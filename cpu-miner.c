@@ -131,6 +131,7 @@ pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
 static unsigned long total_hashes_done;
 static struct timeval total_tv_start;
+static int solutions;
 
 
 struct option_help {
@@ -412,6 +413,7 @@ static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
 {
 	int failures = 0;
 
+	solutions++;
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(curl, wc->u.work)) {
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
@@ -497,11 +499,13 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		pthread_mutex_unlock(&hash_lock);
 		total_secs = (double)total_diff.tv_sec +
 			((double)total_diff.tv_usec / 1000000.0);
-		applog(LOG_INFO, "[Total: %.2f Mhash/sec] [thread %d: %lu hashes, %.0f khash/sec]",
-		       total_mhashes / total_secs, thr_id, hashes_done, khashes / secs);
+		applog(LOG_INFO, "[Total: %.2f Mhash/sec] "
+		       "[thread %d: %lu hashes, %.0f khash/sec] [Solved: %d]",
+		       total_mhashes / total_secs, thr_id, hashes_done,
+		       khashes / secs, solutions);
 	} else {
-		applog(LOG_INFO, "[%lu hashes, %.0f khash/sec]",
-		       hashes_done, khashes / secs);
+		applog(LOG_INFO, "[%lu hashes, %.0f khash/sec] [Solved: %d]",
+		       hashes_done, khashes / secs, solutions);
 	}
 }
 
