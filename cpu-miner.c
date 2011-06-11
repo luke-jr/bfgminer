@@ -128,6 +128,9 @@ static int work_thr_id;
 int longpoll_thr_id;
 struct work_restart *work_restart = NULL;
 pthread_mutex_t time_lock;
+static pthread_mutex_t hash_lock;
+static unsigned long total_hashes_done;
+static struct timeval total_tv_start;
 
 
 struct option_help {
@@ -470,18 +473,36 @@ static void *workio_thread(void *userdata)
 	return NULL;
 }
 
-static void hashmeter(int thr_id, const struct timeval *diff,
+static void hashmeter(int thr_id, struct timeval *diff,
 		      unsigned long hashes_done)
 {
+	struct timeval total_tv_end, total_diff;
 	double khashes, secs;
 
+	/* Don't bother calculating anything if we're not displaying it */
+	if (opt_quiet)
+		return;
 	khashes = hashes_done / 1000.0;
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
 
-	if (!opt_quiet)
-		applog(LOG_INFO, "thread %d: %lu hashes, %.2f khash/sec",
-		       thr_id, hashes_done,
-		       khashes / secs);
+	if (opt_n_threads > 1) {
+		double total_mhashes, total_secs;
+
+		/* Totals are updated by all threads so can race without locking */
+		pthread_mutex_lock(&hash_lock);
+		total_hashes_done += hashes_done;
+		gettimeofday(&total_tv_end, NULL);
+		timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
+		total_mhashes = total_hashes_done / 1000000.0;
+		pthread_mutex_unlock(&hash_lock);
+		total_secs = (double)total_diff.tv_sec +
+			((double)total_diff.tv_usec / 1000000.0);
+		applog(LOG_INFO, "[Total: %.2f Mhash/sec] [thread %d: %lu hashes, %.0f khash/sec]",
+		       total_mhashes / total_secs, thr_id, hashes_done, khashes / secs);
+	} else {
+		applog(LOG_INFO, "[%lu hashes, %.0f khash/sec]",
+		       hashes_done, khashes / secs);
+	}
 }
 
 static bool get_work(struct thr_info *thr, struct work *work)
@@ -934,7 +955,10 @@ int main (int argc, char *argv[])
 		sprintf(rpc_userpass, "%s:%s", rpc_user, rpc_pass);
 	}
 
-	pthread_mutex_init(&time_lock, NULL);
+	if (unlikely(pthread_mutex_init(&time_lock, NULL)))
+		return 1;
+	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
+		return 1;
 
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
@@ -980,6 +1004,7 @@ int main (int argc, char *argv[])
 	} else
 		longpoll_thr_id = -1;
 
+	gettimeofday(&total_tv_start, NULL);
 	/* start mining threads */
 	for (i = 0; i < opt_n_threads; i++) {
 		thr = &thr_info[i];
