@@ -333,7 +333,7 @@ static bool submit_upstream_work(CURL *curl, const struct work *work)
 	if (json_is_true(res)) {
 		solutions++;
 		applog(LOG_INFO, "PROOF OF WORK RESULT: true (yay!!!)");
-	}
+	} else
 		applog(LOG_INFO, "PROOF OF WORK RESULT: false (booooo)");
 
 	json_decref(val);
