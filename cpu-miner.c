@@ -330,8 +330,11 @@ static bool submit_upstream_work(CURL *curl, const struct work *work)
 
 	res = json_object_get(val, "result");
 
-	applog(LOG_INFO, "PROOF OF WORK RESULT: %s",
-	       json_is_true(res) ? "true (yay!!!)" : "false (booooo)");
+	if (json_is_true(res)) {
+		solutions++;
+		applog(LOG_INFO, "PROOF OF WORK RESULT: true (yay!!!)");
+	}
+		applog(LOG_INFO, "PROOF OF WORK RESULT: false (booooo)");
 
 	json_decref(val);
 
@@ -413,7 +416,6 @@ static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
 {
 	int failures = 0;
 
-	solutions++;
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(curl, wc->u.work)) {
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
