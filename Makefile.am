@@ -15,10 +15,11 @@ bin_PROGRAMS	= minerd
 
 minerd_SOURCES	= elist.h miner.h compat.h			\
 		  cpu-miner.c util.c				\
+		  ocl.c findnonce.c				\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c
 minerd_LDFLAGS	= $(PTHREAD_FLAGS)
-minerd_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@
+minerd_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@
 minerd_CPPFLAGS = @LIBCURL_CPPFLAGS@
 
 if HAVE_x86_64

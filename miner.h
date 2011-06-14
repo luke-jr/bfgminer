@@ -194,6 +194,8 @@ extern bool use_syslog;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
+struct work;
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 
 extern void applog(int prio, const char *fmt, ...);
 extern struct thread_q *tq_new(void);

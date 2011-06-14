@@ -40,6 +40,7 @@ case $target in
 esac
 
 
+AC_CHECK_LIB(OpenCL, clSetKernelArg, OPENCL_LIBS=-lOpenCL)
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 AC_CHECK_LIB(pthread, pthread_create, PTHREAD_LIBS=-lpthread)
 
@@ -95,6 +96,7 @@ PKG_PROG_PKG_CONFIG()
 LIBCURL_CHECK_CONFIG(, 7.10.1, ,
   [AC_MSG_ERROR([Missing required libcurl >= 7.10.1])])
 
+AC_SUBST(OPENCL_LIBS)
 AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(PTHREAD_LIBS)
