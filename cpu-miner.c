@@ -739,7 +739,6 @@ static void *gpuminer_thread(void *userdata)
 	uint32_t res[MAXTHREADS];
 
 	setpriority(PRIO_PROCESS, 0, 19);
-	drop_policy();
 
 	size_t globalThreads[1];
 	size_t localThreads[1];
