@@ -1,11 +1,12 @@
-#define MAXTHREADS 2000000
-
 #ifdef __APPLE_CC__
 #include <OpenCL/opencl.h>
 #else
 #include <CL/cl.h>
 #endif
 #include "miner.h"
+
+#define MAXTHREADS (0xFFFFFFFF)
+#define BUFFERSIZE (sizeof(uint32_t) * 128)
 
 typedef struct {
     cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
