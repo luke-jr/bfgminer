@@ -254,11 +254,11 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 		return NULL;
 	}
 
-    clState->inputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, sizeof(dev_blk_ctx), NULL, &status);
-    if(status != CL_SUCCESS) {
-        printf("Error: clCreateBuffer (inputBuffer)\n");
-        return NULL;
-    }   
+	clState->inputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, sizeof(dev_blk_ctx), NULL, &status);
+	if(status != CL_SUCCESS) {
+		printf("Error: clCreateBuffer (inputBuffer)\n");
+		return NULL;
+	}
 
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, sizeof(uint32_t) * 128, NULL, &status);
 	if(status != CL_SUCCESS) {

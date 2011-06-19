@@ -139,7 +139,7 @@ struct work_restart *work_restart = NULL;
 pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
 static unsigned long total_hashes_done;
-static struct timeval total_tv_start;
+static struct timeval total_tv_start, total_tv_end;
 static int accepted, rejected;
 
 
@@ -498,7 +498,7 @@ static void *workio_thread(void *userdata)
 static void hashmeter(int thr_id, struct timeval *diff,
 		      unsigned long hashes_done)
 {
-	struct timeval total_tv_end, total_diff;
+	struct timeval temp_tv_end, total_diff;
 	double khashes, secs;
 
 	/* Don't bother calculating anything if we're not displaying it */
@@ -510,21 +510,28 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (opt_n_threads + nDevs > 1) {
 		double total_mhashes, total_secs;
 
-		/* Totals are updated by all threads so can race without locking */
-		pthread_mutex_lock(&hash_lock);
-		total_hashes_done += hashes_done;
-		gettimeofday(&total_tv_end, NULL);
-		timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
-		total_mhashes = total_hashes_done / 1000000.0;
-		pthread_mutex_unlock(&hash_lock);
-		total_secs = (double)total_diff.tv_sec +
-			((double)total_diff.tv_usec / 1000000.0);
 		if (opt_debug)
 			applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
 			       thr_id, hashes_done, hashes_done / secs);
-		if (!thr_id)
-			applog(LOG_INFO, "[%.2f Mhash/sec] [%d Accepted] [%d Rejected]",
-			       total_mhashes / total_secs, accepted, rejected);
+		gettimeofday(&temp_tv_end, NULL);
+		timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
+
+		/* Totals are updated by all threads so can race without locking */
+		pthread_mutex_lock(&hash_lock);
+		total_hashes_done += hashes_done;
+		if (total_diff.tv_sec < 5) {
+			/* Only update the total every 5 seconds */
+			pthread_mutex_unlock(&hash_lock);
+			return;
+		}
+		gettimeofday(&total_tv_end, NULL);
+		pthread_mutex_unlock(&hash_lock);
+		timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
+		total_mhashes = total_hashes_done / 1000000.0;
+		total_secs = (double)total_diff.tv_sec +
+			((double)total_diff.tv_usec / 1000000.0);
+		applog(LOG_INFO, "[%.2f Mhash/sec] [%d Accepted] [%d Rejected]",
+		       total_mhashes / total_secs, accepted, rejected);
 	} else {
 		if (opt_debug)
 			applog(LOG_DEBUG, "[%lu hashes]", hashes_done);
@@ -740,6 +747,8 @@ static void *gpuminer_thread(void *userdata)
 
 	setpriority(PRIO_PROCESS, 0, 19);
 
+	memset(res, 0, BUFFERSIZE);
+
 	size_t globalThreads[1];
 	size_t localThreads[1];
 
@@ -755,10 +764,14 @@ static void *gpuminer_thread(void *userdata)
 	if (unlikely(status != CL_SUCCESS))
 		{ applog(LOG_ERR, "Error: Setting kernel argument 2.\n"); goto out; }
 
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+			BUFFERSIZE, res, 0, NULL, NULL);   
+	if (unlikely(status != CL_SUCCESS))
+		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
+
 	struct work *work = malloc(sizeof(struct work));
 	bool need_work = true;
-	unsigned long hashes_done = 0;
-	unsigned int threads = 1 << 21;
+	unsigned int threads = 1 << 22;
 	unsigned int h0count = 0;
 	gettimeofday(&tv_start, NULL);
 
@@ -792,12 +805,6 @@ static void *gpuminer_thread(void *userdata)
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 
-		memset(res, 0, BUFFERSIZE);
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-				BUFFERSIZE, res, 0, NULL, NULL);   
-		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-
 		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, NULL, 
 				globalThreads, localThreads, 0,  NULL, NULL);
 		if (unlikely(status != CL_SUCCESS))
@@ -809,25 +816,30 @@ static void *gpuminer_thread(void *userdata)
 			{ applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)"); goto out;}
 
 		for (i = 0; i < 128; i++) {
+			int found = false;
+
 			if (res[i]) {
 				uint32_t start = res[i];
 				uint32_t my_g, my_nonce;
 
 				applog(LOG_INFO, "GPU Found something?");
 				my_g = postcalc_hash(mythr, &work->blk, work, start, start + 1026, &my_nonce, &h0count);
+				found = true;
+				res[i] = 0;
+			}
+			if (found) {
+				/* Clear the buffer again */
+				status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+						BUFFERSIZE, res, 0, NULL, NULL);   
+				if (unlikely(status != CL_SUCCESS))
+					{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 			}
 		}
 
-		hashes_done += threads;
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
-		if (diff.tv_sec > 4) {
-			if (diff.tv_usec > 500000)
-				diff.tv_sec++;
-			hashmeter(thr_id, &diff, hashes_done);
-			hashes_done = 0;
-			gettimeofday(&tv_start, NULL);
-		}
+		hashmeter(thr_id, &diff, threads);
+		gettimeofday(&tv_start, NULL);
 
 		work->blk.nonce += threads;
 
@@ -1170,6 +1182,7 @@ int main (int argc, char *argv[])
 		longpoll_thr_id = -1;
 
 	gettimeofday(&total_tv_start, NULL);
+	gettimeofday(&total_tv_end, NULL);
 
 	/* start gpu mining threads */
 	for (i = 0; i < nDevs; i++) {
