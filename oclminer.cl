@@ -1,4 +1,16 @@
-#define rotr(x, n) rotate(x, (uint)(32 - n))
+typedef uint z;
+#define BITALIGN
+
+#ifdef BITALIGN
+#pragma OPENCL EXTENSION cl_amd_media_ops : enable
+#define rotr(a, b) amd_bitalign((z)a, (z)a, (z)b)
+#define Ch(a, b, c) amd_bytealign(a, b, c)
+#define Ma(a, b, c) amd_bytealign((b), (a | c), (c & a))
+#else
+#define rotr(a, b) rotate((z)a, (z)(32 - b))
+#define Ch(a, b, c) (c ^ (a & (b ^ c)))
+#define Ma(a, b, c) ((b & c) | (a & (b | c)))
+#endif
 
 #define WGS __attribute__((reqd_work_group_size(128, 1, 1)))
 
