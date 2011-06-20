@@ -315,33 +315,32 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 			binaries[i] = NULL;
 	}
 	err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
-	// all the code should be within the first 83000 bytes or so, but scan
-	// a bit more for headroom
-	unsigned bytes_to_scan = 93000;
+
+#if 0
 	for (i = 0; i < nDevices; i++) {
 		if (!binaries[i])
 			continue;
 
-		unsigned remaining = bytes_to_scan;
+		unsigned remaining = binary_sizes[i];
 		char *w = binaries[i];
+		const int ati_cal_markers = 17;
 		int j;
-
-		if (opt_debug)
-			printf("At %p (%u rem. bytes), searching outer elf marker\n", w, remaining);
-		advance(&w, &remaining, "ELF");
-		if (opt_debug)
-			printf("At %p (%u rem. bytes), searching inner elf marker\n", w, remaining);
-		advance(&w, &remaining, "ELF");
-		if (opt_debug)
-			printf("At %p (%u rem. bytes), searching first .text marker\n", w, remaining);
-		advance(&w, &remaining, ".text");
-		if (opt_debug)
-			printf("At %p (%u rem. bytes), searching second .text marker\n", w, remaining);
-		advance(&w, &remaining, ".text");
-		// now we are pointing to the first opcode
+		for (j = 0; j < ati_cal_markers; j++) {
+			if (opt_debug)
+			printf("At %p (%u rem. bytes), searching ATI CAL marker %i\n",
+				w, remaining, j);
+			advance(&w, &remaining, "ATI CAL");
+			if (remaining < 1)
+			fprintf(stderr, "Only %u rem. bytes\n", remaining), exit(1);
+			w++; remaining--;
+		}
+		if (remaining < 11)
+			fprintf(stderr, "Only %u rem. bytes\n", remaining), exit(1);
+		w += 11; remaining -= 11;
 		patch_opcodes(w, remaining);
+		exit (0);
 	}
-
+#endif
 	status = clReleaseProgram(clState->program);
 	if(status != CL_SUCCESS)
 	{
