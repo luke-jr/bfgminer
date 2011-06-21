@@ -814,7 +814,6 @@ static void *gpuminer_thread(void *userdata)
 				BUFFERSIZE, res, 0, NULL, NULL);   
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)"); goto out;}
-
 		for (i = 0; i < 128; i++) {
 			int found = false;
 

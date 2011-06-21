@@ -1,5 +1,7 @@
 typedef uint z;
 
+#define BITALIGN
+
 #ifdef BITALIGN
 #pragma OPENCL EXTENSION cl_amd_media_ops : enable
 #define rotr(a, b) amd_bitalign((z)a, (z)a, (z)b)

@@ -125,29 +125,29 @@ void patch_opcodes(char *w, unsigned remaining)
 		int s2_rel = (*opcode >> (32 + 9)) & 0x1;
 		int pred_sel = (*opcode >> 29) & 0x3;
 		if (!clamp && !dest_rel && !s2_neg && !s2_rel && !pred_sel) {
-		if (alu_inst == OP3_INST_BFE_INT) {
-			count_bfe_int++;
-		} else if (alu_inst == OP3_INST_BFE_UINT) {
-			count_bfe_uint++;
-		} else if (alu_inst == OP3_INST_BYTE_ALIGN_INT) {
-			count_byte_align++;
-			// patch this instruction to BFI_INT
-			*opcode &= 0xfffc1fffffffffffUL;
-			*opcode |= OP3_INST_BFI_INT << (32 + 13);
-			patched++;
-		}
+			if (alu_inst == OP3_INST_BFE_INT) {
+				count_bfe_int++;
+			} else if (alu_inst == OP3_INST_BFE_UINT) {
+				count_bfe_uint++;
+			} else if (alu_inst == OP3_INST_BYTE_ALIGN_INT) {
+				count_byte_align++;
+				// patch this instruction to BFI_INT
+				*opcode &= 0xfffc1fffffffffffUL;
+				*opcode |= OP3_INST_BFI_INT << (32 + 13);
+				patched++;
+			}
 		}
 		if (remaining <= 8) {
-		break;
+			break;
 		}
 		opcode++;
 		remaining -= 8;
 	}
 	if (opt_debug) {
-		printf("Potential OP3 instructions identified: "
-			"%i BFE_INT, %i BFE_UINT, %i BYTE_ALIGN\n",
+		applog(LOG_DEBUG, "Potential OP3 instructions identified: "
+			"%i BFE_INT, %i BFE_UINT, %i BYTE_ALIGN",
 			count_bfe_int, count_bfe_uint, count_byte_align);
-		printf("Patched a total of %i BFI_INT instructions\n", patched);
+		applog(LOG_DEBUG, "Patched a total of %i BFI_INT instructions", patched);
 	}
 }
 
@@ -316,31 +316,34 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 	}
 	err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
 
-#if 0
 	for (i = 0; i < nDevices; i++) {
 		if (!binaries[i])
 			continue;
 
 		unsigned remaining = binary_sizes[i];
 		char *w = binaries[i];
-		const int ati_cal_markers = 17;
-		int j;
-		for (j = 0; j < ati_cal_markers; j++) {
-			if (opt_debug)
-			printf("At %p (%u rem. bytes), searching ATI CAL marker %i\n",
-				w, remaining, j);
-			advance(&w, &remaining, "ATI CAL");
-			if (remaining < 1)
-			fprintf(stderr, "Only %u rem. bytes\n", remaining), exit(1);
-			w++; remaining--;
-		}
-		if (remaining < 11)
-			fprintf(stderr, "Only %u rem. bytes\n", remaining), exit(1);
-		w += 11; remaining -= 11;
-		patch_opcodes(w, remaining);
-		exit (0);
+		unsigned int start, length;
+
+		/* Find 2nd incidence of .text, and copy the program's
+		 * position and length at a fixed offset from that. Then go
+		 * back and find the 2nd incidence of \x7ELF (rewind by one
+		 * from ELF) and then patch the opcocdes */
+		advance(&w, &remaining, ".text");
+		w++; remaining--;
+		advance(&w, &remaining, ".text");
+		memcpy(&start, w + 285, 4);
+		memcpy(&length, w + 289, 4);
+		w = binaries[i]; remaining = binary_sizes[i];
+		advance(&w, &remaining, "ELF");
+		w++; remaining--;
+		advance(&w, &remaining, "ELF");
+		w--; remaining++;
+		w += start; remaining -= start;
+		if (opt_debug)
+			printf("At %p (%u rem. bytes), to begin patching\n",
+				w, remaining);
+		patch_opcodes(w, length);
 	}
-#endif
 	status = clReleaseProgram(clState->program);
 	if(status != CL_SUCCESS)
 	{
