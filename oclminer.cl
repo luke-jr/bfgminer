@@ -629,9 +629,10 @@ A = A + E;
 H = H + D;
 
 	if (H==0xa41f32e7) {
-		for (it = 0; it != 128; it++) {
+		for (it = 0; it != 127; it++) {
 			if (!output[it]) {
 				output[it] = tnonce;
+				output[127] = 1;
 				break;
 			}
 		}

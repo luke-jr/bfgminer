@@ -814,25 +814,24 @@ static void *gpuminer_thread(void *userdata)
 				BUFFERSIZE, res, 0, NULL, NULL);   
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)"); goto out;}
-		for (i = 0; i < 128; i++) {
-			int found = false;
+		if (unlikely(res[127])) {
+			/* 127 is used as a flag to say nonces exist */
+			for (i = 0; i < 127; i++) {
+				if (res[i]) {
+					uint32_t start = res[i];
+					uint32_t my_g, my_nonce;
 
-			if (res[i]) {
-				uint32_t start = res[i];
-				uint32_t my_g, my_nonce;
-
-				applog(LOG_INFO, "GPU Found something?");
-				my_g = postcalc_hash(mythr, &work->blk, work, start, start + 1026, &my_nonce, &h0count);
-				found = true;
-				res[i] = 0;
+					applog(LOG_INFO, "GPU Found something?");
+					my_g = postcalc_hash(mythr, &work->blk, work, start, start + 1026, &my_nonce, &h0count);
+					res[i] = 0;
+				} else
+					break;
 			}
-			if (found) {
-				/* Clear the buffer again */
-				status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-						BUFFERSIZE, res, 0, NULL, NULL);   
-				if (unlikely(status != CL_SUCCESS))
-					{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-			}
+			/* Clear the buffer again */
+			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+					BUFFERSIZE, res, 0, NULL, NULL);   
+			if (unlikely(status != CL_SUCCESS))
+				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 		}
 
 		gettimeofday(&tv_end, NULL);

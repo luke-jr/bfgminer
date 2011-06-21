@@ -308,7 +308,8 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 	/* copy over all of the generated binaries. */
 	binaries = (char **)malloc( sizeof(char *)*nDevices );
 	for( i = 0; i < nDevices; i++ ) {
-		printf("binary size %d : %d\n", i, binary_sizes[i]);
+		if (opt_debug)
+			applog(LOG_DEBUG, "binary size %d : %d\n", i, binary_sizes[i]);
 		if( binary_sizes[i] != 0 )
 			binaries[i] = (char *)malloc( sizeof(char)*binary_sizes[i] );
 		else
