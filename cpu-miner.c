@@ -798,8 +798,6 @@ static void *gpuminer_thread(void *userdata)
 	uint32_t res[128], blank_res[128];
 	cl_kernel *kernel;
 
-	setpriority(PRIO_PROCESS, 0, 19);
-
 	memset(blank_res, 0, BUFFERSIZE);
 
 	size_t globalThreads[1];
