@@ -207,7 +207,7 @@ static struct option_help options_help[] = {
 #endif
 
 	{ "threads N",
-	  "(-t N) Number of miner threads (default: 1)" },
+	  "(-t N) Number of miner CPU threads (default: number of processors)" },
 
 	{ "url URL",
 	  "URL for bitcoin JSON-RPC server "
@@ -500,22 +500,21 @@ static void hashmeter(int thr_id, struct timeval *diff,
 {
 	struct timeval temp_tv_end, total_diff;
 	double khashes, secs;
+	double total_mhashes, total_secs;
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_quiet)
 		return;
 	khashes = hashes_done / 1000.0;
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
+	if (opt_debug)
+		applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
+			thr_id, hashes_done, hashes_done / secs);
+	gettimeofday(&temp_tv_end, NULL);
+	timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
+
 
 	if (opt_n_threads + nDevs > 1) {
-		double total_mhashes, total_secs;
-
-		if (opt_debug)
-			applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
-			       thr_id, hashes_done, hashes_done / secs);
-		gettimeofday(&temp_tv_end, NULL);
-		timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
-
 		/* Totals are updated by all threads so can race without locking */
 		pthread_mutex_lock(&hash_lock);
 		total_hashes_done += hashes_done;
@@ -533,10 +532,19 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		applog(LOG_INFO, "[%.2f Mhash/sec] [%d Accepted] [%d Rejected]",
 		       total_mhashes / total_secs, accepted, rejected);
 	} else {
-		if (opt_debug)
-			applog(LOG_DEBUG, "[%lu hashes]", hashes_done);
-		applog(LOG_INFO, "%.0f khash/sec] [%d Accepted] [%d Rejected]",
-				khashes / secs, accepted, rejected);
+		total_hashes_done += hashes_done;
+		if (total_diff.tv_sec < 5) {
+			/* Only update the total every 5 seconds */
+			pthread_mutex_unlock(&hash_lock);
+			return;
+		}
+		gettimeofday(&total_tv_end, NULL);
+		timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
+		total_mhashes = total_hashes_done / 1000000.0;
+		total_secs = (double)total_diff.tv_sec +
+			((double)total_diff.tv_usec / 1000000.0);
+		applog(LOG_INFO, "[%.2f Mhash/sec] [%d Accepted] [%d Rejected]",
+		       total_mhashes / total_secs, accepted, rejected);
 	}
 }
 
@@ -606,6 +614,11 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	work->data[64+12+2] = (nonce>>16) & 0xff;
 	work->data[64+12+3] = (nonce>>24) & 0xff;
 	return submit_work(thr, work);
+}
+
+static inline int cpu_from_thr_id(int thr_id)
+{
+	return (thr_id - nDevs) % num_processors;
 }
 
 static void *miner_thread(void *userdata)
@@ -718,7 +731,7 @@ static void *miner_thread(void *userdata)
 
 		/* if nonce found, submit work */
 		if (unlikely(rc)) {
-			applog(LOG_INFO, "CPU found something?");
+			applog(LOG_INFO, "CPU %d found something?", cpu_from_thr_id(thr_id));
 			if (!submit_work(mythr, &work))
 				break;
 		}
@@ -772,6 +785,11 @@ static inline cl_int queue_kernel_parameters(dev_blk_ctx *blk, cl_kernel *kernel
 	return status;
 }
 
+static inline int gpu_from_thr_id(int thr_id)
+{
+	return thr_id;
+}
+
 static void *gpuminer_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -799,15 +817,19 @@ static void *gpuminer_thread(void *userdata)
 
 	struct work *work = malloc(sizeof(struct work));
 	bool need_work = true;
-	unsigned int threads = 1 << 22;
+	unsigned int threads = 1 << 21;
+	unsigned int vectors = 4;
+	unsigned int hashes_done = threads * vectors;
 
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
-	localThreads[0] = 128;
+	localThreads[0] = 64;
 
 	while (1) {
 		struct timeval tv_end, diff;
-		int i;
+		unsigned int i;
+
+		clFinish(clState->commandQueue);
 
 		if (need_work) {
 			/* obtain new work from internal workio thread */
@@ -821,7 +843,7 @@ static void *gpuminer_thread(void *userdata)
 			work->blk.nonce = 0;
 			status = queue_kernel_parameters(&work->blk, kernel, clState->outputBuffer);
 			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clSetKernelArg failed."); exit (1); }
+				{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); exit (1); }
 
 			work_restart[thr_id].restart = 0;
 			need_work = false;
@@ -829,8 +851,11 @@ static void *gpuminer_thread(void *userdata)
 			if (opt_debug)
 				applog(LOG_DEBUG, "getwork");
 
+		} else {
+			status = clSetKernelArg(*kernel, 14, sizeof(uint), (void *)&work->blk.nonce);
+			if (unlikely(status != CL_SUCCESS))
+				{ applog(LOG_ERR, "Error: clSetKernelArg of nonce failed."); goto out; }
 		}
-		clFinish(clState->commandQueue);
 
 		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
 				globalThreads, localThreads, 0,  NULL, NULL);
@@ -846,7 +871,7 @@ static void *gpuminer_thread(void *userdata)
 				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 			for (i = 0; i < 127; i++) {
 				if (res[i]) {
-					applog(LOG_INFO, "GPU Found something?");
+					applog(LOG_INFO, "GPU %d found something?", gpu_from_thr_id(thr_id));
 					postcalc_hash(mythr, &work->blk, work, res[i]);
 				} else
 					break;
@@ -861,19 +886,14 @@ static void *gpuminer_thread(void *userdata)
 
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
-		hashmeter(thr_id, &diff, threads);
+		hashmeter(thr_id, &diff, hashes_done);
 		gettimeofday(&tv_start, NULL);
 
-		work->blk.nonce += threads;
+		work->blk.nonce += hashes_done;
 
-		if (unlikely(work->blk.nonce > MAXTHREADS - threads) ||
+		if (unlikely(work->blk.nonce > MAXTHREADS - hashes_done) ||
 			(work_restart[thr_id].restart))
 				need_work = true;
-
-		clFinish(clState->commandQueue);
-		status = clSetKernelArg(*kernel, 14, sizeof(uint), (void *)&work->blk.nonce);
-		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: clSetKernelArg failed."); goto out; }
 	}
 out:
 	tq_freeze(mythr->q);
@@ -982,6 +1002,15 @@ static void parse_arg (int key, char *arg)
 {
 	int v, i;
 
+#ifdef WIN32
+	if (!opt_n_threads)
+		opt_n_threads = 1;
+#else
+	num_processors = sysconf(_SC_NPROCESSORS_ONLN);
+	if (!opt_n_threads)
+		opt_n_threads = num_processors;
+#endif /* !WIN32 */
+
 	switch(key) {
 	case 'a':
 		for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
@@ -1041,7 +1070,7 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 't':
 		v = atoi(arg);
-		if (v < 1 || v > 9999)	/* sanity check */
+		if (v < 0 || v > 9999)	/* sanity check */
 			show_usage();
 
 		opt_n_threads = v;
@@ -1074,15 +1103,6 @@ static void parse_arg (int key, char *arg)
 	default:
 		show_usage();
 	}
-
-#ifdef WIN32
-	if (!opt_n_threads)
-		opt_n_threads = 1;
-#else
-	num_processors = sysconf(_SC_NPROCESSORS_ONLN);
-	if (!opt_n_threads)
-		opt_n_threads = num_processors;
-#endif /* !WIN32 */
 }
 
 static void parse_config(void)

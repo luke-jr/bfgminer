@@ -1,8 +1,10 @@
 // This file is taken and modified from the public-domain poclbm project, and
 // we have therefore decided to keep it public-domain in Phoenix.
 
+#define VECTORS
+
 #ifdef VECTORS
-	typedef uint2 u;
+	typedef uint4 u;
 #else
 	typedef uint u;
 #endif
@@ -34,6 +36,8 @@ __constant uint K[64] = {
 // SHA-256 Ch function, but provides it in exactly one instruction. If
 // detected, use it for Ch. Otherwise, construct Ch out of simpler logical
 // primitives.
+
+#define BFI_INT
 
 #ifdef BFI_INT
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
@@ -72,7 +76,7 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	uint it;
 
 #ifdef VECTORS 
-	nonce = ((base + get_global_id(0))<<1) + (uint2)(0, 1);
+	nonce = ((base >> 2) + (get_global_id(0))<<2) + (uint4)(0, 1, 2, 3);
 #else
 	nonce = base + get_global_id(0);
 #endif
@@ -302,11 +306,43 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 #ifdef VECTORS
 	if (H.x == 0)
 	{
-		output[OUTPUT_SIZE] = output[nonce.x & OUTPUT_MASK] = nonce.x;
+		for (it = 0; it != 127; it++) {
+			if (!output[it]) {
+				output[it] = nonce.x;
+				output[127] = 1;
+				break;
+			}
+		}
 	}
-	else if (H.y == 0)
+	if (H.y == 0)
 	{
-		output[OUTPUT_SIZE] = output[nonce.y & OUTPUT_MASK] = nonce.y;
+		for (it = 0; it != 127; it++) {
+			if (!output[it]) {
+				output[it] = nonce.y;
+				output[127] = 1;
+				break;
+			}
+		}
+	}
+	if (H.z == 0)
+	{
+		for (it = 0; it != 127; it++) {
+			if (!output[it]) {
+				output[it] = nonce.z;
+				output[127] = 1;
+				break;
+			}
+		}
+	}
+	if (H.w == 0)
+	{
+		for (it = 0; it != 127; it++) {
+			if (!output[it]) {
+				output[it] = nonce.w;
+				output[127] = 1;
+				break;
+			}
+		}
 	}
 #else
 	if (H == 0)
