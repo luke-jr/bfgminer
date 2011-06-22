@@ -131,14 +131,13 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
   R(E, F, G, H, A, B, C, D, P(u+4), SHA256_K[u+4]); \
   R(D, E, F, G, H, A, B, C, P(u+5), SHA256_K[u+5])
 
-uint32_t postcalc_hash(struct thr_info *thr, dev_blk_ctx *blk,
-		       struct work *work, uint32_t start, uint32_t end, 
-		       uint32_t *best_nonce, unsigned int *h0count)
+void postcalc_hash(struct thr_info *thr, dev_blk_ctx *blk, struct work *work, uint32_t start)
 {
 	cl_uint A, B, C, D, E, F, G, H;
 	cl_uint W[16];
 	cl_uint nonce;
 	cl_uint best_g = ~0;
+	uint32_t end = start + 1026;
 
 	for (nonce = start; nonce != end; nonce+=1) {
 		A = blk->cty_a; B = blk->cty_b;
@@ -171,8 +170,6 @@ uint32_t postcalc_hash(struct thr_info *thr, dev_blk_ctx *blk,
 		FR(48); PFR(56);
 
 		if (unlikely(H == 0xA41F32E7)) {
-			(*h0count)++;
-
 			if (unlikely(submit_nonce(thr, work, nonce) == false)) {
 				applog(LOG_ERR, "Failed to submit work, exiting");
 				goto out;
@@ -181,14 +178,11 @@ uint32_t postcalc_hash(struct thr_info *thr, dev_blk_ctx *blk,
 			G += 0x1f83d9ab;
 			G = ByteReverse(G);
 
-			if (G < best_g) {
-				*best_nonce = nonce;
+			if (G < best_g)
 				best_g = G;
-			}
 		}
 	}
 out:
-	// if (unlikely(best_g == ~0)) applog(LOG_ERR, "No best_g found! Error in OpenCL code?");
-
-	return best_g;
+	if (unlikely(best_g == ~0))
+		applog(LOG_ERR, "No best_g found! Error in OpenCL code?");
 }

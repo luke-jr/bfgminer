@@ -743,11 +743,11 @@ static void *gpuminer_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	struct timeval tv_start;
 	int thr_id = mythr->id;
-	uint32_t res[128];
+	uint32_t res[128], blank_res[128];
 
 	setpriority(PRIO_PROCESS, 0, 19);
 
-	memset(res, 0, BUFFERSIZE);
+	memset(blank_res, 0, BUFFERSIZE);
 
 	size_t globalThreads[1];
 	size_t localThreads[1];
@@ -765,26 +765,23 @@ static void *gpuminer_thread(void *userdata)
 		{ applog(LOG_ERR, "Error: Setting kernel argument 2.\n"); goto out; }
 
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-			BUFFERSIZE, res, 0, NULL, NULL);   
+			BUFFERSIZE, blank_res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS))
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 
 	struct work *work = malloc(sizeof(struct work));
 	bool need_work = true;
 	unsigned int threads = 1 << 22;
-	unsigned int h0count = 0;
+
 	gettimeofday(&tv_start, NULL);
+	globalThreads[0] = threads;
+	localThreads[0] = 128;
 
 	while (1) {
 		struct timeval tv_end, diff;
 		int i;
 
 		if (need_work) {
-			work_restart[thr_id].restart = 0;
-
-			if (opt_debug)
-				applog(LOG_DEBUG, "getwork");
-
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(mythr, work))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
@@ -793,46 +790,47 @@ static void *gpuminer_thread(void *userdata)
 			}
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
-
 			work->blk.nonce = 0;
-			need_work = false;
-		}
-		globalThreads[0] = threads;
-		localThreads[0] = 128;
-
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->inputBuffer, CL_TRUE, 0,
+			status = clEnqueueWriteBuffer(clState->commandQueue, clState->inputBuffer, CL_FALSE, 0,
 				sizeof(dev_blk_ctx), (void *)&work->blk, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
+			if (unlikely(status != CL_SUCCESS))
+				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, NULL, 
+			work_restart[thr_id].restart = 0;
+			need_work = false;
+
+			if (opt_debug)
+				applog(LOG_DEBUG, "getwork");
+
+		}
+		clFinish(clState->commandQueue);
+
+		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, NULL,
 				globalThreads, localThreads, 0,  NULL, NULL);
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)"); goto out; }
 
-		status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0, 
-				BUFFERSIZE, res, 0, NULL, NULL);   
-		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)"); goto out;}
+		/* 127 is used as a flag to say nonces exist */
 		if (unlikely(res[127])) {
-			/* 127 is used as a flag to say nonces exist */
+			/* Clear the buffer again */
+			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+					BUFFERSIZE, blank_res, 0, NULL, NULL);
+			if (unlikely(status != CL_SUCCESS))
+				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 			for (i = 0; i < 127; i++) {
 				if (res[i]) {
-					uint32_t start = res[i];
-					uint32_t my_g, my_nonce;
-
 					applog(LOG_INFO, "GPU Found something?");
-					my_g = postcalc_hash(mythr, &work->blk, work, start, start + 1026, &my_nonce, &h0count);
-					res[i] = 0;
+					postcalc_hash(mythr, &work->blk, work, res[i]);
 				} else
 					break;
 			}
-			/* Clear the buffer again */
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-					BUFFERSIZE, res, 0, NULL, NULL);   
-			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
+			clFinish(clState->commandQueue);
 		}
+
+		status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+				BUFFERSIZE, res, 0, NULL, NULL);
+		if (unlikely(status != CL_SUCCESS))
+			{ applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)"); goto out;}
 
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
@@ -844,6 +842,14 @@ static void *gpuminer_thread(void *userdata)
 		if (unlikely(work->blk.nonce > MAXTHREADS - threads) ||
 			(work_restart[thr_id].restart))
 				need_work = true;
+
+		clFinish(clState->commandQueue);
+
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->inputBuffer, CL_FALSE, 0,
+				sizeof(dev_blk_ctx), (void *)&work->blk, 0, NULL, NULL);
+		if (unlikely(status != CL_SUCCESS))
+			{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
+
 	}
 out:
 	tq_freeze(mythr->q);
