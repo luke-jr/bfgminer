@@ -268,7 +268,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 	// Load CL file, build CL program object, create CL kernel object
 	/////////////////////////////////////////////////////////////////
 	//
-	const char * filename  = "oclminer.cl";
+	const char * filename  = "poclbm.cl";
 	int pl;
 	char *source = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
