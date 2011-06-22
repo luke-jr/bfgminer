@@ -738,41 +738,36 @@ enum {
 
 static _clState *clStates[16];
 
-/* queue kernel parameter */
-static inline int qkp(cl_kernel *kernel, void *param, int param_num)
-{
-	return clSetKernelArg(*kernel, param_num, sizeof(param), param);
-}
-
 static inline cl_int queue_kernel_parameters(dev_blk_ctx *blk, cl_kernel *kernel,
 	struct _cl_mem *output)
 {
 	cl_int status = 0;
+	int num = 0;
 
-	status |= qkp(kernel, (void *)&blk->ctx_a, 0);
-	status |= qkp(kernel, (void *)&blk->ctx_b, 1);
-	status |= qkp(kernel, (void *)&blk->ctx_c, 2);
-	status |= qkp(kernel, (void *)&blk->ctx_d, 3);
-	status |= qkp(kernel, (void *)&blk->ctx_e, 4);
-	status |= qkp(kernel, (void *)&blk->ctx_f, 5);
-	status |= qkp(kernel, (void *)&blk->ctx_g, 6);
-	status |= qkp(kernel, (void *)&blk->ctx_h, 7);
-	status |= qkp(kernel, (void *)&blk->cty_b, 8);
-	status |= qkp(kernel, (void *)&blk->cty_c, 9);
-	status |= qkp(kernel, (void *)&blk->cty_d, 10);
-	status |= qkp(kernel, (void *)&blk->cty_f, 11);
-	status |= qkp(kernel, (void *)&blk->cty_g, 12);
-	status |= qkp(kernel, (void *)&blk->cty_h, 13);
-	status |= qkp(kernel, (void *)&blk->nonce, 14);
-	status |= qkp(kernel, (void *)&blk->fW0, 15);
-	status |= qkp(kernel, (void *)&blk->fW1, 16);
-	status |= qkp(kernel, (void *)&blk->fW2, 17);
-	status |= qkp(kernel, (void *)&blk->fW3, 18);
-	status |= qkp(kernel, (void *)&blk->fW15, 19);
-	status |= qkp(kernel, (void *)&blk->fW01r, 20);
-	status |= qkp(kernel, (void *)&blk->fcty_e, 21);
-	status |= qkp(kernel, (void *)&blk->fcty_e2, 22);
-	status |= qkp(kernel, (void *)output, 23);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_b);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_c);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_d);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_e);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_d);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
+	status |= clSetKernelArg(*kernel, num++, sizeof(output), (void *)output);
 
 	return status;
 }
@@ -876,7 +871,7 @@ static void *gpuminer_thread(void *userdata)
 				need_work = true;
 
 		clFinish(clState->commandQueue);
-		status = qkp(kernel, (void *)&work->blk.nonce, 14);
+		status = clSetKernelArg(*kernel, 14, sizeof(uint), (void *)&work->blk.nonce);
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: clSetKernelArg failed."); goto out; }
 	}
