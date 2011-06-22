@@ -767,7 +767,7 @@ static inline cl_int queue_kernel_parameters(dev_blk_ctx *blk, cl_kernel *kernel
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
-	status |= clSetKernelArg(*kernel, num++, sizeof(output), (void *)output);
+	status |= clSetKernelArg(*kernel, num++, sizeof(output), (void *)&output);
 
 	return status;
 }
