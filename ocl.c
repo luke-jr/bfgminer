@@ -374,7 +374,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 	}
 
 	/* get a kernel object handle for a kernel with the given name */
-	clState->kernel = clCreateKernel(clState->program, "oclminer", &status);
+	clState->kernel = clCreateKernel(clState->program, "search", &status);
 	if(status != CL_SUCCESS)
 	{
 		printf("Error: Creating Kernel from program. (clCreateKernel)\n");
@@ -388,12 +388,6 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 	if(status != CL_SUCCESS)
 	{
 		printf("Creating Command Queue. (clCreateCommandQueue)\n");
-		return NULL;
-	}
-
-	clState->inputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, sizeof(dev_blk_ctx), NULL, &status);
-	if(status != CL_SUCCESS) {
-		printf("Error: clCreateBuffer (inputBuffer)\n");
 		return NULL;
 	}
 

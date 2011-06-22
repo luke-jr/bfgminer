@@ -738,12 +738,52 @@ enum {
 
 static _clState *clStates[16];
 
+/* queue kernel parameter */
+static inline int qkp(cl_kernel *kernel, void *param, int param_num)
+{
+	return clSetKernelArg(*kernel, param_num, sizeof(param), param);
+}
+
+static inline cl_int queue_kernel_parameters(dev_blk_ctx *blk, cl_kernel *kernel,
+	struct _cl_mem *output)
+{
+	cl_int status = 0;
+
+	status |= qkp(kernel, (void *)&blk->ctx_a, 0);
+	status |= qkp(kernel, (void *)&blk->ctx_b, 1);
+	status |= qkp(kernel, (void *)&blk->ctx_c, 2);
+	status |= qkp(kernel, (void *)&blk->ctx_d, 3);
+	status |= qkp(kernel, (void *)&blk->ctx_e, 4);
+	status |= qkp(kernel, (void *)&blk->ctx_f, 5);
+	status |= qkp(kernel, (void *)&blk->ctx_g, 6);
+	status |= qkp(kernel, (void *)&blk->ctx_h, 7);
+	status |= qkp(kernel, (void *)&blk->cty_b, 8);
+	status |= qkp(kernel, (void *)&blk->cty_c, 9);
+	status |= qkp(kernel, (void *)&blk->cty_d, 10);
+	status |= qkp(kernel, (void *)&blk->cty_f, 11);
+	status |= qkp(kernel, (void *)&blk->cty_g, 12);
+	status |= qkp(kernel, (void *)&blk->cty_h, 13);
+	status |= qkp(kernel, (void *)&blk->nonce, 14);
+	status |= qkp(kernel, (void *)&blk->fW0, 15);
+	status |= qkp(kernel, (void *)&blk->fW1, 16);
+	status |= qkp(kernel, (void *)&blk->fW2, 17);
+	status |= qkp(kernel, (void *)&blk->fW3, 18);
+	status |= qkp(kernel, (void *)&blk->fW15, 19);
+	status |= qkp(kernel, (void *)&blk->fW01r, 20);
+	status |= qkp(kernel, (void *)&blk->fcty_e, 21);
+	status |= qkp(kernel, (void *)&blk->fcty_e2, 22);
+	status |= qkp(kernel, (void *)output, 23);
+
+	return status;
+}
+
 static void *gpuminer_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 	struct timeval tv_start;
 	int thr_id = mythr->id;
 	uint32_t res[128], blank_res[128];
+	cl_kernel *kernel;
 
 	setpriority(PRIO_PROCESS, 0, 19);
 
@@ -755,14 +795,7 @@ static void *gpuminer_thread(void *userdata)
 	cl_int status;
 
 	_clState *clState = clStates[thr_id];
-
-	status = clSetKernelArg(clState->kernel, 0,  sizeof(cl_mem), (void *)&clState->inputBuffer);
-	if (unlikely(status != CL_SUCCESS))
-		{ applog(LOG_ERR, "Error: Setting kernel argument 1.\n"); goto out; }
-
-	status = clSetKernelArg(clState->kernel, 1,  sizeof(cl_mem), (void *)&clState->outputBuffer);
-	if (unlikely(status != CL_SUCCESS))
-		{ applog(LOG_ERR, "Error: Setting kernel argument 2.\n"); goto out; }
+	kernel = &clState->kernel;
 
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);
@@ -791,10 +824,9 @@ static void *gpuminer_thread(void *userdata)
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work->blk.nonce = 0;
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->inputBuffer, CL_FALSE, 0,
-				sizeof(dev_blk_ctx), (void *)&work->blk, 0, NULL, NULL);
+			status = queue_kernel_parameters(&work->blk, kernel, clState->outputBuffer);
 			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
+				{ applog(LOG_ERR, "Error: clSetKernelArg failed."); exit (1); }
 
 			work_restart[thr_id].restart = 0;
 			need_work = false;
@@ -805,7 +837,7 @@ static void *gpuminer_thread(void *userdata)
 		}
 		clFinish(clState->commandQueue);
 
-		status = clEnqueueNDRangeKernel(clState->commandQueue, clState->kernel, 1, NULL,
+		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
 				globalThreads, localThreads, 0,  NULL, NULL);
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)"); goto out; }
@@ -844,12 +876,9 @@ static void *gpuminer_thread(void *userdata)
 				need_work = true;
 
 		clFinish(clState->commandQueue);
-
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->inputBuffer, CL_FALSE, 0,
-				sizeof(dev_blk_ctx), (void *)&work->blk, 0, NULL, NULL);
+		status = qkp(kernel, (void *)&work->blk.nonce, 14);
 		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-
+			{ applog(LOG_ERR, "Error: clSetKernelArg failed."); goto out; }
 	}
 out:
 	tq_freeze(mythr->q);

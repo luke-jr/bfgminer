@@ -11,7 +11,6 @@ typedef struct {
 	cl_kernel kernel;
 	cl_command_queue commandQueue;
 	cl_program program;
-	cl_mem inputBuffer;
 	cl_mem outputBuffer;
 } _clState;
 

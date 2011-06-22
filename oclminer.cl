@@ -57,38 +57,21 @@ uint fcty_e;
 uint fcty_e2;
 } dev_blk_ctx;
 
-__kernel __attribute__((vec_type_hint(uint))) WGS void oclminer(
-	__constant dev_blk_ctx *ctx, __global uint *output)
+__kernel __attribute__((vec_type_hint(uint))) WGS void search(
+const uint state0, const uint state1, const uint state2, const uint state3,
+const uint state4, const uint state5, const uint state6, const uint state7,
+const uint B1, const uint C1, const uint D1,
+const uint F1, const uint G1, const uint H1,
+const uint base,
+const uint fW0, const uint fW1, const uint fW2, const uint fW3, const uint fW15, const uint fW01r, const uint fcty_e, const uint fcty_e2,
+__global uint *output)
 {
-  const uint fW0 = ctx->fW0;
-  const uint fW1 = ctx->fW1;
-  const uint fW2 = ctx->fW2;
-  const uint fW3 = ctx->fW3;
-  const uint fW15 = ctx->fW15;
-  const uint fW01r = ctx->fW01r;
-  const uint fcty_e = ctx->fcty_e;
-  const uint fcty_e2 = ctx->fcty_e2;
-  const uint state0 = ctx->ctx_a;
-  const uint state1 = ctx->ctx_b;
-  const uint state2 = ctx->ctx_c;
-  const uint state3 = ctx->ctx_d;
-  const uint state4 = ctx->ctx_e;
-  const uint state5 = ctx->ctx_f;
-  const uint state6 = ctx->ctx_g;
-  const uint state7 = ctx->ctx_h;
-  const uint B1 = ctx->cty_b;
-  const uint C1 = ctx->cty_c;
-  const uint D1 = ctx->cty_d;
-  const uint F1 = ctx->cty_f;
-  const uint G1 = ctx->cty_g;
-  const uint H1 = ctx->cty_h;
-
   uint A, B, C, D, E, F, G, H;
   uint W0, W1, W2, W3, W4, W5, W6, W7, W8, W9, W10, W11, W12, W13, W14, W15;
   uint it;
   const uint myid = get_global_id(0);
 
-  const uint tnonce = ctx->nonce + myid;
+  const uint tnonce = base + myid;
 
     W3 = 0 ^ tnonce;
     E = fcty_e +  W3;
