@@ -822,12 +822,12 @@ static void *gpuminer_thread(void *userdata)
 	struct work *work = malloc(sizeof(struct work));
 	bool need_work = true;
 	unsigned int threads = 1 << (15 + scan_intensity);
-	unsigned int vectors = 4;
+	unsigned int vectors = preferred_vwidth;
 	unsigned int hashes_done = threads * vectors;
 
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
-	localThreads[0] = 64;
+	localThreads[0] = max_work_size / vectors;
 
 	while (1) {
 		struct timeval tv_end, diff;

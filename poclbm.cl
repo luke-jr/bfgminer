@@ -1,10 +1,13 @@
 // This file is taken and modified from the public-domain poclbm project, and
 // we have therefore decided to keep it public-domain in Phoenix.
 
-#define VECTORS
+// The X is a placeholder for patching to suit hardware
+#define VECTORSX
 
-#ifdef VECTORS
+#ifdef VECTORS4
 	typedef uint4 u;
+#elif defined VECTORS2
+	typedef uint2 u;
 #else
 	typedef uint u;
 #endif
@@ -20,14 +23,6 @@ __constant uint K[64] = {
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
-#define BITALIGN
-
-#ifdef BITALIGN
-	#pragma OPENCL EXTENSION cl_amd_media_ops : enable
-	#define rotr(x, y) amd_bitalign((u)x, (u)x, (u)y)
-#else
-	#define rotr(x, y) rotate((u)x, (u)(32-y))
-#endif
 
 // This part is not from the stock poclbm kernel. It's part of an optimization
 // added in the Phoenix Miner.
@@ -37,9 +32,11 @@ __constant uint K[64] = {
 // detected, use it for Ch. Otherwise, construct Ch out of simpler logical
 // primitives.
 
-#define BFI_INT
+#define BFI_INTX
 
 #ifdef BFI_INT
+
+#define BITALIGN
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
 	// OpenCL (or CAL IL for that matter) in any way. However, there is 
 	// a similar instruction, BYTE_ALIGN_INT, which is exposed to OpenCL via
@@ -55,6 +52,13 @@ __constant uint K[64] = {
 #else
 	#define Ch(x, y, z) (z ^ (x & (y ^ z)))
 	#define Ma(x, y, z) ((x & z) | (y & (x | z)))
+#endif
+
+#ifdef BITALIGN
+	#pragma OPENCL EXTENSION cl_amd_media_ops : enable
+	#define rotr(x, y) amd_bitalign((u)x, (u)x, (u)y)
+#else
+	#define rotr(x, y) rotate((u)x, (u)(32-y))
 #endif
 
 // AMD's KernelAnalyzer throws errors compiling the kernel if we use 
@@ -75,8 +79,10 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	u nonce;
 	uint it;
 
-#ifdef VECTORS 
+#ifdef VECTORS4
 	nonce = ((base >> 2) + (get_global_id(0))<<2) + (uint4)(0, 1, 2, 3);
+#elif defined VECTORS2
+	nonce = ((base >> 1) + (get_global_id(0))<<1) + (uint2)(0, 1);
 #else
 	nonce = base + get_global_id(0);
 #endif
@@ -303,7 +309,7 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 
 	H+=0x5be0cd19U;
 
-#ifdef VECTORS
+#if defined(VECTORS4) || defined(VECTORS2)
 	if (H.x == 0)
 	{
 		for (it = 0; it != 127; it++) {
@@ -324,6 +330,7 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 			}
 		}
 	}
+#ifdef VECTORS4
 	if (H.z == 0)
 	{
 		for (it = 0; it != 127; it++) {
@@ -344,6 +351,7 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 			}
 		}
 	}
+#endif
 #else
 	if (H == 0)
 	{
