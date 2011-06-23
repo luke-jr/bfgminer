@@ -642,7 +642,7 @@ static void *miner_thread(void *userdata)
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
 	if (!(opt_n_threads % num_processors))
-		affine_to_cpu(mythr->id, mythr->id % num_processors);
+		affine_to_cpu(cpu_from_thr_id(thr_id), thr_id % num_processors);
 
 	while (1) {
 		struct work work __attribute__((aligned(128)));
@@ -1284,7 +1284,6 @@ int main (int argc, char *argv[])
 		sleep(1);	/* don't pound RPC server all at once */
 	}
 
-	
 	applog(LOG_INFO, "%d cpu miner threads started, "
 		"using SHA256 '%s' algorithm.",
 		opt_n_threads,
