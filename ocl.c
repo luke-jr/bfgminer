@@ -271,6 +271,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 
 	for (i = 0; i < numDevices; i++) {
 		const char * camo = "cl_amd_media_ops";
+		cl_uint preferred_vwidth;
 		size_t retlen;
 		char *find;
 
@@ -282,6 +283,13 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 		find = strstr(extensions, camo);
 		if (find)
 			hasBitAlign = true;
+
+		status = clGetDeviceInfo(devices[i], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&preferred_vwidth, NULL);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT");
+			return NULL;
+		}
+		applog(LOG_INFO, "Preferred vector width reported %d", preferred_vwidth);
 	}
 
 	if (hasBitAlign == false)
