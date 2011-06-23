@@ -833,12 +833,13 @@ static void *gpuminer_thread(void *userdata)
 	localThreads[0] = clState->max_work_size / vectors;
 
 	while (1) {
-		struct timeval tv_end, diff;
+		struct timeval tv_end, diff, tv_workstart;
 		unsigned int i;
 
 		clFinish(clState->commandQueue);
 
 		if (need_work) {
+			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(mythr, work))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
@@ -897,6 +898,11 @@ static void *gpuminer_thread(void *userdata)
 		gettimeofday(&tv_start, NULL);
 
 		work->blk.nonce += hashes_done;
+		timeval_subtract(&diff, &tv_end, &tv_workstart);
+		if (diff.tv_sec > opt_scantime) {
+			need_work = true;
+			continue;
+		}
 
 		if (unlikely(work->blk.nonce > MAXTHREADS - hashes_done) ||
 			(work_restart[thr_id].restart))
