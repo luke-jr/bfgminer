@@ -128,8 +128,9 @@ static enum sha256_algos opt_algo = ALGO_SSE2_64;
 static enum sha256_algos opt_algo = ALGO_C;
 #endif
 static int nDevs;
-static int opt_n_threads;
+static int opt_n_threads = 1;
 static int num_processors;
+static int scan_intensity = 5;
 static char *rpc_url;
 static char *rpc_userpass;
 static char *rpc_user, *rpc_pass;
@@ -180,6 +181,9 @@ static struct option_help options_help[] = {
 
 	{ "debug",
 	  "(-D) Enable debug output (default: off)" },
+
+	{ "intensity",
+	  "(-I) Intensity of scanning (0 - 15, default 4)" },
 
 	{ "ndevs",
 	  "(-n) Display number of detected GPUs" },
@@ -232,6 +236,7 @@ static struct option options[] = {
 	{ "config", 1, NULL, 'c' },
 	{ "debug", 0, NULL, 'D' },
 	{ "help", 0, NULL, 'h' },
+	{ "intensity", 1, NULL, 'I' },
 	{ "ndevs", 0, NULL, 'n' },
 	{ "no-longpoll", 0, NULL, 1003 },
 	{ "pass", 1, NULL, 'p' },
@@ -816,7 +821,7 @@ static void *gpuminer_thread(void *userdata)
 
 	struct work *work = malloc(sizeof(struct work));
 	bool need_work = true;
-	unsigned int threads = 1 << 21;
+	unsigned int threads = 1 << (15 + scan_intensity);
 	unsigned int vectors = 4;
 	unsigned int hashes_done = threads * vectors;
 
@@ -1001,15 +1006,6 @@ static void parse_arg (int key, char *arg)
 {
 	int v, i;
 
-#ifdef WIN32
-	if (!opt_n_threads)
-		opt_n_threads = 1;
-#else
-	num_processors = sysconf(_SC_NPROCESSORS_ONLN);
-	if (!opt_n_threads)
-		opt_n_threads = num_processors;
-#endif /* !WIN32 */
-
 	switch(key) {
 	case 'a':
 		for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
@@ -1035,6 +1031,12 @@ static void parse_arg (int key, char *arg)
 	}
 	case 'q':
 		opt_quiet = true;
+		break;
+	case 'I':
+		v = atoi(arg);
+		if (v < 0 || v > 16) /* sanity check */
+			show_usage();
+		scan_intensity = v;
 		break;
 	case 'D':
 		opt_debug = true;
@@ -1156,6 +1158,13 @@ int main (int argc, char *argv[])
 	struct thr_info *thr;
 	int i;
 	char name[32];
+
+#ifdef WIN32
+	opt_n_threads = 1;
+#else
+	num_processors = sysconf(_SC_NPROCESSORS_ONLN);
+	opt_n_threads = num_processors;
+#endif /* !WIN32 */
 
 	nDevs = clDevicesNum();
 	if (opt_ndevs) {
