@@ -259,10 +259,10 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
 
 	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
-	if(status != CL_SUCCESS) 
-	{   
+	if(status != CL_SUCCESS)
+	{
 		printf("Error: Creating Context. (clCreateContextFromType)\n");
-		return NULL; 
+		return NULL;
 	}
 
 	/* Check for BFI INT support. Hopefully people don't mix devices with
@@ -270,6 +270,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 	char * extensions = malloc(1024);
 
 	for (i = 0; i < numDevices; i++) {
+		const char * camo = "cl_amd_media_ops";
 		size_t retlen;
 		char *find;
 
@@ -278,11 +279,12 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 			applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_EXTENSIONS");
 			return NULL;
 		}
-		find = memmem(extensions, retlen, "cl_amd_media_ops", 16);
+		find = strstr(extensions, camo);
 		if (find)
 			hasBitAlign = true;
 	}
-	if (hasBitAlign)
+
+	if (hasBitAlign == false)
 		applog(LOG_INFO, "cl_amd_media_ops not found, will not BFI_INT patch");
 	else
 		applog(LOG_INFO, "cl_amd_media_ops found, will patch with BFI_INT");
@@ -294,12 +296,12 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 	/* Load a different kernel depending on whether it supports
 	 * cl_amd_media_ops or not */
 	char *filename;
-	if (hasBitAlign) {
-		filename = malloc(9);
-		strncpy(filename, "poclbm.cl", 9);
+	if (hasBitAlign == true) {
+		filename = malloc(10);
+		strncpy(filename, "poclbm.cl", 10);
 	} else {
-		filename = malloc(15);
-		strncpy(filename, "poclbm_noamd.cl", 15);
+		filename = malloc(16);
+		strncpy(filename, "poclbm_noamd.cl", 16);
 	}
 
 	int pl;
@@ -328,7 +330,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 	}
 
 	/* Patch the kernel if the hardware supports BFI_INT */
-	if (hasBitAlign) {
+	if (hasBitAlign == true) {
 		size_t nDevices;
 		size_t * binary_sizes;
 		char ** binaries;
