@@ -98,7 +98,8 @@ int clDevicesNum() {
 
 void advance(char **area, unsigned *remaining, const char *marker)
 {
-	char *find = strstr(*area, marker);
+	char *find = memmem(*area, *remaining, marker, strlen(marker));
+
 	if (!find)
 		fprintf(stderr, "Marker \"%s\" not found\n", marker), exit(1);
 	*remaining -= find - *area;
