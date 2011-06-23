@@ -119,6 +119,7 @@ bool use_syslog = false;
 static bool opt_quiet = false;
 static int opt_retries = 10;
 static int opt_fail_pause = 30;
+static int opt_log_interval = 5;
 int opt_scantime = 5;
 static json_t *opt_config;
 static const bool opt_time = true;
@@ -185,6 +186,9 @@ static struct option_help options_help[] = {
 	{ "intensity",
 	  "(-I) Intensity of scanning (0 - 16, default 5)" },
 
+	{ "log",
+	  "(-l) Interval in seconds between log output (default 5)" },
+
 	{ "ndevs",
 	  "(-n) Display number of detected GPUs" },
 
@@ -237,6 +241,7 @@ static struct option options[] = {
 	{ "debug", 0, NULL, 'D' },
 	{ "help", 0, NULL, 'h' },
 	{ "intensity", 1, NULL, 'I' },
+	{ "log", 1, NULL, 'l' },
 	{ "ndevs", 0, NULL, 'n' },
 	{ "no-longpoll", 0, NULL, 1003 },
 	{ "pass", 1, NULL, 'p' },
@@ -507,9 +512,11 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	struct timeval temp_tv_end, total_diff;
 	double khashes, secs;
 	double total_mhashes, total_secs;
+	double local_mhashes, local_secs;
+	static local_hashes_done = 0;
 
 	/* Don't bother calculating anything if we're not displaying it */
-	if (opt_quiet)
+	if (opt_quiet || !opt_log_interval)
 		return;
 	khashes = hashes_done / 1000.0;
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
@@ -518,40 +525,39 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			thr_id, hashes_done, hashes_done / secs);
 	gettimeofday(&temp_tv_end, NULL);
 	timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
-
+	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 
 	if (opt_n_threads + nDevs > 1) {
 		/* Totals are updated by all threads so can race without locking */
 		pthread_mutex_lock(&hash_lock);
 		total_hashes_done += hashes_done;
-		if (total_diff.tv_sec < 5) {
-			/* Only update the total every 5 seconds */
+		local_hashes_done += hashes_done;
+		if (total_diff.tv_sec < opt_log_interval) {
+			/* Only update the total every opt_log_interval seconds */
 			pthread_mutex_unlock(&hash_lock);
 			return;
 		}
 		gettimeofday(&total_tv_end, NULL);
 		pthread_mutex_unlock(&hash_lock);
-		timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
-		total_mhashes = total_hashes_done / 1000000.0;
-		total_secs = (double)total_diff.tv_sec +
-			((double)total_diff.tv_usec / 1000000.0);
-		applog(LOG_INFO, "[%.2f Mhash/sec] [%d Accepted] [%d Rejected]",
-		       total_mhashes / total_secs, accepted, rejected);
 	} else {
 		total_hashes_done += hashes_done;
+		local_hashes_done += hashes_done;
 		if (total_diff.tv_sec < 5) {
 			/* Only update the total every 5 seconds */
 			pthread_mutex_unlock(&hash_lock);
 			return;
 		}
 		gettimeofday(&total_tv_end, NULL);
-		timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
-		total_mhashes = total_hashes_done / 1000000.0;
-		total_secs = (double)total_diff.tv_sec +
-			((double)total_diff.tv_usec / 1000000.0);
-		applog(LOG_INFO, "[%.2f Mhash/sec] [%d Accepted] [%d Rejected]",
-		       total_mhashes / total_secs, accepted, rejected);
 	}
+	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
+	total_mhashes = total_hashes_done / 1000000.0;
+	total_secs = (double)total_diff.tv_sec +
+		((double)total_diff.tv_usec / 1000000.0);
+	local_mhashes = local_hashes_done / 1000000.0;
+	local_hashes_done = 0;
+	applog(LOG_INFO, "[%.2f | %.2f Mhash/s] [%d Accepted] [%d Rejected]",
+		local_mhashes / local_secs,
+		total_mhashes / total_secs, accepted, rejected);
 }
 
 static bool get_work(struct thr_info *thr, struct work *work)
@@ -1029,8 +1035,8 @@ static void parse_arg (int key, char *arg)
 		}
 		break;
 	}
-	case 'q':
-		opt_quiet = true;
+	case 'D':
+		opt_debug = true;
 		break;
 	case 'I':
 		v = atoi(arg);
@@ -1038,8 +1044,11 @@ static void parse_arg (int key, char *arg)
 			show_usage();
 		scan_intensity = v;
 		break;
-	case 'D':
-		opt_debug = true;
+	case 'l':
+		v = atoi(arg);
+		if (v < 0 || v > 9999)	/* sanity check */
+			show_usage();
+		opt_log_interval = v;
 		break;
 	case 'p':
 		free(rpc_pass);
@@ -1047,6 +1056,9 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'P':
 		opt_protocol = true;
+		break;
+	case 'q':
+		opt_quiet = true;
 		break;
 	case 'r':
 		v = atoi(arg);
