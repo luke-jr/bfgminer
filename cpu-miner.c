@@ -183,7 +183,7 @@ static struct option_help options_help[] = {
 	  "(-D) Enable debug output (default: off)" },
 
 	{ "intensity",
-	  "(-I) Intensity of scanning (0 - 15, default 4)" },
+	  "(-I) Intensity of scanning (0 - 16, default 5)" },
 
 	{ "ndevs",
 	  "(-n) Display number of detected GPUs" },
