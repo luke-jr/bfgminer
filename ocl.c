@@ -151,8 +151,11 @@ void patch_opcodes(char *w, unsigned remaining)
 	}
 }
 
-_clState *initCl(int gpu, char *name, size_t nameSize) {
+_clState *initCl(int gpu, char *name, size_t nameSize)
+{
+	bool hasBitAlign = false;
 	cl_int status = 0;
+	unsigned int i;
 
 	_clState *clState = malloc(sizeof(_clState));;
 
@@ -175,8 +178,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 			return NULL;
 		}   
 
-		unsigned int i;
-		for(i=0; i < numPlatforms; ++i)
+		for(i = 0; i < numPlatforms; ++i)
 		{   
 			char pbuff[100];
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
@@ -263,12 +265,43 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 		return NULL; 
 	}
 
+	/* Check for BFI INT support. Hopefully people don't mix devices with
+	 * and without it! */
+	char * extensions = malloc(1024);
+
+	for (i = 0; i < numDevices; i++) {
+		size_t retlen;
+		char *find;
+
+		status = clGetDeviceInfo(devices[i], CL_DEVICE_EXTENSIONS, 1024, (void *)extensions, &retlen);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_EXTENSIONS");
+			return NULL;
+		}
+		find = memmem(extensions, retlen, "cl_amd_media_ops", 16);
+		if (find)
+			hasBitAlign = true;
+	}
+	if (hasBitAlign)
+		applog(LOG_INFO, "cl_amd_media_ops not found, will not BFI_INT patch");
+	else
+		applog(LOG_INFO, "cl_amd_media_ops found, will patch with BFI_INT");
 
 	/////////////////////////////////////////////////////////////////
 	// Load CL file, build CL program object, create CL kernel object
 	/////////////////////////////////////////////////////////////////
-	//
-	const char * filename  = "poclbm.cl";
+
+	/* Load a different kernel depending on whether it supports
+	 * cl_amd_media_ops or not */
+	char *filename;
+	if (hasBitAlign) {
+		filename = malloc(9);
+		strncpy(filename, "poclbm.cl", 9);
+	} else {
+		filename = malloc(15);
+		strncpy(filename, "poclbm_noamd.cl", 15);
+	}
+
 	int pl;
 	char *source = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
@@ -276,7 +309,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
 	if(status != CL_SUCCESS) 
 	{   
-		printf("Error: Loading Binary into cl_program (clCreateProgramWithBinary)\n");
+		printf("Error: Loading Binary into cl_program (clCreateProgramWithSource)\n");
 		return NULL;
 	}
 
@@ -294,69 +327,71 @@ _clState *initCl(int gpu, char *name, size_t nameSize) {
 		return NULL; 
 	}
 
-	size_t nDevices;
-	size_t * binary_sizes;
-	char ** binaries;
-	unsigned int i;
-	int err;
+	/* Patch the kernel if the hardware supports BFI_INT */
+	if (hasBitAlign) {
+		size_t nDevices;
+		size_t * binary_sizes;
+		char ** binaries;
+		int err;
 
-	/* figure out number of devices and the sizes of the binary for each device. */
-	err = clGetProgramInfo( clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(nDevices), &nDevices, NULL );
-	binary_sizes = (size_t *)malloc( sizeof(size_t)*nDevices );
-	err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*nDevices, binary_sizes, NULL );
+		/* figure out number of devices and the sizes of the binary for each device. */
+		err = clGetProgramInfo( clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(nDevices), &nDevices, NULL );
+		binary_sizes = (size_t *)malloc( sizeof(size_t)*nDevices );
+		err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*nDevices, binary_sizes, NULL );
 
-	/* copy over all of the generated binaries. */
-	binaries = (char **)malloc( sizeof(char *)*nDevices );
-	for( i = 0; i < nDevices; i++ ) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "binary size %d : %d\n", i, binary_sizes[i]);
-		if( binary_sizes[i] != 0 )
-			binaries[i] = (char *)malloc( sizeof(char)*binary_sizes[i] );
-		else
-			binaries[i] = NULL;
-	}
-	err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
+		/* copy over all of the generated binaries. */
+		binaries = (char **)malloc( sizeof(char *)*nDevices );
+		for( i = 0; i < nDevices; i++ ) {
+			if (opt_debug)
+				applog(LOG_DEBUG, "binary size %d : %d\n", i, binary_sizes[i]);
+			if( binary_sizes[i] != 0 )
+				binaries[i] = (char *)malloc( sizeof(char)*binary_sizes[i] );
+			else
+				binaries[i] = NULL;
+		}
+		err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
 
-	for (i = 0; i < nDevices; i++) {
-		if (!binaries[i])
-			continue;
+		for (i = 0; i < nDevices; i++) {
+			if (!binaries[i])
+				continue;
 
-		unsigned remaining = binary_sizes[i];
-		char *w = binaries[i];
-		unsigned int start, length;
+			unsigned remaining = binary_sizes[i];
+			char *w = binaries[i];
+			unsigned int start, length;
 
-		/* Find 2nd incidence of .text, and copy the program's
-		 * position and length at a fixed offset from that. Then go
-		 * back and find the 2nd incidence of \x7ELF (rewind by one
-		 * from ELF) and then patch the opcocdes */
-		advance(&w, &remaining, ".text");
-		w++; remaining--;
-		advance(&w, &remaining, ".text");
-		memcpy(&start, w + 285, 4);
-		memcpy(&length, w + 289, 4);
-		w = binaries[i]; remaining = binary_sizes[i];
-		advance(&w, &remaining, "ELF");
-		w++; remaining--;
-		advance(&w, &remaining, "ELF");
-		w--; remaining++;
-		w += start; remaining -= start;
-		if (opt_debug)
-			printf("At %p (%u rem. bytes), to begin patching\n",
-				w, remaining);
-		patch_opcodes(w, length);
-	}
-	status = clReleaseProgram(clState->program);
-	if(status != CL_SUCCESS)
-	{
-		printf("Error: Releasing program. (clReleaseProgram)\n");
-		return NULL;
-	}
+			/* Find 2nd incidence of .text, and copy the program's
+			* position and length at a fixed offset from that. Then go
+			* back and find the 2nd incidence of \x7ELF (rewind by one
+			* from ELF) and then patch the opcocdes */
+			advance(&w, &remaining, ".text");
+			w++; remaining--;
+			advance(&w, &remaining, ".text");
+			memcpy(&start, w + 285, 4);
+			memcpy(&length, w + 289, 4);
+			w = binaries[i]; remaining = binary_sizes[i];
+			advance(&w, &remaining, "ELF");
+			w++; remaining--;
+			advance(&w, &remaining, "ELF");
+			w--; remaining++;
+			w += start; remaining -= start;
+			if (opt_debug)
+				printf("At %p (%u rem. bytes), to begin patching\n",
+					w, remaining);
+			patch_opcodes(w, length);
+		}
+		status = clReleaseProgram(clState->program);
+		if(status != CL_SUCCESS)
+		{
+			printf("Error: Releasing program. (clReleaseProgram)\n");
+			return NULL;
+		}
 
-	clState->program = clCreateProgramWithBinary(clState->context, numDevices, &devices[gpu], binary_sizes, binaries, &status, NULL);
-	if(status != CL_SUCCESS) 
-	{   
-		printf("Error: Loading Binary into cl_program (clCreateProgramWithBinary)\n");
-		return NULL;
+		clState->program = clCreateProgramWithBinary(clState->context, numDevices, &devices[gpu], binary_sizes, (const unsigned char **)binaries, &status, NULL);
+		if(status != CL_SUCCESS) 
+		{   
+			printf("Error: Loading Binary into cl_program (clCreateProgramWithBinary)\n");
+			return NULL;
+		}
 	}
 
 	/* create a cl program executable for all the devices specified */
