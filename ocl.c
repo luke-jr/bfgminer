@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -154,7 +155,7 @@ void patch_opcodes(char *w, unsigned remaining)
 	}
 }
 
-_clState *initCl(int gpu, char *name, size_t nameSize)
+_clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	bool hasBitAlign = false;
 	cl_int status = 0;
@@ -241,7 +242,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 			printf("\t%i\t%s\n", i, pbuff);
 		}
 
-		if (gpu >= 0 && gpu < numDevices) {
+		if (gpu < numDevices) {
 			char pbuff[100];
 			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 			if(status != CL_SUCCESS)

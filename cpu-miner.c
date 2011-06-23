@@ -127,7 +127,7 @@ static enum sha256_algos opt_algo = ALGO_SSE2_64;
 #else
 static enum sha256_algos opt_algo = ALGO_C;
 #endif
-static int nDevs;
+static unsigned int nDevs;
 static int opt_n_threads = 1;
 static int num_processors;
 static int scan_intensity = 5;
@@ -642,7 +642,7 @@ static void *miner_thread(void *userdata)
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
 	if (!(opt_n_threads % num_processors))
-		affine_to_cpu(mythr->id, mythr->id % num_processors);
+		affine_to_cpu(thr_id - nDevs, thr_id % num_processors);
 
 	while (1) {
 		struct work work __attribute__((aligned(128)));
@@ -671,7 +671,7 @@ static void *miner_thread(void *userdata)
 
 #ifdef WANT_X8664_SSE2
 		case ALGO_SSE2_64: {
-			unsigned int rc5 =
+			int rc5 =
 			        scanhash_sse2_64(thr_id, work.midstate, work.data + 64,
 						 work.hash1, work.hash,
 						 work.target,
@@ -683,7 +683,7 @@ static void *miner_thread(void *userdata)
 
 #ifdef WANT_SSE2_4WAY
 		case ALGO_4WAY: {
-			unsigned int rc4 =
+			int rc4 =
 				ScanHash_4WaySSE2(thr_id, work.midstate, work.data + 64,
 						  work.hash1, work.hash,
 						  work.target,
@@ -907,7 +907,7 @@ out:
 
 static void restart_threads(void)
 {
-	int i;
+	unsigned int i;
 
 	for (i = 0; i < opt_n_threads + nDevs; i++)
 		work_restart[i].restart = 1;
@@ -988,7 +988,7 @@ out:
 
 static void show_usage(void)
 {
-	int i;
+	unsigned int i;
 
 	printf("minerd version %s\n\n", VERSION);
 	printf("Usage:\tminerd [options]\n\nSupported options:\n");
@@ -1004,7 +1004,8 @@ static void show_usage(void)
 
 static void parse_arg (int key, char *arg)
 {
-	int v, i;
+	int v;
+	unsigned int i;
 
 	switch(key) {
 	case 'a':
@@ -1108,7 +1109,7 @@ static void parse_arg (int key, char *arg)
 
 static void parse_config(void)
 {
-	int i;
+	unsigned int i;
 	json_t *val;
 
 	if (!json_is_object(opt_config))
@@ -1156,7 +1157,7 @@ static void parse_cmdline(int argc, char *argv[])
 int main (int argc, char *argv[])
 {
 	struct thr_info *thr;
-	int i;
+	unsigned int i;
 	char name[32];
 
 #ifdef WIN32
