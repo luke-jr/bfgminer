@@ -825,12 +825,12 @@ static void *gpuminer_thread(void *userdata)
 	struct work *work = malloc(sizeof(struct work));
 	bool need_work = true;
 	unsigned int threads = 1 << (15 + scan_intensity);
-	unsigned int vectors = preferred_vwidth;
+	unsigned int vectors = clState->preferred_vwidth;
 	unsigned int hashes_done = threads * vectors;
 
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
-	localThreads[0] = max_work_size / vectors;
+	localThreads[0] = clState->max_work_size / vectors;
 
 	while (1) {
 		struct timeval tv_end, diff;
@@ -1165,7 +1165,7 @@ static void parse_cmdline(int argc, char *argv[])
 int main (int argc, char *argv[])
 {
 	struct thr_info *thr;
-	int i;
+	unsigned int i;
 	char name[32];
 
 #ifdef WIN32
@@ -1177,7 +1177,7 @@ int main (int argc, char *argv[])
 
 	nDevs = clDevicesNum();
 	if (opt_ndevs) {
-		printf("%i\n", nDevs);
+		applog(LOG_INFO, "%i", nDevs);
 		return nDevs;
 	}
 
@@ -1258,13 +1258,13 @@ int main (int argc, char *argv[])
 		if (!thr->q)
 			return 1;
 
-		printf("Init GPU %i\n", i);
+		applog(LOG_INFO, "Init GPU %i", i);
 		clStates[i] = initCl(i, name, sizeof(name));
 		if (!clStates[i]) {
 			applog(LOG_ERR, "Failed to init GPU %d", i);
 			continue;
 		}
-		printf("initCl() finished. Found %s\n", name);
+		applog(LOG_INFO, "initCl() finished. Found %s", name);
 
 		if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", i);

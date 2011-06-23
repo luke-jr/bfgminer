@@ -14,16 +14,13 @@
 #include "findnonce.h"
 #include "ocl.h"
 
-cl_uint preferred_vwidth = 1;
-size_t max_work_size;
-
 char *file_contents(const char *filename, int *length)
 {
 	FILE *f = fopen(filename, "r");
 	void *buffer;
 
 	if (!f) {
-		fprintf(stderr, "Unable to open %s for reading\n", filename);
+		applog(LOG_ERR, "Unable to open %s for reading", filename);
 		return NULL;
 	}
 
@@ -102,7 +99,7 @@ void advance(char **area, unsigned *remaining, const char *marker)
 	char *find = memmem(*area, *remaining, marker, strlen(marker));
 
 	if (!find)
-		fprintf(stderr, "Marker \"%s\" not found\n", marker), exit(1);
+		applog(LOG_ERR, "Marker \"%s\" not found", marker), exit(1);
 	*remaining -= find - *area;
 	*area = find;
 }
@@ -155,7 +152,7 @@ void patch_opcodes(char *w, unsigned remaining)
 	}
 }
 
-_clState *initCl(int gpu, char *name, size_t nameSize)
+_clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	bool hasBitAlign = false;
 	cl_int status = 0;
@@ -215,7 +212,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 	}
 
 	cl_device_id *devices;
-	if(numDevices > 0 ) {
+	if (numDevices > 0 ) {
 		devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
 
 		/* Now, get the device list data */
@@ -227,7 +224,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 			return NULL;
 		}
 
-		printf("List of devices:\n");
+		applog(LOG_INFO, "List of devices:");
 
 		unsigned int i;
 		for(i=0; i<numDevices; i++) {
@@ -239,10 +236,10 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 				return NULL;
 			}
 
-			printf("\t%i\t%s\n", i, pbuff);
+			applog(LOG_INFO, "\t%i\t%s", i, pbuff);
 		}
 
-		if (gpu >= 0 && gpu < numDevices) {
+		if (gpu < numDevices) {
 			char pbuff[100];
 			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 			if(status != CL_SUCCESS)
@@ -251,7 +248,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 				return NULL;
 			}
 
-			printf("Selected %i: %s\n", gpu, pbuff);
+			applog(LOG_INFO, "Selected %i: %s", gpu, pbuff);
 			strncpy(name, pbuff, nameSize);
 		} else {
 			printf("Invalid GPU %i\n", gpu);
@@ -272,36 +269,32 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 	/* Check for BFI INT support. Hopefully people don't mix devices with
 	 * and without it! */
 	char * extensions = malloc(1024);
+	const char * camo = "cl_amd_media_ops";
+	char *find;
 
-	/* This needs to create separate programs for each GPU, but for now
-	 * assume they all have the same capabilities D: */
-	for (i = 0; i < numDevices; i++) {
-		const char * camo = "cl_amd_media_ops";
-		char *find;
-
-		status = clGetDeviceInfo(devices[i], CL_DEVICE_EXTENSIONS, 1024, (void *)extensions, NULL);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_EXTENSIONS");
-			return NULL;
-		}
-		find = strstr(extensions, camo);
-		if (find)
-			hasBitAlign = true;
-
-		status = clGetDeviceInfo(devices[i], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&preferred_vwidth, NULL);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT");
-			return NULL;
-		}
-		applog(LOG_INFO, "Preferred vector width reported %d", preferred_vwidth);
-
-		status = clGetDeviceInfo(devices[i], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&max_work_size, NULL);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_WORK_GROUP_SIZE");
-			return NULL;
-		}
-		applog(LOG_INFO, "Max work group size reported %d", max_work_size);
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_EXTENSIONS, 1024, (void *)extensions, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_EXTENSIONS");
+		return NULL;
 	}
+	find = strstr(extensions, camo);
+	if (find)
+		hasBitAlign = true;
+
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT");
+		return NULL;
+	}
+	applog(LOG_INFO, "Preferred vector width reported %d", clState->preferred_vwidth);
+
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&clState->max_work_size, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_WORK_GROUP_SIZE");
+		return NULL;
+	}
+	if (opt_debug)
+		applog(LOG_DEBUG, "Max work group size reported %d", clState->max_work_size);
 
 	/////////////////////////////////////////////////////////////////
 	// Load CL file, build CL program object, create CL kernel object
@@ -316,7 +309,7 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 	size_t sourceSize[] = {(size_t)pl};
 
 	/* Patch the source file with the preferred_vwidth */
-	if (preferred_vwidth > 1) {
+	if (clState->preferred_vwidth > 1) {
 		char *find = strstr(source, "VECTORSX");
 
 		if (unlikely(!find)) {
@@ -324,11 +317,12 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 			return NULL;
 		}
 		find += 7; // "VECTORS"
-		if (preferred_vwidth == 2)
+		if (clState->preferred_vwidth == 2)
 			strncpy(find, "2", 1);
 		else
 			strncpy(find, "4", 1);
-		applog(LOG_INFO, "Patched source to suit %d vectors", preferred_vwidth);
+		if (opt_debug)
+			applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->preferred_vwidth);
 	}
 
 	/* Patch the source file defining BFI_INT */
@@ -341,9 +335,13 @@ _clState *initCl(int gpu, char *name, size_t nameSize)
 		}
 		find += 7; // "BFI_INT"
 		strncpy(find, " ", 1);
-		applog(LOG_INFO, "cl_amd_media_ops found, patched source with BFI_INT");
-	} else
-		applog(LOG_INFO, "cl_amd_media_ops not found, will not BFI_INT patch");
+		if (opt_debug)
+			applog(LOG_DEBUG, "cl_amd_media_ops found, patched source with BFI_INT");
+	} else if (opt_debug)
+		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
+
+	applog(LOG_INFO, "Initialising kernel with%s BFI_INT patching, %d vectors and %d worksize",
+	       hasBitAlign ? "" : "out", clState->preferred_vwidth, clState->max_work_size);
 
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
 	if(status != CL_SUCCESS) 
