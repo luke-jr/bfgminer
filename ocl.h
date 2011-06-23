@@ -16,7 +16,7 @@ typedef struct {
 
 extern char *file_contents(const char *filename, int *length);
 extern int clDevicesNum();
-extern _clState *initCl(unsigned int gpu, char *name, size_t nameSize);
+extern _clState *initCl(int gpu, char *name, size_t nameSize);
 extern cl_uint preferred_vwidth;
 extern size_t max_work_size;
 

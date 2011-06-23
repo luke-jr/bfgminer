@@ -136,7 +136,7 @@ void postcalc_hash(struct thr_info *thr, dev_blk_ctx *blk, struct work *work, ui
 	cl_uint A, B, C, D, E, F, G, H;
 	cl_uint W[16];
 	cl_uint nonce;
-	cl_uint best_g = 0xFFFFFFFF;
+	cl_uint best_g = ~0;
 	uint32_t end = start + 1026;
 
 	for (nonce = start; nonce != end; nonce+=1) {
@@ -183,6 +183,6 @@ void postcalc_hash(struct thr_info *thr, dev_blk_ctx *blk, struct work *work, ui
 		}
 	}
 out:
-	if (unlikely(best_g == 0xFFFFFFFF))
+	if (unlikely(best_g == ~0))
 		applog(LOG_ERR, "No best_g found! Error in OpenCL code?");
 }
