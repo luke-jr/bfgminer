@@ -851,7 +851,7 @@ static void *gpuminer_thread(void *userdata)
 			work->blk.nonce = 0;
 			status = queue_kernel_parameters(&work->blk, kernel, clState->outputBuffer);
 			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); exit (1); }
+				{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
 
 			work_restart[thr_id].restart = 0;
 			need_work = false;
