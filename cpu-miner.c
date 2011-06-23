@@ -1,5 +1,6 @@
 
 /*
+ * Copyright 2011 Con Kolivas
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -1230,7 +1231,7 @@ int main (int argc, char *argv[])
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
 
-	/* start gpu mining threads */
+	/* start GPU mining threads */
 	for (i = 0; i < nDevs; i++) {
 		thr = &thr_info[i];
 
@@ -1253,7 +1254,7 @@ int main (int argc, char *argv[])
 
 	applog(LOG_INFO, "%d gpu miner threads started", i);
 
-	/* start mining threads */
+	/* start CPU mining threads */
 	for (i = nDevs; i < nDevs + opt_n_threads; i++) {
 		thr = &thr_info[i];
 
@@ -1270,10 +1271,18 @@ int main (int argc, char *argv[])
 		sleep(1);	/* don't pound RPC server all at once */
 	}
 
+	
 	applog(LOG_INFO, "%d cpu miner threads started, "
 		"using SHA256 '%s' algorithm.",
 		opt_n_threads,
 		algo_names[opt_algo]);
+
+	/* Restart count as it will be wrong till all threads are started */
+	pthread_mutex_lock(&hash_lock);
+	gettimeofday(&total_tv_start, NULL);
+	gettimeofday(&total_tv_end, NULL);
+	total_hashes_done = 0;
+	pthread_mutex_unlock(&hash_lock);
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
