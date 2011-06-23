@@ -1251,6 +1251,10 @@ int main (int argc, char *argv[])
 
 		printf("Init GPU %i\n", i);
 		clStates[i] = initCl(i, name, sizeof(name));
+		if (!clStates[i]) {
+			applog(LOG_ERR, "Failed to init GPU %d", i);
+			continue;
+		}
 		printf("initCl() finished. Found %s\n", name);
 
 		if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr))) {
