@@ -542,11 +542,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	} else {
 		total_hashes_done += hashes_done;
 		local_hashes_done += hashes_done;
-		if (total_diff.tv_sec < 5) {
-			/* Only update the total every 5 seconds */
-			pthread_mutex_unlock(&hash_lock);
+		if (total_diff.tv_sec < opt_log_interval) 
 			return;
-		}
 		gettimeofday(&total_tv_end, NULL);
 	}
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
