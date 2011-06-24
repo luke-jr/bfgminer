@@ -9,7 +9,7 @@
  */
 
 #define _GNU_SOURCE
-#include "cpuminer-config.h"
+#include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,6 +93,7 @@ void applog(int prio, const char *fmt, ...)
 			tm.tm_sec,
 			fmt);
 		vfprintf(stderr, f, ap);	/* atomic write to stderr */
+		fflush(stderr);
 	}
 	va_end(ap);
 	fflush(stderr);

@@ -9,7 +9,7 @@
  *
  */
 
-#include "cpuminer-config.h"
+#include "config.h"
 
 #include "miner.h"
 
