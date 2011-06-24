@@ -286,7 +286,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT");
 		return NULL;
 	}
-	applog(LOG_INFO, "Preferred vector width reported %d", clState->preferred_vwidth);
+	if (opt_debug)
+		applog(LOG_DEBUG, "Preferred vector width reported %d", clState->preferred_vwidth);
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&clState->max_work_size, NULL);
 	if (status != CL_SUCCESS) {
