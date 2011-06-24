@@ -341,8 +341,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	} else if (opt_debug)
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
 
-	applog(LOG_INFO, "Initialising kernel with%s BFI_INT patching, %d vectors and %d worksize",
-	       hasBitAlign ? "" : "out", clState->preferred_vwidth, clState->max_work_size);
+	applog(LOG_INFO, "Initialising kernel with%s BFI_INT patching, %d vectors and worksize %d",
+	       hasBitAlign ? "" : "out", clState->preferred_vwidth, clState->max_work_size / clState->preferred_vwidth);
 
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
 	if(status != CL_SUCCESS) 
