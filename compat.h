@@ -20,6 +20,10 @@ static inline int setpriority(int which, int who, int prio)
 	return 0;
 }
 
+typedef unsigned long int ulong;
+typedef unsigned short int ushort;
+typedef unsigned int uint;
+
 #endif /* WIN32 */
 
 #endif /* __COMPAT_H__ */

@@ -1,13 +1,15 @@
 
+ACLOCAL_AMFLAGS = -I m4
+
 if WANT_JANSSON
 JANSSON_INCLUDES= -I$(top_srcdir)/compat/jansson
 else
 JANSSON_INCLUDES=
 endif
 
-EXTRA_DIST	= example-cfg.json
+EXTRA_DIST	= example-cfg.json m4/gnulib-cache.m4
 
-SUBDIRS		= compat
+SUBDIRS		= lib compat
 
 INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
 
@@ -19,8 +21,8 @@ minerd_SOURCES	= elist.h miner.h compat.h			\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c
 minerd_LDFLAGS	= $(PTHREAD_FLAGS)
-minerd_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@
-minerd_CPPFLAGS = @LIBCURL_CPPFLAGS@
+minerd_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ lib/libgnu.a
+minerd_CPPFLAGS = @LIBCURL_CPPFLAGS@ -I$(top_builddir)/lib -I$(top_srcdir)/lib
 
 if HAVE_x86_64
 if HAS_YASM

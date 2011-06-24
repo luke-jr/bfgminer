@@ -1,0 +1,9 @@
+/Makefile.am
+/dummy.c
+/memchr.c
+/memchr.valgrind
+/memmem.c
+/stddef.in.h
+/stdint.in.h
+/str-two-way.h
+/string.in.h

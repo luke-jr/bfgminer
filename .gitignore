@@ -24,3 +24,12 @@ config.sub
 
 mingw32-config.cache
 
+/arg-nonnull.h
+/c++defs.h
+/warn-on-use.h
+
+*~
+
+ext_deps
+
+config.h
