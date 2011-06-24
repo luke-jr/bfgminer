@@ -184,7 +184,7 @@ static struct option_help options_help[] = {
 	  "(-D) Enable debug output (default: off)" },
 
 	{ "intensity",
-	  "(-I) Intensity of scanning (0 - 16, default 5)" },
+	  "(-I) Intensity of scanning (0 - 10, default 5)" },
 
 	{ "log",
 	  "(-l) Interval in seconds between log output (default 5)" },
@@ -899,13 +899,10 @@ static void *gpuminer_thread(void *userdata)
 
 		work->blk.nonce += hashes_done;
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
-		if (diff.tv_sec > opt_scantime) {
-			need_work = true;
-			continue;
-		}
 
-		if (unlikely(work->blk.nonce > MAXTHREADS - hashes_done) ||
-			(work_restart[thr_id].restart))
+		if (diff.tv_sec > opt_scantime  || 
+			work->blk.nonce > MAXTHREADS - hashes_done ||
+			work_restart[thr_id].restart)
 				need_work = true;
 	}
 out:
@@ -1043,7 +1040,7 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'I':
 		v = atoi(arg);
-		if (v < 0 || v > 16) /* sanity check */
+		if (v < 0 || v > 10) /* sanity check */
 			show_usage();
 		scan_intensity = v;
 		break;
