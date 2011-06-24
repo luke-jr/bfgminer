@@ -141,7 +141,7 @@ int longpoll_thr_id;
 struct work_restart *work_restart = NULL;
 pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
-static unsigned long total_hashes_done;
+static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static int accepted, rejected;
 
@@ -511,7 +511,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 {
 	struct timeval temp_tv_end, total_diff;
 	double khashes, secs;
-	double total_mhashes, total_secs;
+	double total_secs;
 	double local_mhashes, local_secs;
 	static local_hashes_done = 0;
 
@@ -530,7 +530,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (opt_n_threads + nDevs > 1) {
 		/* Totals are updated by all threads so can race without locking */
 		pthread_mutex_lock(&hash_lock);
-		total_hashes_done += hashes_done;
+		total_mhashes_done += (double)hashes_done / 1000000.0;
 		local_hashes_done += hashes_done;
 		if (total_diff.tv_sec < opt_log_interval) {
 			/* Only update the total every opt_log_interval seconds */
@@ -540,21 +540,20 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		gettimeofday(&total_tv_end, NULL);
 		pthread_mutex_unlock(&hash_lock);
 	} else {
-		total_hashes_done += hashes_done;
+		total_mhashes_done += (double)hashes_done / 1000000.0;
 		local_hashes_done += hashes_done;
 		if (total_diff.tv_sec < opt_log_interval) 
 			return;
 		gettimeofday(&total_tv_end, NULL);
 	}
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
-	total_mhashes = total_hashes_done / 1000000.0;
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 	local_mhashes = local_hashes_done / 1000000.0;
 	local_hashes_done = 0;
 	applog(LOG_INFO, "[%.2f | %.2f Mhash/s] [%d Accepted] [%d Rejected]",
 		local_mhashes / local_secs,
-		total_mhashes / total_secs, accepted, rejected);
+		total_mhashes_done / total_secs, accepted, rejected);
 }
 
 static bool get_work(struct thr_info *thr, struct work *work)
@@ -1305,7 +1304,7 @@ int main (int argc, char *argv[])
 	pthread_mutex_lock(&hash_lock);
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
-	total_hashes_done = 0;
+	total_mhashes_done = 0;
 	pthread_mutex_unlock(&hash_lock);
 
 	/* main loop - simply wait for workio thread to exit */
