@@ -133,7 +133,7 @@ static enum sha256_algos opt_algo = ALGO_C;
 static int nDevs;
 static int opt_n_threads = 1;
 static int num_processors;
-static int scan_intensity = 5;
+static int scan_intensity = 4;
 static char *rpc_url;
 static char *rpc_userpass;
 static char *rpc_user, *rpc_pass;
@@ -187,7 +187,7 @@ static struct option_help options_help[] = {
 	  "(-D) Enable debug output (default: off)" },
 
 	{ "intensity",
-	  "(-I) Intensity of scanning (0 - 10, default 5)" },
+	  "(-I) Intensity of scanning (0 - 10, default 4)" },
 
 	{ "log",
 	  "(-l) Interval in seconds between log output (default 5)" },
