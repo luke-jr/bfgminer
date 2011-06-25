@@ -1303,6 +1303,8 @@ int main (int argc, char *argv[])
 	if (unlikely(pthread_mutex_init(&get_lock, NULL)))
 		return 1;
 
+	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
+		return 1;
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
 		openlog("cpuminer", LOG_PID, LOG_USER);
@@ -1408,6 +1410,7 @@ int main (int argc, char *argv[])
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
+	curl_global_cleanup();
 
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
