@@ -14,6 +14,7 @@ typedef struct {
 	cl_mem outputBuffer;
 	cl_uint preferred_vwidth;
 	size_t max_work_size;
+	size_t work_size;
 } _clState;
 
 extern char *file_contents(const char *filename, int *length);

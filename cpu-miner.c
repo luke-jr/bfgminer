@@ -120,6 +120,8 @@ static bool opt_quiet = false;
 static int opt_retries = 10;
 static int opt_fail_pause = 30;
 static int opt_log_interval = 5;
+int opt_vectors;
+int opt_worksize;
 int opt_scantime = 60;
 static json_t *opt_config;
 static const bool opt_time = true;
@@ -231,6 +233,12 @@ static struct option_help options_help[] = {
 	  "(-u USERNAME) Username for bitcoin JSON-RPC server "
 	  "(default: " DEF_RPC_USERNAME ")" },
 
+	{ "vectors N",
+	  "(-v N) Override detected optimal vector width (default: detected, 1,2 or 4)" },
+
+	{ "worksize N",
+	  "(-w N) Override detected optimal worksize (default: detected)" },
+
 	{ "pass PASSWORD",
 	  "(-p PASSWORD) Password for bitcoin JSON-RPC server "
 	  "(default: " DEF_RPC_PASSWORD ")" },
@@ -257,6 +265,8 @@ static struct option options[] = {
 #endif
 	{ "url", 1, NULL, 1001 },
 	{ "user", 1, NULL, 'u' },
+	{ "vectors", 1, NULL, 'v' },
+	{ "worksize", 1, NULL, 'w' },
 	{ "userpass", 1, NULL, 1002 },
 };
 
@@ -902,7 +912,7 @@ static void *gpuminer_thread(void *userdata)
 
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
-	localThreads[0] = clState->max_work_size / vectors;
+	localThreads[0] = clState->work_size;
 
 	while (1) {
 		struct timeval tv_end, diff, tv_workstart;
@@ -1163,6 +1173,20 @@ static void parse_arg (int key, char *arg)
 	case 'u':
 		free(rpc_user);
 		rpc_user = strdup(arg);
+		break;
+	case 'v':
+		v = atoi(arg);
+		if (v != 1 && v != 2 && v != 4)
+			show_usage();
+
+		opt_vectors = v;
+		break;
+	case 'w':
+		v = atoi(arg);
+		if (v < 1 || v > 9999)	/* sanity check */
+			show_usage();
+
+		opt_worksize = v;
 		break;
 	case 1001:			/* --url */
 		if (strncmp(arg, "http://", 7) &&

@@ -14,6 +14,9 @@
 #include "findnonce.h"
 #include "ocl.h"
 
+extern int opt_vectors;
+extern int opt_worksize;
+
 char *file_contents(const char *filename, int *length)
 {
 	FILE *f = fopen(filename, "r");
@@ -309,6 +312,13 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char *source = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
 
+	if (opt_vectors)
+		clState->preferred_vwidth = opt_vectors;
+	if (opt_worksize && opt_worksize <= clState->max_work_size)
+		clState->work_size = opt_worksize;
+	else
+		clState->work_size = clState->max_work_size / clState->preferred_vwidth;
+
 	/* Patch the source file with the preferred_vwidth */
 	if (clState->preferred_vwidth > 1) {
 		char *find = strstr(source, "VECTORSX");
@@ -342,7 +352,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
 
 	applog(LOG_INFO, "Initialising kernel with%s BFI_INT patching, %d vectors and worksize %d",
-	       hasBitAlign ? "" : "out", clState->preferred_vwidth, clState->max_work_size / clState->preferred_vwidth);
+	       hasBitAlign ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
 	if(status != CL_SUCCESS) 
