@@ -391,7 +391,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		binaries = (char **)malloc( sizeof(char *)*nDevices );
 		if (opt_debug)
 			applog(LOG_DEBUG, "binary size %d : %d", gpu, binary_sizes[gpu]);
-		binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[i] );
+		binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[gpu] );
 		err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
 
 		unsigned remaining = binary_sizes[gpu];
