@@ -499,6 +499,7 @@ static bool workio_submit_work(struct workio_cmd *wc)
 		applog(LOG_ERR, "Failed to create submit_thread");
 		return false;
 	}
+	pthread_detach(thr);
 
 	return true;
 }
