@@ -107,11 +107,11 @@ void advance(char **area, unsigned *remaining, const char *marker)
 	*area = find;
 }
 
-#define OP3_INST_BFE_UINT	4UL
-#define OP3_INST_BFE_INT	5UL
-#define OP3_INST_BFI_INT	6UL
-#define OP3_INST_BIT_ALIGN_INT	12UL
-#define OP3_INST_BYTE_ALIGN_INT	13UL
+#define OP3_INST_BFE_UINT	4ULL
+#define OP3_INST_BFE_INT	5ULL
+#define OP3_INST_BFI_INT	6ULL
+#define OP3_INST_BIT_ALIGN_INT	12ULL
+#define OP3_INST_BYTE_ALIGN_INT	13ULL
 
 void patch_opcodes(char *w, unsigned remaining)
 {
