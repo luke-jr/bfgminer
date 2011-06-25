@@ -379,44 +379,35 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 		/* copy over all of the generated binaries. */
 		binaries = (char **)malloc( sizeof(char *)*nDevices );
-		for( i = 0; i < nDevices; i++ ) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "binary size %d : %d", i, binary_sizes[i]);
-			if( binary_sizes[i] != 0 )
-				binaries[i] = (char *)malloc( sizeof(char)*binary_sizes[i] );
-			else
-				binaries[i] = NULL;
-		}
+		if (opt_debug)
+			applog(LOG_DEBUG, "binary size %d : %d", gpu, binary_sizes[gpu]);
+		binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[i] );
 		err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
 
-		for (i = 0; i < nDevices; i++) {
-			if (!binaries[i])
-				continue;
+		unsigned remaining = binary_sizes[gpu];
+		char *w = binaries[gpu];
+		unsigned int start, length;
 
-			unsigned remaining = binary_sizes[i];
-			char *w = binaries[i];
-			unsigned int start, length;
+		/* Find 2nd incidence of .text, and copy the program's
+		* position and length at a fixed offset from that. Then go
+		* back and find the 2nd incidence of \x7ELF (rewind by one
+		* from ELF) and then patch the opcocdes */
+		advance(&w, &remaining, ".text");
+		w++; remaining--;
+		advance(&w, &remaining, ".text");
+		memcpy(&start, w + 285, 4);
+		memcpy(&length, w + 289, 4);
+		w = binaries[gpu]; remaining = binary_sizes[gpu];
+		advance(&w, &remaining, "ELF");
+		w++; remaining--;
+		advance(&w, &remaining, "ELF");
+		w--; remaining++;
+		w += start; remaining -= start;
+		if (opt_debug)
+			applog(LOG_DEBUG, "At %p (%u rem. bytes), to begin patching",
+				w, remaining);
+		patch_opcodes(w, length);
 
-			/* Find 2nd incidence of .text, and copy the program's
-			* position and length at a fixed offset from that. Then go
-			* back and find the 2nd incidence of \x7ELF (rewind by one
-			* from ELF) and then patch the opcocdes */
-			advance(&w, &remaining, ".text");
-			w++; remaining--;
-			advance(&w, &remaining, ".text");
-			memcpy(&start, w + 285, 4);
-			memcpy(&length, w + 289, 4);
-			w = binaries[i]; remaining = binary_sizes[i];
-			advance(&w, &remaining, "ELF");
-			w++; remaining--;
-			advance(&w, &remaining, "ELF");
-			w--; remaining++;
-			w += start; remaining -= start;
-			if (opt_debug)
-				applog(LOG_DEBUG, "At %p (%u rem. bytes), to begin patching",
-					w, remaining);
-			patch_opcodes(w, length);
-		}
 		status = clReleaseProgram(clState->program);
 		if(status != CL_SUCCESS)
 		{
