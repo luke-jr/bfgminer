@@ -220,7 +220,7 @@ static struct option_help options_help[] = {
 #endif
 
 	{ "threads N",
-	  "(-t N) Number of miner CPU threads (default: number of processors)" },
+	  "(-t N) Number of miner CPU threads (default: number of processors or 0 if GPU mining)" },
 
 	{ "url URL",
 	  "URL for bitcoin JSON-RPC server "
@@ -1293,6 +1293,8 @@ int main (int argc, char *argv[])
 		applog(LOG_INFO, "%i", nDevs);
 		return nDevs;
 	}
+	if (nDevs)
+		opt_n_threads = 0;
 
 	rpc_url = strdup(DEF_RPC_URL);
 
