@@ -131,6 +131,8 @@ static enum sha256_algos opt_algo = ALGO_SSE2_64;
 static enum sha256_algos opt_algo = ALGO_C;
 #endif
 static int nDevs;
+static int opt_g_threads = 2;
+static int gpu_threads;
 static int opt_n_threads = 1;
 static int num_processors;
 static int scan_intensity = 4;
@@ -583,7 +585,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 
-	if (opt_n_threads + nDevs > 1) {
+	if (opt_n_threads + gpu_threads > 1) {
 		/* Totals are updated by all threads so can race without locking */
 		pthread_mutex_lock(&hash_lock);
 		total_mhashes_done += (double)hashes_done / 1000000.0;
@@ -715,7 +717,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 static inline int cpu_from_thr_id(int thr_id)
 {
-	return (thr_id - nDevs) % num_processors;
+	return (thr_id - gpu_threads) % num_processors;
 }
 
 static void *miner_thread(void *userdata)
@@ -1003,7 +1005,7 @@ static void restart_threads(void)
 {
 	int i;
 
-	for (i = 0; i < opt_n_threads + nDevs; i++)
+	for (i = 0; i < opt_n_threads + gpu_threads; i++)
 		work_restart[i].restart = 1;
 	/* If longpoll has detected a new block, we should discard any queued
 	 * blocks in work_heap */
@@ -1301,6 +1303,8 @@ int main (int argc, char *argv[])
 	/* parse command line */
 	parse_cmdline(argc, argv);
 
+	gpu_threads = nDevs * opt_g_threads;
+
 	if (!rpc_userpass) {
 		if (!rpc_user || !rpc_pass) {
 			applog(LOG_ERR, "No login credentials supplied");
@@ -1328,16 +1332,16 @@ int main (int argc, char *argv[])
 		openlog("cpuminer", LOG_PID, LOG_USER);
 #endif
 
-	work_restart = calloc(opt_n_threads + nDevs, sizeof(*work_restart));
+	work_restart = calloc(opt_n_threads + gpu_threads, sizeof(*work_restart));
 	if (!work_restart)
 		return 1;
 
-	thr_info = calloc(opt_n_threads + 2 + nDevs, sizeof(*thr));
+	thr_info = calloc(opt_n_threads + 2 + gpu_threads, sizeof(*thr));
 	if (!thr_info)
 		return 1;
 
 	/* init workio thread info */
-	work_thr_id = opt_n_threads + nDevs;
+	work_thr_id = opt_n_threads + gpu_threads;
 	thr = &thr_info[work_thr_id];
 	thr->id = work_thr_id;
 	thr->q = tq_new();
@@ -1352,7 +1356,7 @@ int main (int argc, char *argv[])
 
 	/* init longpoll thread info */
 	if (want_longpoll) {
-		longpoll_thr_id = opt_n_threads + nDevs + 1;
+		longpoll_thr_id = opt_n_threads + gpu_threads + 1;
 		thr = &thr_info[longpoll_thr_id];
 		thr->id = longpoll_thr_id;
 		thr->q = tq_new();
@@ -1364,6 +1368,7 @@ int main (int argc, char *argv[])
 			applog(LOG_ERR, "longpoll thread create failed");
 			return 1;
 		}
+		pthread_detach(thr->pth);
 	} else
 		longpoll_thr_id = -1;
 
@@ -1371,7 +1376,8 @@ int main (int argc, char *argv[])
 	gettimeofday(&total_tv_end, NULL);
 
 	/* start GPU mining threads */
-	for (i = 0; i < nDevs; i++) {
+	for (i = 0; i < gpu_threads; i++) {
+		int gpu = i % nDevs;
 		thr = &thr_info[i];
 
 		thr->id = i;
@@ -1379,10 +1385,10 @@ int main (int argc, char *argv[])
 		if (!thr->q)
 			return 1;
 
-		applog(LOG_INFO, "Init GPU %i", i);
-		clStates[i] = initCl(i, name, sizeof(name));
+		applog(LOG_INFO, "Init GPU thread %i", i);
+		clStates[i] = initCl(gpu, name, sizeof(name));
 		if (!clStates[i]) {
-			applog(LOG_ERR, "Failed to init GPU %d", i);
+			applog(LOG_ERR, "Failed to init GPU thread %d", i);
 			continue;
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
@@ -1391,14 +1397,13 @@ int main (int argc, char *argv[])
 			applog(LOG_ERR, "thread %d create failed", i);
 			return 1;
 		}
-
-		sleep(1);	/* don't pound RPC server all at once */
+		pthread_detach(thr->pth);
 	}
 
 	applog(LOG_INFO, "%d gpu miner threads started", i);
 
 	/* start CPU mining threads */
-	for (i = nDevs; i < nDevs + opt_n_threads; i++) {
+	for (i = gpu_threads; i < gpu_threads + opt_n_threads; i++) {
 		thr = &thr_info[i];
 
 		thr->id = i;
@@ -1410,6 +1415,7 @@ int main (int argc, char *argv[])
 			applog(LOG_ERR, "thread %d create failed", i);
 			return 1;
 		}
+		pthread_detach(thr->pth);
 
 		sleep(1);	/* don't pound RPC server all at once */
 	}
