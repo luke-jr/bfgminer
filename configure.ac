@@ -43,8 +43,20 @@ case $target in
     ;;
 esac
 
-#AC_CHECK_LIB(OpenCL, clSetKernelArg, OPENCL_LIBS=-lOpenCL)
-OPENCL_LIBS=-lOpenCL
+# Check for OpenCL (the long way needed on mingw32 due to calling conventions)
+AC_MSG_CHECKING([for OpenCL])
+SAVED_LIBS=$LIBS
+LIBS="$LIBS -lOpenCL"
+AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([[#include <CL/cl.h>]],
+    [[return clSetKernelArg(0, 0, 0, 0); ]])],
+  [AC_MSG_RESULT(yes)
+   AM_CONDITIONAL(HAVE_OPENCL, true)
+   OPENCL_LIBS=-lOpenCL],
+  [AC_MSG_RESULT(no)
+   AM_CONDITIONAL(HAVE_OPENCL, false)])
+LIBS=$SAVED_LIBS
+
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 AC_CHECK_LIB(pthread, pthread_create, PTHREAD_LIBS=-lpthread)
 

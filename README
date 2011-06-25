@@ -25,7 +25,7 @@ Native WIN32 build instructions (on mingw32, on windows):
 	Install mingw32
 	Install libcurl, copy libcurl.m4 into /mingw/share/aclocal
 	Run:
-	./autogen.sh
+	autoreconf -fvi
 	CFLAGS="-O3 -Wall -msse2 -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86>" ./configure
 	make
 
