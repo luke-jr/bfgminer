@@ -143,6 +143,7 @@ int longpoll_thr_id;
 struct work_restart *work_restart = NULL;
 pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
+static pthread_mutex_t submit_lock;
 static pthread_mutex_t get_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
@@ -467,6 +468,9 @@ static void *submit_thread(void *userdata)
 	int failures = 0;
 	CURL *curl;
 
+	/* libcurl seems to be not thread safe so only submit one at a time! */
+	pthread_mutex_lock(&submit_lock);
+
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialization failed");
@@ -490,6 +494,7 @@ static void *submit_thread(void *userdata)
 
 	free(hexstr);
 	curl_easy_cleanup(curl);
+	pthread_mutex_unlock(&submit_lock);
 	return NULL;
 }
 
@@ -1299,6 +1304,8 @@ int main (int argc, char *argv[])
 	if (unlikely(pthread_mutex_init(&time_lock, NULL)))
 		return 1;
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
+		return 1;
+	if (unlikely(pthread_mutex_init(&submit_lock, NULL)))
 		return 1;
 	if (unlikely(pthread_mutex_init(&get_lock, NULL)))
 		return 1;
