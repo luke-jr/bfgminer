@@ -120,7 +120,7 @@ static bool opt_quiet = false;
 static int opt_retries = 10;
 static int opt_fail_pause = 30;
 static int opt_log_interval = 5;
-int opt_scantime = 5;
+int opt_scantime = 60;
 static json_t *opt_config;
 static const bool opt_time = true;
 #ifdef WANT_X8664_SSE2
@@ -208,7 +208,7 @@ static struct option_help options_help[] = {
 
 	{ "scantime N",
 	  "(-s N) Upper bound on time spent scanning current work,\n"
-	  "\tin seconds. (default: 5)" },
+	  "\tin seconds. (default: 60)" },
 
 #ifdef HAVE_SYSLOG_H
 	{ "syslog",
