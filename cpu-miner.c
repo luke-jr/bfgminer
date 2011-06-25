@@ -141,6 +141,7 @@ int longpoll_thr_id;
 struct work_restart *work_restart = NULL;
 pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
+static pthread_mutex_t get_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static int accepted, rejected;
@@ -591,35 +592,67 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		total_mhashes_done / total_secs, accepted, rejected);
 }
 
-static bool get_work(struct thr_info *thr, struct work *work)
+/* Since we always have one extra work item queued, set the thread id to 0
+ * for all the work and just give the work to the first thread that requests
+ * work */
+static bool get_work(struct work *work)
 {
+	static struct work *work_heap = NULL;
+	struct thr_info *thr = &thr_info[0];
 	struct workio_cmd *wc;
-	struct work *work_heap;
+	bool ret = false;
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
-	if (!wc)
-		return false;
+	if (unlikely(!wc))
+		goto out;
 
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
 
 	/* send work request to workio thread */
-	if (!tq_push(thr_info[work_thr_id].q, wc)) {
+	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
 		workio_cmd_free(wc);
-		return false;
+		goto out;
 	}
 
-	/* wait for response, a unit of work */
-	work_heap = tq_pop(thr->q, NULL);
-	if (!work_heap)
-		return false;
+	/* work_heap is a static var so it is protected by get_lock */
+	pthread_mutex_lock(&get_lock);
+	if (likely(work_heap)) {
+		memcpy(work, work_heap, sizeof(*work));
+		/* Wait for next response, a unit of work - it should be queued */
+		free(work_heap);
+		work_heap = tq_pop(thr->q, NULL);
+	} else {
+		/* wait for 1st response, or 1st response after failure */
+		work_heap = tq_pop(thr->q, NULL);
+		if (unlikely(!work_heap))
+			goto out_unlock;
 
-	/* copy returned work into storage provided by caller */
-	memcpy(work, work_heap, sizeof(*work));
-	free(work_heap);
+		/* send for another work request for the next time get_work
+		 * is called. */
+		wc = calloc(1, sizeof(*wc));
+		if (unlikely(!wc)) {
+			free(work_heap);
+			work_heap = NULL;
+			goto out_unlock;
+		}
 
-	return true;
+		wc->cmd = WC_GET_WORK;
+		wc->thr = thr;
+
+		if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
+			workio_cmd_free(wc);
+			free(work_heap);
+			work_heap = NULL;
+			goto out_unlock;
+		}
+	}
+	ret = true;
+out_unlock:
+	pthread_mutex_unlock(&get_lock);
+out:
+	return ret;
 }
 
 static bool submit_work(struct thr_info *thr, const struct work *work_in)
@@ -689,7 +722,7 @@ static void *miner_thread(void *userdata)
 		bool rc;
 
 		/* obtain new work from internal workio thread */
-		if (unlikely(!get_work(mythr, &work))) {
+		if (unlikely(!get_work(&work))) {
 			applog(LOG_ERR, "work retrieval failed, exiting "
 				"mining thread %d", mythr->id);
 			goto out;
@@ -875,7 +908,7 @@ static void *gpuminer_thread(void *userdata)
 		if (need_work) {
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(mythr, work))) {
+			if (unlikely(!get_work(work))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"gpu mining thread %d", mythr->id);
 				goto out;
@@ -1237,6 +1270,8 @@ int main (int argc, char *argv[])
 	if (unlikely(pthread_mutex_init(&time_lock, NULL)))
 		return 1;
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
+		return 1;
+	if (unlikely(pthread_mutex_init(&get_lock, NULL)))
 		return 1;
 
 #ifdef HAVE_SYSLOG_H
