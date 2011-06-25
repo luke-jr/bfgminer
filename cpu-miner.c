@@ -612,12 +612,13 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		total_mhashes_done / total_secs, accepted, rejected);
 }
 
+static struct work *work_heap = NULL;
+
 /* Since we always have one extra work item queued, set the thread id to 0
  * for all the work and just give the work to the first thread that requests
  * work */
 static bool get_work(struct work *work)
 {
-	static struct work *work_heap = NULL;
 	struct thr_info *thr = &thr_info[0];
 	struct workio_cmd *wc;
 	bool ret = false;
@@ -636,7 +637,7 @@ static bool get_work(struct work *work)
 		goto out;
 	}
 
-	/* work_heap is a static var so it is protected by get_lock */
+	/* work_heap is protected by get_lock */
 	pthread_mutex_lock(&get_lock);
 	if (likely(work_heap)) {
 		memcpy(work, work_heap, sizeof(*work));
@@ -1004,6 +1005,14 @@ static void restart_threads(void)
 
 	for (i = 0; i < opt_n_threads + nDevs; i++)
 		work_restart[i].restart = 1;
+	/* If longpoll has detected a new block, we should discard any queued
+	 * blocks in work_heap */
+	pthread_mutex_lock(&get_lock);
+	if (likely(work_heap)) {
+		free(work_heap);
+		work_heap = NULL;
+	}
+	pthread_mutex_unlock(&get_lock);
 }
 
 static void *longpoll_thread(void *userdata)
