@@ -886,7 +886,7 @@ static inline cl_int queue_kernel_parameters(dev_blk_ctx *blk, cl_kernel *kernel
 
 static inline int gpu_from_thr_id(int thr_id)
 {
-	return thr_id;
+	return thr_id % nDevs;
 }
 
 static void *gpuminer_thread(void *userdata)
