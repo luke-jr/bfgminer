@@ -414,8 +414,10 @@ static bool workio_get_work(struct workio_cmd *wc)
 	CURL *curl;
 
 	ret_work = calloc(1, sizeof(*ret_work));
-	if (!ret_work)
-		goto out;
+	if (!ret_work) {
+		applog(LOG_ERR, "Failed to calloc ret_work in workio_get_work");
+		return ret;
+	}
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
@@ -437,10 +439,12 @@ static bool workio_get_work(struct workio_cmd *wc)
 		sleep(opt_fail_pause);
 	}
 
-	ret = true;
 	/* send work to requesting thread */
-	if (!tq_push(wc->thr->q, ret_work))
+	if (unlikely(!tq_push(wc->thr->q, ret_work))) {
+		applog(LOG_ERR, "Failed to tq_push work in workio_get_work");
 		free(ret_work);
+	} else
+		ret = true;
 
 out:
 	curl_easy_cleanup(curl);
@@ -456,13 +460,15 @@ static void *submit_thread(void *userdata)
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialization failed");
-		return NULL;
+		exit (1);
 	}
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(curl, hexstr)) {
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-			applog(LOG_ERR, "...terminating workio thread");
+			applog(LOG_ERR, "Failed %d retries ...terminating workio thread", opt_retries);
+			free(hexstr);
+			curl_easy_cleanup(curl);
 			exit (1);
 		}
 
@@ -473,8 +479,8 @@ static void *submit_thread(void *userdata)
 	}
 
 	free(hexstr);
-out:
 	curl_easy_cleanup(curl);
+	return NULL;
 }
 
 /* Work is submitted asynchronously by creating a thread for each submit
@@ -485,7 +491,6 @@ static bool workio_submit_work(struct workio_cmd *wc)
 	struct work *work;
 	pthread_t thr;
 	char *hexstr;
-	pid_t child;
 
 	work = wc->u.work;
 
@@ -496,7 +501,7 @@ static bool workio_submit_work(struct workio_cmd *wc)
 		return false;
 	}
 
-	if (pthread_create(&thr, NULL, submit_thread, (void *)hexstr)) {
+	if (unlikely(pthread_create(&thr, NULL, submit_thread, (void *)hexstr))) {
 		applog(LOG_ERR, "Failed to create submit_thread");
 		return false;
 	}
@@ -549,7 +554,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double khashes, secs;
 	double total_secs;
 	double local_mhashes, local_secs;
-	static local_hashes_done = 0;
+	static unsigned long local_hashes_done = 0;
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_quiet || !opt_log_interval)
