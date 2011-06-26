@@ -914,9 +914,10 @@ static void *gpuminer_thread(void *userdata)
 
 	struct work *work = malloc(sizeof(struct work));
 	bool need_work = true;
-	unsigned int threads = 1 << (15 + scan_intensity);
-	unsigned int vectors = clState->preferred_vwidth;
-	unsigned int hashes_done = threads * vectors;
+	unsigned const int threads = 1 << (15 + scan_intensity);
+	unsigned const int vectors = clState->preferred_vwidth;
+	unsigned const int hashes = threads * vectors;
+	unsigned int hashes_done = 0;
 
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
@@ -984,13 +985,17 @@ static void *gpuminer_thread(void *userdata)
 
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
-		hashmeter(thr_id, &diff, hashes_done);
-		gettimeofday(&tv_start, NULL);
+		hashes_done += hashes;
+		work->blk.nonce += hashes;
+		if (diff.tv_sec >= 1) {
+			hashmeter(thr_id, &diff, hashes_done);
+			gettimeofday(&tv_start, NULL);
+			hashes_done = 0;
+		}
 
-		work->blk.nonce += hashes_done;
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
 
-		if (diff.tv_sec > opt_scantime  || 
+		if (diff.tv_sec > opt_scantime  ||
 			work->blk.nonce > MAXTHREADS - hashes_done ||
 			work_restart[thr_id].restart)
 				need_work = true;
