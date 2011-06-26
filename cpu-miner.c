@@ -160,10 +160,6 @@ static struct option_help options_help[] = {
 	{ "help",
 	  "(-h) Display this help text" },
 
-	{ "config FILE",
-	  "(-c FILE) JSON-format configuration file (default: none)\n"
-	  "See example-cfg.json for an example configuration." },
-
 	{ "algo XXX",
 	  "(-a XXX) Specify sha256 implementation:\n"
 	  "\tc\t\tLinux kernel sha256, implemented in C (default)"
@@ -182,17 +178,24 @@ static struct option_help options_help[] = {
 #endif
 	  },
 
-	{ "quiet",
-	  "(-q) Disable per-thread hashmeter output (default: off)" },
+	  { "config FILE",
+	  "(-c FILE) JSON-format configuration file (default: none)\n"
+	  "See example-cfg.json for an example configuration." },
+
+	{ "cpu-threads N",
+	  "(-t N) Number of miner CPU threads (default: number of processors or 0 if GPU mining)" },
 
 	{ "debug",
 	  "(-D) Enable debug output (default: off)" },
+
+	{ "gpu-threads N",
+	  "(-g N) Number of threads per-GPU (1 - 10, default: 2)" },
 
 	{ "intensity",
 	  "(-I) Intensity of scanning (0 - 10, default 4)" },
 
 	{ "log",
-	  "(-l) Interval in seconds between log output (default 5)" },
+	  "(-l) Interval in seconds between log output (default: 5)" },
 
 	{ "ndevs",
 	  "(-n) Display number of detected GPUs" },
@@ -200,8 +203,15 @@ static struct option_help options_help[] = {
 	{ "no-longpoll",
 	  "Disable X-Long-Polling support (default: enabled)" },
 
+	{ "pass PASSWORD",
+	  "(-p PASSWORD) Password for bitcoin JSON-RPC server "
+	  "(default: " DEF_RPC_PASSWORD ")" },
+
 	{ "protocol-dump",
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
+
+	{ "quiet",
+	  "(-q) Disable per-thread hashmeter output (default: off)" },
 
 	{ "retries N",
 	  "(-r N) Number of times to retry, if JSON-RPC call fails\n"
@@ -219,9 +229,6 @@ static struct option_help options_help[] = {
 	{ "syslog",
 	  "Use system log for output messages (default: standard error)" },
 #endif
-
-	{ "threads N",
-	  "(-t N) Number of miner CPU threads (default: number of processors or 0 if GPU mining)" },
 
 	{ "url URL",
 	  "URL for bitcoin JSON-RPC server "
@@ -241,14 +248,13 @@ static struct option_help options_help[] = {
 	{ "worksize N",
 	  "(-w N) Override detected optimal worksize (default: detected)" },
 
-	{ "pass PASSWORD",
-	  "(-p PASSWORD) Password for bitcoin JSON-RPC server "
-	  "(default: " DEF_RPC_PASSWORD ")" },
 };
 
 static struct option options[] = {
 	{ "algo", 1, NULL, 'a' },
 	{ "config", 1, NULL, 'c' },
+	{ "cpu-threads", 1, NULL, 't' },
+	{ "gpu-threads", 1, NULL, 'g' },
 	{ "debug", 0, NULL, 'D' },
 	{ "help", 0, NULL, 'h' },
 	{ "intensity", 1, NULL, 'I' },
@@ -258,7 +264,6 @@ static struct option options[] = {
 	{ "pass", 1, NULL, 'p' },
 	{ "protocol-dump", 0, NULL, 'P' },
 	{ "quiet", 0, NULL, 'q' },
-	{ "threads", 1, NULL, 't' },
 	{ "retries", 1, NULL, 'r' },
 	{ "retry-pause", 1, NULL, 'R' },
 	{ "scantime", 1, NULL, 's' },
@@ -1128,6 +1133,13 @@ static void parse_arg (int key, char *arg)
 		}
 		break;
 	}
+	case 'g':
+		v = atoi(arg);
+		if (v < 1 || v > 10)
+			show_usage();
+
+		opt_g_threads = v;
+		break;
 	case 'D':
 		opt_debug = true;
 		break;
