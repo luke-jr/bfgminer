@@ -996,7 +996,7 @@ static void *gpuminer_thread(void *userdata)
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
 
 		if (diff.tv_sec > opt_scantime  ||
-			work->blk.nonce > MAXTHREADS - hashes_done ||
+			work->blk.nonce > MAXTHREADS - hashes ||
 			work_restart[thr_id].restart)
 				need_work = true;
 	}
