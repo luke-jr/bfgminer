@@ -344,11 +344,19 @@ err_out:
 	return false;
 }
 
-static bool submit_upstream_work(CURL *curl, char *hexstr)
+static bool submit_upstream_work(CURL *curl, const struct work *work)
 {
+	char *hexstr = NULL;
 	json_t *val, *res;
 	char s[345];
 	bool rc = false;
+
+	/* build hex string */
+	hexstr = bin2hex(work->data, sizeof(work->data));
+	if (unlikely(!hexstr)) {
+		applog(LOG_ERR, "submit_upstream_work OOM");
+		goto out;
+	}
 
 	/* build JSON-RPC request */
 	sprintf(s,
@@ -383,6 +391,7 @@ static bool submit_upstream_work(CURL *curl, char *hexstr)
 	rc = true;
 
 out:
+	free(hexstr);
 	return rc;
 }
 
@@ -423,23 +432,15 @@ static void workio_cmd_free(struct workio_cmd *wc)
 	free(wc);
 }
 
-static bool workio_get_work(struct workio_cmd *wc)
+static bool workio_get_work(struct workio_cmd *wc, CURL *curl)
 {
 	struct work *ret_work;
 	int failures = 0;
-	bool ret = false;
-	CURL *curl;
 
 	ret_work = calloc(1, sizeof(*ret_work));
 	if (!ret_work) {
 		applog(LOG_ERR, "Failed to calloc ret_work in workio_get_work");
-		return ret;
-	}
-
-	curl = curl_easy_init();
-	if (unlikely(!curl)) {
-		applog(LOG_ERR, "CURL initialization failed");
-		return ret;
+		return false;
 	}
 
 	/* obtain new work from bitcoin via JSON-RPC */
@@ -447,7 +448,7 @@ static bool workio_get_work(struct workio_cmd *wc)
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
 			free(ret_work);
-			goto out;
+			return false;
 		}
 
 		/* pause, then restart work-request loop */
@@ -460,33 +461,20 @@ static bool workio_get_work(struct workio_cmd *wc)
 	if (unlikely(!tq_push(wc->thr->q, ret_work))) {
 		applog(LOG_ERR, "Failed to tq_push work in workio_get_work");
 		free(ret_work);
-	} else
-		ret = true;
-
-out:
-	curl_easy_cleanup(curl);
-	return ret;
-}
-
-static void *submit_thread(void *userdata)
-{
-	char *hexstr = (char *)userdata;
-	int failures = 0;
-	CURL *curl;
-
-	curl = curl_easy_init();
-	if (unlikely(!curl)) {
-		applog(LOG_ERR, "CURL initialization failed");
-		exit (1);
 	}
 
+	return true;
+}
+
+static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
+{
+	int failures = 0;
+
 	/* submit solution to bitcoin via JSON-RPC */
-	while (!submit_upstream_work(curl, hexstr)) {
+	while (!submit_upstream_work(curl, wc->u.work)) {
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "Failed %d retries ...terminating workio thread", opt_retries);
-			free(hexstr);
-			curl_easy_cleanup(curl);
-			exit (1);
+			return false;
 		}
 
 		/* pause, then restart work-request loop */
@@ -495,35 +483,6 @@ static void *submit_thread(void *userdata)
 		sleep(opt_fail_pause);
 	}
 
-	free(hexstr);
-	curl_easy_cleanup(curl);
-	return NULL;
-}
-
-/* Work is submitted asynchronously by creating a thread for each submit
- * thus avoiding the mining threads having to wait till work is submitted
- * before they can continue working. */
-static bool workio_submit_work(struct workio_cmd *wc)
-{
-	struct work *work;
-	pthread_t thr;
-	char *hexstr;
-
-	work = wc->u.work;
-
-	/* build hex string */
-	hexstr = bin2hex(work->data, sizeof(work->data));
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "workio_submit_work OOM");
-		return false;
-	}
-
-	if (unlikely(pthread_create(&thr, NULL, submit_thread, (void *)hexstr))) {
-		applog(LOG_ERR, "Failed to create submit_thread");
-		return false;
-	}
-	pthread_detach(thr);
-
 	return true;
 }
 
@@ -531,6 +490,13 @@ static void *workio_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 	bool ok = true;
+	CURL *curl;
+
+	curl = curl_easy_init();
+	if (unlikely(!curl)) {
+		applog(LOG_ERR, "CURL initialization failed");
+		return NULL;
+	}
 
 	while (ok) {
 		struct workio_cmd *wc;
@@ -545,10 +511,10 @@ static void *workio_thread(void *userdata)
 		/* process workio_cmd */
 		switch (wc->cmd) {
 		case WC_GET_WORK:
-			ok = workio_get_work(wc);
+			ok = workio_get_work(wc, curl);
 			break;
 		case WC_SUBMIT_WORK:
-			ok = workio_submit_work(wc);
+			ok = workio_submit_work(wc, curl);
 			break;
 
 		default:		/* should never happen */
@@ -560,6 +526,7 @@ static void *workio_thread(void *userdata)
 	}
 
 	tq_freeze(mythr->q);
+	curl_easy_cleanup(curl);
 
 	return NULL;
 }
