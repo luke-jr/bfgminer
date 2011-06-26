@@ -59,7 +59,7 @@ static inline void affine_to_cpu(int id, int cpu)
 	CPU_ZERO(&set);
 	CPU_SET(cpu, &set);
 	sched_setaffinity(0, sizeof(&set), &set);
-	applog(LOG_INFO, "Binding thread %d to cpu %d", id, cpu);
+	applog(LOG_INFO, "Binding cpu mining thread %d to cpu %d", id, cpu);
 }
 #else
 static inline void drop_policy(void)
@@ -735,7 +735,7 @@ static void *miner_thread(void *userdata)
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
 	if (!(opt_n_threads % num_processors))
-		affine_to_cpu(cpu_from_thr_id(thr_id), thr_id % num_processors);
+		affine_to_cpu(thr_id - gpu_threads, cpu_from_thr_id(thr_id));
 
 	while (1) {
 		struct work work __attribute__((aligned(128)));
