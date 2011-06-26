@@ -570,8 +570,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	struct timeval temp_tv_end, total_diff;
 	double khashes, secs;
 	double total_secs;
-	double local_mhashes, local_secs;
-	static unsigned long local_hashes_done = 0;
+	double local_secs;
+	static double local_mhashes_done = 0;
+	double local_mhashes = (double)hashes_done / 1000000.0;
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_quiet || !opt_log_interval)
@@ -588,8 +589,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (opt_n_threads + gpu_threads > 1) {
 		/* Totals are updated by all threads so can race without locking */
 		pthread_mutex_lock(&hash_lock);
-		total_mhashes_done += (double)hashes_done / 1000000.0;
-		local_hashes_done += hashes_done;
+		total_mhashes_done += local_mhashes;
+		local_mhashes_done += local_mhashes;
 		if (total_diff.tv_sec < opt_log_interval) {
 			/* Only update the total every opt_log_interval seconds */
 			pthread_mutex_unlock(&hash_lock);
@@ -598,8 +599,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		gettimeofday(&total_tv_end, NULL);
 		pthread_mutex_unlock(&hash_lock);
 	} else {
-		total_mhashes_done += (double)hashes_done / 1000000.0;
-		local_hashes_done += hashes_done;
+		total_mhashes_done += local_mhashes;
+		local_mhashes_done += local_mhashes;
 		if (total_diff.tv_sec < opt_log_interval) 
 			return;
 		gettimeofday(&total_tv_end, NULL);
@@ -607,11 +608,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
-	local_mhashes = local_hashes_done / 1000000.0;
-	local_hashes_done = 0;
 	applog(LOG_INFO, "[%.2f | %.2f Mhash/s] [%d Accepted] [%d Rejected]",
-		local_mhashes / local_secs,
+		local_mhashes_done / local_secs,
 		total_mhashes_done / total_secs, accepted, rejected);
+	local_mhashes_done = 0;
 }
 
 static struct work *work_heap = NULL;
