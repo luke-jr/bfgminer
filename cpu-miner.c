@@ -871,7 +871,7 @@ static inline int gpu_from_thr_id(int thr_id)
 static void *gpuminer_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
-	struct timeval tv_start;
+	struct timeval tv_start, diff;
 	int thr_id = mythr->id;
 	uint32_t res[128], blank_res[128];
 	cl_kernel *kernel;
@@ -892,7 +892,6 @@ static void *gpuminer_thread(void *userdata)
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 
 	struct work *work = malloc(sizeof(struct work));
-	bool need_work = true;
 	unsigned const int threads = 1 << (15 + scan_intensity);
 	unsigned const int vectors = clState->preferred_vwidth;
 	unsigned const int hashes = threads * vectors;
@@ -901,14 +900,16 @@ static void *gpuminer_thread(void *userdata)
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
 	localThreads[0] = clState->work_size;
+	work_restart[thr_id].restart = 1;
+	diff.tv_sec = 0;
 
 	while (1) {
-		struct timeval tv_end, diff, tv_workstart;
+		struct timeval tv_end, tv_workstart;
 		unsigned int i;
 
+		/* This finish flushes the readbuffer set with CL_FALSE later */
 		clFinish(clState->commandQueue);
-
-		if (need_work) {
+		if (diff.tv_sec > opt_scantime  || work->blk.nonce > MAXTHREADS - hashes || work_restart[thr_id].restart) {
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(work))) {
@@ -924,21 +925,14 @@ static void *gpuminer_thread(void *userdata)
 				{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
 
 			work_restart[thr_id].restart = 0;
-			need_work = false;
 
 			if (opt_debug)
 				applog(LOG_DEBUG, "getwork");
-
 		} else {
 			status = clSetKernelArg(*kernel, 14, sizeof(uint), (void *)&work->blk.nonce);
 			if (unlikely(status != CL_SUCCESS))
 				{ applog(LOG_ERR, "Error: clSetKernelArg of nonce failed."); goto out; }
 		}
-
-		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
-				globalThreads, localThreads, 0,  NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)"); goto out; }
 
 		/* 127 is used as a flag to say nonces exist */
 		if (unlikely(res[127])) {
@@ -957,6 +951,11 @@ static void *gpuminer_thread(void *userdata)
 			clFinish(clState->commandQueue);
 		}
 
+		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
+				globalThreads, localThreads, 0,  NULL, NULL);
+		if (unlikely(status != CL_SUCCESS))
+			{ applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)"); goto out; }
+
 		status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 				BUFFERSIZE, res, 0, NULL, NULL);
 		if (unlikely(status != CL_SUCCESS))
@@ -973,11 +972,6 @@ static void *gpuminer_thread(void *userdata)
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
-
-		if (diff.tv_sec > opt_scantime  ||
-			work->blk.nonce > MAXTHREADS - hashes ||
-			work_restart[thr_id].restart)
-				need_work = true;
 	}
 out:
 	tq_freeze(mythr->q);
