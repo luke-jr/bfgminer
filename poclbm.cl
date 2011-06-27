@@ -33,10 +33,9 @@ __constant uint K[64] = {
 // primitives.
 
 #define BFI_INTX
+#define BITALIGNX
 
 #ifdef BFI_INT
-
-#define BITALIGN
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
 	// OpenCL (or CAL IL for that matter) in any way. However, there is 
 	// a similar instruction, BYTE_ALIGN_INT, which is exposed to OpenCL via

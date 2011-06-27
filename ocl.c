@@ -97,14 +97,18 @@ int clDevicesNum() {
 	return numDevices;
 }
 
-void advance(char **area, unsigned *remaining, const char *marker)
+static int advance(char **area, unsigned *remaining, const char *marker)
 {
 	char *find = memmem(*area, *remaining, marker, strlen(marker));
 
-	if (!find)
-		applog(LOG_ERR, "Marker \"%s\" not found", marker), exit(1);
+	if (!find) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Marker \"%s\" not found", marker);
+		return 0;
+	}
 	*remaining -= find - *area;
 	*area = find;
+	return 1;
 }
 
 #define OP3_INST_BFE_UINT	4ULL
@@ -158,6 +162,7 @@ void patch_opcodes(char *w, unsigned remaining)
 _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	bool hasBitAlign = false;
+	bool patchbfi = false;
 	cl_int status = 0;
 	unsigned int i;
 
@@ -167,39 +172,39 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	cl_platform_id platform = NULL;
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	if(status != CL_SUCCESS)
-	{   
+	{
 		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
 		return NULL;
-	}   
+	}
 
 	if(numPlatforms > 0)
-	{   
+	{
 		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
 		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
 		if(status != CL_SUCCESS)
-		{   
+		{
 			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
 			return NULL;
-		}   
+		}
 
 		for(i = 0; i < numPlatforms; ++i)
-		{   
+		{
 			char pbuff[100];
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 			if(status != CL_SUCCESS)
-			{   
+			{
 				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
 				free(platforms);
 				return NULL;
-			}   
+			}
 			platform = platforms[i];
 			if(!strcmp(pbuff, "Advanced Micro Devices, Inc."))
-			{   
+			{
 				break;
-			}  
-		}   
+			}
+		}
 		free(platforms);
-	}   
+	}
 
 	if(platform == NULL) {
 		perror("NULL platform found!\n");
@@ -282,7 +287,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	find = strstr(extensions, camo);
 	if (find)
-		hasBitAlign = true;
+		hasBitAlign = patchbfi = true;
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
@@ -309,8 +314,15 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char *filename = "poclbm.cl";
 
 	int pl;
-	char *source = file_contents(filename, &pl);
+	char *source, *rawsource = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
+	source = malloc(pl);
+retry:
+	if (!source) {
+		applog(LOG_ERR, "Unable to malloc source");
+		return NULL;
+	}
+	memcpy(source, rawsource, pl);
 
 	if (opt_vectors)
 		clState->preferred_vwidth = opt_vectors;
@@ -336,8 +348,22 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->preferred_vwidth);
 	}
 
-	/* Patch the source file defining BFI_INT */
+	/* Patch the source file defining BITALIGN */
 	if (hasBitAlign == true) {
+		char *find = strstr(source, "BITALIGNX");
+
+		if (unlikely(!find)) {
+			applog(LOG_ERR, "Unable to find BITALIGNX in source");
+			return NULL;
+		}
+		find += 8; // "BITALIGN"
+		strncpy(find, " ", 1);
+		if (opt_debug)
+			applog(LOG_DEBUG, "cl_amd_media_ops found, patched source with BITALIGN");
+	} else if (opt_debug)
+		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BITALIGN patch");
+
+	if (patchbfi == true) {
 		char *find = strstr(source, "BFI_INTX");
 
 		if (unlikely(!find)) {
@@ -351,20 +377,17 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	} else if (opt_debug)
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
 
-	applog(LOG_INFO, "Initialising kernel with%s BFI_INT patching, %d vectors and worksize %d",
-	       hasBitAlign ? "" : "out", clState->preferred_vwidth, clState->work_size);
-
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
-	if(status != CL_SUCCESS) 
-	{   
+	if (status != CL_SUCCESS) 
+	{
 		applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithSource)");
 		return NULL;
 	}
 
 	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
-	if(status != CL_SUCCESS) 
-	{   
+	if (status != CL_SUCCESS) 
+	{
 		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
 		size_t logSize;
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
@@ -376,7 +399,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 
 	/* Patch the kernel if the hardware supports BFI_INT */
-	if (hasBitAlign == true) {
+	if (patchbfi == true) {
 		size_t nDevices;
 		size_t * binary_sizes;
 		char ** binaries;
@@ -402,15 +425,19 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		* position and length at a fixed offset from that. Then go
 		* back and find the 2nd incidence of \x7ELF (rewind by one
 		* from ELF) and then patch the opcocdes */
-		advance(&w, &remaining, ".text");
+		if (!advance(&w, &remaining, ".text"))
+		{patchbfi = false; goto retry;}
 		w++; remaining--;
-		advance(&w, &remaining, ".text");
+		if (!advance(&w, &remaining, ".text"))
+		{patchbfi = false; goto retry;}
 		memcpy(&start, w + 285, 4);
 		memcpy(&length, w + 289, 4);
 		w = binaries[gpu]; remaining = binary_sizes[gpu];
-		advance(&w, &remaining, "ELF");
+		if (!advance(&w, &remaining, "ELF"))
+		{patchbfi = false; goto retry;}
 		w++; remaining--;
-		advance(&w, &remaining, "ELF");
+		if (!advance(&w, &remaining, "ELF"))
+		{patchbfi = false; goto retry;}
 		w--; remaining++;
 		w += start; remaining -= start;
 		if (opt_debug)
@@ -427,16 +454,22 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[gpu], (const unsigned char **)&binaries[gpu], &status, NULL);
 		if(status != CL_SUCCESS) 
-		{   
+		{
 			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
 			return NULL;
 		}
 	}
 
+	free(source);
+	free(rawsource);
+
+	applog(LOG_INFO, "Initialising kernel with%s BFI_INT patching, %d vectors and worksize %d",
+	       patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
+
 	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
 	if(status != CL_SUCCESS) 
-	{   
+	{
 		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
 		size_t logSize;
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
