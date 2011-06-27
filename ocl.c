@@ -324,6 +324,10 @@ retry:
 	}
 	memcpy(source, rawsource, pl);
 
+	/* For some reason 2 vectors is still better even if the card says
+	 * otherwise */
+	if (clState->preferred_vwidth > 1)
+		clState->preferred_vwidth = 2;
 	if (opt_vectors)
 		clState->preferred_vwidth = opt_vectors;
 	if (opt_worksize && opt_worksize <= clState->max_work_size)

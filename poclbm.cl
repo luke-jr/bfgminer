@@ -1,3 +1,6 @@
+// -ck modified kernel taken from Phoenix taken from poclbm, with aspects of
+// phatk and others.
+
 // This file is taken and modified from the public-domain poclbm project, and
 // we have therefore decided to keep it public-domain in Phoenix.
 
@@ -47,7 +50,7 @@ __constant uint K[64] = {
 	#define ch(x, y, z) amd_bytealign(x, y, z)
 	
 	// Ma can also be implemented in terms of BFI_INT...
-	#define Ma(x, y, z) amd_bytealign((y), (x | z), (z & x))
+	#define Ma(x, y, z) amd_bytealign( (z^x), (y), (x) )
 #else
 	#define ch(x, y, z) (z ^ (x & (y ^ z)))
 	#define Ma(x, y, z) ((x & z) | (y & (x | z)))
@@ -76,12 +79,12 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	u W[24];
 	u Vals[8];
 	u nonce;
-	uint it;
+	u it;
 
 #ifdef VECTORS4
-	nonce = ((base >> 2) + (get_global_id(0))<<2) + (uint4)(0, 1, 2, 3);
+	nonce = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
 #elif defined VECTORS2
-	nonce = ((base >> 1) + (get_global_id(0))<<1) + (uint2)(0, 1);
+	nonce = base + (get_global_id(0)<<1) + (uint2)(0, 1);
 #else
 	nonce = base + get_global_id(0);
 #endif
@@ -627,9 +630,9 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = nonce.x;
+		for (it.x = 0; it.x != 127; it.x++) {
+			if (!output[it.x]) {
+				output[it.x] = nonce.x;
 				output[127] = 1;
 				break;
 			}
@@ -637,9 +640,9 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	}
 	if (Vals[7].y == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = nonce.y;
+		for (it.y = 0; it.y != 127; it.y++) {
+			if (!output[it.y]) {
+				output[it.y] = nonce.y;
 				output[127] = 1;
 				break;
 			}
@@ -648,9 +651,9 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 #ifdef VECTORS4
 	if (Vals[7].z == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = nonce.z;
+		for (it.z = 0; it.z != 127; it.z++) {
+			if (!output[it.z]) {
+				output[it.z] = nonce.z;
 				output[127] = 1;
 				break;
 			}
@@ -658,9 +661,9 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	}
 	if (Vals[7].w == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = nonce.w;
+		for (it.w = 0; it.w != 127; it.w++) {
+			if (!output[it.w]) {
+				output[it.w] = nonce.w;
 				output[127] = 1;
 				break;
 			}
