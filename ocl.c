@@ -46,40 +46,40 @@ int clDevicesNum() {
 	cl_platform_id platform = NULL;
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	if(status != CL_SUCCESS)
-	{   
+	{
 		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
 		return -1;
-	}   
+	}
 
 	if(numPlatforms > 0)
-	{   
+	{
 		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
 		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
 		if(status != CL_SUCCESS)
-		{   
+		{
 			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
 			return -1;
-		}   
+		}
 
 		unsigned int i;
 		for(i=0; i < numPlatforms; ++i)
-		{   
+		{
 			char pbuff[100];
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 			if(status != CL_SUCCESS)
-			{   
+			{
 				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
 				free(platforms);
 				return -1;
-			}   
+			}
 			platform = platforms[i];
 			if(!strcmp(pbuff, "Advanced Micro Devices, Inc."))
-			{   
+			{
 				break;
 			}  
-		}   
+		}
 		free(platforms);
-	}   
+	}
 
 	if(platform == NULL) {
 		perror("NULL platform found!\n");
@@ -468,7 +468,7 @@ retry:
 	free(rawsource);
 
 	applog(LOG_INFO, "Initialising kernel with%s BFI_INT patching, %d vectors and worksize %d",
-	       patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
+	 patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
 	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
