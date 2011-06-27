@@ -645,32 +645,58 @@ out:
 	return ret;
 }
 
-static bool submit_work(struct thr_info *thr, const struct work *work_in)
+struct submit_data {
+	struct thr_info *thr;
+	struct work work_in;
+	pthread_t pth;
+};
+
+static void *submit_work(void *userdata)
 {
+	struct submit_data *sd = (struct submit_data *)userdata;
 	struct workio_cmd *wc;
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
-	if (!wc)
-		return false;
+	if (unlikely(!wc))
+		goto out;
 
-	wc->u.work = malloc(sizeof(*work_in));
-	if (!wc->u.work)
+	wc->u.work = malloc(sizeof(struct work));
+	if (unlikely(!wc->u.work))
 		goto err_out;
 
 	wc->cmd = WC_SUBMIT_WORK;
-	wc->thr = thr;
-	memcpy(wc->u.work, work_in, sizeof(*work_in));
+	wc->thr = sd->thr;
+	memcpy(wc->u.work, &sd->work_in, sizeof(struct work));
 
 	/* send solution to workio thread */
-	if (!tq_push(thr_info[work_thr_id].q, wc))
+	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc)))
 		goto err_out;
 
-	return true;
+	goto out;
 
 err_out:
 	workio_cmd_free(wc);
-	return false;
+out:
+	free(sd);
+}
+
+static bool submit_work_async(struct thr_info *thr, const struct work *work_in)
+{
+	struct submit_data *sd = malloc(sizeof(struct submit_data));
+	if (unlikely(!sd)) {
+		applog(LOG_ERR, "Failed to malloc sd in submit_work_async");
+		return false;
+	}
+
+	memcpy(&sd->work_in, work_in, sizeof(struct work));
+
+	if (pthread_create(&sd->pth, NULL, submit_work, (void *)sd)) {
+		applog(LOG_ERR, "Failed to create submit_thread");
+		return false;
+	}
+	pthread_detach(sd->pth);
+	return true;
 }
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
@@ -679,7 +705,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	work->data[64+12+1] = (nonce>>8) & 0xff;
 	work->data[64+12+2] = (nonce>>16) & 0xff;
 	work->data[64+12+3] = (nonce>>24) & 0xff;
-	return submit_work(thr, work);
+	return submit_work_async(thr, work);
 }
 
 static inline int cpu_from_thr_id(int thr_id)
@@ -798,7 +824,7 @@ static void *miner_thread(void *userdata)
 		/* if nonce found, submit work */
 		if (unlikely(rc)) {
 			applog(LOG_INFO, "CPU %d found something?", cpu_from_thr_id(thr_id));
-			if (!submit_work(mythr, &work))
+			if (!submit_work_async(mythr, &work))
 				break;
 		}
 	}
