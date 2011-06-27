@@ -9,9 +9,12 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <pthread.h>
+#include <string.h>
 
 #include "ocl.h"
 #include "findnonce.h"
+#include "miner.h"
 
 const uint32_t SHA256_K[64] = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -131,8 +134,21 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
   R(E, F, G, H, A, B, C, D, P(u+4), SHA256_K[u+4]); \
   R(D, E, F, G, H, A, B, C, P(u+5), SHA256_K[u+5])
 
-void postcalc_hash(struct thr_info *thr, dev_blk_ctx *blk, struct work *work, uint32_t start)
+struct pc_data {
+	struct thr_info *thr;
+	struct work work;
+	uint32_t start;
+	pthread_t pth;
+};
+
+static void *postcalc_hash(void *userdata)
 {
+	struct pc_data *pcd = (struct pc_data *)userdata;
+	struct thr_info *thr = pcd->thr;
+	dev_blk_ctx *blk = &pcd->work.blk;
+	struct work *work = &pcd->work;
+	uint32_t start = pcd->start;
+
 	cl_uint A, B, C, D, E, F, G, H;
 	cl_uint W[16];
 	cl_uint nonce;
@@ -185,4 +201,24 @@ void postcalc_hash(struct thr_info *thr, dev_blk_ctx *blk, struct work *work, ui
 out:
 	if (unlikely(best_g == ~0))
 		applog(LOG_ERR, "No best_g found! Error in OpenCL code?");
+	free(pcd);
+}
+
+void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t start)
+{
+	struct pc_data *pcd = malloc(sizeof(struct pc_data));
+	if (unlikely(!pcd)) {
+		applog(LOG_ERR, "Failed to malloc pc_data in postcalc_hash_async");
+		return;
+	}
+
+	pcd->thr = thr;
+	memcpy(&pcd->work, work, sizeof(struct work));
+	pcd->start = start;
+
+	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
+		applog(LOG_ERR, "Failed to create postcalc_hash thread");
+		return;
+	}
+	pthread_detach(pcd->pth);
 }

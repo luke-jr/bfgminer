@@ -9,6 +9,11 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
+#ifdef __APPLE_CC__
+#include <OpenCL/opencl.h>
+#else
+#include <CL/cl.h>
+#endif
 
 #ifdef STDC_HEADERS
 # include <stdlib.h>
@@ -194,7 +199,31 @@ extern bool use_syslog;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
-struct work;
+
+typedef struct {
+    cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
+    cl_uint ctx_e; cl_uint ctx_f; cl_uint ctx_g; cl_uint ctx_h;
+    cl_uint cty_a; cl_uint cty_b; cl_uint cty_c; cl_uint cty_d;
+    cl_uint cty_e; cl_uint cty_f; cl_uint cty_g; cl_uint cty_h;
+    cl_uint merkle; cl_uint ntime; cl_uint nbits; cl_uint nonce;
+	cl_uint fW0; cl_uint fW1; cl_uint fW2; cl_uint fW3; cl_uint fW15;
+	cl_uint fW01r; cl_uint fcty_e; cl_uint fcty_e2;
+} dev_blk_ctx;
+
+struct work {
+	unsigned char	data[128];
+	unsigned char	hash1[64];
+	unsigned char	midstate[32];
+	unsigned char	target[32];
+
+	unsigned char	hash[32];
+
+	uint32_t		output[1];
+	uint32_t		res_nonce;
+	uint32_t		valid;
+	dev_blk_ctx		blk;
+};
+
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 
 extern void applog(int prio, const char *fmt, ...);

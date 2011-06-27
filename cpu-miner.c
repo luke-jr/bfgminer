@@ -277,20 +277,6 @@ static struct option options[] = {
 	{ "userpass", 1, NULL, 1002 },
 };
 
-struct work {
-	unsigned char	data[128];
-	unsigned char	hash1[64];
-	unsigned char	midstate[32];
-	unsigned char	target[32];
-
-	unsigned char	hash[32];
-
-	uint32_t		output[1];
-	uint32_t		res_nonce;
-	uint32_t		valid;
-	dev_blk_ctx		blk;
-};
-
 static bool jobj_binary(const json_t *obj, const char *key,
 			void *buf, size_t buflen)
 {
@@ -964,7 +950,7 @@ static void *gpuminer_thread(void *userdata)
 			for (i = 0; i < 127; i++) {
 				if (res[i]) {
 					applog(LOG_INFO, "GPU %d found something?", gpu_from_thr_id(thr_id));
-					postcalc_hash(mythr, &work->blk, work, res[i]);
+					postcalc_hash_async(mythr, work, res[i]);
 				} else
 					break;
 			}
