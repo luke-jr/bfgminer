@@ -426,18 +426,22 @@ retry:
 		* back and find the 2nd incidence of \x7ELF (rewind by one
 		* from ELF) and then patch the opcocdes */
 		if (!advance(&w, &remaining, ".text"))
-		{patchbfi = false; goto retry;}
+			{patchbfi = false; goto retry;}
 		w++; remaining--;
-		if (!advance(&w, &remaining, ".text"))
-		{patchbfi = false; goto retry;}
+		if (!advance(&w, &remaining, ".text")) {
+			/* 32 bit builds only one ELF */
+			w--; remaining++;
+		}
 		memcpy(&start, w + 285, 4);
 		memcpy(&length, w + 289, 4);
 		w = binaries[gpu]; remaining = binary_sizes[gpu];
 		if (!advance(&w, &remaining, "ELF"))
-		{patchbfi = false; goto retry;}
+			{patchbfi = false; goto retry;}
 		w++; remaining--;
-		if (!advance(&w, &remaining, "ELF"))
-		{patchbfi = false; goto retry;}
+		if (!advance(&w, &remaining, "ELF")) {
+			/* 32 bit builds only one ELF */
+			w--; remaining++;
+		}
 		w--; remaining++;
 		w += start; remaining -= start;
 		if (opt_debug)
