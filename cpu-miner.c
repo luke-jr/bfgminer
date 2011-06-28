@@ -1297,6 +1297,10 @@ int main (int argc, char *argv[])
 		applog(LOG_INFO, "%i", nDevs);
 		return nDevs;
 	}
+	/* Invert the value to determine if we manually set it in cmdline
+	 * or disable gpu threads */
+	if (nDevs)
+		opt_n_threads = - opt_n_threads;
 
 	rpc_url = strdup(DEF_RPC_URL);
 
@@ -1304,8 +1308,12 @@ int main (int argc, char *argv[])
 	parse_cmdline(argc, argv);
 
 	gpu_threads = nDevs * opt_g_threads;
-	if (gpu_threads)
-		opt_n_threads = 0;
+	if (opt_n_threads < 0) {
+		if (gpu_threads)
+			opt_n_threads = 0;
+		else
+			opt_n_threads = -opt_n_threads;
+	}
 
 	if (!rpc_userpass) {
 		if (!rpc_user || !rpc_pass) {
