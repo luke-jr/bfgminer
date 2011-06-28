@@ -141,7 +141,7 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	W[19] = P1(19) + P2(19) + P3(19);
 	W[18] = P1(18) + P3(18) + P4(18);
 	W[20] = P2(20) + P3(20) + P4(20);
-	u it;
+	uint it;
 
 #ifdef VECTORS4
 	W[3] = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
@@ -366,9 +366,9 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == 0)
 	{
-		for (it.x = 0; it.x != 127; it.x++) {
-			if (!output[it.x]) {
-				output[it.x] = W[3].x;
+		for (it = 0; it != 127; it++) {
+			if (!output[it]) {
+				output[it] = W[3].x;
 				output[127] = 1;
 				break;
 			}
@@ -376,9 +376,9 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	}
 	if (Vals[7].y == 0)
 	{
-		for (it.y = 0; it.y != 127; it.y++) {
-			if (!output[it.y]) {
-				output[it.y] = W[3].y;
+		for (it = 0; it != 127; it++) {
+			if (!output[it]) {
+				output[it] = W[3].y;
 				output[127] = 1;
 				break;
 			}
@@ -387,9 +387,9 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 #ifdef VECTORS4
 	if (Vals[7].z == 0)
 	{
-		for (it.z = 0; it.z != 127; it.z++) {
-			if (!output[it.z]) {
-				output[it.z] = W[3].z;
+		for (it = 0; it != 127; it++) {
+			if (!output[it]) {
+				output[it] = W[3].z;
 				output[127] = 1;
 				break;
 			}
@@ -397,9 +397,9 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	}
 	if (Vals[7].w == 0)
 	{
-		for (it.w = 0; it.w != 127; it.w++) {
-			if (!output[it.w]) {
-				output[it.w] = W[3].w;
+		for (it = 0; it != 127; it++) {
+			if (!output[it]) {
+				output[it] = W[3].w;
 				output[127] = 1;
 				break;
 			}
