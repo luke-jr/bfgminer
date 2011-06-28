@@ -192,7 +192,7 @@ static struct option_help options_help[] = {
 	  "(-g N) Number of threads per-GPU (0 - 10, default: 2)" },
 
 	{ "intensity",
-	  "(-I) Intensity of scanning (0 - 10, default 4)" },
+	  "(-I) Intensity of scanning (0 - 14, default 4)" },
 
 	{ "log",
 	  "(-l) Interval in seconds between log output (default: 5)" },
@@ -1140,7 +1140,7 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'I':
 		v = atoi(arg);
-		if (v < 0 || v > 16) /* sanity check */
+		if (v < 0 || v > 14) /* sanity check */
 			show_usage();
 		scan_intensity = v;
 		break;
