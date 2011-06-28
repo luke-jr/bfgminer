@@ -303,6 +303,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	if (opt_debug)
 		applog(LOG_DEBUG, "Max work group size reported %d", clState->max_work_size);
+	/* Some nvidia cards report 1024 but fail when set larger than 512 !? */
+	if (clState->max_work_size > 512)
+		clState->max_work_size = 512;
 
 	/////////////////////////////////////////////////////////////////
 	// Load CL file, build CL program object, create CL kernel object
