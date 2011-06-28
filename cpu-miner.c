@@ -189,7 +189,7 @@ static struct option_help options_help[] = {
 	  "(-D) Enable debug output (default: off)" },
 
 	{ "gpu-threads N",
-	  "(-g N) Number of threads per-GPU (1 - 10, default: 2)" },
+	  "(-g N) Number of threads per-GPU (0 - 10, default: 2)" },
 
 	{ "intensity",
 	  "(-I) Intensity of scanning (0 - 10, default 4)" },
@@ -802,7 +802,7 @@ static void *miner_thread(void *userdata)
 			diff.tv_sec++;
 		if (diff.tv_sec > 0) {
 			max64 =
-			   ((uint64_t)hashes_done * opt_scantime) / diff.tv_sec;
+			   ((uint64_t)hashes_done * (opt_log_interval ? : opt_scantime)) / diff.tv_sec;
 			if (max64 > 0xfffffffaULL)
 				max64 = 0xfffffffaULL;
 			max_nonce = max64;
@@ -1130,7 +1130,7 @@ static void parse_arg (int key, char *arg)
 	}
 	case 'g':
 		v = atoi(arg);
-		if (v < 1 || v > 10)
+		if (v < 0 || v > 10)
 			show_usage();
 
 		opt_g_threads = v;
@@ -1297,8 +1297,6 @@ int main (int argc, char *argv[])
 		applog(LOG_INFO, "%i", nDevs);
 		return nDevs;
 	}
-	if (nDevs)
-		opt_n_threads = 0;
 
 	rpc_url = strdup(DEF_RPC_URL);
 
@@ -1306,6 +1304,8 @@ int main (int argc, char *argv[])
 	parse_cmdline(argc, argv);
 
 	gpu_threads = nDevs * opt_g_threads;
+	if (gpu_threads)
+		opt_n_threads = 0;
 
 	if (!rpc_userpass) {
 		if (!rpc_user || !rpc_pass) {
