@@ -161,12 +161,11 @@ void patch_opcodes(char *w, unsigned remaining)
 
 _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
-	bool hasBitAlign = false;
-	bool patchbfi = false;
+	int patchbfi = 0;
 	cl_int status = 0;
 	unsigned int i;
 
-	_clState *clState = malloc(sizeof(_clState));;
+	_clState *clState = calloc(1, sizeof(_clState));
 
 	cl_uint numPlatforms;
 	cl_platform_id platform = NULL;
@@ -287,7 +286,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	find = strstr(extensions, camo);
 	if (find)
-		hasBitAlign = patchbfi = true;
+		clState->hasBitAlign = patchbfi = 1;
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
@@ -311,7 +310,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	/* Load a different kernel depending on whether it supports
 	 * cl_amd_media_ops or not */
-	char *filename = "poclbm.cl";
+	char filename[10];
+
+	if (clState->hasBitAlign)
+		strcpy(filename, "phatk.cl");
+	else
+		strcpy(filename, "poclbm.cl");
 
 	int pl;
 	char *source, *rawsource = file_contents(filename, &pl);
@@ -353,7 +357,7 @@ retry:
 	}
 
 	/* Patch the source file defining BITALIGN */
-	if (hasBitAlign == true) {
+	if (clState->hasBitAlign) {
 		char *find = strstr(source, "BITALIGNX");
 
 		if (unlikely(!find)) {
@@ -367,7 +371,7 @@ retry:
 	} else if (opt_debug)
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BITALIGN patch");
 
-	if (patchbfi == true) {
+	if (patchbfi) {
 		char *find = strstr(source, "BFI_INTX");
 
 		if (unlikely(!find)) {
@@ -403,7 +407,7 @@ retry:
 	}
 
 	/* Patch the kernel if the hardware supports BFI_INT */
-	if (patchbfi == true) {
+	if (patchbfi) {
 		size_t nDevices;
 		size_t * binary_sizes;
 		char ** binaries;
@@ -430,7 +434,7 @@ retry:
 		* back and find the 2nd incidence of \x7ELF (rewind by one
 		* from ELF) and then patch the opcocdes */
 		if (!advance(&w, &remaining, ".text"))
-			{patchbfi = false; goto retry;}
+			{patchbfi = 0; goto retry;}
 		w++; remaining--;
 		if (!advance(&w, &remaining, ".text")) {
 			/* 32 bit builds only one ELF */
@@ -440,7 +444,7 @@ retry:
 		memcpy(&length, w + 289, 4);
 		w = binaries[gpu]; remaining = binary_sizes[gpu];
 		if (!advance(&w, &remaining, "ELF"))
-			{patchbfi = false; goto retry;}
+			{patchbfi = 0; goto retry;}
 		w++; remaining--;
 		if (!advance(&w, &remaining, "ELF")) {
 			/* 32 bit builds only one ELF */
@@ -471,8 +475,8 @@ retry:
 	free(source);
 	free(rawsource);
 
-	applog(LOG_INFO, "Initialising kernel with%s BFI_INT patching, %d vectors and worksize %d",
-	 patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
+	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT patching, %d vectors and worksize %d",
+	       filename, patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
 	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);

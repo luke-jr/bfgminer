@@ -829,9 +829,9 @@ enum {
 
 static _clState *clStates[16];
 
-static inline cl_int queue_kernel_parameters(dev_blk_ctx *blk, cl_kernel *kernel,
-	struct _cl_mem *output)
+static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk)
 {
+	cl_kernel *kernel = &clState->kernel;
 	cl_int status = 0;
 	int num = 0;
 
@@ -850,15 +850,27 @@ static inline cl_int queue_kernel_parameters(dev_blk_ctx *blk, cl_kernel *kernel
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
-	status |= clSetKernelArg(*kernel, num++, sizeof(output), (void *)&output);
+
+	if (clState->hasBitAlign == true) {
+		/* Parameters for phatk kernel */
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W2);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W16);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal4);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->T1);
+	} else {
+		/* Parameters for poclbm kernel */
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
+		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
+	}
+	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
+				 (void *)&clState->outputBuffer);
 
 	return status;
 }
@@ -886,11 +898,6 @@ static void *gpuminer_thread(void *userdata)
 	_clState *clState = clStates[thr_id];
 	kernel = &clState->kernel;
 
-	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-			BUFFERSIZE, blank_res, 0, NULL, NULL);
-	if (unlikely(status != CL_SUCCESS))
-		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-
 	struct work *work = malloc(sizeof(struct work));
 	unsigned const int threads = 1 << (15 + scan_intensity);
 	unsigned const int vectors = clState->preferred_vwidth;
@@ -910,6 +917,13 @@ static void *gpuminer_thread(void *userdata)
 		/* This finish flushes the readbuffer set with CL_FALSE later */
 		clFinish(clState->commandQueue);
 		if (diff.tv_sec > opt_scantime  || work->blk.nonce > MAXTHREADS - hashes || work_restart[thr_id].restart) {
+			/* Ignore any reads since we're getting new work and queue a clean buffer */
+			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+					BUFFERSIZE, blank_res, 0, NULL, NULL);
+			if (unlikely(status != CL_SUCCESS))
+				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
+			memset(res, 0, BUFFERSIZE);
+
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(work))) {
@@ -920,14 +934,15 @@ static void *gpuminer_thread(void *userdata)
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work->blk.nonce = 0;
-			status = queue_kernel_parameters(&work->blk, kernel, clState->outputBuffer);
-			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
-
 			work_restart[thr_id].restart = 0;
 
 			if (opt_debug)
-				applog(LOG_DEBUG, "getwork");
+				applog(LOG_DEBUG, "getwork thread %d", thr_id);
+			/* Flushes the writebuffer set with CL_FALSE above */
+			clFinish(clState->commandQueue);
+			status = queue_kernel_parameters(clState, &work->blk);
+			if (unlikely(status != CL_SUCCESS))
+				{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
 		} else {
 			status = clSetKernelArg(*kernel, 14, sizeof(uint), (void *)&work->blk.nonce);
 			if (unlikely(status != CL_SUCCESS))
@@ -983,11 +998,11 @@ static void restart_threads(void)
 {
 	int i;
 
+	pthread_mutex_lock(&get_lock);
 	for (i = 0; i < opt_n_threads + gpu_threads; i++)
 		work_restart[i].restart = 1;
 	/* If longpoll has detected a new block, we should discard any queued
 	 * blocks in work_heap */
-	pthread_mutex_lock(&get_lock);
 	if (likely(work_heap)) {
 		free(work_heap);
 		work_heap = NULL;
@@ -1123,7 +1138,7 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'I':
 		v = atoi(arg);
-		if (v < 0 || v > 10) /* sanity check */
+		if (v < 0 || v > 16) /* sanity check */
 			show_usage();
 		scan_intensity = v;
 		break;

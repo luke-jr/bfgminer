@@ -208,6 +208,8 @@ typedef struct {
     cl_uint merkle; cl_uint ntime; cl_uint nbits; cl_uint nonce;
 	cl_uint fW0; cl_uint fW1; cl_uint fW2; cl_uint fW3; cl_uint fW15;
 	cl_uint fW01r; cl_uint fcty_e; cl_uint fcty_e2;
+	cl_uint W16; cl_uint W17; cl_uint W2;
+	cl_uint PreVal4; cl_uint T1;
 } dev_blk_ctx;
 
 struct work {
