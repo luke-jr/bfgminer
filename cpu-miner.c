@@ -665,6 +665,7 @@ err_out:
 	workio_cmd_free(wc);
 out:
 	free(sd);
+	return NULL;
 }
 
 static bool submit_work_async(struct thr_info *thr, const struct work *work_in)
@@ -888,6 +889,7 @@ static void *gpuminer_thread(void *userdata)
 	uint32_t res[128], blank_res[128];
 	cl_kernel *kernel;
 
+	memset(res, 0, BUFFERSIZE);
 	memset(blank_res, 0, BUFFERSIZE);
 
 	size_t globalThreads[1];
