@@ -114,6 +114,9 @@ struct thr_info {
 	int		id;
 	pthread_t	pth;
 	struct thread_q	*q;
+	int		accepted;
+	int		rejected;
+	int		hw_errors;
 };
 
 static inline uint32_t swab32(uint32_t v)
@@ -195,6 +198,7 @@ struct work_restart {
 };
 
 extern pthread_mutex_t time_lock;
+extern int hw_errors;
 extern bool use_syslog;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
@@ -224,6 +228,8 @@ struct work {
 	uint32_t		res_nonce;
 	uint32_t		valid;
 	dev_blk_ctx		blk;
+
+	int thr_id;
 };
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);

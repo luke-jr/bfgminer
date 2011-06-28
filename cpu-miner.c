@@ -149,6 +149,7 @@ static pthread_mutex_t get_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static int accepted, rejected;
+int hw_errors;
 
 
 struct option_help {
@@ -336,6 +337,7 @@ static bool submit_upstream_work(CURL *curl, const struct work *work)
 	json_t *val, *res;
 	char s[345];
 	bool rc = false;
+	const int thr_id = work->thr_id;
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
@@ -365,12 +367,17 @@ static bool submit_upstream_work(CURL *curl, const struct work *work)
 	 * rejected values but the chance of two submits completing at the
 	 * same time is zero so there is no point adding extra locking */
 	if (json_is_true(res)) {
+		thr_info[thr_id].accepted++;
 		accepted++;
-		applog(LOG_INFO, "PROOF OF WORK RESULT: true (yay!!!)");
+		if (opt_debug)
+			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 	} else {
+		thr_info[thr_id].rejected++;
 		rejected++;
-		applog(LOG_INFO, "PROOF OF WORK RESULT: false (booooo)");
+		if (opt_debug)
+			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 	}
+	applog(LOG_INFO, "Thread: %d Accepted: %d Rejected: %d HW errors: %d", thr_id, thr_info[thr_id].accepted, thr_info[thr_id].rejected, thr_info[thr_id].hw_errors);
 
 	json_decref(val);
 
@@ -561,9 +568,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
-	applog(LOG_INFO, "[%.2f | %.2f Mhash/s] [%d Accepted] [%d Rejected]",
+	applog(LOG_INFO, "[%.2f | %.2f Mhash/s] [%d Accepted] [%d Rejected] [%d HW errors]",
 		local_mhashes_done / local_secs,
-		total_mhashes_done / total_secs, accepted, rejected);
+		total_mhashes_done / total_secs, accepted, rejected, hw_errors);
 	local_mhashes_done = 0;
 }
 
@@ -677,6 +684,8 @@ static bool submit_work_async(struct thr_info *thr, const struct work *work_in)
 	}
 
 	memcpy(&sd->work_in, work_in, sizeof(struct work));
+	/* Pass the thread id to the work struct for per-thread accounting */
+	sd->work_in.thr_id = thr->id;
 
 	if (pthread_create(&sd->pth, NULL, submit_work, (void *)sd)) {
 		applog(LOG_ERR, "Failed to create submit_thread");
@@ -810,7 +819,8 @@ static void *miner_thread(void *userdata)
 
 		/* if nonce found, submit work */
 		if (unlikely(rc)) {
-			applog(LOG_INFO, "CPU %d found something?", cpu_from_thr_id(thr_id));
+			if (opt_debug)
+				applog(LOG_DEBUG, "CPU %d found something?", cpu_from_thr_id(thr_id));
 			if (!submit_work_async(mythr, &work))
 				break;
 		}
@@ -960,7 +970,8 @@ static void *gpuminer_thread(void *userdata)
 				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 			for (i = 0; i < 127; i++) {
 				if (res[i]) {
-					applog(LOG_INFO, "GPU %d found something?", gpu_from_thr_id(thr_id));
+					if (opt_debug)
+						applog(LOG_DEBUG, "GPU %d found something?", gpu_from_thr_id(thr_id));
 					postcalc_hash_async(mythr, work, res[i]);
 				} else
 					break;

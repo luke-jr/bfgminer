@@ -200,8 +200,12 @@ static void *postcalc_hash(void *userdata)
 		}
 	}
 out:
-	if (unlikely(best_g == ~0))
-		applog(LOG_ERR, "No best_g found! Error in OpenCL code?");
+	if (unlikely(best_g == ~0)) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
+		hw_errors++;
+		thr->hw_errors++;
+	}
 	free(pcd);
 }
 
