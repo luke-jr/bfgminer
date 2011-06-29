@@ -533,6 +533,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double total_secs;
 	double local_secs;
 	static double local_mhashes_done = 0;
+	static double rolling_local = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
 
 	/* Don't bother calculating anything if we're not displaying it */
@@ -566,11 +567,14 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			return;
 		gettimeofday(&total_tv_end, NULL);
 	}
+	/* Use a rolling average by faking an exponential decay over 5 * log */
+	rolling_local = ((rolling_local * 0.9) + local_mhashes_done) / 1.9;
+
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 	applog(LOG_INFO, "[%.2f | %.2f Mhash/s] [%d Accepted] [%d Rejected] [%d HW errors]",
-		local_mhashes_done / local_secs,
+		rolling_local / local_secs,
 		total_mhashes_done / total_secs, accepted, rejected, hw_errors);
 	local_mhashes_done = 0;
 }
