@@ -2,7 +2,7 @@
 #define __FINDNONCE_H__
 #include "miner.h"
 
-#define MAXTHREADS (0xFFFFFFFF)
+#define MAXTHREADS (0xFFFFFFFEULL)
 #define BUFFERSIZE (sizeof(uint32_t) * 128)
 
 extern void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data);

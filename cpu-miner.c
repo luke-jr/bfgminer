@@ -933,7 +933,7 @@ static void *gpuminer_thread(void *userdata)
 
 		/* This finish flushes the readbuffer set with CL_FALSE later */
 		clFinish(clState->commandQueue);
-		if (diff.tv_sec > opt_scantime  || work->blk.nonce > MAXTHREADS - hashes || work_restart[thr_id].restart) {
+		if (diff.tv_sec > opt_scantime  || work->blk.nonce >= MAXTHREADS - hashes || work_restart[thr_id].restart) {
 			/* Ignore any reads since we're getting new work and queue a clean buffer */
 			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 					BUFFERSIZE, blank_res, 0, NULL, NULL);
