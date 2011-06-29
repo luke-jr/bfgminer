@@ -141,7 +141,7 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	W[19] = P1(19) + P2(19) + P3(19);
 	W[18] = P1(18) + P3(18) + P4(18);
 	W[20] = P2(20) + P3(20) + P4(20);
-	uint it;
+	uint it = get_local_id(0);
 
 #ifdef VECTORS4
 	W[3] = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
@@ -363,59 +363,70 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	partround(64 + 60);
 	Vals[7] += H[7];
 
+#define MAXBUFFERS (4 * 512)
+
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = W[3].x;
-				output[127] = 1;
-				break;
+		// Unlikely event there is something here already !
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = W[3].x;
+		output[MAXBUFFERS] = 1;
 	}
 	if (Vals[7].y == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = W[3].y;
-				output[127] = 1;
-				break;
+		it += 512;
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = W[3].y;
+		output[MAXBUFFERS] = 1;
 	}
 #ifdef VECTORS4
 	if (Vals[7].z == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = W[3].z;
-				output[127] = 1;
-				break;
+		it += 1024;
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = W[3].z;
+		output[MAXBUFFERS] = 1;
 	}
 	if (Vals[7].w == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = W[3].w;
-				output[127] = 1;
-				break;
+		it += 1536;
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = W[3].w;
+		output[MAXBUFFERS] = 1;
 	}
 #endif
 #else
 	if (Vals[7] == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = W[3];
-				output[127] = 1;
-				break;
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = W[3];
+		output[MAXBUFFERS] = 1;
 	}
 #endif
 

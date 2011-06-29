@@ -79,7 +79,7 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	u W[24];
 	u Vals[8];
 	u nonce;
-	u it;
+	uint it = get_local_id(0);
 
 #ifdef VECTORS4
 	nonce = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
@@ -627,59 +627,70 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 
 	Vals[7]+=0x5be0cd19U;
 
+#define MAXBUFFERS (4 * 512)
+
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == 0)
 	{
-		for (it.x = 0; it.x != 127; it.x++) {
-			if (!output[it.x]) {
-				output[it.x] = nonce.x;
-				output[127] = 1;
-				break;
+		// Unlikely event there is something here already !
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = nonce.x;
+		output[MAXBUFFERS] = 1;
 	}
 	if (Vals[7].y == 0)
 	{
-		for (it.y = 0; it.y != 127; it.y++) {
-			if (!output[it.y]) {
-				output[it.y] = nonce.y;
-				output[127] = 1;
-				break;
+		it += 512;
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = nonce.y;
+		output[MAXBUFFERS] = 1;
 	}
 #ifdef VECTORS4
 	if (Vals[7].z == 0)
 	{
-		for (it.z = 0; it.z != 127; it.z++) {
-			if (!output[it.z]) {
-				output[it.z] = nonce.z;
-				output[127] = 1;
-				break;
+		it += 1024;
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = nonce.z;
+		output[MAXBUFFERS] = 1;
 	}
 	if (Vals[7].w == 0)
 	{
-		for (it.w = 0; it.w != 127; it.w++) {
-			if (!output[it.w]) {
-				output[it.w] = nonce.w;
-				output[127] = 1;
-				break;
+		it += 1536;
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = nonce.w;
+		output[MAXBUFFERS] = 1;
 	}
 #endif
 #else
 	if (Vals[7] == 0)
 	{
-		for (it = 0; it != 127; it++) {
-			if (!output[it]) {
-				output[it] = nonce;
-				output[127] = 1;
-				break;
+		if (output[it]) {
+			for (it = 0; it < MAXBUFFERS; it++) {
+				if (!output[it])
+					break;
 			}
 		}
+		output[it] = nonce;
+		output[MAXBUFFERS] = 1;
 	}
 #endif
 }

@@ -676,6 +676,7 @@ static void *submit_work(void *userdata)
 err_out:
 	workio_cmd_free(wc);
 out:
+	pthread_detach(pthread_self());
 	free(sd);
 	return NULL;
 }
@@ -696,7 +697,6 @@ static bool submit_work_async(struct thr_info *thr, const struct work *work_in)
 		applog(LOG_ERR, "Failed to create submit_thread");
 		return false;
 	}
-	pthread_detach(sd->pth);
 	return true;
 }
 
@@ -900,12 +900,8 @@ static void *gpuminer_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 	struct timeval tv_start, diff;
-	int thr_id = mythr->id;
-	uint32_t res[128], blank_res[128];
-	cl_kernel *kernel;
-
-	memset(res, 0, BUFFERSIZE);
-	memset(blank_res, 0, BUFFERSIZE);
+	const int thr_id = mythr->id;
+	uint32_t *res, *blank_res;
 
 	size_t globalThreads[1];
 	size_t localThreads[1];
@@ -913,13 +909,21 @@ static void *gpuminer_thread(void *userdata)
 	cl_int status;
 
 	_clState *clState = clStates[thr_id];
-	kernel = &clState->kernel;
+	const cl_kernel *kernel = &clState->kernel;
 
 	struct work *work = malloc(sizeof(struct work));
 	unsigned const int threads = 1 << (15 + scan_intensity);
 	unsigned const int vectors = clState->preferred_vwidth;
 	unsigned const int hashes = threads * vectors;
 	unsigned int hashes_done = 0;
+
+	res = calloc(BUFFERSIZE, 1);
+	blank_res = calloc(BUFFERSIZE, 1);
+
+	if (!res || !blank_res) {
+		applog(LOG_ERR, "Failed to calloc in gpuminer_thread");
+		goto out;
+	}
 
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
@@ -966,21 +970,17 @@ static void *gpuminer_thread(void *userdata)
 				{ applog(LOG_ERR, "Error: clSetKernelArg of nonce failed."); goto out; }
 		}
 
-		/* 127 is used as a flag to say nonces exist */
-		if (unlikely(res[127])) {
+		/* MAXBUFFERS entry is used as a flag to say nonces exist */
+		if (res[MAXBUFFERS]) {
 			/* Clear the buffer again */
 			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 					BUFFERSIZE, blank_res, 0, NULL, NULL);
 			if (unlikely(status != CL_SUCCESS))
 				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-			for (i = 0; i < 127; i++) {
-				if (res[i]) {
-					if (opt_debug)
-						applog(LOG_DEBUG, "GPU %d found something?", gpu_from_thr_id(thr_id));
-					postcalc_hash_async(mythr, work, res[i]);
-				} else
-					break;
-			}
+			if (opt_debug)
+				applog(LOG_DEBUG, "GPU %d found something?", gpu_from_thr_id(thr_id));
+			postcalc_hash_async(mythr, work, res);
+			memset(res, 0, BUFFERSIZE);
 			clFinish(clState->commandQueue);
 		}
 

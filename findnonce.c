@@ -138,7 +138,7 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 struct pc_data {
 	struct thr_info *thr;
 	struct work work;
-	uint32_t start;
+	uint32_t res[MAXBUFFERS];
 	pthread_t pth;
 };
 
@@ -148,13 +148,28 @@ static void *postcalc_hash(void *userdata)
 	struct thr_info *thr = pcd->thr;
 	dev_blk_ctx *blk = &pcd->work.blk;
 	struct work *work = &pcd->work;
-	uint32_t start = pcd->start;
+	uint32_t start;
 
 	cl_uint A, B, C, D, E, F, G, H;
 	cl_uint W[16];
 	cl_uint nonce;
-	cl_uint best_g = ~0;
-	uint32_t end = start + 1026;
+	cl_uint best_g;
+	uint32_t end;
+	int entry = 0;
+
+cycle:
+	while (entry < MAXBUFFERS) {
+		if (pcd->res[entry]) {
+			start = pcd->res[entry++];
+			break;
+		}
+		entry++;
+	}
+	if (entry == MAXBUFFERS)
+		goto out;
+
+	best_g = ~0;
+	end = start + 1026;
 
 	for (nonce = start; nonce != end; nonce+=1) {
 		A = blk->cty_a; B = blk->cty_b;
@@ -189,7 +204,7 @@ static void *postcalc_hash(void *userdata)
 		if (unlikely(H == 0xA41F32E7)) {
 			if (unlikely(submit_nonce(thr, work, nonce) == false)) {
 				applog(LOG_ERR, "Failed to submit work, exiting");
-				goto out;
+				break;
 			}
 
 			G += 0x1f83d9ab;
@@ -199,17 +214,22 @@ static void *postcalc_hash(void *userdata)
 				best_g = G;
 		}
 	}
-out:
+
 	if (unlikely(best_g == ~0)) {
 		if (opt_debug)
 			applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 	}
+	if (entry < MAXBUFFERS)
+		goto cycle;
+out:
+	pthread_detach(pthread_self());
 	free(pcd);
+	return NULL;
 }
 
-void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t start)
+void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 {
 	struct pc_data *pcd = malloc(sizeof(struct pc_data));
 	if (unlikely(!pcd)) {
@@ -219,11 +239,10 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t start
 
 	pcd->thr = thr;
 	memcpy(&pcd->work, work, sizeof(struct work));
-	pcd->start = start;
+	memcpy(&pcd->res, res, BUFFERSIZE);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
 		applog(LOG_ERR, "Failed to create postcalc_hash thread");
 		return;
 	}
-	pthread_detach(pcd->pth);
 }
