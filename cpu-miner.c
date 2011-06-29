@@ -337,7 +337,7 @@ static bool submit_upstream_work(CURL *curl, const struct work *work)
 	json_t *val, *res;
 	char s[345];
 	bool rc = false;
-	const int thr_id = work->thr_id;
+	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
@@ -367,17 +367,18 @@ static bool submit_upstream_work(CURL *curl, const struct work *work)
 	 * rejected values but the chance of two submits completing at the
 	 * same time is zero so there is no point adding extra locking */
 	if (json_is_true(res)) {
-		thr_info[thr_id].accepted++;
+		cgpu->accepted++;
 		accepted++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 	} else {
-		thr_info[thr_id].rejected++;
+		cgpu->rejected++;
 		rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 	}
-	applog(LOG_INFO, "Thread: %d Accepted: %d Rejected: %d HW errors: %d", thr_id, thr_info[thr_id].accepted, thr_info[thr_id].rejected, thr_info[thr_id].hw_errors);
+	applog(LOG_INFO, "%sPU: %d Accepted: %d Rejected: %d HW errors: %d",
+	       cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->accepted, cgpu->rejected, cgpu->hw_errors);
 
 	json_decref(val);
 
@@ -1397,9 +1398,20 @@ int main (int argc, char *argv[])
 	/* start GPU mining threads */
 	for (i = 0; i < gpu_threads; i++) {
 		int gpu = i % nDevs;
-		thr = &thr_info[i];
 
+		thr = &thr_info[i];
 		thr->id = i;
+		if (! (i % opt_g_threads)) {
+			thr->cgpu = calloc(1, sizeof(struct cgpu_info));
+			if (unlikely(!thr->cgpu)) {
+				applog(LOG_ERR, "Failed to calloc cgpu_info");
+				return 1;
+			}
+			thr->cgpu->is_gpu = 1;
+			thr->cgpu->cpu_gpu = gpu;
+		} else
+			thr->cgpu = thr_info[i - (i % opt_g_threads)].cgpu;
+
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
@@ -1426,6 +1438,16 @@ int main (int argc, char *argv[])
 		thr = &thr_info[i];
 
 		thr->id = i;
+		if (! (i % opt_g_threads)) {
+			thr->cgpu = calloc(1, sizeof(struct cgpu_info));
+			if (unlikely(!thr->cgpu)) {
+				applog(LOG_ERR, "Failed to calloc cgpu_info");
+				return 1;
+			}
+			thr->cgpu->cpu_gpu = cpu_from_thr_id(i);
+		} else
+			thr->cgpu = thr_info[cpu_from_thr_id(i - (i % opt_g_threads))].cgpu;
+
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;

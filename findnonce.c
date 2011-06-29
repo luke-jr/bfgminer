@@ -204,7 +204,7 @@ out:
 		if (opt_debug)
 			applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
 		hw_errors++;
-		thr->hw_errors++;
+		thr->cgpu->hw_errors++;
 	}
 	free(pcd);
 }

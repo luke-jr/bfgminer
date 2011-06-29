@@ -110,13 +110,19 @@ enum {
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+struct cgpu_info {
+	int is_gpu;
+	int cpu_gpu;
+	int accepted;
+	int rejected;
+	int hw_errors;
+};
+
 struct thr_info {
 	int		id;
 	pthread_t	pth;
 	struct thread_q	*q;
-	int		accepted;
-	int		rejected;
-	int		hw_errors;
+	struct cgpu_info *cgpu;
 };
 
 static inline uint32_t swab32(uint32_t v)
