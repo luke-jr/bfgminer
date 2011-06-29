@@ -377,7 +377,7 @@ static bool submit_upstream_work(CURL *curl, const struct work *work)
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 	}
-	applog(LOG_INFO, "%sPU: %d Accepted: %d Rejected: %d HW errors: %d",
+	applog(LOG_INFO, "%sPU: %d  Accepted: %d  Rejected: %d  HW errors: %d",
 	       cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->accepted, cgpu->rejected, cgpu->hw_errors);
 
 	json_decref(val);
