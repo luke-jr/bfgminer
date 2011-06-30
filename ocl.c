@@ -10,6 +10,8 @@
 #include <time.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "findnonce.h"
 #include "ocl.h"
@@ -210,6 +212,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
+	size_t nDevices;
 	cl_uint numDevices;
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS)
@@ -248,7 +251,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 		if (gpu < numDevices) {
 			char pbuff[100];
-			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
+			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, &nDevices);
 			if (status != CL_SUCCESS)
 			{
 				applog(LOG_ERR, "Error: Getting Device Info");
@@ -307,30 +310,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (clState->max_work_size > 512)
 		clState->max_work_size = 512;
 
-	/////////////////////////////////////////////////////////////////
-	// Load CL file, build CL program object, create CL kernel object
-	/////////////////////////////////////////////////////////////////
-
-	/* Load a different kernel depending on whether it supports
-	 * cl_amd_media_ops or not */
-	char filename[10];
-
-	if (clState->hasBitAlign)
-		strcpy(filename, "phatk.cl");
-	else
-		strcpy(filename, "poclbm.cl");
-
-	int pl;
-	char *source, *rawsource = file_contents(filename, &pl);
-	size_t sourceSize[] = {(size_t)pl};
-	source = malloc(pl);
-retry:
-	if (!source) {
-		applog(LOG_ERR, "Unable to malloc source");
-		return NULL;
-	}
-	memcpy(source, rawsource, pl);
-
 	/* For some reason 2 vectors is still better even if the card says
 	 * otherwise */
 	if (clState->preferred_vwidth > 1)
@@ -341,6 +320,106 @@ retry:
 		clState->work_size = opt_worksize;
 	else
 		clState->work_size = clState->max_work_size / clState->preferred_vwidth;
+
+	/* Create binary filename based on parameters passed to opencl
+	 * compiler to ensure we only load a binary that matches what would
+	 * have otherwise created. The filename is:
+	 * kernelname +/i bitalign + v + vectors + w + work_size + sizeof(long) + .bin
+	 */
+	char binaryfilename[255];
+	char numbuf[10];
+	char filename[10];
+	if (clState->hasBitAlign)
+		strcpy(filename, "phatk.cl");
+	else
+		strcpy(filename, "poclbm.cl");
+	FILE *binaryfile;
+	size_t *binary_sizes;
+	char **binaries;
+	int pl;
+	char *source, *rawsource = file_contents(filename, &pl);
+	size_t sourceSize[] = {(size_t)pl};
+
+	source = malloc(pl);
+	if (!source) {
+		applog(LOG_ERR, "Unable to malloc source");
+		return NULL;
+	}
+
+	binary_sizes = (size_t *)malloc(sizeof(size_t)*nDevices);
+	if (unlikely(!binary_sizes)) {
+		applog(LOG_ERR, "Unable to malloc binary_sizes");
+		return NULL;
+	}
+	binaries = (char **)malloc(sizeof(char *)*nDevices);
+	if (unlikely(!binaries)) {
+		applog(LOG_ERR, "Unable to malloc binaries");
+		return NULL;
+	}
+
+	if (clState->hasBitAlign) {
+		strcpy(binaryfilename, "phatk");
+		strcat(binaryfilename, "bitalign");
+	} else
+		strcpy(binaryfilename, "poclbm");
+	strcat(binaryfilename, "v");
+	sprintf(numbuf, "%d", clState->preferred_vwidth);
+	strcat(binaryfilename, numbuf);
+	strcat(binaryfilename, "w");
+	sprintf(numbuf, "%d", (int)clState->work_size);
+	strcat(binaryfilename, numbuf);
+	strcat(binaryfilename, "long");
+	sprintf(numbuf, "%d", (int)sizeof(long));
+	strcat(binaryfilename, numbuf);
+	strcat(binaryfilename, ".bin");
+
+	binaryfile = fopen(binaryfilename, "r");
+	if (!binaryfile) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "No binary found, generating from source");
+	} else {
+		struct stat binary_stat;
+
+		if (unlikely(stat(binaryfilename, &binary_stat))) {
+			if (opt_debug)
+				applog(LOG_DEBUG, "Unable to stat binary, generating from source");
+			fclose(binaryfile);
+			goto build;
+		}
+		binary_sizes[gpu] = binary_stat.st_size;
+		binaries[gpu] = (char *)malloc(binary_sizes[gpu]);
+		if (unlikely(!binaries[gpu])) {
+			applog(LOG_ERR, "Unable to malloc binaries");
+			fclose(binaryfile);
+			return NULL;
+		}
+
+		if (fread(binaries[gpu], 1, binary_sizes[gpu], binaryfile) != binary_sizes[gpu]) {
+			applog(LOG_ERR, "Unable to fread binaries[gpu]");
+			fclose(binaryfile);
+			return NULL;
+		}
+		fclose(binaryfile);
+
+		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[gpu], (const unsigned char **)&binaries[gpu], &status, NULL);
+		if (status != CL_SUCCESS)
+		{
+			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
+			return NULL;
+		}
+		if (opt_debug)
+			applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
+		
+		free(binaries[gpu]);
+		goto built;
+	}
+
+	/////////////////////////////////////////////////////////////////
+	// Load CL file, build CL program object, create CL kernel object
+	/////////////////////////////////////////////////////////////////
+
+build:
+	memcpy(source, rawsource, pl);
 
 	/* Patch the source file with the preferred_vwidth */
 	if (clState->preferred_vwidth > 1) {
@@ -409,25 +488,26 @@ retry:
 		return NULL; 
 	}
 
+	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*nDevices, binary_sizes, NULL );
+	if (unlikely(status != CL_SUCCESS))
+	{
+		applog(LOG_ERR, "Error: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetPlatformInfo)");
+		return NULL;
+	}
+
+	/* copy over all of the generated binaries. */
+	if (opt_debug)
+		applog(LOG_DEBUG, "binary size %d : %d", gpu, binary_sizes[gpu]);
+	binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[gpu]);
+	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
+	if (unlikely(status != CL_SUCCESS))
+	{
+		applog(LOG_ERR, "Error: Getting program info. (clGetPlatformInfo)");
+		return NULL;
+	}
+
 	/* Patch the kernel if the hardware supports BFI_INT */
 	if (patchbfi) {
-		size_t nDevices;
-		size_t * binary_sizes;
-		char ** binaries;
-		int err;
-
-		/* figure out number of devices and the sizes of the binary for each device. */
-		err = clGetProgramInfo( clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(nDevices), &nDevices, NULL );
-		binary_sizes = (size_t *)malloc( sizeof(size_t)*nDevices );
-		err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*nDevices, binary_sizes, NULL );
-
-		/* copy over all of the generated binaries. */
-		binaries = (char **)malloc( sizeof(char *)*nDevices );
-		if (opt_debug)
-			applog(LOG_DEBUG, "binary size %d : %d", gpu, binary_sizes[gpu]);
-		binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[gpu] );
-		err = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
-
 		unsigned remaining = binary_sizes[gpu];
 		char *w = binaries[gpu];
 		unsigned int start, length;
@@ -437,7 +517,7 @@ retry:
 		* back and find the 2nd incidence of \x7ELF (rewind by one
 		* from ELF) and then patch the opcocdes */
 		if (!advance(&w, &remaining, ".text"))
-			{patchbfi = 0; goto retry;}
+			{patchbfi = 0; goto build;}
 		w++; remaining--;
 		if (!advance(&w, &remaining, ".text")) {
 			/* 32 bit builds only one ELF */
@@ -447,7 +527,7 @@ retry:
 		memcpy(&length, w + 289, 4);
 		w = binaries[gpu]; remaining = binary_sizes[gpu];
 		if (!advance(&w, &remaining, "ELF"))
-			{patchbfi = 0; goto retry;}
+			{patchbfi = 0; goto build;}
 		w++; remaining--;
 		if (!advance(&w, &remaining, "ELF")) {
 			/* 32 bit builds only one ELF */
@@ -477,6 +557,25 @@ retry:
 
 	free(source);
 	free(rawsource);
+
+	/* Save the binary to be loaded next time */
+	binaryfile = fopen(binaryfilename, "w");
+	if (!binaryfile) {
+		/* Not a fatal problem, just means we build it again next time */
+		if (opt_debug)
+			applog(LOG_DEBUG, "Unable to create file %s", binaryfilename);
+	} else {
+		if (unlikely(fwrite(binaries[gpu], 1, binary_sizes[gpu], binaryfile) != binary_sizes[gpu])) {
+			applog(LOG_ERR, "Unable to fwrite to binaryfile");
+			return NULL;
+		}
+		fclose(binaryfile);
+	}
+	if (binaries[gpu])
+		free(binaries[gpu]);
+built:
+	free(binaries);
+	free(binary_sizes);
 
 	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT patching, %d vectors and worksize %d",
 	       filename, patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
