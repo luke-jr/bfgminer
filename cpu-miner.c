@@ -700,13 +700,46 @@ static bool submit_work_async(struct thr_info *thr, const struct work *work_in)
 	return true;
 }
 
+static bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
+{
+	struct workio_cmd *wc;
+
+	/* fill out work request message */
+	wc = calloc(1, sizeof(*wc));
+	if (unlikely(!wc)) {
+		applog(LOG_ERR, "Failed to calloc wc in submit_work_sync");
+		return false;
+	}
+
+	wc->u.work = malloc(sizeof(*work_in));
+	if (unlikely(!wc->u.work)) {
+		applog(LOG_ERR, "Failed to calloc work in submit_work_sync");
+		goto err_out;
+	}
+
+	wc->cmd = WC_SUBMIT_WORK;
+	wc->thr = thr;
+	memcpy(wc->u.work, work_in, sizeof(*work_in));
+
+	/* send solution to workio thread */
+	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
+		applog(LOG_ERR, "Failed to tq_push work in submit_work_sync");
+		goto err_out;
+	}
+
+	return true;
+err_out:
+	workio_cmd_free(wc);
+	return false;
+}
+
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	work->data[64+12+0] = (nonce>>0) & 0xff;
 	work->data[64+12+1] = (nonce>>8) & 0xff;
 	work->data[64+12+2] = (nonce>>16) & 0xff;
 	work->data[64+12+3] = (nonce>>24) & 0xff;
-	return submit_work_async(thr, work);
+	return submit_work_sync(thr, work);
 }
 
 static inline int cpu_from_thr_id(int thr_id)
