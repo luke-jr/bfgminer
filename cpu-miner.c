@@ -1378,11 +1378,11 @@ int main (int argc, char *argv[])
 
 	/* start GPU mining threads */
 	for (i = 0; i < gpu_threads; i++) {
-		int gpu = i % nDevs;
+		int gpu = gpu_from_thr_id(i);
 
 		thr = &thr_info[i];
 		thr->id = i;
-		if (! (i % opt_g_threads)) {
+		if (!thr->cgpu) {
 			thr->cgpu = calloc(1, sizeof(struct cgpu_info));
 			if (unlikely(!thr->cgpu)) {
 				applog(LOG_ERR, "Failed to calloc cgpu_info");
@@ -1391,11 +1391,13 @@ int main (int argc, char *argv[])
 			thr->cgpu->is_gpu = 1;
 			thr->cgpu->cpu_gpu = gpu;
 		} else
-			thr->cgpu = thr_info[i - (i % opt_g_threads)].cgpu;
+			thr->cgpu = thr_info[gpu].cgpu;
 
 		thr->q = tq_new();
-		if (!thr->q)
+		if (!thr->q) {
+			applog(LOG_ERR, "tq_new failed in starting gpu mining threads");
 			return 1;
+		}
 
 		applog(LOG_INFO, "Init GPU thread %i", i);
 		clStates[i] = initCl(gpu, name, sizeof(name));
@@ -1416,22 +1418,26 @@ int main (int argc, char *argv[])
 
 	/* start CPU mining threads */
 	for (i = gpu_threads; i < gpu_threads + opt_n_threads; i++) {
+		int cpu = cpu_from_thr_id(i);
+
 		thr = &thr_info[i];
 
 		thr->id = i;
-		if (! (i % opt_n_threads)) {
+		if (!thr->cgpu) {
 			thr->cgpu = calloc(1, sizeof(struct cgpu_info));
 			if (unlikely(!thr->cgpu)) {
 				applog(LOG_ERR, "Failed to calloc cgpu_info");
 				return 1;
 			}
-			thr->cgpu->cpu_gpu = cpu_from_thr_id(i);
+			thr->cgpu->cpu_gpu = cpu;
 		} else
-			thr->cgpu = thr_info[cpu_from_thr_id(i - (i % opt_n_threads))].cgpu;
+			thr->cgpu = thr_info[cpu].cgpu;
 
 		thr->q = tq_new();
-		if (!thr->q)
+		if (!thr->q) {
+			applog(LOG_ERR, "tq_new failed in starting cpu mining threads");
 			return 1;
+		}
 
 		if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", i);
