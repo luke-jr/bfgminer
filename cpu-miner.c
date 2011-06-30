@@ -1277,9 +1277,10 @@ int main (int argc, char *argv[])
 	struct thr_info *thr;
 	unsigned int i;
 	char name[32];
+	struct cgpu_info *gpus, *cpus;
 
 #ifdef WIN32
-	opt_n_threads = 1;
+	opt_n_threads = num_processors = 1;
 #else
 	num_processors = sysconf(_SC_NPROCESSORS_ONLN);
 	opt_n_threads = num_processors;
@@ -1376,22 +1377,30 @@ int main (int argc, char *argv[])
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
 
+	if (opt_n_threads ) {
+		cpus = calloc(num_processors, sizeof(struct cgpu_info));
+		if (unlikely(!cpus)) {
+			applog(LOG_ERR, "Failed to calloc cpus");
+			return 1;
+		}
+	}
+	if (gpu_threads) {
+		gpus = calloc(nDevs, sizeof(struct cgpu_info));
+		if (unlikely(!gpus)) {
+			applog(LOG_ERR, "Failed to calloc gpus");
+			return 1;
+		}
+	}
+
 	/* start GPU mining threads */
 	for (i = 0; i < gpu_threads; i++) {
 		int gpu = gpu_from_thr_id(i);
 
 		thr = &thr_info[i];
 		thr->id = i;
-		if (!thr->cgpu) {
-			thr->cgpu = calloc(1, sizeof(struct cgpu_info));
-			if (unlikely(!thr->cgpu)) {
-				applog(LOG_ERR, "Failed to calloc cgpu_info");
-				return 1;
-			}
-			thr->cgpu->is_gpu = 1;
-			thr->cgpu->cpu_gpu = gpu;
-		} else
-			thr->cgpu = thr_info[gpu].cgpu;
+		gpus[gpu].is_gpu = 1;
+		gpus[gpu].cpu_gpu = gpu;
+		thr->cgpu = &gpus[gpu];
 
 		thr->q = tq_new();
 		if (!thr->q) {
@@ -1423,15 +1432,8 @@ int main (int argc, char *argv[])
 		thr = &thr_info[i];
 
 		thr->id = i;
-		if (!thr->cgpu) {
-			thr->cgpu = calloc(1, sizeof(struct cgpu_info));
-			if (unlikely(!thr->cgpu)) {
-				applog(LOG_ERR, "Failed to calloc cgpu_info");
-				return 1;
-			}
-			thr->cgpu->cpu_gpu = cpu;
-		} else
-			thr->cgpu = thr_info[cpu].cgpu;
+		cpus[cpu].cpu_gpu = cpu;
+		thr->cgpu = &cpus[cpu];
 
 		thr->q = tq_new();
 		if (!thr->q) {
@@ -1463,6 +1465,10 @@ int main (int argc, char *argv[])
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
 	curl_global_cleanup();
+	if (gpu_threads)
+		free(gpus);
+	if (opt_n_threads)
+		free(cpus);
 
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
