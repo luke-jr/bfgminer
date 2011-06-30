@@ -39,8 +39,31 @@ case $target in
     ;;
 esac
 
+dnl Figure out where OpenCL is, either passed or system-wide
+AC_ARG_WITH([opencl-libdir],
+	[AC_HELP_STRING([--with-opencl-libdir],[specify OpenCL library])],
+	[with_opencl_lib=$withval],
+	[with_opencl_lib="auto"])
+if test "x$with_opencl_lib" = xauto; then
+	AC_CHECK_LIB([OpenCL], [OpenCL], [OPENCL_LIBS="-lOpenCL"], AC_MSG_ERROR([OpenCL library could not be found]))
+else
+	OPENCL_LIBS="$with_opencl_lib/libOpenCL.so"
+fi
+OPENCL_INCLUDES=""
+AC_ARG_WITH([opencl-inc],
+	[AC_HELP_STRING([--with-opencl-inc],[specify OpenCL include paths])],
+	[with_opencl_inc=$withval],
+	[with_opencl_inc="auto"])
+if test "x$with_opencl_inc" = xauto; then
+	AC_CHECK_HEADERS(CL/cl.h, [found="yes"])
+	AC_CHECK_HEADERS(OpenCL/opencl.h, [found="yes"])
+	if test "x$found" = x; then
+		AC_MSG_ERROR([OpenCL headers could not be found])
+	fi
+else
+	OPENCL_INCLUDES="-I$with_opencl_inc"
+fi
 
-AC_CHECK_LIB(OpenCL, clSetKernelArg, OPENCL_LIBS=-lOpenCL)
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 AC_CHECK_LIB(pthread, pthread_create, PTHREAD_LIBS=-lpthread)
 
@@ -97,6 +120,7 @@ LIBCURL_CHECK_CONFIG(, 7.10.1, ,
   [AC_MSG_ERROR([Missing required libcurl >= 7.10.1])])
 
 AC_SUBST(OPENCL_LIBS)
+AC_SUBST(OPENCL_INCLUDES)
 AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(PTHREAD_LIBS)
