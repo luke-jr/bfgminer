@@ -645,7 +645,7 @@ out:
 
 struct submit_data {
 	struct thr_info *thr;
-	struct work work_in;
+	struct work *work_in;
 	pthread_t pth;
 };
 
@@ -688,10 +688,15 @@ static bool submit_work_async(struct thr_info *thr, const struct work *work_in)
 		applog(LOG_ERR, "Failed to malloc sd in submit_work_async");
 		return false;
 	}
+	sd->work_in = malloc(sizeof(struct work));
+	if (unlikely(!sd->work_in)) {
+		applog(LOG_ERR, "Failed to malloc work_in in submit_work_async");
+		return false;
+	}
 
-	memcpy(&sd->work_in, work_in, sizeof(struct work));
+	memcpy(sd->work_in, work_in, sizeof(struct work));
 	/* Pass the thread id to the work struct for per-thread accounting */
-	sd->work_in.thr_id = thr->id;
+	sd->work_in->thr_id = thr->id;
 
 	if (pthread_create(&sd->pth, NULL, submit_work, (void *)sd)) {
 		applog(LOG_ERR, "Failed to create submit_thread");

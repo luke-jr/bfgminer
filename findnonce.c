@@ -137,7 +137,7 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 
 struct pc_data {
 	struct thr_info *thr;
-	struct work work;
+	struct work *work;
 	uint32_t res[MAXBUFFERS];
 	pthread_t pth;
 };
@@ -146,8 +146,8 @@ static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
 	struct thr_info *thr = pcd->thr;
-	dev_blk_ctx *blk = &pcd->work.blk;
-	struct work *work = &pcd->work;
+	dev_blk_ctx *blk = &pcd->work->blk;
+	struct work *work = pcd->work;
 	uint32_t start;
 
 	cl_uint A, B, C, D, E, F, G, H;
@@ -236,9 +236,14 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		applog(LOG_ERR, "Failed to malloc pc_data in postcalc_hash_async");
 		return;
 	}
+	pcd->work = calloc(1, sizeof(struct work));
+	if (unlikely(!pcd->work)) {
+		applog(LOG_ERR, "Failed to malloc work in postcalc_hash_async");
+		return;
+	}
 
 	pcd->thr = thr;
-	memcpy(&pcd->work, work, sizeof(struct work));
+	memcpy(pcd->work, work, sizeof(struct work));
 	memcpy(&pcd->res, res, BUFFERSIZE);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
