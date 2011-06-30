@@ -328,12 +328,16 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char binaryfilename[255];
 	char numbuf[10];
 	char filename[10];
+	if (clState->hasBitAlign)
+		strcpy(filename, "phatk.cl");
+	else
+		strcpy(filename, "poclbm.cl");
 	FILE *binaryfile;
 	size_t *binary_sizes;
 	char **binaries;
 	size_t nDevices = 1;
 	int pl;
-	char *source, *rawsource;
+	char *source, *rawsource = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
 
 	source = malloc(pl);
@@ -341,12 +345,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_ERR, "Unable to malloc source");
 		return NULL;
 	}
-
-	if (clState->hasBitAlign)
-		strcpy(filename, "phatk.cl");
-	else
-		strcpy(filename, "poclbm.cl");
-	rawsource = file_contents(filename, &pl);
 
 	binary_sizes = (size_t *)malloc(sizeof(size_t)*nDevices);
 	if (unlikely(!binary_sizes)) {
