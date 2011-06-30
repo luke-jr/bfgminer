@@ -750,7 +750,7 @@ static inline int cpu_from_thr_id(int thr_id)
 static void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
-	int thr_id = mythr->id;
+	const int thr_id = mythr->id;
 	uint32_t max_nonce = 0xffffff;
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
@@ -777,6 +777,7 @@ static void *miner_thread(void *userdata)
 				"mining thread %d", mythr->id);
 			goto out;
 		}
+		work.thr_id = thr_id;
 
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -966,7 +967,6 @@ static void *gpuminer_thread(void *userdata)
 
 	while (1) {
 		struct timeval tv_end, tv_workstart;
-		unsigned int i;
 
 		/* This finish flushes the readbuffer set with CL_FALSE later */
 		clFinish(clState->commandQueue);
@@ -985,6 +985,7 @@ static void *gpuminer_thread(void *userdata)
 					"gpu mining thread %d", mythr->id);
 				goto out;
 			}
+			work->thr_id = thr_id;
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work->blk.nonce = 0;
@@ -1475,7 +1476,7 @@ int main (int argc, char *argv[])
 		thr = &thr_info[i];
 
 		thr->id = i;
-		if (! (i % opt_g_threads)) {
+		if (! (i % opt_n_threads)) {
 			thr->cgpu = calloc(1, sizeof(struct cgpu_info));
 			if (unlikely(!thr->cgpu)) {
 				applog(LOG_ERR, "Failed to calloc cgpu_info");
@@ -1483,7 +1484,7 @@ int main (int argc, char *argv[])
 			}
 			thr->cgpu->cpu_gpu = cpu_from_thr_id(i);
 		} else
-			thr->cgpu = thr_info[cpu_from_thr_id(i - (i % opt_g_threads))].cgpu;
+			thr->cgpu = thr_info[cpu_from_thr_id(i - (i % opt_n_threads))].cgpu;
 
 		thr->q = tq_new();
 		if (!thr->q)
