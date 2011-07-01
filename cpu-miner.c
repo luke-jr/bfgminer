@@ -146,7 +146,6 @@ int longpoll_thr_id;
 struct work_restart *work_restart = NULL;
 pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
-static pthread_mutex_t get_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static int accepted, rejected;
@@ -457,6 +456,7 @@ struct io_data{
 
 static pthread_t *get_thread = NULL;
 static pthread_t *submit_thread = NULL;
+static char current_block[36];
 
 static void *get_work_thread(void *userdata)
 {
@@ -536,6 +536,11 @@ static void *submit_work_thread(void *userdata)
 	struct workio_cmd *wc = io_data->wc;
 	CURL *curl = io_data->curl;
 	int failures = 0;
+
+	if (unlikely(strncmp((const char *)wc->u.work->data, current_block, 36))) {
+		applog(LOG_INFO, "Stale work detected, discarding");
+		goto out;
+	}
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(curl, wc->u.work)) {
@@ -684,17 +689,15 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	local_mhashes_done = 0;
 }
 
-static struct work *work_heap = NULL;
-
-/* Since we always have one extra work item queued, set the thread id to 0
- * for all the work and just give the work to the first thread that requests
- * work */
 static bool get_work(struct work *work)
 {
-	struct thr_info *thr = &thr_info[0];
+	struct thr_info *thr = &thr_info[work->thr_id];
+	struct work *work_heap;
 	struct workio_cmd *wc;
 	bool ret = false;
+	static bool first_work = true;
 
+get_new:
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc))
@@ -709,41 +712,41 @@ static bool get_work(struct work *work)
 		goto out;
 	}
 
-	/* work_heap is protected by get_lock */
-	pthread_mutex_lock(&get_lock);
-	if (likely(work_heap)) {
-		memcpy(work, work_heap, sizeof(*work));
-		/* Wait for next response, a unit of work - it should be queued */
-		free(work_heap);
-		work_heap = tq_pop(thr->q, NULL);
-	} else {
-		/* wait for 1st response, or 1st response after failure */
-		work_heap = tq_pop(thr->q, NULL);
-		if (unlikely(!work_heap))
-			goto out_unlock;
+	/* wait for 1st response, or get cached response */
+	work_heap = tq_pop(thr->q, NULL);
+	if (unlikely(!work_heap))
+		goto out;
 
+	if (unlikely(work_restart[opt_n_threads + gpu_threads].restart)) {
+		work_restart[opt_n_threads + gpu_threads].restart = 0;
+		free(work_heap);
+		if (opt_debug)
+			applog(LOG_DEBUG, "New block detected, discarding old work");
+		goto get_new;
+	}
+
+	if (unlikely(first_work)) {
+		first_work = false;
 		/* send for another work request for the next time get_work
 		 * is called. */
 		wc = calloc(1, sizeof(*wc));
-		if (unlikely(!wc)) {
-			free(work_heap);
-			work_heap = NULL;
-			goto out_unlock;
-		}
+		if (unlikely(!wc))
+			goto out_free;
 
 		wc->cmd = WC_GET_WORK;
 		wc->thr = thr;
 
 		if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
 			workio_cmd_free(wc);
-			free(work_heap);
-			work_heap = NULL;
-			goto out_unlock;
+			goto out_free;
 		}
 	}
+
+	memcpy(work, work_heap, sizeof(*work));
+	memcpy(current_block, work->data, 36);
 	ret = true;
-out_unlock:
-	pthread_mutex_unlock(&get_lock);
+out_free:
+	free(work_heap);
 out:
 	return ret;
 }
@@ -819,13 +822,13 @@ static void *miner_thread(void *userdata)
 		uint64_t max64;
 		bool rc;
 
+		work.thr_id = thr_id;
 		/* obtain new work from internal workio thread */
 		if (unlikely(!get_work(&work))) {
 			applog(LOG_ERR, "work retrieval failed, exiting "
 				"mining thread %d", mythr->id);
 			goto out;
 		}
-		work.thr_id = thr_id;
 
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -1027,13 +1030,13 @@ static void *gpuminer_thread(void *userdata)
 			memset(res, 0, BUFFERSIZE);
 
 			gettimeofday(&tv_workstart, NULL);
+			work->thr_id = thr_id;
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(work))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"gpu mining thread %d", mythr->id);
 				goto out;
 			}
-			work->thr_id = thr_id;
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work->blk.nonce = 0;
@@ -1094,16 +1097,8 @@ static void restart_threads(void)
 {
 	int i;
 
-	pthread_mutex_lock(&get_lock);
-	for (i = 0; i < opt_n_threads + gpu_threads; i++)
+	for (i = 0; i < opt_n_threads + gpu_threads + 1; i++)
 		work_restart[i].restart = 1;
-	/* If longpoll has detected a new block, we should discard any queued
-	 * blocks in work_heap */
-	if (likely(work_heap)) {
-		free(work_heap);
-		work_heap = NULL;
-	}
-	pthread_mutex_unlock(&get_lock);
 }
 
 static void *longpoll_thread(void *userdata)
@@ -1425,8 +1420,6 @@ int main (int argc, char *argv[])
 		return 1;
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
 		return 1;
-	if (unlikely(pthread_mutex_init(&get_lock, NULL)))
-		return 1;
 
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		return 1;
@@ -1435,7 +1428,7 @@ int main (int argc, char *argv[])
 		openlog("cpuminer", LOG_PID, LOG_USER);
 #endif
 
-	work_restart = calloc(opt_n_threads + gpu_threads, sizeof(*work_restart));
+	work_restart = calloc(opt_n_threads + gpu_threads + 1, sizeof(*work_restart));
 	if (!work_restart)
 		return 1;
 
