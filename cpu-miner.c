@@ -132,7 +132,7 @@ static enum sha256_algos opt_algo = ALGO_SSE2_64;
 static enum sha256_algos opt_algo = ALGO_C;
 #endif
 static int nDevs;
-static int opt_g_threads = 1;
+static int opt_g_threads = 2;
 static int gpu_threads;
 static int opt_n_threads = 1;
 static int num_processors;
@@ -190,7 +190,7 @@ static struct option_help options_help[] = {
 	  "(-D) Enable debug output (default: off)" },
 
 	{ "gpu-threads N",
-	  "(-g N) Number of threads per-GPU (0 - 10, default: 1)" },
+	  "(-g N) Number of threads per-GPU (0 - 10, default: 2)" },
 
 	{ "intensity",
 	  "(-I) Intensity of scanning (0 - 14, default 4)" },
