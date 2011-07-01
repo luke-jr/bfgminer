@@ -691,7 +691,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 static bool get_work(struct work *work)
 {
-	struct thr_info *thr = &thr_info[work->thr_id];
+	struct thr_info *thr = &thr_info[0];
 	struct work *work_heap;
 	struct workio_cmd *wc;
 	bool ret = false;
