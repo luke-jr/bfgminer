@@ -544,6 +544,10 @@ static void *submit_work_thread(void *userdata)
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(curl, wc->u.work)) {
+		if (unlikely(strncmp((const char *)wc->u.work->data, current_block, 36))) {
+			applog(LOG_INFO, "Stale work detected, discarding");
+			goto out;
+		}
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "Failed %d retries ...terminating workio thread", opt_retries);
 			kill_work();
