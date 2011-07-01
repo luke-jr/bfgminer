@@ -148,7 +148,7 @@ static void *postcalc_hash(void *userdata)
 	struct thr_info *thr = pcd->thr;
 	dev_blk_ctx *blk = &pcd->work->blk;
 	struct work *work = pcd->work;
-	uint32_t start;
+	uint32_t start = 0;
 
 	cl_uint A, B, C, D, E, F, G, H;
 	cl_uint W[16];

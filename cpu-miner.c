@@ -400,8 +400,10 @@ static bool get_upstream_work(CURL *curl, struct work *work)
 
 	val = json_rpc_call(curl, rpc_url, rpc_userpass, rpc_req,
 			    want_longpoll, false);
-	if (!val)
+	if (unlikely(!val)) {
+		applog(LOG_ERR, "Failed json_rpc_call in get_upstream_work");
 		return false;
+	}
 
 	rc = work_decode(json_object_get(val, "result"), work);
 
@@ -465,7 +467,7 @@ static void *get_work_thread(void *userdata)
 	int failures = 0;
 
 	ret_work = calloc(1, sizeof(*ret_work));
-	if (!ret_work) {
+	if (unlikely(!ret_work)) {
 		applog(LOG_ERR, "Failed to calloc ret_work in workio_get_work");
 		kill_work();
 		goto out;
@@ -510,7 +512,8 @@ static bool workio_get_work(struct workio_cmd *wc, CURL *curl)
 	id->wc = wc;
 	id->curl = curl;
 
-	if (!get_thread) {
+	if (unlikely(!get_thread)) {
+		/* This is only instantiated once at startup */
 		get_thread = malloc(sizeof(get_thread));
 		if (unlikely(!get_thread)) {
 			applog(LOG_ERR, "Failed to malloc get_thread in workio_get_work");
@@ -519,7 +522,7 @@ static bool workio_get_work(struct workio_cmd *wc, CURL *curl)
 	} else
 		pthread_join(*get_thread, NULL);
 
-	if (pthread_create(get_thread, NULL, get_work_thread, (void *)id)) {
+	if (unlikely(pthread_create(get_thread, NULL, get_work_thread, (void *)id))) {
 		applog(LOG_ERR, "Failed to create get_work_thread");
 		free(id);
 		return false;
@@ -565,7 +568,7 @@ static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
 	id->wc = wc;
 	id->curl = curl;
 
-	if (!submit_thread) {
+	if (unlikely(!submit_thread)) {
 		submit_thread = malloc(sizeof(submit_thread));
 		if (unlikely(!submit_thread)) {
 			applog(LOG_ERR, "Failed to malloc submit_thread in workio_submit_work");
@@ -574,7 +577,7 @@ static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
 	} else
 		pthread_join(*submit_thread, NULL);
 
-	if (pthread_create(submit_thread, NULL, submit_work_thread, (void *)id)) {
+	if (unlikely(pthread_create(submit_thread, NULL, submit_work_thread, (void *)id))) {
 		applog(LOG_ERR, "Failed to create submit_work_thread");
 		free(id);
 		return false;
@@ -905,7 +908,7 @@ static void *miner_thread(void *userdata)
 		if (unlikely(rc)) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "CPU %d found something?", cpu_from_thr_id(thr_id));
-			if (!submit_work_sync(mythr, &work))
+			if (unlikely(!submit_work_sync(mythr, &work)))
 				break;
 		}
 	}
@@ -1379,7 +1382,7 @@ int main (int argc, char *argv[])
 	struct thr_info *thr;
 	unsigned int i;
 	char name[32];
-	struct cgpu_info *gpus, *cpus;
+	struct cgpu_info *gpus = NULL, *cpus = NULL;
 
 #ifdef WIN32
 	opt_n_threads = num_processors = 1;
