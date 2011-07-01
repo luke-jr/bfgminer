@@ -1043,14 +1043,10 @@ static void *gpuminer_thread(void *userdata)
 				applog(LOG_DEBUG, "getwork thread %d", thr_id);
 			/* Flushes the writebuffer set with CL_FALSE above */
 			clFinish(clState->commandQueue);
-			status = queue_kernel_parameters(clState, &work->blk);
-			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
-		} else {
-			status = clSetKernelArg(*kernel, 14, sizeof(uint), (void *)&work->blk.nonce);
-			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clSetKernelArg of nonce failed."); goto out; }
 		}
+		status = queue_kernel_parameters(clState, &work->blk);
+		if (unlikely(status != CL_SUCCESS))
+			{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
 
 		/* MAXBUFFERS entry is used as a flag to say nonces exist */
 		if (res[MAXBUFFERS]) {
