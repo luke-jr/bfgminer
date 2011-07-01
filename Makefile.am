@@ -9,8 +9,7 @@ EXTRA_DIST	= example-cfg.json
 
 SUBDIRS		= compat
 
-INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES) \
-		  @OPENCL_INCLUDES@
+INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
 
 bin_PROGRAMS	= minerd
 
