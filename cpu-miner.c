@@ -826,13 +826,13 @@ static void *miner_thread(void *userdata)
 		uint64_t max64;
 		bool rc;
 
-		work.thr_id = thr_id;
 		/* obtain new work from internal workio thread */
 		if (unlikely(!get_work(&work))) {
 			applog(LOG_ERR, "work retrieval failed, exiting "
 				"mining thread %d", mythr->id);
 			goto out;
 		}
+		work.thr_id = thr_id;
 
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -1034,13 +1034,13 @@ static void *gpuminer_thread(void *userdata)
 			memset(res, 0, BUFFERSIZE);
 
 			gettimeofday(&tv_workstart, NULL);
-			work->thr_id = thr_id;
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(work))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"gpu mining thread %d", mythr->id);
 				goto out;
 			}
+			work->thr_id = thr_id;
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work->blk.nonce = 0;
