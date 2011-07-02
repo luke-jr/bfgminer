@@ -121,6 +121,7 @@ static bool opt_quiet = false;
 static int opt_retries = 10;
 static int opt_fail_pause = 30;
 static int opt_log_interval = 5;
+static int opt_queue = 2;
 int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
@@ -192,14 +193,14 @@ static struct option_help options_help[] = {
 	{ "gpu-threads N",
 	  "(-g N) Number of threads per-GPU (0 - 10, default: 2)" },
 
-	{ "intensity",
+	{ "intensity N",
 	  "(-I) Intensity of scanning (0 - 14, default 4)" },
 
-	{ "log",
-	  "(-l) Interval in seconds between log output (default: 5)" },
+	{ "log N",
+	  "(-l N) Interval in seconds between log output (default: 5)" },
 
 	{ "ndevs",
-	  "(-n) Display number of detected GPUs" },
+	  "(-n) Display number of detected GPUs and exit" },
 
 	{ "no-longpoll",
 	  "Disable X-Long-Polling support (default: enabled)" },
@@ -210,6 +211,9 @@ static struct option_help options_help[] = {
 
 	{ "protocol-dump",
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
+
+	{ "queue N",
+	  "(-Q N) Number of work items to queue (1 - 10, default 2)" },
 
 	{ "quiet",
 	  "(-q) Disable per-thread hashmeter output (default: off)" },
@@ -264,6 +268,7 @@ static struct option options[] = {
 	{ "no-longpoll", 0, NULL, 1003 },
 	{ "pass", 1, NULL, 'p' },
 	{ "protocol-dump", 0, NULL, 'P' },
+	{ "queue", 1, NULL, 'Q' },
 	{ "quiet", 0, NULL, 'q' },
 	{ "retries", 1, NULL, 'r' },
 	{ "retry-pause", 1, NULL, 'R' },
@@ -719,9 +724,10 @@ static bool queue_request(void)
 static bool get_work(struct work *work)
 {
 	struct thr_info *thr = &thr_info[0];
+	static bool first_work = true;
 	struct work *work_heap;
 	bool ret = false;
-	static bool first_work = true;
+	unsigned int i;
 
 get_new:
 	if (unlikely(!queue_request()))
@@ -737,15 +743,27 @@ get_new:
 		free(work_heap);
 		if (opt_debug)
 			applog(LOG_DEBUG, "New block detected, discarding old work");
+		for (i = 1; i < opt_queue; i++) {
+			/* Pop off all the work. Cancelling the requests would
+			 * be better but tricky. */
+			work_heap = tq_pop(thr->q, NULL);
+			if (unlikely(!work_heap))
+				goto out;
+			free(work_heap);
+			if (unlikely(!queue_request()))
+				goto out;
+		}
 		goto get_new;
 	}
 
 	if (unlikely(first_work)) {
 		first_work = false;
-		/* send for another work request for the next time get_work
+		/* send for extra work requests for the next time get_work
 		 * is called. */
-		if (unlikely(!queue_request()))
-			goto out_free;
+		for (i = 1; i < opt_queue; i++) {
+			if (unlikely(!queue_request()))
+				goto out_free;
+		}
 	}
 
 	memcpy(work, work_heap, sizeof(*work));
@@ -1251,6 +1269,13 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'P':
 		opt_protocol = true;
+		break;
+	case 'Q':
+		v = atoi(arg);
+		if (v < 1 || v > 10)
+			show_usage();
+
+		opt_queue = v;
 		break;
 	case 'q':
 		opt_quiet = true;
