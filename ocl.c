@@ -397,7 +397,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (fread(binaries[gpu], 1, binary_sizes[gpu], binaryfile) != binary_sizes[gpu]) {
 			applog(LOG_ERR, "Unable to fread binaries[gpu]");
 			fclose(binaryfile);
-			return NULL;
+			goto build;
 		}
 		fclose(binaryfile);
 
