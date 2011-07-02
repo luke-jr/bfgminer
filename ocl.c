@@ -1,4 +1,5 @@
-#define _GNU_SOURCE
+#include "config.h"
+
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
