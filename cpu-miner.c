@@ -728,7 +728,6 @@ static bool get_work(struct work *work)
 	bool ret = false;
 	unsigned int i;
 
-get_new:
 	if (unlikely(!queue_request()))
 		goto out;
 
@@ -737,24 +736,6 @@ get_new:
 	if (unlikely(!work_heap))
 		goto out;
 
-	if (unlikely(work_restart[opt_n_threads + gpu_threads].restart)) {
-		work_restart[opt_n_threads + gpu_threads].restart = 0;
-		free(work_heap);
-		if (opt_debug)
-			applog(LOG_DEBUG, "New block detected, discarding old work");
-		for (i = 1; i < opt_queue; i++) {
-			/* Pop off all the work. Cancelling the requests would
-			 * be better but tricky. */
-			work_heap = tq_pop(thr->q, NULL);
-			if (unlikely(!work_heap))
-				goto out;
-			free(work_heap);
-			if (unlikely(!queue_request()))
-				goto out;
-		}
-		goto get_new;
-	}
-
 	if (unlikely(first_work)) {
 		first_work = false;
 		/* send for extra work requests for the next time get_work
@@ -762,6 +743,22 @@ get_new:
 		for (i = 1; i < opt_queue; i++) {
 			if (unlikely(!queue_request()))
 				goto out_free;
+		}
+	}
+
+	if (unlikely(work_restart[opt_n_threads + gpu_threads].restart)) {
+		work_restart[opt_n_threads + gpu_threads].restart = 0;
+		if (opt_debug)
+			applog(LOG_DEBUG, "New block detected, discarding old work");
+		for (i = 1; i < opt_queue; i++) {
+			free(work_heap);
+			if (unlikely(!queue_request()))
+				goto out;
+			/* Pop off all the work. Cancelling the requests would
+			 * be better but tricky. */
+			work_heap = tq_pop(thr->q, NULL);
+			if (unlikely(!work_heap))
+				goto out;
 		}
 	}
 
