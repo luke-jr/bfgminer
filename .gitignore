@@ -27,5 +27,5 @@ mingw32-config.cache
 *~
 
 ext_deps
-
+config.h.in
 config.h
