@@ -1,3 +1,6 @@
+/*
+ * Copyright 2011 Con Kolivas
+ */
 #include "config.h"
 
 #include <signal.h>

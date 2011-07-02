@@ -1,5 +1,6 @@
 // -ck modified kernel taken from Phoenix taken from poclbm, with aspects of
 // phatk and others.
+// Modified version copyright 2011 Con Kolivas
 
 // This file is taken and modified from the public-domain poclbm project, and
 // we have therefore decided to keep it public-domain in Phoenix.

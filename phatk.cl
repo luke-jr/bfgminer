@@ -1,5 +1,7 @@
+// -ck modified kernel taken from Phoenix taken from phatk
 // This file is taken and modified from the public-domain poclbm project, and
 // we have therefore decided to keep it public-domain in Phoenix.
+// Modified version copyright 2011 Con Kolivas
 
 // The X is a placeholder for patching to suit hardware
 #define VECTORSX
