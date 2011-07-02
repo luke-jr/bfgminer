@@ -823,6 +823,11 @@ static void *miner_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	uint32_t max_nonce = 0xffffff;
+	bool needs_work = true;
+	unsigned long cycle;
+
+	/* Try to cycle approximately 5 times before each log update */
+	cycle = opt_log_interval / 5 ? : 1;
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
@@ -838,18 +843,21 @@ static void *miner_thread(void *userdata)
 	while (1) {
 		struct work work __attribute__((aligned(128)));
 		unsigned long hashes_done;
-		struct timeval tv_start, tv_end, diff;
+		struct timeval tv_workstart, tv_start, tv_end, diff;
 		uint64_t max64;
 		bool rc;
 
-		/* obtain new work from internal workio thread */
-		if (unlikely(!get_work(&work))) {
-			applog(LOG_ERR, "work retrieval failed, exiting "
-				"mining thread %d", mythr->id);
-			goto out;
+		if (needs_work) {
+			gettimeofday(&tv_workstart, NULL);
+			/* obtain new work from internal workio thread */
+			if (unlikely(!get_work(&work))) {
+				applog(LOG_ERR, "work retrieval failed, exiting "
+					"mining thread %d", mythr->id);
+				goto out;
+			}
+			work.thr_id = thr_id;
+			needs_work = false;
 		}
-		work.thr_id = thr_id;
-
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
 
@@ -915,13 +923,14 @@ static void *miner_thread(void *userdata)
 		timeval_subtract(&diff, &tv_end, &tv_start);
 
 		hashmeter(thr_id, &diff, hashes_done);
+		work.blk.nonce += hashes_done;
 
-		/* adjust max_nonce to meet target scan time */
+		/* adjust max_nonce to meet target cycle time */
 		if (diff.tv_usec > 500000)
 			diff.tv_sec++;
 		if (diff.tv_sec > 0) {
 			max64 =
-			   ((uint64_t)hashes_done * (opt_log_interval ? : opt_scantime)) / diff.tv_sec;
+			   ((uint64_t)hashes_done * cycle) / diff.tv_sec;
 			if (max64 > 0xfffffffaULL)
 				max64 = 0xfffffffaULL;
 			max_nonce = max64;
@@ -934,6 +943,11 @@ static void *miner_thread(void *userdata)
 			if (unlikely(!submit_work_sync(mythr, &work)))
 				break;
 		}
+
+		timeval_subtract(&diff, &tv_end, &tv_workstart);
+		if (diff.tv_sec > opt_scantime || work_restart[thr_id].restart ||
+			work.blk.nonce >= MAXTHREADS - hashes_done)
+				needs_work = true;
 	}
 
 out:
