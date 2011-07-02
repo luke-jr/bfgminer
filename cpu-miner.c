@@ -693,19 +693,17 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	local_mhashes_done = 0;
 }
 
-static bool get_work(struct work *work)
+/* All work is queued flagged as being for thread 0 and then the mining thread
+ * flags it as its own */
+static bool queue_request(void)
 {
 	struct thr_info *thr = &thr_info[0];
-	struct work *work_heap;
 	struct workio_cmd *wc;
-	bool ret = false;
-	static bool first_work = true;
 
-get_new:
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc))
-		goto out;
+		return false;
 
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
@@ -713,8 +711,21 @@ get_new:
 	/* send work request to workio thread */
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
 		workio_cmd_free(wc);
-		goto out;
+		return false;
 	}
+	return true;
+}
+
+static bool get_work(struct work *work)
+{
+	struct thr_info *thr = &thr_info[0];
+	struct work *work_heap;
+	bool ret = false;
+	static bool first_work = true;
+
+get_new:
+	if (unlikely(!queue_request()))
+		goto out;
 
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(thr->q, NULL);
@@ -733,17 +744,8 @@ get_new:
 		first_work = false;
 		/* send for another work request for the next time get_work
 		 * is called. */
-		wc = calloc(1, sizeof(*wc));
-		if (unlikely(!wc))
+		if (unlikely(!queue_request()))
 			goto out_free;
-
-		wc->cmd = WC_GET_WORK;
-		wc->thr = thr;
-
-		if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
-			workio_cmd_free(wc);
-			goto out_free;
-		}
 	}
 
 	memcpy(work, work_heap, sizeof(*work));
