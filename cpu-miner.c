@@ -117,7 +117,7 @@ bool want_longpoll = true;
 bool have_longpoll = false;
 bool use_syslog = false;
 static bool opt_quiet = false;
-static int opt_retries = 10;
+static int opt_retries = -1;
 static int opt_fail_pause = 30;
 static int opt_log_interval = 5;
 static int opt_queue = 2;
@@ -218,8 +218,8 @@ static struct option_help options_help[] = {
 	  "(-q) Disable per-thread hashmeter output (default: off)" },
 
 	{ "retries N",
-	  "(-r N) Number of times to retry, if JSON-RPC call fails\n"
-	  "\t(default: 10; use -1 for \"never\")" },
+	  "(-r N) Number of times to retry before giving up, if JSON-RPC call fails\n"
+	  "\t(default: -1; use -1 for \"never\")" },
 
 	{ "retry-pause N",
 	  "(-R N) Number of seconds to pause, between retries\n"
