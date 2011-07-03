@@ -582,11 +582,11 @@ bool scanhash_asm32(int thr_id, const unsigned char *midstate,
 		unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
 		const unsigned char *target,
-	        uint32_t max_nonce, unsigned long *hashes_done)
+	        uint32_t max_nonce, unsigned long *hashes_done,
+		uint32_t n)
 {
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 12);
-	uint32_t n = 0;
 	unsigned long stat_ctr = 0;
 
 	work_restart[thr_id].restart = 0;

@@ -182,7 +182,7 @@ extern bool scanhash_cryptopp(int, const unsigned char *midstate,unsigned char *
 extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done);
+	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t nonce);
 extern int scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
