@@ -118,7 +118,7 @@ bool have_longpoll = false;
 bool use_syslog = false;
 static bool opt_quiet = false;
 static int opt_retries = -1;
-static int opt_fail_pause = 30;
+static int opt_fail_pause = 5;
 static int opt_log_interval = 5;
 static int opt_queue = 2;
 int opt_vectors;
@@ -223,7 +223,7 @@ static struct option_help options_help[] = {
 
 	{ "retry-pause N",
 	  "(-R N) Number of seconds to pause, between retries\n"
-	  "\t(default: 30)" },
+	  "\t(default: 5)" },
 
 	{ "scantime N",
 	  "(-s N) Upper bound on time spent scanning current work,\n"
