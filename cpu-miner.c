@@ -713,6 +713,34 @@ static bool queue_request(void)
 	return true;
 }
 
+static void flush_requests(void)
+{
+	struct thr_info *thr = &thr_info[0];
+	struct work *work_heap;
+	unsigned int i;
+
+	/* Queue a whole batch of new requests */
+	for (i = 0; i < opt_queue; i++) {
+		if (unlikely(!queue_request())) {
+			applog(LOG_ERR, "Failed to queue requests in flush_requests");
+			kill_work();
+			return;
+		}
+	}
+
+	/* Pop off the old requests. Cancelling the requests would be better
+	 * but is tricky */
+	for (i = 0; i < opt_queue; i++) {
+		work_heap = tq_pop(thr->q, NULL);
+		if (unlikely(!work_heap)) {
+			applog(LOG_ERR, "Failed to pop requests in flush_requests");
+			kill_work();
+			return;
+		}
+		free(work_heap);
+	}
+}
+
 static bool get_work(struct work *work)
 {
 	struct thr_info *thr = &thr_info[0];
@@ -736,22 +764,6 @@ static bool get_work(struct work *work)
 		for (i = 1; i < opt_queue; i++) {
 			if (unlikely(!queue_request()))
 				goto out_free;
-		}
-	}
-
-	if (unlikely(work_restart[opt_n_threads + gpu_threads].restart)) {
-		work_restart[opt_n_threads + gpu_threads].restart = 0;
-		if (opt_debug)
-			applog(LOG_DEBUG, "New block detected, discarding old work");
-		for (i = 1; i < opt_queue; i++) {
-			free(work_heap);
-			if (unlikely(!queue_request()))
-				goto out;
-			/* Pop off all the work. Cancelling the requests would
-			 * be better but tricky. */
-			work_heap = tq_pop(thr->q, NULL);
-			if (unlikely(!work_heap))
-				goto out;
 		}
 	}
 
@@ -1135,7 +1147,9 @@ static void restart_threads(void)
 {
 	int i;
 
-	for (i = 0; i < opt_n_threads + gpu_threads + 1; i++)
+	/* Discard old queued requests and get new ones */
+	flush_requests();
+	for (i = 0; i < opt_n_threads + gpu_threads; i++)
 		work_restart[i].restart = 1;
 }
 
@@ -1473,7 +1487,7 @@ int main (int argc, char *argv[])
 		openlog("cpuminer", LOG_PID, LOG_USER);
 #endif
 
-	work_restart = calloc(opt_n_threads + gpu_threads + 1, sizeof(*work_restart));
+	work_restart = calloc(opt_n_threads + gpu_threads, sizeof(*work_restart));
 	if (!work_restart)
 		return 1;
 
