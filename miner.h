@@ -160,7 +160,7 @@ extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 extern unsigned int ScanHash_4WaySSE2(int, const unsigned char *pmidstate,
 	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone);
+	uint32_t max_nonce, unsigned long *nHashesDone, uint32_t nonce);
 
 extern unsigned int scanhash_sse2_amd64(int, const unsigned char *pmidstate,
 	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
@@ -169,16 +169,16 @@ extern unsigned int scanhash_sse2_amd64(int, const unsigned char *pmidstate,
 
 extern bool scanhash_via(int, unsigned char *data_inout,
 	const unsigned char *target,
-	uint32_t max_nonce, unsigned long *hashes_done);
+	uint32_t max_nonce, unsigned long *hashes_done, uint32_t n);
 
 extern bool scanhash_c(int, const unsigned char *midstate, unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done);
+	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t n);
 extern bool scanhash_cryptopp(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done);
+	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t n);
 extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
@@ -186,7 +186,8 @@ extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *dat
 extern int scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone);
+	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t nonce);
 
 extern int
 timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);

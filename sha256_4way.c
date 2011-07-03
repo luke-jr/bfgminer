@@ -105,10 +105,10 @@ unsigned int ScanHash_4WaySSE2(int thr_id, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone)
+	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t nonce)
 {
     unsigned int *nNonce_p = (unsigned int*)(pdata + 12);
-    unsigned int nonce = 0;
 
     work_restart[thr_id].restart = 0;
 

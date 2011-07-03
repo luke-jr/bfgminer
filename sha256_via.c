@@ -21,7 +21,8 @@ static void via_sha256(void *hash, void *buf, unsigned len)
 
 bool scanhash_via(int thr_id, unsigned char *data_inout,
 		  const unsigned char *target,
-		  uint32_t max_nonce, unsigned long *hashes_done)
+		  uint32_t max_nonce, unsigned long *hashes_done,
+		  uint32_t n)
 {
 	unsigned char data[128] __attribute__((aligned(128)));
 	unsigned char tmp_hash[32] __attribute__((aligned(128)));
@@ -29,7 +30,6 @@ bool scanhash_via(int thr_id, unsigned char *data_inout,
 	uint32_t *data32 = (uint32_t *) data;
 	uint32_t *hash32 = (uint32_t *) tmp_hash;
 	uint32_t *nonce = (uint32_t *)(data + 64 + 12);
-	uint32_t n = 0;
 	unsigned long stat_ctr = 0;
 	int i;
 

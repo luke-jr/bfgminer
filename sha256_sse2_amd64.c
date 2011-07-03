@@ -53,10 +53,10 @@ int scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone)
+	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t nonce)
 {
     uint32_t *nNonce_p = (uint32_t *)(pdata + 12);
-    uint32_t nonce = 0;
     uint32_t m_midstate[8], m_w[16], m_w1[16];
     __m128i m_4w[64], m_4hash[64], m_4hash1[64];
     __m128i offset;

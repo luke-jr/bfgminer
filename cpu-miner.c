@@ -662,29 +662,20 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (opt_debug)
 		applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
 			thr_id, hashes_done, hashes_done / secs);
+
+	/* Totals are updated by all threads so can race without locking */
+	pthread_mutex_lock(&hash_lock);
 	gettimeofday(&temp_tv_end, NULL);
 	timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 
-	if (opt_n_threads + gpu_threads > 1) {
-		/* Totals are updated by all threads so can race without locking */
-		pthread_mutex_lock(&hash_lock);
-		total_mhashes_done += local_mhashes;
-		local_mhashes_done += local_mhashes;
-		if (total_diff.tv_sec < opt_log_interval) {
-			/* Only update the total every opt_log_interval seconds */
-			pthread_mutex_unlock(&hash_lock);
-			return;
-		}
-		gettimeofday(&total_tv_end, NULL);
-		pthread_mutex_unlock(&hash_lock);
-	} else {
-		total_mhashes_done += local_mhashes;
-		local_mhashes_done += local_mhashes;
-		if (total_diff.tv_sec < opt_log_interval) 
-			return;
-		gettimeofday(&total_tv_end, NULL);
-	}
+	total_mhashes_done += local_mhashes;
+	local_mhashes_done += local_mhashes;
+	if (total_diff.tv_sec < opt_log_interval)
+		/* Only update the total every opt_log_interval seconds */
+		goto out_unlock;
+	gettimeofday(&total_tv_end, NULL);
+
 	/* Use a rolling average by faking an exponential decay over 5 * log */
 	rolling_local = ((rolling_local * 0.9) + local_mhashes_done) / 1.9;
 
@@ -695,6 +686,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		rolling_local / local_secs,
 		total_mhashes_done / total_secs, accepted, rejected, hw_errors);
 	local_mhashes_done = 0;
+out_unlock:
+	pthread_mutex_unlock(&hash_lock);
 }
 
 /* All work is queued flagged as being for thread 0 and then the mining thread
@@ -824,10 +817,8 @@ static void *miner_thread(void *userdata)
 	const int thr_id = mythr->id;
 	uint32_t max_nonce = 0xffffff;
 	bool needs_work = true;
-	unsigned long cycle;
-
 	/* Try to cycle approximately 5 times before each log update */
-	cycle = opt_log_interval / 5 ? : 1;
+	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
@@ -857,6 +848,7 @@ static void *miner_thread(void *userdata)
 			}
 			work.thr_id = thr_id;
 			needs_work = false;
+			work.blk.nonce = 0;
 		}
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -866,7 +858,8 @@ static void *miner_thread(void *userdata)
 		case ALGO_C:
 			rc = scanhash_c(thr_id, work.midstate, work.data + 64,
 				        work.hash1, work.hash, work.target,
-					max_nonce, &hashes_done);
+					max_nonce, &hashes_done,
+					work.blk.nonce);
 			break;
 
 #ifdef WANT_X8664_SSE2
@@ -875,7 +868,8 @@ static void *miner_thread(void *userdata)
 			        scanhash_sse2_64(thr_id, work.midstate, work.data + 64,
 						 work.hash1, work.hash,
 						 work.target,
-					         max_nonce, &hashes_done);
+					         max_nonce, &hashes_done,
+						 work.blk.nonce);
 			rc = (rc5 == -1) ? false : true;
 			}
 			break;
@@ -887,7 +881,8 @@ static void *miner_thread(void *userdata)
 				ScanHash_4WaySSE2(thr_id, work.midstate, work.data + 64,
 						  work.hash1, work.hash,
 						  work.target,
-						  max_nonce, &hashes_done);
+						  max_nonce, &hashes_done,
+						  work.blk.nonce);
 			rc = (rc4 == -1) ? false : true;
 			}
 			break;
@@ -896,20 +891,23 @@ static void *miner_thread(void *userdata)
 #ifdef WANT_VIA_PADLOCK
 		case ALGO_VIA:
 			rc = scanhash_via(thr_id, work.data, work.target,
-					  max_nonce, &hashes_done);
+					  max_nonce, &hashes_done,
+					  work.blk.nonce);
 			break;
 #endif
 		case ALGO_CRYPTOPP:
 			rc = scanhash_cryptopp(thr_id, work.midstate, work.data + 64,
 				        work.hash1, work.hash, work.target,
-					max_nonce, &hashes_done);
+					max_nonce, &hashes_done,
+					work.blk.nonce);
 			break;
 
 #ifdef WANT_CRYPTOPP_ASM32
 		case ALGO_CRYPTOPP_ASM32:
 			rc = scanhash_asm32(thr_id, work.midstate, work.data + 64,
 				        work.hash1, work.hash, work.target,
-					max_nonce, &hashes_done);
+					max_nonce, &hashes_done,
+					work.blk.nonce);
 			break;
 #endif
 
@@ -922,19 +920,21 @@ static void *miner_thread(void *userdata)
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
 
+		hashes_done -= work.blk.nonce;
 		hashmeter(thr_id, &diff, hashes_done);
 		work.blk.nonce += hashes_done;
 
 		/* adjust max_nonce to meet target cycle time */
 		if (diff.tv_usec > 500000)
 			diff.tv_sec++;
-		if (diff.tv_sec > 0) {
-			max64 =
-			   ((uint64_t)hashes_done * cycle) / diff.tv_sec;
-			if (max64 > 0xfffffffaULL)
-				max64 = 0xfffffffaULL;
-			max_nonce = max64;
-		}
+		if (diff.tv_sec != cycle) {
+			max64 = work.blk.nonce +
+				((uint64_t)hashes_done * cycle) / diff.tv_sec;
+		} else
+			max64 = work.blk.nonce + hashes_done;
+		if (max64 > 0xfffffffaULL)
+			max64 = 0xfffffffaULL;
+		max_nonce = max64;
 
 		/* if nonce found, submit work */
 		if (unlikely(rc)) {
@@ -942,6 +942,7 @@ static void *miner_thread(void *userdata)
 				applog(LOG_DEBUG, "CPU %d found something?", cpu_from_thr_id(thr_id));
 			if (unlikely(!submit_work_sync(mythr, &work)))
 				break;
+			work.blk.nonce += 4;
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
@@ -1017,6 +1018,7 @@ static inline int gpu_from_thr_id(int thr_id)
 
 static void *gpuminer_thread(void *userdata)
 {
+	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 	struct thr_info *mythr = userdata;
 	struct timeval tv_start, diff;
 	const int thr_id = mythr->id;
@@ -1113,7 +1115,9 @@ static void *gpuminer_thread(void *userdata)
 		timeval_subtract(&diff, &tv_end, &tv_start);
 		hashes_done += hashes;
 		work->blk.nonce += hashes;
-		if (diff.tv_sec >= 1) {
+		if (diff.tv_usec > 500000)
+			diff.tv_sec++;
+		if (diff.tv_sec >= cycle) {
 			hashmeter(thr_id, &diff, hashes_done);
 			gettimeofday(&tv_start, NULL);
 			hashes_done = 0;
