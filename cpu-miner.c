@@ -713,10 +713,20 @@ static bool queue_request(void)
 	return true;
 }
 
-static void flush_requests(void)
+static bool discard_request(void)
 {
 	struct thr_info *thr = &thr_info[0];
 	struct work *work_heap;
+
+	work_heap = tq_pop(thr->q, NULL);
+	if (unlikely(!work_heap))
+		return false;
+	free(work_heap);
+	return true;
+}
+
+static void flush_requests(void)
+{
 	unsigned int i;
 
 	/* Queue a whole batch of new requests */
@@ -731,25 +741,21 @@ static void flush_requests(void)
 	/* Pop off the old requests. Cancelling the requests would be better
 	 * but is tricky */
 	for (i = 0; i < opt_queue; i++) {
-		work_heap = tq_pop(thr->q, NULL);
-		if (unlikely(!work_heap)) {
-			applog(LOG_ERR, "Failed to pop requests in flush_requests");
+		if (unlikely(!discard_request())) {
+			applog(LOG_ERR, "Failed to discard requests in flush_requests");
 			kill_work();
 			return;
 		}
-		free(work_heap);
 	}
 }
 
-static bool get_work(struct work *work)
+static bool get_work(struct work *work, bool queued)
 {
 	struct thr_info *thr = &thr_info[0];
-	static bool first_work = true;
 	struct work *work_heap;
 	bool ret = false;
-	unsigned int i;
 
-	if (unlikely(!queue_request()))
+	if (unlikely(!queued && !queue_request()))
 		goto out;
 
 	/* wait for 1st response, or get cached response */
@@ -757,20 +763,9 @@ static bool get_work(struct work *work)
 	if (unlikely(!work_heap))
 		goto out;
 
-	if (unlikely(first_work)) {
-		first_work = false;
-		/* send for extra work requests for the next time get_work
-		 * is called. */
-		for (i = 1; i < opt_queue; i++) {
-			if (unlikely(!queue_request()))
-				goto out_free;
-		}
-	}
-
 	memcpy(work, work_heap, sizeof(*work));
 	memcpy(current_block, work->data, 36);
 	ret = true;
-out_free:
 	free(work_heap);
 out:
 	return ret;
@@ -831,6 +826,10 @@ static void *miner_thread(void *userdata)
 	bool needs_work = true;
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
+	/* Request the next work item at 2/3 of the scantime */
+	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
+	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
+	bool requested = false;
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
@@ -851,15 +850,25 @@ static void *miner_thread(void *userdata)
 		bool rc;
 
 		if (needs_work) {
+			if (work_restart[thr_id].restart) {
+				if (requested) {
+					/* We have one extra request than desired now */
+					if (unlikely(!discard_request())) {
+						applog(LOG_ERR, "Failed to discard request in uminer thread");
+						goto out;
+					}
+				} else
+					requested = true;
+			}
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(&work))) {
+			if (unlikely(!get_work(&work, requested))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"mining thread %d", mythr->id);
 				goto out;
 			}
 			work.thr_id = thr_id;
-			needs_work = false;
+			needs_work = requested = false;
 			work.blk.nonce = 0;
 		}
 		hashes_done = 0;
@@ -958,6 +967,12 @@ static void *miner_thread(void *userdata)
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
+		if (!requested && (diff.tv_sec > request_interval || work.blk.nonce > request_nonce)) {
+			if (unlikely(!queue_request()))
+				goto out;
+			requested = true;
+		}
+
 		if (diff.tv_sec > opt_scantime || work_restart[thr_id].restart ||
 			work.blk.nonce >= MAXTHREADS - hashes_done)
 				needs_work = true;
@@ -1031,8 +1046,8 @@ static inline int gpu_from_thr_id(int thr_id)
 static void *gpuminer_thread(void *userdata)
 {
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
+	struct timeval tv_start, tv_end, diff;
 	struct thr_info *mythr = userdata;
-	struct timeval tv_start, diff;
 	const int thr_id = mythr->id;
 	uint32_t *res, *blank_res;
 
@@ -1050,6 +1065,11 @@ static void *gpuminer_thread(void *userdata)
 	unsigned const int hashes = threads * vectors;
 	unsigned int hashes_done = 0;
 
+	/* Request the next work item at 2/3 of the scantime */
+	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
+	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
+	bool requested = false;
+
 	res = calloc(BUFFERSIZE, 1);
 	blank_res = calloc(BUFFERSIZE, 1);
 
@@ -1061,11 +1081,11 @@ static void *gpuminer_thread(void *userdata)
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
 	localThreads[0] = clState->work_size;
-	work_restart[thr_id].restart = 1;
-	diff.tv_sec = 0;
+	diff.tv_sec = ~0UL;
+	gettimeofday(&tv_end, NULL);
 
 	while (1) {
-		struct timeval tv_end, tv_workstart;
+		struct timeval tv_workstart;
 
 		/* This finish flushes the readbuffer set with CL_FALSE later */
 		clFinish(clState->commandQueue);
@@ -1078,13 +1098,24 @@ static void *gpuminer_thread(void *userdata)
 			memset(res, 0, BUFFERSIZE);
 
 			gettimeofday(&tv_workstart, NULL);
+			if (work_restart[thr_id].restart) {
+				if (requested) {
+					/* We have one extra request than desired now */
+					if (unlikely(!discard_request())) {
+						applog(LOG_ERR, "Failed to discard request in gpuminer thread");
+						goto out;
+					}
+				} else
+					requested = true;
+			}
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(work))) {
+			if (unlikely(!get_work(work, requested))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"gpu mining thread %d", mythr->id);
 				goto out;
 			}
 			work->thr_id = thr_id;
+			requested = false;
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work->blk.nonce = 0;
@@ -1136,6 +1167,11 @@ static void *gpuminer_thread(void *userdata)
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
+		if (!requested && (diff.tv_sec > request_interval || work->blk.nonce > request_nonce)) {
+			if (unlikely(!queue_request()))
+				goto out;
+			requested = true;
+		}
 	}
 out:
 	tq_freeze(mythr->q);
@@ -1149,8 +1185,18 @@ static void restart_threads(void)
 
 	/* Discard old queued requests and get new ones */
 	flush_requests();
-	for (i = 0; i < opt_n_threads + gpu_threads; i++)
+
+	/* Queue extra requests for each worker thread since they'll all need
+	 * new work. Each worker will set their "requested" flag to true
+	 * should they receive a .restart */
+	for (i = 0; i < opt_n_threads + gpu_threads; i++) {
+		if (unlikely(!queue_request())) {
+			applog(LOG_ERR, "Failed to queue requests in flush_requests");
+			kill_work();
+			return;
+		}
 		work_restart[i].restart = 1;
+	}
 }
 
 static void *longpoll_thread(void *userdata)
@@ -1541,6 +1587,14 @@ int main (int argc, char *argv[])
 		gpus = calloc(nDevs, sizeof(struct cgpu_info));
 		if (unlikely(!gpus)) {
 			applog(LOG_ERR, "Failed to calloc gpus");
+			return 1;
+		}
+	}
+
+	/* Put the extra work in the queue */
+	for (i = 1; i < opt_queue; i++) {
+		if (unlikely(!queue_request())) {
+			applog(LOG_ERR, "Failed to queue_request in main");
 			return 1;
 		}
 	}
