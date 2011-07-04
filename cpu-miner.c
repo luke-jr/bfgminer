@@ -146,11 +146,12 @@ int longpoll_thr_id;
 struct work_restart *work_restart = NULL;
 pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
+static pthread_mutex_t qd_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static int accepted, rejected;
 int hw_errors;
-
+static int total_queued;
 
 struct option_help {
 	const char	*name;
@@ -690,6 +691,32 @@ out_unlock:
 	pthread_mutex_unlock(&hash_lock);
 }
 
+/* This is overkill, but at least we'll know accurately how much work is
+ * queued to prevent ever being left without work */
+static void inc_queued(void)
+{
+	pthread_mutex_lock(&qd_lock);
+	total_queued++;
+	pthread_mutex_unlock(&qd_lock);
+}
+
+static void dec_queued(void)
+{
+	pthread_mutex_lock(&qd_lock);
+	total_queued--;
+	pthread_mutex_unlock(&qd_lock);
+}
+
+static int requests_queued(void)
+{
+	int ret;
+
+	pthread_mutex_lock(&qd_lock);
+	ret = total_queued;
+	pthread_mutex_unlock(&qd_lock);
+	return ret;
+}
+
 /* All work is queued flagged as being for thread 0 and then the mining thread
  * flags it as its own */
 static bool queue_request(void)
@@ -710,6 +737,7 @@ static bool queue_request(void)
 		workio_cmd_free(wc);
 		return false;
 	}
+	inc_queued();
 	return true;
 }
 
@@ -718,10 +746,15 @@ static bool discard_request(void)
 	struct thr_info *thr = &thr_info[0];
 	struct work *work_heap;
 
+	/* Just in case we fell in a hole and missed a queue filling */
+	if (unlikely(!requests_queued()))
+		return true;
+
 	work_heap = tq_pop(thr->q, NULL);
 	if (unlikely(!work_heap))
 		return false;
 	free(work_heap);
+	dec_queued();
 	return true;
 }
 
@@ -740,13 +773,14 @@ static void flush_requests(void)
 
 	/* Pop off the old requests. Cancelling the requests would be better
 	 * but is tricky */
-	for (i = 0; i < opt_queue; i++) {
+	while (requests_queued() > opt_queue) {
 		if (unlikely(!discard_request())) {
 			applog(LOG_ERR, "Failed to discard requests in flush_requests");
 			kill_work();
 			return;
 		}
 	}
+
 }
 
 static bool get_work(struct work *work, bool queued)
@@ -755,13 +789,16 @@ static bool get_work(struct work *work, bool queued)
 	struct work *work_heap;
 	bool ret = false;
 
-	if (unlikely(!queued && !queue_request()))
+	if (!queued || !requests_queued()) {
+		if (unlikely(!queue_request()))
 		goto out;
+	}
 
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(thr->q, NULL);
 	if (unlikely(!work_heap))
 		goto out;
+	dec_queued();
 
 	memcpy(work, work_heap, sizeof(*work));
 	memcpy(current_block, work->data, 36);
