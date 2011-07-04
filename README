@@ -29,7 +29,7 @@ Native WIN32 build instructions (on mingw32, on windows):
 	CFLAGS="-O3 -Wall -msse2 -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86>" ./configure
 	make
 
-Usage instructions:  Run "minerd --help" to see options.
+Usage instructions:  Run "cgminer --help" to see options.
 
 Also many issues and FAQs are covered in the forum thread
 dedicated to this program,

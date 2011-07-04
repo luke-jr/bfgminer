@@ -1,9 +1,9 @@
-AC_INIT([cpuminer], [1.0.2])
+AC_INIT([cgminer], [1.0.9])
 
 AC_PREREQ(2.59)
 AC_CANONICAL_SYSTEM
 AC_CONFIG_MACRO_DIR([m4])
-AC_CONFIG_SRCDIR([cpu-miner.c])
+AC_CONFIG_SRCDIR([main.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign])
 
@@ -109,8 +109,7 @@ AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
 PKG_PROG_PKG_CONFIG()
 
-LIBCURL_CHECK_CONFIG(, 7.10.1, ,
-  [AC_MSG_ERROR([Missing required libcurl >= 7.10.1])])
+LIBCURL_CHECK_CONFIG(, 7.10.1, ,  [AC_MSG_ERROR([Missing required libcurl dev >= 7.10.1])])
   
 AC_SUBST(OPENCL_LIBS)
 AC_SUBST(JANSSON_LIBS)

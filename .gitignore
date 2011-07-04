@@ -1,7 +1,9 @@
-
+cgminer
+cgminer.exe
 minerd
 minerd.exe
 *.o
+*.bin
 
 autom4te.cache
 .deps

@@ -31,7 +31,7 @@
 #include "findnonce.h"
 #include "ocl.h"
 
-#define PROGRAM_NAME		"minerd"
+#define PROGRAM_NAME		"cgminer"
 #define DEF_RPC_URL		"http://127.0.0.1:8332/"
 #define DEF_RPC_USERNAME	"rpcuser"
 #define DEF_RPC_PASSWORD	"rpcpass"
@@ -1313,8 +1313,8 @@ static void show_usage(void)
 {
 	int i;
 
-	printf("minerd version %s\n\n", VERSION);
-	printf("Usage:\tminerd [options]\n\nSupported options:\n");
+	printf("cgminer version %s\n\n", VERSION);
+	printf("Usage:\tcgminer [options]\n\nSupported options:\n");
 	for (i = 0; i < ARRAY_SIZE(options_help); i++) {
 		struct option_help *h;
 

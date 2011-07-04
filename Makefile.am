@@ -13,21 +13,21 @@ SUBDIRS		= lib compat
 
 INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
 
-bin_PROGRAMS	= minerd
+bin_PROGRAMS	= cgminer
 
-minerd_SOURCES	= elist.h miner.h compat.h			\
-		  cpu-miner.c util.c				\
+cgminer_SOURCES	= elist.h miner.h compat.h			\
+		  main.c util.c				\
 		  ocl.c findnonce.c				\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c
-minerd_LDFLAGS	= $(PTHREAD_FLAGS)
-minerd_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ lib/libgnu.a
-minerd_CPPFLAGS = @LIBCURL_CPPFLAGS@ -I$(top_builddir)/lib -I$(top_srcdir)/lib
+cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
+cgminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ lib/libgnu.a
+cgminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ -I$(top_builddir)/lib -I$(top_srcdir)/lib
 
 if HAVE_x86_64
 if HAS_YASM
 SUBDIRS		+= x86_64
-minerd_LDADD	+= x86_64/libx8664.a
+cgminer_LDADD	+= x86_64/libx8664.a
 AM_CFLAGS	= -DHAS_YASM
 endif
 endif
