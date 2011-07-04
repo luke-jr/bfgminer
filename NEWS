@@ -1,3 +1,22 @@
+- Con Kolivas
+- Massive rewrite to incorporate GPU mining.
+- Incorporate original oclminer c code.
+- Rewrite gpu mining code to efficient work loops.
+- Implement per-card detection and settings.
+- Implement vector code.
+- Implement bfi int patching.
+- Import poclbm and phatk ocl kernels and use according to hardware type.
+- Implement customised optimised versions of opencl kernels.
+- Implement binary kernel generation and loading.
+- Implement preemptive asynchronous threaded work gathering and pushing.
+- Implement variable length extra work queues.
+- Optimise workloads to be efficient miners instead of getting lots of extra
+  work.
+- Implement total hash throughput counters, per-card accepted, rejected and
+  hw error count.
+
+Version 1.0.2
+
 - Linux x86_64 optimisations - Con Kolivas
 - Optimise for x86_64 by default by using sse2_64 algo
 - Detects CPUs and sets number of threads accordingly
