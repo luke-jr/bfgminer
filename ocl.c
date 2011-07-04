@@ -334,7 +334,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
 	 * have otherwise created. The filename is:
-	 * kernelname +/i bitalign + v + vectors + w + work_size + sizeof(long) + .bin
+	 * name + kernelname +/i bitalign + v + vectors + w + work_size + sizeof(long) + .bin
 	 */
 	char binaryfilename[255];
 	char numbuf[10];
@@ -367,11 +367,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
+	strcpy(binaryfilename, name);
 	if (clState->hasBitAlign) {
-		strcpy(binaryfilename, "phatk");
+		strcat(binaryfilename, "phatk");
 		strcat(binaryfilename, "bitalign");
 	} else
-		strcpy(binaryfilename, "poclbm");
+		strcat(binaryfilename, "poclbm");
 	strcat(binaryfilename, "v");
 	sprintf(numbuf, "%d", clState->preferred_vwidth);
 	strcat(binaryfilename, numbuf);
