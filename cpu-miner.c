@@ -120,7 +120,7 @@ static bool opt_quiet = false;
 static int opt_retries = -1;
 static int opt_fail_pause = 5;
 static int opt_log_interval = 5;
-static int opt_queue = 2;
+static int opt_queue = 0;
 int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
@@ -212,7 +212,7 @@ static struct option_help options_help[] = {
 	  "(-P) Verbose dump of protocol-level activities (default: off)" },
 
 	{ "queue N",
-	  "(-Q N) Number of work items to queue (1 - 10, default 2)" },
+	  "(-Q N) Number of extra work items to queue (0 - 10, default 0)" },
 
 	{ "quiet",
 	  "(-q) Disable per-thread hashmeter output (default: off)" },
@@ -1346,7 +1346,7 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'Q':
 		v = atoi(arg);
-		if (v < 1 || v > 10)
+		if (v < 0 || v > 10)
 			show_usage();
 
 		opt_queue = v;
@@ -1592,7 +1592,7 @@ int main (int argc, char *argv[])
 	}
 
 	/* Put the extra work in the queue */
-	for (i = 1; i < opt_queue; i++) {
+	for (i = 0; i < opt_queue; i++) {
 		if (unlikely(!queue_request())) {
 			applog(LOG_ERR, "Failed to queue_request in main");
 			return 1;
