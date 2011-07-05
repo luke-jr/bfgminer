@@ -719,27 +719,24 @@ static bool discard_request(void)
 
 static void flush_requests(void)
 {
-	unsigned int i;
+	int i, extra;
 
-	/* Queue a whole batch of new requests */
-	for (i = 0; i < opt_queue; i++) {
+	extra = requests_queued();
+	for (i = 0; i < extra; i++) {
+		/* Queue a whole batch of new requests */
 		if (unlikely(!queue_request())) {
 			applog(LOG_ERR, "Failed to queue requests in flush_requests");
 			kill_work();
-			return;
+			break;
 		}
-	}
-
-	/* Pop off the old requests. Cancelling the requests would be better
-	 * but is tricky */
-	while (requests_queued() > opt_queue) {
+		/* Pop off the old requests. Cancelling the requests would be better
+		* but is tricky */
 		if (unlikely(!discard_request())) {
 			applog(LOG_ERR, "Failed to discard requests in flush_requests");
 			kill_work();
-			return;
+			break;
 		}
 	}
-
 }
 
 static bool get_work(struct work *work, bool queued)
