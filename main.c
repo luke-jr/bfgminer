@@ -1518,6 +1518,8 @@ int main (int argc, char *argv[])
 		return 1;
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
 		return 1;
+	if (unlikely(pthread_mutex_init(&qd_lock, NULL)))
+		return 1;
 
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		return 1;
