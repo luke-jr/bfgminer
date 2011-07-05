@@ -15,7 +15,7 @@
 #else
 	#include <sys/socket.h>
 	#include <netinet/in.h>
-	#include <netdb.h> 
+	#include <netdb.h>
 #endif
 
 #include <time.h>
@@ -32,7 +32,7 @@ extern int opt_worksize;
 
 char *file_contents(const char *filename, int *length)
 {
-	FILE *f = fopen(filename, "r");
+	FILE *f = fopen(filename, "rb");
 	void *buffer;
 
 	if (!f) {
@@ -89,7 +89,7 @@ int clDevicesNum() {
 			if (!strcmp(pbuff, "Advanced Micro Devices, Inc."))
 			{
 				break;
-			}  
+			}
 		}
 		free(platforms);
 	}
@@ -385,7 +385,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, ".bin");
 
-	binaryfile = fopen(binaryfilename, "r");
+	binaryfile = fopen(binaryfilename, "rb");
 	if (!binaryfile) {
 		if (opt_debug)
 			applog(LOG_DEBUG, "No binary found, generating from source");
@@ -421,7 +421,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		}
 		if (opt_debug)
 			applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
-		
+
 		free(binaries[gpu]);
 		goto built;
 	}
@@ -480,7 +480,7 @@ build:
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
 
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
-	if (status != CL_SUCCESS) 
+	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithSource)");
 		return NULL;
@@ -488,7 +488,7 @@ build:
 
 	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
-	if (status != CL_SUCCESS) 
+	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
 		size_t logSize;
@@ -497,7 +497,7 @@ build:
 		char *log = malloc(logSize);
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
 		applog(LOG_INFO, "%s", log);
-		return NULL; 
+		return NULL;
 	}
 
 	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*nDevices, binary_sizes, NULL );
@@ -560,7 +560,7 @@ build:
 		}
 
 		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[gpu], (const unsigned char **)&binaries[gpu], &status, NULL);
-		if (status != CL_SUCCESS) 
+		if (status != CL_SUCCESS)
 		{
 			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
 			return NULL;
@@ -571,7 +571,7 @@ build:
 	free(rawsource);
 
 	/* Save the binary to be loaded next time */
-	binaryfile = fopen(binaryfilename, "w");
+	binaryfile = fopen(binaryfilename, "wb");
 	if (!binaryfile) {
 		/* Not a fatal problem, just means we build it again next time */
 		if (opt_debug)
@@ -594,7 +594,7 @@ built:
 
 	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
-	if (status != CL_SUCCESS) 
+	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
 		size_t logSize;
@@ -603,7 +603,7 @@ built:
 		char *log = malloc(logSize);
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
 		applog(LOG_INFO, "%s", log);
-		return NULL; 
+		return NULL;
 	}
 
 	/* get a kernel object handle for a kernel with the given name */
