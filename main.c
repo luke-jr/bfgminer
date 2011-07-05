@@ -1367,6 +1367,10 @@ static void parse_arg (int key, char *arg)
 			show_usage();
 		opt_log_interval = v;
 		break;
+	case 'n':
+		opt_log_output = true;
+		opt_ndevs = true;
+		break;
 	case 'p':
 		free(rpc_pass);
 		rpc_pass = strdup(arg);
@@ -1523,10 +1527,6 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_OPENCL
 	nDevs = clDevicesNum();
-	if (opt_ndevs) {
-		applog(LOG_INFO, "%i", nDevs);
-		return nDevs;
-	}
 #endif
 	/* Invert the value to determine if we manually set it in cmdline
 	 * or disable gpu threads */
@@ -1537,6 +1537,13 @@ int main (int argc, char *argv[])
 
 	/* parse command line */
 	parse_cmdline(argc, argv);
+
+#ifdef HAVE_OPENCL
+	if (opt_ndevs) {
+		applog(LOG_INFO, "%i", nDevs);
+		return nDevs;
+	}
+#endif
 
 	gpu_threads = nDevs * opt_g_threads;
 	if (opt_n_threads < 0) {
