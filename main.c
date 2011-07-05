@@ -336,19 +336,25 @@ err_out:
 	return false;
 }
 
-static bool submit_upstream_work(CURL *curl, const struct work *work)
+static bool submit_upstream_work(const struct work *work)
 {
 	char *hexstr = NULL;
 	json_t *val, *res;
 	char s[345];
 	bool rc = false;
 	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
+	CURL *curl = curl_easy_init();
+
+	if (unlikely(!curl)) {
+		applog(LOG_ERR, "CURL initialisation failed");
+		return rc;
+	}
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
 	if (unlikely(!hexstr)) {
 		applog(LOG_ERR, "submit_upstream_work OOM");
-		goto out;
+		goto out_nofree;
 	}
 
 	/* build JSON-RPC request */
@@ -388,30 +394,39 @@ static bool submit_upstream_work(CURL *curl, const struct work *work)
 	json_decref(val);
 
 	rc = true;
-
 out:
 	free(hexstr);
+out_nofree:
+	curl_easy_cleanup(curl);
 	return rc;
 }
 
 static const char *rpc_req =
 	"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
 
-static bool get_upstream_work(CURL *curl, struct work *work)
+static bool get_upstream_work(struct work *work)
 {
 	json_t *val;
-	bool rc;
+	bool rc = false;
+	CURL *curl = curl_easy_init();
+
+	if (unlikely(!curl)) {
+		applog(LOG_ERR, "CURL initialisation failed");
+		return rc;
+	}
 
 	val = json_rpc_call(curl, rpc_url, rpc_userpass, rpc_req,
 			    want_longpoll, false);
 	if (unlikely(!val)) {
 		applog(LOG_ERR, "Failed json_rpc_call in get_upstream_work");
-		return false;
+		goto out;
 	}
 
 	rc = work_decode(json_object_get(val, "result"), work);
 
 	json_decref(val);
+out:
+	curl_easy_cleanup(curl);
 
 	return rc;
 }
@@ -454,23 +469,15 @@ static void kill_work(void)
 	}
 }
 
-struct io_data{
-	struct workio_cmd *wc;
-	CURL *curl;
-};
-
-static pthread_t *get_thread = NULL;
-static pthread_t *submit_thread = NULL;
 static char current_block[36];
 
 static void *get_work_thread(void *userdata)
 {
-	struct io_data *io_data = (struct io_data *)userdata;
-	struct workio_cmd *wc = io_data->wc;
-	CURL *curl = io_data->curl;
+	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	struct work *ret_work;
 	int failures = 0;
 
+	pthread_detach(pthread_self());
 	ret_work = calloc(1, sizeof(*ret_work));
 	if (unlikely(!ret_work)) {
 		applog(LOG_ERR, "Failed to calloc ret_work in workio_get_work");
@@ -479,7 +486,7 @@ static void *get_work_thread(void *userdata)
 	}
 
 	/* obtain new work from bitcoin via JSON-RPC */
-	while (!get_upstream_work(curl, ret_work)) {
+	while (!get_upstream_work(ret_work)) {
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
 			free(ret_work);
@@ -501,35 +508,16 @@ static void *get_work_thread(void *userdata)
 	}
 
 out:
-	free(io_data);
 	workio_cmd_free(wc);
 	return NULL;
 }
 
-static bool workio_get_work(struct workio_cmd *wc, CURL *curl)
+static bool workio_get_work(struct workio_cmd *wc)
 {
-	struct io_data *id = malloc(sizeof(struct io_data));
+	pthread_t get_thread;
 
-	if (unlikely(!id)) {
-		applog(LOG_ERR, "Failed to malloc id in workio_get_work");
-		return false;
-	}
-	id->wc = wc;
-	id->curl = curl;
-
-	if (unlikely(!get_thread)) {
-		/* This is only instantiated once at startup */
-		get_thread = malloc(sizeof(get_thread));
-		if (unlikely(!get_thread)) {
-			applog(LOG_ERR, "Failed to malloc get_thread in workio_get_work");
-			return false;
-		}
-	} else
-		pthread_join(*get_thread, NULL);
-
-	if (unlikely(pthread_create(get_thread, NULL, get_work_thread, (void *)id))) {
+	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)wc))) {
 		applog(LOG_ERR, "Failed to create get_work_thread");
-		free(id);
 		return false;
 	}
 	return true;
@@ -537,18 +525,17 @@ static bool workio_get_work(struct workio_cmd *wc, CURL *curl)
 
 static void *submit_work_thread(void *userdata)
 {
-	struct io_data *io_data = (struct io_data *)userdata;
-	struct workio_cmd *wc = io_data->wc;
-	CURL *curl = io_data->curl;
+	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	int failures = 0;
 
+	pthread_detach(pthread_self());
 	if (unlikely(strncmp((const char *)wc->u.work->data, current_block, 36))) {
 		applog(LOG_INFO, "Stale work detected, discarding");
 		goto out;
 	}
 
 	/* submit solution to bitcoin via JSON-RPC */
-	while (!submit_upstream_work(curl, wc->u.work)) {
+	while (!submit_upstream_work(wc->u.work)) {
 		if (unlikely(strncmp((const char *)wc->u.work->data, current_block, 36))) {
 			applog(LOG_INFO, "Stale work detected, discarding");
 			goto out;
@@ -567,33 +554,15 @@ static void *submit_work_thread(void *userdata)
 
 out:
 	workio_cmd_free(wc);
-	free(io_data);
 	return NULL;
 }
 
-static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
+static bool workio_submit_work(struct workio_cmd *wc)
 {
-	struct io_data *id = malloc(sizeof(struct io_data));
+	pthread_t submit_thread;
 
-	if (unlikely(!id)) {
-		applog(LOG_ERR, "Failed to malloc id in workio_submit_work");
-		return false;
-	}
-	id->wc = wc;
-	id->curl = curl;
-
-	if (unlikely(!submit_thread)) {
-		submit_thread = malloc(sizeof(submit_thread));
-		if (unlikely(!submit_thread)) {
-			applog(LOG_ERR, "Failed to malloc submit_thread in workio_submit_work");
-			return false;
-		}
-	} else
-		pthread_join(*submit_thread, NULL);
-
-	if (unlikely(pthread_create(submit_thread, NULL, submit_work_thread, (void *)id))) {
+	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, (void *)wc))) {
 		applog(LOG_ERR, "Failed to create submit_work_thread");
-		free(id);
 		return false;
 	}
 	return true;
@@ -603,14 +572,6 @@ static void *workio_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 	bool ok = true;
-	CURL *get_curl, *submit_curl;
-
-	get_curl = curl_easy_init();
-	submit_curl = curl_easy_init();
-	if (unlikely(!get_curl || !submit_curl)) {
-		applog(LOG_ERR, "CURL initialization failed");
-		return NULL;
-	}
 
 	while (ok) {
 		struct workio_cmd *wc;
@@ -625,10 +586,10 @@ static void *workio_thread(void *userdata)
 		/* process workio_cmd */
 		switch (wc->cmd) {
 		case WC_GET_WORK:
-			ok = workio_get_work(wc, get_curl);
+			ok = workio_get_work(wc);
 			break;
 		case WC_SUBMIT_WORK:
-			ok = workio_submit_work(wc, submit_curl);
+			ok = workio_submit_work(wc);
 			break;
 		case WC_DIE:
 		default:
@@ -638,8 +599,6 @@ static void *workio_thread(void *userdata)
 	}
 
 	tq_freeze(mythr->q);
-	curl_easy_cleanup(submit_curl);
-	curl_easy_cleanup(get_curl);
 
 	return NULL;
 }
@@ -1271,7 +1230,7 @@ static void *longpoll_thread(void *userdata)
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
-		applog(LOG_ERR, "CURL initialization failed");
+		applog(LOG_ERR, "CURL initialisation failed");
 		goto out;
 	}
 
