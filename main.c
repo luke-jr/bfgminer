@@ -281,6 +281,7 @@ static struct option options[] = {
 	{ "vectors", 1, NULL, 'v' },
 	{ "worksize", 1, NULL, 'w' },
 	{ "userpass", 1, NULL, 'O' },
+	{0, 0, 0, 0}
 };
 
 static bool jobj_binary(const json_t *obj, const char *key,
@@ -1414,6 +1415,7 @@ static void parse_arg (int key, char *arg)
 	case 1004:
 		use_syslog = true;
 		break;
+	case '?':
 	default:
 		show_usage();
 	}
