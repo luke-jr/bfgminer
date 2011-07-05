@@ -1353,6 +1353,7 @@ static void parse_arg (int key, char *arg)
 		break;
 	case 'D':
 		opt_debug = true;
+		opt_log_output = true;
 		break;
 	case 'I':
 		v = atoi(arg);
