@@ -119,6 +119,9 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int hw_errors;
+	double rolling_local;
+	double local_mhashes;
+	double total_mhashes;
 };
 
 struct thr_info {
@@ -154,6 +157,7 @@ static inline void swap256(void *dest_p, const void *src_p)
 
 extern bool opt_debug;
 extern bool opt_protocol;
+extern bool opt_log_output;
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool);

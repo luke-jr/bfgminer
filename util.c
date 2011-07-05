@@ -70,7 +70,7 @@ void applog(int prio, const char *fmt, ...)
 #else
 	if (0) {}
 #endif
-	else {
+	else if (opt_log_output) {
 		char *f;
 		int len;
 		struct timeval tv = { };

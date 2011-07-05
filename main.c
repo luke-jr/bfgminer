@@ -120,6 +120,7 @@ static bool opt_quiet = false;
 static int opt_retries = -1;
 static int opt_fail_pause = 5;
 static int opt_log_interval = 5;
+bool opt_log_output = false;
 static int opt_queue = 0;
 int opt_vectors;
 int opt_worksize;
@@ -249,6 +250,9 @@ static struct option_help options_help[] = {
 	  "(-u USERNAME) Username for bitcoin JSON-RPC server "
 	  "(default: " DEF_RPC_USERNAME ")" },
 
+	{ "verbose",
+	  "(-V) Log verbose output to stderr as well as status output (default: off)" },
+
 #ifdef HAVE_OPENCL
 	{ "vectors N",
 	  "(-v N) Override detected optimal vector width (default: detected, 1,2 or 4)" },
@@ -281,6 +285,7 @@ static struct option options[] = {
 #endif
 	{ "url", 1, NULL, 'o' },
 	{ "user", 1, NULL, 'u' },
+	{ "verbose", 0, NULL, 'V' },
 	{ "vectors", 1, NULL, 'v' },
 	{ "worksize", 1, NULL, 'w' },
 	{ "userpass", 1, NULL, 'O' },
@@ -340,6 +345,8 @@ err_out:
 	return false;
 }
 
+static double total_secs;
+
 static bool submit_upstream_work(const struct work *work)
 {
 	char *hexstr = NULL;
@@ -386,11 +393,18 @@ static bool submit_upstream_work(const struct work *work)
 		accepted++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
+		printf("[Accepted] ");
 	} else {
 		cgpu->rejected++;
 		rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
+		printf("[Rejected] ");
+	}
+	if (!opt_quiet) {
+		printf("[%sPU: %d] [Rate: %.2f Mhash/s] [Accepted: %d  Rejected: %d  HW errors: %d]                 \n",
+		cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->total_mhashes / total_secs,
+			cgpu->accepted, cgpu->rejected, cgpu->hw_errors);
 	}
 	applog(LOG_INFO, "%sPU: %d  Accepted: %d  Rejected: %d  HW errors: %d",
 	       cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->accepted, cgpu->rejected, cgpu->hw_errors);
@@ -612,11 +626,12 @@ static void hashmeter(int thr_id, struct timeval *diff,
 {
 	struct timeval temp_tv_end, total_diff;
 	double khashes, secs;
-	double total_secs;
 	double local_secs;
 	static double local_mhashes_done = 0;
 	static double rolling_local = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	unsigned int i;
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_quiet || !opt_log_interval)
@@ -635,6 +650,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	total_mhashes_done += local_mhashes;
 	local_mhashes_done += local_mhashes;
+	cgpu->local_mhashes += local_mhashes;
+	cgpu->total_mhashes += local_mhashes;
 	if (total_diff.tv_sec < opt_log_interval)
 		/* Only update the total every opt_log_interval seconds */
 		goto out_unlock;
@@ -642,6 +659,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	/* Use a rolling average by faking an exponential decay over 5 * log */
 	rolling_local = ((rolling_local * 0.9) + local_mhashes_done) / 1.9;
+	cgpu->rolling_local = ((cgpu->rolling_local * 0.9) + cgpu->local_mhashes) / 1.9;
 
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
@@ -649,6 +667,12 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	applog(LOG_INFO, "[%.2f | %.2f Mhash/s] [%d Accepted] [%d Rejected] [%d HW errors]",
 		rolling_local / local_secs,
 		total_mhashes_done / total_secs, accepted, rejected, hw_errors);
+	printf("[Rate (%ds): %.2f  (avg): %.2f Mhash/s] [Accepted: %d  Rejected: %d  HW errors: %d]\r",
+	       opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
+		accepted, rejected, hw_errors);
+	fflush(stdout);
+	if (opt_log_output)
+		printf("\n");
 	local_mhashes_done = 0;
 out_unlock:
 	pthread_mutex_unlock(&hash_lock);
@@ -1246,6 +1270,7 @@ static void *longpoll_thread(void *userdata)
 			failures = 0;
 			json_decref(val);
 
+			printf("LONGPOLL detected new block                                        \r");
 			applog(LOG_INFO, "LONGPOLL detected new block");
 			restart_threads();
 		} else {
@@ -1390,6 +1415,9 @@ static void parse_arg (int key, char *arg)
 		free(rpc_user);
 		rpc_user = strdup(arg);
 		break;
+	case 'V':
+		opt_log_output = true;
+		break;
 	case 'v':
 		v = atoi(arg);
 		if (v != 1 && v != 2 && v != 4)
@@ -1468,7 +1496,7 @@ static void parse_cmdline(int argc, char *argv[])
 	int key;
 
 	while (1) {
-		key = getopt_long(argc, argv, "a:c:Dg:I:l:no:O:p:PQ:qr:R:s:t:u:v:w:h?", options, NULL);
+		key = getopt_long(argc, argv, "a:c:Dg:I:l:no:O:p:PQ:qr:R:s:t:u:Vv:w:h?", options, NULL);
 		if (key < 0)
 			break;
 
