@@ -664,15 +664,13 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
-	applog(LOG_INFO, "[%.2f | %.2f Mhash/s] [%d Accepted] [%d Rejected] [%d HW errors]",
-		rolling_local / local_secs,
-		total_mhashes_done / total_secs, accepted, rejected, hw_errors);
 	printf("[Rate (%ds): %.2f  (avg): %.2f Mhash/s] [Accepted: %d  Rejected: %d  HW errors: %d]\r",
 	       opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		accepted, rejected, hw_errors);
 	fflush(stdout);
-	if (opt_log_output)
-		printf("\n");
+	applog(LOG_INFO, "[Rate (%ds): %.2f  (avg): %.2f Mhash/s] [Accepted: %d  Rejected: %d  HW errors: %d]",
+	       opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
+		accepted, rejected, hw_errors);
 	local_mhashes_done = 0;
 out_unlock:
 	pthread_mutex_unlock(&hash_lock);
@@ -1270,7 +1268,8 @@ static void *longpoll_thread(void *userdata)
 			failures = 0;
 			json_decref(val);
 
-			printf("LONGPOLL detected new block                                        \r");
+			if (!opt_quiet)
+				printf("LONGPOLL detected new block                                        \n");
 			applog(LOG_INFO, "LONGPOLL detected new block");
 			restart_threads();
 		} else {
