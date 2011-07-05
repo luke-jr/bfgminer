@@ -194,7 +194,7 @@ static struct option_help options_help[] = {
 	  "(-g N) Number of threads per-GPU (0 - 10, default: 2)" },
 
 	{ "intensity N",
-	  "(-I) Intensity of scanning (0 - 14, default 4)" },
+	  "(-I N) Intensity of GPU scanning (0 - 14, default 4)" },
 
 	{ "log N",
 	  "(-l N) Interval in seconds between log output (default: 5)" },
@@ -236,11 +236,11 @@ static struct option_help options_help[] = {
 #endif
 
 	{ "url URL",
-	  "URL for bitcoin JSON-RPC server "
+	  "(-o URL) URL for bitcoin JSON-RPC server "
 	  "(default: " DEF_RPC_URL ")" },
 
 	{ "userpass USERNAME:PASSWORD",
-	  "Username:Password pair for bitcoin JSON-RPC server "
+	  "(-O USERNAME:PASSWORD) Username:Password pair for bitcoin JSON-RPC server "
 	  "(default: " DEF_RPC_USERPASS ")" },
 
 	{ "user USERNAME",
@@ -276,11 +276,11 @@ static struct option options[] = {
 #ifdef HAVE_SYSLOG_H
 	{ "syslog", 0, NULL, 1004 },
 #endif
-	{ "url", 1, NULL, 1001 },
+	{ "url", 1, NULL, 'o' },
 	{ "user", 1, NULL, 'u' },
 	{ "vectors", 1, NULL, 'v' },
 	{ "worksize", 1, NULL, 'w' },
-	{ "userpass", 1, NULL, 1002 },
+	{ "userpass", 1, NULL, 'O' },
 };
 
 static bool jobj_binary(const json_t *obj, const char *key,
@@ -1393,7 +1393,7 @@ static void parse_arg (int key, char *arg)
 
 		opt_worksize = v;
 		break;
-	case 1001:			/* --url */
+	case 'o':			/* --url */
 		if (strncmp(arg, "http://", 7) &&
 		    strncmp(arg, "https://", 8))
 			show_usage();
@@ -1401,7 +1401,7 @@ static void parse_arg (int key, char *arg)
 		free(rpc_url);
 		rpc_url = strdup(arg);
 		break;
-	case 1002:			/* --userpass */
+	case 'O':			/* --userpass */
 		if (!strchr(arg, ':'))
 			show_usage();
 
@@ -1456,7 +1456,7 @@ static void parse_cmdline(int argc, char *argv[])
 	int key;
 
 	while (1) {
-		key = getopt_long(argc, argv, "a:c:qDPr:s:t:h?", options, NULL);
+		key = getopt_long(argc, argv, "a:c:Dg:I:l:no:O:p:PQ:qr:R:s:t:u:v:w:h?", options, NULL);
 		if (key < 0)
 			break;
 
