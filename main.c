@@ -969,7 +969,7 @@ static void *miner_thread(void *userdata)
 		/* adjust max_nonce to meet target cycle time */
 		if (diff.tv_usec > 500000)
 			diff.tv_sec++;
-		if (diff.tv_sec != cycle) {
+		if (diff.tv_sec && diff.tv_sec != cycle) {
 			max64 = work.blk.nonce +
 				((uint64_t)hashes_done * cycle) / diff.tv_sec;
 		} else
