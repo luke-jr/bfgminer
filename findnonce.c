@@ -8,6 +8,9 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+#ifdef HAVE_OPENCL
+
 #include <stdio.h>
 #include <inttypes.h>
 #include <pthread.h>
@@ -252,3 +255,4 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		return;
 	}
 }
+#endif /* HAVE_OPENCL */
