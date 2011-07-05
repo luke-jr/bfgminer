@@ -9,11 +9,14 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
+
+#ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
 #include <OpenCL/opencl.h>
 #else
 #include <CL/cl.h>
 #endif
+#endif /* HAVE_OPENCL */
 
 #ifdef STDC_HEADERS
 # include <stdlib.h>
@@ -211,6 +214,7 @@ extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
 
+#ifdef HAVE_OPENCL
 typedef struct {
     cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
     cl_uint ctx_e; cl_uint ctx_f; cl_uint ctx_g; cl_uint ctx_h;
@@ -222,6 +226,11 @@ typedef struct {
 	cl_uint W16; cl_uint W17; cl_uint W2;
 	cl_uint PreVal4; cl_uint T1;
 } dev_blk_ctx;
+#else
+typedef struct {
+	uint32_t nonce;
+} dev_blk_ctx;
+#endif
 
 struct work {
 	unsigned char	data[128];

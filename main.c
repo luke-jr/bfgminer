@@ -190,18 +190,20 @@ static struct option_help options_help[] = {
 	{ "debug",
 	  "(-D) Enable debug output (default: off)" },
 
+#ifdef HAVE_OPENCL
 	{ "gpu-threads N",
 	  "(-g N) Number of threads per-GPU (0 - 10, default: 2)" },
 
 	{ "intensity N",
 	  "(-I N) Intensity of GPU scanning (0 - 14, default 4)" },
-
+#endif
 	{ "log N",
 	  "(-l N) Interval in seconds between log output (default: 5)" },
 
+#ifdef HAVE_OPENCL
 	{ "ndevs",
 	  "(-n) Display number of detected GPUs and exit" },
-
+#endif
 	{ "no-longpoll",
 	  "Disable X-Long-Polling support (default: enabled)" },
 
@@ -247,12 +249,13 @@ static struct option_help options_help[] = {
 	  "(-u USERNAME) Username for bitcoin JSON-RPC server "
 	  "(default: " DEF_RPC_USERNAME ")" },
 
+#ifdef HAVE_OPENCL
 	{ "vectors N",
 	  "(-v N) Override detected optimal vector width (default: detected, 1,2 or 4)" },
 
 	{ "worksize N",
 	  "(-w N) Override detected optimal worksize (default: detected)" },
-
+#endif
 };
 
 static struct option options[] = {
@@ -984,6 +987,7 @@ enum {
 	FAILURE_INTERVAL		= 30,
 };
 
+#ifdef HAVE_OPENCL
 static _clState *clStates[16];
 
 static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk)
@@ -1172,6 +1176,7 @@ out:
 
 	return NULL;
 }
+#endif /* HAVE_OPENCL */
 
 static void restart_threads(void)
 {
@@ -1270,7 +1275,12 @@ static void show_usage(void)
 {
 	int i;
 
-	printf("cgminer version %s\n\n", VERSION);
+	printf("cgminer version %s\n", VERSION);
+#ifdef HAVE_OPENCL
+	printf("Built with CPU and GPU mining support.\n\n");
+#else
+	printf("Built with CPU mining support only.\n\n");
+#endif
 	printf("Usage:\tcgminer [options]\n\nSupported options:\n");
 	for (i = 0; i < ARRAY_SIZE(options_help); i++) {
 		struct option_help *h;
@@ -1482,11 +1492,13 @@ int main (int argc, char *argv[])
 	opt_n_threads = num_processors;
 #endif /* !WIN32 */
 
+#ifdef HAVE_OPENCL
 	nDevs = clDevicesNum();
 	if (opt_ndevs) {
 		applog(LOG_INFO, "%i", nDevs);
 		return nDevs;
 	}
+#endif
 	/* Invert the value to determine if we manually set it in cmdline
 	 * or disable gpu threads */
 	if (nDevs)
@@ -1596,6 +1608,7 @@ int main (int argc, char *argv[])
 		}
 	}
 
+#ifdef HAVE_OPENCL
 	/* start GPU mining threads */
 	for (i = 0; i < gpu_threads; i++) {
 		int gpu = gpu_from_thr_id(i);
@@ -1628,6 +1641,7 @@ int main (int argc, char *argv[])
 	}
 
 	applog(LOG_INFO, "%d gpu miner threads started", i);
+#endif
 
 	/* start CPU mining threads */
 	for (i = gpu_threads; i < gpu_threads + opt_n_threads; i++) {
