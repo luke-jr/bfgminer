@@ -51,10 +51,11 @@ AC_LINK_IFELSE(
   [AC_LANG_PROGRAM([[#include <CL/cl.h>]],
     [[return clSetKernelArg(0, 0, 0, 0); ]])],
   [AC_MSG_RESULT(yes)
-   AM_CONDITIONAL(HAVE_OPENCL, true)
+   AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL is present on the system.])
+   found_opencl=1
    OPENCL_LIBS=-lOpenCL],
   [AC_MSG_RESULT(no)
-   AM_CONDITIONAL(HAVE_OPENCL, false)])
+   found_opencl=0])
 LIBS=$SAVED_LIBS
 
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
@@ -125,3 +126,11 @@ AC_CONFIG_FILES([
 	])
 AC_OUTPUT
 
+
+echo ''
+
+if test $found_opencl = 1; then
+	echo OpenCL: FOUND. GPU mining support enabled.
+else
+	echo OpenCL: NOT FOUND. GPU mining support DISABLED.
+fi
