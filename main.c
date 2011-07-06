@@ -1218,17 +1218,8 @@ static void restart_threads(void)
 	/* Discard old queued requests and get new ones */
 	flush_requests();
 
-	/* Queue extra requests for each worker thread since they'll all need
-	 * new work. Each worker will set their "requested" flag to true
-	 * should they receive a .restart */
-	for (i = 0; i < opt_n_threads + gpu_threads; i++) {
-		if (unlikely(!queue_request())) {
-			applog(LOG_ERR, "Failed to queue requests in flush_requests");
-			kill_work();
-			return;
-		}
+	for (i = 0; i < opt_n_threads + gpu_threads; i++)
 		work_restart[i].restart = 1;
-	}
 }
 
 static void *longpoll_thread(void *userdata)
@@ -1662,8 +1653,8 @@ int main (int argc, char *argv[])
 		}
 	}
 
-	/* Put the extra work in the queue */
-	for (i = 0; i < opt_queue; i++) {
+	/* Put enough work in the queue */
+	for (i = 0; i < opt_queue + opt_n_threads + gpu_threads; i++) {
 		if (unlikely(!queue_request())) {
 			applog(LOG_ERR, "Failed to queue_request in main");
 			return 1;
