@@ -3,7 +3,16 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <err.h>
+
+#ifndef WIN32
+	#include <err.h>
+#else
+	#define errx(status, fmt, ...) { \
+			fprintf(stderr, fmt, __VA_ARGS__); \
+			fprintf(stderr, "\n"); \
+			exit(status); }
+#endif
+
 #include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -191,11 +200,20 @@ bool opt_parse(int *argc, char *argv[], void (*errlog)(const char *fmt, ...))
 {
 	int ret;
 	unsigned offset = 0;
+	
+	#ifdef WIN32
+	char *original_argv0 = argv[0];
+	argv[0] = (char*)basename(argv[0]);
+	#endif
 
 	/* This helps opt_usage. */
 	opt_argv0 = argv[0];
 
 	while ((ret = parse_one(argc, argv, &offset, errlog)) == 1);
+	
+	#ifdef WIN32
+	argv[0] = original_argv0;
+	#endif
 
 	/* parse_one returns 0 on finish, -1 on error */
 	return (ret == 0);
