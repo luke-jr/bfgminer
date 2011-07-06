@@ -597,6 +597,7 @@ static void *workio_thread(void *userdata)
 		/* wait for workio_cmd sent to us, on our queue */
 		wc = tq_pop(mythr->q, NULL);
 		if (unlikely(!wc)) {
+			applog(LOG_ERR, "Failed to tq_pop in workio_thread");
 			ok = false;
 			break;
 		}
@@ -711,14 +712,17 @@ static bool queue_request(void)
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
-	if (unlikely(!wc))
+	if (unlikely(!wc)) {
+		applog(LOG_ERR, "Failed to tq_pop in queue_request");
 		return false;
+	}
 
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
 
 	/* send work request to workio thread */
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
+		applog(LOG_ERR, "Failed to tq_push in queue_request");
 		workio_cmd_free(wc);
 		return false;
 	}
@@ -732,12 +736,16 @@ static bool discard_request(void)
 	struct work *work_heap;
 
 	/* Just in case we fell in a hole and missed a queue filling */
-	if (unlikely(!requests_queued()))
+	if (unlikely(!requests_queued())) {
+		applog(LOG_WARNING, "Tried to discard_request with nil queued");
 		return true;
+	}
 
 	work_heap = tq_pop(thr->q, NULL);
-	if (unlikely(!work_heap))
+	if (unlikely(!work_heap)) {
+		applog(LOG_ERR, "Failed to tq_pop in discard_request");
 		return false;
+	}
 	free(work_heap);
 	dec_queued();
 	return true;
@@ -778,8 +786,10 @@ static bool get_work(struct work *work, bool queued)
 
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(thr->q, NULL);
-	if (unlikely(!work_heap))
+	if (unlikely(!work_heap)) {
+		applog(LOG_ERR, "Failed to tq_pop in get_work");
 		goto out;
+	}
 	dec_queued();
 
 	memcpy(work, work_heap, sizeof(*work));
@@ -970,15 +980,19 @@ static void *miner_thread(void *userdata)
 		if (unlikely(rc)) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "CPU %d found something?", cpu_from_thr_id(thr_id));
-			if (unlikely(!submit_work_sync(mythr, &work)))
+			if (unlikely(!submit_work_sync(mythr, &work))) {
+				applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
 				break;
+			}
 			work.blk.nonce += 4;
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
 		if (!requested && (diff.tv_sec > request_interval || work.blk.nonce > request_nonce)) {
-			if (unlikely(!queue_request()))
+			if (unlikely(!queue_request())) {
+				applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
 				goto out;
+			}
 			requested = true;
 		}
 
@@ -1168,8 +1182,10 @@ static void *gpuminer_thread(void *userdata)
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
 		if (!requested && (diff.tv_sec > request_interval || work->blk.nonce > request_nonce)) {
-			if (unlikely(!queue_request()))
+			if (unlikely(!queue_request())) {
+				applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
 				goto out;
+			}
 			requested = true;
 		}
 	}
