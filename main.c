@@ -873,7 +873,7 @@ static void *miner_thread(void *userdata)
 	/* Request the next work item at 2/3 of the scantime */
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
-	bool requested = false;
+	bool requested = true;
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
@@ -1107,7 +1107,7 @@ static void *gpuminer_thread(void *userdata)
 	/* Request the next work item at 2/3 of the scantime */
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
-	bool requested = false;
+	bool requested = true;
 
 	res = calloc(BUFFERSIZE, 1);
 	blank_res = calloc(BUFFERSIZE, 1);
