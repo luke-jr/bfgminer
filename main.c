@@ -20,10 +20,12 @@
 #include <sys/time.h>
 #include <time.h>
 #include <math.h>
+#include <stdarg.h>
+#include <assert.h>
 #ifndef WIN32
 #include <sys/resource.h>
 #endif
-#include <getopt.h>
+#include <ccan/opt/opt.h>
 #include <jansson.h>
 #include <curl/curl.h>
 #include "compat.h"
@@ -125,7 +127,6 @@ static int opt_queue = 0;
 int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
-static json_t *opt_config;
 static const bool opt_time = true;
 #ifdef WANT_X8664_SSE2
 static enum sha256_algos opt_algo = ALGO_SSE2_64;
@@ -154,142 +155,255 @@ static int accepted, rejected;
 int hw_errors;
 static int total_queued;
 
-struct option_help {
-	const char	*name;
-	const char	*helptext;
-};
+static void applog_and_exit(const char *fmt, ...)
+{
+	va_list ap;
 
-static struct option_help options_help[] = {
-	{ "help",
-	  "(-h) Display this help text" },
+	va_start(ap, fmt);
+	vapplog(LOG_ERR, fmt, ap);
+	va_end(ap);
+	exit(1);
+}
 
-	{ "algo XXX",
-	  "(-a XXX) Specify sha256 implementation:\n"
-	  "\tc\t\tLinux kernel sha256, implemented in C (default)"
+/* FIXME: Use asprintf for better errors. */
+static char *set_algo(const char *arg, enum sha256_algos *algo)
+{
+	enum sha256_algos i;
+
+	for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
+		if (algo_names[i] && !strcmp(arg, algo_names[i])) {
+			*algo = i;
+			return NULL;
+		}
+	}
+	return "Unknown algorithm";
+}
+
+static void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo)
+{
+	strncpy(buf, algo_names[*algo], OPT_SHOW_LEN);
+}
+
+static char *set_int_range(const char *arg, int *i, int min, int max)
+{
+	char *err = opt_set_intval(arg, i);
+	if (err)
+		return err;
+
+	if (*i < min || *i > max)
+		return "Value out of range";
+
+	return NULL;
+}
+
+static char *set_int_0_to_9999(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 9999);
+}
+
+static char *set_int_0_to_14(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 14);
+}
+
+static char *set_int_0_to_10(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 10);
+}
+
+static char *set_url(const char *arg, char **p)
+{
+	opt_set_charp(arg, p);
+	if (strncmp(arg, "http://", 7) &&
+	    strncmp(arg, "https://", 8))
+		return "URL must start with http:// or https://";
+
+	return NULL;
+}
+
+static char *set_vector(const char *arg, int *i)
+{
+	char *err = opt_set_intval(arg, i);
+	if (err)
+		return err;
+
+	if (*i != 1 && *i != 2 && *i != 4)
+		return "Valid vectors are 1, 2 or 4";
+	return NULL;
+}
+
+static char *enable_debug(bool *flag)
+{
+	*flag = true;
+	/* Turn out verbose output, too. */
+	opt_log_output = true;
+	return NULL;
+}
+
+
+/* These options are available from config file or commandline */
+static struct opt_table opt_config_table[] = {
+	OPT_WITH_ARG("--algo|-a",
+		     set_algo, show_algo, &opt_algo,
+		     "Specify sha256 implementation:\n"
+		     "\tc\t\tLinux kernel sha256, implemented in C"
 #ifdef WANT_SSE2_4WAY
-	  "\n\t4way\t\ttcatm's 4-way SSE2 implementation"
+		     "\n\t4way\t\ttcatm's 4-way SSE2 implementation"
 #endif
 #ifdef WANT_VIA_PADLOCK
-	  "\n\tvia\t\tVIA padlock implementation"
+		     "\n\tvia\t\tVIA padlock implementation"
 #endif
-	  "\n\tcryptopp\tCrypto++ C/C++ implementation"
+		     "\n\tcryptopp\tCrypto++ C/C++ implementation"
 #ifdef WANT_CRYPTOPP_ASM32
-	  "\n\tcryptopp_asm32\tCrypto++ 32-bit assembler implementation"
+		     "\n\tcryptopp_asm32\tCrypto++ 32-bit assembler implementation"
 #endif
 #ifdef WANT_X8664_SSE2
-	  "\n\tsse2_64\t\tSSE2 implementation for x86_64 machines"
+		     "\n\tsse2_64\t\tSSE2 implementation for x86_64 machines"
 #endif
-	  },
-
-	  { "config FILE",
-	  "(-c FILE) JSON-format configuration file (default: none)\n"
-	  "See example-cfg.json for an example configuration." },
-
-	{ "cpu-threads N",
-	  "(-t N) Number of miner CPU threads (default: number of processors or 0 if GPU mining)" },
-
-	{ "debug",
-	  "(-D) Enable debug output (default: off)" },
-
+		),
+	OPT_WITH_ARG("--cpu-threads|-t",
+		     set_int_0_to_9999, opt_show_intval, &opt_n_threads,
+		     "Number of miner CPU threads"),
+	OPT_WITHOUT_ARG("--debug|-D",
+		     enable_debug, &opt_debug,
+		     "Enable debug output"),
 #ifdef HAVE_OPENCL
-	{ "gpu-threads N",
-	  "(-g N) Number of threads per-GPU (0 - 10, default: 2)" },
-
-	{ "intensity N",
-	  "(-I N) Intensity of GPU scanning (0 - 14, default 4)" },
+	OPT_WITH_ARG("--gpu-threads|-g",
+		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
+		     "Number of threads per GPU (0 - 10)"),
+	OPT_WITH_ARG("--intensity|-I",
+		     set_int_0_to_14, opt_show_intval, &scan_intensity,
+		     "Intensity of GPU scanning (0 - 14)"),
 #endif
-	{ "log N",
-	  "(-l N) Interval in seconds between log output (default: 5)" },
-
-#ifdef HAVE_OPENCL
-	{ "ndevs",
-	  "(-n) Display number of detected GPUs and exit" },
-#endif
-	{ "no-longpoll",
-	  "Disable X-Long-Polling support (default: enabled)" },
-
-	{ "pass PASSWORD",
-	  "(-p PASSWORD) Password for bitcoin JSON-RPC server "
-	  "(default: " DEF_RPC_PASSWORD ")" },
-
-	{ "protocol-dump",
-	  "(-P) Verbose dump of protocol-level activities (default: off)" },
-
-	{ "queue N",
-	  "(-Q N) Number of extra work items to queue (0 - 10, default 0)" },
-
-	{ "quiet",
-	  "(-q) Disable per-thread hashmeter output (default: off)" },
-
-	{ "retries N",
-	  "(-r N) Number of times to retry before giving up, if JSON-RPC call fails\n"
-	  "\t(default: -1; use -1 for \"never\")" },
-
-	{ "retry-pause N",
-	  "(-R N) Number of seconds to pause, between retries\n"
-	  "\t(default: 5)" },
-
-	{ "scantime N",
-	  "(-s N) Upper bound on time spent scanning current work,\n"
-	  "\tin seconds. (default: 60)" },
-
+	OPT_WITH_ARG("--log|-l",
+		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
+		     "Interval in seconds between log output"),
+	OPT_WITHOUT_ARG("--no-longpoll",
+			opt_set_invbool, &want_longpoll,
+			"Disable X-Long-Polling support"),
+	OPT_WITH_ARG("--pass|-p",
+		     opt_set_charp, NULL, &rpc_pass,
+		     "Password for bitcoin JSON-RPC server"),
+	OPT_WITHOUT_ARG("--protocol-dump|-P",
+			opt_set_bool, &opt_protocol,
+			"Verbose dump of protocol-level activities"),
+	OPT_WITH_ARG("--queue|-Q",
+		     set_int_0_to_9999, opt_show_intval, &opt_queue,
+		     "Number of extra work items to queue"),
+	OPT_WITHOUT_ARG("--quiet|-q",
+			opt_set_bool, &opt_quiet,
+			"Disable per-thread hashmeter output"),
+	OPT_WITH_ARG("--retries|-r",
+		     opt_set_intval, opt_show_intval, &opt_retries,
+		     "Number of times to retry before giving up, if JSON-RPC call fails (-1 means never)"),
+	OPT_WITH_ARG("--retry-pause|-R",
+		     set_int_0_to_9999, opt_show_intval, &opt_fail_pause,
+		     "Number of seconds to pause, between retries"),
+	OPT_WITH_ARG("--scan-time|-s",
+		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
+		     "Upper bound on time spent scanning current work, in seconds"),
 #ifdef HAVE_SYSLOG_H
-	{ "syslog",
-	  "Use system log for output messages (default: standard error)" },
+	OPT_WITHOUT_ARG("--syslog",
+			opt_set_bool, &use_syslog,
+			"Use system log for output messages (default: standard error)"),
 #endif
-
-	{ "url URL",
-	  "(-o URL) URL for bitcoin JSON-RPC server "
-	  "(default: " DEF_RPC_URL ")" },
-
-	{ "userpass USERNAME:PASSWORD",
-	  "(-O USERNAME:PASSWORD) Username:Password pair for bitcoin JSON-RPC server "
-	  "(default: " DEF_RPC_USERPASS ")" },
-
-	{ "user USERNAME",
-	  "(-u USERNAME) Username for bitcoin JSON-RPC server "
-	  "(default: " DEF_RPC_USERNAME ")" },
-
-	{ "verbose",
-	  "(-V) Log verbose output to stderr as well as status output (default: off)" },
-
+	OPT_WITH_ARG("--url|-o",
+		     set_url, opt_show_charp, &rpc_url,
+		     "URL for bitcoin JSON-RPC server"),
+	OPT_WITH_ARG("--user|-u",
+		     opt_set_charp, NULL, &rpc_user,
+		     "Username for bitcoin JSON-RPC server"),
 #ifdef HAVE_OPENCL
-	{ "vectors N",
-	  "(-v N) Override detected optimal vector width (default: detected, 1,2 or 4)" },
-
-	{ "worksize N",
-	  "(-w N) Override detected optimal worksize (default: detected)" },
+	OPT_WITH_ARG("--vectors|-v",
+		     set_vector, NULL, &opt_vectors,
+		     "Override detected optimal vector width (1, 2 or 4)"),
 #endif
+	OPT_WITHOUT_ARG("--verbose",
+			opt_set_bool, &opt_log_output,
+			"Log verbose output to stderr as well as status output"),
+#ifdef HAVE_OPENCL
+	OPT_WITH_ARG("--worksize|-w",
+		     set_int_0_to_9999, opt_show_intval, &opt_worksize,
+		     "Override detected optimal worksize"),
+#endif
+	OPT_WITH_ARG("--userpass|-O",
+		     opt_set_charp, NULL, &rpc_userpass,
+		     "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_ENDTABLE
 };
 
-static struct option options[] = {
-	{ "algo", 1, NULL, 'a' },
-	{ "config", 1, NULL, 'c' },
-	{ "cpu-threads", 1, NULL, 't' },
-	{ "gpu-threads", 1, NULL, 'g' },
-	{ "debug", 0, NULL, 'D' },
-	{ "help", 0, NULL, 'h' },
-	{ "intensity", 1, NULL, 'I' },
-	{ "log", 1, NULL, 'l' },
-	{ "ndevs", 0, NULL, 'n' },
-	{ "no-longpoll", 0, NULL, 1003 },
-	{ "pass", 1, NULL, 'p' },
-	{ "protocol-dump", 0, NULL, 'P' },
-	{ "queue", 1, NULL, 'Q' },
-	{ "quiet", 0, NULL, 'q' },
-	{ "retries", 1, NULL, 'r' },
-	{ "retry-pause", 1, NULL, 'R' },
-	{ "scantime", 1, NULL, 's' },
-#ifdef HAVE_SYSLOG_H
-	{ "syslog", 0, NULL, 1004 },
+static char *parse_config(json_t *config)
+{
+	static char err_buf[200];
+	json_t *val;
+	struct opt_table *opt;
+
+	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
+		char *p, *name;
+
+		/* We don't handle subtables. */
+		assert(!(opt->type & OPT_SUBTABLE));
+
+		/* Pull apart the option name(s). */
+		name = strdup(opt->names);
+		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
+			char *err;
+			/* Ignore short options. */
+			if (p[1] != '-')
+				continue;
+
+			val = json_object_get(config, p+2);
+			if (!val)
+				continue;
+
+			if ((opt->type & OPT_HASARG) && json_is_string(val)) {
+				err = opt->cb_arg(json_string_value(val),
+						  opt->u.arg);
+			} else if ((opt->type&OPT_NOARG) && json_is_true(val)) {
+				err = opt->cb(opt->u.arg);
+			} else {
+				err = "Invalid value";
+			}
+			if (err) {
+				sprintf(err_buf, "Parsing JSON option %s: %s",
+					p, err);
+				return err_buf;
+			}
+		}
+		free(name);
+	}
+	return NULL;
+}
+
+static char *load_config(const char *arg, void *unused)
+{
+	json_error_t err;
+	json_t *config;
+
+	config = json_load_file(arg, &err);
+	if (!json_is_object(config))
+		return "JSON decode of file failed";
+
+	/* Parse the config now, so we can override it.  That can keep pointers
+	 * so don't free config object. */
+	return parse_config(config);
+}
+	
+/* These options are available from commandline only */
+static struct opt_table opt_cmdline_table[] = {
+	OPT_WITH_ARG("--config|-c",
+		     load_config, NULL, NULL,
+		     "Load a JSON-format configuration file\n"
+		     "See example-cfg.json for an example configuration."),
+	OPT_WITHOUT_ARG("--help|-h",
+			opt_usage_and_exit,
+#ifdef HAVE_OPENCL
+			"\nBuilt with CPU and GPU mining support.\n\n",
+#else
+			"\nBuilt with CPU mining support only.\n\n",
 #endif
-	{ "url", 1, NULL, 'o' },
-	{ "user", 1, NULL, 'u' },
-	{ "verbose", 0, NULL, 'V' },
-	{ "vectors", 1, NULL, 'v' },
-	{ "worksize", 1, NULL, 'w' },
-	{ "userpass", 1, NULL, 'O' },
-	{0, 0, 0, 0}
+			"Print this message"),
+	OPT_ENDTABLE
 };
 
 static bool jobj_binary(const json_t *obj, const char *key,
@@ -1313,221 +1427,6 @@ static void *wakeup_thread(void *userdata)
 	return NULL;
 }
 
-static void show_usage(void)
-{
-	int i;
-
-	printf("cgminer version %s\n", VERSION);
-#ifdef HAVE_OPENCL
-	printf("Built with CPU and GPU mining support.\n\n");
-#else
-	printf("Built with CPU mining support only.\n\n");
-#endif
-	printf("Usage:\tcgminer [options]\n\nSupported options:\n");
-	for (i = 0; i < ARRAY_SIZE(options_help); i++) {
-		struct option_help *h;
-
-		h = &options_help[i];
-		printf("--%s\n%s\n\n", h->name, h->helptext);
-	}
-
-	exit(1);
-}
-
-static void parse_arg (int key, char *arg)
-{
-	int v, i;
-
-	switch(key) {
-	case 'a':
-		for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
-			if (algo_names[i] &&
-			    !strcmp(arg, algo_names[i])) {
-				opt_algo = i;
-				break;
-			}
-		}
-		if (i == ARRAY_SIZE(algo_names))
-			show_usage();
-		break;
-	case 'c': {
-		json_error_t err;
-		if (opt_config)
-			json_decref(opt_config);
-		opt_config = json_load_file(arg, &err);
-		if (!json_is_object(opt_config)) {
-			applog(LOG_ERR, "JSON decode of %s failed", arg);
-			show_usage();
-		}
-		break;
-	}
-	case 'g':
-		v = atoi(arg);
-		if (v < 0 || v > 10)
-			show_usage();
-
-		opt_g_threads = v;
-		break;
-	case 'D':
-		opt_debug = true;
-		opt_log_output = true;
-		break;
-	case 'I':
-		v = atoi(arg);
-		if (v < 0 || v > 14) /* sanity check */
-			show_usage();
-		scan_intensity = v;
-		break;
-	case 'l':
-		v = atoi(arg);
-		if (v < 0 || v > 9999)	/* sanity check */
-			show_usage();
-		opt_log_interval = v;
-		break;
-	case 'n':
-		opt_log_output = true;
-		opt_ndevs = true;
-		break;
-	case 'p':
-		free(rpc_pass);
-		rpc_pass = strdup(arg);
-		break;
-	case 'P':
-		opt_protocol = true;
-		break;
-	case 'Q':
-		v = atoi(arg);
-		if (v < 0 || v > 10)
-			show_usage();
-
-		opt_queue = v;
-		break;
-	case 'q':
-		opt_quiet = true;
-		break;
-	case 'r':
-		v = atoi(arg);
-		if (v < -1 || v > 9999)	/* sanity check */
-			show_usage();
-
-		opt_retries = v;
-		break;
-	case 'R':
-		v = atoi(arg);
-		if (v < 1 || v > 9999)	/* sanity check */
-			show_usage();
-
-		opt_fail_pause = v;
-		break;
-	case 's':
-		v = atoi(arg);
-		if (v < 1 || v > 9999)	/* sanity check */
-			show_usage();
-
-		opt_scantime = v;
-		break;
-	case 't':
-		v = atoi(arg);
-		if (v < 0 || v > 9999)	/* sanity check */
-			show_usage();
-
-		opt_n_threads = v;
-		break;
-	case 'u':
-		free(rpc_user);
-		rpc_user = strdup(arg);
-		break;
-	case 'V':
-		opt_log_output = true;
-		break;
-	case 'v':
-		v = atoi(arg);
-		if (v != 1 && v != 2 && v != 4)
-			show_usage();
-
-		opt_vectors = v;
-		break;
-	case 'w':
-		v = atoi(arg);
-		if (v < 1 || v > 9999)	/* sanity check */
-			show_usage();
-
-		opt_worksize = v;
-		break;
-	case 'o':			/* --url */
-		if (strncmp(arg, "http://", 7) &&
-		    strncmp(arg, "https://", 8))
-			show_usage();
-
-		free(rpc_url);
-		rpc_url = strdup(arg);
-		break;
-	case 'O':			/* --userpass */
-		if (!strchr(arg, ':'))
-			show_usage();
-
-		free(rpc_userpass);
-		rpc_userpass = strdup(arg);
-		break;
-	case 1003:
-		want_longpoll = false;
-		break;
-	case 1004:
-		use_syslog = true;
-		break;
-	case '?':
-	default:
-		show_usage();
-	}
-}
-
-static void parse_config(void)
-{
-	int i;
-	json_t *val;
-
-	if (!json_is_object(opt_config))
-		return;
-
-	for (i = 0; i < ARRAY_SIZE(options); i++) {
-		if (!options[i].name)
-			break;
-		if (!strcmp(options[i].name, "config"))
-			continue;
-
-		val = json_object_get(opt_config, options[i].name);
-		if (!val)
-			continue;
-
-		if (options[i].has_arg && json_is_string(val)) {
-			char *s = strdup(json_string_value(val));
-			if (!s)
-				break;
-			parse_arg(options[i].val, s);
-			free(s);
-		} else if (!options[i].has_arg && json_is_true(val))
-			parse_arg(options[i].val, "");
-		else
-			applog(LOG_ERR, "JSON option %s invalid",
-				options[i].name);
-	}
-}
-
-static void parse_cmdline(int argc, char *argv[])
-{
-	int key;
-
-	while (1) {
-		key = getopt_long(argc, argv, "a:c:Dg:I:l:no:O:p:PQ:qr:R:s:t:u:Vv:w:h?", options, NULL);
-		if (key < 0)
-			break;
-
-		parse_arg(key, optarg);
-	}
-
-	parse_config();
-}
-
 int main (int argc, char *argv[])
 {
 	struct thr_info *thr;
@@ -1553,7 +1452,16 @@ int main (int argc, char *argv[])
 	rpc_url = strdup(DEF_RPC_URL);
 
 	/* parse command line */
-	parse_cmdline(argc, argv);
+	opt_register_table(opt_config_table,
+			   "Options for both config file and command line");
+	opt_register_table(opt_cmdline_table,
+			   "Options for command line only");
+
+	opt_parse(&argc, argv, applog_and_exit);
+	if (argc != 1) {
+		applog(LOG_ERR, "Unexpected extra commandline arguments");
+		return 1;
+	}
 
 #ifdef HAVE_OPENCL
 	if (opt_ndevs) {
