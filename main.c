@@ -631,16 +631,24 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	static double local_mhashes_done = 0;
 	static double rolling_local = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_quiet || !opt_log_interval)
 		return;
+	
 	khashes = hashes_done / 1000.0;
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
-	if (opt_debug)
-		applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
-			thr_id, hashes_done, hashes_done / secs);
+
+	if (thr_id >= 0) {
+		/* So we can call hashmeter from a non worker thread */
+		struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+
+		if (opt_debug)
+			applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
+				thr_id, hashes_done, hashes_done / secs);
+		cgpu->local_mhashes += local_mhashes;
+		cgpu->total_mhashes += local_mhashes;
+	}
 
 	/* Totals are updated by all threads so can race without locking */
 	pthread_mutex_lock(&hash_lock);
@@ -650,8 +658,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	total_mhashes_done += local_mhashes;
 	local_mhashes_done += local_mhashes;
-	cgpu->local_mhashes += local_mhashes;
-	cgpu->total_mhashes += local_mhashes;
 	if (total_diff.tv_sec < opt_log_interval)
 		/* Only update the total every opt_log_interval seconds */
 		goto out_unlock;
@@ -1300,6 +1306,22 @@ out:
 	return NULL;
 }
 
+/* Makes sure the hashmeter keeps going even if mining threads stall */
+static void *wakeup_thread(void *userdata)
+{
+	const unsigned int interval = opt_log_interval / 2 ? : 1;
+	struct timeval zero_tv;
+
+	memset(&zero_tv, 0, sizeof(struct timeval));
+
+	while (1) {
+		sleep(interval);
+		hashmeter(-1, &zero_tv, 0);
+	}
+
+	return NULL;
+}
+
 static void show_usage(void)
 {
 	int i;
@@ -1586,7 +1608,7 @@ int main (int argc, char *argv[])
 	if (!work_restart)
 		return 1;
 
-	thr_info = calloc(opt_n_threads + 2 + gpu_threads, sizeof(*thr));
+	thr_info = calloc(opt_n_threads + 3 + gpu_threads, sizeof(*thr));
 	if (!thr_info)
 		return 1;
 
@@ -1710,6 +1732,13 @@ int main (int argc, char *argv[])
 		"using SHA256 '%s' algorithm.",
 		opt_n_threads,
 		algo_names[opt_algo]);
+
+	thr = &thr_info[opt_n_threads + gpu_threads + 2];
+	/* start wakeup thread */
+	if (pthread_create(&thr->pth, NULL, wakeup_thread, NULL)) {
+		applog(LOG_ERR, "wakeup thread create failed");
+		return 1;
+	}
 
 	/* Restart count as it will be wrong till all threads are started */
 	pthread_mutex_lock(&hash_lock);
