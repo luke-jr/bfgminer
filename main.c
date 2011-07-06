@@ -632,7 +632,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	static double rolling_local = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
-	unsigned int i;
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_quiet || !opt_log_interval)
