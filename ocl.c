@@ -58,10 +58,11 @@ int clDevicesNum() {
 	cl_uint numPlatforms;
 	cl_platform_id platform = NULL;
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
+	/* If this fails, assume no GPUs. */
 	if (status != CL_SUCCESS)
 	{
-		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
-		return -1;
+		applog(LOG_INFO, "clGetPlatformsIDs failed (no GPU?)");
+		return 0;
 	}
 
 	if (numPlatforms > 0)

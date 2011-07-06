@@ -1458,6 +1458,9 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_OPENCL
 	nDevs = clDevicesNum();
+	if (nDevs < 0)
+		return 1;
+
 #endif
 	if (nDevs)
 		opt_n_threads = 0;
