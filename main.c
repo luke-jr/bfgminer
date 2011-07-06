@@ -665,7 +665,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
-	printf("[Rate (%ds): %.2f  (avg): %.2f Mhash/s] [Accepted: %d  Rejected: %d  HW errors: %d]\r",
+	printf("[Rate (%ds): %.2f  (avg): %.2f Mhash/s] [Accepted: %d  Rejected: %d  HW errors: %d]          \r",
 	       opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		accepted, rejected, hw_errors);
 	fflush(stdout);
