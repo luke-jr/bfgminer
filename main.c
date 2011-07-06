@@ -778,16 +778,18 @@ static bool get_work(struct work *work, bool queued)
 	struct thr_info *thr = &thr_info[0];
 	struct work *work_heap;
 	bool ret = false;
+	int failures = 0;
 
+retry:
 	if (unlikely(!queued && !queue_request())) {
-		applog(LOG_ERR, "Failed to queue_request in get_work");
+		applog(LOG_WARNING, "Failed to queue_request in get_work");
 		goto out;
 	}
 
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(thr->q, NULL);
 	if (unlikely(!work_heap)) {
-		applog(LOG_ERR, "Failed to tq_pop in get_work");
+		applog(LOG_WARNING, "Failed to tq_pop in get_work");
 		goto out;
 	}
 	dec_queued();
@@ -797,6 +799,15 @@ static bool get_work(struct work *work, bool queued)
 	ret = true;
 	free(work_heap);
 out:
+	if (unlikely(ret == false)) {
+		if ((opt_retries >= 0) && (++failures > opt_retries)) {
+			applog(LOG_ERR, "Failed %d times to get_work");
+			return ret;
+		}
+		applog(LOG_WARNING, "Retrying after %d seconds", opt_fail_pause);
+		sleep(opt_fail_pause);
+		goto retry;
+	}
 	return ret;
 }
 
