@@ -9,7 +9,7 @@ endif
 
 EXTRA_DIST	= example-cfg.json m4/gnulib-cache.m4
 
-SUBDIRS		= lib compat
+SUBDIRS		= lib compat ccan
 
 INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
 
@@ -20,8 +20,9 @@ cgminer_SOURCES	= elist.h miner.h compat.h			\
 		  ocl.c findnonce.c				\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c
+
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
-cgminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ lib/libgnu.a
+cgminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ lib/libgnu.a ccan/libccan.a
 cgminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ -I$(top_builddir)/lib -I$(top_srcdir)/lib
 
 if HAVE_x86_64
