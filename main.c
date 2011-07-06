@@ -136,7 +136,8 @@ static enum sha256_algos opt_algo = ALGO_C;
 static int nDevs;
 static int opt_g_threads = 2;
 static int gpu_threads;
-static int opt_n_threads = 1;
+static bool forced_n_threads;
+static int opt_n_threads;
 static int num_processors;
 static int scan_intensity = 4;
 static char *rpc_url;
@@ -206,6 +207,12 @@ static char *set_int_0_to_14(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 14);
 }
 
+static char *force_nthreads_int(const char *arg, int *i)
+{
+	forced_n_threads = true;
+	return set_int_range(arg, i, 0, 9999);
+}
+
 static char *set_int_0_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 10);
@@ -262,7 +269,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 		),
 	OPT_WITH_ARG("--cpu-threads|-t",
-		     set_int_0_to_9999, opt_show_intval, &opt_n_threads,
+		     force_nthreads_int, opt_show_intval, &opt_n_threads,
 		     "Number of miner CPU threads"),
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
@@ -1444,10 +1451,8 @@ int main (int argc, char *argv[])
 #ifdef HAVE_OPENCL
 	nDevs = clDevicesNum();
 #endif
-	/* Invert the value to determine if we manually set it in cmdline
-	 * or disable gpu threads */
 	if (nDevs)
-		opt_n_threads = - opt_n_threads;
+		opt_n_threads = 0;
 
 	rpc_url = strdup(DEF_RPC_URL);
 
@@ -1471,11 +1476,9 @@ int main (int argc, char *argv[])
 #endif
 
 	gpu_threads = nDevs * opt_g_threads;
-	if (opt_n_threads < 0) {
-		if (gpu_threads)
-			opt_n_threads = 0;
-		else
-			opt_n_threads = -opt_n_threads;
+	if (!gpu_threads && !forced_n_threads) {
+		/* Maybe they turned GPU off; restore default CPU threads. */
+		opt_n_threads = num_processors;
 	}
 
 	if (!rpc_userpass) {
