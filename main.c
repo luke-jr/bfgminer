@@ -771,8 +771,8 @@ static bool get_work(struct work *work, bool queued)
 	struct work *work_heap;
 	bool ret = false;
 
-	if (!queued || !requests_queued()) {
-		if (unlikely(!queue_request()))
+	if (unlikely(!queued && !queue_request())) {
+		applog(LOG_ERR, "Failed to queue_request in get_work");
 		goto out;
 	}
 
@@ -869,16 +869,6 @@ static void *miner_thread(void *userdata)
 		bool rc;
 
 		if (needs_work) {
-			if (work_restart[thr_id].restart) {
-				if (requested) {
-					/* We have one extra request than desired now */
-					if (unlikely(!discard_request())) {
-						applog(LOG_ERR, "Failed to discard request in uminer thread");
-						goto out;
-					}
-				} else
-					requested = true;
-			}
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(&work, requested))) {
@@ -1118,16 +1108,6 @@ static void *gpuminer_thread(void *userdata)
 			memset(res, 0, BUFFERSIZE);
 
 			gettimeofday(&tv_workstart, NULL);
-			if (work_restart[thr_id].restart) {
-				if (requested) {
-					/* We have one extra request than desired now */
-					if (unlikely(!discard_request())) {
-						applog(LOG_ERR, "Failed to discard request in gpuminer thread");
-						goto out;
-					}
-				} else
-					requested = true;
-			}
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(work, requested))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
