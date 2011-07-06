@@ -1271,7 +1271,7 @@ static void *longpoll_thread(void *userdata)
 			json_decref(val);
 
 			if (!opt_quiet)
-				printf("LONGPOLL detected new block                                                    \n");
+				printf("LONGPOLL detected new block                                                              \n");
 			applog(LOG_INFO, "LONGPOLL detected new block");
 			restart_threads();
 		} else {
