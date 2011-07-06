@@ -114,7 +114,6 @@ static const char *algo_names[] = {
 
 bool opt_debug = false;
 bool opt_protocol = false;
-bool opt_ndevs = false;
 bool want_longpoll = true;
 bool have_longpoll = false;
 bool use_syslog = false;
@@ -395,7 +394,13 @@ static char *load_config(const char *arg, void *unused)
 	 * so don't free config object. */
 	return parse_config(config);
 }
-	
+
+static char *print_ndevs_and_exit(int *ndevs)
+{
+	printf("%i", *ndevs);
+	exit(*ndevs);
+}
+
 /* These options are available from commandline only */
 static struct opt_table opt_cmdline_table[] = {
 	OPT_WITH_ARG("--config|-c",
@@ -410,6 +415,9 @@ static struct opt_table opt_cmdline_table[] = {
 			"\nBuilt with CPU mining support only.\n\n",
 #endif
 			"Print this message"),
+	OPT_WITHOUT_ARG("--ndevs|-n",
+			print_ndevs_and_exit, &nDevs,
+			"Display number of detected GPUs and exit"),
 	OPT_ENDTABLE
 };
 
@@ -1467,13 +1475,6 @@ int main (int argc, char *argv[])
 		applog(LOG_ERR, "Unexpected extra commandline arguments");
 		return 1;
 	}
-
-#ifdef HAVE_OPENCL
-	if (opt_ndevs) {
-		applog(LOG_INFO, "%i", nDevs);
-		return nDevs;
-	}
-#endif
 
 	gpu_threads = nDevs * opt_g_threads;
 	if (!gpu_threads && !forced_n_threads) {
