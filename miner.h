@@ -253,6 +253,7 @@ struct work {
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 
+extern void vapplog(int prio, const char *fmt, va_list ap);
 extern void applog(int prio, const char *fmt, ...);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);

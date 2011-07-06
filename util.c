@@ -57,12 +57,8 @@ struct thread_q {
 	pthread_cond_t		cond;
 };
 
-void applog(int prio, const char *fmt, ...)
+void vapplog(int prio, const char *fmt, va_list ap)
 {
-	va_list ap;
-
-	va_start(ap, fmt);
-
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog) {
 		vsyslog(prio, fmt, ap);
@@ -96,8 +92,15 @@ void applog(int prio, const char *fmt, ...)
 		vfprintf(stderr, f, ap);	/* atomic write to stderr */
 		fflush(stderr);
 	}
+}
+
+void applog(int prio, const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	vapplog(prio, fmt, ap);
 	va_end(ap);
-	fflush(stderr);
 }
 
 static void databuf_free(struct data_buffer *db)
