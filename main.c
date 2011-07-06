@@ -660,7 +660,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	/* Use a rolling average by faking an exponential decay over 5 * log */
 	rolling_local = ((rolling_local * 0.9) + local_mhashes_done) / 1.9;
-	cgpu->rolling_local = ((cgpu->rolling_local * 0.9) + cgpu->local_mhashes) / 1.9;
 
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +

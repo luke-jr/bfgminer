@@ -119,7 +119,6 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int hw_errors;
-	double rolling_local;
 	double local_mhashes;
 	double total_mhashes;
 };
