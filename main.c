@@ -157,6 +157,7 @@ int hw_errors;
 static int total_queued;
 static unsigned int getwork_requested = 0;
 static char current_block[37];
+static char longpoll_block[37];
 static char blank[37];
 
 static void applog_and_exit(const char *fmt, ...)
@@ -766,15 +767,16 @@ static void *stage_thread(void *userdata)
 		if (likely(strncmp(current_block, blank, 36))) {
 			if (unlikely(strncmp(hexstr, current_block, 36))) {
 				if (want_longpoll)
-					applog(LOG_WARNING, "New block detected, possible missed longpoll, flushing work queue      ");
+					applog(LOG_WARNING, "New block detected, possible missed longpoll, flushing work queue");
 				else
-					applog(LOG_WARNING, "New block detected, flushing work queue                                ");
+					applog(LOG_WARNING, "New block detected, flushing work queue                          ");
 				/* As we can't flush the work from here, signal
 				 * the wakeup thread to restart all the
 				 * threads */
 				work_restart[stage_thr_id].restart = 1;
 			}
-		}
+		} else
+			memcpy(longpoll_block, hexstr, 36);
 		memcpy(current_block, hexstr, 36);
 		free(hexstr);
 
@@ -1448,6 +1450,7 @@ static void *longpoll_thread(void *userdata)
 	char *copy_start, *hdr_path, *lp_url = NULL;
 	bool need_slash = false;
 	int failures = 0;
+	unsigned int i;
 
 	hdr_path = tq_pop(mythr->q, NULL);
 	if (!hdr_path)
@@ -1480,6 +1483,9 @@ static void *longpoll_thread(void *userdata)
 		goto out;
 	}
 
+	for (i = 0; i < 36; i++)
+		strcat(longpoll_block, "0");
+
 	while (1) {
 		json_t *val;
 
@@ -1489,8 +1495,14 @@ static void *longpoll_thread(void *userdata)
 			failures = 0;
 			json_decref(val);
 
-			applog(LOG_WARNING, "LONGPOLL detected new block                                               ");
-			restart_threads(true);
+			/* Keep track of who ordered a restart_threads to make
+			 * sure it's only done once per new block */
+			if (likely(!strncmp(longpoll_block, blank, 36) ||
+				!strncmp(longpoll_block, current_block, 36))) {
+					applog(LOG_WARNING, "LONGPOLL detected new block, flushing work queue                 ");
+					restart_threads(true);
+			} else
+				applog(LOG_WARNING, "LONGPOLL received - new block detected and work flushed already      ");
 		} else {
 			if (failures++ < 10) {
 				sleep(30);
@@ -1502,6 +1514,7 @@ static void *longpoll_thread(void *userdata)
 				goto out;
 			}
 		}
+		memcpy(longpoll_block, current_block, 36);
 	}
 
 out:
