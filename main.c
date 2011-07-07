@@ -527,25 +527,27 @@ static bool submit_upstream_work(const struct work *work)
 		accepted++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
-		printf("[Accepted] ");
+		if (!opt_quiet)
+			printf("[Accepted] ");
 	} else {
 		cgpu->rejected++;
 		rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
-		printf("[Rejected] ");
+		if (!opt_quiet)
+			printf("[Rejected] ");
 	}
 
 	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = getwork_requested ? cgpu->accepted * 100.0 / getwork_requested : 0.0;
 
 	if (!opt_quiet) {
-		printf("[%sPU: %d] [Rate: %.2f Mhash/s] [Requested: %d Accepted: %d  Rejected: %d  HW errors: %d Efficiency: %.3f%% Utility: %.2f/m]                 \n",
+		printf("[%sPU %d] [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]                 \n",
 			cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->total_mhashes / total_secs,
 			getwork_requested, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			efficiency, utility);
 	}
-	applog(LOG_INFO, "%sPU: %d  Requested: %d Accepted: %d  Rejected: %d  HW errors: %d  efficiency: %.3f%% utility: %.2f/m",
+	applog(LOG_INFO, "%sPU %d  Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m",
 	       cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, getwork_requested, cgpu->accepted, cgpu->rejected, cgpu->hw_errors, efficiency, utility
            );
 
@@ -875,11 +877,11 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = getwork_requested ? accepted * 100.0 / getwork_requested : 0.0;
 
-	printf("[Rate (%ds): %.2f  (avg): %.2f Mhash/s] [Requested: %d Accepted: %d  Rejected: %d  HW errors: %d Efficiency: %.2f%% Utility: %.2f/m]\r",
+	printf("[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]\r",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
 	fflush(stdout);
-	applog(LOG_INFO, "[Rate (%ds): %.2f  (avg): %.2f Mhash/s] [Requested: %d Accepted: %d  Rejected: %d  HW errors: %d Efficiency: %.2f%% Utility: %.2f/m]",
+	applog(LOG_INFO, "[Rate (%ds):%.1f  (avg):%.2f Mhash/s] [Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m]",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
 
