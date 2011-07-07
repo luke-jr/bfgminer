@@ -44,5 +44,17 @@ Usage instructions:  Run "cgminer --help" to see options.
 
 Also many issues and FAQs are covered in the forum thread
 dedicated to this program,
-	http://www.bitcoin.org/smf/index.php?topic=1925.0;all
+	http://forum.bitcoin.org/index.php?topic=21275.0
 
+The output line shows the following:
+[(5s):204.4  (avg):203.1 Mh/s] [Q:56  A:51  R:4  HW:0  E:91%  U:2.47/m]
+
+Each column is as follows:
+A 5 second exponentially decaying average hash rate
+An all time average hash rate
+The number of requested work items
+The number of accepted shares
+The number of rejected shares
+The number of hardware erorrs
+The efficiency defined as the accepted shares / requested work
+The utility defines as the number of shares / minute
