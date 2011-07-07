@@ -156,8 +156,8 @@ static int accepted, rejected;
 int hw_errors;
 static int total_queued;
 static unsigned int getwork_requested = 0;
-static char current_block[36];
-static char blank[36];
+static char current_block[37];
+static char blank[37];
 
 static void applog_and_exit(const char *fmt, ...)
 {
