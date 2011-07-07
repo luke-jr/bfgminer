@@ -1537,6 +1537,8 @@ static void *wakeup_thread(void *userdata)
 
 	while (1) {
 		sleep(interval);
+		if (!requests_queued())
+			queue_request();
 		hashmeter(-1, &zero_tv, 0);
 		if (unlikely(work_restart[stage_thr_id].restart)) {
 			restart_threads(false);
