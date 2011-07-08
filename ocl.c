@@ -154,7 +154,7 @@ void patch_opcodes(char *w, unsigned remaining)
 			} else if (alu_inst == OP3_INST_BYTE_ALIGN_INT) {
 				count_byte_align++;
 				// patch this instruction to BFI_INT
-				*opcode &= 0xfffc1fffffffffffUL;
+				*opcode &= 0xfffc1fffffffffffULL;
 				*opcode |= OP3_INST_BFI_INT << (32 + 13);
 				patched++;
 			}
