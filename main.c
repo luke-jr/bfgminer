@@ -122,7 +122,7 @@ static int opt_retries = -1;
 static int opt_fail_pause = 5;
 static int opt_log_interval = 5;
 bool opt_log_output = false;
-static int opt_queue = 0;
+static int opt_queue = 1;
 int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
@@ -222,6 +222,11 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
+static char *set_int_1_to_10(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 1, 10);
+}
+
 static char *set_url(const char *arg, char **p)
 {
 	opt_set_charp(arg, p);
@@ -299,8 +304,8 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_protocol,
 			"Verbose dump of protocol-level activities"),
 	OPT_WITH_ARG("--queue|-Q",
-		     set_int_0_to_9999, opt_show_intval, &opt_queue,
-		     "Number of extra work items to queue"),
+		     set_int_1_to_10, opt_show_intval, &opt_queue,
+		     "Number of extra work items to queue (1 - 10)"),
 	OPT_WITHOUT_ARG("--quiet|-q",
 			opt_set_bool, &opt_quiet,
 			"Disable per-thread hashmeter output"),
@@ -1537,7 +1542,7 @@ static void *wakeup_thread(void *userdata)
 
 	while (1) {
 		sleep(interval);
-		if (!requests_queued())
+		if (requests_queued() < opt_queue)
 			queue_request();
 		hashmeter(-1, &zero_tv, 0);
 		if (unlikely(work_restart[stage_thr_id].restart)) {
