@@ -485,6 +485,13 @@ err_out:
 }
 
 static double total_secs;
+static char statusline[256];
+
+static inline void print_status(void)
+{
+	printf("%s\r", statusline);
+	fflush(stdout);
+}
 
 static bool submit_upstream_work(const struct work *work)
 {
@@ -552,6 +559,7 @@ static bool submit_upstream_work(const struct work *work)
 			cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->total_mhashes / total_secs,
 			getwork_requested, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			efficiency, utility);
+		print_status();
 	}
 	applog(LOG_INFO, "%sPU %d  Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m",
 	       cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, getwork_requested, cgpu->accepted, cgpu->rejected, cgpu->hw_errors, efficiency, utility
@@ -884,10 +892,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = getwork_requested ? accepted * 100.0 / getwork_requested : 0.0;
 
-	printf("[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]\r",
+	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]          ",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
-	fflush(stdout);
+	print_status();
 	applog(LOG_INFO, "[Rate (%ds):%.1f  (avg):%.2f Mhash/s] [Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m]",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
