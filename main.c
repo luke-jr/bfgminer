@@ -562,7 +562,7 @@ static bool submit_upstream_work(const struct work *work)
 			printf("[Rejected] ");
 	}
 
-	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
+	utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
 
 	if (!opt_quiet) {
