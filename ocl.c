@@ -318,12 +318,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	if (opt_debug)
 		applog(LOG_DEBUG, "Max work group size reported %d", clState->max_work_size);
-	/* Some nvidia cards report 1024 but fail when set larger than 512 !? */
-	if (clState->max_work_size > 512)
-		clState->max_work_size = 512;
 
 	/* For some reason 2 vectors is still better even if the card says
-	 * otherwise */
+	 * otherwise, and many cards lie about their max so use 256 as max
+	 * unless explicitly set on the command line */
 	if (clState->preferred_vwidth > 1)
 		clState->preferred_vwidth = 2;
 	if (opt_vectors)
@@ -331,7 +329,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (opt_worksize && opt_worksize <= clState->max_work_size)
 		clState->work_size = opt_worksize;
 	else
-		clState->work_size = clState->max_work_size / clState->preferred_vwidth;
+		clState->work_size = (clState->max_work_size <= 256 ? clState->max_work_size : 256) /
+				clState->preferred_vwidth;
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
