@@ -1083,7 +1083,7 @@ retry:
 		goto out;
 	} else if (localgen) {
 		localgen = false;
-		applog(LOG_WARNING, "Resumed retrieving work from server");
+		applog(LOG_WARNING, "Resumed retrieving work from server           ");
 	}
 
 	/* wait for 1st response, or get cached response */
