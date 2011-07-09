@@ -1772,6 +1772,7 @@ int main (int argc, char *argv[])
 			applog(LOG_ERR, "Failed to queue_request in main");
 			return 1;
 		}
+		inc_staged(1, true);
 	}
 
 #ifdef HAVE_OPENCL
