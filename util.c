@@ -120,7 +120,7 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	size_t len = size * nmemb;
 	size_t oldlen, newlen;
 	void *newmem;
-	static const unsigned char zero;
+	static const unsigned char zero = 0;
 
 	oldlen = db->len;
 	newlen = oldlen + len;
@@ -284,6 +284,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	val = JSON_LOADS(all_data.buf, &err);
 	if (!val) {
 		applog(LOG_ERR, "JSON decode failed(%d): %s", err.line, err.text);
+
+		if (opt_protocol)
+		    applog(LOG_DEBUG, "JSON protocol response:\n%s", all_data.buf);
+
 		goto err_out;
 	}
 
