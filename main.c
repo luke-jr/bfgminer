@@ -495,6 +495,8 @@ static inline void print_status(void)
 	fflush(stdout);
 }
 
+static bool submit_fail = false;
+
 static bool submit_upstream_work(const struct work *work)
 {
 	char *hexstr = NULL;
@@ -528,8 +530,15 @@ static bool submit_upstream_work(const struct work *work)
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, rpc_url, rpc_userpass, s, false, false);
 	if (unlikely(!val)) {
-		applog(LOG_ERR, "submit_upstream_work json_rpc_call failed");
+		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
+		if (!submit_fail) {
+			submit_fail = true;
+			applog(LOG_WARNING, "Upstream communication failure, caching submissions");
+		}
 		goto out;
+	} else if (submit_fail) {
+		submit_fail = false;
+		applog(LOG_WARNING, "Upstream communication resumed, submitting work");
 	}
 
 	res = json_object_get(val, "result");
@@ -711,14 +720,14 @@ static void *submit_work_thread(void *userdata)
 		goto out;
 	}
 	if (unlikely(strncmp(hexstr, current_block, 36))) {
-		applog(LOG_INFO, "Stale work detected, discarding");
+		applog(LOG_WARNING, "Stale work detected, discarding");
 		goto out_free;
 	}
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(wc->u.work)) {
 		if (unlikely(strncmp(hexstr, current_block, 36))) {
-			applog(LOG_INFO, "Stale work detected, discarding");
+			applog(LOG_WARNING, "Stale work detected, discarding");
 			goto out_free;
 		}
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
@@ -728,7 +737,7 @@ static void *submit_work_thread(void *userdata)
 		}
 
 		/* pause, then restart work-request loop */
-		applog(LOG_ERR, "json_rpc_call failed on submit_work, retry after %d seconds",
+		applog(LOG_INFO, "json_rpc_call failed on submit_work, retry after %d seconds",
 			opt_fail_pause);
 		sleep(opt_fail_pause);
 	}
