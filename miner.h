@@ -57,7 +57,7 @@ void *alloca (size_t);
 #define WANT_X8664_SSE2 1
 #endif
 
-#if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
+#if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define WANT_BUILTIN_BSWAP
 #else
 #if HAVE_BYTESWAP_H
