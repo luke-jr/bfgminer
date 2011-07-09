@@ -157,7 +157,7 @@ static int accepted, rejected;
 int hw_errors;
 static int total_queued, total_staged, lp_staged;
 static bool localgen = false;
-static unsigned int getwork_requested = 0;
+static unsigned int getwork_requested;
 static char current_block[37];
 static char longpoll_block[37];
 static char blank[37];
@@ -563,17 +563,17 @@ static bool submit_upstream_work(const struct work *work)
 	}
 
 	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
-	efficiency = getwork_requested ? cgpu->accepted * 100.0 / getwork_requested : 0.0;
+	efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
 
 	if (!opt_quiet) {
 		printf("[%sPU %d] [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]                 \n",
 			cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->total_mhashes / total_secs,
-			getwork_requested, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			efficiency, utility);
 		print_status();
 	}
 	applog(LOG_INFO, "%sPU %d  Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m",
-	       cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, getwork_requested, cgpu->accepted, cgpu->rejected, cgpu->hw_errors, efficiency, utility
+	       cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors, efficiency, utility
            );
 
 	json_decref(val);
@@ -1061,6 +1061,8 @@ static bool get_work(struct work *work, bool queued)
 	bool ret = false;
 	int failures = 0;
 
+	getwork_requested++;
+
 retry:
 	if (unlikely(!queued && !queue_request())) {
 		applog(LOG_WARNING, "Failed to queue_request in get_work");
@@ -1194,9 +1196,10 @@ static void *miner_thread(void *userdata)
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(&work, requested))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
-					"mining thread %d", mythr->id);
+					"mining thread %d", thr_id);
 				goto out;
 			}
+			mythr->cgpu->getworks++;
 			work.thr_id = thr_id;
 			needs_work = requested = false;
 			work.blk.nonce = 0;
@@ -1439,10 +1442,9 @@ static void *gpuminer_thread(void *userdata)
 					"gpu mining thread %d", mythr->id);
 				goto out;
 			}
+			mythr->cgpu->getworks++;
 			work->thr_id = thr_id;
 			requested = false;
-
-			getwork_requested++;
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work->blk.nonce = 0;

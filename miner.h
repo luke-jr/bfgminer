@@ -134,6 +134,7 @@ struct cgpu_info {
 	int hw_errors;
 	double local_mhashes;
 	double total_mhashes;
+	unsigned int getworks;
 };
 
 struct thr_info {
