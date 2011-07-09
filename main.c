@@ -150,11 +150,13 @@ struct work_restart *work_restart = NULL;
 pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
+static pthread_mutex_t stgd_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static int accepted, rejected;
 int hw_errors;
-static int total_queued;
+static int total_queued, total_staged, lp_staged;
+static bool localgen = false;
 static unsigned int getwork_requested = 0;
 static char current_block[37];
 static char longpoll_block[37];
@@ -592,7 +594,7 @@ static bool get_upstream_work(struct work *work)
 	val = json_rpc_call(curl, rpc_url, rpc_userpass, rpc_req,
 			    want_longpoll, false);
 	if (unlikely(!val)) {
-		applog(LOG_ERR, "Failed json_rpc_call in get_upstream_work");
+		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 		goto out;
 	}
 
@@ -667,7 +669,7 @@ static void *get_work_thread(void *userdata)
 		}
 
 		/* pause, then restart work-request loop */
-		applog(LOG_ERR, "json_rpc_call failed on get work, retry after %d seconds",
+		applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
 			opt_fail_pause);
 		sleep(opt_fail_pause);
 	}
@@ -748,6 +750,34 @@ static bool workio_submit_work(struct workio_cmd *wc)
 	return true;
 }
 
+static void inc_staged(int inc, bool lp)
+{
+	pthread_mutex_lock(&stgd_lock);
+	total_staged += inc;
+	if (lp)
+		lp_staged += inc;
+	pthread_mutex_unlock(&stgd_lock);
+}
+
+static void dec_staged(int inc)
+{
+	pthread_mutex_lock(&stgd_lock);
+	if (lp_staged)
+		lp_staged -= inc;
+	total_staged -= inc;
+	pthread_mutex_unlock(&stgd_lock);
+}
+
+static int requests_staged(void)
+{
+	int ret;
+
+	pthread_mutex_lock(&stgd_lock);
+	ret = total_staged;
+	pthread_mutex_unlock(&stgd_lock);
+	return ret;
+}
+
 static void *stage_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -798,6 +828,7 @@ static void *stage_thread(void *userdata)
 			ok = false;
 			break;
 		}
+		inc_staged(1, false);
 	}
 
 	tq_freeze(mythr->q);
@@ -919,6 +950,7 @@ static void dec_queued(void)
 	pthread_mutex_lock(&qd_lock);
 	total_queued--;
 	pthread_mutex_unlock(&qd_lock);
+	dec_staged(1);
 }
 
 static int requests_queued(void)
@@ -992,6 +1024,10 @@ static void flush_requests(bool longpoll)
 	else
 		extra--;
 
+	/* Temporarily increase the staged count so that get_work thinks there
+	 * is work available instead of making threads reuse existing work */
+	inc_staged(extra, true);
+
 	for (i = 0; i < extra; i++) {
 		/* Queue a whole batch of new requests */
 		if (unlikely(!queue_request())) {
@@ -1022,6 +1058,25 @@ retry:
 		goto out;
 	}
 
+	if (!requests_staged()) {
+		uint32_t *work_ntime;
+		uint32_t ntime;
+
+		/* Only print this message once each time we shift to localgen */
+		if (!localgen)
+			applog(LOG_WARNING, "Server not providing work fast enough, generating work locally");
+		localgen = true;
+		work_ntime = (uint32_t *)(work->data + 68);
+		ntime = be32toh(*work_ntime);
+		ntime++;
+		*work_ntime = htobe32(ntime);
+		ret = true;
+		goto out;
+	} else if (localgen) {
+		localgen = false;
+		applog(LOG_WARNING, "Resumed retrieving work from server");
+	}
+
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(thr->q, NULL);
 	if (unlikely(!work_heap)) {
@@ -1040,7 +1095,7 @@ out:
 			applog(LOG_ERR, "Failed %d times to get_work");
 			return ret;
 		}
-		applog(LOG_WARNING, "Retrying after %d seconds", opt_fail_pause);
+		applog(LOG_DEBUG, "Retrying after %d seconds", opt_fail_pause);
 		sleep(opt_fail_pause);
 		goto retry;
 	}
@@ -1519,7 +1574,7 @@ static void *longpoll_thread(void *userdata)
 		} else {
 			if (failures++ < 10) {
 				sleep(30);
-				applog(LOG_ERR,
+				applog(LOG_WARNING,
 					"longpoll failed, sleeping for 30s");
 			} else {
 				applog(LOG_ERR,
@@ -1621,6 +1676,8 @@ int main (int argc, char *argv[])
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
 		return 1;
 	if (unlikely(pthread_mutex_init(&qd_lock, NULL)))
+		return 1;
+	if (unlikely(pthread_mutex_init(&stgd_lock, NULL)))
 		return 1;
 
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))

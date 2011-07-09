@@ -84,6 +84,19 @@ void *alloca (size_t);
 #endif
 #endif /* !defined(__GLXBYTEORDER_H__) */
 
+/* This assumes htobe32 is a macro in endian.h */
+#ifndef htobe32
+# if __BYTE_ORDER == __LITTLE_ENDIAN
+#  define be32toh(x) bswap_32(x)
+#  define htobe32(x) bswap_32(x)
+# elif __BYTE_ORDER == __BIG_ENDIAN
+#  define be32toh(x) (x)
+#  define htobe32(x) (x)
+#else
+#error UNKNOWN BYTE ORDER
+#endif
+#endif
+
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
 #else
