@@ -821,7 +821,7 @@ static void *stage_thread(void *userdata)
 				if (want_longpoll)
 					applog(LOG_WARNING, "New block detected, possible missed longpoll, flushing work queue");
 				else
-					applog(LOG_WARNING, "New block detected, flushing work queue                          ");
+					applog(LOG_WARNING, "New block detected, flushing work queue");
 				/* As we can't flush the work from here, signal
 				 * the wakeup thread to restart all the
 				 * threads */
@@ -1083,7 +1083,7 @@ retry:
 		goto out;
 	} else if (localgen) {
 		localgen = false;
-		applog(LOG_WARNING, "Resumed retrieving work from server           ");
+		applog(LOG_WARNING, "Resumed retrieving work from server");
 	}
 
 	/* wait for 1st response, or get cached response */
@@ -1576,10 +1576,10 @@ static void *longpoll_thread(void *userdata)
 			 * sure it's only done once per new block */
 			if (likely(!strncmp(longpoll_block, blank, 36) ||
 				!strncmp(longpoll_block, current_block, 36))) {
-					applog(LOG_WARNING, "LONGPOLL detected new block, flushing work queue                 ");
+					applog(LOG_WARNING, "LONGPOLL detected new block, flushing work queue");
 					restart_threads(true);
 			} else
-				applog(LOG_WARNING, "LONGPOLL received - new block detected and work flushed already      ");
+				applog(LOG_WARNING, "LONGPOLL received - new block detected and work flushed already");
 		} else {
 			if (failures++ < 10) {
 				sleep(30);

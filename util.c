@@ -68,7 +68,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 #endif
 	else if (opt_log_output || prio == LOG_WARNING || prio == LOG_ERR) {
 		char *f;
-		int len;
+		int len, i, extra = 0;
 		struct timeval tv = { };
 		struct tm tm, *tm_p;
 
@@ -80,8 +80,10 @@ void vapplog(int prio, const char *fmt, va_list ap)
 		pthread_mutex_unlock(&time_lock);
 
 		len = 40 + strlen(fmt) + 2;
-		f = alloca(len);
-		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
+		if (len < 80)
+			extra = 80 - len;
+		f = alloca(len + extra);
+		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s",
 			tm.tm_year + 1900,
 			tm.tm_mon + 1,
 			tm.tm_mday,
@@ -90,6 +92,9 @@ void vapplog(int prio, const char *fmt, va_list ap)
 			tm.tm_sec,
 			fmt);
 		vfprintf(stderr, f, ap);	/* atomic write to stderr */
+		for (i = 0; i < extra; i++)
+			fprintf(stderr, " ");
+		fprintf(stderr, "\n");
 		fflush(stderr);
 	}
 }
