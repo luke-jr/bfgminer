@@ -134,6 +134,9 @@ static enum sha256_algos opt_algo = ALGO_C;
 #endif
 static int nDevs;
 static int opt_g_threads = 2;
+static int opt_device;
+static int total_devices;
+static bool gpu_devices[16];
 static int gpu_threads;
 static bool forced_n_threads;
 static int opt_n_threads;
@@ -229,6 +232,20 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
+static char *set_devices(const char *arg, int *i)
+{
+	char *err = opt_set_intval(arg, i);
+
+	if (err)
+		return err;
+
+	if (*i < 0 || *i > 15)
+		return "Invalid GPU device number";
+	total_devices++;
+	gpu_devices[*i] = true;
+	return NULL;
+}
+
 static char *set_url(const char *arg, char **p)
 {
 	opt_set_charp(arg, p);
@@ -286,6 +303,9 @@ static struct opt_table opt_config_table[] = {
 		     enable_debug, &opt_debug,
 		     "Enable debug output"),
 #ifdef HAVE_OPENCL
+	OPT_WITH_ARG("--device|-d",
+		     set_devices, NULL, &opt_device,
+	             "Select device to use, (Use repeat -d for mulitple devices, default: all)"),
 	OPT_WITH_ARG("--gpu-threads|-g",
 		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (0 - 10)"),
@@ -1635,7 +1655,7 @@ static void *wakeup_thread(void *userdata)
 int main (int argc, char *argv[])
 {
 	struct thr_info *thr;
-	unsigned int i;
+	unsigned int i, j = 0;
 	char name[32];
 	struct cgpu_info *gpus = NULL, *cpus = NULL;
 
@@ -1657,10 +1677,11 @@ int main (int argc, char *argv[])
 #endif /* !WIN32 */
 
 #ifdef HAVE_OPENCL
+	for (i = 0; i < 16; i++)
+		gpu_devices[true] = false;
 	nDevs = clDevicesNum();
 	if (nDevs < 0)
 		return 1;
-
 #endif
 	if (nDevs)
 		opt_n_threads = 0;
@@ -1679,7 +1700,23 @@ int main (int argc, char *argv[])
 		return 1;
 	}
 
-	gpu_threads = nDevs * opt_g_threads;
+	if (total_devices) {
+		if (total_devices > nDevs) {
+			applog(LOG_ERR, "More devices specified than exist");
+			return 1;
+		}
+		for (i = 0; i < 16; i++)
+			if (gpu_devices[i] && i + 1 > nDevs) {
+				applog(LOG_ERR, "Command line options set a device that doesn't exist");
+				return 1;
+			}
+		gpu_threads = total_devices * opt_g_threads;
+	} else {
+		gpu_threads = nDevs * opt_g_threads;
+		for (i = 0; i < nDevs; i++)
+			gpu_devices[i] = true;
+	}
+
 	if (!gpu_threads && !forced_n_threads) {
 		/* Maybe they turned GPU off; restore default CPU threads. */
 		opt_n_threads = num_processors;
@@ -1782,10 +1819,15 @@ int main (int argc, char *argv[])
 	}
 
 #ifdef HAVE_OPENCL
-	/* start GPU mining threads */
-	for (i = 0; i < gpu_threads; i++) {
-		int gpu = gpu_from_thr_id(i);
+	i = 0;
 
+	/* start GPU mining threads */
+	for (j = 0; j < nDevs * opt_g_threads; j++) {
+		int gpu = gpu_from_thr_id(j);
+
+		/* Skip devices not set to work */
+		if (!gpu_devices[gpu])
+			continue;
 		thr = &thr_info[i];
 		thr->id = i;
 		gpus[gpu].is_gpu = 1;
@@ -1811,9 +1853,10 @@ int main (int argc, char *argv[])
 			return 1;
 		}
 		pthread_detach(thr->pth);
+		i++;
 	}
 
-	applog(LOG_INFO, "%d gpu miner threads started", i);
+	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
 #endif
 
 	/* start CPU mining threads */
