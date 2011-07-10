@@ -762,8 +762,11 @@ static bool workio_submit_work(struct workio_cmd *wc)
 static void inc_staged(int inc, bool lp)
 {
 	pthread_mutex_lock(&stgd_lock);
-	if (lp)
+	if (lp) {
 		lp_staged += inc;
+		total_staged += inc;
+	} else if (lp_staged)
+		lp_staged--;
 	else
 		total_staged += inc;
 	pthread_mutex_unlock(&stgd_lock);
@@ -783,7 +786,7 @@ static int requests_staged(void)
 	int ret;
 
 	pthread_mutex_lock(&stgd_lock);
-	ret = total_staged + lp_staged;
+	ret = total_staged;
 	pthread_mutex_unlock(&stgd_lock);
 	return ret;
 }
