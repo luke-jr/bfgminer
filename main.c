@@ -764,8 +764,7 @@ static void inc_staged(int inc, bool lp)
 	pthread_mutex_lock(&stgd_lock);
 	if (lp)
 		lp_staged += inc;
-	else
-		total_staged += inc;
+	total_staged += inc;
 	pthread_mutex_unlock(&stgd_lock);
 }
 
@@ -783,7 +782,7 @@ static int requests_staged(void)
 	int ret;
 
 	pthread_mutex_lock(&stgd_lock);
-	ret = total_staged + lp_staged;
+	ret = total_staged;
 	pthread_mutex_unlock(&stgd_lock);
 	return ret;
 }
@@ -1775,8 +1774,8 @@ int main (int argc, char *argv[])
 			applog(LOG_ERR, "Failed to queue_request in main");
 			return 1;
 		}
-		inc_staged(1, true);
 	}
+	lp_staged = opt_n_threads + gpu_threads + opt_queue;
 
 #ifdef HAVE_OPENCL
 	/* start GPU mining threads */
