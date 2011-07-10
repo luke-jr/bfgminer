@@ -140,6 +140,7 @@ static bool gpu_devices[16];
 static int gpu_threads;
 static bool forced_n_threads;
 static int opt_n_threads;
+static int mining_threads;
 static int num_processors;
 static int scan_intensity = 4;
 static char *rpc_url;
@@ -1059,7 +1060,10 @@ static void flush_requests(bool longpoll)
 
 	/* Temporarily increase the staged count so that get_work thinks there
 	 * is work available instead of making threads reuse existing work */
-	inc_staged(extra, true);
+	if (extra >= mining_threads)
+		inc_staged(mining_threads, true);
+	else
+		inc_staged(extra, true);
 
 	for (i = 0; i < extra; i++) {
 		/* Queue a whole batch of new requests */
@@ -1542,7 +1546,7 @@ static void restart_threads(bool longpoll)
 	/* Discard old queued requests and get new ones */
 	flush_requests(longpoll);
 
-	for (i = 0; i < opt_n_threads + gpu_threads; i++)
+	for (i = 0; i < mining_threads; i++)
 		work_restart[i].restart = 1;
 }
 
@@ -1722,6 +1726,8 @@ int main (int argc, char *argv[])
 		opt_n_threads = num_processors;
 	}
 
+	mining_threads = opt_n_threads + gpu_threads;
+
 	if (!rpc_userpass) {
 		if (!rpc_user || !rpc_pass) {
 			applog(LOG_ERR, "No login credentials supplied");
@@ -1740,16 +1746,16 @@ int main (int argc, char *argv[])
 		openlog("cpuminer", LOG_PID, LOG_USER);
 #endif
 
-	work_restart = calloc(opt_n_threads + 4 + gpu_threads, sizeof(*work_restart));
+	work_restart = calloc(mining_threads + 4, sizeof(*work_restart));
 	if (!work_restart)
 		return 1;
 
-	thr_info = calloc(opt_n_threads + 4 + gpu_threads, sizeof(*thr));
+	thr_info = calloc(mining_threads + 4, sizeof(*thr));
 	if (!thr_info)
 		return 1;
 
 	/* init workio thread info */
-	work_thr_id = opt_n_threads + gpu_threads;
+	work_thr_id = mining_threads;
 	thr = &thr_info[work_thr_id];
 	thr->id = work_thr_id;
 	thr->q = tq_new();
@@ -1764,7 +1770,7 @@ int main (int argc, char *argv[])
 
 	/* init longpoll thread info */
 	if (want_longpoll) {
-		longpoll_thr_id = opt_n_threads + gpu_threads + 1;
+		longpoll_thr_id = mining_threads + 1;
 		thr = &thr_info[longpoll_thr_id];
 		thr->id = longpoll_thr_id;
 		thr->q = tq_new();
@@ -1798,7 +1804,7 @@ int main (int argc, char *argv[])
 		}
 	}
 
-	stage_thr_id = opt_n_threads + gpu_threads + 3;
+	stage_thr_id = mining_threads + 3;
 	thr = &thr_info[stage_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
@@ -1810,13 +1816,13 @@ int main (int argc, char *argv[])
 	}
 
 	/* Put enough work in the queue */
-	for (i = 0; i < opt_queue + opt_n_threads + gpu_threads; i++) {
+	for (i = 0; i < opt_queue + mining_threads; i++) {
 		if (unlikely(!queue_request())) {
 			applog(LOG_ERR, "Failed to queue_request in main");
 			return 1;
 		}
-		inc_staged(1, true);
 	}
+	inc_staged(mining_threads, true);
 
 #ifdef HAVE_OPENCL
 	i = 0;
@@ -1860,7 +1866,7 @@ int main (int argc, char *argv[])
 #endif
 
 	/* start CPU mining threads */
-	for (i = gpu_threads; i < gpu_threads + opt_n_threads; i++) {
+	for (i = gpu_threads; i < mining_threads; i++) {
 		int cpu = cpu_from_thr_id(i);
 
 		thr = &thr_info[i];
@@ -1887,7 +1893,7 @@ int main (int argc, char *argv[])
 		opt_n_threads,
 		algo_names[opt_algo]);
 
-	thr = &thr_info[opt_n_threads + gpu_threads + 2];
+	thr = &thr_info[mining_threads + 2];
 	/* start wakeup thread */
 	if (pthread_create(&thr->pth, NULL, wakeup_thread, NULL)) {
 		applog(LOG_ERR, "wakeup thread create failed");
