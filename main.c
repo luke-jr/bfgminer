@@ -305,7 +305,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, &opt_device,
-	             "Select device to use, (Use repeat -d for mulitple devices, default: all)"),
+	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
 	OPT_WITH_ARG("--gpu-threads|-g",
 		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (0 - 10)"),
