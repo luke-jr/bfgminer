@@ -28,6 +28,7 @@
 #include <ccan/opt/opt.h>
 #include <jansson.h>
 #include <curl/curl.h>
+#include <curses.h>
 #include "compat.h"
 #include "miner.h"
 #include "findnonce.h"
@@ -507,13 +508,108 @@ err_out:
 	return false;
 }
 
-static double total_secs;
-static char statusline[256];
-
-static inline void print_status(void)
+static inline int gpu_from_thr_id(int thr_id)
 {
-	printf("%s\r", statusline);
-	fflush(stdout);
+	return thr_id % nDevs;
+}
+
+static inline int cpu_from_thr_id(int thr_id)
+{
+	return (thr_id - gpu_threads) % num_processors;
+}
+
+static WINDOW * mainwin;
+static double total_secs = 0.1;
+static char statusline[256];
+static int cpucursor, gpucursor, logstart, logcursor;
+static bool curses_active = false;
+static struct cgpu_info *gpus, *cpus;
+
+static inline void print_status(int thr_id)
+{
+	int x;
+
+	if (unlikely(!curses_active))
+		return;
+	getyx(mainwin, logcursor, x);
+
+	move(2,0);
+	printw("Totals: %s", statusline);
+	clrtoeol();
+
+	if (thr_id && thr_id < gpu_threads) {
+		int gpu = gpu_from_thr_id(thr_id);
+		struct cgpu_info *cgpu = &gpus[gpu];
+
+		move(gpucursor + gpu, 0);
+		printw("GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]          ",
+			gpu, cgpu->total_mhashes / total_secs,
+			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->efficiency, cgpu->utility);
+		clrtoeol();
+	} else if (thr_id && thr_id >= gpu_threads) {
+		int cpu = cpu_from_thr_id(thr_id);
+		struct cgpu_info *cgpu = &cpus[cpu];
+
+		move(cpucursor + cpu, 0);
+		printw("CPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+			cpu, cgpu->total_mhashes / total_secs,
+			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->efficiency, cgpu->utility);
+		clrtoeol();
+	}
+
+	move(logcursor, 0);
+	refresh();
+}
+
+static void refresh_display(void)
+{
+	int i, x, maxy;
+
+	if (unlikely(!curses_active))
+		return;
+	getyx(mainwin, logcursor, x);
+
+	move(0,0);
+	attron(A_BOLD);
+	printw(PROGRAM_NAME " version " VERSION);
+	attroff(A_BOLD);
+	clrtoeol();
+	move(1, 0);
+	clrtoeol();
+	hline('-', 80);
+	move(3, 0);
+	clrtoeol();
+	hline('-', 80);
+	move(logstart, 0);
+	clrtoeol();
+	hline('-', 80);
+	move(logcursor, 0);
+
+	for (i = 0; i < mining_threads; i++)
+		print_status(i);
+
+	move(logcursor, 0);
+	redrawwin(mainwin);
+}
+
+void log_curses(const char *f, va_list ap)
+{
+	int i, x, maxy;
+
+	if (unlikely(!curses_active))
+		return;
+	vwprintw(mainwin, f, ap);
+	clrtoeol();
+	getyx(mainwin, logcursor, x);
+
+	/* Scroll log output downwards */
+	getmaxyx(mainwin, maxy, x);
+	if (logcursor >= maxy - 1)
+		refresh_display();
+	else
+		refresh();
 }
 
 static bool submit_fail = false;
@@ -526,7 +622,6 @@ static bool submit_upstream_work(const struct work *work)
 	bool rc = false;
 	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
 	CURL *curl = curl_easy_init();
-	double utility, efficiency;
 
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
@@ -573,29 +668,26 @@ static bool submit_upstream_work(const struct work *work)
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!opt_quiet)
-			printf("[Accepted] ");
+			applog(LOG_WARNING, "Share accepted from %sPU %d",
+				cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu);
 	} else {
 		cgpu->rejected++;
 		rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!opt_quiet)
-			printf("[Rejected] ");
+			applog(LOG_WARNING, "Share rejected from %sPU %d",
+				cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu);
 	}
 
-	utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-	efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
+	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
 
-	if (!opt_quiet) {
-		printf("[%sPU %d] [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]                 \n",
-			cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->total_mhashes / total_secs,
-			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			efficiency, utility);
-		print_status();
-	}
+	if (!opt_quiet)
+		print_status(work->thr_id);
 	applog(LOG_INFO, "%sPU %d  Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m",
-	       cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors, efficiency, utility
-           );
+		cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->getworks, cgpu->accepted,
+		cgpu->rejected, cgpu->hw_errors, cgpu->efficiency, cgpu->utility);
 
 	json_decref(val);
 
@@ -960,7 +1052,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]          ",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
-	print_status();
+	print_status(thr_id);
 	applog(LOG_INFO, "[Rate (%ds):%.1f  (avg):%.2f Mhash/s] [Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m]",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
@@ -1183,11 +1275,6 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	return submit_work_sync(thr, work);
 }
 
-static inline int cpu_from_thr_id(int thr_id)
-{
-	return (thr_id - gpu_threads) % num_processors;
-}
-
 static void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -1402,11 +1489,6 @@ static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk
 				 (void *)&clState->outputBuffer);
 
 	return status;
-}
-
-static inline int gpu_from_thr_id(int thr_id)
-{
-	return thr_id % nDevs;
 }
 
 static void *gpuminer_thread(void *userdata)
@@ -1661,7 +1743,6 @@ int main (int argc, char *argv[])
 	struct thr_info *thr;
 	unsigned int i, j = 0;
 	char name[32];
-	struct cgpu_info *gpus = NULL, *cpus = NULL;
 
 	if (unlikely(pthread_mutex_init(&time_lock, NULL)))
 		return 1;
@@ -1726,7 +1807,12 @@ int main (int argc, char *argv[])
 		opt_n_threads = num_processors;
 	}
 
+	logcursor = 4;
 	mining_threads = opt_n_threads + gpu_threads;
+	gpucursor = logcursor;
+	cpucursor = gpucursor + total_devices + 1;
+	logstart = cpucursor + (opt_n_threads ? num_processors : 0);
+	logcursor = logstart + 1;
 
 	if (!rpc_userpass) {
 		if (!rpc_user || !rpc_pass) {
@@ -1907,6 +1993,17 @@ int main (int argc, char *argv[])
 	total_mhashes_done = 0;
 	pthread_mutex_unlock(&hash_lock);
 
+	/* Set up the ncurses interface */
+	if ((mainwin = initscr()) == NULL) {
+		applog(LOG_ERR, "Failed to initscr");
+		return 1;
+	}
+	idlok(mainwin, true);
+	scrollok(mainwin, true);
+	curses_active = true;
+	move(logcursor, 0);
+	refresh_display();
+
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
 	curl_global_cleanup();
@@ -1916,6 +2013,10 @@ int main (int argc, char *argv[])
 		free(cpus);
 
 	applog(LOG_INFO, "workio thread dead, exiting.");
+
+	delwin(mainwin);
+	endwin();
+	refresh();
 
 	return 0;
 }

@@ -60,6 +60,7 @@ LIBS=$SAVED_LIBS
 
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 AC_CHECK_LIB(pthread, pthread_create, PTHREAD_LIBS=-lpthread)
+AC_CHECK_LIB(ncurses, addstr, NCURSES_LIBS=-lncurses)
 
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
@@ -148,6 +149,7 @@ AC_SUBST(OPENCL_LIBS)
 AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(PTHREAD_LIBS)
+AC_SUBST(NCURSES_LIBS)
 
 AC_CONFIG_FILES([
 	Makefile

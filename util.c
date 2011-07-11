@@ -20,6 +20,7 @@
 #include <jansson.h>
 #include <curl/curl.h>
 #include <time.h>
+#include <curses.h>
 #include "miner.h"
 #include "elist.h"
 
@@ -68,7 +69,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 #endif
 	else if (opt_log_output || prio == LOG_WARNING || prio == LOG_ERR) {
 		char *f;
-		int len, i, extra = 0;
+		int len;
 		struct timeval tv = { };
 		struct tm tm, *tm_p;
 
@@ -80,10 +81,8 @@ void vapplog(int prio, const char *fmt, va_list ap)
 		pthread_mutex_unlock(&time_lock);
 
 		len = 40 + strlen(fmt) + 2;
-		if (len < 80)
-			extra = 80 - len;
-		f = alloca(len + extra);
-		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s",
+		f = alloca(len);
+		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
 			tm.tm_year + 1900,
 			tm.tm_mon + 1,
 			tm.tm_mday,
@@ -91,11 +90,12 @@ void vapplog(int prio, const char *fmt, va_list ap)
 			tm.tm_min,
 			tm.tm_sec,
 			fmt);
-		vfprintf(stderr, f, ap);	/* atomic write to stderr */
-		for (i = 0; i < extra; i++)
-			fprintf(stderr, " ");
-		fprintf(stderr, "\n");
-		fflush(stderr);
+		/* Only output to stderr if it's not going to the screen as well */
+		if (opt_log_output && !isatty(fileno((FILE *)stderr))) {
+			vfprintf(stderr, f, ap);	/* atomic write to stderr */
+			fflush(stderr);
+		}
+		log_curses(f, ap);
 	}
 }
 

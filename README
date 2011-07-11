@@ -7,6 +7,7 @@ Dependencies:
 	libcurl			http://curl.haxx.se/libcurl/
 	jansson			http://www.digip.org/jansson/
 	(jansson is included in-tree and an installed one may conflict)
+	libncurses5-dev (or libpdcurses on WIN32)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
