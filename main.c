@@ -601,7 +601,7 @@ void log_curses(const char *f, va_list ap)
 
 	if (unlikely(!curses_active))
 		return;
-	vwprintw(mainwin, f, ap);
+	vw_printw(mainwin, f, ap);
 	clrtoeol();
 	getyx(mainwin, logcursor, x);
 
