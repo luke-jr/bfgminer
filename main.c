@@ -1010,7 +1010,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	khashes = hashes_done / 1000.0;
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
 
-	if (thr_id >= 0) {
+	if (thr_id >= 0 && secs) {
 		/* So we can call hashmeter from a non worker thread */
 		struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 
