@@ -532,7 +532,6 @@ static inline void print_status(int thr_id)
 
 	if (unlikely(!curses_active))
 		return;
-	getyx(mainwin, logcursor, x);
 
 	move(2,0);
 	printw("Totals: %s", statusline);
@@ -566,11 +565,10 @@ static inline void print_status(int thr_id)
 
 static void refresh_display(void)
 {
-	int i, x, maxy;
+	int i, x;
 
 	if (unlikely(!curses_active))
 		return;
-	getyx(mainwin, logcursor, x);
 
 	move(0,0);
 	attron(A_BOLD);
@@ -586,7 +584,6 @@ static void refresh_display(void)
 	move(logstart, 0);
 	clrtoeol();
 	hline('-', 80);
-	move(logcursor, 0);
 
 	for (i = 0; i < mining_threads; i++)
 		print_status(i);
@@ -597,16 +594,17 @@ static void refresh_display(void)
 
 void log_curses(const char *f, va_list ap)
 {
-	int i, x, maxy;
+	int x;
 
 	if (unlikely(!curses_active))
 		return;
-	vw_printw(mainwin, f, ap);
-	clrtoeol();
-	getyx(mainwin, logcursor, x);
 
 	/* Scroll log output downwards */
-	getmaxyx(mainwin, maxy, x);
+	getmaxyx(mainwin, logcursor, x);
+	move(--logcursor, 0);
+	vw_printw(mainwin, f, ap);
+	clrtoeol();
+
 	refresh_display();
 }
 
@@ -1994,6 +1992,7 @@ int main (int argc, char *argv[])
 	idlok(mainwin, true);
 	scrollok(mainwin, true);
 	curses_active = true;
+	getmaxyx(mainwin, logcursor, i);
 	move(logcursor, 0);
 	refresh_display();
 
