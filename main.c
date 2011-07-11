@@ -518,7 +518,7 @@ static inline int cpu_from_thr_id(int thr_id)
 	return (thr_id - gpu_threads) % num_processors;
 }
 
-static WINDOW * mainwin;
+static WINDOW *mainwin, *statuswin, *logwin;
 static double total_secs = 0.1;
 static char statusline[256];
 static int cpucursor, gpucursor, logstart, logcursor;
@@ -532,79 +532,63 @@ static inline void print_status(int thr_id)
 	if (unlikely(!curses_active))
 		return;
 
-	move(2,0);
-	printw("Totals: %s", statusline);
-	clrtoeol();
+	wmove(statuswin, 0, 0);
+	wattron(statuswin, A_BOLD);
+	wprintw(statuswin, PROGRAM_NAME " version " VERSION);
+	wattroff(statuswin, A_BOLD);
+	wmove(statuswin, 1, 0);
+	whline(statuswin, '-', 80);
+	wmove(statuswin, 2,0);
+	wprintw(statuswin, "Totals: %s", statusline);
+	wclrtoeol(statuswin);
+	wmove(statuswin, 3, 0);
+	whline(statuswin, '-', 80);
+	wmove(statuswin, logstart - 1, 0);
+	whline(statuswin, '-', 80);
 
 	if (thr_id >= 0 && thr_id < gpu_threads) {
 		int gpu = gpu_from_thr_id(thr_id);
 		struct cgpu_info *cgpu = &gpus[gpu];
 
-		move(gpucursor + gpu, 0);
-		printw("GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]          ",
+		wmove(statuswin, gpucursor + gpu, 0);
+		wprintw(statuswin, "GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 			gpu, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
-		clrtoeol();
+		wclrtoeol(statuswin);
 	} else if (thr_id >= gpu_threads) {
 		int cpu = cpu_from_thr_id(thr_id);
 		struct cgpu_info *cgpu = &cpus[cpu];
 
-		move(cpucursor + cpu, 0);
-		printw("CPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+		wmove(statuswin, cpucursor + cpu, 0);
+		wprintw(statuswin, "CPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 			cpu, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
-		clrtoeol();
+		wclrtoeol(statuswin);
 	}
 
-	move(logcursor, 0);
-	refresh();
-}
-
-static void refresh_display(void)
-{
-	int i, x;
-
-	if (unlikely(!curses_active))
-		return;
-
-	move(0,0);
-	attron(A_BOLD);
-	printw(PROGRAM_NAME " version " VERSION);
-	attroff(A_BOLD);
-	clrtoeol();
-	move(1, 0);
-	clrtoeol();
-	hline('-', 80);
-	move(3, 0);
-	clrtoeol();
-	hline('-', 80);
-	move(logstart, 0);
-	clrtoeol();
-	hline('-', 80);
-
-	for (i = 0; i < mining_threads; i++)
-		print_status(i);
-
-	move(logcursor, 0);
-	redrawwin(mainwin);
+	wrefresh(statuswin);
 }
 
 void log_curses(const char *f, va_list ap)
 {
-	int x;
+	int x, y, logx, logy;
 
 	if (unlikely(!curses_active))
 		return;
 
-	/* Scroll log output downwards */
-	getmaxyx(mainwin, logcursor, x);
-	move(--logcursor, 0);
-	vw_printw(mainwin, f, ap);
-	clrtoeol();
-
-	refresh_display();
+	getmaxyx(mainwin, y, x);
+	getmaxyx(logwin, logy, logx);
+	y -= logcursor;
+	/* Detect screen size change */
+	if (x != logx || y != logy) {
+		wresize(logwin, y, x);
+		redrawwin(logwin);
+		redrawwin(statuswin);
+	}
+	vw_printw(logwin, f, ap);
+	wrefresh(logwin);
 }
 
 static bool submit_fail = false;
@@ -1736,7 +1720,7 @@ static void *wakeup_thread(void *userdata)
 int main (int argc, char *argv[])
 {
 	struct thr_info *thr;
-	unsigned int i, j = 0;
+	unsigned int i, j = 0, x, y;
 	char name[32];
 
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
@@ -1804,7 +1788,7 @@ int main (int argc, char *argv[])
 	mining_threads = opt_n_threads + gpu_threads;
 	gpucursor = logcursor;
 	cpucursor = gpucursor + nDevs;
-	logstart = cpucursor + (opt_n_threads ? num_processors : 0);
+	logstart = cpucursor + (opt_n_threads ? num_processors : 0) + 1;
 	logcursor = logstart + 1;
 
 	if (!rpc_userpass) {
@@ -1982,16 +1966,17 @@ int main (int argc, char *argv[])
 	pthread_mutex_unlock(&hash_lock);
 
 	/* Set up the ncurses interface */
-	if ((mainwin = initscr()) == NULL) {
-		applog(LOG_ERR, "Failed to initscr");
-		return 1;
-	}
-	idlok(mainwin, true);
-	scrollok(mainwin, true);
+	mainwin = initscr();
+	statuswin = newwin(logstart, 80, 0, 0);
+	getmaxyx(mainwin, y, x);
+	logwin = newwin(y - logcursor, 0, logcursor, 0);
+	idlok(logwin, true);
+	scrollok(logwin, true);
+	leaveok(logwin, true);
+	leaveok(statuswin, true);
 	curses_active = true;
-	getmaxyx(mainwin, logcursor, i);
-	move(logcursor, 0);
-	refresh_display();
+	for (i = 0; i < mining_threads; i++)
+		print_status(i);
 
 	/* Now that everything's ready put enough work in the queue */
 	for (i = 0; i < opt_queue + mining_threads; i++) {
@@ -2011,7 +1996,8 @@ int main (int argc, char *argv[])
 
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
-	delwin(mainwin);
+	delwin(logwin);
+	delwin(statuswin);
 	endwin();
 	refresh();
 
