@@ -11,6 +11,8 @@
 
 #include "config.h"
 
+#include <curses.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +30,6 @@
 #include <ccan/opt/opt.h>
 #include <jansson.h>
 #include <curl/curl.h>
-#include <curses.h>
 #include "compat.h"
 #include "miner.h"
 #include "findnonce.h"
