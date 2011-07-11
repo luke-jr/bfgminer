@@ -1902,13 +1902,8 @@ int main (int argc, char *argv[])
 		return 1;
 	}
 
-	/* Put enough work in the queue */
-	for (i = 0; i < opt_queue + mining_threads; i++) {
-		if (unlikely(!queue_request())) {
-			applog(LOG_ERR, "Failed to queue_request in main");
-			return 1;
-		}
-	}
+	/* Flag the work as ready forcing the mining threads to wait till we
+	 * actually put something into the queue */
 	inc_staged(mining_threads, true);
 
 #ifdef HAVE_OPENCL
@@ -2004,6 +1999,14 @@ int main (int argc, char *argv[])
 	curses_active = true;
 	move(logcursor, 0);
 	refresh_display();
+
+	/* Now that everything's ready put enough work in the queue */
+	for (i = 0; i < opt_queue + mining_threads; i++) {
+		if (unlikely(!queue_request())) {
+			applog(LOG_ERR, "Failed to queue_request in main");
+			return 1;
+		}
+	}
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
