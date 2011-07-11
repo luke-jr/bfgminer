@@ -71,14 +71,11 @@ void vapplog(int prio, const char *fmt, va_list ap)
 		char *f;
 		int len;
 		struct timeval tv = { };
-		struct tm tm, *tm_p;
+		struct tm tm;
 
 		gettimeofday(&tv, NULL);
 
-		pthread_mutex_lock(&time_lock);
-		tm_p = localtime(&tv.tv_sec);
-		memcpy(&tm, tm_p, sizeof(tm));
-		pthread_mutex_unlock(&time_lock);
+		localtime_r(&tv.tv_sec, &tm);
 
 		len = 40 + strlen(fmt) + 2;
 		f = alloca(len);

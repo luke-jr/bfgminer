@@ -226,7 +226,6 @@ struct work_restart {
 	char			padding[128 - sizeof(unsigned long)];
 };
 
-extern pthread_mutex_t time_lock;
 extern int hw_errors;
 extern bool use_syslog;
 extern struct thr_info *thr_info;

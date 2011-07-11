@@ -153,7 +153,6 @@ static int work_thr_id;
 int longpoll_thr_id;
 static int stage_thr_id;
 struct work_restart *work_restart = NULL;
-pthread_mutex_t time_lock;
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t stgd_lock;
@@ -1740,8 +1739,6 @@ int main (int argc, char *argv[])
 	unsigned int i, j = 0;
 	char name[32];
 
-	if (unlikely(pthread_mutex_init(&time_lock, NULL)))
-		return 1;
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
 		return 1;
 	if (unlikely(pthread_mutex_init(&qd_lock, NULL)))
