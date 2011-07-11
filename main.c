@@ -1798,7 +1798,6 @@ int main (int argc, char *argv[])
 			}
 		gpu_threads = total_devices * opt_g_threads;
 	} else {
-		total_devices = nDevs;
 		gpu_threads = nDevs * opt_g_threads;
 		for (i = 0; i < nDevs; i++)
 			gpu_devices[i] = true;
@@ -1812,7 +1811,7 @@ int main (int argc, char *argv[])
 	logcursor = 4;
 	mining_threads = opt_n_threads + gpu_threads;
 	gpucursor = logcursor;
-	cpucursor = gpucursor + total_devices;
+	cpucursor = gpucursor + nDevs;
 	logstart = cpucursor + (opt_n_threads ? num_processors : 0);
 	logcursor = logstart + 1;
 
