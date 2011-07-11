@@ -537,7 +537,7 @@ static inline void print_status(int thr_id)
 	printw("Totals: %s", statusline);
 	clrtoeol();
 
-	if (thr_id && thr_id < gpu_threads) {
+	if (thr_id >= 0 && thr_id < gpu_threads) {
 		int gpu = gpu_from_thr_id(thr_id);
 		struct cgpu_info *cgpu = &gpus[gpu];
 
@@ -547,7 +547,7 @@ static inline void print_status(int thr_id)
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
 		clrtoeol();
-	} else if (thr_id && thr_id >= gpu_threads) {
+	} else if (thr_id >= gpu_threads) {
 		int cpu = cpu_from_thr_id(thr_id);
 		struct cgpu_info *cgpu = &cpus[cpu];
 
