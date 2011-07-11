@@ -1740,7 +1740,7 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_OPENCL
 	for (i = 0; i < 16; i++)
-		gpu_devices[true] = false;
+		gpu_devices[i] = false;
 	nDevs = clDevicesNum();
 	if (nDevs < 0)
 		return 1;
