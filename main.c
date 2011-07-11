@@ -607,10 +607,7 @@ void log_curses(const char *f, va_list ap)
 
 	/* Scroll log output downwards */
 	getmaxyx(mainwin, maxy, x);
-	if (logcursor >= maxy - 1)
-		refresh_display();
-	else
-		refresh();
+	refresh_display();
 }
 
 static bool submit_fail = false;
