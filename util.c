@@ -90,12 +90,15 @@ void vapplog(int prio, const char *fmt, va_list ap)
 			tm.tm_min,
 			tm.tm_sec,
 			fmt);
-		log_curses(f, ap);
 		/* Only output to stderr if it's not going to the screen as well */
 		if (opt_log_output && !isatty(fileno((FILE *)stderr))) {
-			vfprintf(stderr, f, ap);	/* atomic write to stderr */
+			va_list apc;
+
+			va_copy(apc, ap);
+			vfprintf(stderr, f, apc);	/* atomic write to stderr */
 			fflush(stderr);
 		}
+		log_curses(f, ap);
 	}
 }
 
