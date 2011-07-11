@@ -22,7 +22,7 @@ cgminer_SOURCES	= elist.h miner.h compat.h			\
 		  sha256_cryptopp.c sha256_sse2_amd64.c
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
-cgminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ @NCURSES_LIBS@ lib/libgnu.a ccan/libccan.a
+cgminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ lib/libgnu.a ccan/libccan.a
 cgminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ -I$(top_builddir)/lib -I$(top_srcdir)/lib
 
 if HAVE_x86_64
