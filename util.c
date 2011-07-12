@@ -284,6 +284,12 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		goto err_out;
 	}
 
+	if (!all_data.buf) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Empty data received in json_rpc_call.");
+		goto err_out;
+	}
+
 	/* If X-Long-Polling was found, activate long polling */
 	if (hi.lp_path) {
 		have_longpoll = true;
