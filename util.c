@@ -22,6 +22,7 @@
 #include <time.h>
 #include <curses.h>
 #include <errno.h>
+#include <unistd.h>
 #include "miner.h"
 #include "elist.h"
 
