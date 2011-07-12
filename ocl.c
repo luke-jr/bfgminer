@@ -339,9 +339,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	 */
 	char binaryfilename[255];
 	char numbuf[10];
-	char filename[10];
+	char filename[15];
 	if (clState->hasBitAlign)
-		strcpy(filename, "phatk.cl");
+		strcpy(filename, "phatk110711.cl");
 	else
 		strcpy(filename, "poclbm.cl");
 	FILE *binaryfile;
@@ -370,7 +370,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	strcpy(binaryfilename, name);
 	if (clState->hasBitAlign) {
-		strcat(binaryfilename, "phatk");
+		strcat(binaryfilename, "phatk110711");
 		strcat(binaryfilename, "bitalign");
 	} else
 		strcat(binaryfilename, "poclbm");
