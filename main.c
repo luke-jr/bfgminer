@@ -1706,16 +1706,18 @@ static void *wakeup_thread(void *userdata)
 
 		hashmeter(-1, &zero_tv, 0);
 
-		pthread_mutex_lock(&curses_lock);
-		getmaxyx(mainwin, y, x);
-		getmaxyx(logwin, logy, logx);
-		y -= logcursor;
-		/* Detect screen size change */
-		if (x != logx || y != logy)
-			wresize(logwin, y, x);
-		redrawwin(logwin);
-		redrawwin(statuswin);
-		pthread_mutex_unlock(&curses_lock);
+		if (curses_active) {
+			pthread_mutex_lock(&curses_lock);
+			getmaxyx(mainwin, y, x);
+			getmaxyx(logwin, logy, logx);
+			y -= logcursor;
+			/* Detect screen size change */
+			if (x != logx || y != logy)
+				wresize(logwin, y, x);
+			redrawwin(logwin);
+			redrawwin(statuswin);
+			pthread_mutex_unlock(&curses_lock);
+		}
 
 		if (unlikely(work_restart[stage_thr_id].restart)) {
 			restart_threads(false);
@@ -1976,17 +1978,19 @@ int main (int argc, char *argv[])
 	pthread_mutex_unlock(&hash_lock);
 
 	/* Set up the ncurses interface */
-	mainwin = initscr();
-	statuswin = newwin(logstart, 80, 0, 0);
-	getmaxyx(mainwin, y, x);
-	logwin = newwin(y - logcursor, 0, logcursor, 0);
-	idlok(logwin, true);
-	scrollok(logwin, true);
-	leaveok(logwin, true);
-	leaveok(statuswin, true);
-	curses_active = true;
-	for (i = 0; i < mining_threads; i++)
-		print_status(i);
+	if (!opt_quiet) {
+		mainwin = initscr();
+		statuswin = newwin(logstart, 80, 0, 0);
+		getmaxyx(mainwin, y, x);
+		logwin = newwin(y - logcursor, 0, logcursor, 0);
+		idlok(logwin, true);
+		scrollok(logwin, true);
+		leaveok(logwin, true);
+		leaveok(statuswin, true);
+		curses_active = true;
+		for (i = 0; i < mining_threads; i++)
+			print_status(i);
+	}
 
 	/* Now that everything's ready put enough work in the queue */
 	for (i = 0; i < opt_queue + mining_threads; i++) {
@@ -2006,10 +2010,12 @@ int main (int argc, char *argv[])
 
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
-	delwin(logwin);
-	delwin(statuswin);
-	endwin();
-	refresh();
+	if (curses_active) {
+		delwin(logwin);
+		delwin(statuswin);
+		endwin();
+		refresh();
+	}
 
 	return 0;
 }
