@@ -879,12 +879,6 @@ static void *stage_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 	bool ok = true;
-	unsigned int i;
-
-	for (i = 0; i < 36; i++) {
-		strcat(current_block, "0");
-		strcat(blank, "0");
-	}
 
 	while (ok) {
 		struct work *work = NULL;
@@ -1617,7 +1611,6 @@ static void *longpoll_thread(void *userdata)
 	char *copy_start, *hdr_path, *lp_url = NULL;
 	bool need_slash = false;
 	int failures = 0;
-	unsigned int i;
 
 	hdr_path = tq_pop(mythr->q, NULL);
 	if (!hdr_path)
@@ -1649,9 +1642,6 @@ static void *longpoll_thread(void *userdata)
 		applog(LOG_ERR, "CURL initialisation failed");
 		goto out;
 	}
-
-	for (i = 0; i < 36; i++)
-		strcat(longpoll_block, "0");
 
 	while (1) {
 		json_t *val;
@@ -1747,6 +1737,13 @@ int main (int argc, char *argv[])
 		return 1;
 	if (unlikely(pthread_mutex_init(&curses_lock, NULL)))
 		return 1;
+
+	for (i = 0; i < 36; i++) {
+		strcat(blank, "0");
+		strcat(current_block, "0");
+		strcat(longpoll_block, "0");
+	}
+
 
 #ifdef WIN32
 	opt_n_threads = num_processors = 1;
