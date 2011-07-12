@@ -1149,6 +1149,8 @@ static void flush_requests(bool longpoll)
 
 static bool get_work(struct work *work, bool queued)
 {
+	struct timeval now;
+	struct timespec abstime = {};
 	struct thr_info *thr = &thr_info[0];
 	struct work *work_heap;
 	bool ret = false;
@@ -1157,6 +1159,9 @@ static bool get_work(struct work *work, bool queued)
 	getwork_requested++;
 
 retry:
+	gettimeofday(&now, NULL);
+	abstime.tv_sec = now.tv_sec + 60;
+
 	if (unlikely(!queued && !queue_request())) {
 		applog(LOG_WARNING, "Failed to queue_request in get_work");
 		goto out;
@@ -1181,10 +1186,12 @@ retry:
 		applog(LOG_WARNING, "Resumed retrieving work from server");
 	}
 
-	/* wait for 1st response, or get cached response */
-	work_heap = tq_pop(thr->q, NULL);
+	/* Wait for 1st response, or get cached response. We really should
+	 * never time out on the pop request but something might go amiss :/
+	 */
+	work_heap = tq_pop(thr->q, &abstime);
 	if (unlikely(!work_heap)) {
-		applog(LOG_WARNING, "Failed to tq_pop in get_work");
+		applog(LOG_INFO, "Failed to tq_pop in get_work");
 		goto out;
 	}
 	dec_queued();
