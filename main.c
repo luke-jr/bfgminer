@@ -156,6 +156,7 @@ struct work_restart *work_restart = NULL;
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t stgd_lock;
+static pthread_mutex_t curses_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static int accepted, rejected;
@@ -532,6 +533,7 @@ static inline void print_status(int thr_id)
 	if (unlikely(!curses_active))
 		return;
 
+	pthread_mutex_lock(&curses_lock);
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
 	wprintw(statuswin, PROGRAM_NAME " version " VERSION);
@@ -569,26 +571,18 @@ static inline void print_status(int thr_id)
 	}
 
 	wrefresh(statuswin);
+	pthread_mutex_unlock(&curses_lock);
 }
 
 void log_curses(const char *f, va_list ap)
 {
-	int x, y, logx, logy;
-
 	if (unlikely(!curses_active))
 		return;
 
-	getmaxyx(mainwin, y, x);
-	getmaxyx(logwin, logy, logx);
-	y -= logcursor;
-	/* Detect screen size change */
-	if (x != logx || y != logy) {
-		wresize(logwin, y, x);
-		redrawwin(logwin);
-		redrawwin(statuswin);
-	}
+	pthread_mutex_lock(&curses_lock);
 	vw_printw(logwin, f, ap);
 	wrefresh(logwin);
+	pthread_mutex_unlock(&curses_lock);
 }
 
 static bool submit_fail = false;
@@ -1704,10 +1698,25 @@ static void *wakeup_thread(void *userdata)
 	memset(&zero_tv, 0, sizeof(struct timeval));
 
 	while (1) {
+		int x, y, logx, logy;
+
 		sleep(interval);
 		if (requests_queued() < opt_queue)
 			queue_request();
+
 		hashmeter(-1, &zero_tv, 0);
+
+		pthread_mutex_lock(&curses_lock);
+		getmaxyx(mainwin, y, x);
+		getmaxyx(logwin, logy, logx);
+		y -= logcursor;
+		/* Detect screen size change */
+		if (x != logx || y != logy)
+			wresize(logwin, y, x);
+		redrawwin(logwin);
+		redrawwin(statuswin);
+		pthread_mutex_unlock(&curses_lock);
+
 		if (unlikely(work_restart[stage_thr_id].restart)) {
 			restart_threads(false);
 			work_restart[stage_thr_id].restart = 0;
@@ -1729,7 +1738,8 @@ int main (int argc, char *argv[])
 		return 1;
 	if (unlikely(pthread_mutex_init(&stgd_lock, NULL)))
 		return 1;
-
+	if (unlikely(pthread_mutex_init(&curses_lock, NULL)))
+		return 1;
 
 #ifdef WIN32
 	opt_n_threads = num_processors = 1;
