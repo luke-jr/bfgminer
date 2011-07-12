@@ -528,8 +528,6 @@ static struct cgpu_info *gpus, *cpus;
 
 static inline void print_status(int thr_id)
 {
-	int x;
-
 	if (unlikely(!curses_active))
 		return;
 
