@@ -421,7 +421,7 @@ static char *load_config(const char *arg, void *unused)
 	json_error_t err;
 	json_t *config;
 
-	config = json_load_file(arg, &err);
+	config = json_load_file(arg, 0, &err);
 	if (!json_is_object(config))
 		return "JSON decode of file failed";
 

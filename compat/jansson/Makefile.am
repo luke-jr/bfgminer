@@ -3,6 +3,7 @@ noinst_LIBRARIES	= libjansson.a
 
 libjansson_a_SOURCES	= \
 			  config.h		\
+			  jansson_config.h	\
 			  dump.c		\
 			  hashtable.c		\
 			  hashtable.h		\
@@ -14,5 +15,7 @@ libjansson_a_SOURCES	= \
 			  utf.c			\
 			  utf.h			\
 			  util.h		\
-			  value.c
+			  value.c		\
+			  memory.c		\
+			  error.c
 
