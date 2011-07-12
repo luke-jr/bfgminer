@@ -84,7 +84,7 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 {
 	u W[124];
 	u Vals[8];
-	uint it;
+	uint it = get_local_id(0);
 
 	Vals[1] = B1;
 	Vals[2] = C1;
