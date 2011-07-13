@@ -310,9 +310,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, &opt_device,
 	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
-	OPT_WITHOUT_ARG("--no-dynamic|-n",
-			opt_set_invbool, &opt_dynamic,
-			"Disable dynamic adjustment of intensity which normally maintains desktop interactivity"),
 	OPT_WITH_ARG("--gpu-threads|-g",
 		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (0 - 10)"),
@@ -323,6 +320,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
+#ifdef HAVE_OPENCL
+	OPT_WITHOUT_ARG("--no-dynamic|-n",
+			opt_set_invbool, &opt_dynamic,
+			"Disable dynamic adjustment of intensity which normally maintains desktop interactivity"),
+#endif
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -454,9 +456,9 @@ static struct opt_table opt_cmdline_table[] = {
 			"\nBuilt with CPU mining support only.\n\n",
 #endif
 			"Print this message"),
-	OPT_WITHOUT_ARG("--ndevs|-n",
+	OPT_WITHOUT_ARG("--ndevs|-e",
 			print_ndevs_and_exit, &nDevs,
-			"Display number of detected GPUs and exit"),
+			"Enumerate number of detected GPUs and exit"),
 	OPT_ENDTABLE
 };
 
