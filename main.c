@@ -124,6 +124,7 @@ static int opt_retries = -1;
 static int opt_fail_pause = 5;
 static int opt_log_interval = 5;
 bool opt_log_output = false;
+static bool opt_dynamic = true;
 static int opt_queue = 1;
 int opt_vectors;
 int opt_worksize;
@@ -309,6 +310,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, &opt_device,
 	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
+	OPT_WITHOUT_ARG("--no-dynamic|-n",
+			opt_set_invbool, &opt_dynamic,
+			"Disable dynamic adjustment of intensity which normally maintains desktop interactivity"),
 	OPT_WITH_ARG("--gpu-threads|-g",
 		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (0 - 10)"),
@@ -1473,6 +1477,12 @@ static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk
 	return status;
 }
 
+static void set_threads_hashes(int vectors, int *threads, int *hashes, size_t *globalThreads)
+{
+	*globalThreads = *threads = 1 << (15 + scan_intensity);
+	*hashes = *threads * vectors;
+}
+
 static void *gpuminer_thread(void *userdata)
 {
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
@@ -1490,9 +1500,9 @@ static void *gpuminer_thread(void *userdata)
 	const cl_kernel *kernel = &clState->kernel;
 
 	struct work *work = malloc(sizeof(struct work));
-	unsigned const int threads = 1 << (15 + scan_intensity);
+	unsigned int threads = 1 << (15 + scan_intensity);
 	unsigned const int vectors = clState->preferred_vwidth;
-	unsigned const int hashes = threads * vectors;
+	unsigned int hashes = threads * vectors;
 	unsigned int hashes_done = 0;
 
 	/* Request the next work item at 2/3 of the scantime */
@@ -1517,10 +1527,33 @@ static void *gpuminer_thread(void *userdata)
 	gettimeofday(&tv_end, NULL);
 
 	while (1) {
-		struct timeval tv_workstart;
+		struct timeval tv_workstart, tv_gpustart, tv_gpuend;
+		suseconds_t gpu_us;
+		double gpu_ms_average;
 
+		gettimeofday(&tv_gpustart, NULL);
+		timeval_subtract(&diff, &tv_gpustart, &tv_gpuend);
 		/* This finish flushes the readbuffer set with CL_FALSE later */
 		clFinish(clState->commandQueue);
+		gettimeofday(&tv_gpuend, NULL);
+		timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
+		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
+		gpu_ms_average = ((gpu_us / 1000) + gpu_ms_average * 0.9) / 1.9;
+		if (opt_dynamic) {
+			/* Try to not let the GPU be out for longer than 6ms, but
+			 * increase intensity when the system is idle, unless
+			 * dynamic is disabled. */
+			if (gpu_ms_average > 7) {
+				if (scan_intensity > 0)
+					scan_intensity--;
+				set_threads_hashes(vectors, &threads, &hashes, globalThreads);
+			} else if (gpu_ms_average < 3) {
+				if (scan_intensity < 14)
+					scan_intensity++;
+				set_threads_hashes(vectors, &threads, &hashes, globalThreads);
+			}
+		}
+
 		if (diff.tv_sec > opt_scantime  || work->blk.nonce >= MAXTHREADS - hashes || work_restart[thr_id].restart) {
 			/* Ignore any reads since we're getting new work and queue a clean buffer */
 			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
