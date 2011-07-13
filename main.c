@@ -1759,8 +1759,7 @@ static void reinit_gputhread(int thr_id)
 	clStates[thr_id] = initCl(gpu, name, sizeof(name));
 	if (!clStates[thr_id]) {
 		applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
-		kill_work();
-		return;
+		goto failed_out;
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 
