@@ -2106,8 +2106,8 @@ int main (int argc, char *argv[])
 	/* Set up the ncurses interface */
 	if (!opt_quiet) {
 		mainwin = initscr();
-		statuswin = newwin(logstart, 80, 0, 0);
 		getmaxyx(mainwin, y, x);
+		statuswin = newwin(logstart, x, 0, 0);
 		logwin = newwin(y - logcursor, 0, logcursor, 0);
 		idlok(logwin, true);
 		scrollok(logwin, true);
