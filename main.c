@@ -977,6 +977,11 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	static double local_mhashes_done = 0;
 	static double rolling_local = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+
+	/* Update the last time this thread reported in */
+	if (thr_id >= 0)
+		gettimeofday(&thr_info[thr_id].last, NULL);
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_quiet || !opt_log_interval)
@@ -987,8 +992,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	if (thr_id >= 0 && secs) {
 		/* So we can call hashmeter from a non worker thread */
-		struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
-
 		if (opt_debug)
 			applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
 				thr_id, hashes_done, hashes_done / secs);
@@ -1265,6 +1268,8 @@ static void *miner_thread(void *userdata)
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
 
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
 	 * error if it fails */
@@ -1495,6 +1500,8 @@ static void *gpuminer_thread(void *userdata)
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
 
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
 	res = calloc(BUFFERSIZE, 1);
 	blank_res = calloc(BUFFERSIZE, 1);
 
@@ -1698,8 +1705,95 @@ out:
 	return NULL;
 }
 
-/* Makes sure the hashmeter keeps going even if mining threads stall */
-static void *wakeup_thread(void *userdata)
+static void reinit_cputhread(int thr_id)
+{
+	int cpu = cpu_from_thr_id(thr_id);
+	struct thr_info *thr = &thr_info[thr_id];
+
+	tq_freeze(thr->q);
+	if (unlikely(pthread_cancel(thr->pth))) {
+		applog(LOG_ERR, "Failed to pthread_cancel in reinit_gputhread");
+		goto failed_out;
+	}
+
+	if (unlikely(pthread_join(thr->pth, NULL))) {
+		applog(LOG_ERR, "Failed to pthread_join in reinit_gputhread");
+		goto failed_out;
+	}
+
+	applog(LOG_INFO, "Reinit CPU thread %d", thr_id);
+	tq_thaw(thr->q);
+
+	gettimeofday(&thr->last, NULL);
+
+	if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr))) {
+		applog(LOG_ERR, "thread %d create failed", thr_id);
+		goto failed_out;
+	}
+	return;
+
+failed_out:
+	kill_work();
+}
+
+#ifdef HAVE_OPENCL
+static void reinit_gputhread(int thr_id)
+{
+	int gpu = gpu_from_thr_id(thr_id);
+	struct thr_info *thr = &thr_info[thr_id];
+	char name[256];
+
+	tq_freeze(thr->q);
+	if (unlikely(pthread_cancel(thr->pth))) {
+		applog(LOG_ERR, "Failed to pthread_cancel in reinit_gputhread");
+		goto failed_out;
+	}
+	if (unlikely(pthread_join(thr->pth, NULL))) {
+		applog(LOG_ERR, "Failed to pthread_join in reinit_gputhread");
+		goto failed_out;
+	}
+	free(clStates[thr_id]);
+
+	applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
+	tq_thaw(thr->q);
+	clStates[thr_id] = initCl(gpu, name, sizeof(name));
+	if (!clStates[thr_id]) {
+		applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
+		kill_work();
+		return;
+	}
+	applog(LOG_INFO, "initCl() finished. Found %s", name);
+
+	gettimeofday(&thr->last, NULL);
+
+	if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr))) {
+		applog(LOG_ERR, "thread %d create failed", thr_id);
+		goto failed_out;
+	}
+	return;
+
+failed_out:
+	kill_work();
+}
+
+static void reinit_thread(int thr_id)
+{
+	if (thr_id < gpu_threads)
+		reinit_gputhread(thr_id);
+	else
+		reinit_cputhread(thr_id);
+}
+#else
+static void reinit_thread(int thr_id)
+{
+	reinit_cputhread(thr_id);
+}
+#endif
+
+/* Makes sure the hashmeter keeps going even if mining threads stall, updates
+ * the screen at regular intervals, and restarts threads if they appear to have
+ * died. */
+static void *watchdog_thread(void *userdata)
 {
 	const unsigned int interval = opt_log_interval / 2 ? : 1;
 	struct timeval zero_tv;
@@ -1707,7 +1801,8 @@ static void *wakeup_thread(void *userdata)
 	memset(&zero_tv, 0, sizeof(struct timeval));
 
 	while (1) {
-		int x, y, logx, logy;
+		int x, y, logx, logy, i;
+		struct timeval now;
 
 		sleep(interval);
 		if (requests_queued() < opt_queue)
@@ -1723,8 +1818,8 @@ static void *wakeup_thread(void *userdata)
 			/* Detect screen size change */
 			if (x != logx || y != logy)
 				wresize(logwin, y, x);
-			for (x = 0; x < mining_threads; x++)
-				__print_status(x);
+			for (i = 0; i < mining_threads; i++)
+				__print_status(i);
 			redrawwin(logwin);
 			redrawwin(statuswin);
 			pthread_mutex_unlock(&curses_lock);
@@ -1733,6 +1828,17 @@ static void *wakeup_thread(void *userdata)
 		if (unlikely(work_restart[stage_thr_id].restart)) {
 			restart_threads(false);
 			work_restart[stage_thr_id].restart = 0;
+		}
+
+		gettimeofday(&now, NULL);
+		for (i = 0; i < mining_threads; i++) {
+			struct thr_info *thr = &thr_info[i];
+
+			if (now.tv_sec - thr->last.tv_sec > 60) {
+				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
+				reinit_thread(i);
+				applog(LOG_WARNING, "Thread %d restarted", i);
+			}
 		}
 	}
 
@@ -1743,7 +1849,7 @@ int main (int argc, char *argv[])
 {
 	struct thr_info *thr;
 	unsigned int i, j = 0, x, y;
-	char name[32];
+	char name[256];
 
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
 		return 1;
@@ -1942,11 +2048,12 @@ int main (int argc, char *argv[])
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
 
+		gettimeofday(&thr->last, NULL);
+
 		if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", i);
 			return 1;
 		}
-		pthread_detach(thr->pth);
 		i++;
 	}
 
@@ -1969,11 +2076,12 @@ int main (int argc, char *argv[])
 			return 1;
 		}
 
+		gettimeofday(&thr->last, NULL);
+
 		if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", i);
 			return 1;
 		}
-		pthread_detach(thr->pth);
 	}
 
 	applog(LOG_INFO, "%d cpu miner threads started, "
@@ -1983,7 +2091,7 @@ int main (int argc, char *argv[])
 
 	thr = &thr_info[mining_threads + 2];
 	/* start wakeup thread */
-	if (pthread_create(&thr->pth, NULL, wakeup_thread, NULL)) {
+	if (pthread_create(&thr->pth, NULL, watchdog_thread, NULL)) {
 		applog(LOG_ERR, "wakeup thread create failed");
 		return 1;
 	}

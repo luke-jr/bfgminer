@@ -144,6 +144,7 @@ struct thr_info {
 	pthread_t	pth;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
+	struct timeval last;
 };
 
 static inline uint32_t swab32(uint32_t v)
