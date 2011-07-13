@@ -526,12 +526,9 @@ static int cpucursor, gpucursor, logstart, logcursor;
 static bool curses_active = false;
 static struct cgpu_info *gpus, *cpus;
 
-static inline void print_status(int thr_id)
+/* Must be called with curses mutex lock held and curses_active */
+static inline void __print_status(int thr_id)
 {
-	if (unlikely(!curses_active))
-		return;
-
-	pthread_mutex_lock(&curses_lock);
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
 	wprintw(statuswin, PROGRAM_NAME " version " VERSION);
@@ -567,7 +564,15 @@ static inline void print_status(int thr_id)
 			cgpu->efficiency, cgpu->utility);
 		wclrtoeol(statuswin);
 	}
+}
 
+static void print_status(int thr_id)
+{
+	if (unlikely(!curses_active))
+		return;
+
+	pthread_mutex_lock(&curses_lock);
+	__print_status(thr_id);
 	wrefresh(statuswin);
 	pthread_mutex_unlock(&curses_lock);
 }
@@ -1718,6 +1723,8 @@ static void *wakeup_thread(void *userdata)
 			/* Detect screen size change */
 			if (x != logx || y != logy)
 				wresize(logwin, y, x);
+			for (x = 0; x < mining_threads; x++)
+				__print_status(x);
 			redrawwin(logwin);
 			redrawwin(statuswin);
 			pthread_mutex_unlock(&curses_lock);
