@@ -1644,8 +1644,10 @@ static void *longpoll_thread(void *userdata)
 	}
 
 	while (1) {
+		struct timeval start, end;
 		json_t *val;
 
+		gettimeofday(&start, NULL);
 		val = json_rpc_call(curl, lp_url, rpc_userpass, rpc_req,
 				    false, true);
 		if (likely(val)) {
@@ -1661,6 +1663,13 @@ static void *longpoll_thread(void *userdata)
 			} else
 				applog(LOG_WARNING, "LONGPOLL received - new block detected and work flushed already");
 		} else {
+			/* Some pools regularly drop the longpoll request so
+			 * only see this as longpoll failure if it happens
+			 * immediately and just restart it the rest of the
+			 * time. */
+			gettimeofday(&end, NULL);
+			if (end.tv_sec - start.tv_sec > 30)
+				continue;
 			if (failures++ < 10) {
 				sleep(30);
 				applog(LOG_WARNING,
