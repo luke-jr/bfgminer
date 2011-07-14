@@ -147,15 +147,20 @@ static int opt_n_threads;
 static int mining_threads;
 static int num_processors;
 static int scan_intensity;
+static bool use_curses = true;
+
 static char *rpc_url;
 static char *rpc_userpass;
 static char *rpc_user, *rpc_pass;
+
 struct thr_info *thr_info;
 static int work_thr_id;
 int longpoll_thr_id;
 static int stage_thr_id;
 static int watchdog_thr_id;
+
 struct work_restart *work_restart = NULL;
+
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t stgd_lock;
@@ -361,6 +366,9 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
+	OPT_WITHOUT_ARG("--text-only|-T",
+			opt_set_invbool, &use_curses,
+			"Disable ncurses formatted screen output"),
 	OPT_WITH_ARG("--url|-o",
 		     set_url, opt_show_charp, &rpc_url,
 		     "URL for bitcoin JSON-RPC server"),
@@ -603,14 +611,13 @@ static void print_status(int thr_id)
 
 void log_curses(const char *f, va_list ap)
 {
-	if (!curses_active)
-		vprintf(f, ap);
-	else {
+	if (curses_active) {
 		pthread_mutex_lock(&curses_lock);
 		vw_printw(logwin, f, ap);
 		wrefresh(logwin);
 		pthread_mutex_unlock(&curses_lock);
-	}
+	} else
+		vprintf(f, ap);
 }
 
 static bool submit_fail = false;
@@ -1096,8 +1103,11 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
-	print_status(thr_id);
-	applog(LOG_INFO, "%s", statusline);
+	if (!curses_active) {
+		printf("%s          \r", statusline);
+		fflush(stdout);
+	} else
+		applog(LOG_INFO, "%s", statusline);
 
 	local_mhashes_done = 0;
 out_unlock:
@@ -2293,7 +2303,7 @@ int main (int argc, char *argv[])
 	pthread_mutex_unlock(&hash_lock);
 
 	/* Set up the ncurses interface */
-	if (!opt_quiet) {
+	if (!opt_quiet && use_curses) {
 		mainwin = initscr();
 		getmaxyx(mainwin, y, x);
 		statuswin = newwin(logstart, x, 0, 0);
