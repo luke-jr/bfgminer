@@ -1,4 +1,24 @@
-- Con Kolivas
+
+Version 1.2.5 - July 15, 2011
+
+- Conflicting -n options corrected
+- Setting an intensity with -I disables dynamic intensity setting
+- Removed option to manually disable dynamic intensity
+- Improve display output
+- Implement signal handler and attempt to clean up properly on exit
+- Only restart threads that are not stuck waiting on mandatory getworks
+- Compatibility changes courtesy of Ycros to build on mingw32 and osx
+- Explicitly grab first work item to prevent false positive hardware errors
+due to working on uninitialised work structs
+- Add option for non curses --text-only output
+- Ensure we connect at least once successfully before continuing to retry to
+connect in case url/login parameters were wrong
+- Print an executive summary when cgminer is terminated
+- Make sure to refresh the status window
+
+Versions -> 1.2.4
+
+- Con Kolivas - July 2011. New maintainership of code under cgminer name.
 - Massive rewrite to incorporate GPU mining.
 - Incorporate original oclminer c code.
 - Rewrite gpu mining code to efficient work loops.
@@ -14,6 +34,13 @@
   work.
 - Implement total hash throughput counters, per-card accepted, rejected and
   hw error count.
+- Staging and watchdog threads to prevent fallover.
+- Stale and reject share guarding.
+- Autodetection of new blocks without longpoll.
+- Dynamic setting of intensity to maintain desktop interactivity.
+- Curses interface with generous statistics and information.
+- Local generation of work (xroll ntime) when detecting poor network
+connectivity.
 
 Version 1.0.2
 
