@@ -1925,7 +1925,7 @@ static bool active_device(int thr_id)
 	if (thr_id < gpu_threads) {
 		if (thr_id > nDevs)
 			return false;
-		if (!gpu_devices[thr_id])
+		if (!gpu_devices[dev_from_id(thr_id)])
 			return false;
 	} else if (thr_id > gpu_threads + num_processors)
 		return false;
