@@ -2119,6 +2119,7 @@ int main (int argc, char *argv[])
 		gpu_threads = nDevs * opt_g_threads;
 		for (i = 0; i < nDevs; i++)
 			gpu_devices[i] = true;
+		total_devices = nDevs;
 	}
 
 	if (!gpu_threads && !forced_n_threads) {
