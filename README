@@ -82,3 +82,15 @@ The number of rejected shares
 The number of hardware erorrs
 The efficiency defined as the accepted shares / requested work
 The utility defines as the number of shares / minute
+
+The cgminer status line shows:
+ TQ: 1  ST: 1  LS: 0  SS: 0  DW: 0  LW: 8  LO: 1  RF: 1  I: 2
+
+TQ is Total Queued work items.
+ST is STaged work items (ready to use).
+LS is Longpoll Staged work items (mandatory new work)
+DW is Discarded Work items (work from block no longer valid to work on)
+LW is Locally generated Work items (during slow server providing work)
+LO is Local generation Occasions (server slow to provide work)
+RF is Remote Fail occasions (server slow to accept work)
+I is current Intensity (changes in dynamic mode).

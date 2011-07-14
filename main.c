@@ -564,7 +564,12 @@ static void curses_print_status(int thr_id)
 	wmove(statuswin, 2,0);
 	wprintw(statuswin, " %s", statusline);
 	wclrtoeol(statuswin);
-	wmove(statuswin, 3, 0);
+	wmove(statuswin, 4,0);
+	wprintw(statuswin, " TQ: %d  ST: %d  LS: %d  SS: %d  DW: %d  LW: %d  LO: %d  RF: %d  I: %d",
+		total_queued, total_staged, lp_staged, stale_shares, discarded_work,
+		local_work, localgen_occasions, remotefail_occasions, scan_intensity);
+	wclrtoeol(statuswin);
+	wmove(statuswin, 5, 0);
 	whline(statuswin, '-', 80);
 	wmove(statuswin, logstart - 1, 0);
 	whline(statuswin, '-', 80);
@@ -2127,7 +2132,7 @@ int main (int argc, char *argv[])
 		opt_n_threads = num_processors;
 	}
 
-	logcursor = 4;
+	logcursor = 6;
 	mining_threads = opt_n_threads + gpu_threads;
 	gpucursor = logcursor;
 	cpucursor = gpucursor + nDevs;
