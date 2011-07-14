@@ -146,7 +146,7 @@ static bool forced_n_threads;
 static int opt_n_threads;
 static int mining_threads;
 static int num_processors;
-static int scan_intensity = 4;
+static int scan_intensity;
 static char *rpc_url;
 static char *rpc_userpass;
 static char *rpc_user, *rpc_pass;
@@ -217,8 +217,9 @@ static char *set_int_0_to_9999(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 9999);
 }
 
-static char *set_int_0_to_14(const char *arg, int *i)
+static char *forced_int_0_to_14(const char *arg, int *i)
 {
+	opt_dynamic = false;
 	return set_int_range(arg, i, 0, 14);
 }
 
@@ -316,17 +317,12 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (0 - 10)"),
 	OPT_WITH_ARG("--intensity|-I",
-		     set_int_0_to_14, opt_show_intval, &scan_intensity,
-		     "Intensity of GPU scanning (0 - 14)"),
+		     forced_int_0_to_14, opt_show_intval, &scan_intensity,
+		     "Intensity of GPU scanning (0 - 14, default: dynamic to maintain desktop interactivity)"),
 #endif
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
-#ifdef HAVE_OPENCL
-	OPT_WITHOUT_ARG("--no-dynamic|-n",
-			opt_set_invbool, &opt_dynamic,
-			"Disable dynamic adjustment of intensity which normally maintains desktop interactivity"),
-#endif
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -440,7 +436,7 @@ static char *load_config(const char *arg, void *unused)
 
 static char *print_ndevs_and_exit(int *ndevs)
 {
-	printf("%i", *ndevs);
+	printf("%i GPU devices detected", *ndevs);
 	exit(*ndevs);
 }
 
@@ -458,7 +454,7 @@ static struct opt_table opt_cmdline_table[] = {
 			"\nBuilt with CPU mining support only.\n\n",
 #endif
 			"Print this message"),
-	OPT_WITHOUT_ARG("--ndevs|-e",
+	OPT_WITHOUT_ARG("--ndevs|-n",
 			print_ndevs_and_exit, &nDevs,
 			"Enumerate number of detected GPUs and exit"),
 	OPT_ENDTABLE
