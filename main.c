@@ -537,12 +537,12 @@ static inline void __print_status(int thr_id)
 {
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
-	wprintw(statuswin, PROGRAM_NAME " version " VERSION);
+	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION);
 	wattroff(statuswin, A_BOLD);
 	wmove(statuswin, 1, 0);
 	whline(statuswin, '-', 80);
 	wmove(statuswin, 2,0);
-	wprintw(statuswin, "Totals: %s", statusline);
+	wprintw(statuswin, " %s", statusline);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 3, 0);
 	whline(statuswin, '-', 80);
@@ -554,7 +554,7 @@ static inline void __print_status(int thr_id)
 		struct cgpu_info *cgpu = &gpus[gpu];
 
 		wmove(statuswin, gpucursor + gpu, 0);
-		wprintw(statuswin, "GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+		wprintw(statuswin, " GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 			gpu, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
@@ -564,7 +564,7 @@ static inline void __print_status(int thr_id)
 		struct cgpu_info *cgpu = &cpus[cpu];
 
 		wmove(statuswin, cpucursor + cpu, 0);
-		wprintw(statuswin, "CPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+		wprintw(statuswin, " CPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 			cpu, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
@@ -602,7 +602,8 @@ static bool submit_upstream_work(const struct work *work)
 	json_t *val, *res;
 	char s[345];
 	bool rc = false;
-	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
+	int thr_id = work->thr_id;
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	CURL *curl = curl_easy_init();
 
 	if (unlikely(!curl)) {
@@ -650,24 +651,24 @@ static bool submit_upstream_work(const struct work *work)
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!opt_quiet)
-			applog(LOG_WARNING, "Share accepted from %sPU %d",
-				cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu);
+			applog(LOG_WARNING, "Share accepted from %sPU %d thread %d",
+				cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 	} else {
 		cgpu->rejected++;
 		rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!opt_quiet)
-			applog(LOG_WARNING, "Share rejected from %sPU %d",
-				cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu);
+			applog(LOG_WARNING, "Share rejected from %sPU %d thread %d",
+				cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 	}
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 	cgpu->efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
 
 	if (!opt_quiet)
-		print_status(work->thr_id);
-	applog(LOG_INFO, "%sPU %d  Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m",
+		print_status(thr_id);
+	applog(LOG_INFO, "%sPU %d  Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
 		cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->getworks, cgpu->accepted,
 		cgpu->rejected, cgpu->hw_errors, cgpu->efficiency, cgpu->utility);
 
@@ -912,9 +913,9 @@ static void *stage_thread(void *userdata)
 		if (likely(strncmp(current_block, blank, 36))) {
 			if (unlikely(strncmp(hexstr, current_block, 36))) {
 				if (want_longpoll)
-					applog(LOG_WARNING, "New block detected, possible missed longpoll, flushing work queue");
+					applog(LOG_WARNING, "New block detected on network before receiving longpoll, flushing work queue");
 				else
-					applog(LOG_WARNING, "New block detected, flushing work queue");
+					applog(LOG_WARNING, "New block detected on network, flushing work queue");
 				/* As we can't flush the work from here, signal
 				 * the wakeup thread to restart all the
 				 * threads */
@@ -1028,13 +1029,11 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = getwork_requested ? accepted * 100.0 / getwork_requested : 0.0;
 
-	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]          ",
+	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
 		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
 	print_status(thr_id);
-	applog(LOG_INFO, "[Rate (%ds):%.1f  (avg):%.2f Mhash/s] [Requested:%d  Accepted:%d  Rejected:%d  HW errors:%d  Efficiency:%.0f%%  Utility:%.2f/m]",
-		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
-		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
+	applog(LOG_INFO, "%s", statusline);
 
 	local_mhashes_done = 0;
 out_unlock:
@@ -1705,10 +1704,10 @@ static void *longpoll_thread(void *userdata)
 			 * sure it's only done once per new block */
 			if (likely(!strncmp(longpoll_block, blank, 36) ||
 				!strncmp(longpoll_block, current_block, 36))) {
-					applog(LOG_WARNING, "LONGPOLL detected new block, flushing work queue");
+					applog(LOG_WARNING, "LONGPOLL detected new block on network, flushing work queue");
 					restart_threads(true);
 			} else
-				applog(LOG_WARNING, "LONGPOLL received - new block detected and work flushed already");
+				applog(LOG_WARNING, "LONGPOLL received after new block already detected");
 		} else {
 			/* Some pools regularly drop the longpoll request so
 			 * only see this as longpoll failure if it happens
