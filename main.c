@@ -1147,6 +1147,11 @@ static bool queue_request(void)
 	struct thr_info *thr = &thr_info[0];
 	struct workio_cmd *wc;
 
+	/* If we've been generating lots of local work we may already have
+	 * enough in the queue */
+	if (requests_queued() >= opt_queue + mining_threads)
+		return true;
+
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
@@ -1163,6 +1168,7 @@ static bool queue_request(void)
 		workio_cmd_free(wc);
 		return false;
 	}
+	getwork_requested++;
 	inc_queued();
 	return true;
 }
@@ -1232,8 +1238,6 @@ static bool get_work(struct work *work, bool queued)
 	struct work *work_heap;
 	bool ret = false;
 	int failures = 0;
-
-	getwork_requested++;
 
 retry:
 	if (unlikely(!queued && !queue_request())) {
