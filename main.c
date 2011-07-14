@@ -940,8 +940,6 @@ static void inc_staged(int inc, bool lp)
 static void dec_staged(int inc)
 {
 	pthread_mutex_lock(&stgd_lock);
-	if (lp_staged)
-		lp_staged -= inc;
 	total_staged -= inc;
 	pthread_mutex_unlock(&stgd_lock);
 }
