@@ -1923,7 +1923,7 @@ static void reinit_thread(int thr_id)
 static bool active_device(int thr_id)
 {
 	if (thr_id < gpu_threads) {
-		if (thr_id > nDevs)
+		if (thr_id >= total_devices)
 			return false;
 		if (!gpu_devices[dev_from_id(thr_id)])
 			return false;
