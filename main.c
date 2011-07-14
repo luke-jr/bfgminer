@@ -1924,8 +1924,16 @@ static void *watchdog_thread(void *userdata)
 		for (i = 0; i < mining_threads; i++) {
 			struct thr_info *thr = &thr_info[i];
 
-			if (now.tv_sec - thr->last.tv_sec > 60) {
+			/* Do not kill threads waiting on longpoll staged work */
+			if (now.tv_sec - thr->last.tv_sec > 60 && !lp_staged) {
 				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
+				/* Create one mandatory work item */
+				inc_staged(1, true);
+				if (unlikely(!queue_request())) {
+					applog(LOG_ERR, "Failed to queue_request in watchdog_thread");
+					kill_work();
+					break;
+				}
 				reinit_thread(i);
 				applog(LOG_WARNING, "Thread %d restarted", i);
 			}
