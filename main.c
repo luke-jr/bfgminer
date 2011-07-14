@@ -170,6 +170,7 @@ static unsigned int getwork_requested;
 static char current_block[37];
 static char longpoll_block[37];
 static char blank[37];
+static char datestamp[40];
 
 static void applog_and_exit(const char *fmt, ...)
 {
@@ -535,7 +536,7 @@ static inline void __print_status(int thr_id)
 {
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
-	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION);
+	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION " - Started: %s", datestamp);
 	wattroff(statuswin, A_BOLD);
 	wmove(statuswin, 1, 0);
 	whline(statuswin, '-', 80);
@@ -1946,6 +1947,7 @@ int main (int argc, char *argv[])
 	struct sigaction handler;
 	struct thr_info *thr;
 	char name[256];
+	struct tm tm;
 
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
 		return 1;
@@ -1959,6 +1961,17 @@ int main (int argc, char *argv[])
 	handler.sa_handler = &sighandler;
 	sigaction(SIGTERM, &handler, 0);
 	sigaction(SIGINT, &handler, 0);
+
+	gettimeofday(&total_tv_start, NULL);
+	gettimeofday(&total_tv_end, NULL);
+	localtime_r(&total_tv_start.tv_sec, &tm);
+	sprintf(datestamp, "[%d-%02d-%02d %02d:%02d:%02d]",
+		tm.tm_year + 1900,
+		tm.tm_mon + 1,
+		tm.tm_mday,
+		tm.tm_hour,
+		tm.tm_min,
+		tm.tm_sec);
 
 	for (i = 0; i < 36; i++) {
 		strcat(blank, "0");
@@ -2083,9 +2096,6 @@ int main (int argc, char *argv[])
 		pthread_detach(thr->pth);
 	} else
 		longpoll_thr_id = -1;
-
-	gettimeofday(&total_tv_start, NULL);
-	gettimeofday(&total_tv_end, NULL);
 
 	if (opt_n_threads ) {
 		cpus = calloc(num_processors, sizeof(struct cgpu_info));
