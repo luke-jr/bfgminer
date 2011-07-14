@@ -1990,7 +1990,7 @@ static void *watchdog_thread(void *userdata)
 static void print_summary(void)
 {
 	struct timeval diff;
-	int hours, mins, secs, i, cpu_gpu = -1;
+	int hours, mins, secs, i;
 	double utility, efficiency = 0.0;
 
 	timeval_subtract(&diff, &total_tv_end, &total_tv_start);
@@ -2024,10 +2024,11 @@ static void print_summary(void)
 
 	printf("Summary of per device statistics:\n\n");
 	for (i = 0; i < mining_threads; i++) {
-		if (thr_info[i].cgpu->cpu_gpu != cpu_gpu) {
-			cpu_gpu = thr_info[i].cgpu->cpu_gpu;
-			text_print_status(i);
-		}
+		if (i < gpu_threads) {
+			if (i < nDevs && gpu_devices[gpu_from_thr_id(i)])
+				print_status(i);
+		} else if (i < gpu_threads + num_processors)
+			print_status(i);
 	}
 	printf("\n");
 }
