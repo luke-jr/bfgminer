@@ -1531,7 +1531,8 @@ static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk
 	return status;
 }
 
-static void set_threads_hashes(int vectors, int *threads, int *hashes, size_t *globalThreads)
+static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
+			       unsigned int *hashes, size_t *globalThreads)
 {
 	*globalThreads = *threads = 1 << (15 + scan_intensity);
 	*hashes = *threads * vectors;
@@ -1796,7 +1797,6 @@ out:
 
 static void reinit_cputhread(int thr_id)
 {
-	int cpu = cpu_from_thr_id(thr_id);
 	struct thr_info *thr = &thr_info[thr_id];
 
 	tq_freeze(thr->q);
