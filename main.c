@@ -530,14 +530,9 @@ err_out:
 	return false;
 }
 
-static inline int gpu_from_thr_id(int thr_id)
+static inline int dev_from_id(int thr_id)
 {
-	return thr_id % nDevs;
-}
-
-static inline int cpu_from_thr_id(int thr_id)
-{
-	return (thr_id - gpu_threads) % num_processors;
+	return thr_info[thr_id].cgpu->cpu_gpu;
 }
 
 static WINDOW *mainwin, *statuswin, *logwin;
@@ -575,7 +570,7 @@ static void curses_print_status(int thr_id)
 	whline(statuswin, '-', 80);
 
 	if (thr_id >= 0 && thr_id < gpu_threads) {
-		int gpu = gpu_from_thr_id(thr_id);
+		int gpu = dev_from_id(thr_id);
 		struct cgpu_info *cgpu = &gpus[gpu];
 
 		wmove(statuswin, gpucursor + gpu, 0);
@@ -585,7 +580,7 @@ static void curses_print_status(int thr_id)
 			cgpu->efficiency, cgpu->utility);
 		wclrtoeol(statuswin);
 	} else if (thr_id >= gpu_threads) {
-		int cpu = cpu_from_thr_id(thr_id);
+		int cpu = dev_from_id(thr_id);
 		struct cgpu_info *cgpu = &cpus[cpu];
 
 		wmove(statuswin, cpucursor + cpu, 0);
@@ -1364,7 +1359,7 @@ static void *miner_thread(void *userdata)
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
 	if (!(opt_n_threads % num_processors))
-		affine_to_cpu(thr_id - gpu_threads, cpu_from_thr_id(thr_id));
+		affine_to_cpu(thr_id - gpu_threads, dev_from_id(thr_id));
 
 	while (1) {
 		struct work work __attribute__((aligned(128)));
@@ -1475,7 +1470,7 @@ static void *miner_thread(void *userdata)
 		/* if nonce found, submit work */
 		if (unlikely(rc)) {
 			if (opt_debug)
-				applog(LOG_DEBUG, "CPU %d found something?", cpu_from_thr_id(thr_id));
+				applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
 			if (unlikely(!submit_work_sync(mythr, &work))) {
 				applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
 				break;
@@ -1693,7 +1688,7 @@ static void *gpuminer_thread(void *userdata)
 			if (unlikely(status != CL_SUCCESS))
 				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 			if (opt_debug)
-				applog(LOG_DEBUG, "GPU %d found something?", gpu_from_thr_id(thr_id));
+				applog(LOG_DEBUG, "GPU %d found something?", dev_from_id(thr_id));
 			postcalc_hash_async(mythr, work, res);
 			memset(res, 0, BUFFERSIZE);
 			clFinish(clState->commandQueue);
@@ -1873,7 +1868,7 @@ failed_out:
 #ifdef HAVE_OPENCL
 static void reinit_gputhread(int thr_id)
 {
-	int gpu = gpu_from_thr_id(thr_id);
+	int gpu = dev_from_id(thr_id);
 	struct thr_info *thr = &thr_info[thr_id];
 	char name[256];
 
@@ -1923,6 +1918,20 @@ static void reinit_thread(int thr_id)
 }
 #endif
 
+/* Determine which are the first threads belonging to a device and if they're
+ * active */
+static bool active_device(int thr_id)
+{
+	if (thr_id < gpu_threads) {
+		if (thr_id > nDevs)
+			return false;
+		if (!gpu_devices[thr_id])
+			return false;
+	} else if (thr_id > gpu_threads + num_processors)
+		return false;
+	return true;
+}
+
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
@@ -1953,8 +1962,10 @@ static void *watchdog_thread(void *userdata)
 			/* Detect screen size change */
 			if (x != logx || y != logy)
 				wresize(logwin, y, x);
-			for (i = 0; i < mining_threads; i++)
-				curses_print_status(i);
+			for (i = 0; i < mining_threads; i++) {
+				if (active_device(i))
+					curses_print_status(i);
+			}
 			redrawwin(logwin);
 			redrawwin(statuswin);
 			pthread_mutex_unlock(&curses_lock);
@@ -2025,10 +2036,7 @@ static void print_summary(void)
 
 	printf("Summary of per device statistics:\n\n");
 	for (i = 0; i < mining_threads; i++) {
-		if (i < gpu_threads) {
-			if (i < nDevs && gpu_devices[gpu_from_thr_id(i)])
-				print_status(i);
-		} else if (i < gpu_threads + num_processors)
+		if (active_device(i))
 			print_status(i);
 	}
 	printf("\n");
@@ -2225,15 +2233,17 @@ int main (int argc, char *argv[])
 
 	/* start GPU mining threads */
 	for (j = 0; j < nDevs * opt_g_threads; j++) {
-		int gpu = gpu_from_thr_id(j);
+		int gpu = j % nDevs;
 
-		/* Skip devices not set to work */
-		if (!gpu_devices[gpu])
-			continue;
-		thr = &thr_info[i];
-		thr->id = i;
 		gpus[gpu].is_gpu = 1;
 		gpus[gpu].cpu_gpu = gpu;
+
+		/* Skip devices not set to mine */
+		if (!gpu_devices[gpu])
+			continue;
+
+		thr = &thr_info[i];
+		thr->id = i;
 		thr->cgpu = &gpus[gpu];
 
 		thr->q = tq_new();
@@ -2264,7 +2274,7 @@ int main (int argc, char *argv[])
 
 	/* start CPU mining threads */
 	for (i = gpu_threads; i < mining_threads; i++) {
-		int cpu = cpu_from_thr_id(i);
+		int cpu = (i - gpu_threads) % num_processors;
 
 		thr = &thr_info[i];
 
