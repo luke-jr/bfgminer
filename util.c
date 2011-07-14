@@ -573,11 +573,8 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 		rc = pthread_cond_timedwait(&tq->cond, &tq->mutex, abstime);
 	else
 		rc = pthread_cond_wait(&tq->cond, &tq->mutex);
-	if (unlikely(rc)) {
-		if (rc == ETIMEDOUT)
-			applog(LOG_WARNING, "Timed out waiting in tq_pop");
+	if (rc)
 		goto out;
-	}
 	if (list_empty(&tq->q))
 		goto out;
 
