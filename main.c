@@ -162,11 +162,19 @@ static pthread_mutex_t stgd_lock;
 static pthread_mutex_t curses_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
+
 static int accepted, rejected;
 int hw_errors;
 static int total_queued, total_staged, lp_staged;
 static bool localgen = false;
 static unsigned int getwork_requested;
+static unsigned int stale_shares;
+static unsigned int discarded_work;
+static unsigned int new_blocks;
+static unsigned int local_work;
+static unsigned int localgen_occasions;
+static unsigned int remotefail_occasions;
+
 static char current_block[37];
 static char longpoll_block[37];
 static char blank[37];
@@ -531,8 +539,18 @@ static int cpucursor, gpucursor, logstart, logcursor;
 static bool curses_active = false;
 static struct cgpu_info *gpus, *cpus;
 
+static void text_print_status(int thr_id)
+{
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+
+	printf(" %sPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]\n",
+	       cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu, cgpu->total_mhashes / total_secs,
+			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->efficiency, cgpu->utility);
+}
+
 /* Must be called with curses mutex lock held and curses_active */
-static inline void __print_status(int thr_id)
+static void curses_print_status(int thr_id)
 {
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
@@ -573,24 +591,26 @@ static inline void __print_status(int thr_id)
 
 static void print_status(int thr_id)
 {
-	if (unlikely(!curses_active))
-		return;
-
-	pthread_mutex_lock(&curses_lock);
-	__print_status(thr_id);
-	wrefresh(statuswin);
-	pthread_mutex_unlock(&curses_lock);
+	if (!curses_active)
+		text_print_status(thr_id);
+	else {
+		pthread_mutex_lock(&curses_lock);
+		curses_print_status(thr_id);
+		wrefresh(statuswin);
+		pthread_mutex_unlock(&curses_lock);
+	}
 }
 
 void log_curses(const char *f, va_list ap)
 {
-	if (unlikely(!curses_active))
-		return;
-
-	pthread_mutex_lock(&curses_lock);
-	vw_printw(logwin, f, ap);
-	wrefresh(logwin);
-	pthread_mutex_unlock(&curses_lock);
+	if (!curses_active)
+		vprintf(f, ap);
+	else {
+		pthread_mutex_lock(&curses_lock);
+		vw_printw(logwin, f, ap);
+		wrefresh(logwin);
+		pthread_mutex_unlock(&curses_lock);
+	}
 }
 
 static bool submit_fail = false;
@@ -631,6 +651,7 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!submit_fail) {
 			submit_fail = true;
+			remotefail_occasions++;
 			applog(LOG_WARNING, "Upstream communication failure, caching submissions");
 		}
 		goto out;
@@ -771,25 +792,15 @@ static void kill_work(void)
 
 }
 
-static void shutdown_cleanup(void)
+static void disable_curses(void)
 {
-	curl_global_cleanup();
-	if (gpu_threads) {
-		gpu_threads = 0;
-		free(gpus);
-	}
-	if (opt_n_threads) {
-		opt_n_threads = 0;
-		free(cpus);
-	}
-
 	if (curses_active) {
+		curses_active = false;
 		delwin(logwin);
 		delwin(statuswin);
 		delwin(mainwin);
 		endwin();
 		refresh();
-		curses_active = false;
 	}
 }
 
@@ -865,6 +876,7 @@ static void *submit_work_thread(void *userdata)
 	}
 	if (unlikely(strncmp(hexstr, current_block, 36))) {
 		applog(LOG_WARNING, "Stale work detected, discarding");
+		stale_shares++;
 		goto out_free;
 	}
 
@@ -872,6 +884,7 @@ static void *submit_work_thread(void *userdata)
 	while (!submit_upstream_work(wc->u.work)) {
 		if (unlikely(strncmp(hexstr, current_block, 36))) {
 			applog(LOG_WARNING, "Stale work detected, discarding");
+			stale_shares++;
 			goto out_free;
 		}
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
@@ -962,6 +975,7 @@ static void *stage_thread(void *userdata)
 		/* current_block is blanked out on successful longpoll */
 		if (likely(strncmp(current_block, blank, 36))) {
 			if (unlikely(strncmp(hexstr, current_block, 36))) {
+				new_blocks++;
 				if (want_longpoll)
 					applog(LOG_WARNING, "New block detected on network before receiving longpoll, flushing work queue");
 				else
@@ -1162,6 +1176,7 @@ static bool discard_request(void)
 	}
 	free(work_heap);
 	dec_queued();
+	discarded_work++;
 	return true;
 }
 
@@ -1227,14 +1242,17 @@ retry:
 		uint32_t ntime;
 
 		/* Only print this message once each time we shift to localgen */
-		if (!localgen)
+		if (!localgen) {
 			applog(LOG_WARNING, "Server not providing work fast enough, generating work locally");
-		localgen = true;
+			localgen = true;
+			localgen_occasions++;
+		}
 		work_ntime = (uint32_t *)(work->data + 68);
 		ntime = be32toh(*work_ntime);
 		ntime++;
 		*work_ntime = htobe32(ntime);
 		ret = true;
+		local_work++;
 		goto out;
 	} else if (localgen) {
 		localgen = false;
@@ -1775,6 +1793,7 @@ static void *longpoll_thread(void *userdata)
 			 * sure it's only done once per new block */
 			if (likely(!strncmp(longpoll_block, blank, 36) ||
 				!strncmp(longpoll_block, current_block, 36))) {
+					new_blocks++;
 					applog(LOG_WARNING, "LONGPOLL detected new block on network, flushing work queue");
 					restart_threads(true);
 			} else
@@ -1924,7 +1943,7 @@ static void *watchdog_thread(void *userdata)
 			if (x != logx || y != logy)
 				wresize(logwin, y, x);
 			for (i = 0; i < mining_threads; i++)
-				__print_status(i);
+				curses_print_status(i);
 			redrawwin(logwin);
 			redrawwin(statuswin);
 			pthread_mutex_unlock(&curses_lock);
@@ -1956,6 +1975,49 @@ static void *watchdog_thread(void *userdata)
 	}
 
 	return NULL;
+}
+
+static void print_summary(void)
+{
+	struct timeval diff;
+	int hours, mins, secs, i, cpu_gpu = -1;
+	double utility, efficiency = 0.0;
+
+	timeval_subtract(&diff, &total_tv_end, &total_tv_start);
+	hours = diff.tv_sec / 3600;
+	mins = (diff.tv_sec % 3600) / 60;
+	secs = diff.tv_sec % 60;
+
+	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
+	efficiency = getwork_requested ? accepted * 100.0 / getwork_requested : 0.0;
+
+	printf("\nSummary of runtime statistics:\n\n");
+	printf("Started at %s\n", datestamp);
+	printf("Runtime: %d hrs : %d mins : %d secs\n", hours, mins, secs);
+	printf("Average hashrate: %.1f Megahash/s\n", total_mhashes_done / total_secs);
+	printf("Queued work requests: %d\n", getwork_requested);
+	printf("Share submissions: %d\n", accepted + rejected);
+	printf("Accepted shares: %d\n", accepted);
+	printf("Rejected shares: %d\n", rejected);
+	printf("Reject ratio: %.1f\n", (double)(rejected * 100) / (double)(accepted + rejected));
+	printf("Hardware errors: %d\n", hw_errors);
+	printf("Efficiency (accepted / queued): %.0f%%\n", efficiency);
+	printf("Utility (accepted shares / min): %.2f/min\n\n", utility);
+	printf("Discarded work due to new blocks: %d\n", discarded_work);
+	printf("Stale submissions discarded due to new blocks: %d\n", stale_shares);
+	printf("Unable to get work from server occasions: %d\n", localgen_occasions);
+	printf("Work items generated locally: %d\n", local_work);
+	printf("Submitting work remotely delay occasions: %d\n", remotefail_occasions);
+	printf("New blocks detected on network: %d\n\n", new_blocks);
+
+	printf("Summary of per device statistics:\n\n");
+	for (i = 0; i < mining_threads; i++) {
+		if (thr_info[i].cgpu->cpu_gpu != cpu_gpu) {
+			cpu_gpu = thr_info[i].cgpu->cpu_gpu;
+			text_print_status(i);
+		}
+	}
+	printf("\n");
 }
 
 int main (int argc, char *argv[])
@@ -2257,7 +2319,16 @@ int main (int argc, char *argv[])
 	pthread_join(thr_info[work_thr_id].pth, NULL);
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
-	shutdown_cleanup();
+	gettimeofday(&total_tv_end, NULL);
+	curl_global_cleanup();
+	disable_curses();
+	if (!opt_quiet)
+		print_summary();
+
+	if (gpu_threads)
+		free(gpus);
+	if (opt_n_threads)
+		free(cpus);
 
 	return 0;
 }
