@@ -1,3 +1,13 @@
+Version 1.2.6 - July 15, 2011
+
+- Put a current system status line beneath the total work status line
+- Fix a counting error that would prevent cgminer from correctly detecting
+situations where getwork was failing - this would cause stalls sometimes
+unrecoverably.
+- Limit the maximum number of requests that can be put into the queue which
+otherwise could get arbitrarily long during a network outage.
+- Only count getworks that are real queue requests.
+
 
 Version 1.2.5 - July 15, 2011
 
