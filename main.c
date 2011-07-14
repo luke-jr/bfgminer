@@ -595,6 +595,7 @@ static void curses_print_status(int thr_id)
 			cgpu->efficiency, cgpu->utility);
 		wclrtoeol(statuswin);
 	}
+	wrefresh(statuswin);
 }
 
 static void print_status(int thr_id)
