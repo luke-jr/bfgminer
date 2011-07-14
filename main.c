@@ -1545,6 +1545,7 @@ static void *gpuminer_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	uint32_t *res, *blank_res;
+	double gpu_ms_average = 7;
 
 	size_t globalThreads[1];
 	size_t localThreads[1];
@@ -1584,7 +1585,6 @@ static void *gpuminer_thread(void *userdata)
 	while (1) {
 		struct timeval tv_workstart, tv_gpustart, tv_gpuend;
 		suseconds_t gpu_us;
-		double gpu_ms_average;
 
 		gettimeofday(&tv_gpustart, NULL);
 		timeval_subtract(&diff, &tv_gpustart, &tv_gpuend);
