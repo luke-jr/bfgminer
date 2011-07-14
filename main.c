@@ -24,6 +24,7 @@
 #include <math.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <signal.h>
 #ifndef WIN32
 #include <sys/resource.h>
 #endif
@@ -153,6 +154,7 @@ struct thr_info *thr_info;
 static int work_thr_id;
 int longpoll_thr_id;
 static int stage_thr_id;
+static int watchdog_thr_id;
 struct work_restart *work_restart = NULL;
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
@@ -732,8 +734,29 @@ static void workio_cmd_free(struct workio_cmd *wc)
 static void kill_work(void)
 {
 	struct workio_cmd *wc;
+	struct thr_info *thr;
+	unsigned int i;
 
 	applog(LOG_INFO, "Received kill message");
+
+	/* Kill the watchdog thread */
+	thr = &thr_info[watchdog_thr_id];
+	pthread_cancel(thr->pth);
+
+	/* Stop the mining threads*/
+	for (i = 0; i < mining_threads; i++) {
+		thr = &thr_info[i];
+		tq_freeze(thr->q);
+		/* No need to check if this succeeds or not */
+		pthread_cancel(thr->pth);
+	}
+
+	/* Stop the others */
+	thr = &thr_info[stage_thr_id];
+	pthread_cancel(thr->pth);
+	thr = &thr_info[longpoll_thr_id];
+	pthread_cancel(thr->pth);
+
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
 		applog(LOG_ERR, "Failed to calloc wc in kill_work");
@@ -748,6 +771,34 @@ static void kill_work(void)
 		applog(LOG_ERR, "Failed to tq_push work in kill_work");
 		exit (1);
 	}
+
+}
+
+static void shutdown_cleanup(void)
+{
+	curl_global_cleanup();
+	if (gpu_threads) {
+		gpu_threads = 0;
+		free(gpus);
+	}
+	if (opt_n_threads) {
+		opt_n_threads = 0;
+		free(cpus);
+	}
+
+	if (curses_active) {
+		delwin(logwin);
+		delwin(statuswin);
+		delwin(mainwin);
+		endwin();
+		refresh();
+		curses_active = false;
+	}
+}
+
+static void sighandler(int sig)
+{
+	kill_work();
 }
 
 static void *get_work_thread(void *userdata)
@@ -891,6 +942,8 @@ static void *stage_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 	bool ok = true;
+
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	while (ok) {
 		struct work *work = NULL;
@@ -1658,6 +1711,8 @@ static void *longpoll_thread(void *userdata)
 	bool need_slash = false;
 	int failures = 0;
 
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
 	hdr_path = tq_pop(mythr->q, NULL);
 	if (!hdr_path)
 		goto out;
@@ -1831,6 +1886,8 @@ static void *watchdog_thread(void *userdata)
 	const unsigned int interval = opt_log_interval / 2 ? : 1;
 	struct timeval zero_tv;
 
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
 	memset(&zero_tv, 0, sizeof(struct timeval));
 
 	while (1) {
@@ -1880,8 +1937,9 @@ static void *watchdog_thread(void *userdata)
 
 int main (int argc, char *argv[])
 {
-	struct thr_info *thr;
 	unsigned int i, j = 0, x, y;
+	struct sigaction handler;
+	struct thr_info *thr;
 	char name[256];
 
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
@@ -1893,12 +1951,15 @@ int main (int argc, char *argv[])
 	if (unlikely(pthread_mutex_init(&curses_lock, NULL)))
 		return 1;
 
+	handler.sa_handler = &sighandler;
+	sigaction(SIGTERM, &handler, 0);
+	sigaction(SIGINT, &handler, 0);
+
 	for (i = 0; i < 36; i++) {
 		strcat(blank, "0");
 		strcat(current_block, "0");
 		strcat(longpoll_block, "0");
 	}
-
 
 #ifdef WIN32
 	opt_n_threads = num_processors = 1;
@@ -2122,7 +2183,8 @@ int main (int argc, char *argv[])
 		opt_n_threads,
 		algo_names[opt_algo]);
 
-	thr = &thr_info[mining_threads + 2];
+	watchdog_thr_id = mining_threads + 2;
+	thr = &thr_info[watchdog_thr_id];
 	/* start wakeup thread */
 	if (pthread_create(&thr->pth, NULL, watchdog_thread, NULL)) {
 		applog(LOG_ERR, "wakeup thread create failed");
@@ -2161,20 +2223,9 @@ int main (int argc, char *argv[])
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
-	curl_global_cleanup();
-	if (gpu_threads)
-		free(gpus);
-	if (opt_n_threads)
-		free(cpus);
-
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
-	if (curses_active) {
-		delwin(logwin);
-		delwin(statuswin);
-		endwin();
-		refresh();
-	}
+	shutdown_cleanup();
 
 	return 0;
 }
