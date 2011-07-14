@@ -1539,7 +1539,7 @@ static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 static void *gpuminer_thread(void *userdata)
 {
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
-	struct timeval tv_start, tv_end, diff;
+	struct timeval tv_start, tv_end, diff, tv_workstart;
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	uint32_t *res, *blank_res;
@@ -1577,11 +1577,28 @@ static void *gpuminer_thread(void *userdata)
 	gettimeofday(&tv_start, NULL);
 	globalThreads[0] = threads;
 	localThreads[0] = clState->work_size;
-	diff.tv_sec = ~0UL;
+	diff.tv_sec = 0;
 	gettimeofday(&tv_end, NULL);
 
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+			BUFFERSIZE, blank_res, 0, NULL, NULL);
+	if (unlikely(status != CL_SUCCESS))
+		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
+	gettimeofday(&tv_workstart, NULL);
+	/* obtain new work from internal workio thread */
+	if (unlikely(!get_work(work, requested))) {
+		applog(LOG_ERR, "work retrieval failed, exiting "
+			"gpu mining thread %d", mythr->id);
+		goto out;
+	}
+	mythr->cgpu->getworks++;
+	work->thr_id = thr_id;
+	requested = false;
+	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
+	work->blk.nonce = 0;
+
 	while (1) {
-		struct timeval tv_workstart, tv_gpustart, tv_gpuend;
+		struct timeval tv_gpustart, tv_gpuend;
 		suseconds_t gpu_us;
 
 		gettimeofday(&tv_gpustart, NULL);
