@@ -15,6 +15,7 @@
 # In projects that use version control, this file can be treated like
 # other built files.
 
+
 # This macro should be invoked from ./configure.ac, in the section
 # "Checks for programs", right after AC_PROG_CC, and certainly before
 # any checks for libraries, header files, types and library functions.
@@ -34,6 +35,9 @@ AC_DEFUN([gl_EARLY],
   # Code from module memmem:
   # Code from module memmem-simple:
   # Code from module multiarch:
+  # Code from module sigaction:
+  # Code from module signal:
+  # Code from module sigprocmask:
   # Code from module stddef:
   # Code from module stdint:
   # Code from module string:
@@ -72,6 +76,19 @@ if test $HAVE_MEMMEM = 0 || test $REPLACE_MEMMEM = 1; then
 fi
 gl_STRING_MODULE_INDICATOR([memmem])
 gl_MULTIARCH
+gl_SIGACTION
+if test $HAVE_SIGACTION = 0; then
+  AC_LIBOBJ([sigaction])
+  gl_PREREQ_SIGACTION
+fi
+gl_SIGNAL_MODULE_INDICATOR([sigaction])
+gl_SIGNAL_H
+gl_SIGNALBLOCKING
+if test $HAVE_POSIX_SIGNALBLOCKING = 0; then
+  AC_LIBOBJ([sigprocmask])
+  gl_PREREQ_SIGPROCMASK
+fi
+gl_SIGNAL_MODULE_INDICATOR([sigprocmask])
 gl_STDDEF_H
 gl_STDINT_H
 gl_HEADER_STRING_H
@@ -222,6 +239,10 @@ AC_DEFUN([gl_FILE_LIST], [
   lib/memchr.c
   lib/memchr.valgrind
   lib/memmem.c
+  lib/sig-handler.h
+  lib/sigaction.c
+  lib/signal.in.h
+  lib/sigprocmask.c
   lib/stddef.in.h
   lib/stdint.in.h
   lib/str-two-way.h
@@ -236,6 +257,9 @@ AC_DEFUN([gl_FILE_LIST], [
   m4/mmap-anon.m4
   m4/multiarch.m4
   m4/onceonly.m4
+  m4/sigaction.m4
+  m4/signal_h.m4
+  m4/signalblocking.m4
   m4/stddef_h.m4
   m4/stdint.m4
   m4/string_h.m4

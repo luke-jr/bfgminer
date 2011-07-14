@@ -1,6 +1,10 @@
 #ifndef __COMPAT_H__
 #define __COMPAT_H__
 
+#ifndef __SUSECONDS_T_TYPE
+typedef long suseconds_t;
+#endif
+
 #ifdef WIN32
 
 #include <windows.h>
