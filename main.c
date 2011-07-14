@@ -1318,6 +1318,7 @@ static void *miner_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	uint32_t max_nonce = 0xffffff;
+	unsigned long hashes_done = max_nonce;
 	bool needs_work = true;
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
@@ -1341,7 +1342,6 @@ static void *miner_thread(void *userdata)
 
 	while (1) {
 		struct work work __attribute__((aligned(128)));
-		unsigned long hashes_done;
 		struct timeval tv_workstart, tv_start, tv_end, diff;
 		uint64_t max64;
 		bool rc;
@@ -1358,6 +1358,7 @@ static void *miner_thread(void *userdata)
 			work.thr_id = thr_id;
 			needs_work = requested = false;
 			work.blk.nonce = 0;
+			max_nonce = hashes_done;
 		}
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
