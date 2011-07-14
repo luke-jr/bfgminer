@@ -269,6 +269,7 @@ struct work {
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 
+extern void kill_work(void);
 extern void log_curses(const char *f, va_list ap);
 extern void vapplog(int prio, const char *fmt, va_list ap);
 extern void applog(int prio, const char *fmt, ...);
@@ -278,5 +279,6 @@ extern bool tq_push(struct thread_q *tq, void *data);
 extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
+extern bool successful_connect;
 
 #endif /* __MINER_H__ */

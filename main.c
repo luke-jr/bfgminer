@@ -756,12 +756,25 @@ static void workio_cmd_free(struct workio_cmd *wc)
 	free(wc);
 }
 
-static void kill_work(void)
+static void disable_curses(void)
+{
+	if (curses_active) {
+		curses_active = false;
+		delwin(logwin);
+		delwin(statuswin);
+		delwin(mainwin);
+		endwin();
+		refresh();
+	}
+}
+
+void kill_work(void)
 {
 	struct workio_cmd *wc;
 	struct thr_info *thr;
 	unsigned int i;
 
+	disable_curses();
 	applog(LOG_INFO, "Received kill message");
 
 	/* Kill the watchdog thread */
@@ -795,19 +808,6 @@ static void kill_work(void)
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
 		applog(LOG_ERR, "Failed to tq_push work in kill_work");
 		exit (1);
-	}
-
-}
-
-static void disable_curses(void)
-{
-	if (curses_active) {
-		curses_active = false;
-		delwin(logwin);
-		delwin(statuswin);
-		delwin(mainwin);
-		endwin();
-		refresh();
 	}
 }
 
@@ -2004,12 +2004,14 @@ static void print_summary(void)
 	printf("\nSummary of runtime statistics:\n\n");
 	printf("Started at %s\n", datestamp);
 	printf("Runtime: %d hrs : %d mins : %d secs\n", hours, mins, secs);
-	printf("Average hashrate: %.1f Megahash/s\n", total_mhashes_done / total_secs);
+	if (total_secs)
+		printf("Average hashrate: %.1f Megahash/s\n", total_mhashes_done / total_secs);
 	printf("Queued work requests: %d\n", getwork_requested);
 	printf("Share submissions: %d\n", accepted + rejected);
 	printf("Accepted shares: %d\n", accepted);
 	printf("Rejected shares: %d\n", rejected);
-	printf("Reject ratio: %.1f\n", (double)(rejected * 100) / (double)(accepted + rejected));
+	if (accepted || rejected)
+		printf("Reject ratio: %.1f\n", (double)(rejected * 100) / (double)(accepted + rejected));
 	printf("Hardware errors: %d\n", hw_errors);
 	printf("Efficiency (accepted / queued): %.0f%%\n", efficiency);
 	printf("Utility (accepted shares / min): %.2f/min\n\n", utility);
@@ -2332,7 +2334,7 @@ int main (int argc, char *argv[])
 	gettimeofday(&total_tv_end, NULL);
 	curl_global_cleanup();
 	disable_curses();
-	if (!opt_quiet)
+	if (!opt_quiet && successful_connect)
 		print_summary();
 
 	if (gpu_threads)

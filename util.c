@@ -32,6 +32,8 @@
 #define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
 #endif
 
+bool successful_connect = false;
+
 struct data_buffer {
 	void		*buf;
 	size_t		len;
@@ -340,6 +342,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		goto err_out;
 	}
 
+	successful_connect = true;
 	comms_error = false;
 	databuf_free(&all_data);
 	curl_slist_free_all(headers);
@@ -350,6 +353,10 @@ err_out:
 	databuf_free(&all_data);
 	curl_slist_free_all(headers);
 	curl_easy_reset(curl);
+	if (!successful_connect) {
+		kill_work();
+		applog(LOG_ERR, "Failed to connect - wrong URL or login details?");
+	}
 	return NULL;
 }
 
