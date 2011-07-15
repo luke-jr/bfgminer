@@ -1210,10 +1210,7 @@ static void flush_requests(bool longpoll)
 
 	/* Temporarily increase the staged count so that get_work thinks there
 	 * is work available instead of making threads reuse existing work */
-	if (extra >= mining_threads)
-		inc_staged(mining_threads, true);
-	else
-		inc_staged(extra, true);
+	inc_staged(mining_threads, true);
 
 	for (i = 0; i < extra; i++) {
 		/* Queue a whole batch of new requests */
