@@ -2011,7 +2011,11 @@ static void *watchdog_thread(void *userdata)
 		}
 
 		gettimeofday(&now, NULL);
+#if 0
 		for (i = 0; i < mining_threads; i++) {
+#else
+		for (i = 0; i < gpu_threads; i++) {
+#endif
 			struct thr_info *thr = &thr_info[i];
 
 			/* Do not kill threads waiting on longpoll staged work
