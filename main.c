@@ -1258,7 +1258,7 @@ retry:
 		goto out;
 	}
 
-	if (!requests_staged()) {
+	if (!requests_staged() && !stale_work(work)) {
 		uint32_t *work_ntime;
 		uint32_t ntime;
 
@@ -1283,6 +1283,7 @@ retry:
 				goto retry;
 			}
 		}
+
 		work_ntime = (uint32_t *)(work->data + 68);
 		ntime = be32toh(*work_ntime);
 		ntime++;
@@ -1291,6 +1292,7 @@ retry:
 		local_work++;
 		goto out;
 	}
+
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(thr->q, NULL);
 	if (unlikely(!work_heap)) {
