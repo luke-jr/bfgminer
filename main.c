@@ -997,10 +997,10 @@ static void *stage_thread(void *userdata)
 		if (likely(strncmp(current_block, blank, 36))) {
 			if (unlikely(strncmp(hexstr, current_block, 36))) {
 				new_blocks++;
-				if (want_longpoll)
-					applog(LOG_WARNING, "New block detected on network before receiving longpoll, flushing work queue");
+				if (have_longpoll)
+					applog(LOG_WARNING, "New block detected on network before longpoll, waiting on fresh work");
 				else
-					applog(LOG_WARNING, "New block detected on network, flushing work queue");
+					applog(LOG_WARNING, "New block detected on network, waiting on fresh work");
 				/* As we can't flush the work from here, signal
 				 * the wakeup thread to restart all the
 				 * threads */
@@ -1836,7 +1836,7 @@ static void *longpoll_thread(void *userdata)
 			if (likely(!strncmp(longpoll_block, blank, 36) ||
 				!strncmp(longpoll_block, current_block, 36))) {
 					new_blocks++;
-					applog(LOG_WARNING, "LONGPOLL detected new block on network, flushing work queue");
+					applog(LOG_WARNING, "LONGPOLL detected new block on network, waiting on fresh work");
 					restart_threads(true);
 			} else
 				applog(LOG_WARNING, "LONGPOLL received after new block already detected");
