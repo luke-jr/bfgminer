@@ -1275,9 +1275,7 @@ retry:
 			timeval_subtract(&diff, &tv_now, &tv_localgen);
 			if (diff.tv_sec > 600) {
 				/* A new block appears on average every 10 mins */
-				applog(LOG_WARNING, "Server not responding for more than 10 minutes.");
-				applog(LOG_WARNING, "Further local work generation will only generate rejects.");
-				applog(LOG_WARNING, "Going idle till network conditions recover.");
+				applog(LOG_WARNING, "Prolonged outage. Going idle till network recovers.");
 				/* Force every thread to wait for new work */
 				inc_staged(mining_threads, true);
 				goto retry;
