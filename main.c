@@ -126,7 +126,7 @@ static int opt_fail_pause = 5;
 static int opt_log_interval = 5;
 bool opt_log_output = false;
 static bool opt_dynamic = true;
-static int opt_queue = 1;
+static int opt_queue;
 int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
@@ -248,11 +248,6 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
-static char *set_int_1_to_10(const char *arg, int *i)
-{
-	return set_int_range(arg, i, 1, 10);
-}
-
 static char *set_devices(const char *arg, int *i)
 {
 	char *err = opt_set_intval(arg, i);
@@ -347,8 +342,8 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_protocol,
 			"Verbose dump of protocol-level activities"),
 	OPT_WITH_ARG("--queue|-Q",
-		     set_int_1_to_10, opt_show_intval, &opt_queue,
-		     "Number of extra work items to queue (1 - 10)"),
+		     set_int_0_to_10, opt_show_intval, &opt_queue,
+		     "Number of extra work items to queue (0 - 10)"),
 	OPT_WITHOUT_ARG("--quiet|-q",
 			opt_set_bool, &opt_quiet,
 			"Disable per-thread hashmeter output"),

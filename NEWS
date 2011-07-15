@@ -1,3 +1,9 @@
+- Allow queue of zero and make that default again now that we can track how
+work is being queued versus staged. This can decrease reject rates.
+- Queue precisely the number of mining threads as longpoll_staged after a
+new block to not generate local work.
+
+
 Version 1.2.6 - July 15, 2011
 
 - Put a current system status line beneath the total work status line
