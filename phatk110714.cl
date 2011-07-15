@@ -386,32 +386,26 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == -H[7])
 	{
-		output[W[3].x & NFLAG] =  W[3].x;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & W[3].x] =  W[3].x;
 	}
 	if (Vals[7].y == -H[7])
 	{
-		output[W[3].y & NFLAG] =  W[3].y;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & W[3].y] =  W[3].y;
 	}
 #ifdef VECTORS4
 	if (Vals[7].z == -H[7])
 	{
-		output[W[3].z & NFLAG] =  W[3].z;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & W[3].z] =  W[3].z;
 	}
 	if (Vals[7].w == -H[7])
 	{
-		output[W[3].w & NFLAG] =  W[3].w;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & W[3].w] =  W[3].w;
 	}
 #endif
 #else
 	if (Vals[7] == -H[7])
 	{
-		output[W[3] & NFLAG] =  W[3];
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & W[3]] =  W[3];
 	}
 #endif
-
 }
