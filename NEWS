@@ -1,3 +1,4 @@
+- Disable restarting of CPU mining threads pending further investigation.
 - Update longpoll messages.
 - Add new block data to status line.
 - Fix opencl tests for osx.
