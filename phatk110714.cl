@@ -3,6 +3,7 @@
 
 // 2011-07-11: further modified by Diapolo and still public-domain
 // -ck version to be compatible with cgminer
+// 2011-07-14: shorter code
 
 #define VECTORSX
 
@@ -84,7 +85,6 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 {
 	u W[124];
 	u Vals[8];
-	uint it = get_local_id(0);
 
 	Vals[1] = B1;
 	Vals[2] = C1;
@@ -380,70 +380,38 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	// Round 124
 	Vals[7] += Vals[3] + P4(124) + P3(124) + P2(124) + P1(124) + s1(124) + ch(124);
 	
-#define MAXBUFFERS (4 * 512)
+#define MAXBUFFERS (4095)
+#define NFLAG (0xFFFUL)
 
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == -H[7])
 	{
-		// Unlikely event there is something here already !
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = W[3].x;
+		output[W[3].x & NFLAG] =  W[3].x;
 		output[MAXBUFFERS] = 1;
 	}
 	if (Vals[7].y == -H[7])
 	{
-		it += 512;
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = W[3].y;
+		output[W[3].y & NFLAG] =  W[3].y;
 		output[MAXBUFFERS] = 1;
 	}
 #ifdef VECTORS4
 	if (Vals[7].z == -H[7])
 	{
-		it += 1024;
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = W[3].z;
+		output[W[3].z & NFLAG] =  W[3].z;
 		output[MAXBUFFERS] = 1;
 	}
 	if (Vals[7].w == -H[7])
 	{
-		it += 1536;
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = W[3].w;
+		output[W[3].w & NFLAG] =  W[3].w;
 		output[MAXBUFFERS] = 1;
 	}
 #endif
 #else
 	if (Vals[7] == -H[7])
 	{
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = W[3];
+		output[W[3] & NFLAG] =  W[3];
 		output[MAXBUFFERS] = 1;
 	}
 #endif
+
 }

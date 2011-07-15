@@ -4,8 +4,8 @@
 #include "config.h"
 
 #define MAXTHREADS (0xFFFFFFFEULL)
-/* Maximum worksize 512 * maximum vectors 4 plus one flag entry */
-#define MAXBUFFERS (4 * 512)
+/* Maximum worksize 4k to match page size */
+#define MAXBUFFERS (4095)
 #define BUFFERSIZE (sizeof(uint32_t) * (MAXBUFFERS + 1))
 
 #ifdef HAVE_OPENCL
