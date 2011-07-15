@@ -561,8 +561,8 @@ static void curses_print_status(int thr_id)
 	wprintw(statuswin, " %s", statusline);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 4,0);
-	wprintw(statuswin, " TQ: %d  ST: %d  LS: %d  SS: %d  DW: %d  LW: %d  LO: %d  RF: %d  I: %d",
-		total_queued, total_staged, lp_staged, stale_shares, discarded_work,
+	wprintw(statuswin, " TQ: %d  ST: %d  LS: %d  SS: %d  DW: %d  NB: %d  LW: %d  LO: %d  RF: %d  I: %d",
+		total_queued, total_staged, lp_staged, stale_shares, discarded_work, new_blocks,
 		local_work, localgen_occasions, remotefail_occasions, scan_intensity);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 5, 0);
