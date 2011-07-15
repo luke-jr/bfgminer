@@ -1,3 +1,15 @@
+- Update longpoll messages.
+- Add new block data to status line.
+- Fix opencl tests for osx.
+- Only do local generation of work if the work item is not stale itself.
+- Check for stale work within the mining threads and grab new work if
+positive.
+- Test for idle network conditions and prevent threads from being restarted
+by the watchdog thread under those circumstances.
+- Make sure that local work generation does not continue indefinitely by
+stopping it after 10 minutes.
+- Tweak the kernel to have a shorter path using a 4k buffer and a mask on the
+nonce value instead of a compare and loop for a shorter code path.
 - Allow queue of zero and make that default again now that we can track how
 work is being queued versus staged. This can decrease reject rates.
 - Queue precisely the number of mining threads as longpoll_staged after a
