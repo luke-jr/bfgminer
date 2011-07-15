@@ -865,36 +865,48 @@ static bool workio_get_work(struct workio_cmd *wc)
 	return true;
 }
 
+static bool stale_work(struct work *work)
+{
+	bool ret = false;
+	char *hexstr;
+
+	hexstr = bin2hex(work->data, 36);
+	if (unlikely(!hexstr)) {
+		applog(LOG_ERR, "submit_work_thread OOM");
+		return false;
+	}
+
+	if (strncmp(hexstr, current_block, 36))
+		ret = true;
+
+	free(hexstr);
+	return ret;
+}
+
 static void *submit_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	int failures = 0;
-	char *hexstr;
 
 	pthread_detach(pthread_self());
 
-	hexstr = bin2hex(wc->u.work->data, 36);
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "submit_work_thread OOM");
-		goto out;
-	}
-	if (unlikely(strncmp(hexstr, current_block, 36))) {
-		applog(LOG_WARNING, "Stale work detected, discarding");
+	if (stale_work(wc->u.work)) {
+		applog(LOG_WARNING, "Stale share detected, discarding");
 		stale_shares++;
-		goto out_free;
+		goto out;
 	}
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(wc->u.work)) {
-		if (unlikely(strncmp(hexstr, current_block, 36))) {
-			applog(LOG_WARNING, "Stale work detected, discarding");
+		if (stale_work(wc->u.work)) {
+			applog(LOG_WARNING, "Stale share detected, discarding");
 			stale_shares++;
-			goto out_free;
+			break;
 		}
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "Failed %d retries ...terminating workio thread", opt_retries);
 			kill_work();
-			goto out_free;
+			break;
 		}
 
 		/* pause, then restart work-request loop */
@@ -902,8 +914,6 @@ static void *submit_work_thread(void *userdata)
 			opt_fail_pause);
 		sleep(opt_fail_pause);
 	}
-out_free:
-	free(hexstr);
 out:
 	workio_cmd_free(wc);
 	return NULL;
@@ -1508,7 +1518,8 @@ static void *miner_thread(void *userdata)
 		}
 
 		if (diff.tv_sec > opt_scantime || work_restart[thr_id].restart ||
-			work.blk.nonce >= MAXTHREADS - hashes_done)
+			work.blk.nonce >= MAXTHREADS - hashes_done ||
+			stale_work(&work))
 				needs_work = true;
 	}
 
@@ -1668,7 +1679,10 @@ static void *gpuminer_thread(void *userdata)
 			}
 		}
 
-		if (diff.tv_sec > opt_scantime  || work->blk.nonce >= MAXTHREADS - hashes || work_restart[thr_id].restart) {
+		if (diff.tv_sec > opt_scantime ||
+		    work->blk.nonce >= MAXTHREADS - hashes ||
+		    work_restart[thr_id].restart ||
+		    stale_work(work)) {
 			/* Ignore any reads since we're getting new work and queue a clean buffer */
 			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 					BUFFERSIZE, blank_res, 0, NULL, NULL);
