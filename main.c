@@ -172,6 +172,7 @@ static int accepted, rejected;
 int hw_errors;
 static int total_queued, total_staged, lp_staged;
 static bool localgen = false;
+static bool idlenet = false;
 static unsigned int getwork_requested;
 static unsigned int stale_shares;
 static unsigned int discarded_work;
@@ -925,9 +926,18 @@ static void inc_staged(int inc, bool lp)
 	if (lp) {
 		lp_staged += inc;
 		total_staged += inc;
-	} else if (lp_staged)
-		lp_staged--;
-	else
+		idlenet = true;
+	} else if (lp_staged) {
+		if (!--lp_staged) {
+			unsigned int i;
+
+			/* Make sure the watchdog thread doesn't kill the mining
+			* threads once we unset the idlenet flag */
+			for (i = 0; i < mining_threads; i++)
+				gettimeofday(&thr_info[i].last, NULL);
+			idlenet = false;
+		}
+	} else
 		total_staged += inc;
 	pthread_mutex_unlock(&stgd_lock);
 }
@@ -1226,6 +1236,7 @@ static void flush_requests(bool longpoll)
 
 static bool get_work(struct work *work, bool queued)
 {
+	static struct timeval tv_localgen = {};
 	struct thr_info *thr = &thr_info[0];
 	struct work *work_heap;
 	bool ret = false;
@@ -1243,9 +1254,24 @@ retry:
 
 		/* Only print this message once each time we shift to localgen */
 		if (!localgen) {
-			applog(LOG_WARNING, "Server not providing work fast enough, generating work locally");
 			localgen = true;
+			applog(LOG_WARNING, "Server not providing work fast enough, generating work locally");
 			localgen_occasions++;
+			gettimeofday(&tv_localgen, NULL);
+		} else {
+			struct timeval tv_now, diff;
+
+			gettimeofday(&tv_now, NULL);
+			timeval_subtract(&diff, &tv_now, &tv_localgen);
+			if (diff.tv_sec > 600) {
+				/* A new block appears on average every 10 mins */
+				applog(LOG_WARNING, "Server not responding for more than 10 minutes.");
+				applog(LOG_WARNING, "Further local work generation will only generate rejects.");
+				applog(LOG_WARNING, "Going idle till network conditions recover.");
+				/* Force every thread to wait for new work */
+				inc_staged(mining_threads, true);
+				goto retry;
+			}
 		}
 		work_ntime = (uint32_t *)(work->data + 68);
 		ntime = be32toh(*work_ntime);
@@ -1254,16 +1280,18 @@ retry:
 		ret = true;
 		local_work++;
 		goto out;
-	} else if (localgen) {
-		localgen = false;
-		applog(LOG_WARNING, "Resumed retrieving work from server");
 	}
-
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(thr->q, NULL);
 	if (unlikely(!work_heap)) {
 		applog(LOG_WARNING, "Failed to tq_pop in get_work");
 		goto out;
+	}
+
+	/* If we make it here we have succeeded in getting fresh work */
+	if (localgen) {
+		localgen = false;
+		applog(LOG_WARNING, "Resuming with work from server");
 	}
 	dec_queued();
 
@@ -1972,8 +2000,9 @@ static void *watchdog_thread(void *userdata)
 		for (i = 0; i < mining_threads; i++) {
 			struct thr_info *thr = &thr_info[i];
 
-			/* Do not kill threads waiting on longpoll staged work */
-			if (now.tv_sec - thr->last.tv_sec > 60 && !lp_staged) {
+			/* Do not kill threads waiting on longpoll staged work
+			 * or idle network */
+			if (now.tv_sec - thr->last.tv_sec > 60 && !idlenet) {
 				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
 				/* Create one mandatory work item */
 				inc_staged(1, true);
