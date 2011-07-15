@@ -25,6 +25,10 @@ AC_CHECK_HEADERS(syslog.h)
 
 AC_FUNC_ALLOCA
 
+have_win32=false
+PTHREAD_FLAGS="-pthread"
+OPENCL_FLAGS="-lOpenCL"
+
 case $target in
   *-*-mingw*)
     have_x86_64=false
@@ -33,27 +37,33 @@ case $target in
     ;;
   x86_64-*)
     have_x86_64=true
-    have_win32=false
-    PTHREAD_FLAGS="-pthread"
     ;;
+  *-*-darwin*)
+    have_x86_64=false
+    OPENCL_FLAGS="-framework OpenCL"
+	;;
   *)
     have_x86_64=false
-    have_win32=false
-    PTHREAD_FLAGS="-pthread"
     ;;
 esac
 
 # Check for OpenCL (the long way needed on mingw32 due to calling conventions)
 AC_MSG_CHECKING([for OpenCL])
 SAVED_LIBS=$LIBS
-LIBS="$LIBS -lOpenCL"
+LIBS="$LIBS $OPENCL_FLAGS"
 AC_LINK_IFELSE(
-  [AC_LANG_PROGRAM([[#include <CL/cl.h>]],
+  [AC_LANG_PROGRAM([[
+	#ifdef __APPLE_CC__
+	#include <OpenCL/opencl.h>
+	#else
+	#include <CL/cl.h>
+	#endif
+  ]],
     [[return clSetKernelArg(0, 0, 0, 0); ]])],
   [AC_MSG_RESULT(yes)
    AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL is present on the system.])
    found_opencl=1
-   OPENCL_LIBS=-lOpenCL],
+   OPENCL_LIBS=$OPENCL_FLAGS],
   [AC_MSG_RESULT(no)
    found_opencl=0])
 LIBS=$SAVED_LIBS
