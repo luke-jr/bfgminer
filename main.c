@@ -1012,7 +1012,7 @@ static void *stage_thread(void *userdata)
 				/* As we can't flush the work from here, signal
 				 * the wakeup thread to restart all the
 				 * threads */
-				work_restart[stage_thr_id].restart = 1;
+				work_restart[watchdog_thr_id].restart = 1;
 			}
 		} else
 			memcpy(longpoll_block, hexstr, 36);
@@ -2013,9 +2013,9 @@ static void *watchdog_thread(void *userdata)
 			pthread_mutex_unlock(&curses_lock);
 		}
 
-		if (unlikely(work_restart[stage_thr_id].restart)) {
+		if (unlikely(work_restart[watchdog_thr_id].restart)) {
 			restart_threads(false);
-			work_restart[stage_thr_id].restart = 0;
+			work_restart[watchdog_thr_id].restart = 0;
 		}
 
 		gettimeofday(&now, NULL);
