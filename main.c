@@ -188,6 +188,8 @@ static char datestamp[40];
 
 struct sigaction termhandler, inthandler;
 
+struct thread_q *getq;
+
 static void applog_and_exit(const char *fmt, ...)
 {
 	va_list ap;
@@ -1019,7 +1021,7 @@ static void *stage_thread(void *userdata)
 		memcpy(current_block, hexstr, 36);
 		free(hexstr);
 
-		if (unlikely(!tq_push(thr_info[0].q, work))) {
+		if (unlikely(!tq_push(getq, work))) {
 			applog(LOG_ERR, "Failed to tq_push work in stage_thread");
 			ok = false;
 			break;
@@ -1163,11 +1165,8 @@ static int requests_queued(void)
 	return ret;
 }
 
-/* All work is queued flagged as being for thread 0 and then the mining thread
- * flags it as its own */
 static bool queue_request(void)
 {
-	struct thr_info *thr = &thr_info[0];
 	struct workio_cmd *wc;
 
 	/* If we've been generating lots of local work we may already have
@@ -1183,7 +1182,8 @@ static bool queue_request(void)
 	}
 
 	wc->cmd = WC_GET_WORK;
-	wc->thr = thr;
+	/* The get work does not belong to any thread */
+	wc->thr = NULL;
 
 	/* send work request to workio thread */
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
@@ -1198,7 +1198,6 @@ static bool queue_request(void)
 
 static bool discard_request(void)
 {
-	struct thr_info *thr = &thr_info[0];
 	struct work *work_heap;
 
 	/* Just in case we fell in a hole and missed a queue filling */
@@ -1207,7 +1206,7 @@ static bool discard_request(void)
 		return true;
 	}
 
-	work_heap = tq_pop(thr->q, NULL);
+	work_heap = tq_pop(getq, NULL);
 	if (unlikely(!work_heap)) {
 		applog(LOG_ERR, "Failed to tq_pop in discard_request");
 		return false;
@@ -1255,7 +1254,6 @@ static void flush_requests(bool longpoll)
 static bool get_work(struct work *work, bool queued)
 {
 	static struct timeval tv_localgen = {};
-	struct thr_info *thr = &thr_info[0];
 	struct work *work_heap;
 	bool ret = false;
 	int failures = 0;
@@ -1300,7 +1298,7 @@ retry:
 	}
 
 	/* wait for 1st response, or get cached response */
-	work_heap = tq_pop(thr->q, NULL);
+	work_heap = tq_pop(getq, NULL);
 	if (unlikely(!work_heap)) {
 		applog(LOG_WARNING, "Failed to tq_pop in get_work");
 		goto out;
@@ -2275,6 +2273,13 @@ int main (int argc, char *argv[])
 	/* Flag the work as ready forcing the mining threads to wait till we
 	 * actually put something into the queue */
 	inc_staged(mining_threads, true);
+
+	/* Create a unique get work queue */
+	getq = tq_new();
+	if (!getq) {
+		applog(LOG_ERR, "Failed to create getq");
+		return 1;
+	}
 
 #ifdef HAVE_OPENCL
 	i = 0;
