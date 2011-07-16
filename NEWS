@@ -1,3 +1,6 @@
+Version 1.2.7 - July 16, 2011
+
+- Show last 8 characters of share submitted in log.
 - Display URL connected to and user logged in as in status.
 - Display current block and when it was started in the status line.
 - Only pthread_join the mining threads if they exist as determined by
