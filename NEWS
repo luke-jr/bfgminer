@@ -1,3 +1,15 @@
+- Display URL connected to and user logged in as in status.
+- Display current block and when it was started in the status line.
+- Only pthread_join the mining threads if they exist as determined by
+pthread_cancel and don't fail on pthread_cancel.
+- Create a unique work queue for all getworks instead of binding it to thread 0
+to avoid any conflict over thread 0's queue.
+- Clean up the code to make it clear it's watchdog thread being messaged to
+restart the threads.
+- Check the current block description hasn't been blanked pending the real
+new current block data.
+- Re-enable signal handlers once the signal has been received to make it
+possible to kill cgminer if it fails to shut down.
 - Disable restarting of CPU mining threads pending further investigation.
 - Update longpoll messages.
 - Add new block data to status line.
