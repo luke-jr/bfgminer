@@ -571,8 +571,10 @@ static void curses_print_status(int thr_id)
 		local_work, localgen_occasions, remotefail_occasions, scan_intensity);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 4, 0);
-	wprintw(statuswin, " Block %s  started: %s", current_block + 4, blockdate);
+	wprintw(statuswin, " Connected to %s as user %s", rpc_url, rpc_user);
 	wmove(statuswin, 5, 0);
+	wprintw(statuswin, " Block %s  started: %s", current_block + 4, blockdate);
+	wmove(statuswin, 6, 0);
 	whline(statuswin, '-', 80);
 	wmove(statuswin, logstart - 1, 0);
 	whline(statuswin, '-', 80);
@@ -2192,7 +2194,7 @@ int main (int argc, char *argv[])
 		opt_n_threads = num_processors;
 	}
 
-	logcursor = 6;
+	logcursor = 7;
 	mining_threads = opt_n_threads + gpu_threads;
 	gpucursor = logcursor;
 	cpucursor = gpucursor + nDevs;
@@ -2208,6 +2210,16 @@ int main (int argc, char *argv[])
 		if (!rpc_userpass)
 			return 1;
 		sprintf(rpc_userpass, "%s:%s", rpc_user, rpc_pass);
+	} else {
+		rpc_user = malloc(strlen(rpc_userpass));
+		if (!rpc_user)
+			return 1;
+		strcpy(rpc_user, rpc_userpass);
+		rpc_user = strtok(rpc_user, ":");
+		if (!rpc_user) {
+			applog(LOG_ERR, "Failed to find colon delimiter in userpass");
+			return 1;
+		}
 	}
 
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
