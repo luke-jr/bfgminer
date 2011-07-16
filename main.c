@@ -185,6 +185,7 @@ static char current_block[37];
 static char longpoll_block[37];
 static char blank[37];
 static char datestamp[40];
+static char blockdate[40];
 
 struct sigaction termhandler, inthandler;
 
@@ -564,11 +565,13 @@ static void curses_print_status(int thr_id)
 	wmove(statuswin, 2,0);
 	wprintw(statuswin, " %s", statusline);
 	wclrtoeol(statuswin);
-	wmove(statuswin, 4,0);
+	wmove(statuswin, 3,0);
 	wprintw(statuswin, " TQ: %d  ST: %d  LS: %d  SS: %d  DW: %d  NB: %d  LW: %d  LO: %d  RF: %d  I: %d",
 		total_queued, total_staged, lp_staged, stale_shares, discarded_work, new_blocks,
 		local_work, localgen_occasions, remotefail_occasions, scan_intensity);
 	wclrtoeol(statuswin);
+	wmove(statuswin, 4, 0);
+	wprintw(statuswin, " Block %s  started: %s", current_block + 4, blockdate);
 	wmove(statuswin, 5, 0);
 	whline(statuswin, '-', 80);
 	wmove(statuswin, logstart - 1, 0);
@@ -979,6 +982,23 @@ static int requests_staged(void)
 	return ret;
 }
 
+static void set_curblock(char *hexstr)
+{
+	struct timeval tv_now;
+	struct tm tm;
+
+	memcpy(current_block, hexstr, 36);
+	gettimeofday(&tv_now, NULL);
+	localtime_r(&tv_now.tv_sec, &tm);
+	sprintf(blockdate, "[%d-%02d-%02d %02d:%02d:%02d]",
+		tm.tm_year + 1900,
+		tm.tm_mon + 1,
+		tm.tm_mday,
+		tm.tm_hour,
+		tm.tm_min,
+		tm.tm_sec);
+}
+
 static void *stage_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -1015,10 +1035,12 @@ static void *stage_thread(void *userdata)
 				 * the wakeup thread to restart all the
 				 * threads */
 				work_restart[watchdog_thr_id].restart = 1;
+				set_curblock(hexstr);
 			}
-		} else
+		} else {
+			set_curblock(hexstr);
 			memcpy(longpoll_block, hexstr, 36);
-		memcpy(current_block, hexstr, 36);
+		}
 		free(hexstr);
 
 		if (unlikely(!tq_push(getq, work))) {
