@@ -186,6 +186,8 @@ static char longpoll_block[37];
 static char blank[37];
 static char datestamp[40];
 
+struct sigaction termhandler, inthandler;
+
 static void applog_and_exit(const char *fmt, ...)
 {
 	va_list ap;
@@ -810,6 +812,9 @@ void kill_work(void)
 
 static void sighandler(int sig)
 {
+	/* Restore signal handlers so we can still quit if kill_work fails */
+	sigaction(SIGTERM, &termhandler, NULL);
+	sigaction(SIGINT, &inthandler, NULL);
 	kill_work();
 }
 
@@ -2099,8 +2104,8 @@ int main (int argc, char *argv[])
 		return 1;
 
 	handler.sa_handler = &sighandler;
-	sigaction(SIGTERM, &handler, 0);
-	sigaction(SIGINT, &handler, 0);
+	sigaction(SIGTERM, &handler, &termhandler);
+	sigaction(SIGINT, &handler, &inthandler);
 
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
