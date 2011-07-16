@@ -1880,13 +1880,8 @@ static void reinit_cputhread(int thr_id)
 	struct thr_info *thr = &thr_info[thr_id];
 
 	tq_freeze(thr->q);
-	if (unlikely(pthread_cancel(thr->pth))) {
-		applog(LOG_ERR, "Failed to pthread_cancel in reinit_gputhread");
-		goto failed_out;
-	}
-
-	if (unlikely(pthread_join(thr->pth, NULL))) {
-		applog(LOG_ERR, "Failed to pthread_join in reinit_gputhread");
+	if (!(pthread_cancel(thr->pth)) && pthread_join(thr->pth, NULL)) {
+		applog(LOG_ERR, "Failed to pthread_join in reinit_cputhread");
 		goto failed_out;
 	}
 
@@ -1913,11 +1908,7 @@ static void reinit_gputhread(int thr_id)
 	char name[256];
 
 	tq_freeze(thr->q);
-	if (unlikely(pthread_cancel(thr->pth))) {
-		applog(LOG_ERR, "Failed to pthread_cancel in reinit_gputhread");
-		goto failed_out;
-	}
-	if (unlikely(pthread_join(thr->pth, NULL))) {
+	if (!(pthread_cancel(thr->pth)) && pthread_join(thr->pth, NULL)) {
 		applog(LOG_ERR, "Failed to pthread_join in reinit_gputhread");
 		goto failed_out;
 	}
