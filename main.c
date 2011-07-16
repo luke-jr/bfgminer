@@ -684,16 +684,16 @@ static bool submit_upstream_work(const struct work *work)
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!opt_quiet)
-			applog(LOG_WARNING, "Share accepted from %sPU %d thread %d",
-				cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+			applog(LOG_WARNING, "Share %.8s accepted from %sPU %d thread %d",
+			       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 	} else {
 		cgpu->rejected++;
 		rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!opt_quiet)
-			applog(LOG_WARNING, "Share rejected from %sPU %d thread %d",
-				cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+			applog(LOG_WARNING, "Share %.8s rejected from %sPU %d thread %d",
+			       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 	}
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
