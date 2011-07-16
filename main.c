@@ -875,10 +875,13 @@ static bool stale_work(struct work *work)
 	bool ret = false;
 	char *hexstr;
 
+	if (!strncmp(blank, current_block, 36))
+		return ret;
+
 	hexstr = bin2hex(work->data, 36);
 	if (unlikely(!hexstr)) {
 		applog(LOG_ERR, "submit_work_thread OOM");
-		return false;
+		return ret;
 	}
 
 	if (strncmp(hexstr, current_block, 36))
