@@ -80,7 +80,6 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	u W[24];
 	u Vals[8];
 	u nonce;
-	uint it = get_local_id(0);
 
 #ifdef VECTORS4
 	nonce = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
@@ -628,70 +627,32 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 
 	Vals[7]+=0x5be0cd19U;
 
-#define MAXBUFFERS (4 * 512)
+#define MAXBUFFERS (4095)
+#define NFLAG (0xFFFUL)
 
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == 0)
 	{
-		// Unlikely event there is something here already !
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = nonce.x;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & nonce.x] =  nonce.x;
 	}
 	if (Vals[7].y == 0)
 	{
-		it += 512;
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = nonce.y;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & nonce.y] =  nonce.y;
 	}
 #ifdef VECTORS4
 	if (Vals[7].z == 0)
 	{
-		it += 1024;
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = nonce.z;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & nonce.z] =  nonce.z;
 	}
 	if (Vals[7].w == 0)
 	{
-		it += 1536;
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = nonce.w;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & nonce.w] =  nonce.w;
 	}
 #endif
 #else
 	if (Vals[7] == 0)
 	{
-		if (output[it]) {
-			for (it = 0; it < MAXBUFFERS; it++) {
-				if (!output[it])
-					break;
-			}
-		}
-		output[it] = nonce;
-		output[MAXBUFFERS] = 1;
+		output[MAXBUFFERS] = output[NFLAG & nonce] =  nonce;
 	}
 #endif
 }
