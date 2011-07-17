@@ -1676,7 +1676,6 @@ static void *gpuminer_thread(void *userdata)
 			"gpu mining thread %d", mythr->id);
 		goto out;
 	}
-	mythr->best_g = ~0;
 	mythr->cgpu->getworks++;
 	work->thr_id = thr_id;
 	requested = false;
