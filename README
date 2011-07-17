@@ -89,6 +89,7 @@ The cgminer status line shows:
 TQ is Total Queued work items.
 ST is STaged work items (ready to use).
 LS is Longpoll Staged work items (mandatory new work)
+SS is Stale Shares discarded (detected and not submitted so don't count as rejects)
 DW is Discarded Work items (work from block no longer valid to work on)
 NB is New Blocks detected on the network
 LW is Locally generated Work items (during slow server providing work)
