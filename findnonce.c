@@ -157,6 +157,7 @@ static void *postcalc_hash(void *userdata)
 	cl_uint A, B, C, D, E, F, G, H;
 	cl_uint W[16];
 	cl_uint nonce;
+	cl_uint best_g;
 	uint32_t end;
 	int entry = 0;
 
@@ -171,6 +172,7 @@ cycle:
 	if (entry == MAXBUFFERS)
 		goto out;
 
+	best_g = ~0;
 	end = start + 1026;
 
 	for (nonce = start; nonce != end; nonce+=1) {
@@ -204,21 +206,20 @@ cycle:
 		FR(48); PFR(56);
 
 		if (unlikely(H == 0xA41F32E7)) {
+			if (unlikely(submit_nonce(thr, work, nonce) == false)) {
+				applog(LOG_ERR, "Failed to submit work, exiting");
+				break;
+			}
 
 			G += 0x1f83d9ab;
 			G = ByteReverse(G);
 
-			if (G < thr->best_g) {
-				if (unlikely(submit_nonce(thr, work, nonce) == false)) {
-					applog(LOG_ERR, "Failed to submit work, exiting");
-					break;
-				}
-				thr->best_g = G;
-			}
+			if (G < best_g)
+				best_g = G;
 		}
 	}
 
-	if (unlikely(thr->best_g == ~0)) {
+	if (unlikely(best_g == ~0)) {
 		if (opt_debug)
 			applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
 		hw_errors++;

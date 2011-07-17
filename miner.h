@@ -145,7 +145,6 @@ struct thr_info {
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
 	struct timeval last;
-	cl_uint best_g;
 };
 
 static inline uint32_t swab32(uint32_t v)
