@@ -152,19 +152,17 @@ static void *postcalc_hash(void *userdata)
 	struct thr_info *thr = pcd->thr;
 	dev_blk_ctx *blk = &pcd->work->blk;
 	struct work *work = pcd->work;
-	uint32_t start = 0;
 
 	cl_uint A, B, C, D, E, F, G, H;
 	cl_uint W[16];
-	cl_uint nonce;
-	cl_uint best_g;
-	uint32_t end;
+	cl_uint nonce = 0;
 	int entry = 0;
 
+	pthread_detach(pthread_self());
 cycle:
 	while (entry < MAXBUFFERS) {
 		if (pcd->res[entry]) {
-			start = pcd->res[entry++];
+			nonce = pcd->res[entry++];
 			break;
 		}
 		entry++;
@@ -172,54 +170,41 @@ cycle:
 	if (entry == MAXBUFFERS)
 		goto out;
 
-	best_g = ~0;
-	end = start + 1026;
+	A = blk->cty_a; B = blk->cty_b;
+	C = blk->cty_c; D = blk->cty_d;
+	E = blk->cty_e; F = blk->cty_f;
+	G = blk->cty_g; H = blk->cty_h;
+	W[0] = blk->merkle; W[1] = blk->ntime;
+	W[2] = blk->nbits; W[3] = nonce;;
+	W[4] = 0x80000000; W[5] = 0x00000000; W[6] = 0x00000000; W[7] = 0x00000000;
+	W[8] = 0x00000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
+	W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000280;
+	PIR(0); IR(8);
+	FR(16); FR(24);
+	FR(32); FR(40);
+	FR(48); FR(56);
 
-	for (nonce = start; nonce != end; nonce+=1) {
-		A = blk->cty_a; B = blk->cty_b;
-		C = blk->cty_c; D = blk->cty_d;
-		E = blk->cty_e; F = blk->cty_f;
-		G = blk->cty_g; H = blk->cty_h;
-		W[0] = blk->merkle; W[1] = blk->ntime;
-		W[2] = blk->nbits; W[3] = nonce;;
-		W[4] = 0x80000000; W[5] = 0x00000000; W[6] = 0x00000000; W[7] = 0x00000000;
-		W[8] = 0x00000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
-		W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000280;
-		PIR(0); IR(8);
-		FR(16); FR(24);
-		FR(32); FR(40);
-		FR(48); FR(56);
+	W[0] = A + blk->ctx_a; W[1] = B + blk->ctx_b;
+	W[2] = C + blk->ctx_c; W[3] = D + blk->ctx_d;
+	W[4] = E + blk->ctx_e; W[5] = F + blk->ctx_f;
+	W[6] = G + blk->ctx_g; W[7] = H + blk->ctx_h;
+	W[8] = 0x80000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
+	W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000100;
+	A = 0x6a09e667; B = 0xbb67ae85;
+	C = 0x3c6ef372; D = 0xa54ff53a;
+	E = 0x510e527f; F = 0x9b05688c;
+	G = 0x1f83d9ab; H = 0x5be0cd19;
+	IR(0); IR(8);
+	FR(16); FR(24);
+	FR(32); FR(40);
+	FR(48); PFR(56);
 
-		W[0] = A + blk->ctx_a; W[1] = B + blk->ctx_b;
-		W[2] = C + blk->ctx_c; W[3] = D + blk->ctx_d;
-		W[4] = E + blk->ctx_e; W[5] = F + blk->ctx_f;
-		W[6] = G + blk->ctx_g; W[7] = H + blk->ctx_h;
-		W[8] = 0x80000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
-		W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000100;
-		A = 0x6a09e667; B = 0xbb67ae85;
-		C = 0x3c6ef372; D = 0xa54ff53a;
-		E = 0x510e527f; F = 0x9b05688c;
-		G = 0x1f83d9ab; H = 0x5be0cd19;
-		IR(0); IR(8);
-		FR(16); FR(24);
-		FR(32); FR(40);
-		FR(48); PFR(56);
-
-		if (unlikely(H == 0xA41F32E7)) {
-			if (unlikely(submit_nonce(thr, work, nonce) == false)) {
-				applog(LOG_ERR, "Failed to submit work, exiting");
-				break;
-			}
-
-			G += 0x1f83d9ab;
-			G = ByteReverse(G);
-
-			if (G < best_g)
-				best_g = G;
+	if (likely(H == 0xA41F32E7)) {
+		if (unlikely(submit_nonce(thr, work, nonce) == false)) {
+			applog(LOG_ERR, "Failed to submit work, exiting");
+			goto out;
 		}
-	}
-
-	if (unlikely(best_g == ~0)) {
+	} else {
 		if (opt_debug)
 			applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
 		hw_errors++;
@@ -228,7 +213,6 @@ cycle:
 	if (entry < MAXBUFFERS)
 		goto cycle;
 out:
-	pthread_detach(pthread_self());
 	free(pcd);
 	return NULL;
 }
