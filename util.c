@@ -304,7 +304,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	rc = curl_easy_perform(curl);
 	if (rc) {
 		if (!comms_error)
-			applog(LOG_ERR, "HTTP request failed: %s", curl_err_str);
+			applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
 		comms_error = true;
 		goto err_out;
 	}
