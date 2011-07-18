@@ -15,14 +15,14 @@ INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
 
 bin_PROGRAMS	= cgminer
 
-bin_SCRIPTS	= phatk110714.cl poclbm.cl
+bin_SCRIPTS	= phatk110714.cl poclbm110717.cl
 
 cgminer_SOURCES	= elist.h miner.h compat.h			\
 		  main.c util.c					\
 		  ocl.c ocl.h findnonce.c findnonce.h 		\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
-		  phatk110714.cl poclbm.cl
+		  phatk110714.cl poclbm110717.cl
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ lib/libgnu.a ccan/libccan.a
