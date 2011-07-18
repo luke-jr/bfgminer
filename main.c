@@ -1891,6 +1891,7 @@ static void *longpoll_thread(void *userdata)
 		val = json_rpc_call(curl, lp_url, rpc_userpass, rpc_req,
 				    false, true);
 		if (likely(val)) {
+			memcpy(longpoll_block, current_block, 36);
 			convert_to_work(val);
 			failures = 0;
 			json_decref(val);
@@ -1922,7 +1923,6 @@ static void *longpoll_thread(void *userdata)
 				goto out;
 			}
 		}
-		memcpy(longpoll_block, current_block, 36);
 	}
 
 out:
