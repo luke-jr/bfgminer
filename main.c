@@ -168,9 +168,12 @@ static pthread_mutex_t curses_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
+pthread_mutex_t control_lock;
+
 static int accepted, rejected;
 int hw_errors;
 static int total_queued, total_staged, lp_staged;
+static bool submit_fail = false;
 static bool localgen = false;
 static bool idlenet = false;
 static unsigned int getwork_requested;
@@ -180,6 +183,8 @@ static unsigned int new_blocks;
 static unsigned int local_work;
 static unsigned int localgen_occasions;
 static unsigned int remotefail_occasions;
+
+static bool curses_active = false;
 
 static char current_block[37];
 static char longpoll_block[37];
@@ -540,7 +545,6 @@ static WINDOW *mainwin, *statuswin, *logwin;
 static double total_secs = 0.1;
 static char statusline[256];
 static int cpucursor, gpucursor, logstart, logcursor;
-static bool curses_active = false;
 static struct cgpu_info *gpus, *cpus;
 
 static void text_print_status(int thr_id)
@@ -626,8 +630,6 @@ void log_curses(const char *f, va_list ap)
 		vprintf(f, ap);
 }
 
-static bool submit_fail = false;
-
 static bool submit_upstream_work(const struct work *work)
 {
 	char *hexstr = NULL;
@@ -662,16 +664,13 @@ static bool submit_upstream_work(const struct work *work)
 	val = json_rpc_call(curl, rpc_url, rpc_userpass, s, false, false);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
-		if (!submit_fail) {
-			submit_fail = true;
+		if (!test_and_set(&submit_fail)) {
 			remotefail_occasions++;
 			applog(LOG_WARNING, "Upstream communication failure, caching submissions");
 		}
 		goto out;
-	} else if (submit_fail) {
-		submit_fail = false;
+	} else if (test_and_clear(&submit_fail))
 		applog(LOG_WARNING, "Upstream communication resumed, submitting work");
-	}
 
 	res = json_object_get(val, "result");
 
@@ -764,8 +763,7 @@ static void workio_cmd_free(struct workio_cmd *wc)
 
 static void disable_curses(void)
 {
-	if (curses_active) {
-		curses_active = false;
+	if (test_and_clear(&curses_active)) {
 		delwin(logwin);
 		delwin(statuswin);
 		delwin(mainwin);
@@ -1293,8 +1291,7 @@ retry:
 		uint32_t ntime;
 
 		/* Only print this message once each time we shift to localgen */
-		if (!localgen) {
-			localgen = true;
+		if (!test_and_set(&localgen)) {
 			applog(LOG_WARNING, "Server not providing work fast enough, generating work locally");
 			localgen_occasions++;
 			gettimeofday(&tv_localgen, NULL);
@@ -1329,10 +1326,8 @@ retry:
 	}
 
 	/* If we make it here we have succeeded in getting fresh work */
-	if (localgen) {
-		localgen = false;
+	if (test_and_clear(&localgen))
 		applog(LOG_WARNING, "Resuming with work from server");
-	}
 	dec_queued();
 
 	memcpy(work, work_heap, sizeof(*work));
@@ -2118,6 +2113,8 @@ int main (int argc, char *argv[])
 		return 1;
 	if (unlikely(pthread_mutex_init(&curses_lock, NULL)))
 		return 1;
+	if (unlikely(pthread_mutex_init(&control_lock, NULL)))
+		return 1;
 
 	handler.sa_handler = &sighandler;
 	sigaction(SIGTERM, &handler, &termhandler);
@@ -2404,7 +2401,7 @@ int main (int argc, char *argv[])
 		scrollok(logwin, true);
 		leaveok(logwin, true);
 		leaveok(statuswin, true);
-		curses_active = true;
+		test_and_set(&curses_active);
 		for (i = 0; i < mining_threads; i++)
 			print_status(i);
 	}

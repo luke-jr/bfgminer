@@ -34,6 +34,28 @@
 
 bool successful_connect = false;
 
+bool test_and_set(bool *var)
+{
+	bool ret;
+
+	pthread_mutex_lock(&control_lock);
+	ret = *var;
+	*var = true;
+	pthread_mutex_unlock(&control_lock);
+	return ret;
+}
+
+bool test_and_clear(bool *var)
+{
+	bool ret;
+
+	pthread_mutex_lock(&control_lock);
+	ret = *var;
+	*var = false;
+	pthread_mutex_unlock(&control_lock);
+	return ret;
+}
+
 struct data_buffer {
 	void		*buf;
 	size_t		len;
