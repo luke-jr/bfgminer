@@ -181,7 +181,8 @@ static unsigned int local_work;
 static unsigned int total_lo, total_ro;
 
 static struct pool *pools;
-static struct pool *pool;
+static struct pool *cp; /* Current pool */
+static int total_pools;
 
 static bool curses_active = false;
 
@@ -274,10 +275,58 @@ static char *set_devices(const char *arg, int *i)
 
 static char *set_url(const char *arg, char **p)
 {
-	opt_set_charp(arg, p);
+	struct pool *pool;
+
+	total_pools++;
+	pools = realloc(pools, sizeof(struct pool) * total_pools);
+	if (!pools)
+		return "Failed to malloc pools in set_url";
+	pool = &pools[total_pools - 1];
+	memset(pool, 0, sizeof(struct pool));
+
+	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
 	    strncmp(arg, "https://", 8))
 		return "URL must start with http:// or https://";
+
+	return NULL;
+}
+
+static char *set_user(const char *arg, char **p)
+{
+	struct pool *pool;
+
+	if (!total_pools)
+		return "No URL set for user";
+
+	pool = &pools[total_pools - 1];
+	opt_set_charp(arg, &pool->rpc_user);
+
+	return NULL;
+}
+
+static char *set_pass(const char *arg, char **p)
+{
+	struct pool *pool;
+
+	if (!total_pools)
+		return "No URL set for pass";
+
+	pool = &pools[total_pools - 1];
+	opt_set_charp(arg, &pool->rpc_pass);
+
+	return NULL;
+}
+
+static char *set_userpass(const char *arg, char **p)
+{
+	struct pool *pool;
+
+	if (!total_pools)
+		return "No URL set for userpass";
+
+	pool = &pools[total_pools - 1];
+	opt_set_charp(arg, &pool->rpc_userpass);
 
 	return NULL;
 }
@@ -352,7 +401,7 @@ static struct opt_table opt_config_table[] = {
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
 	OPT_WITH_ARG("--pass|-p",
-		     opt_set_charp, NULL, &trpc_pass,
+		     set_pass, NULL, &trpc_pass,
 		     "Password for bitcoin JSON-RPC server"),
 	OPT_WITHOUT_ARG("--protocol-dump|-P",
 			opt_set_bool, &opt_protocol,
@@ -384,7 +433,7 @@ static struct opt_table opt_config_table[] = {
 		     set_url, opt_show_charp, &trpc_url,
 		     "URL for bitcoin JSON-RPC server"),
 	OPT_WITH_ARG("--user|-u",
-		     opt_set_charp, NULL, &trpc_user,
+		     set_user, NULL, &trpc_user,
 		     "Username for bitcoin JSON-RPC server"),
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
@@ -400,7 +449,7 @@ static struct opt_table opt_config_table[] = {
 		     "Override detected optimal worksize"),
 #endif
 	OPT_WITH_ARG("--userpass|-O",
-		     opt_set_charp, NULL, &trpc_userpass,
+		     set_userpass, NULL, &trpc_userpass,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
 	OPT_ENDTABLE
 };
@@ -565,6 +614,8 @@ static void text_print_status(int thr_id)
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(int thr_id)
 {
+	struct pool *pool = cp;
+
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
 	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION " - Started: %s", datestamp);
@@ -644,7 +695,7 @@ static bool submit_upstream_work(const struct work *work)
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	CURL *curl = curl_easy_init();
-	//struct pool *pool = work->pool;
+	struct pool *pool = cp;
 
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
@@ -728,6 +779,7 @@ static const char *rpc_req =
 
 static bool get_upstream_work(struct work *work)
 {
+	struct pool *pool = cp;
 	json_t *val;
 	bool rc = false;
 	CURL *curl = curl_easy_init();
@@ -908,7 +960,7 @@ static bool stale_work(struct work *work)
 static void *submit_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	//struct pool *pool = wc->u.work->pool;
+	struct pool *pool = cp;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
@@ -957,6 +1009,8 @@ static bool workio_submit_work(struct workio_cmd *wc)
 
 static void inc_staged(int inc, bool lp)
 {
+	struct pool *pool = cp;
+
 	pthread_mutex_lock(&stgd_lock);
 	if (lp) {
 		lp_staged += inc;
@@ -1214,6 +1268,7 @@ static bool queue_request(void)
 {
 	int maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
+	struct pool *pool = cp;
 
 	/* If we've been generating lots of local work we may already have
 	 * enough in the queue */
@@ -1246,6 +1301,7 @@ static bool queue_request(void)
 static void discard_staged(void)
 {
 	struct work *work_heap;
+	struct pool *pool = cp;
 
 	/* Just in case we fell in a hole and missed a queue filling */
 	if (unlikely(!requests_staged()))
@@ -1289,7 +1345,7 @@ static void flush_requests(bool longpoll)
 
 static bool get_work(struct work *work, bool queued)
 {
-	//struct pool *pool = work->pool;
+	struct pool *pool = cp;
 	struct work *work_heap;
 	bool ret = false;
 	int failures = 0;
@@ -1867,6 +1923,7 @@ static void *longpoll_thread(void *userdata)
 	char *copy_start, *hdr_path, *lp_url = NULL;
 	bool need_slash = false;
 	int failures = 0;
+	struct pool *pool = cp;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -2048,6 +2105,7 @@ static void *watchdog_thread(void *userdata)
 {
 	const unsigned int interval = opt_log_interval / 2 ? : 1;
 	struct timeval zero_tv;
+	struct pool *pool = cp;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -2164,6 +2222,7 @@ int main (int argc, char *argv[])
 	struct thr_info *thr;
 	char name[256];
 	struct tm tm;
+	struct pool *pool;
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -2202,14 +2261,6 @@ int main (int argc, char *argv[])
 		strcat(longpoll_block, "0");
 	}
 
-	pools = calloc(sizeof(pools), 1);
-	if (!pools) {
-		applog(LOG_ERR, "Failed to calloc pools in main");
-		return 1;
-	}
-	pool = &pools[0];
-	pool->rpc_url = pool->rpc_user = pool->rpc_pass = pool->rpc_userpass = NULL;
-
 #ifdef WIN32
 	opt_n_threads = num_processors = 1;
 #else
@@ -2240,14 +2291,14 @@ int main (int argc, char *argv[])
 		applog(LOG_ERR, "Unexpected extra commandline arguments");
 		return 1;
 	}
-	if (trpc_url)
-		pool->rpc_url = strdup(trpc_url);
-	if (trpc_userpass)
-		pool->rpc_userpass = strdup(trpc_userpass);
-	if (trpc_user)
-		pool->rpc_user = strdup(trpc_user);
-	if (trpc_pass)
-		pool->rpc_pass = strdup(trpc_pass);
+
+	if (!total_pools) {
+		applog(LOG_ERR, "No server specified");
+		return 1;
+	}
+
+	cp = &pools[0];
+	pool = cp;
 
 	if (total_devices) {
 		if (total_devices > nDevs) {
