@@ -206,6 +206,17 @@ static void applog_and_exit(const char *fmt, ...)
 	exit(1);
 }
 
+static void add_pool(void)
+{
+	total_pools++;
+	pools = realloc(pools, sizeof(struct pool) * total_pools);
+	if (!pools) {
+		applog(LOG_ERR, "Failed to malloc pools in add_pool");
+		exit (1);
+	}
+	memset(&pools[total_pools - 1], 0, sizeof(struct pool));
+}
+
 /* FIXME: Use asprintf for better errors. */
 static char *set_algo(const char *arg, enum sha256_algos *algo)
 {
@@ -277,12 +288,8 @@ static char *set_url(const char *arg, char **p)
 {
 	struct pool *pool;
 
-	total_pools++;
-	pools = realloc(pools, sizeof(struct pool) * total_pools);
-	if (!pools)
-		return "Failed to malloc pools in set_url";
+	add_pool();
 	pool = &pools[total_pools - 1];
-	memset(pool, 0, sizeof(struct pool));
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
