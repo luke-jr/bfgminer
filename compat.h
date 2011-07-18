@@ -1,10 +1,6 @@
 #ifndef __COMPAT_H__
 #define __COMPAT_H__
 
-#ifndef __SUSECONDS_T_TYPE
-typedef long suseconds_t;
-#endif
-
 #ifdef WIN32
 
 #include <windows.h>
@@ -27,6 +23,10 @@ static inline int setpriority(int which, int who, int prio)
 typedef unsigned long int ulong;
 typedef unsigned short int ushort;
 typedef unsigned int uint;
+
+#ifndef __SUSECONDS_T_TYPE
+typedef long suseconds_t;
+#endif
 
 #endif /* WIN32 */
 
