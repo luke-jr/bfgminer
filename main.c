@@ -1891,11 +1891,6 @@ static void *longpoll_thread(void *userdata)
 		val = json_rpc_call(curl, lp_url, rpc_userpass, rpc_req,
 				    false, true);
 		if (likely(val)) {
-			memcpy(longpoll_block, current_block, 36);
-			convert_to_work(val);
-			failures = 0;
-			json_decref(val);
-
 			/* Keep track of who ordered a restart_threads to make
 			 * sure it's only done once per new block */
 			if (likely(!strncmp(longpoll_block, blank, 36) ||
@@ -1905,6 +1900,10 @@ static void *longpoll_thread(void *userdata)
 					restart_threads(true);
 			} else
 				applog(LOG_WARNING, "LONGPOLL received after new block already detected");
+
+			convert_to_work(val);
+			failures = 0;
+			json_decref(val);
 		} else {
 			/* Some pools regularly drop the longpoll request so
 			 * only see this as longpoll failure if it happens
@@ -1923,6 +1922,7 @@ static void *longpoll_thread(void *userdata)
 				goto out;
 			}
 		}
+		memcpy(longpoll_block, current_block, 36);
 	}
 
 out:
