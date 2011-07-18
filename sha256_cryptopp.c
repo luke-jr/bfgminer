@@ -116,12 +116,12 @@ bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
 		stat_ctr++;
 
 		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
-			*hashes_done = stat_ctr;
+			*hashes_done = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || work_restart[thr_id].restart) {
-			*hashes_done = stat_ctr;
+			*hashes_done = n;
 			return false;
 		}
 	}

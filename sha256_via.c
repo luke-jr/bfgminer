@@ -70,12 +70,12 @@ bool scanhash_via(int thr_id, unsigned char *data_inout,
 				dout32[i] = swab32(data32[i]);
 			}
 
-			*hashes_done = stat_ctr;
+			*hashes_done = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || work_restart[thr_id].restart) {
-			*hashes_done = stat_ctr;
+			*hashes_done = n;
 			return false;
 		}
 	}
