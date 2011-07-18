@@ -313,7 +313,7 @@ static char *enable_debug(bool *flag)
 static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--algo|-a",
 		     set_algo, show_algo, &opt_algo,
-		     "Specify sha256 implementation:\n"
+		     "Specify sha256 implementation for CPU mining:\n"
 		     "\tc\t\tLinux kernel sha256, implemented in C"
 #ifdef WANT_SSE2_4WAY
 		     "\n\t4way\t\ttcatm's 4-way SSE2 implementation"
