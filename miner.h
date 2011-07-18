@@ -262,6 +262,23 @@ typedef struct {
 } dev_blk_ctx;
 #endif
 
+struct pool {
+	int accepted, rejected;
+	bool submit_fail;
+	bool localgen;
+	bool idlenet;
+	unsigned int getwork_requested;
+	unsigned int stale_shares;
+	unsigned int discarded_work;
+	unsigned int localgen_occasions;
+	unsigned int remotefail_occasions;
+	struct timeval tv_localgen;
+
+	char *rpc_url;
+	char *rpc_userpass;
+	char *rpc_user, *rpc_pass;
+};
+
 struct work {
 	unsigned char	data[128];
 	unsigned char	hash1[64];
@@ -270,12 +287,13 @@ struct work {
 
 	unsigned char	hash[32];
 
-	uint32_t		output[1];
-	uint32_t		res_nonce;
-	uint32_t		valid;
-	dev_blk_ctx		blk;
+	uint32_t	output[1];
+	uint32_t	res_nonce;
+	uint32_t	valid;
+	dev_blk_ctx	blk;
 
-	int thr_id;
+	int		thr_id;
+	struct pool	*pool;
 };
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);

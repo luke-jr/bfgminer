@@ -155,10 +155,6 @@ static int num_processors;
 static int scan_intensity;
 static bool use_curses = true;
 
-static char *rpc_url;
-static char *rpc_userpass;
-static char *rpc_user, *rpc_pass;
-
 struct thr_info *thr_info;
 static int work_thr_id;
 int longpoll_thr_id;
@@ -176,19 +172,16 @@ static struct timeval total_tv_start, total_tv_end;
 
 pthread_mutex_t control_lock;
 
-static int accepted, rejected;
 int hw_errors;
+static int total_accepted, total_rejected;
+static int total_getworks, total_stale, total_discarded;
 static int total_queued, total_staged, lp_staged;
-static bool submit_fail = false;
-static bool localgen = false;
-static bool idlenet = false;
-static unsigned int getwork_requested;
-static unsigned int stale_shares;
-static unsigned int discarded_work;
 static unsigned int new_blocks;
 static unsigned int local_work;
-static unsigned int localgen_occasions;
-static unsigned int remotefail_occasions;
+static unsigned int total_lo, total_ro;
+
+static struct pool *pools;
+static struct pool *pool;
 
 static bool curses_active = false;
 
@@ -308,6 +301,9 @@ static char *enable_debug(bool *flag)
 	return NULL;
 }
 
+static char *trpc_url;
+static char *trpc_userpass;
+static char *trpc_user, *trpc_pass;
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
@@ -356,7 +352,7 @@ static struct opt_table opt_config_table[] = {
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
 	OPT_WITH_ARG("--pass|-p",
-		     opt_set_charp, NULL, &rpc_pass,
+		     opt_set_charp, NULL, &trpc_pass,
 		     "Password for bitcoin JSON-RPC server"),
 	OPT_WITHOUT_ARG("--protocol-dump|-P",
 			opt_set_bool, &opt_protocol,
@@ -385,10 +381,10 @@ static struct opt_table opt_config_table[] = {
 			opt_set_invbool, &use_curses,
 			"Disable ncurses formatted screen output"),
 	OPT_WITH_ARG("--url|-o",
-		     set_url, opt_show_charp, &rpc_url,
+		     set_url, opt_show_charp, &trpc_url,
 		     "URL for bitcoin JSON-RPC server"),
 	OPT_WITH_ARG("--user|-u",
-		     opt_set_charp, NULL, &rpc_user,
+		     opt_set_charp, NULL, &trpc_user,
 		     "Username for bitcoin JSON-RPC server"),
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
@@ -404,7 +400,7 @@ static struct opt_table opt_config_table[] = {
 		     "Override detected optimal worksize"),
 #endif
 	OPT_WITH_ARG("--userpass|-O",
-		     opt_set_charp, NULL, &rpc_userpass,
+		     opt_set_charp, NULL, &trpc_userpass,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
 	OPT_ENDTABLE
 };
@@ -580,11 +576,11 @@ static void curses_print_status(int thr_id)
 	wclrtoeol(statuswin);
 	wmove(statuswin, 3,0);
 	wprintw(statuswin, " TQ: %d  ST: %d  LS: %d  SS: %d  DW: %d  NB: %d  LW: %d  LO: %d  RF: %d  I: %d",
-		total_queued, total_staged, lp_staged, stale_shares, discarded_work, new_blocks,
-		local_work, localgen_occasions, remotefail_occasions, scan_intensity);
+		total_queued, total_staged, lp_staged, total_stale, total_discarded, new_blocks,
+		local_work, total_lo, total_ro, scan_intensity);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 4, 0);
-	wprintw(statuswin, " Connected to %s as user %s", rpc_url, rpc_user);
+	wprintw(statuswin, " Connected to %s as user %s", pool->rpc_url, pool->rpc_user);
 	wmove(statuswin, 5, 0);
 	wprintw(statuswin, " Block %s  started: %s", current_block + 4, blockdate);
 	wmove(statuswin, 6, 0);
@@ -648,6 +644,7 @@ static bool submit_upstream_work(const struct work *work)
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	CURL *curl = curl_easy_init();
+	//struct pool *pool = work->pool;
 
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
@@ -670,15 +667,16 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_DEBUG, "DBG: sending RPC call: %s", s);
 
 	/* issue JSON-RPC request */
-	val = json_rpc_call(curl, rpc_url, rpc_userpass, s, false, false);
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
-		if (!test_and_set(&submit_fail)) {
-			remotefail_occasions++;
+		if (!test_and_set(&pool->submit_fail)) {
+			total_ro++;
+			pool->remotefail_occasions++;
 			applog(LOG_WARNING, "Upstream communication failure, caching submissions");
 		}
 		goto out;
-	} else if (test_and_clear(&submit_fail))
+	} else if (test_and_clear(&pool->submit_fail))
 		applog(LOG_WARNING, "Upstream communication resumed, submitting work");
 
 	res = json_object_get(val, "result");
@@ -688,7 +686,8 @@ static bool submit_upstream_work(const struct work *work)
 	 * same time is zero so there is no point adding extra locking */
 	if (json_is_true(res)) {
 		cgpu->accepted++;
-		accepted++;
+		total_accepted++;
+		pool->accepted++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!opt_quiet)
@@ -696,7 +695,8 @@ static bool submit_upstream_work(const struct work *work)
 			       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 	} else {
 		cgpu->rejected++;
-		rejected++;
+		total_rejected++;
+		pool->rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!opt_quiet)
@@ -737,7 +737,7 @@ static bool get_upstream_work(struct work *work)
 		return rc;
 	}
 
-	val = json_rpc_call(curl, rpc_url, rpc_userpass, rpc_req,
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			    want_longpoll, false);
 	if (unlikely(!val)) {
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
@@ -908,13 +908,15 @@ static bool stale_work(struct work *work)
 static void *submit_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
+	//struct pool *pool = wc->u.work->pool;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
 
 	if (stale_work(wc->u.work)) {
 		applog(LOG_WARNING, "Stale share detected, discarding");
-		stale_shares++;
+		total_stale++;
+		pool->stale_shares++;
 		goto out;
 	}
 
@@ -922,7 +924,8 @@ static void *submit_work_thread(void *userdata)
 	while (!submit_upstream_work(wc->u.work)) {
 		if (stale_work(wc->u.work)) {
 			applog(LOG_WARNING, "Stale share detected, discarding");
-			stale_shares++;
+			total_stale++;
+			pool->stale_shares++;
 			break;
 		}
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
@@ -958,7 +961,7 @@ static void inc_staged(int inc, bool lp)
 	if (lp) {
 		lp_staged += inc;
 		total_staged += inc;
-		idlenet = true;
+		pool->idlenet = true;
 	} else if (lp_staged) {
 		if (!--lp_staged) {
 			unsigned int i;
@@ -967,7 +970,7 @@ static void inc_staged(int inc, bool lp)
 			* threads once we unset the idlenet flag */
 			for (i = 0; i < mining_threads; i++)
 				gettimeofday(&thr_info[i].last, NULL);
-			idlenet = false;
+			pool->idlenet = false;
 		}
 	} else
 		total_staged += inc;
@@ -1162,12 +1165,12 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
-	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
-	efficiency = getwork_requested ? accepted * 100.0 / getwork_requested : 0.0;
+	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
-		getwork_requested, accepted, rejected, hw_errors, efficiency, utility);
+		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
 	if (!curses_active) {
 		printf("%s          \r", statusline);
 		fflush(stdout);
@@ -1234,7 +1237,8 @@ static bool queue_request(void)
 		workio_cmd_free(wc);
 		return false;
 	}
-	getwork_requested++;
+	total_getworks++;
+	pool->getwork_requested++;
 	inc_queued();
 	return true;
 }
@@ -1253,7 +1257,8 @@ static void discard_staged(void)
 
 	free(work_heap);
 	dec_queued();
-	discarded_work++;
+	pool->discarded_work++;
+	total_discarded++;
 }
 
 static void flush_requests(bool longpoll)
@@ -1284,7 +1289,7 @@ static void flush_requests(bool longpoll)
 
 static bool get_work(struct work *work, bool queued)
 {
-	static struct timeval tv_localgen = {};
+	//struct pool *pool = work->pool;
 	struct work *work_heap;
 	bool ret = false;
 	int failures = 0;
@@ -1300,15 +1305,16 @@ retry:
 		uint32_t ntime;
 
 		/* Only print this message once each time we shift to localgen */
-		if (!test_and_set(&localgen)) {
+		if (!test_and_set(&pool->localgen)) {
 			applog(LOG_WARNING, "Server not providing work fast enough, generating work locally");
-			localgen_occasions++;
-			gettimeofday(&tv_localgen, NULL);
+			pool->localgen_occasions++;
+			total_lo++;
+			gettimeofday(&pool->tv_localgen, NULL);
 		} else {
 			struct timeval tv_now, diff;
 
 			gettimeofday(&tv_now, NULL);
-			timeval_subtract(&diff, &tv_now, &tv_localgen);
+			timeval_subtract(&diff, &tv_now, &pool->tv_localgen);
 			if (diff.tv_sec > 600) {
 				/* A new block appears on average every 10 mins */
 				applog(LOG_WARNING, "Prolonged outage. Going idle till network recovers.");
@@ -1335,7 +1341,7 @@ retry:
 	}
 
 	/* If we make it here we have succeeded in getting fresh work */
-	if (test_and_clear(&localgen))
+	if (test_and_clear(&pool->localgen))
 		applog(LOG_WARNING, "Resuming with work from server");
 	dec_queued();
 
@@ -1877,14 +1883,14 @@ static void *longpoll_thread(void *userdata)
 	/* absolute path, on current server */
 	else {
 		copy_start = (*hdr_path == '/') ? (hdr_path + 1) : hdr_path;
-		if (rpc_url[strlen(rpc_url) - 1] != '/')
+		if (pool->rpc_url[strlen(pool->rpc_url) - 1] != '/')
 			need_slash = true;
 
-		lp_url = malloc(strlen(rpc_url) + strlen(copy_start) + 2);
+		lp_url = malloc(strlen(pool->rpc_url) + strlen(copy_start) + 2);
 		if (!lp_url)
 			goto out;
 
-		sprintf(lp_url, "%s%s%s", rpc_url, need_slash ? "/" : "", copy_start);
+		sprintf(lp_url, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
 	}
 
 	applog(LOG_INFO, "Long-polling activated for %s", lp_url);
@@ -1900,7 +1906,7 @@ static void *longpoll_thread(void *userdata)
 		json_t *val;
 
 		gettimeofday(&start, NULL);
-		val = json_rpc_call(curl, lp_url, rpc_userpass, rpc_req,
+		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
 				    false, true);
 		if (likely(val)) {
 			/* Keep track of who ordered a restart_threads to make
@@ -2089,7 +2095,7 @@ static void *watchdog_thread(void *userdata)
 
 			/* Do not kill threads waiting on longpoll staged work
 			 * or idle network */
-			if (now.tv_sec - thr->last.tv_sec > 60 && !idlenet) {
+			if (now.tv_sec - thr->last.tv_sec > 60 && !pool->idlenet) {
 				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
 				/* Create one mandatory work item */
 				inc_staged(1, true);
@@ -2118,28 +2124,29 @@ static void print_summary(void)
 	mins = (diff.tv_sec % 3600) / 60;
 	secs = diff.tv_sec % 60;
 
-	utility = accepted / ( total_secs ? total_secs : 1 ) * 60;
-	efficiency = getwork_requested ? accepted * 100.0 / getwork_requested : 0.0;
+	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	printf("\nSummary of runtime statistics:\n\n");
 	printf("Started at %s\n", datestamp);
 	printf("Runtime: %d hrs : %d mins : %d secs\n", hours, mins, secs);
 	if (total_secs)
 		printf("Average hashrate: %.1f Megahash/s\n", total_mhashes_done / total_secs);
-	printf("Queued work requests: %d\n", getwork_requested);
-	printf("Share submissions: %d\n", accepted + rejected);
-	printf("Accepted shares: %d\n", accepted);
-	printf("Rejected shares: %d\n", rejected);
-	if (accepted || rejected)
-		printf("Reject ratio: %.1f\n", (double)(rejected * 100) / (double)(accepted + rejected));
+	printf("Queued work requests: %d\n", total_getworks);
+	printf("Share submissions: %d\n", total_accepted + total_rejected);
+	printf("Accepted shares: %d\n", total_accepted);
+	printf("Rejected shares: %d\n", total_rejected);
+	if (total_accepted || total_rejected)
+		printf("Reject ratio: %.1f\n", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
 	printf("Hardware errors: %d\n", hw_errors);
 	printf("Efficiency (accepted / queued): %.0f%%\n", efficiency);
 	printf("Utility (accepted shares / min): %.2f/min\n\n", utility);
-	printf("Discarded work due to new blocks: %d\n", discarded_work);
-	printf("Stale submissions discarded due to new blocks: %d\n", stale_shares);
-	printf("Unable to get work from server occasions: %d\n", localgen_occasions);
+
+	printf("Discarded work due to new blocks: %d\n", total_discarded);
+	printf("Stale submissions discarded due to new blocks: %d\n", total_stale);
+	printf("Unable to get work from server occasions: %d\n", total_lo);
 	printf("Work items generated locally: %d\n", local_work);
-	printf("Submitting work remotely delay occasions: %d\n", remotefail_occasions);
+	printf("Submitting work remotely delay occasions: %d\n", total_ro);
 	printf("New blocks detected on network: %d\n\n", new_blocks);
 
 	printf("Summary of per device statistics:\n\n");
@@ -2157,6 +2164,11 @@ int main (int argc, char *argv[])
 	struct thr_info *thr;
 	char name[256];
 	struct tm tm;
+
+	/* This dangerous functions tramples random dynamically allocated
+	 * variables so do it before anything at all */
+	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
+		return 1;
 
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
 		return 1;
@@ -2190,6 +2202,14 @@ int main (int argc, char *argv[])
 		strcat(longpoll_block, "0");
 	}
 
+	pools = calloc(sizeof(pools), 1);
+	if (!pools) {
+		applog(LOG_ERR, "Failed to calloc pools in main");
+		return 1;
+	}
+	pool = &pools[0];
+	pool->rpc_url = pool->rpc_user = pool->rpc_pass = pool->rpc_userpass = NULL;
+
 #ifdef WIN32
 	opt_n_threads = num_processors = 1;
 #else
@@ -2207,7 +2227,7 @@ int main (int argc, char *argv[])
 	if (nDevs)
 		opt_n_threads = 0;
 
-	rpc_url = strdup(DEF_RPC_URL);
+	trpc_url = strdup(DEF_RPC_URL);
 
 	/* parse command line */
 	opt_register_table(opt_config_table,
@@ -2220,6 +2240,14 @@ int main (int argc, char *argv[])
 		applog(LOG_ERR, "Unexpected extra commandline arguments");
 		return 1;
 	}
+	if (trpc_url)
+		pool->rpc_url = strdup(trpc_url);
+	if (trpc_userpass)
+		pool->rpc_userpass = strdup(trpc_userpass);
+	if (trpc_user)
+		pool->rpc_user = strdup(trpc_user);
+	if (trpc_pass)
+		pool->rpc_pass = strdup(trpc_pass);
 
 	if (total_devices) {
 		if (total_devices > nDevs) {
@@ -2251,29 +2279,27 @@ int main (int argc, char *argv[])
 	logstart = cpucursor + (opt_n_threads ? num_processors : 0) + 1;
 	logcursor = logstart + 1;
 
-	if (!rpc_userpass) {
-		if (!rpc_user || !rpc_pass) {
+	if (!pool->rpc_userpass) {
+		if (!pool->rpc_user || !pool->rpc_pass) {
 			applog(LOG_ERR, "No login credentials supplied");
 			return 1;
 		}
-		rpc_userpass = malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);
-		if (!rpc_userpass)
+		pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
+		if (!pool->rpc_userpass)
 			return 1;
-		sprintf(rpc_userpass, "%s:%s", rpc_user, rpc_pass);
+		sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 	} else {
-		rpc_user = malloc(strlen(rpc_userpass));
-		if (!rpc_user)
+		pool->rpc_user = malloc(strlen(pool->rpc_userpass));
+		if (!pool->rpc_user)
 			return 1;
-		strcpy(rpc_user, rpc_userpass);
-		rpc_user = strtok(rpc_user, ":");
-		if (!rpc_user) {
+		strcpy(pool->rpc_user, pool->rpc_userpass);
+		pool->rpc_user = strtok(pool->rpc_user, ":");
+		if (!pool->rpc_user) {
 			applog(LOG_ERR, "Failed to find colon delimiter in userpass");
 			return 1;
 		}
 	}
 
-	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
-		return 1;
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
 		openlog("cpuminer", LOG_PID, LOG_USER);
@@ -2472,7 +2498,6 @@ int main (int argc, char *argv[])
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	gettimeofday(&total_tv_end, NULL);
-	curl_global_cleanup();
 	disable_curses();
 	if (!opt_quiet && successful_connect)
 		print_summary();
@@ -2481,6 +2506,9 @@ int main (int argc, char *argv[])
 		free(gpus);
 	if (opt_n_threads)
 		free(cpus);
+
+	free(pools);
+	curl_global_cleanup();
 
 	return 0;
 }
