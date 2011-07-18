@@ -1802,6 +1802,30 @@ static void restart_threads(bool longpoll)
 		work_restart[i].restart = 1;
 }
 
+/* Stage another work item from the work returned in a longpoll */
+static void convert_to_work(json_t *val)
+{
+	struct work *work;
+	bool rc;
+
+	work = calloc(sizeof(*work), 1);
+	if (unlikely(!work)) {
+		applog(LOG_ERR, "OOM in convert_to_work");
+		return;
+	}
+
+	rc= work_decode(json_object_get(val, "result"), work);
+	if (unlikely(!rc)) {
+		applog(LOG_ERR, "Could not convert longpoll data to work");
+		return;
+	}
+
+	if (unlikely(!tq_push(thr_info[stage_thr_id].q, work)))
+		applog(LOG_ERR, "Could not tq_push work in convert_to_work");
+	else if (opt_debug)
+		applog(LOG_DEBUG, "Converted longpoll data to work");
+}
+
 static void *longpoll_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -1851,6 +1875,7 @@ static void *longpoll_thread(void *userdata)
 		val = json_rpc_call(curl, lp_url, rpc_userpass, rpc_req,
 				    false, true);
 		if (likely(val)) {
+			convert_to_work(val);
 			failures = 0;
 			json_decref(val);
 
