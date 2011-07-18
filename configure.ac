@@ -30,21 +30,23 @@ PTHREAD_FLAGS="-pthread"
 OPENCL_FLAGS="-lOpenCL"
 
 case $target in
+  x86_64-*)
+    have_x86_64=true
+    ;;
+  *)
+    have_x86_64=false
+    ;;
+esac
+
+case $target in
   *-*-mingw*)
     have_x86_64=false
     have_win32=true
     PTHREAD_FLAGS=""
     ;;
-  x86_64-*)
-    have_x86_64=true
-    ;;
   *-*-darwin*)
-    have_x86_64=false
     OPENCL_FLAGS="-framework OpenCL"
 	;;
-  *)
-    have_x86_64=false
-    ;;
 esac
 
 # Check for OpenCL (the long way needed on mingw32 due to calling conventions)
