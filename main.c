@@ -991,6 +991,16 @@ static int requests_staged(void)
 	return ret;
 }
 
+static int real_staged(void)
+{
+	int ret;
+
+	pthread_mutex_lock(&stgd_lock);
+	ret = total_staged - lp_staged;
+	pthread_mutex_unlock(&stgd_lock);
+	return ret;
+}
+
 static void set_curblock(char *hexstr)
 {
 	struct timeval tv_now;
@@ -1198,11 +1208,12 @@ static int requests_queued(void)
 
 static bool queue_request(void)
 {
+	int maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
 
 	/* If we've been generating lots of local work we may already have
 	 * enough in the queue */
-	if (requests_queued() >= opt_queue + mining_threads)
+	if (requests_queued() >= maxq || real_staged() >= maxq)
 		return true;
 
 	/* fill out work request message */
