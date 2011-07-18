@@ -1,7 +1,17 @@
+
+- Add an sse4 algorithm to CPU mining.
+- Fix CPU mining with other algorithms not working.
+- Rename the poclbm file to ensure a new binary is built since.
+- We now are guaranteed to have one fresh work item after a block change and we
+should only discard staged requests.
+- Don't waste the work we retrieve from a longpoll.
+- Provide a control lock around global bools to avoid racing on them.
 - Iterating over 1026 nonces when confirming data from the GPU is old code
 and unnecessary and can lead to repeats/stales.
 - The poclbm kernel needs to be updated to work with the change to 4k sized
 output buffers.
+- longpoll seems to work either way with post or get but some servers prefer
+get so change to httpget.
 
 
 Version 1.2.7 - July 16, 2011
