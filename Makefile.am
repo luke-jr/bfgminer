@@ -22,6 +22,7 @@ cgminer_SOURCES	= elist.h miner.h compat.h			\
 		  ocl.c ocl.h findnonce.c findnonce.h 		\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
+		  sha256_sse4_amd64.c \
 		  phatk110714.cl poclbm110717.cl
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)

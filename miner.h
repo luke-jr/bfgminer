@@ -57,6 +57,10 @@ void *alloca (size_t);
 #define WANT_X8664_SSE2 1
 #endif
 
+#if defined(__x86_64__) && defined(__SSE4_1__) && defined(HAS_YASM)
+#define WANT_X8664_SSE4 1
+#endif
+
 #if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define WANT_BUILTIN_BSWAP
 #else
@@ -207,6 +211,12 @@ extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *dat
 	      const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t nonce);
 extern int scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t nonce);
+
+extern int scanhash_sse4_64(int, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, unsigned long *nHashesDone,

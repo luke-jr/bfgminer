@@ -13,7 +13,7 @@
 
 #include "miner.h"
 
-#ifdef WANT_X8664_SSE2
+#ifdef WANT_X8664_SSE4
 
 #include <string.h>
 #include <assert.h>
@@ -22,7 +22,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-extern void CalcSha256_x64(__m128i *res, __m128i *data, uint32_t init[8]);
+extern void CalcSha256_x64_sse4(__m128i *res, __m128i *data, uint32_t init[8]);
 
 static uint32_t g_sha256_k[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, /*  0 */
@@ -49,7 +49,7 @@ static uint32_t g_sha256_hinit[8] =
 
 __m128i g_4sha256_k[64];
 
-int scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
+int scanhash_sse4_64(int thr_id, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
@@ -95,8 +95,8 @@ int scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
 	m_4w[3] = _mm_add_epi32(offset, _mm_set1_epi32(nonce));
 
 	/* Some optimization can be done here W.R.T. precalculating some hash */
-        CalcSha256_x64(m_4hash1, m_4w, m_midstate);
-	CalcSha256_x64(m_4hash, m_4hash1, g_sha256_hinit);
+        CalcSha256_x64_sse4(m_4hash1, m_4w, m_midstate);
+	CalcSha256_x64_sse4(m_4hash, m_4hash1, g_sha256_hinit);
 
 	for (j = 0; j < 4; j++) {
 	    mi.m = m_4hash[7];
@@ -129,5 +129,5 @@ int scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
    }
 }
 
-#endif /* WANT_X8664_SSE2 */
+#endif /* WANT_X8664_SSE4 */
 

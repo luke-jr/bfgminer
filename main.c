@@ -96,6 +96,7 @@ enum sha256_algos {
 	ALGO_CRYPTOPP,		/* Crypto++ (C) */
 	ALGO_CRYPTOPP_ASM32,	/* Crypto++ 32-bit assembly */
 	ALGO_SSE2_64,		/* SSE2 for x86_64 */
+	ALGO_SSE4_64,		/* SSE4 for x86_64 */
 };
 
 static const char *algo_names[] = {
@@ -112,6 +113,9 @@ static const char *algo_names[] = {
 #endif
 #ifdef WANT_X8664_SSE2
 	[ALGO_SSE2_64]		= "sse2_64",
+#endif
+#ifdef WANT_X8664_SSE4
+	[ALGO_SSE4_64]		= "sse4_64",
 #endif
 };
 
@@ -131,7 +135,9 @@ int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
 static const bool opt_time = true;
-#ifdef WANT_X8664_SSE2
+#ifdef WANT_X8664_SSE4
+static enum sha256_algos opt_algo = ALGO_SSE4_64;
+#elif WANT_X8664_SSE2
 static enum sha256_algos opt_algo = ALGO_SSE2_64;
 #else
 static enum sha256_algos opt_algo = ALGO_C;
@@ -321,6 +327,9 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef WANT_X8664_SSE2
 		     "\n\tsse2_64\t\tSSE2 implementation for x86_64 machines"
+#endif
+#ifdef WANT_X8664_SSE4
+		     "\n\tsse4_64\t\tSSE4 implementation for x86_64 machines"
 #endif
 		),
 	OPT_WITH_ARG("--cpu-threads|-t",
@@ -1440,6 +1449,19 @@ static void *miner_thread(void *userdata)
 		case ALGO_SSE2_64: {
 			unsigned int rc5 =
 			        scanhash_sse2_64(thr_id, work.midstate, work.data + 64,
+						 work.hash1, work.hash,
+						 work.target,
+					         max_nonce, &hashes_done,
+						 work.blk.nonce);
+			rc = (rc5 == -1) ? false : true;
+			}
+			break;
+#endif
+
+#ifdef WANT_X8664_SSE4
+		case ALGO_SSE4_64: {
+			unsigned int rc5 =
+			        scanhash_sse4_64(thr_id, work.midstate, work.data + 64,
 						 work.hash1, work.hash,
 						 work.target,
 					         max_nonce, &hashes_done,
