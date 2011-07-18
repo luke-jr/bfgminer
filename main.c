@@ -1218,45 +1218,37 @@ static bool queue_request(void)
 	return true;
 }
 
-static bool discard_request(void)
+static void discard_staged(void)
 {
 	struct work *work_heap;
 
 	/* Just in case we fell in a hole and missed a queue filling */
-	if (unlikely(!requests_queued())) {
-		applog(LOG_WARNING, "Tried to discard_request with nil queued");
-		return true;
-	}
+	if (unlikely(!requests_staged()))
+		return;
 
 	work_heap = tq_pop(getq, NULL);
-	if (unlikely(!work_heap)) {
-		applog(LOG_ERR, "Failed to tq_pop in discard_request");
-		return false;
-	}
+	if (unlikely(!work_heap))
+		return;
+
 	free(work_heap);
 	dec_queued();
 	discarded_work++;
-	return true;
 }
 
 static void flush_requests(bool longpoll)
 {
-	int i, extra;
+	int i, stale;
 
-	extra = requests_queued();
-	/* When flushing from longpoll, we don't know the new work yet. When
-	 * not flushing from longpoll, the first work item is valid so do not
-	 * discard it */
+	/* We should have one fresh work item staged from the block change. */
+	stale = requests_staged() - 1;
 	if (longpoll)
 		memcpy(current_block, blank, 36);
-	else
-		extra--;
 
 	/* Temporarily increase the staged count so that get_work thinks there
 	 * is work available instead of making threads reuse existing work */
 	inc_staged(mining_threads, true);
 
-	for (i = 0; i < extra; i++) {
+	for (i = 0; i < stale; i++) {
 		/* Queue a whole batch of new requests */
 		if (unlikely(!queue_request())) {
 			applog(LOG_ERR, "Failed to queue requests in flush_requests");
@@ -1265,11 +1257,7 @@ static void flush_requests(bool longpoll)
 		}
 		/* Pop off the old requests. Cancelling the requests would be better
 		* but is tricky */
-		if (unlikely(!discard_request())) {
-			applog(LOG_ERR, "Failed to discard requests in flush_requests");
-			kill_work();
-			break;
-		}
+		discard_staged();
 	}
 }
 
