@@ -250,7 +250,6 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	struct curl_slist *headers = NULL;
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
-	long timeout = longpoll ? (60 * 60) : (60 * 10);
 	struct header_info hi = { };
 	bool lp_scanning = false;
 
@@ -272,7 +271,6 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_READDATA, &upload_data);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 	if (lp_scanning) {
 		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
 		curl_easy_setopt(curl, CURLOPT_HEADERDATA, &hi);
