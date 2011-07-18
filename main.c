@@ -1654,6 +1654,12 @@ static void *gpuminer_thread(void *userdata)
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
 
+	if (opt_dynamic) {
+		/* Minimise impact on desktop if we want dynamic mode */
+		setpriority(PRIO_PROCESS, 0, 19);
+		drop_policy();
+	}
+
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	res = calloc(BUFFERSIZE, 1);
