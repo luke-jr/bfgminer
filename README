@@ -96,3 +96,8 @@ LW is Locally generated Work items (during slow server providing work)
 LO is Local generation Occasions (server slow to provide work)
 RF is Remote Fail occasions (server slow to accept work)
 I is current Intensity (changes in dynamic mode).
+
+NOTE: Running intensities above 9 with current hardware is likely to only
+diminish return performance even if the hash rate might appear better. A good
+starting baseline intensity to try on dedicated miners is 8. Higher values are
+there to cope with future improvements in hardware.

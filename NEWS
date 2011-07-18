@@ -1,4 +1,6 @@
+Version 1.2.8 - July 18, 2011
 
+- More OSX build fixes.
 - Add an sse4 algorithm to CPU mining.
 - Fix CPU mining with other algorithms not working.
 - Rename the poclbm file to ensure a new binary is built since.
