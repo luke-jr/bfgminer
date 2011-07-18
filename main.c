@@ -2158,6 +2158,11 @@ int main (int argc, char *argv[])
 	char name[256];
 	struct tm tm;
 
+	/* This dangerous functions tramples random dynamically allocated
+	 * variables so do it before anything at all */
+	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
+		return 1;
+
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
 		return 1;
 	if (unlikely(pthread_mutex_init(&qd_lock, NULL)))
@@ -2272,8 +2277,6 @@ int main (int argc, char *argv[])
 		}
 	}
 
-	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
-		return 1;
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
 		openlog("cpuminer", LOG_PID, LOG_USER);
@@ -2472,7 +2475,6 @@ int main (int argc, char *argv[])
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	gettimeofday(&total_tv_end, NULL);
-	curl_global_cleanup();
 	disable_curses();
 	if (!opt_quiet && successful_connect)
 		print_summary();
@@ -2482,6 +2484,7 @@ int main (int argc, char *argv[])
 	if (opt_n_threads)
 		free(cpus);
 
+	curl_global_cleanup();
 	return 0;
 }
 
