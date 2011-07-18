@@ -277,6 +277,8 @@ struct pool {
 	char *rpc_url;
 	char *rpc_userpass;
 	char *rpc_user, *rpc_pass;
+
+	pthread_mutex_t pool_lock;
 };
 
 struct work {

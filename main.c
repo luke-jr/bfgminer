@@ -180,7 +180,7 @@ static unsigned int new_blocks;
 static unsigned int local_work;
 static unsigned int total_lo, total_ro;
 
-static struct pool *pools;
+static struct pool *pools = NULL;
 static struct pool *cp; /* Current pool */
 static int total_pools;
 
@@ -208,13 +208,43 @@ static void applog_and_exit(const char *fmt, ...)
 
 static void add_pool(void)
 {
+	struct pool *pool;
+
 	total_pools++;
 	pools = realloc(pools, sizeof(struct pool) * total_pools);
 	if (!pools) {
 		applog(LOG_ERR, "Failed to malloc pools in add_pool");
 		exit (1);
 	}
-	memset(&pools[total_pools - 1], 0, sizeof(struct pool));
+	pool = &pools[total_pools - 1];
+	memset(pool, 0, sizeof(struct pool));
+	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL))) {
+		applog(LOG_ERR, "Failed to pthread_mutex_init in add_pool");
+		exit (1);
+	}
+}
+
+/* Pool variant of test and set */
+static bool pool_tset(struct pool *pool, bool *var)
+{
+	bool ret;
+
+	pthread_mutex_lock(&pool->pool_lock);
+	ret = *var;
+	*var = true;
+	pthread_mutex_unlock(&pool->pool_lock);
+	return ret;
+}
+
+static bool pool_tclear(struct pool *pool, bool *var)
+{
+	bool ret;
+
+	pthread_mutex_lock(&pool->pool_lock);
+	ret = *var;
+	*var = false;
+	pthread_mutex_unlock(&pool->pool_lock);
+	return ret;
 }
 
 /* FIXME: Use asprintf for better errors. */
@@ -728,13 +758,13 @@ static bool submit_upstream_work(const struct work *work)
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
-		if (!test_and_set(&pool->submit_fail)) {
+		if (!pool_tset(pool, &pool->submit_fail)) {
 			total_ro++;
 			pool->remotefail_occasions++;
 			applog(LOG_WARNING, "Upstream communication failure, caching submissions");
 		}
 		goto out;
-	} else if (test_and_clear(&pool->submit_fail))
+	} else if (pool_tclear(pool, &pool->submit_fail))
 		applog(LOG_WARNING, "Upstream communication resumed, submitting work");
 
 	res = json_object_get(val, "result");
@@ -1368,7 +1398,7 @@ retry:
 		uint32_t ntime;
 
 		/* Only print this message once each time we shift to localgen */
-		if (!test_and_set(&pool->localgen)) {
+		if (!pool_tset(pool, &pool->localgen)) {
 			applog(LOG_WARNING, "Server not providing work fast enough, generating work locally");
 			pool->localgen_occasions++;
 			total_lo++;
@@ -1404,7 +1434,7 @@ retry:
 	}
 
 	/* If we make it here we have succeeded in getting fresh work */
-	if (test_and_clear(&pool->localgen))
+	if (pool_tclear(pool, &pool->localgen))
 		applog(LOG_WARNING, "Resuming with work from server");
 	dec_queued();
 
@@ -2569,8 +2599,9 @@ int main (int argc, char *argv[])
 		free(gpus);
 	if (opt_n_threads)
 		free(cpus);
+	if (pools)
+		free(pools);
 
-	free(pools);
 	curl_global_cleanup();
 
 	return 0;
