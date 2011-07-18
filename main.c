@@ -1191,7 +1191,8 @@ static void inc_queued(void)
 static void dec_queued(void)
 {
 	pthread_mutex_lock(&qd_lock);
-	total_queued--;
+	if (total_queued > 0)
+		total_queued--;
 	pthread_mutex_unlock(&qd_lock);
 	dec_staged(1);
 }
