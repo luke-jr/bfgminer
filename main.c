@@ -1970,6 +1970,7 @@ static void convert_to_work(json_t *val)
 		applog(LOG_ERR, "Could not convert longpoll data to work");
 		return;
 	}
+	work->pool = current_pool();
 
 	if (unlikely(!tq_push(thr_info[stage_thr_id].q, work)))
 		applog(LOG_ERR, "Could not tq_push work in convert_to_work");
