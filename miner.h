@@ -149,6 +149,7 @@ struct thr_info {
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
 	struct timeval last;
+	bool	getwork;
 };
 
 static inline uint32_t swab32(uint32_t v)
@@ -268,7 +269,7 @@ struct pool {
 	int accepted, rejected;
 	bool submit_fail;
 	bool localgen;
-	bool idlenet;
+	bool idle;
 	bool has_rolltime;
 	bool probed;
 	unsigned int getwork_requested;

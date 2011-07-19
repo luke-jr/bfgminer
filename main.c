@@ -1096,17 +1096,10 @@ static void inc_staged(struct pool *pool, int inc, bool lp)
 	if (lp) {
 		lp_staged += inc;
 		total_staged += inc;
-		pool->idlenet = true;
+		pool->idle = true;
 	} else if (lp_staged) {
-		if (!--lp_staged) {
-			unsigned int i;
-
-			/* Make sure the watchdog thread doesn't kill the mining
-			* threads once we unset the idlenet flag */
-			for (i = 0; i < mining_threads; i++)
-				gettimeofday(&thr_info[i].last, NULL);
-			pool->idlenet = false;
-		}
+		if (!--lp_staged)
+			pool->idle = false;
 	} else
 		total_staged += inc;
 	pthread_mutex_unlock(&stgd_lock);
@@ -1246,6 +1239,17 @@ static void *workio_thread(void *userdata)
 	tq_freeze(mythr->q);
 
 	return NULL;
+}
+
+static void thread_reportin(struct thr_info *thr)
+{
+	gettimeofday(&thr->last, NULL);
+	thr->getwork = false;
+}
+
+static inline void thread_reportout(struct thr_info *thr)
+{
+	thr->getwork = true;
 }
 
 static void hashmeter(int thr_id, struct timeval *diff,
@@ -1428,7 +1432,8 @@ static void flush_requests(bool longpoll)
 	}
 }
 
-static bool get_work(struct work *work, bool queued)
+static bool get_work(struct work *work, bool queued, struct thr_info *thr,
+		     const int thr_id)
 {
 	struct timespec abstime = {};
 	struct timeval now;
@@ -1437,6 +1442,9 @@ static bool get_work(struct work *work, bool queued)
 	bool ret = false;
 	int failures = 0;
 
+	/* Tell the watchdog thread this thread is waiting on getwork and
+	 * should not be restarted */
+	thread_reportout(thr);
 retry:
 	pool = current_pool();
 	if (unlikely(!queued && !queue_request())) {
@@ -1524,6 +1532,9 @@ out:
 		sleep(opt_fail_pause);
 		goto retry;
 	}
+
+	work->thr_id = thr_id;
+	thread_reportin(thr);
 	return ret;
 }
 
@@ -1605,13 +1616,12 @@ static void *miner_thread(void *userdata)
 		if (needs_work) {
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(&work, requested))) {
+			if (unlikely(!get_work(&work, requested, mythr, thr_id))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"mining thread %d", thr_id);
 				goto out;
 			}
 			mythr->cgpu->getworks++;
-			work.thr_id = thr_id;
 			needs_work = requested = false;
 			work.blk.nonce = 0;
 			max_nonce = hashes_done;
@@ -1865,13 +1875,12 @@ static void *gpuminer_thread(void *userdata)
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 	gettimeofday(&tv_workstart, NULL);
 	/* obtain new work from internal workio thread */
-	if (unlikely(!get_work(work, requested))) {
+	if (unlikely(!get_work(work, requested, mythr, thr_id))) {
 		applog(LOG_ERR, "work retrieval failed, exiting "
-			"gpu mining thread %d", mythr->id);
+			"gpu mining thread %d", thr_id);
 		goto out;
 	}
 	mythr->cgpu->getworks++;
-	work->thr_id = thr_id;
 	requested = false;
 	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 	work->blk.nonce = 0;
@@ -1916,13 +1925,12 @@ static void *gpuminer_thread(void *userdata)
 
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(work, requested))) {
+			if (unlikely(!get_work(work, requested, mythr, thr_id))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
-					"gpu mining thread %d", mythr->id);
+					"gpu mining thread %d", thr_id);
 				goto out;
 			}
 			mythr->cgpu->getworks++;
-			work->thr_id = thr_id;
 			requested = false;
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
@@ -2130,7 +2138,6 @@ out:
 	return NULL;
 }
 
-#if 0
 static void reinit_cputhread(int thr_id)
 {
 	struct thr_info *thr = &thr_info[thr_id];
@@ -2144,7 +2151,7 @@ static void reinit_cputhread(int thr_id)
 	applog(LOG_INFO, "Reinit CPU thread %d", thr_id);
 	tq_thaw(thr->q);
 
-	gettimeofday(&thr->last, NULL);
+	thread_reportin(thr);
 
 	if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr))) {
 		applog(LOG_ERR, "thread %d create failed", thr_id);
@@ -2179,7 +2186,7 @@ static void reinit_gputhread(int thr_id)
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 
-	gettimeofday(&thr->last, NULL);
+	thread_reportin(thr);
 
 	if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr))) {
 		applog(LOG_ERR, "thread %d create failed", thr_id);
@@ -2204,7 +2211,6 @@ static void reinit_thread(int thr_id)
 	reinit_cputhread(thr_id);
 }
 #endif
-#endif /* 0 */
 
 /* Determine which are the first threads belonging to a device and if they're
  * active */
@@ -2265,17 +2271,18 @@ static void *watchdog_thread(void *userdata)
 		}
 
 		gettimeofday(&now, NULL);
-#if 0
 		//for (i = 0; i < mining_threads; i++) {
 		for (i = 0; i < gpu_threads; i++) {
 			struct thr_info *thr = &thr_info[i];
 
-			/* Do not kill threads waiting on longpoll staged work
-			 * or idle network */
-			if (now.tv_sec - thr->last.tv_sec > 60 && !pool->idlenet) {
+			/* Thread is waiting on getwork, don't test it */
+			if (thr->getwork)
+				continue;
+	
+			if (now.tv_sec - thr->last.tv_sec > 60) {
 				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
 				/* Create one mandatory work item */
-				inc_staged(1, true);
+				inc_staged(current_pool(), 1, true);
 				if (unlikely(!queue_request())) {
 					applog(LOG_ERR, "Failed to queue_request in watchdog_thread");
 					kill_work();
@@ -2285,7 +2292,6 @@ static void *watchdog_thread(void *userdata)
 				applog(LOG_WARNING, "Thread %d restarted", i);
 			}
 		}
-#endif
 	}
 
 	return NULL;
@@ -2645,7 +2651,7 @@ int main (int argc, char *argv[])
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
 
-		gettimeofday(&thr->last, NULL);
+		thread_reportin(thr);
 
 		if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", i);
@@ -2673,7 +2679,7 @@ int main (int argc, char *argv[])
 			return 1;
 		}
 
-		gettimeofday(&thr->last, NULL);
+		thread_reportin(thr);
 
 		if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", i);
