@@ -68,6 +68,7 @@ struct upload_buffer {
 
 struct header_info {
 	char		*lp_path;
+	bool		has_rolltime;
 };
 
 struct tq_ent {
@@ -186,8 +187,7 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 	return len;
 }
 
-static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data,
-	struct pool *pool)
+static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 {
 	struct header_info *hi = user_data;
 	size_t remlen, slen, ptrlen = size * nmemb;
@@ -228,7 +228,7 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data,
 
 	if (!strcasecmp("X-Roll-Ntime", key)) {
 		applog(LOG_INFO, "X-Roll-Ntime found");
-		pool->has_rolltime = true;
+		hi->has_rolltime = true;
 	}
 
 	if (!strcasecmp("X-Long-Polling", key)) {
@@ -247,7 +247,7 @@ static bool comms_error = false;
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool longpoll_scan, bool longpoll,
-		      bool getroll, struct pool *pool)
+		      struct pool *pool)
 {
 	json_t *val, *err_val, *res_val;
 	int rc;
@@ -278,7 +278,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_READDATA, &upload_data);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-	if (lp_scanning || getroll) {
+	if (lp_scanning) {
 		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
 		curl_easy_setopt(curl, CURLOPT_HEADERDATA, &hi);
 	}
@@ -329,6 +329,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 			tq_push(thr_info[longpoll_thr_id].q, hi.lp_path);
 		} else
 			free(hi.lp_path);
+		pool->has_rolltime = hi.has_rolltime;
 	}
 	hi.lp_path = NULL;
 

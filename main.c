@@ -775,7 +775,7 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_DEBUG, "DBG: sending RPC call: %s", s);
 
 	/* issue JSON-RPC request */
-	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, false, pool);
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, pool);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
@@ -847,7 +847,7 @@ static bool get_upstream_work(struct work *work)
 	}
 
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-			    want_longpoll, false, false, pool);
+			    want_longpoll, false, pool);
 	if (unlikely(!val)) {
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 		goto out;
@@ -2031,7 +2031,7 @@ next_path:
 
 		gettimeofday(&start, NULL);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
-				    false, true, false, pool);
+				    false, true, pool);
 		if (likely(val)) {
 			/* Keep track of who ordered a restart_threads to make
 			 * sure it's only done once per new block */
@@ -2294,7 +2294,6 @@ int main (int argc, char *argv[])
 	struct thr_info *thr;
 	char name[256];
 	struct tm tm;
-	struct pool *pool;
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -2374,9 +2373,6 @@ int main (int argc, char *argv[])
 		return 1;
 	}
 
-	set_current_pool(pools);
-	pool = current_pool();
-
 	if (total_devices) {
 		if (total_devices > nDevs) {
 			applog(LOG_ERR, "More devices specified than exist");
@@ -2407,26 +2403,31 @@ int main (int argc, char *argv[])
 	logstart = cpucursor + (opt_n_threads ? num_processors : 0) + 1;
 	logcursor = logstart + 1;
 
-	if (!pool->rpc_userpass) {
-		if (!pool->rpc_user || !pool->rpc_pass) {
-			applog(LOG_ERR, "No login credentials supplied");
-			return 1;
-		}
-		pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
-		if (!pool->rpc_userpass)
-			return 1;
-		sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
-	} else {
-		pool->rpc_user = malloc(strlen(pool->rpc_userpass));
-		if (!pool->rpc_user)
-			return 1;
-		strcpy(pool->rpc_user, pool->rpc_userpass);
-		pool->rpc_user = strtok(pool->rpc_user, ":");
-		if (!pool->rpc_user) {
-			applog(LOG_ERR, "Failed to find colon delimiter in userpass");
-			return 1;
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = &pools[i];
+
+		if (!pool->rpc_userpass) {
+			if (!pool->rpc_user || !pool->rpc_pass) {
+				applog(LOG_ERR, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
+				return 1;
+			}
+			pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
+			if (!pool->rpc_userpass)
+				return 1;
+			sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
+		} else {
+			pool->rpc_user = malloc(strlen(pool->rpc_userpass));
+			if (!pool->rpc_user)
+				return 1;
+			strcpy(pool->rpc_user, pool->rpc_userpass);
+			pool->rpc_user = strtok(pool->rpc_user, ":");
+			if (!pool->rpc_user) {
+				applog(LOG_ERR, "Failed to find colon delimiter in userpass");
+				return 1;
+			}
 		}
 	}
+	set_current_pool(pools);
 
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
