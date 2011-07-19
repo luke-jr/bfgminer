@@ -1445,7 +1445,7 @@ retry:
 			if (total_pools > 1) {
 				/* Attempt to switch pools if this one has been unresponsive for >half
 				 * a block's duration */
-				if (diff.tv_sec > 30) {
+				if (diff.tv_sec > 300) {
 					switch_pools();
 					inc_staged(pool, 1, true);
 					goto retry;
@@ -1477,6 +1477,8 @@ retry:
 		if (total_pools > 1) {
 			/* Attempt to switch pools if this one has mandatory
 			 * work that has timed out or does not support rolltime */
+			pool->localgen_occasions++;
+			total_lo++;
 			switch_pools();
 			inc_staged(pool, 1, true);
 			goto retry;
@@ -2307,6 +2309,27 @@ static void print_summary(void)
 	printf("Work items generated locally: %d\n", local_work);
 	printf("Submitting work remotely delay occasions: %d\n", total_ro);
 	printf("New blocks detected on network: %d\n\n", new_blocks);
+
+	if (total_pools > 1) {
+		for (i = 0; i < total_pools; i++) {
+			struct pool *pool = &pools[i];
+
+			printf("Pool: %s\n", pool->rpc_url);
+			printf(" Queued work requests: %d\n", pool->getwork_requested);
+			printf(" Share submissions: %d\n", pool->accepted + pool->rejected);
+			printf(" Accepted shares: %d\n", pool->accepted);
+			printf(" Rejected shares: %d\n", pool->rejected);
+			if (pool->accepted || pool->rejected)
+				printf(" Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
+			efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
+			printf(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
+
+			printf(" Discarded work due to new blocks: %d\n", pool->discarded_work);
+			printf(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
+			printf(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
+			printf(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
+		}
+	}
 
 	printf("Summary of per device statistics:\n\n");
 	for (i = 0; i < mining_threads; i++) {
