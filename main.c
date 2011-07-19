@@ -182,6 +182,7 @@ static unsigned int total_lo, total_ro;
 
 static struct pool *pools = NULL;
 static struct pool *currentpool;
+static int pool_no;
 static int total_pools;
 
 static bool curses_active = false;
@@ -260,10 +261,15 @@ static struct pool *current_pool(void)
 	return pool;
 }
 
-static void set_current_pool(struct pool *pool)
+static void switch_pools(void)
 {
 	pthread_mutex_lock(&control_lock);
-	currentpool = pool;
+	pool_no++;
+	if (pool_no >= total_pools)
+		pool_no = 0;
+	currentpool = &pools[pool_no];
+	gettimeofday(&currentpool->tv_localgen, NULL);
+	applog(LOG_WARNING, "Prolonged outage. Attempting to switch to %s", currentpool->rpc_url);
 	pthread_mutex_unlock(&control_lock);
 }
 
@@ -689,6 +695,7 @@ static void curses_print_status(int thr_id)
 	wclrtoeol(statuswin);
 	wmove(statuswin, 4, 0);
 	wprintw(statuswin, " Connected to %s as user %s", pool->rpc_url, pool->rpc_user);
+	wclrtoeol(statuswin);
 	wmove(statuswin, 5, 0);
 	wprintw(statuswin, " Block %s  started: %s", current_block + 4, blockdate);
 	wmove(statuswin, 6, 0);
@@ -1406,12 +1413,13 @@ static void flush_requests(bool longpoll)
 
 static bool get_work(struct work *work, bool queued)
 {
-	struct pool *pool = current_pool();
 	struct work *work_heap;
+	struct pool *pool;
 	bool ret = false;
 	int failures = 0;
 
 retry:
+	pool = current_pool();
 	if (unlikely(!queued && !queue_request())) {
 		applog(LOG_WARNING, "Failed to queue_request in get_work");
 		goto out;
@@ -1432,7 +1440,14 @@ retry:
 
 			gettimeofday(&tv_now, NULL);
 			timeval_subtract(&diff, &tv_now, &pool->tv_localgen);
-			if (diff.tv_sec > 600) {
+			if (total_pools > 1) {
+				/* Attempt to switch pools if this one has been unresponsive for >half
+				 * a block's duration */
+				if (diff.tv_sec > 300) {
+					switch_pools();
+					goto retry;
+				}
+			} else if (diff.tv_sec > 600) {
 				/* A new block appears on average every 10 mins */
 				applog(LOG_WARNING, "Prolonged outage. Going idle till network recovers.");
 				/* Force every thread to wait for new work */
@@ -2427,7 +2442,8 @@ int main (int argc, char *argv[])
 			}
 		}
 	}
-	set_current_pool(pools);
+	/* Set the current pool to pool 0 */
+	currentpool = pools;
 
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
