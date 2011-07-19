@@ -271,6 +271,11 @@ static void switch_pools(void)
 	gettimeofday(&currentpool->tv_localgen, NULL);
 	applog(LOG_WARNING, "Prolonged outage. Attempting to switch to %s", currentpool->rpc_url);
 	pthread_mutex_unlock(&control_lock);
+
+	/* Reset the queued amount to allow more to be queued for the new pool */
+	pthread_mutex_lock(&qd_lock);
+	total_queued = 0;
+	pthread_mutex_unlock(&qd_lock);
 }
 
 /* FIXME: Use asprintf for better errors. */
