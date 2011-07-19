@@ -1413,6 +1413,8 @@ static void flush_requests(bool longpoll)
 
 static bool get_work(struct work *work, bool queued)
 {
+	struct timespec abstime = {};
+	struct timeval now;
 	struct work *work_heap;
 	struct pool *pool;
 	bool ret = false;
@@ -1425,7 +1427,7 @@ retry:
 		goto out;
 	}
 
-	if (!requests_staged() && !stale_work(work)) {
+	if (!requests_staged() && !stale_work(work) && work->pool->has_rolltime) {
 		uint32_t *work_ntime;
 		uint32_t ntime;
 
@@ -1443,15 +1445,16 @@ retry:
 			if (total_pools > 1) {
 				/* Attempt to switch pools if this one has been unresponsive for >half
 				 * a block's duration */
-				if (diff.tv_sec > 300) {
+				if (diff.tv_sec > 30) {
 					switch_pools();
+					inc_staged(pool, 1, true);
 					goto retry;
 				}
 			} else if (diff.tv_sec > 600) {
 				/* A new block appears on average every 10 mins */
 				applog(LOG_WARNING, "Prolonged outage. Going idle till network recovers.");
 				/* Force every thread to wait for new work */
-				inc_staged(pool, mining_threads, true);
+				inc_staged(pool, 1, true);
 				goto retry;
 			}
 		}
@@ -1465,11 +1468,22 @@ retry:
 		goto out;
 	}
 
+	gettimeofday(&now, NULL);
+	abstime.tv_sec = now.tv_sec + 60;
+
 	/* wait for 1st response, or get cached response */
-	work_heap = tq_pop(getq, NULL);
+	work_heap = tq_pop(getq, &abstime);
 	if (unlikely(!work_heap)) {
-		applog(LOG_WARNING, "Failed to tq_pop in get_work");
-		goto out;
+		if (total_pools > 1) {
+			/* Attempt to switch pools if this one has mandatory
+			 * work that has timed out or does not support rolltime */
+			switch_pools();
+			inc_staged(pool, 1, true);
+			goto retry;
+		}
+		if (!pool_tset(pool, &pool->localgen))
+			applog(LOG_WARNING, "Timed out waiting for work from server");
+		goto retry;
 	}
 
 	/* If we make it here we have succeeded in getting fresh work */
