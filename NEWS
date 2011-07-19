@@ -1,3 +1,23 @@
+Version 1.3.0 - July 19, 2011
+
+- Massive infrastructure update to support pool failover.
+- Accept multiple parameters for url, user and pass and set up structures of
+pool data accordingly.
+- Probe each pool for what it supports.
+- Implement per pool feature support according to rolltime support as
+advertised by server.
+- Do switching automatically based on a 300 second timeout of locally generated
+work or 60 seconds of no response from a server that doesn't support rolltime.
+- Implement longpoll server switching.
+- Keep per-pool data and display accordingly.
+- Make sure cgminer knows how long the pool has actually been out for before
+deeming it a prolonged outage.
+- Fix bug with ever increasing staged work in 1.2.8 that eventually caused
+infinite rejects.
+- Make warning about empty http requests not show by default since many
+servers do this regularly.
+
+
 Version 1.2.8 - July 18, 2011
 
 - More OSX build fixes.

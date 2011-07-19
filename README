@@ -1,5 +1,5 @@
 
-This is a multi-threaded CPU and GPU miner for bitcoin.
+This is a multi-threaded multi-pool CPU and GPU miner for bitcoin.
 
 License: GPLv2.  See COPYING for details.
 
@@ -65,6 +65,22 @@ Native WIN32 build instructions (on mingw32, on windows):
 	make
 
 Usage instructions:  Run "cgminer --help" to see options.
+
+
+EXECUTIVE SUMMARY ON USAGE:
+
+Single pool, regular desktop:
+
+cgminer -o http://pool:port -u username -p password
+
+Single pool, dedicated miner:
+
+cgminer -o http://pool:port -u username -p password -I 8
+
+Multiple pool, dedicated miner:
+
+cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 8
+
 
 Also many issues and FAQs are covered in the forum thread
 dedicated to this program,
