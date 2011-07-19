@@ -246,7 +246,7 @@ static bool comms_error = false;
 
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
-		      bool longpoll_scan, bool longpoll,
+		      bool probe, bool longpoll,
 		      struct pool *pool)
 {
 	json_t *val, *err_val, *res_val;
@@ -258,12 +258,12 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	struct header_info hi = { };
-	bool lp_scanning = false;
+	bool probing = false;
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
-	if (longpoll_scan)
-		lp_scanning = want_longpoll && !have_longpoll;
+	if (probe)
+		probing = ((want_longpoll && !have_longpoll) || !pool->probed);
 
 	if (opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -278,7 +278,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_READDATA, &upload_data);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-	if (lp_scanning) {
+	if (probing) {
 		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
 		curl_easy_setopt(curl, CURLOPT_HEADERDATA, &hi);
 	}
@@ -329,8 +329,13 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 			tq_push(thr_info[longpoll_thr_id].q, hi.lp_path);
 		} else
 			free(hi.lp_path);
+	}
+
+	if (probing) {
+		pool->probed = true;
 		pool->has_rolltime = hi.has_rolltime;
 	}
+	
 	hi.lp_path = NULL;
 
 	val = JSON_LOADS(all_data.buf, &err);

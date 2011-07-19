@@ -2474,6 +2474,38 @@ int main (int argc, char *argv[])
 	} else
 		longpoll_thr_id = -1;
 
+	/* Test each pool to see if we can retrieve and use work and for what
+	 * it supports */
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool;
+		struct work work;
+		json_t *val;
+		CURL *curl;
+
+		curl = curl_easy_init();
+		if (unlikely(!curl)) {
+			applog(LOG_ERR, "CURL initialisation failed");
+			return 1;
+		}
+
+		pool = &pools[i];
+		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
+				true, false, pool);
+
+		if (val) {
+			bool rc;
+
+			rc = work_decode(json_object_get(val, "result"), &work);
+			if (rc)
+				applog(LOG_INFO, "Successfully retreived and deciphered work from pool %u %s", i, pool->rpc_url);
+			else
+				applog(LOG_WARNING, "Successfully retreived but FAILED to decipher work from pool %u %s", i, pool->rpc_url);
+			json_decref(val);
+		} else
+			applog(LOG_WARNING, "FAILED to retrieve work from pool %u %s", i, pool->rpc_url);
+		curl_easy_cleanup(curl);
+	}
+
 	if (opt_n_threads ) {
 		cpus = calloc(num_processors, sizeof(struct cgpu_info));
 		if (unlikely(!cpus)) {

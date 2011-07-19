@@ -270,6 +270,7 @@ struct pool {
 	bool localgen;
 	bool idlenet;
 	bool has_rolltime;
+	bool probed;
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
 	unsigned int discarded_work;
