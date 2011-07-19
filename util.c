@@ -315,12 +315,14 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		goto err_out;
 	}
 
-	/* If X-Long-Polling was found, activate long polling */
-	if (hi.lp_path) {
-		have_longpoll = true;
-		tq_push(thr_info[longpoll_thr_id].q, hi.lp_path);
-	} else
-		free(hi.lp_path);
+	if (!have_longpoll) {
+		/* If X-Long-Polling was found, activate long polling */
+		if (hi.lp_path) {
+			have_longpoll = true;
+			tq_push(thr_info[longpoll_thr_id].q, hi.lp_path);
+		} else
+			free(hi.lp_path);
+	}
 	hi.lp_path = NULL;
 
 	val = JSON_LOADS(all_data.buf, &err);

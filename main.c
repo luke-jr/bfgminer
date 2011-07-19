@@ -1989,9 +1989,19 @@ static void *longpoll_thread(void *userdata)
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	hdr_path = tq_pop(mythr->q, NULL);
-	if (!hdr_path)
+	curl = curl_easy_init();
+	if (unlikely(!curl)) {
+		applog(LOG_ERR, "CURL initialisation failed");
 		goto out;
+	}
+
+	/* Longpoll sits waiting on next pushed url */
+next_path:
+	hdr_path = tq_pop(mythr->q, NULL);
+	if (!hdr_path) {
+		applog(LOG_WARNING, "No long-poll found on this server");
+		goto next_path;
+	}
 
 	/* full URL */
 	if (strstr(hdr_path, "://")) {
@@ -2011,14 +2021,9 @@ static void *longpoll_thread(void *userdata)
 
 		sprintf(lp_url, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
 	}
+	free(hdr_path);
 
-	applog(LOG_INFO, "Long-polling activated for %s", lp_url);
-
-	curl = curl_easy_init();
-	if (unlikely(!curl)) {
-		applog(LOG_ERR, "CURL initialisation failed");
-		goto out;
-	}
+	applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
 
 	while (1) {
 		struct timeval start, end;
@@ -2060,10 +2065,15 @@ static void *longpoll_thread(void *userdata)
 			}
 		}
 		memcpy(longpoll_block, current_block, 36);
+		if (pool != current_pool()) {
+			applog(LOG_WARNING, "Attempting to change longpoll servers");
+			pool = current_pool();
+			have_longpoll = false;
+			goto next_path;
+		}
 	}
 
 out:
-	free(hdr_path);
 	free(lp_url);
 	tq_freeze(mythr->q);
 	if (curl)
