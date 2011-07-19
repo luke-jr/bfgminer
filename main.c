@@ -222,6 +222,9 @@ static void add_pool(void)
 		applog(LOG_ERR, "Failed to pthread_mutex_init in add_pool");
 		exit (1);
 	}
+	/* Make sure the pool doesn't think we've been idle since time 0 if
+	 * we rush to !localgen */
+	pool->tv_localgen.tv_sec = ~0UL;
 }
 
 /* Pool variant of test and set */
