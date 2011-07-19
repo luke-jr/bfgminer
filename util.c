@@ -242,8 +242,6 @@ out:
 	return ptrlen;
 }
 
-static bool comms_error = false;
-
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool probe, bool longpoll,
@@ -310,9 +308,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	rc = curl_easy_perform(curl);
 	if (rc) {
-		if (!comms_error)
-			applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
-		comms_error = true;
+		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
 		goto err_out;
 	}
 
@@ -340,9 +336,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	val = JSON_LOADS(all_data.buf, &err);
 	if (!val) {
-		if (!comms_error)
-			applog(LOG_ERR, "JSON decode failed(%d): %s", err.line, err.text);
-		comms_error = true;
+		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
 
 		if (opt_protocol)
 			applog(LOG_DEBUG, "JSON protocol response:\n%s", all_data.buf);
@@ -371,9 +365,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		else
 			s = strdup("(unknown reason)");
 
-		if (!comms_error)
-			applog(LOG_ERR, "JSON-RPC call failed: %s", s);
-		comms_error = true;
+		applog(LOG_INFO, "JSON-RPC call failed: %s", s);
 
 		free(s);
 
@@ -381,7 +373,6 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	}
 
 	successful_connect = true;
-	comms_error = false;
 	databuf_free(&all_data);
 	curl_slist_free_all(headers);
 	curl_easy_reset(curl);
