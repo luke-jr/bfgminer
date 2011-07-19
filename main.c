@@ -775,7 +775,7 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_DEBUG, "DBG: sending RPC call: %s", s);
 
 	/* issue JSON-RPC request */
-	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false);
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, false, pool);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
@@ -847,7 +847,7 @@ static bool get_upstream_work(struct work *work)
 	}
 
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-			    want_longpoll, false);
+			    want_longpoll, false, false, pool);
 	if (unlikely(!val)) {
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 		goto out;
@@ -2031,7 +2031,7 @@ next_path:
 
 		gettimeofday(&start, NULL);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
-				    false, true);
+				    false, true, false, pool);
 		if (likely(val)) {
 			/* Keep track of who ordered a restart_threads to make
 			 * sure it's only done once per new block */

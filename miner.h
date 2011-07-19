@@ -175,12 +175,15 @@ static inline void swap256(void *dest_p, const void *src_p)
 	dest[7] = src[0];
 }
 
+struct pool;
+
 extern bool opt_debug;
 extern bool opt_protocol;
 extern bool opt_log_output;
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
-			     const char *rpc_req, bool, bool);
+			     const char *rpc_req, bool, bool, bool,
+			     struct pool *pool);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
@@ -267,6 +270,7 @@ struct pool {
 	bool submit_fail;
 	bool localgen;
 	bool idlenet;
+	bool has_rolltime;
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
 	unsigned int discarded_work;
