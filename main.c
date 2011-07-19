@@ -184,6 +184,7 @@ static struct pool *pools = NULL;
 static struct pool *currentpool;
 static int pool_no;
 static int total_pools;
+static int total_urls, total_users, total_passes, total_userpasses;
 
 static bool curses_active = false;
 
@@ -349,8 +350,10 @@ static char *set_url(const char *arg, char **p)
 {
 	struct pool *pool;
 
-	add_pool();
-	pool = &pools[total_pools - 1];
+	total_urls++;
+	if (total_urls > total_pools)
+		add_pool();
+	pool = &pools[total_urls - 1];
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -364,10 +367,13 @@ static char *set_user(const char *arg, char **p)
 {
 	struct pool *pool;
 
-	if (!total_pools)
-		return "No URL set for user";
+	if (total_userpasses)
+		return "Use only user + pass or userpass, but not both";
+	total_users++;
+	if (total_users > total_pools)
+		add_pool();
 
-	pool = &pools[total_pools - 1];
+	pool = &pools[total_users - 1];
 	opt_set_charp(arg, &pool->rpc_user);
 
 	return NULL;
@@ -377,10 +383,13 @@ static char *set_pass(const char *arg, char **p)
 {
 	struct pool *pool;
 
-	if (!total_pools)
-		return "No URL set for pass";
+	if (total_userpasses)
+		return "Use only user + pass or userpass, but not both";
+	total_passes++;
+	if (total_passes > total_pools)
+		add_pool();
 
-	pool = &pools[total_pools - 1];
+	pool = &pools[total_passes - 1];
 	opt_set_charp(arg, &pool->rpc_pass);
 
 	return NULL;
@@ -390,10 +399,13 @@ static char *set_userpass(const char *arg, char **p)
 {
 	struct pool *pool;
 
-	if (!total_pools)
-		return "No URL set for userpass";
+	if (total_users || total_passes)
+		return "Use only user + pass or userpass, but not both";
+	total_userpasses++;
+	if (total_userpasses > total_pools)
+		add_pool();
 
-	pool = &pools[total_pools - 1];
+	pool = &pools[total_userpasses - 1];
 	opt_set_charp(arg, &pool->rpc_userpass);
 
 	return NULL;
