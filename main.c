@@ -99,6 +99,13 @@ enum sha256_algos {
 	ALGO_SSE4_64,		/* SSE4 for x86_64 */
 };
 
+enum pool_strategy {
+	POOL_FAILOVER,
+	POOL_ROUNDROBIN,
+	POOL_ROTATE,
+	POOL_LOADBALANCE,
+};
+
 static const char *algo_names[] = {
 	[ALGO_C]		= "c",
 #ifdef WANT_SSE2_4WAY
@@ -184,6 +191,8 @@ static struct pool *pools = NULL;
 static struct pool *currentpool;
 static int pool_no;
 static int total_pools;
+static enum pool_strategy pool_strategy = POOL_FAILOVER;
+static int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses;
 
 static bool curses_active = false;
@@ -348,6 +357,24 @@ static char *set_devices(const char *arg, int *i)
 	return NULL;
 }
 
+static char *set_loadbalance(enum pool_strategy *strategy)
+{
+	*strategy = POOL_LOADBALANCE;
+	return NULL;
+}
+
+static char *set_rotate(const char *arg, int *i)
+{
+	pool_strategy = POOL_ROTATE;
+	return set_int_range(arg, i, 0, 9999);
+}
+
+static char *set_rr(enum pool_strategy *strategy)
+{
+	*strategy = POOL_ROUNDROBIN;
+	return NULL;
+}
+
 static char *set_url(const char *arg, char **p)
 {
 	struct pool *pool;
@@ -476,6 +503,9 @@ static struct opt_table opt_config_table[] = {
 		     forced_int_0_to_14, opt_show_intval, &scan_intensity,
 		     "Intensity of GPU scanning (0 - 14, default: dynamic to maintain desktop interactivity)"),
 #endif
+	OPT_WITHOUT_ARG("--load-balance",
+		     set_loadbalance, &pool_strategy,
+		     "Change multipool strategy from failover to even load balance"),
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
@@ -500,6 +530,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--retry-pause|-R",
 		     set_int_0_to_9999, opt_show_intval, &opt_fail_pause,
 		     "Number of seconds to pause, between retries"),
+	OPT_WITH_ARG("--rotate",
+		     set_rotate, opt_show_intval, &opt_rotate_period,
+		     "Change multipool strategy from failover to regularly rotate at N minutes"),
+	OPT_WITHOUT_ARG("--round-robin",
+		     set_rr, &pool_strategy,
+		     "Change multipool strategy from failover to round robin on failure"),
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
