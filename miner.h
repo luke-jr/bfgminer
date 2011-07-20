@@ -269,7 +269,6 @@ struct pool {
 	int pool_no;
 	int accepted, rejected;
 	bool submit_fail;
-	bool localgen;
 	bool idle;
 	bool has_rolltime;
 	bool probed;
@@ -278,7 +277,7 @@ struct pool {
 	unsigned int discarded_work;
 	unsigned int localgen_occasions;
 	unsigned int remotefail_occasions;
-	struct timeval tv_localgen;
+	struct timeval tv_idle;
 
 	char *rpc_url;
 	char *rpc_userpass;
