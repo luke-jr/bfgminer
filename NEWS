@@ -1,3 +1,28 @@
+Version 1.3.1 - July 20, 2011
+
+- Feature upgrade; Multiple strategies for failover. Choose from default which
+now falls back to a priority order from 1st to last, round robin which only
+changes pools when one is idle, rotate which changes pools at user-defined
+intervals, and load-balance which spreads the work evenly amongst all pools.
+- Implement pool rotation strategy.
+- Implement load balancing algorithm by rotating requests to each pool.
+- Timeout on failed discarding of staged requests.
+- Implement proper flagging of idle pools, test them with the watchdog thread,
+and failover correctly.
+- Move pool active test to own function.
+- Allow multiple strategies to be set for multipool management.
+- Track pool number.
+- Don't waste the work items queued on testing the pools at startup.
+- Reinstate the mining thread watchdog restart.
+- Add a getpoll bool into the thread information and don't restart threads stuck
+waiting on work.
+- Rename the idlenet bool for the pool for later use.
+- Allow the user/pass userpass urls to be input in any order.
+- When json rpc errors occur they occur in spits and starts, so trying to limit
+them with the comms error bool doesn't stop a flood of them appearing.
+- Reset the queued count to allow more work to be queued for the new pool on
+pool switch.
+
 Version 1.3.0 - July 19, 2011
 
 - Massive infrastructure update to support pool failover.

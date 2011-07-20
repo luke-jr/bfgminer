@@ -117,3 +117,27 @@ NOTE: Running intensities above 9 with current hardware is likely to only
 diminish return performance even if the hash rate might appear better. A good
 starting baseline intensity to try on dedicated miners is 8. Higher values are
 there to cope with future improvements in hardware.
+
+
+FAILOVER STRATEGIES WITH MULTIPOOL:
+A number of different strategies for dealing with multipool setups are
+available. Each has their advantages and disadvantages so multiple strategies
+are available by user choice, as per the following list:
+
+FAILOVER:
+The default strategy is failover. This means that if you input a number of
+pools, it will try to use them as a priority list, moving away from the 1st
+to the 2nd, 2nd to 3rd and so on. If any of the earlier pools recover, it will
+move back to the higher priority ones.
+
+ROUND ROBIN:
+This strategy only moves from one pool to the next when the current one falls
+idle and makes no attempt to move otherwise.
+
+ROTATE:
+This strategy moves at user-defined intervals from one active pool to the next,
+skipping pools that are idle.
+
+LOAD BALANCE:
+This strategy sends work in equal amounts to all the pools specified. If any
+pool falls idle, the rest will take up the slack keeping the miner busy.
