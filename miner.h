@@ -266,6 +266,7 @@ typedef struct {
 #endif
 
 struct pool {
+	int pool_no;
 	int accepted, rejected;
 	bool submit_fail;
 	bool localgen;

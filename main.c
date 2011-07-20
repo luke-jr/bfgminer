@@ -210,16 +210,18 @@ static void applog_and_exit(const char *fmt, ...)
 
 static void add_pool(void)
 {
+	int poolno;
 	struct pool *pool;
 
-	total_pools++;
+	poolno = total_pools++;
 	pools = realloc(pools, sizeof(struct pool) * total_pools);
 	if (!pools) {
 		applog(LOG_ERR, "Failed to malloc pools in add_pool");
 		exit (1);
 	}
-	pool = &pools[total_pools - 1];
+	pool = &pools[poolno];
 	memset(pool, 0, sizeof(struct pool));
+	pool->pool_no = poolno;
 	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL))) {
 		applog(LOG_ERR, "Failed to pthread_mutex_init in add_pool");
 		exit (1);
@@ -822,18 +824,28 @@ static bool submit_upstream_work(const struct work *work)
 		pool->accepted++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
-		if (!opt_quiet)
-			applog(LOG_WARNING, "Share %.8s accepted from %sPU %d thread %d",
-			       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+		if (!opt_quiet) {
+			if (total_pools > 1)
+				applog(LOG_WARNING, "Accepted %.8s %sPU %d thread %d pool %d",
+				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
+			else
+				applog(LOG_WARNING, "Accepted %.8s %sPU %d thread %d",
+				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+		}
 	} else {
 		cgpu->rejected++;
 		total_rejected++;
 		pool->rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
-		if (!opt_quiet)
-			applog(LOG_WARNING, "Share %.8s rejected from %sPU %d thread %d",
-			       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+		if (!opt_quiet) {
+			if (total_pools > 1)
+				applog(LOG_WARNING, "Rejected %.8s %sPU %d thread %d pool %d",
+				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
+			else
+				applog(LOG_WARNING, "Rejected %.8s %sPU %d thread %d",
+				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+		}
 	}
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
