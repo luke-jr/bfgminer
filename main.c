@@ -731,7 +731,10 @@ static void curses_print_status(int thr_id)
 		local_work, total_lo, total_ro, scan_intensity);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 4, 0);
-	wprintw(statuswin, " Connected to %s as user %s", pool->rpc_url, pool->rpc_user);
+	if (pool_strategy == POOL_LOADBALANCE && total_pools > 1)
+		wprintw(statuswin, " Connected to multiple pools");
+	else
+		wprintw(statuswin, " Connected to %s as user %s", pool->rpc_url, pool->rpc_user);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 5, 0);
 	wprintw(statuswin, " Block %s  started: %s", current_block + 4, blockdate);
@@ -888,9 +891,24 @@ out_nofree:
 static const char *rpc_req =
 	"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
 
+static int rotating_pool;
+
+/* Select any active pool in a rotating fashion when loadbalance is chosen */
+static inline struct pool *select_pool(void)
+{
+	if (pool_strategy == POOL_LOADBALANCE) {
+		rotating_pool++;
+		if (rotating_pool >= total_pools)
+			rotating_pool = 0;
+		if (!pools[rotating_pool].idle)
+			return &pools[rotating_pool];
+	}
+	return current_pool();
+}
+
 static bool get_upstream_work(struct work *work)
 {
-	struct pool *pool = current_pool();
+	struct pool *pool = select_pool();
 	json_t *val;
 	bool rc = false;
 	CURL *curl = curl_easy_init();
@@ -909,6 +927,8 @@ static bool get_upstream_work(struct work *work)
 
 	rc = work_decode(json_object_get(val, "result"), work);
 	work->pool = pool;
+	total_getworks++;
+	pool->getwork_requested++;
 
 	json_decref(val);
 out:
@@ -1498,14 +1518,11 @@ static bool queue_request(void)
 {
 	int maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
-	struct pool *pool;
 
 	/* If we've been generating lots of local work we may already have
 	 * enough in the queue */
 	if (requests_queued() >= maxq || real_staged() >= maxq)
 		return true;
-
-	pool = current_pool();
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -1524,8 +1541,6 @@ static bool queue_request(void)
 		workio_cmd_free(wc);
 		return false;
 	}
-	total_getworks++;
-	pool->getwork_requested++;
 	inc_queued();
 	return true;
 }
