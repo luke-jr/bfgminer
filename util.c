@@ -23,6 +23,9 @@
 #include <curses.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/tcp.h>
 #include "miner.h"
 #include "elist.h"
 
@@ -242,6 +245,28 @@ out:
 	return ptrlen;
 }
 
+int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purpose)
+{
+	int keepalive = 1;
+	int tcp_keepcnt = 5;
+	int tcp_keepidle = 120;
+	int tcp_keepintvl = 120;
+
+	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)))
+		return 1;
+
+	if (setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt)))
+		return 1;
+
+	if (setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle)))
+		return 1;
+
+	if (setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl)))
+		return 1;
+
+	return 0;
+}
+
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool probe, bool longpoll,
@@ -284,10 +309,12 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		curl_easy_setopt(curl, CURLOPT_USERPWD, userpass);
 		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 	}
-	if (longpoll)
+	if (longpoll) {
 		curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
-	else
+		curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, json_rpc_call_sockopt_cb);
+	} else {
 		curl_easy_setopt(curl, CURLOPT_POST, 1);
+	}
 
 	if (opt_protocol)
 		applog(LOG_DEBUG, "JSON protocol request:\n%s\n", rpc_req);
