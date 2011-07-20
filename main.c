@@ -2384,11 +2384,13 @@ static bool active_device(int thr_id)
 static void *watchdog_thread(void *userdata)
 {
 	const unsigned int interval = opt_log_interval / 2 ? : 1;
+	static struct timeval rotate_tv;
 	struct timeval zero_tv;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	memset(&zero_tv, 0, sizeof(struct timeval));
+	gettimeofday(&rotate_tv, NULL);
 
 	while (1) {
 		int x, y, logx, logy, i;
@@ -2433,6 +2435,11 @@ static void *watchdog_thread(void *userdata)
 				if (pool_active(pool) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
+		}
+
+		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
+			gettimeofday(&rotate_tv, NULL);
+			switch_pools();
 		}
 
 		//for (i = 0; i < mining_threads; i++) {
