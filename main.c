@@ -1532,6 +1532,8 @@ static bool queue_request(void)
 
 static void discard_staged(void)
 {
+	struct timespec abstime = {};
+	struct timeval now;
 	struct work *work_heap;
 	struct pool *pool;
 
@@ -1539,7 +1541,10 @@ static void discard_staged(void)
 	if (unlikely(!requests_staged()))
 		return;
 
-	work_heap = tq_pop(getq, NULL);
+	gettimeofday(&now, NULL);
+	abstime.tv_sec = now.tv_sec + 60;
+
+	work_heap = tq_pop(getq, &abstime);
 	if (unlikely(!work_heap))
 		return;
 
@@ -1603,7 +1608,8 @@ retry:
 
 		/* Only print this message once each time we shift to localgen */
 		if (!pool_tset(pool, &pool->idle)) {
-			applog(LOG_WARNING, "Server not providing work fast enough, generating work locally");
+			applog(LOG_WARNING, "Pool %d not providing work fast enough, generating work locally",
+				pool->pool_no);
 			pool->localgen_occasions++;
 			total_lo++;
 			gettimeofday(&pool->tv_idle, NULL);
