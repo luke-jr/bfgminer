@@ -617,7 +617,8 @@ built:
 	/////////////////////////////////////////////////////////////////
 	// Create an OpenCL command queue
 	/////////////////////////////////////////////////////////////////
-	clState->commandQueue = clCreateCommandQueue( clState->context, devices[gpu], 0, &status);
+	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
+						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
 	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
