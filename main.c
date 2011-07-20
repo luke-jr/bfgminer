@@ -1397,6 +1397,53 @@ static int requests_queued(void)
 	return ret;
 }
 
+static bool pool_active(struct pool *pool)
+{
+	bool ret = false;
+	json_t *val;
+	CURL *curl;
+
+	curl = curl_easy_init();
+	if (unlikely(!curl)) {
+		applog(LOG_ERR, "CURL initialisation failed");
+		return false;
+	}
+
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
+			true, false, pool);
+
+	if (val) {
+		struct work *work = malloc(sizeof(struct work));
+		bool rc;
+
+		if (!work) {
+			applog(LOG_ERR, "Unable to malloc work in pool_active");
+			goto out;
+		}
+		rc = work_decode(json_object_get(val, "result"), work);
+		if (rc) {
+			applog(LOG_DEBUG, "Successfully retreived and deciphered work from pool %u %s",
+			       pool->pool_no, pool->rpc_url);
+			work->pool = pool;
+			tq_push(thr_info[stage_thr_id].q, work);
+			total_getworks++;
+			pool->getwork_requested++;
+			inc_queued();
+			ret = true;
+		} else {
+			applog(LOG_DEBUG, "Successfully retreived but FAILED to decipher work from pool %u %s",
+			       pool->pool_no, pool->rpc_url);
+			free(work);
+		}
+		json_decref(val);
+	} else
+		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
+		       pool->pool_no, pool->rpc_url);
+out:
+	curl_easy_cleanup(curl);
+	return ret;
+}
+
 static bool queue_request(void)
 {
 	int maxq = opt_queue + mining_threads;
@@ -2639,41 +2686,14 @@ int main (int argc, char *argv[])
 	 * it supports */
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool;
-		json_t *val;
-		CURL *curl;
-
-		curl = curl_easy_init();
-		if (unlikely(!curl)) {
-			applog(LOG_ERR, "CURL initialisation failed");
-			return 1;
-		}
 
 		pool = &pools[i];
-		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-				true, false, pool);
-
-		if (val) {
-			struct work *work = malloc(sizeof(struct work));
-			bool rc;
-
-			if (!work)
-				return 1;
-			rc = work_decode(json_object_get(val, "result"), work);
-			if (rc) {
-				applog(LOG_INFO, "Successfully retreived and deciphered work from pool %u %s", i, pool->rpc_url);
-				work->pool = pool;
-				tq_push(thr_info[stage_thr_id].q, work);
-				total_getworks++;
-				pool->getwork_requested++;
-				inc_queued();
-			} else {
-				applog(LOG_WARNING, "Successfully retreived but FAILED to decipher work from pool %u %s", i, pool->rpc_url);
-				free(work);
-			}
-			json_decref(val);
-		} else
-			applog(LOG_WARNING, "FAILED to retrieve work from pool %u %s", i, pool->rpc_url);
-		curl_easy_cleanup(curl);
+		if (pool_active(pool))
+			applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
+		else {
+			applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
+			pool->idle = true;
+		}
 	}
 
 #ifdef HAVE_OPENCL
