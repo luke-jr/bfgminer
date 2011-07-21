@@ -2539,6 +2539,22 @@ static void print_summary(void)
 	printf("\n");
 }
 
+static void quit(int status, const char *format, ...)
+{
+	va_list ap;
+
+	disable_curses();
+	if (format) {
+		va_start(ap, format);
+		vfprintf(stderr, format, ap);
+		va_end(ap);
+	}
+	fprintf(stderr, "\n");
+	fflush(stderr);
+
+	exit(status);
+}
+
 int main (int argc, char *argv[])
 {
 	unsigned int i, j = 0, x, y, pools_active = 0;
@@ -2550,23 +2566,18 @@ int main (int argc, char *argv[])
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
-		return 1;
-
-	/* This dangerous functions tramples random dynamically allocated
-	 * variables so do it before anything at all */
-	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
-		return 1;
+		quit(1, "Failed to curl_global_init");
 
 	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
-		return 1;
+		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&qd_lock, NULL)))
-		return 1;
+		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&stgd_lock, NULL)))
-		return 1;
+		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&curses_lock, NULL)))
-		return 1;
+		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&control_lock, NULL)))
-		return 1;
+		quit(1, "Failed to pthread_mutex_init");
 
 	handler.sa_handler = &sighandler;
 	sigaction(SIGTERM, &handler, &termhandler);
@@ -2601,7 +2612,7 @@ int main (int argc, char *argv[])
 		gpu_devices[i] = false;
 	nDevs = clDevicesNum();
 	if (nDevs < 0)
-		return 1;
+		quit(1, "clDevicesNum returned error");
 #endif
 	if (nDevs)
 		opt_n_threads = 0;
@@ -2615,26 +2626,18 @@ int main (int argc, char *argv[])
 			   "Options for command line only");
 
 	opt_parse(&argc, argv, applog_and_exit);
-	if (argc != 1) {
-		applog(LOG_ERR, "Unexpected extra commandline arguments");
-		return 1;
-	}
+	if (argc != 1)
+		quit(1, "Unexpected extra commandline arguments");
 
-	if (!total_pools) {
-		applog(LOG_ERR, "No server specified");
-		return 1;
-	}
+	if (!total_pools)
+		quit(1, "No server specified");
 
 	if (total_devices) {
-		if (total_devices > nDevs) {
-			applog(LOG_ERR, "More devices specified than exist");
-			return 1;
-		}
+		if (total_devices > nDevs)
+			quit(1, "More devices specified than exist");
 		for (i = 0; i < 16; i++)
-			if (gpu_devices[i] && i + 1 > nDevs) {
-				applog(LOG_ERR, "Command line options set a device that doesn't exist");
-				return 1;
-			}
+			if (gpu_devices[i] && i + 1 > nDevs)
+				quit (1, "Command line options set a device that doesn't exist");
 		gpu_threads = total_devices * opt_g_threads;
 	} else {
 		gpu_threads = nDevs * opt_g_threads;
@@ -2655,28 +2658,37 @@ int main (int argc, char *argv[])
 	logstart = cpucursor + (opt_n_threads ? num_processors : 0) + 1;
 	logcursor = logstart + 1;
 
+	/* Set up the ncurses interface */
+	if (!opt_quiet && use_curses) {
+		mainwin = initscr();
+		getmaxyx(mainwin, y, x);
+		statuswin = newwin(logstart, x, 0, 0);
+		leaveok(statuswin, true);
+		logwin = newwin(y - logcursor, 0, logcursor, 0);
+		idlok(logwin, true);
+		scrollok(logwin, true);
+		leaveok(logwin, true);
+		test_and_set(&curses_active);
+	}
+
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = &pools[i];
 
 		if (!pool->rpc_userpass) {
-			if (!pool->rpc_user || !pool->rpc_pass) {
-				applog(LOG_ERR, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
-				return 1;
-			}
+			if (!pool->rpc_user || !pool->rpc_pass)
+				quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
 			pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
 			if (!pool->rpc_userpass)
-				return 1;
+				quit(1, "Failed to malloc userpass");
 			sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 		} else {
 			pool->rpc_user = malloc(strlen(pool->rpc_userpass));
 			if (!pool->rpc_user)
-				return 1;
+				quit(1, "Failed to malloc user");
 			strcpy(pool->rpc_user, pool->rpc_userpass);
 			pool->rpc_user = strtok(pool->rpc_user, ":");
-			if (!pool->rpc_user) {
-				applog(LOG_ERR, "Failed to find colon delimiter in userpass");
-				return 1;
-			}
+			if (!pool->rpc_user)
+				quit(1, "Failed to find colon delimiter in userpass");
 		}
 	}
 	/* Set the current pool to pool 0 */
@@ -2689,11 +2701,11 @@ int main (int argc, char *argv[])
 
 	work_restart = calloc(mining_threads + 4, sizeof(*work_restart));
 	if (!work_restart)
-		return 1;
+		quit(1, "Failed to calloc work_restart");
 
 	thr_info = calloc(mining_threads + 4, sizeof(*thr));
 	if (!thr_info)
-		return 1;
+		quit(1, "Failed to calloc thr_info");
 
 	/* init workio thread info */
 	work_thr_id = mining_threads;
@@ -2701,13 +2713,11 @@ int main (int argc, char *argv[])
 	thr->id = work_thr_id;
 	thr->q = tq_new();
 	if (!thr->q)
-		return 1;
+		quit(1, "Failed to tq_new");
 
 	/* start work I/O thread */
-	if (pthread_create(&thr->pth, NULL, workio_thread, thr)) {
-		applog(LOG_ERR, "workio thread create failed");
-		return 1;
-	}
+	if (pthread_create(&thr->pth, NULL, workio_thread, thr)) 
+		quit(1, "workio thread create failed");
 
 	/* init longpoll thread info */
 	if (want_longpoll) {
@@ -2716,42 +2726,34 @@ int main (int argc, char *argv[])
 		thr->id = longpoll_thr_id;
 		thr->q = tq_new();
 		if (!thr->q)
-			return 1;
+			quit(1, "Failed to tq_new");
 
 		/* start longpoll thread */
-		if (unlikely(pthread_create(&thr->pth, NULL, longpoll_thread, thr))) {
-			applog(LOG_ERR, "longpoll thread create failed");
-			return 1;
-		}
+		if (unlikely(pthread_create(&thr->pth, NULL, longpoll_thread, thr)))
+			quit(1, "longpoll thread create failed");
 		pthread_detach(thr->pth);
 	} else
 		longpoll_thr_id = -1;
 
 	if (opt_n_threads ) {
 		cpus = calloc(num_processors, sizeof(struct cgpu_info));
-		if (unlikely(!cpus)) {
-			applog(LOG_ERR, "Failed to calloc cpus");
-			return 1;
-		}
+		if (unlikely(!cpus))
+			quit(1, "Failed to calloc cpus");
 	}
 	if (gpu_threads) {
 		gpus = calloc(nDevs, sizeof(struct cgpu_info));
-		if (unlikely(!gpus)) {
-			applog(LOG_ERR, "Failed to calloc gpus");
-			return 1;
-		}
+		if (unlikely(!gpus))
+			quit(1, "Failed to calloc gpus");
 	}
 
 	stage_thr_id = mining_threads + 3;
 	thr = &thr_info[stage_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
-		return 1;
+		quit(1, "Failed to tq_new");
 	/* start stage thread */
-	if (pthread_create(&thr->pth, NULL, stage_thread, thr)) {
-		applog(LOG_ERR, "stage thread create failed");
-		return 1;
-	}
+	if (pthread_create(&thr->pth, NULL, stage_thread, thr))
+		quit(1, "stage thread create failed");
 
 	/* Flag the work as ready forcing the mining threads to wait till we
 	 * actually put something into the queue */
@@ -2759,10 +2761,8 @@ int main (int argc, char *argv[])
 
 	/* Create a unique get work queue */
 	getq = tq_new();
-	if (!getq) {
-		applog(LOG_ERR, "Failed to create getq");
-		return 1;
-	}
+	if (!getq)
+		quit(1, "Failed to create getq");
 
 	/* Test each pool to see if we can retrieve and use work and for what
 	 * it supports */
@@ -2779,10 +2779,8 @@ int main (int argc, char *argv[])
 		}
 	}
 
-	if (!pools_active) {
-		applog(LOG_ERR, "No pools active! Exiting.");
-		return 0;
-	}
+	if (!pools_active)
+		quit(0, "No pools active! Exiting.");
 
 #ifdef HAVE_OPENCL
 	i = 0;
@@ -2807,10 +2805,8 @@ int main (int argc, char *argv[])
 		thr->cgpu = &gpus[gpu];
 
 		thr->q = tq_new();
-		if (!thr->q) {
-			applog(LOG_ERR, "tq_new failed in starting gpu mining threads");
-			return 1;
-		}
+		if (!thr->q)
+			quit(1, "tq_new failed in starting gpu mining threads");
 
 		applog(LOG_INFO, "Init GPU thread %i", i);
 		clStates[i] = initCl(gpu, name, sizeof(name));
@@ -2822,10 +2818,8 @@ int main (int argc, char *argv[])
 
 		thread_reportin(thr);
 
-		if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr))) {
-			applog(LOG_ERR, "thread %d create failed", i);
-			return 1;
-		}
+		if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr)))
+			quit(1, "thread %d create failed", i);
 		i++;
 	}
 
@@ -2847,17 +2841,13 @@ int main (int argc, char *argv[])
 		thr->cgpu = &cpus[cpu];
 
 		thr->q = tq_new();
-		if (!thr->q) {
-			applog(LOG_ERR, "tq_new failed in starting cpu mining threads");
-			return 1;
-		}
+		if (!thr->q)
+			quit(1, "tq_new failed in starting cpu mining threads");
 
 		thread_reportin(thr);
 
-		if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr))) {
-			applog(LOG_ERR, "thread %d create failed", i);
-			return 1;
-		}
+		if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr)))
+			quit(1, "thread %d create failed", i);
 	}
 
 	applog(LOG_INFO, "%d cpu miner threads started, "
@@ -2868,10 +2858,8 @@ int main (int argc, char *argv[])
 	watchdog_thr_id = mining_threads + 2;
 	thr = &thr_info[watchdog_thr_id];
 	/* start wakeup thread */
-	if (pthread_create(&thr->pth, NULL, watchdog_thread, NULL)) {
-		applog(LOG_ERR, "wakeup thread create failed");
-		return 1;
-	}
+	if (pthread_create(&thr->pth, NULL, watchdog_thread, NULL))
+		quit(1, "wakeup thread create failed");
 
 	/* Restart count as it will be wrong till all threads are started */
 	pthread_mutex_lock(&hash_lock);
@@ -2880,27 +2868,12 @@ int main (int argc, char *argv[])
 	total_mhashes_done = 0;
 	pthread_mutex_unlock(&hash_lock);
 
-	/* Set up the ncurses interface */
-	if (!opt_quiet && use_curses) {
-		mainwin = initscr();
-		getmaxyx(mainwin, y, x);
-		statuswin = newwin(logstart, x, 0, 0);
-		logwin = newwin(y - logcursor, 0, logcursor, 0);
-		idlok(logwin, true);
-		scrollok(logwin, true);
-		leaveok(logwin, true);
-		leaveok(statuswin, true);
-		test_and_set(&curses_active);
-		for (i = 0; i < mining_threads; i++)
-			print_status(i);
-	}
-
 	/* Now that everything's ready put enough work in the queue */
 	for (i = 0; i < opt_queue + mining_threads; i++) {
-		if (unlikely(!queue_request())) {
-			applog(LOG_ERR, "Failed to queue_request in main");
-			return 1;
-		}
+		if (unlikely(!queue_request()))
+			quit(1, "Failed to queue_request in main");
+		if (!opt_quiet)
+			print_status(i);
 	}
 
 	/* main loop - simply wait for workio thread to exit */
