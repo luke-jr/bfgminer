@@ -912,10 +912,13 @@ static int rotating_pool;
 static inline struct pool *select_pool(void)
 {
 	if (pool_strategy == POOL_LOADBALANCE) {
+		struct pool *pool;
+
 		rotating_pool++;
 		if (rotating_pool >= total_pools)
 			rotating_pool = 0;
-		if (!pools[rotating_pool].idle)
+		pool = &pools[rotating_pool];
+		if (!pool->idle && pool->enabled)
 			return &pools[rotating_pool];
 	}
 	return current_pool();
@@ -1207,7 +1210,7 @@ static void switch_pools(void)
 	for (i = 0; i < total_pools; i++) {
 		pool = &pools[i];
 
-		if (!pool->idle)
+		if (!pool->idle && pool->enabled)
 			pools_active++;
 	}
 	
@@ -1223,7 +1226,7 @@ static void switch_pools(void)
 		case POOL_FAILOVER:
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
-				if (!pools[i].idle) {
+				if (!pools[i].idle && pools[i].enabled) {
 					pool_no = i;
 					break;
 				}
@@ -1339,7 +1342,8 @@ static void display_pools(void)
 
 		if (i == cp)
 			wattron(logwin, A_BOLD);
-		wprintw(logwin, "Pool %d: %s  User:%s\n", pool->pool_no, pool->rpc_url, pool->rpc_user);
+		wprintw(logwin, "%s Pool %d: %s  User:%s\n", pool->enabled? "Enabled" : "Disabled",
+			pool->pool_no, pool->rpc_url, pool->rpc_user);
 		wattroff(logwin, A_BOLD);
 	}
 	//wprintw(logwin, "[A]dd pool [S]witch pool [D]isable pool [E]nable pool");
@@ -2512,6 +2516,9 @@ static void *watchdog_thread(void *userdata)
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool = &pools[i];
 
+			if (!pool->enabled)
+				continue;
+
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 60) {
 				gettimeofday(&pool->tv_idle, NULL);
@@ -2902,10 +2909,9 @@ int main (int argc, char *argv[])
 		if (pool_active(pool)) {
 			applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
 			pools_active++;
-		} else {
+			pool->enabled = true;
+		} else
 			applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
-			pool->idle = true;
-		}
 	}
 
 	if (!pools_active)

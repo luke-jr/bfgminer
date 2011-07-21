@@ -272,6 +272,7 @@ struct pool {
 	bool idle;
 	bool has_rolltime;
 	bool probed;
+	bool enabled;
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
 	unsigned int discarded_work;
