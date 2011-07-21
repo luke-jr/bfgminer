@@ -2555,6 +2555,47 @@ static void quit(int status, const char *format, ...)
 	exit(status);
 }
 
+static char *curses_input(const char *query)
+{
+	char *input;
+
+	input = malloc(255);
+	if (!input)
+		quit(1, "Failed to malloc input");
+	leaveok(logwin, false);
+	wprintw(logwin, "%s: ", query);
+	wrefresh(logwin);
+	wgetnstr(logwin, input, 255);
+	leaveok(logwin, true);
+	return input;
+}
+
+static void input_pool(void)
+{
+	char *url, *user, *pass, *seterr;
+
+	immedok(logwin, true);
+	wprintw(logwin, "Input server details.\n");
+
+	url = curses_input("URL");
+	seterr = set_url(url, NULL);
+	if (seterr)
+		quit(1, "%s", seterr);
+
+	user = curses_input("Username");
+	seterr = set_user(user, NULL);
+	if (seterr)
+		quit(1, "%s", seterr);
+
+	pass = curses_input("Password");
+	seterr = set_pass(pass, NULL);
+	if (seterr)
+		quit(1, "%s", seterr);
+
+	wclear(logwin);
+	immedok(logwin, false);
+}
+
 int main (int argc, char *argv[])
 {
 	unsigned int i, j = 0, x, y, pools_active = 0;
@@ -2625,6 +2666,8 @@ int main (int argc, char *argv[])
 	opt_register_table(opt_cmdline_table,
 			   "Options for command line only");
 
+	if (argc == 1)
+		quit(1, "No arguments specified");
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
@@ -2649,7 +2692,6 @@ int main (int argc, char *argv[])
 	}
 
 	logcursor = 7;
-	mining_threads = opt_n_threads + gpu_threads;
 	gpucursor = logcursor;
 	cpucursor = gpucursor + nDevs;
 	logstart = cpucursor + (opt_n_threads ? num_processors : 0) + 1;
@@ -2669,44 +2711,9 @@ int main (int argc, char *argv[])
 	}
 
 	if (!total_pools) {
-		if (curses_active) {
-			char *input, *seterr;
-
-			immedok(logwin, true);
-			leaveok(logwin, false);
-			wprintw(logwin, "No server specified on command line. Enter details manually\n");
-
-			input = malloc(255);
-			if (!input)
-				quit(1, "Failed to malloc input");
-			wprintw(logwin, "URL: ");
-			wgetnstr(logwin, input, 255);
-			seterr = set_url(input, NULL);
-			if (seterr)
-				quit(1, "%s", seterr);
-
-			input = malloc(255);
-			if (!input)
-				quit(1, "Failed to malloc input");
-			wprintw(logwin, "Username: ");
-			wgetnstr(logwin, input, 255);
-			seterr = set_user(input, NULL);
-			if (seterr)
-				quit(1, "%s", seterr);
-
-			input = malloc(255);
-			if (!input)
-				quit(1, "Failed to malloc input");
-			wprintw(logwin, "Password: ");
-			wgetnstr(logwin, input, 255);
-			seterr = set_pass(input, NULL);
-			if (seterr)
-				quit(1, "%s", seterr);
-
-			wclear(logwin);
-			leaveok(logwin, true);
-			immedok(logwin, false);
-		} else
+		if (curses_active)
+			input_pool();
+		else
 			quit(1, "No server specified");
 	}
 
@@ -2738,6 +2745,7 @@ int main (int argc, char *argv[])
 		openlog("cpuminer", LOG_PID, LOG_USER);
 #endif
 
+	mining_threads = opt_n_threads + gpu_threads;
 	work_restart = calloc(mining_threads + 4, sizeof(*work_restart));
 	if (!work_restart)
 		quit(1, "Failed to calloc work_restart");
