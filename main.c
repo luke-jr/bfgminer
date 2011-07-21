@@ -611,11 +611,13 @@ static char *load_config(const char *arg, void *unused)
 	return parse_config(config);
 }
 
+#ifdef HAVE_OPENCL
 static char *print_ndevs_and_exit(int *ndevs)
 {
 	printf("%i GPU devices detected\n", *ndevs);
 	exit(*ndevs);
 }
+#endif
 
 /* These options are available from commandline only */
 static struct opt_table opt_cmdline_table[] = {
@@ -626,14 +628,16 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_WITHOUT_ARG("--help|-h",
 			opt_usage_and_exit,
 #ifdef HAVE_OPENCL
-			"\nBuilt with CPU and GPU mining support.\n\n",
+			"\nBuilt with CPU and GPU mining support.\n",
 #else
-			"\nBuilt with CPU mining support only.\n\n",
+			"\nBuilt with CPU mining support only.\n",
 #endif
 			"Print this message"),
+#ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--ndevs|-n",
 			print_ndevs_and_exit, &nDevs,
 			"Enumerate number of detected GPUs and exit"),
+#endif
 	OPT_ENDTABLE
 };
 
