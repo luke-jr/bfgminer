@@ -132,6 +132,7 @@ bool want_longpoll = true;
 bool have_longpoll = false;
 bool use_syslog = false;
 static bool opt_quiet = false;
+static bool opt_loginput = false;
 static int opt_retries = -1;
 static int opt_fail_pause = 5;
 static int opt_log_interval = 5;
@@ -787,7 +788,7 @@ static void print_status(int thr_id)
 
 void log_curses(const char *f, va_list ap)
 {
-	if (curses_active) {
+	if (curses_active && !opt_loginput) {
 		pthread_mutex_lock(&curses_lock);
 		vw_printw(logwin, f, ap);
 		wrefresh(logwin);
@@ -1326,6 +1327,29 @@ static void *stage_thread(void *userdata)
 	return NULL;
 }
 
+static void display_pools(void)
+{
+	int i, cp = current_pool()->pool_no;
+
+	opt_loginput = true;
+	clear_logwin();
+	pthread_mutex_lock(&curses_lock);
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = &pools[i];
+
+		if (i == cp)
+			wattron(logwin, A_BOLD);
+		wprintw(logwin, "Pool %d: %s  User:%s\n", pool->pool_no, pool->rpc_url, pool->rpc_user);
+		wattroff(logwin, A_BOLD);
+	}
+	//wprintw(logwin, "[A]dd pool [S]witch pool [D]isable pool [E]nable pool");
+	wprintw(logwin, "Press any key to continue\n");
+	wrefresh(logwin);
+	pthread_mutex_unlock(&curses_lock);
+	i = getch();
+	opt_loginput = false;
+}
+
 static void *input_thread(void *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -1360,6 +1384,8 @@ static void *input_thread(void *userdata)
 			applog(LOG_WARNING, "RPC protocl debugging %s", opt_protocol ? "enabled" : "disabled");
 		} else if (!strncasecmp(&input, "c", 1))
 			clear_logwin();
+		else if (!strncasecmp(&input, "p", 1))
+			display_pools();
 	}
 
 	return NULL;
