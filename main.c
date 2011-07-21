@@ -1817,6 +1817,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	work->data[64+12+1] = (nonce>>8) & 0xff;
 	work->data[64+12+2] = (nonce>>16) & 0xff;
 	work->data[64+12+3] = (nonce>>24) & 0xff;
+	/* Do one last check before attempting to submit the work */
+	if (!fulltest(work->data + 64, work->target))
+		return true;
 	return submit_work_sync(thr, work);
 }
 
