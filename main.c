@@ -1352,6 +1352,7 @@ static void display_pools(void)
 	pthread_mutex_unlock(&curses_lock);
 	i = getch();
 	opt_loginput = false;
+	clear_logwin();
 }
 
 static void *input_thread(void *userdata)
@@ -1564,7 +1565,7 @@ static bool pool_active(struct pool *pool)
 		}
 		rc = work_decode(json_object_get(val, "result"), work);
 		if (rc) {
-			applog(LOG_DEBUG, "Successfully retreived and deciphered work from pool %u %s",
+			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
 			tq_push(thr_info[stage_thr_id].q, work);
@@ -2654,32 +2655,65 @@ static char *curses_input(const char *query)
 	return input;
 }
 
-static void input_pool(void)
+static bool input_pool(bool live)
 {
-	char *url, *user, *pass, *seterr;
+	char *url, *user, *pass;
+	int poolno = total_pools;
+	struct pool *pool;
 
 	echo();
 	immedok(logwin, true);
 	wprintw(logwin, "Input server details.\n");
 
 	url = curses_input("URL");
-	seterr = set_url(url, NULL);
-	if (seterr)
-		quit(1, "%s", seterr);
+	if (strncmp(url, "http://", 7) &&
+	    strncmp(url, "https://", 8)) {
+		applog(LOG_ERR, "URL must start with http:// or https://");
+		return false;
+	}
 
 	user = curses_input("Username");
-	seterr = set_user(user, NULL);
-	if (seterr)
-		quit(1, "%s", seterr);
+	if (!user)
+		return false;
 
 	pass = curses_input("Password");
-	seterr = set_pass(pass, NULL);
-	if (seterr)
-		quit(1, "%s", seterr);
+	if (!pass)
+		return false;
 
 	wclear(logwin);
 	immedok(logwin, false);
 	noecho();
+
+	pools = realloc(pools, sizeof(struct pool) * (total_pools + 1));
+	if (!pools)
+		quit(1, "Failed to malloc pools in input_pool");
+	pool = &pools[poolno];
+	memset(pool, 0, sizeof(struct pool));
+	pool->pool_no = poolno;
+	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
+		quit (1, "Failed to pthread_mutex_init in input_pool");
+	pool->rpc_url = url;
+	pool->rpc_user = user;
+	pool->rpc_pass = pass;
+	pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
+	if (!pool->rpc_userpass)
+		quit(1, "Failed to malloc userpass");
+	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
+
+	pool->tv_idle.tv_sec = ~0UL;
+
+	if (!live) {
+		total_pools++;
+		return true;
+	}
+
+	/* Test the pool before we enable it if we're live running*/
+	if (pool_active(pool)) {
+		pool->enabled = true;
+		total_pools++;
+		return true;
+	}
+	return false;
 }
 
 int main (int argc, char *argv[])
@@ -2797,9 +2831,10 @@ int main (int argc, char *argv[])
 	}
 
 	if (!total_pools) {
-		if (curses_active)
-			input_pool();
-		else
+		if (curses_active) {
+			if (!input_pool(false))
+				quit(1, "Pool setup failed");
+		} else
 			quit(1, "No server specified");
 	}
 
