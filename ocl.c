@@ -510,6 +510,10 @@ build:
 	/* copy over all of the generated binaries. */
 	if (opt_debug)
 		applog(LOG_DEBUG, "binary size %d : %d", gpu, binary_sizes[gpu]);
+	if (!binary_sizes[gpu]) {
+		applog(LOG_ERR, "OpenCL compiler generated a zero sized binary, may need to reboot!");
+		return NULL;
+	}
 	binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[gpu]);
 	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
 	if (unlikely(status != CL_SUCCESS))
