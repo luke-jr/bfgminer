@@ -167,6 +167,8 @@ static int work_thr_id;
 int longpoll_thr_id;
 static int stage_thr_id;
 static int watchdog_thr_id;
+static int input_thr_id;
+static int total_threads;
 
 struct work_restart *work_restart = NULL;
 
@@ -794,6 +796,14 @@ void log_curses(const char *f, va_list ap)
 		vprintf(f, ap);
 }
 
+static void clear_logwin(void)
+{
+	pthread_mutex_lock(&curses_lock);
+	wclear(logwin);
+	wrefresh(logwin);
+	pthread_mutex_unlock(&curses_lock);
+}
+
 static bool submit_upstream_work(const struct work *work)
 {
 	char *hexstr = NULL;
@@ -1313,6 +1323,45 @@ static void *stage_thread(void *userdata)
 	}
 
 	tq_freeze(mythr->q);
+	return NULL;
+}
+
+static void *input_thread(void *userdata)
+{
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	if (!curses_active)
+		return NULL;
+
+	while (1) {
+		char input;
+
+		input = getch();
+		if (!strncasecmp(&input, "q", 1)) {
+			kill_work();
+			return NULL;
+		} else if (!strncasecmp(&input, "s", 1)) {
+			opt_quiet ^= true;
+			applog(LOG_WARNING, "Silent mode %s", opt_quiet ? "enabled" : "disabled");
+		} else if (!strncasecmp(&input, "v", 1)) {
+			opt_log_output ^= true;
+			applog(LOG_WARNING, "Verbose mode %s", opt_log_output ? "enabled" : "disabled");
+		} else if (!strncasecmp(&input, "n", 1)) {
+			opt_log_output = true;
+			opt_debug = false;
+			opt_quiet = false;
+			opt_protocol = false;
+			applog(LOG_WARNING, "Output mode reset to normal");
+		} else if (!strncasecmp(&input, "d", 1)) {
+			opt_debug ^= true;
+			applog(LOG_WARNING, "Debug mode %s", opt_debug ? "enabled" : "disabled");
+		} else if (!strncasecmp(&input, "r", 1)) {
+			opt_protocol ^= true;
+			applog(LOG_WARNING, "RPC protocl debugging %s", opt_protocol ? "enabled" : "disabled");
+		} else if (!strncasecmp(&input, "c", 1))
+			clear_logwin();
+	}
+
 	return NULL;
 }
 
@@ -2710,6 +2759,7 @@ int main (int argc, char *argv[])
 		scrollok(logwin, true);
 		leaveok(logwin, true);
 		cbreak();
+		noecho();
 		test_and_set(&curses_active);
 	}
 
@@ -2749,11 +2799,13 @@ int main (int argc, char *argv[])
 #endif
 
 	mining_threads = opt_n_threads + gpu_threads;
-	work_restart = calloc(mining_threads + 4, sizeof(*work_restart));
+
+	total_threads = mining_threads + 5;
+	work_restart = calloc(total_threads, sizeof(*work_restart));
 	if (!work_restart)
 		quit(1, "Failed to calloc work_restart");
 
-	thr_info = calloc(mining_threads + 4, sizeof(*thr));
+	thr_info = calloc(total_threads, sizeof(*thr));
 	if (!thr_info)
 		quit(1, "Failed to calloc thr_info");
 
@@ -2804,6 +2856,7 @@ int main (int argc, char *argv[])
 	/* start stage thread */
 	if (pthread_create(&thr->pth, NULL, stage_thread, thr))
 		quit(1, "stage thread create failed");
+	pthread_detach(thr->pth);
 
 	/* Flag the work as ready forcing the mining threads to wait till we
 	 * actually put something into the queue */
@@ -2925,6 +2978,13 @@ int main (int argc, char *argv[])
 		if (!opt_quiet)
 			print_status(i);
 	}
+
+	/* Create curses input thread for keyboard input */
+	input_thr_id = mining_threads + 4;
+	thr = &thr_info[input_thr_id];
+	if (pthread_create(&thr->pth, NULL, input_thread, thr))
+		quit(1, "input thread create failed");
+	pthread_detach(thr->pth);
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
