@@ -2629,9 +2629,6 @@ int main (int argc, char *argv[])
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
 
-	if (!total_pools)
-		quit(1, "No server specified");
-
 	if (total_devices) {
 		if (total_devices > nDevs)
 			quit(1, "More devices specified than exist");
@@ -2669,6 +2666,48 @@ int main (int argc, char *argv[])
 		scrollok(logwin, true);
 		leaveok(logwin, true);
 		test_and_set(&curses_active);
+	}
+
+	if (!total_pools) {
+		if (curses_active) {
+			char *input, *seterr;
+
+			immedok(logwin, true);
+			leaveok(logwin, false);
+			wprintw(logwin, "No server specified on command line. Enter details manually\n");
+
+			input = malloc(255);
+			if (!input)
+				quit(1, "Failed to malloc input");
+			wprintw(logwin, "URL: ");
+			wgetnstr(logwin, input, 255);
+			seterr = set_url(input, NULL);
+			if (seterr)
+				quit(1, "%s", seterr);
+
+			input = malloc(255);
+			if (!input)
+				quit(1, "Failed to malloc input");
+			wprintw(logwin, "Username: ");
+			wgetnstr(logwin, input, 255);
+			seterr = set_user(input, NULL);
+			if (seterr)
+				quit(1, "%s", seterr);
+
+			input = malloc(255);
+			if (!input)
+				quit(1, "Failed to malloc input");
+			wprintw(logwin, "Password: ");
+			wgetnstr(logwin, input, 255);
+			seterr = set_pass(input, NULL);
+			if (seterr)
+				quit(1, "%s", seterr);
+
+			wclear(logwin);
+			leaveok(logwin, true);
+			immedok(logwin, false);
+		} else
+			quit(1, "No server specified");
 	}
 
 	for (i = 0; i < total_pools; i++) {
