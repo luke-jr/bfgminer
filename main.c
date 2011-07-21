@@ -961,6 +961,8 @@ static void workio_cmd_free(struct workio_cmd *wc)
 static void disable_curses(void)
 {
 	if (test_and_clear(&curses_active)) {
+		nocbreak();
+		echo();
 		delwin(logwin);
 		delwin(statuswin);
 		delwin(mainwin);
@@ -2574,6 +2576,7 @@ static void input_pool(void)
 {
 	char *url, *user, *pass, *seterr;
 
+	echo();
 	immedok(logwin, true);
 	wprintw(logwin, "Input server details.\n");
 
@@ -2594,6 +2597,7 @@ static void input_pool(void)
 
 	wclear(logwin);
 	immedok(logwin, false);
+	noecho();
 }
 
 int main (int argc, char *argv[])
@@ -2705,6 +2709,7 @@ int main (int argc, char *argv[])
 		idlok(logwin, true);
 		scrollok(logwin, true);
 		leaveok(logwin, true);
+		cbreak();
 		test_and_set(&curses_active);
 	}
 
