@@ -981,6 +981,8 @@ void kill_work(void)
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = &thr_info[i];
+		if (!thr->pth)
+			continue;
 		tq_freeze(thr->q);
 		/* No need to check if this succeeds or not */
 		pthread_cancel(thr->pth);
