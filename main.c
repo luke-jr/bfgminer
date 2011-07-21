@@ -2666,8 +2666,6 @@ int main (int argc, char *argv[])
 	opt_register_table(opt_cmdline_table,
 			   "Options for command line only");
 
-	if (argc == 1)
-		quit(1, "No arguments specified");
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
