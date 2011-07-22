@@ -348,7 +348,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		goto err_out;
 	}
 
-	if (!have_longpoll) {
+	if (!have_longpoll && want_longpoll) {
 		/* If X-Long-Polling was found, activate long polling */
 		if (hi.lp_path) {
 			have_longpoll = true;
