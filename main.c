@@ -248,7 +248,7 @@ static void add_pool(void)
 		applog(LOG_ERR, "Failed to malloc pool in add_pool");
 		exit (1);
 	}
-	pool->pool_no = total_pools;
+	pool->pool_no = pool->prio = total_pools;
 	pools[total_pools++] = pool;
 	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL))) {
 		applog(LOG_ERR, "Failed to pthread_mutex_init in add_pool");
@@ -1459,8 +1459,12 @@ updated:
 			wattron(logwin, A_BOLD);
 		if (!pool->enabled)
 			wattron(logwin, A_DIM);
-		wprintw(logwin, "%s Pool %d: %s  User:%s\n", pool->enabled? "Enabled" : "Disabled",
-			pool->pool_no, pool->rpc_url, pool->rpc_user);
+		wprintw(logwin, "%d: %s %s Priority %d: %s  User:%s\n",
+			pool->pool_no,
+			pool->enabled? "Enabled" : "Disabled",
+			pool->idle? "Dead" : "Alive",
+			pool->prio,
+			pool->rpc_url, pool->rpc_user);
 		wattroff(logwin, A_BOLD | A_DIM);
 	}
 retry:
