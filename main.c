@@ -758,6 +758,7 @@ static void curses_print_status(int thr_id)
 	whline(statuswin, '-', 80);
 	wmove(statuswin, logstart - 1, 0);
 	whline(statuswin, '-', 80);
+	mvwprintw(statuswin, gpucursor - 1, 1, "Options: [P]ool management [D]isplay options [Q]uit");
 
 	if (thr_id >= 0 && thr_id < gpu_threads) {
 		int gpu = dev_from_id(thr_id);
@@ -1539,6 +1540,41 @@ retry:
 	opt_loginput = false;
 }
 
+static void display_options(void)
+{
+	char input;
+
+	opt_loginput = true;
+	wprintw(logwin, "\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug [C]lear\n");
+	wprintw(logwin, "Select an option or any other key to return\n");
+	wrefresh(logwin);
+	input = getch();
+	if (!strncasecmp(&input, "s", 1)) {
+		opt_quiet ^= true;
+		applog(LOG_WARNING, "Silent mode %s", opt_quiet ? "enabled" : "disabled");
+	} else if (!strncasecmp(&input, "v", 1)) {
+		opt_log_output ^= true;
+		applog(LOG_WARNING, "Verbose mode %s", opt_log_output ? "enabled" : "disabled");
+	} else if (!strncasecmp(&input, "n", 1)) {
+		opt_log_output = false;
+		opt_debug = false;
+		opt_quiet = false;
+		opt_protocol = false;
+		applog(LOG_WARNING, "Output mode reset to normal");
+	} else if (!strncasecmp(&input, "d", 1)) {
+		opt_debug ^= true;
+		if (opt_debug)
+			opt_log_output = true;
+		applog(LOG_WARNING, "Debug mode %s", opt_debug ? "enabled" : "disabled");
+	} else if (!strncasecmp(&input, "r", 1)) {
+		opt_protocol ^= true;
+		applog(LOG_WARNING, "RPC protocol debugging %s", opt_protocol ? "enabled" : "disabled");
+	} else if (!strncasecmp(&input, "c", 1))
+		clear_logwin();
+	wrefresh(logwin);
+	opt_loginput = false;
+}
+
 static void *input_thread(void *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -1553,26 +1589,8 @@ static void *input_thread(void *userdata)
 		if (!strncasecmp(&input, "q", 1)) {
 			kill_work();
 			return NULL;
-		} else if (!strncasecmp(&input, "s", 1)) {
-			opt_quiet ^= true;
-			applog(LOG_WARNING, "Silent mode %s", opt_quiet ? "enabled" : "disabled");
-		} else if (!strncasecmp(&input, "v", 1)) {
-			opt_log_output ^= true;
-			applog(LOG_WARNING, "Verbose mode %s", opt_log_output ? "enabled" : "disabled");
-		} else if (!strncasecmp(&input, "n", 1)) {
-			opt_log_output = true;
-			opt_debug = false;
-			opt_quiet = false;
-			opt_protocol = false;
-			applog(LOG_WARNING, "Output mode reset to normal");
-		} else if (!strncasecmp(&input, "d", 1)) {
-			opt_debug ^= true;
-			applog(LOG_WARNING, "Debug mode %s", opt_debug ? "enabled" : "disabled");
-		} else if (!strncasecmp(&input, "r", 1)) {
-			opt_protocol ^= true;
-			applog(LOG_WARNING, "RPC protocl debugging %s", opt_protocol ? "enabled" : "disabled");
-		} else if (!strncasecmp(&input, "c", 1))
-			clear_logwin();
+		} else if (!strncasecmp(&input, "d", 1))
+			display_options();
 		else if (!strncasecmp(&input, "p", 1))
 			display_pools();
 	}
@@ -3005,7 +3023,7 @@ int main (int argc, char *argv[])
 		opt_n_threads = num_processors;
 	}
 
-	logcursor = 7;
+	logcursor = 8;
 	gpucursor = logcursor;
 	cpucursor = gpucursor + nDevs;
 	logstart = cpucursor + (opt_n_threads ? num_processors : 0) + 1;
