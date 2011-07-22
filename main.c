@@ -1476,7 +1476,7 @@ retry:
 	} else if (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection");
+			wprintw(logwin, "Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
@@ -1490,7 +1490,7 @@ retry:
 		}
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection");
+			wprintw(logwin, "Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
@@ -1501,7 +1501,7 @@ retry:
 	} else if (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection");
+			wprintw(logwin, "Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
@@ -1514,7 +1514,7 @@ retry:
 			wprintw(logwin, "%d: %s\n", i, strategies[i]);
 		selected = curses_int("Select strategy number type");
 		if (selected < 0 || selected > TOP_STRATEGY) {
-			wprintw(logwin, "Invalid selection");
+			wprintw(logwin, "Invalid selection\n");
 			goto retry;
 		}
 		if (selected == POOL_ROTATE) {
@@ -1522,7 +1522,7 @@ retry:
 
 			if (opt_rotate_period < 0 || opt_rotate_period > 9999) {
 				opt_rotate_period = 0;
-				wprintw(logwin, "Invalid selection");
+				wprintw(logwin, "Invalid selection\n");
 				goto retry;
 			}
 		}
@@ -1532,7 +1532,7 @@ retry:
 	} else if (!strncasecmp(&input, "i", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection");
+			wprintw(logwin, "Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
@@ -1547,11 +1547,14 @@ retry:
 
 static void display_options(void)
 {
+	int selected;
 	char input;
 
 	opt_loginput = true;
 	immedok(logwin, true);
-	wprintw(logwin, "\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug [C]lear\n");
+retry:
+	wprintw(logwin, "\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug\n");
+	wprintw(logwin, "[L]og interval [C]lear\n");
 	wprintw(logwin, "Select an option or any other key to return\n");
 	input = getch();
 	if (!strncasecmp(&input, "s", 1)) {
@@ -1576,6 +1579,14 @@ static void display_options(void)
 		applog(LOG_WARNING, "RPC protocol debugging %s", opt_protocol ? "enabled" : "disabled");
 	} else if (!strncasecmp(&input, "c", 1))
 		clear_logwin();
+	else if (!strncasecmp(&input, "l", 1)) {
+		selected = curses_int("Interval in seconds");
+		if (selected < 0 || selected > 9999) {
+			wprintw(logwin, "Invalid selection\n");
+			goto retry;
+		}
+		opt_log_interval = selected;
+	}
 	immedok(logwin, false);
 	opt_loginput = false;
 }
@@ -2870,6 +2881,7 @@ static char *curses_input(const char *query)
 	wgetnstr(logwin, input, 255);
 	leaveok(logwin, true);
 	noecho();
+	wprintw(logwin, "\n");
 	return input;
 }
 
