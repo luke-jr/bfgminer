@@ -1422,7 +1422,7 @@ updated:
 	}
 retry:
 	wprintw(logwin, "\nCurrent pool management strategy: %s\n", strategies[pool_strategy]);
-	wprintw(logwin, "[A]dd pool [S]witch pool [D]isable pool [E]nable pool\n");
+	wprintw(logwin, "[A]dd pool [D]isable pool [E]nable pool [S]witch pool\n");
 	wprintw(logwin, "Or press any other key to continue\n");
 	wrefresh(logwin);
 	pthread_mutex_unlock(&curses_lock);
@@ -1474,7 +1474,6 @@ retry:
 	}
 
 	opt_loginput = false;
-	clear_logwin();
 }
 
 static void *input_thread(void *userdata)
