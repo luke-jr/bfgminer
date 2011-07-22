@@ -1604,7 +1604,9 @@ static void set_options(void)
 	opt_loginput = true;
 	immedok(logwin, true);
 retry:
-	wprintw(logwin, "\nToggle [D]ynamic mode\n");
+	wclear(logwin);
+	wprintw(logwin, "\n[D]ynamic mode: %s\n[L]ongpoll: %s\n",
+		opt_dynamic ? "On" : "Off", want_longpoll ? "On" : "Off");
 	if (opt_dynamic)
 		wprintw(logwin, "[I]ntensity: Dynamic\n");
 	else
@@ -1621,9 +1623,15 @@ retry:
 			goto retry;
 		}
 		opt_queue = selected;
+		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_dynamic ^= true;
-		applog(LOG_WARNING, "Dynamic mode %s", opt_dynamic ? "enabled" : "disabled");
+		goto retry;
+	} else if (!strncasecmp(&input, "l", 1)) {
+		want_longpoll ^= true;
+		applog(LOG_WARNING, "Longpoll %s", want_longpoll ? "enabled" : "disabled");
+		restart_longpoll();
+		goto retry;
 	} else if (!strncasecmp(&input, "i", 1)) {
 		selected = curses_int("Set GPU scan intensity (0-10)");
 		if (selected < 0 || selected > 10) {
@@ -1632,6 +1640,7 @@ retry:
 		}
 		opt_dynamic = false;
 		scan_intensity = selected;
+		goto retry;
 	} else if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
 		if (selected < 0 || selected > 9999) {
@@ -1639,6 +1648,7 @@ retry:
 			goto retry;
 		}
 		opt_scantime = selected;
+		goto retry;
 	} else if  (!strncasecmp(&input, "r", 1)) {
 		selected = curses_int("Retries before failing (-1 infinite)");
 		if (selected < -1 || selected > 9999) {
@@ -1646,6 +1656,7 @@ retry:
 			goto retry;
 		}
 		opt_retries = selected;
+		goto retry;
 	} else if  (!strncasecmp(&input, "p", 1)) {
 		selected = curses_int("Seconds to pause before network retries");
 		if (selected < 1 || selected > 9999) {
@@ -1653,6 +1664,7 @@ retry:
 			goto retry;
 		}
 		opt_fail_pause = selected;
+		goto retry;
 	}
 	wclear(logwin);
 	immedok(logwin, false);
