@@ -798,7 +798,6 @@ static void print_status(int thr_id)
 	else {
 		pthread_mutex_lock(&curses_lock);
 		curses_print_status(thr_id);
-		wrefresh(statuswin);
 		pthread_mutex_unlock(&curses_lock);
 	}
 }
