@@ -327,10 +327,10 @@ static char *set_int_0_to_9999(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 9999);
 }
 
-static char *forced_int_0_to_14(const char *arg, int *i)
+static char *forced_int_1010(const char *arg, int *i)
 {
 	opt_dynamic = false;
-	return set_int_range(arg, i, 0, 14);
+	return set_int_range(arg, i, -10, 10);
 }
 
 static char *force_nthreads_int(const char *arg, int *i)
@@ -501,8 +501,8 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (0 - 10)"),
 	OPT_WITH_ARG("--intensity|-I",
-		     forced_int_0_to_14, opt_show_intval, &scan_intensity,
-		     "Intensity of GPU scanning (0 - 14, default: dynamic to maintain desktop interactivity)"),
+		     forced_int_1010, opt_show_intval, &scan_intensity,
+		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -1680,8 +1680,8 @@ retry:
 		restart_longpoll();
 		goto retry;
 	} else if (!strncasecmp(&input, "i", 1)) {
-		selected = curses_int("Set GPU scan intensity (0-10)");
-		if (selected < 0 || selected > 10) {
+		selected = curses_int("Set GPU scan intensity (-10 -> 10)");
+		if (selected < -10 || selected > 10) {
 			wprintw(logwin, "Invalid selection\n");
 			goto retry;
 		}
@@ -2410,9 +2410,14 @@ static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk
 }
 
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
-			       unsigned int *hashes, size_t *globalThreads)
+			       unsigned int *hashes, size_t *globalThreads,
+			       unsigned int minthreads)
 {
-	*globalThreads = *threads = 1 << (15 + scan_intensity);
+	int intensity = scan_intensity + 10;
+	*threads = 1 << (5 + intensity);
+	if (*threads < minthreads)
+		*threads = minthreads;
+	*globalThreads = *threads;
 	*hashes = *threads * vectors;
 }
 
@@ -2499,13 +2504,13 @@ static void *gpuminer_thread(void *userdata)
 			 * increase intensity when the system is idle, unless
 			 * dynamic is disabled. */
 			if (gpu_ms_average > 7) {
-				if (scan_intensity > 0)
+				if (scan_intensity > -10)
 					scan_intensity--;
-				set_threads_hashes(vectors, &threads, &hashes, globalThreads);
+				set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
 			} else if (gpu_ms_average < 3) {
-				if (scan_intensity < 14)
+				if (scan_intensity < 10)
 					scan_intensity++;
-				set_threads_hashes(vectors, &threads, &hashes, globalThreads);
+				set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
 			}
 		}
 
