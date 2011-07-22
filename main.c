@@ -1441,6 +1441,30 @@ static void display_pool_summary(struct pool *pool)
 	wprintw(logwin, " Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
 }
 
+/* We can't remove the memory used for this struct pool because there may
+ * still be work referencing it. We just remove it from the pools list */
+static void remove_pool(struct pool *pool)
+{
+	int i, last_pool = total_pools - 1;
+	struct pool *other;
+
+	/* Boost priority of any lower prio than this one */
+	for (i = 0; i < total_pools; i++) {
+		other = pools[i];
+		if (other->prio > pool->prio)
+			other->prio--;
+	}
+
+	if (pool->pool_no < last_pool) {
+		/* Swap the last pool for this one */
+		(pools[last_pool])->pool_no = pool->pool_no;
+		pools[pool->pool_no] = pools[last_pool];
+	}
+	/* Give it an invalid number */
+	pool->pool_no = total_pools;
+	total_pools--;
+}
+
 static void display_pools(void)
 {
 	struct pool *pool;
@@ -1480,6 +1504,26 @@ retry:
 
 	if (!strncasecmp(&input, "a", 1)) {
 		input_pool(true);
+		goto updated;
+	} else if (!strncasecmp(&input, "r", 1)) {
+		if (active_pools() <= 1) {
+			wprintw(logwin, "Cannot remove last pool");
+			goto retry;
+		}
+		selected = curses_int("Select pool number");
+		if (selected < 0 || selected >= total_pools) {
+			wprintw(logwin, "Invalid selection\n");
+			goto retry;
+		}
+		pool = pools[selected];
+		if (pool == current_pool())
+			switch_pools(NULL);
+		if (pool == current_pool()) {
+			wprintw(logwin, "Unable to remove pool due to activity\n");
+			goto retry;
+		}
+		pool->enabled = false;
+		remove_pool(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Select pool number");
