@@ -1245,6 +1245,8 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
+static void restart_longpoll(void);
+
 static void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -1297,8 +1299,10 @@ static void switch_pools(struct pool *selected)
 	pool = currentpool;
 	pthread_mutex_unlock(&control_lock);
 
-	if (pool != last_pool)
+	if (pool != last_pool) {
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		restart_longpoll();
+	}
 
 	/* Reset the queued amount to allow more to be queued for the new pool */
 	pthread_mutex_lock(&qd_lock);
@@ -2582,12 +2586,10 @@ static void *longpoll_thread(void *userdata)
 		goto out;
 	}
 
-	/* Longpoll sits waiting on next pushed url */
-next_path:
 	hdr_path = tq_pop(mythr->q, NULL);
 	if (!hdr_path) {
 		applog(LOG_WARNING, "No long-poll found on this server");
-		goto next_path;
+		goto out;
 	}
 
 	/* full URL */
@@ -2653,13 +2655,6 @@ next_path:
 				goto out;
 			}
 		}
-
-		if (pool != current_pool()) {
-			applog(LOG_WARNING, "Attempting to change longpoll servers");
-			pool = current_pool();
-			have_longpoll = false;
-			goto next_path;
-		}
 	}
 
 out:
@@ -2669,6 +2664,34 @@ out:
 		curl_easy_cleanup(curl);
 
 	return NULL;
+}
+
+static void stop_longpoll(void)
+{
+	struct thr_info *thr = &thr_info[longpoll_thr_id];
+
+	tq_freeze(thr->q);
+	pthread_cancel(thr->pth);
+	have_longpoll = false;
+}
+
+static void quit(int status, const char *format, ...);
+
+static void start_longpoll(void)
+{
+	struct thr_info *thr = &thr_info[longpoll_thr_id];
+
+	tq_thaw(thr->q);
+	if (unlikely(pthread_create(&thr->pth, NULL, longpoll_thread, thr)))
+		quit(1, "longpoll thread create failed");
+	pthread_detach(thr->pth);
+}
+
+static void restart_longpoll(void)
+{
+	stop_longpoll();
+	if (want_longpoll)
+		start_longpoll();
 }
 
 static void reinit_cputhread(int thr_id)
@@ -3188,20 +3211,15 @@ int main (int argc, char *argv[])
 		quit(1, "workio thread create failed");
 
 	/* init longpoll thread info */
-	if (want_longpoll) {
-		longpoll_thr_id = mining_threads + 1;
-		thr = &thr_info[longpoll_thr_id];
-		thr->id = longpoll_thr_id;
-		thr->q = tq_new();
-		if (!thr->q)
-			quit(1, "Failed to tq_new");
+	longpoll_thr_id = mining_threads + 1;
+	thr = &thr_info[longpoll_thr_id];
+	thr->id = longpoll_thr_id;
+	thr->q = tq_new();
+	if (!thr->q)
+		quit(1, "Failed to tq_new");
 
-		/* start longpoll thread */
-		if (unlikely(pthread_create(&thr->pth, NULL, longpoll_thread, thr)))
-			quit(1, "longpoll thread create failed");
-		pthread_detach(thr->pth);
-	} else
-		longpoll_thr_id = -1;
+	if (want_longpoll)
+		start_longpoll();
 
 	if (opt_n_threads ) {
 		cpus = calloc(num_processors, sizeof(struct cgpu_info));
