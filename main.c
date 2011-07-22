@@ -1412,6 +1412,26 @@ static int active_pools(void)
 	return ret;
 }
 
+static void display_pool_summary(struct pool *pool)
+{
+	double efficiency = 0.0;
+
+	wprintw(logwin, "Pool: %s\n", pool->rpc_url);
+	wprintw(logwin, " Queued work requests: %d\n", pool->getwork_requested);
+	wprintw(logwin, " Share submissions: %d\n", pool->accepted + pool->rejected);
+	wprintw(logwin, " Accepted shares: %d\n", pool->accepted);
+	wprintw(logwin, " Rejected shares: %d\n", pool->rejected);
+	if (pool->accepted || pool->rejected)
+		wprintw(logwin, " Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
+	efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
+	wprintw(logwin, " Efficiency (accepted / queued): %.0f%%\n", efficiency);
+
+	wprintw(logwin, " Discarded work due to new blocks: %d\n", pool->discarded_work);
+	wprintw(logwin, " Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
+	wprintw(logwin, " Unable to get work from server occasions: %d\n", pool->localgen_occasions);
+	wprintw(logwin, " Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
+}
+
 static void display_pools(void)
 {
 	struct pool *pool;
@@ -1439,7 +1459,7 @@ retry:
 	if (pool_strategy == POOL_ROTATE)
 		wprintw(logwin, "Set to rotate every %d minutes\n", opt_rotate_period);
 	wprintw(logwin, "[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
-	wprintw(logwin, "[C]hange management strategy [S]witch pool\n");
+	wprintw(logwin, "[C]hange management strategy [S]witch pool [I]nformation\n");
 	wprintw(logwin, "Or press any other key to continue\n");
 	wrefresh(logwin);
 	pthread_mutex_unlock(&curses_lock);
@@ -1504,6 +1524,15 @@ retry:
 		pool_strategy = selected;
 		switch_pools(NULL);
 		goto updated;
+	} else if (!strncasecmp(&input, "i", 1)) {
+		selected = curses_int("Select pool number");
+		if (selected < 0 || selected >= total_pools) {
+			wprintw(logwin, "Invalid selection");
+			goto retry;
+		}
+		pool = pools[selected];
+		display_pool_summary(pool);
+		goto retry;
 	}
 
 	clear_logwin();
