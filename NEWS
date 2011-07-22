@@ -1,3 +1,58 @@
+Version 1.4.0 - July 22, 2011
+
+- Feature upgrade: Add keyboard input during runtime to allow modification of
+and viewing of numerous settings such as adding/removing pools, changing
+multipool management strategy, switching pools, changing intensiy, verbosity,
+etc. with a simple keypress menu system.
+- Free up resources/stale compilers.
+- Kernels are safely flushed in a way that allows out of order execution to
+work.
+- Sometimes the cl compiler generates zero sized binaries and only a reboot
+seems to fix it.
+- Don't try to stop/cancel threads that don't exist.
+- Only set option to show devices and exit if built with opencl support.
+- Enable curses earlier and exit with message in main for messages to not be
+lost in curses windows.
+- Make it possible to enter server credentials with curses input if none are
+specified on the command line.
+- Abstract out a curses input function and separate input pool function to allow
+for live adding of pools later.
+- Remove the nil arguments check to allow starting without parameters.
+- Disable/enable echo & cbreak modes.
+- Add a thread that takes keyboard input and allow for quit, silent, debug,
+verbose, normal, rpc protocol debugging and clear screen options.
+- Add pool option to input and display current pool status, pending code to
+allow live changes.
+- Add a bool for explicit enabling/disabling of pools.
+- Make input pool capable of bringing up pools while running.
+- Do one last check of the work before submitting it.
+- Implement the ability to live add, enable, disable, and switch to pools.
+- Only internally test for block changes when the work matches the current pool
+to prevent interleaved block change timing on multipools.
+- Display current pool management strategy to enable changing it on the fly.
+- The longpoll blanking of the current_block data may not be happening before
+the work is converted and appears to be a detected block change.     Blank the
+current block be
+- Make --no-longpoll work again.
+- Abstract out active pools count.
+- Allow the pool strategy to be modified on the fly.
+- Display pool information on the fly as well.
+- Add a menu and separate out display options.
+- Clean up the messy way the staging thread communicates with the longpoll
+thread to determine who found the block first.
+- Make the input windows update immediately instead of needing a refresh.
+- Allow log interval to be set in the menu.
+- Allow scan settings to be modified at runtime.
+- Abstract out the longpoll start and explicitly restart it on pool change.
+- Make it possible to enable/disable longpoll.
+- Set priority correctly on multipools.     Display priority and alive/dead
+information in display_pools.
+- Implement pool removal.
+- Limit rolltime work generation to 10 iterations only.
+- Decrease testing log to info level.
+- Extra refresh not required.
+
+
 Version 1.3.1 - July 20, 2011
 
 - Feature upgrade; Multiple strategies for failover. Choose from default which
