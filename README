@@ -66,6 +66,7 @@ Native WIN32 build instructions (on mingw32, on windows):
 
 Usage instructions:  Run "cgminer --help" to see options.
 
+---
 
 EXECUTIVE SUMMARY ON USAGE:
 
@@ -81,7 +82,42 @@ Multiple pool, dedicated miner:
 
 cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 8
 
+---
 
+WHILE RUNNING:
+
+The following options are available while running with a single keypress:
+
+[P]ool management [S]ettings [D]isplay options [Q]uit
+
+P gives you:
+
+Current pool management strategy: Failover
+[A]dd pool [R]emove pool [D]isable pool [E]nable pool
+[C]hange management strategy [S]witch pool [I]nformation
+
+
+S gives you:
+
+[D]ynamic mode: On
+[L]ongpoll: On
+[I]ntensity: Dynamic
+[Q]ueue: 0
+[S]cantime: 60
+[R]etries: -1
+[P]ause: 5
+
+
+D gives you:
+
+Toggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug
+[L]og interval [C]lear
+
+
+and Q quits the application.
+
+
+---
 Also many issues and FAQs are covered in the forum thread
 dedicated to this program,
 	http://forum.bitcoin.org/index.php?topic=28402.0
