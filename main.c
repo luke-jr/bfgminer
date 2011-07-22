@@ -1783,15 +1783,13 @@ static void discard_staged(void)
 	total_discarded++;
 }
 
-static void flush_requests(bool longpoll)
+static void flush_requests(void)
 {
 	struct pool *pool = current_pool();
 	int i, stale;
 
 	/* We should have one fresh work item staged from the block change. */
 	stale = requests_staged() - 1;
-	if (longpoll)
-		memcpy(current_block, blank, 36);
 
 	/* Temporarily increase the staged count so that get_work thinks there
 	 * is work available instead of making threads reuse existing work */
@@ -2366,12 +2364,12 @@ out:
 }
 #endif /* HAVE_OPENCL */
 
-static void restart_threads(bool longpoll)
+static void restart_threads(void)
 {
 	int i;
 
 	/* Discard old queued requests and get new ones */
-	flush_requests(longpoll);
+	flush_requests();
 
 	for (i = 0; i < mining_threads; i++)
 		work_restart[i].restart = 1;
@@ -2463,7 +2461,8 @@ next_path:
 				!strncmp(longpoll_block, current_block, 36))) {
 					new_blocks++;
 					applog(LOG_WARNING, "LONGPOLL detected new block on network, waiting on fresh work");
-					restart_threads(true);
+					memcpy(current_block, blank, 36);
+					restart_threads();
 			} else
 				applog(LOG_WARNING, "LONGPOLL received after new block already detected");
 
@@ -2636,7 +2635,7 @@ static void *watchdog_thread(void *userdata)
 		}
 
 		if (unlikely(work_restart[watchdog_thr_id].restart)) {
-			restart_threads(false);
+			restart_threads();
 			work_restart[watchdog_thr_id].restart = 0;
 		}
 
