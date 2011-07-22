@@ -2035,7 +2035,8 @@ static void flush_requests(void)
 
 static inline bool can_roll(struct work *work)
 {
-	return (!stale_work(work) && work->pool->has_rolltime && work->rolls < 11);
+	return (work->pool && !stale_work(work) && work->pool->has_rolltime &&
+		work->rolls < 11);
 }
 
 static bool get_work(struct work *work, bool queued, struct thr_info *thr,
@@ -2179,6 +2180,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 static void *miner_thread(void *userdata)
 {
+	struct work work __attribute__((aligned(128)));
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	uint32_t max_nonce = 0xffffff, total_hashes = 0;
@@ -2205,8 +2207,10 @@ static void *miner_thread(void *userdata)
 	if (!(opt_n_threads % num_processors))
 		affine_to_cpu(thr_id - gpu_threads, dev_from_id(thr_id));
 
+	/* Invalidate pool so it fails can_roll() test */
+	work.pool = NULL;
+
 	while (1) {
-		struct work work __attribute__((aligned(128)));
 		struct timeval tv_workstart, tv_start, tv_end, diff;
 		uint64_t max64;
 		bool rc;
@@ -2476,6 +2480,8 @@ static void *gpuminer_thread(void *userdata)
 	localThreads[0] = clState->work_size;
 	diff.tv_sec = 0;
 	gettimeofday(&tv_end, NULL);
+
+	work->pool = NULL;
 
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);
@@ -3323,10 +3329,6 @@ int main (int argc, char *argv[])
 		quit(1, "stage thread create failed");
 	pthread_detach(thr->pth);
 
-	/* Flag the work as ready forcing the mining threads to wait till we
-	 * actually put something into the queue */
-	inc_staged(current_pool(), mining_threads, true);
-
 	/* Create a unique get work queue */
 	getq = tq_new();
 	if (!getq)
@@ -3432,13 +3434,6 @@ int main (int argc, char *argv[])
 	/* start wakeup thread */
 	if (pthread_create(&thr->pth, NULL, watchdog_thread, NULL))
 		quit(1, "wakeup thread create failed");
-
-	/* Restart count as it will be wrong till all threads are started */
-	pthread_mutex_lock(&hash_lock);
-	gettimeofday(&total_tv_start, NULL);
-	gettimeofday(&total_tv_end, NULL);
-	total_mhashes_done = 0;
-	pthread_mutex_unlock(&hash_lock);
 
 	/* Now that everything's ready put enough work in the queue */
 	for (i = 0; i < opt_queue + mining_threads; i++) {
