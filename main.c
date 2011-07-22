@@ -993,13 +993,31 @@ static void workio_cmd_free(struct workio_cmd *wc)
 static void disable_curses(void)
 {
 	if (test_and_clear(&curses_active)) {
+#ifdef WIN32
+		leaveok(logwin, false);
+		leaveok(statuswin, false);
+		leaveok(mainwin, false);
+#endif
 		nocbreak();
 		echo();
 		delwin(logwin);
 		delwin(statuswin);
 		delwin(mainwin);
 		endwin();
-		refresh();
+		refresh();		
+		
+#ifdef WIN32
+		// Move the cursor to after curses output.
+		HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO csbi;
+		COORD coord;
+		
+		if (GetConsoleScreenBufferInfo(hout, &csbi)) {
+			coord.X = 0;
+			coord.Y = csbi.dwSize.Y - 1;
+			SetConsoleCursorPosition(hout, coord);
+		}
+#endif
 	}
 }
 
