@@ -1900,7 +1900,7 @@ static bool pool_active(struct pool *pool)
 		return false;
 	}
 
-	applog(LOG_WARNING, "Testing pool %s", pool->rpc_url);
+	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			true, false, pool);
 
