@@ -1398,11 +1398,22 @@ static int curses_int(const char *query)
 
 static bool input_pool(bool live);
 
+static int active_pools(void)
+{
+	int ret = 0;
+	int i;
+
+	for (i = 0; i < total_pools; i++) {
+		if ((pools[i])->enabled)
+			ret++;
+	}
+	return ret;
+}
+
 static void display_pools(void)
 {
-	int i, active = 0;
 	struct pool *pool;
-	int selected;
+	int selected, i;
 	char input;
 
 	opt_loginput = true;
@@ -1422,7 +1433,8 @@ updated:
 	}
 retry:
 	wprintw(logwin, "\nCurrent pool management strategy: %s\n", strategies[pool_strategy]);
-	wprintw(logwin, "[A]dd pool [D]isable pool [E]nable pool [S]witch pool\n");
+	wprintw(logwin, "[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
+	wprintw(logwin, "[C]hange management strategy [S]witch pool\n");
 	wprintw(logwin, "Or press any other key to continue\n");
 	wrefresh(logwin);
 	pthread_mutex_unlock(&curses_lock);
@@ -1442,11 +1454,7 @@ retry:
 		switch_pools(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "d", 1)) {
-		for (i = 0; i < total_pools; i++) {
-			if ((pools[i])->enabled)
-				active++;
-		}
-		if (active <= 1) {
+		if (active_pools() <= 1) {
 			wprintw(logwin, "Cannot disable last pool");
 			goto retry;
 		}
