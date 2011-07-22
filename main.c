@@ -3437,7 +3437,7 @@ int main (int argc, char *argv[])
 		quit(1, "wakeup thread create failed");
 
 	/* Now that everything's ready put enough work in the queue */
-	for (i = 0; i < opt_queue + mining_threads; i++) {
+	for (i = 0; i < mining_threads; i++) {
 		if (unlikely(!queue_request()))
 			quit(1, "Failed to queue_request in main");
 		if (!opt_quiet)
