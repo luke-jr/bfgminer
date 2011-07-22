@@ -327,10 +327,10 @@ static char *set_int_0_to_9999(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 9999);
 }
 
-static char *forced_int_0_to_14(const char *arg, int *i)
+static char *forced_int_1010(const char *arg, int *i)
 {
 	opt_dynamic = false;
-	return set_int_range(arg, i, 0, 14);
+	return set_int_range(arg, i, -10, 10);
 }
 
 static char *force_nthreads_int(const char *arg, int *i)
@@ -501,8 +501,8 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (0 - 10)"),
 	OPT_WITH_ARG("--intensity|-I",
-		     forced_int_0_to_14, opt_show_intval, &scan_intensity,
-		     "Intensity of GPU scanning (0 - 14, default: dynamic to maintain desktop interactivity)"),
+		     forced_int_1010, opt_show_intval, &scan_intensity,
+		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -817,10 +817,8 @@ void log_curses(const char *f, va_list ap)
 
 static void clear_logwin(void)
 {
-	pthread_mutex_lock(&curses_lock);
 	wclear(logwin);
 	wrefresh(logwin);
-	pthread_mutex_unlock(&curses_lock);
 }
 
 static bool submit_upstream_work(const struct work *work)
@@ -1492,7 +1490,6 @@ static void display_pools(void)
 	immedok(logwin, true);
 updated:
 	clear_logwin();
-	pthread_mutex_lock(&curses_lock);
 	for (i = 0; i < total_pools; i++) {
 		pool = pools[i];
 
@@ -1516,7 +1513,7 @@ retry:
 	wprintw(logwin, "[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
 	wprintw(logwin, "[C]hange management strategy [S]witch pool [I]nformation\n");
 	wprintw(logwin, "Or press any other key to continue\n");
-	pthread_mutex_unlock(&curses_lock);
+	wrefresh(logwin);
 	input = getch();
 
 	if (!strncasecmp(&input, "a", 1)) {
@@ -1622,6 +1619,7 @@ static void display_options(void)
 	opt_loginput = true;
 	immedok(logwin, true);
 retry:
+	clear_logwin();
 	wprintw(logwin, "\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug\n");
 	wprintw(logwin, "[L]og interval [C]lear\n");
 	wprintw(logwin, "Select an option or any other key to return\n");
@@ -1656,7 +1654,8 @@ retry:
 		}
 		opt_log_interval = selected;
 	}
-	wclear(logwin);
+
+	clear_logwin();
 	immedok(logwin, false);
 	opt_loginput = false;
 }
@@ -1669,7 +1668,7 @@ static void set_options(void)
 	opt_loginput = true;
 	immedok(logwin, true);
 retry:
-	wclear(logwin);
+	clear_logwin();
 	wprintw(logwin, "\n[D]ynamic mode: %s\n[L]ongpoll: %s\n",
 		opt_dynamic ? "On" : "Off", want_longpoll ? "On" : "Off");
 	if (opt_dynamic)
@@ -1679,6 +1678,7 @@ retry:
 	wprintw(logwin, "[Q]ueue: %d\n[S]cantime: %d\n[R]etries: %d\n[P]ause: %d\n",
 		opt_queue, opt_scantime, opt_retries, opt_fail_pause);
 	wprintw(logwin, "Select an option or any other key to return\n");
+	wrefresh(logwin);
 	input = getch();
 
 	if (!strncasecmp(&input, "q", 1)) {
@@ -1698,8 +1698,8 @@ retry:
 		restart_longpoll();
 		goto retry;
 	} else if (!strncasecmp(&input, "i", 1)) {
-		selected = curses_int("Set GPU scan intensity (0-10)");
-		if (selected < 0 || selected > 10) {
+		selected = curses_int("Set GPU scan intensity (-10 -> 10)");
+		if (selected < -10 || selected > 10) {
 			wprintw(logwin, "Invalid selection\n");
 			goto retry;
 		}
@@ -1731,7 +1731,8 @@ retry:
 		opt_fail_pause = selected;
 		goto retry;
 	}
-	wclear(logwin);
+
+	clear_logwin();
 	immedok(logwin, false);
 	opt_loginput = false;
 }
@@ -2053,11 +2054,12 @@ static void flush_requests(void)
 
 static inline bool can_roll(struct work *work)
 {
-	return (!stale_work(work) && work->pool->has_rolltime && work->rolls < 11);
+	return (work->pool && !stale_work(work) && work->pool->has_rolltime &&
+		work->rolls < 11);
 }
 
 static bool get_work(struct work *work, bool queued, struct thr_info *thr,
-		     const int thr_id)
+		     const int thr_id, uint32_t hash_div)
 {
 	struct timespec abstime = {};
 	struct timeval now;
@@ -2197,9 +2199,10 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 static void *miner_thread(void *userdata)
 {
+	struct work work __attribute__((aligned(128)));
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
-	uint32_t max_nonce = 0xffffff;
+	uint32_t max_nonce = 0xffffff, total_hashes = 0;
 	unsigned long hashes_done = max_nonce;
 	bool needs_work = true;
 	/* Try to cycle approximately 5 times before each log update */
@@ -2208,6 +2211,7 @@ static void *miner_thread(void *userdata)
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
+	uint32_t hash_div = 1;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -2222,8 +2226,10 @@ static void *miner_thread(void *userdata)
 	if (!(opt_n_threads % num_processors))
 		affine_to_cpu(thr_id - gpu_threads, dev_from_id(thr_id));
 
+	/* Invalidate pool so it fails can_roll() test */
+	work.pool = NULL;
+
 	while (1) {
-		struct work work __attribute__((aligned(128)));
 		struct timeval tv_workstart, tv_start, tv_end, diff;
 		uint64_t max64;
 		bool rc;
@@ -2231,15 +2237,16 @@ static void *miner_thread(void *userdata)
 		if (needs_work) {
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(&work, requested, mythr, thr_id))) {
+			if (unlikely(!get_work(&work, requested, mythr, thr_id, hash_div))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"mining thread %d", thr_id);
 				goto out;
 			}
 			mythr->cgpu->getworks++;
 			needs_work = requested = false;
-			work.blk.nonce = 0;
-			max_nonce = hashes_done;
+			total_hashes = 0;
+			work.blk.nonce = work.res_nonce;;
+			max_nonce = work.blk.nonce + hashes_done;
 		}
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -2326,6 +2333,7 @@ static void *miner_thread(void *userdata)
 
 		hashes_done -= work.blk.nonce;
 		hashmeter(thr_id, &diff, hashes_done);
+		total_hashes += hashes_done;
 		work.blk.nonce += hashes_done;
 
 		/* adjust max_nonce to meet target cycle time */
@@ -2360,9 +2368,11 @@ static void *miner_thread(void *userdata)
 			requested = true;
 		}
 
-		if (diff.tv_sec > opt_scantime || work_restart[thr_id].restart ||
-			work.blk.nonce >= MAXTHREADS - hashes_done ||
-			stale_work(&work))
+		if (diff.tv_sec > opt_scantime) {
+			hash_div = (MAXTHREADS / total_hashes) ? : 1;
+			needs_work = true;
+		} else if (work_restart[thr_id].restart || stale_work(&work) ||
+			work.blk.nonce >= MAXTHREADS - hashes_done)
 				needs_work = true;
 	}
 
@@ -2428,9 +2438,13 @@ static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk
 }
 
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
-			       unsigned int *hashes, size_t *globalThreads)
+			       unsigned int *hashes, size_t *globalThreads,
+			       unsigned int minthreads)
 {
-	*globalThreads = *threads = 1 << (15 + scan_intensity);
+	*threads = 1 << (15 + scan_intensity);
+	if (*threads < minthreads)
+		*threads = minthreads;
+	*globalThreads = *threads;
 	*hashes = *threads * vectors;
 }
 
@@ -2452,15 +2466,16 @@ static void *gpuminer_thread(void *userdata)
 	const cl_kernel *kernel = &clState->kernel;
 
 	struct work *work = malloc(sizeof(struct work));
-	unsigned int threads = 1 << (15 + scan_intensity);
+	unsigned int threads;
 	unsigned const int vectors = clState->preferred_vwidth;
-	unsigned int hashes = threads * vectors;
+	unsigned int hashes;
 	unsigned int hashes_done = 0;
 
 	/* Request the next work item at 2/3 of the scantime */
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
+	uint32_t total_hashes = 0, hash_div = 1;
 
 	if (opt_dynamic) {
 		/* Minimise impact on desktop if we want dynamic mode */
@@ -2479,10 +2494,14 @@ static void *gpuminer_thread(void *userdata)
 	}
 
 	gettimeofday(&tv_start, NULL);
-	globalThreads[0] = threads;
 	localThreads[0] = clState->work_size;
+	set_threads_hashes(vectors, &threads, &hashes, &globalThreads[0],
+			   localThreads[0]);
+
 	diff.tv_sec = 0;
 	gettimeofday(&tv_end, NULL);
+
+	work->pool = NULL;
 
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);
@@ -2490,7 +2509,7 @@ static void *gpuminer_thread(void *userdata)
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 	gettimeofday(&tv_workstart, NULL);
 	/* obtain new work from internal workio thread */
-	if (unlikely(!get_work(work, requested, mythr, thr_id))) {
+	if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
 		applog(LOG_ERR, "work retrieval failed, exiting "
 			"gpu mining thread %d", thr_id);
 		goto out;
@@ -2517,15 +2536,14 @@ static void *gpuminer_thread(void *userdata)
 			 * increase intensity when the system is idle, unless
 			 * dynamic is disabled. */
 			if (gpu_ms_average > 7) {
-				if (scan_intensity > 0)
+				if (scan_intensity > -10)
 					scan_intensity--;
-				set_threads_hashes(vectors, &threads, &hashes, globalThreads);
 			} else if (gpu_ms_average < 3) {
-				if (scan_intensity < 14)
+				if (scan_intensity < 10)
 					scan_intensity++;
-				set_threads_hashes(vectors, &threads, &hashes, globalThreads);
 			}
 		}
+		set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
 
 		if (diff.tv_sec > opt_scantime ||
 		    work->blk.nonce >= MAXTHREADS - hashes ||
@@ -2540,7 +2558,7 @@ static void *gpuminer_thread(void *userdata)
 
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(work, requested, mythr, thr_id))) {
+			if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"gpu mining thread %d", thr_id);
 				goto out;
@@ -2588,6 +2606,7 @@ static void *gpuminer_thread(void *userdata)
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
 		hashes_done += hashes;
+		total_hashes += hashes;
 		work->blk.nonce += hashes;
 		if (diff.tv_usec > 500000)
 			diff.tv_sec++;
@@ -2598,12 +2617,16 @@ static void *gpuminer_thread(void *userdata)
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
-		if (!requested && (diff.tv_sec > request_interval || work->blk.nonce > request_nonce)) {
-			if (unlikely(!queue_request())) {
-				applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
-				goto out;
+		if (!requested) {
+			if (diff.tv_sec > request_interval)
+				hash_div = (MAXTHREADS / total_hashes) ? : 1;
+			if (diff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
+				if (unlikely(!queue_request())) {
+					applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
+					goto out;
+				}
+				requested = true;
 			}
-			requested = true;
 		}
 	}
 out:
@@ -3325,10 +3348,6 @@ int main (int argc, char *argv[])
 		quit(1, "stage thread create failed");
 	pthread_detach(*thr->pth);
 
-	/* Flag the work as ready forcing the mining threads to wait till we
-	 * actually put something into the queue */
-	inc_staged(current_pool(), mining_threads, true);
-
 	/* Create a unique get work queue */
 	getq = tq_new();
 	if (!getq)
@@ -3434,13 +3453,6 @@ int main (int argc, char *argv[])
 	/* start wakeup thread */
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
 		quit(1, "wakeup thread create failed");
-
-	/* Restart count as it will be wrong till all threads are started */
-	pthread_mutex_lock(&hash_lock);
-	gettimeofday(&total_tv_start, NULL);
-	gettimeofday(&total_tv_end, NULL);
-	total_mhashes_done = 0;
-	pthread_mutex_unlock(&hash_lock);
 
 	/* Now that everything's ready put enough work in the queue */
 	for (i = 0; i < opt_queue + mining_threads; i++) {
