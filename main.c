@@ -1474,7 +1474,6 @@ static void display_pools(void)
 	immedok(logwin, true);
 updated:
 	clear_logwin();
-	pthread_mutex_lock(&curses_lock);
 	for (i = 0; i < total_pools; i++) {
 		pool = pools[i];
 
@@ -1498,7 +1497,6 @@ retry:
 	wprintw(logwin, "[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
 	wprintw(logwin, "[C]hange management strategy [S]witch pool [I]nformation\n");
 	wprintw(logwin, "Or press any other key to continue\n");
-	pthread_mutex_unlock(&curses_lock);
 	input = getch();
 
 	if (!strncasecmp(&input, "a", 1)) {
