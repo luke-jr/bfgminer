@@ -1444,6 +1444,7 @@ static void display_pools(void)
 	char input;
 
 	opt_loginput = true;
+	immedok(logwin, true);
 updated:
 	clear_logwin();
 	pthread_mutex_lock(&curses_lock);
@@ -1466,7 +1467,6 @@ retry:
 	wprintw(logwin, "[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
 	wprintw(logwin, "[C]hange management strategy [S]witch pool [I]nformation\n");
 	wprintw(logwin, "Or press any other key to continue\n");
-	wrefresh(logwin);
 	pthread_mutex_unlock(&curses_lock);
 	input = getch();
 
@@ -1541,6 +1541,7 @@ retry:
 	}
 
 	clear_logwin();
+	immedok(logwin, false);
 	opt_loginput = false;
 }
 
@@ -1549,9 +1550,9 @@ static void display_options(void)
 	char input;
 
 	opt_loginput = true;
+	immedok(logwin, true);
 	wprintw(logwin, "\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug [C]lear\n");
 	wprintw(logwin, "Select an option or any other key to return\n");
-	wrefresh(logwin);
 	input = getch();
 	if (!strncasecmp(&input, "s", 1)) {
 		opt_quiet ^= true;
@@ -1575,7 +1576,7 @@ static void display_options(void)
 		applog(LOG_WARNING, "RPC protocol debugging %s", opt_protocol ? "enabled" : "disabled");
 	} else if (!strncasecmp(&input, "c", 1))
 		clear_logwin();
-	wrefresh(logwin);
+	immedok(logwin, false);
 	opt_loginput = false;
 }
 
