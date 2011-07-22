@@ -267,6 +267,7 @@ typedef struct {
 
 struct pool {
 	int pool_no;
+	int prio;
 	int accepted, rejected;
 	bool submit_fail;
 	bool idle;

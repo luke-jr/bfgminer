@@ -285,8 +285,11 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
-	if (probe)
+	if (probe) {
 		probing = ((want_longpoll && !have_longpoll) || !pool->probed);
+		/* Probe for only 10 seconds */
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
+	}
 
 	if (opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -409,10 +412,8 @@ err_out:
 	databuf_free(&all_data);
 	curl_slist_free_all(headers);
 	curl_easy_reset(curl);
-	if (!successful_connect) {
-		kill_work();
-		applog(LOG_ERR, "Failed to connect - wrong URL or login details?");
-	}
+	if (!successful_connect)
+		applog(LOG_DEBUG, "Failed to connect in json_rpc_call");
 	return NULL;
 }
 

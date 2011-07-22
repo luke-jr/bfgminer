@@ -190,9 +190,10 @@ static unsigned int new_blocks;
 static unsigned int local_work;
 static unsigned int total_lo, total_ro;
 
-static struct pool *pools = NULL;
-static struct pool *currentpool;
-static int pool_no;
+#define MAX_POOLS (32)
+
+static struct pool *pools[MAX_POOLS];
+static struct pool *currentpool = NULL;
 static int total_pools;
 static enum pool_strategy pool_strategy = POOL_FAILOVER;
 static int opt_rotate_period;
@@ -222,18 +223,15 @@ static void applog_and_exit(const char *fmt, ...)
 
 static void add_pool(void)
 {
-	int poolno;
 	struct pool *pool;
 
-	poolno = total_pools++;
-	pools = realloc(pools, sizeof(struct pool) * total_pools);
-	if (!pools) {
-		applog(LOG_ERR, "Failed to malloc pools in add_pool");
+	pool = calloc(sizeof(struct pool), 1);
+	if (!pool) {
+		applog(LOG_ERR, "Failed to malloc pool in add_pool");
 		exit (1);
 	}
-	pool = &pools[poolno];
-	memset(pool, 0, sizeof(struct pool));
-	pool->pool_no = poolno;
+	pool->pool_no = total_pools;
+	pools[total_pools++] = pool;
 	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL))) {
 		applog(LOG_ERR, "Failed to pthread_mutex_init in add_pool");
 		exit (1);
@@ -367,7 +365,7 @@ static char *set_url(const char *arg, char **p)
 	total_urls++;
 	if (total_urls > total_pools)
 		add_pool();
-	pool = &pools[total_urls - 1];
+	pool = pools[total_urls - 1];
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -387,7 +385,7 @@ static char *set_user(const char *arg, char **p)
 	if (total_users > total_pools)
 		add_pool();
 
-	pool = &pools[total_users - 1];
+	pool = pools[total_users - 1];
 	opt_set_charp(arg, &pool->rpc_user);
 
 	return NULL;
@@ -403,7 +401,7 @@ static char *set_pass(const char *arg, char **p)
 	if (total_passes > total_pools)
 		add_pool();
 
-	pool = &pools[total_passes - 1];
+	pool = pools[total_passes - 1];
 	opt_set_charp(arg, &pool->rpc_pass);
 
 	return NULL;
@@ -419,7 +417,7 @@ static char *set_userpass(const char *arg, char **p)
 	if (total_userpasses > total_pools)
 		add_pool();
 
-	pool = &pools[total_userpasses - 1];
+	pool = pools[total_userpasses - 1];
 	opt_set_charp(arg, &pool->rpc_userpass);
 
 	return NULL;
@@ -788,11 +786,13 @@ static void print_status(int thr_id)
 
 void log_curses(const char *f, va_list ap)
 {
-	if (curses_active && !opt_loginput) {
-		pthread_mutex_lock(&curses_lock);
-		vw_printw(logwin, f, ap);
-		wrefresh(logwin);
-		pthread_mutex_unlock(&curses_lock);
+	if (curses_active) {
+		if (!opt_loginput) {
+			pthread_mutex_lock(&curses_lock);
+			vw_printw(logwin, f, ap);
+			wrefresh(logwin);
+			pthread_mutex_unlock(&curses_lock);
+		}
 	} else
 		vprintf(f, ap);
 }
@@ -917,9 +917,9 @@ static inline struct pool *select_pool(void)
 		rotating_pool++;
 		if (rotating_pool >= total_pools)
 			rotating_pool = 0;
-		pool = &pools[rotating_pool];
+		pool = pools[rotating_pool];
 		if (!pool->idle && pool->enabled)
-			return &pools[rotating_pool];
+			return pools[rotating_pool];
 	}
 	return current_pool();
 }
@@ -1202,32 +1202,57 @@ static int real_staged(void)
 	return ret;
 }
 
-static void switch_pools(void)
+/* Find the pool that currently has the highest priority */
+static struct pool *priority_pool(int choice)
 {
-	struct pool *pool, *last_pool;
-	int i, pools_active = 0;
+	struct pool *ret = NULL;
+	int i;
 
 	for (i = 0; i < total_pools; i++) {
-		pool = &pools[i];
+		struct pool *pool = pools[i];
 
-		if (!pool->idle && pool->enabled)
-			pools_active++;
+		if (pool->prio == choice) {
+			ret = pool;
+			break;
+		}
 	}
-	
-	if (!pools_active) {
-		applog(LOG_ERR, "No pools active, waiting...");
-		goto out;
+
+	if (unlikely(!ret)) {
+		applog(LOG_ERR, "WTF No pool %d found!", choice);
+		return pools[choice];
 	}
+	return ret;
+}
+
+static void switch_pools(struct pool *selected)
+{
+	struct pool *pool, *last_pool;
+	int i, pool_no;
 
 	pthread_mutex_lock(&control_lock);
 	last_pool = currentpool;
+	pool_no = currentpool->pool_no;
+
+	/* Switch selected to pool number 0 and move the rest down */
+	if (selected) {
+		if (selected->prio != 0) {
+			for (i = 0; i < total_pools; i++) {
+				pool = pools[i];
+				if (pool->prio < selected->prio)
+					pool->prio++;
+			}
+			selected->prio = 0;
+		}
+	}
+
 	switch (pool_strategy) {
 		/* Both of these set to the master pool */
 		case POOL_FAILOVER:
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
-				if (!pools[i].idle && pools[i].enabled) {
-					pool_no = i;
+				pool = priority_pool(i);
+				if (!pool->idle && pool->enabled) {
+					pool_no = pool->pool_no;
 					break;
 				}
 			}
@@ -1235,6 +1260,10 @@ static void switch_pools(void)
 		/* Both of these simply increment and cycle */
 		case POOL_ROUNDROBIN:
 		case POOL_ROTATE:
+			if (selected) {
+				pool_no = selected->pool_no;
+				break;
+			}
 			pool_no++;
 			if (pool_no >= total_pools)
 				pool_no = 0;
@@ -1242,7 +1271,8 @@ static void switch_pools(void)
 		default:
 			break;
 	}
-	currentpool = &pools[pool_no];
+
+	currentpool = pools[pool_no];
 	pool = currentpool;
 	pthread_mutex_unlock(&control_lock);
 
@@ -1253,7 +1283,7 @@ static void switch_pools(void)
 	pthread_mutex_lock(&qd_lock);
 	total_queued = 0;
 	pthread_mutex_unlock(&qd_lock);
-out:
+
 	inc_staged(pool, 1, true);
 }
 
@@ -1330,27 +1360,95 @@ static void *stage_thread(void *userdata)
 	return NULL;
 }
 
+static char *curses_input(const char *query);
+
+static int curses_int(const char *query)
+{
+	int ret;
+	char *cvar;
+
+	cvar = curses_input(query);
+	ret = atoi(cvar);
+	free(cvar);
+	return ret;
+}
+
+static bool input_pool(bool live);
+
 static void display_pools(void)
 {
-	int i, cp = current_pool()->pool_no;
+	int i, active = 0;
+	struct pool *pool;
+	int selected;
+	char input;
 
 	opt_loginput = true;
+updated:
 	clear_logwin();
 	pthread_mutex_lock(&curses_lock);
 	for (i = 0; i < total_pools; i++) {
-		struct pool *pool = &pools[i];
+		pool = pools[i];
 
-		if (i == cp)
+		if (pool == current_pool())
 			wattron(logwin, A_BOLD);
+		if (!pool->enabled)
+			wattron(logwin, A_DIM);
 		wprintw(logwin, "%s Pool %d: %s  User:%s\n", pool->enabled? "Enabled" : "Disabled",
 			pool->pool_no, pool->rpc_url, pool->rpc_user);
-		wattroff(logwin, A_BOLD);
+		wattroff(logwin, A_BOLD | A_DIM);
 	}
-	//wprintw(logwin, "[A]dd pool [S]witch pool [D]isable pool [E]nable pool");
-	wprintw(logwin, "Press any key to continue\n");
+retry:
+	wprintw(logwin, "\n[A]dd pool [S]witch pool [D]isable pool [E]nable pool\n");
+	wprintw(logwin, "Or press any other key to continue\n");
 	wrefresh(logwin);
 	pthread_mutex_unlock(&curses_lock);
-	i = getch();
+	input = getch();
+
+	if (!strncasecmp(&input, "a", 1)) {
+		input_pool(true);
+		goto updated;
+	} else if (!strncasecmp(&input, "s", 1)) {
+		selected = curses_int("Select pool number");
+		if (selected < 0 || selected >= total_pools) {
+			wprintw(logwin, "Invalid selection");
+			goto retry;
+		}
+		pool = pools[selected];
+		pool->enabled = true;
+		switch_pools(pool);
+		goto updated;
+	} else if (!strncasecmp(&input, "d", 1)) {
+		for (i = 0; i < total_pools; i++) {
+			if ((pools[i])->enabled)
+				active++;
+		}
+		if (active <= 1) {
+			wprintw(logwin, "Cannot disable last pool");
+			goto retry;
+		}
+		selected = curses_int("Select pool number");
+		if (selected < 0 || selected >= total_pools) {
+			wprintw(logwin, "Invalid selection");
+			goto retry;
+		}
+		pool = pools[selected];
+		pool->enabled = false;
+		if (pool == current_pool())
+			switch_pools(NULL);
+		goto updated;
+	} else if (!strncasecmp(&input, "e", 1)) {
+		selected = curses_int("Select pool number");
+		if (selected < 0 || selected >= total_pools) {
+			wprintw(logwin, "Invalid selection");
+			goto retry;
+		}
+		pool = pools[selected];
+		pool->enabled = true;
+		if (pool->prio < current_pool()->prio)
+			switch_pools(pool);
+		goto updated;
+	}
+
 	opt_loginput = false;
 	clear_logwin();
 }
@@ -1552,6 +1650,7 @@ static bool pool_active(struct pool *pool)
 		return false;
 	}
 
+	applog(LOG_WARNING, "Testing pool %s", pool->rpc_url);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			true, false, pool);
 
@@ -1580,9 +1679,11 @@ static bool pool_active(struct pool *pool)
 			free(work);
 		}
 		json_decref(val);
-	} else
+	} else {
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
+		applog(LOG_WARNING, "Pool down, URL or credentials invalid");
+	}
 out:
 	curl_easy_cleanup(curl);
 	return ret;
@@ -1592,14 +1693,14 @@ static void pool_died(struct pool *pool)
 {
 	applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
 	gettimeofday(&pool->tv_idle, NULL);
-	switch_pools();
+	switch_pools(NULL);
 }
 
 static void pool_resus(struct pool *pool)
 {
 	applog(LOG_WARNING, "Pool %d %s recovered", pool->pool_no, pool->rpc_url);
-	if (pool->pool_no < pool_no && pool_strategy == POOL_FAILOVER)
-		switch_pools();
+	if (pool->prio < current_pool()->prio && pool_strategy == POOL_FAILOVER)
+		switch_pools(NULL);
 }
 
 static bool queue_request(void)
@@ -2518,7 +2619,7 @@ static void *watchdog_thread(void *userdata)
 		gettimeofday(&now, NULL);
 
 		for (i = 0; i < total_pools; i++) {
-			struct pool *pool = &pools[i];
+			struct pool *pool = pools[i];
 
 			if (!pool->enabled)
 				continue;
@@ -2533,7 +2634,7 @@ static void *watchdog_thread(void *userdata)
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
 			gettimeofday(&rotate_tv, NULL);
-			switch_pools();
+			switch_pools(NULL);
 		}
 
 		//for (i = 0; i < mining_threads; i++) {
@@ -2600,7 +2701,7 @@ static void print_summary(void)
 
 	if (total_pools > 1) {
 		for (i = 0; i < total_pools; i++) {
-			struct pool *pool = &pools[i];
+			struct pool *pool = pools[i];
 
 			printf("Pool: %s\n", pool->rpc_url);
 			printf(" Queued work requests: %d\n", pool->getwork_requested);
@@ -2647,6 +2748,7 @@ static char *curses_input(const char *query)
 {
 	char *input;
 
+	echo();
 	input = malloc(255);
 	if (!input)
 		quit(1, "Failed to malloc input");
@@ -2655,44 +2757,43 @@ static char *curses_input(const char *query)
 	wrefresh(logwin);
 	wgetnstr(logwin, input, 255);
 	leaveok(logwin, true);
+	noecho();
 	return input;
 }
 
 static bool input_pool(bool live)
 {
 	char *url, *user, *pass;
-	int poolno = total_pools;
 	struct pool *pool;
+	bool ret = false;
 
-	echo();
 	immedok(logwin, true);
+	if (total_pools == MAX_POOLS) {
+		wprintw(logwin, "Reached maximum number of pools.\n");
+		goto out;
+	}
 	wprintw(logwin, "Input server details.\n");
 
 	url = curses_input("URL");
 	if (strncmp(url, "http://", 7) &&
 	    strncmp(url, "https://", 8)) {
 		applog(LOG_ERR, "URL must start with http:// or https://");
-		return false;
+		goto out;
 	}
 
 	user = curses_input("Username");
 	if (!user)
-		return false;
+		goto out;
 
 	pass = curses_input("Password");
 	if (!pass)
-		return false;
+		goto out;
 
-	wclear(logwin);
-	immedok(logwin, false);
-	noecho();
-
-	pools = realloc(pools, sizeof(struct pool) * (total_pools + 1));
-	if (!pools)
-		quit(1, "Failed to malloc pools in input_pool");
-	pool = &pools[poolno];
-	memset(pool, 0, sizeof(struct pool));
-	pool->pool_no = poolno;
+	pool = calloc(sizeof(struct pool), 1);
+	if (!pool)
+		quit(1, "Failed to realloc pools in input_pool");
+	pool->pool_no = total_pools;
+	pool->prio = total_pools;
 	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
 		quit (1, "Failed to pthread_mutex_init in input_pool");
 	pool->rpc_url = url;
@@ -2705,18 +2806,25 @@ static bool input_pool(bool live)
 
 	pool->tv_idle.tv_sec = ~0UL;
 
-	if (!live) {
-		total_pools++;
-		return true;
-	}
-
-	/* Test the pool before we enable it if we're live running*/
-	if (pool_active(pool)) {
+	/* Test the pool before we enable it if we're live running, otherwise
+	 * it will be tested separately */
+	ret = true;
+	if (live && pool_active(pool))
 		pool->enabled = true;
-		total_pools++;
-		return true;
+	pools[total_pools++] = pool;
+out:
+	immedok(logwin, false);
+
+	if (!ret) {
+		free(pool);
+		if (url)
+			free(url);
+		if (user)
+			free(user);
+		if (pass)
+			free(pass);
 	}
-	return false;
+	return ret;
 }
 
 int main (int argc, char *argv[])
@@ -2842,7 +2950,7 @@ int main (int argc, char *argv[])
 	}
 
 	for (i = 0; i < total_pools; i++) {
-		struct pool *pool = &pools[i];
+		struct pool *pool = pools[i];
 
 		if (!pool->rpc_userpass) {
 			if (!pool->rpc_user || !pool->rpc_pass)
@@ -2861,8 +2969,8 @@ int main (int argc, char *argv[])
 				quit(1, "Failed to find colon delimiter in userpass");
 		}
 	}
-	/* Set the current pool to pool 0 */
-	currentpool = pools;
+	/* Set the currentpool to pool 0 */
+	currentpool = pools[0];
 
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
@@ -2943,13 +3051,18 @@ int main (int argc, char *argv[])
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool;
 
-		pool = &pools[i];
+		pool = pools[i];
 		if (pool_active(pool)) {
+			if (!currentpool)
+				currentpool = pool;
 			applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
 			pools_active++;
 			pool->enabled = true;
-		} else
+		} else {
+			if (pool == currentpool)
+				currentpool = NULL;
 			applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
+		}
 	}
 
 	if (!pools_active)
@@ -3069,8 +3182,6 @@ int main (int argc, char *argv[])
 		free(gpus);
 	if (opt_n_threads)
 		free(cpus);
-	if (pools)
-		free(pools);
 
 	curl_global_cleanup();
 
