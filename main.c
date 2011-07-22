@@ -198,6 +198,15 @@ static int total_accepted, total_rejected;
 static int total_getworks, total_stale, total_discarded;
 static int total_queued, total_staged, lp_staged;
 static unsigned int new_blocks;
+
+enum block_change {
+	BLOCK_NONE,
+	BLOCK_LP,
+	BLOCK_DETECT,
+	BLOCK_FIRST,
+};
+
+static enum block_change block_changed = BLOCK_FIRST;
 static unsigned int local_work;
 static unsigned int total_lo, total_ro;
 
@@ -213,8 +222,6 @@ static int total_urls, total_users, total_passes, total_userpasses;
 static bool curses_active = false;
 
 static char current_block[37];
-static char longpoll_block[37];
-static char blank[37];
 static char datestamp[40];
 static char blockdate[40];
 
@@ -1112,9 +1119,6 @@ static bool stale_work(struct work *work)
 	if (work->pool != current_pool())
 		return ret;
 
-	if (!strncmp(blank, current_block, 36))
-		return ret;
-
 	hexstr = bin2hex(work->data, 36);
 	if (unlikely(!hexstr)) {
 		applog(LOG_ERR, "submit_work_thread OOM");
@@ -1336,8 +1340,9 @@ static void test_work_current(struct work *work)
 	}
 
 	/* current_block is blanked out on successful longpoll */
-	if (likely(strncmp(current_block, blank, 36))) {
-		if (unlikely(strncmp(hexstr, current_block, 36))) {
+	if (unlikely(strncmp(hexstr, current_block, 36))) {
+		if (block_changed != BLOCK_LP && block_changed != BLOCK_FIRST) {
+			block_changed = BLOCK_DETECT;
 			new_blocks++;
 			if (have_longpoll)
 				applog(LOG_WARNING, "New block detected on network before longpoll, waiting on fresh work");
@@ -1346,12 +1351,11 @@ static void test_work_current(struct work *work)
 			/* As we can't flush the work from here, signal the
 			 * wakeup thread to restart all the threads */
 			work_restart[watchdog_thr_id].restart = 1;
-			set_curblock(hexstr);
-		}
-	} else {
+		} else
+			block_changed = BLOCK_NONE;
 		set_curblock(hexstr);
-		memcpy(longpoll_block, hexstr, 36);
 	}
+
 	free(hexstr);
 }
 
@@ -2448,6 +2452,9 @@ static void restart_threads(void)
 {
 	int i;
 
+	if (block_changed == BLOCK_DETECT)
+		block_changed = BLOCK_NONE;
+
 	/* Discard old queued requests and get new ones */
 	flush_requests();
 
@@ -2537,14 +2544,15 @@ next_path:
 		if (likely(val)) {
 			/* Keep track of who ordered a restart_threads to make
 			 * sure it's only done once per new block */
-			if (likely(!strncmp(longpoll_block, blank, 36) ||
-				!strncmp(longpoll_block, current_block, 36))) {
-					new_blocks++;
-					applog(LOG_WARNING, "LONGPOLL detected new block on network, waiting on fresh work");
-					memcpy(current_block, blank, 36);
-					restart_threads();
-			} else
+			if (block_changed != BLOCK_DETECT) {
+				block_changed = BLOCK_LP;
+				new_blocks++;
+				applog(LOG_WARNING, "LONGPOLL detected new block on network, waiting on fresh work");
+				restart_threads();
+			} else {
 				applog(LOG_WARNING, "LONGPOLL received after new block already detected");
+				block_changed = BLOCK_NONE;
+			}
 
 			convert_to_work(val);
 			failures = 0;
@@ -2567,7 +2575,7 @@ next_path:
 				goto out;
 			}
 		}
-		memcpy(longpoll_block, current_block, 36);
+
 		if (pool != current_pool()) {
 			applog(LOG_WARNING, "Attempting to change longpoll servers");
 			pool = current_pool();
@@ -2969,11 +2977,8 @@ int main (int argc, char *argv[])
 		tm.tm_min,
 		tm.tm_sec);
 
-	for (i = 0; i < 36; i++) {
-		strcat(blank, "0");
+	for (i = 0; i < 36; i++)
 		strcat(current_block, "0");
-		strcat(longpoll_block, "0");
-	}
 
 #ifdef WIN32
 	opt_n_threads = num_processors = 1;
