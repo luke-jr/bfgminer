@@ -106,6 +106,8 @@ enum pool_strategy {
 	POOL_LOADBALANCE,
 };
 
+#define TOP_STRATEGY (POOL_LOADBALANCE)
+
 struct strategies {
 	const char *s;
 } strategies[] = {
@@ -1432,7 +1434,10 @@ updated:
 		wattroff(logwin, A_BOLD | A_DIM);
 	}
 retry:
-	wprintw(logwin, "\nCurrent pool management strategy: %s\n", strategies[pool_strategy]);
+	wprintw(logwin, "\nCurrent pool management strategy: %s\n",
+		strategies[pool_strategy]);
+	if (pool_strategy == POOL_ROTATE)
+		wprintw(logwin, "Set to rotate every %d minutes\n", opt_rotate_period);
 	wprintw(logwin, "[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
 	wprintw(logwin, "[C]hange management strategy [S]witch pool\n");
 	wprintw(logwin, "Or press any other key to continue\n");
@@ -1479,8 +1484,29 @@ retry:
 		if (pool->prio < current_pool()->prio)
 			switch_pools(pool);
 		goto updated;
+	} else if (!strncasecmp(&input, "c", 1)) {
+		for (i = 0; i <= TOP_STRATEGY; i++)
+			wprintw(logwin, "%d: %s\n", i, strategies[i]);
+		selected = curses_int("Select strategy number type");
+		if (selected < 0 || selected > TOP_STRATEGY) {
+			wprintw(logwin, "Invalid selection");
+			goto retry;
+		}
+		if (selected == POOL_ROTATE) {
+			opt_rotate_period = curses_int("Select interval in minutes");
+
+			if (opt_rotate_period < 0 || opt_rotate_period > 9999) {
+				opt_rotate_period = 0;
+				wprintw(logwin, "Invalid selection");
+				goto retry;
+			}
+		}
+		pool_strategy = selected;
+		switch_pools(NULL);
+		goto updated;
 	}
 
+	clear_logwin();
 	opt_loginput = false;
 }
 
