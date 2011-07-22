@@ -765,7 +765,7 @@ static void curses_print_status(int thr_id)
 	whline(statuswin, '-', 80);
 	wmove(statuswin, logstart - 1, 0);
 	whline(statuswin, '-', 80);
-	mvwprintw(statuswin, gpucursor - 1, 1, "Options: [P]ool management [D]isplay options [Q]uit");
+	mvwprintw(statuswin, gpucursor - 1, 1, "[P]ool management [S]ettings [D]isplay options [Q]uit");
 
 	if (thr_id >= 0 && thr_id < gpu_threads) {
 		int gpu = dev_from_id(thr_id);
@@ -1587,6 +1587,70 @@ retry:
 		}
 		opt_log_interval = selected;
 	}
+	wclear(logwin);
+	immedok(logwin, false);
+	opt_loginput = false;
+}
+
+static void set_options(void)
+{
+	int selected;
+	char input;
+
+	opt_loginput = true;
+	immedok(logwin, true);
+retry:
+	wprintw(logwin, "\nToggle [D]ynamic mode\n");
+	if (opt_dynamic)
+		wprintw(logwin, "[I]ntensity: Dynamic\n");
+	else
+		wprintw(logwin, "[I]ntensity: %d\n", scan_intensity);
+	wprintw(logwin, "[Q]ueue: %d\n[S]cantime: %d\n[R]etries: %d\n[P]ause: %d\n",
+		opt_queue, opt_scantime, opt_retries, opt_fail_pause);
+	wprintw(logwin, "Select an option or any other key to return\n");
+	input = getch();
+
+	if (!strncasecmp(&input, "q", 1)) {
+		selected = curses_int("Extra work items to queue");
+		if (selected < 0 || selected > 9999) {
+			wprintw(logwin, "Invalid selection\n");
+			goto retry;
+		}
+		opt_queue = selected;
+	} else if (!strncasecmp(&input, "d", 1)) {
+		opt_dynamic ^= true;
+		applog(LOG_WARNING, "Dynamic mode %s", opt_dynamic ? "enabled" : "disabled");
+	} else if (!strncasecmp(&input, "i", 1)) {
+		selected = curses_int("Set GPU scan intensity (0-10)");
+		if (selected < 0 || selected > 10) {
+			wprintw(logwin, "Invalid selection\n");
+			goto retry;
+		}
+		opt_dynamic = false;
+		scan_intensity = selected;
+	} else if  (!strncasecmp(&input, "s", 1)) {
+		selected = curses_int("Set scantime in seconds");
+		if (selected < 0 || selected > 9999) {
+			wprintw(logwin, "Invalid selection\n");
+			goto retry;
+		}
+		opt_scantime = selected;
+	} else if  (!strncasecmp(&input, "r", 1)) {
+		selected = curses_int("Retries before failing (-1 infinite)");
+		if (selected < -1 || selected > 9999) {
+			wprintw(logwin, "Invalid selection\n");
+			goto retry;
+		}
+		opt_retries = selected;
+	} else if  (!strncasecmp(&input, "p", 1)) {
+		selected = curses_int("Seconds to pause before network retries");
+		if (selected < 1 || selected > 9999) {
+			wprintw(logwin, "Invalid selection\n");
+			goto retry;
+		}
+		opt_fail_pause = selected;
+	}
+	wclear(logwin);
 	immedok(logwin, false);
 	opt_loginput = false;
 }
@@ -1609,6 +1673,8 @@ static void *input_thread(void *userdata)
 			display_options();
 		else if (!strncasecmp(&input, "p", 1))
 			display_pools();
+		else if (!strncasecmp(&input, "s", 1))
+			set_options();
 	}
 
 	return NULL;
