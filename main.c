@@ -1095,6 +1095,11 @@ static bool stale_work(struct work *work)
 	bool ret = false;
 	char *hexstr;
 
+	/* Only use the primary pool for determination as the work may
+	 * interleave at times of new blocks */
+	if (work->pool != current_pool())
+		return ret;
+
 	if (!strncmp(blank, current_block, 36))
 		return ret;
 
@@ -1304,6 +1309,40 @@ static void set_curblock(char *hexstr)
 		tm.tm_sec);
 }
 
+static void test_work_current(struct work *work)
+{
+	char *hexstr;
+
+	/* Only use the primary pool for determination */
+	if (work->pool != current_pool())
+		return;
+
+	hexstr = bin2hex(work->data, 36);
+	if (unlikely(!hexstr)) {
+		applog(LOG_ERR, "stage_thread OOM");
+		return;
+	}
+
+	/* current_block is blanked out on successful longpoll */
+	if (likely(strncmp(current_block, blank, 36))) {
+		if (unlikely(strncmp(hexstr, current_block, 36))) {
+			new_blocks++;
+			if (have_longpoll)
+				applog(LOG_WARNING, "New block detected on network before longpoll, waiting on fresh work");
+			else
+				applog(LOG_WARNING, "New block detected on network, waiting on fresh work");
+			/* As we can't flush the work from here, signal the
+			 * wakeup thread to restart all the threads */
+			work_restart[watchdog_thr_id].restart = 1;
+			set_curblock(hexstr);
+		}
+	} else {
+		set_curblock(hexstr);
+		memcpy(longpoll_block, hexstr, 36);
+	}
+	free(hexstr);
+}
+
 static void *stage_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -1313,7 +1352,6 @@ static void *stage_thread(void *userdata)
 
 	while (ok) {
 		struct work *work = NULL;
-		char *hexstr;
 
 		work = tq_pop(mythr->q, NULL);
 		if (unlikely(!work)) {
@@ -1322,31 +1360,7 @@ static void *stage_thread(void *userdata)
 			break;
 		}
 
-		hexstr = bin2hex(work->data, 36);
-		if (unlikely(!hexstr)) {
-			applog(LOG_ERR, "stage_thread OOM");
-			break;
-		}
-
-		/* current_block is blanked out on successful longpoll */
-		if (likely(strncmp(current_block, blank, 36))) {
-			if (unlikely(strncmp(hexstr, current_block, 36))) {
-				new_blocks++;
-				if (have_longpoll)
-					applog(LOG_WARNING, "New block detected on network before longpoll, waiting on fresh work");
-				else
-					applog(LOG_WARNING, "New block detected on network, waiting on fresh work");
-				/* As we can't flush the work from here, signal
-				 * the wakeup thread to restart all the
-				 * threads */
-				work_restart[watchdog_thr_id].restart = 1;
-				set_curblock(hexstr);
-			}
-		} else {
-			set_curblock(hexstr);
-			memcpy(longpoll_block, hexstr, 36);
-		}
-		free(hexstr);
+		test_work_current(work);
 
 		if (unlikely(!tq_push(getq, work))) {
 			applog(LOG_ERR, "Failed to tq_push work in stage_thread");
