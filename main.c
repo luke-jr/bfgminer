@@ -2422,8 +2422,7 @@ static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       unsigned int *hashes, size_t *globalThreads,
 			       unsigned int minthreads)
 {
-	int intensity = scan_intensity + 10;
-	*threads = 1 << (5 + intensity);
+	*threads = 1 << (15 + scan_intensity);
 	if (*threads < minthreads)
 		*threads = minthreads;
 	*globalThreads = *threads;
@@ -2448,9 +2447,9 @@ static void *gpuminer_thread(void *userdata)
 	const cl_kernel *kernel = &clState->kernel;
 
 	struct work *work = malloc(sizeof(struct work));
-	unsigned int threads = 1 << (15 + scan_intensity);
+	unsigned int threads;
 	unsigned const int vectors = clState->preferred_vwidth;
-	unsigned int hashes = threads * vectors;
+	unsigned int hashes;
 	unsigned int hashes_done = 0;
 
 	/* Request the next work item at 2/3 of the scantime */
@@ -2476,8 +2475,10 @@ static void *gpuminer_thread(void *userdata)
 	}
 
 	gettimeofday(&tv_start, NULL);
-	globalThreads[0] = threads;
 	localThreads[0] = clState->work_size;
+	set_threads_hashes(vectors, &threads, &hashes, &globalThreads[0],
+			   localThreads[0]);
+
 	diff.tv_sec = 0;
 	gettimeofday(&tv_end, NULL);
 
@@ -2518,13 +2519,12 @@ static void *gpuminer_thread(void *userdata)
 			if (gpu_ms_average > 7) {
 				if (scan_intensity > -10)
 					scan_intensity--;
-				set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
 			} else if (gpu_ms_average < 3) {
 				if (scan_intensity < 10)
 					scan_intensity++;
-				set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
 			}
 		}
+		set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
 
 		if (diff.tv_sec > opt_scantime ||
 		    work->blk.nonce >= MAXTHREADS - hashes ||
