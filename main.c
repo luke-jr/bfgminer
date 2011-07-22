@@ -817,10 +817,8 @@ void log_curses(const char *f, va_list ap)
 
 static void clear_logwin(void)
 {
-	pthread_mutex_lock(&curses_lock);
 	wclear(logwin);
 	wrefresh(logwin);
-	pthread_mutex_unlock(&curses_lock);
 }
 
 static bool submit_upstream_work(const struct work *work)
@@ -1497,6 +1495,7 @@ retry:
 	wprintw(logwin, "[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
 	wprintw(logwin, "[C]hange management strategy [S]witch pool [I]nformation\n");
 	wprintw(logwin, "Or press any other key to continue\n");
+	wrefresh(logwin);
 	input = getch();
 
 	if (!strncasecmp(&input, "a", 1)) {
@@ -1602,6 +1601,7 @@ static void display_options(void)
 	opt_loginput = true;
 	immedok(logwin, true);
 retry:
+	clear_logwin();
 	wprintw(logwin, "\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug\n");
 	wprintw(logwin, "[L]og interval [C]lear\n");
 	wprintw(logwin, "Select an option or any other key to return\n");
@@ -1636,7 +1636,8 @@ retry:
 		}
 		opt_log_interval = selected;
 	}
-	wclear(logwin);
+
+	clear_logwin();
 	immedok(logwin, false);
 	opt_loginput = false;
 }
@@ -1649,7 +1650,7 @@ static void set_options(void)
 	opt_loginput = true;
 	immedok(logwin, true);
 retry:
-	wclear(logwin);
+	clear_logwin();
 	wprintw(logwin, "\n[D]ynamic mode: %s\n[L]ongpoll: %s\n",
 		opt_dynamic ? "On" : "Off", want_longpoll ? "On" : "Off");
 	if (opt_dynamic)
@@ -1659,6 +1660,7 @@ retry:
 	wprintw(logwin, "[Q]ueue: %d\n[S]cantime: %d\n[R]etries: %d\n[P]ause: %d\n",
 		opt_queue, opt_scantime, opt_retries, opt_fail_pause);
 	wprintw(logwin, "Select an option or any other key to return\n");
+	wrefresh(logwin);
 	input = getch();
 
 	if (!strncasecmp(&input, "q", 1)) {
@@ -1711,7 +1713,8 @@ retry:
 		opt_fail_pause = selected;
 		goto retry;
 	}
-	wclear(logwin);
+
+	clear_logwin();
 	immedok(logwin, false);
 	opt_loginput = false;
 }
