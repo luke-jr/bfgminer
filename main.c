@@ -2034,6 +2034,11 @@ static void flush_requests(void)
 	}
 }
 
+static inline bool can_roll(struct work *work)
+{
+	return (!stale_work(work) && work->pool->has_rolltime && work->rolls < 11);
+}
+
 static bool get_work(struct work *work, bool queued, struct thr_info *thr,
 		     const int thr_id)
 {
@@ -2054,7 +2059,7 @@ retry:
 		goto out;
 	}
 
-	if (!requests_staged() && !stale_work(work) && work->pool->has_rolltime) {
+	if (!requests_staged() && can_roll(work)) {
 		uint32_t *work_ntime;
 		uint32_t ntime;
 
@@ -2084,6 +2089,7 @@ retry:
 		*work_ntime = htobe32(ntime);
 		ret = true;
 		local_work++;
+		work->rolls++;
 		goto out;
 	}
 

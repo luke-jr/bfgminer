@@ -293,8 +293,9 @@ struct work {
 	unsigned char	hash1[64];
 	unsigned char	midstate[32];
 	unsigned char	target[32];
-
 	unsigned char	hash[32];
+
+	int		rolls;
 
 	uint32_t	output[1];
 	uint32_t	res_nonce;
