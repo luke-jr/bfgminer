@@ -2039,7 +2039,7 @@ static inline bool can_roll(struct work *work)
 }
 
 static bool get_work(struct work *work, bool queued, struct thr_info *thr,
-		     const int thr_id)
+		     const int thr_id, uint32_t hash_div)
 {
 	struct timespec abstime = {};
 	struct timeval now;
@@ -2181,7 +2181,7 @@ static void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
-	uint32_t max_nonce = 0xffffff;
+	uint32_t max_nonce = 0xffffff, total_hashes = 0;
 	unsigned long hashes_done = max_nonce;
 	bool needs_work = true;
 	/* Try to cycle approximately 5 times before each log update */
@@ -2190,6 +2190,7 @@ static void *miner_thread(void *userdata)
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
+	uint32_t hash_div = 1;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -2213,15 +2214,16 @@ static void *miner_thread(void *userdata)
 		if (needs_work) {
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(&work, requested, mythr, thr_id))) {
+			if (unlikely(!get_work(&work, requested, mythr, thr_id, hash_div))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"mining thread %d", thr_id);
 				goto out;
 			}
 			mythr->cgpu->getworks++;
 			needs_work = requested = false;
-			work.blk.nonce = 0;
-			max_nonce = hashes_done;
+			total_hashes = 0;
+			work.blk.nonce = work.res_nonce;;
+			max_nonce = work.blk.nonce + hashes_done;
 		}
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -2308,6 +2310,7 @@ static void *miner_thread(void *userdata)
 
 		hashes_done -= work.blk.nonce;
 		hashmeter(thr_id, &diff, hashes_done);
+		total_hashes += hashes_done;
 		work.blk.nonce += hashes_done;
 
 		/* adjust max_nonce to meet target cycle time */
@@ -2342,9 +2345,11 @@ static void *miner_thread(void *userdata)
 			requested = true;
 		}
 
-		if (diff.tv_sec > opt_scantime || work_restart[thr_id].restart ||
-			work.blk.nonce >= MAXTHREADS - hashes_done ||
-			stale_work(&work))
+		if (diff.tv_sec > opt_scantime) {
+			hash_div = (MAXTHREADS / total_hashes) ? : 1;
+			needs_work = true;
+		} else if (work_restart[thr_id].restart || stale_work(&work) ||
+			work.blk.nonce >= MAXTHREADS - hashes_done)
 				needs_work = true;
 	}
 
@@ -2448,6 +2453,7 @@ static void *gpuminer_thread(void *userdata)
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
+	uint32_t total_hashes = 0, hash_div = 1;
 
 	if (opt_dynamic) {
 		/* Minimise impact on desktop if we want dynamic mode */
@@ -2477,7 +2483,7 @@ static void *gpuminer_thread(void *userdata)
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 	gettimeofday(&tv_workstart, NULL);
 	/* obtain new work from internal workio thread */
-	if (unlikely(!get_work(work, requested, mythr, thr_id))) {
+	if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
 		applog(LOG_ERR, "work retrieval failed, exiting "
 			"gpu mining thread %d", thr_id);
 		goto out;
@@ -2527,7 +2533,7 @@ static void *gpuminer_thread(void *userdata)
 
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(work, requested, mythr, thr_id))) {
+			if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"gpu mining thread %d", thr_id);
 				goto out;
@@ -2575,6 +2581,7 @@ static void *gpuminer_thread(void *userdata)
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
 		hashes_done += hashes;
+		total_hashes += hashes;
 		work->blk.nonce += hashes;
 		if (diff.tv_usec > 500000)
 			diff.tv_sec++;
@@ -2585,12 +2592,16 @@ static void *gpuminer_thread(void *userdata)
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
-		if (!requested && (diff.tv_sec > request_interval || work->blk.nonce > request_nonce)) {
-			if (unlikely(!queue_request())) {
-				applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
-				goto out;
+		if (!requested) {
+			if (diff.tv_sec > request_interval)
+				hash_div = (MAXTHREADS / total_hashes) ? : 1;
+			if (diff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
+				if (unlikely(!queue_request())) {
+					applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
+					goto out;
+				}
+				requested = true;
 			}
-			requested = true;
 		}
 	}
 out:
