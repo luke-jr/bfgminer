@@ -106,6 +106,15 @@ enum pool_strategy {
 	POOL_LOADBALANCE,
 };
 
+struct strategies {
+	const char *s;
+} strategies[] = {
+	{ "Failover" },
+	{ "Round Robin" },
+	{ "Rotate" },
+	{ "Load Balance" },
+};
+
 static const char *algo_names[] = {
 	[ALGO_C]		= "c",
 #ifdef WANT_SSE2_4WAY
@@ -1412,7 +1421,8 @@ updated:
 		wattroff(logwin, A_BOLD | A_DIM);
 	}
 retry:
-	wprintw(logwin, "\n[A]dd pool [S]witch pool [D]isable pool [E]nable pool\n");
+	wprintw(logwin, "\nCurrent pool management strategy: %s\n", strategies[pool_strategy]);
+	wprintw(logwin, "[A]dd pool [S]witch pool [D]isable pool [E]nable pool\n");
 	wprintw(logwin, "Or press any other key to continue\n");
 	wrefresh(logwin);
 	pthread_mutex_unlock(&curses_lock);
