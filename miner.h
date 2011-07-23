@@ -255,15 +255,17 @@ extern pthread_mutex_t control_lock;
 
 #ifdef HAVE_OPENCL
 typedef struct {
-    cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
-    cl_uint ctx_e; cl_uint ctx_f; cl_uint ctx_g; cl_uint ctx_h;
-    cl_uint cty_a; cl_uint cty_b; cl_uint cty_c; cl_uint cty_d;
-    cl_uint cty_e; cl_uint cty_f; cl_uint cty_g; cl_uint cty_h;
-    cl_uint merkle; cl_uint ntime; cl_uint nbits; cl_uint nonce;
+	cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
+	cl_uint ctx_e; cl_uint ctx_f; cl_uint ctx_g; cl_uint ctx_h;
+	cl_uint cty_a; cl_uint cty_b; cl_uint cty_c; cl_uint cty_d;
+	cl_uint cty_e; cl_uint cty_f; cl_uint cty_g; cl_uint cty_h;
+	cl_uint merkle; cl_uint ntime; cl_uint nbits; cl_uint nonce;
 	cl_uint fW0; cl_uint fW1; cl_uint fW2; cl_uint fW3; cl_uint fW15;
 	cl_uint fW01r; cl_uint fcty_e; cl_uint fcty_e2;
 	cl_uint W16; cl_uint W17; cl_uint W2;
 	cl_uint PreVal4; cl_uint T1;
+	cl_uint C1addK5; cl_uint D1A; cl_uint W2A; cl_uint W17_2;
+	cl_uint PreVal4addT1; cl_uint T1substate0;
 } dev_blk_ctx;
 #else
 typedef struct {
@@ -312,6 +314,12 @@ struct work {
 	struct pool	*pool;
 };
 
+enum cl_kernel {
+	KL_NONE,
+	KL_POCLBM,
+	KL_PHATK,
+};
+
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 
 extern void kill_work(void);
@@ -327,5 +335,6 @@ extern void tq_thaw(struct thread_q *tq);
 extern bool test_and_set(bool *var);
 extern bool test_and_clear(bool *var);
 extern bool successful_connect;
+extern enum cl_kernel chosen_kernel;
 
 #endif /* __MINER_H__ */

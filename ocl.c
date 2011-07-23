@@ -340,10 +340,25 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char binaryfilename[255];
 	char numbuf[10];
 	char filename[16];
-	if (clState->hasBitAlign)
-		strcpy(filename, "phatk110714.cl");
-	else
-		strcpy(filename, "poclbm110717.cl");
+
+	if (chosen_kernel == KL_NONE) {
+		if (clState->hasBitAlign)
+			chosen_kernel = KL_PHATK;
+		else
+			chosen_kernel = KL_POCLBM;
+	}
+
+	switch (chosen_kernel) {
+		case KL_POCLBM:
+			strcpy(filename, "poclbm110717.cl");
+			strcpy(binaryfilename, "poclbm110717");
+			break;
+		case KL_PHATK:
+			strcpy(filename, "phatk110722.cl");
+			strcpy(binaryfilename, "phatk110722");
+			break;
+	}
+
 	FILE *binaryfile;
 	size_t *binary_sizes;
 	char **binaries;
@@ -368,12 +383,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
-	strcpy(binaryfilename, name);
-	if (clState->hasBitAlign) {
-		strcat(binaryfilename, "phatk110714");
+	strcat(binaryfilename, name);
+	if (clState->hasBitAlign)
 		strcat(binaryfilename, "bitalign");
-	} else
-		strcat(binaryfilename, "poclbm110717");
+
 	strcat(binaryfilename, "v");
 	sprintf(numbuf, "%d", clState->preferred_vwidth);
 	strcat(binaryfilename, numbuf);

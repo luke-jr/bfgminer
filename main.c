@@ -225,6 +225,10 @@ static char current_block[37];
 static char datestamp[40];
 static char blockdate[40];
 
+static char *opt_kernel = NULL;
+
+enum cl_kernel chosen_kernel;
+
 struct sigaction termhandler, inthandler;
 
 struct thread_q *getq;
@@ -503,6 +507,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--intensity|-I",
 		     forced_int_1010, opt_show_intval, &scan_intensity,
 		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
+	OPT_WITH_ARG("--kernel|-k",
+		     opt_set_charp, NULL, &opt_kernel,
+		     "Select kernel to use (poclbm or phatk - default: auto)"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -2391,7 +2398,7 @@ enum {
 #ifdef HAVE_OPENCL
 static _clState *clStates[16];
 
-static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk)
+static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 {
 	cl_kernel *kernel = &clState->kernel;
 	cl_int status = 0;
@@ -2413,24 +2420,51 @@ static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
 
-	if (clState->hasBitAlign == true) {
-		/* Parameters for phatk kernel */
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W2);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W16);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal4);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->T1);
-	} else {
-		/* Parameters for poclbm kernel */
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
-	}
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
+				 (void *)&clState->outputBuffer);
+
+	return status;
+}
+
+static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
+{
+	cl_kernel *kernel = &clState->kernel;
+	cl_int status = 0;
+	int num = 0;
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_b);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_c);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_d);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_e);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->C1addK5);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->D1A);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W2A);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W16);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17_2);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal4addT1);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->T1substate0);
+
 	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
 				 (void *)&clState->outputBuffer);
 
@@ -2450,6 +2484,8 @@ static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 
 static void *gpuminer_thread(void *userdata)
 {
+	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *);
+
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, diff, tv_workstart;
 	struct thr_info *mythr = userdata;
@@ -2476,6 +2512,16 @@ static void *gpuminer_thread(void *userdata)
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
 	uint32_t total_hashes = 0, hash_div = 1;
+
+	switch (chosen_kernel) {
+		case KL_POCLBM:
+			queue_kernel_parameters = &queue_poclbm_kernel;
+			break;
+		case KL_PHATK:
+		default:
+			queue_kernel_parameters = &queue_phatk_kernel;
+			break;
+	}
 
 	if (opt_dynamic) {
 		/* Minimise impact on desktop if we want dynamic mode */
@@ -3217,6 +3263,16 @@ int main (int argc, char *argv[])
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
 
+	if (opt_kernel) {
+		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk"))
+			quit(1, "Invalid kernel name specified - must be poclbm or phatk");
+		if (!strcmp(opt_kernel, "poclbm"))
+			chosen_kernel = KL_POCLBM;
+		else
+			chosen_kernel = KL_PHATK;
+	} else
+		chosen_kernel = KL_NONE;
+
 	if (total_devices) {
 		if (total_devices > nDevs)
 			quit(1, "More devices specified than exist");
@@ -3455,7 +3511,7 @@ int main (int argc, char *argv[])
 		quit(1, "wakeup thread create failed");
 
 	/* Now that everything's ready put enough work in the queue */
-	for (i = 0; i < opt_queue + mining_threads; i++) {
+	for (i = 0; i < mining_threads; i++) {
 		if (unlikely(!queue_request()))
 			quit(1, "Failed to queue_request in main");
 		if (!opt_quiet)
