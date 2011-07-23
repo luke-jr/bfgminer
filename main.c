@@ -3432,10 +3432,6 @@ int main (int argc, char *argv[])
 #ifdef HAVE_OPENCL
 	i = 0;
 
-	/* Hopefully remove stale references to allow binaries to build */
-	if (nDevs)
-		clUnloadCompiler();
-
 	/* start GPU mining threads */
 	for (j = 0; j < nDevs * opt_g_threads; j++) {
 		int gpu = j % nDevs;
@@ -3469,10 +3465,6 @@ int main (int argc, char *argv[])
 			quit(1, "thread %d create failed", i);
 		i++;
 	}
-
-	/* Free up resources */
-	if (nDevs)
-		clUnloadCompiler();
 
 	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
 #endif
