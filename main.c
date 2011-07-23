@@ -154,9 +154,9 @@ int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
 static const bool opt_time = true;
-#ifdef WANT_X8664_SSE4
+#if defined(__SSE4_1__)
 static enum sha256_algos opt_algo = ALGO_SSE4_64;
-#elif WANT_X8664_SSE2
+#elif defined(__SSE2__)
 static enum sha256_algos opt_algo = ALGO_SSE2_64;
 #else
 static enum sha256_algos opt_algo = ALGO_C;

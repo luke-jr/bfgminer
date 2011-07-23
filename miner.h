@@ -57,11 +57,11 @@ void *alloca (size_t);
 #define WANT_VIA_PADLOCK 1
 #endif
 
-#if defined(__x86_64__) && defined(__SSE2__) && defined(HAS_YASM)
+#if defined(__x86_64__) && defined(HAS_YASM)
 #define WANT_X8664_SSE2 1
 #endif
 
-#if defined(__x86_64__) && defined(__SSE4_1__) && defined(HAS_YASM)
+#if defined(__x86_64__) && defined(HAS_YASM)
 #define WANT_X8664_SSE4 1
 #endif
 
