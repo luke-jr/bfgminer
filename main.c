@@ -3512,7 +3512,7 @@ int main (int argc, char *argv[])
 	for (i = 0; i < mining_threads; i++) {
 		if (unlikely(!queue_request()))
 			quit(1, "Failed to queue_request in main");
-		if (!opt_quiet)
+		if (!opt_quiet && active_device(i))
 			print_status(i);
 	}
 
