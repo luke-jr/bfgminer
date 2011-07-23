@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #ifndef WIN32
 # include <sys/socket.h>
+# include <netinet/in.h>
 # include <netinet/tcp.h>
 #else
 # include <winsock2.h>
@@ -257,10 +258,12 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 	int tcp_keepidle = 120;
 	int tcp_keepintvl = 120;
 	
-	#ifndef WIN32
+#ifndef WIN32
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
 		return 1;
+
+# ifndef __APPLE_CC__
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt))))
 		return 1;
@@ -270,8 +273,15 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl))))
 		return 1;
+
+# else
+
+	if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl))))
+		return 1;
+
+# endif
 		
-	#else
+#else
 	
 	struct tcp_keepalive vals;
 	vals.onoff = 1;
@@ -283,7 +293,7 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
 		return 1;
 	
-	#endif
+#endif
 
 	return 0;
 }
