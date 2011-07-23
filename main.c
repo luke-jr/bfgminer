@@ -3126,8 +3126,8 @@ static char *curses_input(const char *query)
 
 static bool input_pool(bool live)
 {
-	char *url, *user, *pass;
-	struct pool *pool;
+	char *url = NULL, *user = NULL, *pass = NULL;
+	struct pool *pool = NULL;
 	bool ret = false;
 
 	immedok(logwin, true);
@@ -3179,13 +3179,14 @@ out:
 	immedok(logwin, false);
 
 	if (!ret) {
-		free(pool);
 		if (url)
 			free(url);
 		if (user)
 			free(user);
 		if (pass)
 			free(pass);
+		if (pool)
+			free(pool);
 	}
 	return ret;
 }
