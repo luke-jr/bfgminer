@@ -1,4 +1,4 @@
-Version 1.4.0 - July 22, 2011
+Version 1.4.0 - July 23, 2011
 
 - Feature upgrade: Add keyboard input during runtime to allow modification of
 and viewing of numerous settings such as adding/removing pools, changing
@@ -51,6 +51,31 @@ information in display_pools.
 - Limit rolltime work generation to 10 iterations only.
 - Decrease testing log to info level.
 - Extra refresh not required.
+- With huge variation in GPU performance, allow intensity to go from -10 to +10.
+- Tell getwork how much of a work item we're likely to complete for future
+splitting up of work.
+- Remove the mandatory work requirement at startup by testing for invalid work
+being passed which allows for work to be queued immediately.     This also
+removes the requirem
+- Make sure intensity is carried over to thread count and is at least the
+minimum necessary to work.
+- Unlocking error on retry. Locking unnecessary anyway so remove it.
+- Clear log window from consistent place. No need for locking since logging is
+disabled during input.
+- Cannot print the status of threads that don't exist so just queue enough work
+for the number of mining threads to prevent crash with -Q N.
+- Update phatk kernel to one with new parameters for slightly less overhead
+again.     Make the queue kernel parameters call a function pointer to select
+phatk or poclbm.
+- Make it possible to select the choice of kernel on the command line.
+- Simplify the output part of the kernel. There's no demonstrable advantage from
+more complexity.
+- Merge pull request #18 from ycros/cgminer
+- No need to make leaveok changes win32 only.
+- Build support in for all SSE if possible and only set the default according to
+machine capabilities.
+- Win32 threading and longpoll keepalive fixes.
+- Win32: Fix for mangled output on the terminal on exit.
 
 
 Version 1.3.1 - July 20, 2011
