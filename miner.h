@@ -308,6 +308,12 @@ struct work {
 	struct pool	*pool;
 };
 
+enum cl_kernel {
+	KL_NONE,
+	KL_POCLBM,
+	KL_PHATK,
+};
+
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 
 extern void kill_work(void);
@@ -323,5 +329,6 @@ extern void tq_thaw(struct thread_q *tq);
 extern bool test_and_set(bool *var);
 extern bool test_and_clear(bool *var);
 extern bool successful_connect;
+extern enum cl_kernel chosen_kernel;
 
 #endif /* __MINER_H__ */

@@ -225,6 +225,10 @@ static char current_block[37];
 static char datestamp[40];
 static char blockdate[40];
 
+static char *opt_kernel = NULL;
+
+enum cl_kernel chosen_kernel;
+
 struct sigaction termhandler, inthandler;
 
 struct thread_q *getq;
@@ -503,6 +507,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--intensity|-I",
 		     forced_int_1010, opt_show_intval, &scan_intensity,
 		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
+	OPT_WITH_ARG("--kernel|-k",
+		     opt_set_charp, NULL, &opt_kernel,
+		     "Select kernel to use (poclbm or phatk - default: auto)"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -2488,10 +2495,15 @@ static void *gpuminer_thread(void *userdata)
 	bool requested = true;
 	uint32_t total_hashes = 0, hash_div = 1;
 
-	if (clState->hasBitAlign)
-		queue_kernel_parameters = &queue_phatk_kernel;
-	else
-		queue_kernel_parameters = &queue_poclbm_kernel;
+	switch (chosen_kernel) {
+		case KL_POCLBM:
+			queue_kernel_parameters = &queue_poclbm_kernel;
+			break;
+		case KL_PHATK:
+		default:
+			queue_kernel_parameters = &queue_phatk_kernel;
+			break;
+	}
 
 	if (opt_dynamic) {
 		/* Minimise impact on desktop if we want dynamic mode */
@@ -3232,6 +3244,16 @@ int main (int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	if (opt_kernel) {
+		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk"))
+			quit(1, "Invalid kernel name specified - must be poclbm or phatk");
+		if (!strcmp(opt_kernel, "poclbm"))
+			chosen_kernel = KL_POCLBM;
+		else
+			chosen_kernel = KL_PHATK;
+	} else
+		chosen_kernel = KL_NONE;
 
 	if (total_devices) {
 		if (total_devices > nDevs)
