@@ -29,7 +29,11 @@
 #ifdef HAVE_ALLOCA_H
 # include <alloca.h>
 #elif defined __GNUC__
-# define alloca __builtin_alloca
+# ifndef WIN32
+#  define alloca __builtin_alloca
+# else
+#  include <malloc.h>
+# endif
 #elif defined _AIX
 # define alloca __alloca
 #elif defined _MSC_VER
@@ -145,12 +149,14 @@ struct cgpu_info {
 
 struct thr_info {
 	int		id;
-	pthread_t	pth;
+	pthread_t	*pth;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
 	struct timeval last;
 	bool	getwork;
 };
+
+extern inline int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 
 static inline uint32_t swab32(uint32_t v)
 {

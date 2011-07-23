@@ -24,8 +24,13 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/tcp.h>
+#ifndef WIN32
+# include <sys/socket.h>
+# include <netinet/tcp.h>
+#else
+# include <winsock2.h>
+# include <mstcpip.h>
+#endif
 #include "miner.h"
 #include "elist.h"
 
@@ -251,18 +256,34 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 	int tcp_keepcnt = 5;
 	int tcp_keepidle = 120;
 	int tcp_keepintvl = 120;
+	
+	#ifndef WIN32
 
-	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)))
+	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
 		return 1;
 
-	if (setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt)))
+	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt))))
 		return 1;
 
-	if (setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle)))
+	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle))))
 		return 1;
 
-	if (setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl)))
+	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl))))
 		return 1;
+		
+	#else
+	
+	struct tcp_keepalive vals;
+	vals.onoff = 1;
+	vals.keepalivetime = tcp_keepidle * 1000;
+	vals.keepaliveinterval = tcp_keepintvl * 1000;
+	
+	DWORD outputBytes;
+	
+	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
+		return 1;
+	
+	#endif
 
 	return 0;
 }
@@ -645,5 +666,20 @@ pop:
 out:
 	pthread_mutex_unlock(&tq->mutex);
 	return rval;
+}
+
+inline int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg)
+{
+	int ret = 0;
+	
+	thr->pth = malloc(sizeof(pthread_t));
+	ret = pthread_create(thr->pth, attr, start, arg);
+	
+	if (unlikely(ret)) {
+		free(thr->pth);
+		thr->pth = 0;
+	}
+	
+	return ret;
 }
 

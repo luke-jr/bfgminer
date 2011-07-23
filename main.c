@@ -998,13 +998,31 @@ static void workio_cmd_free(struct workio_cmd *wc)
 static void disable_curses(void)
 {
 	if (test_and_clear(&curses_active)) {
+#ifdef WIN32
+		leaveok(logwin, false);
+		leaveok(statuswin, false);
+		leaveok(mainwin, false);
+#endif
 		nocbreak();
 		echo();
 		delwin(logwin);
 		delwin(statuswin);
 		delwin(mainwin);
 		endwin();
-		refresh();
+		refresh();		
+		
+#ifdef WIN32
+		// Move the cursor to after curses output.
+		HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO csbi;
+		COORD coord;
+		
+		if (GetConsoleScreenBufferInfo(hout, &csbi)) {
+			coord.X = 0;
+			coord.Y = csbi.dwSize.Y - 1;
+			SetConsoleCursorPosition(hout, coord);
+		}
+#endif
 	}
 }
 
@@ -1019,7 +1037,7 @@ void kill_work(void)
 
 	/* Kill the watchdog thread */
 	thr = &thr_info[watchdog_thr_id];
-	pthread_cancel(thr->pth);
+	pthread_cancel(*thr->pth);
 
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
@@ -1028,14 +1046,14 @@ void kill_work(void)
 			continue;
 		tq_freeze(thr->q);
 		/* No need to check if this succeeds or not */
-		pthread_cancel(thr->pth);
+		pthread_cancel(*thr->pth);
 	}
 
 	/* Stop the others */
 	thr = &thr_info[stage_thr_id];
-	pthread_cancel(thr->pth);
+	pthread_cancel(*thr->pth);
 	thr = &thr_info[longpoll_thr_id];
-	pthread_cancel(thr->pth);
+	pthread_cancel(*thr->pth);
 
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
@@ -2805,7 +2823,7 @@ static void stop_longpoll(void)
 	struct thr_info *thr = &thr_info[longpoll_thr_id];
 
 	tq_freeze(thr->q);
-	pthread_cancel(thr->pth);
+	pthread_cancel(*thr->pth);
 	have_longpoll = false;
 }
 
@@ -2815,10 +2833,10 @@ static void start_longpoll(void)
 {
 	struct thr_info *thr = &thr_info[longpoll_thr_id];
 
-	tq_thaw(thr->q);
-	if (unlikely(pthread_create(&thr->pth, NULL, longpoll_thread, thr)))
+	tq_thaw(thr->q);		
+	if (unlikely(thr_info_create(thr, NULL, longpoll_thread, thr)))
 		quit(1, "longpoll thread create failed");
-	pthread_detach(thr->pth);
+	pthread_detach(*thr->pth);
 }
 
 static void restart_longpoll(void)
@@ -2833,7 +2851,7 @@ static void reinit_cputhread(int thr_id)
 	struct thr_info *thr = &thr_info[thr_id];
 
 	tq_freeze(thr->q);
-	if (!(pthread_cancel(thr->pth)) && pthread_join(thr->pth, NULL)) {
+	if (!(pthread_cancel(*thr->pth)) && pthread_join(*thr->pth, NULL)) {
 		applog(LOG_ERR, "Failed to pthread_join in reinit_cputhread");
 		goto failed_out;
 	}
@@ -2843,7 +2861,7 @@ static void reinit_cputhread(int thr_id)
 
 	thread_reportin(thr);
 
-	if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr))) {
+	if (unlikely(thr_info_create(thr, NULL, miner_thread, thr))) {
 		applog(LOG_ERR, "thread %d create failed", thr_id);
 		goto failed_out;
 	}
@@ -2861,7 +2879,7 @@ static void reinit_gputhread(int thr_id)
 	char name[256];
 
 	tq_freeze(thr->q);
-	if (!(pthread_cancel(thr->pth)) && pthread_join(thr->pth, NULL)) {
+	if (!(pthread_cancel(*thr->pth)) && pthread_join(*thr->pth, NULL)) {
 		applog(LOG_ERR, "Failed to pthread_join in reinit_gputhread");
 		goto failed_out;
 	}
@@ -2878,7 +2896,7 @@ static void reinit_gputhread(int thr_id)
 
 	thread_reportin(thr);
 
-	if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr))) {
+	if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr))) {
 		applog(LOG_ERR, "thread %d create failed", thr_id);
 		goto failed_out;
 	}
@@ -3351,7 +3369,7 @@ int main (int argc, char *argv[])
 		quit(1, "Failed to tq_new");
 
 	/* start work I/O thread */
-	if (pthread_create(&thr->pth, NULL, workio_thread, thr)) 
+	if (thr_info_create(thr, NULL, workio_thread, thr)) 
 		quit(1, "workio thread create failed");
 
 	/* init longpoll thread info */
@@ -3382,9 +3400,9 @@ int main (int argc, char *argv[])
 	if (!thr->q)
 		quit(1, "Failed to tq_new");
 	/* start stage thread */
-	if (pthread_create(&thr->pth, NULL, stage_thread, thr))
+	if (thr_info_create(thr, NULL, stage_thread, thr))
 		quit(1, "stage thread create failed");
-	pthread_detach(thr->pth);
+	pthread_detach(*thr->pth);
 
 	/* Create a unique get work queue */
 	getq = tq_new();
@@ -3449,7 +3467,7 @@ int main (int argc, char *argv[])
 
 		thread_reportin(thr);
 
-		if (unlikely(pthread_create(&thr->pth, NULL, gpuminer_thread, thr)))
+		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr)))
 			quit(1, "thread %d create failed", i);
 		i++;
 	}
@@ -3477,7 +3495,7 @@ int main (int argc, char *argv[])
 
 		thread_reportin(thr);
 
-		if (unlikely(pthread_create(&thr->pth, NULL, miner_thread, thr)))
+		if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 			quit(1, "thread %d create failed", i);
 	}
 
@@ -3489,7 +3507,7 @@ int main (int argc, char *argv[])
 	watchdog_thr_id = mining_threads + 2;
 	thr = &thr_info[watchdog_thr_id];
 	/* start wakeup thread */
-	if (pthread_create(&thr->pth, NULL, watchdog_thread, NULL))
+	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
 		quit(1, "wakeup thread create failed");
 
 	/* Now that everything's ready put enough work in the queue */
@@ -3503,12 +3521,12 @@ int main (int argc, char *argv[])
 	/* Create curses input thread for keyboard input */
 	input_thr_id = mining_threads + 4;
 	thr = &thr_info[input_thr_id];
-	if (pthread_create(&thr->pth, NULL, input_thread, thr))
+	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
-	pthread_detach(thr->pth);
+	pthread_detach(*thr->pth);
 
 	/* main loop - simply wait for workio thread to exit */
-	pthread_join(thr_info[work_thr_id].pth, NULL);
+	pthread_join(*thr_info[work_thr_id].pth, NULL);
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	gettimeofday(&total_tv_end, NULL);
