@@ -998,11 +998,9 @@ static void workio_cmd_free(struct workio_cmd *wc)
 static void disable_curses(void)
 {
 	if (test_and_clear(&curses_active)) {
-#ifdef WIN32
 		leaveok(logwin, false);
 		leaveok(statuswin, false);
 		leaveok(mainwin, false);
-#endif
 		nocbreak();
 		echo();
 		delwin(logwin);
