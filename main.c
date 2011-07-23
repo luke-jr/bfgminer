@@ -2373,7 +2373,7 @@ enum {
 #ifdef HAVE_OPENCL
 static _clState *clStates[16];
 
-static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk)
+static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 {
 	cl_kernel *kernel = &clState->kernel;
 	cl_int status = 0;
@@ -2395,24 +2395,51 @@ static inline cl_int queue_kernel_parameters(_clState *clState, dev_blk_ctx *blk
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
 
-	if (clState->hasBitAlign == true) {
-		/* Parameters for phatk kernel */
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W2);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W16);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal4);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->T1);
-	} else {
-		/* Parameters for poclbm kernel */
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
-		status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
-	}
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
+				 (void *)&clState->outputBuffer);
+
+	return status;
+}
+
+static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
+{
+	cl_kernel *kernel = &clState->kernel;
+	cl_int status = 0;
+	int num = 0;
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_b);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_c);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_d);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_e);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->C1addK5);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->D1A);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W2A);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W16);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17_2);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal4addT1);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->T1substate0);
+
 	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
 				 (void *)&clState->outputBuffer);
 
@@ -2432,6 +2459,8 @@ static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 
 static void *gpuminer_thread(void *userdata)
 {
+	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *);
+
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, diff, tv_workstart;
 	struct thr_info *mythr = userdata;
@@ -2458,6 +2487,11 @@ static void *gpuminer_thread(void *userdata)
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
 	uint32_t total_hashes = 0, hash_div = 1;
+
+	if (clState->hasBitAlign)
+		queue_kernel_parameters = &queue_phatk_kernel;
+	else
+		queue_kernel_parameters = &queue_poclbm_kernel;
 
 	if (opt_dynamic) {
 		/* Minimise impact on desktop if we want dynamic mode */
