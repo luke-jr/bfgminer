@@ -3456,6 +3456,7 @@ int main (int argc, char *argv[])
 		clStates[i] = initCl(gpu, name, sizeof(name));
 		if (!clStates[i]) {
 			applog(LOG_ERR, "Failed to init GPU thread %d", i);
+			gpu_devices[i] = false;
 			continue;
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
