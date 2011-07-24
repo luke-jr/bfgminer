@@ -87,6 +87,7 @@ struct workio_cmd {
 	union {
 		struct work	*work;
 	} u;
+	bool			lagging;
 };
 
 enum sha256_algos {
@@ -930,14 +931,14 @@ static const char *rpc_req =
 	"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
 
 /* Select any active pool in a rotating fashion when loadbalance is chosen */
-static inline struct pool *select_pool(void)
+static inline struct pool *select_pool(bool lagging)
 {
-	static int rotating_pool;
+	static int rotating_pool = 0;
 	struct pool *pool, *cp;
 
 	cp = current_pool();
 
-	if (pool_strategy != POOL_LOADBALANCE)
+	if (pool_strategy != POOL_LOADBALANCE && !lagging)
 		pool = cp;
 	else
 		pool = NULL;
@@ -954,18 +955,20 @@ static inline struct pool *select_pool(void)
 	return pool;
 }
 
-static bool get_upstream_work(struct work *work)
+static bool get_upstream_work(struct work *work, bool lagging)
 {
-	struct pool *pool = select_pool();
+	struct pool *pool;
 	json_t *val;
 	bool rc = false;
-	CURL *curl = curl_easy_init();
+	CURL *curl;
 
+	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
 		return rc;
 	}
 
+	pool = select_pool(lagging);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			    want_longpoll, false, pool);
 	if (unlikely(!val)) {
@@ -1099,7 +1102,7 @@ static void *get_work_thread(void *userdata)
 	}
 
 	/* obtain new work from bitcoin via JSON-RPC */
-	while (!get_upstream_work(ret_work)) {
+	while (!get_upstream_work(ret_work, wc->lagging)) {
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
 			free(ret_work);
@@ -1987,10 +1990,14 @@ static bool queue_request(void)
 {
 	int maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
+	int rq, rs;
+
+	rq = requests_queued();
+	rs = real_staged();
 
 	/* If we've been generating lots of local work we may already have
 	 * enough in the queue */
-	if (requests_queued() >= maxq || real_staged() >= maxq)
+	if (rq >= maxq || rs >= maxq)
 		return true;
 
 	/* fill out work request message */
@@ -2003,6 +2010,12 @@ static bool queue_request(void)
 	wc->cmd = WC_GET_WORK;
 	/* The get work does not belong to any thread */
 	wc->thr = NULL;
+
+	/* If we've queued more than 2/3 of the maximum and still have no
+	 * staged work, consider the system lagging and allow work to be
+	 * gathered from another pool if possible */
+	if (rq > (maxq * 2 / 3) && !rs)
+		wc->lagging = true;
 
 	/* send work request to workio thread */
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
