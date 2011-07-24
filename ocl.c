@@ -637,6 +637,8 @@ built:
 	/////////////////////////////////////////////////////////////////
 	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
 						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
+	if (status != CL_SUCCESS) /* Try again without OOE enable */
+		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
 	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
