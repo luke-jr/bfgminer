@@ -929,22 +929,29 @@ out_nofree:
 static const char *rpc_req =
 	"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
 
-static int rotating_pool;
-
 /* Select any active pool in a rotating fashion when loadbalance is chosen */
 static inline struct pool *select_pool(void)
 {
-	if (pool_strategy == POOL_LOADBALANCE) {
-		struct pool *pool;
+	static int rotating_pool;
+	struct pool *pool, *cp;
 
-		rotating_pool++;
-		if (rotating_pool >= total_pools)
+	cp = current_pool();
+
+	if (pool_strategy != POOL_LOADBALANCE)
+		pool = cp;
+	else
+		pool = NULL;
+
+	while (!pool) {
+		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 		pool = pools[rotating_pool];
-		if (!pool->idle && pool->enabled)
-			return pools[rotating_pool];
+		if ((!pool->idle && pool->enabled) || pool == cp)
+			break;
+		pool = NULL;
 	}
-	return current_pool();
+
+	return pool;
 }
 
 static bool get_upstream_work(struct work *work)
