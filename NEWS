@@ -1,3 +1,20 @@
+Version 1.4.1 - July 24, 2011
+
+- Do away with GET for dealing with longpoll forever. POST is the one that works
+everywhere, not the other way around.
+- Detect when the primary pool is lagging and start queueing requests on backup
+pools if possible before needing to roll work.
+- Load balancing puts more into the current pool if there are disabled pools.
+Fix.
+- Disable a GPU device should the thread fail to init.
+- Out of order command queue may fail on osx. Try without if it fails.
+- Fix possible dereference on blank inputs during input_pool.
+- Defines missing would segfault on --help when no sse mining is built in.
+- Revert "Free up resources/stale compilers." - didn't help.
+- Only try to print the status of active devices or it would crash.
+- Some hardware might benefit from the less OPS so there's no harm in leaving
+kernel changes that do that apart from readability of the code.
+
 Version 1.4.0 - July 23, 2011
 
 - Feature upgrade: Add keyboard input during runtime to allow modification of
