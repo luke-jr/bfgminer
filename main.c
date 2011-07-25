@@ -1581,7 +1581,7 @@ retry:
 		input_pool(true);
 		goto updated;
 	} else if (!strncasecmp(&input, "r", 1)) {
-		if (active_pools() <= 1) {
+		if (total_pools <= 1) {
 			wlogprint("Cannot remove last pool");
 			goto retry;
 		}
