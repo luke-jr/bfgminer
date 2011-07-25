@@ -233,7 +233,7 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		goto out;
 
 	if (opt_protocol)
-		applog(LOG_DEBUG, "HTTP hdr(%s): %s", key, val);
+		applog(LOG_DEBUG, "HTTP hdr(%s): %s\n", key, val);
 
 	if (!strcasecmp("X-Roll-Ntime", key)) {
 		applog(LOG_INFO, "X-Roll-Ntime found");

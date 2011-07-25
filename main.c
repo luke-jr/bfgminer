@@ -810,11 +810,72 @@ static void print_status(int thr_id)
 	}
 }
 
+/* Check for window resize. Called with curses mutex locked */
+static void check_logwinsize(void)
+{
+	int x, y, logx, logy;
+
+	getmaxyx(mainwin, y, x);
+	getmaxyx(logwin, logy, logx);
+	y -= logcursor;
+	/* Detect screen size change */
+	if ((x != logx || y != logy) && x >= 80 && y >= 25)
+		wresize(logwin, y, x);
+}
+
+/* For mandatory printing when mutex is already locked */
+static void __wlog(const char *f, ...)
+{
+	va_list ap;
+
+	check_logwinsize();
+	va_start(ap, f);
+	vw_printw(logwin, f, ap);
+	va_end(ap);
+}
+
+/* Print only if opt_loginput isn't set */
+static void wlog(const char *f, ...)
+{
+	va_list ap;
+
+	pthread_mutex_lock(&curses_lock);
+
+	check_logwinsize();
+
+	if (!opt_loginput) {
+		va_start(ap, f);
+		vw_printw(logwin, f, ap);
+		va_end(ap);
+		wrefresh(logwin);
+	}
+
+	pthread_mutex_unlock(&curses_lock);
+}
+
+/* Mandatory printing */
+static void wlogprint(const char *f, ...)
+{
+	va_list ap;
+
+	pthread_mutex_lock(&curses_lock);
+
+	check_logwinsize();
+
+	va_start(ap, f);
+	vw_printw(logwin, f, ap);
+	va_end(ap);
+	wrefresh(logwin);
+
+	pthread_mutex_unlock(&curses_lock);
+}
+
 void log_curses(const char *f, va_list ap)
 {
 	if (curses_active) {
 		if (!opt_loginput) {
 			pthread_mutex_lock(&curses_lock);
+			check_logwinsize();
 			vw_printw(logwin, f, ap);
 			wrefresh(logwin);
 			pthread_mutex_unlock(&curses_lock);
@@ -825,8 +886,10 @@ void log_curses(const char *f, va_list ap)
 
 static void clear_logwin(void)
 {
+	pthread_mutex_lock(&curses_lock);
 	wclear(logwin);
 	wrefresh(logwin);
+	pthread_mutex_unlock(&curses_lock);
 }
 
 static bool submit_upstream_work(const struct work *work)
@@ -1455,20 +1518,23 @@ static void display_pool_summary(struct pool *pool)
 {
 	double efficiency = 0.0;
 
-	wprintw(logwin, "Pool: %s\n", pool->rpc_url);
-	wprintw(logwin, " Queued work requests: %d\n", pool->getwork_requested);
-	wprintw(logwin, " Share submissions: %d\n", pool->accepted + pool->rejected);
-	wprintw(logwin, " Accepted shares: %d\n", pool->accepted);
-	wprintw(logwin, " Rejected shares: %d\n", pool->rejected);
+	pthread_mutex_lock(&curses_lock);
+	__wlog("Pool: %s\n", pool->rpc_url);
+	__wlog(" Queued work requests: %d\n", pool->getwork_requested);
+	__wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
+	__wlog(" Accepted shares: %d\n", pool->accepted);
+	__wlog(" Rejected shares: %d\n", pool->rejected);
 	if (pool->accepted || pool->rejected)
-		wprintw(logwin, " Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
+		__wlog(" Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 	efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-	wprintw(logwin, " Efficiency (accepted / queued): %.0f%%\n", efficiency);
+	__wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
 
-	wprintw(logwin, " Discarded work due to new blocks: %d\n", pool->discarded_work);
-	wprintw(logwin, " Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
-	wprintw(logwin, " Unable to get work from server occasions: %d\n", pool->localgen_occasions);
-	wprintw(logwin, " Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
+	__wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
+	__wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
+	__wlog(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
+	__wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
+	wrefresh(logwin);
+	pthread_mutex_unlock(&curses_lock);
 }
 
 /* We can't remove the memory used for this struct pool because there may
@@ -1512,7 +1578,7 @@ updated:
 			wattron(logwin, A_BOLD);
 		if (!pool->enabled)
 			wattron(logwin, A_DIM);
-		wprintw(logwin, "%d: %s %s Priority %d: %s  User:%s\n",
+		wlogprint("%d: %s %s Priority %d: %s  User:%s\n",
 			pool->pool_no,
 			pool->enabled? "Enabled" : "Disabled",
 			pool->idle? "Dead" : "Alive",
@@ -1521,14 +1587,13 @@ updated:
 		wattroff(logwin, A_BOLD | A_DIM);
 	}
 retry:
-	wprintw(logwin, "\nCurrent pool management strategy: %s\n",
+	wlogprint("\nCurrent pool management strategy: %s\n",
 		strategies[pool_strategy]);
 	if (pool_strategy == POOL_ROTATE)
-		wprintw(logwin, "Set to rotate every %d minutes\n", opt_rotate_period);
-	wprintw(logwin, "[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
-	wprintw(logwin, "[C]hange management strategy [S]witch pool [I]nformation\n");
-	wprintw(logwin, "Or press any other key to continue\n");
-	wrefresh(logwin);
+		wlogprint("Set to rotate every %d minutes\n", opt_rotate_period);
+	wlogprint("[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
+	wlogprint("[C]hange management strategy [S]witch pool [I]nformation\n");
+	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
 	if (!strncasecmp(&input, "a", 1)) {
@@ -1536,19 +1601,19 @@ retry:
 		goto updated;
 	} else if (!strncasecmp(&input, "r", 1)) {
 		if (active_pools() <= 1) {
-			wprintw(logwin, "Cannot remove last pool");
+			wlogprint("Cannot remove last pool");
 			goto retry;
 		}
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
 		if (pool == current_pool())
 			switch_pools(NULL);
 		if (pool == current_pool()) {
-			wprintw(logwin, "Unable to remove pool due to activity\n");
+			wlogprint("Unable to remove pool due to activity\n");
 			goto retry;
 		}
 		pool->enabled = false;
@@ -1557,7 +1622,7 @@ retry:
 	} else if (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
@@ -1566,12 +1631,12 @@ retry:
 		goto updated;
 	} else if (!strncasecmp(&input, "d", 1)) {
 		if (active_pools() <= 1) {
-			wprintw(logwin, "Cannot disable last pool");
+			wlogprint("Cannot disable last pool");
 			goto retry;
 		}
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
@@ -1582,7 +1647,7 @@ retry:
 	} else if (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
@@ -1592,10 +1657,10 @@ retry:
 		goto updated;
 	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)
-			wprintw(logwin, "%d: %s\n", i, strategies[i]);
+			wlogprint("%d: %s\n", i, strategies[i]);
 		selected = curses_int("Select strategy number type");
 		if (selected < 0 || selected > TOP_STRATEGY) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		if (selected == POOL_ROTATE) {
@@ -1603,7 +1668,7 @@ retry:
 
 			if (opt_rotate_period < 0 || opt_rotate_period > 9999) {
 				opt_rotate_period = 0;
-				wprintw(logwin, "Invalid selection\n");
+				wlogprint("Invalid selection\n");
 				goto retry;
 			}
 		}
@@ -1613,7 +1678,7 @@ retry:
 	} else if (!strncasecmp(&input, "i", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		pool = pools[selected];
@@ -1635,9 +1700,9 @@ static void display_options(void)
 	immedok(logwin, true);
 retry:
 	clear_logwin();
-	wprintw(logwin, "\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug\n");
-	wprintw(logwin, "[L]og interval [C]lear\n");
-	wprintw(logwin, "Select an option or any other key to return\n");
+	wlogprint("\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug\n");
+	wlogprint("[L]og interval [C]lear\n");
+	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 	if (!strncasecmp(&input, "s", 1)) {
 		opt_quiet ^= true;
@@ -1664,7 +1729,7 @@ retry:
 	else if (!strncasecmp(&input, "l", 1)) {
 		selected = curses_int("Interval in seconds");
 		if (selected < 0 || selected > 9999) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		opt_log_interval = selected;
@@ -1684,22 +1749,21 @@ static void set_options(void)
 	immedok(logwin, true);
 retry:
 	clear_logwin();
-	wprintw(logwin, "\n[D]ynamic mode: %s\n[L]ongpoll: %s\n",
+	wlogprint("\n[D]ynamic mode: %s\n[L]ongpoll: %s\n",
 		opt_dynamic ? "On" : "Off", want_longpoll ? "On" : "Off");
 	if (opt_dynamic)
-		wprintw(logwin, "[I]ntensity: Dynamic\n");
+		wlogprint("[I]ntensity: Dynamic\n");
 	else
-		wprintw(logwin, "[I]ntensity: %d\n", scan_intensity);
-	wprintw(logwin, "[Q]ueue: %d\n[S]cantime: %d\n[R]etries: %d\n[P]ause: %d\n",
+		wlogprint("[I]ntensity: %d\n", scan_intensity);
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[R]etries: %d\n[P]ause: %d\n",
 		opt_queue, opt_scantime, opt_retries, opt_fail_pause);
-	wprintw(logwin, "Select an option or any other key to return\n");
-	wrefresh(logwin);
+	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 
 	if (!strncasecmp(&input, "q", 1)) {
 		selected = curses_int("Extra work items to queue");
 		if (selected < 0 || selected > 9999) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		opt_queue = selected;
@@ -1715,7 +1779,7 @@ retry:
 	} else if (!strncasecmp(&input, "i", 1)) {
 		selected = curses_int("Set GPU scan intensity (-10 -> 10)");
 		if (selected < -10 || selected > 10) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		opt_dynamic = false;
@@ -1724,7 +1788,7 @@ retry:
 	} else if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
 		if (selected < 0 || selected > 9999) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		opt_scantime = selected;
@@ -1732,7 +1796,7 @@ retry:
 	} else if  (!strncasecmp(&input, "r", 1)) {
 		selected = curses_int("Retries before failing (-1 infinite)");
 		if (selected < -1 || selected > 9999) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		opt_retries = selected;
@@ -1740,7 +1804,7 @@ retry:
 	} else if  (!strncasecmp(&input, "p", 1)) {
 		selected = curses_int("Seconds to pause before network retries");
 		if (selected < 1 || selected > 9999) {
-			wprintw(logwin, "Invalid selection\n");
+			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		opt_fail_pause = selected;
@@ -2978,12 +3042,6 @@ static void *watchdog_thread(void *userdata)
 
 		if (curses_active) {
 			pthread_mutex_lock(&curses_lock);
-			getmaxyx(mainwin, y, x);
-			getmaxyx(logwin, logy, logx);
-			y -= logcursor;
-			/* Detect screen size change */
-			if (x != logx || y != logy)
-				wresize(logwin, y, x);
 			for (i = 0; i < mining_threads; i++) {
 				if (active_device(i))
 					curses_print_status(i);
@@ -3135,12 +3193,10 @@ static char *curses_input(const char *query)
 	if (!input)
 		quit(1, "Failed to malloc input");
 	leaveok(logwin, false);
-	wprintw(logwin, "%s: ", query);
-	wrefresh(logwin);
+	wlogprint("%s: ", query);
 	wgetnstr(logwin, input, 255);
 	leaveok(logwin, true);
 	noecho();
-	wprintw(logwin, "\n");
 	return input;
 }
 
@@ -3152,10 +3208,10 @@ static bool input_pool(bool live)
 
 	immedok(logwin, true);
 	if (total_pools == MAX_POOLS) {
-		wprintw(logwin, "Reached maximum number of pools.\n");
+		wlogprint("Reached maximum number of pools.\n");
 		goto out;
 	}
-	wprintw(logwin, "Input server details.\n");
+	wlogprint("Input server details.\n");
 
 	url = curses_input("URL");
 	if (strncmp(url, "http://", 7) &&
