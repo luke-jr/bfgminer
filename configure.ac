@@ -125,6 +125,7 @@ AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 PKG_PROG_PKG_CONFIG()
 
 LIBCURL_CHECK_CONFIG(, 7.10.1, ,  [AC_MSG_ERROR([Missing required libcurl dev >= 7.10.1])])
+LIBCURL_CHECK_CONFIG(, 7.15.6, [AC_DEFINE([CURL_HAS_SOCKOPT], [1], [Defined if version of curl supports sockopts.])],)
 
 dnl CCAN wants to know a lot of vars.
 # All the configuration checks.  Regrettably, the __attribute__ checks will
