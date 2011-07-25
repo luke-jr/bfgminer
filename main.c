@@ -824,7 +824,7 @@ static void check_logwinsize(void)
 }
 
 /* For mandatory printing when mutex is already locked */
-static void __wlog(const char *f, ...)
+static void wlog(const char *f, ...)
 {
 	va_list ap;
 
@@ -832,25 +832,6 @@ static void __wlog(const char *f, ...)
 	va_start(ap, f);
 	vw_printw(logwin, f, ap);
 	va_end(ap);
-}
-
-/* Print only if opt_loginput isn't set */
-static void wlog(const char *f, ...)
-{
-	va_list ap;
-
-	pthread_mutex_lock(&curses_lock);
-
-	check_logwinsize();
-
-	if (!opt_loginput) {
-		va_start(ap, f);
-		vw_printw(logwin, f, ap);
-		va_end(ap);
-		wrefresh(logwin);
-	}
-
-	pthread_mutex_unlock(&curses_lock);
 }
 
 /* Mandatory printing */
@@ -1519,20 +1500,20 @@ static void display_pool_summary(struct pool *pool)
 	double efficiency = 0.0;
 
 	pthread_mutex_lock(&curses_lock);
-	__wlog("Pool: %s\n", pool->rpc_url);
-	__wlog(" Queued work requests: %d\n", pool->getwork_requested);
-	__wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
-	__wlog(" Accepted shares: %d\n", pool->accepted);
-	__wlog(" Rejected shares: %d\n", pool->rejected);
+	wlog("Pool: %s\n", pool->rpc_url);
+	wlog(" Queued work requests: %d\n", pool->getwork_requested);
+	wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
+	wlog(" Accepted shares: %d\n", pool->accepted);
+	wlog(" Rejected shares: %d\n", pool->rejected);
 	if (pool->accepted || pool->rejected)
-		__wlog(" Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
+		wlog(" Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 	efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-	__wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
+	wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
 
-	__wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
-	__wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
-	__wlog(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
-	__wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
+	wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
+	wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
+	wlog(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
+	wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
 	wrefresh(logwin);
 	pthread_mutex_unlock(&curses_lock);
 }
@@ -3037,7 +3018,7 @@ static void *watchdog_thread(void *userdata)
 	gettimeofday(&rotate_tv, NULL);
 
 	while (1) {
-		int x, y, logx, logy, i;
+		int i;
 		struct timeval now;
 
 		sleep(interval);
