@@ -832,7 +832,7 @@ static void print_status(int thr_id)
 }
 
 /* Check for window resize. Called with curses mutex locked */
-static void check_logwinsize(void)
+static inline void check_logwinsize(void)
 {
 	int x, y, logx, logy;
 
@@ -849,7 +849,6 @@ static void wlog(const char *f, ...)
 {
 	va_list ap;
 
-	check_logwinsize();
 	va_start(ap, f);
 	vw_printw(logwin, f, ap);
 	va_end(ap);
@@ -861,8 +860,6 @@ static void wlogprint(const char *f, ...)
 	va_list ap;
 
 	pthread_mutex_lock(&curses_lock);
-
-	check_logwinsize();
 
 	va_start(ap, f);
 	vw_printw(logwin, f, ap);
@@ -877,7 +874,6 @@ void log_curses(const char *f, va_list ap)
 	if (curses_active) {
 		if (!opt_loginput) {
 			pthread_mutex_lock(&curses_lock);
-			check_logwinsize();
 			vw_printw(logwin, f, ap);
 			wrefresh(logwin);
 			pthread_mutex_unlock(&curses_lock);
@@ -3222,6 +3218,7 @@ static void *watchdog_thread(void *userdata)
 	const unsigned int interval = opt_log_interval / 2 ? : 1;
 	static struct timeval rotate_tv;
 	struct timeval zero_tv;
+	bool statwin = false;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -3239,10 +3236,16 @@ static void *watchdog_thread(void *userdata)
 		hashmeter(-1, &zero_tv, 0);
 
 		if (curses_active) {
+			statwin ^= true;
 			pthread_mutex_lock(&curses_lock);
 			for (i = 0; i < mining_threads; i++)
 				curses_print_status(i);
-			redrawwin(mainwin);
+			if (statwin)
+				redrawwin(statuswin);
+			else {
+				check_logwinsize();
+				redrawwin(logwin);
+			}
 			pthread_mutex_unlock(&curses_lock);
 		}
 
