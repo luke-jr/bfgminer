@@ -1859,7 +1859,7 @@ retry:
 
 	if (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Select GPU to enable");
-		if (selected < 0 || selected > nDevs) {
+		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
@@ -1880,7 +1880,7 @@ retry:
 		}
 	} if (!strncasecmp(&input, "d", 1)) {
 		selected = curses_int("Select GPU to disable");
-		if (selected < 0 || selected > nDevs) {
+		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
@@ -1891,7 +1891,7 @@ retry:
 		gpu_devices[selected] = false;
 	} else if (!strncasecmp(&input, "r", 1)) {
 		selected = curses_int("Select GPU to attempt to restart");
-		if (selected < 0 || selected > nDevs) {
+		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
