@@ -1818,7 +1818,7 @@ retry:
 }
 
 #ifdef HAVE_OPENCL
-static void reinit_thread(long thr_id);
+static void reinit_device(struct cgpu_info *cgpu);
 
 static void manage_gpu(void)
 {
@@ -1895,12 +1895,8 @@ retry:
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
-		for (i = 0; i < gpu_threads; i++) {
-			if (dev_from_id(i) != selected)
-				continue;
-			wlogprint("Attempting to restart thread %d\n", i);
-			reinit_thread(i);
-		}
+		wlogprint("Attempting to restart threads of GPU %d\n", selected);
+		reinit_device(&gpus[selected]);
 	}
 
 	clear_logwin();
@@ -3101,9 +3097,12 @@ static void restart_longpoll(void)
 		start_longpoll();
 }
 
-static void *reinit_cputhread(void *userdata)
+static void *reinit_cpu(void *userdata)
 {
-	long thr_id = (long)userdata;
+#if 0
+	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
+	int cpu = cgpu->cpu_gpu;
+	long thr_id = ....(long)userdata;
 	struct thr_info *thr = &thr_info[thr_id];
 	int cpu = dev_from_id(thr_id);
 
@@ -3126,67 +3125,75 @@ static void *reinit_cputhread(void *userdata)
 	tq_push(thr->q, &ping);
 
 	applog(LOG_WARNING, "Thread %d restarted", thr_id);
-
+#endif
 	return NULL;
 }
 
 #ifdef HAVE_OPENCL
-static void *reinit_gputhread(void *userdata)
+static void *reinit_gpu(void *userdata)
 {
-	long thr_id = (long)userdata;
-	int gpu = dev_from_id(thr_id);
-	struct thr_info *thr = &thr_info[thr_id];
+	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
+	int gpu = cgpu->cpu_gpu;
+	struct thr_info *thr;
 	char name[256];
+	int thr_id;
 
 	gpus[gpu].alive = false;
-	thr->rolling = thr->cgpu->rolling = 0;
-	tq_freeze(thr->q);
-	if (!pthread_cancel(*thr->pth))
-		pthread_join(*thr->pth, NULL);
-	free(thr->q);
-	thr->q = tq_new();
-	if (!thr->q)
-		quit(1, "Failed to tq_new in reinit_gputhread");
 
-	free(clStates[thr_id]);
+	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
+		if (dev_from_id(thr_id) != gpu)
+			continue;
 
-	applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
-	clStates[thr_id] = initCl(gpu, name, sizeof(name));
-	if (!clStates[thr_id]) {
-		applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
-		return NULL;
+		thr = &thr_info[thr_id];
+		thr->rolling = thr->cgpu->rolling = 0;
+		tq_freeze(thr->q);
+		if (!pthread_cancel(*thr->pth))
+			pthread_join(*thr->pth, NULL);
+		free(thr->q);
+		thr->q = tq_new();
+		if (!thr->q)
+			quit(1, "Failed to tq_new in reinit_gputhread");
+
+		free(clStates[thr_id]);
+
+		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
+		clStates[thr_id] = initCl(gpu, name, sizeof(name));
+		if (!clStates[thr_id]) {
+			applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
+			return NULL;
+		}
+		applog(LOG_INFO, "initCl() finished. Found %s", name);
+
+		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr))) {
+			applog(LOG_ERR, "thread %d create failed", thr_id);
+			return NULL;
+		}
+		/* Try to re-enable it */
+		gpu_devices[gpu] = true;
+		tq_push(thr->q, &ping);
+
+		applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	}
-	applog(LOG_INFO, "initCl() finished. Found %s", name);
-
-	if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr))) {
-		applog(LOG_ERR, "thread %d create failed", thr_id);
-		return NULL;
-	}
-	/* Try to re-enable it */
-	gpu_devices[gpu] = true;
-	tq_push(thr->q, &ping);
-
-	applog(LOG_WARNING, "Thread %d restarted", thr_id);
 
 	return NULL;
 }
 #else
-static void *reinit_gputhread(void *userdata)
+static void *reinit_gpu(void *userdata)
 {
 }
 #endif
 
-static void reinit_thread(long thr_id)
+static void reinit_device(struct cgpu_info *cgpu)
 {
 	pthread_t resus_thread;
 	void *reinit;
 
-	if (thr_id < gpu_threads)
-		reinit = reinit_gputhread;
+	if (cgpu->is_gpu)
+		reinit = reinit_gpu;
 	else
-		reinit = reinit_cputhread;
+		reinit = reinit_cpu;
 
-	if (unlikely(pthread_create(&resus_thread, NULL, reinit, (void *)thr_id)))
+	if (unlikely(pthread_create(&resus_thread, NULL, reinit, (void *)cgpu)))
 		applog(LOG_ERR, "Failed to create reinit thread");
 }
 
@@ -3282,7 +3289,11 @@ static void *watchdog_thread(void *userdata)
 					kill_work();
 					break;
 				}
-				reinit_thread(i);
+				reinit_device(thr->cgpu);
+				/* Only initialise the device once since there
+				 * will be multiple threads on the same device
+				 * and it will be declared !alive */
+				break;
 			}
 		}
 	}
