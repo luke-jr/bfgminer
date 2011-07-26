@@ -2460,7 +2460,7 @@ static void *miner_thread(void *userdata)
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 	int request_interval;
 	bool requested = true;
-	uint32_t hash_div = opt_n_threads;
+	uint32_t hash_div = 1;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
