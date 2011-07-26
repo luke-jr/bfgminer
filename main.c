@@ -2909,8 +2909,10 @@ static void *gpuminer_thread(void *userdata)
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
 		if (!requested) {
+#if 0
 			if (diff.tv_sec > request_interval)
 				hash_div = (MAXTHREADS / total_hashes) ? : 1;
+#endif
 			if (diff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
 				if (unlikely(!queue_request())) {
 					applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
