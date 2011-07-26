@@ -1206,12 +1206,17 @@ static bool workio_get_work(struct workio_cmd *wc)
 
 static bool stale_work(struct work *work)
 {
+	struct timeval now;
 	bool ret = false;
 	char *hexstr;
 
 	/* Only use the primary pool for determination as the work may
 	 * interleave at times of new blocks */
 	if (work->pool != current_pool())
+		return ret;
+
+	gettimeofday(&now, NULL);
+	if ((now.tv_sec - work->tv_staged.tv_sec) > opt_scantime)
 		return ret;
 
 	hexstr = bin2hex(work->data, 36);
@@ -1421,7 +1426,7 @@ static void test_work_current(struct work *work)
 	char *hexstr;
 
 	/* Only use the primary pool for determination */
-	if (work->pool != current_pool())
+	if (work->pool != current_pool() || work->cloned || work->rolls || work->clone)
 		return;
 
 	hexstr = bin2hex(work->data, 36);
@@ -1468,6 +1473,8 @@ static void *stage_thread(void *userdata)
 		}
 
 		test_work_current(work);
+		if (!work->cloned && !work->clone)
+			gettimeofday(&work->tv_staged, NULL);
 
 		if (unlikely(!tq_push(getq, work))) {
 			applog(LOG_ERR, "Failed to tq_push work in stage_thread");
@@ -2249,7 +2256,57 @@ static void flush_requests(void)
 static inline bool can_roll(struct work *work)
 {
 	return (work->pool && !stale_work(work) && work->pool->has_rolltime &&
-		work->rolls < 11);
+		work->rolls < 11 && !work->clone);
+}
+
+static void roll_work(struct work *work)
+{
+	uint32_t *work_ntime;
+	uint32_t ntime;
+
+	work_ntime = (uint32_t *)(work->data + 68);
+	ntime = be32toh(*work_ntime);
+	ntime++;
+	*work_ntime = htobe32(ntime);
+	local_work++;
+	work->rolls++;
+	work->blk.nonce = 0;
+	gettimeofday(&work->tv_staged, NULL);
+	if (opt_debug)
+		applog(LOG_DEBUG, "Successfully rolled work");
+}
+
+/* Recycle the work at a higher starting res_nonce if we know the thread we're
+ * giving it to will not finish scanning it. We keep the master copy to be
+ * recycled more rapidly and discard the clone to avoid repeating work */
+static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_div)
+{
+	uint64_t hash_inc;
+
+	if (hash_div < 3 || work->clone)
+		return false;
+
+	hash_inc = MAXTHREADS / (hash_div - 1);
+	if ((uint64_t)work->blk.nonce + hash_inc < MAXTHREADS) {
+		/* Don't keep handing it out if it's getting old, but try to
+		 * roll it instead */
+		if ((now->tv_sec - work->tv_staged.tv_sec) > opt_scantime * 2 / 3) {
+			if (!can_roll(work))
+				return false;
+			else {
+				local_work++;
+				roll_work(work);
+				return true;
+			}
+		}
+		/* Okay we can divide it up */
+		work->blk.nonce += hash_inc;
+		work->cloned = true;
+		if (opt_debug)
+			applog(LOG_DEBUG, "Successfully divided work");
+		return true;
+	}
+	return false;
 }
 
 static bool get_work(struct work *work, bool queued, struct thr_info *thr,
@@ -2273,9 +2330,6 @@ retry:
 	}
 
 	if (!requests_staged() && can_roll(work)) {
-		uint32_t *work_ntime;
-		uint32_t ntime;
-
 		/* Only print this message once each time we shift to localgen */
 		if (!pool_tset(pool, &pool->idle)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough, generating work locally",
@@ -2296,13 +2350,8 @@ retry:
 			}
 		}
 
-		work_ntime = (uint32_t *)(work->data + 68);
-		ntime = be32toh(*work_ntime);
-		ntime++;
-		*work_ntime = htobe32(ntime);
+		roll_work(work);
 		ret = true;
-		local_work++;
-		work->rolls++;
 		goto out;
 	}
 
@@ -2327,9 +2376,17 @@ retry:
 	dec_queued();
 
 	memcpy(work, work_heap, sizeof(*work));
-	
+
+	/* Copy the res nonce back so we know to start at a higher baseline
+	 * should we divide the same work up again. Make the work we're
+	 * handing out be clone */
+	if (divide_work(&now, work_heap, hash_div)) {
+		tq_push(thr_info[stage_thr_id].q, work_heap);
+		work->clone = true;
+	} else
+		free(work_heap);
+
 	ret = true;
-	free(work_heap);
 out:
 	if (unlikely(ret == false)) {
 		if ((opt_retries >= 0) && (++failures > opt_retries)) {
@@ -2402,9 +2459,8 @@ static void *miner_thread(void *userdata)
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 	int request_interval;
-	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
-	uint32_t hash_div = 1;
+	uint32_t hash_div = opt_n_threads;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -2445,7 +2501,6 @@ static void *miner_thread(void *userdata)
 			mythr->cgpu->getworks++;
 			needs_work = requested = false;
 			total_hashes = 0;
-			work.blk.nonce = work.res_nonce;;
 			max_nonce = work.blk.nonce + hashes_done;
 		}
 		hashes_done = 0;
@@ -2560,7 +2615,7 @@ static void *miner_thread(void *userdata)
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
-		if (!requested && (diff.tv_sec >= request_interval || work.blk.nonce > request_nonce)) {
+		if (!requested && (diff.tv_sec >= request_interval)) {
 			if (unlikely(!queue_request())) {
 				applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
 				goto out;
@@ -2810,7 +2865,6 @@ static void *gpuminer_thread(void *userdata)
 			requested = false;
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
-			work->blk.nonce = 0;
 			work_restart[thr_id].restart = 0;
 
 			if (opt_debug)

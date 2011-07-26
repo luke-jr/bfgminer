@@ -308,12 +308,14 @@ struct work {
 	int		rolls;
 
 	uint32_t	output[1];
-	uint32_t	res_nonce;
 	uint32_t	valid;
 	dev_blk_ctx	blk;
 
 	int		thr_id;
 	struct pool	*pool;
+	struct timeval	tv_staged;
+	bool		clone;
+	bool		cloned;
 };
 
 enum cl_kernel {
