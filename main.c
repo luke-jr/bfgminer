@@ -1987,7 +1987,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double local_secs;
 	double utility, efficiency = 0.0;
 	static double local_mhashes_done = 0;
-	static double rolling_local = 0;
+	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 
@@ -2015,7 +2015,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	pthread_mutex_lock(&hash_lock);
 	gettimeofday(&temp_tv_end, NULL);
 	timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
-	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 
 	total_mhashes_done += local_mhashes;
 	local_mhashes_done += local_mhashes;
@@ -2024,8 +2023,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		goto out_unlock;
 	gettimeofday(&total_tv_end, NULL);
 
+	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 	/* Use a rolling average by faking an exponential decay over 5 * log */
-	rolling_local = ((rolling_local * 0.9) + local_mhashes_done) / 1.9;
+	rolling = ((rolling * 0.9) + (local_mhashes_done / local_secs)) / 1.9;
 
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
@@ -2035,7 +2035,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
-		opt_log_interval, rolling_local / local_secs, total_mhashes_done / total_secs,
+		opt_log_interval, rolling, total_mhashes_done / total_secs,
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
 	if (!curses_active) {
 		printf("%s          \r", statusline);
