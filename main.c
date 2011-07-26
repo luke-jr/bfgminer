@@ -3239,8 +3239,7 @@ static void *watchdog_thread(void *userdata)
 			pthread_mutex_lock(&curses_lock);
 			for (i = 0; i < mining_threads; i++)
 				curses_print_status(i);
-			redrawwin(logwin);
-			redrawwin(statuswin);
+			redrawwin(mainwin);
 			pthread_mutex_unlock(&curses_lock);
 		}
 
