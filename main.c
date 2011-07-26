@@ -752,9 +752,10 @@ static void text_print_status(int thr_id)
 {
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 
-	printf(" %sPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]\n",
-	       cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu, cgpu->total_mhashes / total_secs,
-			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+	printf(" %sPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]\n",
+	       cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu, cgpu->rolling,
+			cgpu->total_mhashes / total_secs, cgpu->getworks,
+			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
 }
 
@@ -799,8 +800,8 @@ static void curses_print_status(int thr_id)
 		wmove(statuswin, gpucursor + gpu, 0);
 		if (!gpu_devices[gpu] || !cgpu->alive)
 			wattron(logwin, A_DIM);
-		wprintw(statuswin, " GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
-			gpu, cgpu->total_mhashes / total_secs,
+		wprintw(statuswin, " GPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
 		wattroff(logwin, A_DIM);
@@ -810,8 +811,8 @@ static void curses_print_status(int thr_id)
 		struct cgpu_info *cgpu = &cpus[cpu];
 
 		wmove(statuswin, cpucursor + cpu, 0);
-		wprintw(statuswin, " CPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
-			cpu, cgpu->total_mhashes / total_secs,
+		wprintw(statuswin, " CPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
 		wclrtoeol(statuswin);
@@ -1830,18 +1831,18 @@ retry:
 	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct cgpu_info *cgpu = &gpus[gpu];
 
-		wlog("GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]\n",
-			gpu, cgpu->total_mhashes / total_secs,
+		wlog("GPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]\n",
+			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
 		for (i = 0; i < mining_threads; i++) {
-			if (dev_from_id(i) != gpu)
-				continue;
 			thr = &thr_info[i];
+			if (thr->cgpu != cgpu)
+				continue;
 			get_datestamp(checkin, &thr->last);
-			wlog("Thread %d %s %s reported in %s\n", i,
-				gpu_devices[gpu] ? "Enabled" : "Disabled",
-				cgpu->alive ? "Alive" : "Dead", checkin);
+			wlog("Thread %d: %.1f Mh/s %s %s reported in %s\n", i,
+			     thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled",
+			     cgpu->alive ? "Alive" : "Dead", checkin);
 		}
 	}
 
@@ -1983,7 +1984,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		      unsigned long hashes_done)
 {
 	struct timeval temp_tv_end, total_diff;
-	double khashes, secs;
+	double secs;
 	double local_secs;
 	double utility, efficiency = 0.0;
 	static double local_mhashes_done = 0;
@@ -1999,15 +2000,27 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (opt_quiet || !opt_log_interval)
 		return;
 	
-	khashes = hashes_done / 1000.0;
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
 
-	if (thr_id >= 0 && secs) {
-		/* So we can call hashmeter from a non worker thread */
+	/* So we can call hashmeter from a non worker thread */
+	if (thr_id >= 0) {
+		struct thr_info *thr = &thr_info[thr_id];
+		double thread_rolling = 0.0;
+		int i;
+
 		if (opt_debug)
 			applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
 				thr_id, hashes_done, hashes_done / secs);
-		cgpu->local_mhashes += local_mhashes;
+
+		/* Rolling average for each thread and each device */
+		thr->rolling = ((thr->rolling * 0.9) + (local_mhashes / secs)) / 1.9;
+		for (i = 0; i < mining_threads; i++) {
+			struct thr_info *th = &thr_info[i];
+
+			if (th->cgpu == cgpu)
+				thread_rolling += th->rolling;
+		}
+		cgpu->rolling = ((cgpu->rolling * 0.9) + thread_rolling) / 1.9;
 		cgpu->total_mhashes += local_mhashes;
 	}
 
@@ -2827,8 +2840,6 @@ static void *gpuminer_thread(void *userdata)
 		hashes_done += hashes;
 		total_hashes += hashes;
 		work->blk.nonce += hashes;
-		if (diff.tv_usec > 500000)
-			diff.tv_sec++;
 		if (diff.tv_sec >= cycle) {
 			hashmeter(thr_id, &diff, hashes_done);
 			gettimeofday(&tv_start, NULL);
@@ -2849,6 +2860,7 @@ static void *gpuminer_thread(void *userdata)
 		}
 		if (unlikely(!gpu_devices[dev_from_id(thr_id)])) {
 			applog(LOG_WARNING, "Thread %d being disabled\n", thr_id);
+			mythr->rolling = mythr->cgpu->rolling = 0;
 			tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
 			applog(LOG_WARNING, "Thread %d being re-enabled\n", thr_id);
 		}
@@ -3030,6 +3042,7 @@ static void *reinit_cputhread(void *userdata)
 	struct thr_info *thr = &thr_info[thr_id];
 
 	tq_freeze(thr->q);
+	thr->rolling = thr->cgpu->rolling = 0;
 	if (!pthread_cancel(*thr->pth))
 		pthread_join(*thr->pth, NULL);
 
@@ -3060,6 +3073,7 @@ static void *reinit_gputhread(void *userdata)
 	/* Disable the GPU device in case the pthread never joins, hung in GPU
 	 * space */
 	gpu_devices[gpu] = false;
+	thr->rolling = thr->cgpu->rolling = 0;
 	if (!pthread_cancel(*thr->pth))
 		pthread_join(*thr->pth, NULL);
 	free(clStates[thr_id]);
@@ -3190,6 +3204,7 @@ static void *watchdog_thread(void *userdata)
 				continue;
 	
 			if (now.tv_sec - thr->last.tv_sec > 60) {
+				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[i].alive = false;
 				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
 				/* Create one mandatory work item */

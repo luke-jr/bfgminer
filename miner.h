@@ -140,7 +140,7 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int hw_errors;
-	double local_mhashes;
+	double rolling;
 	double total_mhashes;
 	unsigned int getworks;
 	double efficiency;
@@ -155,6 +155,7 @@ struct thr_info {
 	struct cgpu_info *cgpu;
 	struct timeval last;
 	bool	getwork;
+	double	rolling;
 };
 
 extern inline int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
