@@ -2401,13 +2401,19 @@ static void *miner_thread(void *userdata)
 	bool needs_work = true;
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
-	/* Request the next work item at 2/3 of the scantime */
-	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
+	int request_interval;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = true;
 	uint32_t hash_div = 1;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	/* Request the next work item just before the end of the scantime. We
+	 * don't want the work lying around too long since the CPU will always
+	 * spend the full scantime */
+	request_interval = opt_scantime - 5;
+	if (request_interval < 1)
+		request_interval = 1;
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
@@ -2554,7 +2560,7 @@ static void *miner_thread(void *userdata)
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
-		if (!requested && (diff.tv_sec > request_interval || work.blk.nonce > request_nonce)) {
+		if (!requested && (diff.tv_sec >= request_interval || work.blk.nonce > request_nonce)) {
 			if (unlikely(!queue_request())) {
 				applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
 				goto out;
