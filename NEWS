@@ -1,3 +1,33 @@
+Version 1.5.0 - July 26, 2011
+
+- Increase efficiency of slow mining threads such as CPU miners dramatically. Do
+this by detecting which threads cannot complete searching a work item within the
+scantime and then divide up a work item into multiple smaller work items.
+Detect the age of the work items and if they've been cloned before to prevent
+doing the same work over. If the work is too old to be divided, then see if it
+can be time rolled and do that to generate work. This dramatically decreases the
+number of queued work items from a pool leading to higher overall efficiency
+(but the same hashrate and share submission rate).
+- Don't request work too early for CPUs as CPUs will scan for the full
+opt_scantime anyway.
+- Simplify gpu management enable/disable/restart code.
+- Implement much more accurate rolling statistics per thread and per gpu and
+improve accuracy of rolling displayed values.
+- Make the rolling log-second average more accurate.
+- Add a menu to manage GPUs on the fly allowing you to enable/disable GPUs or
+try restarting them.
+- Keep track of which GPUs are alive versus enabled.
+- Start threads for devices that are even disabled, but don't allow them to
+start working.
+- The last pool is when we are low in total_pools, not active_pools.
+- Make the thread restart do a pthread_join after disabling the device, only
+re-enabling it if we succeed in restarting the thread. Do this from a separate
+thread so as to not block any other code.This will allow cgminer to continue
+even if one GPU hangs.
+- Try to do every curses manipulation under the curses lock.
+- Only use the sockoptfunction if the version of curl is recent enough.
+
+
 Version 1.4.1 - July 24, 2011
 
 - Do away with GET for dealing with longpoll forever. POST is the one that works
