@@ -3149,14 +3149,15 @@ static void *reinit_gpu(void *userdata)
 		thr = &thr_info[thr_id];
 		thr->rolling = thr->cgpu->rolling = 0;
 		tq_freeze(thr->q);
-		if (!pthread_cancel(*thr->pth))
+		if (!pthread_cancel(*thr->pth)) {
 			pthread_join(*thr->pth, NULL);
-		free(thr->q);
+			free(thr->q);
+			free(clStates[thr_id]);
+		}
+
 		thr->q = tq_new();
 		if (!thr->q)
 			quit(1, "Failed to tq_new in reinit_gputhread");
-
-		free(clStates[thr_id]);
 
 		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
 		clStates[thr_id] = initCl(gpu, name, sizeof(name));
