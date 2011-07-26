@@ -230,9 +230,25 @@ static char *opt_kernel = NULL;
 
 enum cl_kernel chosen_kernel;
 
+static bool ping = true;
+
 struct sigaction termhandler, inthandler;
 
 struct thread_q *getq;
+
+void get_datestamp(char *f, struct timeval *tv)
+{
+	struct tm tm;
+
+	localtime_r(&tv->tv_sec, &tm);
+	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
+		tm.tm_year + 1900,
+		tm.tm_mon + 1,
+		tm.tm_mday,
+		tm.tm_hour,
+		tm.tm_min,
+		tm.tm_sec);
+}
 
 static void applog_and_exit(const char *fmt, ...)
 {
@@ -773,17 +789,21 @@ static void curses_print_status(int thr_id)
 	whline(statuswin, '-', 80);
 	wmove(statuswin, logstart - 1, 0);
 	whline(statuswin, '-', 80);
-	mvwprintw(statuswin, gpucursor - 1, 1, "[P]ool management [S]ettings [D]isplay options [Q]uit");
+	mvwprintw(statuswin, gpucursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
+		opt_g_threads ? "[G]PU management " : "");
 
 	if (thr_id >= 0 && thr_id < gpu_threads) {
 		int gpu = dev_from_id(thr_id);
 		struct cgpu_info *cgpu = &gpus[gpu];
 
 		wmove(statuswin, gpucursor + gpu, 0);
+		if (!gpu_devices[gpu] || !cgpu->alive)
+			wattron(logwin, A_DIM);
 		wprintw(statuswin, " GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 			gpu, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
+		wattroff(logwin, A_DIM);
 		wclrtoeol(statuswin);
 	} else if (thr_id >= gpu_threads) {
 		int cpu = dev_from_id(thr_id);
@@ -1389,18 +1409,10 @@ static void switch_pools(struct pool *selected)
 static void set_curblock(char *hexstr)
 {
 	struct timeval tv_now;
-	struct tm tm;
 
 	memcpy(current_block, hexstr, 36);
 	gettimeofday(&tv_now, NULL);
-	localtime_r(&tv_now.tv_sec, &tm);
-	sprintf(blockdate, "[%d-%02d-%02d %02d:%02d:%02d]",
-		tm.tm_year + 1900,
-		tm.tm_mon + 1,
-		tm.tm_mday,
-		tm.tm_hour,
-		tm.tm_min,
-		tm.tm_sec);
+	get_datestamp(blockdate, &tv_now);
 }
 
 static void test_work_current(struct work *work)
@@ -1797,6 +1809,102 @@ retry:
 	opt_loginput = false;
 }
 
+#ifdef HAVE_OPENCL
+static void reinit_thread(long thr_id);
+
+static void manage_gpu(void)
+{
+	struct thr_info *thr;
+	int selected, gpu, i;
+	char checkin[40];
+	char input;
+
+	if (!opt_g_threads)
+		return;
+
+	opt_loginput = true;
+	immedok(logwin, true);
+retry:
+	clear_logwin();
+
+	for (gpu = 0; gpu < nDevs; gpu++) {
+		struct cgpu_info *cgpu = &gpus[gpu];
+
+		wlog("GPU %d: [%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]\n",
+			gpu, cgpu->total_mhashes / total_secs,
+			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->efficiency, cgpu->utility);
+		for (i = 0; i < mining_threads; i++) {
+			if (dev_from_id(i) != gpu)
+				continue;
+			thr = &thr_info[i];
+			get_datestamp(checkin, &thr->last);
+			wlog("Thread %d %s %s reported in %s\n", i,
+				gpu_devices[gpu] ? "Enabled" : "Disabled",
+				cgpu->alive ? "Alive" : "Dead", checkin);
+		}
+	}
+
+	wlogprint("[E]nable [D]isable [R]estart GPU\n");
+	wlogprint("Or press any other key to continue\n");
+	input = getch();
+
+	if (!strncasecmp(&input, "e", 1)) {
+		selected = curses_int("Select GPU to enable");
+		if (selected < 0 || selected > nDevs) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		if (!gpus[selected].alive) {
+			wlogprint("Device dead, need to attempt to restart before enabling\n");
+			goto retry;
+		}
+		gpu_devices[selected] = true;
+		for (i = 0; i < mining_threads; i++) {
+			if (dev_from_id(i) != selected)
+				continue;
+			thr = &thr_info[i];
+			tq_thaw(thr->q);
+			tq_push(thr->q, &ping);
+		}
+	} if (!strncasecmp(&input, "d", 1)) {
+		selected = curses_int("Select GPU to disable");
+		if (selected < 0 || selected > nDevs) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		gpu_devices[selected] = false;
+		for (i = 0; i < mining_threads; i++) {
+			if (dev_from_id(i) != selected)
+				continue;
+			thr = &thr_info[i];
+			tq_freeze(thr->q);
+		}
+	} else if (!strncasecmp(&input, "r", 1)) {
+		selected = curses_int("Select GPU to attempt to restart");
+		if (selected < 0 || selected > nDevs) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		thr = &thr_info[selected];
+		for (i = 0; i < mining_threads; i++) {
+			if (dev_from_id(i) != selected)
+				continue;
+			wlogprint("Attempting to restart thread %d\n", i);
+			reinit_thread(i);
+		}
+	}
+
+	clear_logwin();
+	immedok(logwin, false);
+	opt_loginput = false;
+}
+#else
+static void manage_gpu(void)
+{
+}
+#endif
+
 static void *input_thread(void *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -1817,6 +1925,8 @@ static void *input_thread(void *userdata)
 			display_pools();
 		else if (!strncasecmp(&input, "s", 1))
 			set_options();
+		else if (!strncasecmp(&input, "g", 1))
+			manage_gpu();
 	}
 
 	return NULL;
@@ -2737,6 +2847,11 @@ static void *gpuminer_thread(void *userdata)
 				requested = true;
 			}
 		}
+		if (unlikely(!gpu_devices[dev_from_id(thr_id)])) {
+			applog(LOG_WARNING, "Thread %d being disabled\n", thr_id);
+			tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+			applog(LOG_WARNING, "Thread %d being re-enabled\n", thr_id);
+		}
 	}
 out:
 	tq_freeze(mythr->q);
@@ -2928,6 +3043,8 @@ static void *reinit_cputhread(void *userdata)
 	applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	thread_reportin(thr);
 	tq_thaw(thr->q);
+	tq_push(thr->q, &ping);
+
 	return NULL;
 }
 
@@ -2942,7 +3059,7 @@ static void *reinit_gputhread(void *userdata)
 	tq_freeze(thr->q);
 	/* Disable the GPU device in case the pthread never joins, hung in GPU
 	 * space */
-	gpu_devices[dev_from_id(thr_id)] = false;
+	gpu_devices[gpu] = false;
 	if (!pthread_cancel(*thr->pth))
 		pthread_join(*thr->pth, NULL);
 	free(clStates[thr_id]);
@@ -2964,8 +3081,10 @@ static void *reinit_gputhread(void *userdata)
 	 * for it */
 	applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	thread_reportin(thr);
+	gpu_devices[gpu] = true;
 	tq_thaw(thr->q);
-	gpu_devices[dev_from_id(thr_id)] = true;
+	tq_push(thr->q, &ping);
+	gpus[gpu].alive = true;
 
 	return NULL;
 }
@@ -3029,10 +3148,8 @@ static void *watchdog_thread(void *userdata)
 
 		if (curses_active) {
 			pthread_mutex_lock(&curses_lock);
-			for (i = 0; i < mining_threads; i++) {
-				if (active_device(i))
-					curses_print_status(i);
-			}
+			for (i = 0; i < mining_threads; i++)
+				curses_print_status(i);
 			redrawwin(logwin);
 			redrawwin(statuswin);
 			pthread_mutex_unlock(&curses_lock);
@@ -3068,11 +3185,12 @@ static void *watchdog_thread(void *userdata)
 		for (i = 0; i < gpu_threads; i++) {
 			struct thr_info *thr = &thr_info[i];
 
-			/* Thread is waiting on getwork, don't test it */
-			if (thr->getwork)
+			/* Thread is waiting on getwork or disabled */
+			if (thr->getwork || !gpu_devices[i])
 				continue;
 	
 			if (now.tv_sec - thr->last.tv_sec > 60) {
+				gpus[i].alive = false;
 				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
 				/* Create one mandatory work item */
 				inc_staged(current_pool(), 1, true);
@@ -3259,7 +3377,6 @@ int main (int argc, char *argv[])
 	struct sigaction handler;
 	struct thr_info *thr;
 	char name[256];
-	struct tm tm;
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -3283,14 +3400,7 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
-	localtime_r(&total_tv_start.tv_sec, &tm);
-	sprintf(datestamp, "[%d-%02d-%02d %02d:%02d:%02d]",
-		tm.tm_year + 1900,
-		tm.tm_mon + 1,
-		tm.tm_mday,
-		tm.tm_hour,
-		tm.tm_min,
-		tm.tm_sec);
+	get_datestamp(datestamp, &total_tv_start);
 
 	for (i = 0; i < 36; i++)
 		strcat(current_block, "0");
@@ -3502,10 +3612,6 @@ int main (int argc, char *argv[])
 		gpus[gpu].is_gpu = 1;
 		gpus[gpu].cpu_gpu = gpu;
 
-		/* Skip devices not set to mine */
-		if (!gpu_devices[gpu])
-			continue;
-
 		thr = &thr_info[i];
 		thr->id = i;
 		thr->cgpu = &gpus[gpu];
@@ -3513,6 +3619,11 @@ int main (int argc, char *argv[])
 		thr->q = tq_new();
 		if (!thr->q)
 			quit(1, "tq_new failed in starting gpu mining threads");
+
+		/* Enable threads for devices set not to mine but disable
+		 * their queue in case we wish to enable them later*/
+		if (!gpu_devices[gpu])
+			tq_freeze(thr->q);
 
 		applog(LOG_INFO, "Init GPU thread %i", i);
 		clStates[i] = initCl(gpu, name, sizeof(name));
@@ -3527,10 +3638,14 @@ int main (int argc, char *argv[])
 
 		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr)))
 			quit(1, "thread %d create failed", i);
+		gpus[gpu].alive = true;
+
 		i++;
 	}
 
 	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
+#else
+	opt_g_threads = 0;
 #endif
 
 	/* start CPU mining threads */

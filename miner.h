@@ -145,6 +145,7 @@ struct cgpu_info {
 	unsigned int getworks;
 	double efficiency;
 	double utility;
+	bool alive;
 };
 
 struct thr_info {
