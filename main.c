@@ -2179,7 +2179,7 @@ static bool queue_request(void)
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to tq_pop in queue_request");
+		applog(LOG_ERR, "Failed to calloc wc in queue_request");
 		return false;
 	}
 
@@ -2617,10 +2617,12 @@ static void *miner_thread(void *userdata)
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
 		if (!requested && (diff.tv_sec >= request_interval)) {
+			thread_reportout(mythr);
 			if (unlikely(!queue_request())) {
 				applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
 				goto out;
 			}
+			thread_reportin(mythr);
 			requested = true;
 		}
 
@@ -2634,6 +2636,8 @@ static void *miner_thread(void *userdata)
 	}
 
 out:
+	thread_reportin(mythr);
+	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
 	tq_freeze(mythr->q);
 
 	return NULL;
@@ -2920,10 +2924,12 @@ static void *gpuminer_thread(void *userdata)
 				hash_div = (MAXTHREADS / total_hashes) ? : 1;
 #endif
 			if (diff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
+				thread_reportout(mythr);
 				if (unlikely(!queue_request())) {
 					applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
 					goto out;
 				}
+				thread_reportin(mythr);
 				requested = true;
 			}
 		}
@@ -2935,6 +2941,8 @@ static void *gpuminer_thread(void *userdata)
 		}
 	}
 out:
+	thread_reportin(mythr);
+	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
 	tq_freeze(mythr->q);
 
 	return NULL;
