@@ -1212,13 +1212,13 @@ static bool stale_work(struct work *work)
 	bool ret = false;
 	char *hexstr;
 
+	gettimeofday(&now, NULL);
+	if ((now.tv_sec - work->tv_staged.tv_sec) > opt_scantime)
+		return true;
+
 	/* Only use the primary pool for determination as the work may
 	 * interleave at times of new blocks */
 	if (work->pool != current_pool())
-		return ret;
-
-	gettimeofday(&now, NULL);
-	if ((now.tv_sec - work->tv_staged.tv_sec) > opt_scantime)
 		return ret;
 
 	hexstr = bin2hex(work->data, 36);
@@ -2203,12 +2203,24 @@ static bool queue_request(void)
 	return true;
 }
 
+static void discard_work(struct work *work)
+{
+	if (!work->clone) {
+		if (work->pool)
+			work->pool->discarded_work++;
+		total_discarded++;
+		if (opt_debug)
+			applog(LOG_DEBUG, "Discarded cloned work");
+	} else if (opt_debug)
+		applog(LOG_DEBUG, "Discarded work");
+	free(work);
+}
+
 static void discard_staged(void)
 {
 	struct timespec abstime = {};
 	struct timeval now;
 	struct work *work_heap;
-	struct pool *pool;
 
 	/* Just in case we fell in a hole and missed a queue filling */
 	if (unlikely(!requests_staged()))
@@ -2221,11 +2233,8 @@ static void discard_staged(void)
 	if (unlikely(!work_heap))
 		return;
 
-	pool = work_heap->pool;
-	free(work_heap);
+	discard_work(work_heap);
 	dec_queued();
-	pool->discarded_work++;
-	total_discarded++;
 }
 
 static void flush_requests(void)
@@ -2290,7 +2299,7 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 	if ((uint64_t)work->blk.nonce + hash_inc < MAXTHREADS) {
 		/* Don't keep handing it out if it's getting old, but try to
 		 * roll it instead */
-		if ((now->tv_sec - work->tv_staged.tv_sec) > opt_scantime * 2 / 3) {
+		if ((now->tv_sec - work->tv_staged.tv_sec) > opt_scantime) {
 			if (!can_roll(work))
 				return false;
 			else {
@@ -2366,6 +2375,11 @@ retry:
 		pool->localgen_occasions++;
 		total_lo++;
 		pool_died(pool);
+		goto retry;
+	}
+
+	if (stale_work(work_heap)) {
+		discard_work(work_heap);
 		goto retry;
 	}
 
