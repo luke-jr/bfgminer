@@ -184,6 +184,20 @@ static inline void swap256(void *dest_p, const void *src_p)
 	dest[7] = src[0];
 }
 
+extern void quit(int status, const char *format, ...);
+
+static inline void mutex_lock(pthread_mutex_t *lock)
+{
+	if (unlikely(pthread_mutex_lock(lock)))
+		quit(1, "WTF MUTEX ERROR ON LOCK!");
+}
+
+static inline void mutex_unlock(pthread_mutex_t *lock)
+{
+	if (unlikely(pthread_mutex_unlock(lock)))
+		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
+}
+
 struct pool;
 
 extern bool opt_debug;

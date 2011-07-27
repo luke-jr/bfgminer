@@ -284,10 +284,10 @@ static bool pool_tset(struct pool *pool, bool *var)
 {
 	bool ret;
 
-	pthread_mutex_lock(&pool->pool_lock);
+	mutex_lock(&pool->pool_lock);
 	ret = *var;
 	*var = true;
-	pthread_mutex_unlock(&pool->pool_lock);
+	mutex_unlock(&pool->pool_lock);
 	return ret;
 }
 
@@ -295,10 +295,10 @@ static bool pool_tclear(struct pool *pool, bool *var)
 {
 	bool ret;
 
-	pthread_mutex_lock(&pool->pool_lock);
+	mutex_lock(&pool->pool_lock);
 	ret = *var;
 	*var = false;
-	pthread_mutex_unlock(&pool->pool_lock);
+	mutex_unlock(&pool->pool_lock);
 	return ret;
 }
 
@@ -306,9 +306,9 @@ static struct pool *current_pool(void)
 {
 	struct pool *pool;
 
-	pthread_mutex_lock(&control_lock);
+	mutex_lock(&control_lock);
 	pool = currentpool;
-	pthread_mutex_unlock(&control_lock);
+	mutex_unlock(&control_lock);
 	return pool;
 }
 
@@ -831,9 +831,9 @@ static void print_status(int thr_id)
 	if (!curses_active)
 		text_print_status(thr_id);
 	else {
-		pthread_mutex_lock(&curses_lock);
+		mutex_lock(&curses_lock);
 		curses_print_status(thr_id);
-		pthread_mutex_unlock(&curses_lock);
+		mutex_unlock(&curses_lock);
 	}
 }
 
@@ -865,24 +865,24 @@ static void wlogprint(const char *f, ...)
 {
 	va_list ap;
 
-	pthread_mutex_lock(&curses_lock);
+	mutex_lock(&curses_lock);
 
 	va_start(ap, f);
 	vw_printw(logwin, f, ap);
 	va_end(ap);
 	wrefresh(logwin);
 
-	pthread_mutex_unlock(&curses_lock);
+	mutex_unlock(&curses_lock);
 }
 
 void log_curses(const char *f, va_list ap)
 {
 	if (curses_active) {
 		if (!opt_loginput) {
-			pthread_mutex_lock(&curses_lock);
+			mutex_lock(&curses_lock);
 			vw_printw(logwin, f, ap);
 			wrefresh(logwin);
-			pthread_mutex_unlock(&curses_lock);
+			mutex_unlock(&curses_lock);
 		}
 	} else
 		vprintf(f, ap);
@@ -890,10 +890,10 @@ void log_curses(const char *f, va_list ap)
 
 static void clear_logwin(void)
 {
-	pthread_mutex_lock(&curses_lock);
+	mutex_lock(&curses_lock);
 	wclear(logwin);
 	wrefresh(logwin);
-	pthread_mutex_unlock(&curses_lock);
+	mutex_unlock(&curses_lock);
 }
 
 static bool submit_upstream_work(const struct work *work)
@@ -1287,7 +1287,7 @@ static bool workio_submit_work(struct workio_cmd *wc)
 
 static void inc_staged(struct pool *pool, int inc, bool lp)
 {
-	pthread_mutex_lock(&stgd_lock);
+	mutex_lock(&stgd_lock);
 	if (lp) {
 		lp_staged += inc;
 		total_staged += inc;
@@ -1295,23 +1295,23 @@ static void inc_staged(struct pool *pool, int inc, bool lp)
 		--lp_staged;
 	else
 		total_staged += inc;
-	pthread_mutex_unlock(&stgd_lock);
+	mutex_unlock(&stgd_lock);
 }
 
 static void dec_staged(int inc)
 {
-	pthread_mutex_lock(&stgd_lock);
+	mutex_lock(&stgd_lock);
 	total_staged -= inc;
-	pthread_mutex_unlock(&stgd_lock);
+	mutex_unlock(&stgd_lock);
 }
 
 static int requests_staged(void)
 {
 	int ret;
 
-	pthread_mutex_lock(&stgd_lock);
+	mutex_lock(&stgd_lock);
 	ret = total_staged;
-	pthread_mutex_unlock(&stgd_lock);
+	mutex_unlock(&stgd_lock);
 	return ret;
 }
 
@@ -1319,9 +1319,9 @@ static int real_staged(void)
 {
 	int ret;
 
-	pthread_mutex_lock(&stgd_lock);
+	mutex_lock(&stgd_lock);
 	ret = total_staged - lp_staged;
-	pthread_mutex_unlock(&stgd_lock);
+	mutex_unlock(&stgd_lock);
 	return ret;
 }
 
@@ -1354,7 +1354,7 @@ static void switch_pools(struct pool *selected)
 	struct pool *pool, *last_pool;
 	int i, pool_no;
 
-	pthread_mutex_lock(&control_lock);
+	mutex_lock(&control_lock);
 	last_pool = currentpool;
 	pool_no = currentpool->pool_no;
 
@@ -1399,7 +1399,7 @@ static void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
-	pthread_mutex_unlock(&control_lock);
+	mutex_unlock(&control_lock);
 
 	if (pool != last_pool) {
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
@@ -1407,9 +1407,9 @@ static void switch_pools(struct pool *selected)
 	}
 
 	/* Reset the queued amount to allow more to be queued for the new pool */
-	pthread_mutex_lock(&qd_lock);
+	mutex_lock(&qd_lock);
 	total_queued = 0;
-	pthread_mutex_unlock(&qd_lock);
+	mutex_unlock(&qd_lock);
 
 	inc_staged(pool, 1, true);
 }
@@ -1521,7 +1521,7 @@ static void display_pool_summary(struct pool *pool)
 {
 	double efficiency = 0.0;
 
-	pthread_mutex_lock(&curses_lock);
+	mutex_lock(&curses_lock);
 	wlog("Pool: %s\n", pool->rpc_url);
 	wlog(" Queued work requests: %d\n", pool->getwork_requested);
 	wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
@@ -1537,7 +1537,7 @@ static void display_pool_summary(struct pool *pool)
 	wlog(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
 	wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
 	wrefresh(logwin);
-	pthread_mutex_unlock(&curses_lock);
+	mutex_unlock(&curses_lock);
 }
 
 /* We can't remove the memory used for this struct pool because there may
@@ -2031,7 +2031,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	}
 
 	/* Totals are updated by all threads so can race without locking */
-	pthread_mutex_lock(&hash_lock);
+	mutex_lock(&hash_lock);
 	gettimeofday(&temp_tv_end, NULL);
 	timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
 
@@ -2063,24 +2063,24 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	local_mhashes_done = 0;
 out_unlock:
-	pthread_mutex_unlock(&hash_lock);
+	mutex_unlock(&hash_lock);
 }
 
 /* This is overkill, but at least we'll know accurately how much work is
  * queued to prevent ever being left without work */
 static void inc_queued(void)
 {
-	pthread_mutex_lock(&qd_lock);
+	mutex_lock(&qd_lock);
 	total_queued++;
-	pthread_mutex_unlock(&qd_lock);
+	mutex_unlock(&qd_lock);
 }
 
 static void dec_queued(void)
 {
-	pthread_mutex_lock(&qd_lock);
+	mutex_lock(&qd_lock);
 	if (total_queued > 0)
 		total_queued--;
-	pthread_mutex_unlock(&qd_lock);
+	mutex_unlock(&qd_lock);
 	dec_staged(1);
 }
 
@@ -2088,9 +2088,9 @@ static int requests_queued(void)
 {
 	int ret;
 
-	pthread_mutex_lock(&qd_lock);
+	mutex_lock(&qd_lock);
 	ret = total_queued;
-	pthread_mutex_unlock(&qd_lock);
+	mutex_unlock(&qd_lock);
 	return ret;
 }
 
@@ -3083,8 +3083,6 @@ static void stop_longpoll(void)
 	have_longpoll = false;
 }
 
-static void quit(int status, const char *format, ...);
-
 static void start_longpoll(void)
 {
 	struct thr_info *thr = &thr_info[longpoll_thr_id];
@@ -3244,7 +3242,7 @@ static void *watchdog_thread(void *userdata)
 
 		if (curses_active) {
 			statwin ^= true;
-			pthread_mutex_lock(&curses_lock);
+			mutex_lock(&curses_lock);
 			for (i = 0; i < mining_threads; i++)
 				curses_print_status(i);
 			if (statwin)
@@ -3253,7 +3251,7 @@ static void *watchdog_thread(void *userdata)
 				check_logwinsize();
 				redrawwin(logwin);
 			}
-			pthread_mutex_unlock(&curses_lock);
+			mutex_unlock(&curses_lock);
 		}
 
 		if (unlikely(work_restart[watchdog_thr_id].restart)) {
@@ -3378,7 +3376,7 @@ static void print_summary(void)
 	printf("\n");
 }
 
-static void quit(int status, const char *format, ...)
+void quit(int status, const char *format, ...)
 {
 	va_list ap;
 
