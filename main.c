@@ -1478,16 +1478,7 @@ static void *stage_thread(void *userdata)
 		if (!work->cloned && !work->clone)
 			gettimeofday(&work->tv_staged, NULL);
 
-		/* If the work is cloned it has already gone to get_work once
-		 * so it must be used ASAP before it goes stale so put it at
-		 * the head of the list */
-		if (work->cloned) {
-			if (unlikely(!tq_push_head(getq, work))) {
-				applog(LOG_ERR, "Failed to tq_push work in stage_thread");
-				ok = false;
-				break;
-			}
-		} else if (unlikely(!tq_push(getq, work))) {
+		if (unlikely(!tq_push(getq, work))) {
 			applog(LOG_ERR, "Failed to tq_push work in stage_thread");
 			ok = false;
 			break;
@@ -2327,7 +2318,7 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 	return false;
 }
 
-static bool get_work(struct work *work, bool queued, struct thr_info *thr,
+static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 		     const int thr_id, uint32_t hash_div)
 {
 	struct timespec abstime = {};
@@ -2342,10 +2333,11 @@ static bool get_work(struct work *work, bool queued, struct thr_info *thr,
 	thread_reportout(thr);
 retry:
 	pool = current_pool();
-	if (unlikely(!queued && !queue_request())) {
+	if (unlikely(!requested && !queue_request())) {
 		applog(LOG_WARNING, "Failed to queue_request in get_work");
 		goto out;
 	}
+	requested = false;
 
 	if (!requests_staged() && can_roll(work)) {
 		/* Only print this message once each time we shift to localgen */
@@ -2387,8 +2379,8 @@ retry:
 		goto retry;
 	}
 
-	dec_queued();
 	if (stale_work(work_heap)) {
+		dec_queued();
 		discard_work(work_heap);
 		goto retry;
 	}
@@ -2404,10 +2396,12 @@ retry:
 	 * should we divide the same work up again. Make the work we're
 	 * handing out be clone */
 	if (divide_work(&now, work_heap, hash_div)) {
-		tq_push(thr_info[stage_thr_id].q, work_heap);
+		tq_push_head(getq, work_heap);
 		work->clone = true;
-	} else
+	} else {
+		dec_queued();
 		free(work_heap);
+	}
 
 	ret = true;
 out:
