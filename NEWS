@@ -1,3 +1,36 @@
+Version 1.5.1
+
+- Two redraws in a row cause a crash in old libncurses so just do one redraw
+using the main window.
+- Don't adjust hash_div only up for GPUs. Disable hash_div adjustment for GPUs.
+- Only free the thread structures if the thread still exists.
+- Update both windows separately, but not at the same time to prevent the double
+refresh crash that old libncurses has.     Do the window resize check only when
+about to redraw the log window to minimise ncurses cpu usage.
+- Abstract out the decay time function and use it to make hash_div a rolling
+average so it doesn't change too abruptly and divide work in chunks large enough
+to guarantee they won't overlap.
+- Sanity check to prove locking.
+- Don't take more than one lock at a time.
+- Make threads report out when they're queueing a request and report if they've
+failed.
+- Make cpu mining work submission asynchronous as well.
+- Properly detect stale work based on time from staging and discard instead of
+handing on, but be more lax about how long work can be divided for up to the
+scantime.
+- Do away with queueing work separately at the start and let each thread grab
+its own work as soon as it's ready.
+- Don't put an extra work item in the queue as each new device thread will do so
+itself.
+- Make sure to decrease queued count if we discard the work.
+- Attribute split work as local work generation.
+- If work has been cloned it is already at the head of the list and when being
+reinserted into the queue it should be placed back at the head of the list.
+- Dividing work is like the work is never removed at all so treat it as such.
+However the queued bool needs to be reset to ensure we *can* request more work
+even if we didn't initially.
+
+
 Version 1.5.0 - July 26, 2011
 
 - Increase efficiency of slow mining threads such as CPU miners dramatically. Do
