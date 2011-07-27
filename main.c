@@ -804,13 +804,21 @@ static void curses_print_status(int thr_id)
 		struct cgpu_info *cgpu = &gpus[gpu];
 
 		wmove(statuswin, gpucursor + gpu, 0);
-		if (!gpu_devices[gpu] || !cgpu->alive)
-			wattron(logwin, A_DIM);
-		wprintw(statuswin, " GPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
-			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
-			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->efficiency, cgpu->utility);
-		wattroff(logwin, A_DIM);
+		if (!cgpu->alive)
+			wprintw(statuswin, " GPU %d: [DEAD / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+				gpu, cgpu->total_mhashes / total_secs,
+				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+				cgpu->efficiency, cgpu->utility);
+		else  if (!gpu_devices[gpu])
+			wprintw(statuswin, " GPU %d: [DISABLED / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+				gpu, cgpu->total_mhashes / total_secs,
+				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+				cgpu->efficiency, cgpu->utility);
+		else
+			wprintw(statuswin, " GPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+				gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
+				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+				cgpu->efficiency, cgpu->utility);
 		wclrtoeol(statuswin);
 	} else if (thr_id >= gpu_threads) {
 		int cpu = dev_from_id(thr_id);
@@ -3422,16 +3430,11 @@ static void *watchdog_thread(void *userdata)
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || !gpu_devices[i] || !gpus[i].alive)
 				continue;
-	
+
 			if (now.tv_sec - thr->last.tv_sec > 60) {
 				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[i].alive = false;
-				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
-				reinit_device(thr->cgpu);
-				/* Only initialise the device once since there
-				 * will be multiple threads on the same device
-				 * and it will be declared !alive */
-				break;
+				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared DEAD!", i, gpus[i]);
 			}
 		}
 	}
