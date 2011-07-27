@@ -925,7 +925,7 @@ static bool submit_upstream_work(const struct work *work)
 		hexstr);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "DBG: sending RPC call: %s", s);
+		applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
 
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, pool);
@@ -1036,6 +1036,9 @@ static bool get_upstream_work(struct work *work, bool lagging)
 	}
 
 	pool = select_pool(lagging);
+	if (opt_debug)
+		applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
+
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			    want_longpoll, false, pool);
 	if (unlikely(!val)) {
@@ -1140,6 +1143,9 @@ void kill_work(void)
 	wc->cmd = WC_DIE;
 	wc->thr = 0;
 
+	if (opt_debug)
+		applog(LOG_DEBUG, "Pushing die request to work thread");
+
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
 		applog(LOG_ERR, "Failed to tq_push work in kill_work");
 		exit (1);
@@ -1182,6 +1188,9 @@ static void *get_work_thread(void *userdata)
 			opt_fail_pause);
 		sleep(opt_fail_pause);
 	}
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Pushing work to requesting thread");
 
 	/* send work to requesting thread */
 	if (unlikely(!tq_push(thr_info[stage_thr_id].q, ret_work))) {
@@ -1477,6 +1486,9 @@ static void *stage_thread(void *userdata)
 		test_work_current(work);
 		if (!work->cloned && !work->clone)
 			gettimeofday(&work->tv_staged, NULL);
+
+		if (opt_debug)
+			applog(LOG_DEBUG, "Pushing work to getwork queue");
 
 		if (unlikely(!tq_push(getq, work))) {
 			applog(LOG_ERR, "Failed to tq_push work in stage_thread");
@@ -1895,6 +1907,9 @@ retry:
 			if (dev_from_id(i) != selected)
 				continue;
 			thr = &thr_info[i];
+			if (opt_debug)
+				applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+
 			tq_push(thr->q, &ping);
 		}
 	} if (!strncasecmp(&input, "d", 1)) {
@@ -2143,6 +2158,9 @@ static bool pool_active(struct pool *pool)
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
+			if (opt_debug)
+				applog(LOG_DEBUG, "Pushing pooltest work to base pool");
+
 			tq_push(thr_info[stage_thr_id].q, work);
 			total_getworks++;
 			pool->getwork_requested++;
@@ -2209,6 +2227,9 @@ static bool queue_request(void)
 	 * gathered from another pool if possible */
 	if (rq > (maxq * 2 / 3) && !rs)
 		wc->lagging = true;
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
 	/* send work request to workio thread */
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
@@ -2413,6 +2434,9 @@ retry:
 	 * should we divide the same work up again. Make the work we're
 	 * handing out be clone */
 	if (divide_work(&now, work_heap, hash_div)) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Pushing divided work to get queue head");
+
 		tq_push_head(getq, work_heap);
 		work->clone = true;
 	} else {
@@ -2457,6 +2481,9 @@ static bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
 	memcpy(wc->u.work, work_in, sizeof(*work_in));
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Pushing submit work to work thread");
 
 	/* send solution to workio thread */
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
@@ -2931,6 +2958,8 @@ static void *gpuminer_thread(void *userdata)
 			memset(res, 0, BUFFERSIZE);
 
 			gettimeofday(&tv_workstart, NULL);
+			if (opt_debug)
+				applog(LOG_DEBUG, "getwork thread %d", thr_id);
 			/* obtain new work from internal workio thread */
 			if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
@@ -2943,8 +2972,6 @@ static void *gpuminer_thread(void *userdata)
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work_restart[thr_id].restart = 0;
 
-			if (opt_debug)
-				applog(LOG_DEBUG, "getwork thread %d", thr_id);
 			/* Flushes the writebuffer set with CL_FALSE above */
 			clFinish(clState->commandQueue);
 		}
@@ -3051,6 +3078,9 @@ static void convert_to_work(json_t *val)
 		return;
 	}
 	work->pool = current_pool();
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Pushing converted work to stage thread");
 
 	if (unlikely(!tq_push(thr_info[stage_thr_id].q, work)))
 		applog(LOG_ERR, "Could not tq_push work in convert_to_work");
@@ -3255,6 +3285,9 @@ static void *reinit_gpu(void *userdata)
 		}
 		/* Try to re-enable it */
 		gpu_devices[gpu] = true;
+		if (opt_debug)
+			applog(LOG_DEBUG, "Pushing ping to thread %d", thr_id);
+
 		tq_push(thr->q, &ping);
 
 		applog(LOG_WARNING, "Thread %d restarted", thr_id);
@@ -3799,8 +3832,12 @@ int main (int argc, char *argv[])
 
 		/* Enable threads for devices set not to mine but disable
 		 * their queue in case we wish to enable them later*/
-		if (gpu_devices[gpu])
+		if (gpu_devices[gpu]) {
+			if (opt_debug)
+				applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+
 			tq_push(thr->q, &ping);
+		}
 
 		applog(LOG_INFO, "Init GPU thread %i", i);
 		clStates[i] = initCl(gpu, name, sizeof(name));
