@@ -1,4 +1,4 @@
-Version 1.5.1
+Version 1.5.1 - July 27, 2011
 
 - Two redraws in a row cause a crash in old libncurses so just do one redraw
 using the main window.
@@ -29,6 +29,9 @@ reinserted into the queue it should be placed back at the head of the list.
 - Dividing work is like the work is never removed at all so treat it as such.
 However the queued bool needs to be reset to ensure we *can* request more work
 even if we didn't initially.
+- Make the display options clearer.
+- Add debugging output to tq_push calls.
+- Add debugging output to all tq_pop calls.
 
 
 Version 1.5.0 - July 26, 2011
