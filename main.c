@@ -3353,13 +3353,6 @@ static void *watchdog_thread(void *userdata)
 				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[i].alive = false;
 				applog(LOG_ERR, "Attempting to restart thread %d, idle for more than 60 seconds", i);
-				/* Create one mandatory work item */
-				inc_staged(current_pool(), 1, true);
-				if (unlikely(!queue_request())) {
-					applog(LOG_ERR, "Failed to queue_request in watchdog_thread");
-					kill_work();
-					break;
-				}
 				reinit_device(thr->cgpu);
 				/* Only initialise the device once since there
 				 * will be multiple threads on the same device
