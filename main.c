@@ -1478,7 +1478,16 @@ static void *stage_thread(void *userdata)
 		if (!work->cloned && !work->clone)
 			gettimeofday(&work->tv_staged, NULL);
 
-		if (unlikely(!tq_push(getq, work))) {
+		/* If the work is cloned it has already gone to get_work once
+		 * so it must be used ASAP before it goes stale so put it at
+		 * the head of the list */
+		if (work->cloned) {
+			if (unlikely(!tq_push_head(getq, work))) {
+				applog(LOG_ERR, "Failed to tq_push work in stage_thread");
+				ok = false;
+				break;
+			}
+		} else if (unlikely(!tq_push(getq, work))) {
 			applog(LOG_ERR, "Failed to tq_push work in stage_thread");
 			ok = false;
 			break;
