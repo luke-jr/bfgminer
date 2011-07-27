@@ -2303,7 +2303,6 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 			if (!can_roll(work))
 				return false;
 			else {
-				local_work++;
 				roll_work(work);
 				return true;
 			}
@@ -2311,6 +2310,7 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 		/* Okay we can divide it up */
 		work->blk.nonce += hash_inc;
 		work->cloned = true;
+		local_work++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "Successfully divided work");
 		return true;
