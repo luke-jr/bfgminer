@@ -2436,6 +2436,42 @@ err_out:
 	return false;
 }
 
+struct swa {
+	struct thr_info *thr;
+	const struct work *work_in;
+};
+
+static void *swasync_thread(void *userdata)
+{
+	struct swa *swa = (struct swa *)userdata;
+
+	/* Return value ignored */
+	submit_work_sync(swa->thr, swa->work_in);
+	free(swa);
+	return NULL;
+}
+
+static bool submit_work_async(struct thr_info *thr, const struct work *work_in)
+{
+	pthread_t sw_thread;
+	struct swa *swa;
+
+	swa = malloc(sizeof(struct swa));
+	if (unlikely(!swa)) {
+		applog(LOG_ERR, "Failed to malloc swa in submit_work_async");
+		return false;
+	}
+
+	swa->thr = thr;
+	swa->work_in = work_in;
+
+	if (unlikely(pthread_create(&sw_thread, NULL, swasync_thread, (void *)swa))) {
+		applog(LOG_ERR, "Failed to create swasync_thread");
+		return false;
+	}
+	return true;
+}
+
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	work->data[64+12+0] = (nonce>>0) & 0xff;
@@ -2608,7 +2644,7 @@ static void *miner_thread(void *userdata)
 		if (unlikely(rc)) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
-			if (unlikely(!submit_work_sync(mythr, &work))) {
+			if (unlikely(!submit_work_async(mythr, &work))) {
 				applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
 				break;
 			}
