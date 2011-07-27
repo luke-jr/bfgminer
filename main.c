@@ -2378,6 +2378,7 @@ retry:
 		goto retry;
 	}
 
+	dec_queued();
 	if (stale_work(work_heap)) {
 		discard_work(work_heap);
 		goto retry;
@@ -2387,7 +2388,6 @@ retry:
 	/* If we make it here we have succeeded in getting fresh work */
 	if (pool_tclear(pool, &pool->idle))
 		pool_resus(pool);
-	dec_queued();
 
 	memcpy(work, work_heap, sizeof(*work));
 
