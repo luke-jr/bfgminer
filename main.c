@@ -1703,30 +1703,46 @@ static void display_options(void)
 	immedok(logwin, true);
 retry:
 	clear_logwin();
-	wlogprint("\nToggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug\n");
-	wlogprint("[L]og interval [C]lear\n");
+	wlogprint("\n[D]ebug:%s [S]ilent:%s [V]erbose:%s [R]PC debug:%s [L]og interval:%d\n",
+		opt_debug ? "on" : "off",
+		opt_quiet ? "on" : "off",
+		opt_log_output ? "on" : "off",
+		opt_protocol ? "on" : "off",
+		opt_log_interval);
+	wlogprint("[N]ormal [C]lear\n");
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 	if (!strncasecmp(&input, "s", 1)) {
 		opt_quiet ^= true;
-		applog(LOG_WARNING, "Silent mode %s", opt_quiet ? "enabled" : "disabled");
+		clear_logwin();
+		wlogprint("Silent mode %s\n", opt_quiet ? "enabled" : "disabled");
 	} else if (!strncasecmp(&input, "v", 1)) {
 		opt_log_output ^= true;
-		applog(LOG_WARNING, "Verbose mode %s", opt_log_output ? "enabled" : "disabled");
+		if (opt_log_output)
+			opt_quiet = false;
+		clear_logwin();
+		wlogprint("Verbose mode %s\n", opt_log_output ? "enabled" : "disabled");
 	} else if (!strncasecmp(&input, "n", 1)) {
 		opt_log_output = false;
 		opt_debug = false;
 		opt_quiet = false;
 		opt_protocol = false;
-		applog(LOG_WARNING, "Output mode reset to normal");
+		clear_logwin();
+		wlogprint("Output mode reset to normal\n");
 	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_debug ^= true;
-		if (opt_debug)
+		if (opt_debug) {
 			opt_log_output = true;
-		applog(LOG_WARNING, "Debug mode %s", opt_debug ? "enabled" : "disabled");
+			opt_quiet = false;
+		}
+		clear_logwin();
+		wlogprint("Debug mode %s\n", opt_debug ? "enabled" : "disabled");
 	} else if (!strncasecmp(&input, "r", 1)) {
 		opt_protocol ^= true;
-		applog(LOG_WARNING, "RPC protocol debugging %s", opt_protocol ? "enabled" : "disabled");
+		if (opt_protocol)
+			opt_quiet = false;
+		clear_logwin();
+		wlogprint("RPC protocol debugging %s\n", opt_protocol ? "enabled" : "disabled");
 	} else if (!strncasecmp(&input, "c", 1))
 		clear_logwin();
 	else if (!strncasecmp(&input, "l", 1)) {
@@ -1736,9 +1752,10 @@ retry:
 			goto retry;
 		}
 		opt_log_interval = selected;
-	}
+		clear_logwin();
+		wlogprint("Log interval set to %d seconds\n", opt_log_interval);
+	} else clear_logwin();
 
-	clear_logwin();
 	immedok(logwin, false);
 	opt_loginput = false;
 }
