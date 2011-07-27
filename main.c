@@ -2509,7 +2509,7 @@ static void *miner_thread(void *userdata)
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 	int request_interval;
-	bool requested = true;
+	bool requested = false;
 	uint32_t hash_div = 1;
 	double hash_divfloat = 1.0;
 
@@ -2815,7 +2815,7 @@ static void *gpuminer_thread(void *userdata)
 	/* Request the next work item at 2/3 of the scantime */
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
-	bool requested = true;
+	bool requested = false;
 	uint32_t total_hashes = 0, hash_div = 1;
 
 	switch (chosen_kernel) {
@@ -3839,14 +3839,6 @@ int main (int argc, char *argv[])
 	/* start wakeup thread */
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
 		quit(1, "wakeup thread create failed");
-
-	/* Now that everything's ready put enough work in the queue */
-	for (i = 0; i < mining_threads; i++) {
-		if (unlikely(!queue_request()))
-			quit(1, "Failed to queue_request in main");
-		if (!opt_quiet && active_device(i))
-			print_status(i);
-	}
 
 	/* Create curses input thread for keyboard input */
 	input_thr_id = mining_threads + 4;
