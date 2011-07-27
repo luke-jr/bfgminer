@@ -1476,6 +1476,9 @@ static void *stage_thread(void *userdata)
 	while (ok) {
 		struct work *work = NULL;
 
+		if (opt_debug)
+			applog(LOG_DEBUG, "Popping work to stage thread");
+
 		work = tq_pop(mythr->q, NULL);
 		if (unlikely(!work)) {
 			applog(LOG_ERR, "Failed to tq_pop in stage_thread");
@@ -1978,6 +1981,9 @@ static void *workio_thread(void *userdata)
 	while (ok) {
 		struct workio_cmd *wc;
 
+		if (opt_debug)
+			applog(LOG_DEBUG, "Popping work to work thread");
+
 		/* wait for workio_cmd sent to us, on our queue */
 		wc = tq_pop(mythr->q, NULL);
 		if (unlikely(!wc)) {
@@ -2267,6 +2273,9 @@ static void discard_staged(void)
 	gettimeofday(&now, NULL);
 	abstime.tv_sec = now.tv_sec + 60;
 
+	if (opt_debug)
+		applog(LOG_DEBUG, "Popping work to discard staged");
+
 	work_heap = tq_pop(getq, &abstime);
 	if (unlikely(!work_heap))
 		return;
@@ -2405,6 +2414,9 @@ retry:
 
 	gettimeofday(&now, NULL);
 	abstime.tv_sec = now.tv_sec + 60;
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Popping work from get queue to get work");
 
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(getq, &abstime);
@@ -2907,6 +2919,9 @@ static void *gpuminer_thread(void *userdata)
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 
 	mythr->cgpu->alive = true;
+	if (opt_debug)
+		applog(LOG_DEBUG, "Popping ping in gpuminer thread");
+
 	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
 	gettimeofday(&tv_workstart, NULL);
 	/* obtain new work from internal workio thread */
@@ -3033,6 +3048,9 @@ static void *gpuminer_thread(void *userdata)
 		if (unlikely(!gpu_devices[gpu])) {
 			applog(LOG_WARNING, "Thread %d being disabled\n", thr_id);
 			mythr->rolling = mythr->cgpu->rolling = 0;
+			if (opt_debug)
+				applog(LOG_DEBUG, "Popping wakeup ping in gpuminer thread");
+
 			tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
 			applog(LOG_WARNING, "Thread %d being re-enabled\n", thr_id);
 		}
@@ -3104,6 +3122,9 @@ static void *longpoll_thread(void *userdata)
 		applog(LOG_ERR, "CURL initialisation failed");
 		goto out;
 	}
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Popping hdr path in longpoll thread");
 
 	hdr_path = tq_pop(mythr->q, NULL);
 	if (!hdr_path) {
