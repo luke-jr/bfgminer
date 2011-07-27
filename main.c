@@ -742,6 +742,12 @@ static inline int dev_from_id(int thr_id)
 	return thr_info[thr_id].cgpu->cpu_gpu;
 }
 
+/* Simulate a rolling average by faking an exponential decay over 5 * log */
+static inline void decay_time(double *f, double fadd)
+{
+	*f = (fadd + *f * 0.9) / 1.9;
+}
+
 static WINDOW *mainwin, *statuswin, *logwin;
 static double total_secs = 0.1;
 static char statusline[256];
@@ -2013,14 +2019,14 @@ static void hashmeter(int thr_id, struct timeval *diff,
 				thr_id, hashes_done, hashes_done / secs);
 
 		/* Rolling average for each thread and each device */
-		thr->rolling = ((thr->rolling * 0.9) + (local_mhashes / secs)) / 1.9;
+		decay_time(&thr->rolling, local_mhashes / secs);
 		for (i = 0; i < mining_threads; i++) {
 			struct thr_info *th = &thr_info[i];
 
 			if (th->cgpu == cgpu)
 				thread_rolling += th->rolling;
 		}
-		cgpu->rolling = ((cgpu->rolling * 0.9) + thread_rolling) / 1.9;
+		decay_time(&cgpu->rolling, thread_rolling);
 		cgpu->total_mhashes += local_mhashes;
 	}
 
@@ -2037,8 +2043,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	gettimeofday(&total_tv_end, NULL);
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
-	/* Use a rolling average by faking an exponential decay over 5 * log */
-	rolling = ((rolling * 0.9) + (local_mhashes_done / local_secs)) / 1.9;
+	decay_time(&rolling, local_mhashes_done / local_secs);
 
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
@@ -2278,7 +2283,7 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 	if (hash_div < 3 || work->clone)
 		return false;
 
-	hash_inc = MAXTHREADS / (hash_div - 1);
+	hash_inc = MAXTHREADS / hash_div * 2;
 	if ((uint64_t)work->blk.nonce + hash_inc < MAXTHREADS) {
 		/* Don't keep handing it out if it's getting old, but try to
 		 * roll it instead */
@@ -2453,6 +2458,7 @@ static void *miner_thread(void *userdata)
 	int request_interval;
 	bool requested = true;
 	uint32_t hash_div = 1;
+	double hash_divfloat = 1.0;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -2616,7 +2622,8 @@ static void *miner_thread(void *userdata)
 		}
 
 		if (diff.tv_sec > opt_scantime) {
-			hash_div = (MAXTHREADS / total_hashes) ? : 1;
+			decay_time(&hash_divfloat , (double)((MAXTHREADS / total_hashes) ? : 1));
+			hash_div = hash_divfloat;
 			needs_work = true;
 		} else if (work_restart[thr_id].restart || stale_work(&work) ||
 			work.blk.nonce >= MAXTHREADS - hashes_done)
@@ -2820,7 +2827,7 @@ static void *gpuminer_thread(void *userdata)
 		gettimeofday(&tv_gpuend, NULL);
 		timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
 		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
-		gpu_ms_average = ((gpu_us / 1000) + gpu_ms_average * 0.9) / 1.9;
+		decay_time(&gpu_ms_average, gpu_us / 1000);
 		if (opt_dynamic) {
 			/* Try to not let the GPU be out for longer than 6ms, but
 			 * increase intensity when the system is idle, unless
