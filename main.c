@@ -1997,6 +1997,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	bool showlog = false;
 
 	/* Update the last time this thread reported in */
 	if (thr_id >= 0)
@@ -2040,6 +2041,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (total_diff.tv_sec < opt_log_interval)
 		/* Only update the total every opt_log_interval seconds */
 		goto out_unlock;
+	showlog = true;
 	gettimeofday(&total_tv_end, NULL);
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
@@ -2055,15 +2057,16 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 		opt_log_interval, rolling, total_mhashes_done / total_secs,
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
-	if (!curses_active) {
-		printf("%s          \r", statusline);
-		fflush(stdout);
-	} else
-		applog(LOG_INFO, "%s", statusline);
-
 	local_mhashes_done = 0;
 out_unlock:
 	mutex_unlock(&hash_lock);
+	if (showlog) {
+		if (!curses_active) {
+			printf("%s          \r", statusline);
+			fflush(stdout);
+		} else
+			applog(LOG_INFO, "%s", statusline);
+	}
 }
 
 /* This is overkill, but at least we'll know accurately how much work is
