@@ -809,7 +809,11 @@ static void curses_print_status(int thr_id)
 		int gpu = dev_from_id(thr_id);
 		struct cgpu_info *cgpu = &gpus[gpu];
 
+		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+		cgpu->efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
+
 		wmove(statuswin, gpucursor + gpu, 0);
+
 		if (!cgpu->alive)
 			wprintw(statuswin, " GPU %d: [DEAD / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 				gpu, cgpu->total_mhashes / total_secs,
@@ -830,7 +834,11 @@ static void curses_print_status(int thr_id)
 		int cpu = dev_from_id(thr_id);
 		struct cgpu_info *cgpu = &cpus[cpu];
 
+		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+		cgpu->efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
+
 		wmove(statuswin, cpucursor + cpu, 0);
+
 		wprintw(statuswin, " CPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
