@@ -2715,7 +2715,9 @@ static void *miner_thread(void *userdata)
 		if (diff.tv_sec && diff.tv_sec != cycle) {
 			max64 = work.blk.nonce +
 				((uint64_t)hashes_done * cycle) / diff.tv_sec;
-		} else
+		} else if (!diff.tv_sec)
+			max64 = work.blk.nonce + (hashes_done * 2);
+		else
 			max64 = work.blk.nonce + hashes_done;
 		if (max64 > 0xfffffffaULL)
 			max64 = 0xfffffffaULL;
