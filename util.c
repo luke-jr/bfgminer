@@ -124,7 +124,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 			tm.tm_sec,
 			fmt);
 		/* Only output to stderr if it's not going to the screen as well */
-		if (opt_log_output && !isatty(fileno((FILE *)stderr))) {
+		if (!isatty(fileno((FILE *)stderr))) {
 			va_list apc;
 
 			va_copy(apc, ap);
