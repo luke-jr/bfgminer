@@ -1,3 +1,20 @@
+
+- Restarting a hung GPU can hang the rest of the GPUs so just declare it dead
+and provide the information in the status.
+- The work length in the miner thread gets smaller but doesn't get bigger if
+it's under 1 second.     This could end up leading to CPU under-utilisation and
+lower and lower hash rates.     Fix it by increasing work length if it drops
+under 1 second.
+- Make the "quiet" mode still update the status and display errors, and add a
+new --real-quiet option which disables all output and can be set once while
+running.
+- Update utility and efficiency figures when displaying them.
+- Some Intel HD graphics support the opencl commands but return errors since
+they don't support opencl. Don't fail with them, just provide a warning and
+disable GPU mining.
+- Add http:// if it's not explicitly set for URL entries.
+
+
 Version 1.5.1 - July 27, 2011
 
 - Two redraws in a row cause a crash in old libncurses so just do one redraw
