@@ -400,7 +400,7 @@ static char *set_rr(enum pool_strategy *strategy)
 	return NULL;
 }
 
-static char *set_url(const char *arg, char **p)
+static char *set_url(char *arg, char **p)
 {
 	struct pool *pool;
 
@@ -411,8 +411,16 @@ static char *set_url(const char *arg, char **p)
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
-	    strncmp(arg, "https://", 8))
-		return "URL must start with http:// or https://";
+	    strncmp(arg, "https://", 8)) {
+		char *httpinput;
+
+		httpinput = malloc(255);
+		if (!httpinput)
+			quit(1, "Failed to malloc httpinput");
+		strcpy(httpinput, "http://");
+		strncat(httpinput, arg, 248);
+		pool->rpc_url = httpinput;
+	}
 
 	return NULL;
 }
@@ -3579,10 +3587,20 @@ static bool input_pool(bool live)
 	wlogprint("Input server details.\n");
 
 	url = curses_input("URL");
+	if (!url)
+		goto out;
+
 	if (strncmp(url, "http://", 7) &&
 	    strncmp(url, "https://", 8)) {
-		applog(LOG_ERR, "URL must start with http:// or https://");
-		goto out;
+		char *httpinput;
+
+		httpinput = malloc(255);
+		if (!httpinput)
+			quit(1, "Failed to malloc httpinput");
+		strcpy(httpinput, "http://");
+		strncat(httpinput, url, 248);
+		free(url);
+		url = httpinput;
 	}
 
 	user = curses_input("Username");
