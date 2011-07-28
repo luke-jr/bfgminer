@@ -185,3 +185,10 @@ cgminer will log to stderr if it detects stderr is being redirected to a file.
 To enable logging simply add 2>logfile.txt to your command line and logfile.txt
 will contain the logged output at the log level you specify (normal, verbose,
 debug etc.)
+
+In other words if you would normally use:
+./cgminer -o xxx -u yyy -p zzz
+if you use
+./cgminer -o xxx -u yyy -p zzz 2>logfile.txt
+it will log to a file called logfile.txt and otherwise work the same.
+
