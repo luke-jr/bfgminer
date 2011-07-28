@@ -226,8 +226,9 @@ static int total_urls, total_users, total_passes, total_userpasses;
 static bool curses_active = false;
 
 static char current_block[37];
+static char *current_hash;
 static char datestamp[40];
-static char blockdate[40];
+static char blocktime[30];
 
 static char *opt_kernel = NULL;
 
@@ -252,6 +253,18 @@ void get_datestamp(char *f, struct timeval *tv)
 		tm.tm_min,
 		tm.tm_sec);
 }
+
+void get_timestamp(char *f, struct timeval *tv)
+{
+	struct tm tm;
+
+	localtime_r(&tv->tv_sec, &tm);
+	sprintf(f, "[%02d:%02d:%02d]",
+		tm.tm_hour,
+		tm.tm_min,
+		tm.tm_sec);
+}
+
 
 static void applog_and_exit(const char *fmt, ...)
 {
@@ -805,7 +818,7 @@ static void curses_print_status(int thr_id)
 		wprintw(statuswin, " Connected to %s as user %s", pool->rpc_url, pool->rpc_user);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 5, 0);
-	wprintw(statuswin, " Block %s  started: %s", current_block + 4, blockdate);
+	wprintw(statuswin, " Block: %s...  Started: %s", current_hash, blocktime);
 	wmove(statuswin, 6, 0);
 	whline(statuswin, '-', 80);
 	wmove(statuswin, logstart - 1, 0);
@@ -1456,13 +1469,25 @@ static void switch_pools(struct pool *selected)
 	inc_staged(pool, 1, true);
 }
 
-static void set_curblock(char *hexstr)
+static void set_curblock(char *hexstr, unsigned char *hash)
 {
+	unsigned char hash_swap[32];
+	char *old_hash = NULL;
 	struct timeval tv_now;
 
+	/* Don't free current_hash directly to avoid dereferencing it when
+	 * we might be accessing its data elsewhere */
+	if (current_hash)
+		old_hash = current_hash;
 	memcpy(current_block, hexstr, 36);
 	gettimeofday(&tv_now, NULL);
-	get_datestamp(blockdate, &tv_now);
+	get_timestamp(blocktime, &tv_now);
+	swap256(hash_swap, hash);
+	current_hash = bin2hex(hash_swap, 16);
+	if (unlikely(!current_hash))
+		quit (1, "set_curblock OOM");
+	if (old_hash)
+		free(old_hash);
 }
 
 static void test_work_current(struct work *work)
@@ -1493,7 +1518,7 @@ static void test_work_current(struct work *work)
 			work_restart[watchdog_thr_id].restart = 1;
 		} else
 			block_changed = BLOCK_NONE;
-		set_curblock(hexstr);
+		set_curblock(hexstr, work->data);
 	}
 
 	free(hexstr);
@@ -3683,6 +3708,9 @@ int main (int argc, char *argv[])
 
 	for (i = 0; i < 36; i++)
 		strcat(current_block, "0");
+	current_hash = calloc(sizeof(current_hash), 1);
+	if (unlikely(!current_hash))
+		quit (1, "main OOM");
 
 #ifdef WIN32
 	opt_n_threads = num_processors = 1;
