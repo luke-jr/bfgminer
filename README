@@ -177,3 +177,11 @@ skipping pools that are idle.
 LOAD BALANCE:
 This strategy sends work in equal amounts to all the pools specified. If any
 pool falls idle, the rest will take up the slack keeping the miner busy.
+
+---
+LOGGING
+
+cgminer will log to stderr if it detects stderr is being redirected to a file.
+To enable logging simply add 2>logfile.txt to your command line and logfile.txt
+will contain the logged output at the log level you specify (normal, verbose,
+debug etc.)
