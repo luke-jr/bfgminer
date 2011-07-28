@@ -1,4 +1,4 @@
-AC_INIT([cgminer], [1.5.1])
+AC_INIT([cgminer], [1.5.2])
 
 AC_PREREQ(2.59)
 AC_CANONICAL_SYSTEM
