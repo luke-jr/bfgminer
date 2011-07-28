@@ -3677,8 +3677,10 @@ int main (int argc, char *argv[])
 	for (i = 0; i < 16; i++)
 		gpu_devices[i] = false;
 	nDevs = clDevicesNum();
-	if (nDevs < 0)
-		quit(1, "clDevicesNum returned error");
+	if (nDevs < 0) {
+		applog(LOG_ERR, "clDevicesNum returned error, none usable");
+		nDevs = 0;
+	}
 #endif
 	if (nDevs)
 		opt_n_threads = 0;
