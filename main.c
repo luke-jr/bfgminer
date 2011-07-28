@@ -144,6 +144,7 @@ bool want_longpoll = true;
 bool have_longpoll = false;
 bool use_syslog = false;
 static bool opt_quiet = false;
+static bool opt_realquiet = false;
 static bool opt_loginput = false;
 static int opt_retries = -1;
 static int opt_fail_pause = 5;
@@ -174,6 +175,8 @@ static int mining_threads;
 static int num_processors;
 static int scan_intensity;
 static bool use_curses = true;
+
+#define QUIET	(opt_quiet || opt_realquiet)
 
 struct thr_info *thr_info;
 static int work_thr_id;
@@ -548,7 +551,10 @@ static struct opt_table opt_config_table[] = {
 		     "Number of extra work items to queue (0 - 10)"),
 	OPT_WITHOUT_ARG("--quiet|-q",
 			opt_set_bool, &opt_quiet,
-			"Disable per-thread hashmeter output"),
+			"Disable logging output, display status and errors"),
+	OPT_WITHOUT_ARG("--real-quiet",
+			opt_set_bool, &opt_realquiet,
+			"Disable all output"),
 	OPT_WITH_ARG("--retries|-r",
 		     opt_set_intval, opt_show_intval, &opt_retries,
 		     "Number of times to retry before giving up, if JSON-RPC call fails (-1 means never)"),
@@ -883,8 +889,11 @@ static void wlogprint(const char *f, ...)
 	mutex_unlock(&curses_lock);
 }
 
-void log_curses(const char *f, va_list ap)
+void log_curses(int prio, const char *f, va_list ap)
 {
+	if (opt_quiet && prio != LOG_ERR)
+		return;
+
 	if (curses_active) {
 		if (!opt_loginput) {
 			mutex_lock(&curses_lock);
@@ -959,7 +968,7 @@ static bool submit_upstream_work(const struct work *work)
 		pool->accepted++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
-		if (!opt_quiet) {
+		if (!QUIET) {
 			if (total_pools > 1)
 				applog(LOG_WARNING, "Accepted %.8s %sPU %d thread %d pool %d",
 				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
@@ -973,7 +982,7 @@ static bool submit_upstream_work(const struct work *work)
 		pool->rejected++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
-		if (!opt_quiet) {
+		if (!QUIET) {
 			if (total_pools > 1)
 				applog(LOG_WARNING, "Rejected %.8s %sPU %d thread %d pool %d",
 				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
@@ -986,7 +995,7 @@ static bool submit_upstream_work(const struct work *work)
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 	cgpu->efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
 
-	if (!opt_quiet)
+	if (!opt_realquiet)
 		print_status(thr_id);
 	applog(LOG_INFO, "%sPU %d  Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
 		cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->getworks, cgpu->accepted,
@@ -1726,19 +1735,19 @@ static void display_options(void)
 	immedok(logwin, true);
 retry:
 	clear_logwin();
-	wlogprint("\n[D]ebug:%s [S]ilent:%s [V]erbose:%s [R]PC debug:%s [L]og interval:%d\n",
+	wlogprint("\n[D]ebug:%s [Q]uiet:%s [V]erbose:%s [R]PC debug:%s [L]og interval:%d\n",
 		opt_debug ? "on" : "off",
 		opt_quiet ? "on" : "off",
 		opt_log_output ? "on" : "off",
 		opt_protocol ? "on" : "off",
 		opt_log_interval);
-	wlogprint("[N]ormal [C]lear\n");
+	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
-	if (!strncasecmp(&input, "s", 1)) {
+	if (!strncasecmp(&input, "q", 1)) {
 		opt_quiet ^= true;
 		clear_logwin();
-		wlogprint("Silent mode %s\n", opt_quiet ? "enabled" : "disabled");
+		wlogprint("Quiet mode %s\n", opt_quiet ? "enabled" : "disabled");
 	} else if (!strncasecmp(&input, "v", 1)) {
 		opt_log_output ^= true;
 		if (opt_log_output)
@@ -1777,6 +1786,9 @@ retry:
 		opt_log_interval = selected;
 		clear_logwin();
 		wlogprint("Log interval set to %d seconds\n", opt_log_interval);
+	} else if (!strncasecmp(&input, "s", 1)) {
+		opt_realquiet = true;
+		clear_logwin();
 	} else clear_logwin();
 
 	immedok(logwin, false);
@@ -1976,6 +1988,10 @@ static void *input_thread(void *userdata)
 			set_options();
 		else if (!strncasecmp(&input, "g", 1))
 			manage_gpu();
+		if (opt_realquiet) {
+			disable_curses();
+			break;
+		}
 	}
 
 	return NULL;
@@ -2050,7 +2066,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		gettimeofday(&thr_info[thr_id].last, NULL);
 
 	/* Don't bother calculating anything if we're not displaying it */
-	if (opt_quiet || !opt_log_interval)
+	if (opt_realquiet || !opt_log_interval)
 		return;
 	
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
@@ -3706,7 +3722,7 @@ int main (int argc, char *argv[])
 	logcursor = logstart + 1;
 
 	/* Set up the ncurses interface */
-	if (!opt_quiet && use_curses) {
+	if (!opt_realquiet && use_curses) {
 		mainwin = initscr();
 		getmaxyx(mainwin, y, x);
 		statuswin = newwin(logstart, x, 0, 0);
@@ -3929,7 +3945,7 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&total_tv_end, NULL);
 	disable_curses();
-	if (!opt_quiet && successful_connect)
+	if (!opt_realquiet && successful_connect)
 		print_summary();
 
 	if (gpu_threads)

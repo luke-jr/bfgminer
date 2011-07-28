@@ -131,7 +131,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 			vfprintf(stderr, f, apc);	/* atomic write to stderr */
 			fflush(stderr);
 		}
-		log_curses(f, ap);
+		log_curses(prio, f, ap);
 	}
 }
 

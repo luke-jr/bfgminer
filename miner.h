@@ -341,7 +341,7 @@ enum cl_kernel {
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 
 extern void kill_work(void);
-extern void log_curses(const char *f, va_list ap);
+extern void log_curses(int prio, const char *f, va_list ap);
 extern void vapplog(int prio, const char *fmt, va_list ap);
 extern void applog(int prio, const char *fmt, ...);
 extern struct thread_q *tq_new(void);
