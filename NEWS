@@ -1,3 +1,4 @@
+Version 1.5.2 - July 28, 2011
 
 - Restarting a hung GPU can hang the rest of the GPUs so just declare it dead
 and provide the information in the status.
@@ -13,6 +14,10 @@ running.
 they don't support opencl. Don't fail with them, just provide a warning and
 disable GPU mining.
 - Add http:// if it's not explicitly set for URL entries.
+- Log to the output file at any time with warnings and errors, instead of just
+when verbose mode is on.
+- Display the correct current hash as per blockexplorer, truncated to 16
+characters, with just the time.
 
 
 Version 1.5.1 - July 27, 2011
