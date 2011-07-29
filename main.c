@@ -2246,7 +2246,7 @@ static bool pool_active(struct pool *pool)
 			ret = true;
 			gettimeofday(&pool->tv_idle, NULL);
 		} else {
-			applog(LOG_DEBUG, "Successfully retreived but FAILED to decipher work from pool %u %s",
+			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			free(work);
 		}
