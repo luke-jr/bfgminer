@@ -3448,10 +3448,12 @@ static void *reinit_gpu(void *userdata)
 
 static void reinit_thread(struct thr_info *thr)
 {
+#if 0
 	pthread_t resus_thread;
 
 	if (unlikely(pthread_create(&resus_thread, NULL, reinit_gputhread, (void *)thr)))
 		applog(LOG_ERR, "Failed to create reinit thread");
+#endif
 }
 
 static void reinit_device(struct cgpu_info *cgpu)
@@ -3566,7 +3568,7 @@ static void *watchdog_thread(void *userdata)
 			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
 				gpus[gpu].status = LIFE_DEAD;
 				applog(LOG_ERR, "Thread %d idle for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
-				applog(LOG_ERR, "Attempting to restart thread");
+				//applog(LOG_ERR, "Attempting to restart thread");
 				reinit_thread(thr);
 			}
 		}
