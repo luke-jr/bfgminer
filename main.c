@@ -1096,8 +1096,6 @@ static bool get_upstream_work(struct work *work, bool lagging)
 	work->pool = pool;
 	total_getworks++;
 	pool->getwork_requested++;
-	if (work->thr)
-		work->thr->cgpu->getworks++;
 
 	json_decref(val);
 out:
@@ -1221,11 +1219,6 @@ static void *get_work_thread(void *userdata)
 		kill_work();
 		goto out;
 	}
-
-	if (wc->thr)
-		ret_work->thr = wc->thr;
-	else
-		ret_work->thr = NULL;
 
 	/* obtain new work from bitcoin via JSON-RPC */
 	while (!get_upstream_work(ret_work, wc->lagging)) {
@@ -2275,7 +2268,7 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-static bool queue_request(struct thr_info *thr)
+static bool queue_request(void)
 {
 	int maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
@@ -2297,10 +2290,8 @@ static bool queue_request(struct thr_info *thr)
 	}
 
 	wc->cmd = WC_GET_WORK;
-	if (thr)
-		wc->thr = thr;
-	else
-		wc->thr = NULL;
+	/* The get work does not belong to any thread */
+	wc->thr = NULL;
 
 	/* If we've queued more than 2/3 of the maximum and still have no
 	 * staged work, consider the system lagging and allow work to be
@@ -2372,7 +2363,7 @@ static void flush_requests(void)
 
 	for (i = 0; i < stale; i++) {
 		/* Queue a whole batch of new requests */
-		if (unlikely(!queue_request(NULL))) {
+		if (unlikely(!queue_request())) {
 			applog(LOG_ERR, "Failed to queue requests in flush_requests");
 			kill_work();
 			break;
@@ -2454,7 +2445,7 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 	thread_reportout(thr);
 retry:
 	pool = current_pool();
-	if (unlikely(!requested && !queue_request(NULL))) {
+	if (unlikely(!requested && !queue_request())) {
 		applog(LOG_WARNING, "Failed to queue_request in get_work");
 		goto out;
 	}
@@ -2682,6 +2673,7 @@ static void *miner_thread(void *userdata)
 					"mining thread %d", thr_id);
 				goto out;
 			}
+			mythr->cgpu->getworks++;
 			needs_work = requested = false;
 			total_hashes = 0;
 			max_nonce = work.blk.nonce + hashes_done;
@@ -2802,7 +2794,7 @@ static void *miner_thread(void *userdata)
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
 		if (!requested && (diff.tv_sec >= request_interval)) {
 			thread_reportout(mythr);
-			if (unlikely(!queue_request(mythr))) {
+			if (unlikely(!queue_request())) {
 				applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
 				goto out;
 			}
@@ -3005,6 +2997,7 @@ static void *gpuminer_thread(void *userdata)
 			"gpu mining thread %d", thr_id);
 		goto out;
 	}
+	mythr->cgpu->getworks++;
 	requested = false;
 	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 	work->blk.nonce = 0;
@@ -3055,6 +3048,7 @@ static void *gpuminer_thread(void *userdata)
 					"gpu mining thread %d", thr_id);
 				goto out;
 			}
+			mythr->cgpu->getworks++;
 			requested = false;
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
@@ -3110,7 +3104,7 @@ static void *gpuminer_thread(void *userdata)
 #endif
 			if (diff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
 				thread_reportout(mythr);
-				if (unlikely(!queue_request(mythr))) {
+				if (unlikely(!queue_request())) {
 					applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
 					goto out;
 				}
@@ -3444,7 +3438,7 @@ static void *watchdog_thread(void *userdata)
 
 		sleep(interval);
 		if (requests_queued() < opt_queue)
-			queue_request(NULL);
+			queue_request();
 
 		hashmeter(-1, &zero_tv, 0);
 
