@@ -514,6 +514,21 @@ build:
 		return NULL;
 	}
 
+	/* Create the command queue just so we can flush it to try and avoid
+	 * zero sized binaries */
+	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0, &status);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
+		return NULL;
+	}
+	status = clFinish(clState->commandQueue);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Finishing command queue. (clFinish)");
+		return NULL;
+	}
+
 	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*nDevices, binary_sizes, NULL );
 	if (unlikely(status != CL_SUCCESS))
 	{
