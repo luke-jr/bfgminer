@@ -134,6 +134,12 @@ enum {
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+enum alive {
+	LIFE_WELL,
+	LIFE_SICK,
+	LIFE_DEAD,
+};
+
 struct cgpu_info {
 	int is_gpu;
 	int cpu_gpu;
@@ -145,7 +151,7 @@ struct cgpu_info {
 	unsigned int getworks;
 	double efficiency;
 	double utility;
-	bool alive;
+	enum alive status;
 };
 
 struct thr_info {

@@ -835,8 +835,13 @@ static void curses_print_status(int thr_id)
 
 		wmove(statuswin, gpucursor + gpu, 0);
 
-		if (!cgpu->alive)
+		if (cgpu->status == LIFE_DEAD)
 			wprintw(statuswin, " GPU %d: [DEAD / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+				gpu, cgpu->total_mhashes / total_secs,
+				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+				cgpu->efficiency, cgpu->utility);
+		else if (cgpu->status == LIFE_SICK)
+			wprintw(statuswin, " GPU %d: [SICK / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 				gpu, cgpu->total_mhashes / total_secs,
 				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 				cgpu->efficiency, cgpu->utility);
@@ -1949,9 +1954,22 @@ retry:
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
-			wlog("Thread %d: %.1f Mh/s %s %s reported in %s\n", i,
-			     thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled",
-			     cgpu->alive ? "Alive" : "Dead", checkin);
+			switch (cgpu->status) {
+				case LIFE_WELL:
+					wlog("Thread %d: %.1f Mh/s %s ALIVE\n", i,
+					thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled");
+					break;
+				case LIFE_SICK:
+					wlog("Thread %d: %.1f Mh/s %s SICK reported in %s\n", i,
+					thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled",
+					checkin);
+					break;
+				case LIFE_DEAD:
+					wlog("Thread %d: %.1f Mh/s %s DEAD reported in %s\n", i,
+					thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled",
+					checkin);
+					break;
+			}
 		}
 	}
 
@@ -1963,10 +1981,6 @@ retry:
 		selected = curses_int("Select GPU to enable");
 		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		if (!gpus[selected].alive) {
-			wlogprint("Device dead, need to attempt to restart before enabling\n");
 			goto retry;
 		}
 		if (gpu_devices[selected]) {
@@ -2087,7 +2101,7 @@ static void *workio_thread(void *userdata)
 static void thread_reportin(struct thr_info *thr)
 {
 	gettimeofday(&thr->last, NULL);
-	thr->cgpu->alive = true;
+	thr->cgpu->status = LIFE_WELL;
 	thr->getwork = false;
 }
 
@@ -2993,7 +3007,7 @@ static void *gpuminer_thread(void *userdata)
 	if (unlikely(status != CL_SUCCESS))
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 
-	mythr->cgpu->alive = true;
+	mythr->cgpu->status = LIFE_WELL;
 	if (opt_debug)
 		applog(LOG_DEBUG, "Popping ping in gpuminer thread");
 
@@ -3338,6 +3352,37 @@ static void *reinit_cpu(void *userdata)
 }
 
 #ifdef HAVE_OPENCL
+static void *reinit_gputhread(void *userdata)
+{
+	struct thr_info *thr = (struct thr_info *)userdata;
+	int thr_id = thr->id;
+
+	thr->rolling = thr->cgpu->rolling = 0;
+	tq_freeze(thr->q);
+	if (!pthread_cancel(*thr->pth)) {
+		pthread_join(*thr->pth, NULL);
+		free(thr->q);
+	}
+
+	thr->q = tq_new();
+	if (!thr->q)
+		quit(1, "Failed to tq_new in reinit_thread");
+
+	if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr))) {
+		applog(LOG_ERR, "thread %d create failed", thr_id);
+		return NULL;
+	}
+	/* Try to re-enable it */
+	gpu_devices[thr->cgpu->cpu_gpu] = true;
+	if (opt_debug)
+		applog(LOG_DEBUG, "Pushing ping to thread %d", thr_id);
+	tq_push(thr->q, &ping);
+
+	applog(LOG_WARNING, "Thread %d restarted", thr_id);
+
+	return NULL;
+}
+
 static void *reinit_gpu(void *userdata)
 {
 	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
@@ -3346,7 +3391,7 @@ static void *reinit_gpu(void *userdata)
 	char name[256];
 	int thr_id;
 
-	gpus[gpu].alive = false;
+	gpus[gpu].status = LIFE_DEAD;
 
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
 		if (dev_from_id(thr_id) != gpu)
@@ -3363,7 +3408,7 @@ static void *reinit_gpu(void *userdata)
 
 		thr->q = tq_new();
 		if (!thr->q)
-			quit(1, "Failed to tq_new in reinit_gputhread");
+			quit(1, "Failed to tq_new in reinit_gpu");
 
 		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
 		clStates[thr_id] = initCl(gpu, name, sizeof(name));
@@ -3390,10 +3435,24 @@ static void *reinit_gpu(void *userdata)
 	return NULL;
 }
 #else
+static void *reinit_gputhread(void *userdata)
+{
+	return NULL;
+}
+
 static void *reinit_gpu(void *userdata)
 {
+	return NULL;
 }
 #endif
+
+static void reinit_thread(struct thr_info *thr)
+{
+	pthread_t resus_thread;
+
+	if (unlikely(pthread_create(&resus_thread, NULL, reinit_gputhread, (void *)thr)))
+		applog(LOG_ERR, "Failed to create reinit thread");
+}
 
 static void reinit_device(struct cgpu_info *cgpu)
 {
@@ -3493,13 +3552,23 @@ static void *watchdog_thread(void *userdata)
 			struct thr_info *thr = &thr_info[i];
 
 			/* Thread is waiting on getwork or disabled */
-			if (thr->getwork || !gpu_devices[i] || !gpus[i].alive)
+			if (thr->getwork || !gpu_devices[i])
 				continue;
 
-			if (now.tv_sec - thr->last.tv_sec > 60) {
+			if (gpus[i].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
+				applog(LOG_ERR, "Thread %d recovered, GPU %d declared WELL!", i, gpus[i]);
+				gpus[i].status = LIFE_WELL;
+			} else if (now.tv_sec - thr->last.tv_sec > 60 && gpus[i].status == LIFE_WELL) {
 				thr->rolling = thr->cgpu->rolling = 0;
-				gpus[i].alive = false;
-				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared DEAD!", i, gpus[i]);
+				gpus[i].status = LIFE_SICK;
+				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpus[i]);
+				applog(LOG_ERR, "Attempting to restart thread");
+				reinit_thread(thr);
+			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
+				gpus[i].status = LIFE_DEAD;
+				applog(LOG_ERR, "Thread %d idle for more than 10 minutes, GPU %d declared DEAD!", i, gpus[i]);
+				applog(LOG_ERR, "Attempting to restart thread one last time");
+				reinit_thread(thr);
 			}
 		}
 	}
