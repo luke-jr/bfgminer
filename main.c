@@ -3550,24 +3550,23 @@ static void *watchdog_thread(void *userdata)
 		//for (i = 0; i < mining_threads; i++) {
 		for (i = 0; i < gpu_threads; i++) {
 			struct thr_info *thr = &thr_info[i];
+			int gpu = thr->cgpu->cpu_gpu;
 
 			/* Thread is waiting on getwork or disabled */
-			if (thr->getwork || !gpu_devices[i])
+			if (thr->getwork || !gpu_devices[gpu])
 				continue;
 
-			if (gpus[i].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
-				applog(LOG_ERR, "Thread %d recovered, GPU %d declared WELL!", i, gpus[i]);
-				gpus[i].status = LIFE_WELL;
-			} else if (now.tv_sec - thr->last.tv_sec > 60 && gpus[i].status == LIFE_WELL) {
+			if (gpus[gpu].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
+				applog(LOG_ERR, "Thread %d recovered, GPU %d declared WELL!", i, gpu);
+				gpus[gpu].status = LIFE_WELL;
+			} else if (now.tv_sec - thr->last.tv_sec > 60 && gpus[gpu].status == LIFE_WELL) {
 				thr->rolling = thr->cgpu->rolling = 0;
-				gpus[i].status = LIFE_SICK;
-				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpus[i]);
-				applog(LOG_ERR, "Attempting to restart thread");
-				reinit_thread(thr);
+				gpus[gpu].status = LIFE_SICK;
+				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
 			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
-				gpus[i].status = LIFE_DEAD;
-				applog(LOG_ERR, "Thread %d idle for more than 10 minutes, GPU %d declared DEAD!", i, gpus[i]);
-				applog(LOG_ERR, "Attempting to restart thread one last time");
+				gpus[gpu].status = LIFE_DEAD;
+				applog(LOG_ERR, "Thread %d idle for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
+				applog(LOG_ERR, "Attempting to restart thread");
 				reinit_thread(thr);
 			}
 		}
