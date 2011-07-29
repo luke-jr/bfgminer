@@ -325,6 +325,7 @@ struct work {
 	uint32_t	valid;
 	dev_blk_ctx	blk;
 
+	struct thr_info	*thr;
 	int		thr_id;
 	struct pool	*pool;
 	struct timeval	tv_staged;
