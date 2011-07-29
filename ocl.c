@@ -550,6 +550,7 @@ build:
 		applog(LOG_ERR, "Error: Getting program info. (clGetPlatformInfo)");
 		return NULL;
 	}
+	clReleaseCommandQueue(clState->commandQueue);
 
 	/* Patch the kernel if the hardware supports BFI_INT */
 	if (patchbfi) {
