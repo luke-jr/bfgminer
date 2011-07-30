@@ -3133,13 +3133,13 @@ static void *gpuminer_thread(void *userdata)
 			}
 		}
 		if (unlikely(!gpu_devices[gpu])) {
-			applog(LOG_WARNING, "Thread %d being disabled\n", thr_id);
+			applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 			mythr->rolling = mythr->cgpu->rolling = 0;
 			if (opt_debug)
 				applog(LOG_DEBUG, "Popping wakeup ping in gpuminer thread");
 
 			tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
-			applog(LOG_WARNING, "Thread %d being re-enabled\n", thr_id);
+			applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
 		}
 	}
 out:
@@ -3361,7 +3361,9 @@ static void *reinit_gpu(void *userdata)
 	int thr_id;
 	_clState *clState;
 
-	gpus[gpu].status = LIFE_DEAD;
+	/* Send threads message to stop */
+	gpu_devices[gpu] = false;
+	sleep(5);
 
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
 		if (dev_from_id(thr_id) != gpu)
@@ -3370,11 +3372,14 @@ static void *reinit_gpu(void *userdata)
 		clState = clStates[thr_id];
 		thr = &thr_info[thr_id];
 		thr->rolling = thr->cgpu->rolling = 0;
-		tq_freeze(thr->q);
 		if (!pthread_cancel(*thr->pth)) {
-			pthread_join(*thr->pth, NULL);
+			applog(LOG_WARNING, "Thread still exists, killing it off");
 			free(thr->q);
-		}
+		} else
+			applog(LOG_WARNING, "Thread no longer exists");
+		sleep(5);
+		/* Lose this ram cause we may get stuck here! */
+		//tq_freeze(thr->q);
 
 		thr->q = tq_new();
 		if (!thr->q)
@@ -3406,6 +3411,14 @@ static void *reinit_gpu(void *userdata)
 		tq_push(thr->q, &ping);
 
 		applog(LOG_WARNING, "Thread %d restarted", thr_id);
+	}
+
+	/* Try to re-enable it */
+	gpu_devices[gpu] = true;
+	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
+		thr = &thr_info[thr_id];
+		if (dev_from_id(thr_id) == gpu)
+			tq_push(thr->q, &ping);
 	}
 
 	return NULL;
@@ -3523,9 +3536,9 @@ static void *watchdog_thread(void *userdata)
 				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
 				/* Sent it a ping, it might respond */
 				tq_push(thr->q, &ping);
-			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
+			} else if (now.tv_sec - thr->last.tv_sec > 300 && gpus[i].status == LIFE_SICK) {
 				gpus[gpu].status = LIFE_DEAD;
-				applog(LOG_ERR, "Thread %d idle for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
+				applog(LOG_ERR, "Thread %d idle for more than 5 minutes, GPU %d declared DEAD!", i, gpu);
 				applog(LOG_ERR, "Attempting to restart GPU");
 				reinit_device(thr->cgpu);
 				break;
