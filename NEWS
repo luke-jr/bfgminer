@@ -1,3 +1,20 @@
+Version 1.5.3 - July 30, 2011
+
+- Significant work went into attempting to make the thread restart code robust
+to identify sick threads, tag them SICK after 1 minute, then DEAD after 5
+minutes of inactivity and try to restart them. Instead of re-initialising the
+GPU completely, only a new cl context is created to avoid hanging the rest of
+the GPUs should the dead GPU be hung irrevocably.
+- Use correct application name in syslog.
+- Get rid of extra line feeds.
+- Use pkg-config to check for libcurl version
+- Implement per-thread getwork count with proper accounting to not over-account
+queued items when local work replaces it.
+- Create a command queue from the program created from source which allows us
+to flush the command queue in the hope it will not generate a zero sized binary
+any more.
+
+
 Version 1.5.2 - July 28, 2011
 
 - Restarting a hung GPU can hang the rest of the GPUs so just declare it dead
