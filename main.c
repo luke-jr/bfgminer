@@ -3876,7 +3876,7 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
-		openlog("cpuminer", LOG_PID, LOG_USER);
+		openlog(PROGRAM_NAME, LOG_PID, LOG_USER);
 #endif
 
 	mining_threads = opt_n_threads + gpu_threads;
