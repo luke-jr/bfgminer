@@ -3030,12 +3030,34 @@ static void *gpuminer_thread(void *userdata)
 		struct timeval tv_gpustart, tv_gpuend;
 		suseconds_t gpu_us;
 
+		gettimeofday(&tv_gpustart, NULL);
+		timeval_subtract(&diff, &tv_gpustart, &tv_gpuend);
+		/* This finish flushes the readbuffer set with CL_FALSE later */
+		clFinish(clState->commandQueue);
+		gettimeofday(&tv_gpuend, NULL);
+		timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
+		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
+		decay_time(&gpu_ms_average, gpu_us / 1000);
+		if (opt_dynamic) {
+			/* Try to not let the GPU be out for longer than 6ms, but
+			 * increase intensity when the system is idle, unless
+			 * dynamic is disabled. */
+			if (gpu_ms_average > 7) {
+				if (scan_intensity > -10)
+					scan_intensity--;
+			} else if (gpu_ms_average < 3) {
+				if (scan_intensity < 10)
+					scan_intensity++;
+			}
+		}
+		set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
+
 		if (diff.tv_sec > opt_scantime ||
 		    work->blk.nonce >= MAXTHREADS - hashes ||
 		    work_restart[thr_id].restart ||
 		    stale_work(work)) {
 			/* Ignore any reads since we're getting new work and queue a clean buffer */
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 					BUFFERSIZE, blank_res, 0, NULL, NULL);
 			if (unlikely(status != CL_SUCCESS))
 				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
@@ -3054,6 +3076,9 @@ static void *gpuminer_thread(void *userdata)
 
 			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 			work_restart[thr_id].restart = 0;
+
+			/* Flushes the writebuffer set with CL_FALSE above */
+			clFinish(clState->commandQueue);
 		}
 		status = queue_kernel_parameters(clState, &work->blk);
 		if (unlikely(status != CL_SUCCESS))
@@ -3062,7 +3087,7 @@ static void *gpuminer_thread(void *userdata)
 		/* MAXBUFFERS entry is used as a flag to say nonces exist */
 		if (res[MAXBUFFERS]) {
 			/* Clear the buffer again */
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 					BUFFERSIZE, blank_res, 0, NULL, NULL);
 			if (unlikely(status != CL_SUCCESS))
 				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
@@ -3070,6 +3095,7 @@ static void *gpuminer_thread(void *userdata)
 				applog(LOG_DEBUG, "GPU %d found something?", gpu);
 			postcalc_hash_async(mythr, work, res);
 			memset(res, 0, BUFFERSIZE);
+			clFinish(clState->commandQueue);
 		}
 
 		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
@@ -3077,31 +3103,10 @@ static void *gpuminer_thread(void *userdata)
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)"); goto out; }
 
-		gettimeofday(&tv_gpustart, NULL);
-		timeval_subtract(&diff, &tv_gpustart, &tv_gpuend);
-
-		status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+		status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 				BUFFERSIZE, res, 0, NULL, NULL);
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)"); goto out;}
-
-		gettimeofday(&tv_gpuend, NULL);
-		timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
-		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
-		decay_time(&gpu_ms_average, gpu_us / 1000);
-		if (opt_dynamic) {
-			/* Try to not let the GPU be out for longer than 6ms, but
-			 * increase intensity when the system is idle, unless
-			 * dynamic is disabled. */
-			if (gpu_ms_average > 7) {
-				if (scan_intensity > -10)
-					scan_intensity--;
-			} else if (gpu_ms_average < 3) {
-				if (scan_intensity < 10)
-					scan_intensity++;
-			}
-		}
-		set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
 
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
