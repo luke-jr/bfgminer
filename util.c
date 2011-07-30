@@ -233,7 +233,7 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		goto out;
 
 	if (opt_protocol)
-		applog(LOG_DEBUG, "HTTP hdr(%s): %s\n", key, val);
+		applog(LOG_DEBUG, "HTTP hdr(%s): %s", key, val);
 
 	if (!strcasecmp("X-Roll-Ntime", key)) {
 		applog(LOG_INFO, "X-Roll-Ntime found");
@@ -350,7 +350,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 
 	if (opt_protocol)
-		applog(LOG_DEBUG, "JSON protocol request:\n%s\n", rpc_req);
+		applog(LOG_DEBUG, "JSON protocol request:\n%s", rpc_req);
 
 	upload_data.buf = rpc_req;
 	upload_data.len = strlen(rpc_req);
