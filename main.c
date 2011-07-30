@@ -3059,6 +3059,19 @@ static void *gpuminer_thread(void *userdata)
 		if (unlikely(status != CL_SUCCESS))
 			{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
 
+		/* MAXBUFFERS entry is used as a flag to say nonces exist */
+		if (res[MAXBUFFERS]) {
+			/* Clear the buffer again */
+			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+					BUFFERSIZE, blank_res, 0, NULL, NULL);
+			if (unlikely(status != CL_SUCCESS))
+				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
+			if (opt_debug)
+				applog(LOG_DEBUG, "GPU %d found something?", gpu);
+			postcalc_hash_async(mythr, work, res);
+			memset(res, 0, BUFFERSIZE);
+		}
+
 		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
 				globalThreads, localThreads, 0,  NULL, NULL);
 		if (unlikely(status != CL_SUCCESS))
@@ -3089,19 +3102,6 @@ static void *gpuminer_thread(void *userdata)
 			}
 		}
 		set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
-
-		/* MAXBUFFERS entry is used as a flag to say nonces exist */
-		if (res[MAXBUFFERS]) {
-			/* Clear the buffer again */
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-					BUFFERSIZE, blank_res, 0, NULL, NULL);
-			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-			if (opt_debug)
-				applog(LOG_DEBUG, "GPU %d found something?", gpu);
-			postcalc_hash_async(mythr, work, res);
-			memset(res, 0, BUFFERSIZE);
-		}
 
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
