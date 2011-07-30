@@ -3409,6 +3409,10 @@ static void *reinit_gpu(void *userdata)
 
 	return NULL;
 }
+#else
+static void *reinit_gpu(void *userdata)
+{
+}
 #endif
 
 static void reinit_device(struct cgpu_info *cgpu)
