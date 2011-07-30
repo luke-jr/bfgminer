@@ -2319,10 +2319,10 @@ static bool queue_request(struct thr_info *thr)
 	else
 		wc->thr = NULL;
 
-	/* If we've queued more than 2/3 of the maximum and still have no
-	 * staged work, consider the system lagging and allow work to be
-	 * gathered from another pool if possible */
-	if (rq > (maxq * 2 / 3) && !rs)
+	/* If we're queueing work faster than we can stage it, consider the
+	 * system lagging and allow work to be gathered from another pool if
+	 * possible */
+	if (rq > rs)
 		wc->lagging = true;
 
 	if (opt_debug)
