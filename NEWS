@@ -13,6 +13,8 @@ queued items when local work replaces it.
 - Create a command queue from the program created from source which allows us
 to flush the command queue in the hope it will not generate a zero sized binary
 any more.
+- Be more willing to get work from the backup pools if the work is simply being
+queued faster than it is being retrieved.
 
 
 Version 1.5.2 - July 28, 2011
