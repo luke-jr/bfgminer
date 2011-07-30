@@ -951,7 +951,7 @@ static bool submit_upstream_work(const struct work *work)
 {
 	char *hexstr = NULL;
 	json_t *val, *res;
-	char s[345];
+	char s[345], sd[345];
 	bool rc = false;
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
@@ -974,9 +974,12 @@ static bool submit_upstream_work(const struct work *work)
 	sprintf(s,
 	      "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}\r\n",
 		hexstr);
+	sprintf(sd,
+	      "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}",
+		hexstr);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
+		applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
 
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, pool);
