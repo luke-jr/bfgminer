@@ -3373,14 +3373,18 @@ static void *reinit_gpu(void *userdata)
 			continue;
 
 		clState = clStates[thr_id];
+		/* Send it a command. If it responds we can restart */
+		applog(LOG_WARNING, "Attempting to send GPU command");
+		clFlush(clState->commandQueue);
+		clFinish(clState->commandQueue);
+
 		thr = &thr_info[thr_id];
 		thr->rolling = thr->cgpu->rolling = 0;
 		if (!pthread_cancel(*thr->pth)) {
 			applog(LOG_WARNING, "Thread still exists, killing it off");
-			free(thr->q);
 		} else
 			applog(LOG_WARNING, "Thread no longer exists");
-		sleep(5);
+
 		/* Lose this ram cause we may get stuck here! */
 		//tq_freeze(thr->q);
 
@@ -3388,10 +3392,8 @@ static void *reinit_gpu(void *userdata)
 		if (!thr->q)
 			quit(1, "Failed to tq_new in reinit_gpu");
 
-		/* Send it a command. If it responds we can restart */
-		applog(LOG_WARNING, "Attempting to send GPU command");
-		clFlush(clState->commandQueue);
-	        free(clState);
+		/* Lose this ram cause we may dereference in the dying thread! */
+		//free(clState);
 		applog(LOG_WARNING, "Command successful, attempting to reinit device");
 
 		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
@@ -3406,13 +3408,6 @@ static void *reinit_gpu(void *userdata)
 			applog(LOG_ERR, "thread %d create failed", thr_id);
 			return NULL;
 		}
-		/* Try to re-enable it */
-		gpu_devices[gpu] = true;
-		if (opt_debug)
-			applog(LOG_DEBUG, "Pushing ping to thread %d", thr_id);
-
-		tq_push(thr->q, &ping);
-
 		applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	}
 
