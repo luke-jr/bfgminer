@@ -3396,6 +3396,10 @@ static void *reinit_gpu(void *userdata)
 
 	/* Try to re-enable it */
 	gpu_devices[gpu] = true;
+	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
+		if (dev_from_id(thr_id) == gpu)
+			tq_push(thr->q, &ping);
+	}
 
 	return NULL;
 }
