@@ -3357,12 +3357,11 @@ static void *reinit_gpu(void *userdata)
 	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
 	int gpu = cgpu->cpu_gpu;
 	struct thr_info *thr;
+	char name[256];
 	int thr_id;
 	_clState *clState;
 
-	/* Send threads message to stop */
-	gpu_devices[gpu] = false;
-	sleep(5);
+	gpus[gpu].status = LIFE_DEAD;
 
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
 		if (dev_from_id(thr_id) != gpu)
@@ -3371,31 +3370,43 @@ static void *reinit_gpu(void *userdata)
 		clState = clStates[thr_id];
 		thr = &thr_info[thr_id];
 		thr->rolling = thr->cgpu->rolling = 0;
+		tq_freeze(thr->q);
 		if (!pthread_cancel(*thr->pth)) {
-			applog(LOG_WARNING, "Thread still exists, killing it off");
+			pthread_join(*thr->pth, NULL);
 			free(thr->q);
-		} else
-			applog(LOG_WARNING, "Thread no longer exists");
+		}
 
 		thr->q = tq_new();
 		if (!thr->q)
 			quit(1, "Failed to tq_new in reinit_gpu");
 
-		applog(LOG_WARNING, "Attempting to create new worker thread %d", thr_id);
+		/* Send it a command. If it responds we can restart */
+		applog(LOG_WARNING, "Attempting to send GPU command");
+		clFlush(clState->commandQueue);
+	        free(clState);
+		applog(LOG_WARNING, "Command successful, attempting to reinit device");
+
+		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
+		clState = initCl(gpu, name, sizeof(name));
+		if (!clState) {
+			applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
+			return NULL;
+		}
+		applog(LOG_INFO, "initCl() finished. Found %s", name);
+
 		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", thr_id);
 			return NULL;
 		}
+		/* Try to re-enable it */
+		gpu_devices[gpu] = true;
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing ping to thread %d", thr_id);
 
 		tq_push(thr->q, &ping);
 
-		applog(LOG_WARNING, "Thread %d restarted successfully", thr_id);
+		applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	}
-
-	/* Try to re-enable it */
-	gpu_devices[gpu] = true;
 
 	return NULL;
 }
