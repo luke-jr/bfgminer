@@ -3360,30 +3360,22 @@ static void *reinit_gpu(void *userdata)
 	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
 	int gpu = cgpu->cpu_gpu;
 	struct thr_info *thr;
-	char name[256];
 	int thr_id;
 	_clState *clState;
 
 	/* Send threads message to stop */
 	gpu_devices[gpu] = false;
-	sleep(5);
 
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
 		if (dev_from_id(thr_id) != gpu)
 			continue;
-
-		clState = clStates[thr_id];
-		/* Send it a command. If it responds we can restart */
-		applog(LOG_WARNING, "Attempting to send GPU command");
-		clFlush(clState->commandQueue);
-		clFinish(clState->commandQueue);
 
 		thr = &thr_info[thr_id];
 		thr->rolling = thr->cgpu->rolling = 0;
 		if (!pthread_cancel(*thr->pth)) {
 			applog(LOG_WARNING, "Thread still exists, killing it off");
 		} else
-			applog(LOG_WARNING, "Thread no longer exists");
+			applog(LOG_WARNING, "Thread no longer exists!");
 
 		/* Lose this ram cause we may get stuck here! */
 		//tq_freeze(thr->q);
@@ -3392,17 +3384,13 @@ static void *reinit_gpu(void *userdata)
 		if (!thr->q)
 			quit(1, "Failed to tq_new in reinit_gpu");
 
+		/* Create a new clstate */
+		applog(LOG_WARNING, "Attempting to create a new clState");
+		clState = initCQ(clStates[thr_id], gpu);
+
 		/* Lose this ram cause we may dereference in the dying thread! */
 		//free(clState);
-		applog(LOG_WARNING, "Command successful, attempting to reinit device");
-
-		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
-		clState = initCl(gpu, name, sizeof(name));
-		if (!clState) {
-			applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
-			return NULL;
-		}
-		applog(LOG_INFO, "initCl() finished. Found %s", name);
+		applog(LOG_WARNING, "Command successful, attempting to create new thread");
 
 		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", thr_id);

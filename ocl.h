@@ -18,10 +18,12 @@ typedef struct {
 	cl_uint preferred_vwidth;
 	size_t max_work_size;
 	size_t work_size;
+	cl_device_id *devices;
 } _clState;
 
 extern char *file_contents(const char *filename, int *length);
 extern int clDevicesNum();
+extern _clState *initCQ(_clState *clState, unsigned int gpu);
 extern _clState *initCl(unsigned int gpu, char *name, size_t nameSize);
 #endif /* HAVE_OPENCL */
 #endif /* __OCL_H__ */

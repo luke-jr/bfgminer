@@ -173,6 +173,55 @@ void patch_opcodes(char *w, unsigned remaining)
 	}
 }
 
+_clState *initCQ(_clState *clState, unsigned int gpu)
+{
+	cl_int status = 0;
+	cl_device_id *devices = clState->devices;
+
+	/* create a cl program executable for all the devices specified */
+	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
+		size_t logSize;
+		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
+
+		char *log = malloc(logSize);
+		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
+		applog(LOG_INFO, "%s", log);
+		return NULL;
+	}
+
+	/* get a kernel object handle for a kernel with the given name */
+	clState->kernel = clCreateKernel(clState->program, "search", &status);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error: Creating Kernel from program. (clCreateKernel)");
+		return NULL;
+	}
+
+	/////////////////////////////////////////////////////////////////
+	// Create an OpenCL command queue
+	/////////////////////////////////////////////////////////////////
+	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
+						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
+	if (status != CL_SUCCESS) /* Try again without OOE enable */
+		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
+		return NULL;
+	}
+
+	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, BUFFERSIZE, NULL, &status);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: clCreateBuffer (outputBuffer)");
+		return NULL;
+	}
+
+	return clState;
+}
+
 _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	int patchbfi = 0;
@@ -236,6 +285,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	cl_device_id *devices;
 	if (numDevices > 0 ) {
 		devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
+		clState->devices = devices;
 
 		/* Now, get the device list data */
 
@@ -626,48 +676,7 @@ built:
 	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT patching, %d vectors and worksize %d",
 	       filename, patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
-	/* create a cl program executable for all the devices specified */
-	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
-		size_t logSize;
-		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
-
-		char *log = malloc(logSize);
-		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
-		applog(LOG_INFO, "%s", log);
-		return NULL;
-	}
-
-	/* get a kernel object handle for a kernel with the given name */
-	clState->kernel = clCreateKernel(clState->program, "search", &status);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Creating Kernel from program. (clCreateKernel)");
-		return NULL;
-	}
-
-	/////////////////////////////////////////////////////////////////
-	// Create an OpenCL command queue
-	/////////////////////////////////////////////////////////////////
-	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
-						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
-	if (status != CL_SUCCESS) /* Try again without OOE enable */
-		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
-		return NULL;
-	}
-
-	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, BUFFERSIZE, NULL, &status);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error: clCreateBuffer (outputBuffer)");
-		return NULL;
-	}
-
-	return clState;
+	return initCQ(clState, gpu);
 }
 #endif /* HAVE_OPENCL */
 
