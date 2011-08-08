@@ -231,6 +231,7 @@ static char datestamp[40];
 static char blocktime[30];
 
 static char *opt_kernel = NULL;
+static char *opt_stderr_cmd = NULL;
 
 enum cl_kernel chosen_kernel;
 
@@ -596,9 +597,13 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
+
+	OPT_WITH_ARG("--monitor|-m",
+		    opt_set_charp, NULL, &opt_stderr_cmd,
+                    "Use custom pipe cmd for output messages"),
 	OPT_WITHOUT_ARG("--text-only|-T",
-			opt_set_invbool, &use_curses,
-			"Disable ncurses formatted screen output"),
+                    opt_set_invbool, &use_curses,
+                    "Disable ncurses formatted screen output"),
 	OPT_WITH_ARG("--url|-o",
 		     set_url, opt_show_charp, &trpc_url,
 		     "URL for bitcoin JSON-RPC server"),
@@ -3713,6 +3718,71 @@ out:
 	return ret;
 }
 
+static void fork_monitor()
+{
+        // Make a pipe: [readFD, writeFD]
+        int pfd[2];
+        int r = pipe(pfd);
+        if (r<0) {
+                perror("pipe");
+                exit(1);
+        }
+
+        // Make stderr write end of pipe
+        fflush(stderr);
+        r = dup2(pfd[1], 2);
+        if (r<0) {
+                perror("dup2");
+                exit(1);
+        }
+        r = close(pfd[1]);
+        if (r<0) {
+                perror("close");
+                exit(1);
+        }
+
+        // Don't let a dying monitor kill the main process
+        sighandler_t sr = signal(SIGPIPE, SIG_IGN);
+        if (SIG_ERR==sr) {
+                perror("signal");
+                exit(1);
+        }
+
+        // Fork a child process
+        r = fork();
+        if (r<0) {
+                perror("fork");
+                exit(1);
+        }
+
+        // In child, launch command
+        if (0==r) {
+                // Make stdin read end of pipe
+                r = dup2(pfd[0], 0);
+                if (r<0) {
+                        perror("dup2");
+                        exit(1);
+                }
+                close(pfd[0]);
+                if (r<0) {
+                        perror("close");
+                        exit(1);
+                }
+
+                // Launch user specified command
+                execl("/bin/bash", "/bin/bash", "-c", opt_stderr_cmd, (char*)NULL);
+                perror("execl");
+                exit(1);
+        }
+
+        // In parent, clean up unused fds
+        r = close(pfd[0]);
+        if (r<0) {
+                perror("close");
+                exit(1);
+        }
+}
+
 int main (int argc, char *argv[])
 {
 	unsigned int i, j = 0, x, y, pools_active = 0;
@@ -3865,6 +3935,9 @@ int main (int argc, char *argv[])
 	if (use_syslog)
 		openlog(PROGRAM_NAME, LOG_PID, LOG_USER);
 #endif
+
+        if (opt_stderr_cmd)
+                fork_monitor();
 
 	mining_threads = opt_n_threads + gpu_threads;
 
