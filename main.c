@@ -3719,7 +3719,7 @@ static void fork_monitor()
         int pfd[2];
         int r = pipe(pfd);
         if (r<0) {
-                perror("pipe");
+                perror("pipe - failed to create pipe for --monitor");
                 exit(1);
         }
 
@@ -3727,26 +3727,26 @@ static void fork_monitor()
         fflush(stderr);
         r = dup2(pfd[1], 2);
         if (r<0) {
-                perror("dup2");
+                perror("dup2 - failed to alias stderr to write end of pipe for --monitor");
                 exit(1);
         }
         r = close(pfd[1]);
         if (r<0) {
-                perror("close");
+                perror("close - failed to close write end of pipe for --monitor");
                 exit(1);
         }
 
         // Don't let a dying monitor kill the main process
         sighandler_t sr = signal(SIGPIPE, SIG_IGN);
         if (SIG_ERR==sr) {
-                perror("signal");
+                perror("signal - failed to edit signal mask for --monitor");
                 exit(1);
         }
 
         // Fork a child process
         r = fork();
         if (r<0) {
-                perror("fork");
+                perror("fork - failed to fork child process for --monitor");
                 exit(1);
         }
 
@@ -3755,25 +3755,25 @@ static void fork_monitor()
                 // Make stdin read end of pipe
                 r = dup2(pfd[0], 0);
                 if (r<0) {
-                        perror("dup2");
+                        perror("dup2 - in child, failed to alias read end of pipe to stdin for --monitor");
                         exit(1);
                 }
                 close(pfd[0]);
                 if (r<0) {
-                        perror("close");
+                        perror("close - in child, failed to close read end of  pipe for --monitor");
                         exit(1);
                 }
 
                 // Launch user specified command
                 execl("/bin/bash", "/bin/bash", "-c", opt_stderr_cmd, (char*)NULL);
-                perror("execl");
+                perror("execl - in child failed to exec user specified command for --monitor");
                 exit(1);
         }
 
         // In parent, clean up unused fds
         r = close(pfd[0]);
         if (r<0) {
-                perror("close");
+                perror("close - failed to close read end of pipe for --monitor");
                 exit(1);
         }
 }
