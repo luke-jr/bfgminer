@@ -1221,6 +1221,15 @@ static void sighandler(int sig)
 	kill_work();
 }
 
+static struct work *make_work(void)
+{
+	struct work *work = calloc(1, sizeof(struct work));
+
+	if (unlikely(!work))
+		quit(1, "Failed to calloc work in make_work");
+	return work;
+}
+
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
@@ -1228,12 +1237,7 @@ static void *get_work_thread(void *userdata)
 	int failures = 0;
 
 	pthread_detach(pthread_self());
-	ret_work = calloc(1, sizeof(*ret_work));
-	if (unlikely(!ret_work)) {
-		applog(LOG_ERR, "Failed to calloc ret_work in workio_get_work");
-		kill_work();
-		goto out;
-	}
+	ret_work = make_work();
 
 	if (wc->thr)
 		ret_work->thr = wc->thr;
@@ -2246,13 +2250,9 @@ static bool pool_active(struct pool *pool)
 			true, false, pool);
 
 	if (val) {
-		struct work *work = malloc(sizeof(struct work));
+		struct work *work = make_work();
 		bool rc;
 
-		if (!work) {
-			applog(LOG_ERR, "Unable to malloc work in pool_active");
-			goto out;
-		}
 		rc = work_decode(json_object_get(val, "result"), work);
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
@@ -2278,7 +2278,7 @@ static bool pool_active(struct pool *pool)
 		       pool->pool_no, pool->rpc_url);
 		applog(LOG_WARNING, "Pool down, URL or credentials invalid");
 	}
-out:
+
 	curl_easy_cleanup(curl);
 	return ret;
 }
@@ -2580,12 +2580,7 @@ static bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
 		return false;
 	}
 
-	wc->u.work = malloc(sizeof(*work_in));
-	if (unlikely(!wc->u.work)) {
-		applog(LOG_ERR, "Failed to calloc work in submit_work_sync");
-		goto err_out;
-	}
-
+	wc->u.work = make_work();
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
 	memcpy(wc->u.work, work_in, sizeof(*work_in));
@@ -2655,7 +2650,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 static void *miner_thread(void *userdata)
 {
-	struct work work __attribute__((aligned(128)));
+	struct work *work = make_work();
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	uint32_t max_nonce = 0xffffff, total_hashes = 0;
@@ -2689,7 +2684,7 @@ static void *miner_thread(void *userdata)
 		affine_to_cpu(thr_id - gpu_threads, dev_from_id(thr_id));
 
 	/* Invalidate pool so it fails can_roll() test */
-	work.pool = NULL;
+	work->pool = NULL;
 
 	while (1) {
 		struct timeval tv_workstart, tv_start, tv_end, diff;
@@ -2699,14 +2694,14 @@ static void *miner_thread(void *userdata)
 		if (needs_work) {
 			gettimeofday(&tv_workstart, NULL);
 			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(&work, requested, mythr, thr_id, hash_div))) {
+			if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
 				applog(LOG_ERR, "work retrieval failed, exiting "
 					"mining thread %d", thr_id);
 				goto out;
 			}
 			needs_work = requested = false;
 			total_hashes = 0;
-			max_nonce = work.blk.nonce + hashes_done;
+			max_nonce = work->blk.nonce + hashes_done;
 		}
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -2714,20 +2709,20 @@ static void *miner_thread(void *userdata)
 		/* scan nonces for a proof-of-work hash */
 		switch (opt_algo) {
 		case ALGO_C:
-			rc = scanhash_c(thr_id, work.midstate, work.data + 64,
-				        work.hash1, work.hash, work.target,
+			rc = scanhash_c(thr_id, work->midstate, work->data + 64,
+				        work->hash1, work->hash, work->target,
 					max_nonce, &hashes_done,
-					work.blk.nonce);
+					work->blk.nonce);
 			break;
 
 #ifdef WANT_X8664_SSE2
 		case ALGO_SSE2_64: {
 			unsigned int rc5 =
-			        scanhash_sse2_64(thr_id, work.midstate, work.data + 64,
-						 work.hash1, work.hash,
-						 work.target,
+			        scanhash_sse2_64(thr_id, work->midstate, work->data + 64,
+						 work->hash1, work->hash,
+						 work->target,
 					         max_nonce, &hashes_done,
-						 work.blk.nonce);
+						 work->blk.nonce);
 			rc = (rc5 == -1) ? false : true;
 			}
 			break;
@@ -2736,11 +2731,11 @@ static void *miner_thread(void *userdata)
 #ifdef WANT_X8664_SSE4
 		case ALGO_SSE4_64: {
 			unsigned int rc5 =
-			        scanhash_sse4_64(thr_id, work.midstate, work.data + 64,
-						 work.hash1, work.hash,
-						 work.target,
+			        scanhash_sse4_64(thr_id, work->midstate, work->data + 64,
+						 work->hash1, work->hash,
+						 work->target,
 					         max_nonce, &hashes_done,
-						 work.blk.nonce);
+						 work->blk.nonce);
 			rc = (rc5 == -1) ? false : true;
 			}
 			break;
@@ -2749,11 +2744,11 @@ static void *miner_thread(void *userdata)
 #ifdef WANT_SSE2_4WAY
 		case ALGO_4WAY: {
 			unsigned int rc4 =
-				ScanHash_4WaySSE2(thr_id, work.midstate, work.data + 64,
-						  work.hash1, work.hash,
-						  work.target,
+				ScanHash_4WaySSE2(thr_id, work->midstate, work->data + 64,
+						  work->hash1, work->hash,
+						  work->target,
 						  max_nonce, &hashes_done,
-						  work.blk.nonce);
+						  work->blk.nonce);
 			rc = (rc4 == -1) ? false : true;
 			}
 			break;
@@ -2761,24 +2756,24 @@ static void *miner_thread(void *userdata)
 
 #ifdef WANT_VIA_PADLOCK
 		case ALGO_VIA:
-			rc = scanhash_via(thr_id, work.data, work.target,
+			rc = scanhash_via(thr_id, work->data, work->target,
 					  max_nonce, &hashes_done,
-					  work.blk.nonce);
+					  work->blk.nonce);
 			break;
 #endif
 		case ALGO_CRYPTOPP:
-			rc = scanhash_cryptopp(thr_id, work.midstate, work.data + 64,
-				        work.hash1, work.hash, work.target,
+			rc = scanhash_cryptopp(thr_id, work->midstate, work->data + 64,
+				        work->hash1, work->hash, work->target,
 					max_nonce, &hashes_done,
-					work.blk.nonce);
+					work->blk.nonce);
 			break;
 
 #ifdef WANT_CRYPTOPP_ASM32
 		case ALGO_CRYPTOPP_ASM32:
-			rc = scanhash_asm32(thr_id, work.midstate, work.data + 64,
-				        work.hash1, work.hash, work.target,
+			rc = scanhash_asm32(thr_id, work->midstate, work->data + 64,
+				        work->hash1, work->hash, work->target,
 					max_nonce, &hashes_done,
-					work.blk.nonce);
+					work->blk.nonce);
 			break;
 #endif
 
@@ -2791,21 +2786,21 @@ static void *miner_thread(void *userdata)
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
 
-		hashes_done -= work.blk.nonce;
+		hashes_done -= work->blk.nonce;
 		hashmeter(thr_id, &diff, hashes_done);
 		total_hashes += hashes_done;
-		work.blk.nonce += hashes_done;
+		work->blk.nonce += hashes_done;
 
 		/* adjust max_nonce to meet target cycle time */
 		if (diff.tv_usec > 500000)
 			diff.tv_sec++;
 		if (diff.tv_sec && diff.tv_sec != cycle) {
-			max64 = work.blk.nonce +
+			max64 = work->blk.nonce +
 				((uint64_t)hashes_done * cycle) / diff.tv_sec;
 		} else if (!diff.tv_sec)
-			max64 = work.blk.nonce + (hashes_done * 2);
+			max64 = work->blk.nonce + (hashes_done * 2);
 		else
-			max64 = work.blk.nonce + hashes_done;
+			max64 = work->blk.nonce + hashes_done;
 		if (max64 > 0xfffffffaULL)
 			max64 = 0xfffffffaULL;
 		max_nonce = max64;
@@ -2814,11 +2809,11 @@ static void *miner_thread(void *userdata)
 		if (unlikely(rc)) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
-			if (unlikely(!submit_work_async(mythr, &work))) {
+			if (unlikely(!submit_work_async(mythr, work))) {
 				applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
 				break;
 			}
-			work.blk.nonce += 4;
+			work->blk.nonce += 4;
 		}
 
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
@@ -2836,8 +2831,8 @@ static void *miner_thread(void *userdata)
 			decay_time(&hash_divfloat , (double)((MAXTHREADS / total_hashes) ? : 1));
 			hash_div = hash_divfloat;
 			needs_work = true;
-		} else if (work_restart[thr_id].restart || stale_work(&work) ||
-			work.blk.nonce >= MAXTHREADS - hashes_done)
+		} else if (work_restart[thr_id].restart || stale_work(work) ||
+			work->blk.nonce >= MAXTHREADS - hashes_done)
 				needs_work = true;
 	}
 
@@ -2962,7 +2957,7 @@ static void *gpuminer_thread(void *userdata)
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
 
-	struct work *work = malloc(sizeof(struct work));
+	struct work *work = make_work();
 	unsigned int threads;
 	unsigned const int vectors = clState->preferred_vwidth;
 	unsigned int hashes;
@@ -3179,11 +3174,7 @@ static void convert_to_work(json_t *val)
 	struct work *work;
 	bool rc;
 
-	work = calloc(sizeof(*work), 1);
-	if (unlikely(!work)) {
-		applog(LOG_ERR, "OOM in convert_to_work");
-		return;
-	}
+	work = make_work();
 
 	rc= work_decode(json_object_get(val, "result"), work);
 	if (unlikely(!rc)) {
