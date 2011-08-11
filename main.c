@@ -693,6 +693,7 @@ static char *load_config(const char *arg, void *unused)
 static char *print_ndevs_and_exit(int *ndevs)
 {
 	printf("%i GPU devices detected\n", *ndevs);
+	fflush(stdout);
 	exit(*ndevs);
 }
 #endif
