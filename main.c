@@ -600,13 +600,13 @@ static struct opt_table opt_config_table[] = {
 
 #if !defined(WIN32)
 	OPT_WITH_ARG("--monitor|-m",
-		    opt_set_charp, NULL, &opt_stderr_cmd,
-                    "Use custom pipe cmd for output messages"),
+		     opt_set_charp, NULL, &opt_stderr_cmd,
+		     "Use custom pipe cmd for output messages"),
 #endif // !WIN32
 
 	OPT_WITHOUT_ARG("--text-only|-T",
-                    opt_set_invbool, &use_curses,
-                    "Disable ncurses formatted screen output"),
+			opt_set_invbool, &use_curses,
+			"Disable ncurses formatted screen output"),
 	OPT_WITH_ARG("--url|-o",
 		     set_url, opt_show_charp, &trpc_url,
 		     "URL for bitcoin JSON-RPC server"),
@@ -3715,67 +3715,67 @@ out:
 #if !defined(WIN32)
 static void fork_monitor()
 {
-        // Make a pipe: [readFD, writeFD]
-        int pfd[2];
-        int r = pipe(pfd);
-        if (r<0) {
-                perror("pipe - failed to create pipe for --monitor");
-                exit(1);
-        }
+	// Make a pipe: [readFD, writeFD]
+	int pfd[2];
+	int r = pipe(pfd);
+	if (r<0) {
+		perror("pipe - failed to create pipe for --monitor");
+		exit(1);
+	}
 
-        // Make stderr write end of pipe
-        fflush(stderr);
-        r = dup2(pfd[1], 2);
-        if (r<0) {
-                perror("dup2 - failed to alias stderr to write end of pipe for --monitor");
-                exit(1);
-        }
-        r = close(pfd[1]);
-        if (r<0) {
-                perror("close - failed to close write end of pipe for --monitor");
-                exit(1);
-        }
+	// Make stderr write end of pipe
+	fflush(stderr);
+	r = dup2(pfd[1], 2);
+	if (r<0) {
+		perror("dup2 - failed to alias stderr to write end of pipe for --monitor");
+		exit(1);
+	}
+	r = close(pfd[1]);
+	if (r<0) {
+		perror("close - failed to close write end of pipe for --monitor");
+		exit(1);
+	}
 
-        // Don't let a dying monitor kill the main process
-        sighandler_t sr = signal(SIGPIPE, SIG_IGN);
-        if (SIG_ERR==sr) {
-                perror("signal - failed to edit signal mask for --monitor");
-                exit(1);
-        }
+	// Don't allow a dying monitor to kill the main process
+	sighandler_t sr = signal(SIGPIPE, SIG_IGN);
+	if (SIG_ERR==sr) {
+		perror("signal - failed to edit signal mask for --monitor");
+		exit(1);
+	}
 
-        // Fork a child process
-        r = fork();
-        if (r<0) {
-                perror("fork - failed to fork child process for --monitor");
-                exit(1);
-        }
+	// Fork a child process
+	r = fork();
+	if (r<0) {
+		perror("fork - failed to fork child process for --monitor");
+		exit(1);
+	}
 
-        // In child, launch command
-        if (0==r) {
-                // Make stdin read end of pipe
-                r = dup2(pfd[0], 0);
-                if (r<0) {
-                        perror("dup2 - in child, failed to alias read end of pipe to stdin for --monitor");
-                        exit(1);
-                }
-                close(pfd[0]);
-                if (r<0) {
-                        perror("close - in child, failed to close read end of  pipe for --monitor");
-                        exit(1);
-                }
+	// In child, launch command
+	if (0==r) {
+		// Make stdin read end of pipe
+		r = dup2(pfd[0], 0);
+		if (r<0) {
+			perror("dup2 - in child, failed to alias read end of pipe to stdin for --monitor");
+			exit(1);
+		}
+		close(pfd[0]);
+		if (r<0) {
+			perror("close - in child, failed to close read end of  pipe for --monitor");
+			exit(1);
+		}
 
-                // Launch user specified command
-                execl("/bin/bash", "/bin/bash", "-c", opt_stderr_cmd, (char*)NULL);
-                perror("execl - in child failed to exec user specified command for --monitor");
-                exit(1);
-        }
+		// Launch user specified command
+		execl("/bin/bash", "/bin/bash", "-c", opt_stderr_cmd, (char*)NULL);
+		perror("execl - in child failed to exec user specified command for --monitor");
+		exit(1);
+	}
 
-        // In parent, clean up unused fds
-        r = close(pfd[0]);
-        if (r<0) {
-                perror("close - failed to close read end of pipe for --monitor");
-                exit(1);
-        }
+	// In parent, clean up unused fds
+	r = close(pfd[0]);
+	if (r<0) {
+		perror("close - failed to close read end of pipe for --monitor");
+		exit(1);
+	}
 }
 #endif // !WIN32
 
@@ -3933,8 +3933,8 @@ int main (int argc, char *argv[])
 #endif
 
 #if !defined(WIN32)
-        if (opt_stderr_cmd)
-                fork_monitor();
+	if (opt_stderr_cmd)
+		fork_monitor();
 #endif // !WIN32
 
 	mining_threads = opt_n_threads + gpu_threads;
