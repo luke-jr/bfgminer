@@ -2445,16 +2445,6 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 
 	hash_inc = MAXTHREADS / hash_div * 2;
 	if ((uint64_t)work->blk.nonce + hash_inc < MAXTHREADS) {
-		/* Don't keep handing it out if it's getting old, but try to
-		 * roll it instead */
-		if ((now->tv_sec - work->tv_staged.tv_sec) > opt_scantime) {
-			if (!can_roll(work))
-				return false;
-			else {
-				roll_work(work);
-				return true;
-			}
-		}
 		/* Okay we can divide it up */
 		work->blk.nonce += hash_inc;
 		work->cloned = true;
