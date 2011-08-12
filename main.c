@@ -2241,7 +2241,7 @@ static int requests_queued(void)
 	return ret;
 }
 
-static bool pool_active(struct pool *pool)
+static bool pool_active(struct pool *pool, bool pinging)
 {
 	bool ret = false;
 	json_t *val;
@@ -2284,7 +2284,8 @@ static bool pool_active(struct pool *pool)
 	} else {
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
-		applog(LOG_WARNING, "Pool down, URL or credentials invalid");
+		if (!pinging)
+			applog(LOG_WARNING, "Pool down, URL or credentials invalid");
 	}
 
 	curl_easy_cleanup(curl);
@@ -2443,7 +2444,7 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 {
 	uint64_t hash_inc;
 
-	if (hash_div < 3 || work->clone)
+	if (work->clone)
 		return false;
 
 	hash_inc = MAXTHREADS / hash_div * 2;
@@ -2454,6 +2455,9 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 		local_work++;
 		if (opt_debug)
 			applog(LOG_DEBUG, "Successfully divided work");
+		return true;
+	} else if (can_roll(work)) {
+		roll_work(work);
 		return true;
 	}
 	return false;
@@ -3533,7 +3537,7 @@ static void *watchdog_thread(void *userdata)
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 60) {
 				gettimeofday(&pool->tv_idle, NULL);
-				if (pool_active(pool) && pool_tclear(pool, &pool->idle))
+				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
 		}
@@ -3730,7 +3734,7 @@ static bool input_pool(bool live)
 	/* Test the pool before we enable it if we're live running, otherwise
 	 * it will be tested separately */
 	ret = true;
-	if (live && pool_active(pool))
+	if (live && pool_active(pool, false))
 		pool->enabled = true;
 	pools[total_pools++] = pool;
 out:
@@ -4040,7 +4044,7 @@ int main (int argc, char *argv[])
 		struct pool *pool;
 
 		pool = pools[i];
-		if (pool_active(pool)) {
+		if (pool_active(pool, false)) {
 			if (!currentpool)
 				currentpool = pool;
 			applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
