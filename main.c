@@ -1123,6 +1123,20 @@ out:
 	return rc;
 }
 
+static struct work *make_work(void)
+{
+	struct work *work = calloc(1, sizeof(struct work));
+
+	if (unlikely(!work))
+		quit(1, "Failed to calloc work in make_work");
+	return work;
+}
+
+static void free_work(struct work *work)
+{
+	free(work);
+}
+
 static void workio_cmd_free(struct workio_cmd *wc)
 {
 	if (!wc)
@@ -1130,7 +1144,7 @@ static void workio_cmd_free(struct workio_cmd *wc)
 
 	switch (wc->cmd) {
 	case WC_SUBMIT_WORK:
-		free(wc->u.work);
+		free_work(wc->u.work);
 		break;
 	default: /* do nothing */
 		break;
@@ -1225,15 +1239,6 @@ static void sighandler(int sig)
 	kill_work();
 }
 
-static struct work *make_work(void)
-{
-	struct work *work = calloc(1, sizeof(struct work));
-
-	if (unlikely(!work))
-		quit(1, "Failed to calloc work in make_work");
-	return work;
-}
-
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
@@ -1252,7 +1257,7 @@ static void *get_work_thread(void *userdata)
 	while (!get_upstream_work(ret_work, wc->lagging)) {
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
-			free(ret_work);
+			free_work(ret_work);
 			kill_work();
 			goto out;
 		}
@@ -1270,7 +1275,7 @@ static void *get_work_thread(void *userdata)
 	if (unlikely(!tq_push(thr_info[stage_thr_id].q, ret_work))) {
 		applog(LOG_ERR, "Failed to tq_push work in workio_get_work");
 		kill_work();
-		free(ret_work);
+		free_work(ret_work);
 	}
 
 out:
@@ -2278,7 +2283,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 		} else {
 			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
-			free(work);
+			free_work(work);
 		}
 		json_decref(val);
 	} else {
@@ -2362,7 +2367,7 @@ static void discard_work(struct work *work)
 			applog(LOG_DEBUG, "Discarded cloned work");
 	} else if (opt_debug)
 		applog(LOG_DEBUG, "Discarded work");
-	free(work);
+	free_work(work);
 }
 
 static void discard_staged(void)
@@ -2551,7 +2556,7 @@ retry:
 		work->clone = true;
 	} else {
 		dec_queued();
-		free(work_heap);
+		free_work(work_heap);
 	}
 
 	ret = true;
