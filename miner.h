@@ -157,6 +157,8 @@ struct cgpu_info {
 	unsigned int vwidth;
 	size_t max_work_size;
 	size_t work_size;
+
+	char init[40];
 };
 
 struct thr_info {
