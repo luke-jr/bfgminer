@@ -3637,6 +3637,7 @@ static void print_summary(void)
 			print_status(i);
 	}
 	printf("\n");
+	fflush(stdout);
 }
 
 void quit(int status, const char *format, ...)
