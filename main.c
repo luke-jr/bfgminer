@@ -36,6 +36,12 @@
 #include "findnonce.h"
 #include "ocl.h"
 
+#if defined(__linux)
+	#include <sys/mman.h>
+	#include <sys/wait.h>
+	#include <sys/types.h>
+#endif
+
 #define PROGRAM_NAME		"cgminer"
 #define DEF_RPC_URL		"http://127.0.0.1:8332/"
 #define DEF_RPC_USERNAME	"rpcuser"
@@ -118,6 +124,8 @@ struct strategies {
 	{ "Load Balance" },
 };
 
+static size_t max_name_len = 0;
+static char *name_spaces_pad = NULL;
 static const char *algo_names[] = {
 	[ALGO_C]		= "c",
 #ifdef WANT_SSE2_4WAY
@@ -135,6 +143,27 @@ static const char *algo_names[] = {
 #endif
 #ifdef WANT_X8664_SSE4
 	[ALGO_SSE4_64]		= "sse4_64",
+#endif
+};
+
+typedef void (*sha256_func)();
+static const sha256_func sha256_funcs[] = {
+	[ALGO_C]		= (sha256_func)scanhash_c,
+#ifdef WANT_SSE2_4WAY
+	[ALGO_4WAY]		= (sha256_func)ScanHash_4WaySSE2,
+#endif
+#ifdef WANT_VIA_PADLOCK
+	[ALGO_VIA]		= (sha256_func)scanhash_via,
+#endif
+	[ALGO_CRYPTOPP]		=  (sha256_func)scanhash_cryptopp,
+#ifdef WANT_CRYPTOPP_ASM32
+	[ALGO_CRYPTOPP_ASM32]	= (sha256_func)scanhash_asm32,
+#endif
+#ifdef WANT_X8664_SSE2
+	[ALGO_SSE2_64]		= (sha256_func)scanhash_sse2_64,
+#endif
+#ifdef WANT_X8664_SSE4
+	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64
 #endif
 };
 
@@ -329,10 +358,267 @@ static struct pool *current_pool(void)
 	return pool;
 }
 
+static double bench_algo_stage3(
+	enum sha256_algos algo
+)
+{
+	static uint8_t some_block[] = {
+		0x00, 0x00, 0x00, 0x01, 0x20, 0x00, 0xD8, 0x07, 0x17, 0xC9, 0x13, 0x6F, 0xDC, 0xBE, 0xDE, 0xB7,
+		0xB2, 0x14, 0xEF, 0xD1, 0x72, 0x7F, 0xA3, 0x72, 0xB2, 0x5D, 0x88, 0xF0, 0x00, 0x00, 0x05, 0xAA,
+		0x00, 0x00, 0x00, 0x00, 0x92, 0x8B, 0x4C, 0x77, 0xF5, 0xB2, 0xE6, 0x56, 0x96, 0x27, 0xE0, 0x66,
+		0x3C, 0x5B, 0xDD, 0xDC, 0x88, 0x6A, 0x7D, 0x7C, 0x7B, 0x8C, 0xE4, 0x92, 0x38, 0x92, 0x58, 0x2E,
+		0x18, 0x4D, 0x95, 0x9E, 0x4E, 0x44, 0xF1, 0x5F, 0x1A, 0x08, 0xE1, 0xE5, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x02, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+		0x86, 0x7E, 0x3A, 0xAF, 0x37, 0x83, 0xAF, 0xA0, 0xB5, 0x33, 0x2C, 0x28, 0xED, 0xA9, 0x89, 0x3E,
+		0x0A, 0xB6, 0x46, 0x81, 0xC2, 0x71, 0x4F, 0x34, 0x5A, 0x74, 0x89, 0x0E, 0x2B, 0x04, 0xB3, 0x16,
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xF6, 0x09, 0x02, 0x00, 0x00, 0x00, 0x00,
+		0x55, 0xF1, 0x44, 0x4E, 0x00, 0x00, 0x00, 0x00, 0x79, 0x63, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	};
+	struct work work __attribute__((aligned(128)));
+	assert(sizeof(work) == sizeof(some_block));
+	memcpy(&work, &some_block, sizeof(work));
+
+	struct work_restart dummy;
+	work_restart = &dummy;
+
+	struct timeval end;
+	struct timeval start;
+	uint64_t hashes_done = 0;
+	uint32_t max_nonce = (1<<21);
+
+	gettimeofday(&start, 0);
+		#ifdef WANT_VIA_PADLOCK
+			if (ALGO_VIA==algo) {
+				(void)scanhash_via(
+					0,
+					work.data,
+					work.target,
+					max_nonce,
+					&hashes_done,
+					work.blk.nonce
+				);
+			} else
+		#endif
+		{
+			sha256_func func = sha256_funcs[algo];
+			(*func)(
+				0,
+				work.midstate,
+				work.data + 64,
+				work.hash1,
+				work.hash,
+				work.target,
+				max_nonce,
+				&hashes_done,
+				work.blk.nonce
+			);
+		}
+	gettimeofday(&end, 0);
+	work_restart = NULL;
+
+	uint64_t usec_end = ((uint64_t)end.tv_sec)*1000*1000 + end.tv_usec;
+	uint64_t usec_start = ((uint64_t)start.tv_sec)*1000*1000 + start.tv_usec;
+	uint64_t usec_elapsed = usec_end - usec_start;
+
+	double rate = -1.0;
+	if (0<usec_elapsed) {
+		rate = (1.0*hashes_done)/usec_elapsed;
+	}
+	return rate;
+}
+
+static double bench_algo_stage2(
+	enum sha256_algos algo
+)
+{
+	#if defined(__linux)
+		// Make a shared+anonymous mmap
+		const size_t map_size = 4096;
+		void *map = mmap(
+			(void*)NULL,
+			map_size,
+			PROT_READ |
+			PROT_WRITE,
+			MAP_SHARED   |
+			MAP_ANONYMOUS,
+			-1,
+			0
+		);
+		if ((void*)-1 == map) {
+			perror("bench algo, mmap failed");
+			exit(1);
+		}
+
+		// Load a canary rate in the map
+		double rate = -1.23457;
+		memcpy(map, &rate, sizeof(rate));
+
+		// Fork a child to do the actual benchmarking
+		pid_t child_pid = fork();
+		if (0==child_pid) {
+
+			// Do the dangerous work in the child
+			double r = bench_algo_stage3(algo);
+
+			// Load result in shared map and bail
+			memcpy(map, &r, sizeof(r));
+			exit(0);
+		}
+
+		// Parent waits for a result from child
+		int nb_loops = 0;
+		while (1) {
+
+			// Wait for child to die
+			int status;
+			int r = waitpid(child_pid, &status, WNOHANG);
+			if (child_pid==r) {
+				// Child died somehow. Copy result and bail
+				memcpy(&rate, map, sizeof(rate));
+				break;
+			} else if (r<0) {
+				perror("bench_algo: waitpid failed. giving up.");
+				exit(1);
+			}
+
+			// Give up on child after a ~60s
+			if (60<nb_loops) {
+				kill(child_pid, SIGKILL);
+				waitpid(child_pid, &status, 0);
+				break;
+			}
+
+			// Wait a bit longer
+			++nb_loops;
+			sleep(1);
+		}
+
+		// Clean up shared map
+		int r = munmap(map, map_size);
+		if (r<0) {
+			perror("bench algo, munmap failed");
+			exit(1);
+		}
+	#else
+		// Not on linux, just run the risk of an illegal instruction
+		rate = bench_algo_stage3(algo);
+	#endif
+
+	// Done
+	return rate;
+}
+
+static void bench_algo(
+	double            *best_rate,
+	enum sha256_algos *best_algo,
+	enum sha256_algos algo
+)
+{
+	size_t n = max_name_len - strlen(algo_names[algo]);
+	memset(name_spaces_pad, ' ', n);
+	name_spaces_pad[n] = 0;
+
+	applog(LOG_ERR, "\"%s\"%s : benchmarking algorithm ...", algo_names[algo], name_spaces_pad);
+	double rate = bench_algo_stage2(algo);
+
+	if (rate<0.0) {
+		applog(LOG_ERR, "\"%s\"%s : algorithm fails on this platform", algo_names[algo], name_spaces_pad);
+	} else {
+		applog(LOG_ERR, "\"%s\"%s : algorithm runs at %.5f MH/s", algo_names[algo], name_spaces_pad, rate);
+		if (*best_rate<rate) {
+			*best_rate = rate;
+			*best_algo = algo;
+		}
+	}
+}
+
+static void init_max_name_len()
+{
+	size_t i;
+	size_t nb_names = sizeof(algo_names)/sizeof(algo_names[0]);
+	for (i=0; i<nb_names; ++i) {
+		const char *p = algo_names[i];
+		size_t name_len = p ? strlen(p) : 0;
+		if (max_name_len<name_len) {
+			max_name_len = name_len;
+		}
+	}
+
+	name_spaces_pad = (char*) malloc(max_name_len+16);
+	if (0==name_spaces_pad) {
+		perror("malloc failed");
+		exit(1);
+	}
+}
+
+static enum sha256_algos pick_fastest_algo()
+{
+	double best_rate = -1.0;
+	enum sha256_algos best_algo = 0;
+
+	bench_algo(&best_rate, &best_algo, ALGO_C);
+	#ifdef WANT_SSE2_4WAY
+		bench_algo(&best_rate, &best_algo, ALGO_4WAY);
+	#endif
+	#ifdef WANT_VIA_PADLOCK
+		bench_algo(&best_rate, &best_algo, ALGO_VIA);
+	#endif
+	bench_algo(&best_rate, &best_algo, ALGO_CRYPTOPP);
+	#ifdef WANT_CRYPTOPP_ASM32
+		bench_algo(&best_rate, &best_algo, ALGO_CRYPTOPP_ASM32);
+	#endif
+	#ifdef WANT_X8664_SSE2
+		bench_algo(&best_rate, &best_algo, ALGO_SSE2_64);
+	#endif
+	#ifdef WANT_X8664_SSE4
+		bench_algo(&best_rate, &best_algo, ALGO_SSE4_64);
+	#endif
+
+	size_t n = max_name_len - strlen(algo_names[best_algo]);
+	memset(name_spaces_pad, ' ', n);
+	name_spaces_pad[n] = 0;
+	applog(
+		LOG_ERR,
+		"\"%s\"%s : is fastest algorithm at %.5f MH/s",
+		algo_names[best_algo],
+		name_spaces_pad,
+		best_rate
+	);
+
+	return best_algo;
+}
+
 /* FIXME: Use asprintf for better errors. */
 static char *set_algo(const char *arg, enum sha256_algos *algo)
 {
 	enum sha256_algos i;
+
+	if (!strcmp(arg, "auto")) {
+		*algo = pick_fastest_algo();
+		return NULL;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
 		if (algo_names[i] && !strcmp(arg, algo_names[i])) {
@@ -515,7 +801,8 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--algo|-a",
 		     set_algo, show_algo, &opt_algo,
 		     "Specify sha256 implementation for CPU mining:\n"
-		     "\tc\t\tLinux kernel sha256, implemented in C"
+		     "\tauto\t\tBenchmark at startup and pick fastest algorithm"
+		     "\n\tc\t\tLinux kernel sha256, implemented in C"
 #ifdef WANT_SSE2_4WAY
 		     "\n\t4way\t\ttcatm's 4-way SSE2 implementation"
 #endif
@@ -809,7 +1096,7 @@ static void curses_print_status(int thr_id)
 
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
-	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION " - Started: %s", datestamp);
+	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION " - Started: %s CPU Algo: %s", datestamp, algo_names[opt_algo]);
 	wattroff(statuswin, A_BOLD);
 	wmove(statuswin, 1, 0);
 	whline(statuswin, '-', 80);
@@ -3861,6 +4148,8 @@ int main (int argc, char *argv[])
 		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&control_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init");
+
+	init_max_name_len();
 
 	handler.sa_handler = &sighandler;
 	sigaction(SIGTERM, &handler, &termhandler);
