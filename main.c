@@ -2302,7 +2302,7 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-static bool queue_request(struct thr_info *thr)
+static bool queue_request(struct thr_info *thr, bool needed)
 {
 	int maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
@@ -2332,7 +2332,7 @@ static bool queue_request(struct thr_info *thr)
 	/* If we're queueing work faster than we can stage it, consider the
 	 * system lagging and allow work to be gathered from another pool if
 	 * possible */
-	if (rq > rs)
+	if (!rs && rq && needed)
 		wc->lagging = true;
 
 	if (opt_debug)
@@ -2399,7 +2399,7 @@ static void flush_requests(void)
 
 	for (i = 0; i < stale; i++) {
 		/* Queue a whole batch of new requests */
-		if (unlikely(!queue_request(NULL))) {
+		if (unlikely(!queue_request(NULL, true))) {
 			applog(LOG_ERR, "Failed to queue requests in flush_requests");
 			kill_work();
 			break;
@@ -2481,7 +2481,7 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 	thread_reportout(thr);
 retry:
 	pool = current_pool();
-	if (unlikely(!requested && !queue_request(thr))) {
+	if (unlikely(!requested && !queue_request(thr, true))) {
 		applog(LOG_WARNING, "Failed to queue_request in get_work");
 		goto out;
 	}
@@ -2824,7 +2824,7 @@ static void *miner_thread(void *userdata)
 		timeval_subtract(&diff, &tv_end, &tv_workstart);
 		if (!requested && (diff.tv_sec >= request_interval)) {
 			thread_reportout(mythr);
-			if (unlikely(!queue_request(mythr))) {
+			if (unlikely(!queue_request(mythr, false))) {
 				applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
 				goto out;
 			}
@@ -3133,7 +3133,7 @@ static void *gpuminer_thread(void *userdata)
 #endif
 			if (diff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
 				thread_reportout(mythr);
-				if (unlikely(!queue_request(mythr))) {
+				if (unlikely(!queue_request(mythr, false))) {
 					applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
 					goto out;
 				}
@@ -3506,7 +3506,7 @@ static void *watchdog_thread(void *userdata)
 
 		sleep(interval);
 		if (requests_queued() < opt_queue)
-			queue_request(NULL);
+			queue_request(NULL, false);
 
 		hashmeter(-1, &zero_tv, 0);
 
