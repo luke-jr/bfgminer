@@ -52,6 +52,8 @@ char *file_contents(const char *filename, int *length)
 	return (char*)buffer;
 }
 
+static cl_uint numDevices;
+
 int clDevicesNum() {
 	cl_int status = 0;
 
@@ -109,6 +111,95 @@ int clDevicesNum() {
 	}
 
 	return numDevices;
+}
+
+static cl_platform_id platform = NULL;
+static cl_device_id *devices;
+
+int preinit_devices(void)
+{
+	cl_int status;
+	cl_uint numPlatforms;
+	int i;
+
+	status = clGetPlatformIDs(0, NULL, &numPlatforms);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
+		return -1;
+	}
+
+	if (numPlatforms > 0)
+	{
+		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
+		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
+		if (status != CL_SUCCESS)
+		{
+			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
+			return -1;
+		}
+
+		for(i = 0; i < numPlatforms; ++i)
+		{
+			char pbuff[100];
+			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
+			if (status != CL_SUCCESS)
+			{
+				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
+				free(platforms);
+				return -1;
+			}
+			platform = platforms[i];
+			if (!strcmp(pbuff, "Advanced Micro Devices, Inc."))
+			{
+				break;
+			}
+		}
+		free(platforms);
+	}
+
+	if (platform == NULL) {
+		perror("NULL platform found!\n");
+		return -1;
+	}
+
+	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error: Getting Device IDs (num)");
+		return -1;
+	}
+
+	if (numDevices > 0 ) {
+		devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
+
+		/* Now, get the device list data */
+
+		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+		if (status != CL_SUCCESS)
+		{
+			applog(LOG_ERR, "Error: Getting Device IDs (list)");
+			return -1;
+		}
+
+		applog(LOG_INFO, "List of devices:");
+
+		unsigned int i;
+		for(i=0; i<numDevices; i++) {
+			char pbuff[100];
+			status = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
+			if (status != CL_SUCCESS)
+			{
+				applog(LOG_ERR, "Error: Getting Device Info");
+				return -1;
+			}
+
+			applog(LOG_INFO, "\t%i\t%s", i, pbuff);
+		}
+
+	} else return -1;
+
+	return 0;
 }
 
 static int advance(char **area, unsigned *remaining, const char *marker)
@@ -176,7 +267,6 @@ void patch_opcodes(char *w, unsigned remaining)
 _clState *initCQ(_clState *clState, unsigned int gpu)
 {
 	cl_int status = 0;
-	cl_device_id *devices = clState->devices;
 
 	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
@@ -226,108 +316,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	int patchbfi = 0;
 	cl_int status = 0;
-	unsigned int i;
+	size_t nDevices;
 
 	_clState *clState = calloc(1, sizeof(_clState));
-
-	cl_uint numPlatforms;
-	cl_platform_id platform = NULL;
-	status = clGetPlatformIDs(0, NULL, &numPlatforms);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
-		return NULL;
-	}
-
-	if (numPlatforms > 0)
-	{
-		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
-		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-		if (status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
-			return NULL;
-		}
-
-		for(i = 0; i < numPlatforms; ++i)
-		{
-			char pbuff[100];
-			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
-				free(platforms);
-				return NULL;
-			}
-			platform = platforms[i];
-			if (!strcmp(pbuff, "Advanced Micro Devices, Inc."))
-			{
-				break;
-			}
-		}
-		free(platforms);
-	}
-
-	if (platform == NULL) {
-		perror("NULL platform found!\n");
-		return NULL;
-	}
-
-	size_t nDevices;
-	cl_uint numDevices;
-	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Getting Device IDs (num)");
-		return NULL;
-	}
-
-	cl_device_id *devices;
-	if (numDevices > 0 ) {
-		devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
-		clState->devices = devices;
-
-		/* Now, get the device list data */
-
-		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
-		if (status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error: Getting Device IDs (list)");
-			return NULL;
-		}
-
-		applog(LOG_INFO, "List of devices:");
-
-		unsigned int i;
-		for(i=0; i<numDevices; i++) {
-			char pbuff[100];
-			status = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error: Getting Device Info");
-				return NULL;
-			}
-
-			applog(LOG_INFO, "\t%i\t%s", i, pbuff);
-		}
-
-		if (gpu < numDevices) {
-			char pbuff[100];
-			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, &nDevices);
-			if (status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error: Getting Device Info");
-				return NULL;
-			}
-
-			applog(LOG_INFO, "Selected %i: %s", gpu, pbuff);
-			strncpy(name, pbuff, nameSize);
-		} else {
-			applog(LOG_ERR, "Invalid GPU %i", gpu);
-			return NULL;
-		}
-
-	} else return NULL;
 
 	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
 
@@ -335,6 +326,22 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Error: Creating Context. (clCreateContextFromType)");
+		return NULL;
+	}
+
+	if (gpu < numDevices) {
+		char pbuff[100];
+		status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, &nDevices);
+		if (status != CL_SUCCESS)
+		{
+			applog(LOG_ERR, "Error: Getting Device Info");
+			return NULL;
+		}
+
+		applog(LOG_INFO, "Selected %i: %s", gpu, pbuff);
+		strncpy(name, pbuff, nameSize);
+	} else {
+		applog(LOG_ERR, "Invalid GPU %i", gpu);
 		return NULL;
 	}
 
