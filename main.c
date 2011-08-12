@@ -3415,8 +3415,44 @@ static void *reinit_gpu(void *userdata)
 
 	return NULL;
 }
+
+static void *ping_gputhread(void *userdata)
+{
+	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
+	int gpu = cgpu->cpu_gpu;
+	struct thr_info *thr;
+	_clState *clState;
+	int thr_id;
+
+	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
+		if (dev_from_id(thr_id) != gpu)
+			continue;
+
+		thr = &thr_info[thr_id];
+		clState = clStates[thr_id];
+		tq_push(thr->q, &ping);
+		applog(LOG_WARNING, "Attempting to flush command queue of thread %d", thr_id);
+		clFlush(clState->commandQueue);
+		clFinish(clState->commandQueue);
+		tq_push(thr->q, &ping);
+	}
+
+	return NULL;
+}
+
+static void ping_gpu(struct cgpu_info *cgpu)
+{
+	pthread_t ping_thread;
+
+	if (unlikely(pthread_create(&ping_thread, NULL, ping_gputhread, (void *)cgpu)))
+		applog(LOG_ERR, "Failed to create ping thread");
+}
 #else
 static void *reinit_gpu(void *userdata)
+{
+}
+
+static void ping_gpu(struct cgpu_info *cgpu)
 {
 }
 #endif
@@ -3531,7 +3567,7 @@ static void *watchdog_thread(void *userdata)
 				gpus[gpu].status = LIFE_SICK;
 				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
 				/* Sent it a ping, it might respond */
-				tq_push(thr->q, &ping);
+				ping_gpu(thr->cgpu);
 			} else if (now.tv_sec - thr->last.tv_sec > 300 && gpus[i].status == LIFE_SICK) {
 				gpus[gpu].status = LIFE_DEAD;
 				applog(LOG_ERR, "Thread %d idle for more than 5 minutes, GPU %d declared DEAD!", i, gpu);
