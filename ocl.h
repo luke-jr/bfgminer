@@ -7,6 +7,7 @@
 #else
 #include <CL/cl.h>
 #endif
+#include "miner.h"
 
 typedef struct {
 	cl_context context;
@@ -14,16 +15,13 @@ typedef struct {
 	cl_command_queue commandQueue;
 	cl_program program;
 	cl_mem outputBuffer;
-	int hasBitAlign;
 	cl_uint preferred_vwidth;
-	size_t max_work_size;
-	size_t work_size;
 } _clState;
 
 extern char *file_contents(const char *filename, int *length);
 extern int clDevicesNum();
 extern int preinit_devices(void);
 extern _clState *initCQ(_clState *clState, unsigned int gpu);
-extern _clState *initCl(unsigned int gpu, char *name, size_t nameSize);
+extern _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize);
 #endif /* HAVE_OPENCL */
 #endif /* __OCL_H__ */

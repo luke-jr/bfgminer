@@ -2952,6 +2952,7 @@ static void *gpuminer_thread(void *userdata)
 	uint32_t *res, *blank_res;
 	double gpu_ms_average = 7;
 	int gpu = dev_from_id(thr_id);
+	struct cgpu_info *cgpu = mythr->cgpu;
 
 	size_t globalThreads[1];
 	size_t localThreads[1];
@@ -2963,7 +2964,7 @@ static void *gpuminer_thread(void *userdata)
 
 	struct work *work = make_work();
 	unsigned int threads;
-	unsigned const int vectors = clState->preferred_vwidth;
+	unsigned const int vectors = cgpu->vwidth;
 	unsigned int hashes;
 	unsigned int hashes_done = 0;
 
@@ -3000,7 +3001,7 @@ static void *gpuminer_thread(void *userdata)
 	}
 
 	gettimeofday(&tv_start, NULL);
-	localThreads[0] = clState->work_size;
+	localThreads[0] = cgpu->work_size;
 	set_threads_hashes(vectors, &threads, &hashes, &globalThreads[0],
 			   localThreads[0]);
 
@@ -3014,7 +3015,7 @@ static void *gpuminer_thread(void *userdata)
 	if (unlikely(status != CL_SUCCESS))
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 
-	mythr->cgpu->status = LIFE_WELL;
+	cgpu->status = LIFE_WELL;
 	if (opt_debug)
 		applog(LOG_DEBUG, "Popping ping in gpuminer thread");
 
@@ -3141,7 +3142,7 @@ static void *gpuminer_thread(void *userdata)
 		}
 		if (unlikely(!gpu_devices[gpu])) {
 			applog(LOG_WARNING, "Thread %d being disabled", thr_id);
-			mythr->rolling = mythr->cgpu->rolling = 0;
+			mythr->rolling = cgpu->rolling = 0;
 			if (opt_debug)
 				applog(LOG_DEBUG, "Popping wakeup ping in gpuminer thread");
 
@@ -4029,13 +4030,15 @@ int main (int argc, char *argv[])
 	/* start GPU mining threads */
 	for (j = 0; j < nDevs * opt_g_threads; j++) {
 		int gpu = j % nDevs;
+		struct cgpu_info *cgpu;
 
 		gpus[gpu].is_gpu = 1;
 		gpus[gpu].cpu_gpu = gpu;
 
 		thr = &thr_info[i];
 		thr->id = i;
-		thr->cgpu = &gpus[gpu];
+		cgpu = &gpus[gpu];
+		thr->cgpu = cgpu;
 
 		thr->q = tq_new();
 		if (!thr->q)
@@ -4051,7 +4054,7 @@ int main (int argc, char *argv[])
 		}
 
 		applog(LOG_INFO, "Init GPU thread %i", i);
-		clStates[i] = initCl(gpu, name, sizeof(name));
+		clStates[i] = initCl(cgpu, name, sizeof(name));
 		if (!clStates[i]) {
 			applog(LOG_ERR, "Failed to init GPU thread %d", i);
 			gpu_devices[i] = false;

@@ -152,6 +152,11 @@ struct cgpu_info {
 	double efficiency;
 	double utility;
 	enum alive status;
+
+	int hasBitAlign;
+	unsigned int vwidth;
+	size_t max_work_size;
+	size_t work_size;
 };
 
 struct thr_info {
