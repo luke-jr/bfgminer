@@ -966,6 +966,7 @@ static bool submit_upstream_work(const struct work *work)
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	CURL *curl = curl_easy_init();
 	struct pool *pool = work->pool;
+	bool rolltime;
 
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
@@ -991,7 +992,7 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
 
 	/* issue JSON-RPC request */
-	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, pool);
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
@@ -1103,7 +1104,7 @@ static bool get_upstream_work(struct work *work, bool lagging)
 		applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-			    want_longpoll, false, pool);
+			    want_longpoll, false, &work->rolltime, pool);
 	if (unlikely(!val)) {
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 		goto out;
@@ -2251,6 +2252,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	bool ret = false;
 	json_t *val;
 	CURL *curl;
+	bool rolltime;
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
@@ -2260,7 +2262,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-			true, false, pool);
+			true, false, &rolltime, pool);
 
 	if (val) {
 		struct work *work = make_work();
@@ -2271,6 +2273,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
+			work->rolltime = rolltime;
 			if (opt_debug)
 				applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
@@ -2359,14 +2362,14 @@ static bool queue_request(struct thr_info *thr, bool needed)
 
 static void discard_work(struct work *work)
 {
-	if (!work->clone) {
+	if (!work->clone && !work->rolls) {
 		if (work->pool)
 			work->pool->discarded_work++;
 		total_discarded++;
 		if (opt_debug)
-			applog(LOG_DEBUG, "Discarded cloned work");
+			applog(LOG_DEBUG, "Discarded work");
 	} else if (opt_debug)
-		applog(LOG_DEBUG, "Discarded work");
+		applog(LOG_DEBUG, "Discarded cloned or rolled work");
 	free_work(work);
 }
 
@@ -2421,7 +2424,7 @@ static void flush_requests(void)
 
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && !stale_work(work, true) && work->pool->has_rolltime &&
+	return (work->pool && !stale_work(work, true) && work->rolltime &&
 		work->rolls < 11 && !work->clone);
 }
 
@@ -2437,7 +2440,6 @@ static void roll_work(struct work *work)
 	local_work++;
 	work->rolls++;
 	work->blk.nonce = 0;
-	gettimeofday(&work->tv_staged, NULL);
 	if (opt_debug)
 		applog(LOG_DEBUG, "Successfully rolled work");
 }
@@ -3177,7 +3179,7 @@ static void restart_threads(void)
 }
 
 /* Stage another work item from the work returned in a longpoll */
-static void convert_to_work(json_t *val)
+static void convert_to_work(json_t *val, bool rolltime)
 {
 	struct work *work;
 	bool rc;
@@ -3190,6 +3192,7 @@ static void convert_to_work(json_t *val)
 		return;
 	}
 	work->pool = current_pool();
+	work->rolltime = rolltime;
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing converted work to stage thread");
@@ -3250,11 +3253,12 @@ static void *longpoll_thread(void *userdata)
 
 	while (1) {
 		struct timeval start, end;
+		bool rolltime;
 		json_t *val;
 
 		gettimeofday(&start, NULL);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
-				    false, true, pool);
+				    false, true, &rolltime, pool);
 		if (likely(val)) {
 			/* Keep track of who ordered a restart_threads to make
 			 * sure it's only done once per new block */
@@ -3268,7 +3272,7 @@ static void *longpoll_thread(void *userdata)
 				block_changed = BLOCK_NONE;
 			}
 
-			convert_to_work(val);
+			convert_to_work(val, rolltime);
 			failures = 0;
 			json_decref(val);
 		} else {

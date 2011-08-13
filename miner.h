@@ -218,7 +218,8 @@ extern bool opt_protocol;
 extern bool opt_log_output;
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
-			     const char *rpc_req, bool, bool, struct pool *pool);
+			     const char *rpc_req, bool, bool, bool *,
+			     struct pool *pool);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
@@ -308,7 +309,6 @@ struct pool {
 	int accepted, rejected;
 	bool submit_fail;
 	bool idle;
-	bool has_rolltime;
 	bool probed;
 	bool enabled;
 	unsigned int getwork_requested;
@@ -344,6 +344,7 @@ struct work {
 	struct timeval	tv_staged;
 	bool		clone;
 	bool		cloned;
+	bool		rolltime;
 };
 
 enum cl_kernel {

@@ -300,7 +300,7 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
-		      bool probe, bool longpoll,
+		      bool probe, bool longpoll, bool *rolltime,
 		      struct pool *pool)
 {
 	json_t *val, *err_val, *res_val;
@@ -335,10 +335,8 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_READDATA, &upload_data);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-	if (probing) {
-		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
-		curl_easy_setopt(curl, CURLOPT_HEADERDATA, &hi);
-	}
+	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
+	curl_easy_setopt(curl, CURLOPT_HEADERDATA, &hi);
 	if (userpass) {
 		curl_easy_setopt(curl, CURLOPT_USERPWD, userpass);
 		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
@@ -387,11 +385,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 			free(hi.lp_path);
 	}
 
-	if (probing) {
+	if (probing)
 		pool->probed = true;
-		pool->has_rolltime = hi.has_rolltime;
-	}
-	
+	*rolltime = hi.has_rolltime;
+
 	hi.lp_path = NULL;
 
 	val = JSON_LOADS(all_data.buf, &err);
