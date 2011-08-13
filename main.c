@@ -1582,8 +1582,12 @@ static void *stage_thread(void *userdata)
 		}
 
 		test_work_current(work);
-		if (!work->cloned && !work->clone)
+		/* Stage date the work only once since it may be rolled
+		 * or cloned and be staged again */
+		if (!work->staged) {
 			gettimeofday(&work->tv_staged, NULL);
+			work->staged = true;
+		}
 
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing work to getwork queue");

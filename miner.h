@@ -345,6 +345,7 @@ struct work {
 	bool		clone;
 	bool		cloned;
 	bool		rolltime;
+	bool		staged;
 };
 
 enum cl_kernel {
