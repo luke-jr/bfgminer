@@ -389,31 +389,31 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	Vals[7] += Vals[3] + P4(124) + P3(124) + P2(124) + P1(124) + s1(124) + ch(124);
 	
 #define MAXBUFFERS (4095)
-#define NFLAG (0xFFFUL)
+#define NFLAG (0xFFEUL)
 
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == -H[7])
 	{
-		output[MAXBUFFERS] = output[NFLAG & (W[3].x >> 2)] =  W_3.x;
+		output[MAXBUFFERS] = output[NFLAG & W[3].x] =  W_3.x;
 	}
 	if (Vals[7].y == -H[7])
 	{
-		output[MAXBUFFERS] = output[NFLAG & (W[3].y >> 2)] =  W_3.y;
+		output[MAXBUFFERS] = output[NFLAG & W[3].y] =  W_3.y;
 	}
 #ifdef VECTORS4
 	if (Vals[7].z == -H[7])
 	{
-		output[MAXBUFFERS] = output[NFLAG & (W[3].z >> 2)] =  W_3.z;
+		output[MAXBUFFERS] = output[NFLAG & W[3].z] =  W_3.z;
 	}
 	if (Vals[7].w == -H[7])
 	{
-		output[MAXBUFFERS] = output[NFLAG & (W[3].w >> 2)] =  W_3.w;
+		output[MAXBUFFERS] = output[NFLAG & W[3].w] =  W_3.w;
 	}
 #endif
 #else
 	if (Vals[7] == -H[7])
 	{
-		output[MAXBUFFERS] = output[NFLAG & (W[3] >> 2)] =  W_3;
+		output[MAXBUFFERS] = output[NFLAG & W[3]] =  W_3;
 	}
 #endif
 }
