@@ -342,6 +342,7 @@ struct work {
 	int		thr_id;
 	struct pool	*pool;
 	struct timeval	tv_staged;
+	bool		mined;
 	bool		clone;
 	bool		cloned;
 	bool		rolltime;

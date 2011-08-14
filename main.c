@@ -2358,7 +2358,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 
 static void discard_work(struct work *work)
 {
-	if (!work->clone && !work->rolls) {
+	if (!work->clone && !work->rolls && !work->mined) {
 		if (work->pool)
 			work->pool->discarded_work++;
 		total_discarded++;
@@ -2583,6 +2583,8 @@ out:
 
 	work->thr_id = thr_id;
 	thread_reportin(thr);
+	if (ret)
+		work->mined = true;
 	return ret;
 }
 
