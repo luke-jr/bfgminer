@@ -766,6 +766,7 @@ static bool work_decode(const json_t *val, struct work *work)
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
+	gettimeofday(&work->tv_staged, NULL);
 
 	return true;
 
@@ -1582,8 +1583,6 @@ static void *stage_thread(void *userdata)
 		}
 
 		test_work_current(work);
-		if (!work->cloned && !work->clone)
-			gettimeofday(&work->tv_staged, NULL);
 
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing work to getwork queue");
