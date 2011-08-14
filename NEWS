@@ -1,3 +1,43 @@
+Version 1.5.4 - August 14, 2011
+
+- Add new option: --monitor <cmd> Option lets user specify a command <cmd> that
+will get forked by cgminer on startup. cgminer's stderr output subsequently gets
+piped directly to this command.
+- Allocate work from one function to be able to initialise variables added
+later.
+- Add missing fflush(stdout) for --ndevs and conclusion summary.
+- Preinitialise the devices only once on startup.
+- Move the non cl_ variables into the cgpu info struct to allow creating a new
+cl state on reinit, preserving known GPU variables.
+- Create a new context from scratch in initCQ in case something was corrupted to
+maximise our chance of succesfully creating a new worker thread. Hopefully this
+makes thread restart on GPU failure more reliable, without hanging everything
+in the case of a completely wedged GPU.
+- Display last initialised time in gpu management info, to know if a GPU has
+been re-initialised.
+- When pinging a sick cpu, flush finish and then ping it in a separate thread in
+the hope it recovers without needing a restart, but without blocking code
+elsewhere.
+- Only consider a pool lagging if we actually need the work and we have none
+staged despite queue requests stacking up. This decreases significantly the
+amount of work that leaks to the backup pools.
+- The can_roll function fails inappropriately in stale_work.
+- Only put the message that a pool is down if not pinging it every minute. This
+prevents cgminer from saying pool down at 1 minute intervals unless in debug
+mode.
+- Free all work in one place allowing us to perform actions on it in the future.
+- Remove the extra shift in the output code which was of dubious benefit. In
+fact in cgminer's implementation, removing this caused a miniscule speedup.
+- Test each work item to see if it can be rolled instead of per-pool and roll
+whenever possible, adhering to the 60 second timeout. This makes the period
+after a longpoll have smaller dips in throughput, as well as requiring less
+getworks overall thus increasing efficiency.
+- Stick to rolling only work from the current pool unless we're in load balance
+mode or lagging to avoid aggressive rolling imitating load balancing.
+- If a work item has had any mining done on it, don't consider it discarded
+work.
+
+
 Version 1.5.3 - July 30, 2011
 
 - Significant work went into attempting to make the thread restart code robust
