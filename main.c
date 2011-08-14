@@ -1296,18 +1296,15 @@ static bool workio_get_work(struct workio_cmd *wc)
 	return true;
 }
 
-static bool stale_work(struct work *work, bool rolling)
+static bool stale_work(struct work *work)
 {
+	struct timeval now;
 	bool ret = false;
 	char *hexstr;
 
-	if (!rolling) {
-		struct timeval now;
-
-		gettimeofday(&now, NULL);
-		if ((now.tv_sec - work->tv_staged.tv_sec) > opt_scantime)
-			return true;
-	}
+	gettimeofday(&now, NULL);
+	if ((now.tv_sec - work->tv_staged.tv_sec) >= opt_scantime)
+		return true;
 
 	/* Only use the primary pool for determination as the work may
 	 * interleave at times of new blocks */
@@ -1336,7 +1333,7 @@ static void *submit_work_thread(void *userdata)
 
 	pthread_detach(pthread_self());
 
-	if (stale_work(work, false)) {
+	if (stale_work(work)) {
 		applog(LOG_WARNING, "Stale share detected, discarding");
 		total_stale++;
 		pool->stale_shares++;
@@ -1345,7 +1342,7 @@ static void *submit_work_thread(void *userdata)
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(work)) {
-		if (stale_work(work, false)) {
+		if (stale_work(work)) {
 			applog(LOG_WARNING, "Stale share detected, discarding");
 			total_stale++;
 			pool->stale_shares++;
@@ -2435,7 +2432,7 @@ static inline bool should_roll(struct work *work)
 
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && !stale_work(work, true) && work->rolltime &&
+	return (work->pool && !stale_work(work) && work->rolltime &&
 		work->rolls < 11 && !work->clone);
 }
 
@@ -2545,7 +2542,7 @@ retry:
 		goto retry;
 	}
 
-	if (stale_work(work_heap, false)) {
+	if (stale_work(work_heap)) {
 		dec_queued();
 		discard_work(work_heap);
 		goto retry;
@@ -2851,7 +2848,7 @@ static void *miner_thread(void *userdata)
 			decay_time(&hash_divfloat , (double)((MAXTHREADS / total_hashes) ? : 1));
 			hash_div = hash_divfloat;
 			needs_work = true;
-		} else if (work_restart[thr_id].restart || stale_work(work, false) ||
+		} else if (work_restart[thr_id].restart || stale_work(work) ||
 			work->blk.nonce >= MAXTHREADS - hashes_done)
 				needs_work = true;
 	}
@@ -3076,7 +3073,7 @@ static void *gpuminer_thread(void *userdata)
 		if (diff.tv_sec > opt_scantime ||
 		    work->blk.nonce >= MAXTHREADS - hashes ||
 		    work_restart[thr_id].restart ||
-		    stale_work(work, false)) {
+		    stale_work(work)) {
 			/* Ignore any reads since we're getting new work and queue a clean buffer */
 			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 					BUFFERSIZE, blank_res, 0, NULL, NULL);
