@@ -2421,6 +2421,18 @@ static void flush_requests(void)
 	}
 }
 
+static inline bool should_roll(struct work *work)
+{
+	int rs;
+
+	rs = real_staged();
+	if (rs >= opt_queue + mining_threads)
+		return false;
+	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE || !rs)
+		return true;
+	return false;
+}
+
 static inline bool can_roll(struct work *work)
 {
 	return (work->pool && !stale_work(work, true) && work->rolltime &&
@@ -2462,7 +2474,7 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 		if (opt_debug)
 			applog(LOG_DEBUG, "Successfully divided work");
 		return true;
-	} else if (can_roll(work)) {
+	} else if (can_roll(work) && should_roll(work)) {
 		roll_work(work);
 		return true;
 	}
