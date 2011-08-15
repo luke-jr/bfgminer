@@ -186,6 +186,7 @@ static int opt_queue;
 int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
+int opt_bench_algo = -1;
 static const bool opt_time = true;
 #if defined(WANT_X8664_SSE4) && defined(__SSE4_1__)
 static enum sha256_algos opt_algo = ALGO_SSE4_64;
@@ -587,8 +588,149 @@ static double bench_algo_stage2(
 			perror("close - failed to close read end of pipe for --algo auto");
 			exit(1);
 		}
+		r = close(pfd[1]);
+		if (r<0) {
+			perror("close - failed to close read end of pipe for --algo auto");
+			exit(1);
+		}
+
+	#elif defined(WIN32)
+
+		// Get handle to current exe
+		HINSTANCE module = GetModuleHandle(0);
+		if (!module) {
+			applog(LOG_ERR, "failed to retrieve module handle");
+			exit(1);
+		}
+
+		// Create a unique name
+		char unique_name[32];
+		snprintf(
+			unique_name,
+			sizeof(unique_name)-1,
+			"cgminer-%p",
+			(void*)module
+		);
+
+		// Create and init a chunked of shared memory
+		HANDLE map_handle = CreateFileMapping( 
+			INVALID_HANDLE_VALUE,   // use paging file
+			NULL,                   // default security attributes
+			PAGE_READWRITE,         // read/write access
+			0,                      // size: high 32-bits
+			4096,			// size: low 32-bits
+			unique_name		// name of map object
+		);
+		if (NULL==map_handle) {
+			applog(LOG_ERR, "could not create shared memory");
+			exit(1);
+		}
+
+		void *shared_mem = MapViewOfFile( 
+			map_handle,	// object to map view of
+			FILE_MAP_WRITE, // read/write access
+			0,              // high offset:  map from
+			0,              // low offset:   beginning
+			0		// default: map entire file
+		);
+		if (NULL==shared_mem) {
+			applog(LOG_ERR, "could not map shared memory");
+			exit(1);
+		}
+		SetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name);
+		CopyMemory(shared_mem, &rate, sizeof(rate));
+
+		// Get path to current exe
+		char cmd_line[256 + MAX_PATH];
+		const size_t n = sizeof(cmd_line)-200;
+		DWORD size = GetModuleFileName(module, cmd_line, n);
+		if (0==size) {
+			applog(LOG_ERR, "failed to retrieve module path");
+			exit(1);
+		}
+
+		// Construct new command line based on that
+		char *p = strlen(cmd_line) + cmd_line;
+		sprintf(p, " --bench-algo %d", algo);
+		SetEnvironmentVariable("CGMINER_BENCH_ALGO", "1");
+
+		// Launch a debug copy of cgminer
+		STARTUPINFO startup_info;
+		PROCESS_INFORMATION process_info;
+		ZeroMemory(&startup_info, sizeof(startup_info));
+		ZeroMemory(&process_info, sizeof(process_info));
+		startup_info.cb = sizeof(startup_info);
+
+		BOOL ok = CreateProcess(
+			NULL,			// No module name (use command line)
+			cmd_line,		// Command line
+			NULL,			// Process handle not inheritable
+			NULL,			// Thread handle not inheritable
+			FALSE,			// Set handle inheritance to FALSE
+			DEBUG_ONLY_THIS_PROCESS,// We're going to debug the child
+			NULL,			// Use parent's environment block
+			NULL,			// Use parent's starting directory 
+			&startup_info,		// Pointer to STARTUPINFO structure
+			&process_info		// Pointer to PROCESS_INFORMATION structure
+		);
+		if (!ok) {
+			applog(LOG_ERR, "CreateProcess failed with error %d\n", GetLastError() );
+			exit(1);
+		}
+
+		// Debug the child (only clean way to catch exceptions)
+		while (1) {
+
+			// Wait for child to do something
+			DEBUG_EVENT debug_event;
+			ZeroMemory(&debug_event, sizeof(debug_event));
+
+			BOOL ok = WaitForDebugEvent(&debug_event, 60 * 1000);
+			if (!ok)
+				break;
+
+			// Decide if event is "normal"
+			int go_on =
+				CREATE_PROCESS_DEBUG_EVENT== debug_event.dwDebugEventCode	||
+				CREATE_THREAD_DEBUG_EVENT == debug_event.dwDebugEventCode	||
+				EXIT_THREAD_DEBUG_EVENT   == debug_event.dwDebugEventCode	||
+				EXCEPTION_DEBUG_EVENT     == debug_event.dwDebugEventCode	||
+				LOAD_DLL_DEBUG_EVENT      == debug_event.dwDebugEventCode	||
+				OUTPUT_DEBUG_STRING_EVENT == debug_event.dwDebugEventCode	||
+				UNLOAD_DLL_DEBUG_EVENT    == debug_event.dwDebugEventCode;
+			if (!go_on)
+				break;
+
+			// Some exceptions are also "normal", apparently.
+			if (EXCEPTION_DEBUG_EVENT== debug_event.dwDebugEventCode) {
+
+				int go_on =
+					EXCEPTION_BREAKPOINT== debug_event.u.Exception.ExceptionRecord.ExceptionCode;
+				if (!go_on)
+					break;
+			}
+
+			// If nothing unexpected happened, let child proceed
+			ContinueDebugEvent(
+				debug_event.dwProcessId,
+				debug_event.dwThreadId,
+				DBG_CONTINUE
+			);
+		}
+
+		// Clean up child process
+		TerminateProcess(process_info.hProcess, 1);
+		CloseHandle(process_info.hProcess);
+		CloseHandle(process_info.hThread);
+
+		// Reap return value and cleanup
+		CopyMemory(&rate, shared_mem, sizeof(rate));
+		(void)UnmapViewOfFile(shared_mem); 
+		(void)CloseHandle(map_handle); 
+
 	#else
-		// Not on linux, just run the risk of an illegal instruction
+
+		// Not linux, not unix, not WIN32 ... do our best
 		rate = bench_algo_stage3(algo);
 
 	#endif // defined(unix)
@@ -4226,6 +4368,14 @@ int main (int argc, char *argv[])
 	gettimeofday(&total_tv_end, NULL);
 	get_datestamp(datestamp, &total_tv_start);
 
+	// Hack to make cgminer silent when called recursively on WIN32
+	int skip_to_bench = 0;
+	#if defined(WIN32)
+		char buf[32];
+		if (GetEnvironmentVariable("CGMINER_BENCH_ALGO", buf, 16))
+			skip_to_bench = 1;
+	#endif // defined(WIN32)
+
 	for (i = 0; i < 36; i++)
 		strcat(current_block, "0");
 	current_hash = calloc(sizeof(current_hash), 1);
@@ -4262,12 +4412,14 @@ int main (int argc, char *argv[])
 	opt_n_threads = num_processors;
 
 #ifdef HAVE_OPENCL
-	for (i = 0; i < 16; i++)
-		gpu_devices[i] = false;
-	nDevs = clDevicesNum();
-	if (nDevs < 0) {
-		applog(LOG_ERR, "clDevicesNum returned error, none usable");
-		nDevs = 0;
+	if (!skip_to_bench) {
+		for (i = 0; i < 16; i++)
+			gpu_devices[i] = false;
+		nDevs = clDevicesNum();
+		if (nDevs < 0) {
+			applog(LOG_ERR, "clDevicesNum returned error, none usable");
+			nDevs = 0;
+		}
 	}
 #endif
 	if (nDevs)
@@ -4284,6 +4436,42 @@ int main (int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	if (0<=opt_bench_algo) {
+		double rate = bench_algo_stage3(opt_bench_algo);
+		if (!skip_to_bench) {
+			printf("%.5f (%s)\n", rate, algo_names[opt_bench_algo]);
+		} else {
+			// Write result to shared memory for parent
+			#if defined(WIN32)
+				char unique_name[64];
+				if (GetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name, 32)) {
+					HANDLE map_handle = CreateFileMapping( 
+						INVALID_HANDLE_VALUE,   // use paging file
+						NULL,                   // default security attributes
+						PAGE_READWRITE,         // read/write access
+						0,                      // size: high 32-bits
+						4096,			// size: low 32-bits
+						unique_name		// name of map object
+					);
+					if (NULL!=map_handle) {
+						void *shared_mem = MapViewOfFile( 
+							map_handle,	// object to map view of
+							FILE_MAP_WRITE, // read/write access
+							0,              // high offset:  map from
+							0,              // low offset:   beginning
+							0		// default: map entire file
+						);
+						if (NULL!=shared_mem)  
+							CopyMemory(shared_mem, &rate, sizeof(rate));
+						(void)UnmapViewOfFile(shared_mem); 
+					}
+					(void)CloseHandle(map_handle); 
+				}
+			#endif
+		}
+		exit(0);
+	}
 
 	if (opt_kernel) {
 		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk"))
