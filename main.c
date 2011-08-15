@@ -408,11 +408,13 @@ static double bench_algo_stage3(
 
 	struct timeval end;
 	struct timeval start;
-	uint64_t hashes_done = 0;
-	uint32_t max_nonce = (1<<21);
+	uint32_t max_nonce = (1<<22);
+	unsigned long hashes_done = 0;
 
 	gettimeofday(&start, 0);
-		#ifdef WANT_VIA_PADLOCK
+		#if defined(WANT_VIA_PADLOCK)
+
+			// For some reason, the VIA padlock hasher has a different API ...
 			if (ALGO_VIA==algo) {
 				(void)scanhash_via(
 					0,
@@ -424,20 +426,20 @@ static double bench_algo_stage3(
 				);
 			} else
 		#endif
-		{
-			sha256_func func = sha256_funcs[algo];
-			(*func)(
-				0,
-				work.midstate,
-				work.data + 64,
-				work.hash1,
-				work.hash,
-				work.target,
-				max_nonce,
-				&hashes_done,
-				work.blk.nonce
-			);
-		}
+			{
+				sha256_func func = sha256_funcs[algo];
+				(*func)(
+					0,
+					work.midstate,
+					work.data + 64,
+					work.hash1,
+					work.hash,
+					work.target,
+					max_nonce,
+					&hashes_done,
+					work.blk.nonce
+				);
+			}
 	gettimeofday(&end, 0);
 	work_restart = NULL;
 
@@ -749,13 +751,29 @@ static void bench_algo(
 	memset(name_spaces_pad, ' ', n);
 	name_spaces_pad[n] = 0;
 
-	applog(LOG_ERR, "\"%s\"%s : benchmarking algorithm ...", algo_names[algo], name_spaces_pad);
-	double rate = bench_algo_stage2(algo);
+	applog(
+		LOG_ERR,
+		"\"%s\"%s : benchmarking algorithm ...",
+		algo_names[algo],
+		name_spaces_pad
+	);
 
+	double rate = bench_algo_stage2(algo);
 	if (rate<0.0) {
-		applog(LOG_ERR, "\"%s\"%s : algorithm fails on this platform", algo_names[algo], name_spaces_pad);
+		applog(
+			LOG_ERR,
+			"\"%s\"%s : algorithm fails on this platform",
+			algo_names[algo],
+			name_spaces_pad
+		);
 	} else {
-		applog(LOG_ERR, "\"%s\"%s : algorithm runs at %.5f MH/s", algo_names[algo], name_spaces_pad, rate);
+		applog(
+			LOG_ERR,
+			"\"%s\"%s : algorithm runs at %.5f MH/s",
+			algo_names[algo],
+			name_spaces_pad,
+			rate
+		);
 		if (*best_rate<rate) {
 			*best_rate = rate;
 			*best_algo = algo;
@@ -770,9 +788,8 @@ static void init_max_name_len()
 	for (i=0; i<nb_names; ++i) {
 		const char *p = algo_names[i];
 		size_t name_len = p ? strlen(p) : 0;
-		if (max_name_len<name_len) {
+		if (max_name_len<name_len)
 			max_name_len = name_len;
-		}
 	}
 
 	name_spaces_pad = (char*) malloc(max_name_len+16);
@@ -782,26 +799,34 @@ static void init_max_name_len()
 	}
 }
 
+// Pick the fastest CPU hasher
 static enum sha256_algos pick_fastest_algo()
 {
 	double best_rate = -1.0;
 	enum sha256_algos best_algo = 0;
+	applog(LOG_ERR, "benchmarking all sha256 algorithms ...");
 
 	bench_algo(&best_rate, &best_algo, ALGO_C);
-	#ifdef WANT_SSE2_4WAY
+
+	#if defined(WANT_SSE2_4WAY)
 		bench_algo(&best_rate, &best_algo, ALGO_4WAY);
 	#endif
-	#ifdef WANT_VIA_PADLOCK
+
+	#if defined(WANT_VIA_PADLOCK)
 		bench_algo(&best_rate, &best_algo, ALGO_VIA);
 	#endif
+
 	bench_algo(&best_rate, &best_algo, ALGO_CRYPTOPP);
-	#ifdef WANT_CRYPTOPP_ASM32
+
+	#if defined(WANT_CRYPTOPP_ASM32)
 		bench_algo(&best_rate, &best_algo, ALGO_CRYPTOPP_ASM32);
 	#endif
-	#ifdef WANT_X8664_SSE2
+
+	#if defined(WANT_X8664_SSE2)
 		bench_algo(&best_rate, &best_algo, ALGO_SSE2_64);
 	#endif
-	#ifdef WANT_X8664_SSE4
+
+	#if defined(WANT_X8664_SSE4)
 		bench_algo(&best_rate, &best_algo, ALGO_SSE4_64);
 	#endif
 
@@ -815,7 +840,6 @@ static enum sha256_algos pick_fastest_algo()
 		name_spaces_pad,
 		best_rate
 	);
-
 	return best_algo;
 }
 
@@ -1088,17 +1112,20 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
+	OPT_WITH_ARG("--bench-algo|-b",
+		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
+		     opt_hidden),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
 
-#if !defined(WIN32)
+#if defined(unix)
 	OPT_WITH_ARG("--monitor|-m",
 		     opt_set_charp, NULL, &opt_stderr_cmd,
 		     "Use custom pipe cmd for output messages"),
-#endif // !WIN32
+#endif // defined(unix)
 
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
@@ -4558,10 +4585,10 @@ int main (int argc, char *argv[])
 		openlog(PROGRAM_NAME, LOG_PID, LOG_USER);
 #endif
 
-#if !defined(WIN32)
-	if (opt_stderr_cmd)
-		fork_monitor();
-#endif // !WIN32
+	#if defined(unix)
+		if (opt_stderr_cmd)
+			fork_monitor();
+	#endif // defined(unix)
 
 	mining_threads = opt_n_threads + gpu_threads;
 
