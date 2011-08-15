@@ -1030,6 +1030,9 @@ static struct opt_table opt_config_table[] = {
 		     "\n\tsse4_64\t\tSSE4 implementation for x86_64 machines"
 #endif
 		),
+	OPT_WITH_ARG("--bench-algo|-b",
+		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
+		     opt_hidden),
 	OPT_WITH_ARG("--cpu-threads|-t",
 		     force_nthreads_int, opt_show_intval, &opt_n_threads,
 		     "Number of miner CPU threads"),
@@ -1056,6 +1059,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
+#if defined(unix)
+	OPT_WITH_ARG("--monitor|-m",
+		     opt_set_charp, NULL, &opt_stderr_cmd,
+		     "Use custom pipe cmd for output messages"),
+#endif // defined(unix)
+
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -1092,20 +1101,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--submit-stale",
 			opt_set_bool, &opt_submit_stale,
 		        "Submit shares even if they would normally be considered stale"),
-	OPT_WITH_ARG("--bench-algo|-b",
-		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
-		     opt_hidden),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
-
-#if defined(unix)
-	OPT_WITH_ARG("--monitor|-m",
-		     opt_set_charp, NULL, &opt_stderr_cmd,
-		     "Use custom pipe cmd for output messages"),
-#endif // defined(unix)
 
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
