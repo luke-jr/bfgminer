@@ -263,7 +263,10 @@ static char datestamp[40];
 static char blocktime[30];
 
 static char *opt_kernel = NULL;
-static char *opt_stderr_cmd = NULL;
+
+#if defined(unix)
+	static char *opt_stderr_cmd = NULL;
+#endif // defined(unix)
 
 enum cl_kernel chosen_kernel;
 
