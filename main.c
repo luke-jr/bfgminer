@@ -1972,6 +1972,7 @@ retry:
 			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
+		wlog("Last initialised: %s\n", cgpu->init);
 		for (i = 0; i < mining_threads; i++) {
 			thr = &thr_info[i];
 			if (thr->cgpu != cgpu)
@@ -3384,6 +3385,7 @@ static void *reinit_gpu(void *userdata)
 	struct thr_info *mythr = userdata;
 	struct cgpu_info *cgpu;
 	struct thr_info *thr;
+	struct timeval now;
 	char name[256];
 	int thr_id;
 	int gpu;
@@ -3445,6 +3447,9 @@ select_cgpu:
 		}
 		applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	}
+
+	gettimeofday(&now, NULL);
+	get_datestamp(cgpu->init, &now);
 
 	gpu_devices[gpu] = true;
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
@@ -4069,13 +4074,15 @@ int main (int argc, char *argv[])
 	/* start GPU mining threads */
 	for (i = 0; i < nDevs * opt_g_threads; i++) {
 		int gpu = i % nDevs;
+		struct cgpu_info *cgpu;
+		struct timeval now;
 
 		gpus[gpu].is_gpu = 1;
 		gpus[gpu].cpu_gpu = gpu;
 
 		thr = &thr_info[i];
 		thr->id = i;
-		thr->cgpu = &gpus[gpu];
+		cgpu = thr->cgpu = &gpus[gpu];
 
 		thr->q = tq_new();
 		if (!thr->q)
@@ -4098,6 +4105,8 @@ int main (int argc, char *argv[])
 			continue;
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
+		gettimeofday(&now, NULL);
+		get_datestamp(cgpu->init, &now);
 
 		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr)))
 			quit(1, "thread %d create failed", i);

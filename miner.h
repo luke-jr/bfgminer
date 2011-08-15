@@ -152,6 +152,7 @@ struct cgpu_info {
 	double efficiency;
 	double utility;
 	enum alive status;
+	char init[40];
 };
 
 struct thr_info {
