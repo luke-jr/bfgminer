@@ -480,78 +480,118 @@ static double bench_algo_stage2(
 	enum sha256_algos algo
 )
 {
-	#if defined(__linux)
-		// Make a shared+anonymous mmap
-		const size_t map_size = 4096;
-		void *map = mmap(
-			(void*)NULL,
-			map_size,
-			PROT_READ |
-			PROT_WRITE,
-			MAP_SHARED   |
-			MAP_ANONYMOUS,
-			-1,
-			0
-		);
-		if ((void*)-1 == map) {
-			perror("bench algo, mmap failed");
+	// Here, the gig is to safely run a piece of code that potentially
+	// crashes. Unfortunately, the Right Way (tm) to do this is rather
+	// heavily platform dependent :(
+
+	double rate = -1.23457;
+
+	#if defined(unix)
+
+		// Make a pipe: [readFD, writeFD]
+		int pfd[2];
+		int r = pipe(pfd);
+		if (r<0) {
+			perror("pipe - failed to create pipe for --algo auto");
 			exit(1);
 		}
 
-		// Load a canary rate in the map
-		double rate = -1.23457;
-		memcpy(map, &rate, sizeof(rate));
+		// Make pipe non blocking
+		set_non_blocking(pfd[0], 1);
+		set_non_blocking(pfd[1], 1);
+
+		// Don't allow a crashing child to kill the main process
+		sighandler_t sr0 = signal(SIGPIPE, SIG_IGN);
+		sighandler_t sr1 = signal(SIGPIPE, SIG_IGN);
+		if (SIG_ERR==sr0 || SIG_ERR==sr1) {
+			perror("signal - failed to edit signal mask for --algo auto");
+			exit(1);
+		}
 
 		// Fork a child to do the actual benchmarking
 		pid_t child_pid = fork();
+		if (child_pid<0) {
+			perror("fork - failed to create a child process for --algo auto");
+			exit(1);
+		}
+
+		// Do the dangerous work in the child, knowing we might crash
 		if (0==child_pid) {
 
-			// Do the dangerous work in the child
+			// TODO: some umask trickery to prevent coredumps
+
+			// Benchmark this algorithm
 			double r = bench_algo_stage3(algo);
 
-			// Load result in shared map and bail
-			memcpy(map, &r, sizeof(r));
+			// We survived, send result to parent and bail
+			int loop_count = 0;
+			while (1) {
+				ssize_t bytes_written = write(pfd[1], &r, sizeof(r));
+				int try_again = (0==bytes_written || (bytes_written<0 && EAGAIN==errno));
+				int success = (sizeof(r)==(size_t)bytes_written);
+
+				if (success)
+					break;
+
+				if (!try_again) {
+					perror("write - child failed to write benchmark result to pipe");
+					exit(1);
+				}
+
+				if (5<loop_count) {
+					applog(LOG_ERR, "child tried %d times to communicate with parent, giving up", loop_count);
+					exit(1);
+				}
+				++loop_count;
+				sleep(1);
+			}
 			exit(0);
 		}
 
 		// Parent waits for a result from child
-		int nb_loops = 0;
+		int loop_count = 0;
 		while (1) {
 
 			// Wait for child to die
 			int status;
 			int r = waitpid(child_pid, &status, WNOHANG);
-			if (child_pid==r) {
-				// Child died somehow. Copy result and bail
-				memcpy(&rate, map, sizeof(rate));
+			if ((child_pid==r) || (r<0 && ECHILD==errno)) {
+
+				// Child died somehow. Grab result and bail
+				double tmp;
+				ssize_t bytes_read = read(pfd[0], &tmp, sizeof(tmp));
+				if (sizeof(tmp)==(size_t)bytes_read)
+					rate = tmp;
 				break;
+
 			} else if (r<0) {
 				perror("bench_algo: waitpid failed. giving up.");
 				exit(1);
 			}
 
 			// Give up on child after a ~60s
-			if (60<nb_loops) {
+			if (60<loop_count) {
 				kill(child_pid, SIGKILL);
 				waitpid(child_pid, &status, 0);
 				break;
 			}
 
 			// Wait a bit longer
-			++nb_loops;
+			++loop_count;
 			sleep(1);
 		}
 
-		// Clean up shared map
-		int r = munmap(map, map_size);
+		// Close pipe
+		r = close(pfd[0]);
 		if (r<0) {
-			perror("bench algo, munmap failed");
+			perror("close - failed to close read end of pipe for --algo auto");
 			exit(1);
 		}
 	#else
 		// Not on linux, just run the risk of an illegal instruction
 		rate = bench_algo_stage3(algo);
-	#endif
+
+	#endif // defined(unix)
 
 	// Done
 	return rate;
