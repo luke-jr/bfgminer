@@ -4165,12 +4165,34 @@ int main (int argc, char *argv[])
 	if (unlikely(!current_hash))
 		quit (1, "main OOM");
 
-#ifdef WIN32
-	opt_n_threads = num_processors = 1;
-#else
-	num_processors = sysconf(_SC_NPROCESSORS_ONLN);
+	// Reckon number of cores in the box
+	#if defined(WIN32)
+
+		DWORD system_am;
+		DWORD process_am;
+		BOOL ok = GetProcessAffinityMask(
+			GetCurrentProcess(),
+			&system_am,
+			&process_am
+		);
+		if (!ok) {
+			applog(LOG_ERR, "couldn't figure out number of processors :(");
+			num_processors = 1;
+		} else {
+			size_t n = 32;
+			num_processors = 0;
+			while (n--)
+				if (process_am & (1<<n))
+					++num_processors;
+		}
+
+	#else
+
+		num_processors = sysconf(_SC_NPROCESSORS_ONLN);
+
+	#endif /* !WIN32 */
+
 	opt_n_threads = num_processors;
-#endif /* !WIN32 */
 
 #ifdef HAVE_OPENCL
 	for (i = 0; i < 16; i++)
