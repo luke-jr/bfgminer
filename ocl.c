@@ -267,16 +267,8 @@ void patch_opcodes(char *w, unsigned remaining)
 _clState *initCQ(_clState *clState, unsigned int gpu)
 {
 	cl_int status = 0;
-	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
 
-	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Creating Context. (clCreateContextFromType)");
-		return NULL;
-	}
-
-	/* create a cl program executable for the device specified */
+	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
 	if (status != CL_SUCCESS)
 	{
@@ -320,9 +312,8 @@ _clState *initCQ(_clState *clState, unsigned int gpu)
 	return clState;
 }
 
-_clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
+_clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
-	unsigned int gpu = cgpu->cpu_gpu;
 	int patchbfi = 0;
 	cl_int status = 0;
 	size_t nDevices;
@@ -367,7 +358,7 @@ _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
 	}
 	find = strstr(extensions, camo);
 	if (find)
-		cgpu->hasBitAlign = patchbfi = 1;
+		clState->hasBitAlign = patchbfi = 1;
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
@@ -377,27 +368,26 @@ _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
 	if (opt_debug)
 		applog(LOG_DEBUG, "Preferred vector width reported %d", clState->preferred_vwidth);
 
-	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&cgpu->max_work_size, NULL);
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&clState->max_work_size, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_WORK_GROUP_SIZE");
 		return NULL;
 	}
 	if (opt_debug)
-		applog(LOG_DEBUG, "Max work group size reported %d", cgpu->max_work_size);
+		applog(LOG_DEBUG, "Max work group size reported %d", clState->max_work_size);
 
 	/* For some reason 2 vectors is still better even if the card says
 	 * otherwise, and many cards lie about their max so use 256 as max
 	 * unless explicitly set on the command line */
-	cgpu->vwidth = clState->preferred_vwidth;
 	if (clState->preferred_vwidth > 1)
-		cgpu->vwidth = 2;
+		clState->preferred_vwidth = 2;
 	if (opt_vectors)
-		cgpu->vwidth = opt_vectors;
-	if (opt_worksize && opt_worksize <= cgpu->max_work_size)
-		cgpu->work_size = opt_worksize;
+		clState->preferred_vwidth = opt_vectors;
+	if (opt_worksize && opt_worksize <= clState->max_work_size)
+		clState->work_size = opt_worksize;
 	else
-		cgpu->work_size = (cgpu->max_work_size <= 256 ? cgpu->max_work_size : 256) /
-				cgpu->vwidth;
+		clState->work_size = (clState->max_work_size <= 256 ? clState->max_work_size : 256) /
+				clState->preferred_vwidth;
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
@@ -409,7 +399,7 @@ _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
 	char filename[16];
 
 	if (chosen_kernel == KL_NONE) {
-		if (cgpu->hasBitAlign)
+		if (clState->hasBitAlign)
 			chosen_kernel = KL_PHATK;
 		else
 			chosen_kernel = KL_POCLBM;
@@ -452,14 +442,14 @@ _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
 	}
 
 	strcat(binaryfilename, name);
-	if (cgpu->hasBitAlign)
+	if (clState->hasBitAlign)
 		strcat(binaryfilename, "bitalign");
 
 	strcat(binaryfilename, "v");
-	sprintf(numbuf, "%d", cgpu->vwidth);
+	sprintf(numbuf, "%d", clState->preferred_vwidth);
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, "w");
-	sprintf(numbuf, "%d", (int)cgpu->work_size);
+	sprintf(numbuf, "%d", (int)clState->work_size);
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, "long");
 	sprintf(numbuf, "%d", (int)sizeof(long));
@@ -515,7 +505,7 @@ build:
 	memcpy(source, rawsource, pl);
 
 	/* Patch the source file with the preferred_vwidth */
-	if (cgpu->vwidth > 1) {
+	if (clState->preferred_vwidth > 1) {
 		char *find = strstr(source, "VECTORSX");
 
 		if (unlikely(!find)) {
@@ -523,7 +513,7 @@ build:
 			return NULL;
 		}
 		find += 7; // "VECTORS"
-		if (cgpu->vwidth == 2)
+		if (clState->preferred_vwidth == 2)
 			strncpy(find, "2", 1);
 		else
 			strncpy(find, "4", 1);
@@ -532,7 +522,7 @@ build:
 	}
 
 	/* Patch the source file defining BITALIGN */
-	if (cgpu->hasBitAlign) {
+	if (clState->hasBitAlign) {
 		char *find = strstr(source, "BITALIGNX");
 
 		if (unlikely(!find)) {
@@ -690,11 +680,8 @@ built:
 	free(binaries);
 	free(binary_sizes);
 
-	/* We throw everything out now and create the real context we're using in initCQ */
-	clReleaseContext(clState->context);
-
 	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT patching, %d vectors and worksize %d",
-	       filename, patchbfi ? "" : "out", cgpu->vwidth, cgpu->work_size);
+	       filename, patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
 	return initCQ(clState, gpu);
 }
