@@ -208,6 +208,7 @@ static int mining_threads;
 static int num_processors;
 static int scan_intensity;
 static bool use_curses = true;
+static bool opt_submit_stale;
 
 #define QUIET	(opt_quiet || opt_realquiet)
 
@@ -1088,6 +1089,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
+	OPT_WITHOUT_ARG("--submit-stale",
+			opt_set_bool, &opt_submit_stale,
+		        "Submit shares even if they would normally be considered stale"),
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
@@ -1832,7 +1836,7 @@ static void *submit_work_thread(void *userdata)
 
 	pthread_detach(pthread_self());
 
-	if (stale_work(work)) {
+	if (!opt_submit_stale && stale_work(work)) {
 		applog(LOG_WARNING, "Stale share detected, discarding");
 		total_stale++;
 		pool->stale_shares++;
@@ -1841,7 +1845,7 @@ static void *submit_work_thread(void *userdata)
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(work)) {
-		if (stale_work(work)) {
+		if (!opt_submit_stale && stale_work(work)) {
 			applog(LOG_WARNING, "Stale share detected, discarding");
 			total_stale++;
 			pool->stale_shares++;
