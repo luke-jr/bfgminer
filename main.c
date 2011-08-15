@@ -4040,9 +4040,6 @@ int main (int argc, char *argv[])
 #ifdef HAVE_OPENCL
 	i = 0;
 
-	if (nDevs > 0)
-		preinit_devices();
-
 	/* start GPU mining threads */
 	for (j = 0; j < nDevs * opt_g_threads; j++) {
 		int gpu = j % nDevs;
