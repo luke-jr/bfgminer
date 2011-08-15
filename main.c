@@ -36,8 +36,10 @@
 #include "findnonce.h"
 #include "ocl.h"
 
-#if defined(__linux)
-	#include <sys/mman.h>
+#if defined(unix)
+	#include <errno.h>
+	#include <fcntl.h>
+	#include <unistd.h>
 	#include <sys/wait.h>
 	#include <sys/types.h>
 #endif
@@ -449,6 +451,31 @@ static double bench_algo_stage3(
 	return rate;
 }
 
+#if defined(unix)
+
+	// Change non-blocking status on a file descriptor
+	static void set_non_blocking(
+		int fd,
+		int yes
+	)
+	{
+		int flags = fcntl(fd, F_GETFL, 0);
+		if (flags<0) {
+			perror("fcntl(GET) failed");
+			exit(1);
+		}
+		flags = yes ? (flags|O_NONBLOCK) : (flags&~O_NONBLOCK);
+
+		int r = fcntl(fd, F_SETFL, flags);
+		if (r<0) {
+			perror("fcntl(SET) failed");
+			exit(1);
+		}
+	}
+
+#endif // defined(unix)
+
+// Algo benchmark, crash-safe, system-dependent stage
 static double bench_algo_stage2(
 	enum sha256_algos algo
 )
