@@ -217,6 +217,8 @@ int longpoll_thr_id;
 static int stage_thr_id;
 static int watchdog_thr_id;
 static int input_thr_id;
+static int gpur_thr_id;
+static int cpur_thr_id;
 static int total_threads;
 
 struct work_restart *work_restart = NULL;
@@ -3464,7 +3466,6 @@ static void *gpuminer_thread(void *userdata)
 	uint32_t *res, *blank_res;
 	double gpu_ms_average = 7;
 	int gpu = dev_from_id(thr_id);
-	struct cgpu_info *cgpu = mythr->cgpu;
 
 	size_t globalThreads[1];
 	size_t localThreads[1];
@@ -3476,7 +3477,7 @@ static void *gpuminer_thread(void *userdata)
 
 	struct work *work = make_work();
 	unsigned int threads;
-	unsigned const int vectors = cgpu->vwidth;
+	unsigned const int vectors = clState->preferred_vwidth;
 	unsigned int hashes;
 	unsigned int hashes_done = 0;
 
@@ -3513,7 +3514,7 @@ static void *gpuminer_thread(void *userdata)
 	}
 
 	gettimeofday(&tv_start, NULL);
-	localThreads[0] = cgpu->work_size;
+	localThreads[0] = clState->work_size;
 	set_threads_hashes(vectors, &threads, &hashes, &globalThreads[0],
 			   localThreads[0]);
 
@@ -3527,7 +3528,7 @@ static void *gpuminer_thread(void *userdata)
 	if (unlikely(status != CL_SUCCESS))
 		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
 
-	cgpu->status = LIFE_WELL;
+	mythr->cgpu->status = LIFE_WELL;
 	if (opt_debug)
 		applog(LOG_DEBUG, "Popping ping in gpuminer thread");
 
@@ -3654,7 +3655,7 @@ static void *gpuminer_thread(void *userdata)
 		}
 		if (unlikely(!gpu_devices[gpu])) {
 			applog(LOG_WARNING, "Thread %d being disabled", thr_id);
-			mythr->rolling = cgpu->rolling = 0;
+			mythr->rolling = mythr->cgpu->rolling = 0;
 			if (opt_debug)
 				applog(LOG_DEBUG, "Popping wakeup ping in gpuminer thread");
 
@@ -3839,6 +3840,7 @@ static void restart_longpoll(void)
 
 static void *reinit_cpu(void *userdata)
 {
+	pthread_detach(pthread_self());
 #if 0
 	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
 	int cpu = cgpu->cpu_gpu;
@@ -3870,16 +3872,34 @@ static void *reinit_cpu(void *userdata)
 }
 
 #ifdef HAVE_OPENCL
+/* We have only one thread that ever re-initialises GPUs, thus if any GPU
+ * init command fails due to a completely wedged GPU, the thread will never
+ * return, unable to harm other GPUs. If it does return, it means we only had
+ * a soft failure and then the reinit_gpu thread is ready to tackle another
+ * GPU */
 static void *reinit_gpu(void *userdata)
 {
-	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
-	int gpu = cgpu->cpu_gpu;
+	struct thr_info *mythr = userdata;
+	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 	struct timeval now;
-	_clState *clState;
+	char name[256];
 	int thr_id;
+	int gpu;
 
-	/* Send threads message to stop */
+	pthread_detach(pthread_self());
+
+select_cgpu:
+	cgpu = tq_pop(mythr->q, NULL);
+	if (!cgpu)
+		goto out;
+
+	if (clDevicesNum() != nDevs) {
+		applog(LOG_WARNING, "Hardware not reporting same number of active devices, will not attempt to restart GPU");
+		goto out;
+	}
+
+	gpu = cgpu->cpu_gpu;
 	gpu_devices[gpu] = false;
 
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
@@ -3889,9 +3909,16 @@ static void *reinit_gpu(void *userdata)
 		thr = &thr_info[thr_id];
 		thr->rolling = thr->cgpu->rolling = 0;
 		if (!pthread_cancel(*thr->pth)) {
-			applog(LOG_WARNING, "Thread still exists, killing it off");
+			applog(LOG_WARNING, "Thread %d still exists, killing it off", thr_id);
 		} else
-			applog(LOG_WARNING, "Thread no longer exists!");
+			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);
+	}
+
+	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
+		if (dev_from_id(thr_id) != gpu)
+			continue;
+
+		thr = &thr_info[thr_id];
 
 		/* Lose this ram cause we may get stuck here! */
 		//tq_freeze(thr->q);
@@ -3900,13 +3927,16 @@ static void *reinit_gpu(void *userdata)
 		if (!thr->q)
 			quit(1, "Failed to tq_new in reinit_gpu");
 
-		/* Create a new clstate */
-		applog(LOG_WARNING, "Attempting to create a new clState");
-		clState = initCQ(clStates[thr_id], gpu);
-
 		/* Lose this ram cause we may dereference in the dying thread! */
 		//free(clState);
-		applog(LOG_WARNING, "Command successful, attempting to create new thread");
+
+		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
+		clStates[thr_id] = initCl(gpu, name, sizeof(name));
+		if (!clStates[thr_id]) {
+			applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
+			goto out;
+		}
+		applog(LOG_INFO, "initCl() finished. Found %s", name);
 
 		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", thr_id);
@@ -3918,70 +3948,31 @@ static void *reinit_gpu(void *userdata)
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
 
-	/* Try to re-enable it */
 	gpu_devices[gpu] = true;
-	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
-		thr = &thr_info[thr_id];
-		if (dev_from_id(thr_id) == gpu)
-			tq_push(thr->q, &ping);
-	}
-
-	return NULL;
-}
-
-static void *ping_gputhread(void *userdata)
-{
-	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
-	int gpu = cgpu->cpu_gpu;
-	struct thr_info *thr;
-	_clState *clState;
-	int thr_id;
-
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
 		if (dev_from_id(thr_id) != gpu)
 			continue;
 
 		thr = &thr_info[thr_id];
-		clState = clStates[thr_id];
-		tq_push(thr->q, &ping);
-		applog(LOG_WARNING, "Attempting to flush command queue of thread %d", thr_id);
-		clFlush(clState->commandQueue);
-		clFinish(clState->commandQueue);
 		tq_push(thr->q, &ping);
 	}
 
+	goto select_cgpu;
+out:
 	return NULL;
-}
-
-static void ping_gpu(struct cgpu_info *cgpu)
-{
-	pthread_t ping_thread;
-
-	if (unlikely(pthread_create(&ping_thread, NULL, ping_gputhread, (void *)cgpu)))
-		applog(LOG_ERR, "Failed to create ping thread");
 }
 #else
 static void *reinit_gpu(void *userdata)
-{
-}
-
-static void ping_gpu(struct cgpu_info *cgpu)
 {
 }
 #endif
 
 static void reinit_device(struct cgpu_info *cgpu)
 {
-	pthread_t resus_thread;
-	void *reinit;
-
 	if (cgpu->is_gpu)
-		reinit = reinit_gpu;
+		tq_push(thr_info[gpur_thr_id].q, cgpu);
 	else
-		reinit = reinit_cpu;
-
-	if (unlikely(pthread_create(&resus_thread, NULL, reinit, (void *)cgpu)))
-		applog(LOG_ERR, "Failed to create reinit thread");
+		tq_push(thr_info[cpur_thr_id].q, cgpu);
 }
 
 /* Determine which are the first threads belonging to a device and if they're
@@ -4080,7 +4071,7 @@ static void *watchdog_thread(void *userdata)
 				gpus[gpu].status = LIFE_SICK;
 				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
 				/* Sent it a ping, it might respond */
-				ping_gpu(thr->cgpu);
+				tq_push(thr->q, &ping);
 			} else if (now.tv_sec - thr->last.tv_sec > 300 && gpus[i].status == LIFE_SICK) {
 				gpus[gpu].status = LIFE_DEAD;
 				applog(LOG_ERR, "Thread %d idle for more than 5 minutes, GPU %d declared DEAD!", i, gpu);
@@ -4340,7 +4331,7 @@ out:
 
 int main (int argc, char *argv[])
 {
-	unsigned int i, j = 0, x, y, pools_active = 0;
+	unsigned int i, x, y, pools_active = 0;
 	struct sigaction handler;
 	struct thr_info *thr;
 	char name[256];
@@ -4568,7 +4559,7 @@ int main (int argc, char *argv[])
 
 	mining_threads = opt_n_threads + gpu_threads;
 
-	total_threads = mining_threads + 5;
+	total_threads = mining_threads + 7;
 	work_restart = calloc(total_threads, sizeof(*work_restart));
 	if (!work_restart)
 		quit(1, "Failed to calloc work_restart");
@@ -4649,14 +4640,9 @@ int main (int argc, char *argv[])
 		quit(0, "No pools active! Exiting.");
 
 #ifdef HAVE_OPENCL
-	i = 0;
-
-	if (nDevs > 0)
-		preinit_devices();
-
 	/* start GPU mining threads */
-	for (j = 0; j < nDevs * opt_g_threads; j++) {
-		int gpu = j % nDevs;
+	for (i = 0; i < nDevs * opt_g_threads; i++) {
+		int gpu = i % nDevs;
 		struct cgpu_info *cgpu;
 		struct timeval now;
 
@@ -4665,8 +4651,7 @@ int main (int argc, char *argv[])
 
 		thr = &thr_info[i];
 		thr->id = i;
-		cgpu = &gpus[gpu];
-		thr->cgpu = cgpu;
+		cgpu = thr->cgpu = &gpus[gpu];
 
 		thr->q = tq_new();
 		if (!thr->q)
@@ -4682,11 +4667,10 @@ int main (int argc, char *argv[])
 		}
 
 		applog(LOG_INFO, "Init GPU thread %i", i);
-		clStates[i] = initCl(cgpu, name, sizeof(name));
+		clStates[i] = initCl(gpu, name, sizeof(name));
 		if (!clStates[i]) {
 			applog(LOG_ERR, "Failed to init GPU thread %d", i);
 			gpu_devices[i] = false;
-			strcat(cgpu->init, "Never");
 			continue;
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
@@ -4695,8 +4679,6 @@ int main (int argc, char *argv[])
 
 		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr)))
 			quit(1, "thread %d create failed", i);
-
-		i++;
 	}
 
 	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
@@ -4741,6 +4723,24 @@ int main (int argc, char *argv[])
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
 	pthread_detach(*thr->pth);
+
+	/* Create reinit cpu thread */
+	cpur_thr_id = mining_threads + 5;
+	thr = &thr_info[cpur_thr_id];
+	thr->q = tq_new();
+	if (!thr->q)
+		quit(1, "tq_new failed for cpur_thr_id");
+	if (thr_info_create(thr, NULL, reinit_cpu, thr))
+		quit(1, "reinit_cpu thread create failed");
+
+	/* Create reinit gpu thread */
+	gpur_thr_id = mining_threads + 6;
+	thr = &thr_info[gpur_thr_id];
+	thr->q = tq_new();
+	if (!thr->q)
+		quit(1, "tq_new failed for gpur_thr_id");
+	if (thr_info_create(thr, NULL, reinit_gpu, thr))
+		quit(1, "reinit_gpu thread create failed");
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(*thr_info[work_thr_id].pth, NULL);

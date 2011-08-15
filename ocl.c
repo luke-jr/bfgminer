@@ -52,8 +52,6 @@ char *file_contents(const char *filename, int *length)
 	return (char*)buffer;
 }
 
-static cl_uint numDevices;
-
 int clDevicesNum() {
 	cl_int status = 0;
 
@@ -111,95 +109,6 @@ int clDevicesNum() {
 	}
 
 	return numDevices;
-}
-
-static cl_platform_id platform = NULL;
-static cl_device_id *devices;
-
-int preinit_devices(void)
-{
-	cl_int status;
-	cl_uint numPlatforms;
-	int i;
-
-	status = clGetPlatformIDs(0, NULL, &numPlatforms);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
-		return -1;
-	}
-
-	if (numPlatforms > 0)
-	{
-		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
-		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-		if (status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
-			return -1;
-		}
-
-		for(i = 0; i < numPlatforms; ++i)
-		{
-			char pbuff[100];
-			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
-				free(platforms);
-				return -1;
-			}
-			platform = platforms[i];
-			if (!strcmp(pbuff, "Advanced Micro Devices, Inc."))
-			{
-				break;
-			}
-		}
-		free(platforms);
-	}
-
-	if (platform == NULL) {
-		perror("NULL platform found!\n");
-		return -1;
-	}
-
-	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Getting Device IDs (num)");
-		return -1;
-	}
-
-	if (numDevices > 0 ) {
-		devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
-
-		/* Now, get the device list data */
-
-		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
-		if (status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error: Getting Device IDs (list)");
-			return -1;
-		}
-
-		applog(LOG_INFO, "List of devices:");
-
-		unsigned int i;
-		for(i=0; i<numDevices; i++) {
-			char pbuff[100];
-			status = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS)
-			{
-				applog(LOG_ERR, "Error: Getting Device Info");
-				return -1;
-			}
-
-			applog(LOG_INFO, "\t%i\t%s", i, pbuff);
-		}
-
-	} else return -1;
-
-	return 0;
 }
 
 static int advance(char **area, unsigned *remaining, const char *marker)
@@ -264,93 +173,118 @@ void patch_opcodes(char *w, unsigned remaining)
 	}
 }
 
-_clState *initCQ(_clState *clState, unsigned int gpu)
+_clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
-	cl_int status = 0;
-	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
-
-	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Creating Context. (clCreateContextFromType)");
-		return NULL;
-	}
-
-	/* create a cl program executable for the device specified */
-	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
-		size_t logSize;
-		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
-
-		char *log = malloc(logSize);
-		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
-		applog(LOG_INFO, "%s", log);
-		return NULL;
-	}
-
-	/* get a kernel object handle for a kernel with the given name */
-	clState->kernel = clCreateKernel(clState->program, "search", &status);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Error: Creating Kernel from program. (clCreateKernel)");
-		return NULL;
-	}
-
-	/////////////////////////////////////////////////////////////////
-	// Create an OpenCL command queue
-	/////////////////////////////////////////////////////////////////
-	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
-						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
-	if (status != CL_SUCCESS) /* Try again without OOE enable */
-		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
-		return NULL;
-	}
-
-	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, BUFFERSIZE, NULL, &status);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error: clCreateBuffer (outputBuffer)");
-		return NULL;
-	}
-
-	return clState;
-}
-
-_clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
-{
-	unsigned int gpu = cgpu->cpu_gpu;
 	int patchbfi = 0;
 	cl_int status = 0;
-	size_t nDevices;
+	unsigned int i;
 
 	_clState *clState = calloc(1, sizeof(_clState));
 
+	cl_uint numPlatforms;
+	cl_platform_id platform = NULL;
+	status = clGetPlatformIDs(0, NULL, &numPlatforms);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
+		return NULL;
+	}
+
+	if (numPlatforms > 0)
+	{
+		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
+		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
+		if (status != CL_SUCCESS)
+		{
+			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
+			return NULL;
+		}
+
+		for(i = 0; i < numPlatforms; ++i)
+		{
+			char pbuff[100];
+			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
+			if (status != CL_SUCCESS)
+			{
+				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
+				free(platforms);
+				return NULL;
+			}
+			platform = platforms[i];
+			if (!strcmp(pbuff, "Advanced Micro Devices, Inc."))
+			{
+				break;
+			}
+		}
+		free(platforms);
+	}
+
+	if (platform == NULL) {
+		perror("NULL platform found!\n");
+		return NULL;
+	}
+
+	size_t nDevices;
+	cl_uint numDevices;
+	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error: Getting Device IDs (num)");
+		return NULL;
+	}
+
+	cl_device_id *devices;
+	if (numDevices > 0 ) {
+		devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
+
+		/* Now, get the device list data */
+
+		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+		if (status != CL_SUCCESS)
+		{
+			applog(LOG_ERR, "Error: Getting Device IDs (list)");
+			return NULL;
+		}
+
+		applog(LOG_INFO, "List of devices:");
+
+		unsigned int i;
+		for(i=0; i<numDevices; i++) {
+			char pbuff[100];
+			status = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
+			if (status != CL_SUCCESS)
+			{
+				applog(LOG_ERR, "Error: Getting Device Info");
+				return NULL;
+			}
+
+			applog(LOG_INFO, "\t%i\t%s", i, pbuff);
+		}
+
+		if (gpu < numDevices) {
+			char pbuff[100];
+			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, &nDevices);
+			if (status != CL_SUCCESS)
+			{
+				applog(LOG_ERR, "Error: Getting Device Info");
+				return NULL;
+			}
+
+			applog(LOG_INFO, "Selected %i: %s", gpu, pbuff);
+			strncpy(name, pbuff, nameSize);
+		} else {
+			applog(LOG_ERR, "Invalid GPU %i", gpu);
+			return NULL;
+		}
+
+	} else return NULL;
+
 	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
 
 	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
 	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Error: Creating Context. (clCreateContextFromType)");
-		return NULL;
-	}
-
-	if (gpu < numDevices) {
-		char pbuff[100];
-		status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, &nDevices);
-		if (status != CL_SUCCESS)
-		{
-			applog(LOG_ERR, "Error: Getting Device Info");
-			return NULL;
-		}
-
-		applog(LOG_INFO, "Selected %i: %s", gpu, pbuff);
-		strncpy(name, pbuff, nameSize);
-	} else {
-		applog(LOG_ERR, "Invalid GPU %i", gpu);
 		return NULL;
 	}
 
@@ -367,7 +301,7 @@ _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
 	}
 	find = strstr(extensions, camo);
 	if (find)
-		cgpu->hasBitAlign = patchbfi = 1;
+		clState->hasBitAlign = patchbfi = 1;
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
@@ -377,27 +311,26 @@ _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
 	if (opt_debug)
 		applog(LOG_DEBUG, "Preferred vector width reported %d", clState->preferred_vwidth);
 
-	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&cgpu->max_work_size, NULL);
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&clState->max_work_size, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_WORK_GROUP_SIZE");
 		return NULL;
 	}
 	if (opt_debug)
-		applog(LOG_DEBUG, "Max work group size reported %d", cgpu->max_work_size);
+		applog(LOG_DEBUG, "Max work group size reported %d", clState->max_work_size);
 
 	/* For some reason 2 vectors is still better even if the card says
 	 * otherwise, and many cards lie about their max so use 256 as max
 	 * unless explicitly set on the command line */
-	cgpu->vwidth = clState->preferred_vwidth;
 	if (clState->preferred_vwidth > 1)
-		cgpu->vwidth = 2;
+		clState->preferred_vwidth = 2;
 	if (opt_vectors)
-		cgpu->vwidth = opt_vectors;
-	if (opt_worksize && opt_worksize <= cgpu->max_work_size)
-		cgpu->work_size = opt_worksize;
+		clState->preferred_vwidth = opt_vectors;
+	if (opt_worksize && opt_worksize <= clState->max_work_size)
+		clState->work_size = opt_worksize;
 	else
-		cgpu->work_size = (cgpu->max_work_size <= 256 ? cgpu->max_work_size : 256) /
-				cgpu->vwidth;
+		clState->work_size = (clState->max_work_size <= 256 ? clState->max_work_size : 256) /
+				clState->preferred_vwidth;
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
@@ -409,7 +342,7 @@ _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
 	char filename[16];
 
 	if (chosen_kernel == KL_NONE) {
-		if (cgpu->hasBitAlign)
+		if (clState->hasBitAlign)
 			chosen_kernel = KL_PHATK;
 		else
 			chosen_kernel = KL_POCLBM;
@@ -452,14 +385,14 @@ _clState *initCl(struct cgpu_info *cgpu, char *name, size_t nameSize)
 	}
 
 	strcat(binaryfilename, name);
-	if (cgpu->hasBitAlign)
+	if (clState->hasBitAlign)
 		strcat(binaryfilename, "bitalign");
 
 	strcat(binaryfilename, "v");
-	sprintf(numbuf, "%d", cgpu->vwidth);
+	sprintf(numbuf, "%d", clState->preferred_vwidth);
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, "w");
-	sprintf(numbuf, "%d", (int)cgpu->work_size);
+	sprintf(numbuf, "%d", (int)clState->work_size);
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, "long");
 	sprintf(numbuf, "%d", (int)sizeof(long));
@@ -515,7 +448,7 @@ build:
 	memcpy(source, rawsource, pl);
 
 	/* Patch the source file with the preferred_vwidth */
-	if (cgpu->vwidth > 1) {
+	if (clState->preferred_vwidth > 1) {
 		char *find = strstr(source, "VECTORSX");
 
 		if (unlikely(!find)) {
@@ -523,7 +456,7 @@ build:
 			return NULL;
 		}
 		find += 7; // "VECTORS"
-		if (cgpu->vwidth == 2)
+		if (clState->preferred_vwidth == 2)
 			strncpy(find, "2", 1);
 		else
 			strncpy(find, "4", 1);
@@ -532,7 +465,7 @@ build:
 	}
 
 	/* Patch the source file defining BITALIGN */
-	if (cgpu->hasBitAlign) {
+	if (clState->hasBitAlign) {
 		char *find = strstr(source, "BITALIGNX");
 
 		if (unlikely(!find)) {
@@ -690,13 +623,51 @@ built:
 	free(binaries);
 	free(binary_sizes);
 
-	/* We throw everything out now and create the real context we're using in initCQ */
-	clReleaseContext(clState->context);
-
 	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT patching, %d vectors and worksize %d",
-	       filename, patchbfi ? "" : "out", cgpu->vwidth, cgpu->work_size);
+	       filename, patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
-	return initCQ(clState, gpu);
+	/* create a cl program executable for all the devices specified */
+	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
+		size_t logSize;
+		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
+
+		char *log = malloc(logSize);
+		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
+		applog(LOG_INFO, "%s", log);
+		return NULL;
+	}
+
+	/* get a kernel object handle for a kernel with the given name */
+	clState->kernel = clCreateKernel(clState->program, "search", &status);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error: Creating Kernel from program. (clCreateKernel)");
+		return NULL;
+	}
+
+	/////////////////////////////////////////////////////////////////
+	// Create an OpenCL command queue
+	/////////////////////////////////////////////////////////////////
+	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
+						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
+	if (status != CL_SUCCESS) /* Try again without OOE enable */
+		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
+		return NULL;
+	}
+
+	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, BUFFERSIZE, NULL, &status);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: clCreateBuffer (outputBuffer)");
+		return NULL;
+	}
+
+	return clState;
 }
 #endif /* HAVE_OPENCL */
 
