@@ -4295,72 +4295,73 @@ out:
 	return ret;
 }
 
-#if !defined(WIN32)
-static void fork_monitor()
-{
-	// Make a pipe: [readFD, writeFD]
-	int pfd[2];
-	int r = pipe(pfd);
-	if (r<0) {
-		perror("pipe - failed to create pipe for --monitor");
-		exit(1);
-	}
-
-	// Make stderr write end of pipe
-	fflush(stderr);
-	r = dup2(pfd[1], 2);
-	if (r<0) {
-		perror("dup2 - failed to alias stderr to write end of pipe for --monitor");
-		exit(1);
-	}
-	r = close(pfd[1]);
-	if (r<0) {
-		perror("close - failed to close write end of pipe for --monitor");
-		exit(1);
-	}
-
-	// Don't allow a dying monitor to kill the main process
-	sighandler_t sr = signal(SIGPIPE, SIG_IGN);
-	if (SIG_ERR==sr) {
-		perror("signal - failed to edit signal mask for --monitor");
-		exit(1);
-	}
-
-	// Fork a child process
-	r = fork();
-	if (r<0) {
-		perror("fork - failed to fork child process for --monitor");
-		exit(1);
-	}
-
-	// In child, launch command
-	if (0==r) {
-		// Make stdin read end of pipe
-		r = dup2(pfd[0], 0);
+#if defined(unix)
+	static void fork_monitor()
+	{
+		// Make a pipe: [readFD, writeFD]
+		int pfd[2];
+		int r = pipe(pfd);
 		if (r<0) {
-			perror("dup2 - in child, failed to alias read end of pipe to stdin for --monitor");
-			exit(1);
-		}
-		close(pfd[0]);
-		if (r<0) {
-			perror("close - in child, failed to close read end of  pipe for --monitor");
+			perror("pipe - failed to create pipe for --monitor");
 			exit(1);
 		}
 
-		// Launch user specified command
-		execl("/bin/bash", "/bin/bash", "-c", opt_stderr_cmd, (char*)NULL);
-		perror("execl - in child failed to exec user specified command for --monitor");
-		exit(1);
-	}
+		// Make stderr write end of pipe
+		fflush(stderr);
+		r = dup2(pfd[1], 2);
+		if (r<0) {
+			perror("dup2 - failed to alias stderr to write end of pipe for --monitor");
+			exit(1);
+		}
+		r = close(pfd[1]);
+		if (r<0) {
+			perror("close - failed to close write end of pipe for --monitor");
+			exit(1);
+		}
 
-	// In parent, clean up unused fds
-	r = close(pfd[0]);
-	if (r<0) {
-		perror("close - failed to close read end of pipe for --monitor");
-		exit(1);
+		// Don't allow a dying monitor to kill the main process
+		sighandler_t sr0 = signal(SIGPIPE, SIG_IGN);
+		sighandler_t sr1 = signal(SIGPIPE, SIG_IGN);
+		if (SIG_ERR==sr0 || SIG_ERR==sr1) {
+			perror("signal - failed to edit signal mask for --monitor");
+			exit(1);
+		}
+
+		// Fork a child process
+		r = fork();
+		if (r<0) {
+			perror("fork - failed to fork child process for --monitor");
+			exit(1);
+		}
+
+		// Child: launch monitor command
+		if (0==r) {
+			// Make stdin read end of pipe
+			r = dup2(pfd[0], 0);
+			if (r<0) {
+				perror("dup2 - in child, failed to alias read end of pipe to stdin for --monitor");
+				exit(1);
+			}
+			close(pfd[0]);
+			if (r<0) {
+				perror("close - in child, failed to close read end of  pipe for --monitor");
+				exit(1);
+			}
+
+			// Launch user specified command
+			execl("/bin/bash", "/bin/bash", "-c", opt_stderr_cmd, (char*)NULL);
+			perror("execl - in child failed to exec user specified command for --monitor");
+			exit(1);
+		}
+
+		// Parent: clean up unused fds and bail
+		r = close(pfd[0]);
+		if (r<0) {
+			perror("close - failed to close read end of pipe for --monitor");
+			exit(1);
+		}
 	}
-}
-#endif // !WIN32
+#endif // defined(unix)
 
 int main (int argc, char *argv[])
 {
