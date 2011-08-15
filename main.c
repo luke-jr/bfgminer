@@ -399,7 +399,7 @@ static double bench_algo_stage3(
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	};
 	struct work work __attribute__((aligned(128)));
-	assert(sizeof(work) == sizeof(some_block));
+	assert(sizeof(work) <= sizeof(some_block));
 	memcpy(&work, &some_block, sizeof(work));
 
 	struct work_restart dummy;
