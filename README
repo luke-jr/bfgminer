@@ -40,9 +40,9 @@ If you are on 32 bit, x86_64 in the 2nd last line should be x86
 	To actually build:
 
 	./autogen.sh	# only needed if building from git repo
-	CFLAGS="-O3 -Wall -march=native" ./configure
+	CFLAGS="-O2 -Wall -march=native" ./configure
 	or if you haven't installed the ati files in system locations:
-	CFLAGS="-O3 -Wall -march=native -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86_64> ./configure
+	CFLAGS="-O2 -Wall -march=native -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86_64> ./configure
 	make
 	
 	If it finds the opencl files it will inform you with
@@ -51,7 +51,7 @@ If you are on 32 bit, x86_64 in the 2nd last line should be x86
 Basic WIN32 build instructions (on Fedora 13; requires mingw32):
 	./autogen.sh	# only needed if building from git repo
 	rm -f mingw32-config.cache
-	MINGW32_CFLAGS="-O3 -Wall -msse2" mingw32-configure
+	MINGW32_CFLAGS="-O2 -Wall -msse2" mingw32-configure
 	make
 	./mknsis.sh
 	
@@ -62,7 +62,7 @@ Native WIN32 build instructions (on mingw32, on windows):
 	Install libcurl, copy libcurl.m4 into /mingw/share/aclocal
 	Run:
 	autoreconf -fvi
-	CFLAGS="-O3 -Wall -msse2 -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86>" ./configure
+	CFLAGS="-O2 -Wall -msse2 -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86>" ./configure
 	make
 
 Usage instructions:  Run "cgminer --help" to see options.
