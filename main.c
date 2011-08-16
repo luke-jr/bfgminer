@@ -1350,26 +1350,19 @@ static void curses_print_status(int thr_id)
 
 		wmove(statuswin, gpucursor + gpu, 0);
 
+		wprintw(statuswin, " GPU %d: ", gpu);
 		if (cgpu->status == LIFE_DEAD)
-			wprintw(statuswin, " GPU %d: [DEAD / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
-				gpu, cgpu->total_mhashes / total_secs,
-				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->efficiency, cgpu->utility);
+			wprintw(statuswin, "[DEAD ");
 		else if (cgpu->status == LIFE_SICK)
-			wprintw(statuswin, " GPU %d: [SICK / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
-				gpu, cgpu->total_mhashes / total_secs,
-				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->efficiency, cgpu->utility);
+			wprintw(statuswin, "[SICK ");
 		else  if (!gpu_devices[gpu])
-			wprintw(statuswin, " GPU %d: [DISABLED / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
-				gpu, cgpu->total_mhashes / total_secs,
-				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->efficiency, cgpu->utility);
+			wprintw(statuswin, "[DISABLED ");
 		else
-			wprintw(statuswin, " GPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
-				gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
-				cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->efficiency, cgpu->utility);
+			wprintw(statuswin, "[%.1f ", cgpu->rolling);
+		wprintw(statuswin, "/ %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+			cgpu->total_mhashes / total_secs,
+			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->efficiency, cgpu->utility);
 		wclrtoeol(statuswin);
 	} else if (thr_id >= gpu_threads) {
 		int cpu = dev_from_id(thr_id);
@@ -1380,9 +1373,9 @@ static void curses_print_status(int thr_id)
 
 		wmove(statuswin, cpucursor + cpu, 0);
 
-		wprintw(statuswin, " CPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+		wprintw(statuswin, " CPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  E:%.0f%%  U:%.2f/m]",
 			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
-			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->getworks, cgpu->accepted, cgpu->rejected,
 			cgpu->efficiency, cgpu->utility);
 		wclrtoeol(statuswin);
 	}
