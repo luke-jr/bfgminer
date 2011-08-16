@@ -5,9 +5,10 @@ License: GPLv2.  See COPYING for details.
 
 Dependencies:
 	libcurl			http://curl.haxx.se/libcurl/
+	libncurses5-dev (or libpdcurses on WIN32)
+	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
 	jansson			http://www.digip.org/jansson/
 	(jansson is included in-tree and not necessary)
-	libncurses5-dev (or libpdcurses on WIN32)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
