@@ -192,3 +192,9 @@ if you use
 ./cgminer -o xxx -u yyy -p zzz 2>logfile.txt
 it will log to a file called logfile.txt and otherwise work the same.
 
+---
+This code is provided entirely free of charge by the programmer in his spare
+time so donations would be greatly appreciated.
+
+Con Kolivas <kernel@kolivas.org>
+15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
