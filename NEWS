@@ -1,3 +1,27 @@
+Version 1.5.5 - August 16, 2011
+
+- Rework entirely the GPU restart code. Strike a balance between code that
+re-initialises the GPU entirely so that soft hangs in the code are properly
+managed, but if a GPU is completely hung, the thread restart code fails
+gracefully, so that it does not take out any other code or devices. This will
+allow cgminer to keep restarting GPUs that can be restarted, but continue
+mining even if one or more GPUs hangs which would normally require a reboot.
+- Add --submit-stale option which submits all shares, regardless of whether they
+would normally be considered stale.
+- Keep options in alphabetical order.
+- Probe for slightly longer for when network conditions are lagging.
+- Only display the CPU algo when we're CPU mining.
+- As we have keepalives now, blaming network flakiness on timeouts appears to
+have been wrong.     Set a timeout for longpoll to 1 hour, and most other
+network connectivity to 1 minute.
+- Simplify output code and remove HW errors from CPU stats.
+- Simplify code and tidy output.
+- Only show cpu algo in summary if cpu mining.
+- Log summary at the end as per any other output.
+- Flush output.
+- Add a linux-usb-cgminer guide courtesy of Kano.
+
+
 Version 1.5.4 - August 14, 2011
 
 - Add new option: --monitor <cmd> Option lets user specify a command <cmd> that
