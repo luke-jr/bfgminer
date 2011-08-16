@@ -4099,7 +4099,8 @@ static void print_summary(void)
 
 	printf("\nSummary of runtime statistics:\n\n");
 	printf("Started at %s\n", datestamp);
-	printf("CPU hasher algorithm used: %s\n", algo_names[opt_algo]);
+	if (opt_n_threads)
+		printf("CPU hasher algorithm used: %s\n", algo_names[opt_algo]);
 	printf("Runtime: %d hrs : %d mins : %d secs\n", hours, mins, secs);
 	if (total_secs)
 		printf("Average hashrate: %.1f Megahash/s\n", total_mhashes_done / total_secs);
