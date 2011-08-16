@@ -2474,23 +2474,22 @@ retry:
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
+			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled");
 			switch (cgpu->status) {
+				default:
 				case LIFE_WELL:
-					wlog("Thread %d: %.1f Mh/s %s ALIVE\n", i,
-					thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled");
+					wlog("ALIVE");
 					break;
 				case LIFE_SICK:
-					wlog("Thread %d: %.1f Mh/s %s SICK reported in %s\n", i,
-					thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled",
-					checkin);
+					wlog("SICK reported in %s", checkin);
 					break;
 				case LIFE_DEAD:
-					wlog("Thread %d: %.1f Mh/s %s DEAD reported in %s\n", i,
-					thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled",
-					checkin);
+					wlog("DEAD reported in %s", checkin);
 					break;
 			}
+			wlog("\n");
 		}
+		wlog("\n");
 	}
 
 	wlogprint("[E]nable [D]isable [R]estart GPU\n");
