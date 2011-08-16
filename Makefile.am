@@ -17,7 +17,7 @@ bin_PROGRAMS	= cgminer
 
 bin_SCRIPTS	= phatk110722.cl poclbm110717.cl
 
-cgminer_SOURCES	= elist.h miner.h compat.h			\
+cgminer_SOURCES	= elist.h miner.h compat.h bench_block.h	\
 		  main.c util.c					\
 		  ocl.c ocl.h findnonce.c findnonce.h 		\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
