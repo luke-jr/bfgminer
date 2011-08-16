@@ -318,8 +318,8 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	if (probe) {
 		probing = ((want_longpoll && !have_longpoll) || !pool->probed);
-		/* Probe for only 10 seconds */
-		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
+		/* Probe for only 14 seconds */
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15);
 	}
 
 	if (opt_protocol)
