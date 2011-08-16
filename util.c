@@ -311,6 +311,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	struct curl_slist *headers = NULL;
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
+	long timeout = longpoll ? (60 * 60) : 60;
 	struct header_info hi = { };
 	bool probing = false;
 
@@ -318,9 +319,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	if (probe) {
 		probing = ((want_longpoll && !have_longpoll) || !pool->probed);
-		/* Probe for only 14 seconds */
-		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15);
+		/* Probe for only 15 seconds */
+		timeout = 15;
 	}
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
 	if (opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
