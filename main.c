@@ -4083,6 +4083,17 @@ static void *watchdog_thread(void *userdata)
 	return NULL;
 }
 
+static void log_print_status(int thr_id)
+{
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+
+	applog(LOG_WARNING, " %sPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+	       cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu, cgpu->rolling,
+			cgpu->total_mhashes / total_secs, cgpu->getworks,
+			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->efficiency, cgpu->utility);
+}
+
 static void print_summary(void)
 {
 	struct timeval diff;
@@ -4097,58 +4108,57 @@ static void print_summary(void)
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
-	printf("\nSummary of runtime statistics:\n\n");
-	printf("Started at %s\n", datestamp);
+	applog(LOG_WARNING, "\nSummary of runtime statistics:\n");
+	applog(LOG_WARNING, "Started at %s", datestamp);
 	if (opt_n_threads)
-		printf("CPU hasher algorithm used: %s\n", algo_names[opt_algo]);
-	printf("Runtime: %d hrs : %d mins : %d secs\n", hours, mins, secs);
+		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
+	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
 	if (total_secs)
-		printf("Average hashrate: %.1f Megahash/s\n", total_mhashes_done / total_secs);
-	printf("Queued work requests: %d\n", total_getworks);
-	printf("Share submissions: %d\n", total_accepted + total_rejected);
-	printf("Accepted shares: %d\n", total_accepted);
-	printf("Rejected shares: %d\n", total_rejected);
+		applog(LOG_WARNING, "Average hashrate: %.1f Megahash/s", total_mhashes_done / total_secs);
+	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
+	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
+	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
+	applog(LOG_WARNING, "Rejected shares: %d", total_rejected);
 	if (total_accepted || total_rejected)
-		printf("Reject ratio: %.1f\n", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
-	printf("Hardware errors: %d\n", hw_errors);
-	printf("Efficiency (accepted / queued): %.0f%%\n", efficiency);
-	printf("Utility (accepted shares / min): %.2f/min\n\n", utility);
+		applog(LOG_WARNING, "Reject ratio: %.1f", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
+	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
+	applog(LOG_WARNING, "Efficiency (accepted / queued): %.0f%%", efficiency);
+	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min\n", utility);
 
-	printf("Discarded work due to new blocks: %d\n", total_discarded);
-	printf("Stale submissions discarded due to new blocks: %d\n", total_stale);
-	printf("Unable to get work from server occasions: %d\n", total_lo);
-	printf("Work items generated locally: %d\n", local_work);
-	printf("Submitting work remotely delay occasions: %d\n", total_ro);
-	printf("New blocks detected on network: %d\n\n", new_blocks);
+	applog(LOG_WARNING, "Discarded work due to new blocks: %d", total_discarded);
+	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %d", total_stale);
+	applog(LOG_WARNING, "Unable to get work from server occasions: %d", total_lo);
+	applog(LOG_WARNING, "Work items generated locally: %d", local_work);
+	applog(LOG_WARNING, "Submitting work remotely delay occasions: %d", total_ro);
+	applog(LOG_WARNING, "New blocks detected on network: %d\n", new_blocks);
 
 	if (total_pools > 1) {
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool = pools[i];
 
-			printf("Pool: %s\n", pool->rpc_url);
-			printf(" Queued work requests: %d\n", pool->getwork_requested);
-			printf(" Share submissions: %d\n", pool->accepted + pool->rejected);
-			printf(" Accepted shares: %d\n", pool->accepted);
-			printf(" Rejected shares: %d\n", pool->rejected);
+			applog(LOG_WARNING, "Pool: %s", pool->rpc_url);
+			applog(LOG_WARNING, " Queued work requests: %d", pool->getwork_requested);
+			applog(LOG_WARNING, " Share submissions: %d", pool->accepted + pool->rejected);
+			applog(LOG_WARNING, " Accepted shares: %d", pool->accepted);
+			applog(LOG_WARNING, " Rejected shares: %d", pool->rejected);
 			if (pool->accepted || pool->rejected)
-				printf(" Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
+				applog(LOG_WARNING, " Reject ratio: %.1f", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 			efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-			printf(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
+			applog(LOG_WARNING, " Efficiency (accepted / queued): %.0f%%", efficiency);
 
-			printf(" Discarded work due to new blocks: %d\n", pool->discarded_work);
-			printf(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
-			printf(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
-			printf(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
+			applog(LOG_WARNING, " Discarded work due to new blocks: %d", pool->discarded_work);
+			applog(LOG_WARNING, " Stale submissions discarded due to new blocks: %d", pool->stale_shares);
+			applog(LOG_WARNING, " Unable to get work from server occasions: %d", pool->localgen_occasions);
+			applog(LOG_WARNING, " Submitting work remotely delay occasions: %d\n", pool->remotefail_occasions);
 		}
 	}
 
-	printf("Summary of per device statistics:\n\n");
+	applog(LOG_WARNING, "Summary of per device statistics:\n");
 	for (i = 0; i < mining_threads; i++) {
 		if (active_device(i))
-			print_status(i);
+			log_print_status(i);
 	}
-	printf("\n");
-	fflush(stdout);
+	applog(LOG_WARNING, "\n");
 }
 
 void quit(int status, const char *format, ...)
