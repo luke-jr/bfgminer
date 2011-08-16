@@ -1312,7 +1312,9 @@ static void curses_print_status(int thr_id)
 
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
-	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION " - Started: %s CPU Algo: %s", datestamp, algo_names[opt_algo]);
+	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION " - Started: %s", datestamp);
+	if (opt_n_threads)
+		wprintw(statuswin, " CPU Algo: %s", algo_names[opt_algo]);
 	wattroff(statuswin, A_BOLD);
 	wmove(statuswin, 1, 0);
 	whline(statuswin, '-', 80);
