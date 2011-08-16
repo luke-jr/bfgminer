@@ -1,0 +1,137 @@
+How to setup a cgminer using xubuntu 11.04 live on a USB courtesy of Kano
+
+Software
+========
+Short hardware comment:
+Your mining computer doesn't need any HDD or CD/DVD/BD as long as it has at
+least 2GB of RAM, can boot USB, has some network connection to the internet and
+of course a reasonable mining ATI graphics card
+... Or you can boot a windows PC with the USB to only do mining ... and ignore
+the system HDD ... wasting energy Smiley
+
+To create the USB, you need of course a 4GB USB and temporarily need a PC with a
+CD (or DVD/BD) writer, a USB port and of course an internet connection to the PC
+
+1) Download the xubuntu 11.04 desktop live CD iso for amd64
+   ( look here for mirrors: http://www.xubuntu.org/getubuntu )
+
+2) Burn it to CD then boot that temporarily on any PC with a CD/DVD/BD and a USB
+port (this and the next 2 step won't effect that PC)
+
+3) Plug in your 4GB USB device and it should appear on the desktop - you can
+leave it's contents as long as there is at least 2.8GB free
+
+4) Now run "Startup Disk Creator" in "Applications->System" (the system menu is
+the little rat in the top left corner)
+
+(if you have no mouse you can get the menu with <ctr><esc> and navigate the menu
+with the arrow keys and <return> key)
+
+From here select the boot CD as the "Source" and the USB as the "Disk to use"
+lastly move the slider to 2GB for reserved extra space
+
+The 2GB should be enough for modifications
+
+Click: "Make Install Disk"
+After about 10-15 minutes you have a base xubuntu 11.04 boot USB
+(you can shut down this computer now)
+
+5) Boot your cgminer PC with this USB stick, select "English"
+   then select "Try Xubuntu without installing" and wait for the desktop to
+appear
+   (this happens by default if you wait for the timeouts)
+
+6) Start a terminal
+   "Applications->Accessories->Terminal Emulator"
+
+7) sudo apt-get install openssh-server screen
+
+   if you have a problem here then it's probably coz the internet isn't
+available ... sort that   out by reading elsewhere about routers etc
+
+Cool sudo apt-get install fglrx fglrx-amdcccle fglrx-dev
+   sudo sync
+   sudo shutdown -r now
+
+N.B. always do a "sudo sync" and wait for it to finish every time before
+shutting down the PC to ensure all data is written to the USB
+
+9) sudo aticonfig --lsa
+   this lists your ATI cards so you can see them
+ sudo aticonfig --adapter=all --odgt
+   this checks it can access all the cards ...
+
+10) aticonfig --adapter=all --initial
+   this gets an error - no idea why but the xorg.conf is OK
+ sudo sync
+ sudo shutdown -r now
+
+11) sudo aticonfig --adapter=all --odgt
+   this checks it can access all the cards ...
+
+12) get AMD-APP-SDK-v2.4-lnx64.tgz from
+ http://developer.amd.com/sdks/amdappsdk/downloads/pages/default.aspx
+  ( http://developer.amd.com/Downloads/AMD-APP-SDK-v2.4-lnx64.tgz )
+
+ sudo su
+ cd /opt
+  (replace /home/ubuntu/ with wherever you put the file: )
+ tar -xvzf /home/ubuntu/AMD-APP-SDK-v2.4-lnx64.tgz
+
+ cd AMD-APP-SDK-v2.4-lnx64/
+ cp -pv lib/x86_64/* /usr/lib/
+ rsync -avl include/CL/ /usr/include/CL/
+ tar -xvzf icd-registration.tgz
+ rsync -avl etc/OpenCL/ /etc/OpenCL/
+ ldconfig
+ sync
+ shutdown -r now
+
+ You now have an OpenCL enabled xubuntu
+
+13) cgminer:
+ sudo apt-get install curl
+
+ get the binary linux cgminer (see the bitcoin forum cgminer thread for where to
+get it)
+
+ ./cgminer -n
+   this shows you the GPU's it found on your PC
+
+14) An OC option:
+ sudo apt-get install libwxbase2.8-0 libwxgtk2.8-0
+
+ http://sourceforge.net/projects/amdovdrvctrl/
+  for an Over/underclocking application and get the file listed below then:
+ sudo dpkg -i amdoverdrivectrl_1.2.1_amd64.deb
+
+15) set the screen saver to ONLY blank ...
+
+ Move the mouse to the bottom of the screen and you see a set of icons like on
+an Apple PC
+ Click on Settings, then in the Settings window "Screensaver"
+ Set "Mode:" to "Blank Screen Only"
+
+Edit: originally left this somewhat useful addition out:
+16) apt-get install ntpd
+ An accurate clock is always a good idea Smiley
+
+Initial setup complete.
+
+========
+
+If you want to SSH into the machine and run cgminer:
+ From a terminal on the miner display each time after you boot:
+  xhost +
+
+Then after ssh into the machine:
+ export DISPLAY=:0
+before running cgminer
+
+Also note, that you should force the screen to blank when mining if the ATI card
+is displaying the screen (using the screen saver application menu)
+In my case it takes away 50Mh/s when the screen isn't blanked
+
+
+This is of course just the basics ... but it should get you a computer up and
+running and able to run cgminer
