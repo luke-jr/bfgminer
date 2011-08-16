@@ -4158,7 +4158,8 @@ static void print_summary(void)
 		if (active_device(i))
 			log_print_status(i);
 	}
-	applog(LOG_WARNING, "\n");
+	fflush(stdout);
+	fflush(stderr);
 }
 
 void quit(int status, const char *format, ...)
