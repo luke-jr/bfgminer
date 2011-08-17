@@ -556,7 +556,7 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 		free(target_str);
 	}
 
-	return true;	/* FIXME: return rc; */
+	return rc;
 }
 
 struct thread_q *tq_new(void)
