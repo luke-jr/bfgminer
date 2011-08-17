@@ -3088,7 +3088,7 @@ out:
 	return ret;
 }
 
-static bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
+static bool submit_work_sync(struct thr_info *thr, struct work *work_in)
 {
 	struct workio_cmd *wc;
 
@@ -3099,10 +3099,9 @@ static bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
 		return false;
 	}
 
-	wc->u.work = make_work();
+	wc->u.work = work_in;
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
-	memcpy(wc->u.work, work_in, sizeof(*work_in));
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing submit work to work thread");
@@ -3121,7 +3120,7 @@ err_out:
 
 struct swa {
 	struct thr_info *thr;
-	const struct work *work_in;
+	struct work *work_in;
 };
 
 static void *swasync_thread(void *userdata)
@@ -3146,7 +3145,8 @@ static bool submit_work_async(struct thr_info *thr, const struct work *work_in)
 	}
 
 	swa->thr = thr;
-	swa->work_in = work_in;
+	swa->work_in = make_work();
+	memcpy(swa->work_in, work_in, sizeof(struct work));
 
 	if (unlikely(pthread_create(&sw_thread, NULL, swasync_thread, (void *)swa))) {
 		applog(LOG_ERR, "Failed to create swasync_thread");
