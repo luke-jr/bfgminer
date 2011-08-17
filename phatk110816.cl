@@ -388,7 +388,7 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	u v = W[117] + W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]); 
 	u g = -(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64));
 	
-#define NFLAG (0xFFEUL)
+#define NFLAG (0xFF)
 
 #ifdef VECTORS4
 	if (v.x == g.x)
