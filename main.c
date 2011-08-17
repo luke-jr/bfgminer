@@ -3610,7 +3610,7 @@ static void *gpuminer_thread(void *userdata)
 			{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
 
 		/* MAXBUFFERS entry is used as a flag to say nonces exist */
-		if (res[MAXBUFFERS]) {
+		if (res[FOUND]) {
 			/* Clear the buffer again */
 			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 					BUFFERSIZE, blank_res, 0, NULL, NULL);

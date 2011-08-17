@@ -181,14 +181,14 @@ static void *postcalc_hash(void *userdata)
 
 	pthread_detach(pthread_self());
 cycle:
-	while (entry < OUTBUFFERS) {
+	while (entry < FOUND) {
 		if (pcd->res[entry]) {
 			nonce = pcd->res[entry++];
 			break;
 		}
 		entry++;
 	}
-	if (entry == OUTBUFFERS)
+	if (entry == FOUND)
 		goto out;
 
 	A = blk->cty_a; B = blk->cty_b;
@@ -231,7 +231,7 @@ cycle:
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 	}
-	if (entry < OUTBUFFERS)
+	if (entry < FOUND)
 		goto cycle;
 out:
 	free(pcd);

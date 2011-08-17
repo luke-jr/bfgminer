@@ -387,42 +387,42 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 
 	u v = W[117] + W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]); 
 	u g = -(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64));
-	
-#define NFLAG (0xFF)
+
+#define FOUND (0x80)
+#define NFLAG (0x7F)
 
 #ifdef VECTORS4
 	if (v.x == g.x)
 	{
-		output[MAXBUFFERS] = output[NFLAG & W[3].x] = W[3].x;
+		output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
 	}
 	if (v.y == g.y)
 	{
-		output[MAXBUFFERS] = output[NFLAG & W[3].y] = W[3].y;
+		output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
 	}
 	if (v.z == g.z)
 	{
-		output[MAXBUFFERS] = output[NFLAG & W[3].z] = W[3].z;
+		output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
 	}
 	if (v.w == g.w)
 	{
-		output[MAXBUFFERS] = output[NFLAG & W[3].w] = W[3].w;
+		output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
 	}
 #else
 	#ifdef VECTORS2
 		if (v.x == g.x)
 		{
-			output[MAXBUFFERS] = output[NFLAG & W[3].x] = W[3].x;
+			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
 		}
 		if (v.y == g.y)
 		{
-			output[MAXBUFFERS] = output[NFLAG & W[3].y] = W[3].y;
+			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
 		}
 	#else
 		if (v == g)
 		{
-			output[MAXBUFFERS] = output[NFLAG & W[3]] = W[3];
+			output[FOUND] = output[NFLAG & W[3]] = W[3];
 		}
 	#endif
 #endif
 }
-

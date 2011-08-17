@@ -625,32 +625,32 @@ __kernel void search(	const uint state0, const uint state1, const uint state2, c
 	
 	Vals[7] = Vals[7] + Vals[3] + (rotr(Vals[0], 6) ^ rotr(Vals[0], 11) ^ rotr(Vals[0], 25)) + ch(Vals[0], Vals[1], Vals[2]) + K[60] + W[12];
 
-#define MAXBUFFERS (4095)
-#define NFLAG (0xFF)
+#define FOUND (0x80)
+#define NFLAG (0x7F)
 
 #if defined(VECTORS4) || defined(VECTORS2)
 	if (Vals[7].x == -0x5be0cd19U)
 	{
-		output[MAXBUFFERS] = output[NFLAG & nonce.x] =  nonce.x;
+		output[FOUND] = output[NFLAG & nonce.x] =  nonce.x;
 	}
 	if (Vals[7].y == -0x5be0cd19U)
 	{
-		output[MAXBUFFERS] = output[NFLAG & nonce.y] =  nonce.y;
+		output[FOUND] = output[NFLAG & nonce.y] =  nonce.y;
 	}
 #ifdef VECTORS4
 	if (Vals[7].z == -0x5be0cd19U)
 	{
-		output[MAXBUFFERS] = output[NFLAG & nonce.z] =  nonce.z;
+		output[FOUND] = output[NFLAG & nonce.z] =  nonce.z;
 	}
 	if (Vals[7].w == -0x5be0cd19U)
 	{
-		output[MAXBUFFERS] = output[NFLAG & nonce.w] =  nonce.w;
+		output[FOUND] = output[NFLAG & nonce.w] =  nonce.w;
 	}
 #endif
 #else
 	if (Vals[7] == -0x5be0cd19U)
 	{
-		output[MAXBUFFERS] = output[NFLAG & nonce] =  nonce;
+		output[FOUND] = output[NFLAG & nonce] =  nonce;
 	}
 #endif
 }
