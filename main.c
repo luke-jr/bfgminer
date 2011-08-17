@@ -3411,7 +3411,7 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 
 static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 {
-	cl_kernel *kernel = &clState->kernel;
+		cl_kernel *kernel = &clState->kernel;
 	cl_int status = 0;
 	int num = 0;
 
@@ -3423,21 +3423,27 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
+	
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->C1addK5);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->D1A);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_d);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
+	
+	uint nonces[2];
+	nonces[0] = blk->nonce;
+	nonces[1] = (blk->nonce)+1;
+	status |= clSetKernelArg(*kernel, num++, 2 * sizeof(uint), (void *)nonces);
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W2A);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W16);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17_2);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal4addT1);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->T1substate0);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal4_2);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal0);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreW18);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreW19);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreW31);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreW32);
 
 	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
 				 (void *)&clState->outputBuffer);

@@ -55,7 +55,7 @@ inline uint32_t ByteReverse(uint32_t value)
 
 void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	cl_uint A, B, C, D, E, F, G, H;
-
+	
 	A = state[0];
 	B = state[1];
 	C = state[2];
@@ -96,9 +96,19 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->merkle = data[0];
 	blk->ntime = data[1];
 	blk->nbits = data[2];
-
+	
 	blk->W16 = blk->fW0 = data[0] + (rotr(data[1], 7) ^ rotr(data[1], 18) ^ (data[1] >> 3));
 	blk->W17 = blk->fW1 = data[1] + (rotr(data[2], 7) ^ rotr(data[2], 18) ^ (data[2] >> 3)) + 0x01100000;
+	blk->PreVal4 = blk->fcty_e = E + (rotr(B, 6) ^ rotr(B, 11) ^ rotr(B, 25)) + (D ^ (B & (C ^ D))) + 0xe9b5dba5;
+	blk->T1 = blk->fcty_e2 = (rotr(F, 2) ^ rotr(F, 13) ^ rotr(F, 22)) + ((F & G) | (H & (F | G)));
+	blk->PreVal4_2 = blk->PreVal4 + blk->T1;
+	blk->PreVal0 = blk->PreVal4 + state[0];
+	blk->PreW31 = 0x00000280 + (rotr(blk->W16,  7) ^ rotr(blk->W16, 18) ^ (blk->W16 >> 3));
+	blk->PreW32 = blk->W16 + ((rotr(blk->W17, 7) ^ rotr(blk->W17, 18) ^ (blk->W17 >> 3)));
+	blk->PreW18 = data[2] + (rotr(blk->W16, 17) ^ rotr(blk->W16, 19) ^ (blk->W16 >> 10));
+	blk->PreW19 = 0x11002000 + (rotr(blk->W17, 17) ^ rotr(blk->W17, 19) ^ (blk->W17 >> 10));
+	
+	
 	blk->W2 = data[2];
 
 	blk->W2A = blk->W2 + (rotr(blk->W16, 19) ^ rotr(blk->W16, 17) ^ (blk->W16 >> 10));
@@ -109,9 +119,7 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->fW15 = 0x00000280 + (rotr(blk->fW0, 7) ^ rotr(blk->fW0, 18) ^ (blk->fW0 >> 3));
 	blk->fW01r = blk->fW0 + (rotr(blk->fW1, 7) ^ rotr(blk->fW1, 18) ^ (blk->fW1 >> 3));
 
-	blk->PreVal4 = blk->fcty_e = E + (rotr(B, 6) ^ rotr(B, 11) ^ rotr(B, 25)) + (D ^ (B & (C ^ D))) + 0xe9b5dba5;
-	blk->T1 = blk->fcty_e2 = (rotr(F, 2) ^ rotr(F, 13) ^ rotr(F, 22)) + ((F & G) | (H & (F | G)));
-
+	
 	blk->PreVal4addT1 = blk->PreVal4 + blk->T1;
 	blk->T1substate0 = state[0] - blk->T1;
 }

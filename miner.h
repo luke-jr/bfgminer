@@ -288,6 +288,12 @@ typedef struct {
 	cl_uint PreVal4; cl_uint T1;
 	cl_uint C1addK5; cl_uint D1A; cl_uint W2A; cl_uint W17_2;
 	cl_uint PreVal4addT1; cl_uint T1substate0;
+	cl_uint PreVal4_2;
+	cl_uint PreVal0;
+	cl_uint PreW18;
+	cl_uint PreW19;
+	cl_uint PreW31;
+	cl_uint PreW32;
 } dev_blk_ctx;
 #else
 typedef struct {

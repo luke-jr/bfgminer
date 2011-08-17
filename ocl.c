@@ -355,8 +355,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_PHATK:
-			strcpy(filename, "phatk110722.cl");
-			strcpy(binaryfilename, "phatk110722");
+			strcpy(filename, "phatk2_2.cl");
+			strcpy(binaryfilename, "phatk2_2");
 			break;
 	}
 
@@ -501,7 +501,14 @@ build:
 	}
 
 	/* create a cl program executable for all the devices specified */
-	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
+	char CompilerOptions[256];
+	sprintf(CompilerOptions, "%s%i", "-DWORKSIZE=", clState->work_size);
+	//int n = 1000;
+	//while(n--)
+	//	printf("%s", CompilerOptions);
+	//return 1;
+	status = clBuildProgram(clState->program, 1, &devices[gpu], CompilerOptions , NULL, NULL);
+
 	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
