@@ -373,11 +373,15 @@ static double bench_algo_stage3(
 	enum sha256_algos algo
 )
 {
-	// Random work pulled from a pool
+	// Use a random work block pulled from a pool
 	static uint8_t bench_block[] = { CGMINER_BENCHMARK_BLOCK };
 	struct work work __attribute__((aligned(128)));
-	assert(sizeof(work) <= sizeof(bench_block));
-	memcpy(&work, &bench_block, sizeof(work));
+
+	size_t bench_size = sizeof(work);
+	size_t work_size = sizeof(bench_block);
+	size_t min_size = (work_size < bench_size ? work_size : bench_size);
+	memset(&work, 0, sizeof(work));
+	memcpy(&work, &bench_block, min_size);
 
 	struct work_restart dummy;
 	work_restart = &dummy;
