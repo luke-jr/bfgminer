@@ -355,8 +355,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_PHATK:
-			strcpy(filename, "phatk2_2.cl");
-			strcpy(binaryfilename, "phatk2_2");
+			strcpy(filename, "phatk110816.cl");
+			strcpy(binaryfilename, "phatk110816");
 			break;
 	}
 
@@ -502,7 +502,7 @@ build:
 
 	/* create a cl program executable for all the devices specified */
 	char CompilerOptions[256];
-	sprintf(CompilerOptions, "%s%i", "-DWORKSIZE=", clState->work_size);
+	sprintf(CompilerOptions, "%s%i", "-DWORKSIZE=", (int)clState->work_size);
 	//int n = 1000;
 	//while(n--)
 	//	printf("%s", CompilerOptions);

@@ -388,46 +388,41 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	u v = W[117] + W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]); 
 	u g = -(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64));
 	
-	uint nonce = 0;
+#define NFLAG (0xFFEUL)
+
 #ifdef VECTORS4
 	if (v.x == g.x)
 	{
-		nonce = W[3].x;
+		output[MAXBUFFERS] = output[NFLAG & W[3].x] = W[3].x;
 	}
 	if (v.y == g.y)
 	{
-		nonce = W[3].y;
+		output[MAXBUFFERS] = output[NFLAG & W[3].y] = W[3].y;
 	}
 	if (v.z == g.z)
 	{
-		nonce = W[3].z;
+		output[MAXBUFFERS] = output[NFLAG & W[3].z] = W[3].z;
 	}
 	if (v.w == g.w)
 	{
-		nonce = W[3].w;
+		output[MAXBUFFERS] = output[NFLAG & W[3].w] = W[3].w;
 	}
 #else
 	#ifdef VECTORS2
 		if (v.x == g.x)
 		{
-			nonce = W[3].x;
+			output[MAXBUFFERS] = output[NFLAG & W[3].x] = W[3].x;
 		}
 		if (v.y == g.y)
 		{
-			nonce = W[3].y;
+			output[MAXBUFFERS] = output[NFLAG & W[3].y] = W[3].y;
 		}
 	#else
 		if (v == g)
 		{
-			nonce = W[3];
+			output[MAXBUFFERS] = output[NFLAG & W[3]] = W[3];
 		}
 	#endif
 #endif
-	if(nonce)
-	{
-		//Faster to shift the nonce by 2 due to 4-DWORD addressing and does not add more collisions
-		output[MAXBUFFERS] = nonce;
-		output[get_local_id(0)] = nonce;
-	}
 }
 
