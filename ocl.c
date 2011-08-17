@@ -350,8 +350,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	switch (chosen_kernel) {
 		case KL_POCLBM:
-			strcpy(filename, "poclbm110717.cl");
-			strcpy(binaryfilename, "poclbm110717");
+			strcpy(filename, "poclbm110816.cl");
+			strcpy(binaryfilename, "poclbm110816");
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_PHATK:
