@@ -1,3 +1,12 @@
+Version 1.5.6 - August 17, 2011
+
+- New phatk and poclbm kernels. Updated phatk to be in sync with latest 2.2
+courtesy of phateus. Custom modified to work best with cgminer.
+- Updated output buffer code to use a smaller buffer with the kernels.
+- Clean up the longpoll management to ensure the right paths go to the right
+pool and display whether we're connected to LP or not in the status line.
+
+
 Version 1.5.5 - August 16, 2011
 
 - Rework entirely the GPU restart code. Strike a balance between code that
