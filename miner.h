@@ -261,8 +261,6 @@ timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_scantime;
-extern bool want_longpoll;
-extern bool have_longpoll;
 struct thread_q;
 
 struct work_restart {
@@ -305,6 +303,9 @@ struct pool {
 	bool idle;
 	bool probed;
 	bool enabled;
+
+	char *hdr_path;
+
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
 	unsigned int discarded_work;

@@ -318,7 +318,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
 	if (probe) {
-		probing = ((want_longpoll && !have_longpoll) || !pool->probed);
+		probing = !pool->probed;
 		/* Probe for only 15 seconds */
 		timeout = 15;
 	}
@@ -378,20 +378,16 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		goto err_out;
 	}
 
-	if (!have_longpoll && want_longpoll) {
+	if (probing) {
+		pool->probed = true;
 		/* If X-Long-Polling was found, activate long polling */
-		if (hi.lp_path) {
-			have_longpoll = true;
-			tq_push(thr_info[longpoll_thr_id].q, hi.lp_path);
-		} else
-			free(hi.lp_path);
+		if (hi.lp_path) 
+			pool->hdr_path = hi.lp_path;
+		else
+			pool->hdr_path = NULL;
 	}
 
-	if (probing)
-		pool->probed = true;
 	*rolltime = hi.has_rolltime;
-
-	hi.lp_path = NULL;
 
 	val = JSON_LOADS(all_data.buf, &err);
 	if (!val) {

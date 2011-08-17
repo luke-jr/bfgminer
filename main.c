@@ -172,8 +172,8 @@ static const sha256_func sha256_funcs[] = {
 
 bool opt_debug = false;
 bool opt_protocol = false;
-bool want_longpoll = true;
-bool have_longpoll = false;
+static bool want_longpoll = true;
+static bool have_longpoll = false;
 bool use_syslog = false;
 static bool opt_quiet = false;
 static bool opt_realquiet = false;
@@ -1328,9 +1328,11 @@ static void curses_print_status(int thr_id)
 	wclrtoeol(statuswin);
 	wmove(statuswin, 4, 0);
 	if (pool_strategy == POOL_LOADBALANCE && total_pools > 1)
-		wprintw(statuswin, " Connected to multiple pools");
+		wprintw(statuswin, " Connected to multiple pools with%s LP",
+			have_longpoll ? "": "out");
 	else
-		wprintw(statuswin, " Connected to %s as user %s", pool->rpc_url, pool->rpc_user);
+		wprintw(statuswin, " Connected to %s with%s LP as user %s",
+			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 5, 0);
 	wprintw(statuswin, " Block: %s...  Started: %s", current_hash, blocktime);
@@ -1603,7 +1605,7 @@ static bool get_upstream_work(struct work *work, bool lagging)
 		applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-			    want_longpoll, false, &work->rolltime, pool);
+			    false, false, &work->rolltime, pool);
 	if (unlikely(!val)) {
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 		goto out;
@@ -2127,6 +2129,7 @@ static void display_pool_summary(struct pool *pool)
 
 	mutex_lock(&curses_lock);
 	wlog("Pool: %s\n", pool->rpc_url);
+	wlog("%s long-poll support\n", pool->hdr_path ? "Has" : "Does not have");
 	wlog(" Queued work requests: %d\n", pool->getwork_requested);
 	wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
 	wlog(" Accepted shares: %d\n", pool->accepted);
@@ -3726,14 +3729,12 @@ static void *longpoll_thread(void *userdata)
 		goto out;
 	}
 
-	if (opt_debug)
-		applog(LOG_DEBUG, "Popping hdr path in longpoll thread");
-
-	hdr_path = tq_pop(mythr->q, NULL);
-	if (!hdr_path) {
+	tq_pop(mythr->q, NULL);
+	if (!pool->hdr_path) {
 		applog(LOG_WARNING, "No long-poll found on this server");
 		goto out;
 	}
+	hdr_path = pool->hdr_path;
 
 	/* full URL */
 	if (strstr(hdr_path, "://")) {
@@ -3753,8 +3754,8 @@ static void *longpoll_thread(void *userdata)
 
 		sprintf(lp_url, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
 	}
-	free(hdr_path);
 
+	have_longpoll = true;
 	applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
 
 	while (1) {
@@ -3802,6 +3803,7 @@ static void *longpoll_thread(void *userdata)
 	}
 
 out:
+	have_longpoll = false;
 	free(lp_url);
 	tq_freeze(mythr->q);
 	if (curl)
@@ -3827,6 +3829,9 @@ static void start_longpoll(void)
 	if (unlikely(thr_info_create(thr, NULL, longpoll_thread, thr)))
 		quit(1, "longpoll thread create failed");
 	pthread_detach(*thr->pth);
+	if (opt_debug)
+		applog(LOG_DEBUG, "Pushing ping to longpoll thread");
+	tq_push(thr_info[longpoll_thr_id].q, &ping);
 }
 
 static void restart_longpoll(void)
@@ -4598,9 +4603,6 @@ int main (int argc, char *argv[])
 	if (!thr->q)
 		quit(1, "Failed to tq_new");
 
-	if (want_longpoll)
-		start_longpoll();
-
 	if (opt_n_threads ) {
 		cpus = calloc(num_processors, sizeof(struct cgpu_info));
 		if (unlikely(!cpus))
@@ -4648,6 +4650,9 @@ int main (int argc, char *argv[])
 
 	if (!pools_active)
 		quit(0, "No pools active! Exiting.");
+
+	if (want_longpoll)
+		start_longpoll();
 
 #ifdef HAVE_OPENCL
 	/* start GPU mining threads */
