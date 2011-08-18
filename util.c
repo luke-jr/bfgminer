@@ -236,7 +236,8 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		applog(LOG_DEBUG, "HTTP hdr(%s): %s", key, val);
 
 	if (!strcasecmp("X-Roll-Ntime", key)) {
-		applog(LOG_INFO, "X-Roll-Ntime found");
+		if (opt_debug)
+			applog(LOG_DEBUG, "X-Roll-Ntime found");
 		hi->has_rolltime = true;
 	}
 
