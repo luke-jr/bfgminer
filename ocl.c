@@ -509,8 +509,7 @@ build:
 	//return 1;
 	status = clBuildProgram(clState->program, 1, &devices[gpu], CompilerOptions , NULL, NULL);
 
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
 		size_t logSize;
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
@@ -521,24 +520,14 @@ build:
 		return NULL;
 	}
 
-	/* Create the command queue just so we can flush it to try and avoid
-	 * zero sized binaries */
-	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0, &status);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
-		return NULL;
-	}
-	status = clFinish(clState->commandQueue);
-	if (status != CL_SUCCESS)
-	{
-		applog(LOG_ERR, "Finishing command queue. (clFinish)");
+	clRetainProgram(clState->program);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
 		return NULL;
 	}
 
 	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*nDevices, binary_sizes, NULL );
-	if (unlikely(status != CL_SUCCESS))
-	{
+	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetPlatformInfo)");
 		return NULL;
 	}
@@ -552,12 +541,10 @@ build:
 	}
 	binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[gpu]);
 	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
-	if (unlikely(status != CL_SUCCESS))
-	{
+	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: Getting program info. (clGetPlatformInfo)");
 		return NULL;
 	}
-	clReleaseCommandQueue(clState->commandQueue);
 
 	/* Patch the kernel if the hardware supports BFI_INT */
 	if (patchbfi) {
@@ -594,16 +581,20 @@ build:
 		patch_opcodes(w, length);
 
 		status = clReleaseProgram(clState->program);
-		if (status != CL_SUCCESS)
-		{
+		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Releasing program. (clReleaseProgram)");
 			return NULL;
 		}
 
 		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[gpu], (const unsigned char **)&binaries[gpu], &status, NULL);
-		if (status != CL_SUCCESS)
-		{
+		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
+			return NULL;
+		}
+
+		clRetainProgram(clState->program);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
 			return NULL;
 		}
 	}
@@ -635,8 +626,7 @@ built:
 
 	/* create a cl program executable for all the devices specified */
 	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
 		size_t logSize;
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
@@ -649,8 +639,7 @@ built:
 
 	/* get a kernel object handle for a kernel with the given name */
 	clState->kernel = clCreateKernel(clState->program, "search", &status);
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Creating Kernel from program. (clCreateKernel)");
 		return NULL;
 	}
@@ -662,8 +651,7 @@ built:
 						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
 	if (status != CL_SUCCESS) /* Try again without OOE enable */
 		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Creating Command Queue. (clCreateCommandQueue)");
 		return NULL;
 	}
