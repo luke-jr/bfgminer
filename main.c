@@ -3415,9 +3415,11 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 
 static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 {
-		cl_kernel *kernel = &clState->kernel;
+	cl_uint vwidth = clState->preferred_vwidth;
+	cl_kernel *kernel = &clState->kernel;
 	cl_int status = 0;
-	int num = 0;
+	int i, num = 0;
+	uint *nonces;
 
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_b);
@@ -3434,11 +3436,11 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
-	
-	uint nonces[2];
-	nonces[0] = blk->nonce;
-	nonces[1] = (blk->nonce)+1;
-	status |= clSetKernelArg(*kernel, num++, 2 * sizeof(uint), (void *)nonces);
+
+	nonces = alloca(sizeof(uint) * vwidth);
+	for (i = 0; i < vwidth; i++)
+		nonces[i] = blk->nonce + i;
+	status |= clSetKernelArg(*kernel, num++, vwidth * sizeof(uint), (void *)nonces);
 
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W16);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17);
