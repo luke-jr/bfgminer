@@ -494,9 +494,14 @@ build:
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
 
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithSource)");
+		return NULL;
+	}
+
+	clRetainProgram(clState->program);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
 		return NULL;
 	}
 
@@ -517,12 +522,6 @@ build:
 		char *log = malloc(logSize);
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
 		applog(LOG_INFO, "%s", log);
-		return NULL;
-	}
-
-	clRetainProgram(clState->program);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
 		return NULL;
 	}
 
