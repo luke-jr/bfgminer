@@ -1553,9 +1553,10 @@ static bool submit_upstream_work(const struct work *work)
 
 	if (!opt_realquiet)
 		print_status(thr_id);
-	applog(LOG_INFO, "%sPU %d  Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
-		cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->getworks, cgpu->accepted,
-		cgpu->rejected, cgpu->hw_errors, cgpu->efficiency, cgpu->utility);
+	if (!want_per_device_stats)
+		applog(LOG_INFO, "%sPU %d  Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
+			cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->getworks, cgpu->accepted,
+			cgpu->rejected, cgpu->hw_errors, cgpu->efficiency, cgpu->utility);
 
 	json_decref(val);
 
@@ -4150,10 +4151,6 @@ static void *watchdog_thread(void *userdata)
 static void log_print_status(int thr_id)
 {
 	struct cgpu_info *cgpu;
-
-	/* This will be displayed anyway */
-	if (want_per_device_stats)
-		return;
 
 	cgpu = thr_info[thr_id].cgpu;
 	applog(LOG_WARNING, " %sPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
