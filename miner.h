@@ -153,6 +153,7 @@ struct cgpu_info {
 	double utility;
 	enum alive status;
 	char init[40];
+	struct timeval last_message_tv;
 };
 
 struct thr_info {

@@ -174,6 +174,7 @@ bool opt_debug = false;
 bool opt_protocol = false;
 static bool want_longpoll = true;
 static bool have_longpoll = false;
+static bool want_per_device_stats = false;
 bool use_syslog = false;
 static bool opt_quiet = false;
 static bool opt_realquiet = false;
@@ -1075,6 +1076,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, &trpc_pass,
 		     "Password for bitcoin JSON-RPC server"),
+	OPT_WITHOUT_ARG("--per-device-stats",
+			opt_set_bool, &want_per_device_stats,
+			"Force verbose mode and output per-device statistics"),
 	OPT_WITHOUT_ARG("--protocol-dump|-P",
 			opt_set_bool, &opt_protocol,
 			"Verbose dump of protocol-level activities"),
@@ -2679,6 +2683,40 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		}
 		decay_time(&cgpu->rolling, thread_rolling);
 		cgpu->total_mhashes += local_mhashes;
+
+		// If needed, output detailed, per-device stats
+		if (want_per_device_stats) {
+			struct timeval now;
+			struct timeval elapsed;
+			gettimeofday(&now, NULL);
+			timeval_subtract(&elapsed, &now, &thr->cgpu->last_message_tv);
+			if (opt_log_interval <= elapsed.tv_sec) {
+
+				thr->cgpu->last_message_tv = now;
+
+				sprintf(
+					statusline,
+					"[%sPU%d (%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+					thr->cgpu->is_gpu ? "G" : "C",
+					thr->cgpu->cpu_gpu,
+					opt_log_interval,
+					thr->cgpu->rolling,
+					thr->cgpu->total_mhashes / total_secs,
+					thr->cgpu->getworks,
+					thr->cgpu->accepted,
+					thr->cgpu->rejected,
+					thr->cgpu->hw_errors,
+					thr->cgpu->efficiency,
+					thr->cgpu->utility
+				);
+
+				if (!curses_active) {
+					printf("%s          \r", statusline);
+					fflush(stdout);
+				} else
+					applog(LOG_INFO, "%s", statusline);
+			}
+		}
 	}
 
 	/* Totals are updated by all threads so can race without locking */
@@ -2704,9 +2742,12 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
-	sprintf(statusline, "[(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+	sprintf(statusline, "[%s(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+		want_per_device_stats ? "ALL " : "",
 		opt_log_interval, rolling, total_mhashes_done / total_secs,
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
+
+
 	local_mhashes_done = 0;
 out_unlock:
 	mutex_unlock(&hash_lock);
@@ -4457,6 +4498,9 @@ int main (int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	if (want_per_device_stats)
+		opt_log_output = true;
 
 	if (0<=opt_bench_algo) {
 		double rate = bench_algo_stage3(opt_bench_algo);
