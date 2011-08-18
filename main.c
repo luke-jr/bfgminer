@@ -4143,8 +4143,13 @@ static void *watchdog_thread(void *userdata)
 
 static void log_print_status(int thr_id)
 {
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	struct cgpu_info *cgpu;
 
+	/* This will be displayed anyway */
+	if (want_per_device_stats)
+		return;
+
+	cgpu = thr_info[thr_id].cgpu;
 	applog(LOG_WARNING, " %sPU %d: [%.1f / %.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
 	       cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu, cgpu->rolling,
 			cgpu->total_mhashes / total_secs, cgpu->getworks,
