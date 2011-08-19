@@ -385,44 +385,36 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	sharoundW(64 + 57);
 	sharoundW(64 + 58);
 
-	u v = W[117] + W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]); 
-	u g = -(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64));
+	u v = W[117] + W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]) ^
+		-(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64));
 
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
 #ifdef VECTORS4
-	if (v.x == g.x)
-	{
-		output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
-	}
-	if (v.y == g.y)
-	{
-		output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
-	}
-	if (v.z == g.z)
-	{
-		output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
-	}
-	if (v.w == g.w)
-	{
-		output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
+	bool result = v.x & v.y & v.z & v.w;
+	if (!result) {
+		if (!v.x)
+			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+		if (!v.y)
+			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+		if (!v.z)
+			output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
+		if (!v.w)
+			output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
 	}
 #else
 	#ifdef VECTORS2
-		if (v.x == g.x)
-		{
-			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
-		}
-		if (v.y == g.y)
-		{
-			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+		bool result = v.x & v.y;
+		if (!result) {
+			if (!v.x)
+				output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+			if (!v.y)
+				output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
 		}
 	#else
-		if (v == g)
-		{
+		if (!v)
 			output[FOUND] = output[NFLAG & W[3]] = W[3];
-		}
 	#endif
 #endif
 }
