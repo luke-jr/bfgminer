@@ -4324,11 +4324,12 @@ static bool input_pool(bool live)
 
 	pool->tv_idle.tv_sec = ~0UL;
 
-	/* Test the pool before we enable it if we're live running, otherwise
+	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
 	ret = true;
-	if (live && pool_active(pool, false))
-		pool->enabled = true;
+	pool->enabled = true;
+	if (live && !pool_active(pool, false))
+		pool->idle = true;
 	pools[total_pools++] = pool;
 out:
 	immedok(logwin, false);
@@ -4708,16 +4709,17 @@ int main (int argc, char *argv[])
 		struct pool *pool;
 
 		pool = pools[i];
+		pool->enabled = true;
 		if (pool_active(pool, false)) {
 			if (!currentpool)
 				currentpool = pool;
 			applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
 			pools_active++;
-			pool->enabled = true;
 		} else {
 			if (pool == currentpool)
 				currentpool = NULL;
 			applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
+			pool->idle = true;
 		}
 	}
 
