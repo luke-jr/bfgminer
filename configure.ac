@@ -28,6 +28,7 @@ AC_FUNC_ALLOCA
 have_win32=false
 PTHREAD_FLAGS="-pthread"
 OPENCL_FLAGS="-lOpenCL"
+WS2_LIBS=""
 
 case $target in
   x86_64-*)
@@ -43,6 +44,7 @@ case $target in
     have_x86_64=false
     have_win32=true
     PTHREAD_FLAGS=""
+    WS2_LIBS="-lws2_32"
     ;;
   *-*-darwin*)
     OPENCL_FLAGS="-framework OpenCL"
@@ -167,6 +169,7 @@ AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(PTHREAD_LIBS)
 AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
+AC_SUBST(WS2_LIBS)
 
 AC_CONFIG_FILES([
 	Makefile

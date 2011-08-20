@@ -56,13 +56,15 @@ Basic WIN32 build instructions (on Fedora 13; requires mingw32):
 	./mknsis.sh
 	
 Native WIN32 build instructions (on mingw32, on windows):
-	Install AMD APP sdk, latest version
+	Install the Microsoft platform SDK
+	Install AMD APP sdk, latest version (only if you want GPU mining)
 	(Do NOT install the ati amd sdk if you are on nvidia)
 	Install mingw32
 	Install libcurl, copy libcurl.m4 into /mingw/share/aclocal
+	Install pkg-config, copy pkg.m4 into /mingw/share/aclocal
 	Run:
 	autoreconf -fvi
-	CFLAGS="-O2 -Wall -msse2 -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86>" ./configure
+	CFLAGS="-O2 -msse2" ./configure
 	make
 
 Usage instructions:  Run "cgminer --help" to see options.
