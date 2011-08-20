@@ -162,6 +162,8 @@ struct thr_info {
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
 	struct timeval last;
+	struct timeval sick;
+
 	bool	getwork;
 	double	rolling;
 };

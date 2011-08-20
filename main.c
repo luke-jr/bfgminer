@@ -3976,6 +3976,8 @@ select_cgpu:
 
 		thr = &thr_info[thr_id];
 		thr->rolling = thr->cgpu->rolling = 0;
+		/* Reports the last time we tried to revive a sick GPU */
+		gettimeofday(&thr->sick, NULL);
 		if (!pthread_cancel(*thr->pth)) {
 			applog(LOG_WARNING, "Thread %d still exists, killing it off", thr_id);
 		} else
@@ -4004,7 +4006,7 @@ select_cgpu:
 		clStates[thr_id] = initCl(gpu, name, sizeof(name));
 		if (!clStates[thr_id]) {
 			applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
-			goto out;
+			goto select_cgpu;
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
 
@@ -4139,14 +4141,15 @@ static void *watchdog_thread(void *userdata)
 				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[gpu].status = LIFE_SICK;
 				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
-				/* Sent it a ping, it might respond */
-				tq_push(thr->q, &ping);
-			} else if (now.tv_sec - thr->last.tv_sec > 300 && gpus[i].status == LIFE_SICK) {
-				gpus[gpu].status = LIFE_DEAD;
-				applog(LOG_ERR, "Thread %d idle for more than 5 minutes, GPU %d declared DEAD!", i, gpu);
 				applog(LOG_ERR, "Attempting to restart GPU");
+				gettimeofday(&thr->sick, NULL);
 				reinit_device(thr->cgpu);
-				break;
+			} else if (now.tv_sec - thr->sick.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
+				gpus[gpu].status = LIFE_DEAD;
+				applog(LOG_ERR, "Thread %d not responding for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
+			} else if (now.tv_sec - thr->sick.tv_sec > 60 && gpus[i].status == LIFE_SICK) {
+				/* Attempt to restart a GPU once every minute */
+				reinit_device(thr->cgpu);
 			}
 		}
 	}
