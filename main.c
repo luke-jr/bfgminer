@@ -3725,6 +3725,11 @@ static void *gpuminer_thread(void *userdata)
 		}
 	}
 out:
+	clReleaseCommandQueue(clState->commandQueue);
+	clReleaseKernel(clState->kernel);
+	clReleaseProgram(clState->program);
+	clReleaseContext(clState->context);
+
 	thread_reportin(mythr);
 	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
 	tq_freeze(mythr->q);
