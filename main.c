@@ -2002,7 +2002,9 @@ static void switch_pools(struct pool *selected)
 
 	if (pool != last_pool) {
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
-		restart_longpoll();
+		/* Only switch longpoll if the new pool also supports LP */
+		if (pool->hdr_path)
+			restart_longpoll();
 	}
 
 	/* Reset the queued amount to allow more to be queued for the new pool */
@@ -4726,8 +4728,30 @@ int main (int argc, char *argv[])
 	if (!pools_active)
 		quit(0, "No pools active! Exiting.");
 
-	if (want_longpoll)
-		start_longpoll();
+	/* If we want longpoll, enable it for the chosen default pool, or, if
+	 * the pool does not support longpoll, find the first one that does
+	 * and use its longpoll support */
+	if (want_longpoll) {
+		if (currentpool->hdr_path)
+			start_longpoll();
+		else {
+			for (i = 0; i < total_pools; i++) {
+				struct pool *pool;
+
+				pool = pools[i];
+				if (pool->hdr_path) {
+					struct pool *temp = currentpool;
+
+					currentpool = pool;
+					start_longpoll();
+					/* Not real blocking, but good enough */
+					sleep(1);
+					currentpool = temp;
+					break;
+				}
+			}
+		}
+	}
 
 #ifdef HAVE_OPENCL
 	/* start GPU mining threads */
