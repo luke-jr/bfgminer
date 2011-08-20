@@ -3860,10 +3860,10 @@ static void *longpoll_thread(void *userdata)
 			if (failures++ < 10) {
 				sleep(30);
 				applog(LOG_WARNING,
-					"longpoll failed, sleeping for 30s");
+					"longpoll failed for %s, sleeping for 30s", lp_url);
 			} else {
 				applog(LOG_ERR,
-					"longpoll failed, ending thread");
+					"longpoll failed for %s, ending thread", lp_url);
 				goto out;
 			}
 		}
@@ -3871,7 +3871,6 @@ static void *longpoll_thread(void *userdata)
 
 out:
 	have_longpoll = false;
-	free(lp_url);
 	tq_freeze(mythr->q);
 	if (curl)
 		curl_easy_cleanup(curl);
