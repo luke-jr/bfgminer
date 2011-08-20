@@ -3982,6 +3982,8 @@ select_cgpu:
 			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);
 	}
 
+	gpu_devices[gpu] = true;
+
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -4016,7 +4018,6 @@ select_cgpu:
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
 
-	gpu_devices[gpu] = true;
 	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
 		if (dev_from_id(thr_id) != gpu)
 			continue;
