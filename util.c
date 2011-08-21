@@ -264,7 +264,7 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
 		return 1;
 
-# ifndef __APPLE_CC__
+# ifdef __linux
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt))))
 		return 1;
@@ -274,27 +274,27 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl))))
 		return 1;
-
-# else
+# endif /* __linux */
+# ifdef __APPLE_CC__
 
 	if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl))))
 		return 1;
 
-# endif
-		
-#else
+# endif /* __APPLE_CC__ */
+
+#else /* WIN32 */
 	
 	struct tcp_keepalive vals;
 	vals.onoff = 1;
 	vals.keepalivetime = tcp_keepidle * 1000;
 	vals.keepaliveinterval = tcp_keepintvl * 1000;
-	
+
 	DWORD outputBytes;
-	
+
 	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
 		return 1;
 	
-#endif
+#endif /* WIN32 */
 
 	return 0;
 }
