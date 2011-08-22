@@ -1,3 +1,37 @@
+Version 1.5.7 - August 22, 2011
+
+- Fix a crash with --algo auto
+- Test at appropriate target difficulty now.
+- Add per-device statics log output with --per-device-stats
+- Fix breakage that occurs when 1 or 4 vectors are chosen on new phatk.
+- Make rolltime report debug level only now since we check it every work
+item.
+- Add the ability to enable/disable per-device stats on the fly and match
+logging on/off.
+- Explicitly tell the compiler to retain the program to minimise the chance of
+the zero sized binary errors.
+- Add one more instruction to avoid one branch point in the common path in the
+cl return code. Although this adds more ALUs overall and more branch points, the
+common path code has the same number of ALUs and one less jmp, jmps being more
+expensive.
+- Explicitly link in ws2_32 on the windows build and update README file on how
+to compile successfully on windows.
+- Release cl resources should the gpu mining thread abort.
+- Attempt to restart a GPU once every minute while it's sick.
+- Don't kill off the reinit thread if it fails to init a GPU but returns safely.
+- Only declare a GPU dead if there's been no sign of activity from the reinit
+thread for 10 mins.
+- Never automatically disable any pools but just specify them as idle if they're
+unresponsive at startup.
+- Use any longpoll available, and don't disable it if switching to a server that
+doesn't have it. This allows you to mine solo, yet use the longpoll from a pool
+even if the pool is the backup server.
+- Display which longpoll failed and don't free the ram for lp_url since it
+belongs to the pool hdr path.
+- Make the tcp setsockopts unique to linux in the hope it allows freebsd et. al
+to compile.
+
+
 Version 1.5.6 - August 17, 2011
 
 - New phatk and poclbm kernels. Updated phatk to be in sync with latest 2.2
