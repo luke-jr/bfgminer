@@ -191,6 +191,7 @@ int opt_worksize;
 int opt_scantime = 60;
 int opt_bench_algo = -1;
 static const bool opt_time = true;
+static bool opt_restart = true;
 #if defined(WANT_X8664_SSE4) && defined(__SSE4_1__)
 static enum sha256_algos opt_algo = ALGO_SSE4_64;
 #elif defined(WANT_X8664_SSE2) && defined(__SSE2__)
@@ -1074,6 +1075,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
+#ifdef HAVE_OPENCL
+	OPT_WITHOUT_ARG("--no-restart",
+			opt_set_invbool, &opt_restart,
+			"Do not attempt to restart GPUs that hang"),
+#endif
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, &trpc_pass,
 		     "Password for bitcoin JSON-RPC server"),
@@ -4149,16 +4155,19 @@ static void *watchdog_thread(void *userdata)
 				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[gpu].status = LIFE_SICK;
 				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
-				applog(LOG_ERR, "Attempting to restart GPU");
 				gettimeofday(&thr->sick, NULL);
-				reinit_device(thr->cgpu);
-			} else if (now.tv_sec - thr->sick.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
+				if (opt_restart) {
+					applog(LOG_ERR, "Attempting to restart GPU");
+					reinit_device(thr->cgpu);
+				}
+			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
 				gpus[gpu].status = LIFE_DEAD;
 				applog(LOG_ERR, "Thread %d not responding for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 && gpus[i].status == LIFE_SICK) {
 				/* Attempt to restart a GPU once every minute */
 				gettimeofday(&thr->sick, NULL);
-				reinit_device(thr->cgpu);
+				if (opt_restart)
+					reinit_device(thr->cgpu);
 			}
 		}
 	}
