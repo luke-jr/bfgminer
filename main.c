@@ -2852,9 +2852,11 @@ static bool pool_active(struct pool *pool, bool pinging)
 
 static void pool_died(struct pool *pool)
 {
-	applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
-	gettimeofday(&pool->tv_idle, NULL);
-	switch_pools(NULL);
+	if (!pool_tset(pool, &pool->idle)) {
+		applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
+		gettimeofday(&pool->tv_idle, NULL);
+		switch_pools(NULL);
+	}
 }
 
 static void pool_resus(struct pool *pool)
@@ -3053,30 +3055,18 @@ retry:
 	}
 	requested = false;
 
-	if (!requests_staged() && can_roll(work)) {
-		/* Only print this message once each time we shift to localgen */
-		if (!pool_tset(pool, &pool->idle)) {
-			applog(LOG_WARNING, "Pool %d not providing work fast enough, generating work locally",
+	if (!requests_staged()) {
+		if (!pool_tset(pool, &pool->lagging)) {
+			applog(LOG_WARNING, "Pool %d not providing work fast enough",
 				pool->pool_no);
 			pool->localgen_occasions++;
 			total_lo++;
-			gettimeofday(&pool->tv_idle, NULL);
-		} else {
-			struct timeval tv_now, diff;
-
-			gettimeofday(&tv_now, NULL);
-			timeval_subtract(&diff, &tv_now, &pool->tv_idle);
-			/* Attempt to switch pools if this one has been unresponsive for >half
-				* a block's duration */
-			if (diff.tv_sec > 300) {
-				pool_died(pool);
-				goto retry;
-			}
 		}
-
-		roll_work(work);
-		ret = true;
-		goto out;
+		if (can_roll(work)) {
+			roll_work(work);
+			ret = true;
+			goto out;
+		}
 	}
 
 	gettimeofday(&now, NULL);
@@ -3088,10 +3078,7 @@ retry:
 	/* wait for 1st response, or get cached response */
 	work_heap = tq_pop(getq, &abstime);
 	if (unlikely(!work_heap)) {
-		/* Attempt to switch pools if this one has mandatory work that
-		 * has timed out or does not support rolltime */
-		pool->localgen_occasions++;
-		total_lo++;
+		/* Attempt to switch pools if this one times out */
 		pool_died(pool);
 		goto retry;
 	}
@@ -3104,8 +3091,11 @@ retry:
 
 	pool = work_heap->pool;
 	/* If we make it here we have succeeded in getting fresh work */
-	if (pool_tclear(pool, &pool->idle))
-		pool_resus(pool);
+	if (!work_heap->mined) {
+		pool_tclear(pool, &pool->lagging);
+		if (pool_tclear(pool, &pool->idle))
+			pool_resus(pool);
+	}
 
 	memcpy(work, work_heap, sizeof(*work));
 

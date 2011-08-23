@@ -310,6 +310,7 @@ struct pool {
 	int accepted, rejected;
 	bool submit_fail;
 	bool idle;
+	bool lagging;
 	bool probed;
 	bool enabled;
 
