@@ -3372,6 +3372,8 @@ static void *miner_thread(void *userdata)
 			nonce_inc = next_inc;
 		} else if (!diff.tv_sec)
 			nonce_inc = hashes_done * 2;
+		if (nonce_inc < 4)
+			nonce_inc = 0xffffff;
 		max64 = work->blk.nonce + nonce_inc;
 		if (max64 > 0xfffffffaULL)
 			max64 = 0xfffffffaULL;
