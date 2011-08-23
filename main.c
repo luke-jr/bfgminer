@@ -3053,10 +3053,9 @@ retry:
 		applog(LOG_WARNING, "Failed to queue_request in get_work");
 		goto out;
 	}
-	requested = false;
 
 	if (!requests_staged()) {
-		if (!pool_tset(pool, &pool->lagging)) {
+		if (requested && !pool_tset(pool, &pool->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough",
 				pool->pool_no);
 			pool->localgen_occasions++;
@@ -3069,6 +3068,7 @@ retry:
 		}
 	}
 
+	requested = false;
 	gettimeofday(&now, NULL);
 	abstime.tv_sec = now.tv_sec + 60;
 
