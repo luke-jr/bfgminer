@@ -36,6 +36,7 @@
 #include "findnonce.h"
 #include "bench_block.h"
 #include "ocl.h"
+#include "uthash.h"
 
 #if defined(unix)
 	#include <errno.h>
@@ -281,6 +282,9 @@ static bool ping = true;
 struct sigaction termhandler, inthandler;
 
 struct thread_q *getq;
+
+static int total_work;
+struct work *staged_work = NULL;
 
 void get_datestamp(char *f, struct timeval *tv)
 {
@@ -1641,6 +1645,7 @@ static struct work *make_work(void)
 
 	if (unlikely(!work))
 		quit(1, "Failed to calloc work in make_work");
+	work->id = total_work++;
 	return work;
 }
 
@@ -2075,6 +2080,26 @@ static void test_work_current(struct work *work)
 	free(hexstr);
 }
 
+int tv_sort(struct work *worka, struct work *workb)
+{
+	return worka->tv_staged.tv_sec - workb->tv_staged.tv_sec;
+}
+
+static bool hash_push(struct work *work)
+{
+	bool rc = true;
+
+	mutex_lock(&getq->mutex);
+	if (likely(!getq->frozen)) {
+		HASH_ADD_INT(staged_work, id, work);
+		HASH_SORT(staged_work, tv_sort);
+	} else
+		rc = false;
+	pthread_cond_signal(&getq->cond);
+	mutex_unlock(&getq->mutex);
+	return rc;
+}
+
 static void *stage_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -2100,10 +2125,9 @@ static void *stage_thread(void *userdata)
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing work to getwork queue");
 
-		if (unlikely(!tq_push(getq, work))) {
-			applog(LOG_ERR, "Failed to tq_push work in stage_thread");
-			ok = false;
-			break;
+		if (unlikely(!hash_push(work))) {
+			applog(LOG_WARNING, "Failed to hash_push in stage_thread");
+			continue;
 		}
 		inc_staged(work->pool, 1, false);
 	}
@@ -2930,6 +2954,32 @@ static void discard_work(struct work *work)
 	free_work(work);
 }
 
+struct work *hash_pop(const struct timespec *abstime)
+{
+	struct work *work = NULL;
+	int rc;
+
+	mutex_lock(&getq->mutex);
+	if (HASH_COUNT(staged_work))
+		goto pop;
+
+	if (abstime)
+		rc = pthread_cond_timedwait(&getq->cond, &getq->mutex, abstime);
+	else
+		rc = pthread_cond_wait(&getq->cond, &getq->mutex);
+	if (rc)
+		goto out;
+	if (!HASH_COUNT(staged_work))
+		goto out;
+
+pop:
+	work = staged_work;
+	HASH_DEL(staged_work, work);
+out:
+	mutex_unlock(&getq->mutex);
+	return work;
+}
+
 static void discard_staged(void)
 {
 	struct timespec abstime = {};
@@ -2946,7 +2996,7 @@ static void discard_staged(void)
 	if (opt_debug)
 		applog(LOG_DEBUG, "Popping work to discard staged");
 
-	work_heap = tq_pop(getq, &abstime);
+	work_heap = hash_pop(&abstime);
 	if (unlikely(!work_heap))
 		return;
 
@@ -3081,7 +3131,7 @@ retry:
 		applog(LOG_DEBUG, "Popping work from get queue to get work");
 
 	/* wait for 1st response, or get cached response */
-	work_heap = tq_pop(getq, &abstime);
+	work_heap = hash_pop(&abstime);
 	if (unlikely(!work_heap)) {
 		/* Attempt to switch pools if this one times out */
 		pool_died(pool);
@@ -3111,7 +3161,7 @@ retry:
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing divided work to get queue head");
 
-		tq_push_head(getq, work_heap);
+		hash_push(work_heap);
 		work->clone = true;
 	} else {
 		dec_queued();

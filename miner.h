@@ -9,6 +9,8 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
+#include "elist.h"
+#include "uthash.h"
 
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
@@ -156,6 +158,15 @@ struct cgpu_info {
 	struct timeval last_message_tv;
 };
 
+struct thread_q {
+	struct list_head	q;
+
+	bool frozen;
+
+	pthread_mutex_t		mutex;
+	pthread_cond_t		cond;
+};
+
 struct thr_info {
 	int		id;
 	pthread_t	*pth;
@@ -264,7 +275,6 @@ timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_scantime;
-struct thread_q;
 
 struct work_restart {
 	volatile unsigned long	restart;
@@ -351,6 +361,9 @@ struct work {
 	bool		clone;
 	bool		cloned;
 	bool		rolltime;
+
+	int		id;
+	UT_hash_handle hh;
 };
 
 enum cl_kernel {
@@ -367,7 +380,6 @@ extern void vapplog(int prio, const char *fmt, va_list ap);
 extern void applog(int prio, const char *fmt, ...);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
-extern bool tq_push_head(struct thread_q *tq, void *data);
 extern bool tq_push(struct thread_q *tq, void *data);
 extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
