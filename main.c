@@ -181,6 +181,7 @@ static bool opt_realquiet = false;
 static bool opt_loginput = false;
 static int opt_retries = -1;
 static int opt_fail_pause = 5;
+static int fail_pause = 5;
 static int opt_log_interval = 5;
 bool opt_log_output = false;
 static bool opt_dynamic = true;
@@ -1775,9 +1776,11 @@ static void *get_work_thread(void *userdata)
 
 		/* pause, then restart work-request loop */
 		applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
-			opt_fail_pause);
-		sleep(opt_fail_pause);
+			fail_pause);
+		sleep(fail_pause);
+		fail_pause += opt_fail_pause;
 	}
+	fail_pause = opt_fail_pause;
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing work to requesting thread");
@@ -1865,9 +1868,11 @@ static void *submit_work_thread(void *userdata)
 
 		/* pause, then restart work-request loop */
 		applog(LOG_INFO, "json_rpc_call failed on submit_work, retry after %d seconds",
-			opt_fail_pause);
-		sleep(opt_fail_pause);
+			fail_pause);
+		sleep(fail_pause);
+		fail_pause += opt_fail_pause;
 	}
+	fail_pause = opt_fail_pause;
 out:
 	workio_cmd_free(wc);
 	return NULL;
@@ -3120,10 +3125,12 @@ out:
 			applog(LOG_ERR, "Failed %d times to get_work");
 			return ret;
 		}
-		applog(LOG_DEBUG, "Retrying after %d seconds", opt_fail_pause);
-		sleep(opt_fail_pause);
+		applog(LOG_DEBUG, "Retrying after %d seconds", fail_pause);
+		sleep(fail_pause);
+		fail_pause += opt_fail_pause;
 		goto retry;
 	}
+	fail_pause = opt_fail_pause;
 
 	work->thr_id = thr_id;
 	thread_reportin(thr);
