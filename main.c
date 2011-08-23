@@ -3230,7 +3230,7 @@ static void *miner_thread(void *userdata)
 	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 	int request_interval;
 	bool requested = false;
-	uint32_t hash_div = 1;
+	uint32_t nonce_inc = max_nonce, hash_div = 1;
 	double hash_divfloat = 1.0;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -3365,12 +3365,14 @@ static void *miner_thread(void *userdata)
 		if (diff.tv_usec > 500000)
 			diff.tv_sec++;
 		if (diff.tv_sec && diff.tv_sec != cycle) {
-			max64 = work->blk.nonce +
-				((uint64_t)hashes_done * cycle) / diff.tv_sec;
+			uint64_t next_inc = ((uint64_t)hashes_done * (uint64_t)cycle) / (uint64_t)diff.tv_sec;
+
+			if (next_inc > (uint64_t)nonce_inc / 2 * 3)
+				next_inc = nonce_inc / 2 * 3;
+			nonce_inc = next_inc;
 		} else if (!diff.tv_sec)
-			max64 = work->blk.nonce + (hashes_done * 2);
-		else
-			max64 = work->blk.nonce + hashes_done;
+			nonce_inc = hashes_done * 2;
+		max64 = work->blk.nonce + nonce_inc;
 		if (max64 > 0xfffffffaULL)
 			max64 = 0xfffffffaULL;
 		max_nonce = max64;
