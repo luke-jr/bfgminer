@@ -1,3 +1,17 @@
+Version 1.5.8 - August 23, 2011
+
+- Minimise how much more work can be given in cpu mining threads each interval.
+- Make the fail-pause progressively longer each time it fails until the network
+recovers.
+- Only display the lagging message if we've requested the work earlier.
+- Clean up the pool switching to not be dependent on whether the work can roll
+or not by setting a lagging flag and then the idle flag.
+- Only use one thread to determine if a GPU is sick or well, and make sure to
+reset the sick restart attempt time.
+- The worksize was unintentionally changed back to 4k by mistake, this caused a
+slowdown.
+
+
 Version 1.5.7 - August 22, 2011
 
 - Fix a crash with --algo auto
