@@ -4,8 +4,7 @@
 #include "config.h"
 
 #define MAXTHREADS (0xFFFFFFFEULL)
-/* Maximum worksize 4k to match page size */
-#define MAXBUFFERS (0xFFFF)
+#define MAXBUFFERS (0xFF)
 #define BUFFERSIZE (sizeof(uint32_t) * MAXBUFFERS)
 #define FOUND (0x80)
 /* #define NFLAG (0x7F) Just for reference */
