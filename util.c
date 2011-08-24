@@ -85,15 +85,6 @@ struct tq_ent {
 	struct list_head	q_node;
 };
 
-struct thread_q {
-	struct list_head	q;
-
-	bool frozen;
-
-	pthread_mutex_t		mutex;
-	pthread_cond_t		cond;
-};
-
 void vapplog(int prio, const char *fmt, va_list ap)
 {
 #ifdef HAVE_SYSLOG_H
@@ -612,33 +603,6 @@ void tq_freeze(struct thread_q *tq)
 void tq_thaw(struct thread_q *tq)
 {
 	tq_freezethaw(tq, false);
-}
-
-bool tq_push_head(struct thread_q *tq, void *data)
-{
-	struct tq_ent *ent;
-	bool rc = true;
-
-	ent = calloc(1, sizeof(*ent));
-	if (!ent)
-		return false;
-
-	ent->data = data;
-	INIT_LIST_HEAD(&ent->q_node);
-
-	mutex_lock(&tq->mutex);
-
-	if (!tq->frozen) {
-		list_add(&ent->q_node, &tq->q);
-	} else {
-		free(ent);
-		rc = false;
-	}
-
-	pthread_cond_signal(&tq->cond);
-	mutex_unlock(&tq->mutex);
-
-	return rc;
 }
 
 bool tq_push(struct thread_q *tq, void *data)
