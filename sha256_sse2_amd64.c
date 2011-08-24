@@ -22,9 +22,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-extern void CalcSha256_x64(__m128i *res, __m128i *data, uint32_t init[8]);
+extern void sha256_sse2_64_new (__m128i *res, __m128i *res1, __m128i *data, const uint32_t init[8]);
 
-static uint32_t g_sha256_k[] = {
+static uint32_t g_sha256_k[]__attribute__((aligned(0x100))) = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, /*  0 */
     0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, /*  8 */
@@ -44,10 +44,11 @@ static uint32_t g_sha256_k[] = {
 };
 
 
-static uint32_t g_sha256_hinit[8] =
+const uint32_t sha256_init[8]__attribute__((aligned(0x100))) =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
 __m128i g_4sha256_k[64];
+__m128i sha256_consts_m128i[64]__attribute__((aligned(0x1000)));
 
 int scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
 	unsigned char *pdata,
@@ -58,7 +59,9 @@ int scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
 {
     uint32_t *nNonce_p = (uint32_t *)(pdata + 12);
     uint32_t m_midstate[8], m_w[16], m_w1[16];
-    __m128i m_4w[64], m_4hash[64], m_4hash1[64];
+    __m128i m_4w[64] __attribute__ ((aligned (0x100)));
+    __m128i m_4hash[64] __attribute__ ((aligned (0x100)));
+    __m128i m_4hash1[64] __attribute__ ((aligned (0x100)));
     __m128i offset;
     int i;
 
@@ -84,7 +87,7 @@ int scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
         m_4hash1[i] = _mm_set1_epi32(m_w1[i]);
 
     for (i = 0; i < 64; i++)
-	g_4sha256_k[i] = _mm_set1_epi32(g_sha256_k[i]);
+	sha256_consts_m128i[i] = _mm_set1_epi32(g_sha256_k[i]);
 
     offset = _mm_set_epi32(0x3, 0x2, 0x1, 0x0);
 
@@ -94,9 +97,7 @@ int scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
 
 	m_4w[3] = _mm_add_epi32(offset, _mm_set1_epi32(nonce));
 
-	/* Some optimization can be done here W.R.T. precalculating some hash */
-        CalcSha256_x64(m_4hash1, m_4w, m_midstate);
-	CalcSha256_x64(m_4hash, m_4hash1, g_sha256_hinit);
+	sha256_sse2_64_new (m_4hash, m_4hash1, m_4w, m_midstate);
 
 	for (j = 0; j < 4; j++) {
 	    mi.m = m_4hash[7];

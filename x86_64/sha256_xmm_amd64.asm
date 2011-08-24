@@ -1,256 +1,322 @@
-;; SHA-256 for X86-64 for Linux, based off of:
+;/*
+; * Copyright (C) 2011 - Neil Kettle <neil@digit-labs.org>
+; *
+; * This file is part of cpuminer-ng.
+; *
+; * cpuminer-ng is free software: you can redistribute it and/or modify
+; * it under the terms of the GNU General Public License as published by
+; * the Free Software Foundation, either version 3 of the License, or
+; * (at your option) any later version.
+; *
+; * cpuminer-ng is distributed in the hope that it will be useful,
+; * but WITHOUT ANY WARRANTY; without even the implied warranty of
+; * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; * GNU General Public License for more details.
+; *
+; * You should have received a copy of the GNU General Public License
+; * along with cpuminer-ng.  If not, see <http://www.gnu.org/licenses/>.
+; */
 
-; (c) Ufasoft 2011 http://ufasoft.com mailto:support@ufasoft.com
-; Version 2011
-; This software is Public Domain
-
-; Significant re-write/optimisation and reordering by,
-; Neil Kettle <mu-b@digit-labs.org>
-; ~18% performance improvement
-
-; SHA-256 CPU SSE cruncher for Bitcoin Miner
+; %rbp, %rbx, and %r12-%r15 - callee save
 
 ALIGN 32
 BITS 64
 
-%define hash rdi
-%define data rsi
-%define init rdx
+%define hash  rdi
+%define hash1 rsi
+%define data  rdx
+%define init  rcx
 
 ; 0 = (1024 - 256) (mod (LAB_CALC_UNROLL*LAB_CALC_PARA*16))
-%define LAB_CALC_PARA	2
-%define LAB_CALC_UNROLL	8
+%define SHA_CALC_W_PARA         2
+%define SHA_CALC_W_UNROLL       8
 
-%define LAB_LOOP_UNROLL 8
+%define SHA_ROUND_LOOP_UNROLL   16
 
-extern g_4sha256_k
+%ifidn __YASM_OBJFMT__, macho64
+extern _sha256_consts_m128i
+extern _sha256_init
+%else
+extern sha256_consts_m128i
+extern sha256_init
+%endif
 
-global CalcSha256_x64
-;	CalcSha256	hash(rdi), data(rsi), init(rdx)
-CalcSha256_x64:
+%ifidn __YASM_OBJFMT__, macho64
+global _sha256_sse2_64_new
+%else
+global sha256_sse2_64_new
+%endif
 
-	push	rbx
+%define sr1   xmm6
+%define sr2   xmm1
+%define sr3   xmm2
+%define sr4   xmm13
 
-LAB_NEXT_NONCE:
+%define rA    xmm7
+%define rB    xmm5
+%define rC    xmm4
+%define rD    xmm3
+%define rE    xmm0
+%define rF    xmm8
+%define rG    xmm9
+%define rH    xmm10
 
-	mov	rcx, 64*4					; 256 - rcx is # of SHA-2 rounds
-	mov	rax, 16*4					; 64 - rax is where we expand to
+%macro  sha_round_blk 0
+    movdqa    sr1, [data+rax]                   ; T1  =                                             w;
+    ;movdqa    sr1, xmm11
+    movdqa    sr2, rE                           ; sr2 = rE
 
-LAB_SHA:
-	push	rcx
-	lea	rcx, qword [data+rcx*4]				; + 1024
-	lea	r11, qword [data+rax*4]				; + 256
+    pandn     sr2, rG                           ; sr2 = ~rE & rG
+    movdqa    sr3, rF                           ; sr3 = rF
 
-LAB_CALC:
-%macro	lab_calc_blk 1
-	movdqa	xmm0, [r11-(15-%1)*16]				; xmm0 = W[I-15]
-	movdqa	xmm4, [r11-(15-(%1+1))*16]			; xmm4 = W[I-15+1]
-	movdqa	xmm2, xmm0					; xmm2 = W[I-15]
-	movdqa	xmm6, xmm4					; xmm6 = W[I-15+1]
-	psrld	xmm0, 3						; xmm0 = W[I-15] >> 3
-	psrld	xmm4, 3						; xmm4 = W[I-15+1] >> 3
-	movdqa	xmm1, xmm0					; xmm1 = W[I-15] >> 3
-	movdqa	xmm5, xmm4					; xmm5 = W[I-15+1] >> 3
-	pslld	xmm2, 14					; xmm2 = W[I-15] << 14
-	pslld	xmm6, 14					; xmm6 = W[I-15+1] << 14
-	psrld	xmm1, 4						; xmm1 = W[I-15] >> 7
-	psrld	xmm5, 4						; xmm5 = W[I-15+1] >> 7
-	pxor	xmm0, xmm1					; xmm0 = (W[I-15] >> 3) ^ (W[I-15] >> 7)
-	pxor	xmm4, xmm5					; xmm4 = (W[I-15+1] >> 3) ^ (W[I-15+1] >> 7)
-	psrld	xmm1, 11					; xmm1 = W[I-15] >> 18
-	psrld	xmm5, 11					; xmm5 = W[I-15+1] >> 18
-	pxor	xmm0, xmm2					; xmm0 = (W[I-15] >> 3) ^ (W[I-15] >> 7) ^ (W[I-15] << 14)
-	pxor	xmm4, xmm6					; xmm4 = (W[I-15+1] >> 3) ^ (W[I-15+1] >> 7) ^ (W[I-15+1] << 14)
-	pslld	xmm2, 11					; xmm2 = W[I-15] << 25
-	pslld	xmm6, 11					; xmm6 = W[I-15+1] << 25
-	pxor	xmm0, xmm1					; xmm0 = (W[I-15] >> 3) ^ (W[I-15] >> 7) ^ (W[I-15] << 14) ^ (W[I-15] >> 18)
-	pxor	xmm4, xmm5					; xmm4 = (W[I-15+1] >> 3) ^ (W[I-15+1] >> 7) ^ (W[I-15+1] << 14) ^ (W[I-15+1] >> 18)
-	pxor	xmm0, xmm2					; xmm0 = (W[I-15] >> 3) ^ (W[I-15] >> 7) ^ (W[I-15] << 14) ^ (W[I-15] >> 18) ^ (W[I-15] << 25)
-	pxor	xmm4, xmm6					; xmm4 = (W[I-15+1] >> 3) ^ (W[I-15+1] >> 7) ^ (W[I-15+1] << 14) ^ (W[I-15+1] >> 18) ^ (W[I-15+1] << 25)
+    paddd     sr1, rH                           ; T1  = h                + sha256_consts_m128i[i] + w;
+    movdqa    rH, rG                            ; rH  = rG
 
-	movdqa	xmm3, [r11-(2-%1)*16]				; xmm3 = W[I-2]
-	movdqa	xmm7, [r11-(2-(%1+1))*16]			; xmm7 = W[I-2+1]
+    pand      sr3, rE                           ; sr3 = rE & rF
+    movdqa    rG, rF                            ; rG  = rF
 
-	paddd	xmm0, [r11-(16-%1)*16]				; xmm0 = s0(W[I-15]) + W[I-16]
-	paddd	xmm4, [r11-(16-(%1+1))*16]			; xmm4 = s0(W[I-15+1]) + W[I-16+1]
+%ifidn __YASM_OBJFMT__, macho64
+    paddd     sr1, [rcx+rax]
+%else
+    paddd     sr1, sha256_consts_m128i[rax]     ; T1  =                    sha256_consts_m128i[i] + w;
+%endif
+    pxor      sr2, sr3                          ; sr2 = (rE & rF) ^ (~rE & rG) = Ch (e, f, g)
+
+    movdqa    rF, rE                            ; rF  = rE
+    paddd     sr1, sr2                          ; T1  = h + Ch (e, f, g) + sha256_consts_m128i[i] + w;
+
+    movdqa    sr2, rE                           ; sr2 = rE
+    psrld     rE, 6                 ; e >> 6
+
+    movdqa    sr3, rE               ; e >> 6
+    pslld     sr2, 7                ; e << 7
+
+    psrld     sr3, 5                ; e >> 11
+    pxor      rE, sr2               ; e >> 6 ^ e << 7
+
+    pslld     sr2, 14               ; e << 21
+    pxor      rE, sr3               ; e >> 6 ^ e << 7 ^ e >> 11
+
+    psrld     sr3, 14               ; e >> 25
+    pxor      rE, sr2               ; e >> 6 ^ e << 7 ^ e >> 11 ^ e << 21
+
+    pslld     sr2, 5                ; e << 26
+    pxor      rE, sr3               ; e >> 6 ^ e << 7 ^ e >> 11 ^ e << 21 ^ e >> 25
+
+    pxor      rE, sr2               ; e >> 6 ^ e << 7 ^ e >> 11 ^ e << 21 ^ e >> 25 ^ e << 26
+    movdqa    sr2, rB                           ; sr2 = rB
+
+    paddd     sr1, rE                           ; sr1 = h + BIGSIGMA1_256(e) + Ch (e, f, g) + sha256_consts_m128i[i] + w;
+    movdqa    rE, rD                            ; rE  = rD
+
+    movdqa    rD, rC                            ; rD  = rC
+    paddd     rE, sr1                           ; rE  = rD + T1
+
+    movdqa    sr3, rC                           ; sr3 = rC
+    pand      rC, rA                            ; rC  = rC & rA
+
+    pand      sr3, rB                           ; sr3 = rB & rC
+    pand      sr2, rA                           ; sr2 = rB & rA
+
+    pxor      sr2, rC                           ; sr2 = (rB & rA) ^ (rC & rA)
+    movdqa    rC, rB                            ; rC  = rB
+
+    pxor      sr2, sr3                          ; sr2 = (rB & rA) ^ (rC & rA) ^ (rB & rC)
+    movdqa    rB, rA                            ; rB  = rA
+
+    paddd     sr1, sr2                          ; sr1 = T1 + (rB & rA) ^ (rC & rA) ^ (rB & rC)
+    lea       rax, [rax+16]
+
+    movdqa    sr3, rA                           ; sr3 = rA
+    psrld     rA, 2                 ; a >> 2
+
+    pslld     sr3, 10               ; a << 10
+    movdqa    sr2, rA               ; a >> 2
+
+    pxor      rA, sr3               ; a >> 2 ^ a << 10
+    psrld     sr2, 11               ; a >> 13
+
+    pxor      rA, sr2               ; a >> 2 ^ a << 10 ^ a >> 13
+    pslld     sr3, 9                ; a << 19
+
+    pxor      rA, sr3               ; a >> 2 ^ a << 10 ^ a >> 13 ^ a << 19
+    psrld     sr2, 9                ; a >> 21
+
+    pxor      rA, sr2               ; a >> 2 ^ a << 10 ^ a >> 13 ^ a << 19 ^ a >> 21
+    pslld     sr3, 11               ; a << 30
+
+    pxor      rA, sr3               ; a >> 2 ^ a << 10 ^ a >> 13 ^ a << 19 ^ a >> 21 ^ a << 30
+    paddd     rA, sr1                           ; T1 + BIGSIGMA0_256(a) + Maj(a, b, c);
+%endmacro
+
+%macro  sha_calc_w_blk 1
+    movdqa	xmm0, [r11-(15-%1)*16]				; xmm0 = W[I-15]
+    movdqa	xmm4, [r11-(15-(%1+1))*16]			; xmm4 = W[I-15+1]
+    movdqa	xmm2, xmm0					; xmm2 = W[I-15]
+    movdqa	xmm6, xmm4					; xmm6 = W[I-15+1]
+    psrld	xmm0, 3						; xmm0 = W[I-15] >> 3
+    psrld	xmm4, 3						; xmm4 = W[I-15+1] >> 3
+    movdqa	xmm1, xmm0					; xmm1 = W[I-15] >> 3
+    movdqa	xmm5, xmm4					; xmm5 = W[I-15+1] >> 3
+    pslld	xmm2, 14					; xmm2 = W[I-15] << 14
+    pslld	xmm6, 14					; xmm6 = W[I-15+1] << 14
+    psrld	xmm1, 4						; xmm1 = W[I-15] >> 7
+    psrld	xmm5, 4						; xmm5 = W[I-15+1] >> 7
+    pxor	xmm0, xmm1					; xmm0 = (W[I-15] >> 3) ^ (W[I-15] >> 7)
+    pxor	xmm4, xmm5					; xmm4 = (W[I-15+1] >> 3) ^ (W[I-15+1] >> 7)
+    psrld	xmm1, 11					; xmm1 = W[I-15] >> 18
+    psrld	xmm5, 11					; xmm5 = W[I-15+1] >> 18
+    pxor	xmm0, xmm2					; xmm0 = (W[I-15] >> 3) ^ (W[I-15] >> 7) ^ (W[I-15] << 14)
+    pxor	xmm4, xmm6					; xmm4 = (W[I-15+1] >> 3) ^ (W[I-15+1] >> 7) ^ (W[I-15+1] << 14)
+    pslld	xmm2, 11					; xmm2 = W[I-15] << 25
+    pslld	xmm6, 11					; xmm6 = W[I-15+1] << 25
+    pxor	xmm0, xmm1					; xmm0 = (W[I-15] >> 3) ^ (W[I-15] >> 7) ^ (W[I-15] << 14) ^ (W[I-15] >> 18)
+    pxor	xmm4, xmm5					; xmm4 = (W[I-15+1] >> 3) ^ (W[I-15+1] >> 7) ^ (W[I-15+1] << 14) ^ (W[I-15+1] >> 18)
+    pxor	xmm0, xmm2					; xmm0 = (W[I-15] >> 3) ^ (W[I-15] >> 7) ^ (W[I-15] << 14) ^ (W[I-15] >> 18) ^ (W[I-15] << 25)
+    pxor	xmm4, xmm6					; xmm4 = (W[I-15+1] >> 3) ^ (W[I-15+1] >> 7) ^ (W[I-15+1] << 14) ^ (W[I-15+1] >> 18) ^ (W[I-15+1] << 25)
+
+    movdqa	xmm3, [r11-(2-%1)*16]				; xmm3 = W[I-2]
+    movdqa	xmm7, [r11-(2-(%1+1))*16]			; xmm7 = W[I-2+1]
+
+    paddd	xmm0, [r11-(16-%1)*16]				; xmm0 = s0(W[I-15]) + W[I-16]
+    paddd	xmm4, [r11-(16-(%1+1))*16]			; xmm4 = s0(W[I-15+1]) + W[I-16+1]
 
 ;;;;;;;;;;;;;;;;;;
 
-	movdqa	xmm2, xmm3					; xmm2 = W[I-2]
-	movdqa	xmm6, xmm7					; xmm6 = W[I-2+1]
-	psrld	xmm3, 10					; xmm3 = W[I-2] >> 10
-	psrld	xmm7, 10					; xmm7 = W[I-2+1] >> 10
-	movdqa	xmm1, xmm3					; xmm1 = W[I-2] >> 10
-	movdqa	xmm5, xmm7					; xmm5 = W[I-2+1] >> 10
+    movdqa	xmm2, xmm3					; xmm2 = W[I-2]
+    movdqa	xmm6, xmm7					; xmm6 = W[I-2+1]
+    psrld	xmm3, 10					; xmm3 = W[I-2] >> 10
+    psrld	xmm7, 10					; xmm7 = W[I-2+1] >> 10
+    movdqa	xmm1, xmm3					; xmm1 = W[I-2] >> 10
+    movdqa	xmm5, xmm7					; xmm5 = W[I-2+1] >> 10
 
-	paddd	xmm0, [r11-(7-%1)*16]				; xmm0 = s0(W[I-15]) + W[I-16] + W[I-7]
+    paddd	xmm0, [r11-(7-%1)*16]				; xmm0 = s0(W[I-15]) + W[I-16] + W[I-7]
 
-	pslld	xmm2, 13					; xmm2 = W[I-2] << 13
-	pslld	xmm6, 13					; xmm6 = W[I-2+1] << 13
-	psrld	xmm1, 7						; xmm1 = W[I-2] >> 17
-	psrld	xmm5, 7						; xmm5 = W[I-2+1] >> 17
+    pslld	xmm2, 13					; xmm2 = W[I-2] << 13
+    pslld	xmm6, 13					; xmm6 = W[I-2+1] << 13
+    psrld	xmm1, 7						; xmm1 = W[I-2] >> 17
+    psrld	xmm5, 7						; xmm5 = W[I-2+1] >> 17
 
-	paddd	xmm4, [r11-(7-(%1+1))*16]			; xmm4 = s0(W[I-15+1]) + W[I-16+1] + W[I-7+1]
+    paddd	xmm4, [r11-(7-(%1+1))*16]			; xmm4 = s0(W[I-15+1]) + W[I-16+1] + W[I-7+1]
 
-	pxor	xmm3, xmm1					; xmm3 = (W[I-2] >> 10) ^ (W[I-2] >> 17)
-	pxor	xmm7, xmm5					; xmm7 = (W[I-2+1] >> 10) ^ (W[I-2+1] >> 17)
-	psrld	xmm1, 2						; xmm1 = W[I-2] >> 19
-	psrld	xmm5, 2						; xmm5 = W[I-2+1] >> 19
-	pxor	xmm3, xmm2					; xmm3 = (W[I-2] >> 10) ^ (W[I-2] >> 17) ^ (W[I-2] << 13)
-	pxor	xmm7, xmm6					; xmm7 = (W[I-2+1] >> 10) ^ (W[I-2+1] >> 17) ^ (W[I-2+1] << 13)
-	pslld	xmm2, 2						; xmm2 = W[I-2] << 15
-	pslld	xmm6, 2						; xmm6 = W[I-2+1] << 15
-	pxor	xmm3, xmm1					; xmm3 = (W[I-2] >> 10) ^ (W[I-2] >> 17) ^ (W[I-2] << 13) ^ (W[I-2] >> 19)
-	pxor	xmm7, xmm5					; xmm7 = (W[I-2+1] >> 10) ^ (W[I-2+1] >> 17) ^ (W[I-2+1] << 13) ^ (W[I-2+1] >> 19)
-	pxor	xmm3, xmm2					; xmm3 = (W[I-2] >> 10) ^ (W[I-2] >> 17) ^ (W[I-2] << 13) ^ (W[I-2] >> 19) ^ (W[I-2] << 15)
-	pxor	xmm7, xmm6					; xmm7 = (W[I-2+1] >> 10) ^ (W[I-2+1] >> 17) ^ (W[I-2+1] << 13) ^ (W[I-2+1] >> 19) ^ (W[I-2+1] << 15)
+    pxor	xmm3, xmm1					; xmm3 = (W[I-2] >> 10) ^ (W[I-2] >> 17)
+    pxor	xmm7, xmm5					; xmm7 = (W[I-2+1] >> 10) ^ (W[I-2+1] >> 17)
+    psrld	xmm1, 2						; xmm1 = W[I-2] >> 19
+    psrld	xmm5, 2						; xmm5 = W[I-2+1] >> 19
+    pxor	xmm3, xmm2					; xmm3 = (W[I-2] >> 10) ^ (W[I-2] >> 17) ^ (W[I-2] << 13)
+    pxor	xmm7, xmm6					; xmm7 = (W[I-2+1] >> 10) ^ (W[I-2+1] >> 17) ^ (W[I-2+1] << 13)
+    pslld	xmm2, 2						; xmm2 = W[I-2] << 15
+    pslld	xmm6, 2						; xmm6 = W[I-2+1] << 15
+    pxor	xmm3, xmm1					; xmm3 = (W[I-2] >> 10) ^ (W[I-2] >> 17) ^ (W[I-2] << 13) ^ (W[I-2] >> 19)
+    pxor	xmm7, xmm5					; xmm7 = (W[I-2+1] >> 10) ^ (W[I-2+1] >> 17) ^ (W[I-2+1] << 13) ^ (W[I-2+1] >> 19)
+    pxor	xmm3, xmm2					; xmm3 = (W[I-2] >> 10) ^ (W[I-2] >> 17) ^ (W[I-2] << 13) ^ (W[I-2] >> 19) ^ (W[I-2] << 15)
+    pxor	xmm7, xmm6					; xmm7 = (W[I-2+1] >> 10) ^ (W[I-2+1] >> 17) ^ (W[I-2+1] << 13) ^ (W[I-2+1] >> 19) ^ (W[I-2+1] << 15)
 
-	paddd	xmm0, xmm3					; xmm0 = s0(W[I-15]) + W[I-16] + s1(W[I-2]) + W[I-7]
-	paddd	xmm4, xmm7					; xmm4 = s0(W[I-15+1]) + W[I-16+1] + s1(W[I-2+1]) + W[I-7+1]
-	movdqa	[r11+(%1*16)], xmm0
-	movdqa	[r11+((%1+1)*16)], xmm4
+    paddd	xmm0, xmm3					; xmm0 = s0(W[I-15]) + W[I-16] + s1(W[I-2]) + W[I-7]
+    paddd	xmm4, xmm7					; xmm4 = s0(W[I-15+1]) + W[I-16+1] + s1(W[I-2+1]) + W[I-7+1]
+    movdqa	[r11+(%1*16)], xmm0
+    movdqa	[r11+((%1+1)*16)], xmm4
 %endmacro
 
+; _sha256_sse2_64_new hash(rdi), hash1(rsi), data(rdx), init(rcx),
+
+%ifidn __YASM_OBJFMT__, macho64
+_sha256_sse2_64_new:
+%else
+sha256_sse2_64_new:
+%endif
+
+    push        rbx
+
+%macro  SHA_256  0
+    mov         rbx, 64*4   ; rbx is # of SHA-2 rounds
+    mov         rax, 16*4   ; rax is where we expand to
+
+    push        rbx
+    lea         rbx, qword [data+rbx*4]
+    lea         r11, qword [data+rax*4]
+
+%%SHA_CALC_W:
 %assign i 0
-%rep    LAB_CALC_UNROLL
-        lab_calc_blk i
-%assign i i+LAB_CALC_PARA
+%rep    SHA_CALC_W_UNROLL
+        sha_calc_w_blk i
+%assign i i+SHA_CALC_W_PARA
 %endrep
+    add       r11, SHA_CALC_W_UNROLL*SHA_CALC_W_PARA*16
+    cmp       r11, rbx
+    jb        %%SHA_CALC_W
 
-	add	r11, LAB_CALC_UNROLL*LAB_CALC_PARA*16
-	cmp	r11, rcx
-	jb	LAB_CALC
+    pop       rbx
+    mov       rax, 0
+    lea       rbx, [rbx*4]
 
-	pop	rcx
-	mov	rax, 0
+    movdqa    rA, [init]
+    pshufd    rB, rA, 0x55          ; rB == B
+    pshufd    rC, rA, 0xAA          ; rC == C
+    pshufd    rD, rA, 0xFF          ; rD == D
+    pshufd    rA, rA, 0             ; rA == A
 
-; Load the init values of the message into the hash.
+    movdqa    rE, [init+4*4]
+    pshufd    rF, rE, 0x55          ; rF == F
+    pshufd    rG, rE, 0xAA          ; rG == G
+    pshufd    rH, rE, 0xFF          ; rH == H
+    pshufd    rE, rE, 0             ; rE == E
 
-	movdqa	xmm7, [init]
-	pshufd	xmm5, xmm7, 0x55		; xmm5 == b
-	pshufd	xmm4, xmm7, 0xAA		; xmm4 == c
-	pshufd	xmm3, xmm7, 0xFF		; xmm3 == d
-	pshufd	xmm7, xmm7, 0			; xmm7 == a
+%ifidn __YASM_OBJFMT__, macho64
+    lea       rcx, [_sha256_consts_m128i wrt rip]
+%endif
 
-	movdqa	xmm0, [init+4*4]
-	pshufd	xmm8, xmm0, 0x55		; xmm8 == f
-	pshufd	xmm9, xmm0, 0xAA		; xmm9 == g
-	pshufd	xmm10, xmm0, 0xFF		; xmm10 == h
-	pshufd	xmm0, xmm0, 0			; xmm0 == e
-
-LAB_LOOP:
-
-;; T t1 = h + (Rotr32(e, 6) ^ Rotr32(e, 11) ^ Rotr32(e, 25)) + ((e & f) ^ AndNot(e, g)) + Expand32<T>(g_sha256_k[j]) + w[j]
-
-%macro	lab_loop_blk 0
-	movdqa	xmm6, [data+rax*4]
-	paddd	xmm6, g_4sha256_k[rax*4]
-	add	rax, 4
-
-	paddd	xmm6, xmm10	; +h
-
-	movdqa	xmm1, xmm0
-	movdqa	xmm2, xmm9
-	pandn	xmm1, xmm2	; ~e & g
-
-	movdqa	xmm10, xmm2	; h = g
-	movdqa	xmm2, xmm8	; f
-	movdqa	xmm9, xmm2	; g = f
-
-	pand	xmm2, xmm0	; e & f
-	pxor	xmm1, xmm2	; (e & f) ^ (~e & g)
-	movdqa	xmm8, xmm0	; f = e
-
-	paddd	xmm6, xmm1	; Ch + h + w[i] + k[i]
-
-	movdqa	xmm1, xmm0
-	psrld	xmm0, 6
-	movdqa	xmm2, xmm0
-	pslld	xmm1, 7
-	psrld	xmm2, 5
-	pxor	xmm0, xmm1
-	pxor	xmm0, xmm2
-	pslld	xmm1, 14
-	psrld	xmm2, 14
-	pxor	xmm0, xmm1
-	pxor	xmm0, xmm2
-	pslld	xmm1, 5
-	pxor	xmm0, xmm1	; Rotr32(e, 6) ^ Rotr32(e, 11) ^ Rotr32(e, 25)
-	paddd	xmm6, xmm0	; xmm6 = t1
-
-	movdqa	xmm0, xmm3	; d
-	paddd	xmm0, xmm6	; e = d+t1
-
-	movdqa	xmm1, xmm5	; =b
-	movdqa	xmm3, xmm4	; d = c
-	movdqa	xmm2, xmm4	; c
-	pand	xmm2, xmm5	; b & c
-	pand	xmm4, xmm7	; a & c
-	pand	xmm1, xmm7	; a & b
-	pxor	xmm1, xmm4
-	movdqa	xmm4, xmm5	; c = b
-	movdqa	xmm5, xmm7	; b = a
-	pxor	xmm1, xmm2	; (a & c) ^ (a & d) ^ (c & d)
-	paddd	xmm6, xmm1	; t1 + ((a & c) ^ (a & d) ^ (c & d))
-
-	movdqa	xmm2, xmm7
-	psrld	xmm7, 2
-	movdqa	xmm1, xmm7
-	pslld	xmm2, 10
-	psrld	xmm1, 11
-	pxor	xmm7, xmm2
-	pxor	xmm7, xmm1
-	pslld	xmm2, 9
-	psrld	xmm1, 9
-	pxor	xmm7, xmm2
-	pxor	xmm7, xmm1
-	pslld	xmm2, 11
-	pxor	xmm7, xmm2
-	paddd	xmm7, xmm6	; a = t1 + (Rotr32(a, 2) ^ Rotr32(a, 13) ^ Rotr32(a, 22)) + ((a & c) ^ (a & d) ^ (c & d));
-%endmacro
-
+%%SHAROUND_LOOP:
 %assign i 0
-%rep    LAB_LOOP_UNROLL
-        lab_loop_blk
+%rep    SHA_ROUND_LOOP_UNROLL
+        sha_round_blk
 %assign i i+1
 %endrep
-
-	cmp	rax, rcx
-	jb	LAB_LOOP
+    cmp   rax, rbx
+    jb    %%SHAROUND_LOOP
 
 ; Finished the 64 rounds, calculate hash and save
 
-	movdqa	xmm1, [rdx]
-	pshufd	xmm2, xmm1, 0x55
-	pshufd	xmm6, xmm1, 0xAA
-	pshufd	xmm11, xmm1, 0xFF
-	pshufd	xmm1, xmm1, 0
+    movdqa    sr1, [init]
+    pshufd    sr2, sr1, 0x55
+    pshufd    sr3, sr1, 0xAA
+    pshufd    sr4, sr1, 0xFF
+    pshufd    sr1, sr1, 0
 
-	paddd	xmm5, xmm2
-	paddd	xmm4, xmm6
-	paddd	xmm3, xmm11
-	paddd	xmm7, xmm1
+    paddd     rB, sr2
+    paddd     rC, sr3
+    paddd     rD, sr4
+    paddd     rA, sr1
 
-	movdqa	xmm1, [rdx+4*4]
-	pshufd	xmm2, xmm1, 0x55
-	pshufd	xmm6, xmm1, 0xAA
-	pshufd	xmm11, xmm1, 0xFF
-	pshufd	xmm1, xmm1, 0
+    movdqa    sr1, [init+4*4]
+    pshufd    sr2, sr1, 0x55
+    pshufd    sr3, sr1, 0xAA
+    pshufd    sr4, sr1, 0xFF
+    pshufd    sr1, sr1, 0
 
-	paddd	xmm8, xmm2
-	paddd	xmm9, xmm6
-	paddd	xmm10, xmm11
-	paddd	xmm0, xmm1
+    paddd     rF, sr2
+    paddd     rG, sr3
+    paddd     rH, sr4
+    paddd     rE, sr1
+%endmacro
 
-	movdqa	[hash+0*16], xmm7
-	movdqa	[hash+1*16], xmm5
-	movdqa	[hash+2*16], xmm4
-	movdqa	[hash+3*16], xmm3
-	movdqa	[hash+4*16], xmm0
-	movdqa	[hash+5*16], xmm8
-	movdqa	[hash+6*16], xmm9
-	movdqa	[hash+7*16], xmm10
+    SHA_256
+    movdqa    [hash1+0*16], rA
+    movdqa    [hash1+1*16], rB
+    movdqa    [hash1+2*16], rC
+    movdqa    [hash1+3*16], rD
+    movdqa    [hash1+4*16], rE
+    movdqa    [hash1+5*16], rF
+    movdqa    [hash1+6*16], rG
+    movdqa    [hash1+7*16], rH
+
+    mov       data, hash1
+    mov       init, sha256_init
+
+    SHA_256
+
+    movdqa    [hash+7*16], rH
 
 LAB_RET:
-	pop	rbx
-	ret
+    pop       rbx
+    ret
