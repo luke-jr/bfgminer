@@ -3128,16 +3128,16 @@ retry:
 	}
 
 	if (!requests_staged()) {
+		if (can_roll(work)) {
+			roll_work(work);
+			ret = true;
+			goto out;
+		}
 		if (requested && !pool_tset(pool, &pool->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough",
 				pool->pool_no);
 			pool->localgen_occasions++;
 			total_lo++;
-		}
-		if (can_roll(work)) {
-			roll_work(work);
-			ret = true;
-			goto out;
 		}
 	}
 
