@@ -135,31 +135,31 @@ dnl CCAN wants to know a lot of vars.
 # All the configuration checks.  Regrettably, the __attribute__ checks will
 # give false positives on old GCCs, since they just cause warnings.  But that's
 # fairly harmless.
-AC_COMPILE_IFELSE([static void __attribute__((cold)) cleanup(void) { }],
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((cold)) cleanup(void) { }])],
 			  AC_DEFINE([HAVE_ATTRIBUTE_COLD], [1],
                                     [Define if __attribute__((cold))]))
-AC_COMPILE_IFELSE([static void __attribute__((const)) cleanup(void) { }],
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((const)) cleanup(void) { }])],
 			  AC_DEFINE([HAVE_ATTRIBUTE_CONST], [1],
                                     [Define if __attribute__((const))]))
-AC_COMPILE_IFELSE([static void __attribute__((noreturn)) cleanup(void) { exit(1); }],
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((noreturn)) cleanup(void) { exit(1); }])],
 			  AC_DEFINE([HAVE_ATTRIBUTE_NORETURN], [1],
                                     [Define if __attribute__((noreturn))]))
-AC_COMPILE_IFELSE([static void __attribute__((format(__printf__, 1, 2))) cleanup(const char *fmt, ...) { }],
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((format(__printf__, 1, 2))) cleanup(const char *fmt, ...) { }])],
 			  AC_DEFINE([HAVE_ATTRIBUTE_PRINTF], [1],
                                     [Define if __attribute__((format(__printf__)))]))
-AC_COMPILE_IFELSE([static void __attribute__((unused)) cleanup(void) { }],
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((unused)) cleanup(void) { }])],
 			  AC_DEFINE([HAVE_ATTRIBUTE_UNUSED], [1],
                                     [Define if __attribute__((unused))]))
-AC_COMPILE_IFELSE([static void __attribute__((used)) cleanup(void) { }],
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((used)) cleanup(void) { }])],
 			  AC_DEFINE([HAVE_ATTRIBUTE_USED], [1],
                                     [Define if __attribute__((used))]))
-AC_LINK_IFELSE([int main(void) { return __builtin_constant_p(1) ? 0 : 1; }],
+AC_LINK_IFELSE([AC_LANG_SOURCE([int main(void) { return __builtin_constant_p(1) ? 0 : 1; }])],
 			  AC_DEFINE([HAVE_BUILTIN_CONSTANT_P], [1],
                                     [Define if have __builtin_constant_p]))
-AC_LINK_IFELSE([int main(void) { return __builtin_types_compatible_p(char *, int) ? 1 : 0; }],
+AC_LINK_IFELSE([AC_LANG_SOURCE([int main(void) { return __builtin_types_compatible_p(char *, int) ? 1 : 0; }])],
 			  AC_DEFINE([HAVE_BUILTIN_TYPES_COMPATIBLE_P], [1],
                                     [Define if have __builtin_types_compatible_p]))
-AC_COMPILE_IFELSE([static int __attribute__((warn_unused_result)) func(int x) { return x; }],
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([static int __attribute__((warn_unused_result)) func(int x) { return x; }])],
 			  AC_DEFINE([HAVE_WARN_UNUSED_RESULT], [1],
                                     [Define if __attribute__((warn_unused_result))]))
   
