@@ -4628,6 +4628,7 @@ int main (int argc, char *argv[])
 
 	if (!total_pools) {
 		if (curses_active) {
+			applog(LOG_WARNING, "Need to specify at least one pool server.");
 			if (!input_pool(false))
 				quit(1, "Pool setup failed");
 		} else
