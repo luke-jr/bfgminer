@@ -2073,8 +2073,6 @@ static void restart_threads(void)
 {
 	int i, stale;
 
-	block_changed = BLOCK_NONE;
-
 	/* Discard staged work that is now stale */
 	stale = discard_stale();
 
@@ -4113,11 +4111,6 @@ static void *watchdog_thread(void *userdata)
 				redrawwin(logwin);
 			}
 			mutex_unlock(&curses_lock);
-		}
-
-		if (unlikely(work_restart[watchdog_thr_id].restart)) {
-			restart_threads();
-			work_restart[watchdog_thr_id].restart = 0;
 		}
 
 		gettimeofday(&now, NULL);
