@@ -232,6 +232,7 @@ static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t stgd_lock;
 static pthread_mutex_t curses_lock;
+static pthread_rwlock_t blk_lock;
 static double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
@@ -240,7 +241,7 @@ pthread_mutex_t control_lock;
 int hw_errors;
 static int total_accepted, total_rejected;
 static int total_getworks, total_stale, total_discarded;
-static int total_queued, total_staged, lp_staged;
+static int total_queued;
 static unsigned int new_blocks;
 
 enum block_change {
@@ -1314,6 +1315,16 @@ static inline void decay_time(double *f, double fadd)
 	*f = (fadd + *f * 0.9) / 1.9;
 }
 
+static int requests_staged(void)
+{
+	int ret;
+
+	mutex_lock(&stgd_lock);
+	ret = HASH_COUNT(staged_work);
+	mutex_unlock(&stgd_lock);
+	return ret;
+}
+
 static WINDOW *mainwin, *statuswin, *logwin;
 static double total_secs = 0.1;
 static char statusline[256];
@@ -1348,8 +1359,8 @@ static void curses_print_status(int thr_id)
 	wprintw(statuswin, " %s", statusline);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 3,0);
-	wprintw(statuswin, " TQ: %d  ST: %d  LS: %d  SS: %d  DW: %d  NB: %d  LW: %d  LO: %d  RF: %d  I: %d",
-		total_queued, total_staged, lp_staged, total_stale, total_discarded, new_blocks,
+	wprintw(statuswin, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  LO: %d  RF: %d  I: %d",
+		total_queued, requests_staged(), total_stale, total_discarded, new_blocks,
 		local_work, total_lo, total_ro, scan_intensity);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 4, 0);
@@ -1902,46 +1913,6 @@ static bool workio_submit_work(struct workio_cmd *wc)
 	return true;
 }
 
-static void inc_staged(struct pool *pool, int inc, bool lp)
-{
-	mutex_lock(&stgd_lock);
-	if (lp) {
-		lp_staged += inc;
-		total_staged += inc;
-	} else if (lp_staged)
-		--lp_staged;
-	else
-		total_staged += inc;
-	mutex_unlock(&stgd_lock);
-}
-
-static void dec_staged(int inc)
-{
-	mutex_lock(&stgd_lock);
-	total_staged -= inc;
-	mutex_unlock(&stgd_lock);
-}
-
-static int requests_staged(void)
-{
-	int ret;
-
-	mutex_lock(&stgd_lock);
-	ret = total_staged;
-	mutex_unlock(&stgd_lock);
-	return ret;
-}
-
-static int real_staged(void)
-{
-	int ret;
-
-	mutex_lock(&stgd_lock);
-	ret = total_staged - lp_staged;
-	mutex_unlock(&stgd_lock);
-	return ret;
-}
-
 /* Find the pool that currently has the highest priority */
 static struct pool *priority_pool(int choice)
 {
@@ -2029,8 +2000,6 @@ static void switch_pools(struct pool *selected)
 	mutex_lock(&qd_lock);
 	total_queued = 0;
 	mutex_unlock(&qd_lock);
-
-	inc_staged(pool, 1, true);
 }
 
 static void discard_work(struct work *work)
@@ -2061,7 +2030,6 @@ static void dec_queued(void)
 	if (total_queued > 0)
 		total_queued--;
 	mutex_unlock(&qd_lock);
-	dec_staged(1);
 }
 
 static int requests_queued(void)
@@ -2079,7 +2047,7 @@ static int discard_stale(void)
 	struct work *work, *tmp;
 	int i, stale = 0;
 
-	mutex_lock(&getq->mutex);
+	mutex_lock(&stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work)) {
 			HASH_DEL(staged_work, work);
@@ -2087,7 +2055,7 @@ static int discard_stale(void)
 			stale++;
 		}
 	}
-	mutex_unlock(&getq->mutex);
+	mutex_unlock(&stgd_lock);
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
@@ -2103,7 +2071,6 @@ static bool queue_request(struct thr_info *thr, bool needed);
 
 static void restart_threads(void)
 {
-	struct pool *pool = current_pool();
 	int i, stale;
 
 	block_changed = BLOCK_NONE;
@@ -2113,10 +2080,6 @@ static void restart_threads(void)
 
 	for (i = 0; i < stale; i++)
 		queue_request(NULL, true);
-
-	/* Temporarily increase the staged count so that the pool is not seen
-	 * as lagging when a new block hits */
-	inc_staged(pool, mining_threads, true);
 
 	for (i = 0; i < mining_threads; i++)
 		work_restart[i].restart = 1;
@@ -2156,17 +2119,17 @@ static void test_work_current(struct work *work)
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
-	mutex_lock(&getq->mutex);
+	rd_lock(&blk_lock);
 	HASH_FIND_STR(blocks, hexstr, s);
-	mutex_unlock(&getq->mutex);
+	rd_unlock(&blk_lock);
 	if (!s) {
 		s = calloc(sizeof(struct block), 1);
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
-		mutex_lock(&getq->mutex);
+		wr_lock(&blk_lock);
 		HASH_ADD_STR(blocks, hash, s);
-		mutex_unlock(&getq->mutex);
+		wr_unlock(&blk_lock);
 		set_curblock(hexstr, work->data);
 
 		new_blocks++;
@@ -2233,7 +2196,6 @@ static void *stage_thread(void *userdata)
 			applog(LOG_WARNING, "Failed to hash_push in stage_thread");
 			continue;
 		}
-		inc_staged(work->pool, 1, false);
 	}
 
 	tq_freeze(mythr->q);
@@ -2978,7 +2940,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	int rq, rs;
 
 	rq = requests_queued();
-	rs = real_staged();
+	rs = requests_staged();
 
 	/* If we've been generating lots of local work we may already have
 	 * enough in the queue */
@@ -3051,7 +3013,7 @@ static inline bool should_roll(struct work *work)
 {
 	int rs;
 
-	rs = real_staged();
+	rs = requests_staged();
 	if (rs >= opt_queue + mining_threads)
 		return false;
 	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE || !rs)
@@ -4503,6 +4465,8 @@ int main (int argc, char *argv[])
 		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&control_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init");
+	if (unlikely(pthread_rwlock_init(&blk_lock, NULL)))
+		quit(1, "Failed to pthread_rwlock_init");
 
 	init_max_name_len();
 

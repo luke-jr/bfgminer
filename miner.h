@@ -219,6 +219,34 @@ static inline void mutex_unlock(pthread_mutex_t *lock)
 		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
 }
 
+static inline void wr_lock(pthread_rwlock_t *lock)
+{
+	if (unlikely(pthread_rwlock_wrlock(lock)))
+		quit(1, "WTF WRLOCK ERROR ON LOCK!");
+}
+
+static inline void rd_lock(pthread_rwlock_t *lock)
+{
+	if (unlikely(pthread_rwlock_rdlock(lock)))
+		quit(1, "WTF RDLOCK ERROR ON LOCK!");
+}
+
+static inline void rw_unlock(pthread_rwlock_t *lock)
+{
+	if (unlikely(pthread_rwlock_unlock(lock)))
+		quit(1, "WTF RWLOCK ERROR ON UNLOCK!");
+}
+
+static inline void rd_unlock(pthread_rwlock_t *lock)
+{
+	rw_unlock(lock);
+}
+
+static inline void wr_unlock(pthread_rwlock_t *lock)
+{
+	rw_unlock(lock);
+}
+
 struct pool;
 
 extern bool opt_debug;
