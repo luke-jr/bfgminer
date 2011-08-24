@@ -4467,10 +4467,6 @@ int main (int argc, char *argv[])
 	sigaction(SIGTERM, &handler, &termhandler);
 	sigaction(SIGINT, &handler, &inthandler);
 
-	gettimeofday(&total_tv_start, NULL);
-	gettimeofday(&total_tv_end, NULL);
-	get_datestamp(datestamp, &total_tv_start);
-
 	// Hack to make cgminer silent when called recursively on WIN32
 	int skip_to_bench = 0;
 	#if defined(WIN32)
@@ -4775,6 +4771,10 @@ int main (int argc, char *argv[])
 			}
 		}
 	}
+
+	gettimeofday(&total_tv_start, NULL);
+	gettimeofday(&total_tv_end, NULL);
+	get_datestamp(datestamp, &total_tv_start);
 
 #ifdef HAVE_OPENCL
 	/* start GPU mining threads */
