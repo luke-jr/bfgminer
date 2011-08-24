@@ -3131,7 +3131,6 @@ retry:
 		if (requested && !pool_tset(pool, &pool->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough",
 				pool->pool_no);
-			applog(LOG_WARNING, "staged %d", requests_staged());
 			pool->localgen_occasions++;
 			total_lo++;
 		}
