@@ -2945,9 +2945,6 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	if (rq >= maxq || rs >= maxq)
 		return true;
 
-	if (rs > rq)
-		goto out;
-
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
@@ -2976,7 +2973,6 @@ static bool queue_request(struct thr_info *thr, bool needed)
 		workio_cmd_free(wc);
 		return false;
 	}
-out:
 	inc_queued();
 	return true;
 }
