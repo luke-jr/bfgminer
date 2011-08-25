@@ -106,6 +106,7 @@ enum sha256_algos {
 	ALGO_VIA,		/* VIA padlock */
 	ALGO_CRYPTOPP,		/* Crypto++ (C) */
 	ALGO_CRYPTOPP_ASM32,	/* Crypto++ 32-bit assembly */
+	ALGO_SSE2_32,		/* SSE2 for x86_32 */
 	ALGO_SSE2_64,		/* SSE2 for x86_64 */
 	ALGO_SSE4_64,		/* SSE4 for x86_64 */
 };
@@ -142,6 +143,9 @@ static const char *algo_names[] = {
 #ifdef WANT_CRYPTOPP_ASM32
 	[ALGO_CRYPTOPP_ASM32]	= "cryptopp_asm32",
 #endif
+#ifdef WANT_X8632_SSE2
+	[ALGO_SSE2_32]		= "sse2_32",
+#endif
 #ifdef WANT_X8664_SSE2
 	[ALGO_SSE2_64]		= "sse2_64",
 #endif
@@ -162,6 +166,9 @@ static const sha256_func sha256_funcs[] = {
 	[ALGO_CRYPTOPP]		=  (sha256_func)scanhash_cryptopp,
 #ifdef WANT_CRYPTOPP_ASM32
 	[ALGO_CRYPTOPP_ASM32]	= (sha256_func)scanhash_asm32,
+#endif
+#ifdef WANT_X8632_SSE2
+	[ALGO_SSE2_32]		= (sha256_func)scanhash_sse2_32,
 #endif
 #ifdef WANT_X8664_SSE2
 	[ALGO_SSE2_64]		= (sha256_func)scanhash_sse2_64,
@@ -193,10 +200,10 @@ int opt_scantime = 60;
 int opt_bench_algo = -1;
 static const bool opt_time = true;
 static bool opt_restart = true;
-#if defined(WANT_X8664_SSE4) && defined(__SSE4_1__)
-static enum sha256_algos opt_algo = ALGO_SSE4_64;
-#elif defined(WANT_X8664_SSE2) && defined(__SSE2__)
+#if defined(WANT_X8664_SSE2) && defined(__SSE2__)
 static enum sha256_algos opt_algo = ALGO_SSE2_64;
+#elif defined(WANT_X8632_SSE2) && defined(__SSE2__)
+static enum sha256_algos opt_algo = ALGO_SSE2_32;
 #else
 static enum sha256_algos opt_algo = ALGO_C;
 #endif
@@ -818,6 +825,10 @@ static enum sha256_algos pick_fastest_algo()
 		bench_algo(&best_rate, &best_algo, ALGO_CRYPTOPP_ASM32);
 	#endif
 
+	#if defined(WANT_X8632_SSE2)
+		bench_algo(&best_rate, &best_algo, ALGO_SSE2_32);
+	#endif
+
 	#if defined(WANT_X8664_SSE2)
 		bench_algo(&best_rate, &best_algo, ALGO_SSE2_64);
 	#endif
@@ -1042,11 +1053,14 @@ static struct opt_table opt_config_table[] = {
 #ifdef WANT_CRYPTOPP_ASM32
 		     "\n\tcryptopp_asm32\tCrypto++ 32-bit assembler implementation"
 #endif
+#ifdef WANT_X8632_SSE2
+		     "\n\tsse2_32\t\tSSE2 32 bit implementation for i386 machines"
+#endif
 #ifdef WANT_X8664_SSE2
-		     "\n\tsse2_64\t\tSSE2 implementation for x86_64 machines"
+		     "\n\tsse2_64\t\tSSE2 64 bit implementation for x86_64 machines"
 #endif
 #ifdef WANT_X8664_SSE4
-		     "\n\tsse4_64\t\tSSE4 implementation for x86_64 machines"
+		     "\n\tsse4_64\t\tSSE4.1 64 bit implementation for x86_64 machines"
 #endif
 		),
 	OPT_WITH_ARG("--bench-algo|-b",
@@ -3304,6 +3318,19 @@ static void *miner_thread(void *userdata)
 					max_nonce, &hashes_done,
 					work->blk.nonce);
 			break;
+
+#ifdef WANT_X8632_SSE2
+		case ALGO_SSE2_32: {
+			unsigned int rc5 =
+			        scanhash_sse2_32(thr_id, work->midstate, work->data + 64,
+						 work->hash1, work->hash,
+						 work->target,
+					         max_nonce, &hashes_done,
+						 work->blk.nonce);
+			rc = (rc5 == -1) ? false : true;
+			}
+			break;
+#endif
 
 #ifdef WANT_X8664_SSE2
 		case ALGO_SSE2_64: {

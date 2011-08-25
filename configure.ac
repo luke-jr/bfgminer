@@ -119,7 +119,7 @@ if test "x$YASM" != "xfalse" ; then
   fi
 fi
 if test "x$has_yasm" = "xfalse" ; then
-  AC_MSG_NOTICE([yasm is required for the sse2_64 algorithm. It will be skipped.])
+  AC_MSG_NOTICE([yasm is required for the assembly algorithms. They will be skipped.])
 fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
@@ -176,6 +176,7 @@ AC_CONFIG_FILES([
 	compat/Makefile
 	compat/jansson/Makefile
 	x86_64/Makefile
+	x86_32/Makefile
 	ccan/Makefile
 	lib/Makefile
 	])

@@ -22,7 +22,7 @@ cgminer_SOURCES	= elist.h miner.h compat.h bench_block.h	\
 		  ocl.c ocl.h findnonce.c findnonce.h 		\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
-		  sha256_sse4_amd64.c \
+		  sha256_sse4_amd64.c sha256_sse2_i386.c		\
 		  phatk110817.cl poclbm110817.cl
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
@@ -33,6 +33,12 @@ if HAVE_x86_64
 if HAS_YASM
 SUBDIRS		+= x86_64
 cgminer_LDADD	+= x86_64/libx8664.a
+AM_CFLAGS	= -DHAS_YASM
+endif
+else
+if HAS_YASM
+SUBDIRS		+= x86_32
+cgminer_LDADD	+= x86_32/libx8632.a
 AM_CFLAGS	= -DHAS_YASM
 endif
 endif

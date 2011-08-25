@@ -55,6 +55,10 @@ void *alloca (size_t);
 #define WANT_SSE2_4WAY 1
 #endif
 
+#if defined(__i386__) && defined(HAS_YASM)
+#define WANT_X8632_SSE2 1
+#endif
+
 #if defined(__i386__) || defined(__x86_64__)
 #define WANT_VIA_PADLOCK 1
 #endif
@@ -292,6 +296,12 @@ extern int scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *
 	uint32_t nonce);
 
 extern int scanhash_sse4_64(int, const unsigned char *pmidstate, unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t nonce);
+
+extern int scanhash_sse2_32(int, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, unsigned long *nHashesDone,
