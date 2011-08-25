@@ -367,6 +367,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char *source, *rawsource = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
 
+	if (!rawsource)
+		return NULL;
+
 	source = malloc(pl);
 	if (!source) {
 		applog(LOG_ERR, "Unable to malloc source");
