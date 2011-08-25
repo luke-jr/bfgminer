@@ -162,7 +162,13 @@ AC_LINK_IFELSE([AC_LANG_SOURCE([int main(void) { return __builtin_types_compatib
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([static int __attribute__((warn_unused_result)) func(int x) { return x; }])],
 			  AC_DEFINE([HAVE_WARN_UNUSED_RESULT], [1],
                                     [Define if __attribute__((warn_unused_result))]))
-  
+
+if test "x$prefix" = xNONE; then
+	prefix=/usr
+fi
+
+AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin/"], [Path to cgminer install])
+
 AC_SUBST(OPENCL_LIBS)
 AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)

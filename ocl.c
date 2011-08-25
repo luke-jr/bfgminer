@@ -32,11 +32,19 @@ extern int opt_worksize;
 
 char *file_contents(const char *filename, int *length)
 {
-	FILE *f = fopen(filename, "rb");
+	char *fullpath = alloca(strlen(CGMINER_PREFIX) + strlen(filename));
 	void *buffer;
+	FILE *f;
+
+	strcpy(fullpath, CGMINER_PREFIX);
+	strcat(fullpath, filename);
+
+	f = fopen(filename, "rb");
+	if (!f)
+		f = fopen(fullpath, "rb");
 
 	if (!f) {
-		applog(LOG_ERR, "Unable to open %s for reading", filename);
+		applog(LOG_ERR, "Unable to open %s or %s for reading", filename, fullpath);
 		return NULL;
 	}
 
