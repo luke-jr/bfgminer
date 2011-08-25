@@ -2935,18 +2935,10 @@ static bool queue_request(struct thr_info *thr, bool needed)
 {
 	int maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
-	int rq, rs;
+	int rq = requests_queued();
 
-	rq = requests_queued();
-	rs = requests_staged();
-
-	/* If we've been generating lots of local work we may already have
-	 * enough in the queue */
-	if (rq >= maxq || rs >= maxq)
+	if (rq >= maxq)
 		return true;
-
-	if (rs > rq)
-		goto out;
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -2964,7 +2956,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	/* If we're queueing work faster than we can stage it, consider the
 	 * system lagging and allow work to be gathered from another pool if
 	 * possible */
-	if (!rs && rq && needed)
+	if (rq && needed && !requests_staged())
 		wc->lagging = true;
 
 	if (opt_debug)
@@ -2976,7 +2968,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 		workio_cmd_free(wc);
 		return false;
 	}
-out:
+
 	inc_queued();
 	return true;
 }
@@ -3093,7 +3085,7 @@ retry:
 			ret = true;
 			goto out;
 		}
-		if (requested && requests_queued() > 1 && !pool_tset(pool, &pool->lagging)) {
+		if (requested && !pool_tset(pool, &pool->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough",
 				pool->pool_no);
 			pool->localgen_occasions++;
