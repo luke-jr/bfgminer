@@ -220,6 +220,7 @@ static int num_processors;
 static int scan_intensity;
 static bool use_curses = true;
 static bool opt_submit_stale;
+char *opt_kernel_path;
 
 #define QUIET	(opt_quiet || opt_realquiet)
 
@@ -1082,6 +1083,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--intensity|-I",
 		     forced_int_1010, opt_show_intval, &scan_intensity,
 		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
+	OPT_WITH_ARG("--kernel-path|-K",
+		     opt_set_charp, opt_show_charp, &opt_kernel_path,
+	             "Specify a path to where the kernel .cl files are"),
 	OPT_WITH_ARG("--kernel|-k",
 		     opt_set_charp, NULL, &opt_kernel,
 		     "Select kernel to use (poclbm or phatk - default: auto)"),
@@ -4486,6 +4490,9 @@ int main (int argc, char *argv[])
 	sigaction(SIGTERM, &handler, &termhandler);
 	sigaction(SIGINT, &handler, &inthandler);
 
+	opt_kernel_path = malloc(PATH_MAX);
+	strcat(opt_kernel_path, CGMINER_PREFIX);
+
 	// Hack to make cgminer silent when called recursively on WIN32
 	int skip_to_bench = 0;
 	#if defined(WIN32)
@@ -4556,6 +4563,8 @@ int main (int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	strcat(opt_kernel_path, "/");
 
 	if (want_per_device_stats)
 		opt_log_output = true;
@@ -4921,6 +4930,8 @@ int main (int argc, char *argv[])
 		HASH_DEL(blocks, block);
 		free(block);
 	}
+
+	free(opt_kernel_path);
 
 	curl_global_cleanup();
 

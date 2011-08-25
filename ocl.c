@@ -32,11 +32,11 @@ extern int opt_worksize;
 
 char *file_contents(const char *filename, int *length)
 {
-	char *fullpath = alloca(strlen(CGMINER_PREFIX) + strlen(filename));
+	char *fullpath = alloca(PATH_MAX);
 	void *buffer;
 	FILE *f;
 
-	strcpy(fullpath, CGMINER_PREFIX);
+	strcpy(fullpath, opt_kernel_path);
 	strcat(fullpath, filename);
 
 	f = fopen(filename, "rb");

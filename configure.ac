@@ -167,7 +167,7 @@ if test "x$prefix" = xNONE; then
 	prefix=/usr
 fi
 
-AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin/"], [Path to cgminer install])
+AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
 
 AC_SUBST(OPENCL_LIBS)
 AC_SUBST(JANSSON_LIBS)

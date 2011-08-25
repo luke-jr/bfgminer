@@ -256,6 +256,7 @@ struct pool;
 extern bool opt_debug;
 extern bool opt_protocol;
 extern bool opt_log_output;
+extern char *opt_kernel_path;
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool, bool *,
