@@ -3103,7 +3103,7 @@ retry:
 			ret = true;
 			goto out;
 		}
-		if (requested && !pool_tset(pool, &pool->lagging)) {
+		if (requested && requests_queued() > 1 && !pool_tset(pool, &pool->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough",
 				pool->pool_no);
 			pool->localgen_occasions++;
