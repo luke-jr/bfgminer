@@ -372,17 +372,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	size_t *binary_sizes;
 	char **binaries;
 	int pl;
-	char *source, *rawsource = file_contents(filename, &pl);
+	char *source = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
 
-	if (!rawsource)
+	if (!source)
 		return NULL;
-
-	source = malloc(pl);
-	if (!source) {
-		applog(LOG_ERR, "Unable to malloc source");
-		return NULL;
-	}
 
 	binary_sizes = (size_t *)malloc(sizeof(size_t)*nDevices);
 	if (unlikely(!binary_sizes)) {
@@ -456,54 +450,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	/////////////////////////////////////////////////////////////////
 
 build:
-	memcpy(source, rawsource, pl);
-
-	/* Patch the source file with the preferred_vwidth */
-	if (clState->preferred_vwidth > 1) {
-		char *find = strstr(source, "VECTORSX");
-
-		if (unlikely(!find)) {
-			applog(LOG_ERR, "Unable to find VECTORSX in source");
-			return NULL;
-		}
-		find += 7; // "VECTORS"
-		if (clState->preferred_vwidth == 2)
-			strncpy(find, "2", 1);
-		else
-			strncpy(find, "4", 1);
-		if (opt_debug)
-			applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->preferred_vwidth);
-	}
-
-	/* Patch the source file defining BITALIGN */
-	if (clState->hasBitAlign) {
-		char *find = strstr(source, "BITALIGNX");
-
-		if (unlikely(!find)) {
-			applog(LOG_ERR, "Unable to find BITALIGNX in source");
-			return NULL;
-		}
-		find += 8; // "BITALIGN"
-		strncpy(find, " ", 1);
-		if (opt_debug)
-			applog(LOG_DEBUG, "cl_amd_media_ops found, patched source with BITALIGN");
-	} else if (opt_debug)
-		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BITALIGN patch");
-
-	if (patchbfi) {
-		char *find = strstr(source, "BFI_INTX");
-
-		if (unlikely(!find)) {
-			applog(LOG_ERR, "Unable to find BFI_INTX in source");
-			return NULL;
-		}
-		find += 7; // "BFI_INT"
-		strncpy(find, " ", 1);
-		if (opt_debug)
-			applog(LOG_DEBUG, "cl_amd_media_ops found, patched source with BFI_INT");
-	} else if (opt_debug)
-		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
-
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithSource)");
@@ -518,7 +464,28 @@ build:
 
 	/* create a cl program executable for all the devices specified */
 	char CompilerOptions[256];
-	sprintf(CompilerOptions, "%s%i", "-DWORKSIZE=", (int)clState->work_size);
+
+	sprintf(CompilerOptions, "-DWORKSIZE=%d -DVECTORS%d",
+		(int)clState->work_size, clState->preferred_vwidth);
+	if (opt_debug)
+		applog(LOG_DEBUG, "Setting worksize to %d", clState->work_size);
+	if (clState->preferred_vwidth > 1 && opt_debug)
+		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->preferred_vwidth);
+
+	if (clState->hasBitAlign) {
+		strcat(CompilerOptions, " -DBITALIGN");
+		if (opt_debug)
+			applog(LOG_DEBUG, "cl_amd_media_ops found, patched source with BITALIGN");
+	} else if (opt_debug)
+		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BITALIGN patch");
+
+	if (patchbfi) {
+		strcat(CompilerOptions, " -DBFI_INT");
+		if (opt_debug)
+			applog(LOG_DEBUG, "cl_amd_media_ops found, patched source with BFI_INT");
+	} else if (opt_debug)
+		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
+
 	//int n = 1000;
 	//while(n--)
 	//	printf("%s", CompilerOptions);
@@ -610,7 +577,6 @@ build:
 	}
 
 	free(source);
-	free(rawsource);
 
 	/* Save the binary to be loaded next time */
 	binaryfile = fopen(binaryfilename, "wb");

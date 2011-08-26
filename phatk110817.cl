@@ -2,10 +2,6 @@
 // I have therefore decided to keep it public-domain.
 
 
-#define VECTORSX
-#define BFI_INTX
-#define BITALIGNX
-
 #ifdef VECTORS4
 	typedef uint4 u;
 #else 

@@ -5,9 +5,6 @@
 // This file is taken and modified from the public-domain poclbm project, and
 // we have therefore decided to keep it public-domain in Phoenix.
 
-// The X is a placeholder for patching to suit hardware
-#define VECTORSX
-
 #ifdef VECTORS4
 	typedef uint4 u;
 #elif defined VECTORS2
@@ -35,9 +32,6 @@ __constant uint K[64] = {
 // SHA-256 ch function, but provides it in exactly one instruction. If
 // detected, use it for ch. Otherwise, construct ch out of simpler logical
 // primitives.
-
-#define BFI_INTX
-#define BITALIGNX
 
 #ifdef BFI_INT
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
