@@ -1,3 +1,39 @@
+Version 1.6.0 - August 26, 2011
+
+- Make restarting of GPUs optional for systems that hang on any attempt to
+restart them.     Fix DEAD status by comparing it to last live time rather than
+last attempted restart time since that happens every minute.
+- Move staged threads to hashes so we can sort them by time.
+- Create a hash list of all the blocks created and search them to detect when a
+new block has definitely appeared, using that information to detect stale work
+and discard it.
+- Update configure.ac for newer autoconf tools.
+- Use the new hashes directly for counts instead of the fragile counters
+currently in use.
+- Update to latest sse2 code from cpuminer-ng.
+- Allow LP to reset block detect and block detect lp flags to know who really
+came first.
+- Get start times just before mining begins to not have very slow rise in
+average.
+- Add message about needing one server.
+- We can queue all the necessary work without hitting frequent stales now with
+the time and string stale protection active all the time.     This prevents a
+pool being falsely labelled as not providing work fast enough.
+- Include uthash.h in distro.
+- Implement SSE2 32 bit assembly algorithm as well.
+- Fail gracefully if unable to open the opencl files.
+- Make cgminer look in the install directory for the .cl files making make
+install work correctly.
+- Allow a custom kernel path to be entered on the command line.
+- Bump threshhold for lag up to maximum queued but no staged work.
+- Remove fragile source patching for bitalign, vectors et. al and simply pass it
+with the compiler options.
+- Actually check the value returned for the x-roll-ntime extension to make sure
+it isn't saying N.
+- Prevent segfault on exit for when accessory threads don't exist.
+- Disable curl debugging with opt protocol since it spews to stderr.
+
+
 Version 1.5.8 - August 23, 2011
 
 - Minimise how much more work can be given in cpu mining threads each interval.
