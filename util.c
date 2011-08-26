@@ -319,8 +319,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	}
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
+#if 0 /* Disable curl debugging since it spews to stderr */
 	if (opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+#endif
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
