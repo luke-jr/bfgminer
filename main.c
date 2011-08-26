@@ -1753,7 +1753,8 @@ void kill_work(void)
 
 	/* Kill the watchdog thread */
 	thr = &thr_info[watchdog_thr_id];
-	pthread_cancel(*thr->pth);
+	if (thr->pth)
+		pthread_cancel(*thr->pth);
 
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
@@ -1767,9 +1768,11 @@ void kill_work(void)
 
 	/* Stop the others */
 	thr = &thr_info[stage_thr_id];
-	pthread_cancel(*thr->pth);
+	if (thr->pth)
+		pthread_cancel(*thr->pth);
 	thr = &thr_info[longpoll_thr_id];
-	pthread_cancel(*thr->pth);
+	if (thr->pth)
+		pthread_cancel(*thr->pth);
 
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
