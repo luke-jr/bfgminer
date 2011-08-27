@@ -4495,7 +4495,7 @@ int main (int argc, char *argv[])
 	sigaction(SIGINT, &handler, &inthandler);
 
 	opt_kernel_path = malloc(PATH_MAX);
-	strcat(opt_kernel_path, CGMINER_PREFIX);
+	strcpy(opt_kernel_path, CGMINER_PREFIX);
 
 	// Hack to make cgminer silent when called recursively on WIN32
 	int skip_to_bench = 0;
