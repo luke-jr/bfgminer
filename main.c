@@ -193,7 +193,7 @@ static int fail_pause = 5;
 static int opt_log_interval = 5;
 bool opt_log_output = false;
 static bool opt_dynamic = true;
-static int opt_queue;
+static int opt_queue = 1;
 int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
