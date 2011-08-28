@@ -47,10 +47,6 @@
 #endif
 
 #define PROGRAM_NAME		"cgminer"
-#define DEF_RPC_URL		"http://127.0.0.1:8332/"
-#define DEF_RPC_USERNAME	"rpcuser"
-#define DEF_RPC_PASSWORD	"rpcpass"
-#define DEF_RPC_USERPASS	DEF_RPC_USERNAME ":" DEF_RPC_PASSWORD
 
 #ifdef __linux /* Linux specific policy and affinity management */
 #include <sched.h>
@@ -941,7 +937,7 @@ static char *set_rr(enum pool_strategy *strategy)
 	return NULL;
 }
 
-static char *set_url(char *arg, char **p)
+static char *set_url(char *arg)
 {
 	struct pool *pool;
 
@@ -966,7 +962,7 @@ static char *set_url(char *arg, char **p)
 	return NULL;
 }
 
-static char *set_user(const char *arg, char **p)
+static char *set_user(const char *arg)
 {
 	struct pool *pool;
 
@@ -982,7 +978,7 @@ static char *set_user(const char *arg, char **p)
 	return NULL;
 }
 
-static char *set_pass(const char *arg, char **p)
+static char *set_pass(const char *arg)
 {
 	struct pool *pool;
 
@@ -998,7 +994,7 @@ static char *set_pass(const char *arg, char **p)
 	return NULL;
 }
 
-static char *set_userpass(const char *arg, char **p)
+static char *set_userpass(const char *arg)
 {
 	struct pool *pool;
 
@@ -1032,10 +1028,6 @@ static char *enable_debug(bool *flag)
 	opt_log_output = true;
 	return NULL;
 }
-
-static char *trpc_url;
-static char *trpc_userpass;
-static char *trpc_user, *trpc_pass;
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
@@ -1111,7 +1103,7 @@ static struct opt_table opt_config_table[] = {
 			"Do not attempt to restart GPUs that hang"),
 #endif
 	OPT_WITH_ARG("--pass|-p",
-		     set_pass, NULL, &trpc_pass,
+		     set_pass, NULL, NULL,
 		     "Password for bitcoin JSON-RPC server"),
 	OPT_WITHOUT_ARG("--per-device-stats",
 			opt_set_bool, &want_per_device_stats,
@@ -1156,10 +1148,10 @@ static struct opt_table opt_config_table[] = {
 			opt_set_invbool, &use_curses,
 			"Disable ncurses formatted screen output"),
 	OPT_WITH_ARG("--url|-o",
-		     set_url, opt_show_charp, &trpc_url,
+		     set_url, NULL, NULL,
 		     "URL for bitcoin JSON-RPC server"),
 	OPT_WITH_ARG("--user|-u",
-		     set_user, NULL, &trpc_user,
+		     set_user, NULL, NULL,
 		     "Username for bitcoin JSON-RPC server"),
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
@@ -1175,7 +1167,7 @@ static struct opt_table opt_config_table[] = {
 		     "Override detected optimal worksize"),
 #endif
 	OPT_WITH_ARG("--userpass|-O",
-		     set_userpass, NULL, &trpc_userpass,
+		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
 	OPT_ENDTABLE
 };
@@ -4556,8 +4548,6 @@ int main (int argc, char *argv[])
 #endif
 	if (nDevs)
 		opt_n_threads = 0;
-
-	trpc_url = strdup(DEF_RPC_URL);
 
 	/* parse command line */
 	opt_register_table(opt_config_table,
