@@ -1073,7 +1073,7 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (0 - 10)"),
 	OPT_WITH_ARG("--intensity|-I",
-		     forced_int_1010, opt_show_intval, &scan_intensity,
+		     forced_int_1010, NULL, &scan_intensity,
 		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
 	OPT_WITH_ARG("--kernel-path|-K",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
