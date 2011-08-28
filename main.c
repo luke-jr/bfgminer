@@ -1451,7 +1451,7 @@ static void print_status(int thr_id)
 }
 
 /* Check for window resize. Called with curses mutex locked */
-static inline void check_logwinsize(void)
+static inline bool change_logwinsize(void)
 {
 	int x, y, logx, logy;
 
@@ -1459,8 +1459,11 @@ static inline void check_logwinsize(void)
 	getmaxyx(logwin, logy, logx);
 	y -= logcursor;
 	/* Detect screen size change */
-	if ((x != logx || y != logy) && x >= 80 && y >= 25)
+	if ((x != logx || y != logy) && x >= 80 && y >= 25) {
 		wresize(logwin, y, x);
+		return true;
+	}
+	return false;
 }
 
 /* For mandatory printing when mutex is already locked */
@@ -4109,7 +4112,6 @@ static void *watchdog_thread(void *userdata)
 	const unsigned int interval = opt_log_interval / 2 ? : 1;
 	static struct timeval rotate_tv;
 	struct timeval zero_tv;
-	bool statwin = false;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -4127,14 +4129,11 @@ static void *watchdog_thread(void *userdata)
 		hashmeter(-1, &zero_tv, 0);
 
 		if (curses_active) {
-			statwin ^= true;
 			mutex_lock(&curses_lock);
 			for (i = 0; i < mining_threads; i++)
 				curses_print_status(i);
-			if (statwin)
+			if (!change_logwinsize()) {
 				redrawwin(statuswin);
-			else {
-				check_logwinsize();
 				redrawwin(logwin);
 			}
 			mutex_unlock(&curses_lock);
