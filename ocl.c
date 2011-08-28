@@ -232,7 +232,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
-	size_t nDevices;
 	cl_uint numDevices;
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS)
@@ -271,7 +270,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 		if (gpu < numDevices) {
 			char pbuff[100];
-			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, &nDevices);
+			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS)
 			{
 				applog(LOG_ERR, "Error: Getting Device Info");
@@ -378,12 +377,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (!source)
 		return NULL;
 
-	binary_sizes = (size_t *)malloc(sizeof(size_t)*nDevices);
+	binary_sizes = (size_t *)malloc(sizeof(size_t)*numDevices);
 	if (unlikely(!binary_sizes)) {
 		applog(LOG_ERR, "Unable to malloc binary_sizes");
 		return NULL;
 	}
-	binaries = (char **)malloc(sizeof(char *)*nDevices);
+	binaries = (char **)malloc(sizeof(char *)*numDevices);
 	if (unlikely(!binaries)) {
 		applog(LOG_ERR, "Unable to malloc binaries");
 		return NULL;
@@ -503,7 +502,7 @@ build:
 		return NULL;
 	}
 
-	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*nDevices, binary_sizes, NULL );
+	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*numDevices, binary_sizes, NULL );
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetPlatformInfo)");
 		return NULL;
@@ -517,7 +516,7 @@ build:
 		return NULL;
 	}
 	binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[gpu]);
-	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*nDevices, binaries, NULL );
+	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*numDevices, binaries, NULL );
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: Getting program info. (clGetPlatformInfo)");
 		return NULL;
