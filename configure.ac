@@ -72,10 +72,20 @@ AC_LINK_IFELSE(
    found_opencl=0])
 LIBS=$SAVED_LIBS
 
+AC_CHECK_LIB(pthread, pthread_create, ,
+        AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
+PTHREAD_LIBS=-lpthread
+
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
-AC_CHECK_LIB(pthread, pthread_create, PTHREAD_LIBS=-lpthread)
+
+AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
+        AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev]))
+
 AC_CHECK_LIB(ncurses, addstr, NCURSES_LIBS=-lncurses)
 AC_CHECK_LIB(pdcurses, addstr, PDCURSES_LIBS=-lpdcurses)
+
+AC_CHECK_LIB(curl, curl_easy_init, ,
+	AC_MSG_ERROR([Could not find curl library - please install libcurl-dev]))
 
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
