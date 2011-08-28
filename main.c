@@ -1127,7 +1127,7 @@ static struct opt_table opt_config_table[] = {
 			"Verbose dump of protocol-level activities"),
 	OPT_WITH_ARG("--queue|-Q",
 		     set_int_0_to_10, opt_show_intval, &opt_queue,
-		     "Number of extra work items to queue (0 - 10)"),
+		     "Minimum number of work items to have queued (0 - 10)"),
 	OPT_WITHOUT_ARG("--quiet|-q",
 			opt_set_bool, &opt_quiet,
 			"Disable logging output, display status and errors"),
@@ -2963,11 +2963,10 @@ static void pool_resus(struct pool *pool)
 
 static bool queue_request(struct thr_info *thr, bool needed)
 {
-	int maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
 	int rq = requests_queued();
 
-	if (rq >= maxq)
+	if (rq >= mining_threads)
 		return true;
 
 	/* fill out work request message */
@@ -3034,7 +3033,7 @@ static inline bool should_roll(struct work *work)
 	int rs;
 
 	rs = requests_staged();
-	if (rs >= opt_queue + mining_threads)
+	if (rs >= mining_threads)
 		return false;
 	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE || !rs)
 		return true;
@@ -3104,7 +3103,7 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 	thread_reportout(thr);
 retry:
 	pool = current_pool();
-	if (unlikely(!requested && !queue_request(thr, true))) {
+	if (unlikely((!requested || requests_queued() < opt_queue) && !queue_request(thr, true))) {
 		applog(LOG_WARNING, "Failed to queue_request in get_work");
 		goto out;
 	}
@@ -3115,7 +3114,7 @@ retry:
 			ret = true;
 			goto out;
 		}
-		if (requested && requests_queued() >= opt_queue + mining_threads &&
+		if (requested && requests_queued() >= mining_threads &&
 		    !pool_tset(pool, &pool->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough",
 				pool->pool_no);
