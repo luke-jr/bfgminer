@@ -2175,7 +2175,7 @@ static void test_work_current(struct work *work)
 	free(hexstr);
 }
 
-int tv_sort(struct work *worka, struct work *workb)
+static int tv_sort(struct work *worka, struct work *workb)
 {
 	return worka->tv_staged.tv_sec - workb->tv_staged.tv_sec;
 }
