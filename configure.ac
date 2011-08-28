@@ -51,26 +51,32 @@ case $target in
 	;;
 esac
 
-# Check for OpenCL (the long way needed on mingw32 due to calling conventions)
-AC_MSG_CHECKING([for OpenCL])
-SAVED_LIBS=$LIBS
-LIBS="$LIBS $OPENCL_FLAGS"
-AC_LINK_IFELSE(
-  [AC_LANG_PROGRAM([[
-	#ifdef __APPLE_CC__
-	#include <OpenCL/opencl.h>
-	#else
-	#include <CL/cl.h>
-	#endif
-  ]],
-    [[return clSetKernelArg(0, 0, 0, 0); ]])],
-  [AC_MSG_RESULT(yes)
-   AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL is present on the system.])
-   found_opencl=1
-   OPENCL_LIBS=$OPENCL_FLAGS],
-  [AC_MSG_RESULT(no)
-   found_opencl=0])
-LIBS=$SAVED_LIBS
+AC_ARG_ENABLE([opencl],
+	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
+	[opencl=$enableval]
+	)
+if test "x$opencl" != xno; then
+	# Check for OpenCL (the long way needed on mingw32 due to calling conventions)
+	AC_MSG_CHECKING([for OpenCL])
+	SAVED_LIBS=$LIBS
+	LIBS="$LIBS $OPENCL_FLAGS"
+	AC_LINK_IFELSE(
+	[AC_LANG_PROGRAM([[
+		#ifdef __APPLE_CC__
+		#include <OpenCL/opencl.h>
+		#else
+		#include <CL/cl.h>
+		#endif
+	]],
+	[[return clSetKernelArg(0, 0, 0, 0); ]])],
+	[AC_MSG_RESULT(yes)
+	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL is present on the system.])
+	found_opencl=1
+	OPENCL_LIBS=$OPENCL_FLAGS],
+	[AC_MSG_RESULT(no)
+	found_opencl=0])
+	LIBS=$SAVED_LIBS
+fi
 
 AC_CHECK_LIB(pthread, pthread_create, ,
         AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
@@ -201,8 +207,12 @@ AC_OUTPUT
 
 echo ''
 
-if test $found_opencl = 1; then
-	echo OpenCL: FOUND. GPU mining support enabled.
+if test "x$opencl" != xno; then
+	if test $found_opencl = 1; then
+		echo OpenCL: FOUND. GPU mining support enabled.
+	else
+		echo OpenCL: NOT FOUND. GPU mining support DISABLED.
+	fi
 else
-	echo OpenCL: NOT FOUND. GPU mining support DISABLED.
+	echo OpenCL: Detection overrided. GPU mining support DISABLED.
 fi
