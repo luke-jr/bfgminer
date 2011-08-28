@@ -4309,6 +4309,8 @@ static char *curses_input(const char *query)
 	leaveok(logwin, false);
 	wlogprint("%s: ", query);
 	wgetnstr(logwin, input, 255);
+	if (!strlen(input))
+		strcpy(input, "-1");
 	leaveok(logwin, true);
 	noecho();
 	return input;
