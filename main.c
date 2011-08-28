@@ -216,6 +216,9 @@ static int num_processors;
 static int scan_intensity;
 static bool use_curses = true;
 static bool opt_submit_stale;
+static bool opt_nogpu;
+static bool opt_usecpu;
+
 char *opt_kernel_path;
 
 #define QUIET	(opt_quiet || opt_realquiet)
@@ -905,6 +908,11 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
+static char *set_int_1_to_10(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 1, 10);
+}
+
 static char *set_devices(const char *arg, int *i)
 {
 	char *err = opt_set_intval(arg, i);
@@ -1069,9 +1077,15 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, &opt_device,
 	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
+	OPT_WITHOUT_ARG("--disable-gpu|-G",
+			opt_set_bool, &opt_nogpu,
+			"Disable GPU mining even if suitable devices exist"),
+	OPT_WITHOUT_ARG("--enable-cpu|-C",
+			opt_set_bool, &opt_usecpu,
+			"Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)"),
 	OPT_WITH_ARG("--gpu-threads|-g",
-		     set_int_0_to_10, opt_show_intval, &opt_g_threads,
-		     "Number of threads per GPU (0 - 10)"),
+		     set_int_1_to_10, opt_show_intval, &opt_g_threads,
+		     "Number of threads per GPU (1 - 10)"),
 	OPT_WITH_ARG("--intensity|-I",
 		     forced_int_1010, NULL, &scan_intensity,
 		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
@@ -4546,8 +4560,6 @@ int main (int argc, char *argv[])
 		}
 	}
 #endif
-	if (nDevs)
-		opt_n_threads = 0;
 
 	/* parse command line */
 	opt_register_table(opt_config_table,
@@ -4558,6 +4570,12 @@ int main (int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	if (opt_nogpu)
+		nDevs = 0;
+
+	if (nDevs && !opt_usecpu)
+		opt_n_threads = 0;
 
 	strcat(opt_kernel_path, "/");
 
@@ -4627,6 +4645,9 @@ int main (int argc, char *argv[])
 		/* Maybe they turned GPU off; restore default CPU threads. */
 		opt_n_threads = num_processors;
 	}
+
+	if (!opt_n_threads && ! gpu_threads)
+		quit(1, "All devices disabled, cannot mine!");
 
 	logcursor = 8;
 	gpucursor = logcursor;
