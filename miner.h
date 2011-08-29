@@ -55,7 +55,7 @@ void *alloca (size_t);
 #define WANT_SSE2_4WAY 1
 #endif
 
-#if defined(__i386__) && defined(HAS_YASM)
+#if defined(__i386__) && defined(HAS_YASM) && defined(__SSE2__)
 #define WANT_X8632_SSE2 1
 #endif
 
