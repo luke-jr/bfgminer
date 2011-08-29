@@ -218,6 +218,7 @@ static bool use_curses = true;
 static bool opt_submit_stale;
 static bool opt_nogpu;
 static bool opt_usecpu;
+static int opt_shares;
 
 char *opt_kernel_path;
 
@@ -1149,6 +1150,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
+	OPT_WITH_ARG("--shares",
+		     opt_set_intval, NULL, &opt_shares,
+		     "Quit after mining N shares (default: unlimited)"),
 	OPT_WITHOUT_ARG("--submit-stale",
 			opt_set_bool, &opt_submit_stale,
 		        "Submit shares even if they would normally be considered stale"),
@@ -1601,6 +1605,11 @@ static bool submit_upstream_work(const struct work *work)
 			else
 				applog(LOG_WARNING, "Accepted %.8s %sPU %d thread %d",
 				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+		}
+		if (opt_shares && total_accepted >= opt_shares) {
+			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
+			kill_work();
+			goto out;
 		}
 	} else {
 		cgpu->rejected++;
@@ -4297,6 +4306,9 @@ static void print_summary(void)
 		if (active_device(i))
 			log_print_status(i);
 	}
+
+	if (opt_shares)
+		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
 	fflush(stdout);
 	fflush(stderr);
 }
