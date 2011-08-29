@@ -240,14 +240,35 @@ AC_CONFIG_FILES([
 AC_OUTPUT
 
 
-echo ''
-
+echo
+echo
+echo
+echo "------------------------------------------------------------------------"
+echo "$PACKAGE $VERSION"
+echo "------------------------------------------------------------------------"
+echo
+echo
+echo "Configuration Options Summary:"
+echo
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then
-		echo OpenCL: FOUND. GPU mining support enabled.
+		echo "  OpenCL...............: FOUND. GPU mining support enabled"
 	else
-		echo OpenCL: NOT FOUND. GPU mining support DISABLED.
+		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
 	fi
 else
-	echo OpenCL: Detection overrided. GPU mining support DISABLED.
+	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
 fi
+
+echo "  ASM..................: $has_yasm"
+echo
+echo "Compilation............: make (or gmake)"
+echo "  CPPFLAGS.............: $CPPFLAGS"
+echo "  CFLAGS...............: $CFLAGS"
+echo "  CXXFLAGS.............: $CXXFLAGS"
+echo "  LDFLAGS..............: $LDFLAGS"
+echo
+echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
+echo "  prefix...............: $prefix"
+echo
+
