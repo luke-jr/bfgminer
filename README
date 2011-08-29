@@ -8,7 +8,7 @@ https://github.com/ckolivas/cgminer
 
 Support thread:
 
-http://forum.bitcoin.org/index.php?topic=28402.0
+http://bitcointalk.org/index.php?topic=28402.0
 
 IRC Channel:
 
@@ -17,11 +17,15 @@ irc://irc.freenode.net/cgminer
 License: GPLv2.  See COPYING for details.
 
 Dependencies:
-	libcurl			http://curl.haxx.se/libcurl/
-	libncurses5-dev (or libpdcurses on WIN32)
+	curl dev library 	http://curl.haxx.se/libcurl/
+	(libcurl4-openssl-dev)
+	curses dev library
+	(libncurses5-dev or libpdcurses on WIN32)
 	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
 	jansson			http://www.digip.org/jansson/
 	(jansson is included in-tree and not necessary)
+	yasm 1.0.1+ http://yasm.tortall.net/
+	(yasm is optional, gives assembly routines for CPU mining)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
@@ -80,7 +84,60 @@ Native WIN32 build instructions (on mingw32, on windows):
 	CFLAGS="-O2 -msse2" ./configure
 	make
 
-Usage instructions:  Run "cgminer --help" to see options.
+---
+
+Usage instructions:  Run "cgminer --help" to see options:
+
+Options for both config file and command line:
+--algo|-a <arg>     Specify sha256 implementation for CPU mining:
+        auto            Benchmark at startup and pick fastest algorithm
+        c               Linux kernel sha256, implemented in C
+        4way            tcatm's 4-way SSE2 implementation
+        via             VIA padlock implementation
+        cryptopp        Crypto++ C/C++ implementation
+        sse2_64         SSE2 64 bit implementation for x86_64 machines
+        sse4_64         SSE4.1 64 bit implementation for x86_64 machines (default: sse2_64)
+--cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
+--debug|-D          Enable debug output
+--device|-d <arg>   Select device to use, (Use repeat -d for multiple devices, default: all)
+--disable-gpu|-G    Disable GPU mining even if suitable devices exist
+--enable-cpu|-C     Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)
+--gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
+--intensity|-I <arg> Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)
+--kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/bin")
+--kernel|-k <arg>   Select kernel to use (poclbm or phatk - default: auto)
+--load-balance      Change multipool strategy from failover to even load balance
+--log|-l <arg>      Interval in seconds between log output (default: 5)
+--monitor|-m <arg>  Use custom pipe cmd for output messages
+--no-longpoll       Disable X-Long-Polling support
+--no-restart        Do not attempt to restart GPUs that hang
+--pass|-p <arg>     Password for bitcoin JSON-RPC server
+--per-device-stats  Force verbose mode and output per-device statistics
+--protocol-dump|-P  Verbose dump of protocol-level activities
+--queue|-Q <arg>    Minimum number of work items to have queued (0 - 10) (default: 1)
+--quiet|-q          Disable logging output, display status and errors
+--real-quiet        Disable all output
+--retries|-r <arg>  Number of times to retry before giving up, if JSON-RPC call fails (-1 means never) (default: -1)
+--retry-pause|-R <arg> Number of seconds to pause, between retries (default: 5)
+--rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
+--round-robin       Change multipool strategy from failover to round robin on failure
+--scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
+--shares <arg>      Quit after mining N shares (default: unlimited)
+--submit-stale      Submit shares even if they would normally be considered stale
+--syslog            Use system log for output messages (default: standard error)
+--text-only|-T      Disable ncurses formatted screen output
+--url|-o <arg>      URL for bitcoin JSON-RPC server
+--user|-u <arg>     Username for bitcoin JSON-RPC server
+--vectors|-v <arg>  Override detected optimal vector width (1, 2 or 4)
+--verbose           Log verbose output to stderr as well as status output
+--worksize|-w <arg> Override detected optimal worksize (default: 0)
+--userpass|-O <arg> Username:Password pair for bitcoin JSON-RPC server
+Options for command line only:
+--config|-c <arg>   Load a JSON-format configuration file
+See example-cfg.json for an example configuration.
+--help|-h           Print this message
+--ndevs|-n          Enumerate number of detected GPUs and exit
+--version|-V        Display version and exit
 
 ---
 
@@ -169,6 +226,7 @@ diminish return performance even if the hash rate might appear better. A good
 starting baseline intensity to try on dedicated miners is 8. Higher values are
 there to cope with future improvements in hardware.
 
+---
 
 FAILOVER STRATEGIES WITH MULTIPOOL:
 A number of different strategies for dealing with multipool setups are
