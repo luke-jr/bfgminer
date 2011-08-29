@@ -120,12 +120,14 @@ char *opt_inc_intval(int *i)
 char *opt_version_and_exit(const char *version)
 {
 	printf("%s\n", version);
+	fflush(stdout);
 	exit(0);
 }
 
 char *opt_usage_and_exit(const char *extra)
 {
 	printf("%s", opt_usage(opt_argv0, extra));
+	fflush(stdout);
 	exit(0);
 }
 

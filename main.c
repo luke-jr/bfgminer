@@ -46,8 +46,6 @@
 	#include <sys/types.h>
 #endif
 
-#define PROGRAM_NAME		"cgminer"
-
 #ifdef __linux /* Linux specific policy and affinity management */
 #include <sched.h>
 static inline void drop_policy(void)
@@ -173,6 +171,8 @@ static const sha256_func sha256_funcs[] = {
 	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64
 #endif
 };
+
+static char packagename[255];
 
 bool opt_debug = false;
 bool opt_protocol = false;
@@ -331,7 +331,7 @@ void get_timestamp(char *f, struct timeval *tv)
 static void applog_and_exit(const char *fmt, ...)
 {
 	va_list ap;
-	
+
 	va_start(ap, fmt);
 	vapplog(LOG_ERR, fmt, ap);
 	va_end(ap);
@@ -1252,6 +1252,22 @@ static char *print_ndevs_and_exit(int *ndevs)
 }
 #endif
 
+extern const char *opt_argv0;
+
+static char *opt_verusage_and_exit(const char *extra)
+{
+	printf("%s\n"
+#ifdef HAVE_OPENCL
+		"Built with CPU and GPU mining support.\n"
+#else
+		"Built with CPU mining support only.\n"
+#endif
+		, packagename);
+	printf("%s", opt_usage(opt_argv0, extra));
+	fflush(stdout);
+	exit(0);
+}
+
 /* These options are available from commandline only */
 static struct opt_table opt_cmdline_table[] = {
 	OPT_WITH_ARG("--config|-c",
@@ -1259,18 +1275,16 @@ static struct opt_table opt_cmdline_table[] = {
 		     "Load a JSON-format configuration file\n"
 		     "See example-cfg.json for an example configuration."),
 	OPT_WITHOUT_ARG("--help|-h",
-			opt_usage_and_exit,
-#ifdef HAVE_OPENCL
-			"\nBuilt with CPU and GPU mining support.\n",
-#else
-			"\nBuilt with CPU mining support only.\n",
-#endif
+			opt_verusage_and_exit, NULL,
 			"Print this message"),
 #ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--ndevs|-n",
 			print_ndevs_and_exit, &nDevs,
 			"Enumerate number of detected GPUs and exit"),
 #endif
+	OPT_WITHOUT_ARG("--version|-V",
+			opt_version_and_exit, packagename,
+			"Display version and exit"),
 	OPT_ENDTABLE
 };
 
@@ -1373,7 +1387,7 @@ static void curses_print_status(int thr_id)
 
 	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
-	wprintw(statuswin, " " PROGRAM_NAME " version " VERSION " - Started: %s", datestamp);
+	wprintw(statuswin, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	if (opt_n_threads)
 		wprintw(statuswin, " CPU Algo: %s", algo_names[opt_algo]);
 	wattroff(statuswin, A_BOLD);
@@ -4494,6 +4508,8 @@ int main (int argc, char *argv[])
 	if (unlikely(pthread_rwlock_init(&blk_lock, NULL)))
 		quit(1, "Failed to pthread_rwlock_init");
 
+	sprintf(packagename, "%s %s", PACKAGE, VERSION);
+
 	init_max_name_len();
 
 	handler.sa_handler = &sighandler;
@@ -4569,6 +4585,8 @@ int main (int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	applog(LOG_WARNING, "Started %s", packagename);
 
 	if (opt_nogpu)
 		nDevs = 0;
@@ -4703,7 +4721,7 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
-		openlog(PROGRAM_NAME, LOG_PID, LOG_USER);
+		openlog(PACKAGE, LOG_PID, LOG_USER);
 #endif
 
 	#if defined(unix)
