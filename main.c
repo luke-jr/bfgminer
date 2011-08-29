@@ -4481,9 +4481,28 @@ out:
 	}
 #endif // defined(unix)
 
+static void enable_curses(void) {
+	int x,y;
+
+	if (curses_active)
+		return;
+
+	mainwin = initscr();
+	getmaxyx(mainwin, y, x);
+	statuswin = newwin(logstart, x, 0, 0);
+	leaveok(statuswin, true);
+	logwin = newwin(y - logcursor, 0, logcursor, 0);
+	idlok(logwin, true);
+	scrollok(logwin, true);
+	leaveok(logwin, true);
+	cbreak();
+	noecho();
+	test_and_set(&curses_active);
+}
+
 int main (int argc, char *argv[])
 {
-	unsigned int i, x, y, pools_active = 0;
+	unsigned int i, pools_active = 0;
 	struct block *block, *tmpblock;
 	struct work *work, *tmpwork;
 	struct sigaction handler;
@@ -4672,28 +4691,14 @@ int main (int argc, char *argv[])
 	logstart = cpucursor + (opt_n_threads ? num_processors : 0) + 1;
 	logcursor = logstart + 1;
 
-	/* Set up the ncurses interface */
-	if (!opt_realquiet && use_curses) {
-		mainwin = initscr();
-		getmaxyx(mainwin, y, x);
-		statuswin = newwin(logstart, x, 0, 0);
-		leaveok(statuswin, true);
-		logwin = newwin(y - logcursor, 0, logcursor, 0);
-		idlok(logwin, true);
-		scrollok(logwin, true);
-		leaveok(logwin, true);
-		cbreak();
-		noecho();
-		test_and_set(&curses_active);
-	}
+	if (opt_realquiet)
+		use_curses = false;
 
 	if (!total_pools) {
-		if (curses_active) {
-			applog(LOG_WARNING, "Need to specify at least one pool server.");
-			if (!input_pool(false))
-				quit(1, "Pool setup failed");
-		} else
-			quit(1, "No server specified");
+		enable_curses();
+		applog(LOG_WARNING, "Need to specify at least one pool server.");
+		if (!input_pool(false))
+			quit(1, "Pool setup failed");
 	}
 
 	for (i = 0; i < total_pools; i++) {
@@ -4909,6 +4914,9 @@ int main (int argc, char *argv[])
 		"using SHA256 '%s' algorithm.",
 		opt_n_threads,
 		algo_names[opt_algo]);
+
+	if (use_curses)
+		enable_curses();
 
 	watchdog_thr_id = mining_threads + 2;
 	thr = &thr_info[watchdog_thr_id];
