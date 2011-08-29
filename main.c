@@ -4699,6 +4699,8 @@ int main (int argc, char *argv[])
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
 		if (!input_pool(false))
 			quit(1, "Pool setup failed");
+		if (!use_curses)
+			disable_curses();
 	}
 
 	for (i = 0; i < total_pools; i++) {
