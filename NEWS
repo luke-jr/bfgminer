@@ -1,3 +1,42 @@
+Version 1.6.1 - August 29, 2011
+
+- Copy cgminer path, not cat it.
+- Switching between redrawing windows does not fix the crash with old
+libncurses, so redraw both windows, but only when the window size hasn't
+changed.
+- Reinstate minimum 1 extra in queue to make it extremely unlikely to ever have
+0 staged work items and any idle time.
+- Return -1 if no input is detected from the menu to prevent it being
+interpreted as a 0.
+- Make pthread, libcurl and libcurses library checks mandatory or fail.
+- Add a --disable-opencl configure option to make it possible to override
+detection of opencl and build without GPU mining support.
+- Confusion over the variable name for number of devices was passing a bogus
+value which likely was causing the zero sized binary issue.
+- cgminer no longer supports default url user and pass so remove them.
+- Don't show value of intensity since it's dynamic by default.
+- Add options to explicitly enable CPU mining or disable GPU mining.
+- Convert the opt queue into a minimum number of work items to have queued
+instead of an extra number to decrease risk of getting idle devices without
+increasing risk of higher rejects.
+- Statify tv_sort.
+- Check for SSE2 before trying to build 32 bit SSE2 assembly version. Prevents
+build failure when yasm is installed but -msse2 is not specified.
+- Add some defines to configure.ac to enable exporting of values and packaging,
+and clean up output.
+- Give convenient summary at end of ./configure.
+- Display version information and add --version command line option, and make
+sure we flush stdout.
+- Enable curses after the mining threads are set up so that failure messages
+won't be lost in the curses interface.
+- Disable curses after inputting a pool if we requested no curses interface.
+- Add an option to break out after successfully mining a number of accepted
+shares.
+- Exit with a failed return code if we did not reach opt_shares.
+- The cpu mining work data can get modified before we copy it if we submit it
+async, and the sync submission is not truly sync anyway, so just submit it sync.
+
+
 Version 1.6.0 - August 26, 2011
 
 - Make restarting of GPUs optional for systems that hang on any attempt to
