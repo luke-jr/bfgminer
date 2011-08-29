@@ -4311,6 +4311,8 @@ static void print_summary(void)
 		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
 	fflush(stdout);
 	fflush(stderr);
+	if (opt_shares > total_accepted)
+		quit(1, "Did not successfully mine as many shares as were requested.");
 }
 
 void quit(int status, const char *format, ...)
