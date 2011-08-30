@@ -149,11 +149,11 @@ cgminer -o http://pool:port -u username -p password
 
 Single pool, dedicated miner:
 
-cgminer -o http://pool:port -u username -p password -I 8
+cgminer -o http://pool:port -u username -p password -I 9
 
 Multiple pool, dedicated miner:
 
-cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 8
+cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
 
 ---
 
@@ -223,7 +223,7 @@ I is current Intensity (changes in dynamic mode).
 
 NOTE: Running intensities above 9 with current hardware is likely to only
 diminish return performance even if the hash rate might appear better. A good
-starting baseline intensity to try on dedicated miners is 8. Higher values are
+starting baseline intensity to try on dedicated miners is 9. Higher values are
 there to cope with future improvements in hardware.
 
 ---
