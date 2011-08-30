@@ -219,6 +219,7 @@ static bool opt_submit_stale;
 static bool opt_nogpu;
 static bool opt_usecpu;
 static int opt_shares;
+static bool opt_fail_only;
 
 char *opt_kernel_path;
 
@@ -1084,6 +1085,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
 			"Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)"),
+	OPT_WITHOUT_ARG("--failover-only",
+			opt_set_bool, &opt_fail_only,
+			"Don't leak work to backup pools when primary pool is lagging"),
 	OPT_WITH_ARG("--gpu-threads|-g",
 		     set_int_1_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (1 - 10)"),
@@ -3008,7 +3012,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	/* If we're queueing work faster than we can stage it, consider the
 	 * system lagging and allow work to be gathered from another pool if
 	 * possible */
-	if (rq && needed && !requests_staged())
+	if (rq && needed && !requests_staged() && !opt_fail_only)
 		wc->lagging = true;
 
 	if (opt_debug)
