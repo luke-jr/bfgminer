@@ -1358,7 +1358,7 @@ static inline int dev_from_id(int thr_id)
 /* Simulate a rolling average by faking an exponential decay over 5 * log */
 static inline void decay_time(double *f, double fadd)
 {
-	*f = (fadd + *f * 0.9) / 1.9;
+	*f = (fadd * .37 + *f) / 1.37;
 }
 
 static int requests_staged(void)
