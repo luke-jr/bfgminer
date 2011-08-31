@@ -1355,10 +1355,24 @@ static inline int dev_from_id(int thr_id)
 	return thr_info[thr_id].cgpu->cpu_gpu;
 }
 
-/* Simulate a rolling average by faking an exponential decay over 5 * log */
-static inline void decay_time(double *f, double fadd)
+/* Make the change in the recent value adjust dynamically when the difference
+ * is large, but damp it when the values are closer together. This allows the
+ * value to change quickly, but not fluctuate too dramatically when it has
+ * stabilised. */
+static void decay_time(double *f, double fadd)
 {
-	*f = (fadd * .37 + *f) / 1.37;
+	double ratio = 0;
+
+	if (likely(*f > 0)) {
+		ratio = fadd / *f;
+		if (ratio > 1)
+			ratio = 1 / ratio;
+	}
+
+	if (ratio > 0.9)
+		*f = (fadd * 0.1 + *f) / 1.1;
+	else
+		*f = (fadd + *f * 0.1) / 1.1;
 }
 
 static int requests_staged(void)
