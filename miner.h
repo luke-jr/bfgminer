@@ -325,7 +325,6 @@ extern bool use_syslog;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
-extern pthread_mutex_t control_lock;
 
 #ifdef HAVE_OPENCL
 typedef struct {
@@ -423,8 +422,6 @@ extern bool tq_push(struct thread_q *tq, void *data);
 extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
-extern bool test_and_set(bool *var);
-extern bool test_and_clear(bool *var);
 extern bool successful_connect;
 extern enum cl_kernel chosen_kernel;
 

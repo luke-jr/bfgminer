@@ -1391,6 +1391,27 @@ static char statusline[256];
 static int cpucursor, gpucursor, logstart, logcursor;
 static struct cgpu_info *gpus, *cpus;
 
+static inline void unlock_curses(void)
+{
+	mutex_unlock(&curses_lock);
+}
+
+static inline void lock_curses(void)
+{
+	mutex_lock(&curses_lock);
+}
+
+static bool curses_active_locked(void)
+{
+	bool ret;
+
+	lock_curses();
+	ret = curses_active;
+	if (!ret)
+		unlock_curses();
+	return ret;
+}
+
 static void text_print_status(int thr_id)
 {
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
@@ -1483,13 +1504,11 @@ static void curses_print_status(int thr_id)
 
 static void print_status(int thr_id)
 {
-	if (!curses_active)
-		text_print_status(thr_id);
-	else {
-		mutex_lock(&curses_lock);
+	if (curses_active_locked()) {
 		curses_print_status(thr_id);
-		mutex_unlock(&curses_lock);
-	}
+		unlock_curses();
+	} else
+		text_print_status(thr_id);
 }
 
 /* Check for window resize. Called with curses mutex locked */
@@ -1523,14 +1542,13 @@ static void wlogprint(const char *f, ...)
 {
 	va_list ap;
 
-	mutex_lock(&curses_lock);
-
-	va_start(ap, f);
-	vw_printw(logwin, f, ap);
-	va_end(ap);
-	wrefresh(logwin);
-
-	mutex_unlock(&curses_lock);
+	if (curses_active_locked()) {
+		va_start(ap, f);
+		vw_printw(logwin, f, ap);
+		va_end(ap);
+		wrefresh(logwin);
+		unlock_curses();
+	}
 }
 
 void log_curses(int prio, const char *f, va_list ap)
@@ -1538,23 +1556,23 @@ void log_curses(int prio, const char *f, va_list ap)
 	if (opt_quiet && prio != LOG_ERR)
 		return;
 
-	if (curses_active) {
+	if (curses_active_locked()) {
 		if (!opt_loginput) {
-			mutex_lock(&curses_lock);
 			vw_printw(logwin, f, ap);
 			wrefresh(logwin);
-			mutex_unlock(&curses_lock);
 		}
+		unlock_curses();
 	} else
 		vprintf(f, ap);
 }
 
 static void clear_logwin(void)
 {
-	mutex_lock(&curses_lock);
-	wclear(logwin);
-	wrefresh(logwin);
-	mutex_unlock(&curses_lock);
+	if (curses_active_locked()) {
+		wclear(logwin);
+		wrefresh(logwin);
+		unlock_curses();
+	}
 }
 
 static bool submit_upstream_work(const struct work *work)
@@ -1765,7 +1783,8 @@ static void workio_cmd_free(struct workio_cmd *wc)
 
 static void disable_curses(void)
 {
-	if (test_and_clear(&curses_active)) {
+	if (curses_active_locked()) {
+		curses_active = false;
 		leaveok(logwin, false);
 		leaveok(statuswin, false);
 		leaveok(mainwin, false);
@@ -1775,8 +1794,7 @@ static void disable_curses(void)
 		delwin(statuswin);
 		delwin(mainwin);
 		endwin();
-		refresh();		
-		
+		refresh();
 #ifdef WIN32
 		// Move the cursor to after curses output.
 		HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -1789,6 +1807,7 @@ static void disable_curses(void)
 			SetConsoleCursorPosition(hout, coord);
 		}
 #endif
+		unlock_curses();
 	}
 }
 
@@ -2302,24 +2321,25 @@ static void display_pool_summary(struct pool *pool)
 {
 	double efficiency = 0.0;
 
-	mutex_lock(&curses_lock);
-	wlog("Pool: %s\n", pool->rpc_url);
-	wlog("%s long-poll support\n", pool->hdr_path ? "Has" : "Does not have");
-	wlog(" Queued work requests: %d\n", pool->getwork_requested);
-	wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
-	wlog(" Accepted shares: %d\n", pool->accepted);
-	wlog(" Rejected shares: %d\n", pool->rejected);
-	if (pool->accepted || pool->rejected)
-		wlog(" Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-	efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-	wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
+	if (curses_active_locked()) {
+		wlog("Pool: %s\n", pool->rpc_url);
+		wlog("%s long-poll support\n", pool->hdr_path ? "Has" : "Does not have");
+		wlog(" Queued work requests: %d\n", pool->getwork_requested);
+		wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
+		wlog(" Accepted shares: %d\n", pool->accepted);
+		wlog(" Rejected shares: %d\n", pool->rejected);
+		if (pool->accepted || pool->rejected)
+			wlog(" Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
+		efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
+		wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
 
-	wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
-	wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
-	wlog(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
-	wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
-	wrefresh(logwin);
-	mutex_unlock(&curses_lock);
+		wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
+		wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
+		wlog(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
+		wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
+		wrefresh(logwin);
+		unlock_curses();
+	}
 }
 
 /* We can't remove the memory used for this struct pool because there may
@@ -4138,15 +4158,14 @@ static void *watchdog_thread(void *userdata)
 
 		hashmeter(-1, &zero_tv, 0);
 
-		if (curses_active) {
-			mutex_lock(&curses_lock);
+		if (curses_active_locked()) {
 			for (i = 0; i < mining_threads; i++)
 				curses_print_status(i);
 			if (!change_logwinsize()) {
 				redrawwin(statuswin);
 				redrawwin(logwin);
 			}
-			mutex_unlock(&curses_lock);
+			unlock_curses();
 		}
 
 		gettimeofday(&now, NULL);
@@ -4480,8 +4499,11 @@ out:
 static void enable_curses(void) {
 	int x,y;
 
-	if (curses_active)
+	lock_curses();
+	if (curses_active) {
+		unlock_curses();
 		return;
+	}
 
 	mainwin = initscr();
 	getmaxyx(mainwin, y, x);
@@ -4493,7 +4515,8 @@ static void enable_curses(void) {
 	leaveok(logwin, true);
 	cbreak();
 	noecho();
-	test_and_set(&curses_active);
+	curses_active = true;
+	unlock_curses();
 }
 
 int main (int argc, char *argv[])
