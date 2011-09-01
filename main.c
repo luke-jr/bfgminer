@@ -5007,6 +5007,8 @@ int main (int argc, char *argv[])
 	get_datestamp(datestamp, &total_tv_start);
 
 #ifdef HAVE_OPENCL
+	bool failmessage = false;
+
 	/* start GPU mining threads */
 	for (i = 0; i < nDevs * opt_g_threads; i++) {
 		int gpu = i % nDevs;
@@ -5036,8 +5038,21 @@ int main (int argc, char *argv[])
 		applog(LOG_INFO, "Init GPU thread %i", i);
 		clStates[i] = initCl(gpu, name, sizeof(name));
 		if (!clStates[i]) {
-			applog(LOG_ERR, "Failed to init GPU thread %d", i);
-			gpu_devices[i] = false;
+			enable_curses();
+			applog(LOG_ERR, "Failed to init GPU thread %d, disabling device %d", i, gpu);
+			if (!failmessage) {
+				char *buf;
+
+				applog(LOG_ERR, "The most common reason for this failure is cgminer being unable to read the kernel .cl files");
+				applog(LOG_ERR, "You must either CD into the directory you are running cgminer from,");
+				applog(LOG_ERR, "or run it from a 'make install'ed location. ");
+				applog(LOG_ERR, "Alternatively if it has failed on different GPUs, restarting might help.");
+				failmessage = true;
+				buf = curses_input("Press enter to continue");
+				if (buf)
+					free(buf);
+			}
+			gpu_devices[gpu] = false;
 			continue;
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
