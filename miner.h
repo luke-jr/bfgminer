@@ -179,6 +179,7 @@ struct thr_info {
 	struct timeval last;
 	struct timeval sick;
 
+	bool	pause;
 	bool	getwork;
 	double	rolling;
 };

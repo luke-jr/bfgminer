@@ -304,6 +304,61 @@ struct thread_q *getq;
 static int total_work;
 struct work *staged_work = NULL;
 
+struct schedtime {
+	bool enable;
+	struct tm tm;
+};
+
+struct schedtime schedstart;
+struct schedtime schedstop;
+bool sched_paused;
+
+static bool time_before(struct tm *tm1, struct tm *tm2)
+{
+	if (tm1->tm_hour < tm2->tm_hour)
+		return true;
+	if (tm1->tm_hour == tm2->tm_hour && tm1->tm_min < tm2->tm_min)
+		return true;
+	return false;
+}
+
+static bool should_run(void)
+{
+	struct timeval tv;
+	struct tm tm;
+
+	if (!schedstart.enable && !schedstop.enable)
+		return true;
+
+	gettimeofday(&tv, NULL);
+	localtime_r(&tv.tv_sec, &tm);
+	if (schedstart.enable) {
+		if (!schedstop.enable) {
+			if (time_before(&tm, &schedstart.tm))
+				return false;
+
+			/* This is a once off event with no stop time set */
+			schedstart.enable = false;
+			return true;
+		}
+		if (time_before(&schedstart.tm, &schedstop.tm)) {
+			if (time_before(&tm, &schedstop.tm) && !time_before(&tm, &schedstart.tm))
+				return true;
+			return false;
+		} /* Times are reversed */
+		if (time_before(&tm, &schedstart.tm)) {
+			if (time_before(&tm, &schedstop.tm))
+				return true;
+			return false;
+		}
+		return true;
+	}
+	/* only schedstop.enable == true */
+	if (!time_before(&tm, &schedstop.tm))
+		return false;
+	return true;
+}
+
 void get_datestamp(char *f, struct timeval *tv)
 {
 	struct tm tm;
@@ -328,7 +383,6 @@ void get_timestamp(char *f, struct timeval *tv)
 		tm.tm_min,
 		tm.tm_sec);
 }
-
 
 static void applog_and_exit(const char *fmt, ...)
 {
@@ -1039,6 +1093,14 @@ static char *enable_debug(bool *flag)
 	return NULL;
 }
 
+static char *set_schedtime(const char *arg, struct schedtime *st)
+{
+	if (!strptime(arg, "%H:%M", &st->tm))
+		return "Invalid time set, should be HH:MM";
+	st->enable = true;
+	return NULL;
+}
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--algo|-a",
@@ -1154,6 +1216,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
+	OPT_WITH_ARG("--sched-start",
+		     set_schedtime, NULL, &schedstart,
+		     "Set a time of day in HH:MM to start mining (a once off without a stop time)"),
+	OPT_WITH_ARG("--sched-stop",
+		     set_schedtime, NULL, &schedstop,
+		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
 	OPT_WITH_ARG("--shares",
 		     opt_set_intval, NULL, &opt_shares,
 		     "Quit after mining N shares (default: unlimited)"),
@@ -3489,6 +3557,18 @@ static void *miner_thread(void *userdata)
 		} else if (work_restart[thr_id].restart || stale_work(work) ||
 			work->blk.nonce >= MAXTHREADS - hashes_done)
 				needs_work = true;
+
+		if (unlikely(mythr->pause)) {
+			applog(LOG_WARNING, "Thread %d being disabled", thr_id);
+			mythr->rolling = mythr->cgpu->rolling = 0;
+			if (opt_debug)
+				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
+
+			thread_reportout(mythr);
+			tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+			thread_reportin(mythr);
+			applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
+		}
 	}
 
 out:
@@ -3798,13 +3878,15 @@ static void *gpuminer_thread(void *userdata)
 				requested = true;
 			}
 		}
-		if (unlikely(!gpu_devices[gpu])) {
+		if (unlikely(!gpu_devices[gpu] || mythr->pause)) {
 			applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 			mythr->rolling = mythr->cgpu->rolling = 0;
 			if (opt_debug)
 				applog(LOG_DEBUG, "Popping wakeup ping in gpuminer thread");
 
+			thread_reportout(mythr);
 			tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+			thread_reportin(mythr);
 			applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
 		}
 	}
@@ -4182,7 +4264,43 @@ static void *watchdog_thread(void *userdata)
 			switch_pools(NULL);
 		}
 
-		//for (i = 0; i < mining_threads; i++) {
+		if (!sched_paused && !should_run()) {
+			applog(LOG_WARNING, "Pausing execution as per stop time %02d:%02d scheduled",
+			       schedstop.tm.tm_hour, schedstop.tm.tm_min);
+			if (!schedstart.enable) {
+				quit(0, "Terminating execution as planned");
+				break;
+			}
+
+			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
+			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
+			sched_paused = true;
+			for (i = 0; i < mining_threads; i++) {
+				struct thr_info *thr;
+				thr = &thr_info[i];
+
+				thr->pause = true;
+			}
+		} else if (sched_paused && should_run()) {
+			applog(LOG_WARNING, "Restarting execution as per start time %02d:%02d scheduled",
+				schedstart.tm.tm_hour, schedstart.tm.tm_min);
+			if (schedstop.enable)
+				applog(LOG_WARNING, "Will pause execution as scheduled at %02d:%02d",
+					schedstop.tm.tm_hour, schedstop.tm.tm_min);
+			sched_paused = false;
+
+			for (i = 0; i < mining_threads; i++) {
+				struct thr_info *thr;
+				thr = &thr_info[i];
+
+				/* Don't touch disabled GPUs */
+				if (thr->cgpu->is_gpu && !gpu_devices[thr->cgpu->cpu_gpu])
+					continue;
+				thr->pause = false;
+				tq_push(thr->q, &ping);
+			}
+		}
+
 		for (i = 0; i < gpu_threads; i++) {
 			struct thr_info *thr;
 			int gpu;
