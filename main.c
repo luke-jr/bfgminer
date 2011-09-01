@@ -1095,7 +1095,7 @@ static char *enable_debug(bool *flag)
 
 static char *set_schedtime(const char *arg, struct schedtime *st)
 {
-	if (!strptime(arg, "%H:%M", &st->tm))
+	if (sscanf(arg, "%d:%d", &st->tm.tm_hour, &st->tm.tm_min) != 2)
 		return "Invalid time set, should be HH:MM";
 	st->enable = true;
 	return NULL;
