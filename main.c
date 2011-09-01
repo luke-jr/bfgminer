@@ -1879,6 +1879,8 @@ static void disable_curses(void)
 	}
 }
 
+static void print_summary(void);
+
 void kill_work(void)
 {
 	struct workio_cmd *wc;
@@ -1928,7 +1930,13 @@ void kill_work(void)
 		applog(LOG_ERR, "Failed to tq_push work in kill_work");
 		exit (1);
 	}
+
+	thr = &thr_info[work_thr_id];
+	if (thr->pth)
+		pthread_cancel(*thr->pth);
 }
+
+void quit(int status, const char *format, ...);
 
 static void sighandler(int sig)
 {
@@ -1936,6 +1944,8 @@ static void sighandler(int sig)
 	sigaction(SIGTERM, &termhandler, NULL);
 	sigaction(SIGINT, &inthandler, NULL);
 	kill_work();
+
+	quit(sig, "Received interrupt signal.");
 }
 
 static void *get_work_thread(void *userdata)
@@ -2854,6 +2864,8 @@ static void *workio_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 	bool ok = true;
+
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	while (ok) {
 		struct workio_cmd *wc;
@@ -4432,6 +4444,10 @@ void quit(int status, const char *format, ...)
 	va_list ap;
 
 	disable_curses();
+
+	if (!opt_realquiet && successful_connect)
+		print_summary();
+
 	if (format) {
 		va_start(ap, format);
 		vfprintf(stderr, format, ap);
