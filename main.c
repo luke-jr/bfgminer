@@ -4961,8 +4961,21 @@ int main (int argc, char *argv[])
 		}
 	}
 
-	if (!pools_active)
-		quit(0, "No pools active! Exiting.");
+	if (!pools_active) {
+		enable_curses();
+		applog(LOG_ERR, "No servers were found that could be used to get work from.");
+		applog(LOG_ERR, "Please check the details from the list below of the servers you have input");
+		applog(LOG_ERR, "Most likely you have input the wrong URL, forgotten to add a port, or have not set up workers");
+		for (i = 0; i < total_pools; i++) {
+			struct pool *pool;
+
+			pool = pools[i];
+			applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
+			       i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
+		}
+		curses_input("Press enter to exit");
+		quit(0, "No servers could be used! Exiting.");
+	}
 
 	/* If we want longpoll, enable it for the chosen default pool, or, if
 	 * the pool does not support longpoll, find the first one that does
