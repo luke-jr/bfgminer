@@ -125,9 +125,6 @@ AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
 AC_CHECK_LIB(ncurses, addstr, NCURSES_LIBS=-lncurses)
 AC_CHECK_LIB(pdcurses, addstr, PDCURSES_LIBS=-lpdcurses)
 
-AC_CHECK_LIB(curl, curl_easy_init, ,
-	AC_MSG_ERROR([Could not find curl library - please install libcurl-dev]))
-
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
