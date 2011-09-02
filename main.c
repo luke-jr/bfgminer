@@ -262,7 +262,7 @@ enum block_change {
 
 static enum block_change block_changed = BLOCK_FIRST;
 static unsigned int local_work;
-static unsigned int total_lo, total_ro;
+static unsigned int total_go, total_ro;
 
 #define MAX_POOLS (32)
 
@@ -1510,9 +1510,9 @@ static void curses_print_status(int thr_id)
 	wprintw(statuswin, " %s", statusline);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 3,0);
-	wprintw(statuswin, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  LO: %d  RF: %d  I: %d",
+	wprintw(statuswin, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  I: %d",
 		total_queued, requests_staged(), total_stale, total_discarded, new_blocks,
-		local_work, total_lo, total_ro, scan_intensity);
+		local_work, total_go, total_ro, scan_intensity);
 	wclrtoeol(statuswin);
 	wmove(statuswin, 4, 0);
 	if (pool_strategy == POOL_LOADBALANCE && total_pools > 1)
@@ -2415,7 +2415,7 @@ static void display_pool_summary(struct pool *pool)
 
 		wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
 		wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
-		wlog(" Unable to get work from server occasions: %d\n", pool->localgen_occasions);
+		wlog(" Unable to get work from server occasions: %d\n", pool->getfail_occasions);
 		wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
 		wrefresh(logwin);
 		unlock_curses();
@@ -3261,8 +3261,8 @@ retry:
 		    !pool_tset(pool, &pool->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough",
 				pool->pool_no);
-			pool->localgen_occasions++;
-			total_lo++;
+			pool->getfail_occasions++;
+			total_go++;
 		}
 	}
 
@@ -4401,7 +4401,7 @@ static void print_summary(void)
 
 	applog(LOG_WARNING, "Discarded work due to new blocks: %d", total_discarded);
 	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %d", total_stale);
-	applog(LOG_WARNING, "Unable to get work from server occasions: %d", total_lo);
+	applog(LOG_WARNING, "Unable to get work from server occasions: %d", total_go);
 	applog(LOG_WARNING, "Work items generated locally: %d", local_work);
 	applog(LOG_WARNING, "Submitting work remotely delay occasions: %d", total_ro);
 	applog(LOG_WARNING, "New blocks detected on network: %d\n", new_blocks);
@@ -4422,7 +4422,7 @@ static void print_summary(void)
 
 			applog(LOG_WARNING, " Discarded work due to new blocks: %d", pool->discarded_work);
 			applog(LOG_WARNING, " Stale submissions discarded due to new blocks: %d", pool->stale_shares);
-			applog(LOG_WARNING, " Unable to get work from server occasions: %d", pool->localgen_occasions);
+			applog(LOG_WARNING, " Unable to get work from server occasions: %d", pool->getfail_occasions);
 			applog(LOG_WARNING, " Submitting work remotely delay occasions: %d\n", pool->remotefail_occasions);
 		}
 	}

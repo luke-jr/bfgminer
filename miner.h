@@ -368,7 +368,7 @@ struct pool {
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
 	unsigned int discarded_work;
-	unsigned int localgen_occasions;
+	unsigned int getfail_occasions;
 	unsigned int remotefail_occasions;
 	struct timeval tv_idle;
 
