@@ -1,3 +1,36 @@
+Version 1.6.2 - September 2, 2011
+
+- Add --failover-only option to not leak work to backup pools when the primary
+pool is lagging.
+- Change recommendation to intensity 9 for dedicated miners.
+- Fix the bouncing short term value by allowing it to change dynamically when
+the latest value is very different from the rolling value, but damp the change
+when it gets close.
+- Use the curses_lock to protect the curses_active variable and test it under
+lock.
+- Go back to requesting work 2/3 of the way through the current scantime with
+CPU mining as reports of mining threads running out of work have occurred with
+only 5 seconds to retrieve work.
+- Add start and stop time scheduling for regular time of day running or once off
+start/stop options.
+- Print summary on quit modes.
+- Put some sanity checks on the times that can be input.
+- Give a verbose message when no active pools are found and pause before
+exiting.
+- Add verbose message when a GPU fails to initialise, and disable the correct
+GPU.
+- Cryptopp asm32 was not correctly updated to the incremental nonce code so the
+hash counter was bogus.
+- Get rid of poorly executed curl check.
+- If curl does not have sockopts, do not try to compile the
+json_rpc_call_sockopt_cb function, making it possible to build against older
+curl libraries.
+- Most people expect /usr/local when an unspecified prefix is used so change to
+that.
+- Rename localgen occasions to getwork fail occasions since localgen is
+unrelated now.
+
+
 Version 1.6.1 - August 29, 2011
 
 - Copy cgminer path, not cat it.
