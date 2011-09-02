@@ -224,6 +224,7 @@ out:
 	return ptrlen;
 }
 
+#ifdef CURL_HAS_SOCKOPT
 int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purpose)
 {
 	int keepalive = 1;
@@ -270,6 +271,7 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 
 	return 0;
 }
+#endif
 
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
