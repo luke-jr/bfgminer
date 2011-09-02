@@ -88,6 +88,7 @@ Native WIN32 build instructions (on mingw32, on windows):
 
 Usage instructions:  Run "cgminer --help" to see options:
 
+Usage: ./cgminer [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
 Options for both config file and command line:
 --algo|-a <arg>     Specify sha256 implementation for CPU mining:
         auto            Benchmark at startup and pick fastest algorithm
@@ -102,9 +103,10 @@ Options for both config file and command line:
 --device|-d <arg>   Select device to use, (Use repeat -d for multiple devices, default: all)
 --disable-gpu|-G    Disable GPU mining even if suitable devices exist
 --enable-cpu|-C     Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)
+--failover-only     Don't leak work to backup pools when primary pool is lagging
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
 --intensity|-I <arg> Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)
---kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/bin")
+--kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/local/bin")
 --kernel|-k <arg>   Select kernel to use (poclbm or phatk - default: auto)
 --load-balance      Change multipool strategy from failover to even load balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
@@ -122,6 +124,8 @@ Options for both config file and command line:
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
+--sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
+--sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --submit-stale      Submit shares even if they would normally be considered stale
 --syslog            Use system log for output messages (default: standard error)
@@ -308,6 +312,15 @@ A: The more aggressively the mining software uses your GPU, the less overclock
 you will be able to run. You are more likely to hit your limits with cgminer
 and you will find you may need to overclock your GPU less aggressively. The
 software cannot be responsible and make your GPU hang directly.
+
+Q: The Queue total at the top is much more than the sum of all the Queued
+values in each device.
+A: The per-device queue value is only incremented when that device has
+requested work over any buffered amount of work, so with fewer devices this
+value may stay very small.
+
+Q: GUI version?
+A: No.
 
 ---
 
