@@ -212,7 +212,7 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([static int __attribute__((warn_unused_result)
                                     [Define if __attribute__((warn_unused_result))]))
 
 if test "x$prefix" = xNONE; then
-	prefix=/usr
+	prefix=/usr/local
 fi
 
 AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
