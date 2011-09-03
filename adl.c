@@ -228,6 +228,8 @@ void init_adl(int nDevs)
 		/* Set some default temperatures for autotune when enabled */
 		ga->targettemp = 75;
 		ga->overtemp = 85;
+		if (opt_autofan)
+			ga->autofan = true;
 
 		gpus[devices - 1].has_adl = true;
 	}

@@ -221,6 +221,7 @@ static bool opt_nogpu;
 static bool opt_usecpu;
 static int opt_shares;
 static bool opt_fail_only;
+bool opt_autofan;
 
 char *opt_kernel_path;
 
@@ -1131,6 +1132,11 @@ static struct opt_table opt_config_table[] = {
 		     "\n\tsse4_64\t\tSSE4.1 64 bit implementation for x86_64 machines"
 #endif
 		),
+#ifdef HAVE_ADL
+	OPT_WITHOUT_ARG("--auto-fan",
+			opt_set_bool, &opt_autofan,
+			"Automatically adjust all GPU fan speeds to maintain a target temperature"),
+#endif
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
