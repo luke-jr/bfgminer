@@ -503,12 +503,14 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 		return 1;
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
 		return 1;
+	ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
 	if ((ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_WRITE) &&
 		!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
 		/* Must convert speed to an RPM */
 		iFanSpeed = ga->lpFanSpeedInfo.iMaxRPM * iFanSpeed / 100;
 		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
-	}
+	} else
+		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
 	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
 	if (ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
 		return 1;
@@ -550,9 +552,9 @@ void change_gpusettings(int gpu)
 				return;
 		}
 		if (!set_fanspeed(gpu, val))
-			wlogprint("Successfully modified engine clock speed\n");
+			wlogprint("Successfully modified fan speed\n");
 		else
-			wlogprint("Failed to modify engine clock speed\n");
+			wlogprint("Failed to modify fan speed\n");
 	} else if (!strncasecmp(&input, "m", 1)) {
 		get_memoryrange(gpu, &imin, &imax);
 		wlogprint("Enter GPU memory clock speed (%d - %d Mhz)", imin, imax);
