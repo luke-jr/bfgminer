@@ -20,6 +20,10 @@ bool adl_active;
 
 #include "adl_functions.h"
 
+int opt_hysteresis = 5;
+int opt_targettemp = 75;
+int opt_overheattemp = 85;
+
 // Memory allocation function
 static void * __stdcall ADL_Main_Memory_Alloc(int iSize)
 {
@@ -232,8 +236,8 @@ void init_adl(int nDevs)
 		ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
 
 		/* Set some default temperatures for autotune when enabled */
-		ga->targettemp = 75;
-		ga->overtemp = 85;
+		ga->targettemp = opt_targettemp;
+		ga->overtemp = opt_overheattemp;
 		if (opt_autofan)
 			ga->autofan = true;
 		if (opt_autoengine)
@@ -328,7 +332,7 @@ int gpu_fanspeed(int gpu)
 	return ga->lpFanSpeedValue.iFanSpeed;
 }
 
-static int gpu_fanpercent(int gpu)
+int gpu_fanpercent(int gpu)
 {
 	struct gpu_adl *ga;
 
@@ -581,15 +585,15 @@ void gpu_autotune(int gpu)
 	ga = &gpus[gpu].adl;
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		if (temp > ga->overtemp && fanpercent < 100) {
-			applog(LOG_WARNING, "Overhead detected, increasing fan to 100%");
+			applog(LOG_WARNING, "Overheat detected, increasing fan to 100%");
 			newpercent = 100;
 		} else if (temp > ga->targettemp && fanpercent < 85) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 			newpercent = fanpercent + 5;
-		} else if (fanpercent && temp < ga->targettemp - 5) {
+		} else if (fanpercent && temp < ga->targettemp - opt_hysteresis) {
 			if (opt_debug)
-				applog(LOG_DEBUG, "Temperature 5 degrees below target, decreasing fanspeed");
+				applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
 			newpercent = fanpercent - 1;
 		}
 
@@ -608,9 +612,9 @@ void gpu_autotune(int gpu)
 		if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU clock speed");
 			newengine = ga->minspeed;
-		} else if (temp > ga->targettemp + 5 && engine > ga->minspeed && fan_optimal) {
+		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
 			if (opt_debug)
-				applog(LOG_DEBUG, "Temperature over target, decreasing clock speed");
+				applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
 		} else if (temp < ga->targettemp && engine < ga->maxspeed) {
 			if (opt_debug)

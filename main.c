@@ -967,6 +967,11 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
+static char *set_int_0_to_100(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 100);
+}
+
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
@@ -1246,7 +1251,17 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
-
+#ifdef HAVE_ADL
+	OPT_WITH_ARG("--temp-hysteresis",
+		     set_int_0_to_10, opt_show_intval, &opt_hysteresis,
+		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
+	OPT_WITH_ARG("--temp-overheat",
+		     set_int_0_to_100, opt_show_intval, &opt_overheattemp,
+		     "Set the overheat temperature when automatically managing fan and GPU speeds"),
+	OPT_WITH_ARG("--temp-target",
+		     set_int_0_to_100, opt_show_intval, &opt_targettemp,
+		     "Set the target temperature when automatically managing fan and GPU speeds"),
+#endif
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
 			"Disable ncurses formatted screen output"),
@@ -2764,8 +2779,8 @@ retry:
 			cgpu->efficiency, cgpu->utility);
 #ifdef HAVE_ADL
 		if (gpus[gpu].has_adl)
-			wlog("Temp: %.1f °C\nFan Speed: %d RPM\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
-			     gpu_temp(gpu), gpu_fanspeed(gpu), gpu_engineclock(gpu), gpu_memclock(gpu), gpu_vddc(gpu), gpu_activity(gpu));
+			wlog("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
+			     gpu_temp(gpu), gpu_fanpercent(gpu), gpu_fanspeed(gpu), gpu_engineclock(gpu), gpu_memclock(gpu), gpu_vddc(gpu), gpu_activity(gpu));
 #endif
 		wlog("Last initialised: %s\n", cgpu->init);
 		for (i = 0; i < mining_threads; i++) {
