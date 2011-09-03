@@ -1610,7 +1610,7 @@ static void wlog(const char *f, ...)
 }
 
 /* Mandatory printing */
-static void wlogprint(const char *f, ...)
+void wlogprint(const char *f, ...)
 {
 	va_list ap;
 
@@ -2372,9 +2372,7 @@ static void *stage_thread(void *userdata)
 	return NULL;
 }
 
-static char *curses_input(const char *query);
-
-static int curses_int(const char *query)
+int curses_int(const char *query)
 {
 	int ret;
 	char *cvar;
@@ -2783,7 +2781,8 @@ retry:
 		wlog("\n");
 	}
 
-	wlogprint("[E]nable [D]isable [R]estart GPU\n");
+	wlogprint("[E]nable [D]isable [R]estart GPU %s\n",adl_active ? "[C]hange settings" : "");
+
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
@@ -2826,6 +2825,13 @@ retry:
 		}
 		wlogprint("Attempting to restart threads of GPU %d\n", selected);
 		reinit_device(&gpus[selected]);
+	} else if (adl_active && (!strncasecmp(&input, "c", 1))) {
+		selected = curses_int("Select GPU to change settings on");
+		if (selected < 0 || selected >= nDevs) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		change_gpusettings(selected);
 	}
 
 	clear_logwin();
@@ -4331,10 +4337,6 @@ static void *watchdog_thread(void *userdata)
 				break;
 			thr = &thr_info[i];
 			gpu = thr->cgpu->cpu_gpu;
-#if 0
-			applog(LOG_WARNING, "Temp %d engine %d mem %d vddc %d activity %d fanspeed %d", gpu_temp(gpu), gpu_engineclock(gpu),
-				gpu_memclock(gpu), gpu_vddc(gpu), gpu_activity(gpu), gpu_fanspeed(gpu));
-#endif
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || !gpu_devices[gpu])
 				continue;
@@ -4471,7 +4473,7 @@ void quit(int status, const char *format, ...)
 	exit(status);
 }
 
-static char *curses_input(const char *query)
+char *curses_input(const char *query)
 {
 	char *input;
 

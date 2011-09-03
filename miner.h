@@ -443,7 +443,9 @@ enum cl_kernel {
 };
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
-
+extern void wlogprint(const char *f, ...);
+extern int curses_int(const char *query);
+extern char *curses_input(const char *query);
 extern void kill_work(void);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void vapplog(int prio, const char *fmt, va_list ap);

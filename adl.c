@@ -1,5 +1,8 @@
 #include "miner.h"
 #include "adl.h"
+
+bool adl_active;
+
 #ifdef HAVE_ADL
 #if defined (__linux)
  #include "ADL_SDK/adl_sdk.h"
@@ -13,6 +16,7 @@
 #endif
 
 #include <stdio.h>
+#include <curses.h>
 
 #include "adl_functions.h"
 
@@ -57,7 +61,6 @@ static	ADL_OVERDRIVE5_ODPERFORMANCELEVELS_GET	ADL_Overdrive5_ODPerformanceLevels
 static	ADL_OVERDRIVE5_ODPERFORMANCELEVELS_SET	ADL_Overdrive5_ODPerformanceLevels_Set;
 static	ADL_MAIN_CONTROL_REFRESH	ADL_Main_Control_Refresh;
 
-bool adl_active;
 #if defined (LINUX)
 	static void *hDLL;	// Handle to .so library
 #else
@@ -295,6 +298,89 @@ int gpu_fanspeed(int gpu)
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
 		return 0;
 	return ga->lpFanSpeedValue.iFanSpeed;
+}
+
+static void get_enginerange(int gpu, int *imin, int *imax)
+{
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Get enginerange not supported\n");
+		return;
+	}
+	ga = &gpus[gpu].adl;
+	*imin = ga->lpOdParameters.sEngineClock.iMin / 100;
+	*imax = ga->lpOdParameters.sEngineClock.iMax / 100;
+}
+
+static int set_engineclock(int gpu, int iEngineClock)
+{
+	ADLODPerformanceLevels *lpOdPerformanceLevels;
+	struct gpu_adl *ga;
+	int lev;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Set engineclock not supported\n");
+		return 1;
+	}
+
+	iEngineClock *= 100;
+	ga = &gpus[gpu].adl;
+	if (iEngineClock > ga->lpOdParameters.sEngineClock.iMax ||
+		iEngineClock < ga->lpOdParameters.sEngineClock.iMin)
+			return 1;
+
+	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
+	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
+	lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
+	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
+		return 1;
+	lpOdPerformanceLevels->aLevels[lev].iEngineClock = iEngineClock;
+	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
+		return 1;
+	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
+	/* Reset to old value if it fails! */
+	if (lpOdPerformanceLevels->aLevels[lev].iEngineClock != iEngineClock) {
+		/* Set all the parameters in case they're linked somehow */
+		lpOdPerformanceLevels->aLevels[lev].iEngineClock = ga->iEngineClock;
+		lpOdPerformanceLevels->aLevels[lev].iMemoryClock = ga->iMemoryClock;
+		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
+		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
+		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
+		return 1;
+	}
+	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
+	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
+	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
+	return 0;
+}
+
+void change_gpusettings(int gpu)
+{
+	int val, imin = 0, imax = 0;
+	char input;
+
+	wlogprint("Change [E]ngine\n");
+	wlogprint("Or press any other key to continue\n");
+	input = getch();
+
+	if (!strncasecmp(&input, "e", 1)) {
+		get_enginerange(gpu, &imin, &imax);
+		wlogprint("Enter GPU engine clock speed (%d - %d Mhz):", imin, imax);
+		val = curses_int("");
+		if (val < imin || val > imax) {
+			wlogprint("Value is outside safe range, are you sure?\n");
+			input = getch();
+			if (strncasecmp(&input, "y", 1))
+				return;
+		}
+		if (!set_engineclock(gpu, val))
+			wlogprint("Successfully modified clock speed\n");
+		else
+			wlogprint("Failed to modify clock speed\n");
+		wlogprint("Press any key to continue\n");
+		input = getch();
+	}
 }
 
 void clear_adl(void)
