@@ -3953,6 +3953,7 @@ static void *longpoll_thread(void *userdata)
 	struct pool *pool = current_pool();
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	pthread_detach(pthread_self());
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
@@ -4045,7 +4046,8 @@ static void stop_longpoll(void)
 	struct thr_info *thr = &thr_info[longpoll_thr_id];
 
 	tq_freeze(thr->q);
-	pthread_cancel(*thr->pth);
+	if (thr->pth)
+		pthread_cancel(*thr->pth);
 	have_longpoll = false;
 }
 
@@ -4056,7 +4058,6 @@ static void start_longpoll(void)
 	tq_thaw(thr->q);		
 	if (unlikely(thr_info_create(thr, NULL, longpoll_thread, thr)))
 		quit(1, "longpoll thread create failed");
-	pthread_detach(*thr->pth);
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing ping to longpoll thread");
 	tq_push(thr_info[longpoll_thr_id].q, &ping);
