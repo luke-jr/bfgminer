@@ -608,7 +608,7 @@ void gpu_autotune(int gpu)
 		if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU clock speed");
 			newengine = ga->minspeed;
-		} else if (temp > ga->targettemp && engine > ga->minspeed && fan_optimal) {
+		} else if (temp > ga->targettemp + 5 && engine > ga->minspeed && fan_optimal) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature over target, decreasing clock speed");
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
