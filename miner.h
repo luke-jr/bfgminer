@@ -50,6 +50,15 @@ void *alloca (size_t);
 # endif
 #endif
 
+#if defined (__linux)
+ #ifndef LINUX
+  #define LINUX
+ #endif
+#endif
+
+#ifdef HAVE_ADL
+ #include "ADL_SDK/adl_sdk.h"
+#endif
 
 #ifdef __SSE2__
 #define WANT_SSE2_4WAY 1
@@ -146,6 +155,22 @@ enum alive {
 	LIFE_DEAD,
 };
 
+#ifdef HAVE_ADL
+struct gpu_adl {
+	ADLTemperature lpTemperature;
+	int iAdapterIndex;
+	int lpAdapterID;
+	int lpStatus;
+	ADLPMActivity lpActivity;
+	ADLODParameters lpOdParameters;
+	ADLFanSpeedInfo lpFanSpeedInfo;
+	ADLFanSpeedValue lpFanSpeedValue;
+	int iEngineClock;
+	int iMemoryClock;
+	int iVddc;
+};
+#endif
+
 struct cgpu_info {
 	int is_gpu;
 	int cpu_gpu;
@@ -160,6 +185,11 @@ struct cgpu_info {
 	enum alive status;
 	char init[40];
 	struct timeval last_message_tv;
+
+#ifdef HAVE_ADL
+	bool has_adl;
+	struct gpu_adl adl;
+#endif
 };
 
 struct thread_q {
@@ -326,6 +356,7 @@ extern bool use_syslog;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
+extern struct cgpu_info *gpus;
 
 #ifdef HAVE_OPENCL
 typedef struct {
@@ -425,5 +456,6 @@ extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern enum cl_kernel chosen_kernel;
+extern void adl(void);
 
 #endif /* __MINER_H__ */

@@ -119,6 +119,12 @@ PTHREAD_LIBS=-lpthread
 
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 
+AC_CHECK_FILE([ADL_SDK/adl_sdk.h], have_adl=true, have_adl=false,)
+if test x$have_adl = xtrue
+then
+	AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
+fi
+
 AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
         AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev]))
 
@@ -255,6 +261,12 @@ if test "x$opencl" != xno; then
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
+fi
+
+if test x$have_adl = xtrue; then
+	echo "  ADL..................: SDK found, GPU monitoring support enabled"
+else
+	echo "  ADL..................: SDK NOT found, GPU monitoring support DISABLED"
 fi
 
 echo "  ASM..................: $has_yasm"

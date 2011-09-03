@@ -37,6 +37,7 @@
 #include "bench_block.h"
 #include "ocl.h"
 #include "uthash.h"
+#include "adl.h"
 
 #if defined(unix)
 	#include <errno.h>
@@ -1459,7 +1460,8 @@ static WINDOW *mainwin, *statuswin, *logwin;
 static double total_secs = 0.1;
 static char statusline[256];
 static int cpucursor, gpucursor, logstart, logcursor;
-static struct cgpu_info *gpus, *cpus;
+struct cgpu_info *gpus;
+static struct cgpu_info *cpus;
 
 static inline void unlock_curses(void)
 {
@@ -2752,6 +2754,11 @@ retry:
 			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
+#ifdef HAVE_ADL
+		if (gpus[gpu].has_adl)
+			wlog("Temp: %.1f °C\nFan Speed: %d RPM\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
+			     gpu_temp(gpu), gpu_fanspeed(gpu), gpu_engineclock(gpu), gpu_memclock(gpu), gpu_vddc(gpu), gpu_activity(gpu));
+#endif
 		wlog("Last initialised: %s\n", cgpu->init);
 		for (i = 0; i < mining_threads; i++) {
 			thr = &thr_info[i];
@@ -4324,7 +4331,10 @@ static void *watchdog_thread(void *userdata)
 				break;
 			thr = &thr_info[i];
 			gpu = thr->cgpu->cpu_gpu;
-
+#if 0
+			applog(LOG_WARNING, "Temp %d engine %d mem %d vddc %d activity %d fanspeed %d", gpu_temp(gpu), gpu_engineclock(gpu),
+				gpu_memclock(gpu), gpu_vddc(gpu), gpu_activity(gpu), gpu_fanspeed(gpu));
+#endif
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || !gpu_devices[gpu])
 				continue;
@@ -5007,6 +5017,7 @@ int main (int argc, char *argv[])
 	get_datestamp(datestamp, &total_tv_start);
 
 #ifdef HAVE_OPENCL
+	init_adl(nDevs);
 	bool failmessage = false;
 
 	/* start GPU mining threads */
@@ -5135,6 +5146,10 @@ int main (int argc, char *argv[])
 	disable_curses();
 	if (!opt_realquiet && successful_connect)
 		print_summary();
+
+#ifdef HAVE_OPENCL
+	clear_adl();
+#endif
 
 	if (gpu_threads)
 		free(gpus);
