@@ -163,8 +163,10 @@ struct gpu_adl {
 	int lpStatus;
 	ADLPMActivity lpActivity;
 	ADLODParameters lpOdParameters;
+	ADLODPerformanceLevels *DefPerfLev;
 	ADLFanSpeedInfo lpFanSpeedInfo;
 	ADLFanSpeedValue lpFanSpeedValue;
+	ADLFanSpeedValue DefFanSpeedValue;
 	int iEngineClock;
 	int iMemoryClock;
 	int iVddc;
@@ -296,6 +298,7 @@ extern bool opt_protocol;
 extern bool opt_log_output;
 extern char *opt_kernel_path;
 extern bool opt_autofan;
+extern bool opt_autoengine;
 
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
