@@ -355,12 +355,134 @@ static int set_engineclock(int gpu, int iEngineClock)
 	return 0;
 }
 
+static void get_memoryrange(int gpu, int *imin, int *imax)
+{
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Get memoryrange not supported\n");
+		return;
+	}
+	ga = &gpus[gpu].adl;
+	*imin = ga->lpOdParameters.sMemoryClock.iMin / 100;
+	*imax = ga->lpOdParameters.sMemoryClock.iMax / 100;
+}
+
+static int set_memoryclock(int gpu, int iMemoryClock)
+{
+	ADLODPerformanceLevels *lpOdPerformanceLevels;
+	struct gpu_adl *ga;
+	int lev;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Set memoryclock not supported\n");
+		return 1;
+	}
+
+	iMemoryClock *= 100;
+	ga = &gpus[gpu].adl;
+	if (iMemoryClock > ga->lpOdParameters.sMemoryClock.iMax ||
+		iMemoryClock < ga->lpOdParameters.sMemoryClock.iMin)
+			return 1;
+
+	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
+	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
+	lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
+	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
+		return 1;
+	lpOdPerformanceLevels->aLevels[lev].iMemoryClock = iMemoryClock;
+	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
+		return 1;
+	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
+	/* Reset to old value if it fails! */
+	if (lpOdPerformanceLevels->aLevels[lev].iMemoryClock != iMemoryClock) {
+		/* Set all the parameters in case they're linked somehow */
+		lpOdPerformanceLevels->aLevels[lev].iMemoryClock = ga->iEngineClock;
+		lpOdPerformanceLevels->aLevels[lev].iMemoryClock = ga->iMemoryClock;
+		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
+		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
+		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
+		return 1;
+	}
+	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
+	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
+	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
+	return 0;
+}
+
+static void get_vddcrange(int gpu, float *imin, float *imax)
+{
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Get vddcrange not supported\n");
+		return;
+	}
+	ga = &gpus[gpu].adl;
+	*imin = (float)ga->lpOdParameters.sVddc.iMin / 1000;
+	*imax = (float)ga->lpOdParameters.sVddc.iMax / 1000;
+}
+
+static float curses_float(const char *query)
+{
+	float ret;
+	char *cvar;
+
+	cvar = curses_input(query);
+	ret = atof(cvar);
+	free(cvar);
+	return ret;
+}
+
+static int set_vddc(int gpu, float fVddc)
+{
+	ADLODPerformanceLevels *lpOdPerformanceLevels;
+	struct gpu_adl *ga;
+	int iVddc, lev;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Set vddc not supported\n");
+		return 1;
+	}
+
+	iVddc = 1000 * fVddc;
+	ga = &gpus[gpu].adl;
+	if (iVddc > ga->lpOdParameters.sVddc.iMax ||
+		iVddc < ga->lpOdParameters.sVddc.iMin)
+			return 1;
+
+	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
+	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
+	lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
+	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
+		return 1;
+	lpOdPerformanceLevels->aLevels[lev].iVddc = iVddc;
+	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
+		return 1;
+	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
+	/* Reset to old value if it fails! */
+	if (lpOdPerformanceLevels->aLevels[lev].iVddc != iVddc) {
+		/* Set all the parameters in case they're linked somehow */
+		lpOdPerformanceLevels->aLevels[lev].iEngineClock = ga->iEngineClock;
+		lpOdPerformanceLevels->aLevels[lev].iMemoryClock = ga->iMemoryClock;
+		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
+		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
+		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
+		return 1;
+	}
+	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
+	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
+	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
+	return 0;
+}
+
 void change_gpusettings(int gpu)
 {
 	int val, imin = 0, imax = 0;
+	float fval, fmin = 0, fmax = 0;
 	char input;
 
-	wlogprint("Change [E]ngine\n");
+	wlogprint("Change [E]ngine [M]emory [V]oltage\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
@@ -375,12 +497,40 @@ void change_gpusettings(int gpu)
 				return;
 		}
 		if (!set_engineclock(gpu, val))
-			wlogprint("Successfully modified clock speed\n");
+			wlogprint("Successfully modified engine clock speed\n");
 		else
-			wlogprint("Failed to modify clock speed\n");
-		wlogprint("Press any key to continue\n");
-		input = getch();
+			wlogprint("Failed to modify engine clock speed\n");
+	} else if (!strncasecmp(&input, "m", 1)) {
+		get_memoryrange(gpu, &imin, &imax);
+		wlogprint("Enter GPU memory clock speed (%d - %d Mhz):", imin, imax);
+		val = curses_int("");
+		if (val < imin || val > imax) {
+			wlogprint("Value is outside safe range, are you sure?\n");
+			input = getch();
+			if (strncasecmp(&input, "y", 1))
+				return;
+		}
+		if (!set_memoryclock(gpu, val))
+			wlogprint("Successfully modified memory clock speed\n");
+		else
+			wlogprint("Failed to modify memory clock speed\n");
+	} else if (!strncasecmp(&input, "v", 1)) {
+		get_vddcrange(gpu, &fmin, &fmax);
+		wlogprint("Enter GPU voltage (%.3f - %.3f Mhz):", fmin, fmax);
+		fval = curses_float("");
+		if (fval < fmin || fval > fmax) {
+			wlogprint("Value is outside safe range, are you sure?\n");
+			input = getch();
+			if (strncasecmp(&input, "y", 1))
+				return;
+		}
+		if (!set_vddc(gpu, fval))
+			wlogprint("Successfully modified voltage\n");
+		else
+			wlogprint("Failed to modify voltage\n");
 	}
+	wlogprint("Press any key to continue\n");
+	input = getch();
 }
 
 void clear_adl(void)
