@@ -5163,7 +5163,7 @@ int main (int argc, char *argv[])
 		print_summary();
 
 #ifdef HAVE_OPENCL
-	clear_adl();
+	clear_adl(nDevs);
 #endif
 
 	if (gpu_threads)

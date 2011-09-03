@@ -190,6 +190,8 @@ void init_adl(int nDevs)
 		ga->iAdapterIndex = iAdapterIndex;
 		ga->lpAdapterID = lpAdapterID;
 		ga->lpStatus = lpStatus;
+		ga->DefPerfLev = NULL;
+
 		if (ADL_Overdrive5_ODParameters_Get(iAdapterIndex, &ga->lpOdParameters) != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ODParameters_Get");
 			continue;
@@ -653,8 +655,6 @@ void change_autosettings(int gpu)
 	struct gpu_adl *ga = &gpus[gpu].adl;
 	char input;
 
-	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");
-	wlogprint("GPU engine clock autotune is %s\n", ga->autoengine ? "enabled" : "disabled");
 	wlogprint("Target temperature: %d\n", ga->targettemp);
 	wlogprint("Overheat temperature: %d\n", ga->overtemp);
 	wlogprint("Toggle [F]an auto [G]PU auto, change [T]arget [O]verheat\n");
@@ -679,10 +679,15 @@ void change_autosettings(int gpu)
 
 void change_gpusettings(int gpu)
 {
-	int val, imin = 0, imax = 0;
+	struct gpu_adl *ga = &gpus[gpu].adl;
 	float fval, fmin = 0, fmax = 0;
+	int val, imin = 0, imax = 0;
 	char input;
 
+	wlogprint("Temp: %.1f °C\nFan Speed: %d RPM\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
+		gpu_temp(gpu), gpu_fanspeed(gpu), gpu_engineclock(gpu), gpu_memclock(gpu), gpu_vddc(gpu), gpu_activity(gpu));
+	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");
+	wlogprint("GPU engine clock autotune is %s\n", ga->autoengine ? "enabled" : "disabled");
 	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
@@ -750,10 +755,23 @@ void change_gpusettings(int gpu)
 	input = getch();
 }
 
-void clear_adl(void)
+void clear_adl(nDevs)
 {
+	struct gpu_adl *ga;
+	int i;
+
 	if (!adl_active)
 		return;
+
+	/* Try to reset values to their defaults */
+	for (i = 0; i < nDevs; i++) {
+		ga = &gpus[i].adl;
+		if (!gpus[i].has_adl)
+			continue;
+		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, ga->DefPerfLev);
+		free(ga->DefPerfLev);
+		ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
+	}
 
 	ADL_Main_Memory_Free ( (void **)&lpInfo );
 	ADL_Main_Control_Destroy ();
