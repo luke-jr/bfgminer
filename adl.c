@@ -295,6 +295,7 @@ int gpu_fanspeed(int gpu)
 	ga = &gpus[gpu].adl;
 	if (!(ga->lpFanSpeedInfo.iFlags & (ADL_DL_FANCTRL_SUPPORTS_RPM_READ | ADL_DL_FANCTRL_SUPPORTS_PERCENT_READ )))
 		return 0;
+	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
 		return 0;
 	return ga->lpFanSpeedValue.iFanSpeed;
