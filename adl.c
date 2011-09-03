@@ -476,19 +476,58 @@ static int set_vddc(int gpu, float fVddc)
 	return 0;
 }
 
+static void get_fanrange(int gpu, int *imin, int *imax)
+{
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Get fanrange not supported\n");
+		return;
+	}
+	ga = &gpus[gpu].adl;
+	*imin = ga->lpFanSpeedInfo.iMinPercent;
+	*imax = ga->lpFanSpeedInfo.iMaxPercent;
+}
+
+static int set_fanspeed(int gpu, int iFanSpeed)
+{
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Set fanspeed not supported\n");
+		return 1;
+	}
+
+	ga = &gpus[gpu].adl;
+	if (!(ga->lpFanSpeedInfo.iFlags & (ADL_DL_FANCTRL_SUPPORTS_RPM_WRITE | ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE )))
+		return 1;
+	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
+		return 1;
+	if ((ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_WRITE) &&
+		!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
+		/* Must convert speed to an RPM */
+		iFanSpeed = ga->lpFanSpeedInfo.iMaxRPM * iFanSpeed / 100;
+		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
+	}
+	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
+	if (ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
+		return 1;
+	return 0;
+}
+
 void change_gpusettings(int gpu)
 {
 	int val, imin = 0, imax = 0;
 	float fval, fmin = 0, fmax = 0;
 	char input;
 
-	wlogprint("Change [E]ngine [M]emory [V]oltage\n");
+	wlogprint("Change [E]ngine [F]an [M]emory [V]oltage\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
 	if (!strncasecmp(&input, "e", 1)) {
 		get_enginerange(gpu, &imin, &imax);
-		wlogprint("Enter GPU engine clock speed (%d - %d Mhz):", imin, imax);
+		wlogprint("Enter GPU engine clock speed (%d - %d Mhz)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
@@ -500,9 +539,23 @@ void change_gpusettings(int gpu)
 			wlogprint("Successfully modified engine clock speed\n");
 		else
 			wlogprint("Failed to modify engine clock speed\n");
+	} else 	if (!strncasecmp(&input, "f", 1)) {
+		get_fanrange(gpu, &imin, &imax);
+		wlogprint("Enter fan percentage (%d - %d %)", imin, imax);
+		val = curses_int("");
+		if (val < imin || val > imax) {
+			wlogprint("Value is outside safe range, are you sure?\n");
+			input = getch();
+			if (strncasecmp(&input, "y", 1))
+				return;
+		}
+		if (!set_fanspeed(gpu, val))
+			wlogprint("Successfully modified engine clock speed\n");
+		else
+			wlogprint("Failed to modify engine clock speed\n");
 	} else if (!strncasecmp(&input, "m", 1)) {
 		get_memoryrange(gpu, &imin, &imax);
-		wlogprint("Enter GPU memory clock speed (%d - %d Mhz):", imin, imax);
+		wlogprint("Enter GPU memory clock speed (%d - %d Mhz)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
@@ -516,7 +569,7 @@ void change_gpusettings(int gpu)
 			wlogprint("Failed to modify memory clock speed\n");
 	} else if (!strncasecmp(&input, "v", 1)) {
 		get_vddcrange(gpu, &fmin, &fmax);
-		wlogprint("Enter GPU voltage (%.3f - %.3f Mhz):", fmin, fmax);
+		wlogprint("Enter GPU voltage (%.3f - %.3f V)", fmin, fmax);
 		fval = curses_float("");
 		if (fval < fmin || fval > fmax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
