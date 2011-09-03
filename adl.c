@@ -199,18 +199,35 @@ void init_adl(int nDevs)
 		/* We're only interested in the top performance level */
 		lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
 		lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
-		if (ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK) {
+
+		/* Get default performance levels first */
+		if (ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 1, lpOdPerformanceLevels) != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ODPerformanceLevels_Get");
 			continue;
 		}
+		/* Set the limits we'd use based on default gpu speeds */
+		ga->maxspeed = ga->minspeed = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
+
+		/* Now get the current performance levels for any existing overclock */
+		ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels);
 		ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 		ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 		ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
+
+		/* Now use any parameters already set outside default as limits */
+		if (ga->iEngineClock < ga->minspeed)
+			ga->minspeed = ga->iEngineClock;
+		if (ga->iEngineClock > ga->maxspeed)
+			ga->maxspeed = ga->iEngineClock;
 
 		if (ADL_Overdrive5_FanSpeedInfo_Get(iAdapterIndex, 0, &ga->lpFanSpeedInfo) != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_FanSpeedInfo_Get");
 			continue;
 		}
+
+		/* Set some default temperatures for autotune when enabled */
+		ga->targettemp = 75;
+		ga->overtemp = 85;
 
 		gpus[devices - 1].has_adl = true;
 	}
@@ -293,11 +310,27 @@ int gpu_fanspeed(int gpu)
 		return 0;
 
 	ga = &gpus[gpu].adl;
-	if (!(ga->lpFanSpeedInfo.iFlags & (ADL_DL_FANCTRL_SUPPORTS_RPM_READ | ADL_DL_FANCTRL_SUPPORTS_PERCENT_READ )))
+	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_READ))
 		return 0;
 	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
 		return 0;
+	return ga->lpFanSpeedValue.iFanSpeed;
+}
+
+static int gpu_fanpercent(int gpu)
+{
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active)
+		return -1;
+
+	ga = &gpus[gpu].adl;
+	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_READ ))
+		return -1;
+	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
+	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
+		return -1;
 	return ga->lpFanSpeedValue.iFanSpeed;
 }
 
@@ -518,17 +551,74 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 	return 0;
 }
 
+void gpu_autotune(int gpu)
+{
+	struct gpu_adl *ga;
+	int temp, fanpercent;
+
+	if (!gpus[gpu].has_adl || !adl_active)
+		return;
+
+	temp = gpu_temp(gpu);
+	if (!temp)
+		return;
+	fanpercent = gpu_fanpercent(gpu);
+	if (fanpercent < 0)
+		return;
+
+	ga = &gpus[gpu].adl;
+	if (temp > ga->overtemp) {
+		applog(LOG_WARNING, "Overhead detected, increasing fan to 100%");
+		set_fanspeed(gpu, 100);
+		return;
+	}
+	if (temp > ga->targettemp && fanpercent < 85) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
+		set_fanspeed(gpu, fanpercent + 5);
+		return;
+	}
+	if (fanpercent && temp < ga->targettemp - 5) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Temperature 5 degrees below target, decreasing fanspeed");
+		set_fanspeed(gpu, fanpercent - 1);
+	}
+}
+
+void change_autosettings(int gpu)
+{
+	struct gpu_adl *ga = &gpus[gpu].adl;
+	char input;
+
+	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");
+	wlogprint("Target temperature: %d\n", ga->targettemp);
+	wlogprint("Overheat temperature: %d\n", ga->overtemp);
+	wlogprint("Change [F]an [T]arget [O]verheat\n");
+	wlogprint("Or press any other key to continue\n");
+	input = getch();
+		if (!strncasecmp(&input, "f", 1)) {
+			ga->autofan ^= true;
+		wlogprint("Fan autotune is now %s\n", ga->autofan ? "enabled" : "disabled");
+		if (!ga->autofan) {
+			wlogprint("Setting fan to 85 %% as safety precaution\n");
+			set_fanspeed(gpu, 85);
+		}
+	}
+}
+
 void change_gpusettings(int gpu)
 {
 	int val, imin = 0, imax = 0;
 	float fval, fmin = 0, fmax = 0;
 	char input;
 
-	wlogprint("Change [E]ngine [F]an [M]emory [V]oltage\n");
+	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
-	if (!strncasecmp(&input, "e", 1)) {
+	if (!strncasecmp(&input, "a", 1)) {
+		change_autosettings(gpu);
+	} else if (!strncasecmp(&input, "e", 1)) {
 		get_enginerange(gpu, &imin, &imax);
 		wlogprint("Enter GPU engine clock speed (%d - %d Mhz)", imin, imax);
 		val = curses_int("");
@@ -542,7 +632,7 @@ void change_gpusettings(int gpu)
 			wlogprint("Successfully modified engine clock speed\n");
 		else
 			wlogprint("Failed to modify engine clock speed\n");
-	} else 	if (!strncasecmp(&input, "f", 1)) {
+	} else if (!strncasecmp(&input, "f", 1)) {
 		get_fanrange(gpu, &imin, &imax);
 		wlogprint("Enter fan percentage (%d - %d %)", imin, imax);
 		val = curses_int("");

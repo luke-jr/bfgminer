@@ -168,6 +168,13 @@ struct gpu_adl {
 	int iEngineClock;
 	int iMemoryClock;
 	int iVddc;
+
+	bool autofan;
+	bool autoengine;
+	int targettemp;
+	int overtemp;
+	int minspeed;
+	int maxspeed;
 };
 #endif
 

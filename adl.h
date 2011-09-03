@@ -10,10 +10,12 @@ float gpu_vddc(int gpu);
 int gpu_activity(int gpu);
 int gpu_fanspeed(int gpu);
 void change_gpusettings(int gpu);
+void gpu_autotune(int gpu);
 void clear_adl(void);
 #else /* HAVE_ADL */
 void init_adl(int nDevs) {}
 void change_gpusettings(int gpu) { }
+void gpu_autotune(int gpu) { }
 void clear_adl(void) {}
 #endif
 #endif

@@ -4337,6 +4337,8 @@ static void *watchdog_thread(void *userdata)
 				break;
 			thr = &thr_info[i];
 			gpu = thr->cgpu->cpu_gpu;
+			if (adl_active)
+				gpu_autotune(gpu);
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || !gpu_devices[gpu])
 				continue;
