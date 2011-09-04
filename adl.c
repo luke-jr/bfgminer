@@ -249,6 +249,13 @@ void init_adl(int nDevs)
 	adl_active = true;
 }
 
+static inline float __gpu_temp(struct gpu_adl *ga)
+{
+	if (ADL_Overdrive5_Temperature_Get(ga->iAdapterIndex, 0, &ga->lpTemperature) != ADL_OK)
+		return 0;
+	return (float)ga->lpTemperature.iTemperature / 1000;
+}
+
 float gpu_temp(int gpu)
 {
 	struct gpu_adl *ga;
@@ -257,9 +264,12 @@ float gpu_temp(int gpu)
 		return 0;
 
 	ga = &gpus[gpu].adl;
-	if (ADL_Overdrive5_Temperature_Get(ga->iAdapterIndex, 0, &ga->lpTemperature) != ADL_OK)
-		return 0;
-	return (float)ga->lpTemperature.iTemperature / 1000;
+	return __gpu_temp(ga);
+}
+
+static inline int __gpu_engineclock(struct gpu_adl *ga)
+{
+	return ga->lpActivity.iEngineClock / 100;
 }
 
 int gpu_engineclock(int gpu)
@@ -272,7 +282,12 @@ int gpu_engineclock(int gpu)
 	ga = &gpus[gpu].adl;
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
 		return 0;
-	return ga->lpActivity.iEngineClock / 100;
+	return __gpu_engineclock(ga);
+}
+
+static inline int __gpu_memclock(struct gpu_adl *ga)
+{
+	return ga->lpActivity.iMemoryClock / 100;
 }
 
 int gpu_memclock(int gpu)
@@ -285,7 +300,12 @@ int gpu_memclock(int gpu)
 	ga = &gpus[gpu].adl;
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
 		return 0;
-	return ga->lpActivity.iMemoryClock / 100;
+	return __gpu_memclock(ga);
+}
+
+static inline float __gpu_vddc(struct gpu_adl *ga)
+{
+	return (float)ga->lpActivity.iVddc / 1000;
 }
 
 float gpu_vddc(int gpu)
@@ -298,7 +318,14 @@ float gpu_vddc(int gpu)
 	ga = &gpus[gpu].adl;
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
 		return 0;
-	return (float)ga->lpActivity.iVddc / 1000;
+	return __gpu_vddc(ga);
+}
+
+static inline int __gpu_activity(struct gpu_adl *ga)
+{
+	if (!ga->lpOdParameters.iActivityReportingSupported)
+		return 0;
+	return ga->lpActivity.iActivityPercent;
 }
 
 int gpu_activity(int gpu)
@@ -309,11 +336,19 @@ int gpu_activity(int gpu)
 		return 0;
 
 	ga = &gpus[gpu].adl;
-	if (!ga->lpOdParameters.iActivityReportingSupported)
-		return 0;
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
 		return 0;
-	return ga->lpActivity.iActivityPercent;
+	return __gpu_activity(ga);
+}
+
+static inline int __gpu_fanspeed(struct gpu_adl *ga)
+{
+	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_READ))
+		return 0;
+	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
+	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
+		return 0;
+	return ga->lpFanSpeedValue.iFanSpeed;
 }
 
 int gpu_fanspeed(int gpu)
@@ -324,11 +359,16 @@ int gpu_fanspeed(int gpu)
 		return 0;
 
 	ga = &gpus[gpu].adl;
-	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_READ))
-		return 0;
-	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
+	return __gpu_fanspeed(ga);
+}
+
+static inline int __gpu_fanpercent(struct gpu_adl *ga)
+{
+	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_READ ))
+		return -1;
+	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
-		return 0;
+		return -1;
 	return ga->lpFanSpeedValue.iFanSpeed;
 }
 
@@ -340,12 +380,34 @@ int gpu_fanpercent(int gpu)
 		return -1;
 
 	ga = &gpus[gpu].adl;
-	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_READ ))
-		return -1;
-	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
-	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
-		return -1;
-	return ga->lpFanSpeedValue.iFanSpeed;
+	return __gpu_fanpercent(ga);
+}
+
+bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
+	       int *activity, int *fanspeed, int *fanpercent)
+{
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active)
+		return false;
+
+	ga = &gpus[gpu].adl;
+	*temp = __gpu_temp(ga);
+	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK) {
+		*engineclock = 0;
+		*memclock = 0;
+		*vddc = 0;
+		*activity = 0;
+	} else {
+		*engineclock = __gpu_engineclock(ga);
+		*memclock = __gpu_memclock(ga);
+		*vddc = __gpu_vddc(ga);
+		*activity = __gpu_activity(ga);
+	}
+	*fanspeed = __gpu_fanspeed(ga);
+	*fanpercent = __gpu_fanpercent(ga);
+
+	return true;
 }
 
 static void get_enginerange(int gpu, int *imin, int *imax)
@@ -578,11 +640,11 @@ void gpu_autotune(int gpu)
 	if (!gpus[gpu].has_adl || !adl_active)
 		return;
 
-	temp = gpu_temp(gpu);
-	newpercent = fanpercent = gpu_fanpercent(gpu);
+	ga = &gpus[gpu].adl;
+	temp = __gpu_temp(ga);
+	newpercent = fanpercent = __gpu_fanpercent(ga);
 	newengine = engine = gpu_engineclock(gpu) * 100;
 
-	ga = &gpus[gpu].adl;
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		if (temp > ga->overtemp && fanpercent < 100) {
 			applog(LOG_WARNING, "Overheat detected, increasing fan to 100%");
@@ -687,9 +749,12 @@ void change_gpusettings(int gpu)
 	float fval, fmin = 0, fmax = 0;
 	int val, imin = 0, imax = 0;
 	char input;
+	int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0;
+	float temp = 0, vddc = 0;
 
-	wlogprint("Temp: %.1f °C\nFan Speed: %d RPM\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
-		gpu_temp(gpu), gpu_fanspeed(gpu), gpu_engineclock(gpu), gpu_memclock(gpu), gpu_vddc(gpu), gpu_activity(gpu));
+	if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent))
+	wlogprint("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
+		temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity);
 	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");
 	wlogprint("GPU engine clock autotune is %s\n", ga->autoengine ? "enabled" : "disabled");
 	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage\n");

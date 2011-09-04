@@ -2778,9 +2778,14 @@ retry:
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
 #ifdef HAVE_ADL
-		if (gpus[gpu].has_adl)
+		if (gpus[gpu].has_adl) {
+			int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0;
+			float temp = 0, vddc = 0;
+
+			if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent))
 			wlog("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
-			     gpu_temp(gpu), gpu_fanpercent(gpu), gpu_fanspeed(gpu), gpu_engineclock(gpu), gpu_memclock(gpu), gpu_vddc(gpu), gpu_activity(gpu));
+			     temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity);
+		}
 #endif
 		wlog("Last initialised: %s\n", cgpu->init);
 		for (i = 0; i < mining_threads; i++) {
