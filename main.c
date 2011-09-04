@@ -1166,6 +1166,34 @@ static char *set_gpu_memclock(char *arg)
 	return NULL;
 }
 
+static char *set_gpu_vddc(char *arg)
+{
+	int i, device = 0;
+	float val = 0;
+	char *saveptr = NULL, *nextptr;
+
+	nextptr = strtok_r(arg, ",", &saveptr);
+	if (nextptr == NULL)
+		return "Invalid parameters for set gpu vddc";
+	val = atof(nextptr);
+	if (val <= 0 || val >= 9999)
+		return "Invalid value passed to set_gpu_vddc";
+
+	gpus[device++].gpu_vddc = val;
+
+	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+		val = atoi(nextptr);
+		if (val <= 0 || val >= 9999)
+			return "Invalid value passed to set_gpu_vddc";
+
+		gpus[device++].gpu_vddc = val;
+	}
+	for (i = device; i < 16; i++)
+		gpus[i].gpu_vddc = val;
+
+	return NULL;
+}
+
 #endif
 
 /* These options are available from config file or commandline */
@@ -1235,6 +1263,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-memclock",
 		     set_gpu_memclock, NULL, NULL,
 		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card."),
+	OPT_WITH_ARG("--gpu-vddc",
+		     set_gpu_vddc, NULL, NULL,
+		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card."),
 #endif
 	OPT_WITH_ARG("--intensity|-I",
 		     forced_int_1010, NULL, &scan_intensity,

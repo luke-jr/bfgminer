@@ -200,6 +200,7 @@ struct cgpu_info {
 	struct gpu_adl adl;
 	int gpu_engine;
 	int gpu_memclock;
+	float gpu_vddc;
 #endif
 };
 
