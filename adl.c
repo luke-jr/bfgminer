@@ -461,6 +461,7 @@ bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vdd
 	}
 	*fanspeed = __gpu_fanspeed(ga);
 	*fanpercent = __gpu_fanpercent(ga);
+	*powertune = __gpu_powertune(ga);
 
 	return true;
 }
