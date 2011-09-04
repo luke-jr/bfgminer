@@ -734,6 +734,8 @@ void gpu_autotune(int gpu)
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 			newpercent = fanpercent + 5;
+			if (newpercent > 85)
+				newpercent = 85;
 		} else if (fanpercent && temp < ga->targettemp - opt_hysteresis) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
