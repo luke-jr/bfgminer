@@ -686,6 +686,26 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 	return 0;
 }
 
+static int set_powertune(int gpu, int iPercentage)
+{
+	int oldPercentage, dummy;
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active) {
+		wlogprint("Set powertune not supported\n");
+		return 1;
+	}
+
+	ga = &gpus[gpu].adl;
+	oldPercentage = ga->iPercentage;
+	if (ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, iPercentage) != ADL_OK) {
+		ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, ga->iPercentage);
+		return 1;
+	}
+	ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy);
+	return 0;
+}
+
 void gpu_autotune(int gpu)
 {
 	int temp, fanpercent, engine, newpercent, newengine;
@@ -834,7 +854,7 @@ void change_gpusettings(int gpu)
 		temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");
 	wlogprint("GPU engine clock autotune is %s\n", ga->autoengine ? "enabled" : "disabled");
-	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage\n");
+	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage [P]owertune\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
@@ -896,6 +916,18 @@ void change_gpusettings(int gpu)
 			wlogprint("Successfully modified voltage\n");
 		else
 			wlogprint("Failed to modify voltage\n");
+	} else if (!strncasecmp(&input, "p", 1)) {
+		val = curses_int("Enter powertune value (-20 - 20)");
+		if (val < -20 || val > 20) {
+			wlogprint("Value is outside safe range, are you sure?\n");
+			input = getch();
+			if (strncasecmp(&input, "y", 1))
+				return;
+		}
+		if (!set_powertune(gpu, val))
+			wlogprint("Successfully modified powertune value\n");
+		else
+			wlogprint("Failed to modify powertune value\n");
 	}
 	wlogprint("Press any key to continue\n");
 	input = getch();
