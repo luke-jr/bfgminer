@@ -1193,6 +1193,33 @@ static char *set_gpu_memclock(char *arg)
 	return NULL;
 }
 
+static char *set_gpu_powertune(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *saveptr = NULL, *nextptr;
+
+	nextptr = strtok_r(arg, ",", &saveptr);
+	if (nextptr == NULL)
+		return "Invalid parameters for set gpu powertune";
+	val = atoi(nextptr);
+	if (val < -99 || val > 99)
+		return "Invalid value passed to set_gpu_powertune";
+
+	gpus[device++].gpu_powertune = val;
+
+	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+		val = atoi(nextptr);
+		if (val < -99 || val > 99)
+			return "Invalid value passed to set_gpu_powertune";
+
+		gpus[device++].gpu_powertune = val;
+	}
+	for (i = device; i < 16; i++)
+		gpus[i].gpu_powertune = val;
+
+	return NULL;
+}
+
 static char *set_gpu_vddc(char *arg)
 {
 	int i, device = 0;
@@ -1293,6 +1320,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-memclock",
 		     set_gpu_memclock, NULL, NULL,
 		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card."),
+	OPT_WITH_ARG("--gpu-powertune",
+		     set_gpu_powertune, NULL, NULL,
+		     "Set the GPU powertune percentage - one value for all or separate by commas for per card."),
 	OPT_WITH_ARG("--gpu-vddc",
 		     set_gpu_vddc, NULL, NULL,
 		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card."),

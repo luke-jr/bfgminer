@@ -270,6 +270,11 @@ void init_adl(int nDevs)
 		if (ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_PowerControl_get");
 
+		if (gpus[gpu].gpu_powertune) {
+			ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, gpus[gpu].gpu_powertune);
+			ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy);
+		}
+
 		/* Set some default temperatures for autotune when enabled */
 		ga->targettemp = opt_targettemp;
 		ga->overtemp = opt_overheattemp;
