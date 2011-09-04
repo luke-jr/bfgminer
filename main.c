@@ -1139,6 +1139,33 @@ static char *set_gpu_engine(char *arg)
 	return NULL;
 }
 
+static char *set_gpu_memclock(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *saveptr = NULL, *nextptr;
+
+	nextptr = strtok_r(arg, ",", &saveptr);
+	if (nextptr == NULL)
+		return "Invalid parameters for set gpu memclock";
+	val = atoi(nextptr);
+	if (val <= 0 || val >= 9999)
+		return "Invalid value passed to set_gpu_memclock";
+
+	gpus[device++].gpu_memclock = val;
+
+	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+		val = atoi(nextptr);
+		if (val <= 0 || val >= 9999)
+			return "Invalid value passed to set_gpu_memclock";
+
+		gpus[device++].gpu_memclock = val;
+	}
+	for (i = device; i < 16; i++)
+		gpus[i].gpu_memclock = val;
+
+	return NULL;
+}
+
 #endif
 
 /* These options are available from config file or commandline */
@@ -1205,6 +1232,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-engine",
 		     set_gpu_engine, NULL, NULL,
 		     "Set the GPU engine (over)clock in Mhz - one value for all or separate by commas for per card."),
+	OPT_WITH_ARG("--gpu-memclock",
+		     set_gpu_memclock, NULL, NULL,
+		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card."),
 #endif
 	OPT_WITH_ARG("--intensity|-I",
 		     forced_int_1010, NULL, &scan_intensity,

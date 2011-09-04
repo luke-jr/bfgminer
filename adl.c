@@ -221,11 +221,16 @@ void init_adl(int nDevs)
 		ga->DefPerfLev = lpOdPerformanceLevels;
 
 		if (gpus[gpu].gpu_engine) {
-			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, gpus[gpu].gpu_engine);
 			lpOdPerformanceLevels->aLevels[lev].iEngineClock = gpus[gpu].gpu_engine * 100;
+			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, gpus[gpu].gpu_engine);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
-			ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels);
 		}
+		if (gpus[gpu].gpu_memclock) {
+			lpOdPerformanceLevels->aLevels[lev].iMemoryClock = gpus[gpu].gpu_memclock * 100;
+			applog(LOG_INFO, "Setting GPU %d memory clock to %d", gpu, gpus[gpu].gpu_memclock);
+			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
+		}
+		ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels);
 		ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 		ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 		ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
