@@ -720,10 +720,12 @@ void change_autosettings(int gpu)
 {
 	struct gpu_adl *ga = &gpus[gpu].adl;
 	char input;
+	int val;
 
 	wlogprint("Target temperature: %d\n", ga->targettemp);
 	wlogprint("Overheat temperature: %d\n", ga->overtemp);
-	wlogprint("Toggle [F]an auto [G]PU auto, change [T]arget [O]verheat\n");
+	wlogprint("Hysteresis differece: %d\n", opt_hysteresis);
+	wlogprint("Toggle [F]an auto [G]PU auto\nChange [T]arget [O]verheat [H]ysteresis\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 	if (!strncasecmp(&input, "f", 1)) {
@@ -740,6 +742,25 @@ void change_autosettings(int gpu)
 			wlogprint("Resetting GPU engine clock to startup settings\n");
 			set_defaultengine(gpu);
 		}
+	} else if (!strncasecmp(&input, "t", 1)) {
+		val = curses_int("Enter target temperature for this GPU in °C (0-100)");
+		if (val < 0 || val > 100)
+			wlogprint("Invalid temperature");
+		else
+			ga->targettemp = val;
+	} else if (!strncasecmp(&input, "o", 1)) {
+		wlogprint("Enter oveheat temperature for this GPU in °C (%d-100)", ga->targettemp);
+		val = curses_int("");
+		if (val <= ga->targettemp || val > 100)
+			wlogprint("Invalid temperature");
+		else
+			ga->overtemp = val;
+	} else if (!strncasecmp(&input, "h", 1)) {
+		val = curses_int("Enter hysteresis temperature difference (0-10)");
+		if (val < 1 || val > 10)
+			wlogprint("Invalid value");
+		else
+			opt_hysteresis = val;
 	}
 }
 

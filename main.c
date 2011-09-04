@@ -1253,7 +1253,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--temp-hysteresis",
-		     set_int_0_to_10, opt_show_intval, &opt_hysteresis,
+		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
 	OPT_WITH_ARG("--temp-overheat",
 		     set_int_0_to_100, opt_show_intval, &opt_overheattemp,
