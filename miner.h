@@ -170,6 +170,7 @@ struct gpu_adl {
 	int iEngineClock;
 	int iMemoryClock;
 	int iVddc;
+	int iPercentage;
 
 	bool autofan;
 	bool autoengine;

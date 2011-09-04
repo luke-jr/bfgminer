@@ -2905,12 +2905,13 @@ retry:
 			cgpu->efficiency, cgpu->utility);
 #ifdef HAVE_ADL
 		if (gpus[gpu].has_adl) {
-			int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0;
+			int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
 			float temp = 0, vddc = 0;
 
-			if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent))
-			wlog("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
-			     temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity);
+			if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
+			wlog("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
+				"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
+			     temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 		}
 #endif
 		wlog("Last initialised: %s\n", cgpu->init);
@@ -4498,12 +4499,12 @@ static void *watchdog_thread(void *userdata)
 			if (adl_active)
 				gpu_autotune(gpu);
 			if (opt_debug && gpus[gpu].has_adl) {
-				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0;
+				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
 				float temp = 0, vddc = 0;
 
-				if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent))
-					applog(LOG_DEBUG, "T: %.1f°C  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%",
-					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity);
+				if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
+					applog(LOG_DEBUG, "T: %.1f°C  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%  P: %d%%",
+					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 			}
 #endif
 			/* Thread is waiting on getwork or disabled */

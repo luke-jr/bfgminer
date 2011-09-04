@@ -64,6 +64,8 @@ static	ADL_OVERDRIVE5_FANSPEED_SET	ADL_Overdrive5_FanSpeed_Set;
 static	ADL_OVERDRIVE5_ODPERFORMANCELEVELS_GET	ADL_Overdrive5_ODPerformanceLevels_Get;
 static	ADL_OVERDRIVE5_ODPERFORMANCELEVELS_SET	ADL_Overdrive5_ODPerformanceLevels_Set;
 static	ADL_MAIN_CONTROL_REFRESH	ADL_Main_Control_Refresh;
+static	ADL_OVERDRIVE5_POWERCONTROL_GET	ADL_Overdrive5_PowerControl_Get;
+static	ADL_OVERDRIVE5_POWERCONTROL_SET	ADL_Overdrive5_PowerControl_Set;
 
 #if defined (LINUX)
 	static void *hDLL;	// Handle to .so library
@@ -75,7 +77,7 @@ static LPAdapterInfo lpInfo = NULL;
 
 void init_adl(int nDevs)
 {
-	int i, devices = 0, last_adapter = -1, gpu = 0;
+	int i, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -106,6 +108,8 @@ void init_adl(int nDevs)
 	ADL_Overdrive5_ODPerformanceLevels_Get = (ADL_OVERDRIVE5_ODPERFORMANCELEVELS_GET) GetProcAddress(hDLL, "ADL_Overdrive5_ODPerformanceLevels_Get");
 	ADL_Overdrive5_ODPerformanceLevels_Set = (ADL_OVERDRIVE5_ODPERFORMANCELEVELS_SET) GetProcAddress(hDLL, "ADL_Overdrive5_ODPerformanceLevels_Set");
 	ADL_Main_Control_Refresh = (ADL_MAIN_CONTROL_REFRESH) GetProcAddress(hDLL, "ADL_Main_Control_Refresh");
+	ADL_Overdrive5_PowerControl_Get = (ADL_OVERDRIVE5_POWERCONTROL_GET) GetProcAddress(hDLL, "ADL_Overdrive5_PowerControl_Get");
+	ADL_Overdrive5_PowerControl_Set = (ADL_OVERDRIVE5_POWERCONTROL_SET) GetProcAddress(hDLL, "ADL_Overdrive5_PowerControl_Set");
 
 	if (!ADL_Main_Control_Create || !ADL_Main_Control_Destroy ||
 		!ADL_Adapter_NumberOfAdapters_Get || !ADL_Adapter_AdapterInfo_Get ||
@@ -114,8 +118,9 @@ void init_adl(int nDevs)
 		!ADL_Overdrive5_ODParameters_Get || !ADL_Overdrive5_FanSpeedInfo_Get ||
 		!ADL_Overdrive5_FanSpeed_Get || !ADL_Overdrive5_FanSpeed_Set ||
 		!ADL_Overdrive5_ODPerformanceLevels_Get || !ADL_Overdrive5_ODPerformanceLevels_Set ||
-		!ADL_Main_Control_Refresh) {
-			applog(LOG_INFO, "ATI ADL's API is missing");
+		!ADL_Main_Control_Refresh || !ADL_Overdrive5_PowerControl_Get ||
+		!ADL_Overdrive5_PowerControl_Set) {
+			applog(LOG_WARNING, "ATI ADL's API is missing");
 		return;
 	}
 
@@ -260,6 +265,10 @@ void init_adl(int nDevs)
 			applog(LOG_INFO, "Setting GPU %d fan speed to %d%%", gpu, gpus[gpu].gpu_fan);
 			ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
 		}
+
+		/* Not fatal if powercontrol get fails */
+		if (ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy) != ADL_OK)
+			applog(LOG_INFO, "Failed to ADL_Overdrive5_PowerControl_get");
 
 		/* Set some default temperatures for autotune when enabled */
 		ga->targettemp = opt_targettemp;
@@ -409,8 +418,28 @@ int gpu_fanpercent(int gpu)
 	return __gpu_fanpercent(ga);
 }
 
+static inline int __gpu_powertune(struct gpu_adl *ga)
+{
+	int dummy = 0;
+
+	if (ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy) != ADL_OK)
+		return 0;
+	return ga->iPercentage;
+}
+
+int gpu_powertune(int gpu)
+{
+	struct gpu_adl *ga;
+
+	if (!gpus[gpu].has_adl || !adl_active)
+		return -1;
+
+	ga = &gpus[gpu].adl;
+	return __gpu_powertune(ga);
+}
+
 bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
-	       int *activity, int *fanspeed, int *fanpercent)
+	       int *activity, int *fanspeed, int *fanpercent, int *powertune)
 {
 	struct gpu_adl *ga;
 
@@ -796,12 +825,13 @@ void change_gpusettings(int gpu)
 	float fval, fmin = 0, fmax = 0;
 	int val, imin = 0, imax = 0;
 	char input;
-	int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0;
+	int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
 	float temp = 0, vddc = 0;
 
-	if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent))
-	wlogprint("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\n",
-		temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity);
+	if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
+	wlogprint("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
+		"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
+		temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");
 	wlogprint("GPU engine clock autotune is %s\n", ga->autoengine ? "enabled" : "disabled");
 	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage\n");
