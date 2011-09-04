@@ -252,6 +252,14 @@ void init_adl(int nDevs)
 
 		/* Save the fanspeed values as defaults in case we reset later */
 		ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
+		if (gpus[gpu].gpu_fan) {
+			ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
+			ga->lpFanSpeedValue.iFanSpeed = gpus[gpu].gpu_fan;
+			ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
+			ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
+			applog(LOG_INFO, "Setting GPU %d fan speed to %d%%", gpu, gpus[gpu].gpu_fan);
+			ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
+		}
 
 		/* Set some default temperatures for autotune when enabled */
 		ga->targettemp = opt_targettemp;

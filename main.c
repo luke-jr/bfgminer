@@ -1139,6 +1139,33 @@ static char *set_gpu_engine(char *arg)
 	return NULL;
 }
 
+static char *set_gpu_fan(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *saveptr = NULL, *nextptr;
+
+	nextptr = strtok_r(arg, ",", &saveptr);
+	if (nextptr == NULL)
+		return "Invalid parameters for set gpu fan";
+	val = atoi(nextptr);
+	if (val < 0 || val > 100)
+		return "Invalid value passed to set_gpu_fan";
+
+	gpus[device++].gpu_fan = val;
+
+	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+		val = atoi(nextptr);
+		if (val < 0 || val > 100)
+			return "Invalid value passed to set_gpu_fan";
+
+		gpus[device++].gpu_fan = val;
+	}
+	for (i = device; i < 16; i++)
+		gpus[i].gpu_fan = val;
+
+	return NULL;
+}
+
 static char *set_gpu_memclock(char *arg)
 {
 	int i, val = 0, device = 0;
@@ -1260,6 +1287,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-engine",
 		     set_gpu_engine, NULL, NULL,
 		     "Set the GPU engine (over)clock in Mhz - one value for all or separate by commas for per card."),
+	OPT_WITH_ARG("--gpu-fan",
+		     set_gpu_fan, NULL, NULL,
+		     "Set the GPU fan percentage - one value for all or separate by commas for per card."),
 	OPT_WITH_ARG("--gpu-memclock",
 		     set_gpu_memclock, NULL, NULL,
 		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card."),
