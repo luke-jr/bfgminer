@@ -75,7 +75,7 @@ static LPAdapterInfo lpInfo = NULL;
 
 void init_adl(int nDevs)
 {
-	int i, devices = 0, last_adapter = -1;
+	int i, devices = 0, last_adapter = -1, gpu = 0;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -177,6 +177,7 @@ void init_adl(int nDevs)
 				applog(LOG_ERR, "ADL found more devices than opencl");
 				return;
 			}
+			gpu = devices - 1;
 			last_adapter = lpAdapterID;
 		}
 
@@ -190,7 +191,7 @@ void init_adl(int nDevs)
 
 		/* From here on we know this device is a discrete device and
 		 * should support ADL */
-		ga = &gpus[devices - 1].adl;
+		ga = &gpus[gpu].adl;
 		ga->iAdapterIndex = iAdapterIndex;
 		ga->lpAdapterID = lpAdapterID;
 		ga->lpStatus = lpStatus;
@@ -218,6 +219,13 @@ void init_adl(int nDevs)
 		ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels);
 		/* Save these values as the defaults in case we wish to reset to defaults */
 		ga->DefPerfLev = lpOdPerformanceLevels;
+
+		if (gpus[gpu].gpu_engine) {
+			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, gpus[gpu].gpu_engine);
+			lpOdPerformanceLevels->aLevels[lev].iEngineClock = gpus[gpu].gpu_engine * 100;
+			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
+			ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels);
+		}
 		ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 		ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 		ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
@@ -243,7 +251,7 @@ void init_adl(int nDevs)
 		if (opt_autoengine)
 			ga->autoengine = true;
 
-		gpus[devices - 1].has_adl = true;
+		gpus[gpu].has_adl = true;
 	}
 
 	adl_active = true;

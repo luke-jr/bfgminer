@@ -1111,6 +1111,36 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 	return NULL;
 }
 
+#ifdef HAVE_ADL
+static char *set_gpu_engine(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *saveptr = NULL, *nextptr;
+
+	nextptr = strtok_r(arg, ",", &saveptr);
+	if (nextptr == NULL)
+		return "Invalid parameters for set gpu engine";
+	val = atoi(nextptr);
+	if (val <= 0 || val >= 9999)
+		return "Invalid value passed to set_gpu_engine";
+
+	gpus[device++].gpu_engine = val;
+
+	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+		val = atoi(nextptr);
+		if (val <= 0 || val >= 9999)
+			return "Invalid value passed to set_gpu_engine";
+
+		gpus[device++].gpu_engine = val;
+	}
+	for (i = device; i < 16; i++)
+		gpus[i].gpu_engine = val;
+
+	return NULL;
+}
+
+#endif
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--algo|-a",
@@ -1171,6 +1201,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-threads|-g",
 		     set_int_1_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (1 - 10)"),
+#ifdef HAVE_ADL
+	OPT_WITH_ARG("--gpu-engine",
+		     set_gpu_engine, NULL, NULL,
+		     "Set the GPU engine (over)clock in Mhz - one value for all or separate by commas for per card."),
+#endif
 	OPT_WITH_ARG("--intensity|-I",
 		     forced_int_1010, NULL, &scan_intensity,
 		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
@@ -1485,7 +1520,7 @@ static WINDOW *mainwin, *statuswin, *logwin;
 static double total_secs = 0.1;
 static char statusline[256];
 static int cpucursor, gpucursor, logstart, logcursor;
-struct cgpu_info *gpus;
+struct cgpu_info gpus[16]; /* Maximum number apparently possible */
 static struct cgpu_info *cpus;
 
 static inline void unlock_curses(void)
@@ -4975,11 +5010,6 @@ int main (int argc, char *argv[])
 		if (unlikely(!cpus))
 			quit(1, "Failed to calloc cpus");
 	}
-	if (gpu_threads) {
-		gpus = calloc(nDevs, sizeof(struct cgpu_info));
-		if (unlikely(!gpus))
-			quit(1, "Failed to calloc gpus");
-	}
 
 	stage_thr_id = mining_threads + 3;
 	thr = &thr_info[stage_thr_id];
@@ -5196,8 +5226,6 @@ int main (int argc, char *argv[])
 	clear_adl(nDevs);
 #endif
 
-	if (gpu_threads)
-		free(gpus);
 	if (opt_n_threads)
 		free(cpus);
 

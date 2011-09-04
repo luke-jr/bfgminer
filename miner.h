@@ -198,6 +198,7 @@ struct cgpu_info {
 #ifdef HAVE_ADL
 	bool has_adl;
 	struct gpu_adl adl;
+	int gpu_engine;
 #endif
 };
 
@@ -368,7 +369,7 @@ extern bool use_syslog;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
-extern struct cgpu_info *gpus;
+extern struct cgpu_info gpus[16];
 
 #ifdef HAVE_OPENCL
 typedef struct {
