@@ -4368,8 +4368,18 @@ static void *watchdog_thread(void *userdata)
 				break;
 			thr = &thr_info[i];
 			gpu = thr->cgpu->cpu_gpu;
+#ifdef HAVE_ADL
 			if (adl_active)
 				gpu_autotune(gpu);
+			if (opt_debug && gpus[gpu].has_adl) {
+				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0;
+				float temp = 0, vddc = 0;
+
+				if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent))
+					applog(LOG_DEBUG, "T: %.1f°C  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%",
+					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity);
+			}
+#endif
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || !gpu_devices[gpu])
 				continue;
