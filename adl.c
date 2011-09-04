@@ -66,6 +66,8 @@ static	ADL_OVERDRIVE5_ODPERFORMANCELEVELS_SET	ADL_Overdrive5_ODPerformanceLevels
 static	ADL_MAIN_CONTROL_REFRESH	ADL_Main_Control_Refresh;
 static	ADL_OVERDRIVE5_POWERCONTROL_GET	ADL_Overdrive5_PowerControl_Get;
 static	ADL_OVERDRIVE5_POWERCONTROL_SET	ADL_Overdrive5_PowerControl_Set;
+static	ADL_ADAPTER_SPEED_GET		ADL_Adapter_Speed_Get;
+static	ADL_ADAPTER_SPEED_SET		ADL_Adapter_Speed_Set;
 
 #if defined (LINUX)
 	static void *hDLL;	// Handle to .so library
@@ -110,6 +112,8 @@ void init_adl(int nDevs)
 	ADL_Main_Control_Refresh = (ADL_MAIN_CONTROL_REFRESH) GetProcAddress(hDLL, "ADL_Main_Control_Refresh");
 	ADL_Overdrive5_PowerControl_Get = (ADL_OVERDRIVE5_POWERCONTROL_GET) GetProcAddress(hDLL, "ADL_Overdrive5_PowerControl_Get");
 	ADL_Overdrive5_PowerControl_Set = (ADL_OVERDRIVE5_POWERCONTROL_SET) GetProcAddress(hDLL, "ADL_Overdrive5_PowerControl_Set");
+	ADL_Adapter_Speed_Get = (ADL_ADAPTER_SPEED_GET) GetProcAddress(hDLL, "ADL_Adapter_Speed_Get");
+	ADL_Adapter_Speed_Set = (ADL_ADAPTER_SPEED_SET) GetProcAddress(hDLL, "ADL_Adapter_Speed_Set");
 
 	if (!ADL_Main_Control_Create || !ADL_Main_Control_Destroy ||
 		!ADL_Adapter_NumberOfAdapters_Get || !ADL_Adapter_AdapterInfo_Get ||
@@ -119,7 +123,8 @@ void init_adl(int nDevs)
 		!ADL_Overdrive5_FanSpeed_Get || !ADL_Overdrive5_FanSpeed_Set ||
 		!ADL_Overdrive5_ODPerformanceLevels_Get || !ADL_Overdrive5_ODPerformanceLevels_Set ||
 		!ADL_Main_Control_Refresh || !ADL_Overdrive5_PowerControl_Get ||
-		!ADL_Overdrive5_PowerControl_Set) {
+		!ADL_Overdrive5_PowerControl_Set || !ADL_Adapter_Speed_Get ||
+		!ADL_Adapter_Speed_Set) {
 			applog(LOG_WARNING, "ATI ADL's API is missing");
 		return;
 	}
@@ -201,6 +206,15 @@ void init_adl(int nDevs)
 		ga->lpAdapterID = lpAdapterID;
 		ga->lpStatus = lpStatus;
 		ga->DefPerfLev = NULL;
+
+		/* Save whatever the current speed setting is to restore on exit */
+		if (ADL_Adapter_Speed_Get(iAdapterIndex, &ga->lpCurrent, &dummy) != ADL_OK) {
+			applog(LOG_INFO, "Failed to ADL_Adapter_Speed_Get");
+			continue;
+		}
+
+		/* Force the speed to high, whether it's ignored or not */
+		ADL_Adapter_Speed_Set(iAdapterIndex, ADL_CONTEXT_SPEED_FORCEHIGH);
 
 		if (ADL_Overdrive5_ODParameters_Get(iAdapterIndex, &ga->lpOdParameters) != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ODParameters_Get");
@@ -947,6 +961,7 @@ void clear_adl(nDevs)
 		ga = &gpus[i].adl;
 		if (!gpus[i].has_adl)
 			continue;
+		ADL_Adapter_Speed_Set(ga->iAdapterIndex, ga->lpCurrent);
 		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, ga->DefPerfLev);
 		free(ga->DefPerfLev);
 		ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
