@@ -497,9 +497,6 @@ static int set_engineclock(int gpu, int iEngineClock)
 
 	iEngineClock *= 100;
 	ga = &gpus[gpu].adl;
-	if (iEngineClock > ga->lpOdParameters.sEngineClock.iMax ||
-		iEngineClock < ga->lpOdParameters.sEngineClock.iMin)
-			return 1;
 
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
@@ -556,9 +553,6 @@ static int set_memoryclock(int gpu, int iMemoryClock)
 
 	iMemoryClock *= 100;
 	ga = &gpus[gpu].adl;
-	if (iMemoryClock > ga->lpOdParameters.sMemoryClock.iMax ||
-		iMemoryClock < ga->lpOdParameters.sMemoryClock.iMin)
-			return 1;
 
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
@@ -622,9 +616,6 @@ static int set_vddc(int gpu, float fVddc)
 
 	iVddc = 1000 * fVddc;
 	ga = &gpus[gpu].adl;
-	if (iVddc > ga->lpOdParameters.sVddc.iMax ||
-		iVddc < ga->lpOdParameters.sVddc.iMin)
-			return 1;
 
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
@@ -856,6 +847,7 @@ void change_gpusettings(int gpu)
 	int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
 	float temp = 0, vddc = 0;
 
+updated:
 	if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
 	wlogprint("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
 		"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
@@ -879,7 +871,7 @@ void change_gpusettings(int gpu)
 				return;
 		}
 		if (!set_engineclock(gpu, val))
-			wlogprint("Successfully modified engine clock speed\n");
+			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify engine clock speed\n");
 	} else if (!strncasecmp(&input, "f", 1)) {
@@ -893,7 +885,7 @@ void change_gpusettings(int gpu)
 				return;
 		}
 		if (!set_fanspeed(gpu, val))
-			wlogprint("Successfully modified fan speed\n");
+			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify fan speed\n");
 	} else if (!strncasecmp(&input, "m", 1)) {
@@ -907,7 +899,7 @@ void change_gpusettings(int gpu)
 				return;
 		}
 		if (!set_memoryclock(gpu, val))
-			wlogprint("Successfully modified memory clock speed\n");
+			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify memory clock speed\n");
 	} else if (!strncasecmp(&input, "v", 1)) {
@@ -921,7 +913,7 @@ void change_gpusettings(int gpu)
 				return;
 		}
 		if (!set_vddc(gpu, fval))
-			wlogprint("Successfully modified voltage\n");
+			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify voltage\n");
 	} else if (!strncasecmp(&input, "p", 1)) {
@@ -933,12 +925,13 @@ void change_gpusettings(int gpu)
 				return;
 		}
 		if (!set_powertune(gpu, val))
-			wlogprint("Successfully modified powertune value\n");
+			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify powertune value\n");
-	}
-	wlogprint("Press any key to continue\n");
-	input = getch();
+	} else
+		return;
+	sleep(1);
+	goto updated;
 }
 
 void clear_adl(nDevs)
