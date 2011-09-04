@@ -20,7 +20,7 @@ bool adl_active;
 
 #include "adl_functions.h"
 
-int opt_hysteresis = 5;
+int opt_hysteresis = 3;
 int opt_targettemp = 75;
 int opt_overheattemp = 85;
 
