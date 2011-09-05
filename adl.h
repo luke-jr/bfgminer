@@ -19,9 +19,9 @@ void change_gpusettings(int gpu);
 void gpu_autotune(int gpu);
 void clear_adl(int nDevs);
 #else /* HAVE_ADL */
-void init_adl(int nDevs) {}
-void change_gpusettings(int gpu) { }
-void gpu_autotune(int gpu) { }
-void clear_adl(int nDevs) {}
+static inline void init_adl(int nDevs) {}
+static inline void change_gpusettings(int gpu) { }
+static inline void gpu_autotune(int gpu) { }
+static inline void clear_adl(int nDevs) {}
 #endif
 #endif
