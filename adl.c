@@ -1,6 +1,6 @@
 #include "config.h"
 
-#ifdef HAVE_ADL
+#if defined(HAVE_ADL) && (defined(__linux) || defined (WIN32))
 
 #include <stdio.h>
 #include <curses.h>
@@ -12,9 +12,10 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <unistd.h>
-#else
+#else /* WIN32 */
 #include <windows.h>
 #include <tchar.h>
+#define sleep(x) Sleep(x)
 #endif
 #include "adl_functions.h"
 
