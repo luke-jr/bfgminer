@@ -77,6 +77,8 @@ static	ADL_ADAPTER_SPEED_SET		ADL_Adapter_Speed_Set;
 static int iNumberAdapters;
 static LPAdapterInfo lpInfo = NULL;
 
+static int set_fanspeed(int gpu, int iFanSpeed);
+
 void init_adl(int nDevs)
 {
 	int i, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
@@ -292,8 +294,11 @@ void init_adl(int nDevs)
 		/* Set some default temperatures for autotune when enabled */
 		ga->targettemp = opt_targettemp;
 		ga->overtemp = opt_overheattemp;
-		if (opt_autofan)
+		if (opt_autofan) {
 			ga->autofan = true;
+			/* Set a safe starting default if we're automanaging fan speeds */
+			set_fanspeed(gpu, 85);
+		}
 		if (opt_autoengine)
 			ga->autoengine = true;
 
