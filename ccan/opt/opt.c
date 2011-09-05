@@ -7,6 +7,7 @@
 #ifndef WIN32
 	#include <err.h>
 #else
+#include <libgen.h>
 	#define errx(status, fmt, ...) { \
 			fprintf(stderr, fmt, __VA_ARGS__); \
 			fprintf(stderr, "\n"); \
