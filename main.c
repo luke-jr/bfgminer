@@ -1116,9 +1116,9 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 static char *set_gpu_engine(char *arg)
 {
 	int i, val = 0, device = 0;
-	char *saveptr = NULL, *nextptr;
+	char *nextptr;
 
-	nextptr = strtok_r(arg, ",", &saveptr);
+	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu engine";
 	val = atoi(nextptr);
@@ -1127,7 +1127,7 @@ static char *set_gpu_engine(char *arg)
 
 	gpus[device++].gpu_engine = val;
 
-	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 		if (val <= 0 || val >= 9999)
 			return "Invalid value passed to set_gpu_engine";
@@ -1143,9 +1143,9 @@ static char *set_gpu_engine(char *arg)
 static char *set_gpu_fan(char *arg)
 {
 	int i, val = 0, device = 0;
-	char *saveptr = NULL, *nextptr;
+	char *nextptr;
 
-	nextptr = strtok_r(arg, ",", &saveptr);
+	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu fan";
 	val = atoi(nextptr);
@@ -1154,7 +1154,7 @@ static char *set_gpu_fan(char *arg)
 
 	gpus[device++].gpu_fan = val;
 
-	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 		if (val < 0 || val > 100)
 			return "Invalid value passed to set_gpu_fan";
@@ -1170,9 +1170,9 @@ static char *set_gpu_fan(char *arg)
 static char *set_gpu_memclock(char *arg)
 {
 	int i, val = 0, device = 0;
-	char *saveptr = NULL, *nextptr;
+	char *nextptr;
 
-	nextptr = strtok_r(arg, ",", &saveptr);
+	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu memclock";
 	val = atoi(nextptr);
@@ -1181,7 +1181,7 @@ static char *set_gpu_memclock(char *arg)
 
 	gpus[device++].gpu_memclock = val;
 
-	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 		if (val <= 0 || val >= 9999)
 			return "Invalid value passed to set_gpu_memclock";
@@ -1197,9 +1197,9 @@ static char *set_gpu_memclock(char *arg)
 static char *set_gpu_powertune(char *arg)
 {
 	int i, val = 0, device = 0;
-	char *saveptr = NULL, *nextptr;
+	char *nextptr;
 
-	nextptr = strtok_r(arg, ",", &saveptr);
+	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu powertune";
 	val = atoi(nextptr);
@@ -1208,7 +1208,7 @@ static char *set_gpu_powertune(char *arg)
 
 	gpus[device++].gpu_powertune = val;
 
-	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 		if (val < -99 || val > 99)
 			return "Invalid value passed to set_gpu_powertune";
@@ -1225,9 +1225,9 @@ static char *set_gpu_vddc(char *arg)
 {
 	int i, device = 0;
 	float val = 0;
-	char *saveptr = NULL, *nextptr;
+	char *nextptr;
 
-	nextptr = strtok_r(arg, ",", &saveptr);
+	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu vddc";
 	val = atof(nextptr);
@@ -1236,7 +1236,7 @@ static char *set_gpu_vddc(char *arg)
 
 	gpus[device++].gpu_vddc = val;
 
-	while ((nextptr = strtok_r(NULL, ",", &saveptr)) != NULL) {
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 		if (val <= 0 || val >= 9999)
 			return "Invalid value passed to set_gpu_vddc";
