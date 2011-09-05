@@ -1692,36 +1692,28 @@ static void curses_print_status(int thr_id)
 {
 	struct pool *pool = current_pool();
 
-	wmove(statuswin, 0, 0);
 	wattron(statuswin, A_BOLD);
-	wprintw(statuswin, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
+	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	if (opt_n_threads)
 		wprintw(statuswin, " CPU Algo: %s", algo_names[opt_algo]);
 	wattroff(statuswin, A_BOLD);
-	wmove(statuswin, 1, 0);
-	whline(statuswin, '-', 80);
-	wmove(statuswin, 2,0);
-	wprintw(statuswin, " %s", statusline);
+	mvwhline(statuswin, 1, 0, '-', 80);
+	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	wmove(statuswin, 3,0);
-	wprintw(statuswin, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  I: %d",
+	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  I: %d",
 		total_queued, requests_staged(), total_stale, total_discarded, new_blocks,
 		local_work, total_go, total_ro, scan_intensity);
 	wclrtoeol(statuswin);
-	wmove(statuswin, 4, 0);
 	if (pool_strategy == POOL_LOADBALANCE && total_pools > 1)
-		wprintw(statuswin, " Connected to multiple pools with%s LP",
+		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	else
-		wprintw(statuswin, " Connected to %s with%s LP as user %s",
+		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
 			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
 	wclrtoeol(statuswin);
-	wmove(statuswin, 5, 0);
-	wprintw(statuswin, " Block: %s...  Started: %s", current_hash, blocktime);
-	wmove(statuswin, 6, 0);
-	whline(statuswin, '-', 80);
-	wmove(statuswin, logstart - 1, 0);
-	whline(statuswin, '-', 80);
+	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s", current_hash, blocktime);
+	mvwhline(statuswin, 6, 0, '-', 80);
+	mvwhline(statuswin, logstart - 1, 0, '-', 80);
 	mvwprintw(statuswin, gpucursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
 		opt_g_threads ? "[G]PU management " : "");
 
@@ -1732,9 +1724,7 @@ static void curses_print_status(int thr_id)
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 		cgpu->efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
 
-		wmove(statuswin, gpucursor + gpu, 0);
-
-		wprintw(statuswin, " GPU %d: ", gpu);
+		mvwprintw(statuswin, gpucursor + gpu, 0, " GPU %d: ", gpu);
 #ifdef HAVE_ADL
 		if (cgpu->has_adl)
 			wprintw(statuswin, "[%.1f °C] ", gpu_temp(gpu));
@@ -1759,9 +1749,7 @@ static void curses_print_status(int thr_id)
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 		cgpu->efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
 
-		wmove(statuswin, cpucursor + cpu, 0);
-
-		wprintw(statuswin, " CPU %d: [%.2f/%.2f Mh/s] [Q:%d A:%d R:%d E:%.0f%% U:%.2f/m]   ",
+		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: [%.2f/%.2f Mh/s] [Q:%d A:%d R:%d E:%.0f%% U:%.2f/m]   ",
 			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected,
 			cgpu->efficiency, cgpu->utility);
