@@ -1688,7 +1688,7 @@ static void text_print_status(int thr_id)
 }
 
 /* Must be called with curses mutex lock held and curses_active */
-static void curses_print_status(int thr_id)
+static void curses_print_status(void)
 {
 	struct pool *pool = current_pool();
 
@@ -1716,7 +1716,12 @@ static void curses_print_status(int thr_id)
 	mvwhline(statuswin, logstart - 1, 0, '-', 80);
 	mvwprintw(statuswin, gpucursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
 		opt_g_threads ? "[G]PU management " : "");
+	/* The window will be updated once we're done with all the devices */
+	wnoutrefresh(statuswin);
+}
 
+static void curses_print_devstatus(int thr_id)
+{
 	if (thr_id >= 0 && thr_id < gpu_threads) {
 		int gpu = dev_from_id(thr_id);
 		struct cgpu_info *cgpu = &gpus[gpu];
@@ -1755,15 +1760,12 @@ static void curses_print_status(int thr_id)
 			cgpu->efficiency, cgpu->utility);
 		wclrtoeol(statuswin);
 	}
-	wrefresh(statuswin);
+	wnoutrefresh(statuswin);
 }
 
 static void print_status(int thr_id)
 {
-	if (curses_active_locked()) {
-		curses_print_status(thr_id);
-		unlock_curses();
-	} else
+	if (!curses_active)
 		text_print_status(thr_id);
 }
 
@@ -4484,12 +4486,12 @@ static void *watchdog_thread(void *userdata)
 		hashmeter(-1, &zero_tv, 0);
 
 		if (curses_active_locked()) {
+			change_logwinsize();
+			curses_print_status();
 			for (i = 0; i < mining_threads; i++)
-				curses_print_status(i);
-			if (!change_logwinsize()) {
-				redrawwin(statuswin);
-				redrawwin(logwin);
-			}
+				curses_print_devstatus(i);
+			clearok(statuswin, true);
+			doupdate();
 			unlock_curses();
 		}
 
