@@ -92,7 +92,7 @@ static inline void unlock_adl(void)
 
 void init_adl(int nDevs)
 {
-	int i, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
+	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -258,17 +258,36 @@ void init_adl(int nDevs)
 		ga->DefPerfLev = lpOdPerformanceLevels;
 
 		if (gpus[gpu].gpu_engine) {
-			lpOdPerformanceLevels->aLevels[lev].iEngineClock = gpus[gpu].gpu_engine * 100;
+			int setengine = gpus[gpu].gpu_engine * 100;
+
+			/* Lower profiles can't have a higher setting */
+			for (j = 0; j < lev; j++) {
+				if (lpOdPerformanceLevels->aLevels[j].iEngineClock > setengine)
+					lpOdPerformanceLevels->aLevels[j].iEngineClock = setengine;
+			}
+			lpOdPerformanceLevels->aLevels[lev].iEngineClock = setengine;
 			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, gpus[gpu].gpu_engine);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
 		}
 		if (gpus[gpu].gpu_memclock) {
-			lpOdPerformanceLevels->aLevels[lev].iMemoryClock = gpus[gpu].gpu_memclock * 100;
+			int setmem = gpus[gpu].gpu_memclock * 100;
+
+			for (j = 0; j < lev; j++) {
+				if (lpOdPerformanceLevels->aLevels[j].iMemoryClock > setmem)
+					lpOdPerformanceLevels->aLevels[j].iMemoryClock = setmem;
+			}
+			lpOdPerformanceLevels->aLevels[lev].iMemoryClock = setmem;
 			applog(LOG_INFO, "Setting GPU %d memory clock to %d", gpu, gpus[gpu].gpu_memclock);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
 		}
 		if (gpus[gpu].gpu_vddc) {
-			lpOdPerformanceLevels->aLevels[lev].iVddc = gpus[gpu].gpu_vddc * 1000;
+			int setv = gpus[gpu].gpu_vddc * 1000;
+
+			for (j = 0; j < lev; j++) {
+				if (lpOdPerformanceLevels->aLevels[j].iVddc > setv)
+					lpOdPerformanceLevels->aLevels[j].iVddc = setv;
+			}
+			lpOdPerformanceLevels->aLevels[lev].iVddc = setv;
 			applog(LOG_INFO, "Setting GPU %d voltage to %.3f", gpu, gpus[gpu].gpu_vddc);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
 		}
@@ -562,8 +581,8 @@ static void get_enginerange(int gpu, int *imin, int *imax)
 static int set_engineclock(int gpu, int iEngineClock)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
+	int i, lev, ret = 1;
 	struct gpu_adl *ga;
-	int lev, ret = 1;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
 		wlogprint("Set engineclock not supported\n");
@@ -580,6 +599,10 @@ static int set_engineclock(int gpu, int iEngineClock)
 	lock_adl();
 	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
 		goto out;
+	for (i = 0; i < lev; i++) {
+		if (lpOdPerformanceLevels->aLevels[i].iEngineClock > iEngineClock)
+			lpOdPerformanceLevels->aLevels[i].iEngineClock = iEngineClock;
+	}
 	lpOdPerformanceLevels->aLevels[lev].iEngineClock = iEngineClock;
 	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
 		goto out;
@@ -623,8 +646,8 @@ static void get_memoryrange(int gpu, int *imin, int *imax)
 static int set_memoryclock(int gpu, int iMemoryClock)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
+	int i, lev, ret = 1;
 	struct gpu_adl *ga;
-	int lev, ret = 1;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
 		wlogprint("Set memoryclock not supported\n");
@@ -642,6 +665,10 @@ static int set_memoryclock(int gpu, int iMemoryClock)
 	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
 		goto out;
 	lpOdPerformanceLevels->aLevels[lev].iMemoryClock = iMemoryClock;
+	for (i = 0; i < lev; i++) {
+		if (lpOdPerformanceLevels->aLevels[i].iMemoryClock > iMemoryClock)
+			lpOdPerformanceLevels->aLevels[i].iMemoryClock = iMemoryClock;
+	}
 	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
 		goto out;
 	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
@@ -691,7 +718,7 @@ static float curses_float(const char *query)
 static int set_vddc(int gpu, float fVddc)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
-	int iVddc, lev, ret = 1;
+	int i, iVddc, lev, ret = 1;
 	struct gpu_adl *ga;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
@@ -709,6 +736,10 @@ static int set_vddc(int gpu, float fVddc)
 	lock_adl();
 	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
 		goto out;
+	for (i = 0; i < lev; i++) {
+		if (lpOdPerformanceLevels->aLevels[i].iVddc > iVddc)
+			lpOdPerformanceLevels->aLevels[i].iVddc = iVddc;
+	}
 	lpOdPerformanceLevels->aLevels[lev].iVddc = iVddc;
 	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
 		goto out;
