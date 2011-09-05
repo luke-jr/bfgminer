@@ -1,24 +1,24 @@
-#include "miner.h"
-#include "adl.h"
-
-bool adl_active;
+#include "config.h"
 
 #ifdef HAVE_ADL
-#if defined (__linux)
- #include "ADL_SDK/adl_sdk.h"
- #include <dlfcn.h>
- #include <stdlib.h>
- #include <unistd.h>
-#else
- #include <windows.h>
- #include <tchar.h>
- #include "ADL_SDK/adl_sdk.h"
-#endif
 
 #include <stdio.h>
 #include <curses.h>
 
+#include "miner.h"
+#include "ADL_SDK/adl_sdk.h"
+
+#if defined (__linux)
+#include <dlfcn.h>
+#include <stdlib.h>
+#include <unistd.h>
+#else
+#include <windows.h>
+#include <tchar.h>
+#endif
 #include "adl_functions.h"
+
+bool adl_active;
 
 int opt_hysteresis = 3;
 int opt_targettemp = 75;

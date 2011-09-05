@@ -1,7 +1,7 @@
 #ifndef __ADL_H__
 #define __ADL_H__
-bool adl_active;
 #ifdef HAVE_ADL
+bool adl_active;
 int opt_hysteresis;
 int opt_targettemp;
 int opt_overheattemp;
@@ -19,6 +19,7 @@ void change_gpusettings(int gpu);
 void gpu_autotune(int gpu);
 void clear_adl(int nDevs);
 #else /* HAVE_ADL */
+#define adl_active (0)
 static inline void init_adl(int nDevs) {}
 static inline void change_gpusettings(int gpu) { }
 static inline void gpu_autotune(int gpu) { }
