@@ -23,6 +23,7 @@ bool adl_active;
 int opt_hysteresis = 3;
 int opt_targettemp = 75;
 int opt_overheattemp = 85;
+static pthread_mutex_t adl_lock;
 
 // Memory allocation function
 static void * __stdcall ADL_Main_Memory_Alloc(int iSize)
@@ -79,6 +80,16 @@ static LPAdapterInfo lpInfo = NULL;
 
 static int set_fanspeed(int gpu, int iFanSpeed);
 
+static inline void lock_adl(void)
+{
+	mutex_lock(&adl_lock);
+}
+
+static inline void unlock_adl(void)
+{
+	mutex_unlock(&adl_lock);
+}
+
 void init_adl(int nDevs)
 {
 	int i, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
@@ -94,6 +105,11 @@ void init_adl(int nDevs)
 #endif
 	if (hDLL == NULL) {
 		applog(LOG_INFO, "Unable to load ati adl library");
+		return;
+	}
+
+	if (unlikely(pthread_mutex_init(&adl_lock, NULL))) {
+		applog(LOG_ERR, "Failed to init adl_lock in init_adl");
 		return;
 	}
 
@@ -318,12 +334,16 @@ static inline float __gpu_temp(struct gpu_adl *ga)
 float gpu_temp(int gpu)
 {
 	struct gpu_adl *ga;
+	float ret = 0;
 
 	if (!gpus[gpu].has_adl || !adl_active)
-		return 0;
+		return ret;
 
 	ga = &gpus[gpu].adl;
-	return __gpu_temp(ga);
+	lock_adl();
+	ret = __gpu_temp(ga);
+	unlock_adl();
+	return ret;
 }
 
 static inline int __gpu_engineclock(struct gpu_adl *ga)
@@ -334,14 +354,19 @@ static inline int __gpu_engineclock(struct gpu_adl *ga)
 int gpu_engineclock(int gpu)
 {
 	struct gpu_adl *ga;
+	int ret = 0;
 
 	if (!gpus[gpu].has_adl || !adl_active)
-		return 0;
+		return ret;
 
 	ga = &gpus[gpu].adl;
+	lock_adl();
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
-		return 0;
-	return __gpu_engineclock(ga);
+		goto out;
+	ret = __gpu_engineclock(ga);
+out:
+	unlock_adl();
+	return ret;
 }
 
 static inline int __gpu_memclock(struct gpu_adl *ga)
@@ -352,14 +377,19 @@ static inline int __gpu_memclock(struct gpu_adl *ga)
 int gpu_memclock(int gpu)
 {
 	struct gpu_adl *ga;
+	int ret = 0;
 
 	if (!gpus[gpu].has_adl || !adl_active)
-		return 0;
+		return ret;
 
 	ga = &gpus[gpu].adl;
+	lock_adl();
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
-		return 0;
-	return __gpu_memclock(ga);
+		goto out;
+	ret = __gpu_memclock(ga);
+out:
+	unlock_adl();
+	return ret;
 }
 
 static inline float __gpu_vddc(struct gpu_adl *ga)
@@ -370,14 +400,19 @@ static inline float __gpu_vddc(struct gpu_adl *ga)
 float gpu_vddc(int gpu)
 {
 	struct gpu_adl *ga;
+	float ret = 0;
 
 	if (!gpus[gpu].has_adl || !adl_active)
-		return 0;
+		return ret;
 
 	ga = &gpus[gpu].adl;
+	lock_adl();
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
-		return 0;
-	return __gpu_vddc(ga);
+		goto out;
+	ret = __gpu_vddc(ga);
+out:
+	unlock_adl();
+	return ret;
 }
 
 static inline int __gpu_activity(struct gpu_adl *ga)
@@ -390,14 +425,20 @@ static inline int __gpu_activity(struct gpu_adl *ga)
 int gpu_activity(int gpu)
 {
 	struct gpu_adl *ga;
+	int ret;
 
 	if (!gpus[gpu].has_adl || !adl_active)
 		return 0;
 
 	ga = &gpus[gpu].adl;
-	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK)
+	lock_adl();
+	ret = ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity);
+	unlock_adl();
+	if (ret != ADL_OK)
 		return 0;
-	return __gpu_activity(ga);
+	if (!ga->lpOdParameters.iActivityReportingSupported)
+		return 0;
+	return ga->lpActivity.iActivityPercent;
 }
 
 static inline int __gpu_fanspeed(struct gpu_adl *ga)
@@ -413,12 +454,16 @@ static inline int __gpu_fanspeed(struct gpu_adl *ga)
 int gpu_fanspeed(int gpu)
 {
 	struct gpu_adl *ga;
+	int ret = 0;
 
 	if (!gpus[gpu].has_adl || !adl_active)
-		return 0;
+		return ret;
 
 	ga = &gpus[gpu].adl;
-	return __gpu_fanspeed(ga);
+	lock_adl();
+	ret = __gpu_fanspeed(ga);
+	unlock_adl();
+	return ret;
 }
 
 static inline int __gpu_fanpercent(struct gpu_adl *ga)
@@ -434,12 +479,16 @@ static inline int __gpu_fanpercent(struct gpu_adl *ga)
 int gpu_fanpercent(int gpu)
 {
 	struct gpu_adl *ga;
+	int ret = 0;
 
 	if (!gpus[gpu].has_adl || !adl_active)
 		return -1;
 
 	ga = &gpus[gpu].adl;
-	return __gpu_fanpercent(ga);
+	lock_adl();
+	ret = __gpu_fanpercent(ga);
+	unlock_adl();
+	return ret;
 }
 
 static inline int __gpu_powertune(struct gpu_adl *ga)
@@ -454,12 +503,16 @@ static inline int __gpu_powertune(struct gpu_adl *ga)
 int gpu_powertune(int gpu)
 {
 	struct gpu_adl *ga;
+	int ret = -1;
 
 	if (!gpus[gpu].has_adl || !adl_active)
-		return -1;
+		return ret;
 
 	ga = &gpus[gpu].adl;
-	return __gpu_powertune(ga);
+	lock_adl();
+	ret = __gpu_powertune(ga);
+	unlock_adl();
+	return ret;
 }
 
 bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
@@ -471,6 +524,8 @@ bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vdd
 		return false;
 
 	ga = &gpus[gpu].adl;
+
+	lock_adl();
 	*temp = __gpu_temp(ga);
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK) {
 		*engineclock = 0;
@@ -486,6 +541,7 @@ bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vdd
 	*fanspeed = __gpu_fanspeed(ga);
 	*fanpercent = __gpu_fanpercent(ga);
 	*powertune = __gpu_powertune(ga);
+	unlock_adl();
 
 	return true;
 }
@@ -507,11 +563,11 @@ static int set_engineclock(int gpu, int iEngineClock)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	struct gpu_adl *ga;
-	int lev;
+	int lev, ret = 1;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
 		wlogprint("Set engineclock not supported\n");
-		return 1;
+		return ret;
 	}
 
 	iEngineClock *= 100;
@@ -520,11 +576,13 @@ static int set_engineclock(int gpu, int iEngineClock)
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
 	lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
+
+	lock_adl();
 	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
-		return 1;
+		goto out;
 	lpOdPerformanceLevels->aLevels[lev].iEngineClock = iEngineClock;
 	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
-		return 1;
+		goto out;
 	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
 	/* Reset to old value if it fails! */
 	if (lpOdPerformanceLevels->aLevels[lev].iEngineClock != iEngineClock) {
@@ -534,7 +592,7 @@ static int set_engineclock(int gpu, int iEngineClock)
 		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
 		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
 		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-		return 1;
+		goto out;
 	}
 	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 	if (ga->iEngineClock > ga->maxspeed)
@@ -543,7 +601,10 @@ static int set_engineclock(int gpu, int iEngineClock)
 		ga->minspeed = ga->iEngineClock;
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
-	return 0;
+	ret = 0;
+out:
+	unlock_adl();
+	return ret;
 }
 
 static void get_memoryrange(int gpu, int *imin, int *imax)
@@ -563,11 +624,11 @@ static int set_memoryclock(int gpu, int iMemoryClock)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	struct gpu_adl *ga;
-	int lev;
+	int lev, ret = 1;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
 		wlogprint("Set memoryclock not supported\n");
-		return 1;
+		return ret;
 	}
 
 	iMemoryClock *= 100;
@@ -576,11 +637,13 @@ static int set_memoryclock(int gpu, int iMemoryClock)
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
 	lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
+
+	lock_adl();
 	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
-		return 1;
+		goto out;
 	lpOdPerformanceLevels->aLevels[lev].iMemoryClock = iMemoryClock;
 	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
-		return 1;
+		goto out;
 	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
 	/* Reset to old value if it fails! */
 	if (lpOdPerformanceLevels->aLevels[lev].iMemoryClock != iMemoryClock) {
@@ -590,12 +653,15 @@ static int set_memoryclock(int gpu, int iMemoryClock)
 		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
 		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
 		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-		return 1;
+		goto out;
 	}
 	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
-	return 0;
+	ret = 0;
+out:
+	unlock_adl();
+	return ret;
 }
 
 static void get_vddcrange(int gpu, float *imin, float *imax)
@@ -625,12 +691,12 @@ static float curses_float(const char *query)
 static int set_vddc(int gpu, float fVddc)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
+	int iVddc, lev, ret = 1;
 	struct gpu_adl *ga;
-	int iVddc, lev;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
 		wlogprint("Set vddc not supported\n");
-		return 1;
+		return ret;
 	}
 
 	iVddc = 1000 * fVddc;
@@ -639,11 +705,13 @@ static int set_vddc(int gpu, float fVddc)
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
 	lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
+
+	lock_adl();
 	if (ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels) != ADL_OK)
-		return 1;
+		goto out;
 	lpOdPerformanceLevels->aLevels[lev].iVddc = iVddc;
 	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
-		return 1;
+		goto out;
 	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
 	/* Reset to old value if it fails! */
 	if (lpOdPerformanceLevels->aLevels[lev].iVddc != iVddc) {
@@ -653,12 +721,15 @@ static int set_vddc(int gpu, float fVddc)
 		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
 		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
 		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-		return 1;
+		goto out;
 	}
 	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
-	return 0;
+	ret = 0;
+out:
+	unlock_adl();
+	return ret;
 }
 
 static void get_fanrange(int gpu, int *imin, int *imax)
@@ -677,17 +748,20 @@ static void get_fanrange(int gpu, int *imin, int *imax)
 static int set_fanspeed(int gpu, int iFanSpeed)
 {
 	struct gpu_adl *ga;
+	int ret = 1;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
 		wlogprint("Set fanspeed not supported\n");
-		return 1;
+		return ret;
 	}
 
 	ga = &gpus[gpu].adl;
 	if (!(ga->lpFanSpeedInfo.iFlags & (ADL_DL_FANCTRL_SUPPORTS_RPM_WRITE | ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE )))
-		return 1;
+		return ret;
+
+	lock_adl();
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
-		return 1;
+		goto out;
 	ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
 	if ((ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_WRITE) &&
 		!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
@@ -698,28 +772,37 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
 	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
 	if (ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
-		return 1;
-	return 0;
+		goto out;
+	ret = 0;
+out:
+	unlock_adl();
+	return ret;
 }
 
 static int set_powertune(int gpu, int iPercentage)
 {
 	int oldPercentage, dummy;
 	struct gpu_adl *ga;
+	int ret = 1;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
 		wlogprint("Set powertune not supported\n");
-		return 1;
+		return ret;
 	}
 
 	ga = &gpus[gpu].adl;
 	oldPercentage = ga->iPercentage;
+
+	lock_adl();
 	if (ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, iPercentage) != ADL_OK) {
 		ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, ga->iPercentage);
-		return 1;
+		goto out;
 	}
 	ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy);
-	return 0;
+	ret = 0;
+out:
+	unlock_adl();
+	return ret;
 }
 
 void gpu_autotune(int gpu)
@@ -732,8 +815,12 @@ void gpu_autotune(int gpu)
 		return;
 
 	ga = &gpus[gpu].adl;
+
+	lock_adl();
 	temp = __gpu_temp(ga);
 	newpercent = fanpercent = __gpu_fanpercent(ga);
+	unlock_adl();
+
 	newengine = engine = gpu_engineclock(gpu) * 100;
 
 	if (temp && fanpercent >= 0 && ga->autofan) {
@@ -796,7 +883,9 @@ void set_defaultfan(int gpu)
 		return;
 
 	ga = &gpus[gpu].adl;
+	lock_adl();
 	ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
+	unlock_adl();
 }
 
 void set_defaultengine(int gpu)
@@ -806,7 +895,9 @@ void set_defaultengine(int gpu)
 		return;
 
 	ga = &gpus[gpu].adl;
+	lock_adl();
 	ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, ga->DefPerfLev);
+	unlock_adl();
 }
 
 void change_autosettings(int gpu)
@@ -961,6 +1052,7 @@ void clear_adl(nDevs)
 	if (!adl_active)
 		return;
 
+	lock_adl();
 	/* Try to reset values to their defaults */
 	for (i = 0; i < nDevs; i++) {
 		ga = &gpus[i].adl;
@@ -974,6 +1066,7 @@ void clear_adl(nDevs)
 
 	ADL_Main_Memory_Free ( (void **)&lpInfo );
 	ADL_Main_Control_Destroy ();
+	unlock_adl();
 
 #if defined (LINUX)
 	dlclose(hDLL);
