@@ -52,7 +52,7 @@ typedef struct {
     size_t refcount;
 } json_t;
 
-#if JSON_INTEGER_IS_LONG_LONG
+#if JSON_INTEGER_IS_LONG_LONG && (!defined(WIN32))
 #define JSON_INTEGER_FORMAT "lld"
 typedef long long json_int_t;
 #else
