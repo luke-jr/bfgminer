@@ -57,7 +57,6 @@ static	ADL_ADAPTER_NUMBEROFADAPTERS_GET	ADL_Adapter_NumberOfAdapters_Get;
 static	ADL_ADAPTER_ADAPTERINFO_GET	ADL_Adapter_AdapterInfo_Get;
 static	ADL_ADAPTER_ID_GET		ADL_Adapter_ID_Get;
 static	ADL_OVERDRIVE5_TEMPERATURE_GET	ADL_Overdrive5_Temperature_Get;
-static	ADL_ADAPTER_ACTIVE_GET		ADL_Adapter_Active_Get;
 static	ADL_OVERDRIVE5_CURRENTACTIVITY_GET	ADL_Overdrive5_CurrentActivity_Get;
 static	ADL_OVERDRIVE5_ODPARAMETERS_GET	ADL_Overdrive5_ODParameters_Get;
 static	ADL_OVERDRIVE5_FANSPEEDINFO_GET	ADL_Overdrive5_FanSpeedInfo_Get;
@@ -120,7 +119,6 @@ void init_adl(int nDevs)
 	ADL_Adapter_AdapterInfo_Get = (ADL_ADAPTER_ADAPTERINFO_GET) GetProcAddress(hDLL,"ADL_Adapter_AdapterInfo_Get");
 	ADL_Adapter_ID_Get = (ADL_ADAPTER_ID_GET) GetProcAddress(hDLL,"ADL_Adapter_ID_Get");
 	ADL_Overdrive5_Temperature_Get = (ADL_OVERDRIVE5_TEMPERATURE_GET) GetProcAddress(hDLL,"ADL_Overdrive5_Temperature_Get");
-	ADL_Adapter_Active_Get = (ADL_ADAPTER_ACTIVE_GET) GetProcAddress(hDLL, "ADL_Adapter_Active_Get");
 	ADL_Overdrive5_CurrentActivity_Get = (ADL_OVERDRIVE5_CURRENTACTIVITY_GET) GetProcAddress(hDLL, "ADL_Overdrive5_CurrentActivity_Get");
 	ADL_Overdrive5_ODParameters_Get = (ADL_OVERDRIVE5_ODPARAMETERS_GET) GetProcAddress(hDLL, "ADL_Overdrive5_ODParameters_Get");
 	ADL_Overdrive5_FanSpeedInfo_Get = (ADL_OVERDRIVE5_FANSPEEDINFO_GET) GetProcAddress(hDLL, "ADL_Overdrive5_FanSpeedInfo_Get");
@@ -137,7 +135,7 @@ void init_adl(int nDevs)
 	if (!ADL_Main_Control_Create || !ADL_Main_Control_Destroy ||
 		!ADL_Adapter_NumberOfAdapters_Get || !ADL_Adapter_AdapterInfo_Get ||
 		!ADL_Adapter_ID_Get || !ADL_Overdrive5_Temperature_Get ||
-		!ADL_Adapter_Active_Get || !ADL_Overdrive5_CurrentActivity_Get ||
+		!ADL_Overdrive5_CurrentActivity_Get ||
 		!ADL_Overdrive5_ODParameters_Get || !ADL_Overdrive5_FanSpeedInfo_Get ||
 		!ADL_Overdrive5_FanSpeed_Get || !ADL_Overdrive5_FanSpeed_Set ||
 		!ADL_Overdrive5_ODPerformanceLevels_Get || !ADL_Overdrive5_ODPerformanceLevels_Set ||
@@ -189,7 +187,7 @@ void init_adl(int nDevs)
 		int lev;
 
 		iAdapterIndex = lpInfo[i].iAdapterIndex;
-		/* Get unique identifier of the adapter */
+		/* Get unique identifier of the adapter, 0 means not AMD */
 		if (ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID) != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get");
 			continue;
@@ -197,33 +195,26 @@ void init_adl(int nDevs)
 		if (!lpAdapterID)
 			continue;
 
-		if (lpAdapterID != last_adapter) {
-			/* We found a truly new adapter instead of a logical
-			 * one. Now since there's no way of correlating the
-			 * opencl enumerated devices and the ADL enumerated
-			 * ones, we have to assume they're in the same order.*/
-			if (++devices > nDevs) {
-				applog(LOG_ERR, "ADL found more devices than opencl");
-				return;
-			}
-			gpu = devices - 1;
-			last_adapter = lpAdapterID;
-		}
+		/* Each adapter may have multiple entries */
+		if (lpAdapterID == last_adapter)
+			continue;
 
-		/* See if the adapter is an AMD device with ADL active */
-		if (ADL_Adapter_Active_Get(iAdapterIndex, &lpStatus) != ADL_OK) {
-			applog(LOG_INFO, "Failed to ADL_Adapter_Active_Get");
-			continue;
+		/* We found a truly new adapter instead of a logical
+			* one. Now since there's no way of correlating the
+			* opencl enumerated devices and the ADL enumerated
+			* ones, we have to assume they're in the same order.*/
+		if (++devices > nDevs) {
+			applog(LOG_ERR, "ADL found more devices than opencl");
+			return;
 		}
-		if (!lpStatus)
-			continue;
+		gpu = devices - 1;
+		last_adapter = lpAdapterID;
 
 		/* From here on we know this device is a discrete device and
 		 * should support ADL */
 		ga = &gpus[gpu].adl;
 		ga->iAdapterIndex = iAdapterIndex;
 		ga->lpAdapterID = lpAdapterID;
-		ga->lpStatus = lpStatus;
 		ga->DefPerfLev = NULL;
 
 		/* Save whatever the current speed setting is to restore on exit */

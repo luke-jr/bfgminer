@@ -160,13 +160,14 @@ struct gpu_adl {
 	ADLTemperature lpTemperature;
 	int iAdapterIndex;
 	int lpAdapterID;
-	int lpStatus;
+
 	ADLPMActivity lpActivity;
 	ADLODParameters lpOdParameters;
 	ADLODPerformanceLevels *DefPerfLev;
 	ADLFanSpeedInfo lpFanSpeedInfo;
 	ADLFanSpeedValue lpFanSpeedValue;
 	ADLFanSpeedValue DefFanSpeedValue;
+
 	int iEngineClock;
 	int iMemoryClock;
 	int iVddc;
@@ -175,6 +176,7 @@ struct gpu_adl {
 
 	bool autofan;
 	bool autoengine;
+
 	int targettemp;
 	int overtemp;
 	int minspeed;
