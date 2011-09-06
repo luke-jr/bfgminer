@@ -1,3 +1,100 @@
+Version 2.0.0 - September 6, 2011
+
+Major feature upgrade - GPU monitoring, (over)clocking and fan control for ATI
+GPUs.
+
+New command line switches:
+--auto-fan          Automatically adjust all GPU fan speeds to maintain a target
+temperature
+--auto-gpu          Automatically adjust all GPU engine clock speeds to maintain
+a target temperature
+--gpu-engine <arg>  Set the GPU engine (over)clock in Mhz - one value for all or
+separate by commas for per card.
+--gpu-fan <arg>     Set the GPU fan percentage - one value for all or separate
+by commas for per card.
+--gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all
+or separate by commas for per card.
+--gpu-powertune <arg> Set the GPU powertune percentage - one value for all or
+separate by commas for per card.
+--gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate
+by commas for per card.
+--temp-hysteresis <arg> Set how much the temperature can fluctuate outside
+limits when automanaging speeds (default: 3)
+--temp-overheat <arg> Set the overheat temperature when automatically managing
+fan and GPU speeds (default: 85)
+--temp-target <arg> Set the target temperature when automatically managing fan
+and GPU speeds (default: 75)
+
+- Implement ATI ADL support for GPU parameter monitoring now and setting later
+(temp, fan, clocks etc.).
+- Check for the presence of the ADL header files in ADL_SDK.
+- Import adl_functions.h from amd overdrive ctrl.
+- Implement a setup function that tries to detect GPUs that support the ADL and
+link in the parameters into the gpus struct.
+- Put a summary of monitoring information from the GPU menu.
+- Implement changing memory speed and voltage on the fly.
+- Implement fan speed setting.
+- Minor corrections to set fan speed by percentage.
+- Make sure to read off the value in RPM only.
+- Implement auto fanspeed adjustment to maintain a target temperature and
+fanspeed below 85%, with an overheat check that will speed the fan up to 100%.
+- Add an --auto-fan command line option to allow all GPUs to have autofan
+enabled from startup.
+- Add a gpu autotune option which adjusts GPU speed to maintain a target
+temperature within the bounds of the default GPU speed and any overclocking set.
+- Avoid a dereference if the longpoll thread doesn't exist.
+- Clean up by setting performance profiles and fan settings to startup levels on
+exit.
+- Add a small amount of hysteresis before lowering clock speed.
+- Allow target, overheat and hysteresis temperatures to be set from command
+line.
+- Combine all stats collating into one function to avoid repeating function
+calls on each variable.
+- Add gpu statistics to debugging output via the watchdog thread.
+- Implement menus to change temperature limits.
+- Implement setting the GPU engine clock speed of all devices or each device as
+a comma separated value.
+- Implement setting the GPU memory clock speed of all devices or each device as
+a comma separated value.
+- Implement setting the GPU voltage of all devices or each device as a comma
+separated value.
+- Implement setting the GPU fan speed of all devices or each device as a comma
+separated value.
+- Add support for monitoring powertune setting.
+- Implement changing of powertune value from the GPU change settings menu.
+- Get the value of powertune in get_stats.
+- Implement setting the GPU powertune value of all devices or each device as a
+comma separated value.
+- Remove the safety checks in speed setting since confirmation is done first in
+the menu, then show the new current values after a short pause.
+- Force the speed to high on startup and restore it to whatever the setting was
+on exit.
+- Add temperature to standard output where possible and use more compact output.
+- Move and print at the same time in curses to avoid random trampling display
+errors.
+- Update the status window only from the watchdog thread, do not rewrite the top
+status messages and only refresh once all the status window is complete,
+clearing the window each time to avoid corruption.
+- Set a safe starting fan speed if we're automanaging the speeds.
+- Provide locking around all adl calls to prevent races.
+- Lower profile settings cannot be higher than higher profile ones so link any
+drops in settings.
+- Add new needed text files to distribution.
+- Queue requests ignoring the number of staged clones since they get discarded
+very easily leading to false positives for pool not providing work fast enough.
+- Include libgen.h in opt.c to fix win32 compilation warnings.
+- Fix compilation warning on win32.
+- Add the directory name from the arguments cgminer was called from as well to
+allow it running from a relative pathname.
+- Add a --disable-adl option to configure and only enable it if opencl support
+exists.
+- Retry before returning a failure to get upstream work as a failure to avoid
+false positives for pool dead.
+- Retry also if the decoding of work fails.
+- Use the presence of X-Roll-Ntime in the header as a bool for exists unless N
+is found in the response.
+
+
 Version 1.6.2 - September 2, 2011
 
 - Add --failover-only option to not leak work to backup pools when the primary
