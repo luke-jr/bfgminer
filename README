@@ -1,6 +1,6 @@
 
-This is a multi-threaded multi-pool CPU and GPU miner for bitcoin and
-derivative coins.
+This is a multi-threaded multi-pool CPU and GPU miner with ATI GPU monitoring,
+(over)clocking and fanspeed support for bitcoin and derivative coins.
 
 GIT TREE:
 
@@ -26,13 +26,21 @@ Dependencies:
 	(jansson is included in-tree and not necessary)
 	yasm 1.0.1+ http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
+	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
+	(This sdk is optional and gives support for GPU mining)
+	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
+	(This sdk is optional and gives support for ATI GPU monitoring & clocking)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
 	Install AMD APP sdk, latest version - there is no official place to
 	install it so just keep track of where it is if you're not installing
 	the include files and library files into the system directory.
-	(Do NOT install the ati amd sdk if you are on nvidia)
+	(Do NOT install the ati amd sdk if you are on nvidia.)
+	To build with GPU monitoring & clocking support:
+	Extract the AMD ADL SDK, latest version - there is also no official
+	place for these files. Copy all the *.h files in the "include"
+	directory into cgminer's ADL_SDK directory.
 
 The easiest way to install the ATI AMD SPP sdk on linux is to actually put it
 into a system location. Then building will be simpler. Download the correct
@@ -65,7 +73,7 @@ If you are on 32 bit, x86_64 in the 2nd last line should be x86
 	If it finds the opencl files it will inform you with
 	"OpenCL: FOUND. GPU mining support enabled."
 
-Basic WIN32 build instructions (on Fedora 13; requires mingw32):
+Basic WIN32 build instructions (LIKELY OUTDATED INFO. requires mingw32):
 	./autogen.sh	# only needed if building from git repo
 	rm -f mingw32-config.cache
 	MINGW32_CFLAGS="-O2 -Wall -msse2" mingw32-configure
@@ -75,6 +83,7 @@ Basic WIN32 build instructions (on Fedora 13; requires mingw32):
 Native WIN32 build instructions (on mingw32, on windows):
 	Install the Microsoft platform SDK
 	Install AMD APP sdk, latest version (only if you want GPU mining)
+	Install AMD ADL sdk, latest version (only if you want GPU monitoring)
 	(Do NOT install the ati amd sdk if you are on nvidia)
 	Install mingw32
 	Install libcurl, copy libcurl.m4 into /mingw/share/aclocal
@@ -88,7 +97,7 @@ Native WIN32 build instructions (on mingw32, on windows):
 
 Usage instructions:  Run "cgminer --help" to see options:
 
-Usage: ./cgminer [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
+Usage: . [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
 Options for both config file and command line:
 --algo|-a <arg>     Specify sha256 implementation for CPU mining:
         auto            Benchmark at startup and pick fastest algorithm
@@ -98,6 +107,8 @@ Options for both config file and command line:
         cryptopp        Crypto++ C/C++ implementation
         sse2_64         SSE2 64 bit implementation for x86_64 machines
         sse4_64         SSE4.1 64 bit implementation for x86_64 machines (default: sse2_64)
+--auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
+--auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
 --cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
 --debug|-D          Enable debug output
 --device|-d <arg>   Select device to use, (Use repeat -d for multiple devices, default: all)
@@ -105,6 +116,11 @@ Options for both config file and command line:
 --enable-cpu|-C     Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
+--gpu-engine <arg>  Set the GPU engine (over)clock in Mhz - one value for all or separate by commas for per card.
+--gpu-fan <arg>     Set the GPU fan percentage - one value for all or separate by commas for per card.
+--gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
+--gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
+--gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
 --intensity|-I <arg> Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)
 --kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/local/bin")
 --kernel|-k <arg>   Select kernel to use (poclbm or phatk - default: auto)
@@ -129,6 +145,9 @@ Options for both config file and command line:
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --submit-stale      Submit shares even if they would normally be considered stale
 --syslog            Use system log for output messages (default: standard error)
+--temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
+--temp-overheat <arg> Set the overheat temperature when automatically managing fan and GPU speeds (default: 85)
+--temp-target <arg> Set the target temperature when automatically managing fan and GPU speeds (default: 75)
 --text-only|-T      Disable ncurses formatted screen output
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server
@@ -159,13 +178,23 @@ Multiple pool, dedicated miner:
 
 cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
 
+Add overclocking settings, GPU and fan control for all cards:
+
+cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 950 --gpu-memclock 300
+
+Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
+
+cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 950,945,930,960 --gpu-memclock 300
+
+READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
+
 ---
 
 WHILE RUNNING:
 
 The following options are available while running with a single keypress:
 
-[P]ool management [S]ettings [D]isplay options [Q]uit
+[P]ool management [G]PU management [S]ettings [D]isplay options [Q]uit
 
 P gives you:
 
@@ -191,7 +220,25 @@ Toggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug
 [L]og interval [C]lear
 
 
-and Q quits the application.
+Q quits the application.
+
+
+G gives you something like:
+
+GPU 0: [124.2 / 191.3 Mh/s] [Q:212  A:77  R:33  HW:0  E:36%  U:1.73/m]
+Temp: 67.0 C
+Fan Speed: 35% (2500 RPM)
+Engine Clock: 960 MHz
+Memory Clock: 480 Mhz
+Vddc: 1.200 V
+Activity: 93%
+Powertune: 0%
+Last initialised: [2011-09-06 12:03:56]
+Thread 0: 62.4 Mh/s Enabled ALIVE
+Thread 1: 60.2 Mh/s Enabled ALIVE
+
+[E]nable [D]isable [R]estart GPU [C]hange settings
+Or press any other key to continue
 
 
 ---
@@ -231,6 +278,7 @@ starting baseline intensity to try on dedicated miners is 9. Higher values are
 there to cope with future improvements in hardware.
 
 ---
+MULTIPOOL
 
 FAILOVER STRATEGIES WITH MULTIPOOL:
 A number of different strategies for dealing with multipool setups are
@@ -274,6 +322,91 @@ There is also the -m option on linux which will spawn a command of your choice
 and pipe the output directly to that command.
 
 ---
+OVERCLOCKING WARNING AND INFORMATION
+
+AS WITH ALL OVERCLOCKING TOOLS YOU ARE ENTIRELY RESPONSIBLE FOR ANY HARM YOU
+MAY CAUSE TO YOUR HARDWARE. OVERCLOCKING CAN INVALIDATE WARRANTIES, DAMAGE
+HARDWARE AND EVEN CAUSE FIRES. THE AUTHOR ASSUMES NO RESPONSIBILITY FOR ANY
+DAMAGE YOU MAY CAUSE OR UNPLANNED CHILDREN THAT MAY OCCUR AS A RESULT.
+
+The GPU monitoring, clocking and fanspeed control incorporated into cgminer
+comes through use of the ATI Display Library. As such, it only supports ATI
+GPUs. Even if ADL support is successfully built into cgminer, unless the card
+and driver supports it, no GPU monitoring/settings will be available.
+
+Cgminer supports initial setting of GPU engine clock speed, memory clock
+speed, voltage, fanspeed, and the undocumented powertune feature of 69x0+ GPUs.
+The setting passed to cgminer is used by all GPUs unless separate values are
+specified. All settings can all be changed within the menu on the fly on a
+per-GPU basis.
+
+For example:
+--gpu-engine 950 --gpu-memclock 825
+
+will try to set all GPU engine clocks to 950 and all memory clocks to 825,
+while:
+--gpu-engine 950,945,930,960 --gpu-memclock 300
+
+will try to set the engine clock of card 0 to 950, 1 to 945, 2 to 930, 3 to
+960 and all memory clocks to 825.
+
+AUTO MODES:
+There are two "auto" modes in cgminer, --auto-fan and --auto-gpu. These can
+be used independently of each other and are complementary. Both auto modes
+are designed to safely change settings while trying to maintain a target
+temperature. By default this is set to 75 degrees C but can be changed with:
+--temp-target
+
+AUTO FAN:
+Fan control in auto fan works off the theory that the minimum possible fan
+required to maintain an optimal temperature will use less power, make less
+noise, and prolong the life of the fan. In auto-fan mode, the fan speed is
+limited to 85% if the temperature is below "overheat" intentionally, as
+higher fanspeeds on GPUs do not produce signficantly more cooling, yet
+significanly shorten the lifespan of the fans. If temperature reaches the
+overheat value, fanspeed will still be increased to 100%. The overheat value
+is set to 85 degrees by default and can be changed with:
+--temp-overheat
+
+AUTO GPU:
+GPU control in auto gpu tries to maintain as high a clock speed as possible
+while not reaching overheat temperatures. As a lower clock speed limit,
+the auto-gpu mode checks the GPU card's "normal" clock speed and will not go
+below this unless you have manually set a lower speed at some time. Also,
+unless a higher clock speed was specified at startup, it will not raise the
+clockspeed. If the temperature climbs, fanspeed is adjusted and optimised
+before GPU engine clockspeed is adjusted. If fan speed control is not available
+or already optimal, then GPU clock speed is only decreased if it goes over
+the target temperature by the hysteresis amount, which is set to 3 by default
+and can be changed with:
+--temp-hysteresis
+If the temperature drops below the target temperature, and engine clock speed
+is not at the highest level set at startup, cgminer will raise the clock speed.
+If at any time you manually set an even higher clock speed successfully in
+cgminer, it will record this value and use it as its new upper limit (and the
+same for low clock speeds and lower limits).
+
+CHANGING SETTINGS:
+When setting values, it is important to realise that even though the driver
+may report the value was changed successfully, and the new card power profile
+information contains the values you set it to, that the card itself may
+refuse to use those settings. As the performance profile changes dynamically,
+querying the "current" value on the card can be wrong as well. So when changing
+values in cgminer, after a pause of 1 second, it will report to you the current
+values where you should check that your change has taken. An example is that
+6970 reference cards will accept low memory values but refuse to actually run
+those lower memory values unless they're within 125 of the engine clock speed.
+In that scenario, they usually set their real speed back to their default.
+
+STARTUP / SHUTDOWN:
+When cgminer starts up, it tries to read off the current profile information
+for clock and fan speeds and stores these values. When quitting cgminer, it
+will then try to restore the original values. Changing settings outside of
+cgminer while it's running may be reset to the startup cgminer values when
+cgminer shuts down because of this.
+
+---
+
 FAQ
 
 Q: cgminer segfaults when I change my shell window size.
