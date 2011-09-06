@@ -119,10 +119,19 @@ PTHREAD_LIBS=-lpthread
 
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 
-AC_CHECK_FILE([ADL_SDK/adl_sdk.h], have_adl=true, have_adl=false,)
-if test x$have_adl = xtrue
-then
-	AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
+AC_ARG_ENABLE([adl],
+	[AC_HELP_STRING([--disable-adl],[Override detection and disable building with adl])],
+	[adl=$enableval]
+	)
+
+if test "$found_opencl" = 1; then
+	if test "x$adl" != xno; then
+		AC_CHECK_FILE([ADL_SDK/adl_sdk.h], have_adl=true, have_adl=false,)
+		if test x$have_adl = xtrue
+		then
+			AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
+		fi
+	fi
 fi
 
 AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
@@ -253,6 +262,7 @@ echo
 echo
 echo "Configuration Options Summary:"
 echo
+
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
@@ -263,10 +273,14 @@ else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
 fi
 
-if test x$have_adl = xtrue; then
-	echo "  ADL..................: SDK found, GPU monitoring support enabled"
+if test "x$adl" != xno; then
+	if test x$have_adl = xtrue; then
+		echo "  ADL..................: SDK found, GPU monitoring support enabled"
+	else
+		echo "  ADL..................: SDK NOT found, GPU monitoring support DISABLED"
+	fi
 else
-	echo "  ADL..................: SDK NOT found, GPU monitoring support DISABLED"
+	echo "  ADL..................: Detection overrided. GPU monitoring support DISABLED"
 fi
 
 echo "  ASM..................: $has_yasm"
