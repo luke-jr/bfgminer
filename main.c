@@ -2001,6 +2001,7 @@ static bool get_upstream_work(struct work *work, bool lagging)
 	if (opt_debug)
 		applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
+retry:
 	/* A single failure response here might be reported as a dead pool and
 	 * there may be temporary denied messages etc. falsely reporting
 	 * failure so retry a few times before giving up */
@@ -2013,6 +2014,8 @@ static bool get_upstream_work(struct work *work, bool lagging)
 	}
 
 	rc = work_decode(json_object_get(val, "result"), work);
+	if (!rc && retries < 3)
+		goto retry;
 	work->pool = pool;
 	total_getworks++;
 	pool->getwork_requested++;
