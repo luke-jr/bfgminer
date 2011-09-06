@@ -39,9 +39,17 @@ char *file_contents(const char *filename, int *length)
 	strcpy(fullpath, opt_kernel_path);
 	strcat(fullpath, filename);
 
-	f = fopen(filename, "rb");
-	if (!f)
+	/* Try in the optional kernel path or installed prefix first */
+	f = fopen(fullpath, "rb");
+	if (!f) {
+		/* Then try from the path cgminer was called */
+		strcpy(fullpath, cgminer_path);
+		strcat(fullpath, filename);
 		f = fopen(fullpath, "rb");
+	}
+	/* Finally try opening it directly */
+	if (!f)
+		f = fopen(filename, "rb");
 
 	if (!f) {
 		applog(LOG_ERR, "Unable to open %s or %s for reading", filename, fullpath);

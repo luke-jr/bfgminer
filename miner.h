@@ -304,6 +304,7 @@ extern bool opt_debug;
 extern bool opt_protocol;
 extern bool opt_log_output;
 extern char *opt_kernel_path;
+extern char *cgminer_path;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 

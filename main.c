@@ -31,6 +31,8 @@
 #include <ccan/opt/opt.h>
 #include <jansson.h>
 #include <curl/curl.h>
+#include <libgen.h>
+
 #include "compat.h"
 #include "miner.h"
 #include "findnonce.h"
@@ -225,6 +227,7 @@ bool opt_autofan;
 bool opt_autoengine;
 
 char *opt_kernel_path;
+char *cgminer_path;
 
 #define QUIET	(opt_quiet || opt_realquiet)
 
@@ -4950,8 +4953,11 @@ int main (int argc, char *argv[])
 	sigaction(SIGTERM, &handler, &termhandler);
 	sigaction(SIGINT, &handler, &inthandler);
 
-	opt_kernel_path = malloc(PATH_MAX);
+	opt_kernel_path = alloca(PATH_MAX);
 	strcpy(opt_kernel_path, CGMINER_PREFIX);
+	cgminer_path = alloca(PATH_MAX);
+	strcpy(cgminer_path, dirname(argv[0]));
+	strcat(cgminer_path, "/");
 
 	// Hack to make cgminer silent when called recursively on WIN32
 	int skip_to_bench = 0;
@@ -5307,8 +5313,6 @@ int main (int argc, char *argv[])
 				char *buf;
 
 				applog(LOG_ERR, "The most common reason for this failure is cgminer being unable to read the kernel .cl files");
-				applog(LOG_ERR, "You must either CD into the directory you are running cgminer from,");
-				applog(LOG_ERR, "or run it from a 'make install'ed location. ");
 				applog(LOG_ERR, "Alternatively if it has failed on different GPUs, restarting might help.");
 				failmessage = true;
 				buf = curses_input("Press enter to continue");
@@ -5414,8 +5418,6 @@ int main (int argc, char *argv[])
 		HASH_DEL(blocks, block);
 		free(block);
 	}
-
-	free(opt_kernel_path);
 
 	curl_global_cleanup();
 
