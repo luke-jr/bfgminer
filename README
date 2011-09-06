@@ -419,7 +419,7 @@ A: No, cgminer keeps a database of the block it's working on to ensure it does
 not work on stale blocks, and having different blocks from two networks would
 make it invalidate the work from each other.
 
-Q: Can I change the settings individually for each GPU?
+Q: Can I change the intensity settings individually for each GPU?
 A: Not currently.
 
 Q: Can I put multiple pools in the json config file?
@@ -451,6 +451,14 @@ values in each device.
 A: The per-device queue value is only incremented when that device has
 requested work over any buffered amount of work, so with fewer devices this
 value may stay very small.
+
+Q: Work keeps going to my backup pool even though my primary pool hasn't
+failed?
+A: Cgminer checks for conditions where the primary pool is lagging and will
+pass some work to the backup servers under those conditions. The reason for
+doing this is to try its absolute best to keep the GPUs working on something
+useful and not risk idle periods. You can disable this behaviour with the
+option --failover-only.
 
 Q: GUI version?
 A: No.
