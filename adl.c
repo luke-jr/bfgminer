@@ -959,13 +959,13 @@ void change_autosettings(int gpu)
 			set_defaultengine(gpu);
 		}
 	} else if (!strncasecmp(&input, "t", 1)) {
-		val = curses_int("Enter target temperature for this GPU in °C (0-100)");
+		val = curses_int("Enter target temperature for this GPU in C (0-100)");
 		if (val < 0 || val > 100)
 			wlogprint("Invalid temperature");
 		else
 			ga->targettemp = val;
 	} else if (!strncasecmp(&input, "o", 1)) {
-		wlogprint("Enter oveheat temperature for this GPU in °C (%d-100)", ga->targettemp);
+		wlogprint("Enter oveheat temperature for this GPU in C (%d-100)", ga->targettemp);
 		val = curses_int("");
 		if (val <= ga->targettemp || val > 100)
 			wlogprint("Invalid temperature");
@@ -991,7 +991,7 @@ void change_gpusettings(int gpu)
 
 updated:
 	if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-	wlogprint("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
+	wlogprint("Temp: %.1f C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
 		"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
 		temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");

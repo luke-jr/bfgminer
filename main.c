@@ -1677,7 +1677,7 @@ static void text_print_status(int thr_id)
 	if (cgpu->has_adl) {
 		int gpu = cgpu->cpu_gpu;
 
-		printf("GPU %d: [%.1f °C] [%.1f/%.1f Mh/s] [Q:%d A:%d R:%d HW:%d E:%.0f%% U:%.2f/m]\n",
+		printf("GPU %d: [%.1f ] [%.1f/%.1f Mh/s] [Q:%d A:%d R:%d HW:%d E:%.0f%% U:%.2f/m]\n",
 				cgpu->cpu_gpu, gpu_temp(gpu), cgpu->rolling,
 				cgpu->total_mhashes / total_secs, cgpu->getworks,
 				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
@@ -1736,7 +1736,7 @@ static void curses_print_devstatus(int thr_id)
 		mvwprintw(statuswin, gpucursor + gpu, 0, " GPU %d: ", gpu);
 #ifdef HAVE_ADL
 		if (cgpu->has_adl)
-			wprintw(statuswin, "[%.1f °C] ", gpu_temp(gpu));
+			wprintw(statuswin, "[%.1f C] ", gpu_temp(gpu));
 #endif
 		if (cgpu->status == LIFE_DEAD)
 			wprintw(statuswin, "[DEAD ");
@@ -1935,7 +1935,7 @@ static bool submit_upstream_work(const struct work *work)
 	if (cgpu->has_adl) {
 		int gpu = cgpu->cpu_gpu;
 
-		applog(LOG_INFO, "GPU %d  %.1f°C  Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
+		applog(LOG_INFO, "GPU %d  %.1fC  Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
 			gpu, gpu_temp(gpu), cgpu->getworks, cgpu->accepted,
 			cgpu->rejected, cgpu->hw_errors, cgpu->efficiency, cgpu->utility);
 	} else
@@ -2970,7 +2970,7 @@ retry:
 			float temp = 0, vddc = 0;
 
 			if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-			wlog("Temp: %.1f °C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
+			wlog("Temp: %.1f C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
 				"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
 			     temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 		}
@@ -3207,7 +3207,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 					sprintf(
 						statusline,
-						"[GPU%d %.1f °C (%ds):%.1f (avg):%.1f Mh/s] [Q:%d A:%d R:%d HW:%d E:%.0f%% U:%.2f/m]",
+						"[GPU%d %.1f C (%ds):%.1f (avg):%.1f Mh/s] [Q:%d A:%d R:%d HW:%d E:%.0f%% U:%.2f/m]",
 						cgpu->cpu_gpu,
 						gpu_temp(gpu),
 						opt_log_interval,
@@ -4588,7 +4588,7 @@ static void *watchdog_thread(void *userdata)
 				float temp = 0, vddc = 0;
 
 				if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-					applog(LOG_DEBUG, "%.1f°C  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%  P: %d%%",
+					applog(LOG_DEBUG, "%.1fC  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%  P: %d%%",
 					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 			}
 #endif
@@ -4632,7 +4632,7 @@ static void log_print_status(int thr_id)
 	if (cgpu->has_adl) {
 		int gpu = cgpu->cpu_gpu;
 
-		applog(LOG_WARNING, " GPU %d: [%.1f °C] [%.1f/%.1f Mh/s] [Q:%d A:%d R:%d HW:%d E:%.0f%% U:%.2f/m]",
+		applog(LOG_WARNING, " GPU %d: [%.1f C] [%.1f/%.1f Mh/s] [Q:%d A:%d R:%d HW:%d E:%.0f%% U:%.2f/m]",
 			gpu, gpu_temp(gpu), cgpu->rolling,
 			cgpu->total_mhashes / total_secs, cgpu->getworks,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
