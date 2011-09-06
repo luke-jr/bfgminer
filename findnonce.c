@@ -39,12 +39,6 @@ const uint32_t SHA256_K[64] = {
 	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
-inline uint32_t ByteReverse(uint32_t value)
-{
-	__asm__ ("bswap %0" : "=r" (value) : "0" (value));
-	return value;
-}
-
 #define rotate(x,y) ((x<<y) | (x>>(sizeof(x)*8-y)))
 #define rotr(x,y) ((x>>y) | (x<<(sizeof(x)*8-y)))
 
