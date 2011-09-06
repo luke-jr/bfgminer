@@ -62,6 +62,7 @@ AC_FUNC_ALLOCA
 
 have_win32=false
 PTHREAD_FLAGS="-pthread"
+DLOPEN_FLAGS="-ldl"
 OPENCL_FLAGS="-lOpenCL"
 WS2_LIBS=""
 
@@ -79,6 +80,7 @@ case $target in
     have_x86_64=false
     have_win32=true
     PTHREAD_FLAGS=""
+    DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
     ;;
   *-*-darwin*)
@@ -130,6 +132,8 @@ if test "$found_opencl" = 1; then
 		if test x$have_adl = xtrue
 		then
 			AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
+		else
+			DLOPEN_FLAGS=""
 		fi
 	fi
 fi
@@ -287,7 +291,7 @@ echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS"
+echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $DLOPEN_FLAGS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
