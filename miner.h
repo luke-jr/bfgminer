@@ -176,6 +176,7 @@ struct gpu_adl {
 
 	bool autofan;
 	bool autoengine;
+	bool managed; /* Were the values ever changed on this card */
 
 	int targettemp;
 	int overtemp;

@@ -318,6 +318,12 @@ void init_adl(int nDevs)
 			ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy);
 		}
 
+		/* Flag if the values of this GPU were ever modified to tell us
+		 * we need to reset the values upon exiting */
+		if (gpus[gpu].gpu_engine || gpus[gpu].gpu_memclock || gpus[gpu].gpu_vddc ||
+		    gpus[gpu].gpu_fan || gpus[gpu].gpu_powertune)
+			ga->managed = true;
+
 		/* Set some default temperatures for autotune when enabled */
 		ga->targettemp = opt_targettemp;
 		ga->overtemp = opt_overheattemp;
@@ -616,6 +622,7 @@ static int set_engineclock(int gpu, int iEngineClock)
 		ga->minspeed = ga->iEngineClock;
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
+	ga->managed = true;
 	ret = 0;
 out:
 	unlock_adl();
@@ -677,6 +684,7 @@ static int set_memoryclock(int gpu, int iMemoryClock)
 	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
+	ga->managed = true;
 	ret = 0;
 out:
 	unlock_adl();
@@ -749,6 +757,7 @@ static int set_vddc(int gpu, float fVddc)
 	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
+	ga->managed = true;
 	ret = 0;
 out:
 	unlock_adl();
@@ -796,6 +805,7 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
 	if (ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
 		goto out;
+	ga->managed = true;
 	ret = 0;
 out:
 	unlock_adl();
@@ -822,6 +832,7 @@ static int set_powertune(int gpu, int iPercentage)
 		goto out;
 	}
 	ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy);
+	ga->managed = true;
 	ret = 0;
 out:
 	unlock_adl();
@@ -1079,7 +1090,8 @@ void clear_adl(nDevs)
 	/* Try to reset values to their defaults */
 	for (i = 0; i < nDevs; i++) {
 		ga = &gpus[i].adl;
-		if (!gpus[i].has_adl)
+		/*  Only reset the values if we've changed them at any time */
+		if (!gpus[i].has_adl || !ga->managed)
 			continue;
 		ADL_Adapter_Speed_Set(ga->iAdapterIndex, ga->lpCurrent);
 		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, ga->DefPerfLev);
