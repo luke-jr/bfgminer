@@ -434,7 +434,7 @@ Q: The CPU usage is high.
 A: If you're on linux, the ATI drivers after 11.6 have a bug that makes them
 consume 100% of one CPU core unnecessarily so downgrade to 11.6. If you're on
 windows, you may be out of luck because the pthread library used consumes a
-lot of CPU.
+lot of CPU. Binding everything to one CPU core on windows can help.
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
@@ -444,13 +444,25 @@ Q: My GPU hangs and I have to reboot it to get it going again?
 A: The more aggressively the mining software uses your GPU, the less overclock
 you will be able to run. You are more likely to hit your limits with cgminer
 and you will find you may need to overclock your GPU less aggressively. The
-software cannot be responsible and make your GPU hang directly.
+software cannot be responsible and make your GPU hang directly. If you simply
+cannot get it to ever stop hanging, try decreasing the intensity, and if even
+that fails, try changing to the poclbm kernel with -k poclbm, though you will
+sacrifice performance.
 
 Q: The Queue total at the top is much more than the sum of all the Queued
 values in each device.
 A: The per-device queue value is only incremented when that device has
 requested work over any buffered amount of work, so with fewer devices this
 value may stay very small.
+
+Q: The Queue never increases on my card but the efficiency keeps going up, how
+can the efficiency be so high?
+A: Efficiency is defined as the accepted shares returned over the number of
+work items requested. Cgminer generates a lot of work locally, and has a
+buffer of "global" queued work meaning the device may hardly ever be requesting
+work itself. Thus the number of work items requested may be very small yet the
+GPU may still have plenty of work, creating accepted shares from them. Thus the
+"efficiency", by that definition, becomes extremely high.
 
 Q: Work keeps going to my backup pool even though my primary pool hasn't
 failed?
