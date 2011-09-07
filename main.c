@@ -225,6 +225,7 @@ static int opt_shares;
 static bool opt_fail_only;
 bool opt_autofan;
 bool opt_autoengine;
+bool opt_noadl;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1352,7 +1353,11 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_charp, NULL, &opt_stderr_cmd,
 		     "Use custom pipe cmd for output messages"),
 #endif // defined(unix)
-
+#ifdef HAVE_ADL
+	OPT_WITHOUT_ARG("--no-adl",
+			opt_set_bool, &opt_noadl,
+			"Disable the ATI display library used for monitoring and setting GPU parameters"),
+#endif
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -5288,7 +5293,8 @@ int main (int argc, char *argv[])
 	get_datestamp(datestamp, &total_tv_start);
 
 #ifdef HAVE_OPENCL
-	init_adl(nDevs);
+	if (!opt_noadl)
+		init_adl(nDevs);
 	bool failmessage = false;
 
 	/* start GPU mining threads */
