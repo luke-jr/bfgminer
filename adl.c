@@ -336,9 +336,10 @@ void init_adl(int nDevs)
 			ga->autoengine = true;
 
 		gpus[gpu].has_adl = true;
-	}
 
-	adl_active = true;
+		/* Flag adl as active if any card is successfully activated */
+		adl_active = true;
+	}
 }
 
 static inline float __gpu_temp(struct gpu_adl *ga)
