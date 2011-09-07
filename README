@@ -398,6 +398,19 @@ values where you should check that your change has taken. An example is that
 those lower memory values unless they're within 125 of the engine clock speed.
 In that scenario, they usually set their real speed back to their default.
 
+Cgminer reports the so-called "safe" range of whatever it is you are modifying
+when you ask to modify it on the fly. However, you can change settings to values
+outside this range. Despite this, the card can easily refuse to accept your
+changes, or worse, to accept your changes and then silently ignore them. So
+there is absolutely to know how far to/from where/to it can set things safely or
+otherwise, and there is nothing stopping you from at least trying to set them
+outside this range. Being very conscious of these possible failures is why
+cgminer will report back the current values for you to examine how exactly the
+card has responded. Even within the reported range of accepted values by the
+card, it is very easy to crash just about any card, so it cannot use those
+values to determine what range to set. You have to provide something meaningful
+manually for cgminer to work with through experimentation.
+
 STARTUP / SHUTDOWN:
 When cgminer starts up, it tries to read off the current profile information
 for clock and fan speeds and stores these values. When quitting cgminer, it
