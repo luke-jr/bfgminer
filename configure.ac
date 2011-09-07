@@ -62,7 +62,7 @@ AC_FUNC_ALLOCA
 
 have_win32=false
 PTHREAD_FLAGS="-pthread"
-DLOPEN_FLAGS="-ldl"
+DLOPEN_FLAGS="-ldl -lm"
 OPENCL_FLAGS="-lOpenCL"
 WS2_LIBS=""
 
