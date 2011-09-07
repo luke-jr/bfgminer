@@ -4268,7 +4268,7 @@ static void *longpoll_thread(void *userdata)
 				block_changed = BLOCK_LP;
 				applog(LOG_WARNING, "LONGPOLL detected new block on network, waiting on fresh work");
 			} else {
-				applog(LOG_WARNING, "LONGPOLL received after new block already detected");
+				applog(LOG_INFO, "LONGPOLL received after new block already detected");
 				block_changed = BLOCK_NONE;
 			}
 
