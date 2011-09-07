@@ -24,6 +24,7 @@ bool adl_active;
 int opt_hysteresis = 3;
 int opt_targettemp = 75;
 int opt_overheattemp = 85;
+int opt_cutofftemp = 95;
 static pthread_mutex_t adl_lock;
 
 // Memory allocation function
@@ -327,6 +328,7 @@ void init_adl(int nDevs)
 		/* Set some default temperatures for autotune when enabled */
 		ga->targettemp = opt_targettemp;
 		ga->overtemp = opt_overheattemp;
+		ga->cutofftemp = opt_cutofftemp;
 		if (opt_autofan) {
 			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
@@ -840,14 +842,11 @@ out:
 	return ret;
 }
 
-void gpu_autotune(int gpu)
+void gpu_autotune(int gpu, bool *enable)
 {
 	int temp, fanpercent, engine, newpercent, newengine;
 	bool fan_optimal = true;
 	struct gpu_adl *ga;
-
-	if (!gpus[gpu].has_adl || !adl_active)
-		return;
 
 	ga = &gpus[gpu].adl;
 
@@ -886,7 +885,11 @@ void gpu_autotune(int gpu)
 	}
 
 	if (engine && ga->autoengine) {
-		if (temp > ga->overtemp && engine > ga->minspeed) {
+		if (temp > ga->cutofftemp) {
+			applog(LOG_WARNING, "Hit thermal cutoff limit, disabling GPU!");
+			*enable = false;
+			newengine = ga->minspeed;
+		} else if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU clock speed");
 			newengine = ga->minspeed;
 		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
@@ -943,8 +946,9 @@ void change_autosettings(int gpu)
 
 	wlogprint("Target temperature: %d\n", ga->targettemp);
 	wlogprint("Overheat temperature: %d\n", ga->overtemp);
+	wlogprint("Cutoff temperature: %d\n", ga->cutofftemp);
 	wlogprint("Hysteresis differece: %d\n", opt_hysteresis);
-	wlogprint("Toggle [F]an auto [G]PU auto\nChange [T]arget [O]verheat [H]ysteresis\n");
+	wlogprint("Toggle [F]an auto [G]PU auto\nChange [T]arget [O]verheat [C]utoff [H]ysteresis\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 	if (!strncasecmp(&input, "f", 1)) {
@@ -968,12 +972,19 @@ void change_autosettings(int gpu)
 		else
 			ga->targettemp = val;
 	} else if (!strncasecmp(&input, "o", 1)) {
-		wlogprint("Enter oveheat temperature for this GPU in C (%d-100)", ga->targettemp);
+		wlogprint("Enter overheat temperature for this GPU in C (%d+)", ga->targettemp);
 		val = curses_int("");
-		if (val <= ga->targettemp || val > 100)
+		if (val <= ga->targettemp || val > 200)
 			wlogprint("Invalid temperature");
 		else
 			ga->overtemp = val;
+	} else if (!strncasecmp(&input, "c", 1)) {
+		wlogprint("Enter cutoff temperature for this GPU in C (%d+)", ga->overtemp);
+		val = curses_int("");
+		if (val <= ga->overtemp || val > 200)
+			wlogprint("Invalid temperature");
+		else
+			ga->cutofftemp = val;
 	} else if (!strncasecmp(&input, "h", 1)) {
 		val = curses_int("Enter hysteresis temperature difference (0-10)");
 		if (val < 1 || val > 10)

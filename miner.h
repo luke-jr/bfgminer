@@ -180,6 +180,7 @@ struct gpu_adl {
 
 	int targettemp;
 	int overtemp;
+	int cutofftemp;
 	int minspeed;
 	int maxspeed;
 };

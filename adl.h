@@ -5,6 +5,7 @@ bool adl_active;
 int opt_hysteresis;
 int opt_targettemp;
 int opt_overheattemp;
+int opt_cutofftemp;
 void init_adl(int nDevs);
 float gpu_temp(int gpu);
 int gpu_engineclock(int gpu);
@@ -16,13 +17,12 @@ int gpu_fanpercent(int gpu);
 bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
 	       int *activity, int *fanspeed, int *fanpercent, int *powertune);
 void change_gpusettings(int gpu);
-void gpu_autotune(int gpu);
+void gpu_autotune(int gpu, bool *enable);
 void clear_adl(int nDevs);
 #else /* HAVE_ADL */
 #define adl_active (0)
 static inline void init_adl(int nDevs) {}
 static inline void change_gpusettings(int gpu) { }
-static inline void gpu_autotune(int gpu) { }
 static inline void clear_adl(int nDevs) {}
 #endif
 #endif

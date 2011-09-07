@@ -1412,6 +1412,9 @@ static struct opt_table opt_config_table[] = {
 			"Use system log for output messages (default: standard error)"),
 #endif
 #ifdef HAVE_ADL
+	OPT_WITH_ARG("--temp-cutoff",
+		     set_int_0_to_9999, opt_show_intval, &opt_cutofftemp,
+		     "Set the temperature where a GPU device will be automatically disabled"),
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
@@ -4573,6 +4576,7 @@ static void *watchdog_thread(void *userdata)
 
 		for (i = 0; i < gpu_threads; i++) {
 			struct thr_info *thr;
+			bool *enable;
 			int gpu;
 
 			/* Use only one thread per device to determine if the GPU is healthy */
@@ -4580,9 +4584,10 @@ static void *watchdog_thread(void *userdata)
 				break;
 			thr = &thr_info[i];
 			gpu = thr->cgpu->cpu_gpu;
+			enable = &gpu_devices[gpu];
 #ifdef HAVE_ADL
-			if (adl_active)
-				gpu_autotune(gpu);
+			if (adl_active && gpus[gpu].has_adl && *enable)
+				gpu_autotune(gpu, enable);
 			if (opt_debug && gpus[gpu].has_adl) {
 				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
 				float temp = 0, vddc = 0;
@@ -4593,7 +4598,7 @@ static void *watchdog_thread(void *userdata)
 			}
 #endif
 			/* Thread is waiting on getwork or disabled */
-			if (thr->getwork || !gpu_devices[gpu])
+			if (thr->getwork || !*enable)
 				continue;
 
 			if (gpus[gpu].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
