@@ -969,8 +969,8 @@ void change_autosettings(int gpu)
 			set_defaultengine(gpu);
 		}
 	} else if (!strncasecmp(&input, "t", 1)) {
-		val = curses_int("Enter target temperature for this GPU in C (0-100)");
-		if (val < 0 || val > 100)
+		val = curses_int("Enter target temperature for this GPU in C (0-200)");
+		if (val < 0 || val > 200)
 			wlogprint("Invalid temperature");
 		else
 			ga->targettemp = val;
@@ -989,7 +989,7 @@ void change_autosettings(int gpu)
 		else
 			ga->cutofftemp = val;
 	} else if (!strncasecmp(&input, "h", 1)) {
-		val = curses_int("Enter hysteresis temperature difference (0-10)");
+		val = curses_int("Enter hysteresis temperature difference (1-10)");
 		if (val < 1 || val > 10)
 			wlogprint("Invalid value");
 		else

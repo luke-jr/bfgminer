@@ -972,9 +972,9 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
-static char *set_int_0_to_100(const char *arg, int *i)
+static char *set_int_0_to_200(const char *arg, int *i)
 {
-	return set_int_range(arg, i, 0, 100);
+	return set_int_range(arg, i, 0, 200);
 }
 
 static char *set_int_1_to_10(const char *arg, int *i)
@@ -1418,16 +1418,16 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--temp-cutoff",
-		     set_int_0_to_9999, opt_show_intval, &opt_cutofftemp,
+		     set_int_0_to_200, opt_show_intval, &opt_cutofftemp,
 		     "Set the temperature where a GPU device will be automatically disabled"),
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
 	OPT_WITH_ARG("--temp-overheat",
-		     set_int_0_to_100, opt_show_intval, &opt_overheattemp,
+		     set_int_0_to_200, opt_show_intval, &opt_overheattemp,
 		     "Set the overheat temperature when automatically managing fan and GPU speeds"),
 	OPT_WITH_ARG("--temp-target",
-		     set_int_0_to_100, opt_show_intval, &opt_targettemp,
+		     set_int_0_to_200, opt_show_intval, &opt_targettemp,
 		     "Set the target temperature when automatically managing fan and GPU speeds"),
 #endif
 	OPT_WITHOUT_ARG("--text-only|-T",
