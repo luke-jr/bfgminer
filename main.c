@@ -1241,7 +1241,7 @@ static char *set_gpu_vddc(char *arg)
 	gpus[device++].gpu_vddc = val;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
+		val = atof(nextptr);
 		if (val <= 0 || val >= 9999)
 			return "Invalid value passed to set_gpu_vddc";
 
