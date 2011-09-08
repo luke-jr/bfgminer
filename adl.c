@@ -951,8 +951,7 @@ void change_autosettings(int gpu)
 	wlogprint("Target temperature: %d\n", ga->targettemp);
 	wlogprint("Overheat temperature: %d\n", ga->overtemp);
 	wlogprint("Cutoff temperature: %d\n", ga->cutofftemp);
-	wlogprint("Hysteresis differece: %d\n", opt_hysteresis);
-	wlogprint("Toggle [F]an auto [G]PU auto\nChange [T]arget [O]verheat [C]utoff [H]ysteresis\n");
+	wlogprint("Toggle [F]an auto [G]PU auto\nChange [T]arget [O]verheat [C]utoff\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 	if (!strncasecmp(&input, "f", 1)) {
@@ -989,12 +988,6 @@ void change_autosettings(int gpu)
 			wlogprint("Invalid temperature");
 		else
 			ga->cutofftemp = val;
-	} else if (!strncasecmp(&input, "h", 1)) {
-		val = curses_int("Enter hysteresis temperature difference (1-10)");
-		if (val < 1 || val > 10)
-			wlogprint("Invalid value");
-		else
-			opt_hysteresis = val;
 	}
 }
 
