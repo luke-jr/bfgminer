@@ -183,7 +183,6 @@ void init_adl(int nDevs)
 		struct gpu_adl *ga;
 		int iAdapterIndex;
 		int lpAdapterID;
-		int lpStatus;
 		ADLODPerformanceLevels *lpOdPerformanceLevels;
 		int lev;
 
@@ -858,7 +857,7 @@ void gpu_autotune(int gpu, bool *enable)
 		int bot = gpus[gpu].min_fan;
 
 		if (temp > ga->overtemp && fanpercent < 100) {
-			applog(LOG_WARNING, "Overheat detected, increasing fan to 100%");
+			applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
 			newpercent = 100;
 		} else if (temp > ga->targettemp && fanpercent < top) {
 			if (opt_debug)
@@ -888,11 +887,11 @@ void gpu_autotune(int gpu, bool *enable)
 
 	if (engine && ga->autoengine) {
 		if (temp > ga->cutofftemp) {
-			applog(LOG_WARNING, "Hit thermal cutoff limit, disabling GPU!");
+			applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
 			*enable = false;
 			newengine = ga->minspeed;
 		} else if (temp > ga->overtemp && engine > ga->minspeed) {
-			applog(LOG_WARNING, "Overheat detected, decreasing GPU clock speed");
+			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
 			newengine = ga->minspeed;
 		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
 			if (opt_debug)
