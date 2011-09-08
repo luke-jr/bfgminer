@@ -972,11 +972,6 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
-static char *set_int_0_to_200(const char *arg, int *i)
-{
-	return set_int_range(arg, i, 0, 200);
-}
-
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
@@ -1278,6 +1273,104 @@ static char *set_gpu_vddc(char *arg)
 	return NULL;
 }
 
+static char *set_temp_cutoff(char *arg)
+{
+	int i, val = 0, device = 0, *tco;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set temp cutoff";
+	val = atoi(nextptr);
+	if (val < 0 || val > 200)
+		return "Invalid value passed to set temp cutoff";
+
+	tco = &gpus[device++].adl.cutofftemp;
+	*tco = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+		if (val < 0 || val > 200)
+			return "Invalid value passed to set temp cutoff";
+
+		tco = &gpus[device++].adl.cutofftemp;
+		*tco = val;
+	}
+	if (device == 1) {
+		for (i = device; i < 16; i++) {
+			tco = &gpus[i].adl.cutofftemp;
+			*tco = val;
+		}
+	}
+
+	return NULL;
+}
+
+static char *set_temp_overheat(char *arg)
+{
+	int i, val = 0, device = 0, *to;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set temp overheat";
+	val = atoi(nextptr);
+	if (val < 0 || val > 200)
+		return "Invalid value passed to set temp overheat";
+
+	to = &gpus[device++].adl.overtemp;
+	*to = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+		if (val < 0 || val > 200)
+			return "Invalid value passed to set temp overheat";
+
+		to = &gpus[device++].adl.overtemp;
+		*to = val;
+	}
+	if (device == 1) {
+		for (i = device; i < 16; i++) {
+			to = &gpus[i].adl.overtemp;
+			*to = val;
+		}
+	}
+
+	return NULL;
+}
+
+static char *set_temp_target(char *arg)
+{
+	int i, val = 0, device = 0, *tt;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set temp target";
+	val = atoi(nextptr);
+	if (val < 0 || val > 200)
+		return "Invalid value passed to set temp target";
+
+	tt = &gpus[device++].adl.targettemp;
+	*tt = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+		if (val < 0 || val > 200)
+			return "Invalid value passed to set temp target";
+
+		tt = &gpus[device++].adl.targettemp;
+		*tt = val;
+	}
+	if (device == 1) {
+		for (i = device; i < 16; i++) {
+			tt = &gpus[i].adl.targettemp;
+			*tt = val;
+		}
+	}
+
+	return NULL;
+}
 #endif
 
 /* These options are available from config file or commandline */
@@ -1349,13 +1442,13 @@ static struct opt_table opt_config_table[] = {
 		     "GPU fan percentage range - one value, range and/or comma separated list (e.g. 0-85,85,65)"),
 	OPT_WITH_ARG("--gpu-memclock",
 		     set_gpu_memclock, NULL, NULL,
-		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card."),
+		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card"),
 	OPT_WITH_ARG("--gpu-powertune",
 		     set_gpu_powertune, NULL, NULL,
-		     "Set the GPU powertune percentage - one value for all or separate by commas for per card."),
+		     "Set the GPU powertune percentage - one value for all or separate by commas for per card"),
 	OPT_WITH_ARG("--gpu-vddc",
 		     set_gpu_vddc, NULL, NULL,
-		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card."),
+		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card"),
 #endif
 	OPT_WITH_ARG("--intensity|-I",
 		     forced_int_1010, NULL, &scan_intensity,
@@ -1443,17 +1536,17 @@ static struct opt_table opt_config_table[] = {
 #endif
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--temp-cutoff",
-		     set_int_0_to_200, opt_show_intval, &opt_cutofftemp,
-		     "Set the temperature where a GPU device will be automatically disabled"),
+		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
+		     "Temperature where a GPU device will be automatically disabled, one value or comma separated list"),
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
 	OPT_WITH_ARG("--temp-overheat",
-		     set_int_0_to_200, opt_show_intval, &opt_overheattemp,
-		     "Set the overheat temperature when automatically managing fan and GPU speeds"),
+		     set_temp_overheat, opt_show_intval, &opt_overheattemp,
+		     "Overheat temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
 	OPT_WITH_ARG("--temp-target",
-		     set_int_0_to_200, opt_show_intval, &opt_targettemp,
-		     "Set the target temperature when automatically managing fan and GPU speeds"),
+		     set_temp_target, opt_show_intval, &opt_targettemp,
+		     "Target temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
 #endif
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,

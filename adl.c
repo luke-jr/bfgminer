@@ -22,9 +22,9 @@
 bool adl_active;
 
 int opt_hysteresis = 3;
-int opt_targettemp = 75;
-int opt_overheattemp = 85;
-int opt_cutofftemp = 95;
+const int opt_targettemp = 75;
+const int opt_overheattemp = 85;
+const int opt_cutofftemp = 95;
 static pthread_mutex_t adl_lock;
 
 // Memory allocation function
@@ -321,9 +321,12 @@ void init_adl(int nDevs)
 		}
 
 		/* Set some default temperatures for autotune when enabled */
-		ga->targettemp = opt_targettemp;
-		ga->overtemp = opt_overheattemp;
-		ga->cutofftemp = opt_cutofftemp;
+		if (!ga->targettemp)
+			ga->targettemp = opt_targettemp;
+		if (!ga->overtemp)
+			ga->overtemp = opt_overheattemp;
+		if (!ga->cutofftemp)
+			ga->cutofftemp = opt_cutofftemp;
 		if (opt_autofan) {
 			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */

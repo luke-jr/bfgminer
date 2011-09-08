@@ -3,9 +3,9 @@
 #ifdef HAVE_ADL
 bool adl_active;
 int opt_hysteresis;
-int opt_targettemp;
-int opt_overheattemp;
-int opt_cutofftemp;
+const int opt_targettemp;
+const int opt_overheattemp;
+const int opt_cutofftemp;
 void init_adl(int nDevs);
 float gpu_temp(int gpu);
 int gpu_engineclock(int gpu);
