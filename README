@@ -117,7 +117,7 @@ Options for both config file and command line:
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
 --gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
---gpu-fan <arg>     Set the GPU fan percentage - one value for all or separate by commas for per card.
+--gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
 --gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
 --gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
@@ -358,8 +358,9 @@ temperature. By default this is set to 75 degrees C but can be changed with:
 --temp-target
 
 AUTO FAN:
-i.e.
---auto-fan
+e.g.
+--auto-fan (implies 85% upper limit)
+--gpu-fan 25-85,65 --auto-fan
 
 Fan control in auto fan works off the theory that the minimum possible fan
 required to maintain an optimal temperature will use less power, make less

@@ -1162,27 +1162,36 @@ static char *set_gpu_engine(char *arg)
 
 static char *set_gpu_fan(char *arg)
 {
-	int i, val = 0, device = 0;
+	int i, val1 = 0, val2 = 0, device = 0;
 	char *nextptr;
 
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu fan";
-	val = atoi(nextptr);
-	if (val < 0 || val > 100)
+	get_intrange(nextptr, &val1, &val2);
+	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100)
 		return "Invalid value passed to set_gpu_fan";
 
-	gpus[device++].gpu_fan = val;
+	gpus[device].min_fan = val1;
+	gpus[device].gpu_fan = val2;
+	device++;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val < 0 || val > 100)
+		get_intrange(nextptr, &val1, &val2);
+		if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100)
 			return "Invalid value passed to set_gpu_fan";
 
-		gpus[device++].gpu_fan = val;
+		gpus[device].min_fan = val1;
+		gpus[device].gpu_fan = val2;
+		device++;
 	}
-	for (i = device; i < 16; i++)
-		gpus[i].gpu_fan = val;
+
+	if (device == 1) {
+		for (i = 1; i < 16; i++) {
+			gpus[i].min_fan = gpus[0].min_fan;
+			gpus[i].gpu_fan = gpus[0].gpu_fan;
+		}
+	}
 
 	return NULL;
 }
@@ -1337,7 +1346,7 @@ static struct opt_table opt_config_table[] = {
 		     "GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)"),
 	OPT_WITH_ARG("--gpu-fan",
 		     set_gpu_fan, NULL, NULL,
-		     "Set the GPU fan percentage - one value for all or separate by commas for per card."),
+		     "GPU fan percentage range - one value, range and/or comma separated list (e.g. 0-85,85,65)"),
 	OPT_WITH_ARG("--gpu-memclock",
 		     set_gpu_memclock, NULL, NULL,
 		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card."),

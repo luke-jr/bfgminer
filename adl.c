@@ -264,6 +264,7 @@ void init_adl(int nDevs)
 			ga->maxspeed = setengine;
 			if (gpus[gpu].min_engine)
 				ga->minspeed = gpus[gpu].min_engine * 100;
+			ga->managed = true;
 		}
 		if (gpus[gpu].gpu_memclock) {
 			int setmem = gpus[gpu].gpu_memclock * 100;
@@ -275,6 +276,7 @@ void init_adl(int nDevs)
 			lpOdPerformanceLevels->aLevels[lev].iMemoryClock = setmem;
 			applog(LOG_INFO, "Setting GPU %d memory clock to %d", gpu, gpus[gpu].gpu_memclock);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
+			ga->managed = true;
 		}
 		if (gpus[gpu].gpu_vddc) {
 			int setv = gpus[gpu].gpu_vddc * 1000;
@@ -286,16 +288,15 @@ void init_adl(int nDevs)
 			lpOdPerformanceLevels->aLevels[lev].iVddc = setv;
 			applog(LOG_INFO, "Setting GPU %d voltage to %.3f", gpu, gpus[gpu].gpu_vddc);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
+			ga->managed = true;
 		}
 		ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels);
 		ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 		ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 		ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
 
-		if (ADL_Overdrive5_FanSpeedInfo_Get(iAdapterIndex, 0, &ga->lpFanSpeedInfo) != ADL_OK) {
+		if (ADL_Overdrive5_FanSpeedInfo_Get(iAdapterIndex, 0, &ga->lpFanSpeedInfo) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_FanSpeedInfo_Get");
-			continue;
-		}
 
 		/* Save the fanspeed values as defaults in case we reset later */
 		ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
@@ -306,7 +307,9 @@ void init_adl(int nDevs)
 			ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
 			applog(LOG_INFO, "Setting GPU %d fan speed to %d%%", gpu, gpus[gpu].gpu_fan);
 			ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
-		}
+			ga->managed = true;
+		} else
+			gpus[gpu].gpu_fan = 85; /* Set a nominal upper limit of 85% */
 
 		/* Not fatal if powercontrol get fails */
 		if (ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy) != ADL_OK)
@@ -315,13 +318,8 @@ void init_adl(int nDevs)
 		if (gpus[gpu].gpu_powertune) {
 			ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, gpus[gpu].gpu_powertune);
 			ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy);
-		}
-
-		/* Flag if the values of this GPU were ever modified to tell us
-		 * we need to reset the values upon exiting */
-		if (gpus[gpu].gpu_engine || gpus[gpu].gpu_memclock || gpus[gpu].gpu_vddc ||
-		    gpus[gpu].gpu_fan || gpus[gpu].gpu_powertune)
 			ga->managed = true;
+		}
 
 		/* Set some default temperatures for autotune when enabled */
 		ga->targettemp = opt_targettemp;
@@ -856,19 +854,22 @@ void gpu_autotune(int gpu, bool *enable)
 	newengine = engine = gpu_engineclock(gpu) * 100;
 
 	if (temp && fanpercent >= 0 && ga->autofan) {
+		int top = gpus[gpu].gpu_fan;
+		int bot = gpus[gpu].min_fan;
+
 		if (temp > ga->overtemp && fanpercent < 100) {
 			applog(LOG_WARNING, "Overheat detected, increasing fan to 100%");
 			newpercent = 100;
-		} else if (temp > ga->targettemp && fanpercent < 85) {
+		} else if (temp > ga->targettemp && fanpercent < top) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 			if (temp > ga->targettemp + opt_hysteresis)
 				newpercent = fanpercent + 10;
 			else
 				newpercent = fanpercent + 5;
-			if (newpercent > 85)
-				newpercent = 85;
-		} else if (fanpercent && temp < ga->targettemp - opt_hysteresis) {
+			if (newpercent > top)
+				newpercent = top;
+		} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
 			newpercent = fanpercent - 1;
