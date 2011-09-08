@@ -145,9 +145,10 @@ Options for both config file and command line:
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --submit-stale      Submit shares even if they would normally be considered stale
 --syslog            Use system log for output messages (default: standard error)
+--temp-cutoff <arg> Temperature where a GPU device will be automatically disabled, one value or comma separated list (default: 95)
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
---temp-overheat <arg> Set the overheat temperature when automatically managing fan and GPU speeds (default: 85)
---temp-target <arg> Set the target temperature when automatically managing fan and GPU speeds (default: 75)
+--temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
+--temp-target <arg> Target temperature when automatically managing fan and GPU speeds (default: 75)
 --text-only|-T      Disable ncurses formatted screen output
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server
@@ -355,7 +356,14 @@ There are two "auto" modes in cgminer, --auto-fan and --auto-gpu. These can
 be used independently of each other and are complementary. Both auto modes
 are designed to safely change settings while trying to maintain a target
 temperature. By default this is set to 75 degrees C but can be changed with:
+
 --temp-target
+e.g.
+--temp-target 80
+Sets all cards' target temperature to 80 degrees.
+
+--temp-target 75,85
+Sets card 0 target temperature to 75, and card 1 to 85 degrees.
 
 AUTO FAN:
 e.g.
@@ -370,7 +378,11 @@ higher fanspeeds on GPUs do not produce signficantly more cooling, yet
 significanly shorten the lifespan of the fans. If temperature reaches the
 overheat value, fanspeed will still be increased to 100%. The overheat value
 is set to 85 degrees by default and can be changed with:
+
 --temp-overheat
+e.g.
+--temp-overheat 75,85
+Sets card 0 overheat threshold to 75 degrees and card 1 to 85.
 
 AUTO GPU:
 e.g.
@@ -392,7 +404,16 @@ If the temperature drops below the target temperature, and engine clock speed
 is not at the highest level set at startup, cgminer will raise the clock speed.
 If at any time you manually set an even higher clock speed successfully in
 cgminer, it will record this value and use it as its new upper limit (and the
-same for low clock speeds and lower limits).
+same for low clock speeds and lower limits). If the temperature goes over the
+cutoff limit (95 degrees by default), cgminer will completely disable the GPU
+from mining and it will not be re-enabled unless manually done so. The cutoff
+temperature can be changed with:
+
+--temp-cutoff
+e.g.
+--temp-cutoff 95,105
+Sets card 0 cutoff temperature to 95 and card 1 to 105.
+
 
 CHANGING SETTINGS:
 When setting values, it is important to realise that even though the driver
