@@ -1012,7 +1012,8 @@ updated:
 	wlogprint("Temp: %.1f C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
 		"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
 		temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
-	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");
+	wlogprint("Fan autotune is %s (%d-%d)\n", ga->autofan ? "enabled" : "disabled",
+		  gpus[gpu].min_fan, gpus[gpu].gpu_fan);
 	wlogprint("GPU engine clock autotune is %s (%d-%d)\n", ga->autoengine ? "enabled" : "disabled",
 		ga->minspeed / 100, ga->maxspeed / 100);
 	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage [P]owertune\n");
