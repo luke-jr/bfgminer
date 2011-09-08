@@ -3096,8 +3096,7 @@ retry:
 			float temp = 0, vddc = 0;
 
 			if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-			wlog("Temp: %.1f C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
-				"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
+			wlog("%.1f C  F: %d%% (%d RPM)  E: %d MHz  M: %d Mhz  V: %.3fV  A: %d%%  P: %d%%\n",
 			     temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 		}
 #endif
@@ -4716,7 +4715,7 @@ static void *watchdog_thread(void *userdata)
 				float temp = 0, vddc = 0;
 
 				if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-					applog(LOG_DEBUG, "%.1fC  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%  P: %d%%",
+					applog(LOG_DEBUG, "%.1f C  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%  P: %d%%",
 					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 			}
 #endif
