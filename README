@@ -116,7 +116,7 @@ Options for both config file and command line:
 --enable-cpu|-C     Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
---gpu-engine <arg>  Set the GPU engine (over)clock in Mhz - one value for all or separate by commas for per card.
+--gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
 --gpu-fan <arg>     Set the GPU fan percentage - one value for all or separate by commas for per card.
 --gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
 --gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
@@ -180,11 +180,11 @@ cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:p
 
 Add overclocking settings, GPU and fan control for all cards:
 
-cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 950 --gpu-memclock 300
+cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
 
 Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
 
-cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 950,945,930,960 --gpu-memclock 300
+cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
@@ -358,6 +358,9 @@ temperature. By default this is set to 75 degrees C but can be changed with:
 --temp-target
 
 AUTO FAN:
+i.e.
+--auto-fan
+
 Fan control in auto fan works off the theory that the minimum possible fan
 required to maintain an optimal temperature will use less power, make less
 noise, and prolong the life of the fan. In auto-fan mode, the fan speed is
@@ -369,10 +372,14 @@ is set to 85 degrees by default and can be changed with:
 --temp-overheat
 
 AUTO GPU:
+e.g.
+--auto-gpu --gpu-engine 750-950
+--auto-gpu --gpu-engine 750-950,945,700-930,960
+
 GPU control in auto gpu tries to maintain as high a clock speed as possible
 while not reaching overheat temperatures. As a lower clock speed limit,
 the auto-gpu mode checks the GPU card's "normal" clock speed and will not go
-below this unless you have manually set a lower speed at some time. Also,
+below this unless you have manually set a lower speed in the range. Also,
 unless a higher clock speed was specified at startup, it will not raise the
 clockspeed. If the temperature climbs, fanspeed is adjusted and optimised
 before GPU engine clockspeed is adjusted. If fan speed control is not available

@@ -261,6 +261,9 @@ void init_adl(int nDevs)
 			lpOdPerformanceLevels->aLevels[lev].iEngineClock = setengine;
 			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, gpus[gpu].gpu_engine);
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
+			ga->maxspeed = setengine;
+			if (gpus[gpu].min_engine)
+				ga->minspeed = gpus[gpu].min_engine * 100;
 		}
 		if (gpus[gpu].gpu_memclock) {
 			int setmem = gpus[gpu].gpu_memclock * 100;
@@ -288,11 +291,6 @@ void init_adl(int nDevs)
 		ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 		ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 		ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
-
-		if (ga->iEngineClock < ga->minspeed)
-			ga->minspeed = ga->iEngineClock;
-		if (ga->iEngineClock > ga->maxspeed)
-			ga->maxspeed = ga->iEngineClock;
 
 		if (ADL_Overdrive5_FanSpeedInfo_Get(iAdapterIndex, 0, &ga->lpFanSpeedInfo) != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_FanSpeedInfo_Get");
@@ -1012,7 +1010,8 @@ updated:
 		"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
 		temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 	wlogprint("Fan autotune is %s\n", ga->autofan ? "enabled" : "disabled");
-	wlogprint("GPU engine clock autotune is %s\n", ga->autoengine ? "enabled" : "disabled");
+	wlogprint("GPU engine clock autotune is %s (%d-%d)\n", ga->autoengine ? "enabled" : "disabled",
+		ga->minspeed / 100, ga->maxspeed / 100);
 	wlogprint("Change [A]utomatic [E]ngine [F]an [M]emory [V]oltage [P]owertune\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();

@@ -1117,29 +1117,45 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 }
 
 #ifdef HAVE_ADL
+static void get_intrange(char *arg, int *val1, int *val2)
+{
+	if (sscanf(arg, "%d-%d", val1, val2) == 1) {
+		*val2 = *val1;
+		*val1 = 0;
+	}
+}
+
 static char *set_gpu_engine(char *arg)
 {
-	int i, val = 0, device = 0;
+	int i, val1 = 0, val2 = 0, device = 0;
 	char *nextptr;
 
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu engine";
-	val = atoi(nextptr);
-	if (val <= 0 || val >= 9999)
+	get_intrange(nextptr, &val1, &val2);
+	if (val1 < 0 || val1 > 9999 || val2 <= 0 || val2 > 9999)
 		return "Invalid value passed to set_gpu_engine";
 
-	gpus[device++].gpu_engine = val;
+	gpus[device].min_engine = val1;
+	gpus[device].gpu_engine = val2;
+	device++;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val <= 0 || val >= 9999)
+		get_intrange(nextptr, &val1, &val2);
+		if (val1 < 0 || val1 > 9999 || val2 <= 0 || val2 > 9999)
 			return "Invalid value passed to set_gpu_engine";
-
-		gpus[device++].gpu_engine = val;
+		gpus[device].min_engine = val1;
+		gpus[device].gpu_engine = val2;
+		device++;
 	}
-	for (i = device; i < 16; i++)
-		gpus[i].gpu_engine = val;
+
+	if (device == 1) {
+		for (i = 1; i < 16; i++) {
+			gpus[i].min_engine = gpus[0].min_engine;
+			gpus[i].gpu_engine = gpus[0].gpu_engine;
+		}
+	}
 
 	return NULL;
 }
@@ -1318,7 +1334,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--gpu-engine",
 		     set_gpu_engine, NULL, NULL,
-		     "Set the GPU engine (over)clock in Mhz - one value for all or separate by commas for per card."),
+		     "GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)"),
 	OPT_WITH_ARG("--gpu-fan",
 		     set_gpu_fan, NULL, NULL,
 		     "Set the GPU fan percentage - one value for all or separate by commas for per card."),

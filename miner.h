@@ -205,7 +205,9 @@ struct cgpu_info {
 	bool has_adl;
 	struct gpu_adl adl;
 	int gpu_engine;
+	int min_engine;
 	int gpu_fan;
+	int min_fan;
 	int gpu_memclock;
 	int gpu_powertune;
 	float gpu_vddc;
