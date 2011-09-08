@@ -61,8 +61,8 @@ AC_CHECK_HEADERS(syslog.h)
 AC_FUNC_ALLOCA
 
 have_win32=false
-PTHREAD_FLAGS="-pthread"
-DLOPEN_FLAGS="-ldl -lm"
+PTHREAD_FLAGS="-lpthread"
+DLOPEN_FLAGS="-ldl"
 OPENCL_FLAGS="-lOpenCL"
 WS2_LIBS=""
 
