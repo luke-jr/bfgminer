@@ -210,7 +210,7 @@ static int nDevs;
 static int opt_g_threads = 2;
 static int opt_device;
 static int total_devices;
-static bool gpu_devices[16];
+static bool gpu_devices[MAX_GPUDEVICES];
 static int gpu_threads;
 static bool forced_n_threads;
 static int opt_n_threads;
@@ -1146,7 +1146,7 @@ static char *set_gpu_engine(char *arg)
 	}
 
 	if (device == 1) {
-		for (i = 1; i < 16; i++) {
+		for (i = 1; i < MAX_GPUDEVICES; i++) {
 			gpus[i].min_engine = gpus[0].min_engine;
 			gpus[i].gpu_engine = gpus[0].gpu_engine;
 		}
@@ -1182,7 +1182,7 @@ static char *set_gpu_fan(char *arg)
 	}
 
 	if (device == 1) {
-		for (i = 1; i < 16; i++) {
+		for (i = 1; i < MAX_GPUDEVICES; i++) {
 			gpus[i].min_fan = gpus[0].min_fan;
 			gpus[i].gpu_fan = gpus[0].gpu_fan;
 		}
@@ -1212,8 +1212,10 @@ static char *set_gpu_memclock(char *arg)
 
 		gpus[device++].gpu_memclock = val;
 	}
-	for (i = device; i < 16; i++)
-		gpus[i].gpu_memclock = val;
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].gpu_memclock = gpus[0].gpu_memclock;
+	}
 
 	return NULL;
 }
@@ -1239,8 +1241,10 @@ static char *set_gpu_powertune(char *arg)
 
 		gpus[device++].gpu_powertune = val;
 	}
-	for (i = device; i < 16; i++)
-		gpus[i].gpu_powertune = val;
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].gpu_powertune = gpus[0].gpu_powertune;
+	}
 
 	return NULL;
 }
@@ -1267,8 +1271,10 @@ static char *set_gpu_vddc(char *arg)
 
 		gpus[device++].gpu_vddc = val;
 	}
-	for (i = device; i < 16; i++)
-		gpus[i].gpu_vddc = val;
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].gpu_vddc = gpus[0].gpu_vddc;
+	}
 
 	return NULL;
 }
@@ -1297,7 +1303,7 @@ static char *set_temp_cutoff(char *arg)
 		*tco = val;
 	}
 	if (device == 1) {
-		for (i = device; i < 16; i++) {
+		for (i = device; i < MAX_GPUDEVICES; i++) {
 			tco = &gpus[i].adl.cutofftemp;
 			*tco = val;
 		}
@@ -1330,7 +1336,7 @@ static char *set_temp_overheat(char *arg)
 		*to = val;
 	}
 	if (device == 1) {
-		for (i = device; i < 16; i++) {
+		for (i = device; i < MAX_GPUDEVICES; i++) {
 			to = &gpus[i].adl.overtemp;
 			*to = val;
 		}
@@ -1363,7 +1369,7 @@ static char *set_temp_target(char *arg)
 		*tt = val;
 	}
 	if (device == 1) {
-		for (i = device; i < 16; i++) {
+		for (i = device; i < MAX_GPUDEVICES; i++) {
 			tt = &gpus[i].adl.targettemp;
 			*tt = val;
 		}
@@ -1771,7 +1777,7 @@ static WINDOW *mainwin, *statuswin, *logwin;
 static double total_secs = 0.1;
 static char statusline[256];
 static int cpucursor, gpucursor, logstart, logcursor;
-struct cgpu_info gpus[16]; /* Maximum number apparently possible */
+struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 static struct cgpu_info *cpus;
 
 static inline void unlock_curses(void)
@@ -3980,7 +3986,7 @@ enum {
 };
 
 #ifdef HAVE_OPENCL
-static _clState *clStates[16];
+static _clState *clStates[MAX_GPUDEVICES];
 
 static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 {
@@ -5141,7 +5147,7 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_OPENCL
 	if (!skip_to_bench) {
-		for (i = 0; i < 16; i++)
+		for (i = 0; i < MAX_GPUDEVICES; i++)
 			gpu_devices[i] = false;
 		nDevs = clDevicesNum();
 		if (nDevs < 0) {
@@ -5224,7 +5230,7 @@ int main (int argc, char *argv[])
 	if (total_devices) {
 		if (total_devices > nDevs)
 			quit(1, "More devices specified than exist");
-		for (i = 0; i < 16; i++)
+		for (i = 0; i < MAX_GPUDEVICES; i++)
 			if (gpu_devices[i] && i + 1 > nDevs)
 				quit (1, "Command line options set a device that doesn't exist");
 	} else {

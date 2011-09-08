@@ -377,12 +377,15 @@ struct work_restart {
 	char			padding[128 - sizeof(unsigned long)];
 };
 
+
+#define MAX_GPUDEVICES 16
+
 extern int hw_errors;
 extern bool use_syslog;
 extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
-extern struct cgpu_info gpus[16];
+extern struct cgpu_info gpus[MAX_GPUDEVICES];
 
 #ifdef HAVE_OPENCL
 typedef struct {
