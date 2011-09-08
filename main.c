@@ -1862,17 +1862,17 @@ static void curses_print_devstatus(int thr_id)
 		mvwprintw(statuswin, gpucursor + gpu, 0, " GPU %d: ", gpu);
 #ifdef HAVE_ADL
 		if (cgpu->has_adl)
-			wprintw(statuswin, "[%.1f C] ", gpu_temp(gpu));
+			wprintw(statuswin, "%.1fC %dRPM | ", gpu_temp(gpu), gpu_fanspeed(gpu));
 #endif
 		if (cgpu->status == LIFE_DEAD)
-			wprintw(statuswin, "[DEAD ");
+			wprintw(statuswin, "DEAD ");
 		else if (cgpu->status == LIFE_SICK)
-			wprintw(statuswin, "[SICK ");
+			wprintw(statuswin, "SICK ");
 		else  if (!gpu_devices[gpu])
-			wprintw(statuswin, "[DISABLED ");
+			wprintw(statuswin, "DISABLED ");
 		else
-			wprintw(statuswin, "[%.1f", cgpu->rolling);
-		wprintw(statuswin, "/%.1f Mh/s] [Q:%d A:%d R:%d HW:%d E:%.0f%% U:%.2f/m]   ",
+			wprintw(statuswin, "%.1f", cgpu->rolling);
+		wprintw(statuswin, "/%.1fMh/s | Q:%d A:%d R:%d HW:%d E:%.0f%% U:%.2f/m",
 			cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->efficiency, cgpu->utility);
@@ -1884,7 +1884,7 @@ static void curses_print_devstatus(int thr_id)
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 		cgpu->efficiency = cgpu->getworks ? cgpu->accepted * 100.0 / cgpu->getworks : 0.0;
 
-		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: [%.2f/%.2f Mh/s] [Q:%d A:%d R:%d E:%.0f%% U:%.2f/m]   ",
+		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: %.2f/%.2fMh/s | Q:%d A:%d R:%d E:%.0f%% U:%.2f/m",
 			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->getworks, cgpu->accepted, cgpu->rejected,
 			cgpu->efficiency, cgpu->utility);
