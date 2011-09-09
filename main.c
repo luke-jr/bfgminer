@@ -1896,7 +1896,7 @@ static void curses_print_devstatus(int thr_id)
 			if (gt != -1)
 				wprintw(statuswin, "%.1fC ", gt);
 			if (gf != -1)
-				wprintw(statuswin, "%dRPM ", gf);
+				wprintw(statuswin, "%4dRPM ", gf);
 			if (gt || gf)
 				wprintw(statuswin, "| ");
 		}
