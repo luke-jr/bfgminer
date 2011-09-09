@@ -2255,25 +2255,28 @@ void kill_work(void)
 
 	/* Kill the watchdog thread */
 	thr = &thr_info[watchdog_thr_id];
-	if (thr->pth)
+	if (thr && thr->pth)
 		pthread_cancel(*thr->pth);
 
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = &thr_info[i];
+		if (!thr)
+			continue;
 		if (!thr->pth)
 			continue;
-		tq_freeze(thr->q);
+		if (thr->q)
+			tq_freeze(thr->q);
 		/* No need to check if this succeeds or not */
 		pthread_cancel(*thr->pth);
 	}
 
 	/* Stop the others */
 	thr = &thr_info[stage_thr_id];
-	if (thr->pth)
+	if (thr && thr->pth)
 		pthread_cancel(*thr->pth);
 	thr = &thr_info[longpoll_thr_id];
-	if (thr->pth)
+	if (thr && thr->pth)
 		pthread_cancel(*thr->pth);
 
 	wc = calloc(1, sizeof(*wc));
@@ -2289,14 +2292,16 @@ void kill_work(void)
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing die request to work thread");
 
-	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
-		applog(LOG_ERR, "Failed to tq_push work in kill_work");
-		exit (1);
-	}
-
 	thr = &thr_info[work_thr_id];
-	if (thr->pth)
-		pthread_cancel(*thr->pth);
+	if (thr) {
+		if (unlikely(!tq_push(thr->q, wc))) {
+			applog(LOG_ERR, "Failed to tq_push work in kill_work");
+			exit (1);
+		}
+
+		if (thr->pth)
+			pthread_cancel(*thr->pth);
+	}
 }
 
 void quit(int status, const char *format, ...);
