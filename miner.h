@@ -194,8 +194,6 @@ struct cgpu_info {
 	int hw_errors;
 	double rolling;
 	double total_mhashes;
-	unsigned int getworks;
-	double efficiency;
 	double utility;
 	enum alive status;
 	char init[40];
