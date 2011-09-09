@@ -1,3 +1,39 @@
+Version 2.0.1 - September 9, 2011
+
+- Fix building on 32bit glibc with dlopen with -lpthread and -ldl
+- ByteReverse is not used and the bswap opcode breaks big endian builds. Remove
+it.
+- Ignore whether the display is active or not since only display enabled devices
+work this way, and we skip over repeat entries anwyay.
+- Only reset values on exiting if we've ever modified them.
+- Flag adl as active if any card is successfully activated.
+- Add a thermal cutoff option as well and set it to 95 degrees by default.
+- Change the fan speed by only 5% if it's over the target temperature but less
+than the hysteresis value to minimise overshoot down in temperature.
+- Add a --no-adl option to disable ADL monitoring and GPU settings.
+- Only show longpoll received delayed message at verbose level.
+- Allow temperatures greater than 100 degrees.
+- We should be passing a float for the remainder of the vddc values.
+- Implement accepting a range of engine speeds as well to allow a lower limit to
+be specified on the command line.
+- Allow per-device fan ranges to be set and use them in auto-fan mode.
+- Display which GPU has overheated in warning message.
+- Allow temperature targets to be set on a per-card basis on the command line.
+- Display fan range in autofan status.
+- Setting the hysteresis is unlikely to be useful on the fly and doesn't belong
+in the per-gpu submenu.
+- With many cards, the GPU summaries can be quite long so use a terse output
+line when showing them all.
+- Use a terser device status line to show fan RPM as well when available.
+- Define max gpudevices in one macro.
+- Allow adapterid 0 cards to enumerate as a device as they will be non-AMD
+cards, and enable ADL on any AMD card.
+- Do away with the increasingly confusing and irrelevant total queued and
+efficiency measures per device.
+- Only display values in the log if they're supported and standardise device log
+line printing.
+
+
 Version 2.0.0 - September 6, 2011
 
 Major feature upgrade - GPU monitoring, (over)clocking and fan control for ATI
