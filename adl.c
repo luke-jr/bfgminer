@@ -192,23 +192,26 @@ void init_adl(int nDevs)
 			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get");
 			continue;
 		}
-		if (!lpAdapterID)
-			continue;
 
 		/* Each adapter may have multiple entries */
 		if (lpAdapterID == last_adapter)
 			continue;
 
 		/* We found a truly new adapter instead of a logical
-			* one. Now since there's no way of correlating the
-			* opencl enumerated devices and the ADL enumerated
-			* ones, we have to assume they're in the same order.*/
+		* one. Now since there's no way of correlating the
+		* opencl enumerated devices and the ADL enumerated
+		* ones, we have to assume they're in the same order.*/
 		if (++devices > nDevs) {
 			applog(LOG_ERR, "ADL found more devices than opencl");
 			return;
 		}
 		gpu = devices - 1;
 		last_adapter = lpAdapterID;
+
+		if (!lpAdapterID) {
+			applog(LOG_INFO, "Adapter returns ID 0 meaning not AMD. Card order might be confused");
+			continue;
+		}
 
 		/* From here on we know this device is a discrete device and
 		 * should support ADL */
@@ -218,18 +221,14 @@ void init_adl(int nDevs)
 		ga->DefPerfLev = NULL;
 
 		/* Save whatever the current speed setting is to restore on exit */
-		if (ADL_Adapter_Speed_Get(iAdapterIndex, &ga->lpCurrent, &dummy) != ADL_OK) {
+		if (ADL_Adapter_Speed_Get(iAdapterIndex, &ga->lpCurrent, &dummy) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Adapter_Speed_Get");
-			continue;
-		}
 
 		/* Force the speed to high, whether it's ignored or not */
 		ADL_Adapter_Speed_Set(iAdapterIndex, ADL_CONTEXT_SPEED_FORCEHIGH);
 
-		if (ADL_Overdrive5_ODParameters_Get(iAdapterIndex, &ga->lpOdParameters) != ADL_OK) {
+		if (ADL_Overdrive5_ODParameters_Get(iAdapterIndex, &ga->lpOdParameters) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ODParameters_Get");
-			continue;
-		}
 
 		lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 		/* We're only interested in the top performance level */
@@ -237,10 +236,8 @@ void init_adl(int nDevs)
 		lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
 
 		/* Get default performance levels first */
-		if (ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 1, lpOdPerformanceLevels) != ADL_OK) {
+		if (ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 1, lpOdPerformanceLevels) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ODPerformanceLevels_Get");
-			continue;
-		}
 		/* Set the limits we'd use based on default gpu speeds */
 		ga->maxspeed = ga->minspeed = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 
