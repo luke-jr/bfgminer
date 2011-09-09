@@ -248,16 +248,16 @@ dedicated to this program,
 	http://forum.bitcoin.org/index.php?topic=28402.0
 
 The output line shows the following:
-[(5s):204.4  (avg):203.1 Mh/s] [Q:56  A:51  R:4  HW:0  E:91%  U:2.47/m]
+ GPU 1: 73.5C 2551RPM | 427.3/443.0Mh/s | A:8 R:0 HW:0 U:4.39/m
 
 Each column is as follows:
+Temperature (if supported)
+Fanspeed (if supported)
 A 5 second exponentially decaying average hash rate
 An all time average hash rate
-The number of requested work items
 The number of accepted shares
 The number of rejected shares
 The number of hardware erorrs
-The efficiency defined as the accepted shares / requested work and can be >100
 The utility defines as the number of shares / minute
 
 The cgminer status line shows:
@@ -490,21 +490,6 @@ software cannot be responsible and make your GPU hang directly. If you simply
 cannot get it to ever stop hanging, try decreasing the intensity, and if even
 that fails, try changing to the poclbm kernel with -k poclbm, though you will
 sacrifice performance.
-
-Q: The Queue total at the top is much more than the sum of all the Queued
-values in each device.
-A: The per-device queue value is only incremented when that device has
-requested work over any buffered amount of work, so with fewer devices this
-value may stay very small.
-
-Q: The Queue never increases on my card but the efficiency keeps going up, how
-can the efficiency be so high?
-A: Efficiency is defined as the accepted shares returned over the number of
-work items requested. Cgminer generates a lot of work locally, and has a
-buffer of "global" queued work meaning the device may hardly ever be requesting
-work itself. Thus the number of work items requested may be very small yet the
-GPU may still have plenty of work, creating accepted shares from them. Thus the
-"efficiency", by that definition, becomes extremely high.
 
 Q: Work keeps going to my backup pool even though my primary pool hasn't
 failed?
