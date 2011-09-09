@@ -1801,26 +1801,49 @@ static bool curses_active_locked(void)
 	return ret;
 }
 
-static void text_print_status(int thr_id)
+static void tailsprintf(char *f, const char *fmt, ...)
 {
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	va_list ap;
 
+	va_start(ap, fmt);
+	vsprintf(f + strlen(f), fmt, ap);
+	va_end(ap);
+}
+
+static void get_statline(char *buf, struct cgpu_info *cgpu)
+{
+	sprintf(buf, "%sPU%d ", cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu);
 #ifdef HAVE_ADL
 	if (cgpu->has_adl) {
 		int gpu = cgpu->cpu_gpu;
+		float gt = gpu_temp(gpu);
+		int gf = gpu_fanspeed(gpu);
 
-		printf("GPU %d: [%.1f ] [%.1f/%.1f Mh/s] [A:%d R:%d HW:%d U:%.2f/m]\n",
-				cgpu->cpu_gpu, gpu_temp(gpu), cgpu->rolling,
-				cgpu->total_mhashes / total_secs,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->utility);
-	} else
+		if (gt != -1)
+			tailsprintf(buf, "%.1fC ", gt);
+		if (gf != -1)
+			tailsprintf(buf, "%dRPM ", gf);
+		if (gt || gf)
+			tailsprintf(buf, "| ");
+	}
 #endif
-	printf(" %sPU %d: [%.1f / %.1f Mh/s] [A:%d  R:%d  HW:%d  U:%.2f/m]\n",
-	       cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu, cgpu->rolling,
-			cgpu->total_mhashes / total_secs,
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility);
+	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.2f/m",
+		opt_log_interval,
+		cgpu->rolling,
+		cgpu->total_mhashes / total_secs,
+		cgpu->accepted,
+		cgpu->rejected,
+		cgpu->hw_errors,
+		cgpu->utility);
+}
+
+static void text_print_status(int thr_id)
+{
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	char logline[255];
+
+	get_statline(logline, cgpu);
+	printf("%s\n", logline);
 }
 
 /* Must be called with curses mutex lock held and curses_active */
@@ -1866,8 +1889,17 @@ static void curses_print_devstatus(int thr_id)
 
 		mvwprintw(statuswin, gpucursor + gpu, 0, " GPU %d: ", gpu);
 #ifdef HAVE_ADL
-		if (cgpu->has_adl)
-			wprintw(statuswin, "%.1fC %dRPM | ", gpu_temp(gpu), gpu_fanspeed(gpu));
+		if (cgpu->has_adl) {
+			float gt = gpu_temp(gpu);
+			int gf = gpu_fanspeed(gpu);
+
+			if (gt != -1)
+				wprintw(statuswin, "%.1fC ", gt);
+			if (gf != -1)
+				wprintw(statuswin, "%dRPM ", gf);
+			if (gt || gf)
+				wprintw(statuswin, "| ");
+		}
 #endif
 		if (cgpu->status == LIFE_DEAD)
 			wprintw(statuswin, "DEAD ");
@@ -2060,18 +2092,10 @@ static bool submit_upstream_work(const struct work *work)
 	if (!opt_realquiet)
 		print_status(thr_id);
 	if (!want_per_device_stats) {
-#ifdef HAVE_ADL
-	if (cgpu->has_adl) {
-		int gpu = cgpu->cpu_gpu;
+		char logline[255];
 
-		applog(LOG_INFO, "GPU %d  %.1fC  A:%d  R:%d  HW:%d  U:%.2f/m",
-			gpu, gpu_temp(gpu), cgpu->accepted,
-			cgpu->rejected, cgpu->hw_errors, cgpu->utility);
-	} else
-#endif
-		applog(LOG_INFO, "%sPU %d  A:%d  R:%d  HW:%d  U:%.2f/m",
-			cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, cgpu->accepted,
-			cgpu->rejected, cgpu->hw_errors, cgpu->utility);
+		get_statline(logline, cgpu);
+		applog(LOG_INFO, "%s", logline);
 	}
 
 	json_decref(val);
@@ -3087,7 +3111,7 @@ retry:
 	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct cgpu_info *cgpu = &gpus[gpu];
 
-		wlog("GPU %d: [%.1f / %.1f Mh/s] [A:%d  R:%d  HW:%d  U:%.2f/m]\n",
+		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m\n",
 			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility);
@@ -3096,9 +3120,31 @@ retry:
 			int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
 			float temp = 0, vddc = 0;
 
-			if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-			wlog("%.1f C  F: %d%% (%d RPM)  E: %d MHz  M: %d Mhz  V: %.3fV  A: %d%%  P: %d%%\n",
-			     temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
+			if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
+				char logline[255];
+
+				strcpy(logline, ""); // In case it has no data
+				if (temp != -1)
+					sprintf(logline, "%.1f C  ", temp);
+				if (fanspeed != -1) {
+					tailsprintf(logline, "F: ");
+					if (fanpercent != -1)
+						tailsprintf(logline, "%d%% ", fanpercent);
+					tailsprintf(logline, "%d RPM)  ", fanspeed);
+				}
+				if (engineclock != -1)
+					tailsprintf(logline, "E: %d MHz  ", engineclock);
+				if (memclock != -1)
+					tailsprintf(logline, "M: %d Mhz  ", memclock);
+				if (vddc != -1)
+					tailsprintf(logline, "V: %.3fV  ", vddc);
+				if (activity != -1)
+					tailsprintf(logline, "A: %d%%  ", activity);
+				if (powertune != -1)
+					tailsprintf(logline, "P: %d%%", powertune);
+				tailsprintf(logline, "\n");
+				wlog(logline);
+			}
 		}
 #endif
 		wlog("Last initialised: %s\n", cgpu->init);
@@ -3324,47 +3370,16 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			timeval_subtract(&elapsed, &now, &thr->cgpu->last_message_tv);
 			if (opt_log_interval <= elapsed.tv_sec) {
 				struct cgpu_info *cgpu = thr->cgpu;
+				char logline[255];
 
 				cgpu->last_message_tv = now;
 
-#ifdef HAVE_ADL
-				if (cgpu->has_adl) {
-					int gpu = cgpu->cpu_gpu;
-
-					sprintf(
-						statusline,
-						"[GPU%d %.1f C (%ds):%.1f (avg):%.1f Mh/s] [A:%d R:%d HW:%d U:%.2f/m]",
-						cgpu->cpu_gpu,
-						gpu_temp(gpu),
-						opt_log_interval,
-						cgpu->rolling,
-						cgpu->total_mhashes / total_secs,
-						cgpu->accepted,
-						cgpu->rejected,
-						cgpu->hw_errors,
-						cgpu->utility
-					);
-				} else
-#endif
-				sprintf(
-					statusline,
-					"[%sPU%d (%ds):%.1f  (avg):%.1f Mh/s] [A:%d  R:%d  HW:%d  U:%.2f/m]",
-					cgpu->is_gpu ? "G" : "C",
-					cgpu->cpu_gpu,
-					opt_log_interval,
-					cgpu->rolling,
-					cgpu->total_mhashes / total_secs,
-					cgpu->accepted,
-					cgpu->rejected,
-					cgpu->hw_errors,
-					cgpu->utility
-				);
-
+				get_statline(logline, cgpu);
 				if (!curses_active) {
-					printf("%s          \r", statusline);
+					printf("%s          \r", logline);
 					fflush(stdout);
 				} else
-					applog(LOG_INFO, "%s", statusline);
+					applog(LOG_INFO, "%s", logline);
 			}
 		}
 	}
@@ -3392,7 +3407,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
-	sprintf(statusline, "[%s(%ds):%.1f  (avg):%.1f Mh/s] [Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m]",
+	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f Mh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval, rolling, total_mhashes_done / total_secs,
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
@@ -4750,24 +4765,11 @@ static void *watchdog_thread(void *userdata)
 static void log_print_status(int thr_id)
 {
 	struct cgpu_info *cgpu;
+	char logline[255];
 
 	cgpu = thr_info[thr_id].cgpu;
-#ifdef HAVE_ADL
-	if (cgpu->has_adl) {
-		int gpu = cgpu->cpu_gpu;
-
-		applog(LOG_WARNING, " GPU %d: [%.1f C] [%.1f/%.1f Mh/s] [A:%d R:%d HW:%d U:%.2f/m]",
-			gpu, gpu_temp(gpu), cgpu->rolling,
-			cgpu->total_mhashes / total_secs,
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility);
-	} else
-#endif
-	applog(LOG_WARNING, " %sPU %d: [%.1f / %.1f Mh/s] [A:%d  R:%d  HW:%d  U:%.2f/m]",
-	       cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu, cgpu->rolling,
-			cgpu->total_mhashes / total_secs,
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility);
+	get_statline(logline, cgpu);
+	applog(LOG_WARNING, "%s", logline);
 }
 
 static void print_summary(void)

@@ -342,14 +342,14 @@ void init_adl(int nDevs)
 static inline float __gpu_temp(struct gpu_adl *ga)
 {
 	if (ADL_Overdrive5_Temperature_Get(ga->iAdapterIndex, 0, &ga->lpTemperature) != ADL_OK)
-		return 0;
+		return -1;
 	return (float)ga->lpTemperature.iTemperature / 1000;
 }
 
 float gpu_temp(int gpu)
 {
 	struct gpu_adl *ga;
-	float ret = 0;
+	float ret = -1;
 
 	if (!gpus[gpu].has_adl || !adl_active)
 		return ret;
@@ -369,7 +369,7 @@ static inline int __gpu_engineclock(struct gpu_adl *ga)
 int gpu_engineclock(int gpu)
 {
 	struct gpu_adl *ga;
-	int ret = 0;
+	int ret = -1;
 
 	if (!gpus[gpu].has_adl || !adl_active)
 		return ret;
@@ -392,7 +392,7 @@ static inline int __gpu_memclock(struct gpu_adl *ga)
 int gpu_memclock(int gpu)
 {
 	struct gpu_adl *ga;
-	int ret = 0;
+	int ret = -1;
 
 	if (!gpus[gpu].has_adl || !adl_active)
 		return ret;
@@ -415,7 +415,7 @@ static inline float __gpu_vddc(struct gpu_adl *ga)
 float gpu_vddc(int gpu)
 {
 	struct gpu_adl *ga;
-	float ret = 0;
+	float ret = -1;
 
 	if (!gpus[gpu].has_adl || !adl_active)
 		return ret;
@@ -433,43 +433,43 @@ out:
 static inline int __gpu_activity(struct gpu_adl *ga)
 {
 	if (!ga->lpOdParameters.iActivityReportingSupported)
-		return 0;
+		return -1;
 	return ga->lpActivity.iActivityPercent;
 }
 
 int gpu_activity(int gpu)
 {
 	struct gpu_adl *ga;
-	int ret;
+	int ret = -1;
 
 	if (!gpus[gpu].has_adl || !adl_active)
-		return 0;
+		return ret;
 
 	ga = &gpus[gpu].adl;
 	lock_adl();
 	ret = ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity);
 	unlock_adl();
 	if (ret != ADL_OK)
-		return 0;
+		return ret;
 	if (!ga->lpOdParameters.iActivityReportingSupported)
-		return 0;
+		return ret;
 	return ga->lpActivity.iActivityPercent;
 }
 
 static inline int __gpu_fanspeed(struct gpu_adl *ga)
 {
 	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_READ))
-		return 0;
+		return -1;
 	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
-		return 0;
+		return -1;
 	return ga->lpFanSpeedValue.iFanSpeed;
 }
 
 int gpu_fanspeed(int gpu)
 {
 	struct gpu_adl *ga;
-	int ret = 0;
+	int ret = -1;
 
 	if (!gpus[gpu].has_adl || !adl_active)
 		return ret;
@@ -494,10 +494,10 @@ static inline int __gpu_fanpercent(struct gpu_adl *ga)
 int gpu_fanpercent(int gpu)
 {
 	struct gpu_adl *ga;
-	int ret = 0;
+	int ret = -1;
 
 	if (!gpus[gpu].has_adl || !adl_active)
-		return -1;
+		return ret;
 
 	ga = &gpus[gpu].adl;
 	lock_adl();
@@ -511,7 +511,7 @@ static inline int __gpu_powertune(struct gpu_adl *ga)
 	int dummy = 0;
 
 	if (ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy) != ADL_OK)
-		return 0;
+		return -1;
 	return ga->iPercentage;
 }
 
