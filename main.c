@@ -3135,7 +3135,7 @@ retry:
 					tailsprintf(logline, "F: ");
 					if (fanpercent != -1)
 						tailsprintf(logline, "%d%% ", fanpercent);
-					tailsprintf(logline, "%d RPM)  ", fanspeed);
+					tailsprintf(logline, "(%d RPM)  ", fanspeed);
 				}
 				if (engineclock != -1)
 					tailsprintf(logline, "E: %d MHz  ", engineclock);
