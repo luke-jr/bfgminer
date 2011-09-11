@@ -1,3 +1,29 @@
+Version 2.0.2 - September 11, 2011
+
+- Exit cleanly if we abort before various threads are set up or if they no
+longer exist.
+- Fix a rare crash in HASH_DEL due to using different mutexes to protect the
+data.
+- Flag devices that have never started and don't allow enabling of devices
+without restarting them.
+- Only force the adapter speed to high if we've flagged this device as being
+managed.
+- Flag any devices with autofan or autogpu as being managed.
+- Use a re-entrant value to store what fanspeed we're trying to set in case the
+card doesn't support small changes.     Force it to a multiple of 10% if it
+fails on trying to speed up the fan.
+- Do not bother resetting values to old ones if changes to GPU parameters report
+failure, instead returning a failure code only if the return value from get()
+differs.
+- Remove redundant check.
+- Only display supported values from fanspeed on change settings.
+- Missing bracket from output.
+- Display fan percentage on devices that only support reporting percent and not
+RPM.
+- Properly substitute DLOPEN flags to build with ADL support when -ldl is needed
+and not when opencl is not found.
+
+
 Version 2.0.1 - September 9, 2011
 
 - Fix building on 32bit glibc with dlopen with -lpthread and -ldl
@@ -40,9 +66,9 @@ Major feature upgrade - GPU monitoring, (over)clocking and fan control for ATI
 GPUs.
 
 New command line switches:
---auto-fan          Automatically adjust all GPU fan speeds to maintain a target
+--auto-fan-     Automatically adjust all GPU fan speeds to maintain a target
 temperature
---auto-gpu          Automatically adjust all GPU engine clock speeds to maintain
+--auto-gpu-     Automatically adjust all GPU engine clock speeds to maintain
 a target temperature
 --gpu-engine <arg>  Set the GPU engine (over)clock in Mhz - one value for all or
 separate by commas for per card.
