@@ -605,19 +605,10 @@ static int set_engineclock(int gpu, int iEngineClock)
 			lpOdPerformanceLevels->aLevels[i].iEngineClock = iEngineClock;
 	}
 	lpOdPerformanceLevels->aLevels[lev].iEngineClock = iEngineClock;
-	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
-		goto out;
+	ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
 	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-	/* Reset to old value if it fails! */
-	if (lpOdPerformanceLevels->aLevels[lev].iEngineClock != iEngineClock) {
-		/* Set all the parameters in case they're linked somehow */
-		lpOdPerformanceLevels->aLevels[lev].iEngineClock = ga->iEngineClock;
-		lpOdPerformanceLevels->aLevels[lev].iMemoryClock = ga->iMemoryClock;
-		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
-		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
-		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-		goto out;
-	}
+	if (lpOdPerformanceLevels->aLevels[lev].iEngineClock == iEngineClock)
+		ret = 0;
 	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 	if (ga->iEngineClock > ga->maxspeed)
 		ga->maxspeed = ga->iEngineClock;
@@ -626,7 +617,6 @@ static int set_engineclock(int gpu, int iEngineClock)
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
 	ga->managed = true;
-	ret = 0;
 out:
 	unlock_adl();
 	return ret;
@@ -671,24 +661,14 @@ static int set_memoryclock(int gpu, int iMemoryClock)
 		if (lpOdPerformanceLevels->aLevels[i].iMemoryClock > iMemoryClock)
 			lpOdPerformanceLevels->aLevels[i].iMemoryClock = iMemoryClock;
 	}
-	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
-		goto out;
+	ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
 	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-	/* Reset to old value if it fails! */
-	if (lpOdPerformanceLevels->aLevels[lev].iMemoryClock != iMemoryClock) {
-		/* Set all the parameters in case they're linked somehow */
-		lpOdPerformanceLevels->aLevels[lev].iMemoryClock = ga->iEngineClock;
-		lpOdPerformanceLevels->aLevels[lev].iMemoryClock = ga->iMemoryClock;
-		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
-		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
-		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-		goto out;
-	}
+	if (lpOdPerformanceLevels->aLevels[lev].iMemoryClock == iMemoryClock)
+		ret = 0;
 	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
 	ga->managed = true;
-	ret = 0;
 out:
 	unlock_adl();
 	return ret;
@@ -744,24 +724,14 @@ static int set_vddc(int gpu, float fVddc)
 			lpOdPerformanceLevels->aLevels[i].iVddc = iVddc;
 	}
 	lpOdPerformanceLevels->aLevels[lev].iVddc = iVddc;
-	if (ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels) != ADL_OK)
-		goto out;
+	ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
 	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-	/* Reset to old value if it fails! */
-	if (lpOdPerformanceLevels->aLevels[lev].iVddc != iVddc) {
-		/* Set all the parameters in case they're linked somehow */
-		lpOdPerformanceLevels->aLevels[lev].iEngineClock = ga->iEngineClock;
-		lpOdPerformanceLevels->aLevels[lev].iMemoryClock = ga->iMemoryClock;
-		lpOdPerformanceLevels->aLevels[lev].iVddc = ga->iVddc;
-		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, lpOdPerformanceLevels);
-		ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
-		goto out;
-	}
+	if (lpOdPerformanceLevels->aLevels[lev].iVddc == iVddc)
+		ret = 0;
 	ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 	ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 	ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
 	ga->managed = true;
-	ret = 0;
 out:
 	unlock_adl();
 	return ret;
@@ -809,10 +779,9 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 	} else
 		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
 	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
-	if (ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
-		goto out;
+	if (ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) == ADL_OK)
+		ret = 0;
 	ga->managed = true;
-	ret = 0;
 out:
 	unlock_adl();
 	return ret;
@@ -833,14 +802,11 @@ static int set_powertune(int gpu, int iPercentage)
 	oldPercentage = ga->iPercentage;
 
 	lock_adl();
-	if (ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, iPercentage) != ADL_OK) {
-		ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, ga->iPercentage);
-		goto out;
-	}
+	ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, iPercentage);
 	ADL_Overdrive5_PowerControl_Get(ga->iAdapterIndex, &ga->iPercentage, &dummy);
+	if (ga->iPercentage == iPercentage)
+		ret = 0;
 	ga->managed = true;
-	ret = 0;
-out:
 	unlock_adl();
 	return ret;
 }
