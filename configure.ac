@@ -136,6 +136,8 @@ if test "$found_opencl" = 1; then
 			DLOPEN_FLAGS=""
 		fi
 	fi
+else
+	DLOPEN_FLAGS=""
 fi
 
 AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
@@ -238,6 +240,7 @@ AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
 AC_SUBST(OPENCL_LIBS)
 AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
+AC_SUBST(DLOPEN_FLAGS)
 AC_SUBST(PTHREAD_LIBS)
 AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
