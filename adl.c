@@ -224,9 +224,6 @@ void init_adl(int nDevs)
 		if (ADL_Adapter_Speed_Get(iAdapterIndex, &ga->lpCurrent, &dummy) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Adapter_Speed_Get");
 
-		/* Force the speed to high, whether it's ignored or not */
-		ADL_Adapter_Speed_Set(iAdapterIndex, ADL_CONTEXT_SPEED_FORCEHIGH);
-
 		if (ADL_Overdrive5_ODParameters_Get(iAdapterIndex, &ga->lpOdParameters) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ODParameters_Get");
 
@@ -331,6 +328,11 @@ void init_adl(int nDevs)
 		}
 		if (opt_autoengine)
 			ga->autoengine = true;
+
+		if (ga->managed) {
+			if (ADL_Adapter_Speed_Set(iAdapterIndex, ADL_CONTEXT_SPEED_FORCEHIGH) != ADL_OK)
+				applog(LOG_INFO, "Failed to ADL_Adapter_Speed_Set");
+		}
 
 		gpus[gpu].has_adl = true;
 
