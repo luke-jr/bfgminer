@@ -1818,12 +1818,15 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		int gpu = cgpu->cpu_gpu;
 		float gt = gpu_temp(gpu);
 		int gf = gpu_fanspeed(gpu);
+		int gp = gpu_fanpercent(gpu);
 
 		if (gt != -1)
 			tailsprintf(buf, "%.1fC ", gt);
 		if (gf != -1)
 			tailsprintf(buf, "%dRPM ", gf);
-		if (gt || gf)
+		else if (gp != -1)
+			tailsprintf(buf, "%d%% ", gp);
+		if (gt > -1 || gf > -1 || gp > -1)
 			tailsprintf(buf, "| ");
 	}
 #endif
@@ -1892,12 +1895,15 @@ static void curses_print_devstatus(int thr_id)
 		if (cgpu->has_adl) {
 			float gt = gpu_temp(gpu);
 			int gf = gpu_fanspeed(gpu);
+			int gp = gpu_fanpercent(gpu);
 
 			if (gt != -1)
 				wprintw(statuswin, "%.1fC ", gt);
 			if (gf != -1)
 				wprintw(statuswin, "%4dRPM ", gf);
-			if (gt || gf)
+			else if (gp != -1)
+				wprintw(statuswin, "%2d%% ", gp);
+			if (gt > -1 || gf > -1 || gp > -1)
 				wprintw(statuswin, "| ");
 		}
 #endif
@@ -3131,11 +3137,13 @@ retry:
 				strcpy(logline, ""); // In case it has no data
 				if (temp != -1)
 					sprintf(logline, "%.1f C  ", temp);
-				if (fanspeed != -1) {
+				if (fanspeed != -1 || fanpercent != -1) {
 					tailsprintf(logline, "F: ");
 					if (fanpercent != -1)
 						tailsprintf(logline, "%d%% ", fanpercent);
-					tailsprintf(logline, "(%d RPM)  ", fanspeed);
+					if (fanspeed != -1)
+						tailsprintf(logline, "(%d RPM) ", fanspeed);
+					tailsprintf(logline, " ");
 				}
 				if (engineclock != -1)
 					tailsprintf(logline, "E: %d MHz  ", engineclock);
