@@ -325,9 +325,12 @@ void init_adl(int nDevs)
 			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
 			set_fanspeed(gpu, 85);
+			ga->managed = true;
 		}
-		if (opt_autoengine)
+		if (opt_autoengine) {
 			ga->autoengine = true;
+			ga->managed = true;
+		}
 
 		if (ga->managed) {
 			if (ADL_Adapter_Speed_Set(iAdapterIndex, ADL_CONTEXT_SPEED_FORCEHIGH) != ADL_OK)
