@@ -246,7 +246,7 @@ struct work_restart *work_restart = NULL;
 
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
-static pthread_mutex_t stgd_lock;
+static pthread_mutex_t *stgd_lock;
 static pthread_mutex_t curses_lock;
 static pthread_rwlock_t blk_lock;
 static double total_mhashes_done;
@@ -1767,9 +1767,9 @@ static int requests_staged(void)
 {
 	int ret;
 
-	mutex_lock(&stgd_lock);
+	mutex_lock(stgd_lock);
 	ret = HASH_COUNT(staged_work);
-	mutex_unlock(&stgd_lock);
+	mutex_unlock(stgd_lock);
 	return ret;
 }
 
@@ -2583,7 +2583,7 @@ static int discard_stale(void)
 	struct work *work, *tmp;
 	int i, stale = 0;
 
-	mutex_lock(&stgd_lock);
+	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work)) {
 			HASH_DEL(staged_work, work);
@@ -2593,7 +2593,7 @@ static int discard_stale(void)
 			stale++;
 		}
 	}
-	mutex_unlock(&stgd_lock);
+	mutex_unlock(stgd_lock);
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
@@ -2692,7 +2692,7 @@ static bool hash_push(struct work *work)
 {
 	bool rc = true;
 
-	mutex_lock(&getq->mutex);
+	mutex_lock(stgd_lock);
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
 		HASH_SORT(staged_work, tv_sort);
@@ -2701,7 +2701,7 @@ static bool hash_push(struct work *work)
 	} else
 		rc = false;
 	pthread_cond_signal(&getq->cond);
-	mutex_unlock(&getq->mutex);
+	mutex_unlock(stgd_lock);
 	return rc;
 }
 
@@ -3545,14 +3545,14 @@ struct work *hash_pop(const struct timespec *abstime)
 	struct work *work = NULL;
 	int rc;
 
-	mutex_lock(&getq->mutex);
+	mutex_lock(stgd_lock);
 	if (HASH_COUNT(staged_work))
 		goto pop;
 
 	if (abstime)
-		rc = pthread_cond_timedwait(&getq->cond, &getq->mutex, abstime);
+		rc = pthread_cond_timedwait(&getq->cond, stgd_lock, abstime);
 	else
-		rc = pthread_cond_wait(&getq->cond, &getq->mutex);
+		rc = pthread_cond_wait(&getq->cond, stgd_lock);
 	if (rc)
 		goto out;
 	if (!HASH_COUNT(staged_work))
@@ -3564,7 +3564,7 @@ pop:
 	if (work->clone)
 		--staged_clones;
 out:
-	mutex_unlock(&getq->mutex);
+	mutex_unlock(stgd_lock);
 	return work;
 }
 
@@ -5075,8 +5075,6 @@ int main (int argc, char *argv[])
 		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&qd_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init");
-	if (unlikely(pthread_mutex_init(&stgd_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&curses_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init");
 	if (unlikely(pthread_mutex_init(&control_lock, NULL)))
@@ -5347,6 +5345,8 @@ int main (int argc, char *argv[])
 	getq = tq_new();
 	if (!getq)
 		quit(1, "Failed to create getq");
+	/* We use the getq mutex as the staged lock */
+	stgd_lock = &getq->mutex;
 
 	/* Test each pool to see if we can retrieve and use work and for what
 	 * it supports */
