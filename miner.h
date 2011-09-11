@@ -153,6 +153,7 @@ enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
 	LIFE_DEAD,
+	LIFE_NOSTART
 };
 
 #ifdef HAVE_ADL

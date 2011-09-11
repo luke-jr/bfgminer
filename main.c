@@ -3170,6 +3170,9 @@ retry:
 				case LIFE_DEAD:
 					wlog("DEAD reported in %s", checkin);
 					break;
+				case LIFE_NOSTART:
+					wlog("Never started");
+					break;
 			}
 			wlog("\n");
 		}
@@ -3196,6 +3199,11 @@ retry:
 			if (dev_from_id(i) != selected)
 				continue;
 			thr = &thr_info[i];
+			if (thr->cgpu->status != LIFE_WELL) {
+				wlogprint("Must restart device before enabling it");
+				gpu_devices[selected] = false;
+				goto retry;
+			}
 			if (opt_debug)
 				applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
 
@@ -5460,6 +5468,7 @@ int main (int argc, char *argv[])
 					free(buf);
 			}
 			gpu_devices[gpu] = false;
+			cgpu->status = LIFE_NOSTART;
 			continue;
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
