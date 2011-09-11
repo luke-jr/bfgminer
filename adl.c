@@ -797,6 +797,9 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 	lock_adl();
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK)
 		goto out;
+	/* Store what fanspeed we're actually aiming for for re-entrant changes
+	 * in case this device does not support fine setting changes */
+	ga->targetfan = iFanSpeed;
 	ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
 	if ((ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_WRITE) &&
 		!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
@@ -868,15 +871,15 @@ void gpu_autotune(int gpu, bool *enable)
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 			if (temp > ga->targettemp + opt_hysteresis)
-				newpercent = fanpercent + 10;
+				newpercent = ga->targetfan + 10;
 			else
-				newpercent = fanpercent + 5;
+				newpercent = ga->targetfan + 5;
 			if (newpercent > top)
 				newpercent = top;
 		} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
-			newpercent = fanpercent - 1;
+			newpercent = ga->targetfan - 1;
 		}
 
 		if (newpercent > 100)
@@ -887,6 +890,15 @@ void gpu_autotune(int gpu, bool *enable)
 			fan_optimal = false;
 			applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
 			set_fanspeed(gpu, newpercent);
+			if (newpercent > fanpercent) {
+				int changefan = gpu_fanspeed(gpu);
+
+				if (changefan < newpercent) {
+					newpercent += 10;
+					newpercent -= newpercent % 10;
+					set_fanspeed(gpu, newpercent);
+				}
+			}
 		}
 	}
 
