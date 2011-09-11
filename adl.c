@@ -981,9 +981,17 @@ void change_gpusettings(int gpu)
 
 updated:
 	if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-	wlogprint("Temp: %.1f C\nFan Speed: %d%% (%d RPM)\nEngine Clock: %d MHz\n"
-		"Memory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
-		temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
+	wlogprint("Temp: %.1f C\n", temp);
+	if (fanpercent >= 0 || fanspeed >= 0) {
+		wlogprint("Fan Speed: ");
+		if (fanpercent >= 0)
+			wlogprint("%d%% ", fanpercent);
+		if (fanspeed >= 0)
+			wlogprint("(%d RPM)", fanspeed);
+		wlogprint("\n");
+	}
+	wlogprint("Engine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
+		engineclock, memclock, vddc, activity, powertune);
 	wlogprint("Fan autotune is %s (%d-%d)\n", ga->autofan ? "enabled" : "disabled",
 		  gpus[gpu].min_fan, gpus[gpu].gpu_fan);
 	wlogprint("GPU engine clock autotune is %s (%d-%d)\n", ga->autoengine ? "enabled" : "disabled",
