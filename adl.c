@@ -324,7 +324,7 @@ void init_adl(int nDevs)
 		if (opt_autofan) {
 			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
-			set_fanspeed(gpu, 85);
+			set_fanspeed(gpu, gpus[gpu].gpu_fan);
 			ga->managed = true;
 		}
 		if (opt_autoengine) {
@@ -828,10 +828,12 @@ void gpu_autotune(int gpu, bool *enable)
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		int top = gpus[gpu].gpu_fan;
 		int bot = gpus[gpu].min_fan;
+		int iMin = 0, iMax = 100;
 
-		if (temp > ga->overtemp && fanpercent < 100) {
+		get_fanrange(gpu, &iMin, &iMax);
+		if (temp > ga->overtemp && fanpercent < iMax) {
 			applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
-			newpercent = 100;
+			newpercent = iMax;
 		} else if (temp > ga->targettemp && fanpercent < top) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
@@ -847,23 +849,14 @@ void gpu_autotune(int gpu, bool *enable)
 			newpercent = ga->targetfan - 1;
 		}
 
-		if (newpercent > 100)
-			newpercent = 100;
-		else if (newpercent < 0)
-			newpercent = 0;
+		if (newpercent > iMax)
+			newpercent = iMax;
+		else if (newpercent < iMin)
+			newpercent = iMin;
 		if (newpercent != fanpercent) {
 			fan_optimal = false;
 			applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
 			set_fanspeed(gpu, newpercent);
-			if (newpercent > fanpercent) {
-				int changefan = gpu_fanspeed(gpu);
-
-				if (changefan < newpercent) {
-					newpercent += 10;
-					newpercent -= newpercent % 10;
-					set_fanspeed(gpu, newpercent);
-				}
-			}
 		}
 	}
 
