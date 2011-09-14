@@ -295,7 +295,7 @@ void init_adl(int nDevs)
 		ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
 		if (gpus[gpu].gpu_fan) {
 			ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
-			ga->lpFanSpeedValue.iFanSpeed = gpus[gpu].gpu_fan;
+			ga->targetfan = ga->lpFanSpeedValue.iFanSpeed = gpus[gpu].gpu_fan;
 			ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
 			ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
 			applog(LOG_INFO, "Setting GPU %d fan speed to %d%%", gpu, gpus[gpu].gpu_fan);
