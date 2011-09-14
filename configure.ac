@@ -63,7 +63,7 @@ AC_FUNC_ALLOCA
 have_win32=false
 PTHREAD_FLAGS="-lpthread"
 DLOPEN_FLAGS="-ldl"
-OPENCL_FLAGS="-lOpenCL"
+OPENCL_LIBS="-lOpenCL"
 WS2_LIBS=""
 
 case $target in
@@ -84,9 +84,19 @@ case $target in
     WS2_LIBS="-lws2_32"
     ;;
   *-*-darwin*)
-    OPENCL_FLAGS="-framework OpenCL"
+    OPENCL_LIBS="-framework OpenCL"
 	;;
 esac
+
+if test "x$ATISTREAMSDKROOT" != x; then
+	if test "x$have_x86_64" = xtrue; then
+		ATI_STREAM_ARCH_DIR=x86_64
+	else
+		ATI_STREAM_ARCH_DIR=x86
+	fi
+	OPENCL_FLAGS="-I$ATISTREAMSDKROOT/include $OPENCL_FLAGS"
+	OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ATI_STREAM_ARCH_DIR $OPENCL_LIBS"
+fi
 
 AC_ARG_ENABLE([opencl],
 	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
@@ -96,7 +106,9 @@ if test "x$opencl" != xno; then
 	# Check for OpenCL (the long way needed on mingw32 due to calling conventions)
 	AC_MSG_CHECKING([for OpenCL])
 	SAVED_LIBS=$LIBS
-	LIBS="$LIBS $OPENCL_FLAGS"
+	SAVED_CFLAGS=$CFLAGS
+	LIBS="$LIBS $OPENCL_LIBS"
+	CFLAGS="$CFLAGS $OPENCL_FLAGS"
 	AC_LINK_IFELSE(
 	[AC_LANG_PROGRAM([[
 		#ifdef __APPLE_CC__
@@ -109,10 +121,11 @@ if test "x$opencl" != xno; then
 	[AC_MSG_RESULT(yes)
 	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL is present on the system.])
 	found_opencl=1
-	OPENCL_LIBS=$OPENCL_FLAGS],
+	],
 	[AC_MSG_RESULT(no)
 	found_opencl=0])
 	LIBS=$SAVED_LIBS
+	CFLAGS=$SAVED_CFLAGS
 fi
 
 AC_CHECK_LIB(pthread, pthread_create, ,
@@ -238,6 +251,7 @@ fi
 AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
 
 AC_SUBST(OPENCL_LIBS)
+AC_SUBST(OPENCL_FLAGS)
 AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(DLOPEN_FLAGS)
