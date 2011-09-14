@@ -4346,6 +4346,10 @@ static void convert_to_work(json_t *val, bool rolltime)
 	}
 	work->pool = current_pool();
 	work->rolltime = rolltime;
+	/* We'll be checking this work item twice, but we already know it's
+	 * from a new block so explicitly force the new block detection now
+	 * rather than waiting for it to hit the stage thread */
+	test_work_current(work);
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing converted work to stage thread");
