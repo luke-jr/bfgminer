@@ -213,6 +213,10 @@ void init_adl(int nDevs)
 			continue;
 		}
 
+		gpus[gpu].has_adl = true;
+		/* Flag adl as active if any card is successfully activated */
+		adl_active = true;
+
 		/* From here on we know this device is a discrete device and
 		 * should support ADL */
 		ga = &gpus[gpu].adl;
@@ -336,11 +340,6 @@ void init_adl(int nDevs)
 			if (ADL_Adapter_Speed_Set(iAdapterIndex, ADL_CONTEXT_SPEED_FORCEHIGH) != ADL_OK)
 				applog(LOG_INFO, "Failed to ADL_Adapter_Speed_Set");
 		}
-
-		gpus[gpu].has_adl = true;
-
-		/* Flag adl as active if any card is successfully activated */
-		adl_active = true;
 	}
 }
 
