@@ -794,16 +794,16 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 		return ret;
 	}
 
+	/* Store what fanspeed we're actually aiming for for re-entrant changes
+	 * in case this device does not support fine setting changes */
+	ga->targetfan = iFanSpeed;
+
 	lock_adl();
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK) {
 		if (opt_debug)
 			applog(LOG_DEBUG, "GPU %d doesn't support fanspeed get", gpu);
 		goto out;
 	}
-
-	/* Store what fanspeed we're actually aiming for for re-entrant changes
-	 * in case this device does not support fine setting changes */
-	ga->targetfan = iFanSpeed;
 	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
 		/* Must convert speed to an RPM */
 		iFanSpeed = ga->lpFanSpeedInfo.iMaxRPM * iFanSpeed / 100;
