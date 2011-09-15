@@ -4467,6 +4467,8 @@ static void start_longpoll(void)
 
 static void restart_longpoll(void)
 {
+	if (want_longpoll && have_longpoll)
+		return;
 	stop_longpoll();
 	if (want_longpoll)
 		start_longpoll();
