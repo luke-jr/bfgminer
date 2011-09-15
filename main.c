@@ -4549,7 +4549,7 @@ select_cgpu:
 		thr->rolling = thr->cgpu->rolling = 0;
 		/* Reports the last time we tried to revive a sick GPU */
 		gettimeofday(&thr->sick, NULL);
-		if (thr->pth && !pthread_cancel(*thr->pth)) {
+		if (!pthread_cancel(thr->pth)) {
 			applog(LOG_WARNING, "Thread %d still exists, killing it off", thr_id);
 		} else
 			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);
@@ -5349,7 +5349,7 @@ int main (int argc, char *argv[])
 	/* start stage thread */
 	if (thr_info_create(thr, NULL, stage_thread, thr))
 		quit(1, "stage thread create failed");
-	pthread_detach(*thr->pth);
+	pthread_detach(thr->pth);
 
 	/* Create a unique get work queue */
 	getq = tq_new();
@@ -5525,7 +5525,7 @@ int main (int argc, char *argv[])
 	thr = &thr_info[input_thr_id];
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
-	pthread_detach(*thr->pth);
+	pthread_detach(thr->pth);
 
 	/* Create reinit cpu thread */
 	cpur_thr_id = mining_threads + 5;
@@ -5546,7 +5546,7 @@ int main (int argc, char *argv[])
 		quit(1, "reinit_gpu thread create failed");
 
 	/* main loop - simply wait for workio thread to exit */
-	pthread_join(*thr_info[work_thr_id].pth, NULL);
+	pthread_join(thr_info[work_thr_id].pth, NULL);
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	gettimeofday(&total_tv_end, NULL);

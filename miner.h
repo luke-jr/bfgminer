@@ -225,7 +225,7 @@ struct thread_q {
 
 struct thr_info {
 	int		id;
-	pthread_t	*pth;
+	pthread_t	pth;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
 	struct timeval last;
