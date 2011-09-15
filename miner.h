@@ -236,7 +236,8 @@ struct thr_info {
 	double	rolling;
 };
 
-extern inline int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
+extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
+extern void thr_info_cancel(struct thr_info *thr);
 
 static inline uint32_t swab32(uint32_t v)
 {

@@ -85,7 +85,6 @@ static inline void affine_to_cpu(int id, int cpu)
 enum workio_commands {
 	WC_GET_WORK,
 	WC_SUBMIT_WORK,
-	WC_DIE,
 };
 
 struct workio_cmd {
@@ -2252,62 +2251,41 @@ static void print_summary(void);
 
 void kill_work(void)
 {
-	struct workio_cmd *wc;
 	struct thr_info *thr;
 	unsigned int i;
 
 	disable_curses();
 	applog(LOG_INFO, "Received kill message");
 
+	if (opt_debug)
+		applog(LOG_DEBUG, "Killing off watchdog thread");
 	/* Kill the watchdog thread */
 	thr = &thr_info[watchdog_thr_id];
-	if (thr && thr->pth)
-		pthread_cancel(*thr->pth);
+	thr_info_cancel(thr);
 
+	if (opt_debug)
+		applog(LOG_DEBUG, "Killing off mining threads");
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = &thr_info[i];
-		if (!thr)
-			continue;
-		if (!thr->pth)
-			continue;
-		if (thr->q)
-			tq_freeze(thr->q);
-		/* No need to check if this succeeds or not */
-		pthread_cancel(*thr->pth);
+		thr_info_cancel(thr);
 	}
-
-	/* Stop the others */
-	thr = &thr_info[stage_thr_id];
-	if (thr && thr->pth)
-		pthread_cancel(*thr->pth);
-	thr = &thr_info[longpoll_thr_id];
-	if (thr && thr->pth)
-		pthread_cancel(*thr->pth);
-
-	wc = calloc(1, sizeof(*wc));
-	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to calloc wc in kill_work");
-		/* We're just trying to die anyway, so forget graceful */
-		exit (1);
-	}
-
-	wc->cmd = WC_DIE;
-	wc->thr = 0;
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "Pushing die request to work thread");
+		applog(LOG_DEBUG, "Killing off stage thread");
+	/* Stop the others */
+	thr = &thr_info[stage_thr_id];
+	thr_info_cancel(thr);
 
+	if (opt_debug)
+		applog(LOG_DEBUG, "Killing off longpoll thread");
+	thr = &thr_info[longpoll_thr_id];
+	thr_info_cancel(thr);
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Killing off work thread");
 	thr = &thr_info[work_thr_id];
-	if (thr) {
-		if (unlikely(!tq_push(thr->q, wc))) {
-			applog(LOG_ERR, "Failed to tq_push work in kill_work");
-			exit (1);
-		}
-
-		if (thr->pth)
-			pthread_cancel(*thr->pth);
-	}
+	thr_info_cancel(thr);
 }
 
 void quit(int status, const char *format, ...);
@@ -3315,7 +3293,6 @@ static void *workio_thread(void *userdata)
 		case WC_SUBMIT_WORK:
 			ok = workio_submit_work(wc);
 			break;
-		case WC_DIE:
 		default:
 			ok = false;
 			break;
@@ -4472,9 +4449,7 @@ static void stop_longpoll(void)
 {
 	struct thr_info *thr = &thr_info[longpoll_thr_id];
 
-	tq_freeze(thr->q);
-	if (thr->pth)
-		pthread_cancel(*thr->pth);
+	thr_info_cancel(thr);
 	have_longpoll = false;
 }
 
@@ -4482,7 +4457,7 @@ static void start_longpoll(void)
 {
 	struct thr_info *thr = &thr_info[longpoll_thr_id];
 
-	tq_thaw(thr->q);		
+	tq_thaw(thr->q);
 	if (unlikely(thr_info_create(thr, NULL, longpoll_thread, thr)))
 		quit(1, "longpoll thread create failed");
 	if (opt_debug)
@@ -4566,10 +4541,15 @@ select_cgpu:
 			continue;
 
 		thr = &thr_info[thr_id];
+		if (!thr) {
+			applog(LOG_WARNING, "No reference to thread %d exists", thr_id);
+			continue;
+		}
+
 		thr->rolling = thr->cgpu->rolling = 0;
 		/* Reports the last time we tried to revive a sick GPU */
 		gettimeofday(&thr->sick, NULL);
-		if (!pthread_cancel(*thr->pth)) {
+		if (thr->pth && !pthread_cancel(*thr->pth)) {
 			applog(LOG_WARNING, "Thread %d still exists, killing it off", thr_id);
 		} else
 			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);

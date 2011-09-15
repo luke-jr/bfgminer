@@ -653,18 +653,37 @@ out:
 	return rval;
 }
 
-inline int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg)
+int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg)
 {
-	int ret = 0;
-	
+	int ret = -1;
+
 	thr->pth = malloc(sizeof(pthread_t));
-	ret = pthread_create(thr->pth, attr, start, arg);
-	
-	if (unlikely(ret)) {
-		free(thr->pth);
-		thr->pth = 0;
+	if (unlikely(!thr->pth)) {
+		applog(LOG_ERR, "Failed to malloc in thr_info_create");
+		return ret;
 	}
-	
+
+	ret = pthread_create(thr->pth, attr, start, arg);
+	if (unlikely(ret)) {
+		applog(LOG_ERR, "Failed to pthread_create in thr_info_create");
+		free(thr->pth);
+		thr->pth = NULL;
+	}
+
 	return ret;
 }
 
+void thr_info_cancel(struct thr_info *thr)
+{
+	if (!thr)
+		return;
+
+	if (thr->q)
+		tq_freeze(thr->q);
+	if (thr->pth) {
+		if (pthread_cancel(*thr->pth))
+			pthread_join(*thr->pth, NULL);
+		free(thr->pth);
+		thr->pth = NULL;
+	}
+}
