@@ -299,15 +299,9 @@ void init_adl(int nDevs)
 
 		/* Save the fanspeed values as defaults in case we reset later */
 		ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
-		if (gpus[gpu].gpu_fan) {
-			ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
-			ga->targetfan = ga->lpFanSpeedValue.iFanSpeed = gpus[gpu].gpu_fan;
-			ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
-			ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
-			applog(LOG_INFO, "Setting GPU %d fan speed to %d%%", gpu, gpus[gpu].gpu_fan);
-			ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
-			ga->managed = true;
-		} else
+		if (gpus[gpu].gpu_fan)
+			set_fanspeed(gpu, gpus[gpu].gpu_fan);
+		else
 			gpus[gpu].gpu_fan = 85; /* Set a nominal upper limit of 85% */
 
 		/* Not fatal if powercontrol get fails */
@@ -331,7 +325,6 @@ void init_adl(int nDevs)
 			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
 			set_fanspeed(gpu, gpus[gpu].gpu_fan);
-			ga->managed = true;
 		}
 		if (opt_autoengine) {
 			ga->autoengine = true;
@@ -771,13 +764,17 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 	/* Store what fanspeed we're actually aiming for for re-entrant changes
 	 * in case this device does not support fine setting changes */
 	ga->targetfan = iFanSpeed;
-	ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
 	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
 		/* Must convert speed to an RPM */
 		iFanSpeed = ga->lpFanSpeedInfo.iMaxRPM * iFanSpeed / 100;
 		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
 	} else
 		ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
+	if (!(ga->lpFanSpeedValue.iFlags & ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED)) {
+		/* If user defined is not already specified, set it first */
+		ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
+		ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
+	}
 	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
 	if (ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) == ADL_OK)
 		ret = 0;
