@@ -2455,11 +2455,12 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
-static void restart_longpoll(void);
+static void __restart_longpoll(void);
 
 static void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
+	bool new_pool = false;
 	int i, pool_no;
 
 	mutex_lock(&control_lock);
@@ -2507,13 +2508,23 @@ static void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
-	mutex_unlock(&control_lock);
 
 	if (pool != last_pool) {
-		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		new_pool = true;
 		/* Only switch longpoll if the new pool also supports LP */
 		if (pool->hdr_path)
-			restart_longpoll();
+			__restart_longpoll();
+	}
+
+	mutex_unlock(&control_lock);
+
+	if (new_pool) {
+		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		if (want_longpoll) {
+			if (opt_debug)
+				applog(LOG_DEBUG, "Pushing ping to longpoll thread");
+			tq_push(thr_info[longpoll_thr_id].q, &ping);
+		}
 	}
 
 	/* Reset the queued amount to allow more to be queued for the new pool */
@@ -3002,6 +3013,8 @@ retry:
 	immedok(logwin, false);
 	opt_loginput = false;
 }
+
+static void restart_longpoll(void);
 
 static void set_options(void)
 {
@@ -4470,6 +4483,23 @@ static void restart_longpoll(void)
 	stop_longpoll();
 	if (want_longpoll)
 		start_longpoll();
+}
+
+/* Version for when we are holding a lock, grabs no other locks to prevent
+ * deadlock */
+static void __restart_longpoll(void)
+{
+	struct thr_info *thr = &thr_info[longpoll_thr_id];
+
+	thr_info_cancel(thr);
+	have_longpoll = false;
+
+	if (!want_longpoll)
+		return;
+
+	tq_thaw(thr->q);
+	if (unlikely(thr_info_create(thr, NULL, longpoll_thread, thr)))
+		quit(1, "longpoll thread create failed");
 }
 
 static void *reinit_cpu(void *userdata)
