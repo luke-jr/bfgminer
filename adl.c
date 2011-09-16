@@ -68,8 +68,6 @@ static	ADL_OVERDRIVE5_ODPERFORMANCELEVELS_SET	ADL_Overdrive5_ODPerformanceLevels
 static	ADL_MAIN_CONTROL_REFRESH	ADL_Main_Control_Refresh;
 static	ADL_OVERDRIVE5_POWERCONTROL_GET	ADL_Overdrive5_PowerControl_Get;
 static	ADL_OVERDRIVE5_POWERCONTROL_SET	ADL_Overdrive5_PowerControl_Set;
-static	ADL_ADAPTER_SPEED_GET		ADL_Adapter_Speed_Get;
-static	ADL_ADAPTER_SPEED_SET		ADL_Adapter_Speed_Set;
 static	ADL_OVERDRIVE5_FANSPEEDTODEFAULT_SET	ADL_Overdrive5_FanSpeedToDefault_Set;
 
 #if defined (LINUX)
@@ -131,8 +129,6 @@ void init_adl(int nDevs)
 	ADL_Main_Control_Refresh = (ADL_MAIN_CONTROL_REFRESH) GetProcAddress(hDLL, "ADL_Main_Control_Refresh");
 	ADL_Overdrive5_PowerControl_Get = (ADL_OVERDRIVE5_POWERCONTROL_GET) GetProcAddress(hDLL, "ADL_Overdrive5_PowerControl_Get");
 	ADL_Overdrive5_PowerControl_Set = (ADL_OVERDRIVE5_POWERCONTROL_SET) GetProcAddress(hDLL, "ADL_Overdrive5_PowerControl_Set");
-	ADL_Adapter_Speed_Get = (ADL_ADAPTER_SPEED_GET) GetProcAddress(hDLL, "ADL_Adapter_Speed_Get");
-	ADL_Adapter_Speed_Set = (ADL_ADAPTER_SPEED_SET) GetProcAddress(hDLL, "ADL_Adapter_Speed_Set");
 	ADL_Overdrive5_FanSpeedToDefault_Set = (ADL_OVERDRIVE5_FANSPEEDTODEFAULT_SET) GetProcAddress(hDLL, "ADL_Overdrive5_FanSpeedToDefault_Set");
 
 	if (!ADL_Main_Control_Create || !ADL_Main_Control_Destroy ||
@@ -143,8 +139,7 @@ void init_adl(int nDevs)
 		!ADL_Overdrive5_FanSpeed_Get || !ADL_Overdrive5_FanSpeed_Set ||
 		!ADL_Overdrive5_ODPerformanceLevels_Get || !ADL_Overdrive5_ODPerformanceLevels_Set ||
 		!ADL_Main_Control_Refresh || !ADL_Overdrive5_PowerControl_Get ||
-		!ADL_Overdrive5_PowerControl_Set || !ADL_Adapter_Speed_Get ||
-		!ADL_Adapter_Speed_Set || !ADL_Overdrive5_FanSpeedToDefault_Set) {
+		!ADL_Overdrive5_PowerControl_Set || !ADL_Overdrive5_FanSpeedToDefault_Set) {
 			applog(LOG_WARNING, "ATI ADL's API is missing");
 		return;
 	}
@@ -225,10 +220,6 @@ void init_adl(int nDevs)
 		ga->iAdapterIndex = iAdapterIndex;
 		ga->lpAdapterID = lpAdapterID;
 		ga->DefPerfLev = NULL;
-
-		/* Save whatever the current speed setting is to restore on exit */
-		if (ADL_Adapter_Speed_Get(iAdapterIndex, &ga->lpCurrent, &dummy) != ADL_OK)
-			applog(LOG_INFO, "Failed to ADL_Adapter_Speed_Get");
 
 		if (ADL_Overdrive5_ODParameters_Get(iAdapterIndex, &ga->lpOdParameters) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ODParameters_Get");
@@ -329,11 +320,6 @@ void init_adl(int nDevs)
 		if (opt_autoengine) {
 			ga->autoengine = true;
 			ga->managed = true;
-		}
-
-		if (ga->managed) {
-			if (ADL_Adapter_Speed_Set(iAdapterIndex, ADL_CONTEXT_SPEED_FORCEHIGH) != ADL_OK)
-				applog(LOG_INFO, "Failed to ADL_Adapter_Speed_Set");
 		}
 	}
 }
@@ -1120,7 +1106,6 @@ void clear_adl(nDevs)
 		/*  Only reset the values if we've changed them at any time */
 		if (!gpus[i].has_adl || !ga->managed)
 			continue;
-		ADL_Adapter_Speed_Set(ga->iAdapterIndex, ga->lpCurrent);
 		ADL_Overdrive5_ODPerformanceLevels_Set(ga->iAdapterIndex, ga->DefPerfLev);
 		free(ga->DefPerfLev);
 		ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
