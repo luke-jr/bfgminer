@@ -768,6 +768,7 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 		ga->lpFanSpeedValue.iFlags = ADL_DL_FANCTRL_FLAG_USER_DEFINED_SPEED;
 		ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
 	}
+	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
 	ret = ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
 	ga->managed = true;
 out:
