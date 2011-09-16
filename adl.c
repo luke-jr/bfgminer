@@ -760,7 +760,6 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK) {
 		if (opt_debug)
 			applog(LOG_DEBUG, "GPU %d call to fanspeed get failed", gpu);
-		goto out;
 	}
 	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
 		/* Must convert speed to an RPM */
@@ -776,8 +775,8 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 	ga->lpFanSpeedValue.iFanSpeed = iFanSpeed;
 	ret = ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue);
 	ga->managed = true;
-out:
 	unlock_adl();
+
 	return ret;
 }
 
