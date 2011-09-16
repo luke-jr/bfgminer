@@ -166,6 +166,7 @@ void init_adl(int nDevs)
 		lpInfo = malloc ( sizeof (AdapterInfo) * iNumberAdapters );
 		memset ( lpInfo,'\0', sizeof (AdapterInfo) * iNumberAdapters );
 
+		lpInfo->iSize = sizeof(lpInfo);
 		// Get the AdapterInfo structure for all adapters in the system
 		if (ADL_Adapter_AdapterInfo_Get (lpInfo, sizeof (AdapterInfo) * iNumberAdapters) != ADL_OK) {
 			applog(LOG_INFO, "ADL_Adapter_AdapterInfo_Get Error!");
@@ -221,6 +222,7 @@ void init_adl(int nDevs)
 		ga->lpAdapterID = lpAdapterID;
 		ga->DefPerfLev = NULL;
 
+		ga->lpOdParameters.iSize = sizeof(ADLODParameters);
 		if (ADL_Overdrive5_ODParameters_Get(iAdapterIndex, &ga->lpOdParameters) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ODParameters_Get");
 
@@ -235,6 +237,9 @@ void init_adl(int nDevs)
 		/* Set the limits we'd use based on default gpu speeds */
 		ga->maxspeed = ga->minspeed = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 
+		ga->lpTemperature.iSize = sizeof(ADLTemperature);
+		ga->lpFanSpeedInfo.iSize = sizeof(ADLFanSpeedInfo);
+		ga->lpFanSpeedValue.iSize = ga->DefFanSpeedValue.iSize = sizeof(ADLFanSpeedValue);
 		/* Now get the current performance levels for any existing overclock */
 		ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels);
 		/* Save these values as the defaults in case we wish to reset to defaults */
