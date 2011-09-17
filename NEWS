@@ -1,3 +1,16 @@
+Version 2.0.3 - September 17, 2011
+
+- Various modes of failure to set fanspeeds and adl values have been addressed
+and auto-fan should work now on most hardware, and possibly other values
+which previously would not have worked.
+- Fixed a crash that can occur on switching pools due to longpoll thread races.
+- Use ATISTREAMSDKROOT if available at build time.
+- Fanspeed management is returned to the driver default on exit instead of
+whatever it was when cgminer was started.
+- Logging of events deemed WARNING or ERR now will display even during
+periods where menu input is being awaited on.
+
+
 Version 2.0.2 - September 11, 2011
 
 - Exit cleanly if we abort before various threads are set up or if they no
