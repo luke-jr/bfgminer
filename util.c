@@ -72,7 +72,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 #else
 	if (0) {}
 #endif
-	else if (opt_log_output || prio == LOG_WARNING || prio == LOG_ERR) {
+	else if (opt_log_output || prio <= LOG_NOTICE) {
 		char *f;
 		int len;
 		struct timeval tv = { };

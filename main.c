@@ -1986,7 +1986,7 @@ void log_curses(int prio, const char *f, va_list ap)
 		return;
 
 	if (curses_active_locked()) {
-		if (!opt_loginput) {
+		if (!opt_loginput || prio == LOG_ERR || prio == LOG_WARNING) {
 			vw_printw(logwin, f, ap);
 			wrefresh(logwin);
 		}
@@ -1995,7 +1995,7 @@ void log_curses(int prio, const char *f, va_list ap)
 		vprintf(f, ap);
 }
 
-static void clear_logwin(void)
+void clear_logwin(void)
 {
 	if (curses_active_locked()) {
 		wclear(logwin);
@@ -2065,10 +2065,10 @@ static bool submit_upstream_work(const struct work *work)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_WARNING, "Accepted %.8s %sPU %d thread %d pool %d",
+				applog(LOG_NOTICE, "Accepted %.8s %sPU %d thread %d pool %d",
 				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
 			else
-				applog(LOG_WARNING, "Accepted %.8s %sPU %d thread %d",
+				applog(LOG_NOTICE, "Accepted %.8s %sPU %d thread %d",
 				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 		}
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -2084,10 +2084,10 @@ static bool submit_upstream_work(const struct work *work)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_WARNING, "Rejected %.8s %sPU %d thread %d pool %d",
+				applog(LOG_NOTICE, "Rejected %.8s %sPU %d thread %d pool %d",
 				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
 			else
-				applog(LOG_WARNING, "Rejected %.8s %sPU %d thread %d",
+				applog(LOG_NOTICE, "Rejected %.8s %sPU %d thread %d",
 				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 		}
 	}
@@ -2390,7 +2390,7 @@ static void *submit_work_thread(void *userdata)
 	pthread_detach(pthread_self());
 
 	if (!opt_submit_stale && stale_work(work)) {
-		applog(LOG_WARNING, "Stale share detected, discarding");
+		applog(LOG_NOTICE, "Stale share detected, discarding");
 		total_stale++;
 		pool->stale_shares++;
 		goto out;
@@ -2399,7 +2399,7 @@ static void *submit_work_thread(void *userdata)
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(work)) {
 		if (!opt_submit_stale && stale_work(work)) {
-			applog(LOG_WARNING, "Stale share detected, discarding");
+			applog(LOG_NOTICE, "Stale share detected, discarding");
 			total_stale++;
 			pool->stale_shares++;
 			break;
@@ -2656,9 +2656,9 @@ static void test_work_current(struct work *work)
 		if (block_changed != BLOCK_LP && block_changed != BLOCK_FIRST) {
 			block_changed = BLOCK_DETECT;
 			if (have_longpoll)
-				applog(LOG_WARNING, "New block detected on network before longpoll, waiting on fresh work");
+				applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
 			else
-				applog(LOG_WARNING, "New block detected on network, waiting on fresh work");
+				applog(LOG_NOTICE, "New block detected on network, waiting on fresh work");
 		} else
 			block_changed = BLOCK_NONE;
 		restart_threads();
@@ -2806,8 +2806,8 @@ static void display_pools(void)
 
 	opt_loginput = true;
 	immedok(logwin, true);
-updated:
 	clear_logwin();
+updated:
 	for (i = 0; i < total_pools; i++) {
 		pool = pools[i];
 
@@ -2921,9 +2921,9 @@ retry:
 		pool = pools[selected];
 		display_pool_summary(pool);
 		goto retry;
-	}
+	} else
+		clear_logwin();
 
-	clear_logwin();
 	immedok(logwin, false);
 	opt_loginput = false;
 }
@@ -2935,8 +2935,8 @@ static void display_options(void)
 
 	opt_loginput = true;
 	immedok(logwin, true);
-retry:
 	clear_logwin();
+retry:
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n[R]PC debug:%s\n[L]og interval:%d\n",
 		opt_debug ? "on" : "off",
@@ -2949,40 +2949,40 @@ retry:
 	input = getch();
 	if (!strncasecmp(&input, "q", 1)) {
 		opt_quiet ^= true;
-		clear_logwin();
 		wlogprint("Quiet mode %s\n", opt_quiet ? "enabled" : "disabled");
+		goto retry;
 	} else if (!strncasecmp(&input, "v", 1)) {
 		opt_log_output ^= true;
 		if (opt_log_output)
 			opt_quiet = false;
-		clear_logwin();
 		wlogprint("Verbose mode %s\n", opt_log_output ? "enabled" : "disabled");
+		goto retry;
 	} else if (!strncasecmp(&input, "n", 1)) {
 		opt_log_output = false;
 		opt_debug = false;
 		opt_quiet = false;
 		opt_protocol = false;
 		want_per_device_stats = false;
-		clear_logwin();
 		wlogprint("Output mode reset to normal\n");
+		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_debug ^= true;
 		opt_log_output = opt_debug;
 		if (opt_debug)
 			opt_quiet = false;
-		clear_logwin();
 		wlogprint("Debug mode %s\n", opt_debug ? "enabled" : "disabled");
+		goto retry;
 	} else if (!strncasecmp(&input, "p", 1)) {
 		want_per_device_stats ^= true;
 		opt_log_output = want_per_device_stats;
-		clear_logwin();
 		wlogprint("Per-device stats %s\n", want_per_device_stats ? "enabled" : "disabled");
+		goto retry;
 	} else if (!strncasecmp(&input, "r", 1)) {
 		opt_protocol ^= true;
 		if (opt_protocol)
 			opt_quiet = false;
-		clear_logwin();
 		wlogprint("RPC protocol debugging %s\n", opt_protocol ? "enabled" : "disabled");
+		goto retry;
 	} else if (!strncasecmp(&input, "c", 1))
 		clear_logwin();
 	else if (!strncasecmp(&input, "l", 1)) {
@@ -2992,12 +2992,12 @@ retry:
 			goto retry;
 		}
 		opt_log_interval = selected;
-		clear_logwin();
 		wlogprint("Log interval set to %d seconds\n", opt_log_interval);
+		goto retry;
 	} else if (!strncasecmp(&input, "s", 1)) {
 		opt_realquiet = true;
+	} else
 		clear_logwin();
-	} else clear_logwin();
 
 	immedok(logwin, false);
 	opt_loginput = false;
@@ -3010,8 +3010,8 @@ static void set_options(void)
 
 	opt_loginput = true;
 	immedok(logwin, true);
-retry:
 	clear_logwin();
+retry:
 	wlogprint("\n[D]ynamic mode: %s\n[L]ongpoll: %s\n",
 		opt_dynamic ? "On" : "Off", want_longpoll ? "On" : "Off");
 	if (opt_dynamic)
@@ -3072,9 +3072,9 @@ retry:
 		}
 		opt_fail_pause = selected;
 		goto retry;
-	}
+	} else
+		clear_logwin();
 
-	clear_logwin();
 	immedok(logwin, false);
 	opt_loginput = false;
 }
@@ -3221,9 +3221,9 @@ retry:
 			goto retry;
 		}
 		change_gpusettings(selected);
-	}
+	} else
+		clear_logwin();
 
-	clear_logwin();
 	immedok(logwin, false);
 	opt_loginput = false;
 }
@@ -4367,7 +4367,7 @@ static void *longpoll_thread(void *userdata)
 
 	tq_pop(mythr->q, NULL);
 	if (!pool->hdr_path) {
-		applog(LOG_WARNING, "No long-poll found on this server");
+		applog(LOG_NOTICE, "No long-poll found on this server");
 		goto out;
 	}
 	hdr_path = pool->hdr_path;
@@ -4392,7 +4392,7 @@ static void *longpoll_thread(void *userdata)
 	}
 
 	have_longpoll = true;
-	applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
+	applog(LOG_NOTICE, "Long-polling activated for %s", lp_url);
 
 	while (1) {
 		struct timeval start, end;
@@ -4407,7 +4407,7 @@ static void *longpoll_thread(void *userdata)
 			 * sure it's only done once per new block */
 			if (block_changed != BLOCK_DETECT) {
 				block_changed = BLOCK_LP;
-				applog(LOG_WARNING, "LONGPOLL detected new block on network, waiting on fresh work");
+				applog(LOG_NOTICE, "LONGPOLL detected new block on network, waiting on fresh work");
 			} else {
 				applog(LOG_INFO, "LONGPOLL received after new block already detected");
 				block_changed = BLOCK_NONE;
@@ -4891,7 +4891,7 @@ char *curses_input(const char *query)
 	if (!input)
 		quit(1, "Failed to malloc input");
 	leaveok(logwin, false);
-	wlogprint("%s: ", query);
+	wlogprint("%s:\n", query);
 	wgetnstr(logwin, input, 255);
 	if (!strlen(input))
 		strcpy(input, "-1");

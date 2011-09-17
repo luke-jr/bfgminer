@@ -1057,8 +1057,10 @@ updated:
 			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify powertune value\n");
-	} else
+	} else {
+		clear_logwin();
 		return;
+	}
 	sleep(1);
 	goto updated;
 }

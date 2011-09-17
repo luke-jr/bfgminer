@@ -126,6 +126,7 @@ void *alloca (size_t);
 enum {
 	LOG_ERR,
 	LOG_WARNING,
+	LOG_NOTICE,
 	LOG_INFO,
 	LOG_DEBUG,
 };
@@ -477,6 +478,7 @@ extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
 extern void log_curses(int prio, const char *f, va_list ap);
+extern void clear_logwin(void);
 extern void vapplog(int prio, const char *fmt, va_list ap);
 extern void applog(int prio, const char *fmt, ...);
 extern struct thread_q *tq_new(void);
