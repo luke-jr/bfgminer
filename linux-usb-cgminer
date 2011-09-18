@@ -16,13 +16,13 @@ CD (or DVD/BD) writer, a USB port and of course an internet connection to the PC
    ( look here for mirrors: http://www.xubuntu.org/getubuntu )
 
 2) Burn it to CD then boot that temporarily on any PC with a CD/DVD/BD and a USB
-port (this and the next 2 step won't effect that PC)
+   port (this and the next 2 step won't effect that PC)
 
 3) Plug in your 4GB USB device and it should appear on the desktop - you can
-leave it's contents as long as there is at least 2.8GB free
+   leave it's contents as long as there is at least 2.8GB free
 
-4) Now run "Startup Disk Creator" in "Applications->System" (the system menu is
-the little rat in the top left corner)
+4) Now run "Startup Disk Creator" in "Applications->System"
+   (the system menu is the little rat in the top left corner)
 
 (if you have no mouse you can get the menu with <ctr><esc> and navigate the menu
 with the arrow keys and <return> key)
@@ -38,8 +38,7 @@ After about 10-15 minutes you have a base xubuntu 11.04 boot USB
 
 5) Boot your cgminer PC with this USB stick, select "English"
    then select "Try Xubuntu without installing" and wait for the desktop to
-appear
-   (this happens by default if you wait for the timeouts)
+   appear (this happens by default if you wait for the timeouts)
 
 6) Start a terminal
    "Applications->Accessories->Terminal Emulator"
@@ -54,7 +53,7 @@ available ... sort that   out by reading elsewhere about routers etc
    sudo shutdown -r now
 
 N.B. always do a "sudo sync" and wait for it to finish every time before
-shutting down the PC to ensure all data is written to the USB
+   shutting down the PC to ensure all data is written to the USB
 
 9) sudo aticonfig --lsa
    this lists your ATI cards so you can see them
@@ -92,8 +91,8 @@ shutting down the PC to ensure all data is written to the USB
 13) cgminer:
  sudo apt-get install curl
 
- get the binary linux cgminer (see the bitcoin forum cgminer thread for where to
-get it)
+ get the binary linux cgminer (see the bitcoin forum cgminer thread
+ for where to get it)
 
  ./cgminer -n
    this shows you the GPU's it found on your PC
@@ -107,14 +106,20 @@ get it)
 
 15) set the screen saver to ONLY blank ...
 
- Move the mouse to the bottom of the screen and you see a set of icons like on
-an Apple PC
+ Move the mouse to the bottom of the screen and you see a set of icons
+ like on an Apple PC
  Click on Settings, then in the Settings window "Screensaver"
  Set "Mode:" to "Blank Screen Only"
 
 Edit: originally left this somewhat useful addition out:
 16) apt-get install ntpd
  An accurate clock is always a good idea Smiley
+
+Edit2: another item that seems I missed
+17) if you wish to ssh into the box you must set a password
+    to do this you simply have to be logged into it at the screen and type
+  sudo passwd ubuntu
+    it will prompt you (twice) to enter a password for the ubuntu account
 
 Initial setup complete.
 
