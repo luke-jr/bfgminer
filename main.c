@@ -2008,14 +2008,14 @@ void clear_logwin(void)
 /* regenerate the full work->hash value */
 void regeneratehash(const struct work *work)
 {
-        uint32_t *data32 = (uint32_t *)(work->data);
-        unsigned char swap[128];
-        uint32_t *swap32 = (uint32_t *)swap;
+	uint32_t *data32 = (uint32_t *)(work->data);
+	unsigned char swap[128];
+	uint32_t *swap32 = (uint32_t *)swap;
 	unsigned char hash1[SHA256_DIGEST_LENGTH];
-        int i;
+	int i;
 
-        for (i = 0; i < 80/4; i++)
-                swap32[i] = swab32(data32[i]);
+	for (i = 0; i < 80/4; i++)
+		swap32[i] = swab32(data32[i]);
 
 	SHA256(swap, 80, hash1);
 	SHA256(hash1, SHA256_DIGEST_LENGTH, (unsigned char *)(work->hash));
