@@ -135,3 +135,27 @@ In my case it takes away 50Mh/s when the screen isn't blanked
 
 This is of course just the basics ... but it should get you a computer up and
 running and able to run cgminer
+
+========
+
+You should keep an eye on USB disk space
+The system logger writes log files in the /var/log/ directory
+The two main ones that grow large are 'kern.log' and 'syslog'
+If you want to keep them, save them away to some other computer
+When space is low, just delete them.
+
+The 'df' command will show you the current space e.g.:
+
+Filesystem           1K-blocks      Used Available Use% Mounted on
+aufs                   2099420    892024   1100748  45% /
+none                   1015720       628   1015092   1% /dev
+/dev/sda1              3909348   2837248   1072100  73% /cdrom
+/dev/loop0              670848    670848         0 100% /rofs
+none                   1023772       136   1023636   1% /dev/shm
+tmpfs                  1023772        16   1023756   1% /tmp
+none                   1023772       124   1023648   1% /var/run
+none                   1023772         0   1023772   0% /var/lock
+
+
+This shows the 2GB space allocated when you setup the USB as '/' (aufs)
+In this example, it's currently 45% full with almost 1.1GB of free space
