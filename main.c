@@ -32,6 +32,7 @@
 #include <jansson.h>
 #include <curl/curl.h>
 #include <libgen.h>
+#include <openssl/sha.h>
 
 #include "compat.h"
 #include "miner.h"
@@ -1996,6 +1997,58 @@ void clear_logwin(void)
 	}
 }
 
+/* regenerate the full work->hash value and also return true if it's a block */
+bool regeneratehash(const struct work *work)
+{
+	uint32_t *data32 = (uint32_t *)(work->data);
+	unsigned char swap[128];
+	uint32_t *swap32 = (uint32_t *)swap;
+	unsigned char hash1[SHA256_DIGEST_LENGTH];
+	uint32_t *hash32 = (uint32_t *)(work->hash);
+	uint32_t difficulty = 0;
+	uint32_t diffbytes = 0;
+	uint32_t diffvalue = 0;
+	uint32_t diffcmp[8];
+	int diffshift = 0;
+	int i;
+
+	for (i = 0; i < 80/4; i++)
+		swap32[i] = swab32(data32[i]);
+
+	SHA256(swap, 80, hash1);
+	SHA256(hash1, SHA256_DIGEST_LENGTH, (unsigned char *)(work->hash));
+
+	difficulty = swab32(*((uint32_t *)(work->data + 72)));
+
+	diffbytes = ((difficulty >> 24) & 0xff) - 3;
+	diffvalue = difficulty & 0x00ffffff;
+
+	diffshift = (diffbytes % 4) * 8;
+	if (diffshift == 0) {
+		diffshift = 32;
+		diffbytes--;
+	}
+
+	memset(diffcmp, 0, 32);
+	diffcmp[(diffbytes >> 2) + 1] = diffvalue >> (32 - diffshift);
+	diffcmp[diffbytes >> 2] = diffvalue << diffshift;
+
+	for (i = 7; i >= 0; i--) {
+		if (hash32[i] > diffcmp[i])
+			return false;
+		if (hash32[i] < diffcmp[i])
+			return true;
+	}
+
+	// https://en.bitcoin.it/wiki/Block says: "numerically below"
+	// https://en.bitcoin.it/wiki/Target says: "lower than or equal to"
+	// code in bitcoind 0.3.24 main.cpp CheckWork() says: if (hash > hashTarget) return false;
+	if (hash32[0] == diffcmp[0])
+		return true;
+	else
+		return false;
+}
+
 static bool submit_upstream_work(const struct work *work)
 {
 	char *hexstr = NULL;
@@ -2007,6 +2060,9 @@ static bool submit_upstream_work(const struct work *work)
 	CURL *curl = curl_easy_init();
 	struct pool *pool = work->pool;
 	bool rolltime;
+	uint32_t *hash32;
+	char hashshow[64+1] = "";
+	bool isblock;
 
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
@@ -2046,6 +2102,14 @@ static bool submit_upstream_work(const struct work *work)
 
 	res = json_object_get(val, "result");
 
+	if (!QUIET) {
+		isblock = regeneratehash(work);
+		hash32 = (uint32_t *)(work->hash);
+		sprintf(hashshow, "%08lx.%08lx.%08lx%s",
+			(unsigned long)(hash32[7]), (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
+			isblock ? " BLOCK!" : "");
+	}
+
 	/* Theoretically threads could race when modifying accepted and
 	 * rejected values but the chance of two submits completing at the
 	 * same time is zero so there is no point adding extra locking */
@@ -2057,11 +2121,11 @@ static bool submit_upstream_work(const struct work *work)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %.8s %sPU %d thread %d pool %d",
-				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Accepted %s %sPU %d thread %d pool %d",
+				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
 			else
-				applog(LOG_NOTICE, "Accepted %.8s %sPU %d thread %d",
-				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+				applog(LOG_NOTICE, "Accepted %s %sPU %d thread %d",
+				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 		}
 		if (opt_shares && total_accepted >= opt_shares) {
 			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
@@ -2076,11 +2140,11 @@ static bool submit_upstream_work(const struct work *work)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Rejected %.8s %sPU %d thread %d pool %d",
-				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Rejected %s %sPU %d thread %d pool %d",
+				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
 			else
-				applog(LOG_NOTICE, "Rejected %.8s %sPU %d thread %d",
-				       hexstr + 152, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+				applog(LOG_NOTICE, "Rejected %s %sPU %d thread %d",
+				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
 		}
 	}
 
