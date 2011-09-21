@@ -216,7 +216,7 @@ static int opt_n_threads;
 static int mining_threads;
 static int num_processors;
 static int scan_intensity;
-static bool use_curses = true;
+bool use_curses = true;
 static bool opt_submit_stale;
 static bool opt_nogpu;
 static bool opt_usecpu;

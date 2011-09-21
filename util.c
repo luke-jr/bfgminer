@@ -84,7 +84,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 
 		len = 40 + strlen(fmt) + 22;
 		f = alloca(len);
-		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s                    \n",
+		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
 			tm.tm_year + 1900,
 			tm.tm_mon + 1,
 			tm.tm_mday,
@@ -100,7 +100,16 @@ void vapplog(int prio, const char *fmt, va_list ap)
 			vfprintf(stderr, f, apc);	/* atomic write to stderr */
 			fflush(stderr);
 		}
-		log_curses(prio, f, ap);
+
+		if (use_curses)
+			log_curses(prio, f, ap);
+		else {
+			int len = strlen(f);
+
+			strcpy(f + len - 1, "                    \n");
+
+			log_curses(prio, f, ap);
+		}
 	}
 }
 
