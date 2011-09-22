@@ -32,7 +32,7 @@
 #include <jansson.h>
 #include <curl/curl.h>
 #include <libgen.h>
-#include <openssl/sha.h>
+#include <sha2.h>
 
 #include "compat.h"
 #include "miner.h"
@@ -2003,7 +2003,7 @@ bool regeneratehash(const struct work *work)
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[128];
 	uint32_t *swap32 = (uint32_t *)swap;
-	unsigned char hash1[SHA256_DIGEST_LENGTH];
+	unsigned char hash1[64];
 	uint32_t *hash32 = (uint32_t *)(work->hash);
 	uint32_t difficulty = 0;
 	uint32_t diffbytes = 0;
@@ -2015,8 +2015,8 @@ bool regeneratehash(const struct work *work)
 	for (i = 0; i < 80/4; i++)
 		swap32[i] = swab32(data32[i]);
 
-	SHA256(swap, 80, hash1);
-	SHA256(hash1, SHA256_DIGEST_LENGTH, (unsigned char *)(work->hash));
+	sha2(swap, 80, hash1, false);
+	sha2(hash1, 64, (unsigned char *)(work->hash), false);
 
 	difficulty = swab32(*((uint32_t *)(work->data + 72)));
 

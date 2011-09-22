@@ -25,7 +25,8 @@ cgminer_SOURCES	= elist.h miner.h compat.h bench_block.h	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
 		  sha256_sse4_amd64.c sha256_sse2_i386.c	\
 		  adl.c	adl.h adl_functions.h			\
-		  phatk110817.cl poclbm110817.cl
+		  phatk110817.cl poclbm110817.cl \
+		  sha2.c sha2.h
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS) $(DLOPEN_FLAGS)
 cgminer_LDADD	= @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ lib/libgnu.a ccan/libccan.a
