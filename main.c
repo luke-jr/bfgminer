@@ -260,14 +260,6 @@ static int total_getworks, total_stale, total_discarded;
 static int total_queued;
 static unsigned int new_blocks;
 
-enum block_change {
-	BLOCK_NONE,
-	BLOCK_LP,
-	BLOCK_DETECT,
-	BLOCK_FIRST,
-};
-
-static enum block_change block_changed = BLOCK_FIRST;
 static unsigned int local_work;
 static unsigned int total_go, total_ro;
 
@@ -2690,7 +2682,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 		free(old_hash);
 }
 
-static void test_work_current(struct work *work)
+static void test_work_current(struct work *work, bool longpoll)
 {
 	struct block *s;
 	char *hexstr;
@@ -2715,19 +2707,18 @@ static void test_work_current(struct work *work)
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
 		set_curblock(hexstr, work->data);
+		if (++new_blocks == 1)
+			goto out_free;
 
-		new_blocks++;
-		if (block_changed != BLOCK_LP && block_changed != BLOCK_FIRST) {
-			block_changed = BLOCK_DETECT;
-			if (have_longpoll)
-				applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
-			else
-				applog(LOG_NOTICE, "New block detected on network, waiting on fresh work");
-		} else
-			block_changed = BLOCK_NONE;
+		if (longpoll)
+			applog(LOG_NOTICE, "LONGPOLL detected new block on network, waiting on fresh work");
+		else if (have_longpoll)
+			applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
+		else
+			applog(LOG_NOTICE, "New block detected on network, waiting on fresh work");
 		restart_threads();
 	}
-
+out_free:
 	free(hexstr);
 }
 
@@ -2773,7 +2764,7 @@ static void *stage_thread(void *userdata)
 			break;
 		}
 
-		test_work_current(work);
+		test_work_current(work, false);
 
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing work to getwork queue");
@@ -4399,8 +4390,9 @@ static void convert_to_work(json_t *val, bool rolltime)
 	work->rolltime = rolltime;
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
-	 * rather than waiting for it to hit the stage thread */
-	test_work_current(work);
+	 * rather than waiting for it to hit the stage thread. This also
+	 * allows testwork to know whether LP discovered the block or not. */
+	test_work_current(work, true);
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing converted work to stage thread");
@@ -4467,16 +4459,6 @@ static void *longpoll_thread(void *userdata)
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool);
 		if (likely(val)) {
-			/* Keep track of who ordered a restart_threads to make
-			 * sure it's only done once per new block */
-			if (block_changed != BLOCK_DETECT) {
-				block_changed = BLOCK_LP;
-				applog(LOG_NOTICE, "LONGPOLL detected new block on network, waiting on fresh work");
-			} else {
-				applog(LOG_INFO, "LONGPOLL received after new block already detected");
-				block_changed = BLOCK_NONE;
-			}
-
 			convert_to_work(val, rolltime);
 			failures = 0;
 			json_decref(val);
