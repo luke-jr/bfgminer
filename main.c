@@ -3255,6 +3255,7 @@ retry:
 
 			tq_push(thr->q, &ping);
 		}
+		goto retry;
 	} if (!strncasecmp(&input, "d", 1)) {
 		if (selected)
 			selected = curses_int("Select GPU to disable");
@@ -3267,6 +3268,7 @@ retry:
 			goto retry;
 		}
 		gpu_devices[selected] = false;
+		goto retry;
 	} else if (!strncasecmp(&input, "r", 1)) {
 		if (selected)
 			selected = curses_int("Select GPU to attempt to restart");
@@ -3276,6 +3278,7 @@ retry:
 		}
 		wlogprint("Attempting to restart threads of GPU %d\n", selected);
 		reinit_device(&gpus[selected]);
+		goto retry;
 	} else if (adl_active && (!strncasecmp(&input, "c", 1))) {
 		if (selected)
 			selected = curses_int("Select GPU to change settings on");
