@@ -123,6 +123,8 @@ if test "x$opencl" != xno; then
 	found_opencl=1
 	],
 	[AC_MSG_RESULT(no)
+	OPENCL_FLAGS=
+	OPENCL_LIBS=
 	found_opencl=0])
 	LIBS=$SAVED_LIBS
 	CFLAGS=$SAVED_CFLAGS
