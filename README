@@ -2,6 +2,10 @@
 This is a multi-threaded multi-pool CPU and GPU miner with ATI GPU monitoring,
 (over)clocking and fanspeed support for bitcoin and derivative coins.
 
+DOWNLOADS:
+
+http://ck.kolivas.org/apps/cgminer
+
 GIT TREE:
 
 https://github.com/ckolivas/cgminer
@@ -478,10 +482,9 @@ A: Remove the "-march=native" component of your CFLAGS as your version of gcc
 does not support it.
 
 Q: The CPU usage is high.
-A: If you're on linux, the ATI drivers after 11.6 have a bug that makes them
-consume 100% of one CPU core unnecessarily so downgrade to 11.6. If you're on
-windows, you may be out of luck because the pthread library used consumes a
-lot of CPU. Binding everything to one CPU core on windows can help.
+A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
+CPU core unnecessarily so downgrade to 11.6. Binding cgminer to one CPU core on
+windows can minimise it to 100% (instead of more than one core).
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
@@ -503,6 +506,13 @@ pass some work to the backup servers under those conditions. The reason for
 doing this is to try its absolute best to keep the GPUs working on something
 useful and not risk idle periods. You can disable this behaviour with the
 option --failover-only.
+
+Q: Is this a virus?
+A: Cgminer is being packaged with other trojan scripts and some antivirus
+software is falsely accusing cgminer.exe as being the actual virus, rather
+than whatever it is being packaged with. If you installed cgminer yourself,
+then you do not have a virus on your computer. Complain to your antivirus
+software company.
 
 Q: GUI version?
 A: No.
