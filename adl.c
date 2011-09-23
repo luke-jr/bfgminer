@@ -79,6 +79,7 @@ static int iNumberAdapters;
 static LPAdapterInfo lpInfo = NULL;
 
 static int set_fanspeed(int gpu, int iFanSpeed);
+static float __gpu_temp(struct gpu_adl *ga);
 
 static inline void lock_adl(void)
 {
@@ -326,10 +327,11 @@ void init_adl(int nDevs)
 			ga->autoengine = true;
 			ga->managed = true;
 		}
+		ga->lasttemp = __gpu_temp(ga);
 	}
 }
 
-static inline float __gpu_temp(struct gpu_adl *ga)
+static float __gpu_temp(struct gpu_adl *ga)
 {
 	if (ADL_Overdrive5_Temperature_Get(ga->iAdapterIndex, 0, &ga->lpTemperature) != ADL_OK)
 		return -1;
@@ -828,7 +830,7 @@ void gpu_autotune(int gpu, bool *enable)
 		if (temp > ga->overtemp && fanpercent < iMax) {
 			applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
 			newpercent = iMax;
-		} else if (temp > ga->targettemp && fanpercent < top) {
+		} else if (temp > ga->targettemp && fanpercent < top && temp >= ga->lasttemp) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 			if (temp > ga->targettemp + opt_hysteresis)
@@ -837,7 +839,7 @@ void gpu_autotune(int gpu, bool *enable)
 				newpercent = ga->targetfan + 5;
 			if (newpercent > top)
 				newpercent = top;
-		} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis) {
+		} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis && temp <= ga->lasttemp) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
 			newpercent = ga->targetfan - 1;
@@ -882,6 +884,7 @@ void gpu_autotune(int gpu, bool *enable)
 			set_engineclock(gpu, newengine);
 		}
 	}
+	ga->lasttemp = temp;
 }
 
 void set_defaultfan(int gpu)
