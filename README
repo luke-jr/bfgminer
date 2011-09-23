@@ -189,6 +189,11 @@ cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu -
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
+On Linux you virtually always need to export your display settings before
+starting to get all the cards recognised and/or temperature+clocking working:
+
+export DISPLAY=:0
+
 ---
 
 WHILE RUNNING:
