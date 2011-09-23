@@ -3225,8 +3225,13 @@ retry:
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
+	if (nDevs == 1)
+		selected = 0;
+	else
+		selected = -1;
 	if (!strncasecmp(&input, "e", 1)) {
-		selected = curses_int("Select GPU to enable");
+		if (selected)
+			selected = curses_int("Select GPU to enable");
 		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
 			goto retry;
@@ -3251,7 +3256,8 @@ retry:
 			tq_push(thr->q, &ping);
 		}
 	} if (!strncasecmp(&input, "d", 1)) {
-		selected = curses_int("Select GPU to disable");
+		if (selected)
+			selected = curses_int("Select GPU to disable");
 		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
 			goto retry;
@@ -3262,7 +3268,8 @@ retry:
 		}
 		gpu_devices[selected] = false;
 	} else if (!strncasecmp(&input, "r", 1)) {
-		selected = curses_int("Select GPU to attempt to restart");
+		if (selected)
+			selected = curses_int("Select GPU to attempt to restart");
 		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
 			goto retry;
@@ -3270,12 +3277,14 @@ retry:
 		wlogprint("Attempting to restart threads of GPU %d\n", selected);
 		reinit_device(&gpus[selected]);
 	} else if (adl_active && (!strncasecmp(&input, "c", 1))) {
-		selected = curses_int("Select GPU to change settings on");
+		if (selected)
+			selected = curses_int("Select GPU to change settings on");
 		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
 		change_gpusettings(selected);
+		goto retry;
 	} else
 		clear_logwin();
 
