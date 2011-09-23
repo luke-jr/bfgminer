@@ -126,6 +126,9 @@ if test "x$opencl" != xno; then
 	found_opencl=0])
 	LIBS=$SAVED_LIBS
 	CFLAGS=$SAVED_CFLAGS
+else
+	OPENCL_FLAGS=""
+	OPENCL_LIBS=""
 fi
 
 AC_CHECK_LIB(pthread, pthread_create, ,
