@@ -4696,7 +4696,7 @@ static bool active_device(int thr_id)
  * died. */
 static void *watchdog_thread(void *userdata)
 {
-	const unsigned int interval = opt_log_interval / 2 ? : 1;
+	const unsigned int interval = 3;
 	static struct timeval rotate_tv;
 	struct timeval zero_tv;
 
