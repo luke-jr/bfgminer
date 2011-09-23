@@ -1,3 +1,18 @@
+Version 2.0.4 - September 23, 2011
+
+- Confused Longpoll messages should be finally fixed with cgminer knowing for
+sure who found the new block and possibly avoiding a rare crash.
+- Display now shows the actual hash and will say BLOCK! if a block is deemed
+solved.
+- Extra spaces, which would double space lines on small terminals, have been
+removed.
+- Fan speed change is now damped if it is already heading in the correct
+direction to minimise overshoot.
+- Building without opencl libraries is fixed.
+- GPUs are autoselected if there is only one when in the GPU management menu.
+- GPU menu is refreshed instead of returning to status after a GPU change.
+
+
 Version 2.0.3 - September 17, 2011
 
 - Various modes of failure to set fanspeeds and adl values have been addressed
