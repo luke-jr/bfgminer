@@ -272,6 +272,8 @@ void opt_show_charp(char buf[OPT_SHOW_LEN], char *const *p);
 /* Set an integer value, various forms.  Sets to 1 on arg == NULL. */
 char *opt_set_intval(const char *arg, int *i);
 void opt_show_intval(char buf[OPT_SHOW_LEN], const int *i);
+char *opt_set_floatval(const char *arg, float *f);
+void opt_show_floatval(char buf[OPT_SHOW_LEN], const float *f);
 char *opt_set_uintval(const char *arg, unsigned int *ui);
 void opt_show_uintval(char buf[OPT_SHOW_LEN], const unsigned int *ui);
 char *opt_set_longval(const char *arg, long *l);

@@ -69,6 +69,19 @@ char *opt_set_intval(const char *arg, int *i)
 	return err;
 }
 
+char *opt_set_floatval(const char *arg, float *f)
+{
+	char *endp;
+
+	errno = 0;
+	*f = strtof(arg, &endp);
+	if (*endp || !arg[0])
+		return arg_bad("'%s' is not a number", arg);
+	if (errno)
+		return arg_bad("'%s' is out of range", arg);
+	return NULL;
+}
+
 char *opt_set_uintval(const char *arg, unsigned int *ui)
 {
 	int i;
@@ -157,6 +170,11 @@ void opt_show_charp(char buf[OPT_SHOW_LEN], char *const *p)
 void opt_show_intval(char buf[OPT_SHOW_LEN], const int *i)
 {
 	snprintf(buf, OPT_SHOW_LEN, "%i", *i);
+}
+
+void opt_show_floatval(char buf[OPT_SHOW_LEN], const float *f)
+{
+	snprintf(buf, OPT_SHOW_LEN, "%.1f", *f);
 }
 
 void opt_show_uintval(char buf[OPT_SHOW_LEN], const unsigned int *ui)
