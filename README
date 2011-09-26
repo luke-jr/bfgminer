@@ -125,7 +125,7 @@ Options for both config file and command line:
 --gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
 --gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
---intensity|-I <arg> Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)
+--intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
 --kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/local/bin")
 --kernel|-k <arg>   Select kernel to use (poclbm or phatk - default: auto)
 --load-balance      Change multipool strategy from failover to even load balance
@@ -179,6 +179,10 @@ Single pool, dedicated miner:
 
 cgminer -o http://pool:port -u username -p password -I 9
 
+Single pool, first card regular desktop, 3 other dedicated cards:
+
+cgminer -o http://pool:port -u username -p password -I d,9,9,9
+
 Multiple pool, dedicated miner:
 
 cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
@@ -215,9 +219,7 @@ Current pool management strategy: Failover
 
 S gives you:
 
-[D]ynamic mode: On
 [L]ongpoll: On
-[I]ntensity: Dynamic
 [Q]ueue: 0
 [S]cantime: 60
 [R]etries: -1
@@ -270,7 +272,7 @@ The number of hardware erorrs
 The utility defines as the number of shares / minute
 
 The cgminer status line shows:
- TQ: 1  ST: 1  SS: 0  DW: 0  NB: 1  LW: 8  GF: 1  RF: 1  I: 2
+ TQ: 1  ST: 1  SS: 0  DW: 0  NB: 1  LW: 8  GF: 1  RF: 1
 
 TQ is Total Queued work items.
 ST is STaged work items (ready to use).
@@ -280,7 +282,6 @@ NB is New Blocks detected on the network
 LW is Locally generated Work items
 GF is Getwork Fail Occasions (server slow to provide work)
 RF is Remote Fail occasions (server slow to accept work)
-I is current Intensity (changes in dynamic mode).
 
 NOTE: Running intensities above 9 with current hardware is likely to only
 diminish return performance even if the hash rate might appear better. A good
@@ -471,7 +472,7 @@ not work on stale blocks, and having different blocks from two networks would
 make it invalidate the work from each other.
 
 Q: Can I change the intensity settings individually for each GPU?
-A: Not currently.
+A: Yes, pass a list separated by commas such as -I d,4,9,9
 
 Q: Can I put multiple pools in the json config file?
 A: Not currently, but you can use multiple config files and specify each with

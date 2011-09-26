@@ -202,6 +202,8 @@ struct cgpu_info {
 	char init[40];
 	struct timeval last_message_tv;
 
+	bool dynamic;
+	int intensity;
 #ifdef HAVE_ADL
 	bool has_adl;
 	struct gpu_adl adl;

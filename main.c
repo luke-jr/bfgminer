@@ -191,7 +191,6 @@ static int opt_fail_pause = 5;
 static int fail_pause = 5;
 static int opt_log_interval = 5;
 bool opt_log_output = false;
-static bool opt_dynamic = true;
 static int opt_queue = 1;
 int opt_vectors;
 int opt_worksize;
@@ -216,7 +215,6 @@ static bool forced_n_threads;
 static int opt_n_threads;
 static int mining_threads;
 static int num_processors;
-static int scan_intensity;
 bool use_curses = true;
 static bool opt_submit_stale;
 static bool opt_nogpu;
@@ -947,12 +945,6 @@ static char *set_int_0_to_9999(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 9999);
 }
 
-static char *forced_int_1010(const char *arg, int *i)
-{
-	opt_dynamic = false;
-	return set_int_range(arg, i, -10, 10);
-}
-
 static char *force_nthreads_int(const char *arg, int *i)
 {
 	forced_n_threads = true;
@@ -1370,6 +1362,50 @@ static char *set_temp_target(char *arg)
 	return NULL;
 }
 #endif
+#ifdef HAVE_OPENCL
+static char *set_intensity(char *arg)
+{
+	int i, device = 0, *tt;
+	char *nextptr, val = 0;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set intensity";
+	if (!strncasecmp(nextptr, "d", 1))
+		gpus[device].dynamic = true;
+	else {
+		val = atoi(nextptr);
+		if (val < -10 || val > 10)
+			return "Invalid value passed to set intensity";
+		tt = &gpus[device].intensity;
+		*tt = val;
+	}
+
+	device++;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		if (!strncasecmp(nextptr, "d", 1))
+			gpus[device].dynamic = true;
+		else {
+			val = atoi(nextptr);
+			if (val < -10 || val > 10)
+				return "Invalid value passed to set intensity";
+
+			tt = &gpus[device].intensity;
+			*tt = val;
+		}
+		device++;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++) {
+			gpus[i].dynamic = gpus[0].dynamic;
+			gpus[i].intensity = gpus[0].intensity;
+		}
+	}
+
+	return NULL;
+}
+#endif
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
@@ -1449,8 +1485,8 @@ static struct opt_table opt_config_table[] = {
 		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card"),
 #endif
 	OPT_WITH_ARG("--intensity|-I",
-		     forced_int_1010, NULL, &scan_intensity,
-		     "Intensity of GPU scanning (-10 -> 10, default: dynamic to maintain desktop interactivity)"),
+		     set_intensity, NULL, NULL,
+		     "Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)"),
 	OPT_WITH_ARG("--kernel-path|-K",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             "Specify a path to where the kernel .cl files are"),
@@ -1854,9 +1890,9 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  I: %d",
+	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
 		total_queued, requests_staged(), total_stale, total_discarded, new_blocks,
-		local_work, total_go, total_ro, scan_intensity);
+		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
 	if (pool_strategy == POOL_LOADBALANCE && total_pools > 1)
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -3067,12 +3103,7 @@ static void set_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
-	wlogprint("\n[D]ynamic mode: %s\n[L]ongpoll: %s\n",
-		opt_dynamic ? "On" : "Off", want_longpoll ? "On" : "Off");
-	if (opt_dynamic)
-		wlogprint("[I]ntensity: Dynamic\n");
-	else
-		wlogprint("[I]ntensity: %d\n", scan_intensity);
+	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
 	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[R]etries: %d\n[P]ause: %d\n",
 		opt_queue, opt_scantime, opt_retries, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
@@ -3086,22 +3117,10 @@ retry:
 		}
 		opt_queue = selected;
 		goto retry;
-	} else if (!strncasecmp(&input, "d", 1)) {
-		opt_dynamic ^= true;
-		goto retry;
 	} else if (!strncasecmp(&input, "l", 1)) {
 		want_longpoll ^= true;
 		applog(LOG_WARNING, "Longpoll %s", want_longpoll ? "enabled" : "disabled");
 		restart_longpoll();
-		goto retry;
-	} else if (!strncasecmp(&input, "i", 1)) {
-		selected = curses_int("Set GPU scan intensity (-10 -> 10)");
-		if (selected < -10 || selected > 10) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		opt_dynamic = false;
-		scan_intensity = selected;
 		goto retry;
 	} else if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
@@ -3194,6 +3213,11 @@ retry:
 		}
 #endif
 		wlog("Last initialised: %s\n", cgpu->init);
+		wlog("Intensity: ");
+		if (gpus[gpu].dynamic)
+			wlog("Dynamic\n");
+		else
+			wlog("%u\n", gpus[gpu].intensity);
 		for (i = 0; i < mining_threads; i++) {
 			thr = &thr_info[i];
 			if (thr->cgpu != cgpu)
@@ -3220,7 +3244,7 @@ retry:
 		wlog("\n");
 	}
 
-	wlogprint("[E]nable [D]isable [R]estart GPU %s\n",adl_active ? "[C]hange settings" : "");
+	wlogprint("[E]nable [D]isable [I]ntensity [R]estart GPU %s\n",adl_active ? "[C]hange settings" : "");
 
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
@@ -3268,6 +3292,37 @@ retry:
 			goto retry;
 		}
 		gpu_devices[selected] = false;
+		goto retry;
+	} else if (!strncasecmp(&input, "i", 1)) {
+		int intensity;
+		char *intvar;
+
+		if (selected)
+			selected = curses_int("Select GPU to change intensity on");
+		if (selected < 0 || selected >= nDevs) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		intvar = curses_input("Set GPU scan intensity (d or -10 -> 10)");
+		if (!intvar) {
+			wlogprint("Invalid input\n");
+			goto retry;
+		}
+		if (!strncasecmp(intvar, "d", 1)) {
+			wlogprint("Dynamic mode enabled on gpu %d\n", selected);
+			gpus[selected].dynamic = true;
+			free(intvar);
+			goto retry;
+		}
+		intensity = atoi(intvar);
+		free(intvar);
+		if (intensity < -10 || intensity > 10) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		gpus[selected].dynamic = false;
+		gpus[selected].intensity = intensity;
+		wlogprint("Intensity on gpu %d set to %d\n", selected, intensity);
 		goto retry;
 	} else if (!strncasecmp(&input, "r", 1)) {
 		if (selected)
@@ -4152,9 +4207,9 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       unsigned int *hashes, size_t *globalThreads,
-			       unsigned int minthreads)
+			       unsigned int minthreads, int intensity)
 {
-	*threads = 1 << (15 + scan_intensity);
+	*threads = 1 << (15 + intensity);
 	if (*threads < minthreads)
 		*threads = minthreads;
 	*globalThreads = *threads;
@@ -4203,12 +4258,6 @@ static void *gpuminer_thread(void *userdata)
 			break;
 	}
 
-	if (opt_dynamic) {
-		/* Minimise impact on desktop if we want dynamic mode */
-		setpriority(PRIO_PROCESS, 0, 19);
-		drop_policy();
-	}
-
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	res = calloc(BUFFERSIZE, 1);
@@ -4222,7 +4271,7 @@ static void *gpuminer_thread(void *userdata)
 	gettimeofday(&tv_start, NULL);
 	localThreads[0] = clState->work_size;
 	set_threads_hashes(vectors, &threads, &hashes, &globalThreads[0],
-			   localThreads[0]);
+			   localThreads[0], gpus[gpu].intensity);
 
 	diff.tv_sec = 0;
 	gettimeofday(&tv_end, NULL);
@@ -4262,19 +4311,20 @@ static void *gpuminer_thread(void *userdata)
 		timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
 		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
 		decay_time(&gpu_ms_average, gpu_us / 1000);
-		if (opt_dynamic) {
+		if (gpus[gpu].dynamic) {
 			/* Try to not let the GPU be out for longer than 6ms, but
 			 * increase intensity when the system is idle, unless
 			 * dynamic is disabled. */
 			if (gpu_ms_average > 7) {
-				if (scan_intensity > -10)
-					scan_intensity--;
+				if (gpus[gpu].intensity > -10)
+					gpus[gpu].intensity--;
 			} else if (gpu_ms_average < 3) {
-				if (scan_intensity < 10)
-					scan_intensity++;
+				if (gpus[gpu].intensity < 10)
+					gpus[gpu].intensity++;
 			}
 		}
-		set_threads_hashes(vectors, &threads, &hashes, globalThreads, localThreads[0]);
+		set_threads_hashes(vectors, &threads, &hashes, globalThreads,
+				   localThreads[0], gpus[gpu].intensity);
 
 		if (diff.tv_sec > opt_scantime ||
 		    work->blk.nonce >= MAXTHREADS - hashes ||
@@ -5213,8 +5263,10 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_OPENCL
 	if (!skip_to_bench) {
-		for (i = 0; i < MAX_GPUDEVICES; i++)
+		for (i = 0; i < MAX_GPUDEVICES; i++) {
 			gpu_devices[i] = false;
+			gpus[i].dynamic = true;
+		}
 		nDevs = clDevicesNum();
 		if (nDevs < 0) {
 			applog(LOG_ERR, "clDevicesNum returned error, none usable");
