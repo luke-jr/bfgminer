@@ -82,7 +82,7 @@ static inline void affine_to_cpu(int id, int cpu)
 {
 }
 #endif
-		
+
 enum workio_commands {
 	WC_GET_WORK,
 	WC_SUBMIT_WORK,
@@ -671,7 +671,7 @@ static double bench_algo_stage2(
 		);
 
 		// Create and init a chunked of shared memory
-		HANDLE map_handle = CreateFileMapping( 
+		HANDLE map_handle = CreateFileMapping(
 			INVALID_HANDLE_VALUE,   // use paging file
 			NULL,                   // default security attributes
 			PAGE_READWRITE,         // read/write access
@@ -684,7 +684,7 @@ static double bench_algo_stage2(
 			exit(1);
 		}
 
-		void *shared_mem = MapViewOfFile( 
+		void *shared_mem = MapViewOfFile(
 			map_handle,	// object to map view of
 			FILE_MAP_WRITE, // read/write access
 			0,              // high offset:  map from
@@ -727,7 +727,7 @@ static double bench_algo_stage2(
 			FALSE,			// Set handle inheritance to FALSE
 			DEBUG_ONLY_THIS_PROCESS,// We're going to debug the child
 			NULL,			// Use parent's environment block
-			NULL,			// Use parent's starting directory 
+			NULL,			// Use parent's starting directory
 			&startup_info,		// Pointer to STARTUPINFO structure
 			&process_info		// Pointer to PROCESS_INFORMATION structure
 		);
@@ -783,8 +783,8 @@ static double bench_algo_stage2(
 
 		// Reap return value and cleanup
 		CopyMemory(&rate, shared_mem, sizeof(rate));
-		(void)UnmapViewOfFile(shared_mem); 
-		(void)CloseHandle(map_handle); 
+		(void)UnmapViewOfFile(shared_mem);
+		(void)CloseHandle(map_handle);
 
 	#else
 
@@ -2328,7 +2328,7 @@ static void disable_curses(void)
 		HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
 		COORD coord;
-		
+
 		if (GetConsoleScreenBufferInfo(hout, &csbi)) {
 			coord.X = 0;
 			coord.Y = csbi.dwSize.Y - 1;
@@ -3458,7 +3458,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_realquiet || !opt_log_interval)
 		return;
-	
+
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
 
 	/* So we can call hashmeter from a non worker thread */
@@ -4177,7 +4177,7 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
-	
+
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_d);
@@ -4495,7 +4495,7 @@ static void *longpoll_thread(void *userdata)
 		lp_url = hdr_path;
 		hdr_path = NULL;
 	}
-	
+
 	/* absolute path, on current server */
 	else {
 		copy_start = (*hdr_path == '/') ? (hdr_path + 1) : hdr_path;
@@ -5307,7 +5307,7 @@ int main (int argc, char *argv[])
 			#if defined(WIN32)
 				char unique_name[64];
 				if (GetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name, 32)) {
-					HANDLE map_handle = CreateFileMapping( 
+					HANDLE map_handle = CreateFileMapping(
 						INVALID_HANDLE_VALUE,   // use paging file
 						NULL,                   // default security attributes
 						PAGE_READWRITE,         // read/write access
@@ -5316,18 +5316,18 @@ int main (int argc, char *argv[])
 						unique_name		// name of map object
 					);
 					if (NULL!=map_handle) {
-						void *shared_mem = MapViewOfFile( 
+						void *shared_mem = MapViewOfFile(
 							map_handle,	// object to map view of
 							FILE_MAP_WRITE, // read/write access
 							0,              // high offset:  map from
 							0,              // low offset:   beginning
 							0		// default: map entire file
 						);
-						if (NULL!=shared_mem)  
+						if (NULL!=shared_mem)
 							CopyMemory(shared_mem, &rate, sizeof(rate));
-						(void)UnmapViewOfFile(shared_mem); 
+						(void)UnmapViewOfFile(shared_mem);
 					}
-					(void)CloseHandle(map_handle); 
+					(void)CloseHandle(map_handle);
 				}
 			#endif
 		}
@@ -5344,6 +5344,7 @@ int main (int argc, char *argv[])
 	} else
 		chosen_kernel = KL_NONE;
 
+#ifdef HAVE_OPENCL
 	gpu_threads = nDevs * opt_g_threads;
 	if (total_devices) {
 		if (total_devices > nDevs)
@@ -5366,6 +5367,9 @@ int main (int argc, char *argv[])
 			gpu_devices[i] = true;
 		total_devices = nDevs;
 	}
+#else
+  gpu_threads = 0;
+#endif
 
 	if (!gpu_threads && !forced_n_threads) {
 		/* Maybe they turned GPU off; restore default CPU threads. */
@@ -5446,7 +5450,7 @@ int main (int argc, char *argv[])
 		quit(1, "Failed to tq_new");
 
 	/* start work I/O thread */
-	if (thr_info_create(thr, NULL, workio_thread, thr)) 
+	if (thr_info_create(thr, NULL, workio_thread, thr))
 		quit(1, "workio thread create failed");
 
 	/* init longpoll thread info */
