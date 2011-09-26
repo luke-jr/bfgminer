@@ -265,6 +265,10 @@ static unsigned int total_go, total_ro;
 
 static struct pool *pools[MAX_POOLS];
 static struct pool *currentpool = NULL;
+
+static float opt_donation = 0.0;
+static struct pool donationpool;
+
 static int total_pools;
 static enum pool_strategy pool_strategy = POOL_FAILOVER;
 static int opt_rotate_period;
@@ -961,6 +965,18 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
+static char *set_float_0_to_99(const char *arg, float *f)
+{
+	char *err = opt_set_floatval(arg, f);
+	if (err)
+		return err;
+
+	if (*f < 0.0 || *f > 99.9)
+		return "Value out of range";
+
+	return NULL;
+}
+
 static char *set_devices(const char *arg, int *i)
 {
 	char *err = opt_set_intval(arg, i);
@@ -1458,6 +1474,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
 			"Disable GPU mining even if suitable devices exist"),
+#endif
+	OPT_WITH_ARG("--donation",
+		     set_float_0_to_99, &opt_show_floatval, &opt_donation,
+		     "Set donation percentage to cgminer author (0.0 - 99.9)"),
+#ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
 			"Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)"),
@@ -2085,6 +2106,11 @@ bool regeneratehash(const struct work *work)
 		return false;
 }
 
+static bool donor(struct pool *pool)
+{
+	return (pool == &donationpool);
+}
+
 static bool submit_upstream_work(const struct work *work)
 {
 	char *hexstr = NULL;
@@ -2130,11 +2156,14 @@ static bool submit_upstream_work(const struct work *work)
 		if (!pool_tset(pool, &pool->submit_fail)) {
 			total_ro++;
 			pool->remotefail_occasions++;
-			applog(LOG_WARNING, "Pool %d communication failure, caching submissions", pool->pool_no);
+			if (!donor(pool))
+				applog(LOG_WARNING, "Pool %d communication failure, caching submissions", pool->pool_no);
 		}
 		goto out;
-	} else if (pool_tclear(pool, &pool->submit_fail))
-		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
+	} else if (pool_tclear(pool, &pool->submit_fail)) {
+		if (!donor(pool))
+			applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
+	}
 
 	res = json_object_get(val, "result");
 
@@ -2156,7 +2185,10 @@ static bool submit_upstream_work(const struct work *work)
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
-			if (total_pools > 1)
+			if (donor(work->pool))
+				applog(LOG_NOTICE, "Accepted %s %sPU %d thread %d donate",
+				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+			else if (total_pools > 1)
 				applog(LOG_NOTICE, "Accepted %s %sPU %d thread %d pool %d",
 				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
 			else
@@ -2175,7 +2207,10 @@ static bool submit_upstream_work(const struct work *work)
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
-			if (total_pools > 1)
+			if (donor(work->pool))
+				applog(LOG_NOTICE, "Rejected %s %sPU %d thread %d donate",
+				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+			else if (total_pools > 1)
 				applog(LOG_NOTICE, "Rejected %s %sPU %d thread %d pool %d",
 				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
 			else
@@ -2213,6 +2248,10 @@ static inline struct pool *select_pool(bool lagging)
 {
 	static int rotating_pool = 0;
 	struct pool *pool, *cp;
+
+	if (total_getworks && opt_donation > 0.0 && !donationpool.idle &&
+	   (float)donationpool.getwork_requested / (float)total_getworks < opt_donation / 100)
+		return &donationpool;
 
 	cp = current_pool();
 
@@ -3601,7 +3640,8 @@ static bool pool_active(struct pool *pool, bool pinging)
 static void pool_died(struct pool *pool)
 {
 	if (!pool_tset(pool, &pool->idle)) {
-		applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
+		if (!donor(pool))
+			applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
 		gettimeofday(&pool->tv_idle, NULL);
 		switch_pools(NULL);
 	}
@@ -3619,7 +3659,8 @@ static inline int cp_prio(void)
 
 static void pool_resus(struct pool *pool)
 {
-	applog(LOG_WARNING, "Pool %d %s recovered", pool->pool_no, pool->rpc_url);
+	if (!donor(pool))
+		applog(LOG_WARNING, "Pool %d %s recovered", pool->pool_no, pool->rpc_url);
 	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER)
 		switch_pools(NULL);
 }
@@ -3708,7 +3749,7 @@ static inline bool should_roll(struct work *work)
 static inline bool can_roll(struct work *work)
 {
 	return (work->pool && !stale_work(work) && work->rolltime &&
-		work->rolls < 11 && !work->clone);
+		work->rolls < 11 && !work->clone && !donor(work->pool));
 }
 
 static void roll_work(struct work *work)
@@ -4791,6 +4832,14 @@ static void *watchdog_thread(void *userdata)
 			}
 		}
 
+		if (opt_donation > 0.0) {
+			if (donationpool.idle && now.tv_sec - donationpool.tv_idle.tv_sec > 60) {
+				gettimeofday(&donationpool.tv_idle, NULL);
+				if (pool_active(&donationpool, true) && pool_tclear(&donationpool, &donationpool.idle))
+					pool_resus(&donationpool);
+			}
+		}
+
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
 			gettimeofday(&rotate_tv, NULL);
 			switch_pools(NULL);
@@ -4955,6 +5004,9 @@ static void print_summary(void)
 			applog(LOG_WARNING, " Submitting work remotely delay occasions: %d\n", pool->remotefail_occasions);
 		}
 	}
+
+	if (opt_donation > 0.0)
+		applog(LOG_WARNING, "Donated share submissions: %d\n", donationpool.accepted + donationpool.rejected);
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
 	for (i = 0; i < mining_threads; i++) {
@@ -5514,6 +5566,17 @@ int main (int argc, char *argv[])
 		}
 		curses_input("Press enter to exit");
 		quit(0, "No servers could be used! Exiting.");
+	}
+
+	if (opt_donation > 0.0) {
+		if (!get_dondata(&donationpool.rpc_url, &donationpool.rpc_userpass))
+			opt_donation = 0.0;
+		else {
+			donationpool.enabled = true;
+			donationpool.pool_no = MAX_POOLS;
+			if (!pool_active(&donationpool, false))
+				donationpool.idle = true;
+		}
 	}
 
 	/* If we want longpoll, enable it for the chosen default pool, or, if

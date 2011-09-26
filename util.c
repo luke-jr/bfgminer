@@ -682,3 +682,53 @@ void thr_info_cancel(struct thr_info *thr)
 	if (pthread_cancel(thr->pth))
 		pthread_join(thr->pth, NULL);
 }
+
+bool get_dondata(char **url, char **userpass)
+{
+	struct data_buffer all_data = { };
+	char curl_err_str[CURL_ERROR_SIZE];
+	CURL *curl = curl_easy_init();
+	int rc;
+
+	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
+	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
+	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &all_data);
+	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
+	curl_easy_setopt(curl, CURLOPT_URL, "http://vds.kolivas.org/url");
+	rc = curl_easy_perform(curl);
+	if (rc) {
+		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
+		goto err_out;
+	}
+	if (!all_data.buf)
+		goto err_out;
+	*url = strtok(all_data.buf, "\n");
+	all_data.buf = NULL;
+	databuf_free(&all_data);
+
+	curl_easy_setopt(curl, CURLOPT_URL, "http://vds.kolivas.org/userpass");
+	rc = curl_easy_perform(curl);
+	if (rc) {
+		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
+		goto err_out;
+	}
+	if (!all_data.buf)
+		goto err_out;
+	*userpass = strtok(all_data.buf, "\n");
+	all_data.buf = NULL;
+	databuf_free(&all_data);
+
+	applog(LOG_INFO, "Donation URL: %s Userpass: %s", *url, *userpass);
+	curl_easy_cleanup(curl);
+	return true;
+
+err_out:
+	databuf_free(&all_data);
+	*url = NULL;
+	*userpass = NULL;
+	curl_easy_cleanup(curl);
+	return false;
+}

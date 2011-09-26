@@ -494,5 +494,6 @@ extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern enum cl_kernel chosen_kernel;
 extern void adl(void);
+extern bool get_dondata(char **url, char **userpass);
 
 #endif /* __MINER_H__ */
