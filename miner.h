@@ -81,7 +81,9 @@ void *alloca (size_t);
 #endif
 
 #if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
-#define WANT_BUILTIN_BSWAP
+#define bswap_16 __builtin_bswap16
+#define bswap_32 __builtin_bswap32
+#define bswap_64 __builtin_bswap64
 #else
 #if HAVE_BYTESWAP_H
 #include <byteswap.h>
@@ -99,7 +101,7 @@ void *alloca (size_t);
 #define	bswap_32(value)	\
  	(((uint32_t)bswap_16((uint16_t)((value) & 0xffff)) << 16) | \
  	(uint32_t)bswap_16((uint16_t)((value) >> 16)))
- 
+
 #define	bswap_64(value)	\
  	(((uint64_t)bswap_32((uint32_t)((value) & 0xffffffff)) \
  	    << 32) | \
@@ -244,11 +246,7 @@ extern void thr_info_cancel(struct thr_info *thr);
 
 static inline uint32_t swab32(uint32_t v)
 {
-#ifdef WANT_BUILTIN_BSWAP
-	return __builtin_bswap32(v);
-#else
 	return bswap_32(v);
-#endif
 }
 
 static inline void swap256(void *dest_p, const void *src_p)
