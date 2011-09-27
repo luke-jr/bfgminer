@@ -1390,6 +1390,7 @@ static char *set_intensity(char *arg)
 	if (!strncasecmp(nextptr, "d", 1))
 		gpus[device].dynamic = true;
 	else {
+		gpus[device].dynamic = false;
 		val = atoi(nextptr);
 		if (val < -10 || val > 10)
 			return "Invalid value passed to set intensity";
