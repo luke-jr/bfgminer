@@ -3818,12 +3818,13 @@ retry:
 		goto out;
 	}
 
+	if (can_roll(work) && should_roll(work)) {
+		roll_work(work);
+		ret = true;
+		goto out;
+	}
+
 	if (!requests_staged()) {
-		if (can_roll(work)) {
-			roll_work(work);
-			ret = true;
-			goto out;
-		}
 		if (requested && requests_queued() >= mining_threads &&
 		    !pool_tset(pool, &pool->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough",
