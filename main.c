@@ -1889,6 +1889,8 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->rejected,
 		cgpu->hw_errors,
 		cgpu->utility);
+	if (cgpu->is_gpu)
+		tailsprintf(buf, " I:%d", cgpu->intensity);
 }
 
 static void text_print_status(int thr_id)
@@ -1966,10 +1968,10 @@ static void curses_print_devstatus(int thr_id)
 			wprintw(statuswin, "DISABLED ");
 		else
 			wprintw(statuswin, "%.1f", cgpu->rolling);
-		wprintw(statuswin, "/%.1fMh/s | A:%d R:%d HW:%d U:%.2f/m",
+		wprintw(statuswin, "/%.1fMh/s | A:%d R:%d HW:%d U:%.2f/m I:%d",
 			cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility);
+			cgpu->utility, gpus[gpu].intensity);
 		wclrtoeol(statuswin);
 	} else if (thr_id >= gpu_threads) {
 		int cpu = dev_from_id(thr_id);
@@ -3215,10 +3217,10 @@ retry:
 	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct cgpu_info *cgpu = &gpus[gpu];
 
-		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m\n",
+		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
 			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility);
+			cgpu->utility, cgpu->intensity);
 #ifdef HAVE_ADL
 		if (gpus[gpu].has_adl) {
 			int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
