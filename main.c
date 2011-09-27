@@ -3448,7 +3448,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	bool showlog = false;
 
 	/* Update the last time this thread reported in */
@@ -3464,6 +3463,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	/* So we can call hashmeter from a non worker thread */
 	if (thr_id >= 0) {
 		struct thr_info *thr = &thr_info[thr_id];
+		struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 		double thread_rolling = 0.0;
 		int i;
 
@@ -5207,6 +5207,8 @@ int main (int argc, char *argv[])
 	init_max_name_len();
 
 	handler.sa_handler = &sighandler;
+	handler.sa_flags = 0;
+	sigemptyset(&handler.sa_mask);
 	sigaction(SIGTERM, &handler, &termhandler);
 	sigaction(SIGINT, &handler, &inthandler);
 
@@ -5408,7 +5410,7 @@ int main (int argc, char *argv[])
 				quit(1, "Failed to malloc userpass");
 			sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 		} else {
-			pool->rpc_user = malloc(strlen(pool->rpc_userpass));
+			pool->rpc_user = malloc(strlen(pool->rpc_userpass) + 1);
 			if (!pool->rpc_user)
 				quit(1, "Failed to malloc user");
 			strcpy(pool->rpc_user, pool->rpc_userpass);
