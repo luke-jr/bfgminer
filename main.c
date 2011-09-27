@@ -4573,7 +4573,7 @@ static void *longpoll_thread(void *userdata)
 			gettimeofday(&end, NULL);
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
-			if (failures++ < 10) {
+			if (opt_retries == -1 || failures++ < opt_retries) {
 				sleep(30);
 				applog(LOG_WARNING,
 					"longpoll failed for %s, sleeping for 30s", lp_url);
