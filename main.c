@@ -5583,6 +5583,8 @@ int main (int argc, char *argv[])
 		if (!get_dondata(&donationpool.rpc_url, &donationpool.rpc_userpass))
 			opt_donation = 0.0;
 		else {
+			if (unlikely(pthread_mutex_init(&donationpool.pool_lock, NULL)))
+				quit (1, "Failed to pthread_mutex_init in add donpool");
 			donationpool.enabled = true;
 			donationpool.pool_no = MAX_POOLS;
 			if (!pool_active(&donationpool, false))
