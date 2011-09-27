@@ -3256,7 +3256,7 @@ retry:
 		if (gpus[gpu].dynamic)
 			wlog("Dynamic\n");
 		else
-			wlog("%u\n", gpus[gpu].intensity);
+			wlog("%d\n", gpus[gpu].intensity);
 		for (i = 0; i < mining_threads; i++) {
 			thr = &thr_info[i];
 			if (thr->cgpu != cgpu)
