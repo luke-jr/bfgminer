@@ -1,3 +1,18 @@
+Version 2.0.5 - September 27, 2011
+
+- Intensity can now be set to dynamic or static values per-device.
+- New donation feature --donation sends a proportion of shares to author's
+account of choice, but is disabled by default!
+- The hash being displayed and block detection has been fixed.
+- Devices not being mined on will not attempt to be ADL managed.
+- Intensity is now displayed per GPU device.
+- Make longpoll attempt to restart as often as opt_retries specifies.
+- We weren't rolling work as often as we could.
+- Correct some memory management issues.
+- Build fixes.
+- Don't mess with GPUs if we don't have them.
+
+
 Version 2.0.4 - September 23, 2011
 
 - Confused Longpoll messages should be finally fixed with cgminer knowing for
