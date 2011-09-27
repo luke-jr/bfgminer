@@ -2,6 +2,13 @@
 This is a multi-threaded multi-pool CPU and GPU miner with ATI GPU monitoring,
 (over)clocking and fanspeed support for bitcoin and derivative coins.
 
+This code is provided entirely free of charge by the programmer in his spare
+time so donations would be greatly appreciated. Please consider using the
+--donation feature or donate directly to the address below.
+
+Con Kolivas <kernel@kolivas.org>
+15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+
 DOWNLOADS:
 
 http://ck.kolivas.org/apps/cgminer
@@ -117,6 +124,7 @@ Options for both config file and command line:
 --debug|-D          Enable debug output
 --device|-d <arg>   Select device to use, (Use repeat -d for multiple devices, default: all)
 --disable-gpu|-G    Disable GPU mining even if suitable devices exist
+--donation <arg>    Set donation percentage to cgminer author (0.0 - 99.9) (default: 0.0)
 --enable-cpu|-C     Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
@@ -515,13 +523,22 @@ than whatever it is being packaged with. If you installed cgminer yourself,
 then you do not have a virus on your computer. Complain to your antivirus
 software company.
 
+Q: How does the donation feature work and how does it affect my shares?
+A: The donation feature is disabled by default and only does anything once
+enabled. It queries the author's website for login credentials and contributes
+up to a proportion of work to the author's account. While the overall
+accepted/rejected rates will include this work, none of these will appear in
+your own accounts. On exiting, the summary will tell you how many shares were
+contributed to the author.
+
 Q: GUI version?
 A: No.
 
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
-time so donations would be greatly appreciated.
+time so donations would be greatly appreciated. Please consider using the
+--donation feature or donate directly to the address below.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
