@@ -5736,6 +5736,12 @@ int main (int argc, char *argv[])
 	if (thr_info_create(thr, NULL, reinit_gpu, thr))
 		quit(1, "reinit_gpu thread create failed");
 
+	sleep(opt_log_interval);
+	if (opt_donation > 0.0)
+		applog(LOG_WARNING, "Donation is enabled at %.1f%% thank you :-)", opt_donation);
+	else
+		applog(LOG_WARNING, "Donation is disabled, please consider just 0.5%% :-(");
+
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
 	applog(LOG_INFO, "workio thread dead, exiting.");
