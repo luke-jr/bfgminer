@@ -266,7 +266,7 @@ static unsigned int total_go, total_ro;
 static struct pool *pools[MAX_POOLS];
 static struct pool *currentpool = NULL;
 
-static float opt_donation = 0.0;
+static float opt_donation = 0.5;
 static struct pool donationpool;
 
 static int total_pools;

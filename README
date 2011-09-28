@@ -3,8 +3,8 @@ This is a multi-threaded multi-pool CPU and GPU miner with ATI GPU monitoring,
 (over)clocking and fanspeed support for bitcoin and derivative coins.
 
 This code is provided entirely free of charge by the programmer in his spare
-time so donations would be greatly appreciated. Please consider using the
---donation feature or donate directly to the address below.
+time so donations are greatly appreciated. Please note the donation feature is
+on by default at a tiny 0.5% which you wouldn't notice, but can be disabled.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
@@ -124,7 +124,7 @@ Options for both config file and command line:
 --debug|-D          Enable debug output
 --device|-d <arg>   Select device to use, (Use repeat -d for multiple devices, default: all)
 --disable-gpu|-G    Disable GPU mining even if suitable devices exist
---donation <arg>    Set donation percentage to cgminer author (0.0 - 99.9) (default: 0.0)
+--donation <arg>    Set donation percentage to cgminer author (0.0 - 99.9) (default: 0.5)
 --enable-cpu|-C     Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
@@ -537,8 +537,8 @@ A: No.
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
-time so donations would be greatly appreciated. Please consider using the
---donation feature or donate directly to the address below.
+time so donations are greatly appreciated. Please note the donation feature is
+on by default at a tiny 0.5% which you wouldn't notice, but can be disabled.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
