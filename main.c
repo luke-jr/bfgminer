@@ -2502,6 +2502,10 @@ static bool stale_work(struct work *work)
 	if ((now.tv_sec - work->tv_staged.tv_sec) >= opt_scantime)
 		return true;
 
+	/* Don't compare donor work in case it's on a different chain */
+	if (donor(work->pool))
+		return ret;
+
 	hexstr = bin2hex(work->data, 18);
 	if (unlikely(!hexstr)) {
 		applog(LOG_ERR, "submit_work_thread OOM");
@@ -2765,6 +2769,11 @@ static void test_work_current(struct work *work, bool longpoll)
 {
 	struct block *s;
 	char *hexstr;
+
+	/* Allow donation to not set current work, so it will work even if
+	 * mining on a different chain */
+	if (donor(work->pool))
+		return;
 
 	hexstr = bin2hex(work->data, 18);
 	if (unlikely(!hexstr)) {
