@@ -126,6 +126,7 @@ Options for both config file and command line:
 --disable-gpu|-G    Disable GPU mining even if suitable devices exist
 --donation <arg>    Set donation percentage to cgminer author (0.0 - 99.9) (default: 0.0)
 --enable-cpu|-C     Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)
+--expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
 --gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)

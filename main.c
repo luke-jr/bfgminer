@@ -195,6 +195,7 @@ static int opt_queue = 1;
 int opt_vectors;
 int opt_worksize;
 int opt_scantime = 60;
+int opt_expiry = 120;
 int opt_bench_algo = -1;
 static const bool opt_time = true;
 static bool opt_restart = true;
@@ -1484,6 +1485,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
 			"Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)"),
+#endif
+	OPT_WITH_ARG("--expiry|-E",
+		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
+		     "Upper bound on how many seconds after getting work we consider a share from it stale"),
+#ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--failover-only",
 			opt_set_bool, &opt_fail_only,
 			"Don't leak work to backup pools when primary pool is lagging"),
@@ -2492,14 +2498,17 @@ static bool workio_get_work(struct workio_cmd *wc)
 	return true;
 }
 
-static bool stale_work(struct work *work)
+static bool stale_work(struct work *work, bool share)
 {
 	struct timeval now;
 	bool ret = false;
 	char *hexstr;
 
 	gettimeofday(&now, NULL);
-	if ((now.tv_sec - work->tv_staged.tv_sec) >= opt_scantime)
+	if (share) {
+		if ((now.tv_sec - work->tv_staged.tv_sec) >= opt_expiry)
+			return true;
+	} else if ((now.tv_sec - work->tv_staged.tv_sec) >= opt_scantime)
 		return true;
 
 	/* Don't compare donor work in case it's on a different chain */
@@ -2528,7 +2537,7 @@ static void *submit_work_thread(void *userdata)
 
 	pthread_detach(pthread_self());
 
-	if (!opt_submit_stale && stale_work(work)) {
+	if (!opt_submit_stale && stale_work(work, true)) {
 		applog(LOG_NOTICE, "Stale share detected, discarding");
 		total_stale++;
 		pool->stale_shares++;
@@ -2537,7 +2546,7 @@ static void *submit_work_thread(void *userdata)
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(work)) {
-		if (!opt_submit_stale && stale_work(work)) {
+		if (!opt_submit_stale && stale_work(work, true)) {
 			applog(LOG_NOTICE, "Stale share detected, discarding");
 			total_stale++;
 			pool->stale_shares++;
@@ -2708,7 +2717,7 @@ static int discard_stale(void)
 
 	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
-		if (stale_work(work)) {
+		if (stale_work(work, false)) {
 			HASH_DEL(staged_work, work);
 			if (work->clone)
 				--staged_clones;
@@ -3156,8 +3165,8 @@ static void set_options(void)
 	clear_logwin();
 retry:
 	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[R]etries: %d\n[P]ause: %d\n",
-		opt_queue, opt_scantime, opt_retries, opt_fail_pause);
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n[P]ause: %d\n",
+		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 
@@ -3181,6 +3190,14 @@ retry:
 			goto retry;
 		}
 		opt_scantime = selected;
+		goto retry;
+	} else if  (!strncasecmp(&input, "e", 1)) {
+		selected = curses_int("Set expiry time in seconds");
+		if (selected < 0 || selected > 9999) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		opt_expiry = selected;
 		goto retry;
 	} else if  (!strncasecmp(&input, "r", 1)) {
 		selected = curses_int("Retries before failing (-1 infinite)");
@@ -3761,7 +3778,7 @@ static inline bool should_roll(struct work *work)
 
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && !stale_work(work) && work->rolltime &&
+	return (work->pool && !stale_work(work, false) && work->rolltime &&
 		work->rolls < 11 && !work->clone && !donor(work->pool));
 }
 
@@ -3858,7 +3875,7 @@ retry:
 		goto retry;
 	}
 
-	if (stale_work(work_heap)) {
+	if (stale_work(work_heap, false)) {
 		dec_queued();
 		discard_work(work_heap);
 		goto retry;
@@ -4145,7 +4162,7 @@ static void *miner_thread(void *userdata)
 			decay_time(&hash_divfloat , (double)((MAXTHREADS / total_hashes) ? : 1));
 			hash_div = hash_divfloat;
 			needs_work = true;
-		} else if (work_restart[thr_id].restart || stale_work(work) ||
+		} else if (work_restart[thr_id].restart || stale_work(work, false) ||
 			work->blk.nonce >= MAXTHREADS - hashes_done)
 				needs_work = true;
 
@@ -4384,7 +4401,7 @@ static void *gpuminer_thread(void *userdata)
 		if (diff.tv_sec > opt_scantime ||
 		    work->blk.nonce >= MAXTHREADS - hashes ||
 		    work_restart[thr_id].restart ||
-		    stale_work(work)) {
+		    stale_work(work, false)) {
 			/* Ignore any reads since we're getting new work and queue a clean buffer */
 			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 					BUFFERSIZE, blank_res, 0, NULL, NULL);
