@@ -5569,6 +5569,7 @@ int main (int argc, char *argv[])
 	/* We use the getq mutex as the staged lock */
 	stgd_lock = &getq->mutex;
 
+retry_pools:
 	/* Test each pool to see if we can retrieve and use work and for what
 	 * it supports */
 	for (i = 0; i < total_pools; i++) {
@@ -5601,8 +5602,12 @@ int main (int argc, char *argv[])
 			applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
 			       i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
 		}
-		curses_input("Press enter to exit");
-		quit(0, "No servers could be used! Exiting.");
+		halfdelay(150);
+		applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 15s.");
+		if (getch() != ERR)
+			quit(0, "No servers could be used! Exiting.");
+		nocbreak();
+		goto retry_pools;
 	}
 
 	if (opt_donation > 0.0) {
