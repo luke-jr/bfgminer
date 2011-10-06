@@ -5437,6 +5437,7 @@ int main (int argc, char *argv[])
 		for (i = 0; i < MAX_GPUDEVICES; i++)
 			if (gpu_devices[i] && i + 1 > nDevs)
 				quit (1, "Command line options set a device that doesn't exist");
+#ifdef HAVE_ADL
 		for (i = 0; i < nDevs; i++) {
 			/* Make sure we do not attempt to adl manage devices
 			 * that we disable */
@@ -5447,6 +5448,7 @@ int main (int argc, char *argv[])
 				gpus[i].gpu_fan =
 				gpus[i].gpu_powertune = 0;
 		}
+#endif
 	} else {
 		for (i = 0; i < nDevs; i++)
 			gpu_devices[i] = true;
