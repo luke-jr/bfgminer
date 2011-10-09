@@ -1,3 +1,22 @@
+Version 2.0.6 - October 9, 2011
+
+- Must initialise the donorpool mutex or it fails on windows.
+- Don't make donation work interfere with block change detection allowing
+donation to work regardless of the block chain we're mining on.
+- Expire shares as stale with a separate timeout from the scantime, defaulting
+to 120 seconds.
+- Retry pools after a delay of 15 seconds if none can be contacted on startup
+unless a key is pressed.
+- Don't try to build adl features without having adl.
+- Properly check shares against target difficulty - This will no longer show
+shares when solo mining at all unless they're considered to be a block solve.
+- Add altivec 4 way (cpu mining) support courtesy of Gilles Risch.
+- Try to use SSL if the server supports it.
+- Display the total solved blocks on exit (LOL if you're lucky).
+- Use ADL activity report to tell us if a sick GPU is still busy suggesting it
+is hard hung and do not attempt to restart it.
+
+
 Version 2.0.5 - September 27, 2011
 
 - Intensity can now be set to dynamic or static values per-device.

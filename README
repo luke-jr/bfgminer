@@ -1,6 +1,7 @@
 
 This is a multi-threaded multi-pool CPU and GPU miner with ATI GPU monitoring,
-(over)clocking and fanspeed support for bitcoin and derivative coins.
+(over)clocking and fanspeed support for bitcoin and derivative coins. Do not
+use on multiple block chains at the same time!
 
 This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider using the
