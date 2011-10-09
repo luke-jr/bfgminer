@@ -5017,6 +5017,12 @@ static void *watchdog_thread(void *userdata)
 				gpus[gpu].status = LIFE_SICK;
 				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
 				gettimeofday(&thr->sick, NULL);
+#ifdef HAVE_ADL
+				if (adl_active && gpus[gpu].has_adl && gpu_activity(gpu) > 50) {
+					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
+					applog(LOG_ERR, "Will not attempt to auto-restart it.");
+				} else
+#endif
 				if (opt_restart) {
 					applog(LOG_ERR, "Attempting to restart GPU");
 					reinit_device(thr->cgpu);
