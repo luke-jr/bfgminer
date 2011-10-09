@@ -2079,7 +2079,7 @@ bool regeneratehash(const struct work *work)
 	int diffshift = 0;
 	int i;
 
-	for (i = 0; i < 80/4; i++)
+	for (i = 0; i < 80 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 
 	sha2(swap, 80, hash1, false);
@@ -3957,15 +3957,35 @@ err_out:
 	return false;
 }
 
+bool hashtest(const struct work *work)
+{
+	uint32_t *data32 = (uint32_t *)(work->data);
+	unsigned char swap[128];
+	uint32_t *swap32 = (uint32_t *)swap;
+	unsigned char hash1[32];
+	int i;
+
+	for (i = 0; i < 80 / 4; i++)
+		swap32[i] = swab32(data32[i]);
+
+	sha2(swap, 80, hash1, false);
+	sha2(hash1, 32, (unsigned char *)(work->hash), false);
+	return fulltest(work->hash, work->target);
+
+}
+
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
-	work->data[64+12+0] = (nonce>>0) & 0xff;
-	work->data[64+12+1] = (nonce>>8) & 0xff;
-	work->data[64+12+2] = (nonce>>16) & 0xff;
-	work->data[64+12+3] = (nonce>>24) & 0xff;
+	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
+	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
+	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
+	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
+
 	/* Do one last check before attempting to submit the work */
-	if (!fulltest(work->data + 64, work->target))
+	if (!hashtest(work)) {
+		applog(LOG_INFO, "Share below target");
 		return true;
+	}
 	return submit_work_sync(thr, work);
 }
 
