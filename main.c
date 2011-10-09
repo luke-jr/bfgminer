@@ -265,6 +265,7 @@ static int total_accepted, total_rejected;
 static int total_getworks, total_stale, total_discarded;
 static int total_queued;
 static unsigned int new_blocks;
+static unsigned int found_blocks;
 
 static unsigned int local_work;
 static unsigned int total_go, total_ro;
@@ -2212,6 +2213,8 @@ static bool submit_upstream_work(const struct work *work)
 
 	if (!QUIET) {
 		isblock = regeneratehash(work);
+		if (isblock)
+			found_blocks++;
 		hash32 = (uint32_t *)(work->hash);
 		sprintf(hashshow, "%08lx.%08lx.%08lx%s",
 			(unsigned long)(hash32[7]), (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
@@ -5064,6 +5067,7 @@ static void print_summary(void)
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
 	if (total_secs)
 		applog(LOG_WARNING, "Average hashrate: %.1f Megahash/s", total_mhashes_done / total_secs);
+	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
 	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
