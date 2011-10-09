@@ -3839,6 +3839,13 @@ static void roll_work(struct work *work)
  * recycled more rapidly and discard the clone to avoid repeating work */
 static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_div)
 {
+	if (can_roll(work) && should_roll(work)) {
+		roll_work(work);
+		return true;
+	}
+	return false;
+#if 0
+	/* Work division is disabled because it can lead to repeated work */
 	uint64_t hash_inc;
 
 	if (work->clone)
@@ -3858,6 +3865,7 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 		return true;
 	}
 	return false;
+#endif
 }
 
 static bool get_work(struct work *work, bool requested, struct thr_info *thr,
