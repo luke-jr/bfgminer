@@ -106,6 +106,7 @@ enum sha256_algos {
 	ALGO_SSE2_32,		/* SSE2 for x86_32 */
 	ALGO_SSE2_64,		/* SSE2 for x86_64 */
 	ALGO_SSE4_64,		/* SSE4 for x86_64 */
+    ALGO_ALTIVEC_4WAY, /* parallel Altivec */
 };
 
 enum pool_strategy {
@@ -149,6 +150,9 @@ static const char *algo_names[] = {
 #ifdef WANT_X8664_SSE4
 	[ALGO_SSE4_64]		= "sse4_64",
 #endif
+#ifdef WANT_ALTIVEC_4WAY
+    [ALGO_ALTIVEC_4WAY] = "altivec_4way",
+#endif
 };
 
 typedef void (*sha256_func)();
@@ -156,6 +160,9 @@ static const sha256_func sha256_funcs[] = {
 	[ALGO_C]		= (sha256_func)scanhash_c,
 #ifdef WANT_SSE2_4WAY
 	[ALGO_4WAY]		= (sha256_func)ScanHash_4WaySSE2,
+#endif
+#ifdef WANT_ALTIVEC_4WAY
+    [ALGO_ALTIVEC_4WAY] = (sha256_func) ScanHash_altivec_4way,
 #endif
 #ifdef WANT_VIA_PADLOCK
 	[ALGO_VIA]		= (sha256_func)scanhash_via,
@@ -896,6 +903,10 @@ static enum sha256_algos pick_fastest_algo()
 		bench_algo(&best_rate, &best_algo, ALGO_SSE4_64);
 	#endif
 
+        #if defined(WANT_ALTIVEC_4WAY)
+                bench_algo(&best_rate, &best_algo, ALGO_ALTIVEC_4WAY);
+        #endif
+
 	size_t n = max_name_len - strlen(algo_names[best_algo]);
 	memset(name_spaces_pad, ' ', n);
 	name_spaces_pad[n] = 0;
@@ -1452,6 +1463,9 @@ static struct opt_table opt_config_table[] = {
 #ifdef WANT_X8664_SSE4
 		     "\n\tsse4_64\t\tSSE4.1 64 bit implementation for x86_64 machines"
 #endif
+#ifdef WANT_ALTIVEC_4WAY
+    "\n\taltivec_4way\tAltivec implementation for PowerPC G4 and G5 machines"
+#endif
 		),
 #ifdef HAVE_ADL
 	OPT_WITHOUT_ARG("--auto-fan",
@@ -1787,6 +1801,19 @@ static bool work_decode(const json_t *val, struct work *work)
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
+
+#ifdef __BIG_ENDIAN__
+        int swapcounter = 0;
+        for (swapcounter = 0; swapcounter < 32; swapcounter++)
+            (((uint32_t*) (work->data))[swapcounter]) = swab32(((uint32_t*) (work->data))[swapcounter]);
+        for (swapcounter = 0; swapcounter < 16; swapcounter++)
+            (((uint32_t*) (work->hash1))[swapcounter]) = swab32(((uint32_t*) (work->hash1))[swapcounter]);
+        for (swapcounter = 0; swapcounter < 8; swapcounter++)
+            (((uint32_t*) (work->midstate))[swapcounter]) = swab32(((uint32_t*) (work->midstate))[swapcounter]);
+        for (swapcounter = 0; swapcounter < 8; swapcounter++)
+            (((uint32_t*) (work->target))[swapcounter]) = swab32(((uint32_t*) (work->target))[swapcounter]);
+#endif
+
 	gettimeofday(&work->tv_staged, NULL);
 
 	return true;
@@ -2140,6 +2167,12 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_ERR, "CURL initialisation failed");
 		return rc;
 	}
+
+#ifdef __BIG_ENDIAN__
+        int swapcounter = 0;
+        for (swapcounter = 0; swapcounter < 32; swapcounter++)
+            (((uint32_t*) (work->data))[swapcounter]) = swab32(((uint32_t*) (work->data))[swapcounter]);
+#endif
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
@@ -4099,6 +4132,19 @@ static void *miner_thread(void *userdata)
 			rc = (rc4 == -1) ? false : true;
 			}
 			break;
+#endif
+
+#ifdef WANT_ALTIVEC_4WAY
+            case ALGO_ALTIVEC_4WAY:
+            {
+                unsigned int rc4 = ScanHash_altivec_4way(thr_id, work->midstate, work->data + 64,
+                        work->hash1, work->hash,
+                        work->target,
+                        max_nonce, &hashes_done,
+                        work->blk.nonce);
+                rc = (rc4 == -1) ? false : true;
+            }
+                break;
 #endif
 
 #ifdef WANT_VIA_PADLOCK

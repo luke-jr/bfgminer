@@ -83,6 +83,11 @@ case $target in
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
     ;;
+  powerpc-*-darwin*)
+    CFLAGS="$CFLAGS -faltivec"
+    OPENCL_LIBS=""
+    PTHREAD_FLAGS=""
+    ;;
   *-*-darwin*)
     OPENCL_LIBS="-framework OpenCL"
 	;;

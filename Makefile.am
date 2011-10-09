@@ -24,6 +24,7 @@ cgminer_SOURCES	= elist.h miner.h compat.h bench_block.h	\
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
 		  sha256_sse4_amd64.c sha256_sse2_i386.c	\
+		  sha256_altivec_4way.c				\
 		  adl.c	adl.h adl_functions.h			\
 		  phatk110817.cl poclbm110817.cl \
 		  sha2.c sha2.h

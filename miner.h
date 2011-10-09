@@ -64,6 +64,10 @@ void *alloca (size_t);
 #define WANT_SSE2_4WAY 1
 #endif
 
+#ifdef __ALTIVEC__
+#define WANT_ALTIVEC_4WAY 1
+#endif
+
 #if defined(__i386__) && defined(HAS_YASM) && defined(__SSE2__)
 #define WANT_X8632_SSE2 1
 #endif
@@ -329,6 +333,12 @@ extern unsigned int ScanHash_4WaySSE2(int, const unsigned char *pmidstate,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, unsigned long *nHashesDone, uint32_t nonce);
 
+extern unsigned int ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
+	unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, unsigned long *nHashesDone, uint32_t nonce);
+
 extern unsigned int scanhash_sse2_amd64(int, const unsigned char *pmidstate,
 	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
@@ -342,14 +352,17 @@ extern bool scanhash_c(int, const unsigned char *midstate, unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t n);
+
 extern bool scanhash_cryptopp(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t n);
+
 extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t nonce);
+
 extern int scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
