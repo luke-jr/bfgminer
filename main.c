@@ -5769,8 +5769,9 @@ retry_pools:
 			if (!failmessage) {
 				char *buf;
 
-				applog(LOG_ERR, "The most common reason for this failure is cgminer being unable to read the kernel .cl files");
-				applog(LOG_ERR, "Alternatively if it has failed on different GPUs, restarting might help.");
+				applog(LOG_ERR, "Restarting the GPU from the menu is unlikely to fix this.");
+				applog(LOG_ERR, "Try stopping other applications using the GPU like afterburner.");
+				applog(LOG_ERR, "Then restart cgminer.");
 				failmessage = true;
 				buf = curses_input("Press enter to continue");
 				if (buf)
@@ -5856,7 +5857,7 @@ retry_pools:
 	if (opt_donation > 0.0)
 		applog(LOG_WARNING, "Donation is enabled at %.1f%% thank you :-)", opt_donation);
 	else
-		applog(LOG_WARNING, "Donation is disabled, please consider just 0.5%% :-(");
+		applog(LOG_WARNING, "--donation is disabled, please consider just 0.5%% :-(");
 
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
