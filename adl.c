@@ -784,9 +784,8 @@ static int set_fanspeed(int gpu, int iFanSpeed)
 
 static int set_powertune(int gpu, int iPercentage)
 {
-	int oldPercentage, dummy;
 	struct gpu_adl *ga;
-	int ret = 1;
+	int dummy, ret = 1;
 
 	if (!gpus[gpu].has_adl || !adl_active) {
 		wlogprint("Set powertune not supported\n");
@@ -794,7 +793,6 @@ static int set_powertune(int gpu, int iPercentage)
 	}
 
 	ga = &gpus[gpu].adl;
-	oldPercentage = ga->iPercentage;
 
 	lock_adl();
 	ADL_Overdrive5_PowerControl_Set(ga->iAdapterIndex, iPercentage);
