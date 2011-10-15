@@ -1765,7 +1765,7 @@ static bool jobj_binary(const json_t *obj, const char *key,
 	tmp = json_object_get(obj, key);
 	if (unlikely(!tmp)) {
 		if (unlikely(required))
-		applog(LOG_ERR, "JSON key '%s' not found", key);
+			applog(LOG_ERR, "JSON key '%s' not found", key);
 		return false;
 	}
 	hexstr = json_string_value(tmp);
@@ -1790,7 +1790,7 @@ static bool work_decode(const json_t *val, struct work *work)
 			 work->midstate, sizeof(work->midstate), false))) {
 		// Calculate it ourselves
 		union {
-			char c[64];
+			unsigned char c[64];
 			uint32_t i[16];
 		} data;
 		int swapcounter;
