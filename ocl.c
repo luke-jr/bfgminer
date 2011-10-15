@@ -437,14 +437,14 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			fclose(binaryfile);
 			goto build;
 		}
-		fclose(binaryfile);
 
 		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[gpu], (const unsigned char **)&binaries[gpu], &status, NULL);
-		if (status != CL_SUCCESS)
-		{
+		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
-			return NULL;
+			fclose(binaryfile);
+			goto build;
 		}
+		fclose(binaryfile);
 		if (opt_debug)
 			applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
 
