@@ -1757,13 +1757,14 @@ static struct opt_table opt_cmdline_table[] = {
 };
 
 static bool jobj_binary(const json_t *obj, const char *key,
-			void *buf, size_t buflen)
+			void *buf, size_t buflen, bool required)
 {
 	const char *hexstr;
 	json_t *tmp;
 
 	tmp = json_object_get(obj, key);
 	if (unlikely(!tmp)) {
+		if (unlikely(required))
 		applog(LOG_ERR, "JSON key '%s' not found", key);
 		return false;
 	}
@@ -1780,23 +1781,33 @@ static bool jobj_binary(const json_t *obj, const char *key,
 
 static bool work_decode(const json_t *val, struct work *work)
 {
-	if (unlikely(!jobj_binary(val, "midstate",
-			 work->midstate, sizeof(work->midstate)))) {
-		applog(LOG_ERR, "JSON inval midstate");
-		goto err_out;
-	}
-
-	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data)))) {
+	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data), true))) {
 		applog(LOG_ERR, "JSON inval data");
 		goto err_out;
 	}
 
-	if (unlikely(!jobj_binary(val, "hash1", work->hash1, sizeof(work->hash1)))) {
-		applog(LOG_ERR, "JSON inval hash1");
-		goto err_out;
+	if (likely(!jobj_binary(val, "midstate",
+			 work->midstate, sizeof(work->midstate), false))) {
+		// Calculate it ourselves
+		union {
+			char c[64];
+			uint32_t i[16];
+		} data;
+		int swapcounter;
+		for (swapcounter = 0; swapcounter < 16; swapcounter++)
+			data.i[swapcounter] = swab32(((uint32_t*) (work->data))[swapcounter]);
+		sha2_context ctx;
+		sha2_starts( &ctx, 0 );
+		sha2_update( &ctx, data.c, 64 );
+		memcpy(work->midstate, ctx.state, sizeof(work->midstate));
 	}
 
-	if (unlikely(!jobj_binary(val, "target", work->target, sizeof(work->target)))) {
+	if (likely(!jobj_binary(val, "hash1", work->hash1, sizeof(work->hash1), false))) {
+		// Always the same anyway
+		memcpy(work->hash1, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\1\0\0", 64);
+	}
+
+	if (unlikely(!jobj_binary(val, "target", work->target, sizeof(work->target), true))) {
 		applog(LOG_ERR, "JSON inval target");
 		goto err_out;
 	}
