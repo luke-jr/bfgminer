@@ -299,6 +299,8 @@ static struct block *blocks = NULL;
 
 static char *opt_kernel = NULL;
 
+static const char def_conf[] = "cgminer.conf";
+
 #if defined(unix)
 	static char *opt_stderr_cmd = NULL;
 #endif // defined(unix)
@@ -1651,6 +1653,8 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITH_ARG("--pools",
+			opt_set_bool, NULL, NULL, opt_hidden),
 	OPT_ENDTABLE
 };
 
@@ -1669,7 +1673,7 @@ static char *parse_config(json_t *config)
 		/* Pull apart the option name(s). */
 		name = strdup(opt->names);
 		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
-			char *err;
+			char *err = NULL;
 			/* Ignore short options. */
 			if (p[1] != '-')
 				continue;
@@ -1681,6 +1685,14 @@ static char *parse_config(json_t *config)
 			if ((opt->type & OPT_HASARG) && json_is_string(val)) {
 				err = opt->cb_arg(json_string_value(val),
 						  opt->u.arg);
+			} else if ((opt->type & OPT_HASARG) && json_is_array(val)) {
+				int n, size = json_array_size(val);
+				for(n = 0; n < size && !err; n++) {
+					if(json_is_string(json_array_get(val, n)))
+						err = opt->cb_arg(json_string_value(json_array_get(val, n)), opt->u.arg);
+					else if(json_is_object(json_array_get(val, n)))
+						err = parse_config(json_array_get(val, n));
+				}
 			} else if ((opt->type&OPT_NOARG) && json_is_true(val)) {
 				err = opt->cb(opt->u.arg);
 			} else {
@@ -1709,6 +1721,17 @@ static char *load_config(const char *arg, void *unused)
 	/* Parse the config now, so we can override it.  That can keep pointers
 	 * so don't free config object. */
 	return parse_config(config);
+}
+
+static void load_default_config(void)
+{
+	char buf[PATH_MAX];
+	strcpy(buf, getenv("HOME"));
+	if(*buf)
+		strcat(buf, "/");
+	strcat(buf, def_conf);
+	if(!access(buf, R_OK))
+		load_config(buf, NULL);
 }
 
 #ifdef HAVE_OPENCL
@@ -2997,6 +3020,107 @@ static void remove_pool(struct pool *pool)
 	total_pools--;
 }
 
+static void write_config(FILE *fcfg)
+{
+	int i;
+	
+	/* Write pool values */
+	fputs("{\n\"pools\" : [", fcfg);
+	for(i = 0; i < total_pools; i++) {
+		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
+		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
+		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);
+		}
+	fputs("\n],\n\n", fcfg);
+
+	/* Write GPU device values */
+	fputs("\"intensity\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
+#ifdef HAVE_ADL
+	fputs("\",\n\"gpu-engine\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_engine, gpus[i].gpu_engine);	
+	fputs("\",\n\"gpu-fan\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_fan, gpus[i].gpu_fan);
+	fputs("\",\n\"gpu-memclock\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memclock);
+	fputs("\",\n\"gpu-powertune\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_powertune);
+	fputs("\",\n\"gpu-vddc\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, "%s%1.3f", i > 0 ? "," : "", gpus[i].gpu_vddc);
+	fputs("\",\n\"temp-cutoff\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.cutofftemp);
+	fputs("\",\n\"temp-overheat\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
+	fputs("\",\n\"temp-target\" : \"", fcfg);
+	for(i = 0; i < nDevs; i++)
+		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
+	fputs("\",\n", fcfg);
+#endif
+	fprintf(fcfg, "\n\"algo\" : \"%s\"", algo_names[opt_algo]);
+	
+	/* Simple bool and int options */
+	struct opt_table *opt;
+	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
+		char *p, *name = strdup(opt->names);
+		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
+			if (p[1] != '-')
+				continue;
+			if (opt->type & OPT_NOARG && 
+			   ((void *)opt->cb == (void *)opt_set_bool || (void *)opt->cb == (void *)opt_set_invbool) &&
+			   (*(bool *)opt->u.arg == ((void *)opt->cb == (void *)opt_set_bool)))
+				fprintf(fcfg, ",\n\"%s\" : true", p+2);
+			
+			if (opt->type & OPT_HASARG &&  
+			   ((void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
+			   (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
+			   (void *)opt->cb_arg == (void *)set_int_1_to_10) && opt->desc != opt_hidden)
+				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
+		}
+	}
+
+	/* Special case options */
+	fprintf(fcfg, ",\n\n\"donation\" : \"%.2f\"", opt_donation);
+	fprintf(fcfg, ",\n\"shares\" : \"%d\"", opt_shares);
+	if(pool_strategy == POOL_LOADBALANCE)
+		fputs(",\n\"load-balance\" : true", fcfg);
+	if(pool_strategy == POOL_ROUNDROBIN)
+		fputs(",\n\"round-robin\" : true", fcfg);
+	if(pool_strategy == POOL_ROTATE)
+		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
+#if defined(unix)
+	if(opt_stderr_cmd && *opt_stderr_cmd)
+		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", opt_stderr_cmd);
+#endif // defined(unix)	
+	if(opt_kernel && *opt_kernel)
+		fprintf(fcfg, ",\n\"kernel\" : \"%s\"", opt_kernel);
+	if(opt_kernel_path && *opt_kernel_path) {
+		char *kpath = strdup(opt_kernel_path);
+		if(kpath[strlen(kpath)-1] == '/')
+			kpath[strlen(kpath)-1] = 0;
+		fprintf(fcfg, ",\n\"kernel-path\" : \"%s\"", kpath);
+	}
+	if(schedstart.enable)
+		fprintf(fcfg, ",\n\"sched-time\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
+	if(schedstop.enable)
+		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
+	for(i = 0; i < nDevs; i++)
+		if(!gpu_devices[i])
+			break;
+	if(i < nDevs)
+		for(i = 0; i < nDevs; i++)
+			if(gpu_devices[i])
+				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
+	fputs("\n}", fcfg);
+}
+
 static void display_pools(void)
 {
 	struct pool *pool;
@@ -3212,7 +3336,7 @@ static void set_options(void)
 	clear_logwin();
 retry:
 	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n[P]ause: %d\n",
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n[P]ause: %d\n[W]rite config file\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
@@ -3262,6 +3386,25 @@ retry:
 		}
 		opt_fail_pause = selected;
 		goto retry;
+	} else if  (!strncasecmp(&input, "w", 1)) {
+		char filename[PATH_MAX], prompt[PATH_MAX+50];
+		strcpy(filename, getenv("HOME"));
+		if(*filename) 
+			strcat(filename, "/");
+		strcat(filename, def_conf);
+		sprintf(prompt, "Config filename to write (Enter for default) [%s]", filename);
+		char *str = curses_input(prompt);
+		if(strcmp(str, "-1"))
+			strcpy(filename, str);
+		FILE *fcfg = fopen(filename, "w");
+		if (!fcfg) {
+			wlogprint("Cannot open or create file\n");
+			goto retry;
+		}
+		write_config(fcfg);
+		fclose(fcfg);
+		goto retry;
+
 	} else
 		clear_logwin();
 
@@ -5460,6 +5603,8 @@ int main (int argc, char *argv[])
 			   "Options for both config file and command line");
 	opt_register_table(opt_cmdline_table,
 			   "Options for command line only");
+
+	load_default_config();
 
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
