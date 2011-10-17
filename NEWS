@@ -1,3 +1,15 @@
+Version 2.0.7 - October 17, 2011
+
+- Support work without midstate or hash1, which are deprecated in bitcoind 0.5+
+- Go to kernel build should we fail to clCreateProgramWithBinary instead of
+failing on that device. This should fix the windows problems with devices not
+initialising.
+- Support new configuration file format courtesy of Chris Savery which can write
+the config file from the menu and will load it on startup.
+- Write unix configuration to .cgminer/cgminer.conf by default and prompt to
+overwrite if given a filename from the menu that exists.
+
+
 Version 2.0.6 - October 9, 2011
 
 - Must initialise the donorpool mutex or it fails on windows.
