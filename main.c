@@ -25,6 +25,10 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
+
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #ifndef WIN32
 #include <sys/resource.h>
 #endif
@@ -45,9 +49,7 @@
 #if defined(unix)
 	#include <errno.h>
 	#include <fcntl.h>
-	#include <unistd.h>
 	#include <sys/wait.h>
-	#include <sys/types.h>
 #endif
 
 #ifdef __linux /* Linux specific policy and affinity management */
@@ -1726,9 +1728,17 @@ static char *load_config(const char *arg, void *unused)
 static void load_default_config(void)
 {
 	char buf[PATH_MAX];
+
+#if defined(unix)
 	strcpy(buf, getenv("HOME"));
 	if (*buf)
 		strcat(buf, "/");
+	else
+		strcpy(buf, "");
+	strcat(buf, ".cgminer/");
+#else
+	strcpy(buf, "");
+#endif
 	strcat(buf, def_conf);
 	if (!access(buf, R_OK))
 		load_config(buf, NULL);
@@ -3387,16 +3397,35 @@ retry:
 		opt_fail_pause = selected;
 		goto retry;
 	} else if  (!strncasecmp(&input, "w", 1)) {
-		char filename[PATH_MAX], prompt[PATH_MAX+50];
+		FILE *fcfg;
+		char *str, filename[PATH_MAX], prompt[PATH_MAX + 50];
+
+#if defined(unix)
 		strcpy(filename, getenv("HOME"));
 		if (*filename)
 			strcat(filename, "/");
+		else
+			strcpy(filename, "");
+		strcat(filename, ".cgminer/");
+		mkdir(filename, 0777);
+#else
+		strcpy(filename, "");
+#endif
 		strcat(filename, def_conf);
 		sprintf(prompt, "Config filename to write (Enter for default) [%s]", filename);
-		char *str = curses_input(prompt);
-		if (strcmp(str, "-1"))
+		str = curses_input(prompt);
+		if (strcmp(str, "-1")) {
+			struct stat statbuf;
+
 			strcpy(filename, str);
-		FILE *fcfg = fopen(filename, "w");
+			if (!stat(filename, &statbuf)) {
+				wlogprint("File exists, overwrite?\n");
+				input = getch();
+				if (strncasecmp(&input, "y", 1))
+					goto retry;
+			}
+		}
+		fcfg = fopen(filename, "w");
 		if (!fcfg) {
 			wlogprint("Cannot open or create file\n");
 			goto retry;
