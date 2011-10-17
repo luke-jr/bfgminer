@@ -1688,9 +1688,9 @@ static char *parse_config(json_t *config)
 			} else if ((opt->type & OPT_HASARG) && json_is_array(val)) {
 				int n, size = json_array_size(val);
 				for(n = 0; n < size && !err; n++) {
-					if(json_is_string(json_array_get(val, n)))
+					if (json_is_string(json_array_get(val, n)))
 						err = opt->cb_arg(json_string_value(json_array_get(val, n)), opt->u.arg);
-					else if(json_is_object(json_array_get(val, n)))
+					else if (json_is_object(json_array_get(val, n)))
 						err = parse_config(json_array_get(val, n));
 				}
 			} else if ((opt->type&OPT_NOARG) && json_is_true(val)) {
@@ -1727,10 +1727,10 @@ static void load_default_config(void)
 {
 	char buf[PATH_MAX];
 	strcpy(buf, getenv("HOME"));
-	if(*buf)
+	if (*buf)
 		strcat(buf, "/");
 	strcat(buf, def_conf);
-	if(!access(buf, R_OK))
+	if (!access(buf, R_OK))
 		load_config(buf, NULL);
 }
 
@@ -3089,34 +3089,34 @@ static void write_config(FILE *fcfg)
 	/* Special case options */
 	fprintf(fcfg, ",\n\n\"donation\" : \"%.2f\"", opt_donation);
 	fprintf(fcfg, ",\n\"shares\" : \"%d\"", opt_shares);
-	if(pool_strategy == POOL_LOADBALANCE)
+	if (pool_strategy == POOL_LOADBALANCE)
 		fputs(",\n\"load-balance\" : true", fcfg);
-	if(pool_strategy == POOL_ROUNDROBIN)
+	if (pool_strategy == POOL_ROUNDROBIN)
 		fputs(",\n\"round-robin\" : true", fcfg);
-	if(pool_strategy == POOL_ROTATE)
+	if (pool_strategy == POOL_ROTATE)
 		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
 #if defined(unix)
-	if(opt_stderr_cmd && *opt_stderr_cmd)
+	if (opt_stderr_cmd && *opt_stderr_cmd)
 		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", opt_stderr_cmd);
 #endif // defined(unix)	
-	if(opt_kernel && *opt_kernel)
+	if (opt_kernel && *opt_kernel)
 		fprintf(fcfg, ",\n\"kernel\" : \"%s\"", opt_kernel);
-	if(opt_kernel_path && *opt_kernel_path) {
+	if (opt_kernel_path && *opt_kernel_path) {
 		char *kpath = strdup(opt_kernel_path);
-		if(kpath[strlen(kpath)-1] == '/')
+		if (kpath[strlen(kpath)-1] == '/')
 			kpath[strlen(kpath)-1] = 0;
 		fprintf(fcfg, ",\n\"kernel-path\" : \"%s\"", kpath);
 	}
-	if(schedstart.enable)
+	if (schedstart.enable)
 		fprintf(fcfg, ",\n\"sched-time\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
-	if(schedstop.enable)
+	if (schedstop.enable)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	for(i = 0; i < nDevs; i++)
-		if(!gpu_devices[i])
+		if (!gpu_devices[i])
 			break;
-	if(i < nDevs)
+	if (i < nDevs)
 		for(i = 0; i < nDevs; i++)
-			if(gpu_devices[i])
+			if (gpu_devices[i])
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
 	fputs("\n}", fcfg);
 }
@@ -3389,12 +3389,12 @@ retry:
 	} else if  (!strncasecmp(&input, "w", 1)) {
 		char filename[PATH_MAX], prompt[PATH_MAX+50];
 		strcpy(filename, getenv("HOME"));
-		if(*filename) 
+		if (*filename)
 			strcat(filename, "/");
 		strcat(filename, def_conf);
 		sprintf(prompt, "Config filename to write (Enter for default) [%s]", filename);
 		char *str = curses_input(prompt);
-		if(strcmp(str, "-1"))
+		if (strcmp(str, "-1"))
 			strcpy(filename, str);
 		FILE *fcfg = fopen(filename, "w");
 		if (!fcfg) {
