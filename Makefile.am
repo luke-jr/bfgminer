@@ -7,7 +7,7 @@ else
 JANSSON_INCLUDES=
 endif
 
-EXTRA_DIST	= example-cfg.json m4/gnulib-cache.m4 linux-usb-cgminer \
+EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
 		  ADL_SDK/readme.txt
 
 SUBDIRS		= lib compat ccan
