@@ -172,7 +172,7 @@ Options for both config file and command line:
 --userpass|-O <arg> Username:Password pair for bitcoin JSON-RPC server
 Options for command line only:
 --config|-c <arg>   Load a JSON-format configuration file
-See example-cfg.json for an example configuration.
+See example.conf for an example configuration.
 --help|-h           Print this message
 --ndevs|-n          Enumerate number of detected GPUs and exit
 --version|-V        Display version and exit
@@ -180,6 +180,10 @@ See example-cfg.json for an example configuration.
 ---
 
 EXECUTIVE SUMMARY ON USAGE:
+
+After saving configuration from the menu, you do not need to give cgminer any
+arguments and it will load your configuration.
+
 
 Single pool, regular desktop:
 
@@ -230,10 +234,12 @@ Current pool management strategy: Failover
 S gives you:
 
 [L]ongpoll: On
-[Q]ueue: 0
+[Q]ueue: 1
 [S]cantime: 60
+[E]xpiry: 120
 [R]etries: -1
 [P]ause: 5
+[W]rite config file
 
 
 D gives you:
@@ -484,9 +490,10 @@ make it invalidate the work from each other.
 Q: Can I change the intensity settings individually for each GPU?
 A: Yes, pass a list separated by commas such as -I d,4,9,9
 
-Q: Can I put multiple pools in the json config file?
-A: Not currently, but you can use multiple config files and specify each with
-successive -c. e.g.: cgminer -c cfg1.json -c cfg2.json
+Q: Can I put multiple pools in the config file?
+A: Yes, check the example.conf file. Alternatively, set up everything either on
+the command line or via the menu after startup and choose settings->write
+config file and the file will be loaded one each startup.
 
 Q: The build fails with gcc is unable to build a binary.
 A: Remove the "-march=native" component of your CFLAGS as your version of gcc
