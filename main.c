@@ -1237,6 +1237,35 @@ static char *set_gpu_memclock(char *arg)
 	return NULL;
 }
 
+static char *set_gpu_memdiff(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+	
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set gpu memdiff";
+	val = atoi(nextptr);
+	if (val < -9999 || val > 9999)
+		return "Invalid value passed to set_gpu_memdiff";
+	
+	gpus[device++].gpu_memdiff = val;
+	
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+		if (val < -9999 || val > 9999)
+			return "Invalid value passed to set_gpu_memdiff";
+		
+		gpus[device++].gpu_memdiff = val;
+	}
+		if (device == 1) {
+			for (i = device; i < MAX_GPUDEVICES; i++)
+				gpus[i].gpu_memdiff = gpus[0].gpu_memdiff;
+		}
+		
+			return NULL;
+}
+
 static char *set_gpu_powertune(char *arg)
 {
 	int i, val = 0, device = 0;
@@ -1525,6 +1554,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-memclock",
 		     set_gpu_memclock, NULL, NULL,
 		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card"),
+	OPT_WITH_ARG("--gpu-memdiff",
+		     set_gpu_memdiff, NULL, NULL,
+		     "Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode"),
 	OPT_WITH_ARG("--gpu-powertune",
 		     set_gpu_powertune, NULL, NULL,
 		     "Set the GPU powertune percentage - one value for all or separate by commas for per card"),

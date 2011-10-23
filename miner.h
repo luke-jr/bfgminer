@@ -218,6 +218,7 @@ struct cgpu_info {
 	int gpu_fan;
 	int min_fan;
 	int gpu_memclock;
+	int gpu_memdiff;
 	int gpu_powertune;
 	float gpu_vddc;
 #endif

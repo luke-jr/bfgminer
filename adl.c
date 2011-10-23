@@ -808,9 +808,11 @@ void gpu_autotune(int gpu, bool *enable)
 {
 	int temp, fanpercent, engine, newpercent, newengine;
 	bool fan_optimal = true;
+	struct cgpu_info *cgpu;
 	struct gpu_adl *ga;
 
-	ga = &gpus[gpu].adl;
+	cgpu = &gpus[gpu];
+	ga = &cgpu->adl;
 
 	lock_adl();
 	temp = __gpu_temp(ga);
@@ -880,6 +882,8 @@ void gpu_autotune(int gpu, bool *enable)
 			newengine /= 100;
 			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, newengine);
 			set_engineclock(gpu, newengine);
+			if (cgpu->gpu_memdiff)
+				set_memoryclock(gpu, newengine + cgpu->gpu_memdiff);
 		}
 	}
 	ga->lasttemp = temp;
