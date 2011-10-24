@@ -4222,13 +4222,21 @@ bool hashtest(const struct work *work)
 	unsigned char swap[128];
 	uint32_t *swap32 = (uint32_t *)swap;
 	unsigned char hash1[32];
+	unsigned char hash2[32];
+	uint32_t *hash2_32 = (uint32_t *)hash2;
 	int i;
 
 	for (i = 0; i < 80 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 
 	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, (unsigned char *)(work->hash), false);
+	sha2(hash1, 32, hash2, false);
+
+	for (i = 0; i < 32 / 4; i++)
+		hash2_32[i] = swab32(hash2_32[i]);
+
+	memcpy((void*)work->hash, hash2, 32);
+
 	return fulltest(work->hash, work->target);
 
 }
