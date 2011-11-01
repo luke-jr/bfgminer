@@ -267,6 +267,7 @@ static int total_accepted, total_rejected;
 static int total_getworks, total_stale, total_discarded;
 static int total_queued;
 static unsigned int new_blocks;
+static unsigned int work_block;
 static unsigned int found_blocks;
 
 static unsigned int local_work;
@@ -2614,7 +2615,6 @@ static bool stale_work(struct work *work, bool share)
 {
 	struct timeval now;
 	bool ret = false;
-	char *hexstr;
 
 	gettimeofday(&now, NULL);
 	if (share) {
@@ -2627,16 +2627,8 @@ static bool stale_work(struct work *work, bool share)
 	if (donor(work->pool))
 		return ret;
 
-	hexstr = bin2hex(work->data, 18);
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "submit_work_thread OOM");
-		return ret;
-	}
-
-	if (strcmp(hexstr, current_block))
+	if (work->work_block != work_block)
 		ret = true;
-
-	free(hexstr);
 	return ret;
 }
 
@@ -2916,8 +2908,10 @@ static void test_work_current(struct work *work, bool longpoll)
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
 		set_curblock(hexstr, work->data);
-		if (++new_blocks == 1)
+		if (unlikely(++new_blocks == 1))
 			goto out_free;
+
+		work_block++;
 
 		if (longpoll)
 			applog(LOG_NOTICE, "LONGPOLL detected new block on network, waiting on fresh work");
@@ -2925,6 +2919,10 @@ static void test_work_current(struct work *work, bool longpoll)
 			applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
 		else
 			applog(LOG_NOTICE, "New block detected on network, waiting on fresh work");
+		restart_threads();
+	} else if (longpoll) {
+		applog(LOG_NOTICE, "LONGPOLL requested work restart, waiting on fresh work");
+		work_block++;
 		restart_threads();
 	}
 out_free:
@@ -2972,6 +2970,7 @@ static void *stage_thread(void *userdata)
 			ok = false;
 			break;
 		}
+		work->work_block = work_block;
 
 		test_work_current(work, false);
 

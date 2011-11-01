@@ -478,6 +478,7 @@ struct work {
 	bool		cloned;
 	bool		rolltime;
 
+	unsigned int	work_block;
 	int		id;
 	UT_hash_handle hh;
 };
