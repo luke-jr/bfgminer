@@ -133,6 +133,7 @@ Options for both config file and command line:
 --gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
 --gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
 --gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
+--gpu-memdiff <arg> Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode
 --gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
 --intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
@@ -440,6 +441,12 @@ e.g.
 --temp-cutoff 95,105
 Sets card 0 cutoff temperature to 95 and card 1 to 105.
 
+--gpu-memdiff -125
+This setting will modify the memory speed whenever the GPU clock speed is
+modified by --auto-gpu. In this example, it will set the memory speed to
+be 125 Mhz lower than the GPU speed. This is useful for some cards like the
+6970 which normally don't allow a bigger clock speed difference.
+
 
 CHANGING SETTINGS:
 When setting values, it is important to realise that even though the driver
@@ -539,6 +546,17 @@ up to a proportion of work to the author's account. While the overall
 accepted/rejected rates will include this work, none of these will appear in
 your own accounts. On exiting, the summary will tell you how many shares were
 contributed to the author.
+
+Q: Can you modify the display to include more of one thing in the output and
+less of another, or can you change the quiet mode or can you add yet another
+output mode?
+A: Everyone will always have their own view of what's important to monitor.
+The defaults are very sane and I have very little interest in changing this
+any further.
+
+Q: Can you change the autofan/autogpu to change speeds in a different manner?
+A: The defaults are sane and safe. I'm not interested in changing them
+further.
 
 Q: GUI version?
 A: No.
