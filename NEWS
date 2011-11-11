@@ -13,6 +13,7 @@ autotune mode.
 line.
 - Don't build VIA on apple since -a auto bombs instead of gracefully ignoring
 VIA failing.
+- Build fix for dlopen/dlclose errors in glibc.
 
 
 Version 2.0.7 - October 17, 2011
