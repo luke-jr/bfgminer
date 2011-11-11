@@ -29,8 +29,8 @@ cgminer_SOURCES	= elist.h miner.h compat.h bench_block.h	\
 		  phatk110817.cl poclbm110817.cl \
 		  sha2.c sha2.h
 
-cgminer_LDFLAGS	= $(PTHREAD_FLAGS) $(DLOPEN_FLAGS)
-cgminer_LDADD	= @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ lib/libgnu.a ccan/libccan.a
+cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
+cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ lib/libgnu.a ccan/libccan.a
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
 
 if HAVE_x86_64

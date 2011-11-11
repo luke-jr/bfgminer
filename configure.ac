@@ -320,12 +320,13 @@ else
 	echo "  ADL..................: Detection overrided. GPU monitoring support DISABLED"
 fi
 
-echo "  ASM..................: $has_yasm"
+echo "  ASM.(for CPU mining).: $has_yasm"
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $DLOPEN_FLAGS"
+echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
+echo "  LDADD................: $DLOPEN_FLAGS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
