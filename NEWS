@@ -1,3 +1,16 @@
+Version 2.0.8
+
+- Make longpoll do a mandatory flushing of all work even if the block hasn't
+changed, thus supporting longpoll initiated work change of any sort and merged
+mining.
+- Byteswap computed hash in hashtest so it can be correctly checked. This fixes
+the very rare possibility that a block solve on solo mining was missed.
+- Add x86_64 w64 mingw32 target
+- Allow a fixed speed difference between memory and GPU clock speed with
+--gpu-memdiff that will change memory speed when GPU speed is changed in
+autotune mode.
+
+
 Version 2.0.7 - October 17, 2011
 
 - Support work without midstate or hash1, which are deprecated in bitcoind 0.5+
