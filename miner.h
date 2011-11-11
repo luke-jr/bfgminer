@@ -72,7 +72,7 @@ void *alloca (size_t);
 #define WANT_X8632_SSE2 1
 #endif
 
-#if defined(__i386__) || defined(__x86_64__)
+#if (defined(__i386__) || defined(__x86_64__)) &&  !defined(__APPLE__)
 #define WANT_VIA_PADLOCK 1
 #endif
 
