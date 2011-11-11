@@ -1,4 +1,4 @@
-Version 2.0.8
+Version 2.0.8 - November 11, 2011
 
 - Make longpoll do a mandatory flushing of all work even if the block hasn't
 changed, thus supporting longpoll initiated work change of any sort and merged
@@ -9,6 +9,10 @@ the very rare possibility that a block solve on solo mining was missed.
 - Allow a fixed speed difference between memory and GPU clock speed with
 --gpu-memdiff that will change memory speed when GPU speed is changed in
 autotune mode.
+- Don't load the default config if a config file is specified on the command
+line.
+- Don't build VIA on apple since -a auto bombs instead of gracefully ignoring
+VIA failing.
 
 
 Version 2.0.7 - October 17, 2011
