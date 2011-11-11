@@ -303,6 +303,7 @@ static struct block *blocks = NULL;
 static char *opt_kernel = NULL;
 
 static const char def_conf[] = "cgminer.conf";
+static bool config_loaded = false;
 
 #if defined(unix)
 	static char *opt_stderr_cmd = NULL;
@@ -1753,6 +1754,7 @@ static char *load_config(const char *arg, void *unused)
 	if (!json_is_object(config))
 		return "JSON decode of file failed";
 
+	config_loaded = true;
 	/* Parse the config now, so we can override it.  That can keep pointers
 	 * so don't free config object. */
 	return parse_config(config);
@@ -5672,7 +5674,8 @@ int main (int argc, char *argv[])
 	opt_register_table(opt_cmdline_table,
 			   "Options for command line only");
 
-	load_default_config();
+	if (!config_loaded)
+		load_default_config();
 
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
