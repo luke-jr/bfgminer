@@ -97,6 +97,7 @@ case $target in
     ;;
   *-*-darwin*)
     OPENCL_LIBS="-framework OpenCL"
+    PTHREAD_FLAGS=""
 	;;
 esac
 
