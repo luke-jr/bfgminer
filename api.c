@@ -189,6 +189,13 @@ char *poolstatus(char *params)
 	return buffer;
 }
 
+char *doquit(char *params)
+{
+	bye = 1;
+	kill_work();
+	return NULL;
+}
+
 struct CMDS {
 	char *name;
 	char *(*func)(char *);
@@ -196,9 +203,10 @@ struct CMDS {
 	{ "apiversion",	apiversion },
 	{ "dev",	devstatus },
 	{ "pool",	poolstatus },
+	{ "quit",	doquit },
 };
 
-#define CMDMAX 3
+#define CMDMAX 4
 
 void send_result(int c, char *result)
 {
@@ -211,7 +219,7 @@ void send_result(int c, char *result)
 	n = write(c, result, strlen(result)+1);
 }
 
-void api()
+void api(void)
 {
 	char buf[BUFSIZ];
 	const char *addr;

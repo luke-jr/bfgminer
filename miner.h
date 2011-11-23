@@ -394,7 +394,9 @@ struct work_restart {
 	char			padding[128 - sizeof(unsigned long)];
 };
 
-extern void api();
+extern void kill_work(void);
+
+extern void api(void);
 
 
 #define MAX_GPUDEVICES 16
