@@ -288,13 +288,9 @@ void api()
 		}
 
 		inet_ntop(AF_INET, &(cli.sin_addr), &(tmpaddr[0]), sizeof(tmpaddr)-1);
-		if (strcmp(tmpaddr, addr) != 0)
-			close(c);
-		else {
+		if (strcmp(tmpaddr, addr) == 0) {
 			n = read(c, &buf[0], BUFSIZ-1);
-			if (n < 0)
-				close(c);
-			else {
+			if (n >= 0) {
 				buf[n] = '\0';
 				params = strchr(buf, '|');
 				if (params != NULL)
@@ -310,6 +306,7 @@ void api()
 				}
 			}
 		}
+		close(c);
 	}
 
 	close(sock);
