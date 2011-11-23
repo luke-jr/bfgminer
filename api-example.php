@@ -2,23 +2,23 @@
 #
 # Sample Socket I/O to CGMiner API
 #
-function getsock($port)
+function getsock($addr, $port)
 {
  $socket = null;
  $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
  if ($socket === false || $socket === null)
  {
 	$error = socket_strerror(socket_last_error());
-	$msg = "socket create($port) failed";
+	$msg = "socket create(TCP) failed";
 	echo "ERR: $msg '$error'\n";
 	return NULL;
  }
 
- $res = socket_connect($socket, '127.0.0.1', $port);
+ $res = socket_connect($socket, $addr, $port);
  if ($res === false)
  {
 	$error = socket_strerror(socket_last_error());
-	$msg = "socket connect($port) failed";
+	$msg = "socket connect($addr,$port) failed";
 	echo "ERR: $msg '$error'\n";
 	socket_close($socket);
 	return NULL;
@@ -44,7 +44,7 @@ function readsockline($socket)
 #
 function request($cmd)
 {
- $socket = getsock(4028);
+ $socket = getsock('127.0.0.1', 4028);
  if ($socket != null)
  {
 	socket_write($socket, $cmd, strlen($cmd));
@@ -105,13 +105,16 @@ function request($cmd)
  return null;
 }
 #
-$ver = request('apiversion');
-echo print_r($ver, true)."\n";
+$r = request('apiversion');
+echo print_r($r, true)."\n";
 #
-$dev = request('dev');
-echo print_r($dev, true)."\n";
+$r = request('dev');
+echo print_r($r, true)."\n";
 #
-$pool = request('pool');
-echo print_r($pool, true)."\n";
+$r = request('pool');
+echo print_r($r, true)."\n";
+#
+$r = request('summary');
+echo print_r($r, true)."\n";
 #
 ?>

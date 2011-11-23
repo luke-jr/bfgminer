@@ -239,12 +239,12 @@ void send_result(int c, char *result)
 void api(void)
 {
 	char buf[BUFSIZ];
-	const char *addr;
+	const char *addr = "127.0.0.1";
 	int c, sock, n, bound;
 	char tmpaddr[32];
 	char *binderror;
 	time_t bindstart;
-	short int port = 4028;
+	short int port = opt_api_port;
 	struct sockaddr_in serv;
 	struct sockaddr_in cli;
 	socklen_t clisiz;
@@ -252,8 +252,6 @@ void api(void)
 	char *result;
 	char *params;
 	int i;
-
-	addr = "127.0.0.1";
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
@@ -264,9 +262,11 @@ void api(void)
 	memset(&serv, 0, sizeof(serv));
 
 	serv.sin_family = AF_INET;
-	if (inet_pton(AF_INET, addr, &(serv.sin_addr)) == 0) {
-		applog(LOG_ERR, "API2 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
-		return;
+	if (!opt_api_listen) {
+		if (inet_pton(AF_INET, addr, &(serv.sin_addr)) == 0) {
+			applog(LOG_ERR, "API2 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
+			return;
+		}
 	}
 	serv.sin_port = htons(port);
 
@@ -312,8 +312,10 @@ void api(void)
 			return;
 		}
 
-		inet_ntop(AF_INET, &(cli.sin_addr), &(tmpaddr[0]), sizeof(tmpaddr)-1);
-		if (strcmp(tmpaddr, addr) == 0) {
+		if (!opt_api_listen)
+			inet_ntop(AF_INET, &(cli.sin_addr), &(tmpaddr[0]), sizeof(tmpaddr)-1);
+
+		if (opt_api_listen || strcmp(tmpaddr, addr) == 0) {
 			n = read(c, &buf[0], BUFSIZ-1);
 			if (n >= 0) {
 				buf[n] = '\0';

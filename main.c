@@ -222,6 +222,8 @@ static bool opt_fail_only;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
+int opt_api_port = 4028;
+bool opt_api_listen;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -955,6 +957,11 @@ static char *set_int_0_to_9999(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 9999);
 }
 
+static char *set_int_1_to_65535(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 1, 65535);
+}
+
 static char *force_nthreads_int(const char *arg, int *i)
 {
 	forced_n_threads = true;
@@ -1490,6 +1497,12 @@ static struct opt_table opt_config_table[] = {
     "\n\taltivec_4way\tAltivec implementation for PowerPC G4 and G5 machines"
 #endif
 		),
+	OPT_WITHOUT_ARG("--api-listen",
+			opt_set_bool, &opt_api_listen,
+			"Enable API to listen on/for any address, default: only 127.0.0.1"),
+	OPT_WITH_ARG("--api-port",
+		     set_int_1_to_65535, opt_show_intval, &opt_api_port,
+		     "Port number of miner API, default: 4028"),
 #ifdef HAVE_ADL
 	OPT_WITHOUT_ARG("--auto-fan",
 			opt_set_bool, &opt_autofan,
@@ -3110,6 +3123,7 @@ static void write_config(FILE *fcfg)
 			
 			if (opt->type & OPT_HASARG &&  
 			   ((void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
+			   (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
 			   (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
 			   (void *)opt->cb_arg == (void *)set_int_1_to_10) && opt->desc != opt_hidden)
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
