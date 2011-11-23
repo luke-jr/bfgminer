@@ -1,22 +1,35 @@
-How to setup a cgminer using xubuntu 11.04 live on a USB courtesy of Kano
+How to setup a cgminer using xubuntu 11.04 live on a USB
+
+The master version of this document is here:
+ https://github.com/kanoi/linux-usb-cgminer
+
+The actual file is:
+ https://github.com/kanoi/linux-usb-cgminer/blob/master/linux-usb-cgminer
+
+The copy in cgminer (check to make sure it isn't older) is:
+ https://github.com/ckolivas/cgminer/blob/master/linux-usb-cgminer
+
+The original old verion on bitcointalk is:
+ https://bitcointalk.org/index.php?topic=28402.msg426741#msg426741
 
 Software
 ========
 Short hardware comment:
 Your mining computer doesn't need any HDD or CD/DVD/BD as long as it has at
-least 2GB of RAM, can boot USB, has some network connection to the internet and
-of course a reasonable mining ATI graphics card
+least 2GB of RAM, can boot USB, has some network connection to the internet
+and of course a reasonable mining ATI graphics card
 ... Or you can boot a windows PC with the USB to only do mining ... and ignore
-the system HDD ... wasting energy Smiley
+the system HDD ... wasting energy running the HDD :)
 
-To create the USB, you need of course a 4GB USB and temporarily need a PC with a
-CD (or DVD/BD) writer, a USB port and of course an internet connection to the PC
+To create the USB, you need of course a 4GB USB and temporarily need a PC
+with a CD (or DVD/BD) writer, a USB port and of course an internet
+connection to the PC
 
 1) Download the xubuntu 11.04 desktop live CD iso for amd64
    ( look here for mirrors: http://www.xubuntu.org/getubuntu )
 
-2) Burn it to CD then boot that temporarily on any PC with a CD/DVD/BD and a USB
-   port (this and the next 2 step won't effect that PC)
+2) Burn it to CD then boot that temporarily on any PC with a CD/DVD/BD and
+   a USB port (this and the next 2 step won't effect that PC)
 
 3) Plug in your 4GB USB device and it should appear on the desktop - you can
    leave it's contents as long as there is at least 2.8GB free
@@ -24,8 +37,8 @@ CD (or DVD/BD) writer, a USB port and of course an internet connection to the PC
 4) Now run "Startup Disk Creator" in "Applications->System"
    (the system menu is the little rat in the top left corner)
 
-(if you have no mouse you can get the menu with <ctr><esc> and navigate the menu
-with the arrow keys and <return> key)
+(if you have no mouse you can get the menu with <ctr><esc> and navigate
+the menu with the arrow keys and <return> key)
 
 From here select the boot CD as the "Source" and the USB as the "Disk to use"
 lastly move the slider to 2GB for reserved extra space
@@ -46,21 +59,21 @@ After about 10-15 minutes you have a base xubuntu 11.04 boot USB
 7) sudo apt-get install openssh-server screen
 
    if you have a problem here then it's probably coz the internet isn't
-available ... sort that   out by reading elsewhere about routers etc
+   available ... sort that out by reading elsewhere about routers etc
 
 8) sudo apt-get install fglrx fglrx-amdcccle fglrx-dev
    sudo sync
    sudo shutdown -r now
 
 N.B. always do a "sudo sync" and wait for it to finish every time before
-   shutting down the PC to ensure all data is written to the USB
+shutting down the PC to ensure all data is written to the USB
 
 9) sudo aticonfig --lsa
    this lists your ATI cards so you can see them
  sudo aticonfig --adapter=all --odgt
    this checks it can access all the cards ...
 
-10) aticonfig --adapter=all --initial
+10) sudo aticonfig --adapter=all --initial
    this gets an error - no idea why but the xorg.conf is OK
  sudo sync
  sudo shutdown -r now
@@ -91,13 +104,17 @@ N.B. always do a "sudo sync" and wait for it to finish every time before
 13) cgminer:
  sudo apt-get install curl
 
- get the binary linux cgminer (see the bitcoin forum cgminer thread
- for where to get it)
+ get the binary linux cgminer
+ (see the bitcoin forum cgminer thread for where to get it)
+ https://bitcointalk.org/index.php?topic=28402.0
 
  ./cgminer -n
    this shows you the GPU's it found on your PC
+   See further below if you get an error regarding libtinfo.so.5
 
 14) An OC option:
+ This is no longer needed since cgminer 2.* includes OC, however:
+
  sudo apt-get install libwxbase2.8-0 libwxgtk2.8-0
 
  http://sourceforge.net/projects/amdovdrvctrl/
@@ -106,20 +123,21 @@ N.B. always do a "sudo sync" and wait for it to finish every time before
 
 15) set the screen saver to ONLY blank ...
 
- Move the mouse to the bottom of the screen and you see a set of icons
- like on an Apple PC
+ Move the mouse to the bottom of the screen and you see a set of icons like
+ on an Apple PC
  Click on Settings, then in the Settings window "Screensaver"
  Set "Mode:" to "Blank Screen Only"
 
-Edit: originally left this somewhat useful addition out:
 16) apt-get install ntpd
- An accurate clock is always a good idea Smiley
+ An accurate clock is always a good idea :)
 
-Edit2: another item that seems I missed
 17) if you wish to ssh into the box you must set a password
     to do this you simply have to be logged into it at the screen and type
+
   sudo passwd ubuntu
+
     it will prompt you (twice) to enter a password for the ubuntu account
+
 
 Initial setup complete.
 
@@ -129,17 +147,23 @@ If you want to SSH into the machine and run cgminer:
  From a terminal on the miner display each time after you boot:
   xhost +
 
-Then after ssh into the machine:
+ 'xhost +' isn't needed if you ssh into the machine with the same
+ username that the GUI boots into (which is 'ubuntu' in this case)
+
+Then after you ssh into the machine:
  export DISPLAY=:0
 before running cgminer
 
-Also note, that you should force the screen to blank when mining if the ATI card
-is displaying the screen (using the screen saver application menu)
+Also note, that you should force the screen to blank when mining if
+the ATI card is displaying the screen (using the screen saver
+application menu)
 In my case it takes away 50Mh/s when the screen isn't blanked
+It will auto blank - but make sure the blank is of course just blank
+as mentioned above at 15)
 
 
-This is of course just the basics ... but it should get you a computer up and
-running and able to run cgminer
+This is of course just the basics ... but it should get you a computer
+up and running and able to run cgminer
 
 ========
 
@@ -147,9 +171,14 @@ You should keep an eye on USB disk space
 The system logger writes log files in the /var/log/ directory
 The two main ones that grow large are 'kern.log' and 'syslog'
 If you want to keep them, save them away to some other computer
-When space is low, just delete them.
+When space is low, just delete them e.g.
+
+   sudo rm -i /var/log/syslog
+   sudo rm -i /var/log/kern.log
 
 The 'df' command will show you the current space e.g.:
+
+   sudo df
 
 Filesystem           1K-blocks      Used Available Use% Mounted on
 aufs                   2099420    892024   1100748  45% /
@@ -164,3 +193,15 @@ none                   1023772         0   1023772   0% /var/lock
 
 This shows the 2GB space allocated when you setup the USB as '/' (aufs)
 In this example, it's currently 45% full with almost 1.1GB of free space
+
+========
+
+The latest version (2.0.8) of cgminer is built with 11.10 (not 11.04)
+If you get the following error when running the prebuilt version in 11.04:
+
+   ./cgminer: error while loading shared libraries: libtinfo.so.5: cannot open shared object file: No such file or directory
+
+The fix is to simply link the old curses library to the new name e.g.:
+
+   cd /lib64/
+   sudo ln -s libncurses.so.5 libtinfo.so.5

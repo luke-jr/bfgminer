@@ -219,11 +219,11 @@ static int nDevs;
 static int opt_g_threads = 2;
 static int opt_device;
 static int total_devices;
-static bool gpu_devices[MAX_GPUDEVICES];
-static int gpu_threads;
+bool gpu_devices[MAX_GPUDEVICES];
+int gpu_threads;
 static bool forced_n_threads;
 static int opt_n_threads;
-static int mining_threads;
+int mining_threads;
 static int num_processors;
 bool use_curses = true;
 static bool opt_submit_stale;
@@ -248,6 +248,7 @@ static int watchdog_thr_id;
 static int input_thr_id;
 static int gpur_thr_id;
 static int cpur_thr_id;
+static int api_thr_id;
 static int total_threads;
 
 struct work_restart *work_restart = NULL;
@@ -273,15 +274,13 @@ static unsigned int found_blocks;
 static unsigned int local_work;
 static unsigned int total_go, total_ro;
 
-#define MAX_POOLS (32)
-
-static struct pool *pools[MAX_POOLS];
+struct pool *pools[MAX_POOLS];
 static struct pool *currentpool = NULL;
 
 static float opt_donation = 0.0;
 static struct pool donationpool;
 
-static int total_pools;
+int total_pools;
 static enum pool_strategy pool_strategy = POOL_FAILOVER;
 static int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses;
@@ -1938,11 +1937,11 @@ static int requests_staged(void)
 }
 
 static WINDOW *mainwin, *statuswin, *logwin;
-static double total_secs = 0.1;
+double total_secs = 0.1;
 static char statusline[256];
 static int cpucursor, gpucursor, logstart, logcursor;
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
-static struct cgpu_info *cpus;
+struct cgpu_info *cpus;
 
 static inline void unlock_curses(void)
 {
@@ -3743,6 +3742,15 @@ static void *workio_thread(void *userdata)
 	}
 
 	tq_freeze(mythr->q);
+
+	return NULL;
+}
+
+static void *api_thread(void *userdata)
+{
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	api();
 
 	return NULL;
 }
@@ -6087,6 +6095,13 @@ retry_pools:
 		quit(1, "tq_new failed for gpur_thr_id");
 	if (thr_info_create(thr, NULL, reinit_gpu, thr))
 		quit(1, "reinit_gpu thread create failed");
+
+	/* Create API socket thread */
+	api_thr_id = mining_threads + 7;
+	thr = &thr_info[api_thr_id];
+	if (thr_info_create(thr, NULL, api_thread, thr))
+		quit(1, "API thread create failed");
+	pthread_detach(thr->pth);
 
 	sleep(opt_log_interval);
 	if (opt_donation > 0.0)

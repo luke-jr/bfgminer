@@ -34,10 +34,17 @@
 //	#include <sys/wait.h>
 #endif
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 // Big enough for largest API request
 //  though a PC with 100s of CPUs may exceed the size ...
 // Current code assumes it can socket send this size also
 #define MYBUFSIZ	16384
+
+// Socket is on 127.0.0.1
+#define QUEUE	10
 
 static char *buffer = NULL;
 
@@ -45,18 +52,20 @@ static const char *UNAVAILABLE = " - API will not be available";
 
 static const char *BLANK = "";
 
-static const char *VERSION = "0.1";
+static const char *APIVERSION = "0.1";
 static const char *DEAD = "DEAD";
 static const char *SICK = "SICK";
 static const char *DISABLED = "DISABLED";
-static const char * = "";
-zzz -> other pool status
+static const char *ALIVE = "ALIVE";
+
+static const char *YES = "Y";
+static const char *NO = "N";
 
 static int bye = 0;
 
 char *apiversion(char *params)
 {
-	return VERSION;
+	return (char *)APIVERSION;
 }
 
 void gpustatus(int thr_id)
@@ -68,7 +77,7 @@ void gpustatus(int thr_id)
 	int gf, gp;
 
 	if (thr_id >= 0 && thr_id < gpu_threads) {
-		int gpu = dev_from_id(thr_id);
+		int gpu = thr_info[thr_id].cgpu->cpu_gpu;
 		struct cgpu_info *cgpu = &gpus[gpu];
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
@@ -84,21 +93,21 @@ void gpustatus(int thr_id)
 		gt = gf = gp = 0;
 
 		if (cgpu->status == LIFE_DEAD)
-			status = DEAD;
+			status = (char *)DEAD;
 		else if (cgpu->status == LIFE_SICK)
-			status = SICK;
+			status = (char *)SICK;
 		else if (!gpu_devices[gpu])
-			status = DISABLED;
+			status = (char *)DISABLED;
 		else {
 			sprintf(status_buf, "%.1f", cgpu->rolling);
 			status = status_buf;
 		}
 
-		sprintf(buf, "G%d=%.2f,%d,%d,%s,%.2f,%d,%d,%d,%.2f,%d|",
+		sprintf(buf, "GPU=%d,GT=%.2f,FR=%d,FP=%d,STA=%s,MHS=%.2f,A=%d,R=%d,HW=%d,U=%.2f,I=%d|",
 			gpu, gt, gf, gp, status,
 			cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility, gpus[gpu].intensity);
+			cgpu->utility, gpus->intensity);
 
 		strcat(buffer, buf);
 	}
@@ -109,16 +118,16 @@ void cpustatus(int thr_id)
 	char buf[BUFSIZ];
 
 	if (thr_id >= gpu_threads) {
-		int cpu = dev_from_id(thr_id);
+		int cpu = thr_info[thr_id].cgpu->cpu_gpu;
 		struct cgpu_info *cgpu = &cpus[cpu];
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		sprintf(buf, "C%d=%.2f,%.2f,%d,%d,%d,%.2f,%d|",
+		sprintf(buf, "CPU=%d,STA=%.2f,MHS=%.2f,A=%d,R=%d,U=%.2f|",
 			cpu, cgpu->rolling,
 			cgpu->total_mhashes / total_secs,
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility, gpus[gpu].intensity);
+			cgpu->accepted, cgpu->rejected,
+			cgpu->utility);
 
 		strcat(buffer, buf);
 	}
@@ -142,7 +151,7 @@ char *devstatus(char *params)
 char *poolstatus(char *params)
 {
 	char buf[BUFSIZ];
-	char *status;
+	char *status, *lp;
 	int i;
 
 	*buffer = '\0';
@@ -151,12 +160,22 @@ char *poolstatus(char *params)
 		struct pool *pool = pools[i];
 
 		if (!pool->enabled)
-			status = DISABLED;
+			status = (char *)DISABLED;
 		else
-			status = OK;
+		{
+			if (pool->idle)
+				status = (char *)DEAD;
+			else
+				status = (char *)ALIVE;
+		}
 
-		sprintf(buf, "P%d=%s,%s,%d,%d,%d,%d,%d,%d,%d|",
-			i, pool->rpc_url, status,
+		if (pool->hdr_path)
+			lp = (char *)YES;
+		else
+			lp = (char *)NO;
+
+		sprintf(buf, "POOL=%d,URL=%s,STA=%s,PRI=%d,LP=%s,Q=%d,A=%d,R=%d,DW=%d,ST=%d,GF=%d,RF=%d|",
+			i, pool->rpc_url, status, pool->prio, lp,
 			pool->getwork_requested,
 			pool->accepted, pool->rejected,
 			pool->discarded_work,
@@ -171,31 +190,33 @@ char *poolstatus(char *params)
 }
 
 struct CMDS {
-	const char *cmd;
-	char (*func)();
+	char *name;
+	char *(*func)(char *);
 } cmds[] = {
 	{ "apiversion",	apiversion },
 	{ "dev",	devstatus },
-	{ "pool",	poolstatus }
+	{ "pool",	poolstatus },
 };
 
-#define MAXCMD sizeof(cmds)/sizeof(struct CMDS)
+#define CMDMAX 3
 
 void send_result(int c, char *result)
 {
 	int n;
 
 	if (result == NULL)
-		result = BLANK;
+		result = (char *)BLANK;
 
 	// ignore failure - it's closed immediately anyway
 	n = write(c, result, strlen(result)+1);
 }
 
-static void api()
+void api()
 {
+	char buf[BUFSIZ];
 	const char *addr;
 	int c, sock, n, bound;
+	char tmpaddr[32];
 	char *binderror;
 	time_t bindstart;
 	short int port = 4028;
@@ -205,13 +226,14 @@ static void api()
 	long long counter;
 	char *result;
 	char *params;
+	int i;
 
 	addr = "127.0.0.1";
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
-		return NULL;
+		return;
 	}
 
 	memset(&serv, 0, sizeof(serv));
@@ -219,7 +241,7 @@ static void api()
 	serv.sin_family = AF_INET;
 	if (inet_pton(AF_INET, addr, &(serv.sin_addr)) == 0) {
 		applog(LOG_ERR, "API2 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
-		return NULL;
+		return;
 	}
 	serv.sin_port = htons(port);
 
@@ -232,8 +254,8 @@ static void api()
 			if ((time(NULL) - bindstart) > 61)
 				break;
 			else {
-				applog(LOG_ERR, "API bind to port %d failed - trying again in 10sec", port);
-				sleep(10);
+				applog(LOG_ERR, "API bind to port %d failed - trying again in 15sec", port);
+				sleep(15);
 			}
 		}
 		else
@@ -242,13 +264,13 @@ static void api()
 
 	if (bound == 0) {
 		applog(LOG_ERR, "API bind to port %d failed (%s)%s", port, binderror, UNAVAILABLE);
-		return NULL;
+		return;
 	}
 
 	if (listen(sock, QUEUE) < 0) {
 		applog(LOG_ERR, "API3 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
 		close(sock);
-		return NULL;
+		return;
 	}
 
 	buffer = malloc(MYBUFSIZ+1);
@@ -262,24 +284,25 @@ static void api()
 			applog(LOG_ERR, "API failed (%s)%s", strerror(errno), UNAVAILABLE);
 			close(sock);
 			free(buffer);
-			return NULL;
+			return;
 		}
 
 		inet_ntop(AF_INET, &(cli.sin_addr), &(tmpaddr[0]), sizeof(tmpaddr)-1);
 		if (strcmp(tmpaddr, addr) != 0)
 			close(c);
 		else {
-			n = read(c, &buf[0], BUFS);
+			n = read(c, &buf[0], BUFSIZ-1);
 			if (n < 0)
 				close(c);
 			else {
+				buf[n] = '\0';
 				params = strchr(buf, '|');
 				if (params != NULL)
 					*(params++) = '\0';
 
 				for (i = 0; i < CMDMAX; i++) {
 					if (strcmp(buf, cmds[i].name) == 0) {
-						result = cmds[i].func(params);
+						result = (cmds[i].func)(params);
 						send_result(c, result);
 						close(c);
 						break;
@@ -291,6 +314,4 @@ static void api()
 
 	close(sock);
 	free(buffer);
-
-	return NULL;
 }

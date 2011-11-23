@@ -394,8 +394,11 @@ struct work_restart {
 	char			padding[128 - sizeof(unsigned long)];
 };
 
+extern void api();
+
 
 #define MAX_GPUDEVICES 16
+#define MAX_POOLS (32)
 
 extern int hw_errors;
 extern bool use_syslog;
@@ -403,6 +406,13 @@ extern struct thr_info *thr_info;
 extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
+extern int gpu_threads;
+extern double total_secs;
+extern bool gpu_devices[MAX_GPUDEVICES];
+extern int mining_threads;
+extern struct cgpu_info *cpus;
+extern int total_pools;
+extern struct pool *pools[MAX_POOLS];
 
 #ifdef HAVE_OPENCL
 typedef struct {
