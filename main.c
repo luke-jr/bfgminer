@@ -99,18 +99,6 @@ struct workio_cmd {
 	bool			lagging;
 };
 
-enum sha256_algos {
-	ALGO_C,			/* plain C */
-	ALGO_4WAY,		/* parallel SSE2 */
-	ALGO_VIA,		/* VIA padlock */
-	ALGO_CRYPTOPP,		/* Crypto++ (C) */
-	ALGO_CRYPTOPP_ASM32,	/* Crypto++ 32-bit assembly */
-	ALGO_SSE2_32,		/* SSE2 for x86_32 */
-	ALGO_SSE2_64,		/* SSE2 for x86_64 */
-	ALGO_SSE4_64,		/* SSE4 for x86_64 */
-    ALGO_ALTIVEC_4WAY, /* parallel Altivec */
-};
-
 enum pool_strategy {
 	POOL_FAILOVER,
 	POOL_ROUNDROBIN,
@@ -131,7 +119,7 @@ struct strategies {
 
 static size_t max_name_len = 0;
 static char *name_spaces_pad = NULL;
-static const char *algo_names[] = {
+const char *algo_names[] = {
 	[ALGO_C]		= "c",
 #ifdef WANT_SSE2_4WAY
 	[ALGO_4WAY]		= "4way",
@@ -209,11 +197,11 @@ int opt_bench_algo = -1;
 static const bool opt_time = true;
 static bool opt_restart = true;
 #if defined(WANT_X8664_SSE2) && defined(__SSE2__)
-static enum sha256_algos opt_algo = ALGO_SSE2_64;
+enum sha256_algos opt_algo = ALGO_SSE2_64;
 #elif defined(WANT_X8632_SSE2) && defined(__SSE2__)
-static enum sha256_algos opt_algo = ALGO_SSE2_32;
+enum sha256_algos opt_algo = ALGO_SSE2_32;
 #else
-static enum sha256_algos opt_algo = ALGO_C;
+enum sha256_algos opt_algo = ALGO_C;
 #endif
 static int nDevs;
 static int opt_g_threads = 2;
@@ -258,21 +246,21 @@ static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 static pthread_mutex_t curses_lock;
 static pthread_rwlock_t blk_lock;
-static double total_mhashes_done;
+double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
 pthread_mutex_t control_lock;
 
 int hw_errors;
-static int total_accepted, total_rejected;
-static int total_getworks, total_stale, total_discarded;
+int total_accepted, total_rejected;
+int total_getworks, total_stale, total_discarded;
 static int total_queued;
-static unsigned int new_blocks;
+unsigned int new_blocks;
 static unsigned int work_block;
-static unsigned int found_blocks;
+unsigned int found_blocks;
 
-static unsigned int local_work;
-static unsigned int total_go, total_ro;
+unsigned int local_work;
+unsigned int total_go, total_ro;
 
 struct pool *pools[MAX_POOLS];
 static struct pool *currentpool = NULL;

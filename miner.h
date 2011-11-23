@@ -156,6 +156,19 @@ enum {
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+enum sha256_algos {
+	ALGO_C,			/* plain C */
+	ALGO_4WAY,		/* parallel SSE2 */
+	ALGO_VIA,		/* VIA padlock */
+	ALGO_CRYPTOPP,		/* Crypto++ (C) */
+	ALGO_CRYPTOPP_ASM32,	/* Crypto++ 32-bit assembly */
+	ALGO_SSE2_32,		/* SSE2 for x86_32 */
+	ALGO_SSE2_64,		/* SSE2 for x86_64 */
+	ALGO_SSE4_64,		/* SSE4 for x86_64 */
+	ALGO_ALTIVEC_4WAY,	/* parallel Altivec */
+};
+
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
@@ -415,6 +428,15 @@ extern int mining_threads;
 extern struct cgpu_info *cpus;
 extern int total_pools;
 extern struct pool *pools[MAX_POOLS];
+extern const char *algo_names[];
+extern enum sha256_algos opt_algo;
+extern double total_mhashes_done;
+extern unsigned int new_blocks;
+extern unsigned int found_blocks;
+extern int total_accepted, total_rejected;
+extern int total_getworks, total_stale, total_discarded;
+extern unsigned int local_work;
+extern unsigned int total_go, total_ro;
 
 #ifdef HAVE_OPENCL
 typedef struct {

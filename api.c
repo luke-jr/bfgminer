@@ -189,6 +189,22 @@ char *poolstatus(char *params)
 	return buffer;
 }
 
+char *summary(char *params)
+{
+	double utility, mhs;
+
+	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+	mhs = total_mhashes_done / total_secs;
+
+	sprintf(buffer, "SUMMARY,EL=%.0lf,ALGO=%s,MHS=%.2lf,SOL=%d,Q=%d,A=%d,R=%d,HW=%d,U=%.2lf,DW=%d,ST=%d,GF=%d,LW=%d,RO=%d,BC=%d",
+		total_secs, algo_names[opt_algo], mhs, found_blocks,
+		total_getworks, total_accepted, total_rejected,
+		hw_errors, utility, total_discarded, total_stale,
+		total_go, local_work, total_ro, new_blocks);
+
+	return buffer;
+}
+
 char *doquit(char *params)
 {
 	bye = 1;
@@ -203,10 +219,11 @@ struct CMDS {
 	{ "apiversion",	apiversion },
 	{ "dev",	devstatus },
 	{ "pool",	poolstatus },
+	{ "summary",	summary },
 	{ "quit",	doquit },
 };
 
-#define CMDMAX 4
+#define CMDMAX 5
 
 void send_result(int c, char *result)
 {
