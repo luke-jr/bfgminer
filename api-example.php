@@ -69,7 +69,7 @@ function request($cmd)
 			$items = explode(',', $obj);
 			$item = $items[0];
 			$id = explode('=', $items[0], 2);
-			if (count($id) == 1)
+			if (count($id) == 1 or !ctype_digit($id[1]))
 				$name = $id[0];
 			else
 				$name = $id[0].$id[1];

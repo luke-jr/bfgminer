@@ -186,7 +186,7 @@ static bool opt_loginput = false;
 static int opt_retries = -1;
 static int opt_fail_pause = 5;
 static int fail_pause = 5;
-static int opt_log_interval = 5;
+int opt_log_interval = 5;
 bool opt_log_output = false;
 static int opt_queue = 1;
 int opt_vectors;
@@ -223,7 +223,7 @@ bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
 int opt_api_port = 4028;
-bool opt_api_listen;
+bool opt_api_listen = false;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -3476,7 +3476,7 @@ retry:
 }
 
 #ifdef HAVE_OPENCL
-static void reinit_device(struct cgpu_info *cgpu);
+void reinit_device(struct cgpu_info *cgpu);
 
 static void manage_gpu(void)
 {
@@ -5102,7 +5102,7 @@ static void *reinit_gpu(void *userdata)
 }
 #endif
 
-static void reinit_device(struct cgpu_info *cgpu)
+void reinit_device(struct cgpu_info *cgpu)
 {
 	if (cgpu->is_gpu)
 		tq_push(thr_info[gpur_thr_id].q, cgpu);

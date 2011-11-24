@@ -411,6 +411,8 @@ struct work_restart {
 
 extern void kill_work(void);
 
+extern void reinit_device(struct cgpu_info *cgpu);
+
 extern void api(void);
 
 
@@ -439,6 +441,7 @@ extern int total_accepted, total_rejected;
 extern int total_getworks, total_stale, total_discarded;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
+extern int opt_log_interval;
 
 #ifdef HAVE_OPENCL
 typedef struct {
