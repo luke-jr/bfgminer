@@ -419,6 +419,9 @@ extern void api(void);
 #define MAX_GPUDEVICES 16
 #define MAX_POOLS (32)
 
+extern int nDevs;
+extern int opt_n_threads;
+extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
 extern struct thr_info *thr_info;

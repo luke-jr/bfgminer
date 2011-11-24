@@ -203,16 +203,16 @@ enum sha256_algos opt_algo = ALGO_SSE2_32;
 #else
 enum sha256_algos opt_algo = ALGO_C;
 #endif
-static int nDevs;
+int nDevs;
 static int opt_g_threads = 2;
 static int opt_device;
 static int total_devices;
 bool gpu_devices[MAX_GPUDEVICES];
 int gpu_threads;
 static bool forced_n_threads;
-static int opt_n_threads;
+int opt_n_threads;
 int mining_threads;
-static int num_processors;
+int num_processors;
 bool use_curses = true;
 static bool opt_submit_stale;
 static bool opt_nogpu;
@@ -1502,7 +1502,7 @@ static struct opt_table opt_config_table[] = {
 			"Enable API to listen on/for any address, default: only 127.0.0.1"),
 	OPT_WITH_ARG("--api-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_port,
-		     "Port number of miner API, default: 4028"),
+		     "Port number of miner API"),
 #ifdef HAVE_ADL
 	OPT_WITHOUT_ARG("--auto-fan",
 			opt_set_bool, &opt_autofan,
@@ -2541,6 +2541,11 @@ void kill_work(void)
 	if (opt_debug)
 		applog(LOG_DEBUG, "Killing off work thread");
 	thr = &thr_info[work_thr_id];
+	thr_info_cancel(thr);
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Killing off API thread");
+	thr = &thr_info[api_thr_id];
 	thr_info_cancel(thr);
 }
 
@@ -5840,7 +5845,7 @@ int main (int argc, char *argv[])
 
 	mining_threads = opt_n_threads + gpu_threads;
 
-	total_threads = mining_threads + 7;
+	total_threads = mining_threads + 8;
 	work_restart = calloc(total_threads, sizeof(*work_restart));
 	if (!work_restart)
 		quit(1, "Failed to calloc work_restart");
