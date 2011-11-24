@@ -510,8 +510,8 @@ struct CMDS {
 	void (*func)(char *);
 } cmds[] = {
 	{ "apiversion",	apiversion },
-	{ "dev",	devstatus },
-	{ "pool",	poolstatus },
+	{ "devs",	devstatus },
+	{ "pools",	poolstatus },
 	{ "summary",	summary },
 	{ "gpuenable",	gpuenable },
 	{ "gpudisable",	gpudisable },
