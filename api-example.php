@@ -11,7 +11,7 @@ function getsock($addr, $port)
 	$error = socket_strerror(socket_last_error());
 	$msg = "socket create(TCP) failed";
 	echo "ERR: $msg '$error'\n";
-	return NULL;
+	return null;
  }
 
  $res = socket_connect($socket, $addr, $port);
@@ -21,7 +21,7 @@ function getsock($addr, $port)
 	$msg = "socket connect($addr,$port) failed";
 	echo "ERR: $msg '$error'\n";
 	socket_close($socket);
-	return NULL;
+	return null;
  }
  return $socket;
 }
@@ -105,16 +105,11 @@ function request($cmd)
  return null;
 }
 #
-$r = request('apiversion');
-echo print_r($r, true)."\n";
+if (isset($argv) and count($argv) > 1)
+ $r = request($argv[1]);
+else
+ $r = request('summary');
 #
-$r = request('dev');
-echo print_r($r, true)."\n";
-#
-$r = request('pool');
-echo print_r($r, true)."\n";
-#
-$r = request('summary');
 echo print_r($r, true)."\n";
 #
 ?>

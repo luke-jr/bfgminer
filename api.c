@@ -23,11 +23,33 @@
 
 #if defined(unix)
 	#include <errno.h>
+	#include <sys/socket.h>
+	#include <netinet/in.h>
+	#include <arpa/inet.h>
+
+	#define SOCKETTYPE int
+	#define BINDERROR < 0
+	#define LISTENERROR BINDERROR
+	#define ACCEPTERROR BINDERROR
+	#define INVSOCK -1
+	#define CLOSESOCKET close
 #endif
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#ifdef WIN32
+	#include <winsock2.h>
+	#include "inet_ntop.h"
+	#include "inet_pton.h"
+
+	#define SOCKETTYPE SOCKET
+	#define BINDERROR == SOCKET_ERROR
+	#define LISTENERROR BINDERROR
+	#define ACCEPTERROR BINDERROR
+	#define INVSOCK INVALID_SOCKET
+	#define CLOSESOCKET closesocket
+	#ifndef SHUT_RDWR
+	#define SHUT_RDWR SD_BOTH
+	#endif
+#endif
 
 // Big enough for largest API request
 //  though a PC with 100s of CPUs may exceed the size ...
@@ -39,6 +61,7 @@
 
 static char *io_buffer = NULL;
 static char *msg_buffer = NULL;
+static SOCKETTYPE sock = INVSOCK;
 
 static const char *UNAVAILABLE = " - API will not be available";
 
@@ -65,6 +88,8 @@ static const char *SEPARATORSTR = "|";
 #define MSG_GPUDEV 17
 #define MSG_CPUDEV 18
 #define MSG_INVCPU 19
+#define MSG_NUMGPU 20
+#define MSG_NUMCPU 21
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -109,10 +134,12 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_GPUDEV,	PARAM_GPU,	"GPU%d" },
  { SEVERITY_SUCC,  MSG_CPUDEV,	PARAM_CPU,	"CPU%d" },
  { SEVERITY_ERR,   MSG_INVCPU,	PARAM_CPUMAX,	"Invalid CPU id %d - range is 0 - %d" },
+ { SEVERITY_SUCC,  MSG_NUMGPU,	PARAM_NONE,	"GPU count" },
+ { SEVERITY_SUCC,  MSG_NUMCPU,	PARAM_NONE,	"CPU count" },
  { SEVERITY_FAIL }
 };
 
-static const char *APIVERSION = "0.2";
+static const char *APIVERSION = "0.3";
 static const char *DEAD = "DEAD";
 static const char *SICK = "SICK";
 static const char *NOSTART = "NOSTART";
@@ -204,7 +231,6 @@ void gpustatus(int gpu)
 	char *status;
 	float gt;
 	int gf, gp;
-	int i;
 
 	if (gpu >= 0 && gpu < nDevs) {
 		struct cgpu_info *cgpu = &gpus[gpu];
@@ -273,7 +299,7 @@ void devstatus(char *params)
 {
 	int i;
 
-	if (nDevs == 0 && num_processors == 0) {
+	if (nDevs == 0 && opt_n_threads == 0) {
 		strcpy(io_buffer, message(MSG_NODEVS, 0));
 		return;
 	}
@@ -386,12 +412,16 @@ void summary(char *params)
 {
 	double utility, mhs;
 
+	char *algo = (char *)(algo_names[opt_algo]);
+	if (algo == NULL)
+		algo = "(null)";
+
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
 
-	sprintf(io_buffer, "%sSUMMARY=all,EL=%.0lf,ALGO=%s,MHS=%.2lf,SOL=%d,Q=%d,A=%d,R=%d,HW=%d,U=%.2lf,DW=%d,ST=%d,GF=%d,LW=%d,RO=%d,BC=%d%c",
+	sprintf(io_buffer, "%sSUMMARY=all,EL=%.0f,ALGO=%s,MHS=%.2f,SOL=%d,Q=%d,A=%d,R=%d,HW=%d,U=%.2f,DW=%d,ST=%d,GF=%d,LW=%u,RO=%u,BC=%u%c",
 		message(MSG_SUMM, 0),
-		total_secs, algo_names[opt_algo], mhs, found_blocks,
+		total_secs, algo, mhs, found_blocks,
 		total_getworks, total_accepted, total_rejected,
 		hw_errors, utility, total_discarded, total_stale,
 		total_go, local_work, total_ro, new_blocks, SEPARATOR);
@@ -498,6 +528,28 @@ void gpurestart(char *params)
 	strcpy(io_buffer, message(MSG_GPUREI, id));
 }
 
+void gpucount(char *params)
+{
+	char buf[BUFSIZ];
+
+	strcpy(io_buffer, message(MSG_NUMGPU, 0));
+
+	sprintf(buf, "GPUS,COUNT=%d|", nDevs);
+
+	strcat(io_buffer, buf);
+}
+
+void cpucount(char *params)
+{
+	char buf[BUFSIZ];
+
+	strcpy(io_buffer, message(MSG_NUMCPU, 0));
+
+	sprintf(buf, "CPUS,COUNT=%d|", opt_n_threads > 0 ? num_processors : 0);
+
+	strcat(io_buffer, buf);
+}
+
 void doquit(char *params)
 {
 	*io_buffer = '\0';
@@ -518,23 +570,47 @@ struct CMDS {
 	{ "gpurestart",	gpurestart },
 	{ "gpu",	gpudev },
 	{ "cpu",	cpudev },
+	{ "gpucount",	gpucount },
+	{ "cpucount",	cpucount },
 	{ "quit",	doquit },
 	{ NULL }
 };
 
-void send_result(int c)
+void send_result(SOCKETTYPE c)
 {
 	int n;
 
 	// ignore failure - it's closed immediately anyway
-	n = write(c, io_buffer, strlen(io_buffer)+1);
+	n = send(c, io_buffer, strlen(io_buffer)+1, 0);
+}
+
+void tidyup()
+{
+	bye = 1;
+
+	if (sock != INVSOCK) {
+		shutdown(sock, SHUT_RDWR);
+		CLOSESOCKET(sock);
+		sock = INVSOCK;
+	}
+
+	if (msg_buffer != NULL) {
+		free(msg_buffer);
+		msg_buffer = NULL;
+	}
+
+	if (io_buffer != NULL) {
+		free(io_buffer);
+		io_buffer = NULL;
+	}
 }
 
 void api(void)
 {
 	char buf[BUFSIZ];
 	const char *localaddr = "127.0.0.1";
-	int c, sock, n, bound;
+	SOCKETTYPE c;
+	int n, bound;
 	char connectaddr[32];
 	char *binderror;
 	time_t bindstart;
@@ -543,12 +619,12 @@ void api(void)
 	struct sockaddr_in cli;
 	socklen_t clisiz;
 	char *params;
-	bool portok;
+	bool addrok;
 	bool did;
 	int i;
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (sock < 0) {
+	if (sock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
 		return;
 	}
@@ -570,7 +646,7 @@ void api(void)
 	bound = 0;
 	bindstart = time(NULL);
 	while (bound == 0) {
-		if (bind(sock, (struct sockaddr *)(&serv), sizeof(serv)) < 0) {
+		if (bind(sock, (struct sockaddr *)(&serv), sizeof(serv)) BINDERROR) {
 			binderror = strerror(errno);
 			if ((time(NULL) - bindstart) > 61)
 				break;
@@ -588,9 +664,9 @@ void api(void)
 		return;
 	}
 
-	if (listen(sock, QUEUE) < 0) {
+	if (listen(sock, QUEUE) LISTENERROR) {
 		applog(LOG_ERR, "API3 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
-		close(sock);
+		CLOSESOCKET(sock);
 		return;
 	}
 
@@ -606,20 +682,20 @@ void api(void)
 
 	while (bye == 0) {
 		clisiz = sizeof(cli);
-		if ((c = accept(sock, (struct sockaddr *)(&cli), &clisiz)) < 0) {
+		if ((c = accept(sock, (struct sockaddr *)(&cli), &clisiz)) ACCEPTERROR) {
 			applog(LOG_ERR, "API failed (%s)%s", strerror(errno), UNAVAILABLE);
 			goto die;
 		}
 
 		if (opt_api_listen)
-			portok = true;
+			addrok = true;
 		else {
 			inet_ntop(AF_INET, &(cli.sin_addr), &(connectaddr[0]), sizeof(connectaddr)-1);
-			portok = (strcmp(connectaddr, localaddr) == 0);
+			addrok = (strcmp(connectaddr, localaddr) == 0);
 		}
 
-		if (portok) {
-			n = read(c, &buf[0], BUFSIZ-1);
+		if (addrok) {
+			n = recv(c, &buf[0], BUFSIZ-1, 0);
 			if (n >= 0) {
 				did = false;
 				buf[n] = '\0';
@@ -643,11 +719,8 @@ void api(void)
 				}
 			}
 		}
-		close(c);
+		CLOSESOCKET(c);
 	}
 die:
-	free(msg_buffer);
-	free(io_buffer);
-
-	close(sock);
+	tidyup();
 }

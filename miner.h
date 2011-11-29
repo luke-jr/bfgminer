@@ -413,6 +413,10 @@ extern void kill_work(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);
 
+extern float gpu_temp(int gpu);
+extern int gpu_fanspeed(int gpu);
+extern int gpu_fanpercent(int gpu);
+
 extern void api(void);
 
 
