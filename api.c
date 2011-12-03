@@ -28,11 +28,11 @@
 	#include <arpa/inet.h>
 
 	#define SOCKETTYPE int
-	#define BINDERROR < 0
-	#define LISTENERROR BINDERROR
-	#define ACCEPTERROR BINDERROR
+	#define SOCKETFAIL(a) ((a) < 0)
 	#define INVSOCK -1
 	#define CLOSESOCKET close
+
+	#define SOCKERRMSG strerror(errno)
 #endif
 
 #ifdef WIN32
@@ -41,11 +41,87 @@
 	#include "inet_pton.h"
 
 	#define SOCKETTYPE SOCKET
-	#define BINDERROR == SOCKET_ERROR
-	#define LISTENERROR BINDERROR
-	#define ACCEPTERROR BINDERROR
+	#define SOCKETFAIL(a) ((a) == SOCKET_ERROR)
 	#define INVSOCK INVALID_SOCKET
 	#define CLOSESOCKET closesocket
+
+	static char WSAbuf[1024];
+
+	struct WSAERRORS {
+		int id;
+		char *code;
+	} WSAErrors[] = {
+		{ 0,			"No error" },
+		{ WSAEINTR,		"Interrupted system call" },
+		{ WSAEBADF,		"Bad file number" },
+		{ WSAEACCES,		"Permission denied" },
+		{ WSAEFAULT,		"Bad address" },
+		{ WSAEINVAL,		"Invalid argument" },
+		{ WSAEMFILE,		"Too many open sockets" },
+		{ WSAEWOULDBLOCK,	"Operation would block" },
+		{ WSAEINPROGRESS,	"Operation now in progress" },
+		{ WSAEALREADY,		"Operation already in progress" },
+		{ WSAENOTSOCK,		"Socket operation on non-socket" },
+		{ WSAEDESTADDRREQ,	"Destination address required" },
+		{ WSAEMSGSIZE,		"Message too long" },
+		{ WSAEPROTOTYPE,	"Protocol wrong type for socket" },
+		{ WSAENOPROTOOPT,	"Bad protocol option" },
+		{ WSAEPROTONOSUPPORT,	"Protocol not supported" },
+		{ WSAESOCKTNOSUPPORT,	"Socket type not supported" },
+		{ WSAEOPNOTSUPP,	"Operation not supported on socket" },
+		{ WSAEPFNOSUPPORT,	"Protocol family not supported" },
+		{ WSAEAFNOSUPPORT,	"Address family not supported" },
+		{ WSAEADDRINUSE,	"Address already in use" },
+		{ WSAEADDRNOTAVAIL,	"Can't assign requested address" },
+		{ WSAENETDOWN,		"Network is down" },
+		{ WSAENETUNREACH,	"Network is unreachable" },
+		{ WSAENETRESET,		"Net connection reset" },
+		{ WSAECONNABORTED,	"Software caused connection abort" },
+		{ WSAECONNRESET,	"Connection reset by peer" },
+		{ WSAENOBUFS,		"No buffer space available" },
+		{ WSAEISCONN,		"Socket is already connected" },
+		{ WSAENOTCONN,		"Socket is not connected" },
+		{ WSAESHUTDOWN,		"Can't send after socket shutdown" },
+		{ WSAETOOMANYREFS,	"Too many references, can't splice" },
+		{ WSAETIMEDOUT,		"Connection timed out" },
+		{ WSAECONNREFUSED,	"Connection refused" },
+		{ WSAELOOP,		"Too many levels of symbolic links" },
+		{ WSAENAMETOOLONG,	"File name too long" },
+		{ WSAEHOSTDOWN,		"Host is down" },
+		{ WSAEHOSTUNREACH,	"No route to host" },
+		{ WSAENOTEMPTY,		"Directory not empty" },
+		{ WSAEPROCLIM,		"Too many processes" },
+		{ WSAEUSERS,		"Too many users" },
+		{ WSAEDQUOT,		"Disc quota exceeded" },
+		{ WSAESTALE,		"Stale NFS file handle" },
+		{ WSAEREMOTE,		"Too many levels of remote in path" },
+		{ WSASYSNOTREADY,	"Network system is unavailable" },
+		{ WSAVERNOTSUPPORTED,	"Winsock version out of range" },
+		{ WSANOTINITIALISED,	"WSAStartup not yet called" },
+		{ WSAEDISCON,		"Graceful shutdown in progress" },
+		{ WSAHOST_NOT_FOUND,	"Host not found" },
+		{ WSANO_DATA,		"No host data of that type was found" },
+		{ -1,			"Unknown error code" }
+	};
+
+	static char *WSAErrorMsg()
+	{
+		char *msg;
+		int i;
+		int id = WSAGetLastError();
+
+		/* Assume none of them are actually -1 */
+		for (i = 0; WSAErrors[i].id != -1; i++)
+			if (WSAErrors[i].id == id)
+				break;
+
+		sprintf(WSAbuf, "Socket Error: (%d) %s", id, WSAErrors[i].code);
+
+		return &(WSAbuf[0]);
+	}
+
+	#define SOCKERRMSG WSAErrorMsg()
+
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
 	#endif
@@ -67,7 +143,6 @@ static const char *UNAVAILABLE = " - API will not be available";
 
 static const char *BLANK = "";
 static const char SEPARATOR = '|';
-static const char *SEPARATORSTR = "|";
 
 #define MSG_INVGPU 1
 #define MSG_ALRENA 2
@@ -90,6 +165,7 @@ static const char *SEPARATORSTR = "|";
 #define MSG_INVCPU 19
 #define MSG_NUMGPU 20
 #define MSG_NUMCPU 21
+#define MSG_VERSION 22
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -136,15 +212,16 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVCPU,	PARAM_CPUMAX,	"Invalid CPU id %d - range is 0 - %d" },
  { SEVERITY_SUCC,  MSG_NUMGPU,	PARAM_NONE,	"GPU count" },
  { SEVERITY_SUCC,  MSG_NUMCPU,	PARAM_NONE,	"CPU count" },
+ { SEVERITY_SUCC,  MSG_VERSION,	PARAM_CPU,	"CGMiner versions" },
  { SEVERITY_FAIL }
 };
 
-static const char *APIVERSION = "0.3";
-static const char *DEAD = "DEAD";
-static const char *SICK = "SICK";
-static const char *NOSTART = "NOSTART";
-static const char *DISABLED = "DISABLED";
-static const char *ALIVE = "ALIVE";
+static const char *APIVERSION = "0.5";
+static const char *DEAD = "Dead";
+static const char *SICK = "Sick";
+static const char *NOSTART = "NoStart";
+static const char *DISABLED = "Disabled";
+static const char *ALIVE = "Alive";
 static const char *DYNAMIC = "D";
 
 static const char *YES = "Y";
@@ -178,7 +255,7 @@ static char *message(int messageid, int gpuid)
 				break;
 			}
 
-			sprintf(msg_buffer, "STATUS=%c,CODE=%d,MSG=", severity, messageid);
+			sprintf(msg_buffer, "STATUS=%c,Code=%d,Msg=", severity, messageid);
 
 			ptr = msg_buffer + strlen(msg_buffer);
 
@@ -208,19 +285,26 @@ static char *message(int messageid, int gpuid)
 				strcpy(ptr, codes[i].description);
 			}
 
-			strcat(msg_buffer, SEPARATORSTR);
+			ptr = msg_buffer + strlen(msg_buffer);
+
+			sprintf(ptr, ",Description=%s%c",
+				opt_api_description, SEPARATOR);
 
 			return msg_buffer;
 		}
 	}
 
-	sprintf(msg_buffer, "STATUS=F,CODE=-1,MSG=%d%c", messageid, SEPARATOR);
+	sprintf(msg_buffer, "STATUS=F,Code=-1,Msg=%d,Description=%s%c",
+		messageid, opt_api_description, SEPARATOR);
+
 	return msg_buffer;
 }
 
-void apiversion(char *params)
+void apiversion(SOCKETTYPE c, char *params)
 {
-	strcpy(io_buffer, APIVERSION);
+	sprintf(io_buffer, "%sVERSION,CGMiner=%s,API=%s%c",
+		message(MSG_VERSION, 0),
+		VERSION, APIVERSION, SEPARATOR);
 }
 
 void gpustatus(int gpu)
@@ -229,8 +313,8 @@ void gpustatus(int gpu)
 	char buf[BUFSIZ];
 	char *enabled;
 	char *status;
-	float gt;
-	int gf, gp;
+	float gt, gv;
+	int ga, gf, gp, gc, gm, pt;
 
 	if (gpu >= 0 && gpu < nDevs) {
 		struct cgpu_info *cgpu = &gpus[gpu];
@@ -238,14 +322,9 @@ void gpustatus(int gpu)
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 #ifdef HAVE_ADL
-		if (cgpu->has_adl) {
-			gt = gpu_temp(gpu);
-			gf = gpu_fanspeed(gpu);
-			gp = gpu_fanpercent(gpu);
-		}
-		else
+		if (!gpu_stats(gpu, &gt, &gc, &gm, &gv, &ga, &gf, &gp, &pt))
 #endif
-		gt = gf = gp = 0;
+			gt = gv = gm = gc = ga = gf = gp = pt = 0;
 
 		if (gpu_devices[gpu])
 			enabled = (char *)YES;
@@ -266,8 +345,8 @@ void gpustatus(int gpu)
 		else
 			sprintf(intensity, "%d", gpus->intensity);
 
-		sprintf(buf, "GPU=%d,GT=%.2f,FR=%d,FP=%d,EN=%s,STA=%s,MHS=%.2f,A=%d,R=%d,HW=%d,U=%.2f,I=%s%c",
-			gpu, gt, gf, gp, enabled, status,
+		sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s%c",
+			gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
 			cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, intensity, SEPARATOR);
@@ -285,7 +364,7 @@ void cpustatus(int cpu)
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		sprintf(buf, "CPU=%d,STA=%.2f,MHS=%.2f,A=%d,R=%d,U=%.2f%c",
+		sprintf(buf, "CPU=%d,Status=%.2f,MHS=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f%c",
 			cpu, cgpu->rolling,
 			cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected,
@@ -295,7 +374,7 @@ void cpustatus(int cpu)
 	}
 }
 
-void devstatus(char *params)
+void devstatus(SOCKETTYPE c, char *params)
 {
 	int i;
 
@@ -314,7 +393,7 @@ void devstatus(char *params)
 			cpustatus(i);
 }
 
-void gpudev(char *params)
+void gpudev(SOCKETTYPE c, char *params)
 {
 	int id;
 
@@ -339,7 +418,7 @@ void gpudev(char *params)
 	gpustatus(id);
 }
 
-void cpudev(char *params)
+void cpudev(SOCKETTYPE c, char *params)
 {
 	int id;
 
@@ -364,7 +443,7 @@ void cpudev(char *params)
 	cpustatus(id);
 }
 
-void poolstatus(char *params)
+void poolstatus(SOCKETTYPE c, char *params)
 {
 	char buf[BUFSIZ];
 	char *status, *lp;
@@ -395,7 +474,7 @@ void poolstatus(char *params)
 		else
 			lp = (char *)NO;
 
-		sprintf(buf, "POOL=%d,URL=%s,STA=%s,PRI=%d,LP=%s,Q=%d,A=%d,R=%d,DW=%d,ST=%d,GF=%d,RF=%d%c",
+		sprintf(buf, "POOL=%d,URL=%s,Status=%s,Priority=%d,Long Poll=%s,Getworks=%d,Accepted=%d,Rejected=%d,Discarded=%d,Stale=%d,Get Failures=%d,Remote Failures=%d%c",
 			i, pool->rpc_url, status, pool->prio, lp,
 			pool->getwork_requested,
 			pool->accepted, pool->rejected,
@@ -408,7 +487,7 @@ void poolstatus(char *params)
 	}
 }
 
-void summary(char *params)
+void summary(SOCKETTYPE c, char *params)
 {
 	double utility, mhs;
 
@@ -419,7 +498,7 @@ void summary(char *params)
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
 
-	sprintf(io_buffer, "%sSUMMARY=all,EL=%.0f,ALGO=%s,MHS=%.2f,SOL=%d,Q=%d,A=%d,R=%d,HW=%d,U=%.2f,DW=%d,ST=%d,GF=%d,LW=%u,RO=%u,BC=%u%c",
+	sprintf(io_buffer, "%sSUMMARY,Elapsed=%.0f,Algorithm=%s,MHS=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
 		message(MSG_SUMM, 0),
 		total_secs, algo, mhs, found_blocks,
 		total_getworks, total_accepted, total_rejected,
@@ -427,7 +506,7 @@ void summary(char *params)
 		total_go, local_work, total_ro, new_blocks, SEPARATOR);
 }
 
-void gpuenable(char *params)
+void gpuenable(SOCKETTYPE c, char *params)
 {
 	struct thr_info *thr;
 	int gpu;
@@ -473,7 +552,7 @@ void gpuenable(char *params)
 	strcpy(io_buffer, message(MSG_GPUREN, id));
 }
 
-void gpudisable(char *params)
+void gpudisable(SOCKETTYPE c, char *params)
 {
 	int id;
 
@@ -503,7 +582,7 @@ void gpudisable(char *params)
 	strcpy(io_buffer, message(MSG_GPUDIS, id));
 }
 
-void gpurestart(char *params)
+void gpurestart(SOCKETTYPE c, char *params)
 {
 	int id;
 
@@ -528,30 +607,34 @@ void gpurestart(char *params)
 	strcpy(io_buffer, message(MSG_GPUREI, id));
 }
 
-void gpucount(char *params)
+void gpucount(SOCKETTYPE c, char *params)
 {
 	char buf[BUFSIZ];
 
 	strcpy(io_buffer, message(MSG_NUMGPU, 0));
 
-	sprintf(buf, "GPUS,COUNT=%d|", nDevs);
+	sprintf(buf, "GPUS,Count=%d|", nDevs);
 
 	strcat(io_buffer, buf);
 }
 
-void cpucount(char *params)
+void cpucount(SOCKETTYPE c, char *params)
 {
 	char buf[BUFSIZ];
 
 	strcpy(io_buffer, message(MSG_NUMCPU, 0));
 
-	sprintf(buf, "CPUS,COUNT=%d|", opt_n_threads > 0 ? num_processors : 0);
+	sprintf(buf, "CPUS,Count=%d|", opt_n_threads > 0 ? num_processors : 0);
 
 	strcat(io_buffer, buf);
 }
 
-void doquit(char *params)
+void send_result(SOCKETTYPE c);
+
+void doquit(SOCKETTYPE c, char *params)
 {
+	strcpy(io_buffer, "bye");
+	send_result(c);
 	*io_buffer = '\0';
 	bye = 1;
 	kill_work();
@@ -559,9 +642,9 @@ void doquit(char *params)
 
 struct CMDS {
 	char *name;
-	void (*func)(char *);
+	void (*func)(SOCKETTYPE, char *);
 } cmds[] = {
-	{ "apiversion",	apiversion },
+	{ "version",	apiversion },
 	{ "devs",	devstatus },
 	{ "pools",	poolstatus },
 	{ "summary",	summary },
@@ -579,9 +662,21 @@ struct CMDS {
 void send_result(SOCKETTYPE c)
 {
 	int n;
+	int len = strlen(io_buffer);
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "DBG: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
 
 	// ignore failure - it's closed immediately anyway
-	n = send(c, io_buffer, strlen(io_buffer)+1, 0);
+	n = send(c, io_buffer, len+1, 0);
+
+	if (opt_debug) {
+		if (SOCKETFAIL(n))
+			applog(LOG_DEBUG, "DBG: send failed: %s", SOCKERRMSG);
+		else
+			applog(LOG_DEBUG, "DBG: sent %d", n);
+	}
+
 }
 
 void tidyup()
@@ -623,9 +718,17 @@ void api(void)
 	bool did;
 	int i;
 
+	if (!opt_api_listen) {
+		applog(LOG_WARNING, "API not running%s", UNAVAILABLE);
+		return;
+	}
+
+	/* This should be done first to ensure curl has already called WSAStartup() in windows */
+	sleep(opt_log_interval);
+
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
-		applog(LOG_ERR, "API1 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
+		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 		return;
 	}
 
@@ -633,9 +736,9 @@ void api(void)
 
 	serv.sin_family = AF_INET;
 
-	if (!opt_api_listen) {
+	if (!opt_api_network) {
 		if (inet_pton(AF_INET, localaddr, &(serv.sin_addr)) == 0) {
-			applog(LOG_ERR, "API2 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
+			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 			return;
 		}
 	}
@@ -646,8 +749,8 @@ void api(void)
 	bound = 0;
 	bindstart = time(NULL);
 	while (bound == 0) {
-		if (bind(sock, (struct sockaddr *)(&serv), sizeof(serv)) BINDERROR) {
-			binderror = strerror(errno);
+		if (SOCKETFAIL(bind(sock, (struct sockaddr *)(&serv), sizeof(serv)))) {
+			binderror = SOCKERRMSG;
 			if ((time(NULL) - bindstart) > 61)
 				break;
 			else {
@@ -664,15 +767,13 @@ void api(void)
 		return;
 	}
 
-	if (listen(sock, QUEUE) LISTENERROR) {
-		applog(LOG_ERR, "API3 initialisation failed (%s)%s", strerror(errno), UNAVAILABLE);
+	if (SOCKETFAIL(listen(sock, QUEUE))) {
+		applog(LOG_ERR, "API3 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 		CLOSESOCKET(sock);
 		return;
 	}
 
-	sleep(opt_log_interval);
-
-	if (opt_api_listen)
+	if (opt_api_network)
 		applog(LOG_WARNING, "API running in UNRESTRICTED access mode");
 	else
 		applog(LOG_WARNING, "API running in restricted access mode");
@@ -682,23 +783,39 @@ void api(void)
 
 	while (bye == 0) {
 		clisiz = sizeof(cli);
-		if ((c = accept(sock, (struct sockaddr *)(&cli), &clisiz)) ACCEPTERROR) {
-			applog(LOG_ERR, "API failed (%s)%s", strerror(errno), UNAVAILABLE);
+		if (SOCKETFAIL(c = accept(sock, (struct sockaddr *)(&cli), &clisiz))) {
+			applog(LOG_ERR, "API failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 			goto die;
 		}
 
-		if (opt_api_listen)
+		if (opt_api_network)
 			addrok = true;
 		else {
 			inet_ntop(AF_INET, &(cli.sin_addr), &(connectaddr[0]), sizeof(connectaddr)-1);
 			addrok = (strcmp(connectaddr, localaddr) == 0);
 		}
 
+		if (opt_debug) {
+			inet_ntop(AF_INET, &(cli.sin_addr), &(connectaddr[0]), sizeof(connectaddr)-1);
+			applog(LOG_DEBUG, "DBG: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
+		}
+
 		if (addrok) {
 			n = recv(c, &buf[0], BUFSIZ-1, 0);
-			if (n >= 0) {
-				did = false;
+			if (SOCKETFAIL(n))
+				buf[0] = '\0';
+			else
 				buf[n] = '\0';
+
+			if (opt_debug) {
+				if (SOCKETFAIL(n))
+					applog(LOG_DEBUG, "DBG: recv failed: %s", SOCKERRMSG);
+				else
+					applog(LOG_DEBUG, "DBG: recv command: (%d) '%s'", n, buf);
+			}
+
+			if (!SOCKETFAIL(n)) {
+				did = false;
 				params = strchr(buf, SEPARATOR);
 				if (params == NULL)
 					params = (char *)BLANK;
@@ -707,7 +824,7 @@ void api(void)
 
 				for (i = 0; cmds[i].name != NULL; i++) {
 					if (strcmp(buf, cmds[i].name) == 0) {
-						(cmds[i].func)(params);
+						(cmds[i].func)(c, params);
 						send_result(c);
 						did = true;
 						break;

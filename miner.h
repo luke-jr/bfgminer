@@ -334,8 +334,10 @@ extern char *cgminer_path;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+extern char *opt_api_description;
 extern int opt_api_port;
 extern bool opt_api_listen;
+extern bool opt_api_network;
 
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
@@ -413,12 +415,14 @@ extern void kill_work(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);
 
+#ifdef HAVE_ADL
 extern float gpu_temp(int gpu);
 extern int gpu_fanspeed(int gpu);
 extern int gpu_fanpercent(int gpu);
+extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc, int *activity, int *fanspeed, int *fanpercent, int *powertune);
+#endif
 
 extern void api(void);
-
 
 #define MAX_GPUDEVICES 16
 #define MAX_POOLS (32)

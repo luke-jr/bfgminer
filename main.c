@@ -222,8 +222,10 @@ static bool opt_fail_only;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
+char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
 bool opt_api_listen = false;
+bool opt_api_network = false;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1467,6 +1469,13 @@ static char *set_intensity(char *arg)
 }
 #endif
 
+static char *set_api_description(const char *arg)
+{
+	opt_set_charp(arg, &opt_api_description);
+
+	return NULL;
+}
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--algo|-a",
@@ -1497,9 +1506,15 @@ static struct opt_table opt_config_table[] = {
     "\n\taltivec_4way\tAltivec implementation for PowerPC G4 and G5 machines"
 #endif
 		),
+	OPT_WITH_ARG("--api-description",
+		     set_api_description, NULL, NULL,
+		     "Description placed in the API status header, default: cgminer"),
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
-			"Enable API to listen on/for any address, default: only 127.0.0.1"),
+			"Enable API, default: disabled"),
+	OPT_WITHOUT_ARG("--api-network",
+			opt_set_bool, &opt_api_network,
+			"Allow API (if enabled) to listen on/for any address, default: only 127.0.0.1"),
 	OPT_WITH_ARG("--api-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_port,
 		     "Port number of miner API"),
