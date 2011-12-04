@@ -40,8 +40,6 @@
 
 #ifdef WIN32
 	#include <winsock2.h>
-	#include "inet_ntop.h"
-	#include "inet_pton.h"
 
 	#define SOCKETTYPE SOCKET
 	#define SOCKETFAIL(a) ((a) == SOCKET_ERROR)
@@ -138,6 +136,8 @@
 	#endif
 #endif
 
+#define RECVSIZE 65500
+
 static const char SEPARATOR = '|';
 static const char COMMA = ',';
 static const char EQ = '=';
@@ -187,12 +187,12 @@ void display(char *buf)
 
 int callapi(char *command, char *host, short int port)
 {
-	char buf[BUFSIZ];
+	char buf[RECVSIZE+1];
 	struct hostent *ip;
 	struct sockaddr_in serv;
 	SOCKETTYPE sock;
 	int ret = 0;
-	int n;
+	int n, p;
 
 	SOCKETINIT;
 
@@ -220,8 +220,23 @@ int callapi(char *command, char *host, short int port)
 		ret = 1;
 	}
 	else {
-		n = recv(sock, buf, BUFSIZ, 0);
-		buf[n] = '\0';
+		p = 0;
+		buf[0] = '\0';
+		while (p < RECVSIZE) {
+			n = recv(sock, &buf[p], RECVSIZE - p , 0);
+
+			if (SOCKETFAIL(n)) {
+				printf("Recv failed: %s\n", SOCKERRMSG);
+				ret = 1;
+				break;
+			}
+
+			if (n == 0)
+				break;
+
+			p += n;
+			buf[p] = '\0';
+		}
 
 		printf("Reply was '%s'\n", buf);
 
@@ -255,6 +270,14 @@ int main(int argc, char *argv[])
 	char *host = "127.0.0.1";
 	short int port = 4028;
 	char *ptr;
+
+	if (argc > 1)
+		if (strcmp(argv[1], "-?") == 0
+		||  strcmp(argv[1], "-h") == 0
+		||  strcmp(argv[1], "--help") == 0) {
+			fprintf(stderr, "usAge: %s [command [ip/host [port]]]\n", argv[0]);
+			return 1;
+		}
 
 	if (argc > 1) {
 		ptr = trim(argv[1]);

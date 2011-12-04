@@ -30,6 +30,7 @@
 	#define SOCKETTYPE int
 	#define SOCKETFAIL(a) ((a) < 0)
 	#define INVSOCK -1
+	#define INVINETADDR -1
 	#define CLOSESOCKET close
 
 	#define SOCKERRMSG strerror(errno)
@@ -37,12 +38,11 @@
 
 #ifdef WIN32
 	#include <winsock2.h>
-	#include "inet_ntop.h"
-	#include "inet_pton.h"
 
 	#define SOCKETTYPE SOCKET
 	#define SOCKETFAIL(a) ((a) == SOCKET_ERROR)
 	#define INVSOCK INVALID_SOCKET
+	#define INVINETADDR INADDR_NONE
 	#define CLOSESOCKET closesocket
 
 	static char WSAbuf[1024];
@@ -706,7 +706,7 @@ void api(void)
 	const char *localaddr = "127.0.0.1";
 	SOCKETTYPE c;
 	int n, bound;
-	char connectaddr[32];
+	char *connectaddr;
 	char *binderror;
 	time_t bindstart;
 	short int port = opt_api_port;
@@ -718,13 +718,13 @@ void api(void)
 	bool did;
 	int i;
 
+	/* This should be done first to ensure curl has already called WSAStartup() in windows */
+	sleep(opt_log_interval);
+
 	if (!opt_api_listen) {
 		applog(LOG_WARNING, "API not running%s", UNAVAILABLE);
 		return;
 	}
-
-	/* This should be done first to ensure curl has already called WSAStartup() in windows */
-	sleep(opt_log_interval);
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
@@ -737,7 +737,8 @@ void api(void)
 	serv.sin_family = AF_INET;
 
 	if (!opt_api_network) {
-		if (inet_pton(AF_INET, localaddr, &(serv.sin_addr)) == 0) {
+		serv.sin_addr.s_addr = inet_addr(localaddr);
+		if (serv.sin_addr.s_addr == INVINETADDR) {
 			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 			return;
 		}
@@ -791,12 +792,12 @@ void api(void)
 		if (opt_api_network)
 			addrok = true;
 		else {
-			inet_ntop(AF_INET, &(cli.sin_addr), &(connectaddr[0]), sizeof(connectaddr)-1);
+			connectaddr = inet_ntoa(cli.sin_addr);
 			addrok = (strcmp(connectaddr, localaddr) == 0);
 		}
 
 		if (opt_debug) {
-			inet_ntop(AF_INET, &(cli.sin_addr), &(connectaddr[0]), sizeof(connectaddr)-1);
+			connectaddr = inet_ntoa(cli.sin_addr);
 			applog(LOG_DEBUG, "DBG: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
 		}
 
