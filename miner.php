@@ -151,7 +151,7 @@ function getparam($name, $both = false)
 #
 function details($list)
 {
- $stas = array('S' => 'Succees', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
+ $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
  $tb = '<tr><td><table border=1 cellpadding=5 cellspacing=0>';
  $te = '</table></td></tr>';
