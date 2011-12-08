@@ -216,7 +216,7 @@ struct CODES {
  { SEVERITY_FAIL }
 };
 
-static const char *APIVERSION = "0.5";
+static const char *APIVERSION = "0.6";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -345,9 +345,9 @@ void gpustatus(int gpu)
 		else
 			sprintf(intensity, "%d", gpus->intensity);
 
-		sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s%c",
+		sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s%c",
 			gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
-			cgpu->total_mhashes / total_secs,
+			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, intensity, SEPARATOR);
 
@@ -364,9 +364,9 @@ void cpustatus(int cpu)
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		sprintf(buf, "CPU=%d,Status=%.2f,MHS=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f%c",
-			cpu, cgpu->rolling,
-			cgpu->total_mhashes / total_secs,
+		sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f%c",
+			cpu, cgpu->total_mhashes / total_secs,
+			opt_log_interval, cgpu->rolling,
 			cgpu->accepted, cgpu->rejected,
 			cgpu->utility, SEPARATOR);
 
@@ -498,7 +498,7 @@ void summary(SOCKETTYPE c, char *params)
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
 
-	sprintf(io_buffer, "%sSUMMARY,Elapsed=%.0f,Algorithm=%s,MHS=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
+	sprintf(io_buffer, "%sSUMMARY,Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
 		message(MSG_SUMM, 0),
 		total_secs, algo, mhs, found_blocks,
 		total_getworks, total_accepted, total_rejected,
