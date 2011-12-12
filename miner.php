@@ -11,6 +11,7 @@ $here = $_SERVER['PHP_SELF'];
 <html><head><title>Mine</title>
 <style type='text/css'>
 td { color:blue; font-family:verdana,arial,sans; font-size:14pt; }
+td.h { color:blue; font-family:verdana,arial,sans; font-size:14pt; background:#d0ffff }
 td.sta { color:green; font-family:verdana,arial,sans; font-size:14pt; }
 </style>
 </head><body bgcolor=#ecffff>
@@ -149,6 +150,53 @@ function getparam($name, $both = false)
  return substr($a, 0, 1024);
 }
 #
+function fmt($section, $name, $value)
+{
+ $b = '&nbsp;';
+
+ switch ($section.'.'.$name)
+ {
+ case 'SUMMARY.Elapsed':
+	$s = $value % 60;
+	$value -= $s;
+	$value /= 60;
+	if ($value == 0)
+	{
+		return $s.'s';
+	}
+	else
+	{
+		$m = $value % 60;
+		$value -= $m;
+		$value /= 60;
+		if ($value == 0)
+		{
+			return sprintf("%dm$b%02ds", $m, $s);
+		}
+		else
+		{
+			$h = $value % 24;
+			$value -= $h;
+			$value /= 24;
+			if ($value == 0)
+				return sprintf("%dh$b%02dm$b%02ds", $h, $m, $s);
+			else
+				return sprintf("%ddays$b%02dh$b%02dm$b%02ds", $value, $h, $m, $s);
+		}
+	}
+	break;
+ case 'GPU0.Utility':
+ case 'SUMMARY.Utility':
+	return $value.'/m';
+	break;
+ case 'GPU0.Temperature':
+	return $value.'&deg;C';
+	break;
+ }
+
+ return $value;
+}
+#
 function details($list)
 {
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
@@ -158,7 +206,7 @@ function details($list)
 
  echo $tb;
 
- echo '<tr><td colspan=2 class=sta>Date: '.date('H:i:s j-M-Y \U\T\CP').'</td></tr>';
+ echo '<tr><td class=sta>Date: '.date('H:i:s j-M-Y \U\T\CP').'</td></tr>';
 
  echo $te.$tb;
 
@@ -174,17 +222,21 @@ function details($list)
 
  echo $te.$tb;
 
+ $section = '';
+
  foreach ($list as $item => $values)
  {
 	if ($item != 'STATUS')
 	{
+		$section = $item;
+
 		echo '<tr>';
 
 		foreach ($values as $name => $value)
 		{
 			if ($name == '0')
 				$name = '&nbsp;';
-			echo "<td valign=bottom>$name</td>";
+			echo "<td valign=bottom class=h>$name</td>";
 		}
 
 		echo '</tr>';
@@ -199,7 +251,7 @@ function details($list)
 		continue;
 
 	foreach ($values as $name => $value)
-		echo "<td>$value</td>";
+		echo '<td>'.fmt($section, $name, $value).'</td>';
 
 	echo '</tr>';
  }
