@@ -119,6 +119,10 @@ Options for both config file and command line:
         cryptopp        Crypto++ C/C++ implementation
         sse2_64         SSE2 64 bit implementation for x86_64 machines
         sse4_64         SSE4.1 64 bit implementation for x86_64 machines (default: sse2_64)
+--api-description   Description placed in the API status header (default: cgminer version)
+--api-listen        Listen for API requests (default: disabled)
+--api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
+--api-port          Port number of miner API (default: 4028)
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
 --cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
@@ -479,6 +483,124 @@ for clock and fan speeds and stores these values. When quitting cgminer, it
 will then try to restore the original values. Changing settings outside of
 cgminer while it's running may be reset to the startup cgminer values when
 cgminer shuts down because of this.
+
+---
+
+API
+
+If you start cgminer with the "--api-listen" option, it will listen on a
+simple TCP/IP socket for single string API requests from the same machine
+running cgminer and reply with a string and then close the socket each time
+Also, if you add the "--api-network" option, it will accept API requests
+from any network attached computer.
+
+The request can be either simple text or JSON.
+
+If the request is JSON (starts with '{'), it will reply with a JSON formatted
+response, otherwise it replies with text formatted as described further below.
+
+The JSON request format required is '{"command":"CMD","parameter":"PARAM"}'
+(though of course parameter is not required for all requests)
+where "CMD" is from the "Request" column below and "PARAM" would be e.g.
+the CPU/GPU number if required.
+
+The format of each reply (unless stated otherwise) is a STATUS section
+followed by an optional detail section
+
+The STATUS section is:
+
+ STATUS=X,Code=N,Msg=string,Description=string|
+
+  STATUS=X Where X is one of:
+   W - Warning
+   I - Informational
+   S - Success
+   E - Error
+   F - Fatal (code bug)
+
+  Code=N
+   Each unique reply has a unigue Code (See api.c - #define MSG_NNNNNN)
+
+  Msg=string
+   Message matching the Code value N
+
+  Description=string
+   This defaults to the cgminer version but is the value of --api-description
+   if it was specified at runtime.
+
+The list of requests and replies are:
+
+ Request       Reply Section  Details
+ -------       -------------  -------
+ version       VERSION        CGMiner=cgminer version
+                              API=API version
+
+ summary       SUMMARY        The status summary of the miner
+                              e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
+
+ pools         POOLS          The status of each pool
+                              e.g. Pool=0,URL=http://pool.com:6311,Status=Alive,...|
+
+ devs          DEVS           Each available CPU and GPU with their details
+                              e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
+
+ gpu|N         GPU            The details of a single GPU number N in the same
+                              format and details as for DEVS
+
+ cpu|N         CPU            The details of a single CPU number N in the same
+                              format and details as for DEVS
+
+ gpucount      GPUS           Count=N| <- the number of GPUs
+
+ cpucount      CPUS           Count=N| <- the number of CPUs
+
+ gpuenable|N   none           There is no reply section just the STATUS section
+                              stating the results of the enable request
+
+ gpudisable|N  none           There is no reply section just the STATUS section
+                              stating the results of the disable request
+
+ gpurestart|N  none           There is no reply section just the STATUS section
+                              stating the results of the restart request
+
+ quit          none           There is no status section but just a single "BYE|"
+                              reply before cgminer quits
+
+When you enable, disable or restart a GPU, you will also get Thread messages in
+the cgminer status window
+
+Obviously, the JSON format is simply just the names as given before the '='
+with the values after the '='
+
+If you enable cgminer debug (-D or --debug) you will also get messages showing
+details of the requests received and the replies
+
+There are included 4 program examples for accessing the API:
+
+api-example.php - a php script to access the API
+  usAge: php api-example.php command
+ by default it sends a 'summary' request to the miner at 127.0.0.1:4028
+ If you specify a command it will send that request instead
+ You must modify the line "$socket = getsock('127.0.0.1', 4028);" at the
+ beginning of "function request($cmd)" to change where it looks for cgminer
+
+API.java/API.class
+ a java program to access the API (with source code)
+  usAge is: java API command address port
+ Any missing or blank parameters are replaced as if you entered:
+  java API summary 127.0.0.1 4028
+
+api-example.c - a 'C' program to access the API (with source code)
+  usAge: api-example [command [ip/host [port]]]
+ again, as above, missing or blank parameters are replaced as if you entered:
+  api-example summary 127.0.0.1 4028
+
+miner.php - an example web page to access the API
+ This includes buttons to enable, disable and restart the GPUs and also to
+ quit cgminer
+ You must modify the 2 lines near the top to change where it looks for cgminer
+  $miner = '127.0.0.1'; # hostname or IP address
+  $port = 4028;
 
 ---
 

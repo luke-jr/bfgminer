@@ -1508,7 +1508,7 @@ static struct opt_table opt_config_table[] = {
 		),
 	OPT_WITH_ARG("--api-description",
 		     set_api_description, NULL, NULL,
-		     "Description placed in the API status header, default: cgminer"),
+		     "Description placed in the API status header, default: cgminer version"),
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
 			"Enable API, default: disabled"),
