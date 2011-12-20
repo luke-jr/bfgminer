@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Kano
+ * Copyright 2011 Andrew Smith
  * Copyright 2011 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
