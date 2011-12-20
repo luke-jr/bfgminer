@@ -59,6 +59,9 @@ function request($cmd)
 
 	print "$cmd returned '$line'\n";
 
+	if (substr($line,0,1) == '{')
+		return json_decode($line, true);
+
 	$data = array();
 
 	$objs = explode('|', $line);
