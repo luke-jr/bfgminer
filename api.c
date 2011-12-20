@@ -876,7 +876,7 @@ void api(void)
 	sleep(opt_log_interval);
 
 	if (!opt_api_listen) {
-		applog(LOG_WARNING, "API not running%s", UNAVAILABLE);
+		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
 		return;
 	}
 
