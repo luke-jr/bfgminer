@@ -5829,7 +5829,13 @@ int main (int argc, char *argv[])
 	logcursor = 8;
 	gpucursor = logcursor;
 	cpucursor = gpucursor + nDevs;
-	logstart = cpucursor + (opt_n_threads ? num_processors : 0) + 1;
+	logstart = cpucursor + 1;
+	if (opt_n_threads) {
+		if (opt_n_threads < num_processors)
+			logstart += opt_n_threads;
+		else
+			logstart += num_processors;
+	}
 	logcursor = logstart + 1;
 
 	if (opt_realquiet)
