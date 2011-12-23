@@ -3770,9 +3770,13 @@ static void *workio_thread(void *userdata)
 
 static void *api_thread(void *userdata)
 {
+	struct thr_info *mythr = userdata;
+
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	api();
+
+	mythr->pth = 0L;
 
 	return NULL;
 }
