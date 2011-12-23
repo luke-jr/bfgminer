@@ -4868,6 +4868,25 @@ static void convert_to_work(json_t *val, bool rolltime)
 		applog(LOG_DEBUG, "Converted longpoll data to work");
 }
 
+/* If we want longpoll, enable it for the chosen default pool, or, if
+ * the pool does not support longpoll, find the first one that does
+ * and use its longpoll support */
+static struct pool *select_longpoll_pool(void)
+{
+	struct pool *cp = current_pool();
+	int i;
+
+	if (cp->hdr_path)
+		return cp;
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+
+		if (pool->hdr_path)
+			return pool;
+	}
+	return NULL;
+}
+
 static void *longpoll_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -4875,7 +4894,7 @@ static void *longpoll_thread(void *userdata)
 	char *copy_start, *hdr_path, *lp_url = NULL;
 	bool need_slash = false;
 	int failures = 0;
-	struct pool *pool = current_pool();
+	struct pool *pool;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 	pthread_detach(pthread_self());
@@ -4887,8 +4906,9 @@ static void *longpoll_thread(void *userdata)
 	}
 
 	tq_pop(mythr->q, NULL);
+	pool = select_longpoll_pool();
 	if (!pool->hdr_path) {
-		applog(LOG_NOTICE, "No long-poll found on this server");
+		applog(LOG_WARNING, "No long-poll found on any pool server");
 		goto out;
 	}
 	hdr_path = pool->hdr_path;
@@ -4905,7 +4925,7 @@ static void *longpoll_thread(void *userdata)
 		if (pool->rpc_url[strlen(pool->rpc_url) - 1] != '/')
 			need_slash = true;
 
-		lp_url = malloc(strlen(pool->rpc_url) + strlen(copy_start) + 2);
+		lp_url = alloca(strlen(pool->rpc_url) + strlen(copy_start) + 2);
 		if (!lp_url)
 			goto out;
 
@@ -4913,7 +4933,7 @@ static void *longpoll_thread(void *userdata)
 	}
 
 	have_longpoll = true;
-	applog(LOG_NOTICE, "Long-polling activated for %s", lp_url);
+	applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
 
 	while (1) {
 		struct timeval start, end;
@@ -4978,9 +4998,8 @@ static void start_longpoll(void)
 
 static void restart_longpoll(void)
 {
-	if (want_longpoll && have_longpoll)
-		return;
-	stop_longpoll();
+	if (have_longpoll)
+		stop_longpoll();
 	if (want_longpoll)
 		start_longpoll();
 }
@@ -5966,30 +5985,8 @@ retry_pools:
 		}
 	}
 
-	/* If we want longpoll, enable it for the chosen default pool, or, if
-	 * the pool does not support longpoll, find the first one that does
-	 * and use its longpoll support */
-	if (want_longpoll) {
-		if (currentpool->hdr_path)
-			start_longpoll();
-		else {
-			for (i = 0; i < total_pools; i++) {
-				struct pool *pool;
-
-				pool = pools[i];
-				if (pool->hdr_path) {
-					struct pool *temp = currentpool;
-
-					currentpool = pool;
-					start_longpoll();
-					/* Not real blocking, but good enough */
-					sleep(1);
-					currentpool = temp;
-					break;
-				}
-			}
-		}
-	}
+	if (want_longpoll)
+		start_longpoll();
 
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
