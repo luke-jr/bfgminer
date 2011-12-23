@@ -3125,8 +3125,8 @@ static void write_config(FILE *fcfg)
 	fputs("\",\n\"temp-target\" : \"", fcfg);
 	for(i = 0; i < nDevs; i++)
 		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
-	fputs("\",\n", fcfg);
 #endif
+	fputs("\",\n", fcfg);
 	fprintf(fcfg, "\n\"algo\" : \"%s\"", algo_names[opt_algo]);
 	
 	/* Simple bool and int options */
