@@ -815,6 +815,7 @@ void gpu_autotune(int gpu, bool *enable)
 	ga = &cgpu->adl;
 
 	lock_adl();
+	ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity);
 	temp = __gpu_temp(ga);
 	newpercent = fanpercent = __gpu_fanpercent(ga);
 	unlock_adl();
@@ -864,11 +865,14 @@ void gpu_autotune(int gpu, bool *enable)
 		} else if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
 			newengine = ga->minspeed;
-		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
+		/* Only try to tune engine speed if the current performance level is at max */
+		} else if ((ga->lpActivity.iCurrentPerformanceLevel == ga->lpOdParameters.iNumberOfPerformanceLevels) &&
+			   (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal)) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
-		} else if (temp < ga->targettemp && engine < ga->maxspeed) {
+		} else if ((ga->lpActivity.iCurrentPerformanceLevel == ga->lpOdParameters.iNumberOfPerformanceLevels) &&
+			   (temp < ga->targettemp && engine < ga->maxspeed)) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
 			newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
