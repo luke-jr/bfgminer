@@ -2551,7 +2551,8 @@ void kill_work(void)
 	if (opt_debug)
 		applog(LOG_DEBUG, "Killing off longpoll thread");
 	thr = &thr_info[longpoll_thr_id];
-	thr_info_cancel(thr);
+	if (have_longpoll)
+		thr_info_cancel(thr);
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Killing off work thread");
