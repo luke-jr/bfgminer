@@ -4972,11 +4972,15 @@ static void *longpoll_thread(void *userdata)
 	}
 
 out:
-	have_longpoll = false;
-	tq_freeze(mythr->q);
 	if (curl)
 		curl_easy_cleanup(curl);
 
+	/* Wait indefinitely if longpoll is flagged as existing, thus making
+	 * this thread only die if killed from elsewhere, usually in
+	 * thr_info_cancel */
+	if (have_longpoll)
+		tq_pop(mythr->q, NULL);
+	tq_freeze(mythr->q);
 	return NULL;
 }
 
@@ -4986,6 +4990,7 @@ static void stop_longpoll(void)
 
 	thr_info_cancel(thr);
 	have_longpoll = false;
+	tq_freeze(thr->q);
 }
 
 static void start_longpoll(void)
