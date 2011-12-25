@@ -681,7 +681,7 @@ void thr_info_cancel(struct thr_info *thr)
 	if (thr->q)
 		tq_freeze(thr->q);
 	if (thr->pth) {
-			if (pthread_cancel(thr->pth))
+			if (!pthread_cancel(thr->pth))
 				pthread_join(thr->pth, NULL);
 			thr->pth = 0L;
 	}
