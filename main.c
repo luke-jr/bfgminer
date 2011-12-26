@@ -3099,37 +3099,39 @@ static void write_config(FILE *fcfg)
 		}
 	fputs("\n],\n\n", fcfg);
 
-	/* Write GPU device values */
-	fputs("\"intensity\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
+	if (nDevs) {
+		/* Write GPU device values */
+		fputs("\"intensity\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
 #ifdef HAVE_ADL
-	fputs("\",\n\"gpu-engine\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_engine, gpus[i].gpu_engine);	
-	fputs("\",\n\"gpu-fan\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_fan, gpus[i].gpu_fan);
-	fputs("\",\n\"gpu-memclock\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memclock);
-	fputs("\",\n\"gpu-powertune\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_powertune);
-	fputs("\",\n\"gpu-vddc\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, "%s%1.3f", i > 0 ? "," : "", gpus[i].gpu_vddc);
-	fputs("\",\n\"temp-cutoff\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.cutofftemp);
-	fputs("\",\n\"temp-overheat\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
-	fputs("\",\n\"temp-target\" : \"", fcfg);
-	for(i = 0; i < nDevs; i++)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
+		fputs("\",\n\"gpu-engine\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_engine, gpus[i].gpu_engine);
+		fputs("\",\n\"gpu-fan\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_fan, gpus[i].gpu_fan);
+		fputs("\",\n\"gpu-memclock\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memclock);
+		fputs("\",\n\"gpu-powertune\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_powertune);
+		fputs("\",\n\"gpu-vddc\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%1.3f", i > 0 ? "," : "", gpus[i].gpu_vddc);
+		fputs("\",\n\"temp-cutoff\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.cutofftemp);
+		fputs("\",\n\"temp-overheat\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
+		fputs("\",\n\"temp-target\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
 #endif
-	fputs("\",\n", fcfg);
+		fputs("\",\n", fcfg);
+	}
 	fprintf(fcfg, "\n\"algo\" : \"%s\"", algo_names[opt_algo]);
 	
 	/* Simple bool and int options */
