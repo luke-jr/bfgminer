@@ -3949,7 +3949,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
 		if (!pinging)
-			applog(LOG_WARNING, "Pool down, URL or credentials invalid");
+			applog(LOG_WARNING, "Pool %u slow/down or URL or credentials invalid", pool->pool_no);
 	}
 
 	curl_easy_cleanup(curl);
