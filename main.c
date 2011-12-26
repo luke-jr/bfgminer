@@ -4846,7 +4846,7 @@ out:
 #endif /* HAVE_OPENCL */
 
 /* Stage another work item from the work returned in a longpoll */
-static void convert_to_work(json_t *val, bool rolltime)
+static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 {
 	struct work *work;
 	bool rc;
@@ -4858,7 +4858,7 @@ static void convert_to_work(json_t *val, bool rolltime)
 		applog(LOG_ERR, "Could not convert longpoll data to work");
 		return;
 	}
-	work->pool = current_pool();
+	work->pool = pool;
 	work->rolltime = rolltime;
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
@@ -4951,7 +4951,7 @@ static void *longpoll_thread(void *userdata)
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool);
 		if (likely(val)) {
-			convert_to_work(val, rolltime);
+			convert_to_work(val, rolltime, pool);
 			failures = 0;
 			json_decref(val);
 		} else {
