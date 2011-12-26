@@ -1239,28 +1239,28 @@ static char *set_gpu_memdiff(char *arg)
 {
 	int i, val = 0, device = 0;
 	char *nextptr;
-	
+
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu memdiff";
 	val = atoi(nextptr);
 	if (val < -9999 || val > 9999)
 		return "Invalid value passed to set_gpu_memdiff";
-	
+
 	gpus[device++].gpu_memdiff = val;
-	
+
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 		if (val < -9999 || val > 9999)
 			return "Invalid value passed to set_gpu_memdiff";
-		
+
 		gpus[device++].gpu_memdiff = val;
 	}
 		if (device == 1) {
 			for (i = device; i < MAX_GPUDEVICES; i++)
 				gpus[i].gpu_memdiff = gpus[0].gpu_memdiff;
 		}
-		
+
 			return NULL;
 }
 
@@ -3089,7 +3089,7 @@ static void remove_pool(struct pool *pool)
 static void write_config(FILE *fcfg)
 {
 	int i;
-	
+
 	/* Write pool values */
 	fputs("{\n\"pools\" : [", fcfg);
 	for(i = 0; i < total_pools; i++) {
@@ -3133,7 +3133,7 @@ static void write_config(FILE *fcfg)
 		fputs("\",\n", fcfg);
 	}
 	fprintf(fcfg, "\n\"algo\" : \"%s\"", algo_names[opt_algo]);
-	
+
 	/* Simple bool and int options */
 	struct opt_table *opt;
 	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
@@ -3141,12 +3141,12 @@ static void write_config(FILE *fcfg)
 		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
 			if (p[1] != '-')
 				continue;
-			if (opt->type & OPT_NOARG && 
+			if (opt->type & OPT_NOARG &&
 			   ((void *)opt->cb == (void *)opt_set_bool || (void *)opt->cb == (void *)opt_set_invbool) &&
 			   (*(bool *)opt->u.arg == ((void *)opt->cb == (void *)opt_set_bool)))
 				fprintf(fcfg, ",\n\"%s\" : true", p+2);
-			
-			if (opt->type & OPT_HASARG &&  
+
+			if (opt->type & OPT_HASARG &&
 			   ((void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
 			   (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
 			   (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
@@ -3167,7 +3167,7 @@ static void write_config(FILE *fcfg)
 #if defined(unix)
 	if (opt_stderr_cmd && *opt_stderr_cmd)
 		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", opt_stderr_cmd);
-#endif // defined(unix)	
+#endif // defined(unix)
 	if (opt_kernel && *opt_kernel)
 		fprintf(fcfg, ",\n\"kernel\" : \"%s\"", opt_kernel);
 	if (opt_kernel_path && *opt_kernel_path) {

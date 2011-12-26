@@ -244,7 +244,7 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 	int tcp_keepcnt = 5;
 	int tcp_keepidle = 120;
 	int tcp_keepintvl = 120;
-	
+
 #ifndef WIN32
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
@@ -269,7 +269,7 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 # endif /* __APPLE_CC__ */
 
 #else /* WIN32 */
-	
+
 	struct tcp_keepalive vals;
 	vals.onoff = 1;
 	vals.keepalivetime = tcp_keepidle * 1000;
@@ -279,7 +279,7 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 
 	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
 		return 1;
-	
+
 #endif /* WIN32 */
 
 	return 0;
@@ -374,7 +374,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	if (probing) {
 		pool->probed = true;
 		/* If X-Long-Polling was found, activate long polling */
-		if (hi.lp_path) 
+		if (hi.lp_path)
 			pool->hdr_path = hi.lp_path;
 		else
 			pool->hdr_path = NULL;

@@ -82,7 +82,7 @@ unsigned int ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
 	uint32_t nonce)
 {
     unsigned int *nNonce_p = (unsigned int*)(pdata + 12);
-    
+
     work_restart[thr_id].restart = 0;
 
     for (;;)
@@ -102,7 +102,7 @@ unsigned int ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
 
                 for (i = 0; i < 32/4; i++)
                     ((unsigned int*)phash)[i] = thash[i][j];
-                
+
 		if (fulltest(phash, ptarget)) {
 			*nHashesDone = nonce;
 			*nNonce_p = nonce + j;
@@ -138,7 +138,7 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
 
     /* nonce offset for vector */
     vector unsigned int offset = (vector unsigned int)(0, 1, 2, 3);
-    
+
     preNonce = vec_add((vector unsigned int)(In[3],In[3],In[3],In[3]), offset);
 
    for(k = 0; k<NPAR; k+=4)

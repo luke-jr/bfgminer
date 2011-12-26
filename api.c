@@ -993,7 +993,7 @@ void api(void)
 						send_result(c, isjson);
 						did = true;
 					}
-					else { 
+					else {
 						json_val = json_object_get(json_config, JSON_COMMAND);
 						if (json_val == NULL) {
 							strcpy(io_buffer, message(MSG_MISSCMD, 0, isjson));
