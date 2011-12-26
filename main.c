@@ -2060,7 +2060,7 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, logstart - 1, 0, '-', 80);
 	mvwprintw(statuswin, gpucursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
-		opt_g_threads ? "[G]PU management " : "");
+		gpu_threads ? "[G]PU management " : "");
 	/* The window will be updated once we're done with all the devices */
 	wnoutrefresh(statuswin);
 }
@@ -3722,7 +3722,7 @@ static void *input_thread(void *userdata)
 			display_pools();
 		else if (!strncasecmp(&input, "s", 1))
 			set_options();
-		else if (!strncasecmp(&input, "g", 1))
+		else if (gpu_threads && !strncasecmp(&input, "g", 1))
 			manage_gpu();
 		if (opt_realquiet) {
 			disable_curses();
