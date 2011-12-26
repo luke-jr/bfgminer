@@ -2026,8 +2026,10 @@ static void text_print_status(int thr_id)
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	char logline[255];
 
-	get_statline(logline, cgpu);
-	printf("%s\n", logline);
+	if (cgpu) {
+		get_statline(logline, cgpu);
+		printf("%s\n", logline);
+	}
 }
 
 /* Must be called with curses mutex lock held and curses_active */
@@ -5339,8 +5341,10 @@ static void log_print_status(int thr_id)
 	char logline[255];
 
 	cgpu = thr_info[thr_id].cgpu;
-	get_statline(logline, cgpu);
-	applog(LOG_WARNING, "%s", logline);
+	if (cgpu) {
+		get_statline(logline, cgpu);
+		applog(LOG_WARNING, "%s", logline);
+	}
 }
 
 static void print_summary(void)
