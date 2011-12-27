@@ -2081,13 +2081,16 @@ static void curses_print_devstatus(int thr_id)
 			int gp = gpu_fanpercent(gpu);
 
 			if (gt != -1)
-				wprintw(statuswin, "%.1fC ", gt);
+				wprintw(statuswin, "%5.1fC ", gt);
+			else
+				wprintw(statuswin, "       ");
 			if (gf != -1)
 				wprintw(statuswin, "%4dRPM ", gf);
 			else if (gp != -1)
-				wprintw(statuswin, "%2d%% ", gp);
-			if (gt > -1 || gf > -1 || gp > -1)
-				wprintw(statuswin, "| ");
+				wprintw(statuswin, "%3d%%    ", gp);
+			else
+				wprintw(statuswin, "        ");
+			wprintw(statuswin, "| ");
 		}
 #endif
 		if (cgpu->status == LIFE_DEAD)
@@ -2095,10 +2098,10 @@ static void curses_print_devstatus(int thr_id)
 		else if (cgpu->status == LIFE_SICK)
 			wprintw(statuswin, "SICK ");
 		else  if (!gpu_devices[gpu])
-			wprintw(statuswin, "DISABLED ");
+			wprintw(statuswin, "OFF  ");
 		else
-			wprintw(statuswin, "%.1f", cgpu->rolling);
-		wprintw(statuswin, "/%.1fMh/s | A:%d R:%d HW:%d U:%.2f/m I:%d",
+			wprintw(statuswin, "%5.1f", cgpu->rolling);
+		wprintw(statuswin, "/%5.1fMh/s | A:%d R:%d HW:%d U:%.2f/m I:%d",
 			cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, gpus[gpu].intensity);
@@ -2109,7 +2112,7 @@ static void curses_print_devstatus(int thr_id)
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: %.2f/%.2fMh/s | A:%d R:%d U:%.2f/m",
+		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: %5.2f/%5.2fMh/s | A:%d R:%d U:%.2f/m",
 			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected,
 			cgpu->utility);
