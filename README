@@ -280,6 +280,18 @@ dedicated to this program,
 	http://forum.bitcoin.org/index.php?topic=28402.0
 
 The output line shows the following:
+(5s):1713.6 (avg):1707.8 Mh/s | Q:301  A:729  R:8  HW:0  E:242%  U:22.53/m
+
+Each column is as folloss:
+A 5 second exponentially decaying average hash rate
+An all time average hash rate
+The number of requested (Queued) work items from the pools
+The number of Accepted shares
+The number of Rejected shares
+The number of HardWare erorrs
+The Efficiency defined as number of shares returned / work item
+The Utility defines as the number of shares / minute
+
  GPU 1: 73.5C 2551RPM | 427.3/443.0Mh/s | A:8 R:0 HW:0 U:4.39/m
 
 Each column is as follows:
@@ -644,7 +656,11 @@ and you will find you may need to overclock your GPU less aggressively. The
 software cannot be responsible and make your GPU hang directly. If you simply
 cannot get it to ever stop hanging, try decreasing the intensity, and if even
 that fails, try changing to the poclbm kernel with -k poclbm, though you will
-sacrifice performance.
+sacrifice performance. cgminer is designed to try and safely restart GPUs as
+much as possible, but NOT if that restart might actually crash the rest of the
+GPUs mining, or even the machine. It tries to restart them with a separate
+thread and if that separate thread dies, it gives up trying to restart any more
+GPUs.
 
 Q: Work keeps going to my backup pool even though my primary pool hasn't
 failed?
@@ -678,10 +694,19 @@ any further.
 
 Q: Can you change the autofan/autogpu to change speeds in a different manner?
 A: The defaults are sane and safe. I'm not interested in changing them
-further.
+further. The starting fan speed is set to 85% in auto-fan mode as a safety
+precaution, but if a specific fan speed has been set, it will use that first
+before adjusting automatically.
+
+Q: Why is my efficiency above/below 100%?
+A: Efficiency simply means how many shares you return for the amount of work
+you request. It does not correlate with efficient use of your hardware, and is
+a measure of a combination of hardware speed, block luck, pool design and other
+factors.
 
 Q: GUI version?
-A: No.
+A: No. The RPC interface makes it possible for someone else to write one
+though.
 
 ---
 
