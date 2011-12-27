@@ -237,6 +237,12 @@ struct cgpu_info {
 #endif
 };
 
+#ifndef WIN32
+#define PTH(thr) ((thr)->pth)
+#else
+#define PTH(thr) ((thr)->pth.p)
+#endif
+
 struct thread_q {
 	struct list_head	q;
 

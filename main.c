@@ -3785,7 +3785,7 @@ static void *api_thread(void *userdata)
 
 	api();
 
-	mythr->pth = 0L;
+	PTH(mythr) = 0L;
 
 	return NULL;
 }
@@ -4925,7 +4925,7 @@ static void *longpoll_thread(void *userdata)
 
 	pool = select_longpoll_pool();
 new_longpoll:
-	if (!pool->hdr_path) {
+	if (!pool) {
 		applog(LOG_WARNING, "No long-poll found on any pool server");
 		goto out;
 	}

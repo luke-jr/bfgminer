@@ -282,7 +282,7 @@ dedicated to this program,
 The output line shows the following:
 (5s):1713.6 (avg):1707.8 Mh/s | Q:301  A:729  R:8  HW:0  E:242%  U:22.53/m
 
-Each column is as folloss:
+Each column is as follows:
 A 5 second exponentially decaying average hash rate
 An all time average hash rate
 The number of requested (Queued) work items from the pools
