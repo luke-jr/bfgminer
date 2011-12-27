@@ -1,3 +1,26 @@
+Version 2.1.0 - December 27, 2012
+
+- Major infrastructure upgrade with RPC interface for controlling via sockets
+encoded with/without JSON courtesy of Andrew Smith. Added documentation for
+use of the API and sample code to use with it.
+- Updated linux-usb-cgminer document.
+- Rewrite of longpoll mechanism to choose the current pool wherever possible to
+use for the longpoll, or any pool that supports longpoll if the current one
+does not.
+- Display information about longpoll when the chosen server has changed.
+- Fix the bug where longpoll generated work may have been sent back to the
+wrong pool, causing rejects.
+- Fix a few race conditions on closing cgminer which caused some of the crashes
+on exit.
+- Only adjust gpu engine speed in autotune mode if the gpu is currently at the
+performance level of that being adjusted.
+- Various fixes for parsing/writing of configuration files.
+- Do not add blank lines for threads of unused CPUs.
+- Show which pool is unresponsive on startup.
+- Only show GPU management menu item if GPUs are in use.
+- Align most device columns in the curses display.
+
+
 Version 2.0.8 - November 11, 2011
 
 - Make longpoll do a mandatory flushing of all work even if the block hasn't
