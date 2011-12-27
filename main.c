@@ -2732,8 +2732,6 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
-static void restart_longpoll(void);
-
 static void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -2786,12 +2784,8 @@ static void switch_pools(struct pool *selected)
 	pool = currentpool;
 	mutex_unlock(&control_lock);
 
-	if (pool != last_pool) {
+	if (pool != last_pool)
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
-		/* Only switch longpoll if the new pool also supports LP */
-		if (pool->hdr_path)
-			restart_longpoll();
-	}
 
 	/* Reset the queued amount to allow more to be queued for the new pool */
 	mutex_lock(&qd_lock);
@@ -3395,6 +3389,9 @@ retry:
 	opt_loginput = false;
 }
 
+static void start_longpoll(void);
+static void stop_longpoll(void);
+
 static void set_options(void)
 {
 	int selected;
@@ -3421,7 +3418,11 @@ retry:
 	} else if (!strncasecmp(&input, "l", 1)) {
 		want_longpoll ^= true;
 		applog(LOG_WARNING, "Longpoll %s", want_longpoll ? "enabled" : "disabled");
-		restart_longpoll();
+		if (!want_longpoll) {
+			if (have_longpoll)
+				stop_longpoll();
+		} else
+			start_longpoll();
 		goto retry;
 	} else if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
@@ -4898,12 +4899,15 @@ static struct pool *select_longpoll_pool(void)
 
 static void *longpoll_thread(void *userdata)
 {
-	struct thr_info *mythr = userdata;
-	CURL *curl = NULL;
 	char *copy_start, *hdr_path, *lp_url = NULL;
+	struct thr_info *mythr = userdata;
+	struct timeval start, end;
 	bool need_slash = false;
+	struct pool *sp, *pool;
+	CURL *curl = NULL;
 	int failures = 0;
-	struct pool *pool;
+	bool rolltime;
+	json_t *val;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 	pthread_detach(pthread_self());
@@ -4915,7 +4919,9 @@ static void *longpoll_thread(void *userdata)
 	}
 
 	tq_pop(mythr->q, NULL);
+
 	pool = select_longpoll_pool();
+new_longpoll:
 	if (!pool->hdr_path) {
 		applog(LOG_WARNING, "No long-poll found on any pool server");
 		goto out;
@@ -4926,15 +4932,13 @@ static void *longpoll_thread(void *userdata)
 	if (strstr(hdr_path, "://")) {
 		lp_url = hdr_path;
 		hdr_path = NULL;
-	}
-
-	/* absolute path, on current server */
-	else {
+	} else {
+		/* absolute path, on current server */
 		copy_start = (*hdr_path == '/') ? (hdr_path + 1) : hdr_path;
 		if (pool->rpc_url[strlen(pool->rpc_url) - 1] != '/')
 			need_slash = true;
 
-		lp_url = alloca(strlen(pool->rpc_url) + strlen(copy_start) + 2);
+		lp_url = malloc(strlen(pool->rpc_url) + strlen(copy_start) + 2);
 		if (!lp_url)
 			goto out;
 
@@ -4945,10 +4949,6 @@ static void *longpoll_thread(void *userdata)
 	applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
 
 	while (1) {
-		struct timeval start, end;
-		bool rolltime;
-		json_t *val;
-
 		gettimeofday(&start, NULL);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool);
@@ -4965,14 +4965,21 @@ static void *longpoll_thread(void *userdata)
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
 			if (opt_retries == -1 || failures++ < opt_retries) {
-				sleep(30);
 				applog(LOG_WARNING,
 					"longpoll failed for %s, sleeping for 30s", lp_url);
+				sleep(30);
 			} else {
 				applog(LOG_ERR,
 					"longpoll failed for %s, ending thread", lp_url);
 				goto out;
 			}
+		}
+		sp = select_longpoll_pool();
+		if (sp != pool) {
+			if (likely(lp_url))
+				free(lp_url);
+			pool = sp;
+			goto new_longpoll;
 		}
 	}
 
@@ -4980,11 +4987,6 @@ out:
 	if (curl)
 		curl_easy_cleanup(curl);
 
-	/* Wait indefinitely if longpoll is flagged as existing, thus making
-	 * this thread only die if killed from elsewhere, usually in
-	 * thr_info_cancel */
-	if (have_longpoll)
-		tq_pop(mythr->q, NULL);
 	tq_freeze(mythr->q);
 	return NULL;
 }
@@ -5008,14 +5010,6 @@ static void start_longpoll(void)
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing ping to longpoll thread");
 	tq_push(thr_info[longpoll_thr_id].q, &ping);
-}
-
-static void restart_longpoll(void)
-{
-	if (have_longpoll)
-		stop_longpoll();
-	if (want_longpoll)
-		start_longpoll();
 }
 
 static void *reinit_cpu(void *userdata)

@@ -669,9 +669,7 @@ int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (
 {
 	int ret;
 
-	mutex_lock(&control_lock);
 	ret = pthread_create(&thr->pth, attr, start, arg);
-	mutex_unlock(&control_lock);
 	return ret;
 }
 
@@ -683,14 +681,11 @@ void thr_info_cancel(struct thr_info *thr)
 	if (thr->q)
 		tq_freeze(thr->q);
 
-	/* control_lock protects thr->pth */
-	mutex_lock(&control_lock);
 	if (thr->pth) {
 			if (!pthread_cancel(thr->pth))
 				pthread_join(thr->pth, NULL);
 			thr->pth = 0L;
 	}
-	mutex_unlock(&control_lock);
 }
 
 bool get_dondata(char **url, char **userpass)

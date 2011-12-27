@@ -453,7 +453,6 @@ extern int total_getworks, total_stale, total_discarded;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
 extern int opt_log_interval;
-extern pthread_mutex_t control_lock;
 
 #ifdef HAVE_OPENCL
 typedef struct {
