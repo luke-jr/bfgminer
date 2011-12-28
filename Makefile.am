@@ -8,7 +8,8 @@ JANSSON_INCLUDES=
 endif
 
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
-		  ADL_SDK/readme.txt
+		  ADL_SDK/readme.txt api-example.php miner.php	\
+		  API.class API.java api-example.c
 
 SUBDIRS		= lib compat ccan
 
