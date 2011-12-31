@@ -5329,6 +5329,11 @@ static void *watchdog_thread(void *userdata)
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 && gpus[i].status == LIFE_SICK) {
 				/* Attempt to restart a GPU once every minute */
 				gettimeofday(&thr->sick, NULL);
+#ifdef HAVE_ADL
+				if (adl_active && gpus[gpu].has_adl && gpu_activity(gpu) > 50) {
+					/* Again do not attempt to restart a device that may have hard hung */
+				} else
+#endif
 				if (opt_restart)
 					reinit_device(thr->cgpu);
 			}
