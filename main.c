@@ -5326,8 +5326,10 @@ static void *watchdog_thread(void *userdata)
 			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
 				gpus[gpu].status = LIFE_DEAD;
 				applog(LOG_ERR, "Thread %d not responding for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
-			} else if (now.tv_sec - thr->sick.tv_sec > 60 && gpus[i].status == LIFE_SICK) {
-				/* Attempt to restart a GPU once every minute */
+				gettimeofday(&thr->sick, NULL);
+			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
+				   (gpus[i].status == LIFE_SICK || gpus[i].status == LIFE_DEAD)) {
+				/* Attempt to restart a GPU that's sick or dead once every minute */
 				gettimeofday(&thr->sick, NULL);
 #ifdef HAVE_ADL
 				if (adl_active && gpus[gpu].has_adl && gpu_activity(gpu) > 50) {
