@@ -5392,6 +5392,8 @@ static void print_summary(void)
 
 	applog(LOG_WARNING, "\nSummary of runtime statistics:\n");
 	applog(LOG_WARNING, "Started at %s", datestamp);
+	if (total_pools == 1)
+		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
 	if (opt_n_threads)
 		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
