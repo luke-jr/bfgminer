@@ -3219,6 +3219,8 @@ static void write_config(FILE *fcfg)
 		for(i = 0; i < nDevs; i++)
 			if (gpu_devices[i])
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
+	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
+		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
 	fputs("\n}", fcfg);
 }
 
@@ -3560,7 +3562,7 @@ retry:
 	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct cgpu_info *cgpu = &gpus[gpu];
 
-		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:2%d\n",
+		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
 			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, cgpu->intensity);
