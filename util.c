@@ -432,6 +432,7 @@ err_out:
 	curl_easy_reset(curl);
 	if (!successful_connect)
 		applog(LOG_DEBUG, "Failed to connect in json_rpc_call");
+	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	return NULL;
 }
 
