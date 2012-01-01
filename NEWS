@@ -1,4 +1,19 @@
-Version 2.1.0 - December 27, 2012
+Version 2.1.1 - January 2, 2012
+
+- Include API examples in distribution tarball.
+- Don't attempt to pthread_join when cancelling threads as they're already
+detached and doing so can lead to a segfault.
+- Give more generic message if slow pool at startup is the donation pool.
+- Continue to attempt restarting GPU threads if they're flagged dead at 1 min.
+intervals.
+- Don't attempt to restart sick flagged GPUs while they're still registering
+activity.
+- Make curl use fresh connections whenever there is any communication issue
+in case there are dead persistent connections preventing further comms from
+working.
+
+
+Version 2.1.0 - December 27, 2011
 
 - Major infrastructure upgrade with RPC interface for controlling via sockets
 encoded with/without JSON courtesy of Andrew Smith. Added documentation for
