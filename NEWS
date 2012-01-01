@@ -1,4 +1,4 @@
-Version 2.1.1 - January 2, 2012
+Version 2.1.1 - January 1, 2012
 
 - Include API examples in distribution tarball.
 - Don't attempt to pthread_join when cancelling threads as they're already
@@ -11,6 +11,8 @@ activity.
 - Make curl use fresh connections whenever there is any communication issue
 in case there are dead persistent connections preventing further comms from
 working.
+- Display pool in summary if only 1 pool.
+- Adjust column width of A/R/HW to be the maximum of any device and align them.
 
 
 Version 2.1.0 - December 27, 2011
