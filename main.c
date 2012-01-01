@@ -2075,8 +2075,16 @@ static void curses_print_status(void)
 	wnoutrefresh(statuswin);
 }
 
+static void adj_width(int var, int *length)
+{
+	if ((int)(log10(var) + 1) > *length)
+		(*length)++;
+}
+
 static void curses_print_devstatus(int thr_id)
 {
+	static int awidth = 1, rwidth = 1, hwwidth = 1;
+
 	if (thr_id >= 0 && thr_id < gpu_threads) {
 		int gpu = dev_from_id(thr_id);
 		struct cgpu_info *cgpu = &gpus[gpu];
@@ -2111,9 +2119,14 @@ static void curses_print_devstatus(int thr_id)
 			wprintw(statuswin, "OFF  ");
 		else
 			wprintw(statuswin, "%5.1f", cgpu->rolling);
-		wprintw(statuswin, "/%5.1fMh/s | A:%d R:%d HW:%d U:%.2f/m I:%d",
+		adj_width(cgpu->accepted, &awidth);
+		adj_width(cgpu->rejected, &rwidth);
+		adj_width(cgpu->hw_errors, &hwwidth);
+		wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%4.2f/m I:%2d",
 			cgpu->total_mhashes / total_secs,
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			awidth, cgpu->accepted,
+			rwidth, cgpu->rejected,
+			hwwidth, cgpu->hw_errors,
 			cgpu->utility, gpus[gpu].intensity);
 		wclrtoeol(statuswin);
 	} else if (thr_id >= gpu_threads) {
@@ -2122,9 +2135,12 @@ static void curses_print_devstatus(int thr_id)
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: %5.2f/%5.2fMh/s | A:%d R:%d U:%.2f/m",
+		adj_width(cgpu->accepted, &awidth);
+		adj_width(cgpu->rejected, &rwidth);
+		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: %5.2f/%5.2fMh/s | A:%*d R:%*d U:%4.2f/m",
 			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
-			cgpu->accepted, cgpu->rejected,
+			awidth, cgpu->accepted,
+			rwidth, cgpu->rejected,
 			cgpu->utility);
 		wclrtoeol(statuswin);
 	}
@@ -3544,7 +3560,7 @@ retry:
 	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct cgpu_info *cgpu = &gpus[gpu];
 
-		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
+		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:2%d\n",
 			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, cgpu->intensity);
