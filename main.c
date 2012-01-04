@@ -2425,7 +2425,7 @@ static inline struct pool *select_pool(bool lagging)
 	static int rotating_pool = 0;
 	struct pool *pool, *cp;
 
-	if (total_getworks && opt_donation > 0.0 && !donationpool.idle &&
+	if (!lagging && total_getworks && opt_donation > 0.0 && !donationpool.idle &&
 	   (float)donationpool.getwork_requested / (float)total_getworks < opt_donation / 100)
 		return &donationpool;
 
@@ -2470,9 +2470,18 @@ retry:
 	/* A single failure response here might be reported as a dead pool and
 	 * there may be temporary denied messages etc. falsely reporting
 	 * failure so retry a few times before giving up */
-	while (!val && retries++ < 3)
+	while (!val && retries++ < 3) {
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			    false, false, &work->rolltime, pool);
+		if (donor(pool) && !val) {
+			if (opt_debug)
+				applog(LOG_DEBUG, "Donor pool lagging");
+			pool = select_pool(true);
+			if (opt_debug)
+				applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
+			retries = 0;
+		}
+	}
 	if (unlikely(!val)) {
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 		goto out;
