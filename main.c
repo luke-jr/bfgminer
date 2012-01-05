@@ -3093,7 +3093,7 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Accepted shares: %d\n", pool->accepted);
 		wlog(" Rejected shares: %d\n", pool->rejected);
 		if (pool->accepted || pool->rejected)
-			wlog(" Reject ratio: %.1f\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
+			wlog(" Reject ratio: %.1f%%\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 		efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
 		wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
 
@@ -5433,7 +5433,7 @@ static void print_summary(void)
 	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
 	applog(LOG_WARNING, "Rejected shares: %d", total_rejected);
 	if (total_accepted || total_rejected)
-		applog(LOG_WARNING, "Reject ratio: %.1f", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
+		applog(LOG_WARNING, "Reject ratio: %.1f%%", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
 	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
 	applog(LOG_WARNING, "Efficiency (accepted / queued): %.0f%%", efficiency);
 	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min\n", utility);
@@ -5455,7 +5455,7 @@ static void print_summary(void)
 			applog(LOG_WARNING, " Accepted shares: %d", pool->accepted);
 			applog(LOG_WARNING, " Rejected shares: %d", pool->rejected);
 			if (pool->accepted || pool->rejected)
-				applog(LOG_WARNING, " Reject ratio: %.1f", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
+				applog(LOG_WARNING, " Reject ratio: %.1f%%", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 			efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
 			applog(LOG_WARNING, " Efficiency (accepted / queued): %.0f%%", efficiency);
 
