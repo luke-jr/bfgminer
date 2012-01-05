@@ -2083,7 +2083,7 @@ static void adj_width(int var, int *length)
 
 static void curses_print_devstatus(int thr_id)
 {
-	static int awidth = 1, rwidth = 1, hwwidth = 1;
+	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
 
 	if (thr_id >= 0 && thr_id < gpu_threads) {
 		int gpu = dev_from_id(thr_id);
@@ -2122,12 +2122,14 @@ static void curses_print_devstatus(int thr_id)
 		adj_width(cgpu->accepted, &awidth);
 		adj_width(cgpu->rejected, &rwidth);
 		adj_width(cgpu->hw_errors, &hwwidth);
-		wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%4.2f/m I:%2d",
+		adj_width(cgpu->utility, &uwidth);
+		wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%*.2f/m I:%2d",
 			cgpu->total_mhashes / total_secs,
 			awidth, cgpu->accepted,
 			rwidth, cgpu->rejected,
 			hwwidth, cgpu->hw_errors,
-			cgpu->utility, gpus[gpu].intensity);
+			uwidth + 3, cgpu->utility,
+			gpus[gpu].intensity);
 		wclrtoeol(statuswin);
 	} else if (thr_id >= gpu_threads) {
 		int cpu = dev_from_id(thr_id);
@@ -2137,11 +2139,12 @@ static void curses_print_devstatus(int thr_id)
 
 		adj_width(cgpu->accepted, &awidth);
 		adj_width(cgpu->rejected, &rwidth);
-		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: %5.2f/%5.2fMh/s | A:%*d R:%*d U:%4.2f/m",
+		adj_width(cgpu->utility, &uwidth);
+		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: %5.2f/%5.2fMh/s | A:%*d R:%*d U:%*.2f/m",
 			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
 			awidth, cgpu->accepted,
 			rwidth, cgpu->rejected,
-			cgpu->utility);
+			uwidth + 3, cgpu->utility);
 		wclrtoeol(statuswin);
 	}
 	wnoutrefresh(statuswin);
