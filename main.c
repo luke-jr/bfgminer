@@ -2425,9 +2425,12 @@ static inline struct pool *select_pool(bool lagging)
 	static int rotating_pool = 0;
 	struct pool *pool, *cp;
 
-	if (!lagging && total_getworks && opt_donation > 0.0 && !donationpool.idle &&
-	   (float)donationpool.getwork_requested / (float)total_getworks < opt_donation / 100)
-		return &donationpool;
+	if (total_getworks && opt_donation > 0.0 && !donationpool.idle &&
+	   (float)donationpool.getwork_requested / (float)total_getworks < opt_donation / 100) {
+		if (!lagging)
+			return &donationpool;
+		lagging = false;
+	}
 
 	cp = current_pool();
 
