@@ -1,3 +1,13 @@
+Version 2.1.2 - January 6, 2012
+
+- If api-description is specified, save it when writing the config file
+- Adjust utility width to be constant maximum as well.
+- Add percent signs to reject ratio outputs
+- Should the donation pool fail, don't make the fallover pool behave as though
+the primary pool is lagging.
+- Use an alternative pool should the donation getwork fail.
+
+
 Version 2.1.1 - January 1, 2012
 
 - Include API examples in distribution tarball.
