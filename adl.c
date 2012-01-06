@@ -212,6 +212,15 @@ void init_adl(int nDevs)
 			continue;
 		}
 
+		if (!gpus[gpu].enabled) {
+			gpus[i].gpu_engine =
+			gpus[i].gpu_memclock =
+			gpus[i].gpu_vddc =
+			gpus[i].gpu_fan =
+			gpus[i].gpu_powertune = 0;
+			continue;
+		}
+
 		gpus[gpu].has_adl = true;
 		/* Flag adl as active if any card is successfully activated */
 		adl_active = true;

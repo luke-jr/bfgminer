@@ -208,9 +208,28 @@ struct gpu_adl {
 };
 #endif
 
+struct cgpu_info;
+struct thr_info;
+
+struct device_api {
+	char*name;
+
+	// API-global functions
+	void (*api_detect)();
+
+	// Device-specific functions
+	void (*reinit_device)(struct cgpu_info*);
+	void (*get_statline)(char*, struct cgpu_info*);
+
+	// Thread-specific functions
+	void (*thread_start)(struct thr_info*);
+};
+
 struct cgpu_info {
-	int is_gpu;
-	int cpu_gpu;
+	int cgminer_id;
+	struct device_api *api;
+	int device_id;
+	bool enabled;
 	int accepted;
 	int rejected;
 	int hw_errors;
@@ -220,6 +239,8 @@ struct cgpu_info {
 	enum alive status;
 	char init[40];
 	struct timeval last_message_tv;
+
+	int threads;
 
 	bool dynamic;
 	int intensity;
@@ -431,6 +452,7 @@ extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, flo
 extern void api(void);
 
 #define MAX_GPUDEVICES 16
+#define MAX_DEVICES 32
 #define MAX_POOLS (32)
 
 extern int nDevs;
@@ -444,9 +466,10 @@ extern struct work_restart *work_restart;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
 extern double total_secs;
-extern bool gpu_devices[MAX_GPUDEVICES];
 extern int mining_threads;
 extern struct cgpu_info *cpus;
+extern int total_devices;
+extern struct cgpu_info *devices[];
 extern int total_pools;
 extern struct pool *pools[MAX_POOLS];
 extern const char *algo_names[];

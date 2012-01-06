@@ -1,6 +1,7 @@
 
 /*
  * Copyright 2011 Con Kolivas
+ * Copyright 2011 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -205,12 +206,14 @@ enum sha256_algos opt_algo = ALGO_C;
 #endif
 int nDevs;
 static int opt_g_threads = 2;
-static int opt_device;
-static int total_devices;
-bool gpu_devices[MAX_GPUDEVICES];
+static signed int devices_enabled = 0;
+static bool opt_removedisabled = false;
+int total_devices = 0;
+struct cgpu_info *devices[MAX_DEVICES];
+bool have_opencl = false;
 int gpu_threads;
 static bool forced_n_threads;
-int opt_n_threads;
+int opt_n_threads = -1;
 int mining_threads;
 int num_processors;
 bool use_curses = true;
@@ -1002,17 +1005,20 @@ static char *set_float_0_to_99(const char *arg, float *f)
 	return NULL;
 }
 
-static char *set_devices(const char *arg, int *i)
+static char *set_devices(char *arg)
 {
-	char *err = opt_set_intval(arg, i);
+	int i = strtol(arg, &arg, 0);
+	if (*arg) {
+		if (*arg == '?') {
+			devices_enabled = -1;
+			return NULL;
+		}
+		return "Invalid device number";
+	}
 
-	if (err)
-		return err;
-
-	if (*i < 0 || *i > 15)
-		return "Invalid GPU device number";
-	total_devices++;
-	gpu_devices[*i] = true;
+	if (i < 0 || i >= (sizeof(devices_enabled) * 8) - 1)
+		return "Invalid device number";
+	devices_enabled |= 1 << i;
 	return NULL;
 }
 
@@ -1545,10 +1551,10 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
 		     "Enable debug output"),
-#ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--device|-d",
-		     set_devices, NULL, &opt_device,
+		     set_devices, NULL, NULL,
 	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
+#ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
 			"Disable GPU mining even if suitable devices exist"),
@@ -1643,6 +1649,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--real-quiet",
 			opt_set_bool, &opt_realquiet,
 			"Disable all output"),
+	OPT_WITHOUT_ARG("--remove-disabled",
+		     opt_set_bool, &opt_removedisabled,
+	         "Remove disabled devices entirely, as if they didn't exist"),
 	OPT_WITH_ARG("--retries|-r",
 		     opt_set_intval, opt_show_intval, &opt_retries,
 		     "Number of times to retry before giving up, if JSON-RPC call fails (-1 means never)"),
@@ -1929,7 +1938,7 @@ err_out:
 
 static inline int dev_from_id(int thr_id)
 {
-	return thr_info[thr_id].cgpu->cpu_gpu;
+	return thr_info[thr_id].cgpu->device_id;
 }
 
 /* Make the change in the recent value adjust dynamically when the difference
@@ -1965,7 +1974,7 @@ static int requests_staged(void)
 static WINDOW *mainwin, *statuswin, *logwin;
 double total_secs = 0.1;
 static char statusline[256];
-static int cpucursor, gpucursor, logstart, logcursor;
+static int devcursor, logstart, logcursor;
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
@@ -2001,24 +2010,7 @@ static void tailsprintf(char *f, const char *fmt, ...)
 
 static void get_statline(char *buf, struct cgpu_info *cgpu)
 {
-	sprintf(buf, "%sPU%d ", cgpu->is_gpu ? "G" : "C", cgpu->cpu_gpu);
-#ifdef HAVE_ADL
-	if (cgpu->has_adl) {
-		int gpu = cgpu->cpu_gpu;
-		float gt = gpu_temp(gpu);
-		int gf = gpu_fanspeed(gpu);
-		int gp = gpu_fanpercent(gpu);
-
-		if (gt != -1)
-			tailsprintf(buf, "%.1fC ", gt);
-		if (gf != -1)
-			tailsprintf(buf, "%dRPM ", gf);
-		else if (gp != -1)
-			tailsprintf(buf, "%d%% ", gp);
-		if (gt > -1 || gf > -1 || gp > -1)
-			tailsprintf(buf, "| ");
-	}
-#endif
+	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
 	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.2f/m",
 		opt_log_interval,
 		cgpu->rolling,
@@ -2027,8 +2019,8 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->rejected,
 		cgpu->hw_errors,
 		cgpu->utility);
-	if (cgpu->is_gpu)
-		tailsprintf(buf, " I:%d", cgpu->intensity);
+	if (cgpu->api->get_statline)
+		cgpu->api->get_statline(buf, cgpu);
 }
 
 static void text_print_status(int thr_id)
@@ -2069,8 +2061,8 @@ static void curses_print_status(void)
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s", current_hash, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, logstart - 1, 0, '-', 80);
-	mvwprintw(statuswin, gpucursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
-		gpu_threads ? "[G]PU management " : "");
+	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
+		have_opencl ? "[G]PU management " : "");
 	/* The window will be updated once we're done with all the devices */
 	wnoutrefresh(statuswin);
 }
@@ -2084,38 +2076,17 @@ static void adj_width(int var, int *length)
 static void curses_print_devstatus(int thr_id)
 {
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
-
-	if (thr_id >= 0 && thr_id < gpu_threads) {
-		int gpu = dev_from_id(thr_id);
-		struct cgpu_info *cgpu = &gpus[gpu];
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	char logline[255];
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		mvwprintw(statuswin, gpucursor + gpu, 0, " GPU %d: ", gpu);
-#ifdef HAVE_ADL
-		if (cgpu->has_adl) {
-			float gt = gpu_temp(gpu);
-			int gf = gpu_fanspeed(gpu);
-			int gp = gpu_fanpercent(gpu);
-
-			if (gt != -1)
-				wprintw(statuswin, "%5.1fC ", gt);
-			else
-				wprintw(statuswin, "       ");
-			if (gf != -1)
-				wprintw(statuswin, "%4dRPM ", gf);
-			else if (gp != -1)
-				wprintw(statuswin, "%3d%%    ", gp);
-			else
-				wprintw(statuswin, "        ");
-			wprintw(statuswin, "| ");
-		}
-#endif
+	mvwprintw(statuswin, devcursor + cgpu->cgminer_id, 0, " %s %d: ", cgpu->api->name, cgpu->device_id);
 		if (cgpu->status == LIFE_DEAD)
 			wprintw(statuswin, "DEAD ");
 		else if (cgpu->status == LIFE_SICK)
 			wprintw(statuswin, "SICK ");
-		else  if (!gpu_devices[gpu])
+	else if (!cgpu->enabled)
 			wprintw(statuswin, "OFF  ");
 		else
 			wprintw(statuswin, "%5.1f", cgpu->rolling);
@@ -2123,30 +2094,20 @@ static void curses_print_devstatus(int thr_id)
 		adj_width(cgpu->rejected, &rwidth);
 		adj_width(cgpu->hw_errors, &hwwidth);
 		adj_width(cgpu->utility, &uwidth);
-		wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%*.2f/m I:%2d",
+	wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
 			cgpu->total_mhashes / total_secs,
 			awidth, cgpu->accepted,
 			rwidth, cgpu->rejected,
 			hwwidth, cgpu->hw_errors,
-			uwidth + 3, cgpu->utility,
-			gpus[gpu].intensity);
-		wclrtoeol(statuswin);
-	} else if (thr_id >= gpu_threads) {
-		int cpu = dev_from_id(thr_id);
-		struct cgpu_info *cgpu = &cpus[cpu];
+		uwidth + 3, cgpu->utility);
 
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-
-		adj_width(cgpu->accepted, &awidth);
-		adj_width(cgpu->rejected, &rwidth);
-		adj_width(cgpu->utility, &uwidth);
-		mvwprintw(statuswin, cpucursor + cpu, 0, " CPU %d: %5.2f/%5.2fMh/s | A:%*d R:%*d U:%*.2f/m",
-			cpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
-			awidth, cgpu->accepted,
-			rwidth, cgpu->rejected,
-			uwidth + 3, cgpu->utility);
-		wclrtoeol(statuswin);
+	if (cgpu->api->get_statline) {
+		logline[0] = '\0';
+		cgpu->api->get_statline(logline, cgpu);
+		wprintw(statuswin, "%s", logline);
 	}
+
+		wclrtoeol(statuswin);
 	wnoutrefresh(statuswin);
 }
 
@@ -2365,14 +2326,14 @@ static bool submit_upstream_work(const struct work *work)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (donor(work->pool))
-				applog(LOG_NOTICE, "Accepted %s %sPU %d thread %d donate",
-				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+				applog(LOG_NOTICE, "Accepted %s %s %d thread %d donate",
+				       hashshow, cgpu->api->name, cgpu->device_id, thr_id);
 			else if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %sPU %d thread %d pool %d",
-				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Accepted %s %s %d thread %d pool %d",
+				       hashshow, cgpu->api->name, cgpu->device_id, thr_id, work->pool->pool_no);
 			else
-				applog(LOG_NOTICE, "Accepted %s %sPU %d thread %d",
-				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+				applog(LOG_NOTICE, "Accepted %s %s %d thread %d",
+				       hashshow, cgpu->api->name, cgpu->device_id, thr_id);
 		}
 		if (opt_shares && total_accepted >= opt_shares) {
 			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
@@ -2387,14 +2348,14 @@ static bool submit_upstream_work(const struct work *work)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
 			if (donor(work->pool))
-				applog(LOG_NOTICE, "Rejected %s %sPU %d thread %d donate",
-				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+				applog(LOG_NOTICE, "Rejected %s %s %d thread %d donate",
+				       hashshow, cgpu->api->name, cgpu->device_id, thr_id);
 			else if (total_pools > 1)
-				applog(LOG_NOTICE, "Rejected %s %sPU %d thread %d pool %d",
-				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Rejected %s %s %d thread %d pool %d",
+				       hashshow, cgpu->api->name, cgpu->device_id, thr_id, work->pool->pool_no);
 			else
-				applog(LOG_NOTICE, "Rejected %s %sPU %d thread %d",
-				       hashshow, cgpu->is_gpu? "G" : "C", cgpu->cpu_gpu, thr_id);
+				applog(LOG_NOTICE, "Rejected %s %s %d thread %d",
+				       hashshow, cgpu->api->name, cgpu->device_id, thr_id);
 		}
 	}
 
@@ -3228,11 +3189,11 @@ static void write_config(FILE *fcfg)
 	if (schedstop.enable)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	for(i = 0; i < nDevs; i++)
-		if (!gpu_devices[i])
+		if (!gpus[i].enabled)
 			break;
 	if (i < nDevs)
 		for(i = 0; i < nDevs; i++)
-			if (gpu_devices[i])
+			if (gpus[i].enabled)
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
@@ -3558,6 +3519,7 @@ retry:
 
 #ifdef HAVE_OPENCL
 void reinit_device(struct cgpu_info *cgpu);
+struct device_api opencl_api;
 
 static void manage_gpu(void)
 {
@@ -3626,7 +3588,7 @@ retry:
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
-			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, gpu_devices[gpu] ? "Enabled" : "Disabled");
+			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, cgpu->enabled ? "Enabled" : "Disabled");
 			switch (cgpu->status) {
 				default:
 				case LIFE_WELL:
@@ -3657,24 +3619,29 @@ retry:
 	else
 		selected = -1;
 	if (!strncasecmp(&input, "e", 1)) {
+		struct cgpu_info *cgpu;
+
 		if (selected)
 			selected = curses_int("Select GPU to enable");
 		if (selected < 0 || selected >= nDevs) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
-		if (gpu_devices[selected]) {
+		if (gpus[selected].enabled) {
 			wlogprint("Device already enabled\n");
 			goto retry;
 		}
-		gpu_devices[selected] = true;
-		for (i = 0; i < gpu_threads; i++) {
+		gpus[selected].enabled = true;
+		for (i = 0; i < mining_threads; ++i) {
+			thr = &thr_info[i];
+			cgpu = thr->cgpu;
+			if (cgpu->api != &opencl_api)
+				continue;
 			if (dev_from_id(i) != selected)
 				continue;
-			thr = &thr_info[i];
-			if (thr->cgpu->status != LIFE_WELL) {
+			if (cgpu->status != LIFE_WELL) {
 				wlogprint("Must restart device before enabling it");
-				gpu_devices[selected] = false;
+				gpus[selected].enabled = false;
 				goto retry;
 			}
 			if (opt_debug)
@@ -3690,11 +3657,11 @@ retry:
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
-		if (!gpu_devices[selected]) {
+		if (!gpus[selected].enabled) {
 			wlogprint("Device already disabled\n");
 			goto retry;
 		}
-		gpu_devices[selected] = false;
+		gpus[selected].enabled = false;
 		goto retry;
 	} else if (!strncasecmp(&input, "i", 1)) {
 		int intensity;
@@ -3778,7 +3745,7 @@ static void *input_thread(void *userdata)
 			display_pools();
 		else if (!strncasecmp(&input, "s", 1))
 			set_options();
-		else if (gpu_threads && !strncasecmp(&input, "g", 1))
+		else if (have_opencl && !strncasecmp(&input, "g", 1))
 			manage_gpu();
 		if (opt_realquiet) {
 			disable_curses();
@@ -4382,7 +4349,7 @@ static void *miner_thread(void *userdata)
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
 	if (!(opt_n_threads % num_processors))
-		affine_to_cpu(thr_id - gpu_threads, dev_from_id(thr_id));
+		affine_to_cpu(dev_from_id(thr_id), dev_from_id(thr_id) % num_processors);
 
 	/* Invalidate pool so it fails can_roll() test */
 	work->pool = NULL;
@@ -4881,7 +4848,7 @@ static void *gpuminer_thread(void *userdata)
 				requested = true;
 			}
 		}
-		if (unlikely(!gpu_devices[gpu] || mythr->pause)) {
+		if (unlikely(!gpus[gpu].enabled || mythr->pause)) {
 			applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 			mythr->rolling = mythr->cgpu->rolling = 0;
 			if (opt_debug)
@@ -5076,7 +5043,7 @@ static void *reinit_cpu(void *userdata)
 	pthread_detach(pthread_self());
 #if 0
 	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
-	int cpu = cgpu->cpu_gpu;
+	int cpu = cgpu->device_id;
 	long thr_id = ....(long)userdata;
 	struct thr_info *thr = &thr_info[thr_id];
 	int cpu = dev_from_id(thr_id);
@@ -5132,10 +5099,14 @@ select_cgpu:
 		goto out;
 	}
 
-	gpu = cgpu->cpu_gpu;
-	gpu_devices[gpu] = false;
+	gpu = cgpu->device_id;
+	cgpu->enabled = false;
 
-	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
+	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
+		thr = &thr_info[thr_id];
+		cgpu = thr->cgpu;
+		if (cgpu->api != &opencl_api)
+			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
 
@@ -5154,13 +5125,15 @@ select_cgpu:
 			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);
 	}
 
-	gpu_devices[gpu] = true;
+	cgpu->enabled = true;
 
-	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
+	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
+		thr = &thr_info[thr_id];
+		cgpu = thr->cgpu;
+		if (cgpu->api != &opencl_api)
+			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
-
-		thr = &thr_info[thr_id];
 
 		/* Lose this ram cause we may get stuck here! */
 		//tq_freeze(thr->q);
@@ -5190,11 +5163,14 @@ select_cgpu:
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
 
-	for (thr_id = 0; thr_id < gpu_threads; thr_id ++) {
+	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
+		thr = &thr_info[thr_id];
+		cgpu = thr->cgpu;
+		if (cgpu->api != &opencl_api)
+			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
 
-		thr = &thr_info[thr_id];
 		tq_push(thr->q, &ping);
 	}
 
@@ -5210,24 +5186,16 @@ static void *reinit_gpu(void *userdata)
 
 void reinit_device(struct cgpu_info *cgpu)
 {
-	if (cgpu->is_gpu)
-		tq_push(thr_info[gpur_thr_id].q, cgpu);
-	else
-		tq_push(thr_info[cpur_thr_id].q, cgpu);
+	if (cgpu->api->reinit_device)
+		cgpu->api->reinit_device(cgpu);
 }
 
 /* Determine which are the first threads belonging to a device and if they're
  * active */
 static bool active_device(int thr_id)
 {
-	if (thr_id < gpu_threads) {
-		if (thr_id >= total_devices)
-			return false;
-		if (!gpu_devices[dev_from_id(thr_id)])
-			return false;
-	} else if (thr_id > gpu_threads + num_processors)
-		return false;
-	return true;
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	return cgpu->enabled;
 }
 
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
@@ -5322,25 +5290,30 @@ static void *watchdog_thread(void *userdata)
 				struct thr_info *thr;
 				thr = &thr_info[i];
 
-				/* Don't touch disabled GPUs */
-				if (thr->cgpu->is_gpu && !gpu_devices[thr->cgpu->cpu_gpu])
+				/* Don't touch disabled devices */
+				if (!thr->cgpu->enabled)
 					continue;
 				thr->pause = false;
 				tq_push(thr->q, &ping);
 			}
 		}
 
-		for (i = 0; i < gpu_threads; i++) {
+#ifdef HAVE_OPENCL
+		for (i = 0; i < mining_threads; i++) {
 			struct thr_info *thr;
 			bool *enable;
+			struct cgpu_info *cgpu;
 			int gpu;
 
+			thr = &thr_info[i];
+			cgpu = thr->cgpu;
+			if (cgpu->api != &opencl_api)
+				continue;
 			/* Use only one thread per device to determine if the GPU is healthy */
 			if (i >= nDevs)
 				break;
-			thr = &thr_info[i];
-			gpu = thr->cgpu->cpu_gpu;
-			enable = &gpu_devices[gpu];
+			gpu = thr->cgpu->device_id;
+			enable = &cgpu->enabled;
 #ifdef HAVE_ADL
 			if (adl_active && gpus[gpu].has_adl && *enable)
 				gpu_autotune(gpu, enable);
@@ -5392,6 +5365,7 @@ static void *watchdog_thread(void *userdata)
 					reinit_device(thr->cgpu);
 			}
 		}
+#endif
 	}
 
 	return NULL;
@@ -5695,14 +5669,232 @@ static void enable_curses(void) {
 	unlock_curses();
 }
 
+
+struct device_api cpu_api;
+
+static void cpu_detect()
+{
+	int i;
+
+	// Reckon number of cores in the box
+	#if defined(WIN32)
+	{
+		DWORD system_am;
+		DWORD process_am;
+		BOOL ok = GetProcessAffinityMask(
+			GetCurrentProcess(),
+			&system_am,
+			&process_am
+		);
+		if (!ok) {
+			applog(LOG_ERR, "couldn't figure out number of processors :(");
+			num_processors = 1;
+		} else {
+			size_t n = 32;
+			num_processors = 0;
+			while (n--)
+				if (process_am & (1<<n))
+					++num_processors;
+		}
+	}
+	#else
+		num_processors = sysconf(_SC_NPROCESSORS_ONLN);
+	#endif /* !WIN32 */
+
+	if (opt_n_threads < 0 || !forced_n_threads) {
+		if (nDevs && !opt_usecpu)
+			opt_n_threads = 0;
+		else
+			opt_n_threads = num_processors;
+	}
+	if (num_processors < 1)
+		return;
+
+	if (total_devices + opt_n_threads > MAX_DEVICES)
+		opt_n_threads = MAX_DEVICES - total_devices;
+	cpus = calloc(opt_n_threads, sizeof(struct cgpu_info));
+	if (unlikely(!cpus))
+		quit(1, "Failed to calloc cpus");
+	for (i = 0; i < opt_n_threads; ++i) {
+		struct cgpu_info *cgpu;
+
+		cgpu = devices[total_devices + i] = &cpus[i];
+		cgpu->api = &cpu_api;
+		cgpu->enabled = true;
+		cgpu->device_id = i;
+		cgpu->threads = 1;
+	}
+	total_devices += opt_n_threads;
+}
+
+static void reinit_cpu_device(struct cgpu_info *cpu)
+{
+	tq_push(thr_info[cpur_thr_id].q, cpu);
+}
+
+static void cpu_thread_start(struct thr_info *thr)
+{
+	thread_reportin(thr);
+
+	if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+		quit(1, "thread %d create failed", thr->id);
+}
+
+struct device_api cpu_api = {
+	.name = "CPU",
+	.api_detect = cpu_detect,
+	.reinit_device = reinit_cpu_device,
+	.thread_start = cpu_thread_start,
+};
+
+
+#ifdef HAVE_OPENCL
+struct device_api opencl_api;
+
+static void opencl_detect()
+{
+	int i;
+
+	nDevs = clDevicesNum();
+	if (nDevs < 0) {
+		applog(LOG_ERR, "clDevicesNum returned error, none usable");
+		nDevs = 0;
+	}
+
+	if (MAX_DEVICES - total_devices < nDevs)
+		nDevs = MAX_DEVICES - total_devices;
+
+	if (!nDevs) {
+		return;
+	}
+
+	if (opt_kernel) {
+		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk"))
+			quit(1, "Invalid kernel name specified - must be poclbm or phatk");
+		if (!strcmp(opt_kernel, "poclbm"))
+			chosen_kernel = KL_POCLBM;
+		else
+			chosen_kernel = KL_PHATK;
+	} else
+		chosen_kernel = KL_NONE;
+
+	for (i = 0; i < nDevs; ++i) {
+		struct cgpu_info *cgpu;
+		cgpu = devices[total_devices++] = &gpus[i];
+		cgpu->enabled = true;
+		cgpu->api = &opencl_api;
+		cgpu->device_id = i;
+		cgpu->threads = opt_g_threads;
+	}
+}
+
+static void reinit_opencl_device(struct cgpu_info *gpu)
+{
+	tq_push(thr_info[gpur_thr_id].q, gpu);
+}
+
+static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
+{
+	tailsprintf(buf, " | I:%2d", gpu->intensity);
+#ifdef HAVE_ADL
+	if (gpu->has_adl) {
+		int gpuid = gpu->device_id;
+		float gt = gpu_temp(gpuid);
+		int gf = gpu_fanspeed(gpuid);
+		int gp;
+
+		if (gt != -1)
+			tailsprintf(buf, " %5.1fC ", gt);
+		else
+			tailsprintf(buf, "        ", gt);
+		if (gf != -1)
+			tailsprintf(buf, " %4dRPM", gf);
+		else if ((gp = gpu_fanpercent(gpuid)) != -1)
+			tailsprintf(buf, " %3d%%", gp);
+	}
+#endif
+}
+
+static void opencl_thread_start(struct thr_info *thr)
+{
+	char name[256];
+	struct timeval now;
+	struct cgpu_info *cgpu = thr->cgpu;
+	int gpu = cgpu->device_id;
+	int i = thr->id;
+	static bool failmessage = false;
+
+	/* Enable threads for devices set not to mine but disable
+	 * their queue in case we wish to enable them later*/
+	if (cgpu->enabled) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+
+		tq_push(thr->q, &ping);
+	}
+
+	applog(LOG_INFO, "Init GPU thread %i", i);
+	clStates[i] = initCl(gpu, name, sizeof(name));
+	if (!clStates[i]) {
+		enable_curses();
+		applog(LOG_ERR, "Failed to init GPU thread %d, disabling device %d", i, gpu);
+		if (!failmessage) {
+			char *buf;
+
+			applog(LOG_ERR, "Restarting the GPU from the menu is unlikely to fix this.");
+			applog(LOG_ERR, "Try stopping other applications using the GPU like afterburner.");
+			applog(LOG_ERR, "Then restart cgminer.");
+			failmessage = true;
+			buf = curses_input("Press enter to continue");
+			if (buf)
+				free(buf);
+		}
+		cgpu->enabled = false;
+		cgpu->status = LIFE_NOSTART;
+		return;
+	}
+	applog(LOG_INFO, "initCl() finished. Found %s", name);
+	gettimeofday(&now, NULL);
+	get_datestamp(cgpu->init, &now);
+
+	have_opencl = true;
+
+	if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr)))
+		quit(1, "thread %d create failed", i);
+}
+
+struct device_api opencl_api = {
+	.name = "GPU",
+	.api_detect = opencl_detect,
+	.reinit_device = reinit_opencl_device,
+	.get_statline = get_opencl_statline,
+	.thread_start = opencl_thread_start,
+};
+#endif
+
+
+static int cgminer_id_count = 0;
+
+void enable_device(struct cgpu_info *cgpu)
+{
+	cgpu->enabled = true;
+	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
+	mining_threads += cgpu->threads;
+#ifdef OPENCL
+	if (cgpu->api == &opencl_api) {
+		gpu_threads += cgpu->threads;
+	}
+#endif
+}
+
 int main (int argc, char *argv[])
 {
 	unsigned int i, pools_active = 0;
+	unsigned int j, k;
 	struct block *block, *tmpblock;
 	struct work *work, *tmpwork;
 	struct sigaction handler;
 	struct thr_info *thr;
-	char name[256];
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -5752,48 +5944,11 @@ int main (int argc, char *argv[])
 	HASH_ADD_STR(blocks, hash, block);
 	strcpy(current_block, block->hash);
 
-	// Reckon number of cores in the box
-	#if defined(WIN32)
+	memset(gpus, 0, sizeof(gpus));
+	for (i = 0; i < MAX_GPUDEVICES; i++)
+		gpus[i].dynamic = true;
 
-		DWORD system_am;
-		DWORD process_am;
-		BOOL ok = GetProcessAffinityMask(
-			GetCurrentProcess(),
-			&system_am,
-			&process_am
-		);
-		if (!ok) {
-			applog(LOG_ERR, "couldn't figure out number of processors :(");
-			num_processors = 1;
-		} else {
-			size_t n = 32;
-			num_processors = 0;
-			while (n--)
-				if (process_am & (1<<n))
-					++num_processors;
-		}
-
-	#else
-
-		num_processors = sysconf(_SC_NPROCESSORS_ONLN);
-
-	#endif /* !WIN32 */
-
-	opt_n_threads = num_processors;
-
-#ifdef HAVE_OPENCL
-	if (!skip_to_bench) {
-		for (i = 0; i < MAX_GPUDEVICES; i++) {
-			gpu_devices[i] = false;
-			gpus[i].dynamic = true;
-		}
-		nDevs = clDevicesNum();
-		if (nDevs < 0) {
-			applog(LOG_ERR, "clDevicesNum returned error, none usable");
-			nDevs = 0;
-		}
-	}
-#endif
+	memset(devices, 0, sizeof(devices));
 
 	/* parse command line */
 	opt_register_table(opt_config_table,
@@ -5809,12 +5964,6 @@ int main (int argc, char *argv[])
 		quit(1, "Unexpected extra commandline arguments");
 
 	applog(LOG_WARNING, "Started %s", packagename);
-
-	if (opt_nogpu)
-		nDevs = 0;
-
-	if (nDevs && !opt_usecpu)
-		opt_n_threads = 0;
 
 	strcat(opt_kernel_path, "/");
 
@@ -5857,63 +6006,50 @@ int main (int argc, char *argv[])
 		exit(0);
 	}
 
-	if (opt_kernel) {
-		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk"))
-			quit(1, "Invalid kernel name specified - must be poclbm or phatk");
-		if (!strcmp(opt_kernel, "poclbm"))
-			chosen_kernel = KL_POCLBM;
-		else
-			chosen_kernel = KL_PHATK;
-	} else
-		chosen_kernel = KL_NONE;
-
 #ifdef HAVE_OPENCL
-	gpu_threads = nDevs * opt_g_threads;
-	if (total_devices) {
-		if (total_devices > nDevs)
-			quit(1, "More devices specified than exist");
-		for (i = 0; i < MAX_GPUDEVICES; i++)
-			if (gpu_devices[i] && i + 1 > nDevs)
-				quit (1, "Command line options set a device that doesn't exist");
-#ifdef HAVE_ADL
-		for (i = 0; i < nDevs; i++) {
-			/* Make sure we do not attempt to adl manage devices
-			 * that we disable */
-			if (!gpu_devices[i])
-				gpus[i].gpu_engine =
-				gpus[i].gpu_memclock =
-				gpus[i].gpu_vddc =
-				gpus[i].gpu_fan =
-				gpus[i].gpu_powertune = 0;
+	if (!opt_nogpu)
+		opencl_api.api_detect();
+#endif
+
+	cpu_api.api_detect();
+
+	if (devices_enabled == -1) {
+		applog(LOG_ERR, "Devices detected:");
+		for (i = 0; i < total_devices; ++i) {
+			applog(LOG_ERR, " %2d. %s%d", i, devices[i]->api->name, devices[i]->device_id);
 		}
-#endif
+		quit(0, "%d devices listed", total_devices);
+	}
+
+	mining_threads = 0;
+	gpu_threads = 0;
+	if (devices_enabled) {
+		for (i = 0; i < (sizeof(devices_enabled) * 8) - 1; ++i) {
+			if (devices_enabled & (1 << i)) {
+				if (i >= total_devices)
+					quit (1, "Command line options set a device that doesn't exist");
+				enable_device(devices[i]);
+			} else if (i < total_devices) {
+				if (opt_removedisabled) {
+					if (devices[i]->api == &cpu_api)
+						--opt_n_threads;
+				} else {
+					enable_device(devices[i]);
+				}
+				devices[i]->enabled = false;
+			}
+		}
+		total_devices = cgminer_id_count;
 	} else {
-		for (i = 0; i < nDevs; i++)
-			gpu_devices[i] = true;
-		total_devices = nDevs;
-	}
-#else
-  gpu_threads = 0;
-#endif
-
-	if (!gpu_threads && !forced_n_threads) {
-		/* Maybe they turned GPU off; restore default CPU threads. */
-		opt_n_threads = num_processors;
+		for (i = 0; i < total_devices; ++i)
+			enable_device(devices[i]);
 	}
 
-	if (!opt_n_threads && ! gpu_threads)
+	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
 
-	logcursor = 8;
-	gpucursor = logcursor;
-	cpucursor = gpucursor + nDevs;
-	logstart = cpucursor + 1;
-	if (opt_n_threads) {
-		if (opt_n_threads < num_processors)
-			logstart += opt_n_threads;
-		else
-			logstart += num_processors;
-	}
+	devcursor = 8;
+	logstart = devcursor + total_devices + 1;
 	logcursor = logstart + 1;
 
 	if (opt_realquiet)
@@ -5961,8 +6097,6 @@ int main (int argc, char *argv[])
 			fork_monitor();
 	#endif // defined(unix)
 
-	mining_threads = opt_n_threads + gpu_threads;
-
 	total_threads = mining_threads + 8;
 	work_restart = calloc(total_threads, sizeof(*work_restart));
 	if (!work_restart)
@@ -5991,12 +6125,6 @@ int main (int argc, char *argv[])
 	thr->q = tq_new();
 	if (!thr->q)
 		quit(1, "Failed to tq_new");
-
-	if (opt_n_threads ) {
-		cpus = calloc(num_processors, sizeof(struct cgpu_info));
-		if (unlikely(!cpus))
-			quit(1, "Failed to calloc cpus");
-	}
 
 	stage_thr_id = mining_threads + 3;
 	thr = &thr_info[stage_thr_id];
@@ -6079,86 +6207,28 @@ retry_pools:
 #ifdef HAVE_OPENCL
 	if (!opt_noadl)
 		init_adl(nDevs);
-	bool failmessage = false;
-
-	/* start GPU mining threads */
-	for (i = 0; i < nDevs * opt_g_threads; i++) {
-		int gpu = i % nDevs;
-		struct cgpu_info *cgpu;
-		struct timeval now;
-
-		gpus[gpu].is_gpu = 1;
-		gpus[gpu].cpu_gpu = gpu;
-
-		thr = &thr_info[i];
-		thr->id = i;
-		cgpu = thr->cgpu = &gpus[gpu];
-
-		thr->q = tq_new();
-		if (!thr->q)
-			quit(1, "tq_new failed in starting gpu mining threads");
-
-		/* Enable threads for devices set not to mine but disable
-		 * their queue in case we wish to enable them later*/
-		if (gpu_devices[gpu]) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
-
-			tq_push(thr->q, &ping);
-		}
-
-		applog(LOG_INFO, "Init GPU thread %i", i);
-		clStates[i] = initCl(gpu, name, sizeof(name));
-		if (!clStates[i]) {
-			enable_curses();
-			applog(LOG_ERR, "Failed to init GPU thread %d, disabling device %d", i, gpu);
-			if (!failmessage) {
-				char *buf;
-
-				applog(LOG_ERR, "Restarting the GPU from the menu is unlikely to fix this.");
-				applog(LOG_ERR, "Try stopping other applications using the GPU like afterburner.");
-				applog(LOG_ERR, "Then restart cgminer.");
-				failmessage = true;
-				buf = curses_input("Press enter to continue");
-				if (buf)
-					free(buf);
-			}
-			gpu_devices[gpu] = false;
-			cgpu->status = LIFE_NOSTART;
-			continue;
-		}
-		applog(LOG_INFO, "initCl() finished. Found %s", name);
-		gettimeofday(&now, NULL);
-		get_datestamp(cgpu->init, &now);
-
-		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr)))
-			quit(1, "thread %d create failed", i);
-	}
-
-	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
 #else
 	opt_g_threads = 0;
 #endif
 
-	/* start CPU mining threads */
-	for (i = gpu_threads; i < mining_threads; i++) {
-		int cpu = (i - gpu_threads) % num_processors;
+	// Start threads
+	k = 0;
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = devices[i];
+		for (j = 0; j < cgpu->threads; ++j, ++k) {
+			thr = &thr_info[k];
+			thr->id = k;
+			thr->cgpu = cgpu;
 
-		thr = &thr_info[i];
+			thr->q = tq_new();
+			if (!thr->q)
+				quit(1, "tq_new failed in starting %s%d mining thread (#%d)", cgpu->api->name, cgpu->device_id, i);
 
-		thr->id = i;
-		cpus[cpu].cpu_gpu = cpu;
-		thr->cgpu = &cpus[cpu];
-
-		thr->q = tq_new();
-		if (!thr->q)
-			quit(1, "tq_new failed in starting cpu mining threads");
-
-		thread_reportin(thr);
-
-		if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
-			quit(1, "thread %d create failed", i);
+			cgpu->api->thread_start(thr);
+		}
 	}
+
+	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
 
 	applog(LOG_INFO, "%d cpu miner threads started, "
 		"using SHA256 '%s' algorithm.",
