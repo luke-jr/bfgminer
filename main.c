@@ -4323,230 +4323,149 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	return submit_work_sync(thr, work);
 }
 
+static inline bool abandon_work(int thr_id, struct work *work, struct timeval *wdiff, uint64_t hashes)
+{
+	if (wdiff->tv_sec > opt_scantime ||
+	    work->blk.nonce >= MAXTHREADS - hashes ||
+	    stale_work(work, false))
+		return true;
+	return false;
+}
+
 static void *miner_thread(void *userdata)
 {
-	struct work *work = make_work();
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
-	uint32_t max_nonce = 0xffffff, total_hashes = 0;
-	unsigned long hashes_done = max_nonce;
-	bool needs_work = true;
-	/* Try to cycle approximately 5 times before each log update */
-	const unsigned long cycle = opt_log_interval / 5 ? : 1;
-	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
-	bool requested = false;
-	uint32_t nonce_inc = max_nonce, hash_div = 1;
-	double hash_divfloat = 1.0;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_api *api = cgpu->api;
 
+	/* Try to cycle approximately 5 times before each log update */
+	const unsigned long def_cycle = opt_log_interval / 5 ? : 1;
+	unsigned long cycle;
+	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
+	struct timeval diff, sdiff, wdiff;
+	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
+	uint32_t hashes_done = 0;
+	uint32_t hashes;
+	struct work *work = make_work();
+	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
+	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
+	bool requested = false;
+	uint32_t hash_div = 1;
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
-	 * and if that fails, then SCHED_BATCH. No need for this to be an
-	 * error if it fails */
-	setpriority(PRIO_PROCESS, 0, 19);
-	drop_policy();
+	if (api->thread_init && !api->thread_init(mythr))
+		goto out;
 
-	/* Cpu affinity only makes sense if the number of threads is a multiple
-	 * of the number of CPUs */
-	if (!(opt_n_threads % num_processors))
-		affine_to_cpu(dev_from_id(thr_id), dev_from_id(thr_id) % num_processors);
+	if (opt_debug)
+		applog(LOG_DEBUG, "Popping ping in miner thread");
+	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
 
-	/* Invalidate pool so it fails can_roll() test */
-	work->pool = NULL;
+	sdiff.tv_sec = sdiff.tv_usec = 0;
+	gettimeofday(&tv_lastupdate, NULL);
 
 	while (1) {
-		struct timeval tv_workstart, tv_start, tv_end, diff;
-		uint64_t max64;
-		bool rc;
-
-		if (needs_work) {
-			gettimeofday(&tv_workstart, NULL);
-			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
-				applog(LOG_ERR, "work retrieval failed, exiting "
-					"mining thread %d", thr_id);
-				goto out;
-			}
-			needs_work = requested = false;
-			total_hashes = 0;
-			max_nonce = work->blk.nonce + hashes_done;
+		work_restart[thr_id].restart = 0;
+		if (api->free_work && likely(work->pool))
+			api->free_work(mythr, work);
+		if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
+			applog(LOG_ERR, "work retrieval failed, exiting "
+				"mining thread %d", thr_id);
+			break;
 		}
-		hashes_done = 0;
-		gettimeofday(&tv_start, NULL);
-
-		/* scan nonces for a proof-of-work hash */
-		switch (opt_algo) {
-		case ALGO_C:
-			rc = scanhash_c(thr_id, work->midstate, work->data + 64,
-				        work->hash1, work->hash, work->target,
-					max_nonce, &hashes_done,
-					work->blk.nonce);
+		requested = false;
+		cycle = (can_roll(work) && should_roll(work)) ? 1 : def_cycle;
+		gettimeofday(&tv_workstart, NULL);
+		work->blk.nonce = 0;
+		if (api->prepare_work && !api->prepare_work(mythr, work)) {
+			applog(LOG_ERR, "work prepare failed, exiting "
+				"mining thread %d", thr_id);
 			break;
-
-#ifdef WANT_X8632_SSE2
-		case ALGO_SSE2_32: {
-			unsigned int rc5 =
-			        scanhash_sse2_32(thr_id, work->midstate, work->data + 64,
-						 work->hash1, work->hash,
-						 work->target,
-					         max_nonce, &hashes_done,
-						 work->blk.nonce);
-			rc = (rc5 == -1) ? false : true;
-			}
-			break;
-#endif
-
-#ifdef WANT_X8664_SSE2
-		case ALGO_SSE2_64: {
-			unsigned int rc5 =
-			        scanhash_sse2_64(thr_id, work->midstate, work->data + 64,
-						 work->hash1, work->hash,
-						 work->target,
-					         max_nonce, &hashes_done,
-						 work->blk.nonce);
-			rc = (rc5 == -1) ? false : true;
-			}
-			break;
-#endif
-
-#ifdef WANT_X8664_SSE4
-		case ALGO_SSE4_64: {
-			unsigned int rc5 =
-			        scanhash_sse4_64(thr_id, work->midstate, work->data + 64,
-						 work->hash1, work->hash,
-						 work->target,
-					         max_nonce, &hashes_done,
-						 work->blk.nonce);
-			rc = (rc5 == -1) ? false : true;
-			}
-			break;
-#endif
-
-#ifdef WANT_SSE2_4WAY
-		case ALGO_4WAY: {
-			unsigned int rc4 =
-				ScanHash_4WaySSE2(thr_id, work->midstate, work->data + 64,
-						  work->hash1, work->hash,
-						  work->target,
-						  max_nonce, &hashes_done,
-						  work->blk.nonce);
-			rc = (rc4 == -1) ? false : true;
-			}
-			break;
-#endif
-
-#ifdef WANT_ALTIVEC_4WAY
-            case ALGO_ALTIVEC_4WAY:
-            {
-                unsigned int rc4 = ScanHash_altivec_4way(thr_id, work->midstate, work->data + 64,
-                        work->hash1, work->hash,
-                        work->target,
-                        max_nonce, &hashes_done,
-                        work->blk.nonce);
-                rc = (rc4 == -1) ? false : true;
-            }
-                break;
-#endif
-
-#ifdef WANT_VIA_PADLOCK
-		case ALGO_VIA:
-			rc = scanhash_via(thr_id, work->data, work->target,
-					  max_nonce, &hashes_done,
-					  work->blk.nonce);
-			break;
-#endif
-		case ALGO_CRYPTOPP:
-			rc = scanhash_cryptopp(thr_id, work->midstate, work->data + 64,
-				        work->hash1, work->hash, work->target,
-					max_nonce, &hashes_done,
-					work->blk.nonce);
-			break;
-
-#ifdef WANT_CRYPTOPP_ASM32
-		case ALGO_CRYPTOPP_ASM32:
-			rc = scanhash_asm32(thr_id, work->midstate, work->data + 64,
-				        work->hash1, work->hash, work->target,
-					max_nonce, &hashes_done,
-					work->blk.nonce);
-			break;
-#endif
-
-		default:
-			/* should never happen */
-			goto out;
 		}
 
-		/* record scanhash elapsed time */
-		gettimeofday(&tv_end, NULL);
-		timeval_subtract(&diff, &tv_end, &tv_start);
+		do {
+			gettimeofday(&tv_start, NULL);
 
-		hashes_done -= work->blk.nonce;
-		hashmeter(thr_id, &diff, hashes_done);
-		total_hashes += hashes_done;
-		work->blk.nonce += hashes_done;
-
-		/* adjust max_nonce to meet target cycle time */
-		if (diff.tv_usec > 500000)
-			diff.tv_sec++;
-		if (diff.tv_sec && diff.tv_sec != cycle) {
-			uint64_t next_inc = ((uint64_t)hashes_done * (uint64_t)cycle) / (uint64_t)diff.tv_sec;
-
-			if (next_inc > (uint64_t)nonce_inc / 2 * 3)
-				next_inc = nonce_inc / 2 * 3;
-			nonce_inc = next_inc;
-		} else if (!diff.tv_sec)
-			nonce_inc = hashes_done * 2;
-		if (nonce_inc < 4)
-			nonce_inc = 0xffffff;
-		max64 = work->blk.nonce + nonce_inc;
-		if (max64 > 0xfffffffaULL)
-			max64 = 0xfffffffaULL;
-		max_nonce = max64;
-
-		/* if nonce found, submit work */
-		if (unlikely(rc)) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
-			if (unlikely(!submit_work_sync(mythr, work))) {
-				applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
+			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
+			if (unlikely(work_restart[thr_id].restart))
 				break;
-			}
-			work->blk.nonce += 4;
-		}
-
-		timeval_subtract(&diff, &tv_end, &tv_workstart);
-		if (!requested && (diff.tv_sec >= request_interval)) {
-			thread_reportout(mythr);
-			if (unlikely(!queue_request(mythr, false))) {
-				applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
+			if (unlikely(!hashes))
 				goto out;
+			hashes_done += hashes;
+
+			gettimeofday(&tv_end, NULL);
+			timeval_subtract(&diff, &tv_end, &tv_start);
+			sdiff.tv_sec += diff.tv_sec;
+			sdiff.tv_usec += diff.tv_usec;
+			if (sdiff.tv_usec > 1000000) {
+				++sdiff.tv_sec;
+				sdiff.tv_usec -= 1000000;
 			}
-			thread_reportin(mythr);
-			requested = true;
-		}
 
-		if (diff.tv_sec > opt_scantime) {
-			decay_time(&hash_divfloat , (double)((MAXTHREADS / total_hashes) ? : 1));
-			hash_div = hash_divfloat;
-			needs_work = true;
-		} else if (work_restart[thr_id].restart || stale_work(work, false) ||
-			work->blk.nonce >= MAXTHREADS - hashes_done)
-				needs_work = true;
+			timeval_subtract(&wdiff, &tv_end, &tv_workstart);
+			if (!requested) {
+#if 0
+			if (wdiff.tv_sec > request_interval)
+				hash_div = (MAXTHREADS / total_hashes) ? : 1;
+#endif
+				if (wdiff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
+					thread_reportout(mythr);
+					if (unlikely(!queue_request(mythr, false))) {
+						applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
+						goto out;
+					}
+					thread_reportin(mythr);
+					requested = true;
+				}
+			}
 
-		if (unlikely(mythr->pause)) {
-			applog(LOG_WARNING, "Thread %d being disabled", thr_id);
-			mythr->rolling = mythr->cgpu->rolling = 0;
-			if (opt_debug)
-				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
+			if (sdiff.tv_sec < cycle) {
+				if (likely(!api->can_limit_work || max_nonce == 0xffffffff))
+					continue;
 
-			thread_reportout(mythr);
-			tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
-			thread_reportin(mythr);
-			applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
-		}
+				{
+					int mult = 1000000 / ((sdiff.tv_usec + 0x400) / 0x400) + 0x10;
+					mult *= cycle;
+					if (max_nonce > (0xffffffff * 0x400) / mult)
+						max_nonce = 0xffffffff;
+					else
+						max_nonce = (max_nonce * mult) / 0x400;
+				}
+			} else if (unlikely(sdiff.tv_sec > cycle) && api->can_limit_work) {
+				max_nonce = max_nonce * cycle / sdiff.tv_sec;
+			} else if (unlikely(sdiff.tv_usec > 100000) && api->can_limit_work) {
+				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
+			}
+
+			timeval_subtract(&diff, &tv_end, &tv_lastupdate);
+			if (diff.tv_sec >= opt_log_interval) {
+				hashmeter(thr_id, &diff, hashes_done);
+				hashes_done = 0;
+				tv_lastupdate = tv_end;
+			}
+
+			if (unlikely(mythr->pause || !cgpu->enabled)) {
+				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
+				mythr->rolling = mythr->cgpu->rolling = 0;
+				if (opt_debug)
+					applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
+				thread_reportout(mythr);
+				tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+				thread_reportin(mythr);
+				applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
+			}
+
+			sdiff.tv_sec = sdiff.tv_usec = 0;
+
+			if (can_roll(work) && should_roll(work))
+				roll_work(work);
+		} while (!abandon_work(thr_id, work, &wdiff, hashes));
 	}
 
 out:
+	if (api->thread_shutdown)
+		api->thread_shutdown(mythr);
+
 	thread_reportin(mythr);
 	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
 	tq_freeze(mythr->q);
@@ -4653,224 +4572,6 @@ static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 		*threads = minthreads;
 	*globalThreads = *threads;
 	*hashes = *threads * vectors;
-}
-
-static void *gpuminer_thread(void *userdata)
-{
-	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *);
-
-	const unsigned long cycle = opt_log_interval / 5 ? : 1;
-	struct timeval tv_start, tv_end, diff, tv_workstart;
-	struct thr_info *mythr = userdata;
-	const int thr_id = mythr->id;
-	uint32_t *res, *blank_res;
-	double gpu_ms_average = 7;
-	int gpu = dev_from_id(thr_id);
-
-	size_t globalThreads[1];
-	size_t localThreads[1];
-
-	cl_int status;
-
-	_clState *clState = clStates[thr_id];
-	const cl_kernel *kernel = &clState->kernel;
-
-	struct work *work = make_work();
-	unsigned int threads;
-	unsigned const int vectors = clState->preferred_vwidth;
-	unsigned int hashes;
-	unsigned int hashes_done = 0;
-
-	/* Request the next work item at 2/3 of the scantime */
-	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
-	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
-	bool requested = false;
-	uint32_t total_hashes = 0, hash_div = 1;
-
-	switch (chosen_kernel) {
-		case KL_POCLBM:
-			queue_kernel_parameters = &queue_poclbm_kernel;
-			break;
-		case KL_PHATK:
-		default:
-			queue_kernel_parameters = &queue_phatk_kernel;
-			break;
-	}
-
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-	res = calloc(BUFFERSIZE, 1);
-	blank_res = calloc(BUFFERSIZE, 1);
-
-	if (!res || !blank_res) {
-		applog(LOG_ERR, "Failed to calloc in gpuminer_thread");
-		goto out;
-	}
-
-	gettimeofday(&tv_start, NULL);
-	localThreads[0] = clState->work_size;
-	set_threads_hashes(vectors, &threads, &hashes, &globalThreads[0],
-			   localThreads[0], gpus[gpu].intensity);
-
-	diff.tv_sec = 0;
-	gettimeofday(&tv_end, NULL);
-
-	work->pool = NULL;
-
-	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-			BUFFERSIZE, blank_res, 0, NULL, NULL);
-	if (unlikely(status != CL_SUCCESS))
-		{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-
-	mythr->cgpu->status = LIFE_WELL;
-	if (opt_debug)
-		applog(LOG_DEBUG, "Popping ping in gpuminer thread");
-
-	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
-	gettimeofday(&tv_workstart, NULL);
-	/* obtain new work from internal workio thread */
-	if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
-		applog(LOG_ERR, "work retrieval failed, exiting "
-			"gpu mining thread %d", thr_id);
-		goto out;
-	}
-	requested = false;
-	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
-	work->blk.nonce = 0;
-
-	while (1) {
-		struct timeval tv_gpustart, tv_gpuend;
-		suseconds_t gpu_us;
-
-		gettimeofday(&tv_gpustart, NULL);
-		timeval_subtract(&diff, &tv_gpustart, &tv_gpuend);
-		/* This finish flushes the readbuffer set with CL_FALSE later */
-		clFinish(clState->commandQueue);
-		gettimeofday(&tv_gpuend, NULL);
-		timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
-		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
-		decay_time(&gpu_ms_average, gpu_us / 1000);
-		if (gpus[gpu].dynamic) {
-			/* Try to not let the GPU be out for longer than 6ms, but
-			 * increase intensity when the system is idle, unless
-			 * dynamic is disabled. */
-			if (gpu_ms_average > 7) {
-				if (gpus[gpu].intensity > -10)
-					gpus[gpu].intensity--;
-			} else if (gpu_ms_average < 3) {
-				if (gpus[gpu].intensity < 10)
-					gpus[gpu].intensity++;
-			}
-		}
-		set_threads_hashes(vectors, &threads, &hashes, globalThreads,
-				   localThreads[0], gpus[gpu].intensity);
-
-		if (diff.tv_sec > opt_scantime ||
-		    work->blk.nonce >= MAXTHREADS - hashes ||
-		    work_restart[thr_id].restart ||
-		    stale_work(work, false)) {
-			/* Ignore any reads since we're getting new work and queue a clean buffer */
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
-					BUFFERSIZE, blank_res, 0, NULL, NULL);
-			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-			memset(res, 0, BUFFERSIZE);
-
-			gettimeofday(&tv_workstart, NULL);
-			if (opt_debug)
-				applog(LOG_DEBUG, "getwork thread %d", thr_id);
-			/* obtain new work from internal workio thread */
-			if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
-				applog(LOG_ERR, "work retrieval failed, exiting "
-					"gpu mining thread %d", thr_id);
-				goto out;
-			}
-			requested = false;
-
-			precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
-			work_restart[thr_id].restart = 0;
-
-			/* Flushes the writebuffer set with CL_FALSE above */
-			clFinish(clState->commandQueue);
-		}
-		status = queue_kernel_parameters(clState, &work->blk);
-		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: clSetKernelArg of all params failed."); goto out; }
-
-		/* MAXBUFFERS entry is used as a flag to say nonces exist */
-		if (res[FOUND]) {
-			/* Clear the buffer again */
-			status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
-					BUFFERSIZE, blank_res, 0, NULL, NULL);
-			if (unlikely(status != CL_SUCCESS))
-				{ applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed."); goto out; }
-			if (opt_debug)
-				applog(LOG_DEBUG, "GPU %d found something?", gpu);
-			postcalc_hash_async(mythr, work, res);
-			memset(res, 0, BUFFERSIZE);
-			clFinish(clState->commandQueue);
-		}
-
-		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
-				globalThreads, localThreads, 0,  NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)"); goto out; }
-
-		status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
-				BUFFERSIZE, res, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-			{ applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)"); goto out;}
-
-		gettimeofday(&tv_end, NULL);
-		timeval_subtract(&diff, &tv_end, &tv_start);
-		hashes_done += hashes;
-		total_hashes += hashes;
-		work->blk.nonce += hashes;
-		if (diff.tv_sec >= cycle) {
-			hashmeter(thr_id, &diff, hashes_done);
-			gettimeofday(&tv_start, NULL);
-			hashes_done = 0;
-		}
-
-		timeval_subtract(&diff, &tv_end, &tv_workstart);
-		if (!requested) {
-#if 0
-			if (diff.tv_sec > request_interval)
-				hash_div = (MAXTHREADS / total_hashes) ? : 1;
-#endif
-			if (diff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
-				thread_reportout(mythr);
-				if (unlikely(!queue_request(mythr, false))) {
-					applog(LOG_ERR, "Failed to queue_request in gpuminer_thread %d", thr_id);
-					goto out;
-				}
-				thread_reportin(mythr);
-				requested = true;
-			}
-		}
-		if (unlikely(!gpus[gpu].enabled || mythr->pause)) {
-			applog(LOG_WARNING, "Thread %d being disabled", thr_id);
-			mythr->rolling = mythr->cgpu->rolling = 0;
-			if (opt_debug)
-				applog(LOG_DEBUG, "Popping wakeup ping in gpuminer thread");
-
-			thread_reportout(mythr);
-			tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
-			thread_reportin(mythr);
-			applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
-		}
-	}
-out:
-	clReleaseCommandQueue(clState->commandQueue);
-	clReleaseKernel(clState->kernel);
-	clReleaseProgram(clState->program);
-	clReleaseContext(clState->context);
-
-	thread_reportin(mythr);
-	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
-	tq_freeze(mythr->q);
-
-	return NULL;
 }
 #endif /* HAVE_OPENCL */
 
@@ -5153,7 +4854,7 @@ select_cgpu:
 		}
 		applog(LOG_INFO, "initCl() finished. Found %s", name);
 
-		if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr))) {
+		if (unlikely(thr_info_create(thr, NULL, miner_thread, thr))) {
 			applog(LOG_ERR, "thread %d create failed", thr_id);
 			return NULL;
 		}
@@ -5732,19 +5433,157 @@ static void reinit_cpu_device(struct cgpu_info *cpu)
 	tq_push(thr_info[cpur_thr_id].q, cpu);
 }
 
-static void cpu_thread_start(struct thr_info *thr)
+static bool cpu_thread_prepare(struct thr_info *thr)
 {
 	thread_reportin(thr);
 
-	if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
-		quit(1, "thread %d create failed", thr->id);
+	return true;
+}
+
+static uint64_t cpu_can_limit_work(struct thr_info *thr)
+{
+	return 0xfffff;
+}
+
+static bool cpu_thread_init(struct thr_info *thr)
+{
+	const int thr_id = thr->id;
+
+	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
+	 * and if that fails, then SCHED_BATCH. No need for this to be an
+	 * error if it fails */
+	setpriority(PRIO_PROCESS, 0, 19);
+	drop_policy();
+	/* Cpu affinity only makes sense if the number of threads is a multiple
+	 * of the number of CPUs */
+	if (!(opt_n_threads % num_processors))
+		affine_to_cpu(dev_from_id(thr_id), dev_from_id(thr_id) % num_processors);
+	return true;
+}
+
+static uint64_t cpu_scanhash(struct thr_info *thr, struct work *work, uint64_t max_nonce)
+{
+	const int thr_id = thr->id;
+
+	long unsigned int hashes_done = 0;
+	uint32_t first_nonce = work->blk.nonce;
+	bool rc = false;
+
+	/* scan nonces for a proof-of-work hash */
+	switch (opt_algo) {
+	case ALGO_C:
+		rc = scanhash_c(thr_id, work->midstate, work->data + 64,
+			        work->hash1, work->hash, work->target,
+				max_nonce, &hashes_done,
+				work->blk.nonce);
+		break;
+#ifdef WANT_X8632_SSE2
+	case ALGO_SSE2_32: {
+		unsigned int rc5 =
+		        scanhash_sse2_32(thr_id, work->midstate, work->data + 64,
+					 work->hash1, work->hash,
+					 work->target,
+				         max_nonce, &hashes_done,
+					 work->blk.nonce);
+		rc = (rc5 == -1) ? false : true;
+		}
+		break;
+#endif
+#ifdef WANT_X8664_SSE2
+	case ALGO_SSE2_64: {
+		unsigned int rc5 =
+		        scanhash_sse2_64(thr_id, work->midstate, work->data + 64,
+					 work->hash1, work->hash,
+					 work->target,
+				         max_nonce, &hashes_done,
+					 work->blk.nonce);
+		rc = (rc5 == -1) ? false : true;
+		}
+		break;
+#endif
+#ifdef WANT_X8664_SSE4
+	case ALGO_SSE4_64: {
+		unsigned int rc5 =
+		        scanhash_sse4_64(thr_id, work->midstate, work->data + 64,
+					 work->hash1, work->hash,
+					 work->target,
+				         max_nonce, &hashes_done,
+					 work->blk.nonce);
+		rc = (rc5 == -1) ? false : true;
+		}
+		break;
+#endif
+#ifdef WANT_SSE2_4WAY
+	case ALGO_4WAY: {
+		unsigned int rc4 =
+			ScanHash_4WaySSE2(thr_id, work->midstate, work->data + 64,
+					  work->hash1, work->hash,
+					  work->target,
+					  max_nonce, &hashes_done,
+					  work->blk.nonce);
+		rc = (rc4 == -1) ? false : true;
+		}
+		break;
+#endif
+#ifdef WANT_ALTIVEC_4WAY
+        case ALGO_ALTIVEC_4WAY:
+        {
+            unsigned int rc4 = ScanHash_altivec_4way(thr_id, work->midstate, work->data + 64,
+                    work->hash1, work->hash,
+                    work->target,
+                    max_nonce, &hashes_done,
+                    work->blk.nonce);
+            rc = (rc4 == -1) ? false : true;
+        }
+        break;
+#endif
+#ifdef WANT_VIA_PADLOCK
+	case ALGO_VIA:
+		rc = scanhash_via(thr_id, work->data, work->target,
+				  max_nonce, &hashes_done,
+				  work->blk.nonce);
+		break;
+#endif
+	case ALGO_CRYPTOPP:
+		rc = scanhash_cryptopp(thr_id, work->midstate, work->data + 64,
+			        work->hash1, work->hash, work->target,
+				max_nonce, &hashes_done,
+				work->blk.nonce);
+		break;
+#ifdef WANT_CRYPTOPP_ASM32
+	case ALGO_CRYPTOPP_ASM32:
+		rc = scanhash_asm32(thr_id, work->midstate, work->data + 64,
+			        work->hash1, work->hash, work->target,
+				max_nonce, &hashes_done,
+				work->blk.nonce);
+		break;
+#endif
+	default:
+		/* should never happen */
+		applog(LOG_ERR, "Unrecognized hash algorithm! This should be impossible!");
+	}
+
+	/* if nonce found, submit work */
+	if (unlikely(rc)) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
+		if (unlikely(!submit_work_sync(thr, work))) {
+			applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
+		}
+	}
+
+	work->blk.nonce = hashes_done;
+	return (uint64_t)hashes_done - first_nonce;
 }
 
 struct device_api cpu_api = {
 	.name = "CPU",
 	.api_detect = cpu_detect,
 	.reinit_device = reinit_cpu_device,
-	.thread_start = cpu_thread_start,
+	.thread_prepare = cpu_thread_prepare,
+	.can_limit_work = cpu_can_limit_work,
+	.thread_init = cpu_thread_init,
+	.scanhash = cpu_scanhash,
 };
 
 
@@ -5815,7 +5654,16 @@ static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
 #endif
 }
 
-static void opencl_thread_start(struct thr_info *thr)
+struct opencl_thread_data {
+	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *);
+	uint32_t *res;
+	struct work *last_work;
+	struct work _last_work;
+};
+
+static uint32_t *blank_res;
+
+static bool opencl_thread_prepare(struct thr_info *thr)
 {
 	char name[256];
 	struct timeval now;
@@ -5824,13 +5672,11 @@ static void opencl_thread_start(struct thr_info *thr)
 	int i = thr->id;
 	static bool failmessage = false;
 
-	/* Enable threads for devices set not to mine but disable
-	 * their queue in case we wish to enable them later*/
-	if (cgpu->enabled) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
-
-		tq_push(thr->q, &ping);
+	if (!blank_res)
+		blank_res = calloc(BUFFERSIZE, 1);
+	if (!blank_res) {
+		applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
+		return false;
 	}
 
 	applog(LOG_INFO, "Init GPU thread %i", i);
@@ -5851,7 +5697,7 @@ static void opencl_thread_start(struct thr_info *thr)
 		}
 		cgpu->enabled = false;
 		cgpu->status = LIFE_NOSTART;
-		return;
+		return false;
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 	gettimeofday(&now, NULL);
@@ -5859,8 +5705,174 @@ static void opencl_thread_start(struct thr_info *thr)
 
 	have_opencl = true;
 
-	if (unlikely(thr_info_create(thr, NULL, gpuminer_thread, thr)))
-		quit(1, "thread %d create failed", i);
+	return true;
+}
+
+static bool opencl_thread_init(struct thr_info *thr)
+{
+	const int thr_id = thr->id;
+	struct cgpu_info *gpu = thr->cgpu;
+
+	struct opencl_thread_data *thrdata;
+	thrdata = calloc(1, sizeof(*thrdata));
+	thr->cgpu_data = thrdata;
+
+	if (!thrdata) {
+		applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
+		return false;
+	}
+
+	switch (chosen_kernel) {
+		case KL_POCLBM:
+			thrdata->queue_kernel_parameters = &queue_poclbm_kernel;
+			break;
+		case KL_PHATK:
+		default:
+			thrdata->queue_kernel_parameters = &queue_phatk_kernel;
+			break;
+	}
+
+	thrdata->res = calloc(BUFFERSIZE, 1);
+
+	if (!thrdata->res) {
+		free(thrdata);
+		applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
+		return false;
+	}
+
+	_clState *clState = clStates[thr_id];
+	cl_int status;
+
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+			BUFFERSIZE, blank_res, 0, NULL, NULL);
+	if (unlikely(status != CL_SUCCESS)) {
+		applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
+		return false;
+	}
+
+	gpu->status = LIFE_WELL;
+
+	return true;
+}
+
+static void opencl_free_work(struct thr_info *thr, struct work *work)
+{
+	const int thr_id = thr->id;
+	struct opencl_thread_data *thrdata = thr->cgpu_data;
+	_clState *clState = clStates[thr_id];
+
+	clFinish(clState->commandQueue);
+	if (thrdata->res[FOUND]) {
+		thrdata->last_work = &thrdata->_last_work;
+		memcpy(thrdata->last_work, work, sizeof(*thrdata->last_work));
+	}
+}
+
+static bool opencl_prepare_work(struct thr_info *thr, struct work *work)
+{
+	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
+	return true;
+}
+
+static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work, uint64_t max_nonce)
+{
+	const int thr_id = thr->id;
+	struct opencl_thread_data *thrdata = thr->cgpu_data;
+	struct cgpu_info *gpu = thr->cgpu;
+	_clState *clState = clStates[thr_id];
+	const cl_kernel *kernel = &clState->kernel;
+
+	double gpu_ms_average = 7;
+	cl_int status;
+
+	size_t globalThreads[1];
+	size_t localThreads[1] = { clState->work_size };
+	unsigned int threads;
+	unsigned int hashes;
+
+
+	struct timeval tv_gpustart, tv_gpuend, diff;
+	suseconds_t gpu_us;
+
+	gettimeofday(&tv_gpustart, NULL);
+	timeval_subtract(&diff, &tv_gpustart, &tv_gpuend);
+	/* This finish flushes the readbuffer set with CL_FALSE later */
+	clFinish(clState->commandQueue);
+	gettimeofday(&tv_gpuend, NULL);
+	timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
+	gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
+	decay_time(&gpu_ms_average, gpu_us / 1000);
+	if (gpu->dynamic) {
+		/* Try to not let the GPU be out for longer than 6ms, but
+		 * increase intensity when the system is idle, unless
+		 * dynamic is disabled. */
+		if (gpu_ms_average > 7) {
+			if (gpu->intensity > -10)
+				--gpu->intensity;
+		} else if (gpu_ms_average < 3) {
+			if (gpu->intensity < 10)
+				++gpu->intensity;
+		}
+	}
+	set_threads_hashes(clState->preferred_vwidth, &threads, &hashes, globalThreads,
+			   localThreads[0], gpu->intensity);
+
+	status = thrdata->queue_kernel_parameters(clState, &work->blk);
+	if (unlikely(status != CL_SUCCESS)) {
+		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
+		return 0;
+	}
+
+	/* MAXBUFFERS entry is used as a flag to say nonces exist */
+	if (thrdata->res[FOUND]) {
+		/* Clear the buffer again */
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+				BUFFERSIZE, blank_res, 0, NULL, NULL);
+		if (unlikely(status != CL_SUCCESS)) {
+			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
+			return 0;
+		}
+		if (unlikely(thrdata->last_work)) {
+			if (opt_debug)
+				applog(LOG_DEBUG, "GPU %d found something in last work?", gpu->device_id);
+			postcalc_hash_async(thr, thrdata->last_work, thrdata->res);
+			thrdata->last_work = NULL;
+		} else {
+			if (opt_debug)
+				applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
+			postcalc_hash_async(thr, work, thrdata->res);
+		}
+		memset(thrdata->res, 0, BUFFERSIZE);
+		clFinish(clState->commandQueue);
+	}
+	status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
+			globalThreads, localThreads, 0,  NULL, NULL);
+	if (unlikely(status != CL_SUCCESS)) {
+		applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)");
+		return 0;
+	}
+
+	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+			BUFFERSIZE, thrdata->res, 0, NULL, NULL);
+	if (unlikely(status != CL_SUCCESS)) {
+		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)");
+		return 0;
+	}
+
+	work->blk.nonce += hashes;
+
+	return hashes;
+}
+
+static void opencl_thread_shutdown(struct thr_info *thr)
+{
+	const int thr_id = thr->id;
+	_clState *clState = clStates[thr_id];
+
+	clReleaseCommandQueue(clState->commandQueue);
+	clReleaseKernel(clState->kernel);
+	clReleaseProgram(clState->program);
+	clReleaseContext(clState->context);
 }
 
 struct device_api opencl_api = {
@@ -5868,7 +5880,12 @@ struct device_api opencl_api = {
 	.api_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 	.get_statline = get_opencl_statline,
-	.thread_start = opencl_thread_start,
+	.thread_prepare = opencl_thread_prepare,
+	.thread_init = opencl_thread_init,
+	.free_work = opencl_free_work,
+	.prepare_work = opencl_prepare_work,
+	.scanhash = opencl_scanhash,
+	.thread_shutdown = opencl_thread_shutdown,
 };
 #endif
 
@@ -6224,7 +6241,20 @@ retry_pools:
 			if (!thr->q)
 				quit(1, "tq_new failed in starting %s%d mining thread (#%d)", cgpu->api->name, cgpu->device_id, i);
 
-			cgpu->api->thread_start(thr);
+			/* Enable threads for devices set not to mine but disable
+			 * their queue in case we wish to enable them later */
+			if (cgpu->enabled) {
+				if (opt_debug)
+					applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+
+				tq_push(thr->q, &ping);
+			}
+
+			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
+				continue;
+
+			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+				quit(1, "thread %d create failed", thr->id);
 		}
 	}
 

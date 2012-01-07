@@ -210,6 +210,7 @@ struct gpu_adl {
 
 struct cgpu_info;
 struct thr_info;
+struct work;
 
 struct device_api {
 	char*name;
@@ -222,7 +223,13 @@ struct device_api {
 	void (*get_statline)(char*, struct cgpu_info*);
 
 	// Thread-specific functions
-	void (*thread_start)(struct thr_info*);
+	bool (*thread_prepare)(struct thr_info*);
+	uint64_t (*can_limit_work)(struct thr_info*);
+	bool (*thread_init)(struct thr_info*);
+	void (*free_work)(struct thr_info*, struct work*);
+	bool (*prepare_work)(struct thr_info*, struct work*);
+	uint64_t (*scanhash)(struct thr_info*, struct work*, uint64_t);
+	void (*thread_shutdown)(struct thr_info*);
 };
 
 struct cgpu_info {
@@ -278,6 +285,7 @@ struct thr_info {
 	pthread_t	pth;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
+	void *cgpu_data;
 	struct timeval last;
 	struct timeval sick;
 
