@@ -236,6 +236,9 @@ struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
 	int device_id;
+	char *device_path;
+	FILE *device_file;
+
 	bool enabled;
 	int accepted;
 	int rejected;
@@ -296,6 +299,32 @@ struct thr_info {
 
 extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 extern void thr_info_cancel(struct thr_info *thr);
+
+
+struct string_elist {
+	char *string;
+	bool free_me;
+
+	struct list_head list;
+};
+
+static inline void string_elist_add(const char *s, struct list_head *head)
+{
+	struct string_elist *n;
+
+	n = calloc(1, sizeof(*n));
+	n->string = strdup(s);
+	n->free_me = true;
+	list_add_tail(&n->list, head);
+}
+
+static inline void string_elist_del(struct string_elist *item)
+{
+	if (item->free_me)
+		free(item->string);
+	list_del(&item->list);
+}
+
 
 static inline uint32_t swab32(uint32_t v)
 {
@@ -468,6 +497,7 @@ extern void api(void);
 #define MAX_DEVICES 32
 #define MAX_POOLS (32)
 
+extern struct list_head scan_devices;
 extern int nDevs;
 extern int opt_n_threads;
 extern int num_processors;
@@ -581,6 +611,7 @@ enum cl_kernel {
 	KL_PHATK,
 };
 
+extern void get_datestamp(char *, struct timeval *);
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);

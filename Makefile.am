@@ -60,3 +60,7 @@ AM_CFLAGS	= -DHAS_YASM
 endif
 endif
 endif
+
+if USE_BITFORCE
+cgminer_SOURCES += bitforce.c
+endif

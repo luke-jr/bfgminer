@@ -216,6 +216,7 @@ static bool opt_restart = true;
 static bool opt_nogpu;
 #endif
 
+struct list_head scan_devices;
 int nDevs;
 static int opt_g_threads = 2;
 static signed int devices_enabled = 0;
@@ -1003,6 +1004,12 @@ static char *set_float_0_to_99(const char *arg, float *f)
 	return NULL;
 }
 
+static char *add_serial(char *arg)
+{
+	string_elist_add(arg, &scan_devices);
+	return NULL;
+}
+
 static char *set_devices(char *arg)
 {
 	int i = strtol(arg, &arg, 0);
@@ -1670,6 +1677,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--round-robin",
 		     set_rr, &pool_strategy,
 		     "Change multipool strategy from failover to round robin on failure"),
+#ifdef USE_BITFORCE
+	OPT_WITH_ARG("--scan-serial|-S",
+		     add_serial, NULL, NULL,
+		     "Serial port to probe for BitForce device"),
+#endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
@@ -4340,6 +4352,7 @@ static inline bool abandon_work(int thr_id, struct work *work, struct timeval *w
 {
 	if (wdiff->tv_sec > opt_scantime ||
 	    work->blk.nonce >= MAXTHREADS - hashes ||
+	    hashes >= 0xfffffffe ||
 	    stale_work(work, false))
 		return true;
 	return false;
@@ -4432,7 +4445,7 @@ static void *miner_thread(void *userdata)
 				}
 			}
 
-			if (sdiff.tv_sec < cycle) {
+			if (unlikely(sdiff.tv_sec < cycle)) {
 				if (likely(!api->can_limit_work || max_nonce == 0xffffffff))
 					continue;
 
@@ -5386,7 +5399,7 @@ static void cpu_detect()
 	#endif /* !WIN32 */
 
 	if (opt_n_threads < 0 || !forced_n_threads) {
-		if (nDevs && !opt_usecpu)
+		if (total_devices && !opt_usecpu)
 			opt_n_threads = 0;
 		else
 			opt_n_threads = num_processors;
@@ -5803,6 +5816,12 @@ struct device_api opencl_api = {
 };
 #endif
 
+
+#ifdef USE_BITFORCE
+extern struct device_api bitforce_api;
+#endif
+
+
 static int cgminer_id_count = 0;
 
 void enable_device(struct cgpu_info *cgpu)
@@ -5877,6 +5896,8 @@ int main (int argc, char *argv[])
 	HASH_ADD_STR(blocks, hash, block);
 	strcpy(current_block, block->hash);
 
+	INIT_LIST_HEAD(&scan_devices);
+
 	memset(gpus, 0, sizeof(gpus));
 	for (i = 0; i < MAX_GPUDEVICES; i++)
 		gpus[i].dynamic = true;
@@ -5944,6 +5965,10 @@ int main (int argc, char *argv[])
 #ifdef HAVE_OPENCL
 	if (!opt_nogpu)
 		opencl_api.api_detect();
+#endif
+
+#ifdef USE_BITFORCE
+	bitforce_api.api_detect();
 #endif
 
 #ifdef WANT_CPUMINE

@@ -181,6 +181,15 @@ else
 	DLOPEN_FLAGS=""
 fi
 
+bitforce=yes
+AC_ARG_ENABLE([bitforce],
+	[AC_HELP_STRING([--disable-bitforce],[Don't compile support for BitForce FPGAs])],
+	[bitforce=$enableval]
+)
+if test "x$bitforce" != xno; then
+	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted.])
+fi
+
 AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
         AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev]))
 
@@ -190,6 +199,7 @@ AC_CHECK_LIB(pdcurses, addstr, PDCURSES_LIBS=-lpdcurses)
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
+AM_CONDITIONAL([USE_BITFORCE], [test x$bitforce != xno])
 
 if test x$request_jansson = xtrue
 then
@@ -312,18 +322,20 @@ echo
 echo "Configuration Options Summary:"
 echo
 
+echo "  BitForce.FPGAs.......: $bitforce"
+
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$cpumining" != xyes; then
+		if test "x$cpumining$bitforce" = xnono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$cpumining" != xyes; then
+	if test "x$cpumining$bitforce" = xnono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 fi
