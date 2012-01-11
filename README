@@ -392,7 +392,7 @@ while:
 --gpu-engine 950,945,930,960 --gpu-memclock 300
 
 will try to set the engine clock of card 0 to 950, 1 to 945, 2 to 930, 3 to
-960 and all memory clocks to 825.
+960 and all memory clocks to 300.
 
 AUTO MODES:
 There are two "auto" modes in cgminer, --auto-fan and --auto-gpu. These can
