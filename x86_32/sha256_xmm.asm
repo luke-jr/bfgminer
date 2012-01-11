@@ -1,4 +1,4 @@
-;; SHA-256 for X86 for Linux, based off of:
+;; SHA-256 for X86 for Linux, based off of:A
 
 ; (c) Ufasoft 2011 http://ufasoft.com mailto:support@ufasoft.com
 ; Version 2011
@@ -15,30 +15,21 @@ BITS 32
 
 ; 0 = (1024 - 256) (mod (LAB_CALC_UNROLL*LAB_CALC_PARA*16))
 %define LAB_CALC_PARA	2
-%define LAB_CALC_UNROLL	8
+%define LAB_CALC_UNROLL	24
 
-%define LAB_LOOP_UNROLL 8
+%define LAB_LOOP_UNROLL 64
 
 extern sha256_consts_m128i
 
 global CalcSha256_x86
 ;	CalcSha256	hash(ecx), data(edx), init([esp+4])
 CalcSha256_x86:
-                push	esi
-                push	edi
-                mov	init, [esp+12]
-
-	push	ebx
-
-LAB_NEXT_NONCE:
-
-	mov	eax, 64*4					; 256 - rcx is # of SHA-2 rounds
-	mov	ebx, 16*4					; 64 - rax is where we expand to
+	push	esi
+	push	edi
+	mov	init, [esp+12]
 
 LAB_SHA:
-	push	eax
-	lea	eax, qword [data+eax*4]				; + 1024
-	lea	edi, qword [data+ebx*4]				; + 256
+	lea	edi, qword [data+256]				; + 256
 
 LAB_CALC:
 %macro	lab_calc_blk 1
@@ -116,13 +107,6 @@ LAB_CALC:
 %assign i i+LAB_CALC_PARA
 %endrep
 
-	add	edi, LAB_CALC_UNROLL*LAB_CALC_PARA*16
-	cmp	edi, eax
-	jb	LAB_CALC
-
-	pop	eax
-	mov	ebx, 0
-
 ; Load the init values of the message into the hash.
 
 	movdqa	xmm7, [init]
@@ -143,14 +127,14 @@ LAB_CALC:
 
 	pshufd	xmm0, xmm0, 0			; xmm0 == e
 
+
 LAB_LOOP:
 
 ;; T t1 = h + (Rotr32(e, 6) ^ Rotr32(e, 11) ^ Rotr32(e, 25)) + ((e & f) ^ AndNot(e, g)) + Expand32<T>(g_sha256_k[j]) + w[j]
 
-%macro	lab_loop_blk 0
-	movdqa	xmm6, [data+ebx*4]
-	paddd	xmm6, sha256_consts_m128i[ebx*4]
-	add	ebx, 4
+%macro	lab_loop_blk 1
+	movdqa	xmm6, [data+%1]
+	paddd	xmm6, sha256_consts_m128i[%1]
 
 	paddd	xmm6, [hash+2*16]		; +h
 
@@ -217,68 +201,52 @@ LAB_LOOP:
 
 %assign i 0
 %rep    LAB_LOOP_UNROLL
-        lab_loop_blk
-%assign i i+1
+        lab_loop_blk i
+%assign i i+16
 %endrep
-
-	cmp	ebx, eax
-	jb	LAB_LOOP
 
 ; Finished the 64 rounds, calculate hash and save
 
-	movdqa	xmm1, [init]
-	pshufd	xmm2, xmm1, 0x55
-	pshufd	xmm6, xmm1, 0xAA
-	movdqa	[hash+3*16], xmm6
-	pshufd	xmm6, xmm1, 0xFF
-	movdqa	[hash+4*16], xmm6
+	movdqa	xmm1, [init+16]
+
+	pshufd	xmm2, xmm1, 0xFF
+	movdqa  xmm6, [hash+2*16]
+	paddd   xmm2, xmm6
+	movdqa  [hash+7*16], xmm2
+
+	pshufd	xmm2, xmm1, 0xAA
+	movdqa  xmm6, [hash+1*16]
+	paddd   xmm2, xmm6
+	movdqa  [hash+6*16], xmm2
+
+	pshufd  xmm2, xmm1, 0x55
+	movdqa  xmm6, [hash+0*16]
+	paddd   xmm2, xmm6
+	movdqa  [hash+5*16], xmm2
+
 	pshufd	xmm1, xmm1, 0
-
-	paddd	xmm5, xmm2
-	paddd	xmm4, [hash+3*16]
-	paddd	xmm3, [hash+4*16]
-	paddd	xmm7, xmm1
-
-	movdqa	xmm1, [init+4*4]
-	pshufd	xmm2, xmm1, 0x55
-	pshufd	xmm6, xmm1, 0xAA
-	movdqa	[hash+3*16], xmm6
-	pshufd	xmm6, xmm1, 0xFF
-	movdqa	[hash+4*16], xmm6
-	pshufd	xmm1, xmm1, 0
-
-	movdqa	xmm6, [hash+0*16]
-	paddd	xmm2, xmm6
-	movdqa	[hash+0*16], xmm2
-
-
-	movdqa	xmm2, [hash+3*16]
-	movdqa	xmm6, [hash+1*16]
-	paddd	xmm2, xmm6
-	movdqa	[hash+1*16], xmm2
-
-	movdqa	xmm2, [hash+4*16]
-	movdqa	xmm6, [hash+2*16]
-	paddd	xmm2, xmm6
-	movdqa	[hash+2*16], xmm2
-
 	paddd	xmm0, xmm1
+	movdqa  [hash+4*16], xmm0
 
-	movdqa	xmm1, [hash+0*16]
-	movdqa	xmm2, [hash+1*16]
-	movdqa	xmm6, [hash+2*16]
+	movdqa  xmm1, [init]
 
+	pshufd  xmm2, xmm1, 0xFF
+	paddd   xmm3, xmm2
+	movdqa  [hash+3*16], xmm3
+
+	pshufd  xmm2, xmm1, 0xAA
+	paddd   xmm4, xmm2
+	movdqa  [hash+2*16], xmm4
+
+        pshufd  xmm2, xmm1, 0x55
+        paddd   xmm5, xmm2
+        movdqa  [hash+1*16], xmm5
+
+	pshufd  xmm1, xmm1, 0
+	paddd   xmm7, xmm1
 	movdqa	[hash+0*16], xmm7
-	movdqa	[hash+1*16], xmm5
-	movdqa	[hash+2*16], xmm4
-	movdqa	[hash+3*16], xmm3
-	movdqa	[hash+4*16], xmm0
-	movdqa	[hash+5*16], xmm1
-	movdqa	[hash+6*16], xmm2
-	movdqa	[hash+7*16], xmm6
 
 LAB_RET:
-	pop	ebx
-                pop	edi
-                pop	esi
-                retn	4
+	pop	edi
+	pop	esi
+	retn	4

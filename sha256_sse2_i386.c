@@ -67,12 +67,6 @@ int scanhash_sse2_32(int thr_id, const unsigned char *pmidstate,
 
     work_restart[thr_id].restart = 0;
 
-    /* For debugging */
-    union {
-        __m128i m;
-        uint32_t i[4];
-    } mi;
-
     /* Message expansion */
     memcpy(m_midstate, pmidstate, sizeof(m_midstate));
     memcpy(m_w, pdata, sizeof(m_w)); /* The 2nd half of the data */
@@ -102,17 +96,12 @@ int scanhash_sse2_32(int thr_id, const unsigned char *pmidstate,
 	CalcSha256_x86 (m_4hash, m_4hash1, sha256_32init);
 
 	for (j = 0; j < 4; j++) {
-	    mi.m = m_4hash[7];
-	    if (unlikely(mi.i[j] == 0))
-		break;
-        }
+	    if (unlikely(((uint32_t *)&(m_4hash[7]))[j] == 0)) {
+		/* We found a hit...so check it */
+		/* Use the C version for a check... */
 
-	/* If j = true, we found a hit...so check it */
-	/* Use the C version for a check... */
-	if (unlikely(j != 4)) {
 		for (i = 0; i < 8; i++) {
-		    mi.m = m_4hash[i];
-		    *(uint32_t *)&(phash)[i*4] = mi.i[j];
+		    *(uint32_t *)&(phash)[i<<2] = ((uint32_t *)&(m_4hash[i]))[j];
 		}
 
 		if (fulltest(phash, ptarget)) {
@@ -120,6 +109,7 @@ int scanhash_sse2_32(int thr_id, const unsigned char *pmidstate,
 		     *nNonce_p = nonce + j;
 		     return nonce + j;
 		}
+	    }
 	}
 
 	nonce += 4;
