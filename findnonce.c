@@ -161,29 +161,13 @@ struct pc_data {
 	pthread_t pth;
 };
 
-static void *postcalc_hash(void *userdata)
+static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 {
-	struct pc_data *pcd = (struct pc_data *)userdata;
-	struct thr_info *thr = pcd->thr;
 	dev_blk_ctx *blk = &pcd->work->blk;
-	struct work *work = pcd->work;
-
+	struct thr_info *thr = pcd->thr;
 	cl_uint A, B, C, D, E, F, G, H;
+	struct work *work = pcd->work;
 	cl_uint W[16];
-	cl_uint nonce = 0;
-	int entry = 0;
-
-	pthread_detach(pthread_self());
-cycle:
-	while (entry < FOUND) {
-		if (pcd->res[entry]) {
-			nonce = pcd->res[entry++];
-			break;
-		}
-		entry++;
-	}
-	if (entry == FOUND)
-		goto out;
 
 	A = blk->cty_a; B = blk->cty_b;
 	C = blk->cty_c; D = blk->cty_d;
@@ -215,20 +199,40 @@ cycle:
 	FR(48); PFR(56);
 
 	if (likely(H == 0xA41F32E7)) {
-		if (unlikely(submit_nonce(thr, work, nonce) == false)) {
+		if (unlikely(submit_nonce(thr, work, nonce) == false))
 			applog(LOG_ERR, "Failed to submit work, exiting");
-			goto out;
-		}
 	} else {
 		if (opt_debug)
 			applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 	}
-	if (entry < FOUND)
-		goto cycle;
-out:
+}
+
+static void *postcalc_hash(void *userdata)
+{
+	struct pc_data *pcd = (struct pc_data *)userdata;
+	struct thr_info *thr = pcd->thr;
+	int entry = 0, nonces = 0;
+
+	pthread_detach(pthread_self());
+
+	do {
+		if (pcd->res[entry]) {
+			send_nonce(pcd, pcd->res[entry]);
+			nonces++;
+		}
+	} while (++entry < FOUND);
+
 	free(pcd);
+
+	if (unlikely(!nonces)) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "No nonces found! Error in OpenCL code?");
+		hw_errors++;
+		thr->cgpu->hw_errors++;
+	}
+
 	return NULL;
 }
 
