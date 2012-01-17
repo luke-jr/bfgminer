@@ -208,9 +208,35 @@ struct gpu_adl {
 };
 #endif
 
+struct cgpu_info;
+struct thr_info;
+struct work;
+
+struct device_api {
+	char*name;
+
+	// API-global functions
+	void (*api_detect)();
+
+	// Device-specific functions
+	void (*reinit_device)(struct cgpu_info*);
+	void (*get_statline)(char*, struct cgpu_info*);
+
+	// Thread-specific functions
+	bool (*thread_prepare)(struct thr_info*);
+	uint64_t (*can_limit_work)(struct thr_info*);
+	bool (*thread_init)(struct thr_info*);
+	void (*free_work)(struct thr_info*, struct work*);
+	bool (*prepare_work)(struct thr_info*, struct work*);
+	uint64_t (*scanhash)(struct thr_info*, struct work*, uint64_t);
+	void (*thread_shutdown)(struct thr_info*);
+};
+
 struct cgpu_info {
-	int is_gpu;
-	int cpu_gpu;
+	int cgminer_id;
+	struct device_api *api;
+	int device_id;
+	bool enabled;
 	int accepted;
 	int rejected;
 	int hw_errors;
@@ -220,6 +246,8 @@ struct cgpu_info {
 	enum alive status;
 	char init[40];
 	struct timeval last_message_tv;
+
+	int threads;
 
 	bool dynamic;
 	int intensity;
@@ -257,6 +285,7 @@ struct thr_info {
 	pthread_t	pth;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
+	void *cgpu_data;
 	struct timeval last;
 	struct timeval sick;
 
@@ -352,57 +381,62 @@ extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
-extern unsigned int ScanHash_4WaySSE2(int, const unsigned char *pmidstate,
-	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone, uint32_t nonce);
-
-extern unsigned int ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
+typedef bool (*sha256_func)(int thr_id, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone, uint32_t nonce);
+	uint32_t max_nonce,
+	uint32_t *last_nonce,
+	uint32_t nonce);
 
-extern unsigned int scanhash_sse2_amd64(int, const unsigned char *pmidstate,
+extern bool ScanHash_4WaySSE2(int, const unsigned char *pmidstate,
 	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone);
+	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
-extern bool scanhash_via(int, unsigned char *data_inout,
+extern bool ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
+	unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+
+extern bool scanhash_via(int, const unsigned char *pmidstate,
+	unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *target,
-	uint32_t max_nonce, unsigned long *hashes_done, uint32_t n);
+	uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
 
 extern bool scanhash_c(int, const unsigned char *midstate, unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t n);
+	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
 
 extern bool scanhash_cryptopp(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t n);
+	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
 
 extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *data,
 	      unsigned char *hash1, unsigned char *hash,
 	      const unsigned char *target,
-	      uint32_t max_nonce, unsigned long *hashes_done, uint32_t nonce);
+	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
-extern int scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
+extern bool scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce);
 
-extern int scanhash_sse4_64(int, const unsigned char *pmidstate, unsigned char *pdata,
+extern bool scanhash_sse4_64(int, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce);
 
-extern int scanhash_sse2_32(int, const unsigned char *pmidstate, unsigned char *pdata,
+extern bool scanhash_sse2_32(int, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce);
 
 extern int
@@ -431,6 +465,7 @@ extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, flo
 extern void api(void);
 
 #define MAX_GPUDEVICES 16
+#define MAX_DEVICES 32
 #define MAX_POOLS (32)
 
 extern int nDevs;
@@ -444,9 +479,10 @@ extern struct work_restart *work_restart;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
 extern double total_secs;
-extern bool gpu_devices[MAX_GPUDEVICES];
 extern int mining_threads;
 extern struct cgpu_info *cpus;
+extern int total_devices;
+extern struct cgpu_info *devices[];
 extern int total_pools;
 extern struct pool *pools[MAX_POOLS];
 extern const char *algo_names[];

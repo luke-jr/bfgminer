@@ -97,11 +97,13 @@ bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
 		unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
 		const unsigned char *target,
-	        uint32_t max_nonce, unsigned long *hashes_done,
+	        uint32_t max_nonce, uint32_t *last_nonce,
 		uint32_t n)
 {
 	uint32_t *hash32 = (uint32_t *) hash;
-	uint32_t *nonce = (uint32_t *)(data + 12);
+	uint32_t *nonce = (uint32_t *)(data + 76);
+
+	data += 64;
 
 	work_restart[thr_id].restart = 0;
 
@@ -113,12 +115,12 @@ bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
 		runhash(hash, hash1, sha256_init_state);
 
 		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
-			*hashes_done = n;
+			*last_nonce = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || work_restart[thr_id].restart) {
-			*hashes_done = n;
+			*last_nonce = n;
 			return false;
 		}
 	}
@@ -579,11 +581,13 @@ bool scanhash_asm32(int thr_id, const unsigned char *midstate,
 		unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
 		const unsigned char *target,
-	        uint32_t max_nonce, unsigned long *hashes_done,
+	        uint32_t max_nonce, uint32_t *last_nonce,
 		uint32_t n)
 {
 	uint32_t *hash32 = (uint32_t *) hash;
-	uint32_t *nonce = (uint32_t *)(data + 12);
+	uint32_t *nonce = (uint32_t *)(data + 76);
+
+	data += 64;
 
 	work_restart[thr_id].restart = 0;
 
@@ -595,12 +599,12 @@ bool scanhash_asm32(int thr_id, const unsigned char *midstate,
 		runhash32(hash, hash1, sha256_init_state);
 
 		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
-			*hashes_done = n;
+			*last_nonce = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || work_restart[thr_id].restart) {
-			*hashes_done = n;
+			*last_nonce = n;
 			return false;
 		}
 	}

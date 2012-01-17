@@ -387,7 +387,7 @@ void gpustatus(int gpu, bool isjson)
 #endif
 			gt = gv = gm = gc = ga = gf = gp = pt = 0;
 
-		if (gpu_devices[gpu])
+		if (cgpu->enabled)
 			enabled = (char *)YES;
 		else
 			enabled = (char *)NO;
@@ -662,13 +662,13 @@ void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	if (gpu_devices[id]) {
+	if (gpus[id].enabled) {
 		strcpy(io_buffer, message(MSG_ALRENA, id, isjson));
 		return;
 	}
 
 	for (i = 0; i < gpu_threads; i++) {
-		gpu = thr_info[i].cgpu->cpu_gpu;
+		gpu = thr_info[i].cgpu->device_id;
 		if (gpu == id) {
 			thr = &thr_info[i];
 			if (thr->cgpu->status != LIFE_WELL) {
@@ -676,7 +676,7 @@ void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 				return;
 			}
 
-			gpu_devices[id] = true;
+			gpus[id].enabled = true;
 			tq_push(thr->q, &ping);
 
 		}
@@ -705,12 +705,12 @@ void gpudisable(SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	if (!gpu_devices[id]) {
+	if (!gpus[id].enabled) {
 		strcpy(io_buffer, message(MSG_ALRDIS, id, isjson));
 		return;
 	}
 
-	gpu_devices[id] = false;
+	gpus[id].enabled = false;
 
 	strcpy(io_buffer, message(MSG_GPUDIS, id, isjson));
 }

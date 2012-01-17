@@ -49,18 +49,20 @@ static uint32_t g_sha256_hinit[8] =
 
 __m128i g_4sha256_k[64];
 
-int scanhash_sse4_64(int thr_id, const unsigned char *pmidstate,
+bool scanhash_sse4_64(int thr_id, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
-    uint32_t *nNonce_p = (uint32_t *)(pdata + 12);
+    uint32_t *nNonce_p = (uint32_t *)(pdata + 76);
     uint32_t m_midstate[8], m_w[16], m_w1[16];
     __m128i m_4w[64], m_4hash[64], m_4hash1[64];
     __m128i offset;
     int i;
+
+	pdata += 64;
 
     work_restart[thr_id].restart = 0;
 
@@ -113,19 +115,20 @@ int scanhash_sse4_64(int thr_id, const unsigned char *pmidstate,
 		}
 
 		if (fulltest(phash, ptarget)) {
-		     *nHashesDone = nonce;
-		     *nNonce_p = nonce + j;
-		     return nonce + j;
+			nonce += j;
+			*last_nonce = nonce;
+			*nNonce_p = nonce;
+			return true;
 		}
 	}
 
-	nonce += 4;
-
         if (unlikely((nonce >= max_nonce) || work_restart[thr_id].restart))
         {
-            *nHashesDone = nonce;
-            return -1;
+			*last_nonce = nonce;
+			return false;
 	}
+
+	nonce += 4;
    }
 }
 
