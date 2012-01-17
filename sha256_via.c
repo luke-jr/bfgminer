@@ -19,9 +19,11 @@ static void via_sha256(void *hash, void *buf, unsigned len)
 		     :"memory");
 }
 
-bool scanhash_via(int thr_id, unsigned char *data_inout,
-		  const unsigned char *target,
-		  uint32_t max_nonce, unsigned long *hashes_done,
+bool scanhash_via(int thr_id, const unsigned char *pmidstate,
+	unsigned char *data_inout,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *target,
+		  uint32_t max_nonce, uint32_t *last_nonce,
 		  uint32_t n)
 {
 	unsigned char data[128] __attribute__((aligned(128)));
@@ -70,12 +72,12 @@ bool scanhash_via(int thr_id, unsigned char *data_inout,
 				dout32[i] = swab32(data32[i]);
 			}
 
-			*hashes_done = n;
+			*last_nonce = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || work_restart[thr_id].restart) {
-			*hashes_done = n;
+			*last_nonce = n;
 			return false;
 		}
 	}

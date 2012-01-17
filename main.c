@@ -146,7 +146,6 @@ const char *algo_names[] = {
 #endif
 };
 
-typedef void (*sha256_func)();
 static const sha256_func sha256_funcs[] = {
 	[ALGO_C]		= (sha256_func)scanhash_c,
 #ifdef WANT_SSE2_4WAY
@@ -488,34 +487,20 @@ static double bench_algo_stage3(
 	struct timeval end;
 	struct timeval start;
 	uint32_t max_nonce = (1<<22);
-	unsigned long hashes_done = 0;
+	uint32_t last_nonce = 0;
 
 	gettimeofday(&start, 0);
-		#if defined(WANT_VIA_PADLOCK)
-
-			// For some reason, the VIA padlock hasher has a different API ...
-			if (ALGO_VIA==algo) {
-				(void)scanhash_via(
-					0,
-					work.data,
-					work.target,
-					max_nonce,
-					&hashes_done,
-					work.blk.nonce
-				);
-			} else
-		#endif
 			{
 				sha256_func func = sha256_funcs[algo];
 				(*func)(
 					0,
 					work.midstate,
-					work.data + 64,
+					work.data,
 					work.hash1,
 					work.hash,
 					work.target,
 					max_nonce,
-					&hashes_done,
+					&last_nonce,
 					work.blk.nonce
 				);
 			}
@@ -528,7 +513,7 @@ static double bench_algo_stage3(
 
 	double rate = -1.0;
 	if (0<usec_elapsed) {
-		rate = (1.0*hashes_done)/usec_elapsed;
+		rate = (1.0*(last_nonce+1))/usec_elapsed;
 	}
 	return rate;
 }
@@ -5465,102 +5450,28 @@ static uint64_t cpu_scanhash(struct thr_info *thr, struct work *work, uint64_t m
 {
 	const int thr_id = thr->id;
 
-	long unsigned int hashes_done = 0;
 	uint32_t first_nonce = work->blk.nonce;
-	bool rc = false;
+	uint32_t last_nonce;
+	bool rc;
+
+CPUSearch:
+	last_nonce = first_nonce;
+	rc = false;
 
 	/* scan nonces for a proof-of-work hash */
-	switch (opt_algo) {
-	case ALGO_C:
-		rc = scanhash_c(thr_id, work->midstate, work->data + 64,
-			        work->hash1, work->hash, work->target,
-				max_nonce, &hashes_done,
-				work->blk.nonce);
-		break;
-#ifdef WANT_X8632_SSE2
-	case ALGO_SSE2_32: {
-		unsigned int rc5 =
-		        scanhash_sse2_32(thr_id, work->midstate, work->data + 64,
-					 work->hash1, work->hash,
-					 work->target,
-				         max_nonce, &hashes_done,
-					 work->blk.nonce);
-		rc = (rc5 == -1) ? false : true;
-		}
-		break;
-#endif
-#ifdef WANT_X8664_SSE2
-	case ALGO_SSE2_64: {
-		unsigned int rc5 =
-		        scanhash_sse2_64(thr_id, work->midstate, work->data + 64,
-					 work->hash1, work->hash,
-					 work->target,
-				         max_nonce, &hashes_done,
-					 work->blk.nonce);
-		rc = (rc5 == -1) ? false : true;
-		}
-		break;
-#endif
-#ifdef WANT_X8664_SSE4
-	case ALGO_SSE4_64: {
-		unsigned int rc5 =
-		        scanhash_sse4_64(thr_id, work->midstate, work->data + 64,
-					 work->hash1, work->hash,
-					 work->target,
-				         max_nonce, &hashes_done,
-					 work->blk.nonce);
-		rc = (rc5 == -1) ? false : true;
-		}
-		break;
-#endif
-#ifdef WANT_SSE2_4WAY
-	case ALGO_4WAY: {
-		unsigned int rc4 =
-			ScanHash_4WaySSE2(thr_id, work->midstate, work->data + 64,
-					  work->hash1, work->hash,
-					  work->target,
-					  max_nonce, &hashes_done,
-					  work->blk.nonce);
-		rc = (rc4 == -1) ? false : true;
-		}
-		break;
-#endif
-#ifdef WANT_ALTIVEC_4WAY
-        case ALGO_ALTIVEC_4WAY:
-        {
-            unsigned int rc4 = ScanHash_altivec_4way(thr_id, work->midstate, work->data + 64,
-                    work->hash1, work->hash,
-                    work->target,
-                    max_nonce, &hashes_done,
-                    work->blk.nonce);
-            rc = (rc4 == -1) ? false : true;
-        }
-        break;
-#endif
-#ifdef WANT_VIA_PADLOCK
-	case ALGO_VIA:
-		rc = scanhash_via(thr_id, work->data, work->target,
-				  max_nonce, &hashes_done,
-				  work->blk.nonce);
-		break;
-#endif
-	case ALGO_CRYPTOPP:
-		rc = scanhash_cryptopp(thr_id, work->midstate, work->data + 64,
-			        work->hash1, work->hash, work->target,
-				max_nonce, &hashes_done,
-				work->blk.nonce);
-		break;
-#ifdef WANT_CRYPTOPP_ASM32
-	case ALGO_CRYPTOPP_ASM32:
-		rc = scanhash_asm32(thr_id, work->midstate, work->data + 64,
-			        work->hash1, work->hash, work->target,
-				max_nonce, &hashes_done,
-				work->blk.nonce);
-		break;
-#endif
-	default:
-		/* should never happen */
-		applog(LOG_ERR, "Unrecognized hash algorithm! This should be impossible!");
+	{
+		sha256_func func = sha256_funcs[opt_algo];
+		rc = (*func)(
+			thr_id,
+			work->midstate,
+			work->data,
+			work->hash1,
+			work->hash,
+			work->target,
+			max_nonce,
+			&last_nonce,
+			work->blk.nonce
+		);
 	}
 
 	/* if nonce found, submit work */
@@ -5570,10 +5481,15 @@ static uint64_t cpu_scanhash(struct thr_info *thr, struct work *work, uint64_t m
 		if (unlikely(!submit_work_sync(thr, work))) {
 			applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
 		}
+		work->blk.nonce = last_nonce + 1;
+		goto CPUSearch;
 	}
+	else
+	if (unlikely(last_nonce == first_nonce))
+		return 0;
 
-	work->blk.nonce = hashes_done;
-	return (uint64_t)hashes_done - first_nonce;
+	work->blk.nonce = last_nonce + 1;
+	return last_nonce - first_nonce + 1;
 }
 
 struct device_api cpu_api = {

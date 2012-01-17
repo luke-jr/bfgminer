@@ -74,14 +74,16 @@ static const unsigned int pSHA256InitState[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
 
-unsigned int ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
+bool ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *nHashesDone,
+	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
-    unsigned int *nNonce_p = (unsigned int*)(pdata + 12);
+    unsigned int *nNonce_p = (unsigned int*)(pdata + 76);
+
+	pdata += 64;
 
     work_restart[thr_id].restart = 0;
 
@@ -104,17 +106,18 @@ unsigned int ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
                     ((unsigned int*)phash)[i] = thash[i][j];
 
 		if (fulltest(phash, ptarget)) {
-			*nHashesDone = nonce;
-			*nNonce_p = nonce + j;
-                	return nonce + j;
+					nonce += j;
+					*last_nonce = nonce;
+					*nNonce_p = nonce;
+					return true;
 		}
             }
         }
 
         if ((nonce >= max_nonce) || work_restart[thr_id].restart)
         {
-            *nHashesDone = nonce;
-            return -1;
+            *last_nonce = nonce;
+            return false;
         }
 
         nonce += NPAR;
