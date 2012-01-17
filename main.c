@@ -4087,31 +4087,23 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	return true;
 }
 
-struct work *hash_pop(const struct timespec *abstime)
+static struct work *hash_pop(const struct timespec *abstime)
 {
 	struct work *work = NULL;
-	int rc;
+	int rc = 0;
 
 	mutex_lock(stgd_lock);
-	if (HASH_COUNT(staged_work))
-		goto pop;
-
-	if (abstime)
+	while (!getq->frozen && !HASH_COUNT(staged_work) && !rc)
 		rc = pthread_cond_timedwait(&getq->cond, stgd_lock, abstime);
-	else
-		rc = pthread_cond_wait(&getq->cond, stgd_lock);
-	if (rc)
-		goto out;
-	if (!HASH_COUNT(staged_work))
-		goto out;
 
-pop:
-	work = staged_work;
-	HASH_DEL(staged_work, work);
-	if (work->clone)
-		--staged_clones;
-out:
+	if (HASH_COUNT(staged_work)) {
+		work = staged_work;
+		HASH_DEL(staged_work, work);
+		if (work->clone)
+			--staged_clones;
+	}
 	mutex_unlock(stgd_lock);
+
 	return work;
 }
 
