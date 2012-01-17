@@ -4178,11 +4178,11 @@ static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_di
 static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 		     const int thr_id, uint32_t hash_div)
 {
+	bool newreq = false, ret = false;
 	struct timespec abstime = {};
 	struct timeval now;
 	struct work *work_heap;
 	struct pool *pool;
-	bool ret = false;
 	int failures = 0;
 
 	/* Tell the watchdog thread this thread is waiting on getwork and
@@ -4190,9 +4190,12 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 	thread_reportout(thr);
 retry:
 	pool = current_pool();
-	if (unlikely((!requested || requests_queued() < opt_queue) && !queue_request(thr, true))) {
-		applog(LOG_WARNING, "Failed to queue_request in get_work");
-		goto out;
+	if (!requested || requests_queued() < opt_queue) {
+		if (unlikely(!queue_request(thr, true))) {
+			applog(LOG_WARNING, "Failed to queue_request in get_work");
+			goto out;
+		}
+		newreq = true;
 	}
 
 	if (can_roll(work) && should_roll(work)) {
@@ -4201,17 +4204,14 @@ retry:
 		goto out;
 	}
 
-	if (!requests_staged()) {
-		if (requested && requests_queued() >= mining_threads &&
-		    !pool_tset(pool, &pool->lagging)) {
-			applog(LOG_WARNING, "Pool %d not providing work fast enough",
-				pool->pool_no);
-			pool->getfail_occasions++;
-			total_go++;
-		}
+	if (requested && !newreq && !requests_staged() && requests_queued() >= mining_threads &&
+	    !pool_tset(pool, &pool->lagging)) {
+		applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
+		pool->getfail_occasions++;
+		total_go++;
 	}
 
-	requested = false;
+	newreq = requested = false;
 	gettimeofday(&now, NULL);
 	abstime.tv_sec = now.tv_sec + 60;
 
