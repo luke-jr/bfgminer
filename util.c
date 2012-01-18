@@ -351,7 +351,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
 	headers = curl_slist_append(headers,
-		"X-Mining-Extensions: rollntime");
+		"X-Mining-Extensions: midstate rollntime");
 	headers = curl_slist_append(headers, len_hdr);
 	headers = curl_slist_append(headers, user_agent_hdr);
 	headers = curl_slist_append(headers, "Expect:"); /* disable Expect hdr*/
