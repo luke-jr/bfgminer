@@ -1145,7 +1145,7 @@ static char *set_gpu_engine(char *arg)
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu engine";
 	get_intrange(nextptr, &val1, &val2);
-	if (val1 < 0 || val1 > 9999 || val2 <= 0 || val2 > 9999)
+	if (val1 < 0 || val1 > 9999 || val2 < 0 || val2 > 9999)
 		return "Invalid value passed to set_gpu_engine";
 
 	gpus[device].min_engine = val1;
@@ -1154,7 +1154,7 @@ static char *set_gpu_engine(char *arg)
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		get_intrange(nextptr, &val1, &val2);
-		if (val1 < 0 || val1 > 9999 || val2 <= 0 || val2 > 9999)
+		if (val1 < 0 || val1 > 9999 || val2 < 0 || val2 > 9999)
 			return "Invalid value passed to set_gpu_engine";
 		gpus[device].min_engine = val1;
 		gpus[device].gpu_engine = val2;
@@ -1216,14 +1216,14 @@ static char *set_gpu_memclock(char *arg)
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu memclock";
 	val = atoi(nextptr);
-	if (val <= 0 || val >= 9999)
+	if (val < 0 || val >= 9999)
 		return "Invalid value passed to set_gpu_memclock";
 
 	gpus[device++].gpu_memclock = val;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
-		if (val <= 0 || val >= 9999)
+		if (val < 0 || val >= 9999)
 			return "Invalid value passed to set_gpu_memclock";
 
 		gpus[device++].gpu_memclock = val;
@@ -1304,14 +1304,14 @@ static char *set_gpu_vddc(char *arg)
 	if (nextptr == NULL)
 		return "Invalid parameters for set gpu vddc";
 	val = atof(nextptr);
-	if (val <= 0 || val >= 9999)
+	if (val < 0 || val >= 9999)
 		return "Invalid value passed to set_gpu_vddc";
 
 	gpus[device++].gpu_vddc = val;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atof(nextptr);
-		if (val <= 0 || val >= 9999)
+		if (val < 0 || val >= 9999)
 			return "Invalid value passed to set_gpu_vddc";
 
 		gpus[device++].gpu_vddc = val;
