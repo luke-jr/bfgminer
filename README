@@ -1,7 +1,7 @@
 
-This is a multi-threaded multi-pool CPU and GPU miner with ATI GPU monitoring,
-(over)clocking and fanspeed support for bitcoin and derivative coins. Do not
-use on multiple block chains at the same time!
+This is a multi-threaded multi-pool CPU, GPU, and FPGA miner with ATI GPU
+monitoring, (over)clocking and fanspeed support for bitcoin and derivative
+coins. Do not use on multiple block chains at the same time!
 
 This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider using the
@@ -161,10 +161,12 @@ Options for both config file and command line:
 --queue|-Q <arg>    Minimum number of work items to have queued (0 - 10) (default: 1)
 --quiet|-q          Disable logging output, display status and errors
 --real-quiet        Disable all output
+--remove-disabled   Remove disabled devices entirely, as if they didn't exist
 --retries|-r <arg>  Number of times to retry before giving up, if JSON-RPC call fails (-1 means never) (default: -1)
 --retry-pause|-R <arg> Number of seconds to pause, between retries (default: 5)
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
+--scan-serial|-S <arg> Serial port to probe for BitForce device
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
