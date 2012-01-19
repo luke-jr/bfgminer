@@ -118,6 +118,7 @@ struct strategies {
 	{ "Load Balance" },
 };
 
+#ifdef WANT_CPUMINE
 static size_t max_name_len = 0;
 static char *name_spaces_pad = NULL;
 const char *algo_names[] = {
@@ -171,6 +172,7 @@ static const sha256_func sha256_funcs[] = {
 	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64
 #endif
 };
+#endif
 
 static char packagename[255];
 
@@ -195,7 +197,8 @@ int opt_scantime = 60;
 int opt_expiry = 120;
 int opt_bench_algo = -1;
 static const bool opt_time = true;
-static bool opt_restart = true;
+
+#ifdef WANT_CPUMINE
 #if defined(WANT_X8664_SSE2) && defined(__SSE2__)
 enum sha256_algos opt_algo = ALGO_SSE2_64;
 #elif defined(WANT_X8632_SSE2) && defined(__SSE2__)
@@ -203,6 +206,16 @@ enum sha256_algos opt_algo = ALGO_SSE2_32;
 #else
 enum sha256_algos opt_algo = ALGO_C;
 #endif
+static bool opt_usecpu;
+static int cpur_thr_id;
+static bool forced_n_threads;
+#endif
+
+#ifdef HAVE_OPENCL
+static bool opt_restart = true;
+static bool opt_nogpu;
+#endif
+
 int nDevs;
 static int opt_g_threads = 2;
 static signed int devices_enabled = 0;
@@ -211,14 +224,11 @@ int total_devices = 0;
 struct cgpu_info *devices[MAX_DEVICES];
 bool have_opencl = false;
 int gpu_threads;
-static bool forced_n_threads;
 int opt_n_threads = -1;
 int mining_threads;
 int num_processors;
 bool use_curses = true;
 static bool opt_submit_stale;
-static bool opt_nogpu;
-static bool opt_usecpu;
 static int opt_shares;
 static bool opt_fail_only;
 bool opt_autofan;
@@ -241,7 +251,6 @@ static int stage_thr_id;
 static int watchdog_thr_id;
 static int input_thr_id;
 static int gpur_thr_id;
-static int cpur_thr_id;
 static int api_thr_id;
 static int total_threads;
 
@@ -466,6 +475,7 @@ static struct pool *current_pool(void)
 	return pool;
 }
 
+#ifdef WANT_CPUMINE
 // Algo benchmark, crash-prone, system independent stage
 static double bench_algo_stage3(
 	enum sha256_algos algo
@@ -939,6 +949,7 @@ static void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo)
 {
 	strncpy(buf, algo_names[*algo], OPT_SHOW_LEN);
 }
+#endif
 
 static char *set_int_range(const char *arg, int *i, int min, int max)
 {
@@ -962,11 +973,13 @@ static char *set_int_1_to_65535(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 65535);
 }
 
+#ifdef WANT_CPUMINE
 static char *force_nthreads_int(const char *arg, int *i)
 {
 	forced_n_threads = true;
 	return set_int_range(arg, i, 0, 9999);
 }
+#endif
 
 static char *set_int_0_to_10(const char *arg, int *i)
 {
@@ -1098,6 +1111,7 @@ static char *set_userpass(const char *arg)
 	return NULL;
 }
 
+#ifdef HAVE_OPENCL
 static char *set_vector(const char *arg, int *i)
 {
 	char *err = opt_set_intval(arg, i);
@@ -1108,6 +1122,7 @@ static char *set_vector(const char *arg, int *i)
 		return "Valid vectors are 1, 2 or 4";
 	return NULL;
 }
+#endif
 
 static char *enable_debug(bool *flag)
 {
@@ -1479,6 +1494,7 @@ static char *set_api_description(const char *arg)
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
+#ifdef WANT_CPUMINE
 	OPT_WITH_ARG("--algo|-a",
 		     set_algo, show_algo, &opt_algo,
 		     "Specify sha256 implementation for CPU mining:\n"
@@ -1507,6 +1523,7 @@ static struct opt_table opt_config_table[] = {
     "\n\taltivec_4way\tAltivec implementation for PowerPC G4 and G5 machines"
 #endif
 		),
+#endif
 	OPT_WITH_ARG("--api-description",
 		     set_api_description, NULL, NULL,
 		     "Description placed in the API status header, default: cgminer version"),
@@ -1527,12 +1544,14 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_autoengine,
 			"Automatically adjust all GPU engine clock speeds to maintain a target temperature"),
 #endif
+#ifdef WANT_CPUMINE
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
 	OPT_WITH_ARG("--cpu-threads|-t",
 		     force_nthreads_int, opt_show_intval, &opt_n_threads,
 		     "Number of miner CPU threads"),
+#endif
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
 		     "Enable debug output"),
@@ -1548,9 +1567,11 @@ static struct opt_table opt_config_table[] = {
 		     set_float_0_to_99, &opt_show_floatval, &opt_donation,
 		     "Set donation percentage to cgminer author (0.0 - 99.9)"),
 #ifdef HAVE_OPENCL
+#ifdef WANT_CPUMINE
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
 			"Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)"),
+#endif
 #endif
 	OPT_WITH_ARG("--expiry|-E",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
@@ -1813,10 +1834,18 @@ static char *opt_verusage_and_exit(const char *extra)
 {
 	printf("%s\n"
 #ifdef HAVE_OPENCL
+#ifdef WANT_CPUMINE
 		"Built with CPU and GPU mining support.\n"
-#else
+#else /* WANT_CPUMINE */
+		"Built with GPU mining support only.\n"
+#endif /* WANT_CPUMINE */
+#else /* HAVE_OPENCL */
+#ifdef WANT_CPUMINE
 		"Built with CPU mining support only.\n"
-#endif
+#else /* WANT_CPUMINE */
+		"Built with NO MINING support lol wtf.\n"
+#endif /* WANT_CPUMINE */
+#endif /* HAVE_OPENCL */
 		, packagename);
 	printf("%s", opt_usage(opt_argv0, extra));
 	fflush(stdout);
@@ -2026,8 +2055,10 @@ static void curses_print_status(void)
 
 	wattron(statuswin, A_BOLD);
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
+#ifdef WANT_CPUMINE
 	if (opt_n_threads)
 		wprintw(statuswin, " CPU Algo: %s", algo_names[opt_algo]);
+#endif
 	wattroff(statuswin, A_BOLD);
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
@@ -3123,9 +3154,14 @@ static void write_config(FILE *fcfg)
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
 #endif
-		fputs("\",\n", fcfg);
+		fputs("\"", fcfg);
+#ifdef WANT_CPUMINE
+		fputs(",\n", fcfg);
+#endif
 	}
+#ifdef WANT_CPUMINE
 	fprintf(fcfg, "\n\"algo\" : \"%s\"", algo_names[opt_algo]);
+#endif
 
 	/* Simple bool and int options */
 	struct opt_table *opt;
@@ -4716,39 +4752,6 @@ static void start_longpoll(void)
 	tq_push(thr_info[longpoll_thr_id].q, &ping);
 }
 
-static void *reinit_cpu(void *userdata)
-{
-	pthread_detach(pthread_self());
-#if 0
-	struct cgpu_info *cgpu = (struct cgpu_info *)userdata;
-	int cpu = cgpu->device_id;
-	long thr_id = ....(long)userdata;
-	struct thr_info *thr = &thr_info[thr_id];
-	int cpu = dev_from_id(thr_id);
-
-	cpus[cpu].alive = false;
-	thr->rolling = thr->cgpu->rolling = 0;
-	tq_freeze(thr->q);
-	if (!pthread_cancel(*thr->pth))
-		pthread_join(*thr->pth, NULL);
-	free(thr->q);
-	thr->q = tq_new();
-	if (!thr->q)
-		quit(1, "Failed to tq_new in reinit_cputhread");
-
-	applog(LOG_INFO, "Reinit CPU thread %d", thr_id);
-
-	if (unlikely(thr_info_create(thr, NULL, miner_thread, thr))) {
-		applog(LOG_ERR, "thread %d create failed", thr_id);
-		return NULL;
-	}
-	tq_push(thr->q, &ping);
-
-	applog(LOG_WARNING, "Thread %d restarted", thr_id);
-#endif
-	return NULL;
-}
-
 #ifdef HAVE_OPENCL
 /* We have only one thread that ever re-initialises GPUs, thus if any GPU
  * init command fails due to a completely wedged GPU, the thread will never
@@ -4859,6 +4862,7 @@ out:
 #else
 static void *reinit_gpu(void *userdata)
 {
+	return NULL;
 }
 #endif
 
@@ -5079,8 +5083,10 @@ static void print_summary(void)
 	applog(LOG_WARNING, "Started at %s", datestamp);
 	if (total_pools == 1)
 		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
+#ifdef WANT_CPUMINE
 	if (opt_n_threads)
 		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
+#endif
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
 	if (total_secs)
 		applog(LOG_WARNING, "Average hashrate: %.1f Megahash/s", total_mhashes_done / total_secs);
@@ -5347,9 +5353,9 @@ static void enable_curses(void) {
 	unlock_curses();
 }
 
-
 struct device_api cpu_api;
 
+#ifdef WANT_CPUMINE
 static void cpu_detect()
 {
 	int i;
@@ -5493,7 +5499,7 @@ struct device_api cpu_api = {
 	.thread_init = cpu_thread_init,
 	.scanhash = cpu_scanhash,
 };
-
+#endif
 
 #ifdef HAVE_OPENCL
 struct device_api opencl_api;
@@ -5797,7 +5803,6 @@ struct device_api opencl_api = {
 };
 #endif
 
-
 static int cgminer_id_count = 0;
 
 void enable_device(struct cgpu_info *cgpu)
@@ -5839,7 +5844,9 @@ int main (int argc, char *argv[])
 
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 
+#ifdef WANT_CPUMINE
 	init_max_name_len();
+#endif
 
 	handler.sa_handler = &sighandler;
 	handler.sa_flags = 0;
@@ -5852,7 +5859,7 @@ int main (int argc, char *argv[])
 	cgminer_path = alloca(PATH_MAX);
 	strcpy(cgminer_path, dirname(argv[0]));
 	strcat(cgminer_path, "/");
-
+#ifdef WANT_CPUMINE
 	// Hack to make cgminer silent when called recursively on WIN32
 	int skip_to_bench = 0;
 	#if defined(WIN32)
@@ -5860,6 +5867,7 @@ int main (int argc, char *argv[])
 		if (GetEnvironmentVariable("CGMINER_BENCH_ALGO", buf, 16))
 			skip_to_bench = 1;
 	#endif // defined(WIN32)
+#endif
 
 	block = calloc(sizeof(struct block), 1);
 	if (unlikely(!block))
@@ -5895,6 +5903,7 @@ int main (int argc, char *argv[])
 	if (want_per_device_stats)
 		opt_log_output = true;
 
+#ifdef WANT_CPUMINE
 	if (0<=opt_bench_algo) {
 		double rate = bench_algo_stage3(opt_bench_algo);
 		if (!skip_to_bench) {
@@ -5930,13 +5939,16 @@ int main (int argc, char *argv[])
 		}
 		exit(0);
 	}
+#endif
 
 #ifdef HAVE_OPENCL
 	if (!opt_nogpu)
 		opencl_api.api_detect();
 #endif
 
+#ifdef WANT_CPUMINE
 	cpu_api.api_detect();
+#endif
 
 	if (devices_enabled == -1) {
 		applog(LOG_ERR, "Devices detected:");
@@ -6168,10 +6180,12 @@ retry_pools:
 
 	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
 
+#ifdef WANT_CPUMINE
 	applog(LOG_INFO, "%d cpu miner threads started, "
 		"using SHA256 '%s' algorithm.",
 		opt_n_threads,
 		algo_names[opt_algo]);
+#endif
 
 	if (use_curses)
 		enable_curses();
@@ -6189,6 +6203,8 @@ retry_pools:
 		quit(1, "input thread create failed");
 	pthread_detach(thr->pth);
 
+#if 0
+#ifdef WANT_CPUMINE
 	/* Create reinit cpu thread */
 	cpur_thr_id = mining_threads + 5;
 	thr = &thr_info[cpur_thr_id];
@@ -6197,6 +6213,8 @@ retry_pools:
 		quit(1, "tq_new failed for cpur_thr_id");
 	if (thr_info_create(thr, NULL, reinit_cpu, thr))
 		quit(1, "reinit_cpu thread create failed");
+#endif
+#endif
 
 	/* Create reinit gpu thread */
 	gpur_thr_id = mining_threads + 6;

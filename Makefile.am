@@ -19,6 +19,7 @@ bin_PROGRAMS	= cgminer
 
 bin_SCRIPTS	= phatk110817.cl poclbm110817.cl
 
+if HAS_CPUMINE
 cgminer_SOURCES	= elist.h miner.h compat.h bench_block.h	\
 		  main.c util.c uthash.h			\
 		  ocl.c ocl.h findnonce.c findnonce.h 		\
@@ -29,6 +30,14 @@ cgminer_SOURCES	= elist.h miner.h compat.h bench_block.h	\
 		  adl.c	adl.h adl_functions.h			\
 		  phatk110817.cl poclbm110817.cl \
 		  sha2.c sha2.h api.c
+else
+cgminer_SOURCES	= elist.h miner.h compat.h bench_block.h	\
+		  main.c util.c uthash.h			\
+		  ocl.c ocl.h findnonce.c findnonce.h 		\
+		  adl.c	adl.h adl_functions.h			\
+		  phatk110817.cl poclbm110817.cl \
+		  sha2.c sha2.h api.c
+endif
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
@@ -36,6 +45,7 @@ cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
 
+if HAS_CPUMINE
 if HAVE_x86_64
 if HAS_YASM
 SUBDIRS		+= x86_64
@@ -47,5 +57,6 @@ if HAS_YASM
 SUBDIRS		+= x86_32
 cgminer_LDADD	+= x86_32/libx8632.a
 AM_CFLAGS	= -DHAS_YASM
+endif
 endif
 endif

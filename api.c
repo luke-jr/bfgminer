@@ -616,13 +616,16 @@ void summary(SOCKETTYPE c, char *param, bool isjson)
 {
 	double utility, mhs;
 
+#ifdef WANT_CPUMINE
 	char *algo = (char *)(algo_names[opt_algo]);
 	if (algo == NULL)
 		algo = "(null)";
+#endif
 
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
 
+#ifdef WANT_CPUMINE
 	if (isjson)
 		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u}" JSON_CLOSE,
 			message(MSG_SUMM, 0, isjson),
@@ -637,6 +640,22 @@ void summary(SOCKETTYPE c, char *param, bool isjson)
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
 			total_go, local_work, total_ro, new_blocks, SEPARATOR);
+#else
+	if (isjson)
+		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u}" JSON_CLOSE,
+			message(MSG_SUMM, 0, isjson),
+			total_secs, mhs, found_blocks,
+			total_getworks, total_accepted, total_rejected,
+			hw_errors, utility, total_discarded, total_stale,
+			total_go, local_work, total_ro, new_blocks);
+	else
+		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
+			message(MSG_SUMM, 0, isjson),
+			total_secs, mhs, found_blocks,
+			total_getworks, total_accepted, total_rejected,
+			hw_errors, utility, total_discarded, total_stale,
+			total_go, local_work, total_ro, new_blocks, SEPARATOR);
+#endif
 }
 
 void gpuenable(SOCKETTYPE c, char *param, bool isjson)

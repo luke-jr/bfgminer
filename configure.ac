@@ -119,6 +119,7 @@ AC_ARG_ENABLE([cpumining],
 if test "x$cpumining" = xyes; then
 	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
 fi
+AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
 
 AC_ARG_ENABLE([opencl],
 	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
@@ -316,9 +317,15 @@ if test "x$opencl" != xno; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
+		if test "x$cpumining" != xyes; then
+			AC_MSG_ERROR([No mining configured in])
+		fi
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
+	if test "x$cpumining" != xyes; then
+		AC_MSG_ERROR([No mining configured in])
+	fi
 fi
 
 if test "x$adl" != xno; then
@@ -334,10 +341,10 @@ fi
 echo
 
 if test "x$cpumining" = xyes; then
-	echo "  CPU MINING...........: Enabled"
+	echo "  CPU Mining...........: Enabled"
 	echo "  ASM.(for CPU mining).: $has_yasm"
 else
-	echo "  CPU MINING...........: Disabled"
+	echo "  CPU Mining...........: Disabled"
 fi
 echo
 echo "Compilation............: make (or gmake)"
