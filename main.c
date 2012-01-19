@@ -1,6 +1,6 @@
 
 /*
- * Copyright 2011 Con Kolivas
+ * Copyright 2011-2012 Con Kolivas
  * Copyright 2011 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *

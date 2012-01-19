@@ -1,6 +1,6 @@
 /*
  * Copyright 2011 Andrew Smith
- * Copyright 2011 Con Kolivas
+ * Copyright 2011-2012 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
