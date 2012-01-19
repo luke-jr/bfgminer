@@ -1844,20 +1844,17 @@ extern const char *opt_argv0;
 
 static char *opt_verusage_and_exit(const char *extra)
 {
-	printf("%s\n"
+	printf("%s\nBuilt with "
 #ifdef HAVE_OPENCL
+		"GPU "
+#endif
 #ifdef WANT_CPUMINE
-		"Built with CPU and GPU mining support.\n"
-#else /* WANT_CPUMINE */
-		"Built with GPU mining support only.\n"
-#endif /* WANT_CPUMINE */
-#else /* HAVE_OPENCL */
-#ifdef WANT_CPUMINE
-		"Built with CPU mining support only.\n"
-#else /* WANT_CPUMINE */
-		"Built with NO MINING support lol wtf.\n"
-#endif /* WANT_CPUMINE */
-#endif /* HAVE_OPENCL */
+		"CPU "
+#endif
+#ifdef USE_BITFORCE
+		"bitforce "
+#endif
+		"mining support.\n"
 		, packagename);
 	printf("%s", opt_usage(opt_argv0, extra));
 	fflush(stdout);
