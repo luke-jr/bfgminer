@@ -28,6 +28,8 @@ irc://irc.freenode.net/cgminer
 
 License: GPLv2.  See COPYING for details.
 
+READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
+
 Dependencies:
 	curl dev library 	http://curl.haxx.se/libcurl/
 	(libcurl4-openssl-dev)
@@ -42,6 +44,11 @@ Dependencies:
 	(This sdk is optional and gives support for GPU mining)
 	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
 	(This sdk is optional and gives support for ATI GPU monitoring & clocking)
+
+CGMiner specific configuration options:
+	--enable-cpumining      Build with cpu mining support(default disabled)
+	--disable-opencl        Override detection and disable building with opencl
+	--disable-adl           Override detection and disable building with adl
 
 Basic *nix build instructions:
 	To build with GPU mining support:
