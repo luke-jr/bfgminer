@@ -1574,10 +1574,10 @@ static struct opt_table opt_config_table[] = {
 		     set_float_0_to_99, &opt_show_floatval, &opt_donation,
 		     "Set donation percentage to cgminer author (0.0 - 99.9)"),
 #ifdef HAVE_OPENCL
-#ifdef WANT_CPUMINE
+#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_BITFORCE))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
-			"Enable CPU mining with GPU mining (default: no CPU mining if suitable GPUs exist)"),
+			"Enable CPU mining with other mining (default: no CPU mining if other devices exist)"),
 #endif
 #endif
 	OPT_WITH_ARG("--expiry|-E",

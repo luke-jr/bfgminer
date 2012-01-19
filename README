@@ -203,7 +203,7 @@ CPU only options:
         sse2_64         SSE2 64 bit implementation for x86_64 machines
         sse4_64         SSE4.1 64 bit implementation for x86_64 machines (default: sse2_64)
 --cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
---enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if suitable devices exist)
+--enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if other devices exist)
 
 
 
