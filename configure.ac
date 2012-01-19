@@ -112,6 +112,14 @@ if test "x$ATISTREAMSDKROOT" != x; then
 	OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ATI_STREAM_ARCH_DIR $OPENCL_LIBS"
 fi
 
+AC_ARG_ENABLE([cpumining],
+	[AC_HELP_STRING([--enable-cpumining],[Build with cpu mining support(default disabled)])],
+	[cpumining=$enableval]
+	)
+if test "x$cpumining" = xyes; then
+	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
+fi
+
 AC_ARG_ENABLE([opencl],
 	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
 	[opencl=$enableval]
@@ -323,7 +331,14 @@ else
 	echo "  ADL..................: Detection overrided. GPU monitoring support DISABLED"
 fi
 
-echo "  ASM.(for CPU mining).: $has_yasm"
+echo
+
+if test "x$cpumining" = xyes; then
+	echo "  CPU MINING...........: Enabled"
+	echo "  ASM.(for CPU mining).: $has_yasm"
+else
+	echo "  CPU MINING...........: Disabled"
+fi
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
