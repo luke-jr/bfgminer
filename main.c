@@ -1746,7 +1746,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_ENDTABLE
 };
 
-static char *parse_config(json_t *config)
+static char *parse_config(json_t *config, bool fileconf)
 {
 	static char err_buf[200];
 	json_t *val;
@@ -1779,7 +1779,7 @@ static char *parse_config(json_t *config)
 					if (json_is_string(json_array_get(val, n)))
 						err = opt->cb_arg(json_string_value(json_array_get(val, n)), opt->u.arg);
 					else if (json_is_object(json_array_get(val, n)))
-						err = parse_config(json_array_get(val, n));
+						err = parse_config(json_array_get(val, n), false);
 				}
 			} else if ((opt->type&OPT_NOARG) && json_is_true(val)) {
 				err = opt->cb(opt->u.arg);
@@ -1787,9 +1787,16 @@ static char *parse_config(json_t *config)
 				err = "Invalid value";
 			}
 			if (err) {
-				sprintf(err_buf, "Parsing JSON option %s: %s",
-					p, err);
-				return err_buf;
+				/* Allow invalid values to be in configuration
+				 * file, just skipping over them provided the
+				 * JSON is still valid after that. */
+				if (fileconf)
+					applog(LOG_ERR, "Invalid config option %s: %s", p, err);
+				else {
+					sprintf(err_buf, "Parsing JSON option %s: %s",
+						p, err);
+					return err_buf;
+				}
 			}
 		}
 		free(name);
@@ -1809,7 +1816,7 @@ static char *load_config(const char *arg, void *unused)
 	config_loaded = true;
 	/* Parse the config now, so we can override it.  That can keep pointers
 	 * so don't free config object. */
-	return parse_config(config);
+	return parse_config(config, true);
 }
 
 static void load_default_config(void)
