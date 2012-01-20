@@ -5005,14 +5005,12 @@ static void *watchdog_thread(void *userdata)
 		}
 
 #ifdef HAVE_OPENCL
-		for (i = 0; i < mining_threads; i++) {
-			struct thr_info *thr;
+		for (i = 0; i < total_devices; ++i) {
+			struct cgpu_info *cgpu = devices[i];
+			struct thr_info *thr = cgpu->thread;
 			bool *enable;
-			struct cgpu_info *cgpu;
 			int gpu;
 
-			thr = &thr_info[i];
-			cgpu = thr->cgpu;
 			if (cgpu->api != &opencl_api)
 				continue;
 			/* Use only one thread per device to determine if the GPU is healthy */
@@ -6221,6 +6219,8 @@ retry_pools:
 
 			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 				quit(1, "thread %d create failed", thr->id);
+
+			cgpu->thread = thr;
 		}
 	}
 
