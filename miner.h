@@ -220,6 +220,7 @@ struct device_api {
 
 	// Device-specific functions
 	void (*reinit_device)(struct cgpu_info*);
+	void (*get_statline_before)(char*, struct cgpu_info*);
 	void (*get_statline)(char*, struct cgpu_info*);
 
 	// Thread-specific functions
