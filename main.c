@@ -1839,8 +1839,11 @@ static void load_default_config(void)
 }
 
 #ifdef HAVE_OPENCL
+struct device_api opencl_api;
+
 static char *print_ndevs_and_exit(int *ndevs)
 {
+	opencl_api.api_detect();
 	printf("%i GPU devices detected\n", *ndevs);
 	fflush(stdout);
 	exit(*ndevs);
