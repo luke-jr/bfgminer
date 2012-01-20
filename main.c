@@ -5871,16 +5871,10 @@ int main (int argc, char *argv[])
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		quit(1, "Failed to curl_global_init");
 
-	if (unlikely(pthread_mutex_init(&hash_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init");
-	if (unlikely(pthread_mutex_init(&qd_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init");
-	if (unlikely(pthread_mutex_init(&curses_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init");
-	if (unlikely(pthread_mutex_init(&control_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init");
-	if (unlikely(pthread_rwlock_init(&blk_lock, NULL)))
-		quit(1, "Failed to pthread_rwlock_init");
+	mutex_init(&hash_lock);
+	mutex_init(&curses_lock);
+	mutex_init(&control_lock);
+	rwlock_init(&blk_lock);
 
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 

@@ -389,6 +389,18 @@ static inline void wr_unlock(pthread_rwlock_t *lock)
 	rw_unlock(lock);
 }
 
+static inline void mutex_init(pthread_mutex_t *lock)
+{
+	if (unlikely(pthread_mutex_init(lock, NULL)))
+		quit(1, "Failed to pthread_mutex_init");
+}
+
+static inline void rwlock_init(pthread_rwlock_t *lock)
+{
+	if (unlikely(pthread_rwlock_init(lock, NULL)))
+		quit(1, "Failed to pthread_rwlock_init");
+}
+
 struct pool;
 
 extern bool opt_debug;
