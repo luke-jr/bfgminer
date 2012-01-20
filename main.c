@@ -5586,9 +5586,9 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 		int gp;
 
 		if (gt != -1)
-			tailsprintf(buf, " %5.1fC ", gt);
+			tailsprintf(buf, "%5.1fC ", gt);
 		else
-			tailsprintf(buf, "        ", gt);
+			tailsprintf(buf, "       ", gt);
 		if (gf != -1)
 			tailsprintf(buf, "%4dRPM ", gf);
 		else if ((gp = gpu_fanpercent(gpuid)) != -1)
