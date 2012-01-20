@@ -2041,6 +2041,8 @@ static void tailsprintf(char *f, const char *fmt, ...)
 static void get_statline(char *buf, struct cgpu_info *cgpu)
 {
 	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
+	if (cgpu->api->get_statline_before)
+		cgpu->api->get_statline_before(buf, cgpu);
 	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.2f/m",
 		opt_log_interval,
 		cgpu->rolling,
@@ -2114,6 +2116,11 @@ static void curses_print_devstatus(int thr_id)
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 	mvwprintw(statuswin, devcursor + cgpu->cgminer_id, 0, " %s %d: ", cgpu->api->name, cgpu->device_id);
+	if (cgpu->api->get_statline_before) {
+		logline[0] = '\0';
+		cgpu->api->get_statline_before(logline, cgpu);
+		wprintw(statuswin, "%s", logline);
+	}
 		if (cgpu->status == LIFE_DEAD)
 			wprintw(statuswin, "DEAD ");
 		else if (cgpu->status == LIFE_SICK)
@@ -5563,10 +5570,9 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 	tq_push(thr_info[gpur_thr_id].q, gpu);
 }
 
-static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
-{
-	tailsprintf(buf, " | I:%2d", gpu->intensity);
 #ifdef HAVE_ADL
+static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
+{
 	if (gpu->has_adl) {
 		int gpuid = gpu->device_id;
 		float gt = gpu_temp(gpuid);
@@ -5578,11 +5584,19 @@ static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
 		else
 			tailsprintf(buf, "        ", gt);
 		if (gf != -1)
-			tailsprintf(buf, " %4dRPM", gf);
+			tailsprintf(buf, "%4dRPM ", gf);
 		else if ((gp = gpu_fanpercent(gpuid)) != -1)
-			tailsprintf(buf, " %3d%%", gp);
+			tailsprintf(buf, "%3d%%    ", gp);
+		else
+			tailsprintf(buf, "        ");
+		tailsprintf(buf, "| ");
 	}
+}
 #endif
+
+static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
+{
+	tailsprintf(buf, " I:%2d", gpu->intensity);
 }
 
 struct opencl_thread_data {
@@ -5810,6 +5824,9 @@ struct device_api opencl_api = {
 	.name = "GPU",
 	.api_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
+#ifdef HAVE_ADL
+	.get_statline_before = get_opencl_statline_before,
+#endif
 	.get_statline = get_opencl_statline,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
