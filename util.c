@@ -42,6 +42,7 @@
 #endif
 
 bool successful_connect = false;
+struct timeval nettime;
 
 struct data_buffer {
 	void		*buf;
@@ -286,6 +287,21 @@ int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purp
 }
 #endif
 
+static void last_nettime(struct timeval *last)
+{
+	rd_lock(&netacc_lock);
+	last->tv_sec = nettime.tv_sec;
+	last->tv_usec = nettime.tv_usec;
+	rd_unlock(&netacc_lock);
+}
+
+static void set_nettime(void)
+{
+	wr_lock(&netacc_lock);
+	gettimeofday(&nettime, NULL);
+	wr_unlock(&netacc_lock);
+}
+
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool probe, bool longpoll, bool *rolltime,
@@ -358,6 +374,25 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
+	if (opt_delaynet) {
+		long long now_msecs, last_msecs;
+		struct timeval now, last;
+
+		gettimeofday(&now, NULL);
+		last_nettime(&last);
+		now_msecs = (long long)now.tv_sec * 1000;
+		now_msecs += now.tv_usec / 1000;
+		last_msecs = (long long)last.tv_sec * 1000;
+		last_msecs += last.tv_usec / 1000;
+		if (now_msecs > last_msecs && now_msecs - last_msecs < 250) {
+			struct timespec rgtp;
+
+			rgtp.tv_sec = 0;
+			rgtp.tv_nsec = (250 - (now_msecs - last_msecs)) * 1000000;
+			nanosleep(&rgtp, NULL);
+		}
+		set_nettime();
+	}
 	rc = curl_easy_perform(curl);
 	if (rc) {
 		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);

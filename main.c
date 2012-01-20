@@ -239,6 +239,7 @@ char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
 bool opt_api_listen = false;
 bool opt_api_network = false;
+bool opt_delaynet = false;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -262,6 +263,8 @@ static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 static pthread_mutex_t curses_lock;
 static pthread_rwlock_t blk_lock;
+pthread_rwlock_t netacc_lock;
+
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
@@ -1631,6 +1634,9 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_charp, NULL, &opt_stderr_cmd,
 		     "Use custom pipe cmd for output messages"),
 #endif // defined(unix)
+	OPT_WITHOUT_ARG("--net-delay",
+			opt_set_bool, &opt_delaynet,
+			"Impose small delays in networking to not overload slow routers"),
 #ifdef HAVE_ADL
 	OPT_WITHOUT_ARG("--no-adl",
 			opt_set_bool, &opt_noadl,
@@ -5875,6 +5881,7 @@ int main (int argc, char *argv[])
 	mutex_init(&curses_lock);
 	mutex_init(&control_lock);
 	rwlock_init(&blk_lock);
+	rwlock_init(&netacc_lock);
 
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 

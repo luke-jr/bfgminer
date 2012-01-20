@@ -415,6 +415,9 @@ extern char *opt_api_description;
 extern int opt_api_port;
 extern bool opt_api_listen;
 extern bool opt_api_network;
+extern bool opt_delaynet;
+
+extern pthread_rwlock_t netacc_lock;
 
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
