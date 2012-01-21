@@ -725,6 +725,11 @@ further. The starting fan speed is set to 85% in auto-fan mode as a safety
 precaution, but if a specific fan speed has been set, it will use that first
 before adjusting automatically.
 
+Q: The fanspeed starts at 85% with --auto-fan. Can I set it lower?
+A: The initial fanspeed will always start at 85% unless you choose your own
+value with --gpu-fan. In this case it will use the value you give it with
+--gpu-fan as the first fanspeed.
+
 Q: Why is my efficiency above/below 100%?
 A: Efficiency simply means how many shares you return for the amount of work
 you request. It does not correlate with efficient use of your hardware, and is
