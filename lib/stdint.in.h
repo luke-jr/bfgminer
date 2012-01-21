@@ -34,6 +34,14 @@
    <inttypes.h>.  */
 #define _GL_JUST_INCLUDE_SYSTEM_INTTYPES_H
 
+/* On Android (Bionic libc), <sys/types.h> includes this file before
+   having defined 'time_t'.  Therefore in this case avoid including
+   other system header files; just include the system's <stdint.h>.  */
+#if defined __BIONIC__ \
+    && defined _SYS_TYPES_H_ && !defined _SSIZE_T_DEFINED_
+# @INCLUDE_NEXT@ @NEXT_STDINT_H@
+#else
+
 /* Get those types that are already defined in other system include
    files, so that we can "#define int8_t signed char" below without
    worrying about a later system include file containing a "typedef
@@ -589,4 +597,5 @@ typedef int _verify_intmax_size[sizeof (intmax_t) == sizeof (uintmax_t)
 #endif /* !defined __cplusplus || defined __STDC_CONSTANT_MACROS */
 
 #endif /* _@GUARD_PREFIX@_STDINT_H */
+#endif /* !(defined __BIONIC__ && ...) */
 #endif /* !defined _@GUARD_PREFIX@_STDINT_H && !defined _GL_JUST_INCLUDE_SYSTEM_STDINT_H */
