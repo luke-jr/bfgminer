@@ -307,6 +307,7 @@ struct block {
 static struct block *blocks = NULL;
 
 static char *opt_kernel = NULL;
+char *opt_socks_proxy = NULL;
 
 static const char def_conf[] = "cgminer.conf";
 static bool config_loaded = false;
@@ -1700,6 +1701,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--shares",
 		     opt_set_intval, NULL, &opt_shares,
 		     "Quit after mining N shares (default: unlimited)"),
+	OPT_WITH_ARG("--socks-proxy",
+		     opt_set_charp, NULL, &opt_socks_proxy,
+		     "Set socks4 proxy (host:port)"),
 	OPT_WITHOUT_ARG("--submit-stale",
 			opt_set_bool, &opt_submit_stale,
 		        "Submit shares even if they would normally be considered stale"),
@@ -3241,6 +3245,8 @@ static void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"sched-time\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
 	if (schedstop.enable)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
+	if (opt_socks_proxy && *opt_socks_proxy)
+		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", opt_socks_proxy);
 	for(i = 0; i < nDevs; i++)
 		if (!gpus[i].enabled)
 			break;
