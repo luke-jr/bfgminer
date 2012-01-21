@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Andrew Smith
+ * Copyright 2011-2012 Andrew Smith
  * Copyright 2011-2012 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -150,7 +150,11 @@ static const char SEPARATOR = '|';
 #define _SUMMARY	"SUMMARY"
 #define _STATUS		"STATUS"
 #define _VERSION	"VERSION"
+
+#ifdef WANT_CPUMINE
 #define _CPU		"CPU"
+#endif
+
 #define _GPU		"GPU"
 #define _CPUS		"CPUS"
 #define _GPUS		"GPUS"
@@ -170,7 +174,11 @@ static const char ISJSON = '{';
 #define JSON_STATUS	JSON1 _STATUS JSON2
 #define JSON_VERSION	JSON1 _VERSION JSON2
 #define JSON_GPU	JSON1 _GPU JSON2
+
+#ifdef WANT_CPUMINE
 #define JSON_CPU	JSON1 _CPU JSON2
+#endif
+
 #define JSON_GPUS	JSON1 _GPUS JSON2
 #define JSON_CPUS	JSON1 _CPUS JSON2
 #define JSON_BYE	JSON1 _BYE JSON1
@@ -195,10 +203,14 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_GPUREI 13
 #define MSG_INVCMD 14
 #define MSG_MISID 15
-#define MSG_CPUNON 16
 #define MSG_GPUDEV 17
+
+#ifdef WANT_CPUMINE
+#define MSG_CPUNON 16
 #define MSG_CPUDEV 18
 #define MSG_INVCPU 19
+#endif
+
 #define MSG_NUMGPU 20
 #define MSG_NUMCPU 21
 #define MSG_VERSION 22
@@ -219,7 +231,11 @@ enum code_parameters {
 	PARAM_GPUMAX,
 	PARAM_CPUMAX,
 	PARAM_PMAX,
+#ifdef WANT_CPUMINE
 	PARAM_GCMAX,
+#else
+	PARAM_GMAX,
+#endif
 	PARAM_CMD,
 	PARAM_NONE
 };
@@ -238,26 +254,33 @@ struct CODES {
  { SEVERITY_ERR,   MSG_GPUNON,	PARAM_NONE,	"No GPUs" },
  { SEVERITY_SUCC,  MSG_POOL,	PARAM_PMAX,	"%d Pool(s)" },
  { SEVERITY_ERR,   MSG_NOPOOL,	PARAM_NONE,	"No pools" },
+#ifdef WANT_CPUMINE
  { SEVERITY_SUCC,  MSG_DEVS,	PARAM_GCMAX,	"%d GPU(s) - %d CPU(s)" },
  { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs/CPUs" },
+#else
+ { SEVERITY_SUCC,  MSG_DEVS,	PARAM_GMAX,	"%d GPU(s)" },
+ { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs" },
+#endif
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
  { SEVERITY_INFO,  MSG_GPUDIS,	PARAM_GPU,	"GPU %d set disable flag" },
  { SEVERITY_INFO,  MSG_GPUREI,	PARAM_GPU,	"GPU %d restart attempted" },
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
- { SEVERITY_ERR,   MSG_CPUNON,	PARAM_NONE,	"No CPUs" },
  { SEVERITY_SUCC,  MSG_GPUDEV,	PARAM_GPU,	"GPU%d" },
+#ifdef WANT_CPUMINE
+ { SEVERITY_ERR,   MSG_CPUNON,	PARAM_NONE,	"No CPUs" },
  { SEVERITY_SUCC,  MSG_CPUDEV,	PARAM_CPU,	"CPU%d" },
  { SEVERITY_ERR,   MSG_INVCPU,	PARAM_CPUMAX,	"Invalid CPU id %d - range is 0 - %d" },
+#endif
  { SEVERITY_SUCC,  MSG_NUMGPU,	PARAM_NONE,	"GPU count" },
  { SEVERITY_SUCC,  MSG_NUMCPU,	PARAM_NONE,	"CPU count" },
- { SEVERITY_SUCC,  MSG_VERSION,	PARAM_CPU,	"CGMiner versions" },
+ { SEVERITY_SUCC,  MSG_VERSION,	PARAM_NONE,	"CGMiner versions" },
  { SEVERITY_ERR,   MSG_INVJSON,	PARAM_NONE,	"Invalid JSON" },
  { SEVERITY_ERR,   MSG_MISSCMD,	PARAM_CMD,	"Missing JSON '%s'" },
  { SEVERITY_FAIL }
 };
 
-static const char *APIVERSION = "0.7";
+static const char *APIVERSION = "0.8";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -278,7 +301,9 @@ static char *message(int messageid, int gpuid, bool isjson)
 {
 	char severity;
 	char *ptr;
+#ifdef WANT_CPUMINE
 	int cpu;
+#endif
 	int i;
 
 	for (i = 0; codes[i].severity != SEVERITY_FAIL; i++) {
@@ -319,6 +344,7 @@ static char *message(int messageid, int gpuid, bool isjson)
 			case PARAM_PMAX:
 				sprintf(ptr, codes[i].description, total_pools);
 				break;
+#ifdef WANT_CPUMINE
 			case PARAM_GCMAX:
 				if (opt_n_threads > 0)
 					cpu = num_processors;
@@ -327,6 +353,11 @@ static char *message(int messageid, int gpuid, bool isjson)
 
 				sprintf(ptr, codes[i].description, nDevs, cpu);
 				break;
+#else
+			case PARAM_GMAX:
+				sprintf(ptr, codes[i].description, nDevs);
+				break;
+#endif
 			case PARAM_CMD:
 				sprintf(ptr, codes[i].description, JSON_COMMAND);
 				break;
@@ -423,6 +454,7 @@ void gpustatus(int gpu, bool isjson)
 	}
 }
 
+#ifdef WANT_CPUMINE
 void cpustatus(int cpu, bool isjson)
 {
 	char buf[BUFSIZ];
@@ -448,6 +480,7 @@ void cpustatus(int cpu, bool isjson)
 		strcat(io_buffer, buf);
 	}
 }
+#endif
 
 void devstatus(SOCKETTYPE c, char *param, bool isjson)
 {
@@ -472,6 +505,7 @@ void devstatus(SOCKETTYPE c, char *param, bool isjson)
 		gpustatus(i, isjson);
 	}
 
+#ifdef WANT_CPUMINE
 	if (opt_n_threads > 0)
 		for (i = 0; i < num_processors; i++) {
 			if (isjson && (i > 0 || nDevs > 0))
@@ -479,6 +513,7 @@ void devstatus(SOCKETTYPE c, char *param, bool isjson)
 
 			cpustatus(i, isjson);
 		}
+#endif
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
@@ -517,6 +552,7 @@ void gpudev(SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
+#ifdef WANT_CPUMINE
 void cpudev(SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
@@ -549,6 +585,7 @@ void cpudev(SOCKETTYPE c, char *param, bool isjson)
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
+#endif
 
 void poolstatus(SOCKETTYPE c, char *param, bool isjson)
 {
@@ -776,13 +813,18 @@ void gpucount(SOCKETTYPE c, char *param, bool isjson)
 void cpucount(SOCKETTYPE c, char *param, bool isjson)
 {
 	char buf[BUFSIZ];
+	int count = 0;
+
+#ifdef WANT_CPUMINE
+	count = opt_n_threads > 0 ? num_processors : 0;
+#endif
 
 	strcpy(io_buffer, message(MSG_NUMCPU, 0, isjson));
 
 	if (isjson)
-		sprintf(buf, "," JSON_CPUS "{\"Count\":%d}" JSON_CLOSE, opt_n_threads > 0 ? num_processors : 0);
+		sprintf(buf, "," JSON_CPUS "{\"Count\":%d}" JSON_CLOSE, count);
 	else
-		sprintf(buf, _CPUS ",Count=%d%c", opt_n_threads > 0 ? num_processors : 0, SEPARATOR);
+		sprintf(buf, _CPUS ",Count=%d%c", count, SEPARATOR);
 
 	strcat(io_buffer, buf);
 }
@@ -814,7 +856,9 @@ struct CMDS {
 	{ "gpudisable",	gpudisable },
 	{ "gpurestart",	gpurestart },
 	{ "gpu",	gpudev },
+#ifdef WANT_CPUMINE
 	{ "cpu",	cpudev },
+#endif
 	{ "gpucount",	gpucount },
 	{ "cpucount",	cpucount },
 	{ "quit",	doquit },
