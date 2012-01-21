@@ -214,7 +214,7 @@ int callapi(char *command, char *host, short int port)
 		return 1;
 	}
 
-	n = send(sock, command, strlen(command)+1, 0);
+	n = send(sock, command, strlen(command), 0);
 	if (SOCKETFAIL(n)) {
 		printf("Send failed: %s\n", SOCKERRMSG);
 		ret = 1;
