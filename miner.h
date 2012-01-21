@@ -274,6 +274,10 @@ struct cgpu_info {
 #define PTH(thr) ((thr)->pth)
 #else
 #define PTH(thr) ((thr)->pth.p)
+static inline void nanosleep(struct timespec *rgtp, void *__unused)
+{
+	Sleep(rgtp->tv_nsec / 1000000);
+}
 #endif
 
 struct thread_q {
