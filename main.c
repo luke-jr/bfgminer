@@ -5867,6 +5867,7 @@ int main (int argc, char *argv[])
 		quit(1, "Failed to curl_global_init");
 
 	mutex_init(&hash_lock);
+	mutex_init(&qd_lock);
 	mutex_init(&curses_lock);
 	mutex_init(&control_lock);
 	rwlock_init(&blk_lock);
