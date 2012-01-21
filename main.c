@@ -4896,14 +4896,6 @@ void reinit_device(struct cgpu_info *cgpu)
 		cgpu->api->reinit_device(cgpu);
 }
 
-/* Determine which are the first threads belonging to a device and if they're
- * active */
-static bool active_device(int thr_id)
-{
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
-	return cgpu->enabled;
-}
-
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
@@ -5077,16 +5069,12 @@ static void *watchdog_thread(void *userdata)
 	return NULL;
 }
 
-static void log_print_status(int thr_id)
+static void log_print_status(struct cgpu_info *cgpu)
 {
-	struct cgpu_info *cgpu;
 	char logline[255];
 
-	cgpu = thr_info[thr_id].cgpu;
-	if (cgpu) {
 		get_statline(logline, cgpu);
 		applog(LOG_WARNING, "%s", logline);
-	}
 }
 
 static void print_summary(void)
@@ -5157,9 +5145,9 @@ static void print_summary(void)
 		applog(LOG_WARNING, "Donated share submissions: %d\n", donationpool.accepted + donationpool.rejected);
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
-	for (i = 0; i < mining_threads; i++) {
-		if (active_device(i))
-			log_print_status(i);
+	for (i = 0; i < total_devices; ++i) {
+		if (devices[i]->enabled)
+			log_print_status(devices[i]);
 	}
 
 	if (opt_shares)
