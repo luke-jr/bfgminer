@@ -144,12 +144,26 @@ static const char *UNAVAILABLE = " - API will not be available";
 //static const char *BLANK = "";
 static const char *COMMA = ",";
 static const char SEPARATOR = '|';
+static const char GPUSEP = ',';
+
+static const char *APIVERSION = "1.0";
+static const char *DEAD = "Dead";
+static const char *SICK = "Sick";
+static const char *NOSTART = "NoStart";
+static const char *DISABLED = "Disabled";
+static const char *ALIVE = "Alive";
+#define _DYNAMIC "D"
+static const char *DYNAMIC = _DYNAMIC;
+
+static const char *YES = "Y";
+static const char *NO = "N";
 
 #define _DEVS		"DEVS"
 #define _POOLS		"POOLS"
 #define _SUMMARY	"SUMMARY"
 #define _STATUS		"STATUS"
 #define _VERSION	"VERSION"
+#define _MINECON	"CONFIG"
 
 #ifdef WANT_CPUMINE
 #define _CPU		"CPU"
@@ -173,6 +187,7 @@ static const char ISJSON = '{';
 #define JSON_SUMMARY	JSON1 _SUMMARY JSON2
 #define JSON_STATUS	JSON1 _STATUS JSON2
 #define JSON_VERSION	JSON1 _VERSION JSON2
+#define JSON_MINECON	JSON1 _MINECON JSON2
 #define JSON_GPU	JSON1 _GPU JSON2
 
 #ifdef WANT_CPUMINE
@@ -215,7 +230,27 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_NUMCPU 21
 #define MSG_VERSION 22
 #define MSG_INVJSON 23
-#define MSG_MISSCMD 24
+#define MSG_MISCMD 24
+#define MSG_MISPID 25
+#define MSG_INVPID 26
+#define MSG_SWITCHP 27
+#define MSG_MISVAL 28
+#define MSG_NOADL 29
+#define MSG_NOGPUADL 30
+#define MSG_INVINT 31
+#define MSG_GPUINT 32
+#define MSG_MINECON 33
+#define MSG_GPUMERR 34
+#define MSG_GPUMEM 35
+#define MSG_GPUEERR 36
+#define MSG_GPUENG 37
+#define MSG_GPUVERR 38
+#define MSG_GPUVDDC 39
+#define MSG_GPUFERR 40
+#define MSG_GPUFAN 41
+#define MSG_MISFN 42
+#define MSG_BADFN 43
+#define MSG_SAVED 44
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -231,12 +266,16 @@ enum code_parameters {
 	PARAM_GPUMAX,
 	PARAM_CPUMAX,
 	PARAM_PMAX,
+	PARAM_POOLMAX,
 #ifdef WANT_CPUMINE
 	PARAM_GCMAX,
 #else
 	PARAM_GMAX,
 #endif
 	PARAM_CMD,
+	PARAM_POOL,
+	PARAM_STR,
+	PARAM_BOTH,
 	PARAM_NONE
 };
 
@@ -276,20 +315,29 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_NUMCPU,	PARAM_NONE,	"CPU count" },
  { SEVERITY_SUCC,  MSG_VERSION,	PARAM_NONE,	"CGMiner versions" },
  { SEVERITY_ERR,   MSG_INVJSON,	PARAM_NONE,	"Invalid JSON" },
- { SEVERITY_ERR,   MSG_MISSCMD,	PARAM_CMD,	"Missing JSON '%s'" },
+ { SEVERITY_ERR,   MSG_MISCMD,	PARAM_CMD,	"Missing JSON '%s'" },
+ { SEVERITY_ERR,   MSG_MISPID,	PARAM_NONE,	"Missing pool id parameter" },
+ { SEVERITY_ERR,   MSG_INVPID,	PARAM_POOLMAX,	"Invalid pool id %d - range is 0 - %d" },
+ { SEVERITY_SUCC,  MSG_SWITCHP,	PARAM_POOL,	"Switching to pool %d:'%s'" },
+ { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
+ { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
+ { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
+ { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range -10 - 10" },
+ { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
+ { SEVERITY_SUCC,  MSG_MINECON, PARAM_NONE,	"CGMiner config" },
+ { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
+ { SEVERITY_SUCC,  MSG_GPUMEM,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported succeess" },
+ { SEVERITY_ERR,   MSG_GPUEERR,	PARAM_BOTH,	"Setting GPU %d clock to (%s) reported failure" },
+ { SEVERITY_SUCC,  MSG_GPUENG,	PARAM_BOTH,	"Setting GPU %d clock to (%s) reported succeess" },
+ { SEVERITY_ERR,   MSG_GPUVERR,	PARAM_BOTH,	"Setting GPU %d vddc to (%s) reported failure" },
+ { SEVERITY_SUCC,  MSG_GPUVDDC,	PARAM_BOTH,	"Setting GPU %d vddc to (%s) reported succeess" },
+ { SEVERITY_ERR,   MSG_GPUFERR,	PARAM_BOTH,	"Setting GPU %d fan to (%s) reported failure" },
+ { SEVERITY_SUCC,  MSG_GPUFAN,	PARAM_BOTH,	"Setting GPU %d fan to (%s) reported succeess" },
+ { SEVERITY_ERR,   MSG_MISFN,	PARAM_NONE,	"Missing save filename parameter" },
+ { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
+ { SEVERITY_ERR,   MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
  { SEVERITY_FAIL }
 };
-
-static const char *APIVERSION = "0.8";
-static const char *DEAD = "Dead";
-static const char *SICK = "Sick";
-static const char *NOSTART = "NoStart";
-static const char *DISABLED = "Disabled";
-static const char *ALIVE = "Alive";
-static const char *DYNAMIC = "D";
-
-static const char *YES = "Y";
-static const char *NO = "N";
 
 static int bye = 0;
 static bool ping = true;
@@ -297,7 +345,7 @@ static bool ping = true;
 // All replies (except BYE) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
 //  and send_result() adds JSON_END at the end
-static char *message(int messageid, int gpuid, bool isjson)
+static char *message(int messageid, int paramid, char *param2, bool isjson)
 {
 	char severity;
 	char *ptr;
@@ -333,16 +381,20 @@ static char *message(int messageid, int gpuid, bool isjson)
 
 			switch(codes[i].params) {
 			case PARAM_GPU:
-				sprintf(ptr, codes[i].description, gpuid);
-				break;
 			case PARAM_CPU:
-				sprintf(ptr, codes[i].description, gpuid);
+				sprintf(ptr, codes[i].description, paramid);
+				break;
+			case PARAM_POOL:
+				sprintf(ptr, codes[i].description, paramid, pools[paramid]->rpc_url);
 				break;
 			case PARAM_GPUMAX:
-				sprintf(ptr, codes[i].description, gpuid, nDevs - 1);
+				sprintf(ptr, codes[i].description, paramid, nDevs - 1);
 				break;
 			case PARAM_PMAX:
 				sprintf(ptr, codes[i].description, total_pools);
+				break;
+			case PARAM_POOLMAX:
+				sprintf(ptr, codes[i].description, paramid, total_pools - 1);
 				break;
 #ifdef WANT_CPUMINE
 			case PARAM_GCMAX:
@@ -360,6 +412,12 @@ static char *message(int messageid, int gpuid, bool isjson)
 #endif
 			case PARAM_CMD:
 				sprintf(ptr, codes[i].description, JSON_COMMAND);
+				break;
+			case PARAM_STR:
+				sprintf(ptr, codes[i].description, param2);
+				break;
+			case PARAM_BOTH:
+				sprintf(ptr, codes[i].description, paramid, param2);
 				break;
 			case PARAM_NONE:
 			default:
@@ -387,19 +445,52 @@ static char *message(int messageid, int gpuid, bool isjson)
 	return msg_buffer;
 }
 
-void apiversion(SOCKETTYPE c, char *param, bool isjson)
+static void apiversion(SOCKETTYPE c, char *param, bool isjson)
 {
 	if (isjson)
 		sprintf(io_buffer, "%s," JSON_VERSION "{\"CGMiner\":\"%s\",\"API\":\"%s\"}" JSON_CLOSE,
-			message(MSG_VERSION, 0, isjson),
+			message(MSG_VERSION, 0, NULL, isjson),
 			VERSION, APIVERSION);
 	else
 		sprintf(io_buffer, "%s" _VERSION ",CGMiner=%s,API=%s%c",
-			message(MSG_VERSION, 0, isjson),
+			message(MSG_VERSION, 0, NULL, isjson),
 			VERSION, APIVERSION, SEPARATOR);
 }
 
-void gpustatus(int gpu, bool isjson)
+static void minerconfig(SOCKETTYPE c, char *param, bool isjson)
+{
+	char buf[BUFSIZ];
+	int cpucount = 0;
+	char *adlinuse = (char *)NO;
+#ifdef HAVE_ADL
+	const char *adl = YES;
+	int i;
+
+	for (i = 0; i < nDevs; i++) {
+		if (gpus[i].has_adl) {
+			adlinuse = (char *)YES;
+			break;
+		}
+	}
+#else
+	const char *adl = NO;
+#endif
+
+#ifdef WANT_CPUMINE
+	cpucount = opt_n_threads > 0 ? num_processors : 0;
+#endif
+
+	strcpy(io_buffer, message(MSG_MINECON, 0, NULL, isjson));
+
+	if (isjson)
+		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\"}" JSON_CLOSE, nDevs, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s);
+	else
+		sprintf(buf, _MINECON ",GPU Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s%c", nDevs, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, SEPARATOR);
+
+	strcat(io_buffer, buf);
+}
+
+static void gpustatus(int gpu, bool isjson)
 {
 	char intensity[20];
 	char buf[BUFSIZ];
@@ -455,7 +546,7 @@ void gpustatus(int gpu, bool isjson)
 }
 
 #ifdef WANT_CPUMINE
-void cpustatus(int cpu, bool isjson)
+static void cpustatus(int cpu, bool isjson)
 {
 	char buf[BUFSIZ];
 
@@ -482,16 +573,16 @@ void cpustatus(int cpu, bool isjson)
 }
 #endif
 
-void devstatus(SOCKETTYPE c, char *param, bool isjson)
+static void devstatus(SOCKETTYPE c, char *param, bool isjson)
 {
 	int i;
 
 	if (nDevs == 0 && opt_n_threads == 0) {
-		strcpy(io_buffer, message(MSG_NODEVS, 0, isjson));
+		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_DEVS, 0, isjson));
+	strcpy(io_buffer, message(MSG_DEVS, 0, NULL, isjson));
 
 	if (isjson) {
 		strcat(io_buffer, COMMA);
@@ -519,27 +610,27 @@ void devstatus(SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-void gpudev(SOCKETTYPE c, char *param, bool isjson)
+static void gpudev(SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
 	if (nDevs == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, isjson));
+		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, isjson));
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, isjson));
+		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_GPUDEV, id, isjson));
+	strcpy(io_buffer, message(MSG_GPUDEV, id, NULL, isjson));
 
 	if (isjson) {
 		strcat(io_buffer, COMMA);
@@ -553,27 +644,27 @@ void gpudev(SOCKETTYPE c, char *param, bool isjson)
 }
 
 #ifdef WANT_CPUMINE
-void cpudev(SOCKETTYPE c, char *param, bool isjson)
+static void cpudev(SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
 	if (opt_n_threads == 0) {
-		strcpy(io_buffer, message(MSG_CPUNON, 0, isjson));
+		strcpy(io_buffer, message(MSG_CPUNON, 0, NULL, isjson));
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, isjson));
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= num_processors) {
-		strcpy(io_buffer, message(MSG_INVCPU, id, isjson));
+		strcpy(io_buffer, message(MSG_INVCPU, id, NULL, isjson));
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_CPUDEV, id, isjson));
+	strcpy(io_buffer, message(MSG_CPUDEV, id, NULL, isjson));
 
 	if (isjson) {
 		strcat(io_buffer, COMMA);
@@ -587,18 +678,18 @@ void cpudev(SOCKETTYPE c, char *param, bool isjson)
 }
 #endif
 
-void poolstatus(SOCKETTYPE c, char *param, bool isjson)
+static void poolstatus(SOCKETTYPE c, char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 	char *status, *lp;
 	int i;
 
 	if (total_pools == 0) {
-		strcpy(io_buffer, message(MSG_NOPOOL, 0, isjson));
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_POOL, 0, isjson));
+	strcpy(io_buffer, message(MSG_POOL, 0, NULL, isjson));
 
 	if (isjson) {
 		strcat(io_buffer, COMMA);
@@ -649,7 +740,7 @@ void poolstatus(SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-void summary(SOCKETTYPE c, char *param, bool isjson)
+static void summary(SOCKETTYPE c, char *param, bool isjson)
 {
 	double utility, mhs;
 
@@ -665,14 +756,14 @@ void summary(SOCKETTYPE c, char *param, bool isjson)
 #ifdef WANT_CPUMINE
 	if (isjson)
 		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u}" JSON_CLOSE,
-			message(MSG_SUMM, 0, isjson),
+			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, algo, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
 			total_go, local_work, total_ro, new_blocks);
 	else
 		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
-			message(MSG_SUMM, 0, isjson),
+			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, algo, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
@@ -680,14 +771,14 @@ void summary(SOCKETTYPE c, char *param, bool isjson)
 #else
 	if (isjson)
 		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u}" JSON_CLOSE,
-			message(MSG_SUMM, 0, isjson),
+			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
 			total_go, local_work, total_ro, new_blocks);
 	else
 		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
-			message(MSG_SUMM, 0, isjson),
+			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
@@ -695,7 +786,7 @@ void summary(SOCKETTYPE c, char *param, bool isjson)
 #endif
 }
 
-void gpuenable(SOCKETTYPE c, char *param, bool isjson)
+static void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 {
 	struct thr_info *thr;
 	int gpu;
@@ -703,23 +794,23 @@ void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 	int i;
 
 	if (gpu_threads == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, isjson));
+		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, isjson));
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, isjson));
+		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
 		return;
 	}
 
 	if (gpus[id].enabled) {
-		strcpy(io_buffer, message(MSG_ALRENA, id, isjson));
+		strcpy(io_buffer, message(MSG_ALRENA, id, NULL, isjson));
 		return;
 	}
 
@@ -728,7 +819,7 @@ void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 		if (gpu == id) {
 			thr = &thr_info[i];
 			if (thr->cgpu->status != LIFE_WELL) {
-				strcpy(io_buffer, message(MSG_GPUMRE, id, isjson));
+				strcpy(io_buffer, message(MSG_GPUMRE, id, NULL, isjson));
 				return;
 			}
 
@@ -738,69 +829,69 @@ void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 		}
 	}
 
-	strcpy(io_buffer, message(MSG_GPUREN, id, isjson));
+	strcpy(io_buffer, message(MSG_GPUREN, id, NULL, isjson));
 }
 
-void gpudisable(SOCKETTYPE c, char *param, bool isjson)
+static void gpudisable(SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
 	if (nDevs == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, isjson));
+		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, isjson));
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, isjson));
+		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
 		return;
 	}
 
 	if (!gpus[id].enabled) {
-		strcpy(io_buffer, message(MSG_ALRDIS, id, isjson));
+		strcpy(io_buffer, message(MSG_ALRDIS, id, NULL, isjson));
 		return;
 	}
 
 	gpus[id].enabled = false;
 
-	strcpy(io_buffer, message(MSG_GPUDIS, id, isjson));
+	strcpy(io_buffer, message(MSG_GPUDIS, id, NULL, isjson));
 }
 
-void gpurestart(SOCKETTYPE c, char *param, bool isjson)
+static void gpurestart(SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
 	if (nDevs == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, isjson));
+		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, isjson));
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, isjson));
+		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
 		return;
 	}
 
 	reinit_device(&gpus[id]);
 
-	strcpy(io_buffer, message(MSG_GPUREI, id, isjson));
+	strcpy(io_buffer, message(MSG_GPUREI, id, NULL, isjson));
 }
 
-void gpucount(SOCKETTYPE c, char *param, bool isjson)
+static void gpucount(SOCKETTYPE c, char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 
-	strcpy(io_buffer, message(MSG_NUMGPU, 0, isjson));
+	strcpy(io_buffer, message(MSG_NUMGPU, 0, NULL, isjson));
 
 	if (isjson)
 		sprintf(buf, "," JSON_GPUS "{\"Count\":%d}" JSON_CLOSE, nDevs);
@@ -810,7 +901,7 @@ void gpucount(SOCKETTYPE c, char *param, bool isjson)
 	strcat(io_buffer, buf);
 }
 
-void cpucount(SOCKETTYPE c, char *param, bool isjson)
+static void cpucount(SOCKETTYPE c, char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 	int count = 0;
@@ -819,7 +910,7 @@ void cpucount(SOCKETTYPE c, char *param, bool isjson)
 	count = opt_n_threads > 0 ? num_processors : 0;
 #endif
 
-	strcpy(io_buffer, message(MSG_NUMCPU, 0, isjson));
+	strcpy(io_buffer, message(MSG_NUMCPU, 0, NULL, isjson));
 
 	if (isjson)
 		sprintf(buf, "," JSON_CPUS "{\"Count\":%d}" JSON_CLOSE, count);
@@ -829,7 +920,167 @@ void cpucount(SOCKETTYPE c, char *param, bool isjson)
 	strcat(io_buffer, buf);
 }
 
-void send_result(SOCKETTYPE c, bool isjson);
+static void switchpool(SOCKETTYPE c, char *param, bool isjson)
+{
+	struct pool *pool;
+	int id;
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		return;
+	}
+
+	pool = pools[id];
+	pool->enabled = true;
+	switch_pools(pool);
+
+	strcpy(io_buffer, message(MSG_SWITCHP, id, NULL, isjson));
+}
+
+static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
+{
+	int id;
+	char *gpusep;
+
+	if (nDevs == 0) {
+		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
+		return false;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		return false;
+	}
+
+	gpusep = strchr(param, GPUSEP);
+	if (gpusep == NULL) {
+		strcpy(io_buffer, message(MSG_MISVAL, 0, NULL, isjson));
+		return false;
+	}
+
+	*(gpusep++) = '\0';
+
+	id = atoi(param);
+	if (id < 0 || id >= nDevs) {
+		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
+		return false;
+	}
+
+	*gpu = id;
+	*value = gpusep;
+
+	return true;
+}
+
+static void gpuintensity(SOCKETTYPE c, char *param, bool isjson)
+{
+	int id;
+	char *value;
+	int intensity;
+	char intensitystr[7];
+
+	if (!splitgpuvalue(param, &id, &value, isjson))
+		return;
+
+	if (!strncasecmp(value, DYNAMIC, 1)) {
+		gpus[id].dynamic = true;
+		strcpy(intensitystr, DYNAMIC);
+	}
+	else {
+		intensity = atoi(value);
+		if (intensity < -10 || intensity > 10) {
+			strcpy(io_buffer, message(MSG_INVINT, 0, value, isjson));
+			return;
+		}
+
+		gpus[id].dynamic = false;
+		gpus[id].intensity = intensity;
+		sprintf(intensitystr, "%d", intensity);
+	}
+
+	strcpy(io_buffer, message(MSG_GPUINT, id, intensitystr, isjson));
+}
+
+static void gpumem(SOCKETTYPE c, char *param, bool isjson)
+{
+	int id;
+	char *value;
+	int clock;
+
+	if (!splitgpuvalue(param, &id, &value, isjson))
+		return;
+
+	clock = atoi(value);
+
+	if (set_memoryclock(id, clock))
+		strcpy(io_buffer, message(MSG_GPUMERR, id, value, isjson));
+	else
+		strcpy(io_buffer, message(MSG_GPUMEM, id, value, isjson));
+}
+
+static void gpuengine(SOCKETTYPE c, char *param, bool isjson)
+{
+	int id;
+	char *value;
+	int clock;
+
+	if (!splitgpuvalue(param, &id, &value, isjson))
+		return;
+
+	clock = atoi(value);
+
+	if (set_engineclock(id, clock))
+		strcpy(io_buffer, message(MSG_GPUEERR, id, value, isjson));
+	else
+		strcpy(io_buffer, message(MSG_GPUENG, id, value, isjson));
+}
+
+static void gpufan(SOCKETTYPE c, char *param, bool isjson)
+{
+	int id;
+	char *value;
+	int fan;
+
+	if (!splitgpuvalue(param, &id, &value, isjson))
+		return;
+
+	fan = atoi(value);
+
+	if (set_fanspeed(id, fan))
+		strcpy(io_buffer, message(MSG_GPUFERR, id, value, isjson));
+	else
+		strcpy(io_buffer, message(MSG_GPUFAN, id, value, isjson));
+}
+
+static void gpuvddc(SOCKETTYPE c, char *param, bool isjson)
+{
+	int id;
+	char *value;
+	float vddc;
+
+	if (!splitgpuvalue(param, &id, &value, isjson))
+		return;
+
+	vddc = atof(value);
+
+	if (set_vddc(id, vddc))
+		strcpy(io_buffer, message(MSG_GPUVERR, id, value, isjson));
+	else
+		strcpy(io_buffer, message(MSG_GPUVDDC, id, value, isjson));
+}
+
+static void send_result(SOCKETTYPE c, bool isjson);
 
 void doquit(SOCKETTYPE c, char *param, bool isjson)
 {
@@ -844,28 +1095,57 @@ void doquit(SOCKETTYPE c, char *param, bool isjson)
 	kill_work();
 }
 
+void dosave(SOCKETTYPE c, char *param, bool isjson)
+{
+	FILE *fcfg;
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISFN, 0, NULL, isjson));
+		return;
+	}
+
+	fcfg = fopen(param, "w");
+	if (!fcfg) {
+		strcpy(io_buffer, message(MSG_BADFN, 0, param, isjson));
+		return;
+	}
+
+	write_config(fcfg);
+	fclose(fcfg);
+
+	strcpy(io_buffer, message(MSG_SAVED, 0, param, isjson));
+}
+
 struct CMDS {
 	char *name;
 	void (*func)(SOCKETTYPE, char *, bool);
 } cmds[] = {
-	{ "version",	apiversion },
-	{ "devs",	devstatus },
-	{ "pools",	poolstatus },
-	{ "summary",	summary },
-	{ "gpuenable",	gpuenable },
-	{ "gpudisable",	gpudisable },
-	{ "gpurestart",	gpurestart },
-	{ "gpu",	gpudev },
+	{ "version",		apiversion },
+	{ "config",		minerconfig },
+	{ "devs",		devstatus },
+	{ "pools",		poolstatus },
+	{ "summary",		summary },
+	{ "gpuenable",		gpuenable },
+	{ "gpudisable",		gpudisable },
+	{ "gpurestart",		gpurestart },
+	{ "gpu",		gpudev },
 #ifdef WANT_CPUMINE
-	{ "cpu",	cpudev },
+	{ "cpu",		cpudev },
 #endif
-	{ "gpucount",	gpucount },
-	{ "cpucount",	cpucount },
-	{ "quit",	doquit },
+	{ "gpucount",		gpucount },
+	{ "cpucount",		cpucount },
+	{ "switchpool",		switchpool },
+	{ "gpuintensity",	gpuintensity },
+	{ "gpumem",		gpumem},
+	{ "gpuengine",		gpuengine},
+	{ "gpufan",		gpufan},
+	{ "gpuvddc",		gpuvddc},
+	{ "save",		dosave },
+	{ "quit",		doquit },
 	{ NULL }
 };
 
-void send_result(SOCKETTYPE c, bool isjson)
+static void send_result(SOCKETTYPE c, bool isjson)
 {
 	int n;
 	int len;
@@ -890,7 +1170,7 @@ void send_result(SOCKETTYPE c, bool isjson)
 
 }
 
-void tidyup()
+static void tidyup()
 {
 	bye = 1;
 
@@ -1052,20 +1332,20 @@ void api(void)
 					json_config = json_loadb(buf, n, 0, &json_err);
 
 					if (!json_is_object(json_config)) {
-						strcpy(io_buffer, message(MSG_INVJSON, 0, isjson));
+						strcpy(io_buffer, message(MSG_INVJSON, 0, NULL, isjson));
 						send_result(c, isjson);
 						did = true;
 					}
 					else {
 						json_val = json_object_get(json_config, JSON_COMMAND);
 						if (json_val == NULL) {
-							strcpy(io_buffer, message(MSG_MISSCMD, 0, isjson));
+							strcpy(io_buffer, message(MSG_MISCMD, 0, NULL, isjson));
 							send_result(c, isjson);
 							did = true;
 						}
 						else {
 							if (!json_is_string(json_val)) {
-								strcpy(io_buffer, message(MSG_INVCMD, 0, isjson));
+								strcpy(io_buffer, message(MSG_INVCMD, 0, NULL, isjson));
 								send_result(c, isjson);
 								did = true;
 							}
@@ -1097,7 +1377,7 @@ void api(void)
 					}
 
 				if (!did) {
-					strcpy(io_buffer, message(MSG_INVCMD, 0, isjson));
+					strcpy(io_buffer, message(MSG_INVCMD, 0, NULL, isjson));
 					send_result(c, isjson);
 				}
 			}
