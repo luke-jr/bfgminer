@@ -148,6 +148,7 @@ Options for both config file and command line:
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
 --shares <arg>      Quit after mining N shares (default: unlimited)
+--socks-proxy <arg> Set socks4 proxy (host:port)
 --submit-stale      Submit shares even if they would normally be considered stale
 --syslog            Use system log for output messages (default: standard error)
 --text-only|-T      Disable ncurses formatted screen output
