@@ -1,3 +1,35 @@
+Version 2.2.0
+
+- Implement socks4 proxy support.
+- Fix send() for JSON strings
+- Introduce a --net-delay option which guarantees at least 250ms between any
+networking requests to not overload slow routers.
+- Generalise locking init code.
+- Allow invalid values to be in the configuration file, just skipping over them
+provided the rest of the file is valid JSON. This will allow older configurat
+- Allow CPU mining explicitly enable only if other mining support is built in.
+- BitForce FPGA support
+- Configure out building and support of all CPU mining code unless
+--enable-cpumining is enabled.
+- Allow parsed values to be zero which will allow 0 values in the config file to
+work.
+- Advertise that we can make our own midstate, so the pool can skip generating
+it for us
+- Refactor the CPU scanhash_* functions to use a common API. Fixes bugs.
+- Don't consider a pool lagging if a request has only just been filed. This
+should decrease the false positives for "pool not providing work fast enough".
+- Invalidating work after longpoll made hash_pop return no work giving a false
+positive for dead pool. Rework hash_pop to retry while finds no staged work u
+- Remove TCP_NODELAY from curl options as many small packets may be contributing
+to network overload.
+- Refactor miner_thread to be common code for any kind of device
+- Simplify submit_nonce loop and avoid potentially missing FOUND - 1 entry.
+Reported by Luke-Jr.
+- Micro-optimisation in sha256_sse2 code courtesy of Guido Ascioti
+guido.ascioti@gmail.com
+- Refactor to abstract device-specific code
+
+
 Version 2.1.2 - January 6, 2012
 
 - If api-description is specified, save it when writing the config file
