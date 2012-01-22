@@ -1,5 +1,6 @@
 Version 2.2.0
 
+- Add API commands: config, switchpool, gpu settings, save
 - Implement socks4 proxy support.
 - Fix send() for JSON strings
 - Introduce a --net-delay option which guarantees at least 250ms between any
@@ -21,7 +22,7 @@ should decrease the false positives for "pool not providing work fast enough".
 - Invalidating work after longpoll made hash_pop return no work giving a false
 positive for dead pool. Rework hash_pop to retry while finds no staged work u
 - Remove TCP_NODELAY from curl options as many small packets may be contributing
-to network overload.
+to network overload, when --net-delay is enabled.
 - Refactor miner_thread to be common code for any kind of device
 - Simplify submit_nonce loop and avoid potentially missing FOUND - 1 entry.
 Reported by Luke-Jr.
