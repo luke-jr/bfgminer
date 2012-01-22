@@ -424,6 +424,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			fclose(binaryfile);
 			goto build;
 		}
+		if (!binary_stat.st_size)
+			goto build;
+
 		binary_sizes[gpu] = binary_stat.st_size;
 		binaries[gpu] = (char *)malloc(binary_sizes[gpu]);
 		if (unlikely(!binaries[gpu])) {
@@ -435,6 +438,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (fread(binaries[gpu], 1, binary_sizes[gpu], binaryfile) != binary_sizes[gpu]) {
 			applog(LOG_ERR, "Unable to fread binaries[gpu]");
 			fclose(binaryfile);
+			free(binaries[gpu]);
 			goto build;
 		}
 
@@ -442,6 +446,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
 			fclose(binaryfile);
+			free(binaries[gpu]);
 			goto build;
 		}
 		fclose(binaryfile);
