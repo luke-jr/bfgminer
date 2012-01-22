@@ -234,6 +234,7 @@ void init_adl(int nDevs)
 		ga->lpAdapterID = lpAdapterID;
 		ga->DefPerfLev = NULL;
 
+		ga->lpThermalControllerInfo.iSize=sizeof(ADLThermalControllerInfo);
 		if (ADL_Overdrive5_ThermalDevices_Enum(iAdapterIndex, 0, &ga->lpThermalControllerInfo) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_ThermalDevices_Enum");
 
