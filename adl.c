@@ -78,7 +78,7 @@ static	ADL_OVERDRIVE5_FANSPEEDTODEFAULT_SET	ADL_Overdrive5_FanSpeedToDefault_Set
 static int iNumberAdapters;
 static LPAdapterInfo lpInfo = NULL;
 
-static int set_fanspeed(int gpu, int iFanSpeed);
+int set_fanspeed(int gpu, int iFanSpeed);
 static float __gpu_temp(struct gpu_adl *ga);
 
 static inline void lock_adl(void)
@@ -575,7 +575,7 @@ static void get_enginerange(int gpu, int *imin, int *imax)
 	*imax = ga->lpOdParameters.sEngineClock.iMax / 100;
 }
 
-static int set_engineclock(int gpu, int iEngineClock)
+int set_engineclock(int gpu, int iEngineClock)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	int i, lev, ret = 1;
@@ -631,7 +631,7 @@ static void get_memoryrange(int gpu, int *imin, int *imax)
 	*imax = ga->lpOdParameters.sMemoryClock.iMax / 100;
 }
 
-static int set_memoryclock(int gpu, int iMemoryClock)
+int set_memoryclock(int gpu, int iMemoryClock)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	int i, lev, ret = 1;
@@ -694,7 +694,7 @@ static float curses_float(const char *query)
 	return ret;
 }
 
-static int set_vddc(int gpu, float fVddc)
+int set_vddc(int gpu, float fVddc)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	int i, iVddc, lev, ret = 1;
@@ -746,7 +746,7 @@ static void get_fanrange(int gpu, int *imin, int *imax)
 	*imax = ga->lpFanSpeedInfo.iMaxPercent;
 }
 
-static int set_fanspeed(int gpu, int iFanSpeed)
+int set_fanspeed(int gpu, int iFanSpeed)
 {
 	struct gpu_adl *ga;
 	int ret = 1;

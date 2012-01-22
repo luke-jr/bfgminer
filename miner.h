@@ -176,6 +176,21 @@ enum alive {
 	LIFE_NOSTART
 };
 
+
+enum pool_strategy {
+	POOL_FAILOVER,
+	POOL_ROUNDROBIN,
+	POOL_ROTATE,
+	POOL_LOADBALANCE,
+};
+
+#define TOP_STRATEGY (POOL_LOADBALANCE)
+
+struct strategies {
+	const char *s;
+};
+
+
 #ifdef HAVE_ADL
 struct gpu_adl {
 	ADLTemperature lpTemperature;
@@ -511,6 +526,10 @@ extern float gpu_temp(int gpu);
 extern int gpu_fanspeed(int gpu);
 extern int gpu_fanpercent(int gpu);
 extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc, int *activity, int *fanspeed, int *fanpercent, int *powertune);
+extern int set_fanspeed(int gpu, int iFanSpeed);
+extern int set_vddc(int gpu, float fVddc);
+extern int set_engineclock(int gpu, int iEngineClock);
+extern int set_memoryclock(int gpu, int iMemoryClock);
 #endif
 
 extern void api(void);
@@ -539,6 +558,9 @@ extern int total_pools;
 extern struct pool *pools[MAX_POOLS];
 extern const char *algo_names[];
 extern enum sha256_algos opt_algo;
+extern struct strategies strategies[];
+extern enum pool_strategy pool_strategy;
+extern int opt_rotate_period;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;
@@ -639,6 +661,8 @@ extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
+extern void switch_pools(struct pool *selected);
+extern void write_config(FILE *fcfg);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
 extern void vapplog(int prio, const char *fmt, va_list ap);

@@ -100,18 +100,7 @@ struct workio_cmd {
 	bool			lagging;
 };
 
-enum pool_strategy {
-	POOL_FAILOVER,
-	POOL_ROUNDROBIN,
-	POOL_ROTATE,
-	POOL_LOADBALANCE,
-};
-
-#define TOP_STRATEGY (POOL_LOADBALANCE)
-
-struct strategies {
-	const char *s;
-} strategies[] = {
+struct strategies strategies[] = {
 	{ "Failover" },
 	{ "Round Robin" },
 	{ "Rotate" },
@@ -288,8 +277,8 @@ static float opt_donation = 0.0;
 static struct pool donationpool;
 
 int total_pools;
-static enum pool_strategy pool_strategy = POOL_FAILOVER;
-static int opt_rotate_period;
+enum pool_strategy pool_strategy = POOL_FAILOVER;
+int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses;
 
 static bool curses_active = false;
@@ -2798,7 +2787,7 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
-static void switch_pools(struct pool *selected)
+void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
 	int i, pool_no;
@@ -3146,7 +3135,7 @@ static void remove_pool(struct pool *pool)
 	total_pools--;
 }
 
-static void write_config(FILE *fcfg)
+void write_config(FILE *fcfg)
 {
 	int i;
 

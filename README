@@ -574,6 +574,14 @@ The list of requests and replies are:
  version       VERSION        CGMiner=cgminer version
                               API=API version
 
+ config        CONFIG         Some miner configuration information:
+                              GPU Count=N| <- the number of GPUs
+                              CPU Count=N| <- the number of CPUs
+                              Pool Count=N| <- the number of Pools
+                              ADL=X| <- Y or N if ADL is compiled in the code
+                              ADL in use=X| <- Y or N if any GPU has ADL
+                              Strategy=Name| <- the current pool strategy
+
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
 
@@ -582,16 +590,25 @@ The list of requests and replies are:
 
  devs          DEVS           Each available CPU and GPU with their details
                               e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
+                              Will not report CPUs if CPU mining is disabled
 
  gpu|N         GPU            The details of a single GPU number N in the same
                               format and details as for DEVS
 
  cpu|N         CPU            The details of a single CPU number N in the same
                               format and details as for DEVS
+                              This is only available if CPU mining is enabled
+                              Use 'cpucount' or 'config' first to see if there are any
 
  gpucount      GPUS           Count=N| <- the number of GPUs
 
  cpucount      CPUS           Count=N| <- the number of CPUs
+                              Always returns 0 if CPU mining is disabled
+
+ switchpool|N  none           There is no reply section just the STATUS section
+                              stating the results of switching pool N to the
+                              highest priority (the pool is also enabled)
+                              The Msg includes the pool URL
 
  gpuenable|N   none           There is no reply section just the STATUS section
                               stating the results of the enable request
@@ -601,6 +618,21 @@ The list of requests and replies are:
 
  gpurestart|N  none           There is no reply section just the STATUS section
                               stating the results of the restart request
+
+ gpuintensity|N,I  none       There is no reply section just the STATUS section
+                              stating the results of setting GPU N intensity to I
+
+ gpumem|N,V    none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N memoryclock to V MHz
+
+ gpuengine|N,V none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N clock to V MHz
+
+ gpufan|N,V    none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N fan speed to V%
+
+ gpuvddc|N,V   none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N vddc to V
 
  quit          none           There is no status section but just a single "BYE|"
                               reply before cgminer quits
