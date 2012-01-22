@@ -75,14 +75,12 @@ int clDevicesNum() {
 	cl_platform_id platform = NULL;
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	/* If this fails, assume no GPUs. */
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_INFO, "clGetPlatformsIDs failed (no GPU?)");
 		return 0;
 	}
 
-	if (numPlatforms > 0)
-	{
+	if (numPlatforms > 0) {
 		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
 		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
 		if (status != CL_SUCCESS)
@@ -92,8 +90,7 @@ int clDevicesNum() {
 		}
 
 		unsigned int i;
-		for(i=0; i < numPlatforms; ++i)
-		{
+		for (i = 0; i < numPlatforms; ++i) {
 			char pbuff[100];
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS)
@@ -118,8 +115,7 @@ int clDevicesNum() {
 
 	cl_uint numDevices;
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Getting Device IDs (num)");
 		return -1;
 	}
@@ -154,8 +150,7 @@ void patch_opcodes(char *w, unsigned remaining)
 	int count_bfe_int = 0;
 	int count_bfe_uint = 0;
 	int count_byte_align = 0;
-	while (42)
-	{
+	while (42) {
 		int clamp = (*opcode >> (32 + 31)) & 0x1;
 		int dest_rel = (*opcode >> (32 + 28)) & 0x1;
 		int alu_inst = (*opcode >> (32 + 13)) & 0x1f;
@@ -175,9 +170,8 @@ void patch_opcodes(char *w, unsigned remaining)
 				patched++;
 			}
 		}
-		if (remaining <= 8) {
+		if (remaining <= 8)
 			break;
-		}
 		opcode++;
 		remaining -= 8;
 	}
@@ -200,14 +194,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	cl_uint numPlatforms;
 	cl_platform_id platform = NULL;
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
 		return NULL;
 	}
 
-	if (numPlatforms > 0)
-	{
+	if (numPlatforms > 0) {
 		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
 		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
 		if (status != CL_SUCCESS)
@@ -216,8 +208,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			return NULL;
 		}
 
-		for(i = 0; i < numPlatforms; ++i)
-		{
+		for(i = 0; i < numPlatforms; ++i) {
 			char pbuff[100];
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS)
@@ -242,8 +233,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	cl_uint numDevices;
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Getting Device IDs (num)");
 		return NULL;
 	}
@@ -255,8 +245,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		/* Now, get the device list data */
 
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
-		if (status != CL_SUCCESS)
-		{
+		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Getting Device IDs (list)");
 			return NULL;
 		}
@@ -264,11 +253,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_INFO, "List of devices:");
 
 		unsigned int i;
-		for(i=0; i<numDevices; i++) {
+		for(i=0; i < numDevices; i++) {
 			char pbuff[100];
 			status = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS)
-			{
+			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error: Getting Device Info");
 				return NULL;
 			}
@@ -279,8 +267,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (gpu < numDevices) {
 			char pbuff[100];
 			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS)
-			{
+			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error: Getting Device Info");
 				return NULL;
 			}
@@ -297,8 +284,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
 
 	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
-	if (status != CL_SUCCESS)
-	{
+	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Creating Context. (clCreateContextFromType)");
 		return NULL;
 	}
