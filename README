@@ -575,11 +575,11 @@ The list of requests and replies are:
                               API=API version
 
  config        CONFIG         Some miner configuration information:
-                              GPU Count=N| <- the number of GPUs
-                              CPU Count=N| <- the number of CPUs
-                              Pool Count=N| <- the number of Pools
-                              ADL=X| <- Y or N if ADL is compiled in the code
-                              ADL in use=X| <- Y or N if any GPU has ADL
+                              GPU Count=N, <- the number of GPUs
+                              CPU Count=N, <- the number of CPUs
+                              Pool Count=N, <- the number of Pools
+                              ADL=X, <- Y or N if ADL is compiled in the code
+                              ADL in use=X, <- Y or N if any GPU has ADL
                               Strategy=Name| <- the current pool strategy
 
  summary       SUMMARY        The status summary of the miner
@@ -633,6 +633,9 @@ The list of requests and replies are:
 
  gpuvddc|N,V   none           There is no reply section just the STATUS section
                               stating the results of setting GPU N vddc to V
+
+ save|filename none           There is no reply section just the STATUS section
+                              stating success or failure
 
  quit          none           There is no status section but just a single "BYE|"
                               reply before cgminer quits
