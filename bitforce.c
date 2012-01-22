@@ -13,7 +13,11 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <dirent.h>
+#ifndef WIN32
 #include <termios.h>
+#else
+#define NAME_MAX 255
+#endif
 #include <unistd.h>
 
 #include "elist.h"
@@ -46,7 +50,7 @@ static bool bitforce_detect_one(const char *devpath)
 	fclose(fileDev);
 	if (unlikely(!strstr(pdevbuf, "SHA256")))
 	{
-		applog(LOG_DEBUG, "BitForce Detect: Didn't recognize BitForce on %s", devpath);
+		applog(LOG_DEBUG, "BitForce Detect: Didn't recognise BitForce on %s", devpath);
 		return false;
 	}
 
@@ -110,9 +114,11 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 		return false;
 	}
 
+#ifndef WIN32
 	{
 		int nDevFD = fileno(fileDev);
 		struct termios pattr;
+
 		tcgetattr(nDevFD, &pattr);
 		pattr.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
 		pattr.c_oflag &= ~OPOST;
@@ -121,6 +127,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 		pattr.c_cflag |= CS8;
 		tcsetattr(nDevFD, TCSANOW, &pattr);
 	}
+#endif
 	setbuf(fileDev, NULL);
 	bitforce->device_file = fileDev;
 
