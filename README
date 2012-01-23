@@ -543,6 +543,10 @@ The JSON request format required is '{"command":"CMD","parameter":"PARAM"}'
 where "CMD" is from the "Request" column below and "PARAM" would be e.g.
 the CPU/GPU number if required.
 
+An example request in both formats:
+  gpufan|0,80
+  {"command":"gpufan","parameter":"0,80"}
+
 The format of each reply (unless stated otherwise) is a STATUS section
 followed by an optional detail section
 
@@ -635,7 +639,8 @@ The list of requests and replies are:
                               stating the results of setting GPU N vddc to V
 
  save|filename none           There is no reply section just the STATUS section
-                              stating success or failure
+                              stating success or failure saving the cgminer config
+                              to filename
 
  quit          none           There is no status section but just a single "BYE|"
                               reply before cgminer quits
