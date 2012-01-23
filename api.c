@@ -21,7 +21,7 @@
 #include "compat.h"
 #include "miner.h"
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
