@@ -1014,6 +1014,7 @@ static void gpuintensity(SOCKETTYPE c, char *param, bool isjson)
 
 static void gpumem(SOCKETTYPE c, char *param, bool isjson)
 {
+#ifdef HAVE_ADL
 	int id;
 	char *value;
 	int clock;
@@ -1027,10 +1028,14 @@ static void gpumem(SOCKETTYPE c, char *param, bool isjson)
 		strcpy(io_buffer, message(MSG_GPUMERR, id, value, isjson));
 	else
 		strcpy(io_buffer, message(MSG_GPUMEM, id, value, isjson));
+#else
+	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
+#endif
 }
 
 static void gpuengine(SOCKETTYPE c, char *param, bool isjson)
 {
+#ifdef HAVE_ADL
 	int id;
 	char *value;
 	int clock;
@@ -1044,10 +1049,14 @@ static void gpuengine(SOCKETTYPE c, char *param, bool isjson)
 		strcpy(io_buffer, message(MSG_GPUEERR, id, value, isjson));
 	else
 		strcpy(io_buffer, message(MSG_GPUENG, id, value, isjson));
+#else
+	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
+#endif
 }
 
 static void gpufan(SOCKETTYPE c, char *param, bool isjson)
 {
+#ifdef HAVE_ADL
 	int id;
 	char *value;
 	int fan;
@@ -1061,10 +1070,14 @@ static void gpufan(SOCKETTYPE c, char *param, bool isjson)
 		strcpy(io_buffer, message(MSG_GPUFERR, id, value, isjson));
 	else
 		strcpy(io_buffer, message(MSG_GPUFAN, id, value, isjson));
+#else
+	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
+#endif
 }
 
 static void gpuvddc(SOCKETTYPE c, char *param, bool isjson)
 {
+#ifdef HAVE_ADL
 	int id;
 	char *value;
 	float vddc;
@@ -1078,6 +1091,9 @@ static void gpuvddc(SOCKETTYPE c, char *param, bool isjson)
 		strcpy(io_buffer, message(MSG_GPUVERR, id, value, isjson));
 	else
 		strcpy(io_buffer, message(MSG_GPUVDDC, id, value, isjson));
+#else
+	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
+#endif
 }
 
 static void send_result(SOCKETTYPE c, bool isjson);
