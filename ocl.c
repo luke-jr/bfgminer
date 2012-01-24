@@ -185,7 +185,7 @@ void patch_opcodes(char *w, unsigned remaining)
 
 _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
-	int patchbfi = 0;
+	bool patchbfi = false;
 	cl_int status = 0;
 	unsigned int i;
 
@@ -253,7 +253,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_INFO, "List of devices:");
 
 		unsigned int i;
-		for(i=0; i < numDevices; i++) {
+		for (i = 0; i < numDevices; i++) {
 			char pbuff[100];
 			status = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS) {
@@ -302,7 +302,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	find = strstr(extensions, camo);
 	if (find)
-		clState->hasBitAlign = patchbfi = 1;
+		clState->hasBitAlign = true;
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
@@ -439,6 +439,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (opt_debug)
 			applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
 
+		/* We don't need to patch this already loaded image, but need to
+		 * set the flag for status later */
+		if (clState->hasBitAlign)
+			patchbfi = true;
+
 		free(binaries[gpu]);
 		goto built;
 	}
@@ -473,21 +478,32 @@ build:
 	if (clState->hasBitAlign) {
 		strcat(CompilerOptions, " -DBITALIGN");
 		if (opt_debug)
-			applog(LOG_DEBUG, "cl_amd_media_ops found, patched source with BITALIGN");
+			applog(LOG_DEBUG, "cl_amd_media_ops found, setting BITALIGN");
+		if (strstr(name, "Cedar") ||
+		    strstr(name, "Redwood") ||
+		    strstr(name, "Juniper") ||
+		    strstr(name, "Cypress" ) ||
+		    strstr(name, "Hemlock" ) ||
+		    strstr(name, "Caicos" ) ||
+		    strstr(name, "Turks" ) ||
+		    strstr(name, "Barts" ) ||
+		    strstr(name, "Cayman" ) ||
+		    strstr(name, "Antilles" ) ||
+		    strstr(name, "Wrestler" ) ||
+		    strstr(name, "Zacate" ) ||
+		    strstr(name, "WinterPark" ) ||
+		    strstr(name, "BeaverCreek" ))
+			patchbfi = true;
 	} else if (opt_debug)
-		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BITALIGN patch");
+		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
 
 	if (patchbfi) {
 		strcat(CompilerOptions, " -DBFI_INT");
 		if (opt_debug)
-			applog(LOG_DEBUG, "cl_amd_media_ops found, patched source with BFI_INT");
+			applog(LOG_DEBUG, "BFI_INT patch requiring device found, patched source with BFI_INT");
 	} else if (opt_debug)
-		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not BFI_INT patch");
+		applog(LOG_DEBUG, "BFI_INT patch requiring device not found, will not BFI_INT patch");
 
-	//int n = 1000;
-	//while(n--)
-	//	printf("%s", CompilerOptions);
-	//return 1;
 	status = clBuildProgram(clState->program, 1, &devices[gpu], CompilerOptions , NULL, NULL);
 
 	if (status != CL_SUCCESS) {
@@ -521,7 +537,8 @@ build:
 		return NULL;
 	}
 
-	/* Patch the kernel if the hardware supports BFI_INT */
+	/* Patch the kernel if the hardware supports BFI_INT but it needs to
+	 * be hacked in */
 	if (patchbfi) {
 		unsigned remaining = binary_sizes[gpu];
 		char *w = binaries[gpu];
@@ -595,7 +612,7 @@ built:
 	free(binaries);
 	free(binary_sizes);
 
-	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT patching, %d vectors and worksize %d",
+	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT, %d vectors and worksize %d",
 	       filename, patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
 	/* create a cl program executable for all the devices specified */

@@ -1,6 +1,9 @@
 #ifndef __OCL_H__
 #define __OCL_H__
+
 #include "config.h"
+
+#include <stdbool.h>
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
 #include <OpenCL/opencl.h>
@@ -14,7 +17,7 @@ typedef struct {
 	cl_command_queue commandQueue;
 	cl_program program;
 	cl_mem outputBuffer;
-	int hasBitAlign;
+	bool hasBitAlign;
 	cl_uint preferred_vwidth;
 	size_t max_work_size;
 	size_t work_size;
