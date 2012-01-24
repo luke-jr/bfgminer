@@ -153,6 +153,7 @@ Options for both config file and command line:
 --socks-proxy <arg> Set socks4 proxy (host:port)
 --submit-stale      Submit shares even if they would normally be considered stale
 --syslog            Use system log for output messages (default: standard error)
+--temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
 --text-only|-T      Disable ncurses formatted screen output
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server
@@ -183,7 +184,6 @@ GPU only options:
 --kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/local/bin")
 --kernel|-k <arg>   Select kernel to use (poclbm or phatk - default: auto)
 --no-restart        Do not attempt to restart GPUs that hang
---temp-cutoff <arg> Temperature where a GPU device will be automatically disabled, one value or comma separated list (default: 95)
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
 --temp-target <arg> Target temperature when automatically managing fan and GPU speeds (default: 75)

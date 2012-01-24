@@ -6,7 +6,6 @@ bool opt_reorder;
 int opt_hysteresis;
 const int opt_targettemp;
 const int opt_overheattemp;
-const int opt_cutofftemp;
 void init_adl(int nDevs);
 float gpu_temp(int gpu);
 int gpu_engineclock(int gpu);

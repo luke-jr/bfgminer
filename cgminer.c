@@ -90,6 +90,7 @@ bool use_syslog = false;
 static bool opt_quiet = false;
 static bool opt_realquiet = false;
 bool opt_loginput = false;
+const int opt_cutofftemp = 95;
 static int opt_retries = -1;
 static int opt_fail_pause = 5;
 static int fail_pause = 5;
@@ -537,6 +538,46 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 	return NULL;
 }
 
+static char *temp_cutoff_str = NULL;
+
+char *set_temp_cutoff(char *arg)
+{
+	int val;
+
+	if (!(arg && arg[0]))
+		return "Invalid parameters for set temp cutoff";
+	val = atoi(arg);
+	if (val < 0 || val > 200)
+		return "Invalid value passed to set temp cutoff";
+	temp_cutoff_str = arg;
+
+	return NULL;
+}
+
+static void load_temp_cutoffs()
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	if (temp_cutoff_str) {
+		for (device = 0, nextptr = strtok(temp_cutoff_str, ","); nextptr; ++device, nextptr = strtok(NULL, ",")) {
+			if (device >= total_devices)
+				quit(1, "Too many values passed to set temp cutoff");
+			val = atoi(nextptr);
+			if (val < 0 || val > 200)
+				quit(1, "Invalid value passed to set temp cutoff");
+
+			devices[device]->cutofftemp = val;
+		}
+	}
+	else
+		val = opt_cutofftemp;
+	if (device <= 1) {
+		for (i = device; i < total_devices; ++i)
+			devices[i]->cutofftemp = val;
+	}
+}
+
 static char *set_api_allow(const char *arg)
 {
 	opt_set_charp(arg, &opt_api_allow);
@@ -764,10 +805,12 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
-#ifdef HAVE_ADL
+#if defined(HAVE_ADL) || defined(USE_BITFORCE)
 	OPT_WITH_ARG("--temp-cutoff",
 		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
-		     "Temperature where a GPU device will be automatically disabled, one value or comma separated list"),
+		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
+#endif
+#ifdef HAVE_ADL
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
@@ -2237,7 +2280,7 @@ void write_config(FILE *fcfg)
 			fprintf(fcfg, "%s%1.3f", i > 0 ? "," : "", gpus[i].gpu_vddc);
 		fputs("\",\n\"temp-cutoff\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.cutofftemp);
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].cutofftemp);
 		fputs("\",\n\"temp-overheat\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
@@ -4236,6 +4279,8 @@ int main (int argc, char *argv[])
 
 	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
+
+	load_temp_cutoffs();
 
 	devcursor = 8;
 	logstart = devcursor + total_devices + 1;
