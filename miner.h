@@ -190,6 +190,7 @@ struct strategies {
 	const char *s;
 };
 
+struct cgpu_info;
 
 #ifdef HAVE_ADL
 struct gpu_adl {
@@ -221,10 +222,13 @@ struct gpu_adl {
 	int cutofftemp;
 	int minspeed;
 	int maxspeed;
+
+	int gpu;
+	bool has_fanspeed;
+	struct gpu_adl *twin;
 };
 #endif
 
-struct cgpu_info;
 struct thr_info;
 struct work;
 
@@ -276,6 +280,7 @@ struct cgpu_info {
 #ifdef HAVE_ADL
 	bool has_adl;
 	struct gpu_adl adl;
+
 	int gpu_engine;
 	int min_engine;
 	int gpu_fan;

@@ -94,7 +94,7 @@ static inline void unlock_adl(void)
 
 void init_adl(int nDevs)
 {
-	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
+	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0, prev_id = -1, prev_gpu = -1;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -230,9 +230,11 @@ void init_adl(int nDevs)
 		/* From here on we know this device is a discrete device and
 		 * should support ADL */
 		ga = &gpus[gpu].adl;
+		ga->gpu = gpu;
 		ga->iAdapterIndex = iAdapterIndex;
 		ga->lpAdapterID = lpAdapterID;
 		ga->DefPerfLev = NULL;
+		ga->twin = NULL;
 
 		ga->lpThermalControllerInfo.iSize=sizeof(ADLThermalControllerInfo);
 		if (ADL_Overdrive5_ThermalDevices_Enum(iAdapterIndex, 0, &ga->lpThermalControllerInfo) != ADL_OK)
@@ -306,8 +308,21 @@ void init_adl(int nDevs)
 		ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 		ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
 
-		if (ADL_Overdrive5_FanSpeedInfo_Get(iAdapterIndex, 0, &ga->lpFanSpeedInfo) != ADL_OK)
+		if (ADL_Overdrive5_FanSpeedInfo_Get(iAdapterIndex, 0, &ga->lpFanSpeedInfo) != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_FanSpeedInfo_Get");
+			/* This is our opportunity to detect the 2nd GPU in a
+			 * dual GPU device with a fan controller only on the
+			 * first */
+			if (prev_id >= 0 &&
+			    !strcmp(lpInfo[i].strAdapterName, lpInfo[prev_id].strAdapterName) &&
+			    lpInfo[i].iBusNumber == lpInfo[prev_id].iBusNumber + 1 &&
+			    gpus[prev_gpu].adl.has_fanspeed) {
+				applog(LOG_INFO, "2nd GPU of dual card device detected");
+				ga->twin = &gpus[prev_gpu].adl;
+				gpus[prev_gpu].adl.twin = ga;
+			}
+		} else
+			ga->has_fanspeed = true;
 
 		/* Save the fanspeed values as defaults in case we reset later */
 		ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
@@ -343,6 +358,9 @@ void init_adl(int nDevs)
 			ga->managed = true;
 		}
 		ga->lasttemp = __gpu_temp(ga);
+
+		prev_id = i;
+		prev_gpu = gpu;
 	}
 }
 
@@ -465,6 +483,9 @@ int gpu_activity(int gpu)
 
 static inline int __gpu_fanspeed(struct gpu_adl *ga)
 {
+	if (!ga->has_fanspeed && ga->twin)
+		return __gpu_fanspeed(ga->twin);
+
 	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_RPM_READ))
 		return -1;
 	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_RPM;
@@ -488,8 +509,11 @@ int gpu_fanspeed(int gpu)
 	return ret;
 }
 
-static inline int __gpu_fanpercent(struct gpu_adl *ga)
+static int __gpu_fanpercent(struct gpu_adl *ga)
 {
+	if (!ga->has_fanspeed && ga->twin)
+		return __gpu_fanpercent(ga->twin);
+
 	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_READ ))
 		return -1;
 	ga->lpFanSpeedValue.iSpeedType = ADL_DL_FANCTRL_SPEED_TYPE_PERCENT;
@@ -819,9 +843,48 @@ static int set_powertune(int gpu, int iPercentage)
 	return ret;
 }
 
+static void fan_autotune(int gpu, int temp, int fanpercent, bool *fan_optimal)
+{
+	struct cgpu_info *cgpu = &gpus[gpu];
+	struct gpu_adl *ga = &cgpu->adl;
+	int top = gpus[gpu].gpu_fan;
+	int bot = gpus[gpu].min_fan;
+	int newpercent = fanpercent;
+	int iMin = 0, iMax = 100;
+
+	get_fanrange(gpu, &iMin, &iMax);
+	if (temp > ga->overtemp && fanpercent < iMax) {
+		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
+		newpercent = iMax;
+	} else if (temp > ga->targettemp && fanpercent < top && temp >= ga->lasttemp) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
+		if (temp > ga->targettemp + opt_hysteresis)
+			newpercent = ga->targetfan + 10;
+		else
+			newpercent = ga->targetfan + 5;
+		if (newpercent > top)
+			newpercent = top;
+	} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis && temp <= ga->lasttemp) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
+		newpercent = ga->targetfan - 1;
+	}
+
+	if (newpercent > iMax)
+		newpercent = iMax;
+	else if (newpercent < iMin)
+		newpercent = iMin;
+	if (newpercent != fanpercent) {
+		fan_optimal = false;
+		applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
+		set_fanspeed(gpu, newpercent);
+	}
+}
+
 void gpu_autotune(int gpu, bool *enable)
 {
-	int temp, fanpercent, engine, newpercent, newengine;
+	int temp, fanpercent, engine, newengine, twintemp;
 	bool fan_optimal = true;
 	struct cgpu_info *cgpu;
 	struct gpu_adl *ga;
@@ -832,43 +895,28 @@ void gpu_autotune(int gpu, bool *enable)
 	lock_adl();
 	ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity);
 	temp = __gpu_temp(ga);
-	newpercent = fanpercent = __gpu_fanpercent(ga);
+	if (ga->twin)
+		twintemp = __gpu_temp(ga->twin);
+	fanpercent = __gpu_fanpercent(ga);
 	unlock_adl();
 
 	newengine = engine = gpu_engineclock(gpu) * 100;
 
 	if (temp && fanpercent >= 0 && ga->autofan) {
-		int top = gpus[gpu].gpu_fan;
-		int bot = gpus[gpu].min_fan;
-		int iMin = 0, iMax = 100;
+		if (!ga->twin)
+			fan_autotune(gpu, temp, fanpercent, &fan_optimal);
+		else {
+			int hightemp, fan_gpu;
 
-		get_fanrange(gpu, &iMin, &iMax);
-		if (temp > ga->overtemp && fanpercent < iMax) {
-			applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
-			newpercent = iMax;
-		} else if (temp > ga->targettemp && fanpercent < top && temp >= ga->lasttemp) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
-			if (temp > ga->targettemp + opt_hysteresis)
-				newpercent = ga->targetfan + 10;
+			if (twintemp > temp)
+				hightemp = twintemp;
 			else
-				newpercent = ga->targetfan + 5;
-			if (newpercent > top)
-				newpercent = top;
-		} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis && temp <= ga->lasttemp) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
-			newpercent = ga->targetfan - 1;
-		}
-
-		if (newpercent > iMax)
-			newpercent = iMax;
-		else if (newpercent < iMin)
-			newpercent = iMin;
-		if (newpercent != fanpercent) {
-			fan_optimal = false;
-			applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
-			set_fanspeed(gpu, newpercent);
+				hightemp = temp;
+			if (ga->has_fanspeed)
+				fan_gpu = gpu;
+			else
+				fan_gpu = ga->twin->gpu;
+			fan_autotune(fan_gpu, hightemp, fanpercent, &fan_optimal);
 		}
 	}
 
