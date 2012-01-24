@@ -255,6 +255,7 @@ struct cgpu_info {
 	int device_id;
 	char *device_path;
 	FILE *device_file;
+	int device_fd;
 
 	bool enabled;
 	int accepted;
