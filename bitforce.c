@@ -15,6 +15,8 @@
 #include <dirent.h>
 #ifndef WIN32
 #include <termios.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #else
 #include <windows.h>
 #include <io.h>
