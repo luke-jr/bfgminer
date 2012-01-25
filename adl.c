@@ -872,7 +872,7 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool *fan_optimal)
 	} else {
 		/* We're in the optimal range, make minor adjustments if the
 		 * temp is still drifting */
-		if (fanpercent > bot && temp < ga->lasttemp && temp < ga->targettemp) {
+		if (fanpercent > bot && temp < ga->lasttemp && ga->lasttemp < ga->targettemp) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature dropping while in target range, decreasing fanspeed");
 			newpercent = ga->targetfan - 1;
