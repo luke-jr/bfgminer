@@ -917,7 +917,9 @@ void gpu_autotune(int gpu, bool *enable)
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		if (!ga->twin)
 			fan_autotune(gpu, temp, fanpercent, &fan_optimal);
-		else {
+		else if (ga->autofan && (ga->has_fanspeed || !ga->twin->autofan)) {
+			/* On linked GPUs, we autotune the fan only once, based
+			 * on the highest temperature from either GPUs */
 			int hightemp, fan_gpu;
 
 			if (twintemp > temp)
