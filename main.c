@@ -1452,7 +1452,7 @@ static char *set_intensity(char *arg)
 	else {
 		gpus[device].dynamic = false;
 		val = atoi(nextptr);
-		if (val < -10 || val > 10)
+		if (val < -10 || val > 14)
 			return "Invalid value passed to set intensity";
 		tt = &gpus[device].intensity;
 		*tt = val;
@@ -1605,7 +1605,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--intensity|-I",
 		     set_intensity, NULL, NULL,
-		     "Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)"),
+		     "Intensity of GPU scanning (d or -10 -> 14, default: d to maintain desktop interactivity)"),
 	OPT_WITH_ARG("--kernel-path|-K",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             "Specify a path to where the kernel .cl files are"),
