@@ -185,7 +185,7 @@ void patch_opcodes(char *w, unsigned remaining)
 
 _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
-	bool patchbfi = false;
+	bool patchbfi = false, prog_built = false;
 	cl_int status = 0;
 	unsigned int i;
 
@@ -526,6 +526,8 @@ build:
 		return NULL;
 	}
 
+	prog_built = true;
+
 	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*numDevices, binary_sizes, NULL );
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetPlatformInfo)");
@@ -624,17 +626,19 @@ built:
 	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT, %d vectors and worksize %d",
 	       filename, patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
-	/* create a cl program executable for all the devices specified */
-	status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
-		size_t logSize;
-		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
+	if (!prog_built) {
+		/* create a cl program executable for all the devices specified */
+		status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
+			size_t logSize;
+			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
 
-		char *log = malloc(logSize);
-		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
-		applog(LOG_INFO, "%s", log);
-		return NULL;
+			char *log = malloc(logSize);
+			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
+			applog(LOG_INFO, "%s", log);
+			return NULL;
+		}
 	}
 
 	/* get a kernel object handle for a kernel with the given name */
