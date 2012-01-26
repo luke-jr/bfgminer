@@ -5745,7 +5745,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work, uint64_
 			if (gpu->intensity > MIN_INTENSITY)
 				--gpu->intensity;
 		} else if (gpu_ms_average < 3) {
-			if (gpu->intensity < 10) // Should this be MAX_INTENSITY?
+			if (gpu->intensity < MAX_INTENSITY)
 				++gpu->intensity;
 		}
 	}
