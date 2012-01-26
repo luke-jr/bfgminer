@@ -474,7 +474,7 @@ build:
 	/* create a cl program executable for all the devices specified */
 	char *CompilerOptions = calloc(1, 256);
 
-	sprintf(CompilerOptions, "-D WORKSIZE=%d -DV ECTORS%d",
+	sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d",
 		(int)clState->work_size, clState->preferred_vwidth);
 	if (opt_debug)
 		applog(LOG_DEBUG, "Setting worksize to %d", clState->work_size);
