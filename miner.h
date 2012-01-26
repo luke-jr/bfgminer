@@ -197,6 +197,8 @@ struct gpu_adl {
 	ADLTemperature lpTemperature;
 	int iAdapterIndex;
 	int lpAdapterID;
+	int iBusNumber;
+	char strAdapterName[256];
 
 	ADLPMActivity lpActivity;
 	ADLODParameters lpOdParameters;

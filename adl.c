@@ -92,9 +92,22 @@ static inline void unlock_adl(void)
 	mutex_unlock(&adl_lock);
 }
 
+/* This looks for the twin GPU that has the fanspeed control of a non fanspeed
+ * control GPU on dual GPU cards */
+static inline bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
+{
+	if (!other_ga->has_fanspeed)
+		return false;
+	if (abs(ga->iBusNumber - other_ga->iBusNumber) != 1)
+		return false;
+	if (strcmp(ga->strAdapterName, other_ga->strAdapterName))
+		return false;
+	return true;
+}
+
 void init_adl(int nDevs)
 {
-	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0, prev_id = -1, prev_gpu = -1;
+	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -233,6 +246,7 @@ void init_adl(int nDevs)
 		ga->gpu = gpu;
 		ga->iAdapterIndex = iAdapterIndex;
 		ga->lpAdapterID = lpAdapterID;
+		strcpy(ga->strAdapterName, lpInfo[i].strAdapterName);
 		ga->DefPerfLev = NULL;
 		ga->twin = NULL;
 
@@ -307,21 +321,11 @@ void init_adl(int nDevs)
 		ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 		ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
 		ga->iVddc = lpOdPerformanceLevels->aLevels[lev].iVddc;
+		ga->iBusNumber = lpInfo[i].iBusNumber;
 
-		if (ADL_Overdrive5_FanSpeedInfo_Get(iAdapterIndex, 0, &ga->lpFanSpeedInfo) != ADL_OK) {
+		if (ADL_Overdrive5_FanSpeedInfo_Get(iAdapterIndex, 0, &ga->lpFanSpeedInfo) != ADL_OK)
 			applog(LOG_INFO, "Failed to ADL_Overdrive5_FanSpeedInfo_Get");
-			/* This is our opportunity to detect the 2nd GPU in a
-			 * dual GPU device with a fan controller only on the
-			 * first */
-			if (prev_id >= 0 &&
-			    !strcmp(lpInfo[i].strAdapterName, lpInfo[prev_id].strAdapterName) &&
-			    lpInfo[i].iBusNumber == lpInfo[prev_id].iBusNumber + 1 &&
-			    gpus[prev_gpu].adl.has_fanspeed) {
-				applog(LOG_INFO, "2nd GPU of dual card device detected");
-				ga->twin = &gpus[prev_gpu].adl;
-				gpus[prev_gpu].adl.twin = ga;
-			}
-		} else
+		else
 			ga->has_fanspeed = true;
 
 		/* Save the fanspeed values as defaults in case we reset later */
@@ -358,9 +362,31 @@ void init_adl(int nDevs)
 			ga->managed = true;
 		}
 		ga->lasttemp = __gpu_temp(ga);
+	}
 
-		prev_id = i;
-		prev_gpu = gpu;
+	/* Search for twin GPUs on a single card. They will be separated by one
+	 * bus id and one will have fanspeed while the other won't. */
+	for (gpu = 0; gpu < devices; gpu++) {
+		struct gpu_adl *ga = &gpus[gpu].adl;
+		int j;
+
+		if (ga->has_fanspeed)
+			continue;
+
+		for (j = 0; j < devices; j++) {
+			struct gpu_adl *other_ga;
+
+			if (j == gpu)
+				continue;
+			other_ga = &gpus[j].adl;
+			if (fanspeed_twin(ga, other_ga)) {
+				applog(LOG_INFO, "Dual GPUs detected: %d and %d",
+					ga->gpu, other_ga->gpu);
+				ga->twin = other_ga;
+				other_ga->twin = ga;
+				break;
+			}
+		}
 	}
 }
 
