@@ -1452,7 +1452,7 @@ static char *set_intensity(char *arg)
 	else {
 		gpus[device].dynamic = false;
 		val = atoi(nextptr);
-		if (val < -10 || val > 14)
+		if (val < MIN_INTENSITY || val > MAX_INTENSITY)
 			return "Invalid value passed to set intensity";
 		tt = &gpus[device].intensity;
 		*tt = val;
@@ -1466,7 +1466,7 @@ static char *set_intensity(char *arg)
 		else {
 			gpus[device].dynamic = false;
 			val = atoi(nextptr);
-			if (val < -10 || val > 14)
+			if (val < MIN_INTENSITY || val > MAX_INTENSITY)
 				return "Invalid value passed to set intensity";
 
 			tt = &gpus[device].intensity;
@@ -1605,7 +1605,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--intensity|-I",
 		     set_intensity, NULL, NULL,
-		     "Intensity of GPU scanning (d or -10 -> 14, default: d to maintain desktop interactivity)"),
+		     "Intensity of GPU scanning (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ", default: d to maintain desktop interactivity)"),
 	OPT_WITH_ARG("--kernel-path|-K",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             "Specify a path to where the kernel .cl files are"),
@@ -3721,7 +3721,7 @@ retry:
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
-		intvar = curses_input("Set GPU scan intensity (d or -10 -> 10)");
+		intvar = curses_input("Set GPU scan intensity (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ")");
 		if (!intvar) {
 			wlogprint("Invalid input\n");
 			goto retry;
@@ -3734,7 +3734,7 @@ retry:
 		}
 		intensity = atoi(intvar);
 		free(intvar);
-		if (intensity < -10 || intensity > 10) {
+		if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
@@ -5742,10 +5742,10 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work, uint64_
 		 * increase intensity when the system is idle, unless
 		 * dynamic is disabled. */
 		if (gpu_ms_average > 7) {
-			if (gpu->intensity > -10)
+			if (gpu->intensity > MIN_INTENSITY)
 				--gpu->intensity;
 		} else if (gpu_ms_average < 3) {
-			if (gpu->intensity < 10)
+			if (gpu->intensity < 10) // Should this be MAX_INTENSITY?
 				++gpu->intensity;
 		}
 	}

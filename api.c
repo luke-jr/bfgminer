@@ -322,7 +322,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
  { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
- { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range -10 - 10" },
+ { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " _MIN_INTENSITY_STR " - " _MAX_INTENSITY_STR },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECON, PARAM_NONE,	"CGMiner config" },
  { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
@@ -999,7 +999,7 @@ static void gpuintensity(SOCKETTYPE c, char *param, bool isjson)
 	}
 	else {
 		intensity = atoi(value);
-		if (intensity < -10 || intensity > 10) {
+		if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
 			strcpy(io_buffer, message(MSG_INVINT, 0, value, isjson));
 			return;
 		}
