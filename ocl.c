@@ -322,9 +322,15 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	/* For some reason 2 vectors is still better even if the card says
 	 * otherwise, and many cards lie about their max so use 256 as max
-	 * unless explicitly set on the command line */
-	if (clState->preferred_vwidth > 1)
-		clState->preferred_vwidth = 2;
+	 * unless explicitly set on the command line. 79x0 cards perform
+	 * better without vectors */
+	if (clState->preferred_vwidth > 1) {
+		if (strstr(name, "Tahiti"))
+			clState->preferred_vwidth = 1;
+		else
+			clState->preferred_vwidth = 2;
+	}
+
 	if (opt_vectors)
 		clState->preferred_vwidth = opt_vectors;
 	if (opt_worksize && opt_worksize <= clState->max_work_size)
