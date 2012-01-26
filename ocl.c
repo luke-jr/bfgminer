@@ -474,7 +474,7 @@ build:
 	/* create a cl program executable for all the devices specified */
 	char *CompilerOptions = calloc(1, 256);
 
-	sprintf(CompilerOptions, "-DWORKSIZE=%d -DVECTORS%d",
+	sprintf(CompilerOptions, "-D WORKSIZE=%d -DV ECTORS%d",
 		(int)clState->work_size, clState->preferred_vwidth);
 	if (opt_debug)
 		applog(LOG_DEBUG, "Setting worksize to %d", clState->work_size);
@@ -482,7 +482,7 @@ build:
 		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->preferred_vwidth);
 
 	if (clState->hasBitAlign) {
-		strcat(CompilerOptions, " -DBITALIGN");
+		strcat(CompilerOptions, " -D BITALIGN");
 		if (opt_debug)
 			applog(LOG_DEBUG, "cl_amd_media_ops found, setting BITALIGN");
 		if (strstr(name, "Cedar") ||
@@ -504,7 +504,7 @@ build:
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
 
 	if (patchbfi) {
-		strcat(CompilerOptions, " -DBFI_INT");
+		strcat(CompilerOptions, " -D BFI_INT");
 		if (opt_debug)
 			applog(LOG_DEBUG, "BFI_INT patch requiring device found, patched source with BFI_INT");
 	} else if (opt_debug)
