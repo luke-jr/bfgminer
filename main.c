@@ -5622,9 +5622,8 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		if (!failmessage) {
 			char *buf;
 
-			applog(LOG_ERR, "Restarting the GPU from the menu is unlikely to fix this.");
-			applog(LOG_ERR, "Try stopping other applications using the GPU like afterburner.");
-			applog(LOG_ERR, "Then restart cgminer.");
+			applog(LOG_ERR, "Restarting the GPU from the menu will not fix this.");
+			applog(LOG_ERR, "Try restarting cgminer.");
 			failmessage = true;
 			buf = curses_input("Press enter to continue");
 			if (buf)
