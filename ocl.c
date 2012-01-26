@@ -472,7 +472,7 @@ build:
 	}
 
 	/* create a cl program executable for all the devices specified */
-	char CompilerOptions[256];
+	char *CompilerOptions = calloc(1, 256);
 
 	sprintf(CompilerOptions, "-DWORKSIZE=%d -DVECTORS%d",
 		(int)clState->work_size, clState->preferred_vwidth);
@@ -510,7 +510,10 @@ build:
 	} else if (opt_debug)
 		applog(LOG_DEBUG, "BFI_INT patch requiring device not found, will not BFI_INT patch");
 
+	if (opt_debug)
+		applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
 	status = clBuildProgram(clState->program, 1, &devices[gpu], CompilerOptions , NULL, NULL);
+	free(CompilerOptions);
 
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Building Program (clBuildProgram)");
