@@ -545,6 +545,11 @@ extern void api(void);
 #define MAX_DEVICES 32
 #define MAX_POOLS (32)
 
+#define MIN_INTENSITY -10
+#define _MIN_INTENSITY_STR "-10"
+#define MAX_INTENSITY 14
+#define _MAX_INTENSITY_STR "14"
+
 extern struct list_head scan_devices;
 extern int nDevs;
 extern int opt_n_threads;

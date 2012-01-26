@@ -896,7 +896,7 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool *fan_optimal)
 
 void gpu_autotune(int gpu, bool *enable)
 {
-	int temp, fanpercent, engine, newengine, twintemp;
+	int temp, fanpercent, engine, newengine, twintemp = 0;
 	bool fan_optimal = true;
 	struct cgpu_info *cgpu;
 	struct gpu_adl *ga;
