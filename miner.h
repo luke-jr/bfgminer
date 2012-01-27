@@ -277,6 +277,7 @@ struct cgpu_info {
 	int threads;
 	struct thr_info *thread;
 
+	int virtual_gpu;
 	bool dynamic;
 	int intensity;
 #ifdef HAVE_ADL

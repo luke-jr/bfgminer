@@ -364,29 +364,38 @@ void init_adl(int nDevs)
 		ga->lasttemp = __gpu_temp(ga);
 	}
 
-	/* Search for twin GPUs on a single card. They will be separated by one
-	 * bus id and one will have fanspeed while the other won't. */
 	for (gpu = 0; gpu < devices; gpu++) {
 		struct gpu_adl *ga = &gpus[gpu].adl;
+		struct cgpu_info *cgpu = &gpus[gpu];
 		int j;
 
-		if (ga->has_fanspeed)
-			continue;
-
+		cgpu->virtual_gpu = 0;
 		for (j = 0; j < devices; j++) {
 			struct gpu_adl *other_ga;
 
 			if (j == gpu)
 				continue;
+
 			other_ga = &gpus[j].adl;
-			if (fanspeed_twin(ga, other_ga)) {
-				applog(LOG_INFO, "Dual GPUs detected: %d and %d",
-					ga->gpu, other_ga->gpu);
-				ga->twin = other_ga;
-				other_ga->twin = ga;
-				break;
+
+			/* Find the real GPU order based on their order
+			 * according to their iBusNumber value */
+			if (other_ga->iBusNumber < ga->iBusNumber)
+				cgpu->virtual_gpu++;
+
+			/* Search for twin GPUs on a single card. They will be
+			 * separated by one bus id and one will have fanspeed
+			 * while the other won't. */
+			if (!ga->has_fanspeed) {
+				if (fanspeed_twin(ga, other_ga)) {
+					applog(LOG_INFO, "Dual GPUs detected: %d and %d",
+						ga->gpu, other_ga->gpu);
+					ga->twin = other_ga;
+					other_ga->twin = ga;
+				}
 			}
 		}
+		applog(LOG_INFO, "GPU %d mapped to virtual GPU %d", gpu, cgpu->virtual_gpu);
 	}
 }
 
