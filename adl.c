@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <curses.h>
+#include <string.h>
 
 #include "miner.h"
 #include "ADL_SDK/adl_sdk.h"
@@ -94,7 +95,7 @@ static inline void unlock_adl(void)
 
 /* This looks for the twin GPU that has the fanspeed control of a non fanspeed
  * control GPU on dual GPU cards */
-static inline bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
+static bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
 {
 	if (!other_ga->has_fanspeed)
 		return false;
@@ -105,9 +106,35 @@ static inline bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
 	return true;
 }
 
+static void reorder_devices(int devices)
+{
+	struct cgpu_info base_gpus[MAX_GPUDEVICES];
+	struct cgpu_info *cgpu, *base_cgpu;
+	int i, j;
+
+	memcpy(base_gpus, gpus, sizeof(gpus));
+	for (i = 0; i < devices; i++) {
+		cgpu = &gpus[i];
+
+		for (j = 0; j < devices; j++) {
+			base_cgpu = &base_gpus[j];
+			if (base_cgpu->virtual_gpu == i) {
+				memcpy(cgpu, base_cgpu, sizeof(struct cgpu_info));
+				/* Swap the parameters so the device displayed
+				 * matches its physical location, but its
+				 * initialised from its virtual location */
+				cgpu->device_id = base_cgpu->virtual_gpu;
+				cgpu->virtual_gpu = base_cgpu->device_id;
+				break;
+			}
+		}
+	}
+}
+
 void init_adl(int nDevs)
 {
 	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
+	bool map_devices = false;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -395,8 +422,14 @@ void init_adl(int nDevs)
 				}
 			}
 		}
-		applog(LOG_INFO, "GPU %d mapped to virtual GPU %d", gpu, cgpu->virtual_gpu);
+		if (cgpu->virtual_gpu != gpu) {
+			map_devices = true;
+			applog(LOG_INFO, "GPU %d mapped to virtual GPU %d", gpu, cgpu->virtual_gpu);
+		}
 	}
+
+	if (map_devices)
+		reorder_devices(devices);
 }
 
 static float __gpu_temp(struct gpu_adl *ga)

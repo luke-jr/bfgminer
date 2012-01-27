@@ -4837,6 +4837,8 @@ select_cgpu:
 	cgpu->enabled = true;
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
+		int virtual_gpu;
+
 		thr = &thr_info[thr_id];
 		cgpu = thr->cgpu;
 		if (cgpu->api != &opencl_api)
@@ -4844,6 +4846,7 @@ select_cgpu:
 		if (dev_from_id(thr_id) != gpu)
 			continue;
 
+		virtual_gpu = cgpu->virtual_gpu;
 		/* Lose this ram cause we may get stuck here! */
 		//tq_freeze(thr->q);
 
@@ -4855,7 +4858,7 @@ select_cgpu:
 		//free(clState);
 
 		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
-		clStates[thr_id] = initCl(gpu, name, sizeof(name));
+		clStates[thr_id] = initCl(virtual_gpu, name, sizeof(name));
 		if (!clStates[thr_id]) {
 			applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
 			goto select_cgpu;
@@ -5524,16 +5527,15 @@ static void opencl_detect()
 
 	nDevs = clDevicesNum();
 	if (nDevs < 0) {
-		applog(LOG_ERR, "clDevicesNum returned error, none usable");
+		applog(LOG_ERR, "clDevicesNum returned error, no GPUs usable");
 		nDevs = 0;
 	}
 
 	if (MAX_DEVICES - total_devices < nDevs)
 		nDevs = MAX_DEVICES - total_devices;
 
-	if (!nDevs) {
+	if (!nDevs)
 		return;
-	}
 
 	if (opt_kernel) {
 		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk"))
@@ -5547,12 +5549,16 @@ static void opencl_detect()
 
 	for (i = 0; i < nDevs; ++i) {
 		struct cgpu_info *cgpu;
+
 		cgpu = devices[total_devices++] = &gpus[i];
 		cgpu->enabled = true;
 		cgpu->api = &opencl_api;
 		cgpu->device_id = i;
 		cgpu->threads = opt_g_threads;
 	}
+
+	if (!opt_noadl)
+		init_adl(nDevs);
 }
 
 static void reinit_opencl_device(struct cgpu_info *gpu)
@@ -5604,6 +5610,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	struct timeval now;
 	struct cgpu_info *cgpu = thr->cgpu;
 	int gpu = cgpu->device_id;
+	int virtual_gpu = cgpu->virtual_gpu;
 	int i = thr->id;
 	static bool failmessage = false;
 
@@ -5614,8 +5621,8 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		return false;
 	}
 
-	applog(LOG_INFO, "Init GPU thread %i", i);
-	clStates[i] = initCl(gpu, name, sizeof(name));
+	applog(LOG_INFO, "Init GPU thread %i GPU %i virtual GPU %i", i, gpu, virtual_gpu);
+	clStates[i] = initCl(virtual_gpu, name, sizeof(name));
 	if (!clStates[i]) {
 		enable_curses();
 		applog(LOG_ERR, "Failed to init GPU thread %d, disabling device %d", i, gpu);
@@ -6172,10 +6179,7 @@ retry_pools:
 	gettimeofday(&total_tv_end, NULL);
 	get_datestamp(datestamp, &total_tv_start);
 
-#ifdef HAVE_OPENCL
-	if (!opt_noadl)
-		init_adl(nDevs);
-#else
+#ifndef HAVE_OPENCL
 	opt_g_threads = 0;
 #endif
 

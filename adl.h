@@ -20,18 +20,8 @@ void change_gpusettings(int gpu);
 void gpu_autotune(int gpu, bool *enable);
 void clear_adl(int nDevs);
 #else /* HAVE_ADL */
-#include "miner.h"
 #define adl_active (0)
-static inline void init_adl(int nDevs)
-{
-	int i;
-
-	for (i = 0; i < nDevs; i++) {
-		struct cgpu_info *cgpu = &gpus[i];
-
-		cgpu->virtual_gpu = i;
-	}
-}
+static inline void init_adl(int nDevs) {}
 static inline void change_gpusettings(int gpu) { }
 static inline void clear_adl(int nDevs) {}
 #endif
