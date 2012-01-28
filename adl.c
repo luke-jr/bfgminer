@@ -28,6 +28,12 @@ const int opt_overheattemp = 85;
 const int opt_cutofftemp = 95;
 static pthread_mutex_t adl_lock;
 
+struct gpu_adapters {
+	int iAdapterIndex;
+	int iBusNumber;
+	int id;
+};
+
 // Memory allocation function
 static void * __stdcall ADL_Main_Memory_Alloc(int iSize)
 {
@@ -106,35 +112,10 @@ static bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
 	return true;
 }
 
-static void reorder_devices(int devices)
-{
-	struct cgpu_info base_gpus[MAX_GPUDEVICES];
-	struct cgpu_info *cgpu, *base_cgpu;
-	int i, j;
-
-	memcpy(base_gpus, gpus, sizeof(gpus));
-	for (i = 0; i < devices; i++) {
-		cgpu = &gpus[i];
-
-		for (j = 0; j < devices; j++) {
-			base_cgpu = &base_gpus[j];
-			if (base_cgpu->virtual_gpu == i) {
-				memcpy(cgpu, base_cgpu, sizeof(struct cgpu_info));
-				/* Swap the parameters so the device displayed
-				 * matches its physical location, but its
-				 * initialised from its virtual location */
-				cgpu->device_id = base_cgpu->virtual_gpu;
-				cgpu->virtual_gpu = base_cgpu->device_id;
-				break;
-			}
-		}
-	}
-}
-
 void init_adl(int nDevs)
 {
 	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
-	bool map_devices = false;
+	struct gpu_adapters adapters[nDevs], vadapters[nDevs];
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -220,12 +201,10 @@ void init_adl(int nDevs)
 		return;
 	}
 
+	/* Iterate over iNumberAdapters and find the lpAdapterID of real devices */
 	for (i = 0; i < iNumberAdapters; i++) {
-		struct gpu_adl *ga;
 		int iAdapterIndex;
 		int lpAdapterID;
-		ADLODPerformanceLevels *lpOdPerformanceLevels;
-		int lev;
 
 		iAdapterIndex = lpInfo[i].iAdapterIndex;
 		/* Get unique identifier of the adapter, 0 means not AMD */
@@ -238,19 +217,51 @@ void init_adl(int nDevs)
 		if (lpAdapterID == last_adapter)
 			continue;
 
+		adapters[devices].iAdapterIndex = iAdapterIndex;
+		adapters[devices].iBusNumber = lpInfo[i].iBusNumber;
+		adapters[devices].id = i;
+
 		/* We found a truly new adapter instead of a logical
-		* one. Now since there's no way of correlating the
-		* opencl enumerated devices and the ADL enumerated
-		* ones, we have to assume they're in the same order.*/
+		 * one. Now since there's no way of correlating the
+		 * opencl enumerated devices and the ADL enumerated
+		 * ones, we have to assume they're in the same order.*/
 		if (++devices > nDevs) {
 			applog(LOG_ERR, "ADL found more devices than opencl");
 			return;
 		}
-		gpu = devices - 1;
 		last_adapter = lpAdapterID;
 
 		if (!lpAdapterID) {
 			applog(LOG_INFO, "Adapter returns ID 0 meaning not AMD. Card order might be confused");
+			continue;
+		}
+	}
+
+	for (i = 0; i < devices; i++) {
+		int j, virtual_gpu = 0;
+
+		for (j = 0; j < devices; j++) {
+			if (i == j)
+				continue;
+			if (adapters[j].iBusNumber < adapters[i].iBusNumber)
+				virtual_gpu++;
+		}
+		vadapters[virtual_gpu].id = adapters[i].id;
+	}
+
+	for (gpu = 0; gpu < devices; gpu++) {
+		struct gpu_adl *ga;
+		int iAdapterIndex;
+		int lpAdapterID;
+		ADLODPerformanceLevels *lpOdPerformanceLevels;
+		int lev;
+
+		i = vadapters[gpu].id;
+		iAdapterIndex = lpInfo[i].iAdapterIndex;
+
+		/* Get unique identifier of the adapter, 0 means not AMD */
+		if (ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID) != ADL_OK) {
+			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get");
 			continue;
 		}
 
@@ -393,10 +404,8 @@ void init_adl(int nDevs)
 
 	for (gpu = 0; gpu < devices; gpu++) {
 		struct gpu_adl *ga = &gpus[gpu].adl;
-		struct cgpu_info *cgpu = &gpus[gpu];
 		int j;
 
-		cgpu->virtual_gpu = 0;
 		for (j = 0; j < devices; j++) {
 			struct gpu_adl *other_ga;
 
@@ -404,11 +413,6 @@ void init_adl(int nDevs)
 				continue;
 
 			other_ga = &gpus[j].adl;
-
-			/* Find the real GPU order based on their order
-			 * according to their iBusNumber value */
-			if (other_ga->iBusNumber < ga->iBusNumber)
-				cgpu->virtual_gpu++;
 
 			/* Search for twin GPUs on a single card. They will be
 			 * separated by one bus id and one will have fanspeed
@@ -422,14 +426,7 @@ void init_adl(int nDevs)
 				}
 			}
 		}
-		if (cgpu->virtual_gpu != gpu) {
-			map_devices = true;
-			applog(LOG_INFO, "GPU %d mapped to virtual GPU %d", gpu, cgpu->virtual_gpu);
-		}
 	}
-
-	if (map_devices)
-		reorder_devices(devices);
 }
 
 static float __gpu_temp(struct gpu_adl *ga)
