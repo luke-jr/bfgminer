@@ -1,5 +1,5 @@
 
-This is a multi-threaded multi-pool CPU, GPU, and FPGA miner with ATI GPU
+This is a multi-threaded multi-pool GPU, FPGA and CPU miner with ATI GPU
 monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
 
@@ -41,18 +41,19 @@ Dependencies:
 	yasm 1.0.1+ http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
 	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
-	(This sdk is optional and gives support for GPU mining)
+	(This sdk is mandatory for GPU mining)
 	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
-	(This sdk is optional and gives support for ATI GPU monitoring & clocking)
+	(This sdk is mandatory for ATI GPU monitoring & clocking)
 
 CGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-opencl        Override detection and disable building with opencl
 	--disable-adl           Override detection and disable building with adl
+	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
-	Install AMD APP sdk, latest version - there is no official place to
+	Install AMD APP sdk, ideal version (see FAQ!) - no official place to
 	install it so just keep track of where it is if you're not installing
 	the include files and library files into the system directory.
 	(Do NOT install the ati amd sdk if you are on nvidia.)
@@ -101,8 +102,8 @@ Basic WIN32 build instructions (LIKELY OUTDATED INFO. requires mingw32):
 	
 Native WIN32 build instructions (on mingw32, on windows):
 	Install the Microsoft platform SDK
-	Install AMD APP sdk, latest version (only if you want GPU mining)
-	Install AMD ADL sdk, latest version (only if you want GPU monitoring)
+	Install AMD APP sdk, (if you want GPU mining)
+	Install AMD ADL sdk, (if you want GPU monitoring)
 	(Do NOT install the ati amd sdk if you are on nvidia)
 	Install mingw32
 	Install libcurl, copy libcurl.m4 into /mingw/share/aclocal
@@ -800,11 +801,11 @@ this time.
 
 Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK, -v 1 -w 64 might help, along with not decreasing your memroy clock
+the 2.6 SDK, -v 1 -w 64 might help, along with not decreasing your memory clock
 speed.
 
 Q: ATI 79XX support?
-A: Pending.
+A: Work in progress. Still needs a lot of work to get a good hashrate.
 
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one
