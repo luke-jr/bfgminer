@@ -465,6 +465,12 @@ build:
 		return NULL;
 	}
 
+	clRetainProgram(clState->program);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
+		return NULL;
+	}
+
 	/* create a cl program executable for all the devices specified */
 	char *CompilerOptions = calloc(1, 256);
 
@@ -588,6 +594,12 @@ build:
 			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
 			return NULL;
 		}
+
+		clRetainProgram(clState->program);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
+			return NULL;
+		}
 	}
 
 	free(source);
@@ -625,6 +637,12 @@ built:
 			char *log = malloc(logSize);
 			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
 			applog(LOG_INFO, "%s", log);
+			return NULL;
+		}
+
+		clRetainProgram(clState->program);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
 			return NULL;
 		}
 	}
