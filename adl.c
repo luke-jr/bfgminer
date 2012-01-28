@@ -31,6 +31,7 @@ static pthread_mutex_t adl_lock;
 struct gpu_adapters {
 	int iAdapterIndex;
 	int iBusNumber;
+	int virtual_gpu;
 	int id;
 };
 
@@ -246,6 +247,7 @@ void init_adl(int nDevs)
 			if (adapters[j].iBusNumber < adapters[i].iBusNumber)
 				virtual_gpu++;
 		}
+		vadapters[virtual_gpu].virtual_gpu = i;
 		vadapters[virtual_gpu].id = adapters[i].id;
 	}
 
@@ -258,6 +260,7 @@ void init_adl(int nDevs)
 
 		i = vadapters[gpu].id;
 		iAdapterIndex = lpInfo[i].iAdapterIndex;
+		gpus[gpu].virtual_gpu = vadapters[gpu].virtual_gpu;
 
 		/* Get unique identifier of the adapter, 0 means not AMD */
 		if (ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID) != ADL_OK) {
