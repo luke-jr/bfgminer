@@ -639,6 +639,12 @@ built:
 			applog(LOG_INFO, "%s", log);
 			return NULL;
 		}
+
+		clRetainProgram(clState->program);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
+			return NULL;
+		}
 	}
 
 	/* get a kernel object handle for a kernel with the given name */
