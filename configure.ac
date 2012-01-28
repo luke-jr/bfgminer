@@ -181,13 +181,12 @@ else
 	DLOPEN_FLAGS=""
 fi
 
-bitforce=yes
 AC_ARG_ENABLE([bitforce],
-	[AC_HELP_STRING([--disable-bitforce],[Don't compile support for BitForce FPGAs])],
+	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs(default disabled)])],
 	[bitforce=$enableval]
-)
-if test "x$bitforce" != xno; then
-	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted.])
+	)
+if test "bitforce" = xyes; then
+	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
 fi
 
 AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
@@ -322,8 +321,6 @@ echo
 echo "Configuration Options Summary:"
 echo
 
-echo "  BitForce.FPGAs.......: $bitforce"
-
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
@@ -351,13 +348,20 @@ else
 fi
 
 echo
+if test "x$bitforce" = xyes; then
+	echo "  BitForce.FPGAs.......: Enabled"
+else
+	echo "  BitForce.FPGAs.......: Disabled"
+fi
 
+echo
 if test "x$cpumining" = xyes; then
 	echo "  CPU Mining...........: Enabled"
 	echo "  ASM.(for CPU mining).: $has_yasm"
 else
 	echo "  CPU Mining...........: Disabled"
 fi
+
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
