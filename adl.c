@@ -116,7 +116,7 @@ static bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
 void init_adl(int nDevs)
 {
 	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
-	struct gpu_adapters adapters[nDevs], vadapters[nDevs];
+	struct gpu_adapters adapters[MAX_GPUDEVICES], vadapters[MAX_GPUDEVICES];
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
