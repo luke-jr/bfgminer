@@ -600,6 +600,9 @@ build:
 			applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
 			return NULL;
 		}
+
+		/* Program needs to be rebuilt */
+		prog_built = false;
 	}
 
 	free(source);
