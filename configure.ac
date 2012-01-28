@@ -198,7 +198,7 @@ AC_CHECK_LIB(pdcurses, addstr, PDCURSES_LIBS=-lpdcurses)
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
-AM_CONDITIONAL([USE_BITFORCE], [test x$bitforce != xno])
+AM_CONDITIONAL([USE_BITFORCE], [test x$bitforce = xyes])
 
 if test x$request_jansson = xtrue
 then
