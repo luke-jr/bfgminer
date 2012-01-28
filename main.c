@@ -5846,7 +5846,7 @@ void enable_device(struct cgpu_info *cgpu)
 	cgpu->enabled = true;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
 	mining_threads += cgpu->threads;
-#ifdef OPENCL
+#ifdef HAVE_OPENCL
 	if (cgpu->api == &opencl_api) {
 		gpu_threads += cgpu->threads;
 	}
