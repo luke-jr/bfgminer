@@ -17,6 +17,9 @@
 #include <termios.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
 #else
 #include <windows.h>
 #include <io.h>
