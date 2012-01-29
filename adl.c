@@ -280,6 +280,9 @@ void init_adl(int nDevs)
 #endif
 					virtual_gpu++;
 			}
+			if (virtual_gpu != i)
+				applog(LOG_INFO, "Mapping device %d to GPU %d according to Bus Number order",
+				       i, virtual_gpu);
 			vadapters[virtual_gpu].virtual_gpu = i;
 			vadapters[virtual_gpu].id = adapters[i].id;
 		}
