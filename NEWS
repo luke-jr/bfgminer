@@ -1,4 +1,4 @@
-Version 2.2.0
+Version 2.2.0 - January 29, 2012
 
 NOTE: GPU Device order will change with this release with ATI GPUs as cgminer
 now can enumerate them according to their Bus ID which means the values should
