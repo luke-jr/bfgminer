@@ -349,10 +349,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char filename[16];
 
 	if (chosen_kernel == KL_NONE) {
-		if (clState->hasBitAlign)
-			chosen_kernel = KL_PHATK;
-		else
+		if (!clState->hasBitAlign || strstr(name, "Tahiti"))
 			chosen_kernel = KL_POCLBM;
+		else
+			chosen_kernel = KL_PHATK;
 	}
 
 	switch (chosen_kernel) {
