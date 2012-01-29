@@ -206,7 +206,6 @@ struct gpu_adl {
 	ADLFanSpeedInfo lpFanSpeedInfo;
 	ADLFanSpeedValue lpFanSpeedValue;
 	ADLFanSpeedValue DefFanSpeedValue;
-	ADLThermalControllerInfo lpThermalControllerInfo;
 
 	int iEngineClock;
 	int iMemoryClock;
