@@ -114,7 +114,7 @@ static bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
 
 void init_adl(int nDevs)
 {
-	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
+	int result, i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
 	struct gpu_adapters adapters[MAX_GPUDEVICES], vadapters[MAX_GPUDEVICES];
 
 #if defined (LINUX)
@@ -169,19 +169,22 @@ void init_adl(int nDevs)
 
 	// Initialise ADL. The second parameter is 1, which means:
 	// retrieve adapter information only for adapters that are physically present and enabled in the system
-	if (ADL_Main_Control_Create (ADL_Main_Memory_Alloc, 1) != ADL_OK) {
-		applog(LOG_INFO, "ADL Initialisation Error!");
+	result = ADL_Main_Control_Create (ADL_Main_Memory_Alloc, 1);
+	if (result != ADL_OK) {
+		applog(LOG_INFO, "ADL Initialisation Error! Error %d!", result);
 		return ;
 	}
 
-	if (ADL_Main_Control_Refresh() != ADL_OK) {
-		applog(LOG_INFO, "ADL Refresh Error!");
+	result = ADL_Main_Control_Refresh();
+	if (result != ADL_OK) {
+		applog(LOG_INFO, "ADL Refresh Error! Error %d!", result);
 		return ;
 	}
 
 	// Obtain the number of adapters for the system
-	if (ADL_Adapter_NumberOfAdapters_Get ( &iNumberAdapters ) != ADL_OK) {
-		applog(LOG_INFO, "Cannot get the number of adapters!\n");
+	result = ADL_Adapter_NumberOfAdapters_Get (&iNumberAdapters);
+	if (result != ADL_OK) {
+		applog(LOG_INFO, "Cannot get the number of adapters! Error %d!", result);
 		return ;
 	}
 
@@ -191,8 +194,9 @@ void init_adl(int nDevs)
 
 		lpInfo->iSize = sizeof(lpInfo);
 		// Get the AdapterInfo structure for all adapters in the system
-		if (ADL_Adapter_AdapterInfo_Get (lpInfo, sizeof (AdapterInfo) * iNumberAdapters) != ADL_OK) {
-			applog(LOG_INFO, "ADL_Adapter_AdapterInfo_Get Error!");
+		result = ADL_Adapter_AdapterInfo_Get (lpInfo, sizeof (AdapterInfo) * iNumberAdapters);
+		if (result != ADL_OK) {
+			applog(LOG_INFO, "ADL_Adapter_AdapterInfo_Get Error! Error %d", result);
 			return ;
 		}
 	} else {
@@ -207,8 +211,9 @@ void init_adl(int nDevs)
 
 		iAdapterIndex = lpInfo[i].iAdapterIndex;
 		/* Get unique identifier of the adapter, 0 means not AMD */
-		if (ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID) != ADL_OK) {
-			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get");
+		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
+		if (result != ADL_OK) {
+			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
 			continue;
 		}
 
@@ -286,8 +291,9 @@ void init_adl(int nDevs)
 		gpus[gpu].virtual_gpu = vadapters[gpu].virtual_gpu;
 
 		/* Get unique identifier of the adapter, 0 means not AMD */
-		if (ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID) != ADL_OK) {
-			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get");
+		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
+		if (result != ADL_OK) {
+			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
 			continue;
 		}
 
