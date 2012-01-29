@@ -218,6 +218,24 @@ void init_adl(int nDevs)
 		if (lpAdapterID == last_adapter)
 			continue;
 
+		if (opt_debug)
+			applog(LOG_DEBUG, "GPU %d "
+			       "iAdapterIndex %d "
+			       "strUDID %s "
+			       "iBusNumber %d "
+			       "iDeviceNumber %d "
+			       "iFunctionNumber %d "
+			       "iVendorID %d "
+			       "strAdapterName  %s ",
+			       devices,
+			       iAdapterIndex,
+			       lpInfo[i].strUDID,
+			       lpInfo[i].iBusNumber,
+			       lpInfo[i].iDeviceNumber,
+			       lpInfo[i].iFunctionNumber,
+			       lpInfo[i].iVendorID,
+			       lpInfo[i].strAdapterName);
+
 		adapters[devices].iAdapterIndex = iAdapterIndex;
 		adapters[devices].iBusNumber = lpInfo[i].iBusNumber;
 		adapters[devices].id = i;
