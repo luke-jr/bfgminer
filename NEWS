@@ -1,5 +1,43 @@
 Version 2.2.0
 
+NOTE: GPU Device order will change with this release with ATI GPUs as cgminer
+now can enumerate them according to their Bus ID which means the values should
+now correlate with their physical position on the motherboard.
+
+- Default to poclbm kernel on Tahiti (7970) since phatk does not work, even
+though performance is sub-standard so that at least it will mine successfully by
+defau
+- Retain cl program after every possible place we might build the program.
+- Update ADL SDK URL.
+- Fix potential overflow.
+- Map GPU devices to virtual devices in their true physical order based on
+BusNumber.
+- Change the warning that comes with failure to init cl on a device to be more
+generic and accurate.
+- Advertise longpoll support in X-Mining-Extensions
+- Detect dual GPU cards by iterating through all GPUs, finding ones without
+fanspeed and matching twins with fanspeed one bus ID apart.
+- Do not attempt to build the program that becomes the kernel twice. This could
+have been leading to failures on initialising cl.
+- Some opencl compilers have issues with no spaces after -D in the compiler
+options.
+- Allow intensity up to 14.
+- Use calloced stack memory for CompilerOptions to ensure sprintf writes to the
+beginning of the char.
+- Whitelist 79x0 cards to prefer no vectors as they perform better without.
+- Adjust fan speed gently while in the optimal range when temperature is
+drifting to minimise overshoot in either direction.
+- Detect dual GPU cards via the indirect information of - 1st card has a fan
+controller. 2nd card does not have a fan controller, cards share the same device
+name
+- Instead of using the BFI_INT patching hack on any device reporting
+cl_amd_media_ops, create a whitelist of devices that need it. This should enable
+GCN architec
+- Fixed API compiling issue on OS X
+- Add more explanation of JSON format and the 'save' command
+- Return an error if using ADL API commands when it's not available
+- Read off lpThermalControllerInfo from each ADL device.
+- Add ADL_Overdrive5_ThermalDevices_Enum interface.
 - Add API commands: config, switchpool, gpu settings, save
 - Implement socks4 proxy support.
 - Fix send() for JSON strings
