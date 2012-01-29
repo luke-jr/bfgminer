@@ -997,11 +997,13 @@ static char *set_float_0_to_99(const char *arg, float *f)
 	return NULL;
 }
 
+#ifdef USE_BITFORCE
 static char *add_serial(char *arg)
 {
 	string_elist_add(arg, &scan_devices);
 	return NULL;
 }
+#endif
 
 static char *set_devices(char *arg)
 {
