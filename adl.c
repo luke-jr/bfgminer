@@ -116,6 +116,7 @@ void init_adl(int nDevs)
 {
 	int result, i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
 	struct gpu_adapters adapters[MAX_GPUDEVICES], vadapters[MAX_GPUDEVICES];
+	bool devs_match = true;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -248,8 +249,11 @@ void init_adl(int nDevs)
 		 * opencl enumerated devices and the ADL enumerated
 		 * ones, we have to assume they're in the same order.*/
 		if (++devices > nDevs) {
-			applog(LOG_ERR, "ADL found more devices than opencl");
-			return;
+			applog(LOG_ERR, "ADL found more devices than opencl!");
+			applog(LOG_ERR, "There is possibly at least one GPU that doesn't support OpenCL");
+			devs_match = false;
+			devices = nDevs;
+			break;
 		}
 		last_adapter = lpAdapterID;
 
@@ -259,24 +263,33 @@ void init_adl(int nDevs)
 		}
 	}
 
-	/* Windows has some kind of random ordering for bus number IDs and
-	 * ordering the GPUs according to ascending order fixes it. Linux
-	 * has usually sequential but decreasing order instead! */
-	for (i = 0; i < devices; i++) {
-		int j, virtual_gpu = 0;
+	if (devs_match && devices == nDevs) {
+		/* Windows has some kind of random ordering for bus number IDs and
+		 * ordering the GPUs according to ascending order fixes it. Linux
+		 * has usually sequential but decreasing order instead! */
+		for (i = 0; i < devices; i++) {
+			int j, virtual_gpu = 0;
 
-		for (j = 0; j < devices; j++) {
-			if (i == j)
-				continue;
+			for (j = 0; j < devices; j++) {
+				if (i == j)
+					continue;
 #ifdef WIN32
-			if (adapters[j].iBusNumber < adapters[i].iBusNumber)
+				if (adapters[j].iBusNumber < adapters[i].iBusNumber)
 #else
-			if (adapters[j].iBusNumber > adapters[i].iBusNumber)
+				if (adapters[j].iBusNumber > adapters[i].iBusNumber)
 #endif
-				virtual_gpu++;
+					virtual_gpu++;
+			}
+			vadapters[virtual_gpu].virtual_gpu = i;
+			vadapters[virtual_gpu].id = adapters[i].id;
 		}
-		vadapters[virtual_gpu].virtual_gpu = i;
-		vadapters[virtual_gpu].id = adapters[i].id;
+	} else {
+		if (devices < nDevs) {
+			applog(LOG_ERR, "ADL found less devices than opencl!");
+			applog(LOG_ERR, "There is possibly more than one display attached to a GPU");
+		}
+		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices does not match!");
+		applog(LOG_ERR, "Hardware monitoring may NOT match up with devices!");
 	}
 
 	for (gpu = 0; gpu < devices; gpu++) {
