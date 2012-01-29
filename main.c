@@ -1842,9 +1842,9 @@ struct device_api opencl_api;
 
 static char *print_ndevs_and_exit(int *ndevs)
 {
+	opt_log_output = true;
 	opencl_api.api_detect();
-	printf("%i GPU devices detected\n", *ndevs);
-	fflush(stdout);
+	applog(LOG_INFO, "%i GPU devices detected", *ndevs);
 	exit(*ndevs);
 }
 #endif
@@ -1882,7 +1882,7 @@ static struct opt_table opt_cmdline_table[] = {
 #ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--ndevs|-n",
 			print_ndevs_and_exit, &nDevs,
-			"Enumerate number of detected GPUs and exit"),
+			"Display number of detected GPUs, OpenCL information, and exit"),
 #endif
 	OPT_WITHOUT_ARG("--version|-V",
 			opt_version_and_exit, packagename,
