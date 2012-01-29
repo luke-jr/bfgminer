@@ -70,6 +70,7 @@ char *file_contents(const char *filename, int *length)
 
 int clDevicesNum() {
 	cl_int status;
+	char pbuff[256];
 	cl_uint numDevices;
 	cl_uint numPlatforms;
 	cl_platform_id platform = NULL;
@@ -92,8 +93,6 @@ int clDevicesNum() {
 		}
 
 		for (i = 0; i < numPlatforms; ++i) {
-			char pbuff[256];
-
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
@@ -112,6 +111,14 @@ int clDevicesNum() {
 		perror("NULL platform found!\n");
 		return -1;
 	}
+
+	applog(LOG_INFO, "CL Platform vendor: %s", pbuff);
+	status = clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(pbuff), pbuff, NULL);
+	if (status == CL_SUCCESS)
+		applog(LOG_INFO, "CL Platform name: %s", pbuff);
+	status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
+	if (status == CL_SUCCESS)
+		applog(LOG_INFO, "CL Platform version: %s", pbuff);
 
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
@@ -190,6 +197,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	cl_device_id *devices;
 	cl_uint numPlatforms;
 	cl_uint numDevices;
+	char pbuff[256];
 	unsigned int i;
 	cl_int status;
 
@@ -209,8 +217,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		}
 
 		for(i = 0; i < numPlatforms; ++i) {
-			char pbuff[100];
-
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
@@ -229,6 +235,14 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		perror("NULL platform found!\n");
 		return NULL;
 	}
+
+	applog(LOG_INFO, "CL Platform vendor: %s", pbuff);
+	status = clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(pbuff), pbuff, NULL);
+	if (status == CL_SUCCESS)
+		applog(LOG_INFO, "CL Platform name: %s", pbuff);
+	status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
+	if (status == CL_SUCCESS)
+		applog(LOG_INFO, "CL Platform version: %s", pbuff);
 
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
@@ -251,7 +265,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 		unsigned int i;
 		for (i = 0; i < numDevices; i++) {
-			char pbuff[100];
 			status = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error: Getting Device Info");
@@ -262,7 +275,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		}
 
 		if (gpu < numDevices) {
-			char pbuff[100];
 			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error: Getting Device Info");
