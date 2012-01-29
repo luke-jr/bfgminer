@@ -28,7 +28,7 @@
 #include "ocl.h"
 
 extern int opt_vectors;
-extern int opt_worksize;
+extern unsigned int opt_worksize;
 
 char *file_contents(const char *filename, int *length)
 {

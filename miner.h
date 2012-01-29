@@ -147,6 +147,7 @@ enum {
 #define unlikely(expr) (expr)
 #define likely(expr) (expr)
 #endif
+#define __maybe_unused			__attribute__((unused))
 
 #if defined(__i386__)
 #define WANT_CRYPTOPP_ASM32
@@ -250,7 +251,7 @@ struct device_api {
 	uint64_t (*can_limit_work)(struct thr_info*);
 	bool (*thread_init)(struct thr_info*);
 	void (*free_work)(struct thr_info*, struct work*);
-	bool (*prepare_work)(struct thr_info*, struct work*);
+	bool (*prepare_work)(struct work*);
 	uint64_t (*scanhash)(struct thr_info*, struct work*, uint64_t);
 	void (*thread_shutdown)(struct thr_info*);
 };

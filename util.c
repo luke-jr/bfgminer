@@ -78,7 +78,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 	else if (opt_log_output || prio <= LOG_NOTICE) {
 		char *f;
 		int len;
-		struct timeval tv = { };
+		struct timeval tv;
 		struct tm tm;
 
 		gettimeofday(&tv, NULL);
@@ -163,7 +163,7 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 			     void *user_data)
 {
 	struct upload_buffer *ub = user_data;
-	int len = size * nmemb;
+	unsigned int len = size * nmemb;
 
 	if (len > ub->len)
 		len = ub->len;
@@ -239,7 +239,7 @@ out:
 }
 
 #ifdef CURL_HAS_SOCKOPT
-int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purpose)
+int json_rpc_call_sockopt_cb(__maybe_unused void *userdata, curl_socket_t fd, __maybe_unused curlsocktype purpose)
 {
 	int keepalive = 1;
 	int tcp_keepcnt = 5;
@@ -309,14 +309,14 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 {
 	json_t *val, *err_val, *res_val;
 	int rc;
-	struct data_buffer all_data = { };
+	struct data_buffer all_data;
 	struct upload_buffer upload_data;
-	json_error_t err = { };
+	json_error_t err;
 	struct curl_slist *headers = NULL;
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	long timeout = longpoll ? (60 * 60) : 60;
-	struct header_info hi = { };
+	struct header_info hi;
 	bool probing = false;
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
@@ -478,7 +478,7 @@ err_out:
 
 char *bin2hex(const unsigned char *p, size_t len)
 {
-	int i;
+	unsigned int i;
 	char *s = malloc((len * 2) + 1);
 	if (!s)
 		return NULL;
@@ -730,7 +730,7 @@ void thr_info_cancel(struct thr_info *thr)
 
 bool get_dondata(char **url, char **userpass)
 {
-	struct data_buffer all_data = { };
+	struct data_buffer all_data ;
 	char curl_err_str[CURL_ERROR_SIZE];
 	CURL *curl = curl_easy_init();
 	int rc;

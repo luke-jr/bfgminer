@@ -181,7 +181,7 @@ int opt_log_interval = 5;
 bool opt_log_output = false;
 static int opt_queue = 1;
 int opt_vectors;
-int opt_worksize;
+unsigned int opt_worksize;
 int opt_scantime = 60;
 int opt_expiry = 120;
 int opt_bench_algo = -1;
@@ -997,15 +997,18 @@ static char *set_float_0_to_99(const char *arg, float *f)
 	return NULL;
 }
 
+#ifdef USE_BITFORCE
 static char *add_serial(char *arg)
 {
 	string_elist_add(arg, &scan_devices);
 	return NULL;
 }
+#endif
 
 static char *set_devices(char *arg)
 {
 	int i = strtol(arg, &arg, 0);
+
 	if (*arg) {
 		if (*arg == '?') {
 			devices_enabled = -1;
@@ -1014,7 +1017,7 @@ static char *set_devices(char *arg)
 		return "Invalid device number";
 	}
 
-	if (i < 0 || i >= (sizeof(devices_enabled) * 8) - 1)
+	if (i < 0 || i >= (int)(sizeof(devices_enabled) * 8) - 1)
 		return "Invalid device number";
 	devices_enabled |= 1 << i;
 	return NULL;
@@ -1803,7 +1806,7 @@ static char *parse_config(json_t *config, bool fileconf)
 	return NULL;
 }
 
-static char *load_config(const char *arg, void *unused)
+static char *load_config(const char *arg, __maybe_unused void *unused)
 {
 	json_error_t err;
 	json_t *config;
@@ -2580,7 +2583,7 @@ static void print_summary(void);
 void kill_work(void)
 {
 	struct thr_info *thr;
-	unsigned int i;
+	int i;
 
 	disable_curses();
 	applog(LOG_INFO, "Received kill message");
@@ -3773,7 +3776,7 @@ static void manage_gpu(void)
 }
 #endif
 
-static void *input_thread(void *userdata)
+static void *input_thread(__maybe_unused void *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -4159,7 +4162,8 @@ static void roll_work(struct work *work)
 /* Recycle the work at a higher starting res_nonce if we know the thread we're
  * giving it to will not finish scanning it. We keep the master copy to be
  * recycled more rapidly and discard the clone to avoid repeating work */
-static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_div)
+static bool divide_work(__maybe_unused struct timeval *now, struct work *work,
+			__maybe_unused uint32_t hash_div)
 {
 	if (can_roll(work) && should_roll(work)) {
 		roll_work(work);
@@ -4194,7 +4198,7 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 		     const int thr_id, uint32_t hash_div)
 {
 	bool newreq = false, ret = false;
-	struct timespec abstime = {};
+	struct timespec abstime;
 	struct timeval now;
 	struct work *work_heap;
 	struct pool *pool;
@@ -4363,7 +4367,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	return submit_work_sync(thr, work);
 }
 
-static inline bool abandon_work(int thr_id, struct work *work, struct timeval *wdiff, uint64_t hashes)
+static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 {
 	if (wdiff->tv_sec > opt_scantime ||
 	    work->blk.nonce >= MAXTHREADS - hashes ||
@@ -4382,7 +4386,7 @@ static void *miner_thread(void *userdata)
 
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long def_cycle = opt_log_interval / 5 ? : 1;
-	unsigned long cycle;
+	time_t cycle;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
@@ -4418,7 +4422,7 @@ static void *miner_thread(void *userdata)
 		cycle = (can_roll(work) && should_roll(work)) ? 1 : def_cycle;
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
-		if (api->prepare_work && !api->prepare_work(mythr, work)) {
+		if (api->prepare_work && !api->prepare_work(work)) {
 			applog(LOG_ERR, "work prepare failed, exiting "
 				"mining thread %d", thr_id);
 			break;
@@ -4500,7 +4504,7 @@ static void *miner_thread(void *userdata)
 
 			if (can_roll(work) && should_roll(work))
 				roll_work(work);
-		} while (!abandon_work(thr_id, work, &wdiff, hashes));
+		} while (!abandon_work(work, &wdiff, hashes));
 	}
 
 out:
@@ -4565,7 +4569,8 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
 	cl_int status = 0;
-	int i, num = 0;
+	unsigned int i;
+	int num = 0;
 	uint *nonces;
 
 	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
@@ -4906,7 +4911,7 @@ void reinit_device(struct cgpu_info *cgpu)
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
-static void *watchdog_thread(void *userdata)
+static void *watchdog_thread(__maybe_unused void *userdata)
 {
 	const unsigned int interval = 3;
 	static struct timeval rotate_tv;
@@ -5709,13 +5714,14 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 	}
 }
 
-static bool opencl_prepare_work(struct thr_info *thr, struct work *work)
+static bool opencl_prepare_work(struct work *work)
 {
 	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 	return true;
 }
 
-static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work, uint64_t max_nonce)
+static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
+				__maybe_unused uint64_t max_nonce)
 {
 	const int thr_id = thr->id;
 	struct opencl_thread_data *thrdata = thr->cgpu_data;
@@ -5855,12 +5861,13 @@ void enable_device(struct cgpu_info *cgpu)
 
 int main (int argc, char *argv[])
 {
-	unsigned int i, pools_active = 0;
-	unsigned int j, k;
+	unsigned pools_active = 0;
 	struct block *block, *tmpblock;
 	struct work *work, *tmpwork;
 	struct sigaction handler;
 	struct thr_info *thr;
+	unsigned int k;
+	int i, j;
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -5999,7 +6006,7 @@ int main (int argc, char *argv[])
 	mining_threads = 0;
 	gpu_threads = 0;
 	if (devices_enabled) {
-		for (i = 0; i < (sizeof(devices_enabled) * 8) - 1; ++i) {
+		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
 			if (devices_enabled & (1 << i)) {
 				if (i >= total_devices)
 					quit (1, "Command line options set a device that doesn't exist");

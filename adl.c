@@ -936,7 +936,7 @@ static int set_powertune(int gpu, int iPercentage)
 	return ret;
 }
 
-static void fan_autotune(int gpu, int temp, int fanpercent, bool *fan_optimal)
+static void fan_autotune(int gpu, int temp, int fanpercent, __maybe_unused bool *fan_optimal)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
 	struct gpu_adl *ga = &cgpu->adl;
@@ -1244,7 +1244,7 @@ updated:
 	goto updated;
 }
 
-void clear_adl(nDevs)
+void clear_adl(int nDevs)
 {
 	struct gpu_adl *ga;
 	int i;
