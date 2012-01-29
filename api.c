@@ -336,7 +336,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISFN,	PARAM_NONE,	"Missing save filename parameter" },
  { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
  { SEVERITY_ERR,   MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
- { SEVERITY_FAIL }
+ { SEVERITY_FAIL,  0,		0,		NULL }
 };
 
 static int bye = 0;
@@ -445,7 +445,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 	return msg_buffer;
 }
 
-static void apiversion(SOCKETTYPE c, char *param, bool isjson)
+static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	if (isjson)
 		sprintf(io_buffer, "%s," JSON_VERSION "{\"CGMiner\":\"%s\",\"API\":\"%s\"}" JSON_CLOSE,
@@ -457,7 +457,7 @@ static void apiversion(SOCKETTYPE c, char *param, bool isjson)
 			VERSION, APIVERSION, SEPARATOR);
 }
 
-static void minerconfig(SOCKETTYPE c, char *param, bool isjson)
+static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 	int cpucount = 0;
@@ -573,7 +573,7 @@ static void cpustatus(int cpu, bool isjson)
 }
 #endif
 
-static void devstatus(SOCKETTYPE c, char *param, bool isjson)
+static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	int i;
 
@@ -610,7 +610,7 @@ static void devstatus(SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-static void gpudev(SOCKETTYPE c, char *param, bool isjson)
+static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
@@ -644,7 +644,7 @@ static void gpudev(SOCKETTYPE c, char *param, bool isjson)
 }
 
 #ifdef WANT_CPUMINE
-static void cpudev(SOCKETTYPE c, char *param, bool isjson)
+static void cpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
@@ -678,7 +678,7 @@ static void cpudev(SOCKETTYPE c, char *param, bool isjson)
 }
 #endif
 
-static void poolstatus(SOCKETTYPE c, char *param, bool isjson)
+static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 	char *status, *lp;
@@ -740,7 +740,7 @@ static void poolstatus(SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-static void summary(SOCKETTYPE c, char *param, bool isjson)
+static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	double utility, mhs;
 
@@ -786,7 +786,7 @@ static void summary(SOCKETTYPE c, char *param, bool isjson)
 #endif
 }
 
-static void gpuenable(SOCKETTYPE c, char *param, bool isjson)
+static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	struct thr_info *thr;
 	int gpu;
@@ -832,7 +832,7 @@ static void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUREN, id, NULL, isjson));
 }
 
-static void gpudisable(SOCKETTYPE c, char *param, bool isjson)
+static void gpudisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
@@ -862,7 +862,7 @@ static void gpudisable(SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUDIS, id, NULL, isjson));
 }
 
-static void gpurestart(SOCKETTYPE c, char *param, bool isjson)
+static void gpurestart(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
@@ -887,7 +887,7 @@ static void gpurestart(SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUREI, id, NULL, isjson));
 }
 
-static void gpucount(SOCKETTYPE c, char *param, bool isjson)
+static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 
@@ -901,7 +901,7 @@ static void gpucount(SOCKETTYPE c, char *param, bool isjson)
 	strcat(io_buffer, buf);
 }
 
-static void cpucount(SOCKETTYPE c, char *param, bool isjson)
+static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 	int count = 0;
@@ -920,7 +920,7 @@ static void cpucount(SOCKETTYPE c, char *param, bool isjson)
 	strcat(io_buffer, buf);
 }
 
-static void switchpool(SOCKETTYPE c, char *param, bool isjson)
+static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	struct pool *pool;
 	int id;
@@ -983,7 +983,7 @@ static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 	return true;
 }
 
-static void gpuintensity(SOCKETTYPE c, char *param, bool isjson)
+static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 	char *value;
@@ -1012,7 +1012,7 @@ static void gpuintensity(SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUINT, id, intensitystr, isjson));
 }
 
-static void gpumem(SOCKETTYPE c, char *param, bool isjson)
+static void gpumem(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1033,7 +1033,7 @@ static void gpumem(SOCKETTYPE c, char *param, bool isjson)
 #endif
 }
 
-static void gpuengine(SOCKETTYPE c, char *param, bool isjson)
+static void gpuengine(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1054,7 +1054,7 @@ static void gpuengine(SOCKETTYPE c, char *param, bool isjson)
 #endif
 }
 
-static void gpufan(SOCKETTYPE c, char *param, bool isjson)
+static void gpufan(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1075,7 +1075,7 @@ static void gpufan(SOCKETTYPE c, char *param, bool isjson)
 #endif
 }
 
-static void gpuvddc(SOCKETTYPE c, char *param, bool isjson)
+static void gpuvddc(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1098,7 +1098,7 @@ static void gpuvddc(SOCKETTYPE c, char *param, bool isjson)
 
 static void send_result(SOCKETTYPE c, bool isjson);
 
-void doquit(SOCKETTYPE c, char *param, bool isjson)
+void doquit(SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	if (isjson)
 		strcpy(io_buffer, JSON_START JSON_BYE);
@@ -1111,7 +1111,7 @@ void doquit(SOCKETTYPE c, char *param, bool isjson)
 	kill_work();
 }
 
-void dosave(SOCKETTYPE c, char *param, bool isjson)
+void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	FILE *fcfg;
 
@@ -1158,7 +1158,7 @@ struct CMDS {
 	{ "gpuvddc",		gpuvddc},
 	{ "save",		dosave },
 	{ "quit",		doquit },
-	{ NULL }
+	{ NULL,			NULL }
 };
 
 static void send_result(SOCKETTYPE c, bool isjson)
@@ -1251,7 +1251,7 @@ void api(void)
 
 	if (!opt_api_network) {
 		serv.sin_addr.s_addr = inet_addr(localaddr);
-		if (serv.sin_addr.s_addr == INVINETADDR) {
+		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
 			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 			return;
 		}
