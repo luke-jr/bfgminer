@@ -69,10 +69,11 @@ char *file_contents(const char *filename, int *length)
 }
 
 int clDevicesNum() {
-	cl_int status = 0;
-
+	cl_int status;
+	cl_uint numDevices;
 	cl_uint numPlatforms;
 	cl_platform_id platform = NULL;
+
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	/* If this fails, assume no GPUs. */
 	if (status != CL_SUCCESS) {
@@ -82,28 +83,27 @@ int clDevicesNum() {
 
 	if (numPlatforms > 0) {
 		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
+		unsigned int i;
+
 		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-		if (status != CL_SUCCESS)
-		{
+		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
 			return -1;
 		}
 
-		unsigned int i;
 		for (i = 0; i < numPlatforms; ++i) {
-			char pbuff[100];
+			char pbuff[256];
+
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS)
-			{
+			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
 				free(platforms);
 				return -1;
 			}
 			platform = platforms[i];
-			if (!strcmp(pbuff, "Advanced Micro Devices, Inc."))
-			{
+			if (!strcmp(pbuff, "Advanced Micro Devices, Inc.") ||
+			    !strcmp(pbuff, "NVIDIA Corporation"))
 				break;
-			}
 		}
 		free(platforms);
 	}
@@ -113,7 +113,6 @@ int clDevicesNum() {
 		return -1;
 	}
 
-	cl_uint numDevices;
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Getting Device IDs (num)");
@@ -185,14 +184,15 @@ void patch_opcodes(char *w, unsigned remaining)
 
 _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
-	bool patchbfi = false, prog_built = false;
-	cl_int status = 0;
-	unsigned int i;
-
 	_clState *clState = calloc(1, sizeof(_clState));
-
-	cl_uint numPlatforms;
+	bool patchbfi = false, prog_built = false;
 	cl_platform_id platform = NULL;
+	cl_device_id *devices;
+	cl_uint numPlatforms;
+	cl_uint numDevices;
+	unsigned int i;
+	cl_int status;
+
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Getting Platforms. (clGetPlatformsIDs)");
@@ -201,27 +201,26 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	if (numPlatforms > 0) {
 		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
+
 		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-		if (status != CL_SUCCESS)
-		{
+		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
 			return NULL;
 		}
 
 		for(i = 0; i < numPlatforms; ++i) {
 			char pbuff[100];
+
 			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS)
-			{
+			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
 				free(platforms);
 				return NULL;
 			}
 			platform = platforms[i];
-			if (!strcmp(pbuff, "Advanced Micro Devices, Inc."))
-			{
+			if (!strcmp(pbuff, "Advanced Micro Devices, Inc.") ||
+			    !strcmp(pbuff, "NVIDIA Corporation"))
 				break;
-			}
 		}
 		free(platforms);
 	}
@@ -231,14 +230,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
-	cl_uint numDevices;
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Getting Device IDs (num)");
 		return NULL;
 	}
 
-	cl_device_id *devices;
 	if (numDevices > 0 ) {
 		devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
 
