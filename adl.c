@@ -238,13 +238,20 @@ void init_adl(int nDevs)
 		}
 	}
 
+	/* Windows has some kind of random ordering for bus number IDs and
+	 * ordering the GPUs according to ascending order fixes it. Linux
+	 * has usually sequential but decreasing order instead! */
 	for (i = 0; i < devices; i++) {
 		int j, virtual_gpu = 0;
 
 		for (j = 0; j < devices; j++) {
 			if (i == j)
 				continue;
+#ifdef WIN32
 			if (adapters[j].iBusNumber < adapters[i].iBusNumber)
+#else
+			if (adapters[j].iBusNumber > adapters[i].iBusNumber)
+#endif
 				virtual_gpu++;
 		}
 		vadapters[virtual_gpu].virtual_gpu = i;
