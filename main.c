@@ -3572,6 +3572,24 @@ retry:
 }
 
 #ifdef HAVE_OPENCL
+
+/* In dynamic mode, only the first thread of each device will be in use.
+ * This potentially could start a thread that was stopped with the start-stop
+ * options if one were to disable dynamic from the menu on a paused GPU */
+static void pause_dynamic_threads(int gpu)
+{
+	struct cgpu_info *cgpu = &gpus[gpu];
+	int i;
+
+	for (i = 1; i < cgpu->threads; i++) {
+		struct thr_info *thr = &thr_info[i];
+
+		thr->pause = cgpu->dynamic;
+		if (!cgpu->dynamic)
+			tq_push(thr->q, &ping);
+	}
+}
+
 void reinit_device(struct cgpu_info *cgpu);
 struct device_api opencl_api;
 
@@ -3735,6 +3753,7 @@ retry:
 		if (!strncasecmp(intvar, "d", 1)) {
 			wlogprint("Dynamic mode enabled on gpu %d\n", selected);
 			gpus[selected].dynamic = true;
+			pause_dynamic_threads(selected);
 			free(intvar);
 			goto retry;
 		}
@@ -3747,6 +3766,7 @@ retry:
 		gpus[selected].dynamic = false;
 		gpus[selected].intensity = intensity;
 		wlogprint("Intensity on gpu %d set to %d\n", selected, intensity);
+		pause_dynamic_threads(selected);
 		goto retry;
 	} else if (!strncasecmp(&input, "r", 1)) {
 		if (selected)
@@ -6221,7 +6241,11 @@ retry_pools:
 		}
 	}
 
+#ifdef HAVE_OPENCL
 	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
+	for (i = 0; i < nDevs; i++)
+		pause_dynamic_threads(i);
+#endif
 
 #ifdef WANT_CPUMINE
 	applog(LOG_INFO, "%d cpu miner threads started, "
