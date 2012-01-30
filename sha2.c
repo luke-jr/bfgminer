@@ -40,10 +40,10 @@
 #ifndef GET_ULONG_BE
 #define GET_ULONG_BE(n,b,i)                             \
 {                                                       \
-    (n) = ( (unsigned long) (b)[(i)    ] << 24 )        \
-        | ( (unsigned long) (b)[(i) + 1] << 16 )        \
-        | ( (unsigned long) (b)[(i) + 2] <<  8 )        \
-        | ( (unsigned long) (b)[(i) + 3]       );       \
+    (n) = ( (uint32_t) (b)[(i)    ] << 24 )        \
+        | ( (uint32_t) (b)[(i) + 1] << 16 )        \
+        | ( (uint32_t) (b)[(i) + 2] <<  8 )        \
+        | ( (uint32_t) (b)[(i) + 3]       );       \
 }
 #endif
 
@@ -95,8 +95,8 @@ void sha2_starts( sha2_context *ctx, int is224 )
 
 static void sha2_process( sha2_context *ctx, const unsigned char data[64] )
 {
-    unsigned long temp1, temp2, W[64];
-    unsigned long A, B, C, D, E, F, G, H;
+    uint32_t temp1, temp2, W[64];
+    uint32_t A, B, C, D, E, F, G, H;
 
     GET_ULONG_BE( W[ 0], data,  0 );
     GET_ULONG_BE( W[ 1], data,  4 );
@@ -230,7 +230,7 @@ static void sha2_process( sha2_context *ctx, const unsigned char data[64] )
 void sha2_update( sha2_context *ctx, const unsigned char *input, int ilen )
 {
     int fill;
-    unsigned long left;
+    uint32_t left;
 
     if( ilen <= 0 )
         return;
@@ -241,7 +241,7 @@ void sha2_update( sha2_context *ctx, const unsigned char *input, int ilen )
     ctx->total[0] += ilen;
     ctx->total[0] &= 0xFFFFFFFF;
 
-    if( ctx->total[0] < (unsigned long) ilen )
+    if( ctx->total[0] < (uint32_t) ilen )
         ctx->total[1]++;
 
     if( left && ilen >= fill )
@@ -281,8 +281,8 @@ static const unsigned char sha2_padding[64] =
  */
 void sha2_finish( sha2_context *ctx, unsigned char output[32] )
 {
-    unsigned long last, padn;
-    unsigned long high, low;
+    uint32_t last, padn;
+    uint32_t high, low;
     unsigned char msglen[8];
 
     high = ( ctx->total[0] >> 29 )
