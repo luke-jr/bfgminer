@@ -811,6 +811,11 @@ Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one
 though.
 
+Q: I'm having an issue. What debugging information should I provide?
+A: Start cgminer with your regular commands and add -D -T --verbose and provide
+the full startup output and a summary of your hardware, operating system, ATI
+driver version and ATI stream version.
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
