@@ -1564,11 +1564,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
 			"Disable GPU mining even if suitable devices exist"),
-#ifdef HAVE_ADL
-	OPT_WITHOUT_ARG("--dev-reorder",
-			opt_set_bool, &opt_reorder,
-			"Attempt to reorder GPU devices according to PCI Bus ID"),
-#endif
 #endif
 	OPT_WITH_ARG("--donation",
 		     set_float_0_to_99, &opt_show_floatval, &opt_donation,
@@ -1606,6 +1601,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-powertune",
 		     set_gpu_powertune, NULL, NULL,
 		     "Set the GPU powertune percentage - one value for all or separate by commas for per card"),
+	OPT_WITHOUT_ARG("--gpu-reorder",
+			opt_set_bool, &opt_reorder,
+			"Attempt to reorder GPU devices according to PCI Bus ID"),
 	OPT_WITH_ARG("--gpu-vddc",
 		     set_gpu_vddc, NULL, NULL,
 		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card"),
