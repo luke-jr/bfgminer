@@ -1163,9 +1163,8 @@ void change_autosettings(int gpu)
 	}
 }
 
-void change_gpusettings(int disp_gpu)
+void change_gpusettings(int gpu)
 {
-	int gpu = gpus[disp_gpu].virtual_gpu;
 	struct gpu_adl *ga = &gpus[gpu].adl;
 	float fval, fmin = 0, fmax = 0;
 	int val, imin = 0, imax = 0;
