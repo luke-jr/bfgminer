@@ -21,6 +21,7 @@
 #include "adl_functions.h"
 
 bool adl_active;
+bool opt_reorder = false;
 
 int opt_hysteresis = 3;
 const int opt_targettemp = 75;
@@ -263,7 +264,7 @@ void init_adl(int nDevs)
 		}
 	}
 
-	if (devs_match && devices == nDevs) {
+	if (opt_reorder && devs_match && devices == nDevs) {
 		/* Windows has some kind of random ordering for bus number IDs and
 		 * ordering the GPUs according to ascending order fixes it. Linux
 		 * has usually sequential but decreasing order instead! */
