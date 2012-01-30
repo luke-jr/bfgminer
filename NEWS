@@ -4,6 +4,7 @@ NOTE - The GPU Device reordering in 2.2.0 by default was considered a bad idea
 so the original GPU ordering is used by default again unless reordering is
 explicitly requested.
 
+- Add missing options to write config function.
 - Add a --gpu-reorder option to only reorder devices according to PCI Bus ID
 when requested.
 - Fix for midstate support being broken on pools that supported no-midstate

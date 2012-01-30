@@ -3169,6 +3169,9 @@ void write_config(FILE *fcfg)
 		fputs("\",\n\"gpu-memclock\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memclock);
+		fputs("\",\n\"gpu-memdiff\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memdiff);
 		fputs("\",\n\"gpu-powertune\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_powertune);
@@ -3190,6 +3193,10 @@ void write_config(FILE *fcfg)
 		fputs(",\n", fcfg);
 #endif
 	}
+#ifdef HAVE_ADL
+	if (opt_reorder)
+		fprintf(fcfg, ",\n\"gpu-reorder\" : true");
+#endif
 #ifdef WANT_CPUMINE
 	fprintf(fcfg, "\n\"algo\" : \"%s\"", algo_names[opt_algo]);
 #endif
@@ -3246,7 +3253,7 @@ void write_config(FILE *fcfg)
 		if (!gpus[i].enabled)
 			break;
 	if (i < nDevs)
-		for(i = 0; i < nDevs; i++)
+		for (i = 0; i < nDevs; i++)
 			if (gpus[i].enabled)
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
