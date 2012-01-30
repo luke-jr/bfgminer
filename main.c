@@ -3656,7 +3656,7 @@ retry:
 		wlog("Last initialised: %s\n", cgpu->init);
 		wlog("Intensity: ");
 		if (gpus[gpu].dynamic)
-			wlog("Dynamic\n");
+			wlog("Dynamic (only one thread in use)\n");
 		else
 			wlog("%d\n", gpus[gpu].intensity);
 		for (i = 0; i < mining_threads; i++) {
@@ -3680,6 +3680,8 @@ retry:
 					wlog("Never started");
 					break;
 			}
+			if (thr->pause)
+				wlog(" paused");
 			wlog("\n");
 		}
 		wlog("\n");
