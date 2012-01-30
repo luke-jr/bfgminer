@@ -1564,6 +1564,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
 			"Disable GPU mining even if suitable devices exist"),
+#ifdef HAVE_ADL
+	OPT_WITHOUT_ARG("--dev-reorder",
+			opt_set_bool, &opt_reorder,
+			"Attempt to reorder GPU devices according to PCI Bus ID"),
+#endif
 #endif
 	OPT_WITH_ARG("--donation",
 		     set_float_0_to_99, &opt_show_floatval, &opt_donation,
@@ -1846,6 +1851,7 @@ static char *print_ndevs_and_exit(int *ndevs)
 {
 	opt_log_output = true;
 	opencl_api.api_detect();
+	clear_adl(*ndevs);
 	applog(LOG_INFO, "%i GPU devices detected", *ndevs);
 	exit(*ndevs);
 }

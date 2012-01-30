@@ -2,6 +2,7 @@
 #define __ADL_H__
 #ifdef HAVE_ADL
 bool adl_active;
+bool opt_reorder;
 int opt_hysteresis;
 const int opt_targettemp;
 const int opt_overheattemp;
