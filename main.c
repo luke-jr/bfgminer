@@ -5587,6 +5587,7 @@ static void opencl_detect()
 		cgpu->api = &opencl_api;
 		cgpu->device_id = i;
 		cgpu->threads = opt_g_threads;
+		cgpu->virtual_gpu = i;
 	}
 
 	if (!opt_noadl)
