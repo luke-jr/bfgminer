@@ -147,7 +147,6 @@ enum {
 #define unlikely(expr) (expr)
 #define likely(expr) (expr)
 #endif
-#define __maybe_unused			__attribute__((unused))
 
 #if defined(__i386__)
 #define WANT_CRYPTOPP_ASM32
