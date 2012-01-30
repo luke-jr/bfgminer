@@ -1,3 +1,39 @@
+Version 2.2.1 - January 30, 2012
+
+NOTE - The GPU Device reordering in 2.2.0 by default was considered a bad idea
+so the original GPU ordering is used by default again unless reordering is
+explicitly requested.
+
+- Add a --gpu-reorder option to only reorder devices according to PCI Bus ID
+when requested.
+- Fix for midstate support being broken on pools that supported no-midstate
+work by ensuring numbers are 32 bits in sha2.c
+- Set virtual GPUs to work when ADL is disabled or all mining will occur on GPU
+0.
+- Add information about paused threads in the menu status.
+- Disable all but the first thread on GPUs in dynamic mode for better
+interactivity.
+- Set the latest network access time on share submission for --net-delay even if
+we're not delaying that submission for further network access.
+- Clear adl on exiting after probing values since it may attempt to overclock.
+- As share submission is usually staggered, and delays can be costly, submit
+shares without delay even when --net-delay is enabled.
+- Display GPU number and device name when ADL is successfully enabled on it.
+- Display GPU ordering remapping in verbose mode.
+- Don't fail in the case the number of ADL and OpenCL devices do not match, and
+do not attempt to reorder devices unless they match. Instead give a warning
+about
+- Display error codes should ADL not return ADL_OK in the more critical function
+calls.
+- Fix unused warning.
+- Fix compile warnings in api.c
+- Add extensive ADL based device info in debug mode.
+- Make --ndevs display verbose opencl information as well to make debugging
+version information easier.
+- Display information about the opencl platform with verbose enabled.
+- Explicitly check for nvidia in opencl platform strings as well.
+
+
 Version 2.2.0 - January 29, 2012
 
 NOTE: GPU Device order will change with this release with ATI GPUs as cgminer
