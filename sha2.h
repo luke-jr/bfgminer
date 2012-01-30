@@ -26,13 +26,15 @@
 #ifndef POLARSSL_SHA2_H
 #define POLARSSL_SHA2_H
 
+#include <stdint.h>
+
 /**
  * \brief          SHA-256 context structure
  */
 typedef struct
 {
-    unsigned long total[2];     /*!< number of bytes processed  */
-    unsigned long state[8];     /*!< intermediate digest state  */
+    uint32_t total[2];     /*!< number of bytes processed  */
+    uint32_t state[8];     /*!< intermediate digest state  */
     unsigned char buffer[64];   /*!< data block being processed */
 
     unsigned char ipad[64];     /*!< HMAC: inner padding        */
