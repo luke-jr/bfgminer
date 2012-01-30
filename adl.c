@@ -264,26 +264,30 @@ void init_adl(int nDevs)
 		}
 	}
 
-	if (opt_reorder && devs_match && devices == nDevs) {
+	if (devs_match && devices == nDevs) {
 		/* Windows has some kind of random ordering for bus number IDs and
 		 * ordering the GPUs according to ascending order fixes it. Linux
 		 * has usually sequential but decreasing order instead! */
 		for (i = 0; i < devices; i++) {
-			int j, virtual_gpu = 0;
+			int j, virtual_gpu;
 
-			for (j = 0; j < devices; j++) {
-				if (i == j)
-					continue;
+			if (opt_reorder) {
+				virtual_gpu = 0;
+				for (j = 0; j < devices; j++) {
+					if (i == j)
+						continue;
 #ifdef WIN32
-				if (adapters[j].iBusNumber < adapters[i].iBusNumber)
+					if (adapters[j].iBusNumber < adapters[i].iBusNumber)
 #else
-				if (adapters[j].iBusNumber > adapters[i].iBusNumber)
+					if (adapters[j].iBusNumber > adapters[i].iBusNumber)
 #endif
-					virtual_gpu++;
-			}
-			if (virtual_gpu != i)
-				applog(LOG_INFO, "Mapping device %d to GPU %d according to Bus Number order",
-				       i, virtual_gpu);
+						virtual_gpu++;
+				}
+				if (virtual_gpu != i)
+					applog(LOG_INFO, "Mapping device %d to GPU %d according to Bus Number order",
+					       i, virtual_gpu);
+			} else
+				virtual_gpu = i;
 			vadapters[virtual_gpu].virtual_gpu = i;
 			vadapters[virtual_gpu].id = adapters[i].id;
 		}
@@ -294,6 +298,10 @@ void init_adl(int nDevs)
 		}
 		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices does not match!");
 		applog(LOG_ERR, "Hardware monitoring may NOT match up with devices!");
+		for (i = 0; i < devices; i++) {
+			vadapters[i].virtual_gpu = i;
+			vadapters[i].id = adapters[i].id;
+		}
 	}
 
 	for (gpu = 0; gpu < devices; gpu++) {
