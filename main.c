@@ -1851,6 +1851,7 @@ static char *print_ndevs_and_exit(int *ndevs)
 {
 	opt_log_output = true;
 	opencl_api.api_detect();
+	clear_adl(*ndevs);
 	applog(LOG_INFO, "%i GPU devices detected", *ndevs);
 	exit(*ndevs);
 }
