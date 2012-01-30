@@ -336,6 +336,9 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
+
+	/* Shares are staggered already and delays in submission can be costly
+	 * so do not delay them */
 	if (!opt_delaynet || share)
 		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
@@ -380,25 +383,29 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-	if (opt_delaynet && !share) {
-		long long now_msecs, last_msecs;
-		struct timeval now, last;
+	if (opt_delaynet) {
+		/* Don't delay share submission, but still track the nettime */
+		if (!share) {
+			long long now_msecs, last_msecs;
+			struct timeval now, last;
 
-		gettimeofday(&now, NULL);
-		last_nettime(&last);
-		now_msecs = (long long)now.tv_sec * 1000;
-		now_msecs += now.tv_usec / 1000;
-		last_msecs = (long long)last.tv_sec * 1000;
-		last_msecs += last.tv_usec / 1000;
-		if (now_msecs > last_msecs && now_msecs - last_msecs < 250) {
-			struct timespec rgtp;
+			gettimeofday(&now, NULL);
+			last_nettime(&last);
+			now_msecs = (long long)now.tv_sec * 1000;
+			now_msecs += now.tv_usec / 1000;
+			last_msecs = (long long)last.tv_sec * 1000;
+			last_msecs += last.tv_usec / 1000;
+			if (now_msecs > last_msecs && now_msecs - last_msecs < 250) {
+				struct timespec rgtp;
 
-			rgtp.tv_sec = 0;
-			rgtp.tv_nsec = (250 - (now_msecs - last_msecs)) * 1000000;
-			nanosleep(&rgtp, NULL);
+				rgtp.tv_sec = 0;
+				rgtp.tv_nsec = (250 - (now_msecs - last_msecs)) * 1000000;
+				nanosleep(&rgtp, NULL);
+			}
 		}
 		set_nettime();
 	}
+
 	rc = curl_easy_perform(curl);
 	if (rc) {
 		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
