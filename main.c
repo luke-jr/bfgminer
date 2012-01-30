@@ -3579,11 +3579,15 @@ retry:
 static void pause_dynamic_threads(int gpu)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
-	int i;
+	int i, thread_no = 0;
 
-	for (i = 1; i < cgpu->threads; i++) {
+	for (i = 0; i < mining_threads; i++) {
 		struct thr_info *thr = &thr_info[i];
 
+		if (thr->cgpu != cgpu)
+			continue;
+		if (!thread_no++)
+			continue;
 		thr->pause = cgpu->dynamic;
 		if (!cgpu->dynamic)
 			tq_push(thr->q, &ping);
