@@ -264,43 +264,44 @@ void init_adl(int nDevs)
 		}
 	}
 
-	if (devs_match && devices == nDevs) {
+	if (devices < nDevs) {
+		applog(LOG_ERR, "ADL found less devices than opencl!");
+		applog(LOG_ERR, "There is possibly more than one display attached to a GPU");
+		devs_match = false;
+	}
+
+	for (i = 0; i < nDevs; i++) {
+		vadapters[i].virtual_gpu = i;
+		vadapters[i].id = adapters[i].id;
+	}
+
+	if (!devs_match) {
+		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices does not match!");
+		applog(LOG_ERR, "Hardware monitoring may NOT match up with devices!");
+	} else if (opt_reorder) {
 		/* Windows has some kind of random ordering for bus number IDs and
 		 * ordering the GPUs according to ascending order fixes it. Linux
 		 * has usually sequential but decreasing order instead! */
 		for (i = 0; i < devices; i++) {
 			int j, virtual_gpu;
 
-			if (opt_reorder) {
-				virtual_gpu = 0;
-				for (j = 0; j < devices; j++) {
-					if (i == j)
-						continue;
+			virtual_gpu = 0;
+			for (j = 0; j < devices; j++) {
+				if (i == j)
+					continue;
 #ifdef WIN32
-					if (adapters[j].iBusNumber < adapters[i].iBusNumber)
+				if (adapters[j].iBusNumber < adapters[i].iBusNumber)
 #else
-					if (adapters[j].iBusNumber > adapters[i].iBusNumber)
+				if (adapters[j].iBusNumber > adapters[i].iBusNumber)
 #endif
-						virtual_gpu++;
-				}
-				if (virtual_gpu != i)
-					applog(LOG_INFO, "Mapping device %d to GPU %d according to Bus Number order",
-					       i, virtual_gpu);
-			} else
-				virtual_gpu = i;
-			vadapters[virtual_gpu].virtual_gpu = i;
-			vadapters[virtual_gpu].id = adapters[i].id;
-		}
-	} else {
-		if (devices < nDevs) {
-			applog(LOG_ERR, "ADL found less devices than opencl!");
-			applog(LOG_ERR, "There is possibly more than one display attached to a GPU");
-		}
-		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices does not match!");
-		applog(LOG_ERR, "Hardware monitoring may NOT match up with devices!");
-		for (i = 0; i < devices; i++) {
-			vadapters[i].virtual_gpu = i;
-			vadapters[i].id = adapters[i].id;
+					virtual_gpu++;
+			}
+			if (virtual_gpu != i) {
+				applog(LOG_INFO, "Mapping device %d to GPU %d according to Bus Number order",
+				       i, virtual_gpu);
+				vadapters[virtual_gpu].virtual_gpu = i;
+				vadapters[virtual_gpu].id = adapters[i].id;
+			}
 		}
 	}
 
