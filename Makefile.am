@@ -61,6 +61,6 @@ endif
 endif
 endif
 
-if USE_BITFORCE
+if HAS_BITFORCE
 cgminer_SOURCES += bitforce.c
 endif

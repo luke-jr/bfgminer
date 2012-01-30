@@ -185,9 +185,10 @@ AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs(default disabled)])],
 	[bitforce=$enableval]
 	)
-if test "bitforce" = xyes; then
+if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
 fi
+AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
 AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
         AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev]))
@@ -198,7 +199,6 @@ AC_CHECK_LIB(pdcurses, addstr, PDCURSES_LIBS=-lpdcurses)
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
-AM_CONDITIONAL([USE_BITFORCE], [test x$bitforce = xyes])
 
 if test x$request_jansson = xtrue
 then
