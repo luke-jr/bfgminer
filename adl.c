@@ -66,7 +66,6 @@ static	ADL_ADAPTER_NUMBEROFADAPTERS_GET	ADL_Adapter_NumberOfAdapters_Get;
 static	ADL_ADAPTER_ADAPTERINFO_GET	ADL_Adapter_AdapterInfo_Get;
 static	ADL_ADAPTER_ID_GET		ADL_Adapter_ID_Get;
 static	ADL_OVERDRIVE5_TEMPERATURE_GET	ADL_Overdrive5_Temperature_Get;
-static	ADL_OVERDRIVE5_THERMALDEVICES_ENUM	ADL_Overdrive5_ThermalDevices_Enum;
 static	ADL_OVERDRIVE5_CURRENTACTIVITY_GET	ADL_Overdrive5_CurrentActivity_Get;
 static	ADL_OVERDRIVE5_ODPARAMETERS_GET	ADL_Overdrive5_ODParameters_Get;
 static	ADL_OVERDRIVE5_FANSPEEDINFO_GET	ADL_Overdrive5_FanSpeedInfo_Get;
@@ -115,8 +114,9 @@ static bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
 
 void init_adl(int nDevs)
 {
-	int i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
+	int result, i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
 	struct gpu_adapters adapters[MAX_GPUDEVICES], vadapters[MAX_GPUDEVICES];
+	bool devs_match = true;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -143,7 +143,6 @@ void init_adl(int nDevs)
 	ADL_Adapter_AdapterInfo_Get = (ADL_ADAPTER_ADAPTERINFO_GET) GetProcAddress(hDLL,"ADL_Adapter_AdapterInfo_Get");
 	ADL_Adapter_ID_Get = (ADL_ADAPTER_ID_GET) GetProcAddress(hDLL,"ADL_Adapter_ID_Get");
 	ADL_Overdrive5_Temperature_Get = (ADL_OVERDRIVE5_TEMPERATURE_GET) GetProcAddress(hDLL,"ADL_Overdrive5_Temperature_Get");
-	ADL_Overdrive5_ThermalDevices_Enum = (ADL_OVERDRIVE5_THERMALDEVICES_ENUM) GetProcAddress(hDLL,"ADL_Overdrive5_ThermalDevices_Enum");
 	ADL_Overdrive5_CurrentActivity_Get = (ADL_OVERDRIVE5_CURRENTACTIVITY_GET) GetProcAddress(hDLL, "ADL_Overdrive5_CurrentActivity_Get");
 	ADL_Overdrive5_ODParameters_Get = (ADL_OVERDRIVE5_ODPARAMETERS_GET) GetProcAddress(hDLL, "ADL_Overdrive5_ODParameters_Get");
 	ADL_Overdrive5_FanSpeedInfo_Get = (ADL_OVERDRIVE5_FANSPEEDINFO_GET) GetProcAddress(hDLL, "ADL_Overdrive5_FanSpeedInfo_Get");
@@ -159,7 +158,7 @@ void init_adl(int nDevs)
 	if (!ADL_Main_Control_Create || !ADL_Main_Control_Destroy ||
 		!ADL_Adapter_NumberOfAdapters_Get || !ADL_Adapter_AdapterInfo_Get ||
 		!ADL_Adapter_ID_Get || !ADL_Overdrive5_Temperature_Get ||
-		!ADL_Overdrive5_ThermalDevices_Enum || !ADL_Overdrive5_CurrentActivity_Get ||
+		!ADL_Overdrive5_CurrentActivity_Get ||
 		!ADL_Overdrive5_ODParameters_Get || !ADL_Overdrive5_FanSpeedInfo_Get ||
 		!ADL_Overdrive5_FanSpeed_Get || !ADL_Overdrive5_FanSpeed_Set ||
 		!ADL_Overdrive5_ODPerformanceLevels_Get || !ADL_Overdrive5_ODPerformanceLevels_Set ||
@@ -171,19 +170,22 @@ void init_adl(int nDevs)
 
 	// Initialise ADL. The second parameter is 1, which means:
 	// retrieve adapter information only for adapters that are physically present and enabled in the system
-	if (ADL_Main_Control_Create (ADL_Main_Memory_Alloc, 1) != ADL_OK) {
-		applog(LOG_INFO, "ADL Initialisation Error!");
+	result = ADL_Main_Control_Create (ADL_Main_Memory_Alloc, 1);
+	if (result != ADL_OK) {
+		applog(LOG_INFO, "ADL Initialisation Error! Error %d!", result);
 		return ;
 	}
 
-	if (ADL_Main_Control_Refresh() != ADL_OK) {
-		applog(LOG_INFO, "ADL Refresh Error!");
+	result = ADL_Main_Control_Refresh();
+	if (result != ADL_OK) {
+		applog(LOG_INFO, "ADL Refresh Error! Error %d!", result);
 		return ;
 	}
 
 	// Obtain the number of adapters for the system
-	if (ADL_Adapter_NumberOfAdapters_Get ( &iNumberAdapters ) != ADL_OK) {
-		applog(LOG_INFO, "Cannot get the number of adapters!\n");
+	result = ADL_Adapter_NumberOfAdapters_Get (&iNumberAdapters);
+	if (result != ADL_OK) {
+		applog(LOG_INFO, "Cannot get the number of adapters! Error %d!", result);
 		return ;
 	}
 
@@ -193,8 +195,9 @@ void init_adl(int nDevs)
 
 		lpInfo->iSize = sizeof(lpInfo);
 		// Get the AdapterInfo structure for all adapters in the system
-		if (ADL_Adapter_AdapterInfo_Get (lpInfo, sizeof (AdapterInfo) * iNumberAdapters) != ADL_OK) {
-			applog(LOG_INFO, "ADL_Adapter_AdapterInfo_Get Error!");
+		result = ADL_Adapter_AdapterInfo_Get (lpInfo, sizeof (AdapterInfo) * iNumberAdapters);
+		if (result != ADL_OK) {
+			applog(LOG_INFO, "ADL_Adapter_AdapterInfo_Get Error! Error %d", result);
 			return ;
 		}
 	} else {
@@ -209,8 +212,9 @@ void init_adl(int nDevs)
 
 		iAdapterIndex = lpInfo[i].iAdapterIndex;
 		/* Get unique identifier of the adapter, 0 means not AMD */
-		if (ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID) != ADL_OK) {
-			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get");
+		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
+		if (result != ADL_OK) {
+			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
 			continue;
 		}
 
@@ -245,8 +249,11 @@ void init_adl(int nDevs)
 		 * opencl enumerated devices and the ADL enumerated
 		 * ones, we have to assume they're in the same order.*/
 		if (++devices > nDevs) {
-			applog(LOG_ERR, "ADL found more devices than opencl");
-			return;
+			applog(LOG_ERR, "ADL found more devices than opencl!");
+			applog(LOG_ERR, "There is possibly at least one GPU that doesn't support OpenCL");
+			devs_match = false;
+			devices = nDevs;
+			break;
 		}
 		last_adapter = lpAdapterID;
 
@@ -256,24 +263,36 @@ void init_adl(int nDevs)
 		}
 	}
 
-	/* Windows has some kind of random ordering for bus number IDs and
-	 * ordering the GPUs according to ascending order fixes it. Linux
-	 * has usually sequential but decreasing order instead! */
-	for (i = 0; i < devices; i++) {
-		int j, virtual_gpu = 0;
+	if (devs_match && devices == nDevs) {
+		/* Windows has some kind of random ordering for bus number IDs and
+		 * ordering the GPUs according to ascending order fixes it. Linux
+		 * has usually sequential but decreasing order instead! */
+		for (i = 0; i < devices; i++) {
+			int j, virtual_gpu = 0;
 
-		for (j = 0; j < devices; j++) {
-			if (i == j)
-				continue;
+			for (j = 0; j < devices; j++) {
+				if (i == j)
+					continue;
 #ifdef WIN32
-			if (adapters[j].iBusNumber < adapters[i].iBusNumber)
+				if (adapters[j].iBusNumber < adapters[i].iBusNumber)
 #else
-			if (adapters[j].iBusNumber > adapters[i].iBusNumber)
+				if (adapters[j].iBusNumber > adapters[i].iBusNumber)
 #endif
-				virtual_gpu++;
+					virtual_gpu++;
+			}
+			if (virtual_gpu != i)
+				applog(LOG_INFO, "Mapping device %d to GPU %d according to Bus Number order",
+				       i, virtual_gpu);
+			vadapters[virtual_gpu].virtual_gpu = i;
+			vadapters[virtual_gpu].id = adapters[i].id;
 		}
-		vadapters[virtual_gpu].virtual_gpu = i;
-		vadapters[virtual_gpu].id = adapters[i].id;
+	} else {
+		if (devices < nDevs) {
+			applog(LOG_ERR, "ADL found less devices than opencl!");
+			applog(LOG_ERR, "There is possibly more than one display attached to a GPU");
+		}
+		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices does not match!");
+		applog(LOG_ERR, "Hardware monitoring may NOT match up with devices!");
 	}
 
 	for (gpu = 0; gpu < devices; gpu++) {
@@ -288,8 +307,9 @@ void init_adl(int nDevs)
 		gpus[gpu].virtual_gpu = vadapters[gpu].virtual_gpu;
 
 		/* Get unique identifier of the adapter, 0 means not AMD */
-		if (ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID) != ADL_OK) {
-			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get");
+		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
+		if (result != ADL_OK) {
+			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
 			continue;
 		}
 
@@ -302,6 +322,7 @@ void init_adl(int nDevs)
 			continue;
 		}
 
+		applog(LOG_INFO, "GPU %d %s hardware monitoring enabled", gpu, lpInfo[i].strAdapterName);
 		gpus[gpu].has_adl = true;
 		/* Flag adl as active if any card is successfully activated */
 		adl_active = true;
@@ -315,10 +336,6 @@ void init_adl(int nDevs)
 		strcpy(ga->strAdapterName, lpInfo[i].strAdapterName);
 		ga->DefPerfLev = NULL;
 		ga->twin = NULL;
-
-		ga->lpThermalControllerInfo.iSize=sizeof(ADLThermalControllerInfo);
-		if (ADL_Overdrive5_ThermalDevices_Enum(iAdapterIndex, 0, &ga->lpThermalControllerInfo) != ADL_OK)
-			applog(LOG_INFO, "Failed to ADL_Overdrive5_ThermalDevices_Enum");
 
 		ga->lpOdParameters.iSize = sizeof(ADLODParameters);
 		if (ADL_Overdrive5_ODParameters_Get(iAdapterIndex, &ga->lpOdParameters) != ADL_OK)
@@ -1136,8 +1153,9 @@ void change_autosettings(int gpu)
 	}
 }
 
-void change_gpusettings(int gpu)
+void change_gpusettings(int disp_gpu)
 {
+	int gpu = gpus[disp_gpu].virtual_gpu;
 	struct gpu_adl *ga = &gpus[gpu].adl;
 	float fval, fmin = 0, fmax = 0;
 	int val, imin = 0, imax = 0;

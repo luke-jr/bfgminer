@@ -305,7 +305,7 @@ static void set_nettime(void)
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool probe, bool longpoll, bool *rolltime,
-		      struct pool *pool)
+		      struct pool *pool, bool share)
 {
 	json_t *val, *err_val, *res_val;
 	int rc;
@@ -336,7 +336,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
-	if (!opt_delaynet)
+	if (!opt_delaynet || share)
 		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &all_data);
@@ -380,7 +380,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-	if (opt_delaynet) {
+	if (opt_delaynet && !share) {
 		long long now_msecs, last_msecs;
 		struct timeval now, last;
 

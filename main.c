@@ -997,11 +997,13 @@ static char *set_float_0_to_99(const char *arg, float *f)
 	return NULL;
 }
 
+#ifdef USE_BITFORCE
 static char *add_serial(char *arg)
 {
 	string_elist_add(arg, &scan_devices);
 	return NULL;
 }
+#endif
 
 static char *set_devices(char *arg)
 {
@@ -2329,7 +2331,7 @@ static bool submit_upstream_work(const struct work *work)
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 
 	/* issue JSON-RPC request */
-	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool);
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
@@ -2480,7 +2482,7 @@ retry:
 	 * failure so retry a few times before giving up */
 	while (!val && retries++ < 3) {
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-			    false, false, &work->rolltime, pool);
+			    false, false, &work->rolltime, pool, false);
 		if (donor(pool) && !val) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Donor pool lagging");
@@ -3991,7 +3993,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-			true, false, &rolltime, pool);
+			true, false, &rolltime, pool, false);
 
 	if (val) {
 		struct work *work = make_work();
@@ -4719,7 +4721,7 @@ new_longpoll:
 	while (1) {
 		gettimeofday(&start, NULL);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
-				    false, true, &rolltime, pool);
+				    false, true, &rolltime, pool, false);
 		if (likely(val)) {
 			convert_to_work(val, rolltime, pool);
 			failures = 0;

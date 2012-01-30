@@ -16,13 +16,13 @@ int gpu_fanspeed(int gpu);
 int gpu_fanpercent(int gpu);
 bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
 	       int *activity, int *fanspeed, int *fanpercent, int *powertune);
-void change_gpusettings(int gpu);
+void change_gpusettings(int disp_gpu);
 void gpu_autotune(int gpu, bool *enable);
 void clear_adl(int nDevs);
 #else /* HAVE_ADL */
 #define adl_active (0)
 static inline void init_adl(int nDevs) {}
-static inline void change_gpusettings(int gpu) { }
+static inline void change_gpusettings(int disp_gpu) { }
 static inline void clear_adl(int nDevs) {}
 #endif
 #endif
