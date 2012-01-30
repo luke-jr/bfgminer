@@ -1,0 +1,27 @@
+#ifndef __DEVICE_GPU_H__
+#define __DEVICE_GPU_H__
+
+#include "miner.h"
+
+
+extern char *print_ndevs_and_exit(int *ndevs);
+extern void *reinit_gpu(void *userdata);
+extern char *set_gpu_engine(char *arg);
+extern char *set_gpu_fan(char *arg);
+extern char *set_gpu_memclock(char *arg);
+extern char *set_gpu_memdiff(char *arg);
+extern char *set_gpu_powertune(char *arg);
+extern char *set_gpu_vddc(char *arg);
+extern char *set_temp_cutoff(char *arg);
+extern char *set_temp_overheat(char *arg);
+extern char *set_temp_target(char *arg);
+extern char *set_intensity(char *arg);
+extern char *set_vector(const char *arg, int *i);
+void manage_gpu(void);
+extern void pause_dynamic_threads(int gpu);
+
+extern bool have_opencl;
+
+extern struct device_api opencl_api;
+
+#endif /* __DEVICE_GPU_H__ */
