@@ -41,7 +41,7 @@ static int BFopen(const char *devpath)
 
 static int BFopen(const char *devpath)
 {
-	return open(devpath, O_CLOEXEC | O_NOCTTY);
+	return open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
 }
 
 #endif
