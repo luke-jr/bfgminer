@@ -1,6 +1,6 @@
 // This file is taken and modified from the public-domain poclbm project, and
 // I have therefore decided to keep it public-domain.
-
+// Modified version copyright 2011-2012 Con Kolivas
 
 #ifdef VECTORS4
 	typedef uint4 u;
@@ -51,9 +51,6 @@ __constant uint H[8] = {
 #ifdef BITALIGN
 	#pragma OPENCL EXTENSION cl_amd_media_ops : enable
 	#define rot(x, y) amd_bitalign(x, x, (uint)(32 - y))
-#else
-	#define rot(x, y) rotate(x, (uint)y)
-#endif
 
 // This part is not from the stock poclbm kernel. It's part of an optimization
 // added in the Phoenix Miner.
@@ -63,7 +60,7 @@ __constant uint H[8] = {
 // detected, use it for Ch. Otherwise, construct Ch out of simpler logical
 // primitives.
 
-#ifdef BFI_INT
+ #ifdef BFI_INT
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
 	// OpenCL (or CAL IL for that matter) in any way. However, there is 
 	// a similar instruction, BYTE_ALIGN_INT, which is exposed to OpenCL via
@@ -75,11 +72,20 @@ __constant uint H[8] = {
 	#define Ch(x, y, z) amd_bytealign(x,y,z)
 	// Ma can also be implemented in terms of BFI_INT...
 	#define Ma(z, x, y) amd_bytealign(z^x,y,x)
-#else
-	#define Ch(x, y, z) bitselect(x,y,z)
-	// Ma can also be implemented in terms of bitselect
-	#define Ma(z, x, y) bitselect(z^x,y,x)
+ #else // BFI_INT
+	// Later SDKs optimise this to BFI INT without patching and GCN
+	// actually fails if manually patched with BFI_INT
+
+	#define Ch(x, y, z) bitselect((u)z, (u)y, (u)x)
+	#define Ma(x, y, z) bitselect((u)x, (u)y, (u)z ^ (u)x)
+	#define rotr(x, y) amd_bitalign((u)x, (u)x, (u)y)
+ #endif
+#else // BITALIGN
+	#define Ch(x, y, z) (z ^ (x & (y ^ z)))
+	#define Ma(x, y, z) ((x & z) | (y & (x | z)))
+	#define rotr(x, y) rotate((u)x, (u)(32-y))
 #endif
+
 
 
 //Various intermediate calculations for each SHA round

@@ -1,6 +1,6 @@
 // -ck modified kernel taken from Phoenix taken from poclbm, with aspects of
 // phatk and others.
-// Modified version copyright 2011 Con Kolivas
+// Modified version copyright 2011-2012 Con Kolivas
 
 // This file is taken and modified from the public-domain poclbm project, and
 // we have therefore decided to keep it public-domain in Phoenix.
@@ -33,7 +33,10 @@ __constant uint K[64] = {
 // detected, use it for ch. Otherwise, construct ch out of simpler logical
 // primitives.
 
-#ifdef BFI_INT
+#ifdef BITALIGN
+	#pragma OPENCL EXTENSION cl_amd_media_ops : enable
+	#define rotr(x, y) amd_bitalign((u)x, (u)x, (u)y)
+ #ifdef BFI_INT
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
 	// OpenCL (or CAL IL for that matter) in any way. However, there is 
 	// a similar instruction, BYTE_ALIGN_INT, which is exposed to OpenCL via
@@ -46,16 +49,17 @@ __constant uint K[64] = {
 	
 	// Ma can also be implemented in terms of BFI_INT...
 	#define Ma(x, y, z) amd_bytealign( (z^x), (y), (x) )
-#else
+ #else // BFI_INT
+	// Later SDKs optimise this to BFI INT without patching and GCN
+	// actually fails if manually patched with BFI_INT
+
+	#define ch(x, y, z) bitselect((u)z, (u)y, (u)x)
+	#define Ma(x, y, z) bitselect((u)x, (u)y, (u)z ^ (u)x)
+#endif
+#else // BITALIGN
 	#define ch(x, y, z) (z ^ (x & (y ^ z)))
 	#define Ma(x, y, z) ((x & z) | (y & (x | z)))
-#endif
-
-#ifdef BITALIGN
-	#pragma OPENCL EXTENSION cl_amd_media_ops : enable
-	#define rotr(x, y) amd_bitalign((u)x, (u)x, (u)y)
-#else
-	#define rotr(x, y) rotate((u)x, (u)(32-y))
+	#define rotr(x, y) rotate((u)x, (u)(32 - y))
 #endif
 
 // AMD's KernelAnalyzer throws errors compiling the kernel if we use 
@@ -63,7 +67,7 @@ __constant uint K[64] = {
 // problems. (this is used 4 times, and likely optimized out by the compiler.)
 #define Ma2(x, y, z) ((y & z) | (x & (y | z)))
 
-__kernel void search(	const uint state0, const uint state1, const uint state2, const uint state3,
+__kernel void search(const uint state0, const uint state1, const uint state2, const uint state3,
 						const uint state4, const uint state5, const uint state6, const uint state7,
 						const uint b1, const uint c1, const uint d1,
 						const uint f1, const uint g1, const uint h1,
