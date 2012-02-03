@@ -83,6 +83,7 @@ __constant uint H[8] = {
 #else // BITALIGN
 	#define Ch(x, y, z) (z ^ (x & (y ^ z)))
 	#define Ma(x, y, z) ((x & z) | (y & (x | z)))
+	#define rot(x, y) rotate((u)x, (u)y)
 	#define rotr(x, y) rotate((u)x, (u)(32-y))
 #endif
 
