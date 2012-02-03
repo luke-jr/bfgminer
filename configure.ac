@@ -112,6 +112,8 @@ if test "x$ATISTREAMSDKROOT" != x; then
 	OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ATI_STREAM_ARCH_DIR $OPENCL_LIBS"
 fi
 
+cpumining="no"
+
 AC_ARG_ENABLE([cpumining],
 	[AC_HELP_STRING([--enable-cpumining],[Build with cpu mining support(default disabled)])],
 	[cpumining=$enableval]
@@ -120,6 +122,8 @@ if test "x$cpumining" = xyes; then
 	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
 fi
 AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
+
+opencl="yes"
 
 AC_ARG_ENABLE([opencl],
 	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
@@ -180,6 +184,8 @@ if test "$found_opencl" = 1; then
 else
 	DLOPEN_FLAGS=""
 fi
+
+bitforce="no"
 
 AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs(default disabled)])],

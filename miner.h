@@ -526,6 +526,8 @@ struct work_restart {
 	char			padding[128 - sizeof(unsigned long)];
 };
 
+extern void thread_reportin(struct thr_info *thr);
+
 extern void kill_work(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);

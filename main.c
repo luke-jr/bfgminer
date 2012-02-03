@@ -3896,7 +3896,7 @@ static void *api_thread(void *userdata)
 	return NULL;
 }
 
-static void thread_reportin(struct thr_info *thr)
+void thread_reportin(struct thr_info *thr)
 {
 	gettimeofday(&thr->last, NULL);
 	thr->cgpu->status = LIFE_WELL;
