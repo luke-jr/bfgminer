@@ -60,9 +60,14 @@ static void BFgets(char *buf, size_t bufLen, int fd)
 	buf[0] = '\0';
 }
 
-#define BFwrite(fd, buf, bufLen) write(fd, buf, bufLen)
-#define BFclose(fd) close(fd)
+static void BFwrite(int fd, const void *buf, size_t bufLen)
+{
+	ssize_t ret = write(fd, buf, bufLen);
+	if (unlikely(ret != bufLen))
+		quit(1, "BFwrite failed");
+}
 
+#define BFclose(fd) close(fd)
 
 static bool bitforce_detect_one(const char *devpath)
 {
