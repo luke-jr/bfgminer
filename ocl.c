@@ -68,65 +68,60 @@ char *file_contents(const char *filename, int *length)
 	return (char*)buffer;
 }
 
-int clDevicesNum() {
+int clDevicesNum(void) {
 	cl_int status;
 	char pbuff[256];
 	cl_uint numDevices;
 	cl_uint numPlatforms;
+	cl_platform_id *platforms;
 	cl_platform_id platform = NULL;
+	unsigned int most_devices = 0, i;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	/* If this fails, assume no GPUs. */
 	if (status != CL_SUCCESS) {
-		applog(LOG_INFO, "clGetPlatformsIDs failed (no GPU?)");
-		return 0;
+		applog(LOG_ERR, "clGetPlatformsIDs failed (no OpenCL SDK installed?)");
+		return -1;
 	}
 
-	if (numPlatforms > 0) {
-		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
-		unsigned int i;
+	if (numPlatforms == 0) {
+		applog(LOG_ERR, "clGetPlatformsIDs returned no platforms (no OpenCL SDK installed?)");
+		return -1;
+	}
 
-		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
+	platforms = (cl_platform_id *)alloca(numPlatforms*sizeof(cl_platform_id));
+	status = clGetPlatformIDs(numPlatforms, platforms, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
+		return -1;
+	}
+
+	for (i = 0; i < numPlatforms; i++) {
+		status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
+			applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
+			free(platforms);
 			return -1;
 		}
-
-		for (i = 0; i < numPlatforms; ++i) {
-			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS) {
-				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
-				free(platforms);
-				return -1;
-			}
-			platform = platforms[i];
-			if (!strcmp(pbuff, "Advanced Micro Devices, Inc.") ||
-			    !strcmp(pbuff, "NVIDIA Corporation"))
-				break;
+		platform = platforms[i];
+		applog(LOG_INFO, "CL Platform vendor: %s", pbuff);
+		status = clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(pbuff), pbuff, NULL);
+		if (status == CL_SUCCESS)
+			applog(LOG_INFO, "CL Platform name: %s", pbuff);
+		status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
+		if (status == CL_SUCCESS)
+			applog(LOG_INFO, "CL Platform version: %s", pbuff);
+		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Getting Device IDs (num)");
+			return -1;
 		}
-		free(platforms);
+		applog(LOG_INFO, "Platform devices: %d", numDevices);
+		if (numDevices > most_devices)
+			most_devices = numDevices;
 	}
 
-	if (platform == NULL) {
-		perror("NULL platform found!\n");
-		return -1;
-	}
-
-	applog(LOG_INFO, "CL Platform vendor: %s", pbuff);
-	status = clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(pbuff), pbuff, NULL);
-	if (status == CL_SUCCESS)
-		applog(LOG_INFO, "CL Platform name: %s", pbuff);
-	status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
-	if (status == CL_SUCCESS)
-		applog(LOG_INFO, "CL Platform version: %s", pbuff);
-
-	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error: Getting Device IDs (num)");
-		return -1;
-	}
-
-	return numDevices;
+	return most_devices;
 }
 
 static int advance(char **area, unsigned *remaining, const char *marker)
