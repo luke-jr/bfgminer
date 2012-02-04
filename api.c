@@ -526,7 +526,7 @@ static void gpustatus(int gpu, bool isjson)
 		if (cgpu->dynamic)
 			strcpy(intensity, DYNAMIC);
 		else
-			sprintf(intensity, "%d", gpus->intensity);
+			sprintf(intensity, "%d", cgpu->intensity);
 
 		if (isjson)
 			sprintf(buf, "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu}",
