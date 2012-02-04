@@ -292,6 +292,8 @@ struct cgpu_info {
 	int gpu_powertune;
 	float gpu_vddc;
 #endif
+	int last_share_pool;
+	time_t last_share_pool_time;
 };
 
 #ifndef WIN32
