@@ -560,17 +560,21 @@ static void cpustatus(int cpu, bool isjson)
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 		if (isjson)
-			sprintf(buf, "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f}",
+			sprintf(buf, "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu}",
 				cpu, cgpu->total_mhashes / total_secs,
 				opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected,
-				cgpu->utility);
+				cgpu->utility,
+				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+				(unsigned long)(cgpu->last_share_pool_time));
 		else
-			sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f%c",
+			sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu%c",
 				cpu, cgpu->total_mhashes / total_secs,
 				opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected,
-				cgpu->utility, SEPARATOR);
+				cgpu->utility,
+				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+				(unsigned long)(cgpu->last_share_pool_time), SEPARATOR);
 
 		strcat(io_buffer, buf);
 	}
