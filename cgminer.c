@@ -641,10 +641,13 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--expiry|-E",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
 		     "Upper bound on how many seconds after getting work we consider a share from it stale"),
-#ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--failover-only",
 			opt_set_bool, &opt_fail_only,
 			"Don't leak work to backup pools when primary pool is lagging"),
+#ifdef HAVE_OPENCL
+	OPT_WITH_ARG("--gpu-platform",
+		     set_int_0_to_9999, opt_show_intval, &opt_platform_id,
+		     "Select OpenCL platform ID to use for GPU mining"),
 	OPT_WITH_ARG("--gpu-threads|-g",
 		     set_int_1_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (1 - 10)"),
@@ -938,7 +941,7 @@ static struct opt_table opt_cmdline_table[] = {
 #ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--ndevs|-n",
 			print_ndevs_and_exit, &nDevs,
-			"Display number of detected GPUs, OpenCL information, and exit"),
+			"Display number of detected GPUs, OpenCL platform information, and exit"),
 #endif
 	OPT_WITHOUT_ARG("--version|-V",
 			opt_version_and_exit, packagename,

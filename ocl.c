@@ -29,6 +29,7 @@
 
 extern int opt_vectors;
 extern int opt_worksize;
+int opt_platform_id;
 
 char *file_contents(const char *filename, int *length)
 {
@@ -100,23 +101,22 @@ int clDevicesNum(void) {
 		status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
-			free(platforms);
 			return -1;
 		}
 		platform = platforms[i];
-		applog(LOG_INFO, "CL Platform vendor: %s", pbuff);
+		applog(LOG_INFO, "CL Platform %d vendor: %s", i, pbuff);
 		status = clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(pbuff), pbuff, NULL);
 		if (status == CL_SUCCESS)
-			applog(LOG_INFO, "CL Platform name: %s", pbuff);
+			applog(LOG_INFO, "CL Platform %d name: %s", i, pbuff);
 		status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
 		if (status == CL_SUCCESS)
-			applog(LOG_INFO, "CL Platform version: %s", pbuff);
+			applog(LOG_INFO, "CL Platform %d version: %s", i, pbuff);
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Getting Device IDs (num)");
 			return -1;
 		}
-		applog(LOG_INFO, "Platform devices: %d", numDevices);
+		applog(LOG_INFO, "Platform %d devices: %d", i, numDevices);
 		if (numDevices > most_devices)
 			most_devices = numDevices;
 	}
@@ -189,11 +189,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	_clState *clState = calloc(1, sizeof(_clState));
 	bool patchbfi = false, prog_built = false;
 	cl_platform_id platform = NULL;
+	cl_platform_id* platforms;
 	cl_device_id *devices;
 	cl_uint numPlatforms;
 	cl_uint numDevices;
 	char pbuff[256];
-	unsigned int i;
 	cl_int status;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
@@ -202,29 +202,24 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
-	if (numPlatforms > 0) {
-		cl_platform_id* platforms = (cl_platform_id *)malloc(numPlatforms*sizeof(cl_platform_id));
-
-		status = clGetPlatformIDs(numPlatforms, platforms, NULL);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
-			return NULL;
-		}
-
-		for(i = 0; i < numPlatforms; ++i) {
-			status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
-			if (status != CL_SUCCESS) {
-				applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
-				free(platforms);
-				return NULL;
-			}
-			platform = platforms[i];
-			if (!strcmp(pbuff, "Advanced Micro Devices, Inc.") ||
-			    !strcmp(pbuff, "NVIDIA Corporation"))
-				break;
-		}
-		free(platforms);
+	platforms = (cl_platform_id *)alloca(numPlatforms*sizeof(cl_platform_id));
+	status = clGetPlatformIDs(numPlatforms, platforms, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Getting Platform Ids. (clGetPlatformsIDs)");
+		return NULL;
 	}
+
+	if (opt_platform_id >= numPlatforms) {
+		applog(LOG_ERR, "Specified platform that does not exist");
+		return NULL;
+	}
+
+	status = clGetPlatformInfo(platforms[opt_platform_id], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Getting Platform Info. (clGetPlatformInfo)");
+		return NULL;
+	}
+	platform = platforms[opt_platform_id];
 
 	if (platform == NULL) {
 		perror("NULL platform found!\n");
