@@ -1422,6 +1422,8 @@ static bool submit_upstream_work(const struct work *work)
 		cgpu->accepted++;
 		total_accepted++;
 		pool->accepted++;
+		cgpu->last_share_pool = pool->pool_no;
+		cgpu->last_share_pool_time = time(NULL);
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {

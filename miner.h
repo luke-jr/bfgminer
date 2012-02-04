@@ -147,6 +147,7 @@ enum {
 #define unlikely(expr) (expr)
 #define likely(expr) (expr)
 #endif
+#define __maybe_unused		__attribute__((unused))
 
 #if defined(__i386__)
 #define WANT_CRYPTOPP_ASM32
@@ -292,6 +293,8 @@ struct cgpu_info {
 	int gpu_powertune;
 	float gpu_vddc;
 #endif
+	int last_share_pool;
+	time_t last_share_pool_time;
 };
 
 #ifndef WIN32
