@@ -319,13 +319,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	struct header_info hi = { };
 	bool probing = false;
 
-	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
-
-	if (probe) {
-		probing = !pool->probed;
-		/* Probe for only 15 seconds */
-		timeout = 15;
-	}
+	/* it is assumed that 'curl' is freshly [re]initialised at this pt */
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
 #if 0 /* Disable curl debugging since it spews to stderr */
