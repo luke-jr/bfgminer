@@ -81,6 +81,60 @@ extern char *set_int_range(const char *arg, int *i, int min, int max);
 extern int dev_from_id(int thr_id);
 
 
+/* chipset-optimized hash functions */
+extern bool ScanHash_4WaySSE2(int, const unsigned char *pmidstate,
+	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+
+extern bool ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
+	unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+
+extern bool scanhash_via(int, const unsigned char *pmidstate,
+	unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *target,
+	uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
+
+extern bool scanhash_c(int, const unsigned char *midstate, unsigned char *data,
+	      unsigned char *hash1, unsigned char *hash,
+	      const unsigned char *target,
+	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
+
+extern bool scanhash_cryptopp(int, const unsigned char *midstate,unsigned char *data,
+	      unsigned char *hash1, unsigned char *hash,
+	      const unsigned char *target,
+	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
+
+extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *data,
+	      unsigned char *hash1, unsigned char *hash,
+	      const unsigned char *target,
+	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+
+extern bool scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, uint32_t *last_nonce,
+	uint32_t nonce);
+
+extern bool scanhash_sse4_64(int, const unsigned char *pmidstate, unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, uint32_t *last_nonce,
+	uint32_t nonce);
+
+extern bool scanhash_sse2_32(int, const unsigned char *pmidstate, unsigned char *pdata,
+	unsigned char *phash1, unsigned char *phash,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, uint32_t *last_nonce,
+	uint32_t nonce);
+
+
+
+
 #ifdef WANT_CPUMINE
 static size_t max_name_len = 0;
 static char *name_spaces_pad = NULL;

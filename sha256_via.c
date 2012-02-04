@@ -1,5 +1,5 @@
 
-#include "config.h"
+#include "device-cpu.h"
 
 #include <stdint.h>
 #include <stdlib.h>

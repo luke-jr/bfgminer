@@ -9,8 +9,7 @@
 //
 
 
-//#include "config.h"
-#include "miner.h"
+#include "device-cpu.h"
 
 #ifdef WANT_ALTIVEC_4WAY
 
