@@ -5664,7 +5664,8 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	applog(LOG_INFO, "Init GPU thread %i GPU %i virtual GPU %i", i, gpu, virtual_gpu);
 	clStates[i] = initCl(virtual_gpu, name, sizeof(name));
 	if (!clStates[i]) {
-		enable_curses();
+		if (use_curses)
+			enable_curses();
 		applog(LOG_ERR, "Failed to init GPU thread %d, disabling device %d", i, gpu);
 		if (!failmessage) {
 			char *buf;
@@ -5672,9 +5673,11 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 			applog(LOG_ERR, "Restarting the GPU from the menu will not fix this.");
 			applog(LOG_ERR, "Try restarting cgminer.");
 			failmessage = true;
-			buf = curses_input("Press enter to continue");
-			if (buf)
-				free(buf);
+			if (use_curses) {
+				buf = curses_input("Press enter to continue");
+				if (buf)
+					free(buf);
+			}
 		}
 		cgpu->enabled = false;
 		cgpu->status = LIFE_NOSTART;
@@ -6071,12 +6074,11 @@ int main (int argc, char *argv[])
 		use_curses = false;
 
 	if (!total_pools) {
-		enable_curses();
+		if (use_curses)
+			enable_curses();
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
-		if (!input_pool(false))
+		if (!use_curses || (use_curses && !input_pool(false)))
 			quit(1, "Pool setup failed");
-		if (!use_curses)
-			disable_curses();
 	}
 
 	for (i = 0; i < total_pools; i++) {
@@ -6180,7 +6182,8 @@ retry_pools:
 	}
 
 	if (!pools_active) {
-		enable_curses();
+		if (use_curses)
+			enable_curses();
 		applog(LOG_ERR, "No servers were found that could be used to get work from.");
 		applog(LOG_ERR, "Please check the details from the list below of the servers you have input");
 		applog(LOG_ERR, "Most likely you have input the wrong URL, forgotten to add a port, or have not set up workers");
@@ -6191,11 +6194,14 @@ retry_pools:
 			applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
 			       i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
 		}
-		halfdelay(150);
-		applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 15s.");
-		if (getch() != ERR)
+		if (use_curses) {
+			halfdelay(150);
+			applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 15s.");
+			if (getch() != ERR)
+				quit(0, "No servers could be used! Exiting.");
+			nocbreak();
+		} else
 			quit(0, "No servers could be used! Exiting.");
-		nocbreak();
 		goto retry_pools;
 	}
 
