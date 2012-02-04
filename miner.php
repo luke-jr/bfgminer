@@ -18,6 +18,7 @@ td.sta { color:green; font-family:verdana,arial,sans; font-size:14pt; }
 <script type='text/javascript'>
 function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<? echo $here ?>"+a}
 function prs(a){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];pr('?arg='+a,m)}
+function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;pr('?arg='+a+','+v,m)}
 </script>
 <table width=100% height=100% border=0 cellpadding=0 cellspacing=0 summary='Mine'>
 <tr><td align=center valign=top>
@@ -156,6 +157,9 @@ function fmt($section, $name, $value)
 
  switch ($section.'.'.$name)
  {
+ case 'GPU0.Last Share Time':
+	return date('H:i:s', $value);
+	break;
  case 'SUMMARY.Elapsed':
 	$s = $value % 60;
 	$value -= $s;
@@ -258,33 +262,69 @@ function details($list)
  echo $te;
 }
 #
-function gpubuttons($count)
+global $devs;
+$devs = null;
+#
+function gpubuttons($count, $info)
 {
+ global $devs;
+
+ $basic = array( 'GPU', 'Enable', 'Disable', 'Restart' );
+
+ $options = array(	'intensity' => 'Intensity',
+			'fan' => 'Fan Percent',
+			'engine' => 'GPU Clock',
+			'mem' => 'Memory Clock',
+			'vddc' => 'GPU Voltage' );
+
  $tb = '<tr><td><table border=1 cellpadding=5 cellspacing=0>';
  $te = '</table></td></tr>';
 
  echo $tb.'<tr>';
 
- for ($i = 0; $i < 4; $i++)
- {
-	echo '<td>';
+ foreach ($basic as $head)
+	echo "<td>$head</td>";
 
-	if ($i == 0)
-		echo 'GPU';
-	else
-		echo '&nbsp;';
+ foreach ($options as $name => $des)
+	echo "<td nowrap>$des</td>";
 
-	echo '</td>';
- }
-
+ $n = 0;
  for ($c = 0; $c < $count; $c++)
  {
 	echo '</tr><tr>';
 
-	echo "<td>$c</td>";
-	echo "<td><input type=button value='Enable $c' onclick='prs(\"gpuenable|$c\")'></td>";
-	echo "<td><input type=button value='Disable $c' onclick='prs(\"gpudisable|$c\")'></td>";
-	echo "<td><input type=button value='Restart $c' onclick='prs(\"gpurestart|$c\")'></td>";
+	foreach ($basic as $name)
+	{
+		echo '<td>';
+
+		if ($name == 'GPU')
+			echo $c;
+		else
+		{
+			echo "<input type=button value='$name $c' onclick='prs(\"gpu";
+			echo strtolower($name);
+			echo "|$c\")'>";
+		}
+
+		echo '</td>';
+	}
+
+	foreach ($options as $name => $des)
+	{
+		echo '<td>';
+		if (!isset($devs["GPU$c"][$des]))
+			echo '&nbsp;';
+		else
+		{
+			$value = $devs["GPU$c"][$des];
+			echo "<input type=button value='Set $c:' onclick='prs2(\"gpu$name|$c\",$n)'>";
+			echo "<input size=7 type=text name=gi$n value='$value' id=gi$n>";
+			$n++;
+		}
+
+		echo '</td>';
+	}
+
  }
 
  echo '</tr>'.$te;
@@ -315,7 +355,7 @@ function processgpus($rd, $ro)
 #
 function process($cmds, $rd, $ro)
 {
- global $error;
+ global $error, $devs;
 
  foreach ($cmds as $cmd => $des)
  {
@@ -331,6 +371,8 @@ function process($cmds, $rd, $ro)
 	{
 		details($process);
 		echo '<tr><td><br><br></td></tr>';
+		if ($cmd == 'devs')
+			$devs = $process;
 	}
  }
 }
@@ -356,7 +398,8 @@ function display()
 
  $cmds = array(	'devs'    => 'device list',
 		'summary' => 'summary information',
-		'pools'   => 'pool list');
+		'pools'   => 'pool list',
+		'config'  => 'cgminer config');
 
  process($cmds, $rd, $ro);
 
