@@ -239,7 +239,8 @@ out:
 }
 
 #ifdef CURL_HAS_SOCKOPT
-int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purpose)
+int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
+			     curlsocktype __maybe_unused purpose)
 {
 	int keepalive = 1;
 	int tcp_keepcnt = 5;

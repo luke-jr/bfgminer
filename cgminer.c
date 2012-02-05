@@ -854,7 +854,7 @@ static char *parse_config(json_t *config, bool fileconf)
 	return NULL;
 }
 
-static char *load_config(const char *arg, void *unused)
+static char *load_config(const char *arg, void __maybe_unused *unused)
 {
 	json_error_t err;
 	json_t *config;
@@ -2599,7 +2599,7 @@ retry:
 	opt_loginput = false;
 }
 
-static void *input_thread(void *userdata)
+static void *input_thread(void __maybe_unused *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -2979,7 +2979,8 @@ static void roll_work(struct work *work)
 /* Recycle the work at a higher starting res_nonce if we know the thread we're
  * giving it to will not finish scanning it. We keep the master copy to be
  * recycled more rapidly and discard the clone to avoid repeating work */
-static bool divide_work(struct timeval *now, struct work *work, uint32_t hash_div)
+static bool divide_work(struct timeval __maybe_unused *now, struct work *work,
+			uint32_t __maybe_unused hash_div)
 {
 	if (can_roll(work) && should_roll(work)) {
 		roll_work(work);
@@ -3183,7 +3184,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	return submit_work_sync(thr, work);
 }
 
-static inline bool abandon_work(int thr_id, struct work *work, struct timeval *wdiff, uint64_t hashes)
+static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 {
 	if (wdiff->tv_sec > opt_scantime ||
 	    work->blk.nonce >= MAXTHREADS - hashes ||
@@ -3334,7 +3335,7 @@ void *miner_thread(void *userdata)
 
 			if (can_roll(work) && should_roll(work))
 				roll_work(work);
-		} while (!abandon_work(thr_id, work, &wdiff, hashes));
+		} while (!abandon_work(work, &wdiff, hashes));
 	}
 
 out:
@@ -3527,7 +3528,7 @@ void reinit_device(struct cgpu_info *cgpu)
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
-static void *watchdog_thread(void *userdata)
+static void *watchdog_thread(void __maybe_unused *userdata)
 {
 	const unsigned int interval = 3;
 	static struct timeval rotate_tv;

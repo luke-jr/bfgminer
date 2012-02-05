@@ -1081,13 +1081,14 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 	}
 }
 
-static bool opencl_prepare_work(struct thr_info *thr, struct work *work)
+static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
 	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 	return true;
 }
 
-static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work, uint64_t max_nonce)
+static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
+				uint64_t __maybe_unused max_nonce)
 {
 	const int thr_id = thr->id;
 	struct opencl_thread_data *thrdata = thr->cgpu_data;
