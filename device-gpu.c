@@ -27,7 +27,6 @@
 #include "miner.h"
 #include "device-cpu.h"
 #include "findnonce.h"
-#include "util.h"
 #include "ocl.h"
 #include "adl.h"
 
