@@ -3297,9 +3297,6 @@ void *miner_thread(void *userdata)
 			}
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
-
-			if (can_roll(work) && should_roll(work))
-				roll_work(work);
 		} while (!abandon_work(work, &wdiff, hashes));
 	}
 
