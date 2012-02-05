@@ -4,8 +4,8 @@ monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
 
 This code is provided entirely free of charge by the programmer in his spare
-time so donations would be greatly appreciated. Please consider using the
---donation feature or donate directly to the address below.
+time so donations would be greatly appreciated. Please consider donating to the
+address below.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
@@ -126,7 +126,6 @@ Options for both config file and command line:
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
 --debug|-D          Enable debug output
---donation <arg>    Set donation percentage to cgminer author (0.0 - 99.9) (default: 0.0)
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --load-balance      Change multipool strategy from failover to even load balance
@@ -747,14 +746,6 @@ than whatever it is being packaged with. If you installed cgminer yourself,
 then you do not have a virus on your computer. Complain to your antivirus
 software company.
 
-Q: How does the donation feature work and how does it affect my shares?
-A: The donation feature is disabled by default and only does anything once
-enabled. It queries the author's website for login credentials and contributes
-up to a proportion of work to the author's account. While the overall
-accepted/rejected rates will include this work, none of these will appear in
-your own accounts. On exiting, the summary will tell you how many shares were
-contributed to the author.
-
 Q: Can you modify the display to include more of one thing in the output and
 less of another, or can you change the quiet mode or can you add yet another
 output mode?
@@ -820,8 +811,8 @@ driver version and ATI stream version.
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
-time so donations would be greatly appreciated. Please consider using the
---donation feature or donate directly to the address below.
+time so donations would be greatly appreciated. Please consider donating to the
+address below.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
