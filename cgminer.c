@@ -2974,6 +2974,10 @@ static void roll_work(struct work *work)
 	work->blk.nonce = 0;
 	if (opt_debug)
 		applog(LOG_DEBUG, "Successfully rolled work");
+
+	/* This is now a different work item so it needs a different ID for the
+	 * hashtable */
+	work->id = total_work++;
 }
 
 static bool divide_work(struct work *work)
