@@ -3706,12 +3706,12 @@ static void *watchdog_thread(void *userdata)
 				continue;
 
 			if (gpus[gpu].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
-				applog(LOG_ERR, "Thread %d recovered, GPU %d declared WELL!", i, gpu);
+				applog(LOG_ERR, "Device %d recovered, GPU %d declared WELL!", i, gpu);
 				gpus[gpu].status = LIFE_WELL;
 			} else if (now.tv_sec - thr->last.tv_sec > 60 && gpus[gpu].status == LIFE_WELL) {
 				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[gpu].status = LIFE_SICK;
-				applog(LOG_ERR, "Thread %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
+				applog(LOG_ERR, "Device %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
 				gettimeofday(&thr->sick, NULL);
 #ifdef HAVE_ADL
 				if (adl_active && gpus[gpu].has_adl && gpu_activity(gpu) > 50) {
@@ -3725,7 +3725,7 @@ static void *watchdog_thread(void *userdata)
 				}
 			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
 				gpus[gpu].status = LIFE_DEAD;
-				applog(LOG_ERR, "Thread %d not responding for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
+				applog(LOG_ERR, "Device %d not responding for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
 				gettimeofday(&thr->sick, NULL);
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
 				   (gpus[i].status == LIFE_SICK || gpus[i].status == LIFE_DEAD)) {
