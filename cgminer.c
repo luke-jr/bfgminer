@@ -2013,9 +2013,36 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 		free(old_hash);
 }
 
-static void test_work_current(struct work *work, bool longpoll)
+/* Search to see if this string is from a block that has been seen before */
+static bool block_exists(char *hexstr)
 {
 	struct block *s;
+
+	rd_lock(&blk_lock);
+	HASH_FIND_STR(blocks, hexstr, s);
+	rd_unlock(&blk_lock);
+	if (s)
+		return true;
+	return false;
+}
+
+/* Tests if this work is from a block that has been seen before */
+static inline bool from_existing_block(struct work *work)
+{
+	char *hexstr = bin2hex(work->data, 18);
+	bool ret;
+
+	if (unlikely(!hexstr)) {
+		applog(LOG_ERR, "from_existing_block OOM");
+		return true;
+	}
+	ret = block_exists(hexstr);
+	free(hexstr);
+	return ret;
+}
+
+static void test_work_current(struct work *work, bool longpoll)
+{
 	char *hexstr;
 
 	/* Allow donation to not set current work, so it will work even if
@@ -2031,11 +2058,9 @@ static void test_work_current(struct work *work, bool longpoll)
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
-	rd_lock(&blk_lock);
-	HASH_FIND_STR(blocks, hexstr, s);
-	rd_unlock(&blk_lock);
-	if (!s) {
-		s = calloc(sizeof(struct block), 1);
+	if (!block_exists(hexstr)) {
+		struct block *s = calloc(sizeof(struct block), 1);
+
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
