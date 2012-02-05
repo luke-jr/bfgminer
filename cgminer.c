@@ -2976,43 +2976,17 @@ static void roll_work(struct work *work)
 		applog(LOG_DEBUG, "Successfully rolled work");
 }
 
-/* Recycle the work at a higher starting res_nonce if we know the thread we're
- * giving it to will not finish scanning it. We keep the master copy to be
- * recycled more rapidly and discard the clone to avoid repeating work */
-static bool divide_work(struct timeval __maybe_unused *now, struct work *work,
-			uint32_t __maybe_unused hash_div)
+static bool divide_work(struct work *work)
 {
 	if (can_roll(work) && should_roll(work)) {
 		roll_work(work);
 		return true;
 	}
 	return false;
-#if 0
-	/* Work division is disabled because it can lead to repeated work */
-	uint64_t hash_inc;
-
-	if (work->clone)
-		return false;
-
-	hash_inc = MAXTHREADS / hash_div * 2;
-	if ((uint64_t)work->blk.nonce + hash_inc < MAXTHREADS) {
-		/* Okay we can divide it up */
-		work->blk.nonce += hash_inc;
-		work->cloned = true;
-		local_work++;
-		if (opt_debug)
-			applog(LOG_DEBUG, "Successfully divided work");
-		return true;
-	} else if (can_roll(work) && should_roll(work)) {
-		roll_work(work);
-		return true;
-	}
-	return false;
-#endif
 }
 
 static bool get_work(struct work *work, bool requested, struct thr_info *thr,
-		     const int thr_id, uint32_t hash_div)
+		     const int thr_id)
 {
 	bool newreq = false, ret = false;
 	struct timespec abstime = {};
@@ -3081,7 +3055,7 @@ retry:
 	/* Copy the res nonce back so we know to start at a higher baseline
 	 * should we divide the same work up again. Make the work we're
 	 * handing out be clone */
-	if (divide_work(&now, work_heap, hash_div)) {
+	if (divide_work(work_heap)) {
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing divided work to get queue head");
 
@@ -3213,7 +3187,6 @@ void *miner_thread(void *userdata)
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = false;
-	uint32_t hash_div = 1;
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	if (api->thread_init && !api->thread_init(mythr))
@@ -3230,7 +3203,7 @@ void *miner_thread(void *userdata)
 		work_restart[thr_id].restart = 0;
 		if (api->free_work && likely(work->pool))
 			api->free_work(mythr, work);
-		if (unlikely(!get_work(work, requested, mythr, thr_id, hash_div))) {
+		if (unlikely(!get_work(work, requested, mythr, thr_id))) {
 			applog(LOG_ERR, "work retrieval failed, exiting "
 				"mining thread %d", thr_id);
 			break;
@@ -3280,10 +3253,6 @@ void *miner_thread(void *userdata)
 
 			timeval_subtract(&wdiff, &tv_end, &tv_workstart);
 			if (!requested) {
-#if 0
-			if (wdiff.tv_sec > request_interval)
-				hash_div = (MAXTHREADS / total_hashes) ? : 1;
-#endif
 				if (wdiff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
 					thread_reportout(mythr);
 					if (unlikely(!queue_request(mythr, false))) {
