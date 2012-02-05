@@ -2980,7 +2980,7 @@ static void roll_work(struct work *work)
 	work->id = total_work++;
 }
 
-static bool divide_work(struct work *work)
+static bool reuse_work(struct work *work)
 {
 	if (can_roll(work) && should_roll(work)) {
 		roll_work(work);
@@ -3012,8 +3012,7 @@ retry:
 		newreq = true;
 	}
 
-	if (can_roll(work) && should_roll(work)) {
-		roll_work(work);
+	if (reuse_work(work)) {
 		ret = true;
 		goto out;
 	}
@@ -3056,10 +3055,8 @@ retry:
 
 	memcpy(work, work_heap, sizeof(*work));
 
-	/* Copy the res nonce back so we know to start at a higher baseline
-	 * should we divide the same work up again. Make the work we're
-	 * handing out be clone */
-	if (divide_work(work_heap)) {
+	/* Hand out a clone if we can roll this work item */
+	if (reuse_work(work_heap)) {
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing divided work to get queue head");
 
