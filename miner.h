@@ -318,6 +318,8 @@ struct thread_q {
 
 struct thr_info {
 	int		id;
+	int		device_thread;
+
 	pthread_t	pth;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;

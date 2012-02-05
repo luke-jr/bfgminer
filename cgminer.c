@@ -3248,8 +3248,22 @@ void *miner_thread(void *userdata)
 			gettimeofday(&tv_start, NULL);
 
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
-			if (unlikely(work_restart[thr_id].restart))
+			if (unlikely(work_restart[thr_id].restart)) {
+
+				/* Apart from device_thread 0, we stagger the
+				 * starting of every next thread to try and get
+				 * all devices busy before worrying about
+				 * getting work for their extra threads */
+				if (mythr->device_thread) {
+					struct timespec rgtp;
+
+					rgtp.tv_sec = 0;
+					rgtp.tv_nsec = 250 * mythr->device_thread * 1000000;
+					nanosleep(&rgtp, NULL);
+				}
 				break;
+			}
+
 			if (unlikely(!hashes))
 				goto out;
 			hashes_done += hashes;
@@ -4317,10 +4331,12 @@ retry_pools:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
+
 		for (j = 0; j < cgpu->threads; ++j, ++k) {
 			thr = &thr_info[k];
 			thr->id = k;
 			thr->cgpu = cgpu;
+			thr->device_thread = j;
 
 			thr->q = tq_new();
 			if (!thr->q)
