@@ -3690,7 +3690,7 @@ static void *watchdog_thread(void *userdata)
 			gpu = thr->cgpu->device_id;
 			enable = &cgpu->enabled;
 #ifdef HAVE_ADL
-			if (adl_active && gpus[gpu].has_adl && *enable)
+			if (adl_active && gpus[gpu].has_adl)
 				gpu_autotune(gpu, enable);
 			if (opt_debug && gpus[gpu].has_adl) {
 				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;

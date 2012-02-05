@@ -1066,9 +1066,10 @@ void gpu_autotune(int gpu, bool *enable)
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
-			/* Only try to tune engine speed if the current performance level is at max */
+			/* Only try to tune engine speed up if the current performance level is at max and this GPU is not
+			 * disabled */
 		} else if ((ga->lpActivity.iCurrentPerformanceLevel == ga->lpOdParameters.iNumberOfPerformanceLevels - 1) &&
-			   (temp < ga->targettemp && engine < ga->maxspeed)) {
+			   (temp < ga->targettemp && engine < ga->maxspeed) && *enable) {
 			if (opt_debug)
 				applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
 			newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
