@@ -2944,12 +2944,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 
 static inline bool should_roll(struct work *work)
 {
-	int rs;
-
-	rs = requests_staged();
-	if (rs >= mining_threads)
-		return false;
-	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE || !rs)
+	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE)
 		return true;
 	return false;
 }
