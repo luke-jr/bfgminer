@@ -1,3 +1,10 @@
+Version 2.2.3 - February 6, 2012
+
+- Revert "Rewrite the convoluted get_work() function to be much simpler and roll
+work as much as possible with each new work item." This seems to cause a race on
+work in free_work(). Presumably other threads are still accessing the structure.
+
+
 Version 2.2.2 - February 6, 2012
 
 - Provide support for the submitold extension on a per-pool basis based on the
