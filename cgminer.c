@@ -1740,11 +1740,17 @@ static void *submit_work_thread(void *userdata)
 
 	pthread_detach(pthread_self());
 
-	if (!opt_submit_stale && stale_work(work, true)) {
-		applog(LOG_NOTICE, "Stale share detected, discarding");
+	if (stale_work(work, true)) {
 		total_stale++;
 		pool->stale_shares++;
-		goto out;
+		if (!opt_submit_stale && !pool->submit_old) {
+			applog(LOG_NOTICE, "Stale share detected, discarding");
+			goto out;
+		}
+		if (opt_submit_stale)
+			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
+		else if (pool->submit_old)
+			applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
 	}
 
 	/* submit solution to bitcoin via JSON-RPC */
@@ -3378,7 +3384,6 @@ static void *longpoll_thread(void *userdata)
 	CURL *curl = NULL;
 	int failures = 0;
 	bool rolltime;
-	json_t *val;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 	pthread_detach(pthread_self());
@@ -3420,10 +3425,17 @@ new_longpoll:
 	applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
 
 	while (1) {
+		json_t *val, *soval;
+
 		gettimeofday(&start, NULL);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool, false);
 		if (likely(val)) {
+			soval = json_object_get(json_object_get(val, "result"), "submitold");
+			if (soval)
+				pool->submit_old = json_is_true(soval);
+			else
+				pool->submit_old = false;
 			convert_to_work(val, rolltime, pool);
 			failures = 0;
 			json_decref(val);

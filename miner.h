@@ -626,6 +626,7 @@ struct pool {
 	bool lagging;
 	bool probed;
 	bool enabled;
+	bool submit_old;
 
 	char *hdr_path;
 
