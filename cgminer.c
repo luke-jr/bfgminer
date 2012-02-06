@@ -2089,6 +2089,18 @@ static void *stage_thread(void *userdata)
 	return NULL;
 }
 
+static bool stage_work(struct work *work)
+{
+	if (opt_debug)
+		applog(LOG_DEBUG, "Pushing work to stage thread");
+
+	if (unlikely(!tq_push(thr_info[stage_thr_id].q, work))) {
+		applog(LOG_ERR, "Could not tq_push work in stage_work");
+		return false;
+	}
+	return true;
+}
+
 int curses_int(const char *query)
 {
 	int ret;
@@ -3055,7 +3067,7 @@ retry:
 		if (opt_debug)
 			applog(LOG_DEBUG, "Pushing divided work to get queue head");
 
-		hash_push(work_heap);
+		stage_work(work_heap);
 		work->clone = true;
 	} else {
 		dec_queued();
@@ -3320,7 +3332,7 @@ enum {
 /* Stage another work item from the work returned in a longpoll */
 static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 {
-	struct work *work;
+	struct work *work, *work_clone;
 	bool rc;
 
 	work = make_work();
@@ -3338,11 +3350,24 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	 * allows testwork to know whether LP discovered the block or not. */
 	test_work_current(work, true);
 
+	work_clone = make_work();
+	memcpy(work_clone, work, sizeof(struct work));
+	while (reuse_work(work)) {
+		work_clone->clone = true;
+		if (opt_debug)
+			applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
+		if (unlikely(!stage_work(work_clone)))
+			break;
+		work_clone = make_work();
+		memcpy(work_clone, work, sizeof(struct work));
+	}
+	free_work(work_clone);
+
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing converted work to stage thread");
 
-	if (unlikely(!tq_push(thr_info[stage_thr_id].q, work)))
-		applog(LOG_ERR, "Could not tq_push work in convert_to_work");
+	if (unlikely(!stage_work(work)))
+		free_work(work);
 	else if (opt_debug)
 		applog(LOG_DEBUG, "Converted longpoll data to work");
 }
