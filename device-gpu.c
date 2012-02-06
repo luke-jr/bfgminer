@@ -453,7 +453,7 @@ void pause_dynamic_threads(int gpu)
 		if (!thread_no++)
 			continue;
 		thr->pause = cgpu->dynamic;
-		if (!cgpu->dynamic)
+		if (!cgpu->dynamic && cgpu->enabled)
 			tq_push(thr->q, &ping);
 	}
 }
