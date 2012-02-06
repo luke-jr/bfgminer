@@ -1525,30 +1525,19 @@ out:
 	return rc;
 }
 
-static int inc_totalwork(void)
-{
-	int ret;
-
-	mutex_lock(&control_lock);
-	ret = total_work++;
-	mutex_unlock(&control_lock);
-	return ret;
-}
-
 static struct work *make_work(void)
 {
 	struct work *work = calloc(1, sizeof(struct work));
 
 	if (unlikely(!work))
 		quit(1, "Failed to calloc work in make_work");
-	work->id = inc_totalwork();
+	work->id = total_work++;
 	return work;
 }
 
 static void free_work(struct work *work)
 {
 	free(work);
-	work = NULL;
 }
 
 static void workio_cmd_free(struct workio_cmd *wc)
@@ -3001,7 +2990,7 @@ static void roll_work(struct work *work)
 
 	/* This is now a different work item so it needs a different ID for the
 	 * hashtable */
-	work->id = inc_totalwork();
+	work->id = total_work++;
 }
 
 static bool reuse_work(struct work *work)
@@ -3013,83 +3002,103 @@ static bool reuse_work(struct work *work)
 	return false;
 }
 
-static void roll_cloned(struct work *work)
+static bool get_work(struct work *work, bool requested, struct thr_info *thr,
+		     const int thr_id)
 {
-	struct work *work_clone = make_work();
-
-	memcpy(work_clone, work, sizeof(struct work));
-	while (reuse_work(work)) {
-		work_clone->clone = true;
-		if (opt_debug)
-			applog(LOG_DEBUG, "Pushing rolled cloned work to stage thread");
-		if (unlikely(!stage_work(work_clone)))
-			break;
-		work_clone = make_work();
-		memcpy(work_clone, work, sizeof(struct work));
-	}
-	free_work(work_clone);
-}
-
-static struct work *get_work(bool requested, struct thr_info *thr, const int thr_id)
-{
-	struct timespec abstime = {0, 0};
-	struct work *work = NULL;
-	bool newreq = false;
+	bool newreq = false, ret = false;
+	struct timespec abstime = {};
 	struct timeval now;
+	struct work *work_heap;
 	struct pool *pool;
+	int failures = 0;
 
 	/* Tell the watchdog thread this thread is waiting on getwork and
 	 * should not be restarted */
 	thread_reportout(thr);
-
-	while (!work) {
-		pool = current_pool();
-		if (!requested || requests_queued() < opt_queue) {
-			if (unlikely(!queue_request(thr, true)))
-				quit(1, "Failed to queue_request in get_work");
-			newreq = true;
+retry:
+	pool = current_pool();
+	if (!requested || requests_queued() < opt_queue) {
+		if (unlikely(!queue_request(thr, true))) {
+			applog(LOG_WARNING, "Failed to queue_request in get_work");
+			goto out;
 		}
-
-		if (requested && !newreq && !requests_staged() && requests_queued() >= mining_threads &&
-		    !pool_tset(pool, &pool->lagging)) {
-			applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
-			pool->getfail_occasions++;
-			total_go++;
-		}
-
-		newreq = requested = false;
-		gettimeofday(&now, NULL);
-		abstime.tv_sec = now.tv_sec + 60;
-
-		if (opt_debug)
-			applog(LOG_DEBUG, "Popping work from get queue to get work");
-
-		/* wait for 1st response, or get cached response */
-		work = hash_pop(&abstime);
-		if (unlikely(!work)) {
-			/* Attempt to switch pools if this one times out */
-			pool_died(pool);
-		} else if (stale_work(work, false)) {
-			dec_queued();
-			discard_work(work);
-		}
+		newreq = true;
 	}
 
-	pool = work->pool;
+	if (reuse_work(work)) {
+		ret = true;
+		goto out;
+	}
+
+	if (requested && !newreq && !requests_staged() && requests_queued() >= mining_threads &&
+	    !pool_tset(pool, &pool->lagging)) {
+		applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
+		pool->getfail_occasions++;
+		total_go++;
+	}
+
+	newreq = requested = false;
+	gettimeofday(&now, NULL);
+	abstime.tv_sec = now.tv_sec + 60;
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Popping work from get queue to get work");
+
+	/* wait for 1st response, or get cached response */
+	work_heap = hash_pop(&abstime);
+	if (unlikely(!work_heap)) {
+		/* Attempt to switch pools if this one times out */
+		pool_died(pool);
+		goto retry;
+	}
+
+	if (stale_work(work_heap, false)) {
+		dec_queued();
+		discard_work(work_heap);
+		goto retry;
+	}
+
+	pool = work_heap->pool;
 	/* If we make it here we have succeeded in getting fresh work */
-	if (likely(pool)) {
+	if (!work_heap->mined) {
 		pool_tclear(pool, &pool->lagging);
 		if (pool_tclear(pool, &pool->idle))
 			pool_resus(pool);
 	}
 
-	roll_cloned(work);
-	dec_queued();
+	memcpy(work, work_heap, sizeof(*work));
+
+	/* Hand out a clone if we can roll this work item */
+	if (reuse_work(work_heap)) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Pushing divided work to get queue head");
+
+		stage_work(work_heap);
+		work->clone = true;
+	} else {
+		dec_queued();
+		free_work(work_heap);
+	}
+
+	ret = true;
+out:
+	if (unlikely(ret == false)) {
+		if ((opt_retries >= 0) && (++failures > opt_retries)) {
+			applog(LOG_ERR, "Failed %d times to get_work");
+			return ret;
+		}
+		applog(LOG_DEBUG, "Retrying after %d seconds", fail_pause);
+		sleep(fail_pause);
+		fail_pause += opt_fail_pause;
+		goto retry;
+	}
+	fail_pause = opt_fail_pause;
 
 	work->thr_id = thr_id;
-	work->mined = true;
 	thread_reportin(thr);
-	return work;
+	if (ret)
+		work->mined = true;
+	return ret;
 }
 
 bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
@@ -3208,8 +3217,11 @@ void *miner_thread(void *userdata)
 		work_restart[thr_id].restart = 0;
 		if (api->free_work && likely(work->pool))
 			api->free_work(mythr, work);
-		free_work(work);
-		work = get_work(requested, mythr, thr_id);
+		if (unlikely(!get_work(work, requested, mythr, thr_id))) {
+			applog(LOG_ERR, "work retrieval failed, exiting "
+				"mining thread %d", thr_id);
+			break;
+		}
 		requested = false;
 		cycle = (can_roll(work) && should_roll(work)) ? 1 : def_cycle;
 		gettimeofday(&tv_workstart, NULL);
@@ -3326,7 +3338,7 @@ enum {
 /* Stage another work item from the work returned in a longpoll */
 static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 {
-	struct work *work;
+	struct work *work, *work_clone;
 	bool rc;
 
 	work = make_work();
@@ -3344,7 +3356,18 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	 * allows testwork to know whether LP discovered the block or not. */
 	test_work_current(work, true);
 
-	roll_cloned(work);
+	work_clone = make_work();
+	memcpy(work_clone, work, sizeof(struct work));
+	while (reuse_work(work)) {
+		work_clone->clone = true;
+		if (opt_debug)
+			applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
+		if (unlikely(!stage_work(work_clone)))
+			break;
+		work_clone = make_work();
+		memcpy(work_clone, work, sizeof(struct work));
+	}
+	free_work(work_clone);
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Pushing converted work to stage thread");
