@@ -12,6 +12,7 @@
 
 #include "config.h"
 
+#include <curses.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -31,7 +32,6 @@
 #include "adl.h"
 
 /* TODO: cleanup externals ********************/
-#include <curses.h>
 
 extern WINDOW *mainwin, *statuswin, *logwin;
 extern void enable_curses(void);
