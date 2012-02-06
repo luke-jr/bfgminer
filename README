@@ -595,6 +595,9 @@ The list of requests and replies are:
 
  devs          DEVS           Each available CPU and GPU with their details
                               e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
+                              Last Share Time=NNN, <- standand long time in seconds
+                               (or 0 if none) of last accepted share
+                              Last Share Pool=N, <- pool number (or -1 if none)
                               Will not report CPUs if CPU mining is disabled
 
  gpu|N         GPU            The details of a single GPU number N in the same
