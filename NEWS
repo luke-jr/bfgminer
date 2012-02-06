@@ -1,3 +1,60 @@
+Version 2.2.2 - February 6, 2012
+
+- Provide support for the submitold extension on a per-pool basis based on the
+value being detected in a longpoll.
+- Don't send a ping to a dynamic device if it's not enabled as that will just
+enable it for one pass and then disable it again.
+- Rewrite the convoluted get_work() function to be much simpler and roll work as
+much as possible with each new work item.
+- Roll as much work as possible from the work returned from a longpoll.
+- Rolling work on each loop through the mining thread serves no purpose.
+- Allow to stage more than necessary work items if we're just rolling work.
+- Replace divide_work with reuse_work function used twice.
+- Give rolled work a new ID to make sure there is no confusion in the hashtable
+lookups.
+- Remove now-defunct hash_div variables.
+- Remove unused get_dondata function.
+- Silence ADL warnings.
+- Silence unused parameter warnings.
+- Stagger the restart of every next thread per device to keep devices busy ahead
+of accessory threads per device.
+- Deprecate the --donation feature. Needlessly complex, questionable usefulness,
+depends on author's server and a central pool of some kind, and was not heavily
+adopted.
+- It's devices that report back now, not threads, update message.
+- Continue auto-management of fan and engine speeds even if a device is disabled
+for safety reasons.
+- No need to check we're highest performance level when throttling GPU engine
+speed.
+- Abstract out tests for whether work has come from a block that has been seen
+before and whether a string is from a previously seen block.
+- Probe but don't set the timeout to 15 seconds as some networks take a long
+time to timeout.
+- Remove most compiler warnings from api.c
+- Add last share's pool info in cgpu_info
+- Allow the OpenCL platform ID to be chosen with --gpu-platform.
+- Iterate over all platforms displaying their information and number of devices
+when --ndevs is called.
+- Deprecate main.c
+- Some networks can take a long time to resolve so go back to 60 second timeouts
+instead of 15.
+- Only enable curses on failure if curses is desired.
+- Fix warnings in bitforce.c
+- Bugfix: Need to open BitForce tty for read-write
+- Fix various build issues.
+- Modularize code: main.c -> device-cpu + device-gpu
+- Fix phatk kernel not working on non-bitalign capable devices (Nvidia, older
+ATI).
+- Update poclbm kernel for better performance on GCN and new SDKs with bitalign
+support when not BFI INT patching. Update phatk kernel to work properly for non
+BFI INT patched kernels, providing support for phatk to run on GCN and non-ATI
+cards.
+- Return last accepted share pool/time for devices
+- Display accepted share pool/time for CPUs
+- Bug intensity always shows GPU 0
+- Update example web miner.php to use new API commands
+
+
 Version 2.2.1 - January 30, 2012
 
 NOTE - The GPU Device reordering in 2.2.0 by default was considered a bad idea
