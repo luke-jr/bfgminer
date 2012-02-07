@@ -2,8 +2,12 @@
 session_start();
 #
 global $miner, $port;
-$miner = '127.0.0.1'; # hostname or IP address
+#$miner = '127.0.0.1'; # hostname or IP address
+#$miner = 'ernie.paige'; # hostname or IP address
+$miner = 'subaru.paige'; # hostname or IP address
+#$miner = 'evilming.paige'; # hostname or IP address
 $port = 4028;
+#$port = 4029;
 #
 $here = $_SERVER['PHP_SELF'];
 #
@@ -17,8 +21,9 @@ td.sta { color:green; font-family:verdana,arial,sans; font-size:14pt; }
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
 function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<? echo $here ?>"+a}
-function prs(a){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];pr('?arg='+a,m)}
-function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;pr('?arg='+a+','+v,m)}
+function prc(a,m){pr('?arg='+a,m)}
+function prs(a){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a,m)}
+function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v,m)}
 </script>
 <table width=100% height=100% border=0 cellpadding=0 cellspacing=0 summary='Mine'>
 <tr><td align=center valign=top>
@@ -201,7 +206,7 @@ function fmt($section, $name, $value)
  return $value;
 }
 #
-function details($list)
+function details($cmd, $list)
 {
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
@@ -243,6 +248,9 @@ function details($list)
 			echo "<td valign=bottom class=h>$name</td>";
 		}
 
+		if ($cmd == 'pools')
+			echo "<td valign=bottom class=h>Switch</td>";
+
 		echo '</tr>';
 
 		break;
@@ -256,6 +264,23 @@ function details($list)
 
 	foreach ($values as $name => $value)
 		echo '<td>'.fmt($section, $name, $value).'</td>';
+
+	if ($cmd == 'pools')
+	{
+		echo '<td>';
+
+		reset($values);
+		$pool = current($values);
+		if ($pool === false)
+			echo '&nbsp;';
+		else
+		{
+			echo "<input type=button value='Pool $pool'";
+			echo " onclick='prc(\"switchpool|$pool\",\"Switch to Pool $pool\")'>";
+		}
+
+		echo '</td>';
+	}
 
 	echo '</tr>';
  }
@@ -369,7 +394,7 @@ function process($cmds, $rd, $ro)
 	}
 	else
 	{
-		details($process);
+		details($cmd, $process);
 		echo '<tr><td><br><br></td></tr>';
 		if ($cmd == 'devs')
 			$devs = $process;
@@ -389,7 +414,7 @@ function display()
  echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
  echo "<input type=button value='Refresh' onclick='pr(\"\",null)'>";
  echo "</td><td width=100%>&nbsp;</td><td>";
- echo "<input type=button value='Quit' onclick='pr(\"?arg=quit\",\"Quit CGMiner\")'>";
+ echo "<input type=button value='Quit' onclick='prc(\"quit\",\"Quit CGMiner\")'>";
  echo "</td></tr></table></td></tr>";
 
  $arg = trim(getparam('arg', true));
