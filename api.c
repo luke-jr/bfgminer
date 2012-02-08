@@ -125,6 +125,10 @@
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
 	#endif
+
+	#ifndef in_addr_t
+	#define in_addr_t uint32_t
+	#endif
 #endif
 
 // Big enough for largest API request
