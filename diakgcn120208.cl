@@ -3,9 +3,7 @@
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
 
-#ifdef VECTORS8
-	typedef uint8 u;
-#elif defined VECTORS4
+#if defined VECTORS4
 	typedef uint4 u;
 #elif defined VECTORS2
 	typedef uint2 u;
@@ -31,9 +29,7 @@
 #ifdef GOFFSET
 	typedef uint uu;
 #else
-	#ifdef VECTORS8
-		typedef uint8 uu;
-	#elif defined VECTORS4
+	#if defined VECTORS4
 		typedef uint4 uu;
 	#elif defined VECTORS2
 		typedef uint2 uu;
@@ -67,29 +63,23 @@ __kernel
 	u W[17];
 	u V[8];
 
-#ifdef VECTORS8
+#if defined VECTORS4
 	#ifdef GOFFSET
-		u nonce = ((uint)get_global_id(0) << 3) + (u)(0, 1, 2, 3, 4, 5, 6, 7);
+		u nonce = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
 	#else
-		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZExVECSIZE) + ((uint)get_local_id(0) * 8U) + base;
-	#endif
-#elif defined VECTORS4
-	#ifdef GOFFSET
-		u nonce = ((uint)get_global_id(0) << 2) + (u)(0, 1, 2, 3);
-	#else
-		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZExVECSIZE) + ((uint)get_local_id(0) * 4U) + base;
+		u nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
 	#endif
 #elif defined VECTORS2
 	#ifdef GOFFSET
-		u nonce = ((uint)get_global_id(0) << 1) + (u)(0, 1);
+		u nonce = base + (get_global_id(0)<<1) + (uint2)(0, 1);
 	#else
-		u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) * 2U) + ((uint)get_local_id(0) * 2U) + base;
+		u nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
 	#endif
 #else
 	#ifdef GOFFSET
-		u nonce = (uint)get_global_id(0);
+		u nonce = base + get_global_id(0);
 	#else
-		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZExVECSIZE) + (uint)get_local_id(0) + base;
+		u nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
 	#endif
 #endif
 
@@ -589,22 +579,40 @@ __kernel
 
 	V[7] += V[3] + W[10] + ch(124) + rot26(V[0]);
 
-#ifdef VECTORS8
-	u result = (u)(((V[7].s0 == 0x136032ed) * nonce.s0), ((V[7].s1 == 0x136032ed) * nonce.s1), ((V[7].s2 == 0x136032ed) * nonce.s2), ((V[7].s3 == 0x136032ed) * nonce.s3),
-				   ((V[7].s4 == 0x136032ed) * nonce.s4), ((V[7].s5 == 0x136032ed) * nonce.s5), ((V[7].s6 == 0x136032ed) * nonce.s6), ((V[7].s7 == 0x136032ed) * nonce.s7));
-	output[0 + (upsample(result.s0, result.s1) > 0)] = upsample(result.s0, result.s1);
-	output[2 + (upsample(result.s2, result.s3) > 1)] = upsample(result.s2, result.s3);
-	output[4 + (upsample(result.s4, result.s5) > 0)] = upsample(result.s4, result.s5);
-	output[6 + (upsample(result.s6, result.s7) > 1)] = upsample(result.s6, result.s7);
-#elif defined VECTORS4
-	u result = (u)(((V[7].x == 0x136032ed) * nonce.x), ((V[7].y == 0x136032ed) * nonce.y), ((V[7].z == 0x136032ed) * nonce.z), ((V[7].w == 0x136032ed) * nonce.w));
-	output[0 + (upsample(result.x, result.y) > 0)] = upsample(result.x, result.y);
-	output[2 + (upsample(result.z, result.w) > 1)] = upsample(result.z, result.w);
-#elif defined VECTORS2
-	u result = (u)(((V[7].x == 0x136032ed) * nonce.x), ((V[7].y == 0x136032ed) * nonce.y));
-	output[upsample(result.x, result.y) > 0] = upsample(result.x, result.y);
+
+#define FOUND (0x80)
+#define NFLAG (0x7F)
+
+#ifdef VECTORS4
+	V[7] ^= 0x136032ed;
+
+	bool result = V[7].x & V[7].y & V[7].z & V[7].w;
+
+	if (!result) {
+		if (!V[7].x)
+			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+		if (!V[7].y)
+			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+		if (!V[7].z)
+			output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
+		if (!V[7].w)
+			output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
+	}
 #else
-	u result = (V[7] == 0x136032ed) * nonce;
-	output[result != 0] = result;
+	#ifdef VECTORS2
+		V[7] ^= 0x136032ed;
+
+		bool result = V[7].x & V[7].y;
+
+		if (!result) {
+			if (!V[7].x)
+				output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+			if (!V[7].y)
+				output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+		}
+	#else
+		if (V[7] == 0x136032ed)
+			output[FOUND] = output[NFLAG & W[3]] = W[3];
+	#endif
 #endif
 }
