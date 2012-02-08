@@ -2,12 +2,8 @@
 session_start();
 #
 global $miner, $port;
-#$miner = '127.0.0.1'; # hostname or IP address
-#$miner = 'ernie.paige'; # hostname or IP address
-$miner = 'subaru.paige'; # hostname or IP address
-#$miner = 'evilming.paige'; # hostname or IP address
+$miner = '127.0.0.1'; # hostname or IP address
 $port = 4028;
-#$port = 4029;
 #
 $here = $_SERVER['PHP_SELF'];
 #
