@@ -67,7 +67,7 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->cty_b = B;
 	blk->cty_c = C;
 
-	blk->C1addK5 = C + 0x59f111f1;
+	blk->C1addK5 = C + SHA256_K[5];
 
 	blk->cty_d = D;
 
@@ -117,10 +117,10 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->PreVal4addT1 = blk->PreVal4 + blk->T1;
 	blk->T1substate0 = blk->ctx_a - blk->T1;
 
-	blk->B1addK6 = blk->cty_b + 0x923f82a4;
-	blk->PreVal0addK7 = blk->PreVal0 + 0xab1c5ed5;
-	blk->W16addK16 = blk->W16 + 0xe49b69c1;
-	blk->W17addK17 = blk->W17 + 0xefbe4786;
+	blk->B1addK6 = blk->cty_b + SHA256_K[6];
+	blk->PreVal0addK7 = blk->PreVal0 + SHA256_K[7];
+	blk->W16addK16 = blk->W16 + SHA256_K[16];
+	blk->W17addK17 = blk->W17 + SHA256_K[17];
 
 	blk->A0 = blk->ctx_a + 0x98c7e2a2;
 	blk->B0 = blk->ctx_a + 0xfc08884d;
