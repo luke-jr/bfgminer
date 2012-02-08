@@ -590,13 +590,13 @@ __kernel
 
 	if (!result) {
 		if (!V[7].x)
-			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
 		if (!V[7].y)
-			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
 		if (!V[7].z)
-			output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
+			output[FOUND] = output[NFLAG & nonce.z] = nonce.z;
 		if (!V[7].w)
-			output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
+			output[FOUND] = output[NFLAG & nonce.w] = nonce.w;
 	}
 #else
 	#ifdef VECTORS2
@@ -606,13 +606,13 @@ __kernel
 
 		if (!result) {
 			if (!V[7].x)
-				output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+				output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
 			if (!V[7].y)
-				output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+				output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
 		}
 	#else
 		if (V[7] == 0x136032ed)
-			output[FOUND] = output[NFLAG & W[3]] = W[3];
+			output[FOUND] = output[NFLAG & nonce] = nonce;
 	#endif
 #endif
 }
