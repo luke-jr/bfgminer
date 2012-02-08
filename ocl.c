@@ -348,21 +348,27 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char filename[16];
 
 	if (chosen_kernel == KL_NONE) {
-		if (!clState->hasBitAlign || strstr(name, "Tahiti"))
+		if (strstr(name, "Tahiti"))
+			chosen_kernel = KL_DIAKGCN;
+		else if (!clState->hasBitAlign)
 			chosen_kernel = KL_POCLBM;
 		else
 			chosen_kernel = KL_PHATK;
 	}
 
 	switch (chosen_kernel) {
+		case KL_DIAKGCN:
+			strcpy(filename, DIAKGCN_KERNNAME".cl");
+			strcpy(binaryfilename, DIAKGCN_KERNNAME);
+			break;
 		case KL_POCLBM:
-			strcpy(filename, "poclbm120203.cl");
-			strcpy(binaryfilename, "poclbm120203");
+			strcpy(filename, POCLBM_KERNNAME".cl");
+			strcpy(binaryfilename, POCLBM_KERNNAME);
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_PHATK:
-			strcpy(filename, "phatk120203.cl");
-			strcpy(binaryfilename, "phatk120203");
+			strcpy(filename, PHATK_KERNNAME".cl");
+			strcpy(binaryfilename, PHATK_KERNNAME);
 			break;
 	}
 

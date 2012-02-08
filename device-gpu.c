@@ -754,6 +754,43 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 	return status;
 }
 
+static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
+{
+	cl_kernel *kernel = &clState->kernel;
+	cl_int status = 0;
+	int num = 0;
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_b);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_c);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_d);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_e);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_d);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
+	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
+
+	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
+				 (void *)&clState->outputBuffer);
+
+	return status;
+}
+
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       unsigned int *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
@@ -905,9 +942,11 @@ static void opencl_detect()
 		return;
 
 	if (opt_kernel) {
-		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk"))
-			quit(1, "Invalid kernel name specified - must be poclbm or phatk");
-		if (!strcmp(opt_kernel, "poclbm"))
+		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk") && strcmp(opt_kernel, "diakgcn"))
+			quit(1, "Invalid kernel name specified - must be poclbm, phatk or diakgcn");
+		if (!strcmp(opt_kernel, "diakgcn"))
+			chosen_kernel = KL_DIAKGCN;
+		else if (!strcmp(opt_kernel, "poclbm"))
 			chosen_kernel = KL_POCLBM;
 		else
 			chosen_kernel = KL_PHATK;
@@ -1041,6 +1080,9 @@ static bool opencl_thread_init(struct thr_info *thr)
 		case KL_PHATK:
 		default:
 			thrdata->queue_kernel_parameters = &queue_phatk_kernel;
+			break;
+		case KL_DIAKGCN:
+			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
 			break;
 	}
 
