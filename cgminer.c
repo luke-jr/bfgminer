@@ -127,6 +127,7 @@ static bool opt_fail_only;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
+char *opt_api_allow = NULL;
 char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
 bool opt_api_listen = false;
@@ -535,6 +536,13 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 	return NULL;
 }
 
+static char *set_api_allow(const char *arg)
+{
+	opt_set_charp(arg, &opt_api_allow);
+
+	return NULL;
+}
+
 static char *set_api_description(const char *arg)
 {
 	opt_set_charp(arg, &opt_api_description);
@@ -574,6 +582,9 @@ static struct opt_table opt_config_table[] = {
 #endif
 		),
 #endif
+	OPT_WITH_ARG("--api-allow",
+		     set_api_allow, NULL, NULL,
+		     "Allow API access only to the given list of IP[/Prefix] addresses[/subnets]"),
 	OPT_WITH_ARG("--api-description",
 		     set_api_description, NULL, NULL,
 		     "Description placed in the API status header, default: cgminer version"),
@@ -2295,6 +2306,8 @@ void write_config(FILE *fcfg)
 		for (i = 0; i < nDevs; i++)
 			if (gpus[i].enabled)
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
+	if (opt_api_allow != NULL)
+		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
 	fputs("\n}", fcfg);

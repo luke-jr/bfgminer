@@ -446,6 +446,7 @@ extern char *cgminer_path;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+extern char *opt_api_allow;
 extern char *opt_api_description;
 extern int opt_api_port;
 extern bool opt_api_listen;
