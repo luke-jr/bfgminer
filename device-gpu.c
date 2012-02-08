@@ -673,39 +673,42 @@ void manage_gpu(void)
 #ifdef HAVE_OPENCL
 static _clState *clStates[MAX_GPUDEVICES];
 
+#define CL_SET_BLKARG(blkvar) status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->blkvar)
+#define CL_SET_ARG(var) status |= clSetKernelArg(*kernel, num++, sizeof(var), (void *)&var)
+#define CL_SET_VARG(args, var) status |= clSetKernelArg(*kernel, num++, args * sizeof(uint), (void *)var)
+
 static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 {
 	cl_kernel *kernel = &clState->kernel;
 	cl_int status = 0;
 	int num = 0;
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_b);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_c);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_d);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_e);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_d);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
+	CL_SET_BLKARG(ctx_a);
+	CL_SET_BLKARG(ctx_b);
+	CL_SET_BLKARG(ctx_c);
+	CL_SET_BLKARG(ctx_d);
+	CL_SET_BLKARG(ctx_e);
+	CL_SET_BLKARG(ctx_f);
+	CL_SET_BLKARG(ctx_g);
+	CL_SET_BLKARG(ctx_h);
+	CL_SET_BLKARG(cty_b);
+	CL_SET_BLKARG(cty_c);
+	CL_SET_BLKARG(cty_d);
+	CL_SET_BLKARG(cty_f);
+	CL_SET_BLKARG(cty_g);
+	CL_SET_BLKARG(cty_h);
+	CL_SET_BLKARG(nonce);
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
+	CL_SET_BLKARG(fW0);
+	CL_SET_BLKARG(fW1);
+	CL_SET_BLKARG(fW2);
+	CL_SET_BLKARG(fW3);
+	CL_SET_BLKARG(fW15);
+	CL_SET_BLKARG(fW01r);
+	CL_SET_BLKARG(fcty_e);
+	CL_SET_BLKARG(fcty_e2);
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
-				 (void *)&clState->outputBuffer);
+	CL_SET_ARG(clState->outputBuffer);
 
 	return status;
 }
@@ -718,75 +721,87 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 	int i, num = 0;
 	uint *nonces;
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_b);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_c);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_d);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_e);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
+	CL_SET_BLKARG(ctx_a);
+	CL_SET_BLKARG(ctx_b);
+	CL_SET_BLKARG(ctx_c);
+	CL_SET_BLKARG(ctx_d);
+	CL_SET_BLKARG(ctx_e);
+	CL_SET_BLKARG(ctx_f);
+	CL_SET_BLKARG(ctx_g);
+	CL_SET_BLKARG(ctx_h);
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_d);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
+	CL_SET_BLKARG(cty_b);
+	CL_SET_BLKARG(cty_c);
+	CL_SET_BLKARG(cty_d);
+	CL_SET_BLKARG(cty_f);
+	CL_SET_BLKARG(cty_g);
+	CL_SET_BLKARG(cty_h);
 
 	nonces = alloca(sizeof(uint) * vwidth);
 	for (i = 0; i < vwidth; i++)
 		nonces[i] = blk->nonce + i;
 	status |= clSetKernelArg(*kernel, num++, vwidth * sizeof(uint), (void *)nonces);
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W16);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->W17);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal4_2);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreVal0);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreW18);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreW19);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreW31);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->PreW32);
+	CL_SET_BLKARG(W16);
+	CL_SET_BLKARG(W17);
+	CL_SET_BLKARG(PreVal4_2);
+	CL_SET_BLKARG(PreVal0);
+	CL_SET_BLKARG(PreW18);
+	CL_SET_BLKARG(PreW19);
+	CL_SET_BLKARG(PreW31);
+	CL_SET_BLKARG(PreW32);
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
-				 (void *)&clState->outputBuffer);
+	CL_SET_ARG(clState->outputBuffer);
 
 	return status;
 }
 
 static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 {
+	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
 	cl_int status = 0;
-	int num = 0;
+	int i, num = 0;
+	uint *nonces;
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_a);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_b);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_c);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_d);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_e);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_f);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_g);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->ctx_h);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_b);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_c);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_d);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_f);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_g);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->cty_h);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->nonce);
+	nonces = alloca(sizeof(uint) * vwidth);
+	for (i = 0; i < vwidth; i++)
+		nonces[i] = blk->nonce + i;
+	CL_SET_VARG(vwidth, nonces);
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW0);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW1);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW2);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW3);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW15);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fW01r);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e);
-	status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->fcty_e2);
+	CL_SET_BLKARG(PreVal4);
+	CL_SET_BLKARG(cty_h);
+	CL_SET_BLKARG(cty_d);
+	CL_SET_BLKARG(PreVal0);
+	CL_SET_BLKARG(cty_b);
+	CL_SET_BLKARG(cty_c);
+	CL_SET_BLKARG(cty_f);
+	CL_SET_BLKARG(cty_g);
+	CL_SET_BLKARG(C1addK5);
+	CL_SET_BLKARG(B1addK6);
+	CL_SET_BLKARG(PreVal0addK7);
+	CL_SET_BLKARG(W16addK16);
+	CL_SET_BLKARG(W17addK17);
+	CL_SET_BLKARG(PreW18);
+	CL_SET_BLKARG(PreW19);
+	CL_SET_BLKARG(W16);
+	CL_SET_BLKARG(W17);
+	CL_SET_BLKARG(PreW31);
+	CL_SET_BLKARG(PreW32);
 
-	status |= clSetKernelArg(*kernel, num++, sizeof(clState->outputBuffer),
-				 (void *)&clState->outputBuffer);
+	CL_SET_BLKARG(ctx_a);
+	CL_SET_BLKARG(ctx_b);
+	CL_SET_BLKARG(ctx_c);
+	CL_SET_BLKARG(ctx_d);
+	CL_SET_BLKARG(ctx_e);
+	CL_SET_BLKARG(ctx_f);
+	CL_SET_BLKARG(ctx_g);
+	CL_SET_BLKARG(ctx_h);
+
+	CL_SET_BLKARG(A0);
+	CL_SET_BLKARG(B0);
+
+	CL_SET_ARG(clState->outputBuffer);
 
 	return status;
 }
