@@ -3,7 +3,9 @@
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
 
-#if defined VECTORS4
+#ifdef VECTORS8
+	typedef uint8 u;
+#elif defined VECTORS4
 	typedef uint4 u;
 #elif defined VECTORS2
 	typedef uint2 u;
@@ -29,7 +31,9 @@
 #ifdef GOFFSET
 	typedef uint uu;
 #else
-	#if defined VECTORS4
+	#ifdef VECTORS8
+		typedef uint8 uu;
+	#elif defined VECTORS4
 		typedef uint4 uu;
 	#elif defined VECTORS2
 		typedef uint2 uu;
@@ -63,23 +67,29 @@ __kernel
 	u W[17];
 	u V[8];
 
-#if defined VECTORS4
+#ifdef VECTORS8
 	#ifdef GOFFSET
-		u nonce = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
+		u nonce = ((uint)get_global_id(0) << 3) + (u)(0, 1, 2, 3, 4, 5, 6, 7);
 	#else
-		u nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
+		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZE * 8U) + ((uint)get_local_id(0) * 8U) + base;
+	#endif
+#elif defined VECTORS4
+	#ifdef GOFFSET
+		u nonce = ((uint)get_global_id(0) << 2) + (u)(0, 1, 2, 3);
+	#else
+		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZE * 4U) + ((uint)get_local_id(0) * 4U) + base;
 	#endif
 #elif defined VECTORS2
 	#ifdef GOFFSET
-		u nonce = base + (get_global_id(0)<<1) + (uint2)(0, 1);
+		u nonce = ((uint)get_global_id(0) << 1) + (u)(0, 1);
 	#else
-		u nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
+		u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) * 2U) + ((uint)get_local_id(0) * 2U) + base;
 	#endif
 #else
 	#ifdef GOFFSET
-		u nonce = base + get_global_id(0);
+		u nonce = (uint)get_global_id(0);
 	#else
-		u nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
+		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZE) + (uint)get_local_id(0) + base;
 	#endif
 #endif
 
