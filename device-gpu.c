@@ -769,7 +769,7 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 		nonces[i] = blk->nonce + i;
 	CL_SET_VARG(vwidth, nonces);
 
-	CL_SET_BLKARG(PreVal4);
+	CL_SET_BLKARG(PreVal4_2);
 	CL_SET_BLKARG(cty_h);
 	CL_SET_BLKARG(cty_d);
 	CL_SET_BLKARG(PreVal0);
