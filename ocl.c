@@ -358,7 +358,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	 */
 	enum cl_kernel this_kernel;
 	char binaryfilename[255];
-	char filename[16];
+	char filename[255];
 	char numbuf[10];
 
 	if (chosen_kernel == KL_NONE) {
