@@ -313,7 +313,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 	find = strstr(devoclver, ocl10);
-	if !(find)
+	if (!find)
 		clState->hasOpenCL11plus = true;
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
@@ -361,7 +361,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char filename[16];
 
 	if (chosen_kernel == KL_NONE) {
-		if (strstr(name, "Tahiti"))
+		if (!strstr(name, "Tahiti"))
 			chosen_kernel = KL_DIAKGCN;
 		else if (!clState->hasBitAlign)
 			chosen_kernel = KL_POCLBM;
