@@ -1717,7 +1717,7 @@ static bool stale_work(struct work *work, bool share)
 	if (work->work_block != work_block)
 		return true;
 
-	if (opt_fail_only && work->pool != current_pool())
+	if (opt_fail_only && !share && work->pool != current_pool())
 		return true;
 
 	return false;
