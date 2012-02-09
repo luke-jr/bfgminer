@@ -62,7 +62,7 @@ __kernel
 					const uint state0, const uint state1, const uint state2, const uint state3,
 					const uint state4, const uint state5, const uint state6, const uint state7,
 					const uint state0A, const uint state0B,
-					__global ulong * output)
+					__global uint * output)
 {
 	u W[17];
 	u V[8];
