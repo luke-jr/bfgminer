@@ -1706,7 +1706,6 @@ static bool workio_get_work(struct workio_cmd *wc)
 static bool stale_work(struct work *work, bool share)
 {
 	struct timeval now;
-	bool ret = false;
 
 	gettimeofday(&now, NULL);
 	if (share) {
@@ -1716,8 +1715,12 @@ static bool stale_work(struct work *work, bool share)
 		return true;
 
 	if (work->work_block != work_block)
-		ret = true;
-	return ret;
+		return true;
+
+	if (opt_fail_only && work->pool != current_pool())
+		return true;
+
+	return false;
 }
 
 static void *submit_work_thread(void *userdata)
