@@ -302,6 +302,19 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	find = strstr(extensions, camo);
 	if (find)
 		clState->hasBitAlign = true;
+		
+	/* Check for OpenCL >= 1.0 support, needed for global offset parameter usage. */
+	char * devoclver = malloc(1024);
+	const char * ocl10 = "OpenCL 1.0";
+
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_VERSION, 1024, (void *)devoclver, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: Failed to clGetDeviceInfo when trying to get CL_DEVICE_VERSION");
+		return NULL;
+	}
+	find = strstr(devoclver, ocl10);
+	if !(find)
+		clState->hasOpenCL11plus = true;
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
