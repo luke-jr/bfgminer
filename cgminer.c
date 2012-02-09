@@ -2902,12 +2902,18 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
+static long requested_tv_sec;
+
 static bool queue_request(struct thr_info *thr, bool needed)
 {
-	struct workio_cmd *wc;
 	int rq = requests_queued();
+	struct workio_cmd *wc;
+	struct timeval now;
 
-	if (rq >= mining_threads + staged_clones)
+	gettimeofday(&now, NULL);
+
+	if (rq >= mining_threads + staged_clones &&
+	    (now.tv_sec - requested_tv_sec) > opt_scantime * 2 / 3)
 		return true;
 
 	/* fill out work request message */
@@ -2939,6 +2945,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 		return false;
 	}
 
+	requested_tv_sec = now.tv_sec;
 	inc_queued();
 	return true;
 }
