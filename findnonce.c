@@ -66,9 +66,6 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->cty_a = A;
 	blk->cty_b = B;
 	blk->cty_c = C;
-
-	blk->C1addK5 = C + SHA256_K[5];
-
 	blk->cty_d = D;
 
 	blk->D1A = D + 0xb956c25b;
@@ -93,12 +90,12 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 
 	blk->W16 = blk->fW0 = data[0] + (rotr(data[1], 7) ^ rotr(data[1], 18) ^ (data[1] >> 3));
 	blk->W17 = blk->fW1 = data[1] + (rotr(data[2], 7) ^ rotr(data[2], 18) ^ (data[2] >> 3)) + 0x01100000;
-	blk->PreVal4 = blk->fcty_e = E + (rotr(B, 6) ^ rotr(B, 11) ^ rotr(B, 25)) + (D ^ (B & (C ^ D))) + 0xe9b5dba5;
+	blk->PreVal4 = blk->fcty_e = blk->ctx_e + (rotr(B, 6) ^ rotr(B, 11) ^ rotr(B, 25)) + (D ^ (B & (C ^ D))) + 0xe9b5dba5;
 	blk->T1 = blk->fcty_e2 = (rotr(F, 2) ^ rotr(F, 13) ^ rotr(F, 22)) + ((F & G) | (H & (F | G)));
 	blk->PreVal4_2 = blk->PreVal4 + blk->T1;
-	blk->PreVal0 = blk->PreVal4 + state[0];
+	blk->PreVal0 = blk->PreVal4 + blk->ctx_a;
 	blk->PreW31 = 0x00000280 + (rotr(blk->W16,  7) ^ rotr(blk->W16, 18) ^ (blk->W16 >> 3));
-	blk->PreW32 = blk->W16 + ((rotr(blk->W17, 7) ^ rotr(blk->W17, 18) ^ (blk->W17 >> 3)));
+	blk->PreW32 = blk->W16 + (rotr(blk->W17, 7) ^ rotr(blk->W17, 18) ^ (blk->W17 >> 3));
 	blk->PreW18 = data[2] + (rotr(blk->W16, 17) ^ rotr(blk->W16, 19) ^ (blk->W16 >> 10));
 	blk->PreW19 = 0x11002000 + (rotr(blk->W17, 17) ^ rotr(blk->W17, 19) ^ (blk->W17 >> 10));
 
@@ -117,6 +114,7 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->PreVal4addT1 = blk->PreVal4 + blk->T1;
 	blk->T1substate0 = blk->ctx_a - blk->T1;
 
+	blk->C1addK5 = blk->cty_c + SHA256_K[5];
 	blk->B1addK6 = blk->cty_b + SHA256_K[6];
 	blk->PreVal0addK7 = blk->PreVal0 + SHA256_K[7];
 	blk->W16addK16 = blk->W16 + SHA256_K[16];

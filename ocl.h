@@ -18,6 +18,7 @@ typedef struct {
 	cl_program program;
 	cl_mem outputBuffer;
 	bool hasBitAlign;
+	bool hasOpenCL11plus;
 	cl_uint preferred_vwidth;
 	size_t max_work_size;
 	size_t work_size;
