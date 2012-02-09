@@ -2913,7 +2913,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	gettimeofday(&now, NULL);
 
 	if (rq >= mining_threads + staged_clones &&
-	    (now.tv_sec - requested_tv_sec) > opt_scantime * 2 / 3)
+	    (now.tv_sec - requested_tv_sec) < opt_scantime * 2 / 3)
 		return true;
 
 	/* fill out work request message */
