@@ -66,25 +66,25 @@ __kernel
 	#ifdef GOFFSET
 		u nonce = ((uint)get_global_id(0) << 3) + (u)(0, 1, 2, 3, 4, 5, 6, 7);
 	#else
-		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZE * 8U) + ((uint)get_local_id(0) * 8U) + base;
+		u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 3) + ((uint)get_local_id(0) << 3) + base;
 	#endif
 #elif defined VECTORS4
 	#ifdef GOFFSET
 		u nonce = ((uint)get_global_id(0) << 2) + (u)(0, 1, 2, 3);
 	#else
-		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZE * 4U) + ((uint)get_local_id(0) * 4U) + base;
+		u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 2) + ((uint)get_local_id(0) << 2) + base;
 	#endif
 #elif defined VECTORS2
 	#ifdef GOFFSET
 		u nonce = ((uint)get_global_id(0) << 1) + (u)(0, 1);
 	#else
-		u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) * 2U) + ((uint)get_local_id(0) * 2U) + base;
+		u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 1) + ((uint)get_local_id(0) << 1) + base;
 	#endif
 #else
 	#ifdef GOFFSET
 		u nonce = (uint)get_global_id(0);
 	#else
-		u nonce = ((uint)get_group_id(0) * (uint)WORKSIZE) + (uint)get_local_id(0) + base;
+		u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0)) + (uint)get_local_id(0) + base;
 	#endif
 #endif
 
