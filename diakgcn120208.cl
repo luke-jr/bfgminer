@@ -29,17 +29,11 @@
 #endif
 
 #ifdef GOFFSET
-	typedef uint uu;
+	// make sure kernel parameter "base" is not used, if GOFFSET is defined
+	#define BASE
 #else
-	#ifdef VECTORS8
-		typedef uint8 uu;
-	#elif defined VECTORS4
-		typedef uint4 uu;
-	#elif defined VECTORS2
-		typedef uint2 uu;
-	#else
-		typedef uint uu;
-	#endif	
+	// make sure kernel parameter "base" is used, if GOFFSET is not defined
+	#define BASE const u base,
 #endif
 
 #define ch(n) Ch(V[(4 + 128 - n) % 8], V[(5 + 128 - n) % 8], V[(6 + 128 - n) % 8])
@@ -52,17 +46,18 @@
 
 __kernel
 	__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-	void search(	const uu base, const uint PreVal4,
-					const uint H1, const uint D1, const uint PreVal0, const uint B1, const uint C1,
-					const uint F1, const uint G1, const uint C1addK5, const uint B1addK6, const uint PreVal0addK7,
-					const uint W16addK16, const uint W17addK17,
-					const uint PreW18, const uint PreW19,
-					const uint W16, const uint W17,
-					const uint PreW31, const uint PreW32,
-					const uint state0, const uint state1, const uint state2, const uint state3,
-					const uint state4, const uint state5, const uint state6, const uint state7,
-					const uint state0A, const uint state0B,
-					__global uint * output)
+	void search(	BASE
+			const uint PreVal4,
+			const uint H1, const uint D1, const uint PreVal0, const uint B1, const uint C1,
+			const uint F1, const uint G1, const uint C1addK5, const uint B1addK6, const uint PreVal0addK7,
+			const uint W16addK16, const uint W17addK17,
+			const uint PreW18, const uint PreW19,
+			const uint W16, const uint W17,
+			const uint PreW31, const uint PreW32,
+			const uint state0, const uint state1, const uint state2, const uint state3,
+			const uint state4, const uint state5, const uint state6, const uint state7,
+			const uint state0A, const uint state0B,
+			__global int * output)
 {
 	u W[17];
 	u V[8];
