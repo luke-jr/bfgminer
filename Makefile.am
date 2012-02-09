@@ -17,7 +17,7 @@ INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
 
 bin_PROGRAMS	= cgminer
 
-bin_SCRIPTS	= phatk120203.cl poclbm120203.cl
+bin_SCRIPTS	= *.cl
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
@@ -44,7 +44,7 @@ cgminer_SOURCES += device-gpu.h device-gpu.c
 # the original GPU related sources, unchanged
 cgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 cgminer_SOURCES += adl.c adl.h adl_functions.h
-cgminer_SOURCES += phatk120203.cl poclbm120203.cl
+cgminer_SOURCES += *.cl
 
 if HAS_CPUMINE
 # original CPU related sources, unchanged

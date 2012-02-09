@@ -610,6 +610,10 @@ typedef struct {
 	cl_uint PreW19;
 	cl_uint PreW31;
 	cl_uint PreW32;
+
+	/* For diakgcn */
+	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
+	cl_uint A0, B0;
 } dev_blk_ctx;
 #else
 typedef struct {
@@ -675,6 +679,7 @@ enum cl_kernel {
 	KL_NONE,
 	KL_POCLBM,
 	KL_PHATK,
+	KL_DIAKGCN,
 };
 
 extern void get_datestamp(char *, struct timeval *);
