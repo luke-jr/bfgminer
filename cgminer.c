@@ -238,16 +238,16 @@ static bool time_before(struct tm *tm1, struct tm *tm2)
 static bool should_run(void)
 {
 	struct timeval tv;
-	struct tm tm;
+	struct tm *tm;
 
 	if (!schedstart.enable && !schedstop.enable)
 		return true;
 
 	gettimeofday(&tv, NULL);
-	localtime_r(&tv.tv_sec, &tm);
+	tm = localtime(&tv.tv_sec);
 	if (schedstart.enable) {
 		if (!schedstop.enable) {
-			if (time_before(&tm, &schedstart.tm))
+			if (time_before(tm, &schedstart.tm))
 				return false;
 
 			/* This is a once off event with no stop time set */
@@ -255,46 +255,46 @@ static bool should_run(void)
 			return true;
 		}
 		if (time_before(&schedstart.tm, &schedstop.tm)) {
-			if (time_before(&tm, &schedstop.tm) && !time_before(&tm, &schedstart.tm))
+			if (time_before(tm, &schedstop.tm) && !time_before(tm, &schedstart.tm))
 				return true;
 			return false;
 		} /* Times are reversed */
-		if (time_before(&tm, &schedstart.tm)) {
-			if (time_before(&tm, &schedstop.tm))
+		if (time_before(tm, &schedstart.tm)) {
+			if (time_before(tm, &schedstop.tm))
 				return true;
 			return false;
 		}
 		return true;
 	}
 	/* only schedstop.enable == true */
-	if (!time_before(&tm, &schedstop.tm))
+	if (!time_before(tm, &schedstop.tm))
 		return false;
 	return true;
 }
 
 void get_datestamp(char *f, struct timeval *tv)
 {
-	struct tm tm;
+	struct tm *tm;
 
-	localtime_r(&tv->tv_sec, &tm);
+	tm = localtime(&tv->tv_sec);
 	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
-		tm.tm_year + 1900,
-		tm.tm_mon + 1,
-		tm.tm_mday,
-		tm.tm_hour,
-		tm.tm_min,
-		tm.tm_sec);
+		tm->tm_year + 1900,
+		tm->tm_mon + 1,
+		tm->tm_mday,
+		tm->tm_hour,
+		tm->tm_min,
+		tm->tm_sec);
 }
 
 void get_timestamp(char *f, struct timeval *tv)
 {
-	struct tm tm;
+	struct tm *tm;
 
-	localtime_r(&tv->tv_sec, &tm);
+	tm = localtime(&tv->tv_sec);
 	sprintf(f, "[%02d:%02d:%02d]",
-		tm.tm_hour,
-		tm.tm_min,
-		tm.tm_sec);
+		tm->tm_hour,
+		tm->tm_min,
+		tm->tm_sec);
 }
 
 static void applog_and_exit(const char *fmt, ...)

@@ -79,21 +79,21 @@ void vapplog(int prio, const char *fmt, va_list ap)
 		char *f;
 		int len;
 		struct timeval tv = { };
-		struct tm tm;
+		struct tm *tm;
 
 		gettimeofday(&tv, NULL);
 
-		localtime_r(&tv.tv_sec, &tm);
+		tm = localtime(&tv.tv_sec);
 
 		len = 40 + strlen(fmt) + 22;
 		f = alloca(len);
 		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
-			tm.tm_year + 1900,
-			tm.tm_mon + 1,
-			tm.tm_mday,
-			tm.tm_hour,
-			tm.tm_min,
-			tm.tm_sec,
+			tm->tm_year + 1900,
+			tm->tm_mon + 1,
+			tm->tm_mday,
+			tm->tm_hour,
+			tm->tm_min,
+			tm->tm_sec,
 			fmt);
 		/* Only output to stderr if it's not going to the screen as well */
 		if (!isatty(fileno((FILE *)stderr))) {
