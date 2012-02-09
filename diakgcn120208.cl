@@ -13,19 +13,24 @@
 	typedef uint u;
 #endif
 
-#ifdef BFI_INT
+#ifdef BITALIGN
 	#pragma OPENCL EXTENSION cl_amd_media_ops : enable
-	#define Ch(x, y, z) amd_bytealign(x, y, z)
-	#define Ma(x, y, z) amd_bytealign(z ^ x, y, x)
-#else
-	#define Ch(x, y, z) bitselect(z, y, x)
-	#if defined(VECTORS2) || defined(VECTORS4) || defined(VECTORS8)
-		// GCN - VEC2 or VEC4
-		#define Ma(z, x, y) bitselect(z, y, z ^ x)
+	#ifdef BFI_INT
+		#define Ch(x, y, z) amd_bytealign(x, y, z)
+		#define Ma(x, y, z) amd_bytealign(z ^ x, y, x)
 	#else
-		// GCN - no VEC
-		#define Ma(z, x, y) Ch(z ^ x, y, x)
+		#define Ch(x, y, z) bitselect(z, y, x)
+		#if defined(VECTORS2) || defined(VECTORS4) || defined(VECTORS8)
+			// GCN - VEC2 or VEC4
+			#define Ma(z, x, y) bitselect(z, y, z ^ x)
+		#else
+			// GCN - no VEC
+			#define Ma(z, x, y) Ch(z ^ x, y, x)
+		#endif
 	#endif
+#else //BITALIGN
+	#define Ch(x, y, z) (z ^ (x & (y ^ z)))
+	#define Ma(x, y, z) ((x & z) | (y & (x | z)))
 #endif
 
 #ifdef GOFFSET
