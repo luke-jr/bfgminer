@@ -356,20 +356,22 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	 * have otherwise created. The filename is:
 	 * name + kernelname +/i bitalign + v + vectors + w + work_size + sizeof(long) + .bin
 	 */
+	enum cl_kernel this_kernel;
 	char binaryfilename[255];
-	char numbuf[10];
 	char filename[16];
+	char numbuf[10];
 
 	if (chosen_kernel == KL_NONE) {
-		if (!strstr(name, "Tahiti"))
-			chosen_kernel = KL_DIAKGCN;
+		if (strstr(name, "Tahiti"))
+			this_kernel = KL_DIAKGCN;
 		else if (!clState->hasBitAlign)
-			chosen_kernel = KL_POCLBM;
+			this_kernel = KL_POCLBM;
 		else
-			chosen_kernel = KL_PHATK;
-	}
+			this_kernel = KL_PHATK;
+	} else
+		this_kernel = chosen_kernel;
 
-	switch (chosen_kernel) {
+	switch (this_kernel) {
 		case KL_DIAKGCN:
 			strcpy(filename, DIAKGCN_KERNNAME".cl");
 			strcpy(binaryfilename, DIAKGCN_KERNNAME);
