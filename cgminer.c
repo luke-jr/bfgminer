@@ -205,7 +205,7 @@ static bool config_loaded = false;
 	static char *opt_stderr_cmd = NULL;
 #endif // defined(unix)
 
-enum cl_kernel chosen_kernel;
+enum cl_kernels chosen_kernel;
 
 bool ping = true;
 
