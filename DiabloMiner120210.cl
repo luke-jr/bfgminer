@@ -18,14 +18,14 @@
 
 typedef uint z;
 
-#if BITALIGN
+#ifdef BITALIGN
 #pragma OPENCL EXTENSION cl_amd_media_ops : enable
 #define Zrotr(a, b) amd_bitalign((z)a, (z)a, (z)(32 - b))
 #else
 #define Zrotr(a, b) rotate((z)a, (z)b)
 #endif
 
-#if BFI_INT
+#ifdef BFI_INT
 #define ZCh(a, b, c) amd_bytealign(a, b, c)
 #define ZMa(a, b, c) amd_bytealign((c ^ a), (b), (a))
 #else
