@@ -806,6 +806,46 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 	return status;
 }
 
+static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk)
+{
+	cl_kernel *kernel = &clState->kernel;
+	cl_int status = 0;
+	int num = 0;
+
+	CL_SET_BLKARG(nonce);
+	CL_SET_BLKARG(PreVal0);
+	CL_SET_BLKARG(PreVal4_2);
+	CL_SET_BLKARG(PreW18);
+	CL_SET_BLKARG(PreW19);
+	CL_SET_BLKARG(W16);
+	CL_SET_BLKARG(W17);
+	CL_SET_BLKARG(PreW31);
+	CL_SET_BLKARG(PreW32);
+
+	CL_SET_BLKARG(cty_d);
+	CL_SET_BLKARG(cty_b);
+	CL_SET_BLKARG(cty_c);
+	CL_SET_BLKARG(cty_h);
+	CL_SET_BLKARG(cty_f);
+	CL_SET_BLKARG(cty_g);
+
+	CL_SET_BLKARG(C1addK5);
+	CL_SET_BLKARG(B1addK6);
+
+	CL_SET_BLKARG(ctx_a);
+	CL_SET_BLKARG(ctx_b);
+	CL_SET_BLKARG(ctx_c);
+	CL_SET_BLKARG(ctx_d);
+	CL_SET_BLKARG(ctx_e);
+	CL_SET_BLKARG(ctx_f);
+	CL_SET_BLKARG(ctx_g);
+	CL_SET_BLKARG(ctx_h);
+
+	CL_SET_ARG(clState->outputBuffer);
+
+	return status;
+}
+
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       unsigned int *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
@@ -957,12 +997,17 @@ static void opencl_detect()
 		return;
 
 	if (opt_kernel) {
-		if (strcmp(opt_kernel, "poclbm") && strcmp(opt_kernel, "phatk") && strcmp(opt_kernel, "diakgcn"))
-			quit(1, "Invalid kernel name specified - must be poclbm, phatk or diakgcn");
+		if (strcmp(opt_kernel, "poclbm") &&
+		    strcmp(opt_kernel, "phatk") &&
+		    strcmp(opt_kernel, "diakgcn") &&
+		    strcmp(opt_kernel, "diablo"))
+			quit(1, "Invalid kernel name specified - must be poclbm, phatk, diakgcn or diablo");
 		if (!strcmp(opt_kernel, "diakgcn"))
 			chosen_kernel = KL_DIAKGCN;
 		else if (!strcmp(opt_kernel, "poclbm"))
 			chosen_kernel = KL_POCLBM;
+		else if (!strcmp(opt_kernel, "diablo"))
+			chosen_kernel = KL_DIABLO;
 		else
 			chosen_kernel = KL_PHATK;
 	} else
@@ -1100,6 +1145,9 @@ static bool opencl_thread_init(struct thr_info *thr)
 		case KL_DIAKGCN:
 			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
 			break;
+		case KL_DIABLO:
+			thrdata->queue_kernel_parameters = &queue_diablo_kernel;
+			break;
 	}
 
 	thrdata->res = calloc(BUFFERSIZE, 1);
@@ -1184,7 +1232,6 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	}
 	set_threads_hashes(clState->preferred_vwidth, &threads, &hashes, globalThreads,
 			   localThreads[0], gpu->intensity);
-
 	status = thrdata->queue_kernel_parameters(clState, &work->blk);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");

@@ -25,7 +25,7 @@ typedef uint z;
 #define Zrotr(a, b) rotate((z)a, (z)b)
 #endif
 
-#if BFIINT
+#if BFI_INT
 #define ZCh(a, b, c) amd_bytealign(a, b, c)
 #define ZMa(a, b, c) amd_bytealign((c ^ a), (b), (a))
 #else
@@ -60,24 +60,8 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
   z ZG[4];
   z ZH[4];
 
-  #ifdef USEBASE
-  uint noncebase = base + get_global_id(0);
-  #else
-  uint noncebase = get_global_id(0);
-  #endif
+  z Znonce = base + get_global_id(0);
 
-  #ifdef DOLOOPS
-  noncebase *= LOOPS;
-  #endif
-
-  z Znonce = noncebase;
-  uintzz nonce = (uintzz)0;
-
-  #ifdef DOLOOPS
-  uintzz loopout = 0;
-
-  for(int i = 0; i < LOOPS; i++) {
-  #endif
     ZA[0] = PreVal4_plus_state0 + Znonce;
     ZB[0] = PreVal4_plus_T1 + Znonce;
 
@@ -539,30 +523,33 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
     ZF[2] = ZA[1] + ZH[0] + 0x8cc70208U + ZR15(ZH[1]) + ZR25(ZA[3]) + ZA[2] + ZC[2] + ZCh(ZE[2], ZB[2], ZF[1]) + ZR26(ZE[2]);
     ZG[2] = ZG[1] + ZF[1] + ZR26(ZF[2]) + ZCh(ZF[2], ZE[2], ZB[2]) + ZR15(ZD[2]) + ZH[2] + ZR25(ZH[3]) + ZA[3];
 
-    bool Zio = any(ZG[2] == (z)0x136032EDU);
+#define FOUND (0x80)
+#define NFLAG (0x7F)
 
-    bool io = false;
-    io = (Zio) ? Zio : io;
-
-    nonce = Znonce;
-
-  #ifdef DOLOOPS
-    loopout = (io) ? nonce : loopout;
-
-    Znonce += (z)1;
-  }
-
-  nonce = loopout;
-
-  bool io = any(nonce > (uintzz)0);
-  #endif
-
-  #ifdef VSTORE
-  if(io) { vstorezz(nonce, 0, output); }
-  #else
-  if(io) { output[0] = (uintzz)nonce; }
-  #endif
+#if defined(VECTORS4)
+	ZG[2] ^= 0x136032EDU;
+	bool result = ZG[2].x & ZG[2].y & ZG[2].z & ZG[2].w;
+	if (!result) {
+		if (!ZG[2].x)
+			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
+		if (!ZG[2].y)
+			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
+		if (!ZG[2].z)
+			output[FOUND] = output[NFLAG & Znonce.z] =  Znonce.z;
+		if (!ZG[2].w)
+			output[FOUND] = output[NFLAG & Znonce.w] =  Znonce.w;
+	}
+#elif defined(VECTORS2)
+	ZG[2] ^= 0x136032EDU;
+	bool result = ZG[2].x & ZG[2].y;
+	if (!result) {
+		if (!ZG[2].x)
+			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
+		if (!ZG[2].y)
+			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
+	}
+#else
+	if (ZG[2] == 0x136032EDU)
+		output[FOUND] = output[NFLAG & Znonce] =  Znonce;
+#endif
 }
-
-// vim: set ft=c
-

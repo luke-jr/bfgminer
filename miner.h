@@ -680,6 +680,7 @@ enum cl_kernels {
 	KL_POCLBM,
 	KL_PHATK,
 	KL_DIAKGCN,
+	KL_DIABLO,
 };
 
 extern void get_datestamp(char *, struct timeval *);
