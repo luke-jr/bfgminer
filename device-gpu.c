@@ -1078,8 +1078,9 @@ static bool opencl_thread_init(struct thr_info *thr)
 {
 	const int thr_id = thr->id;
 	struct cgpu_info *gpu = thr->cgpu;
-
 	struct opencl_thread_data *thrdata;
+	_clState *clState = clStates[thr_id];
+	cl_int status;
 	thrdata = calloc(1, sizeof(*thrdata));
 	thr->cgpu_data = thrdata;
 
@@ -1088,7 +1089,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 		return false;
 	}
 
-	switch (chosen_kernel) {
+	switch (clState->chosen_kernel) {
 		case KL_POCLBM:
 			thrdata->queue_kernel_parameters = &queue_poclbm_kernel;
 			break;
@@ -1108,9 +1109,6 @@ static bool opencl_thread_init(struct thr_info *thr)
 		applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
 		return false;
 	}
-
-	_clState *clState = clStates[thr_id];
-	cl_int status;
 
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);

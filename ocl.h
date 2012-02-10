@@ -11,6 +11,8 @@
 #include <CL/cl.h>
 #endif
 
+#include "miner.h"
+
 typedef struct {
 	cl_context context;
 	cl_kernel kernel;
@@ -22,6 +24,7 @@ typedef struct {
 	cl_uint preferred_vwidth;
 	size_t max_work_size;
 	size_t work_size;
+	enum cl_kernels chosen_kernel;
 } _clState;
 
 extern char *file_contents(const char *filename, int *length);

@@ -675,7 +675,7 @@ struct work {
 	UT_hash_handle hh;
 };
 
-enum cl_kernel {
+enum cl_kernels {
 	KL_NONE,
 	KL_POCLBM,
 	KL_PHATK,
@@ -701,7 +701,7 @@ extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
-extern enum cl_kernel chosen_kernel;
+extern enum cl_kernels chosen_kernel;
 extern void adl(void);
 
 #endif /* __MINER_H__ */
