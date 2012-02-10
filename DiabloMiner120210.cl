@@ -16,7 +16,13 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-typedef uint z;
+#ifdef VECTORS4
+	typedef uint4 z;
+#elif defined(VECTORS2)
+	typedef uint2 z;
+#else
+	typedef uint z;
+#endif
 
 #ifdef BITALIGN
 #pragma OPENCL EXTENSION cl_amd_media_ops : enable
@@ -60,7 +66,15 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
   z ZG[4];
   z ZH[4];
 
-  z Znonce = base + get_global_id(0);
+  z Znonce;
+
+#ifdef VECTORS4
+	Znonce = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
+#elif defined VECTORS2
+	Znonce = base + (get_global_id(0)<<1) + (uint2)(0, 1);
+#else
+	Znonce = base + get_global_id(0);
+#endif
 
     ZA[0] = PreVal4_plus_state0 + Znonce;
     ZB[0] = PreVal4_plus_T1 + Znonce;
