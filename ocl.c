@@ -362,7 +362,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	if (chosen_kernel == KL_NONE) {
 		if (strstr(name, "Tahiti"))
-			clState->chosen_kernel = KL_DIAKGCN;
+			clState->chosen_kernel = KL_DIABLO;
 		else if (!clState->hasBitAlign)
 			clState->chosen_kernel = KL_POCLBM;
 		else
@@ -371,6 +371,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		clState->chosen_kernel = chosen_kernel;
 
 	switch (clState->chosen_kernel) {
+		case KL_DIABLO:
+			strcpy(filename, DIABLO_KERNNAME".cl");
+			strcpy(binaryfilename, DIABLO_KERNNAME);
+			break;
 		case KL_DIAKGCN:
 			strcpy(filename, DIAKGCN_KERNNAME".cl");
 			strcpy(binaryfilename, DIAKGCN_KERNNAME);
