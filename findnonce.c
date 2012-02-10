@@ -167,53 +167,6 @@ struct pc_data {
 	pthread_t pth;
 };
 
-static void find_nonce(struct pc_data *pcd)
-{
-	dev_blk_ctx *blk = &pcd->work->blk;
-	struct thr_info *thr = pcd->thr;
-	cl_uint A, B, C, D, E, F, G, H;
-	struct work *work = pcd->work;
-	cl_uint W[16], nonce;
-
-	for (nonce = 0; nonce < 0xFFFFFFFF; nonce++) {
-		A = blk->cty_a; B = blk->cty_b;
-		C = blk->cty_c; D = blk->cty_d;
-		E = blk->cty_e; F = blk->cty_f;
-		G = blk->cty_g; H = blk->cty_h;
-		W[0] = blk->merkle; W[1] = blk->ntime;
-		W[2] = blk->nbits; W[3] = nonce;;
-		W[4] = 0x80000000; W[5] = 0x00000000; W[6] = 0x00000000; W[7] = 0x00000000;
-		W[8] = 0x00000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
-		W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000280;
-		PIR(0); IR(8);
-		FR(16); FR(24);
-		FR(32); FR(40);
-		FR(48); FR(56);
-
-		W[0] = A + blk->ctx_a; W[1] = B + blk->ctx_b;
-		W[2] = C + blk->ctx_c; W[3] = D + blk->ctx_d;
-		W[4] = E + blk->ctx_e; W[5] = F + blk->ctx_f;
-		W[6] = G + blk->ctx_g; W[7] = H + blk->ctx_h;
-		W[8] = 0x80000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
-		W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000100;
-		A = 0x6a09e667; B = 0xbb67ae85;
-		C = 0x3c6ef372; D = 0xa54ff53a;
-		E = 0x510e527f; F = 0x9b05688c;
-		G = 0x1f83d9ab; H = 0x5be0cd19;
-		IR(0); IR(8);
-		FR(16); FR(24);
-		FR(32); FR(40);
-		FR(48); PFR(56);
-	}
-
-	if (unlikely(H == 0xA41F32E7)) {
-		applog(LOG_WARNING, "Nonce found at %d", nonce);
-		if (unlikely(submit_nonce(thr, work, nonce) == false))
-			applog(LOG_ERR, "Failed to submit work, exiting");
-		return;
-	}
-}
-
 static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 {
 	dev_blk_ctx *blk = &pcd->work->blk;
@@ -259,8 +212,6 @@ static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 			applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
 		hw_errors++;
 		thr->cgpu->hw_errors++;
-		applog(LOG_ERR, "Nonce reported as %d but not found!", nonce);
-		find_nonce(pcd);
 	}
 }
 
