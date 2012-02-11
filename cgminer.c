@@ -1589,6 +1589,7 @@ static void disable_curses(void)
 
 static void print_summary(void);
 
+/* This should be the common exit path */
 void kill_work(void)
 {
 	struct thr_info *thr;
@@ -1624,14 +1625,11 @@ void kill_work(void)
 		thr_info_cancel(thr);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "Killing off work thread");
-	thr = &thr_info[work_thr_id];
-	thr_info_cancel(thr);
-
-	if (opt_debug)
 		applog(LOG_DEBUG, "Killing off API thread");
 	thr = &thr_info[api_thr_id];
 	thr_info_cancel(thr);
+
+	quit(0, "Shutdown signal received.");
 }
 
 void quit(int status, const char *format, ...);
@@ -1642,8 +1640,6 @@ static void sighandler(int sig)
 	sigaction(SIGTERM, &termhandler, NULL);
 	sigaction(SIGINT, &inthandler, NULL);
 	kill_work();
-
-	quit(sig, "Received interrupt signal.");
 }
 
 static void *get_work_thread(void *userdata)
@@ -2651,6 +2647,7 @@ static void *input_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
+/* This thread should not be shut down unless a problem occurs */
 static void *workio_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -3783,14 +3780,28 @@ static void print_summary(void)
 		quit(1, "Did not successfully mine as many shares as were requested.");
 }
 
+static void clean_up(void)
+{
+	gettimeofday(&total_tv_end, NULL);
+	disable_curses();
+	if (!opt_realquiet && successful_connect)
+		print_summary();
+
+#ifdef HAVE_OPENCL
+	clear_adl(nDevs);
+#endif
+
+	if (opt_n_threads)
+		free(cpus);
+
+	curl_global_cleanup();
+}
+
 void quit(int status, const char *format, ...)
 {
 	va_list ap;
 
-	disable_curses();
-
-	if (!opt_realquiet && successful_connect)
-		print_summary();
+	clean_up();
 
 	if (format) {
 		va_start(ap, format);
@@ -4235,7 +4246,7 @@ int main (int argc, char *argv[])
 			fork_monitor();
 	#endif // defined(unix)
 
-	total_threads = mining_threads + 8;
+	total_threads = mining_threads + 7;
 	work_restart = calloc(total_threads, sizeof(*work_restart));
 	if (!work_restart)
 		quit(1, "Failed to calloc work_restart");
@@ -4393,28 +4404,8 @@ retry_pools:
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
 		quit(1, "wakeup thread create failed");
 
-	/* Create curses input thread for keyboard input */
-	input_thr_id = mining_threads + 4;
-	thr = &thr_info[input_thr_id];
-	if (thr_info_create(thr, NULL, input_thread, thr))
-		quit(1, "input thread create failed");
-	pthread_detach(thr->pth);
-
-#if 0
-#ifdef WANT_CPUMINE
-	/* Create reinit cpu thread */
-	cpur_thr_id = mining_threads + 5;
-	thr = &thr_info[cpur_thr_id];
-	thr->q = tq_new();
-	if (!thr->q)
-		quit(1, "tq_new failed for cpur_thr_id");
-	if (thr_info_create(thr, NULL, reinit_cpu, thr))
-		quit(1, "reinit_cpu thread create failed");
-#endif
-#endif
-
 	/* Create reinit gpu thread */
-	gpur_thr_id = mining_threads + 6;
+	gpur_thr_id = mining_threads + 4;
 	thr = &thr_info[gpur_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
@@ -4423,30 +4414,30 @@ retry_pools:
 		quit(1, "reinit_gpu thread create failed");
 
 	/* Create API socket thread */
-	api_thr_id = mining_threads + 7;
+	api_thr_id = mining_threads + 5;
 	thr = &thr_info[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
 	pthread_detach(thr->pth);
 
-	sleep(opt_log_interval);
+	/* Create curses input thread for keyboard input. Create this last so
+	 * that we know all threads are created since this can call kill_work
+	 * to try and shut down ll previous threads. */
+	input_thr_id = mining_threads + 6;
+	thr = &thr_info[input_thr_id];
+	if (thr_info_create(thr, NULL, input_thread, thr))
+		quit(1, "input thread create failed");
+	pthread_detach(thr->pth);
 
-	/* main loop - simply wait for workio thread to exit */
+	/* main loop - simply wait for workio thread to exit. This is not the
+	 * normal exit path and only occurs should the workio_thread die
+	 * unexpectedly */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
-	gettimeofday(&total_tv_end, NULL);
-	disable_curses();
-	if (!opt_realquiet && successful_connect)
-		print_summary();
+	clean_up();
 
-#ifdef HAVE_OPENCL
-	clear_adl(nDevs);
-#endif
-
-	if (opt_n_threads)
-		free(cpus);
-
+	/* Not really necessary, but let's clean this up too anyway */
 	HASH_ITER(hh, staged_work, work, tmpwork) {
 		HASH_DEL(staged_work, work);
 		free_work(work);
@@ -4455,8 +4446,6 @@ retry_pools:
 		HASH_DEL(blocks, block);
 		free(block);
 	}
-
-	curl_global_cleanup();
 
 	return 0;
 }
