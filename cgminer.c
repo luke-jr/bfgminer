@@ -142,6 +142,7 @@ struct thr_info *thr_info;
 static int work_thr_id;
 int longpoll_thr_id;
 static int stage_thr_id;
+static int watchpool_thr_id;
 static int watchdog_thr_id;
 static int input_thr_id;
 int gpur_thr_id;
@@ -1597,6 +1598,12 @@ void kill_work(void)
 
 	disable_curses();
 	applog(LOG_INFO, "Received kill message");
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Killing off watchpool thread");
+	/* Kill the watchpool thread */
+	thr = &thr_info[watchpool_thr_id];
+	thr_info_cancel(thr);
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Killing off watchdog thread");
@@ -3533,13 +3540,49 @@ void reinit_device(struct cgpu_info *cgpu)
 		cgpu->api->reinit_device(cgpu);
 }
 
+static struct timeval rotate_tv;
+
+static void *watchpool_thread(void __maybe_unused *userdata)
+{
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	while (42) {
+		struct timeval now;
+		int i;
+
+		gettimeofday(&now, NULL);
+
+		for (i = 0; i < total_pools; i++) {
+			struct pool *pool = pools[i];
+
+			if (!pool->enabled)
+				continue;
+
+			/* Test pool is idle once every minute */
+			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 60) {
+				gettimeofday(&pool->tv_idle, NULL);
+				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
+					pool_resus(pool);
+			}
+		}
+
+		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
+			gettimeofday(&rotate_tv, NULL);
+			switch_pools(NULL);
+		}
+
+		sleep(10);
+	}
+	return NULL;
+}
+
+
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
 static void *watchdog_thread(void __maybe_unused *userdata)
 {
 	const unsigned int interval = 3;
-	static struct timeval rotate_tv;
 	struct timeval zero_tv;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -3568,25 +3611,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		}
 
 		gettimeofday(&now, NULL);
-
-		for (i = 0; i < total_pools; i++) {
-			struct pool *pool = pools[i];
-
-			if (!pool->enabled)
-				continue;
-
-			/* Test pool is idle once every minute */
-			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 60) {
-				gettimeofday(&pool->tv_idle, NULL);
-				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
-					pool_resus(pool);
-			}
-		}
-
-		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
-			gettimeofday(&rotate_tv, NULL);
-			switch_pools(NULL);
-		}
 
 		if (!sched_paused && !should_run()) {
 			applog(LOG_WARNING, "Pausing execution as per stop time %02d:%02d scheduled",
@@ -4248,7 +4272,7 @@ int main (int argc, char *argv[])
 			fork_monitor();
 	#endif // defined(unix)
 
-	total_threads = mining_threads + 7;
+	total_threads = mining_threads + 8;
 	work_restart = calloc(total_threads, sizeof(*work_restart));
 	if (!work_restart)
 		quit(1, "Failed to calloc work_restart");
@@ -4277,7 +4301,7 @@ int main (int argc, char *argv[])
 	if (!thr->q)
 		quit(1, "Failed to tq_new");
 
-	stage_thr_id = mining_threads + 3;
+	stage_thr_id = mining_threads + 2;
 	thr = &thr_info[stage_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
@@ -4400,14 +4424,22 @@ retry_pools:
 	if (use_curses)
 		enable_curses();
 
-	watchdog_thr_id = mining_threads + 2;
+	watchpool_thr_id = mining_threads + 3;
+	thr = &thr_info[watchpool_thr_id];
+	/* start watchpool thread */
+	if (thr_info_create(thr, NULL, watchpool_thread, NULL))
+		quit(1, "watchpool thread create failed");
+	pthread_detach(thr->pth);
+
+	watchdog_thr_id = mining_threads + 4;
 	thr = &thr_info[watchdog_thr_id];
-	/* start wakeup thread */
+	/* start watchdog thread */
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
-		quit(1, "wakeup thread create failed");
+		quit(1, "watchdog thread create failed");
+	pthread_detach(thr->pth);
 
 	/* Create reinit gpu thread */
-	gpur_thr_id = mining_threads + 4;
+	gpur_thr_id = mining_threads + 5;
 	thr = &thr_info[gpur_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
@@ -4416,7 +4448,7 @@ retry_pools:
 		quit(1, "reinit_gpu thread create failed");
 
 	/* Create API socket thread */
-	api_thr_id = mining_threads + 5;
+	api_thr_id = mining_threads + 6;
 	thr = &thr_info[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
@@ -4425,7 +4457,7 @@ retry_pools:
 	/* Create curses input thread for keyboard input. Create this last so
 	 * that we know all threads are created since this can call kill_work
 	 * to try and shut down ll previous threads. */
-	input_thr_id = mining_threads + 6;
+	input_thr_id = mining_threads + 7;
 	thr = &thr_info[input_thr_id];
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
