@@ -221,7 +221,6 @@ struct gpu_adl {
 	int targetfan;
 	int targettemp;
 	int overtemp;
-	int cutofftemp;
 	int minspeed;
 	int maxspeed;
 
@@ -280,6 +279,10 @@ struct cgpu_info {
 	int virtual_gpu;
 	bool dynamic;
 	int intensity;
+
+	float temp;
+	int cutofftemp;
+
 #ifdef HAVE_ADL
 	bool has_adl;
 	struct gpu_adl adl;
@@ -590,6 +593,7 @@ extern int total_accepted, total_rejected;
 extern int total_getworks, total_stale, total_discarded;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
+extern const int opt_cutofftemp;
 extern int opt_log_interval;
 
 #ifdef HAVE_OPENCL
@@ -686,6 +690,7 @@ enum cl_kernels {
 
 extern void get_datestamp(char *, struct timeval *);
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);
 extern char *curses_input(const char *query);

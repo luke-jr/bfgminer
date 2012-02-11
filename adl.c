@@ -26,7 +26,6 @@ bool opt_reorder = false;
 int opt_hysteresis = 3;
 const int opt_targettemp = 75;
 const int opt_overheattemp = 85;
-const int opt_cutofftemp = 95;
 static pthread_mutex_t adl_lock;
 
 struct gpu_adapters {
@@ -443,8 +442,8 @@ void init_adl(int nDevs)
 			ga->targettemp = opt_targettemp;
 		if (!ga->overtemp)
 			ga->overtemp = opt_overheattemp;
-		if (!ga->cutofftemp)
-			ga->cutofftemp = opt_cutofftemp;
+		if (!gpus[gpu].cutofftemp)
+			gpus[gpu].cutofftemp = opt_cutofftemp;
 		if (opt_autofan) {
 			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
@@ -503,6 +502,7 @@ float gpu_temp(int gpu)
 	lock_adl();
 	ret = __gpu_temp(ga);
 	unlock_adl();
+	gpus[gpu].temp = ret;
 	return ret;
 }
 
@@ -1055,7 +1055,7 @@ void gpu_autotune(int gpu, bool *enable)
 	}
 
 	if (engine && ga->autoengine) {
-		if (temp > ga->cutofftemp) {
+		if (temp > cgpu->cutofftemp) {
 			applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
 			*enable = false;
 			newengine = ga->minspeed;
@@ -1122,7 +1122,7 @@ void change_autosettings(int gpu)
 
 	wlogprint("Target temperature: %d\n", ga->targettemp);
 	wlogprint("Overheat temperature: %d\n", ga->overtemp);
-	wlogprint("Cutoff temperature: %d\n", ga->cutofftemp);
+	wlogprint("Cutoff temperature: %d\n", gpus[gpu].cutofftemp);
 	wlogprint("Toggle [F]an auto [G]PU auto\nChange [T]arget [O]verheat [C]utoff\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
@@ -1159,7 +1159,7 @@ void change_autosettings(int gpu)
 		if (val <= ga->overtemp || val > 200)
 			wlogprint("Invalid temperature");
 		else
-			ga->cutofftemp = val;
+			gpus[gpu].cutofftemp = val;
 	}
 }
 

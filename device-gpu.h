@@ -12,7 +12,6 @@ extern char *set_gpu_memclock(char *arg);
 extern char *set_gpu_memdiff(char *arg);
 extern char *set_gpu_powertune(char *arg);
 extern char *set_gpu_vddc(char *arg);
-extern char *set_temp_cutoff(char *arg);
 extern char *set_temp_overheat(char *arg);
 extern char *set_temp_target(char *arg);
 extern char *set_intensity(char *arg);

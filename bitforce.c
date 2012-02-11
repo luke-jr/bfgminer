@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <strings.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -146,6 +147,16 @@ static void bitforce_detect()
 	bitforce_detect_auto();
 }
 
+static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
+{
+	float gt = bitforce->temp;
+	if (gt > 0)
+		tailsprintf(buf, "%5.1fC ", gt);
+	else
+		tailsprintf(buf, "       ", gt);
+	tailsprintf(buf, "        | ");
+}
+
 static bool bitforce_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
@@ -221,6 +232,23 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		return 0;
 	}
 
+	BFwrite(fdDev, "ZKX", 3);
+	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	if (unlikely(!pdevbuf[0])) {
+		applog(LOG_ERR, "Error reading from BitForce (ZKX)");
+		return 0;
+	}
+	if (!strncasecmp(pdevbuf, "TEMP:", 5)) {
+		float temp = strtof(pdevbuf + 5, NULL);
+		if (temp > 0) {
+			bitforce->temp = temp;
+			if (temp > bitforce->cutofftemp) {
+				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, disabling!", bitforce->api->name, bitforce->device_id);
+				bitforce->enabled = false;
+			}
+		}
+	}
+
 	usleep(4500000);
 	i = 4500;
 	while (1) {
@@ -267,6 +295,7 @@ struct device_api bitforce_api = {
 	.name = "BFL",
 	.api_detect = bitforce_detect,
 	// .reinit_device = TODO
+	.get_statline_before = get_bitforce_statline_before,
 	.thread_prepare = bitforce_thread_prepare,
 	.scanhash = bitforce_scanhash,
 };

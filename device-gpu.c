@@ -269,39 +269,6 @@ char *set_gpu_vddc(char *arg)
 	return NULL;
 }
 
-char *set_temp_cutoff(char *arg)
-{
-	int i, val = 0, device = 0, *tco;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set temp cutoff";
-	val = atoi(nextptr);
-	if (val < 0 || val > 200)
-		return "Invalid value passed to set temp cutoff";
-
-	tco = &gpus[device++].adl.cutofftemp;
-	*tco = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val < 0 || val > 200)
-			return "Invalid value passed to set temp cutoff";
-
-		tco = &gpus[device++].adl.cutofftemp;
-		*tco = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++) {
-			tco = &gpus[i].adl.cutofftemp;
-			*tco = val;
-		}
-	}
-
-	return NULL;
-}
-
 char *set_temp_overheat(char *arg)
 {
 	int i, val = 0, device = 0, *to;
