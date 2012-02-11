@@ -914,7 +914,11 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	json_error_t err;
 	json_t *config;
 
+#if JANSSON_MAJOR_VERSION > 1
 	config = json_load_file(arg, 0, &err);
+#else
+	config = json_load_file(arg, &err);
+#endif
 	if (!json_is_object(config))
 		return "JSON decode of file failed";
 
