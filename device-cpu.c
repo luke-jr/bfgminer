@@ -23,9 +23,9 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 
 #ifndef WIN32
+#include <sys/wait.h>
 #include <sys/resource.h>
 #endif
 #include <libgen.h>

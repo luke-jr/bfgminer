@@ -119,6 +119,8 @@ Usage instructions:  Run "cgminer --help" to see options:
 
 Usage: . [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
 Options for both config file and command line:
+--api-allow         Allow API access (if enabled) only to the given list of IP[/Prefix] address[/subnets]
+                    This overrides --api-network and you must specify 127.0.0.1 if it is required
 --api-description   Description placed in the API status header (default: cgminer version)
 --api-listen        Listen for API requests (default: disabled)
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
@@ -526,15 +528,24 @@ cgminer shuts down because of this.
 
 ---
 
-API
+RPC API
 
 If you start cgminer with the "--api-listen" option, it will listen on a
 simple TCP/IP socket for single string API requests from the same machine
 running cgminer and reply with a string and then close the socket each time
-Also, if you add the "--api-network" option, it will accept API requests
-from any network attached computer.
+If you add the "--api-network" option, it will accept API requests from any
+network attached computer.
 
-The request can be either simple text or JSON.
+You can specify IP addresses/prefixes that are only allowed to access the API
+with the "--api-access" option e.g. --api-access 192.168.0.1,10.0.0/24
+will allow 192.168.0.1 or any address matching 10.0.0.*, but nothing else
+IP addresses are automatically padded with extra '.0's as needed
+Without a /prefix is the same as specifying /32
+Using the "--api-access" option overides the "--api-network" option if they
+are both specified
+With "--api-access", 127.0.0.1 is not by default given access unless specified
+
+The RPC API request can be either simple text or JSON.
 
 If the request is JSON (starts with '{'), it will reply with a JSON formatted
 response, otherwise it replies with text formatted as described further below.
@@ -544,7 +555,7 @@ The JSON request format required is '{"command":"CMD","parameter":"PARAM"}'
 where "CMD" is from the "Request" column below and "PARAM" would be e.g.
 the CPU/GPU number if required.
 
-An example request in both formats:
+An example request in both formats to set GPU 0 fan to 80%:
   gpufan|0,80
   {"command":"gpufan","parameter":"0,80"}
 
@@ -651,6 +662,9 @@ The list of requests and replies are:
 
 When you enable, disable or restart a GPU, you will also get Thread messages in
 the cgminer status window
+
+When you switch to a different pool to the current one, you will get a
+'Switching to URL' message in the cgminer status windows
 
 Obviously, the JSON format is simply just the names as given before the '='
 with the values after the '='

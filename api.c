@@ -126,6 +126,10 @@
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
 	#endif
+
+	#ifndef in_addr_t
+	#define in_addr_t uint32_t
+	#endif
 #endif
 
 // Big enough for largest API request
@@ -342,6 +346,14 @@ struct CODES {
 
 static int bye = 0;
 static bool ping = true;
+
+struct IP4ACCESS {
+	in_addr_t ip;
+	in_addr_t mask;
+};
+
+static struct IP4ACCESS *ipaccess = NULL;
+static int ips = 0;
 
 // All replies (except BYE) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
@@ -1205,6 +1217,11 @@ static void tidyup()
 		sock = INVSOCK;
 	}
 
+	if (ipaccess != NULL) {
+		free(ipaccess);
+		ipaccess = NULL;
+	}
+
 	if (msg_buffer != NULL) {
 		free(msg_buffer);
 		msg_buffer = NULL;
@@ -1214,6 +1231,89 @@ static void tidyup()
 		free(io_buffer);
 		io_buffer = NULL;
 	}
+}
+
+/*
+ * Interpret IP[/Prefix][,IP2[/Prefix2][,...]] --api-allow option
+ *
+ * N.B. IP4 addresses are by Definition 32bit big endian on all platforms
+ */
+static void setup_ipaccess()
+{
+	char *buf, *ptr, *comma, *slash, *dot;
+	int ipcount, mask, octet, i;
+
+	buf = malloc(strlen(opt_api_allow) + 1);
+	if (unlikely(!buf))
+		quit(1, "Failed to malloc ipaccess buf");
+
+	strcpy(buf, opt_api_allow);
+
+	ipcount = 1;
+	ptr = buf;
+	while (*ptr)
+		if (*(ptr++) == ',')
+			ipcount++;
+
+	// possibly more than needed, but never less
+	ipaccess = calloc(ipcount, sizeof(struct IP4ACCESS));
+	if (unlikely(!ipaccess))
+		quit(1, "Failed to calloc ipaccess");
+
+	ips = 0;
+	ptr = buf;
+	while (ptr && *ptr) {
+		while (*ptr == ' ' || *ptr == '\t')
+			ptr++;
+
+		if (*ptr == ',') {
+			ptr++;
+			continue;
+		}
+
+		comma = strchr(ptr, ',');
+		if (comma)
+			*(comma++) = '\0';
+
+		slash = strchr(ptr, '/');
+		if (!slash)
+			ipaccess[ips].mask = 0xffffffff;
+		else {
+			*(slash++) = '\0';
+			mask = atoi(slash);
+			if (mask < 1 || mask > 32)
+				goto popipo; // skip invalid/zero
+
+			ipaccess[ips].mask = 0;
+			while (mask-- >= 0) {
+				octet = 1 << (mask % 8);
+				ipaccess[ips].mask |= (octet << (8 * (mask >> 3)));
+			}
+		}
+
+		ipaccess[ips].ip = 0; // missing default to '.0'
+		for (i = 0; ptr && (i < 4); i++) {
+			dot = strchr(ptr, '.');
+			if (dot)
+				*(dot++) = '\0';
+
+			octet = atoi(ptr);
+			if (octet < 0 || octet > 0xff)
+				goto popipo; // skip invalid
+
+			ipaccess[ips].ip |= (octet << (i * 8));
+
+			ptr = dot;
+		}
+
+		ipaccess[ips].ip &= ipaccess[ips].mask;
+
+		ips++;
+popipo:
+		ptr = comma;
+	}
+
+	free(buf);
 }
 
 void api(void)
@@ -1248,6 +1348,15 @@ void api(void)
 		return;
 	}
 
+	if (opt_api_allow) {
+		setup_ipaccess();
+
+		if (ips == 0) {
+			applog(LOG_WARNING, "API not running (no valid IPs specified)%s", UNAVAILABLE);
+			return;
+		}
+	}
+
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
@@ -1258,9 +1367,9 @@ void api(void)
 
 	serv.sin_family = AF_INET;
 
-	if (!opt_api_network) {
+	if (!opt_api_allow && !opt_api_network) {
 		serv.sin_addr.s_addr = inet_addr(localaddr);
-		if (serv.sin_addr.s_addr == INVINETADDR) {
+		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
 			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 			return;
 		}
@@ -1296,10 +1405,14 @@ void api(void)
 		return;
 	}
 
-	if (opt_api_network)
-		applog(LOG_WARNING, "API running in UNRESTRICTED access mode");
-	else
-		applog(LOG_WARNING, "API running in restricted access mode");
+	if (opt_api_allow)
+		applog(LOG_WARNING, "API running in IP access mode");
+	else {
+		if (opt_api_network)
+			applog(LOG_WARNING, "API running in UNRESTRICTED access mode");
+		else
+			applog(LOG_WARNING, "API running in local access mode");
+	}
 
 	io_buffer = malloc(MYBUFSIZ+1);
 	msg_buffer = malloc(MYBUFSIZ+1);
@@ -1311,11 +1424,21 @@ void api(void)
 			goto die;
 		}
 
-		if (opt_api_network)
-			addrok = true;
-		else {
-			connectaddr = inet_ntoa(cli.sin_addr);
-			addrok = (strcmp(connectaddr, localaddr) == 0);
+		addrok = false;
+		if (opt_api_allow) {
+			for (i = 0; i < ips; i++) {
+				if ((cli.sin_addr.s_addr & ipaccess[i].mask) == ipaccess[i].ip) {
+					addrok = true;
+					break;
+				}
+			}
+		} else {
+			if (opt_api_network)
+				addrok = true;
+			else {
+				connectaddr = inet_ntoa(cli.sin_addr);
+				addrok = (strcmp(connectaddr, localaddr) == 0);
+			}
 		}
 
 		if (opt_debug) {
