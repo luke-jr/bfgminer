@@ -1473,19 +1473,18 @@ static bool submit_upstream_work(const struct work *work)
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
-			char wherebuf[17];
-			char *where = wherebuf;
-			char reasonbuf[32];
-			char *reason = reasonbuf;
+			char where[17];
+			char reason[32];
 
 			if (total_pools > 1)
 				sprintf(where, " pool %d", work->pool->pool_no);
 			else
-				where = "";
+				strcpy(where, "");
 			
 			res = json_object_get(val, "reject-reason");
 			if (res) {
 				const char *reasontmp = json_string_value(res);
+
 				size_t reasonLen = strlen(reasontmp);
 				if (reasonLen > 28)
 					reasonLen = 28;
@@ -1493,7 +1492,7 @@ static bool submit_upstream_work(const struct work *work)
 				memcpy(2 + reason, reasontmp, reasonLen);
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
 			} else
-				reason = "";
+				strcpy(reason, "");
 			
 			applog(LOG_NOTICE, "Rejected %s %s %d thread %d%s%s",
 			       hashshow, cgpu->api->name, cgpu->device_id, thr_id, where, reason);
