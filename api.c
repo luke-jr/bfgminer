@@ -1192,8 +1192,7 @@ static void send_result(SOCKETTYPE c, bool isjson)
 
 	len = strlen(io_buffer);
 
-	if (opt_debug)
-		applog(LOG_DEBUG, "DBG: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
+	applog(LOG_DEBUG, "DBG: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
 
 	// ignore failure - it's closed immediately anyway
 	n = send(c, io_buffer, len+1, 0);

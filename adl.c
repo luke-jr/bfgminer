@@ -222,23 +222,22 @@ void init_adl(int nDevs)
 		if (lpAdapterID == last_adapter)
 			continue;
 
-		if (opt_debug)
-			applog(LOG_DEBUG, "GPU %d "
-			       "iAdapterIndex %d "
-			       "strUDID %s "
-			       "iBusNumber %d "
-			       "iDeviceNumber %d "
-			       "iFunctionNumber %d "
-			       "iVendorID %d "
-			       "strAdapterName  %s ",
-			       devices,
-			       iAdapterIndex,
-			       lpInfo[i].strUDID,
-			       lpInfo[i].iBusNumber,
-			       lpInfo[i].iDeviceNumber,
-			       lpInfo[i].iFunctionNumber,
-			       lpInfo[i].iVendorID,
-			       lpInfo[i].strAdapterName);
+		applog(LOG_DEBUG, "GPU %d "
+		       "iAdapterIndex %d "
+		       "strUDID %s "
+		       "iBusNumber %d "
+		       "iDeviceNumber %d "
+		       "iFunctionNumber %d "
+		       "iVendorID %d "
+		       "strAdapterName  %s ",
+		       devices,
+		       iAdapterIndex,
+		       lpInfo[i].strUDID,
+		       lpInfo[i].iBusNumber,
+		       lpInfo[i].iDeviceNumber,
+		       lpInfo[i].iFunctionNumber,
+		       lpInfo[i].iVendorID,
+		       lpInfo[i].strAdapterName);
 
 		adapters[devices].iAdapterIndex = iAdapterIndex;
 		adapters[devices].iBusNumber = lpInfo[i].iBusNumber;
@@ -908,8 +907,7 @@ int set_fanspeed(int gpu, int iFanSpeed)
 
 	ga = &gpus[gpu].adl;
 	if (!(ga->lpFanSpeedInfo.iFlags & (ADL_DL_FANCTRL_SUPPORTS_RPM_WRITE | ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE ))) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "GPU %d doesn't support rpm or percent write", gpu);
+		applog(LOG_DEBUG, "GPU %d doesn't support rpm or percent write", gpu);
 		return ret;
 	}
 
@@ -919,8 +917,7 @@ int set_fanspeed(int gpu, int iFanSpeed)
 
 	lock_adl();
 	if (ADL_Overdrive5_FanSpeed_Get(ga->iAdapterIndex, 0, &ga->lpFanSpeedValue) != ADL_OK) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "GPU %d call to fanspeed get failed", gpu);
+		applog(LOG_DEBUG, "GPU %d call to fanspeed get failed", gpu);
 	}
 	if (!(ga->lpFanSpeedInfo.iFlags & ADL_DL_FANCTRL_SUPPORTS_PERCENT_WRITE)) {
 		/* Must convert speed to an RPM */
@@ -977,8 +974,7 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool __maybe_unused 
 		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
 		newpercent = iMax;
 	} else if (temp > ga->targettemp && fanpercent < top && temp >= ga->lasttemp) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
+		applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 		if (temp > ga->targettemp + opt_hysteresis)
 			newpercent = ga->targetfan + 10;
 		else
@@ -986,19 +982,16 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool __maybe_unused 
 		if (newpercent > top)
 			newpercent = top;
 	} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis && temp <= ga->lasttemp) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
+		applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
 		newpercent = ga->targetfan - 1;
 	} else {
 		/* We're in the optimal range, make minor adjustments if the
 		 * temp is still drifting */
 		if (fanpercent > bot && temp < ga->lasttemp && ga->lasttemp < ga->targettemp) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "Temperature dropping while in target range, decreasing fanspeed");
+			applog(LOG_DEBUG, "Temperature dropping while in target range, decreasing fanspeed");
 			newpercent = ga->targetfan - 1;
 		} else if (fanpercent < top && temp > ga->lasttemp && temp > ga->targettemp - opt_hysteresis) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "Temperature rising while in target range, increasing fanspeed");
+			applog(LOG_DEBUG, "Temperature rising while in target range, increasing fanspeed");
 			newpercent = ga->targetfan + 1;
 		}
 	}
@@ -1063,13 +1056,11 @@ void gpu_autotune(int gpu, bool *enable)
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
 			newengine = ga->minspeed;
 		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
+			applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
 			/* Only try to tune engine speed up if this GPU is not disabled */
 		} else if (temp < ga->targettemp && engine < ga->maxspeed && *enable) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
+			applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
 			newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
 		}
 

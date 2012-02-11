@@ -758,8 +758,7 @@ CPUSearch:
 
 	/* if nonce found, submit work */
 	if (unlikely(rc)) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
+		applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
 		if (unlikely(!submit_work_sync(thr, work))) {
 			applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
 		}
