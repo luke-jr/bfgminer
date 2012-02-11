@@ -462,11 +462,17 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			free(binaries[gpu]);
 			goto build;
 		}
+
+		clRetainProgram(clState->program);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error: Retaining Program (clRetainProgram)");
+			return NULL;
+		}
+
 		fclose(binaryfile);
 		if (opt_debug)
 			applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
 
-		free(binaries[gpu]);
 		goto built;
 	}
 
@@ -636,9 +642,9 @@ build:
 		}
 		fclose(binaryfile);
 	}
+built:
 	if (binaries[gpu])
 		free(binaries[gpu]);
-built:
 	free(binaries);
 	free(binary_sizes);
 
