@@ -1,4 +1,4 @@
-Version 2.2.4
+Version 2.2.4 - February 11, 2012
 
 - Retain cl program after successfully loading a binary image. May decrease
 failures to build kernels at startup.
