@@ -4056,12 +4056,12 @@ void enable_device(struct cgpu_info *cgpu)
 
 int main (int argc, char *argv[])
 {
-	unsigned int i, pools_active = 0;
-	unsigned int j, k;
 	struct block *block, *tmpblock;
 	struct work *work, *tmpwork;
+	bool pools_active = false;
 	struct sigaction handler;
 	struct thr_info *thr;
+	unsigned int i, j, k;
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -4318,50 +4318,54 @@ int main (int argc, char *argv[])
 	/* We use the getq mutex as the staged lock */
 	stgd_lock = &getq->mutex;
 
-retry_pools:
-	/* Test each pool to see if we can retrieve and use work and for what
-	 * it supports */
 	for (i = 0; i < total_pools; i++) {
-		struct pool *pool;
+		struct pool *pool  = pools[i];
 
-		pool = pools[i];
 		pool->enabled = true;
-		if (pool_active(pool, false)) {
-			if (!currentpool)
-				currentpool = pool;
-			applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
-			pools_active++;
-		} else {
-			if (pool == currentpool)
-				currentpool = NULL;
-			applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
-			pool->idle = true;
-		}
+		pool->idle = true;
 	}
 
-	if (!pools_active) {
-		if (use_curses)
-			enable_curses();
-		applog(LOG_ERR, "No servers were found that could be used to get work from.");
-		applog(LOG_ERR, "Please check the details from the list below of the servers you have input");
-		applog(LOG_ERR, "Most likely you have input the wrong URL, forgotten to add a port, or have not set up workers");
+	applog(LOG_NOTICE, "Probing for an alive pool");
+	do {
+		/* Look for at least one active pool before starting */
 		for (i = 0; i < total_pools; i++) {
-			struct pool *pool;
-
-			pool = pools[i];
-			applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
-			       i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
+			struct pool *pool  = pools[i];
+			if (pool_active(pool, false)) {
+				if (!currentpool)
+					currentpool = pool;
+				applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
+				pools_active = true;
+				break;
+			} else {
+				if (pool == currentpool)
+					currentpool = NULL;
+				applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
+			}
 		}
-		if (use_curses) {
-			halfdelay(150);
-			applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 15s.");
-			if (getch() != ERR)
+
+		if (!pools_active) {
+			if (use_curses)
+				enable_curses();
+			applog(LOG_ERR, "No servers were found that could be used to get work from.");
+			applog(LOG_ERR, "Please check the details from the list below of the servers you have input");
+			applog(LOG_ERR, "Most likely you have input the wrong URL, forgotten to add a port, or have not set up workers");
+			for (i = 0; i < total_pools; i++) {
+				struct pool *pool;
+
+				pool = pools[i];
+				applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
+				       i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
+			}
+			if (use_curses) {
+				halfdelay(150);
+				applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 15s.");
+				if (getch() != ERR)
+					quit(0, "No servers could be used! Exiting.");
+				nocbreak();
+			} else
 				quit(0, "No servers could be used! Exiting.");
-			nocbreak();
-		} else
-			quit(0, "No servers could be used! Exiting.");
-		goto retry_pools;
-	}
+		}
+	} while (!pools_active);
 
 	if (want_longpoll)
 		start_longpoll();
