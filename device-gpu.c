@@ -764,8 +764,8 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 	CL_SET_BLKARG(ctx_g);
 	CL_SET_BLKARG(ctx_h);
 
-	CL_SET_BLKARG(A0);
-	CL_SET_BLKARG(B0);
+	CL_SET_BLKARG(zeroA);
+	CL_SET_BLKARG(zeroB);
 
 	CL_SET_ARG(clState->outputBuffer);
 

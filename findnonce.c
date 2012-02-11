@@ -120,8 +120,8 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->W16addK16 = blk->W16 + SHA256_K[16];
 	blk->W17addK17 = blk->W17 + SHA256_K[17];
 
-	blk->A0 = blk->ctx_a + 0x98c7e2a2;
-	blk->B0 = blk->ctx_a + 0xfc08884d;
+	blk->zeroA = blk->ctx_a + 0x98c7e2a2;
+	blk->zeroB = blk->ctx_a + 0xfc08884d;
 }
 
 #define P(t) (W[(t)&0xF] = W[(t-16)&0xF] + (rotate(W[(t-15)&0xF], 25) ^ rotate(W[(t-15)&0xF], 14) ^ (W[(t-15)&0xF] >> 3)) + W[(t-7)&0xF] + (rotate(W[(t-2)&0xF], 15) ^ rotate(W[(t-2)&0xF], 13) ^ (W[(t-2)&0xF] >> 10)))

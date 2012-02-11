@@ -618,7 +618,7 @@ typedef struct {
 
 	/* For diakgcn */
 	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
-	cl_uint A0, B0;
+	cl_uint zeroA, zeroB;
 } dev_blk_ctx;
 #else
 typedef struct {
