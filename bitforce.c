@@ -72,7 +72,7 @@ static void BFwrite(int fd, const void *buf, size_t bufLen)
 static bool bitforce_detect_one(const char *devpath)
 {
 	char pdevbuf[0x100];
-	int i = 0;
+	static int i = 0;
 
 	if (total_devices == MAX_DEVICES)
 		return false;
