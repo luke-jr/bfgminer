@@ -56,6 +56,9 @@ code.
 - Allow API to restrict access by IP address
 - Add pool switching to example miner.php
 - Display X-Reject-Reason, when provided
+- Remove the test for whether the device is on the highest profil level before
+raising the GPU speed as it is ineffectual and may prevent raising the GPU
+speed.
 
 
 Version 2.2.3 - February 6, 2012
