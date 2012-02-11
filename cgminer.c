@@ -2909,8 +2909,10 @@ static bool queue_request(struct thr_info *thr, bool needed)
 
 	gettimeofday(&now, NULL);
 
+	/* Space out retrieval of extra work according to the number of mining
+	 * threads */
 	if (rq >= mining_threads + staged_clones &&
-	    (now.tv_sec - requested_tv_sec) < opt_scantime * 2 / 3)
+	    (now.tv_sec - requested_tv_sec) < opt_scantime / (mining_threads + 1))
 		return true;
 
 	/* fill out work request message */
