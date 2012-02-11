@@ -729,7 +729,9 @@ Q: The CPU usage is high.
 A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
 CPU core unnecessarily so downgrade to 11.6. Binding cgminer to one CPU core on
 windows can minimise it to 100% (instead of more than one core). Driver version
-11.11 on linux and 11.12 on windows appear to have fixed this issue.
+11.11 on linux and 11.12 on windows appear to have fixed this issue. Note that
+later drivers may have an apparent return of high CPU usage. Try
+'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting cgminer.
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
@@ -779,7 +781,8 @@ before adjusting automatically.
 Q: The fanspeed starts at 85% with --auto-fan. Can I set it lower?
 A: The initial fanspeed will always start at 85% unless you choose your own
 value with --gpu-fan. In this case it will use the value you give it with
---gpu-fan as the first fanspeed.
+--gpu-fan as the first fanspeed, but it will also use this as the maximum fan
+speed unless overheat is detected.
 
 Q: Why is my efficiency above/below 100%?
 A: Efficiency simply means how many shares you return for the amount of work
@@ -810,11 +813,7 @@ this time.
 
 Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK, -v 1 -w 64 might help, along with not decreasing your memory clock
-speed.
-
-Q: ATI 79XX support?
-A: Work in progress. Still needs a lot of work to get a good hashrate.
+the 2.6 SDK, -v 1 might help, along with not decreasing your memory clock speed.
 
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one
@@ -824,6 +823,22 @@ Q: I'm having an issue. What debugging information should I provide?
 A: Start cgminer with your regular commands and add -D -T --verbose and provide
 the full startup output and a summary of your hardware, operating system, ATI
 driver version and ATI stream version.
+
+Q: cgminer reports no devices or only one device on startup on Linux although
+I have multiple devices and drivers+SDK installed properly?
+A: Try 'export DISPLAY=:0" before running cgminer.
+
+Q: My network gets slower and slower and then dies for a minute?
+A; Try the --net-delay option.
+
+Q: How do I tune for p2pool?
+A: p2pool has very rapid expiration of work and new blocks, it is suggested you
+decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
+with -g 1.
+
+Q: Are kernels from other mining software useable in cgminer?
+A: No, the APIs are slightly different between the different software and they
+will not work.
 
 ---
 
