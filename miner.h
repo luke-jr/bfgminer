@@ -11,6 +11,7 @@
 #include <curl/curl.h>
 #include "elist.h"
 #include "uthash.h"
+#include "logging.h"
 
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
@@ -100,18 +101,6 @@ void *alloca (size_t);
 #else
 #error UNKNOWN BYTE ORDER
 #endif
-#endif
-
-#ifdef HAVE_SYSLOG_H
-#include <syslog.h>
-#else
-enum {
-	LOG_ERR,
-	LOG_WARNING,
-	LOG_NOTICE,
-	LOG_INFO,
-	LOG_DEBUG,
-};
 #endif
 
 #undef unlikely
@@ -403,9 +392,7 @@ static inline void rwlock_init(pthread_rwlock_t *lock)
 
 struct pool;
 
-extern bool opt_debug;
 extern bool opt_protocol;
-extern bool opt_log_output;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
@@ -609,8 +596,6 @@ extern void switch_pools(struct pool *selected);
 extern void write_config(FILE *fcfg);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
-extern void vapplog(int prio, const char *fmt, va_list ap);
-extern void applog(int prio, const char *fmt, ...);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);

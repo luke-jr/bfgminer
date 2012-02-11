@@ -65,69 +65,6 @@ struct tq_ent {
 	struct list_head	q_node;
 };
 
-void vapplog(int prio, const char *fmt, va_list ap)
-{
-	extern bool use_curses;
-	if (!opt_debug && prio == LOG_DEBUG)
-		return;
-
-#ifdef HAVE_SYSLOG_H
-	if (use_syslog) {
-		vsyslog(prio, fmt, ap);
-	}
-#else
-	if (0) {}
-#endif
-	else if (opt_log_output || prio <= LOG_NOTICE) {
-		char *f;
-		int len;
-		struct timeval tv = { };
-		struct tm *tm;
-
-		gettimeofday(&tv, NULL);
-
-		tm = localtime(&tv.tv_sec);
-
-		len = 40 + strlen(fmt) + 22;
-		f = alloca(len);
-		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
-			tm->tm_year + 1900,
-			tm->tm_mon + 1,
-			tm->tm_mday,
-			tm->tm_hour,
-			tm->tm_min,
-			tm->tm_sec,
-			fmt);
-		/* Only output to stderr if it's not going to the screen as well */
-		if (!isatty(fileno((FILE *)stderr))) {
-			va_list apc;
-
-			va_copy(apc, ap);
-			vfprintf(stderr, f, apc);	/* atomic write to stderr */
-			fflush(stderr);
-		}
-
-		if (use_curses)
-			log_curses(prio, f, ap);
-		else {
-			int len = strlen(f);
-
-			strcpy(f + len - 1, "                    \n");
-
-			log_curses(prio, f, ap);
-		}
-	}
-}
-
-void applog(int prio, const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vapplog(prio, fmt, ap);
-	va_end(ap);
-}
-
 static void databuf_free(struct data_buffer *db)
 {
 	if (!db)

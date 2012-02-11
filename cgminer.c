@@ -78,7 +78,6 @@ static char packagename[255];
 
 int gpu_threads;
 
-bool opt_debug = false;
 bool opt_protocol = false;
 static bool want_longpoll = true;
 static bool have_longpoll = false;
@@ -92,7 +91,6 @@ static int opt_retries = -1;
 static int opt_fail_pause = 5;
 static int fail_pause = 5;
 int opt_log_interval = 5;
-bool opt_log_output = false;
 static int opt_queue = 1;
 int opt_vectors;
 int opt_worksize;
@@ -1474,7 +1472,7 @@ static bool submit_upstream_work(const struct work *work)
 				sprintf(where, " pool %d", work->pool->pool_no);
 			else
 				strcpy(where, "");
-			
+
 			res = json_object_get(val, "reject-reason");
 			if (res) {
 				const char *reasontmp = json_string_value(res);
@@ -1487,7 +1485,7 @@ static bool submit_upstream_work(const struct work *work)
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
 			} else
 				strcpy(reason, "");
-			
+
 			applog(LOG_NOTICE, "Rejected %s %s %d thread %d%s%s",
 			       hashshow, cgpu->api->name, cgpu->device_id, thr_id, where, reason);
 		}

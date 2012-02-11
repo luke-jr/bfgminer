@@ -26,16 +26,13 @@ cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
 
 # common sources
-
-# this is the original monolithic main.c, kept as reference
-# cgminer_SOURCES	:= main.c
-
-# this is the original main.c without extracted CPU and GPU code
 cgminer_SOURCES := cgminer.c
 
 cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   util.c uthash.h				\
 		   sha2.c sha2.h api.c
+
+cgminer_SOURCES	+= logging.c
 
 # GPU sources, TODO: make them selectable
 # the GPU portion extracted from original main.c
