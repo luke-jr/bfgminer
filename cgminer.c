@@ -2901,7 +2901,7 @@ static inline int cp_prio(void)
 
 static void pool_resus(struct pool *pool)
 {
-	applog(LOG_WARNING, "Pool %d %s recovered", pool->pool_no, pool->rpc_url);
+	applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER)
 		switch_pools(NULL);
 }
