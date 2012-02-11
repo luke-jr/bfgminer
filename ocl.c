@@ -466,11 +466,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (opt_debug)
 			applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
 
-		/* We don't need to patch this already loaded image, but need to
-		 * set the flag for status later */
-		if (clState->hasBitAlign)
-			patchbfi = true;
-
 		free(binaries[gpu]);
 		goto built;
 	}
@@ -647,8 +642,8 @@ built:
 	free(binaries);
 	free(binary_sizes);
 
-	applog(LOG_INFO, "Initialising kernel %s with%s BFI_INT, %d vectors and worksize %d",
-	       filename, patchbfi ? "" : "out", clState->preferred_vwidth, clState->work_size);
+	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %d vectors and worksize %d",
+	       filename, clState->hasBitAlign ? "" : "out", clState->preferred_vwidth, clState->work_size);
 
 	if (!prog_built) {
 		/* create a cl program executable for all the devices specified */
