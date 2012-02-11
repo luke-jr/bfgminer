@@ -57,6 +57,7 @@ struct upload_buffer {
 struct header_info {
 	char		*lp_path;
 	bool		has_rolltime;
+	char		*reason;
 };
 
 struct tq_ent {
@@ -229,6 +230,11 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 
 	if (!strcasecmp("X-Long-Polling", key)) {
 		hi->lp_path = val;	/* steal memory reference */
+		val = NULL;
+	}
+
+	if (!strcasecmp("X-Reject-Reason", key)) {
+		hi->reason = val;	/* steal memory reference */
 		val = NULL;
 	}
 
@@ -464,6 +470,9 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 		goto err_out;
 	}
+
+	if (hi.reason)
+		json_object_set_new(val, "reject-reason", json_string(hi.reason));
 
 	successful_connect = true;
 	databuf_free(&all_data);

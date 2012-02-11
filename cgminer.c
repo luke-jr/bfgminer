@@ -1473,12 +1473,30 @@ static bool submit_upstream_work(const struct work *work)
 		if (opt_debug)
 			applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
+			char wherebuf[17];
+			char *where = wherebuf;
+			char reasonbuf[32];
+			char *reason = reasonbuf;
+
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Rejected %s %s %d thread %d pool %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, thr_id, work->pool->pool_no);
+				sprintf(where, " pool %d", work->pool->pool_no);
 			else
-				applog(LOG_NOTICE, "Rejected %s %s %d thread %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, thr_id);
+				where = "";
+			
+			res = json_object_get(val, "reject-reason");
+			if (res) {
+				const char *reasontmp = json_string_value(res);
+				size_t reasonLen = strlen(reasontmp);
+				if (reasonLen > 28)
+					reasonLen = 28;
+				reason[0] = ' '; reason[1] = '(';
+				memcpy(2 + reason, reasontmp, reasonLen);
+				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
+			} else
+				reason = "";
+			
+			applog(LOG_NOTICE, "Rejected %s %s %d thread %d%s%s",
+			       hashshow, cgpu->api->name, cgpu->device_id, thr_id, where, reason);
 		}
 	}
 
