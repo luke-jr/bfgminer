@@ -576,7 +576,7 @@ build:
 		* back and find the 2nd incidence of \x7ELF (rewind by one
 		* from ELF) and then patch the opcocdes */
 		if (!advance(&w, &remaining, ".text"))
-			{patchbfi = 0; goto build;}
+			goto build;
 		w++; remaining--;
 		if (!advance(&w, &remaining, ".text")) {
 			/* 32 bit builds only one ELF */
@@ -586,7 +586,7 @@ build:
 		memcpy(&length, w + 289, 4);
 		w = binaries[gpu]; remaining = binary_sizes[gpu];
 		if (!advance(&w, &remaining, "ELF"))
-			{patchbfi = 0; goto build;}
+			goto build;
 		w++; remaining--;
 		if (!advance(&w, &remaining, "ELF")) {
 			/* 32 bit builds only one ELF */
