@@ -1,3 +1,63 @@
+Version 2.2.4
+
+- Retain cl program after successfully loading a binary image. May decrease
+failures to build kernels at startup.
+- Variable unused after this so remove setting it.
+- BFI INT patching is not necessarily true on binary loading of files and not
+true on ATI SDK2.6+. Report bitalign instead.
+- Various string fixes for reject reason.
+- Generalize --temp-cutoff and implement support for reading temperature from
+BitFORCE FPGAs
+- Change message from recovered to alive since it is used on startup as well as
+when a pool has recovered.
+- Start mining as soon as any pool is found active and rely on the watchpool
+thread to bring up other pools.
+- Delayed responses from testing pools that are down can hold up the watchdog
+thread from getting to its device testing code, leading to false detection of
+the GPU not checking in, and can substantially delay auto gpu/auto fan
+management leading to overheating. Move pool watching to its own thread.
+- Bugfix: BitFORCE index needs to be static to count correctly
+- Space out retrieval of extra work according to the number of mining threads.
+- Make shutdown more robust. Enable the input thread only after the other
+threads exist. Don't kill off the workio thread and use it to exit main() only
+if there is an unexpected problem. Use kill_work() for all anticipated shutdowns
+where possible. Remove unused thread entry.
+- Change poclbm version number.
+- One array is faster than 2 separate arrays so change to that in poclbm kernel.
+- Microoptimisations to poclbm kernel which increase throughput slightly.
+- Import diablominer kernel. Currently disabled as not working.
+- Import diapolo kernel. Currently disabled as not working.
+- Conflicting entries of cl_kernel may have been causing problems, and
+automatically chosen kernel type was not being passed on. Rename the enum to
+cl_kernels and store the chosen kernel in each clState.
+- Set cl_amd_media_ops with the BITALIGN flag and allow non-bitselect devices to
+build.
+- ALlow much longer filenames for kernels to load properly.
+- Allow different kernels to be used by different devices and fix the logic fail
+of overcorrecting on last commit with !strstr.
+- Fix kernel selection process and build error.
+- queue_phatk_kernel now uses CL_SET_VARG() for base-nonce(s), too
+- added OpenCL >= 1.1 detection code, in preparation of OpenCL 1.1 global offset
+parameter support
+- Use K array explicitly to make it clear what is being added.
+- Work items have a tendency to expire at exactly the same time and we don't
+queue extra items when there are plenty in the queue, regardless of age. Allow
+extra work items to be queued if adequate time has passed since we last
+requested work even if over the limit.
+- Discard work when failover-only is enabled and the work has come from a
+different pool.
+- Missing include to build on newer mingw32.
+- Move from the thread safe localtime_r to regular localtime which is the only
+one supported on newer pthread libraries on mingw32 to make it compile with the
+newer ming. Thread safety is of no importance where localtime is used in this
+code.
+- Define in_addr_t in windows if required
+- sys/wait.h not required in windows
+- Allow API to restrict access by IP address
+- Add pool switching to example miner.php
+- Display X-Reject-Reason, when provided
+
+
 Version 2.2.3 - February 6, 2012
 
 - Revert "Rewrite the convoluted get_work() function to be much simpler and roll
