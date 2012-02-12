@@ -1032,7 +1032,7 @@ void gpu_autotune(int gpu, bool *enable)
 	unlock_adl();
 
 	newengine = engine = gpu_engineclock(gpu) * 100;
-	levengine = lpOdPerformanceLevels->aLevels[lev].iEngineClock / 100;
+	levengine = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		if (!ga->twin)
