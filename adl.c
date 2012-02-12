@@ -1009,7 +1009,8 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool __maybe_unused 
 
 void gpu_autotune(int gpu, bool *enable)
 {
-	int temp, fanpercent, engine, newengine, twintemp = 0;
+	int lev, temp, fanpercent, engine, levengine, newengine, twintemp = 0;
+	ADLODPerformanceLevels *lpOdPerformanceLevels;
 	bool fan_optimal = true;
 	struct cgpu_info *cgpu;
 	struct gpu_adl *ga;
@@ -1017,7 +1018,12 @@ void gpu_autotune(int gpu, bool *enable)
 	cgpu = &gpus[gpu];
 	ga = &cgpu->adl;
 
+	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
+	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
+	lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
+
 	lock_adl();
+	ADL_Overdrive5_ODPerformanceLevels_Get(ga->iAdapterIndex, 0, lpOdPerformanceLevels);
 	ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity);
 	temp = __gpu_temp(ga);
 	if (ga->twin)
@@ -1026,6 +1032,7 @@ void gpu_autotune(int gpu, bool *enable)
 	unlock_adl();
 
 	newengine = engine = gpu_engineclock(gpu) * 100;
+	levengine = lpOdPerformanceLevels->aLevels[lev].iEngineClock * 100;
 
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		if (!ga->twin)
@@ -1058,10 +1065,12 @@ void gpu_autotune(int gpu, bool *enable)
 		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
 			applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
-			/* Only try to tune engine speed up if this GPU is not disabled */
-		} else if (temp < ga->targettemp && engine < ga->maxspeed && *enable) {
+			/* Only try to tune engine speed up if this GPU is not
+			 * disabled, and work off the performance level engine
+			 * speed, not the current engine speed. */
+		} else if (temp < ga->targettemp && levengine < ga->maxspeed && *enable) {
 			applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
-			newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
+			newengine = levengine + ga->lpOdParameters.sEngineClock.iStep;
 		}
 
 		if (newengine > ga->maxspeed)
