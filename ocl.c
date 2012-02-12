@@ -186,11 +186,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	_clState *clState = calloc(1, sizeof(_clState));
 	bool patchbfi = false, prog_built = false;
 	cl_platform_id platform = NULL;
+	char pbuff[256], vbuff[255];
 	cl_platform_id* platforms;
 	cl_device_id *devices;
 	cl_uint numPlatforms;
 	cl_uint numDevices;
-	char pbuff[256];
 	cl_int status;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
@@ -227,9 +227,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(pbuff), pbuff, NULL);
 	if (status == CL_SUCCESS)
 		applog(LOG_INFO, "CL Platform name: %s", pbuff);
-	status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
+	status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(vbuff), vbuff, NULL);
 	if (status == CL_SUCCESS)
-		applog(LOG_INFO, "CL Platform version: %s", pbuff);
+		applog(LOG_INFO, "CL Platform version: %s", vbuff);
 
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
@@ -356,7 +356,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char numbuf[10];
 
 	if (chosen_kernel == KL_NONE) {
-		if (strstr(name, "Tahiti") || !clState->hasBitAlign)
+		if (strstr(name, "Tahiti") // GCN
+		    || !clState->hasBitAlign // Older Radeon & Nvidia
+		    || strstr(vbuff, "844.4") // Linux 64 bit ATI 2.6 SDK
+		    || strstr(vbuff, "851.4") // Windows 64 bit ""
+		    || strstr(vbuff, "831.4") // Windows & Linux 32 bit ""
+		)
 			clState->chosen_kernel = KL_POCLBM;
 		else
 			clState->chosen_kernel = KL_PHATK;
