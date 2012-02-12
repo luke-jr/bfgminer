@@ -427,6 +427,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, ".bin");
 
+loadbin:
 	binaryfile = fopen(binaryfilename, "rb");
 	if (!binaryfile) {
 		applog(LOG_DEBUG, "No binary found, generating from source");
@@ -504,6 +505,7 @@ build:
 			sprintf(numbuf, "%d", (int)sizeof(long));
 			strcat(binaryfilename, numbuf);
 			strcat(binaryfilename, ".bin");
+			goto loadbin;
 	}
 
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
