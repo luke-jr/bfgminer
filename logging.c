@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 #include "logging.h"
 #include "miner.h"
 
