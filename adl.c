@@ -8,6 +8,7 @@
 
 #include "miner.h"
 #include "ADL_SDK/adl_sdk.h"
+#include "compat.h"
 
 #if defined (__linux)
 #include <dlfcn.h>
@@ -16,7 +17,6 @@
 #else /* WIN32 */
 #include <windows.h>
 #include <tchar.h>
-#define sleep(x) Sleep(x)
 #endif
 #include "adl_functions.h"
 
