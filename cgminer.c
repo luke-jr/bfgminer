@@ -410,6 +410,7 @@ static char *add_serial(char *arg)
 static char *set_devices(char *arg)
 {
 	int i = strtol(arg, &arg, 0);
+
 	if (*arg) {
 		if (*arg == '?') {
 			devices_enabled = -1;
@@ -418,7 +419,7 @@ static char *set_devices(char *arg)
 		return "Invalid device number";
 	}
 
-	if (i < 0 || i >= (sizeof(devices_enabled) * 8) - 1)
+	if (i < 0 || i >= (int)(sizeof(devices_enabled) * 8) - 1)
 		return "Invalid device number";
 	devices_enabled |= 1 << i;
 	return NULL;
@@ -1660,7 +1661,7 @@ static void print_summary(void);
 void kill_work(void)
 {
 	struct thr_info *thr;
-	unsigned int i;
+	int i;
 
 	disable_curses();
 	applog(LOG_INFO, "Received kill message");
@@ -3255,7 +3256,7 @@ void *miner_thread(void *userdata)
 
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long def_cycle = opt_log_interval / 5 ? : 1;
-	unsigned long cycle;
+	long cycle;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
@@ -4104,7 +4105,8 @@ int main (int argc, char *argv[])
 	bool pools_active = false;
 	struct sigaction handler;
 	struct thr_info *thr;
-	unsigned int i, j, k;
+	unsigned int k;
+	int i, j;
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -4243,7 +4245,7 @@ int main (int argc, char *argv[])
 	mining_threads = 0;
 	gpu_threads = 0;
 	if (devices_enabled) {
-		for (i = 0; i < (sizeof(devices_enabled) * 8) - 1; ++i) {
+		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
 			if (devices_enabled & (1 << i)) {
 				if (i >= total_devices)
 					quit (1, "Command line options set a device that doesn't exist");

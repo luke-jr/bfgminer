@@ -206,7 +206,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
-	if (opt_platform_id >= numPlatforms) {
+	if (opt_platform_id >= (int)numPlatforms) {
 		applog(LOG_ERR, "Specified platform that does not exist");
 		return NULL;
 	}
@@ -340,7 +340,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	if (opt_vectors)
 		clState->preferred_vwidth = opt_vectors;
-	if (opt_worksize && opt_worksize <= clState->max_work_size)
+	if (opt_worksize && opt_worksize <= (int)clState->max_work_size)
 		clState->work_size = opt_worksize;
 	else
 		clState->work_size = (clState->max_work_size <= 256 ? clState->max_work_size : 256) /

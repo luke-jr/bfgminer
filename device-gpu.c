@@ -689,8 +689,8 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 {
 	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
+	unsigned int i, num = 0;
 	cl_int status = 0;
-	int i, num = 0;
 	uint *nonces;
 
 	CL_SET_BLKARG(ctx_a);
@@ -732,8 +732,8 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 {
 	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
+	unsigned int i, num = 0;
 	cl_int status = 0;
-	int i, num = 0;
 	uint *nonces;
 
 	nonces = alloca(sizeof(uint) * vwidth);

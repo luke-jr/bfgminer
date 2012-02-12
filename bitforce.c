@@ -61,9 +61,10 @@ static void BFgets(char *buf, size_t bufLen, int fd)
 	buf[0] = '\0';
 }
 
-static void BFwrite(int fd, const void *buf, size_t bufLen)
+static void BFwrite(int fd, const void *buf, ssize_t bufLen)
 {
 	ssize_t ret = write(fd, buf, bufLen);
+
 	if (unlikely(ret != bufLen))
 		quit(1, "BFwrite failed");
 }
