@@ -389,18 +389,21 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	int pl;
 	char *source = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
+	cl_uint slot, cpnd;
+
+	slot = cpnd = 0;
 
 	if (!source)
 		return NULL;
 
-	binary_sizes = (size_t *)malloc(sizeof(size_t)*numDevices);
+	binary_sizes = calloc(sizeof(size_t) * MAX_GPUDEVICES * 4, 1);
 	if (unlikely(!binary_sizes)) {
-		applog(LOG_ERR, "Unable to malloc binary_sizes");
+		applog(LOG_ERR, "Unable to calloc binary_sizes");
 		return NULL;
 	}
-	binaries = (char **)malloc(sizeof(char *)*numDevices);
+	binaries = calloc(sizeof(char *) * MAX_GPUDEVICES * 4, 1);
 	if (unlikely(!binaries)) {
-		applog(LOG_ERR, "Unable to malloc binaries");
+		applog(LOG_ERR, "Unable to calloc binaries");
 		return NULL;
 	}
 
@@ -433,26 +436,26 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (!binary_stat.st_size)
 			goto build;
 
-		binary_sizes[gpu] = binary_stat.st_size;
-		binaries[gpu] = (char *)malloc(binary_sizes[gpu]);
-		if (unlikely(!binaries[gpu])) {
-			applog(LOG_ERR, "Unable to malloc binaries");
+		binary_sizes[slot] = binary_stat.st_size;
+		binaries[slot] = (char *)calloc(binary_sizes[slot], 1);
+		if (unlikely(!binaries[slot])) {
+			applog(LOG_ERR, "Unable to calloc binaries");
 			fclose(binaryfile);
 			return NULL;
 		}
 
-		if (fread(binaries[gpu], 1, binary_sizes[gpu], binaryfile) != binary_sizes[gpu]) {
-			applog(LOG_ERR, "Unable to fread binaries[gpu]");
+		if (fread(binaries[slot], 1, binary_sizes[slot], binaryfile) != binary_sizes[slot]) {
+			applog(LOG_ERR, "Unable to fread binaries");
 			fclose(binaryfile);
-			free(binaries[gpu]);
+			free(binaries[slot]);
 			goto build;
 		}
 
-		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[gpu], (const unsigned char **)&binaries[gpu], &status, NULL);
+		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[slot], (const unsigned char **)binaries, &status, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
 			fclose(binaryfile);
-			free(binaries[gpu]);
+			free(binaries[slot]);
 			goto build;
 		}
 
@@ -538,30 +541,43 @@ build:
 
 	prog_built = true;
 
-	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*numDevices, binary_sizes, NULL );
+	status = clGetProgramInfo(clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetPlatformInfo)");
+		applog(LOG_ERR, "Error: Getting program info CL_PROGRAM_NUM_DEVICES. (clGetProgramInfo)");
 		return NULL;
 	}
 
+	status = clGetProgramInfo(clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*cpnd, binary_sizes, NULL);
+	if (unlikely(status != CL_SUCCESS)) {
+		applog(LOG_ERR, "Error: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetProgramInfo)");
+		return NULL;
+	}
+
+	/* The actual compiled binary ends up in a RANDOM slot! Grr, so we have
+	 * to iterate over all the binary slots and find where the real program
+	 * is. What the heck is this!? */
+	for (slot = 0; slot < cpnd; slot++)
+		if (binary_sizes[slot])
+			break;
+
 	/* copy over all of the generated binaries. */
-	applog(LOG_DEBUG, "binary size %d : %d", gpu, binary_sizes[gpu]);
-	if (!binary_sizes[gpu]) {
+	applog(LOG_DEBUG, "Binary size for gpu %d found in binary slot %d: %d", gpu, slot, binary_sizes[slot]);
+	if (!binary_sizes[slot]) {
 		applog(LOG_ERR, "OpenCL compiler generated a zero sized binary, may need to reboot!");
 		return NULL;
 	}
-	binaries[gpu] = (char *)malloc( sizeof(char)*binary_sizes[gpu]);
-	status = clGetProgramInfo( clState->program, CL_PROGRAM_BINARIES, sizeof(char *)*numDevices, binaries, NULL );
+	binaries[slot] = calloc(sizeof(char) * binary_sizes[slot], 1);
+	status = clGetProgramInfo(clState->program, CL_PROGRAM_BINARIES, sizeof(char *) * cpnd, binaries, NULL );
 	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: Getting program info. (clGetPlatformInfo)");
+		applog(LOG_ERR, "Error: Getting program info. CL_PROGRAM_BINARIES (clGetProgramInfo)");
 		return NULL;
 	}
 
 	/* Patch the kernel if the hardware supports BFI_INT but it needs to
 	 * be hacked in */
 	if (patchbfi) {
-		unsigned remaining = binary_sizes[gpu];
-		char *w = binaries[gpu];
+		unsigned remaining = binary_sizes[slot];
+		char *w = binaries[slot];
 		unsigned int start, length;
 
 		/* Find 2nd incidence of .text, and copy the program's
@@ -577,7 +593,7 @@ build:
 		}
 		memcpy(&start, w + 285, 4);
 		memcpy(&length, w + 289, 4);
-		w = binaries[gpu]; remaining = binary_sizes[gpu];
+		w = binaries[slot]; remaining = binary_sizes[slot];
 		if (!advance(&w, &remaining, "ELF"))
 			goto build;
 		w++; remaining--;
@@ -597,7 +613,7 @@ build:
 			return NULL;
 		}
 
-		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[gpu], (const unsigned char **)&binaries[gpu], &status, NULL);
+		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[slot], (const unsigned char **)&binaries[slot], &status, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithBinary)");
 			return NULL;
@@ -621,15 +637,15 @@ build:
 		/* Not a fatal problem, just means we build it again next time */
 		applog(LOG_DEBUG, "Unable to create file %s", binaryfilename);
 	} else {
-		if (unlikely(fwrite(binaries[gpu], 1, binary_sizes[gpu], binaryfile) != binary_sizes[gpu])) {
+		if (unlikely(fwrite(binaries[slot], 1, binary_sizes[slot], binaryfile) != binary_sizes[slot])) {
 			applog(LOG_ERR, "Unable to fwrite to binaryfile");
 			return NULL;
 		}
 		fclose(binaryfile);
 	}
 built:
-	if (binaries[gpu])
-		free(binaries[gpu]);
+	if (binaries[slot])
+		free(binaries[slot]);
 	free(binaries);
 	free(binary_sizes);
 
