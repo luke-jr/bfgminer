@@ -87,12 +87,11 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	nonce = base + get_global_id(0);
 #endif
 
-	W[3] = nonce + fw3;
 	W[20] = fcty_e +  nonce;
 	W[16] = state0 + W[20];
-	W[20] += fcty_e2;
 	W[19] = d1 + (rotr(W[16], 6) ^ rotr(W[16], 11) ^ rotr(W[16], 25)) + ch(W[16], b1, c1) + K[ 4] +  0x80000000;
 	W[23] = h1 + W[19];
+	W[20] += fcty_e2;
 	W[19] += (rotr(W[20], 2) ^ rotr(W[20], 13) ^ rotr(W[20], 22)) + Ma2(g1, W[20], f1);
 	W[18] = c1 + (rotr(W[23], 6) ^ rotr(W[23], 11) ^ rotr(W[23], 25)) + ch(W[23], W[16], b1) + K[ 5];
 	W[22] = g1 + W[18];
@@ -134,9 +133,12 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	W[18] += W[22];
 	W[22] += (rotr(W[23], 2) ^ rotr(W[23], 13) ^ rotr(W[23], 22)) + Ma(W[17], W[23], W[16]);
 	W[2] = (rotr(nonce, 7) ^ rotr(nonce, 18) ^ (nonce >> 3U)) + fw2;
+
 	W[21] += (rotr(W[18], 6) ^ rotr(W[18], 11) ^ rotr(W[18], 25)) + ch(W[18], W[19], W[20]) + K[18] +  W[2];
 	W[17] += W[21];
 	W[21] += (rotr(W[22], 2) ^ rotr(W[22], 13) ^ rotr(W[22], 22)) + Ma(W[16], W[22], W[23]);
+	W[3] = nonce + fw3;
+
 	W[20] += (rotr(W[17], 6) ^ rotr(W[17], 11) ^ rotr(W[17], 25)) + ch(W[17], W[18], W[19]) + K[19] +  W[3];
 	W[16] += W[20];
 	W[20] += (rotr(W[21], 2) ^ rotr(W[21], 13) ^ rotr(W[21], 22)) + Ma(W[23], W[21], W[22]);
@@ -166,6 +168,7 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	W[19] += W[23];
 	W[23] += (rotr(W[16], 2) ^ rotr(W[16], 13) ^ rotr(W[16], 22)) + Ma(W[18], W[16], W[17]);
 	W[9] = W[2] + (rotr(W[7], 17) ^ rotr(W[7], 19) ^ (W[7] >> 10U));
+
 	W[22] += (rotr(W[19], 6) ^ rotr(W[19], 11) ^ rotr(W[19], 25)) + ch(W[19], W[20], W[21]) + K[25] +  W[9];
 	W[18] += W[22];
 	W[22] += (rotr(W[23], 2) ^ rotr(W[23], 13) ^ rotr(W[23], 22)) + Ma(W[17], W[23], W[16]);
@@ -200,14 +203,17 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	W[20] += W[16];
 	W[16] += (rotr(W[17], 2) ^ rotr(W[17], 13) ^ rotr(W[17], 22)) + Ma(W[19], W[17], W[18]);
 	W[0] = fw01r + W[9] + (rotr(W[14], 17) ^ rotr(W[14], 19) ^ (W[14] >> 10U));
+
 	W[23] += (rotr(W[20], 6) ^ rotr(W[20], 11) ^ rotr(W[20], 25)) + ch(W[20], W[21], W[22]) + K[32] +  W[0];
 	W[19] += W[23];
 	W[23] += (rotr(W[16], 2) ^ rotr(W[16], 13) ^ rotr(W[16], 22)) + Ma(W[18], W[16], W[17]);
 	W[1] = fw1 + (rotr(W[2], 7) ^ rotr(W[2], 18) ^ (W[2] >> 3U)) + W[10] + (rotr(W[15], 17) ^ rotr(W[15], 19) ^ (W[15] >> 10U));
+
 	W[22] += (rotr(W[19], 6) ^ rotr(W[19], 11) ^ rotr(W[19], 25)) + ch(W[19], W[20], W[21]) + K[33] +  W[1];
 	W[18] += W[22];
 	W[22] += (rotr(W[23], 2) ^ rotr(W[23], 13) ^ rotr(W[23], 22)) + Ma(W[17], W[23], W[16]);
 	W[2] += (rotr(W[3], 7) ^ rotr(W[3], 18) ^ (W[3] >> 3U)) + W[11] + (rotr(W[0], 17) ^ rotr(W[0], 19) ^ (W[0] >> 10U));
+
 	W[21] += (rotr(W[18], 6) ^ rotr(W[18], 11) ^ rotr(W[18], 25)) + ch(W[18], W[19], W[20]) + K[34] +  W[2];
 	W[17] += W[21];
 	W[21] += (rotr(W[22], 2) ^ rotr(W[22], 13) ^ rotr(W[22], 22)) + Ma(W[16], W[22], W[23]);
@@ -277,14 +283,17 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	W[20] += W[16];
 	W[16] += (rotr(W[17], 2) ^ rotr(W[17], 13) ^ rotr(W[17], 22)) + Ma(W[19], W[17], W[18]);
 	W[0] += (rotr(W[1], 7) ^ rotr(W[1], 18) ^ (W[1] >> 3U)) + W[9] + (rotr(W[14], 17) ^ rotr(W[14], 19) ^ (W[14] >> 10U));
+
 	W[23] += (rotr(W[20], 6) ^ rotr(W[20], 11) ^ rotr(W[20], 25)) + ch(W[20], W[21], W[22]) + K[48] +  W[0];
 	W[19] += W[23];
 	W[23] += (rotr(W[16], 2) ^ rotr(W[16], 13) ^ rotr(W[16], 22)) + Ma(W[18], W[16], W[17]);
 	W[1] += (rotr(W[2], 7) ^ rotr(W[2], 18) ^ (W[2] >> 3U)) + W[10] + (rotr(W[15], 17) ^ rotr(W[15], 19) ^ (W[15] >> 10U));
+
 	W[22] += (rotr(W[19], 6) ^ rotr(W[19], 11) ^ rotr(W[19], 25)) + ch(W[19], W[20], W[21]) + K[49] +  W[1];
 	W[18] += W[22];
 	W[22] += (rotr(W[23], 2) ^ rotr(W[23], 13) ^ rotr(W[23], 22)) + Ma(W[17], W[23], W[16]);
 	W[2] += (rotr(W[3], 7) ^ rotr(W[3], 18) ^ (W[3] >> 3U)) + W[11] + (rotr(W[0], 17) ^ rotr(W[0], 19) ^ (W[0] >> 10U));
+
 	W[21] += (rotr(W[18], 6) ^ rotr(W[18], 11) ^ rotr(W[18], 25)) + ch(W[18], W[19], W[20]) + K[50] +  W[2];
 	W[17] += W[21];
 	W[21] += (rotr(W[22], 2) ^ rotr(W[22], 13) ^ rotr(W[22], 22)) + Ma(W[16], W[22], W[23]);
@@ -416,14 +425,17 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	W[20] += W[16];
 	W[16] += (rotr(W[17], 2) ^ rotr(W[17], 13) ^ rotr(W[17], 22)) + Ma(W[19], W[17], W[18]);
 	W[0] += (rotr(W[1], 7) ^ rotr(W[1], 18) ^ (W[1] >> 3U));
+
 	W[23] += (rotr(W[20], 6) ^ rotr(W[20], 11) ^ rotr(W[20], 25)) + ch(W[20], W[21], W[22]) + K[16] +  W[0];
 	W[19] += W[23];
 	W[23] += (rotr(W[16], 2) ^ rotr(W[16], 13) ^ rotr(W[16], 22)) + Ma(W[18], W[16], W[17]);
 	W[1] += (rotr(W[2], 7) ^ rotr(W[2], 18) ^ (W[2] >> 3U)) + 0x00a00000U;
+
 	W[22] += (rotr(W[19], 6) ^ rotr(W[19], 11) ^ rotr(W[19], 25)) + ch(W[19], W[20], W[21]) + K[17] +  W[1];
 	W[18] += W[22];
 	W[22] += (rotr(W[23], 2) ^ rotr(W[23], 13) ^ rotr(W[23], 22)) + Ma(W[17], W[23], W[16]);
 	W[2] += (rotr(W[3], 7) ^ rotr(W[3], 18) ^ (W[3] >> 3U)) + (rotr(W[0], 17) ^ rotr(W[0], 19) ^ (W[0] >> 10U));
+
 	W[21] += (rotr(W[18], 6) ^ rotr(W[18], 11) ^ rotr(W[18], 25)) + ch(W[18], W[19], W[20]) + K[18] +  W[2];
 	W[17] += W[21];
 	W[21] += (rotr(W[22], 2) ^ rotr(W[22], 13) ^ rotr(W[22], 22)) + Ma(W[16], W[22], W[23]);
@@ -493,14 +505,17 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	W[20] += W[16];
 	W[16] += (rotr(W[17], 2) ^ rotr(W[17], 13) ^ rotr(W[17], 22)) + Ma(W[19], W[17], W[18]);
 	W[0] += (rotr(W[1], 7) ^ rotr(W[1], 18) ^ (W[1] >> 3U)) + W[9] + (rotr(W[14], 17) ^ rotr(W[14], 19) ^ (W[14] >> 10U));
+
 	W[23] += (rotr(W[20], 6) ^ rotr(W[20], 11) ^ rotr(W[20], 25)) + ch(W[20], W[21], W[22]) + K[32] +  W[0];
 	W[19] += W[23];
 	W[23] += (rotr(W[16], 2) ^ rotr(W[16], 13) ^ rotr(W[16], 22)) + Ma(W[18], W[16], W[17]);
 	W[1] += (rotr(W[2], 7) ^ rotr(W[2], 18) ^ (W[2] >> 3U)) + W[10] + (rotr(W[15], 17) ^ rotr(W[15], 19) ^ (W[15] >> 10U));
+
 	W[22] += (rotr(W[19], 6) ^ rotr(W[19], 11) ^ rotr(W[19], 25)) + ch(W[19], W[20], W[21]) + K[33] +  W[1];
 	W[18] += W[22];
 	W[22] += (rotr(W[23], 2) ^ rotr(W[23], 13) ^ rotr(W[23], 22)) + Ma(W[17], W[23], W[16]);
 	W[2] += (rotr(W[3], 7) ^ rotr(W[3], 18) ^ (W[3] >> 3U)) + W[11] + (rotr(W[0], 17) ^ rotr(W[0], 19) ^ (W[0] >> 10U));
+
 	W[21] += (rotr(W[18], 6) ^ rotr(W[18], 11) ^ rotr(W[18], 25)) + ch(W[18], W[19], W[20]) + K[34] +  W[2];
 	W[17] += W[21];
 	W[21] += (rotr(W[22], 2) ^ rotr(W[22], 13) ^ rotr(W[22], 22)) + Ma(W[16], W[22], W[23]);
@@ -570,14 +585,17 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	W[20] += W[16];
 	W[16] += (rotr(W[17], 2) ^ rotr(W[17], 13) ^ rotr(W[17], 22)) + Ma(W[19], W[17], W[18]);
 	W[0] += (rotr(W[1], 7) ^ rotr(W[1], 18) ^ (W[1] >> 3U)) + W[9] + (rotr(W[14], 17) ^ rotr(W[14], 19) ^ (W[14] >> 10U));
+
 	W[23] += (rotr(W[20], 6) ^ rotr(W[20], 11) ^ rotr(W[20], 25)) + ch(W[20], W[21], W[22]) + K[48] +  W[0];
 	W[19] += W[23];
 	W[23] += (rotr(W[16], 2) ^ rotr(W[16], 13) ^ rotr(W[16], 22)) + Ma(W[18], W[16], W[17]);
 	W[1] += (rotr(W[2], 7) ^ rotr(W[2], 18) ^ (W[2] >> 3U)) + W[10] + (rotr(W[15], 17) ^ rotr(W[15], 19) ^ (W[15] >> 10U));
+
 	W[22] += (rotr(W[19], 6) ^ rotr(W[19], 11) ^ rotr(W[19], 25)) + ch(W[19], W[20], W[21]) + K[49] +  W[1];
 	W[18] += W[22];
 	W[22] += (rotr(W[23], 2) ^ rotr(W[23], 13) ^ rotr(W[23], 22)) + Ma(W[17], W[23], W[16]);
 	W[2] += (rotr(W[3], 7) ^ rotr(W[3], 18) ^ (W[3] >> 3U)) + W[11] + (rotr(W[0], 17) ^ rotr(W[0], 19) ^ (W[0] >> 10U));
+
 	W[21] += (rotr(W[18], 6) ^ rotr(W[18], 11) ^ rotr(W[18], 25)) + ch(W[18], W[19], W[20]) + K[50] +  W[2];
 	W[17] += W[21];
 	W[21] += (rotr(W[22], 2) ^ rotr(W[22], 13) ^ rotr(W[22], 22)) + Ma(W[16], W[22], W[23]);
