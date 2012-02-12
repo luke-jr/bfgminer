@@ -481,6 +481,31 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	/////////////////////////////////////////////////////////////////
 
 build:
+	/* If no binary is available, and we have a card that suffers with phatk
+	 * on SDK2.6, use the poclbm kernel instead if one has not been
+	 * selected. */
+	if (chosen_kernel == KL_NONE && !strstr(name, "Tahiti") && clState->hasBitAlign &&
+		(strstr(vbuff, "844.4") /* Linux 64 bit ATI 2.6 SDK */	||
+		 strstr(vbuff, "851.4") /* Windows 64 bit "" */		||
+		 strstr(vbuff, "831.4") /* Windows & Linux 32 bit "" */ )) {
+			applog(LOG_WARNING, "SDK 2.6 detected, using poclbm kernel");
+			clState->chosen_kernel = KL_POCLBM;
+			strcpy(filename, POCLBM_KERNNAME".cl");
+			strcpy(binaryfilename, POCLBM_KERNNAME);
+			strcat(binaryfilename, name);
+			strcat(binaryfilename, "bitalign");
+			strcat(binaryfilename, "v");
+			sprintf(numbuf, "%d", clState->preferred_vwidth);
+			strcat(binaryfilename, numbuf);
+			strcat(binaryfilename, "w");
+			sprintf(numbuf, "%d", (int)clState->work_size);
+			strcat(binaryfilename, numbuf);
+			strcat(binaryfilename, "long");
+			sprintf(numbuf, "%d", (int)sizeof(long));
+			strcat(binaryfilename, numbuf);
+			strcat(binaryfilename, ".bin");
+	}
+
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: Loading Binary into cl_program (clCreateProgramWithSource)");
