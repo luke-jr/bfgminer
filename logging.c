@@ -25,7 +25,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 	else if (opt_log_output || prio <= LOG_NOTICE) {
 		char *f;
 		int len;
-		struct timeval tv = { };
+		struct timeval tv = {0, 0};
 		struct tm *tm;
 
 		gettimeofday(&tv, NULL);
@@ -79,7 +79,7 @@ void applog(int prio, const char *fmt, ...)
  * generic log function used by priority specific ones
  * equals vapplog() without additional priority checks
  */
-static void log_generic(int prio, const char *fmt, va_list ap)
+static void __maybe_unused log_generic(int prio, const char *fmt, va_list ap)
 {
 	extern bool use_curses;
 #ifdef HAVE_SYSLOG_H
@@ -92,7 +92,7 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 	else {
 		char *f;
 		int len;
-		struct timeval tv = { };
+		struct timeval tv = {0, 0};
 		struct tm *tm;
 
 		gettimeofday(&tv, NULL);

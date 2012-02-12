@@ -1701,7 +1701,7 @@ void kill_work(void)
 
 void quit(int status, const char *format, ...);
 
-static void sighandler(int sig)
+static void sighandler(int __maybe_unused sig)
 {
 	/* Restore signal handlers so we can still quit if kill_work fails */
 	sigaction(SIGTERM, &termhandler, NULL);
@@ -3073,7 +3073,7 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 		     const int thr_id)
 {
 	bool newreq = false, ret = false;
-	struct timespec abstime = {};
+	struct timespec abstime = {0, 0};
 	struct timeval now;
 	struct work *work_heap;
 	struct pool *pool;

@@ -254,14 +254,14 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 {
 	json_t *val, *err_val, *res_val;
 	int rc;
-	struct data_buffer all_data = { };
+	struct data_buffer all_data = {NULL, 0};
 	struct upload_buffer upload_data;
-	json_error_t err = { };
+	json_error_t err = {0, 0, 0, "", ""};
 	struct curl_slist *headers = NULL;
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	long timeout = longpoll ? (60 * 60) : 60;
-	struct header_info hi = { };
+	struct header_info hi = {NULL, false, NULL};
 	bool probing = false;
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
