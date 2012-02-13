@@ -77,14 +77,13 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 {
 	u W[24];
 	//u Vals[8]; Now put at W[16] to be in same array
-	u nonce;
 
 #ifdef VECTORS4
-	nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
+	const u nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
 #elif defined VECTORS2
-	nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
+	const u nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
 #else
-	nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
+	const u nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
 #endif
 
 	W[20] = fcty_e +  nonce;
