@@ -399,7 +399,7 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
-#ifdef USE_BITFORCE
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
 static char *add_serial(char *arg)
 {
 	string_elist_add(arg, &scan_devices);
@@ -661,7 +661,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
 			"Disable GPU mining even if suitable devices exist"),
-#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_BITFORCE))
+#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_BITFORCE) || defined(USE_ICARUS))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
 			"Enable CPU mining with other mining (default: no CPU mining if other devices exist)"),
@@ -776,10 +776,10 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--round-robin",
 		     set_rr, &pool_strategy,
 		     "Change multipool strategy from failover to round robin on failure"),
-#ifdef USE_BITFORCE
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
 	OPT_WITH_ARG("--scan-serial|-S",
 		     add_serial, NULL, NULL,
-		     "Serial port to probe for BitForce device"),
+		     "Serial port to probe for FPGA Mining device"),
 #endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
@@ -960,6 +960,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_BITFORCE
 		"bitforce "
+#endif
+#ifdef USE_ICARUS
+		"icarus "
 #endif
 		"mining support.\n"
 		, packagename);
@@ -4153,6 +4156,10 @@ struct device_api cpu_api = {
 extern struct device_api bitforce_api;
 #endif
 
+#ifdef USE_ICARUS
+extern struct device_api icarus_api;
+#endif
+
 
 static int cgminer_id_count = 0;
 
@@ -4305,6 +4312,10 @@ int main (int argc, char *argv[])
 
 #ifdef USE_BITFORCE
 	bitforce_api.api_detect();
+#endif
+
+#ifdef USE_ICARUS
+	icarus_api.api_detect();
 #endif
 
 #ifdef WANT_CPUMINE
