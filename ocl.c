@@ -726,7 +726,7 @@ built:
 		return NULL;
 	}
 
-	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, BUFFERSIZE, NULL, &status);
+	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error: clCreateBuffer (outputBuffer)");
 		return NULL;
