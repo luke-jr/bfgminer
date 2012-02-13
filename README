@@ -50,6 +50,7 @@ CGMiner specific configuration options:
 	--disable-opencl        Override detection and disable building with opencl
 	--disable-adl           Override detection and disable building with adl
 	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
+	--enable-icarus         Compile support for Icarus Board(default disabled)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
@@ -193,9 +194,9 @@ GPU only options:
 --ndevs|-n          Enumerate number of detected GPUs and exit
 
 
-BitForce only options:
+FPGA mining boards(BitForce, Icarus) only options:
 
---scan-serial|-S <arg> Serial port to probe for BitForce device
+--scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
 
 CPU only options:
