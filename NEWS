@@ -1,5 +1,31 @@
+Version 2.2.5 - February 13, 2012
+
+- Make output buffer write only as per Diapolo's suggestion.
+- Constify nonce in poclbm.
+- Use local and group id on poclbm kernel as well.
+- Microoptimise phatk kernel on return code.
+- Adjust engine speed up according to performance level engine setting, not the
+current engine speed.
+- Try to load a binary if we've defaulted to the poclbm kernel on SDK2.6
+- Use the poclbm kernel on SDK2.6 with bitalign devices only if there is no
+binary available.
+- Further generic microoptimisations to poclbm kernel.
+- The longstanding generation of a zero sized binary appears to be due to the
+OpenCL library putting the binary in a RANDOM SLOT amongst 4 possible binary
+locations. Iterate over each of them after building from source till the real
+binary is found and use that.
+- Fix harmless warnings with -Wsign-compare to allow cgminer to build with -W.
+- Fix missing field initialisers warnings.
+- Put win32 equivalents of nanosleep and sleep into compat.h fixing sleep() for
+adl.c.
+- Restore compatibility with Jansson 1.3 and 2.0 (api.c required 2.1)
+- Modularized logging, support for priority based logging
+- Move CPU chipset specific optimization into device-cpu
+
+
 Version 2.2.4 - February 11, 2012
 
+- Fix double definition of A0 B0 to zeroA zeroB.
 - Retain cl program after successfully loading a binary image. May decrease
 failures to build kernels at startup.
 - Variable unused after this so remove setting it.
