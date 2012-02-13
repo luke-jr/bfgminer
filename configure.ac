@@ -196,6 +196,17 @@ if test "x$bitforce" = xyes; then
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
+icarus="no"
+
+AC_ARG_ENABLE([icarus],
+	[AC_HELP_STRING([--enable-icarus],[Compile support for Icarus (default disabled)])],
+	[icarus=$enableval]
+	)
+if test "x$icarus" = xyes; then
+	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+fi
+AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
+
 AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
         AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev]))
 
@@ -338,13 +349,13 @@ if test "x$opencl" != xno; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$cpumining$bitforce" = xnono; then
+		if test "x$cpumining$bitforce$icarus" = xnonono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$cpumining$bitforce" = xnono; then
+	if test "x$cpumining$bitforce$icarus" = xnonono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 fi
@@ -364,6 +375,12 @@ if test "x$bitforce" = xyes; then
 	echo "  BitForce.FPGAs.......: Enabled"
 else
 	echo "  BitForce.FPGAs.......: Disabled"
+fi
+
+if test "x$icarus" = xyes; then
+	echo "  Icarus.FPGAs.........: Enabled"
+else
+	echo "  Icarus.FPGAs.........: Disabled"
 fi
 
 echo

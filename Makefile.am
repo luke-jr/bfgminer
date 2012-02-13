@@ -70,3 +70,6 @@ if HAS_BITFORCE
 cgminer_SOURCES += bitforce.c
 endif
 
+if HAS_ICARUS
+cgminer_SOURCES += icarus.c
+endif
