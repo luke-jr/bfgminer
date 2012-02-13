@@ -4,12 +4,10 @@
 
 #ifdef VECTORS4
 	typedef uint4 u;
-#else 
-	#ifdef VECTORS2
-		typedef uint2 u;
-	#else
-		typedef uint u;
-	#endif
+#elif defined VECTORS2
+	typedef uint2 u;
+#else
+	typedef uint u;
 #endif
 
 __constant uint K[64] = { 
@@ -175,7 +173,7 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 
 //Dummy Variable to prevent compiler from reordering between rounds
 	u t1;
-	
+
 	//Vals[0]=state0;
 	Vals[1]=B1;
 	Vals[2]=C1;
@@ -194,16 +192,14 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
 	//Since only the 2 LSB is opposite between the nonces, we can save an instruction by flipping the 4 bits in W18 rather than the 1 bit in W3
 	W[18] = PreW18 + (u){r, r ^ 0x2004000U, r ^ 0x4008000U, r ^ 0x600C000U};
+#elif defined VECTORS2
+	W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
+	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
+	W[18] = PreW18 + (u){r, r ^ 0x2004000U};
 #else
-	#ifdef VECTORS2
-		W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
-		uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
-		W[18] = PreW18 + (u){r, r ^ 0x2004000U};
-	#else
-		W[3] = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
-		u r = rot(W[3],25u)^rot(W[3],14u)^((W[3])>>3U);
-		W[18] = PreW18 + r;
-	#endif
+	W[3] = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
+	u r = rot(W[3],25u)^rot(W[3],14u)^((W[3])>>3U);
+	W[18] = PreW18 + r;
 #endif
 	//the order of the W calcs and Rounds is like this because the compiler needs help finding how to order the instructions
 
@@ -388,36 +384,34 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	sharoundW(64 + 57);
 	sharoundW(64 + 58);
 
-	u v = W[117] + W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]) ^
-		-(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64));
+	W[117] += W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]) -
+		(-(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64)));
 
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
 #ifdef VECTORS4
-	bool result = v.x & v.y & v.z & v.w;
+	bool result = W[117].x & W[117].y & W[117].z & W[117].w;
 	if (!result) {
-		if (!v.x)
+		if (!W[117].x)
 			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
-		if (!v.y)
+		if (!W[117].y)
 			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
-		if (!v.z)
+		if (!W[117].z)
 			output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
-		if (!v.w)
+		if (!W[117].w)
 			output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
 	}
+#elif defined VECTORS2
+	bool result = W[117].x & W[117].y;
+	if (!result) {
+		if (!W[117].x)
+			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+		if (!W[117].y)
+			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+	}
 #else
-	#ifdef VECTORS2
-		bool result = v.x & v.y;
-		if (!result) {
-			if (!v.x)
-				output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
-			if (!v.y)
-				output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
-		}
-	#else
-		if (!v)
-			output[FOUND] = output[NFLAG & W[3]] = W[3];
-	#endif
+	if (!W[117])
+		output[FOUND] = output[NFLAG & W[3]] = W[3];
 #endif
 }

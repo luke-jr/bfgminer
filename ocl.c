@@ -597,7 +597,7 @@ build:
 	/* copy over all of the generated binaries. */
 	applog(LOG_DEBUG, "Binary size for gpu %d found in binary slot %d: %d", gpu, slot, binary_sizes[slot]);
 	if (!binary_sizes[slot]) {
-		applog(LOG_ERR, "OpenCL compiler generated a zero sized binary, may need to reboot!");
+		applog(LOG_ERR, "OpenCL compiler generated a zero sized binary, FAIL!");
 		return NULL;
 	}
 	binaries[slot] = calloc(sizeof(char) * binary_sizes[slot], 1);
