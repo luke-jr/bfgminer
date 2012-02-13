@@ -651,9 +651,11 @@ static _clState *clStates[MAX_GPUDEVICES];
 
 static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 {
+	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
+	unsigned int i, num = 0;
 	cl_int status = 0;
-	int num = 0;
+	uint *nonces;
 
 	CL_SET_BLKARG(ctx_a);
 	CL_SET_BLKARG(ctx_b);
@@ -663,13 +665,18 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 	CL_SET_BLKARG(ctx_f);
 	CL_SET_BLKARG(ctx_g);
 	CL_SET_BLKARG(ctx_h);
+
 	CL_SET_BLKARG(cty_b);
 	CL_SET_BLKARG(cty_c);
 	CL_SET_BLKARG(cty_d);
 	CL_SET_BLKARG(cty_f);
 	CL_SET_BLKARG(cty_g);
 	CL_SET_BLKARG(cty_h);
-	CL_SET_BLKARG(nonce);
+
+	nonces = alloca(sizeof(uint) * vwidth);
+	for (i = 0; i < vwidth; i++)
+		nonces[i] = blk->nonce + i;
+	CL_SET_VARG(vwidth, nonces);
 
 	CL_SET_BLKARG(fW0);
 	CL_SET_BLKARG(fW1);

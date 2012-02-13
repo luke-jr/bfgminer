@@ -71,7 +71,7 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 						const uint state4, const uint state5, const uint state6, const uint state7,
 						const uint b1, const uint c1, const uint d1,
 						const uint f1, const uint g1, const uint h1,
-						const uint base,
+						const u base,
 						const uint fw0, const uint fw1, const uint fw2, const uint fw3, const uint fw15, const uint fw01r, const uint fcty_e, const uint fcty_e2,
 						__global uint * output)
 {
@@ -80,11 +80,11 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	u nonce;
 
 #ifdef VECTORS4
-	nonce = base + (get_global_id(0)<<2) + (uint4)(0, 1, 2, 3);
+	nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
 #elif defined VECTORS2
-	nonce = base + (get_global_id(0)<<1) + (uint2)(0, 1);
+	nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
 #else
-	nonce = base + get_global_id(0);
+	nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
 #endif
 
 	W[20] = fcty_e +  nonce;
