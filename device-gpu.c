@@ -692,7 +692,7 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 	CL_SET_BLKARG(B1addK6);
 	CL_SET_BLKARG(W16addK16);
 	CL_SET_BLKARG(W17addK17);
-	CL_SET_BLKARG(PreVal4);
+	CL_SET_BLKARG(PreVal4addT1);
 	CL_SET_BLKARG(PreVal0);
 
 	CL_SET_ARG(clState->outputBuffer);
