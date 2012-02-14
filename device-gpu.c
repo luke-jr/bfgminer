@@ -1217,8 +1217,12 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 				++gpu->intensity;
 		}
 	}
+	if (!work->blk.nonce)
+		gpu->max_hashes = 0;
 	set_threads_hashes(clState->preferred_vwidth, &threads, &hashes, globalThreads,
 			   localThreads[0], gpu->intensity);
+	if (hashes > gpu->max_hashes)
+		gpu->max_hashes = hashes;
 	status = thrdata->queue_kernel_parameters(clState, &work->blk);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
@@ -1259,7 +1263,10 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		return 0;
 	}
 
-	work->blk.nonce += hashes;
+	/* The amount of work scanned can fluctuate when intensity changes
+	 * and since we do this one cycle behind, we increment the work more
+	 * than enough to prevent repeating work */
+	work->blk.nonce += gpu->max_hashes;
 
 	return hashes;
 }

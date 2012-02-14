@@ -228,9 +228,10 @@ struct cgpu_info {
 	int threads;
 	struct thr_info *thread;
 
+	unsigned int max_hashes;
 	int virtual_gpu;
-	bool dynamic;
 	int intensity;
+	bool dynamic;
 
 	float temp;
 	int cutofftemp;
