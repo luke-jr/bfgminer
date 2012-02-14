@@ -69,10 +69,13 @@ __constant uint K[64] = {
 
 __kernel void search(const uint state0, const uint state1, const uint state2, const uint state3,
 						const uint state4, const uint state5, const uint state6, const uint state7,
-						const uint b1, const uint c1, const uint d1,
+						const uint b1, const uint c1,
 						const uint f1, const uint g1, const uint h1,
 						const u base,
-						const uint fw0, const uint fw1, const uint fw2, const uint fw3, const uint fw15, const uint fw01r, const uint fcty_e, const uint fcty_e2,
+						const uint fw0, const uint fw1, const uint fw2, const uint fw3, const uint fw15, const uint fw01r,
+						const uint fcty_e, const uint fcty_e2,
+						const uint D1A, const uint C1addK5, const uint B1addK6,
+						const uint W16addK16, const uint W17addK17,
 						__global uint * output)
 {
 	u W[24];
@@ -93,29 +96,26 @@ Vals[0]=Vals[4];
 Vals[0]+=state0;
 
 Vals[3]=(rotr(Vals[0],6)^rotr(Vals[0],11)^rotr(Vals[0],25));
-Vals[3]+=d1;
 Vals[3]+=ch(Vals[0],b1,c1);
-Vals[3]+=0xB956C25B;
+Vals[3]+=D1A;
 
 Vals[7]=Vals[3];
 Vals[7]+=h1;
 Vals[4]+=fcty_e2;
 Vals[3]+=(rotr(Vals[4],2)^rotr(Vals[4],13)^rotr(Vals[4],22));
 
-Vals[2]=c1;
+Vals[2]=C1addK5;
 Vals[2]+=(rotr(Vals[7],6)^rotr(Vals[7],11)^rotr(Vals[7],25));
 Vals[2]+=ch(Vals[7],Vals[0],b1);
-Vals[2]+=K[5];
 
 Vals[6]=Vals[2];
 Vals[6]+=g1;
 Vals[3]+=Ma2(g1,Vals[4],f1);
 Vals[2]+=(rotr(Vals[3],2)^rotr(Vals[3],13)^rotr(Vals[3],22));
 
-Vals[1]=b1;
+Vals[1]=B1addK6;
 Vals[1]+=(rotr(Vals[6],6)^rotr(Vals[6],11)^rotr(Vals[6],25));
 Vals[1]+=ch(Vals[6],Vals[7],Vals[0]);
-Vals[1]+=K[6];
 
 Vals[5]=Vals[1];
 Vals[5]+=f1;
@@ -177,16 +177,14 @@ Vals[4]+=Vals[0];
 Vals[0]+=(rotr(Vals[1],2)^rotr(Vals[1],13)^rotr(Vals[1],22));
 Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
 Vals[7]+=ch(Vals[4],Vals[5],Vals[6]);
-Vals[7]+=K[16];
-Vals[7]+=fw0;
+Vals[7]+=W16addK16;
 Vals[0]+=Ma(Vals[3],Vals[1],Vals[2]);
 Vals[3]+=Vals[7];
 Vals[7]+=(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22));
 Vals[7]+=Ma(Vals[2],Vals[0],Vals[1]);
 Vals[6]+=(rotr(Vals[3],6)^rotr(Vals[3],11)^rotr(Vals[3],25));
 Vals[6]+=ch(Vals[3],Vals[4],Vals[5]);
-Vals[6]+=K[17];
-Vals[6]+=fw1;
+Vals[6]+=W17addK17;
 Vals[2]+=Vals[6];
 Vals[6]+=(rotr(Vals[7],2)^rotr(Vals[7],13)^rotr(Vals[7],22));
 
