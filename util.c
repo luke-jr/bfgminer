@@ -256,13 +256,15 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	int rc;
 	struct data_buffer all_data = {NULL, 0};
 	struct upload_buffer upload_data;
-	json_error_t err = {0, 0, 0, "", ""};
+	json_error_t err;
 	struct curl_slist *headers = NULL;
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	long timeout = longpoll ? (60 * 60) : 60;
 	struct header_info hi = {NULL, false, NULL};
 	bool probing = false;
+
+	memset(&err, 0, sizeof(err));
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
