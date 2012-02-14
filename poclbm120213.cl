@@ -1268,13 +1268,13 @@ W[16]+=W[20];
 W[23]+=W[19];
 W[23]+=(rotr(W[16],6)^rotr(W[16],11)^rotr(W[16],25));
 W[23]+=ch(W[16],W[17],W[18]);
-W[23]+=K[60];
+//W[23]+=K[60]; diffed from 0xA41F32E7
 
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
 #if defined(VECTORS4)
-	W[23] ^= -0x5be0cd19U;
+	W[23] ^= 0x136032ED;
 	bool result = W[23].x & W[23].y & W[23].z & W[23].w;
 	if (!result) {
 		if (!W[23].x)
@@ -1287,7 +1287,7 @@ W[23]+=K[60];
 			output[FOUND] = output[NFLAG & nonce.w] =  nonce.w;
 	}
 #elif defined(VECTORS2)
-	W[23] ^= -0x5be0cd19U;
+	W[23] ^= 0x136032ED;
 	bool result = W[23].x & W[23].y;
 	if (!result) {
 		if (!W[23].x)
@@ -1296,7 +1296,7 @@ W[23]+=K[60];
 			output[FOUND] = output[NFLAG & nonce.y] =  nonce.y;
 	}
 #else
-	if (W[23] == -0x5be0cd19U)
+	if (W[23] == 0x136032ED)
 		output[FOUND] = output[NFLAG & nonce] =  nonce;
 #endif
 }
