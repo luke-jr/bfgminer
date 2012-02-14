@@ -139,13 +139,22 @@ static void bitforce_detect_auto()
 static void bitforce_detect()
 {
 	struct string_elist *iter, *tmp;
+	bool found = false;
+	bool autoscan = false;
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
+		if (!strcmp(iter->string, "auto"))
+			autoscan = true;
+		else
 		if (bitforce_detect_one(iter->string))
+		{
 			string_elist_del(iter);
+			found = true;
+		}
 	}
 
-	bitforce_detect_auto();
+	if (autoscan || !found)
+		bitforce_detect_auto();
 }
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
