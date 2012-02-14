@@ -33,20 +33,14 @@
 
 struct device_api bitforce_api;
 
-#ifdef WIN32
-
 static int BFopen(const char *devpath)
 {
+#ifdef WIN32
 	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
 		return -1;
 	return _open_osfhandle((LONG)hSerial, 0);
-}
-
 #else
-
-static int BFopen(const char *devpath)
-{
 	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
 	if (likely(fdDev != -1))
 	{
@@ -63,9 +57,8 @@ static int BFopen(const char *devpath)
 	tcflush(fdDev, TCOFLUSH);
 	tcflush(fdDev, TCIFLUSH);
 	return fdDev;
-}
-
 #endif
+}
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {
