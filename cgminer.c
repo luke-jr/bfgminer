@@ -929,9 +929,10 @@ static void load_default_config(void)
 	char buf[PATH_MAX];
 
 #if defined(unix)
-	strcpy(buf, getenv("HOME"));
-	if (*buf)
+	if (getenv("HOME") && *getenv("HOME")) {
+	        strcpy(buf, getenv("HOME"));
 		strcat(buf, "/");
+	}
 	else
 		strcpy(buf, "");
 	strcat(buf, ".cgminer/");
@@ -2640,9 +2641,10 @@ retry:
 		char *str, filename[PATH_MAX], prompt[PATH_MAX + 50];
 
 #if defined(unix)
-		strcpy(filename, getenv("HOME"));
-		if (*filename)
+		if (getenv("HOME") && *getenv("HOME")) {
+		        strcpy(filename, getenv("HOME"));
 			strcat(filename, "/");
+		}
 		else
 			strcpy(filename, "");
 		strcat(filename, ".cgminer/");
