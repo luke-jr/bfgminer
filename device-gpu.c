@@ -1219,7 +1219,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	}
 	set_threads_hashes(clState->preferred_vwidth, &threads, &hashes, globalThreads,
 			   localThreads[0], gpu->intensity);
-	if (gpu->dynamic && hashes > gpu->max_hashes)
+	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 	status = thrdata->queue_kernel_parameters(clState, &work->blk);
 	if (unlikely(status != CL_SUCCESS)) {
@@ -1264,10 +1264,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	/* The amount of work scanned can fluctuate when intensity changes
 	 * and since we do this one cycle behind, we increment the work more
 	 * than enough to prevent repeating work */
-	if (gpu->dynamic)
-		work->blk.nonce += gpu->max_hashes;
-	else
-		work->blk.nonce += hashes;
+	work->blk.nonce += gpu->max_hashes;
 
 	return hashes;
 }

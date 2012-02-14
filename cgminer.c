@@ -3292,6 +3292,7 @@ void *miner_thread(void *userdata)
 		cycle = (can_roll(work) && should_roll(work)) ? 1 : def_cycle;
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
+		cgpu->max_hashes = 0;
 		if (api->prepare_work && !api->prepare_work(mythr, work)) {
 			applog(LOG_ERR, "work prepare failed, exiting "
 				"mining thread %d", thr_id);
@@ -3321,6 +3322,8 @@ void *miner_thread(void *userdata)
 			if (unlikely(!hashes))
 				goto out;
 			hashes_done += hashes;
+			if (hashes > cgpu->max_hashes)
+				cgpu->max_hashes = hashes;
 
 			gettimeofday(&tv_end, NULL);
 			timeval_subtract(&diff, &tv_end, &tv_start);
@@ -3380,7 +3383,7 @@ void *miner_thread(void *userdata)
 			}
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
-		} while (!abandon_work(work, &wdiff, hashes));
+		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
 	}
 
 out:
