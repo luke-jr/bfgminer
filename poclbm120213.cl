@@ -73,9 +73,10 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 						const uint f1, const uint g1, const uint h1,
 						const u base,
 						const uint fw0, const uint fw1, const uint fw2, const uint fw3, const uint fw15, const uint fw01r,
-						const uint fcty_e, const uint fcty_e2,
+						const uint fcty_e2,
 						const uint D1A, const uint C1addK5, const uint B1addK6,
 						const uint W16addK16, const uint W17addK17,
+						const uint PreVal4, const uint Preval0,
 						__global uint * output)
 {
 	u W[24];
@@ -89,11 +90,9 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	const u nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
 #endif
 
-Vals[4]=fcty_e;
-Vals[4]+=nonce;
+Vals[4]=PreVal4+nonce;
 
-Vals[0]=Vals[4];
-Vals[0]+=state0;
+Vals[0]=Preval0+nonce;
 
 Vals[3]=(rotr(Vals[0],6)^rotr(Vals[0],11)^rotr(Vals[0],25));
 Vals[3]+=ch(Vals[0],b1,c1);
