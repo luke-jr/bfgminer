@@ -47,7 +47,22 @@ static int BFopen(const char *devpath)
 
 static int BFopen(const char *devpath)
 {
-	return open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
+	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
+	if (likely(fdDev != -1))
+	{
+		struct termios pattr;
+		
+		tcgetattr(fdDev, &pattr);
+		pattr.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+		pattr.c_oflag &= ~OPOST;
+		pattr.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+		pattr.c_cflag &= ~(CSIZE | PARENB);
+		pattr.c_cflag |= CS8;
+		tcsetattr(fdDev, TCSANOW, &pattr);
+	}
+	tcflush(fdDev, TCOFLUSH);
+	tcflush(fdDev, TCIFLUSH);
+	return fdDev;
 }
 
 #endif
@@ -180,19 +195,6 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 		return false;
 	}
 
-#ifndef WIN32
-	{
-		struct termios pattr;
-
-		tcgetattr(fdDev, &pattr);
-		pattr.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-		pattr.c_oflag &= ~OPOST;
-		pattr.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-		pattr.c_cflag &= ~(CSIZE | PARENB);
-		pattr.c_cflag |= CS8;
-		tcsetattr(fdDev, TCSANOW, &pattr);
-	}
-#endif
 	bitforce->device_fd = fdDev;
 
 	applog(LOG_INFO, "Opened BitForce on %s", bitforce->device_path);
