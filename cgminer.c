@@ -1278,11 +1278,14 @@ static void check_winsizes(void)
 	if (!use_curses)
 		return;
 	if (curses_active_locked()) {
-		int __maybe_unused y, x;
+		int y, x;
 
-		getmaxyx(statuswin, y, x);
+		x = getmaxx(statuswin);
 		wresize(statuswin, logstart, x);
-		change_logwinsize();
+		getmaxyx(mainwin, y, x);
+		y -= logcursor;
+		wresize(logwin, y, x);
+		mvwin(logwin, logcursor, 0);
 		doupdate();
 		unlock_curses();
 	}
