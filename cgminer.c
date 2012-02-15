@@ -100,6 +100,7 @@ int opt_bench_algo = -1;
 static const bool opt_time = true;
 
 #ifdef HAVE_OPENCL
+int opt_dynamic_interval = 7;
 static bool opt_restart = true;
 static bool opt_nogpu;
 #endif
@@ -674,6 +675,9 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_fail_only,
 			"Don't leak work to backup pools when primary pool is lagging"),
 #ifdef HAVE_OPENCL
+	OPT_WITH_ARG("--gpu-dyninterval",
+		     set_int_1_to_65535, opt_show_intval, &opt_dynamic_interval,
+		     "Set the refresh interval in ms for GPUs using dynamic intensity"),
 	OPT_WITH_ARG("--gpu-platform",
 		     set_int_0_to_9999, opt_show_intval, &opt_platform_id,
 		     "Select OpenCL platform ID to use for GPU mining"),

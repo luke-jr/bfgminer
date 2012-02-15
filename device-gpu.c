@@ -1176,6 +1176,8 @@ static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work
 	return true;
 }
 
+extern int opt_dynamic_interval;
+
 static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 				uint64_t __maybe_unused max_nonce)
 {
@@ -1209,10 +1211,10 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		/* Try to not let the GPU be out for longer than 6ms, but
 		 * increase intensity when the system is idle, unless
 		 * dynamic is disabled. */
-		if (gpu_ms_average > 7) {
+		if (gpu_ms_average > opt_dynamic_interval) {
 			if (gpu->intensity > MIN_INTENSITY)
 				--gpu->intensity;
-		} else if (gpu_ms_average < 3) {
+		} else if (gpu_ms_average < ((opt_dynamic_interval / 2) ? : 1)) {
 			if (gpu->intensity < MAX_INTENSITY)
 				++gpu->intensity;
 		}
