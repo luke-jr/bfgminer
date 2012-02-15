@@ -1,3 +1,42 @@
+Version 2.2.6 - February 16, 2012
+
+- Provide warning on each startup about sdk 2.6
+- Fix unused warnings on win32.
+- bitforce: Simplify BFopen WIN32 ifdef/else
+- Fix initialization warning with jansson 1.3
+- bitforce: Cleanup extraneous TODO that isn't needed
+- Move tcsetattr (and new tcflush) into *nix BFopen to simplify things a bit
+- Add message explaining 2nd thread disabling for dynamic mode and how to tune
+it.
+- Move logwindow down once number of devices is known.
+- Automatically choose phatk kernel for bitalign non-gcn ATI cards, and then
+only select poclbm if SDK2.6 is detected.
+- Allow the refresh interval to be adjusted in dynamic intensity with a
+--gpu-dyninterval parameter.
+- Make curses display visible right from the beginning and fix the window sizes
+so the initial messages don't get lost once the status window is drawn.
+- The amount of work scanned can fluctuate when intensity changes and since we
+do this one cycle behind, we increment the work more than enough to prevent
+repeati
+- bitforce: Set a 30 second timeout for serial port on Windows, since the
+default is undefined
+- Use PreVal4addT1 instead of PreVal4 in poclbm kernel.
+- Import PreVal4 and PreVal0 into poclbm kernel.
+- Import more prepared constants into poclbm kernel.
+- Keep variables in one array but use Vals[] name for consistency with other
+kernel designs.
+- Replace constants that are mandatorily added in poclbm kernel with one value.
+- Remove addition of final constant before testing for result in poclbm kernel.
+- Hand optimise variable addition order.
+- Hand optimise first variable declaration order in poclbm kernel.
+- Radical reordering machine based first pass to change variables as late as
+possible, bringing their usage close together.
+- fix strcpy NULL pointer if env HOME unset.
+- bitforce: Disable automatic scanning when at least one device is specified
+manually
+- Unroll all poclbm additions to enable further optimisations.
+
+
 Version 2.2.5 - February 13, 2012
 
 - Make output buffer write only as per Diapolo's suggestion.
