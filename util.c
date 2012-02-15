@@ -186,12 +186,12 @@ out:
 int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
 			     curlsocktype __maybe_unused purpose)
 {
-	int keepalive = 1;
-	int tcp_keepcnt = 5;
 	int tcp_keepidle = 120;
 	int tcp_keepintvl = 120;
 
 #ifndef WIN32
+	int keepalive = 1;
+	int tcp_keepcnt = 5;
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
 		return 1;
