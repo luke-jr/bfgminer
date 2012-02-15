@@ -425,6 +425,11 @@ void pause_dynamic_threads(int gpu)
 			continue;
 		if (!thread_no++)
 			continue;
+		if (!thr->pause && cgpu->dynamic) {
+			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
+			applog(LOG_WARNING, "Tune dynamic intensity with --gpu-dyninterval");
+		}
+
 		thr->pause = cgpu->dynamic;
 		if (!cgpu->dynamic && cgpu->enabled)
 			tq_push(thr->q, &ping);
