@@ -1269,6 +1269,21 @@ static inline bool change_logwinsize(void)
 	return false;
 }
 
+static void check_winsizes(void)
+{
+	if (!use_curses)
+		return;
+	if (curses_active_locked()) {
+		int __maybe_unused y, x;
+
+		getmaxyx(statuswin, y, x);
+		wresize(statuswin, logstart, x);
+		change_logwinsize();
+		doupdate();
+		unlock_curses();
+	}
+}
+
 /* For mandatory printing when mutex is already locked */
 void wlog(const char *f, ...)
 {
@@ -1295,13 +1310,20 @@ void wlogprint(const char *f, ...)
 
 void log_curses(int prio, const char *f, va_list ap)
 {
+	bool high_prio;
+
 	if (opt_quiet && prio != LOG_ERR)
 		return;
 
+	high_prio = (prio == LOG_WARNING || prio == LOG_ERR);
+
 	if (curses_active_locked()) {
-		if (!opt_loginput || prio == LOG_ERR || prio == LOG_WARNING) {
+		if (!opt_loginput || high_prio) {
 			vw_printw(logwin, f, ap);
-			wrefresh(logwin);
+			if (high_prio)
+				refresh();
+			else
+				wrefresh(logwin);
 		}
 		unlock_curses();
 	} else
@@ -3654,7 +3676,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			curses_print_status();
 			for (i = 0; i < mining_threads; i++)
 				curses_print_devstatus(i);
-			clearok(statuswin, true);
+			clearok(curscr, true);
 			doupdate();
 			unlock_curses();
 		}
@@ -4152,6 +4174,10 @@ int main (int argc, char *argv[])
 	#endif // defined(WIN32)
 #endif
 
+	devcursor = 8;
+	logstart = devcursor + 1;
+	logcursor = logstart + 1;
+
 	block = calloc(sizeof(struct block), 1);
 	if (unlikely(!block))
 		quit (1, "main OOM");
@@ -4180,6 +4206,9 @@ int main (int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	if (use_curses)
+		enable_curses();
 
 	applog(LOG_WARNING, "Started %s", packagename);
 
@@ -4276,16 +4305,15 @@ int main (int argc, char *argv[])
 
 	load_temp_cutoffs();
 
-	devcursor = 8;
-	logstart = devcursor + total_devices + 1;
+	logstart += total_devices;
 	logcursor = logstart + 1;
+
+	check_winsizes();
 
 	if (opt_realquiet)
 		use_curses = false;
 
 	if (!total_pools) {
-		if (use_curses)
-			enable_curses();
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
 		if (!use_curses || (use_curses && !input_pool(false)))
 			quit(1, "Pool setup failed");
@@ -4396,8 +4424,6 @@ int main (int argc, char *argv[])
 		}
 
 		if (!pools_active) {
-			if (use_curses)
-				enable_curses();
 			applog(LOG_ERR, "No servers were found that could be used to get work from.");
 			applog(LOG_ERR, "Please check the details from the list below of the servers you have input");
 			applog(LOG_ERR, "Most likely you have input the wrong URL, forgotten to add a port, or have not set up workers");
@@ -4475,9 +4501,6 @@ int main (int argc, char *argv[])
 		opt_n_threads,
 		algo_names[opt_algo]);
 #endif
-
-	if (use_curses)
-		enable_curses();
 
 	watchpool_thr_id = mining_threads + 3;
 	thr = &thr_info[watchpool_thr_id];
