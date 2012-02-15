@@ -40,6 +40,10 @@ static int BFopen(const char *devpath)
 	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
 		return -1;
+	
+	COMMTIMEOUTS cto = {30000, 0, 30000, 0, 30000};
+	SetCommTimeouts(hSerial, &cto);
+	
 	return _open_osfhandle((LONG)hSerial, 0);
 }
 
