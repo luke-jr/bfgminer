@@ -357,11 +357,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	if (chosen_kernel == KL_NONE) {
 		if (strstr(name, "Tahiti") // GCN
-		    || !clState->hasBitAlign // Older Radeon & Nvidia
-		    || strstr(vbuff, "844.4") // Linux 64 bit ATI 2.6 SDK
-		    || strstr(vbuff, "851.4") // Windows 64 bit ""
-		    || strstr(vbuff, "831.4") // Windows & Linux 32 bit ""
-		)
+		    || !clState->hasBitAlign) // Older Radeon & Nvidia
 			clState->chosen_kernel = KL_POCLBM;
 		else
 			clState->chosen_kernel = KL_PHATK;
