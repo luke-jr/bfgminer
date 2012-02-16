@@ -108,7 +108,6 @@
 
 	static char *WSAErrorMsg()
 	{
-		char *msg;
 		int i;
 		int id = WSAGetLastError();
 
