@@ -763,7 +763,7 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 
 	CL_SET_BLKARG(PreVal4_2);
 	CL_SET_BLKARG(cty_h);
-	CL_SET_BLKARG(cty_d);
+	CL_SET_BLKARG(D1A);
 	CL_SET_BLKARG(PreVal0);
 	CL_SET_BLKARG(cty_b);
 	CL_SET_BLKARG(cty_c);

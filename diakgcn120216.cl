@@ -53,7 +53,7 @@ __kernel
 	__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 	void search(	BASE
 			const uint PreVal4,
-			const uint H1, const uint D1, const uint PreVal0, const uint B1, const uint C1,
+			const uint H1, const uint D1A, const uint PreVal0, const uint B1, const uint C1,
 			const uint F1, const uint G1, const uint C1addK5, const uint B1addK6, const uint PreVal0addK7,
 			const uint W16addK16, const uint W17addK17,
 			const uint PreW18, const uint PreW19,
@@ -95,7 +95,7 @@ __kernel
 
 	V[4] = PreVal4 + nonce;
 
-	V[7] = H1 + (V[3] = D1 + Ch((PreVal0 + nonce), B1, C1) + rotr26(PreVal0 + nonce));
+	V[7] = H1 + (V[3] = D1A + Ch((PreVal0 + nonce), B1, C1) + rotr26(PreVal0 + nonce));
 	V[3] += rotr30(V[4]) + Ma(F1, G1, V[4]);
 
 	V[6] = G1 + (V[2] = C1addK5 + Ch(V[7], (PreVal0 + nonce), B1) + rotr26(V[7]));
