@@ -1198,8 +1198,6 @@ static void curses_print_status(void)
 	mvwhline(statuswin, logstart - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
 		have_opencl ? "[G]PU management " : "");
-	/* The window will be updated once we're done with all the devices */
-	wnoutrefresh(statuswin);
 }
 
 static void adj_width(int var, int *length)
@@ -1248,7 +1246,6 @@ static void curses_print_devstatus(int thr_id)
 	}
 
 		wclrtoeol(statuswin);
-	wnoutrefresh(statuswin);
 }
 
 static void print_status(int thr_id)
@@ -1286,7 +1283,6 @@ static void check_winsizes(void)
 		y -= logcursor;
 		wresize(logwin, y, x);
 		mvwin(logwin, logcursor, 0);
-		doupdate();
 		unlock_curses();
 	}
 }
@@ -1310,7 +1306,6 @@ void wlogprint(const char *f, ...)
 		va_start(ap, f);
 		vw_printw(logwin, f, ap);
 		va_end(ap);
-		wrefresh(logwin);
 		unlock_curses();
 	}
 }
@@ -1327,7 +1322,10 @@ void log_curses(int prio, const char *f, va_list ap)
 	if (curses_active_locked()) {
 		if (!opt_loginput || high_prio) {
 			vw_printw(logwin, f, ap);
-			wrefresh(logwin);
+			if (high_prio) {
+				touchwin(logwin);
+				wrefresh(logwin);
+			}
 		}
 		unlock_curses();
 	} else
@@ -1338,7 +1336,6 @@ void clear_logwin(void)
 {
 	if (curses_active_locked()) {
 		wclear(logwin);
-		wrefresh(logwin);
 		unlock_curses();
 	}
 }
@@ -2247,7 +2244,6 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
 		wlog(" Unable to get work from server occasions: %d\n", pool->getfail_occasions);
 		wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
-		wrefresh(logwin);
 		unlock_curses();
 	}
 }
@@ -3687,8 +3683,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			curses_print_status();
 			for (i = 0; i < mining_threads; i++)
 				curses_print_devstatus(i);
-			clearok(curscr, true);
-			doupdate();
+			touchwin(statuswin);
+			wrefresh(statuswin);
+			touchwin(logwin);
+			wrefresh(logwin);
 			unlock_curses();
 		}
 
