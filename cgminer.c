@@ -1702,8 +1702,17 @@ void kill_work(void)
 	thr = &thr_info[watchdog_thr_id];
 	thr_info_cancel(thr);
 
-	applog(LOG_DEBUG, "Killing off mining threads");
+	applog(LOG_DEBUG, "Stopping mining threads");
 	/* Stop the mining threads*/
+	for (i = 0; i < mining_threads; i++) {
+		thr = &thr_info[i];
+		thr->pause = true;
+	}
+
+	sleep(1);
+
+	applog(LOG_DEBUG, "Killing off mining threads");
+	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = &thr_info[i];
 		thr_info_cancel(thr);
