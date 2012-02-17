@@ -1689,7 +1689,6 @@ void kill_work(void)
 	struct thr_info *thr;
 	int i;
 
-	disable_curses();
 	applog(LOG_INFO, "Received kill message");
 
 	applog(LOG_DEBUG, "Killing off watchpool thread");
@@ -3891,14 +3890,14 @@ static void print_summary(void)
 
 static void clean_up(void)
 {
+#ifdef HAVE_OPENCL
+	clear_adl(nDevs);
+#endif
+
 	gettimeofday(&total_tv_end, NULL);
 	disable_curses();
 	if (!opt_realquiet && successful_connect)
 		print_summary();
-
-#ifdef HAVE_OPENCL
-	clear_adl(nDevs);
-#endif
 
 	if (opt_n_threads)
 		free(cpus);
