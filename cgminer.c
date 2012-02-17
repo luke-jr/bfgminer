@@ -1327,10 +1327,7 @@ void log_curses(int prio, const char *f, va_list ap)
 	if (curses_active_locked()) {
 		if (!opt_loginput || high_prio) {
 			vw_printw(logwin, f, ap);
-			if (high_prio)
-				refresh();
-			else
-				wrefresh(logwin);
+			wrefresh(logwin);
 		}
 		unlock_curses();
 	} else
@@ -1668,7 +1665,6 @@ static void disable_curses(void)
 		delwin(statuswin);
 		delwin(mainwin);
 		endwin();
-		refresh();
 #ifdef WIN32
 		// Move the cursor to after curses output.
 		HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
