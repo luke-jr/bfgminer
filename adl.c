@@ -743,6 +743,10 @@ int set_engineclock(int gpu, int iEngineClock)
 	iEngineClock *= 100;
 	ga = &gpus[gpu].adl;
 
+	/* Keep track of intended engine clock in case the device changes
+	 * profile and drops while idle, not taking the new engine clock */
+	ga->lastengine = iEngineClock;
+
 	lev = ga->lpOdParameters.iNumberOfPerformanceLevels - 1;
 	lpOdPerformanceLevels = alloca(sizeof(ADLODPerformanceLevels) + (lev * sizeof(ADLODPerformanceLevel)));
 	lpOdPerformanceLevels->iSize = sizeof(ADLODPerformanceLevels) + sizeof(ADLODPerformanceLevel) * lev;
@@ -1073,7 +1077,12 @@ void gpu_autotune(int gpu, bool *enable)
 			newengine = ga->maxspeed;
 		else if (newengine < ga->minspeed)
 			newengine = ga->minspeed;
-		if (newengine != engine) {
+
+		/* Adjust engine clock speed if it's lower, or if it's higher
+		 * but higher than the last intended value as well as the
+		 * current speed, to avoid setting the engine clock speed to
+		 * a speed relateive to a lower profile during idle periods. */
+		if (newengine < engine || (newengine > engine && newengine > ga->lastengine)) {
 			newengine /= 100;
 			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, newengine);
 			set_engineclock(gpu, newengine);
