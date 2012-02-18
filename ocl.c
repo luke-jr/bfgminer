@@ -1,6 +1,7 @@
 /*
- * Copyright 2011 Con Kolivas
+ * Copyright 2011-2012 Con Kolivas
  */
+
 #include "config.h"
 #ifdef HAVE_OPENCL
 

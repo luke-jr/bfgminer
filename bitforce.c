@@ -1,5 +1,6 @@
 /*
  * Copyright 2012 Luke Dashjr
+ * Copyright 2012 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
