@@ -483,12 +483,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			goto build;
 		}
 
-		clRetainProgram(clState->program);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Retaining Program (clRetainProgram)", status);
-			return NULL;
-		}
-
 		fclose(binaryfile);
 		applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
 
@@ -503,12 +497,6 @@ build:
 	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithSource)", status);
-		return NULL;
-	}
-
-	clRetainProgram(clState->program);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: Retaining Program (clRetainProgram)", status);
 		return NULL;
 	}
 
@@ -643,12 +631,6 @@ build:
 			return NULL;
 		}
 
-		clRetainProgram(clState->program);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Retaining Program (clRetainProgram)", status);
-			return NULL;
-		}
-
 		/* Program needs to be rebuilt */
 		prog_built = false;
 	}
@@ -687,12 +669,6 @@ built:
 			char *log = malloc(logSize);
 			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
 			applog(LOG_ERR, "%s", log);
-			return NULL;
-		}
-
-		clRetainProgram(clState->program);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Retaining Program (clRetainProgram)", status);
 			return NULL;
 		}
 	}
