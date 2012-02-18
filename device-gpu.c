@@ -761,10 +761,10 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 		nonces[i] = blk->nonce + i;
 	CL_SET_VARG(vwidth, nonces);
 
+	CL_SET_BLKARG(PreVal0);
 	CL_SET_BLKARG(PreVal4_2);
 	CL_SET_BLKARG(cty_h);
 	CL_SET_BLKARG(D1A);
-	CL_SET_BLKARG(PreVal0);
 	CL_SET_BLKARG(cty_b);
 	CL_SET_BLKARG(cty_c);
 	CL_SET_BLKARG(cty_f);
@@ -792,6 +792,14 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 
 	CL_SET_BLKARG(zeroA);
 	CL_SET_BLKARG(zeroB);
+
+	CL_SET_BLKARG(oneA);
+	CL_SET_BLKARG(twoA);
+	CL_SET_BLKARG(threeA);
+	CL_SET_BLKARG(fourA);
+	CL_SET_BLKARG(fiveA);
+	CL_SET_BLKARG(sixA);
+	CL_SET_BLKARG(sevenA);
 
 	CL_SET_ARG(clState->outputBuffer);
 
