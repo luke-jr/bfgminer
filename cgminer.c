@@ -3547,6 +3547,12 @@ new_longpoll:
 		json_t *val, *soval;
 
 		gettimeofday(&start, NULL);
+
+		/* Longpoll connections can be persistent for a very long time
+		 * and any number of issues could have come up in the meantime
+		 * so always establish a fresh connection instead of relying on
+		 * a persistent one. */
+		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool, false);
 		if (likely(val)) {
