@@ -113,7 +113,8 @@ int clDevicesNum(void) {
 			applog(LOG_INFO, "CL Platform %d version: %s", i, pbuff);
 		if (strstr(pbuff, "844.4") /* Linux 64 bit ATI 2.6 SDK */	||
 		    strstr(pbuff, "851.4") /* Windows 64 bit "" */		||
-		    strstr(pbuff, "831.4") /* Windows & Linux 32 bit "" */ ) {
+		    strstr(pbuff, "831.4") /* Windows & Linux 32 bit "" */	||
+		    strstr(pbuff, "898.1") /* Windows 64 bit 12.2 driver SDK */) {
 				applog(LOG_WARNING, "AMD OpenCL SDK 2.6 installed giving POOR PERFORMANCE on R5xxx and R6xxx.");
 				applog(LOG_WARNING, "Downgrade SDK, delete .bin files and restart cgminer to fix this.");
 		}
@@ -236,13 +237,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(vbuff), vbuff, NULL);
 	if (status == CL_SUCCESS)
 		applog(LOG_INFO, "CL Platform version: %s", vbuff);
-
-	if (strstr(vbuff, "844.4") /* Linux 64 bit ATI 2.6 SDK */	||
-	    strstr(vbuff, "851.4") /* Windows 64 bit "" */		||
-	    strstr(vbuff, "831.4") /* Windows & Linux 32 bit "" */ ) {
-			applog(LOG_WARNING, "AMD OpenCL SDK 2.6 installed giving POOR PERFORMANCE on R5xxx and R6xxx.");
-			applog(LOG_WARNING, "Downgrade SDK, delete .bin files and restart cgminer to fix this.");
-	}
 
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
