@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Con Kolivas
+ * Copyright 2011-2012 Con Kolivas
  * Copyright 2011 Nils Schneider
  *
  * This program is free software; you can redistribute it and/or modify it
