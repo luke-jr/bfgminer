@@ -383,7 +383,10 @@ void init_adl(int nDevs)
 			if (gpus[gpu].min_engine)
 				ga->minspeed = gpus[gpu].min_engine * 100;
 			ga->managed = true;
+			if (gpus[gpu].gpu_memdiff)
+				set_memoryclock(gpu, gpus[gpu].gpu_engine + gpus[gpu].gpu_memdiff);
 		}
+
 		if (gpus[gpu].gpu_memclock) {
 			int setmem = gpus[gpu].gpu_memclock * 100;
 
@@ -396,6 +399,7 @@ void init_adl(int nDevs)
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
 			ga->managed = true;
 		}
+
 		if (gpus[gpu].gpu_vddc) {
 			int setv = gpus[gpu].gpu_vddc * 1000;
 
@@ -408,6 +412,7 @@ void init_adl(int nDevs)
 			ADL_Overdrive5_ODPerformanceLevels_Set(iAdapterIndex, lpOdPerformanceLevels);
 			ga->managed = true;
 		}
+
 		ADL_Overdrive5_ODPerformanceLevels_Get(iAdapterIndex, 0, lpOdPerformanceLevels);
 		ga->iEngineClock = lpOdPerformanceLevels->aLevels[lev].iEngineClock;
 		ga->iMemoryClock = lpOdPerformanceLevels->aLevels[lev].iMemoryClock;
