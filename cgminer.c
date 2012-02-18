@@ -1702,6 +1702,7 @@ void kill_work(void)
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = &thr_info[i];
+		thr_info_freeze(thr);
 		thr->pause = true;
 	}
 
