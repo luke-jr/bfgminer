@@ -1,4 +1,4 @@
-// DiaKGCN 16-02-2012 - OpenCL kernel by Diapolo
+// DiaKGCN 18-02-2012 - OpenCL kernel by Diapolo
 //
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
@@ -88,19 +88,25 @@ __kernel
 #endif
 
 	V[0] = PreVal0 + nonce;
+	V[1] = B1;
+	V[2] = C1;
+	V[3] = D1A;
 	V[4] = PreVal4 + nonce;
+	V[5] = F1;
+	V[6] = G1;
+	V[7] = H1;
 
-	V[7] = H1 + (V[3] = D1A + ch(V[0], B1, C1) + rotr26(V[0]));
-	V[3] += rotr30(V[4]) + ma(F1, G1, V[4]);
+	V[7] += V[3] + ch(V[0], V[1], V[2]) + rotr26(V[0]);
+	V[3] =  V[3] + ch(V[0], V[1], V[2]) + rotr26(V[0]) + rotr30(V[4]) + ma(V[5], V[6], V[4]);
 
-	V[6] = G1 + (V[2] = C1addK5 + ch(V[7], V[0], B1) + rotr26(V[7]));
-	V[2] += rotr30(V[3]) + ma(V[4], F1, V[3]);
+	V[6] += C1addK5 + ch(V[7], V[0], V[1]) + rotr26(V[7]);
+	V[2] =  C1addK5 + ch(V[7], V[0], V[1]) + rotr26(V[7]) + rotr30(V[3]) + ma(V[4], V[5], V[3]);
 
-	V[5] = F1 + (V[1] = B1addK6 + ch(V[6], V[7], V[0]) + rotr26(V[6]));
-	V[1] += rotr30(V[2]) + ma(V[3], V[4], V[2]);
+	V[5] += B1addK6 + ch(V[6], V[7], V[0]) + rotr26(V[6]);
+	V[1] =  B1addK6 + ch(V[6], V[7], V[0]) + rotr26(V[6]) + rotr30(V[2]) + ma(V[3], V[4], V[2]);
 
-	V[4] = V[4] + (V[0] = PreVal0addK7 + nonce + ch(V[5], V[6], V[7]) + rotr26(V[5]));
-	V[0] += rotr30(V[1]) + ma(V[2], V[3], V[1]);
+	V[4] += PreVal0addK7 + nonce + ch(V[5], V[6], V[7]) + rotr26(V[5]);
+	V[0] =  PreVal0addK7 + nonce + ch(V[5], V[6], V[7]) + rotr26(V[5]) + rotr30(V[1]) + ma(V[2], V[3], V[1]);
 
 	V[3] += 0xd807aa98 + V[7] + ch(V[4], V[5], V[6]) + rotr26(V[4]);
 	V[7] =  0xd807aa98 + V[7] + ch(V[4], V[5], V[6]) + rotr26(V[4]) + rotr30(V[0]) + ma(V[1], V[2], V[0]);
@@ -345,46 +351,52 @@ __kernel
 	W[6] = state6 + V[6];
 	W[7] = state7 + V[7];
 
-	// 0x98c7e2a2 + W[0]
-	const u state0AaddV0 = state0A + V[0];
-	// 0xfc08884d + W[0]
-	const u state0BaddV0 = state0B + V[0];
-
-	// 0x90bb1e3c + W[1]
+	// 0x71374491 + 0x1f83d9ab + state1
 	const u state1AaddV1 = state1A + V[1];
-	// 0x50c6645b + W[2]
+	// 0xb5c0fbcf + 0x9b05688c + state2
 	const u state2AaddV2 = state2A + V[2];
-	// 0x3ac42e24 + W[3]
+	// 0x510e527f + 0xe9b5dba5 + state3
 	const u state3AaddV3 = state3A + V[3];
-	// 0x3956c25b + W[4]
+	// 0x3956c25b + state4
 	const u state4AaddV4 = state4A + V[4];
-	// 0x59f111f1 + W[5]
+	// 0x59f111f1 + state5
 	const u state5AaddV5 = state5A + V[5];
-	// 0x923f82a4 + W[6]
+	// 0x923f82a4 + state6
 	const u state6AaddV6 = state6A + V[6];
-	// 0xab1c5ed5 + W[7]
+	// 0xab1c5ed5 + state7
 	const u state7AaddV7 = state7A + V[7];
-	
-	V[2] = 0x3c6ef372 + (V[6] = state1AaddV1 + ch(state0AaddV0, 0x510e527fU, 0x9b05688cU) + rotr26(state0AaddV0));
-	V[6] += rotr30(state0BaddV0) + ma(0x6a09e667U, 0xbb67ae85U, state0BaddV0);
-		
-	V[1] = 0xbb67ae85 + (V[5] = state2AaddV2 + ch(V[2], state0AaddV0, 0x510e527fU) + rotr26(V[2]));
-	V[5] += rotr30(V[6]) + ma(state0BaddV0, 0x6a09e667U, V[6]);
 
-	V[0] = 0x6a09e667 + (V[4] = state3AaddV3 + ch(V[1], V[2], state0AaddV0) + rotr26(V[1]));
-	V[4] += rotr30(V[5]) + ma(V[6], state0BaddV0, V[5]);
+	// 0x98c7e2a2 + state0	
+	V[3] = state0A + V[0];
+	// 0xfc08884d + state0
+	V[7] = state0B + V[0];
+	V[0] = 0x6a09e667;
+	V[1] = 0xbb67ae85;
+	V[2] = 0x3c6ef372;
+	V[4] = 0x510e527f;
+	V[5] = 0x9b05688c;
+	V[6] = 0x1f83d9ab;
 
-	V[7] = state0BaddV0 + (V[3] = state4AaddV4 + state0AaddV0 + ch(V[0], V[1], V[2]) + rotr26(V[0]));
-	V[3] += rotr30(V[4]) + ma(V[5], V[6], V[4]);
+	V[2] += state1AaddV1 + ch(V[3], V[4], V[5]) + rotr26(V[3]);
+	V[6] =  state1AaddV1 + ch(V[3], V[4], V[5]) + rotr26(V[3]) + rotr30(V[7]) + ma(V[0], V[1], V[7]);
 
-	V[6] += (V[2] += state5AaddV5 + ch(V[7], V[0], V[1]) + rotr26(V[7]));
-	V[2] += rotr30(V[3]) + ma(V[4], V[5], V[3]);
+	V[1] += state2AaddV2 + ch(V[2], V[3], V[4]) + rotr26(V[2]);
+	V[5] =  state2AaddV2 + ch(V[2], V[3], V[4]) + rotr26(V[2]) + rotr30(V[6]) + ma(V[7], V[0], V[6]);
 
-	V[5] += (V[1] += state6AaddV6 + ch(V[6], V[7], V[0]) + rotr26(V[6]));
-	V[1] += rotr30(V[2]) + ma(V[3], V[4], V[2]);
+	V[0] += state3AaddV3 + ch(V[1], V[2], V[3]) + rotr26(V[1]);
+	V[4] =  state3AaddV3 + ch(V[1], V[2], V[3]) + rotr26(V[1]) + rotr30(V[5]) + ma(V[6], V[7], V[5]);
 
-	V[4] += (V[0] += state7AaddV7 + ch(V[5], V[6], V[7]) + rotr26(V[5]));
-	V[0] += rotr30(V[1]) + ma(V[2], V[3], V[1]);
+	V[7] += state4AaddV4 + V[3] + ch(V[0], V[1], V[2]) + rotr26(V[0]);
+	V[3] =  state4AaddV4 + V[3] + ch(V[0], V[1], V[2]) + rotr26(V[0]) + rotr30(V[4]) + ma(V[5], V[6], V[4]);
+
+	V[6] += state5AaddV5 + V[2] + ch(V[7], V[0], V[1]) + rotr26(V[7]);
+	V[2] =  state5AaddV5 + V[2] + ch(V[7], V[0], V[1]) + rotr26(V[7]) + rotr30(V[3]) + ma(V[4], V[5], V[3]);
+
+	V[5] += state6AaddV6 + V[1] + ch(V[6], V[7], V[0]) + rotr26(V[6]);
+	V[1] =  state6AaddV6 + V[1] + ch(V[6], V[7], V[0]) + rotr26(V[6]) + rotr30(V[2]) + ma(V[3], V[4], V[2]);
+
+	V[4] += state7AaddV7 + V[0] + ch(V[5], V[6], V[7]) + rotr26(V[5]);
+	V[0] =  state7AaddV7 + V[0] + ch(V[5], V[6], V[7]) + rotr26(V[5]) + rotr30(V[1]) + ma(V[2], V[3], V[1]);
 
 	V[3] += 0x5807aa98 + V[7] + ch(V[4], V[5], V[6]) + rotr26(V[4]);
 	V[7] =  0x5807aa98 + V[7] + ch(V[4], V[5], V[6]) + rotr26(V[4]) + rotr30(V[0]) + ma(V[1], V[2], V[0]);
