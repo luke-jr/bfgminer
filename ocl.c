@@ -355,6 +355,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		clState->preferred_vwidth = opt_vectors;
 	if (opt_worksize && opt_worksize <= (int)clState->max_work_size)
 		clState->work_size = opt_worksize;
+	else if (strstr(name, "Tahiti"))
+		clState->work_size = 64;
 	else
 		clState->work_size = (clState->max_work_size <= 256 ? clState->max_work_size : 256) /
 				clState->preferred_vwidth;
