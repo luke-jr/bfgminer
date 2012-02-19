@@ -119,7 +119,7 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->api = &bitforce_api;
 	bitforce->device_id = i++;
 	bitforce->device_path = strdup(devpath);
-	bitforce->enabled = true;
+	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
 
 	return true;
@@ -254,7 +254,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 			bitforce->temp = temp;
 			if (temp > bitforce->cutofftemp) {
 				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, disabling!", bitforce->api->name, bitforce->device_id);
-				bitforce->enabled = false;
+				bitforce->deven = DEV_RECOVER;
 			}
 		}
 	}

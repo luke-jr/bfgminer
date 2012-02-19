@@ -100,7 +100,7 @@ static const bool opt_time = true;
 
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
-static bool opt_restart = true;
+bool opt_restart = true;
 static bool opt_nogpu;
 #endif
 
@@ -1223,10 +1223,12 @@ static void curses_print_devstatus(int thr_id)
 			wprintw(statuswin, "DEAD ");
 		else if (cgpu->status == LIFE_SICK)
 			wprintw(statuswin, "SICK ");
-	else if (!cgpu->enabled)
-			wprintw(statuswin, "OFF  ");
-		else
-			wprintw(statuswin, "%5.1f", cgpu->rolling);
+	else if (cgpu->deven == DEV_DISABLED)
+		wprintw(statuswin, "OFF  ");
+	else if (cgpu->deven == DEV_RECOVER)
+		wprintw(statuswin, "REST  ");
+	else
+		wprintw(statuswin, "%5.1f", cgpu->rolling);
 		adj_width(cgpu->accepted, &awidth);
 		adj_width(cgpu->rejected, &rwidth);
 		adj_width(cgpu->hw_errors, &hwwidth);
@@ -2380,11 +2382,11 @@ void write_config(FILE *fcfg)
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", opt_socks_proxy);
 	for(i = 0; i < nDevs; i++)
-		if (!gpus[i].enabled)
+		if (gpus[i].deven == DEV_DISABLED)
 			break;
 	if (i < nDevs)
 		for (i = 0; i < nDevs; i++)
-			if (gpus[i].enabled)
+			if (gpus[i].deven != DEV_DISABLED)
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
 	if (opt_api_allow != NULL)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
@@ -3401,7 +3403,7 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || !cgpu->enabled)) {
+			if (unlikely(mythr->pause || cgpu->deven == DEV_DISABLED)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 				mythr->rolling = mythr->cgpu->rolling = 0;
 				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
@@ -3728,7 +3730,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				thr = &thr_info[i];
 
 				/* Don't touch disabled devices */
-				if (!thr->cgpu->enabled)
+				if (thr->cgpu->deven == DEV_DISABLED)
 					continue;
 				thr->pause = false;
 				tq_push(thr->q, &ping);
@@ -3739,7 +3741,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
 			struct thr_info *thr = cgpu->thread;
-			bool *enable;
+			enum dev_enable *denable;
 			int gpu;
 
 			if (cgpu->api != &opencl_api)
@@ -3748,10 +3750,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (i >= nDevs)
 				break;
 			gpu = thr->cgpu->device_id;
-			enable = &cgpu->enabled;
+			denable = &cgpu->deven;
 #ifdef HAVE_ADL
 			if (adl_active && gpus[gpu].has_adl)
-				gpu_autotune(gpu, enable);
+				gpu_autotune(gpu, denable);
 			if (opt_debug && gpus[gpu].has_adl) {
 				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
 				float temp = 0, vddc = 0;
@@ -3762,7 +3764,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			}
 #endif
 			/* Thread is waiting on getwork or disabled */
-			if (thr->getwork || !*enable)
+			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
 
 			if (gpus[gpu].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
@@ -3880,7 +3882,7 @@ static void print_summary(void)
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
 	for (i = 0; i < total_devices; ++i) {
-		if (devices[i]->enabled)
+		if (devices[i]->deven == DEV_ENABLED)
 			log_print_status(devices[i]);
 	}
 
@@ -4130,7 +4132,7 @@ static int cgminer_id_count = 0;
 
 void enable_device(struct cgpu_info *cgpu)
 {
-	cgpu->enabled = true;
+	cgpu->deven = DEV_ENABLED;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
 	mining_threads += cgpu->threads;
 #ifdef HAVE_OPENCL
@@ -4306,7 +4308,7 @@ int main (int argc, char *argv[])
 				} else {
 					enable_device(devices[i]);
 				}
-				devices[i]->enabled = false;
+				devices[i]->deven = DEV_DISABLED;
 			}
 		}
 		total_devices = cgminer_id_count;
@@ -4488,7 +4490,7 @@ int main (int argc, char *argv[])
 
 			/* Enable threads for devices set not to mine but disable
 			 * their queue in case we wish to enable them later */
-			if (cgpu->enabled) {
+			if (cgpu->deven != DEV_DISABLED) {
 				applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
 
 				tq_push(thr->q, &ping);

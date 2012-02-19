@@ -522,7 +522,7 @@ static void gpustatus(int gpu, bool isjson)
 #endif
 			gt = gv = gm = gc = ga = gf = gp = pt = 0;
 
-		if (cgpu->enabled)
+		if (cgpu->deven != DEV_DISABLED)
 			enabled = (char *)YES;
 		else
 			enabled = (char *)NO;
@@ -830,7 +830,7 @@ static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	if (gpus[id].enabled) {
+	if (gpus[id].deven != DEV_DISABLED) {
 		strcpy(io_buffer, message(MSG_ALRENA, id, NULL, isjson));
 		return;
 	}
@@ -844,7 +844,7 @@ static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 				return;
 			}
 
-			gpus[id].enabled = true;
+			gpus[id].deven = DEV_ENABLED;
 			tq_push(thr->q, &ping);
 
 		}
@@ -873,12 +873,12 @@ static void gpudisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	if (!gpus[id].enabled) {
+	if (gpus[id].deven == DEV_DISABLED) {
 		strcpy(io_buffer, message(MSG_ALRDIS, id, NULL, isjson));
 		return;
 	}
 
-	gpus[id].enabled = false;
+	gpus[id].deven = DEV_DISABLED;
 
 	strcpy(io_buffer, message(MSG_GPUDIS, id, NULL, isjson));
 }

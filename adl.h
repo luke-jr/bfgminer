@@ -17,7 +17,7 @@ int gpu_fanpercent(int gpu);
 bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc,
 	       int *activity, int *fanspeed, int *fanpercent, int *powertune);
 void change_gpusettings(int gpu);
-void gpu_autotune(int gpu, bool *enable);
+void gpu_autotune(int gpu, enum dev_enable *denable);
 void clear_adl(int nDevs);
 #else /* HAVE_ADL */
 #define adl_active (0)

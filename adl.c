@@ -330,7 +330,7 @@ void init_adl(int nDevs)
 			continue;
 		}
 
-		if (!gpus[gpu].enabled) {
+		if (gpus[gpu].deven == DEV_DISABLED) {
 			gpus[i].gpu_engine =
 			gpus[i].gpu_memclock =
 			gpus[i].gpu_vddc =
@@ -1025,7 +1025,7 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool __maybe_unused 
 	}
 }
 
-void gpu_autotune(int gpu, bool *enable)
+void gpu_autotune(int gpu, enum dev_enable *denable)
 {
 	int temp, fanpercent, engine, newengine, twintemp = 0;
 	bool fan_optimal = true;
@@ -1068,7 +1068,7 @@ void gpu_autotune(int gpu, bool *enable)
 	if (engine && ga->autoengine) {
 		if (temp > cgpu->cutofftemp) {
 			applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
-			*enable = false;
+			*denable = DEV_RECOVER;
 			newengine = ga->minspeed;
 		} else if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
@@ -1077,9 +1077,12 @@ void gpu_autotune(int gpu, bool *enable)
 			applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
 			/* Only try to tune engine speed up if this GPU is not disabled */
-		} else if (temp < ga->targettemp && engine < ga->maxspeed && *enable) {
+		} else if (temp < ga->targettemp && engine < ga->maxspeed && *denable == DEV_ENABLED) {
 			applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
 			newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
+		} else if (temp < ga->targettemp && *denable == DEV_RECOVER && opt_restart) {
+			applog(LOG_NOTICE, "Device recovered to temperature below target, re-enabling");
+			*denable = DEV_ENABLED;
 		}
 
 		if (newengine > ga->maxspeed)

@@ -207,6 +207,12 @@ struct device_api {
 	void (*thread_shutdown)(struct thr_info*);
 };
 
+enum dev_enable {
+	DEV_ENABLED,
+	DEV_DISABLED,
+	DEV_RECOVER,
+};
+
 struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
@@ -215,7 +221,7 @@ struct cgpu_info {
 	FILE *device_file;
 	int device_fd;
 
-	bool enabled;
+	enum dev_enable deven;
 	int accepted;
 	int rejected;
 	int hw_errors;
@@ -398,6 +404,7 @@ extern int opt_api_port;
 extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
+extern bool opt_restart;
 
 extern pthread_rwlock_t netacc_lock;
 

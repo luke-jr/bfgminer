@@ -742,7 +742,7 @@ static void cpu_detect()
 
 		cgpu = devices[total_devices + i] = &cpus[i];
 		cgpu->api = &cpu_api;
-		cgpu->enabled = true;
+		cgpu->deven = DEV_ENABLED;
 		cgpu->device_id = i;
 		cgpu->threads = 1;
 	}

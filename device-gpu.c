@@ -430,7 +430,7 @@ void pause_dynamic_threads(int gpu)
 		}
 
 		thr->pause = cgpu->dynamic;
-		if (!cgpu->dynamic && cgpu->enabled)
+		if (!cgpu->dynamic && cgpu->deven != DEV_DISABLED)
 			tq_push(thr->q, &ping);
 	}
 }
@@ -505,7 +505,7 @@ retry:
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
-			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, cgpu->enabled ? "Enabled" : "Disabled");
+			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
 			switch (cgpu->status) {
 				default:
 				case LIFE_WELL:
@@ -546,11 +546,11 @@ retry:
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
-		if (gpus[selected].enabled) {
+		if (gpus[selected].deven != DEV_DISABLED) {
 			wlogprint("Device already enabled\n");
 			goto retry;
 		}
-		gpus[selected].enabled = true;
+		gpus[selected].deven = DEV_ENABLED;
 		for (i = 0; i < mining_threads; ++i) {
 			thr = &thr_info[i];
 			cgpu = thr->cgpu;
@@ -560,7 +560,7 @@ retry:
 				continue;
 			if (cgpu->status != LIFE_WELL) {
 				wlogprint("Must restart device before enabling it");
-				gpus[selected].enabled = false;
+				gpus[selected].deven = DEV_DISABLED;
 				goto retry;
 			}
 			applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
@@ -575,11 +575,11 @@ retry:
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
-		if (!gpus[selected].enabled) {
+		if (gpus[selected].deven == DEV_DISABLED) {
 			wlogprint("Device already disabled\n");
 			goto retry;
 		}
-		gpus[selected].enabled = false;
+		gpus[selected].deven = DEV_DISABLED;
 		goto retry;
 	} else if (!strncasecmp(&input, "i", 1)) {
 		int intensity;
@@ -887,7 +887,7 @@ select_cgpu:
 	}
 
 	gpu = cgpu->device_id;
-	cgpu->enabled = false;
+	cgpu->deven = DEV_DISABLED;
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = &thr_info[thr_id];
@@ -912,7 +912,7 @@ select_cgpu:
 			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);
 	}
 
-	cgpu->enabled = true;
+	cgpu->deven = DEV_ENABLED;
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		int virtual_gpu;
@@ -1016,7 +1016,7 @@ static void opencl_detect()
 		struct cgpu_info *cgpu;
 
 		cgpu = devices[total_devices++] = &gpus[i];
-		cgpu->enabled = true;
+		cgpu->deven = DEV_ENABLED;
 		cgpu->api = &opencl_api;
 		cgpu->device_id = i;
 		cgpu->threads = opt_g_threads;
@@ -1105,7 +1105,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 					free(buf);
 			}
 		}
-		cgpu->enabled = false;
+		cgpu->deven = DEV_DISABLED;
 		cgpu->status = LIFE_NOSTART;
 		return false;
 	}
