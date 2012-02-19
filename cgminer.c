@@ -1592,7 +1592,7 @@ static bool get_upstream_work(struct work *work, bool lagging)
 
 	/* If this is the current pool and supports longpoll but has not sent
 	 * a longpoll, send one now */
-	if (unlikely(pool == current_pool() && pool->hdr_path && !pool->lp_sent)) {
+	if (unlikely(pool == current_pool() && !pool->is_lp && pool->hdr_path && !pool->lp_sent)) {
 		req_longpoll = true;
 		url = pool->lp_url;
 	}
@@ -3566,6 +3566,7 @@ static void *longpoll_thread(void *userdata)
 		}
 	}
 
+	pool->is_lp = true;
 	have_longpoll = true;
 	applog(LOG_WARNING, "Long-polling activated for %s", pool->lp_url);
 
@@ -3610,7 +3611,9 @@ static void *longpoll_thread(void *userdata)
 		}
 		sp = select_longpoll_pool();
 		if (sp != pool) {
+			pool->is_lp = false;
 			pool = sp;
+			pool->is_lp = true;
 			applog(LOG_WARNING, "Long-polling changed to %s", pool->lp_url);
 		}
 	}
