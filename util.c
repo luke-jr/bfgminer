@@ -301,10 +301,12 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		curl_easy_setopt(curl, CURLOPT_USERPWD, userpass);
 		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 	}
+	if (longpoll) {
+		pool->lp_sent = true;
 #ifdef CURL_HAS_SOCKOPT
-	if (longpoll)
 		curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, json_rpc_call_sockopt_cb);
 #endif
+	}
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 
 	if (opt_protocol)
@@ -350,6 +352,8 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	}
 
 	rc = curl_easy_perform(curl);
+	if (longpoll)
+		pool->lp_sent = false;
 	if (rc) {
 		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
 		goto err_out;
