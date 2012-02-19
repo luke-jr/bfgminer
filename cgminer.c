@@ -2956,6 +2956,36 @@ static bool pool_active(struct pool *pool, bool pinging)
 			free_work(work);
 		}
 		json_decref(val);
+
+		/* We may be updating the url after the pool has died */
+		if (pool->lp_url)
+			free(pool->lp_url);
+
+		/* Decipher the longpoll URL, if any, and store it in ->lp_url */
+		if (pool->hdr_path) {
+			char *copy_start, *hdr_path;
+			bool need_slash = false;
+
+			hdr_path = pool->hdr_path;
+			if (strstr(hdr_path, "://")) {
+				pool->lp_url = hdr_path;
+				hdr_path = NULL;
+			} else {
+				/* absolute path, on current server */
+				copy_start = (*hdr_path == '/') ? (hdr_path + 1) : hdr_path;
+				if (pool->rpc_url[strlen(pool->rpc_url) - 1] != '/')
+					need_slash = true;
+
+				pool->lp_url = malloc(strlen(pool->rpc_url) + strlen(copy_start) + 2);
+				if (!pool->lp_url) {
+					applog(LOG_ERR, "Malloc failure in pool_active");
+					return false;
+				}
+
+				sprintf(pool->lp_url, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
+			}
+		} else
+			pool->lp_url = NULL;
 	} else {
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
@@ -3496,10 +3526,8 @@ static struct pool *select_longpoll_pool(void)
 
 static void *longpoll_thread(void *userdata)
 {
-	char *copy_start, *hdr_path, *lp_url = NULL;
 	struct thr_info *mythr = userdata;
 	struct timeval start, end;
-	bool need_slash = false;
 	struct pool *sp, *pool;
 	CURL *curl = NULL;
 	int failures = 0;
@@ -3517,34 +3545,16 @@ static void *longpoll_thread(void *userdata)
 	tq_pop(mythr->q, NULL);
 
 	pool = select_longpoll_pool();
-	if (!pool)
+	if (!pool) {
 		applog(LOG_WARNING, "No long-poll found on any pool server");
-new_longpoll:
-	while (!pool) {
-		sleep(30);
-		pool = select_longpoll_pool();
-	}
-	hdr_path = pool->hdr_path;
-
-	/* full URL */
-	if (strstr(hdr_path, "://")) {
-		lp_url = hdr_path;
-		hdr_path = NULL;
-	} else {
-		/* absolute path, on current server */
-		copy_start = (*hdr_path == '/') ? (hdr_path + 1) : hdr_path;
-		if (pool->rpc_url[strlen(pool->rpc_url) - 1] != '/')
-			need_slash = true;
-
-		lp_url = malloc(strlen(pool->rpc_url) + strlen(copy_start) + 2);
-		if (!lp_url)
-			goto out;
-
-		sprintf(lp_url, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
+		while (!pool) {
+			sleep(30);
+			pool = select_longpoll_pool();
+		}
 	}
 
 	have_longpoll = true;
-	applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
+	applog(LOG_WARNING, "Long-polling activated for %s", pool->lp_url);
 
 	while (1) {
 		json_t *val, *soval;
@@ -3556,7 +3566,7 @@ new_longpoll:
 		 * so always establish a fresh connection instead of relying on
 		 * a persistent one. */
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
-		val = json_rpc_call(curl, lp_url, pool->rpc_userpass, rpc_req,
+		val = json_rpc_call(curl, pool->lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool, false);
 		if (likely(val)) {
 			soval = json_object_get(json_object_get(val, "result"), "submitold");
@@ -3577,20 +3587,18 @@ new_longpoll:
 				continue;
 			if (opt_retries == -1 || failures++ < opt_retries) {
 				applog(LOG_WARNING,
-					"longpoll failed for %s, sleeping for 30s", lp_url);
+					"longpoll failed for %s, sleeping for 30s", pool->lp_url);
 				sleep(30);
 			} else {
 				applog(LOG_ERR,
-					"longpoll failed for %s, ending thread", lp_url);
+					"longpoll failed for %s, ending thread", pool->lp_url);
 				goto out;
 			}
 		}
 		sp = select_longpoll_pool();
 		if (sp != pool) {
-			if (likely(lp_url))
-				free(lp_url);
 			pool = sp;
-			goto new_longpoll;
+			applog(LOG_WARNING, "Long-polling changed to %s", pool->lp_url);
 		}
 	}
 
