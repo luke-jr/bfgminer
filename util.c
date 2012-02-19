@@ -301,12 +301,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		curl_easy_setopt(curl, CURLOPT_USERPWD, userpass);
 		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 	}
-	if (longpoll) {
-		pool->lp_sent = true;
 #ifdef CURL_HAS_SOCKOPT
+	if (longpoll)
 		curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, json_rpc_call_sockopt_cb);
 #endif
-	}
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 
 	if (opt_protocol)
