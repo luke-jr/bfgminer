@@ -536,6 +536,7 @@ struct pool {
 	bool submit_old;
 
 	char *hdr_path;
+	char *lp_url;
 
 	unsigned int getwork_requested;
 	unsigned int stale_shares;

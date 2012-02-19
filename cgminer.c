@@ -3517,10 +3517,12 @@ static void *longpoll_thread(void *userdata)
 	tq_pop(mythr->q, NULL);
 
 	pool = select_longpoll_pool();
-new_longpoll:
-	if (!pool) {
+	if (!pool)
 		applog(LOG_WARNING, "No long-poll found on any pool server");
-		goto out;
+new_longpoll:
+	while (!pool) {
+		sleep(30);
+		pool = select_longpoll_pool();
 	}
 	hdr_path = pool->hdr_path;
 
