@@ -816,6 +816,10 @@ Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
 the 2.6 SDK, -v 1 might help, along with not decreasing your memory clock speed.
 
+Q: I have multiple SDKs installed, can I choose which one it uses?
+A: Run cgminer with the -n option and it will list all the platforms currently
+installed. Then you can tell cgminer which platform to use with --gpu-platform.
+
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one
 though.
