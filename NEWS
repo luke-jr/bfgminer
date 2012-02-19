@@ -1,3 +1,52 @@
+Version 2.2.7 - February 20, 2012
+
+- Send out extra longpolls when we have switched pools and the longpoll thread
+is still bound to the old one. This is particularly useful with p2pool where
+longpolls do not correlate with main bitcoin block change and would have led to
+high reject rates on failover.
+- Store whether a work item is the result of a longpoll or not in struct work
+and use it to help determine block changes directly from the work longpoll bool.
+- Keep track of when a longpoll has been sent for a pool and if the current pool
+is requesting work but has not sent a longpoll request, convert one of the work
+i
+- Store the longpoll url in the pool struct and update it from the pool_active
+test in case it changes. This is to allow further changes to longpoll management
+on
+- Re-check for a longpoll supporting pool every 30 seconds if none is found
+initially.
+- Report threads as busy waiting on getwork on startup to avoid them being
+flagged sick on startup during slow networking.
+- Allow devices that are disabled due to overheating to be flagged as recovering
+instead of disabling them and re-enable them if they're below ideal temperatures
+- Tahiti prefers worksize 64 with poclbm.
+- No need to expressly retain the opencl program now that the zero binary issue
+is fixed. This actually fixes cgminer to work with the latest SDK included with
+the ATI catalyst driver 12.2.
+- Show error code on any opencl failure status.
+- Add detection for version 898.1 SDK as well but only give SDK 2.6 warning once
+on startup instead of with each device initialisation.
+- Always use a fresh connection for longpoll as prolonged persistent connections
+can fail for many reasons.
+- Keep track of intended engine clock speed and only adjust up if it's higher
+than the last intended speed. This avoids setting the clock speed to one
+relative to
+- Use gpu-memdiff on startup if an engine clockspeed is set and a memdiff value
+is set.
+- Revert "Adjust engine speed up according to performance level engine setting,
+not the current engine speed." - ineffectual.
+- Freeze the queues on all threads that are sent the pause message to prevent
+them trying to start up again with saved pings in their queues.
+- Updates to diakgcn kernel/
+- Consolidate all screen updates to the watchdog thread and touch both windows
+before refresh.
+- Curses will be disabled in clean_up so don't do it early in kill_work, and
+disable_adl so that GPU settings may be restored to normal in case shutting down
+curs
+- Stop the mining threads before trying to kill them.
+- Plain refresh() does not give reliably screen updates so get rid of all uses
+of it.
+- First release with working diakgcn kernel.
+
 Version 2.2.6 - February 16, 2012
 
 - Provide warning on each startup about sdk 2.6
