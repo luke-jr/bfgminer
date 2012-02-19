@@ -4499,6 +4499,8 @@ int main (int argc, char *argv[])
 			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
 				continue;
 
+			thread_reportout(thr);
+
 			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 				quit(1, "thread %d create failed", thr->id);
 
