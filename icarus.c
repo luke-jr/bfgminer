@@ -52,7 +52,9 @@
 
 #define ICARUS_READ_FAULT_COUNT	(8)
 
-int icarus_read_count;
+static int icarus_read_count;
+static int icarus_write_fault;
+
 struct device_api icarus_api;
 
 static void rev(unsigned char *s, size_t l)
@@ -136,7 +138,7 @@ static void icarus_write(int fd, const void *buf, size_t bufLen)
 
 	ret = write(fd, buf, bufLen);
 	if (unlikely(ret != bufLen))
-		quit(1, "Icarus: Send data failed!");
+		icarus_write_fault = 1;
 }
 
 #define icarus_close(fd) close(fd)
@@ -144,7 +146,6 @@ static void icarus_write(int fd, const void *buf, size_t bufLen)
 static bool icarus_detect_one(const char *devpath)
 {
 	int fd;
-	static int i = 0;
 
 	const unsigned char golden_ob[] =
 		"2db907f9cb4eb938ded904f4832c4331"
@@ -189,12 +190,14 @@ static bool icarus_detect_one(const char *devpath)
 
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;
-	icarus = calloc(1, sizeof(*icarus));
-	devices[total_devices++] = icarus;
+	icarus = calloc(1, sizeof(struct cgpu_info));
 	icarus->api = &icarus_api;
-	icarus->device_id = i++;
+	icarus->device_id = total_devices;
 	icarus->device_path = strdup(devpath);
 	icarus->threads = 1;
+	devices[total_devices++] = icarus;
+
+	icarus_write_fault = 0;
 
 	return true;
 }
@@ -209,7 +212,7 @@ static void icarus_detect()
 	}
 }
 
-static bool icarus_thread_prepare(struct thr_info *thr)
+static bool icarus_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 
@@ -255,6 +258,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	tcflush(fd, TCOFLUSH);
 #endif
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
+	if (icarus_write_fault)
+		return 0;	/* This should never happen */
 
 	ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 	if (ob_hex) {
@@ -299,9 +304,30 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
         return hash_count;
 }
 
+static void icarus_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *icarus;
+	int fd;
+
+	if (thr->cgpu) {
+		icarus = thr->cgpu;
+
+		if (icarus->device_path)
+			free(icarus->device_path);
+
+		close(icarus->device_fd);
+
+		devices[icarus->device_id] = NULL;
+		free(icarus);
+
+		thr->cgpu = NULL;
+	}
+}
+
 struct device_api icarus_api = {
 	.name = "Icarus",
 	.api_detect = icarus_detect,
-	.thread_prepare = icarus_thread_prepare,
+	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,
+	.thread_shutdown = icarus_shutdown,
 };
