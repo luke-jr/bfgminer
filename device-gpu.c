@@ -1000,7 +1000,7 @@ static void opencl_detect()
 		    strcmp(opt_kernel, "phatk") &&
 		    strcmp(opt_kernel, "diakgcn") &&
 		    strcmp(opt_kernel, "diablo"))
-			quit(1, "Invalid kernel name specified - must be poclbm or phatk");
+			quit(1, "Invalid kernel name specified - must be poclbm, phatk or diakgcn");
 		if (!strcmp(opt_kernel, "diakgcn"))
 			chosen_kernel = KL_DIAKGCN;
 		else if (!strcmp(opt_kernel, "poclbm"))

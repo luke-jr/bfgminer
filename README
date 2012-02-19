@@ -183,7 +183,7 @@ GPU only options:
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
 --intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
 --kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/local/bin")
---kernel|-k <arg>   Select kernel to use (poclbm or phatk - default: auto)
+--kernel|-k <arg>   Select kernel to use (poclbm, phatk or diakgcn - default: auto)
 --no-restart        Do not attempt to restart GPUs that hang
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
