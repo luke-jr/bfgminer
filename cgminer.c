@@ -1577,6 +1577,7 @@ static bool get_upstream_work(struct work *work, bool lagging)
 	json_t *val = NULL;
 	int retries = 0;
 	CURL *curl;
+	char *url;
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
@@ -1587,17 +1588,21 @@ static bool get_upstream_work(struct work *work, bool lagging)
 	pool = select_pool(lagging);
 	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
+	url = pool->rpc_url;
+
 	/* If this is the current pool and supports longpoll but has not sent
 	 * a longpoll, send one now */
-	if (unlikely(pool == current_pool() && pool->hdr_path && !pool->lp_sent))
+	if (unlikely(pool == current_pool() && pool->hdr_path && !pool->lp_sent)) {
 		req_longpoll = true;
+		url = pool->lp_url;
+	}
 
 retry:
 	/* A single failure response here might be reported as a dead pool and
 	 * there may be temporary denied messages etc. falsely reporting
 	 * failure so retry a few times before giving up */
 	while (!val && retries++ < 3) {
-		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
+		val = json_rpc_call(curl, url, pool->rpc_userpass, rpc_req,
 			    false, req_longpoll, &work->rolltime, pool, false);
 	}
 	if (unlikely(!val)) {
