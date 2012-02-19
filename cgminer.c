@@ -1613,6 +1613,7 @@ retry:
 		goto retry;
 	}
 	work->pool = pool;
+	work->longpoll = req_longpoll;
 	total_getworks++;
 	pool->getwork_requested++;
 
@@ -2096,7 +2097,7 @@ static inline bool from_existing_block(struct work *work)
 	return ret;
 }
 
-static void test_work_current(struct work *work, bool longpoll)
+static void test_work_current(struct work *work)
 {
 	char *hexstr;
 
@@ -2123,14 +2124,14 @@ static void test_work_current(struct work *work, bool longpoll)
 
 		work_block++;
 
-		if (longpoll)
+		if (work->longpoll)
 			applog(LOG_NOTICE, "LONGPOLL detected new block on network, waiting on fresh work");
 		else if (have_longpoll)
 			applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
 		else
 			applog(LOG_NOTICE, "New block detected on network, waiting on fresh work");
 		restart_threads();
-	} else if (longpoll) {
+	} else if (work->longpoll) {
 		applog(LOG_NOTICE, "LONGPOLL requested work restart, waiting on fresh work");
 		work_block++;
 		restart_threads();
@@ -2181,7 +2182,7 @@ static void *stage_thread(void *userdata)
 		}
 		work->work_block = work_block;
 
-		test_work_current(work, false);
+		test_work_current(work);
 
 		applog(LOG_DEBUG, "Pushing work to getwork queue");
 
@@ -3484,11 +3485,13 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	}
 	work->pool = pool;
 	work->rolltime = rolltime;
+	work->longpoll = true;
+
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
 	 * rather than waiting for it to hit the stage thread. This also
 	 * allows testwork to know whether LP discovered the block or not. */
-	test_work_current(work, true);
+	test_work_current(work);
 
 	work_clone = make_work();
 	memcpy(work_clone, work, sizeof(struct work));

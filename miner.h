@@ -574,6 +574,7 @@ struct work {
 	bool		clone;
 	bool		cloned;
 	bool		rolltime;
+	bool		longpoll;
 
 	unsigned int	work_block;
 	int		id;
