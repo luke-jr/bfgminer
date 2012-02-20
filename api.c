@@ -1234,7 +1234,10 @@ static void tidyup()
 
 /*
  * Interpret IP[/Prefix][,IP2[/Prefix2][,...]] --api-allow option
- *
+ *	special case of 0/0 allows /0 (means all IP addresses)
+ */
+#define ALLIP4 "0/0"
+/*
  * N.B. IP4 addresses are by Definition 32bit big endian on all platforms
  */
 static void setup_ipaccess()
@@ -1274,38 +1277,42 @@ static void setup_ipaccess()
 		if (comma)
 			*(comma++) = '\0';
 
-		slash = strchr(ptr, '/');
-		if (!slash)
-			ipaccess[ips].mask = 0xffffffff;
+		if (strcmp(ptr, ALLIP4) == 0)
+			ipaccess[ips].ip = ipaccess[ips].mask = 0;
 		else {
-			*(slash++) = '\0';
-			mask = atoi(slash);
-			if (mask < 1 || mask > 32)
-				goto popipo; // skip invalid/zero
+			slash = strchr(ptr, '/');
+			if (!slash)
+				ipaccess[ips].mask = 0xffffffff;
+			else {
+				*(slash++) = '\0';
+				mask = atoi(slash);
+				if (mask < 1 || mask > 32)
+					goto popipo; // skip invalid/zero
 
-			ipaccess[ips].mask = 0;
-			while (mask-- >= 0) {
-				octet = 1 << (mask % 8);
-				ipaccess[ips].mask |= (octet << (8 * (mask >> 3)));
+				ipaccess[ips].mask = 0;
+				while (mask-- >= 0) {
+					octet = 1 << (mask % 8);
+					ipaccess[ips].mask |= (octet << (8 * (mask >> 3)));
+				}
 			}
+
+			ipaccess[ips].ip = 0; // missing default to '.0'
+			for (i = 0; ptr && (i < 4); i++) {
+				dot = strchr(ptr, '.');
+				if (dot)
+					*(dot++) = '\0';
+
+				octet = atoi(ptr);
+				if (octet < 0 || octet > 0xff)
+					goto popipo; // skip invalid
+
+				ipaccess[ips].ip |= (octet << (i * 8));
+
+				ptr = dot;
+			}
+
+			ipaccess[ips].ip &= ipaccess[ips].mask;
 		}
-
-		ipaccess[ips].ip = 0; // missing default to '.0'
-		for (i = 0; ptr && (i < 4); i++) {
-			dot = strchr(ptr, '.');
-			if (dot)
-				*(dot++) = '\0';
-
-			octet = atoi(ptr);
-			if (octet < 0 || octet > 0xff)
-				goto popipo; // skip invalid
-
-			ipaccess[ips].ip |= (octet << (i * 8));
-
-			ptr = dot;
-		}
-
-		ipaccess[ips].ip &= ipaccess[ips].mask;
 
 		ips++;
 popipo:
