@@ -151,7 +151,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.1";
+static const char *APIVERSION = "1.2";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
