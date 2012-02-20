@@ -351,7 +351,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	rc = curl_easy_perform(curl);
 	if (longpoll)
-		pool->lp_sent = false;
+		pool_tclear(pool, &pool->lp_sent);
 	if (rc) {
 		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
 		goto err_out;

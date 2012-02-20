@@ -601,6 +601,7 @@ extern void switch_pools(struct pool *selected);
 extern void write_config(FILE *fcfg);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
+extern bool pool_tclear(struct pool *pool, bool *var);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
