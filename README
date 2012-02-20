@@ -119,10 +119,13 @@ Usage instructions:  Run "cgminer --help" to see options:
 
 Usage: . [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
 Options for both config file and command line:
---api-allow         Allow API access (if enabled) only to the given list of IP[/Prefix] address[/subnets]
+--api-allow         Allow API access (if enabled) only to the given list of [W:]IP[/Prefix] address[/subnets]
                     This overrides --api-network and you must specify 127.0.0.1 if it is required
+                    W: in front of the IP address gives that address privileged access to all api commands
 --api-description   Description placed in the API status header (default: cgminer version)
 --api-listen        Listen for API requests (default: disabled)
+                    By default any command that does not just display data returns access denied
+                    See --api-allow to overcome this
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-port          Port number of miner API (default: 4028)
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
@@ -537,11 +540,22 @@ running cgminer and reply with a string and then close the socket each time
 If you add the "--api-network" option, it will accept API requests from any
 network attached computer.
 
+You can only access the comands that reply with data in this mode.
+By default, you cannot access any privileged command that affects the miner -
+you will receive an access denied status message see --api-access below.
+
 You can specify IP addresses/prefixes that are only allowed to access the API
-with the "--api-access" option e.g. --api-access 192.168.0.1,10.0.0/24
+with the "--api-access" option e.g. --api-access W:192.168.0.1,10.0.0/24
 will allow 192.168.0.1 or any address matching 10.0.0.*, but nothing else
 IP addresses are automatically padded with extra '.0's as needed
 Without a /prefix is the same as specifying /32
+0/0 means all IP addresses.
+The 'W:' on the front gives that address/subnet privileged access to commands
+that modify cgminer.
+Without it those commands return an access denied status.
+Privileged access is checked in the order the IP addresses were supplied to
+"--api-access"
+The first match determines the privilege level.
 Using the "--api-access" option overides the "--api-network" option if they
 are both specified
 With "--api-access", 127.0.0.1 is not by default given access unless specified
@@ -584,7 +598,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-The list of requests and replies are:
+The list of requests - a (*) means it requires privileged access - and replies are:
 
  Request       Reply Section  Details
  -------       -------------  -------
@@ -597,7 +611,8 @@ The list of requests and replies are:
                               Pool Count=N, <- the number of Pools
                               ADL=X, <- Y or N if ADL is compiled in the code
                               ADL in use=X, <- Y or N if any GPU has ADL
-                              Strategy=Name| <- the current pool strategy
+                              Strategy=Name, <- the current pool strategy
+                              Log Interval=N| <- log interval (--log N)
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -625,40 +640,50 @@ The list of requests and replies are:
  cpucount      CPUS           Count=N| <- the number of CPUs
                               Always returns 0 if CPU mining is disabled
 
- switchpool|N  none           There is no reply section just the STATUS section
+ switchpool|N (*)
+               none           There is no reply section just the STATUS section
                               stating the results of switching pool N to the
                               highest priority (the pool is also enabled)
                               The Msg includes the pool URL
 
- gpuenable|N   none           There is no reply section just the STATUS section
+ gpuenable|N (*)
+               none           There is no reply section just the STATUS section
                               stating the results of the enable request
 
- gpudisable|N  none           There is no reply section just the STATUS section
+ gpudisable|N (*)
+               none           There is no reply section just the STATUS section
                               stating the results of the disable request
 
- gpurestart|N  none           There is no reply section just the STATUS section
+ gpurestart|N (*)
+               none           There is no reply section just the STATUS section
                               stating the results of the restart request
 
- gpuintensity|N,I  none       There is no reply section just the STATUS section
+ gpuintensity|N,I (*)
+               none       There is no reply section just the STATUS section
                               stating the results of setting GPU N intensity to I
 
- gpumem|N,V    none           There is no reply section just the STATUS section
+ gpumem|N,V (*)
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N memoryclock to V MHz
 
- gpuengine|N,V none           There is no reply section just the STATUS section
+ gpuengine|N,V (*)
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N clock to V MHz
 
- gpufan|N,V    none           There is no reply section just the STATUS section
+ gpufan|N,V (*)
+                none           There is no reply section just the STATUS section
                               stating the results of setting GPU N fan speed to V%
 
- gpuvddc|N,V   none           There is no reply section just the STATUS section
+ gpuvddc|N,V (*)
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N vddc to V
 
- save|filename none           There is no reply section just the STATUS section
+ save|filename (*)
+               none           There is no reply section just the STATUS section
                               stating success or failure saving the cgminer config
                               to filename
 
- quit          none           There is no status section but just a single "BYE|"
+ quit (*)      none           There is no status section but just a single "BYE|"
                               reply before cgminer quits
 
 When you enable, disable or restart a GPU, you will also get Thread messages in
@@ -694,8 +719,7 @@ api-example.c - a 'C' program to access the API (with source code)
   api-example summary 127.0.0.1 4028
 
 miner.php - an example web page to access the API
- This includes buttons to enable, disable and restart the GPUs and also to
- quit cgminer
+ This includes buttons and inputs to attempt access to the privileged commands
  You must modify the 2 lines near the top to change where it looks for cgminer
   $miner = '127.0.0.1'; # hostname or IP address
   $port = 4028;
