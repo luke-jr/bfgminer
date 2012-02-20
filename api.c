@@ -11,6 +11,7 @@
 #include "config.h"
 
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
@@ -256,6 +257,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MISFN 42
 #define MSG_BADFN 43
 #define MSG_SAVED 44
+#define MSG_ACCDENY 45
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -341,6 +343,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISFN,	PARAM_NONE,	"Missing save filename parameter" },
  { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
  { SEVERITY_ERR,   MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
+ { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -350,6 +353,7 @@ static bool ping = true;
 struct IP4ACCESS {
 	in_addr_t ip;
 	in_addr_t mask;
+	bool writemode;
 };
 
 static struct IP4ACCESS *ipaccess = NULL;
@@ -1156,30 +1160,31 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 struct CMDS {
 	char *name;
 	void (*func)(SOCKETTYPE, char *, bool);
+	bool requires_writemode;
 } cmds[] = {
-	{ "version",		apiversion },
-	{ "config",		minerconfig },
-	{ "devs",		devstatus },
-	{ "pools",		poolstatus },
-	{ "summary",		summary },
-	{ "gpuenable",		gpuenable },
-	{ "gpudisable",		gpudisable },
-	{ "gpurestart",		gpurestart },
-	{ "gpu",		gpudev },
+	{ "version",		apiversion,	false },
+	{ "config",		minerconfig,	false },
+	{ "devs",		devstatus,	false },
+	{ "pools",		poolstatus,	false },
+	{ "summary",		summary,	false },
+	{ "gpuenable",		gpuenable,	true },
+	{ "gpudisable",		gpudisable,	true },
+	{ "gpurestart",		gpurestart,	true },
+	{ "gpu",		gpudev,		false },
 #ifdef WANT_CPUMINE
-	{ "cpu",		cpudev },
+	{ "cpu",		cpudev,		false },
 #endif
-	{ "gpucount",		gpucount },
-	{ "cpucount",		cpucount },
-	{ "switchpool",		switchpool },
-	{ "gpuintensity",	gpuintensity },
-	{ "gpumem",		gpumem},
-	{ "gpuengine",		gpuengine},
-	{ "gpufan",		gpufan},
-	{ "gpuvddc",		gpuvddc},
-	{ "save",		dosave },
-	{ "quit",		doquit },
-	{ NULL,			NULL }
+	{ "gpucount",		gpucount,	false },
+	{ "cpucount",		cpucount,	false },
+	{ "switchpool",		switchpool,	true },
+	{ "gpuintensity",	gpuintensity,	true },
+	{ "gpumem",		gpumem,		true },
+	{ "gpuengine",		gpuengine,	true },
+	{ "gpufan",		gpufan,		true },
+	{ "gpuvddc",		gpuvddc,	true },
+	{ "save",		dosave,		true },
+	{ "quit",		doquit,		true },
+	{ NULL,			NULL,		false }
 };
 
 static void send_result(SOCKETTYPE c, bool isjson)
@@ -1233,7 +1238,7 @@ static void tidyup()
 }
 
 /*
- * Interpret IP[/Prefix][,IP2[/Prefix2][,...]] --api-allow option
+ * Interpret [R|W:]IP[/Prefix][,[R|W:]IP2[/Prefix2][,...]] --api-allow option
  *	special case of 0/0 allows /0 (means all IP addresses)
  */
 #define ALLIP4 "0/0"
@@ -1244,6 +1249,7 @@ static void setup_ipaccess()
 {
 	char *buf, *ptr, *comma, *slash, *dot;
 	int ipcount, mask, octet, i;
+	bool writemode;
 
 	buf = malloc(strlen(opt_api_allow) + 1);
 	if (unlikely(!buf))
@@ -1276,6 +1282,17 @@ static void setup_ipaccess()
 		comma = strchr(ptr, ',');
 		if (comma)
 			*(comma++) = '\0';
+
+		writemode = false;
+
+		if (isalpha(*ptr) && *(ptr+1) == ':') {
+			if (tolower(*ptr) == 'w')
+				writemode = true;
+
+			ptr += 2;
+		}
+
+		ipaccess[ips].writemode = writemode;
 
 		if (strcmp(ptr, ALLIP4) == 0)
 			ipaccess[ips].ip = ipaccess[ips].mask = 0;
@@ -1339,6 +1356,7 @@ void api(void)
 	char *cmd;
 	char *param;
 	bool addrok;
+	bool writemode;
 	json_error_t json_err;
 	json_t *json_config;
 	json_t *json_val;
@@ -1430,27 +1448,27 @@ void api(void)
 			goto die;
 		}
 
+		connectaddr = inet_ntoa(cli.sin_addr);
+
 		addrok = false;
+		writemode = false;
 		if (opt_api_allow) {
 			for (i = 0; i < ips; i++) {
 				if ((cli.sin_addr.s_addr & ipaccess[i].mask) == ipaccess[i].ip) {
 					addrok = true;
+					writemode = ipaccess[i].writemode;
 					break;
 				}
 			}
 		} else {
 			if (opt_api_network)
 				addrok = true;
-			else {
-				connectaddr = inet_ntoa(cli.sin_addr);
+			else
 				addrok = (strcmp(connectaddr, localaddr) == 0);
-			}
 		}
 
-		if (opt_debug) {
-			connectaddr = inet_ntoa(cli.sin_addr);
+		if (opt_debug)
 			applog(LOG_DEBUG, "DBG: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
-		}
 
 		if (addrok) {
 			n = recv(c, &buf[0], BUFSIZ-1, 0);
@@ -1529,7 +1547,13 @@ void api(void)
 				if (!did)
 					for (i = 0; cmds[i].name != NULL; i++) {
 						if (strcmp(cmd, cmds[i].name) == 0) {
-							(cmds[i].func)(c, param, isjson);
+							if (cmds[i].requires_writemode && !writemode) {
+								strcpy(io_buffer, message(MSG_ACCDENY, 0, cmds[i].name, isjson));
+								applog(LOG_DEBUG, "DBG: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
+							}
+							else
+								(cmds[i].func)(c, param, isjson);
+
 							send_result(c, isjson);
 							did = true;
 							break;
