@@ -3503,6 +3503,7 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	memcpy(work_clone, work, sizeof(struct work));
 	while (reuse_work(work)) {
 		work_clone->clone = true;
+		work_clone->longpoll = false;
 		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
 		if (unlikely(!stage_work(work_clone)))
 			break;
