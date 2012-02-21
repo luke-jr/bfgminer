@@ -349,6 +349,7 @@ struct CODES {
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
+static int my_thr_id = 0;
 static int bye = 0;
 static bool ping = true;
 
@@ -1135,6 +1136,9 @@ void doquit(SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 	send_result(c, isjson);
 	*io_buffer = '\0';
 	bye = 1;
+
+        PTH(&thr_info[my_thr_id]) = 0L;
+
 	kill_work();
 }
 
@@ -1347,7 +1351,7 @@ popipo:
 	free(buf);
 }
 
-void api(void)
+void api(int api_thr_id)
 {
 	char buf[BUFSIZ];
 	char param_buf[BUFSIZ];
@@ -1371,6 +1375,8 @@ void api(void)
 	bool isjson;
 	bool did;
 	int i;
+
+	my_thr_id = api_thr_id;
 
 	/* This should be done first to ensure curl has already called WSAStartup() in windows */
 	sleep(opt_log_interval);
