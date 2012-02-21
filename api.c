@@ -1209,16 +1209,16 @@ static void send_result(SOCKETTYPE c, bool isjson)
 
 	len = strlen(io_buffer);
 
-	applog(LOG_DEBUG, "DBG: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
+	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
 
 	// ignore failure - it's closed immediately anyway
 	n = send(c, io_buffer, len+1, 0);
 
 	if (opt_debug) {
 		if (SOCKETFAIL(n))
-			applog(LOG_DEBUG, "DBG: send failed: %s", SOCKERRMSG);
+			applog(LOG_DEBUG, "API: send failed: %s", SOCKERRMSG);
 		else
-			applog(LOG_DEBUG, "DBG: sent %d", n);
+			applog(LOG_DEBUG, "API: sent %d", n);
 	}
 
 }
@@ -1482,7 +1482,7 @@ void api(int api_thr_id)
 		}
 
 		if (opt_debug)
-			applog(LOG_DEBUG, "DBG: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
+			applog(LOG_DEBUG, "API: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
 
 		if (addrok) {
 			n = recv(c, &buf[0], BUFSIZ-1, 0);
@@ -1493,9 +1493,9 @@ void api(int api_thr_id)
 
 			if (opt_debug) {
 				if (SOCKETFAIL(n))
-					applog(LOG_DEBUG, "DBG: recv failed: %s", SOCKERRMSG);
+					applog(LOG_DEBUG, "API: recv failed: %s", SOCKERRMSG);
 				else
-					applog(LOG_DEBUG, "DBG: recv command: (%d) '%s'", n, buf);
+					applog(LOG_DEBUG, "API: recv command: (%d) '%s'", n, buf);
 			}
 
 			if (!SOCKETFAIL(n)) {
@@ -1563,7 +1563,7 @@ void api(int api_thr_id)
 						if (strcmp(cmd, cmds[i].name) == 0) {
 							if (cmds[i].requires_writemode && !writemode) {
 								strcpy(io_buffer, message(MSG_ACCDENY, 0, cmds[i].name, isjson));
-								applog(LOG_DEBUG, "DBG: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
+								applog(LOG_DEBUG, "API: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
 							}
 							else
 								(cmds[i].func)(c, param, isjson);
