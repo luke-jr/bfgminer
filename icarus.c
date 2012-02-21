@@ -108,7 +108,7 @@ static int icarus_open(const char *devpath)
 #endif
 }
 
-static void icarus_gets(char *buf, size_t bufLen, int fd)
+static void icarus_gets(unsigned char *buf, size_t bufLen, int fd)
 {
 	ssize_t ret = 0;
 
@@ -134,7 +134,7 @@ static void icarus_gets(char *buf, size_t bufLen, int fd)
 
 static void icarus_write(int fd, const void *buf, size_t bufLen)
 {
-	ssize_t ret;
+	size_t ret;
 
 	ret = write(fd, buf, bufLen);
 	if (unlikely(ret != bufLen))
@@ -147,14 +147,14 @@ static bool icarus_detect_one(const char *devpath)
 {
 	int fd;
 
-	const unsigned char golden_ob[] =
+	const char golden_ob[] =
 		"2db907f9cb4eb938ded904f4832c4331"
 		"0380e3aeb54364057e7fec5157bfc533"
 		"00000000000000000000000080000000"
 		"00000000a58e091ac342724e7c3dc346";
-	const unsigned char golden_nonce[] = "063c5e01";
+	const char golden_nonce[] = "063c5e01";
 
-	char ob_bin[64], nonce_bin[4];
+	unsigned char ob_bin[64], nonce_bin[4];
 	char *nonce_hex;
 
 	if (total_devices == MAX_DEVICES)
@@ -235,13 +235,13 @@ static bool icarus_prepare(struct thr_info *thr)
 }
 
 static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
-				uint64_t max_nonce)
+				__maybe_unused uint64_t max_nonce)
 {
 	struct cgpu_info *icarus;
 	int fd;
 
 	unsigned char ob_bin[64], nonce_bin[4];
-	unsigned char *ob_hex, *nonce_hex;
+	char *ob_hex, *nonce_hex;
 	uint32_t nonce;
 	uint32_t hash_count;
 	time_t t;
@@ -307,7 +307,6 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 static void icarus_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *icarus;
-	int fd;
 
 	if (thr->cgpu) {
 		icarus = thr->cgpu;
