@@ -117,13 +117,6 @@ int clDevicesNum(void) {
 		status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
 		if (status == CL_SUCCESS)
 			applog(LOG_INFO, "CL Platform %d version: %s", i, pbuff);
-		if (strstr(pbuff, "844.4") /* Linux 64 bit ATI 2.6 SDK */	||
-		    strstr(pbuff, "851.4") /* Windows 64 bit "" */		||
-		    strstr(pbuff, "831.4") /* Windows & Linux 32 bit "" */	||
-		    strstr(pbuff, "898.1") /* Windows 64 bit 12.2 driver SDK */) {
-				applog(LOG_WARNING, "AMD OpenCL SDK 2.6 installed giving POOR PERFORMANCE on R5xxx and R6xxx.");
-				applog(LOG_WARNING, "Downgrade SDK, delete .bin files and restart cgminer to fix this.");
-		}
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
@@ -371,20 +364,19 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char numbuf[10];
 
 	if (chosen_kernel == KL_NONE) {
-		/* If no binary is available, and we have a card that suffers with phatk
+		/* If no binary is available, and we have a card that suffers with diablo
 		 * on SDK2.6, use the poclbm kernel instead if one has not been
 		 * selected. */
-		if (strstr(name, "Tahiti") // GCN
-		    || !clState->hasBitAlign // Older Radeon & Nvidia
-		    || strstr(vbuff, "844.4") // Linux 64 bit ATI 2.6 SDK
-		    || strstr(vbuff, "851.4") // Windows 64 bit ""
-		    || strstr(vbuff, "831.4") // Windows & Linux 32 bit ""
-		) {
-			applog(LOG_INFO, "Selecting poclbm kernel");
+		if (strstr(name, "Tahiti") &&
+			(strstr(vbuff, "844.4") || // Linux 64 bit ATI 2.6 SDK
+			 strstr(vbuff, "851.4") || // Windows 64 bit ""
+			 strstr(vbuff, "831.4")))  // Windows & Linux 32 bit ""
+		{
+			 applog(LOG_INFO, "Selecting poclbm kernel");
 			clState->chosen_kernel = KL_POCLBM;
 		} else {
-			applog(LOG_INFO, "Selecting phatk kernel");
-			clState->chosen_kernel = KL_PHATK;
+			applog(LOG_INFO, "Selecting diablo kernel");
+			clState->chosen_kernel = KL_DIABLO;
 		}
 	} else
 		clState->chosen_kernel = chosen_kernel;
@@ -394,7 +386,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			strcpy(filename, POCLBM_KERNNAME".cl");
 			strcpy(binaryfilename, POCLBM_KERNNAME);
 			break;
-		case KL_NONE: /* Shouldn't happen */
 		case KL_PHATK:
 			strcpy(filename, PHATK_KERNNAME".cl");
 			strcpy(binaryfilename, PHATK_KERNNAME);
@@ -403,6 +394,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			strcpy(filename, DIAKGCN_KERNNAME".cl");
 			strcpy(binaryfilename, DIAKGCN_KERNNAME);
 			break;
+		case KL_NONE: /* Shouldn't happen */
 		case KL_DIABLO:
 			strcpy(filename, DIABLO_KERNNAME".cl");
 			strcpy(binaryfilename, DIABLO_KERNNAME);

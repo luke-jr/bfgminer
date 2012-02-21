@@ -1009,7 +1009,7 @@ static void opencl_detect()
 		    strcmp(opt_kernel, "phatk") &&
 		    strcmp(opt_kernel, "diakgcn") &&
 		    strcmp(opt_kernel, "diablo"))
-			quit(1, "Invalid kernel name specified - must be poclbm, phatk or diakgcn");
+			quit(1, "Invalid kernel name specified - must be diablo, poclbm, phatk or diakgcn");
 		if (!strcmp(opt_kernel, "diakgcn"))
 			chosen_kernel = KL_DIAKGCN;
 		else if (!strcmp(opt_kernel, "poclbm"))
@@ -1147,12 +1147,12 @@ static bool opencl_thread_init(struct thr_info *thr)
 			thrdata->queue_kernel_parameters = &queue_poclbm_kernel;
 			break;
 		case KL_PHATK:
-		default:
 			thrdata->queue_kernel_parameters = &queue_phatk_kernel;
 			break;
 		case KL_DIAKGCN:
 			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
 			break;
+		default:
 		case KL_DIABLO:
 			thrdata->queue_kernel_parameters = &queue_diablo_kernel;
 			break;

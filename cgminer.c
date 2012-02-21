@@ -714,7 +714,7 @@ static struct opt_table opt_config_table[] = {
 	             "Specify a path to where the kernel .cl files are"),
 	OPT_WITH_ARG("--kernel|-k",
 		     opt_set_charp, NULL, &opt_kernel,
-		     "Select kernel to use (poclbm, phatk or diakgcn - default: auto)"),
+		     "Select kernel to use (diablo, poclbm, phatk or diakgcn - default: auto)"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
