@@ -449,7 +449,7 @@ extern int set_engineclock(int gpu, int iEngineClock);
 extern int set_memoryclock(int gpu, int iMemoryClock);
 #endif
 
-extern void api(void);
+extern void api(int thr_id);
 
 #define MAX_GPUDEVICES 16
 #define MAX_DEVICES 32

@@ -11,6 +11,7 @@
 #include "config.h"
 
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
@@ -151,7 +152,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.1";
+static const char *APIVERSION = "1.2";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -256,6 +257,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MISFN 42
 #define MSG_BADFN 43
 #define MSG_SAVED 44
+#define MSG_ACCDENY 45
+#define MSG_ACCOK 46
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -341,15 +344,19 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISFN,	PARAM_NONE,	"Missing save filename parameter" },
  { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
  { SEVERITY_ERR,   MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
+ { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
+ { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
+static int my_thr_id = 0;
 static int bye = 0;
 static bool ping = true;
 
 struct IP4ACCESS {
 	in_addr_t ip;
 	in_addr_t mask;
+	bool writemode;
 };
 
 static struct IP4ACCESS *ipaccess = NULL;
@@ -496,9 +503,9 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	strcpy(io_buffer, message(MSG_MINECON, 0, NULL, isjson));
 
 	if (isjson)
-		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\"}" JSON_CLOSE, nDevs, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s);
+		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":\"%d\"}" JSON_CLOSE, nDevs, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval);
 	else
-		sprintf(buf, _MINECON ",GPU Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s%c", nDevs, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, SEPARATOR);
+		sprintf(buf, _MINECON ",GPU Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d%c", nDevs, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, SEPARATOR);
 
 	strcat(io_buffer, buf);
 }
@@ -1129,7 +1136,15 @@ void doquit(SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 	send_result(c, isjson);
 	*io_buffer = '\0';
 	bye = 1;
+
+        PTH(&thr_info[my_thr_id]) = 0L;
+
 	kill_work();
+}
+
+void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	strcpy(io_buffer, message(MSG_ACCOK, 0, NULL, isjson));
 }
 
 void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
@@ -1156,30 +1171,32 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 struct CMDS {
 	char *name;
 	void (*func)(SOCKETTYPE, char *, bool);
+	bool requires_writemode;
 } cmds[] = {
-	{ "version",		apiversion },
-	{ "config",		minerconfig },
-	{ "devs",		devstatus },
-	{ "pools",		poolstatus },
-	{ "summary",		summary },
-	{ "gpuenable",		gpuenable },
-	{ "gpudisable",		gpudisable },
-	{ "gpurestart",		gpurestart },
-	{ "gpu",		gpudev },
+	{ "version",		apiversion,	false },
+	{ "config",		minerconfig,	false },
+	{ "devs",		devstatus,	false },
+	{ "pools",		poolstatus,	false },
+	{ "summary",		summary,	false },
+	{ "gpuenable",		gpuenable,	true },
+	{ "gpudisable",		gpudisable,	true },
+	{ "gpurestart",		gpurestart,	true },
+	{ "gpu",		gpudev,		false },
 #ifdef WANT_CPUMINE
-	{ "cpu",		cpudev },
+	{ "cpu",		cpudev,		false },
 #endif
-	{ "gpucount",		gpucount },
-	{ "cpucount",		cpucount },
-	{ "switchpool",		switchpool },
-	{ "gpuintensity",	gpuintensity },
-	{ "gpumem",		gpumem},
-	{ "gpuengine",		gpuengine},
-	{ "gpufan",		gpufan},
-	{ "gpuvddc",		gpuvddc},
-	{ "save",		dosave },
-	{ "quit",		doquit },
-	{ NULL,			NULL }
+	{ "gpucount",		gpucount,	false },
+	{ "cpucount",		cpucount,	false },
+	{ "switchpool",		switchpool,	true },
+	{ "gpuintensity",	gpuintensity,	true },
+	{ "gpumem",		gpumem,		true },
+	{ "gpuengine",		gpuengine,	true },
+	{ "gpufan",		gpufan,		true },
+	{ "gpuvddc",		gpuvddc,	true },
+	{ "save",		dosave,		true },
+	{ "quit",		doquit,		true },
+	{ "privileged",		privileged,	true },
+	{ NULL,			NULL,		false }
 };
 
 static void send_result(SOCKETTYPE c, bool isjson)
@@ -1192,16 +1209,16 @@ static void send_result(SOCKETTYPE c, bool isjson)
 
 	len = strlen(io_buffer);
 
-	applog(LOG_DEBUG, "DBG: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
+	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
 
 	// ignore failure - it's closed immediately anyway
 	n = send(c, io_buffer, len+1, 0);
 
 	if (opt_debug) {
 		if (SOCKETFAIL(n))
-			applog(LOG_DEBUG, "DBG: send failed: %s", SOCKERRMSG);
+			applog(LOG_DEBUG, "API: send failed: %s", SOCKERRMSG);
 		else
-			applog(LOG_DEBUG, "DBG: sent %d", n);
+			applog(LOG_DEBUG, "API: sent %d", n);
 	}
 
 }
@@ -1233,14 +1250,18 @@ static void tidyup()
 }
 
 /*
- * Interpret IP[/Prefix][,IP2[/Prefix2][,...]] --api-allow option
- *
+ * Interpret [R|W:]IP[/Prefix][,[R|W:]IP2[/Prefix2][,...]] --api-allow option
+ *	special case of 0/0 allows /0 (means all IP addresses)
+ */
+#define ALLIP4 "0/0"
+/*
  * N.B. IP4 addresses are by Definition 32bit big endian on all platforms
  */
 static void setup_ipaccess()
 {
 	char *buf, *ptr, *comma, *slash, *dot;
 	int ipcount, mask, octet, i;
+	bool writemode;
 
 	buf = malloc(strlen(opt_api_allow) + 1);
 	if (unlikely(!buf))
@@ -1274,38 +1295,53 @@ static void setup_ipaccess()
 		if (comma)
 			*(comma++) = '\0';
 
-		slash = strchr(ptr, '/');
-		if (!slash)
-			ipaccess[ips].mask = 0xffffffff;
+		writemode = false;
+
+		if (isalpha(*ptr) && *(ptr+1) == ':') {
+			if (tolower(*ptr) == 'w')
+				writemode = true;
+
+			ptr += 2;
+		}
+
+		ipaccess[ips].writemode = writemode;
+
+		if (strcmp(ptr, ALLIP4) == 0)
+			ipaccess[ips].ip = ipaccess[ips].mask = 0;
 		else {
-			*(slash++) = '\0';
-			mask = atoi(slash);
-			if (mask < 1 || mask > 32)
-				goto popipo; // skip invalid/zero
+			slash = strchr(ptr, '/');
+			if (!slash)
+				ipaccess[ips].mask = 0xffffffff;
+			else {
+				*(slash++) = '\0';
+				mask = atoi(slash);
+				if (mask < 1 || mask > 32)
+					goto popipo; // skip invalid/zero
 
-			ipaccess[ips].mask = 0;
-			while (mask-- >= 0) {
-				octet = 1 << (mask % 8);
-				ipaccess[ips].mask |= (octet << (8 * (mask >> 3)));
+				ipaccess[ips].mask = 0;
+				while (mask-- >= 0) {
+					octet = 1 << (mask % 8);
+					ipaccess[ips].mask |= (octet << (8 * (mask >> 3)));
+				}
 			}
+
+			ipaccess[ips].ip = 0; // missing default to '.0'
+			for (i = 0; ptr && (i < 4); i++) {
+				dot = strchr(ptr, '.');
+				if (dot)
+					*(dot++) = '\0';
+
+				octet = atoi(ptr);
+				if (octet < 0 || octet > 0xff)
+					goto popipo; // skip invalid
+
+				ipaccess[ips].ip |= (octet << (i * 8));
+
+				ptr = dot;
+			}
+
+			ipaccess[ips].ip &= ipaccess[ips].mask;
 		}
-
-		ipaccess[ips].ip = 0; // missing default to '.0'
-		for (i = 0; ptr && (i < 4); i++) {
-			dot = strchr(ptr, '.');
-			if (dot)
-				*(dot++) = '\0';
-
-			octet = atoi(ptr);
-			if (octet < 0 || octet > 0xff)
-				goto popipo; // skip invalid
-
-			ipaccess[ips].ip |= (octet << (i * 8));
-
-			ptr = dot;
-		}
-
-		ipaccess[ips].ip &= ipaccess[ips].mask;
 
 		ips++;
 popipo:
@@ -1315,7 +1351,7 @@ popipo:
 	free(buf);
 }
 
-void api(void)
+void api(int api_thr_id)
 {
 	char buf[BUFSIZ];
 	char param_buf[BUFSIZ];
@@ -1332,12 +1368,15 @@ void api(void)
 	char *cmd;
 	char *param;
 	bool addrok;
+	bool writemode;
 	json_error_t json_err;
 	json_t *json_config;
 	json_t *json_val;
 	bool isjson;
 	bool did;
 	int i;
+
+	my_thr_id = api_thr_id;
 
 	/* This should be done first to ensure curl has already called WSAStartup() in windows */
 	sleep(opt_log_interval);
@@ -1423,27 +1462,27 @@ void api(void)
 			goto die;
 		}
 
+		connectaddr = inet_ntoa(cli.sin_addr);
+
 		addrok = false;
+		writemode = false;
 		if (opt_api_allow) {
 			for (i = 0; i < ips; i++) {
 				if ((cli.sin_addr.s_addr & ipaccess[i].mask) == ipaccess[i].ip) {
 					addrok = true;
+					writemode = ipaccess[i].writemode;
 					break;
 				}
 			}
 		} else {
 			if (opt_api_network)
 				addrok = true;
-			else {
-				connectaddr = inet_ntoa(cli.sin_addr);
+			else
 				addrok = (strcmp(connectaddr, localaddr) == 0);
-			}
 		}
 
-		if (opt_debug) {
-			connectaddr = inet_ntoa(cli.sin_addr);
-			applog(LOG_DEBUG, "DBG: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
-		}
+		if (opt_debug)
+			applog(LOG_DEBUG, "API: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
 
 		if (addrok) {
 			n = recv(c, &buf[0], BUFSIZ-1, 0);
@@ -1454,9 +1493,9 @@ void api(void)
 
 			if (opt_debug) {
 				if (SOCKETFAIL(n))
-					applog(LOG_DEBUG, "DBG: recv failed: %s", SOCKERRMSG);
+					applog(LOG_DEBUG, "API: recv failed: %s", SOCKERRMSG);
 				else
-					applog(LOG_DEBUG, "DBG: recv command: (%d) '%s'", n, buf);
+					applog(LOG_DEBUG, "API: recv command: (%d) '%s'", n, buf);
 			}
 
 			if (!SOCKETFAIL(n)) {
@@ -1522,7 +1561,13 @@ void api(void)
 				if (!did)
 					for (i = 0; cmds[i].name != NULL; i++) {
 						if (strcmp(cmd, cmds[i].name) == 0) {
-							(cmds[i].func)(c, param, isjson);
+							if (cmds[i].requires_writemode && !writemode) {
+								strcpy(io_buffer, message(MSG_ACCDENY, 0, cmds[i].name, isjson));
+								applog(LOG_DEBUG, "API: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
+							}
+							else
+								(cmds[i].func)(c, param, isjson);
+
 							send_result(c, isjson);
 							did = true;
 							break;

@@ -2802,7 +2802,7 @@ static void *api_thread(void *userdata)
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	api();
+	api(api_thr_id);
 
 	PTH(mythr) = 0L;
 
