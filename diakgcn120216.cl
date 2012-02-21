@@ -1,4 +1,4 @@
-// DiaKGCN 18-02-2012 - OpenCL kernel by Diapolo
+// DiaKGCN 20-02-2012 - OpenCL kernel by Diapolo
 //
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
@@ -20,15 +20,9 @@
 		#define ma(x, y, z) amd_bytealign(z ^ x, y, x)
 	#else
 		#define ch(x, y, z) bitselect(z, y, x)
-		#if defined(VECTORS2) || defined(VECTORS4) || defined(VECTORS8)
-			// GCN - VEC2 or VEC4 or VEC8
-			#define ma(z, x, y) bitselect(z, y, z ^ x)
-		#else
-			// GCN - no VEC
-			#define ma(z, x, y) ch(z ^ x, y, x)
-		#endif
+		#define ma(z, x, y) bitselect(z, y, z ^ x)
 	#endif
-#else //BITALIGN
+#else
 	#define ch(x, y, z) (z ^ (x & (y ^ z)))
 	#define ma(x, y, z) ((x & z) | (y & (x | z)))
 #endif
@@ -58,8 +52,8 @@ __kernel
 			const uint state5A, const uint state6A, const uint state7A,
 			__global uint * output)
 {
-	u W[16];
 	u V[8];
+	u W[16];
 
 #ifdef VECTORS8
 	#ifdef GOFFSET
