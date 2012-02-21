@@ -50,6 +50,7 @@ CGMiner specific configuration options:
 	--disable-opencl        Override detection and disable building with opencl
 	--disable-adl           Override detection and disable building with adl
 	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
+	--enable-icarus         Compile support for Icarus Board(default disabled)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
@@ -196,9 +197,9 @@ GPU only options:
 --ndevs|-n          Enumerate number of detected GPUs and exit
 
 
-BitForce only options:
+FPGA mining boards(BitForce, Icarus) only options:
 
---scan-serial|-S <arg> Serial port to probe for BitForce device
+--scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
 
 CPU only options:
@@ -317,14 +318,14 @@ The output line shows the following:
 (5s):1713.6 (avg):1707.8 Mh/s | Q:301  A:729  R:8  HW:0  E:242%  U:22.53/m
 
 Each column is as follows:
-A 5 second exponentially decaying average hash rate
-An all time average hash rate
-The number of requested (Queued) work items from the pools
-The number of Accepted shares
-The number of Rejected shares
-The number of HardWare errors
-The Efficiency defined as number of shares returned / work item
-The Utility defined as the number of shares / minute
+5s:  A 5 second exponentially decaying average hash rate
+avg: An all time average hash rate
+Q:   The number of requested (Queued) work items from the pools
+A:   The number of Accepted shares
+R:   The number of Rejected shares
+HW:  The number of HardWare errors
+E:   The Efficiency defined as number of shares returned / work item
+U:   The Utility defined as the number of shares / minute
 
  GPU 1: 73.5C 2551RPM | 427.3/443.0Mh/s | A:8 R:0 HW:0 U:4.39/m
 
