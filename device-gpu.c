@@ -807,21 +807,30 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 
 static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk)
 {
+	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
+	unsigned int i, num = 0;
 	cl_int status = 0;
-	int num = 0;
+	uint *nonces;
 
-	CL_SET_BLKARG(nonce);
+	nonces = alloca(sizeof(uint) * vwidth);
+	for (i = 0; i < vwidth; i++)
+		nonces[i] = blk->nonce + i;
+	CL_SET_VARG(vwidth, nonces);
+
 	CL_SET_BLKARG(PreVal0);
-	CL_SET_BLKARG(PreVal4_2);
+	CL_SET_BLKARG(PreVal0addK7);
+	CL_SET_BLKARG(PreVal4addT1);
 	CL_SET_BLKARG(PreW18);
 	CL_SET_BLKARG(PreW19);
 	CL_SET_BLKARG(W16);
 	CL_SET_BLKARG(W17);
+	CL_SET_BLKARG(W16addK16);
+	CL_SET_BLKARG(W17addK17);
 	CL_SET_BLKARG(PreW31);
 	CL_SET_BLKARG(PreW32);
 
-	CL_SET_BLKARG(cty_d);
+	CL_SET_BLKARG(D1A);
 	CL_SET_BLKARG(cty_b);
 	CL_SET_BLKARG(cty_c);
 	CL_SET_BLKARG(cty_h);
