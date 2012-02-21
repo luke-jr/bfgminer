@@ -598,6 +598,8 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
+For API version 1.2:
+
 The list of requests - a (*) means it requires privileged access - and replies are:
 
  Request       Reply Section  Details
@@ -659,7 +661,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating the results of the restart request
 
  gpuintensity|N,I (*)
-               none       There is no reply section just the STATUS section
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N intensity to I
 
  gpumem|N,V (*)
@@ -685,6 +687,12 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  quit (*)      none           There is no status section but just a single "BYE|"
                               reply before cgminer quits
+
+ privileged (*)
+               none           There is no reply section just the STATUS section
+                              stating an error if you do not have privileged access
+                              to the API and success if you do have privilege
+                              The command doesn't change anything in cgminer
 
 When you enable, disable or restart a GPU, you will also get Thread messages in
 the cgminer status window
