@@ -2130,14 +2130,16 @@ static void test_work_current(struct work *work)
 
 		work_block++;
 
-		if (work->longpoll)
+		if (work->longpoll) {
 			applog(LOG_NOTICE, "LONGPOLL detected new block on network, waiting on fresh work");
-		else if (have_longpoll)
+			work->longpoll = false;
+		} else if (have_longpoll)
 			applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
 		else
 			applog(LOG_NOTICE, "New block detected on network, waiting on fresh work");
 		restart_threads();
 	} else if (work->longpoll) {
+		work->longpoll = false;
 		applog(LOG_NOTICE, "LONGPOLL requested work restart, waiting on fresh work");
 		work_block++;
 		restart_threads();
