@@ -47,8 +47,7 @@ static int BFopen(const char *devpath)
 	return _open_osfhandle((LONG)hSerial, 0);
 #else
 	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
-	if (likely(fdDev != -1))
-	{
+	if (likely(fdDev != -1)) {
 		struct termios pattr;
 		
 		tcgetattr(fdDev, &pattr);
@@ -93,21 +92,18 @@ static bool bitforce_detect_one(const char *devpath)
 		return false;
 
 	int fdDev = BFopen(devpath);
-	if (unlikely(fdDev == -1))
-	{
+	if (unlikely(fdDev == -1)) {
 		applog(LOG_DEBUG, "BitForce Detect: Failed to open %s", devpath);
 		return false;
 	}
 	BFwrite(fdDev, "ZGX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (unlikely(!pdevbuf[0]))
-	{
+	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "Error reading from BitForce (ZGX)");
 		return 0;
 	}
 	BFclose(fdDev);
-	if (unlikely(!strstr(pdevbuf, "SHA256")))
-	{
+	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		applog(LOG_DEBUG, "BitForce Detect: Didn't recognise BitForce on %s", devpath);
 		return false;
 	}
@@ -158,9 +154,7 @@ static void bitforce_detect()
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
 		if (!strcmp(iter->string, "auto"))
 			autoscan = true;
-		else
-		if (bitforce_detect_one(iter->string))
-		{
+		else if (bitforce_detect_one(iter->string)) {
 			string_elist_del(iter);
 			found = true;
 		}
@@ -187,8 +181,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	struct timeval now;
 
 	int fdDev = BFopen(bitforce->device_path);
-	if (unlikely(-1 == fdDev))
-	{
+	if (unlikely(-1 == fdDev)) {
 		applog(LOG_ERR, "Failed to open BitForce on %s", bitforce->device_path);
 		return false;
 	}
@@ -219,8 +212,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		applog(LOG_ERR, "Error reading from BitForce (ZDX)");
 		return 0;
 	}
-	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K'))
-	{
+	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
 		applog(LOG_ERR, "BitForce ZDX reports: %s", pdevbuf);
 		return 0;
 	}
@@ -231,13 +223,11 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	applog(LOG_DEBUG, "BitForce block data: %s", bin2hex(ob + 8, 44));
 
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (unlikely(!pdevbuf[0]))
-	{
+	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "Error reading from BitForce (block data)");
 		return 0;
 	}
-	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K'))
-	{
+	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
 		applog(LOG_ERR, "BitForce block data reports: %s", pdevbuf);
 		return 0;
 	}
@@ -264,8 +254,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	while (1) {
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-		if (unlikely(!pdevbuf[0]))
-		{
+		if (unlikely(!pdevbuf[0])) {
 			applog(LOG_ERR, "Error reading from BitForce (ZFX)");
 			return 0;
 		}
@@ -278,8 +267,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	work->blk.nonce = 0xffffffff;
 	if (pdevbuf[2] == '-')
 		return 0xffffffff;
-	else
-	if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
+	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		applog(LOG_ERR, "BitForce result reports: %s", pdevbuf);
 		return 0;
 	}
