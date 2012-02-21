@@ -244,7 +244,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	char *ob_hex, *nonce_hex;
 	uint32_t nonce;
 	uint32_t hash_count;
-	time_t t;
+	time_t t = 0;
 
 	icarus = thr->cgpu;
 	fd = icarus->device_fd;
