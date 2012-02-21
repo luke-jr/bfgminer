@@ -258,6 +258,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_BADFN 43
 #define MSG_SAVED 44
 #define MSG_ACCDENY 45
+#define MSG_ACCOK 46
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -344,6 +345,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
  { SEVERITY_ERR,   MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
  { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
+ { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1136,6 +1138,11 @@ void doquit(SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 	kill_work();
 }
 
+void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	strcpy(io_buffer, message(MSG_ACCOK, 0, NULL, isjson));
+}
+
 void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	FILE *fcfg;
@@ -1184,6 +1191,7 @@ struct CMDS {
 	{ "gpuvddc",		gpuvddc,	true },
 	{ "save",		dosave,		true },
 	{ "quit",		doquit,		true },
+	{ "privileged",		privileged,	true },
 	{ NULL,			NULL,		false }
 };
 
