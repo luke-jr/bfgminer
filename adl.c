@@ -457,8 +457,11 @@ void init_adl(int nDevs)
 			ga->overtemp = opt_overheattemp;
 		if (!gpus[gpu].cutofftemp)
 			gpus[gpu].cutofftemp = opt_cutofftemp;
-		if (opt_autofan)
+		if (opt_autofan) {
 			ga->autofan = true;
+			/* Set a safe starting default if we're automanaging fan speeds */
+			set_fanspeed(gpu, gpus[gpu].gpu_fan);
+		}
 		if (opt_autoengine) {
 			ga->autoengine = true;
 			ga->managed = true;
