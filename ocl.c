@@ -425,6 +425,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
+	strcat(binaryfilename, name);
+
 	strcat(binaryfilename, "v");
 	sprintf(numbuf, "%d", clState->preferred_vwidth);
 	strcat(binaryfilename, numbuf);
