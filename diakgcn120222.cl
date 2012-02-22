@@ -569,55 +569,49 @@ __kernel
 #define NFLAG (0x7F)
 
 #ifdef VECTORS8
-	V[7] ^= 0x136032ed;
-
-	bool result = any(V[7] == 0);
+	bool result = any(V[7] == 0x136032ed);
 
 	if (result) {
 		output[FOUND] = FOUND;
-		if (!V[7].s0)
+		if (V[7].s0 == 0x136032ed)
 			output[NFLAG & nonce.s0] = nonce.s0;
-		if (!V[7].s1)
+		if (V[7].s1 == 0x136032ed)
 			output[NFLAG & nonce.s1] = nonce.s1;
-		if (!V[7].s2)
+		if (V[7].s2 == 0x136032ed)
 			output[NFLAG & nonce.s2] = nonce.s2;
-		if (!V[7].s3)
+		if (V[7].s3 == 0x136032ed)
 			output[NFLAG & nonce.s3] = nonce.s3;
-		if (!V[7].s4)
+		if (V[7].s4 == 0x136032ed)
 			output[NFLAG & nonce.s4] = nonce.s4;
-		if (!V[7].s5)
+		if (V[7].s5 == 0x136032ed)
 			output[NFLAG & nonce.s5] = nonce.s5;
-		if (!V[7].s6)
+		if (V[7].s6 == 0x136032ed)
 			output[NFLAG & nonce.s6] = nonce.s6;
-		if (!V[7].s7)
+		if (V[7].s7 == 0x136032ed)
 			output[NFLAG & nonce.s7] = nonce.s7;
 	}
 #elif defined VECTORS4
-	V[7] ^= 0x136032ed;
-
-	bool result = any(V[7] == 0);
+	bool result = any(V[7] == 0x136032ed);
 
 	if (result) {
 		output[FOUND] = FOUND;
-		if (!V[7].x)
+		if (V[7].x == 0x136032ed)
 			output[NFLAG & nonce.x] = nonce.x;
-		if (!V[7].y)
+		if (V[7].y == 0x136032ed)
 			output[NFLAG & nonce.y] = nonce.y;
-		if (!V[7].z)
+		if (V[7].z == 0x136032ed)
 			output[NFLAG & nonce.z] = nonce.z;
-		if (!V[7].w)
+		if (V[7].w == 0x136032ed)
 			output[NFLAG & nonce.w] = nonce.w;
 	}
 #elif defined VECTORS2
-	V[7] ^= 0x136032ed;
-
-	bool result = any(V[7] == 0);
+	bool result = any(V[7]  == 0x136032ed);
 
 	if (result) {
 		output[FOUND] = FOUND;
-		if (!V[7].x)
+		if (V[7].x == 0x136032ed)
 			output[NFLAG & nonce.x] = nonce.x;
-		if (!V[7].y)
+		if (V[7].y == 0x136032ed)
 			output[NFLAG & nonce.y] = nonce.y;
 	}
 #else
