@@ -224,6 +224,10 @@ EXECUTIVE SUMMARY ON USAGE:
 After saving configuration from the menu, you do not need to give cgminer any
 arguments and it will load your configuration.
 
+Any configuration file may also contain a single
+	"include" : "filename"
+to recursively include another configuration file.
+
 
 Single pool, regular desktop:
 
