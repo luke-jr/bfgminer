@@ -33,7 +33,6 @@
 #include "findnonce.h"
 #include "ocl.h"
 
-extern int opt_worksize;
 int opt_platform_id;
 
 char *file_contents(const char *filename, int *length)
@@ -349,12 +348,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	else
 		clState->vwidth = preferred_vwidth;
 
-	if (opt_worksize && opt_worksize <= (int)clState->max_work_size)
-		clState->work_size = opt_worksize;
+	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
+		clState->wsize = gpus[gpu].work_size;
 	else if (strstr(name, "Tahiti"))
-		clState->work_size = 64;
+		clState->wsize = 64;
 	else
-		clState->work_size = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
+		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would

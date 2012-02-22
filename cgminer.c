@@ -91,8 +91,6 @@ static int opt_fail_pause = 5;
 static int fail_pause = 5;
 int opt_log_interval = 5;
 static int opt_queue = 1;
-int opt_vectors;
-int opt_worksize;
 int opt_scantime = 60;
 int opt_expiry = 120;
 int opt_bench_algo = -1;
@@ -839,8 +837,8 @@ static struct opt_table opt_config_table[] = {
 			"Log verbose output to stderr as well as status output"),
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--worksize|-w",
-		     set_int_0_to_9999, opt_show_intval, &opt_worksize,
-		     "Override detected optimal worksize"),
+		     set_worksize, NULL, NULL,
+		     "Override detected optimal worksize - one value or comma separated list"),
 #endif
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,

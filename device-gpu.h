@@ -16,6 +16,7 @@ extern char *set_temp_overheat(char *arg);
 extern char *set_temp_target(char *arg);
 extern char *set_intensity(char *arg);
 extern char *set_vector(char *arg);
+extern char *set_worksize(char *arg);
 void manage_gpu(void);
 extern void pause_dynamic_threads(int gpu);
 

@@ -93,6 +93,36 @@ char *set_vector(char *arg)
 
 	return NULL;
 }
+
+char *set_worksize(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set work size";
+	val = atoi(nextptr);
+	if (val < 1 || val > 9999)
+		return "Invalid value passed to set_worksize";
+
+	gpus[device++].work_size = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+		if (val < 1 || val > 9999)
+			return "Invalid value passed to set_worksize";
+
+		gpus[device++].work_size = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].work_size = gpus[0].work_size;
+	}
+
+	return NULL;
+}
+
 #endif
 
 #ifdef HAVE_ADL
