@@ -1081,7 +1081,8 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 			applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
 			if (temp < ga->targettemp - opt_hysteresis)
 				newengine = ga->maxspeed;
-			newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
+			else
+				newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
 		} else if (temp < ga->targettemp && *denable == DEV_RECOVER && opt_restart) {
 			applog(LOG_NOTICE, "Device recovered to temperature below target, re-enabling");
 			*denable = DEV_ENABLED;
