@@ -197,7 +197,6 @@ char *opt_socks_proxy = NULL;
 
 static const char def_conf[] = "cgminer.conf";
 static bool config_loaded = false;
-static char *include_conf = NULL;
 static int include_count = 0;
 #define JSON_INCLUDE_CONF "include"
 #define JSON_LOAD_ERROR "JSON decode of file '%s' failed"
@@ -916,12 +915,8 @@ static char *parse_config(json_t *config, bool fileconf)
 	}
 
 	val = json_object_get(config, JSON_INCLUDE_CONF);
-	if (val && json_is_string(val)) {
-		if (include_conf == NULL)
-			include_conf = (char *)json_string_value(val);
-
+	if (val && json_is_string(val))
 		return load_config(json_string_value(val), NULL);
-	}
 
 	return NULL;
 }
@@ -2481,8 +2476,6 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
-	if (include_conf)
-		fprintf(fcfg, ",\n\"%s\" : \"%s\"", JSON_INCLUDE_CONF, include_conf);
 	fputs("\n}", fcfg);
 }
 

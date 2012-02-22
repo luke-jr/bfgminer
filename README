@@ -227,6 +227,7 @@ arguments and it will load your configuration.
 Any configuration file may also contain a single
 	"include" : "filename"
 to recursively include another configuration file.
+Writing the configuration will save all settings from all files in the output.
 
 
 Single pool, regular desktop:
