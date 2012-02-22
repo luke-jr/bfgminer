@@ -368,20 +368,27 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char numbuf[10];
 
 	if (gpus[gpu].kernel == KL_NONE) {
-		/* If no binary is available, and we have a card that suffers with diablo
-		 * on SDK2.6, use the poclbm kernel instead if one has not been
-		 * selected. */
-		if (strstr(name, "Tahiti") &&
-			(strstr(vbuff, "844.4") || // Linux 64 bit ATI 2.6 SDK
-			 strstr(vbuff, "851.4") || // Windows 64 bit ""
-			 strstr(vbuff, "831.4")))  // Windows & Linux 32 bit ""
-		{
-			 applog(LOG_INFO, "Selecting poclbm kernel");
-			clState->chosen_kernel = KL_POCLBM;
-		} else {
+		if (strstr(vbuff, "844.4") || // Linux 64 bit ATI 2.6 SDK
+		    strstr(vbuff, "851.4") || // Windows 64 bit ""
+		    strstr(vbuff, "831.4")) { // Windows & Linux 32 bit ""
+			if (strstr(name, "Tahiti")) {
+				applog(LOG_INFO, "Selecting poclbm kernel");
+				clState->chosen_kernel = KL_POCLBM;
+			} else {
+				applog(LOG_INFO, "Selecting diablo kernel");
+				clState->chosen_kernel = KL_DIABLO;
+			}
+		} else if (strstr(vbuff, "898.1")) { // Windows 64 bit 12.2 driver
 			applog(LOG_INFO, "Selecting diablo kernel");
 			clState->chosen_kernel = KL_DIABLO;
+		} else if (clState->hasBitAlign) {
+			applog(LOG_INFO, "Selecting phatk kernel");
+			clState->chosen_kernel = KL_PHATK;
+		} else {
+			applog(LOG_INFO, "Selecting poclbm kernel");
+			clState->chosen_kernel = KL_POCLBM;
 		}
+
 		gpus[gpu].kernel = clState->chosen_kernel;
 	} else
 		clState->chosen_kernel = gpus[gpu].kernel;
