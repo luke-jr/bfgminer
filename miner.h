@@ -213,6 +213,14 @@ enum dev_enable {
 	DEV_RECOVER,
 };
 
+enum cl_kernels {
+	KL_NONE,
+	KL_POCLBM,
+	KL_PHATK,
+	KL_DIAKGCN,
+	KL_DIABLO,
+};
+
 struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
@@ -243,6 +251,7 @@ struct cgpu_info {
 	bool dynamic;
 	cl_uint vwidth;
 	size_t work_size;
+	enum cl_kernels kernel;
 
 	float temp;
 	int cutofftemp;
@@ -587,14 +596,6 @@ struct work {
 	UT_hash_handle hh;
 };
 
-enum cl_kernels {
-	KL_NONE,
-	KL_POCLBM,
-	KL_PHATK,
-	KL_DIAKGCN,
-	KL_DIABLO,
-};
-
 extern void get_datestamp(char *, struct timeval *);
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern void tailsprintf(char *f, const char *fmt, ...);
@@ -614,7 +615,6 @@ extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
-extern enum cl_kernels chosen_kernel;
 extern void adl(void);
 
 #endif /* __MINER_H__ */

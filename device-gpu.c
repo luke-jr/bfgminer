@@ -41,7 +41,6 @@ extern int opt_g_threads;
 extern bool ping;
 extern bool opt_loginput;
 extern char *opt_kernel_path;
-extern char *opt_kernel;
 extern int gpur_thr_id;
 extern bool opt_noadl;
 extern bool have_opencl;
@@ -123,6 +122,47 @@ char *set_worksize(char *arg)
 	return NULL;
 }
 
+static enum cl_kernels select_kernel(char *arg)
+{
+	if (!strcmp(arg, "diablo"))
+		return KL_DIABLO;
+	if (!strcmp(arg, "diakgcn"))
+		return KL_DIAKGCN;
+	if (!strcmp(arg, "poclbm"))
+		return KL_POCLBM;
+	if (!strcmp(arg, "phatk"))
+		return KL_PHATK;
+	return KL_NONE;
+}
+
+char *set_kernel(char *arg)
+{
+	enum cl_kernels kern;
+	int i, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set kernel";
+	kern = select_kernel(nextptr);
+	if (kern == KL_NONE)
+		return "Invalid parameter to set_kernel";
+	gpus[device++].kernel = kern;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		kern = select_kernel(nextptr);
+		if (kern == KL_NONE)
+			return "Invalid parameter to set_kernel";
+
+		gpus[device++].kernel = kern;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].kernel = gpus[0].kernel;
+	}
+
+	return NULL;
+}
 #endif
 
 #ifdef HAVE_ADL
@@ -1053,23 +1093,6 @@ static void opencl_detect()
 
 	if (!nDevs)
 		return;
-
-	if (opt_kernel) {
-		if (strcmp(opt_kernel, "poclbm") &&
-		    strcmp(opt_kernel, "phatk") &&
-		    strcmp(opt_kernel, "diakgcn") &&
-		    strcmp(opt_kernel, "diablo"))
-			quit(1, "Invalid kernel name specified - must be diablo, poclbm, phatk or diakgcn");
-		if (!strcmp(opt_kernel, "diakgcn"))
-			chosen_kernel = KL_DIAKGCN;
-		else if (!strcmp(opt_kernel, "poclbm"))
-			chosen_kernel = KL_POCLBM;
-		else if (!strcmp(opt_kernel, "diablo"))
-			chosen_kernel = KL_DIABLO;
-		else
-			chosen_kernel = KL_PHATK;
-	} else
-		chosen_kernel = KL_NONE;
 
 	for (i = 0; i < nDevs; ++i) {
 		struct cgpu_info *cgpu;

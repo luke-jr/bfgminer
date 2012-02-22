@@ -364,7 +364,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char filename[255];
 	char numbuf[10];
 
-	if (chosen_kernel == KL_NONE) {
+	if (gpus[gpu].kernel == KL_NONE) {
 		/* If no binary is available, and we have a card that suffers with diablo
 		 * on SDK2.6, use the poclbm kernel instead if one has not been
 		 * selected. */
@@ -380,7 +380,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			clState->chosen_kernel = KL_DIABLO;
 		}
 	} else
-		clState->chosen_kernel = chosen_kernel;
+		clState->chosen_kernel = gpus[gpu].kernel;
 
 	switch (clState->chosen_kernel) {
 		case KL_POCLBM:

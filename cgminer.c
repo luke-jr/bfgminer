@@ -201,8 +201,6 @@ static bool config_loaded = false;
 	static char *opt_stderr_cmd = NULL;
 #endif // defined(unix)
 
-enum cl_kernels chosen_kernel;
-
 bool ping = true;
 
 struct sigaction termhandler, inthandler;
@@ -711,8 +709,8 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             "Specify a path to where the kernel .cl files are"),
 	OPT_WITH_ARG("--kernel|-k",
-		     opt_set_charp, NULL, &opt_kernel,
-		     "Select kernel to use (diablo, poclbm, phatk or diakgcn - default: auto)"),
+		     set_kernel, NULL, NULL,
+		     "Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
