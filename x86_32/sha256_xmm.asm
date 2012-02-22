@@ -250,3 +250,10 @@ LAB_RET:
 	pop	edi
 	pop	esi
 	retn	4
+
+%ifidn __OUTPUT_FORMAT__,elf
+section .note.GNU-stack noalloc noexec nowrite progbits
+%endif
+%ifidn __OUTPUT_FORMAT__,elf32
+section .note.GNU-stack noalloc noexec nowrite progbits
+%endif
