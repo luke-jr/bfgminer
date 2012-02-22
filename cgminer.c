@@ -2327,6 +2327,7 @@ void write_config(FILE *fcfg)
 		fputs("\"intensity\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
+#ifdef HAVE_OPENCL
 		fputs("\",\n\"vectors\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
@@ -2335,6 +2336,26 @@ void write_config(FILE *fcfg)
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
 				(int)gpus[i].work_size);
+		fputs("\",\n\"kernel\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++) {
+			fprintf(fcfg, "%s", i > 0 ? "," : "");
+			switch (gpus[i].kernel) {
+				case KL_NONE: // Shouldn't happen
+					break;
+				case KL_POCLBM:
+					fprintf(fcfg, "poclbm");
+					break;
+				case KL_PHATK:
+					fprintf(fcfg, "phatk");
+					break;
+				case KL_DIAKGCN:
+					fprintf(fcfg, "diakgcn");
+					break;
+				case KL_DIABLO:
+					fprintf(fcfg, "diablo");
+					break;
+			}
+		}
 #ifdef HAVE_ADL
 		fputs("\",\n\"gpu-engine\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
@@ -2364,26 +2385,7 @@ void write_config(FILE *fcfg)
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
 #endif
-		fputs("\",\n\"kernel\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++) {
-			fprintf(fcfg, "%s", i > 0 ? "," : "");
-			switch (gpus[i].kernel) {
-				case KL_NONE: // Shouldn't happen
-					break;
-				case KL_POCLBM:
-					fprintf(fcfg, "poclbm");
-					break;
-				case KL_PHATK:
-					fprintf(fcfg, "phatk");
-					break;
-				case KL_DIAKGCN:
-					fprintf(fcfg, "diakgcn");
-					break;
-				case KL_DIABLO:
-					fprintf(fcfg, "diablo");
-					break;
-			}
-		}
+#endif
 		fputs("\"", fcfg);
 #ifdef WANT_CPUMINE
 		fputs(",\n", fcfg);

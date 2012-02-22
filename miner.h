@@ -245,13 +245,14 @@ struct cgpu_info {
 
 	unsigned int max_hashes;
 
-#ifdef HAVE_OPENCL
 	int virtual_gpu;
 	int intensity;
 	bool dynamic;
+#ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;
+#endif
 
 	float temp;
 	int cutofftemp;
@@ -268,7 +269,6 @@ struct cgpu_info {
 	int gpu_memdiff;
 	int gpu_powertune;
 	float gpu_vddc;
-#endif
 #endif
 	int last_share_pool;
 	time_t last_share_pool_time;
