@@ -224,6 +224,11 @@ EXECUTIVE SUMMARY ON USAGE:
 After saving configuration from the menu, you do not need to give cgminer any
 arguments and it will load your configuration.
 
+Any configuration file may also contain a single
+	"include" : "filename"
+to recursively include another configuration file.
+Writing the configuration will save all settings from all files in the output.
+
 
 Single pool, regular desktop:
 
@@ -543,10 +548,10 @@ network attached computer.
 
 You can only access the comands that reply with data in this mode.
 By default, you cannot access any privileged command that affects the miner -
-you will receive an access denied status message see --api-access below.
+you will receive an access denied status message see --api-allow below.
 
 You can specify IP addresses/prefixes that are only allowed to access the API
-with the "--api-access" option e.g. --api-access W:192.168.0.1,10.0.0/24
+with the "--api-allow" option e.g. --api-allow W:192.168.0.1,10.0.0/24
 will allow 192.168.0.1 or any address matching 10.0.0.*, but nothing else
 IP addresses are automatically padded with extra '.0's as needed
 Without a /prefix is the same as specifying /32
@@ -555,11 +560,11 @@ The 'W:' on the front gives that address/subnet privileged access to commands
 that modify cgminer.
 Without it those commands return an access denied status.
 Privileged access is checked in the order the IP addresses were supplied to
-"--api-access"
+"--api-allow"
 The first match determines the privilege level.
-Using the "--api-access" option overides the "--api-network" option if they
+Using the "--api-allow" option overides the "--api-network" option if they
 are both specified
-With "--api-access", 127.0.0.1 is not by default given access unless specified
+With "--api-allow", 127.0.0.1 is not by default given access unless specified
 
 The RPC API request can be either simple text or JSON.
 

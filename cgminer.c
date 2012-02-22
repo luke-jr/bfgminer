@@ -197,6 +197,12 @@ char *opt_socks_proxy = NULL;
 
 static const char def_conf[] = "cgminer.conf";
 static bool config_loaded = false;
+static int include_count = 0;
+#define JSON_INCLUDE_CONF "include"
+#define JSON_LOAD_ERROR "JSON decode of file '%s' failed"
+#define JSON_LOAD_ERROR_LEN strlen(JSON_LOAD_ERROR)
+#define JSON_MAX_DEPTH 10
+#define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
 
 #if defined(unix)
 	static char *opt_stderr_cmd = NULL;
@@ -850,6 +856,8 @@ static struct opt_table opt_config_table[] = {
 	OPT_ENDTABLE
 };
 
+static char *load_config(const char *arg, void __maybe_unused *unused);
+
 static char *parse_config(json_t *config, bool fileconf)
 {
 	static char err_buf[200];
@@ -905,6 +913,11 @@ static char *parse_config(json_t *config, bool fileconf)
 		}
 		free(name);
 	}
+
+	val = json_object_get(config, JSON_INCLUDE_CONF);
+	if (val && json_is_string(val))
+		return load_config(json_string_value(val), NULL);
+
 	return NULL;
 }
 
@@ -912,14 +925,24 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 {
 	json_error_t err;
 	json_t *config;
+	char *json_error;
+
+	if(++include_count > JSON_MAX_DEPTH)
+		return JSON_MAX_DEPTH_ERR;
 
 #if JANSSON_MAJOR_VERSION > 1
 	config = json_load_file(arg, 0, &err);
 #else
 	config = json_load_file(arg, &err);
 #endif
-	if (!json_is_object(config))
-		return "JSON decode of file failed";
+	if (!json_is_object(config)) {
+		json_error = malloc(JSON_LOAD_ERROR_LEN + strlen(arg));
+		if (!json_error)
+			quit(1, "Malloc failure in json error");
+
+		sprintf(json_error, JSON_LOAD_ERROR, arg);
+		return json_error;
+	}
 
 	config_loaded = true;
 	/* Parse the config now, so we can override it.  That can keep pointers
@@ -2451,7 +2474,7 @@ void write_config(FILE *fcfg)
 		for (i = 0; i < nDevs; i++)
 			if (gpus[i].deven != DEV_DISABLED)
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
-	if (opt_api_allow != NULL)
+	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
