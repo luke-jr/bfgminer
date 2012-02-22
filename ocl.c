@@ -379,6 +379,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			applog(LOG_INFO, "Selecting diablo kernel");
 			clState->chosen_kernel = KL_DIABLO;
 		}
+		gpus[gpu].kernel = clState->chosen_kernel;
 	} else
 		clState->chosen_kernel = gpus[gpu].kernel;
 

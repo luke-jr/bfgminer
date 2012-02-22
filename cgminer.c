@@ -191,7 +191,6 @@ struct block {
 
 static struct block *blocks = NULL;
 
-char *opt_kernel = NULL;
 char *opt_socks_proxy = NULL;
 
 static const char def_conf[] = "cgminer.conf";
@@ -2334,6 +2333,26 @@ void write_config(FILE *fcfg)
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
 #endif
+		fputs("\",\n\"kernel\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++) {
+			fprintf(fcfg, "%s", i > 0 ? "," : "");
+			switch (gpus[i].kernel) {
+				case KL_NONE: // Shouldn't happen
+					break;
+				case KL_POCLBM:
+					fprintf(fcfg, "poclbm");
+					break;
+				case KL_PHATK:
+					fprintf(fcfg, "phatk");
+					break;
+				case KL_DIAKGCN:
+					fprintf(fcfg, "diakgcn");
+					break;
+				case KL_DIABLO:
+					fprintf(fcfg, "diablo");
+					break;
+			}
+		}
 		fputs("\"", fcfg);
 #ifdef WANT_CPUMINE
 		fputs(",\n", fcfg);
@@ -2380,8 +2399,6 @@ void write_config(FILE *fcfg)
 	if (opt_stderr_cmd && *opt_stderr_cmd)
 		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", opt_stderr_cmd);
 #endif // defined(unix)
-	if (opt_kernel && *opt_kernel)
-		fprintf(fcfg, ",\n\"kernel\" : \"%s\"", opt_kernel);
 	if (opt_kernel_path && *opt_kernel_path) {
 		char *kpath = strdup(opt_kernel_path);
 		if (kpath[strlen(kpath)-1] == '/')
