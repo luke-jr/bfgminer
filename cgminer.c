@@ -4562,6 +4562,9 @@ int main (int argc, char *argv[])
 		algo_names[opt_algo]);
 #endif
 
+	gettimeofday(&total_tv_start, NULL);
+	gettimeofday(&total_tv_end, NULL);
+
 	watchpool_thr_id = mining_threads + 3;
 	thr = &thr_info[watchpool_thr_id];
 	/* start watchpool thread */
