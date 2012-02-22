@@ -391,27 +391,29 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 #define NFLAG (0x7F)
 
 #ifdef VECTORS4
-	bool result = W[117].x & W[117].y & W[117].z & W[117].w;
-	if (!result) {
+	bool result = any(W[117] == 0);
+	if (result) {
+		output[FOUND] = FOUND;
 		if (!W[117].x)
-			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+			output[NFLAG & W[3].x] = W[3].x;
 		if (!W[117].y)
-			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+			output[NFLAG & W[3].y] = W[3].y;
 		if (!W[117].z)
-			output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
+			output[NFLAG & W[3].z] = W[3].z;
 		if (!W[117].w)
-			output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
+			output[NFLAG & W[3].w] = W[3].w;
 	}
 #elif defined VECTORS2
-	bool result = W[117].x & W[117].y;
-	if (!result) {
+	bool result = any(W[117] == 0);
+	if (result) {
+		output[FOUND] = FOUND;
 		if (!W[117].x)
-			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+			output[NFLAG & W[3].x] = W[3].x;
 		if (!W[117].y)
-			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+			output[NFLAG & W[3].y] = W[3].y;
 	}
 #else
-	if (!W[117])
+	if (W[117] == 0)
 		output[FOUND] = output[NFLAG & W[3]] = W[3];
 #endif
 }

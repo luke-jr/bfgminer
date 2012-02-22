@@ -55,18 +55,30 @@ __kernel
 	u V[8];
 	u W[16];
 
-#ifdef GOFFSET
-	#ifdef VECTORS8
+#ifdef VECTORS8
+	#ifdef GOFFSET
 		const u nonce = ((uint)get_global_id(0) << 3) + (u)(0, 1, 2, 3, 4, 5, 6, 7);
-	#elif defined VECTORS4
+	#else
+		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 3) + ((uint)get_local_id(0) << 3) + base;
+	#endif
+#elif defined VECTORS4
+	#ifdef GOFFSET
 		const u nonce = ((uint)get_global_id(0) << 2) + (u)(0, 1, 2, 3);
-	#elif defined VECTORS2
+	#else
+		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 2) + ((uint)get_local_id(0) << 2) + base;
+	#endif
+#elif defined VECTORS2
+	#ifdef GOFFSET
 		const u nonce = ((uint)get_global_id(0) << 1) + (u)(0, 1);
 	#else
-		const u nonce = (uint)get_global_id(0);
+		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 1) + ((uint)get_local_id(0) << 1) + base;
 	#endif
 #else
-	const u nonce = base + (uint)(get_global_id(0));
+	#ifdef GOFFSET
+		const u nonce = (uint)get_global_id(0);
+	#else
+		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0)) + (uint)get_local_id(0) + base;
+	#endif
 #endif
 
 	V[0] = PreVal0 + nonce;
@@ -585,51 +597,54 @@ __kernel
 #ifdef VECTORS8
 	V[7] ^= 0x136032ed;
 
-	bool result = V[7].s0 & V[7].s1 & V[7].s2 & V[7].s3 & V[7].s4 & V[7].s5 & V[7].s6 & V[7].s7;
+	bool result = any(V[7] == 0);
 
-	if (!result) {
+	if (result) {
+		output[FOUND] = FOUND;
 		if (!V[7].s0)
-			output[FOUND] = output[NFLAG & nonce.s0] = nonce.s0;
+			output[NFLAG & nonce.s0] = nonce.s0;
 		if (!V[7].s1)
-			output[FOUND] = output[NFLAG & nonce.s1] = nonce.s1;
+			output[NFLAG & nonce.s1] = nonce.s1;
 		if (!V[7].s2)
-			output[FOUND] = output[NFLAG & nonce.s2] = nonce.s2;
+			output[NFLAG & nonce.s2] = nonce.s2;
 		if (!V[7].s3)
-			output[FOUND] = output[NFLAG & nonce.s3] = nonce.s3;
+			output[NFLAG & nonce.s3] = nonce.s3;
 		if (!V[7].s4)
-			output[FOUND] = output[NFLAG & nonce.s4] = nonce.s4;
+			output[NFLAG & nonce.s4] = nonce.s4;
 		if (!V[7].s5)
-			output[FOUND] = output[NFLAG & nonce.s5] = nonce.s5;
+			output[NFLAG & nonce.s5] = nonce.s5;
 		if (!V[7].s6)
-			output[FOUND] = output[NFLAG & nonce.s6] = nonce.s6;
+			output[NFLAG & nonce.s6] = nonce.s6;
 		if (!V[7].s7)
-			output[FOUND] = output[NFLAG & nonce.s7] = nonce.s7;
+			output[NFLAG & nonce.s7] = nonce.s7;
 	}
 #elif defined VECTORS4
 	V[7] ^= 0x136032ed;
 
-	bool result = V[7].x & V[7].y & V[7].z & V[7].w;
+	bool result = any(V[7] == 0);
 
-	if (!result) {
+	if (result) {
+		output[FOUND] = FOUND;
 		if (!V[7].x)
-			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
+			output[NFLAG & nonce.x] = nonce.x;
 		if (!V[7].y)
-			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
+			output[NFLAG & nonce.y] = nonce.y;
 		if (!V[7].z)
-			output[FOUND] = output[NFLAG & nonce.z] = nonce.z;
+			output[NFLAG & nonce.z] = nonce.z;
 		if (!V[7].w)
-			output[FOUND] = output[NFLAG & nonce.w] = nonce.w;
+			output[NFLAG & nonce.w] = nonce.w;
 	}
 #elif defined VECTORS2
 	V[7] ^= 0x136032ed;
 
-	bool result = V[7].x & V[7].y;
+	bool result = any(V[7] == 0);
 
-	if (!result) {
+	if (result) {
+		output[FOUND] = FOUND;
 		if (!V[7].x)
-			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
+			output[NFLAG & nonce.x] = nonce.x;
 		if (!V[7].y)
-			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
+			output[NFLAG & nonce.y] = nonce.y;
 	}
 #else
 	if (V[7] == 0x136032ed)

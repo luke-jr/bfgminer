@@ -1256,26 +1256,28 @@ Vals[7]+=ch(Vals[0],Vals[1],Vals[2]);
 #define NFLAG (0x7F)
 
 #if defined(VECTORS4)
-	Vals[7] ^= 0x136032ED;
-	bool result = Vals[7].x & Vals[7].y & Vals[7].z & Vals[7].w;
-	if (!result) {
-		if (!Vals[7].x)
-			output[FOUND] = output[NFLAG & nonce.x] =  nonce.x;
-		if (!Vals[7].y)
-			output[FOUND] = output[NFLAG & nonce.y] =  nonce.y;
-		if (!Vals[7].z)
-			output[FOUND] = output[NFLAG & nonce.z] =  nonce.z;
-		if (!Vals[7].w)
-			output[FOUND] = output[NFLAG & nonce.w] =  nonce.w;
+	bool result = any(Vals[7] == 0x136032ed);
+
+	if (result) {
+		output[FOUND] = FOUND;
+		if (Vals[7].x == 0x136032ed)
+			output[NFLAG & nonce.x] =  nonce.x;
+		if (Vals[7].y == 0x136032ed)
+			output[NFLAG & nonce.y] =  nonce.y;
+		if (Vals[7].z == 0x136032ed)
+			output[NFLAG & nonce.z] =  nonce.z;
+		if (Vals[7].w == 0x136032ed)
+			output[NFLAG & nonce.w] =  nonce.w;
 	}
 #elif defined(VECTORS2)
-	Vals[7] ^= 0x136032ED;
-	bool result = Vals[7].x & Vals[7].y;
-	if (!result) {
-		if (!Vals[7].x)
-			output[FOUND] = output[NFLAG & nonce.x] =  nonce.x;
-		if (!Vals[7].y)
-			output[FOUND] = output[NFLAG & nonce.y] =  nonce.y;
+	bool result = any(Vals[7] == 0x136032ed);
+
+	if (result) {
+		output[FOUND] = FOUND;
+		if (Vals[7].x == 0x136032ed)
+			output[NFLAG & nonce.x] =  nonce.x;
+		if (Vals[7].y == 0x136032ed)
+			output[NFLAG & nonce.y] =  nonce.y;
 	}
 #else
 	if (Vals[7] == 0x136032ED)

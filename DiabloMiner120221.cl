@@ -1237,26 +1237,28 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
 #define NFLAG (0x7F)
 
 #if defined(VECTORS4)
-	ZA[924] ^= 0x136032EDU;
-	bool result = ZA[924].x & ZA[924].y & ZA[924].z & ZA[924].w;
-	if (!result) {
-		if (!ZA[924].x)
-			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
-		if (!ZA[924].y)
-			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
-		if (!ZA[924].z)
-			output[FOUND] = output[NFLAG & Znonce.z] =  Znonce.z;
-		if (!ZA[924].w)
-			output[FOUND] = output[NFLAG & Znonce.w] =  Znonce.w;
+	bool result = any(ZA[924] == 0x136032EDU);
+
+	if (result) {
+		output[FOUND] = FOUND;
+		if (ZA[924].x == 0x136032EDU)
+			output[NFLAG & Znonce.x] =  Znonce.x;
+		if (ZA[924].y == 0x136032EDU)
+			output[NFLAG & Znonce.y] =  Znonce.y;
+		if (ZA[924].z == 0x136032EDU)
+			output[NFLAG & Znonce.z] =  Znonce.z;
+		if (ZA[924].w == 0x136032EDU)
+			output[NFLAG & Znonce.w] =  Znonce.w;
 	}
 #elif defined(VECTORS2)
-	ZA[924] ^= 0x136032EDU;
-	bool result = ZA[924].x & ZA[924].y;
-	if (!result) {
-		if (!ZA[924].x)
-			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
-		if (!ZA[924].y)
-			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
+	bool result = any(ZA[924] == 0x136032EDU);
+
+	if (result) {
+		output[FOUND] = FOUND;
+		if (ZA[924].x == 0x136032EDU)
+			output[NFLAG & Znonce.x] =  Znonce.x;
+		if (ZA[924].y == 0x136032EDU)
+			output[NFLAG & Znonce.y] =  Znonce.y;
 	}
 #else
 	if (ZA[924] == 0x136032EDU)
