@@ -65,14 +65,32 @@ extern int gpu_fanpercent(int gpu);
 
 
 #ifdef HAVE_OPENCL
-char *set_vector(const char *arg, int *i)
+char *set_vector(char *arg)
 {
-	char *err = opt_set_intval(arg, i);
-	if (err)
-		return err;
+	int i, val = 0, device = 0;
+	char *nextptr;
 
-	if (*i != 1 && *i != 2 && *i != 4)
-		return "Valid vectors are 1, 2 or 4";
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set vector";
+	val = atoi(nextptr);
+	if (val != 1 && val != 2 && val != 4)
+		return "Invalid value passed to set_vector";
+
+	gpus[device++].vwidth = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+		if (val != 1 && val != 2 && val != 4)
+			return "Invalid value passed to set_vector";
+
+		gpus[device++].vwidth = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].vwidth = gpus[0].vwidth;
+	}
+
 	return NULL;
 }
 #endif
@@ -655,8 +673,8 @@ static _clState *clStates[MAX_GPUDEVICES];
 
 static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
-	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
+	cl_uint vwidth = clState->vwidth;
 	unsigned int i, num = 0;
 	cl_int status = 0;
 	uint *nonces;
@@ -707,8 +725,8 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk,
 				 __maybe_unused cl_uint threads)
 {
-	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
+	cl_uint vwidth = clState->vwidth;
 	unsigned int i, num = 0;
 	cl_int status = 0;
 	uint *nonces;
@@ -751,8 +769,8 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk,
 static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk,
 				   __maybe_unused cl_uint threads)
 {
-	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
+	cl_uint vwidth = clState->vwidth;
 	unsigned int i, num = 0;
 	cl_int status = 0;
 	uint *nonces;
@@ -809,8 +827,8 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk,
 
 static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
-	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
+	cl_uint vwidth = clState->vwidth;
 	unsigned int i, num = 0;
 	cl_int status = 0;
 	uint *nonces;
@@ -1242,7 +1260,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 				++gpu->intensity;
 		}
 	}
-	set_threads_hashes(clState->preferred_vwidth, &threads, &hashes, globalThreads,
+	set_threads_hashes(clState->vwidth, &threads, &hashes, globalThreads,
 			   localThreads[0], gpu->intensity);
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;

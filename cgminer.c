@@ -831,8 +831,8 @@ static struct opt_table opt_config_table[] = {
 		     "Username for bitcoin JSON-RPC server"),
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
-		     set_vector, NULL, &opt_vectors,
-		     "Override detected optimal vector width (1, 2 or 4)"),
+		     set_vector, NULL, NULL,
+		     "Override detected optimal vector (1, 2 or 4) - one value or comma separated list"),
 #endif
 	OPT_WITHOUT_ARG("--verbose",
 			opt_set_bool, &opt_log_output,

@@ -33,7 +33,6 @@
 #include "findnonce.h"
 #include "ocl.h"
 
-extern int opt_vectors;
 extern int opt_worksize;
 int opt_platform_id;
 
@@ -194,6 +193,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
 	cl_platform_id* platforms;
+	cl_uint preferred_vwidth;
 	cl_device_id *devices;
 	cl_uint numPlatforms;
 	cl_uint numDevices;
@@ -319,12 +319,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (!find)
 		clState->hasOpenCL11plus = true;
 
-	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT", status);
 		return NULL;
 	}
-	applog(LOG_DEBUG, "Preferred vector width reported %d", clState->preferred_vwidth);
+	applog(LOG_DEBUG, "Preferred vector width reported %d", preferred_vwidth);
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&clState->max_work_size, NULL);
 	if (status != CL_SUCCESS) {
@@ -337,22 +337,24 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	 * otherwise, and many cards lie about their max so use 256 as max
 	 * unless explicitly set on the command line. 79x0 cards perform
 	 * better without vectors */
-	if (clState->preferred_vwidth > 1) {
+	if (preferred_vwidth > 1) {
 		if (strstr(name, "Tahiti"))
-			clState->preferred_vwidth = 1;
+			preferred_vwidth = 1;
 		else
-			clState->preferred_vwidth = 2;
+			preferred_vwidth = 2;
 	}
 
-	if (opt_vectors)
-		clState->preferred_vwidth = opt_vectors;
+	if (gpus[gpu].vwidth)
+		clState->vwidth = gpus[gpu].vwidth;
+	else
+		clState->vwidth = preferred_vwidth;
+
 	if (opt_worksize && opt_worksize <= (int)clState->max_work_size)
 		clState->work_size = opt_worksize;
 	else if (strstr(name, "Tahiti"))
 		clState->work_size = 64;
 	else
-		clState->work_size = (clState->max_work_size <= 256 ? clState->max_work_size : 256) /
-				clState->preferred_vwidth;
+		clState->work_size = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
@@ -428,7 +430,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	strcat(binaryfilename, name);
 
 	strcat(binaryfilename, "v");
-	sprintf(numbuf, "%d", clState->preferred_vwidth);
+	sprintf(numbuf, "%d", clState->vwidth);
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, "w");
 	sprintf(numbuf, "%d", (int)clState->work_size);
@@ -496,10 +498,10 @@ build:
 	char *CompilerOptions = calloc(1, 256);
 
 	sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d",
-		(int)clState->work_size, clState->preferred_vwidth);
+		(int)clState->work_size, clState->vwidth);
 	applog(LOG_DEBUG, "Setting worksize to %d", clState->work_size);
-	if (clState->preferred_vwidth > 1)
-		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->preferred_vwidth);
+	if (clState->vwidth > 1)
+		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
 
 	if (clState->hasBitAlign) {
 		strcat(CompilerOptions, " -D BITALIGN");
@@ -648,7 +650,7 @@ built:
 	free(binary_sizes);
 
 	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %d vectors and worksize %d",
-	       filename, clState->hasBitAlign ? "" : "out", clState->preferred_vwidth, clState->work_size);
+	       filename, clState->hasBitAlign ? "" : "out", clState->vwidth, clState->work_size);
 
 	if (!prog_built) {
 		/* create a cl program executable for all the devices specified */
