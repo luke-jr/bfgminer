@@ -432,7 +432,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	sprintf(numbuf, "%d", clState->vwidth);
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, "w");
-	sprintf(numbuf, "%d", (int)clState->work_size);
+	sprintf(numbuf, "%d", (int)clState->wsize);
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, "l");
 	sprintf(numbuf, "%d", (int)sizeof(long));
@@ -497,8 +497,8 @@ build:
 	char *CompilerOptions = calloc(1, 256);
 
 	sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d",
-		(int)clState->work_size, clState->vwidth);
-	applog(LOG_DEBUG, "Setting worksize to %d", clState->work_size);
+		(int)clState->wsize, clState->vwidth);
+	applog(LOG_DEBUG, "Setting worksize to %d", clState->wsize);
 	if (clState->vwidth > 1)
 		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
 
@@ -649,7 +649,7 @@ built:
 	free(binary_sizes);
 
 	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %d vectors and worksize %d",
-	       filename, clState->hasBitAlign ? "" : "out", clState->vwidth, clState->work_size);
+	       filename, clState->hasBitAlign ? "" : "out", clState->vwidth, clState->wsize);
 
 	if (!prog_built) {
 		/* create a cl program executable for all the devices specified */

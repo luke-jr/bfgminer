@@ -1262,7 +1262,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	cl_int status;
 
 	size_t globalThreads[1];
-	size_t localThreads[1] = { clState->work_size };
+	size_t localThreads[1] = { clState->wsize };
 	unsigned int threads;
 	unsigned int hashes;
 

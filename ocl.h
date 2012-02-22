@@ -23,7 +23,6 @@ typedef struct {
 	bool hasOpenCL11plus;
 	cl_uint vwidth;
 	size_t max_work_size;
-	size_t work_size;
 	size_t wsize;
 	enum cl_kernels chosen_kernel;
 } _clState;
