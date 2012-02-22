@@ -1,4 +1,4 @@
-// DiaKGCN 20-02-2012 - OpenCL kernel by Diapolo
+// DiaKGCN 22-02-2012 - OpenCL kernel by Diapolo
 //
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
@@ -35,9 +35,7 @@
 __kernel
 	__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 	void search(	
-			#ifndef GOFFSET
 			const u base,
-			#endif
 			const uint PreVal0, const uint PreVal4,
 			const uint H1, const uint D1A, const uint B1, const uint C1,
 			const uint F1, const uint G1, const uint C1addK5, const uint B1addK6, const uint PreVal0addK7,
@@ -55,31 +53,7 @@ __kernel
 	u V[8];
 	u W[16];
 
-#ifdef VECTORS8
-	#ifdef GOFFSET
-		const u nonce = ((uint)get_global_id(0) << 3) + (u)(0, 1, 2, 3, 4, 5, 6, 7);
-	#else
-		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 3) + ((uint)get_local_id(0) << 3) + base;
-	#endif
-#elif defined VECTORS4
-	#ifdef GOFFSET
-		const u nonce = ((uint)get_global_id(0) << 2) + (u)(0, 1, 2, 3);
-	#else
-		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 2) + ((uint)get_local_id(0) << 2) + base;
-	#endif
-#elif defined VECTORS2
-	#ifdef GOFFSET
-		const u nonce = ((uint)get_global_id(0) << 1) + (u)(0, 1);
-	#else
-		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 1) + ((uint)get_local_id(0) << 1) + base;
-	#endif
-#else
-	#ifdef GOFFSET
-		const u nonce = (uint)get_global_id(0);
-	#else
-		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0)) + (uint)get_local_id(0) + base;
-	#endif
-#endif
+	const u nonce = base + (uint)get_global_id(0);
 
 	V[0] = PreVal0 + nonce;
 	V[1] = B1;
