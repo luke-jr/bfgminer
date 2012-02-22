@@ -819,7 +819,7 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk,
 
 	nonces = alloca(sizeof(uint) * vwidth);
 	for (i = 0; i < vwidth; i++)
-		nonces[i] = blk->nonce + i;
+		nonces[i] = blk->nonce + (i * threads);
 	CL_SET_VARG(vwidth, nonces);
 
 	CL_SET_BLKARG(W16);

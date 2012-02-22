@@ -168,8 +168,8 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 {
 
 
-	u W[124];
-	u Vals[8];
+	u W[132];
+	u *Vals=&W[124];
 
 //Dummy Variable to prevent compiler from reordering between rounds
 	u t1;
@@ -186,23 +186,11 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	W[16] = W16;
 	W[17] = W17;
 
-#ifdef VECTORS4
-	//Less dependencies to get both the local id and group id and then add them
-	W[3] = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
-	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
-	//Since only the 2 LSB is opposite between the nonces, we can save an instruction by flipping the 4 bits in W18 rather than the 1 bit in W3
-	W[18] = PreW18 + (u){r, r ^ 0x2004000U, r ^ 0x4008000U, r ^ 0x600C000U};
-#elif defined VECTORS2
-	W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
-	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
-	W[18] = PreW18 + (u){r, r ^ 0x2004000U};
-#else
-	W[3] = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
+	W[3] = base + (uint)get_global_id(0);
 	u r = rot(W[3],25u)^rot(W[3],14u)^((W[3])>>3U);
 	W[18] = PreW18 + r;
-#endif
-	//the order of the W calcs and Rounds is like this because the compiler needs help finding how to order the instructions
 
+	//the order of the W calcs and Rounds is like this because the compiler needs help finding how to order the instructions
 
 
 	Vals[4] = PreVal4 + W[3];
