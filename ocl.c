@@ -345,8 +345,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	if (gpus[gpu].vwidth)
 		clState->vwidth = gpus[gpu].vwidth;
-	else
+	else {
 		clState->vwidth = preferred_vwidth;
+		gpus[gpu].vwidth = preferred_vwidth;
+	}
 
 	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
 		clState->wsize = gpus[gpu].work_size;

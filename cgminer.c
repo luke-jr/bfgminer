@@ -2304,6 +2304,10 @@ void write_config(FILE *fcfg)
 		fputs("\"intensity\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
+		fputs("\",\n\"vectors\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
+				gpus[i].vwidth);
 #ifdef HAVE_ADL
 		fputs("\",\n\"gpu-engine\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
