@@ -1019,7 +1019,7 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool __maybe_unused 
 	else if (newpercent < iMin)
 		newpercent = iMin;
 	if (newpercent != fanpercent) {
-		fan_optimal = false;
+		*fan_optimal = false;
 		applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
 		set_fanspeed(gpu, newpercent);
 	}
