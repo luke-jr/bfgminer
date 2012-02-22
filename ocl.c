@@ -356,6 +356,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		clState->wsize = 64;
 	else
 		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
+	gpus[gpu].work_size = clState->wsize;
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
