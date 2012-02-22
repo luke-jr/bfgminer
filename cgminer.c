@@ -44,6 +44,7 @@
 #include "adl.h"
 #include "device-cpu.h"
 #include "device-gpu.h"
+#include "bench_block.h"
 
 #if defined(unix)
 	#include <errno.h>
@@ -78,6 +79,7 @@ static char packagename[255];
 int gpu_threads;
 
 bool opt_protocol = false;
+static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool have_longpoll = false;
 static bool want_per_device_stats = false;
@@ -638,6 +640,9 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_autoengine,
 			"Automatically adjust all GPU engine clock speeds to maintain a target temperature"),
 #endif
+	OPT_WITHOUT_ARG("--benchmark",
+			opt_set_bool, &opt_benchmark,
+			"Run cgminer in benchmark mode - produces no shares"),
 #ifdef WANT_CPUMINE
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
@@ -1568,6 +1573,18 @@ static inline struct pool *select_pool(bool lagging)
 	return pool;
 }
 
+static void get_benchmark_work(struct work *work)
+{
+	// Use a random work block pulled from a pool
+	static uint8_t bench_block[] = { CGMINER_BENCHMARK_BLOCK };
+
+	size_t bench_size = sizeof(work);
+	size_t work_size = sizeof(bench_block);
+	size_t min_size = (work_size < bench_size ? work_size : bench_size);
+	memset(work, 0, sizeof(work));
+	memcpy(work, &bench_block, min_size);
+}
+
 static bool get_upstream_work(struct work *work, bool lagging)
 {
 	bool rc = false, req_longpoll = false;
@@ -1812,6 +1829,9 @@ static bool workio_get_work(struct workio_cmd *wc)
 static bool stale_work(struct work *work, bool share)
 {
 	struct timeval now;
+
+	if (opt_benchmark)
+		return false;
 
 	gettimeofday(&now, NULL);
 	if (share) {
@@ -2104,6 +2124,9 @@ static inline bool from_existing_block(struct work *work)
 static void test_work_current(struct work *work)
 {
 	char *hexstr;
+
+	if (opt_benchmark)
+		return;
 
 	hexstr = bin2hex(work->data, 18);
 	if (unlikely(!hexstr)) {
@@ -3184,6 +3207,11 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 	/* Tell the watchdog thread this thread is waiting on getwork and
 	 * should not be restarted */
 	thread_reportout(thr);
+
+	if (opt_benchmark) {
+		get_benchmark_work(work);
+		return true;
+	}
 retry:
 	pool = current_pool();
 	if (!requested || requests_queued() < opt_queue) {
@@ -4282,6 +4310,23 @@ int main (int argc, char *argv[])
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
 
+	if (opt_benchmark) {
+		struct pool *pool;
+
+		want_longpoll = false;
+		pool = calloc(sizeof(struct pool), 1);
+		pool->pool_no = 0;
+		pools[total_pools++] = pool;
+		pthread_mutex_init(&pool->pool_lock, NULL);
+		pool->rpc_url = malloc(255);
+		strcpy(pool->rpc_url, "Benchmark");
+		pool->rpc_user = pool->rpc_url;
+		pool->rpc_pass = pool->rpc_url;
+		pool->enabled = true;
+		pool->idle = false;
+		successful_connect = true;
+	}
+
 	if (use_curses)
 		enable_curses();
 
@@ -4477,6 +4522,9 @@ int main (int argc, char *argv[])
 	/* We use the getq mutex as the staged lock */
 	stgd_lock = &getq->mutex;
 
+	if (opt_benchmark)
+		goto begin_bench;
+
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool  = pools[i];
 
@@ -4527,6 +4575,7 @@ int main (int argc, char *argv[])
 	if (want_longpoll)
 		start_longpoll();
 
+begin_bench:
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
 	get_datestamp(datestamp, &total_tv_start);
