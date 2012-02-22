@@ -55,30 +55,18 @@ __kernel
 	u V[8];
 	u W[16];
 
-#ifdef VECTORS8
-	#ifdef GOFFSET
+#ifdef GOFFSET
+	#ifdef VECTORS8
 		const u nonce = ((uint)get_global_id(0) << 3) + (u)(0, 1, 2, 3, 4, 5, 6, 7);
-	#else
-		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 3) + ((uint)get_local_id(0) << 3) + base;
-	#endif
-#elif defined VECTORS4
-	#ifdef GOFFSET
+	#elif defined VECTORS4
 		const u nonce = ((uint)get_global_id(0) << 2) + (u)(0, 1, 2, 3);
-	#else
-		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 2) + ((uint)get_local_id(0) << 2) + base;
-	#endif
-#elif defined VECTORS2
-	#ifdef GOFFSET
+	#elif defined VECTORS2
 		const u nonce = ((uint)get_global_id(0) << 1) + (u)(0, 1);
 	#else
-		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 1) + ((uint)get_local_id(0) << 1) + base;
+		const u nonce = (uint)get_global_id(0);
 	#endif
 #else
-	#ifdef GOFFSET
-		const u nonce = (uint)get_global_id(0);
-	#else
-		const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0)) + (uint)get_local_id(0) + base;
-	#endif
+	const u nonce = base + (uint)(get_global_id(0));
 #endif
 
 	V[0] = PreVal0 + nonce;

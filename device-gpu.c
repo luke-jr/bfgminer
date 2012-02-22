@@ -653,7 +653,7 @@ static _clState *clStates[MAX_GPUDEVICES];
 #define CL_SET_ARG(var) status |= clSetKernelArg(*kernel, num++, sizeof(var), (void *)&var)
 #define CL_SET_VARG(args, var) status |= clSetKernelArg(*kernel, num++, args * sizeof(uint), (void *)var)
 
-static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
+static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
 	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
@@ -680,7 +680,7 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 
 	nonces = alloca(sizeof(uint) * vwidth);
 	for (i = 0; i < vwidth; i++)
-		nonces[i] = blk->nonce + i;
+		nonces[i] = blk->nonce + (i * threads);
 	CL_SET_VARG(vwidth, nonces);
 
 	CL_SET_BLKARG(fW0);
@@ -704,7 +704,8 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk)
 	return status;
 }
 
-static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
+static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk,
+				 __maybe_unused cl_uint threads)
 {
 	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
@@ -747,7 +748,7 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk)
 	return status;
 }
 
-static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
+static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
 	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
@@ -757,7 +758,7 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 
 	nonces = alloca(sizeof(uint) * vwidth);
 	for (i = 0; i < vwidth; i++)
-		nonces[i] = blk->nonce + i;
+		nonces[i] = blk->nonce + (i * threads);
 	CL_SET_VARG(vwidth, nonces);
 
 	CL_SET_BLKARG(PreVal0);
@@ -805,7 +806,7 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk)
 	return status;
 }
 
-static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk)
+static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
 	cl_uint vwidth = clState->preferred_vwidth;
 	cl_kernel *kernel = &clState->kernel;
@@ -815,7 +816,7 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk)
 
 	nonces = alloca(sizeof(uint) * vwidth);
 	for (i = 0; i < vwidth; i++)
-		nonces[i] = blk->nonce + i;
+		nonces[i] = blk->nonce + (i * threads);
 	CL_SET_VARG(vwidth, nonces);
 
 	CL_SET_BLKARG(PreVal0);
@@ -1071,7 +1072,7 @@ static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
 }
 
 struct opencl_thread_data {
-	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *);
+	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *, cl_uint);
 	uint32_t *res;
 	struct work *last_work;
 	struct work _last_work;
@@ -1244,7 +1245,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			   localThreads[0], gpu->intensity);
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
-	status = thrdata->queue_kernel_parameters(clState, &work->blk);
+	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
 		return 0;
