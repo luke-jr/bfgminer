@@ -168,8 +168,8 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 {
 
 
-	u W[132];
-	u *Vals=&W[124];
+	u W[124];
+	u Vals[8];
 
 //Dummy Variable to prevent compiler from reordering between rounds
 	u t1;
