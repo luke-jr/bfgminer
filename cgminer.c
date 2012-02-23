@@ -3235,6 +3235,7 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 
 	if (opt_benchmark) {
 		get_benchmark_work(work);
+		thread_reportin(thr);
 		return true;
 	}
 retry:
