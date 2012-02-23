@@ -259,6 +259,11 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_SAVED 44
 #define MSG_ACCDENY 45
 #define MSG_ACCOK 46
+#define MSG_ENAPOOL 47
+#define MSG_DISPOOL 48
+#define MSG_ALRENAP 49
+#define MSG_ALRDISP 50
+#define MSG_DISLASTP 51
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -346,6 +351,11 @@ struct CODES {
  { SEVERITY_ERR,   MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
  { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
  { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
+ { SEVERITY_SUCC,  MSG_ENAPOOL,	PARAM_POOL,	"Enabling pool %d:'%s'" },
+ { SEVERITY_SUCC,  MSG_DISPOOL,	PARAM_POOL,	"Disabling pool %d:'%s'" },
+ { SEVERITY_INFO,  MSG_ALRENAP,	PARAM_POOL,	"Pool %d:'%s' already enabled" },
+ { SEVERITY_INFO,  MSG_ALRDISP,	PARAM_POOL,	"Pool %d:'%s' already disabled" },
+ { SEVERITY_ERR,   MSG_DISLASTP,PARAM_POOL,	"Cannot disable last active pool %d:'%s'" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -976,6 +986,79 @@ static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_SWITCHP, id, NULL, isjson));
 }
 
+static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	struct pool *pool;
+	int id;
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		return;
+	}
+
+	pool = pools[id];
+	if (pool->enabled == true) {
+		strcpy(io_buffer, message(MSG_ALRENAP, id, NULL, isjson));
+		return;
+	}
+
+	pool->enabled = true;
+	if (pool->prio < current_pool()->prio)
+		switch_pools(pool);
+
+	strcpy(io_buffer, message(MSG_ENAPOOL, id, NULL, isjson));
+}
+
+static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	struct pool *pool;
+	int id;
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		return;
+	}
+
+	pool = pools[id];
+	if (pool->enabled == false) {
+		strcpy(io_buffer, message(MSG_ALRDISP, id, NULL, isjson));
+		return;
+	}
+
+	if (active_pools() <= 1) {
+		strcpy(io_buffer, message(MSG_DISLASTP, id, NULL, isjson));
+		return;
+	}
+
+	pool->enabled = false;
+	if (pool == current_pool())
+		switch_pools(NULL);
+
+	strcpy(io_buffer, message(MSG_DISPOOL, id, NULL, isjson));
+}
+
 static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 {
 	int id;
@@ -1188,6 +1271,9 @@ struct CMDS {
 	{ "gpucount",		gpucount,	false },
 	{ "cpucount",		cpucount,	false },
 	{ "switchpool",		switchpool,	true },
+//	{ "addpool",		addpool,	true }, Not yet ...
+	{ "enablepool",		enablepool,	true },
+	{ "disablepool",	disablepool,	true },
 	{ "gpuintensity",	gpuintensity,	true },
 	{ "gpumem",		gpumem,		true },
 	{ "gpuengine",		gpuengine,	true },

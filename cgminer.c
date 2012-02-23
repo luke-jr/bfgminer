@@ -360,7 +360,7 @@ static bool pool_isset(struct pool *pool, bool *var)
 	return ret;
 }
 
-static struct pool *current_pool(void)
+struct pool *current_pool(void)
 {
 	struct pool *pool;
 
