@@ -3425,6 +3425,7 @@ void *miner_thread(void *userdata)
 	if (api->thread_init && !api->thread_init(mythr))
 		goto out;
 
+	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
 
