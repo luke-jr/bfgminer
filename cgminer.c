@@ -4611,6 +4611,13 @@ int main (int argc, char *argv[])
 		start_longpoll();
 
 begin_bench:
+	total_mhashes_done = 0;
+	for (i = 0; i < total_devices; i++) {
+		struct cgpu_info *cgpu = devices[i];
+
+		cgpu->rolling = cgpu->total_mhashes = 0;
+	}
+	
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
 	get_datestamp(datestamp, &total_tv_start);
