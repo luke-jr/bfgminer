@@ -332,32 +332,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	applog(LOG_DEBUG, "Max work group size reported %d", clState->max_work_size);
 
-	/* For some reason 2 vectors is still better even if the card says
-	 * otherwise, and many cards lie about their max so use 256 as max
-	 * unless explicitly set on the command line. 79x0 cards perform
-	 * better without vectors */
-	if (preferred_vwidth > 1) {
-		if (strstr(name, "Tahiti"))
-			preferred_vwidth = 1;
-		else
-			preferred_vwidth = 2;
-	}
-
-	if (gpus[gpu].vwidth)
-		clState->vwidth = gpus[gpu].vwidth;
-	else {
-		clState->vwidth = preferred_vwidth;
-		gpus[gpu].vwidth = preferred_vwidth;
-	}
-
-	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
-		clState->wsize = gpus[gpu].work_size;
-	else if (strstr(name, "Tahiti"))
-		clState->wsize = 64;
-	else
-		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
-	gpus[gpu].work_size = clState->wsize;
-
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
 	 * have otherwise created. The filename is:
@@ -378,9 +352,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 				applog(LOG_INFO, "Selecting diablo kernel");
 				clState->chosen_kernel = KL_DIABLO;
 			}
-		} else if (strstr(vbuff, "898.1")) { // Windows 64 bit 12.2 driver
-			applog(LOG_INFO, "Selecting diablo kernel");
-			clState->chosen_kernel = KL_DIABLO;
+		} else if (strstr(vbuff, "898.1") || // Windows 64 bit 12.2 driver
+			   strstr(name, "Tahiti")) { // All non SDK 2.6 79x0
+				applog(LOG_INFO, "Selecting diablo kernel");
+				clState->chosen_kernel = KL_DIABLO;
 		} else if (clState->hasBitAlign) {
 			applog(LOG_INFO, "Selecting phatk kernel");
 			clState->chosen_kernel = KL_PHATK;
@@ -393,10 +368,18 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	} else
 		clState->chosen_kernel = gpus[gpu].kernel;
 
+	/* For some reason 2 vectors is still better even if the card says
+	 * otherwise, and many cards lie about their max so use 256 as max
+	 * unless explicitly set on the command line. */
+	if (preferred_vwidth > 2)
+		preferred_vwidth = 2;
+
 	switch (clState->chosen_kernel) {
 		case KL_POCLBM:
 			strcpy(filename, POCLBM_KERNNAME".cl");
 			strcpy(binaryfilename, POCLBM_KERNNAME);
+			/* This kernel prefers to not use vectors */
+			preferred_vwidth = 1;
 			break;
 		case KL_PHATK:
 			strcpy(filename, PHATK_KERNNAME".cl");
@@ -412,6 +395,21 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			strcpy(binaryfilename, DIABLO_KERNNAME);
 			break;
 	}
+
+	if (gpus[gpu].vwidth)
+		clState->vwidth = gpus[gpu].vwidth;
+	else {
+		clState->vwidth = preferred_vwidth;
+		gpus[gpu].vwidth = preferred_vwidth;
+	}
+
+	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
+		clState->wsize = gpus[gpu].work_size;
+	else if (strstr(name, "Tahiti"))
+		clState->wsize = 64;
+	else
+		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
+	gpus[gpu].work_size = clState->wsize;
 
 	FILE *binaryfile;
 	size_t *binary_sizes;
