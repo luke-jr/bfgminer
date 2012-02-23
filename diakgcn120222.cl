@@ -560,50 +560,56 @@ __kernel
 #define NFLAG (0x7F)
 
 #ifdef VECTORS8
-	bool result = any(V[7] == 0x136032edU);
+	V[7] ^= 0x136032edU;
 
-	if (result) {
+	bool result = V[7].s0 & V[7].s1 & V[7].s2 & V[7].s3 & V[7].s4 & V[7].s5 & V[7].s6 & V[7].s7;
+
+	if (!result) {
 		output[FOUND] = FOUND;
-		if (V[7].s0 == 0x136032edU)
+		if (!V[7].s0)
 			output[NFLAG & nonce.s0] = nonce.s0;
-		if (V[7].s1 == 0x136032edU)
+		if (!V[7].s1)
 			output[NFLAG & nonce.s1] = nonce.s1;
-		if (V[7].s2 == 0x136032edU)
+		if (!V[7].s2)
 			output[NFLAG & nonce.s2] = nonce.s2;
-		if (V[7].s3 == 0x136032edU)
+		if (!V[7].s3)
 			output[NFLAG & nonce.s3] = nonce.s3;
-		if (V[7].s4 == 0x136032edU)
+		if (!V[7].s4)
 			output[NFLAG & nonce.s4] = nonce.s4;
-		if (V[7].s5 == 0x136032edU)
+		if (!V[7].s5)
 			output[NFLAG & nonce.s5] = nonce.s5;
-		if (V[7].s6 == 0x136032edU)
+		if (!V[7].s6)
 			output[NFLAG & nonce.s6] = nonce.s6;
-		if (V[7].s7 == 0x136032edU)
+		if (!V[7].s7)
 			output[NFLAG & nonce.s7] = nonce.s7;
 	}
 #elif defined VECTORS4
-	bool result = any(V[7] == 0x136032edU);
+	V[7] ^= 0x136032edU;
 
-	if (result) {
+	bool result = V[7].x & V[7].y & V[7].z & V[7].w;
+
+	if (!result) {
 		output[FOUND] = FOUND;
-		if (V[7].x == 0x136032edU)
+		if (!V[7].x)
 			output[NFLAG & nonce.x] = nonce.x;
-		if (V[7].y == 0x136032edU)
+		if (!V[7].y)
 			output[NFLAG & nonce.y] = nonce.y;
-		if (V[7].z == 0x136032edU)
+		if (!V[7].z)
 			output[NFLAG & nonce.z] = nonce.z;
-		if (V[7].w == 0x136032edU)
+		if (!V[7].w)
 			output[NFLAG & nonce.w] = nonce.w;
 	}
 #elif defined VECTORS2
-	bool result = any(V[7]  == 0x136032edU);
+	V[7] ^= 0x136032edU;
 
-	if (result) {
+	bool result = V[7].x & V[7].y;
+
+	if (!result) {
 		output[FOUND] = FOUND;
-		if (V[7].x == 0x136032edU)
-			output[NFLAG & nonce.x] = nonce.x;
-		if (V[7].y == 0x136032edU)
-			output[NFLAG & nonce.y] = nonce.y;
+		if (!V[7].x)
+			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
+		if (!V[7].y)
+			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
 	}
 #else
 	if (V[7] == 0x136032edU)
