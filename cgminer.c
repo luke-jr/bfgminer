@@ -216,7 +216,7 @@ struct thread_q *getq;
 
 static int total_work;
 struct work *staged_work = NULL;
-static int staged_clones;
+static int staged_extras;
 
 struct schedtime {
 	bool enable;
@@ -2062,8 +2062,8 @@ static int discard_stale(void)
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work, false)) {
 			HASH_DEL(staged_work, work);
-			if (work->clone)
-				--staged_clones;
+			if (work->clone || work->longpoll)
+				--staged_extras;
 			discard_work(work);
 			stale++;
 		}
@@ -2205,8 +2205,8 @@ static bool hash_push(struct work *work)
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
 		HASH_SORT(staged_work, tv_sort);
-		if (work->clone)
-			++staged_clones;
+		if (work->clone || work->longpoll)
+			++staged_extras;
 	} else
 		rc = false;
 	pthread_cond_signal(&getq->cond);
@@ -3121,7 +3121,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 
 	/* Space out retrieval of extra work according to the number of mining
 	 * threads */
-	if (rq >= mining_threads + staged_clones &&
+	if (rq >= mining_threads + staged_extras &&
 	    (now.tv_sec - requested_tv_sec) < opt_scantime / (mining_threads + 1))
 		return true;
 
@@ -3170,8 +3170,8 @@ static struct work *hash_pop(const struct timespec *abstime)
 	if (HASH_COUNT(staged_work)) {
 		work = staged_work;
 		HASH_DEL(staged_work, work);
-		if (work->clone)
-			--staged_clones;
+		if (work->clone || work->longpoll)
+			--staged_extras;
 	}
 	mutex_unlock(stgd_lock);
 
