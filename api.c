@@ -264,6 +264,10 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ALRENAP 49
 #define MSG_ALRDISP 50
 #define MSG_DISLASTP 51
+#define MSG_MISPDP 52
+#define MSG_INVPDP 53
+#define MSG_TOOMANYP 54
+#define MSG_ADDPOOL 55
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -356,6 +360,10 @@ struct CODES {
  { SEVERITY_INFO,  MSG_ALRENAP,	PARAM_POOL,	"Pool %d:'%s' already enabled" },
  { SEVERITY_INFO,  MSG_ALRDISP,	PARAM_POOL,	"Pool %d:'%s' already disabled" },
  { SEVERITY_ERR,   MSG_DISLASTP,PARAM_POOL,	"Cannot disable last active pool %d:'%s'" },
+ { SEVERITY_ERR,   MSG_MISPDP,	PARAM_NONE,	"Missing addpool details" },
+ { SEVERITY_ERR,   MSG_INVPDP,	PARAM_STR,	"Invalid addpool details '%s'" },
+ { SEVERITY_ERR,   MSG_TOOMANYP,PARAM_NONE,	"Reached maximum number of pools (%d)" },
+ { SEVERITY_SUCC,  MSG_ADDPOOL,	PARAM_STR,	"Added pool '%s'" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -986,6 +994,81 @@ static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_SWITCHP, id, NULL, isjson));
 }
 
+static void copyadvanceafter(char ch, char **param, char **buf)
+{
+#define src_p (*param)
+#define dst_b (*buf)
+
+	while (*src_p && *src_p != ch) {
+		if (*src_p == '\\' && *(src_p+1) != '\0')
+			src_p++;
+
+		*(dst_b++) = *(src_p++);
+	}
+	if (*src_p)
+		src_p++;
+
+	*(dst_b++) = '\0';
+}
+
+static bool pooldetails(char *param, char **url, char **user, char **pass)
+{
+	char *ptr, *buf;
+
+	ptr = buf = malloc(strlen(param)+1);
+	if (unlikely(!buf))
+		quit(1, "Failed to malloc pooldetails buf");
+
+	*url = buf;
+
+	// copy url
+	copyadvanceafter(',', &param, &buf);
+
+	if (!(*param)) // missing user
+		goto exitsama;
+
+	*user = buf;
+
+	// copy user
+	copyadvanceafter(',', &param, &buf);
+
+	if (!*param) // missing pass
+		goto exitsama;
+
+	*pass = buf;
+
+	// copy pass
+	copyadvanceafter(',', &param, &buf);
+
+	return true;
+
+exitsama:
+	free(ptr);
+	return false;
+}
+
+static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	char *url, *user, *pass;
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPDP, 0, NULL, isjson));
+		return;
+	}
+
+	if (!pooldetails(param, &url, &user, &pass)) {
+		strcpy(io_buffer, message(MSG_INVPDP, 0, param, isjson));
+		return;
+	}
+
+	if (add_pool_details(true, url, user, pass) == ADD_POOL_MAXIMUM) {
+		strcpy(io_buffer, message(MSG_TOOMANYP, MAX_POOLS, NULL, isjson));
+		return;
+	}
+
+	strcpy(io_buffer, message(MSG_ADDPOOL, 0, url, isjson));
+}
+
 static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	struct pool *pool;
@@ -1271,7 +1354,7 @@ struct CMDS {
 	{ "gpucount",		gpucount,	false },
 	{ "cpucount",		cpucount,	false },
 	{ "switchpool",		switchpool,	true },
-//	{ "addpool",		addpool,	true }, Not yet ...
+	{ "addpool",		addpool,	true },
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
 	{ "gpuintensity",	gpuintensity,	true },
