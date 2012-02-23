@@ -360,7 +360,7 @@ static bool pool_isset(struct pool *pool, bool *var)
 	return ret;
 }
 
-static struct pool *current_pool(void)
+struct pool *current_pool(void)
 {
 	struct pool *pool;
 
@@ -2272,7 +2272,7 @@ int curses_int(const char *query)
 
 static bool input_pool(bool live);
 
-static int active_pools(void)
+int active_pools(void)
 {
 	int ret = 0;
 	int i;
@@ -4053,10 +4053,43 @@ char *curses_input(const char *query)
 	return input;
 }
 
+int add_pool_details(bool live, char *url, char *user, char *pass)
+{
+	struct pool *pool = NULL;
+
+	if (total_pools == MAX_POOLS)
+		return ADD_POOL_MAXIMUM;
+
+	pool = calloc(sizeof(struct pool), 1);
+	if (!pool)
+		quit(1, "Failed to realloc pools in add_pool_details");
+	pool->pool_no = total_pools;
+	pool->prio = total_pools;
+	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
+		quit (1, "Failed to pthread_mutex_init in input_pool");
+	pool->rpc_url = url;
+	pool->rpc_user = user;
+	pool->rpc_pass = pass;
+	pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
+	if (!pool->rpc_userpass)
+		quit(1, "Failed to malloc userpass");
+	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
+
+	pool->tv_idle.tv_sec = ~0UL;
+
+	/* Test the pool is not idle if we're live running, otherwise
+	 * it will be tested separately */
+	pool->enabled = true;
+	if (live && !pool_active(pool, false))
+		pool->idle = true;
+	pools[total_pools++] = pool;
+
+	return ADD_POOL_OK;
+}
+
 static bool input_pool(bool live)
 {
 	char *url = NULL, *user = NULL, *pass = NULL;
-	struct pool *pool = NULL;
 	bool ret = false;
 
 	immedok(logwin, true);
@@ -4091,30 +4124,7 @@ static bool input_pool(bool live)
 	if (!pass)
 		goto out;
 
-	pool = calloc(sizeof(struct pool), 1);
-	if (!pool)
-		quit(1, "Failed to realloc pools in input_pool");
-	pool->pool_no = total_pools;
-	pool->prio = total_pools;
-	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
-		quit (1, "Failed to pthread_mutex_init in input_pool");
-	pool->rpc_url = url;
-	pool->rpc_user = user;
-	pool->rpc_pass = pass;
-	pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
-	if (!pool->rpc_userpass)
-		quit(1, "Failed to malloc userpass");
-	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
-
-	pool->tv_idle.tv_sec = ~0UL;
-
-	/* Test the pool is not idle if we're live running, otherwise
-	 * it will be tested separately */
-	ret = true;
-	pool->enabled = true;
-	if (live && !pool_active(pool, false))
-		pool->idle = true;
-	pools[total_pools++] = pool;
+	ret = (add_pool_details(live, url, user, pass) == ADD_POOL_OK);
 out:
 	immedok(logwin, false);
 
@@ -4125,8 +4135,6 @@ out:
 			free(user);
 		if (pass)
 			free(pass);
-		if (pool)
-			free(pool);
 	}
 	return ret;
 }

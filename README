@@ -654,6 +654,16 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               highest priority (the pool is also enabled)
                               The Msg includes the pool URL
 
+ enablepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of enabling pool N
+                              The Msg includes the pool URL
+
+ disablepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of disabling pool N
+                              The Msg includes the pool URL
+
  gpuenable|N (*)
                none           There is no reply section just the STATUS section
                               stating the results of the enable request
