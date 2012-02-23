@@ -204,7 +204,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
 	int i;
 	char *pnoncebuf;
-	char *pblkdata;
+	char *s;
 	uint32_t nonce;
 
 	BFwrite(fdDev, "ZDX", 3);
@@ -222,9 +222,9 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	memcpy(ob + 8 + 32, work->data + 64, 12);
 	BFwrite(fdDev, ob, 60);
 	if (opt_debug) {
-		pblkdata = bin2hex(ob + 8, 44);
-		applog(LOG_DEBUG, "BitForce block data: %s", pblkdata);
-		free(pblkdata);
+		s = bin2hex(ob + 8, 44);
+		applog(LOG_DEBUG, "BitForce block data: %s", s);
+		free(s);
 	}
 
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
@@ -243,8 +243,8 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		applog(LOG_ERR, "Error reading from BitForce (ZKX)");
 		return 0;
 	}
-	if (!strncasecmp(pdevbuf, "TEMP:", 5)) {
-		float temp = strtof(pdevbuf + 5, NULL);
+	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
+		float temp = strtof(s + 1, NULL);
 		if (temp > 0) {
 			bitforce->temp = temp;
 			if (temp > bitforce->cutofftemp) {
