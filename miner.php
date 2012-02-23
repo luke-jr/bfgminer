@@ -10,9 +10,9 @@ $here = $_SERVER['PHP_SELF'];
 ?>
 <html><head><title>Mine</title>
 <style type='text/css'>
-td { color:blue; font-family:verdana,arial,sans; font-size:14pt; }
-td.h { color:blue; font-family:verdana,arial,sans; font-size:14pt; background:#d0ffff }
-td.sta { color:green; font-family:verdana,arial,sans; font-size:14pt; }
+td { color:blue; font-family:verdana,arial,sans; font-size:13pt; }
+td.h { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#d0ffff }
+td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
 </style>
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
@@ -229,6 +229,10 @@ function details($cmd, $list)
 
  $section = '';
 
+ $poolcmd = array(	'Switch to'	=> 'switchpool',
+			'Enable'	=> 'enablepool',
+			'Disable'	=> 'disablepool' );
+
  foreach ($list as $item => $values)
  {
 	if ($item != 'STATUS')
@@ -245,7 +249,8 @@ function details($cmd, $list)
 		}
 
 		if ($cmd == 'pools')
-			echo "<td valign=bottom class=h>Switch</td>";
+			foreach ($poolcmd as $name => $pcmd)
+				echo "<td valign=bottom class=h>$name</td>";
 
 		echo '</tr>';
 
@@ -258,24 +263,27 @@ function details($cmd, $list)
 	if ($item == 'STATUS')
 		continue;
 
+	echo '<tr>';
+
 	foreach ($values as $name => $value)
 		echo '<td>'.fmt($section, $name, $value).'</td>';
 
 	if ($cmd == 'pools')
 	{
-		echo '<td>';
-
 		reset($values);
 		$pool = current($values);
-		if ($pool === false)
-			echo '&nbsp;';
-		else
+		foreach ($poolcmd as $name => $pcmd)
 		{
-			echo "<input type=button value='Pool $pool'";
-			echo " onclick='prc(\"switchpool|$pool\",\"Switch to Pool $pool\")'>";
+			echo '<td>';
+			if ($pool === false)
+				echo '&nbsp;';
+			else
+			{
+				echo "<input type=button value='Pool $pool'";
+				echo " onclick='prc(\"$pcmd|$pool\",\"$name Pool $pool\")'>";
+			}
+			echo '</td>';
 		}
-
-		echo '</td>';
 	}
 
 	echo '</tr>';
