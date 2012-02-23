@@ -835,7 +835,8 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk,
 	return status;
 }
 
-static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
+static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk,
+				   __maybe_unused cl_uint threads)
 {
 	cl_kernel *kernel = &clState->kernel;
 	cl_uint vwidth = clState->vwidth;
@@ -845,7 +846,7 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint 
 
 	nonces = alloca(sizeof(uint) * vwidth);
 	for (i = 0; i < vwidth; i++)
-		nonces[i] = blk->nonce + (i * threads);
+		nonces[i] = blk->nonce + i;
 	CL_SET_VARG(vwidth, nonces);
 
 	CL_SET_BLKARG(PreVal0);

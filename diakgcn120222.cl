@@ -53,7 +53,15 @@ __kernel
 	u V[8];
 	u W[16];
 
-	const u nonce = base + (uint)get_global_id(0);
+#ifdef VECTORS8
+	const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 3) + ((uint)get_local_id(0) << 3) + base;
+#elif defined VECTORS4
+	const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 2) + ((uint)get_local_id(0) << 2) + base;
+#elif defined VECTORS2
+	const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0) << 1) + ((uint)get_local_id(0) << 1) + base;
+#else
+	const u nonce = ((uint)get_group_id(0) * (uint)get_local_size(0)) + (uint)get_local_id(0) + base;
+#endif
 
 	V[0] = PreVal0 + nonce;
 	V[1] = B1;
@@ -108,7 +116,16 @@ __kernel
 
 //----------------------------------------------------------------------------------
 
+#ifdef VECTORS8
+	 W[0] = PreW18 + (u)(	rotr25(nonce.s0),             rotr25(nonce.s0) ^ 0x2004000U, rotr25(nonce.s0) ^ 0x4008000U, rotr25(nonce.s0) ^ 0x600c000U,
+				rotr25(nonce.s0) ^ 0x8010000U, rotr25(nonce.s0) ^ 0xa014000U, rotr25(nonce.s0) ^ 0xc018000U, rotr25(nonce.s0) ^ 0xe01c000U);
+#elif defined VECTORS4
+	 W[0] = PreW18 + (u)(rotr25(nonce.x), rotr25(nonce.x) ^ 0x2004000U, rotr25(nonce.x) ^ 0x4008000U, rotr25(nonce.x) ^ 0x600c000U);
+#elif defined VECTORS2
+	 W[0] = PreW18 + (u)(rotr25(nonce.x), rotr25(nonce.x) ^ 0x2004000U);
+#else
 	 W[0] = PreW18 + rotr25(nonce);
+#endif
 	 W[1] = PreW19 + nonce;
 	 W[2] = 0x80000000U + rotr15(W[0]);
 	 W[3] = rotr15(W[1]);
