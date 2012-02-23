@@ -1,3 +1,55 @@
+Version 2.3.0
+
+- API new commands enablepool and disablepool (version already incremented)
+- Tolerate new-format temperature readings
+- Modify cgminer.c pool control to allow API to call it
+- Bugfix: Fix BitFORCE driver memory leak in debug logging
+- Extra byte was being unused and leading to failure on some platforms.
+- Explicitly type the constants in poclbm kernel as uint.
+- Don't save 'include' when saving the configuration
+- Allow configuration file to include another recursively
+- Use the SDK and hardware information to choose good performing default
+kernels.
+- Move phatk kernel to offset vector based nonce bases as well.
+- Add a --benchmark feature which works on a fake item indefinitely to compare
+device performance without any server or networking influence.
+- Allow writing of multiple worksizes to the configuration file.
+- Allow writing of multiple vector sizes to the configuration file.
+- Allow writing of multiple kernels to the configuration file.
+- Allow multiple different kernels to be chosen per device.
+- Allow the worksize to be set per-device.
+- Allow different vectors to be set per device.
+- If we're well below the target temperature, increase gpu engine speed back to
+maximum in case we have gotten lost between profiles during an idle period.
+- We should be setting the value of fan_optimal, not its address.
+- As all kernels will be new versions it's an opportunity to change the .bin
+format and make it simpler. Specifying bitalign is redundant and long can be l.
+- Use any() in kernel output code.
+- Put the nonce for each vector offset in advance, avoiding one extra addition
+in the kernel.
+- Reset times after all mining threads are started to make estimating hashrates
+easier at startup.
+- Bugfix: allow no-exec (NX) stack
+- Fix minor warning.
+- fix the bitforce.c code style follow 1TBS
+- fix icarus.c compile warning
+- small changes to speedup no vec for AMD 898.1 OCL runtime
+- Update licensing to GPL V3.
+- Reset the longpoll flag after it's been used once to prevent it restarting
+work again.
+- Begin import of DiabloMiner kernel.
+- Modify API debug messages to say API instead of DBG
+- When API shuts down cgminer don't kill itself
+- Don't make rolled work from the longpoll be seen as other longpoll work items.
+- API add 'privileged' command so can verify access level
+- Set the lp_sent variable under lock since there will almost always be a race
+on setting this variable, potentially leading to multiple LPs being sent out.
+- API restrict access to all non display commands by default
+- Update API version to 1.2 for new 'Log Interval'
+- API add --log Interval to 'config' reply
+- --api-allow special case 0/0 means all
+
+
 Version 2.2.7 - February 20, 2012
 
 - Send out extra longpolls when we have switched pools and the longpoll thread
@@ -8,10 +60,10 @@ high reject rates on failover.
 and use it to help determine block changes directly from the work longpoll bool.
 - Keep track of when a longpoll has been sent for a pool and if the current pool
 is requesting work but has not sent a longpoll request, convert one of the work
-i
+items to a longpoll.
 - Store the longpoll url in the pool struct and update it from the pool_active
 test in case it changes. This is to allow further changes to longpoll management
-on
+on switching pools.
 - Re-check for a longpoll supporting pool every 30 seconds if none is found
 initially.
 - Report threads as busy waiting on getwork on startup to avoid them being
@@ -29,7 +81,7 @@ on startup instead of with each device initialisation.
 can fail for many reasons.
 - Keep track of intended engine clock speed and only adjust up if it's higher
 than the last intended speed. This avoids setting the clock speed to one
-relative to
+relative to a lower profile one by mistake.
 - Use gpu-memdiff on startup if an engine clockspeed is set and a memdiff value
 is set.
 - Revert "Adjust engine speed up according to performance level engine setting,
@@ -41,7 +93,7 @@ them trying to start up again with saved pings in their queues.
 before refresh.
 - Curses will be disabled in clean_up so don't do it early in kill_work, and
 disable_adl so that GPU settings may be restored to normal in case shutting down
-curs
+curses leads to instability on windows.
 - Stop the mining threads before trying to kill them.
 - Plain refresh() does not give reliably screen updates so get rid of all uses
 of it.
