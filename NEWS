@@ -1,10 +1,22 @@
-Version 2.3.0
+Version 2.3.0 - February 23, 2012
 
+- Consider extra longpoll work items as staged_extra so as to make sure we queue
+more work if queueing regular work items as longpolls.
+- Use diablo kernel on all future SDKs for Tahiti and set preferred vector width
+to 1 on poclbm kernel only.
+- Explicitly type the constants in diakgcn kernel as uint, to be in line with
+poclbm kernel.
+- Reset all hash counters at the same time as resetting start times to get
+accurate hashrates on exiting which is mandatory for benchmarking.
+- Report thread out before it starts to avoid being flagged as sick when waiting
+for the first work item.
+- Don't disable and re-enable devices as they may recover and in the meantime
+have their status set to OFF.
 - API new commands enablepool and disablepool (version already incremented)
-- Tolerate new-format temperature readings
+- Tolerate new-format temperature readings for bitforce
 - Modify cgminer.c pool control to allow API to call it
 - Bugfix: Fix BitFORCE driver memory leak in debug logging
-- Extra byte was being unused and leading to failure on some platforms.
+- Extra byte was being unused in poclbm leading to failure on some platforms.
 - Explicitly type the constants in poclbm kernel as uint.
 - Don't save 'include' when saving the configuration
 - Allow configuration file to include another recursively

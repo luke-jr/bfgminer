@@ -131,6 +131,7 @@ Options for both config file and command line:
 --api-port          Port number of miner API (default: 4028)
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
+--benchmark         Run cgminer in benchmark mode - produces no shares
 --debug|-D          Enable debug output
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
@@ -186,15 +187,15 @@ GPU only options:
 --gpu-reorder       Attempt to reorder GPU devices according to PCI Bus ID
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
 --intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
+--kernel|-k <arg>   Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
 --kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/local/bin")
---kernel|-k <arg>   Select kernel to use (poclbm, phatk or diakgcn - default: auto)
+--ndevs|-n          Enumerate number of detected GPUs and exit
 --no-restart        Do not attempt to restart GPUs that hang
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
 --temp-target <arg> Target temperature when automatically managing fan and GPU speeds (default: 75)
---vectors|-v <arg>  Override detected optimal vector width (1, 2 or 4)
---worksize|-w <arg> Override detected optimal worksize (default: 0)
---ndevs|-n          Enumerate number of detected GPUs and exit
+--vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
+--worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 
 
 FPGA mining boards(BitForce, Icarus) only options:
