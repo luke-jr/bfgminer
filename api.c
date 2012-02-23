@@ -152,7 +152,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.2";
+static const char *APIVERSION = "1.3";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -559,21 +559,21 @@ static void gpustatus(int gpu, bool isjson)
 			sprintf(intensity, "%d", cgpu->intensity);
 
 		if (isjson)
-			sprintf(buf, "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu}",
+			sprintf(buf, "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
 				gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
 				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 				cgpu->utility, intensity,
 				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time));
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
 		else
-			sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s,Last Share Pool=%d,Last Share Time=%lu%c",
+			sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
 				gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
 				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 				cgpu->utility, intensity,
 				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), SEPARATOR);
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
 
 		strcat(io_buffer, buf);
 	}
@@ -590,21 +590,21 @@ static void cpustatus(int cpu, bool isjson)
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 		if (isjson)
-			sprintf(buf, "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu}",
+			sprintf(buf, "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
 				cpu, cgpu->total_mhashes / total_secs,
 				opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected,
 				cgpu->utility,
 				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time));
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
 		else
-			sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu%c",
+			sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
 				cpu, cgpu->total_mhashes / total_secs,
 				opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected,
 				cgpu->utility,
 				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), SEPARATOR);
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
 
 		strcat(io_buffer, buf);
 	}
@@ -793,34 +793,34 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 
 #ifdef WANT_CPUMINE
 	if (isjson)
-		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u}" JSON_CLOSE,
+		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE,
 			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, algo, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks);
+			total_go, local_work, total_ro, new_blocks, total_mhashes_done);
 	else
-		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
+		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f%c",
 			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, algo, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks, SEPARATOR);
+			total_go, local_work, total_ro, new_blocks, total_mhashes_done, SEPARATOR);
 #else
 	if (isjson)
-		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u}" JSON_CLOSE,
+		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE,
 			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks);
+			total_go, local_work, total_ro, new_blocks, total_mhashes_done);
 	else
-		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
+		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f%c",
 			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks, SEPARATOR);
+			total_go, local_work, total_ro, new_blocks, total_mhashes_done, SEPARATOR);
 #endif
 }
 
