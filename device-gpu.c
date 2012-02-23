@@ -648,7 +648,6 @@ retry:
 				continue;
 			if (cgpu->status != LIFE_WELL) {
 				wlogprint("Must restart device before enabling it");
-				gpus[selected].deven = DEV_DISABLED;
 				goto retry;
 			}
 			applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
@@ -985,7 +984,6 @@ select_cgpu:
 	}
 
 	gpu = cgpu->device_id;
-	cgpu->deven = DEV_DISABLED;
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = &thr_info[thr_id];
@@ -1009,8 +1007,6 @@ select_cgpu:
 		} else
 			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);
 	}
-
-	cgpu->deven = DEV_ENABLED;
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		int virtual_gpu;
