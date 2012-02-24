@@ -1,3 +1,15 @@
+Version 2.3.1 - February 24, 2012
+
+- Revert input and output code on diakgcn and phatk kernels to old style which
+worked better for older hardware and SDKs.
+- Add a vector*worksize parameter passed to those kernels to avoid one op.
+- Increase the speed of hashrate adaptation.
+- Only send out extra longpoll requests if we want longpolls.
+- API implement addpool command
+- API return the untouched Total MH also (API now version 1.3)
+- Add enable/disablepool to miner.php example and reduce font size 1pt
+
+
 Version 2.3.0 - February 23, 2012
 
 - Consider extra longpoll work items as staged_extra so as to make sure we queue
