@@ -53,14 +53,10 @@ __kernel
 	u V[8];
 	u W[16];
 
-#ifdef VECTORS8
-	const u nonce = base + (uint)(get_local_id(0)) * 8u + (uint)(get_group_id(0)) * (WORKVEC);
-#elif VECTORS4
-	const u nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKVEC);
-#elif defined VECTORS2
-	const u nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKVEC);
+#if defined(VECTORS2) || defined(VECTORS4) || defined(VECTORS8)
+	const u nonce = (uint)(get_local_id(0)) * (uint)(vec_step(u)) + (uint)(get_group_id(0)) * (uint)(WORKVEC) + base;
 #else
-	const u nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
+	const u nonce = (uint)(get_local_id(0)) + (uint)(get_group_id(0)) * (uint)(WORKSIZE) + base;
 #endif
 
 	V[0] = PreVal0 + nonce;
