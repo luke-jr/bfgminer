@@ -836,7 +836,7 @@ static cl_int queue_phatk_kernel(_clState *clState, dev_blk_ctx *blk,
 }
 
 static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk,
-				 __maybe_unused cl_uint threads)
+				   __maybe_unused cl_uint threads)
 {
 	cl_kernel *kernel = &clState->kernel;
 	cl_uint vwidth = clState->vwidth;
