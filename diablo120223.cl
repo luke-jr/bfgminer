@@ -63,9 +63,9 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
   z ZA[930];
 
 #ifdef VECTORS4
-	const z Znonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
+	const z Znonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKVEC);
 #elif defined VECTORS2
-	const z Znonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
+	const z Znonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKVEC);
 #else
 	const z Znonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
 #endif

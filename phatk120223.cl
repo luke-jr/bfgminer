@@ -188,12 +188,12 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 
 #ifdef VECTORS4
 	//Less dependencies to get both the local id and group id and then add them
-	W[3] = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
+	W[3] = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKVEC);
 	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
 	//Since only the 2 LSB is opposite between the nonces, we can save an instruction by flipping the 4 bits in W18 rather than the 1 bit in W3
 	W[18] = PreW18 + (u){r, r ^ 0x2004000U, r ^ 0x4008000U, r ^ 0x600C000U};
 #elif defined VECTORS2
-	W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
+	W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKVEC);
 	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
 	W[18] = PreW18 + (u){r, r ^ 0x2004000U};
 #else

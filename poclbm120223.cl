@@ -83,9 +83,9 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	u *Vals = &W[16]; // Now put at W[16] to be in same array
 
 #ifdef VECTORS4
-	const u nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
+	const u nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKVEC);
 #elif defined VECTORS2
-	const u nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
+	const u nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKVEC);
 #else
 	const u nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
 #endif

@@ -505,8 +505,8 @@ build:
 	/* create a cl program executable for all the devices specified */
 	char *CompilerOptions = calloc(1, 256);
 
-	sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d",
-		(int)clState->wsize, clState->vwidth);
+	sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC%d",
+		(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
 	applog(LOG_DEBUG, "Setting worksize to %d", clState->wsize);
 	if (clState->vwidth > 1)
 		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
