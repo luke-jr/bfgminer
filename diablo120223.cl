@@ -1248,7 +1248,7 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
 
 	if (!result) {
 		output[FOUND] = FOUND;
-		if (!ZA[924].xU)
+		if (!ZA[924].x)
 			output[NFLAG & Znonce.x] =  Znonce.x;
 		if (!ZA[924].y)
 			output[NFLAG & Znonce.y] =  Znonce.y;
@@ -1263,7 +1263,7 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
 
 	if (!result) {
 		output[FOUND] = FOUND;
-		if (!ZA[924].xU)
+		if (!ZA[924].x)
 			output[NFLAG & Znonce.x] =  Znonce.x;
 		if (!ZA[924].y)
 			output[NFLAG & Znonce.y] =  Znonce.y;
