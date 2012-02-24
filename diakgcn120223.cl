@@ -117,8 +117,7 @@ __kernel
 //----------------------------------------------------------------------------------
 
 #ifdef VECTORS8
-	 W[0] = PreW18 + (u)(	rotr25(nonce.s0), 				rotr25(nonce.s0) ^ 0x2004000U, rotr25(nonce.s0) ^ 0x4008000U, rotr25(nonce.s0) ^ 0x600c000U,
-							rotr25(nonce.s0) ^ 0x8010000U, 	rotr25(nonce.s0) ^ 0xa014000U, rotr25(nonce.s0) ^ 0xc018000U, rotr25(nonce.s0) ^ 0xe01c000U);
+	 W[0] = PreW18 + (u)(rotr25(nonce.s0), rotr25(nonce.s0) ^ 0x2004000U, rotr25(nonce.s0) ^ 0x4008000U, rotr25(nonce.s0) ^ 0x600c000U, rotr25(nonce.s0) ^ 0x8010000U, rotr25(nonce.s0) ^ 0xa014000U, rotr25(nonce.s0) ^ 0xc018000U, rotr25(nonce.s0) ^ 0xe01c000U);
 #elif defined VECTORS4
 	 W[0] = PreW18 + (u)(rotr25(nonce.x), rotr25(nonce.x) ^ 0x2004000U, rotr25(nonce.x) ^ 0x4008000U, rotr25(nonce.x) ^ 0x600c000U);
 #elif defined VECTORS2
