@@ -901,6 +901,11 @@ Q: Are kernels from other mining software useable in cgminer?
 A: No, the APIs are slightly different between the different software and they
 will not work.
 
+Q: I run PHP on windows to access the API with the example miner.php. Why does
+it fail when php is installed properly but I only get errors about Sockets not
+working in the logs?
+A: http://us.php.net/manual/en/sockets.installation.php
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
