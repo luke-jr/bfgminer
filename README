@@ -660,6 +660,13 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating the results of enabling pool N
                               The Msg includes the pool URL
 
+ addpool|URL,USR,PASS (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of attempting to add pool N
+                              The Msg includes the pool URL
+                              Use '\\' to get a '\' and '\,' to include a comma
+                              inside URL, USR or PASS
+
  disablepool|N (*)
                none           There is no reply section just the STATUS section
                               stating the results of disabling pool N
@@ -893,6 +900,11 @@ with -g 1.
 Q: Are kernels from other mining software useable in cgminer?
 A: No, the APIs are slightly different between the different software and they
 will not work.
+
+Q: I run PHP on windows to access the API with the example miner.php. Why does
+it fail when php is installed properly but I only get errors about Sockets not
+working in the logs?
+A: http://us.php.net/manual/en/sockets.installation.php
 
 ---
 

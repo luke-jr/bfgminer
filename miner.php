@@ -10,13 +10,13 @@ $here = $_SERVER['PHP_SELF'];
 ?>
 <html><head><title>Mine</title>
 <style type='text/css'>
-td { color:blue; font-family:verdana,arial,sans; font-size:14pt; }
-td.h { color:blue; font-family:verdana,arial,sans; font-size:14pt; background:#d0ffff }
-td.sta { color:green; font-family:verdana,arial,sans; font-size:14pt; }
+td { color:blue; font-family:verdana,arial,sans; font-size:13pt; }
+td.h { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#d0ffff }
+td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
 </style>
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
-function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<? echo $here ?>"+a}
+function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<?php echo $here ?>"+a}
 function prc(a,m){pr('?arg='+a,m)}
 function prs(a){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a,m)}
 function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v,m)}
@@ -24,7 +24,7 @@ function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3)
 <table width=100% height=100% border=0 cellpadding=0 cellspacing=0 summary='Mine'>
 <tr><td align=center valign=top>
 <table border=0 cellpadding=4 cellspacing=0 summary='Mine'>
-<?
+<?php
 #
 global $error;
 $error = null;
@@ -229,6 +229,10 @@ function details($cmd, $list)
 
  $section = '';
 
+ $poolcmd = array(	'Switch to'	=> 'switchpool',
+			'Enable'	=> 'enablepool',
+			'Disable'	=> 'disablepool' );
+
  foreach ($list as $item => $values)
  {
 	if ($item != 'STATUS')
@@ -245,7 +249,8 @@ function details($cmd, $list)
 		}
 
 		if ($cmd == 'pools')
-			echo "<td valign=bottom class=h>Switch</td>";
+			foreach ($poolcmd as $name => $pcmd)
+				echo "<td valign=bottom class=h>$name</td>";
 
 		echo '</tr>';
 
@@ -258,24 +263,27 @@ function details($cmd, $list)
 	if ($item == 'STATUS')
 		continue;
 
+	echo '<tr>';
+
 	foreach ($values as $name => $value)
 		echo '<td>'.fmt($section, $name, $value).'</td>';
 
 	if ($cmd == 'pools')
 	{
-		echo '<td>';
-
 		reset($values);
 		$pool = current($values);
-		if ($pool === false)
-			echo '&nbsp;';
-		else
+		foreach ($poolcmd as $name => $pcmd)
 		{
-			echo "<input type=button value='Pool $pool'";
-			echo " onclick='prc(\"switchpool|$pool\",\"Switch to Pool $pool\")'>";
+			echo '<td>';
+			if ($pool === false)
+				echo '&nbsp;';
+			else
+			{
+				echo "<input type=button value='Pool $pool'";
+				echo " onclick='prc(\"$pcmd|$pool\",\"$name Pool $pool\")'>";
+			}
+			echo '</td>';
 		}
-
-		echo '</td>';
 	}
 
 	echo '</tr>';
