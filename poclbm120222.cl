@@ -82,13 +82,7 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	u W[24];
 	u *Vals = &W[16]; // Now put at W[16] to be in same array
 
-#ifdef VECTORS4
-	const u nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKVEC);
-#elif defined VECTORS2
-	const u nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKVEC);
-#else
-	const u nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
-#endif
+	const u nonce = base + (uint)(get_global_id(0));
 
 
 Vals[0]=Preval0+nonce;
@@ -170,7 +164,7 @@ Vals[1]+=(rotr(Vals[2],2)^rotr(Vals[2],13)^rotr(Vals[2],22));
 Vals[1]+=Ma(Vals[4],Vals[2],Vals[3]);
 Vals[0]+=(rotr(Vals[5],6)^rotr(Vals[5],11)^rotr(Vals[5],25));
 Vals[0]+=ch(Vals[5],Vals[6],Vals[7]);
-Vals[0]+=0xC19BF3F4;
+Vals[0]+=0xC19BF3F4U;
 Vals[4]+=Vals[0];
 Vals[0]+=(rotr(Vals[1],2)^rotr(Vals[1],13)^rotr(Vals[1],22));
 Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
@@ -207,7 +201,7 @@ Vals[0]+=Vals[4];
 Vals[4]+=(rotr(Vals[5],2)^rotr(Vals[5],13)^rotr(Vals[5],22));
 
 W[4]=(rotr(W[2],17)^rotr(W[2],19)^(W[2]>>10U));
-W[4]+=0x80000000;
+W[4]+=0x80000000U;
 Vals[3]+=W[4];
 Vals[3]+=(rotr(Vals[0],6)^rotr(Vals[0],11)^rotr(Vals[0],25));
 Vals[3]+=ch(Vals[0],Vals[1],Vals[2]);
@@ -658,14 +652,14 @@ W[0]=Vals[0];
 W[7]=state7;
 W[7]+=Vals[7];
 
-Vals[7]=0xF377ED68;
+Vals[7]=0xF377ED68U;
 W[0]+=state0;
 Vals[7]+=W[0];
 
 W[3]=state3;
 W[3]+=Vals[3];
 
-Vals[3]=0xa54ff53a;
+Vals[3]=0xa54ff53aU;
 Vals[3]+=Vals[7];
 
 W[1]=Vals[1];
@@ -674,7 +668,7 @@ W[1]+=state1;
 W[6]=state6;
 W[6]+=Vals[6];
 
-Vals[6]=0x90BB1E3C;
+Vals[6]=0x90BB1E3CU;
 Vals[6]+=(rotr(Vals[3],6)^rotr(Vals[3],11)^rotr(Vals[3],25));
 Vals[6]+=(0x9b05688cU^(Vals[3]&0xca0b3af3U));
 
@@ -690,7 +684,7 @@ Vals[6]+=(rotr(Vals[7],2)^rotr(Vals[7],13)^rotr(Vals[7],22));
 W[5]=state5;
 W[5]+=Vals[5];
 
-Vals[5]=0x150C6645B;
+Vals[5]=0x150C6645BU;
 Vals[5]+=(rotr(Vals[2],6)^rotr(Vals[2],11)^rotr(Vals[2],25));
 Vals[5]+=ch(Vals[2],Vals[3],0x510e527fU);
 Vals[5]+=W[2];
@@ -703,7 +697,7 @@ Vals[5]+=(rotr(Vals[6],2)^rotr(Vals[6],13)^rotr(Vals[6],22));
 W[4]=state4;
 W[4]+=Vals[4];
 
-Vals[4]=0x13AC42E24;
+Vals[4]=0x13AC42E24U;
 Vals[4]+=(rotr(Vals[1],6)^rotr(Vals[1],11)^rotr(Vals[1],25));
 Vals[4]+=ch(Vals[1],Vals[2],Vals[3]);
 Vals[4]+=W[3];
@@ -742,7 +736,7 @@ Vals[4]+=Vals[0];
 Vals[0]+=(rotr(Vals[1],2)^rotr(Vals[1],13)^rotr(Vals[1],22));
 Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
 Vals[7]+=ch(Vals[4],Vals[5],Vals[6]);
-Vals[7]+=0x15807AA98;
+Vals[7]+=0x5807AA98U;
 Vals[0]+=Ma(Vals[3],Vals[1],Vals[2]);
 Vals[3]+=Vals[7];
 Vals[7]+=(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22));
@@ -785,7 +779,7 @@ Vals[1]+=(rotr(Vals[2],2)^rotr(Vals[2],13)^rotr(Vals[2],22));
 Vals[1]+=Ma(Vals[4],Vals[2],Vals[3]);
 Vals[0]+=(rotr(Vals[5],6)^rotr(Vals[5],11)^rotr(Vals[5],25));
 Vals[0]+=ch(Vals[5],Vals[6],Vals[7]);
-Vals[0]+=0xC19BF274;
+Vals[0]+=0xC19BF274U;
 Vals[4]+=Vals[0];
 Vals[0]+=(rotr(Vals[1],2)^rotr(Vals[1],13)^rotr(Vals[1],22));
 Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
@@ -862,7 +856,7 @@ Vals[0]+=W[7];
 Vals[4]+=Vals[0];
 Vals[0]+=(rotr(Vals[1],2)^rotr(Vals[1],13)^rotr(Vals[1],22));
 
-W[8]=0x80000000;
+W[8]=0x80000000U;
 W[8]+=W[1];
 W[8]+=(rotr(W[6],17)^rotr(W[6],19)^(W[6]>>10U));
 Vals[7]+=W[8];
