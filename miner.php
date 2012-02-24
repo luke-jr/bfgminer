@@ -16,7 +16,7 @@ td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
 </style>
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
-function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<? echo $here ?>"+a}
+function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<?php echo $here ?>"+a}
 function prc(a,m){pr('?arg='+a,m)}
 function prs(a){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a,m)}
 function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v,m)}
@@ -24,7 +24,7 @@ function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3)
 <table width=100% height=100% border=0 cellpadding=0 cellspacing=0 summary='Mine'>
 <tr><td align=center valign=top>
 <table border=0 cellpadding=4 cellspacing=0 summary='Mine'>
-<?
+<?php
 #
 global $error;
 $error = null;
