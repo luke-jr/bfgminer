@@ -1111,7 +1111,7 @@ void decay_time(double *f, double fadd)
 			ratio = 1 / ratio;
 	}
 
-	if (ratio > 0.9)
+	if (ratio > 0.95)
 		*f = (fadd * 0.1 + *f) / 1.1;
 	else
 		*f = (fadd + *f * 0.1) / 1.1;
