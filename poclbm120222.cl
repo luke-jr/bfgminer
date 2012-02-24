@@ -1261,15 +1261,14 @@ Vals[7]+=ch(Vals[0],Vals[1],Vals[2]);
 	bool result = Vals[7].x & Vals[7].y & Vals[7].z & Vals[7].w;
 
 	if (!result) {
-		output[FOUND] = FOUND;
 		if (!Vals[7].x)
-			output[NFLAG & nonce.x] = nonce.x;
+			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
 		if (!Vals[7].y)
-			output[NFLAG & nonce.y] = nonce.y;
+			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
 		if (!Vals[7].z)
-			output[NFLAG & nonce.z] = nonce.z;
+			output[FOUND] = output[NFLAG & nonce.z] = nonce.z;
 		if (!Vals[7].w)
-			output[NFLAG & nonce.w] = nonce.w;
+			output[FOUND] = output[NFLAG & nonce.w] = nonce.w;
 	}
 #elif defined VECTORS2
 	Vals[7] ^= 0x136032edU;
@@ -1277,11 +1276,10 @@ Vals[7]+=ch(Vals[0],Vals[1],Vals[2]);
 	bool result = Vals[7].x & Vals[7].y;
 
 	if (!result) {
-		output[FOUND] = FOUND;
 		if (!Vals[7].x)
-			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
+			output[FOUND] = output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
 		if (!Vals[7].y)
-			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
+			output[FOUND] = output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
 	}
 #else
 	if (Vals[7] == 0x136032EDU)

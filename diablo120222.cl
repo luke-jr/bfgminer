@@ -1240,25 +1240,23 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
 	bool result = any(ZA[924] == 0x136032EDU);
 
 	if (result) {
-		output[FOUND] = FOUND;
 		if (ZA[924].x == 0x136032EDU)
-			output[NFLAG & Znonce.x] =  Znonce.x;
+			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
 		if (ZA[924].y == 0x136032EDU)
-			output[NFLAG & Znonce.y] =  Znonce.y;
+			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
 		if (ZA[924].z == 0x136032EDU)
-			output[NFLAG & Znonce.z] =  Znonce.z;
+			output[FOUND] = output[NFLAG & Znonce.z] =  Znonce.z;
 		if (ZA[924].w == 0x136032EDU)
-			output[NFLAG & Znonce.w] =  Znonce.w;
+			output[FOUND] = output[NFLAG & Znonce.w] =  Znonce.w;
 	}
 #elif defined(VECTORS2)
 	bool result = any(ZA[924] == 0x136032EDU);
 
 	if (result) {
-		output[FOUND] = FOUND;
 		if (ZA[924].x == 0x136032EDU)
-			output[NFLAG & Znonce.x] =  Znonce.x;
+			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
 		if (ZA[924].y == 0x136032EDU)
-			output[NFLAG & Znonce.y] =  Znonce.y;
+			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
 	}
 #else
 	if (ZA[924] == 0x136032EDU)
