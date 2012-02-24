@@ -1630,8 +1630,8 @@ static bool get_upstream_work(struct work *work, bool lagging)
 
 	/* If this is the current pool and supports longpoll but has not sent
 	 * a longpoll, send one now */
-	if (unlikely(!pool->is_lp && pool == current_pool() && pool->hdr_path &&
-		!pool_tset(pool, &pool->lp_sent))) {
+	if (unlikely(want_longpoll && !pool->is_lp && pool == current_pool() &&
+		pool->hdr_path && !pool_tset(pool, &pool->lp_sent))) {
 			req_longpoll = true;
 			url = pool->lp_url;
 	}
