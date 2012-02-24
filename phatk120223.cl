@@ -188,12 +188,12 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 
 #ifdef VECTORS4
 	//Less dependencies to get both the local id and group id and then add them
-	W[3] = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKVEC);
+	W[3] = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKSIZE * 4u);
 	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
 	//Since only the 2 LSB is opposite between the nonces, we can save an instruction by flipping the 4 bits in W18 rather than the 1 bit in W3
 	W[18] = PreW18 + (u){r, r ^ 0x2004000U, r ^ 0x4008000U, r ^ 0x600C000U};
 #elif defined VECTORS2
-	W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKVEC);
+	W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
 	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
 	W[18] = PreW18 + (u){r, r ^ 0x2004000U};
 #else
@@ -393,24 +393,22 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 #ifdef VECTORS4
 	bool result = W[117].x & W[117].y & W[117].z & W[117].w;
 	if (!result) {
-		output[FOUND] = FOUND;
 		if (!W[117].x)
-			output[NFLAG & W[3].x] = W[3].x;
+			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
 		if (!W[117].y)
-			output[NFLAG & W[3].y] = W[3].y;
+			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
 		if (!W[117].z)
-			output[NFLAG & W[3].z] = W[3].z;
+			output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
 		if (!W[117].w)
-			output[NFLAG & W[3].w] = W[3].w;
+			output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
 	}
 #elif defined VECTORS2
 	bool result = W[117].x & W[117].y;
 	if (!result) {
-		output[FOUND] = FOUND;
 		if (!W[117].x)
-			output[NFLAG & W[3].x] = W[3].x;
+			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
 		if (!W[117].y)
-			output[NFLAG & W[3].y] = W[3].y;
+			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
 	}
 #else
 	if (!W[117])
