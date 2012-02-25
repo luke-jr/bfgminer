@@ -52,9 +52,6 @@
 
 #define ICARUS_READ_FAULT_COUNT	(8)
 
-static int icarus_read_count;
-static int icarus_write_fault;
-
 struct device_api icarus_api;
 
 static void rev(unsigned char *s, size_t l)
@@ -108,11 +105,10 @@ static int icarus_open(const char *devpath)
 #endif
 }
 
-static void icarus_gets(unsigned char *buf, size_t bufLen, int fd)
+static int icarus_gets(unsigned char *buf, size_t bufLen, int fd)
 {
 	ssize_t ret = 0;
-
-	icarus_read_count = 0;
+	int rc = 0;
 
 	while (bufLen) {
 		ret = read(fd, buf, 1);
@@ -122,23 +118,26 @@ static void icarus_gets(unsigned char *buf, size_t bufLen, int fd)
 			continue;
 		}
 
-		icarus_read_count++;
-		if (icarus_read_count == ICARUS_READ_FAULT_COUNT) {
+		rc++;
+		if (rc == ICARUS_READ_FAULT_COUNT) {
 			applog(LOG_WARNING,
-			       "Icarus Read: No data in %d seconds",
-			       ICARUS_READ_FAULT_COUNT);
-			break;
+			       "Icarus Read: No data in %d seconds", rc);
+			return 1;
 		}
 	}
+
+	return 0;
 }
 
-static void icarus_write(int fd, const void *buf, size_t bufLen)
+static int icarus_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
 
 	ret = write(fd, buf, bufLen);
 	if (unlikely(ret != bufLen))
-		icarus_write_fault = 1;
+		return 1;
+
+	return 0;
 }
 
 #define icarus_close(fd) close(fd)
@@ -179,7 +178,7 @@ static bool icarus_detect_one(const char *devpath)
 		if (strncmp(nonce_hex, golden_nonce, 8)) {
 			applog(LOG_ERR, 
 			       "Icarus Detect: "
-			       "Test failed at %s : get %s, should: %s",
+			       "Test failed at %s: get %s, should: %s",
 			       devpath, nonce_hex, golden_nonce);
 			free(nonce_hex);
 			return false;
@@ -197,7 +196,8 @@ static bool icarus_detect_one(const char *devpath)
 	icarus->threads = 1;
 	devices[total_devices++] = icarus;
 
-	icarus_write_fault = 0;
+	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
+	       devpath, icarus->device_id);
 
 	return true;
 }
@@ -239,6 +239,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 {
 	struct cgpu_info *icarus;
 	int fd;
+	int ret;
 
 	unsigned char ob_bin[64], nonce_bin[4];
 	char *ob_hex, *nonce_hex;
@@ -257,32 +258,33 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
 #endif
-	icarus_write(fd, ob_bin, sizeof(ob_bin));
-	if (icarus_write_fault)
+	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
+	if (ret)
 		return 0;	/* This should never happen */
 
 	ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 	if (ob_hex) {
 		t = time(NULL);
-		applog(LOG_DEBUG, "Icarus send : %s", ob_hex);
+		applog(LOG_DEBUG, "Icarus %s send: %s",
+		       icarus->device_id, ob_hex);
 		free(ob_hex);
 	}
 
 	/* Icarus will return 8 bytes nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	icarus_gets(nonce_bin, sizeof(nonce_bin), fd);
+	ret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd);
 
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 	if (nonce_hex) {
 		t = time(NULL) - t;
-		applog(LOG_DEBUG, "Icarus return (elapse %d seconds): %s",
-		       t, nonce_hex);
+		applog(LOG_DEBUG, "Icarus %d return (elapse %d seconds): %s",
+		       icarus->device_id, t, nonce_hex);
 		free(nonce_hex);
 	}
 
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
-        if (nonce == 0 && icarus_read_count == ICARUS_READ_FAULT_COUNT)
+        if (nonce == 0 && ret)
                 return 0xffffffff;
 
 #ifndef __BIG_ENDIAN__
@@ -324,7 +326,7 @@ static void icarus_shutdown(struct thr_info *thr)
 }
 
 struct device_api icarus_api = {
-	.name = "Icarus",
+	.name = "ICA",
 	.api_detect = icarus_detect,
 	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,
