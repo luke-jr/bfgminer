@@ -4000,7 +4000,7 @@ static void print_summary(void)
 	fflush(stdout);
 	fflush(stderr);
 	if (opt_shares > total_accepted)
-		quit(1, "Did not successfully mine as many shares as were requested.");
+		applog(LOG_WARNING, "WARNING - Mined only %d shares of %d requested.", total_accepted, opt_shares);
 }
 
 static void clean_up(void)
