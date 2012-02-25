@@ -684,7 +684,7 @@ Vals[6]+=(rotr(Vals[7],2)^rotr(Vals[7],13)^rotr(Vals[7],22));
 W[5]=state5;
 W[5]+=Vals[5];
 
-Vals[5]=0x150C6645BU;
+Vals[5]=0x50C6645BU;
 Vals[5]+=(rotr(Vals[2],6)^rotr(Vals[2],11)^rotr(Vals[2],25));
 Vals[5]+=ch(Vals[2],Vals[3],0x510e527fU);
 Vals[5]+=W[2];
@@ -697,7 +697,7 @@ Vals[5]+=(rotr(Vals[6],2)^rotr(Vals[6],13)^rotr(Vals[6],22));
 W[4]=state4;
 W[4]+=Vals[4];
 
-Vals[4]=0x13AC42E24U;
+Vals[4]=0x3AC42E24U;
 Vals[4]+=(rotr(Vals[1],6)^rotr(Vals[1],11)^rotr(Vals[1],25));
 Vals[4]+=ch(Vals[1],Vals[2],Vals[3]);
 Vals[4]+=W[3];
@@ -1282,7 +1282,7 @@ Vals[7]+=ch(Vals[0],Vals[1],Vals[2]);
 			output[FOUND] = output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
 	}
 #else
-	if (Vals[7] == 0x136032EDU)
+	if (Vals[7] == 0x136032edU)
 		output[FOUND] = output[NFLAG & nonce] =  nonce;
 #endif
 }
