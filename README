@@ -202,11 +202,11 @@ FPGA mining boards(BitForce, Icarus) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
-     With "-S auto", BitForce enabled and only on linux, cgminer will attempt
-     to automatically find BitForce FPGA devices
-     Note that the computer may take some time to recognise the USB device
-     when it is first plugged in - especially if the system is slow or busy
-     (e.g. already GPU mining)
+     By default, cgminer will scan for autodetected FPGAs unless at least one
+     -S is specified. If you specify -S and still want cgminer to scan, you
+     must also use "-S auto". Note that presently, autodetection only works
+     on Linux, and might only detect one device depending on the version of
+     udev being used.
 
      On linux <arg> is usually of the format /dev/ttyUSBn
      On windows <arg> is usually of the format COMn
