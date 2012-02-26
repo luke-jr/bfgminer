@@ -978,7 +978,7 @@ static int set_powertune(int gpu, int iPercentage)
 	return ret;
 }
 
-static void fan_autotune(int gpu, int temp, int fanpercent, bool __maybe_unused *fan_optimal)
+static void fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool __maybe_unused *fan_optimal)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
 	struct gpu_adl *ga = &cgpu->adl;
@@ -991,7 +991,7 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool __maybe_unused 
 	if (temp > ga->overtemp && fanpercent < iMax) {
 		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
 		newpercent = iMax;
-	} else if (temp > ga->targettemp && fanpercent < top && temp >= ga->lasttemp) {
+	} else if (temp > ga->targettemp && fanpercent < top && temp >= lasttemp) {
 		applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 		if (temp > ga->targettemp + opt_hysteresis)
 			newpercent = ga->targetfan + 10;
@@ -999,16 +999,16 @@ static void fan_autotune(int gpu, int temp, int fanpercent, bool __maybe_unused 
 			newpercent = ga->targetfan + 5;
 		if (newpercent > top)
 			newpercent = top;
-	} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis && temp <= ga->lasttemp) {
+	} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis && temp <= lasttemp) {
 		applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
 		newpercent = ga->targetfan - 1;
 	} else {
 		/* We're in the optimal range, make minor adjustments if the
 		 * temp is still drifting */
-		if (fanpercent > bot && temp < ga->lasttemp && ga->lasttemp < ga->targettemp) {
+		if (fanpercent > bot && temp < lasttemp && lasttemp < ga->targettemp) {
 			applog(LOG_DEBUG, "Temperature dropping while in target range, decreasing fanspeed");
 			newpercent = ga->targetfan - 1;
-		} else if (fanpercent < top && temp > ga->lasttemp && temp > ga->targettemp - opt_hysteresis) {
+		} else if (fanpercent < top && temp > lasttemp && temp > ga->targettemp - opt_hysteresis) {
 			applog(LOG_DEBUG, "Temperature rising while in target range, increasing fanspeed");
 			newpercent = ga->targetfan + 1;
 		}
@@ -1047,21 +1047,25 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		if (!ga->twin)
-			fan_autotune(gpu, temp, fanpercent, &fan_optimal);
+			fan_autotune(gpu, temp, fanpercent, ga->lasttemp, &fan_optimal);
 		else if (ga->autofan && (ga->has_fanspeed || !ga->twin->autofan)) {
 			/* On linked GPUs, we autotune the fan only once, based
 			 * on the highest temperature from either GPUs */
 			int hightemp, fan_gpu;
+			int lasttemp;
 
-			if (twintemp > temp)
+			if (twintemp > temp) {
+				lasttemp = ga->twin->lasttemp;
 				hightemp = twintemp;
-			else
+			} else {
+				lasttemp = ga->lasttemp;
 				hightemp = temp;
+			}
 			if (ga->has_fanspeed)
 				fan_gpu = gpu;
 			else
 				fan_gpu = ga->twin->gpu;
-			fan_autotune(fan_gpu, hightemp, fanpercent, &fan_optimal);
+			fan_autotune(fan_gpu, hightemp, fanpercent, lasttemp, &fan_optimal);
 		}
 	}
 
