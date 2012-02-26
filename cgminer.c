@@ -3122,7 +3122,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	/* Space out retrieval of extra work according to the number of mining
 	 * threads */
 	if (rq >= mining_threads + staged_extras &&
-	    (now.tv_sec - requested_tv_sec) < opt_scantime / (mining_threads + 1))
+	    (now.tv_sec - requested_tv_sec) < (opt_scantime / (mining_threads + 1) ?: 1))
 		return true;
 
 	/* fill out work request message */
