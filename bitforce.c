@@ -237,7 +237,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		return 0;
 	}
 
-	BFwrite(fdDev, "ZKX", 3);
+	BFwrite(fdDev, "ZLX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "Error reading from BitForce (ZKX)");
