@@ -978,7 +978,8 @@ static int set_powertune(int gpu, int iPercentage)
 	return ret;
 }
 
-static void fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool __maybe_unused *fan_optimal)
+/* Returns whether the fanspeed is optimal already or not */
+static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
 	struct gpu_adl *ga = &cgpu->adl;
@@ -1019,10 +1020,11 @@ static void fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool _
 	else if (newpercent < iMin)
 		newpercent = iMin;
 	if (newpercent != fanpercent) {
-		*fan_optimal = false;
 		applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
 		set_fanspeed(gpu, newpercent);
+		return false;
 	}
+	return true;
 }
 
 void gpu_autotune(int gpu, enum dev_enable *denable)
@@ -1047,7 +1049,7 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		if (!ga->twin)
-			fan_autotune(gpu, temp, fanpercent, ga->lasttemp, &fan_optimal);
+			fan_optimal = fan_autotune(gpu, temp, fanpercent, ga->lasttemp);
 		else if (ga->autofan && (ga->has_fanspeed || !ga->twin->autofan)) {
 			/* On linked GPUs, we autotune the fan only once, based
 			 * on the highest temperature from either GPUs */
@@ -1065,7 +1067,7 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 				fan_gpu = gpu;
 			else
 				fan_gpu = ga->twin->gpu;
-			fan_autotune(fan_gpu, hightemp, fanpercent, lasttemp, &fan_optimal);
+			fan_optimal = fan_autotune(fan_gpu, hightemp, fanpercent, lasttemp);
 		}
 	}
 
