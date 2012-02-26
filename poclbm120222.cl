@@ -1213,8 +1213,6 @@ Vals[7]+=ch(Vals[4],Vals[5],Vals[6]);
 Vals[7]+=K[56];
 Vals[0]+=Ma(Vals[3],Vals[1],Vals[2]);
 Vals[3]+=Vals[7];
-Vals[7]+=(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22));
-Vals[7]+=Ma(Vals[2],Vals[0],Vals[1]);
 
 W[9]+=(rotr(W[10],7)^rotr(W[10],18)^(W[10]>>3U));
 W[9]+=W[2];
@@ -1223,66 +1221,78 @@ Vals[6]+=W[9];
 Vals[6]+=(rotr(Vals[3],6)^rotr(Vals[3],11)^rotr(Vals[3],25));
 Vals[6]+=ch(Vals[3],Vals[4],Vals[5]);
 Vals[6]+=K[57];
+Vals[6]+=Vals[2];
 
 W[10]+=(rotr(W[11],7)^rotr(W[11],18)^(W[11]>>3U));
 W[10]+=W[3];
 W[10]+=(rotr(W[8],17)^rotr(W[8],19)^(W[8]>>10U));
 Vals[5]+=W[10];
-Vals[2]+=Vals[6];
-Vals[5]+=(rotr(Vals[2],6)^rotr(Vals[2],11)^rotr(Vals[2],25));
-Vals[5]+=ch(Vals[2],Vals[3],Vals[4]);
+Vals[5]+=(rotr(Vals[6],6)^rotr(Vals[6],11)^rotr(Vals[6],25));
+Vals[5]+=ch(Vals[6],Vals[3],Vals[4]);
 Vals[5]+=K[58];
+Vals[5]+=Vals[1];
 
 W[11]+=(rotr(W[12],7)^rotr(W[12],18)^(W[12]>>3U));
 W[11]+=W[4];
 W[11]+=(rotr(W[9],17)^rotr(W[9],19)^(W[9]>>10U));
 Vals[4]+=W[11];
-Vals[1]+=Vals[5];
-Vals[4]+=(rotr(Vals[1],6)^rotr(Vals[1],11)^rotr(Vals[1],25));
-Vals[4]+=ch(Vals[1],Vals[2],Vals[3]);
+Vals[4]+=(rotr(Vals[5],6)^rotr(Vals[5],11)^rotr(Vals[5],25));
+Vals[4]+=ch(Vals[5],Vals[6],Vals[3]);
 Vals[4]+=K[59];
-
-W[12]+=(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U));
-W[12]+=W[5];
-W[12]+=(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U));
-Vals[7]+=W[12];
-Vals[0]+=Vals[4];
-Vals[7]+=Vals[3];
-Vals[7]+=(rotr(Vals[0],6)^rotr(Vals[0],11)^rotr(Vals[0],25));
-Vals[7]+=ch(Vals[0],Vals[1],Vals[2]);
-//Vals[7]+=K[60]; diffed from 0xA41F32E7
+Vals[4]+=Vals[0];
 
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
-#if defined(VECTORS4)
-	Vals[7] ^= 0x136032edU;
+#if defined(VECTORS2) || defined(VECTORS4)
+	bool result = any((Vals[7]+
+		Ma(Vals[2],Vals[0],Vals[1])+
+		(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22))+
+		W[12]+
+		(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U))+
+		W[5]+
+		(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U))+
+		Vals[3]+
+		(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25))+
+		ch(Vals[4],Vals[5],Vals[6])-
+		0x136032edU) == 0);
+	if (result) {
+		// Repeating this seems crazy but it's faster than setting the
+		// Vals[7] variable on all non-matches.
+		Vals[7]+=Ma(Vals[2],Vals[0],Vals[1]);
+		Vals[7]+=(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22));
+		Vals[7]+=W[12];
+		Vals[7]+=(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U));
+		Vals[7]+=W[5];
+		Vals[7]+=(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U));
+		Vals[7]+=Vals[3];
+		Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
+		Vals[7]+=ch(Vals[4],Vals[5],Vals[6]);
+		Vals[7] ^= 0x136032edU;
 
-	bool result = Vals[7].x & Vals[7].y & Vals[7].z & Vals[7].w;
-
-	if (!result) {
 		if (!Vals[7].x)
 			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
 		if (!Vals[7].y)
 			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
+#if defined(VECTORS4)
 		if (!Vals[7].z)
 			output[FOUND] = output[NFLAG & nonce.z] = nonce.z;
 		if (!Vals[7].w)
 			output[FOUND] = output[NFLAG & nonce.w] = nonce.w;
-	}
-#elif defined VECTORS2
-	Vals[7] ^= 0x136032edU;
-
-	bool result = Vals[7].x & Vals[7].y;
-
-	if (!result) {
-		if (!Vals[7].x)
-			output[FOUND] = output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
-		if (!Vals[7].y)
-			output[FOUND] = output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
+#endif
 	}
 #else
-	if (Vals[7] == 0x136032edU)
-		output[FOUND] = output[NFLAG & nonce] =  nonce;
+	if (!(Vals[7]+
+		Ma(Vals[2],Vals[0],Vals[1])+
+		(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22))+
+		W[12]+
+		(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U))+
+		W[5]+
+		(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U))+
+		Vals[3]+
+		(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25))+
+		ch(Vals[4],Vals[5],Vals[6])-
+		0x136032edU))
+			output[FOUND] = output[NFLAG & nonce] =  nonce;
 #endif
 }
