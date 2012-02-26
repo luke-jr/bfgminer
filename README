@@ -202,6 +202,16 @@ FPGA mining boards(BitForce, Icarus) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
+     With "-S auto", BitForce enabled and only on linux, cgminer will attempt
+     to automatically find BitForce FPGA devices
+     Note that the computer may take some time to recognise the USB device
+     when it is first plugged in - especially if the system is slow or busy
+     (e.g. already GPU mining)
+
+     On linux <arg> is usually of the format /dev/ttyUSBn
+     On windows <arg> is usually of the format COMn
+       (where n = the correct device number for the FPGA device)
+
 
 CPU only options:
 
@@ -605,7 +615,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.2:
+For API version 1.3:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
