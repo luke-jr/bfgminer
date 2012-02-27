@@ -1,4 +1,4 @@
-// DiaKGCN 23-02-2012 - OpenCL kernel by Diapolo
+// DiaKGCN 24-02-2012 - OpenCL kernel by Diapolo
 //
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
@@ -54,13 +54,13 @@ __kernel
 	u W[16];
 
 #ifdef VECTORS8
-	const u nonce = base + (uint)(get_local_id(0)) * 8u + (uint)(get_group_id(0)) * (WORKVEC);
-#elif VECTORS4
-	const u nonce = base + (uint)(get_local_id(0)) * 4u + (uint)(get_group_id(0)) * (WORKVEC);
+	const u nonce = (uint)(get_local_id(0)) * 8U + (uint)(get_group_id(0)) * (uint)(WORKVEC) + base;
+#elif defined VECTORS4
+	const u nonce = (uint)(get_local_id(0)) * 4U + (uint)(get_group_id(0)) * (uint)(WORKVEC) + base;
 #elif defined VECTORS2
-	const u nonce = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKVEC);
+	const u nonce = (uint)(get_local_id(0)) * 2U + (uint)(get_group_id(0)) * (uint)(WORKVEC) + base;
 #else
-	const u nonce = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
+	const u nonce = (uint)(get_local_id(0)) + (uint)(get_group_id(0)) * (uint)(WORKSIZE) + base;
 #endif
 
 	V[0] = PreVal0 + nonce;
@@ -117,8 +117,7 @@ __kernel
 //----------------------------------------------------------------------------------
 
 #ifdef VECTORS8
-	 W[0] = PreW18 + (u)(	rotr25(nonce.s0),             rotr25(nonce.s0) ^ 0x2004000U, rotr25(nonce.s0) ^ 0x4008000U, rotr25(nonce.s0) ^ 0x600c000U,
-				rotr25(nonce.s0) ^ 0x8010000U, rotr25(nonce.s0) ^ 0xa014000U, rotr25(nonce.s0) ^ 0xc018000U, rotr25(nonce.s0) ^ 0xe01c000U);
+	 W[0] = PreW18 + (u)(rotr25(nonce.s0), rotr25(nonce.s0) ^ 0x2004000U, rotr25(nonce.s0) ^ 0x4008000U, rotr25(nonce.s0) ^ 0x600c000U, rotr25(nonce.s0) ^ 0x8010000U, rotr25(nonce.s0) ^ 0xa014000U, rotr25(nonce.s0) ^ 0xc018000U, rotr25(nonce.s0) ^ 0xe01c000U);
 #elif defined VECTORS4
 	 W[0] = PreW18 + (u)(rotr25(nonce.x), rotr25(nonce.x) ^ 0x2004000U, rotr25(nonce.x) ^ 0x4008000U, rotr25(nonce.x) ^ 0x600c000U);
 #elif defined VECTORS2
