@@ -260,6 +260,26 @@ fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
+if test "x$bitforce" != xno; then
+	AC_ARG_WITH([libudev], [AC_HELP_STRING([--with-libudev], [Autodetect FPGAs using libudev])],
+		[libudev=$enableval],
+		[libudev=auto]
+		)
+	if test "x$libudev" != "xno"; then
+		AC_CHECK_LIB([udev], [udev_device_get_devnode], [
+			libudev=yes
+			UDEV_LIBS=-ludev
+			AC_DEFINE([HAVE_LIBUDEV], [1], [Defined to 1 if libudev is wanted])
+		], [
+			if test "x$libudev" = "xyes"; then
+				AC_MSG_ERROR([libudev not found])
+			fi
+			libudev=no
+		])
+	fi
+fi
+AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
+
 PKG_PROG_PKG_CONFIG()
 
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.15.6], [AC_DEFINE([CURL_HAS_SOCKOPT], [1], [Defined if version of curl supports sockopts.])],
@@ -320,6 +340,7 @@ AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
+AC_SUBST(UDEV_LIBS)
 
 AC_CONFIG_FILES([
 	Makefile
@@ -383,6 +404,10 @@ else
 	echo "  Icarus.FPGAs.........: Disabled"
 fi
 
+if test "x$bitforce" != xno; then
+	echo "  libudev.detection....: $libudev"
+fi
+
 echo
 if test "x$cpumining" = xyes; then
 	echo "  CPU Mining...........: Enabled"
@@ -396,7 +421,7 @@ echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"

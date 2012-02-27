@@ -28,6 +28,12 @@
 #endif
 #include <unistd.h>
 
+#include "config.h"
+
+#ifdef HAVE_LIBUDEV
+#include <libudev.h>
+#endif
+
 #include "elist.h"
 #include "miner.h"
 
@@ -121,7 +127,43 @@ static bool bitforce_detect_one(const char *devpath)
 	return true;
 }
 
-static void bitforce_detect_auto()
+static bool bitforce_detect_auto_udev()
+{
+#ifdef HAVE_LIBUDEV
+	struct udev *udev = udev_new();
+	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
+	struct udev_list_entry *list_entry;
+	bool foundany = false;
+	
+	udev_enumerate_add_match_subsystem(enumerate, "tty");
+	udev_enumerate_add_match_property(enumerate, "ID_MODEL", "BitFORCE*SHA256");
+	udev_enumerate_scan_devices(enumerate);
+	udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(enumerate)) {
+		struct udev_device *device = udev_device_new_from_syspath(
+			udev_enumerate_get_udev(enumerate),
+			udev_list_entry_get_name(list_entry)
+		);
+		if (!device)
+			continue;
+		
+		const char *devpath = udev_device_get_devnode(device);
+		if (devpath) {
+			foundany = true;
+			bitforce_detect_one(devpath);
+		}
+		
+		udev_device_unref(device);
+	}
+	udev_enumerate_unref(enumerate);
+	udev_unref(udev);
+	
+	return foundany;
+#else
+	return false;
+#endif
+}
+
+static bool bitforce_detect_auto_devserial()
 {
 #ifndef WIN32
 	DIR *D;
@@ -129,20 +171,33 @@ static void bitforce_detect_auto()
 	const char udevdir[] = "/dev/serial/by-id";
 	char devpath[sizeof(udevdir) + 1 + NAME_MAX];
 	char *devfile = devpath + sizeof(udevdir);
-
+	bool foundany = false;
+	
 	D = opendir(udevdir);
 	if (!D)
-		return;
+		return false;
 	memcpy(devpath, udevdir, sizeof(udevdir) - 1);
 	devpath[sizeof(udevdir) - 1] = '/';
 	while ( (de = readdir(D)) ) {
 		if (!strstr(de->d_name, "BitFORCE_SHA256"))
 			continue;
+		foundany = true;
 		strcpy(devfile, de->d_name);
 		bitforce_detect_one(devpath);
 	}
 	closedir(D);
+	
+	return foundany;
+#else
+	return false;
 #endif
+}
+
+static void bitforce_detect_auto()
+{
+	bitforce_detect_auto_udev() ?:
+	bitforce_detect_auto_devserial() ?:
+	0;
 }
 
 static void bitforce_detect()
