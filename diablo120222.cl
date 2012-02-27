@@ -511,35 +511,40 @@ ZA[1]=ZA[16]+ZMa(ZA[5],ZA[7],ZA[9])+ZR30(ZA[9]);
 ZA[3]+=(ZCh(ZA[10],ZA[15],ZA[4])+ZA[5]+ZA[12]+0x78a5636fU)+ZR26(ZA[10]);
 ZA[4]+=(ZCh(ZA[3],ZA[10],ZA[15])+ZA[9]+ZA[13]+0x84c87814U)+ZR26(ZA[3]);
 ZA[15]+=(ZCh(ZA[4],ZA[3],ZA[10])+ZA[1]+ZR15(ZA[12])+ZA[0]+ZR25(ZA[6])+ZA[11]+0x8cc70208U)+ZR26(ZA[4]);
-ZA[10]+=(ZCh(ZA[15],ZA[4],ZA[3])+ZA[22]+ZMa(ZA[9],ZA[5],ZA[1])+ZR30(ZA[1])+ZR15(ZA[13])+ZA[17]+ZR25(ZA[14])+ZA[6])+ZR26(ZA[15]);
     
+
+
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
-#if defined(VECTORS4)
-	bool result = any(ZA[10] == 0x136032EDU);
+#if defined(VECTORS2) || defined(VECTORS4)
+ZA[10]+=(ZCh(ZA[15],ZA[4],ZA[3])+ZA[22]+ZMa(ZA[9],ZA[5],ZA[1])+ZR30(ZA[1])+ZR15(ZA[13])+ZA[17]+ZR25(ZA[14])+ZA[6])+ZR26(ZA[15])-0x136032EDU;
+	bool result = any(!ZA[10]);
 
 	if (result) {
-		if (ZA[10].x == 0x136032EDU)
+		if (!ZA[10].x)
 			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
-		if (ZA[10].y == 0x136032EDU)
+		if (!ZA[10].y)
 			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
-		if (ZA[10].z == 0x136032EDU)
+#if defined(VECTORS4)
+		if (!ZA[10].z)
 			output[FOUND] = output[NFLAG & Znonce.z] =  Znonce.z;
-		if (ZA[10].w == 0x136032EDU)
+		if (!ZA[10].w)
 			output[FOUND] = output[NFLAG & Znonce.w] =  Znonce.w;
+#endif
 	}
 #elif defined(VECTORS2)
-	bool result = any(ZA[10] == 0x136032EDU);
+	bool result = any(!ZA[10]);
 
 	if (result) {
-		if (ZA[10].x == 0x136032EDU)
+		if (!ZA[10].x)
 			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
-		if (ZA[10].y == 0x136032EDU)
+		if (!ZA[10].y)
 			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
 	}
 #else
-	if (ZA[10] == 0x136032EDU)
-		output[FOUND] = output[NFLAG & Znonce] =  Znonce;
+	if (ZA[10]+(ZCh(ZA[15],ZA[4],ZA[3])+ZA[22]+ZMa(ZA[9],ZA[5],ZA[1])+
+		ZR30(ZA[1])+ZR15(ZA[13])+ZA[17]+ZR25(ZA[14])+ZA[6])+ZR26(ZA[15]) == 0x136032EDU)
+			output[FOUND] = output[NFLAG & Znonce] =  Znonce;
 #endif
 }

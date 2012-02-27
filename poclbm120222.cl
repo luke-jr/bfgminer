@@ -1245,31 +1245,18 @@ Vals[4]+=Vals[0];
 #define NFLAG (0x7F)
 
 #if defined(VECTORS2) || defined(VECTORS4)
-	bool result = any((Vals[7]+
-		Ma(Vals[2],Vals[0],Vals[1])+
-		(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22))+
-		W[12]+
-		(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U))+
-		W[5]+
-		(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U))+
-		Vals[3]+
-		(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25))+
-		ch(Vals[4],Vals[5],Vals[6])-
-		0x136032edU) == 0);
+	Vals[7]+=Ma(Vals[2],Vals[0],Vals[1]);
+	Vals[7]+=(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22));
+	Vals[7]+=W[12];
+	Vals[7]+=(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U));
+	Vals[7]+=W[5];
+	Vals[7]+=(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U));
+	Vals[7]+=Vals[3];
+	Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
+	Vals[7]+=ch(Vals[4],Vals[5],Vals[6]);
+	Vals[7] ^= 0x136032edU;
+	bool result = any(!Vals[7]);
 	if (result) {
-		// Repeating this seems crazy but it's faster than setting the
-		// Vals[7] variable on all non-matches.
-		Vals[7]+=Ma(Vals[2],Vals[0],Vals[1]);
-		Vals[7]+=(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22));
-		Vals[7]+=W[12];
-		Vals[7]+=(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U));
-		Vals[7]+=W[5];
-		Vals[7]+=(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U));
-		Vals[7]+=Vals[3];
-		Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
-		Vals[7]+=ch(Vals[4],Vals[5],Vals[6]);
-		Vals[7] ^= 0x136032edU;
-
 		if (!Vals[7].x)
 			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
 		if (!Vals[7].y)
