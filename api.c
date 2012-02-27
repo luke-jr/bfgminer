@@ -152,7 +152,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.3";
+static const char *APIVERSION = "1.4";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -371,6 +371,8 @@ static int my_thr_id = 0;
 static int bye = 0;
 static bool ping = true;
 
+static time_t when = 0;	// when the request occurred
+
 struct IP4ACCESS {
 	in_addr_t ip;
 	in_addr_t mask;
@@ -411,9 +413,9 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 			}
 
 			if (isjson)
-				sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"%c\",\"Code\":%d,\"Msg\":\"", severity, messageid);
+				sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"%c\",\"When\":%lu,\"Code\":%d,\"Msg\":\"", severity, (unsigned long)when, messageid);
 			else
-				sprintf(msg_buffer, _STATUS "=%c,Code=%d,Msg=", severity, messageid);
+				sprintf(msg_buffer, _STATUS "=%c,When=%lu,Code=%d,Msg=", severity, (unsigned long)when, messageid);
 
 			ptr = msg_buffer + strlen(msg_buffer);
 
@@ -474,11 +476,11 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 	}
 
 	if (isjson)
-		sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"F\",\"Code\":-1,\"Msg\":\"%d\",\"Description\":\"%s\"}" JSON_CLOSE,
-			messageid, opt_api_description);
+		sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"F\",\"When\":%lu,\"Code\":-1,\"Msg\":\"%d\",\"Description\":\"%s\"}" JSON_CLOSE,
+			(unsigned long)when, messageid, opt_api_description);
 	else
-		sprintf(msg_buffer, _STATUS "=F,Code=-1,Msg=%d,Description=%s%c",
-			messageid, opt_api_description, SEPARATOR);
+		sprintf(msg_buffer, _STATUS "=F,When=%lu,Code=-1,Msg=%d,Description=%s%c",
+			(unsigned long)when, messageid, opt_api_description, SEPARATOR);
 
 	return msg_buffer;
 }
@@ -1668,6 +1670,9 @@ void api(int api_thr_id)
 			}
 
 			if (!SOCKETFAIL(n)) {
+				// the time of the request in now
+				when = time(NULL);
+
 				did = false;
 
 				if (*buf != ISJSON) {
