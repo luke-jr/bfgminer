@@ -44,6 +44,8 @@ Dependencies:
 	(This sdk is mandatory for GPU mining)
 	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
 	(This sdk is mandatory for ATI GPU monitoring & clocking)
+	libudev headers
+	(This is only required for FPGA auto-detection)
 
 CGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
