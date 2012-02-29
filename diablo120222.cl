@@ -1191,13 +1191,22 @@ ZA[15]+=ZR25(ZA[6]);
 ZA[15]+=ZA[11];
 ZA[15]+=0x8cc70208U;
 ZA[15]+=ZR26(ZA[4]);
-   
 
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
 #if defined(VECTORS2) || defined(VECTORS4)
-ZA[10]+=(ZCh(ZA[15],ZA[4],ZA[3])+ZA[22]+ZMa(ZA[9],ZA[5],ZA[1])+ZR30(ZA[1])+ZR15(ZA[13])+ZA[17]+ZR25(ZA[14])+ZA[6])+ZR26(ZA[15])-0x136032EDU;
+ZA[10]+=ZCh(ZA[15],ZA[4],ZA[3]);
+ZA[10]+=ZA[22];
+ZA[10]+=ZMa(ZA[9],ZA[5],ZA[1]);
+ZA[10]+=ZR30(ZA[1]);
+ZA[10]+=ZR15(ZA[13]);
+ZA[10]+=ZA[17];
+ZA[10]+=ZR25(ZA[14]);
+ZA[10]+=ZA[6];
+ZA[10]+=ZR26(ZA[15]);
+ZA[10]^=0x136032EDU;
+
 	bool result = any(!ZA[10]);
 
 	if (result) {
