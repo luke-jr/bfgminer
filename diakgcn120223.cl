@@ -1,4 +1,4 @@
-// DiaKGCN 24-02-2012 - OpenCL kernel by Diapolo
+// DiaKGCN 01-03-2012 - OpenCL kernel by Diapolo
 //
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
@@ -571,7 +571,6 @@ __kernel
 
 	V[7] += V[3] + W[12] + ch(V[0], V[1], V[2]) + rotr26(V[0]);
 
-
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
@@ -599,31 +598,11 @@ __kernel
 			output[FOUND] = output[NFLAG & nonce.s7] = nonce.s7;
 	}
 #elif defined VECTORS4
-	V[7] ^= 0x136032edU;
-
-	bool result = V[7].x & V[7].y & V[7].z & V[7].w;
-
-	if (!result) {
-		if (!V[7].x)
-			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
-		if (!V[7].y)
-			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
-		if (!V[7].z)
-			output[FOUND] = output[NFLAG & nonce.z] = nonce.z;
-		if (!V[7].w)
-			output[FOUND] = output[NFLAG & nonce.w] = nonce.w;
-	}
+	if ((V[7].x == 0x136032edU) ^ (V[7].y == 0x136032edU) ^ (V[7].z == 0x136032edU) ^ (V[7].w == 0x136032edU))
+		output[FOUND] = output[NFLAG & nonce.x] = (V[7].x == 0x136032edU) ? nonce.x : ((V[7].y == 0x136032edU) ? nonce.y : ((V[7].z == 0x136032edU) ? nonce.z : nonce.w));
 #elif defined VECTORS2
-	V[7] ^= 0x136032edU;
-
-	bool result = V[7].x & V[7].y;
-
-	if (!result) {
-		if (!V[7].x)
-			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
-		if (!V[7].y)
-			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
-	}
+	if ((V[7].x == 0x136032edU) + (V[7].y == 0x136032edU))
+		output[FOUND] = output[NFLAG & nonce.x] = (V[7].x == 0x136032edU) ? nonce.x : nonce.y;
 #else
 	if (V[7] == 0x136032edU)
 		output[FOUND] = output[NFLAG & nonce] = nonce;
