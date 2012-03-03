@@ -1309,30 +1309,18 @@ ZA[10]+=ZA[17];
 ZA[10]+=ZR25(ZA[14]);
 ZA[10]+=ZA[6];
 ZA[10]+=ZR26(ZA[15]);
-ZA[10]+=0xEC9FCD13U;
 
-	bool result = any(!ZA[10]);
-
-	if (result) {
-		if (!ZA[10].x)
+	if (any(ZA[10] == 0x136032EDU)) {
+		if (ZA[10].x == 0x136032EDU)
 			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
-		if (!ZA[10].y)
+		if (ZA[10].y == 0x136032EDU)
 			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
 #if defined(VECTORS4)
-		if (!ZA[10].z)
+		if (ZA[10].z == 0x136032EDU)
 			output[FOUND] = output[NFLAG & Znonce.z] =  Znonce.z;
-		if (!ZA[10].w)
+		if (ZA[10].w == 0x136032EDU)
 			output[FOUND] = output[NFLAG & Znonce.w] =  Znonce.w;
 #endif
-	}
-#elif defined(VECTORS2)
-	bool result = any(!ZA[10]);
-
-	if (result) {
-		if (!ZA[10].x)
-			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
-		if (!ZA[10].y)
-			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
 	}
 #else
 	if (ZA[10]+(ZCh(ZA[15],ZA[4],ZA[3])+ZA[22]+ZMa(ZA[9],ZA[5],ZA[1])+

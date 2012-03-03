@@ -1263,17 +1263,16 @@ Vals[4]+=Vals[0];
 	Vals[7]+=Vals[3];
 	Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
 	Vals[7]+=ch(Vals[4],Vals[5],Vals[6]);
-	Vals[7]+=0xEC9FCD13U;
-	bool result = any(!Vals[7]);
-	if (result) {
-		if (!Vals[7].x)
+
+	if (any(Vals[7] == 0x136032edU)) {
+		if (Vals[7].x == 0x136032edU)
 			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
-		if (!Vals[7].y)
+		if (Vals[7].y == 0x136032edU)
 			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
 #if defined(VECTORS4)
-		if (!Vals[7].z)
+		if (Vals[7].z == 0x136032edU)
 			output[FOUND] = output[NFLAG & nonce.z] = nonce.z;
-		if (!Vals[7].w)
+		if (Vals[7].w == 0x136032edU)
 			output[FOUND] = output[NFLAG & nonce.w] = nonce.w;
 #endif
 	}
