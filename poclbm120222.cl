@@ -85,7 +85,8 @@ __kernel void search(const uint state0, const uint state1, const uint state2, co
 	const u nonce = base + (uint)(get_global_id(0));
 
 
-Vals[0]=Preval0+nonce;
+Vals[0]=Preval0;
+Vals[0]+=nonce;
 
 Vals[3]=(rotr(Vals[0],6)^rotr(Vals[0],11)^rotr(Vals[0],25));
 Vals[3]+=ch(Vals[0],b1,c1);
@@ -93,7 +94,8 @@ Vals[3]+=D1A;
 
 Vals[7]=Vals[3];
 Vals[7]+=h1;
-Vals[4]=PreVal4addT1+nonce;
+Vals[4]=PreVal4addT1;
+Vals[4]+=nonce;
 Vals[3]+=(rotr(Vals[4],2)^rotr(Vals[4],13)^rotr(Vals[4],22));
 
 Vals[2]=C1addK5;
