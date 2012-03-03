@@ -1231,13 +1231,12 @@ Vals[5]+=(rotr(Vals[6],6)^rotr(Vals[6],11)^rotr(Vals[6],25));
 Vals[5]+=ch(Vals[6],Vals[3],Vals[4]);
 Vals[5]+=K[58];
 Vals[5]+=Vals[1];
-
-W[11]+=(rotr(W[12],7)^rotr(W[12],18)^(W[12]>>3U));
-W[11]+=W[4];
-W[11]+=(rotr(W[9],17)^rotr(W[9],19)^(W[9]>>10U));
-Vals[4]+=W[11];
 Vals[4]+=(rotr(Vals[5],6)^rotr(Vals[5],11)^rotr(Vals[5],25));
 Vals[4]+=ch(Vals[5],Vals[6],Vals[3]);
+Vals[4]+=W[11];
+Vals[4]+=(rotr(W[12],7)^rotr(W[12],18)^(W[12]>>3U));
+Vals[4]+=W[4];
+Vals[4]+=(rotr(W[9],17)^rotr(W[9],19)^(W[9]>>10U));
 Vals[4]+=K[59];
 Vals[4]+=Vals[0];
 
