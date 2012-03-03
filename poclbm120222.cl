@@ -1254,7 +1254,7 @@ Vals[4]+=Vals[0];
 	Vals[7]+=Vals[3];
 	Vals[7]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
 	Vals[7]+=ch(Vals[4],Vals[5],Vals[6]);
-	Vals[7] ^= 0x136032edU;
+	Vals[7]+=0xEC9FCD13U;
 	bool result = any(!Vals[7]);
 	if (result) {
 		if (!Vals[7].x)
@@ -1269,7 +1269,7 @@ Vals[4]+=Vals[0];
 #endif
 	}
 #else
-	if (!(Vals[7]+
+	if ((Vals[7]+
 		Ma(Vals[2],Vals[0],Vals[1])+
 		(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22))+
 		W[12]+
@@ -1278,8 +1278,7 @@ Vals[4]+=Vals[0];
 		(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U))+
 		Vals[3]+
 		(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25))+
-		ch(Vals[4],Vals[5],Vals[6])-
-		0x136032edU))
+		ch(Vals[4],Vals[5],Vals[6])) == 0x136032edU)
 			output[FOUND] = output[NFLAG & nonce] =  nonce;
 #endif
 }

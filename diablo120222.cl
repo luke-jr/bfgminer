@@ -1309,7 +1309,7 @@ ZA[10]+=ZA[17];
 ZA[10]+=ZR25(ZA[14]);
 ZA[10]+=ZA[6];
 ZA[10]+=ZR26(ZA[15]);
-ZA[10]^=0x136032EDU;
+ZA[10]+=0xEC9FCD13U;
 
 	bool result = any(!ZA[10]);
 
