@@ -100,7 +100,10 @@ static int icarus_open(const char *devpath)
 				    NULL, OPEN_EXISTING, 0, NULL);
 	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
 		return -1;
-	/* TODO: Needs setup read block time. just like VTIME = 10 */
+
+	COMMTIMEOUTS cto = {1000, 0, 1000, 0, 1000};
+	SetCommTimeouts(hSerial, &cto);
+
 	return _open_osfhandle((LONG)hSerial, 0);
 #endif
 }
