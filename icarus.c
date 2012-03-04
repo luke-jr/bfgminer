@@ -205,9 +205,13 @@ static bool icarus_detect_one(const char *devpath)
 static void icarus_detect()
 {
 	struct string_elist *iter, *tmp;
+	const char*s;
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
-		if (icarus_detect_one(iter->string))
+		s = iter->string;
+		if (!strncmp("icarus:", iter->string, 7))
+			s += 7;
+		if (icarus_detect_one(s))
 			string_elist_del(iter);
 	}
 }
