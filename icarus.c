@@ -123,7 +123,7 @@ static int icarus_gets(unsigned char *buf, size_t bufLen, int fd)
 
 		rc++;
 		if (rc == ICARUS_READ_FAULT_COUNT) {
-			applog(LOG_WARNING,
+			applog(LOG_DEBUG,
 			       "Icarus Read: No data in %d seconds", rc);
 			return 1;
 		}
