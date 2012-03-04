@@ -524,6 +524,21 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 			case PARAM_GPUMAX:
 				sprintf(ptr, codes[i].description, paramid, nDevs - 1);
 				break;
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+			case PARAM_PGAMAX:
+				pga = numpgas();
+				sprintf(ptr, codes[i].description, paramid, pga - 1);
+				break;
+#endif
+#ifdef WANT_CPUMINE
+			case PARAM_CPUMAX:
+				if (opt_n_threads > 0)
+					cpu = num_processors;
+				else
+					cpu = 0;
+				sprintf(ptr, codes[i].description, paramid, cpu - 1);
+				break;
+#endif
 			case PARAM_PMAX:
 				sprintf(ptr, codes[i].description, total_pools);
 				break;
