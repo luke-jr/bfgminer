@@ -44,7 +44,10 @@
 #define ZR26(n) ((Zrotr((n), 26) ^ Zrotr((n), 21) ^ Zrotr((n), 7)))
 #define ZR30(n) ((Zrotr((n), 30) ^ Zrotr((n), 19) ^ Zrotr((n), 10)))
 
-__kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
+__kernel
+__attribute__((vec_type_hint(z)))
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+void search(
     const z base,
     const uint PreVal4_state0, const uint PreVal4_state0_k7,
     const uint PreVal4_T1,
