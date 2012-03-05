@@ -67,7 +67,10 @@ __constant uint K[64] = {
 // problems. (this is used 4 times, and likely optimized out by the compiler.)
 #define Ma2(x, y, z) ((y & z) | (x & (y | z)))
 
-__kernel void search(const uint state0, const uint state1, const uint state2, const uint state3,
+__kernel
+	__attribute__((vec_type_hint(u)))
+	__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+	void search(const uint state0, const uint state1, const uint state2, const uint state3,
 						const uint state4, const uint state5, const uint state6, const uint state7,
 						const uint b1, const uint c1,
 						const uint f1, const uint g1, const uint h1,
