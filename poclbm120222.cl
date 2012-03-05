@@ -67,19 +67,18 @@ __constant uint K[64] = {
 
 
 __kernel
-	__attribute__((vec_type_hint(u)))
-	__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-	void search(const uint state0, const uint state1, const uint state2, const uint state3,
-						const uint state4, const uint state5, const uint state6, const uint state7,
-						const uint b1, const uint c1,
-						const uint f1, const uint g1, const uint h1,
-						const u base,
-						const uint fw0, const uint fw1, const uint fw2, const uint fw3, const uint fw15, const uint fw01r,
-						const uint fcty_e2,
-						const uint D1A, const uint C1addK5, const uint B1addK6,
-						const uint W16addK16, const uint W17addK17,
-						const uint PreVal4addT1, const uint Preval0,
-						__global uint * output)
+__attribute__((vec_type_hint(u)))
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+void search(const uint state0, const uint state1, const uint state2, const uint state3,
+	const uint state4, const uint state5, const uint state6, const uint state7,
+	const uint b1, const uint c1,
+	const uint f1, const uint g1, const uint h1,
+	const u base,
+	const uint fw0, const uint fw1, const uint fw2, const uint fw3, const uint fw15, const uint fw01r,
+	const uint D1A, const uint C1addK5, const uint B1addK6,
+	const uint W16addK16, const uint W17addK17,
+	const uint PreVal4addT1, const uint Preval0,
+	__global uint * output)
 {
 	u W[24];
 	u *Vals = &W[16]; // Now put at W[16] to be in same array
