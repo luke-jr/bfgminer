@@ -1,6 +1,6 @@
 AC_INIT([cpuminer], [1.0])
 
-AC_PREREQ(2.52)
+AC_PREREQ([2.59c])
 AC_CANONICAL_SYSTEM
 AC_CONFIG_SRCDIR([cpu-miner.c])
 AM_INIT_AUTOMAKE([gnu])
@@ -10,7 +10,7 @@ dnl Make sure anyone changing configure.ac/Makefile.am has a clue
 AM_MAINTAINER_MODE
 
 dnl Checks for programs
-AC_PROG_CC
+AC_PROG_CC_C99
 AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
