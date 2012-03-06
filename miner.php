@@ -158,7 +158,8 @@ function fmt($section, $name, $value)
 
  switch ($section.'.'.$name)
  {
- case 'GPU0.Last Share Time':
+ case 'GPU.Last Share Time':
+ case 'PGA.Last Share Time':
 	return date('H:i:s', $value);
 	break;
  case 'SUMMARY.Elapsed':
@@ -190,11 +191,13 @@ function fmt($section, $name, $value)
 		}
 	}
 	break;
- case 'GPU0.Utility':
+ case 'GPU.Utility':
+ case 'PGA.Utility':
  case 'SUMMARY.Utility':
 	return $value.'/m';
 	break;
- case 'GPU0.Temperature':
+ case 'GPU.Temperature':
+ case 'PGA.Temperature':
 	return $value.'&deg;C';
 	break;
  }
@@ -202,8 +205,37 @@ function fmt($section, $name, $value)
  return $value;
 }
 #
+global $poolcmd;
+$poolcmd = array(	'Switch to'	=> 'switchpool',
+			'Enable'	=> 'enablepool',
+			'Disable'	=> 'disablepool' );
+#
+function showhead($cmd, $item, $values)
+{
+ global $poolcmd;
+
+ echo '<tr>';
+
+ foreach ($values as $name => $value)
+ {
+	if ($name == '0')
+		$name = '&nbsp;';
+	echo "<td valign=bottom class=h>$name</td>";
+ }
+
+ if ($cmd == 'pools')
+	foreach ($poolcmd as $name => $pcmd)
+		echo "<td valign=bottom class=h>$name</td>";
+
+ echo '</tr>';
+}
+#
 function details($cmd, $list)
 {
+ global $poolcmd;
+
+ $dfmt = 'H:i:s j-M-Y \U\T\CP';
+
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
  $tb = '<tr><td><table border=1 cellpadding=5 cellspacing=0>';
@@ -211,7 +243,7 @@ function details($cmd, $list)
 
  echo $tb;
 
- echo '<tr><td class=sta>Date: '.date('H:i:s j-M-Y \U\T\CP').'</td></tr>';
+ echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
 
  echo $te.$tb;
 
@@ -219,49 +251,30 @@ function details($cmd, $list)
  {
 	echo '<tr>';
 	echo '<td>Computer: '.$list['STATUS']['Description'].'</td>';
+	if (isset($list['STATUS']['When']))
+		echo '<td>When: '.date($dfmt, $list['STATUS']['When']).'</td>';
 	$sta = $list['STATUS']['STATUS'];
 	echo '<td>Status: '.$stas[$sta].'</td>';
 	echo '<td>Message: '.$list['STATUS']['Msg'].'</td>';
 	echo '</tr>';
  }
 
- echo $te.$tb;
 
  $section = '';
-
- $poolcmd = array(	'Switch to'	=> 'switchpool',
-			'Enable'	=> 'enablepool',
-			'Disable'	=> 'disablepool' );
-
- foreach ($list as $item => $values)
- {
-	if ($item != 'STATUS')
-	{
-		$section = $item;
-
-		echo '<tr>';
-
-		foreach ($values as $name => $value)
-		{
-			if ($name == '0')
-				$name = '&nbsp;';
-			echo "<td valign=bottom class=h>$name</td>";
-		}
-
-		if ($cmd == 'pools')
-			foreach ($poolcmd as $name => $pcmd)
-				echo "<td valign=bottom class=h>$name</td>";
-
-		echo '</tr>';
-
-		break;
-	}
- }
 
  foreach ($list as $item => $values)
  {
 	if ($item == 'STATUS')
 		continue;
+
+	$sectionname = ereg_replace('[0-9]', '', $item);
+
+	if ($sectionname != $section)
+	{
+		echo $te.$tb;
+		showhead($cmd, $item, $values);
+		$section = $sectionname;
+	}
 
 	echo '<tr>';
 
