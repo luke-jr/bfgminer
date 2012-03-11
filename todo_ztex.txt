@@ -1,0 +1,5 @@
+- make it compile on osx / windows
+- read actual bitstream
+- nonce errors from fpga
+- clock scaling
+- HS fpga config

@@ -54,6 +54,9 @@
 	#include <sys/wait.h>
 #endif
 
+#ifdef HAVE_LIBUSB
+        #include <libusb.h>
+#endif
 
 enum workio_commands {
 	WC_GET_WORK,
@@ -1016,6 +1019,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_ICARUS
 		"icarus "
+#endif
+#ifdef USE_ZTEX
+		"ztex "
 #endif
 		"mining support.\n"
 		, packagename);
@@ -4130,6 +4136,9 @@ static void clean_up(void)
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
 #endif
+#ifdef HAVE_LIBUSB
+        libusb_exit(NULL);
+#endif
 
 	gettimeofday(&total_tv_end, NULL);
 #ifdef HAVE_CURSES
@@ -4385,6 +4394,10 @@ extern struct device_api bitforce_api;
 extern struct device_api icarus_api;
 #endif
 
+#ifdef USE_ZTEX
+extern struct device_api ztex_api;
+#endif
+
 
 static int cgminer_id_count = 0;
 
@@ -4409,6 +4422,9 @@ int main(int argc, char *argv[])
 	struct thr_info *thr;
 	unsigned int k;
 	int i, j;
+#ifdef HAVE_LIBUSB
+        struct libusb_context *context;
+#endif
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -4419,6 +4435,9 @@ int main(int argc, char *argv[])
 	for  (i = 0; i < argc; i++)
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
+#ifdef HAVE_LIBUSB
+        libusb_init(NULL);
+#endif
 
 	mutex_init(&hash_lock);
 	mutex_init(&qd_lock);
@@ -4570,6 +4589,10 @@ int main(int argc, char *argv[])
 
 #ifdef USE_ICARUS
 	icarus_api.api_detect();
+#endif
+
+#ifdef USE_ZTEX
+	ztex_api.api_detect();
 #endif
 
 #ifdef WANT_CPUMINE

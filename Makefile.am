@@ -13,7 +13,7 @@ EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
 
 SUBDIRS		= lib compat ccan
 
-INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
+INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES) $(USB_FLAGS)
 
 bin_PROGRAMS	= cgminer
 
@@ -22,7 +22,7 @@ bin_SCRIPTS	= *.cl
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
-		  @UDEV_LIBS@ \
+		  @UDEV_LIBS@ @USB_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
 
@@ -73,4 +73,8 @@ endif
 
 if HAS_ICARUS
 cgminer_SOURCES += icarus.c
+endif
+
+if HAS_ZTEX
+cgminer_SOURCES += ztex.c libztex.c
 endif

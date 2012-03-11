@@ -62,6 +62,8 @@ AC_FUNC_ALLOCA
 
 have_win32=false
 PTHREAD_FLAGS="-lpthread"
+USB_LIBS=""
+USB_FLAGS=""
 DLOPEN_FLAGS="-ldl"
 OPENCL_LIBS="-lOpenCL"
 WS2_LIBS=""
@@ -207,6 +209,16 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
+ztex="no"
+
+AC_ARG_ENABLE([ztex],
+	[AC_HELP_STRING([--enable-ztex],[Compile support for Ztex (default disabled)])],
+	[ztex=$enableval]
+	)
+if test "x$ztex" = xyes; then
+	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if Ztex support is wanted])
+fi
+AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
 curses="auto"
 
@@ -301,6 +313,14 @@ if test "x$bitforce" != xno; then
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
+if test "x$ztex" != xno; then
+  AC_CHECK_LIB(usb-1.0, libusb_init, ,
+          AC_MSG_ERROR([Could not find usb library - please install libusb]))
+  AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
+  USB_LIBS="-lusb-1.0"
+  USB_FLAGS="-I/usr/include/libusb-1.0"
+fi
+
 PKG_PROG_PKG_CONFIG()
 
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.15.6], [AC_DEFINE([CURL_HAS_SOCKOPT], [1], [Defined if version of curl supports sockopts.])],
@@ -362,6 +382,8 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
+AC_SUBST(USB_LIBS)
+AC_SUBST(USB_FLAGS)
 
 AC_CONFIG_FILES([
 	Makefile
@@ -393,13 +415,13 @@ if test "x$opencl" != xno; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$cpumining$bitforce$icarus" = xnonono; then
+		if test "x$cpumining$bitforce$icarus$ztex" = xnononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$cpumining$bitforce$icarus" = xnonono; then
+	if test "x$cpumining$bitforce$icarus$ztex" = xnononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 fi
@@ -427,6 +449,12 @@ else
 	echo "  Icarus.FPGAs.........: Disabled"
 fi
 
+if test "x$ztex" = xyes; then
+	echo "  Ztex.FPGAs...........: Enabled"
+else
+	echo "  Ztex.FPGAs...........: Disabled"
+fi
+
 if test "x$bitforce" != xno; then
 	echo "  libudev.detection....: $libudev"
 fi
@@ -441,8 +469,8 @@ echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS"
+echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_FLAGS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
