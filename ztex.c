@@ -1,33 +1,36 @@
-//#include <limits.h>
-//#include <pthread.h>
-//#include <stdio.h>
-//#include <sys/time.h>
-//#include <sys/types.h>
-//#include <dirent.h>
-//#include <unistd.h>
-//#ifndef WIN32
-//  #include <termios.h>
-//  #include <sys/stat.h>
-//  #include <fcntl.h>
-//  #ifndef O_CLOEXEC
-//    #define O_CLOEXEC 0
-//  #endif
-//#else
-//  #include <windows.h>
-//  #include <io.h>
-//#endif
-
-//#include "elist.h"
+/**
+ *   ztex.c - cgminer worker for Ztex 1.15x fpga board
+ *
+ *   Copyright (c) 2012 nelisky.btc@gmail.com
+ *
+ *   This work is based upon the Java SDK provided by ztex which is
+ *   Copyright (C) 2009-2011 ZTEX GmbH.
+ *   http://www.ztex.de
+ *
+ *   This work is based upon the icarus.c worker which is
+ *   Copyright 2012 Luke Dashjr
+ *   Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
+ *
+ *   This program is free software; you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License version 2 as
+ *   published by the Free Software Foundation.
+ *
+ *   This program is distributed in the hope that it will be useful, but
+ *   WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ *   General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program; if not, see http://www.gnu.org/licenses/.
+**/
 #include <unistd.h>
 
 #include "miner.h"
 #include "libztex.h"
-//#include <libusb.h>
 
 #define GOLDEN_BACKLOG 5
 
 struct device_api ztex_api;
-
 
 static void ztex_detect()
 {
@@ -46,7 +49,6 @@ static void ztex_detect()
     ztex->api = &ztex_api;
     ztex->device_id = total_devices;
     ztex->device = ztex_devices[i]->dev;
-    //ztex->device_path = strdup(devpath);
     ztex->threads = 1;
     devices[total_devices++] = ztex;
 
@@ -91,17 +93,13 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
   memcpy(sendbuf+12, work->midstate, 32);
   memset(backlog, 0, sizeof(backlog));
   libztex_sendHashData(ztex, sendbuf);
-  //applog(LOG_WARNING, "sent hashdata");
+  applog(LOG_DEBUG, "sent hashdata");
 
-  //hdata = malloc(sizeof(struct libztex_hash_data*)*ztex->numNonces);
   for (i=0; i<ztex->numNonces; i++) {
-    //hdata[i] = malloc(sizeof(struct libztex_hash_data));
     lastnonce[i] = 0;
   }
-  //sleep(1.00);
   overflow = false;
   while (!(overflow || work_restart[thr->id].restart)) {
-    //sleep(0.5);
     libztex_readHashData(ztex, &hdata[0]);
 
     for (i=0; i<ztex->numNonces; i++) {
@@ -132,22 +130,14 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 #endif
 	  work->blk.nonce = 0xffffffff;
 	  rv = submit_nonce(thr, work, nonce);
-          applog(LOG_WARNING, "submitted %0.8X %d", nonce, rv);
+          applog(LOG_DEBUG, "submitted %0.8X %d", nonce, rv);
         }
       }
-
-//
-//      //applog(LOG_WARNING, "%0.8X %0.8X %d", hdata[i]->nonce, hdata[i]->goldenNonce, work_restart[thr->id].restart);
     }
 
   }
 
-  //for (i=0; i<ztex->numNonces; i++) {
-  //  free(hdata[i]);
- // }
- // free(hdata);
-
-  applog(LOG_WARNING, "exit %0.8X", noncecnt);
+  applog(LOG_DEBUG, "exit %0.8X", noncecnt);
   return noncecnt;
 }
 
@@ -166,3 +156,4 @@ struct device_api ztex_api = {
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,
 };
+

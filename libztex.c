@@ -1,3 +1,25 @@
+/**
+ *   libztex.c - Ztex 1.15x fpga board support library
+ *
+ *   Copyright (c) 2012 nelisky.btc@gmail.com
+ *
+ *   This work is based upon the Java SDK provided by ztex which is
+ *   Copyright (C) 2009-2011 ZTEX GmbH.
+ *   http://www.ztex.de
+ *
+ *   This program is free software; you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License version 2 as
+ *   published by the Free Software Foundation.
+ *
+ *   This program is distributed in the hope that it will be useful, but
+ *   WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ *   General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program; if not, see http://www.gnu.org/licenses/.
+**/
+
 #include <stdio.h>
 #include <unistd.h>
 #include "miner.h"
@@ -340,8 +362,6 @@ int libztex_scanDevices (struct libztex_dev_list*** devs_p) {
     devs[pos] = malloc(sizeof(struct libztex_dev_list));
     devs[pos]->dev = ztex;
     devs[pos]->next = NULL;
-    //libusb_open(list[usbdevices[i]], &devs[i]->hndl);
-    //libusb_close(devs[cnt]->dev->hndl);
     if (pos > 0) {
       devs[pos]->next = devs[pos];
     }
