@@ -74,7 +74,6 @@ static bool ztex_updateFreq (struct libztex_device* ztex)
   maxM = 0;
   while (maxM<ztex->freqMDefault && ztex->maxErrorRate[maxM+1]<LIBZTEX_MAXMAXERRORRATE)
     maxM++;
-  //applog(LOG_WARNING, "maxM:%d freqMaxM:%d errorWeight:%f maxErrorRate:%f maxMax:%f", maxM, ztex->freqMaxM, ztex->errorWeight[maxM], ztex->maxErrorRate[maxM+1], LIBZTEX_MAXMAXERRORRATE);
   while (maxM<ztex->freqMaxM && ztex->errorWeight[maxM]>150 && ztex->maxErrorRate[maxM+1]<LIBZTEX_MAXMAXERRORRATE)
     maxM++;
 
@@ -87,9 +86,6 @@ static bool ztex_updateFreq (struct libztex_device* ztex)
       bestR = r;
     }
   }
-
-  //applog(LOG_WARNING, "maxM:%d bestM:%d bestR:%f freqM:%d", maxM, bestM, bestR, ztex->freqM);
-
 
   if (bestM != ztex->freqM) {
     libztex_setFreq(ztex, bestM);
@@ -132,7 +128,7 @@ static bool ztex_checkNonce (struct libztex_device *ztex,
  
   if (swab32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
     ztex->errorCount[ztex->freqM] += 1.0/ztex->numNonces;
-    applog(LOG_ERR, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
+    applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
     return false;
   }
   return true;
@@ -162,9 +158,16 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
     lastnonce[i] = 0;
   }
   overflow = false;
+
   while (!(overflow || work_restart[thr->id].restart)) {
     usleep(250000);
+    if (work_restart[thr->id].restart) {
+      break;
+    }
     libztex_readHashData(ztex, &hdata[0]);
+    if (work_restart[thr->id].restart) {
+      break;
+    }
 
     ztex->errorCount[ztex->freqM] *= 0.995;
     ztex->errorWeight[ztex->freqM] = ztex->errorWeight[ztex->freqM] * 0.995 + 1.0;
@@ -179,6 +182,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
         lastnonce[i] = nonce;
       }
       if (!ztex_checkNonce(ztex, work, &hdata[i])) {
+        thr->cgpu->hw_errors++;
         continue;
       }
       nonce = hdata[i].goldenNonce;
@@ -208,17 +212,20 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
     }
 
   }
-      ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /  ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM]<100 ? ztex->errorWeight[ztex->freqM]*0.01 : 1.0);
-      if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM]) {
-        ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
-      }
 
-      if (!ztex_updateFreq(ztex)) {
-        // Something really serious happened, so mark this thread as dead!
-        thr->cgpu->status = LIFE_DEAD;
-      }
-  applog(LOG_WARNING, "freqM:%d errorRate:%0.3f errorCount:%d", ztex->freqM, ztex->errorRate[ztex->freqM], ztex->errorCount[ztex->freqM]);
-  applog(LOG_DEBUG, "exit %0.8X", noncecnt);
+  ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /  ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM]<100 ? ztex->errorWeight[ztex->freqM]*0.01 : 1.0);
+  if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM]) {
+    ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
+  }
+
+  if (!ztex_updateFreq(ztex)) {
+    // Something really serious happened, so mark this thread as dead!
+    thr->cgpu->status = LIFE_DEAD;
+  }
+  applog(LOG_DEBUG, "exit %1.8X", noncecnt);
+
+  work->blk.nonce = 0xffffffff;
+
   return noncecnt;
 }
 
@@ -235,6 +242,7 @@ static bool ztex_prepare(struct thr_info *thr)
   }
   ztex->device->freqM = -1;
   ztex_updateFreq(ztex->device);
+
   return true;
 }
 

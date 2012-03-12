@@ -3,3 +3,4 @@
 - read actual bitstream
 - HS fpga config
 - allow configuring LIBZTEX_OVERHEATTHRESHOLD
+- hotplug support?
