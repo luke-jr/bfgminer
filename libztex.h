@@ -30,6 +30,10 @@
 #define LIBZTEX_IDVENDOR 0x221A
 #define LIBZTEX_IDPRODUCT 0x0100
 
+#define LIBZTEX_MAXMAXERRORRATE 0.05
+#define LIBZTEX_ERRORHYSTERESIS 0.1
+#define LIBZTEX_OVERHEATTHRESHOLD 0.5
+
 struct libztex_fpgastate {
   bool fpgaConfigured;
   unsigned char fpgaChecksum;
@@ -58,6 +62,11 @@ struct libztex_device {
   uint8_t freqMaxM;
   uint8_t freqMDefault;
 
+  double errorCount[256];
+  double errorWeight[256];
+  double errorRate[256];
+  double maxErrorRate[256];
+
   char repr[64];
 };
 
@@ -79,5 +88,6 @@ extern int libztex_configureFpga (struct libztex_device *dev);
 extern int libztex_setFreq (struct libztex_device *ztex, uint16_t freq);
 extern int libztex_sendHashData (struct libztex_device *ztex, unsigned char *sendbuf);
 extern int libztex_readHashData (struct libztex_device *ztex, struct libztex_hash_data nonces[]);
+extern int libztex_resetFpga (struct libztex_device *ztex);
 
 #endif /* __LIBZTEX_H__ */

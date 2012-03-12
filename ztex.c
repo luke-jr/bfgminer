@@ -24,7 +24,7 @@
  *   along with this program; if not, see http://www.gnu.org/licenses/.
 **/
 #include <unistd.h>
-
+#include <sha2.h>
 #include "miner.h"
 #include "libztex.h"
 
@@ -61,15 +61,78 @@ static void ztex_detect()
 
 }
 
-static bool ztex_prepare(struct thr_info *thr)
+static bool ztex_updateFreq (struct libztex_device* ztex)
 {
-  struct timeval now;
-  struct cgpu_info *ztex = thr->cgpu;
+  int i, maxM, bestM;
+  double bestR, r;
 
-  gettimeofday(&now, NULL);
-  get_datestamp(ztex->init, &now);
+  for (i=0; i<ztex->freqMaxM; i++) {
+    if (ztex->maxErrorRate[i+1]*i < ztex->maxErrorRate[i]*(i+20))
+      ztex->maxErrorRate[i+1] = ztex->maxErrorRate[i]*(1.0+20.0/i);
+  }
 
-  if (libztex_configureFpga(ztex->device) != 0) {
+  maxM = 0;
+  while (maxM<ztex->freqMDefault && ztex->maxErrorRate[maxM+1]<LIBZTEX_MAXMAXERRORRATE)
+    maxM++;
+  //applog(LOG_WARNING, "maxM:%d freqMaxM:%d errorWeight:%f maxErrorRate:%f maxMax:%f", maxM, ztex->freqMaxM, ztex->errorWeight[maxM], ztex->maxErrorRate[maxM+1], LIBZTEX_MAXMAXERRORRATE);
+  while (maxM<ztex->freqMaxM && ztex->errorWeight[maxM]>150 && ztex->maxErrorRate[maxM+1]<LIBZTEX_MAXMAXERRORRATE)
+    maxM++;
+
+  bestM = 0;
+  bestR = 0;
+  for (i=0; i<=maxM; i++) {
+    r = (i + 1 + ( i == ztex->freqM ? LIBZTEX_ERRORHYSTERESIS : 0))*(1-ztex->maxErrorRate[i]);
+    if (r > bestR) {
+      bestM = i;
+      bestR = r;
+    }
+  }
+
+  //applog(LOG_WARNING, "maxM:%d bestM:%d bestR:%f freqM:%d", maxM, bestM, bestR, ztex->freqM);
+
+
+  if (bestM != ztex->freqM) {
+    libztex_setFreq(ztex, bestM);
+  }
+
+  maxM = ztex->freqMDefault;
+  while (maxM<ztex->freqMaxM && ztex->errorWeight[maxM+1] > 100)
+    maxM++;
+  if ((bestM < (1.0-LIBZTEX_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
+    libztex_resetFpga(ztex);
+    applog(LOG_ERR, "%s: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.", ztex->repr, (1.0-1.0*bestM/maxM)*100);
+    return false;
+  }
+  return true;
+}
+
+
+static bool ztex_checkNonce (struct libztex_device *ztex,
+                             struct work *work,
+                             struct libztex_hash_data *hdata)
+{
+  uint32_t *data32 = (uint32_t *)(work->data);
+  unsigned char swap[128];
+  uint32_t *swap32 = (uint32_t *)swap;
+  unsigned char hash1[32];
+  unsigned char hash2[32];
+  uint32_t *hash2_32 = (uint32_t *)hash2;
+  int i;
+  
+  work->data[64 + 12 + 0] = (hdata->nonce >> 0) & 0xff;
+  work->data[64 + 12 + 1] = (hdata->nonce >> 8) & 0xff;
+  work->data[64 + 12 + 2] = (hdata->nonce >> 16) & 0xff;
+  work->data[64 + 12 + 3] = (hdata->nonce >> 24) & 0xff;
+
+  for (i = 0; i < 80 / 4; i++)
+  	swap32[i] = swab32(data32[i]);
+  
+  sha2(swap, 80, hash1, false);
+  sha2(hash1, 32, hash2, false);
+ 
+  if (swab32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
+    ztex->errorCount[ztex->freqM] += 1.0/ztex->numNonces;
+    applog(LOG_ERR, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
     return false;
   }
   return true;
@@ -100,16 +163,24 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
   }
   overflow = false;
   while (!(overflow || work_restart[thr->id].restart)) {
+    usleep(250000);
     libztex_readHashData(ztex, &hdata[0]);
 
+    ztex->errorCount[ztex->freqM] *= 0.995;
+    ztex->errorWeight[ztex->freqM] = ztex->errorWeight[ztex->freqM] * 0.995 + 1.0;
+ 
     for (i=0; i<ztex->numNonces; i++) {
       nonce = hdata[i].nonce;
       if (nonce > noncecnt)
         noncecnt = nonce;
-      if ((nonce >> 4) < (lastnonce[i] >> 4))
+      if ((nonce >> 4) < (lastnonce[i] >> 4)) {
         overflow = true;
-      else
+      } else {
         lastnonce[i] = nonce;
+      }
+      if (!ztex_checkNonce(ztex, work, &hdata[i])) {
+        continue;
+      }
       nonce = hdata[i].goldenNonce;
       if (nonce > 0) {
         found = false;
@@ -133,12 +204,38 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
           applog(LOG_DEBUG, "submitted %0.8X %d", nonce, rv);
         }
       }
+
     }
 
   }
+      ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /  ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM]<100 ? ztex->errorWeight[ztex->freqM]*0.01 : 1.0);
+      if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM]) {
+        ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
+      }
 
+      if (!ztex_updateFreq(ztex)) {
+        // Something really serious happened, so mark this thread as dead!
+        thr->cgpu->status = LIFE_DEAD;
+      }
+  applog(LOG_WARNING, "freqM:%d errorRate:%0.3f errorCount:%d", ztex->freqM, ztex->errorRate[ztex->freqM], ztex->errorCount[ztex->freqM]);
   applog(LOG_DEBUG, "exit %0.8X", noncecnt);
   return noncecnt;
+}
+
+static bool ztex_prepare(struct thr_info *thr)
+{
+  struct timeval now;
+  struct cgpu_info *ztex = thr->cgpu;
+
+  gettimeofday(&now, NULL);
+  get_datestamp(ztex->init, &now);
+
+  if (libztex_configureFpga(ztex->device) != 0) {
+    return false;
+  }
+  ztex->device->freqM = -1;
+  ztex_updateFreq(ztex->device);
+  return true;
 }
 
 static void ztex_shutdown(struct thr_info *thr)

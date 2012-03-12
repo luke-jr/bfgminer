@@ -156,7 +156,7 @@ static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* fir
             
   for (tries=10; tries>0; tries--) {
     //* Reset fpga
-    cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x31, 0, 0, NULL, 0, 1000);
+    cnt = libztex_resetFpga(ztex);
     if (unlikely(cnt < 0)) {
       applog(LOG_ERR, "%s: Failed reset fpga with err %d", ztex->repr, cnt);
       continue;
@@ -185,7 +185,7 @@ static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* fir
       return 3;
     }
   }
-  sleep(0.2);
+  usleep(200000);
   applog(LOG_ERR, "%s: FPGA configuration done", ztex->repr);
   return 0;
 }
@@ -193,9 +193,9 @@ static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* fir
 int libztex_configureFpga (struct libztex_device *ztex) {
   int rv;
   rv = libztex_configureFpgaLS(ztex, "bitstreams/ztex_ufm1_15d3.bit", true, 2);
-  if (rv == 0) {
-    libztex_setFreq(ztex, ztex->freqMDefault);
-  }
+  //if (rv == 0) {
+  //  libztex_setFreq(ztex, ztex->freqMDefault);
+  //}
   return rv;
 }
 
@@ -214,6 +214,10 @@ int libztex_setFreq (struct libztex_device *ztex, uint16_t freq) {
   applog(LOG_WARNING, "%s: Frequency change to %d Mhz", ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
 
   return 0;
+}
+
+int libztex_resetFpga (struct libztex_device *ztex) {
+  return libusb_control_transfer(ztex->hndl, 0x40, 0x31, 0, 0, NULL, 0, 1000);
 }
 
 int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** ztex) {
@@ -305,6 +309,13 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
   newdev->freqMaxM = (buf[7] & 255);
   newdev->freqM = (buf[6] & 255);
   newdev->freqMDefault = newdev->freqM;
+
+  for (cnt=0; cnt<255; cnt++) {
+    newdev->errorCount[cnt] = 0;
+    newdev->errorWeight[cnt] = 0;
+    newdev->errorRate[cnt] = 0;
+    newdev->maxErrorRate[cnt] = 0;
+  }
 
   newdev->usbbus = libusb_get_bus_number(dev);
   newdev->usbaddress = libusb_get_device_address(dev);
