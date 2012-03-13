@@ -21,7 +21,7 @@
 
 #include "compat.h"
 #include "miner.h"
-#include "device-cpu.h" /* for algo_names[], TODO: re-factor dependency */
+#include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
