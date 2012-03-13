@@ -19,7 +19,6 @@
 #include <jansson.h>
 #include <curl/curl.h>
 #include <time.h>
-#include <curses.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
