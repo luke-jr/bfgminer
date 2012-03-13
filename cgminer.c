@@ -100,9 +100,9 @@ static const bool opt_time = true;
 
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
+#endif
 bool opt_restart = true;
 static bool opt_nogpu;
-#endif
 
 struct list_head scan_devices;
 int nDevs;
@@ -663,11 +663,14 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
 	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
-#ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
-			"Disable GPU mining even if suitable devices exist"),
+#ifdef HAVE_OPENCL
+			"Disable GPU mining even if suitable devices exist"
+#else
+			opt_hidden
 #endif
+	),
 #if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_BITFORCE) || defined(USE_ICARUS))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
@@ -736,19 +739,25 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--net-delay",
 			opt_set_bool, &opt_delaynet,
 			"Impose small delays in networking to not overload slow routers"),
-#ifdef HAVE_ADL
 	OPT_WITHOUT_ARG("--no-adl",
 			opt_set_bool, &opt_noadl,
-			"Disable the ATI display library used for monitoring and setting GPU parameters"),
+#ifdef HAVE_ADL
+			"Disable the ATI display library used for monitoring and setting GPU parameters"
+#else
+			opt_hidden
 #endif
+	),
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
-#ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
-			"Do not attempt to restart GPUs that hang"),
+#ifdef HAVE_OPENCL
+			"Do not attempt to restart GPUs that hang"
+#else
+			opt_hidden
 #endif
+	),
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, NULL,
 		     "Password for bitcoin JSON-RPC server"),
