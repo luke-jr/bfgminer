@@ -266,7 +266,7 @@ if test "x$bitforce" != xno; then
 		[libudev=auto]
 		)
 	if test "x$libudev" != "xno"; then
-		AC_CHECK_LIB([udev], [udev_device_get_devnode], [
+		AC_CHECK_HEADER([libudev.h],[
 			libudev=yes
 			UDEV_LIBS=-ludev
 			AC_DEFINE([HAVE_LIBUDEV], [1], [Defined to 1 if libudev is wanted])
