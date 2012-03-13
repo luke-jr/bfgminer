@@ -318,7 +318,7 @@ if test "x$ztex" != xno; then
           AC_MSG_ERROR([Could not find usb library - please install libusb]))
   AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
   USB_LIBS="-lusb-1.0"
-  USB_FLAGS="-I/usr/include/libusb-1.0"
+  USB_FLAGS=""
 fi
 
 PKG_PROG_PKG_CONFIG()
