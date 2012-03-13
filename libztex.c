@@ -192,7 +192,12 @@ static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* fir
 
 int libztex_configureFpga (struct libztex_device *ztex) {
   int rv;
-  rv = libztex_configureFpgaLS(ztex, "bitstreams/ztex_ufm1_15d3.bit", true, 2);
+  char buf[256] = "bitstreams/";
+  memset(&buf[11], 0, 245);
+  strcpy(&buf[11], ztex->bitFileName);
+  strcpy(&buf[strlen(buf)], ".bit");
+
+  rv = libztex_configureFpgaLS(ztex, buf, true, 2);
   //if (rv == 0) {
   //  libztex_setFreq(ztex, ztex->freqMDefault);
   //}
@@ -228,6 +233,7 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
   newdev = malloc(sizeof(struct libztex_device));
   newdev->valid = false;
   newdev->hndl = NULL;
+  newdev->bitFileName = NULL;
   *ztex = newdev;
 
   err = libusb_get_device_descriptor(dev, &newdev->descriptor);
@@ -295,9 +301,9 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
     return cnt;
   }
 
-  if (unlikely(buf[0]) != 4) {
+  if (unlikely(!(buf[0]) == 4)) {
     if (unlikely(buf[0]) != 2) {
-      applog(LOG_ERR, "Invalid BTCMiner descriptor version. Firmware must be updated.");
+      applog(LOG_ERR, "Invalid BTCMiner descriptor version. Firmware must be updated (%d).", buf[0]);
       return 3;
     }
     applog(LOG_WARNING, "Firmware out of date");
@@ -317,6 +323,10 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
     newdev->maxErrorRate[cnt] = 0;
   }
 
+  cnt = strlen(&buf[buf[0]==4?10:8]);
+  newdev->bitFileName = malloc(sizeof(char)*(cnt+1));
+  memcpy(newdev->bitFileName, &buf[buf[0]==4?10:8], cnt+1);  
+
   newdev->usbbus = libusb_get_bus_number(dev);
   newdev->usbaddress = libusb_get_device_address(dev);
   sprintf(newdev->repr, "ZTEX %.3d:%.3d-%s", newdev->usbbus, newdev->usbaddress, newdev->snString);
@@ -327,6 +337,9 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
 void libztex_destroy_device (struct libztex_device* ztex) {
   if (ztex->hndl != NULL) {
     libusb_close(ztex->hndl);
+  }
+  if (ztex->bitFileName != NULL) {
+    free(ztex->bitFileName);
   }
   free(ztex);
 }

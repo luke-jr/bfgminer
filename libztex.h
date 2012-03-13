@@ -61,6 +61,7 @@ struct libztex_device {
   uint8_t freqM;
   uint8_t freqMaxM;
   uint8_t freqMDefault;
+  char* bitFileName;
 
   double errorCount[256];
   double errorWeight[256];
