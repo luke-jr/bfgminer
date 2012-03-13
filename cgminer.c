@@ -4432,6 +4432,9 @@ int main (int argc, char *argv[])
 	}
 
 #ifdef HAVE_CURSES
+	if (opt_realquiet || devices_enabled == -1)
+		use_curses = false;
+
 	if (use_curses)
 		enable_curses();
 #endif
@@ -4540,9 +4543,6 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_CURSES
 	check_winsizes();
-
-	if (opt_realquiet)
-		use_curses = false;
 #endif
 
 	if (!total_pools) {
