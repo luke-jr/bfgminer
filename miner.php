@@ -267,7 +267,7 @@ function details($cmd, $list)
 	if ($item == 'STATUS')
 		continue;
 
-	$sectionname = ereg_replace('[0-9]', '', $item);
+	$sectionname = preg_replace('/\d/', '', $item);
 
 	if ($sectionname != $section)
 	{
