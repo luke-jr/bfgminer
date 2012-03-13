@@ -4362,6 +4362,9 @@ int main (int argc, char *argv[])
 		successful_connect = true;
 	}
 
+	if (opt_realquiet || devices_enabled == -1)
+		use_curses = false;
+
 	if (use_curses)
 		enable_curses();
 
@@ -4468,9 +4471,6 @@ int main (int argc, char *argv[])
 	logcursor = logstart + 1;
 
 	check_winsizes();
-
-	if (opt_realquiet)
-		use_curses = false;
 
 	if (!total_pools) {
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
