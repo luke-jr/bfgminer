@@ -326,7 +326,8 @@ static void icarus_shutdown(struct thr_info *thr)
 }
 
 struct device_api icarus_api = {
-	.name = "ICA",
+	.dname = "icarus",
+	.name = "PGA",
 	.api_detect = icarus_detect,
 	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,

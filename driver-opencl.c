@@ -25,7 +25,7 @@
 
 #include "compat.h"
 #include "miner.h"
-#include "device-gpu.h"
+#include "driver-opencl.h"
 #include "findnonce.h"
 #include "ocl.h"
 #include "adl.h"
@@ -1373,6 +1373,7 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 }
 
 struct device_api opencl_api = {
+	.dname = "opencl",
 	.name = "GPU",
 	.api_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,

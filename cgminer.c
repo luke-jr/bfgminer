@@ -42,8 +42,8 @@
 #include "miner.h"
 #include "findnonce.h"
 #include "adl.h"
-#include "device-cpu.h"
-#include "device-gpu.h"
+#include "driver-cpu.h"
+#include "driver-opencl.h"
 #include "bench_block.h"
 
 #if defined(unix)
@@ -4430,7 +4430,7 @@ int main (int argc, char *argv[])
 	if (devices_enabled == -1) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
-			applog(LOG_ERR, " %2d. %s%d", i, devices[i]->api->name, devices[i]->device_id);
+			applog(LOG_ERR, " %2d. %s%d (driver: %s)", i, devices[i]->api->name, devices[i]->device_id, devices[i]->api->dname);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}

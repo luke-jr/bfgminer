@@ -32,7 +32,7 @@
 #include "compat.h"
 #include "miner.h"
 #include "bench_block.h"
-#include "device-cpu.h"
+#include "driver-cpu.h"
 
 #if defined(unix)
 	#include <errno.h>
@@ -827,6 +827,7 @@ CPUSearch:
 }
 
 struct device_api cpu_api = {
+	.dname = "cpu",
 	.name = "CPU",
 	.api_detect = cpu_detect,
 	.reinit_device = reinit_cpu_device,

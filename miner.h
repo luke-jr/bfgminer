@@ -187,6 +187,7 @@ struct thr_info;
 struct work;
 
 struct device_api {
+	char*dname;
 	char*name;
 
 	// API-global functions
