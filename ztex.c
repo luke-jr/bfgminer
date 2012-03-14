@@ -164,7 +164,11 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
     if (work_restart[thr->id].restart) {
       break;
     }
-    libztex_readHashData(ztex, &hdata[0]);
+    i = libztex_readHashData(ztex, &hdata[0]);
+    if (i < 0) {
+      // Something wrong happened in read
+      
+    }
     if (work_restart[thr->id].restart) {
       break;
     }
@@ -220,13 +224,13 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
   if (!ztex_updateFreq(ztex)) {
     // Something really serious happened, so mark this thread as dead!
-    thr->cgpu->status = LIFE_DEAD;
+    return 0;
   }
   applog(LOG_DEBUG, "exit %1.8X", noncecnt);
 
   work->blk.nonce = 0xffffffff;
 
-  return noncecnt;
+  return noncecnt > 0 ? noncecnt : 1;
 }
 
 static bool ztex_prepare(struct thr_info *thr)
