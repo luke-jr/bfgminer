@@ -1,12 +1,27 @@
 <?php
 session_start();
 #
-global $miner, $port;
+global $miner, $port, $readonly;
 $miner = '127.0.0.1'; # hostname or IP address
 $port = 4028;
 #
+# Set $readonly to true to force miner.php to be readonly
+# Set $readonly to false then it will check cgminer 'privileged'
+$readonly = false;
+#
 $here = $_SERVER['PHP_SELF'];
 #
+function htmlhead()
+{
+ global $error, $readonly, $here;
+ if ($readonly === false)
+ {
+	$access = api('privileged');
+	if ($error != null
+	||  !isset($access['STATUS']['STATUS'])
+	||  $access['STATUS']['STATUS'] != 'S')
+		$readonly = true;
+ }
 ?>
 <html><head><title>Mine</title>
 <style type='text/css'>
@@ -17,14 +32,22 @@ td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
 function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<?php echo $here ?>"+a}
+<?php
+ if ($readonly === false)
+ {
+?>
 function prc(a,m){pr('?arg='+a,m)}
 function prs(a){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a,m)}
 function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v,m)}
+<?php
+ }
+?>
 </script>
 <table width=100% height=100% border=0 cellpadding=0 cellspacing=0 summary='Mine'>
 <tr><td align=center valign=top>
 <table border=0 cellpadding=4 cellspacing=0 summary='Mine'>
 <?php
+}
 #
 global $error;
 $error = null;
@@ -212,7 +235,7 @@ $poolcmd = array(	'Switch to'	=> 'switchpool',
 #
 function showhead($cmd, $item, $values)
 {
- global $poolcmd;
+ global $poolcmd, $readonly;
 
  echo '<tr>';
 
@@ -223,7 +246,7 @@ function showhead($cmd, $item, $values)
 	echo "<td valign=bottom class=h>$name</td>";
  }
 
- if ($cmd == 'pools')
+ if ($cmd == 'pools' && $readonly === false)
 	foreach ($poolcmd as $name => $pcmd)
 		echo "<td valign=bottom class=h>$name</td>";
 
@@ -232,7 +255,7 @@ function showhead($cmd, $item, $values)
 #
 function details($cmd, $list)
 {
- global $poolcmd;
+ global $poolcmd, $readonly;
 
  $dfmt = 'H:i:s j-M-Y \U\T\CP';
 
@@ -281,7 +304,7 @@ function details($cmd, $list)
 	foreach ($values as $name => $value)
 		echo '<td>'.fmt($section, $name, $value).'</td>';
 
-	if ($cmd == 'pools')
+	if ($cmd == 'pools' && $readonly === false)
 	{
 		reset($values);
 		$pool = current($values);
@@ -307,7 +330,7 @@ function details($cmd, $list)
 global $devs;
 $devs = null;
 #
-function gpubuttons($count, $info)
+function gpubuttons($count)
 {
  global $devs;
 
@@ -421,7 +444,7 @@ function process($cmds, $rd, $ro)
 #
 function display()
 {
- global $error;
+ global $error, $readonly;
 
  $error = null;
 
@@ -431,7 +454,8 @@ function display()
  echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
  echo "<input type=button value='Refresh' onclick='pr(\"\",null)'>";
  echo "</td><td width=100%>&nbsp;</td><td>";
- echo "<input type=button value='Quit' onclick='prc(\"quit\",\"Quit CGMiner\")'>";
+ if ($readonly === false)
+	echo "<input type=button value='Quit' onclick='prc(\"quit\",\"Quit CGMiner\")'>";
  echo "</td></tr></table></td></tr>";
 
  $arg = trim(getparam('arg', true));
@@ -445,10 +469,11 @@ function display()
 
  process($cmds, $rd, $ro);
 
- if ($error == null)
+ if ($error == null && $readonly === false)
 	processgpus($rd, $ro);
 }
 #
+htmlhead();
 display();
 #
 ?>
