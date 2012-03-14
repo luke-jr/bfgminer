@@ -54,10 +54,6 @@
 	#include <sys/wait.h>
 #endif
 
-#ifdef HAVE_LIBUSB
-        #include <libusb.h>
-#endif
-
 enum workio_commands {
 	WC_GET_WORK,
 	WC_SUBMIT_WORK,
