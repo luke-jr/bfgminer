@@ -118,10 +118,10 @@ static int libztex_getFpgaState (struct libztex_device *ztex, struct libztex_fpg
 
 static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* firmware, bool force, char bs) {
   struct libztex_fpgastate state;
-  unsigned char buf[8*1024*1024], cs;
   ssize_t pos=0;
   int transactionBytes = 2048;
-  int tries, cnt, i, j;
+  unsigned char buf[transactionBytes], cs;
+  int tries, cnt, buf_p, i;
   FILE *fp;
 
   if (!libztex_checkCapability(ztex, CAPABILITY_FPGA)) {
@@ -135,55 +135,70 @@ static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* fir
     }
   }
 
-  fp = fopen(firmware, "rb");
-  if (!fp) {
-    applog(LOG_ERR, "%s: failed to read firmware '%s'", ztex->repr, firmware);
-    return -2;
-  }
-
-  while (!feof(fp)) {
-    buf[pos++] = getc(fp);
-  };
-  pos--;
-  applog(LOG_ERR, "%s: read firmware, %d bytes", ztex->repr, pos);
-
-  fclose(fp);
-  
-  if ( bs<0 || bs>1 )
-    bs = libztex_detectBitstreamBitOrder(buf, transactionBytes<pos ? transactionBytes : pos);
-  if ( bs == 1 )
-    libztex_swapBits(buf, pos);
-            
   for (tries=10; tries>0; tries--) {
-    //* Reset fpga
+
+    fp = fopen(firmware, "rb");
+    if (!fp) {
+      applog(LOG_ERR, "%s: failed to read firmware '%s'", ztex->repr, firmware);
+      return -2;
+    }
+
+    cs = 0;
+    while (pos < transactionBytes && !feof(fp)) {
+      buf[pos] = getc(fp);
+      cs += buf[pos++];
+    };
+    if (feof(fp))
+      pos--;
+
+    if ( bs<0 || bs>1 )
+      bs = libztex_detectBitstreamBitOrder(buf, transactionBytes<pos ? transactionBytes : pos);
+
+	  //* Reset fpga
     cnt = libztex_resetFpga(ztex);
     if (unlikely(cnt < 0)) {
       applog(LOG_ERR, "%s: Failed reset fpga with err %d", ztex->repr, cnt);
       continue;
     }
-    cs = 0;
-    i = 0;
-    while (i < pos) {
-      j = (i+transactionBytes) > pos ? pos-i : transactionBytes;
-      cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x32, 0, 0, &buf[i], j, 5000);
-      if (unlikely(cnt < 0)) {
-        applog(LOG_ERR, "%s: Failed send fpga data with err %d", ztex->repr, cnt);
+
+    if ( bs == 1 )
+      libztex_swapBits(buf, pos);
+   
+    buf_p = pos;
+    while (1) {
+      i = 0;
+      while (i < buf_p) {
+        cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x32, 0, 0, &buf[i], buf_p-i, 5000);
+        if (unlikely(cnt < 0)) {
+          applog(LOG_ERR, "%s: Failed send fpga data with err %d", ztex->repr, cnt);
+          break;
+        }
+        i += cnt;
+      }
+      if (i < buf_p || buf_p < transactionBytes)
         break;
-      }
-      for (j=0; j<cnt; j++) {
-        cs = (cs + (buf[i+j] & 0xFF)) & 0xFF;
-      }
-      i += cnt;
+      buf_p = 0;
+      while (buf_p < transactionBytes && !feof(fp)) {
+        buf[buf_p] = getc(fp);
+        cs += buf[buf_p++];
+      };
+      if (feof(fp))
+        buf_p--;
+      pos += buf_p;
+      if (buf_p == 0)
+        break;
+      if ( bs == 1 )
+        libztex_swapBits(buf, buf_p);
     }
-    if (i < pos) {
-      continue;
-    }
-    tries = 0;
-    libztex_getFpgaState(ztex, &state);
-    if (!state.fpgaConfigured) {
-      applog(LOG_ERR, "%s: FPGA configuration failed: DONE pin does not go high", ztex->repr);
-      return 3;
-    }
+    if (cnt >= 0)
+      tries = 0;
+
+    fclose(fp);
+  }
+  libztex_getFpgaState(ztex, &state);
+  if (!state.fpgaConfigured) {
+    applog(LOG_ERR, "%s: FPGA configuration failed: DONE pin does not go high", ztex->repr);
+    return 3;
   }
   usleep(200000);
   applog(LOG_ERR, "%s: FPGA configuration done", ztex->repr);
@@ -323,7 +338,7 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
     newdev->maxErrorRate[cnt] = 0;
   }
 
-  cnt = strlen(&buf[buf[0]==4?10:8]);
+  cnt = strlen((char *)&buf[buf[0]==4?10:8]);
   newdev->bitFileName = malloc(sizeof(char)*(cnt+1));
   memcpy(newdev->bitFileName, &buf[buf[0]==4?10:8], cnt+1);  
 
