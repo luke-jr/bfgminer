@@ -352,6 +352,7 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
 void libztex_destroy_device (struct libztex_device* ztex) {
   if (ztex->hndl != NULL) {
     libusb_close(ztex->hndl);
+    ztex->hndl = NULL;
   }
   if (ztex->bitFileName != NULL) {
     free(ztex->bitFileName);
