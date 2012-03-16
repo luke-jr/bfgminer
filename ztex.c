@@ -32,6 +32,9 @@
 
 struct device_api ztex_api;
 
+// Forward declarations
+static void ztex_disable (struct thr_info* thr);
+
 static void ztex_detect()
 {
   int cnt;
@@ -151,7 +154,19 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
   memcpy(sendbuf, work->data + 64, 12);
   memcpy(sendbuf+12, work->midstate, 32);
   memset(backlog, 0, sizeof(backlog));
-  libztex_sendHashData(ztex, sendbuf);
+  i = libztex_sendHashData(ztex, sendbuf);
+  if (i < 0) {
+    // Something wrong happened in send
+    applog(LOG_ERR, "%s: Failed to send hash data with err %d", ztex->repr, i);
+    usleep(500000);
+    i = libztex_sendHashData(ztex, sendbuf);
+    if (i < 0) {
+      // And there's nothing we can do about it
+      ztex_disable(thr);
+      return 0;
+    }
+  }
+  
   applog(LOG_DEBUG, "sent hashdata");
 
   for (i=0; i<ztex->numNonces; i++) {
@@ -167,8 +182,16 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
     i = libztex_readHashData(ztex, &hdata[0]);
     if (i < 0) {
       // Something wrong happened in read
-      
+      applog(LOG_ERR, "%s: Failed to read hash data with err %d", ztex->repr, i);
+      usleep(500000);
+      i = libztex_readHashData(ztex, &hdata[0]);
+      if (i < 0) {
+        // And there's nothing we can do about it
+        ztex_disable(thr);
+        return 0;
+      }
     }
+
     if (work_restart[thr->id].restart) {
       break;
     }
@@ -217,6 +240,11 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
   }
 
+  //if (thr->id == 1 && !work_restart[thr->id]) {
+  //  ztex_disable(thr);
+  //  return 0;
+ // }
+
   ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /  ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM]<100 ? ztex->errorWeight[ztex->freqM]*0.01 : 1.0);
   if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM]) {
     ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
@@ -252,10 +280,13 @@ static bool ztex_prepare(struct thr_info *thr)
 
 static void ztex_shutdown(struct thr_info *thr)
 {
-  if (thr->cgpu) {
-    libztex_destroy_device(thr->cgpu->device);
-    thr->cgpu = NULL;
-  } 
+  libztex_destroy_device(thr->cgpu->device);
+}
+
+static void ztex_disable (struct thr_info *thr)
+{
+  applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device->repr);
+  devices[thr->cgpu->device_id]->deven = DEV_DISABLED;
 }
 
 struct device_api ztex_api = {
