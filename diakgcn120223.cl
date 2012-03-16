@@ -3,9 +3,7 @@
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
 
-#ifdef VECTORS8
-	typedef uint8 u;
-#elif defined VECTORS4
+#ifdef VECTORS4
 	typedef uint4 u;
 #elif defined VECTORS2
 	typedef uint2 u;
@@ -53,9 +51,7 @@ __kernel
 	u V[8];
 	u W[16];
 
-#ifdef VECTORS8
-	const u nonce = (uint)(get_local_id(0)) * 8U + (uint)(get_group_id(0)) * (uint)(WORKVEC) + base;
-#elif defined VECTORS4
+#ifdef VECTORS4
 	const u nonce = (uint)(get_local_id(0)) * 4U + (uint)(get_group_id(0)) * (uint)(WORKVEC) + base;
 #elif defined VECTORS2
 	const u nonce = (uint)(get_local_id(0)) * 2U + (uint)(get_group_id(0)) * (uint)(WORKVEC) + base;
@@ -116,9 +112,7 @@ __kernel
 
 //----------------------------------------------------------------------------------
 
-#ifdef VECTORS8
-	 W[0] = PreW18 + (u)(rotr25(nonce.s0), rotr25(nonce.s0) ^ 0x2004000U, rotr25(nonce.s0) ^ 0x4008000U, rotr25(nonce.s0) ^ 0x600c000U, rotr25(nonce.s0) ^ 0x8010000U, rotr25(nonce.s0) ^ 0xa014000U, rotr25(nonce.s0) ^ 0xc018000U, rotr25(nonce.s0) ^ 0xe01c000U);
-#elif defined VECTORS4
+#ifdef VECTORS4
 	 W[0] = PreW18 + (u)(rotr25(nonce.x), rotr25(nonce.x) ^ 0x2004000U, rotr25(nonce.x) ^ 0x4008000U, rotr25(nonce.x) ^ 0x600c000U);
 #elif defined VECTORS2
 	 W[0] = PreW18 + (u)(rotr25(nonce.x), rotr25(nonce.x) ^ 0x2004000U);
@@ -574,30 +568,7 @@ __kernel
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
-#ifdef VECTORS8
-	V[7] ^= 0x136032edU;
-
-	bool result = V[7].s0 & V[7].s1 & V[7].s2 & V[7].s3 & V[7].s4 & V[7].s5 & V[7].s6 & V[7].s7;
-
-	if (!result) {
-		if (!V[7].s0)
-			output[FOUND] = output[NFLAG & nonce.s0] = nonce.s0;
-		if (!V[7].s1)
-			output[FOUND] = output[NFLAG & nonce.s1] = nonce.s1;
-		if (!V[7].s2)
-			output[FOUND] = output[NFLAG & nonce.s2] = nonce.s2;
-		if (!V[7].s3)
-			output[FOUND] = output[NFLAG & nonce.s3] = nonce.s3;
-		if (!V[7].s4)
-			output[FOUND] = output[NFLAG & nonce.s4] = nonce.s4;
-		if (!V[7].s5)
-			output[FOUND] = output[NFLAG & nonce.s5] = nonce.s5;
-		if (!V[7].s6)
-			output[FOUND] = output[NFLAG & nonce.s6] = nonce.s6;
-		if (!V[7].s7)
-			output[FOUND] = output[NFLAG & nonce.s7] = nonce.s7;
-	}
-#elif defined VECTORS4
+#ifdef VECTORS4
 	if ((V[7].x == 0x136032edU) ^ (V[7].y == 0x136032edU) ^ (V[7].z == 0x136032edU) ^ (V[7].w == 0x136032edU))
 		output[FOUND] = output[NFLAG & nonce.x] = (V[7].x == 0x136032edU) ? nonce.x : ((V[7].y == 0x136032edU) ? nonce.y : ((V[7].z == 0x136032edU) ? nonce.z : nonce.w));
 #elif defined VECTORS2
