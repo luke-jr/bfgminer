@@ -1,4 +1,4 @@
-// DiaKGCN 01-03-2012 - OpenCL kernel by Diapolo
+// DiaKGCN 16-03-2012 - OpenCL kernel by Diapolo
 //
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
