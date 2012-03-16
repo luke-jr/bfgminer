@@ -141,8 +141,8 @@ __kernel
 	W[14] = W[7] + PreW32 + rotr15(W[12]);
 	W[15] = W[8] + W17 + rotr15(W[13]) + rotr25(W[0]);
 
-	V[1] += 0x0fc19dc6U + V[5] + W[0] + ch(V[2], V[3], V[4]) + rotr26(V[2]);
-	V[5] =  0x0fc19dc6U + V[5] + W[0] + ch(V[2], V[3], V[4]) + rotr26(V[2]) + rotr30(V[6]) + ma(V[7], V[0], V[6]);
+	V[1] += 0x0fc19dc6U + V[5] + ch(V[2], V[3], V[4]) + rotr26(V[2]) + W[0];
+	V[5] =  0x0fc19dc6U + V[5] + ch(V[2], V[3], V[4]) + rotr26(V[2]) + W[0] + rotr30(V[6]) + ma(V[7], V[0], V[6]);
 
 	V[0] += 0x240ca1ccU + V[4] + W[1] + ch(V[1], V[2], V[3]) + rotr26(V[1]);
 	V[4] =  0x240ca1ccU + V[4] + W[1] + ch(V[1], V[2], V[3]) + rotr26(V[1]) + rotr30(V[5]) + ma(V[6], V[7], V[5]);
