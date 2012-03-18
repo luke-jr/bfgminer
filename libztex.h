@@ -84,6 +84,7 @@ struct libztex_hash_data {
 
 extern int libztex_scanDevices (struct libztex_dev_list ***devs);
 extern void libztex_freeDevList (struct libztex_dev_list **devs);
+extern int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** ztex);
 extern void libztex_destroy_device (struct libztex_device* ztex);
 extern int libztex_configureFpga (struct libztex_device *dev);
 extern int libztex_setFreq (struct libztex_device *ztex, uint16_t freq);

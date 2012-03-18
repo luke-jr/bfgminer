@@ -53,7 +53,7 @@ static bool libztex_checkDevice (struct libusb_device *dev) {
     applog(LOG_ERR, "Ztex check device: Failed to open read descriptor with error %d", err);
     return false;
   }
-  if (!(desc.idVendor == 0x221A && desc.idProduct == 0x0100)) {
+  if (!(desc.idVendor == LIBZTEX_IDVENDOR && desc.idProduct == LIBZTEX_IDPRODUCT)) {
     return false;
   }
   return true;
@@ -264,14 +264,18 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
     return 1;
   }
 
-  libusb_open(dev, &newdev->hndl);
+  err = libusb_open(dev, &newdev->hndl);
+  if (unlikely(err != 0)) {
+    applog(LOG_ERR, "Ztex check device: Failed to open handle with error %d", err);
+    return err;
+  }
+
   cnt = libusb_get_string_descriptor_ascii (newdev->hndl, newdev->descriptor.iSerialNumber, newdev->snString,
                                             LIBZTEX_SNSTRING_LEN+1);
   if (unlikely(cnt < 0)) {
     applog(LOG_ERR, "Ztex check device: Failed to read device snString with err %d", cnt);
     return cnt;
   }
-  applog(LOG_WARNING, "-- %s", newdev->snString);
 
   cnt = libusb_control_transfer(newdev->hndl, 0xc0, 0x22, 0, 0, buf, 40, 500);
   if (unlikely(cnt < 0)) {
@@ -356,6 +360,7 @@ void libztex_destroy_device (struct libztex_device* ztex) {
   }
   if (ztex->bitFileName != NULL) {
     free(ztex->bitFileName);
+    ztex->bitFileName = NULL;
   }
   free(ztex);
 }
@@ -415,7 +420,9 @@ int libztex_scanDevices (struct libztex_dev_list*** devs_p) {
 
 int libztex_sendHashData (struct libztex_device *ztex, unsigned char *sendbuf) {
   int cnt;
-
+  if (ztex->hndl == NULL) {
+    return 0;
+  }
   cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x80, 0, 0, sendbuf, 44, 1000);
   if (unlikely(cnt < 0)) {
     applog(LOG_ERR, "%s: Failed sendHashData with err %d", ztex->repr, cnt);
@@ -428,6 +435,10 @@ int libztex_readHashData (struct libztex_device *ztex, struct libztex_hash_data 
   // length of buf must be 8 * (numNonces + 1)
   unsigned char rbuf[12*8];
   int cnt, i;
+
+  if (ztex->hndl == NULL) {
+    return 0;
+  }
   
   cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x81, 0, 0, rbuf, 12*ztex->numNonces, 1000);
   if (unlikely(cnt < 0)) {
