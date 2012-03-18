@@ -30,16 +30,24 @@
 
 #define GOLDEN_BACKLOG 5
 
-struct device_api ztex_api;
+struct device_api ztex_api, ztex_hotplug_api;
 
 // Forward declarations
 static void ztex_disable (struct thr_info* thr);
+static bool ztex_prepare(struct thr_info *thr);
 
 static void ztex_detect()
 {
   int cnt;
   int i;
   struct libztex_dev_list **ztex_devices;
+  struct cgpu_info *ztex;
+
+  ztex = calloc(1, sizeof(struct cgpu_info));
+  ztex->api = &ztex_hotplug_api;
+  ztex->threads = 1;
+  devices[total_devices++] = ztex;
+  
 
   cnt = libztex_scanDevices(&ztex_devices);
   applog(LOG_WARNING, "Found %d ztex board(s)", cnt);
@@ -47,7 +55,6 @@ static void ztex_detect()
   for (i=0; i<cnt; i++) {
     if (total_devices == MAX_DEVICES)
       break;
-    struct cgpu_info *ztex;
     ztex = calloc(1, sizeof(struct cgpu_info));
     ztex->api = &ztex_api;
     ztex->device_id = total_devices;
@@ -280,13 +287,17 @@ static bool ztex_prepare(struct thr_info *thr)
 
 static void ztex_shutdown(struct thr_info *thr)
 {
-  libztex_destroy_device(thr->cgpu->device);
+  if (thr->cgpu->device != NULL) {
+    libztex_destroy_device(thr->cgpu->device);
+    thr->cgpu->device = NULL;
+  }
 }
 
 static void ztex_disable (struct thr_info *thr)
 {
   applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device->repr);
   devices[thr->cgpu->device_id]->deven = DEV_DISABLED;
+  ztex_shutdown(thr);
 }
 
 struct device_api ztex_api = {
