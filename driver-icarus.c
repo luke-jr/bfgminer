@@ -191,10 +191,9 @@ static bool icarus_detect_one(const char *devpath)
 	struct cgpu_info *icarus;
 	icarus = calloc(1, sizeof(struct cgpu_info));
 	icarus->api = &icarus_api;
-	icarus->device_id = total_devices;
 	icarus->device_path = strdup(devpath);
 	icarus->threads = 1;
-	devices[total_devices++] = icarus;
+	add_cgpu(icarus);
 
 	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
 	       devpath, icarus->device_id);

@@ -1101,12 +1101,13 @@ static void opencl_detect()
 	for (i = 0; i < nDevs; ++i) {
 		struct cgpu_info *cgpu;
 
-		cgpu = devices[total_devices++] = &gpus[i];
+		cgpu = &gpus[i];
 		cgpu->deven = DEV_ENABLED;
 		cgpu->api = &opencl_api;
 		cgpu->device_id = i;
 		cgpu->threads = opt_g_threads;
 		cgpu->virtual_gpu = i;
+		add_cgpu(cgpu);
 	}
 
 	if (!opt_noadl)
@@ -1196,6 +1197,25 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		cgpu->deven = DEV_DISABLED;
 		cgpu->status = LIFE_NOSTART;
 		return false;
+	}
+	if (name && !cgpu->name)
+		cgpu->name = strdup(name);
+	if (!cgpu->kname)
+	{
+		switch (clStates[i]->chosen_kernel) {
+		case KL_DIABLO:
+			cgpu->kname = "diablo";
+			break;
+		case KL_DIAKGCN:
+			cgpu->kname = "diakgcn";
+			break;
+		case KL_PHATK:
+			cgpu->kname = "phatk";
+			break;
+		case KL_POCLBM:
+			cgpu->kname = "poclbm";
+		default:
+		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 	gettimeofday(&now, NULL);

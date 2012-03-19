@@ -226,6 +226,7 @@ struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
 	int device_id;
+	char *name;
 	char *device_path;
 	FILE *device_file;
 	int device_fd;
@@ -249,6 +250,7 @@ struct cgpu_info {
 	int virtual_gpu;
 	int intensity;
 	bool dynamic;
+	char *kname;
 #ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;
@@ -274,6 +276,8 @@ struct cgpu_info {
 	int last_share_pool;
 	time_t last_share_pool_time;
 };
+
+extern bool add_cgpu(struct cgpu_info*);
 
 struct thread_q {
 	struct list_head	q;
