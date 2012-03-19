@@ -268,6 +268,12 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
   return noncecnt > 0 ? noncecnt : 1;
 }
 
+static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
+{
+  tailsprintf(buf, "%dMhz", cgpu->device->freqM1 * (cgpu->device->freqM + 1));
+  tailsprintf(buf, "| ");
+}
+
 static bool ztex_prepare(struct thr_info *thr)
 {
   struct timeval now;
@@ -303,6 +309,7 @@ static void ztex_disable (struct thr_info *thr)
 struct device_api ztex_api = {
 	.name = "ZTX",
 	.api_detect = ztex_detect,
+	.get_statline_before = ztex_statline_before,
 	.thread_prepare = ztex_prepare,
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,
