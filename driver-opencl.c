@@ -1093,12 +1093,13 @@ static void opencl_detect()
 	for (i = 0; i < nDevs; ++i) {
 		struct cgpu_info *cgpu;
 
-		cgpu = devices[total_devices++] = &gpus[i];
+		cgpu = &gpus[i];
 		cgpu->deven = DEV_ENABLED;
 		cgpu->api = &opencl_api;
 		cgpu->device_id = i;
 		cgpu->threads = opt_g_threads;
 		cgpu->virtual_gpu = i;
+		add_cgpu(cgpu);
 	}
 
 	if (!opt_noadl)

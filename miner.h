@@ -275,6 +275,8 @@ struct cgpu_info {
 	time_t last_share_pool_time;
 };
 
+extern bool add_cgpu(struct cgpu_info*);
+
 struct thread_q {
 	struct list_head	q;
 

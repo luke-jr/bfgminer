@@ -4263,6 +4263,31 @@ void enable_device(struct cgpu_info *cgpu)
 #endif
 }
 
+struct _cgpu_devid_counter {
+	char name[4];
+	int lastid;
+	UT_hash_handle hh;
+};
+
+bool add_cgpu(struct cgpu_info*cgpu)
+{
+	static struct _cgpu_devid_counter *devids = NULL;
+	struct _cgpu_devid_counter *d;
+	
+	HASH_FIND_STR(devids, cgpu->api->name, d);
+	if (d)
+		cgpu->device_id = ++d->lastid;
+	else
+	{
+		d = malloc(sizeof(*d));
+		memcpy(d->name, cgpu->api->name, sizeof(d->name));
+		cgpu->device_id = d->lastid = 0;
+		HASH_ADD_STR(devids, name, d);
+	}
+	devices[total_devices++] = cgpu;
+	return true;
+}
+
 int main (int argc, char *argv[])
 {
 	struct block *block, *tmpblock;

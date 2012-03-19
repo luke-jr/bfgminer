@@ -739,13 +739,12 @@ static void cpu_detect()
 	for (i = 0; i < opt_n_threads; ++i) {
 		struct cgpu_info *cgpu;
 
-		cgpu = devices[total_devices + i] = &cpus[i];
+		cgpu = &cpus[i];
 		cgpu->api = &cpu_api;
 		cgpu->deven = DEV_ENABLED;
-		cgpu->device_id = i;
 		cgpu->threads = 1;
+		add_cgpu(cgpu);
 	}
-	total_devices += opt_n_threads;
 }
 
 static void reinit_cpu_device(struct cgpu_info *cpu)
