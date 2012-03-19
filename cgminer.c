@@ -4455,7 +4455,11 @@ int main (int argc, char *argv[])
 	if (devices_enabled == -1) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
-			applog(LOG_ERR, " %2d. %s%d (driver: %s)", i, devices[i]->api->name, devices[i]->device_id, devices[i]->api->dname);
+			struct cgpu_info *cgpu = devices[i];
+			if (cgpu->name)
+				applog(LOG_ERR, " %2d. %s %d: %s (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->name, cgpu->api->dname);
+			else
+				applog(LOG_ERR, " %2d. %s %d (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->api->dname);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}

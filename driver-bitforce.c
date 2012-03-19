@@ -91,6 +91,7 @@ static void BFwrite(int fd, const void *buf, ssize_t bufLen)
 
 static bool bitforce_detect_one(const char *devpath)
 {
+	char *s;
 	char pdevbuf[0x100];
 
 	if (total_devices == MAX_DEVICES)
@@ -120,6 +121,12 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
+	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
+	{
+		s[0] = '\0';
+		bitforce->name = strdup(pdevbuf + 7);
+	}
+
 	return add_cgpu(bitforce);
 }
 

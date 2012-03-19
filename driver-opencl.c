@@ -1188,6 +1188,8 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		cgpu->status = LIFE_NOSTART;
 		return false;
 	}
+	if (name && !cgpu->name)
+		cgpu->name = strdup(name);
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
