@@ -250,6 +250,7 @@ struct cgpu_info {
 	int virtual_gpu;
 	int intensity;
 	bool dynamic;
+	char *kname;
 #ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;

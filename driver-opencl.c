@@ -1190,6 +1190,23 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	}
 	if (name && !cgpu->name)
 		cgpu->name = strdup(name);
+	if (!cgpu->kname)
+	{
+		switch (clStates[i]->chosen_kernel) {
+		case KL_DIABLO:
+			cgpu->kname = "diablo";
+			break;
+		case KL_DIAKGCN:
+			cgpu->kname = "diakgcn";
+			break;
+		case KL_PHATK:
+			cgpu->kname = "phatk";
+			break;
+		case KL_POCLBM:
+			cgpu->kname = "poclbm";
+		default:
+		}
+	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
