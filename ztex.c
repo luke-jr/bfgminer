@@ -270,8 +270,10 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
-  tailsprintf(buf, "%dMhz", cgpu->device->freqM1 * (cgpu->device->freqM + 1));
-  tailsprintf(buf, "| ");
+  if (cgpu->deven == DEV_ENABLED) {
+    tailsprintf(buf, "%s | ", cgpu->device->snString);
+    tailsprintf(buf, "%dMhz | ", cgpu->device->freqM1 * (cgpu->device->freqM + 1));
+  }
 }
 
 static bool ztex_prepare(struct thr_info *thr)
