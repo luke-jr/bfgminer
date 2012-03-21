@@ -420,7 +420,7 @@ int libztex_scanDevices (struct libztex_dev_list*** devs_p) {
 
 int libztex_sendHashData (struct libztex_device *ztex, unsigned char *sendbuf) {
   int cnt;
-  if (ztex->hndl == NULL) {
+  if (ztex == NULL || ztex->hndl == NULL) {
     return 0;
   }
   cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x80, 0, 0, sendbuf, 44, 1000);
