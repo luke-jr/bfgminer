@@ -723,7 +723,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating the results of setting GPU N clock to V MHz
 
  gpufan|N,V (*)
-                none           There is no reply section just the STATUS section
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N fan speed to V%
 
  gpuvddc|N,V (*)
@@ -737,6 +737,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  quit (*)      none           There is no status section but just a single "BYE|"
                               reply before cgminer quits
+
+ notify        NOTIFY         The last status and history count of each devices problem
+                              e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
 
  privileged (*)
                none           There is no reply section just the STATUS section

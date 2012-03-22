@@ -222,6 +222,7 @@ static const char *OSINFO =
 #define _GPUS		"GPUS"
 #define _PGAS		"PGAS"
 #define _CPUS		"CPUS"
+#define _NOTIFY		"NOTIFY"
 #define _BYE		"BYE"
 
 static const char ISJSON = '{';
@@ -251,6 +252,7 @@ static const char ISJSON = '{';
 #define JSON_GPUS	JSON1 _GPUS JSON2
 #define JSON_PGAS	JSON1 _PGAS JSON2
 #define JSON_CPUS	JSON1 _CPUS JSON2
+#define JSON_NOTIFY	JSON1 _NOTIFY JSON2
 #define JSON_BYE	JSON1 _BYE JSON1
 #define JSON_CLOSE	JSON3
 #define JSON_END	JSON4
@@ -325,6 +327,7 @@ static const char *JSON_PARAMETER = "parameter";
 #endif
 
 #define MSG_NUMPGA 59
+#define MSG_NOTIFY 60
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -440,6 +443,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVPDP,	PARAM_STR,	"Invalid addpool details '%s'" },
  { SEVERITY_ERR,   MSG_TOOMANYP,PARAM_NONE,	"Reached maximum number of pools (%d)" },
  { SEVERITY_SUCC,  MSG_ADDPOOL,	PARAM_STR,	"Added pool '%s'" },
+ { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1596,6 +1600,97 @@ void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool is
 	strcpy(io_buffer, message(MSG_ACCOK, 0, NULL, isjson));
 }
 
+void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
+{
+	char buf[BUFSIZ];
+	char *reason;
+
+	if (cgpu->device_last_not_well == 0)
+		reason = REASON_NONE;
+	else
+		switch(cgpu->device_not_well_reason) {
+		case REASON_THREAD_FAIL_INIT:
+			reason = REASON_THREAD_FAIL_INIT_STR;
+			break;
+		case REASON_THREAD_ZERO_HASH:
+			reason = REASON_THREAD_ZERO_HASH_STR;
+			break;
+		case REASON_THREAD_FAIL_QUEUE:
+			reason = REASON_THREAD_FAIL_QUEUE_STR;
+			break;
+		case REASON_DEV_SICK_IDLE_60:
+			reason = REASON_DEV_SICK_IDLE_60_STR;
+			break;
+		case REASON_DEV_DEAD_IDLE_600:
+			reason = REASON_DEV_DEAD_IDLE_600_STR;
+			break;
+		case REASON_DEV_NOSTART:
+			reason = REASON_DEV_NOSTART_STR;
+			break;
+		case REASON_DEV_OVER_HEAT:
+			reason = REASON_DEV_OVER_HEAT_STR;
+			break;
+		case REASON_DEV_THERMAL_CUTOFF:
+			reason = REASON_DEV_THERMAL_CUTOFF_STR;
+			break;
+		default:
+			reason = REASON_UNKNOWN_STR;
+			break;
+		}
+
+	if (isjson)
+		sprintf(buf, "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"Thread Fail Init\":%d,\"Thread Zero Hash\":%d,\"Thread Fail Queue\":%d,\"Dev Sick Idle 60s\":%d,\"Dev Dead Idle 600s\":%d,\"Dev Nostart\":%d,\"Dev Over Heat\":%d,\"Dev Thermal Cutoff\":%d}" JSON_CLOSE,
+			device > 0 ? "," : "", device, cgpu->api->name, cgpu->device_id,
+			cgpu->device_last_well, cgpu->device_last_not_well, reason,
+			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
+			cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
+			cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
+			cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count);
+	else
+		sprintf(buf, "NOTIFY=%d,Name=%s,ID=%d,Last Well=%lu,Last Not Well=%lu,Reason Not Well=%s,Thread Fail Init=%d,Thread Zero Hash=%d,Thread Fail Queue=%d,Dev Sick Idle 60s=%d,Dev Dead Idle 600s=%d,Dev Nostart=%d,Dev Over Heat=%d,Dev Thermal Cutoff=%d%c",
+			device, cgpu->api->name, cgpu->device_id,
+			cgpu->device_last_well, cgpu->device_last_not_well, reason,
+			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
+			cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
+			cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
+			cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count, SEPARATOR);
+
+	strcat(io_buffer, buf);
+}
+
+static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	int devcount = 0;
+	int i;
+
+	for (i = 0; i < total_devices; i++) {
+		if (devices[i]->deven == DEV_ENABLED) {
+			devcount++;
+			break;
+		}
+	}
+
+	if (devcount == 0) {
+		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
+		return;
+	}
+
+	strcpy(io_buffer, message(MSG_NOTIFY, 0, NULL, isjson));
+
+	if (isjson) {
+		strcat(io_buffer, COMMA);
+		strcat(io_buffer, JSON_NOTIFY);
+	}
+
+	devcount = 0;
+	for (i = 0; i < total_devices; i++)
+		if (devices[i]->deven == DEV_ENABLED)
+			notifystatus(devcount++, devices[i], isjson);
+
+	if (isjson)
+		strcat(io_buffer, JSON_CLOSE);
+}
+
 void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	FILE *fcfg;
@@ -1652,6 +1747,7 @@ struct CMDS {
 	{ "save",		dosave,		true },
 	{ "quit",		doquit,		true },
 	{ "privileged",		privileged,	true },
+	{ "notify",		notify,		false },
 	{ NULL,			NULL,		false }
 };
 

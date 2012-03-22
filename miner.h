@@ -232,6 +232,17 @@ enum dev_reason {
 	REASON_DEV_THERMAL_CUTOFF,
 };
 
+#define REASON_NONE			"None"
+#define REASON_THREAD_FAIL_INIT_STR	"Thread failed to init"
+#define REASON_THREAD_ZERO_HASH_STR	"Thread got zero hashes"
+#define REASON_THREAD_FAIL_QUEUE_STR	"Thread failed to queue work"
+#define REASON_DEV_SICK_IDLE_60_STR	"Device idle for 60s"
+#define REASON_DEV_DEAD_IDLE_600_STR	"Device dead - idle for 600s"
+#define REASON_DEV_NOSTART_STR		"Device failed to start"
+#define REASON_DEV_OVER_HEAT_STR	"Device over heated"
+#define REASON_DEV_THERMAL_CUTOFF_STR	"Device reached thermal cutoff"
+#define REASON_UNKNOWN_STR		"Unknown reason - code bug"
+
 struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
