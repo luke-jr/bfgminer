@@ -620,7 +620,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.5:
+For API version 1.6:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
@@ -637,7 +637,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               ADL=X, <- Y or N if ADL is compiled in the code
                               ADL in use=X, <- Y or N if any GPU has ADL
                               Strategy=Name, <- the current pool strategy
-                              Log Interval=N| <- log interval (--log N)
+                              Log Interval=N, <- log interval (--log N)
+                              Device Code=GPU ICA | <- spaced list of compiled devices
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|

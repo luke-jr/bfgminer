@@ -157,7 +157,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.5";
+static const char *APIVERSION = "1.6";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -168,6 +168,21 @@ static const char *DYNAMIC = _DYNAMIC;
 
 static const char *YES = "Y";
 static const char *NO = "N";
+
+static const char *DEVICECODE = ""
+#ifdef HAVE_OPENCL
+			"GPU "
+#endif
+#ifdef USE_BITFORCE
+			"BFL "
+#endif
+#ifdef USE_ICARUS
+			"ICA "
+#endif
+#ifdef WANT_CPUMINE
+			"CPU "
+#endif
+			"";
 
 #define _DEVS		"DEVS"
 #define _POOLS		"POOLS"
@@ -643,9 +658,9 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	strcpy(io_buffer, message(MSG_MINECON, 0, NULL, isjson));
 
 	if (isjson)
-		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":\"%d\"}" JSON_CLOSE, nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval);
+		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":\"%d\",\"Device Code\":\"%s\"}" JSON_CLOSE, nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE);
 	else
-		sprintf(buf, _MINECON ",GPU Count=%d,PGA Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d%c", nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, SEPARATOR);
+		sprintf(buf, _MINECON ",GPU Count=%d,PGA Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d,Device Code=%s%c", nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE, SEPARATOR);
 
 	strcat(io_buffer, buf);
 }
