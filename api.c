@@ -140,7 +140,7 @@
 // Big enough for largest API request
 //  though a PC with 100s of PGAs/CPUs may exceed the size ...
 // Current code assumes it can socket send this size also
-#define MYBUFSIZ	32768	// TODO: intercept before it's exceeded
+#define MYBUFSIZ	65432	// TODO: intercept before it's exceeded
 
 // Number of requests to queue - normally would be small
 // However lots of PGA's may mean more
