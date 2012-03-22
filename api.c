@@ -658,7 +658,7 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	strcpy(io_buffer, message(MSG_MINECON, 0, NULL, isjson));
 
 	if (isjson)
-		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":\"%d\",\"Device Code\":\"%s\"}" JSON_CLOSE, nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE);
+		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":%d,\"Device Code\":\"%s\"}" JSON_CLOSE, nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE);
 	else
 		sprintf(buf, _MINECON ",GPU Count=%d,PGA Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d,Device Code=%s%c", nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE, SEPARATOR);
 
