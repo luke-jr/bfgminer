@@ -1660,17 +1660,9 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
 
 static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	int devcount = 0;
 	int i;
 
-	for (i = 0; i < total_devices; i++) {
-		if (devices[i]->deven == DEV_ENABLED) {
-			devcount++;
-			break;
-		}
-	}
-
-	if (devcount == 0) {
+	if (total_devices == 0) {
 		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
 		return;
 	}
@@ -1682,10 +1674,8 @@ static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool
 		strcat(io_buffer, JSON_NOTIFY);
 	}
 
-	devcount = 0;
 	for (i = 0; i < total_devices; i++)
-		if (devices[i]->deven == DEV_ENABLED)
-			notifystatus(devcount++, devices[i], isjson);
+		notifystatus(i, devices[i], isjson);
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
