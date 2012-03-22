@@ -305,6 +305,10 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 			if (temp > bitforce->cutofftemp) {
 				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, disabling!", bitforce->api->name, bitforce->device_id);
 				bitforce->deven = DEV_RECOVER;
+
+				bitforce->device_last_not_well = time(NULL);
+				bitforce->device_not_well_reason = REASON_THERMAL_CUTOFF;
+				bitforce->dev_thermal_cutoff_count++;
 			}
 		}
 	}

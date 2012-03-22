@@ -221,6 +221,17 @@ enum cl_kernels {
 	KL_DIABLO,
 };
 
+enum dev_reason {
+	REASON_THREAD_FAIL_INIT,
+	REASON_THREAD_ZERO_HASH,
+	REASON_THREAD_FAIL_QUEUE,
+	REASON_DEV_SICK_IDLE_60,
+	REASON_DEV_DEAD_IDLE_600,
+	REASON_DEV_NOSTART,
+	REASON_DEV_OVER_HEAT,
+	REASON_DEV_THERMAL_CUTOFF,
+};
+
 struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
@@ -272,6 +283,18 @@ struct cgpu_info {
 #endif
 	int last_share_pool;
 	time_t last_share_pool_time;
+
+	time_t device_last_well;
+	time_t device_last_not_well;
+	enum dev_reason device_not_well_reason;
+	int thread_fail_init_count;
+	int thread_zero_hash_count;
+	int thread_fail_queue_count;
+	int dev_sick_idle_60_count;
+	int dev_dead_idle_600_count;
+	int dev_nostart_count;
+	int dev_over_heat_count;	// It's a warning but worth knowing
+	int dev_thermal_cutoff_count;
 };
 
 struct thread_q {
