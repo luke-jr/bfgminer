@@ -307,7 +307,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 				bitforce->deven = DEV_RECOVER;
 
 				bitforce->device_last_not_well = time(NULL);
-				bitforce->device_not_well_reason = REASON_THERMAL_CUTOFF;
+				bitforce->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
 				bitforce->dev_thermal_cutoff_count++;
 			}
 		}
