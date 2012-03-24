@@ -256,14 +256,8 @@ function fmt($section, $name, $value)
 	break;
  }
 
- if ($section == 'NOTIFY')
- {
-	$code = preg_split('/ /', $name);
-	if (count($code) > 1)
-		if ($code[0] == 'Thread' || $code[0] == 'Dev')
-			if ($value != '0')
-				$class = $errorclass;
- }
+ if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
+	$class = $errorclass;
 
  return array($ret, $class);
 }

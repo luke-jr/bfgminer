@@ -1638,8 +1638,10 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
 			break;
 		}
 
+	// ALL counters (and only counters) must start the name with a '*'
+	// Simplifies future external support for adding new counters
 	if (isjson)
-		sprintf(buf, "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"Thread Fail Init\":%d,\"Thread Zero Hash\":%d,\"Thread Fail Queue\":%d,\"Dev Sick Idle 60s\":%d,\"Dev Dead Idle 600s\":%d,\"Dev Nostart\":%d,\"Dev Over Heat\":%d,\"Dev Thermal Cutoff\":%d}" JSON_CLOSE,
+		sprintf(buf, "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"*Thread Fail Init\":%d,\"*Thread Zero Hash\":%d,\"*Thread Fail Queue\":%d,\"*Dev Sick Idle 60s\":%d,\"*Dev Dead Idle 600s\":%d,\"*Dev Nostart\":%d,\"*Dev Over Heat\":%d,\"*Dev Thermal Cutoff\":%d}" JSON_CLOSE,
 			device > 0 ? "," : "", device, cgpu->api->name, cgpu->device_id,
 			cgpu->device_last_well, cgpu->device_last_not_well, reason,
 			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
@@ -1647,7 +1649,7 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
 			cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
 			cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count);
 	else
-		sprintf(buf, "NOTIFY=%d,Name=%s,ID=%d,Last Well=%lu,Last Not Well=%lu,Reason Not Well=%s,Thread Fail Init=%d,Thread Zero Hash=%d,Thread Fail Queue=%d,Dev Sick Idle 60s=%d,Dev Dead Idle 600s=%d,Dev Nostart=%d,Dev Over Heat=%d,Dev Thermal Cutoff=%d%c",
+		sprintf(buf, "NOTIFY=%d,Name=%s,ID=%d,Last Well=%lu,Last Not Well=%lu,Reason Not Well=%s,*Thread Fail Init=%d,*Thread Zero Hash=%d,*Thread Fail Queue=%d,*Dev Sick Idle 60s=%d,*Dev Dead Idle 600s=%d,*Dev Nostart=%d,*Dev Over Heat=%d,*Dev Thermal Cutoff=%d%c",
 			device, cgpu->api->name, cgpu->device_id,
 			cgpu->device_last_well, cgpu->device_last_not_well, reason,
 			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
