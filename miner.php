@@ -1,13 +1,19 @@
 <?php
 session_start();
 #
-global $miner, $port, $readonly;
+global $miner, $port, $readonly, $notify;
 $miner = '127.0.0.1'; # hostname or IP address
 $port = 4028;
 #
 # Set $readonly to true to force miner.php to be readonly
 # Set $readonly to false then it will check cgminer 'privileged'
 $readonly = false;
+#
+# Set $notify to false to NOT attempt to display the notify command
+# Set $notify to true to attempt to display the notify command
+# If your older version of cgminer returns an 'Invalid command'
+#  coz it doesn't have notify - it just shows the error status table
+$notify = true;
 #
 $here = $_SERVER['PHP_SELF'];
 #
@@ -27,6 +33,8 @@ function htmlhead()
 <style type='text/css'>
 td { color:blue; font-family:verdana,arial,sans; font-size:13pt; }
 td.h { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#d0ffff }
+td.err { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ff3050 }
+td.warn { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ffb050 }
 td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
 </style>
 </head><body bgcolor=#ecffff>
@@ -177,55 +185,87 @@ function getparam($name, $both = false)
 #
 function fmt($section, $name, $value)
 {
+ $errorclass = ' class=err';
+ $warnclass = ' class=warn';
  $b = '&nbsp;';
+
+ $ret = $value;
+ $class = '';
 
  switch ($section.'.'.$name)
  {
  case 'GPU.Last Share Time':
  case 'PGA.Last Share Time':
-	return date('H:i:s', $value);
+	$ret = date('H:i:s', $value);
 	break;
  case 'SUMMARY.Elapsed':
 	$s = $value % 60;
 	$value -= $s;
 	$value /= 60;
 	if ($value == 0)
-	{
-		return $s.'s';
-	}
+		$ret = $s.'s';
 	else
 	{
 		$m = $value % 60;
 		$value -= $m;
 		$value /= 60;
 		if ($value == 0)
-		{
-			return sprintf("%dm$b%02ds", $m, $s);
-		}
+			$ret = sprintf("%dm$b%02ds", $m, $s);
 		else
 		{
 			$h = $value % 24;
 			$value -= $h;
 			$value /= 24;
 			if ($value == 0)
-				return sprintf("%dh$b%02dm$b%02ds", $h, $m, $s);
+				$ret = sprintf("%dh$b%02dm$b%02ds", $h, $m, $s);
 			else
-				return sprintf("%ddays$b%02dh$b%02dm$b%02ds", $value, $h, $m, $s);
+				$ret = sprintf("%ddays$b%02dh$b%02dm$b%02ds", $value, $h, $m, $s);
 		}
 	}
+	break;
+ case 'NOTIFY.Last Well':
+	if ($value == '0')
+	{
+		$ret = 'Never';
+		$class = $warnclass;
+	}
+	else
+		$ret = date('H:i:s', $value);
+	break;
+ case 'NOTIFY.Last Not Well':
+	if ($value == '0')
+		$ret = 'Never';
+	else
+	{
+		$ret = date('H:i:s', $value);
+		$class = $errorclass;
+	}
+	break;
+ case 'NOTIFY.Reason Not Well':
+	if ($value != 'None')
+		$class = $errorclass;
 	break;
  case 'GPU.Utility':
  case 'PGA.Utility':
  case 'SUMMARY.Utility':
-	return $value.'/m';
+	$ret = $value.'/m';
 	break;
  case 'GPU.Temperature':
  case 'PGA.Temperature':
-	return $value.'&deg;C';
+	$ret = $value.'&deg;C';
 	break;
  }
 
- return $value;
+ if ($section == 'NOTIFY')
+ {
+	$code = preg_split('/ /', $name);
+	if (count($code) > 1)
+		if ($code[0] == 'Thread' || $code[0] == 'Dev')
+			if ($value != '0')
+				$class = $errorclass;
+ }
+
+ return array($ret, $class);
 }
 #
 global $poolcmd;
@@ -302,7 +342,10 @@ function details($cmd, $list)
 	echo '<tr>';
 
 	foreach ($values as $name => $value)
-		echo '<td>'.fmt($section, $name, $value).'</td>';
+	{
+		list($showvalue, $class) = fmt($section, $name, $value);
+		echo "<td$class>$showvalue</td>";
+	}
 
 	if ($cmd == 'pools' && $readonly === false)
 	{
@@ -444,7 +487,7 @@ function process($cmds, $rd, $ro)
 #
 function display()
 {
- global $error, $readonly;
+ global $error, $readonly, $notify;
 
  $error = null;
 
@@ -464,8 +507,12 @@ function display()
 
  $cmds = array(	'devs'    => 'device list',
 		'summary' => 'summary information',
-		'pools'   => 'pool list',
-		'config'  => 'cgminer config');
+		'pools'   => 'pool list');
+
+ if ($notify)
+	$cmds['notify'] = 'device status';
+
+ $cmds['config'] = 'cgminer config';
 
  process($cmds, $rd, $ro);
 
