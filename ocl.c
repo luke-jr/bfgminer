@@ -342,28 +342,23 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char numbuf[10];
 
 	if (gpus[gpu].kernel == KL_NONE) {
-		if (strstr(vbuff, "844.4") || // Linux 64 bit ATI 2.6 SDK
-		    strstr(vbuff, "851.4") || // Windows 64 bit ""
-		    strstr(vbuff, "831.4")) { // Windows & Linux 32 bit ""
-			if (strstr(name, "Tahiti")) {
-				applog(LOG_INFO, "Selecting poclbm kernel");
-				clState->chosen_kernel = KL_POCLBM;
-			} else {
+		/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
+		if (!strstr(name, "Tahiti") &&
+			(strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
+			 strstr(vbuff, "851.4") ||  // Windows 64 bit ""
+			 strstr(vbuff, "831.4") ||
+			 strstr(vbuff, "898.1"))) { // 12.2 driver SDK
 				applog(LOG_INFO, "Selecting diablo kernel");
 				clState->chosen_kernel = KL_DIABLO;
-			}
-		} else if (strstr(vbuff, "898.1") || // Windows 64 bit 12.2 driver
-			   strstr(name, "Tahiti")) { // All non SDK 2.6 79x0
-				applog(LOG_INFO, "Selecting diablo kernel");
-				clState->chosen_kernel = KL_DIABLO;
-		} else if (clState->hasBitAlign) {
-			applog(LOG_INFO, "Selecting phatk kernel");
-			clState->chosen_kernel = KL_PHATK;
-		} else {
+		/* Detect all 7970s, older ATI and NVIDIA and use poclbm */
+		} else if (strstr(name, "Tahiti") || !clState->hasBitAlign) {
 			applog(LOG_INFO, "Selecting poclbm kernel");
 			clState->chosen_kernel = KL_POCLBM;
+		/* Use phatk for the rest R5xxx R6xxx */
+		} else {
+			applog(LOG_INFO, "Selecting phatk kernel");
+			clState->chosen_kernel = KL_PHATK;
 		}
-
 		gpus[gpu].kernel = clState->chosen_kernel;
 	} else
 		clState->chosen_kernel = gpus[gpu].kernel;
