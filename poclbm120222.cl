@@ -73,7 +73,9 @@ void search(const uint state0, const uint state1, const uint state2, const uint 
 	const uint state4, const uint state5, const uint state6, const uint state7,
 	const uint b1, const uint c1,
 	const uint f1, const uint g1, const uint h1,
+#ifndef GOFFSET
 	const u base,
+#endif
 	const uint fw0, const uint fw1, const uint fw2, const uint fw3, const uint fw15, const uint fw01r,
 	const uint D1A, const uint C1addK5, const uint B1addK6,
 	const uint W16addK16, const uint W17addK17,
@@ -83,8 +85,11 @@ void search(const uint state0, const uint state1, const uint state2, const uint 
 	u W[24];
 	u *Vals = &W[16]; // Now put at W[16] to be in same array
 
+#ifdef GOFFSET
+	const u nonce = (uint)(get_global_id(0));
+#else
 	const u nonce = base + (uint)(get_global_id(0));
-
+#endif
 
 Vals[0]=Preval0;
 Vals[0]+=nonce;

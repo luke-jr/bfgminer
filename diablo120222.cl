@@ -48,7 +48,9 @@ __kernel
 __attribute__((vec_type_hint(z)))
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 void search(
+#ifndef GOFFSET
     const z base,
+#endif
     const uint PreVal4_state0, const uint PreVal4_state0_k7,
     const uint PreVal4_T1,
     const uint W18, const uint W19,
@@ -65,7 +67,11 @@ void search(
 
   z ZA[25];
 
+#ifdef GOFFSET
+	const z Znonce = (uint)(get_global_id(0));
+#else
 	const z Znonce = base + (uint)(get_global_id(0));
+#endif
 
 ZA[2]=Znonce;
 ZA[2]+=PreVal4_state0;

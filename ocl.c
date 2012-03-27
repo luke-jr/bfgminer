@@ -335,7 +335,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
 	 * have otherwise created. The filename is:
-	 * name + kernelname + v + vectors + w + work_size + l + sizeof(long) + .bin
+	 * name + kernelname +/- g(offset) + v + vectors + w + work_size + l + sizeof(long) + .bin
 	 */
 	char binaryfilename[255];
 	char filename[255];
@@ -398,6 +398,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		gpus[gpu].vwidth = preferred_vwidth;
 	}
 
+	if ((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO) &&
+		clState->vwidth == 1 && clState->hasOpenCL11plus)
+			clState->goffset = true;
+
 	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
 		clState->wsize = gpus[gpu].work_size;
 	else if (strstr(name, "Tahiti"))
@@ -431,7 +435,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 
 	strcat(binaryfilename, name);
-
+	if (clState->goffset)
+		strcat(binaryfilename, "g");
 	strcat(binaryfilename, "v");
 	sprintf(numbuf, "%d", clState->vwidth);
 	strcat(binaryfilename, numbuf);
@@ -532,6 +537,9 @@ build:
 		applog(LOG_DEBUG, "BFI_INT patch requiring device found, patched source with BFI_INT");
 	} else
 		applog(LOG_DEBUG, "BFI_INT patch requiring device not found, will not BFI_INT patch");
+
+	if (clState->goffset)
+		strcat(CompilerOptions, " -D GOFFSET");
 
 	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
 	status = clBuildProgram(clState->program, 1, &devices[gpu], CompilerOptions , NULL, NULL);
