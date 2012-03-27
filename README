@@ -101,7 +101,7 @@ Basic WIN32 build instructions (LIKELY OUTDATED INFO. requires mingw32):
 	make
 	./mknsis.sh
 	
-Native WIN32 build instructions (on mingw32, on windows):
+Native WIN32 build instructions (outdated, see windows-build.txt)
 	Install the Microsoft platform SDK
 	Install AMD APP sdk, (if you want GPU mining)
 	Install AMD ADL sdk, (if you want GPU monitoring)
