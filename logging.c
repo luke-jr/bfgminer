@@ -18,9 +18,29 @@ bool opt_log_output = false;
 /* per default priorities higher than LOG_NOTICE are logged */
 int opt_log_level = LOG_NOTICE;
 
+static void my_log_curses(int prio, char *f, va_list ap)
+{
+#ifdef HAVE_CURSES
+	extern bool use_curses;
+	if (use_curses)
+		log_curses(prio, f, ap);
+	else
+#endif
+	{
+		int len = strlen(f);
+
+		strcpy(f + len - 1, "                    \n");
+
+#ifdef HAVE_CURSES
+		log_curses(prio, f, ap);
+#else
+		vprintf(f, ap);
+#endif
+	}
+}
+
 void vapplog(int prio, const char *fmt, va_list ap)
 {
-	extern bool use_curses;
 	if (!opt_debug && prio == LOG_DEBUG)
 		return;
 
@@ -60,15 +80,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 			fflush(stderr);
 		}
 
-		if (use_curses)
-			log_curses(prio, f, ap);
-		else {
-			int len = strlen(f);
-
-			strcpy(f + len - 1, "                    \n");
-
-			log_curses(prio, f, ap);
-		}
+		my_log_curses(prio, f, ap);
 	}
 }
 
@@ -90,7 +102,6 @@ void applog(int prio, const char *fmt, ...)
  */
 static void __maybe_unused log_generic(int prio, const char *fmt, va_list ap)
 {
-	extern bool use_curses;
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog) {
 		vsyslog(prio, fmt, ap);
@@ -127,15 +138,7 @@ static void __maybe_unused log_generic(int prio, const char *fmt, va_list ap)
 			fflush(stderr);
 		}
 
-		if (use_curses)
-			log_curses(prio, f, ap);
-		else {
-			int len = strlen(f);
-
-			strcpy(f + len - 1, "                    \n");
-
-			log_curses(prio, f, ap);
-		}
+		my_log_curses(prio, f, ap);
 	}
 }
 /* we can not generalize variable argument list */

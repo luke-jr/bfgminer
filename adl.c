@@ -12,8 +12,11 @@
 #if defined(HAVE_ADL) && (defined(__linux) || defined (WIN32))
 
 #include <stdio.h>
-#include <curses.h>
 #include <string.h>
+
+#ifdef HAVE_CURSES
+#include <curses.h>
+#endif
 
 #include "miner.h"
 #include "ADL_SDK/adl_sdk.h"
@@ -850,6 +853,7 @@ static void get_vddcrange(int gpu, float *imin, float *imax)
 	*imax = (float)ga->lpOdParameters.sVddc.iMax / 1000;
 }
 
+#ifdef HAVE_CURSES
 static float curses_float(const char *query)
 {
 	float ret;
@@ -860,6 +864,7 @@ static float curses_float(const char *query)
 	free(cvar);
 	return ret;
 }
+#endif
 
 int set_vddc(int gpu, float fVddc)
 {
@@ -1150,6 +1155,7 @@ void set_defaultengine(int gpu)
 	unlock_adl();
 }
 
+#ifdef HAVE_CURSES
 void change_autosettings(int gpu)
 {
 	struct gpu_adl *ga = &gpus[gpu].adl;
@@ -1306,6 +1312,7 @@ updated:
 	sleep(1);
 	goto updated;
 }
+#endif
 
 void clear_adl(int nDevs)
 {

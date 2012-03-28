@@ -11,7 +11,10 @@
 
 #include "config.h"
 
+#ifdef HAVE_CURSES
 #include <curses.h>
+#endif
+
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -32,8 +35,10 @@
 
 /* TODO: cleanup externals ********************/
 
+#ifdef HAVE_CURSES
 extern WINDOW *mainwin, *statuswin, *logwin;
 extern void enable_curses(void);
+#endif
 
 extern int mining_threads;
 extern double total_secs;
@@ -526,6 +531,9 @@ void pause_dynamic_threads(int gpu)
 
 struct device_api opencl_api;
 
+#endif /* HAVE_OPENCL */
+
+#if defined(HAVE_OPENCL) && defined(HAVE_CURSES)
 void manage_gpu(void)
 {
 	struct thr_info *thr;
@@ -1183,11 +1191,13 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 			applog(LOG_ERR, "Restarting the GPU from the menu will not fix this.");
 			applog(LOG_ERR, "Try restarting cgminer.");
 			failmessage = true;
+#ifdef HAVE_CURSES
 			if (use_curses) {
 				buf = curses_input("Press enter to continue");
 				if (buf)
 					free(buf);
 			}
+#endif
 		}
 		cgpu->deven = DEV_DISABLED;
 		cgpu->status = LIFE_NOSTART;

@@ -11,7 +11,9 @@
 
 #include "config.h"
 
+#ifdef HAVE_CURSES
 #include <curses.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,7 +118,13 @@ int gpu_threads;
 int opt_n_threads = -1;
 int mining_threads;
 int num_processors;
-bool use_curses = true;
+bool use_curses =
+#ifdef HAVE_CURSES
+	true
+#else
+	false
+#endif
+;
 static bool opt_submit_stale;
 static int opt_shares;
 static bool opt_fail_only;
@@ -141,7 +149,9 @@ int longpoll_thr_id;
 static int stage_thr_id;
 static int watchpool_thr_id;
 static int watchdog_thr_id;
+#ifdef HAVE_CURSES
 static int input_thr_id;
+#endif
 int gpur_thr_id;
 static int api_thr_id;
 static int total_threads;
@@ -151,7 +161,9 @@ struct work_restart *work_restart = NULL;
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
+#ifdef HAVE_CURSES
 static pthread_mutex_t curses_lock;
+#endif
 static pthread_rwlock_t blk_lock;
 pthread_rwlock_t netacc_lock;
 
@@ -179,6 +191,9 @@ enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses;
 
+#ifndef HAVE_CURSES
+const
+#endif
 static bool curses_active = false;
 
 static char current_block[37];
@@ -828,7 +843,12 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
-			"Disable ncurses formatted screen output"),
+#ifdef HAVE_CURSES
+			"Disable ncurses formatted screen output"
+#else
+			opt_hidden
+#endif
+	),
 	OPT_WITH_ARG("--url|-o",
 		     set_url, NULL, NULL,
 		     "URL for bitcoin JSON-RPC server"),
@@ -1127,13 +1147,16 @@ static int requests_staged(void)
 	return ret;
 }
 
+#ifdef HAVE_CURSES
 WINDOW *mainwin, *statuswin, *logwin;
+#endif
 double total_secs = 0.1;
 static char statusline[256];
 static int devcursor, logstart, logcursor;
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
+#ifdef HAVE_CURSES
 static inline void unlock_curses(void)
 {
 	mutex_unlock(&curses_lock);
@@ -1154,6 +1177,7 @@ static bool curses_active_locked(void)
 		unlock_curses();
 	return ret;
 }
+#endif
 
 void tailsprintf(char *f, const char *fmt, ...)
 {
@@ -1192,6 +1216,7 @@ static void text_print_status(int thr_id)
 	}
 }
 
+#ifdef HAVE_CURSES
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
 {
@@ -1274,6 +1299,7 @@ static void curses_print_devstatus(int thr_id)
 
 		wclrtoeol(statuswin);
 }
+#endif
 
 static void print_status(int thr_id)
 {
@@ -1281,6 +1307,7 @@ static void print_status(int thr_id)
 		text_print_status(thr_id);
 }
 
+#ifdef HAVE_CURSES
 /* Check for window resize. Called with curses mutex locked */
 static inline bool change_logwinsize(void)
 {
@@ -1336,7 +1363,9 @@ void wlogprint(const char *f, ...)
 		unlock_curses();
 	}
 }
+#endif
 
+#ifdef HAVE_CURSES
 void log_curses(int prio, const char *f, va_list ap)
 {
 	bool high_prio;
@@ -1366,6 +1395,7 @@ void clear_logwin(void)
 		unlock_curses();
 	}
 }
+#endif
 
 /* regenerate the full work->hash value and also return true if it's a block */
 bool regeneratehash(const struct work *work)
@@ -1700,6 +1730,7 @@ static void workio_cmd_free(struct workio_cmd *wc)
 	free(wc);
 }
 
+#ifdef HAVE_CURSES
 static void disable_curses(void)
 {
 	if (curses_active_locked()) {
@@ -1728,6 +1759,7 @@ static void disable_curses(void)
 		unlock_curses();
 	}
 }
+#endif
 
 static void print_summary(void);
 
@@ -2260,6 +2292,7 @@ static bool stage_work(struct work *work)
 	return true;
 }
 
+#ifdef HAVE_CURSES
 int curses_int(const char *query)
 {
 	int ret;
@@ -2270,8 +2303,11 @@ int curses_int(const char *query)
 	free(cvar);
 	return ret;
 }
+#endif
 
+#ifdef HAVE_CURSES
 static bool input_pool(bool live);
+#endif
 
 int active_pools(void)
 {
@@ -2285,6 +2321,7 @@ int active_pools(void)
 	return ret;
 }
 
+#ifdef HAVE_CURSES
 static void display_pool_summary(struct pool *pool)
 {
 	double efficiency = 0.0;
@@ -2332,6 +2369,7 @@ static void remove_pool(struct pool *pool)
 	pool->pool_no = total_pools;
 	total_pools--;
 }
+#endif
 
 void write_config(FILE *fcfg)
 {
@@ -2482,6 +2520,7 @@ void write_config(FILE *fcfg)
 	fputs("\n}", fcfg);
 }
 
+#ifdef HAVE_CURSES
 static void display_pools(void)
 {
 	struct pool *pool;
@@ -2686,10 +2725,12 @@ retry:
 	immedok(logwin, false);
 	opt_loginput = false;
 }
+#endif
 
 static void start_longpoll(void);
 static void stop_longpoll(void);
 
+#ifdef HAVE_CURSES
 static void set_options(void)
 {
 	int selected;
@@ -2830,6 +2871,7 @@ static void *input_thread(void __maybe_unused *userdata)
 
 	return NULL;
 }
+#endif
 
 /* This thread should not be shut down unless a problem occurs */
 static void *workio_thread(void *userdata)
@@ -3731,6 +3773,7 @@ out:
 	return NULL;
 }
 
+__maybe_unused
 static void stop_longpoll(void)
 {
 	struct thr_info *thr = &thr_info[longpoll_thr_id];
@@ -3817,6 +3860,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 		hashmeter(-1, &zero_tv, 0);
 
+#ifdef HAVE_CURSES
 		if (curses_active_locked()) {
 			change_logwinsize();
 			curses_print_status();
@@ -3828,6 +3872,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			wrefresh(logwin);
 			unlock_curses();
 		}
+#endif
 
 		gettimeofday(&now, NULL);
 
@@ -4041,7 +4086,9 @@ static void clean_up(void)
 #endif
 
 	gettimeofday(&total_tv_end, NULL);
+#ifdef HAVE_CURSES
 	disable_curses();
+#endif
 	if (!opt_realquiet && successful_connect)
 		print_summary();
 
@@ -4068,6 +4115,7 @@ void quit(int status, const char *format, ...)
 	exit(status);
 }
 
+#ifdef HAVE_CURSES
 char *curses_input(const char *query)
 {
 	char *input;
@@ -4085,6 +4133,7 @@ char *curses_input(const char *query)
 	noecho();
 	return input;
 }
+#endif
 
 int add_pool_details(bool live, char *url, char *user, char *pass)
 {
@@ -4120,6 +4169,7 @@ int add_pool_details(bool live, char *url, char *user, char *pass)
 	return ADD_POOL_OK;
 }
 
+#ifdef HAVE_CURSES
 static bool input_pool(bool live)
 {
 	char *url = NULL, *user = NULL, *pass = NULL;
@@ -4171,6 +4221,7 @@ out:
 	}
 	return ret;
 }
+#endif
 
 #if defined(unix)
 	static void fork_monitor()
@@ -4240,6 +4291,7 @@ out:
 	}
 #endif // defined(unix)
 
+#ifdef HAVE_CURSES
 void enable_curses(void) {
 	int x,y;
 
@@ -4262,6 +4314,7 @@ void enable_curses(void) {
 	curses_active = true;
 	unlock_curses();
 }
+#endif
 
 /* TODO: fix need a dummy CPU device_api even if no support for CPU mining */
 #ifndef WANT_CPUMINE
@@ -4311,7 +4364,9 @@ int main (int argc, char *argv[])
 
 	mutex_init(&hash_lock);
 	mutex_init(&qd_lock);
+#ifdef HAVE_CURSES
 	mutex_init(&curses_lock);
+#endif
 	mutex_init(&control_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
@@ -4393,8 +4448,10 @@ int main (int argc, char *argv[])
 		successful_connect = true;
 	}
 
+#ifdef HAVE_CURSES
 	if (use_curses)
 		enable_curses();
+#endif
 
 	applog(LOG_WARNING, "Started %s", packagename);
 
@@ -4498,14 +4555,18 @@ int main (int argc, char *argv[])
 	logstart += total_devices;
 	logcursor = logstart + 1;
 
+#ifdef HAVE_CURSES
 	check_winsizes();
 
 	if (opt_realquiet)
 		use_curses = false;
+#endif
 
 	if (!total_pools) {
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
-		if (!use_curses || (use_curses && !input_pool(false)))
+#ifdef HAVE_CURSES
+		if (!use_curses || !input_pool(false))
+#endif
 			quit(1, "Pool setup failed");
 	}
 
@@ -4627,6 +4688,7 @@ int main (int argc, char *argv[])
 				applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
 				       i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
 			}
+#ifdef HAVE_CURSES
 			if (use_curses) {
 				halfdelay(150);
 				applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 15s.");
@@ -4634,6 +4696,7 @@ int main (int argc, char *argv[])
 					quit(0, "No servers could be used! Exiting.");
 				nocbreak();
 			} else
+#endif
 				quit(0, "No servers could be used! Exiting.");
 		}
 	} while (!pools_active);
@@ -4738,6 +4801,7 @@ begin_bench:
 		quit(1, "API thread create failed");
 	pthread_detach(thr->pth);
 
+#ifdef HAVE_CURSES
 	/* Create curses input thread for keyboard input. Create this last so
 	 * that we know all threads are created since this can call kill_work
 	 * to try and shut down ll previous threads. */
@@ -4746,6 +4810,7 @@ begin_bench:
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
 	pthread_detach(thr->pth);
+#endif
 
 	/* main loop - simply wait for workio thread to exit. This is not the
 	 * normal exit path and only occurs should the workio_thread die

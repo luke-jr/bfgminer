@@ -207,12 +207,33 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
-AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
-        AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev]))
 
-AC_CHECK_LIB(ncurses, addstr, NCURSES_LIBS=-lncurses)
-AC_CHECK_LIB(pdcurses, addstr, PDCURSES_LIBS=-lpdcurses)
+curses="auto"
 
+AC_ARG_WITH([curses],
+	[AC_HELP_STRING([--without-curses],[Compile support for curses TUI (default enabled)])],
+	[curses=$withval]
+	)
+if test "x$curses" = "xno"; then
+	cursesmsg='User specified --without-curses. TUI support DISABLED'
+else
+	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
+		curses=yes
+		cursesmsg="FOUND: ${ac_cv_search_addstr:2}"
+		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
+	], [
+		if test "x$curses" = "xyes"; then
+			AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
+		else
+			AC_MSG_WARN([Could not find curses library - if you want a TUI, install libncurses-dev or pdcurses-dev])
+			curses=no
+			cursesmsg='NOT FOUND. TUI support DISABLED'
+		fi
+	])
+fi
+
+
+AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
@@ -364,6 +385,8 @@ echo
 echo
 echo "Configuration Options Summary:"
 echo
+
+echo "  curses.TUI...........: $cursesmsg"
 
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then
