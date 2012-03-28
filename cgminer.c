@@ -2936,8 +2936,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			if (th->cgpu == cgpu)
 				thread_rolling += th->rolling;
 		}
+		mutex_lock(&hash_lock);
 		decay_time(&cgpu->rolling, thread_rolling);
 		cgpu->total_mhashes += local_mhashes;
+		mutex_unlock(&hash_lock);
 
 		// If needed, output detailed, per-device stats
 		if (want_per_device_stats) {
