@@ -2112,6 +2112,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	current_hash = bin2hex(hash_swap, 16);
 	if (unlikely(!current_hash))
 		quit (1, "set_curblock OOM");
+	applog(LOG_INFO, "New block: %s...", current_hash);
 	if (old_hash)
 		free(old_hash);
 }
