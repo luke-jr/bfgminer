@@ -327,7 +327,7 @@ AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
 AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120223"], [Filename for phatk kernel])
 AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120327"], [Filename for poclbm kernel])
 AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120223"], [Filename for diakgcn kernel])
-AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120327"], [Filename for diablo kernel])
+AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120328"], [Filename for diablo kernel])
 
 
 AC_SUBST(OPENCL_LIBS)
