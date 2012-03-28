@@ -463,7 +463,7 @@ void init_adl(int nDevs)
 		if (opt_autofan) {
 			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
-			set_fanspeed(gpu, gpus[gpu].gpu_fan);
+			set_fanspeed(gpu, 50);
 		}
 		if (opt_autoengine) {
 			ga->autoengine = true;
