@@ -261,8 +261,8 @@ fi
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
 if test "x$bitforce" != xno; then
-	AC_ARG_WITH([libudev], [AC_HELP_STRING([--with-libudev], [Autodetect FPGAs using libudev])],
-		[libudev=$enableval],
+	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
+		[libudev=$withval],
 		[libudev=auto]
 		)
 	if test "x$libudev" != "xno"; then
