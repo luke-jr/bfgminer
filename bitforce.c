@@ -203,13 +203,17 @@ static void bitforce_detect_auto()
 static void bitforce_detect()
 {
 	struct string_elist *iter, *tmp;
+	const char*s;
 	bool found = false;
 	bool autoscan = false;
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
-		if (!strcmp(iter->string, "auto"))
+		s = iter->string;
+		if (!strncmp("bitforce:", iter->string, 9))
+			s += 9;
+		if (!strcmp(s, "auto"))
 			autoscan = true;
-		else if (bitforce_detect_one(iter->string)) {
+		else if (bitforce_detect_one(s)) {
 			string_elist_del(iter);
 			found = true;
 		}
