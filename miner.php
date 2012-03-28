@@ -1,30 +1,61 @@
 <?php
 session_start();
 #
-global $miner, $port;
+global $miner, $port, $readonly, $notify;
 $miner = '127.0.0.1'; # hostname or IP address
 $port = 4028;
 #
+# Set $readonly to true to force miner.php to be readonly
+# Set $readonly to false then it will check cgminer 'privileged'
+$readonly = false;
+#
+# Set $notify to false to NOT attempt to display the notify command
+# Set $notify to true to attempt to display the notify command
+# If your older version of cgminer returns an 'Invalid command'
+#  coz it doesn't have notify - it just shows the error status table
+$notify = true;
+#
 $here = $_SERVER['PHP_SELF'];
 #
+function htmlhead()
+{
+ global $error, $readonly, $here;
+ if ($readonly === false)
+ {
+	$access = api('privileged');
+	if ($error != null
+	||  !isset($access['STATUS']['STATUS'])
+	||  $access['STATUS']['STATUS'] != 'S')
+		$readonly = true;
+ }
 ?>
 <html><head><title>Mine</title>
 <style type='text/css'>
 td { color:blue; font-family:verdana,arial,sans; font-size:13pt; }
 td.h { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#d0ffff }
+td.err { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ff3050 }
+td.warn { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ffb050 }
 td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
 </style>
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
 function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<?php echo $here ?>"+a}
+<?php
+ if ($readonly === false)
+ {
+?>
 function prc(a,m){pr('?arg='+a,m)}
 function prs(a){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a,m)}
 function prs2(a,n){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v,m)}
+<?php
+ }
+?>
 </script>
 <table width=100% height=100% border=0 cellpadding=0 cellspacing=0 summary='Mine'>
 <tr><td align=center valign=top>
 <table border=0 cellpadding=4 cellspacing=0 summary='Mine'>
 <?php
+}
 #
 global $error;
 $error = null;
@@ -154,56 +185,114 @@ function getparam($name, $both = false)
 #
 function fmt($section, $name, $value)
 {
+ $errorclass = ' class=err';
+ $warnclass = ' class=warn';
  $b = '&nbsp;';
+
+ $ret = $value;
+ $class = '';
 
  switch ($section.'.'.$name)
  {
- case 'GPU0.Last Share Time':
-	return date('H:i:s', $value);
+ case 'GPU.Last Share Time':
+ case 'PGA.Last Share Time':
+	$ret = date('H:i:s', $value);
 	break;
  case 'SUMMARY.Elapsed':
 	$s = $value % 60;
 	$value -= $s;
 	$value /= 60;
 	if ($value == 0)
-	{
-		return $s.'s';
-	}
+		$ret = $s.'s';
 	else
 	{
 		$m = $value % 60;
 		$value -= $m;
 		$value /= 60;
 		if ($value == 0)
-		{
-			return sprintf("%dm$b%02ds", $m, $s);
-		}
+			$ret = sprintf("%dm$b%02ds", $m, $s);
 		else
 		{
 			$h = $value % 24;
 			$value -= $h;
 			$value /= 24;
 			if ($value == 0)
-				return sprintf("%dh$b%02dm$b%02ds", $h, $m, $s);
+				$ret = sprintf("%dh$b%02dm$b%02ds", $h, $m, $s);
 			else
-				return sprintf("%ddays$b%02dh$b%02dm$b%02ds", $value, $h, $m, $s);
+				$ret = sprintf("%ddays$b%02dh$b%02dm$b%02ds", $value, $h, $m, $s);
 		}
 	}
 	break;
- case 'GPU0.Utility':
- case 'SUMMARY.Utility':
-	return $value.'/m';
+ case 'NOTIFY.Last Well':
+	if ($value == '0')
+	{
+		$ret = 'Never';
+		$class = $warnclass;
+	}
+	else
+		$ret = date('H:i:s', $value);
 	break;
- case 'GPU0.Temperature':
-	return $value.'&deg;C';
+ case 'NOTIFY.Last Not Well':
+	if ($value == '0')
+		$ret = 'Never';
+	else
+	{
+		$ret = date('H:i:s', $value);
+		$class = $errorclass;
+	}
+	break;
+ case 'NOTIFY.Reason Not Well':
+	if ($value != 'None')
+		$class = $errorclass;
+	break;
+ case 'GPU.Utility':
+ case 'PGA.Utility':
+ case 'SUMMARY.Utility':
+	$ret = $value.'/m';
+	break;
+ case 'GPU.Temperature':
+ case 'PGA.Temperature':
+	$ret = $value.'&deg;C';
 	break;
  }
 
- return $value;
+ if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
+	$class = $errorclass;
+
+ return array($ret, $class);
+}
+#
+global $poolcmd;
+$poolcmd = array(	'Switch to'	=> 'switchpool',
+			'Enable'	=> 'enablepool',
+			'Disable'	=> 'disablepool' );
+#
+function showhead($cmd, $item, $values)
+{
+ global $poolcmd, $readonly;
+
+ echo '<tr>';
+
+ foreach ($values as $name => $value)
+ {
+	if ($name == '0')
+		$name = '&nbsp;';
+	echo "<td valign=bottom class=h>$name</td>";
+ }
+
+ if ($cmd == 'pools' && $readonly === false)
+	foreach ($poolcmd as $name => $pcmd)
+		echo "<td valign=bottom class=h>$name</td>";
+
+ echo '</tr>';
 }
 #
 function details($cmd, $list)
 {
+ global $poolcmd, $readonly;
+
+ $dfmt = 'H:i:s j-M-Y \U\T\CP';
+
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
  $tb = '<tr><td><table border=1 cellpadding=5 cellspacing=0>';
@@ -211,7 +300,7 @@ function details($cmd, $list)
 
  echo $tb;
 
- echo '<tr><td class=sta>Date: '.date('H:i:s j-M-Y \U\T\CP').'</td></tr>';
+ echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
 
  echo $te.$tb;
 
@@ -219,56 +308,40 @@ function details($cmd, $list)
  {
 	echo '<tr>';
 	echo '<td>Computer: '.$list['STATUS']['Description'].'</td>';
+	if (isset($list['STATUS']['When']))
+		echo '<td>When: '.date($dfmt, $list['STATUS']['When']).'</td>';
 	$sta = $list['STATUS']['STATUS'];
 	echo '<td>Status: '.$stas[$sta].'</td>';
 	echo '<td>Message: '.$list['STATUS']['Msg'].'</td>';
 	echo '</tr>';
  }
 
- echo $te.$tb;
 
  $section = '';
-
- $poolcmd = array(	'Switch to'	=> 'switchpool',
-			'Enable'	=> 'enablepool',
-			'Disable'	=> 'disablepool' );
-
- foreach ($list as $item => $values)
- {
-	if ($item != 'STATUS')
-	{
-		$section = $item;
-
-		echo '<tr>';
-
-		foreach ($values as $name => $value)
-		{
-			if ($name == '0')
-				$name = '&nbsp;';
-			echo "<td valign=bottom class=h>$name</td>";
-		}
-
-		if ($cmd == 'pools')
-			foreach ($poolcmd as $name => $pcmd)
-				echo "<td valign=bottom class=h>$name</td>";
-
-		echo '</tr>';
-
-		break;
-	}
- }
 
  foreach ($list as $item => $values)
  {
 	if ($item == 'STATUS')
 		continue;
 
+	$sectionname = preg_replace('/\d/', '', $item);
+
+	if ($sectionname != $section)
+	{
+		echo $te.$tb;
+		showhead($cmd, $item, $values);
+		$section = $sectionname;
+	}
+
 	echo '<tr>';
 
 	foreach ($values as $name => $value)
-		echo '<td>'.fmt($section, $name, $value).'</td>';
+	{
+		list($showvalue, $class) = fmt($section, $name, $value);
+		echo "<td$class>$showvalue</td>";
+	}
 
-	if ($cmd == 'pools')
+	if ($cmd == 'pools' && $readonly === false)
 	{
 		reset($values);
 		$pool = current($values);
@@ -294,7 +367,7 @@ function details($cmd, $list)
 global $devs;
 $devs = null;
 #
-function gpubuttons($count, $info)
+function gpubuttons($count)
 {
  global $devs;
 
@@ -408,7 +481,7 @@ function process($cmds, $rd, $ro)
 #
 function display()
 {
- global $error;
+ global $error, $readonly, $notify;
 
  $error = null;
 
@@ -418,7 +491,8 @@ function display()
  echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
  echo "<input type=button value='Refresh' onclick='pr(\"\",null)'>";
  echo "</td><td width=100%>&nbsp;</td><td>";
- echo "<input type=button value='Quit' onclick='prc(\"quit\",\"Quit CGMiner\")'>";
+ if ($readonly === false)
+	echo "<input type=button value='Quit' onclick='prc(\"quit\",\"Quit CGMiner\")'>";
  echo "</td></tr></table></td></tr>";
 
  $arg = trim(getparam('arg', true));
@@ -427,15 +501,20 @@ function display()
 
  $cmds = array(	'devs'    => 'device list',
 		'summary' => 'summary information',
-		'pools'   => 'pool list',
-		'config'  => 'cgminer config');
+		'pools'   => 'pool list');
+
+ if ($notify)
+	$cmds['notify'] = 'device status';
+
+ $cmds['config'] = 'cgminer config';
 
  process($cmds, $rd, $ro);
 
- if ($error == null)
+ if ($error == null && $readonly === false)
 	processgpus($rd, $ro);
 }
 #
+htmlhead();
 display();
 #
 ?>

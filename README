@@ -596,7 +596,7 @@ An example request in both formats to set GPU 0 fan to 80%:
 The format of each reply (unless stated otherwise) is a STATUS section
 followed by an optional detail section
 
-For API version 1.4:
+For API version 1.4 and later:
 
 The STATUS section is:
 
@@ -622,7 +622,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.4:
+For API version 1.6:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
@@ -633,12 +633,14 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  config        CONFIG         Some miner configuration information:
                               GPU Count=N, <- the number of GPUs
+                              PGA Count=N, <- the number of PGAs
                               CPU Count=N, <- the number of CPUs
                               Pool Count=N, <- the number of Pools
                               ADL=X, <- Y or N if ADL is compiled in the code
                               ADL in use=X, <- Y or N if any GPU has ADL
                               Strategy=Name, <- the current pool strategy
-                              Log Interval=N| <- log interval (--log N)
+                              Log Interval=N, <- log interval (--log N)
+                              Device Code=GPU ICA | <- spaced list of compiled devices
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -646,15 +648,21 @@ The list of requests - a (*) means it requires privileged access - and replies a
  pools         POOLS          The status of each pool
                               e.g. Pool=0,URL=http://pool.com:6311,Status=Alive,...|
 
- devs          DEVS           Each available CPU and GPU with their details
+ devs          DEVS           Each available GPU, PGA and CPU with their details
                               e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
                               Last Share Time=NNN, <- standand long time in seconds
                                (or 0 if none) of last accepted share
                               Last Share Pool=N, <- pool number (or -1 if none)
+                              Will not report PGAs if PGA mining is disabled
                               Will not report CPUs if CPU mining is disabled
 
  gpu|N         GPU            The details of a single GPU number N in the same
                               format and details as for DEVS
+
+ pga|N         PGA            The details of a single PGA number N in the same
+                              format and details as for DEVS
+                              This is only available if PGA mining is enabled
+                              Use 'pgacount' or 'config' first to see if there are any
 
  cpu|N         CPU            The details of a single CPU number N in the same
                               format and details as for DEVS
@@ -662,6 +670,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Use 'cpucount' or 'config' first to see if there are any
 
  gpucount      GPUS           Count=N| <- the number of GPUs
+
+ pgacount      PGAS           Count=N| <- the number of PGAs
+                              Always returns 0 if PGA mining is disabled
 
  cpucount      CPUS           Count=N| <- the number of CPUs
                               Always returns 0 if CPU mining is disabled
@@ -714,7 +725,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating the results of setting GPU N clock to V MHz
 
  gpufan|N,V (*)
-                none           There is no reply section just the STATUS section
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N fan speed to V%
 
  gpuvddc|N,V (*)
@@ -728,6 +739,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  quit (*)      none           There is no status section but just a single "BYE|"
                               reply before cgminer quits
+
+ notify        NOTIFY         The last status and history count of each devices problem
+                              e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
 
  privileged (*)
                none           There is no reply section just the STATUS section
@@ -922,6 +936,12 @@ Q: I run PHP on windows to access the API with the example miner.php. Why does
 it fail when php is installed properly but I only get errors about Sockets not
 working in the logs?
 A: http://us.php.net/manual/en/sockets.installation.php
+
+Q: What is a PGA?
+A: At the moment, cgminer supports 2 FPGA's: Icarus and BitForce.
+They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
+mining. Since the acronym needs to be only 3 characters, the "Field-" part has
+been skipped.
 
 ---
 

@@ -2889,6 +2889,7 @@ void thread_reportin(struct thr_info *thr)
 	gettimeofday(&thr->last, NULL);
 	thr->cgpu->status = LIFE_WELL;
 	thr->getwork = false;
+	thr->cgpu->device_last_well = time(NULL);
 }
 
 static inline void thread_reportout(struct thr_info *thr)
@@ -2909,8 +2910,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	bool showlog = false;
 
 	/* Update the last time this thread reported in */
-	if (thr_id >= 0)
+	if (thr_id >= 0) {
 		gettimeofday(&thr_info[thr_id].last, NULL);
+		thr_info[thr_id].cgpu->device_last_well = time(NULL);
+	}
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_realquiet || !opt_log_interval)
@@ -3426,8 +3429,13 @@ void *miner_thread(void *userdata)
 	bool requested = false;
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	if (api->thread_init && !api->thread_init(mythr))
+	if (api->thread_init && !api->thread_init(mythr)) {
+		cgpu->device_last_not_well = time(NULL);
+		cgpu->device_not_well_reason = REASON_THREAD_FAIL_INIT;
+		cgpu->thread_fail_init_count++;
+
 		goto out;
+	}
 
 	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
@@ -3476,8 +3484,14 @@ void *miner_thread(void *userdata)
 				break;
 			}
 
-			if (unlikely(!hashes))
+			if (unlikely(!hashes)) {
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
+				cgpu->thread_zero_hash_count++;
+
 				goto out;
+			}
+
 			hashes_done += hashes;
 			if (hashes > cgpu->max_hashes)
 				cgpu->max_hashes = hashes;
@@ -3497,6 +3511,11 @@ void *miner_thread(void *userdata)
 					thread_reportout(mythr);
 					if (unlikely(!queue_request(mythr, false))) {
 						applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
+
+						cgpu->device_last_not_well = time(NULL);
+						cgpu->device_not_well_reason = REASON_THREAD_FAIL_QUEUE;
+						cgpu->thread_fail_queue_count++;
+
 						goto out;
 					}
 					thread_reportin(mythr);
@@ -3882,11 +3901,16 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (gpus[gpu].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
 				applog(LOG_ERR, "Device %d recovered, GPU %d declared WELL!", i, gpu);
 				gpus[gpu].status = LIFE_WELL;
+				gpus[gpu].device_last_well = time(NULL);
 			} else if (now.tv_sec - thr->last.tv_sec > 60 && gpus[gpu].status == LIFE_WELL) {
 				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[gpu].status = LIFE_SICK;
 				applog(LOG_ERR, "Device %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
 				gettimeofday(&thr->sick, NULL);
+
+				gpus[gpu].device_last_not_well = time(NULL);
+				gpus[gpu].device_not_well_reason = REASON_DEV_SICK_IDLE_60;
+				gpus[gpu].dev_sick_idle_60_count++;
 #ifdef HAVE_ADL
 				if (adl_active && gpus[gpu].has_adl && gpu_activity(gpu) > 50) {
 					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
@@ -3901,6 +3925,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				gpus[gpu].status = LIFE_DEAD;
 				applog(LOG_ERR, "Device %d not responding for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
 				gettimeofday(&thr->sick, NULL);
+
+				gpus[gpu].device_last_not_well = time(NULL);
+				gpus[gpu].device_not_well_reason = REASON_DEV_DEAD_IDLE_600;
+				gpus[gpu].dev_dead_idle_600_count++;
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
 				   (gpus[i].status == LIFE_SICK || gpus[i].status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
