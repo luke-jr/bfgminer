@@ -365,16 +365,16 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	/* For some reason 2 vectors is still better even if the card says
 	 * otherwise, and many cards lie about their max so use 256 as max
-	 * unless explicitly set on the command line. */
-	if (preferred_vwidth > 2)
+	 * unless explicitly set on the command line. Tahiti prefers 1 */
+	if (strstr(name, "Tahiti"))
+		preferred_vwidth = 1;
+	else if (preferred_vwidth > 2)
 		preferred_vwidth = 2;
 
 	switch (clState->chosen_kernel) {
 		case KL_POCLBM:
 			strcpy(filename, POCLBM_KERNNAME".cl");
 			strcpy(binaryfilename, POCLBM_KERNNAME);
-			/* This kernel prefers to not use vectors */
-			preferred_vwidth = 1;
 			break;
 		case KL_PHATK:
 			strcpy(filename, PHATK_KERNNAME".cl");
