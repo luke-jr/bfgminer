@@ -1923,16 +1923,16 @@ static void *submit_work_thread(void *userdata)
 	pthread_detach(pthread_self());
 
 	if (stale_work(work, true)) {
-		total_stale++;
-		pool->stale_shares++;
-		if (!opt_submit_stale && !pool->submit_old) {
-			applog(LOG_NOTICE, "Stale share detected, discarding");
-			goto out;
-		}
 		if (opt_submit_stale)
 			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
 		else if (pool->submit_old)
 			applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
+		else {
+			applog(LOG_NOTICE, "Stale share detected, discarding");
+			total_stale++;
+			pool->stale_shares++;
+			goto out;
+		}
 	}
 
 	/* submit solution to bitcoin via JSON-RPC */
