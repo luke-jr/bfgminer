@@ -2,10 +2,6 @@ Version 2.3.2 - March 30, 2012
 
 - Change the preferred vector width to 1 for Tahiti only, not all poclbm
 kernels.
-- Update phatk version number.
-- Use min() function on 2 vector output path in phatk kernel and don't use extra
-variable for both 2 and 4 vectors.
-- Add vector type hint to phatk kernel.
 - Use a time constant 0.63 for when large changes in hashrate are detected to
 damp change in case the large change is an aliasing artefact instead of a real
 chang
@@ -41,29 +37,10 @@ kernels.
 - Swap Vals and W variables where they can overlap in poclbm.
 - More tidying of poclbm.
 - Tidy up first half of poclbm.
-- Diablo tidy.
-- Absorb as many ZA variables into each other in diablo kernel.
-- Add spaces to new assignments in diablo kernel.
-- Variable assignment alignment in diablo kernel.
 - Clean up use of any() by diablo and poclbm kernels.
 - Minor variable symmetry changes in poclbm.
 - Put additions on separate lines for consistency in poclbm.
 - Consolidate last use of W11 into Vals4 in poclbm.
-- Add last value in vectors in diablo and poclbm kernel for consistency with
-original code.
-- Separate out all additions of different variables in diablo kernel.
-- Separate out additions in final vector code in diablo kernel as well.
-- Get rid of accessory braces.
-- Keep lines that reference the same variable together.
-- Split addition lines without functions.
-- Remove unnecessary braces from diablo kernel.
-- Use the unrolled option for no vectors return code.
-- Convert additions to += in diablo kernel.
-- Reuse variables to decrease total number used in diablo kernel.
-- Strip out unused variables from diablo array.
-- Machine optimise by removing one-use variables.
-- Merge all additions before output.
-- Cluster Vals7 for use on output.
 - Change email due to SPAM
 - api.c miner.php add a '*' to the front of all notify counters - simplifies
 future support of new counters
