@@ -749,8 +749,19 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               to the API and success if you do have privilege
                               The command doesn't change anything in cgminer
 
-When you enable, disable or restart a GPU, you will also get Thread messages in
-the cgminer status window
+ pgaenable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the enable request
+                              You cannot enable a PGA if it's status is not WELL
+                              This is only available if PGA mining is enabled
+
+ pgadisable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the disable request
+                              This is only available if PGA mining is enabled
+
+When you enable, disable or restart a GPU or PGA, you will also get Thread messages
+in the cgminer status window
 
 When you switch to a different pool to the current one, you will get a
 'Switching to URL' message in the cgminer status windows
