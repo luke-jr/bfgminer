@@ -221,6 +221,7 @@ static int include_count = 0;
 
 #if defined(unix)
 	static char *opt_stderr_cmd = NULL;
+	static int forkpid = 0;
 #endif // defined(unix)
 
 bool ping = true;
@@ -4121,6 +4122,13 @@ void quit(int status, const char *format, ...)
 	fprintf(stderr, "\n");
 	fflush(stderr);
 
+#if defined(unix)
+	if (forkpid > 0) {
+		kill(forkpid, SIGTERM);
+		forkpid = 0;
+	}
+#endif
+
 	exit(status);
 }
 
@@ -4265,14 +4273,14 @@ out:
 		}
 
 		// Fork a child process
-		r = fork();
-		if (r<0) {
+		forkpid = fork();
+		if (forkpid<0) {
 			perror("fork - failed to fork child process for --monitor");
 			exit(1);
 		}
 
 		// Child: launch monitor command
-		if (0==r) {
+		if (0==forkpid) {
 			// Make stdin read end of pipe
 			r = dup2(pfd[0], 0);
 			if (r<0) {
@@ -4458,6 +4466,9 @@ int main (int argc, char *argv[])
 	}
 
 #ifdef HAVE_CURSES
+	if (opt_realquiet || devices_enabled == -1)
+		use_curses = false;
+
 	if (use_curses)
 		enable_curses();
 #endif
@@ -4566,9 +4577,6 @@ int main (int argc, char *argv[])
 
 #ifdef HAVE_CURSES
 	check_winsizes();
-
-	if (opt_realquiet)
-		use_curses = false;
 #endif
 
 	if (!total_pools) {
@@ -4838,6 +4846,13 @@ begin_bench:
 		HASH_DEL(blocks, block);
 		free(block);
 	}
+
+#if defined(unix)
+	if (forkpid > 0) {
+		kill(forkpid, SIGTERM);
+		forkpid = 0;
+	}
+#endif
 
 	return 0;
 }

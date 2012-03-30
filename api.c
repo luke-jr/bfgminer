@@ -329,6 +329,14 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_NUMPGA 59
 #define MSG_NOTIFY 60
 
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#define MSG_PGALRENA 61
+#define MSG_PGALRDIS 62
+#define MSG_PGAENA 63
+#define MSG_PGADIS 64
+#define MSG_PGAUNW 65
+#endif
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -400,6 +408,11 @@ struct CODES {
  { SEVERITY_ERR,   MSG_PGANON,	PARAM_NONE,	"No PGAs" },
  { SEVERITY_SUCC,  MSG_PGADEV,	PARAM_PGA,	"PGA%d" },
  { SEVERITY_ERR,   MSG_INVPGA,	PARAM_PGAMAX,	"Invalid PGA id %d - range is 0 - %d" },
+ { SEVERITY_INFO,  MSG_PGALRENA,PARAM_PGA,	"PGA %d already enabled" },
+ { SEVERITY_INFO,  MSG_PGALRDIS,PARAM_PGA,	"PGA %d already disabled" },
+ { SEVERITY_INFO,  MSG_PGAENA,	PARAM_PGA,	"PGA %d sent enable message" },
+ { SEVERITY_INFO,  MSG_PGADIS,	PARAM_PGA,	"PGA %d set disable flag" },
+ { SEVERITY_ERR,   MSG_PGAUNW,	PARAM_PGA,	"PGA %d is not flagged WELL, cannot enable" },
 #endif
 #ifdef WANT_CPUMINE
  { SEVERITY_ERR,   MSG_CPUNON,	PARAM_NONE,	"No CPUs" },
@@ -954,6 +967,99 @@ static void pgadev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
+}
+
+static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	int numpga = numpgas();
+	struct thr_info *thr;
+	int pga;
+	int id;
+	int i;
+
+	if (numpga == 0) {
+		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	int dev = pgadevice(id);
+	if (dev < 0) { // Should never happen
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	struct cgpu_info *cgpu = devices[dev];
+
+	if (cgpu->deven != DEV_DISABLED) {
+		strcpy(io_buffer, message(MSG_PGALRENA, id, NULL, isjson));
+		return;
+	}
+
+	if (cgpu->status != LIFE_WELL) {
+		strcpy(io_buffer, message(MSG_PGAUNW, id, NULL, isjson));
+		return;
+	}
+
+	for (i = 0; i < mining_threads; i++) {
+		pga = thr_info[i].cgpu->device_id;
+		if (pga == dev) {
+			thr = &thr_info[i];
+			cgpu->deven = DEV_ENABLED;
+			tq_push(thr->q, &ping);
+		}
+	}
+
+	strcpy(io_buffer, message(MSG_PGAENA, id, NULL, isjson));
+}
+
+static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	int numpga = numpgas();
+	int id;
+
+	if (numpga == 0) {
+		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	int dev = pgadevice(id);
+	if (dev < 0) { // Should never happen
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	struct cgpu_info *cgpu = devices[dev];
+
+	if (cgpu->deven == DEV_DISABLED) {
+		strcpy(io_buffer, message(MSG_PGALRDIS, id, NULL, isjson));
+		return;
+	}
+
+	cgpu->deven = DEV_DISABLED;
+
+	strcpy(io_buffer, message(MSG_PGADIS, id, NULL, isjson));
 }
 #endif
 
@@ -1720,6 +1826,8 @@ struct CMDS {
 	{ "gpu",		gpudev,		false },
 #if defined(USE_BITFORCE) || defined(USE_ICARUS)
 	{ "pga",		pgadev,		false },
+	{ "pgaenable",		pgaenable,	true },
+	{ "pgadisable",		pgadisable,	true },
 #endif
 #ifdef WANT_CPUMINE
 	{ "cpu",		cpudev,		false },
