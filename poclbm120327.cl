@@ -82,8 +82,8 @@ void search(const uint state0, const uint state1, const uint state2, const uint 
 	const uint PreVal4addT1, const uint Preval0,
 	__global uint * output)
 {
-	u W[24];
-	u *Vals = &W[16]; // Now put at W[16] to be in same array
+	u Vals[24];
+	u *W = &Vals[8];
 
 #ifdef GOFFSET
 	const u nonce = (uint)(get_global_id(0));
