@@ -507,7 +507,7 @@ extern int add_pool_details(bool live, char *url, char *user, char *pass);
 #define ADD_POOL_OK 0
 
 #define MAX_GPUDEVICES 16
-#define MAX_DEVICES 32
+#define MAX_DEVICES 64
 #define MAX_POOLS (32)
 
 #define MIN_INTENSITY -10
