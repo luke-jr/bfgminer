@@ -1,5 +1,10 @@
-Version 2.3.2 - March 30, 2012
+Version 2.3.2 - March 31, 2012
 
+- Damping small changes in hashrate so dramatically has the tendency to always
+make the hashrate underread so go back to gentle damping instead.
+- Revert the crossover of variables from Vals to W in poclbm kernel now that
+Vals are the first declared variables so they're used more frequently.
+- Vals variables appearing first in the array in poclbm is faster.
 - Change the preferred vector width to 1 for Tahiti only, not all poclbm
 kernels.
 - Use a time constant 0.63 for when large changes in hashrate are detected to
