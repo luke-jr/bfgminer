@@ -124,7 +124,12 @@ static bool ztex_checkNonce (struct libztex_device *ztex,
   unsigned char hash2[32];
   uint32_t *hash2_32 = (uint32_t *)hash2;
   int i;
-  
+
+#if defined(__BIGENDIAN__) || defined(MIPSEB)
+  hdata->nonce = swab32(hdata->nonce);
+  hdata->hash7 = swab32(hdata->hash7);
+#endif
+
   work->data[64 + 12 + 0] = (hdata->nonce >> 0) & 0xff;
   work->data[64 + 12 + 1] = (hdata->nonce >> 8) & 0xff;
   work->data[64 + 12 + 2] = (hdata->nonce >> 16) & 0xff;
@@ -135,8 +140,11 @@ static bool ztex_checkNonce (struct libztex_device *ztex,
   
   sha2(swap, 80, hash1, false);
   sha2(hash1, 32, hash2, false);
- 
+#if defined(__BIGENDIAN__) || defined(MIPSEB)
+  if (hash2_32[7] != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
+#else
   if (swab32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
+#endif
     ztex->errorCount[ztex->freqM] += 1.0/ztex->numNonces;
     applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
     return false;
@@ -207,7 +215,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
     ztex->errorWeight[ztex->freqM] = ztex->errorWeight[ztex->freqM] * 0.995 + 1.0;
  
     for (i=0; i<ztex->numNonces; i++) {
-      nonce = hdata[i].nonce;
+      nonce = swab32(hdata[i].nonce);
       if (nonce > noncecnt)
         noncecnt = nonce;
       if ((nonce >> 4) < (lastnonce[i] >> 4)) {
@@ -234,7 +242,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
           if (backlog_p >= GOLDEN_BACKLOG) {
             backlog_p = 0;
           }
-#ifdef __BIG_ENDIAN__
+#if defined(__BIGENDIAN__) || defined(MIPSEB)
           nonce = swab32(nonce);
 #endif
 	  work->blk.nonce = 0xffffffff;

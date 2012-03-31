@@ -1528,6 +1528,8 @@ static bool submit_upstream_work(const struct work *work)
 	res = json_object_get(val, "result");
 
 	if (!QUIET) {
+#ifndef MIPSEB
+// This one segfaults on my router for some reason
 		isblock = regeneratehash(work);
 		if (isblock)
 			found_blocks++;
@@ -1535,6 +1537,7 @@ static bool submit_upstream_work(const struct work *work)
 		sprintf(hashshow, "%08lx.%08lx.%08lx%s",
 			(unsigned long)(hash32[7]), (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
 			isblock ? " BLOCK!" : "");
+#endif
 	}
 
 	/* Theoretically threads could race when modifying accepted and
