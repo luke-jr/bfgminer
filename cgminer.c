@@ -1141,10 +1141,10 @@ void decay_time(double *f, double fadd)
 			ratio = 1 / ratio;
 	}
 
-	if (ratio > 0.95)
-		*f = (fadd * 0.05 + *f) / 1.05;
+	if (ratio > 0.63)
+		*f = (fadd * 0.58 + *f) / 1.58;
 	else
-		*f = (fadd + *f * 0.58) / 1.58; // 0.63
+		*f = (fadd + *f * 0.58) / 1.58;
 }
 
 static int requests_staged(void)
