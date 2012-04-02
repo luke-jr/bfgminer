@@ -57,7 +57,7 @@ struct libztex_device {
   unsigned char moduleReserved[12];
   uint8_t numNonces;
   uint16_t offsNonces;
-  uint16_t freqM1;  
+  double freqM1;  
   uint8_t freqM;
   uint8_t freqMaxM;
   uint8_t freqMDefault;
