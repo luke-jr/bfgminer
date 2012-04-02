@@ -280,7 +280,7 @@ static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
   if (cgpu->deven == DEV_ENABLED) {
     tailsprintf(buf, "%s | ", cgpu->device->snString);
-    tailsprintf(buf, "%dMhz | ", cgpu->device->freqM1 * (cgpu->device->freqM + 1));
+    tailsprintf(buf, "%0.2fMhz | ", cgpu->device->freqM1 * (cgpu->device->freqM + 1));
   }
 }
 

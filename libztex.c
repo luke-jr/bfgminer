@@ -231,7 +231,7 @@ int libztex_setFreq (struct libztex_device *ztex, uint16_t freq) {
     return cnt;
   }
   ztex->freqM = freq;
-  applog(LOG_WARNING, "%s: Frequency change to %d Mhz", ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
+  applog(LOG_WARNING, "%s: Frequency change to %0.2f Mhz", ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
 
   return 0;
 }
