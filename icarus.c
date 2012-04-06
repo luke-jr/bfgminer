@@ -225,15 +225,6 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	struct timeval now;
 
-	int fd = icarus_open(icarus->device_path);
-	if (unlikely(-1 == fd)) {
-		applog(LOG_ERR, "Failed to open Icarus on %s",
-		       icarus->device_path);
-		return false;
-	}
-
-	icarus->device_fd = fd;
-
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(icarus->init, &now);
@@ -255,7 +246,13 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	time_t t = 0;
 
 	icarus = thr->cgpu;
-	fd = icarus->device_fd;
+
+	fd = icarus_open(icarus->device_path);
+	if (unlikely(-1 == fd)) {
+		applog(LOG_ERR, "Failed to open Icarus on %s",
+		       icarus->device_path);
+		return 0;
+	}
 
 	memset(ob_bin, 0, sizeof(ob_bin));
 	memcpy(ob_bin, work->midstate, 32);
@@ -266,8 +263,10 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	tcflush(fd, TCOFLUSH);
 #endif
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
-	if (ret)
+	if (ret) {
+		icarus_close(fd);
 		return 0;	/* This should never happen */
+	}
 
 	ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 	if (ob_hex) {
@@ -291,8 +290,10 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
-        if (nonce == 0 && ret)
+	if (nonce == 0 && ret) {
+		icarus_close(fd);
                 return 0xffffffff;
+	}
 
 #ifndef __BIG_ENDIAN__
 	nonce = swab32(nonce);
@@ -310,6 +311,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
                         hash_count <<= 1;
         }
 
+	icarus_close(fd);
         return hash_count;
 }
 
@@ -322,8 +324,6 @@ static void icarus_shutdown(struct thr_info *thr)
 
 		if (icarus->device_path)
 			free(icarus->device_path);
-
-		close(icarus->device_fd);
 
 		devices[icarus->device_id] = NULL;
 		free(icarus);
