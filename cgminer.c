@@ -3600,7 +3600,7 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven == DEV_DISABLED)) {
+			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 				mythr->rolling = mythr->cgpu->rolling = 0;
 				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
