@@ -674,10 +674,10 @@ Vals[3]+=Vals[6];
 Vals[6]+=(rotr(Vals[0],2)^rotr(Vals[0],13)^rotr(Vals[0],22));
 Vals[6]+=Ma(Vals[4],Vals[0],Vals[1]);
 
-W[14]+=(rotr(W[15],7)^rotr(W[15],18)^(W[15]>>3U));
-W[14]+=W[7];
-W[14]+=(rotr(W[12],17)^rotr(W[12],19)^(W[12]>>10U));
 Vals[7]+=W[14];
+Vals[7]+=(rotr(W[15],7)^rotr(W[15],18)^(W[15]>>3U));
+Vals[7]+=W[7];
+Vals[7]+=(rotr(W[12],17)^rotr(W[12],19)^(W[12]>>10U));
 Vals[7]+=(rotr(Vals[3],6)^rotr(Vals[3],11)^rotr(Vals[3],25));
 Vals[7]+=ch(Vals[3],Vals[2],Vals[5]);
 Vals[7]+=K[62];
@@ -685,10 +685,10 @@ Vals[4]+=Vals[7];
 Vals[7]+=(rotr(Vals[6],2)^rotr(Vals[6],13)^rotr(Vals[6],22));
 Vals[7]+=Ma(Vals[1],Vals[6],Vals[0]);
 
-W[15]+=(rotr(W[0],7)^rotr(W[0],18)^(W[0]>>3U));
-W[15]+=W[8];
-W[15]+=(rotr(W[13],17)^rotr(W[13],19)^(W[13]>>10U));
 Vals[5]+=W[15];
+Vals[5]+=(rotr(W[0],7)^rotr(W[0],18)^(W[0]>>3U));
+Vals[5]+=W[8];
+Vals[5]+=(rotr(W[13],17)^rotr(W[13],19)^(W[13]>>10U));
 Vals[5]+=(rotr(Vals[4],6)^rotr(Vals[4],11)^rotr(Vals[4],25));
 Vals[5]+=ch(Vals[4],Vals[3],Vals[2]);
 Vals[5]+=K[63];
@@ -696,14 +696,13 @@ Vals[1]+=Vals[5];
 Vals[5]+=(rotr(Vals[7],2)^rotr(Vals[7],13)^rotr(Vals[7],22));
 Vals[5]+=Ma(Vals[0],Vals[7],Vals[6]);
 
-W[0]=Vals[5];
-W[0]+=state0;
+Vals[5]+=state0;
 
 W[7]=state7;
 W[7]+=Vals[2];
 
 Vals[2]=0xF377ED68U;
-Vals[2]+=W[0];
+Vals[2]+=Vals[5];
 
 W[3]=state3;
 W[3]+=Vals[0];
@@ -719,9 +718,8 @@ Vals[3]=0x90BB1E3CU;
 Vals[3]+=(rotr(Vals[0],6)^rotr(Vals[0],11)^rotr(Vals[0],25));
 Vals[3]+=(0x9b05688cU^(Vals[0]&0xca0b3af3U));
 
-W[1]=Vals[7];
-W[1]+=state1;
-Vals[3]+=W[1];
+Vals[7]+=state1;
+Vals[3]+=Vals[7];
 
 W[2]=state2;
 W[2]+=Vals[6];
@@ -739,6 +737,7 @@ Vals[4]+=(rotr(Vals[6],6)^rotr(Vals[6],11)^rotr(Vals[6],25));
 Vals[4]+=ch(Vals[6],Vals[0],0x510e527fU);
 Vals[4]+=W[2];
 
+W[1]=Vals[7];
 Vals[7]=0xbb67ae85U;
 Vals[7]+=Vals[4];
 Vals[4]+=(rotr(Vals[3],2)^rotr(Vals[3],13)^rotr(Vals[3],22));
@@ -751,6 +750,8 @@ Vals[1]=0x3AC42E24U;
 Vals[1]+=(rotr(Vals[7],6)^rotr(Vals[7],11)^rotr(Vals[7],25));
 Vals[1]+=ch(Vals[7],Vals[6],Vals[0]);
 Vals[1]+=W[3];
+
+W[0]=Vals[5];
 
 Vals[5]=Vals[1];
 Vals[5]+=0x6a09e667U;
