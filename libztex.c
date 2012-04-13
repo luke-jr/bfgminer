@@ -408,7 +408,7 @@ int libztex_scanDevices (struct libztex_dev_list*** devs_p) {
     devs[pos]->dev = ztex;
     devs[pos]->next = NULL;
     if (pos > 0) {
-      devs[pos]->next = devs[pos];
+      devs[pos-1]->next = devs[pos];
     }
     pos++;
   }
