@@ -431,12 +431,10 @@ if test "x$bitforce" != xno; then
 	echo "  libudev.detection....: $libudev"
 fi
 
-echo
 if test "x$cpumining" = xyes; then
+	echo
 	echo "  CPU Mining...........: Enabled"
 	echo "  ASM.(for CPU mining).: $has_yasm"
-else
-	echo "  CPU Mining...........: Disabled"
 fi
 
 echo
