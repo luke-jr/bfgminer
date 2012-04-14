@@ -1,5 +1,7 @@
-Version 2.3.3
+Version 2.3.3 - April 15, 2012
 
+- Don't even display that cpumining is disabled on ./configure to discourage
+people from enabling it.
 - Do a complete cgminer restart if the ATI Display Library fails, as it does on
 windows after running for some time, when fanspeed reporting fails.
 - Cache the initial arguments passed to cgminer and implement an attempted
