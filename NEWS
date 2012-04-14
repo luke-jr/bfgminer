@@ -1,3 +1,25 @@
+Version 2.3.3
+
+- Do a complete cgminer restart if the ATI Display Library fails, as it does on
+windows after running for some time, when fanspeed reporting fails.
+- Cache the initial arguments passed to cgminer and implement an attempted
+restart option from the settings menu.
+- Disable per-device status lines when there are more than 8 devices since
+screen output will be corrupted, enumerating them to the log output instead at
+startup.
+- Reuse Vals[] array more than W[] till they're re-initialised on the second
+sha256 cycle in poclbm kernel.
+- Minor variable alignment in poclbm kernel.
+- Make sure to disable devices with any status not being DEV_ENABLED to ensure
+that thermal cutoff code works as it was setting the status to DEV_RECOVER.
+- Re-initialising ADL simply made the driver fail since it is corruption over
+time within the windows driver that's responsible. Revert "Attempt to
+re-initialise ADL should a device that previously reported fanspeed stops
+reporting it."
+- Microoptimise poclbm kernel by ordering Val variables according to usage
+frequency.
+
+
 Version 2.3.2 - March 31, 2012
 
 - Damping small changes in hashrate so dramatically has the tendency to always
