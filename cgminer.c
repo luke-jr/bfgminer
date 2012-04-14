@@ -1776,8 +1776,7 @@ static void disable_curses(void)
 
 static void print_summary(void);
 
-/* This should be the common exit path */
-void kill_work(void)
+static void __kill_work(void)
 {
 	struct thr_info *thr;
 	int i;
@@ -1824,11 +1823,37 @@ void kill_work(void)
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &thr_info[api_thr_id];
 	thr_info_cancel(thr);
+}
+
+/* This should be the common exit path */
+void kill_work(void)
+{
+	__kill_work();
 
 	quit(0, "Shutdown signal received.");
 }
 
-void quit(int status, const char *format, ...);
+static char **initial_args;
+
+static void clean_up(void);
+
+void app_restart(void)
+{
+	applog(LOG_WARNING, "Attempting to restart %s", packagename);
+
+	__kill_work();
+	clean_up();
+
+#if defined(unix)
+	if (forkpid > 0) {
+		kill(forkpid, SIGTERM);
+		forkpid = 0;
+	}
+#endif
+
+	execv(initial_args[0], initial_args);
+	applog(LOG_WARNING, "Failed to restart application");
+}
 
 static void sighandler(int __maybe_unused sig)
 {
@@ -2754,7 +2779,8 @@ static void set_options(void)
 	clear_logwin();
 retry:
 	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n[P]ause: %d\n[W]rite config file\n",
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
+		  "[P]ause: %d\n[W]rite config file\n[C]gminer restart\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
@@ -2847,6 +2873,13 @@ retry:
 		fclose(fcfg);
 		goto retry;
 
+	} else if (!strncasecmp(&input, "c", 1)) {
+		wlogprint("Are you sure?\n");
+		input = getch();
+		if (!strncasecmp(&input, "y", 1))
+			app_restart();
+		else
+			clear_logwin();
 	} else
 		clear_logwin();
 
@@ -4367,7 +4400,7 @@ void enable_device(struct cgpu_info *cgpu)
 #endif
 }
 
-int main (int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	struct block *block, *tmpblock;
 	struct work *work, *tmpwork;
@@ -4381,6 +4414,11 @@ int main (int argc, char *argv[])
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		quit(1, "Failed to curl_global_init");
+
+	initial_args = malloc(sizeof(char *) * (argc + 1));
+	for  (i = 0; i < argc; i++)
+		initial_args[i] = strdup(argv[i]);
+	initial_args[argc] = NULL;
 
 	mutex_init(&hash_lock);
 	mutex_init(&qd_lock);
