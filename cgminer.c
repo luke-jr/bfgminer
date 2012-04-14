@@ -1272,7 +1272,9 @@ static void curses_print_devstatus(int thr_id)
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	char logline[255];
 
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	if (total_devices > 8)
+		return;
 
 	mvwprintw(statuswin, devcursor + cgpu->cgminer_id, 0, " %s %d: ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before) {
@@ -1280,10 +1282,11 @@ static void curses_print_devstatus(int thr_id)
 		cgpu->api->get_statline_before(logline, cgpu);
 		wprintw(statuswin, "%s", logline);
 	}
-		if (cgpu->status == LIFE_DEAD)
-			wprintw(statuswin, "DEAD ");
-		else if (cgpu->status == LIFE_SICK)
-			wprintw(statuswin, "SICK ");
+
+	if (cgpu->status == LIFE_DEAD)
+		wprintw(statuswin, "DEAD ");
+	else if (cgpu->status == LIFE_SICK)
+		wprintw(statuswin, "SICK ");
 	else if (cgpu->deven == DEV_DISABLED)
 		wprintw(statuswin, "OFF  ");
 	else if (cgpu->deven == DEV_RECOVER)
@@ -1307,7 +1310,7 @@ static void curses_print_devstatus(int thr_id)
 		wprintw(statuswin, "%s", logline);
 	}
 
-		wclrtoeol(statuswin);
+	wclrtoeol(statuswin);
 }
 #endif
 
@@ -4007,8 +4010,8 @@ static void log_print_status(struct cgpu_info *cgpu)
 {
 	char logline[255];
 
-		get_statline(logline, cgpu);
-		applog(LOG_WARNING, "%s", logline);
+	get_statline(logline, cgpu);
+	applog(LOG_WARNING, "%s", logline);
 }
 
 static void print_summary(void)
@@ -4572,7 +4575,18 @@ int main (int argc, char *argv[])
 
 	load_temp_cutoffs();
 
-	logstart += total_devices;
+	if (total_devices <= 8) {
+		logstart += total_devices;
+	} else {
+		applog(LOG_NOTICE, "Too many devices exist for per-device status lines");
+		for (i = 0; i < total_devices; ++i) {
+			struct cgpu_info *cgpu = devices[i];
+
+			applog(LOG_NOTICE, "%s%d: %s", cgpu->api->name, cgpu->device_id,
+				cgpu->deven == DEV_ENABLED? "Enabled" : "Disabled");
+		}
+		applog(LOG_NOTICE, "%d devices found, disabling per-device status lines", total_devices);
+	}
 	logcursor = logstart + 1;
 
 #ifdef HAVE_CURSES
