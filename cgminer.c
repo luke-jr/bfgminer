@@ -4421,9 +4421,6 @@ int main(int argc, char *argv[])
 	struct thr_info *thr;
 	unsigned int k;
 	int i, j;
-#ifdef HAVE_LIBUSB
-        struct libusb_context *context;
-#endif
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
