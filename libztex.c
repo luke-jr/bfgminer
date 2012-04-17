@@ -469,7 +469,4 @@ void libztex_freeDevList (struct libztex_dev_list **devs) {
   free(devs);
 }
 
-int libztex_configreFpga (struct libztex_dev_list* dev) {
-  return 0;
-}
 

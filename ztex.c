@@ -249,11 +249,6 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
   }
 
-  //if (thr->id == 1 && !work_restart[thr->id]) {
-  //  ztex_disable(thr);
-  //  return 0;
- // }
-
   ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /  ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM]<100 ? ztex->errorWeight[ztex->freqM]*0.01 : 1.0);
   if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM]) {
     ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
