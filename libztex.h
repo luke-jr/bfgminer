@@ -35,51 +35,51 @@
 #define LIBZTEX_OVERHEATTHRESHOLD 0.5
 
 struct libztex_fpgastate {
-  bool fpgaConfigured;
-  unsigned char fpgaChecksum;
-  uint16_t fpgaBytes;
-  unsigned char fpgaInitB;
-  unsigned char fpgaFlashResult;
-  bool fpgaFlashBitSwap;
+	bool fpgaConfigured;
+	unsigned char fpgaChecksum;
+	uint16_t fpgaBytes;
+	unsigned char fpgaInitB;
+	unsigned char fpgaFlashResult;
+	bool fpgaFlashBitSwap;
 };
 
 struct libztex_device {
-  bool valid;
-  struct libusb_device_descriptor descriptor;
-  libusb_device_handle *hndl; 
-  unsigned char usbbus;
-  unsigned char usbaddress;
-  unsigned char snString[LIBZTEX_SNSTRING_LEN+1];
-  unsigned char productId[4];
-  unsigned char fwVersion;
-  unsigned char interfaceVersion;
-  unsigned char interfaceCapabilities[6];
-  unsigned char moduleReserved[12];
-  uint8_t numNonces;
-  uint16_t offsNonces;
-  double freqM1;  
-  uint8_t freqM;
-  uint8_t freqMaxM;
-  uint8_t freqMDefault;
-  char* bitFileName;
+	bool valid;
+	struct libusb_device_descriptor descriptor;
+	libusb_device_handle *hndl; 
+	unsigned char usbbus;
+	unsigned char usbaddress;
+	unsigned char snString[LIBZTEX_SNSTRING_LEN+1];
+	unsigned char productId[4];
+	unsigned char fwVersion;
+	unsigned char interfaceVersion;
+	unsigned char interfaceCapabilities[6];
+	unsigned char moduleReserved[12];
+	uint8_t numNonces;
+	uint16_t offsNonces;
+	double freqM1;	
+	uint8_t freqM;
+	uint8_t freqMaxM;
+	uint8_t freqMDefault;
+	char* bitFileName;
 
-  double errorCount[256];
-  double errorWeight[256];
-  double errorRate[256];
-  double maxErrorRate[256];
+	double errorCount[256];
+	double errorWeight[256];
+	double errorRate[256];
+	double maxErrorRate[256];
 
-  char repr[64];
+	char repr[64];
 };
 
 struct libztex_dev_list { 
-  struct libztex_device *dev;
-  struct libztex_dev_list *next;
+	struct libztex_device *dev;
+	struct libztex_dev_list *next;
 };
 
 struct libztex_hash_data {
-  uint32_t goldenNonce;
-  uint32_t nonce;
-  uint32_t hash7;
+	uint32_t goldenNonce;
+	uint32_t nonce;
+	uint32_t hash7;
 };
 
 extern int libztex_scanDevices (struct libztex_dev_list ***devs);
