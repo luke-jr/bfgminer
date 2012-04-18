@@ -310,7 +310,11 @@ function fmt($section, $name, $value)
 	if ($value != 'Alive')
 		$class = $errorclass;
 	break;
-
+ case 'GPU.Enabled':
+ case 'PGA.Enabled':
+	if ($value != 'Y')
+		$class = $warnclass;
+	break;
  }
 
  if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
