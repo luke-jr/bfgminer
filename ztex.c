@@ -59,10 +59,8 @@ static void ztex_detect()
 		applog(LOG_WARNING,"%s: Found Ztex, mark as %d", ztex->device->repr, ztex->device_id);
 	}
 
-	if (cnt > 0) {
+	if (cnt > 0)
 		libztex_freeDevList(ztex_devices);
-	}
-
 }
 
 static bool ztex_updateFreq (struct libztex_device* ztex)
@@ -70,10 +68,9 @@ static bool ztex_updateFreq (struct libztex_device* ztex)
 	int i, maxM, bestM;
 	double bestR, r;
 
-	for (i=0; i<ztex->freqMaxM; i++) {
+	for (i=0; i<ztex->freqMaxM; i++)
 		if (ztex->maxErrorRate[i+1]*i < ztex->maxErrorRate[i]*(i+20))
 			ztex->maxErrorRate[i+1] = ztex->maxErrorRate[i]*(1.0+20.0/i);
-	}
 
 	maxM = 0;
 	while (maxM<ztex->freqMDefault && ztex->maxErrorRate[maxM+1]<LIBZTEX_MAXMAXERRORRATE)
@@ -91,9 +88,8 @@ static bool ztex_updateFreq (struct libztex_device* ztex)
 		}
 	}
 
-	if (bestM != ztex->freqM) {
+	if (bestM != ztex->freqM) 
 		libztex_setFreq(ztex, bestM);
-	}
 
 	maxM = ztex->freqMDefault;
 	while (maxM<ztex->freqMaxM && ztex->errorWeight[maxM+1] > 100)
@@ -166,42 +162,46 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	i = libztex_sendHashData(ztex, sendbuf);
 	if (i < 0) {
 		// Something wrong happened in send
-		applog(LOG_ERR, "%s: Failed to send hash data with err %d", ztex->repr, i);
+		applog(LOG_ERR, "%s: Failed to send hash data with err %d, retrying", ztex->repr, i);
 		usleep(500000);
 		i = libztex_sendHashData(ztex, sendbuf);
 		if (i < 0) {
 			// And there's nothing we can do about it
 			ztex_disable(thr);
+			applog(LOG_ERR, "%s: Failed to send hash data with err %d, giving up", ztex->repr, i);
 			return 0;
 		}
 	}
 	
 	applog(LOG_DEBUG, "sent hashdata");
 
-	for (i=0; i<ztex->numNonces; i++) {
+	for (i=0; i<ztex->numNonces; i++)
 		lastnonce[i] = 0;
-	}
+
 	overflow = false;
 
 	while (!(overflow || work_restart[thr->id].restart)) {
 		usleep(250000);
 		if (work_restart[thr->id].restart) {
+			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
 			break;
 		}
 		i = libztex_readHashData(ztex, &hdata[0]);
 		if (i < 0) {
 			// Something wrong happened in read
-			applog(LOG_ERR, "%s: Failed to read hash data with err %d", ztex->repr, i);
+			applog(LOG_ERR, "%s: Failed to read hash data with err %d, retrying", ztex->repr, i);
 			usleep(500000);
 			i = libztex_readHashData(ztex, &hdata[0]);
 			if (i < 0) {
 				// And there's nothing we can do about it
 				ztex_disable(thr);
+				applog(LOG_ERR, "%s: Failed to read hash data with err %d, giving up", ztex->repr, i);
 				return 0;
 			}
 		}
 
 		if (work_restart[thr->id].restart) {
+			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
 			break;
 		}
 
@@ -231,17 +231,16 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 					}
 				}
 				if (!found) {
-					// new nonce found!
+					applog(LOG_DEBUG, "%s: Share found", ztex->repr);
 					backlog[backlog_p++] = nonce;
-					if (backlog_p >= GOLDEN_BACKLOG) {
+					if (backlog_p >= GOLDEN_BACKLOG)
 						backlog_p = 0;
-					}
 #if defined(__BIGENDIAN__) || defined(MIPSEB)
 					nonce = swab32(nonce);
 #endif
-		work->blk.nonce = 0xffffffff;
-		rv = submit_nonce(thr, work, nonce);
-					applog(LOG_DEBUG, "submitted %0.8X %d", nonce, rv);
+					work->blk.nonce = 0xffffffff;
+					rv = submit_nonce(thr, work, nonce);
+					applog(LOG_DEBUG, "%s: submitted %0.8x %d", ztex->repr, nonce, rv);
 				}
 			}
 
@@ -250,15 +249,14 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /	ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM]<100 ? ztex->errorWeight[ztex->freqM]*0.01 : 1.0);
-	if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM]) {
+	if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM])
 		ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
-	}
 
-	if (!ztex_updateFreq(ztex)) {
+	if (!ztex_updateFreq(ztex))
 		// Something really serious happened, so mark this thread as dead!
 		return 0;
-	}
-	applog(LOG_DEBUG, "exit %1.8X", noncecnt);
+
+	applog(LOG_DEBUG, "%s: exit %1.8X", ztex->repr, noncecnt);
 
 	work->blk.nonce = 0xffffffff;
 
@@ -281,18 +279,20 @@ static bool ztex_prepare(struct thr_info *thr)
 	gettimeofday(&now, NULL);
 	get_datestamp(ztex->init, &now);
 
-	if (libztex_configureFpga(ztex->device) != 0) {
+	if (libztex_configureFpga(ztex->device) != 0)
 		return false;
-	}
+
 	ztex->device->freqM = -1;
 	ztex_updateFreq(ztex->device);
 
+	applog(LOG_DEBUG, "%s: prepare", ztex->device->repr);
 	return true;
 }
 
 static void ztex_shutdown(struct thr_info *thr)
 {
 	if (thr->cgpu->device != NULL) {
+		applog(LOG_DEBUG, "%s: shutdown", thr->cgpu->device->repr);
 		libztex_destroy_device(thr->cgpu->device);
 		thr->cgpu->device = NULL;
 	}

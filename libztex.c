@@ -54,6 +54,7 @@ static bool libztex_checkDevice (struct libusb_device *dev) {
 		return false;
 	}
 	if (!(desc.idVendor == LIBZTEX_IDVENDOR && desc.idProduct == LIBZTEX_IDPRODUCT)) {
+		applog(LOG_DEBUG, "Not a ZTEX device %0.4x:%0.4x", desc.idVendor, desc.idProduct);
 		return false;
 	}
 	return true;
@@ -61,9 +62,8 @@ static bool libztex_checkDevice (struct libusb_device *dev) {
 
 static bool libztex_checkCapability (struct libztex_device *ztex, int i, int j) {
 	if (!((i>=0) && (i<=5) && (j>=0) && (j<8) &&
-	     (((ztex->interfaceCapabilities[i] & 255) & (1 << j)) != 0))) {
+	     (((ztex->interfaceCapabilities[i] & 255) & (1 << j)) != 0)))
 		applog(LOG_ERR, "%s: capability missing: %d %d", ztex->repr, i, i);
-	}
 	return true;
 }
 
@@ -99,20 +99,19 @@ static void libztex_swapBits (unsigned char *buf, int size) {
 static int libztex_getFpgaState (struct libztex_device *ztex, struct libztex_fpgastate *state) {
 	int cnt;
 	unsigned char buf[9];
-	if (!libztex_checkCapability(ztex, CAPABILITY_FPGA)) {
+	if (!libztex_checkCapability(ztex, CAPABILITY_FPGA))
 		return -1;
-	}
 	cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x30, 0, 0, buf, 9, 1000);
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "%s: Failed getFpgaState with err %d", ztex->repr, cnt);
 		return cnt;
 	}
-	state->fpgaConfigured = buf[0] == 0;
+	state->fpgaConfigured = (buf[0] == 0);
 	state->fpgaChecksum = buf[1] & 0xff;
 	state->fpgaBytes = ((buf[5] & 0xff)<<24) | ((buf[4] & 0xff)<<16) | ((buf[3] & 0xff)<<8) | (buf[2] & 0xff);
 	state->fpgaInitB = buf[6] & 0xff;
 	state->fpgaFlashResult = buf[7];
-	state->fpgaFlashBitSwap = buf[8] != 0;
+	state->fpgaFlashBitSwap = (buf[8] != 0);
 	return 0;
 }
 
@@ -124,15 +123,13 @@ static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* fir
 	int tries, cnt, buf_p, i;
 	FILE *fp;
 
-	if (!libztex_checkCapability(ztex, CAPABILITY_FPGA)) {
+	if (!libztex_checkCapability(ztex, CAPABILITY_FPGA))
 		return -1;
-	}
 
 	libztex_getFpgaState(ztex, &state);
-	if (!force) {
-		if (state.fpgaConfigured) {
-			return 1;
-		}
+	if (!force && state.fpgaConfigured) {
+		applog(LOG_DEBUG, "Bitstream already configured");
+		return 1;
 	}
 
 	for (tries=10; tries>0; tries--) {
@@ -151,7 +148,7 @@ static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* fir
 		if (feof(fp))
 			pos--;
 
-		if ( bs<0 || bs>1 )
+		if ( bs != 0 && bs != 1 )
 			bs = libztex_detectBitstreamBitOrder(buf, transactionBytes<pos ? transactionBytes : pos);
 
 		//* Reset fpga
@@ -201,7 +198,7 @@ static int libztex_configureFpgaLS (struct libztex_device *ztex, const char* fir
 		return 3;
 	}
 	usleep(200000);
-	applog(LOG_ERR, "%s: FPGA configuration done", ztex->repr);
+	applog(LOG_INFO, "%s: FPGA configuration done", ztex->repr);
 	return 0;
 }
 
@@ -218,9 +215,8 @@ int libztex_configureFpga (struct libztex_device *ztex) {
 
 int libztex_setFreq (struct libztex_device *ztex, uint16_t freq) {
 	int cnt;
-	if (freq > ztex->freqMaxM) {
+	if (freq > ztex->freqMaxM)
 		freq = ztex->freqMaxM;
-	}
 
 	cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x83, freq, 0, NULL, 0, 500);
 	if (unlikely(cnt < 0)) {
@@ -268,7 +264,7 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
 	}
 
 	cnt = libusb_get_string_descriptor_ascii (newdev->hndl, newdev->descriptor.iSerialNumber, newdev->snString,
-																						LIBZTEX_SNSTRING_LEN+1);
+	                                          LIBZTEX_SNSTRING_LEN+1);
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to read device snString with err %d", cnt);
 		return cnt;
@@ -317,8 +313,8 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
 		return cnt;
 	}
 
-	if (unlikely(!(buf[0]) == 4)) {
-		if (unlikely(buf[0]) != 2) {
+	if (unlikely(buf[0] != 4)) {
+		if (unlikely(buf[0] != 2)) {
 			applog(LOG_ERR, "Invalid BTCMiner descriptor version. Firmware must be updated (%d).", buf[0]);
 			return 3;
 		}
@@ -326,7 +322,7 @@ int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** z
 	}
 
 	newdev->numNonces = buf[1] + 1;
-	newdev->offsNonces =	((buf[2] & 255) | ((buf[3] & 255) << 8)) - 10000;
+	newdev->offsNonces = ((buf[2] & 255) | ((buf[3] & 255) << 8)) - 10000;
 	newdev->freqM1 = ( (buf[4] & 255) | ((buf[5] & 255) << 8) ) * 0.01;
 	newdev->freqMaxM = (buf[7] & 255);
 	newdev->freqM = (buf[6] & 255);
@@ -393,9 +389,8 @@ int libztex_scanDevices (struct libztex_dev_list*** devs_p) {
 
 	for (i = 0; i < found; i++) {
 		err = libztex_prepare_device(list[usbdevices[i]], &ztex);
-		if (unlikely(err != 0)) {
+		if (unlikely(err != 0))
 			applog(LOG_ERR, "prepare device: %d", err);
-		}
 		// check if valid
 		if (!ztex->valid) {
 			libztex_destroy_device(ztex);
@@ -404,9 +399,8 @@ int libztex_scanDevices (struct libztex_dev_list*** devs_p) {
 		devs[pos] = malloc(sizeof(struct libztex_dev_list));
 		devs[pos]->dev = ztex;
 		devs[pos]->next = NULL;
-		if (pos > 0) {
+		if (pos > 0)
 			devs[pos-1]->next = devs[pos];
-		}
 		pos++;
 	}
 
@@ -417,13 +411,11 @@ int libztex_scanDevices (struct libztex_dev_list*** devs_p) {
 
 int libztex_sendHashData (struct libztex_device *ztex, unsigned char *sendbuf) {
 	int cnt;
-	if (ztex == NULL || ztex->hndl == NULL) {
+	if (ztex == NULL || ztex->hndl == NULL)
 		return 0;
-	}
 	cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x80, 0, 0, sendbuf, 44, 1000);
-	if (unlikely(cnt < 0)) {
+	if (unlikely(cnt < 0))
 		applog(LOG_ERR, "%s: Failed sendHashData with err %d", ztex->repr, cnt);
-	}
 	
 	return cnt;
 }
@@ -433,9 +425,8 @@ int libztex_readHashData (struct libztex_device *ztex, struct libztex_hash_data 
 	unsigned char rbuf[12*8];
 	int cnt, i;
 
-	if (ztex->hndl == NULL) {
+	if (ztex->hndl == NULL)
 		return 0;
-	}
 	
 	cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x81, 0, 0, rbuf, 12*ztex->numNonces, 1000);
 	if (unlikely(cnt < 0)) {
@@ -458,9 +449,8 @@ void libztex_freeDevList (struct libztex_dev_list **devs) {
 	ssize_t cnt = 0;
 	bool done = false;
 	while (!done) {
-		if (devs[cnt]->next == NULL) {
+		if (devs[cnt]->next == NULL)
 			done = true;
-		}
 		free(devs[cnt++]);
 	}
 	free(devs);
