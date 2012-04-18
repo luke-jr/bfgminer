@@ -304,6 +304,13 @@ function fmt($section, $name, $value)
 		$dec = '.'.$parts[1];
 	$ret = number_format($parts[0]).$dec;
 	break;
+ case 'GPU.Status':
+ case 'PGA.Status':
+ case 'POOL.Status':
+	if ($value != 'Alive')
+		$class = $errorclass;
+	break;
+
  }
 
  if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
