@@ -275,9 +275,19 @@ function fmt($section, $name, $value)
  case 'SUMMARY.Utility':
 	$ret = $value.'/m';
 	break;
- case 'GPU.Temperature':
  case 'PGA.Temperature':
 	$ret = $value.'&deg;C';
+	break;
+ case 'GPU.Temperature':
+	$ret = $value.'&deg;C';
+ case 'GPU.Fan Speed':
+ case 'GPU.Fan Percent':
+ case 'GPU.GPU Clock':
+ case 'GPU.Memory Clock':
+ case 'GPU.GPU Voltage':
+ case 'GPU.GPU Activity':
+	if ($value == 0)
+		$class = $warnclass;
 	break;
  case 'GPU.MHS av':
  case 'PGA.MHS av':
