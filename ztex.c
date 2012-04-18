@@ -209,14 +209,21 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		ztex->errorWeight[ztex->freqM] = ztex->errorWeight[ztex->freqM] * 0.995 + 1.0;
  
 		for (i=0; i<ztex->numNonces; i++) {
-			nonce = swab32(hdata[i].nonce);
+			nonce = hdata[i].nonce;
+#if defined(__BIGENDIAN__) || defined(MIPSEB)
+			nonce = swab32(nonce);
+#endif
 			if (nonce > noncecnt)
 				noncecnt = nonce;
-			if ((nonce >> 4) < (lastnonce[i] >> 4)) {
+			if (((nonce & 0x7fffffff) >> 4) < ((lastnonce[i] & 0x7fffffff) >> 4)) {
+				applog(LOG_DEBUG, "%s: overflow nonce=%0.8x lastnonce=%0.8x", ztex->repr, nonce, lastnonce[i]);
 				overflow = true;
 			} else {
 				lastnonce[i] = nonce;
 			}
+#if !(defined(__BIGENDIAN__) || defined(MIPSEB))
+			nonce = swab32(nonce);
+#endif
 			if (!ztex_checkNonce(ztex, work, &hdata[i])) {
 				thr->cgpu->hw_errors++;
 				continue;
