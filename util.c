@@ -374,6 +374,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		}
 	} else if (hi.lp_path) {
 		free(hi.lp_path);
+		hi.lp_path = NULL;
 	}
 
 	*rolltime = hi.has_rolltime;
