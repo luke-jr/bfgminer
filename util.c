@@ -30,11 +30,6 @@
 # include <winsock2.h>
 # include <mstcpip.h>
 #endif
-#ifdef DMALLOC
-#include <stdlib.h>
-#include <string.h>
-#include <dmalloc.h>
-#endif
 
 #include "miner.h"
 #include "elist.h"
