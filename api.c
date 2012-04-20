@@ -337,6 +337,10 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_PGAUNW 65
 #endif
 
+#define MSG_REMLASTP 66
+#define MSG_ACTPOOL 67
+#define MSG_REMPOOL 68
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -456,6 +460,9 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVPDP,	PARAM_STR,	"Invalid addpool details '%s'" },
  { SEVERITY_ERR,   MSG_TOOMANYP,PARAM_NONE,	"Reached maximum number of pools (%d)" },
  { SEVERITY_SUCC,  MSG_ADDPOOL,	PARAM_STR,	"Added pool '%s'" },
+ { SEVERITY_ERR,   MSG_REMLASTP,PARAM_POOL,	"Cannot remove last pool %d:'%s'" },
+ { SEVERITY_ERR,   MSG_ACTPOOL, PARAM_POOL,	"Cannot remove active pool %d:'%s'" },
+ { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
@@ -1621,6 +1628,57 @@ static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_DISPOOL, id, NULL, isjson));
 }
 
+static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	struct pool *pool;
+	char *rpc_url;
+	bool dofree = false;
+	int id;
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		return;
+	}
+
+	if (total_pools <= 1) {
+		strcpy(io_buffer, message(MSG_REMLASTP, id, NULL, isjson));
+		return;
+	}
+
+	pool = pools[id];
+	if (pool == current_pool())
+		switch_pools(NULL);
+
+	if (pool == current_pool()) {
+		strcpy(io_buffer, message(MSG_ACTPOOL, id, NULL, isjson));
+		return;
+	}
+
+	pool->enabled = false;
+	rpc_url = escape_string(pool->rpc_url, isjson);
+	if (rpc_url != pool->rpc_url)
+		dofree = true;
+
+	remove_pool(pool);
+
+	strcpy(io_buffer, message(MSG_REMPOOL, id, rpc_url, isjson));
+
+	if (dofree)
+		free(rpc_url);
+	rpc_url = NULL;
+}
+
 static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 {
 	int id;
@@ -1934,6 +1992,7 @@ struct CMDS {
 	{ "addpool",		addpool,	true },
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
+	{ "removepool",		removepool,	true },
 	{ "gpuintensity",	gpuintensity,	true },
 	{ "gpumem",		gpumem,		true },
 	{ "gpuengine",		gpuengine,	true },

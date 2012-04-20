@@ -709,6 +709,12 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating the results of disabling pool N
                               The Msg includes the pool URL
 
+ removepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of removing pool N
+                              The Msg includes the pool URL
+                              N.B. all details for the pool will be lost
+
  gpuenable|N (*)
                none           There is no reply section just the STATUS section
                               stating the results of the enable request
