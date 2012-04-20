@@ -61,6 +61,14 @@ void *alloca (size_t);
  #include "ADL_SDK/adl_sdk.h"
 #endif
 
+#ifdef HAVE_LIBUSB
+  #include <libusb-1.0/libusb.h>
+#endif
+
+#ifdef USE_ZTEX
+  #include "libztex.h"
+#endif
+
 #if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define bswap_16 __builtin_bswap16
 #define bswap_32 __builtin_bswap32
@@ -249,6 +257,9 @@ struct cgpu_info {
 	int device_id;
 	char *device_path;
 	FILE *device_file;
+#ifdef USE_ZTEX
+        struct libztex_device *device;
+#endif
 	int device_fd;
 
 	enum dev_enable deven;
