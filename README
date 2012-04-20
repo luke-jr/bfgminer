@@ -794,9 +794,8 @@ api-example.c - a 'C' program to access the API (with source code)
 
 miner.php - an example web page to access the API
  This includes buttons and inputs to attempt access to the privileged commands
- You must modify the 2 lines near the top to change where it looks for cgminer
-  $miner = '127.0.0.1'; # hostname or IP address
-  $port = 4028;
+ Read the top of the file (miner.php) for details of how to tune the display
+ and also to use the option to display a multi-rig summary
 
 ---
 
