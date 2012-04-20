@@ -157,7 +157,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.6";
+static const char *APIVERSION = "1.7";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -482,6 +482,68 @@ extern struct device_api bitforce_api;
 #ifdef USE_ICARUS
 extern struct device_api icarus_api;
 #endif
+
+// This is only called when expected to be needed (rarely)
+// i.e. strings outside of the codes control (input from the user)
+static char *escape_string(char *str, bool isjson)
+{
+	char *buf, *ptr;
+	int count;
+
+	count = 0;
+	for (ptr = str; *ptr; ptr++) {
+		switch (*ptr) {
+		case ',':
+		case '|':
+		case '=':
+			if (!isjson)
+				count++;
+			break;
+		case '"':
+			if (isjson)
+				count++;
+			break;
+		case '\\':
+			count++;
+			break;
+		}
+	}
+
+	if (count == 0)
+		return str;
+
+	buf = malloc(strlen(str) + count + 1);
+	if (unlikely(!buf))
+		quit(1, "Failed to malloc escape buf");
+
+	ptr = buf;
+	while (*str)
+		switch (*str) {
+		case ',':
+		case '|':
+		case '=':
+			if (!isjson)
+				*(ptr++) = '\\';
+			*(ptr++) = *(str++);
+			break;
+		case '"':
+			if (isjson)
+				*(ptr++) = '\\';
+			*(ptr++) = *(str++);
+			break;
+		case '\\':
+			*(ptr++) = '\\';
+			*(ptr++) = *(str++);
+			break;
+		default:
+			*(ptr++) = *(str++);
+			break;
+		}
+
+	*ptr = '\0';
+
+	return buf;
+}
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS)
 static int numpgas()
@@ -1102,6 +1164,8 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 {
 	char buf[BUFSIZ];
 	char *status, *lp;
+	char *rpc_url;
+	char *rpc_user;
 	int i;
 
 	if (total_pools == 0) {
@@ -1133,27 +1197,40 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		else
 			lp = (char *)NO;
 
+		rpc_url = escape_string(pool->rpc_url, isjson);
+		rpc_user = escape_string(pool->rpc_user, isjson);
+
 		if (isjson)
-			sprintf(buf, "%s{\"POOL\":%d,\"URL\":\"%s\",\"Status\":\"%s\",\"Priority\":%d,\"Long Poll\":\"%s\",\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Remote Failures\":%d}",
+			sprintf(buf, "%s{\"POOL\":%d,\"URL\":\"%s\",\"Status\":\"%s\",\"Priority\":%d,\"Long Poll\":\"%s\",\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Remote Failures\":%d,\"User\":\"%s\"}",
 				(i > 0) ? COMMA : "",
-				i, pool->rpc_url, status, pool->prio, lp,
+				i, rpc_url, status, pool->prio, lp,
 				pool->getwork_requested,
 				pool->accepted, pool->rejected,
 				pool->discarded_work,
 				pool->stale_shares,
 				pool->getfail_occasions,
-				pool->remotefail_occasions);
+				pool->remotefail_occasions,
+				rpc_user);
 		else
-			sprintf(buf, "POOL=%d,URL=%s,Status=%s,Priority=%d,Long Poll=%s,Getworks=%d,Accepted=%d,Rejected=%d,Discarded=%d,Stale=%d,Get Failures=%d,Remote Failures=%d%c",
-				i, pool->rpc_url, status, pool->prio, lp,
+			sprintf(buf, "POOL=%d,URL=%s,Status=%s,Priority=%d,Long Poll=%s,Getworks=%d,Accepted=%d,Rejected=%d,Discarded=%d,Stale=%d,Get Failures=%d,Remote Failures=%d,User=%s%c",
+				i, rpc_url, status, pool->prio, lp,
 				pool->getwork_requested,
 				pool->accepted, pool->rejected,
 				pool->discarded_work,
 				pool->stale_shares,
 				pool->getfail_occasions,
-				pool->remotefail_occasions, SEPARATOR);
+				pool->remotefail_occasions,
+				rpc_user, SEPARATOR);
 
 		strcat(io_buffer, buf);
+
+		if (rpc_url != pool->rpc_url)
+			free(rpc_url);
+		rpc_url = NULL;
+
+		if (rpc_user != pool->rpc_user)
+			free(rpc_user);
+		rpc_user = NULL;
 	}
 
 	if (isjson)
@@ -1443,6 +1520,7 @@ exitsama:
 static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	char *url, *user, *pass;
+	char *ptr;
 
 	if (param == NULL || *param == '\0') {
 		strcpy(io_buffer, message(MSG_MISPDP, 0, NULL, isjson));
@@ -1450,7 +1528,11 @@ static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	}
 
 	if (!pooldetails(param, &url, &user, &pass)) {
-		strcpy(io_buffer, message(MSG_INVPDP, 0, param, isjson));
+		ptr = escape_string(param, isjson);
+		strcpy(io_buffer, message(MSG_INVPDP, 0, ptr, isjson));
+		if (ptr != param)
+			free(ptr);
+		ptr = NULL;
 		return;
 	}
 
@@ -1459,7 +1541,11 @@ static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_ADDPOOL, 0, url, isjson));
+	ptr = escape_string(url, isjson);
+	strcpy(io_buffer, message(MSG_ADDPOOL, 0, ptr, isjson));
+	if (ptr != url)
+		free(ptr);
+	ptr = NULL;
 }
 
 static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
@@ -1792,6 +1878,7 @@ static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool
 void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	FILE *fcfg;
+	char *ptr;
 
 	if (param == NULL || *param == '\0') {
 		strcpy(io_buffer, message(MSG_MISFN, 0, NULL, isjson));
@@ -1800,14 +1887,22 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	fcfg = fopen(param, "w");
 	if (!fcfg) {
-		strcpy(io_buffer, message(MSG_BADFN, 0, param, isjson));
+		ptr = escape_string(param, isjson);
+		strcpy(io_buffer, message(MSG_BADFN, 0, ptr, isjson));
+		if (ptr != param)
+			free(ptr);
+		ptr = NULL;
 		return;
 	}
 
 	write_config(fcfg);
 	fclose(fcfg);
 
-	strcpy(io_buffer, message(MSG_SAVED, 0, param, isjson));
+	ptr = escape_string(param, isjson);
+	strcpy(io_buffer, message(MSG_SAVED, 0, ptr, isjson));
+	if (ptr != param)
+		free(ptr);
+	ptr = NULL;
 }
 
 struct CMDS {
