@@ -1273,7 +1273,7 @@ static void curses_print_devstatus(int thr_id)
 	char logline[255];
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-	if (total_devices > 8)
+	if (total_devices > 14)
 		return;
 
 	mvwprintw(statuswin, devcursor + cgpu->cgminer_id, 0, " %s %d: ", cgpu->api->name, cgpu->device_id);
@@ -4613,7 +4613,7 @@ int main(int argc, char *argv[])
 
 	load_temp_cutoffs();
 
-	if (total_devices <= 8) {
+	if (total_devices <= 14) {
 		logstart += total_devices;
 	} else {
 		applog(LOG_NOTICE, "Too many devices exist for per-device status lines");
