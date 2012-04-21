@@ -1180,6 +1180,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		return false;
 	}
 
+	strcpy(name, "");
 	applog(LOG_INFO, "Init GPU thread %i GPU %i virtual GPU %i", i, gpu, virtual_gpu);
 	clStates[i] = initCl(virtual_gpu, name, sizeof(name));
 	if (!clStates[i]) {
