@@ -259,10 +259,12 @@ struct cgpu_info {
 	char *name;
 	char *device_path;
 	FILE *device_file;
+	union {
 #ifdef USE_ZTEX
-        struct libztex_device *device;
+		struct libztex_device *device_ztex;
 #endif
-	int device_fd;
+		int device_fd;
+	};
 
 	enum dev_enable deven;
 	int accepted;

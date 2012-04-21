@@ -51,11 +51,11 @@ static void ztex_detect()
 		struct cgpu_info *ztex;
 		ztex = calloc(1, sizeof(struct cgpu_info));
 		ztex->api = &ztex_api;
-		ztex->device = ztex_devices[i]->dev;
+		ztex->device_ztex = ztex_devices[i]->dev;
 		ztex->threads = 1;
 		add_cgpu(ztex);
 
-		applog(LOG_WARNING,"%s: Found Ztex, mark as %d", ztex->device->repr, ztex->device_id);
+		applog(LOG_WARNING,"%s: Found Ztex, mark as %d", ztex->device_ztex->repr, ztex->device_id);
 	}
 
 	if (cnt > 0)
@@ -153,7 +153,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	bool overflow, found, rv;
 	struct libztex_hash_data hdata[GOLDEN_BACKLOG];
 
-	ztex = thr->cgpu->device;
+	ztex = thr->cgpu->device_ztex;
 
 	memcpy(sendbuf, work->data + 64, 12);
 	memcpy(sendbuf+12, work->midstate, 32);
@@ -272,8 +272,8 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
 	if (cgpu->deven == DEV_ENABLED) {
-		tailsprintf(buf, "%s | ", cgpu->device->snString);
-		tailsprintf(buf, "%0.2fMhz | ", cgpu->device->freqM1 * (cgpu->device->freqM + 1));
+		tailsprintf(buf, "%s | ", cgpu->device_ztex->snString);
+		tailsprintf(buf, "%0.2fMhz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
 	}
 }
 
@@ -285,28 +285,28 @@ static bool ztex_prepare(struct thr_info *thr)
 	gettimeofday(&now, NULL);
 	get_datestamp(ztex->init, &now);
 
-	if (libztex_configureFpga(ztex->device) != 0)
+	if (libztex_configureFpga(ztex->device_ztex) != 0)
 		return false;
 
-	ztex->device->freqM = -1;
-	ztex_updateFreq(ztex->device);
+	ztex->device_ztex->freqM = -1;
+	ztex_updateFreq(ztex->device_ztex);
 
-	applog(LOG_DEBUG, "%s: prepare", ztex->device->repr);
+	applog(LOG_DEBUG, "%s: prepare", ztex->device_ztex->repr);
 	return true;
 }
 
 static void ztex_shutdown(struct thr_info *thr)
 {
-	if (thr->cgpu->device != NULL) {
-		applog(LOG_DEBUG, "%s: shutdown", thr->cgpu->device->repr);
-		libztex_destroy_device(thr->cgpu->device);
-		thr->cgpu->device = NULL;
+	if (thr->cgpu->device_ztex != NULL) {
+		applog(LOG_DEBUG, "%s: shutdown", thr->cgpu->device_ztex->repr);
+		libztex_destroy_device(thr->cgpu->device_ztex);
+		thr->cgpu->device_ztex = NULL;
 	}
 }
 
 static void ztex_disable (struct thr_info *thr)
 {
-	applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device->repr);
+	applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device_ztex->repr);
 	devices[thr->cgpu->device_id]->deven = DEV_DISABLED;
 	ztex_shutdown(thr);
 }
