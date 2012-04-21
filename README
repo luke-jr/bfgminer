@@ -596,6 +596,15 @@ An example request in both formats to set GPU 0 fan to 80%:
 The format of each reply (unless stated otherwise) is a STATUS section
 followed by an optional detail section
 
+From API verion 1.7 onwards, reply strings in JSON and Text have the
+necessary escaping as required to avoid ambiguity - they didn't before 1.7
+For JSON the 2 characters '"' and '\' are escaped with a '\' before them
+For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
+
+Only user entered information will contain characters that require being
+escaped, such as Pool URL, User and Password or the Config save filename,
+when they are returned in messages or as their values by the API
+
 For API version 1.4 and later:
 
 The STATUS section is:
@@ -622,7 +631,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.6:
+For API version 1.7:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
@@ -699,6 +708,12 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating the results of disabling pool N
                               The Msg includes the pool URL
+
+ removepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of removing pool N
+                              The Msg includes the pool URL
+                              N.B. all details for the pool will be lost
 
  gpuenable|N (*)
                none           There is no reply section just the STATUS section

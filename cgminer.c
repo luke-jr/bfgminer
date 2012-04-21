@@ -2388,10 +2388,11 @@ static void display_pool_summary(struct pool *pool)
 		unlock_curses();
 	}
 }
+#endif
 
 /* We can't remove the memory used for this struct pool because there may
  * still be work referencing it. We just remove it from the pools list */
-static void remove_pool(struct pool *pool)
+void remove_pool(struct pool *pool)
 {
 	int i, last_pool = total_pools - 1;
 	struct pool *other;
@@ -2412,7 +2413,6 @@ static void remove_pool(struct pool *pool)
 	pool->pool_no = total_pools;
 	total_pools--;
 }
-#endif
 
 void write_config(FILE *fcfg)
 {
