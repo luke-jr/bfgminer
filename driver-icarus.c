@@ -290,8 +290,11 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
-        if (nonce == 0 && ret)
-                return 0xffffffff;
+	if (nonce == 0 && ret) {
+		t = time(NULL) - t;
+		// Approximately how much of the nonce Icarus scans in 1 second...
+		return 0x16a7a561 * t;
+	}
 
 #ifndef __BIG_ENDIAN__
 	nonce = swab32(nonce);
