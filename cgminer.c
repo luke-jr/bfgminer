@@ -44,8 +44,8 @@
 #include "miner.h"
 #include "findnonce.h"
 #include "adl.h"
-#include "device-cpu.h"
-#include "device-gpu.h"
+#include "driver-cpu.h"
+#include "driver-opencl.h"
 #include "bench_block.h"
 
 #if defined(unix)
@@ -4425,6 +4425,31 @@ void enable_device(struct cgpu_info *cgpu)
 #endif
 }
 
+struct _cgpu_devid_counter {
+	char name[4];
+	int lastid;
+	UT_hash_handle hh;
+};
+
+bool add_cgpu(struct cgpu_info*cgpu)
+{
+	static struct _cgpu_devid_counter *devids = NULL;
+	struct _cgpu_devid_counter *d;
+	
+	HASH_FIND_STR(devids, cgpu->api->name, d);
+	if (d)
+		cgpu->device_id = ++d->lastid;
+	else
+	{
+		d = malloc(sizeof(*d));
+		memcpy(d->name, cgpu->api->name, sizeof(d->name));
+		cgpu->device_id = d->lastid = 0;
+		HASH_ADD_STR(devids, name, d);
+	}
+	devices[total_devices++] = cgpu;
+	return true;
+}
+
 int main(int argc, char *argv[])
 {
 	struct block *block, *tmpblock;
@@ -4604,7 +4629,11 @@ int main(int argc, char *argv[])
 	if (devices_enabled == -1) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
-			applog(LOG_ERR, " %2d. %s%d", i, devices[i]->api->name, devices[i]->device_id);
+			struct cgpu_info *cgpu = devices[i];
+			if (cgpu->name)
+				applog(LOG_ERR, " %2d. %s %d: %s (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->name, cgpu->api->dname);
+			else
+				applog(LOG_ERR, " %2d. %s %d (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->api->dname);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}

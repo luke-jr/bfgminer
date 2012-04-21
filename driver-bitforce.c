@@ -91,8 +91,8 @@ static void BFwrite(int fd, const void *buf, ssize_t bufLen)
 
 static bool bitforce_detect_one(const char *devpath)
 {
+	char *s;
 	char pdevbuf[0x100];
-	static int i = 0;
 
 	if (total_devices == MAX_DEVICES)
 		return false;
@@ -117,14 +117,17 @@ static bool bitforce_detect_one(const char *devpath)
 	// We have a real BitForce!
 	struct cgpu_info *bitforce;
 	bitforce = calloc(1, sizeof(*bitforce));
-	devices[total_devices++] = bitforce;
 	bitforce->api = &bitforce_api;
-	bitforce->device_id = i++;
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
+	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
+	{
+		s[0] = '\0';
+		bitforce->name = strdup(pdevbuf + 7);
+	}
 
-	return true;
+	return add_cgpu(bitforce);
 }
 
 static bool bitforce_detect_auto_udev()
@@ -358,7 +361,8 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 }
 
 struct device_api bitforce_api = {
-	.name = "BFL",
+	.dname = "bitforce",
+	.name = "PGA",
 	.api_detect = bitforce_detect,
 	.get_statline_before = get_bitforce_statline_before,
 	.thread_prepare = bitforce_thread_prepare,
