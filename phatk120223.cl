@@ -1,15 +1,13 @@
 // This file is taken and modified from the public-domain poclbm project, and
 // I have therefore decided to keep it public-domain.
-
+// Modified version copyright 2011-2012 Con Kolivas
 
 #ifdef VECTORS4
 	typedef uint4 u;
-#else 
-	#ifdef VECTORS2
-		typedef uint2 u;
-	#else
-		typedef uint u;
-	#endif
+#elif defined VECTORS2
+	typedef uint2 u;
+#else
+	typedef uint u;
 #endif
 
 __constant uint K[64] = { 
@@ -51,9 +49,6 @@ __constant uint H[8] = {
 #ifdef BITALIGN
 	#pragma OPENCL EXTENSION cl_amd_media_ops : enable
 	#define rot(x, y) amd_bitalign(x, x, (uint)(32 - y))
-#else
-	#define rot(x, y) rotate(x, (uint)y)
-#endif
 
 // This part is not from the stock poclbm kernel. It's part of an optimization
 // added in the Phoenix Miner.
@@ -63,7 +58,7 @@ __constant uint H[8] = {
 // detected, use it for Ch. Otherwise, construct Ch out of simpler logical
 // primitives.
 
-#ifdef BFI_INT
+ #ifdef BFI_INT
 	// Well, slight problem... It turns out BFI_INT isn't actually exposed to
 	// OpenCL (or CAL IL for that matter) in any way. However, there is 
 	// a similar instruction, BYTE_ALIGN_INT, which is exposed to OpenCL via
@@ -75,11 +70,21 @@ __constant uint H[8] = {
 	#define Ch(x, y, z) amd_bytealign(x,y,z)
 	// Ma can also be implemented in terms of BFI_INT...
 	#define Ma(z, x, y) amd_bytealign(z^x,y,x)
-#else
-	#define Ch(x, y, z) bitselect(x,y,z)
-	// Ma can also be implemented in terms of bitselect
-	#define Ma(z, x, y) bitselect(z^x,y,x)
+ #else // BFI_INT
+	// Later SDKs optimise this to BFI INT without patching and GCN
+	// actually fails if manually patched with BFI_INT
+
+	#define Ch(x, y, z) bitselect((u)z, (u)y, (u)x)
+	#define Ma(x, y, z) bitselect((u)x, (u)y, (u)z ^ (u)x)
+	#define rotr(x, y) amd_bitalign((u)x, (u)x, (u)y)
+ #endif
+#else // BITALIGN
+	#define Ch(x, y, z) (z ^ (x & (y ^ z)))
+	#define Ma(x, y, z) ((x & z) | (y & (x | z)))
+	#define rot(x, y) rotate((u)x, (u)y)
+	#define rotr(x, y) rotate((u)x, (u)(32-y))
 #endif
+
 
 
 //Various intermediate calculations for each SHA round
@@ -168,7 +173,7 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 
 //Dummy Variable to prevent compiler from reordering between rounds
 	u t1;
-	
+
 	//Vals[0]=state0;
 	Vals[1]=B1;
 	Vals[2]=C1;
@@ -187,16 +192,14 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
 	//Since only the 2 LSB is opposite between the nonces, we can save an instruction by flipping the 4 bits in W18 rather than the 1 bit in W3
 	W[18] = PreW18 + (u){r, r ^ 0x2004000U, r ^ 0x4008000U, r ^ 0x600C000U};
+#elif defined VECTORS2
+	W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
+	uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
+	W[18] = PreW18 + (u){r, r ^ 0x2004000U};
 #else
-	#ifdef VECTORS2
-		W[3] = base + (uint)(get_local_id(0)) * 2u + (uint)(get_group_id(0)) * (WORKSIZE * 2u);
-		uint r = rot(W[3].x,25u)^rot(W[3].x,14u)^((W[3].x)>>3U);
-		W[18] = PreW18 + (u){r, r ^ 0x2004000U};
-	#else
-		W[3] = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
-		u r = rot(W[3],25u)^rot(W[3],14u)^((W[3])>>3U);
-		W[18] = PreW18 + r;
-	#endif
+	W[3] = base + get_local_id(0) + get_group_id(0) * (WORKSIZE);
+	u r = rot(W[3],25u)^rot(W[3],14u)^((W[3])>>3U);
+	W[18] = PreW18 + r;
 #endif
 	//the order of the W calcs and Rounds is like this because the compiler needs help finding how to order the instructions
 
@@ -381,36 +384,34 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	sharoundW(64 + 57);
 	sharoundW(64 + 58);
 
-	u v = W[117] + W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]) ^
-		-(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64));
+	W[117] += W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]) -
+		(-(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64)));
 
 #define FOUND (0x80)
 #define NFLAG (0x7F)
 
 #ifdef VECTORS4
-	bool result = v.x & v.y & v.z & v.w;
+	bool result = W[117].x & W[117].y & W[117].z & W[117].w;
 	if (!result) {
-		if (!v.x)
+		if (!W[117].x)
 			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
-		if (!v.y)
+		if (!W[117].y)
 			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
-		if (!v.z)
+		if (!W[117].z)
 			output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
-		if (!v.w)
+		if (!W[117].w)
 			output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
 	}
+#elif defined VECTORS2
+	bool result = W[117].x & W[117].y;
+	if (!result) {
+		if (!W[117].x)
+			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
+		if (!W[117].y)
+			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+	}
 #else
-	#ifdef VECTORS2
-		bool result = v.x & v.y;
-		if (!result) {
-			if (!v.x)
-				output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
-			if (!v.y)
-				output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
-		}
-	#else
-		if (!v)
-			output[FOUND] = output[NFLAG & W[3]] = W[3];
-	#endif
+	if (!W[117])
+		output[FOUND] = output[NFLAG & W[3]] = W[3];
 #endif
 }

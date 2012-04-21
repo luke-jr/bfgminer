@@ -1,11 +1,10 @@
-
 /*
- * Copyright 2011 Con Kolivas
+ * Copyright 2011-2012 Con Kolivas
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option)
+ * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  */
 
@@ -20,7 +19,6 @@
 #include <jansson.h>
 #include <curl/curl.h>
 #include <time.h>
-#include <curses.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -32,8 +30,10 @@
 # include <winsock2.h>
 # include <mstcpip.h>
 #endif
+
 #include "miner.h"
 #include "elist.h"
+#include "compat.h"
 
 #if JANSSON_MAJOR_VERSION >= 2
 #define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
@@ -57,73 +57,13 @@ struct upload_buffer {
 struct header_info {
 	char		*lp_path;
 	bool		has_rolltime;
+	char		*reason;
 };
 
 struct tq_ent {
 	void			*data;
 	struct list_head	q_node;
 };
-
-void vapplog(int prio, const char *fmt, va_list ap)
-{
-	extern bool use_curses;
-
-#ifdef HAVE_SYSLOG_H
-	if (use_syslog) {
-		vsyslog(prio, fmt, ap);
-	}
-#else
-	if (0) {}
-#endif
-	else if (opt_log_output || prio <= LOG_NOTICE) {
-		char *f;
-		int len;
-		struct timeval tv = { };
-		struct tm tm;
-
-		gettimeofday(&tv, NULL);
-
-		localtime_r(&tv.tv_sec, &tm);
-
-		len = 40 + strlen(fmt) + 22;
-		f = alloca(len);
-		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
-			tm.tm_year + 1900,
-			tm.tm_mon + 1,
-			tm.tm_mday,
-			tm.tm_hour,
-			tm.tm_min,
-			tm.tm_sec,
-			fmt);
-		/* Only output to stderr if it's not going to the screen as well */
-		if (!isatty(fileno((FILE *)stderr))) {
-			va_list apc;
-
-			va_copy(apc, ap);
-			vfprintf(stderr, f, apc);	/* atomic write to stderr */
-			fflush(stderr);
-		}
-
-		if (use_curses)
-			log_curses(prio, f, ap);
-		else {
-			int len = strlen(f);
-
-			strcpy(f + len - 1, "                    \n");
-
-			log_curses(prio, f, ap);
-		}
-	}
-}
-
-void applog(int prio, const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vapplog(prio, fmt, ap);
-	va_end(ap);
-}
 
 static void databuf_free(struct data_buffer *db)
 {
@@ -163,7 +103,7 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 			     void *user_data)
 {
 	struct upload_buffer *ub = user_data;
-	int len = size * nmemb;
+	unsigned int len = size * nmemb;
 
 	if (len > ub->len)
 		len = ub->len;
@@ -218,17 +158,20 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 
 	if (!strcasecmp("X-Roll-Ntime", key)) {
 		if (!strncasecmp("N", val, 1)) {
-			if (opt_debug)
-				applog(LOG_DEBUG, "X-Roll-Ntime: N found");
+			applog(LOG_DEBUG, "X-Roll-Ntime: N found");
 		} else {
-			if (opt_debug)
-				applog(LOG_DEBUG, "X-Roll-Ntime found");
+			applog(LOG_DEBUG, "X-Roll-Ntime found");
 			hi->has_rolltime = true;
 		}
 	}
 
 	if (!strcasecmp("X-Long-Polling", key)) {
 		hi->lp_path = val;	/* steal memory reference */
+		val = NULL;
+	}
+
+	if (!strcasecmp("X-Reject-Reason", key)) {
+		hi->reason = val;	/* steal memory reference */
 		val = NULL;
 	}
 
@@ -239,14 +182,15 @@ out:
 }
 
 #ifdef CURL_HAS_SOCKOPT
-int json_rpc_call_sockopt_cb(void *userdata, curl_socket_t fd, curlsocktype purpose)
+int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
+			     curlsocktype __maybe_unused purpose)
 {
-	int keepalive = 1;
-	int tcp_keepcnt = 5;
 	int tcp_keepidle = 120;
 	int tcp_keepintvl = 120;
 
 #ifndef WIN32
+	int keepalive = 1;
+	int tcp_keepcnt = 5;
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
 		return 1;
@@ -305,27 +249,26 @@ static void set_nettime(void)
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool probe, bool longpoll, bool *rolltime,
-		      struct pool *pool)
+		      struct pool *pool, bool share)
 {
 	json_t *val, *err_val, *res_val;
 	int rc;
-	struct data_buffer all_data = { };
+	struct data_buffer all_data = {NULL, 0};
 	struct upload_buffer upload_data;
-	json_error_t err = { };
+	json_error_t err;
 	struct curl_slist *headers = NULL;
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	long timeout = longpoll ? (60 * 60) : 60;
-	struct header_info hi = { };
+	struct header_info hi = {NULL, false, NULL};
 	bool probing = false;
+
+	memset(&err, 0, sizeof(err));
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
-	if (probe) {
+	if (probe)
 		probing = !pool->probed;
-		/* Probe for only 15 seconds */
-		timeout = 15;
-	}
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
 #if 0 /* Disable curl debugging since it spews to stderr */
@@ -336,7 +279,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
-	if (!opt_delaynet)
+
+	/* Shares are staggered already and delays in submission can be costly
+	 * so do not delay them */
+	if (!opt_delaynet || share)
 		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &all_data);
@@ -373,7 +319,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
 	headers = curl_slist_append(headers,
-		"X-Mining-Extensions: midstate rollntime");
+		"X-Mining-Extensions: longpoll midstate rollntime submitold");
 	headers = curl_slist_append(headers, len_hdr);
 	headers = curl_slist_append(headers, user_agent_hdr);
 	headers = curl_slist_append(headers, "Expect:"); /* disable Expect hdr*/
@@ -381,43 +327,54 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 	if (opt_delaynet) {
-		long long now_msecs, last_msecs;
-		struct timeval now, last;
+		/* Don't delay share submission, but still track the nettime */
+		if (!share) {
+			long long now_msecs, last_msecs;
+			struct timeval now, last;
 
-		gettimeofday(&now, NULL);
-		last_nettime(&last);
-		now_msecs = (long long)now.tv_sec * 1000;
-		now_msecs += now.tv_usec / 1000;
-		last_msecs = (long long)last.tv_sec * 1000;
-		last_msecs += last.tv_usec / 1000;
-		if (now_msecs > last_msecs && now_msecs - last_msecs < 250) {
-			struct timespec rgtp;
+			gettimeofday(&now, NULL);
+			last_nettime(&last);
+			now_msecs = (long long)now.tv_sec * 1000;
+			now_msecs += now.tv_usec / 1000;
+			last_msecs = (long long)last.tv_sec * 1000;
+			last_msecs += last.tv_usec / 1000;
+			if (now_msecs > last_msecs && now_msecs - last_msecs < 250) {
+				struct timespec rgtp;
 
-			rgtp.tv_sec = 0;
-			rgtp.tv_nsec = (250 - (now_msecs - last_msecs)) * 1000000;
-			nanosleep(&rgtp, NULL);
+				rgtp.tv_sec = 0;
+				rgtp.tv_nsec = (250 - (now_msecs - last_msecs)) * 1000000;
+				nanosleep(&rgtp, NULL);
+			}
 		}
 		set_nettime();
 	}
+
 	rc = curl_easy_perform(curl);
+	if (longpoll)
+		pool_tclear(pool, &pool->lp_sent);
 	if (rc) {
 		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
 		goto err_out;
 	}
 
 	if (!all_data.buf) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "Empty data received in json_rpc_call.");
+		applog(LOG_DEBUG, "Empty data received in json_rpc_call.");
 		goto err_out;
 	}
 
 	if (probing) {
 		pool->probed = true;
 		/* If X-Long-Polling was found, activate long polling */
-		if (hi.lp_path)
+		if (hi.lp_path) {
+			if (pool->hdr_path != NULL)
+				free(pool->hdr_path);
 			pool->hdr_path = hi.lp_path;
-		else
+		} else {
 			pool->hdr_path = NULL;
+		}
+	} else if (hi.lp_path) {
+		free(hi.lp_path);
+		hi.lp_path = NULL;
 	}
 
 	*rolltime = hi.has_rolltime;
@@ -460,6 +417,11 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		goto err_out;
 	}
 
+	if (hi.reason) {
+		json_object_set_new(val, "reject-reason", json_string(hi.reason));
+		free(hi.reason);
+		hi.reason = NULL;
+	}
 	successful_connect = true;
 	databuf_free(&all_data);
 	curl_slist_free_all(headers);
@@ -478,8 +440,9 @@ err_out:
 
 char *bin2hex(const unsigned char *p, size_t len)
 {
-	int i;
+	unsigned int i;
 	char *s = malloc((len * 2) + 1);
+
 	if (!s)
 		return NULL;
 
@@ -714,67 +677,34 @@ int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (
 	return ret;
 }
 
+void thr_info_freeze(struct thr_info *thr)
+{
+	struct tq_ent *ent, *iter;
+	struct thread_q *tq;
+
+	if (!thr)
+		return;
+
+	tq = thr->q;
+	if (!tq)
+		return;
+
+	mutex_lock(&tq->mutex);
+	tq->frozen = true;
+	list_for_each_entry_safe(ent, iter, &tq->q, q_node) {
+		list_del(&ent->q_node);
+		free(ent);
+	}
+	mutex_unlock(&tq->mutex);
+}
+
 void thr_info_cancel(struct thr_info *thr)
 {
 	if (!thr)
 		return;
 
-	if (thr->q)
-		tq_freeze(thr->q);
-
 	if (PTH(thr) != 0L) {
 		pthread_cancel(thr->pth);
 		PTH(thr) = 0L;
 	}
-}
-
-bool get_dondata(char **url, char **userpass)
-{
-	struct data_buffer all_data = { };
-	char curl_err_str[CURL_ERROR_SIZE];
-	CURL *curl = curl_easy_init();
-	int rc;
-
-	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
-	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
-	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
-	if (!opt_delaynet)
-		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &all_data);
-	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
-	curl_easy_setopt(curl, CURLOPT_URL, "http://vds.kolivas.org/url");
-	rc = curl_easy_perform(curl);
-	if (rc) {
-		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
-		goto err_out;
-	}
-	if (!all_data.buf)
-		goto err_out;
-	*url = strtok(all_data.buf, "\n");
-	all_data.buf = NULL;
-	databuf_free(&all_data);
-
-	curl_easy_setopt(curl, CURLOPT_URL, "http://vds.kolivas.org/userpass");
-	rc = curl_easy_perform(curl);
-	if (rc) {
-		applog(LOG_INFO, "HTTP request failed: %s", curl_err_str);
-		goto err_out;
-	}
-	if (!all_data.buf)
-		goto err_out;
-	*userpass = strtok(all_data.buf, "\n");
-	all_data.buf = NULL;
-	databuf_free(&all_data);
-
-	applog(LOG_INFO, "Donation URL: %s Userpass: %s", *url, *userpass);
-	curl_easy_cleanup(curl);
-	return true;
-
-err_out:
-	databuf_free(&all_data);
-	*url = NULL;
-	*userpass = NULL;
-	curl_easy_cleanup(curl);
-	return false;
 }

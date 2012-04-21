@@ -2,10 +2,16 @@
 #define __COMPAT_H__
 
 #ifdef WIN32
+#include <time.h>
+#include <pthread.h>
 
 #include <windows.h>
 
-static inline void sleep(int secs)
+static inline void nanosleep(struct timespec *rgtp, void *__unused)
+{
+	Sleep(rgtp->tv_nsec / 1000000);
+}
+static inline void sleep(unsigned int secs)
 {
 	Sleep(secs * 1000);
 }
@@ -28,6 +34,9 @@ typedef unsigned int uint;
 typedef long suseconds_t;
 #endif
 
+#define PTH(thr) ((thr)->pth.p)
+#else
+#define PTH(thr) ((thr)->pth)
 #endif /* WIN32 */
 
 #endif /* __COMPAT_H__ */

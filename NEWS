@@ -1,5 +1,526 @@
-Version 2.2.0
+Version 2.3.3 - April 15, 2012
 
+- Don't even display that cpumining is disabled on ./configure to discourage
+people from enabling it.
+- Do a complete cgminer restart if the ATI Display Library fails, as it does on
+windows after running for some time, when fanspeed reporting fails.
+- Cache the initial arguments passed to cgminer and implement an attempted
+restart option from the settings menu.
+- Disable per-device status lines when there are more than 8 devices since
+screen output will be corrupted, enumerating them to the log output instead at
+startup.
+- Reuse Vals[] array more than W[] till they're re-initialised on the second
+sha256 cycle in poclbm kernel.
+- Minor variable alignment in poclbm kernel.
+- Make sure to disable devices with any status not being DEV_ENABLED to ensure
+that thermal cutoff code works as it was setting the status to DEV_RECOVER.
+- Re-initialising ADL simply made the driver fail since it is corruption over
+time within the windows driver that's responsible. Revert "Attempt to
+re-initialise ADL should a device that previously reported fanspeed stops
+reporting it."
+- Microoptimise poclbm kernel by ordering Val variables according to usage
+frequency.
+
+
+Version 2.3.2 - March 31, 2012
+
+- Damping small changes in hashrate so dramatically has the tendency to always
+make the hashrate underread so go back to gentle damping instead.
+- Revert the crossover of variables from Vals to W in poclbm kernel now that
+Vals are the first declared variables so they're used more frequently.
+- Vals variables appearing first in the array in poclbm is faster.
+- Change the preferred vector width to 1 for Tahiti only, not all poclbm
+kernels.
+- Use a time constant 0.63 for when large changes in hashrate are detected to
+damp change in case the large change is an aliasing artefact instead of a real
+chang
+- Only increment stale counter if the detected stales are discarded.
+- Attempt to re-initialise ADL should a device that previously reported fanspeed
+stops reporting it.
+- Move the ADL setup and clearing to separate functions and provide a reinit_adl
+function to be used when adl fails while running.
+- Use slightly more damping on the decay time function in the never-ending quest
+to smooth off the hashmeter.
+- Set the starting fanspeed to a safe and fairly neutral 50% when autofan is
+enabled.
+- Provide locking around updates of cgpu hashrates as well to prevent multiple
+threads accessing data fields on the same device.
+- Display the beginning of the new block in verbose mode in the logs.
+- Reinstate old diablo kernel variable ordering from 120222, adding only goffset
+and vector size hint. The massive variable ordering change only helped one SDK
+on
+- Change the version number on the correct kernels.
+- api.c devicecode/osinfo incorrectly swapped for json
+- Add extensive instructions on how to make a native windows build.
+- Update version numbers of poclbm and diablo kernels as their APIs have also
+changed.
+- Use global offset parameter to diablo and poclbm kernel ONLY for 1 vector
+kernels.
+- Use poclbm preferentially on Tahiti now regardless of SDK.
+- Remove unused constant passed to poclbm.
+- Clean up use of macros in poclbm and use bitselect everywhere possible.
+- Add vector type hint to diablo kernel.
+- Add worksize and vector attribute hints to the poclbm kernel.
+- Spaces for non-aligned variables in poclbm.
+- More tidying of poclbm.
+- Swap Vals and W variables where they can overlap in poclbm.
+- More tidying of poclbm.
+- Tidy up first half of poclbm.
+- Clean up use of any() by diablo and poclbm kernels.
+- Minor variable symmetry changes in poclbm.
+- Put additions on separate lines for consistency in poclbm.
+- Consolidate last use of W11 into Vals4 in poclbm.
+- Change email due to SPAM
+- api.c miner.php add a '*' to the front of all notify counters - simplifies
+future support of new counters
+- miner.php add display 'notify' command
+- Small change to help arch's without processor affinity
+- Fix bitforce compile error
+- api.c notify should report disabled devices also - of course
+- API returns the simple device history with the 'notify' command
+- code changes for supporting a simple device history
+- api.c Report an OS string in config to help with device issues
+- api.c fix Log Interval - integer in JSON
+- api.c config 'Device Code' to show list of compiled devices + README
+- api.c increase buffer size close to current code allowable limit
+- removed 8-component vector support from kernel, as this is not supported in
+CGMINER anyway
+- forgot to update kernel modification date, fixed ;)
+- reordered an addition in the kernel, which results in less instructions used
+in the GPU ISA code for GCN
+- miner.php: option for readonly or check privileged access
+- Ignore reduntant-with-build options --disable-gpu, --no-adl, and --no-restart
+- miner.php: ereg_replace is DEPRECATED so use preg_replace instead
+- Make curses TUI support optional at compile-time.
+- Bugfix: AC_ARG_WITH provides withval instead of enableval
+- miner.php split devs output for different devices
+- api.c: correct error messages
+- icarus.c modify (regular) timeout warning to only be debug
+- icarus.c set the windows TODO timeout
+- Allow specifying a specific driver for --scan-serial
+- optimized nonce-check and output code for -v 2 and -v 4
+- Bugfix: Check for libudev header (not just library) in configure, and document
+optional dependency
+- Add API support for Icarus and Bitforce
+- Next API version is 1.4 (1.3 is current)
+- README/api.c add "When" the request was processed to STATUS
+- Bugfix: ZLX to read BitFORCE temp, not ZKX -.-
+- Use libudev to autodetect BitFORCE GPUs, if available
+- Use the return value of fan_autotune to set fan_optimal instead of passing it
+as a pointer.
+- Pass the lasttemp from the device we're using to adjust fanspeed in twin
+devices.
+- fix the name to 3 chars, fix the multi-icarus support
+- Bugfix: "-S auto" is the default if no -S is specified, and there is no such
+delay in using it
+- README add information missing from --scan-serial
+- Update README RPC API Version comment
+- Bugfix: Allow enabling CPU even without OpenCL support
+- Change failed-to-mine number of requested shares messge to avoid segfault on
+recursive calling of quit().
+- Get rid of extra char which is just truncated in poclbm kernel.
+- only small code formating changes
+- removed vec_step() as this could lead to errors on older SDKs
+- unified code for generating nonce in kernel and moved addition of base to the
+end -> faster
+
+Version 2.3.1 - February 24, 2012
+
+- Revert input and output code on diakgcn and phatk kernels to old style which
+worked better for older hardware and SDKs.
+- Add a vector*worksize parameter passed to those kernels to avoid one op.
+- Increase the speed of hashrate adaptation.
+- Only send out extra longpoll requests if we want longpolls.
+- API implement addpool command
+- API return the untouched Total MH also (API now version 1.3)
+- Add enable/disablepool to miner.php example and reduce font size 1pt
+
+
+Version 2.3.0 - February 23, 2012
+
+- Consider extra longpoll work items as staged_extra so as to make sure we queue
+more work if queueing regular work items as longpolls.
+- Use diablo kernel on all future SDKs for Tahiti and set preferred vector width
+to 1 on poclbm kernel only.
+- Explicitly type the constants in diakgcn kernel as uint, to be in line with
+poclbm kernel.
+- Reset all hash counters at the same time as resetting start times to get
+accurate hashrates on exiting which is mandatory for benchmarking.
+- Report thread out before it starts to avoid being flagged as sick when waiting
+for the first work item.
+- Don't disable and re-enable devices as they may recover and in the meantime
+have their status set to OFF.
+- API new commands enablepool and disablepool (version already incremented)
+- Tolerate new-format temperature readings for bitforce
+- Modify cgminer.c pool control to allow API to call it
+- Bugfix: Fix BitFORCE driver memory leak in debug logging
+- Extra byte was being unused in poclbm leading to failure on some platforms.
+- Explicitly type the constants in poclbm kernel as uint.
+- Don't save 'include' when saving the configuration
+- Allow configuration file to include another recursively
+- Use the SDK and hardware information to choose good performing default
+kernels.
+- Move phatk kernel to offset vector based nonce bases as well.
+- Add a --benchmark feature which works on a fake item indefinitely to compare
+device performance without any server or networking influence.
+- Allow writing of multiple worksizes to the configuration file.
+- Allow writing of multiple vector sizes to the configuration file.
+- Allow writing of multiple kernels to the configuration file.
+- Allow multiple different kernels to be chosen per device.
+- Allow the worksize to be set per-device.
+- Allow different vectors to be set per device.
+- If we're well below the target temperature, increase gpu engine speed back to
+maximum in case we have gotten lost between profiles during an idle period.
+- We should be setting the value of fan_optimal, not its address.
+- As all kernels will be new versions it's an opportunity to change the .bin
+format and make it simpler. Specifying bitalign is redundant and long can be l.
+- Use any() in kernel output code.
+- Put the nonce for each vector offset in advance, avoiding one extra addition
+in the kernel.
+- Reset times after all mining threads are started to make estimating hashrates
+easier at startup.
+- Bugfix: allow no-exec (NX) stack
+- Fix minor warning.
+- fix the bitforce.c code style follow 1TBS
+- fix icarus.c compile warning
+- small changes to speedup no vec for AMD 898.1 OCL runtime
+- Update licensing to GPL V3.
+- Reset the longpoll flag after it's been used once to prevent it restarting
+work again.
+- Begin import of DiabloMiner kernel.
+- Modify API debug messages to say API instead of DBG
+- When API shuts down cgminer don't kill itself
+- Don't make rolled work from the longpoll be seen as other longpoll work items.
+- API add 'privileged' command so can verify access level
+- Set the lp_sent variable under lock since there will almost always be a race
+on setting this variable, potentially leading to multiple LPs being sent out.
+- API restrict access to all non display commands by default
+- Update API version to 1.2 for new 'Log Interval'
+- API add --log Interval to 'config' reply
+- --api-allow special case 0/0 means all
+
+
+Version 2.2.7 - February 20, 2012
+
+- Send out extra longpolls when we have switched pools and the longpoll thread
+is still bound to the old one. This is particularly useful with p2pool where
+longpolls do not correlate with main bitcoin block change and would have led to
+high reject rates on failover.
+- Store whether a work item is the result of a longpoll or not in struct work
+and use it to help determine block changes directly from the work longpoll bool.
+- Keep track of when a longpoll has been sent for a pool and if the current pool
+is requesting work but has not sent a longpoll request, convert one of the work
+items to a longpoll.
+- Store the longpoll url in the pool struct and update it from the pool_active
+test in case it changes. This is to allow further changes to longpoll management
+on switching pools.
+- Re-check for a longpoll supporting pool every 30 seconds if none is found
+initially.
+- Report threads as busy waiting on getwork on startup to avoid them being
+flagged sick on startup during slow networking.
+- Allow devices that are disabled due to overheating to be flagged as recovering
+instead of disabling them and re-enable them if they're below ideal temperatures
+- Tahiti prefers worksize 64 with poclbm.
+- No need to expressly retain the opencl program now that the zero binary issue
+is fixed. This actually fixes cgminer to work with the latest SDK included with
+the ATI catalyst driver 12.2.
+- Show error code on any opencl failure status.
+- Add detection for version 898.1 SDK as well but only give SDK 2.6 warning once
+on startup instead of with each device initialisation.
+- Always use a fresh connection for longpoll as prolonged persistent connections
+can fail for many reasons.
+- Keep track of intended engine clock speed and only adjust up if it's higher
+than the last intended speed. This avoids setting the clock speed to one
+relative to a lower profile one by mistake.
+- Use gpu-memdiff on startup if an engine clockspeed is set and a memdiff value
+is set.
+- Revert "Adjust engine speed up according to performance level engine setting,
+not the current engine speed." - ineffectual.
+- Freeze the queues on all threads that are sent the pause message to prevent
+them trying to start up again with saved pings in their queues.
+- Updates to diakgcn kernel/
+- Consolidate all screen updates to the watchdog thread and touch both windows
+before refresh.
+- Curses will be disabled in clean_up so don't do it early in kill_work, and
+disable_adl so that GPU settings may be restored to normal in case shutting down
+curses leads to instability on windows.
+- Stop the mining threads before trying to kill them.
+- Plain refresh() does not give reliably screen updates so get rid of all uses
+of it.
+- First release with working diakgcn kernel.
+
+Version 2.2.6 - February 16, 2012
+
+- Provide warning on each startup about sdk 2.6
+- Fix unused warnings on win32.
+- bitforce: Simplify BFopen WIN32 ifdef/else
+- Fix initialization warning with jansson 1.3
+- bitforce: Cleanup extraneous TODO that isn't needed
+- Move tcsetattr (and new tcflush) into *nix BFopen to simplify things a bit
+- Add message explaining 2nd thread disabling for dynamic mode and how to tune
+it.
+- Move logwindow down once number of devices is known.
+- Automatically choose phatk kernel for bitalign non-gcn ATI cards, and then
+only select poclbm if SDK2.6 is detected.
+- Allow the refresh interval to be adjusted in dynamic intensity with a
+--gpu-dyninterval parameter.
+- Make curses display visible right from the beginning and fix the window sizes
+so the initial messages don't get lost once the status window is drawn.
+- The amount of work scanned can fluctuate when intensity changes and since we
+do this one cycle behind, we increment the work more than enough to prevent
+repeati
+- bitforce: Set a 30 second timeout for serial port on Windows, since the
+default is undefined
+- Use PreVal4addT1 instead of PreVal4 in poclbm kernel.
+- Import PreVal4 and PreVal0 into poclbm kernel.
+- Import more prepared constants into poclbm kernel.
+- Keep variables in one array but use Vals[] name for consistency with other
+kernel designs.
+- Replace constants that are mandatorily added in poclbm kernel with one value.
+- Remove addition of final constant before testing for result in poclbm kernel.
+- Hand optimise variable addition order.
+- Hand optimise first variable declaration order in poclbm kernel.
+- Radical reordering machine based first pass to change variables as late as
+possible, bringing their usage close together.
+- fix strcpy NULL pointer if env HOME unset.
+- bitforce: Disable automatic scanning when at least one device is specified
+manually
+- Unroll all poclbm additions to enable further optimisations.
+
+
+Version 2.2.5 - February 13, 2012
+
+- Make output buffer write only as per Diapolo's suggestion.
+- Constify nonce in poclbm.
+- Use local and group id on poclbm kernel as well.
+- Microoptimise phatk kernel on return code.
+- Adjust engine speed up according to performance level engine setting, not the
+current engine speed.
+- Try to load a binary if we've defaulted to the poclbm kernel on SDK2.6
+- Use the poclbm kernel on SDK2.6 with bitalign devices only if there is no
+binary available.
+- Further generic microoptimisations to poclbm kernel.
+- The longstanding generation of a zero sized binary appears to be due to the
+OpenCL library putting the binary in a RANDOM SLOT amongst 4 possible binary
+locations. Iterate over each of them after building from source till the real
+binary is found and use that.
+- Fix harmless warnings with -Wsign-compare to allow cgminer to build with -W.
+- Fix missing field initialisers warnings.
+- Put win32 equivalents of nanosleep and sleep into compat.h fixing sleep() for
+adl.c.
+- Restore compatibility with Jansson 1.3 and 2.0 (api.c required 2.1)
+- Modularized logging, support for priority based logging
+- Move CPU chipset specific optimization into device-cpu
+
+
+Version 2.2.4 - February 11, 2012
+
+- Fix double definition of A0 B0 to zeroA zeroB.
+- Retain cl program after successfully loading a binary image. May decrease
+failures to build kernels at startup.
+- Variable unused after this so remove setting it.
+- BFI INT patching is not necessarily true on binary loading of files and not
+true on ATI SDK2.6+. Report bitalign instead.
+- Various string fixes for reject reason.
+- Generalize --temp-cutoff and implement support for reading temperature from
+BitFORCE FPGAs
+- Change message from recovered to alive since it is used on startup as well as
+when a pool has recovered.
+- Start mining as soon as any pool is found active and rely on the watchpool
+thread to bring up other pools.
+- Delayed responses from testing pools that are down can hold up the watchdog
+thread from getting to its device testing code, leading to false detection of
+the GPU not checking in, and can substantially delay auto gpu/auto fan
+management leading to overheating. Move pool watching to its own thread.
+- Bugfix: BitFORCE index needs to be static to count correctly
+- Space out retrieval of extra work according to the number of mining threads.
+- Make shutdown more robust. Enable the input thread only after the other
+threads exist. Don't kill off the workio thread and use it to exit main() only
+if there is an unexpected problem. Use kill_work() for all anticipated shutdowns
+where possible. Remove unused thread entry.
+- Change poclbm version number.
+- One array is faster than 2 separate arrays so change to that in poclbm kernel.
+- Microoptimisations to poclbm kernel which increase throughput slightly.
+- Import diablominer kernel. Currently disabled as not working.
+- Import diapolo kernel. Currently disabled as not working.
+- Conflicting entries of cl_kernel may have been causing problems, and
+automatically chosen kernel type was not being passed on. Rename the enum to
+cl_kernels and store the chosen kernel in each clState.
+- Set cl_amd_media_ops with the BITALIGN flag and allow non-bitselect devices to
+build.
+- ALlow much longer filenames for kernels to load properly.
+- Allow different kernels to be used by different devices and fix the logic fail
+of overcorrecting on last commit with !strstr.
+- Fix kernel selection process and build error.
+- queue_phatk_kernel now uses CL_SET_VARG() for base-nonce(s), too
+- added OpenCL >= 1.1 detection code, in preparation of OpenCL 1.1 global offset
+parameter support
+- Use K array explicitly to make it clear what is being added.
+- Work items have a tendency to expire at exactly the same time and we don't
+queue extra items when there are plenty in the queue, regardless of age. Allow
+extra work items to be queued if adequate time has passed since we last
+requested work even if over the limit.
+- Discard work when failover-only is enabled and the work has come from a
+different pool.
+- Missing include to build on newer mingw32.
+- Move from the thread safe localtime_r to regular localtime which is the only
+one supported on newer pthread libraries on mingw32 to make it compile with the
+newer ming. Thread safety is of no importance where localtime is used in this
+code.
+- Define in_addr_t in windows if required
+- sys/wait.h not required in windows
+- Allow API to restrict access by IP address
+- Add pool switching to example miner.php
+- Display X-Reject-Reason, when provided
+- Remove the test for whether the device is on the highest profil level before
+raising the GPU speed as it is ineffectual and may prevent raising the GPU
+speed.
+- Remove unnecessary check for opt_debug one every invocation of applog at
+LOG_DEBUG level and place the check in applog().
+
+
+Version 2.2.3 - February 6, 2012
+
+- Revert "Rewrite the convoluted get_work() function to be much simpler and roll
+work as much as possible with each new work item." This seems to cause a race on
+work in free_work(). Presumably other threads are still accessing the structure.
+
+
+Version 2.2.2 - February 6, 2012
+
+- Provide support for the submitold extension on a per-pool basis based on the
+value being detected in a longpoll.
+- Don't send a ping to a dynamic device if it's not enabled as that will just
+enable it for one pass and then disable it again.
+- Rewrite the convoluted get_work() function to be much simpler and roll work as
+much as possible with each new work item.
+- Roll as much work as possible from the work returned from a longpoll.
+- Rolling work on each loop through the mining thread serves no purpose.
+- Allow to stage more than necessary work items if we're just rolling work.
+- Replace divide_work with reuse_work function used twice.
+- Give rolled work a new ID to make sure there is no confusion in the hashtable
+lookups.
+- Remove now-defunct hash_div variables.
+- Remove unused get_dondata function.
+- Silence ADL warnings.
+- Silence unused parameter warnings.
+- Stagger the restart of every next thread per device to keep devices busy ahead
+of accessory threads per device.
+- Deprecate the --donation feature. Needlessly complex, questionable usefulness,
+depends on author's server and a central pool of some kind, and was not heavily
+adopted.
+- It's devices that report back now, not threads, update message.
+- Continue auto-management of fan and engine speeds even if a device is disabled
+for safety reasons.
+- No need to check we're highest performance level when throttling GPU engine
+speed.
+- Abstract out tests for whether work has come from a block that has been seen
+before and whether a string is from a previously seen block.
+- Probe but don't set the timeout to 15 seconds as some networks take a long
+time to timeout.
+- Remove most compiler warnings from api.c
+- Add last share's pool info in cgpu_info
+- Allow the OpenCL platform ID to be chosen with --gpu-platform.
+- Iterate over all platforms displaying their information and number of devices
+when --ndevs is called.
+- Deprecate main.c
+- Some networks can take a long time to resolve so go back to 60 second timeouts
+instead of 15.
+- Only enable curses on failure if curses is desired.
+- Fix warnings in bitforce.c
+- Bugfix: Need to open BitForce tty for read-write
+- Fix various build issues.
+- Modularize code: main.c -> device-cpu + device-gpu
+- Fix phatk kernel not working on non-bitalign capable devices (Nvidia, older
+ATI).
+- Update poclbm kernel for better performance on GCN and new SDKs with bitalign
+support when not BFI INT patching. Update phatk kernel to work properly for non
+BFI INT patched kernels, providing support for phatk to run on GCN and non-ATI
+cards.
+- Return last accepted share pool/time for devices
+- Display accepted share pool/time for CPUs
+- Bug intensity always shows GPU 0
+- Update example web miner.php to use new API commands
+
+
+Version 2.2.1 - January 30, 2012
+
+NOTE - The GPU Device reordering in 2.2.0 by default was considered a bad idea
+so the original GPU ordering is used by default again unless reordering is
+explicitly requested.
+
+- Fix bitforce failing to build into cgminer.
+- Add missing options to write config function.
+- Add a --gpu-reorder option to only reorder devices according to PCI Bus ID
+when requested.
+- Fix for midstate support being broken on pools that supported no-midstate
+work by ensuring numbers are 32 bits in sha2.c
+- Set virtual GPUs to work when ADL is disabled or all mining will occur on GPU
+0.
+- Add information about paused threads in the menu status.
+- Disable all but the first thread on GPUs in dynamic mode for better
+interactivity.
+- Set the latest network access time on share submission for --net-delay even if
+we're not delaying that submission for further network access.
+- Clear adl on exiting after probing values since it may attempt to overclock.
+- As share submission is usually staggered, and delays can be costly, submit
+shares without delay even when --net-delay is enabled.
+- Display GPU number and device name when ADL is successfully enabled on it.
+- Display GPU ordering remapping in verbose mode.
+- Don't fail in the case the number of ADL and OpenCL devices do not match, and
+do not attempt to reorder devices unless they match. Instead give a warning
+about
+- Display error codes should ADL not return ADL_OK in the more critical function
+calls.
+- Fix unused warning.
+- Fix compile warnings in api.c
+- Add extensive ADL based device info in debug mode.
+- Make --ndevs display verbose opencl information as well to make debugging
+version information easier.
+- Display information about the opencl platform with verbose enabled.
+- Explicitly check for nvidia in opencl platform strings as well.
+
+
+Version 2.2.0 - January 29, 2012
+
+NOTE: GPU Device order will change with this release with ATI GPUs as cgminer
+now can enumerate them according to their Bus ID which means the values should
+now correlate with their physical position on the motherboard.
+
+- Default to poclbm kernel on Tahiti (7970) since phatk does not work, even
+though performance is sub-standard so that at least it will mine successfully by
+defau
+- Retain cl program after every possible place we might build the program.
+- Update ADL SDK URL.
+- Fix potential overflow.
+- Map GPU devices to virtual devices in their true physical order based on
+BusNumber.
+- Change the warning that comes with failure to init cl on a device to be more
+generic and accurate.
+- Advertise longpoll support in X-Mining-Extensions
+- Detect dual GPU cards by iterating through all GPUs, finding ones without
+fanspeed and matching twins with fanspeed one bus ID apart.
+- Do not attempt to build the program that becomes the kernel twice. This could
+have been leading to failures on initialising cl.
+- Some opencl compilers have issues with no spaces after -D in the compiler
+options.
+- Allow intensity up to 14.
+- Use calloced stack memory for CompilerOptions to ensure sprintf writes to the
+beginning of the char.
+- Whitelist 79x0 cards to prefer no vectors as they perform better without.
+- Adjust fan speed gently while in the optimal range when temperature is
+drifting to minimise overshoot in either direction.
+- Detect dual GPU cards via the indirect information of - 1st card has a fan
+controller. 2nd card does not have a fan controller, cards share the same device
+name
+- Instead of using the BFI_INT patching hack on any device reporting
+cl_amd_media_ops, create a whitelist of devices that need it. This should enable
+GCN architec
+- Fixed API compiling issue on OS X
+- Add more explanation of JSON format and the 'save' command
+- Return an error if using ADL API commands when it's not available
+- Read off lpThermalControllerInfo from each ADL device.
+- Add ADL_Overdrive5_ThermalDevices_Enum interface.
 - Add API commands: config, switchpool, gpu settings, save
 - Implement socks4 proxy support.
 - Fix send() for JSON strings

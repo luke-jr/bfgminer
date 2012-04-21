@@ -4,13 +4,18 @@
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option)
+ * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
+ *
+ * Note: the code always includes GPU support even if there are no GPUs
+ *	this simplifies handling multiple other device code being included
+ *	depending on compile options
  */
 
 #include "config.h"
 
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
@@ -20,6 +25,7 @@
 
 #include "compat.h"
 #include "miner.h"
+#include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
@@ -37,6 +43,7 @@
 #endif
 
 #ifdef WIN32
+	#include <ws2tcpip.h>
 	#include <winsock2.h>
 
 	#define SOCKETTYPE SOCKET
@@ -106,7 +113,6 @@
 
 	static char *WSAErrorMsg()
 	{
-		char *msg;
 		int i;
 		int id = WSAGetLastError();
 
@@ -125,15 +131,20 @@
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
 	#endif
+
+	#ifndef in_addr_t
+	#define in_addr_t uint32_t
+	#endif
 #endif
 
 // Big enough for largest API request
-//  though a PC with 100s of CPUs may exceed the size ...
+//  though a PC with 100s of PGAs/CPUs may exceed the size ...
 // Current code assumes it can socket send this size also
-#define MYBUFSIZ	32768
+#define MYBUFSIZ	65432	// TODO: intercept before it's exceeded
 
 // Number of requests to queue - normally would be small
-#define QUEUE	10
+// However lots of PGA's may mean more
+#define QUEUE	100
 
 static char *io_buffer = NULL;
 static char *msg_buffer = NULL;
@@ -146,7 +157,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.0";
+static const char *APIVERSION = "1.7";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -158,20 +169,60 @@ static const char *DYNAMIC = _DYNAMIC;
 static const char *YES = "Y";
 static const char *NO = "N";
 
+static const char *DEVICECODE = ""
+#ifdef HAVE_OPENCL
+			"GPU "
+#endif
+#ifdef USE_BITFORCE
+			"BFL "
+#endif
+#ifdef USE_ICARUS
+			"ICA "
+#endif
+#ifdef WANT_CPUMINE
+			"CPU "
+#endif
+			"";
+
+static const char *OSINFO =
+#if defined(__linux)
+			"Linux";
+#else
+#if defined(__APPLE__)
+			"Apple";
+#else
+#if defined (WIN32)
+			"Windows";
+#else
+#if defined(unix)
+			"Unix";
+#else
+			"Unknown";
+#endif
+#endif
+#endif
+#endif
+
 #define _DEVS		"DEVS"
 #define _POOLS		"POOLS"
 #define _SUMMARY	"SUMMARY"
 #define _STATUS		"STATUS"
 #define _VERSION	"VERSION"
 #define _MINECON	"CONFIG"
+#define _GPU		"GPU"
+
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#define _PGA		"PGA"
+#endif
 
 #ifdef WANT_CPUMINE
 #define _CPU		"CPU"
 #endif
 
-#define _GPU		"GPU"
-#define _CPUS		"CPUS"
 #define _GPUS		"GPUS"
+#define _PGAS		"PGAS"
+#define _CPUS		"CPUS"
+#define _NOTIFY		"NOTIFY"
 #define _BYE		"BYE"
 
 static const char ISJSON = '{';
@@ -190,12 +241,18 @@ static const char ISJSON = '{';
 #define JSON_MINECON	JSON1 _MINECON JSON2
 #define JSON_GPU	JSON1 _GPU JSON2
 
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#define JSON_PGA	JSON1 _PGA JSON2
+#endif
+
 #ifdef WANT_CPUMINE
 #define JSON_CPU	JSON1 _CPU JSON2
 #endif
 
 #define JSON_GPUS	JSON1 _GPUS JSON2
+#define JSON_PGAS	JSON1 _PGAS JSON2
 #define JSON_CPUS	JSON1 _CPUS JSON2
+#define JSON_NOTIFY	JSON1 _NOTIFY JSON2
 #define JSON_BYE	JSON1 _BYE JSON1
 #define JSON_CLOSE	JSON3
 #define JSON_END	JSON4
@@ -251,6 +308,38 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MISFN 42
 #define MSG_BADFN 43
 #define MSG_SAVED 44
+#define MSG_ACCDENY 45
+#define MSG_ACCOK 46
+#define MSG_ENAPOOL 47
+#define MSG_DISPOOL 48
+#define MSG_ALRENAP 49
+#define MSG_ALRDISP 50
+#define MSG_DISLASTP 51
+#define MSG_MISPDP 52
+#define MSG_INVPDP 53
+#define MSG_TOOMANYP 54
+#define MSG_ADDPOOL 55
+
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#define MSG_PGANON 56
+#define MSG_PGADEV 57
+#define MSG_INVPGA 58
+#endif
+
+#define MSG_NUMPGA 59
+#define MSG_NOTIFY 60
+
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#define MSG_PGALRENA 61
+#define MSG_PGALRDIS 62
+#define MSG_PGAENA 63
+#define MSG_PGADIS 64
+#define MSG_PGAUNW 65
+#endif
+
+#define MSG_REMLASTP 66
+#define MSG_ACTPOOL 67
+#define MSG_REMPOOL 68
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -262,16 +351,17 @@ enum code_severity {
 
 enum code_parameters {
 	PARAM_GPU,
+	PARAM_PGA,
 	PARAM_CPU,
 	PARAM_GPUMAX,
+	PARAM_PGAMAX,
 	PARAM_CPUMAX,
 	PARAM_PMAX,
 	PARAM_POOLMAX,
-#ifdef WANT_CPUMINE
-	PARAM_GCMAX,
-#else
-	PARAM_GMAX,
-#endif
+
+// Single generic case: have the code resolve it - see below
+	PARAM_DMAX,
+
 	PARAM_CMD,
 	PARAM_POOL,
 	PARAM_STR,
@@ -293,25 +383,48 @@ struct CODES {
  { SEVERITY_ERR,   MSG_GPUNON,	PARAM_NONE,	"No GPUs" },
  { SEVERITY_SUCC,  MSG_POOL,	PARAM_PMAX,	"%d Pool(s)" },
  { SEVERITY_ERR,   MSG_NOPOOL,	PARAM_NONE,	"No pools" },
-#ifdef WANT_CPUMINE
- { SEVERITY_SUCC,  MSG_DEVS,	PARAM_GCMAX,	"%d GPU(s) - %d CPU(s)" },
- { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs/CPUs" },
-#else
- { SEVERITY_SUCC,  MSG_DEVS,	PARAM_GMAX,	"%d GPU(s)" },
- { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs" },
+
+ { SEVERITY_SUCC,  MSG_DEVS,	PARAM_DMAX,	"%d GPU(s)"
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+						" - %d PGA(s)"
 #endif
+#ifdef WANT_CPUMINE
+						" - %d CPU(s)"
+#endif
+ },
+
+ { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs"
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+						"/PGAs"
+#endif
+#ifdef WANT_CPUMINE
+						"/CPUs"
+#endif
+ },
+
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
  { SEVERITY_INFO,  MSG_GPUDIS,	PARAM_GPU,	"GPU %d set disable flag" },
  { SEVERITY_INFO,  MSG_GPUREI,	PARAM_GPU,	"GPU %d restart attempted" },
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
  { SEVERITY_SUCC,  MSG_GPUDEV,	PARAM_GPU,	"GPU%d" },
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+ { SEVERITY_ERR,   MSG_PGANON,	PARAM_NONE,	"No PGAs" },
+ { SEVERITY_SUCC,  MSG_PGADEV,	PARAM_PGA,	"PGA%d" },
+ { SEVERITY_ERR,   MSG_INVPGA,	PARAM_PGAMAX,	"Invalid PGA id %d - range is 0 - %d" },
+ { SEVERITY_INFO,  MSG_PGALRENA,PARAM_PGA,	"PGA %d already enabled" },
+ { SEVERITY_INFO,  MSG_PGALRDIS,PARAM_PGA,	"PGA %d already disabled" },
+ { SEVERITY_INFO,  MSG_PGAENA,	PARAM_PGA,	"PGA %d sent enable message" },
+ { SEVERITY_INFO,  MSG_PGADIS,	PARAM_PGA,	"PGA %d set disable flag" },
+ { SEVERITY_ERR,   MSG_PGAUNW,	PARAM_PGA,	"PGA %d is not flagged WELL, cannot enable" },
+#endif
 #ifdef WANT_CPUMINE
  { SEVERITY_ERR,   MSG_CPUNON,	PARAM_NONE,	"No CPUs" },
  { SEVERITY_SUCC,  MSG_CPUDEV,	PARAM_CPU,	"CPU%d" },
  { SEVERITY_ERR,   MSG_INVCPU,	PARAM_CPUMAX,	"Invalid CPU id %d - range is 0 - %d" },
 #endif
  { SEVERITY_SUCC,  MSG_NUMGPU,	PARAM_NONE,	"GPU count" },
+ { SEVERITY_SUCC,  MSG_NUMPGA,	PARAM_NONE,	"PGA count" },
  { SEVERITY_SUCC,  MSG_NUMCPU,	PARAM_NONE,	"CPU count" },
  { SEVERITY_SUCC,  MSG_VERSION,	PARAM_NONE,	"CGMiner versions" },
  { SEVERITY_ERR,   MSG_INVJSON,	PARAM_NONE,	"Invalid JSON" },
@@ -322,7 +435,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
  { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
- { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range -10 - 10" },
+ { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " _MIN_INTENSITY_STR " - " _MAX_INTENSITY_STR },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECON, PARAM_NONE,	"CGMiner config" },
  { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
@@ -336,11 +449,148 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISFN,	PARAM_NONE,	"Missing save filename parameter" },
  { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
  { SEVERITY_ERR,   MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
- { SEVERITY_FAIL }
+ { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
+ { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
+ { SEVERITY_SUCC,  MSG_ENAPOOL,	PARAM_POOL,	"Enabling pool %d:'%s'" },
+ { SEVERITY_SUCC,  MSG_DISPOOL,	PARAM_POOL,	"Disabling pool %d:'%s'" },
+ { SEVERITY_INFO,  MSG_ALRENAP,	PARAM_POOL,	"Pool %d:'%s' already enabled" },
+ { SEVERITY_INFO,  MSG_ALRDISP,	PARAM_POOL,	"Pool %d:'%s' already disabled" },
+ { SEVERITY_ERR,   MSG_DISLASTP,PARAM_POOL,	"Cannot disable last active pool %d:'%s'" },
+ { SEVERITY_ERR,   MSG_MISPDP,	PARAM_NONE,	"Missing addpool details" },
+ { SEVERITY_ERR,   MSG_INVPDP,	PARAM_STR,	"Invalid addpool details '%s'" },
+ { SEVERITY_ERR,   MSG_TOOMANYP,PARAM_NONE,	"Reached maximum number of pools (%d)" },
+ { SEVERITY_SUCC,  MSG_ADDPOOL,	PARAM_STR,	"Added pool '%s'" },
+ { SEVERITY_ERR,   MSG_REMLASTP,PARAM_POOL,	"Cannot remove last pool %d:'%s'" },
+ { SEVERITY_ERR,   MSG_ACTPOOL, PARAM_POOL,	"Cannot remove active pool %d:'%s'" },
+ { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
+ { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
+ { SEVERITY_FAIL, 0, 0, NULL }
 };
 
+static int my_thr_id = 0;
 static int bye = 0;
 static bool ping = true;
+
+static time_t when = 0;	// when the request occurred
+
+struct IP4ACCESS {
+	in_addr_t ip;
+	in_addr_t mask;
+	bool writemode;
+};
+
+static struct IP4ACCESS *ipaccess = NULL;
+static int ips = 0;
+
+#ifdef USE_BITFORCE
+extern struct device_api bitforce_api;
+#endif
+
+#ifdef USE_ICARUS
+extern struct device_api icarus_api;
+#endif
+
+// This is only called when expected to be needed (rarely)
+// i.e. strings outside of the codes control (input from the user)
+static char *escape_string(char *str, bool isjson)
+{
+	char *buf, *ptr;
+	int count;
+
+	count = 0;
+	for (ptr = str; *ptr; ptr++) {
+		switch (*ptr) {
+		case ',':
+		case '|':
+		case '=':
+			if (!isjson)
+				count++;
+			break;
+		case '"':
+			if (isjson)
+				count++;
+			break;
+		case '\\':
+			count++;
+			break;
+		}
+	}
+
+	if (count == 0)
+		return str;
+
+	buf = malloc(strlen(str) + count + 1);
+	if (unlikely(!buf))
+		quit(1, "Failed to malloc escape buf");
+
+	ptr = buf;
+	while (*str)
+		switch (*str) {
+		case ',':
+		case '|':
+		case '=':
+			if (!isjson)
+				*(ptr++) = '\\';
+			*(ptr++) = *(str++);
+			break;
+		case '"':
+			if (isjson)
+				*(ptr++) = '\\';
+			*(ptr++) = *(str++);
+			break;
+		case '\\':
+			*(ptr++) = '\\';
+			*(ptr++) = *(str++);
+			break;
+		default:
+			*(ptr++) = *(str++);
+			break;
+		}
+
+	*ptr = '\0';
+
+	return buf;
+}
+
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+static int numpgas()
+{
+	int count = 0;
+	int i;
+
+	for (i = 0; i < total_devices; i++) {
+#ifdef USE_BITFORCE
+		if (devices[i]->api == &bitforce_api)
+			count++;
+#endif
+#ifdef USE_ICARUS
+		if (devices[i]->api == &icarus_api)
+			count++;
+#endif
+	}
+	return count;
+}
+
+static int pgadevice(int pgaid)
+{
+	int count = 0;
+	int i;
+
+	for (i = 0; i < total_devices; i++) {
+#ifdef USE_BITFORCE
+		if (devices[i]->api == &bitforce_api)
+			count++;
+#endif
+#ifdef USE_ICARUS
+		if (devices[i]->api == &icarus_api)
+			count++;
+#endif
+		if (count == (pgaid + 1))
+			return i;
+	}
+	return -1;
+}
+#endif
 
 // All replies (except BYE) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
@@ -349,6 +599,9 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 {
 	char severity;
 	char *ptr;
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+	int pga;
+#endif
 #ifdef WANT_CPUMINE
 	int cpu;
 #endif
@@ -373,14 +626,15 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 			}
 
 			if (isjson)
-				sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"%c\",\"Code\":%d,\"Msg\":\"", severity, messageid);
+				sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"%c\",\"When\":%lu,\"Code\":%d,\"Msg\":\"", severity, (unsigned long)when, messageid);
 			else
-				sprintf(msg_buffer, _STATUS "=%c,Code=%d,Msg=", severity, messageid);
+				sprintf(msg_buffer, _STATUS "=%c,When=%lu,Code=%d,Msg=", severity, (unsigned long)when, messageid);
 
 			ptr = msg_buffer + strlen(msg_buffer);
 
 			switch(codes[i].params) {
 			case PARAM_GPU:
+			case PARAM_PGA:
 			case PARAM_CPU:
 				sprintf(ptr, codes[i].description, paramid);
 				break;
@@ -390,26 +644,47 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 			case PARAM_GPUMAX:
 				sprintf(ptr, codes[i].description, paramid, nDevs - 1);
 				break;
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+			case PARAM_PGAMAX:
+				pga = numpgas();
+				sprintf(ptr, codes[i].description, paramid, pga - 1);
+				break;
+#endif
+#ifdef WANT_CPUMINE
+			case PARAM_CPUMAX:
+				if (opt_n_threads > 0)
+					cpu = num_processors;
+				else
+					cpu = 0;
+				sprintf(ptr, codes[i].description, paramid, cpu - 1);
+				break;
+#endif
 			case PARAM_PMAX:
 				sprintf(ptr, codes[i].description, total_pools);
 				break;
 			case PARAM_POOLMAX:
 				sprintf(ptr, codes[i].description, paramid, total_pools - 1);
 				break;
+			case PARAM_DMAX:
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+				pga = numpgas();
+#endif
 #ifdef WANT_CPUMINE
-			case PARAM_GCMAX:
 				if (opt_n_threads > 0)
 					cpu = num_processors;
 				else
 					cpu = 0;
-
-				sprintf(ptr, codes[i].description, nDevs, cpu);
-				break;
-#else
-			case PARAM_GMAX:
-				sprintf(ptr, codes[i].description, nDevs);
-				break;
 #endif
+
+				sprintf(ptr, codes[i].description, nDevs
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+					, pga
+#endif
+#ifdef WANT_CPUMINE
+					, cpu
+#endif
+					);
+				break;
 			case PARAM_CMD:
 				sprintf(ptr, codes[i].description, JSON_COMMAND);
 				break;
@@ -436,16 +711,16 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 	}
 
 	if (isjson)
-		sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"F\",\"Code\":-1,\"Msg\":\"%d\",\"Description\":\"%s\"}" JSON_CLOSE,
-			messageid, opt_api_description);
+		sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"F\",\"When\":%lu,\"Code\":-1,\"Msg\":\"%d\",\"Description\":\"%s\"}" JSON_CLOSE,
+			(unsigned long)when, messageid, opt_api_description);
 	else
-		sprintf(msg_buffer, _STATUS "=F,Code=-1,Msg=%d,Description=%s%c",
-			messageid, opt_api_description, SEPARATOR);
+		sprintf(msg_buffer, _STATUS "=F,When=%lu,Code=-1,Msg=%d,Description=%s%c",
+			(unsigned long)when, messageid, opt_api_description, SEPARATOR);
 
 	return msg_buffer;
 }
 
-static void apiversion(SOCKETTYPE c, char *param, bool isjson)
+static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	if (isjson)
 		sprintf(io_buffer, "%s," JSON_VERSION "{\"CGMiner\":\"%s\",\"API\":\"%s\"}" JSON_CLOSE,
@@ -457,9 +732,10 @@ static void apiversion(SOCKETTYPE c, char *param, bool isjson)
 			VERSION, APIVERSION, SEPARATOR);
 }
 
-static void minerconfig(SOCKETTYPE c, char *param, bool isjson)
+static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[BUFSIZ];
+	int pgacount = 0;
 	int cpucount = 0;
 	char *adlinuse = (char *)NO;
 #ifdef HAVE_ADL
@@ -476,6 +752,10 @@ static void minerconfig(SOCKETTYPE c, char *param, bool isjson)
 	const char *adl = NO;
 #endif
 
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+	pgacount = numpgas();
+#endif
+
 #ifdef WANT_CPUMINE
 	cpucount = opt_n_threads > 0 ? num_processors : 0;
 #endif
@@ -483,9 +763,9 @@ static void minerconfig(SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_MINECON, 0, NULL, isjson));
 
 	if (isjson)
-		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\"}" JSON_CLOSE, nDevs, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s);
+		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":%d,\"Device Code\":\"%s\",\"OS\":\"%s\"}" JSON_CLOSE, nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE, OSINFO);
 	else
-		sprintf(buf, _MINECON ",GPU Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s%c", nDevs, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, SEPARATOR);
+		sprintf(buf, _MINECON ",GPU Count=%d,PGA Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d,Device Code=%s,OS=%s%c", nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE, OSINFO, SEPARATOR);
 
 	strcat(io_buffer, buf);
 }
@@ -509,7 +789,7 @@ static void gpustatus(int gpu, bool isjson)
 #endif
 			gt = gv = gm = gc = ga = gf = gp = pt = 0;
 
-		if (cgpu->enabled)
+		if (cgpu->deven != DEV_DISABLED)
 			enabled = (char *)YES;
 		else
 			enabled = (char *)NO;
@@ -526,24 +806,81 @@ static void gpustatus(int gpu, bool isjson)
 		if (cgpu->dynamic)
 			strcpy(intensity, DYNAMIC);
 		else
-			sprintf(intensity, "%d", gpus->intensity);
+			sprintf(intensity, "%d", cgpu->intensity);
 
 		if (isjson)
-			sprintf(buf, "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\"}",
+			sprintf(buf, "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
 				gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
 				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->utility, intensity);
+				cgpu->utility, intensity,
+				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
 		else
-			sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s%c",
+			sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
 				gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
 				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->utility, intensity, SEPARATOR);
+				cgpu->utility, intensity,
+				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
 
 		strcat(io_buffer, buf);
 	}
 }
+
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+static void pgastatus(int pga, bool isjson)
+{
+	char buf[BUFSIZ];
+	char *enabled;
+	char *status;
+	int numpga = numpgas();
+
+	if (numpga > 0 && pga >= 0 && pga < numpga) {
+		int dev = pgadevice(pga);
+		if (dev < 0) // Should never happen
+			return;
+
+		struct cgpu_info *cgpu = devices[dev];
+
+		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+
+		if (cgpu->deven != DEV_DISABLED)
+			enabled = (char *)YES;
+		else
+			enabled = (char *)NO;
+
+		if (cgpu->status == LIFE_DEAD)
+			status = (char *)DEAD;
+		else if (cgpu->status == LIFE_SICK)
+			status = (char *)SICK;
+		else if (cgpu->status == LIFE_NOSTART)
+			status = (char *)NOSTART;
+		else
+			status = (char *)ALIVE;
+
+		if (isjson)
+			sprintf(buf, "{\"PGA\":%d,\"Name\":\"%s\",\"ID\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
+				pga, cgpu->api->name, cgpu->device_id,
+				enabled, status, cgpu->temp,
+				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
+				cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
+				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
+		else
+			sprintf(buf, "PGA=%d,Name=%s,ID=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
+				pga, cgpu->api->name, cgpu->device_id,
+				enabled, status, cgpu->temp,
+				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
+				cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
+				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
+
+		strcat(io_buffer, buf);
+	}
+}
+#endif
 
 #ifdef WANT_CPUMINE
 static void cpustatus(int cpu, bool isjson)
@@ -556,25 +893,30 @@ static void cpustatus(int cpu, bool isjson)
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 		if (isjson)
-			sprintf(buf, "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f}",
+			sprintf(buf, "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
 				cpu, cgpu->total_mhashes / total_secs,
 				opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected,
-				cgpu->utility);
+				cgpu->utility,
+				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
 		else
-			sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f%c",
+			sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
 				cpu, cgpu->total_mhashes / total_secs,
 				opt_log_interval, cgpu->rolling,
 				cgpu->accepted, cgpu->rejected,
-				cgpu->utility, SEPARATOR);
+				cgpu->utility,
+				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
 
 		strcat(io_buffer, buf);
 	}
 }
 #endif
 
-static void devstatus(SOCKETTYPE c, char *param, bool isjson)
+static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
+	int devcount = 0;
 	int i;
 
 	if (nDevs == 0 && opt_n_threads == 0) {
@@ -590,19 +932,37 @@ static void devstatus(SOCKETTYPE c, char *param, bool isjson)
 	}
 
 	for (i = 0; i < nDevs; i++) {
-		if (isjson && i > 0)
+		if (isjson && devcount > 0)
 			strcat(io_buffer, COMMA);
 
 		gpustatus(i, isjson);
+
+		devcount++;
 	}
+
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+	int numpga = numpgas();
+
+	if (numpga > 0)
+		for (i = 0; i < numpga; i++) {
+			if (isjson && devcount > 0)
+				strcat(io_buffer, COMMA);
+
+			pgastatus(i, isjson);
+
+			devcount++;
+		}
+#endif
 
 #ifdef WANT_CPUMINE
 	if (opt_n_threads > 0)
 		for (i = 0; i < num_processors; i++) {
-			if (isjson && (i > 0 || nDevs > 0))
+			if (isjson && devcount > 0)
 				strcat(io_buffer, COMMA);
 
 			cpustatus(i, isjson);
+
+			devcount++;
 		}
 #endif
 
@@ -610,7 +970,7 @@ static void devstatus(SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-static void gpudev(SOCKETTYPE c, char *param, bool isjson)
+static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
@@ -643,8 +1003,137 @@ static void gpudev(SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+static void pgadev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	int numpga = numpgas();
+	int id;
+
+	if (numpga == 0) {
+		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	strcpy(io_buffer, message(MSG_PGADEV, id, NULL, isjson));
+
+	if (isjson) {
+		strcat(io_buffer, COMMA);
+		strcat(io_buffer, JSON_PGA);
+	}
+
+	pgastatus(id, isjson);
+
+	if (isjson)
+		strcat(io_buffer, JSON_CLOSE);
+}
+
+static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	int numpga = numpgas();
+	struct thr_info *thr;
+	int pga;
+	int id;
+	int i;
+
+	if (numpga == 0) {
+		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	int dev = pgadevice(id);
+	if (dev < 0) { // Should never happen
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	struct cgpu_info *cgpu = devices[dev];
+
+	if (cgpu->deven != DEV_DISABLED) {
+		strcpy(io_buffer, message(MSG_PGALRENA, id, NULL, isjson));
+		return;
+	}
+
+	if (cgpu->status != LIFE_WELL) {
+		strcpy(io_buffer, message(MSG_PGAUNW, id, NULL, isjson));
+		return;
+	}
+
+	for (i = 0; i < mining_threads; i++) {
+		pga = thr_info[i].cgpu->device_id;
+		if (pga == dev) {
+			thr = &thr_info[i];
+			cgpu->deven = DEV_ENABLED;
+			tq_push(thr->q, &ping);
+		}
+	}
+
+	strcpy(io_buffer, message(MSG_PGAENA, id, NULL, isjson));
+}
+
+static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	int numpga = numpgas();
+	int id;
+
+	if (numpga == 0) {
+		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	int dev = pgadevice(id);
+	if (dev < 0) { // Should never happen
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	struct cgpu_info *cgpu = devices[dev];
+
+	if (cgpu->deven == DEV_DISABLED) {
+		strcpy(io_buffer, message(MSG_PGALRDIS, id, NULL, isjson));
+		return;
+	}
+
+	cgpu->deven = DEV_DISABLED;
+
+	strcpy(io_buffer, message(MSG_PGADIS, id, NULL, isjson));
+}
+#endif
+
 #ifdef WANT_CPUMINE
-static void cpudev(SOCKETTYPE c, char *param, bool isjson)
+static void cpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
@@ -678,10 +1167,12 @@ static void cpudev(SOCKETTYPE c, char *param, bool isjson)
 }
 #endif
 
-static void poolstatus(SOCKETTYPE c, char *param, bool isjson)
+static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 	char *status, *lp;
+	char *rpc_url;
+	char *rpc_user;
 	int i;
 
 	if (total_pools == 0) {
@@ -713,34 +1204,47 @@ static void poolstatus(SOCKETTYPE c, char *param, bool isjson)
 		else
 			lp = (char *)NO;
 
+		rpc_url = escape_string(pool->rpc_url, isjson);
+		rpc_user = escape_string(pool->rpc_user, isjson);
+
 		if (isjson)
-			sprintf(buf, "%s{\"POOL\":%d,\"URL\":\"%s\",\"Status\":\"%s\",\"Priority\":%d,\"Long Poll\":\"%s\",\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Remote Failures\":%d}",
+			sprintf(buf, "%s{\"POOL\":%d,\"URL\":\"%s\",\"Status\":\"%s\",\"Priority\":%d,\"Long Poll\":\"%s\",\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Remote Failures\":%d,\"User\":\"%s\"}",
 				(i > 0) ? COMMA : "",
-				i, pool->rpc_url, status, pool->prio, lp,
+				i, rpc_url, status, pool->prio, lp,
 				pool->getwork_requested,
 				pool->accepted, pool->rejected,
 				pool->discarded_work,
 				pool->stale_shares,
 				pool->getfail_occasions,
-				pool->remotefail_occasions);
+				pool->remotefail_occasions,
+				rpc_user);
 		else
-			sprintf(buf, "POOL=%d,URL=%s,Status=%s,Priority=%d,Long Poll=%s,Getworks=%d,Accepted=%d,Rejected=%d,Discarded=%d,Stale=%d,Get Failures=%d,Remote Failures=%d%c",
-				i, pool->rpc_url, status, pool->prio, lp,
+			sprintf(buf, "POOL=%d,URL=%s,Status=%s,Priority=%d,Long Poll=%s,Getworks=%d,Accepted=%d,Rejected=%d,Discarded=%d,Stale=%d,Get Failures=%d,Remote Failures=%d,User=%s%c",
+				i, rpc_url, status, pool->prio, lp,
 				pool->getwork_requested,
 				pool->accepted, pool->rejected,
 				pool->discarded_work,
 				pool->stale_shares,
 				pool->getfail_occasions,
-				pool->remotefail_occasions, SEPARATOR);
+				pool->remotefail_occasions,
+				rpc_user, SEPARATOR);
 
 		strcat(io_buffer, buf);
+
+		if (rpc_url != pool->rpc_url)
+			free(rpc_url);
+		rpc_url = NULL;
+
+		if (rpc_user != pool->rpc_user)
+			free(rpc_user);
+		rpc_user = NULL;
 	}
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-static void summary(SOCKETTYPE c, char *param, bool isjson)
+static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	double utility, mhs;
 
@@ -755,38 +1259,38 @@ static void summary(SOCKETTYPE c, char *param, bool isjson)
 
 #ifdef WANT_CPUMINE
 	if (isjson)
-		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u}" JSON_CLOSE,
+		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE,
 			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, algo, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks);
+			total_go, local_work, total_ro, new_blocks, total_mhashes_done);
 	else
-		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
+		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f%c",
 			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, algo, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks, SEPARATOR);
+			total_go, local_work, total_ro, new_blocks, total_mhashes_done, SEPARATOR);
 #else
 	if (isjson)
-		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u}" JSON_CLOSE,
+		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE,
 			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks);
+			total_go, local_work, total_ro, new_blocks, total_mhashes_done);
 	else
-		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u%c",
+		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f%c",
 			message(MSG_SUMM, 0, NULL, isjson),
 			total_secs, mhs, found_blocks,
 			total_getworks, total_accepted, total_rejected,
 			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks, SEPARATOR);
+			total_go, local_work, total_ro, new_blocks, total_mhashes_done, SEPARATOR);
 #endif
 }
 
-static void gpuenable(SOCKETTYPE c, char *param, bool isjson)
+static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	struct thr_info *thr;
 	int gpu;
@@ -809,7 +1313,7 @@ static void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	if (gpus[id].enabled) {
+	if (gpus[id].deven != DEV_DISABLED) {
 		strcpy(io_buffer, message(MSG_ALRENA, id, NULL, isjson));
 		return;
 	}
@@ -823,7 +1327,7 @@ static void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 				return;
 			}
 
-			gpus[id].enabled = true;
+			gpus[id].deven = DEV_ENABLED;
 			tq_push(thr->q, &ping);
 
 		}
@@ -832,7 +1336,7 @@ static void gpuenable(SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUREN, id, NULL, isjson));
 }
 
-static void gpudisable(SOCKETTYPE c, char *param, bool isjson)
+static void gpudisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
@@ -852,17 +1356,17 @@ static void gpudisable(SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	if (!gpus[id].enabled) {
+	if (gpus[id].deven == DEV_DISABLED) {
 		strcpy(io_buffer, message(MSG_ALRDIS, id, NULL, isjson));
 		return;
 	}
 
-	gpus[id].enabled = false;
+	gpus[id].deven = DEV_DISABLED;
 
 	strcpy(io_buffer, message(MSG_GPUDIS, id, NULL, isjson));
 }
 
-static void gpurestart(SOCKETTYPE c, char *param, bool isjson)
+static void gpurestart(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 
@@ -887,7 +1391,7 @@ static void gpurestart(SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUREI, id, NULL, isjson));
 }
 
-static void gpucount(SOCKETTYPE c, char *param, bool isjson)
+static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 
@@ -901,7 +1405,26 @@ static void gpucount(SOCKETTYPE c, char *param, bool isjson)
 	strcat(io_buffer, buf);
 }
 
-static void cpucount(SOCKETTYPE c, char *param, bool isjson)
+static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	char buf[BUFSIZ];
+	int count = 0;
+
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+	count = numpgas();
+#endif
+
+	strcpy(io_buffer, message(MSG_NUMPGA, 0, NULL, isjson));
+
+	if (isjson)
+		sprintf(buf, "," JSON_PGAS "{\"Count\":%d}" JSON_CLOSE, count);
+	else
+		sprintf(buf, _PGAS ",Count=%d%c", count, SEPARATOR);
+
+	strcat(io_buffer, buf);
+}
+
+static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[BUFSIZ];
 	int count = 0;
@@ -920,7 +1443,7 @@ static void cpucount(SOCKETTYPE c, char *param, bool isjson)
 	strcat(io_buffer, buf);
 }
 
-static void switchpool(SOCKETTYPE c, char *param, bool isjson)
+static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	struct pool *pool;
 	int id;
@@ -946,6 +1469,214 @@ static void switchpool(SOCKETTYPE c, char *param, bool isjson)
 	switch_pools(pool);
 
 	strcpy(io_buffer, message(MSG_SWITCHP, id, NULL, isjson));
+}
+
+static void copyadvanceafter(char ch, char **param, char **buf)
+{
+#define src_p (*param)
+#define dst_b (*buf)
+
+	while (*src_p && *src_p != ch) {
+		if (*src_p == '\\' && *(src_p+1) != '\0')
+			src_p++;
+
+		*(dst_b++) = *(src_p++);
+	}
+	if (*src_p)
+		src_p++;
+
+	*(dst_b++) = '\0';
+}
+
+static bool pooldetails(char *param, char **url, char **user, char **pass)
+{
+	char *ptr, *buf;
+
+	ptr = buf = malloc(strlen(param)+1);
+	if (unlikely(!buf))
+		quit(1, "Failed to malloc pooldetails buf");
+
+	*url = buf;
+
+	// copy url
+	copyadvanceafter(',', &param, &buf);
+
+	if (!(*param)) // missing user
+		goto exitsama;
+
+	*user = buf;
+
+	// copy user
+	copyadvanceafter(',', &param, &buf);
+
+	if (!*param) // missing pass
+		goto exitsama;
+
+	*pass = buf;
+
+	// copy pass
+	copyadvanceafter(',', &param, &buf);
+
+	return true;
+
+exitsama:
+	free(ptr);
+	return false;
+}
+
+static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	char *url, *user, *pass;
+	char *ptr;
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPDP, 0, NULL, isjson));
+		return;
+	}
+
+	if (!pooldetails(param, &url, &user, &pass)) {
+		ptr = escape_string(param, isjson);
+		strcpy(io_buffer, message(MSG_INVPDP, 0, ptr, isjson));
+		if (ptr != param)
+			free(ptr);
+		ptr = NULL;
+		return;
+	}
+
+	if (add_pool_details(true, url, user, pass) == ADD_POOL_MAXIMUM) {
+		strcpy(io_buffer, message(MSG_TOOMANYP, MAX_POOLS, NULL, isjson));
+		return;
+	}
+
+	ptr = escape_string(url, isjson);
+	strcpy(io_buffer, message(MSG_ADDPOOL, 0, ptr, isjson));
+	if (ptr != url)
+		free(ptr);
+	ptr = NULL;
+}
+
+static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	struct pool *pool;
+	int id;
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		return;
+	}
+
+	pool = pools[id];
+	if (pool->enabled == true) {
+		strcpy(io_buffer, message(MSG_ALRENAP, id, NULL, isjson));
+		return;
+	}
+
+	pool->enabled = true;
+	if (pool->prio < current_pool()->prio)
+		switch_pools(pool);
+
+	strcpy(io_buffer, message(MSG_ENAPOOL, id, NULL, isjson));
+}
+
+static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	struct pool *pool;
+	int id;
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		return;
+	}
+
+	pool = pools[id];
+	if (pool->enabled == false) {
+		strcpy(io_buffer, message(MSG_ALRDISP, id, NULL, isjson));
+		return;
+	}
+
+	if (active_pools() <= 1) {
+		strcpy(io_buffer, message(MSG_DISLASTP, id, NULL, isjson));
+		return;
+	}
+
+	pool->enabled = false;
+	if (pool == current_pool())
+		switch_pools(NULL);
+
+	strcpy(io_buffer, message(MSG_DISPOOL, id, NULL, isjson));
+}
+
+static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+{
+	struct pool *pool;
+	char *rpc_url;
+	bool dofree = false;
+	int id;
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		return;
+	}
+
+	if (total_pools <= 1) {
+		strcpy(io_buffer, message(MSG_REMLASTP, id, NULL, isjson));
+		return;
+	}
+
+	pool = pools[id];
+	if (pool == current_pool())
+		switch_pools(NULL);
+
+	if (pool == current_pool()) {
+		strcpy(io_buffer, message(MSG_ACTPOOL, id, NULL, isjson));
+		return;
+	}
+
+	pool->enabled = false;
+	rpc_url = escape_string(pool->rpc_url, isjson);
+	if (rpc_url != pool->rpc_url)
+		dofree = true;
+
+	remove_pool(pool);
+
+	strcpy(io_buffer, message(MSG_REMPOOL, id, rpc_url, isjson));
+
+	if (dofree)
+		free(rpc_url);
+	rpc_url = NULL;
 }
 
 static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
@@ -983,7 +1714,7 @@ static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 	return true;
 }
 
-static void gpuintensity(SOCKETTYPE c, char *param, bool isjson)
+static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
 	char *value;
@@ -999,7 +1730,7 @@ static void gpuintensity(SOCKETTYPE c, char *param, bool isjson)
 	}
 	else {
 		intensity = atoi(value);
-		if (intensity < -10 || intensity > 10) {
+		if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
 			strcpy(io_buffer, message(MSG_INVINT, 0, value, isjson));
 			return;
 		}
@@ -1012,7 +1743,7 @@ static void gpuintensity(SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUINT, id, intensitystr, isjson));
 }
 
-static void gpumem(SOCKETTYPE c, char *param, bool isjson)
+static void gpumem(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1033,7 +1764,7 @@ static void gpumem(SOCKETTYPE c, char *param, bool isjson)
 #endif
 }
 
-static void gpuengine(SOCKETTYPE c, char *param, bool isjson)
+static void gpuengine(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1054,7 +1785,7 @@ static void gpuengine(SOCKETTYPE c, char *param, bool isjson)
 #endif
 }
 
-static void gpufan(SOCKETTYPE c, char *param, bool isjson)
+static void gpufan(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1075,7 +1806,7 @@ static void gpufan(SOCKETTYPE c, char *param, bool isjson)
 #endif
 }
 
-static void gpuvddc(SOCKETTYPE c, char *param, bool isjson)
+static void gpuvddc(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1098,7 +1829,7 @@ static void gpuvddc(SOCKETTYPE c, char *param, bool isjson)
 
 static void send_result(SOCKETTYPE c, bool isjson);
 
-void doquit(SOCKETTYPE c, char *param, bool isjson)
+void doquit(SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	if (isjson)
 		strcpy(io_buffer, JSON_START JSON_BYE);
@@ -1108,12 +1839,104 @@ void doquit(SOCKETTYPE c, char *param, bool isjson)
 	send_result(c, isjson);
 	*io_buffer = '\0';
 	bye = 1;
+
+        PTH(&thr_info[my_thr_id]) = 0L;
+
 	kill_work();
 }
 
-void dosave(SOCKETTYPE c, char *param, bool isjson)
+void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	strcpy(io_buffer, message(MSG_ACCOK, 0, NULL, isjson));
+}
+
+void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
+{
+	char buf[BUFSIZ];
+	char *reason;
+
+	if (cgpu->device_last_not_well == 0)
+		reason = REASON_NONE;
+	else
+		switch(cgpu->device_not_well_reason) {
+		case REASON_THREAD_FAIL_INIT:
+			reason = REASON_THREAD_FAIL_INIT_STR;
+			break;
+		case REASON_THREAD_ZERO_HASH:
+			reason = REASON_THREAD_ZERO_HASH_STR;
+			break;
+		case REASON_THREAD_FAIL_QUEUE:
+			reason = REASON_THREAD_FAIL_QUEUE_STR;
+			break;
+		case REASON_DEV_SICK_IDLE_60:
+			reason = REASON_DEV_SICK_IDLE_60_STR;
+			break;
+		case REASON_DEV_DEAD_IDLE_600:
+			reason = REASON_DEV_DEAD_IDLE_600_STR;
+			break;
+		case REASON_DEV_NOSTART:
+			reason = REASON_DEV_NOSTART_STR;
+			break;
+		case REASON_DEV_OVER_HEAT:
+			reason = REASON_DEV_OVER_HEAT_STR;
+			break;
+		case REASON_DEV_THERMAL_CUTOFF:
+			reason = REASON_DEV_THERMAL_CUTOFF_STR;
+			break;
+		default:
+			reason = REASON_UNKNOWN_STR;
+			break;
+		}
+
+	// ALL counters (and only counters) must start the name with a '*'
+	// Simplifies future external support for adding new counters
+	if (isjson)
+		sprintf(buf, "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"*Thread Fail Init\":%d,\"*Thread Zero Hash\":%d,\"*Thread Fail Queue\":%d,\"*Dev Sick Idle 60s\":%d,\"*Dev Dead Idle 600s\":%d,\"*Dev Nostart\":%d,\"*Dev Over Heat\":%d,\"*Dev Thermal Cutoff\":%d}" JSON_CLOSE,
+			device > 0 ? "," : "", device, cgpu->api->name, cgpu->device_id,
+			cgpu->device_last_well, cgpu->device_last_not_well, reason,
+			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
+			cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
+			cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
+			cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count);
+	else
+		sprintf(buf, "NOTIFY=%d,Name=%s,ID=%d,Last Well=%lu,Last Not Well=%lu,Reason Not Well=%s,*Thread Fail Init=%d,*Thread Zero Hash=%d,*Thread Fail Queue=%d,*Dev Sick Idle 60s=%d,*Dev Dead Idle 600s=%d,*Dev Nostart=%d,*Dev Over Heat=%d,*Dev Thermal Cutoff=%d%c",
+			device, cgpu->api->name, cgpu->device_id,
+			cgpu->device_last_well, cgpu->device_last_not_well, reason,
+			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
+			cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
+			cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
+			cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count, SEPARATOR);
+
+	strcat(io_buffer, buf);
+}
+
+static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	int i;
+
+	if (total_devices == 0) {
+		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
+		return;
+	}
+
+	strcpy(io_buffer, message(MSG_NOTIFY, 0, NULL, isjson));
+
+	if (isjson) {
+		strcat(io_buffer, COMMA);
+		strcat(io_buffer, JSON_NOTIFY);
+	}
+
+	for (i = 0; i < total_devices; i++)
+		notifystatus(i, devices[i], isjson);
+
+	if (isjson)
+		strcat(io_buffer, JSON_CLOSE);
+}
+
+void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	FILE *fcfg;
+	char *ptr;
 
 	if (param == NULL || *param == '\0') {
 		strcpy(io_buffer, message(MSG_MISFN, 0, NULL, isjson));
@@ -1122,43 +1945,64 @@ void dosave(SOCKETTYPE c, char *param, bool isjson)
 
 	fcfg = fopen(param, "w");
 	if (!fcfg) {
-		strcpy(io_buffer, message(MSG_BADFN, 0, param, isjson));
+		ptr = escape_string(param, isjson);
+		strcpy(io_buffer, message(MSG_BADFN, 0, ptr, isjson));
+		if (ptr != param)
+			free(ptr);
+		ptr = NULL;
 		return;
 	}
 
 	write_config(fcfg);
 	fclose(fcfg);
 
-	strcpy(io_buffer, message(MSG_SAVED, 0, param, isjson));
+	ptr = escape_string(param, isjson);
+	strcpy(io_buffer, message(MSG_SAVED, 0, ptr, isjson));
+	if (ptr != param)
+		free(ptr);
+	ptr = NULL;
 }
 
 struct CMDS {
 	char *name;
 	void (*func)(SOCKETTYPE, char *, bool);
+	bool requires_writemode;
 } cmds[] = {
-	{ "version",		apiversion },
-	{ "config",		minerconfig },
-	{ "devs",		devstatus },
-	{ "pools",		poolstatus },
-	{ "summary",		summary },
-	{ "gpuenable",		gpuenable },
-	{ "gpudisable",		gpudisable },
-	{ "gpurestart",		gpurestart },
-	{ "gpu",		gpudev },
-#ifdef WANT_CPUMINE
-	{ "cpu",		cpudev },
+	{ "version",		apiversion,	false },
+	{ "config",		minerconfig,	false },
+	{ "devs",		devstatus,	false },
+	{ "pools",		poolstatus,	false },
+	{ "summary",		summary,	false },
+	{ "gpuenable",		gpuenable,	true },
+	{ "gpudisable",		gpudisable,	true },
+	{ "gpurestart",		gpurestart,	true },
+	{ "gpu",		gpudev,		false },
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+	{ "pga",		pgadev,		false },
+	{ "pgaenable",		pgaenable,	true },
+	{ "pgadisable",		pgadisable,	true },
 #endif
-	{ "gpucount",		gpucount },
-	{ "cpucount",		cpucount },
-	{ "switchpool",		switchpool },
-	{ "gpuintensity",	gpuintensity },
-	{ "gpumem",		gpumem},
-	{ "gpuengine",		gpuengine},
-	{ "gpufan",		gpufan},
-	{ "gpuvddc",		gpuvddc},
-	{ "save",		dosave },
-	{ "quit",		doquit },
-	{ NULL }
+#ifdef WANT_CPUMINE
+	{ "cpu",		cpudev,		false },
+#endif
+	{ "gpucount",		gpucount,	false },
+	{ "pgacount",		pgacount,	false },
+	{ "cpucount",		cpucount,	false },
+	{ "switchpool",		switchpool,	true },
+	{ "addpool",		addpool,	true },
+	{ "enablepool",		enablepool,	true },
+	{ "disablepool",	disablepool,	true },
+	{ "removepool",		removepool,	true },
+	{ "gpuintensity",	gpuintensity,	true },
+	{ "gpumem",		gpumem,		true },
+	{ "gpuengine",		gpuengine,	true },
+	{ "gpufan",		gpufan,		true },
+	{ "gpuvddc",		gpuvddc,	true },
+	{ "save",		dosave,		true },
+	{ "quit",		doquit,		true },
+	{ "privileged",		privileged,	true },
+	{ "notify",		notify,		false },
+	{ NULL,			NULL,		false }
 };
 
 static void send_result(SOCKETTYPE c, bool isjson)
@@ -1171,17 +2015,16 @@ static void send_result(SOCKETTYPE c, bool isjson)
 
 	len = strlen(io_buffer);
 
-	if (opt_debug)
-		applog(LOG_DEBUG, "DBG: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
+	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
 
 	// ignore failure - it's closed immediately anyway
 	n = send(c, io_buffer, len+1, 0);
 
 	if (opt_debug) {
 		if (SOCKETFAIL(n))
-			applog(LOG_DEBUG, "DBG: send failed: %s", SOCKERRMSG);
+			applog(LOG_DEBUG, "API: send failed: %s", SOCKERRMSG);
 		else
-			applog(LOG_DEBUG, "DBG: sent %d", n);
+			applog(LOG_DEBUG, "API: sent %d", n);
 	}
 
 }
@@ -1196,6 +2039,11 @@ static void tidyup()
 		sock = INVSOCK;
 	}
 
+	if (ipaccess != NULL) {
+		free(ipaccess);
+		ipaccess = NULL;
+	}
+
 	if (msg_buffer != NULL) {
 		free(msg_buffer);
 		msg_buffer = NULL;
@@ -1207,7 +2055,109 @@ static void tidyup()
 	}
 }
 
-void api(void)
+/*
+ * Interpret [R|W:]IP[/Prefix][,[R|W:]IP2[/Prefix2][,...]] --api-allow option
+ *	special case of 0/0 allows /0 (means all IP addresses)
+ */
+#define ALLIP4 "0/0"
+/*
+ * N.B. IP4 addresses are by Definition 32bit big endian on all platforms
+ */
+static void setup_ipaccess()
+{
+	char *buf, *ptr, *comma, *slash, *dot;
+	int ipcount, mask, octet, i;
+	bool writemode;
+
+	buf = malloc(strlen(opt_api_allow) + 1);
+	if (unlikely(!buf))
+		quit(1, "Failed to malloc ipaccess buf");
+
+	strcpy(buf, opt_api_allow);
+
+	ipcount = 1;
+	ptr = buf;
+	while (*ptr)
+		if (*(ptr++) == ',')
+			ipcount++;
+
+	// possibly more than needed, but never less
+	ipaccess = calloc(ipcount, sizeof(struct IP4ACCESS));
+	if (unlikely(!ipaccess))
+		quit(1, "Failed to calloc ipaccess");
+
+	ips = 0;
+	ptr = buf;
+	while (ptr && *ptr) {
+		while (*ptr == ' ' || *ptr == '\t')
+			ptr++;
+
+		if (*ptr == ',') {
+			ptr++;
+			continue;
+		}
+
+		comma = strchr(ptr, ',');
+		if (comma)
+			*(comma++) = '\0';
+
+		writemode = false;
+
+		if (isalpha(*ptr) && *(ptr+1) == ':') {
+			if (tolower(*ptr) == 'w')
+				writemode = true;
+
+			ptr += 2;
+		}
+
+		ipaccess[ips].writemode = writemode;
+
+		if (strcmp(ptr, ALLIP4) == 0)
+			ipaccess[ips].ip = ipaccess[ips].mask = 0;
+		else {
+			slash = strchr(ptr, '/');
+			if (!slash)
+				ipaccess[ips].mask = 0xffffffff;
+			else {
+				*(slash++) = '\0';
+				mask = atoi(slash);
+				if (mask < 1 || mask > 32)
+					goto popipo; // skip invalid/zero
+
+				ipaccess[ips].mask = 0;
+				while (mask-- >= 0) {
+					octet = 1 << (mask % 8);
+					ipaccess[ips].mask |= (octet << (8 * (mask >> 3)));
+				}
+			}
+
+			ipaccess[ips].ip = 0; // missing default to '.0'
+			for (i = 0; ptr && (i < 4); i++) {
+				dot = strchr(ptr, '.');
+				if (dot)
+					*(dot++) = '\0';
+
+				octet = atoi(ptr);
+				if (octet < 0 || octet > 0xff)
+					goto popipo; // skip invalid
+
+				ipaccess[ips].ip |= (octet << (i * 8));
+
+				ptr = dot;
+			}
+
+			ipaccess[ips].ip &= ipaccess[ips].mask;
+		}
+
+		ips++;
+popipo:
+		ptr = comma;
+	}
+
+	free(buf);
+}
+
+void api(int api_thr_id)
 {
 	char buf[BUFSIZ];
 	char param_buf[BUFSIZ];
@@ -1224,6 +2174,7 @@ void api(void)
 	char *cmd;
 	char *param;
 	bool addrok;
+	bool writemode;
 	json_error_t json_err;
 	json_t *json_config;
 	json_t *json_val;
@@ -1231,12 +2182,23 @@ void api(void)
 	bool did;
 	int i;
 
+	my_thr_id = api_thr_id;
+
 	/* This should be done first to ensure curl has already called WSAStartup() in windows */
 	sleep(opt_log_interval);
 
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
 		return;
+	}
+
+	if (opt_api_allow) {
+		setup_ipaccess();
+
+		if (ips == 0) {
+			applog(LOG_WARNING, "API not running (no valid IPs specified)%s", UNAVAILABLE);
+			return;
+		}
 	}
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -1249,9 +2211,9 @@ void api(void)
 
 	serv.sin_family = AF_INET;
 
-	if (!opt_api_network) {
+	if (!opt_api_allow && !opt_api_network) {
 		serv.sin_addr.s_addr = inet_addr(localaddr);
-		if (serv.sin_addr.s_addr == INVINETADDR) {
+		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
 			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 			return;
 		}
@@ -1287,10 +2249,14 @@ void api(void)
 		return;
 	}
 
-	if (opt_api_network)
-		applog(LOG_WARNING, "API running in UNRESTRICTED access mode");
-	else
-		applog(LOG_WARNING, "API running in restricted access mode");
+	if (opt_api_allow)
+		applog(LOG_WARNING, "API running in IP access mode");
+	else {
+		if (opt_api_network)
+			applog(LOG_WARNING, "API running in UNRESTRICTED access mode");
+		else
+			applog(LOG_WARNING, "API running in local access mode");
+	}
 
 	io_buffer = malloc(MYBUFSIZ+1);
 	msg_buffer = malloc(MYBUFSIZ+1);
@@ -1302,17 +2268,27 @@ void api(void)
 			goto die;
 		}
 
-		if (opt_api_network)
-			addrok = true;
-		else {
-			connectaddr = inet_ntoa(cli.sin_addr);
-			addrok = (strcmp(connectaddr, localaddr) == 0);
+		connectaddr = inet_ntoa(cli.sin_addr);
+
+		addrok = false;
+		writemode = false;
+		if (opt_api_allow) {
+			for (i = 0; i < ips; i++) {
+				if ((cli.sin_addr.s_addr & ipaccess[i].mask) == ipaccess[i].ip) {
+					addrok = true;
+					writemode = ipaccess[i].writemode;
+					break;
+				}
+			}
+		} else {
+			if (opt_api_network)
+				addrok = true;
+			else
+				addrok = (strcmp(connectaddr, localaddr) == 0);
 		}
 
-		if (opt_debug) {
-			connectaddr = inet_ntoa(cli.sin_addr);
-			applog(LOG_DEBUG, "DBG: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
-		}
+		if (opt_debug)
+			applog(LOG_DEBUG, "API: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
 
 		if (addrok) {
 			n = recv(c, &buf[0], BUFSIZ-1, 0);
@@ -1323,12 +2299,15 @@ void api(void)
 
 			if (opt_debug) {
 				if (SOCKETFAIL(n))
-					applog(LOG_DEBUG, "DBG: recv failed: %s", SOCKERRMSG);
+					applog(LOG_DEBUG, "API: recv failed: %s", SOCKERRMSG);
 				else
-					applog(LOG_DEBUG, "DBG: recv command: (%d) '%s'", n, buf);
+					applog(LOG_DEBUG, "API: recv command: (%d) '%s'", n, buf);
 			}
 
 			if (!SOCKETFAIL(n)) {
+				// the time of the request in now
+				when = time(NULL);
+
 				did = false;
 
 				if (*buf != ISJSON) {
@@ -1345,7 +2324,13 @@ void api(void)
 
 					param = NULL;
 
+#if JANSSON_MAJOR_VERSION > 2 || (JANSSON_MAJOR_VERSION == 2 && JANSSON_MINOR_VERSION > 0)
 					json_config = json_loadb(buf, n, 0, &json_err);
+#elif JANSSON_MAJOR_VERSION > 1
+					json_config = json_loads(buf, 0, &json_err);
+#else
+					json_config = json_loads(buf, &json_err);
+#endif
 
 					if (!json_is_object(json_config)) {
 						strcpy(io_buffer, message(MSG_INVJSON, 0, NULL, isjson));
@@ -1385,7 +2370,13 @@ void api(void)
 				if (!did)
 					for (i = 0; cmds[i].name != NULL; i++) {
 						if (strcmp(cmd, cmds[i].name) == 0) {
-							(cmds[i].func)(c, param, isjson);
+							if (cmds[i].requires_writemode && !writemode) {
+								strcpy(io_buffer, message(MSG_ACCDENY, 0, cmds[i].name, isjson));
+								applog(LOG_DEBUG, "API: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
+							}
+							else
+								(cmds[i].func)(c, param, isjson);
+
 							send_result(c, isjson);
 							did = true;
 							break;

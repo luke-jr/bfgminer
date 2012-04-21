@@ -1,11 +1,11 @@
 
-This is a multi-threaded multi-pool CPU, GPU, and FPGA miner with ATI GPU
+This is a multi-threaded multi-pool GPU, FPGA and CPU miner with ATI GPU
 monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
 
 This code is provided entirely free of charge by the programmer in his spare
-time so donations would be greatly appreciated. Please consider using the
---donation feature or donate directly to the address below.
+time so donations would be greatly appreciated. Please consider donating to the
+address below.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
@@ -41,18 +41,22 @@ Dependencies:
 	yasm 1.0.1+ http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
 	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
-	(This sdk is optional and gives support for GPU mining)
+	(This sdk is mandatory for GPU mining)
 	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
-	(This sdk is optional and gives support for ATI GPU monitoring & clocking)
+	(This sdk is mandatory for ATI GPU monitoring & clocking)
+	libudev headers
+	(This is only required for FPGA auto-detection)
 
 CGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-opencl        Override detection and disable building with opencl
 	--disable-adl           Override detection and disable building with adl
+	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
+	--enable-icarus         Compile support for Icarus Board(default disabled)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
-	Install AMD APP sdk, latest version - there is no official place to
+	Install AMD APP sdk, ideal version (see FAQ!) - no official place to
 	install it so just keep track of where it is if you're not installing
 	the include files and library files into the system directory.
 	(Do NOT install the ati amd sdk if you are on nvidia.)
@@ -99,10 +103,10 @@ Basic WIN32 build instructions (LIKELY OUTDATED INFO. requires mingw32):
 	make
 	./mknsis.sh
 	
-Native WIN32 build instructions (on mingw32, on windows):
+Native WIN32 build instructions (outdated, see windows-build.txt)
 	Install the Microsoft platform SDK
-	Install AMD APP sdk, latest version (only if you want GPU mining)
-	Install AMD ADL sdk, latest version (only if you want GPU monitoring)
+	Install AMD APP sdk, (if you want GPU mining)
+	Install AMD ADL sdk, (if you want GPU monitoring)
 	(Do NOT install the ati amd sdk if you are on nvidia)
 	Install mingw32
 	Install libcurl, copy libcurl.m4 into /mingw/share/aclocal
@@ -118,14 +122,19 @@ Usage instructions:  Run "cgminer --help" to see options:
 
 Usage: . [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
 Options for both config file and command line:
+--api-allow         Allow API access (if enabled) only to the given list of [W:]IP[/Prefix] address[/subnets]
+                    This overrides --api-network and you must specify 127.0.0.1 if it is required
+                    W: in front of the IP address gives that address privileged access to all api commands
 --api-description   Description placed in the API status header (default: cgminer version)
 --api-listen        Listen for API requests (default: disabled)
+                    By default any command that does not just display data returns access denied
+                    See --api-allow to overcome this
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-port          Port number of miner API (default: 4028)
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
+--benchmark         Run cgminer in benchmark mode - produces no shares
 --debug|-D          Enable debug output
---donation <arg>    Set donation percentage to cgminer author (0.0 - 99.9) (default: 0.0)
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --load-balance      Change multipool strategy from failover to even load balance
@@ -151,6 +160,7 @@ Options for both config file and command line:
 --socks-proxy <arg> Set socks4 proxy (host:port)
 --submit-stale      Submit shares even if they would normally be considered stale
 --syslog            Use system log for output messages (default: standard error)
+--temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
 --text-only|-T      Disable ncurses formatted screen output
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server
@@ -170,28 +180,39 @@ GPU only options:
 --device|-d <arg>   Select device to use, (Use repeat -d for multiple devices, default: all)
 --disable-gpu|-G    Disable GPU mining even if suitable devices exist
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
+--gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
 --gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
 --gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
 --gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
 --gpu-memdiff <arg> Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode
 --gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
+--gpu-reorder       Attempt to reorder GPU devices according to PCI Bus ID
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
 --intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
+--kernel|-k <arg>   Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
 --kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/local/bin")
---kernel|-k <arg>   Select kernel to use (poclbm or phatk - default: auto)
+--ndevs|-n          Enumerate number of detected GPUs and exit
 --no-restart        Do not attempt to restart GPUs that hang
---temp-cutoff <arg> Temperature where a GPU device will be automatically disabled, one value or comma separated list (default: 95)
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
 --temp-target <arg> Target temperature when automatically managing fan and GPU speeds (default: 75)
---vectors|-v <arg>  Override detected optimal vector width (1, 2 or 4)
---worksize|-w <arg> Override detected optimal worksize (default: 0)
---ndevs|-n          Enumerate number of detected GPUs and exit
+--vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
+--worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 
 
-BitForce only options:
+FPGA mining boards(BitForce, Icarus) only options:
 
---scan-serial|-S <arg> Serial port to probe for BitForce device
+--scan-serial|-S <arg> Serial port to probe for FPGA mining device
+
+     By default, cgminer will scan for autodetected FPGAs unless at least one
+     -S is specified. If you specify -S and still want cgminer to scan, you
+     must also use "-S auto". Note that presently, autodetection only works
+     on Linux, and might only detect one device depending on the version of
+     udev being used.
+
+     On linux <arg> is usually of the format /dev/ttyUSBn
+     On windows <arg> is usually of the format COMn
+       (where n = the correct device number for the FPGA device)
 
 
 CPU only options:
@@ -215,6 +236,11 @@ EXECUTIVE SUMMARY ON USAGE:
 
 After saving configuration from the menu, you do not need to give cgminer any
 arguments and it will load your configuration.
+
+Any configuration file may also contain a single
+	"include" : "filename"
+to recursively include another configuration file.
+Writing the configuration will save all settings from all files in the output.
 
 
 Single pool, regular desktop:
@@ -310,14 +336,14 @@ The output line shows the following:
 (5s):1713.6 (avg):1707.8 Mh/s | Q:301  A:729  R:8  HW:0  E:242%  U:22.53/m
 
 Each column is as follows:
-A 5 second exponentially decaying average hash rate
-An all time average hash rate
-The number of requested (Queued) work items from the pools
-The number of Accepted shares
-The number of Rejected shares
-The number of HardWare errors
-The Efficiency defined as number of shares returned / work item
-The Utility defined as the number of shares / minute
+5s:  A 5 second exponentially decaying average hash rate
+avg: An all time average hash rate
+Q:   The number of requested (Queued) work items from the pools
+A:   The number of Accepted shares
+R:   The number of Rejected shares
+HW:  The number of HardWare errors
+E:   The Efficiency defined as number of shares returned / work item
+U:   The Utility defined as the number of shares / minute
 
  GPU 1: 73.5C 2551RPM | 427.3/443.0Mh/s | A:8 R:0 HW:0 U:4.39/m
 
@@ -525,15 +551,35 @@ cgminer shuts down because of this.
 
 ---
 
-API
+RPC API
 
 If you start cgminer with the "--api-listen" option, it will listen on a
 simple TCP/IP socket for single string API requests from the same machine
 running cgminer and reply with a string and then close the socket each time
-Also, if you add the "--api-network" option, it will accept API requests
-from any network attached computer.
+If you add the "--api-network" option, it will accept API requests from any
+network attached computer.
 
-The request can be either simple text or JSON.
+You can only access the comands that reply with data in this mode.
+By default, you cannot access any privileged command that affects the miner -
+you will receive an access denied status message see --api-allow below.
+
+You can specify IP addresses/prefixes that are only allowed to access the API
+with the "--api-allow" option e.g. --api-allow W:192.168.0.1,10.0.0/24
+will allow 192.168.0.1 or any address matching 10.0.0.*, but nothing else
+IP addresses are automatically padded with extra '.0's as needed
+Without a /prefix is the same as specifying /32
+0/0 means all IP addresses.
+The 'W:' on the front gives that address/subnet privileged access to commands
+that modify cgminer.
+Without it those commands return an access denied status.
+Privileged access is checked in the order the IP addresses were supplied to
+"--api-allow"
+The first match determines the privilege level.
+Using the "--api-allow" option overides the "--api-network" option if they
+are both specified
+With "--api-allow", 127.0.0.1 is not by default given access unless specified
+
+The RPC API request can be either simple text or JSON.
 
 If the request is JSON (starts with '{'), it will reply with a JSON formatted
 response, otherwise it replies with text formatted as described further below.
@@ -543,16 +589,27 @@ The JSON request format required is '{"command":"CMD","parameter":"PARAM"}'
 where "CMD" is from the "Request" column below and "PARAM" would be e.g.
 the CPU/GPU number if required.
 
-An example request in both formats:
+An example request in both formats to set GPU 0 fan to 80%:
   gpufan|0,80
   {"command":"gpufan","parameter":"0,80"}
 
 The format of each reply (unless stated otherwise) is a STATUS section
 followed by an optional detail section
 
+From API verion 1.7 onwards, reply strings in JSON and Text have the
+necessary escaping as required to avoid ambiguity - they didn't before 1.7
+For JSON the 2 characters '"' and '\' are escaped with a '\' before them
+For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
+
+Only user entered information will contain characters that require being
+escaped, such as Pool URL, User and Password or the Config save filename,
+when they are returned in messages or as their values by the API
+
+For API version 1.4 and later:
+
 The STATUS section is:
 
- STATUS=X,Code=N,Msg=string,Description=string|
+ STATUS=X,When=NNN,Code=N,Msg=string,Description=string|
 
   STATUS=X Where X is one of:
    W - Warning
@@ -560,6 +617,9 @@ The STATUS section is:
    S - Success
    E - Error
    F - Fatal (code bug)
+
+  When=NNN
+   Standard long time of request in seconds
 
   Code=N
    Each unique reply has a unigue Code (See api.c - #define MSG_NNNNNN)
@@ -571,7 +631,9 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-The list of requests and replies are:
+For API version 1.7:
+
+The list of requests - a (*) means it requires privileged access - and replies are:
 
  Request       Reply Section  Details
  -------       -------------  -------
@@ -580,11 +642,14 @@ The list of requests and replies are:
 
  config        CONFIG         Some miner configuration information:
                               GPU Count=N, <- the number of GPUs
+                              PGA Count=N, <- the number of PGAs
                               CPU Count=N, <- the number of CPUs
                               Pool Count=N, <- the number of Pools
                               ADL=X, <- Y or N if ADL is compiled in the code
                               ADL in use=X, <- Y or N if any GPU has ADL
-                              Strategy=Name| <- the current pool strategy
+                              Strategy=Name, <- the current pool strategy
+                              Log Interval=N, <- log interval (--log N)
+                              Device Code=GPU ICA | <- spaced list of compiled devices
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -592,12 +657,21 @@ The list of requests and replies are:
  pools         POOLS          The status of each pool
                               e.g. Pool=0,URL=http://pool.com:6311,Status=Alive,...|
 
- devs          DEVS           Each available CPU and GPU with their details
+ devs          DEVS           Each available GPU, PGA and CPU with their details
                               e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
+                              Last Share Time=NNN, <- standand long time in seconds
+                               (or 0 if none) of last accepted share
+                              Last Share Pool=N, <- pool number (or -1 if none)
+                              Will not report PGAs if PGA mining is disabled
                               Will not report CPUs if CPU mining is disabled
 
  gpu|N         GPU            The details of a single GPU number N in the same
                               format and details as for DEVS
+
+ pga|N         PGA            The details of a single PGA number N in the same
+                              format and details as for DEVS
+                              This is only available if PGA mining is enabled
+                              Use 'pgacount' or 'config' first to see if there are any
 
  cpu|N         CPU            The details of a single CPU number N in the same
                               format and details as for DEVS
@@ -606,47 +680,106 @@ The list of requests and replies are:
 
  gpucount      GPUS           Count=N| <- the number of GPUs
 
+ pgacount      PGAS           Count=N| <- the number of PGAs
+                              Always returns 0 if PGA mining is disabled
+
  cpucount      CPUS           Count=N| <- the number of CPUs
                               Always returns 0 if CPU mining is disabled
 
- switchpool|N  none           There is no reply section just the STATUS section
+ switchpool|N (*)
+               none           There is no reply section just the STATUS section
                               stating the results of switching pool N to the
                               highest priority (the pool is also enabled)
                               The Msg includes the pool URL
 
- gpuenable|N   none           There is no reply section just the STATUS section
+ enablepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of enabling pool N
+                              The Msg includes the pool URL
+
+ addpool|URL,USR,PASS (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of attempting to add pool N
+                              The Msg includes the pool URL
+                              Use '\\' to get a '\' and '\,' to include a comma
+                              inside URL, USR or PASS
+
+ disablepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of disabling pool N
+                              The Msg includes the pool URL
+
+ removepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of removing pool N
+                              The Msg includes the pool URL
+                              N.B. all details for the pool will be lost
+
+ gpuenable|N (*)
+               none           There is no reply section just the STATUS section
                               stating the results of the enable request
 
- gpudisable|N  none           There is no reply section just the STATUS section
+ gpudisable|N (*)
+               none           There is no reply section just the STATUS section
                               stating the results of the disable request
 
- gpurestart|N  none           There is no reply section just the STATUS section
+ gpurestart|N (*)
+               none           There is no reply section just the STATUS section
                               stating the results of the restart request
 
- gpuintensity|N,I  none       There is no reply section just the STATUS section
+ gpuintensity|N,I (*)
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N intensity to I
 
- gpumem|N,V    none           There is no reply section just the STATUS section
+ gpumem|N,V (*)
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N memoryclock to V MHz
 
- gpuengine|N,V none           There is no reply section just the STATUS section
+ gpuengine|N,V (*)
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N clock to V MHz
 
- gpufan|N,V    none           There is no reply section just the STATUS section
+ gpufan|N,V (*)
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N fan speed to V%
 
- gpuvddc|N,V   none           There is no reply section just the STATUS section
+ gpuvddc|N,V (*)
+               none           There is no reply section just the STATUS section
                               stating the results of setting GPU N vddc to V
 
- save|filename none           There is no reply section just the STATUS section
+ save|filename (*)
+               none           There is no reply section just the STATUS section
                               stating success or failure saving the cgminer config
                               to filename
 
- quit          none           There is no status section but just a single "BYE|"
+ quit (*)      none           There is no status section but just a single "BYE|"
                               reply before cgminer quits
 
-When you enable, disable or restart a GPU, you will also get Thread messages in
-the cgminer status window
+ notify        NOTIFY         The last status and history count of each devices problem
+                              e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
+
+ privileged (*)
+               none           There is no reply section just the STATUS section
+                              stating an error if you do not have privileged access
+                              to the API and success if you do have privilege
+                              The command doesn't change anything in cgminer
+
+ pgaenable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the enable request
+                              You cannot enable a PGA if it's status is not WELL
+                              This is only available if PGA mining is enabled
+
+ pgadisable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the disable request
+                              This is only available if PGA mining is enabled
+
+When you enable, disable or restart a GPU or PGA, you will also get Thread messages
+in the cgminer status window
+
+When you switch to a different pool to the current one, you will get a
+'Switching to URL' message in the cgminer status windows
 
 Obviously, the JSON format is simply just the names as given before the '='
 with the values after the '='
@@ -675,11 +808,9 @@ api-example.c - a 'C' program to access the API (with source code)
   api-example summary 127.0.0.1 4028
 
 miner.php - an example web page to access the API
- This includes buttons to enable, disable and restart the GPUs and also to
- quit cgminer
- You must modify the 2 lines near the top to change where it looks for cgminer
-  $miner = '127.0.0.1'; # hostname or IP address
-  $port = 4028;
+ This includes buttons and inputs to attempt access to the privileged commands
+ Read the top of the file (miner.php) for details of how to tune the display
+ and also to use the option to display a multi-rig summary
 
 ---
 
@@ -711,7 +842,9 @@ Q: The CPU usage is high.
 A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
 CPU core unnecessarily so downgrade to 11.6. Binding cgminer to one CPU core on
 windows can minimise it to 100% (instead of more than one core). Driver version
-11.11 on linux and 11.12 on windows appear to have fixed this issue.
+11.11 on linux and 11.12 on windows appear to have fixed this issue. Note that
+later drivers may have an apparent return of high CPU usage. Try
+'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting cgminer.
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
@@ -745,14 +878,6 @@ than whatever it is being packaged with. If you installed cgminer yourself,
 then you do not have a virus on your computer. Complain to your antivirus
 software company.
 
-Q: How does the donation feature work and how does it affect my shares?
-A: The donation feature is disabled by default and only does anything once
-enabled. It queries the author's website for login credentials and contributes
-up to a proportion of work to the author's account. While the overall
-accepted/rejected rates will include this work, none of these will appear in
-your own accounts. On exiting, the summary will tell you how many shares were
-contributed to the author.
-
 Q: Can you modify the display to include more of one thing in the output and
 less of another, or can you change the quiet mode or can you add yet another
 output mode?
@@ -762,20 +887,14 @@ any further.
 
 Q: Can you change the autofan/autogpu to change speeds in a different manner?
 A: The defaults are sane and safe. I'm not interested in changing them
-further. The starting fan speed is set to 85% in auto-fan mode as a safety
-precaution, but if a specific fan speed has been set, it will use that first
-before adjusting automatically.
-
-Q: The fanspeed starts at 85% with --auto-fan. Can I set it lower?
-A: The initial fanspeed will always start at 85% unless you choose your own
-value with --gpu-fan. In this case it will use the value you give it with
---gpu-fan as the first fanspeed.
+further. The starting fan speed is set to 50% in auto-fan mode as a safety
+precaution.
 
 Q: Why is my efficiency above/below 100%?
 A: Efficiency simply means how many shares you return for the amount of work
 you request. It does not correlate with efficient use of your hardware, and is
 a measure of a combination of hardware speed, block luck, pool design and other
-factors.
+factors
 
 Q: What are the best parameters to pass for X pool/hardware/device.
 A: Virtually always, the DEFAULT parameters give the best results. Most user
@@ -800,21 +919,53 @@ this time.
 
 Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK, -v 1 -w 64 might help, along with not decreasing your memroy clock
-speed.
+the 2.6 SDK.
 
-Q: ATI 79XX support?
-A: Pending.
+Q: I have multiple SDKs installed, can I choose which one it uses?
+A: Run cgminer with the -n option and it will list all the platforms currently
+installed. Then you can tell cgminer which platform to use with --gpu-platform.
 
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one
 though.
 
+Q: I'm having an issue. What debugging information should I provide?
+A: Start cgminer with your regular commands and add -D -T --verbose and provide
+the full startup output and a summary of your hardware, operating system, ATI
+driver version and ATI stream version.
+
+Q: cgminer reports no devices or only one device on startup on Linux although
+I have multiple devices and drivers+SDK installed properly?
+A: Try 'export DISPLAY=:0" before running cgminer.
+
+Q: My network gets slower and slower and then dies for a minute?
+A; Try the --net-delay option.
+
+Q: How do I tune for p2pool?
+A: p2pool has very rapid expiration of work and new blocks, it is suggested you
+decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
+with -g 1.
+
+Q: Are kernels from other mining software useable in cgminer?
+A: No, the APIs are slightly different between the different software and they
+will not work.
+
+Q: I run PHP on windows to access the API with the example miner.php. Why does
+it fail when php is installed properly but I only get errors about Sockets not
+working in the logs?
+A: http://us.php.net/manual/en/sockets.installation.php
+
+Q: What is a PGA?
+A: At the moment, cgminer supports 2 FPGA's: Icarus and BitForce.
+They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
+mining. Since the acronym needs to be only 3 characters, the "Field-" part has
+been skipped.
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
-time so donations would be greatly appreciated. Please consider using the
---donation feature or donate directly to the address below.
+time so donations would be greatly appreciated. Please consider donating to the
+address below.
 
 Con Kolivas <kernel@kolivas.org>
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ

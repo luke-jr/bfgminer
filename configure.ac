@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [2])
-m4_define([v_min], [1])
-m4_define([v_mic], [2])
+m4_define([v_min], [3])
+m4_define([v_mic], [3])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -16,7 +16,7 @@ AC_INIT([cgminer], [v_ver], [kernel@kolivas.org])
 AC_PREREQ(2.59)
 AC_CANONICAL_SYSTEM
 AC_CONFIG_MACRO_DIR([m4])
-AC_CONFIG_SRCDIR([main.c])
+AC_CONFIG_SRCDIR([cgminer.c])
 AC_CONFIG_HEADERS([config.h])
 
 AM_INIT_AUTOMAKE([foreign])
@@ -112,6 +112,8 @@ if test "x$ATISTREAMSDKROOT" != x; then
 	OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ATI_STREAM_ARCH_DIR $OPENCL_LIBS"
 fi
 
+cpumining="no"
+
 AC_ARG_ENABLE([cpumining],
 	[AC_HELP_STRING([--enable-cpumining],[Build with cpu mining support(default disabled)])],
 	[cpumining=$enableval]
@@ -120,6 +122,8 @@ if test "x$cpumining" = xyes; then
 	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
 fi
 AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
+
+opencl="yes"
 
 AC_ARG_ENABLE([opencl],
 	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
@@ -181,25 +185,58 @@ else
 	DLOPEN_FLAGS=""
 fi
 
-bitforce=yes
+bitforce="no"
+
 AC_ARG_ENABLE([bitforce],
-	[AC_HELP_STRING([--disable-bitforce],[Don't compile support for BitForce FPGAs])],
+	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs(default disabled)])],
 	[bitforce=$enableval]
-)
-if test "x$bitforce" != xno; then
-	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted.])
+	)
+if test "x$bitforce" = xyes; then
+	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
+
+icarus="no"
+
+AC_ARG_ENABLE([icarus],
+	[AC_HELP_STRING([--enable-icarus],[Compile support for Icarus (default disabled)])],
+	[icarus=$enableval]
+	)
+if test "x$icarus" = xyes; then
+	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+fi
+AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
+
+
+curses="auto"
+
+AC_ARG_WITH([curses],
+	[AC_HELP_STRING([--without-curses],[Compile support for curses TUI (default enabled)])],
+	[curses=$withval]
+	)
+if test "x$curses" = "xno"; then
+	cursesmsg='User specified --without-curses. TUI support DISABLED'
+else
+	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
+		curses=yes
+		cursesmsg="FOUND: ${ac_cv_search_addstr:2}"
+		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
+	], [
+		if test "x$curses" = "xyes"; then
+			AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
+		else
+			AC_MSG_WARN([Could not find curses library - if you want a TUI, install libncurses-dev or pdcurses-dev])
+			curses=no
+			cursesmsg='NOT FOUND. TUI support DISABLED'
+		fi
+	])
 fi
 
-AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
-        AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev]))
 
-AC_CHECK_LIB(ncurses, addstr, NCURSES_LIBS=-lncurses)
-AC_CHECK_LIB(pdcurses, addstr, PDCURSES_LIBS=-lpdcurses)
-
+AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
-AM_CONDITIONAL([USE_BITFORCE], [test x$bitforce != xno])
 
 if test x$request_jansson = xtrue
 then
@@ -243,6 +280,26 @@ if test "x$has_yasm" = "xfalse" ; then
 fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
+
+if test "x$bitforce" != xno; then
+	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
+		[libudev=$withval],
+		[libudev=auto]
+		)
+	if test "x$libudev" != "xno"; then
+		AC_CHECK_HEADER([libudev.h],[
+			libudev=yes
+			UDEV_LIBS=-ludev
+			AC_DEFINE([HAVE_LIBUDEV], [1], [Defined to 1 if libudev is wanted])
+		], [
+			if test "x$libudev" = "xyes"; then
+				AC_MSG_ERROR([libudev not found])
+			fi
+			libudev=no
+		])
+	fi
+fi
+AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
 PKG_PROG_PKG_CONFIG()
 
@@ -288,6 +345,12 @@ fi
 
 AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
 
+AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120223"], [Filename for phatk kernel])
+AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120327"], [Filename for poclbm kernel])
+AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120223"], [Filename for diakgcn kernel])
+AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120328"], [Filename for diablo kernel])
+
+
 AC_SUBST(OPENCL_LIBS)
 AC_SUBST(OPENCL_FLAGS)
 AC_SUBST(JANSSON_LIBS)
@@ -298,6 +361,7 @@ AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
+AC_SUBST(UDEV_LIBS)
 
 AC_CONFIG_FILES([
 	Makefile
@@ -322,20 +386,20 @@ echo
 echo "Configuration Options Summary:"
 echo
 
-echo "  BitForce.FPGAs.......: $bitforce"
+echo "  curses.TUI...........: $cursesmsg"
 
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$cpumining$bitforce" = xnono; then
+		if test "x$cpumining$bitforce$icarus" = xnonono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$cpumining$bitforce" = xnono; then
+	if test "x$cpumining$bitforce$icarus" = xnonono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 fi
@@ -351,19 +415,34 @@ else
 fi
 
 echo
+if test "x$bitforce" = xyes; then
+	echo "  BitForce.FPGAs.......: Enabled"
+else
+	echo "  BitForce.FPGAs.......: Disabled"
+fi
+
+if test "x$icarus" = xyes; then
+	echo "  Icarus.FPGAs.........: Enabled"
+else
+	echo "  Icarus.FPGAs.........: Disabled"
+fi
+
+if test "x$bitforce" != xno; then
+	echo "  libudev.detection....: $libudev"
+fi
 
 if test "x$cpumining" = xyes; then
+	echo
 	echo "  CPU Mining...........: Enabled"
 	echo "  ASM.(for CPU mining).: $has_yasm"
-else
-	echo "  CPU Mining...........: Disabled"
 fi
+
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"

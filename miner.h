@@ -11,6 +11,7 @@
 #include <curl/curl.h>
 #include "elist.h"
 #include "uthash.h"
+#include "logging.h"
 
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
@@ -60,30 +61,6 @@ void *alloca (size_t);
  #include "ADL_SDK/adl_sdk.h"
 #endif
 
-#ifdef __SSE2__
-#define WANT_SSE2_4WAY 1
-#endif
-
-#ifdef __ALTIVEC__
-#define WANT_ALTIVEC_4WAY 1
-#endif
-
-#if defined(__i386__) && defined(HAS_YASM) && defined(__SSE2__)
-#define WANT_X8632_SSE2 1
-#endif
-
-#if (defined(__i386__) || defined(__x86_64__)) &&  !defined(__APPLE__)
-#define WANT_VIA_PADLOCK 1
-#endif
-
-#if defined(__x86_64__) && defined(HAS_YASM)
-#define WANT_X8664_SSE2 1
-#endif
-
-#if defined(__x86_64__) && defined(HAS_YASM)
-#define WANT_X8664_SSE4 1
-#endif
-
 #if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define bswap_16 __builtin_bswap16
 #define bswap_32 __builtin_bswap32
@@ -126,18 +103,6 @@ void *alloca (size_t);
 #endif
 #endif
 
-#ifdef HAVE_SYSLOG_H
-#include <syslog.h>
-#else
-enum {
-	LOG_ERR,
-	LOG_WARNING,
-	LOG_NOTICE,
-	LOG_INFO,
-	LOG_DEBUG,
-};
-#endif
-
 #undef unlikely
 #undef likely
 #if defined(__GNUC__) && (__GNUC__ > 2) && defined(__OPTIMIZE__)
@@ -147,6 +112,7 @@ enum {
 #define unlikely(expr) (expr)
 #define likely(expr) (expr)
 #endif
+#define __maybe_unused		__attribute__((unused))
 
 #if defined(__i386__)
 #define WANT_CRYPTOPP_ASM32
@@ -155,19 +121,6 @@ enum {
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
-
-enum sha256_algos {
-	ALGO_C,			/* plain C */
-	ALGO_4WAY,		/* parallel SSE2 */
-	ALGO_VIA,		/* VIA padlock */
-	ALGO_CRYPTOPP,		/* Crypto++ (C) */
-	ALGO_CRYPTOPP_ASM32,	/* Crypto++ 32-bit assembly */
-	ALGO_SSE2_32,		/* SSE2 for x86_32 */
-	ALGO_SSE2_64,		/* SSE2 for x86_64 */
-	ALGO_SSE4_64,		/* SSE4 for x86_64 */
-	ALGO_ALTIVEC_4WAY,	/* parallel Altivec */
-};
-
 
 enum alive {
 	LIFE_WELL,
@@ -197,6 +150,8 @@ struct gpu_adl {
 	ADLTemperature lpTemperature;
 	int iAdapterIndex;
 	int lpAdapterID;
+	int iBusNumber;
+	char strAdapterName[256];
 
 	ADLPMActivity lpActivity;
 	ADLODParameters lpOdParameters;
@@ -204,7 +159,6 @@ struct gpu_adl {
 	ADLFanSpeedInfo lpFanSpeedInfo;
 	ADLFanSpeedValue lpFanSpeedValue;
 	ADLFanSpeedValue DefFanSpeedValue;
-	ADLThermalControllerInfo lpThermalControllerInfo;
 
 	int iEngineClock;
 	int iMemoryClock;
@@ -215,11 +169,11 @@ struct gpu_adl {
 	bool autoengine;
 	bool managed; /* Were the values ever changed on this card */
 
+	int lastengine;
 	int lasttemp;
 	int targetfan;
 	int targettemp;
 	int overtemp;
-	int cutofftemp;
 	int minspeed;
 	int maxspeed;
 
@@ -233,6 +187,7 @@ struct thr_info;
 struct work;
 
 struct device_api {
+	char*dname;
 	char*name;
 
 	// API-global functions
@@ -253,15 +208,52 @@ struct device_api {
 	void (*thread_shutdown)(struct thr_info*);
 };
 
+enum dev_enable {
+	DEV_ENABLED,
+	DEV_DISABLED,
+	DEV_RECOVER,
+};
+
+enum cl_kernels {
+	KL_NONE,
+	KL_POCLBM,
+	KL_PHATK,
+	KL_DIAKGCN,
+	KL_DIABLO,
+};
+
+enum dev_reason {
+	REASON_THREAD_FAIL_INIT,
+	REASON_THREAD_ZERO_HASH,
+	REASON_THREAD_FAIL_QUEUE,
+	REASON_DEV_SICK_IDLE_60,
+	REASON_DEV_DEAD_IDLE_600,
+	REASON_DEV_NOSTART,
+	REASON_DEV_OVER_HEAT,
+	REASON_DEV_THERMAL_CUTOFF,
+};
+
+#define REASON_NONE			"None"
+#define REASON_THREAD_FAIL_INIT_STR	"Thread failed to init"
+#define REASON_THREAD_ZERO_HASH_STR	"Thread got zero hashes"
+#define REASON_THREAD_FAIL_QUEUE_STR	"Thread failed to queue work"
+#define REASON_DEV_SICK_IDLE_60_STR	"Device idle for 60s"
+#define REASON_DEV_DEAD_IDLE_600_STR	"Device dead - idle for 600s"
+#define REASON_DEV_NOSTART_STR		"Device failed to start"
+#define REASON_DEV_OVER_HEAT_STR	"Device over heated"
+#define REASON_DEV_THERMAL_CUTOFF_STR	"Device reached thermal cutoff"
+#define REASON_UNKNOWN_STR		"Unknown reason - code bug"
+
 struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
 	int device_id;
+	char *name;
 	char *device_path;
 	FILE *device_file;
 	int device_fd;
 
-	bool enabled;
+	enum dev_enable deven;
 	int accepted;
 	int rejected;
 	int hw_errors;
@@ -275,8 +267,21 @@ struct cgpu_info {
 	int threads;
 	struct thr_info *thread;
 
-	bool dynamic;
+	unsigned int max_hashes;
+
+	int virtual_gpu;
 	int intensity;
+	bool dynamic;
+	char *kname;
+#ifdef HAVE_OPENCL
+	cl_uint vwidth;
+	size_t work_size;
+	enum cl_kernels kernel;
+#endif
+
+	float temp;
+	int cutofftemp;
+
 #ifdef HAVE_ADL
 	bool has_adl;
 	struct gpu_adl adl;
@@ -290,17 +295,23 @@ struct cgpu_info {
 	int gpu_powertune;
 	float gpu_vddc;
 #endif
+	int last_share_pool;
+	time_t last_share_pool_time;
+
+	time_t device_last_well;
+	time_t device_last_not_well;
+	enum dev_reason device_not_well_reason;
+	int thread_fail_init_count;
+	int thread_zero_hash_count;
+	int thread_fail_queue_count;
+	int dev_sick_idle_60_count;
+	int dev_dead_idle_600_count;
+	int dev_nostart_count;
+	int dev_over_heat_count;	// It's a warning but worth knowing
+	int dev_thermal_cutoff_count;
 };
 
-#ifndef WIN32
-#define PTH(thr) ((thr)->pth)
-#else
-#define PTH(thr) ((thr)->pth.p)
-static inline void nanosleep(struct timespec *rgtp, void *__unused)
-{
-	Sleep(rgtp->tv_nsec / 1000000);
-}
-#endif
+extern bool add_cgpu(struct cgpu_info*);
 
 struct thread_q {
 	struct list_head	q;
@@ -313,6 +324,8 @@ struct thread_q {
 
 struct thr_info {
 	int		id;
+	int		device_thread;
+
 	pthread_t	pth;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
@@ -327,6 +340,7 @@ struct thr_info {
 
 extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 extern void thr_info_cancel(struct thr_info *thr);
+extern void thr_info_freeze(struct thr_info *thr);
 
 
 struct string_elist {
@@ -430,27 +444,27 @@ static inline void rwlock_init(pthread_rwlock_t *lock)
 
 struct pool;
 
-extern bool opt_debug;
 extern bool opt_protocol;
-extern bool opt_log_output;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+extern char *opt_api_allow;
 extern char *opt_api_description;
 extern int opt_api_port;
 extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
+extern bool opt_restart;
 
 extern pthread_rwlock_t netacc_lock;
 
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool, bool *,
-			     struct pool *pool);
+			     struct pool *pool, bool);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
@@ -460,56 +474,6 @@ typedef bool (*sha256_func)(int thr_id, const unsigned char *pmidstate,
 	const unsigned char *ptarget,
 	uint32_t max_nonce,
 	uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool ScanHash_4WaySSE2(int, const unsigned char *pmidstate,
-	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
-
-extern bool ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
-
-extern bool scanhash_via(int, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *target,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_c(int, const unsigned char *midstate, unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_cryptopp(int, const unsigned char *midstate,unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_asm32(int, const unsigned char *midstate,unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
-
-extern bool scanhash_sse2_64(int, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool scanhash_sse4_64(int, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool scanhash_sse2_32(int, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce);
 
 extern int
@@ -524,14 +488,13 @@ struct work_restart {
 	char			padding[128 - sizeof(unsigned long)];
 };
 
+extern void thread_reportin(struct thr_info *thr);
+
 extern void kill_work(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);
 
 #ifdef HAVE_ADL
-extern float gpu_temp(int gpu);
-extern int gpu_fanspeed(int gpu);
-extern int gpu_fanpercent(int gpu);
 extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc, int *activity, int *fanspeed, int *fanpercent, int *powertune);
 extern int set_fanspeed(int gpu, int iFanSpeed);
 extern int set_vddc(int gpu, float fVddc);
@@ -539,11 +502,23 @@ extern int set_engineclock(int gpu, int iEngineClock);
 extern int set_memoryclock(int gpu, int iMemoryClock);
 #endif
 
-extern void api(void);
+extern void api(int thr_id);
+
+extern struct pool *current_pool(void);
+extern int active_pools(void);
+extern int add_pool_details(bool live, char *url, char *user, char *pass);
+
+#define ADD_POOL_MAXIMUM 1
+#define ADD_POOL_OK 0
 
 #define MAX_GPUDEVICES 16
-#define MAX_DEVICES 32
+#define MAX_DEVICES 64
 #define MAX_POOLS (32)
+
+#define MIN_INTENSITY -10
+#define _MIN_INTENSITY_STR "-10"
+#define MAX_INTENSITY 14
+#define _MAX_INTENSITY_STR "14"
 
 extern struct list_head scan_devices;
 extern int nDevs;
@@ -575,6 +550,7 @@ extern int total_accepted, total_rejected;
 extern int total_getworks, total_stale, total_discarded;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
+extern const int opt_cutofftemp;
 extern int opt_log_interval;
 
 #ifdef HAVE_OPENCL
@@ -596,6 +572,11 @@ typedef struct {
 	cl_uint PreW19;
 	cl_uint PreW31;
 	cl_uint PreW32;
+
+	/* For diakgcn */
+	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
+	cl_uint zeroA, zeroB;
+	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
 } dev_blk_ctx;
 #else
 typedef struct {
@@ -612,8 +593,12 @@ struct pool {
 	bool lagging;
 	bool probed;
 	bool enabled;
+	bool submit_old;
 
 	char *hdr_path;
+	char *lp_url;
+	bool lp_sent;
+	bool is_lp;
 
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
@@ -650,30 +635,26 @@ struct work {
 	bool		clone;
 	bool		cloned;
 	bool		rolltime;
+	bool		longpoll;
 
 	unsigned int	work_block;
 	int		id;
 	UT_hash_handle hh;
 };
 
-enum cl_kernel {
-	KL_NONE,
-	KL_POCLBM,
-	KL_PHATK,
-};
-
 extern void get_datestamp(char *, struct timeval *);
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
+extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
-extern void vapplog(int prio, const char *fmt, va_list ap);
-extern void applog(int prio, const char *fmt, ...);
+extern bool pool_tclear(struct pool *pool, bool *var);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
@@ -681,8 +662,7 @@ extern void *tq_pop(struct thread_q *tq, const struct timespec *abstime);
 extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
-extern enum cl_kernel chosen_kernel;
 extern void adl(void);
-extern bool get_dondata(char **url, char **userpass);
+extern void app_restart(void);
 
 #endif /* __MINER_H__ */

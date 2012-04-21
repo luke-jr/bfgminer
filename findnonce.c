@@ -1,10 +1,10 @@
 /*
- * Copyright 2011 Con Kolivas
+ * Copyright 2011-2012 Con Kolivas
  * Copyright 2011 Nils Schneider
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option)
+ * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  */
 
@@ -16,9 +16,7 @@
 #include <pthread.h>
 #include <string.h>
 
-#include "ocl.h"
 #include "findnonce.h"
-#include "miner.h"
 
 const uint32_t SHA256_K[64] = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -66,9 +64,6 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->cty_a = A;
 	blk->cty_b = B;
 	blk->cty_c = C;
-
-	blk->C1addK5 = C + 0x59f111f1;
-
 	blk->cty_d = D;
 
 	blk->D1A = D + 0xb956c25b;
@@ -93,12 +88,12 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 
 	blk->W16 = blk->fW0 = data[0] + (rotr(data[1], 7) ^ rotr(data[1], 18) ^ (data[1] >> 3));
 	blk->W17 = blk->fW1 = data[1] + (rotr(data[2], 7) ^ rotr(data[2], 18) ^ (data[2] >> 3)) + 0x01100000;
-	blk->PreVal4 = blk->fcty_e = E + (rotr(B, 6) ^ rotr(B, 11) ^ rotr(B, 25)) + (D ^ (B & (C ^ D))) + 0xe9b5dba5;
+	blk->PreVal4 = blk->fcty_e = blk->ctx_e + (rotr(B, 6) ^ rotr(B, 11) ^ rotr(B, 25)) + (D ^ (B & (C ^ D))) + 0xe9b5dba5;
 	blk->T1 = blk->fcty_e2 = (rotr(F, 2) ^ rotr(F, 13) ^ rotr(F, 22)) + ((F & G) | (H & (F | G)));
 	blk->PreVal4_2 = blk->PreVal4 + blk->T1;
-	blk->PreVal0 = blk->PreVal4 + state[0];
+	blk->PreVal0 = blk->PreVal4 + blk->ctx_a;
 	blk->PreW31 = 0x00000280 + (rotr(blk->W16,  7) ^ rotr(blk->W16, 18) ^ (blk->W16 >> 3));
-	blk->PreW32 = blk->W16 + ((rotr(blk->W17, 7) ^ rotr(blk->W17, 18) ^ (blk->W17 >> 3)));
+	blk->PreW32 = blk->W16 + (rotr(blk->W17, 7) ^ rotr(blk->W17, 18) ^ (blk->W17 >> 3));
 	blk->PreW18 = data[2] + (rotr(blk->W16, 17) ^ rotr(blk->W16, 19) ^ (blk->W16 >> 10));
 	blk->PreW19 = 0x11002000 + (rotr(blk->W17, 17) ^ rotr(blk->W17, 19) ^ (blk->W17 >> 10));
 
@@ -115,7 +110,23 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 
 
 	blk->PreVal4addT1 = blk->PreVal4 + blk->T1;
-	blk->T1substate0 = state[0] - blk->T1;
+	blk->T1substate0 = blk->ctx_a - blk->T1;
+
+	blk->C1addK5 = blk->cty_c + SHA256_K[5];
+	blk->B1addK6 = blk->cty_b + SHA256_K[6];
+	blk->PreVal0addK7 = blk->PreVal0 + SHA256_K[7];
+	blk->W16addK16 = blk->W16 + SHA256_K[16];
+	blk->W17addK17 = blk->W17 + SHA256_K[17];
+
+	blk->zeroA = blk->ctx_a + 0x98c7e2a2;
+	blk->zeroB = blk->ctx_a + 0xfc08884d;
+	blk->oneA = blk->ctx_b + 0x90bb1e3c;
+	blk->twoA = blk->ctx_c + 0x50c6645b;
+	blk->threeA = blk->ctx_d + 0x3ac42e24;
+	blk->fourA = blk->ctx_e + SHA256_K[4];
+	blk->fiveA = blk->ctx_f + SHA256_K[5];
+	blk->sixA = blk->ctx_g + SHA256_K[6];
+	blk->sevenA = blk->ctx_h + SHA256_K[7];
 }
 
 #define P(t) (W[(t)&0xF] = W[(t-16)&0xF] + (rotate(W[(t-15)&0xF], 25) ^ rotate(W[(t-15)&0xF], 14) ^ (W[(t-15)&0xF] >> 3)) + W[(t-7)&0xF] + (rotate(W[(t-2)&0xF], 15) ^ rotate(W[(t-2)&0xF], 13) ^ (W[(t-2)&0xF] >> 10)))
@@ -174,7 +185,7 @@ static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 	E = blk->cty_e; F = blk->cty_f;
 	G = blk->cty_g; H = blk->cty_h;
 	W[0] = blk->merkle; W[1] = blk->ntime;
-	W[2] = blk->nbits; W[3] = nonce;;
+	W[2] = blk->nbits; W[3] = nonce;
 	W[4] = 0x80000000; W[5] = 0x00000000; W[6] = 0x00000000; W[7] = 0x00000000;
 	W[8] = 0x00000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
 	W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000280;
@@ -198,12 +209,11 @@ static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 	FR(32); FR(40);
 	FR(48); PFR(56);
 
-	if (likely(H == 0xA41F32E7)) {
+	if (likely(H == 0xa41f32e7)) {
 		if (unlikely(submit_nonce(thr, work, nonce) == false))
 			applog(LOG_ERR, "Failed to submit work, exiting");
 	} else {
-		if (opt_debug)
-			applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
+		applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 	}
@@ -217,18 +227,16 @@ static void *postcalc_hash(void *userdata)
 
 	pthread_detach(pthread_self());
 
-	do {
-		if (pcd->res[entry]) {
+	for (entry = 0; entry < FOUND; entry++) {
+		if (pcd->res[entry])
 			send_nonce(pcd, pcd->res[entry]);
-			nonces++;
-		}
-	} while (++entry < FOUND);
+		nonces++;
+	}
 
 	free(pcd);
 
 	if (unlikely(!nonces)) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "No nonces found! Error in OpenCL code?");
+		applog(LOG_DEBUG, "No nonces found! Error in OpenCL code?");
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 	}

@@ -9,9 +9,7 @@
  *
  */
 
-#include "config.h"
-
-#include "miner.h"
+#include "driver-cpu.h"
 
 #ifdef WANT_X8664_SSE4
 
