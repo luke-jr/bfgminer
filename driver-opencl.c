@@ -1209,7 +1209,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 
 		return false;
 	}
-	if (name && !cgpu->name)
+	if (!cgpu->name)
 		cgpu->name = strdup(name);
 	if (!cgpu->kname)
 	{
