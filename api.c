@@ -2029,7 +2029,7 @@ static void send_result(SOCKETTYPE c, bool isjson)
 
 }
 
-static void tidyup()
+static void tidyup(void *arg)
 {
 	bye = 1;
 
@@ -2182,6 +2182,7 @@ void api(int api_thr_id)
 	bool did;
 	int i;
 
+	pthread_cleanup_push(tidyup, NULL);
 	my_thr_id = api_thr_id;
 
 	/* This should be done first to ensure curl has already called WSAStartup() in windows */
@@ -2392,5 +2393,5 @@ void api(int api_thr_id)
 		CLOSESOCKET(c);
 	}
 die:
-	tidyup();
+	pthread_cleanup_pop(true);
 }
