@@ -919,7 +919,7 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 	int devcount = 0;
 	int i;
 
-	if (nDevs == 0 && opt_n_threads == 0) {
+	if (total_devices == 0) {
 		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
 		return;
 	}
