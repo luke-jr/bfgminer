@@ -163,6 +163,7 @@ static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
+static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
 static const char *DYNAMIC = _DYNAMIC;
 
@@ -770,149 +771,109 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	strcat(io_buffer, buf);
 }
 
-static void gpustatus(int gpu, bool isjson)
+static const char*
+bool2str(bool b)
 {
-	char intensity[20];
-	char buf[BUFSIZ];
-	char *enabled;
-	char *status;
-	float gt, gv;
-	int ga, gf, gp, gc, gm, pt;
+	return b ? YES : NO;
+}
 
-	if (gpu >= 0 && gpu < nDevs) {
-		struct cgpu_info *cgpu = &gpus[gpu];
+static const char*
+status2str(enum alive status)
+{
+	switch (status) {
+	case LIFE_WELL:
+		return ALIVE;
+	case LIFE_SICK:
+		return SICK;
+	case LIFE_DEAD:
+		return DEAD;
+	case LIFE_NOSTART:
+		return NOSTART;
+	default:
+		return UNKNOWN;
+	}
+}
 
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+#ifdef HAVE_OPENCL
+extern struct device_api opencl_api;
+#endif
 
+static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
+{
+	tailsprintf(buf, isjson
+				? "{\"%s\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f"
+				: "%s=%d,Enabled=%s,Status=%s,Temperature=%.2f",
+			cgpu->api->name, cgpu->device_id,
+			bool2str(cgpu->deven != DEV_DISABLED),
+			status2str(cgpu->status),
+			cgpu->temp
+	);
+#ifdef HAVE_OPENCL
+	if (cgpu->api == &opencl_api) {
+		float gt, gv;
+		int ga, gf, gp, gc, gm, pt;
 #ifdef HAVE_ADL
 		if (!gpu_stats(gpu, &gt, &gc, &gm, &gv, &ga, &gf, &gp, &pt))
 #endif
 			gt = gv = gm = gc = ga = gf = gp = pt = 0;
-
-		if (cgpu->deven != DEV_DISABLED)
-			enabled = (char *)YES;
-		else
-			enabled = (char *)NO;
-
-		if (cgpu->status == LIFE_DEAD)
-			status = (char *)DEAD;
-		else if (cgpu->status == LIFE_SICK)
-			status = (char *)SICK;
-		else if (cgpu->status == LIFE_NOSTART)
-			status = (char *)NOSTART;
-		else
-			status = (char *)ALIVE;
-
+		tailsprintf(buf, isjson
+					? ",\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d"
+					: ",Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d",
+				gf, gp, gc, gm, gv, ga, pt
+		);
+	}
+#endif
+	tailsprintf(buf, isjson
+				? ",\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f"
+				: ",MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f",
+			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
+			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->utility
+	);
+#ifdef HAVE_OPENCL
+	if (cgpu->api == &opencl_api) {
+		char intensity[20];
 		if (cgpu->dynamic)
 			strcpy(intensity, DYNAMIC);
 		else
 			sprintf(intensity, "%d", cgpu->intensity);
-
-		if (isjson)
-			sprintf(buf, "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
-				gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
-				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->utility, intensity,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-		else
-			sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
-				gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
-				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->utility, intensity,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
-
-		strcat(io_buffer, buf);
+		tailsprintf(buf, isjson
+					? ",\"Intensity\":\"%s\""
+					: ",Intensity=%s",
+				intensity
+		);
 	}
+#endif
+	tailsprintf(buf, isjson
+				? ",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
+				: ",Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f",
+			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
+	if (!isjson)
+		tailsprintf(buf, "%c", SEPARATOR);
 }
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+static void gpustatus(int gpu, bool isjson)
+{
+	if (gpu < 0 || gpu >= nDevs)
+		return;
+	devstatus_an(io_buffer, &gpus[gpu], isjson);
+}
+
 static void pgastatus(int pga, bool isjson)
 {
-	char buf[BUFSIZ];
-	char *enabled;
-	char *status;
-	int numpga = numpgas();
-
-	if (numpga > 0 && pga >= 0 && pga < numpga) {
-		int dev = pgadevice(pga);
-		if (dev < 0) // Should never happen
-			return;
-
-		struct cgpu_info *cgpu = devices[dev];
-
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-
-		if (cgpu->deven != DEV_DISABLED)
-			enabled = (char *)YES;
-		else
-			enabled = (char *)NO;
-
-		if (cgpu->status == LIFE_DEAD)
-			status = (char *)DEAD;
-		else if (cgpu->status == LIFE_SICK)
-			status = (char *)SICK;
-		else if (cgpu->status == LIFE_NOSTART)
-			status = (char *)NOSTART;
-		else
-			status = (char *)ALIVE;
-
-		if (isjson)
-			sprintf(buf, "{\"PGA\":%d,\"Name\":\"%s\",\"ID\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
-				pga, cgpu->api->name, cgpu->device_id,
-				enabled, status, cgpu->temp,
-				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-		else
-			sprintf(buf, "PGA=%d,Name=%s,ID=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
-				pga, cgpu->api->name, cgpu->device_id,
-				enabled, status, cgpu->temp,
-				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
-
-		strcat(io_buffer, buf);
-	}
+	int dev = pgadevice(pga);
+	if (dev < 0) // Should never happen
+		return;
+	devstatus_an(io_buffer, devices[dev], isjson);
 }
-#endif
 
-#ifdef WANT_CPUMINE
 static void cpustatus(int cpu, bool isjson)
 {
-	char buf[BUFSIZ];
-
-	if (opt_n_threads > 0 && cpu >= 0 && cpu < num_processors) {
-		struct cgpu_info *cgpu = &cpus[cpu];
-
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-
-		if (isjson)
-			sprintf(buf, "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
-				cpu, cgpu->total_mhashes / total_secs,
-				opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected,
-				cgpu->utility,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-		else
-			sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
-				cpu, cgpu->total_mhashes / total_secs,
-				opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected,
-				cgpu->utility,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
-
-		strcat(io_buffer, buf);
-	}
+	if (opt_n_threads <= 0 || cpu < 0 || cpu >= num_processors)
+		return;
+	devstatus_an(io_buffer, &cpus[cpu], isjson);
 }
-#endif
 
 static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
