@@ -206,13 +206,17 @@ static void bitforce_detect_auto()
 static void bitforce_detect()
 {
 	struct string_elist *iter, *tmp;
+	const char*s;
 	bool found = false;
 	bool autoscan = false;
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
-		if (!strcmp(iter->string, "auto"))
+		s = iter->string;
+		if (!strncmp("bitforce:", iter->string, 9))
+			s += 9;
+		if (!strcmp(s, "auto"))
 			autoscan = true;
-		else if (bitforce_detect_one(iter->string)) {
+		else if (bitforce_detect_one(s)) {
 			string_elist_del(iter);
 			found = true;
 		}
@@ -308,6 +312,10 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 			if (temp > bitforce->cutofftemp) {
 				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, disabling!", bitforce->api->name, bitforce->device_id);
 				bitforce->deven = DEV_RECOVER;
+
+				bitforce->device_last_not_well = time(NULL);
+				bitforce->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
+				bitforce->dev_thermal_cutoff_count++;
 			}
 		}
 	}

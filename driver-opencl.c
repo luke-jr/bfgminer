@@ -11,7 +11,10 @@
 
 #include "config.h"
 
+#ifdef HAVE_CURSES
 #include <curses.h>
+#endif
+
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -32,8 +35,10 @@
 
 /* TODO: cleanup externals ********************/
 
+#ifdef HAVE_CURSES
 extern WINDOW *mainwin, *statuswin, *logwin;
 extern void enable_curses(void);
+#endif
 
 extern int mining_threads;
 extern double total_secs;
@@ -526,6 +531,9 @@ void pause_dynamic_threads(int gpu)
 
 struct device_api opencl_api;
 
+#endif /* HAVE_OPENCL */
+
+#if defined(HAVE_OPENCL) && defined(HAVE_CURSES)
 void manage_gpu(void)
 {
 	struct thr_info *thr;
@@ -743,10 +751,8 @@ static _clState *clStates[MAX_GPUDEVICES];
 static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
 	cl_kernel *kernel = &clState->kernel;
-	cl_uint vwidth = clState->vwidth;
-	unsigned int i, num = 0;
+	unsigned int num = 0;
 	cl_int status = 0;
-	uint *nonces;
 
 	CL_SET_BLKARG(ctx_a);
 	CL_SET_BLKARG(ctx_b);
@@ -765,10 +771,15 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	CL_SET_BLKARG(cty_g);
 	CL_SET_BLKARG(cty_h);
 
-	nonces = alloca(sizeof(uint) * vwidth);
-	for (i = 0; i < vwidth; i++)
-		nonces[i] = blk->nonce + (i * threads);
-	CL_SET_VARG(vwidth, nonces);
+	if (!clState->goffset) {
+		cl_uint vwidth = clState->vwidth;
+		uint *nonces = alloca(sizeof(uint) * vwidth);
+		unsigned int i;
+
+		for (i = 0; i < vwidth; i++)
+			nonces[i] = blk->nonce + (i * threads);
+		CL_SET_VARG(vwidth, nonces);
+	}
 
 	CL_SET_BLKARG(fW0);
 	CL_SET_BLKARG(fW1);
@@ -777,7 +788,6 @@ static cl_int queue_poclbm_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	CL_SET_BLKARG(fW15);
 	CL_SET_BLKARG(fW01r);
 
-	CL_SET_BLKARG(fcty_e2);
 	CL_SET_BLKARG(D1A);
 	CL_SET_BLKARG(C1addK5);
 	CL_SET_BLKARG(B1addK6);
@@ -897,15 +907,19 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk,
 static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
 	cl_kernel *kernel = &clState->kernel;
-	cl_uint vwidth = clState->vwidth;
-	unsigned int i, num = 0;
+	unsigned int num = 0;
 	cl_int status = 0;
-	uint *nonces;
 
-	nonces = alloca(sizeof(uint) * vwidth);
-	for (i = 0; i < vwidth; i++)
-		nonces[i] = blk->nonce + (i * threads);
-	CL_SET_VARG(vwidth, nonces);
+	if (!clState->goffset) {
+		cl_uint vwidth = clState->vwidth;
+		uint *nonces = alloca(sizeof(uint) * vwidth);
+		unsigned int i;
+
+		for (i = 0; i < vwidth; i++)
+			nonces[i] = blk->nonce + (i * threads);
+		CL_SET_VARG(vwidth, nonces);
+	}
+
 
 	CL_SET_BLKARG(PreVal0);
 	CL_SET_BLKARG(PreVal0addK7);
@@ -1178,14 +1192,21 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 			applog(LOG_ERR, "Restarting the GPU from the menu will not fix this.");
 			applog(LOG_ERR, "Try restarting cgminer.");
 			failmessage = true;
+#ifdef HAVE_CURSES
 			if (use_curses) {
 				buf = curses_input("Press enter to continue");
 				if (buf)
 					free(buf);
 			}
+#endif
 		}
 		cgpu->deven = DEV_DISABLED;
 		cgpu->status = LIFE_NOSTART;
+
+		cgpu->device_last_not_well = time(NULL);
+		cgpu->device_not_well_reason = REASON_DEV_NOSTART;
+		cgpu->dev_nostart_count++;
+
 		return false;
 	}
 	if (name && !cgpu->name)
@@ -1263,6 +1284,8 @@ static bool opencl_thread_init(struct thr_info *thr)
 	}
 
 	gpu->status = LIFE_WELL;
+
+	gpu->device_last_well = time(NULL);
 
 	return true;
 }
@@ -1359,8 +1382,16 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		memset(thrdata->res, 0, BUFFERSIZE);
 		clFinish(clState->commandQueue);
 	}
-	status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
-			globalThreads, localThreads, 0,  NULL, NULL);
+
+	if (clState->goffset) {
+		size_t global_work_offset[1];
+
+		global_work_offset[0] = work->blk.nonce;
+		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, global_work_offset,
+						globalThreads, localThreads, 0,  NULL, NULL);
+	} else
+		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
+						globalThreads, localThreads, 0,  NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)");
 		return 0;

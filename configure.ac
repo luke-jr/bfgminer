@@ -2,7 +2,7 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [2])
 m4_define([v_min], [3])
-m4_define([v_mic], [1])
+m4_define([v_mic], [3])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -207,12 +207,33 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
-AC_SEARCH_LIBS(addstr, ncurses pdcurses, ,
-        AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev]))
 
-AC_CHECK_LIB(ncurses, addstr, NCURSES_LIBS=-lncurses)
-AC_CHECK_LIB(pdcurses, addstr, PDCURSES_LIBS=-lpdcurses)
+curses="auto"
 
+AC_ARG_WITH([curses],
+	[AC_HELP_STRING([--without-curses],[Compile support for curses TUI (default enabled)])],
+	[curses=$withval]
+	)
+if test "x$curses" = "xno"; then
+	cursesmsg='User specified --without-curses. TUI support DISABLED'
+else
+	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
+		curses=yes
+		cursesmsg="FOUND: ${ac_cv_search_addstr:2}"
+		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
+	], [
+		if test "x$curses" = "xyes"; then
+			AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
+		else
+			AC_MSG_WARN([Could not find curses library - if you want a TUI, install libncurses-dev or pdcurses-dev])
+			curses=no
+			cursesmsg='NOT FOUND. TUI support DISABLED'
+		fi
+	])
+fi
+
+
+AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
@@ -261,12 +282,12 @@ fi
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
 if test "x$bitforce" != xno; then
-	AC_ARG_WITH([libudev], [AC_HELP_STRING([--with-libudev], [Autodetect FPGAs using libudev])],
-		[libudev=$enableval],
+	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
+		[libudev=$withval],
 		[libudev=auto]
 		)
 	if test "x$libudev" != "xno"; then
-		AC_CHECK_LIB([udev], [udev_device_get_devnode], [
+		AC_CHECK_HEADER([libudev.h],[
 			libudev=yes
 			UDEV_LIBS=-ludev
 			AC_DEFINE([HAVE_LIBUDEV], [1], [Defined to 1 if libudev is wanted])
@@ -325,9 +346,9 @@ fi
 AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
 
 AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120223"], [Filename for phatk kernel])
-AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120222"], [Filename for poclbm kernel])
+AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120327"], [Filename for poclbm kernel])
 AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120223"], [Filename for diakgcn kernel])
-AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120222"], [Filename for diablo kernel])
+AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120328"], [Filename for diablo kernel])
 
 
 AC_SUBST(OPENCL_LIBS)
@@ -364,6 +385,8 @@ echo
 echo
 echo "Configuration Options Summary:"
 echo
+
+echo "  curses.TUI...........: $cursesmsg"
 
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then
@@ -408,12 +431,10 @@ if test "x$bitforce" != xno; then
 	echo "  libudev.detection....: $libudev"
 fi
 
-echo
 if test "x$cpumining" = xyes; then
+	echo
 	echo "  CPU Mining...........: Enabled"
 	echo "  ASM.(for CPU mining).: $has_yasm"
-else
-	echo "  CPU Mining...........: Disabled"
 fi
 
 echo

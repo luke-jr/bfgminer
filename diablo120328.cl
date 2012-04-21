@@ -44,8 +44,13 @@
 #define ZR26(n) ((Zrotr((n), 26) ^ Zrotr((n), 21) ^ Zrotr((n), 7)))
 #define ZR30(n) ((Zrotr((n), 30) ^ Zrotr((n), 19) ^ Zrotr((n), 10)))
 
-__kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
+__kernel
+__attribute__((vec_type_hint(z)))
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+void search(
+#ifndef GOFFSET
     const z base,
+#endif
     const uint PreVal4_state0, const uint PreVal4_state0_k7,
     const uint PreVal4_T1,
     const uint W18, const uint W19,
@@ -62,7 +67,11 @@ __kernel __attribute__((reqd_work_group_size(WORKSIZE, 1, 1))) void search(
 
   z ZA[930];
 
+#ifdef GOFFSET
+	const z Znonce = (uint)(get_global_id(0));
+#else
 	const z Znonce = base + (uint)(get_global_id(0));
+#endif
 
     ZA[15] = Znonce + PreVal4_state0;
     

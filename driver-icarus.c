@@ -100,7 +100,10 @@ static int icarus_open(const char *devpath)
 				    NULL, OPEN_EXISTING, 0, NULL);
 	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
 		return -1;
-	/* TODO: Needs setup read block time. just like VTIME = 10 */
+
+	COMMTIMEOUTS cto = {1000, 0, 1000, 0, 1000};
+	SetCommTimeouts(hSerial, &cto);
+
 	return _open_osfhandle((LONG)hSerial, 0);
 #endif
 }
@@ -120,7 +123,7 @@ static int icarus_gets(unsigned char *buf, size_t bufLen, int fd)
 
 		rc++;
 		if (rc == ICARUS_READ_FAULT_COUNT) {
-			applog(LOG_WARNING,
+			applog(LOG_DEBUG,
 			       "Icarus Read: No data in %d seconds", rc);
 			return 1;
 		}
@@ -204,9 +207,13 @@ static bool icarus_detect_one(const char *devpath)
 static void icarus_detect()
 {
 	struct string_elist *iter, *tmp;
+	const char*s;
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
-		if (icarus_detect_one(iter->string))
+		s = iter->string;
+		if (!strncmp("icarus:", iter->string, 7))
+			s += 7;
+		if (icarus_detect_one(s))
 			string_elist_del(iter);
 	}
 }
