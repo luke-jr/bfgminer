@@ -1226,6 +1226,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		case KL_POCLBM:
 			cgpu->kname = "poclbm";
 		default:
+			break;
 		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
