@@ -9,7 +9,7 @@
  *
  */
 
-#include "device-cpu.h"
+#include "driver-cpu.h"
 
 #ifdef WANT_X8664_SSE2
 

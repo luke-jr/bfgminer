@@ -51,10 +51,9 @@ static void ztex_detect()
 		struct cgpu_info *ztex;
 		ztex = calloc(1, sizeof(struct cgpu_info));
 		ztex->api = &ztex_api;
-		ztex->device_id = total_devices;
 		ztex->device = ztex_devices[i]->dev;
 		ztex->threads = 1;
-		devices[total_devices++] = ztex;
+		add_cgpu(ztex);
 
 		applog(LOG_WARNING,"%s: Found Ztex, mark as %d", ztex->device->repr, ztex->device_id);
 	}
@@ -313,7 +312,8 @@ static void ztex_disable (struct thr_info *thr)
 }
 
 struct device_api ztex_api = {
-	.name = "ZTX",
+	.dname = "ztex",
+	.name = "PGA",
 	.api_detect = ztex_detect,
 	.get_statline_before = ztex_statline_before,
 	.thread_prepare = ztex_prepare,

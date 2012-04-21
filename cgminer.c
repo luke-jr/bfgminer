@@ -44,8 +44,8 @@
 #include "miner.h"
 #include "findnonce.h"
 #include "adl.h"
-#include "device-cpu.h"
-#include "device-gpu.h"
+#include "driver-cpu.h"
+#include "driver-opencl.h"
 #include "bench_block.h"
 
 #if defined(unix)
@@ -1164,7 +1164,10 @@ WINDOW *mainwin, *statuswin, *logwin;
 #endif
 double total_secs = 0.1;
 static char statusline[256];
+/* logstart is where the log window should start */
 static int devcursor, logstart, logcursor;
+/* statusy is where the status window goes up to in cases where it won't fit at startup */
+static int statusy;
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
@@ -1257,7 +1260,7 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s", current_hash, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
-	mvwhline(statuswin, logstart - 1, 0, '-', 80);
+	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
 		have_opencl ? "[G]PU management " : "");
 }
@@ -1275,10 +1278,11 @@ static void curses_print_devstatus(int thr_id)
 	char logline[255];
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-	if (total_devices > 14)
-		return;
 
-	mvwprintw(statuswin, devcursor + cgpu->cgminer_id, 0, " %s %d: ", cgpu->api->name, cgpu->device_id);
+	/* Check this isn't out of the window size */
+	if (wmove(statuswin,devcursor + cgpu->cgminer_id, 0) == ERR)
+		return;
+	wprintw(statuswin, " %s %d: ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before) {
 		logline[0] = '\0';
 		cgpu->api->get_statline_before(logline, cgpu);
@@ -1295,10 +1299,10 @@ static void curses_print_devstatus(int thr_id)
 		wprintw(statuswin, "REST  ");
 	else
 		wprintw(statuswin, "%5.1f", cgpu->rolling);
-		adj_width(cgpu->accepted, &awidth);
-		adj_width(cgpu->rejected, &rwidth);
-		adj_width(cgpu->hw_errors, &hwwidth);
-		adj_width(cgpu->utility, &uwidth);
+	adj_width(cgpu->accepted, &awidth);
+	adj_width(cgpu->rejected, &rwidth);
+	adj_width(cgpu->hw_errors, &hwwidth);
+	adj_width(cgpu->utility, &uwidth);
 	wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
 			cgpu->total_mhashes / total_secs,
 			awidth, cgpu->accepted,
@@ -1327,16 +1331,31 @@ static void print_status(int thr_id)
 static inline bool change_logwinsize(void)
 {
 	int x, y, logx, logy;
+	bool ret = false;
 
 	getmaxyx(mainwin, y, x);
-	getmaxyx(logwin, logy, logx);
-	y -= logcursor;
-	/* Detect screen size change */
-	if ((x != logx || y != logy) && x >= 80 && y >= 25) {
-		wresize(logwin, y, x);
-		return true;
+	if (x < 80 || y < 25)
+		return ret;
+
+	if (y > statusy + 2 && statusy < logstart) {
+		if (y - 2 < logstart)
+			statusy = y - 2;
+		else
+			statusy = logstart;
+		logcursor = statusy + 1;
+		mvwin(logwin, logcursor, 0);
+		wresize(statuswin, statusy, x);
+		ret = true;
 	}
-	return false;
+
+	y -= logcursor;
+	getmaxyx(logwin, logy, logx);
+	/* Detect screen size change */
+	if (x != logx || y != logy) {
+		wresize(logwin, y, x);
+		ret = true;
+	}
+	return ret;
 }
 
 static void check_winsizes(void)
@@ -1347,7 +1366,12 @@ static void check_winsizes(void)
 		int y, x;
 
 		x = getmaxx(statuswin);
-		wresize(statuswin, logstart, x);
+		if (logstart > LINES - 2)
+			statusy = LINES - 2;
+		else
+			statusy = logstart;
+		logcursor = statusy + 1;
+		wresize(statuswin, statusy, x);
 		getmaxyx(mainwin, y, x);
 		y -= logcursor;
 		wresize(logwin, y, x);
@@ -4373,6 +4397,7 @@ void enable_curses(void) {
 	cbreak();
 	noecho();
 	curses_active = true;
+	statusy = logstart;
 	unlock_curses();
 }
 #endif
@@ -4410,6 +4435,31 @@ void enable_device(struct cgpu_info *cgpu)
 		gpu_threads += cgpu->threads;
 	}
 #endif
+}
+
+struct _cgpu_devid_counter {
+	char name[4];
+	int lastid;
+	UT_hash_handle hh;
+};
+
+bool add_cgpu(struct cgpu_info*cgpu)
+{
+	static struct _cgpu_devid_counter *devids = NULL;
+	struct _cgpu_devid_counter *d;
+	
+	HASH_FIND_STR(devids, cgpu->api->name, d);
+	if (d)
+		cgpu->device_id = ++d->lastid;
+	else
+	{
+		d = malloc(sizeof(*d));
+		memcpy(d->name, cgpu->api->name, sizeof(d->name));
+		cgpu->device_id = d->lastid = 0;
+		HASH_ADD_STR(devids, name, d);
+	}
+	devices[total_devices++] = cgpu;
+	return true;
 }
 
 int main(int argc, char *argv[])
@@ -4598,7 +4648,11 @@ int main(int argc, char *argv[])
 	if (devices_enabled == -1) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
-			applog(LOG_ERR, " %2d. %s%d", i, devices[i]->api->name, devices[i]->device_id);
+			struct cgpu_info *cgpu = devices[i];
+			if (cgpu->name)
+				applog(LOG_ERR, " %2d. %s %d: %s (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->name, cgpu->api->dname);
+			else
+				applog(LOG_ERR, " %2d. %s %d (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->api->dname);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}
@@ -4632,18 +4686,7 @@ int main(int argc, char *argv[])
 
 	load_temp_cutoffs();
 
-	if (total_devices <= 14) {
-		logstart += total_devices;
-	} else {
-		applog(LOG_NOTICE, "Too many devices exist for per-device status lines");
-		for (i = 0; i < total_devices; ++i) {
-			struct cgpu_info *cgpu = devices[i];
-
-			applog(LOG_NOTICE, "%s%d: %s", cgpu->api->name, cgpu->device_id,
-				cgpu->deven == DEV_ENABLED? "Enabled" : "Disabled");
-		}
-		applog(LOG_NOTICE, "%d devices found, disabling per-device status lines", total_devices);
-	}
+	logstart += total_devices;
 	logcursor = logstart + 1;
 
 #ifdef HAVE_CURSES

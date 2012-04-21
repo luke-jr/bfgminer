@@ -195,6 +195,7 @@ struct thr_info;
 struct work;
 
 struct device_api {
+	char*dname;
 	char*name;
 
 	// API-global functions
@@ -255,6 +256,7 @@ struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
 	int device_id;
+	char *name;
 	char *device_path;
 	FILE *device_file;
 #ifdef USE_ZTEX
@@ -281,6 +283,7 @@ struct cgpu_info {
 	int virtual_gpu;
 	int intensity;
 	bool dynamic;
+	char *kname;
 #ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;
@@ -318,6 +321,8 @@ struct cgpu_info {
 	int dev_over_heat_count;	// It's a warning but worth knowing
 	int dev_thermal_cutoff_count;
 };
+
+extern bool add_cgpu(struct cgpu_info*);
 
 struct thread_q {
 	struct list_head	q;

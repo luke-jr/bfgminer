@@ -37,7 +37,7 @@ cgminer_SOURCES	+= logging.c
 
 # GPU sources, TODO: make them selectable
 # the GPU portion extracted from original main.c
-cgminer_SOURCES += device-gpu.h device-gpu.c
+cgminer_SOURCES += driver-opencl.h driver-opencl.c
 
 # the original GPU related sources, unchanged
 cgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
@@ -53,7 +53,7 @@ cgminer_SOURCES	+= \
 		  sha256_altivec_4way.c
 
 # the CPU portion extracted from original main.c
-cgminer_SOURCES += device-cpu.h device-cpu.c
+cgminer_SOURCES += driver-cpu.h driver-cpu.c
 
 if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM
@@ -68,13 +68,13 @@ endif # HAS_YASM
 endif # HAS_CPUMINE
 
 if HAS_BITFORCE
-cgminer_SOURCES += bitforce.c
+cgminer_SOURCES += driver-bitforce.c
 endif
 
 if HAS_ICARUS
-cgminer_SOURCES += icarus.c
+cgminer_SOURCES += driver-icarus.c
 endif
 
 if HAS_ZTEX
-cgminer_SOURCES += ztex.c libztex.c
+cgminer_SOURCES += driver-ztex.c libztex.c
 endif
