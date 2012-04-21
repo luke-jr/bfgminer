@@ -294,6 +294,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
+	work->blk.nonce = 0xffffffff;
+
 	if (nonce == 0 && ret) {
 		if (unlikely(diff.tv_sec > 12 || (diff.tv_sec == 11 && diff.tv_usec > 300067)))
 			return 0xffffffff;
@@ -306,7 +308,6 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 #ifndef __BIG_ENDIAN__
 	nonce = swab32(nonce);
 #endif
-	work->blk.nonce = 0xffffffff;
 	submit_nonce(thr, work, nonce);
 
 	hash_count = (nonce & 0x7fffffff);
