@@ -845,11 +845,22 @@ static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 	}
 #endif
 	tailsprintf(buf, isjson
-				? ",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
+				? ",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f"
 				: ",Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f",
 			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
 			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-	if (!isjson)
+
+	tailsprintf(buf, isjson ? ",\"Driver\":\"%s\"" : ",Driver=%s", cgpu->api->dname);
+	if (cgpu->kname)
+		tailsprintf(buf, isjson ? ",\"Kernel\":\"%s\"" : ",Kernel=%s", cgpu->kname);
+	if (cgpu->name)
+		tailsprintf(buf, isjson ? ",\"Model\":\"%s\"" : ",Model=%s", cgpu->name);
+	if (cgpu->device_path)
+		tailsprintf(buf, isjson ? ",\"Device Path\":\"%s\"" : ",Device Path=%s", cgpu->device_path);
+
+	if (isjson)
+		tailsprintf(buf, "}");
+	else
 		tailsprintf(buf, "%c", SEPARATOR);
 }
 
