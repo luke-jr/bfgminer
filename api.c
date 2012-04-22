@@ -797,27 +797,20 @@ status2str(enum alive status)
 static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 {
 	tailsprintf(buf, isjson
-				? "{\"%s\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f"
-				: "%s=%d,Enabled=%s,Status=%s,Temperature=%.2f",
+				? "{\"%s\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f,\"Driver\":\"%s\""
+				: "%s=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f,Driver=%s",
 			cgpu->api->name, cgpu->device_id,
 			bool2str(cgpu->deven != DEV_DISABLED),
 			status2str(cgpu->status),
-			cgpu->temp
-	);
-	tailsprintf(buf, isjson
-				? ",\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f"
-				: ",MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f",
+			cgpu->temp,
 			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility
-	);
-	tailsprintf(buf, isjson
-				? ",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f"
-				: ",Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f",
+			cgpu->utility,
 			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
+			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes,
+			cgpu->api->dname
+	);
 
-	tailsprintf(buf, isjson ? ",\"Driver\":\"%s\"" : ",Driver=%s", cgpu->api->dname);
 	if (cgpu->kname)
 		tailsprintf(buf, isjson ? ",\"Kernel\":\"%s\"" : ",Kernel=%s", cgpu->kname);
 	if (cgpu->name)
