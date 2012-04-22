@@ -246,7 +246,7 @@ static void icarus_detect()
 		s = iter->string;
 		if (!strncmp("icarus:", iter->string, 7))
 			s += 7;
-		if (!strcmp(s, "auto"))
+		if (!strcmp(s, "auto") || !strcmp(s, "noauto"))
 			continue;
 		if (icarus_detect_one(s))
 			string_elist_del(iter);
