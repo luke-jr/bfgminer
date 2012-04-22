@@ -65,8 +65,6 @@ bool scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
 
 	pdata += 64;
 
-    work_restart[thr_id].restart = 0;
-
     /* For debugging */
     union {
         __m128i m;

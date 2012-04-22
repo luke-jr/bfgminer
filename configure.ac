@@ -301,6 +301,8 @@ if test "x$bitforce" != xno; then
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
+AC_CHECK_HEADERS([sys/epoll.h])
+
 PKG_PROG_PKG_CONFIG()
 
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.15.6], [AC_DEFINE([CURL_HAS_SOCKOPT], [1], [Defined if version of curl supports sockopts.])],

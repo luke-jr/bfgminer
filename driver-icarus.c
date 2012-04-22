@@ -46,11 +46,17 @@
   #include <windows.h>
   #include <io.h>
 #endif
+#ifdef HAVE_SYS_EPOLL_H
+  #include <sys/epoll.h>
+  #define HAVE_EPOLL
+#endif
 
 #include "elist.h"
 #include "miner.h"
 
-#define ICARUS_READ_FAULT_COUNT	(8)
+// 8 second timeout
+#define ICARUS_READ_FAULT_DECISECONDS (1)
+#define ICARUS_READ_FAULT_COUNT	(80)
 
 struct device_api icarus_api;
 
@@ -87,7 +93,7 @@ static int icarus_open(const char *devpath)
 				ISTRIP | INLCR | IGNCR | ICRNL | IXON);
 	my_termios.c_oflag &= ~OPOST;
 	my_termios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-	my_termios.c_cc[VTIME] = 10; /* block 1 second */
+	my_termios.c_cc[VTIME] = ICARUS_READ_FAULT_DECISECONDS;
 	my_termios.c_cc[VMIN] = 0;
 	tcsetattr(serialfd, TCSANOW, &my_termios);
 
@@ -108,12 +114,31 @@ static int icarus_open(const char *devpath)
 #endif
 }
 
-static int icarus_gets(unsigned char *buf, size_t bufLen, int fd)
+static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsigned long *wr)
 {
 	ssize_t ret = 0;
 	int rc = 0;
+	int epollfd = -1;
+
+#ifdef HAVE_EPOLL
+	struct epoll_event ev, evr;
+	epollfd = epoll_create(1);
+	if (epollfd != -1) {
+		ev.events = EPOLLIN;
+		ev.data.fd = fd;
+		if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
+			close(epollfd);
+			epollfd = -1;
+		}
+	}
+#endif
 
 	while (bufLen) {
+#ifdef HAVE_EPOLL
+		if (epollfd != -1 && epoll_wait(epollfd, &evr, 1, ICARUS_READ_FAULT_DECISECONDS * 100) != 1)
+			ret = 0;
+		else
+#endif
 		ret = read(fd, buf, 1);
 		if (ret == 1) {
 			bufLen--;
@@ -122,12 +147,19 @@ static int icarus_gets(unsigned char *buf, size_t bufLen, int fd)
 		}
 
 		rc++;
+		if (*wr)
+			return 1;
 		if (rc == ICARUS_READ_FAULT_COUNT) {
+			if (epollfd != -1)
+				close(epollfd);
 			applog(LOG_DEBUG,
-			       "Icarus Read: No data in %d seconds", rc);
+			       "Icarus Read: No data in %d seconds", rc * ICARUS_READ_FAULT_DECISECONDS / 10);
 			return 1;
 		}
 	}
+
+	if (epollfd != -1)
+		close(epollfd);
 
 	return 0;
 }
@@ -172,7 +204,8 @@ static bool icarus_detect_one(const char *devpath)
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	icarus_gets(nonce_bin, sizeof(nonce_bin), fd);
+	volatile unsigned long wr = 0;
+	icarus_gets(nonce_bin, sizeof(nonce_bin), fd, &wr);
 
 	icarus_close(fd);
 
@@ -243,6 +276,8 @@ static bool icarus_prepare(struct thr_info *thr)
 static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused uint64_t max_nonce)
 {
+	volatile unsigned long *wr = &work_restart[thr->id].restart;
+
 	struct cgpu_info *icarus;
 	int fd;
 	int ret;
@@ -278,7 +313,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	/* Icarus will return 8 bytes nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	ret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd);
+	ret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr);
 
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 	if (nonce_hex) {
