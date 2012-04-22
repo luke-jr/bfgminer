@@ -33,10 +33,10 @@
 struct device_api ztex_api, ztex_hotplug_api;
 
 // Forward declarations
-static void ztex_disable (struct thr_info* thr);
+static void ztex_disable(struct thr_info* thr);
 static bool ztex_prepare(struct thr_info *thr);
 
-static void ztex_detect()
+static void ztex_detect(void)
 {
 	int cnt;
 	int i;
@@ -45,7 +45,7 @@ static void ztex_detect()
 	cnt = libztex_scanDevices(&ztex_devices);
 	applog(LOG_WARNING, "Found %d ztex board(s)", cnt);
 
-	for (i=0; i<cnt; i++) {
+	for (i = 0; i < cnt; i++) {
 		if (total_devices == MAX_DEVICES)
 			break;
 		struct cgpu_info *ztex;
@@ -62,25 +62,25 @@ static void ztex_detect()
 		libztex_freeDevList(ztex_devices);
 }
 
-static bool ztex_updateFreq (struct libztex_device* ztex)
+static bool ztex_updateFreq(struct libztex_device* ztex)
 {
 	int i, maxM, bestM;
 	double bestR, r;
 
-	for (i=0; i<ztex->freqMaxM; i++)
-		if (ztex->maxErrorRate[i+1]*i < ztex->maxErrorRate[i]*(i+20))
-			ztex->maxErrorRate[i+1] = ztex->maxErrorRate[i]*(1.0+20.0/i);
+	for (i = 0; i < ztex->freqMaxM; i++)
+		if (ztex->maxErrorRate[i + 1] * i < ztex->maxErrorRate[i] * (i + 20))
+			ztex->maxErrorRate[i + 1] = ztex->maxErrorRate[i] * (1.0 + 20.0 / i);
 
 	maxM = 0;
-	while (maxM<ztex->freqMDefault && ztex->maxErrorRate[maxM+1]<LIBZTEX_MAXMAXERRORRATE)
+	while (maxM < ztex->freqMDefault && ztex->maxErrorRate[maxM + 1] < LIBZTEX_MAXMAXERRORRATE)
 		maxM++;
-	while (maxM<ztex->freqMaxM && ztex->errorWeight[maxM]>150 && ztex->maxErrorRate[maxM+1]<LIBZTEX_MAXMAXERRORRATE)
+	while (maxM < ztex->freqMaxM && ztex->errorWeight[maxM] > 150 && ztex->maxErrorRate[maxM + 1] < LIBZTEX_MAXMAXERRORRATE)
 		maxM++;
 
 	bestM = 0;
 	bestR = 0;
-	for (i=0; i<=maxM; i++) {
-		r = (i + 1 + ( i == ztex->freqM ? LIBZTEX_ERRORHYSTERESIS : 0))*(1-ztex->maxErrorRate[i]);
+	for (i = 0; i <= maxM; i++) {
+		r = (i + 1 + (i == ztex->freqM? LIBZTEX_ERRORHYSTERESIS: 0)) * (1 - ztex->maxErrorRate[i]);
 		if (r > bestR) {
 			bestM = i;
 			bestR = r;
@@ -91,20 +91,21 @@ static bool ztex_updateFreq (struct libztex_device* ztex)
 		libztex_setFreq(ztex, bestM);
 
 	maxM = ztex->freqMDefault;
-	while (maxM<ztex->freqMaxM && ztex->errorWeight[maxM+1] > 100)
+	while (maxM < ztex->freqMaxM && ztex->errorWeight[maxM + 1] > 100)
 		maxM++;
-	if ((bestM < (1.0-LIBZTEX_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
+	if ((bestM < (1.0 - LIBZTEX_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
 		libztex_resetFpga(ztex);
-		applog(LOG_ERR, "%s: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.", ztex->repr, (1.0-1.0*bestM/maxM)*100);
+		applog(LOG_ERR, "%s: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
+		       ztex->repr, (1.0 - 1.0 * bestM / maxM) * 100);
 		return false;
 	}
 	return true;
 }
 
 
-static bool ztex_checkNonce (struct libztex_device *ztex,
-                             struct work *work,
-                             struct libztex_hash_data *hdata)
+static bool ztex_checkNonce(struct libztex_device *ztex,
+                            struct work *work,
+                            struct libztex_hash_data *hdata)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[128];
@@ -134,7 +135,7 @@ static bool ztex_checkNonce (struct libztex_device *ztex,
 #else
 	if (swab32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
 #endif
-		ztex->errorCount[ztex->freqM] += 1.0/ztex->numNonces;
+		ztex->errorCount[ztex->freqM] += 1.0 / ztex->numNonces;
 		applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
 		return false;
 	}
@@ -156,7 +157,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	ztex = thr->cgpu->device_ztex;
 
 	memcpy(sendbuf, work->data + 64, 12);
-	memcpy(sendbuf+12, work->midstate, 32);
+	memcpy(sendbuf + 12, work->midstate, 32);
 	memset(backlog, 0, sizeof(backlog));
 	i = libztex_sendHashData(ztex, sendbuf);
 	if (i < 0) {
@@ -174,7 +175,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	
 	applog(LOG_DEBUG, "sent hashdata");
 
-	for (i=0; i<ztex->numNonces; i++)
+	for (i = 0; i < ztex->numNonces; i++)
 		lastnonce[i] = 0;
 
 	overflow = false;
@@ -207,7 +208,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		ztex->errorCount[ztex->freqM] *= 0.995;
 		ztex->errorWeight[ztex->freqM] = ztex->errorWeight[ztex->freqM] * 0.995 + 1.0;
  
-		for (i=0; i<ztex->numNonces; i++) {
+		for (i = 0; i < ztex->numNonces; i++) {
 			nonce = hdata[i].nonce;
 #if defined(__BIGENDIAN__) || defined(MIPSEB)
 			nonce = swab32(nonce);
@@ -217,9 +218,8 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			if (((nonce & 0x7fffffff) >> 4) < ((lastnonce[i] & 0x7fffffff) >> 4)) {
 				applog(LOG_DEBUG, "%s: overflow nonce=%0.8x lastnonce=%0.8x", ztex->repr, nonce, lastnonce[i]);
 				overflow = true;
-			} else {
+			} else
 				lastnonce[i] = nonce;
-			}
 #if !(defined(__BIGENDIAN__) || defined(MIPSEB))
 			nonce = swab32(nonce);
 #endif
@@ -230,7 +230,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			nonce = hdata[i].goldenNonce;
 			if (nonce > 0) {
 				found = false;
-				for (j=0; j<GOLDEN_BACKLOG; j++) {
+				for (j = 0; j < GOLDEN_BACKLOG; j++) {
 					if (backlog[j] == nonce) {
 						found = true;
 						break;
@@ -254,7 +254,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	}
 
-	ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /	ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM]<100 ? ztex->errorWeight[ztex->freqM]*0.01 : 1.0);
+	ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /	ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM] < 100? ztex->errorWeight[ztex->freqM] * 0.01: 1.0);
 	if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM])
 		ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
 
@@ -266,7 +266,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	work->blk.nonce = 0xffffffff;
 
-	return noncecnt > 0 ? noncecnt : 1;
+	return noncecnt > 0? noncecnt: 1;
 }
 
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
@@ -304,7 +304,7 @@ static void ztex_shutdown(struct thr_info *thr)
 	}
 }
 
-static void ztex_disable (struct thr_info *thr)
+static void ztex_disable(struct thr_info *thr)
 {
 	applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device_ztex->repr);
 	devices[thr->cgpu->device_id]->deven = DEV_DISABLED;
@@ -320,4 +320,3 @@ struct device_api ztex_api = {
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,
 };
-
