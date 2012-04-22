@@ -64,8 +64,10 @@ static bool libztex_checkDevice(struct libusb_device *dev)
 static bool libztex_checkCapability(struct libztex_device *ztex, int i, int j)
 {
 	if (!((i >= 0) && (i <= 5) && (j >= 0) && (j < 8) &&
-	     (((ztex->interfaceCapabilities[i] & 255) & (1 << j)) != 0)))
+	     (((ztex->interfaceCapabilities[i] & 255) & (1 << j)) != 0))) {
 		applog(LOG_ERR, "%s: capability missing: %d %d", ztex->repr, i, i);
+		return false;
+	}
 	return true;
 }
 
