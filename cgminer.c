@@ -957,11 +957,16 @@ static char *parse_config(json_t *config, bool fileconf)
 	return NULL;
 }
 
+char *cnfbuf = NULL;
+
 static char *load_config(const char *arg, void __maybe_unused *unused)
 {
 	json_error_t err;
 	json_t *config;
 	char *json_error;
+
+	if (!cnfbuf)
+		cnfbuf = strdup(arg);
 
 	if (++include_count > JSON_MAX_DEPTH)
 		return JSON_MAX_DEPTH_ERR;
@@ -981,15 +986,16 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	}
 
 	config_loaded = true;
+
 	/* Parse the config now, so we can override it.  That can keep pointers
 	 * so don't free config object. */
 	return parse_config(config, true);
 }
 
-char cnfbuf[PATH_MAX];
-
 static void load_default_config(void)
 {
+	cnfbuf = malloc(PATH_MAX);
+
 #if defined(unix)
 	if (getenv("HOME") && *getenv("HOME")) {
 	        strcpy(cnfbuf, getenv("HOME"));
@@ -1004,6 +1010,10 @@ static void load_default_config(void)
 	strcat(cnfbuf, def_conf);
 	if (!access(cnfbuf, R_OK))
 		load_config(cnfbuf, NULL);
+	else {
+		free(cnfbuf);
+		cnfbuf = NULL;
+	}
 }
 
 extern const char *opt_argv0;
@@ -4558,12 +4568,12 @@ int main(int argc, char *argv[])
 	opt_register_table(opt_cmdline_table,
 			   "Options for command line only");
 
-	if (!config_loaded)
-		load_default_config();
-
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	if (!config_loaded)
+		load_default_config();
 
 	if (opt_benchmark) {
 		struct pool *pool;
@@ -4591,7 +4601,7 @@ int main(int argc, char *argv[])
 #endif
 
 	applog(LOG_WARNING, "Started %s", packagename);
-	if (strcmp(cnfbuf, "")) {
+	if (cnfbuf) {
 		applog(LOG_NOTICE, "Loaded configuration file %s", cnfbuf);
 		switch (fileconf_load) {
 			case 0:
@@ -4605,6 +4615,8 @@ int main(int argc, char *argv[])
 			default:
 				break;
 		}
+		free(cnfbuf);
+		cnfbuf = NULL;
 	}
 
 	strcat(opt_kernel_path, "/");
