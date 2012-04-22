@@ -35,8 +35,6 @@ bool scanhash_via(int thr_id, const unsigned char *pmidstate,
 	unsigned long stat_ctr = 0;
 	int i;
 
-	work_restart[thr_id].restart = 0;
-
 	/* bitcoin gives us big endian input, but via wants LE,
 	 * so we reverse the swapping bitcoin has already done (extra work)
 	 * in order to permit the hardware to swap everything

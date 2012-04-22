@@ -46,11 +46,17 @@
   #include <windows.h>
   #include <io.h>
 #endif
+#ifdef HAVE_SYS_EPOLL_H
+  #include <sys/epoll.h>
+  #define HAVE_EPOLL
+#endif
 
 #include "elist.h"
 #include "miner.h"
 
-#define ICARUS_READ_FAULT_COUNT	(8)
+// 8 second timeout
+#define ICARUS_READ_FAULT_DECISECONDS (1)
+#define ICARUS_READ_FAULT_COUNT	(80)
 
 struct device_api icarus_api;
 
@@ -87,7 +93,7 @@ static int icarus_open(const char *devpath)
 				ISTRIP | INLCR | IGNCR | ICRNL | IXON);
 	my_termios.c_oflag &= ~OPOST;
 	my_termios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-	my_termios.c_cc[VTIME] = 10; /* block 1 second */
+	my_termios.c_cc[VTIME] = ICARUS_READ_FAULT_DECISECONDS;
 	my_termios.c_cc[VMIN] = 0;
 	tcsetattr(serialfd, TCSANOW, &my_termios);
 
@@ -108,12 +114,31 @@ static int icarus_open(const char *devpath)
 #endif
 }
 
-static int icarus_gets(unsigned char *buf, size_t bufLen, int fd)
+static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsigned long *wr)
 {
 	ssize_t ret = 0;
 	int rc = 0;
+	int epollfd = -1;
+
+#ifdef HAVE_EPOLL
+	struct epoll_event ev, evr;
+	epollfd = epoll_create(1);
+	if (epollfd != -1) {
+		ev.events = EPOLLIN;
+		ev.data.fd = fd;
+		if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
+			close(epollfd);
+			epollfd = -1;
+		}
+	}
+#endif
 
 	while (bufLen) {
+#ifdef HAVE_EPOLL
+		if (epollfd != -1 && epoll_wait(epollfd, &evr, 1, ICARUS_READ_FAULT_DECISECONDS * 100) != 1)
+			ret = 0;
+		else
+#endif
 		ret = read(fd, buf, 1);
 		if (ret == 1) {
 			bufLen--;
@@ -122,12 +147,19 @@ static int icarus_gets(unsigned char *buf, size_t bufLen, int fd)
 		}
 
 		rc++;
+		if (*wr)
+			return 1;
 		if (rc == ICARUS_READ_FAULT_COUNT) {
+			if (epollfd != -1)
+				close(epollfd);
 			applog(LOG_DEBUG,
-			       "Icarus Read: No data in %d seconds", rc);
+			       "Icarus Read: No data in %d seconds", rc * ICARUS_READ_FAULT_DECISECONDS / 10);
 			return 1;
 		}
 	}
+
+	if (epollfd != -1)
+		close(epollfd);
 
 	return 0;
 }
@@ -172,7 +204,8 @@ static bool icarus_detect_one(const char *devpath)
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	icarus_gets(nonce_bin, sizeof(nonce_bin), fd);
+	volatile unsigned long wr = 0;
+	icarus_gets(nonce_bin, sizeof(nonce_bin), fd, &wr);
 
 	icarus_close(fd);
 
@@ -243,6 +276,8 @@ static bool icarus_prepare(struct thr_info *thr)
 static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused uint64_t max_nonce)
 {
+	volatile unsigned long *wr = &work_restart[thr->id].restart;
+
 	struct cgpu_info *icarus;
 	int fd;
 	int ret;
@@ -251,7 +286,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	char *ob_hex, *nonce_hex;
 	uint32_t nonce;
 	uint32_t hash_count;
-	time_t t = 0;
+	struct timeval tv_start, tv_end, diff;
 
 	icarus = thr->cgpu;
 	fd = icarus->device_fd;
@@ -264,13 +299,15 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
 #endif
+
+	gettimeofday(&tv_start, NULL);
+
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
 	if (ret)
 		return 0;	/* This should never happen */
 
 	ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 	if (ob_hex) {
-		t = time(NULL);
 		applog(LOG_DEBUG, "Icarus %s send: %s",
 		       icarus->device_id, ob_hex);
 		free(ob_hex);
@@ -278,25 +315,34 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	/* Icarus will return 8 bytes nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	ret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd);
+	ret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr);
+
+	gettimeofday(&tv_end, NULL);
+	timeval_subtract(&diff, &tv_end, &tv_start);
 
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 	if (nonce_hex) {
-		t = time(NULL) - t;
-		applog(LOG_DEBUG, "Icarus %d return (elapse %d seconds): %s",
-		       icarus->device_id, t, nonce_hex);
+		applog(LOG_DEBUG, "Icarus %d returned (in %d.%06d seconds): %s",
+		       icarus->device_id, diff.tv_sec, diff.tv_usec, nonce_hex);
 		free(nonce_hex);
 	}
 
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
-        if (nonce == 0 && ret)
-                return 0xffffffff;
+	work->blk.nonce = 0xffffffff;
+
+	if (nonce == 0 && ret) {
+		if (unlikely(diff.tv_sec > 12 || (diff.tv_sec == 11 && diff.tv_usec > 300067)))
+			return 0xffffffff;
+		// Approximately how much of the nonce Icarus scans in 1 second...
+		// 0x16a7a561 would be if it was exactly 380 MH/s
+		// 0x168b7b4b was the average over a 201-sample period based on time to find actual shares
+		return (0x168b7b4b * diff.tv_sec) + (0x17a * diff.tv_usec);
+	}
 
 #ifndef __BIG_ENDIAN__
 	nonce = swab32(nonce);
 #endif
-	work->blk.nonce = 0xffffffff;
 	submit_nonce(thr, work, nonce);
 
 	hash_count = (nonce & 0x7fffffff);
@@ -308,6 +354,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
                 else
                         hash_count <<= 1;
         }
+
+	applog(LOG_DEBUG, "0x%x hashes in %d.%06d seconds", hash_count, diff.tv_sec, diff.tv_usec);
 
         return hash_count;
 }
