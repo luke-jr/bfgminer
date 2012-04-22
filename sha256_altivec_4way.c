@@ -84,8 +84,6 @@ bool ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
 
 	pdata += 64;
 
-    work_restart[thr_id].restart = 0;
-
     for (;;)
     {
         unsigned int thash[9][NPAR] __attribute__((aligned(128)));

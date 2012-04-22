@@ -9,11 +9,12 @@ endif
 
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
 		  ADL_SDK/readme.txt api-example.php miner.php	\
-		  API.class API.java api-example.c
+		  API.class API.java api-example.c windows-build.txt \
+		  bitstreams/*
 
 SUBDIRS		= lib compat ccan
 
-INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
+INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES) $(USB_FLAGS)
 
 bin_PROGRAMS	= cgminer
 
@@ -22,7 +23,7 @@ bin_SCRIPTS	= *.cl
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
-		  @UDEV_LIBS@ \
+		  @UDEV_LIBS@ @USB_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
 
@@ -73,4 +74,10 @@ endif
 
 if HAS_ICARUS
 cgminer_SOURCES += driver-icarus.c
+endif
+
+if HAS_ZTEX
+cgminer_SOURCES += driver-ztex.c libztex.c libztex.h
+bitstreamsdir = $(bindir)/bitstreams
+dist_bitstreams_DATA = bitstreams/*
 endif

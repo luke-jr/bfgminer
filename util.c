@@ -30,6 +30,7 @@
 # include <winsock2.h>
 # include <mstcpip.h>
 #endif
+
 #include "miner.h"
 #include "elist.h"
 #include "compat.h"
@@ -364,10 +365,16 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	if (probing) {
 		pool->probed = true;
 		/* If X-Long-Polling was found, activate long polling */
-		if (hi.lp_path)
+		if (hi.lp_path) {
+			if (pool->hdr_path != NULL)
+				free(pool->hdr_path);
 			pool->hdr_path = hi.lp_path;
-		else
+		} else {
 			pool->hdr_path = NULL;
+		}
+	} else if (hi.lp_path) {
+		free(hi.lp_path);
+		hi.lp_path = NULL;
 	}
 
 	*rolltime = hi.has_rolltime;
@@ -410,9 +417,11 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		goto err_out;
 	}
 
-	if (hi.reason)
+	if (hi.reason) {
 		json_object_set_new(val, "reject-reason", json_string(hi.reason));
-
+		free(hi.reason);
+		hi.reason = NULL;
+	}
 	successful_connect = true;
 	databuf_free(&all_data);
 	curl_slist_free_all(headers);

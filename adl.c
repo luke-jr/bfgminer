@@ -124,11 +124,9 @@ static bool fanspeed_twin(struct gpu_adl *ga, struct gpu_adl *other_ga)
 	return true;
 }
 
-void init_adl(int nDevs)
+static bool prepare_adl(void)
 {
-	int result, i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
-	struct gpu_adapters adapters[MAX_GPUDEVICES], vadapters[MAX_GPUDEVICES];
-	bool devs_match = true;
+	int result;
 
 #if defined (LINUX)
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
@@ -141,14 +139,8 @@ void init_adl(int nDevs)
 #endif
 	if (hDLL == NULL) {
 		applog(LOG_INFO, "Unable to load ati adl library");
-		return;
+		return false;
 	}
-
-	if (unlikely(pthread_mutex_init(&adl_lock, NULL))) {
-		applog(LOG_ERR, "Failed to init adl_lock in init_adl");
-		return;
-	}
-
 	ADL_Main_Control_Create = (ADL_MAIN_CONTROL_CREATE) GetProcAddress(hDLL,"ADL_Main_Control_Create");
 	ADL_Main_Control_Destroy = (ADL_MAIN_CONTROL_DESTROY) GetProcAddress(hDLL,"ADL_Main_Control_Destroy");
 	ADL_Adapter_NumberOfAdapters_Get = (ADL_ADAPTER_NUMBEROFADAPTERS_GET) GetProcAddress(hDLL,"ADL_Adapter_NumberOfAdapters_Get");
@@ -177,7 +169,7 @@ void init_adl(int nDevs)
 		!ADL_Main_Control_Refresh || !ADL_Overdrive5_PowerControl_Get ||
 		!ADL_Overdrive5_PowerControl_Set || !ADL_Overdrive5_FanSpeedToDefault_Set) {
 			applog(LOG_WARNING, "ATI ADL's API is missing");
-		return;
+		return false;
 	}
 
 	// Initialise ADL. The second parameter is 1, which means:
@@ -185,14 +177,31 @@ void init_adl(int nDevs)
 	result = ADL_Main_Control_Create (ADL_Main_Memory_Alloc, 1);
 	if (result != ADL_OK) {
 		applog(LOG_INFO, "ADL Initialisation Error! Error %d!", result);
-		return ;
+		return false;
 	}
 
 	result = ADL_Main_Control_Refresh();
 	if (result != ADL_OK) {
 		applog(LOG_INFO, "ADL Refresh Error! Error %d!", result);
-		return ;
+		return false;
 	}
+
+	return true;
+}
+
+void init_adl(int nDevs)
+{
+	int result, i, j, devices = 0, last_adapter = -1, gpu = 0, dummy = 0;
+	struct gpu_adapters adapters[MAX_GPUDEVICES], vadapters[MAX_GPUDEVICES];
+	bool devs_match = true;
+
+	if (unlikely(pthread_mutex_init(&adl_lock, NULL))) {
+		applog(LOG_ERR, "Failed to init adl_lock in init_adl");
+		return;
+	}
+
+	if (!prepare_adl())
+		return;
 
 	// Obtain the number of adapters for the system
 	result = ADL_Adapter_NumberOfAdapters_Get (&iNumberAdapters);
@@ -466,7 +475,7 @@ void init_adl(int nDevs)
 		if (opt_autofan) {
 			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
-			set_fanspeed(gpu, gpus[gpu].gpu_fan);
+			set_fanspeed(gpu, 50);
 		}
 		if (opt_autoengine) {
 			ga->autoengine = true;
@@ -673,6 +682,16 @@ int gpu_fanpercent(int gpu)
 	lock_adl();
 	ret = __gpu_fanpercent(ga);
 	unlock_adl();
+	if (unlikely(ga->has_fanspeed && ret == -1)) {
+		applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
+		if (opt_restart) {
+			applog(LOG_WARNING, "Restart enabled, will restart cgminer");
+			applog(LOG_WARNING, "You can disable this with the --no-restart option");
+			app_restart();
+		}
+		applog(LOG_WARNING, "Disabling fanspeed monitoring on this device");
+		ga->has_fanspeed = false;
+	}
 	return ret;
 }
 
@@ -1000,6 +1019,10 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp)
 	if (temp > ga->overtemp && fanpercent < iMax) {
 		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
 		newpercent = iMax;
+
+		cgpu->device_last_not_well = time(NULL);
+		cgpu->device_not_well_reason = REASON_DEV_OVER_HEAT;
+		cgpu->dev_over_heat_count++;
 	} else if (temp > ga->targettemp && fanpercent < top && temp >= lasttemp) {
 		applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 		if (temp > ga->targettemp + opt_hysteresis)
@@ -1084,9 +1107,17 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 			applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
 			*denable = DEV_RECOVER;
 			newengine = ga->minspeed;
+
+			cgpu->device_last_not_well = time(NULL);
+			cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
+			cgpu->dev_thermal_cutoff_count++;
 		} else if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
 			newengine = ga->minspeed;
+
+			cgpu->device_last_not_well = time(NULL);
+			cgpu->device_not_well_reason = REASON_DEV_OVER_HEAT;
+			cgpu->dev_over_heat_count++;
 		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
 			applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
@@ -1305,6 +1336,17 @@ updated:
 }
 #endif
 
+static void free_adl(void)
+{
+	ADL_Main_Memory_Free ((void **)&lpInfo);
+	ADL_Main_Control_Destroy ();
+#if defined (LINUX)
+	dlclose(hDLL);
+#else
+	FreeLibrary(hDLL);
+#endif
+}
+
 void clear_adl(int nDevs)
 {
 	struct gpu_adl *ga;
@@ -1325,15 +1367,21 @@ void clear_adl(int nDevs)
 		ADL_Overdrive5_FanSpeed_Set(ga->iAdapterIndex, 0, &ga->DefFanSpeedValue);
 		ADL_Overdrive5_FanSpeedToDefault_Set(ga->iAdapterIndex, 0);
 	}
-
-	ADL_Main_Memory_Free ( (void **)&lpInfo );
-	ADL_Main_Control_Destroy ();
+	adl_active = false;
 	unlock_adl();
+	free_adl();
+}
 
-#if defined (LINUX)
-	dlclose(hDLL);
-#else
-	FreeLibrary(hDLL);
-#endif
+void reinit_adl(void)
+{
+	bool ret;
+	lock_adl();
+	free_adl();
+	ret = prepare_adl();
+	if (!ret) {
+		adl_active = false;
+		applog(LOG_WARNING, "Attempt to re-initialise ADL has failed, disabling");
+	}
+	unlock_adl();
 }
 #endif /* HAVE_ADL */

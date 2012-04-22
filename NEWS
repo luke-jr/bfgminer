@@ -1,3 +1,129 @@
+Version 2.3.3 - April 15, 2012
+
+- Don't even display that cpumining is disabled on ./configure to discourage
+people from enabling it.
+- Do a complete cgminer restart if the ATI Display Library fails, as it does on
+windows after running for some time, when fanspeed reporting fails.
+- Cache the initial arguments passed to cgminer and implement an attempted
+restart option from the settings menu.
+- Disable per-device status lines when there are more than 8 devices since
+screen output will be corrupted, enumerating them to the log output instead at
+startup.
+- Reuse Vals[] array more than W[] till they're re-initialised on the second
+sha256 cycle in poclbm kernel.
+- Minor variable alignment in poclbm kernel.
+- Make sure to disable devices with any status not being DEV_ENABLED to ensure
+that thermal cutoff code works as it was setting the status to DEV_RECOVER.
+- Re-initialising ADL simply made the driver fail since it is corruption over
+time within the windows driver that's responsible. Revert "Attempt to
+re-initialise ADL should a device that previously reported fanspeed stops
+reporting it."
+- Microoptimise poclbm kernel by ordering Val variables according to usage
+frequency.
+
+
+Version 2.3.2 - March 31, 2012
+
+- Damping small changes in hashrate so dramatically has the tendency to always
+make the hashrate underread so go back to gentle damping instead.
+- Revert the crossover of variables from Vals to W in poclbm kernel now that
+Vals are the first declared variables so they're used more frequently.
+- Vals variables appearing first in the array in poclbm is faster.
+- Change the preferred vector width to 1 for Tahiti only, not all poclbm
+kernels.
+- Use a time constant 0.63 for when large changes in hashrate are detected to
+damp change in case the large change is an aliasing artefact instead of a real
+chang
+- Only increment stale counter if the detected stales are discarded.
+- Attempt to re-initialise ADL should a device that previously reported fanspeed
+stops reporting it.
+- Move the ADL setup and clearing to separate functions and provide a reinit_adl
+function to be used when adl fails while running.
+- Use slightly more damping on the decay time function in the never-ending quest
+to smooth off the hashmeter.
+- Set the starting fanspeed to a safe and fairly neutral 50% when autofan is
+enabled.
+- Provide locking around updates of cgpu hashrates as well to prevent multiple
+threads accessing data fields on the same device.
+- Display the beginning of the new block in verbose mode in the logs.
+- Reinstate old diablo kernel variable ordering from 120222, adding only goffset
+and vector size hint. The massive variable ordering change only helped one SDK
+on
+- Change the version number on the correct kernels.
+- api.c devicecode/osinfo incorrectly swapped for json
+- Add extensive instructions on how to make a native windows build.
+- Update version numbers of poclbm and diablo kernels as their APIs have also
+changed.
+- Use global offset parameter to diablo and poclbm kernel ONLY for 1 vector
+kernels.
+- Use poclbm preferentially on Tahiti now regardless of SDK.
+- Remove unused constant passed to poclbm.
+- Clean up use of macros in poclbm and use bitselect everywhere possible.
+- Add vector type hint to diablo kernel.
+- Add worksize and vector attribute hints to the poclbm kernel.
+- Spaces for non-aligned variables in poclbm.
+- More tidying of poclbm.
+- Swap Vals and W variables where they can overlap in poclbm.
+- More tidying of poclbm.
+- Tidy up first half of poclbm.
+- Clean up use of any() by diablo and poclbm kernels.
+- Minor variable symmetry changes in poclbm.
+- Put additions on separate lines for consistency in poclbm.
+- Consolidate last use of W11 into Vals4 in poclbm.
+- Change email due to SPAM
+- api.c miner.php add a '*' to the front of all notify counters - simplifies
+future support of new counters
+- miner.php add display 'notify' command
+- Small change to help arch's without processor affinity
+- Fix bitforce compile error
+- api.c notify should report disabled devices also - of course
+- API returns the simple device history with the 'notify' command
+- code changes for supporting a simple device history
+- api.c Report an OS string in config to help with device issues
+- api.c fix Log Interval - integer in JSON
+- api.c config 'Device Code' to show list of compiled devices + README
+- api.c increase buffer size close to current code allowable limit
+- removed 8-component vector support from kernel, as this is not supported in
+CGMINER anyway
+- forgot to update kernel modification date, fixed ;)
+- reordered an addition in the kernel, which results in less instructions used
+in the GPU ISA code for GCN
+- miner.php: option for readonly or check privileged access
+- Ignore reduntant-with-build options --disable-gpu, --no-adl, and --no-restart
+- miner.php: ereg_replace is DEPRECATED so use preg_replace instead
+- Make curses TUI support optional at compile-time.
+- Bugfix: AC_ARG_WITH provides withval instead of enableval
+- miner.php split devs output for different devices
+- api.c: correct error messages
+- icarus.c modify (regular) timeout warning to only be debug
+- icarus.c set the windows TODO timeout
+- Allow specifying a specific driver for --scan-serial
+- optimized nonce-check and output code for -v 2 and -v 4
+- Bugfix: Check for libudev header (not just library) in configure, and document
+optional dependency
+- Add API support for Icarus and Bitforce
+- Next API version is 1.4 (1.3 is current)
+- README/api.c add "When" the request was processed to STATUS
+- Bugfix: ZLX to read BitFORCE temp, not ZKX -.-
+- Use libudev to autodetect BitFORCE GPUs, if available
+- Use the return value of fan_autotune to set fan_optimal instead of passing it
+as a pointer.
+- Pass the lasttemp from the device we're using to adjust fanspeed in twin
+devices.
+- fix the name to 3 chars, fix the multi-icarus support
+- Bugfix: "-S auto" is the default if no -S is specified, and there is no such
+delay in using it
+- README add information missing from --scan-serial
+- Update README RPC API Version comment
+- Bugfix: Allow enabling CPU even without OpenCL support
+- Change failed-to-mine number of requested shares messge to avoid segfault on
+recursive calling of quit().
+- Get rid of extra char which is just truncated in poclbm kernel.
+- only small code formating changes
+- removed vec_step() as this could lead to errors on older SDKs
+- unified code for generating nonce in kernel and moved addition of base to the
+end -> faster
+
 Version 2.3.1 - February 24, 2012
 
 - Revert input and output code on diakgcn and phatk kernels to old style which

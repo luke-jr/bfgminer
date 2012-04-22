@@ -335,51 +335,46 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
 	 * have otherwise created. The filename is:
-	 * name + kernelname + v + vectors + w + work_size + l + sizeof(long) + .bin
+	 * name + kernelname +/- g(offset) + v + vectors + w + work_size + l + sizeof(long) + .bin
 	 */
 	char binaryfilename[255];
 	char filename[255];
 	char numbuf[10];
 
 	if (gpus[gpu].kernel == KL_NONE) {
-		if (strstr(vbuff, "844.4") || // Linux 64 bit ATI 2.6 SDK
-		    strstr(vbuff, "851.4") || // Windows 64 bit ""
-		    strstr(vbuff, "831.4")) { // Windows & Linux 32 bit ""
-			if (strstr(name, "Tahiti")) {
-				applog(LOG_INFO, "Selecting poclbm kernel");
-				clState->chosen_kernel = KL_POCLBM;
-			} else {
+		/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
+		if (!strstr(name, "Tahiti") &&
+			(strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
+			 strstr(vbuff, "851.4") ||  // Windows 64 bit ""
+			 strstr(vbuff, "831.4") ||
+			 strstr(vbuff, "898.1"))) { // 12.2 driver SDK
 				applog(LOG_INFO, "Selecting diablo kernel");
 				clState->chosen_kernel = KL_DIABLO;
-			}
-		} else if (strstr(vbuff, "898.1") || // Windows 64 bit 12.2 driver
-			   strstr(name, "Tahiti")) { // All non SDK 2.6 79x0
-				applog(LOG_INFO, "Selecting diablo kernel");
-				clState->chosen_kernel = KL_DIABLO;
-		} else if (clState->hasBitAlign) {
-			applog(LOG_INFO, "Selecting phatk kernel");
-			clState->chosen_kernel = KL_PHATK;
-		} else {
+		/* Detect all 7970s, older ATI and NVIDIA and use poclbm */
+		} else if (strstr(name, "Tahiti") || !clState->hasBitAlign) {
 			applog(LOG_INFO, "Selecting poclbm kernel");
 			clState->chosen_kernel = KL_POCLBM;
+		/* Use phatk for the rest R5xxx R6xxx */
+		} else {
+			applog(LOG_INFO, "Selecting phatk kernel");
+			clState->chosen_kernel = KL_PHATK;
 		}
-
 		gpus[gpu].kernel = clState->chosen_kernel;
 	} else
 		clState->chosen_kernel = gpus[gpu].kernel;
 
 	/* For some reason 2 vectors is still better even if the card says
 	 * otherwise, and many cards lie about their max so use 256 as max
-	 * unless explicitly set on the command line. */
-	if (preferred_vwidth > 2)
+	 * unless explicitly set on the command line. Tahiti prefers 1 */
+	if (strstr(name, "Tahiti"))
+		preferred_vwidth = 1;
+	else if (preferred_vwidth > 2)
 		preferred_vwidth = 2;
 
 	switch (clState->chosen_kernel) {
 		case KL_POCLBM:
 			strcpy(filename, POCLBM_KERNNAME".cl");
 			strcpy(binaryfilename, POCLBM_KERNNAME);
-			/* This kernel prefers to not use vectors */
-			preferred_vwidth = 1;
 			break;
 		case KL_PHATK:
 			strcpy(filename, PHATK_KERNNAME".cl");
@@ -402,6 +397,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		clState->vwidth = preferred_vwidth;
 		gpus[gpu].vwidth = preferred_vwidth;
 	}
+
+	if ((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO) &&
+		clState->vwidth == 1 && clState->hasOpenCL11plus)
+			clState->goffset = true;
 
 	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
 		clState->wsize = gpus[gpu].work_size;
@@ -436,7 +435,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 
 	strcat(binaryfilename, name);
-
+	if (clState->goffset)
+		strcat(binaryfilename, "g");
 	strcat(binaryfilename, "v");
 	sprintf(numbuf, "%d", clState->vwidth);
 	strcat(binaryfilename, numbuf);
@@ -537,6 +537,9 @@ build:
 		applog(LOG_DEBUG, "BFI_INT patch requiring device found, patched source with BFI_INT");
 	} else
 		applog(LOG_DEBUG, "BFI_INT patch requiring device not found, will not BFI_INT patch");
+
+	if (clState->goffset)
+		strcat(CompilerOptions, " -D GOFFSET");
 
 	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
 	status = clBuildProgram(clState->program, 1, &devices[gpu], CompilerOptions , NULL, NULL);

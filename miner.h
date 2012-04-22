@@ -61,6 +61,14 @@ void *alloca (size_t);
  #include "ADL_SDK/adl_sdk.h"
 #endif
 
+#ifdef HAVE_LIBUSB
+  #include <libusb-1.0/libusb.h>
+#endif
+
+#ifdef USE_ZTEX
+  #include "libztex.h"
+#endif
+
 #if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define bswap_16 __builtin_bswap16
 #define bswap_32 __builtin_bswap32
@@ -222,6 +230,28 @@ enum cl_kernels {
 	KL_DIABLO,
 };
 
+enum dev_reason {
+	REASON_THREAD_FAIL_INIT,
+	REASON_THREAD_ZERO_HASH,
+	REASON_THREAD_FAIL_QUEUE,
+	REASON_DEV_SICK_IDLE_60,
+	REASON_DEV_DEAD_IDLE_600,
+	REASON_DEV_NOSTART,
+	REASON_DEV_OVER_HEAT,
+	REASON_DEV_THERMAL_CUTOFF,
+};
+
+#define REASON_NONE			"None"
+#define REASON_THREAD_FAIL_INIT_STR	"Thread failed to init"
+#define REASON_THREAD_ZERO_HASH_STR	"Thread got zero hashes"
+#define REASON_THREAD_FAIL_QUEUE_STR	"Thread failed to queue work"
+#define REASON_DEV_SICK_IDLE_60_STR	"Device idle for 60s"
+#define REASON_DEV_DEAD_IDLE_600_STR	"Device dead - idle for 600s"
+#define REASON_DEV_NOSTART_STR		"Device failed to start"
+#define REASON_DEV_OVER_HEAT_STR	"Device over heated"
+#define REASON_DEV_THERMAL_CUTOFF_STR	"Device reached thermal cutoff"
+#define REASON_UNKNOWN_STR		"Unknown reason - code bug"
+
 struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
@@ -229,7 +259,12 @@ struct cgpu_info {
 	char *name;
 	char *device_path;
 	FILE *device_file;
-	int device_fd;
+	union {
+#ifdef USE_ZTEX
+		struct libztex_device *device_ztex;
+#endif
+		int device_fd;
+	};
 
 	enum dev_enable deven;
 	int accepted;
@@ -275,6 +310,18 @@ struct cgpu_info {
 #endif
 	int last_share_pool;
 	time_t last_share_pool_time;
+
+	time_t device_last_well;
+	time_t device_last_not_well;
+	enum dev_reason device_not_well_reason;
+	int thread_fail_init_count;
+	int thread_zero_hash_count;
+	int thread_fail_queue_count;
+	int dev_sick_idle_60_count;
+	int dev_dead_idle_600_count;
+	int dev_nostart_count;
+	int dev_over_heat_count;	// It's a warning but worth knowing
+	int dev_thermal_cutoff_count;
 };
 
 extern bool add_cgpu(struct cgpu_info*);
@@ -478,7 +525,7 @@ extern int add_pool_details(bool live, char *url, char *user, char *pass);
 #define ADD_POOL_OK 0
 
 #define MAX_GPUDEVICES 16
-#define MAX_DEVICES 32
+#define MAX_DEVICES 64
 #define MAX_POOLS (32)
 
 #define MIN_INTENSITY -10
@@ -616,6 +663,7 @@ extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
+extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
@@ -628,5 +676,6 @@ extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
+extern void app_restart(void);
 
 #endif /* __MINER_H__ */

@@ -54,7 +54,6 @@
 	#include <sys/wait.h>
 #endif
 
-
 enum workio_commands {
 	WC_GET_WORK,
 	WC_SUBMIT_WORK,
@@ -221,6 +220,7 @@ static int include_count = 0;
 
 #if defined(unix)
 	static char *opt_stderr_cmd = NULL;
+	static int forkpid = 0;
 #endif // defined(unix)
 
 bool ping = true;
@@ -887,11 +887,16 @@ static struct opt_table opt_config_table[] = {
 
 static char *load_config(const char *arg, void __maybe_unused *unused);
 
+static int fileconf_load;
+
 static char *parse_config(json_t *config, bool fileconf)
 {
 	static char err_buf[200];
 	json_t *val;
 	struct opt_table *opt;
+
+	if (fileconf && !fileconf_load)
+		fileconf_load = 1;
 
 	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
 		char *p, *name;
@@ -916,24 +921,26 @@ static char *parse_config(json_t *config, bool fileconf)
 						  opt->u.arg);
 			} else if ((opt->type & OPT_HASARG) && json_is_array(val)) {
 				int n, size = json_array_size(val);
-				for(n = 0; n < size && !err; n++) {
+
+				for (n = 0; n < size && !err; n++) {
 					if (json_is_string(json_array_get(val, n)))
 						err = opt->cb_arg(json_string_value(json_array_get(val, n)), opt->u.arg);
 					else if (json_is_object(json_array_get(val, n)))
 						err = parse_config(json_array_get(val, n), false);
 				}
-			} else if ((opt->type&OPT_NOARG) && json_is_true(val)) {
+			} else if ((opt->type & OPT_NOARG) && json_is_true(val))
 				err = opt->cb(opt->u.arg);
-			} else {
+			else
 				err = "Invalid value";
-			}
+
 			if (err) {
 				/* Allow invalid values to be in configuration
 				 * file, just skipping over them provided the
 				 * JSON is still valid after that. */
-				if (fileconf)
+				if (fileconf) {
 					applog(LOG_ERR, "Invalid config option %s: %s", p, err);
-				else {
+					fileconf_load = -1;
+				} else {
 					sprintf(err_buf, "Parsing JSON option %s: %s",
 						p, err);
 					return err_buf;
@@ -950,13 +957,18 @@ static char *parse_config(json_t *config, bool fileconf)
 	return NULL;
 }
 
+char *cnfbuf = NULL;
+
 static char *load_config(const char *arg, void __maybe_unused *unused)
 {
 	json_error_t err;
 	json_t *config;
 	char *json_error;
 
-	if(++include_count > JSON_MAX_DEPTH)
+	if (!cnfbuf)
+		cnfbuf = strdup(arg);
+
+	if (++include_count > JSON_MAX_DEPTH)
 		return JSON_MAX_DEPTH_ERR;
 
 #if JANSSON_MAJOR_VERSION > 1
@@ -974,6 +986,7 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	}
 
 	config_loaded = true;
+
 	/* Parse the config now, so we can override it.  That can keep pointers
 	 * so don't free config object. */
 	return parse_config(config, true);
@@ -981,22 +994,26 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 
 static void load_default_config(void)
 {
-	char buf[PATH_MAX];
+	cnfbuf = malloc(PATH_MAX);
 
 #if defined(unix)
 	if (getenv("HOME") && *getenv("HOME")) {
-	        strcpy(buf, getenv("HOME"));
-		strcat(buf, "/");
+	        strcpy(cnfbuf, getenv("HOME"));
+		strcat(cnfbuf, "/");
 	}
 	else
-		strcpy(buf, "");
-	strcat(buf, ".cgminer/");
+		strcpy(cnfbuf, "");
+	strcat(cnfbuf, ".cgminer/");
 #else
-	strcpy(buf, "");
+	strcpy(cnfbuf, "");
 #endif
-	strcat(buf, def_conf);
-	if (!access(buf, R_OK))
-		load_config(buf, NULL);
+	strcat(cnfbuf, def_conf);
+	if (!access(cnfbuf, R_OK))
+		load_config(cnfbuf, NULL);
+	else {
+		free(cnfbuf);
+		cnfbuf = NULL;
+	}
 }
 
 extern const char *opt_argv0;
@@ -1015,6 +1032,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_ICARUS
 		"icarus "
+#endif
+#ifdef USE_ZTEX
+		"ztex "
 #endif
 		"mining support.\n"
 		, packagename);
@@ -1140,10 +1160,10 @@ void decay_time(double *f, double fadd)
 			ratio = 1 / ratio;
 	}
 
-	if (ratio > 0.95)
-		*f = (fadd * 0.1 + *f) / 1.1;
+	if (ratio > 0.63)
+		*f = (fadd * 0.58 + *f) / 1.58;
 	else
-		*f = (fadd + *f * 0.1) / 1.1;
+		*f = (fadd + *f * 0.58) / 1.58;
 }
 
 static int requests_staged(void)
@@ -1161,7 +1181,10 @@ WINDOW *mainwin, *statuswin, *logwin;
 #endif
 double total_secs = 0.1;
 static char statusline[256];
+/* logstart is where the log window should start */
 static int devcursor, logstart, logcursor;
+/* statusy is where the status window goes up to in cases where it won't fit at startup */
+static int statusy;
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
@@ -1256,7 +1279,7 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s", current_hash, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
-	mvwhline(statuswin, logstart - 1, 0, '-', 80);
+	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
 		have_opencl ? "[G]PU management " : "");
 }
@@ -1273,9 +1296,12 @@ static void curses_print_devstatus(int thr_id)
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	char logline[255];
 
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-	mvwprintw(statuswin, devcursor + cgpu->cgminer_id, 0, " %s %d: ", cgpu->api->name, cgpu->device_id);
+	/* Check this isn't out of the window size */
+	if (wmove(statuswin,devcursor + cgpu->cgminer_id, 0) == ERR)
+		return;
+	wprintw(statuswin, " %s %d: ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before) {
 		logline[0] = '\0';
 		cgpu->api->get_statline_before(logline, cgpu);
@@ -1284,20 +1310,20 @@ static void curses_print_devstatus(int thr_id)
 	else
 		wprintw(statuswin, "               | ");
 
-		if (cgpu->status == LIFE_DEAD)
-			wprintw(statuswin, "DEAD ");
-		else if (cgpu->status == LIFE_SICK)
-			wprintw(statuswin, "SICK ");
+	if (cgpu->status == LIFE_DEAD)
+		wprintw(statuswin, "DEAD ");
+	else if (cgpu->status == LIFE_SICK)
+		wprintw(statuswin, "SICK ");
 	else if (cgpu->deven == DEV_DISABLED)
 		wprintw(statuswin, "OFF  ");
 	else if (cgpu->deven == DEV_RECOVER)
 		wprintw(statuswin, "REST  ");
 	else
 		wprintw(statuswin, "%5.1f", cgpu->rolling);
-		adj_width(cgpu->accepted, &awidth);
-		adj_width(cgpu->rejected, &rwidth);
-		adj_width(cgpu->hw_errors, &hwwidth);
-		adj_width(cgpu->utility, &uwidth);
+	adj_width(cgpu->accepted, &awidth);
+	adj_width(cgpu->rejected, &rwidth);
+	adj_width(cgpu->hw_errors, &hwwidth);
+	adj_width(cgpu->utility, &uwidth);
 	wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
 			cgpu->total_mhashes / total_secs,
 			awidth, cgpu->accepted,
@@ -1311,7 +1337,7 @@ static void curses_print_devstatus(int thr_id)
 		wprintw(statuswin, "%s", logline);
 	}
 
-		wclrtoeol(statuswin);
+	wclrtoeol(statuswin);
 }
 #endif
 
@@ -1326,16 +1352,31 @@ static void print_status(int thr_id)
 static inline bool change_logwinsize(void)
 {
 	int x, y, logx, logy;
+	bool ret = false;
 
 	getmaxyx(mainwin, y, x);
-	getmaxyx(logwin, logy, logx);
-	y -= logcursor;
-	/* Detect screen size change */
-	if ((x != logx || y != logy) && x >= 80 && y >= 25) {
-		wresize(logwin, y, x);
-		return true;
+	if (x < 80 || y < 25)
+		return ret;
+
+	if (y > statusy + 2 && statusy < logstart) {
+		if (y - 2 < logstart)
+			statusy = y - 2;
+		else
+			statusy = logstart;
+		logcursor = statusy + 1;
+		mvwin(logwin, logcursor, 0);
+		wresize(statuswin, statusy, x);
+		ret = true;
 	}
-	return false;
+
+	y -= logcursor;
+	getmaxyx(logwin, logy, logx);
+	/* Detect screen size change */
+	if (x != logx || y != logy) {
+		wresize(logwin, y, x);
+		ret = true;
+	}
+	return ret;
 }
 
 static void check_winsizes(void)
@@ -1346,7 +1387,12 @@ static void check_winsizes(void)
 		int y, x;
 
 		x = getmaxx(statuswin);
-		wresize(statuswin, logstart, x);
+		if (logstart > LINES - 2)
+			statusy = LINES - 2;
+		else
+			statusy = logstart;
+		logcursor = statusy + 1;
+		wresize(statuswin, statusy, x);
 		getmaxyx(mainwin, y, x);
 		y -= logcursor;
 		wresize(logwin, y, x);
@@ -1527,6 +1573,8 @@ static bool submit_upstream_work(const struct work *work)
 	res = json_object_get(val, "result");
 
 	if (!QUIET) {
+#ifndef MIPSEB
+// This one segfaults on my router for some reason
 		isblock = regeneratehash(work);
 		if (isblock)
 			found_blocks++;
@@ -1534,6 +1582,7 @@ static bool submit_upstream_work(const struct work *work)
 		sprintf(hashshow, "%08lx.%08lx.%08lx%s",
 			(unsigned long)(hash32[7]), (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
 			isblock ? " BLOCK!" : "");
+#endif
 	}
 
 	/* Theoretically threads could race when modifying accepted and
@@ -1777,8 +1826,7 @@ static void disable_curses(void)
 
 static void print_summary(void);
 
-/* This should be the common exit path */
-void kill_work(void)
+static void __kill_work(void)
 {
 	struct thr_info *thr;
 	int i;
@@ -1825,11 +1873,37 @@ void kill_work(void)
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &thr_info[api_thr_id];
 	thr_info_cancel(thr);
+}
+
+/* This should be the common exit path */
+void kill_work(void)
+{
+	__kill_work();
 
 	quit(0, "Shutdown signal received.");
 }
 
-void quit(int status, const char *format, ...);
+static char **initial_args;
+
+static void clean_up(void);
+
+void app_restart(void)
+{
+	applog(LOG_WARNING, "Attempting to restart %s", packagename);
+
+	__kill_work();
+	clean_up();
+
+#if defined(unix)
+	if (forkpid > 0) {
+		kill(forkpid, SIGTERM);
+		forkpid = 0;
+	}
+#endif
+
+	execv(initial_args[0], initial_args);
+	applog(LOG_WARNING, "Failed to restart application");
+}
 
 static void sighandler(int __maybe_unused sig)
 {
@@ -1928,16 +2002,16 @@ static void *submit_work_thread(void *userdata)
 	pthread_detach(pthread_self());
 
 	if (stale_work(work, true)) {
-		total_stale++;
-		pool->stale_shares++;
-		if (!opt_submit_stale && !pool->submit_old) {
-			applog(LOG_NOTICE, "Stale share detected, discarding");
-			goto out;
-		}
 		if (opt_submit_stale)
 			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
 		else if (pool->submit_old)
 			applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
+		else {
+			applog(LOG_NOTICE, "Stale share detected, discarding");
+			total_stale++;
+			pool->stale_shares++;
+			goto out;
+		}
 	}
 
 	/* submit solution to bitcoin via JSON-RPC */
@@ -2158,6 +2232,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	current_hash = bin2hex(hash_swap, 16);
 	if (unlikely(!current_hash))
 		quit (1, "set_curblock OOM");
+	applog(LOG_INFO, "New block: %s...", current_hash);
 	if (old_hash)
 		free(old_hash);
 }
@@ -2358,10 +2433,11 @@ static void display_pool_summary(struct pool *pool)
 		unlock_curses();
 	}
 }
+#endif
 
 /* We can't remove the memory used for this struct pool because there may
  * still be work referencing it. We just remove it from the pools list */
-static void remove_pool(struct pool *pool)
+void remove_pool(struct pool *pool)
 {
 	int i, last_pool = total_pools - 1;
 	struct pool *other;
@@ -2382,7 +2458,6 @@ static void remove_pool(struct pool *pool)
 	pool->pool_no = total_pools;
 	total_pools--;
 }
-#endif
 
 void write_config(FILE *fcfg)
 {
@@ -2754,7 +2829,8 @@ static void set_options(void)
 	clear_logwin();
 retry:
 	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n[P]ause: %d\n[W]rite config file\n",
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
+		  "[P]ause: %d\n[W]rite config file\n[C]gminer restart\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
@@ -2847,6 +2923,13 @@ retry:
 		fclose(fcfg);
 		goto retry;
 
+	} else if (!strncasecmp(&input, "c", 1)) {
+		wlogprint("Are you sure?\n");
+		input = getch();
+		if (!strncasecmp(&input, "y", 1))
+			app_restart();
+		else
+			clear_logwin();
 	} else
 		clear_logwin();
 
@@ -2944,6 +3027,7 @@ void thread_reportin(struct thr_info *thr)
 	gettimeofday(&thr->last, NULL);
 	thr->cgpu->status = LIFE_WELL;
 	thr->getwork = false;
+	thr->cgpu->device_last_well = time(NULL);
 }
 
 static inline void thread_reportout(struct thr_info *thr)
@@ -2964,8 +3048,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	bool showlog = false;
 
 	/* Update the last time this thread reported in */
-	if (thr_id >= 0)
+	if (thr_id >= 0) {
 		gettimeofday(&thr_info[thr_id].last, NULL);
+		thr_info[thr_id].cgpu->device_last_well = time(NULL);
+	}
 
 	/* Don't bother calculating anything if we're not displaying it */
 	if (opt_realquiet || !opt_log_interval)
@@ -2991,8 +3077,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			if (th->cgpu == cgpu)
 				thread_rolling += th->rolling;
 		}
+		mutex_lock(&hash_lock);
 		decay_time(&cgpu->rolling, thread_rolling);
 		cgpu->total_mhashes += local_mhashes;
+		mutex_unlock(&hash_lock);
 
 		// If needed, output detailed, per-device stats
 		if (want_per_device_stats) {
@@ -3479,8 +3567,13 @@ void *miner_thread(void *userdata)
 	bool requested = false;
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	if (api->thread_init && !api->thread_init(mythr))
+	if (api->thread_init && !api->thread_init(mythr)) {
+		cgpu->device_last_not_well = time(NULL);
+		cgpu->device_not_well_reason = REASON_THREAD_FAIL_INIT;
+		cgpu->thread_fail_init_count++;
+
 		goto out;
+	}
 
 	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
@@ -3529,8 +3622,14 @@ void *miner_thread(void *userdata)
 				break;
 			}
 
-			if (unlikely(!hashes))
+			if (unlikely(!hashes)) {
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
+				cgpu->thread_zero_hash_count++;
+
 				goto out;
+			}
+
 			hashes_done += hashes;
 			if (hashes > cgpu->max_hashes)
 				cgpu->max_hashes = hashes;
@@ -3550,6 +3649,11 @@ void *miner_thread(void *userdata)
 					thread_reportout(mythr);
 					if (unlikely(!queue_request(mythr, false))) {
 						applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
+
+						cgpu->device_last_not_well = time(NULL);
+						cgpu->device_not_well_reason = REASON_THREAD_FAIL_QUEUE;
+						cgpu->thread_fail_queue_count++;
+
 						goto out;
 					}
 					thread_reportin(mythr);
@@ -3582,7 +3686,7 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven == DEV_DISABLED)) {
+			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 				mythr->rolling = mythr->cgpu->rolling = 0;
 				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
@@ -3938,11 +4042,16 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (gpus[gpu].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
 				applog(LOG_ERR, "Device %d recovered, GPU %d declared WELL!", i, gpu);
 				gpus[gpu].status = LIFE_WELL;
+				gpus[gpu].device_last_well = time(NULL);
 			} else if (now.tv_sec - thr->last.tv_sec > 60 && gpus[gpu].status == LIFE_WELL) {
 				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[gpu].status = LIFE_SICK;
 				applog(LOG_ERR, "Device %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
 				gettimeofday(&thr->sick, NULL);
+
+				gpus[gpu].device_last_not_well = time(NULL);
+				gpus[gpu].device_not_well_reason = REASON_DEV_SICK_IDLE_60;
+				gpus[gpu].dev_sick_idle_60_count++;
 #ifdef HAVE_ADL
 				if (adl_active && gpus[gpu].has_adl && gpu_activity(gpu) > 50) {
 					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
@@ -3957,6 +4066,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				gpus[gpu].status = LIFE_DEAD;
 				applog(LOG_ERR, "Device %d not responding for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
 				gettimeofday(&thr->sick, NULL);
+
+				gpus[gpu].device_last_not_well = time(NULL);
+				gpus[gpu].device_not_well_reason = REASON_DEV_DEAD_IDLE_600;
+				gpus[gpu].dev_dead_idle_600_count++;
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
 				   (gpus[i].status == LIFE_SICK || gpus[i].status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
@@ -3980,8 +4093,8 @@ static void log_print_status(struct cgpu_info *cgpu)
 {
 	char logline[255];
 
-		get_statline(logline, cgpu);
-		applog(LOG_WARNING, "%s", logline);
+	get_statline(logline, cgpu);
+	applog(LOG_WARNING, "%s", logline);
 }
 
 static void print_summary(void)
@@ -4067,6 +4180,9 @@ static void clean_up(void)
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
 #endif
+#ifdef HAVE_LIBUSB
+        libusb_exit(NULL);
+#endif
 
 	gettimeofday(&total_tv_end, NULL);
 #ifdef HAVE_CURSES
@@ -4094,6 +4210,13 @@ void quit(int status, const char *format, ...)
 	}
 	fprintf(stderr, "\n");
 	fflush(stderr);
+
+#if defined(unix)
+	if (forkpid > 0) {
+		kill(forkpid, SIGTERM);
+		forkpid = 0;
+	}
+#endif
 
 	exit(status);
 }
@@ -4239,14 +4362,14 @@ out:
 		}
 
 		// Fork a child process
-		r = fork();
-		if (r<0) {
+		forkpid = fork();
+		if (forkpid<0) {
 			perror("fork - failed to fork child process for --monitor");
 			exit(1);
 		}
 
 		// Child: launch monitor command
-		if (0==r) {
+		if (0==forkpid) {
 			// Make stdin read end of pipe
 			r = dup2(pfd[0], 0);
 			if (r<0) {
@@ -4295,6 +4418,7 @@ void enable_curses(void) {
 	cbreak();
 	noecho();
 	curses_active = true;
+	statusy = logstart;
 	unlock_curses();
 }
 #endif
@@ -4313,6 +4437,10 @@ extern struct device_api bitforce_api;
 
 #ifdef USE_ICARUS
 extern struct device_api icarus_api;
+#endif
+
+#ifdef USE_ZTEX
+extern struct device_api ztex_api;
 #endif
 
 
@@ -4355,7 +4483,7 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	return true;
 }
 
-int main (int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	struct block *block, *tmpblock;
 	struct work *work, *tmpwork;
@@ -4369,6 +4497,14 @@ int main (int argc, char *argv[])
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		quit(1, "Failed to curl_global_init");
+
+	initial_args = malloc(sizeof(char *) * (argc + 1));
+	for  (i = 0; i < argc; i++)
+		initial_args[i] = strdup(argv[i]);
+	initial_args[argc] = NULL;
+#ifdef HAVE_LIBUSB
+        libusb_init(NULL);
+#endif
 
 	mutex_init(&hash_lock);
 	mutex_init(&qd_lock);
@@ -4432,12 +4568,12 @@ int main (int argc, char *argv[])
 	opt_register_table(opt_cmdline_table,
 			   "Options for command line only");
 
-	if (!config_loaded)
-		load_default_config();
-
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+	if (!config_loaded)
+		load_default_config();
 
 	if (opt_benchmark) {
 		struct pool *pool;
@@ -4465,6 +4601,23 @@ int main (int argc, char *argv[])
 #endif
 
 	applog(LOG_WARNING, "Started %s", packagename);
+	if (cnfbuf) {
+		applog(LOG_NOTICE, "Loaded configuration file %s", cnfbuf);
+		switch (fileconf_load) {
+			case 0:
+				applog(LOG_WARNING, "Fatal JSON error in configuration file.");
+				applog(LOG_WARNING, "Configuration file could not be used.");
+				break;
+			case -1:
+				applog(LOG_WARNING, "Error in configuration file, partially loaded.");
+				applog(LOG_WARNING, "Start cgminer with -T to see what failed to load.");
+				break;
+			default:
+				break;
+		}
+		free(cnfbuf);
+		cnfbuf = NULL;
+	}
 
 	strcat(opt_kernel_path, "/");
 
@@ -4520,6 +4673,10 @@ int main (int argc, char *argv[])
 
 #ifdef USE_ICARUS
 	icarus_api.api_detect();
+#endif
+
+#ifdef USE_ZTEX
+	ztex_api.api_detect();
 #endif
 
 #ifdef WANT_CPUMINE
@@ -4841,6 +4998,13 @@ begin_bench:
 		HASH_DEL(blocks, block);
 		free(block);
 	}
+
+#if defined(unix)
+	if (forkpid > 0) {
+		kill(forkpid, SIGTERM);
+		forkpid = 0;
+	}
+#endif
 
 	return 0;
 }
