@@ -216,6 +216,9 @@ static void bitforce_detect()
 			s += 9;
 		if (!strcmp(s, "auto"))
 			autoscan = true;
+		else
+		if (!strcmp(s, "noauto"))
+			found = true;
 		else if (bitforce_detect_one(s)) {
 			string_elist_del(iter);
 			found = true;
