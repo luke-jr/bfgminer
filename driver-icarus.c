@@ -277,7 +277,6 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused uint64_t max_nonce)
 {
 	volatile unsigned long *wr = &work_restart[thr->id].restart;
-	*wr = 0;
 
 	struct cgpu_info *icarus;
 	int fd;

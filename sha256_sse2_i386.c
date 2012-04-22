@@ -65,8 +65,6 @@ bool scanhash_sse2_32(int thr_id, const unsigned char *pmidstate,
 
 	pdata += 64;
 
-    work_restart[thr_id].restart = 0;
-
     /* Message expansion */
     memcpy(m_midstate, pmidstate, sizeof(m_midstate));
     memcpy(m_w, pdata, sizeof(m_w)); /* The 2nd half of the data */
