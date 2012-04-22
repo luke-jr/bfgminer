@@ -257,15 +257,6 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	struct timeval now;
 
-	int fd = icarus_open(icarus->device_path);
-	if (unlikely(-1 == fd)) {
-		applog(LOG_ERR, "Failed to open Icarus on %s",
-		       icarus->device_path);
-		return false;
-	}
-
-	icarus->device_fd = fd;
-
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(icarus->init, &now);
@@ -289,7 +280,13 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct timeval tv_start, tv_end, diff;
 
 	icarus = thr->cgpu;
-	fd = icarus->device_fd;
+
+	fd = icarus_open(icarus->device_path);
+	if (unlikely(-1 == fd)) {
+		applog(LOG_ERR, "Failed to open Icarus on %s",
+		       icarus->device_path);
+		return 0;
+	}
 
 	memset(ob_bin, 0, sizeof(ob_bin));
 	memcpy(ob_bin, work->midstate, 32);
@@ -303,8 +300,10 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	gettimeofday(&tv_start, NULL);
 
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
-	if (ret)
+	if (ret) {
+		icarus_close(fd);
 		return 0;	/* This should never happen */
+	}
 
 	ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 	if (ob_hex) {
@@ -330,6 +329,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
 	work->blk.nonce = 0xffffffff;
+	icarus_close(fd);
 
 	if (nonce == 0 && ret) {
 		if (unlikely(diff.tv_sec > 12 || (diff.tv_sec == 11 && diff.tv_usec > 300067)))
@@ -369,8 +369,6 @@ static void icarus_shutdown(struct thr_info *thr)
 
 		if (icarus->device_path)
 			free(icarus->device_path);
-
-		close(icarus->device_fd);
 
 		devices[icarus->device_id] = NULL;
 		free(icarus);
