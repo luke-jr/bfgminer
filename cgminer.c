@@ -887,11 +887,16 @@ static struct opt_table opt_config_table[] = {
 
 static char *load_config(const char *arg, void __maybe_unused *unused);
 
+static int fileconf_load;
+
 static char *parse_config(json_t *config, bool fileconf)
 {
 	static char err_buf[200];
 	json_t *val;
 	struct opt_table *opt;
+
+	if (fileconf && !fileconf_load)
+		fileconf_load = 1;
 
 	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
 		char *p, *name;
@@ -916,24 +921,26 @@ static char *parse_config(json_t *config, bool fileconf)
 						  opt->u.arg);
 			} else if ((opt->type & OPT_HASARG) && json_is_array(val)) {
 				int n, size = json_array_size(val);
-				for(n = 0; n < size && !err; n++) {
+
+				for (n = 0; n < size && !err; n++) {
 					if (json_is_string(json_array_get(val, n)))
 						err = opt->cb_arg(json_string_value(json_array_get(val, n)), opt->u.arg);
 					else if (json_is_object(json_array_get(val, n)))
 						err = parse_config(json_array_get(val, n), false);
 				}
-			} else if ((opt->type&OPT_NOARG) && json_is_true(val)) {
+			} else if ((opt->type & OPT_NOARG) && json_is_true(val))
 				err = opt->cb(opt->u.arg);
-			} else {
+			else
 				err = "Invalid value";
-			}
+
 			if (err) {
 				/* Allow invalid values to be in configuration
 				 * file, just skipping over them provided the
 				 * JSON is still valid after that. */
-				if (fileconf)
+				if (fileconf) {
 					applog(LOG_ERR, "Invalid config option %s: %s", p, err);
-				else {
+					fileconf_load = -1;
+				} else {
 					sprintf(err_buf, "Parsing JSON option %s: %s",
 						p, err);
 					return err_buf;
@@ -956,7 +963,7 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	json_t *config;
 	char *json_error;
 
-	if(++include_count > JSON_MAX_DEPTH)
+	if (++include_count > JSON_MAX_DEPTH)
 		return JSON_MAX_DEPTH_ERR;
 
 #if JANSSON_MAJOR_VERSION > 1
@@ -979,24 +986,24 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	return parse_config(config, true);
 }
 
+char cnfbuf[PATH_MAX];
+
 static void load_default_config(void)
 {
-	char buf[PATH_MAX];
-
 #if defined(unix)
 	if (getenv("HOME") && *getenv("HOME")) {
-	        strcpy(buf, getenv("HOME"));
-		strcat(buf, "/");
+	        strcpy(cnfbuf, getenv("HOME"));
+		strcat(cnfbuf, "/");
 	}
 	else
-		strcpy(buf, "");
-	strcat(buf, ".cgminer/");
+		strcpy(cnfbuf, "");
+	strcat(cnfbuf, ".cgminer/");
 #else
-	strcpy(buf, "");
+	strcpy(cnfbuf, "");
 #endif
-	strcat(buf, def_conf);
-	if (!access(buf, R_OK))
-		load_config(buf, NULL);
+	strcat(cnfbuf, def_conf);
+	if (!access(cnfbuf, R_OK))
+		load_config(cnfbuf, NULL);
 }
 
 extern const char *opt_argv0;
@@ -4584,6 +4591,21 @@ int main(int argc, char *argv[])
 #endif
 
 	applog(LOG_WARNING, "Started %s", packagename);
+	if (strcmp(cnfbuf, "")) {
+		applog(LOG_NOTICE, "Loaded configuration file %s", cnfbuf);
+		switch (fileconf_load) {
+			case 0:
+				applog(LOG_WARNING, "Fatal JSON error in configuration file.");
+				applog(LOG_WARNING, "Configuration file could not be used.");
+				break;
+			case -1:
+				applog(LOG_WARNING, "Error in configuration file, partially loaded.");
+				applog(LOG_WARNING, "Start cgminer with -T to see what failed to load.");
+				break;
+			default:
+				break;
+		}
+	}
 
 	strcat(opt_kernel_path, "/");
 
