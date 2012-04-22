@@ -794,10 +794,6 @@ status2str(enum alive status)
 	}
 }
 
-#ifdef HAVE_OPENCL
-extern struct device_api opencl_api;
-#endif
-
 static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 {
 	tailsprintf(buf, isjson
@@ -808,21 +804,6 @@ static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 			status2str(cgpu->status),
 			cgpu->temp
 	);
-#ifdef HAVE_OPENCL
-	if (cgpu->api == &opencl_api) {
-		float gt, gv;
-		int ga, gf, gp, gc, gm, pt;
-#ifdef HAVE_ADL
-		if (!gpu_stats(gpu, &gt, &gc, &gm, &gv, &ga, &gf, &gp, &pt))
-#endif
-			gt = gv = gm = gc = ga = gf = gp = pt = 0;
-		tailsprintf(buf, isjson
-					? ",\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d"
-					: ",Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d",
-				gf, gp, gc, gm, gv, ga, pt
-		);
-	}
-#endif
 	tailsprintf(buf, isjson
 				? ",\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f"
 				: ",MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f",
@@ -830,20 +811,6 @@ static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility
 	);
-#ifdef HAVE_OPENCL
-	if (cgpu->api == &opencl_api) {
-		char intensity[20];
-		if (cgpu->dynamic)
-			strcpy(intensity, DYNAMIC);
-		else
-			sprintf(intensity, "%d", cgpu->intensity);
-		tailsprintf(buf, isjson
-					? ",\"Intensity\":\"%s\""
-					: ",Intensity=%s",
-				intensity
-		);
-	}
-#endif
 	tailsprintf(buf, isjson
 				? ",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f"
 				: ",Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f",
@@ -857,6 +824,22 @@ static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 		tailsprintf(buf, isjson ? ",\"Model\":\"%s\"" : ",Model=%s", cgpu->name);
 	if (cgpu->device_path)
 		tailsprintf(buf, isjson ? ",\"Device Path\":\"%s\"" : ",Device Path=%s", cgpu->device_path);
+
+	if (cgpu->api->get_extra_device_info) {
+		json_t *info = cgpu->api->get_extra_device_info(cgpu), *value;
+		const char *key, *tmpl = isjson ? ",\"%s\":%s" : ",%s=%s";
+		char *vdump;
+
+		json_object_foreach(info, key, value) {
+			if (isjson || !json_is_string(value))
+				vdump = json_dumps(value, JSON_COMPACT | JSON_ENCODE_ANY);
+			else
+				vdump = strdup(json_string_value(value));
+			tailsprintf(buf, tmpl, key, vdump);
+			free(vdump);
+		}
+		json_decref(info);
+	}
 
 	if (isjson)
 		tailsprintf(buf, "}");
