@@ -9,7 +9,8 @@ endif
 
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
 		  ADL_SDK/readme.txt api-example.php miner.php	\
-		  API.class API.java api-example.c windows-build.txt
+		  API.class API.java api-example.c windows-build.txt \
+		  bitstreams/*
 
 SUBDIRS		= lib compat ccan
 
@@ -77,4 +78,6 @@ endif
 
 if HAS_ZTEX
 cgminer_SOURCES += driver-ztex.c libztex.c
+bitstreamsdir = $(bindir)/bitstreams
+dist_bitstreams_DATA = bitstreams/*
 endif
