@@ -1206,6 +1206,8 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before)
 		cgpu->api->get_statline_before(buf, cgpu);
+	else
+		tailsprintf(buf, "               | ");
 	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.2f/m",
 		opt_log_interval,
 		cgpu->rolling,
@@ -1286,6 +1288,8 @@ static void curses_print_devstatus(int thr_id)
 		cgpu->api->get_statline_before(logline, cgpu);
 		wprintw(statuswin, "%s", logline);
 	}
+	else
+		wprintw(statuswin, "               | ");
 
 	if (cgpu->status == LIFE_DEAD)
 		wprintw(statuswin, "DEAD ");
