@@ -352,6 +352,9 @@ void init_adl(int nDevs)
 		}
 
 		applog(LOG_INFO, "GPU %d %s hardware monitoring enabled", gpu, lpInfo[i].strAdapterName);
+		if (gpus[gpu].name)
+			free(gpus[gpu].name);
+		gpus[gpu].name = lpInfo[i].strAdapterName;
 		gpus[gpu].has_adl = true;
 		/* Flag adl as active if any card is successfully activated */
 		adl_active = true;
@@ -639,8 +642,6 @@ static inline int __gpu_fanspeed(struct gpu_adl *ga)
 	return ga->lpFanSpeedValue.iFanSpeed;
 }
 
-static void reinit_adl(void);
-
 int gpu_fanspeed(int gpu)
 {
 	struct gpu_adl *ga;
@@ -669,8 +670,6 @@ static int __gpu_fanpercent(struct gpu_adl *ga)
 	return ga->lpFanSpeedValue.iFanSpeed;
 }
 
-
-
 int gpu_fanpercent(int gpu)
 {
 	struct gpu_adl *ga;
@@ -684,9 +683,14 @@ int gpu_fanpercent(int gpu)
 	ret = __gpu_fanpercent(ga);
 	unlock_adl();
 	if (unlikely(ga->has_fanspeed && ret == -1)) {
-		applog(LOG_WARNING, "GPU %d stopped reporting fanspeed", gpu);
-		applog(LOG_WARNING, "Will attempt to re-initialise ADL");
-		reinit_adl();
+		applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
+		if (opt_restart) {
+			applog(LOG_WARNING, "Restart enabled, will restart cgminer");
+			applog(LOG_WARNING, "You can disable this with the --no-restart option");
+			app_restart();
+		}
+		applog(LOG_WARNING, "Disabling fanspeed monitoring on this device");
+		ga->has_fanspeed = false;
 	}
 	return ret;
 }
@@ -1368,7 +1372,7 @@ void clear_adl(int nDevs)
 	free_adl();
 }
 
-static void reinit_adl(void)
+void reinit_adl(void)
 {
 	bool ret;
 	lock_adl();
@@ -1377,8 +1381,7 @@ static void reinit_adl(void)
 	if (!ret) {
 		adl_active = false;
 		applog(LOG_WARNING, "Attempt to re-initialise ADL has failed, disabling");
-	} else
-		applog(LOG_WARNING, "ADL re-initialisation complete");
+	}
 	unlock_adl();
 }
 #endif /* HAVE_ADL */

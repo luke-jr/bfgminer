@@ -251,8 +251,6 @@ bool scanhash_c(int thr_id, const unsigned char *midstate, unsigned char *data,
 
 	data += 64;
 
-	work_restart[thr_id].restart = 0;
-
 	while (1) {
 		n++;
 		*nonce = n;

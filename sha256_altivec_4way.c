@@ -9,7 +9,7 @@
 //
 
 
-#include "device-cpu.h"
+#include "driver-cpu.h"
 
 #ifdef WANT_ALTIVEC_4WAY
 
@@ -83,8 +83,6 @@ bool ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
     unsigned int *nNonce_p = (unsigned int*)(pdata + 76);
 
 	pdata += 64;
-
-    work_restart[thr_id].restart = 0;
 
     for (;;)
     {

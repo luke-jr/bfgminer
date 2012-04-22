@@ -596,6 +596,15 @@ An example request in both formats to set GPU 0 fan to 80%:
 The format of each reply (unless stated otherwise) is a STATUS section
 followed by an optional detail section
 
+From API verion 1.7 onwards, reply strings in JSON and Text have the
+necessary escaping as required to avoid ambiguity - they didn't before 1.7
+For JSON the 2 characters '"' and '\' are escaped with a '\' before them
+For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
+
+Only user entered information will contain characters that require being
+escaped, such as Pool URL, User and Password or the Config save filename,
+when they are returned in messages or as their values by the API
+
 For API version 1.4 and later:
 
 The STATUS section is:
@@ -622,7 +631,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.6:
+For API version 1.7:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
@@ -699,6 +708,12 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating the results of disabling pool N
                               The Msg includes the pool URL
+
+ removepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of removing pool N
+                              The Msg includes the pool URL
+                              N.B. all details for the pool will be lost
 
  gpuenable|N (*)
                none           There is no reply section just the STATUS section
@@ -794,9 +809,8 @@ api-example.c - a 'C' program to access the API (with source code)
 
 miner.php - an example web page to access the API
  This includes buttons and inputs to attempt access to the privileged commands
- You must modify the 2 lines near the top to change where it looks for cgminer
-  $miner = '127.0.0.1'; # hostname or IP address
-  $port = 4028;
+ Read the top of the file (miner.php) for details of how to tune the display
+ and also to use the option to display a multi-rig summary
 
 ---
 
@@ -873,21 +887,14 @@ any further.
 
 Q: Can you change the autofan/autogpu to change speeds in a different manner?
 A: The defaults are sane and safe. I'm not interested in changing them
-further. The starting fan speed is set to 85% in auto-fan mode as a safety
-precaution, but if a specific fan speed has been set, it will use that first
-before adjusting automatically.
-
-Q: The fanspeed starts at 85% with --auto-fan. Can I set it lower?
-A: The initial fanspeed will always start at 85% unless you choose your own
-value with --gpu-fan. In this case it will use the value you give it with
---gpu-fan as the first fanspeed, but it will also use this as the maximum fan
-speed unless overheat is detected.
+further. The starting fan speed is set to 50% in auto-fan mode as a safety
+precaution.
 
 Q: Why is my efficiency above/below 100%?
 A: Efficiency simply means how many shares you return for the amount of work
 you request. It does not correlate with efficient use of your hardware, and is
 a measure of a combination of hardware speed, block luck, pool design and other
-factors.
+factors
 
 Q: What are the best parameters to pass for X pool/hardware/device.
 A: Virtually always, the DEFAULT parameters give the best results. Most user
@@ -912,7 +919,7 @@ this time.
 
 Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK, -v 1 might help, along with not decreasing your memory clock speed.
+the 2.6 SDK.
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
 A: Run cgminer with the -n option and it will list all the platforms currently

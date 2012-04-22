@@ -4,7 +4,7 @@
 
 // tcatm's 4-way 128-bit SSE2 SHA-256
 
-#include "device-cpu.h"
+#include "driver-cpu.h"
 
 #ifdef WANT_SSE2_4WAY
 
@@ -110,8 +110,6 @@ bool ScanHash_4WaySSE2(int thr_id, const unsigned char *pmidstate,
     unsigned int *nNonce_p = (unsigned int*)(pdata + 76);
 
 	pdata += 64;
-
-    work_restart[thr_id].restart = 0;
 
     for (;;)
     {

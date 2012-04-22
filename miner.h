@@ -61,6 +61,14 @@ void *alloca (size_t);
  #include "ADL_SDK/adl_sdk.h"
 #endif
 
+#ifdef HAVE_LIBUSB
+  #include <libusb-1.0/libusb.h>
+#endif
+
+#ifdef USE_ZTEX
+  #include "libztex.h"
+#endif
+
 #if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define bswap_16 __builtin_bswap16
 #define bswap_32 __builtin_bswap32
@@ -187,6 +195,7 @@ struct thr_info;
 struct work;
 
 struct device_api {
+	char*dname;
 	char*name;
 
 	// API-global functions
@@ -247,9 +256,15 @@ struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
 	int device_id;
+	char *name;
 	char *device_path;
 	FILE *device_file;
-	int device_fd;
+	union {
+#ifdef USE_ZTEX
+		struct libztex_device *device_ztex;
+#endif
+		int device_fd;
+	};
 
 	enum dev_enable deven;
 	int accepted;
@@ -270,6 +285,7 @@ struct cgpu_info {
 	int virtual_gpu;
 	int intensity;
 	bool dynamic;
+	char *kname;
 #ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;
@@ -307,6 +323,8 @@ struct cgpu_info {
 	int dev_over_heat_count;	// It's a warning but worth knowing
 	int dev_thermal_cutoff_count;
 };
+
+extern bool add_cgpu(struct cgpu_info*);
 
 struct thread_q {
 	struct list_head	q;
@@ -645,6 +663,7 @@ extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
+extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
@@ -657,5 +676,6 @@ extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
+extern void app_restart(void);
 
 #endif /* __MINER_H__ */

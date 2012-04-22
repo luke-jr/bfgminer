@@ -9,11 +9,12 @@ endif
 
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
 		  ADL_SDK/readme.txt api-example.php miner.php	\
-		  API.class API.java api-example.c windows-build.txt
+		  API.class API.java api-example.c windows-build.txt \
+		  bitstreams/*
 
 SUBDIRS		= lib compat ccan
 
-INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
+INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES) $(USB_FLAGS)
 
 bin_PROGRAMS	= cgminer
 
@@ -22,7 +23,7 @@ bin_SCRIPTS	= *.cl
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
-		  @UDEV_LIBS@ \
+		  @UDEV_LIBS@ @USB_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
 
@@ -37,7 +38,7 @@ cgminer_SOURCES	+= logging.c
 
 # GPU sources, TODO: make them selectable
 # the GPU portion extracted from original main.c
-cgminer_SOURCES += device-gpu.h device-gpu.c
+cgminer_SOURCES += driver-opencl.h driver-opencl.c
 
 # the original GPU related sources, unchanged
 cgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
@@ -53,7 +54,7 @@ cgminer_SOURCES	+= \
 		  sha256_altivec_4way.c
 
 # the CPU portion extracted from original main.c
-cgminer_SOURCES += device-cpu.h device-cpu.c
+cgminer_SOURCES += driver-cpu.h driver-cpu.c
 
 if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM
@@ -68,9 +69,15 @@ endif # HAS_YASM
 endif # HAS_CPUMINE
 
 if HAS_BITFORCE
-cgminer_SOURCES += bitforce.c
+cgminer_SOURCES += driver-bitforce.c
 endif
 
 if HAS_ICARUS
-cgminer_SOURCES += icarus.c
+cgminer_SOURCES += driver-icarus.c
+endif
+
+if HAS_ZTEX
+cgminer_SOURCES += driver-ztex.c libztex.c
+bitstreamsdir = $(bindir)/bitstreams
+dist_bitstreams_DATA = bitstreams/*
 endif

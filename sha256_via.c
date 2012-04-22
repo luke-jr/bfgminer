@@ -1,5 +1,5 @@
 
-#include "device-cpu.h"
+#include "driver-cpu.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -34,8 +34,6 @@ bool scanhash_via(int thr_id, const unsigned char *pmidstate,
 	uint32_t *nonce = (uint32_t *)(data + 64 + 12);
 	unsigned long stat_ctr = 0;
 	int i;
-
-	work_restart[thr_id].restart = 0;
 
 	/* bitcoin gives us big endian input, but via wants LE,
 	 * so we reverse the swapping bitcoin has already done (extra work)

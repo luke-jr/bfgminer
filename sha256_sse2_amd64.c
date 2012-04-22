@@ -9,7 +9,7 @@
  *
  */
 
-#include "device-cpu.h"
+#include "driver-cpu.h"
 
 #ifdef WANT_X8664_SSE2
 
@@ -64,8 +64,6 @@ bool scanhash_sse2_64(int thr_id, const unsigned char *pmidstate,
     int i;
 
 	pdata += 64;
-
-    work_restart[thr_id].restart = 0;
 
     /* For debugging */
     union {

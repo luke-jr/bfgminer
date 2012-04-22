@@ -9,7 +9,7 @@
  *
  */
 
-#include "device-cpu.h"
+#include "driver-cpu.h"
 
 #ifdef WANT_X8632_SSE2
 
@@ -64,8 +64,6 @@ bool scanhash_sse2_32(int thr_id, const unsigned char *pmidstate,
     int i;
 
 	pdata += 64;
-
-    work_restart[thr_id].restart = 0;
 
     /* Message expansion */
     memcpy(m_midstate, pmidstate, sizeof(m_midstate));

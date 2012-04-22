@@ -44,8 +44,8 @@
 #include "miner.h"
 #include "findnonce.h"
 #include "adl.h"
-#include "device-cpu.h"
-#include "device-gpu.h"
+#include "driver-cpu.h"
+#include "driver-opencl.h"
 #include "bench_block.h"
 
 #if defined(unix)
@@ -53,7 +53,6 @@
 	#include <fcntl.h>
 	#include <sys/wait.h>
 #endif
-
 
 enum workio_commands {
 	WC_GET_WORK,
@@ -1017,6 +1016,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_ICARUS
 		"icarus "
 #endif
+#ifdef USE_ZTEX
+		"ztex "
+#endif
 		"mining support.\n"
 		, packagename);
 	printf("%s", opt_usage(opt_argv0, extra));
@@ -1162,7 +1164,10 @@ WINDOW *mainwin, *statuswin, *logwin;
 #endif
 double total_secs = 0.1;
 static char statusline[256];
+/* logstart is where the log window should start */
 static int devcursor, logstart, logcursor;
+/* statusy is where the status window goes up to in cases where it won't fit at startup */
+static int statusy;
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
@@ -1203,6 +1208,8 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before)
 		cgpu->api->get_statline_before(buf, cgpu);
+	else
+		tailsprintf(buf, "               | ");
 	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.2f/m",
 		opt_log_interval,
 		cgpu->rolling,
@@ -1255,7 +1262,7 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s", current_hash, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
-	mvwhline(statuswin, logstart - 1, 0, '-', 80);
+	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
 		have_opencl ? "[G]PU management " : "");
 }
@@ -1272,28 +1279,34 @@ static void curses_print_devstatus(int thr_id)
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	char logline[255];
 
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-	mvwprintw(statuswin, devcursor + cgpu->cgminer_id, 0, " %s %d: ", cgpu->api->name, cgpu->device_id);
+	/* Check this isn't out of the window size */
+	if (wmove(statuswin,devcursor + cgpu->cgminer_id, 0) == ERR)
+		return;
+	wprintw(statuswin, " %s %d: ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before) {
 		logline[0] = '\0';
 		cgpu->api->get_statline_before(logline, cgpu);
 		wprintw(statuswin, "%s", logline);
 	}
-		if (cgpu->status == LIFE_DEAD)
-			wprintw(statuswin, "DEAD ");
-		else if (cgpu->status == LIFE_SICK)
-			wprintw(statuswin, "SICK ");
+	else
+		wprintw(statuswin, "               | ");
+
+	if (cgpu->status == LIFE_DEAD)
+		wprintw(statuswin, "DEAD ");
+	else if (cgpu->status == LIFE_SICK)
+		wprintw(statuswin, "SICK ");
 	else if (cgpu->deven == DEV_DISABLED)
 		wprintw(statuswin, "OFF  ");
 	else if (cgpu->deven == DEV_RECOVER)
 		wprintw(statuswin, "REST  ");
 	else
 		wprintw(statuswin, "%5.1f", cgpu->rolling);
-		adj_width(cgpu->accepted, &awidth);
-		adj_width(cgpu->rejected, &rwidth);
-		adj_width(cgpu->hw_errors, &hwwidth);
-		adj_width(cgpu->utility, &uwidth);
+	adj_width(cgpu->accepted, &awidth);
+	adj_width(cgpu->rejected, &rwidth);
+	adj_width(cgpu->hw_errors, &hwwidth);
+	adj_width(cgpu->utility, &uwidth);
 	wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
 			cgpu->total_mhashes / total_secs,
 			awidth, cgpu->accepted,
@@ -1307,7 +1320,7 @@ static void curses_print_devstatus(int thr_id)
 		wprintw(statuswin, "%s", logline);
 	}
 
-		wclrtoeol(statuswin);
+	wclrtoeol(statuswin);
 }
 #endif
 
@@ -1322,16 +1335,31 @@ static void print_status(int thr_id)
 static inline bool change_logwinsize(void)
 {
 	int x, y, logx, logy;
+	bool ret = false;
 
 	getmaxyx(mainwin, y, x);
-	getmaxyx(logwin, logy, logx);
-	y -= logcursor;
-	/* Detect screen size change */
-	if ((x != logx || y != logy) && x >= 80 && y >= 25) {
-		wresize(logwin, y, x);
-		return true;
+	if (x < 80 || y < 25)
+		return ret;
+
+	if (y > statusy + 2 && statusy < logstart) {
+		if (y - 2 < logstart)
+			statusy = y - 2;
+		else
+			statusy = logstart;
+		logcursor = statusy + 1;
+		mvwin(logwin, logcursor, 0);
+		wresize(statuswin, statusy, x);
+		ret = true;
 	}
-	return false;
+
+	y -= logcursor;
+	getmaxyx(logwin, logy, logx);
+	/* Detect screen size change */
+	if (x != logx || y != logy) {
+		wresize(logwin, y, x);
+		ret = true;
+	}
+	return ret;
 }
 
 static void check_winsizes(void)
@@ -1342,7 +1370,12 @@ static void check_winsizes(void)
 		int y, x;
 
 		x = getmaxx(statuswin);
-		wresize(statuswin, logstart, x);
+		if (logstart > LINES - 2)
+			statusy = LINES - 2;
+		else
+			statusy = logstart;
+		logcursor = statusy + 1;
+		wresize(statuswin, statusy, x);
 		getmaxyx(mainwin, y, x);
 		y -= logcursor;
 		wresize(logwin, y, x);
@@ -1523,6 +1556,8 @@ static bool submit_upstream_work(const struct work *work)
 	res = json_object_get(val, "result");
 
 	if (!QUIET) {
+#ifndef MIPSEB
+// This one segfaults on my router for some reason
 		isblock = regeneratehash(work);
 		if (isblock)
 			found_blocks++;
@@ -1530,6 +1565,7 @@ static bool submit_upstream_work(const struct work *work)
 		sprintf(hashshow, "%08lx.%08lx.%08lx%s",
 			(unsigned long)(hash32[7]), (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
 			isblock ? " BLOCK!" : "");
+#endif
 	}
 
 	/* Theoretically threads could race when modifying accepted and
@@ -1773,8 +1809,7 @@ static void disable_curses(void)
 
 static void print_summary(void);
 
-/* This should be the common exit path */
-void kill_work(void)
+static void __kill_work(void)
 {
 	struct thr_info *thr;
 	int i;
@@ -1821,11 +1856,37 @@ void kill_work(void)
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &thr_info[api_thr_id];
 	thr_info_cancel(thr);
+}
+
+/* This should be the common exit path */
+void kill_work(void)
+{
+	__kill_work();
 
 	quit(0, "Shutdown signal received.");
 }
 
-void quit(int status, const char *format, ...);
+static char **initial_args;
+
+static void clean_up(void);
+
+void app_restart(void)
+{
+	applog(LOG_WARNING, "Attempting to restart %s", packagename);
+
+	__kill_work();
+	clean_up();
+
+#if defined(unix)
+	if (forkpid > 0) {
+		kill(forkpid, SIGTERM);
+		forkpid = 0;
+	}
+#endif
+
+	execv(initial_args[0], initial_args);
+	applog(LOG_WARNING, "Failed to restart application");
+}
 
 static void sighandler(int __maybe_unused sig)
 {
@@ -2355,10 +2416,11 @@ static void display_pool_summary(struct pool *pool)
 		unlock_curses();
 	}
 }
+#endif
 
 /* We can't remove the memory used for this struct pool because there may
  * still be work referencing it. We just remove it from the pools list */
-static void remove_pool(struct pool *pool)
+void remove_pool(struct pool *pool)
 {
 	int i, last_pool = total_pools - 1;
 	struct pool *other;
@@ -2379,7 +2441,6 @@ static void remove_pool(struct pool *pool)
 	pool->pool_no = total_pools;
 	total_pools--;
 }
-#endif
 
 void write_config(FILE *fcfg)
 {
@@ -2751,7 +2812,8 @@ static void set_options(void)
 	clear_logwin();
 retry:
 	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n[P]ause: %d\n[W]rite config file\n",
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
+		  "[P]ause: %d\n[W]rite config file\n[C]gminer restart\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
@@ -2844,6 +2906,13 @@ retry:
 		fclose(fcfg);
 		goto retry;
 
+	} else if (!strncasecmp(&input, "c", 1)) {
+		wlogprint("Are you sure?\n");
+		input = getch();
+		if (!strncasecmp(&input, "y", 1))
+			app_restart();
+		else
+			clear_logwin();
 	} else
 		clear_logwin();
 
@@ -3600,7 +3669,7 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven == DEV_DISABLED)) {
+			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 				mythr->rolling = mythr->cgpu->rolling = 0;
 				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
@@ -4007,8 +4076,8 @@ static void log_print_status(struct cgpu_info *cgpu)
 {
 	char logline[255];
 
-		get_statline(logline, cgpu);
-		applog(LOG_WARNING, "%s", logline);
+	get_statline(logline, cgpu);
+	applog(LOG_WARNING, "%s", logline);
 }
 
 static void print_summary(void)
@@ -4093,6 +4162,9 @@ static void clean_up(void)
 {
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
+#endif
+#ifdef HAVE_LIBUSB
+        libusb_exit(NULL);
 #endif
 
 	gettimeofday(&total_tv_end, NULL);
@@ -4329,6 +4401,7 @@ void enable_curses(void) {
 	cbreak();
 	noecho();
 	curses_active = true;
+	statusy = logstart;
 	unlock_curses();
 }
 #endif
@@ -4349,6 +4422,10 @@ extern struct device_api bitforce_api;
 extern struct device_api icarus_api;
 #endif
 
+#ifdef USE_ZTEX
+extern struct device_api ztex_api;
+#endif
+
 
 static int cgminer_id_count = 0;
 
@@ -4364,7 +4441,32 @@ void enable_device(struct cgpu_info *cgpu)
 #endif
 }
 
-int main (int argc, char *argv[])
+struct _cgpu_devid_counter {
+	char name[4];
+	int lastid;
+	UT_hash_handle hh;
+};
+
+bool add_cgpu(struct cgpu_info*cgpu)
+{
+	static struct _cgpu_devid_counter *devids = NULL;
+	struct _cgpu_devid_counter *d;
+	
+	HASH_FIND_STR(devids, cgpu->api->name, d);
+	if (d)
+		cgpu->device_id = ++d->lastid;
+	else
+	{
+		d = malloc(sizeof(*d));
+		memcpy(d->name, cgpu->api->name, sizeof(d->name));
+		cgpu->device_id = d->lastid = 0;
+		HASH_ADD_STR(devids, name, d);
+	}
+	devices[total_devices++] = cgpu;
+	return true;
+}
+
+int main(int argc, char *argv[])
 {
 	struct block *block, *tmpblock;
 	struct work *work, *tmpwork;
@@ -4378,6 +4480,14 @@ int main (int argc, char *argv[])
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		quit(1, "Failed to curl_global_init");
+
+	initial_args = malloc(sizeof(char *) * (argc + 1));
+	for  (i = 0; i < argc; i++)
+		initial_args[i] = strdup(argv[i]);
+	initial_args[argc] = NULL;
+#ifdef HAVE_LIBUSB
+        libusb_init(NULL);
+#endif
 
 	mutex_init(&hash_lock);
 	mutex_init(&qd_lock);
@@ -4531,6 +4641,10 @@ int main (int argc, char *argv[])
 	icarus_api.api_detect();
 #endif
 
+#ifdef USE_ZTEX
+	ztex_api.api_detect();
+#endif
+
 #ifdef WANT_CPUMINE
 	cpu_api.api_detect();
 #endif
@@ -4538,7 +4652,11 @@ int main (int argc, char *argv[])
 	if (devices_enabled == -1) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
-			applog(LOG_ERR, " %2d. %s%d", i, devices[i]->api->name, devices[i]->device_id);
+			struct cgpu_info *cgpu = devices[i];
+			if (cgpu->name)
+				applog(LOG_ERR, " %2d. %s %d: %s (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->name, cgpu->api->dname);
+			else
+				applog(LOG_ERR, " %2d. %s %d (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->api->dname);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}
