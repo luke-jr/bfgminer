@@ -77,7 +77,7 @@ cgminer_SOURCES += driver-icarus.c
 endif
 
 if HAS_ZTEX
-cgminer_SOURCES += driver-ztex.c libztex.c
+cgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = bitstreams/*
 endif
