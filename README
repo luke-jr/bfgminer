@@ -212,7 +212,7 @@ FPGA mining boards(BitForce, Icarus) only options:
      device depending on the version of udev being used.
 
      On linux <arg> is usually of the format /dev/ttyUSBn
-     On windows <arg> is usually of the format COMn
+     On windows <arg> is usually of the format \\.\COMn
        (where n = the correct device number for the FPGA device)
 
 
