@@ -365,7 +365,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 
 struct device_api bitforce_api = {
 	.dname = "bitforce",
-	.name = "BFL",
+	.name = "PGA",
 	.api_detect = bitforce_detect,
 	.get_statline_before = get_bitforce_statline_before,
 	.thread_prepare = bitforce_thread_prepare,
