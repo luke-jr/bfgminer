@@ -257,6 +257,7 @@ struct icarus_state {
 	bool firstrun;
 	struct timeval tv_workstart;
 	struct work last_work;
+	bool changework;
 };
 
 static bool icarus_prepare(struct thr_info *thr)
@@ -309,8 +310,20 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	if (!state->firstrun) {
-		/* Icarus will return 8 bytes nonces or nothing */
-		lret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr);
+		if (state->changework)
+			state->changework = false;
+		else
+		{
+			/* Icarus will return 8 bytes nonces or nothing */
+			lret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr);
+			if (lret && *wr) {
+				// The prepared work is invalid, and the current work is abandoned
+				// Go back to the main loop to get the next work, and stuff
+				// Returning to the main loop will clear work_restart, so use a flag...
+				state->changework = true;
+				return 1;
+			}
+		}
 
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &state->tv_workstart);
