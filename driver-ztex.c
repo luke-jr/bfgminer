@@ -313,7 +313,7 @@ static void ztex_disable(struct thr_info *thr)
 
 struct device_api ztex_api = {
 	.dname = "ztex",
-	.name = "PGA",
+	.name = "ZTX",
 	.api_detect = ztex_detect,
 	.get_statline_before = ztex_statline_before,
 	.thread_prepare = ztex_prepare,
