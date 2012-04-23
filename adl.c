@@ -268,12 +268,11 @@ void init_adl(int nDevs)
 		 * one. Now since there's no way of correlating the
 		 * opencl enumerated devices and the ADL enumerated
 		 * ones, we have to assume they're in the same order.*/
-		if (++devices > nDevs) {
+		if (++devices > nDevs && devs_match) {
 			applog(LOG_ERR, "ADL found more devices than opencl!");
 			applog(LOG_ERR, "There is possibly at least one GPU that doesn't support OpenCL");
+			applog(LOG_ERR, "Use the gpu map feature to reliably map OpenCL to ADL");
 			devs_match = false;
-			devices = nDevs;
-			break;
 		}
 		last_adapter = lpAdapterID;
 
@@ -286,16 +285,25 @@ void init_adl(int nDevs)
 	if (devices < nDevs) {
 		applog(LOG_ERR, "ADL found less devices than opencl!");
 		applog(LOG_ERR, "There is possibly more than one display attached to a GPU");
+		applog(LOG_ERR, "Use the gpu map feature to reliably map OpenCL to ADL");
 		devs_match = false;
 	}
 
-	for (i = 0; i < nDevs; i++) {
+	for (i = 0; i < devices; i++) {
 		vadapters[i].virtual_gpu = i;
 		vadapters[i].id = adapters[i].id;
 	}
 
+	/* Apply manually provided OpenCL to ADL mapping, if any */
+	for (i = 0; i < nDevs; i++) {
+		if (gpus[i].mapped) {
+			vadapters[gpus[i].virtual_adl].virtual_gpu = i;
+			applog(LOG_INFO, "Mapping OpenCL device %d to ADL device %d", i, gpus[i].virtual_adl);
+		}
+	}
+			
 	if (!devs_match) {
-		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices does not match!");
+		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices did not match!");
 		applog(LOG_ERR, "Hardware monitoring may NOT match up with devices!");
 	} else if (opt_reorder) {
 		/* Windows has some kind of random ordering for bus number IDs and

@@ -123,6 +123,18 @@ int clDevicesNum(void) {
 		applog(LOG_INFO, "Platform %d devices: %d", i, numDevices);
 		if (numDevices > most_devices)
 			most_devices = numDevices;
+		if (numDevices) {
+			unsigned int j;
+			char pbuff[256];
+			cl_device_id *devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
+
+			clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+			for (j = 0; j < numDevices; j++) {
+				clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
+				applog(LOG_INFO, "\t%i\t%s", j, pbuff);
+			}
+			free(devices);
+		}
 	}
 
 	return most_devices;
