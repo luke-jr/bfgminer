@@ -253,6 +253,12 @@ static void icarus_detect()
 	}
 }
 
+struct icarus_state {
+	bool firstrun;
+	struct timeval tv_workstart;
+	struct work last_work;
+};
+
 static bool icarus_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
@@ -262,6 +268,10 @@ static bool icarus_prepare(struct thr_info *thr)
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(icarus->init, &now);
+
+	struct icarus_state *state;
+	thr->cgpu_data = state = calloc(1, sizeof(*state));
+	state->firstrun = true;
 
 	return true;
 }
@@ -273,16 +283,24 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	struct cgpu_info *icarus;
 	int fd;
-	int ret;
+	int ret, lret;
 
-	unsigned char ob_bin[64], nonce_bin[4];
+	unsigned char ob_bin[64] = {0}, nonce_bin[4] = {0};
 	char *ob_hex, *nonce_hex;
 	uint32_t nonce;
 	uint32_t hash_count;
-	struct timeval tv_start, tv_end, diff;
+	struct timeval tv_end, diff;
 
 	icarus = thr->cgpu;
+	struct icarus_state *state = thr->cgpu_data;
 
+	// Prepare the next work immediately
+	memcpy(ob_bin, work->midstate, 32);
+	memcpy(ob_bin + 52, work->data + 64, 12);
+	rev(ob_bin, 32);
+	rev(ob_bin + 52, 12);
+
+	// Open serial port and wait for the previous run's result
 	fd = icarus_open(icarus->device_path);
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "Failed to open Icarus on %s",
@@ -290,16 +308,19 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		return 0;
 	}
 
-	memset(ob_bin, 0, sizeof(ob_bin));
-	memcpy(ob_bin, work->midstate, 32);
-	memcpy(ob_bin + 52, work->data + 64, 12);
-	rev(ob_bin, 32);
-	rev(ob_bin + 52, 12);
+	if (!state->firstrun) {
+		/* Icarus will return 8 bytes nonces or nothing */
+		lret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr);
+
+		gettimeofday(&tv_end, NULL);
+		timeval_subtract(&diff, &tv_end, &state->tv_workstart);
+	}
+
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
 #endif
 
-	gettimeofday(&tv_start, NULL);
+	gettimeofday(&state->tv_workstart, NULL);
 
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
 	if (ret) {
@@ -314,13 +335,17 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		free(ob_hex);
 	}
 
-	/* Icarus will return 8 bytes nonces or nothing */
-	memset(nonce_bin, 0, sizeof(nonce_bin));
-	ret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr);
+	icarus_close(fd);
 
-	gettimeofday(&tv_end, NULL);
-	timeval_subtract(&diff, &tv_end, &tv_start);
+	work->blk.nonce = 0xffffffff;
 
+	if (state->firstrun) {
+		state->firstrun = false;
+		memcpy(&state->last_work, work, sizeof(state->last_work));
+		return 1;
+	}
+
+	// OK, done starting Icarus's next job... now process the last run's result!
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 	if (nonce_hex) {
 		applog(LOG_DEBUG, "Icarus %d returned (in %d.%06d seconds): %s",
@@ -330,10 +355,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
-	work->blk.nonce = 0xffffffff;
-	icarus_close(fd);
-
-	if (nonce == 0 && ret) {
+	if (nonce == 0 && lret) {
+		memcpy(&state->last_work, work, sizeof(state->last_work));
 		if (unlikely(diff.tv_sec > 12 || (diff.tv_sec == 11 && diff.tv_usec > 300067)))
 			return 0xffffffff;
 		// Approximately how much of the nonce Icarus scans in 1 second...
@@ -345,7 +368,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 #ifndef __BIG_ENDIAN__
 	nonce = swab32(nonce);
 #endif
-	submit_nonce(thr, work, nonce);
+	submit_nonce(thr, &state->last_work, nonce);
+	memcpy(&state->last_work, work, sizeof(state->last_work));
 
 	hash_count = (nonce & 0x7fffffff);
         if (hash_count == 0)
@@ -365,6 +389,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 static void icarus_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *icarus;
+
+	free(thr->cgpu_data);
 
 	if (thr->cgpu) {
 		icarus = thr->cgpu;
