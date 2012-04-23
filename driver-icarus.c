@@ -181,12 +181,15 @@ static bool icarus_detect_one(const char *devpath)
 {
 	int fd;
 
+	// Block 171874 nonce = (0xa2870100) = 0x000187a2
+	//	This one takes ~0.53ms on Rev3 Icarus
 	const char golden_ob[] =
-		"2db907f9cb4eb938ded904f4832c4331"
-		"0380e3aeb54364057e7fec5157bfc533"
-		"00000000000000000000000080000000"
-		"00000000a58e091ac342724e7c3dc346";
-	const char golden_nonce[] = "063c5e01";
+		"4679ba4ec99876bf4bfe086082b40025"
+		"4df6c356451471139a3afa71e48f544a"
+		"00000000000000000000000000000000"
+		"0000000087320b1a1426674f2fa722ce";
+
+	const char golden_nonce[] = "000187a2";
 
 	unsigned char ob_bin[64], nonce_bin[4];
 	char *nonce_hex;
