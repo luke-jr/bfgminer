@@ -1184,6 +1184,34 @@ static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
 	tailsprintf(buf, " I:%2d", gpu->intensity);
 }
 
+static json_t*
+get_opencl_extra_device_info(struct cgpu_info *gpu)
+{
+	json_t *info = json_object();
+
+	float gt, gv;
+	int ga, gf, gp, gc, gm, pt;
+#ifdef HAVE_ADL
+	if (!gpu_stats(gpu->device_id, &gt, &gc, &gm, &gv, &ga, &gf, &gp, &pt))
+#endif
+		gt = gv = gm = gc = ga = gf = gp = pt = 0;
+	json_object_set(info, "Fan Speed", json_integer(gf));
+	json_object_set(info, "Fan Percent", json_integer(gp));
+	json_object_set(info, "GPU Clock", json_integer(gc));
+	json_object_set(info, "Memory Clock", json_integer(gm));
+	json_object_set(info, "GPU Voltage", json_real(gv));
+	json_object_set(info, "GPU Activity", json_integer(ga));
+	json_object_set(info, "Powertune", json_integer(pt));
+
+	json_object_set(info, "Intensity",
+					gpu->dynamic
+						? json_string("D")
+						: json_integer(gpu->intensity)
+	);
+
+	return info;
+}
+
 struct opencl_thread_data {
 	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *, cl_uint);
 	uint32_t *res;
@@ -1464,6 +1492,7 @@ struct device_api opencl_api = {
 	.get_statline_before = get_opencl_statline_before,
 #endif
 	.get_statline = get_opencl_statline,
+	.get_extra_device_info = get_opencl_extra_device_info,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
 	.free_work = opencl_free_work,
