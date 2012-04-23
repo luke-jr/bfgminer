@@ -6,6 +6,7 @@
 
 extern char *print_ndevs_and_exit(int *ndevs);
 extern void *reinit_gpu(void *userdata);
+extern char *set_gpu_map(char *arg);
 extern char *set_gpu_engine(char *arg);
 extern char *set_gpu_fan(char *arg);
 extern char *set_gpu_memclock(char *arg);

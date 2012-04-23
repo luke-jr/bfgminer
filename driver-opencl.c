@@ -171,6 +171,36 @@ char *set_kernel(char *arg)
 #endif
 
 #ifdef HAVE_ADL
+/* This function allows us to map an adl device to an opencl device for when
+ * simple enumeration has failed to match them. */
+char *set_gpu_map(char *arg)
+{
+	int val1 = 0, val2 = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set gpu map";
+	if (sscanf(arg, "%d:%d", &val1, &val2) != 2)
+		return "Invalid description for map pair";
+	if (val1 < 0 || val1 > MAX_GPUDEVICES || val2 < 0 || val2 > MAX_GPUDEVICES)
+		return "Invalid value passed to set_gpu_map";
+
+	gpus[val1].virtual_adl = val2;
+	gpus[val1].mapped = true;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		if (sscanf(nextptr, "%d:%d", &val1, &val2) != 2)
+			return "Invalid description for map pair";
+		if (val1 < 0 || val1 > MAX_GPUDEVICES || val2 < 0 || val2 > MAX_GPUDEVICES)
+			return "Invalid value passed to set_gpu_map";
+		gpus[val1].virtual_adl = val2;
+		gpus[val1].mapped = true;
+	}
+
+	return NULL;
+}
+
 void get_intrange(char *arg, int *val1, int *val2)
 {
 	if (sscanf(arg, "%d-%d", val1, val2) == 1) {

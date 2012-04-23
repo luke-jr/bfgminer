@@ -282,7 +282,9 @@ struct cgpu_info {
 
 	unsigned int max_hashes;
 
+	bool mapped;
 	int virtual_gpu;
+	int virtual_adl;
 	int intensity;
 	bool dynamic;
 	char *kname;
