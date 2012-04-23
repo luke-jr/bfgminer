@@ -864,7 +864,6 @@ static void cpustatus(int cpu, bool isjson)
 
 static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	int devcount = 0;
 	int i;
 
 	if (total_devices == 0) {
@@ -879,40 +878,12 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 		strcat(io_buffer, JSON_DEVS);
 	}
 
-	for (i = 0; i < nDevs; i++) {
-		if (isjson && devcount > 0)
+	for (i = 0; i < total_devices; ++i) {
+		if (isjson && i)
 			strcat(io_buffer, COMMA);
 
-		gpustatus(i, isjson);
-
-		devcount++;
+		devstatus_an(io_buffer, devices[i], isjson);
 	}
-
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
-	int numpga = numpgas();
-
-	if (numpga > 0)
-		for (i = 0; i < numpga; i++) {
-			if (isjson && devcount > 0)
-				strcat(io_buffer, COMMA);
-
-			pgastatus(i, isjson);
-
-			devcount++;
-		}
-#endif
-
-#ifdef WANT_CPUMINE
-	if (opt_n_threads > 0)
-		for (i = 0; i < num_processors; i++) {
-			if (isjson && devcount > 0)
-				strcat(io_buffer, COMMA);
-
-			cpustatus(i, isjson);
-
-			devcount++;
-		}
-#endif
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
