@@ -834,10 +834,7 @@ devdetail_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 		json_decref(info);
 	}
 
-	if (isjson)
-		tailsprintf(buf, "}");
-	else
-		tailsprintf(buf, "%c", SEPARATOR);
+	tailsprintf(buf, "%c", isjson ? '}' : SEPARATOR);
 }
 
 static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
@@ -862,10 +859,7 @@ static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 		json_decref(info);
 	}
 
-	if (isjson)
-		tailsprintf(buf, "}");
-	else
-		tailsprintf(buf, "%c", SEPARATOR);
+	tailsprintf(buf, "%c", isjson ? '}' : SEPARATOR);
 }
 
 static void gpustatus(int gpu, bool isjson)
