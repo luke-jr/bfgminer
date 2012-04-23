@@ -219,6 +219,10 @@ static bool icarus_detect_one(const char *devpath)
 			free(nonce_hex);
 			return false;
 		}
+		applog(LOG_DEBUG, 
+		       "Icarus Detect: "
+		       "Test succeeded at %s: got %s",
+			       devpath, nonce_hex);
 		free(nonce_hex);
 	} else
 		return false;
