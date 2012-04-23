@@ -794,20 +794,30 @@ status2str(enum alive status)
 	}
 }
 
-static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
+static void
+append_kv(char *buf, json_t*info, bool isjson)
+{
+	json_t *value;
+	const char *key, *tmpl = isjson ? ",\"%s\":%s" : ",%s=%s";
+	char *vdump;
+
+	json_object_foreach(info, key, value) {
+		if (isjson || !json_is_string(value))
+			vdump = json_dumps(value, JSON_COMPACT | JSON_ENCODE_ANY);
+		else
+			vdump = strdup(json_string_value(value));
+		tailsprintf(buf, tmpl, key, vdump);
+		free(vdump);
+	}
+}
+
+static void
+devdetail_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 {
 	tailsprintf(buf, isjson
-				? "{\"%s\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f,\"Driver\":\"%s\""
-				: "%s=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f,Driver=%s",
+				? "{\"%s\":%d,Driver=%s"
+				: "%s=%d,Driver=%s",
 			cgpu->api->name, cgpu->device_id,
-			bool2str(cgpu->deven != DEV_DISABLED),
-			status2str(cgpu->status),
-			cgpu->temp,
-			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility,
-			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes,
 			cgpu->api->dname
 	);
 
@@ -818,19 +828,37 @@ static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 	if (cgpu->device_path)
 		tailsprintf(buf, isjson ? ",\"Device Path\":\"%s\"" : ",Device Path=%s", cgpu->device_path);
 
-	if (cgpu->api->get_extra_device_info) {
-		json_t *info = cgpu->api->get_extra_device_info(cgpu), *value;
-		const char *key, *tmpl = isjson ? ",\"%s\":%s" : ",%s=%s";
-		char *vdump;
+	if (cgpu->api->get_extra_device_detail) {
+		json_t *info = cgpu->api->get_extra_device_detail(cgpu);
+		append_kv(buf, info, isjson);
+		json_decref(info);
+	}
 
-		json_object_foreach(info, key, value) {
-			if (isjson || !json_is_string(value))
-				vdump = json_dumps(value, JSON_COMPACT | JSON_ENCODE_ANY);
-			else
-				vdump = strdup(json_string_value(value));
-			tailsprintf(buf, tmpl, key, vdump);
-			free(vdump);
-		}
+	if (isjson)
+		tailsprintf(buf, "}");
+	else
+		tailsprintf(buf, "%c", SEPARATOR);
+}
+
+static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
+{
+	tailsprintf(buf, isjson
+				? "{\"%s\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f"
+				: "%s=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f",
+			cgpu->api->name, cgpu->device_id,
+			bool2str(cgpu->deven != DEV_DISABLED),
+			status2str(cgpu->status),
+			cgpu->temp,
+			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
+			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->utility,
+			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes
+	);
+
+	if (cgpu->api->get_extra_device_status) {
+		json_t *info = cgpu->api->get_extra_device_status(cgpu);
+		append_kv(buf, info, isjson);
 		json_decref(info);
 	}
 
@@ -862,7 +890,9 @@ static void cpustatus(int cpu, bool isjson)
 	devstatus_an(io_buffer, &cpus[cpu], isjson);
 }
 
-static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void
+devinfo_internal(void (*func)(char*, struct cgpu_info*, bool),
+                 __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	int i;
 
@@ -882,11 +912,23 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 		if (isjson && i)
 			strcat(io_buffer, COMMA);
 
-		devstatus_an(io_buffer, devices[i], isjson);
+		func(io_buffer, devices[i], isjson);
 	}
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
+}
+
+static void
+devdetail(SOCKETTYPE c, char *param, bool isjson)
+{
+	return devinfo_internal(devdetail_an, c, param, isjson);
+}
+
+static void
+devstatus(SOCKETTYPE c, char *param, bool isjson)
+{
+	return devinfo_internal(devstatus_an, c, param, isjson);
 }
 
 static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
@@ -1890,6 +1932,7 @@ struct CMDS {
 	{ "version",		apiversion,	false },
 	{ "config",		minerconfig,	false },
 	{ "devs",		devstatus,	false },
+	{ "devdetail",	devdetail,	false },
 	{ "pools",		poolstatus,	false },
 	{ "summary",		summary,	false },
 	{ "gpuenable",		gpuenable,	true },
