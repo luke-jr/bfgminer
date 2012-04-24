@@ -102,10 +102,25 @@ static int icarus_open(const char *devpath)
 
 	return serialfd;
 #else
+	COMMCONFIG comCfg;
+
 	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0,
 				    NULL, OPEN_EXISTING, 0, NULL);
 	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
 		return -1;
+
+	// thanks to af_newbie for pointers about this
+	memset(&comCfg, 0 , sizeof(comCfg));
+	comCfg.dwSize = sizeof(COMMCONFIG);
+	comCfg.wVersion = 1;
+	comCfg.dcb.DCBlength = sizeof(DCB);
+	comCfg.dcb.BaudRate = 115200;
+	comCfg.dcb.fBinary = 1;
+	comCfg.dcb.fDtrControl = DTR_CONTROL_ENABLE;
+	comCfg.dcb.fRtsControl = RTS_CONTROL_ENABLE;
+	comCfg.dcb.ByteSize = 8;
+
+	SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
 
 	const DWORD ctoms = ICARUS_READ_FAULT_DECISECONDS * 100;
 	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
