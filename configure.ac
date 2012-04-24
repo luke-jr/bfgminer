@@ -57,7 +57,6 @@ gl_INIT
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS(syslog.h)
-AC_CHECK_HEADERS([sys/epoll.h])
 
 AC_FUNC_ALLOCA
 
