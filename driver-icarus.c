@@ -114,7 +114,7 @@ static int icarus_open(const char *devpath)
 #endif
 }
 
-static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsigned long *wr)
+static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsigned long *wr, int read_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
@@ -149,7 +149,7 @@ static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsig
 		rc++;
 		if (*wr)
 			return 1;
-		if (rc == ICARUS_READ_FAULT_COUNT) {
+		if (rc >= read_count) {
 			if (epollfd != -1)
 				close(epollfd);
 			applog(LOG_DEBUG,
@@ -181,12 +181,17 @@ static bool icarus_detect_one(const char *devpath)
 {
 	int fd;
 
+	// Block 171874 nonce = (0xa2870100) = 0x000187a2
+	// N.B. golden_ob MUST take less time to calculate
+	//	than the timeout set in icarus_open()
+	//	This one takes ~0.53ms on Rev3 Icarus
 	const char golden_ob[] =
-		"2db907f9cb4eb938ded904f4832c4331"
-		"0380e3aeb54364057e7fec5157bfc533"
-		"00000000000000000000000080000000"
-		"00000000a58e091ac342724e7c3dc346";
-	const char golden_nonce[] = "063c5e01";
+		"4679ba4ec99876bf4bfe086082b40025"
+		"4df6c356451471139a3afa71e48f544a"
+		"00000000000000000000000000000000"
+		"0000000087320b1a1426674f2fa722ce";
+
+	const char golden_nonce[] = "000187a2";
 
 	unsigned char ob_bin[64], nonce_bin[4];
 	char *nonce_hex;
@@ -205,7 +210,7 @@ static bool icarus_detect_one(const char *devpath)
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	volatile unsigned long wr = 0;
-	icarus_gets(nonce_bin, sizeof(nonce_bin), fd, &wr);
+	icarus_gets(nonce_bin, sizeof(nonce_bin), fd, &wr, 1);
 
 	icarus_close(fd);
 
@@ -219,6 +224,10 @@ static bool icarus_detect_one(const char *devpath)
 			free(nonce_hex);
 			return false;
 		}
+		applog(LOG_DEBUG, 
+		       "Icarus Detect: "
+		       "Test succeeded at %s: got %s",
+			       devpath, nonce_hex);
 		free(nonce_hex);
 	} else
 		return false;
@@ -316,7 +325,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	/* Icarus will return 8 bytes nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	ret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr);
+	ret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr,
+	                  ICARUS_READ_FAULT_COUNT);
 
 	gettimeofday(&tv_end, NULL);
 	timeval_subtract(&diff, &tv_end, &tv_start);
