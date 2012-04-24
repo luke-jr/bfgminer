@@ -313,7 +313,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	char *ob_hex, *nonce_hex;
 	uint32_t nonce;
 	uint32_t hash_count;
-	struct timeval tv_end, diff;
+	struct timeval tv_end, elapsed;
 
 	icarus = thr->cgpu;
 	struct icarus_state *state = thr->cgpu_data;
@@ -349,7 +349,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 
 		gettimeofday(&tv_end, NULL);
-		timeval_subtract(&diff, &tv_end, &state->tv_workstart);
+		timeval_subtract(&elapsed, &tv_end, &state->tv_workstart);
 	}
 
 #ifndef WIN32
@@ -385,7 +385,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 	if (nonce_hex) {
 		applog(LOG_DEBUG, "Icarus %d returned (in %d.%06d seconds): %s",
-		       icarus->device_id, diff.tv_sec, diff.tv_usec, nonce_hex);
+		       icarus->device_id, elapsed.tv_sec, elapsed.tv_usec, nonce_hex);
 		free(nonce_hex);
 	}
 
@@ -393,12 +393,12 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	if (nonce == 0 && lret) {
 		memcpy(&state->last_work, work, sizeof(state->last_work));
-		if (unlikely(diff.tv_sec > 12 || (diff.tv_sec == 11 && diff.tv_usec > 300067)))
+		if (unlikely(elapsed.tv_sec > 12 || (elapsed.tv_sec == 11 && elapsed.tv_usec > 300067)))
 			return 0xffffffff;
 		// Approximately how much of the nonce Icarus scans in 1 second...
 		// 0x16a7a561 would be if it was exactly 380 MH/s
 		// 0x168b7b4b was the average over a 201-sample period based on time to find actual shares
-		return (0x168b7b4b * diff.tv_sec) + (0x17a * diff.tv_usec);
+		return (0x168b7b4b * elapsed.tv_sec) + (0x17a * elapsed.tv_usec);
 	}
 
 #ifndef __BIG_ENDIAN__
@@ -417,7 +417,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
                         hash_count <<= 1;
         }
 
-	applog(LOG_DEBUG, "0x%x hashes in %d.%06d seconds", hash_count, diff.tv_sec, diff.tv_usec);
+	applog(LOG_DEBUG, "0x%x hashes in %d.%06d seconds", hash_count, elapsed.tv_sec, elapsed.tv_usec);
 
         return hash_count;
 }
