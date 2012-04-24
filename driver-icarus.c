@@ -393,12 +393,12 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	if (nonce == 0 && lret) {
 		memcpy(&state->last_work, work, sizeof(state->last_work));
-		if (unlikely(elapsed.tv_sec > 12 || (elapsed.tv_sec == 11 && elapsed.tv_usec > 300067)))
+		if (unlikely(elapsed.tv_sec > 12 || (elapsed.tv_sec == 11 && elapsed.tv_usec > 389666)))
 			return 0xffffffff;
 		// Approximately how much of the nonce Icarus scans in 1 second...
 		// 0x16a7a561 would be if it was exactly 380 MH/s
-		// 0x168b7b4b was the average over a 201-sample period based on time to find actual shares
-		return (0x168b7b4b * elapsed.tv_sec) + (0x17a * elapsed.tv_usec);
+		// 0x167a09b3 was the average over a 7500-sample period based on time to find actual shares
+		return (0x167a09b3 * elapsed.tv_sec) + (0x179 * elapsed.tv_usec);
 	}
 
 #ifndef __BIG_ENDIAN__
