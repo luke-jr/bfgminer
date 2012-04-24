@@ -308,7 +308,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	char *ob_hex, *nonce_hex;
 	uint32_t nonce;
 	uint32_t hash_count;
-	struct timeval tv_start, tv_end, diff;
+	struct timeval tv_start, tv_end, elapsed;
 
 	icarus = thr->cgpu;
 
@@ -349,7 +349,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	                  ICARUS_READ_FAULT_COUNT);
 
 	gettimeofday(&tv_end, NULL);
-	timeval_subtract(&diff, &tv_end, &tv_start);
+	timeval_subtract(&elapsed, &tv_end, &tv_start);
 
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
@@ -359,15 +359,15 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// aborted before becoming idle, get new work
 	if (nonce == 0 && ret) {
 		uint32_t ESTIMATE_HASHES;
-		if (unlikely(diff.tv_sec > 12 || (diff.tv_sec == 11 && diff.tv_usec > 300067)))
+		if (unlikely(elapsed.tv_sec > 12 || (elapsed.tv_sec == 11 && elapsed.tv_usec > 300067)))
 			ESTIMATE_HASHES = 0xffffffff;
 		else
 			// Approximately how much of the nonce Icarus scans in 1 second...
 			// 0x16a7a561 would be if it was exactly 380 MH/s
 			// 0x168b7b4b was the average over a 201-sample period based on time to find actual shares
-			ESTIMATE_HASHES = (0x168b7b4b * diff.tv_sec) + (0x17a * diff.tv_usec);
+			ESTIMATE_HASHES = (0x168b7b4b * elapsed.tv_sec) + (0x17a * elapsed.tv_usec);
 		applog(LOG_DEBUG, "Icarus %d no nonce = 0x%08x hashes (%ld.%06lds)",
-			icarus->device_id, ESTIMATE_HASHES, diff.tv_sec, diff.tv_usec);
+			icarus->device_id, ESTIMATE_HASHES, elapsed.tv_sec, elapsed.tv_usec);
 		return ESTIMATE_HASHES;
 	}
 
@@ -379,7 +379,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 	if (nonce_hex) {
 		applog(LOG_DEBUG, "Icarus %d returned (elapsed %ld.%06ld seconds): %s",
-		       icarus->device_id, diff.tv_sec, diff.tv_usec, nonce_hex);
+		       icarus->device_id, elapsed.tv_sec, elapsed.tv_usec, nonce_hex);
 		free(nonce_hex);
 	}
 
@@ -394,7 +394,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
         }
 
 	applog(LOG_DEBUG, "Icarus %d nonce = 0x%08x = 0x%08x hashes (%ld.%06lds)",
-			icarus->device_id, nonce, hash_count, diff.tv_sec, diff.tv_usec);
+			icarus->device_id, nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
 
         return hash_count;
 }
