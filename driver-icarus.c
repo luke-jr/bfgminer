@@ -351,7 +351,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 	if (ob_hex) {
-		applog(LOG_DEBUG, "Icarus %s send: %s",
+		applog(LOG_DEBUG, "Icarus %d sent: %s",
 		       icarus->device_id, ob_hex);
 		free(ob_hex);
 	}
