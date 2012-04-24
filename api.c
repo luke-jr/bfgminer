@@ -2029,7 +2029,7 @@ static void send_result(SOCKETTYPE c, bool isjson)
 
 }
 
-static void tidyup(void *arg)
+static void tidyup(__maybe_unused void *arg)
 {
 	bye = 1;
 
