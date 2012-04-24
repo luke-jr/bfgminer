@@ -130,7 +130,7 @@ static int icarus_open(const char *devpath)
 #endif
 }
 
-static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsigned long *wr)
+static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsigned long *wr, int read_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
@@ -169,7 +169,7 @@ static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsig
 			       "Icarus Read: Work restart at %d.%d seconds", rc / 10, rc % 10);
 			return 1;
 		}
-		if (rc == ICARUS_READ_FAULT_COUNT) {
+		if (rc >= read_count) {
 			if (epollfd != -1)
 				close(epollfd);
 			rc *= ICARUS_READ_FAULT_DECISECONDS;
@@ -203,6 +203,8 @@ static bool icarus_detect_one(const char *devpath)
 	int fd;
 
 	// Block 171874 nonce = (0xa2870100) = 0x000187a2
+	// N.B. golden_ob MUST take less time to calculate
+	//	than the timeout set in icarus_open()
 	//	This one takes ~0.53ms on Rev3 Icarus
 	const char golden_ob[] =
 		"4679ba4ec99876bf4bfe086082b40025"
@@ -229,7 +231,7 @@ static bool icarus_detect_one(const char *devpath)
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	volatile unsigned long wr = 0;
-	icarus_gets(nonce_bin, sizeof(nonce_bin), fd, &wr);
+	icarus_gets(nonce_bin, sizeof(nonce_bin), fd, &wr, 1);
 
 	icarus_close(fd);
 
@@ -343,7 +345,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		else
 		{
 			/* Icarus will return 8 bytes nonces or nothing */
-			lret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr);
+			lret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr,
+			                   ICARUS_READ_FAULT_COUNT);
 			if (lret && *wr) {
 				// The prepared work is invalid, and the current work is abandoned
 				// Go back to the main loop to get the next work, and stuff
