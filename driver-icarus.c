@@ -122,7 +122,8 @@ static int icarus_open(const char *devpath)
 
 	SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
 
-	COMMTIMEOUTS cto = {1000, 0, 1000, 0, 1000};
+	const DWORD ctoms = ICARUS_READ_FAULT_DECISECONDS * 100;
+	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
 	SetCommTimeouts(hSerial, &cto);
 
 	return _open_osfhandle((LONG)hSerial, 0);
