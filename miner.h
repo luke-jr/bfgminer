@@ -195,8 +195,8 @@ struct thr_info;
 struct work;
 
 struct device_api {
-	char*dname;
-	char*name;
+	const char*dname;
+	const char*name;
 
 	// API-global functions
 	void (*api_detect)();
@@ -254,10 +254,10 @@ enum dev_reason {
 
 struct cgpu_info {
 	int cgminer_id;
-	struct device_api *api;
+	const struct device_api *api;
 	int device_id;
-	char *name;
-	char *device_path;
+	const char *name;
+	const char *device_path;
 	FILE *device_file;
 	union {
 #ifdef USE_ZTEX
@@ -287,7 +287,7 @@ struct cgpu_info {
 	int virtual_adl;
 	int intensity;
 	bool dynamic;
-	char *kname;
+	const char *kname;
 #ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;

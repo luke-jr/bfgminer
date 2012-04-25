@@ -396,7 +396,7 @@ static void icarus_shutdown(struct thr_info *thr)
 		icarus = thr->cgpu;
 
 		if (icarus->device_path)
-			free(icarus->device_path);
+			free((void*)icarus->device_path);
 
 		close(icarus->device_fd);
 
