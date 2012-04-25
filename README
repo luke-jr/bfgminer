@@ -156,6 +156,7 @@ Options for both config file and command line:
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
+--sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --socks-proxy <arg> Set socks4 proxy (host:port)
 --submit-stale      Submit shares even if they would normally be considered stale
@@ -183,6 +184,7 @@ GPU only options:
 --gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
 --gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
 --gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
+--gpu-map <arg>     Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)
 --gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
 --gpu-memdiff <arg> Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode
 --gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
@@ -216,7 +218,7 @@ FPGA mining boards(BitForce, Icarus) only options:
        (where n = the correct device number for the FPGA device)
 
 
-CPU only options:
+CPU only options (deprecated, not included in binaries!):
 
 --algo|-a <arg>     Specify sha256 implementation for CPU mining:
         auto            Benchmark at startup and pick fastest algorithm
@@ -415,9 +417,31 @@ if you use
 ./cgminer -o xxx -u yyy -p zzz 2>logfile.txt
 it will log to a file called logfile.txt and otherwise work the same.
 
-
 There is also the -m option on linux which will spawn a command of your choice
 and pipe the output directly to that command.
+
+
+If you start cgminer with the --sharelog option, you can get detailed
+information for each share found. The argument to the option may be "-" for
+standard output (not advisable with the ncurses UI), any valid positive number
+for that file descriptor, or a filename.
+
+To log share data to a file named "share.log", you can use either:
+./cgminer --sharelog 50 -o xxx -u yyy -p zzz 50>share.log
+./cgminer --sharelog share.log -o xxx -u yyy -p zzz
+
+For every share found, data will be logged in a CSV (Comma Separated Value)
+format:
+    timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
+For example (this is wrapped, but it's all on one line for real):
+    1335313090,reject,
+    ffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000,
+    http://localhost:8337,GPU0,0,
+    6f983c918f3299b58febf95ec4d0c7094ed634bc13754553ec34fc3800000000,
+    00000001a0980aff4ce4a96d53f4b89a2d5f0e765c978640fe24372a000001c5
+    000000004a4366808f81d44f26df3d69d7dc4b3473385930462d9ab707b50498
+    f681634a4f1f63d01a0cd43fb338000000000080000000000000000000000000
+    0000000000000000000000000000000000000000000000000000000080020000
 
 ---
 OVERCLOCKING WARNING AND INFORMATION
@@ -815,6 +839,81 @@ miner.php - an example web page to access the API
 
 ---
 
+GPU DEVICE ISSUES and use of --gpu-map
+
+GPUs mine with OpenCL software via the GPU device driver. This means you need
+to have both an OpenCL SDK installed, and the GPU device driver RUNNING (i.e.
+Xorg up and running configured for all devices that will mine on linux etc.)
+Meanwhile, the hardware monitoring that cgminer offers for AMD devices relies
+on the ATI Display Library (ADL) software to work. OpenCL DOES NOT TALK TO THE
+ADL. There is no 100% reliable way to know that OpenCL devices are identical
+to the ADL devices, as neither give off the same information. cgminer does its
+best to correlate these devices based on the order that OpenCL and ADL numbers
+them. It is possible that this will fail for the following reasons:
+
+1. The device order is listed differently by OpenCL and ADL (rare), even if the
+number of devices is the same.
+2. There are more OpenCL devices than ADL. OpenCL stupidly sees one GPU as two
+devices if you have two monitors connected to the one GPU.
+3. There are more ADL devices than OpenCL. ADL devices include any ATI GPUs,
+including ones that can't mine, like some older R4xxx cards.
+
+To cope with this, the ADVANCED option for --gpu-map is provided with cgminer.
+DO NOT USE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. The default will work the
+vast majority of the time unless you know you have a problem already.
+
+To get useful information, start cgminer with just the -n option. You will get
+output that looks like this:
+
+[2012-04-25 13:17:34] CL Platform 0 vendor: Advanced Micro Devices, Inc.
+[2012-04-25 13:17:34] CL Platform 0 name: AMD Accelerated Parallel Processing
+[2012-04-25 13:17:34] CL Platform 0 version: OpenCL 1.1 AMD-APP (844.4)
+[2012-04-25 13:17:34] Platform 0 devices: 3
+[2012-04-25 13:17:34]   0       Tahiti
+[2012-04-25 13:17:34]   1       Tahiti
+[2012-04-25 13:17:34]   2       Cayman
+[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 7900 Series  hardware monitoring enabled
+[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
+[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 6900 Series hardware monitoring enabled
+[2012-04-25 13:17:34] 3 GPU devices max detected
+
+Note the number of devices here match, and the order is the same. If devices 1
+and 2 were different between Tahiti and Cayman, you could run cgminer with:
+--gpu-map 2:1,1:2
+And it would swap the monitoring it received from ADL device 1 and put it to
+opencl device 2 and vice versa.
+
+If you have 2 monitors connected to the first device it would look like this:
+
+[2012-04-25 13:17:34] Platform 0 devices: 4
+[2012-04-25 13:17:34]   0       Tahiti
+[2012-04-25 13:17:34]   1       Tahiti
+[2012-04-25 13:17:34]   2       Tahiti
+[2012-04-25 13:17:34]   3       Cayman
+[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 7900 Series  hardware monitoring enabled
+[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
+[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 6900 Series hardware monitoring enabled
+
+To work around this, you would use:
+-d 0 -d 2 -d 3 --gpu-map 2:1,3:2
+
+If you have an older card as well as the rest it would look like this:
+
+[2012-04-25 13:17:34] Platform 0 devices: 3
+[2012-04-25 13:17:34]   0       Tahiti
+[2012-04-25 13:17:34]   1       Tahiti
+[2012-04-25 13:17:34]   2       Cayman
+[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 4500 Series  hardware monitoring enabled
+[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
+[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 7900 Series  hardware monitoring enabled
+[2012-04-25 13:17:34] GPU 3 AMD Radeon HD 6900 Series hardware monitoring enabled
+
+To work around this you would use:
+--gpu-map 0:1,1:2,2:3
+
+
+---
+
 FAQ
 
 Q: cgminer segfaults when I change my shell window size.
@@ -908,6 +1007,10 @@ no longer under active development and will not be supported unless someone
 steps up to help maintain it. No binary builds supporting CPU mining will be
 released but CPU mining can be built into cgminer when it is compiled.
 
+Q: I upgraded cgminer version and mu hashrate suddenly dropped!
+A: No, you upgraded your SDK version unwittingly between upgrades of cgminer
+and that caused  your hashrate to drop. See the next question.
+
 Q: I upgraded my ATI driver/SDK/cgminer and my hashrate suddenly dropped!
 A: The hashrate performance in cgminer is tied to the version of the ATI SDK
 that is installed only for the very first time cgminer is run. This generates
@@ -916,11 +1019,12 @@ SDK after that time will have no effect on the binaries. However, if you
 install a fresh version of cgminer, and have since upgraded your SDK, new
 binaries will be built. It is known that the 2.6 ATI SDK has a huge hashrate
 penalty on generating new binaries. It is recommended to not use this SDK at
-this time.
+this time unless you are using an ATI 7xxx card that needs it.
 
 Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK.
+the 2.6 SDK, the phatk kernel will perform poorly, while the diablo or my
+custom modified poclbm kernel are optimised for it.
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
 A: Run cgminer with the -n option and it will list all the platforms currently

@@ -657,6 +657,8 @@ struct work {
 	unsigned int	work_block;
 	int		id;
 	UT_hash_handle hh;
+
+	time_t share_found_time;
 };
 
 extern void get_datestamp(char *, struct timeval *);
