@@ -55,6 +55,7 @@ CGMiner specific configuration options:
 	--disable-adl           Override detection and disable building with adl
 	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
 	--enable-icarus         Compile support for Icarus Board(default disabled)
+	--enable-ztex           Compile support for Ztex Board(default disabled)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
@@ -193,7 +194,7 @@ GPU only options:
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 
 
-FPGA mining boards(BitForce, Icarus) only options:
+FPGA mining boards(BitForce, Icarus, Ztex) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
@@ -1059,7 +1060,7 @@ working in the logs?
 A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
-A: At the moment, cgminer supports 2 FPGA's: Icarus and BitForce.
+A: At the moment, cgminer supports 3 FPGA's: Icarus, Ztex and BitForce.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
