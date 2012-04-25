@@ -323,6 +323,61 @@ static void applog_and_exit(const char *fmt, ...)
 	exit(1);
 }
 
+static pthread_mutex_t sharelog_lock;
+FILE *sharelog_file = NULL;
+
+static void
+sharelog(const char*disposition, const struct work*work) {
+	if (!sharelog_file)
+		return;
+
+	int thr_id = work->thr_id;
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	struct pool *pool = work->pool;
+	unsigned long int t = (unsigned long int)work->share_found_time;
+	char *target = bin2hex(work->target, sizeof(work->target));
+	if (unlikely(!target)) {
+		applog(LOG_ERR, "sharelog target OOM");
+		return;
+	}
+	char *hash = bin2hex(work->hash, sizeof(work->hash));
+	if (unlikely(!hash)) {
+		free(target);
+		applog(LOG_ERR, "sharelog hash OOM");
+		return;
+	}
+	char *data = bin2hex(work->data, sizeof(work->data));
+	if (unlikely(!data)) {
+		free(target);
+		free(hash);
+		applog(LOG_ERR, "sharelog data OOM");
+		return;
+	}
+
+	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
+	char s[1024];
+	int rv;
+	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s%u,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->api->name, cgpu->device_id, thr_id, hash, data);
+	free(target);
+	free(hash);
+	free(data);
+	if (rv >= sizeof(s))
+		s[sizeof(s) - 1] = '\0';
+	else
+	if (rv < 0) {
+		applog(LOG_ERR, "sharelog printf error");
+		return;
+	}
+
+	size_t ret;
+	mutex_lock(&sharelog_lock);
+	ret = fwrite(s, rv, 1, sharelog_file);
+	fflush(sharelog_file);
+	mutex_unlock(&sharelog_lock);
+	if (1 != ret)
+		applog(LOG_ERR, "sharelog fwrite error");
+}
+
 static void add_pool(void)
 {
 	struct pool *pool;
@@ -549,6 +604,28 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 	if (st->tm.tm_hour > 23 || st->tm.tm_min > 59 || st->tm.tm_hour < 0 || st->tm.tm_min < 0)
 		return "Invalid time set.";
 	st->enable = true;
+	return NULL;
+}
+
+static char*
+set_sharelog(char *arg) {
+	char *r = "";
+	long int i = strtol(arg, &r, 10);
+
+	if ((!*r) && i >= 0 && i <= INT_MAX) {
+		sharelog_file = fdopen((int)i, "a");
+		if (!sharelog_file)
+			applog(LOG_ERR, "Failed to open fd %u for share log", (unsigned int)i);
+	} else if (!strcmp(arg, "-")) {
+		sharelog_file = stdout;
+		if (!sharelog_file)
+			applog(LOG_ERR, "Standard output missing for share log");
+	} else {
+		sharelog_file = fopen(arg, "a");
+		if (!sharelog_file)
+			applog(LOG_ERR, "Failed to open %s for share log", arg);
+	}
+
 	return NULL;
 }
 
@@ -823,6 +900,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--sched-stop",
 		     set_schedtime, NULL, &schedstop,
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
+	OPT_WITH_ARG("--sharelog",
+		     set_sharelog, NULL, NULL,
+		     "Append share log to file"),
 	OPT_WITH_ARG("--shares",
 		     opt_set_intval, NULL, &opt_shares,
 		     "Quit after mining N shares (default: unlimited)"),
@@ -1606,6 +1686,7 @@ static bool submit_upstream_work(const struct work *work)
 				applog(LOG_NOTICE, "Accepted %s %s %d thread %d",
 				       hashshow, cgpu->api->name, cgpu->device_id, thr_id);
 		}
+		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
 			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
 			kill_work();
@@ -1618,6 +1699,7 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
 			char where[17];
+			char disposition[36] = "reject";
 			char reason[32];
 
 			if (total_pools > 1)
@@ -1635,11 +1717,14 @@ static bool submit_upstream_work(const struct work *work)
 				reason[0] = ' '; reason[1] = '(';
 				memcpy(2 + reason, reasontmp, reasonLen);
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
+				memcpy(disposition + 7, reasontmp, reasonLen);
+				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
 			} else
 				strcpy(reason, "");
 
 			applog(LOG_NOTICE, "Rejected %s %s %d thread %d%s%s",
 			       hashshow, cgpu->api->name, cgpu->device_id, thr_id, where, reason);
+			sharelog(disposition, work);
 		}
 	}
 
@@ -2011,6 +2096,7 @@ static void *submit_work_thread(void *userdata)
 			applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
 		else {
 			applog(LOG_NOTICE, "Stale share detected, discarding");
+			sharelog("discard", work);
 			total_stale++;
 			pool->stale_shares++;
 			goto out;
@@ -3484,6 +3570,7 @@ bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
 	memcpy(wc->u.work, work_in, sizeof(*work_in));
+	wc->u.work->share_found_time = time(NULL);
 
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
@@ -4515,6 +4602,7 @@ int main(int argc, char *argv[])
 	mutex_init(&curses_lock);
 #endif
 	mutex_init(&control_lock);
+	mutex_init(&sharelog_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
 

@@ -156,6 +156,7 @@ Options for both config file and command line:
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
+--sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --socks-proxy <arg> Set socks4 proxy (host:port)
 --submit-stale      Submit shares even if they would normally be considered stale
@@ -415,9 +416,31 @@ if you use
 ./cgminer -o xxx -u yyy -p zzz 2>logfile.txt
 it will log to a file called logfile.txt and otherwise work the same.
 
-
 There is also the -m option on linux which will spawn a command of your choice
 and pipe the output directly to that command.
+
+
+If you start cgminer with the --sharelog option, you can get detailed
+information for each share found. The argument to the option may be "-" for
+standard output (not advisable with the ncurses UI), any valid positive number
+for that file descriptor, or a filename.
+
+To log share data to a file named "share.log", you can use either:
+./cgminer --sharelog 50 -o xxx -u yyy -p zzz 50>share.log
+./cgminer --sharelog share.log -o xxx -u yyy -p zzz
+
+For every share found, data will be logged in a CSV (Comma Separated Value)
+format:
+    timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
+For example (this is wrapped, but it's all on one line for real):
+    1335313090,reject,
+    ffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000,
+    http://localhost:8337,GPU0,0,
+    6f983c918f3299b58febf95ec4d0c7094ed634bc13754553ec34fc3800000000,
+    00000001a0980aff4ce4a96d53f4b89a2d5f0e765c978640fe24372a000001c5
+    000000004a4366808f81d44f26df3d69d7dc4b3473385930462d9ab707b50498
+    f681634a4f1f63d01a0cd43fb338000000000080000000000000000000000000
+    0000000000000000000000000000000000000000000000000000000080020000
 
 ---
 OVERCLOCKING WARNING AND INFORMATION
