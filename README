@@ -791,6 +791,11 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating the results of the disable request
                               This is only available if PGA mining is enabled
 
+ devdetails    DEVDETAILS     Each device with a list of their static details
+                              This lists all devices including those not supported
+                              by the 'devs' command
+                              e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
