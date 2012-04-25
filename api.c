@@ -155,6 +155,7 @@ static const char *UNAVAILABLE = " - API will not be available";
 static const char *BLANK = "";
 static const char *COMMA = ",";
 static const char SEPARATOR = '|';
+#define SEPSTR "|"
 static const char GPUSEP = ',';
 
 static const char *APIVERSION = "1.8";
@@ -629,10 +630,10 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 				break;
 			}
 
-			if (isjson)
-				sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"%c\",\"When\":%lu,\"Code\":%d,\"Msg\":\"", severity, (unsigned long)when, messageid);
-			else
-				sprintf(msg_buffer, _STATUS "=%c,When=%lu,Code=%d,Msg=", severity, (unsigned long)when, messageid);
+			sprintf(msg_buffer, isjson
+				? JSON_START JSON_STATUS "{\"" _STATUS "\":\"%c\",\"When\":%lu,\"Code\":%d,\"Msg\":\""
+				: _STATUS "=%c,When=%lu,Code=%d,Msg=",
+				severity, (unsigned long)when, messageid);
 
 			ptr = msg_buffer + strlen(msg_buffer);
 
@@ -705,35 +706,30 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 
 			ptr = msg_buffer + strlen(msg_buffer);
 
-			if (isjson)
-				sprintf(ptr, "\",\"Description\":\"%s\"}" JSON_CLOSE, opt_api_description);
-			else
-				sprintf(ptr, ",Description=%s%c", opt_api_description, SEPARATOR);
+			sprintf(ptr, isjson
+				? "\",\"Description\":\"%s\"}" JSON_CLOSE
+				: ",Description=%s" SEPSTR,
+				opt_api_description);
 
 			return msg_buffer;
 		}
 	}
 
-	if (isjson)
-		sprintf(msg_buffer, JSON_START JSON_STATUS "{\"" _STATUS "\":\"F\",\"When\":%lu,\"Code\":-1,\"Msg\":\"%d\",\"Description\":\"%s\"}" JSON_CLOSE,
-			(unsigned long)when, messageid, opt_api_description);
-	else
-		sprintf(msg_buffer, _STATUS "=F,When=%lu,Code=-1,Msg=%d,Description=%s%c",
-			(unsigned long)when, messageid, opt_api_description, SEPARATOR);
+	sprintf(msg_buffer, isjson
+		? JSON_START JSON_STATUS "{\"" _STATUS "\":\"F\",\"When\":%lu,\"Code\":-1,\"Msg\":\"%d\",\"Description\":\"%s\"}" JSON_CLOSE
+		: _STATUS "=F,When=%lu,Code=-1,Msg=%d,Description=%s" SEPSTR,
+		(unsigned long)when, messageid, opt_api_description);
 
 	return msg_buffer;
 }
 
 static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	if (isjson)
-		sprintf(io_buffer, "%s," JSON_VERSION "{\"CGMiner\":\"%s\",\"API\":\"%s\"}" JSON_CLOSE,
-			message(MSG_VERSION, 0, NULL, isjson),
-			VERSION, APIVERSION);
-	else
-		sprintf(io_buffer, "%s" _VERSION ",CGMiner=%s,API=%s%c",
-			message(MSG_VERSION, 0, NULL, isjson),
-			VERSION, APIVERSION, SEPARATOR);
+	sprintf(io_buffer, isjson
+		? "%s," JSON_VERSION "{\"CGMiner\":\"%s\",\"API\":\"%s\"}" JSON_CLOSE
+		: "%s" _VERSION ",CGMiner=%s,API=%s" SEPSTR,
+		message(MSG_VERSION, 0, NULL, isjson),
+		VERSION, APIVERSION);
 }
 
 static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
@@ -766,10 +762,12 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 
 	strcpy(io_buffer, message(MSG_MINECON, 0, NULL, isjson));
 
-	if (isjson)
-		sprintf(buf, "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":%d,\"Device Code\":\"%s\",\"OS\":\"%s\"}" JSON_CLOSE, nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE, OSINFO);
-	else
-		sprintf(buf, _MINECON ",GPU Count=%d,PGA Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d,Device Code=%s,OS=%s%c", nDevs, pgacount, cpucount, total_pools, adl, adlinuse, strategies[pool_strategy].s, opt_log_interval, DEVICECODE, OSINFO, SEPARATOR);
+	sprintf(buf, isjson
+		? "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":%d,\"Device Code\":\"%s\",\"OS\":\"%s\"}" JSON_CLOSE
+		: _MINECON ",GPU Count=%d,PGA Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d,Device Code=%s,OS=%s" SEPSTR,
+
+		nDevs, pgacount, cpucount, total_pools, adl, adlinuse,
+		strategies[pool_strategy].s, opt_log_interval, DEVICECODE, OSINFO);
 
 	strcat(io_buffer, buf);
 }
@@ -812,22 +810,15 @@ static void gpustatus(int gpu, bool isjson)
 		else
 			sprintf(intensity, "%d", cgpu->intensity);
 
-		if (isjson)
-			sprintf(buf, "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
-				gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
-				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->utility, intensity,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-		else
-			sprintf(buf, "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
-				gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
-				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-				cgpu->utility, intensity,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
+		sprintf(buf, isjson
+			? "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
+			: "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f" SEPSTR,
+			gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
+			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
+			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+			cgpu->utility, intensity,
+			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
 
 		strcat(io_buffer, buf);
 	}
@@ -864,22 +855,15 @@ static void pgastatus(int pga, bool isjson)
 		else
 			status = (char *)ALIVE;
 
-		if (isjson)
-			sprintf(buf, "{\"PGA\":%d,\"Name\":\"%s\",\"ID\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
-				pga, cgpu->api->name, cgpu->device_id,
-				enabled, status, cgpu->temp,
-				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-		else
-			sprintf(buf, "PGA=%d,Name=%s,ID=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
-				pga, cgpu->api->name, cgpu->device_id,
-				enabled, status, cgpu->temp,
-				cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
+		sprintf(buf, isjson
+			? "{\"PGA\":%d,\"Name\":\"%s\",\"ID\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
+			: "PGA=%d,Name=%s,ID=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f" SEPSTR,
+			pga, cgpu->api->name, cgpu->device_id,
+			enabled, status, cgpu->temp,
+			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
+			cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
+			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
 
 		strcat(io_buffer, buf);
 	}
@@ -896,22 +880,15 @@ static void cpustatus(int cpu, bool isjson)
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		if (isjson)
-			sprintf(buf, "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}",
-				cpu, cgpu->total_mhashes / total_secs,
-				opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected,
-				cgpu->utility,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-		else
-			sprintf(buf, "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f%c",
-				cpu, cgpu->total_mhashes / total_secs,
-				opt_log_interval, cgpu->rolling,
-				cgpu->accepted, cgpu->rejected,
-				cgpu->utility,
-				((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-				(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, SEPARATOR);
+		sprintf(buf, isjson
+			? "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
+			: "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f" SEPSTR,
+			cpu, cgpu->total_mhashes / total_secs,
+			opt_log_interval, cgpu->rolling,
+			cgpu->accepted, cgpu->rejected,
+			cgpu->utility,
+			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
+			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
 
 		strcat(io_buffer, buf);
 	}
@@ -1211,27 +1188,18 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		rpc_url = escape_string(pool->rpc_url, isjson);
 		rpc_user = escape_string(pool->rpc_user, isjson);
 
-		if (isjson)
-			sprintf(buf, "%s{\"POOL\":%d,\"URL\":\"%s\",\"Status\":\"%s\",\"Priority\":%d,\"Long Poll\":\"%s\",\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Remote Failures\":%d,\"User\":\"%s\"}",
-				(i > 0) ? COMMA : BLANK,
-				i, rpc_url, status, pool->prio, lp,
-				pool->getwork_requested,
-				pool->accepted, pool->rejected,
-				pool->discarded_work,
-				pool->stale_shares,
-				pool->getfail_occasions,
-				pool->remotefail_occasions,
-				rpc_user);
-		else
-			sprintf(buf, "POOL=%d,URL=%s,Status=%s,Priority=%d,Long Poll=%s,Getworks=%d,Accepted=%d,Rejected=%d,Discarded=%d,Stale=%d,Get Failures=%d,Remote Failures=%d,User=%s%c",
-				i, rpc_url, status, pool->prio, lp,
-				pool->getwork_requested,
-				pool->accepted, pool->rejected,
-				pool->discarded_work,
-				pool->stale_shares,
-				pool->getfail_occasions,
-				pool->remotefail_occasions,
-				rpc_user, SEPARATOR);
+		sprintf(buf, isjson
+			? "%s{\"POOL\":%d,\"URL\":\"%s\",\"Status\":\"%s\",\"Priority\":%d,\"Long Poll\":\"%s\",\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Remote Failures\":%d,\"User\":\"%s\"}"
+			: "%sPOOL=%d,URL=%s,Status=%s,Priority=%d,Long Poll=%s,Getworks=%d,Accepted=%d,Rejected=%d,Discarded=%d,Stale=%d,Get Failures=%d,Remote Failures=%d,User=%s" SEPSTR,
+			(isjson && (i > 0)) ? COMMA : BLANK,
+			i, rpc_url, status, pool->prio, lp,
+			pool->getwork_requested,
+			pool->accepted, pool->rejected,
+			pool->discarded_work,
+			pool->stale_shares,
+			pool->getfail_occasions,
+			pool->remotefail_occasions,
+			rpc_user);
 
 		strcat(io_buffer, buf);
 
@@ -1262,35 +1230,23 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 	mhs = total_mhashes_done / total_secs;
 
 #ifdef WANT_CPUMINE
-	if (isjson)
-		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE,
-			message(MSG_SUMM, 0, NULL, isjson),
-			total_secs, algo, mhs, found_blocks,
-			total_getworks, total_accepted, total_rejected,
-			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks, total_mhashes_done);
-	else
-		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f%c",
-			message(MSG_SUMM, 0, NULL, isjson),
-			total_secs, algo, mhs, found_blocks,
-			total_getworks, total_accepted, total_rejected,
-			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks, total_mhashes_done, SEPARATOR);
+	sprintf(io_buffer, isjson
+		? "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE
+		: "%s" _SUMMARY ",Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f" SEPSTR,
+		message(MSG_SUMM, 0, NULL, isjson),
+		total_secs, algo, mhs, found_blocks,
+		total_getworks, total_accepted, total_rejected,
+		hw_errors, utility, total_discarded, total_stale,
+		total_go, local_work, total_ro, new_blocks, total_mhashes_done);
 #else
-	if (isjson)
-		sprintf(io_buffer, "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE,
-			message(MSG_SUMM, 0, NULL, isjson),
-			total_secs, mhs, found_blocks,
-			total_getworks, total_accepted, total_rejected,
-			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks, total_mhashes_done);
-	else
-		sprintf(io_buffer, "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f%c",
-			message(MSG_SUMM, 0, NULL, isjson),
-			total_secs, mhs, found_blocks,
-			total_getworks, total_accepted, total_rejected,
-			hw_errors, utility, total_discarded, total_stale,
-			total_go, local_work, total_ro, new_blocks, total_mhashes_done, SEPARATOR);
+	sprintf(io_buffer, isjson
+		? "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE
+		: "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f" SEPSTR,
+		message(MSG_SUMM, 0, NULL, isjson),
+		total_secs, mhs, found_blocks,
+		total_getworks, total_accepted, total_rejected,
+		hw_errors, utility, total_discarded, total_stale,
+		total_go, local_work, total_ro, new_blocks, total_mhashes_done);
 #endif
 }
 
@@ -1401,10 +1357,10 @@ static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 
 	strcpy(io_buffer, message(MSG_NUMGPU, 0, NULL, isjson));
 
-	if (isjson)
-		sprintf(buf, "," JSON_GPUS "{\"Count\":%d}" JSON_CLOSE, nDevs);
-	else
-		sprintf(buf, _GPUS ",Count=%d%c", nDevs, SEPARATOR);
+	sprintf(buf, isjson
+		? "," JSON_GPUS "{\"Count\":%d}" JSON_CLOSE
+		: _GPUS ",Count=%d" SEPSTR,
+		nDevs);
 
 	strcat(io_buffer, buf);
 }
@@ -1420,10 +1376,10 @@ static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 
 	strcpy(io_buffer, message(MSG_NUMPGA, 0, NULL, isjson));
 
-	if (isjson)
-		sprintf(buf, "," JSON_PGAS "{\"Count\":%d}" JSON_CLOSE, count);
-	else
-		sprintf(buf, _PGAS ",Count=%d%c", count, SEPARATOR);
+	sprintf(buf, isjson
+		? "," JSON_PGAS "{\"Count\":%d}" JSON_CLOSE
+		: _PGAS ",Count=%d" SEPSTR,
+		count);
 
 	strcat(io_buffer, buf);
 }
@@ -1439,10 +1395,10 @@ static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 
 	strcpy(io_buffer, message(MSG_NUMCPU, 0, NULL, isjson));
 
-	if (isjson)
-		sprintf(buf, "," JSON_CPUS "{\"Count\":%d}" JSON_CLOSE, count);
-	else
-		sprintf(buf, _CPUS ",Count=%d%c", count, SEPARATOR);
+	sprintf(buf, isjson
+		? "," JSON_CPUS "{\"Count\":%d}" JSON_CLOSE
+		: _CPUS ",Count=%d" SEPSTR,
+		count);
 
 	strcat(io_buffer, buf);
 }
@@ -1894,22 +1850,16 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
 
 	// ALL counters (and only counters) must start the name with a '*'
 	// Simplifies future external support for adding new counters
-	if (isjson)
-		sprintf(buf, "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"*Thread Fail Init\":%d,\"*Thread Zero Hash\":%d,\"*Thread Fail Queue\":%d,\"*Dev Sick Idle 60s\":%d,\"*Dev Dead Idle 600s\":%d,\"*Dev Nostart\":%d,\"*Dev Over Heat\":%d,\"*Dev Thermal Cutoff\":%d}" JSON_CLOSE,
-			device > 0 ? COMMA : BLANK, device, cgpu->api->name, cgpu->device_id,
-			cgpu->device_last_well, cgpu->device_last_not_well, reason,
-			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
-			cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
-			cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
-			cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count);
-	else
-		sprintf(buf, "NOTIFY=%d,Name=%s,ID=%d,Last Well=%lu,Last Not Well=%lu,Reason Not Well=%s,*Thread Fail Init=%d,*Thread Zero Hash=%d,*Thread Fail Queue=%d,*Dev Sick Idle 60s=%d,*Dev Dead Idle 600s=%d,*Dev Nostart=%d,*Dev Over Heat=%d,*Dev Thermal Cutoff=%d%c",
-			device, cgpu->api->name, cgpu->device_id,
-			cgpu->device_last_well, cgpu->device_last_not_well, reason,
-			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
-			cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
-			cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
-			cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count, SEPARATOR);
+	sprintf(buf, isjson
+		? "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"*Thread Fail Init\":%d,\"*Thread Zero Hash\":%d,\"*Thread Fail Queue\":%d,\"*Dev Sick Idle 60s\":%d,\"*Dev Dead Idle 600s\":%d,\"*Dev Nostart\":%d,\"*Dev Over Heat\":%d,\"*Dev Thermal Cutoff\":%d}" JSON_CLOSE
+		: "%sNOTIFY=%d,Name=%s,ID=%d,Last Well=%lu,Last Not Well=%lu,Reason Not Well=%s,*Thread Fail Init=%d,*Thread Zero Hash=%d,*Thread Fail Queue=%d,*Dev Sick Idle 60s=%d,*Dev Dead Idle 600s=%d,*Dev Nostart=%d,*Dev Over Heat=%d,*Dev Thermal Cutoff=%d" SEPSTR,
+		(isjson && (device > 0)) ? COMMA : BLANK,
+		device, cgpu->api->name, cgpu->device_id,
+		cgpu->device_last_well, cgpu->device_last_not_well, reason,
+		cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
+		cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
+		cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
+		cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count);
 
 	strcat(io_buffer, buf);
 }
@@ -1958,16 +1908,13 @@ static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 	for (i = 0; i < total_devices; i++) {
 		cgpu = devices[i];
 
-		if (isjson)
-			sprintf(buf, "%s{\"DEVDETAILS\":%d,\"Name\":\"%s\",\"ID\":%d,\"Driver\":\"%s\",\"Kernel\":\"%s\",\"Model\"=\"%s\",\"Device Path\":\"%s\"}",
-				i > 0 ? COMMA : BLANK, i, cgpu->api->name, cgpu->device_id,
-				cgpu->api->dname, cgpu->kname ? : BLANK,
-				cgpu->name ? : BLANK, cgpu->device_path ? : BLANK);
-		else
-			sprintf(buf, "DEVDETAILS=%d,Name=%s,ID=%d,Driver=%s,Kernel=%s,Model=%s,Device Path=%s%c",
-				i, cgpu->api->name, cgpu->device_id,
-				cgpu->api->dname, cgpu->kname ? : BLANK,
-				cgpu->name ? : BLANK, cgpu->device_path ? : BLANK, SEPARATOR);
+		sprintf(buf, isjson
+			? "%s{\"DEVDETAILS\":%d,\"Name\":\"%s\",\"ID\":%d,\"Driver\":\"%s\",\"Kernel\":\"%s\",\"Model\":\"%s\",\"Device Path\":\"%s\"}"
+			: "%sDEVDETAILS=%d,Name=%s,ID=%d,Driver=%s,Kernel=%s,Model=%s,Device Path=%s" SEPSTR,
+			(isjson && (i > 0)) ? COMMA : BLANK,
+			i, cgpu->api->name, cgpu->device_id,
+			cgpu->api->dname, cgpu->kname ? : BLANK,
+			cgpu->name ? : BLANK, cgpu->device_path ? : BLANK);
 
 		strcat(io_buffer, buf);
 	}
