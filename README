@@ -772,6 +772,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               reply before cgminer quits
 
  notify        NOTIFY         The last status and history count of each devices problem
+                              This lists all devices including those not supported
+                              by the 'devs' command
                               e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
 
  privileged (*)
