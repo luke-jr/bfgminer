@@ -180,6 +180,9 @@ static const char *DEVICECODE = ""
 #ifdef USE_ICARUS
 			"ICA "
 #endif
+#ifdef USE_ZTEX
+			"ZTX "
+#endif
 #ifdef WANT_CPUMINE
 			"CPU "
 #endif
@@ -212,7 +215,7 @@ static const char *OSINFO =
 #define _MINECON	"CONFIG"
 #define _GPU		"GPU"
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 #define _PGA		"PGA"
 #endif
 
@@ -243,7 +246,7 @@ static const char ISJSON = '{';
 #define JSON_MINECON	JSON1 _MINECON JSON2
 #define JSON_GPU	JSON1 _GPU JSON2
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 #define JSON_PGA	JSON1 _PGA JSON2
 #endif
 
@@ -323,7 +326,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_TOOMANYP 54
 #define MSG_ADDPOOL 55
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 #define MSG_PGANON 56
 #define MSG_PGADEV 57
 #define MSG_INVPGA 58
@@ -332,7 +335,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_NUMPGA 59
 #define MSG_NOTIFY 60
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 #define MSG_PGALRENA 61
 #define MSG_PGALRDIS 62
 #define MSG_PGAENA 63
@@ -389,7 +392,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_NOPOOL,	PARAM_NONE,	"No pools" },
 
  { SEVERITY_SUCC,  MSG_DEVS,	PARAM_DMAX,	"%d GPU(s)"
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 						" - %d PGA(s)"
 #endif
 #ifdef WANT_CPUMINE
@@ -398,7 +401,7 @@ struct CODES {
  },
 
  { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs"
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 						"/PGAs"
 #endif
 #ifdef WANT_CPUMINE
@@ -412,7 +415,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
  { SEVERITY_SUCC,  MSG_GPUDEV,	PARAM_GPU,	"GPU%d" },
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
  { SEVERITY_ERR,   MSG_PGANON,	PARAM_NONE,	"No PGAs" },
  { SEVERITY_SUCC,  MSG_PGADEV,	PARAM_PGA,	"PGA%d" },
  { SEVERITY_ERR,   MSG_INVPGA,	PARAM_PGAMAX,	"Invalid PGA id %d - range is 0 - %d" },
@@ -495,6 +498,10 @@ extern struct device_api bitforce_api;
 extern struct device_api icarus_api;
 #endif
 
+#ifdef USE_ZTEX
+extern struct device_api ztex_api;
+#endif
+
 // This is only called when expected to be needed (rarely)
 // i.e. strings outside of the codes control (input from the user)
 static char *escape_string(char *str, bool isjson)
@@ -557,7 +564,7 @@ static char *escape_string(char *str, bool isjson)
 	return buf;
 }
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 static int numpgas()
 {
 	int count = 0;
@@ -570,6 +577,10 @@ static int numpgas()
 #endif
 #ifdef USE_ICARUS
 		if (devices[i]->api == &icarus_api)
+			count++;
+#endif
+#ifdef USE_ZTEX
+		if (devices[i]->api == &ztex_api)
 			count++;
 #endif
 	}
@@ -590,6 +601,10 @@ static int pgadevice(int pgaid)
 		if (devices[i]->api == &icarus_api)
 			count++;
 #endif
+#ifdef USE_ZTEX
+		if (devices[i]->api == &ztex_api)
+			count++;
+#endif
 		if (count == (pgaid + 1))
 			return i;
 	}
@@ -604,7 +619,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 {
 	char severity;
 	char *ptr;
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 	int pga;
 #endif
 #ifdef WANT_CPUMINE
@@ -649,7 +664,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 			case PARAM_GPUMAX:
 				sprintf(ptr, codes[i].description, paramid, nDevs - 1);
 				break;
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 			case PARAM_PGAMAX:
 				pga = numpgas();
 				sprintf(ptr, codes[i].description, paramid, pga - 1);
@@ -671,7 +686,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 				sprintf(ptr, codes[i].description, paramid, total_pools - 1);
 				break;
 			case PARAM_DMAX:
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 				pga = numpgas();
 #endif
 #ifdef WANT_CPUMINE
@@ -682,7 +697,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 #endif
 
 				sprintf(ptr, codes[i].description, nDevs
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 					, pga
 #endif
 #ifdef WANT_CPUMINE
@@ -752,7 +767,7 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	const char *adl = NO;
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 	pgacount = numpgas();
 #endif
 
@@ -824,7 +839,7 @@ static void gpustatus(int gpu, bool isjson)
 	}
 }
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 static void pgastatus(int pga, bool isjson)
 {
 	char buf[BUFSIZ];
@@ -838,6 +853,12 @@ static void pgastatus(int pga, bool isjson)
 			return;
 
 		struct cgpu_info *cgpu = devices[dev];
+		double frequency = 0;
+
+#ifdef USE_ZTEX
+		if (cgpu->api == &ztex_api && cgpu->device_ztex)
+			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
+#endif
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
@@ -856,14 +877,14 @@ static void pgastatus(int pga, bool isjson)
 			status = (char *)ALIVE;
 
 		sprintf(buf, isjson
-			? "{\"PGA\":%d,\"Name\":\"%s\",\"ID\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
-			: "PGA=%d,Name=%s,ID=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f" SEPSTR,
+			? "{\"PGA\":%d,\"Name\":\"%s\",\"ID\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f,\"Frequency\":%.2f}"
+			: "PGA=%d,Name=%s,ID=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f,Frequency=%.2f" SEPSTR,
 			pga, cgpu->api->name, cgpu->device_id,
 			enabled, status, cgpu->temp,
 			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
 			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
+			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, frequency);
 
 		strcat(io_buffer, buf);
 	}
@@ -901,7 +922,7 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 	int numpga = 0;
 	int i;
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 	numpga = numpgas();
 #endif
 
@@ -926,7 +947,7 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 		devcount++;
 	}
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 	if (numpga > 0)
 		for (i = 0; i < numpga; i++) {
 			if (isjson && devcount > 0)
@@ -987,7 +1008,7 @@ static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 static void pgadev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int numpga = numpgas();
@@ -1373,7 +1394,7 @@ static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 	char buf[BUFSIZ];
 	int count = 0;
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 	count = numpgas();
 #endif
 
@@ -1970,7 +1991,7 @@ struct CMDS {
 	{ "gpudisable",		gpudisable,	true },
 	{ "gpurestart",		gpurestart,	true },
 	{ "gpu",		gpudev,		false },
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
 	{ "pga",		pgadev,		false },
 	{ "pgaenable",		pgaenable,	true },
 	{ "pgadisable",		pgadisable,	true },
