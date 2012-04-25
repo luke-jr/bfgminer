@@ -647,7 +647,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.7:
+For API version 1.8:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
