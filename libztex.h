@@ -84,7 +84,7 @@ struct libztex_dev_list {
 };
 
 struct libztex_hash_data {
-	uint32_t *goldenNonce;
+	uint32_t goldenNonce[2];
 	uint32_t nonce;
 	uint32_t hash7;
 };

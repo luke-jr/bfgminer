@@ -197,13 +197,6 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	
 	overflow = false;
 
-	// Because we may have more than one solution on 1.15y boards, lets allocate space for these
-	for (i=0; i<GOLDEN_BACKLOG; i++)
-		hdata[i].goldenNonce = (uint32_t*)malloc((sizeof(uint32_t))*(ztex->extraSolutions+1));
-		if (hdata[i].goldenNonce == NULL) {
-			applog(LOG_ERR, "%s: failed to allocate hash_data.goldenNonce[%d]", ztex->repr, ztex->extraSolutions+1);
-			return 0;
-		}
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
 	while (!(overflow || work_restart[thr->id].restart)) {
 		usleep(250000);
@@ -222,8 +215,6 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				// And there's nothing we can do about it
 				ztex_disable(thr);
 				applog(LOG_ERR, "%s: Failed to read hash data with err %d, giving up", ztex->repr, i);
-				for (j=0; j<GOLDEN_BACKLOG; j++)
-					free(hdata[j].goldenNonce);
 				free(lastnonce);
 				free(backlog);
 				return 0;
@@ -292,8 +283,6 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	if (!ztex_updateFreq(ztex)) {
 		// Something really serious happened, so mark this thread as dead!
-		for (i=0; i<GOLDEN_BACKLOG; i++)
-			free(hdata[i].goldenNonce);
 		free(lastnonce);
 		free(backlog);
 		
@@ -304,8 +293,6 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	work->blk.nonce = 0xffffffff;
 
-	for (i=0; i<GOLDEN_BACKLOG; i++)
-		free(hdata[i].goldenNonce);
 	free(lastnonce);
 	free(backlog);
 	
