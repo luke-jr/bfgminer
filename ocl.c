@@ -372,8 +372,17 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			clState->chosen_kernel = KL_PHATK;
 		}
 		gpus[gpu].kernel = clState->chosen_kernel;
-	} else
+	} else {
 		clState->chosen_kernel = gpus[gpu].kernel;
+		if (clState->chosen_kernel == KL_PHATK &&
+		    (strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
+		     strstr(vbuff, "831.4") || strstr(vbuff, "898.1"))) {
+			applog(LOG_WARNING, "WARNING: You have selected the phatk kernel.");
+			applog(LOG_WARNING, "You are running SDK 2.6 which performs poorly with this kernel.");
+			applog(LOG_WARNING, "Downgrade your SDK and delete any .bin files before starting again.");
+			applog(LOG_WARNING, "Or allow cgminer to automatically choose a more suitable kernel.");
+		}
+	}
 
 	/* For some reason 2 vectors is still better even if the card says
 	 * otherwise, and many cards lie about their max so use 256 as max
