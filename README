@@ -45,7 +45,9 @@ Dependencies:
 	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
 	(This sdk is mandatory for ATI GPU monitoring & clocking)
 	libudev headers
-	(This is only required for FPGA auto-detection)
+	(This is only required for FPGA auto-detection and is linux only)
+	libusb headers
+	(This is only required for ZTEX support)
 
 CGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
@@ -103,18 +105,7 @@ Basic WIN32 build instructions (LIKELY OUTDATED INFO. requires mingw32):
 	make
 	./mknsis.sh
 	
-Native WIN32 build instructions (outdated, see windows-build.txt)
-	Install the Microsoft platform SDK
-	Install AMD APP sdk, (if you want GPU mining)
-	Install AMD ADL sdk, (if you want GPU monitoring)
-	(Do NOT install the ati amd sdk if you are on nvidia)
-	Install mingw32
-	Install libcurl, copy libcurl.m4 into /mingw/share/aclocal
-	Install pkg-config, copy pkg.m4 into /mingw/share/aclocal
-	Run:
-	autoreconf -fvi
-	CFLAGS="-O2 -msse2" ./configure
-	make
+Native WIN32 build instructions: see windows-build.txt
 
 ---
 

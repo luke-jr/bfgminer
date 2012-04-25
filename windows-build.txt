@@ -222,3 +222,8 @@ For you. Make sure you never remove the ADL_SDK folder from your home folder.
 #       Native WIN32 setup and build instructions (on mingw32/Windows) complete      #
 #                                                                                    #
 ######################################################################################
+
+Addendum:
+Ztex support requires libusb support. The most comprehensive support is
+currently available from the libusbx project here:
+http://libusbx.org/
