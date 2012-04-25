@@ -924,8 +924,8 @@ this time unless you are using an ATI 7xxx card that needs it.
 
 Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK, the phatk kernel will perform poorly, and the diablo and my custom
-modified poclbm kernel are optimised for it.
+the 2.6 SDK, the phatk kernel will perform poorly, while the diablo or my
+custom modified poclbm kernel are optimised for it.
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
 A: Run cgminer with the -n option and it will list all the platforms currently
