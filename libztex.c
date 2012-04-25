@@ -265,6 +265,7 @@ int libztex_selectFpga(struct libztex_device *ztex, int number) {
 
 int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 	int cnt;
+	uint16_t oldfreq = ztex->freqM;
 
 	if (freq > ztex->freqMaxM)
 		freq = ztex->freqMaxM;
@@ -275,7 +276,8 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 		return cnt;
 	}
 	ztex->freqM = freq;
-	applog(LOG_WARNING, "%s: Frequency change to %0.2f Mhz", ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
+	applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
+	       ztex->repr, ztex->freqM1 * (oldfreq + 1)), ztex->freqM1 * (ztex->freqM + 1));
 
 	return 0;
 }
