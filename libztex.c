@@ -227,14 +227,14 @@ int libztex_configureFpga(struct libztex_device *ztex)
 int libztex_numberOfFpgas(struct libztex_device *ztex) {
 	int cnt;
 	unsigned char buf[3];
-	if ( ztex->numberOfFpgas < 0 ) {
+	if (ztex->numberOfFpgas < 0) {
 		if (libztex_checkCapability(ztex, CAPABILITY_MULTI_FPGA)) {
 			cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x50, 0, 0, buf, 3, 1000);
 			if (unlikely(cnt < 0)) {
 				applog(LOG_ERR, "%s: Failed getMultiFpgaInfo with err %d", ztex->repr, cnt);
 				return cnt;
 			}
-			ztex->numberOfFpgas = buf[0]+1;
+			ztex->numberOfFpgas = buf[0] + 1;
 			ztex->selectedFpga = buf[1];
 			ztex->parallelConfigSupport = (buf[2] == 1);
 		} else {
@@ -277,7 +277,7 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 	}
 	ztex->freqM = freq;
 	applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
-	       ztex->repr, ztex->freqM1 * (oldfreq + 1)), ztex->freqM1 * (ztex->freqM + 1));
+	       ztex->repr, ztex->freqM1 * (oldfreq + 1), ztex->freqM1 * (ztex->freqM + 1));
 
 	return 0;
 }
@@ -315,7 +315,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 
 	// Check vendorId and productId
 	if (!(newdev->descriptor.idVendor == LIBZTEX_IDVENDOR &&
-				newdev->descriptor.idProduct == LIBZTEX_IDPRODUCT)) {
+	    newdev->descriptor.idProduct == LIBZTEX_IDPRODUCT)) {
 		applog(LOG_ERR, "Not a ztex device? %0.4X, %0.4X", newdev->descriptor.idVendor, newdev->descriptor.idProduct);
 		return 1;
 	}
@@ -339,7 +339,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		return cnt;
 	}
 	
-	if ( buf[0] != 40 || buf[1] != 1 || buf[2] != 'Z' || buf[3] != 'T' || buf[4] != 'E' || buf[5] != 'X' ) {
+	if (buf[0] != 40 || buf[1] != 1 || buf[2] != 'Z' || buf[3] != 'T' || buf[4] != 'E' || buf[5] != 'X') {
 		applog(LOG_ERR, "Ztex check device: Error reading ztex descriptor");
 		return 2;
 	}
@@ -384,16 +384,16 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		applog(LOG_WARNING, "Firmware out of date (%d).", buf[0]);
 	}
 
-	i = buf[0] > 4 ? 11 : (buf[0] > 2 ? 10 : 8);
+	i = buf[0] > 4? 11: (buf[0] > 2? 10: 8);
 
 	while (cnt < 64 && buf[cnt] != 0)
 		cnt++;
-	if (cnt < i+1) {
+	if (cnt < i + 1) {
 		applog(LOG_ERR, "Invalid bitstream file name .");
 		return 4;
 	}
 
-	newdev->bitFileName = malloc(sizeof(char)*(cnt+1));
+	newdev->bitFileName = malloc(sizeof(char) * (cnt + 1));
 	memcpy(newdev->bitFileName, &buf[i], cnt);
 	newdev->bitFileName[cnt] = 0;	
 
@@ -404,8 +404,8 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	newdev->freqM = (buf[6] & 255);
 	newdev->freqMDefault = newdev->freqM;
 	newdev->suspendSupported = (buf[0] == 5);
-	newdev->hashesPerClock = buf[0] > 2 ? ((buf[8] & 255) | ((buf[9] & 255) << 8) + 1) / 128.0 : 1.0;
-	newdev->extraSolutions = buf[0] > 4 ? buf[10] : 0;
+	newdev->hashesPerClock = buf[0] > 2? (((buf[8] & 255) | ((buf[9] & 255) << 8)) + 1) / 128.0: 1.0;
+	newdev->extraSolutions = buf[0] > 4? buf[10]: 0;
 	
 	applog(LOG_DEBUG, "PID: %d numNonces: %d offsNonces: %d freqM1: %f freqMaxM: %d freqM: %d suspendSupported: %s hashesPerClock: %f extraSolutions: %d",
 	                 buf[0], newdev->numNonces, newdev->offsNonces, newdev->freqM1, newdev->freqMaxM, newdev->freqM, newdev->suspendSupported ? "T": "F", 
