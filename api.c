@@ -152,7 +152,7 @@ static SOCKETTYPE sock = INVSOCK;
 
 static const char *UNAVAILABLE = " - API will not be available";
 
-//static const char *BLANK = "";
+static const char *BLANK = "";
 static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
@@ -1213,7 +1213,7 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 
 		if (isjson)
 			sprintf(buf, "%s{\"POOL\":%d,\"URL\":\"%s\",\"Status\":\"%s\",\"Priority\":%d,\"Long Poll\":\"%s\",\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Remote Failures\":%d,\"User\":\"%s\"}",
-				(i > 0) ? COMMA : "",
+				(i > 0) ? COMMA : BLANK,
 				i, rpc_url, status, pool->prio, lp,
 				pool->getwork_requested,
 				pool->accepted, pool->rejected,
@@ -1896,7 +1896,7 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
 	// Simplifies future external support for adding new counters
 	if (isjson)
 		sprintf(buf, "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"*Thread Fail Init\":%d,\"*Thread Zero Hash\":%d,\"*Thread Fail Queue\":%d,\"*Dev Sick Idle 60s\":%d,\"*Dev Dead Idle 600s\":%d,\"*Dev Nostart\":%d,\"*Dev Over Heat\":%d,\"*Dev Thermal Cutoff\":%d}" JSON_CLOSE,
-			device > 0 ? "," : "", device, cgpu->api->name, cgpu->device_id,
+			device > 0 ? COMMA : BLANK, device, cgpu->api->name, cgpu->device_id,
 			cgpu->device_last_well, cgpu->device_last_not_well, reason,
 			cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
 			cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
@@ -1960,14 +1960,14 @@ static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 
 		if (isjson)
 			sprintf(buf, "%s{\"DEVDETAILS\":%d,\"Name\":\"%s\",\"ID\":%d,\"Driver\":\"%s\",\"Kernel\":\"%s\",\"Model\"=\"%s\",\"Device Path\":\"%s\"}",
-				i > 0 ? "," : "", i, cgpu->api->name, cgpu->device_id,
-				cgpu->api->dname, cgpu->kname ? : "",
-				cgpu->name ? : "", cgpu->device_path ? : "");
+				i > 0 ? COMMA : BLANK, i, cgpu->api->name, cgpu->device_id,
+				cgpu->api->dname, cgpu->kname ? : BLANK,
+				cgpu->name ? : BLANK, cgpu->device_path ? : BLANK);
 		else
 			sprintf(buf, "DEVDETAILS=%d,Name=%s,ID=%d,Driver=%s,Kernel=%s,Model=%s,Device Path=%s%c",
 				i, cgpu->api->name, cgpu->device_id,
-				cgpu->api->dname, cgpu->kname ? : "",
-				cgpu->name ? : "", cgpu->device_path ? : "", SEPARATOR);
+				cgpu->api->dname, cgpu->kname ? : BLANK,
+				cgpu->name ? : BLANK, cgpu->device_path ? : BLANK, SEPARATOR);
 
 		strcat(io_buffer, buf);
 	}
@@ -2059,7 +2059,7 @@ static void send_result(SOCKETTYPE c, bool isjson)
 
 	len = strlen(io_buffer);
 
-	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : "");
+	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : BLANK);
 
 	// ignore failure - it's closed immediately anyway
 	n = send(c, io_buffer, len+1, 0);
