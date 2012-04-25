@@ -908,6 +908,10 @@ no longer under active development and will not be supported unless someone
 steps up to help maintain it. No binary builds supporting CPU mining will be
 released but CPU mining can be built into cgminer when it is compiled.
 
+Q: I upgraded cgminer version and mu hashrate suddenly dropped!
+A: No, you upgraded your SDK version unwittingly between upgrades of cgminer
+and that caused  your hashrate to drop. See the next question.
+
 Q: I upgraded my ATI driver/SDK/cgminer and my hashrate suddenly dropped!
 A: The hashrate performance in cgminer is tied to the version of the ATI SDK
 that is installed only for the very first time cgminer is run. This generates
@@ -916,11 +920,12 @@ SDK after that time will have no effect on the binaries. However, if you
 install a fresh version of cgminer, and have since upgraded your SDK, new
 binaries will be built. It is known that the 2.6 ATI SDK has a huge hashrate
 penalty on generating new binaries. It is recommended to not use this SDK at
-this time.
+this time unless you are using an ATI 7xxx card that needs it.
 
 Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK.
+the 2.6 SDK, the phatk kernel will perform poorly, and the diablo and my custom
+modified poclbm kernel are optimised for it.
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
 A: Run cgminer with the -n option and it will list all the platforms currently
