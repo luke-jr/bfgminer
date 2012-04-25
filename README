@@ -612,7 +612,7 @@ An example request in both formats to set GPU 0 fan to 80%:
 The format of each reply (unless stated otherwise) is a STATUS section
 followed by an optional detail section
 
-From API verion 1.7 onwards, reply strings in JSON and Text have the
+From API version 1.7 onwards, reply strings in JSON and Text have the
 necessary escaping as required to avoid ambiguity - they didn't before 1.7
 For JSON the 2 characters '"' and '\' are escaped with a '\' before them
 For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
