@@ -898,9 +898,14 @@ static void cpustatus(int cpu, bool isjson)
 static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	int devcount = 0;
+	int numpga = 0;
 	int i;
 
-	if (nDevs == 0 && opt_n_threads == 0) {
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+	numpga = numpgas();
+#endif
+
+	if (nDevs == 0 && opt_n_threads == 0 && numpga == 0) {
 		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
 		return;
 	}
@@ -922,8 +927,6 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 	}
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS)
-	int numpga = numpgas();
-
 	if (numpga > 0)
 		for (i = 0; i < numpga; i++) {
 			if (isjson && devcount > 0)
