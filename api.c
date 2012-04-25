@@ -157,7 +157,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.7";
+static const char *APIVERSION = "1.8";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -223,6 +223,7 @@ static const char *OSINFO =
 #define _PGAS		"PGAS"
 #define _CPUS		"CPUS"
 #define _NOTIFY		"NOTIFY"
+#define _DEVDETAILS	"DEVDETAILS"
 #define _BYE		"BYE"
 
 static const char ISJSON = '{';
@@ -253,6 +254,7 @@ static const char ISJSON = '{';
 #define JSON_PGAS	JSON1 _PGAS JSON2
 #define JSON_CPUS	JSON1 _CPUS JSON2
 #define JSON_NOTIFY	JSON1 _NOTIFY JSON2
+#define JSON_DEVDETAILS	JSON1 _DEVDETAILS JSON2
 #define JSON_BYE	JSON1 _BYE JSON1
 #define JSON_CLOSE	JSON3
 #define JSON_END	JSON4
@@ -340,6 +342,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_REMLASTP 66
 #define MSG_ACTPOOL 67
 #define MSG_REMPOOL 68
+#define MSG_DEVDETAILS 69
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -464,6 +467,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ACTPOOL, PARAM_POOL,	"Cannot remove active pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
+ { SEVERITY_SUCC,  MSG_DEVDETAILS,PARAM_NONE,	"Device Details" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1933,6 +1937,45 @@ static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool
 		strcat(io_buffer, JSON_CLOSE);
 }
 
+static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	char buf[BUFSIZ];
+	struct cgpu_info *cgpu;
+	int i;
+
+	if (total_devices == 0) {
+		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
+		return;
+	}
+
+	strcpy(io_buffer, message(MSG_DEVDETAILS, 0, NULL, isjson));
+
+	if (isjson) {
+		strcat(io_buffer, COMMA);
+		strcat(io_buffer, JSON_DEVDETAILS);
+	}
+
+	for (i = 0; i < total_devices; i++) {
+		cgpu = devices[i];
+
+		if (isjson)
+			sprintf(buf, "%s{\"DEVDETAILS\":%d,\"Name\":\"%s\",\"ID\":%d,\"Driver\":\"%s\",\"Kernel\":\"%s\",\"Model\"=\"%s\",\"Device Path\":\"%s\"}",
+				i > 0 ? "," : "", i, cgpu->api->name, cgpu->device_id,
+				cgpu->api->dname, cgpu->kname ? : "",
+				cgpu->name ? : "", cgpu->device_path ? : "");
+		else
+			sprintf(buf, "DEVDETAILS=%d,Name=%s,ID=%d,Driver=%s,Kernel=%s,Model=%s,Device Path=%s%c",
+				i, cgpu->api->name, cgpu->device_id,
+				cgpu->api->dname, cgpu->kname ? : "",
+				cgpu->name ? : "", cgpu->device_path ? : "", SEPARATOR);
+
+		strcat(io_buffer, buf);
+	}
+
+	if (isjson)
+		strcat(io_buffer, JSON_CLOSE);
+}
+
 void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	FILE *fcfg;
@@ -2002,6 +2045,7 @@ struct CMDS {
 	{ "quit",		doquit,		true },
 	{ "privileged",		privileged,	true },
 	{ "notify",		notify,		false },
+	{ "devdetails",		devdetails,	false },
 	{ NULL,			NULL,		false }
 };
 
