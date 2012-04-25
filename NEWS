@@ -1,26 +1,43 @@
+Version 2.3.4 - April 25, 2012
 
+- Extensively document the cause of GPU device issues and the use of --gpu-map.
+- Support for share logging
+- Detect poorly performing combination of SDK and phatk kernel and add verbose
+warning at startup.
 - Icarus update to new add_cgpu()
 - Icarus driver working with Linux and Windows
 - api.c fix unused variable compile warning
-- Display all OpenCL devices when -n is called as well to allow debugging of differential mapping of OpenCL to ADL.
-- Add a --gpu-map option which will allow arbitrarily mapping ADL devices to OpenCL devices for instances where association by enumeration alone fails.
-- Increase upper limit on number of extra items to queue as some FPGA code can't yet reliably keep many devices busy.
-- Display configuration file information when -c option is passed and only when file exists on loading default config file.
-- Display configuration file loaded, if any, and debug output if configuration file parsing failed.
+- Display all OpenCL devices when -n is called as well to allow debugging of
+differential mapping of OpenCL to ADL.
+- Add a --gpu-map option which will allow arbitrarily mapping ADL devices to
+OpenCL devices for instances where association by enumeration alone fails.
+- Increase upper limit on number of extra items to queue as some FPGA code can't
+yet reliably keep many devices busy.
+- Display configuration file information when -c option is passed and only when
+file exists on loading default config file.
+- Display configuration file loaded, if any, and debug output if configuration
+file parsing failed.
 - Add missing ztex header to Makefile for distribution.
-- Document long-form COM port device names on Windows, required to specify serial ports above 9
+- Document long-form COM port device names on Windows, required to specify
+serial ports above 9
 - Include ztex bitstreams firmware in distribution and install if configured in.
 - Style police on driver-ztex.c
 - work_restart should only be changed by cgminer.c now
-- Shut down the api cleanly when the api thread is cancelled. This should allow the api socket to be closed successfully to next be reopened with app_restart.
-- Make a union for cgpu device handles, and rename "device" to "device_ztex" since it's Ztex-specific
+- Shut down the api cleanly when the api thread is cancelled. This should allow
+the api socket to be closed successfully to next be reopened with app_restart.
+- Make a union for cgpu device handles, and rename "device" to "device_ztex"
+since it's Ztex-specific
 - Initialise name variable.
 - Remove unnecessary check for variable that always has memory allocated.
 - Bugfix: Missing "break" no-op in default case
-- Make the status window and log window as large as can fit on startup, rechecking to see if it can be enlarged after the fact. This allows any number of devices to be displayed provided the window is made long enough without corrupting the output.
+- Make the status window and log window as large as can fit on startup,
+rechecking to see if it can be enlarged after the fact. This allows any number
+of devices to be displayed provided the window is made long enough without
+corrupting the output.
 - Style police on libztex.c.
 - API add removepool like the screen interface
-- api.c escape required characters in return strings + pools returns the username
+- api.c escape required characters in return strings + pools returns the
+username
 - Set lp_path to NULL after free for consistency.
 - Removing dmalloc import left behind by mistake
 - Fixing leak in resp_hdr_cb
