@@ -390,21 +390,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 static void icarus_shutdown(struct thr_info *thr)
 {
-	struct cgpu_info *icarus;
-
-	if (thr->cgpu) {
-		icarus = thr->cgpu;
-
-		if (icarus->device_path)
-			free(icarus->device_path);
-
-		close(icarus->device_fd);
-
-		devices[icarus->device_id] = NULL;
-		free(icarus);
-
-		thr->cgpu = NULL;
-	}
+	struct cgpu_info *icarus = thr->cgpu;
+	icarus_close(icarus->device_fd);
 }
 
 struct device_api icarus_api = {
