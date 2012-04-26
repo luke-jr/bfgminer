@@ -3653,7 +3653,7 @@ void *miner_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
-	struct device_api *api = cgpu->api;
+	const struct device_api *api = cgpu->api;
 
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long def_cycle = opt_log_interval / 5 ? : 1;
