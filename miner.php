@@ -26,13 +26,11 @@ $notify = true;
 $rigs = array('127.0.0.1:4028');
 #
 # This should be OK for most cases
-# If you really do have a slow netowrk connection from php to cgminer
-# then 2 may not be enough
 # However, the longer it is the longer you have to wait while php
 # hangs if the target cgminer isn't runnning or listening
 # Feel free to increase it if your network is very slow
 # Also, on some windows PHP, apparently the $usec is ignored
-$socktimeoutsec = 2;
+$socktimeoutsec = 10;
 #
 $here = $_SERVER['PHP_SELF'];
 #
