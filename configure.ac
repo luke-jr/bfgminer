@@ -136,7 +136,11 @@ AC_ARG_ENABLE([adl],
 
 if test "x$opencl" = xyes; then
 	if test "x$adl" != xno; then
-		AC_CHECK_FILE([ADL_SDK/adl_sdk.h], have_adl=true, have_adl=false,)
+		if test -f ADL_SDK/adl_sdk.h; then
+			have_adl=true
+		else
+			have_adl=false
+		fi
 		if test x$have_adl = xtrue
 		then
 			AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
