@@ -8,16 +8,16 @@ $miner = null;
 $port = null;
 #
 # Set $readonly to true to force miner.php to be readonly
-# Set $readonly to false then it will check cgminer 'privileged'
+# Set $readonly to false then it will check BFGMiner 'privileged'
 $readonly = false;
 #
 # Set $notify to false to NOT attempt to display the notify command
 # Set $notify to true to attempt to display the notify command
-# If your older version of cgminer returns an 'Invalid command'
+# If your older version of BFGMiner returns an 'Invalid command'
 #  coz it doesn't have notify - it just shows the error status table
 $notify = true;
 #
-# Set $rigs to an array of your cgminer rigs that are running
+# Set $rigs to an array of your BFGMiner rigs that are running
 #  format: 'IP:Port' or 'Host:Port'
 # If you only have one rig, it will just show the detail of that rig
 # If you have more than one rig it will show a summary of all the rigs
@@ -686,7 +686,7 @@ function doOne($rig, $preprocess)
  echo "<td width=100%>&nbsp;</td><td>";
  if ($readonly === false)
  {
-	$msg = 'Quit CGMiner';
+	$msg = 'Quit BFGMiner';
 	if (count($rigs) > 1)
 		$msg .= " Rig $rig";
 	echo "<input type=button value='Quit' onclick='prc(\"quit&rig=$rig\",\"$msg\")'>";
@@ -703,7 +703,7 @@ function doOne($rig, $preprocess)
  if ($notify)
 	$cmds['notify'] = 'device status';
 
- $cmds['config'] = 'cgminer config';
+ $cmds['config'] = 'BFGMiner config';
 
  process($cmds, $rig);
 

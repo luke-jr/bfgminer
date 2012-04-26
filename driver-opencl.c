@@ -1249,7 +1249,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 			char *buf;
 
 			applog(LOG_ERR, "Restarting the GPU from the menu will not fix this.");
-			applog(LOG_ERR, "Try restarting cgminer.");
+			applog(LOG_ERR, "Try restarting BFGMiner.");
 			failmessage = true;
 #ifdef HAVE_CURSES
 			if (use_curses) {

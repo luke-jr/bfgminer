@@ -47,7 +47,7 @@ char *file_contents(const char *filename, int *length)
 	/* Try in the optional kernel path or installed prefix first */
 	f = fopen(fullpath, "rb");
 	if (!f) {
-		/* Then try from the path cgminer was called */
+		/* Then try from the path BFGMiner was called */
 		strcpy(fullpath, cgminer_path);
 		strcat(fullpath, filename);
 		f = fopen(fullpath, "rb");
@@ -380,7 +380,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			applog(LOG_WARNING, "WARNING: You have selected the phatk kernel.");
 			applog(LOG_WARNING, "You are running SDK 2.6 which performs poorly with this kernel.");
 			applog(LOG_WARNING, "Downgrade your SDK and delete any .bin files before starting again.");
-			applog(LOG_WARNING, "Or allow cgminer to automatically choose a more suitable kernel.");
+			applog(LOG_WARNING, "Or allow BFGMiner to automatically choose a more suitable kernel.");
 		}
 	}
 

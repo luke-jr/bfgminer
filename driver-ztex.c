@@ -1,5 +1,5 @@
 /**
- *   ztex.c - cgminer worker for Ztex 1.15x fpga board
+ *   ztex.c - BFGMiner worker for Ztex 1.15x fpga board
  *
  *   Copyright (c) 2012 nelisky.btc@gmail.com
  *

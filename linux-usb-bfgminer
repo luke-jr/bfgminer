@@ -1,15 +1,9 @@
-How to setup a cgminer using xubuntu 11.04 live on a USB
+How to setup a BFGMiner using Xubuntu 11.04 live on a USB
 
 The master version of this document is here:
- https://github.com/kanoi/linux-usb-cgminer
+ https://github.com/luke-jr/bfgminer/blob/master/linux-usb-bfgminer
 
-The actual file is:
- https://github.com/kanoi/linux-usb-cgminer/blob/master/linux-usb-cgminer
-
-The copy in cgminer (check to make sure it isn't older) is:
- https://github.com/ckolivas/cgminer/blob/master/linux-usb-cgminer
-
-The original old verion on bitcointalk is:
+The original old version on bitcointalk is:
  https://bitcointalk.org/index.php?topic=28402.msg426741#msg426741
 
 ========
@@ -63,7 +57,7 @@ Click: "Make Install Disk"
 After about 10-15 minutes you have a base xubuntu 11.04 boot USB
 (you can shut down this computer now)
 
-5) Boot your cgminer PC with this USB stick, select "English"
+5) Boot your BFGMiner PC with this USB stick, select "English"
    then select "Try Xubuntu without installing" and wait for the desktop to
    appear (this happens by default if you wait for the timeouts)
 
@@ -115,19 +109,19 @@ shutting down the PC to ensure all data is written to the USB
 
  You now have an OpenCL enabled xubuntu
 
-13) cgminer:
+13) BFGMiner:
  sudo apt-get install curl
 
- get the binary linux cgminer
- (see the bitcoin forum cgminer thread for where to get it)
+ get the binary Linux BFGMiner
+ (see the bitcoin forum bfgminer thread for where to get it)
  https://bitcointalk.org/index.php?topic=28402.0
 
- ./cgminer -n
+ ./bfgminer -n
    this shows you the GPU's it found on your PC
    See further below if you get an error regarding libtinfo.so.5
 
 14) An OC option:
- This is no longer needed since cgminer 2.* includes OC, however:
+ This is no longer needed since BFGMiner 2.* includes OC, however:
 
  sudo apt-get install libwxbase2.8-0 libwxgtk2.8-0
 
@@ -157,7 +151,7 @@ Initial setup complete.
 
 ========
 
-If you want to SSH into the machine and run cgminer:
+If you want to SSH into the machine and run BFGMiner:
  From a terminal on the miner display each time after you boot:
   xhost +
 
@@ -166,7 +160,7 @@ If you want to SSH into the machine and run cgminer:
 
 Then after you ssh into the machine:
  export DISPLAY=:0
-before running cgminer
+before running BFGMiner
 
 Also note, that you should force the screen to blank when mining if
 the ATI card is displaying the screen (using the screen saver
@@ -177,7 +171,7 @@ as mentioned above at 15)
 
 
 This is of course just the basics ... but it should get you a computer
-up and running and able to run cgminer
+up and running and able to run BFGMiner
 
 ========
 
@@ -210,10 +204,10 @@ In this example, it's currently 45% full with almost 1.1GB of free space
 
 ========
 
-The latest version (2.0.8) of cgminer is built with 11.10 (not 11.04)
+The latest version (2.0.8) of BFGMiner is built with 11.10 (not 11.04)
 If you get the following error when running the prebuilt version in 11.04:
 
-   ./cgminer: error while loading shared libraries: libtinfo.so.5: cannot open shared object file: No such file or directory
+   ./bfgminer: error while loading shared libraries: libtinfo.so.5: cannot open shared object file: No such file or directory
 
 The fix is to simply link the old curses library to the new name e.g.:
 
@@ -284,8 +278,8 @@ Then:
    username you chose here instead of "ubuntu"
 
    Important: set it to "log in automatically" if you ever want to be able
-   to start cgminer without being in front of the computer since 'X' must
-   be running to use cgminer properly
+   to start BFGMiner without being in front of the computer since 'X' must
+   be running to use BFGMiner properly
    That does of course mean that the computer isn't secure from anyone who
    has access to it - but then again no computer that can automatically
    reboot is secure from anyone who has access to the actual computer itself

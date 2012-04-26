@@ -413,11 +413,11 @@ static double bench_algo_stage2(
 		}
 
 		// Create a unique name
-		char unique_name[32];
+		char unique_name[33];
 		snprintf(
 			unique_name,
 			sizeof(unique_name)-1,
-			"cgminer-%p",
+			"bfgminer-%p",
 			(void*)module
 		);
 
@@ -446,7 +446,7 @@ static double bench_algo_stage2(
 			applog(LOG_ERR, "could not map shared memory");
 			exit(1);
 		}
-		SetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name);
+		SetEnvironmentVariable("BFGMINER_SHARED_MEM", unique_name);
 		CopyMemory(shared_mem, &rate, sizeof(rate));
 
 		// Get path to current exe
@@ -461,9 +461,9 @@ static double bench_algo_stage2(
 		// Construct new command line based on that
 		char *p = strlen(cmd_line) + cmd_line;
 		sprintf(p, " --bench-algo %d", algo);
-		SetEnvironmentVariable("CGMINER_BENCH_ALGO", "1");
+		SetEnvironmentVariable("BFGMINER_BENCH_ALGO", "1");
 
-		// Launch a debug copy of cgminer
+		// Launch a debug copy of BFGMiner
 		STARTUPINFO startup_info;
 		PROCESS_INFORMATION process_info;
 		ZeroMemory(&startup_info, sizeof(startup_info));

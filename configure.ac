@@ -11,12 +11,12 @@ m4_define([lt_age], v_min)
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 
-AC_INIT([cgminer], [v_ver], [kernel@kolivas.org])
+AC_INIT([bfgminer], [v_ver], [luke-jr+bfgminer@utopios.org])
 
 AC_PREREQ(2.59)
 AC_CANONICAL_SYSTEM
 AC_CONFIG_MACRO_DIR([m4])
-AC_CONFIG_SRCDIR([cgminer.c])
+AC_CONFIG_SRCDIR([miner.c])
 AC_CONFIG_HEADERS([config.h])
 
 AM_INIT_AUTOMAKE([foreign])
@@ -364,7 +364,7 @@ if test "x$prefix" = xNONE; then
 	prefix=/usr/local
 fi
 
-AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
+AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to bfgminer install])
 
 AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120223"], [Filename for phatk kernel])
 AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120327"], [Filename for poclbm kernel])

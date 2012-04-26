@@ -7,7 +7,7 @@ else
 JANSSON_INCLUDES=
 endif
 
-EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
+EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 		  ADL_SDK/readme.txt api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
 		  bitstreams/*
@@ -16,68 +16,68 @@ SUBDIRS		= lib compat ccan
 
 INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES) $(USB_FLAGS)
 
-bin_PROGRAMS	= cgminer
+bin_PROGRAMS	= bfgminer
 
 bin_SCRIPTS	= *.cl
 
-cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
-cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
+bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
+bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
 		  @UDEV_LIBS@ @USB_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
-cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
+bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
 
 # common sources
-cgminer_SOURCES := cgminer.c
+bfgminer_SOURCES := miner.c
 
-cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
+bfgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   util.c uthash.h logging.h			\
 		   sha2.c sha2.h api.c
 
-cgminer_SOURCES	+= logging.c
+bfgminer_SOURCES	+= logging.c
 
 # GPU sources, TODO: make them selectable
 # the GPU portion extracted from original main.c
-cgminer_SOURCES += driver-opencl.h driver-opencl.c
+bfgminer_SOURCES += driver-opencl.h driver-opencl.c
 
 # the original GPU related sources, unchanged
-cgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
-cgminer_SOURCES += adl.c adl.h adl_functions.h
-cgminer_SOURCES += *.cl
+bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
+bfgminer_SOURCES += adl.c adl.h adl_functions.h
+bfgminer_SOURCES += *.cl
 
 if HAS_CPUMINE
 # original CPU related sources, unchanged
-cgminer_SOURCES	+= \
+bfgminer_SOURCES	+= \
 		  sha256_generic.c sha256_4way.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
 		  sha256_sse4_amd64.c sha256_sse2_i386.c	\
 		  sha256_altivec_4way.c
 
 # the CPU portion extracted from original main.c
-cgminer_SOURCES += driver-cpu.h driver-cpu.c
+bfgminer_SOURCES += driver-cpu.h driver-cpu.c
 
 if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM
 if HAVE_x86_64
 SUBDIRS		+= x86_64
-cgminer_LDADD	+= x86_64/libx8664.a
+bfgminer_LDADD	+= x86_64/libx8664.a
 else # HAVE_x86_64
 SUBDIRS		+= x86_32
-cgminer_LDADD	+= x86_32/libx8632.a
+bfgminer_LDADD	+= x86_32/libx8632.a
 endif # HAVE_x86_64
 endif # HAS_YASM
 endif # HAS_CPUMINE
 
 if HAS_BITFORCE
-cgminer_SOURCES += driver-bitforce.c
+bfgminer_SOURCES += driver-bitforce.c
 endif
 
 if HAS_ICARUS
-cgminer_SOURCES += driver-icarus.c
+bfgminer_SOURCES += driver-icarus.c
 endif
 
 if HAS_ZTEX
-cgminer_SOURCES += driver-ztex.c libztex.c libztex.h
+bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = bitstreams/*
 endif

@@ -209,7 +209,7 @@ static struct block *blocks = NULL;
 
 char *opt_socks_proxy = NULL;
 
-static const char def_conf[] = "cgminer.conf";
+static const char def_conf[] = "bfgminer.conf";
 static bool config_loaded = false;
 static int include_count = 0;
 #define JSON_INCLUDE_CONF "include"
@@ -720,7 +720,7 @@ static struct opt_table opt_config_table[] = {
 		     "Allow API access only to the given list of IP[/Prefix] addresses[/subnets]"),
 	OPT_WITH_ARG("--api-description",
 		     set_api_description, NULL, NULL,
-		     "Description placed in the API status header, default: cgminer version"),
+		     "Description placed in the API status header, default: BFGMiner version"),
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
 			"Enable API, default: disabled"),
@@ -740,7 +740,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITHOUT_ARG("--benchmark",
 			opt_set_bool, &opt_benchmark,
-			"Run cgminer in benchmark mode - produces no shares"),
+			"Run BFGMiner in benchmark mode - produces no shares"),
 #ifdef WANT_CPUMINE
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
@@ -1086,7 +1086,15 @@ static void load_default_config(void)
 	}
 	else
 		strcpy(cnfbuf, "");
-	strcat(cnfbuf, ".cgminer/");
+	char *dirp = cnfbuf + strlen(cnfbuf);
+	strcpy(dirp, ".bfgminer/");
+	strcat(dirp, def_conf);
+	if (access(cnfbuf, R_OK))
+	{
+		// No BFGMiner config, try Cgminer's...
+		strcpy(dirp, ".cgminer/");
+		strcat(dirp, def_conf);
+	}
 #else
 	strcpy(cnfbuf, "");
 #endif
@@ -2984,7 +2992,7 @@ retry:
 		}
 		else
 			strcpy(filename, "");
-		strcat(filename, ".cgminer/");
+		strcat(filename, ".bfgminer/");
 		mkdir(filename, 0777);
 #else
 		strcpy(filename, "");
@@ -4628,6 +4636,8 @@ int main(int argc, char *argv[])
 	int skip_to_bench = 0;
 	#if defined(WIN32)
 		char buf[32];
+		if (GetEnvironmentVariable("BFGMINER_BENCH_ALGO", buf, 16))
+			skip_to_bench = 1;
 		if (GetEnvironmentVariable("CGMINER_BENCH_ALGO", buf, 16))
 			skip_to_bench = 1;
 	#endif // defined(WIN32)
@@ -4701,7 +4711,7 @@ int main(int argc, char *argv[])
 				break;
 			case -1:
 				applog(LOG_WARNING, "Error in configuration file, partially loaded.");
-				applog(LOG_WARNING, "Start cgminer with -T to see what failed to load.");
+				applog(LOG_WARNING, "Start BFGMiner with -T to see what failed to load.");
 				break;
 			default:
 				break;
@@ -4724,7 +4734,7 @@ int main(int argc, char *argv[])
 			// Write result to shared memory for parent
 			#if defined(WIN32)
 				char unique_name[64];
-				if (GetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name, 32)) {
+				if (GetEnvironmentVariable("BFGMINER_SHARED_MEM", unique_name, 32) || GetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name, 32)) {
 					HANDLE map_handle = CreateFileMapping(
 						INVALID_HANDLE_VALUE,   // use paging file
 						NULL,                   // default security attributes
@@ -4951,7 +4961,7 @@ int main(int argc, char *argv[])
 #ifdef HAVE_CURSES
 			if (use_curses) {
 				halfdelay(150);
-				applog(LOG_ERR, "Press any key to exit, or cgminer will try again in 15s.");
+				applog(LOG_ERR, "Press any key to exit, or BFGMiner will try again in 15s.");
 				if (getch() != ERR)
 					quit(0, "No servers could be used! Exiting.");
 				nocbreak();

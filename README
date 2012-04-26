@@ -7,26 +7,26 @@ This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider donating to the
 address below.
 
-Con Kolivas <kernel@kolivas.org>
-15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+Luke-Jr <luke-jr+bfgminer@utopios.org>
+1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
 
 DOWNLOADS:
 
-http://ck.kolivas.org/apps/cgminer
+http://luke.dashjr.org/programs/bitcoin/files/bfgminer
 
 GIT TREE:
 
-https://github.com/ckolivas/cgminer
+https://github.com/luke-jr/bfgminer
 
-Support thread:
+Bug reports:
 
-http://bitcointalk.org/index.php?topic=28402.0
+https://github.com/luke-jr/bfgminer/issues
 
 IRC Channel:
 
-irc://irc.freenode.net/cgminer
+irc://irc.freenode.net/eligius
 
-License: GPLv2.  See COPYING for details.
+License: GPLv3.  See COPYING for details.
 
 READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
 
@@ -47,7 +47,7 @@ Dependencies:
 	libudev headers
 	(This is only required for FPGA auto-detection)
 
-CGMiner specific configuration options:
+BFGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-opencl        Override detection and disable building with opencl
 	--disable-adl           Override detection and disable building with adl
@@ -63,7 +63,7 @@ Basic *nix build instructions:
 	To build with GPU monitoring & clocking support:
 	Extract the AMD ADL SDK, latest version - there is also no official
 	place for these files. Copy all the *.h files in the "include"
-	directory into cgminer's ADL_SDK directory.
+	directory into BFGMiner's ADL_SDK directory.
 
 The easiest way to install the ATI AMD SPP sdk on linux is to actually put it
 into a system location. Then building will be simpler. Download the correct
@@ -118,14 +118,14 @@ Native WIN32 build instructions (outdated, see windows-build.txt)
 
 ---
 
-Usage instructions:  Run "cgminer --help" to see options:
+Usage instructions:  Run "bfgminer --help" to see options:
 
 Usage: . [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
 Options for both config file and command line:
 --api-allow         Allow API access (if enabled) only to the given list of [W:]IP[/Prefix] address[/subnets]
                     This overrides --api-network and you must specify 127.0.0.1 if it is required
                     W: in front of the IP address gives that address privileged access to all api commands
---api-description   Description placed in the API status header (default: cgminer version)
+--api-description   Description placed in the API status header (default: BFGMiner version)
 --api-listen        Listen for API requests (default: disabled)
                     By default any command that does not just display data returns access denied
                     See --api-allow to overcome this
@@ -133,7 +133,7 @@ Options for both config file and command line:
 --api-port          Port number of miner API (default: 4028)
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---benchmark         Run cgminer in benchmark mode - produces no shares
+--benchmark         Run BFGMiner in benchmark mode - produces no shares
 --debug|-D          Enable debug output
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
@@ -206,9 +206,9 @@ FPGA mining boards(BitForce, Icarus) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
-     By default, cgminer will scan for autodetected FPGAs unless at least one
-     -S is specified for that driver. If you specify -S and still want cgminer
-     to scan, you must also use "-S auto". If you want to prevent cgminer from
+     By default, BFGMiner will scan for autodetected FPGAs unless at least one
+     -S is specified for that driver. If you specify -S and still want BFGMiner
+     to scan, you must also use "-S auto". If you want to prevent BFGMiner from
      scanning without specifying a device, you can use "-S noauto". Note that
      presently, autodetection only works on Linux, and might only detect one
      device depending on the version of udev being used.
@@ -237,7 +237,7 @@ CPU only options (deprecated, not included in binaries!):
 
 EXECUTIVE SUMMARY ON USAGE:
 
-After saving configuration from the menu, you do not need to give cgminer any
+After saving configuration from the menu, you do not need to give BFGMiner any
 arguments and it will load your configuration.
 
 Any configuration file may also contain a single
@@ -248,27 +248,27 @@ Writing the configuration will save all settings from all files in the output.
 
 Single pool, regular desktop:
 
-cgminer -o http://pool:port -u username -p password
+bfgminer -o http://pool:port -u username -p password
 
 Single pool, dedicated miner:
 
-cgminer -o http://pool:port -u username -p password -I 9
+bfgminer -o http://pool:port -u username -p password -I 9
 
 Single pool, first card regular desktop, 3 other dedicated cards:
 
-cgminer -o http://pool:port -u username -p password -I d,9,9,9
+bfgminer -o http://pool:port -u username -p password -I d,9,9,9
 
 Multiple pool, dedicated miner:
 
-cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
+bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
 
 Add overclocking settings, GPU and fan control for all cards:
 
-cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
+bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
 
 Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
 
-cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
+bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
@@ -360,7 +360,7 @@ The number of rejected shares
 The number of hardware erorrs
 The utility defines as the number of shares / minute
 
-The cgminer status line shows:
+The BFGMiner status line shows:
  TQ: 1  ST: 1  SS: 0  DW: 0  NB: 1  LW: 8  GF: 1  RF: 1
 
 TQ is Total Queued work items.
@@ -406,29 +406,29 @@ pool falls idle, the rest will take up the slack keeping the miner busy.
 ---
 LOGGING
 
-cgminer will log to stderr if it detects stderr is being redirected to a file.
+BFGMiner will log to stderr if it detects stderr is being redirected to a file.
 To enable logging simply add 2>logfile.txt to your command line and logfile.txt
 will contain the logged output at the log level you specify (normal, verbose,
 debug etc.)
 
 In other words if you would normally use:
-./cgminer -o xxx -u yyy -p zzz
+./bfgminer -o xxx -u yyy -p zzz
 if you use
-./cgminer -o xxx -u yyy -p zzz 2>logfile.txt
+./bfgminer -o xxx -u yyy -p zzz 2>logfile.txt
 it will log to a file called logfile.txt and otherwise work the same.
 
 There is also the -m option on linux which will spawn a command of your choice
 and pipe the output directly to that command.
 
 
-If you start cgminer with the --sharelog option, you can get detailed
+If you start BFGMiner with the --sharelog option, you can get detailed
 information for each share found. The argument to the option may be "-" for
 standard output (not advisable with the ncurses UI), any valid positive number
 for that file descriptor, or a filename.
 
 To log share data to a file named "share.log", you can use either:
-./cgminer --sharelog 50 -o xxx -u yyy -p zzz 50>share.log
-./cgminer --sharelog share.log -o xxx -u yyy -p zzz
+./bfgminer --sharelog 50 -o xxx -u yyy -p zzz 50>share.log
+./bfgminer --sharelog share.log -o xxx -u yyy -p zzz
 
 For every share found, data will be logged in a CSV (Comma Separated Value)
 format:
@@ -451,14 +451,14 @@ MAY CAUSE TO YOUR HARDWARE. OVERCLOCKING CAN INVALIDATE WARRANTIES, DAMAGE
 HARDWARE AND EVEN CAUSE FIRES. THE AUTHOR ASSUMES NO RESPONSIBILITY FOR ANY
 DAMAGE YOU MAY CAUSE OR UNPLANNED CHILDREN THAT MAY OCCUR AS A RESULT.
 
-The GPU monitoring, clocking and fanspeed control incorporated into cgminer
+The GPU monitoring, clocking and fanspeed control incorporated into BFGMiner
 comes through use of the ATI Display Library. As such, it only supports ATI
-GPUs. Even if ADL support is successfully built into cgminer, unless the card
+GPUs. Even if ADL support is successfully built into BFGMiner, unless the card
 and driver supports it, no GPU monitoring/settings will be available.
 
-Cgminer supports initial setting of GPU engine clock speed, memory clock
+BFGMiner supports initial setting of GPU engine clock speed, memory clock
 speed, voltage, fanspeed, and the undocumented powertune feature of 69x0+ GPUs.
-The setting passed to cgminer is used by all GPUs unless separate values are
+The setting passed to BFGMiner is used by all GPUs unless separate values are
 specified. All settings can all be changed within the menu on the fly on a
 per-GPU basis.
 
@@ -473,7 +473,7 @@ will try to set the engine clock of card 0 to 950, 1 to 945, 2 to 930, 3 to
 960 and all memory clocks to 300.
 
 AUTO MODES:
-There are two "auto" modes in cgminer, --auto-fan and --auto-gpu. These can
+There are two "auto" modes in BFGMiner, --auto-fan and --auto-gpu. These can
 be used independently of each other and are complementary. Both auto modes
 are designed to safely change settings while trying to maintain a target
 temperature. By default this is set to 75 degrees C but can be changed with:
@@ -522,11 +522,11 @@ the target temperature by the hysteresis amount, which is set to 3 by default
 and can be changed with:
 --temp-hysteresis
 If the temperature drops below the target temperature, and engine clock speed
-is not at the highest level set at startup, cgminer will raise the clock speed.
+is not at the highest level set at startup, BFGMiner will raise the clock speed.
 If at any time you manually set an even higher clock speed successfully in
-cgminer, it will record this value and use it as its new upper limit (and the
+BFGMiner, it will record this value and use it as its new upper limit (and the
 same for low clock speeds and lower limits). If the temperature goes over the
-cutoff limit (95 degrees by default), cgminer will completely disable the GPU
+cutoff limit (95 degrees by default), BFGMiner will completely disable the GPU
 from mining and it will not be re-enabled unless manually done so. The cutoff
 temperature can be changed with:
 
@@ -548,39 +548,39 @@ may report the value was changed successfully, and the new card power profile
 information contains the values you set it to, that the card itself may
 refuse to use those settings. As the performance profile changes dynamically,
 querying the "current" value on the card can be wrong as well. So when changing
-values in cgminer, after a pause of 1 second, it will report to you the current
+values in BFGMiner, after a pause of 1 second, it will report to you the current
 values where you should check that your change has taken. An example is that
 6970 reference cards will accept low memory values but refuse to actually run
 those lower memory values unless they're within 125 of the engine clock speed.
 In that scenario, they usually set their real speed back to their default.
 
-Cgminer reports the so-called "safe" range of whatever it is you are modifying
+BFGMiner reports the so-called "safe" range of whatever it is you are modifying
 when you ask to modify it on the fly. However, you can change settings to values
 outside this range. Despite this, the card can easily refuse to accept your
 changes, or worse, to accept your changes and then silently ignore them. So
 there is absolutely to know how far to/from where/to it can set things safely or
 otherwise, and there is nothing stopping you from at least trying to set them
 outside this range. Being very conscious of these possible failures is why
-cgminer will report back the current values for you to examine how exactly the
+BFGMiner will report back the current values for you to examine how exactly the
 card has responded. Even within the reported range of accepted values by the
 card, it is very easy to crash just about any card, so it cannot use those
 values to determine what range to set. You have to provide something meaningful
-manually for cgminer to work with through experimentation.
+manually for BFGMiner to work with through experimentation.
 
 STARTUP / SHUTDOWN:
-When cgminer starts up, it tries to read off the current profile information
-for clock and fan speeds and stores these values. When quitting cgminer, it
+When BFGMiner starts up, it tries to read off the current profile information
+for clock and fan speeds and stores these values. When quitting BFGMiner, it
 will then try to restore the original values. Changing settings outside of
-cgminer while it's running may be reset to the startup cgminer values when
-cgminer shuts down because of this.
+BFGMiner while it's running may be reset to the startup BFGMiner values when
+BFGMiner shuts down because of this.
 
 ---
 
 RPC API
 
-If you start cgminer with the "--api-listen" option, it will listen on a
+If you start BFGMiner with the "--api-listen" option, it will listen on a
 simple TCP/IP socket for single string API requests from the same machine
-running cgminer and reply with a string and then close the socket each time
+running BFGMiner and reply with a string and then close the socket each time
 If you add the "--api-network" option, it will accept API requests from any
 network attached computer.
 
@@ -595,7 +595,7 @@ IP addresses are automatically padded with extra '.0's as needed
 Without a /prefix is the same as specifying /32
 0/0 means all IP addresses.
 The 'W:' on the front gives that address/subnet privileged access to commands
-that modify cgminer.
+that modify BFGMiner.
 Without it those commands return an access denied status.
 Privileged access is checked in the order the IP addresses were supplied to
 "--api-allow"
@@ -653,7 +653,7 @@ The STATUS section is:
    Message matching the Code value N
 
   Description=string
-   This defaults to the cgminer version but is the value of --api-description
+   This defaults to the BFGMiner version but is the value of --api-description
    if it was specified at runtime.
 
 For API version 1.7:
@@ -662,7 +662,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  Request       Reply Section  Details
  -------       -------------  -------
- version       VERSION        CGMiner=cgminer version
+ version       VERSION        BFGMiner=bfgminer version
                               API=API version
 
  config        CONFIG         Some miner configuration information:
@@ -774,11 +774,11 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  save|filename (*)
                none           There is no reply section just the STATUS section
-                              stating success or failure saving the cgminer config
+                              stating success or failure saving the BFGMiner config
                               to filename
 
  quit (*)      none           There is no status section but just a single "BYE|"
-                              reply before cgminer quits
+                              reply before BFGMiner quits
 
  notify        NOTIFY         The last status and history count of each devices problem
                               e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
@@ -787,7 +787,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating an error if you do not have privileged access
                               to the API and success if you do have privilege
-                              The command doesn't change anything in cgminer
+                              The command doesn't change anything in BFGMiner
 
  pgaenable|N (*)
                none           There is no reply section just the STATUS section
@@ -801,15 +801,15 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               This is only available if PGA mining is enabled
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
-in the cgminer status window
+in the BFGMiner status window
 
 When you switch to a different pool to the current one, you will get a
-'Switching to URL' message in the cgminer status windows
+'Switching to URL' message in the BFGMiner status windows
 
 Obviously, the JSON format is simply just the names as given before the '='
 with the values after the '='
 
-If you enable cgminer debug (-D or --debug) you will also get messages showing
+If you enable BFGMiner debug (-D or --debug) you will also get messages showing
 details of the requests received and the replies
 
 There are included 4 program examples for accessing the API:
@@ -819,7 +819,7 @@ api-example.php - a php script to access the API
  by default it sends a 'summary' request to the miner at 127.0.0.1:4028
  If you specify a command it will send that request instead
  You must modify the line "$socket = getsock('127.0.0.1', 4028);" at the
- beginning of "function request($cmd)" to change where it looks for cgminer
+ beginning of "function request($cmd)" to change where it looks for BFGMiner
 
 API.java/API.class
  a java program to access the API (with source code)
@@ -844,10 +844,10 @@ GPU DEVICE ISSUES and use of --gpu-map
 GPUs mine with OpenCL software via the GPU device driver. This means you need
 to have both an OpenCL SDK installed, and the GPU device driver RUNNING (i.e.
 Xorg up and running configured for all devices that will mine on linux etc.)
-Meanwhile, the hardware monitoring that cgminer offers for AMD devices relies
+Meanwhile, the hardware monitoring that BFGMiner offers for AMD devices relies
 on the ATI Display Library (ADL) software to work. OpenCL DOES NOT TALK TO THE
 ADL. There is no 100% reliable way to know that OpenCL devices are identical
-to the ADL devices, as neither give off the same information. cgminer does its
+to the ADL devices, as neither give off the same information. BFGMiner does its
 best to correlate these devices based on the order that OpenCL and ADL numbers
 them. It is possible that this will fail for the following reasons:
 
@@ -858,11 +858,11 @@ devices if you have two monitors connected to the one GPU.
 3. There are more ADL devices than OpenCL. ADL devices include any ATI GPUs,
 including ones that can't mine, like some older R4xxx cards.
 
-To cope with this, the ADVANCED option for --gpu-map is provided with cgminer.
+To cope with this, the ADVANCED option for --gpu-map is provided with BFGMiner.
 DO NOT USE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. The default will work the
 vast majority of the time unless you know you have a problem already.
 
-To get useful information, start cgminer with just the -n option. You will get
+To get useful information, start BFGMiner with just the -n option. You will get
 output that looks like this:
 
 [2012-04-25 13:17:34] CL Platform 0 vendor: Advanced Micro Devices, Inc.
@@ -878,7 +878,7 @@ output that looks like this:
 [2012-04-25 13:17:34] 3 GPU devices max detected
 
 Note the number of devices here match, and the order is the same. If devices 1
-and 2 were different between Tahiti and Cayman, you could run cgminer with:
+and 2 were different between Tahiti and Cayman, you could run BFGMiner with:
 --gpu-map 2:1,1:2
 And it would swap the monitoring it received from ADL device 1 and put it to
 opencl device 2 and vice versa.
@@ -916,13 +916,13 @@ To work around this you would use:
 
 FAQ
 
-Q: cgminer segfaults when I change my shell window size.
+Q: BFGMiner segfaults when I change my shell window size.
 A: Older versions of libncurses have a bug to do with refreshing a window
 after a size change. Upgrading to a new version of curses will fix it.
 
 Q: Can I mine on servers from different networks (eg smartcoin and bitcoin) at
 the same time?
-A: No, cgminer keeps a database of the block it's working on to ensure it does
+A: No, BFGMiner keeps a database of the block it's working on to ensure it does
 not work on stale blocks, and having different blocks from two networks would
 make it invalidate the work from each other.
 
@@ -940,11 +940,11 @@ does not support it.
 
 Q: The CPU usage is high.
 A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
-CPU core unnecessarily so downgrade to 11.6. Binding cgminer to one CPU core on
+CPU core unnecessarily so downgrade to 11.6. Binding BFGMiner to one CPU core on
 windows can minimise it to 100% (instead of more than one core). Driver version
 11.11 on linux and 11.12 on windows appear to have fixed this issue. Note that
 later drivers may have an apparent return of high CPU usage. Try
-'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting cgminer.
+'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting BFGMiner.
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
@@ -952,12 +952,12 @@ their feature requests implemented.
 
 Q: My GPU hangs and I have to reboot it to get it going again?
 A: The more aggressively the mining software uses your GPU, the less overclock
-you will be able to run. You are more likely to hit your limits with cgminer
+you will be able to run. You are more likely to hit your limits with BFGMiner
 and you will find you may need to overclock your GPU less aggressively. The
 software cannot be responsible and make your GPU hang directly. If you simply
 cannot get it to ever stop hanging, try decreasing the intensity, and if even
 that fails, try changing to the poclbm kernel with -k poclbm, though you will
-sacrifice performance. cgminer is designed to try and safely restart GPUs as
+sacrifice performance. BFGMiner is designed to try and safely restart GPUs as
 much as possible, but NOT if that restart might actually crash the rest of the
 GPUs mining, or even the machine. It tries to restart them with a separate
 thread and if that separate thread dies, it gives up trying to restart any more
@@ -965,16 +965,16 @@ GPUs.
 
 Q: Work keeps going to my backup pool even though my primary pool hasn't
 failed?
-A: Cgminer checks for conditions where the primary pool is lagging and will
+A: BFGMiner checks for conditions where the primary pool is lagging and will
 pass some work to the backup servers under those conditions. The reason for
 doing this is to try its absolute best to keep the GPUs working on something
 useful and not risk idle periods. You can disable this behaviour with the
 option --failover-only.
 
 Q: Is this a virus?
-A: Cgminer is being packaged with other trojan scripts and some antivirus
-software is falsely accusing cgminer.exe as being the actual virus, rather
-than whatever it is being packaged with. If you installed cgminer yourself,
+A: BFGMiner is being packaged with other trojan scripts and some antivirus
+software is falsely accusing bfgminer.exe as being the actual virus, rather
+than whatever it is being packaged with. If you installed BFGMiner yourself,
 then you do not have a virus on your computer. Complain to your antivirus
 software company.
 
@@ -1005,43 +1005,43 @@ Q: What happened to CPU mining?
 A: Being increasingly irrelevant for most users, and a maintenance issue, it is
 no longer under active development and will not be supported unless someone
 steps up to help maintain it. No binary builds supporting CPU mining will be
-released but CPU mining can be built into cgminer when it is compiled.
+released but CPU mining can be built into BFGMiner when it is compiled.
 
-Q: I upgraded cgminer version and mu hashrate suddenly dropped!
-A: No, you upgraded your SDK version unwittingly between upgrades of cgminer
+Q: I upgraded BFGMiner version and mu hashrate suddenly dropped!
+A: No, you upgraded your SDK version unwittingly between upgrades of BFGMiner
 and that caused  your hashrate to drop. See the next question.
 
-Q: I upgraded my ATI driver/SDK/cgminer and my hashrate suddenly dropped!
-A: The hashrate performance in cgminer is tied to the version of the ATI SDK
-that is installed only for the very first time cgminer is run. This generates
+Q: I upgraded my ATI driver/SDK/BFGMiner and my hashrate suddenly dropped!
+A: The hashrate performance in BFGMiner is tied to the version of the ATI SDK
+that is installed only for the very first time BFGMiner is run. This generates
 binaries that are used by the GPU every time after that. Any upgrades to the
 SDK after that time will have no effect on the binaries. However, if you
-install a fresh version of cgminer, and have since upgraded your SDK, new
+install a fresh version of BFGMiner, and have since upgraded your SDK, new
 binaries will be built. It is known that the 2.6 ATI SDK has a huge hashrate
 penalty on generating new binaries. It is recommended to not use this SDK at
 this time unless you are using an ATI 7xxx card that needs it.
 
-Q: Which ATI SDK is the best for cgminer?
+Q: Which ATI SDK is the best for BFGMiner?
 A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
 the 2.6 SDK, the phatk kernel will perform poorly, while the diablo or my
 custom modified poclbm kernel are optimised for it.
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
-A: Run cgminer with the -n option and it will list all the platforms currently
-installed. Then you can tell cgminer which platform to use with --gpu-platform.
+A: Run bfgminer with the -n option and it will list all the platforms currently
+installed. Then you can tell BFGMiner which platform to use with --gpu-platform.
 
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one
 though.
 
 Q: I'm having an issue. What debugging information should I provide?
-A: Start cgminer with your regular commands and add -D -T --verbose and provide
+A: Start BFGMiner with your regular commands and add -D -T --verbose and provide
 the full startup output and a summary of your hardware, operating system, ATI
 driver version and ATI stream version.
 
-Q: cgminer reports no devices or only one device on startup on Linux although
+Q: BFGMiner reports no devices or only one device on startup on Linux although
 I have multiple devices and drivers+SDK installed properly?
-A: Try 'export DISPLAY=:0" before running cgminer.
+A: Try 'export DISPLAY=:0" before running BFGMiner.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
@@ -1051,7 +1051,7 @@ A: p2pool has very rapid expiration of work and new blocks, it is suggested you
 decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
 with -g 1.
 
-Q: Are kernels from other mining software useable in cgminer?
+Q: Are kernels from other mining software useable in BFGMiner?
 A: No, the APIs are slightly different between the different software and they
 will not work.
 
@@ -1061,7 +1061,7 @@ working in the logs?
 A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
-A: At the moment, cgminer supports 2 FPGA's: Icarus and BitForce.
+A: At the moment, BFGMiner supports 2 FPGA's: Icarus and BitForce.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
@@ -1072,5 +1072,5 @@ This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider donating to the
 address below.
 
-Con Kolivas <kernel@kolivas.org>
-15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+Luke-Jr <luke-jr+bfgminer@utopios.org>
+1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
