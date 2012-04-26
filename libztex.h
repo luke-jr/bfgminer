@@ -32,7 +32,7 @@
 
 #define LIBZTEX_MAXMAXERRORRATE 0.05
 #define LIBZTEX_ERRORHYSTERESIS 0.1
-#define LIBZTEX_OVERHEATTHRESHOLD 0.5
+#define LIBZTEX_OVERHEATTHRESHOLD 0.4
 
 struct libztex_fpgastate {
 	bool fpgaConfigured;
@@ -62,12 +62,19 @@ struct libztex_device {
 	uint8_t freqMaxM;
 	uint8_t freqMDefault;
 	char* bitFileName;
+	bool suspendSupported;
+	double hashesPerClock;
+	uint8_t extraSolutions;
 
 	double errorCount[256];
 	double errorWeight[256];
 	double errorRate[256];
 	double maxErrorRate[256];
 
+	int numberOfFpgas;
+	int selectedFpga;
+	bool parallelConfigSupport;
+	
 	char repr[64];
 };
 
@@ -77,7 +84,7 @@ struct libztex_dev_list {
 };
 
 struct libztex_hash_data {
-	uint32_t goldenNonce;
+	uint32_t goldenNonce[2];
 	uint32_t nonce;
 	uint32_t hash7;
 };

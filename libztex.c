@@ -41,7 +41,8 @@
 #define CAPABILITY_HS_FPGA 0,5
 //* Capability index for AVR XMEGA support.
 #define CAPABILITY_MAC_EEPROM 0,6
-
+//* Capability index for multi FPGA support.
+#define CAPABILITY_MULTI_FPGA 0,7
 
 
 static bool libztex_checkDevice(struct libusb_device *dev)
@@ -65,7 +66,7 @@ static bool libztex_checkCapability(struct libztex_device *ztex, int i, int j)
 {
 	if (!((i >= 0) && (i <= 5) && (j >= 0) && (j < 8) &&
 	     (((ztex->interfaceCapabilities[i] & 255) & (1 << j)) != 0))) {
-		applog(LOG_ERR, "%s: capability missing: %d %d", ztex->repr, i, i);
+		applog(LOG_ERR, "%s: capability missing: %d %d", ztex->repr, i, j);
 		return false;
 	}
 	return true;
@@ -223,9 +224,48 @@ int libztex_configureFpga(struct libztex_device *ztex)
 	return libztex_configureFpgaLS(ztex, buf, true, 2);
 }
 
-int libztex_setFreq(struct libztex_device *ztex, uint16_t freq)
-{
+int libztex_numberOfFpgas(struct libztex_device *ztex) {
 	int cnt;
+	unsigned char buf[3];
+	if (ztex->numberOfFpgas < 0) {
+		if (libztex_checkCapability(ztex, CAPABILITY_MULTI_FPGA)) {
+			cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x50, 0, 0, buf, 3, 1000);
+			if (unlikely(cnt < 0)) {
+				applog(LOG_ERR, "%s: Failed getMultiFpgaInfo with err %d", ztex->repr, cnt);
+				return cnt;
+			}
+			ztex->numberOfFpgas = buf[0] + 1;
+			ztex->selectedFpga = buf[1];
+			ztex->parallelConfigSupport = (buf[2] == 1);
+		} else {
+			ztex->numberOfFpgas = 1;
+			ztex->selectedFpga = 0;
+			ztex->parallelConfigSupport = false;
+		}
+	}
+	return ztex->numberOfFpgas;
+}
+
+int libztex_selectFpga(struct libztex_device *ztex, int number) {
+	int cnt, fpgacnt = libztex_numberOfFpgas(ztex);
+	if (number < 0 || number >= fpgacnt) {
+		applog(LOG_WARNING, "%s: Trying to select wrong fpga (%d in %d)", ztex->repr, number, fpgacnt);
+		return 1;
+	}
+	if (ztex->selectedFpga != number && libztex_checkCapability(ztex, CAPABILITY_MULTI_FPGA)) {
+		cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x51, number, 0, NULL, 0, 500);
+		if (unlikely(cnt < 0)) {
+			applog(LOG_ERR, "Ztex check device: Failed to set fpga with err %d", cnt);
+			return cnt;
+		}
+		ztex->selectedFpga = number;
+	}
+	return 0;
+}
+
+int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
+	int cnt;
+	uint16_t oldfreq = ztex->freqM;
 
 	if (freq > ztex->freqMaxM)
 		freq = ztex->freqMaxM;
@@ -236,7 +276,8 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq)
 		return cnt;
 	}
 	ztex->freqM = freq;
-	applog(LOG_WARNING, "%s: Frequency change to %0.2f Mhz", ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
+	applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
+	       ztex->repr, ztex->freqM1 * (oldfreq + 1), ztex->freqM1 * (ztex->freqM + 1));
 
 	return 0;
 }
@@ -246,14 +287,22 @@ int libztex_resetFpga(struct libztex_device *ztex)
 	return libusb_control_transfer(ztex->hndl, 0x40, 0x31, 0, 0, NULL, 0, 1000);
 }
 
-int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** ztex)
-{
+int libztex_suspend(struct libztex_device *ztex) {
+	if (ztex->suspendSupported) {
+		return libusb_control_transfer(ztex->hndl, 0x40, 0x84, 0, 0, NULL, 0, 1000);
+	} else {
+		return 0;
+	}
+}
+
+int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** ztex) {
 	struct libztex_device *newdev;
+	int i, cnt, err;
 	unsigned char buf[64];
-	int cnt, err;
 
 	newdev = malloc(sizeof(struct libztex_device));
 	newdev->bitFileName = NULL;
+	newdev->numberOfFpgas = -1;
 	newdev->valid = false;
 	newdev->hndl = NULL;
 	*ztex = newdev;
@@ -266,7 +315,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 
 	// Check vendorId and productId
 	if (!(newdev->descriptor.idVendor == LIBZTEX_IDVENDOR &&
-				newdev->descriptor.idProduct == LIBZTEX_IDPRODUCT)) {
+	    newdev->descriptor.idProduct == LIBZTEX_IDPRODUCT)) {
 		applog(LOG_ERR, "Not a ztex device? %0.4X, %0.4X", newdev->descriptor.idVendor, newdev->descriptor.idProduct);
 		return 1;
 	}
@@ -290,7 +339,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		return cnt;
 	}
 	
-	if ( buf[0] != 40 || buf[1] != 1 || buf[2] != 'Z' || buf[3] != 'T' || buf[4] != 'E' || buf[5] != 'X' ) {
+	if (buf[0] != 40 || buf[1] != 1 || buf[2] != 'Z' || buf[3] != 'T' || buf[4] != 'E' || buf[5] != 'X') {
 		applog(LOG_ERR, "Ztex check device: Error reading ztex descriptor");
 		return 2;
 	}
@@ -327,13 +376,26 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		return cnt;
 	}
 
-	if (unlikely(buf[0] != 4)) {
-		if (unlikely(buf[0] != 2)) {
+	if (unlikely(buf[0] != 5)) {
+		if (unlikely(buf[0] != 2 && buf[0] != 4)) {
 			applog(LOG_ERR, "Invalid BTCMiner descriptor version. Firmware must be updated (%d).", buf[0]);
 			return 3;
 		}
-		applog(LOG_WARNING, "Firmware out of date");
+		applog(LOG_WARNING, "Firmware out of date (%d).", buf[0]);
 	}
+
+	i = buf[0] > 4? 11: (buf[0] > 2? 10: 8);
+
+	while (cnt < 64 && buf[cnt] != 0)
+		cnt++;
+	if (cnt < i + 1) {
+		applog(LOG_ERR, "Invalid bitstream file name .");
+		return 4;
+	}
+
+	newdev->bitFileName = malloc(sizeof(char) * (cnt + 1));
+	memcpy(newdev->bitFileName, &buf[i], cnt);
+	newdev->bitFileName[cnt] = 0;	
 
 	newdev->numNonces = buf[1] + 1;
 	newdev->offsNonces = ((buf[2] & 255) | ((buf[3] & 255) << 8)) - 10000;
@@ -341,6 +403,19 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	newdev->freqMaxM = (buf[7] & 255);
 	newdev->freqM = (buf[6] & 255);
 	newdev->freqMDefault = newdev->freqM;
+	newdev->suspendSupported = (buf[0] == 5);
+	newdev->hashesPerClock = buf[0] > 2? (((buf[8] & 255) | ((buf[9] & 255) << 8)) + 1) / 128.0: 1.0;
+	newdev->extraSolutions = buf[0] > 4? buf[10]: 0;
+	
+	applog(LOG_DEBUG, "PID: %d numNonces: %d offsNonces: %d freqM1: %f freqMaxM: %d freqM: %d suspendSupported: %s hashesPerClock: %f extraSolutions: %d",
+	                 buf[0], newdev->numNonces, newdev->offsNonces, newdev->freqM1, newdev->freqMaxM, newdev->freqM, newdev->suspendSupported ? "T": "F", 
+	                 newdev->hashesPerClock, newdev->extraSolutions);
+
+	if (buf[0] < 4) {
+		if (strncmp(newdev->bitFileName, "ztex_ufm1_15b", 13) != 0)
+			newdev->hashesPerClock = 0.5;
+		applog(LOG_WARNING, "HASHES_PER_CLOCK not defined, assuming %0.2f", newdev->hashesPerClock);
+	}
 
 	for (cnt=0; cnt < 255; cnt++) {
 		newdev->errorCount[cnt] = 0;
@@ -348,10 +423,6 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		newdev->errorRate[cnt] = 0;
 		newdev->maxErrorRate[cnt] = 0;
 	}
-
-	cnt = strlen((char *)&buf[buf[0] == 4? 10: 8]);
-	newdev->bitFileName = malloc(sizeof(char) * (cnt + 1));
-	memcpy(newdev->bitFileName, &buf[buf[0] == 4? 10: 8], cnt + 1);
 
 	newdev->usbbus = libusb_get_bus_number(dev);
 	newdev->usbaddress = libusb_get_device_address(dev);
@@ -437,29 +508,43 @@ int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)
 	return cnt;
 }
 
-int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data nonces[])
-{
-	// length of buf must be 8 * (numNonces + 1)
-	unsigned char rbuf[12 * 8];
-	int cnt, i;
+int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data nonces[]) {
+	int bufsize = 12 + ztex->extraSolutions * 4;
+	unsigned char *rbuf;
+	int cnt, i, j;
 
 	if (ztex->hndl == NULL)
 		return 0;
 	
-	cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x81, 0, 0, rbuf, 12 * ztex->numNonces, 1000);
+	rbuf = malloc(sizeof(unsigned char) * (ztex->numNonces * bufsize));
+	if (rbuf == NULL) {
+		applog(LOG_ERR, "%s: Failed to allocate memory for reading nonces", ztex->repr);
+		return 0;
+	}
+	cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x81, 0, 0, rbuf, bufsize * ztex->numNonces, 1000);
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "%s: Failed readHashData with err %d", ztex->repr, cnt);
+		free(rbuf);
 		return cnt;
 	}
 
-	for (i = 0; i < ztex->numNonces; i++) {
-		memcpy((char*)&nonces[i].goldenNonce, &rbuf[i * 12], 4);
-		nonces[i].goldenNonce -= ztex->offsNonces;
-		memcpy((char*)&nonces[i].nonce, &rbuf[(i * 12) + 4], 4);
+	for (i=0; i<ztex->numNonces; i++) {
+		memcpy((char*)&nonces[i].goldenNonce[0], &rbuf[i*bufsize], 4);
+		nonces[i].goldenNonce[0] -= ztex->offsNonces;
+		//applog(LOG_DEBUG, "W %d:0 %0.8x", i, nonces[i].goldenNonce[0]);
+		
+		memcpy((char*)&nonces[i].nonce, &rbuf[(i*bufsize)+4], 4);
 		nonces[i].nonce -= ztex->offsNonces;
-		memcpy((char*)&nonces[i].hash7, &rbuf[(i * 12) + 8], 4);
+		memcpy((char*)&nonces[i].hash7, &rbuf[(i*bufsize)+8], 4);
+
+		for (j=0; j<ztex->extraSolutions; j++) {
+			memcpy((char*)&nonces[i].goldenNonce[j+1], &rbuf[(i*bufsize)+12+(j*4)], 4);
+			nonces[i].goldenNonce[j+1] -= ztex->offsNonces;
+			//applog(LOG_DEBUG, "W %d:%d %0.8x", i, j+1, nonces[i].goldenNonce[j+1]);
+		}
 	}
-	
+
+	free(rbuf);
 	return cnt;
 }
 

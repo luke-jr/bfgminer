@@ -87,13 +87,16 @@ static bool ztex_updateFreq(struct libztex_device* ztex)
 		}
 	}
 
-	if (bestM != ztex->freqM) 
+	if (bestM != ztex->freqM) {
+		libztex_selectFpga(ztex, 0);
 		libztex_setFreq(ztex, bestM);
+	}
 
 	maxM = ztex->freqMDefault;
 	while (maxM < ztex->freqMaxM && ztex->errorWeight[maxM + 1] > 100)
 		maxM++;
 	if ((bestM < (1.0 - LIBZTEX_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
+		libztex_selectFpga(ztex, 0);
 		libztex_resetFpga(ztex);
 		applog(LOG_ERR, "%s: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
 		       ztex->repr, (1.0 - 1.0 * bestM / maxM) * 100);
@@ -147,10 +150,11 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 {
 	struct libztex_device *ztex;
 	unsigned char sendbuf[44];
-	int i, j;
-	uint32_t backlog[GOLDEN_BACKLOG];
-	int backlog_p = 0;
-	uint32_t lastnonce[GOLDEN_BACKLOG], nonce, noncecnt = 0;
+	int i, j, k;
+	uint32_t *backlog;
+	int backlog_p = 0, backlog_max;
+	uint32_t *lastnonce;
+	uint32_t nonce, noncecnt = 0;
 	bool overflow, found, rv;
 	struct libztex_hash_data hdata[GOLDEN_BACKLOG];
 
@@ -158,7 +162,8 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	memcpy(sendbuf, work->data + 64, 12);
 	memcpy(sendbuf + 12, work->midstate, 32);
-	memset(backlog, 0, sizeof(backlog));
+	
+	libztex_selectFpga(ztex, 0);
 	i = libztex_sendHashData(ztex, sendbuf);
 	if (i < 0) {
 		// Something wrong happened in send
@@ -173,19 +178,33 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		}
 	}
 	
-	applog(LOG_DEBUG, "sent hashdata");
+	applog(LOG_DEBUG, "%s: sent hashdata", ztex->repr);
 
-	for (i = 0; i < ztex->numNonces; i++)
-		lastnonce[i] = 0;
-
+	lastnonce = malloc(sizeof(uint32_t)*ztex->numNonces);
+	if (lastnonce == NULL) {
+		applog(LOG_ERR, "%s: failed to allocate lastnonce[%d]", ztex->repr, ztex->numNonces);
+		return 0;
+	}
+	memset(lastnonce, 0, sizeof(uint32_t)*ztex->numNonces);
+	
+	backlog_max = ztex->numNonces * (1 + ztex->extraSolutions);
+	backlog = malloc(sizeof(uint32_t) * backlog_max);
+	if (backlog == NULL) {
+		applog(LOG_ERR, "%s: failed to allocate backlog[%d]", ztex->repr, backlog_max);
+		return 0;
+	}
+	memset(backlog, 0, sizeof(uint32_t) * backlog_max);
+	
 	overflow = false;
 
+	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
 	while (!(overflow || work_restart[thr->id].restart)) {
 		usleep(250000);
 		if (work_restart[thr->id].restart) {
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
 			break;
 		}
+		libztex_selectFpga(ztex, 0);
 		i = libztex_readHashData(ztex, &hdata[0]);
 		if (i < 0) {
 			// Something wrong happened in read
@@ -196,6 +215,8 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				// And there's nothing we can do about it
 				ztex_disable(thr);
 				applog(LOG_ERR, "%s: Failed to read hash data with err %d, giving up", ztex->repr, i);
+				free(lastnonce);
+				free(backlog);
 				return 0;
 			}
 		}
@@ -227,26 +248,28 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				thr->cgpu->hw_errors++;
 				continue;
 			}
-			nonce = hdata[i].goldenNonce;
-			if (nonce > 0) {
-				found = false;
-				for (j = 0; j < GOLDEN_BACKLOG; j++) {
-					if (backlog[j] == nonce) {
-						found = true;
-						break;
+			for (j=0; j<=ztex->extraSolutions; j++) {
+				nonce = hdata[i].goldenNonce[j];
+				if (nonce > 0) {
+					found = false;
+					for (k = 0; k < backlog_max; k++) {
+						if (backlog[k] == nonce) {
+							found = true;
+							break;
+						}
 					}
-				}
-				if (!found) {
-					applog(LOG_DEBUG, "%s: Share found", ztex->repr);
-					backlog[backlog_p++] = nonce;
-					if (backlog_p >= GOLDEN_BACKLOG)
-						backlog_p = 0;
+					if (!found) {
+						applog(LOG_DEBUG, "%s: Share found N%dE%d", ztex->repr, i, j);
+						backlog[backlog_p++] = nonce;
+						if (backlog_p >= backlog_max)
+							backlog_p = 0;
 #if defined(__BIGENDIAN__) || defined(MIPSEB)
-					nonce = swab32(nonce);
+						nonce = swab32(nonce);
 #endif
-					work->blk.nonce = 0xffffffff;
-					rv = submit_nonce(thr, work, nonce);
-					applog(LOG_DEBUG, "%s: submitted %0.8x %d", ztex->repr, nonce, rv);
+						work->blk.nonce = 0xffffffff;
+						rv = submit_nonce(thr, work, nonce);
+						applog(LOG_DEBUG, "%s: submitted %0.8x %d", ztex->repr, nonce, rv);
+					}
 				}
 			}
 
@@ -258,14 +281,21 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM])
 		ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
 
-	if (!ztex_updateFreq(ztex))
+	if (!ztex_updateFreq(ztex)) {
 		// Something really serious happened, so mark this thread as dead!
+		free(lastnonce);
+		free(backlog);
+		
 		return 0;
+	}
 
 	applog(LOG_DEBUG, "%s: exit %1.8X", ztex->repr, noncecnt);
 
 	work->blk.nonce = 0xffffffff;
 
+	free(lastnonce);
+	free(backlog);
+	
 	return noncecnt > 0? noncecnt: 1;
 }
 
