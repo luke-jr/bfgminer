@@ -653,7 +653,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  Request       Reply Section  Details
  -------       -------------  -------
- version       VERSION        BFGMiner=bfgminer version
+ version       VERSION        CGMiner=BFGMiner version
                               API=API version
 
  config        CONFIG         Some miner configuration information:
