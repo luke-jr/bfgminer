@@ -35,6 +35,10 @@ $warnfont = '<font color=red><b>';
 $warnoff = '</b></font>';
 $dfmt = 'H:i:s j-M-Y \U\T\CP';
 #
+# Ensure it is only ever shown once
+global $showndate;
+$showndate = false;
+#
 function htmlhead($checkapi)
 {
  global $error, $readonly, $here;
@@ -368,14 +372,20 @@ function details($cmd, $list, $rig)
 {
  global $tablebegin, $tableend, $dfmt;
  global $poolcmd, $readonly;
+ global $showndate;
 
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
  echo $tablebegin;
 
- echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
+ if ($showndate === false)
+ {
+	echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
 
- echo $tableend.$tablebegin;
+	echo $tableend.$tablebegin;
+
+	$showndate = true;
+ }
 
  if (isset($list['STATUS']))
  {
