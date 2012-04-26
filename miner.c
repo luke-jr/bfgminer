@@ -1979,7 +1979,11 @@ void kill_work(void)
 	quit(0, "Shutdown signal received.");
 }
 
-static char **initial_args;
+static
+#ifdef WIN32
+const
+#endif
+char **initial_args;
 
 static void clean_up(void);
 
