@@ -2931,7 +2931,7 @@ static void set_options(void)
 retry:
 	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
 	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
-		  "[P]ause: %d\n[W]rite config file\n[C]gminer restart\n",
+		  "[P]ause: %d\n[W]rite config file\n[B]FGMiner restart\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
@@ -3024,7 +3024,7 @@ retry:
 		fclose(fcfg);
 		goto retry;
 
-	} else if (!strncasecmp(&input, "c", 1)) {
+	} else if (!strncasecmp(&input, "b", 1)) {
 		wlogprint("Are you sure?\n");
 		input = getch();
 		if (!strncasecmp(&input, "y", 1))
