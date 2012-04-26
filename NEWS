@@ -1,4 +1,21 @@
-Version 2.3.4 - April 25, 2012
+BFGMiner Version 2.3.4 - April 26, 2012
+
+- New maintainership of code with modular FPGA/GPU focus, under BFGMiner name
+- Complete working support for cross-compiling Windows builds on Linux.
+- Fix usage of low --scan-time settings so it doesn't busy-loop
+- JSON API: Add new 'devdetail' command to get fixed device information
+- JSON API: Implement driver abstraction for extra device status
+- Icarus: Use epoll to wait for serial port input properly, when available
+- Icarus: Workaround buggy USB-UART that causes Icarus to stop mining rarely
+- Icarus: Estimate mining hashrate correctly, calibrated from real-world data
+- Icarus: Parallelize work setup with Icarus hash search improving performance
+- Icarus: More reliable detection and runtime
+- OpenCL: Move GPU-specific data fetching from JSON API to OpenCL driver
+- OpenCL: Dynamically load OpenCL library, to be more vendor-independent and
+allow use without actually having OpenCL (i.e. FPGA-only rigs).
+
+
+CGMiner Version 2.3.4 - April 25, 2012
 
 - Extensively document the cause of GPU device issues and the use of --gpu-map.
 - Support for share logging
@@ -48,7 +65,7 @@ username
 - Initial Ztex support 1.15x board.
 
 
-Version 2.3.3 - April 15, 2012
+CGMiner Version 2.3.3 - April 15, 2012
 
 - Don't even display that cpumining is disabled on ./configure to discourage
 people from enabling it.
@@ -72,7 +89,7 @@ reporting it."
 frequency.
 
 
-Version 2.3.2 - March 31, 2012
+CGMiner Version 2.3.2 - March 31, 2012
 
 - Damping small changes in hashrate so dramatically has the tendency to always
 make the hashrate underread so go back to gentle damping instead.
@@ -174,7 +191,7 @@ recursive calling of quit().
 - unified code for generating nonce in kernel and moved addition of base to the
 end -> faster
 
-Version 2.3.1 - February 24, 2012
+CGMiner Version 2.3.1 - February 24, 2012
 
 - Revert input and output code on diakgcn and phatk kernels to old style which
 worked better for older hardware and SDKs.
@@ -186,7 +203,7 @@ worked better for older hardware and SDKs.
 - Add enable/disablepool to miner.php example and reduce font size 1pt
 
 
-Version 2.3.0 - February 23, 2012
+CGMiner Version 2.3.0 - February 23, 2012
 
 - Consider extra longpoll work items as staged_extra so as to make sure we queue
 more work if queueing regular work items as longpolls.
@@ -250,7 +267,7 @@ on setting this variable, potentially leading to multiple LPs being sent out.
 - --api-allow special case 0/0 means all
 
 
-Version 2.2.7 - February 20, 2012
+CGMiner Version 2.2.7 - February 20, 2012
 
 - Send out extra longpolls when we have switched pools and the longpoll thread
 is still bound to the old one. This is particularly useful with p2pool where
@@ -299,7 +316,7 @@ curses leads to instability on windows.
 of it.
 - First release with working diakgcn kernel.
 
-Version 2.2.6 - February 16, 2012
+CGMiner Version 2.2.6 - February 16, 2012
 
 - Provide warning on each startup about sdk 2.6
 - Fix unused warnings on win32.
@@ -338,7 +355,7 @@ manually
 - Unroll all poclbm additions to enable further optimisations.
 
 
-Version 2.2.5 - February 13, 2012
+CGMiner Version 2.2.5 - February 13, 2012
 
 - Make output buffer write only as per Diapolo's suggestion.
 - Constify nonce in poclbm.
@@ -363,7 +380,7 @@ adl.c.
 - Move CPU chipset specific optimization into device-cpu
 
 
-Version 2.2.4 - February 11, 2012
+CGMiner Version 2.2.4 - February 11, 2012
 
 - Fix double definition of A0 B0 to zeroA zeroB.
 - Retain cl program after successfully loading a binary image. May decrease
@@ -429,14 +446,14 @@ speed.
 LOG_DEBUG level and place the check in applog().
 
 
-Version 2.2.3 - February 6, 2012
+CGMiner Version 2.2.3 - February 6, 2012
 
 - Revert "Rewrite the convoluted get_work() function to be much simpler and roll
 work as much as possible with each new work item." This seems to cause a race on
 work in free_work(). Presumably other threads are still accessing the structure.
 
 
-Version 2.2.2 - February 6, 2012
+CGMiner Version 2.2.2 - February 6, 2012
 
 - Provide support for the submitold extension on a per-pool basis based on the
 value being detected in a longpoll.
@@ -493,7 +510,7 @@ cards.
 - Update example web miner.php to use new API commands
 
 
-Version 2.2.1 - January 30, 2012
+CGMiner Version 2.2.1 - January 30, 2012
 
 NOTE - The GPU Device reordering in 2.2.0 by default was considered a bad idea
 so the original GPU ordering is used by default again unless reordering is
@@ -531,7 +548,7 @@ version information easier.
 - Explicitly check for nvidia in opencl platform strings as well.
 
 
-Version 2.2.0 - January 29, 2012
+CGMiner Version 2.2.0 - January 29, 2012
 
 NOTE: GPU Device order will change with this release with ATI GPUs as cgminer
 now can enumerate them according to their Bus ID which means the values should
@@ -602,7 +619,7 @@ guido.ascioti@gmail.com
 - Refactor to abstract device-specific code
 
 
-Version 2.1.2 - January 6, 2012
+CGMiner Version 2.1.2 - January 6, 2012
 
 - If api-description is specified, save it when writing the config file
 - Adjust utility width to be constant maximum as well.
@@ -612,7 +629,7 @@ the primary pool is lagging.
 - Use an alternative pool should the donation getwork fail.
 
 
-Version 2.1.1 - January 1, 2012
+CGMiner Version 2.1.1 - January 1, 2012
 
 - Include API examples in distribution tarball.
 - Don't attempt to pthread_join when cancelling threads as they're already
@@ -629,7 +646,7 @@ working.
 - Adjust column width of A/R/HW to be the maximum of any device and align them.
 
 
-Version 2.1.0 - December 27, 2011
+CGMiner Version 2.1.0 - December 27, 2011
 
 - Major infrastructure upgrade with RPC interface for controlling via sockets
 encoded with/without JSON courtesy of Andrew Smith. Added documentation for
@@ -652,7 +669,7 @@ performance level of that being adjusted.
 - Align most device columns in the curses display.
 
 
-Version 2.0.8 - November 11, 2011
+CGMiner Version 2.0.8 - November 11, 2011
 
 - Make longpoll do a mandatory flushing of all work even if the block hasn't
 changed, thus supporting longpoll initiated work change of any sort and merged
@@ -670,7 +687,7 @@ VIA failing.
 - Build fix for dlopen/dlclose errors in glibc.
 
 
-Version 2.0.7 - October 17, 2011
+CGMiner Version 2.0.7 - October 17, 2011
 
 - Support work without midstate or hash1, which are deprecated in bitcoind 0.5+
 - Go to kernel build should we fail to clCreateProgramWithBinary instead of
@@ -682,7 +699,7 @@ the config file from the menu and will load it on startup.
 overwrite if given a filename from the menu that exists.
 
 
-Version 2.0.6 - October 9, 2011
+CGMiner Version 2.0.6 - October 9, 2011
 
 - Must initialise the donorpool mutex or it fails on windows.
 - Don't make donation work interfere with block change detection allowing
@@ -701,7 +718,7 @@ shares when solo mining at all unless they're considered to be a block solve.
 is hard hung and do not attempt to restart it.
 
 
-Version 2.0.5 - September 27, 2011
+CGMiner Version 2.0.5 - September 27, 2011
 
 - Intensity can now be set to dynamic or static values per-device.
 - New donation feature --donation sends a proportion of shares to author's
@@ -716,7 +733,7 @@ account of choice, but is disabled by default!
 - Don't mess with GPUs if we don't have them.
 
 
-Version 2.0.4 - September 23, 2011
+CGMiner Version 2.0.4 - September 23, 2011
 
 - Confused Longpoll messages should be finally fixed with cgminer knowing for
 sure who found the new block and possibly avoiding a rare crash.
@@ -731,7 +748,7 @@ direction to minimise overshoot.
 - GPU menu is refreshed instead of returning to status after a GPU change.
 
 
-Version 2.0.3 - September 17, 2011
+CGMiner Version 2.0.3 - September 17, 2011
 
 - Various modes of failure to set fanspeeds and adl values have been addressed
 and auto-fan should work now on most hardware, and possibly other values
@@ -744,7 +761,7 @@ whatever it was when cgminer was started.
 periods where menu input is being awaited on.
 
 
-Version 2.0.2 - September 11, 2011
+CGMiner Version 2.0.2 - September 11, 2011
 
 - Exit cleanly if we abort before various threads are set up or if they no
 longer exist.
@@ -770,7 +787,7 @@ RPM.
 and not when opencl is not found.
 
 
-Version 2.0.1 - September 9, 2011
+CGMiner Version 2.0.1 - September 9, 2011
 
 - Fix building on 32bit glibc with dlopen with -lpthread and -ldl
 - ByteReverse is not used and the bswap opcode breaks big endian builds. Remove
@@ -806,7 +823,7 @@ efficiency measures per device.
 line printing.
 
 
-Version 2.0.0 - September 6, 2011
+CGMiner Version 2.0.0 - September 6, 2011
 
 Major feature upgrade - GPU monitoring, (over)clocking and fan control for ATI
 GPUs.
@@ -903,7 +920,7 @@ false positives for pool dead.
 is found in the response.
 
 
-Version 1.6.2 - September 2, 2011
+CGMiner Version 1.6.2 - September 2, 2011
 
 - Add --failover-only option to not leak work to backup pools when the primary
 pool is lagging.
@@ -936,7 +953,7 @@ that.
 unrelated now.
 
 
-Version 1.6.1 - August 29, 2011
+CGMiner Version 1.6.1 - August 29, 2011
 
 - Copy cgminer path, not cat it.
 - Switching between redrawing windows does not fix the crash with old
@@ -975,7 +992,7 @@ shares.
 async, and the sync submission is not truly sync anyway, so just submit it sync.
 
 
-Version 1.6.0 - August 26, 2011
+CGMiner Version 1.6.0 - August 26, 2011
 
 - Make restarting of GPUs optional for systems that hang on any attempt to
 restart them.     Fix DEAD status by comparing it to last live time rather than
@@ -1011,7 +1028,7 @@ it isn't saying N.
 - Disable curl debugging with opt protocol since it spews to stderr.
 
 
-Version 1.5.8 - August 23, 2011
+CGMiner Version 1.5.8 - August 23, 2011
 
 - Minimise how much more work can be given in cpu mining threads each interval.
 - Make the fail-pause progressively longer each time it fails until the network
@@ -1025,7 +1042,7 @@ reset the sick restart attempt time.
 slowdown.
 
 
-Version 1.5.7 - August 22, 2011
+CGMiner Version 1.5.7 - August 22, 2011
 
 - Fix a crash with --algo auto
 - Test at appropriate target difficulty now.
@@ -1059,7 +1076,7 @@ belongs to the pool hdr path.
 to compile.
 
 
-Version 1.5.6 - August 17, 2011
+CGMiner Version 1.5.6 - August 17, 2011
 
 - New phatk and poclbm kernels. Updated phatk to be in sync with latest 2.2
 courtesy of phateus. Custom modified to work best with cgminer.
@@ -1068,7 +1085,7 @@ courtesy of phateus. Custom modified to work best with cgminer.
 pool and display whether we're connected to LP or not in the status line.
 
 
-Version 1.5.5 - August 16, 2011
+CGMiner Version 1.5.5 - August 16, 2011
 
 - Rework entirely the GPU restart code. Strike a balance between code that
 re-initialises the GPU entirely so that soft hangs in the code are properly
@@ -1092,7 +1109,7 @@ network connectivity to 1 minute.
 - Add a linux-usb-cgminer guide courtesy of Kano.
 
 
-Version 1.5.4 - August 14, 2011
+CGMiner Version 1.5.4 - August 14, 2011
 
 - Add new option: --monitor <cmd> Option lets user specify a command <cmd> that
 will get forked by cgminer on startup. cgminer's stderr output subsequently gets
@@ -1132,7 +1149,7 @@ mode or lagging to avoid aggressive rolling imitating load balancing.
 work.
 
 
-Version 1.5.3 - July 30, 2011
+CGMiner Version 1.5.3 - July 30, 2011
 
 - Significant work went into attempting to make the thread restart code robust
 to identify sick threads, tag them SICK after 1 minute, then DEAD after 5
@@ -1151,7 +1168,7 @@ any more.
 queued faster than it is being retrieved.
 
 
-Version 1.5.2 - July 28, 2011
+CGMiner Version 1.5.2 - July 28, 2011
 
 - Restarting a hung GPU can hang the rest of the GPUs so just declare it dead
 and provide the information in the status.
@@ -1173,7 +1190,7 @@ when verbose mode is on.
 characters, with just the time.
 
 
-Version 1.5.1 - July 27, 2011
+CGMiner Version 1.5.1 - July 27, 2011
 
 - Two redraws in a row cause a crash in old libncurses so just do one redraw
 using the main window.
@@ -1209,7 +1226,7 @@ even if we didn't initially.
 - Add debugging output to all tq_pop calls.
 
 
-Version 1.5.0 - July 26, 2011
+CGMiner Version 1.5.0 - July 26, 2011
 
 - Increase efficiency of slow mining threads such as CPU miners dramatically. Do
 this by detecting which threads cannot complete searching a work item within the
@@ -1239,7 +1256,7 @@ even if one GPU hangs.
 - Only use the sockoptfunction if the version of curl is recent enough.
 
 
-Version 1.4.1 - July 24, 2011
+CGMiner Version 1.4.1 - July 24, 2011
 
 - Do away with GET for dealing with longpoll forever. POST is the one that works
 everywhere, not the other way around.
@@ -1256,7 +1273,7 @@ Fix.
 - Some hardware might benefit from the less OPS so there's no harm in leaving
 kernel changes that do that apart from readability of the code.
 
-Version 1.4.0 - July 23, 2011
+CGMiner Version 1.4.0 - July 23, 2011
 
 - Feature upgrade: Add keyboard input during runtime to allow modification of
 and viewing of numerous settings such as adding/removing pools, changing
@@ -1336,7 +1353,7 @@ machine capabilities.
 - Win32: Fix for mangled output on the terminal on exit.
 
 
-Version 1.3.1 - July 20, 2011
+CGMiner Version 1.3.1 - July 20, 2011
 
 - Feature upgrade; Multiple strategies for failover. Choose from default which
 now falls back to a priority order from 1st to last, round robin which only
@@ -1361,7 +1378,7 @@ them with the comms error bool doesn't stop a flood of them appearing.
 - Reset the queued count to allow more work to be queued for the new pool on
 pool switch.
 
-Version 1.3.0 - July 19, 2011
+CGMiner Version 1.3.0 - July 19, 2011
 
 - Massive infrastructure update to support pool failover.
 - Accept multiple parameters for url, user and pass and set up structures of
@@ -1381,7 +1398,7 @@ infinite rejects.
 servers do this regularly.
 
 
-Version 1.2.8 - July 18, 2011
+CGMiner Version 1.2.8 - July 18, 2011
 
 - More OSX build fixes.
 - Add an sse4 algorithm to CPU mining.
@@ -1399,7 +1416,7 @@ output buffers.
 get so change to httpget.
 
 
-Version 1.2.7 - July 16, 2011
+CGMiner Version 1.2.7 - July 16, 2011
 
 - Show last 8 characters of share submitted in log.
 - Display URL connected to and user logged in as in status.
@@ -1433,7 +1450,7 @@ work is being queued versus staged. This can decrease reject rates.
 new block to not generate local work.
 
 
-Version 1.2.6 - July 15, 2011
+CGMiner Version 1.2.6 - July 15, 2011
 
 - Put a current system status line beneath the total work status line
 - Fix a counting error that would prevent cgminer from correctly detecting
@@ -1444,7 +1461,7 @@ otherwise could get arbitrarily long during a network outage.
 - Only count getworks that are real queue requests.
 
 
-Version 1.2.5 - July 15, 2011
+CGMiner Version 1.2.5 - July 15, 2011
 
 - Conflicting -n options corrected
 - Setting an intensity with -I disables dynamic intensity setting
@@ -1461,7 +1478,7 @@ connect in case url/login parameters were wrong
 - Print an executive summary when cgminer is terminated
 - Make sure to refresh the status window
 
-Versions -> 1.2.4
+CGMiner Versions -> 1.2.4
 
 - Con Kolivas - July 2011. New maintainership of code under cgminer name.
 - Massive rewrite to incorporate GPU mining.
@@ -1487,7 +1504,7 @@ Versions -> 1.2.4
 - Local generation of work (xroll ntime) when detecting poor network
 connectivity.
 
-Version 1.0.2
+cpuminer Version 1.0.2
 
 - Linux x86_64 optimisations - Con Kolivas
 - Optimise for x86_64 by default by using sse2_64 algo
@@ -1496,11 +1513,11 @@ Version 1.0.2
 - Sets scheduling policy to lowest possible
 - Minor performance tweaks
 
-Version 1.0.1 - May 14, 2011
+cpuminer Version 1.0.1 - May 14, 2011
 
 - OSX support
 
-Version 1.0 - May 9, 2011
+cpuminer Version 1.0 - May 9, 2011
 
 - jansson 2.0 compatibility
 - correct off-by-one in date (month) display output
@@ -1508,7 +1525,7 @@ Version 1.0 - May 9, 2011
 - improve yasm configure bits
 - support full URL, in X-Long-Polling header
 
-Version 0.8.1 - March 22, 2011
+cpuminer Version 0.8.1 - March 22, 2011
 
 - Make --user, --pass actually work
 
@@ -1517,7 +1534,7 @@ Version 0.8.1 - March 22, 2011
 
 - Fix minor bug in example JSON config file
 
-Version 0.8 - March 21, 2011
+cpuminer Version 0.8 - March 21, 2011
 
 - Support long polling: http://deepbit.net/longpolling.php
 
@@ -1529,7 +1546,7 @@ Version 0.8 - March 21, 2011
 - Suport --user/--pass options (and "user" and "pass" in config file),
   as an alternative to the current --userpass
 
-Version 0.7.2 - March 14, 2011
+cpuminer Version 0.7.2 - March 14, 2011
 
 - Add port of ufasoft's sse2 assembly implementation (Linux only)
   This is a substantial speed improvement on Intel CPUs.
@@ -1538,7 +1555,7 @@ Version 0.7.2 - March 14, 2011
   number of HTTP connections from one-per-thread to one, reducing resource
   usage on upstream bitcoind / pool server.
 
-Version 0.7.1 - March 2, 2011
+cpuminer Version 0.7.1 - March 2, 2011
 
 - Add support for JSON-format configuration file.  See example
   file example-cfg.json.  Any long argument on the command line
@@ -1550,13 +1567,13 @@ Version 0.7.1 - March 2, 2011
 - Build on Intel compiler
 - HTTP library now follows HTTP redirects
 
-Version 0.7 - February 12, 2011
+cpuminer Version 0.7 - February 12, 2011
 
 - Re-use CURL object, thereby reuseing DNS cache and HTTP connections
 - Use bswap_32, if compiler intrinsic is not available
 - Disable full target validation (as opposed to simply H==0) for now
 
-Version 0.6.1 - February 4, 2011
+cpuminer Version 0.6.1 - February 4, 2011
 
 - Fully validate "hash < target", rather than simply stopping our scan
   if the high 32 bits are 00000000.
@@ -1566,68 +1583,68 @@ Version 0.6.1 - February 4, 2011
   scan takes longer than 5 seconds (--scantime), the miner will slowly
   reduce the number of hashes you work on, before fetching a new work unit.
 
-Version 0.6 - January 29, 2011
+cpuminer Version 0.6 - January 29, 2011
 
 - Fetch new work unit, if scanhash takes longer than 5 seconds (--scantime)
 - BeeCee1's sha256 4way optimizations
 - lfm's byte swap optimization (improves via, cryptopp)
 - Fix non-working short options -q, -r
 
-Version 0.5 - December 28, 2010
+cpuminer Version 0.5 - December 28, 2010
 
 - Exit program, when all threads have exited
 - Improve JSON-RPC failure diagnostics and resilience
 - Add --quiet option, to disable hashmeter output.
 
-Version 0.3.3 - December 27, 2010
+cpuminer Version 0.3.3 - December 27, 2010
 
 - Critical fix for sha256_cryptopp 'cryptopp_asm' algo
 
-Version 0.3.2 - December 23, 2010
+cpuminer Version 0.3.2 - December 23, 2010
 
 - Critical fix for sha256_via
 
-Version 0.3.1 - December 19, 2010
+cpuminer Version 0.3.1 - December 19, 2010
 
 - Critical fix for sha256_via
 - Retry JSON-RPC failures (see --retry, under "minerd --help" output)
 
-Version 0.3 - December 18, 2010
+cpuminer Version 0.3 - December 18, 2010
 
 - Add crypto++ 32bit assembly implementation
 - show version upon 'minerd --help'
 - work around gcc 4.5.x bug that killed 4way performance
 
-Version 0.2.2 - December 6, 2010
+cpuminer Version 0.2.2 - December 6, 2010
 
 - VIA padlock implementation works now
 - Minor build and runtime fixes
 
-Version 0.2.1 - November 29, 2010
+cpuminer Version 0.2.1 - November 29, 2010
 
 - avoid buffer overflow when submitting solutions
 - add Crypto++ sha256 implementation (C only, ASM elided for now)
 - minor internal optimizations and cleanups
 
-Version 0.2 - November 27, 2010
+cpuminer Version 0.2 - November 27, 2010
 
 - Add script for building a Windows installer
 - improve hash performance (hashmeter) statistics
 - add tcatm 4way sha256 implementation
 - Add experimental VIA Padlock sha256 implementation
 
-Version 0.1.2 - November 26, 2010
+cpuminer Version 0.1.2 - November 26, 2010
 
 - many small cleanups and micro-optimizations
 - build win32 exe using mingw
 - RPC URL, username/password become command line arguments
 - remove unused OpenSSL dependency
 
-Version 0.1.1 - November 24, 2010
+cpuminer Version 0.1.1 - November 24, 2010
 
 - Do not build sha256_generic module separately from cpuminer.
 
-Version 0.1 - November 24, 2010
+cpuminer Version 0.1 - November 24, 2010
 
 - Initial release.
 
