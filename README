@@ -55,6 +55,7 @@ CGMiner specific configuration options:
 	--disable-adl           Override detection and disable building with adl
 	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
 	--enable-icarus         Compile support for Icarus Board(default disabled)
+	--enable-ztex           Compile support for Ztex Board(default disabled)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
@@ -193,7 +194,7 @@ GPU only options:
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 
 
-FPGA mining boards(BitForce, Icarus) only options:
+FPGA mining boards(BitForce, Icarus, Ztex) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
@@ -612,7 +613,7 @@ An example request in both formats to set GPU 0 fan to 80%:
 The format of each reply (unless stated otherwise) is a STATUS section
 followed by an optional detail section
 
-From API verion 1.7 onwards, reply strings in JSON and Text have the
+From API version 1.7 onwards, reply strings in JSON and Text have the
 necessary escaping as required to avoid ambiguity - they didn't before 1.7
 For JSON the 2 characters '"' and '\' are escaped with a '\' before them
 For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
@@ -647,7 +648,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.7:
+For API version 1.8:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
@@ -772,6 +773,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               reply before cgminer quits
 
  notify        NOTIFY         The last status and history count of each devices problem
+                              This lists all devices including those not supported
+                              by the 'devs' command
                               e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
 
  privileged (*)
@@ -790,6 +793,11 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating the results of the disable request
                               This is only available if PGA mining is enabled
+
+ devdetails    DEVDETAILS     Each device with a list of their static details
+                              This lists all devices including those not supported
+                              by the 'devs' command
+                              e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
@@ -1052,7 +1060,7 @@ working in the logs?
 A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
-A: At the moment, cgminer supports 2 FPGA's: Icarus and BitForce.
+A: At the moment, cgminer supports 3 FPGA's: Icarus, Ztex and BitForce.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
