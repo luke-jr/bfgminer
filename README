@@ -673,13 +673,16 @@ The list of requests - a (*) means it requires privileged access - and replies a
  pools         POOLS          The status of each pool
                               e.g. Pool=0,URL=http://pool.com:6311,Status=Alive,...|
 
- devs          DEVS           Each available GPU, PGA and CPU with their details
+ devs          DEVS           Each available GPU, PGA and CPU with their status
                               e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
                               Last Share Time=NNN, <- standand long time in seconds
                                (or 0 if none) of last accepted share
                               Last Share Pool=N, <- pool number (or -1 if none)
                               Will not report PGAs if PGA mining is disabled
                               Will not report CPUs if CPU mining is disabled
+
+ devdetail     DEVS           Each available device with their fixed details
+                              e.g. GPU=0,Driver=opencl,Kernel=diablo,Model=...|
 
  gpu|N         GPU            The details of a single GPU number N in the same
                               format and details as for DEVS

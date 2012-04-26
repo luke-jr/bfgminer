@@ -881,6 +881,7 @@ static void pgastatus(int pga, bool isjson)
 	devstatus_an(io_buffer, devices[dev], isjson);
 }
 
+__maybe_unused
 static void cpustatus(int cpu, bool isjson)
 {
 	if (opt_n_threads <= 0 || cpu < 0 || cpu >= num_processors)
