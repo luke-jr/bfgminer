@@ -800,8 +800,12 @@ append_kv(char *buf, json_t*info, bool isjson)
 	json_t *value;
 	const char *key, *tmpl = isjson ? ",\"%s\":%s" : ",%s=%s";
 	char *vdump;
+	void *it;
 
-	json_object_foreach(info, key, value) {
+	for (it = json_object_iter(info); it; it = json_object_iter_next(info, it)) {
+		key = json_object_iter_key(it);
+		value = json_object_iter_value(it);
+
 		if (isjson || !json_is_string(value))
 			vdump = json_dumps(value, JSON_COMPACT | JSON_ENCODE_ANY);
 		else
