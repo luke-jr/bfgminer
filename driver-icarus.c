@@ -73,7 +73,7 @@ static void rev(unsigned char *s, size_t l)
 	}
 }
 
-static int icarus_open(const char *devpath)
+static int icarus_open2(const char *devpath, __maybe_unused bool purge)
 {
 #ifndef WIN32
 	struct termios my_termios;
@@ -127,9 +127,18 @@ static int icarus_open(const char *devpath)
 	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
 	SetCommTimeouts(hSerial, &cto);
 
+	if (purge) {
+		PurgeComm(hSerial, PURGE_RXABORT);
+		PurgeComm(hSerial, PURGE_TXABORT);
+		PurgeComm(hSerial, PURGE_RXCLEAR);
+		PurgeComm(hSerial, PURGE_TXCLEAR);
+	}
+
 	return _open_osfhandle((LONG)hSerial, 0);
 #endif
 }
+
+#define icarus_open(devpath)  icarus_open2(devpath, false)
 
 static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsigned long *wr, int read_count)
 {
@@ -221,7 +230,7 @@ static bool icarus_detect_one(const char *devpath)
 	if (total_devices == MAX_DEVICES)
 		return false;
 
-	fd = icarus_open(devpath);
+	fd = icarus_open2(devpath, true);
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Icarus Detect: Failed to open %s", devpath);
 		return false;
@@ -297,7 +306,7 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	struct timeval now;
 
-	int fd = icarus_open(icarus->device_path);
+	int fd = icarus_open2(icarus->device_path, true);
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "Failed to open Icarus on %s",
 		       icarus->device_path);
