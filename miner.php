@@ -1,7 +1,7 @@
 <?php
 session_start();
 #
-global $miner, $port, $readonly, $notify, $rigs;
+global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
 #
 # Don't touch these 2 - see $rigs below
 $miner = null;
@@ -25,6 +25,15 @@ $notify = true;
 # e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028');
 $rigs = array('127.0.0.1:4028');
 #
+# This should be OK for most cases
+# If you really do have a slow netowrk connection from php to cgminer
+# then 2 may not be enough
+# However, the longer it is the longer you have to wait while php
+# hangs if the target cgminer isn't runnning or listening
+# Feel free to increase it if your network is very slow
+# Also, on some windows PHP, apparently the $usec is ignored
+$socktimeoutsec = 2;
+#
 $here = $_SERVER['PHP_SELF'];
 #
 global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
@@ -38,6 +47,10 @@ $dfmt = 'H:i:s j-M-Y \U\T\CP';
 # Ensure it is only ever shown once
 global $showndate;
 $showndate = false;
+#
+# For summary page to stop retrying failed rigs
+global $rigerror;
+$rigerror = array();
 #
 function htmlhead($checkapi)
 {
@@ -85,7 +98,7 @@ $error = null;
 #
 function getsock($addr, $port)
 {
- global $error;
+ global $error, $socktimeoutsec;
 
  $socket = null;
  $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
@@ -96,6 +109,11 @@ function getsock($addr, $port)
 	$error = "ERR: $msg '$error'\n";
 	return null;
  }
+
+ // Ignore if this fails since the socket connect may work anyway
+ //  and nothing is gained by aborting if the option cannot be set
+ //  since we don't know in advance if it can connect
+ socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, array('sec' => $socktimeoutsec, 'usec' => 0));
 
  $res = socket_connect($socket, $addr, $port);
  if ($res === false)
@@ -569,13 +587,18 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
  global $miner, $port;
  global $error, $readonly, $notify, $rigs;
  global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
+ global $rigerror;
 
  $header = $head;
  $anss = array();
 
  $count = 0;
+ $preverr = count($rigerror);
  foreach ($rigs as $rig)
  {
+	if (isset($rigerror[$rig]))
+		continue;
+
 	$parts = explode(':', $rig, 2);
 	if (count($parts) == 2)
 	{
@@ -588,6 +611,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 		{
 			echo "<tr><td colspan=100>Error on rig $count getting $des: ";
 			echo $warnfont.$error.$warnoff.'</td></tr>';
+			$rigerror[$rig] = $error;
 			$error = null;
 		}
 		else
@@ -598,7 +622,10 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  if (count($anss) == 0)
  {
-	echo "<tr><td>Failed to access any rigs successfully</td></tr>";
+	echo '<tr><td>Failed to access any rigs successfully';
+	if ($preverr > 0)
+		echo ' (or rigs had previous errors)';
+	echo '</td></tr>';
 	return;
  }
 
