@@ -203,6 +203,8 @@ function getparam($name, $both = false)
 #
 function fmt($section, $name, $value)
 {
+ $dfmt = 'H:i:s j-M-Y \U\T\CP';
+
  $errorclass = ' class=err';
  $warnclass = ' class=warn';
  $b = '&nbsp;';
@@ -325,6 +327,9 @@ function fmt($section, $name, $value)
 	if ($value != 'Y')
 		$class = $warnclass;
 	break;
+ case 'STATUS.When':
+	$ret = date($dfmt, $value);
+	break;
  }
 
  if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
@@ -346,7 +351,7 @@ function showhead($cmd, $item, $values)
 
  foreach ($values as $name => $value)
  {
-	if ($name == '0')
+	if ($name == '0' or $name == '')
 		$name = '&nbsp;';
 	echo "<td valign=bottom class=h>$name</td>";
  }
@@ -550,7 +555,7 @@ function process($cmds, $rig)
 }
 #
 # $head is a hack but this is just a demo anyway :)
-function doforeach($cmd, $des, $sum, $head)
+function doforeach($cmd, $des, $sum, $head, $datetime)
 {
  global $miner, $port;
  global $error, $readonly, $notify, $rigs;
@@ -586,6 +591,45 @@ function doforeach($cmd, $des, $sum, $head)
  {
 	echo "<tr><td>Failed to access any rigs successfully</td></tr>";
 	return;
+ }
+
+ if ($datetime)
+ {
+	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1);
+	showhead('', null, $dthead);
+
+	foreach ($anss as $rig => $ans)
+	{
+		echo '<tr>';
+
+		foreach ($ans as $item => $row)
+		{
+			if ($item != 'STATUS')
+				continue;
+
+			foreach ($dthead as $name => $x)
+			{
+				if ($name == '')
+					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"?rig=$rig\",null)'></td>";
+				else
+				{
+					if (isset($row[$name]))
+						list($showvalue, $class) = fmt('STATUS', $name, $row[$name]);
+					else
+					{
+						$class = '';
+						$showvalue = '&nbsp;';
+					}
+					echo "<td$class align=right>$showvalue</td>";
+				}
+			}
+		}
+
+		echo '</tr>';
+	}
+	echo $tableend;
+	echo '<tr><td><br><br></td></tr>';
+	echo $tablebegin;
  }
 
  $total = array();
@@ -795,15 +839,15 @@ function display()
 
  echo $tablebegin;
  $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH');
- doforeach('summary', 'summary information', $sum, array());
+ doforeach('summary', 'summary information', $sum, array(), true);
  echo $tableend;
  echo '<tr><td><br><br></td></tr>';
  echo $tablebegin;
- doforeach('devs', 'device list', $sum, array(''=>'','ID'=>'','Name'=>''));
+ doforeach('devs', 'device list', $sum, array(''=>'','ID'=>'','Name'=>''), false);
  echo $tableend;
  echo '<tr><td><br><br></td></tr>';
  echo $tablebegin;
- doforeach('pools', 'pool list', $sum, array(''=>''));
+ doforeach('pools', 'pool list', $sum, array(''=>''), false);
  echo $tableend;
 }
 #
