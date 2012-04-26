@@ -297,6 +297,15 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	struct timeval now;
 
+	int fd = icarus_open(icarus->device_path);
+	if (unlikely(-1 == fd)) {
+		applog(LOG_ERR, "Failed to open Icarus on %s",
+		       icarus->device_path);
+		return false;
+	}
+
+	icarus->device_fd = fd;
+
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(icarus->init, &now);
@@ -332,13 +341,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	rev(ob_bin, 32);
 	rev(ob_bin + 52, 12);
 
-	// Open serial port and wait for the previous run's result
-	fd = icarus_open(icarus->device_path);
-	if (unlikely(-1 == fd)) {
-		applog(LOG_ERR, "Failed to open Icarus on %s",
-		       icarus->device_path);
-		return 0;
-	}
+	// Wait for the previous run's result
+	fd = icarus->device_fd;
 
 	if (!state->firstrun) {
 		if (state->changework)
@@ -380,7 +384,18 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		free(ob_hex);
 	}
 
-	icarus_close(fd);
+	// Reopen the serial port to workaround a USB-host-chipset-specific issue with the Icarus's buggy USB-UART
+	fd = icarus_open(icarus->device_path);
+	if (unlikely(-1 == fd)) {
+		applog(LOG_ERR, "Failed to reopen Icarus on %s",
+		       icarus->device_path);
+		fd = icarus->device_fd;
+	}
+	else
+	{
+		icarus_close(icarus->device_fd);
+		icarus->device_fd = fd;
+	}
 
 	work->blk.nonce = 0xffffffff;
 
@@ -449,6 +464,8 @@ static void icarus_shutdown(struct thr_info *thr)
 
 		if (icarus->device_path)
 			free(icarus->device_path);
+
+		icarus_close(icarus->device_fd);
 
 		devices[icarus->device_id] = NULL;
 		free(icarus);
