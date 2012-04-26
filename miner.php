@@ -27,12 +27,13 @@ $rigs = array('127.0.0.1:4028');
 #
 $here = $_SERVER['PHP_SELF'];
 #
-global $tablebegin, $tableend, $warnfont, $warnoff;
+global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
+#
 $tablebegin = '<tr><td><table border=1 cellpadding=5 cellspacing=0>';
 $tableend = '</table></td></tr>';
 $warnfont = '<font color=red><b>';
 $warnoff = '</b></font>';
-
+$dfmt = 'H:i:s j-M-Y \U\T\CP';
 #
 function htmlhead($checkapi)
 {
@@ -203,7 +204,7 @@ function getparam($name, $both = false)
 #
 function fmt($section, $name, $value)
 {
- $dfmt = 'H:i:s j-M-Y \U\T\CP';
+ global $dfmt;
 
  $errorclass = ' class=err';
  $warnclass = ' class=warn';
@@ -365,10 +366,8 @@ function showhead($cmd, $item, $values)
 #
 function details($cmd, $list, $rig)
 {
- global $tablebegin, $tableend;
+ global $tablebegin, $tableend, $dfmt;
  global $poolcmd, $readonly;
-
- $dfmt = 'H:i:s j-M-Y \U\T\CP';
 
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
@@ -559,7 +558,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 {
  global $miner, $port;
  global $error, $readonly, $notify, $rigs;
- global $tablebegin, $tableend, $warnfont, $warnoff;
+ global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
 
  $header = $head;
  $anss = array();
@@ -595,6 +594,10 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  if ($datetime)
  {
+	echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
+
+	echo $tableend.$tablebegin;
+
 	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1);
 	showhead('', null, $dthead);
 
