@@ -385,17 +385,14 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	// Reopen the serial port to workaround a USB-host-chipset-specific issue with the Icarus's buggy USB-UART
+	icarus_close(fd);
 	fd = icarus_open(icarus->device_path);
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "Failed to reopen Icarus on %s",
 		       icarus->device_path);
-		fd = icarus->device_fd;
+		return 0;
 	}
-	else
-	{
-		icarus_close(icarus->device_fd);
-		icarus->device_fd = fd;
-	}
+	icarus->device_fd = fd;
 
 	work->blk.nonce = 0xffffffff;
 
