@@ -22,10 +22,10 @@ bin_SCRIPTS	= *.cl
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
-		  @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
+		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
 		  @UDEV_LIBS@ @USB_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
-cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
+cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib
 
 # common sources
 cgminer_SOURCES := cgminer.c

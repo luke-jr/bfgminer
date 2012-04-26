@@ -65,7 +65,6 @@ PTHREAD_FLAGS="-lpthread"
 USB_LIBS=""
 USB_FLAGS=""
 DLOPEN_FLAGS="-ldl"
-OPENCL_LIBS="-lOpenCL"
 WS2_LIBS=""
 MATH_LIBS="-lm"
 
@@ -95,24 +94,12 @@ case $target in
     ;;
   powerpc-*-darwin*)
     CFLAGS="$CFLAGS -faltivec"
-    OPENCL_LIBS=""
     PTHREAD_FLAGS=""
     ;;
   *-*-darwin*)
-    OPENCL_LIBS="-framework OpenCL"
     PTHREAD_FLAGS=""
 	;;
 esac
-
-if test "x$ATISTREAMSDKROOT" != x; then
-	if test "x$have_x86_64" = xtrue; then
-		ATI_STREAM_ARCH_DIR=x86_64
-	else
-		ATI_STREAM_ARCH_DIR=x86
-	fi
-	OPENCL_FLAGS="-I$ATISTREAMSDKROOT/include $OPENCL_FLAGS"
-	OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ATI_STREAM_ARCH_DIR $OPENCL_LIBS"
-fi
 
 cpumining="no"
 
@@ -128,39 +115,13 @@ AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
 opencl="yes"
 
 AC_ARG_ENABLE([opencl],
-	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
+	[AC_HELP_STRING([--disable-opencl],[Build without support for OpenCL (default enabled)])],
 	[opencl=$enableval]
 	)
-if test "x$opencl" != xno; then
-	# Check for OpenCL (the long way needed on mingw32 due to calling conventions)
-	AC_MSG_CHECKING([for OpenCL])
-	SAVED_LIBS=$LIBS
-	SAVED_CFLAGS=$CFLAGS
-	LIBS="$LIBS $OPENCL_LIBS"
-	CFLAGS="$CFLAGS $OPENCL_FLAGS"
-	AC_LINK_IFELSE(
-	[AC_LANG_PROGRAM([[
-		#ifdef __APPLE_CC__
-		#include <OpenCL/opencl.h>
-		#else
-		#include <CL/cl.h>
-		#endif
-	]],
-	[[return clSetKernelArg(0, 0, 0, 0); ]])],
-	[AC_MSG_RESULT(yes)
-	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL is present on the system.])
-	found_opencl=1
-	],
-	[AC_MSG_RESULT(no)
-	OPENCL_FLAGS=
-	OPENCL_LIBS=
-	found_opencl=0])
-	LIBS=$SAVED_LIBS
-	CFLAGS=$SAVED_CFLAGS
-else
-	OPENCL_FLAGS=""
-	OPENCL_LIBS=""
+if test "x$opencl" = xyes; then
+	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL support is wanted])
 fi
+AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 
 AC_CHECK_LIB(pthread, pthread_create, ,
         AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
@@ -173,7 +134,7 @@ AC_ARG_ENABLE([adl],
 	[adl=$enableval]
 	)
 
-if test "$found_opencl" = 1; then
+if test "x$opencl" = xyes; then
 	if test "x$adl" != xno; then
 		AC_CHECK_FILE([ADL_SDK/adl_sdk.h], have_adl=true, have_adl=false,)
 		if test x$have_adl = xtrue
@@ -371,8 +332,6 @@ AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120223"], [Filename for diakgcn 
 AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120328"], [Filename for diablo kernel])
 
 
-AC_SUBST(OPENCL_LIBS)
-AC_SUBST(OPENCL_FLAGS)
 AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(DLOPEN_FLAGS)
@@ -410,33 +369,24 @@ echo
 
 echo "  curses.TUI...........: $cursesmsg"
 
-if test "x$opencl" != xno; then
-	if test $found_opencl = 1; then
-		echo "  OpenCL...............: FOUND. GPU mining support enabled"
-	else
-		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$cpumining$bitforce$icarus$ztex" = xnononono; then
-			AC_MSG_ERROR([No mining configured in])
-		fi
-	fi
+echo
+
+if test "x$opencl" = xyes; then
+	echo "  OpenCL...............: Enabled"
 else
-	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$cpumining$bitforce$icarus$ztex" = xnononono; then
-		AC_MSG_ERROR([No mining configured in])
-	fi
+	echo "  OpenCL...............: Disabled"
 fi
 
 if test "x$adl" != xno; then
 	if test x$have_adl = xtrue; then
-		echo "  ADL..................: SDK found, GPU monitoring support enabled"
+		echo "    ADL................: SDK found, GPU monitoring support enabled"
 	else
-		echo "  ADL..................: SDK NOT found, GPU monitoring support DISABLED"
+		echo "    ADL................: SDK NOT found, GPU monitoring support DISABLED"
 	fi
 else
-	echo "  ADL..................: Detection overrided. GPU monitoring support DISABLED"
+	echo "    ADL................: Detection overrided. GPU monitoring support DISABLED"
 fi
 
-echo
 if test "x$bitforce" = xyes; then
 	echo "  BitForce.FPGAs.......: Enabled"
 else
@@ -470,7 +420,7 @@ echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"

@@ -24,11 +24,7 @@
 #ifndef __OPENCL_CL_H
 #define __OPENCL_CL_H
 
-#ifdef __APPLE__
-#include <OpenCL/cl_platform.h>
-#else
-#include <CL/cl_platform.h>
-#endif	
+#include "cl_platform.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -560,6 +556,8 @@ typedef struct _cl_buffer_region {
 #define CL_PROFILING_COMMAND_END                    0x1283
 
 /********************************************************************************************************/
+
+#ifndef OMIT_OPENCL_API
 
 /* Platform API */
 extern CL_API_ENTRY cl_int CL_API_CALL
@@ -1230,6 +1228,8 @@ clGetExtensionFunctionAddressForPlatform(cl_platform_id /* platform */,
     extern CL_API_ENTRY void * CL_API_CALL 
     clGetExtensionFunctionAddress(const char * /* func_name */) CL_EXT_SUFFIX__VERSION_1_1_DEPRECATED;
 #endif /* CL_USE_DEPRECATED_OPENCL_1_2_APIS */
+
+#endif /* OMIT_OPENCL_API */
 
 #ifdef __cplusplus
 }
