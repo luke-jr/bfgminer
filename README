@@ -133,7 +133,6 @@ Options for both config file and command line:
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
---no-longpoll       Disable X-Long-Polling support
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
 --protocol-dump|-P  Verbose dump of protocol-level activities

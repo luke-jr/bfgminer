@@ -81,7 +81,6 @@ int gpu_threads;
 
 bool opt_protocol = false;
 static bool opt_benchmark;
-static bool want_longpoll = true;
 static bool have_longpoll = false;
 static bool want_per_device_stats = false;
 bool use_syslog = false;
@@ -850,9 +849,6 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
-	OPT_WITHOUT_ARG("--no-longpoll",
-			opt_set_invbool, &want_longpoll,
-			"Disable X-Long-Polling support"),
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
 #ifdef HAVE_OPENCL
@@ -2019,7 +2015,7 @@ static void *get_work_thread(void *userdata)
 		struct work *ret_work;
 		int failures = 0;
 
-		if (unlikely(want_longpoll && !pool->is_lp && pool == current_pool() &&
+		if (unlikely(!pool->is_lp && pool == current_pool() &&
 			pool->hdr_path && !pool_tset(pool, &pool->lp_sent))) {
 				stop_longpoll();
 				start_longpoll();
@@ -2941,7 +2937,6 @@ static void set_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
-	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
 	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
 		  "[P]ause: %d\n[W]rite config file\n[C]gminer restart\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
@@ -2955,15 +2950,6 @@ retry:
 			goto retry;
 		}
 		opt_queue = selected;
-		goto retry;
-	} else if (!strncasecmp(&input, "l", 1)) {
-		want_longpoll ^= true;
-		applog(LOG_WARNING, "Longpoll %s", want_longpoll ? "enabled" : "disabled");
-		if (!want_longpoll) {
-			if (have_longpoll)
-				stop_longpoll();
-		} else
-			start_longpoll();
 		goto retry;
 	} else if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
@@ -4693,7 +4679,6 @@ int main(int argc, char *argv[])
 	if (opt_benchmark) {
 		struct pool *pool;
 
-		want_longpoll = false;
 		pool = calloc(sizeof(struct pool), 1);
 		pool->pool_no = 0;
 		pools[total_pools++] = pool;
@@ -4985,8 +4970,7 @@ int main(int argc, char *argv[])
 		}
 	} while (!pools_active);
 
-	if (want_longpoll)
-		start_longpoll();
+	start_longpoll();
 
 begin_bench:
 	total_mhashes_done = 0;
