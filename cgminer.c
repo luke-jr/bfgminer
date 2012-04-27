@@ -1645,8 +1645,7 @@ static bool submit_upstream_work(const struct work *work)
 		if (isblock)
 			found_blocks++;
 		hash32 = (uint32_t *)(work->hash);
-		sprintf(hashshow, "%08lx.%08lx.%08lx%s",
-			(unsigned long)(hash32[7]), (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
+		sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
 			isblock ? " BLOCK!" : "");
 #endif
 	}
