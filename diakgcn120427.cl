@@ -1,4 +1,4 @@
-// DiaKGCN 16-03-2012 - OpenCL kernel by Diapolo
+// DiaKGCN 27-04-2012 - OpenCL kernel by Diapolo
 //
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
@@ -33,7 +33,9 @@
 __kernel
 	__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 	void search(	
+#ifndef GOFFSET
 			const u base,
+#endif
 			const uint PreVal0, const uint PreVal4,
 			const uint H1, const uint D1A, const uint B1, const uint C1,
 			const uint F1, const uint G1, const uint C1addK5, const uint B1addK6, const uint PreVal0addK7,
@@ -56,7 +58,11 @@ __kernel
 #elif defined VECTORS2
 	const u nonce = (uint)(get_local_id(0)) * 2U + (uint)(get_group_id(0)) * (uint)(WORKVEC) + base;
 #else
-	const u nonce = (uint)(get_local_id(0)) + (uint)(get_group_id(0)) * (uint)(WORKSIZE) + base;
+	#ifdef GOFFSET
+		const u nonce = (uint)(get_global_id(0));
+	#else
+		const u nonce = (uint)(get_local_id(0)) + (uint)(get_group_id(0)) * (uint)(WORKSIZE) + base;
+	#endif
 #endif
 
 	V[0] = PreVal0 + nonce;
