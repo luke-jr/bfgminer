@@ -44,6 +44,7 @@
 /* TODO: cleanup externals ********************/
 
 
+#ifdef HAVE_OPENCL
 /* Platform API */
 CL_API_ENTRY cl_int CL_API_CALL
 (*clGetPlatformIDs)(cl_uint          /* num_entries */,
@@ -248,6 +249,7 @@ load_opencl_symbols() {
 	
 	return true;
 }
+#endif
 
 
 #ifdef HAVE_CURSES
