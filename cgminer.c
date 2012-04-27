@@ -2086,10 +2086,10 @@ static void *submit_work_thread(void *userdata)
 		int failures = 0;
 
 		if (stale_work(work, true)) {
-			if (opt_submit_stale)
-				applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
-			else if (pool->submit_old)
+			if (pool->submit_old)
 				applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
+			else if (opt_submit_stale)
+				applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
 			else {
 				applog(LOG_NOTICE, "Stale share detected, discarding");
 				sharelog("discard", work);
