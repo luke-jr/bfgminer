@@ -324,10 +324,10 @@ static void applog_and_exit(const char *fmt, ...)
 }
 
 static pthread_mutex_t sharelog_lock;
-FILE *sharelog_file = NULL;
+static FILE *sharelog_file = NULL;
 
-static void
-sharelog(const char*disposition, const struct work*work) {
+static void sharelog(const char*disposition, const struct work*work)
+{
 	if (!sharelog_file)
 		return;
 
@@ -361,7 +361,7 @@ sharelog(const char*disposition, const struct work*work) {
 	free(target);
 	free(hash);
 	free(data);
-	if (rv >= sizeof(s))
+	if (rv >= (int)(sizeof(s)))
 		s[sizeof(s) - 1] = '\0';
 	else
 	if (rv < 0) {

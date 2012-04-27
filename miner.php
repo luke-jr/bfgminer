@@ -1,7 +1,7 @@
 <?php
 session_start();
 #
-global $miner, $port, $readonly, $notify, $rigs;
+global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
 #
 # Don't touch these 2 - see $rigs below
 $miner = null;
@@ -25,14 +25,30 @@ $notify = true;
 # e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028');
 $rigs = array('127.0.0.1:4028');
 #
+# This should be OK for most cases
+# However, the longer it is the longer you have to wait while php
+# hangs if the target cgminer isn't runnning or listening
+# Feel free to increase it if your network is very slow
+# Also, on some windows PHP, apparently the $usec is ignored
+$socktimeoutsec = 10;
+#
 $here = $_SERVER['PHP_SELF'];
 #
-global $tablebegin, $tableend, $warnfont, $warnoff;
+global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
+#
 $tablebegin = '<tr><td><table border=1 cellpadding=5 cellspacing=0>';
 $tableend = '</table></td></tr>';
 $warnfont = '<font color=red><b>';
 $warnoff = '</b></font>';
-
+$dfmt = 'H:i:s j-M-Y \U\T\CP';
+#
+# Ensure it is only ever shown once
+global $showndate;
+$showndate = false;
+#
+# For summary page to stop retrying failed rigs
+global $rigerror;
+$rigerror = array();
 #
 function htmlhead($checkapi)
 {
@@ -80,7 +96,7 @@ $error = null;
 #
 function getsock($addr, $port)
 {
- global $error;
+ global $error, $socktimeoutsec;
 
  $socket = null;
  $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
@@ -91,6 +107,11 @@ function getsock($addr, $port)
 	$error = "ERR: $msg '$error'\n";
 	return null;
  }
+
+ // Ignore if this fails since the socket connect may work anyway
+ //  and nothing is gained by aborting if the option cannot be set
+ //  since we don't know in advance if it can connect
+ socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, array('sec' => $socktimeoutsec, 'usec' => 0));
 
  $res = socket_connect($socket, $addr, $port);
  if ($res === false)
@@ -203,6 +224,8 @@ function getparam($name, $both = false)
 #
 function fmt($section, $name, $value)
 {
+ global $dfmt;
+
  $errorclass = ' class=err';
  $warnclass = ' class=warn';
  $b = '&nbsp;';
@@ -325,6 +348,9 @@ function fmt($section, $name, $value)
 	if ($value != 'Y')
 		$class = $warnclass;
 	break;
+ case 'STATUS.When':
+	$ret = date($dfmt, $value);
+	break;
  }
 
  if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
@@ -346,7 +372,7 @@ function showhead($cmd, $item, $values)
 
  foreach ($values as $name => $value)
  {
-	if ($name == '0')
+	if ($name == '0' or $name == '')
 		$name = '&nbsp;';
 	echo "<td valign=bottom class=h>$name</td>";
  }
@@ -360,18 +386,22 @@ function showhead($cmd, $item, $values)
 #
 function details($cmd, $list, $rig)
 {
- global $tablebegin, $tableend;
+ global $tablebegin, $tableend, $dfmt;
  global $poolcmd, $readonly;
-
- $dfmt = 'H:i:s j-M-Y \U\T\CP';
+ global $showndate;
 
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
  echo $tablebegin;
 
- echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
+ if ($showndate === false)
+ {
+	echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
 
- echo $tableend.$tablebegin;
+	echo $tableend.$tablebegin;
+
+	$showndate = true;
+ }
 
  if (isset($list['STATUS']))
  {
@@ -550,18 +580,23 @@ function process($cmds, $rig)
 }
 #
 # $head is a hack but this is just a demo anyway :)
-function doforeach($cmd, $des, $sum, $head)
+function doforeach($cmd, $des, $sum, $head, $datetime)
 {
  global $miner, $port;
  global $error, $readonly, $notify, $rigs;
- global $tablebegin, $tableend, $warnfont, $warnoff;
+ global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
+ global $rigerror;
 
  $header = $head;
  $anss = array();
 
  $count = 0;
+ $preverr = count($rigerror);
  foreach ($rigs as $rig)
  {
+	if (isset($rigerror[$rig]))
+		continue;
+
 	$parts = explode(':', $rig, 2);
 	if (count($parts) == 2)
 	{
@@ -574,6 +609,7 @@ function doforeach($cmd, $des, $sum, $head)
 		{
 			echo "<tr><td colspan=100>Error on rig $count getting $des: ";
 			echo $warnfont.$error.$warnoff.'</td></tr>';
+			$rigerror[$rig] = $error;
 			$error = null;
 		}
 		else
@@ -584,8 +620,54 @@ function doforeach($cmd, $des, $sum, $head)
 
  if (count($anss) == 0)
  {
-	echo "<tr><td>Failed to access any rigs successfully</td></tr>";
+	echo '<tr><td>Failed to access any rigs successfully';
+	if ($preverr > 0)
+		echo ' (or rigs had previous errors)';
+	echo '</td></tr>';
 	return;
+ }
+
+ if ($datetime)
+ {
+	echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
+
+	echo $tableend.$tablebegin;
+
+	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1);
+	showhead('', null, $dthead);
+
+	foreach ($anss as $rig => $ans)
+	{
+		echo '<tr>';
+
+		foreach ($ans as $item => $row)
+		{
+			if ($item != 'STATUS')
+				continue;
+
+			foreach ($dthead as $name => $x)
+			{
+				if ($name == '')
+					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"?rig=$rig\",null)'></td>";
+				else
+				{
+					if (isset($row[$name]))
+						list($showvalue, $class) = fmt('STATUS', $name, $row[$name]);
+					else
+					{
+						$class = '';
+						$showvalue = '&nbsp;';
+					}
+					echo "<td$class align=right>$showvalue</td>";
+				}
+			}
+		}
+
+		echo '</tr>';
+	}
+	echo $tableend;
+	echo '<tr><td><br><br></td></tr>';
+	echo $tablebegin;
  }
 
  $total = array();
@@ -795,15 +877,15 @@ function display()
 
  echo $tablebegin;
  $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH');
- doforeach('summary', 'summary information', $sum, array());
+ doforeach('summary', 'summary information', $sum, array(), true);
  echo $tableend;
  echo '<tr><td><br><br></td></tr>';
  echo $tablebegin;
- doforeach('devs', 'device list', $sum, array(''=>'','ID'=>'','Name'=>''));
+ doforeach('devs', 'device list', $sum, array(''=>'','ID'=>'','Name'=>''), false);
  echo $tableend;
  echo '<tr><td><br><br></td></tr>';
  echo $tablebegin;
- doforeach('pools', 'pool list', $sum, array(''=>''));
+ doforeach('pools', 'pool list', $sum, array(''=>''), false);
  echo $tableend;
 }
 #
