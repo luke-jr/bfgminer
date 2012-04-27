@@ -3810,7 +3810,7 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	work->rolltime = rolltime;
 
 	/* Only flag this as longpoll work if the pool is the current pool */
-	if (pool == current_pool())
+	if (pool == cp)
 		work->longpoll = true;
 
 	/* We'll be checking this work item twice, but we already know it's
@@ -3820,7 +3820,7 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	test_work_current(work);
 
 	/* Don't use as work if we have failover-only enabled */
-	if (!work->longpoll && opt_fail_only) {
+	if (pool != cp && opt_fail_only) {
 		free_work(work);
 		return;
 	}
