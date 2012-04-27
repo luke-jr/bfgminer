@@ -3890,6 +3890,9 @@ retry_pool:
 		}
 	}
 
+	/* Any longpoll from any pool is enough for this to be true */
+	have_longpoll = true;
+
 	if (cp == pool)
 		applog(LOG_WARNING, "Long-polling activated for %s", pool->lp_url);
 	else
