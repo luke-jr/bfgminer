@@ -542,7 +542,6 @@ extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
 extern struct thr_info *thr_info;
-extern int longpoll_thr_id;
 extern struct work_restart *work_restart;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
@@ -603,17 +602,17 @@ struct pool {
 	int pool_no;
 	int prio;
 	int accepted, rejected;
+
 	bool submit_fail;
 	bool idle;
 	bool lagging;
 	bool probed;
 	bool enabled;
 	bool submit_old;
+	bool removed;
 
 	char *hdr_path;
 	char *lp_url;
-	bool lp_sent;
-	bool is_lp;
 
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
@@ -631,6 +630,7 @@ struct pool {
 	struct thread_q *submit_q;
 	struct thread_q *getwork_q;
 
+	pthread_t longpoll_thread;
 	pthread_t submit_thread;
 	pthread_t getwork_thread;
 
