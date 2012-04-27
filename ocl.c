@@ -421,7 +421,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		gpus[gpu].vwidth = preferred_vwidth;
 	}
 
-	if ((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO) &&
+	if ((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO || clState->chosen_kernel == KL_DIAKGCN) &&
 		clState->vwidth == 1 && clState->hasOpenCL11plus)
 			clState->goffset = true;
 
