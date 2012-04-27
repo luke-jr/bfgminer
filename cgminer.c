@@ -1685,7 +1685,7 @@ static bool submit_upstream_work(const struct work *work)
 			char reason[32];
 
 			if (total_pools > 1)
-				sprintf(where, " pool %d", work->pool->pool_no);
+				sprintf(where, "pool %d", work->pool->pool_no);
 			else
 				strcpy(where, "");
 
