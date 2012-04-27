@@ -81,6 +81,7 @@ int gpu_threads;
 
 bool opt_protocol = false;
 static bool opt_benchmark;
+static bool want_longpoll = true;
 static bool have_longpoll = false;
 static bool want_per_device_stats = false;
 bool use_syslog = false;
@@ -838,6 +839,9 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--no-longpoll",
+			opt_set_invbool, &want_longpoll,
+			"Disable X-Long-Polling support"),
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
 #ifdef HAVE_OPENCL
@@ -1970,6 +1974,9 @@ static void sighandler(int __maybe_unused sig)
 	kill_work();
 }
 
+static void start_longpoll(void);
+static void stop_longpoll(void);
+
 /* One get work thread is created per pool, so as to use one curl handle for
  * all getwork reqeusts from the same pool, minimising connections opened, but
  * separate from the submit work curl handle to not delay share submissions due
@@ -2912,6 +2919,7 @@ static void set_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
+	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
 	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
 		  "[P]ause: %d\n[W]rite config file\n[B]FGMiner restart\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
@@ -2925,6 +2933,13 @@ retry:
 			goto retry;
 		}
 		opt_queue = selected;
+		goto retry;
+	} else if (!strncasecmp(&input, "l", 1)) {
+		if (want_longpoll)
+			stop_longpoll();
+		else
+			start_longpoll();
+		applog(LOG_WARNING, "Longpoll %s", want_longpoll ? "enabled" : "disabled");
 		goto retry;
 	} else if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
@@ -3292,7 +3307,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 		} else
 			pool->lp_url = NULL;
 
-		if (!pool->lp_started) {
+		if (want_longpoll && !pool->lp_started) {
 			pool->lp_started = true;
 			if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
 				quit(1, "Failed to create pool longpoll thread");
@@ -3956,6 +3971,42 @@ out:
 		curl_easy_cleanup(curl);
 
 	return NULL;
+}
+
+static void stop_longpoll(void)
+{
+	int i;
+	
+	want_longpoll = false;
+	for (i = 0; i < total_pools; ++i)
+	{
+		struct pool *pool = pools[i];
+		
+		if (unlikely(!pool->lp_started))
+			continue;
+		
+		pool->lp_started = false;
+		pthread_cancel(pool->longpoll_thread);
+	}
+	have_longpoll = false;
+}
+
+static void start_longpoll(void)
+{
+	int i;
+	
+	want_longpoll = true;
+	for (i = 0; i < total_pools; ++i)
+	{
+		struct pool *pool = pools[i];
+		
+		if (unlikely(pool->removed || pool->lp_started || !pool->lp_url))
+			continue;
+		
+		pool->lp_started = true;
+		if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
+			quit(1, "Failed to create pool longpoll thread");
+	}
 }
 
 void reinit_device(struct cgpu_info *cgpu)
@@ -4649,6 +4700,7 @@ int main(int argc, char *argv[])
 	if (opt_benchmark) {
 		struct pool *pool;
 
+		want_longpoll = false;
 		pool = calloc(sizeof(struct pool), 1);
 		pool->pool_no = 0;
 		pools[total_pools++] = pool;
