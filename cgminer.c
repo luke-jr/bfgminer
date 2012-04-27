@@ -1662,11 +1662,11 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d thread %d pool %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, thr_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Accepted %s %s %d pool %d",
+				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no);
 			else
-				applog(LOG_NOTICE, "Accepted %s %s %d thread %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, thr_id);
+				applog(LOG_NOTICE, "Accepted %s %s %d",
+				       hashshow, cgpu->api->name, cgpu->device_id);
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
