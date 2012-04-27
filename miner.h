@@ -625,6 +625,15 @@ struct pool {
 	char *rpc_user, *rpc_pass;
 
 	pthread_mutex_t pool_lock;
+
+	struct thread_q *submit_q;
+	struct thread_q *getwork_q;
+
+	pthread_t submit_thread;
+	pthread_t getwork_thread;
+
+	CURL *submit_curl;
+	CURL *getwork_curl;
 };
 
 struct work {
