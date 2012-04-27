@@ -1704,8 +1704,8 @@ static bool submit_upstream_work(const struct work *work)
 			} else
 				strcpy(reason, "");
 
-			applog(LOG_NOTICE, "Rejected %s %s %d thread %d%s%s",
-			       hashshow, cgpu->api->name, cgpu->device_id, thr_id, where, reason);
+			applog(LOG_NOTICE, "Rejected %s %s %d %s%s",
+			       hashshow, cgpu->api->name, cgpu->device_id, where, reason);
 			sharelog(disposition, work);
 		}
 	}
