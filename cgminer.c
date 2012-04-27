@@ -429,16 +429,6 @@ bool pool_tclear(struct pool *pool, bool *var)
 	return ret;
 }
 
-static bool pool_isset(struct pool *pool, bool *var)
-{
-	bool ret;
-
-	mutex_lock(&pool->pool_lock);
-	ret = *var;
-	mutex_unlock(&pool->pool_lock);
-	return ret;
-}
-
 struct pool *current_pool(void)
 {
 	struct pool *pool;
@@ -1636,11 +1626,6 @@ static bool submit_upstream_work(const struct work *work)
 
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
 
-	/* Force a fresh connection in case there are dead persistent
-	 * connections to this pool */
-	if (pool_isset(pool, &pool->submit_fail))
-		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
-
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
 	if (unlikely(!val)) {
@@ -1816,12 +1801,8 @@ retry:
 	}
 
 	rc = work_decode(json_object_get(val, "result"), work);
-	if (!rc && retries < 3) {
-		/* Force a fresh connection in case there are dead persistent
-		 * connections */
-		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
+	if (!rc && retries < 3)
 		goto retry;
-	}
 	work->pool = pool;
 	work->longpoll = false;
 	total_getworks++;
