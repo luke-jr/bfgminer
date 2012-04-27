@@ -1096,15 +1096,17 @@ static cl_int queue_diakgcn_kernel(_clState *clState, dev_blk_ctx *blk,
 				   __maybe_unused cl_uint threads)
 {
 	cl_kernel *kernel = &clState->kernel;
-	cl_uint vwidth = clState->vwidth;
-	unsigned int i, num = 0;
+	unsigned int num = 0;
 	cl_int status = 0;
-	uint *nonces;
 
-	nonces = alloca(sizeof(uint) * vwidth);
-	for (i = 0; i < vwidth; i++)
-		nonces[i] = blk->nonce + i;
-	CL_SET_VARG(vwidth, nonces);
+	if (!clState->goffset) {
+		cl_uint vwidth = clState->vwidth;
+		uint *nonces = alloca(sizeof(uint) * vwidth);
+		unsigned int i;
+		for (i = 0; i < vwidth; i++)
+			nonces[i] = blk->nonce + i;
+		CL_SET_VARG(vwidth, nonces);
+	}
 
 	CL_SET_BLKARG(PreVal0);
 	CL_SET_BLKARG(PreVal4_2);

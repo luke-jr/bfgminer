@@ -1657,8 +1657,7 @@ static bool submit_upstream_work(const struct work *work)
 		if (isblock)
 			found_blocks++;
 		hash32 = (uint32_t *)(work->hash);
-		sprintf(hashshow, "%08lx.%08lx.%08lx%s",
-			(unsigned long)(hash32[7]), (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
+		sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
 			isblock ? " BLOCK!" : "");
 #endif
 	}
@@ -1675,11 +1674,11 @@ static bool submit_upstream_work(const struct work *work)
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d thread %d pool %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, thr_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Accepted %s %s %d pool %d",
+				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no);
 			else
-				applog(LOG_NOTICE, "Accepted %s %s %d thread %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, thr_id);
+				applog(LOG_NOTICE, "Accepted %s %s %d",
+				       hashshow, cgpu->api->name, cgpu->device_id);
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -3821,10 +3820,6 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	struct work *work, *work_clone;
 	bool rc;
 
-	/* Don't use as work if we have failover-only enabled */
-	if (pool != cp && opt_fail_only)
-		return;
-
 	work = make_work();
 
 	rc = work_decode(json_object_get(val, "result"), work);
@@ -3845,6 +3840,12 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	 * rather than waiting for it to hit the stage thread. This also
 	 * allows testwork to know whether LP discovered the block or not. */
 	test_work_current(work);
+
+	/* Don't use as work if we have failover-only enabled */
+	if (pool != cp && opt_fail_only) {
+		free_work(work);
+		return;
+	}
 
 	work_clone = make_work();
 	memcpy(work_clone, work, sizeof(struct work));
@@ -3911,6 +3912,9 @@ retry_pool:
 			pool = select_longpoll_pool(cp);
 		}
 	}
+
+	/* Any longpoll from any pool is enough for this to be true */
+	have_longpoll = true;
 
 	if (cp == pool)
 		applog(LOG_WARNING, "Long-polling activated for %s", pool->lp_url);
