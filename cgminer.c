@@ -378,7 +378,6 @@ static void sharelog(const char*disposition, const struct work*work)
 
 static void *submit_work_thread(void *userdata);
 static void *get_work_thread(void *userdata);
-static void *longpoll_thread(void *userdata);
 
 static void add_pool(void)
 {
@@ -402,8 +401,6 @@ static void add_pool(void)
 		quit(1, "Failed to create pool submit thread");
 	if (unlikely(pthread_create(&pool->getwork_thread, NULL, get_work_thread, (void *)pool)))
 		quit(1, "Failed to create pool getwork thread");
-	if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
-		quit(1, "Failed to create pool longpoll thread");
 }
 
 /* Pool variant of test and set */
@@ -3214,6 +3211,8 @@ out_unlock:
 	}
 }
 
+static void *longpoll_thread(void *userdata);
+
 static bool pool_active(struct pool *pool, bool pinging)
 {
 	bool ret = false;
@@ -3256,9 +3255,8 @@ static bool pool_active(struct pool *pool, bool pinging)
 		}
 		json_decref(val);
 
-		/* We may be updating the url after the pool has died */
 		if (pool->lp_url)
-			free(pool->lp_url);
+			goto out;
 
 		/* Decipher the longpoll URL, if any, and store it in ->lp_url */
 		if (pool->hdr_path) {
@@ -3285,13 +3283,19 @@ static bool pool_active(struct pool *pool, bool pinging)
 			}
 		} else
 			pool->lp_url = NULL;
+
+		if (!pool->lp_started) {
+			pool->lp_started = true;
+			if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
+				quit(1, "Failed to create pool longpoll thread");
+		}
 	} else {
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
 		if (!pinging)
 			applog(LOG_WARNING, "Pool %u slow/down or URL or credentials invalid", pool->pool_no);
 	}
-
+out:
 	curl_easy_cleanup(curl);
 	return ret;
 }

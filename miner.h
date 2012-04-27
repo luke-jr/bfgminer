@@ -610,6 +610,7 @@ struct pool {
 	bool enabled;
 	bool submit_old;
 	bool removed;
+	bool lp_started;
 
 	char *hdr_path;
 	char *lp_url;
