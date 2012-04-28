@@ -1,5 +1,11 @@
-Version 2.3.5
+Version 2.3.5 - April 28, 2012
 
+- Restarting cgminer leads to a socket that can't be bound for 60 seconds, so
+increase the interval that API binding waits to 30 seconds to minimise the
+number of times it will retry, spamming the logs.
+- Give a longpoll message for any longpoll that detects a block change, primary
+or backup, and also display which pool it was.
+- Decrease utility display to one decimal place.
 - Small cosmetic output alignment.
 - Add pool number to stale share message.
 - Add space to log output now that there is more screen real estate available.

@@ -2376,18 +2376,19 @@ static void test_work_current(struct work *work)
 		work_block++;
 
 		if (work->longpoll) {
-			applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block, waiting on fresh work",
+			applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
 			       work->pool->pool_no);
 			work->longpoll = false;
 		} else if (have_longpoll)
-			applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
+			applog(LOG_NOTICE, "New block detected on network before longpoll");
 		else
-			applog(LOG_NOTICE, "New block detected on network, waiting on fresh work");
+			applog(LOG_NOTICE, "New block detected on network");
 		restart_threads();
 	} else if (work->longpoll) {
 		work->longpoll = false;
 		if (work->pool == current_pool()) {
-			applog(LOG_NOTICE, "LONGPOLL requested work restart, waiting on fresh work");
+			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
+				work->pool->pool_no);
 			work_block++;
 			restart_threads();
 		}
