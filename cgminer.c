@@ -1303,7 +1303,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->api->get_statline_before(buf, cgpu);
 	else
 		tailsprintf(buf, "               | ");
-	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.2f/m",
+	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
 		cgpu->rolling,
 		cgpu->total_mhashes / total_secs,
@@ -3195,7 +3195,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
-	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f Mh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
+	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f Mh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval, rolling, total_mhashes_done / total_secs,
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
