@@ -905,6 +905,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
+	OPT_WITHOUT_ARG("--submit-stale",
+			opt_set_bool, &opt_submit_stale,
+	                opt_hidden),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
