@@ -2376,7 +2376,8 @@ static void test_work_current(struct work *work)
 		work_block++;
 
 		if (work->longpoll) {
-			applog(LOG_NOTICE, "LONGPOLL detected new block on network, waiting on fresh work");
+			applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block, waiting on fresh work",
+			       work->pool->pool_no);
 			work->longpoll = false;
 		} else if (have_longpoll)
 			applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
@@ -2385,9 +2386,11 @@ static void test_work_current(struct work *work)
 		restart_threads();
 	} else if (work->longpoll) {
 		work->longpoll = false;
-		applog(LOG_NOTICE, "LONGPOLL requested work restart, waiting on fresh work");
-		work_block++;
-		restart_threads();
+		if (work->pool == current_pool()) {
+			applog(LOG_NOTICE, "LONGPOLL requested work restart, waiting on fresh work");
+			work_block++;
+			restart_threads();
+		}
 	}
 out_free:
 	free(hexstr);
@@ -3810,10 +3813,7 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	}
 	work->pool = pool;
 	work->rolltime = rolltime;
-
-	/* Only flag this as longpoll work if the pool is the current pool */
-	if (pool == cp)
-		work->longpoll = true;
+	work->longpoll = true;
 
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
@@ -3821,8 +3821,8 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	 * allows testwork to know whether LP discovered the block or not. */
 	test_work_current(work);
 
-	/* Don't use as work if we have failover-only enabled */
-	if (pool != cp && opt_fail_only) {
+	/* Don't use backup LPs as work if we have failover-only enabled */
+	if (pool != current_pool() && opt_fail_only) {
 		free_work(work);
 		return;
 	}
