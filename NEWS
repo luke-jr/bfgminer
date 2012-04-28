@@ -1,3 +1,19 @@
+Version 2.3.6 - April 29, 2012
+
+- Change default behaviour to submitting stale, removing the --submit-stale
+option and adding a --no-submit-stale option.
+- Make sure to start the getwork and submit threads when a pool is added on the
+fly. This fixes a crash when a pool is added to running cgminer and then
+switched to.
+- Faster hardware can easily outstrip the speed we can get work and submit
+shares when using only one connection per pool.
+- Test the queued list to see if any get/submits are already queued and if they
+are, start recruiting extra connections by generating new threads.
+- This allows us to reuse network connections at low loads but recuit new open
+connections as they're needed, so that cgminer can scale to hardware of any
+size.
+
+
 Version 2.3.5 - April 28, 2012
 
 - Restarting cgminer leads to a socket that can't be bound for 60 seconds, so
