@@ -123,7 +123,7 @@ bool use_curses =
 	false
 #endif
 ;
-static bool opt_submit_stale;
+static bool opt_submit_stale = true;
 static int opt_shares;
 static bool opt_fail_only;
 bool opt_autofan;
@@ -842,6 +842,9 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--no-submit-stale",
+			opt_set_invbool, &opt_submit_stale,
+		        "Don't submit shares if they are detected as stale"),
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, NULL,
 		     "Password for bitcoin JSON-RPC server"),
@@ -898,9 +901,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
-	OPT_WITHOUT_ARG("--submit-stale",
-			opt_set_bool, &opt_submit_stale,
-		        "Submit shares even if they would normally be considered stale"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
