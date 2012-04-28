@@ -37,8 +37,6 @@ pool.
 thread on pool changes that was leading to race conditions.
 - It will also have less work restarts from the multiple longpolls received from
 different pools.
-- Remove the ability to disable longpoll. It is not a useful feature and will
-conflict with planned changes to longpoll code.
 - Remove the invalid entries from the example configuration file.
 - Add support for latest ATI SDK on windows.
 - Export missing function from libztex.
