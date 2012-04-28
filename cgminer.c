@@ -3799,7 +3799,6 @@ enum {
 /* Stage another work item from the work returned in a longpoll */
 static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 {
-	struct pool *cp = current_pool();
 	struct work *work, *work_clone;
 	bool rc;
 
