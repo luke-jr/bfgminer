@@ -384,16 +384,12 @@ static void add_pool(void)
 	struct pool *pool;
 
 	pool = calloc(sizeof(struct pool), 1);
-	if (!pool) {
-		applog(LOG_ERR, "Failed to malloc pool in add_pool");
-		exit (1);
-	}
+	if (!pool)
+		quit(1, "Failed to malloc pool in add_pool");
 	pool->pool_no = pool->prio = total_pools;
 	pools[total_pools++] = pool;
-	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL))) {
-		applog(LOG_ERR, "Failed to pthread_mutex_init in add_pool");
-		exit (1);
-	}
+	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
+		quit(1, "Failed to pthread_mutex_init in add_pool");
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 
@@ -4456,6 +4452,11 @@ int add_pool_details(bool live, char *url, char *user, char *pass)
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
 	pool->tv_idle.tv_sec = ~0UL;
+
+	if (unlikely(pthread_create(&pool->submit_thread, NULL, submit_work_thread, (void *)pool)))
+		quit(1, "Failed to create pool submit thread");
+	if (unlikely(pthread_create(&pool->getwork_thread, NULL, get_work_thread, (void *)pool)))
+		quit(1, "Failed to create pool getwork thread");
 
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
