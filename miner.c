@@ -1315,7 +1315,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->api->get_statline_before(buf, cgpu);
 	else
 		tailsprintf(buf, "               | ");
-	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.2f/m",
+	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
 		cgpu->rolling,
 		cgpu->total_mhashes / total_secs,
@@ -1697,7 +1697,7 @@ static bool submit_upstream_work(const struct work *work)
 			char reason[32];
 
 			if (total_pools > 1)
-				sprintf(where, " pool %d", work->pool->pool_no);
+				sprintf(where, "pool %d", work->pool->pool_no);
 			else
 				strcpy(where, "");
 
@@ -1716,8 +1716,8 @@ static bool submit_upstream_work(const struct work *work)
 			} else
 				strcpy(reason, "");
 
-			applog(LOG_NOTICE, "Rejected %s %s %d thread %d%s%s",
-			       hashshow, cgpu->api->name, cgpu->device_id, thr_id, where, reason);
+			applog(LOG_NOTICE, "Rejected %s %s %d %s%s",
+			       hashshow, cgpu->api->name, cgpu->device_id, where, reason);
 			sharelog(disposition, work);
 		}
 	}
@@ -2098,11 +2098,14 @@ static void *submit_work_thread(void *userdata)
 
 		if (stale_work(work, true)) {
 			if (pool->submit_old)
-				applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
+				applog(LOG_NOTICE, "Stale share detected, submitting as pool %d requested",
+				       pool->pool_no);
 			else if (opt_submit_stale)
-				applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
+				applog(LOG_NOTICE, "Stale share detected from pool %d, submitting as user requested",
+					pool->pool_no);
 			else {
-				applog(LOG_NOTICE, "Stale share detected, discarding");
+				applog(LOG_NOTICE, "Stale share detected from pool %d, discarding",
+					pool->pool_no);
 				sharelog("discard", work);
 				total_stale++;
 				pool->stale_shares++;
@@ -2388,18 +2391,22 @@ static void test_work_current(struct work *work)
 		work_block++;
 
 		if (work->longpoll) {
-			applog(LOG_NOTICE, "LONGPOLL detected new block on network, waiting on fresh work");
+			applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
+			       work->pool->pool_no);
 			work->longpoll = false;
 		} else if (have_longpoll)
-			applog(LOG_NOTICE, "New block detected on network before longpoll, waiting on fresh work");
+			applog(LOG_NOTICE, "New block detected on network before longpoll");
 		else
-			applog(LOG_NOTICE, "New block detected on network, waiting on fresh work");
+			applog(LOG_NOTICE, "New block detected on network");
 		restart_threads();
 	} else if (work->longpoll) {
 		work->longpoll = false;
-		applog(LOG_NOTICE, "LONGPOLL requested work restart, waiting on fresh work");
-		work_block++;
-		restart_threads();
+		if (work->pool == current_pool()) {
+			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
+				work->pool->pool_no);
+			work_block++;
+			restart_threads();
+		}
 	}
 out_free:
 	free(hexstr);
@@ -3215,7 +3222,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
-	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f Mh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.2f/m",
+	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f Mh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval, rolling, total_mhashes_done / total_secs,
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
@@ -3816,7 +3823,6 @@ enum {
 /* Stage another work item from the work returned in a longpoll */
 static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 {
-	struct pool *cp = current_pool();
 	struct work *work, *work_clone;
 	bool rc;
 
@@ -3830,10 +3836,7 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	}
 	work->pool = pool;
 	work->rolltime = rolltime;
-
-	/* Only flag this as longpoll work if the pool is the current pool */
-	if (pool == cp)
-		work->longpoll = true;
+	work->longpoll = true;
 
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
@@ -3841,8 +3844,8 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	 * allows testwork to know whether LP discovered the block or not. */
 	test_work_current(work);
 
-	/* Don't use as work if we have failover-only enabled */
-	if (pool != cp && opt_fail_only) {
+	/* Don't use backup LPs as work if we have failover-only enabled */
+	if (pool != current_pool() && opt_fail_only) {
 		free_work(work);
 		return;
 	}

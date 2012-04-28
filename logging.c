@@ -63,7 +63,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 
 		len = 40 + strlen(fmt) + 22;
 		f = alloca(len);
-		sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d] %s\n",
+		sprintf(f, " [%d-%02d-%02d %02d:%02d:%02d] %s\n",
 			tm->tm_year + 1900,
 			tm->tm_mon + 1,
 			tm->tm_mday,

@@ -2221,11 +2221,10 @@ void api(int api_thr_id)
 			if ((time(NULL) - bindstart) > 61)
 				break;
 			else {
-				applog(LOG_WARNING, "API bind to port %d failed - trying again in 15sec", port);
-				sleep(15);
+				applog(LOG_WARNING, "API bind to port %d failed - trying again in 30sec", port);
+				sleep(30);
 			}
-		}
-		else
+		} else
 			bound = 1;
 	}
 

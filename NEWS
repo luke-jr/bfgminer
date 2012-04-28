@@ -1,3 +1,80 @@
+BFGMiner Version 2.3.5 - April 28, 2012
+
+- Restarting cgminer leads to a socket that can't be bound for 60 seconds, so
+increase the interval that API binding waits to 30 seconds to minimise the
+number of times it will retry, spamming the logs.
+- Give a longpoll message for any longpoll that detects a block change, primary
+or backup, and also display which pool it was.
+- Decrease utility display to one decimal place.
+- Small cosmetic output alignment.
+- Add pool number to stale share message.
+- Add space to log output now that there is more screen real estate available.
+- Indentation clean up.
+- Merge branch 'master' of github.com:ckolivas/cgminer
+- Remove thread id display from rejected shares as well.
+- Merge pull request #185 from Diapolo/diakgcn
+- add goffset support for diakgcn with -v 1 and update kernel version
+- Set have_longpoll to true when there is at least one pool with longpoll.
+- Don't display the thread ID since it adds no useful information over the
+device number.
+- Don't display the first 8 bytes of a share since they will always be zero at
+>= 1 difficulty.
+- work->longpoll is reset across test_work_current so we need to recheck what
+pool it belongs to.
+- Use longpolls from backup pools with failover-only enabled just to check for
+block changes, but don't use them as work.
+- Start longpoll only after we have tried to extract the longpoll URL.
+- Check for submitold flag on resubmit of shares, and give different message for
+stale shares on retry.
+- Check for submitold before submitstale.
+- Don't force fresh curl connections on anything but longpoll threads.
+- Create one longpoll thread per pool, using backup pools for those pools that
+don't have longpoll.
+- Use the work created from the longpoll return only if we don't have
+failover-enabled, and only flag the work as a longpoll if it is the current
+pool.
+- This will work around the problem of trying to restart the single longpoll
+thread on pool changes that was leading to race conditions.
+- It will also have less work restarts from the multiple longpolls received from
+different pools.
+- Remove the ability to disable longpoll. It is not a useful feature and will
+conflict with planned changes to longpoll code.
+- Remove the invalid entries from the example configuration file.
+- Add support for latest ATI SDK on windows.
+- Export missing function from libztex.
+- miner.php change socktimeoutsec = 10 (it only waits once)
+- Bugfix: Make initial_args a const char** to satisfy exec argument type warning
+(on Windows only)
+- miner.php add a timeout so you don't sit and wait ... forever
+- Create discrete persistent submit and get work threads per pool, thus allowing
+all submitworks belonging to the same pool to reuse the same curl handle, and
+all getworks to reuse their own handle.
+- Use separate handles for submission to not make getwork potentially delay
+share submission which is time critical.
+- This will allow much more reusing of persistent connections instead of opening
+new ones which can flood routers.
+- This mandated a rework of the extra longpoll support (for when pools are
+switched) and this is managed by restarting longpoll cleanly and waiting for a
+thread join.
+- miner.php only show the current date header once
+- miner.php also add current time like single rig page
+- miner.php display rig 'when' table at top of the multi-rig summary page
+- README - add some Ztex details
+- api.c include zTex in the FPGA support list
+- api.c ensure 'devs' shows PGA's when only PGA code is compiled
+- cgminer.c sharelog code consistency and compile warning fix
+- README correct API version number
+- README spelling error
+- api.c combine all pairs of sprintfs()
+- api.c uncomment and use BLANK (and COMMA)
+- Code style cleanup
+- Annotating frequency changes with the changed from value
+- README clarification of 'notify' command
+- README update for API RPC 'devdetails'
+- api.c 'devdetails' list static details of devices
+- Using less heap space as my TP-Link seems to not handle this much
+
+
 BFGMiner Version 2.3.4 - April 26, 2012
 
 - New maintainership of code with modular FPGA/GPU focus, under BFGMiner name
