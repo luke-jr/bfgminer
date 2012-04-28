@@ -134,6 +134,7 @@ Options for both config file and command line:
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
 --no-longpoll       Disable X-Long-Polling support
+--no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
 --protocol-dump|-P  Verbose dump of protocol-level activities
@@ -151,7 +152,6 @@ Options for both config file and command line:
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --socks-proxy <arg> Set socks4 proxy (host:port)
---submit-stale      Submit shares even if they would normally be considered stale
 --syslog            Use system log for output messages (default: standard error)
 --temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
 --text-only|-T      Disable ncurses formatted screen output
