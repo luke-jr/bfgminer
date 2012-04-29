@@ -161,7 +161,9 @@ static pthread_mutex_t *stgd_lock;
 #ifdef HAVE_CURSES
 static pthread_mutex_t curses_lock;
 #endif
+static pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
+
 pthread_rwlock_t netacc_lock;
 
 double total_mhashes_done;
@@ -2419,23 +2421,25 @@ static void restart_threads(void)
 static void set_curblock(char *hexstr, unsigned char *hash)
 {
 	unsigned char hash_swap[32];
-	char *old_hash = NULL;
 	struct timeval tv_now;
+	char *old_hash;
 
-	/* Don't free current_hash directly to avoid dereferencing it when
-	 * we might be accessing its data elsewhere */
-	if (current_hash)
-		old_hash = current_hash;
 	strcpy(current_block, hexstr);
 	gettimeofday(&tv_now, NULL);
 	get_timestamp(blocktime, &tv_now);
 	swap256(hash_swap, hash);
+
+	/* Don't free current_hash directly to avoid dereferencing when read
+	 * elsewhere */
+	mutex_lock(&ch_lock);
+	old_hash = current_hash;
 	current_hash = bin2hex(hash_swap, 16);
+	free(old_hash);
+	mutex_unlock(&ch_lock);
+
 	if (unlikely(!current_hash))
 		quit (1, "set_curblock OOM");
 	applog(LOG_INFO, "New block: %s...", current_hash);
-	if (old_hash)
-		free(old_hash);
 }
 
 /* Search to see if this string is from a block that has been seen before */
@@ -4706,6 +4710,7 @@ int main(int argc, char *argv[])
 #endif
 	mutex_init(&control_lock);
 	mutex_init(&sharelog_lock);
+	mutex_init(&ch_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
 
