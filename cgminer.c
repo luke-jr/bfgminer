@@ -2140,13 +2140,13 @@ static void *submit_work_thread(void *userdata)
 
 		if (stale_work(work, true)) {
 			if (pool->submit_old)
-				applog(LOG_NOTICE, "Stale share detected, submitting as pool %d requested",
+				applog(LOG_NOTICE, "Stale share, submitting as pool %d requested",
 				       pool->pool_no);
 			else if (opt_submit_stale)
-				applog(LOG_NOTICE, "Stale share detected from pool %d, submitting as user requested",
+				applog(LOG_NOTICE, "Stale share from pool %d, submitting as user requested",
 					pool->pool_no);
 			else {
-				applog(LOG_NOTICE, "Stale share detected from pool %d, discarding",
+				applog(LOG_NOTICE, "Stale share from pool %d, discarding",
 					pool->pool_no);
 				sharelog("discard", work);
 				total_stale++;
