@@ -1,5 +1,8 @@
 BFGMiner Version 2.3.6 - April 29, 2012
 
+- Shorten stale share messages slightly.
+- Protect the freeing of current_hash under mutex_lock to prevent racing on it
+when set_curblock is hit concurrently.
 - Change default behaviour to submitting stale, removing the --submit-stale
 option and adding a --no-submit-stale option.
 - Make sure to start the getwork and submit threads when a pool is added on the
