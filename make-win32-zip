@@ -1,0 +1,53 @@
+#!/bin/bash
+set -x
+tag="$1"; shift
+[ -n "$tag" ] || exit 1
+sw="$1"; shift
+[ -n "$sw" ] || sw="$tag"
+
+IDIR="$PWD"
+ZIPNAME="${sw}-win32"
+OUTDIR="$PWD/w32zip/$ZIPNAME"
+TMPDIR="${OUTDIR}-tmp"
+
+set -e
+mkdir -v "$OUTDIR"
+cp -v \
+	-L \
+	pdcurses.dll \
+	libcurl-4.dll \
+	pthreadGC2.dll \
+	libusb-1.0.dll \
+	"$OUTDIR/"
+git clone . "$TMPDIR" -b "$tag" --depth 1
+cd "$TMPDIR"
+for txt in AUTHORS COPYING NEWS README; do
+	cp -v "$txt" "$OUTDIR/${txt}.txt"
+done
+cp -av "bitstreams" "$OUTDIR/"
+cp -av "$IDIR/"ADL_SDK/adl_{defines,sdk,structures}.h "ADL_SDK/"
+./autogen.sh
+./configure \
+	--prefix='C:\\Program Files\\BFGMiner\' \
+	CFLAGS='-march=i686 -Wall' \
+	--disable-cpumining \
+	--enable-opencl \
+	--enable-adl \
+	--enable-bitforce \
+	--enable-icarus \
+	--enable-ztex \
+	--build=i686-pc-linux-gnu \
+	--host=i686-pc-mingw32
+make -j4
+cp -v \
+	bfgminer.exe \
+	*.cl \
+	example.conf \
+	windows-build.txt \
+	API.class \
+	miner.php \
+	"$OUTDIR/" -v
+cd "$OUTDIR"
+cd ..
+zip -r "$IDIR/${ZIPNAME}.zip" "${ZIPNAME}"
+cd "$IDIR"
