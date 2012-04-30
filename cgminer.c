@@ -2158,8 +2158,8 @@ static void *submit_work_thread(void *userdata)
 
 		/* submit solution to bitcoin via JSON-RPC */
 		while (!submit_upstream_work(work, pool->submit_curl)) {
-			if (!opt_submit_stale && stale_work(work, true) && !pool->submit_old) {
-				applog(LOG_NOTICE, "Stale share detected on submit retry, discarding");
+			if (stale_work(work, true)) {
+				applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
 				total_stale++;
 				pool->stale_shares++;
 				break;
@@ -2211,8 +2211,8 @@ static void *submit_extra_work(void *userdata)
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(work, curl)) {
-		if (!opt_submit_stale && stale_work(work, true)) {
-			applog(LOG_NOTICE, "Stale share detected, discarding");
+		if (stale_work(work, true)) {
+			applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
 			total_stale++;
 			pool->stale_shares++;
 			break;
