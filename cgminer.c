@@ -1965,6 +1965,7 @@ static void *get_work_thread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
 	struct workio_cmd *wc;
+	CURL *curl;
 
 	pthread_detach(pthread_self());
 
@@ -1973,9 +1974,8 @@ static void *get_work_thread(void *userdata)
 	if (!pool->getwork_q)
 		quit(1, "Failed to tq_new in get_work_thread");
 
-	/* getwork_curl never cleared */
-	pool->getwork_curl = curl_easy_init();
-	if (unlikely(!pool->getwork_curl))
+	curl = curl_easy_init();
+	if (unlikely(!curl))
 		quit(1, "Failed to initialise pool getwork CURL");
 
 	while ((wc = tq_pop(pool->getwork_q, NULL)) != NULL) {
@@ -1992,7 +1992,7 @@ static void *get_work_thread(void *userdata)
 		ret_work->pool = pool;
 
 		/* obtain new work from bitcoin via JSON-RPC */
-		while (!get_upstream_work(ret_work, pool->getwork_curl)) {
+		while (!get_upstream_work(ret_work, curl)) {
 			if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 				applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
 				free_work(ret_work);
@@ -2019,6 +2019,7 @@ static void *get_work_thread(void *userdata)
 		workio_cmd_free(wc);
 	}
 
+	curl_easy_cleanup(curl);
 	return NULL;
 }
 
@@ -2121,6 +2122,7 @@ static void *submit_work_thread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
 	struct workio_cmd *wc;
+	CURL *curl;
 
 	pthread_detach(pthread_self());
 
@@ -2129,9 +2131,8 @@ static void *submit_work_thread(void *userdata)
 	if (!pool->submit_q )
 		quit(1, "Failed to tq_new in submit_work_thread");
 
-	/* submit_curl never cleared */
-	pool->submit_curl = curl_easy_init();
-	if (unlikely(!pool->submit_curl))
+	curl = curl_easy_init();
+	if (unlikely(!curl))
 		quit(1, "Failed to initialise pool submit CURL");
 
 	while ((wc = tq_pop(pool->submit_q, NULL)) != NULL) {
@@ -2157,7 +2158,7 @@ static void *submit_work_thread(void *userdata)
 		}
 
 		/* submit solution to bitcoin via JSON-RPC */
-		while (!submit_upstream_work(work, pool->submit_curl)) {
+		while (!submit_upstream_work(work, curl)) {
 			if (stale_work(work, true)) {
 				applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
 				total_stale++;
@@ -2180,6 +2181,7 @@ static void *submit_work_thread(void *userdata)
 		workio_cmd_free(wc);
 	}
 
+	curl_easy_cleanup(curl);
 	return NULL;
 }
 
