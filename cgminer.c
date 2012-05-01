@@ -2080,7 +2080,7 @@ static bool workio_get_work(struct workio_cmd *wc)
 	struct pool *pool = select_pool(wc->lagging);
 	pthread_t get_thread;
 
-	if (list_empty(&pool->getwork_q->q))
+	if (list_empty(&pool->getwork_q->q) || pool->submit_fail)
 		return tq_push(pool->getwork_q, wc);
 
 	if (unlikely(pthread_create(&get_thread, NULL, get_extra_work, (void *)wc))) {
@@ -2242,10 +2242,11 @@ out:
  * any size hardware */
 static bool workio_submit_work(struct workio_cmd *wc)
 {
+	struct pool *pool = wc->u.work->pool;
 	pthread_t submit_thread;
 
-	if (list_empty(&wc->u.work->pool->submit_q->q))
-		return tq_push(wc->u.work->pool->submit_q, wc);
+	if (list_empty(&pool->submit_q->q) || pool->submit_fail)
+		return tq_push(pool->submit_q, wc);
 
 	if (unlikely(pthread_create(&submit_thread, NULL, submit_extra_work, (void *)wc))) {
 		applog(LOG_ERR, "Failed to create submit_work_thread");
