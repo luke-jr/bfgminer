@@ -3720,11 +3720,14 @@ void *miner_thread(void *userdata)
 			}
 
 			if (unlikely(!hashes)) {
+				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
+				cgpu->deven = DEV_DISABLED;
+
 				cgpu->device_last_not_well = time(NULL);
 				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
 				cgpu->thread_zero_hash_count++;
 
-				goto out;
+				goto disabled;
 			}
 
 			hashes_done += hashes;
@@ -3785,6 +3788,7 @@ void *miner_thread(void *userdata)
 
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
+disabled:
 				mythr->rolling = mythr->cgpu->rolling = 0;
 				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
 				thread_reportout(mythr);
