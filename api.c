@@ -478,14 +478,14 @@ struct CODES {
 };
 
 static int my_thr_id = 0;
-static int bye = 0;
+static bool bye;
 static bool ping = true;
 
 // Used to control quit restart access to shutdown variables
 static pthread_mutex_t quit_restart_lock;
 
-static int do_a_quit = 0;
-static int do_a_restart = 0;
+static bool do_a_quit;
+static bool do_a_restart;
 
 static time_t when = 0;	// when the request occurred
 
@@ -1826,8 +1826,8 @@ void doquit(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson
 	else
 		strcpy(io_buffer, _BYE);
 
-	bye = 1;
-	do_a_quit = 1;
+	bye = true;
+	do_a_quit = true;
 }
 
 void dorestart(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
@@ -1837,8 +1837,8 @@ void dorestart(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isj
 	else
 		strcpy(io_buffer, _RESTART);
 
-	bye = 1;
-	do_a_restart = 1;
+	bye = true;
+	do_a_restart = true;
 }
 
 void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
@@ -2060,7 +2060,7 @@ static void tidyup(__maybe_unused void *arg)
 {
 	mutex_lock(&quit_restart_lock);
 
-	bye = 1;
+	bye = true;
 
 	if (sock != INVSOCK) {
 		shutdown(sock, SHUT_RDWR);
@@ -2323,7 +2323,7 @@ void api(int api_thr_id)
 	io_buffer = malloc(MYBUFSIZ+1);
 	msg_buffer = malloc(MYBUFSIZ+1);
 
-	while (bye == 0) {
+	while (!bye) {
 		clisiz = sizeof(cli);
 		if (SOCKETFAIL(c = accept(sock, (struct sockaddr *)(&cli), &clisiz))) {
 			applog(LOG_ERR, "API failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
@@ -2462,26 +2462,19 @@ die:
 
 	mutex_lock(&quit_restart_lock);
 
-	if (do_a_restart != 0) {
-
+	if (do_a_restart) {
 		if (thr_info_create(&bye_thr, NULL, restart_thread, &bye_thr)) {
 			mutex_unlock(&quit_restart_lock);
 			quit(1, "API failed to initiate a restart - aborting");
 		}
-
 		pthread_detach(bye_thr.pth);
-
-	} else
-		if (do_a_quit != 0) {
-
-			if (thr_info_create(&bye_thr, NULL, quit_thread, &bye_thr)) {
-				mutex_unlock(&quit_restart_lock);
-				quit(1, "API failed to initiate a clean quit - aborting");
-			}
-
-			pthread_detach(bye_thr.pth);
-
+	} else if (do_a_quit) {
+		if (thr_info_create(&bye_thr, NULL, quit_thread, &bye_thr)) {
+			mutex_unlock(&quit_restart_lock);
+			quit(1, "API failed to initiate a clean quit - aborting");
 		}
+		pthread_detach(bye_thr.pth);
+	}
 
 	mutex_unlock(&quit_restart_lock);
 }
