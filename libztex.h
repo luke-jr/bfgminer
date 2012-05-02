@@ -44,6 +44,9 @@ struct libztex_fpgastate {
 };
 
 struct libztex_device {
+	pthread_mutex_t	mutex;
+	struct libztex_device *root;
+	int fpgaNum;
 	bool valid;
 	struct libusb_device_descriptor descriptor;
 	libusb_device_handle *hndl; 
@@ -98,6 +101,7 @@ extern int libztex_setFreq (struct libztex_device *ztex, uint16_t freq);
 extern int libztex_sendHashData (struct libztex_device *ztex, unsigned char *sendbuf);
 extern int libztex_readHashData (struct libztex_device *ztex, struct libztex_hash_data nonces[]);
 extern int libztex_resetFpga (struct libztex_device *ztex);
-extern int libztex_selectFpga(struct libztex_device *ztex, int number);
+extern int libztex_selectFpga(struct libztex_device *ztex);
+extern int libztex_numberOfFpgas(struct libztex_device *ztex);
 
 #endif /* __LIBZTEX_H__ */

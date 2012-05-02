@@ -339,19 +339,20 @@ int libztex_numberOfFpgas(struct libztex_device *ztex) {
 				return cnt;
 			}
 			ztex->numberOfFpgas = buf[0] + 1;
-			ztex->selectedFpga = buf[1];
+			ztex->selectedFpga = -1;//buf[1];
 			ztex->parallelConfigSupport = (buf[2] == 1);
 		} else {
 			ztex->numberOfFpgas = 1;
-			ztex->selectedFpga = 0;
+			ztex->selectedFpga = -1;//0;
 			ztex->parallelConfigSupport = false;
 		}
 	}
 	return ztex->numberOfFpgas;
 }
 
-int libztex_selectFpga(struct libztex_device *ztex, int number) {
+int libztex_selectFpga(struct libztex_device *ztex) {
 	int cnt, fpgacnt = libztex_numberOfFpgas(ztex);
+	int number = ztex->fpgaNum;
 	if (number < 0 || number >= fpgacnt) {
 		applog(LOG_WARNING, "%s: Trying to select wrong fpga (%d in %d)", ztex->repr, number, fpgacnt);
 		return 1;
@@ -380,8 +381,12 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 		return cnt;
 	}
 	ztex->freqM = freq;
-	applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
-	       ztex->repr, ztex->freqM1 * (oldfreq + 1), ztex->freqM1 * (ztex->freqM + 1));
+	if (oldfreq == -1) 
+		applog(LOG_WARNING, "%s: Frequency set to %0.2f Mhz",
+		       ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
+	else
+		applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
+		       ztex->repr, ztex->freqM1 * (oldfreq + 1), ztex->freqM1 * (ztex->freqM + 1));
 
 	return 0;
 }
