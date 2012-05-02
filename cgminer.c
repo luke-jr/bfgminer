@@ -378,7 +378,8 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
-static void add_pool(void)
+/* Return value is ignored if not called from add_pool_details */
+static struct pool *add_pool(void)
 {
 	struct pool *pool;
 
@@ -393,6 +394,8 @@ static void add_pool(void)
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
+
+	return pool;
 }
 
 /* Pool variant of test and set */
@@ -4351,19 +4354,12 @@ char *curses_input(const char *query)
 
 int add_pool_details(bool live, char *url, char *user, char *pass)
 {
-	struct pool *pool = NULL;
+	struct pool *pool;
 
 	if (total_pools == MAX_POOLS)
 		return ADD_POOL_MAXIMUM;
 
-	pool = calloc(sizeof(struct pool), 1);
-	if (!pool)
-		quit(1, "Failed to realloc pools in add_pool_details");
-	pool->pool_no = total_pools;
-	pool->prio = total_pools;
-	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
-		quit (1, "Failed to pthread_mutex_init in input_pool");
-	INIT_LIST_HEAD(&pool->curlring);
+	pool = add_pool();
 
 	pool->rpc_url = url;
 	pool->rpc_user = user;
@@ -4373,14 +4369,11 @@ int add_pool_details(bool live, char *url, char *user, char *pass)
 		quit(1, "Failed to malloc userpass");
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
-	pool->tv_idle.tv_sec = ~0UL;
-
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
 	pool->enabled = true;
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
-	pools[total_pools++] = pool;
 
 	return ADD_POOL_OK;
 }

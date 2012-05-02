@@ -641,6 +641,8 @@ struct pool {
 	pthread_t submit_thread;
 	pthread_t getwork_thread;
 
+	pthread_mutex_t cr_lock;
+	pthread_cond_t cr_cond;
 	struct list_head curlring;
 };
 
