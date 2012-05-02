@@ -4031,7 +4031,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			switch_pools(NULL);
 		}
 
-		sleep(10);
+		sleep(30);
 	}
 	return NULL;
 }
