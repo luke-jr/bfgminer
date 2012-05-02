@@ -390,6 +390,8 @@ static struct pool *add_pool(void)
 	pools[total_pools++] = pool;
 	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init in add_pool");
+	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
+		quit(1, "Failed to pthread_cond_init in add_pool");
 	INIT_LIST_HEAD(&pool->curlring);
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -1965,19 +1967,29 @@ static void recruit_curl(struct pool *pool)
 		quit(1, "Failed to init in recruit_curl");
 
 	list_add(&ce->node, &pool->curlring);
-	applog(LOG_DEBUG, "Recruited new curl for pool %d", pool->pool_no);
+	pool->curls++;
+	applog(LOG_DEBUG, "Recruited curl %d for pool %d", pool->curls, pool->pool_no);
 }
 
+/* Grab an available curl if there is one. If not, then recruit extra curls
+ * unless we are in a submit_fail situation, or we have opt_delaynet enabled
+ * and there are already 5 curls in circulation */
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
 	struct curl_ent *ce;
 
 	mutex_lock(&pool->pool_lock);
-	if (list_empty(&pool->curlring))
+	if (!pool->curls)
 		recruit_curl(pool);
+	else if (list_empty(&pool->curlring)) {
+		if ((pool->submit_fail || opt_delaynet) && pool->curls > 4)
+			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
+		else
+			recruit_curl(pool);
+	}
 	ce = list_entry(pool->curlring.next, struct curl_ent, node);
 	list_del(&ce->node);
-	mutex_unlock(&pool->pool_lock);;
+	mutex_unlock(&pool->pool_lock);
 
 	return ce;
 }
@@ -1987,6 +1999,7 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	mutex_lock(&pool->pool_lock);
 	list_add_tail(&ce->node, &pool->curlring);
 	gettimeofday(&ce->tv, NULL);
+	pthread_cond_signal(&pool->cr_cond);
 	mutex_unlock(&pool->pool_lock);
 }
 
@@ -3999,7 +4012,8 @@ static void reap_curl(struct pool *pool)
 	mutex_lock(&pool->pool_lock);
 	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
 		if (now.tv_sec - ent->tv.tv_sec > 60) {
-			applog(LOG_DEBUG, "Reaped curl from pool %d", pool->pool_no);
+			applog(LOG_DEBUG, "Reaped curl %d from pool %d", pool->curls, pool->pool_no);
+			pool->curls--;
 			list_del(&ent->node);
 			curl_easy_cleanup(ent->curl);
 			free(ent);
