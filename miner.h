@@ -601,6 +601,7 @@ typedef struct {
 struct curl_ent {
 	CURL *curl;
 	struct list_head node;
+	struct timeval tv;
 };
 
 struct pool {

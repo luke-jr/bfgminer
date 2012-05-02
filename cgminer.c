@@ -1951,7 +1951,8 @@ static void sighandler(int __maybe_unused sig)
 	kill_work();
 }
 
-/* Called with pool_lock held */
+/* Called with pool_lock held. Recruit an extra curl if none are available for
+ * this pool. */
 static void recruit_curl(struct pool *pool)
 {
 	struct curl_ent *ce = calloc(sizeof(struct curl_ent), 1);
@@ -1981,7 +1982,8 @@ static struct curl_ent *pop_curl_entry(struct pool *pool)
 static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 {
 	mutex_lock(&pool->pool_lock);
-	list_add(&ce->node, &pool->curlring);
+	list_add_tail(&ce->node, &pool->curlring);
+	gettimeofday(&ce->tv, NULL);
 	mutex_unlock(&pool->pool_lock);
 }
 
@@ -3980,6 +3982,25 @@ void reinit_device(struct cgpu_info *cgpu)
 
 static struct timeval rotate_tv;
 
+/* We reap curls if they are unused for over a minute */
+static void reap_curl(struct pool *pool)
+{
+	struct curl_ent *ent, *iter;
+	struct timeval now;
+
+	gettimeofday(&now, NULL);
+	mutex_lock(&pool->pool_lock);
+	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
+		if (now.tv_sec - ent->tv.tv_sec > 60) {
+			applog(LOG_DEBUG, "Reaped curl from pool %d", pool->pool_no);
+			list_del(&ent->node);
+			curl_easy_cleanup(ent->curl);
+			free(ent);
+		}
+	}
+	mutex_unlock(&pool->pool_lock);
+}
+
 static void *watchpool_thread(void __maybe_unused *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -3993,6 +4014,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool = pools[i];
 
+			reap_curl(pool);
 			if (!pool->enabled)
 				continue;
 
