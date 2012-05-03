@@ -1660,6 +1660,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		pool->seq_rejects = 0;
 		cgpu->last_share_pool = pool->pool_no;
 		cgpu->last_share_pool_time = time(NULL);
+		pool->last_share_time = cgpu->last_share_pool_time;
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)

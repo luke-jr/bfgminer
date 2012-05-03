@@ -645,6 +645,8 @@ struct pool {
 	int curls;
 	pthread_cond_t cr_cond;
 	struct list_head curlring;
+
+	time_t last_share_time;
 };
 
 struct work {
