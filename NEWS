@@ -1,5 +1,6 @@
 Version 2.4.0 - May 3, 2012
 
+- Only show longpoll warning once when it has failed.
 - Convert hashes to an unsigned long long as well.
 - Detect pools that have issues represented by endless rejected shares and
 disable them, with a parameter to optionally disable this feature.
