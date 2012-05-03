@@ -134,6 +134,7 @@ Options for both config file and command line:
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
 --no-longpoll       Disable X-Long-Polling support
+--no-pool-disable   Do not automatically disable pools that continually reject shares
 --no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
@@ -1010,7 +1011,7 @@ no longer under active development and will not be supported unless someone
 steps up to help maintain it. No binary builds supporting CPU mining will be
 released but CPU mining can be built into BFGMiner when it is compiled.
 
-Q: I upgraded BFGMiner version and mu hashrate suddenly dropped!
+Q: I upgraded BFGMiner version and my hashrate suddenly dropped!
 A: No, you upgraded your SDK version unwittingly between upgrades of BFGMiner
 and that caused  your hashrate to drop. See the next question.
 
