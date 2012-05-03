@@ -158,7 +158,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.8";
+static const char *APIVERSION = "1.9";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -230,6 +230,7 @@ static const char *OSINFO =
 #define _NOTIFY		"NOTIFY"
 #define _DEVDETAILS	"DEVDETAILS"
 #define _BYE		"BYE"
+#define _RESTART	"RESTART"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -261,6 +262,7 @@ static const char ISJSON = '{';
 #define JSON_NOTIFY	JSON1 _NOTIFY JSON2
 #define JSON_DEVDETAILS	JSON1 _DEVDETAILS JSON2
 #define JSON_BYE	JSON1 _BYE JSON1
+#define JSON_RESTART	JSON1 _RESTART JSON1
 #define JSON_CLOSE	JSON3
 #define JSON_END	JSON4
 
@@ -477,8 +479,14 @@ struct CODES {
 };
 
 static int my_thr_id = 0;
-static int bye = 0;
+static bool bye;
 static bool ping = true;
+
+// Used to control quit restart access to shutdown variables
+static pthread_mutex_t quit_restart_lock;
+
+static bool do_a_quit;
+static bool do_a_restart;
 
 static time_t when = 0;	// when the request occurred
 
@@ -613,7 +621,7 @@ static int pgadevice(int pgaid)
 }
 #endif
 
-// All replies (except BYE) start with a message
+// All replies (except BYE and RESTART) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
 //  and send_result() adds JSON_END at the end
 static char *message(int messageid, int paramid, char *param2, bool isjson)
@@ -1785,22 +1793,26 @@ static void gpuvddc(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 #endif
 }
 
-static void send_result(SOCKETTYPE c, bool isjson);
-
-void doquit(SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+void doquit(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	if (isjson)
 		strcpy(io_buffer, JSON_START JSON_BYE);
 	else
 		strcpy(io_buffer, _BYE);
 
-	send_result(c, isjson);
-	*io_buffer = '\0';
-	bye = 1;
+	bye = true;
+	do_a_quit = true;
+}
 
-        PTH(&thr_info[my_thr_id]) = 0L;
+void dorestart(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	if (isjson)
+		strcpy(io_buffer, JSON_START JSON_RESTART);
+	else
+		strcpy(io_buffer, _RESTART);
 
-	kill_work();
+	bye = true;
+	do_a_restart = true;
 }
 
 void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
@@ -1992,6 +2004,7 @@ struct CMDS {
 	{ "privileged",		privileged,	true },
 	{ "notify",		notify,		false },
 	{ "devdetails",		devdetails,	false },
+	{ "restart",		dorestart,	true },
 	{ NULL,			NULL,		false }
 };
 
@@ -2016,12 +2029,13 @@ static void send_result(SOCKETTYPE c, bool isjson)
 		else
 			applog(LOG_DEBUG, "API: sent %d", n);
 	}
-
 }
 
 static void tidyup(__maybe_unused void *arg)
 {
-	bye = 1;
+	mutex_lock(&quit_restart_lock);
+
+	bye = true;
 
 	if (sock != INVSOCK) {
 		shutdown(sock, SHUT_RDWR);
@@ -2043,6 +2057,8 @@ static void tidyup(__maybe_unused void *arg)
 		free(io_buffer);
 		io_buffer = NULL;
 	}
+
+	mutex_unlock(&quit_restart_lock);
 }
 
 /*
@@ -2147,8 +2163,37 @@ popipo:
 	free(buf);
 }
 
+static void *quit_thread(__maybe_unused void *userdata)
+{
+	// allow thread creator to finish whatever it's doing
+	mutex_lock(&quit_restart_lock);
+	mutex_unlock(&quit_restart_lock);
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "API: killing cgminer");
+
+	kill_work();
+
+	return NULL;
+}
+
+static void *restart_thread(__maybe_unused void *userdata)
+{
+	// allow thread creator to finish whatever it's doing
+	mutex_lock(&quit_restart_lock);
+	mutex_unlock(&quit_restart_lock);
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "API: restarting cgminer");
+
+	app_restart();
+
+	return NULL;
+}
+
 void api(int api_thr_id)
 {
+	struct thr_info bye_thr;
 	char buf[BUFSIZ];
 	char param_buf[BUFSIZ];
 	const char *localaddr = "127.0.0.1";
@@ -2171,6 +2216,8 @@ void api(int api_thr_id)
 	bool isjson;
 	bool did;
 	int i;
+
+	mutex_init(&quit_restart_lock);
 
 	pthread_cleanup_push(tidyup, NULL);
 	my_thr_id = api_thr_id;
@@ -2251,7 +2298,7 @@ void api(int api_thr_id)
 	io_buffer = malloc(MYBUFSIZ+1);
 	msg_buffer = malloc(MYBUFSIZ+1);
 
-	while (bye == 0) {
+	while (!bye) {
 		clisiz = sizeof(cli);
 		if (SOCKETFAIL(c = accept(sock, (struct sockaddr *)(&cli), &clisiz))) {
 			applog(LOG_ERR, "API failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
@@ -2383,4 +2430,26 @@ void api(int api_thr_id)
 	}
 die:
 	pthread_cleanup_pop(true);
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "API: terminating due to: %s",
+				do_a_quit ? "QUIT" : (do_a_restart ? "RESTART" : (bye ? "BYE" : "UNKNOWN!")));
+
+	mutex_lock(&quit_restart_lock);
+
+	if (do_a_restart) {
+		if (thr_info_create(&bye_thr, NULL, restart_thread, &bye_thr)) {
+			mutex_unlock(&quit_restart_lock);
+			quit(1, "API failed to initiate a restart - aborting");
+		}
+		pthread_detach(bye_thr.pth);
+	} else if (do_a_quit) {
+		if (thr_info_create(&bye_thr, NULL, quit_thread, &bye_thr)) {
+			mutex_unlock(&quit_restart_lock);
+			quit(1, "API failed to initiate a clean quit - aborting");
+		}
+		pthread_detach(bye_thr.pth);
+	}
+
+	mutex_unlock(&quit_restart_lock);
 }

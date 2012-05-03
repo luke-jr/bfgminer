@@ -648,7 +648,7 @@ The STATUS section is:
    This defaults to the BFGMiner version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.8:
+For API version 1.9:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
@@ -772,7 +772,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating success or failure saving the BFGMiner config
                               to filename
 
- quit (*)      none           There is no status section but just a single "BYE|"
+ quit (*)      none           There is no status section but just a single "BYE"
                               reply before BFGMiner quits
 
  notify        NOTIFY         The last status and history count of each devices problem
@@ -799,6 +799,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               This lists all devices including those not supported
                               by the 'devs' command
                               e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
+
+ restart (*)   none           There is no status section but just a single "RESTART"
+                              reply before cgminer restarts
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
