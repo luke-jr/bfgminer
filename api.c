@@ -2454,6 +2454,10 @@ void api(int api_thr_id)
 		CLOSESOCKET(c);
 	}
 die:
+	/* Blank line fix for older compilers since pthread_cleanup_pop is a
+	 * macro that gets confused by a label existing immediately before it
+	 */
+	;
 	pthread_cleanup_pop(true);
 
 	if (opt_debug)
