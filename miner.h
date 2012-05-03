@@ -608,6 +608,7 @@ struct pool {
 	int pool_no;
 	int prio;
 	int accepted, rejected;
+	int seq_rejects;
 
 	bool submit_fail;
 	bool idle;
