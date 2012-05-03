@@ -136,6 +136,7 @@ int opt_api_port = 4028;
 bool opt_api_listen = false;
 bool opt_api_network = false;
 bool opt_delaynet = false;
+bool opt_disable_pool = true;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -839,6 +840,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
+	OPT_WITHOUT_ARG("--no-pool-disable",
+			opt_set_invbool, &opt_disable_pool,
+			"Do not automatically disable pools that continually reject shares"),
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
 #ifdef HAVE_OPENCL
@@ -1668,6 +1672,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		cgpu->accepted++;
 		total_accepted++;
 		pool->accepted++;
+		pool->seq_rejects = 0;
 		cgpu->last_share_pool = pool->pool_no;
 		cgpu->last_share_pool_time = time(NULL);
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
@@ -1689,6 +1694,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		cgpu->rejected++;
 		total_rejected++;
 		pool->rejected++;
+		pool->seq_rejects++;
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
 			char where[17];
@@ -1718,6 +1724,22 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 			applog(LOG_NOTICE, "Rejected %s %s %d %s%s",
 			       hashshow, cgpu->api->name, cgpu->device_id, where, reason);
 			sharelog(disposition, work);
+		}
+
+		/* Once we have more than a nominal amount of sequential rejects,
+		 * at least 10 and more than the current utility rate per minute,
+		 * disable the pool because some pool error is likely to have
+		 * ensued. */
+		if (pool->seq_rejects > 10 && opt_disable_pool && total_pools > 1) {
+			double utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+
+			if (pool->seq_rejects > utility) {
+				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
+				       pool->pool_no, pool->seq_rejects);
+				pool->enabled = false;
+				if (pool == current_pool())
+					switch_pools(NULL);
+			}
 		}
 	}
 
