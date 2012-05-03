@@ -3721,7 +3721,7 @@ void *miner_thread(void *userdata)
 	struct timeval diff, sdiff, wdiff;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	unsigned long long hashes_done = 0;
-	uint32_t hashes;
+	unsigned long long hashes;
 	struct work *work = make_work();
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
