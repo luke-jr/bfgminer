@@ -26,7 +26,7 @@ IRC Channel:
 
 irc://irc.freenode.net/cgminer
 
-License: GPLv2.  See COPYING for details.
+License: GPLv3.  See COPYING for details.
 
 READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
 
@@ -133,6 +133,7 @@ Options for both config file and command line:
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
+--no-pool-disable   Do not automatically disable pools that continually reject shares
 --no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
@@ -285,7 +286,6 @@ Current pool management strategy: Failover
 
 S gives you:
 
-[L]ongpoll: On
 [Q]ueue: 1
 [S]cantime: 60
 [E]xpiry: 120
@@ -647,7 +647,7 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.8:
+For API version 1.9:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
@@ -768,7 +768,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating success or failure saving the cgminer config
                               to filename
 
- quit (*)      none           There is no status section but just a single "BYE|"
+ quit (*)      none           There is no status section but just a single "BYE"
                               reply before cgminer quits
 
  notify        NOTIFY         The last status and history count of each devices problem
@@ -797,6 +797,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               This lists all devices including those not supported
                               by the 'devs' command
                               e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
+
+ restart (*)   none           There is no status section but just a single "RESTART"
+                              reply before cgminer restarts
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
@@ -1005,7 +1008,7 @@ no longer under active development and will not be supported unless someone
 steps up to help maintain it. No binary builds supporting CPU mining will be
 released but CPU mining can be built into cgminer when it is compiled.
 
-Q: I upgraded cgminer version and mu hashrate suddenly dropped!
+Q: I upgraded cgminer version and my hashrate suddenly dropped!
 A: No, you upgraded your SDK version unwittingly between upgrades of cgminer
 and that caused  your hashrate to drop. See the next question.
 

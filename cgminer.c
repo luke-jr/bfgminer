@@ -135,6 +135,7 @@ int opt_api_port = 4028;
 bool opt_api_listen = false;
 bool opt_api_network = false;
 bool opt_delaynet = false;
+bool opt_disable_pool = true;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -378,10 +379,8 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
-static void *submit_work_thread(void *userdata);
-static void *get_work_thread(void *userdata);
-
-static void add_pool(void)
+/* Return value is ignored if not called from add_pool_details */
+static struct pool *add_pool(void)
 {
 	struct pool *pool;
 
@@ -392,13 +391,14 @@ static void add_pool(void)
 	pools[total_pools++] = pool;
 	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init in add_pool");
+	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
+		quit(1, "Failed to pthread_cond_init in add_pool");
+	INIT_LIST_HEAD(&pool->curlring);
+
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 
-	if (unlikely(pthread_create(&pool->submit_thread, NULL, submit_work_thread, (void *)pool)))
-		quit(1, "Failed to create pool submit thread");
-	if (unlikely(pthread_create(&pool->getwork_thread, NULL, get_work_thread, (void *)pool)))
-		quit(1, "Failed to create pool getwork thread");
+	return pool;
 }
 
 /* Pool variant of test and set */
@@ -836,6 +836,9 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--no-pool-disable",
+			opt_set_invbool, &opt_disable_pool,
+			"Do not automatically disable pools that continually reject shares"),
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
 #ifdef HAVE_OPENCL
@@ -1654,6 +1657,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		cgpu->accepted++;
 		total_accepted++;
 		pool->accepted++;
+		pool->seq_rejects = 0;
 		cgpu->last_share_pool = pool->pool_no;
 		cgpu->last_share_pool_time = time(NULL);
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
@@ -1675,6 +1679,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		cgpu->rejected++;
 		total_rejected++;
 		pool->rejected++;
+		pool->seq_rejects++;
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
 			char where[17];
@@ -1704,6 +1709,22 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 			applog(LOG_NOTICE, "Rejected %s %s %d %s%s",
 			       hashshow, cgpu->api->name, cgpu->device_id, where, reason);
 			sharelog(disposition, work);
+		}
+
+		/* Once we have more than a nominal amount of sequential rejects,
+		 * at least 10 and more than the current utility rate per minute,
+		 * disable the pool because some pool error is likely to have
+		 * ensued. */
+		if (pool->seq_rejects > 10 && opt_disable_pool && total_pools > 1) {
+			double utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+
+			if (pool->seq_rejects > utility) {
+				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
+				       pool->pool_no, pool->seq_rejects);
+				pool->enabled = false;
+				if (pool == current_pool())
+					switch_pools(NULL);
+			}
 		}
 	}
 
@@ -1957,76 +1978,59 @@ static void sighandler(int __maybe_unused sig)
 	kill_work();
 }
 
-/* One get work thread is created per pool, so as to use one curl handle for
- * all getwork reqeusts from the same pool, minimising connections opened, but
- * separate from the submit work curl handle to not delay share submissions due
- * to getwork traffic */
-static void *get_work_thread(void *userdata)
+/* Called with pool_lock held. Recruit an extra curl if none are available for
+ * this pool. */
+static void recruit_curl(struct pool *pool)
 {
-	struct pool *pool = (struct pool *)userdata;
-	struct workio_cmd *wc;
+	struct curl_ent *ce = calloc(sizeof(struct curl_ent), 1);
 
-	pthread_detach(pthread_self());
+	ce->curl = curl_easy_init();
+	if (unlikely(!ce->curl || !ce))
+		quit(1, "Failed to init in recruit_curl");
 
-	/* getwork_q memory never freed */
-	pool->getwork_q = tq_new();
-	if (!pool->getwork_q)
-		quit(1, "Failed to tq_new in get_work_thread");
-
-	/* getwork_curl never cleared */
-	pool->getwork_curl = curl_easy_init();
-	if (unlikely(!pool->getwork_curl))
-		quit(1, "Failed to initialise pool getwork CURL");
-
-	while ((wc = tq_pop(pool->getwork_q, NULL)) != NULL) {
-		struct work *ret_work;
-		int failures = 0;
-
-		ret_work = make_work();
-
-		if (wc->thr)
-			ret_work->thr = wc->thr;
-		else
-			ret_work->thr = NULL;
-
-		ret_work->pool = pool;
-
-		/* obtain new work from bitcoin via JSON-RPC */
-		while (!get_upstream_work(ret_work, pool->getwork_curl)) {
-			if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-				applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
-				free_work(ret_work);
-				kill_work();
-				break;
-			}
-
-			/* pause, then restart work-request loop */
-			applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
-				fail_pause);
-			sleep(fail_pause);
-			fail_pause += opt_fail_pause;
-		}
-		fail_pause = opt_fail_pause;
-
-		applog(LOG_DEBUG, "Pushing work to requesting thread");
-
-		/* send work to requesting thread */
-		if (unlikely(!tq_push(thr_info[stage_thr_id].q, ret_work))) {
-			applog(LOG_ERR, "Failed to tq_push work in workio_get_work");
-			kill_work();
-			free_work(ret_work);
-		}
-		workio_cmd_free(wc);
-	}
-
-	return NULL;
+	list_add(&ce->node, &pool->curlring);
+	pool->curls++;
+	applog(LOG_DEBUG, "Recruited curl %d for pool %d", pool->curls, pool->pool_no);
 }
 
-static void *get_extra_work(void *userdata)
+/* Grab an available curl if there is one. If not, then recruit extra curls
+ * unless we are in a submit_fail situation, or we have opt_delaynet enabled
+ * and there are already 5 curls in circulation */
+static struct curl_ent *pop_curl_entry(struct pool *pool)
+{
+	struct curl_ent *ce;
+
+	mutex_lock(&pool->pool_lock);
+	if (!pool->curls)
+		recruit_curl(pool);
+	else if (list_empty(&pool->curlring)) {
+		if ((pool->submit_fail || opt_delaynet) && pool->curls > 4)
+			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
+		else
+			recruit_curl(pool);
+	}
+	ce = list_entry(pool->curlring.next, struct curl_ent, node);
+	list_del(&ce->node);
+	mutex_unlock(&pool->pool_lock);
+
+	return ce;
+}
+
+static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
+{
+	mutex_lock(&pool->pool_lock);
+	list_add_tail(&ce->node, &pool->curlring);
+	gettimeofday(&ce->tv, NULL);
+	pthread_cond_signal(&pool->cr_cond);
+	mutex_unlock(&pool->pool_lock);
+}
+
+static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct work *ret_work = make_work();;
-	CURL *curl = curl_easy_init();
+	struct work *ret_work = make_work();
+	struct curl_ent *ce;
+	struct pool *pool;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
@@ -2038,10 +2042,11 @@ static void *get_extra_work(void *userdata)
 	else
 		ret_work->thr = NULL;
 
-	ret_work->pool = select_pool(wc->lagging);
+	pool = ret_work->pool = select_pool(wc->lagging);
+	ce = pop_curl_entry(pool);
 
 	/* obtain new work from bitcoin via JSON-RPC */
-	while (!get_upstream_work(ret_work, curl)) {
+	while (!get_upstream_work(ret_work, ce->curl)) {
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
 			free_work(ret_work);
@@ -2068,7 +2073,7 @@ static void *get_extra_work(void *userdata)
 
 out:
 	workio_cmd_free(wc);
-	curl_easy_cleanup(curl);
+	push_curl_entry(ce, pool);
 	return NULL;
 }
 
@@ -2077,13 +2082,9 @@ out:
  * requests */
 static bool workio_get_work(struct workio_cmd *wc)
 {
-	struct pool *pool = select_pool(wc->lagging);
 	pthread_t get_thread;
 
-	if (list_empty(&pool->getwork_q->q))
-		return tq_push(pool->getwork_q, wc);
-
-	if (unlikely(pthread_create(&get_thread, NULL, get_extra_work, (void *)wc))) {
+	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)wc))) {
 		applog(LOG_ERR, "Failed to create get_work_thread");
 		return false;
 	}
@@ -2113,82 +2114,13 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
-/* One submit work thread is created per pool, so as to use one curl handle
- * for all submissions to the same pool, minimising connections opened, but
- * separate from the getwork curl handle to not delay share submission due to
- * getwork traffic */
+
 static void *submit_work_thread(void *userdata)
-{
-	struct pool *pool = (struct pool *)userdata;
-	struct workio_cmd *wc;
-
-	pthread_detach(pthread_self());
-
-	/* submit_q memory never freed */
-	pool->submit_q = tq_new();
-	if (!pool->submit_q )
-		quit(1, "Failed to tq_new in submit_work_thread");
-
-	/* submit_curl never cleared */
-	pool->submit_curl = curl_easy_init();
-	if (unlikely(!pool->submit_curl))
-		quit(1, "Failed to initialise pool submit CURL");
-
-	while ((wc = tq_pop(pool->submit_q, NULL)) != NULL) {
-		struct work *work = wc->u.work;
-		int failures = 0;
-
-		if (stale_work(work, true)) {
-			if (pool->submit_old)
-				applog(LOG_NOTICE, "Stale share, submitting as pool %d requested",
-				       pool->pool_no);
-			else if (opt_submit_stale)
-				applog(LOG_NOTICE, "Stale share from pool %d, submitting as user requested",
-					pool->pool_no);
-			else {
-				applog(LOG_NOTICE, "Stale share from pool %d, discarding",
-					pool->pool_no);
-				sharelog("discard", work);
-				total_stale++;
-				pool->stale_shares++;
-				workio_cmd_free(wc);
-				continue;
-			}
-		}
-
-		/* submit solution to bitcoin via JSON-RPC */
-		while (!submit_upstream_work(work, pool->submit_curl)) {
-			if (!opt_submit_stale && stale_work(work, true) && !pool->submit_old) {
-				applog(LOG_NOTICE, "Stale share detected on submit retry, discarding");
-				total_stale++;
-				pool->stale_shares++;
-				break;
-			}
-			if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-				applog(LOG_ERR, "Failed %d retries ...terminating workio thread", opt_retries);
-				kill_work();
-				break;
-			}
-
-			/* pause, then restart work-request loop */
-			applog(LOG_INFO, "json_rpc_call failed on submit_work, retry after %d seconds",
-				fail_pause);
-			sleep(fail_pause);
-			fail_pause += opt_fail_pause;
-		}
-		fail_pause = opt_fail_pause;
-		workio_cmd_free(wc);
-	}
-
-	return NULL;
-}
-
-static void *submit_extra_work(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	struct work *work = wc->u.work;
 	struct pool *pool = work->pool;
-	CURL *curl = curl_easy_init();
+	struct curl_ent *ce;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
@@ -2209,10 +2141,11 @@ static void *submit_extra_work(void *userdata)
 		}
 	}
 
+	ce = pop_curl_entry(pool);
 	/* submit solution to bitcoin via JSON-RPC */
-	while (!submit_upstream_work(work, curl)) {
-		if (!opt_submit_stale && stale_work(work, true)) {
-			applog(LOG_NOTICE, "Stale share detected, discarding");
+	while (!submit_upstream_work(work, ce->curl)) {
+		if (stale_work(work, true)) {
+			applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
 			total_stale++;
 			pool->stale_shares++;
 			break;
@@ -2230,9 +2163,9 @@ static void *submit_extra_work(void *userdata)
 		fail_pause += opt_fail_pause;
 	}
 	fail_pause = opt_fail_pause;
+	push_curl_entry(ce, pool);
 out:
 	workio_cmd_free(wc);
-	curl_easy_cleanup(curl);
 	return NULL;
 }
 
@@ -2244,10 +2177,7 @@ static bool workio_submit_work(struct workio_cmd *wc)
 {
 	pthread_t submit_thread;
 
-	if (list_empty(&wc->u.work->pool->submit_q->q))
-		return tq_push(wc->u.work->pool->submit_q, wc);
-
-	if (unlikely(pthread_create(&submit_thread, NULL, submit_extra_work, (void *)wc))) {
+	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, (void *)wc))) {
 		applog(LOG_ERR, "Failed to create submit_work_thread");
 		return false;
 	}
@@ -3233,7 +3163,7 @@ static inline void thread_reportout(struct thr_info *thr)
 }
 
 static void hashmeter(int thr_id, struct timeval *diff,
-		      unsigned long hashes_done)
+		      unsigned long long hashes_done)
 {
 	struct timeval temp_tv_end, total_diff;
 	double secs;
@@ -3263,7 +3193,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		double thread_rolling = 0.0;
 		int i;
 
-		applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
+		applog(LOG_DEBUG, "[thread %d: %llu hashes, %.0f khash/sec]",
 			thr_id, hashes_done, hashes_done / secs);
 
 		/* Rolling average for each thread and each device */
@@ -3764,8 +3694,8 @@ void *miner_thread(void *userdata)
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
-	uint32_t hashes_done = 0;
-	uint32_t hashes;
+	unsigned long long hashes_done = 0;
+	unsigned long long hashes;
 	struct work *work = make_work();
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
@@ -3828,11 +3758,14 @@ void *miner_thread(void *userdata)
 			}
 
 			if (unlikely(!hashes)) {
+				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
+				cgpu->deven = DEV_DISABLED;
+
 				cgpu->device_last_not_well = time(NULL);
 				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
 				cgpu->thread_zero_hash_count++;
 
-				goto out;
+				goto disabled;
 			}
 
 			hashes_done += hashes;
@@ -3893,6 +3826,7 @@ void *miner_thread(void *userdata)
 
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
+disabled:
 				mythr->rolling = mythr->cgpu->rolling = 0;
 				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
 				thread_reportout(mythr);
@@ -4056,8 +3990,9 @@ retry_pool:
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
 			if (opt_retries == -1 || failures++ < opt_retries) {
-				applog(LOG_WARNING,
-					"longpoll failed for %s, sleeping for 30s", pool->lp_url);
+				if (failures == 1)
+					applog(LOG_WARNING,
+					       "longpoll failed for %s, retrying every 30s", pool->lp_url);
 				sleep(30);
 			} else {
 				applog(LOG_ERR,
@@ -4090,6 +4025,26 @@ void reinit_device(struct cgpu_info *cgpu)
 
 static struct timeval rotate_tv;
 
+/* We reap curls if they are unused for over a minute */
+static void reap_curl(struct pool *pool)
+{
+	struct curl_ent *ent, *iter;
+	struct timeval now;
+
+	gettimeofday(&now, NULL);
+	mutex_lock(&pool->pool_lock);
+	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
+		if (now.tv_sec - ent->tv.tv_sec > 60) {
+			applog(LOG_DEBUG, "Reaped curl %d from pool %d", pool->curls, pool->pool_no);
+			pool->curls--;
+			list_del(&ent->node);
+			curl_easy_cleanup(ent->curl);
+			free(ent);
+		}
+	}
+	mutex_unlock(&pool->pool_lock);
+}
+
 static void *watchpool_thread(void __maybe_unused *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -4103,6 +4058,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool = pools[i];
 
+			reap_curl(pool);
 			if (!pool->enabled)
 				continue;
 
@@ -4119,7 +4075,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			switch_pools(NULL);
 		}
 
-		sleep(10);
+		sleep(30);
 	}
 	return NULL;
 }
@@ -4435,18 +4391,13 @@ char *curses_input(const char *query)
 
 int add_pool_details(bool live, char *url, char *user, char *pass)
 {
-	struct pool *pool = NULL;
+	struct pool *pool;
 
 	if (total_pools == MAX_POOLS)
 		return ADD_POOL_MAXIMUM;
 
-	pool = calloc(sizeof(struct pool), 1);
-	if (!pool)
-		quit(1, "Failed to realloc pools in add_pool_details");
-	pool->pool_no = total_pools;
-	pool->prio = total_pools;
-	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
-		quit (1, "Failed to pthread_mutex_init in input_pool");
+	pool = add_pool();
+
 	pool->rpc_url = url;
 	pool->rpc_user = user;
 	pool->rpc_pass = pass;
@@ -4455,19 +4406,11 @@ int add_pool_details(bool live, char *url, char *user, char *pass)
 		quit(1, "Failed to malloc userpass");
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
-	pool->tv_idle.tv_sec = ~0UL;
-
-	if (unlikely(pthread_create(&pool->submit_thread, NULL, submit_work_thread, (void *)pool)))
-		quit(1, "Failed to create pool submit thread");
-	if (unlikely(pthread_create(&pool->getwork_thread, NULL, get_work_thread, (void *)pool)))
-		quit(1, "Failed to create pool getwork thread");
-
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
 	pool->enabled = true;
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
-	pools[total_pools++] = pool;
 
 	return ADD_POOL_OK;
 }
