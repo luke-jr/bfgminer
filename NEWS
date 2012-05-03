@@ -1,3 +1,44 @@
+Version 2.4.0 - May 3, 2012
+
+- Convert hashes to an unsigned long long as well.
+- Detect pools that have issues represented by endless rejected shares and
+disable them, with a parameter to optionally disable this feature.
+- Bugfix: Use a 64-bit type for hashes_done (miner_thread) since it can overflow
+32-bit on some FPGAs
+- Implement an older header fix for a label existing before the pthread_cleanup
+macro.
+- Limit the number of curls we recruit on communication failures and with
+delaynet enabled to 5 by maintaining a per-pool curl count, and using a pthread
+conditional that wakes up when one is returned to the ring buffer.
+- Generalise add_pool() functions since they're repeated in add_pool_details.
+- Bugfix: Return failure, rather than quit, if BFwrite fails
+- Disable failing devices such that the user can attempt to re-enable them
+- Bugfix: thread_shutdown shouldn't try to free the device, since it's needed
+afterward
+- API bool's and 1TBS fixes
+- Icarus - minimise code delays and name timer variables
+- api.c V1.9 add 'restart' + redesign 'quit' so thread exits cleanly
+- api.c bug - remove extra ']'s in notify command
+- Increase pool watch interval to 30 seconds.
+- Reap curls that are unused for over a minute. This allows connections to be
+closed, thereby allowing the number of curl handles to always be the minimum
+necessary to not delay networking.
+- Use the ringbuffer of curls from the same pool for submit as well as getwork
+threads. Since the curl handles were already connected to the same pool and are
+immediately available, share submission will not be delayed by getworks.
+- Implement a scaleable networking framework designed to cope with any sized
+network requirements, yet minimise the number of connections being reopened. Do
+this by create a ring buffer linked list of curl handles to be used by getwork,
+recruiting extra handles when none is immediately available.
+- There is no need for the submit and getwork curls to be tied to the pool
+struct.
+- Do not recruit extra connection threads if there have been connection errors
+to the pool in question.
+- We should not retry submitting shares indefinitely or we may end up with a
+huge backlog during network outages, so discard stale shares if we failed to
+submit them and they've become stale in the interim.
+
+
 Version 2.3.6 - April 29, 2012
 
 - Shorten stale share messages slightly.
