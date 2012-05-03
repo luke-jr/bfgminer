@@ -1983,6 +1983,7 @@ static void *get_work_thread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
 	struct workio_cmd *wc;
+	CURL *curl;
 
 	pthread_detach(pthread_self());
 
@@ -1991,9 +1992,8 @@ static void *get_work_thread(void *userdata)
 	if (!pool->getwork_q)
 		quit(1, "Failed to tq_new in get_work_thread");
 
-	/* getwork_curl never cleared */
-	pool->getwork_curl = curl_easy_init();
-	if (unlikely(!pool->getwork_curl))
+	curl = curl_easy_init();
+	if (unlikely(!curl))
 		quit(1, "Failed to initialise pool getwork CURL");
 
 	while ((wc = tq_pop(pool->getwork_q, NULL)) != NULL) {
@@ -2010,7 +2010,7 @@ static void *get_work_thread(void *userdata)
 		ret_work->pool = pool;
 
 		/* obtain new work from bitcoin via JSON-RPC */
-		while (!get_upstream_work(ret_work, pool->getwork_curl)) {
+		while (!get_upstream_work(ret_work, curl)) {
 			if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 				applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
 				free_work(ret_work);
@@ -2037,6 +2037,7 @@ static void *get_work_thread(void *userdata)
 		workio_cmd_free(wc);
 	}
 
+	curl_easy_cleanup(curl);
 	return NULL;
 }
 
@@ -2098,7 +2099,7 @@ static bool workio_get_work(struct workio_cmd *wc)
 	struct pool *pool = select_pool(wc->lagging);
 	pthread_t get_thread;
 
-	if (list_empty(&pool->getwork_q->q))
+	if (list_empty(&pool->getwork_q->q) || pool->submit_fail)
 		return tq_push(pool->getwork_q, wc);
 
 	if (unlikely(pthread_create(&get_thread, NULL, get_extra_work, (void *)wc))) {
@@ -2139,6 +2140,7 @@ static void *submit_work_thread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
 	struct workio_cmd *wc;
+	CURL *curl;
 
 	pthread_detach(pthread_self());
 
@@ -2147,9 +2149,8 @@ static void *submit_work_thread(void *userdata)
 	if (!pool->submit_q )
 		quit(1, "Failed to tq_new in submit_work_thread");
 
-	/* submit_curl never cleared */
-	pool->submit_curl = curl_easy_init();
-	if (unlikely(!pool->submit_curl))
+	curl = curl_easy_init();
+	if (unlikely(!curl))
 		quit(1, "Failed to initialise pool submit CURL");
 
 	while ((wc = tq_pop(pool->submit_q, NULL)) != NULL) {
@@ -2175,9 +2176,9 @@ static void *submit_work_thread(void *userdata)
 		}
 
 		/* submit solution to bitcoin via JSON-RPC */
-		while (!submit_upstream_work(work, pool->submit_curl)) {
-			if (!opt_submit_stale && stale_work(work, true) && !pool->submit_old) {
-				applog(LOG_NOTICE, "Stale share detected on submit retry, discarding");
+		while (!submit_upstream_work(work, curl)) {
+			if (stale_work(work, true)) {
+				applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
 				total_stale++;
 				pool->stale_shares++;
 				break;
@@ -2198,6 +2199,7 @@ static void *submit_work_thread(void *userdata)
 		workio_cmd_free(wc);
 	}
 
+	curl_easy_cleanup(curl);
 	return NULL;
 }
 
@@ -2229,8 +2231,8 @@ static void *submit_extra_work(void *userdata)
 
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(work, curl)) {
-		if (!opt_submit_stale && stale_work(work, true)) {
-			applog(LOG_NOTICE, "Stale share detected, discarding");
+		if (stale_work(work, true)) {
+			applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
 			total_stale++;
 			pool->stale_shares++;
 			break;
@@ -2260,10 +2262,11 @@ out:
  * any size hardware */
 static bool workio_submit_work(struct workio_cmd *wc)
 {
+	struct pool *pool = wc->u.work->pool;
 	pthread_t submit_thread;
 
-	if (list_empty(&wc->u.work->pool->submit_q->q))
-		return tq_push(wc->u.work->pool->submit_q, wc);
+	if (list_empty(&pool->submit_q->q) || pool->submit_fail)
+		return tq_push(pool->submit_q, wc);
 
 	if (unlikely(pthread_create(&submit_thread, NULL, submit_extra_work, (void *)wc))) {
 		applog(LOG_ERR, "Failed to create submit_work_thread");

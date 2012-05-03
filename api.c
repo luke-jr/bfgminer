@@ -1849,7 +1849,7 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
 	// ALL counters (and only counters) must start the name with a '*'
 	// Simplifies future external support for adding new counters
 	sprintf(buf, isjson
-		? "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"*Thread Fail Init\":%d,\"*Thread Zero Hash\":%d,\"*Thread Fail Queue\":%d,\"*Dev Sick Idle 60s\":%d,\"*Dev Dead Idle 600s\":%d,\"*Dev Nostart\":%d,\"*Dev Over Heat\":%d,\"*Dev Thermal Cutoff\":%d}" JSON_CLOSE
+		? "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"*Thread Fail Init\":%d,\"*Thread Zero Hash\":%d,\"*Thread Fail Queue\":%d,\"*Dev Sick Idle 60s\":%d,\"*Dev Dead Idle 600s\":%d,\"*Dev Nostart\":%d,\"*Dev Over Heat\":%d,\"*Dev Thermal Cutoff\":%d}"
 		: "%sNOTIFY=%d,Name=%s,ID=%d,Last Well=%lu,Last Not Well=%lu,Reason Not Well=%s,*Thread Fail Init=%d,*Thread Zero Hash=%d,*Thread Fail Queue=%d,*Dev Sick Idle 60s=%d,*Dev Dead Idle 600s=%d,*Dev Nostart=%d,*Dev Over Heat=%d,*Dev Thermal Cutoff=%d" SEPSTR,
 		(isjson && (device > 0)) ? COMMA : BLANK,
 		device, cgpu->api->name, cgpu->device_id,

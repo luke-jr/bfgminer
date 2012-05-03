@@ -632,9 +632,6 @@ struct pool {
 	pthread_t longpoll_thread;
 	pthread_t submit_thread;
 	pthread_t getwork_thread;
-
-	CURL *submit_curl;
-	CURL *getwork_curl;
 };
 
 struct work {
