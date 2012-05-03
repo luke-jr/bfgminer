@@ -598,6 +598,12 @@ typedef struct {
 } dev_blk_ctx;
 #endif
 
+struct curl_ent {
+	CURL *curl;
+	struct list_head node;
+	struct timeval tv;
+};
+
 struct pool {
 	int pool_no;
 	int prio;
@@ -634,6 +640,10 @@ struct pool {
 	pthread_t longpoll_thread;
 	pthread_t submit_thread;
 	pthread_t getwork_thread;
+
+	int curls;
+	pthread_cond_t cr_cond;
+	struct list_head curlring;
 };
 
 struct work {
