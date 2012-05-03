@@ -360,7 +360,7 @@ static bool ztex_prepare(struct thr_info *thr)
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
 	
-	libztex_selectFpga(ztex);
+	ztex_selectFpga(ztex);
 	if (libztex_configureFpga(ztex) != 0)
 		return false;
 	ztex_releaseFpga(ztex);
