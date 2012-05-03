@@ -3990,8 +3990,9 @@ retry_pool:
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
 			if (opt_retries == -1 || failures++ < opt_retries) {
-				applog(LOG_WARNING,
-					"longpoll failed for %s, sleeping for 30s", pool->lp_url);
+				if (failures == 1)
+					applog(LOG_WARNING,
+					       "longpoll failed for %s, retrying every 30s", pool->lp_url);
 				sleep(30);
 			} else {
 				applog(LOG_ERR,
