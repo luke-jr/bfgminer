@@ -3141,7 +3141,7 @@ static inline void thread_reportout(struct thr_info *thr)
 }
 
 static void hashmeter(int thr_id, struct timeval *diff,
-		      unsigned long hashes_done)
+		      unsigned long long hashes_done)
 {
 	struct timeval temp_tv_end, total_diff;
 	double secs;
@@ -3171,7 +3171,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		double thread_rolling = 0.0;
 		int i;
 
-		applog(LOG_DEBUG, "[thread %d: %lu hashes, %.0f khash/sec]",
+		applog(LOG_DEBUG, "[thread %d: %llu hashes, %.0f khash/sec]",
 			thr_id, hashes_done, hashes_done / secs);
 
 		/* Rolling average for each thread and each device */
@@ -3672,7 +3672,7 @@ void *miner_thread(void *userdata)
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
-	uint32_t hashes_done = 0;
+	unsigned long long hashes_done = 0;
 	uint32_t hashes;
 	struct work *work = make_work();
 	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
