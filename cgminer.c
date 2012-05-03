@@ -4058,7 +4058,8 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool = pools[i];
 
-			reap_curl(pool);
+			if (!opt_benchmark)
+				reap_curl(pool);
 			if (!pool->enabled)
 				continue;
 
