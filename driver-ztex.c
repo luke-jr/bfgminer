@@ -87,8 +87,9 @@ static void ztex_detect(void)
 			ztex_slave = calloc(1, sizeof(struct libztex_device));
 			memcpy(ztex_slave, ztex_devices[i]->dev, sizeof(struct libztex_device));
 			ztex->device_ztex = ztex_slave;
-			ztex_slave->root = ztex_devices[i]->dev;
+			ztex->threads = 1;
 			ztex_slave->fpgaNum = j;
+			ztex_slave->root = ztex_devices[i]->dev;
 			add_cgpu(ztex);
 		}
 
