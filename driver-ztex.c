@@ -41,6 +41,7 @@ static void ztex_selectFpga(struct libztex_device* ztex)
 	if (ztex->root->numberOfFpgas > 1) {
 		if (ztex->root->selectedFpga != ztex->fpgaNum)
 			mutex_lock(&ztex->root->mutex);
+			applog(LOG_DEBUG, "%s:%d: locked", ztex->repr, ztex->fpgaNum);
 		libztex_selectFpga(ztex);
 	}
 }
@@ -50,6 +51,7 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 	if (ztex->root->numberOfFpgas > 1) {
 		ztex->root->selectedFpga = -1;
 		mutex_unlock(&ztex->root->mutex);
+		applog(LOG_DEBUG, "%s:%d: unlocked", ztex->repr, ztex->fpgaNum);
 	}
 }
 
@@ -127,7 +129,7 @@ static bool ztex_updateFreq(struct libztex_device* ztex)
 
 	if (bestM != ztex->freqM) {
 		ztex_selectFpga(ztex);
-		libztex_setFreq(ztex, bestM);
+		libztex_setFreq(ztex->root, bestM);
 		ztex_releaseFpga(ztex);
 	}
 
@@ -136,7 +138,7 @@ static bool ztex_updateFreq(struct libztex_device* ztex)
 		maxM++;
 	if ((bestM < (1.0 - LIBZTEX_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
 		ztex_selectFpga(ztex);
-		libztex_resetFpga(ztex);
+		libztex_resetFpga(ztex->root);
 		ztex_releaseFpga(ztex);
 		applog(LOG_ERR, "%s: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
 		       ztex->repr, (1.0 - 1.0 * bestM / maxM) * 100);
@@ -204,12 +206,12 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	memcpy(sendbuf + 12, work->midstate, 32);
 	
 	ztex_selectFpga(ztex);
-	i = libztex_sendHashData(ztex, sendbuf);
+	i = libztex_sendHashData(ztex->root, sendbuf);
 	if (i < 0) {
 		// Something wrong happened in send
 		applog(LOG_ERR, "%s: Failed to send hash data with err %d, retrying", ztex->repr, i);
 		usleep(500000);
-		i = libztex_sendHashData(ztex, sendbuf);
+		i = libztex_sendHashData(ztex->root, sendbuf);
 		if (i < 0) {
 			// And there's nothing we can do about it
 			ztex_disable(thr);
@@ -247,12 +249,12 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			break;
 		}
 		ztex_selectFpga(ztex);
-		i = libztex_readHashData(ztex, &hdata[0]);
+		i = libztex_readHashData(ztex->root, &hdata[0]);
 		if (i < 0) {
 			// Something wrong happened in read
 			applog(LOG_ERR, "%s: Failed to read hash data with err %d, retrying", ztex->repr, i);
 			usleep(500000);
-			i = libztex_readHashData(ztex, &hdata[0]);
+			i = libztex_readHashData(ztex->root, &hdata[0]);
 			if (i < 0) {
 				// And there's nothing we can do about it
 				ztex_disable(thr);
@@ -361,7 +363,7 @@ static bool ztex_prepare(struct thr_info *thr)
 	get_datestamp(cgpu->init, &now);
 	
 	ztex_selectFpga(ztex);
-	if (libztex_configureFpga(ztex) != 0)
+	if (libztex_configureFpga(ztex->root) != 0)
 		return false;
 	ztex_releaseFpga(ztex);
 	ztex->freqM = -1;
