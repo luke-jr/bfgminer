@@ -79,13 +79,17 @@ static void BFgets(char *buf, size_t bufLen, int fd)
 	buf[0] = '\0';
 }
 
-static void BFwrite(int fd, const void *buf, ssize_t bufLen)
+static ssize_t BFwrite2(int fd, const void *buf, ssize_t bufLen)
 {
-	ssize_t ret = write(fd, buf, bufLen);
-
-	if (unlikely(ret != bufLen))
-		quit(1, "BFwrite failed");
+	return write(fd, buf, bufLen);
 }
+
+#define BFwrite(fd, buf, bufLen)  do {  \
+	if ((bufLen) != BFwrite2(fd, buf, bufLen)) {  \
+		applog(LOG_ERR, "Error writing to BitForce (" #buf ")");  \
+		return 0;  \
+	}  \
+} while(0)
 
 #define BFclose(fd) close(fd)
 
