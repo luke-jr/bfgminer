@@ -89,6 +89,7 @@ static void ztex_detect(void)
 			ztex->device_ztex = ztex_slave;
 			ztex_slave->root = ztex_devices[i]->dev;
 			ztex_slave->fpgaNum = j;
+			add_cgpu(ztex);
 		}
 
 		applog(LOG_WARNING,"%s: Found Ztex (fpga count = %d) , mark as %d", ztex->device_ztex->repr, fpgacount, ztex->device_id);
