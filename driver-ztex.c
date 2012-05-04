@@ -41,7 +41,6 @@ static void ztex_selectFpga(struct libztex_device* ztex)
 	if (ztex->root->numberOfFpgas > 1) {
 		if (ztex->root->selectedFpga != ztex->fpgaNum)
 			mutex_lock(&ztex->root->mutex);
-			applog(LOG_DEBUG, "%s:%d: locked", ztex->repr, ztex->fpgaNum);
 		libztex_selectFpga(ztex);
 	}
 }
@@ -51,7 +50,6 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 	if (ztex->root->numberOfFpgas > 1) {
 		ztex->root->selectedFpga = -1;
 		mutex_unlock(&ztex->root->mutex);
-		applog(LOG_DEBUG, "%s:%d: unlocked", ztex->repr, ztex->fpgaNum);
 	}
 }
 
