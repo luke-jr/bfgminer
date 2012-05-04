@@ -130,6 +130,9 @@ void *alloca (size_t);
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+#define INPUTEQ(X)	(!strncasecmp(&input, ("X"), 1))
+#define INPUTNEQ(X)	(strncasecmp(&input, ("X"), 1))
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,

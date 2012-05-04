@@ -1198,34 +1198,34 @@ void change_autosettings(int gpu)
 	wlogprint("Toggle [F]an auto [G]PU auto\nChange [T]arget [O]verheat [C]utoff\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
-	if (!strncasecmp(&input, "f", 1)) {
+	if (INPUTEQ(f)) {
 		ga->autofan ^= true;
 		wlogprint("Fan autotune is now %s\n", ga->autofan ? "enabled" : "disabled");
 		if (!ga->autofan) {
 			wlogprint("Resetting fan to startup settings\n");
 			set_defaultfan(gpu);
 		}
-	} else if (!strncasecmp(&input, "g", 1)) {
+	} else if (INPUTEQ(g)) {
 		ga->autoengine ^= true;
 		wlogprint("GPU engine clock autotune is now %s\n", ga->autoengine ? "enabled" : "disabled");
 		if (!ga->autoengine) {
 			wlogprint("Resetting GPU engine clock to startup settings\n");
 			set_defaultengine(gpu);
 		}
-	} else if (!strncasecmp(&input, "t", 1)) {
+	} else if (INPUTEQ(t)) {
 		val = curses_int("Enter target temperature for this GPU in C (0-200)");
 		if (val < 0 || val > 200)
 			wlogprint("Invalid temperature");
 		else
 			ga->targettemp = val;
-	} else if (!strncasecmp(&input, "o", 1)) {
+	} else if (INPUTEQ(o)) {
 		wlogprint("Enter overheat temperature for this GPU in C (%d+)", ga->targettemp);
 		val = curses_int("");
 		if (val <= ga->targettemp || val > 200)
 			wlogprint("Invalid temperature");
 		else
 			ga->overtemp = val;
-	} else if (!strncasecmp(&input, "c", 1)) {
+	} else if (INPUTEQ(c)) {
 		wlogprint("Enter cutoff temperature for this GPU in C (%d+)", ga->overtemp);
 		val = curses_int("");
 		if (val <= ga->overtemp || val > 200)
@@ -1265,70 +1265,70 @@ updated:
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
-	if (!strncasecmp(&input, "a", 1)) {
+	if (INPUTEQ(a)) {
 		change_autosettings(gpu);
-	} else if (!strncasecmp(&input, "e", 1)) {
+	} else if (INPUTEQ(e)) {
 		get_enginerange(gpu, &imin, &imax);
 		wlogprint("Enter GPU engine clock speed (%d - %d Mhz)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
 			input = getch();
-			if (strncasecmp(&input, "y", 1))
+			if (INPUTNEQ(y))
 				return;
 		}
 		if (!set_engineclock(gpu, val))
 			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify engine clock speed\n");
-	} else if (!strncasecmp(&input, "f", 1)) {
+	} else if (INPUTEQ(f)) {
 		get_fanrange(gpu, &imin, &imax);
 		wlogprint("Enter fan percentage (%d - %d %)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
 			input = getch();
-			if (strncasecmp(&input, "y", 1))
+			if (INPUTNEQ(y))
 				return;
 		}
 		if (!set_fanspeed(gpu, val))
 			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify fan speed\n");
-	} else if (!strncasecmp(&input, "m", 1)) {
+	} else if (INPUTEQ(m)) {
 		get_memoryrange(gpu, &imin, &imax);
 		wlogprint("Enter GPU memory clock speed (%d - %d Mhz)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
 			input = getch();
-			if (strncasecmp(&input, "y", 1))
+			if (INPUTNEQ(y))
 				return;
 		}
 		if (!set_memoryclock(gpu, val))
 			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify memory clock speed\n");
-	} else if (!strncasecmp(&input, "v", 1)) {
+	} else if (INPUTEQ(v)) {
 		get_vddcrange(gpu, &fmin, &fmax);
 		wlogprint("Enter GPU voltage (%.3f - %.3f V)", fmin, fmax);
 		fval = curses_float("");
 		if (fval < fmin || fval > fmax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
 			input = getch();
-			if (strncasecmp(&input, "y", 1))
+			if (INPUTNEQ(y))
 				return;
 		}
 		if (!set_vddc(gpu, fval))
 			wlogprint("Driver reports success but check values below\n");
 		else
 			wlogprint("Failed to modify voltage\n");
-	} else if (!strncasecmp(&input, "p", 1)) {
+	} else if (INPUTEQ(p)) {
 		val = curses_int("Enter powertune value (-20 - 20)");
 		if (val < -20 || val > 20) {
 			wlogprint("Value is outside safe range, are you sure?\n");
 			input = getch();
-			if (strncasecmp(&input, "y", 1))
+			if (INPUTNEQ(y))
 				return;
 		}
 		if (!set_powertune(gpu, val))
