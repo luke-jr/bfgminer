@@ -1676,6 +1676,16 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 			kill_work();
 			goto out;
 		}
+
+		/* Detect if a pool that has been temporarily disabled for
+		 * continually rejecting shares has started accepting shares.
+		 * This will only happen with the work returned from a
+		 * longpoll */
+		if (unlikely(pool->enabled == POOL_REJECTING)) {
+			applog(LOG_WARNING, "Rejecting pool %d now accepting shares, re-enabling!", pool->pool_no);
+			pool->enabled = POOL_ENABLED;
+			switch_pools(NULL);
+		}
 	} else {
 		cgpu->rejected++;
 		total_rejected++;
@@ -1722,7 +1732,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 			if (pool->seq_rejects > utility) {
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
 				       pool->pool_no, pool->seq_rejects);
-				pool->enabled = false;
+				pool->enabled = POOL_REJECTING;
 				if (pool == current_pool())
 					switch_pools(NULL);
 				pool->seq_rejects = 0;
@@ -1770,7 +1780,7 @@ static inline struct pool *select_pool(bool lagging)
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 		pool = pools[rotating_pool];
-		if ((!pool->idle && pool->enabled) || pool == cp)
+		if ((!pool->idle && pool->enabled == POOL_ENABLED) || pool == cp)
 			break;
 		pool = NULL;
 	}
@@ -2102,6 +2112,7 @@ static bool workio_get_work(struct workio_cmd *wc)
 static bool stale_work(struct work *work, bool share)
 {
 	struct timeval now;
+	struct pool *pool;
 
 	if (opt_benchmark)
 		return false;
@@ -2116,7 +2127,8 @@ static bool stale_work(struct work *work, bool share)
 	if (work->work_block != work_block)
 		return true;
 
-	if (opt_fail_only && !share && work->pool != current_pool())
+	pool = work->pool;
+	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING)
 		return true;
 
 	return false;
@@ -2241,7 +2253,7 @@ void switch_pools(struct pool *selected)
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
 				pool = priority_pool(i);
-				if (!pool->idle && pool->enabled) {
+				if (!pool->idle && pool->enabled == POOL_ENABLED) {
 					pool_no = pool->pool_no;
 					break;
 				}
@@ -2550,7 +2562,7 @@ int active_pools(void)
 	int i;
 
 	for (i = 0; i < total_pools; i++) {
-		if ((pools[i])->enabled)
+		if ((pools[i])->enabled == POOL_ENABLED)
 			ret++;
 	}
 	return ret;
@@ -2772,11 +2784,21 @@ updated:
 
 		if (pool == current_pool())
 			wattron(logwin, A_BOLD);
-		if (!pool->enabled)
+		if (pool->enabled != POOL_ENABLED)
 			wattron(logwin, A_DIM);
-		wlogprint("%d: %s %s Priority %d: %s  User:%s\n",
-			pool->pool_no,
-			pool->enabled? "Enabled" : "Disabled",
+		wlogprint("%d: ");
+		switch (pool->enabled) {
+			case POOL_ENABLED:
+				wlogprint("Enabled ");
+				break;
+			case POOL_DISABLED:
+				wlogprint("Disabled ");
+				break;
+			case POOL_REJECTING:
+				wlogprint("Rejecting ");
+				break;
+		}
+		wlogprint("%s Priority %d: %s  User:%s\n",
 			pool->idle? "Dead" : "Alive",
 			pool->prio,
 			pool->rpc_url, pool->rpc_user);
@@ -2812,7 +2834,7 @@ retry:
 			wlogprint("Unable to remove pool due to activity\n");
 			goto retry;
 		}
-		pool->enabled = false;
+		pool->enabled = POOL_DISABLED;
 		remove_pool(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "s", 1)) {
@@ -2822,7 +2844,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		pool->enabled = true;
+		pool->enabled = POOL_ENABLED;
 		switch_pools(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "d", 1)) {
@@ -2836,7 +2858,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		pool->enabled = false;
+		pool->enabled = POOL_DISABLED;
 		if (pool == current_pool())
 			switch_pools(NULL);
 		goto updated;
@@ -2847,7 +2869,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		pool->enabled = true;
+		pool->enabled = POOL_ENABLED;
 		if (pool->prio < current_pool()->prio)
 			switch_pools(pool);
 		goto updated;
@@ -3888,8 +3910,11 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	 * allows testwork to know whether LP discovered the block or not. */
 	test_work_current(work);
 
-	/* Don't use backup LPs as work if we have failover-only enabled */
-	if (pool != current_pool() && opt_fail_only) {
+	/* Don't use backup LPs as work if we have failover-only enabled. Use
+	 * the longpoll work from a pool that has been rejecting shares as a
+	 * way to detect when the pool has recovered.
+	 */
+	if (pool != current_pool() && opt_fail_only && pool->enabled != POOL_REJECTING) {
 		free_work(work);
 		return;
 	}
@@ -4068,7 +4093,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			if (!opt_benchmark)
 				reap_curl(pool);
-			if (!pool->enabled)
+			if (pool->enabled != POOL_ENABLED)
 				continue;
 
 			/* Test pool is idle once every minute */
@@ -4417,7 +4442,7 @@ int add_pool_details(bool live, char *url, char *user, char *pass)
 
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
-	pool->enabled = true;
+	pool->enabled = POOL_ENABLED;
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
 
@@ -4737,7 +4762,7 @@ int main(int argc, char *argv[])
 		strcpy(pool->rpc_url, "Benchmark");
 		pool->rpc_user = pool->rpc_url;
 		pool->rpc_pass = pool->rpc_url;
-		pool->enabled = true;
+		pool->enabled = POOL_ENABLED;
 		pool->idle = false;
 		successful_connect = true;
 	}
@@ -4966,7 +4991,7 @@ int main(int argc, char *argv[])
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool  = pools[i];
 
-		pool->enabled = true;
+		pool->enabled = POOL_ENABLED;
 		pool->idle = true;
 	}
 
