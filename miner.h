@@ -122,6 +122,8 @@ void *alloca (size_t);
 #endif
 #define __maybe_unused		__attribute__((unused))
 
+#define uninitialised_var(x) x = x
+
 #if defined(__i386__)
 #define WANT_CRYPTOPP_ASM32
 #endif

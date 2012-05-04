@@ -2037,12 +2037,14 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	mutex_unlock(&pool->pool_lock);
 }
 
+/* ce and pool may appear uninitialised at push_curl_entry, but they're always
+ * set when we don't have opt_benchmark enabled */
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
+	struct curl_ent * uninitialised_var(ce);
+	struct pool * uninitialised_var(pool);
 	struct work *ret_work = make_work();
-	struct curl_ent *ce;
-	struct pool *pool;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
