@@ -125,6 +125,107 @@ static int libztex_getFpgaState(struct libztex_device *ztex, struct libztex_fpga
 	return 0;
 }
 
+static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firmware, bool force, char bs)
+{
+	struct libztex_fpgastate state;
+	const int transactionBytes = 65536;
+	unsigned char buf[transactionBytes], settings[2];
+	int tries, cnt, buf_p, i;
+	ssize_t pos = 0;
+	FILE *fp;
+
+	if (!libztex_checkCapability(ztex, CAPABILITY_HS_FPGA))
+		return -1;
+	libztex_getFpgaState(ztex, &state);
+	if (!force && state.fpgaConfigured) {
+		applog(LOG_INFO, "Bitstream already configured");
+		return 1;
+	}
+	cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x33, 0, 0, settings, 2, 1000);
+	if (unlikely(cnt < 0)) {
+		applog(LOG_ERR, "%s: Failed getHSFpgaSettings with err %d", ztex->repr, cnt);
+		return cnt;
+	}
+
+	libusb_claim_interface(ztex->hndl, settings[1]);
+
+	for (tries = 3; tries > 0; tries--) {
+		fp = fopen(firmware, "rb");
+		if (!fp) {
+			applog(LOG_ERR, "%s: failed to read firmware '%s'", ztex->repr, firmware);
+			return -2;
+		}
+
+		while (pos < transactionBytes && !feof(fp)) {
+			buf[pos++] = getc(fp);
+		}
+
+		if (feof(fp))
+			pos--;
+
+		if (bs != 0 && bs != 1)
+			bs = libztex_detectBitstreamBitOrder(buf, transactionBytes < pos? transactionBytes: pos);
+
+
+		if (bs == 1)
+			libztex_swapBits(buf, pos);
+	 
+		libusb_control_transfer(ztex->hndl, 0x40, 0x34, 0, 0, NULL, 0, 1000);
+		// 0x34 - initHSFPGAConfiguration
+
+		buf_p = pos;
+		while (1) {
+			i = 0;
+			while (i < buf_p) {
+				if (libusb_bulk_transfer(ztex->hndl,
+				                                  settings[0],
+				                                  &buf[i],
+				                                  buf_p - i,
+				                                  &cnt, 1000) != 0) {
+					applog(LOG_ERR, "%s: Failed send hs fpga data", ztex->repr);
+					break;
+				}
+				usleep(500);
+				i += cnt;
+			}
+			if (i < buf_p || buf_p < transactionBytes)
+				break;
+			buf_p = 0;
+			while (buf_p < transactionBytes && !feof(fp)) {
+				buf[buf_p++] = getc(fp);
+			}
+			if (feof(fp))
+				buf_p--;
+			pos += buf_p;
+			if (buf_p == 0)
+				break;
+			if (bs == 1)
+				libztex_swapBits(buf, buf_p);
+		}
+
+		libusb_control_transfer(ztex->hndl, 0x40, 0x35, 0, 0, NULL, 0, 1000);
+		// 0x35 - finishHSFPGAConfiguration
+		if (cnt >= 0)
+			tries = 0;
+
+		fclose(fp);
+
+		libztex_getFpgaState(ztex, &state);
+		if (!state.fpgaConfigured) {
+			applog(LOG_ERR, "%s: HS FPGA configuration failed: DONE pin does not go high", ztex->repr);
+			return -3;
+		}
+
+	}
+
+	libusb_release_interface(ztex->hndl, settings[1]);
+
+	usleep(200000);
+	applog(LOG_INFO, "%s: HS FPGA configuration done", ztex->repr);
+	return 0;
+
+}
+
 static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firmware, bool force, char bs)
 {
 	struct libztex_fpgastate state;
@@ -216,12 +317,15 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 int libztex_configureFpga(struct libztex_device *ztex)
 {
 	char buf[256] = "bitstreams/";
+	int rv;
 
 	memset(&buf[11], 0, 245);
 	strcpy(&buf[11], ztex->bitFileName);
 	strcpy(&buf[strlen(buf)], ".bit");
-
-	return libztex_configureFpgaLS(ztex, buf, true, 2);
+	rv = libztex_configureFpgaHS(ztex, buf, true, 2); 
+	if (rv != 0)
+		rv = libztex_configureFpgaLS(ztex, buf, true, 2); 
+	return rv;
 }
 
 int libztex_numberOfFpgas(struct libztex_device *ztex) {
@@ -235,30 +339,31 @@ int libztex_numberOfFpgas(struct libztex_device *ztex) {
 				return cnt;
 			}
 			ztex->numberOfFpgas = buf[0] + 1;
-			ztex->selectedFpga = buf[1];
+			ztex->selectedFpga = -1;//buf[1];
 			ztex->parallelConfigSupport = (buf[2] == 1);
 		} else {
 			ztex->numberOfFpgas = 1;
-			ztex->selectedFpga = 0;
+			ztex->selectedFpga = -1;//0;
 			ztex->parallelConfigSupport = false;
 		}
 	}
 	return ztex->numberOfFpgas;
 }
 
-int libztex_selectFpga(struct libztex_device *ztex, int number) {
-	int cnt, fpgacnt = libztex_numberOfFpgas(ztex);
+int libztex_selectFpga(struct libztex_device *ztex) {
+	int cnt, fpgacnt = libztex_numberOfFpgas(ztex->root);
+	int number = ztex->fpgaNum;
 	if (number < 0 || number >= fpgacnt) {
 		applog(LOG_WARNING, "%s: Trying to select wrong fpga (%d in %d)", ztex->repr, number, fpgacnt);
 		return 1;
 	}
-	if (ztex->selectedFpga != number && libztex_checkCapability(ztex, CAPABILITY_MULTI_FPGA)) {
-		cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x51, number, 0, NULL, 0, 500);
+	if (ztex->root->selectedFpga != number && libztex_checkCapability(ztex->root, CAPABILITY_MULTI_FPGA)) {
+		cnt = libusb_control_transfer(ztex->root->hndl, 0x40, 0x51, number, 0, NULL, 0, 500);
 		if (unlikely(cnt < 0)) {
 			applog(LOG_ERR, "Ztex check device: Failed to set fpga with err %d", cnt);
 			return cnt;
 		}
-		ztex->selectedFpga = number;
+		ztex->root->selectedFpga = number;
 	}
 	return 0;
 }
@@ -276,8 +381,12 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 		return cnt;
 	}
 	ztex->freqM = freq;
-	applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
-	       ztex->repr, ztex->freqM1 * (oldfreq + 1), ztex->freqM1 * (ztex->freqM + 1));
+	if (oldfreq > ztex->freqMaxM) 
+		applog(LOG_WARNING, "%s: Frequency set to %0.2f Mhz",
+		       ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
+	else
+		applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
+		       ztex->repr, ztex->freqM1 * (oldfreq + 1), ztex->freqM1 * (ztex->freqM + 1));
 
 	return 0;
 }
@@ -426,7 +535,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 
 	newdev->usbbus = libusb_get_bus_number(dev);
 	newdev->usbaddress = libusb_get_device_address(dev);
-	sprintf(newdev->repr, "ZTEX %.3d:%.3d-%s", newdev->usbbus, newdev->usbaddress, newdev->snString);
+	sprintf(newdev->repr, "ZTEX %s-1", newdev->snString);
 	newdev->valid = true;
 	return 0;
 }

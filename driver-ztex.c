@@ -30,17 +30,37 @@
 
 #define GOLDEN_BACKLOG 5
 
-struct device_api ztex_api, ztex_hotplug_api;
+struct device_api ztex_api;
 
 // Forward declarations
 static void ztex_disable(struct thr_info* thr);
 static bool ztex_prepare(struct thr_info *thr);
 
+static void ztex_selectFpga(struct libztex_device* ztex)
+{
+	if (ztex->root->numberOfFpgas > 1) {
+		if (ztex->root->selectedFpga != ztex->fpgaNum)
+			mutex_lock(&ztex->root->mutex);
+		libztex_selectFpga(ztex);
+	}
+}
+
+static void ztex_releaseFpga(struct libztex_device* ztex)
+{
+	if (ztex->root->numberOfFpgas > 1) {
+		ztex->root->selectedFpga = -1;
+		mutex_unlock(&ztex->root->mutex);
+	}
+}
+
 static void ztex_detect(void)
 {
 	int cnt;
-	int i;
+	int i,j;
+	int fpgacount;
 	struct libztex_dev_list **ztex_devices;
+	struct libztex_device *ztex_slave;
+	struct cgpu_info *ztex;
 
 	cnt = libztex_scanDevices(&ztex_devices);
 	applog(LOG_WARNING, "Found %d ztex board(s)", cnt);
@@ -48,14 +68,33 @@ static void ztex_detect(void)
 	for (i = 0; i < cnt; i++) {
 		if (total_devices == MAX_DEVICES)
 			break;
-		struct cgpu_info *ztex;
 		ztex = calloc(1, sizeof(struct cgpu_info));
 		ztex->api = &ztex_api;
 		ztex->device_ztex = ztex_devices[i]->dev;
 		ztex->threads = 1;
+		ztex->device_ztex->fpgaNum = 0;
+		ztex->device_ztex->root = ztex->device_ztex;
 		add_cgpu(ztex);
 
-		applog(LOG_WARNING,"%s: Found Ztex, mark as %d", ztex->device_ztex->repr, ztex->device_id);
+		fpgacount = libztex_numberOfFpgas(ztex->device_ztex);
+
+		if (fpgacount > 1)
+			pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
+
+		for (j = 1; j < fpgacount; j++) {
+			ztex = calloc(1, sizeof(struct cgpu_info));
+			ztex->api = &ztex_api;
+			ztex_slave = calloc(1, sizeof(struct libztex_device));
+			memcpy(ztex_slave, ztex_devices[i]->dev, sizeof(struct libztex_device));
+			ztex->device_ztex = ztex_slave;
+			ztex->threads = 1;
+			ztex_slave->fpgaNum = j;
+			ztex_slave->root = ztex_devices[i]->dev;
+			ztex_slave->repr[strlen(ztex_slave->repr) - 1] = ('1' + j);
+			add_cgpu(ztex);
+		}
+
+		applog(LOG_WARNING,"%s: Found Ztex (fpga count = %d) , mark as %d", ztex->device_ztex->repr, fpgacount, ztex->device_id);
 	}
 
 	if (cnt > 0)
@@ -88,16 +127,18 @@ static bool ztex_updateFreq(struct libztex_device* ztex)
 	}
 
 	if (bestM != ztex->freqM) {
-		libztex_selectFpga(ztex, 0);
+		ztex_selectFpga(ztex);
 		libztex_setFreq(ztex, bestM);
+		ztex_releaseFpga(ztex);
 	}
 
 	maxM = ztex->freqMDefault;
 	while (maxM < ztex->freqMaxM && ztex->errorWeight[maxM + 1] > 100)
 		maxM++;
 	if ((bestM < (1.0 - LIBZTEX_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
-		libztex_selectFpga(ztex, 0);
+		ztex_selectFpga(ztex);
 		libztex_resetFpga(ztex);
+		ztex_releaseFpga(ztex);
 		applog(LOG_ERR, "%s: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
 		       ztex->repr, (1.0 - 1.0 * bestM / maxM) * 100);
 		return false;
@@ -163,7 +204,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	memcpy(sendbuf, work->data + 64, 12);
 	memcpy(sendbuf + 12, work->midstate, 32);
 	
-	libztex_selectFpga(ztex, 0);
+	ztex_selectFpga(ztex);
 	i = libztex_sendHashData(ztex, sendbuf);
 	if (i < 0) {
 		// Something wrong happened in send
@@ -174,9 +215,11 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			// And there's nothing we can do about it
 			ztex_disable(thr);
 			applog(LOG_ERR, "%s: Failed to send hash data with err %d, giving up", ztex->repr, i);
+			ztex_releaseFpga(ztex);
 			return 0;
 		}
 	}
+	ztex_releaseFpga(ztex);
 	
 	applog(LOG_DEBUG, "%s: sent hashdata", ztex->repr);
 
@@ -204,7 +247,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
 			break;
 		}
-		libztex_selectFpga(ztex, 0);
+		ztex_selectFpga(ztex);
 		i = libztex_readHashData(ztex, &hdata[0]);
 		if (i < 0) {
 			// Something wrong happened in read
@@ -217,9 +260,11 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				applog(LOG_ERR, "%s: Failed to read hash data with err %d, giving up", ztex->repr, i);
 				free(lastnonce);
 				free(backlog);
+				ztex_releaseFpga(ztex);
 				return 0;
 			}
 		}
+		ztex_releaseFpga(ztex);
 
 		if (work_restart[thr->id].restart) {
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
@@ -302,7 +347,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
 	if (cgpu->deven == DEV_ENABLED) {
-		tailsprintf(buf, "%s | ", cgpu->device_ztex->snString);
+		tailsprintf(buf, "%s-%d | ", cgpu->device_ztex->snString, cgpu->device_ztex->fpgaNum+1);
 		tailsprintf(buf, "%0.2fMhz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
 	}
 }
@@ -310,24 +355,28 @@ static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 static bool ztex_prepare(struct thr_info *thr)
 {
 	struct timeval now;
-	struct cgpu_info *ztex = thr->cgpu;
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct libztex_device *ztex = cgpu->device_ztex;
 
 	gettimeofday(&now, NULL);
-	get_datestamp(ztex->init, &now);
-
-	if (libztex_configureFpga(ztex->device_ztex) != 0)
+	get_datestamp(cgpu->init, &now);
+	
+	ztex_selectFpga(ztex);
+	if (libztex_configureFpga(ztex) != 0)
 		return false;
-
-	ztex->device_ztex->freqM = -1;
-	ztex_updateFreq(ztex->device_ztex);
-
-	applog(LOG_DEBUG, "%s: prepare", ztex->device_ztex->repr);
+	ztex_releaseFpga(ztex);
+	ztex->freqM = ztex->freqMaxM+1;;
+	//ztex_updateFreq(ztex);
+	libztex_setFreq(ztex, ztex->freqMDefault);
+	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
 	return true;
 }
 
 static void ztex_shutdown(struct thr_info *thr)
 {
 	if (thr->cgpu->device_ztex != NULL) {
+		if (thr->cgpu->device_ztex->fpgaNum == 0)
+			pthread_mutex_destroy(&thr->cgpu->device_ztex->mutex);  
 		applog(LOG_DEBUG, "%s: shutdown", thr->cgpu->device_ztex->repr);
 		libztex_destroy_device(thr->cgpu->device_ztex);
 		thr->cgpu->device_ztex = NULL;
@@ -350,3 +399,4 @@ struct device_api ztex_api = {
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,
 };
+
