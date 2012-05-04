@@ -4842,12 +4842,12 @@ int main(int argc, char *argv[])
 		opencl_api.api_detect();
 #endif
 
-#ifdef USE_BITFORCE
-	bitforce_api.api_detect();
-#endif
-
 #ifdef USE_ICARUS
 	icarus_api.api_detect();
+#endif
+
+#ifdef USE_BITFORCE
+	bitforce_api.api_detect();
 #endif
 
 #ifdef USE_ZTEX
