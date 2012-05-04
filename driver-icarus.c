@@ -72,12 +72,8 @@
 // 2 x 11.1 / (5.26 x 10^-9)
 //#define ESTIMATE_HASHES	0xFB90365E
 
-// This is the 8s value but causes hash rate loss
-//#define ESTIMATE_HASHES	0xB54E9147
-
-// TODO: determine why returning any other value when no nonce is found
-//	causes hash rate loss
-#define ESTIMATE_HASHES	0xffffffff
+// This is the 8s value
+#define ESTIMATE_HASHES	0xB54E9147
 
 struct device_api icarus_api;
 
@@ -353,6 +349,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (opt_debug)
 		gettimeofday(&tv_finish, NULL);
 
+	work->blk.nonce = 0xffffffff;
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
 	// aborted before becoming idle, get new work
@@ -369,7 +366,6 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	nonce = swab32(nonce);
 #endif
 
-	work->blk.nonce = 0xffffffff;
 	submit_nonce(thr, work, nonce);
 
 	if (opt_debug) {

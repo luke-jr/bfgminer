@@ -604,6 +604,12 @@ struct curl_ent {
 	struct timeval tv;
 };
 
+enum pool_enable {
+	POOL_ENABLED,
+	POOL_DISABLED,
+	POOL_REJECTING,
+};
+
 struct pool {
 	int pool_no;
 	int prio;
@@ -614,7 +620,7 @@ struct pool {
 	bool idle;
 	bool lagging;
 	bool probed;
-	bool enabled;
+	enum pool_enable enabled;
 	bool submit_old;
 	bool removed;
 	bool lp_started;
@@ -645,6 +651,8 @@ struct pool {
 	int curls;
 	pthread_cond_t cr_cond;
 	struct list_head curlring;
+
+	time_t last_share_time;
 };
 
 struct work {
