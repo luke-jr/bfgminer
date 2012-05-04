@@ -164,6 +164,8 @@ static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
+static const char *REJECTING = "Rejecting";
+static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
 static const char *DYNAMIC = _DYNAMIC;
 
@@ -1203,13 +1205,22 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
-		if (!pool->enabled)
+		switch (pool->enabled) {
+		case POOL_DISABLED:
 			status = (char *)DISABLED;
-		else {
+			break;
+		case POOL_REJECTING:
+			status = (char *)REJECTING;
+			break;
+		case POOL_ENABLED:
 			if (pool->idle)
 				status = (char *)DEAD;
 			else
 				status = (char *)ALIVE;
+			break;
+		default:
+			status = (char *)UNKNOWN;
+			break;
 		}
 
 		if (pool->hdr_path)
