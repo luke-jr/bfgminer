@@ -381,7 +381,7 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 		return cnt;
 	}
 	ztex->freqM = freq;
-	if (oldfreq == -1) 
+	if (oldfreq > ztex->freqMaxM) 
 		applog(LOG_WARNING, "%s: Frequency set to %0.2f Mhz",
 		       ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
 	else
@@ -535,7 +535,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 
 	newdev->usbbus = libusb_get_bus_number(dev);
 	newdev->usbaddress = libusb_get_device_address(dev);
-	sprintf(newdev->repr, "ZTEX %.3d:%.3d-%s", newdev->usbbus, newdev->usbaddress, newdev->snString);
+	sprintf(newdev->repr, "ZTEX %s-1", newdev->snString);
 	newdev->valid = true;
 	return 0;
 }

@@ -78,7 +78,7 @@ struct libztex_device {
 	int selectedFpga;
 	bool parallelConfigSupport;
 	
-	char repr[64];
+	char repr[20];
 };
 
 struct libztex_dev_list { 

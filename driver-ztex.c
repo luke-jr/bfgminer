@@ -90,6 +90,7 @@ static void ztex_detect(void)
 			ztex->threads = 1;
 			ztex_slave->fpgaNum = j;
 			ztex_slave->root = ztex_devices[i]->dev;
+			ztex_slave->repr[strlen(ztex_slave->repr) - 1] = ('1' + j);
 			add_cgpu(ztex);
 		}
 
@@ -346,7 +347,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
 	if (cgpu->deven == DEV_ENABLED) {
-		tailsprintf(buf, "%s | ", cgpu->device_ztex->snString);
+		tailsprintf(buf, "%s-%d | ", cgpu->device_ztex->snString, cgpu->device_ztex->fpgaNum+1);
 		tailsprintf(buf, "%0.2fMhz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
 	}
 }
@@ -364,8 +365,9 @@ static bool ztex_prepare(struct thr_info *thr)
 	if (libztex_configureFpga(ztex) != 0)
 		return false;
 	ztex_releaseFpga(ztex);
-	ztex->freqM = -1;
-	ztex_updateFreq(ztex);
+	ztex->freqM = ztex->freqMaxM+1;;
+	//ztex_updateFreq(ztex);
+	libztex_setFreq(ztex, ztex->freqMDefault);
 	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
 	return true;
 }
