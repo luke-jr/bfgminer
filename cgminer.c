@@ -1724,6 +1724,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 				pool->enabled = false;
 				if (pool == current_pool())
 					switch_pools(NULL);
+				pool->seq_rejects = 0;
 			}
 		}
 	}
