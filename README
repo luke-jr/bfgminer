@@ -809,7 +809,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               The values returned by this may change in future
                               versions thus would not normally be displayed
                               except when trying to determine performance and
-                              issues with pool perforamce
+                              issues with pool performance
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
