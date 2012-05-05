@@ -2814,10 +2814,10 @@ retry:
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
 
-	if (INPUTEQ(a)) {
+	if (!strncasecmp(&input, "a", 1)) {
 		input_pool(true);
 		goto updated;
-	} else if (INPUTEQ(r)) {
+	} else if (!strncasecmp(&input, "r", 1)) {
 		if (total_pools <= 1) {
 			wlogprint("Cannot remove last pool");
 			goto retry;
@@ -2837,7 +2837,7 @@ retry:
 		pool->enabled = POOL_DISABLED;
 		remove_pool(pool);
 		goto updated;
-	} else if (INPUTEQ(s)) {
+	} else if (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
 			wlogprint("Invalid selection\n");
@@ -2847,7 +2847,7 @@ retry:
 		pool->enabled = POOL_ENABLED;
 		switch_pools(pool);
 		goto updated;
-	} else if (INPUTEQ(d)) {
+	} else if (!strncasecmp(&input, "d", 1)) {
 		if (active_pools() <= 1) {
 			wlogprint("Cannot disable last pool");
 			goto retry;
@@ -2862,7 +2862,7 @@ retry:
 		if (pool == current_pool())
 			switch_pools(NULL);
 		goto updated;
-	} else if (INPUTEQ(e)) {
+	} else if (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
 			wlogprint("Invalid selection\n");
@@ -2873,7 +2873,7 @@ retry:
 		if (pool->prio < current_pool()->prio)
 			switch_pools(pool);
 		goto updated;
-	} else if (INPUTEQ(c)) {
+	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)
 			wlogprint("%d: %s\n", i, strategies[i]);
 		selected = curses_int("Select strategy number type");
@@ -2893,7 +2893,7 @@ retry:
 		pool_strategy = selected;
 		switch_pools(NULL);
 		goto updated;
-	} else if (INPUTEQ(i)) {
+	} else if (!strncasecmp(&input, "i", 1)) {
 		selected = curses_int("Select pool number");
 		if (selected < 0 || selected >= total_pools) {
 			wlogprint("Invalid selection\n");
@@ -2928,17 +2928,17 @@ retry:
 		opt_log_interval);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
-	if (INPUTEQ(q)) {
+	if (!strncasecmp(&input, "q", 1)) {
 		opt_quiet ^= true;
 		wlogprint("Quiet mode %s\n", opt_quiet ? "enabled" : "disabled");
 		goto retry;
-	} else if (INPUTEQ(v)) {
+	} else if (!strncasecmp(&input, "v", 1)) {
 		opt_log_output ^= true;
 		if (opt_log_output)
 			opt_quiet = false;
 		wlogprint("Verbose mode %s\n", opt_log_output ? "enabled" : "disabled");
 		goto retry;
-	} else if (INPUTEQ(n)) {
+	} else if (!strncasecmp(&input, "n", 1)) {
 		opt_log_output = false;
 		opt_debug = false;
 		opt_quiet = false;
@@ -2946,27 +2946,27 @@ retry:
 		want_per_device_stats = false;
 		wlogprint("Output mode reset to normal\n");
 		goto retry;
-	} else if (INPUTEQ(d)) {
+	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_debug ^= true;
 		opt_log_output = opt_debug;
 		if (opt_debug)
 			opt_quiet = false;
 		wlogprint("Debug mode %s\n", opt_debug ? "enabled" : "disabled");
 		goto retry;
-	} else if (INPUTEQ(p)) {
+	} else if (!strncasecmp(&input, "p", 1)) {
 		want_per_device_stats ^= true;
 		opt_log_output = want_per_device_stats;
 		wlogprint("Per-device stats %s\n", want_per_device_stats ? "enabled" : "disabled");
 		goto retry;
-	} else if (INPUTEQ(r)) {
+	} else if (!strncasecmp(&input, "r", 1)) {
 		opt_protocol ^= true;
 		if (opt_protocol)
 			opt_quiet = false;
 		wlogprint("RPC protocol debugging %s\n", opt_protocol ? "enabled" : "disabled");
 		goto retry;
-	} else if (INPUTEQ(c))
+	} else if (!strncasecmp(&input, "c", 1))
 		clear_logwin();
-	else if (INPUTEQ(l)) {
+	else if (!strncasecmp(&input, "l", 1)) {
 		selected = curses_int("Interval in seconds");
 		if (selected < 0 || selected > 9999) {
 			wlogprint("Invalid selection\n");
@@ -2975,7 +2975,7 @@ retry:
 		opt_log_interval = selected;
 		wlogprint("Log interval set to %d seconds\n", opt_log_interval);
 		goto retry;
-	} else if (INPUTEQ(s)) {
+	} else if (!strncasecmp(&input, "s", 1)) {
 		opt_realquiet = true;
 	} else
 		clear_logwin();
@@ -3001,7 +3001,7 @@ retry:
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 
-	if (INPUTEQ(q)) {
+	if (!strncasecmp(&input, "q", 1)) {
 		selected = curses_int("Extra work items to queue");
 		if (selected < 0 || selected > 9999) {
 			wlogprint("Invalid selection\n");
@@ -3009,7 +3009,7 @@ retry:
 		}
 		opt_queue = selected;
 		goto retry;
-	} else if  (INPUTEQ(s)) {
+	} else if  (!strncasecmp(&input, "s", 1)) {
 		selected = curses_int("Set scantime in seconds");
 		if (selected < 0 || selected > 9999) {
 			wlogprint("Invalid selection\n");
@@ -3017,7 +3017,7 @@ retry:
 		}
 		opt_scantime = selected;
 		goto retry;
-	} else if  (INPUTEQ(e)) {
+	} else if  (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Set expiry time in seconds");
 		if (selected < 0 || selected > 9999) {
 			wlogprint("Invalid selection\n");
@@ -3025,7 +3025,7 @@ retry:
 		}
 		opt_expiry = selected;
 		goto retry;
-	} else if  (INPUTEQ(r)) {
+	} else if  (!strncasecmp(&input, "r", 1)) {
 		selected = curses_int("Retries before failing (-1 infinite)");
 		if (selected < -1 || selected > 9999) {
 			wlogprint("Invalid selection\n");
@@ -3033,7 +3033,7 @@ retry:
 		}
 		opt_retries = selected;
 		goto retry;
-	} else if  (INPUTEQ(p)) {
+	} else if  (!strncasecmp(&input, "p", 1)) {
 		selected = curses_int("Seconds to pause before network retries");
 		if (selected < 1 || selected > 9999) {
 			wlogprint("Invalid selection\n");
@@ -3041,7 +3041,7 @@ retry:
 		}
 		opt_fail_pause = selected;
 		goto retry;
-	} else if  (INPUTEQ(w)) {
+	} else if  (!strncasecmp(&input, "w", 1)) {
 		FILE *fcfg;
 		char *str, filename[PATH_MAX], prompt[PATH_MAX + 50];
 
@@ -3067,7 +3067,7 @@ retry:
 			if (!stat(filename, &statbuf)) {
 				wlogprint("File exists, overwrite?\n");
 				input = getch();
-				if (INPUTNEQ(y))
+				if (strncasecmp(&input, "y", 1))
 					goto retry;
 			}
 		}
@@ -3080,10 +3080,10 @@ retry:
 		fclose(fcfg);
 		goto retry;
 
-	} else if (INPUTEQ(c)) {
+	} else if (!strncasecmp(&input, "c", 1)) {
 		wlogprint("Are you sure?\n");
 		input = getch();
-		if (INPUTEQ(y))
+		if (!strncasecmp(&input, "y", 1))
 			app_restart();
 		else
 			clear_logwin();
@@ -3105,16 +3105,16 @@ static void *input_thread(void __maybe_unused *userdata)
 		char input;
 
 		input = getch();
-		if (INPUTEQ(q)) {
+		if (!strncasecmp(&input, "q", 1)) {
 			kill_work();
 			return NULL;
-		} else if (INPUTEQ(d))
+		} else if (!strncasecmp(&input, "d", 1))
 			display_options();
-		else if (INPUTEQ(p))
+		else if (!strncasecmp(&input, "p", 1))
 			display_pools();
-		else if (INPUTEQ(s))
+		else if (!strncasecmp(&input, "s", 1))
 			set_options();
-		else if (have_opencl && INPUTEQ(g))
+		else if (have_opencl && !strncasecmp(&input, "g", 1))
 			manage_gpu();
 		if (opt_realquiet) {
 			disable_curses();
