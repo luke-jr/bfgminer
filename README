@@ -804,6 +804,13 @@ The list of requests - a (*) means it requires privileged access - and replies a
  restart (*)   none           There is no status section but just a single "RESTART"
                               reply before cgminer restarts
 
+ stats         STATS          Each device or pool that has 1 or more getworks
+                              with a list of stats regarding getwork times
+                              The values returned by this may change in future
+                              versions thus would not normally be displayed
+                              except when trying to determine performance and
+                              issues with pool perforamce
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
 
