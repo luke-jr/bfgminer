@@ -880,7 +880,7 @@ retry:
 		selected = 0;
 	else
 		selected = -1;
-	if (INPUTEQ(e)) {
+	if (!strncasecmp(&input, "e", 1)) {
 		struct cgpu_info *cgpu;
 
 		if (selected)
@@ -910,7 +910,7 @@ retry:
 			tq_push(thr->q, &ping);
 		}
 		goto retry;
-	} if (INPUTEQ(d)) {
+	} if (!strncasecmp(&input, "d", 1)) {
 		if (selected)
 			selected = curses_int("Select GPU to disable");
 		if (selected < 0 || selected >= nDevs) {
@@ -923,7 +923,7 @@ retry:
 		}
 		gpus[selected].deven = DEV_DISABLED;
 		goto retry;
-	} else if (INPUTEQ(i)) {
+	} else if (!strncasecmp(&input, "i", 1)) {
 		int intensity;
 		char *intvar;
 
@@ -956,7 +956,7 @@ retry:
 		wlogprint("Intensity on gpu %d set to %d\n", selected, intensity);
 		pause_dynamic_threads(selected);
 		goto retry;
-	} else if (INPUTEQ(r)) {
+	} else if (!strncasecmp(&input, "r", 1)) {
 		if (selected)
 			selected = curses_int("Select GPU to attempt to restart");
 		if (selected < 0 || selected >= nDevs) {
@@ -966,7 +966,7 @@ retry:
 		wlogprint("Attempting to restart threads of GPU %d\n", selected);
 		reinit_device(&gpus[selected]);
 		goto retry;
-	} else if (adl_active && (INPUTEQ(c))) {
+	} else if (adl_active && (!strncasecmp(&input, "c", 1))) {
 		if (selected)
 			selected = curses_int("Select GPU to change settings on");
 		if (selected < 0 || selected >= nDevs) {
