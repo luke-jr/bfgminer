@@ -232,6 +232,7 @@ static const char *OSINFO =
 #define _DEVDETAILS	"DEVDETAILS"
 #define _BYE		"BYE"
 #define _RESTART	"RESTART"
+#define _MINESTATS	"STATS"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -265,6 +266,7 @@ static const char ISJSON = '{';
 #define JSON_BYE	JSON1 _BYE JSON1
 #define JSON_RESTART	JSON1 _RESTART JSON1
 #define JSON_CLOSE	JSON3
+#define JSON_MINESTATS	JSON1 _MINESTATS JSON2
 #define JSON_END	JSON4
 
 static const char *JSON_COMMAND = "command";
@@ -351,6 +353,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ACTPOOL 67
 #define MSG_REMPOOL 68
 #define MSG_DEVDETAILS 69
+#define MSG_MINESTATS 70
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -476,6 +479,7 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
  { SEVERITY_SUCC,  MSG_DEVDETAILS,PARAM_NONE,	"Device Details" },
+ { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"CGMiner stats" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -2000,6 +2004,71 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	ptr = NULL;
 }
 
+static int itemstats(int i, char *id, struct cgminer_stats *stats, char *extra, bool isjson)
+{
+	char buf[BUFSIZ];
+
+	if (stats->getwork_calls || (extra != NULL && *extra))
+	{
+		if (extra == NULL)
+			extra = (char *)BLANK;
+
+		sprintf(buf, isjson
+			? "%s{\"STATS\":%d,\"ID\":\"%s\",\"Elapsed\":%.0f,\"Calls\":%d,\"Wait\":%ld.%06ld,\"Max\":%ld.%06ld,\"Min\":%ld.%06ld%s%s}"
+			: "%sSTATS=%d,ID=%s,Elapsed=%.0f,Calls=%d,Wait=%ld.%06ld,Max=%ld.%06ld,Min=%ld.%06ld%s%s" SEPSTR,
+			(isjson && (i > 0)) ? COMMA : BLANK,
+			i, id, total_secs, stats->getwork_calls,
+			stats->getwork_wait.tv_sec, stats->getwork_wait.tv_usec,
+			stats->getwork_wait_max.tv_sec, stats->getwork_wait_max.tv_usec,
+			stats->getwork_wait_min.tv_sec, stats->getwork_wait_min.tv_usec,
+			*extra ? COMMA : BLANK, extra);
+
+		strcat(io_buffer, buf);
+
+		i++;
+	}
+
+	return i;
+}
+static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+{
+	char extra[BUFSIZ];
+	char id[20];
+	int i, j;
+
+	strcpy(io_buffer, message(MSG_MINESTATS, 0, NULL, isjson));
+
+	if (isjson) {
+		strcat(io_buffer, COMMA);
+		strcat(io_buffer, JSON_MINESTATS);
+	}
+
+	i = 0;
+	for (j = 0; j < total_devices; j++) {
+		struct cgpu_info *cgpu = devices[j];
+
+		if (cgpu && cgpu->api) {
+			if (cgpu->api->get_api_stats)
+				cgpu->api->get_api_stats(extra, cgpu, isjson);
+			else
+				extra[0] = '\0';
+
+			sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
+			i = itemstats(i, id, &(cgpu->cgminer_stats), extra, isjson);
+		}
+	}
+
+	for (j = 0; j < total_pools; j++) {
+		struct pool *pool = pools[j];
+
+		sprintf(id, "POOL%d", j);
+		i = itemstats(i, id, &(pool->cgminer_stats), NULL, isjson);
+	}
+
+	if (isjson)
+		strcat(io_buffer, JSON_CLOSE);
+}
+
 struct CMDS {
 	char *name;
 	void (*func)(SOCKETTYPE, char *, bool);
@@ -2041,6 +2110,7 @@ struct CMDS {
 	{ "notify",		notify,		false },
 	{ "devdetails",		devdetails,	false },
 	{ "restart",		dorestart,	true },
+	{ "stats",		minerstats,	false },
 	{ NULL,			NULL,		false }
 };
 
