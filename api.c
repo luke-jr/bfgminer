@@ -801,6 +801,27 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	strcat(io_buffer, buf);
 }
 
+static void
+append_kv(char *buf, json_t*info, bool isjson)
+{
+	json_t *value;
+	const char *key, *tmpl = isjson ? ",\"%s\":%s" : ",%s=%s";
+	char *vdump;
+	void *it;
+
+	for (it = json_object_iter(info); it; it = json_object_iter_next(info, it)) {
+		key = json_object_iter_key(it);
+		value = json_object_iter_value(it);
+
+		if (isjson || !json_is_string(value))
+			vdump = json_dumps(value, JSON_COMPACT | JSON_ENCODE_ANY);
+		else
+			vdump = strdup(json_string_value(value));
+		tailsprintf(buf, tmpl, key, vdump);
+		free(vdump);
+	}
+}
+
 static void gpustatus(int gpu, bool isjson)
 {
 	char intensity[20];
@@ -2014,14 +2035,14 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, char *extra, 
 			extra = (char *)BLANK;
 
 		sprintf(buf, isjson
-			? "%s{\"STATS\":%d,\"ID\":\"%s\",\"Elapsed\":%.0f,\"Calls\":%d,\"Wait\":%ld.%06ld,\"Max\":%ld.%06ld,\"Min\":%ld.%06ld%s%s}"
-			: "%sSTATS=%d,ID=%s,Elapsed=%.0f,Calls=%d,Wait=%ld.%06ld,Max=%ld.%06ld,Min=%ld.%06ld%s%s" SEPSTR,
+			? "%s{\"STATS\":%d,\"ID\":\"%s\",\"Elapsed\":%.0f,\"Calls\":%d,\"Wait\":%ld.%06ld,\"Max\":%ld.%06ld,\"Min\":%ld.%06ld%s}"
+			: "%sSTATS=%d,ID=%s,Elapsed=%.0f,Calls=%d,Wait=%ld.%06ld,Max=%ld.%06ld,Min=%ld.%06ld%s" SEPSTR,
 			(isjson && (i > 0)) ? COMMA : BLANK,
 			i, id, total_secs, stats->getwork_calls,
 			stats->getwork_wait.tv_sec, stats->getwork_wait.tv_usec,
 			stats->getwork_wait_max.tv_sec, stats->getwork_wait_max.tv_usec,
 			stats->getwork_wait_min.tv_sec, stats->getwork_wait_min.tv_usec,
-			*extra ? COMMA : BLANK, extra);
+			extra);
 
 		strcat(io_buffer, buf);
 
@@ -2047,15 +2068,15 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 	for (j = 0; j < total_devices; j++) {
 		struct cgpu_info *cgpu = devices[j];
 
-		if (cgpu && cgpu->api) {
-			if (cgpu->api->get_api_stats)
-				cgpu->api->get_api_stats(extra, cgpu, isjson);
-			else
-				extra[0] = '\0';
-
-			sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
-			i = itemstats(i, id, &(cgpu->cgminer_stats), extra, isjson);
+		extra[0] = '\0';
+		if (cgpu->api->get_extra_device_perf_stats) {
+			json_t *info = cgpu->api->get_extra_device_perf_stats(cgpu);
+			append_kv(extra, info, isjson);
+			json_decref(info);
 		}
+
+		sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
+		i = itemstats(i, id, &(cgpu->cgminer_stats), extra, isjson);
 	}
 
 	for (j = 0; j < total_pools; j++) {
