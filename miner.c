@@ -1738,13 +1738,13 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		}
 
 		/* Once we have more than a nominal amount of sequential rejects,
-		 * at least 10 and more than the current utility rate per minute,
+		 * at least 10 and more than 3 mins at the current utility,
 		 * disable the pool because some pool error is likely to have
 		 * ensued. */
 		if (pool->seq_rejects > 10 && opt_disable_pool && total_pools > 1) {
 			double utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-			if (pool->seq_rejects > utility) {
+			if (pool->seq_rejects > utility * 3) {
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
 				       pool->pool_no, pool->seq_rejects);
 				pool->enabled = POOL_REJECTING;
@@ -2055,12 +2055,14 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	mutex_unlock(&pool->pool_lock);
 }
 
+/* ce and pool may appear uninitialised at push_curl_entry, but they're always
+ * set when we don't have opt_benchmark enabled */
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
+	struct curl_ent * uninitialised_var(ce);
+	struct pool * uninitialised_var(pool);
 	struct work *ret_work = make_work();
-	struct curl_ent *ce;
-	struct pool *pool;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
