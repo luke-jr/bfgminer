@@ -205,6 +205,7 @@ struct device_api {
 	void (*get_statline)(char*, struct cgpu_info*);
 	json_t* (*get_extra_device_detail)(struct cgpu_info*);
 	json_t* (*get_extra_device_status)(struct cgpu_info*);
+	void (*get_api_stats)(char*, struct cgpu_info*, bool);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info*);
