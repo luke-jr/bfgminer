@@ -1739,6 +1739,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 				pool->enabled = false;
 				if (pool == current_pool())
 					switch_pools(NULL);
+				pool->seq_rejects = 0;
 			}
 		}
 	}
@@ -2060,25 +2061,30 @@ static void *get_work_thread(void *userdata)
 	else
 		ret_work->thr = NULL;
 
-	pool = ret_work->pool = select_pool(wc->lagging);
-	ce = pop_curl_entry(pool);
+	if (opt_benchmark)
+		get_benchmark_work(ret_work);
+	else {
+		pool = ret_work->pool = select_pool(wc->lagging);
+		
+		ce = pop_curl_entry(pool);
 
-	/* obtain new work from bitcoin via JSON-RPC */
-	while (!get_upstream_work(ret_work, ce->curl)) {
-		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-			applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
-			free_work(ret_work);
-			kill_work();
-			goto out;
+		/* obtain new work from bitcoin via JSON-RPC */
+		while (!get_upstream_work(ret_work, ce->curl)) {
+			if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
+				applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
+				free_work(ret_work);
+				kill_work();
+				goto out;
+			}
+
+			/* pause, then restart work-request loop */
+			applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
+				fail_pause);
+			sleep(fail_pause);
+			fail_pause += opt_fail_pause;
 		}
-
-		/* pause, then restart work-request loop */
-		applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
-			fail_pause);
-		sleep(fail_pause);
-		fail_pause += opt_fail_pause;
+		fail_pause = opt_fail_pause;
 	}
-	fail_pause = opt_fail_pause;
 
 	applog(LOG_DEBUG, "Pushing work to requesting thread");
 
@@ -2091,7 +2097,8 @@ static void *get_work_thread(void *userdata)
 
 out:
 	workio_cmd_free(wc);
-	push_curl_entry(ce, pool);
+	if (!opt_benchmark)
+		push_curl_entry(ce, pool);
 	return NULL;
 }
 
