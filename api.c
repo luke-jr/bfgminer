@@ -2004,20 +2004,24 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	ptr = NULL;
 }
 
-static int itemstats(int i, char *id, struct cgminer_stats *stats, bool isjson)
+static int itemstats(int i, char *id, struct cgminer_stats *stats, char *extra, bool isjson)
 {
 	char buf[BUFSIZ];
 
-	if (stats->getwork_calls)
+	if (stats->getwork_calls || (extra != NULL && *extra))
 	{
+		if (extra == NULL)
+			extra = (char *)BLANK;
+
 		sprintf(buf, isjson
-			? "%s{\"STATS\":%d,\"ID\":\"%s\",\"Elapsed\":%.0f,\"Calls\":%d,\"Wait\":%ld.%06ld,\"Max\":%ld.%06ld,\"Min\":%ld.%06ld}"
-			: "%sSTATS=%d,ID=%s,Elapsed=%.0f,Calls=%d,Wait=%ld.%06ld,Max=%ld.%06ld,Min=%ld.%06ld" SEPSTR,
+			? "%s{\"STATS\":%d,\"ID\":\"%s\",\"Elapsed\":%.0f,\"Calls\":%d,\"Wait\":%ld.%06ld,\"Max\":%ld.%06ld,\"Min\":%ld.%06ld%s%s}"
+			: "%sSTATS=%d,ID=%s,Elapsed=%.0f,Calls=%d,Wait=%ld.%06ld,Max=%ld.%06ld,Min=%ld.%06ld%s%s" SEPSTR,
 			(isjson && (i > 0)) ? COMMA : BLANK,
 			i, id, total_secs, stats->getwork_calls,
 			stats->getwork_wait.tv_sec, stats->getwork_wait.tv_usec,
 			stats->getwork_wait_max.tv_sec, stats->getwork_wait_max.tv_usec,
-			stats->getwork_wait_min.tv_sec, stats->getwork_wait_min.tv_usec);
+			stats->getwork_wait_min.tv_sec, stats->getwork_wait_min.tv_usec,
+			*extra ? COMMA : BLANK, extra);
 
 		strcat(io_buffer, buf);
 
@@ -2028,7 +2032,8 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, bool isjson)
 }
 static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	char buf[BUFSIZ];
+	char extra[BUFSIZ];
+	char id[20];
 	int i, j;
 
 	strcpy(io_buffer, message(MSG_MINESTATS, 0, NULL, isjson));
@@ -2043,16 +2048,21 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		struct cgpu_info *cgpu = devices[j];
 
 		if (cgpu && cgpu->api) {
-			sprintf(buf, "%s%d", cgpu->api->name, cgpu->device_id);
-			i = itemstats(i, buf, &(cgpu->cgminer_stats), isjson);
+			if (cgpu->api->get_api_stats)
+				cgpu->api->get_api_stats(extra, cgpu, isjson);
+			else
+				extra[0] = '\0';
+
+			sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
+			i = itemstats(i, id, &(cgpu->cgminer_stats), extra, isjson);
 		}
 	}
 
 	for (j = 0; j < total_pools; j++) {
 		struct pool *pool = pools[j];
 
-		sprintf(buf, "POOL%d", j);
-		i = itemstats(i, buf, &(pool->cgminer_stats), isjson);
+		sprintf(id, "POOL%d", j);
+		i = itemstats(i, id, &(pool->cgminer_stats), NULL, isjson);
 	}
 
 	if (isjson)
