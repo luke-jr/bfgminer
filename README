@@ -806,10 +806,10 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  stats         STATS          Each device or pool that has 1 or more getworks
                               with a list of stats regarding getwork times
-                              The values returned by this may change in future
+                              The values returned by stats may change in future
                               versions thus would not normally be displayed
-                              except when trying to determine performance and
-                              issues with pool performance
+                              Device drivers are also able to add stats to the
+                              end of the details returned
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
