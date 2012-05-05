@@ -79,15 +79,15 @@ static char packagename[255];
 
 int gpu_threads;
 
-bool opt_protocol = false;
+bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
-static bool have_longpoll = false;
-static bool want_per_device_stats = false;
-bool use_syslog = false;
-static bool opt_quiet = false;
-static bool opt_realquiet = false;
-bool opt_loginput = false;
+static bool have_longpoll;
+static bool want_per_device_stats;
+bool use_syslog;
+static bool opt_quiet;
+static bool opt_realquiet;
+bool opt_loginput;
 const int opt_cutofftemp = 95;
 static int opt_retries = -1;
 static int opt_fail_pause = 5;
@@ -108,22 +108,20 @@ static bool opt_nogpu;
 struct list_head scan_devices;
 int nDevs;
 int opt_g_threads = 2;
-static signed int devices_enabled = 0;
-static bool opt_removedisabled = false;
-int total_devices = 0;
+static signed int devices_enabled;
+static bool opt_removedisabled;
+int total_devices;
 struct cgpu_info *devices[MAX_DEVICES];
-bool have_opencl = false;
+bool have_opencl;
 int gpu_threads;
 int opt_n_threads = -1;
 int mining_threads;
 int num_processors;
-bool use_curses =
 #ifdef HAVE_CURSES
-	true
+bool use_curses = true;
 #else
-	false
+bool use_curses;
 #endif
-;
 static bool opt_submit_stale = true;
 static int opt_shares;
 static bool opt_fail_only;
@@ -133,9 +131,9 @@ bool opt_noadl;
 char *opt_api_allow = NULL;
 char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
-bool opt_api_listen = false;
-bool opt_api_network = false;
-bool opt_delaynet = false;
+bool opt_api_listen;
+bool opt_api_network;
+bool opt_delaynet;
 bool opt_disable_pool = true;
 
 char *opt_kernel_path;
@@ -195,7 +193,7 @@ static int total_urls, total_users, total_passes, total_userpasses;
 #ifndef HAVE_CURSES
 const
 #endif
-static bool curses_active = false;
+static bool curses_active;
 
 static char current_block[37];
 static char *current_hash;
@@ -212,8 +210,8 @@ static struct block *blocks = NULL;
 char *opt_socks_proxy = NULL;
 
 static const char def_conf[] = "bfgminer.conf";
-static bool config_loaded = false;
-static int include_count = 0;
+static bool config_loaded;
+static int include_count;
 #define JSON_INCLUDE_CONF "include"
 #define JSON_LOAD_ERROR "JSON decode of file '%s' failed"
 #define JSON_LOAD_ERROR_LEN strlen(JSON_LOAD_ERROR)
@@ -222,7 +220,7 @@ static int include_count = 0;
 
 #if defined(unix)
 	static char *opt_stderr_cmd = NULL;
-	static int forkpid = 0;
+	static int forkpid;
 #endif // defined(unix)
 
 bool ping = true;
