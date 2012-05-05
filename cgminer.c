@@ -3717,6 +3717,9 @@ void *miner_thread(void *userdata)
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_api *api = cgpu->api;
+	struct cgminer_stats *dev_stats = &(cgpu->cgminer_stats);
+	struct cgminer_stats *pool_stats;
+	struct timeval getwork_start;
 
 	/* Try to cycle approximately 5 times before each log update */
 	const unsigned long def_cycle = opt_log_interval / 5 ? : 1;
@@ -3731,6 +3734,8 @@ void *miner_thread(void *userdata)
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = false;
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	gettimeofday(&getwork_start, NULL);
 
 	if (api->thread_init && !api->thread_init(mythr)) {
 		cgpu->device_last_not_well = time(NULL);
@@ -3770,7 +3775,40 @@ void *miner_thread(void *userdata)
 		do {
 			gettimeofday(&tv_start, NULL);
 
+			timersub(&tv_start, &getwork_start, &getwork_start);
+
+			timeradd(&getwork_start,
+				&(dev_stats->getwork_wait),
+				&(dev_stats->getwork_wait));
+			if (timercmp(&getwork_start, &(dev_stats->getwork_wait_max), >)) {
+				dev_stats->getwork_wait_max.tv_sec = getwork_start.tv_sec;
+				dev_stats->getwork_wait_max.tv_usec = getwork_start.tv_usec;
+			}
+			if (timercmp(&getwork_start, &(dev_stats->getwork_wait_min), <)) {
+				dev_stats->getwork_wait_min.tv_sec = getwork_start.tv_sec;
+				dev_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
+			}
+			dev_stats->getwork_calls++;
+
+			pool_stats = &(work->pool->cgminer_stats);
+
+			timeradd(&getwork_start,
+				&(pool_stats->getwork_wait),
+				&(pool_stats->getwork_wait));
+			if (timercmp(&getwork_start, &(pool_stats->getwork_wait_max), >)) {
+				pool_stats->getwork_wait_max.tv_sec = getwork_start.tv_sec;
+				pool_stats->getwork_wait_max.tv_usec = getwork_start.tv_usec;
+			}
+			if (timercmp(&getwork_start, &(pool_stats->getwork_wait_min), <)) {
+				pool_stats->getwork_wait_min.tv_sec = getwork_start.tv_sec;
+				pool_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
+			}
+			pool_stats->getwork_calls++;
+
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
+
+			gettimeofday(&getwork_start, NULL);
+
 			if (unlikely(work_restart[thr_id].restart)) {
 
 				/* Apart from device_thread 0, we stagger the
@@ -4899,6 +4937,9 @@ int main(int argc, char *argv[])
 
 	load_temp_cutoffs();
 
+	for (i = 0; i < total_devices; ++i)
+		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+
 	logstart += total_devices;
 	logcursor = logstart + 1;
 
@@ -4916,6 +4957,8 @@ int main(int argc, char *argv[])
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
+
+		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 		if (!pool->rpc_userpass) {
 			if (!pool->rpc_user || !pool->rpc_pass)

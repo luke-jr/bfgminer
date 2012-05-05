@@ -252,6 +252,15 @@ enum dev_reason {
 #define REASON_DEV_THERMAL_CUTOFF_STR	"Device reached thermal cutoff"
 #define REASON_UNKNOWN_STR		"Unknown reason - code bug"
 
+#define MIN_SEC_UNSET 99999999
+
+struct cgminer_stats {
+	uint32_t getwork_calls;
+	struct timeval getwork_wait;
+	struct timeval getwork_wait_max;
+	struct timeval getwork_wait_min;
+};
+
 struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
@@ -324,6 +333,8 @@ struct cgpu_info {
 	int dev_nostart_count;
 	int dev_over_heat_count;	// It's a warning but worth knowing
 	int dev_thermal_cutoff_count;
+
+	struct cgminer_stats cgminer_stats;
 };
 
 extern bool add_cgpu(struct cgpu_info*);
@@ -653,6 +664,8 @@ struct pool {
 	struct list_head curlring;
 
 	time_t last_share_time;
+
+	struct cgminer_stats cgminer_stats;
 };
 
 struct work {
