@@ -395,6 +395,8 @@ static struct pool *add_pool(void)
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
+	pool->enabled = POOL_ENABLED;
+	pool->idle = true;
 
 	return pool;
 }
@@ -5030,13 +5032,6 @@ int main(int argc, char *argv[])
 
 	if (opt_benchmark)
 		goto begin_bench;
-
-	for (i = 0; i < total_pools; i++) {
-		struct pool *pool  = pools[i];
-
-		pool->enabled = POOL_ENABLED;
-		pool->idle = true;
-	}
 
 	applog(LOG_NOTICE, "Probing for an alive pool");
 	do {
