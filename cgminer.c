@@ -4131,7 +4131,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			if (!opt_benchmark)
 				reap_curl(pool);
-			if (pool->enabled != POOL_ENABLED)
+			if (pool->enabled == POOL_DISABLED)
 				continue;
 
 			/* Test pool is idle once every minute */
