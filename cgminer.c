@@ -4825,7 +4825,8 @@ int main(int argc, char *argv[])
 				break;
 			case -1:
 				applog(LOG_WARNING, "Error in configuration file, partially loaded.");
-				applog(LOG_WARNING, "Start cgminer with -T to see what failed to load.");
+				if (use_curses)
+					applog(LOG_WARNING, "Start cgminer with -T to see what failed to load.");
 				break;
 			default:
 				break;
