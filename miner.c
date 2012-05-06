@@ -396,8 +396,6 @@ static struct pool *add_pool(void)
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
-	pool->enabled = POOL_ENABLED;
-	pool->idle = true;
 
 	return pool;
 }
@@ -2806,7 +2804,7 @@ updated:
 			wattron(logwin, A_BOLD);
 		if (pool->enabled != POOL_ENABLED)
 			wattron(logwin, A_DIM);
-		wlogprint("%d: ");
+		wlogprint("%d: ", pool->pool_no);
 		switch (pool->enabled) {
 			case POOL_ENABLED:
 				wlogprint("Enabled ");
@@ -4195,7 +4193,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			if (!opt_benchmark)
 				reap_curl(pool);
-			if (pool->enabled != POOL_ENABLED)
+			if (pool->enabled == POOL_DISABLED)
 				continue;
 
 			/* Test pool is idle once every minute */
@@ -5098,6 +5096,13 @@ int main(int argc, char *argv[])
 
 	if (opt_benchmark)
 		goto begin_bench;
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool  = pools[i];
+
+		pool->enabled = POOL_ENABLED;
+		pool->idle = true;
+	}
 
 	applog(LOG_NOTICE, "Probing for an alive pool");
 	do {

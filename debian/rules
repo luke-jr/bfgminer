@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+
+override_dh_auto_configure:
+	./autogen.sh
+	wget -O ADL_SDK/adl.zip http://download2-developer.amd.com/amd/GPU/zip/ADL_SDK_4.0.zip;
+	unzip ADL_SDK/adl.zip include/* -d ADL_SDK/;
+	mv ADL_SDK/include/* ADL_SDK/;
+	rm -rf ADL_SDK/adl.zip ADL_SDK/include/;
+	dh_auto_configure -- --enable-ztex --enable-bitforce --enable-icarus
+
+
+override_dh_auto_install:
+	$(MAKE) DESTDIR=$$(pwd)/debian/cgminer  install
+
+
+override_dh_shlibdeps:
+	dh_shlibdeps -Xcgminer
