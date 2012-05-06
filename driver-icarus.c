@@ -422,14 +422,14 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (nonce == 0 && lret) {
 		memcpy(&state->last_work, work, sizeof(state->last_work));
 		uint32_t ESTIMATE_HASHES;
-		if (unlikely(elapsed.tv_sec > 12 || (elapsed.tv_sec == 11 && elapsed.tv_usec > 353778)))
+		if (unlikely(elapsed.tv_sec > 12 || (elapsed.tv_sec == 11 && elapsed.tv_usec > 353063)))
 			ESTIMATE_HASHES = 0xffffffff;
 		else
 			// Approximately how much of the nonce Icarus scans in 1 second...
 			// 0x16a7a561 would be if it was exactly 380 MH/s
 			// 0x16a65700 would be the perfect 5.2631579ns/H
-			// 0x168c2ce9 was the average over a 13,015-sample period based on time to find actual shares
-			ESTIMATE_HASHES = (0x168c2ce9 * elapsed.tv_sec) + (0x17a * elapsed.tv_usec);
+			// 0x168c89e5 was the average over a 20,050-sample period based on time to find actual shares
+			ESTIMATE_HASHES = (0x168c89e5 * elapsed.tv_sec) + (0x17a * elapsed.tv_usec);
 		if (opt_debug) {
 			applog(LOG_DEBUG, "Icarus %d no nonce = 0x%08x hashes (%ld.%06lds)",
 				icarus->device_id, ESTIMATE_HASHES, elapsed.tv_sec, elapsed.tv_usec);
