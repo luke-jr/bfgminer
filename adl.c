@@ -1379,17 +1379,4 @@ void clear_adl(int nDevs)
 	unlock_adl();
 	free_adl();
 }
-
-void reinit_adl(void)
-{
-	bool ret;
-	lock_adl();
-	free_adl();
-	ret = prepare_adl();
-	if (!ret) {
-		adl_active = false;
-		applog(LOG_WARNING, "Attempt to re-initialise ADL has failed, disabling");
-	}
-	unlock_adl();
-}
 #endif /* HAVE_ADL */

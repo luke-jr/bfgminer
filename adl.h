@@ -19,12 +19,10 @@ bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vdd
 void change_gpusettings(int gpu);
 void gpu_autotune(int gpu, enum dev_enable *denable);
 void clear_adl(int nDevs);
-void reinit_adl(void);
 #else /* HAVE_ADL */
 #define adl_active (0)
 static inline void init_adl(int nDevs) {}
 static inline void change_gpusettings(int gpu) { }
 static inline void clear_adl(int nDevs) {}
-static inline void reinit_adl(void) {}
 #endif
 #endif
