@@ -1640,8 +1640,10 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 #ifndef MIPSEB
 // This one segfaults on my router for some reason
 		isblock = regeneratehash(work);
-		if (isblock)
+		if (unlikely(isblock)) {
+			pool->solved++;
 			found_blocks++;
+		}
 		hash32 = (uint32_t *)(work->hash);
 		sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
 			isblock ? " BLOCK!" : "");
@@ -2575,7 +2577,9 @@ static void display_pool_summary(struct pool *pool)
 
 	if (curses_active_locked()) {
 		wlog("Pool: %s\n", pool->rpc_url);
-		wlog("%s long-poll support\n", pool->hdr_path ? "Has" : "Does not have");
+		if (pool->solved)
+			wlog("SOLVED %d BLOCK%s!\n", pool->solved, pool->solved > 1 ? "S" : "");
+		wlog("%s own long-poll support\n", pool->hdr_path ? "Has" : "Does not have");
 		wlog(" Queued work requests: %d\n", pool->getwork_requested);
 		wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
 		wlog(" Accepted shares: %d\n", pool->accepted);
@@ -4365,6 +4369,8 @@ static void print_summary(void)
 			struct pool *pool = pools[i];
 
 			applog(LOG_WARNING, "Pool: %s", pool->rpc_url);
+			if (pool->solved)
+				applog(LOG_WARNING, "SOLVED %d BLOCK%s!", pool->solved, pool->solved > 1 ? "S" : "");
 			applog(LOG_WARNING, " Queued work requests: %d", pool->getwork_requested);
 			applog(LOG_WARNING, " Share submissions: %d", pool->accepted + pool->rejected);
 			applog(LOG_WARNING, " Accepted shares: %d", pool->accepted);
