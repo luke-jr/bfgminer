@@ -1,5 +1,6 @@
 BFGMiner Version 2.4.1 - May 6, 2012
 
+- Icarus: Calibrate hashrate yet even more accurately
 - In the unlikely event of finding a block, display the block solved count with
 the pool it came from for auditing.
 - Display the device summary on exit even if a device has been disabled.
@@ -8,17 +9,16 @@ the pool it came from for auditing.
 - Ensure we test for a pool recovering from idle so long as it's not set to
 disabled.
 - Fix pool number display.
-- Give cgminer -T message only if curses is in use.
+- Give BFGMiner -T message only if curses is in use.
 - Reinit_adl is no longer used.
 - API 'stats' allow devices to add their own stats also for testing/debug
-- API add getwork stats to cgminer - accesable from API 'stats'
+- API add getwork stats to BFGMiner - accesable from API 'stats'
 - Don't initialise variables to zero when in global scope since they're already
 initialised.
 - Get rid of unitialised variable warning when it's false.
 - Move a pool to POOL_REJECTING to be disabled only after 3 minutes of
 continuous rejected shares.
 - Some tweaks to reporting and logging.
-- Change FPGA detection order since BFL hangs on an ICA
 - API support new pool status
 - Add a temporarily disabled state for enabled pools called POOL_REJECTING and
 use the work from each longpoll to help determine when a rejecting pool has
@@ -28,7 +28,6 @@ is re-enabled.
 - Fix the benchmark feature by bypassing the new networking code.
 - Reset sequential reject counter after a pool is disabled for when it is
 re-enabled.
-- Icarus - correct MH/s and U: with work restart set at 8 seconds
 - ztex updateFreq was always reporting on fpga 0
 - Trying harder to get 1.15y working
 - Specifying threads on multi fpga boards extra cgpu
@@ -87,20 +86,20 @@ when set_curblock is hit concurrently.
 - Change default behaviour to submitting stale, removing the --submit-stale
 option and adding a --no-submit-stale option.
 - Make sure to start the getwork and submit threads when a pool is added on the
-fly. This fixes a crash when a pool is added to running cgminer and then
+fly. This fixes a crash when a pool is added to running BFGMiner and then
 switched to.
 - Faster hardware can easily outstrip the speed we can get work and submit
 shares when using only one connection per pool.
 - Test the queued list to see if any get/submits are already queued and if they
 are, start recruiting extra connections by generating new threads.
 - This allows us to reuse network connections at low loads but recuit new open
-connections as they're needed, so that cgminer can scale to hardware of any
+connections as they're needed, so that BFGMiner can scale to hardware of any
 size.
 
 
 BFGMiner Version 2.3.5 - April 28, 2012
 
-- Restarting cgminer leads to a socket that can't be bound for 60 seconds, so
+- Restarting BFGMiner leads to a socket that can't be bound for 60 seconds, so
 increase the interval that API binding waits to 30 seconds to minimise the
 number of times it will retry, spamming the logs.
 - Give a longpoll message for any longpoll that detects a block change, primary
@@ -110,7 +109,6 @@ or backup, and also display which pool it was.
 - Add pool number to stale share message.
 - Add space to log output now that there is more screen real estate available.
 - Indentation clean up.
-- Merge branch 'master' of github.com:ckolivas/cgminer
 - Remove thread id display from rejected shares as well.
 - Merge pull request #185 from Diapolo/diakgcn
 - add goffset support for diakgcn with -v 1 and update kernel version
@@ -160,7 +158,7 @@ thread join.
 - README - add some Ztex details
 - api.c include zTex in the FPGA support list
 - api.c ensure 'devs' shows PGA's when only PGA code is compiled
-- cgminer.c sharelog code consistency and compile warning fix
+- miner.c sharelog code consistency and compile warning fix
 - README correct API version number
 - README spelling error
 - api.c combine all pairs of sprintfs()
