@@ -1,3 +1,42 @@
+Version 2.4.1 - May 6, 2012
+
+- In the unlikely event of finding a block, display the block solved count with
+the pool it came from for auditing.
+- Display the device summary on exit even if a device has been disabled.
+- Use correct pool enabled enums in api.c.
+- Import Debian packaging configs
+- Ensure we test for a pool recovering from idle so long as it's not set to
+disabled.
+- Fix pool number display.
+- Give cgminer -T message only if curses is in use.
+- Reinit_adl is no longer used.
+- API 'stats' allow devices to add their own stats also for testing/debug
+- API add getwork stats to cgminer - accesable from API 'stats'
+- Don't initialise variables to zero when in global scope since they're already
+initialised.
+- Get rid of unitialised variable warning when it's false.
+- Move a pool to POOL_REJECTING to be disabled only after 3 minutes of
+continuous rejected shares.
+- Some tweaks to reporting and logging.
+- Change FPGA detection order since BFL hangs on an ICA
+- API support new pool status
+- Add a temporarily disabled state for enabled pools called POOL_REJECTING and
+use the work from each longpoll to help determine when a rejecting pool has
+started working again. Switch pools based on the multipool strategy once a pool
+is re-enabled.
+- Removing extra debug
+- Fix the benchmark feature by bypassing the new networking code.
+- Reset sequential reject counter after a pool is disabled for when it is
+re-enabled.
+- Icarus - correct MH/s and U: with work restart set at 8 seconds
+- ztex updateFreq was always reporting on fpga 0
+- Trying harder to get 1.15y working
+- Specifying threads on multi fpga boards extra cgpu
+- Missing the add cgpu per extra fpga on 1.15y boards
+- API add last share time to each pool
+- Don't try to reap curls if benchmarking is enabled.
+
+
 Version 2.4.0 - May 3, 2012
 
 - Only show longpoll warning once when it has failed.
