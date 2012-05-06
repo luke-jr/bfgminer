@@ -4382,10 +4382,8 @@ static void print_summary(void)
 	}
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
-	for (i = 0; i < total_devices; ++i) {
-		if (devices[i]->deven == DEV_ENABLED)
-			log_print_status(devices[i]);
-	}
+	for (i = 0; i < total_devices; ++i)
+		log_print_status(devices[i]);
 
 	if (opt_shares)
 		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
