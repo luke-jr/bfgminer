@@ -2788,7 +2788,7 @@ updated:
 			wattron(logwin, A_BOLD);
 		if (pool->enabled != POOL_ENABLED)
 			wattron(logwin, A_DIM);
-		wlogprint("%d: ");
+		wlogprint("%d: ", pool->pool_no);
 		switch (pool->enabled) {
 			case POOL_ENABLED:
 				wlogprint("Enabled ");
