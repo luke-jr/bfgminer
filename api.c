@@ -1472,7 +1472,7 @@ static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	}
 
 	pool = pools[id];
-	pool->enabled = true;
+	pool->enabled = POOL_ENABLED;
 	switch_pools(pool);
 
 	strcpy(io_buffer, message(MSG_SWITCHP, id, NULL, isjson));
@@ -1584,12 +1584,12 @@ static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	}
 
 	pool = pools[id];
-	if (pool->enabled == true) {
+	if (pool->enabled == POOL_ENABLED) {
 		strcpy(io_buffer, message(MSG_ALRENAP, id, NULL, isjson));
 		return;
 	}
 
-	pool->enabled = true;
+	pool->enabled = POOL_ENABLED;
 	if (pool->prio < current_pool()->prio)
 		switch_pools(pool);
 
@@ -1618,7 +1618,7 @@ static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	}
 
 	pool = pools[id];
-	if (pool->enabled == false) {
+	if (pool->enabled == POOL_DISABLED) {
 		strcpy(io_buffer, message(MSG_ALRDISP, id, NULL, isjson));
 		return;
 	}
@@ -1628,7 +1628,7 @@ static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	pool->enabled = false;
+	pool->enabled = POOL_DISABLED;
 	if (pool == current_pool())
 		switch_pools(NULL);
 
@@ -1672,7 +1672,7 @@ static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	pool->enabled = false;
+	pool->enabled = POOL_DISABLED;
 	rpc_url = escape_string(pool->rpc_url, isjson);
 	if (rpc_url != pool->rpc_url)
 		dofree = true;
