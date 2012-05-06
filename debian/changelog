@@ -1,0 +1,85 @@
+cgminer (2.4.0-2) stable; urgency=low
+  Version 2.4.0-2 - May 4, 2012
+
+  - Fix the benchmark feature by bypassing the new networking code.
+  - Reset sequential reject counter after a pool is disabled for when it is re-enabled.
+  - Don't try to reap curls if benchmarking is enabled.
+
+ -- nushor <nushor11@gmail.com>  Thurs, 03 May 2012 23:18:42 -0500
+
+cgminer (2.4.0-1) stable; urgency=low
+  Version 2.4.0 - May 3, 2012
+
+  - Only show longpoll warning once when it has failed.
+  - Convert hashes to an unsigned long long as well.
+  - Detect pools that have issues represented by endless rejected shares and
+    disable them, with a parameter to optionally disable this feature.
+  - Bugfix: Use a 64-bit type for hashes_done (miner_thread) since it can overflow
+    32-bit on some FPGAs
+  - Implement an older header fix for a label existing before the pthread_cleanup
+    macro.
+  - Limit the number of curls we recruit on communication failures and with
+    delaynet enabled to 5 by maintaining a per-pool curl count, and using a pthread
+    conditional that wakes up when one is returned to the ring buffer.
+  - Generalise add_pool() functions since they're repeated in add_pool_details.
+  - Bugfix: Return failure, rather than quit, if BFwrite fails
+  - Disable failing devices such that the user can attempt to re-enable them
+  - Bugfix: thread_shutdown shouldn't try to free the device, since it's needed
+    afterward
+  - API bool's and 1TBS fixes
+  - Icarus - minimise code delays and name timer variables
+  - api.c V1.9 add 'restart' + redesign 'quit' so thread exits cleanly
+  - api.c bug - remove extra ']'s in notify command
+  - Increase pool watch interval to 30 seconds.
+  - Reap curls that are unused for over a minute. This allows connections to be
+    closed, thereby allowing the number of curl handles to always be the minimum
+    necessary to not delay networking.
+  - Use the ringbuffer of curls from the same pool for submit as well as getwork
+    threads. Since the curl handles were already connected to the same pool and are
+    immediately available, share submission will not be delayed by getworks.
+  - Implement a scaleable networking framework designed to cope with any sized
+    network requirements, yet minimise the number of connections being reopened. Do
+    this by create a ring buffer linked list of curl handles to be used by getwork,
+    recruiting extra handles when none is immediately available.
+  - There is no need for the submit and getwork curls to be tied to the pool
+    struct.
+  - Do not recruit extra connection threads if there have been connection errors
+    to the pool in question.
+  - We should not retry submitting shares indefinitely or we may end up with a
+    huge backlog during network outages, so discard stale shares if we failed to
+    submit them and they've become stale in the interim.
+
+ -- nushor <nushor11@gmail.com>  Thurs, 03 May 2012 10:43:22 -0500
+
+cgminer (2.3.6-3) stable; urgency=low
+  Version 2.3.6-3 - may 3, 2012
+  - More bug fixes, Pre 2.4.1 release.
+
+ -- nushor <nushor11@gmail.com>  Thurs, 03 May 2012 00:36:50 -0500
+
+cgminer (2.3.6-2) stable; urgency=low
+  Version 2.3.6-2 - May 2, 2012
+  - Various bug fixes, latest build from repository.
+
+ -- nushor <nushor11@gmail.com>  Wed, 02 May 2012 18:17:49 -0500
+
+cgminer (2.3.6-1) stable; urgency=low
+
+  Version 2.3.6 - April 29, 2012
+  - Shorten stale share messages slightly.
+  - Protect the freeing of current_hash under mutex_lock to prevent racing on it
+    when set_curblock is hit concurrently.
+  - Change default behaviour to submitting stale, removing the --submit-stale
+    option and adding a --no-submit-stale option.
+  - Make sure to start the getwork and submit threads when a pool is added on the
+    fly. This fixes a crash when a pool is added to running cgminer and then
+    switched to.
+  - Faster hardware can easily outstrip the speed we can get work and submit
+    shares when using only one connection per pool.
+  - Test the queued list to see if any get/submits are already queued and if they
+    are, start recruiting extra connections by generating new threads.
+  - This allows us to reuse network connections at low loads but recuit new open
+    connections as they're needed, so that cgminer can scale to hardware of any
+    size.
+
+ -- nushor <nushor11@gmail.com>  Tue, 01 May 2012 13:26:09 -0500
