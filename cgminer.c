@@ -2634,11 +2634,11 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
 		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);
 		}
-	fputs("\n],\n\n", fcfg);
+	fputs("\n]\n", fcfg);
 
 	if (nDevs) {
 		/* Write GPU device values */
-		fputs("\"intensity\" : \"", fcfg);
+		fputs(",\n\"intensity\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
 #ifdef HAVE_OPENCL
@@ -2701,16 +2701,13 @@ void write_config(FILE *fcfg)
 #endif
 #endif
 		fputs("\"", fcfg);
-#ifdef WANT_CPUMINE
-		fputs(",\n", fcfg);
-#endif
 	}
 #ifdef HAVE_ADL
 	if (opt_reorder)
 		fprintf(fcfg, ",\n\"gpu-reorder\" : true");
 #endif
 #ifdef WANT_CPUMINE
-	fprintf(fcfg, "\n\"algo\" : \"%s\"", algo_names[opt_algo]);
+	fprintf(fcfg, ",\n\"algo\" : \"%s\"", algo_names[opt_algo]);
 #endif
 
 	/* Simple bool and int options */
