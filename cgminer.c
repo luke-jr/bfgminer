@@ -1182,6 +1182,11 @@ static bool work_decode(const json_t *val, struct work *work)
 		sha2_starts( &ctx, 0 );
 		sha2_update( &ctx, data.c, 64 );
 		memcpy(work->midstate, ctx.state, sizeof(work->midstate));
+#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
+		int i;
+		for (i = 0; i < 8; i++)
+			(((uint32_t*) (work->midstate))[i]) = swab32(((uint32_t*) (work->midstate))[i]);
+#endif
 	}
 
 	if (likely(!jobj_binary(val, "hash1", work->hash1, sizeof(work->hash1), false))) {
@@ -1195,18 +1200,6 @@ static bool work_decode(const json_t *val, struct work *work)
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
-
-#ifdef __BIG_ENDIAN__
-        int swapcounter = 0;
-        for (swapcounter = 0; swapcounter < 32; swapcounter++)
-            (((uint32_t*) (work->data))[swapcounter]) = swab32(((uint32_t*) (work->data))[swapcounter]);
-        for (swapcounter = 0; swapcounter < 16; swapcounter++)
-            (((uint32_t*) (work->hash1))[swapcounter]) = swab32(((uint32_t*) (work->hash1))[swapcounter]);
-        for (swapcounter = 0; swapcounter < 8; swapcounter++)
-            (((uint32_t*) (work->midstate))[swapcounter]) = swab32(((uint32_t*) (work->midstate))[swapcounter]);
-        for (swapcounter = 0; swapcounter < 8; swapcounter++)
-            (((uint32_t*) (work->target))[swapcounter]) = swab32(((uint32_t*) (work->target))[swapcounter]);
-#endif
 
 	gettimeofday(&work->tv_staged, NULL);
 
