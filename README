@@ -209,6 +209,53 @@ FPGA mining boards(BitForce, Icarus, Ztex) only options:
      On windows <arg> is usually of the format \\.\COMn
        (where n = the correct device number for the FPGA device)
 
+--icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
+           default       Use the default Icarus hash time (2.6316ns)
+           short         Calculate the hash time and stop adjusting it at ~315 difficulty 1 shares (~1hr)
+           long          Re-calculate the hash time continuously
+           value         Specify the hash time in nanoseconds (e.g. 2.6316)
+
+     Icarus timing is required for devices that do not exactly match a default Icarus Rev3 in
+     processing speed
+     If you have an Icarus Rev3 you should not norally need to use --icarus-timing since the
+     default values will maximise the MH/s and display it correctly
+
+     Icarus timing is used to determine the number of hashes that have been checked when it aborts
+     a nonce range (including on a LongPoll)
+     It is also used to determine the elapsed time when it should abort a nonce range to avoid
+     letting the Icarus to go idle, but also to safely maximise that time
+
+     'short' or 'long' mode should only be used on a computer that has enough CPU available to run
+     cgminer without any CPU delays (an active desktop or swapping computer would not be stable enough)
+     Any CPU delays while calculating the hash time will affect the result
+     'short' mode only requires the computer to be stable until it has completed ~315 difficulty 1 shares
+     'long' mode requires it to always be stable to ensure accuracy, however, over time it continually
+     corrects itself
+
+     When in 'short' or 'long' mode, it will report the hash time value each time it is re-calculated
+     In 'short' or 'long' mode, the scan abort time starts at 5 seconds and uses the default 2.6316ns
+     scan hash time, for the first 5 nonce's or one minute (whichever is longer)
+
+     In 'default' or 'value' mode the 'constants' are calculated once at the start, based on the default
+     value or the value specified
+
+     To determine the hash time value for a non Icarus Rev3 device or an Icarus Rev3 with a different
+     bitstream to the default one, use 'long' mode and give it at least a few hundred shares, or use
+     'short' mode and take note of the final hash time value (Hs) calculated
+     You can also use the RPC API 'stats' command to see the current hash time (Hs) at any time
+
+     The Icarus code currently only works with a dual FPGA device that supports the same commands as
+     Icarus Rev3 requires and also is less than ~840MH/s and greater than 2MH/s
+     If a dual FPGA device does hash faster than ~840MH/s it should work correctly if you supply the
+     correct hash time nanoseconds value
+
+     The timing code itself will affect the Icarus performance since it increases the delay after
+     work is completed or aborted until it starts again
+     The increase is, however, extremely small and the actual increase is reported with the
+     RPC API 'stats' command (a very slow CPU will make it more noticeable)
+     Using the 'short' mode will remove this delay after 'short' mode completes
+     The delay doesn't affect the calculation of the correct hash time
+
 
 CPU only options (deprecated, not included in binaries!):
 
