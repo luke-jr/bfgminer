@@ -825,7 +825,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--icarus-timing",
 		     set_icarus_timing, NULL, NULL,
-		     "Set how the Icarus timing is calculated - one setting/value for all or comma separated ('default'/'short'/'long'/value)"),
+		     opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
