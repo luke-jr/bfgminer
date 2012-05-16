@@ -14,7 +14,7 @@ There is a hidden option in cgminer when Icarus support is compiled in:
 
      Icarus timing is required for devices that do not exactly match a default Icarus Rev3 in
      processing speed
-     If you have an Icarus Rev3 you should not norally need to use --icarus-timing since the
+     If you have an Icarus Rev3 you should not normally need to use --icarus-timing since the
      default values will maximise the MH/s and display it correctly
 
      Icarus timing is used to determine the number of hashes that have been checked when it aborts
