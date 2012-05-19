@@ -329,7 +329,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 
 	usleep(4500000);
 	i = 4500;
-	while (1) {
+	while (i < 10000) {
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		if (unlikely(!pdevbuf[0])) {
@@ -341,6 +341,12 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		usleep(10000);
 		i += 10;
 	}
+
+    if (i >= 10000) {
+	  applog(LOG_DEBUG, "BitForce took longer than 10s");
+      return 0;
+    }
+
 	applog(LOG_DEBUG, "BitForce waited %dms until %s\n", i, pdevbuf);
 	work->blk.nonce = 0xffffffff;
 	if (pdevbuf[2] == '-')
