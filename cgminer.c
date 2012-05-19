@@ -2623,7 +2623,7 @@ void write_config(FILE *fcfg)
 
 	/* Write pool values in priority order */
 	fputs("{\n\"pools\" : [", fcfg);
-	while(j < total_pools) {
+	while((j < total_pools) && (i < total_pools)) {
 	    if(pools[i]->prio == j) {
 		    fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
 		    fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
