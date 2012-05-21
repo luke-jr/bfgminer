@@ -7,10 +7,10 @@ Icarus
 There is a hidden option in cgminer when Icarus support is compiled in:
 
 --icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
-           default       Use the default Icarus hash time (2.6316ns)
+           default[=N]   Use the default Icarus hash time (2.6316ns)
            short         Calculate the hash time and stop adjusting it at ~315 difficulty 1 shares (~1hr)
            long          Re-calculate the hash time continuously
-           value         Specify the hash time in nanoseconds (e.g. 2.6316)
+           value[=N]     Specify the hash time in nanoseconds (e.g. 2.6316) and abort time (e.g. 2.6316=80)
 
      Icarus timing is required for devices that do not exactly match a default Icarus Rev3 in
      processing speed
@@ -35,6 +35,8 @@ There is a hidden option in cgminer when Icarus support is compiled in:
 
      In 'default' or 'value' mode the 'constants' are calculated once at the start, based on the default
      value or the value specified
+     The optional additional =N specifies to set the default abort at N 1/10ths of a second, not the
+     calculated value, which is 112 for 2.6316ns
 
      To determine the hash time value for a non Icarus Rev3 device or an Icarus Rev3 with a different
      bitstream to the default one, use 'long' mode and give it at least a few hundred shares, or use

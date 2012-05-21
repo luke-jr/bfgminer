@@ -82,7 +82,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 // Since this rounds up a the last digit - it is a slight overestimate
 // Thus the hash rate will be a VERY slight underestimate
 // (by a lot less than the displayed accuracy)
-#define ICARUS_HASH_TIME 0.0000000026316
+#define ICARUS_REV3_HASH_TIME 0.0000000026316
 #define NANOSEC 1000000000.0
 
 // Icarus Rev3 doesn't send a completion message when it finishes
@@ -259,17 +259,22 @@ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, in
 	ssize_t ret = 0;
 	int rc = 0;
 	int read_amount = ICARUS_READ_SIZE;
+	bool first = true;
 
+	// Read reply 1 byte at a time to get earliest tv_finish
 	while (true) {
-		ret = read(fd, buf, read_amount);
-		gettimeofday(tv_finish, NULL);
+		ret = read(fd, buf, 1);
+
+		if (first)
+			gettimeofday(tv_finish, NULL);
+
 		if (ret >= read_amount)
 			return 0;
 
-		// Allow a partial I/O
 		if (ret > 0) {
 			buf += ret;
 			read_amount -= ret;
+			first = false;
 			continue;
 		}
 			
@@ -328,7 +333,7 @@ static void set_timing_mode(struct cgpu_info *icarus)
 	struct ICARUS_INFO *info = icarus_info[icarus->device_id];
 	double Hs;
 	char buf[BUFSIZ+1];
-	char *ptr, *comma;
+	char *ptr, *comma, *eq;
 	size_t max;
 	int i;
 
@@ -355,14 +360,17 @@ static void set_timing_mode(struct cgpu_info *icarus)
 		buf[max] = '\0';
 	}
 
+	info->Hs = 0;
+	info->read_count = 0;
+
 	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
-		info->Hs = ICARUS_HASH_TIME;
+		info->Hs = ICARUS_REV3_HASH_TIME;
 		info->read_count = ICARUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
 	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
-		info->Hs = ICARUS_HASH_TIME;
+		info->Hs = ICARUS_REV3_HASH_TIME;
 		info->read_count = ICARUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_LONG;
@@ -370,16 +378,29 @@ static void set_timing_mode(struct cgpu_info *icarus)
 	} else if ((Hs = atof(buf)) != 0) {
 		info->Hs = Hs / NANOSEC;
 		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-		info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+
+		if ((eq = strchr(buf, '=')) != NULL)
+			info->read_count = atoi(eq+1);
+
+		if (info->read_count < 1)
+			info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+
+		if (unlikely(info->read_count < 1))
+			info->read_count = 1;
 
 		info->timing_mode = MODE_VALUE;
 		info->do_icarus_timing = false;
 	} else {
 		// Anything else in buf just uses DEFAULT mode
 
-		info->Hs = ICARUS_HASH_TIME;
+		info->Hs = ICARUS_REV3_HASH_TIME;
 		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-		info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+
+		if ((eq = strchr(buf, '=')) != NULL)
+			info->read_count = atoi(eq+1);
+
+		if (info->read_count < 1)
+			info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
 
 		info->timing_mode = MODE_DEFAULT;
 		info->do_icarus_timing = false;
@@ -562,10 +583,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (ret)
 		return 0;	/* This should never happen */
 
-	info = icarus_info[icarus->device_id];
-
-	if (opt_debug || info->do_icarus_timing)
-		gettimeofday(&tv_start, NULL);
+	gettimeofday(&tv_start, NULL);
 
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
@@ -578,6 +596,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
+	info = icarus_info[icarus->device_id];
 	ret = icarus_gets(nonce_bin, fd, &tv_finish, thr_id, info->read_count);
 
 	work->blk.nonce = 0xffffffff;
@@ -654,7 +673,9 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		if (history0->values >= info->min_data_count
 		&&  timercmp(&tv_start, &(history0->finish), >)) {
 			for (i = INFO_HISTORY; i > 0; i--)
-				memcpy(&(info->history[i]), &(info->history[i-1]), sizeof(struct ICARUS_HISTORY));
+				memcpy(&(info->history[i]),
+					&(info->history[i-1]),
+					sizeof(struct ICARUS_HISTORY));
 
 			// Initialise history0 to zero for summary calculation
 			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
