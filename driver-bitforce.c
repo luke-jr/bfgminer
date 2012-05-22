@@ -290,6 +290,7 @@ static uint64_t bitforce_get_temp(struct cgpu_info *bitforce)
 			}
 		}
 	}
+    return 1;
 }
 
 
@@ -329,6 +330,7 @@ static uint64_t bitforce_send_work(struct cgpu_info *bitforce, struct work *work
 		applog(LOG_ERR, "BitForce block data reports: %s", pdevbuf);
 		return 0;
 	}
+    return 1;
 }
 
 static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
