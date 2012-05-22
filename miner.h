@@ -250,6 +250,7 @@ enum dev_enable {
 	DEV_ENABLED,
 	DEV_DISABLED,
 	DEV_RECOVER,
+	DEV_IDLE,
 };
 
 enum cl_kernels {

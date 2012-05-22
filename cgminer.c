@@ -3893,7 +3893,7 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
+			if (unlikely(mythr->pause || cgpu->deven == DEV_DISABLED || cgpu->deven == DEV_RECOVER)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 disabled:
 				mythr->rolling = mythr->cgpu->rolling = 0;
@@ -5130,6 +5130,9 @@ begin_bench:
 				quit(1, "thread %d create failed", thr->id);
 
 			cgpu->thread = thr;
+			
+			/* delay each start by 100ms */
+			usleep(100000);
 		}
 	}
 

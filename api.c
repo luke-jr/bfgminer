@@ -158,7 +158,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.10";
+static const char *APIVERSION = "1.11";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -876,7 +876,7 @@ static void pgastatus(int pga, bool isjson)
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		if (cgpu->deven != DEV_DISABLED)
+		if (cgpu->deven == DEV_ENABLED)
 			enabled = (char *)YES;
 		else
 			enabled = (char *)NO;
@@ -1089,7 +1089,7 @@ static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	struct cgpu_info *cgpu = devices[dev];
 
-	if (cgpu->deven != DEV_DISABLED) {
+	if (cgpu->deven == DEV_ENABLED) {
 		strcpy(io_buffer, message(MSG_PGALRENA, id, NULL, isjson));
 		return;
 	}
@@ -1140,12 +1140,12 @@ static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	struct cgpu_info *cgpu = devices[dev];
 
-	if (cgpu->deven == DEV_DISABLED) {
+	if (cgpu->deven != DEV_ENABLED) {
 		strcpy(io_buffer, message(MSG_PGALRDIS, id, NULL, isjson));
 		return;
 	}
 
-	cgpu->deven = DEV_DISABLED;
+	cgpu->deven = DEV_IDLE;
 
 	strcpy(io_buffer, message(MSG_PGADIS, id, NULL, isjson));
 }
