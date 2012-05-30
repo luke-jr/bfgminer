@@ -7,6 +7,10 @@
  * any later version.  See COPYING for more details.
  */
 
+/* Compile:
+ *   gcc api-example.c -I compat/jansson -o cgminer-api
+ */
+
 #include "config.h"
 
 #include <stdio.h>
