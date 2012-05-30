@@ -4000,8 +4000,14 @@ static struct pool *select_longpoll_pool(struct pool *cp)
 	return NULL;
 }
 
+/* This will make the longpoll thread wait till it's the current pool, or it
+ * has been flagged as rejecting, before attempting to open any connections.
+ */
 static void wait_lpcurrent(struct pool *pool)
 {
+	if (pool->enabled == POOL_REJECTING)
+		return;
+
 	while (pool != current_pool()) {
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
