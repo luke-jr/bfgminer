@@ -1725,8 +1725,10 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		/* Once we have more than a nominal amount of sequential rejects,
 		 * at least 10 and more than 3 mins at the current utility,
 		 * disable the pool because some pool error is likely to have
-		 * ensued. */
-		if (pool->seq_rejects > 10 && opt_disable_pool && total_pools > 1) {
+		 * ensued. Do not do this if we know the share just happened to
+		 * be stale due to networking delays.
+		 */
+		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && total_pools > 1) {
 			double utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 			if (pool->seq_rejects > utility * 3) {
@@ -2161,6 +2163,7 @@ static void *submit_work_thread(void *userdata)
 			pool->stale_shares++;
 			goto out;
 		}
+		work->stale = true;
 	}
 
 	ce = pop_curl_entry(pool);
