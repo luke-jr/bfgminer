@@ -290,10 +290,9 @@ static void icarus_detect()
 }
 
 struct icarus_state {
-	bool firstrun;
+	bool jobrunning;
 	struct timeval tv_workstart;
 	struct work last_work;
-	bool changework;
 };
 
 static bool icarus_prepare(struct thr_info *thr)
@@ -317,7 +316,6 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	struct icarus_state *state;
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
-	state->firstrun = true;
 
 	return true;
 }
@@ -351,21 +349,15 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
 
-	if (!state->firstrun) {
-		if (state->changework)
-			state->changework = false;
-		else
-		{
-			/* Icarus will return 4 bytes nonces or nothing */
-			lret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr,
+	if (likely(state->jobrunning)) {
+		/* Icarus will return 8 bytes nonces or nothing */
+		lret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr,
 			                   ICARUS_READ_FAULT_COUNT);
-			if (lret && *wr) {
-				// The prepared work is invalid, and the current work is abandoned
-				// Go back to the main loop to get the next work, and stuff
-				// Returning to the main loop will clear work_restart, so use a flag...
-				state->changework = true;
-				return 1;
-			}
+		if (lret && *wr) {
+			// The prepared work is invalid, and the current work is abandoned
+			// Go back to the main loop to get the next work, and stuff
+			state->jobrunning = false;
+			return 1;
 		}
 
 		gettimeofday(&tv_finish, NULL);
@@ -405,8 +397,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	work->blk.nonce = 0xffffffff;
 
-	if (state->firstrun) {
-		state->firstrun = false;
+	if (unlikely(!state->jobrunning)) {
+		state->jobrunning = true;
 		memcpy(&state->last_work, work, sizeof(state->last_work));
 		return 1;
 	}
