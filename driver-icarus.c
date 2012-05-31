@@ -264,7 +264,7 @@ static int icarus_open2(const char *devpath, __maybe_unused bool purge)
 
 #define icarus_open(devpath)  icarus_open2(devpath, false)
 
-static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, volatile unsigned long *wr, int read_count)
+static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, bool *wr, int read_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
@@ -474,7 +474,7 @@ static bool icarus_detect_one(const char *devpath)
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	volatile unsigned long wr = 0;
+	bool wr = 0;
 	struct timeval tv_finish;
 	icarus_gets(nonce_bin, fd, &tv_finish, &wr, 1);
 
@@ -577,7 +577,7 @@ static bool icarus_prepare(struct thr_info *thr)
 static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused uint64_t max_nonce)
 {
-	volatile unsigned long *wr = &work_restart[thr->id].restart;
+	bool *wr = &thr->work_restart;
 
 	struct cgpu_info *icarus;
 	int fd;
