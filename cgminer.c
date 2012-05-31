@@ -134,6 +134,7 @@ bool opt_api_listen;
 bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool = true;
+char *opt_icarus_timing = NULL;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -678,6 +679,15 @@ static char *set_api_description(const char *arg)
 	return NULL;
 }
 
+#ifdef USE_ICARUS
+static char *set_icarus_timing(const char *arg)
+{
+	opt_set_charp(arg, &opt_icarus_timing);
+
+	return NULL;
+}
+#endif
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 #ifdef WANT_CPUMINE
@@ -814,6 +824,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--kernel|-k",
 		     set_kernel, NULL, NULL,
 		     "Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
+#endif
+#ifdef USE_ICARUS
+	OPT_WITH_ARG("--icarus-timing",
+		     set_icarus_timing, NULL, NULL,
+		     opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -2769,6 +2784,8 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
+	if (opt_icarus_timing)
+		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", opt_icarus_timing);
 	fputs("\n}", fcfg);
 }
 
