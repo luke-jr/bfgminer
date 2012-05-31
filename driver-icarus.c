@@ -173,18 +173,14 @@ static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsig
 		}
 
 		rc++;
-		if (*wr) {
-			rc *= ICARUS_READ_FAULT_DECISECONDS;
-			applog(LOG_DEBUG,
-			       "Icarus Read: Work restart at %d.%d seconds", rc / 10, rc % 10);
-			return 1;
-		}
-		if (rc >= read_count) {
+		if (rc >= read_count || *wr) {
 			if (epollfd != -1)
 				close(epollfd);
 			rc *= ICARUS_READ_FAULT_DECISECONDS;
 			applog(LOG_DEBUG,
-			       "Icarus Read: No data in %d.%d seconds", rc / 10, rc % 10);
+			     "Icarus Read: %s %d.%d seconds",
+			     (*wr) ? "Work restart at" : "No data in",
+			     rc / 10, rc % 10);
 			return 1;
 		}
 	}
