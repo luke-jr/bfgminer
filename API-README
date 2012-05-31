@@ -349,10 +349,7 @@ Support for Icarus and Bitforce FPGAs was added
 
 ----------
 
-API V1.5 (Kano's interim release of cgminer v2.3.1)
-
-Modified API commands:
- 'config' added "Device Code" and "OS"
+API V1.5 was not released
 
 ----------
 
@@ -360,6 +357,9 @@ API V1.4 (Kano's interim release of cgminer v2.3.1)
 
 Added API commands:
  'notify'
+
+Modified API commands:
+ 'config' added "Device Code" and "OS"
 
 Added "When" to the STATUS reply section of all commands
 
