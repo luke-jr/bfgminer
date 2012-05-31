@@ -3006,6 +3006,23 @@ retry:
 }
 #endif
 
+void default_save_file(char *filename)
+{
+#if defined(unix)
+	if (getenv("HOME") && *getenv("HOME")) {
+	        strcpy(filename, getenv("HOME"));
+		strcat(filename, "/");
+	}
+	else
+		strcpy(filename, "");
+	strcat(filename, ".cgminer/");
+	mkdir(filename, 0777);
+#else
+	strcpy(filename, "");
+#endif
+	strcat(filename, def_conf);
+}
+
 #ifdef HAVE_CURSES
 static void set_options(void)
 {
@@ -3066,19 +3083,7 @@ retry:
 		FILE *fcfg;
 		char *str, filename[PATH_MAX], prompt[PATH_MAX + 50];
 
-#if defined(unix)
-		if (getenv("HOME") && *getenv("HOME")) {
-		        strcpy(filename, getenv("HOME"));
-			strcat(filename, "/");
-		}
-		else
-			strcpy(filename, "");
-		strcat(filename, ".cgminer/");
-		mkdir(filename, 0777);
-#else
-		strcpy(filename, "");
-#endif
-		strcat(filename, def_conf);
+		default_save_file(filename);
 		sprintf(prompt, "Config filename to write (Enter for default) [%s]", filename);
 		str = curses_input(prompt);
 		if (strcmp(str, "-1")) {

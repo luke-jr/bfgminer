@@ -1976,12 +1976,13 @@ static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 
 void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
+	char filename[PATH_MAX];
 	FILE *fcfg;
 	char *ptr;
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISFN, 0, NULL, isjson));
-		return;
+		default_save_file(filename);
+		param = filename;
 	}
 
 	fcfg = fopen(param, "w");
