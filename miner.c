@@ -166,6 +166,9 @@ static pthread_rwlock_t blk_lock;
 
 pthread_rwlock_t netacc_lock;
 
+static pthread_mutex_t lp_lock;
+static pthread_cond_t lp_cond;
+
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
@@ -2301,6 +2304,10 @@ void switch_pools(struct pool *selected)
 	mutex_lock(&qd_lock);
 	total_queued = 0;
 	mutex_unlock(&qd_lock);
+
+	mutex_lock(&lp_lock);
+	pthread_cond_broadcast(&lp_cond);
+	mutex_unlock(&lp_lock);
 }
 
 static void discard_work(struct work *work)
@@ -4019,6 +4026,20 @@ static struct pool *select_longpoll_pool(struct pool *cp)
 	return NULL;
 }
 
+/* This will make the longpoll thread wait till it's the current pool, or it
+ * has been flagged as rejecting, before attempting to open any connections.
+ */
+static void wait_lpcurrent(struct pool *pool)
+{
+	if (pool->enabled == POOL_REJECTING)
+		return;
+
+	while (pool != current_pool()) {
+		mutex_lock(&lp_lock);
+		pthread_cond_wait(&lp_cond, &lp_lock);
+	}
+}
+
 static void *longpoll_thread(void *userdata)
 {
 	struct pool *cp = (struct pool *)userdata;
@@ -4049,6 +4070,8 @@ retry_pool:
 	/* Any longpoll from any pool is enough for this to be true */
 	have_longpoll = true;
 
+	wait_lpcurrent(cp);
+
 	if (cp == pool)
 		applog(LOG_WARNING, "Long-polling activated for %s", pool->lp_url);
 	else
@@ -4056,6 +4079,8 @@ retry_pool:
 
 	while (42) {
 		json_t *val, *soval;
+
+		wait_lpcurrent(cp);
 
 		gettimeofday(&start, NULL);
 
@@ -4787,6 +4812,10 @@ int main(int argc, char *argv[])
 	mutex_init(&ch_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
+
+	mutex_init(&lp_lock);
+	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
+		quit(1, "Failed to pthread_cond_init lp_cond");
 
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 
