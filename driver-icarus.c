@@ -55,9 +55,133 @@
 #include "elist.h"
 #include "miner.h"
 
-// 8 second timeout
+// The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
+#define ICARUS_IO_SPEED 115200
+
+// The size of a successful nonce read
+#define ICARUS_READ_SIZE 4
+
+// A stupid constant that must be 10. Don't change it.
+#define TIME_FACTOR 10
+
+// Ensure the sizes are correct for the Serial read
+#if (ICARUS_READ_SIZE != 4)
+#error ICARUS_READ_SIZE must be 4
+#endif
+#if (TIME_FACTOR != 10)
+#error TIME_FACTOR must be 10
+#endif
+#define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
+ASSERT1(sizeof(uint32_t) == 4);
+
+#define ICARUS_READ_TIME ((double)ICARUS_READ_SIZE * (double)8.0 / (double)ICARUS_IO_SPEED)
+
+// Minimum precision of longpolls, in deciseconds
 #define ICARUS_READ_FAULT_DECISECONDS (1)
-#define ICARUS_READ_FAULT_COUNT	(80)
+
+// In timing mode: Default starting value until an estimate can be obtained
+// 5 seconds allows for up to a ~840MH/s device
+#define ICARUS_READ_FAULT_COUNT_DEFAULT	(50)
+
+// For a standard Icarus REV3 (to 5 places)
+// Since this rounds up a the last digit - it is a slight overestimate
+// Thus the hash rate will be a VERY slight underestimate
+// (by a lot less than the displayed accuracy)
+#define ICARUS_REV3_HASH_TIME 0.0000000026316
+#define NANOSEC 1000000000.0
+
+// Icarus Rev3 doesn't send a completion message when it finishes
+// the full nonce range, so to avoid being idle we must abort the
+// work (by starting a new work) shortly before it finishes
+//
+// Thus we need to estimate 2 things:
+//	1) How many hashes were done if the work was aborted
+//	2) How high can the timeout be before the Icarus is idle,
+//		to minimise the number of work started
+//	We set 2) to 'the calculated estimate' - 1
+//	to ensure the estimate ends before idle
+//
+// The simple calculation used is:
+//	Tn = Total time in seconds to calculate n hashes
+//	Hs = seconds per hash
+//	Xn = number of hashes
+//	W  = code overhead per work
+//
+// Rough but reasonable estimate:
+//	Tn = Hs * Xn + W	(of the form y = mx + b)
+//
+// Thus:
+//	Line of best fit (using least squares)
+//
+//	Hs = (n*Sum(XiTi)-Sum(Xi)*Sum(Ti))/(n*Sum(Xi^2)-Sum(Xi)^2)
+//	W = Sum(Ti)/n - (Hs*Sum(Xi))/n
+//
+// N.B. W is less when aborting work since we aren't waiting for the reply
+//	to be transferred back (ICARUS_READ_TIME)
+//	Calculating the hashes aborted at n seconds is thus just n/Hs
+//	(though this is still a slight overestimate due to code delays)
+//
+
+// Both below must be exceeded to complete a set of data
+// Minimum how long after the first, the last data point must be
+#define HISTORY_SEC 60
+// Minimum how many points a single ICARUS_HISTORY should have
+#define MIN_DATA_COUNT 5
+// The value above used is doubled each history until it exceeds:
+#define MAX_MIN_DATA_COUNT 100
+
+static struct timeval history_sec = { HISTORY_SEC, 0 };
+
+// Store the last INFO_HISTORY data sets
+// [0] = current data, not yet ready to be included as an estimate
+// Each new data set throws the last old set off the end thus
+// keeping a ongoing average of recent data
+#define INFO_HISTORY 10
+
+struct ICARUS_HISTORY {
+	struct timeval finish;
+	double sumXiTi;
+	double sumXi;
+	double sumTi;
+	double sumXi2;
+	uint32_t values;
+	uint32_t hash_count_min;
+	uint32_t hash_count_max;
+};
+
+enum timing_mode { MODE_DEFAULT, MODE_SHORT, MODE_LONG, MODE_VALUE };
+
+static const char *MODE_DEFAULT_STR = "default";
+static const char *MODE_SHORT_STR = "short";
+static const char *MODE_LONG_STR = "long";
+static const char *MODE_VALUE_STR = "value";
+static const char *MODE_UNKNOWN_STR = "unknown";
+
+struct ICARUS_INFO {
+	struct ICARUS_HISTORY history[INFO_HISTORY+1];
+	uint32_t min_data_count;
+
+	// seconds per Hash
+	double Hs;
+	int read_count;
+
+	enum timing_mode timing_mode;
+	bool do_icarus_timing;
+
+	double fullnonce;
+	int count;
+	double W;
+	uint32_t values;
+	uint64_t hash_count_range;
+
+	// Determine the cost of history processing
+	// (which will only affect W)
+	uint64_t history_count;
+	struct timeval history_time;
+};
+
+// One for each possible device
+static struct ICARUS_INFO *icarus_info[MAX_DEVICES];
 
 struct device_api icarus_api;
 
@@ -115,7 +239,7 @@ static int icarus_open2(const char *devpath, __maybe_unused bool purge)
 	comCfg.dwSize = sizeof(COMMCONFIG);
 	comCfg.wVersion = 1;
 	comCfg.dcb.DCBlength = sizeof(DCB);
-	comCfg.dcb.BaudRate = 115200;
+	comCfg.dcb.BaudRate = ICARUS_IO_SPEED;
 	comCfg.dcb.fBinary = 1;
 	comCfg.dcb.fDtrControl = DTR_CONTROL_ENABLE;
 	comCfg.dcb.fRtsControl = RTS_CONTROL_ENABLE;
@@ -140,11 +264,13 @@ static int icarus_open2(const char *devpath, __maybe_unused bool purge)
 
 #define icarus_open(devpath)  icarus_open2(devpath, false)
 
-static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsigned long *wr, int read_count)
+static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, volatile unsigned long *wr, int read_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
 	int epollfd = -1;
+	int read_amount = ICARUS_READ_SIZE;
+	bool first = true;
 
 #ifdef HAVE_EPOLL
 	struct epoll_event ev, evr;
@@ -159,36 +285,46 @@ static int icarus_gets(unsigned char *buf, size_t bufLen, int fd, volatile unsig
 	}
 #endif
 
-	while (bufLen) {
+	// Read reply 1 byte at a time to get earliest tv_finish
+	while (true) {
 #ifdef HAVE_EPOLL
 		if (epollfd != -1 && epoll_wait(epollfd, &evr, 1, ICARUS_READ_FAULT_DECISECONDS * 100) != 1)
 			ret = 0;
 		else
 #endif
 		ret = read(fd, buf, 1);
-		if (ret == 1) {
-			bufLen--;
-			buf++;
-			continue;
+
+		if (first)
+			gettimeofday(tv_finish, NULL);
+
+		if (ret >= read_amount)
+		{
+			if (epollfd != -1)
+				close(epollfd);
+			return 0;
 		}
 
+		if (ret > 0) {
+			buf += ret;
+			read_amount -= ret;
+			first = false;
+			continue;
+		}
+			
 		rc++;
 		if (rc >= read_count || *wr) {
 			if (epollfd != -1)
 				close(epollfd);
-			rc *= ICARUS_READ_FAULT_DECISECONDS;
-			applog(LOG_DEBUG,
-			     "Icarus Read: %s %d.%d seconds",
-			     (*wr) ? "Work restart at" : "No data in",
-			     rc / 10, rc % 10);
+			if (opt_debug) {
+				rc *= ICARUS_READ_FAULT_DECISECONDS;
+				applog(LOG_DEBUG,
+			        "Icarus Read: %s %d.%d seconds",
+			        (*wr) ? "Work restart at" : "No data in",
+			        rc / 10, rc % 10);
+			}
 			return 1;
 		}
 	}
-
-	if (epollfd != -1)
-		close(epollfd);
-
-	return 0;
 }
 
 static int icarus_write(int fd, const void *buf, size_t bufLen)
@@ -204,8 +340,110 @@ static int icarus_write(int fd, const void *buf, size_t bufLen)
 
 #define icarus_close(fd) close(fd)
 
+static const char *timing_mode_str(enum timing_mode timing_mode)
+{
+	switch(timing_mode) {
+	case MODE_DEFAULT:
+		return MODE_DEFAULT_STR;
+	case MODE_SHORT:
+		return MODE_SHORT_STR;
+	case MODE_LONG:
+		return MODE_LONG_STR;
+	case MODE_VALUE:
+		return MODE_VALUE_STR;
+	default:
+		return MODE_UNKNOWN_STR;
+	}
+}
+
+static void set_timing_mode(struct cgpu_info *icarus)
+{
+	struct ICARUS_INFO *info = icarus_info[icarus->device_id];
+	double Hs;
+	char buf[BUFSIZ+1];
+	char *ptr, *comma, *eq;
+	size_t max;
+	int i;
+
+	if (opt_icarus_timing == NULL)
+		buf[0] = '\0';
+	else {
+		ptr = opt_icarus_timing;
+		for (i = 0; i < icarus->device_id; i++) {
+			comma = strchr(ptr, ',');
+			if (comma == NULL)
+				break;
+			ptr = comma + 1;
+		}
+
+		comma = strchr(ptr, ',');
+		if (comma == NULL)
+			max = strlen(ptr);
+		else
+			max = comma - ptr;
+
+		if (max > BUFSIZ)
+			max = BUFSIZ;
+		strncpy(buf, ptr, max);
+		buf[max] = '\0';
+	}
+
+	info->Hs = 0;
+	info->read_count = 0;
+
+	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
+		info->Hs = ICARUS_REV3_HASH_TIME;
+		info->read_count = ICARUS_READ_FAULT_COUNT_DEFAULT;
+
+		info->timing_mode = MODE_SHORT;
+		info->do_icarus_timing = true;
+	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
+		info->Hs = ICARUS_REV3_HASH_TIME;
+		info->read_count = ICARUS_READ_FAULT_COUNT_DEFAULT;
+
+		info->timing_mode = MODE_LONG;
+		info->do_icarus_timing = true;
+	} else if ((Hs = atof(buf)) != 0) {
+		info->Hs = Hs / NANOSEC;
+		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
+
+		if ((eq = strchr(buf, '=')) != NULL)
+			info->read_count = atoi(eq+1);
+
+		if (info->read_count < 1)
+			info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+
+		if (unlikely(info->read_count < 1))
+			info->read_count = 1;
+
+		info->timing_mode = MODE_VALUE;
+		info->do_icarus_timing = false;
+	} else {
+		// Anything else in buf just uses DEFAULT mode
+
+		info->Hs = ICARUS_REV3_HASH_TIME;
+		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
+
+		if ((eq = strchr(buf, '=')) != NULL)
+			info->read_count = atoi(eq+1);
+
+		if (info->read_count < 1)
+			info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+
+		info->timing_mode = MODE_DEFAULT;
+		info->do_icarus_timing = false;
+	}
+
+	info->min_data_count = MIN_DATA_COUNT;
+
+	applog(LOG_DEBUG, "Icarus: Init: %d mode=%s read_count=%d Hs=%e",
+		icarus->device_id, timing_mode_str(info->timing_mode), info->read_count, info->Hs);
+
+}
+
 static bool icarus_detect_one(const char *devpath)
 {
+	struct ICARUS_INFO *info;
 	int fd;
 
 	// Block 171874 nonce = (0xa2870100) = 0x000187a2
@@ -220,7 +458,7 @@ static bool icarus_detect_one(const char *devpath)
 
 	const char golden_nonce[] = "000187a2";
 
-	unsigned char ob_bin[64], nonce_bin[4];
+	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *nonce_hex;
 
 	if (total_devices == MAX_DEVICES)
@@ -237,7 +475,8 @@ static bool icarus_detect_one(const char *devpath)
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	volatile unsigned long wr = 0;
-	icarus_gets(nonce_bin, sizeof(nonce_bin), fd, &wr, 1);
+	struct timeval tv_finish;
+	icarus_gets(nonce_bin, fd, &tv_finish, &wr, 1);
 
 	icarus_close(fd);
 
@@ -245,16 +484,16 @@ static bool icarus_detect_one(const char *devpath)
 	if (nonce_hex) {
 		if (strncmp(nonce_hex, golden_nonce, 8)) {
 			applog(LOG_ERR, 
-			       "Icarus Detect: "
-			       "Test failed at %s: get %s, should: %s",
-			       devpath, nonce_hex, golden_nonce);
+				"Icarus Detect: "
+				"Test failed at %s: get %s, should: %s",
+				devpath, nonce_hex, golden_nonce);
 			free(nonce_hex);
 			return false;
 		}
 		applog(LOG_DEBUG, 
-		       "Icarus Detect: "
-		       "Test succeeded at %s: got %s",
-			       devpath, nonce_hex);
+			"Icarus Detect: "
+			"Test succeeded at %s: got %s",
+				devpath, nonce_hex);
 		free(nonce_hex);
 	} else
 		return false;
@@ -268,7 +507,20 @@ static bool icarus_detect_one(const char *devpath)
 	add_cgpu(icarus);
 
 	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
-	       devpath, icarus->device_id);
+		devpath, icarus->device_id);
+
+	if (icarus_info[icarus->device_id] == NULL) {
+		icarus_info[icarus->device_id] = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
+		if (unlikely(!(icarus_info[icarus->device_id])))
+			quit(1, "Failed to malloc ICARUS_INFO");
+	}
+
+	info = icarus_info[icarus->device_id];
+
+	// Initialise everything to zero for a new device
+	memset(info, 0, sizeof(struct ICARUS_INFO));
+
+	set_timing_mode(icarus);
 
 	return true;
 }
@@ -290,9 +542,10 @@ static void icarus_detect()
 }
 
 struct icarus_state {
-	bool jobrunning;
+	bool firstrun;
 	struct timeval tv_workstart;
 	struct work last_work;
+	bool changework;
 };
 
 static bool icarus_prepare(struct thr_info *thr)
@@ -316,6 +569,7 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	struct icarus_state *state;
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
+	state->firstrun = true;
 
 	return true;
 }
@@ -329,11 +583,24 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	int fd;
 	int ret, lret;
 
-	unsigned char ob_bin[64] = {0}, nonce_bin[4] = {0};
-	char *ob_hex, *nonce_hex;
+	struct ICARUS_INFO *info;
+
+	unsigned char ob_bin[64] = {0}, nonce_bin[ICARUS_READ_SIZE] = {0};
+	char *ob_hex;
 	uint32_t nonce;
-	uint32_t hash_count;
-	struct timeval tv_finish, elapsed;
+	uint64_t hash_count;
+	struct timeval tv_start, tv_finish, elapsed;
+	struct timeval tv_history_start, tv_history_finish;
+	double Ti, Xi;
+	int i;
+
+	struct ICARUS_HISTORY *history0, *history;
+	int count;
+	double Hs, W, fullnonce;
+	int read_count;
+	uint64_t estimate_hashes;
+	uint32_t values;
+	uint64_t hash_count_range;
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
@@ -349,19 +616,25 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
 
-	if (likely(state->jobrunning)) {
-		/* Icarus will return 8 bytes nonces or nothing */
-		lret = icarus_gets(nonce_bin, sizeof(nonce_bin), fd, wr,
-			                   ICARUS_READ_FAULT_COUNT);
-		if (lret && *wr) {
-			// The prepared work is invalid, and the current work is abandoned
-			// Go back to the main loop to get the next work, and stuff
-			state->jobrunning = false;
-			return 1;
+	if (!state->firstrun) {
+		if (state->changework)
+			state->changework = false;
+		else
+		{
+			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
+			info = icarus_info[icarus->device_id];
+			lret = icarus_gets(nonce_bin, fd, &tv_finish, wr, info->read_count);
+			if (lret && *wr) {
+				// The prepared work is invalid, and the current work is abandoned
+				// Go back to the main loop to get the next work, and stuff
+				// Returning to the main loop will clear work_restart, so use a flag...
+				state->changework = true;
+				return 1;
+			}
 		}
 
-		gettimeofday(&tv_finish, NULL);
-		timeval_subtract(&elapsed, &tv_finish, &state->tv_workstart);
+		tv_start = state->tv_workstart;
+		timeval_subtract(&elapsed, &tv_finish, &tv_start);
 	}
 
 #ifndef WIN32
@@ -380,7 +653,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 		if (ob_hex) {
 			applog(LOG_DEBUG, "Icarus %d sent: %s",
-			       icarus->device_id, ob_hex);
+				icarus->device_id, ob_hex);
 			free(ob_hex);
 		}
 	}
@@ -397,8 +670,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	work->blk.nonce = 0xffffffff;
 
-	if (unlikely(!state->jobrunning)) {
-		state->jobrunning = true;
+	if (state->firstrun) {
+		state->firstrun = false;
 		memcpy(&state->last_work, work, sizeof(state->last_work));
 		return 1;
 	}
@@ -409,36 +682,31 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// aborted before becoming idle, get new work
 	if (nonce == 0 && lret) {
 		memcpy(&state->last_work, work, sizeof(state->last_work));
-		uint32_t ESTIMATE_HASHES;
-		if (unlikely(elapsed.tv_sec > 12 || (elapsed.tv_sec == 11 && elapsed.tv_usec > 353063)))
-			ESTIMATE_HASHES = 0xffffffff;
-		else
-			// Approximately how much of the nonce Icarus scans in 1 second...
-			// 0x16a7a561 would be if it was exactly 380 MH/s
-			// 0x16a65700 would be the perfect 5.2631579ns/H
-			// 0x168c89e5 was the average over a 20,050-sample period based on time to find actual shares
-			ESTIMATE_HASHES = (0x168c89e5 * elapsed.tv_sec) + (0x17a * elapsed.tv_usec);
+		// ONLY up to just when it aborted
+		// We didn't read a reply so we don't subtract ICARUS_READ_TIME
+		estimate_hashes = ((double)(elapsed.tv_sec)
+					+ ((double)(elapsed.tv_usec))/((double)1000000)) / info->Hs;
+
+		// If some Serial-USB delay allowed the full nonce range to
+		// complete it can't have done more than a full nonce
+		if (unlikely(estimate_hashes > 0xffffffff))
+			estimate_hashes = 0xffffffff;
+
 		if (opt_debug) {
-			applog(LOG_DEBUG, "Icarus %d no nonce = 0x%08x hashes (%ld.%06lds)",
-				icarus->device_id, ESTIMATE_HASHES, elapsed.tv_sec, elapsed.tv_usec);
+			applog(LOG_DEBUG, "Icarus %d no nonce = 0x%08llx hashes (%ld.%06lds)",
+					icarus->device_id, estimate_hashes,
+					elapsed.tv_sec, elapsed.tv_usec);
 		}
-		return ESTIMATE_HASHES;
+
+		return estimate_hashes;
 	}
 
 #if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
 	nonce = swab32(nonce);
 #endif
+
 	submit_nonce(thr, &state->last_work, nonce);
 	memcpy(&state->last_work, work, sizeof(state->last_work));
-
-	if (opt_debug) {
-		nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
-		if (nonce_hex) {
-			applog(LOG_DEBUG, "Icarus %d returned (elapsed %ld.%06ld seconds): %s",
-			       icarus->device_id, elapsed.tv_sec, elapsed.tv_usec, nonce_hex);
-			free(nonce_hex);
-		}
-	}
 
 	hash_count = (nonce & 0x7fffffff);
 	if (hash_count++ == 0x7fffffff)
@@ -446,11 +714,135 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	else
 		hash_count <<= 1;
 
-	if (opt_debug)
-		applog(LOG_DEBUG, "Icarus %d nonce = 0x%08x = 0x%08x hashes (%ld.%06lds)",
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Icarus %d nonce = 0x%08x = 0x%08llx hashes (%ld.%06lds)",
 				icarus->device_id, nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
+	}
 
-        return hash_count;
+	// ignore possible end condition values
+	if (info->do_icarus_timing && (nonce & 0x7fffffff) > 0x000fffff && (nonce & 0x7fffffff) < 0x7ff00000) {
+		gettimeofday(&tv_history_start, NULL);
+
+		history0 = &(info->history[0]);
+
+		if (history0->values == 0)
+			timeradd(&tv_start, &history_sec, &(history0->finish));
+
+		Ti = (double)(elapsed.tv_sec)
+			+ ((double)(elapsed.tv_usec))/((double)1000000)
+			- ICARUS_READ_TIME;
+		Xi = (double)hash_count;
+		history0->sumXiTi += Xi * Ti;
+		history0->sumXi += Xi;
+		history0->sumTi += Ti;
+		history0->sumXi2 += Xi * Xi;
+
+		history0->values++;
+
+		if (history0->hash_count_max < hash_count)
+			history0->hash_count_max = hash_count;
+		if (history0->hash_count_min > hash_count || history0->hash_count_min == 0)
+			history0->hash_count_min = hash_count;
+
+		if (history0->values >= info->min_data_count
+		&&  timercmp(&tv_start, &(history0->finish), >)) {
+			for (i = INFO_HISTORY; i > 0; i--)
+				memcpy(&(info->history[i]),
+					&(info->history[i-1]),
+					sizeof(struct ICARUS_HISTORY));
+
+			// Initialise history0 to zero for summary calculation
+			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
+
+			// We just completed a history data set
+			// So now recalc read_count based on the whole history thus we will
+			// initially get more accurate until it completes INFO_HISTORY
+			// total data sets
+			count = 0;
+			for (i = 1 ; i <= INFO_HISTORY; i++) {
+				history = &(info->history[i]);
+				if (history->values >= MIN_DATA_COUNT) {
+					count++;
+
+					history0->sumXiTi += history->sumXiTi;
+					history0->sumXi += history->sumXi;
+					history0->sumTi += history->sumTi;
+					history0->sumXi2 += history->sumXi2;
+					history0->values += history->values;
+
+					if (history0->hash_count_max < history->hash_count_max)
+						history0->hash_count_max = history->hash_count_max;
+					if (history0->hash_count_min > history->hash_count_min || history0->hash_count_min == 0)
+						history0->hash_count_min = history->hash_count_min;
+				}
+			}
+
+			// All history data
+			Hs = (history0->values*history0->sumXiTi - history0->sumXi*history0->sumTi)
+				/ (history0->values*history0->sumXi2 - history0->sumXi*history0->sumXi);
+			W = history0->sumTi/history0->values - Hs*history0->sumXi/history0->values;
+			hash_count_range = history0->hash_count_max - history0->hash_count_min;
+			values = history0->values;
+			
+			// Initialise history0 to zero for next data set
+			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
+
+			fullnonce = W + Hs * (((double)0xffffffff) + 1);
+			read_count = (int)(fullnonce * TIME_FACTOR) - 1;
+
+			info->Hs = Hs;
+			info->read_count = read_count;
+
+			info->fullnonce = fullnonce;
+			info->count = count;
+			info->W = W;
+			info->values = values;
+			info->hash_count_range = hash_count_range;
+
+			if (info->min_data_count < MAX_MIN_DATA_COUNT)
+				info->min_data_count *= 2;
+			else if (info->timing_mode == MODE_SHORT)
+				info->do_icarus_timing = false;
+
+//			applog(LOG_WARNING, "Icarus %d Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
+			applog(LOG_WARNING, "Icarus %d Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
+					icarus->device_id, Hs, W, read_count, fullnonce);
+		}
+		info->history_count++;
+		gettimeofday(&tv_history_finish, NULL);
+
+		timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
+		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
+	}
+
+	return hash_count;
+}
+
+static json_t*
+icarus_perf_stats(struct cgpu_info *cgpu)
+{
+	struct ICARUS_INFO *info = icarus_info[cgpu->device_id];
+	json_t *ji = json_object();
+
+	// Warning, access to these is not locked - but we don't really
+	// care since hashing performance is way more important than
+	// locking access to displaying API debug 'stats'
+	json_object_set(ji, "read_count"    , json_integer(info->read_count    ));
+	json_object_set(ji, "fullnonce"     , json_real   (info->fullnonce     ));
+	json_object_set(ji, "count"         , json_integer(info->count         ));
+	json_object_set(ji, "Hs"            , json_real   (info->Hs            ));
+	json_object_set(ji, "W"             , json_real   (info->W             ));
+	json_object_set(ji, "total_values"  , json_integer(info->values        ));
+	json_object_set(ji, "range"         , json_integer(info->hash_count_range));
+	json_object_set(ji, "history_count" , json_integer(info->history_count ));
+	json_object_set(ji, "history_time"  , json_real   (
+		(double)(info->history_time.tv_sec)
+			+ ((double)(info->history_time.tv_usec))/((double)1000000)
+	));
+	json_object_set(ji, "min_data_count", json_integer(info->min_data_count));
+	json_object_set(ji, "timing_values" , json_integer(info->history[0].values));
+
+	return ji;
 }
 
 static void icarus_shutdown(struct thr_info *thr)
@@ -464,6 +856,7 @@ struct device_api icarus_api = {
 	.dname = "icarus",
 	.name = "PGA",
 	.api_detect = icarus_detect,
+	.get_extra_device_perf_stats = icarus_perf_stats,
 	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,
 	.thread_shutdown = icarus_shutdown,

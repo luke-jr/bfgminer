@@ -512,6 +512,7 @@ extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
 extern bool opt_restart;
+extern char *opt_icarus_timing;
 
 extern pthread_rwlock_t netacc_lock;
 

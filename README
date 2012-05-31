@@ -210,6 +210,8 @@ FPGA mining boards(BitForce, Icarus, Ztex) only options:
      On windows <arg> is usually of the format \\.\COMn
        (where n = the correct device number for the FPGA device)
 
+For other FPGA details see the FPGA-README
+
 
 CPU only options (deprecated, not included in binaries!):
 
