@@ -1,0 +1,447 @@
+
+This README contains details about the cgminer RPC API
+
+
+If you start cgminer with the "--api-listen" option, it will listen on a
+simple TCP/IP socket for single string API requests from the same machine
+running cgminer and reply with a string and then close the socket each time
+If you add the "--api-network" option, it will accept API requests from any
+network attached computer.
+
+You can only access the comands that reply with data in this mode.
+By default, you cannot access any privileged command that affects the miner -
+you will receive an access denied status message see --api-allow below.
+
+You can specify IP addresses/prefixes that are only allowed to access the API
+with the "--api-allow" option e.g. --api-allow W:192.168.0.1,10.0.0/24
+will allow 192.168.0.1 or any address matching 10.0.0.*, but nothing else
+IP addresses are automatically padded with extra '.0's as needed
+Without a /prefix is the same as specifying /32
+0/0 means all IP addresses.
+The 'W:' on the front gives that address/subnet privileged access to commands
+that modify cgminer.
+Without it those commands return an access denied status.
+Privileged access is checked in the order the IP addresses were supplied to
+"--api-allow"
+The first match determines the privilege level.
+Using the "--api-allow" option overides the "--api-network" option if they
+are both specified
+With "--api-allow", 127.0.0.1 is not by default given access unless specified
+
+The RPC API request can be either simple text or JSON.
+
+If the request is JSON (starts with '{'), it will reply with a JSON formatted
+response, otherwise it replies with text formatted as described further below.
+
+The JSON request format required is '{"command":"CMD","parameter":"PARAM"}'
+(though of course parameter is not required for all requests)
+where "CMD" is from the "Request" column below and "PARAM" would be e.g.
+the CPU/GPU number if required.
+
+An example request in both formats to set GPU 0 fan to 80%:
+  gpufan|0,80
+  {"command":"gpufan","parameter":"0,80"}
+
+The format of each reply (unless stated otherwise) is a STATUS section
+followed by an optional detail section
+
+From API version 1.7 onwards, reply strings in JSON and Text have the
+necessary escaping as required to avoid ambiguity - they didn't before 1.7
+For JSON the 2 characters '"' and '\' are escaped with a '\' before them
+For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
+
+Only user entered information will contain characters that require being
+escaped, such as Pool URL, User and Password or the Config save filename,
+when they are returned in messages or as their values by the API
+
+For API version 1.4 and later:
+
+The STATUS section is:
+
+ STATUS=X,When=NNN,Code=N,Msg=string,Description=string|
+
+  STATUS=X Where X is one of:
+   W - Warning
+   I - Informational
+   S - Success
+   E - Error
+   F - Fatal (code bug)
+
+  When=NNN
+   Standard long time of request in seconds
+
+  Code=N
+   Each unique reply has a unigue Code (See api.c - #define MSG_NNNNNN)
+
+  Msg=string
+   Message matching the Code value N
+
+  Description=string
+   This defaults to the cgminer version but is the value of --api-description
+   if it was specified at runtime.
+
+For API version 1.9:
+
+The list of requests - a (*) means it requires privileged access - and replies are:
+
+ Request       Reply Section  Details
+ -------       -------------  -------
+ version       VERSION        CGMiner=cgminer version
+                              API=API version
+
+ config        CONFIG         Some miner configuration information:
+                              GPU Count=N, <- the number of GPUs
+                              PGA Count=N, <- the number of PGAs
+                              CPU Count=N, <- the number of CPUs
+                              Pool Count=N, <- the number of Pools
+                              ADL=X, <- Y or N if ADL is compiled in the code
+                              ADL in use=X, <- Y or N if any GPU has ADL
+                              Strategy=Name, <- the current pool strategy
+                              Log Interval=N, <- log interval (--log N)
+                              Device Code=GPU ICA | <- spaced list of compiled devices
+
+ summary       SUMMARY        The status summary of the miner
+                              e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
+
+ pools         POOLS          The status of each pool
+                              e.g. Pool=0,URL=http://pool.com:6311,Status=Alive,...|
+
+ devs          DEVS           Each available GPU, PGA and CPU with their details
+                              e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
+                              Last Share Time=NNN, <- standand long time in seconds
+                               (or 0 if none) of last accepted share
+                              Last Share Pool=N, <- pool number (or -1 if none)
+                              Will not report PGAs if PGA mining is disabled
+                              Will not report CPUs if CPU mining is disabled
+
+ gpu|N         GPU            The details of a single GPU number N in the same
+                              format and details as for DEVS
+
+ pga|N         PGA            The details of a single PGA number N in the same
+                              format and details as for DEVS
+                              This is only available if PGA mining is enabled
+                              Use 'pgacount' or 'config' first to see if there are any
+
+ cpu|N         CPU            The details of a single CPU number N in the same
+                              format and details as for DEVS
+                              This is only available if CPU mining is enabled
+                              Use 'cpucount' or 'config' first to see if there are any
+
+ gpucount      GPUS           Count=N| <- the number of GPUs
+
+ pgacount      PGAS           Count=N| <- the number of PGAs
+                              Always returns 0 if PGA mining is disabled
+
+ cpucount      CPUS           Count=N| <- the number of CPUs
+                              Always returns 0 if CPU mining is disabled
+
+ switchpool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of switching pool N to the
+                              highest priority (the pool is also enabled)
+                              The Msg includes the pool URL
+
+ enablepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of enabling pool N
+                              The Msg includes the pool URL
+
+ addpool|URL,USR,PASS (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of attempting to add pool N
+                              The Msg includes the pool URL
+                              Use '\\' to get a '\' and '\,' to include a comma
+                              inside URL, USR or PASS
+
+ disablepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of disabling pool N
+                              The Msg includes the pool URL
+
+ removepool|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of removing pool N
+                              The Msg includes the pool URL
+                              N.B. all details for the pool will be lost
+
+ gpuenable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the enable request
+
+ gpudisable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the disable request
+
+ gpurestart|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the restart request
+
+ gpuintensity|N,I (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N intensity to I
+
+ gpumem|N,V (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N memoryclock to V MHz
+
+ gpuengine|N,V (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N clock to V MHz
+
+ gpufan|N,V (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N fan speed to V%
+
+ gpuvddc|N,V (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting GPU N vddc to V
+
+ save|filename (*)
+               none           There is no reply section just the STATUS section
+                              stating success or failure saving the cgminer config
+                              to filename
+
+ quit (*)      none           There is no status section but just a single "BYE"
+                              reply before cgminer quits
+
+ notify        NOTIFY         The last status and history count of each devices problem
+                              This lists all devices including those not supported
+                              by the 'devs' command
+                              e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
+
+ privileged (*)
+               none           There is no reply section just the STATUS section
+                              stating an error if you do not have privileged access
+                              to the API and success if you do have privilege
+                              The command doesn't change anything in cgminer
+
+ pgaenable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the enable request
+                              You cannot enable a PGA if it's status is not WELL
+                              This is only available if PGA mining is enabled
+
+ pgadisable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the disable request
+                              This is only available if PGA mining is enabled
+
+ devdetails    DEVDETAILS     Each device with a list of their static details
+                              This lists all devices including those not supported
+                              by the 'devs' command
+                              e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
+
+ restart (*)   none           There is no status section but just a single "RESTART"
+                              reply before cgminer restarts
+
+ stats         STATS          Each device or pool that has 1 or more getworks
+                              with a list of stats regarding getwork times
+                              The values returned by stats may change in future
+                              versions thus would not normally be displayed
+                              Device drivers are also able to add stats to the
+                              end of the details returned
+
+When you enable, disable or restart a GPU or PGA, you will also get Thread messages
+in the cgminer status window
+
+When you switch to a different pool to the current one, you will get a
+'Switching to URL' message in the cgminer status windows
+
+Obviously, the JSON format is simply just the names as given before the '='
+with the values after the '='
+
+If you enable cgminer debug (-D or --debug) you will also get messages showing
+details of the requests received and the replies
+
+There are included 4 program examples for accessing the API:
+
+api-example.php - a php script to access the API
+  usAge: php api-example.php command
+ by default it sends a 'summary' request to the miner at 127.0.0.1:4028
+ If you specify a command it will send that request instead
+ You must modify the line "$socket = getsock('127.0.0.1', 4028);" at the
+ beginning of "function request($cmd)" to change where it looks for cgminer
+
+API.java/API.class
+ a java program to access the API (with source code)
+  usAge is: java API command address port
+ Any missing or blank parameters are replaced as if you entered:
+  java API summary 127.0.0.1 4028
+
+api-example.c - a 'C' program to access the API (with source code)
+  usAge: api-example [command [ip/host [port]]]
+ again, as above, missing or blank parameters are replaced as if you entered:
+  api-example summary 127.0.0.1 4028
+
+miner.php - an example web page to access the API
+ This includes buttons and inputs to attempt access to the privileged commands
+ Read the top of the file (miner.php) for details of how to tune the display
+ and also to use the option to display a multi-rig summary
+
+----------
+
+Feature Changelog for external applications using the API:
+
+
+API V1.10
+
+Added API commands:
+ 'stats'
+
+N.B. the 'stats' command can change at any time so any specific content
+present should not be relied upon.
+The data content is mainly used for debugging purposes or hidden options
+in cgminer and can change as development work requires
+
+Modified API commands:
+ 'pools' added "Last Share Time"
+
+----------
+
+API V1.9 (cgminer v2.4.0)
+
+Added API commands:
+ 'restart'
+
+Modified API commands:
+ 'notify' corrected invalid JSON
+
+----------
+
+API V1.8 (cgminer v2.3.5)
+
+Added API commands:
+ 'devdetails'
+
+Support for the ZTex FPGA was added
+
+----------
+
+API V1.7 (cgminer v2.3.4)
+
+Added API commands:
+ 'removepool'
+
+Modified API commands:
+ 'pools' added "User"
+
+From API version 1.7 onwards, reply strings in JSON and Text have the
+necessary escaping as required to avoid ambiguity
+For JSON the 2 characters '"' and '\' are escaped with a '\' before them
+For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
+
+----------
+
+API V1.6 (cgminer v2.3.2)
+
+Added API commands:
+ 'pga'
+ 'pgaenable'
+ 'pgadisable'
+ 'pgacount'
+
+Modified API commands:
+ 'devs' now includes Icarus and Bitforce FPGA devices
+ 'notify' added "*" to the front of the name of all numeric error fields
+ 'config' correct "Log Interval" to use numeric (not text) type for JSON
+
+Support for Icarus and Bitforce FPGAs was added
+
+----------
+
+API V1.5 (Kano's interim release of cgminer v2.3.1)
+
+Modified API commands:
+ 'config' added "Device Code" and "OS"
+
+----------
+
+API V1.4 (Kano's interim release of cgminer v2.3.1)
+
+Added API commands:
+ 'notify'
+
+Added "When" to the STATUS reply section of all commands
+
+----------
+
+API V1.3 (cgminer v2.3.1-2)
+
+Added API commands:
+ 'addpool'
+
+Modified API commands:
+ 'devs'/'gpu' added "Total MH" for each device
+ 'summary' added "Total MH"
+
+----------
+
+API V1.2 (cgminer v2.3.0)
+
+Added API commands:
+ 'enablepool'
+ 'disablepool'
+ 'privileged'
+
+Modified API commands:
+ 'config' added "Log Interval"
+
+Starting with API V1.2, any attempt to access a command that requires
+privileged security, from an IP address that does not have privileged
+security, will return an "Access denied" Error Status
+
+----------
+
+API V1.1 (cgminer v2.2.4)
+
+There were no changes to the API commands in cgminer v2.2.4,
+however support was added to cgminer for IP address restrictions
+with the --api-allow option
+
+----------
+
+API V1.1 (cgminer v2.2.2)
+
+Prior to V1.1, devs/gpu incorrectly reported GPU0 Intensity for all GPUs
+
+Modified API commands:
+ 'devs'/'gpu' added "Last Share Pool" and "Last Share Time" for each device
+
+----------
+
+API V1.0 (cgminer v2.2.0)
+
+Remove default CPU support
+
+Added API commands:
+ 'config'
+ 'gpucount'
+ 'cpucount'
+ 'switchpool'
+ 'gpuintensity'
+ 'gpumem'
+ 'gpuengine'
+ 'gpufan'
+ 'gpuvddc'
+ 'save'
+
+----------
+
+API V0.7 (cgminer v2.1.0)
+
+Initial release of the API in the main cgminer git
+
+Commands:
+ 'version'
+ 'devs'
+ 'pools'
+ 'summary'
+ 'gpuenable'
+ 'gpudisable'
+ 'gpurestart'
+ 'gpu'
+ 'cpu'
+ 'gpucount'
+ 'cpucount'
+ 'quit'
+
