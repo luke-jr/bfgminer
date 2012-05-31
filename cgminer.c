@@ -4029,6 +4029,7 @@ static void wait_lpcurrent(struct pool *pool)
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
 	}
+	mutex_unlock(&lp_lock);
 }
 
 static void *longpoll_thread(void *userdata)
