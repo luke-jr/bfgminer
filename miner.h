@@ -390,6 +390,10 @@ struct thr_info {
 	bool	pause;
 	bool	getwork;
 	double	rolling;
+
+	bool	work_restart;
+	int		work_restart_fd;
+	int		_work_restart_fd_w;
 };
 
 extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
@@ -523,7 +527,7 @@ extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
-typedef bool (*sha256_func)(int thr_id, const unsigned char *pmidstate,
+typedef bool (*sha256_func)(struct thr_info*, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
@@ -537,11 +541,6 @@ timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_scantime;
-
-struct work_restart {
-	volatile unsigned long	restart;
-	char			padding[128 - sizeof(unsigned long)];
-};
 
 extern void thread_reportin(struct thr_info *thr);
 
@@ -582,7 +581,6 @@ extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
 extern struct thr_info *thr_info;
-extern struct work_restart *work_restart;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
 extern double total_secs;

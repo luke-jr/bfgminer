@@ -241,9 +241,9 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	overflow = false;
 
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
-	while (!(overflow || work_restart[thr->id].restart)) {
+	while (!(overflow || thr->work_restart)) {
 		usleep(250000);
-		if (work_restart[thr->id].restart) {
+		if (thr->work_restart) {
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
 			break;
 		}
@@ -266,7 +266,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		}
 		ztex_releaseFpga(ztex);
 
-		if (work_restart[thr->id].restart) {
+		if (thr->work_restart) {
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
 			break;
 		}

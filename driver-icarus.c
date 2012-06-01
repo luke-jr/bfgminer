@@ -29,6 +29,8 @@
  *      nonce range is completely calculated.
  */
 
+#include "config.h"
+
 #include <limits.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -264,7 +266,7 @@ static int icarus_open2(const char *devpath, __maybe_unused bool purge)
 
 #define icarus_open(devpath)  icarus_open2(devpath, false)
 
-static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, volatile unsigned long *wr, int read_count)
+static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info*thr, int read_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
@@ -273,8 +275,10 @@ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, vo
 	bool first = true;
 
 #ifdef HAVE_EPOLL
-	struct epoll_event ev, evr;
-	epollfd = epoll_create(1);
+	struct epoll_event ev;
+	struct epoll_event evr[2];
+	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
+	epollfd = epoll_create(2);
 	if (epollfd != -1) {
 		ev.events = EPOLLIN;
 		ev.data.fd = fd;
@@ -282,14 +286,37 @@ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, vo
 			close(epollfd);
 			epollfd = -1;
 		}
+		if (thr->work_restart_fd != -1)
+		{
+			ev.data.fd = thr->work_restart_fd;
+			if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, thr->work_restart_fd, &ev))
+				applog(LOG_ERR, "Icarus: Error adding work restart fd to epoll");
+			else
+			{
+				epoll_timeout *= read_count;
+				read_count = 1;
+			}
+		}
 	}
+	else
+		applog(LOG_ERR, "Icarus: Error creating epoll");
 #endif
 
 	// Read reply 1 byte at a time to get earliest tv_finish
 	while (true) {
 #ifdef HAVE_EPOLL
-		if (epollfd != -1 && epoll_wait(epollfd, &evr, 1, ICARUS_READ_FAULT_DECISECONDS * 100) != 1)
-			ret = 0;
+		if (epollfd != -1 && (ret = epoll_wait(epollfd, evr, 2, epoll_timeout)) != -1)
+		{
+			if (ret == 1 && evr[0].data.fd == fd)
+				ret = read(fd, buf, 1);
+			else
+			{
+				if (ret)
+					// work restart trigger
+					(void)read(thr->work_restart_fd, buf, read_amount);
+				ret = 0;
+			}
+		}
 		else
 #endif
 		ret = read(fd, buf, 1);
@@ -312,14 +339,14 @@ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, vo
 		}
 			
 		rc++;
-		if (rc >= read_count || *wr) {
+		if (rc >= read_count || thr->work_restart) {
 			if (epollfd != -1)
 				close(epollfd);
 			if (opt_debug) {
 				rc *= ICARUS_READ_FAULT_DECISECONDS;
 				applog(LOG_DEBUG,
 			        "Icarus Read: %s %d.%d seconds",
-			        (*wr) ? "Work restart at" : "No data in",
+			        thr->work_restart ? "Work restart at" : "No data in",
 			        rc / 10, rc % 10);
 			}
 			return 1;
@@ -474,9 +501,11 @@ static bool icarus_detect_one(const char *devpath)
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	volatile unsigned long wr = 0;
+	struct thr_info dummy = {
+		.work_restart_fd = -1,
+	};
 	struct timeval tv_finish;
-	icarus_gets(nonce_bin, fd, &tv_finish, &wr, 1);
+	icarus_gets(nonce_bin, fd, &tv_finish, &dummy, 1);
 
 	icarus_close(fd);
 
@@ -571,14 +600,21 @@ static bool icarus_prepare(struct thr_info *thr)
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
 	state->firstrun = true;
 
+#ifdef HAVE_EPOLL
+	int epollfd = epoll_create(2);
+	if (epollfd != -1)
+	{
+		close(epollfd);
+		thr->work_restart_fd = 0;
+	}
+#endif
+
 	return true;
 }
 
 static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused uint64_t max_nonce)
 {
-	volatile unsigned long *wr = &work_restart[thr->id].restart;
-
 	struct cgpu_info *icarus;
 	int fd;
 	int ret, lret;
@@ -623,8 +659,8 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		{
 			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
 			info = icarus_info[icarus->device_id];
-			lret = icarus_gets(nonce_bin, fd, &tv_finish, wr, info->read_count);
-			if (lret && *wr) {
+			lret = icarus_gets(nonce_bin, fd, &tv_finish, thr, info->read_count);
+			if (lret && thr->work_restart) {
 				// The prepared work is invalid, and the current work is abandoned
 				// Go back to the main loop to get the next work, and stuff
 				// Returning to the main loop will clear work_restart, so use a flag...

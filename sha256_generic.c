@@ -239,7 +239,7 @@ const uint32_t sha256_init_state[8] = {
 };
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_c(int thr_id, const unsigned char *midstate, unsigned char *data,
+bool scanhash_c(struct thr_info*thr, const unsigned char *midstate, unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
 		const unsigned char *target,
 	        uint32_t max_nonce, uint32_t *last_nonce,
@@ -265,7 +265,7 @@ bool scanhash_c(int thr_id, const unsigned char *midstate, unsigned char *data,
 			return true;
 		}
 
-		if ((n >= max_nonce) || work_restart[thr_id].restart) {
+		if ((n >= max_nonce) || thr->work_restart) {
 			*last_nonce = n;
 			return false;
 		}

@@ -48,7 +48,7 @@ const uint32_t sha256_32init[8]__attribute__((aligned(0x100))) =
 __m128i g_4sha256_k[64];
 __m128i sha256_consts_m128i[64]__attribute__((aligned(0x1000)));
 
-bool scanhash_sse2_32(int thr_id, const unsigned char *pmidstate,
+bool scanhash_sse2_32(struct thr_info*thr, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
@@ -111,7 +111,7 @@ bool scanhash_sse2_32(int thr_id, const unsigned char *pmidstate,
 	    }
 	}
 
-	if (unlikely((nonce >= max_nonce) || work_restart[thr_id].restart)) {
+	if (unlikely((nonce >= max_nonce) || thr->work_restart)) {
 		*last_nonce = nonce;
 		return false;
 	}
