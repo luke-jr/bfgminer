@@ -2392,7 +2392,7 @@ static bool queue_request(struct thr_info *thr, bool needed);
 
 static void restart_threads(void)
 {
-	int i, j, stale;
+	int i, j, stale, fd;
 	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 
@@ -2408,7 +2408,10 @@ static void restart_threads(void)
 		for (j = 0; j < cgpu->threads; ++j)
 		{
 			thr = &cgpu->thread[j];
+			fd = thr->_work_restart_fd_w;
 			thr->work_restart = true;
+			if (fd != -1)
+				write(fd, "\0", 1);
 		}
 	}
 }
@@ -5218,6 +5221,7 @@ begin_bench:
 			thr->id = k;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
+			thr->work_restart_fd = thr->_work_restart_fd_w = -1;
 
 			thr->q = tq_new();
 			if (!thr->q)
@@ -5233,6 +5237,18 @@ begin_bench:
 
 			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
 				continue;
+
+			if (!thr->work_restart_fd)
+			{
+				int pipefd[2];
+				if (!pipe(pipefd))
+				{
+					thr->work_restart_fd = pipefd[0];
+					thr->_work_restart_fd_w = pipefd[1];
+				}
+				else
+					thr->work_restart_fd = -1;
+			}
 
 			thread_reportout(thr);
 
