@@ -742,8 +742,8 @@ static int cpu_autodetect()
 					++num_processors;
 		}
 	}
-	#elif defined(_SC_NPROCESSORS_ONLN)
-		num_processors = sysconf(_SC_NPROCESSORS_ONLN);
+	#elif defined(_SC_NPROCESSORS_CONF)
+		num_processors = sysconf(_SC_NPROCESSORS_CONF);
 	#elif defined(CTL_HW) && defined(HW_NCPU)
 		int req[] = { CTL_HW, HW_NCPU };
 		size_t len = sizeof(num_processors);
