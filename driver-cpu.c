@@ -824,7 +824,7 @@ static bool cpu_thread_init(struct thr_info *thr)
 	drop_policy();
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
-	if (!(opt_n_threads % num_processors))
+	if (num_processors > 1 && opt_n_threads % num_processors == 0)
 		affine_to_cpu(dev_from_id(thr_id), dev_from_id(thr_id) % num_processors);
 	return true;
 }
