@@ -200,6 +200,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating success or failure saving the cgminer config
                               to filename
+                              The filename is optional and will use the cgminer
+                              default if not specified
 
  quit (*)      none           There is no status section but just a single "BYE"
                               reply before cgminer quits
@@ -283,7 +285,17 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.10
+API V1.11
+
+Modified API commands:
+ 'save' no longer requires a filename (use default if not specified)
+
+'save' incorrectly returned status E (error) on success before.
+It now correctly returns S (success)
+
+----------
+
+API V1.10 (cgminer v2.4.1)
 
 Added API commands:
  'stats'
