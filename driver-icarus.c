@@ -752,8 +752,8 @@ static void icarus_api_stats(char *buf, struct cgpu_info *cgpu, bool isjson)
 	// care since hashing performance is way more important than
 	// locking access to displaying API debug 'stats'
 	sprintf(buf, isjson
-		? "\"read_count\":%d,\"fullnonce\":%f,\"count\":%d,\"Hs\":%.15f,\"W\":%f,\"total_values\":%u,\"range\":%ld,\"history_count\":%lu,\"history_time\":%f,\"min_data_count\":%u,\"timing_values\":%u"
-		: "read_count=%d,fullnonce=%f,count=%d,Hs=%.15f,W=%f,total_values=%u,range=%ld,history_count=%lu,history_time=%f,min_data_count=%u,timing_values=%u",
+		? "\"read_count\":%d,\"fullnonce\":%f,\"count\":%d,\"Hs\":%.15f,\"W\":%f,\"total_values\":%u,\"range\":%"PRIu64",\"history_count\":%"PRIu64",\"history_time\":%f,\"min_data_count\":%u,\"timing_values\":%u"
+		: "read_count=%d,fullnonce=%f,count=%d,Hs=%.15f,W=%f,total_values=%u,range=%"PRIu64",history_count=%"PRIu64",history_time=%f,min_data_count=%u,timing_values=%u",
 		info->read_count, info->fullnonce,
 		info->count, info->Hs, info->W,
 		info->values, info->hash_count_range,
