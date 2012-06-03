@@ -738,6 +738,7 @@ extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
+extern void default_save_file(char *filename);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
