@@ -1,8 +1,9 @@
 #!/bin/bash
+set -e
 set -x
 tag="$1"; shift
 [ -n "$tag" ] || exit 1
-sw="$1"; shift
+sw="$1"; shift || true
 [ -n "$sw" ] || sw="$tag"
 
 IDIR="$PWD"
@@ -19,7 +20,9 @@ cp -v \
 	pthreadGC2.dll \
 	libusb-1.0.dll \
 	"$OUTDIR/"
-git clone . "$TMPDIR" -b "$tag" --depth 1
+git branch TMP "$tag"
+git clone . "$TMPDIR" -b TMP --depth 1
+git branch -D TMP
 cd "$TMPDIR"
 git archive --prefix "$sw"/ --format tar "$tag" | tar xvp
 cd "$sw"
