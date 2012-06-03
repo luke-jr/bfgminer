@@ -5240,6 +5240,7 @@ begin_bench:
 
 			if (!thr->work_restart_fd)
 			{
+#if defined(unix)
 				int pipefd[2];
 				if (!pipe(pipefd))
 				{
@@ -5247,6 +5248,7 @@ begin_bench:
 					thr->_work_restart_fd_w = pipefd[1];
 				}
 				else
+#endif
 					thr->work_restart_fd = -1;
 			}
 
