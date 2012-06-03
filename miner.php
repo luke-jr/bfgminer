@@ -2,6 +2,7 @@
 session_start();
 #
 global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
+global $checklastshare;
 #
 # Don't touch these 2 - see $rigs below
 $miner = null;
@@ -16,6 +17,13 @@ $readonly = false;
 # If your older version of BFGMiner returns an 'Invalid command'
 #  coz it doesn't have notify - it just shows the error status table
 $notify = true;
+#
+# set $checklastshare to true to do the following checks:
+# If a device's last share is 12x expected ago then display as an error
+# If a device's last share is 8x expected ago then display as a warning
+# If either of the above is true, also display the whole line highlighted
+# This assumes shares are 1 difficulty shares
+$checklastshare = true;
 #
 # Set $rigs to an array of your BFGMiner rigs that are running
 #  format: 'IP:Port' or 'Host:Port'
@@ -70,6 +78,7 @@ td.err { color:black; font-family:verdana,arial,sans; font-size:13pt; background
 td.warn { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ffb050 }
 td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
 td.tot { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#fff8f2 }
+td.lst { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#ffffdd }
 </style>
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
@@ -222,139 +231,229 @@ function getparam($name, $both = false)
  return substr($a, 0, 1024);
 }
 #
-function fmt($section, $name, $value)
+function classlastshare($when, $alldata, $warnclass, $errorclass)
+{
+ global $checklastshare;
+
+ if ($checklastshare === false)
+	return '';
+
+ if ($when == 0)
+	return '';
+
+ if (!isset($alldata['MHS av']))
+	return '';
+
+ if (!isset($alldata['Last Share Time']))
+	return '';
+
+ $expected = pow(2, 32) / ($alldata['MHS av'] * pow(10, 6));
+ $howlong = $when - $alldata['Last Share Time'];
+ if ($howlong < 1)
+	$howlong = 1;
+
+ if ($howlong > ($expected * 12))
+	return $errorclass;
+
+ if ($howlong > ($expected * 8))
+	return $warnclass;
+
+ return '';
+}
+#
+function fmt($section, $name, $value, $when, $alldata)
 {
  global $dfmt;
 
+ if ($alldata == null)
+	$alldata = array();
+
  $errorclass = ' class=err';
  $warnclass = ' class=warn';
+ $lstclass = ' class=lst';
  $b = '&nbsp;';
 
  $ret = $value;
  $class = '';
 
- switch ($section.'.'.$name)
- {
- case 'GPU.Last Share Time':
- case 'PGA.Last Share Time':
-	$ret = date('H:i:s', $value);
-	break;
- case 'SUMMARY.Elapsed':
-	$s = $value % 60;
-	$value -= $s;
-	$value /= 60;
-	if ($value == 0)
-		$ret = $s.'s';
-	else
+ if ($value === null)
+	$ret = $b;
+ else
+	switch ($section.'.'.$name)
 	{
-		$m = $value % 60;
-		$value -= $m;
-		$value /= 60;
-		if ($value == 0)
-			$ret = sprintf("%dm$b%02ds", $m, $s);
+	case 'GPU.Last Share Time':
+	case 'PGA.Last Share Time':
+		if ($value == 0
+		||  (isset($alldata['Last Share Pool']) && $alldata['Last Share Pool'] == -1))
+		{
+			$ret = 'Never';
+			$class = $warnclass;
+		}
 		else
 		{
-			$h = $value % 24;
-			$value -= $h;
-			$value /= 24;
+			$ret = date('H:i:s', $value);
+			$class = classlastshare($when, $alldata, $warnclass, $errorclass);
+		}
+		break;
+	case 'POOL.Last Share Time':
+		if ($value == 0)
+			$ret = 'Never';
+		else
+			$ret = date('H:i:s d-M', $value);
+		break;
+	case 'GPU.Last Share Pool':
+	case 'PGA.Last Share Pool':
+		if ($value == -1)
+		{
+			$ret = 'None';
+			$class = $warnclass;
+		}
+		break;
+	case 'SUMMARY.Elapsed':
+		$s = $value % 60;
+		$value -= $s;
+		$value /= 60;
+		if ($value == 0)
+			$ret = $s.'s';
+		else
+		{
+			$m = $value % 60;
+			$value -= $m;
+			$value /= 60;
 			if ($value == 0)
-				$ret = sprintf("%dh$b%02dm$b%02ds", $h, $m, $s);
+				$ret = sprintf("%dm$b%02ds", $m, $s);
 			else
 			{
-				if ($value == 1)
-					$days = '';
+				$h = $value % 24;
+				$value -= $h;
+				$value /= 24;
+				if ($value == 0)
+					$ret = sprintf("%dh$b%02dm$b%02ds", $h, $m, $s);
 				else
-					$days = 's';
-
-				$ret = sprintf("%dday$days$b%02dh$b%02dm$b%02ds", $value, $h, $m, $s);
+				{
+					if ($value == 1)
+						$days = '';
+					else
+						$days = 's';
+	
+					$ret = sprintf("%dday$days$b%02dh$b%02dm$b%02ds", $value, $h, $m, $s);
+				}
 			}
 		}
+		break;
+	case 'NOTIFY.Last Well':
+		if ($value == '0')
+		{
+			$ret = 'Never';
+			$class = $warnclass;
+		}
+		else
+			$ret = date('H:i:s', $value);
+		break;
+	case 'NOTIFY.Last Not Well':
+		if ($value == '0')
+			$ret = 'Never';
+		else
+		{
+			$ret = date('H:i:s', $value);
+			$class = $errorclass;
+		}
+		break;
+	case 'NOTIFY.Reason Not Well':
+		if ($value != 'None')
+			$class = $errorclass;
+		break;
+	case 'GPU.Utility':
+	case 'PGA.Utility':
+	case 'SUMMARY.Utility':
+		$ret = $value.'/m';
+		if ($value == 0)
+			$class = $warnclass;
+		break;
+	case 'PGA.Temperature':
+		$ret = $value.'&deg;C';
+		break;
+	case 'GPU.Temperature':
+		$ret = $value.'&deg;C';
+	case 'GPU.GPU Clock':
+	case 'GPU.Memory Clock':
+	case 'GPU.GPU Voltage':
+	case 'GPU.GPU Activity':
+		if ($value == 0)
+			$class = $warnclass;
+		break;
+	case 'GPU.Fan Percent':
+		if ($value == 0)
+			$class = $warnclass;
+		else
+		{
+			if ($value == 100)
+				$class = $errorclass;
+			else
+				if ($value > 85)
+					$class = $warnclass;
+		}
+		break;
+	case 'GPU.Fan Speed':
+		if ($value == 0)
+			$class = $warnclass;
+		else
+			if (isset($alldata['Fan Percent']))
+			{
+				$test = $alldata['Fan Percent'];
+				if ($test == 100)
+					$class = $errorclass;
+				else
+					if ($test > 85)
+						$class = $warnclass;
+			}
+		break;
+	case 'GPU.MHS av':
+	case 'PGA.MHS av':
+	case 'SUMMARY.MHS av':
+	case 'GPU.Total MH':
+	case 'PGA.Total MH':
+	case 'SUMMARY.Total MH':
+	case 'SUMMARY.Getworks':
+	case 'GPU.Accepted':
+	case 'PGA.Accepted':
+	case 'SUMMARY.Accepted':
+	case 'GPU.Rejected':
+	case 'PGA.Rejected':
+	case 'SUMMARY.Rejected':
+	case 'SUMMARY.Local Work':
+	case 'POOL.Getworks':
+	case 'POOL.Accepted':
+	case 'POOL.Rejected':
+	case 'POOL.Discarded':
+		$parts = explode('.', $value, 2);
+		if (count($parts) == 1)
+			$dec = '';
+		else
+			$dec = '.'.$parts[1];
+		$ret = number_format($parts[0]).$dec;
+		break;
+	case 'GPU.Status':
+	case 'PGA.Status':
+	case 'POOL.Status':
+		if ($value != 'Alive')
+			$class = $errorclass;
+		break;
+	case 'GPU.Enabled':
+	case 'PGA.Enabled':
+		if ($value != 'Y')
+			$class = $warnclass;
+		break;
+	case 'STATUS.When':
+		$ret = date($dfmt, $value);
+		break;
 	}
-	break;
- case 'NOTIFY.Last Well':
-	if ($value == '0')
-	{
-		$ret = 'Never';
-		$class = $warnclass;
-	}
-	else
-		$ret = date('H:i:s', $value);
-	break;
- case 'NOTIFY.Last Not Well':
-	if ($value == '0')
-		$ret = 'Never';
-	else
-	{
-		$ret = date('H:i:s', $value);
-		$class = $errorclass;
-	}
-	break;
- case 'NOTIFY.Reason Not Well':
-	if ($value != 'None')
-		$class = $errorclass;
-	break;
- case 'GPU.Utility':
- case 'PGA.Utility':
- case 'SUMMARY.Utility':
-	$ret = $value.'/m';
-	break;
- case 'PGA.Temperature':
-	$ret = $value.'&deg;C';
-	break;
- case 'GPU.Temperature':
-	$ret = $value.'&deg;C';
- case 'GPU.Fan Speed':
- case 'GPU.Fan Percent':
- case 'GPU.GPU Clock':
- case 'GPU.Memory Clock':
- case 'GPU.GPU Voltage':
- case 'GPU.GPU Activity':
-	if ($value == 0)
-		$class = $warnclass;
-	break;
- case 'GPU.MHS av':
- case 'PGA.MHS av':
- case 'SUMMARY.MHS av':
- case 'GPU.Total MH':
- case 'PGA.Total MH':
- case 'SUMMARY.Total MH':
- case 'SUMMARY.Getworks':
- case 'GPU.Accepted':
- case 'PGA.Accepted':
- case 'SUMMARY.Accepted':
- case 'GPU.Rejected':
- case 'PGA.Rejected':
- case 'SUMMARY.Rejected':
- case 'SUMMARY.Local Work':
- case 'POOL.Getworks':
- case 'POOL.Accepted':
- case 'POOL.Rejected':
- case 'POOL.Discarded':
-	$parts = explode('.', $value, 2);
-	if (count($parts) == 1)
-		$dec = '';
-	else
-		$dec = '.'.$parts[1];
-	$ret = number_format($parts[0]).$dec;
-	break;
- case 'GPU.Status':
- case 'PGA.Status':
- case 'POOL.Status':
-	if ($value != 'Alive')
-		$class = $errorclass;
-	break;
- case 'GPU.Enabled':
- case 'PGA.Enabled':
-	if ($value != 'Y')
-		$class = $warnclass;
-	break;
- case 'STATUS.When':
-	$ret = date($dfmt, $value);
-	break;
- }
 
  if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
 	$class = $errorclass;
+
+ if ($class == '' && $section != 'POOL')
+	$class = classlastshare($when, $alldata, $lstclass, $lstclass);
 
  return array($ret, $class);
 }
@@ -390,6 +489,8 @@ function details($cmd, $list, $rig)
  global $poolcmd, $readonly;
  global $showndate;
 
+ $when = 0;
+
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
  echo $tablebegin;
@@ -408,7 +509,10 @@ function details($cmd, $list, $rig)
 	echo '<tr>';
 	echo '<td>Computer: '.$list['STATUS']['Description'].'</td>';
 	if (isset($list['STATUS']['When']))
+	{
 		echo '<td>When: '.date($dfmt, $list['STATUS']['When']).'</td>';
+		$when = $list['STATUS']['When'];
+	}
 	$sta = $list['STATUS']['STATUS'];
 	echo '<td>Status: '.$stas[$sta].'</td>';
 	echo '<td>Message: '.$list['STATUS']['Msg'].'</td>';
@@ -436,7 +540,7 @@ function details($cmd, $list, $rig)
 
 	foreach ($values as $name => $value)
 	{
-		list($showvalue, $class) = fmt($section, $name, $value);
+		list($showvalue, $class) = fmt($section, $name, $value, $when, $values);
 		echo "<td$class>$showvalue</td>";
 	}
 
@@ -587,6 +691,8 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
  global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
  global $rigerror;
 
+ $when = 0;
+
  $header = $head;
  $anss = array();
 
@@ -652,7 +758,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 				else
 				{
 					if (isset($row[$name]))
-						list($showvalue, $class) = fmt('STATUS', $name, $row[$name]);
+						list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
 					else
 					{
 						$class = '';
@@ -710,6 +816,10 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  foreach ($anss as $rig => $ans)
  {
+	$when = 0;
+	if (isset($ans['STATUS']['When']))
+		$when = $ans['STATUS']['When'];
+
 	foreach ($ans as $item => $row)
 	{
 		if ($item == 'STATUS')
@@ -733,12 +843,11 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 			else
 			{
 				if (isset($row[$name]))
-					list($showvalue, $class) = fmt($section, $name, $row[$name]);
+					$value = $row[$name];
 				else
-				{
-					$class = '';
-					$showvalue = '&nbsp;';
-				}
+					$value = null;
+
+				list($showvalue, $class) = fmt($section, $name, $value, $when, $row);
 
 				if ($rig === 'total' and $class == '')
 					$class = ' class=tot';
