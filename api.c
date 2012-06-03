@@ -142,6 +142,9 @@
 // Current code assumes it can socket send this size also
 #define MYBUFSIZ	65432	// TODO: intercept before it's exceeded
 
+// BUFSIZ varies on Windows and Linux
+#define TMPBUFSIZ	8192
+
 // Number of requests to queue - normally would be small
 // However lots of PGA's may mean more
 #define QUEUE	100
@@ -763,7 +766,7 @@ static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 
 static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	char buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
 	int pgacount = 0;
 	int cpucount = 0;
 	char *adlinuse = (char *)NO;
@@ -1161,7 +1164,7 @@ static void cpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	char buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
 	char *status, *lp;
 	char *rpc_url;
 	char *rpc_user;
@@ -1373,7 +1376,7 @@ static void gpurestart(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	char buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
 
 	strcpy(io_buffer, message(MSG_NUMGPU, 0, NULL, isjson));
 
@@ -1387,7 +1390,7 @@ static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 
 static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	char buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
 	int count = 0;
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX)
@@ -1406,7 +1409,7 @@ static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 
 static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	char buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
 	int count = 0;
 
 #ifdef WANT_CPUMINE
@@ -1836,7 +1839,7 @@ void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool is
 
 void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
 {
-	char buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
 	char *reason;
 
 	if (cgpu->device_last_not_well == 0)
@@ -1913,7 +1916,7 @@ static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool
 
 static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	char buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
 	struct cgpu_info *cgpu;
 	int i;
 
@@ -1979,7 +1982,7 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 static int itemstats(int i, char *id, struct cgminer_stats *stats, char *extra, bool isjson)
 {
-	char buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
 
 	if (stats->getwork_calls || (extra != NULL && *extra))
 	{
@@ -2005,7 +2008,7 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, char *extra, 
 }
 static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
-	char extra[BUFSIZ];
+	char extra[TMPBUFSIZ];
 	char id[20];
 	int i, j;
 
@@ -2274,8 +2277,8 @@ static void *restart_thread(__maybe_unused void *userdata)
 void api(int api_thr_id)
 {
 	struct thr_info bye_thr;
-	char buf[BUFSIZ];
-	char param_buf[BUFSIZ];
+	char buf[TMPBUFSIZ];
+	char param_buf[TMPBUFSIZ];
 	const char *localaddr = "127.0.0.1";
 	SOCKETTYPE c;
 	int n, bound;
@@ -2408,7 +2411,7 @@ void api(int api_thr_id)
 			applog(LOG_DEBUG, "API: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
 
 		if (addrok) {
-			n = recv(c, &buf[0], BUFSIZ-1, 0);
+			n = recv(c, &buf[0], TMPBUFSIZ-1, 0);
 			if (SOCKETFAIL(n))
 				buf[0] = '\0';
 			else
