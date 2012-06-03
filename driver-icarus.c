@@ -85,11 +85,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 // 5 seconds allows for up to a ~840MH/s device
 #define ICARUS_READ_FAULT_COUNT_DEFAULT	(50)
 
-// For a standard Icarus REV3 (to 5 places)
-// Since this rounds up a the last digit - it is a slight overestimate
-// Thus the hash rate will be a VERY slight underestimate
-// (by a lot less than the displayed accuracy)
-#define ICARUS_REV3_HASH_TIME 0.0000000026316
+// For a standard Icarus REV3
+#define ICARUS_REV3_HASH_TIME 0.00000000264083
 #define NANOSEC 1000000000.0
 
 // Icarus Rev3 doesn't send a completion message when it finishes
