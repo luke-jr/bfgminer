@@ -4064,6 +4064,7 @@ static void wait_lpcurrent(struct pool *pool)
 	while (pool != current_pool()) {
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
+		mutex_unlock(&lp_lock);
 	}
 }
 
