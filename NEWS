@@ -1,3 +1,31 @@
+BFGMiner Version 2.4.2 - June 2, 2012
+
+- API.class compiled with Java SE 6.0_03 - works with Win7x64
+- miner.php highlight devs too slow finding shares (possibly failing)
+- API update version to V1.11 and document changes
+- API save default config file if none specified
+- api.c save success incorrectly returns error
+- api.c replace BUFSIZ (linux/windows have different values)
+- Move RPC API content out of README to API-README
+- Open a longpoll connection if a pool is in the REJECTING state as it's the
+only way to re-enable it automatically.
+- Use only one longpoll as much as possible by using a pthread conditional
+broadcast that each longpoll thread waits on and checks if it's the current pool
+before
+- If shares are known stale, don't use them to decide to disable a pool for
+sequential rejects.
+- Restarting cgminer from within after ADL has been corrupted only leads to a
+crash. Display a warning only and disable fanspeed monitoring.
+- Icarus: fix abort calculation/allow user specified abort
+- Icarus: make --icarus-timing hidden and document it in FPGA-README
+- Icarus: high accuracy timing and other bitstream speed support
+- add-MIPSEB-to-icarus-for-BIG_ENDIAN
+- work_decode only needs swab32 on midstate under BIG ENDIAN
+- add compile command to api-example.c
+- save config bugfix: writing an extra ',' when no gpus
+- Add dpkg-source commits
+
+
 BFGMiner Version 2.4.1 - May 6, 2012
 
 - Icarus: Calibrate hashrate yet even more accurately
