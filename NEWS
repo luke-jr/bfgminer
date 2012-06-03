@@ -1,5 +1,6 @@
 BFGMiner Version 2.4.2 - June 2, 2012
 
+- Use epoll to immediately interrupt Icarus with new work on longpolls (Linux)
 - API.class compiled with Java SE 6.0_03 - works with Win7x64
 - miner.php highlight devs too slow finding shares (possibly failing)
 - API update version to V1.11 and document changes
