@@ -716,8 +716,14 @@ static void cpu_detect()
 					++num_processors;
 		}
 	}
-	#else
+	#elif defined(_SC_NPROCESSORS_ONLN)
 		num_processors = sysconf(_SC_NPROCESSORS_ONLN);
+	#elif defined(HW_NCPU)
+		int req[] = { CTL_HW, HW_NCPU };
+		size_t len = sizeof(num_processors);
+		v = sysctl(req, 2, &num_processors, &len, NULL, 0);
+	#else
+		num_processors = 1;
 	#endif /* !WIN32 */
 
 	if (opt_n_threads < 0 || !forced_n_threads) {
