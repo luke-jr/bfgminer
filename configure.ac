@@ -13,7 +13,7 @@ m4_define([lt_age], v_min)
 
 AC_INIT([bfgminer], [v_ver], [luke-jr+bfgminer@utopios.org])
 
-AC_PREREQ(2.59)
+AC_PREREQ([2.59c])
 AC_CANONICAL_SYSTEM
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([miner.c])
@@ -46,7 +46,7 @@ dnl Make sure anyone changing configure.ac/Makefile.am has a clue
 AM_MAINTAINER_MODE
 
 dnl Checks for programs
-AC_PROG_CC
+AC_PROG_CC_C99
 gl_EARLY
 AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
