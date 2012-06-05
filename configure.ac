@@ -245,6 +245,7 @@ else
 fi
 
 
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$ztex != xnonono])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])

@@ -68,6 +68,10 @@ endif # HAVE_x86_64
 endif # HAS_YASM
 endif # HAS_CPUMINE
 
+if NEED_FPGAUTILS
+cgminer_SOURCES += fpgautils.c
+endif
+
 if HAS_BITFORCE
 cgminer_SOURCES += driver-bitforce.c
 endif
