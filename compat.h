@@ -172,7 +172,7 @@ enum {
 
 static inline int setpriority(__maybe_unused int which, __maybe_unused int who, __maybe_unused int prio)
 {
-	return -!SetPriorityClass(GetCurrentProcess(), IDLE_PRIORITY_CLASS);
+	return -!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
 }
 
 typedef unsigned long int ulong;
