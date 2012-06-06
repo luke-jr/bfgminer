@@ -739,7 +739,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
 	echo $tableend.$tablebegin;
 
-	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1);
+	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1, 'API' => 1, 'CGMiner' => 1);
 	showhead('', null, $dthead);
 
 	foreach ($anss as $rig => $ans)
@@ -748,23 +748,20 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
 		foreach ($ans as $item => $row)
 		{
-			if ($item != 'STATUS')
+			if ($item != 'STATUS' && $item != 'VERSION')
 				continue;
 
 			foreach ($dthead as $name => $x)
 			{
-				if ($name == '')
+				if ($item == 'STATUS' && $name == '')
 					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"?rig=$rig\",null)'></td>";
 				else
 				{
 					if (isset($row[$name]))
-						list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
-					else
 					{
-						$class = '';
-						$showvalue = '&nbsp;';
+						list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
+						echo "<td$class align=right>$showvalue</td>";
 					}
-					echo "<td$class align=right>$showvalue</td>";
 				}
 			}
 		}
@@ -774,6 +771,8 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 	echo $tableend;
 	echo '<tr><td><br><br></td></tr>';
 	echo $tablebegin;
+
+	return;
  }
 
  $total = array();
@@ -985,8 +984,9 @@ function display()
 	process(array($preprocess => $preprocess), $rig);
 
  echo $tablebegin;
+ doforeach('version', 'rig summary', array(), array(), true);
  $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH');
- doforeach('summary', 'summary information', $sum, array(), true);
+ doforeach('summary', 'summary information', $sum, array(), false);
  echo $tableend;
  echo '<tr><td><br><br></td></tr>';
  echo $tablebegin;
