@@ -1816,6 +1816,8 @@ static void get_benchmark_work(struct work *work)
 static bool get_upstream_work(struct work *work, CURL *curl)
 {
 	struct pool *pool = work->pool;
+	struct cgminer_pool_stats *pool_stats = &(pool->cgminer_pool_stats);
+	struct timeval tv_start, tv_end, tv_elapsed;
 	json_t *val = NULL;
 	bool rc = false;
 	int retries = 0;
@@ -1830,8 +1832,11 @@ retry:
 	 * there may be temporary denied messages etc. falsely reporting
 	 * failure so retry a few times before giving up */
 	while (!val && retries++ < 3) {
+		pool_stats->getwork_attempts++;
+		gettimeofday(&tv_start, NULL);
 		val = json_rpc_call(curl, url, pool->rpc_userpass, rpc_req,
 			    false, false, &work->rolltime, pool, false);
+		gettimeofday(&tv_end, NULL);
 	}
 	if (unlikely(!val)) {
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
@@ -1845,6 +1850,18 @@ retry:
 	work->longpoll = false;
 	total_getworks++;
 	pool->getwork_requested++;
+
+	timersub(&tv_end, &tv_start, &tv_elapsed);
+	timeradd(&tv_elapsed, &(pool_stats->getwork_wait), &(pool_stats->getwork_wait));
+	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_max), >)) {
+		pool_stats->getwork_wait_max.tv_sec = tv_elapsed.tv_sec;
+		pool_stats->getwork_wait_max.tv_usec = tv_elapsed.tv_usec;
+	}
+	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_min), <)) {
+		pool_stats->getwork_wait_min.tv_sec = tv_elapsed.tv_sec;
+		pool_stats->getwork_wait_min.tv_usec = tv_elapsed.tv_usec;
+	}
+	pool_stats->getwork_calls++;
 
 	json_decref(val);
 out:
@@ -5009,6 +5026,7 @@ int main(int argc, char *argv[])
 		struct pool *pool = pools[i];
 
 		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 		if (!pool->rpc_userpass) {
 			if (!pool->rpc_user || !pool->rpc_pass)
