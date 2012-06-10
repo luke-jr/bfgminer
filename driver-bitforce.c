@@ -267,6 +267,44 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
+static bool bitforce_init(struct cgpu_info *bitforce)
+{
+	int fdDev = bitforce->device_fd;
+	char *devpath = bitforce->device_path;
+	char pdevbuf[0x100];
+	char *s;
+
+	BFclose(fdDev);
+
+	fdDev = BFopen(devpath);
+	if (unlikely(fdDev == -1)) {
+		applog(LOG_ERR, "BitForce init: Failed to open %s", devpath);
+		return false;
+	}
+
+	bitforce->device_fd = fdDev;
+
+	BFwrite(fdDev, "ZGX", 3);
+	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	if (unlikely(!pdevbuf[0])) {
+		applog(LOG_ERR, "Error reading from BitForce (ZGX)");
+		return false;
+	}
+
+	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
+		applog(LOG_ERR, "BitForce init: Didn't recognise BitForce on %s", devpath);
+		return false;
+	}
+	
+	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
+	{
+		s[0] = '\0';
+		bitforce->name = strdup(pdevbuf + 7);
+	}
+	
+	return true;
+}
+
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
@@ -359,7 +397,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		usleep(10000);
 		i += 10;
 	}
-	
+
 	if (i >= BITFORCE_TIMEOUT_MS) {
 		applog(LOG_ERR, "BitForce took longer than 30s");
 		bitforce->device_last_not_well = time(NULL);
@@ -400,7 +438,12 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	bool dev_enabled = (bitforce->deven == DEV_ENABLED);
+	static enum dev_enable last_dev_state = DEV_ENABLED;
 	
+	// if device has just gone from disabled to enabled, re-initialise it
+	if (last_dev_state == DEV_DISABLED && dev_enabled)
+		bitforce_init(bitforce);
+
 	if (dev_enabled)
 		if (!bitforce_send_work(thr, work))
 			return 0;
@@ -416,6 +459,14 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		return 1;
 }
 
+static void bitforce_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	int fdDev = bitforce->device_fd;
+
+	BFclose(fdDev);
+}
+
 struct device_api bitforce_api = {
 	.dname = "bitforce",
 	.name = "BFL",
@@ -423,4 +474,5 @@ struct device_api bitforce_api = {
 	.get_statline_before = get_bitforce_statline_before,
 	.thread_prepare = bitforce_thread_prepare,
 	.scanhash = bitforce_scanhash,
+	.thread_shutdown = bitforce_shutdown
 };
