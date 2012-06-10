@@ -39,6 +39,7 @@
 
 #define BITFORCE_SLEEP_US 4500000
 #define BITFORCE_SLEEP_MS (BITFORCE_SLEEP_US/1000)
+#define BITFORCE_TIMEOUT_MS 30000
 
 struct device_api bitforce_api;
 
@@ -346,7 +347,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	int i;
 
 	i = BITFORCE_SLEEP_MS;
-	while (1) {
+	while (i < BITFORCE_TIMEOUT_MS) {
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		if (unlikely(!pdevbuf[0])) {
@@ -357,6 +358,14 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 			break;
 		usleep(10000);
 		i += 10;
+	}
+	
+	if (i >= BITFORCE_TIMEOUT_MS) {
+		applog(LOG_ERR, "BitForce took longer than 30s");
+		bitforce->device_last_not_well = time(NULL);
+		bitforce->device_not_well_reason = REASON_THREAD_ZERO_HASH;
+		bitforce->thread_zero_hash_count++;
+		return 1;
 	}
 
 	applog(LOG_DEBUG, "BitForce waited %dms until %s\n", i, pdevbuf);
