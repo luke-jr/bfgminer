@@ -161,7 +161,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.11";
+static const char *APIVERSION = "1.12";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -1981,7 +1981,7 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	ptr = NULL;
 }
 
-static int itemstats(int i, char *id, struct cgminer_stats *stats, char *extra, bool isjson)
+static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgminer_pool_stats *pool_stats, char *extra, bool isjson)
 {
 	char buf[TMPBUFSIZ];
 
@@ -1991,14 +1991,31 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, char *extra, 
 			extra = (char *)BLANK;
 
 		sprintf(buf, isjson
-			? "%s{\"STATS\":%d,\"ID\":\"%s\",\"Elapsed\":%.0f,\"Calls\":%d,\"Wait\":%ld.%06ld,\"Max\":%ld.%06ld,\"Min\":%ld.%06ld%s}"
-			: "%sSTATS=%d,ID=%s,Elapsed=%.0f,Calls=%d,Wait=%ld.%06ld,Max=%ld.%06ld,Min=%ld.%06ld%s" SEPSTR,
+			? "%s{\"STATS\":%d,\"ID\":\"%s\",\"Elapsed\":%.0f,\"Calls\":%d,\"Wait\":%ld.%06ld,\"Max\":%ld.%06ld,\"Min\":%ld.%06ld"
+			: "%sSTATS=%d,ID=%s,Elapsed=%.0f,Calls=%d,Wait=%ld.%06ld,Max=%ld.%06ld,Min=%ld.%06ld",
 			(isjson && (i > 0)) ? COMMA : BLANK,
 			i, id, total_secs, stats->getwork_calls,
 			stats->getwork_wait.tv_sec, stats->getwork_wait.tv_usec,
 			stats->getwork_wait_max.tv_sec, stats->getwork_wait_max.tv_usec,
-			stats->getwork_wait_min.tv_sec, stats->getwork_wait_min.tv_usec,
-			extra);
+			stats->getwork_wait_min.tv_sec, stats->getwork_wait_min.tv_usec);
+
+		strcat(io_buffer, buf);
+
+		if (pool_stats) {
+			sprintf(buf, isjson
+				? ",\"Pool Calls\":%d,\"Pool Attempts\":%d,\"Pool Wait\":%ld.%06ld,\"Pool Max\":%ld.%06ld,\"Pool Min\":%ld.%06ld"
+				: ",Pool Calls=%d,Pool Attempts=%d,Pool Wait=%ld.%06ld,Pool Max=%ld.%06ld,Pool Min=%ld.%06ld",
+				pool_stats->getwork_calls, pool_stats->getwork_attempts,
+				pool_stats->getwork_wait.tv_sec, pool_stats->getwork_wait.tv_usec,
+				pool_stats->getwork_wait_max.tv_sec, pool_stats->getwork_wait_max.tv_usec,
+				pool_stats->getwork_wait_min.tv_sec, pool_stats->getwork_wait_min.tv_usec);
+
+			strcat(io_buffer, buf);
+		}
+
+		sprintf(buf, isjson
+			? "%s}"
+			: "%s" SEPSTR);
 
 		strcat(io_buffer, buf);
 
@@ -2032,14 +2049,14 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		}
 
 		sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
-		i = itemstats(i, id, &(cgpu->cgminer_stats), extra, isjson);
+		i = itemstats(i, id, &(cgpu->cgminer_stats), NULL, extra, isjson);
 	}
 
 	for (j = 0; j < total_pools; j++) {
 		struct pool *pool = pools[j];
 
 		sprintf(id, "POOL%d", j);
-		i = itemstats(i, id, &(pool->cgminer_stats), NULL, isjson);
+		i = itemstats(i, id, &(pool->cgminer_stats), &(pool->cgminer_pool_stats), NULL, isjson);
 	}
 
 	if (isjson)
