@@ -37,6 +37,8 @@
 #include "elist.h"
 #include "miner.h"
 
+#define BITFORCE_SLEEP_US 4500000
+#define BITFORCE_SLEEP_MS (BITFORCE_SLEEP_US/1000)
 
 struct device_api bitforce_api;
 
@@ -103,7 +105,7 @@ static bool bitforce_detect_one(const char *devpath)
 
 	int fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
-		applog(LOG_DEBUG, "BitForce Detect: Failed to open %s", devpath);
+		applog(LOG_ERR, "BitForce Detect: Failed to open %s", devpath);
 		return false;
 	}
 	BFwrite(fdDev, "ZGX", 3);
@@ -114,7 +116,7 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 	BFclose(fdDev);
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
-		applog(LOG_DEBUG, "BitForce Detect: Didn't recognise BitForce on %s", devpath);
+		applog(LOG_ERR, "BitForce Detect: Didn't recognise BitForce on %s", devpath);
 		return false;
 	}
 
@@ -264,53 +266,17 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
-static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
+static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
-	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
-
 	char pdevbuf[0x100];
-	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
-	int i;
-	char *pnoncebuf;
 	char *s;
-	uint32_t nonce;
-
-	BFwrite(fdDev, "ZDX", 3);
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "Error reading from BitForce (ZDX)");
-		return 0;
-	}
-	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
-		applog(LOG_ERR, "BitForce ZDX reports: %s", pdevbuf);
-		return 0;
-	}
-
-	memcpy(ob + 8, work->midstate, 32);
-	memcpy(ob + 8 + 32, work->data + 64, 12);
-	BFwrite(fdDev, ob, 60);
-	if (opt_debug) {
-		s = bin2hex(ob + 8, 44);
-		applog(LOG_DEBUG, "BitForce block data: %s", s);
-		free(s);
-	}
-
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "Error reading from BitForce (block data)");
-		return 0;
-	}
-	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
-		applog(LOG_ERR, "BitForce block data reports: %s", pdevbuf);
-		return 0;
-	}
 
 	BFwrite(fdDev, "ZLX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "Error reading from BitForce (ZKX)");
-		return 0;
+		applog(LOG_ERR, "Error reading temp from BitForce (ZLX)");
+		return false;
 	}
 	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
 		float temp = strtof(s + 1, NULL);
@@ -326,10 +292,61 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 			}
 		}
 	}
+	return true;
+}
 
-	usleep(4500000);
-	i = 4500;
-	while (i < 10000) {
+static bool bitforce_send_work(struct thr_info *thr, struct work *work)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	int fdDev = bitforce->device_fd;
+	char pdevbuf[0x100];
+	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
+	char *s;
+
+	BFwrite(fdDev, "ZDX", 3);
+	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	if (unlikely(!pdevbuf[0])) {
+		applog(LOG_ERR, "Error reading from BitForce (ZDX)");
+		return false;
+	}
+	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
+		applog(LOG_ERR, "BitForce ZDX reports: %s", pdevbuf);
+		return false;
+	}
+
+	memcpy(ob + 8, work->midstate, 32);
+	memcpy(ob + 8 + 32, work->data + 64, 12);
+	BFwrite(fdDev, ob, 60);
+	if (opt_debug) {
+		s = bin2hex(ob + 8, 44);
+		applog(LOG_DEBUG, "BitForce block data: %s", s);
+		free(s);
+	}
+
+	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	if (unlikely(!pdevbuf[0])) {
+		applog(LOG_ERR, "Error reading from BitForce (block data)");
+		return false;
+	}
+	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
+		applog(LOG_ERR, "BitForce block data reports: %s", pdevbuf);
+		return false;
+	}
+	return true;
+}
+
+static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	int fdDev = bitforce->device_fd;
+
+	char pdevbuf[0x100];
+	char *pnoncebuf;
+	uint32_t nonce;
+	int i;
+
+	i = BITFORCE_SLEEP_MS;
+	while (1) {
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		if (unlikely(!pdevbuf[0])) {
@@ -337,23 +354,20 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 			return 0;
 		}
 		if (pdevbuf[0] != 'B')
-		    break;
+			break;
 		usleep(10000);
 		i += 10;
 	}
 
-    if (i >= 10000) {
-	  applog(LOG_DEBUG, "BitForce took longer than 10s");
-      return 0;
-    }
-
 	applog(LOG_DEBUG, "BitForce waited %dms until %s\n", i, pdevbuf);
 	work->blk.nonce = 0xffffffff;
-	if (pdevbuf[2] == '-')
-		return 0xffffffff;
+	if (pdevbuf[2] == '-') 
+		return 0xffffffff;   /* No valid nonce found */
+	else if (pdevbuf[0] == 'I')
+		return 1;          /* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
-		applog(LOG_ERR, "BitForce result reports: %s", pdevbuf);
-		return 0;
+		applog(LOG_WARNING, "BitForce result reports: %s", pdevbuf);
+		return 1;
 	}
 
 	pnoncebuf = &pdevbuf[12];
@@ -371,6 +385,21 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	}
 
 	return 0xffffffff;
+}
+
+static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+
+	if (!bitforce_send_work(thr, work))
+		return 0;
+
+	if (!bitforce_get_temp(bitforce))
+		return 0;
+
+	usleep(BITFORCE_SLEEP_US);
+
+	return bitforce_get_result(thr, work);
 }
 
 struct device_api bitforce_api = {
