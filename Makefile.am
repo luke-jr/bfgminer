@@ -10,7 +10,7 @@ endif
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 		  ADL_SDK/readme.txt api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
-		  bitstreams/*
+		  bitstreams/* API-README FPGA-README
 
 SUBDIRS		= lib compat ccan
 

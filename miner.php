@@ -2,7 +2,7 @@
 session_start();
 #
 global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
-global $checklastshare;
+global $checklastshare, $hidefields;
 #
 # Don't touch these 2 - see $rigs below
 $miner = null;
@@ -39,6 +39,16 @@ $rigs = array('127.0.0.1:4028');
 # Feel free to increase it if your network is very slow
 # Also, on some windows PHP, apparently the $usec is ignored
 $socktimeoutsec = 10;
+#
+# List of fields NOT to be displayed
+# You can use this to hide data you don't want to see or don't want
+# shown on a public web page
+# The list of sections are: SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG
+# See the web page for the list of field names (the table headers)
+# It is an array of 'SECTION.Field Name' => 1
+# This example would hide the slightly more sensitive pool information
+#$hidefields = array('POOL.URL' => 1, 'POOL.User' => 1);
+$hidefields = array();
 #
 $here = $_SERVER['PHP_SELF'];
 #
@@ -151,7 +161,7 @@ function readsockline($socket)
 #
 function api($cmd)
 {
- global $miner, $port;
+ global $miner, $port, $hidefields;
 
  $socket = getsock($miner, $port);
  if ($socket != null)
@@ -186,6 +196,8 @@ function api($cmd)
 			if (strlen($name) == 0)
 				$name = 'null';
 
+			$sectionname = preg_replace('/\d/', '', $name);
+
 			if (isset($data[$name]))
 			{
 				$num = 1;
@@ -198,6 +210,10 @@ function api($cmd)
 			foreach ($items as $item)
 			{
 				$id = explode('=', $item, 2);
+
+				if (isset($hidefields[$sectionname.'.'.$id[0]]))
+					continue;
+
 				if (count($id) == 2)
 					$data[$name][$id[0]] = $id[1];
 				else
@@ -739,7 +755,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
 	echo $tableend.$tablebegin;
 
-	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1);
+	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1, 'API' => 1, 'CGMiner' => 1);
 	showhead('', null, $dthead);
 
 	foreach ($anss as $rig => $ans)
@@ -748,23 +764,20 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
 		foreach ($ans as $item => $row)
 		{
-			if ($item != 'STATUS')
+			if ($item != 'STATUS' && $item != 'VERSION')
 				continue;
 
 			foreach ($dthead as $name => $x)
 			{
-				if ($name == '')
+				if ($item == 'STATUS' && $name == '')
 					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"?rig=$rig\",null)'></td>";
 				else
 				{
 					if (isset($row[$name]))
-						list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
-					else
 					{
-						$class = '';
-						$showvalue = '&nbsp;';
+						list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
+						echo "<td$class align=right>$showvalue</td>";
 					}
-					echo "<td$class align=right>$showvalue</td>";
 				}
 			}
 		}
@@ -774,6 +787,8 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 	echo $tableend;
 	echo '<tr><td><br><br></td></tr>';
 	echo $tablebegin;
+
+	return;
  }
 
  $total = array();
@@ -985,8 +1000,9 @@ function display()
 	process(array($preprocess => $preprocess), $rig);
 
  echo $tablebegin;
+ doforeach('version', 'rig summary', array(), array(), true);
  $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH');
- doforeach('summary', 'summary information', $sum, array(), true);
+ doforeach('summary', 'summary information', $sum, array(), false);
  echo $tableend;
  echo '<tr><td><br><br></td></tr>';
  echo $tablebegin;
