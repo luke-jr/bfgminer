@@ -566,6 +566,12 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	uint32_t values;
 	uint64_t hash_count_range;
 
+	/* Device developer can make use of idle state, until then, disable and return */
+	if (thr->cgpu->deven == DEV_IDLE) {
+		thr->cgpu->deven = DEV_DISABLED;
+		return 1;
+	}
+
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
 	icarus = thr->cgpu;

@@ -167,6 +167,7 @@ static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
+static const char *IDLE = "Idle";
 static const char *REJECTING = "Rejecting";
 static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
@@ -879,7 +880,7 @@ static void pgastatus(int pga, bool isjson)
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		if (cgpu->deven != DEV_DISABLED)
+		if (cgpu->deven == DEV_ENABLED)
 			enabled = (char *)YES;
 		else
 			enabled = (char *)NO;
@@ -890,6 +891,8 @@ static void pgastatus(int pga, bool isjson)
 			status = (char *)SICK;
 		else if (cgpu->status == LIFE_NOSTART)
 			status = (char *)NOSTART;
+		else if (cgpu->deven == DEV_IDLE)
+			status = (char *)IDLE;
 		else
 			status = (char *)ALIVE;
 
@@ -1092,7 +1095,7 @@ static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	struct cgpu_info *cgpu = devices[dev];
 
-	if (cgpu->deven != DEV_DISABLED) {
+	if (cgpu->deven == DEV_ENABLED) {
 		strcpy(io_buffer, message(MSG_PGALRENA, id, NULL, isjson));
 		return;
 	}
@@ -1143,12 +1146,12 @@ static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	struct cgpu_info *cgpu = devices[dev];
 
-	if (cgpu->deven == DEV_DISABLED) {
+	if (cgpu->deven != DEV_ENABLED) {
 		strcpy(io_buffer, message(MSG_PGALRDIS, id, NULL, isjson));
 		return;
 	}
 
-	cgpu->deven = DEV_DISABLED;
+	cgpu->deven = DEV_IDLE;
 
 	strcpy(io_buffer, message(MSG_PGADIS, id, NULL, isjson));
 }

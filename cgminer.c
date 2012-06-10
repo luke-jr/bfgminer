@@ -2643,22 +2643,15 @@ void remove_pool(struct pool *pool)
 
 void write_config(FILE *fcfg)
 {
-	int i = 0;
-	int j = 0;
+	int i;
 
-	/* Write pool values in priority order */
+	/* Write pool values */
 	fputs("{\n\"pools\" : [", fcfg);
-	while((j < total_pools) && (i < total_pools)) {
-	    if(pools[i]->prio == j) {
-		    fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
-		    fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
-		    fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);       
-            j++;
-            i=0;
-        }
-        else
-            i++;
-    }
+	for(i = 0; i < total_pools; i++) {
+		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
+		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
+		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);
+		}
 	fputs("\n]\n", fcfg);
 
 	if (nDevs) {
@@ -3925,7 +3918,7 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
+			if (unlikely(mythr->pause || cgpu->deven == DEV_DISABLED || cgpu->deven == DEV_RECOVER)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 disabled:
 				mythr->rolling = mythr->cgpu->rolling = 0;
