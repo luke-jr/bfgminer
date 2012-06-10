@@ -284,8 +284,8 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		if (temp > 0) {
 			bitforce->temp = temp;
 			if (temp > bitforce->cutofftemp) {
-				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, disabling!", bitforce->api->name, bitforce->device_id);
-				bitforce->deven = DEV_RECOVER;
+				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, setting idle", bitforce->api->name, bitforce->device_id);
+				bitforce->deven = DEV_IDLE;
 
 				bitforce->device_last_not_well = time(NULL);
 				bitforce->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
@@ -399,16 +399,21 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-
-	if (!bitforce_send_work(thr, work))
-		return 0;
+	bool dev_enabled = (bitforce->deven == DEV_ENABLED);
+	
+	if (dev_enabled)
+		if (!bitforce_send_work(thr, work))
+			return 0;
 
 	if (!bitforce_get_temp(bitforce))
 		return 0;
 
 	usleep(BITFORCE_SLEEP_US);
 
-	return bitforce_get_result(thr, work);
+	if (dev_enabled)
+		return bitforce_get_result(thr, work);
+	else
+		return 1;
 }
 
 struct device_api bitforce_api = {
