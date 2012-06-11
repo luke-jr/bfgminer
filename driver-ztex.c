@@ -199,12 +199,6 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	bool overflow, found, rv;
 	struct libztex_hash_data hdata[GOLDEN_BACKLOG];
 
-	/* Device developer can make use of idle state, until then, disable and return */
-	if (thr->cgpu->deven == DEV_IDLE) {
-		thr->cgpu->deven = DEV_DISABLED;
-		return 1;
-	}
-	
 	ztex = thr->cgpu->device_ztex;
 
 	memcpy(sendbuf, work->data + 64, 12);

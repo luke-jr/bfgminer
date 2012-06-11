@@ -133,6 +133,8 @@ static bool bitforce_detect_one(const char *devpath)
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
+	
+	mutex_init(&bitforce->dev_lock);
 
 	return add_cgpu(bitforce);
 }
@@ -284,8 +286,11 @@ static bool bitforce_init(struct cgpu_info *bitforce)
 
 	bitforce->device_fd = fdDev;
 
+	mutex_lock(&bitforce->dev_lock);
 	BFwrite(fdDev, "ZGX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	mutex_unlock(&bitforce->dev_lock);
+	
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "Error reading from BitForce (ZGX)");
 		return false;
@@ -311,8 +316,11 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	char pdevbuf[0x100];
 	char *s;
 
+	mutex_lock(&bitforce->dev_lock);
 	BFwrite(fdDev, "ZLX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	mutex_unlock(&bitforce->dev_lock);
+	
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "Error reading temp from BitForce (ZLX)");
 		return false;
@@ -322,8 +330,8 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		if (temp > 0) {
 			bitforce->temp = temp;
 			if (temp > bitforce->cutofftemp) {
-				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, setting idle", bitforce->api->name, bitforce->device_id);
-				bitforce->deven = DEV_IDLE;
+				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, disabling!", bitforce->api->name, bitforce->device_id);
+				bitforce->deven = DEV_RECOVER;
 
 				bitforce->device_last_not_well = time(NULL);
 				bitforce->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
@@ -342,27 +350,30 @@ static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
 	char *s;
 
+	mutex_lock(&bitforce->dev_lock);
 	BFwrite(fdDev, "ZDX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "Error reading from BitForce (ZDX)");
+		mutex_unlock(&bitforce->dev_lock);
 		return false;
 	}
 	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
 		applog(LOG_ERR, "BitForce ZDX reports: %s", pdevbuf);
+		mutex_unlock(&bitforce->dev_lock);
 		return false;
 	}
-
 	memcpy(ob + 8, work->midstate, 32);
 	memcpy(ob + 8 + 32, work->data + 64, 12);
+
 	BFwrite(fdDev, ob, 60);
 	if (opt_debug) {
 		s = bin2hex(ob + 8, 44);
 		applog(LOG_DEBUG, "BitForce block data: %s", s);
 		free(s);
 	}
-
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	mutex_unlock(&bitforce->dev_lock);
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "Error reading from BitForce (block data)");
 		return false;
@@ -386,10 +397,13 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 	i = BITFORCE_SLEEP_MS;
 	while (i < BITFORCE_TIMEOUT_MS) {
+    	mutex_lock(&bitforce->dev_lock);
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	    mutex_unlock(&bitforce->dev_lock);
 		if (unlikely(!pdevbuf[0])) {
 			applog(LOG_ERR, "Error reading from BitForce (ZFX)");
+	    	mutex_unlock(&bitforce->dev_lock);
 			return 0;
 		}
 		if (pdevbuf[0] != 'B')
@@ -410,7 +424,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	work->blk.nonce = 0xffffffff;
 	if (pdevbuf[2] == '-') 
 		return 0xffffffff;   /* No valid nonce found */
-	else if (pdevbuf[0] == 'I')
+	else if (pdevbuf[0] == 'I') 
 		return 1;          /* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		applog(LOG_WARNING, "BitForce result reports: %s", pdevbuf);
@@ -434,11 +448,24 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	return 0xffffffff;
 }
 
+static void bitforce_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	int fdDev = bitforce->device_fd;
+
+	BFclose(fdDev);
+}
+
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	bool dev_enabled = (bitforce->deven == DEV_ENABLED);
 	static enum dev_enable last_dev_state = DEV_ENABLED;
+	
+	if (bitforce->deven == DEV_DISABLED) {
+		bitforce_shutdown(thr);
+		return 1;
+	}
 	
 	// if device has just gone from disabled to enabled, re-initialise it
 	if (last_dev_state == DEV_DISABLED && dev_enabled)
@@ -448,9 +475,6 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		if (!bitforce_send_work(thr, work))
 			return 0;
 
-	if (!bitforce_get_temp(bitforce))
-		return 0;
-
 	usleep(BITFORCE_SLEEP_US);
 
 	if (dev_enabled)
@@ -459,12 +483,9 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		return 1;
 }
 
-static void bitforce_shutdown(struct thr_info *thr)
+static bool bitforce_get_stats(struct cgpu_info *bitforce)
 {
-	struct cgpu_info *bitforce = thr->cgpu;
-	int fdDev = bitforce->device_fd;
-
-	BFclose(fdDev);
+	return bitforce_get_temp(bitforce);
 }
 
 struct device_api bitforce_api = {
@@ -472,6 +493,7 @@ struct device_api bitforce_api = {
 	.name = "BFL",
 	.api_detect = bitforce_detect,
 	.get_statline_before = get_bitforce_statline_before,
+	.get_stats = bitforce_get_stats,
 	.thread_prepare = bitforce_thread_prepare,
 	.scanhash = bitforce_scanhash,
 	.thread_shutdown = bitforce_shutdown

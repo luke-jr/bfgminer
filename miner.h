@@ -235,6 +235,7 @@ struct device_api {
 	void (*get_statline_before)(char*, struct cgpu_info*);
 	void (*get_statline)(char*, struct cgpu_info*);
 	void (*get_api_stats)(char*, struct cgpu_info*, bool);
+	bool (*get_stats)(struct cgpu_info*);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info*);
@@ -250,7 +251,6 @@ enum dev_enable {
 	DEV_ENABLED,
 	DEV_DISABLED,
 	DEV_RECOVER,
-	DEV_IDLE,
 };
 
 enum cl_kernels {
@@ -366,6 +366,8 @@ struct cgpu_info {
 	int dev_thermal_cutoff_count;
 
 	struct cgminer_stats cgminer_stats;
+	
+	pthread_mutex_t dev_lock;
 };
 
 extern bool add_cgpu(struct cgpu_info*);

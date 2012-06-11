@@ -3918,7 +3918,7 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven == DEV_DISABLED || cgpu->deven == DEV_RECOVER)) {
+			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 disabled:
 				mythr->rolling = mythr->cgpu->rolling = 0;
@@ -4274,13 +4274,17 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			}
 		}
 
-#ifdef HAVE_OPENCL
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
 			struct thr_info *thr = cgpu->thread;
 			enum dev_enable *denable;
 			int gpu;
+			
+			if (cgpu->api->get_stats) {
+				cgpu->api->get_stats(cgpu);
+			}
 
+#ifdef HAVE_OPENCL
 			if (cgpu->api != &opencl_api)
 				continue;
 			/* Use only one thread per device to determine if the GPU is healthy */
@@ -4300,6 +4304,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 			}
 #endif
+			
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
@@ -4347,8 +4352,9 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				if (opt_restart)
 					reinit_device(thr->cgpu);
 			}
+#endif /* HAVE_OPENCL */
 		}
-#endif
+
 	}
 
 	return NULL;
