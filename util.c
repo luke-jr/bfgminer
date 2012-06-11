@@ -78,6 +78,7 @@ struct data_buffer {
 struct upload_buffer {
 	const void	*buf;
 	size_t		len;
+	size_t		pos;
 };
 
 struct header_info {
@@ -177,17 +178,40 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 		pool->lp_active = true;
 	}
 
-	if (len > ub->len)
-		len = ub->len;
+	if (len > ub->len - ub->pos)
+		len = ub->len - ub->pos;
 
 	if (len) {
-		memcpy(ptr, ub->buf, len);
-		ub->buf += len;
-		ub->len -= len;
+		memcpy(ptr, ub->buf + ub->pos, len);
+		ub->pos += len;
 	}
 
 	return len;
 }
+
+#if LIBCURL_VERSION_NUM >= 0x071200
+static int seek_data_cb(void *user_data, curl_off_t offset, int origin)
+{
+	struct json_rpc_call_state * const state = user_data;
+	struct upload_buffer * const ub = &state->upload_data;
+	
+	switch (origin) {
+		case SEEK_SET:
+			ub->pos = offset;
+			break;
+		case SEEK_CUR:
+			ub->pos += offset;
+			break;
+		case SEEK_END:
+			ub->pos = ub->len + offset;
+			break;
+		default:
+			return 1;  /* CURL_SEEKFUNC_FAIL */
+	}
+	
+	return 0;  /* CURL_SEEKFUNC_OK */
+}
+#endif
 
 static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 {
@@ -461,6 +485,10 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state->all_data);
 	curl_easy_setopt(curl, CURLOPT_READFUNCTION, upload_data_cb);
 	curl_easy_setopt(curl, CURLOPT_READDATA, state);
+#if LIBCURL_VERSION_NUM >= 0x071200
+	curl_easy_setopt(curl, CURLOPT_SEEKFUNCTION, &seek_data_cb);
+	curl_easy_setopt(curl, CURLOPT_SEEKDATA, state);
+#endif
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, &state->curl_err_str[0]);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
@@ -486,6 +514,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 
 	state->upload_data.buf = rpc_req;
 	state->upload_data.len = strlen(rpc_req);
+	state->upload_data.pos = 0;
 	sprintf(len_hdr, "Content-Length: %lu",
 		(unsigned long) state->upload_data.len);
 	sprintf(user_agent_hdr, "User-Agent: %s", PACKAGE"/"VERSION);
