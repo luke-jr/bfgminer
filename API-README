@@ -285,7 +285,14 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.11
+API V1.12
+
+Modified API commands:
+ 'stats' - more pool stats added
+
+----------
+
+API V1.11 (cgminer v2.4.2)
 
 Modified API commands:
  'save' no longer requires a filename (use default if not specified)
