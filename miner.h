@@ -313,6 +313,7 @@ struct cgpu_info {
 #endif
 		int device_fd;
 	};
+	pthread_mutex_t		device_mutex;
 
 	enum dev_enable deven;
 	int accepted;

@@ -209,6 +209,17 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
+modminer="no"
+
+AC_ARG_ENABLE([modminer],
+	[AC_HELP_STRING([--enable-modminer],[Compile support for ModMiner FPGAs(default disabled)])],
+	[modminer=$enableval]
+	)
+if test "x$modminer" = xyes; then
+	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
+fi
+AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
+
 ztex="no"
 
 AC_ARG_ENABLE([ztex],
@@ -245,7 +256,7 @@ else
 fi
 
 
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$ztex != xnonono])
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
@@ -294,7 +305,7 @@ fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
-if test "x$bitforce" != xno; then
+if test "x$bitforce$modminer" != xnono; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
 		[libudev=auto]
@@ -416,13 +427,13 @@ if test "x$opencl" != xno; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$cpumining$bitforce$icarus$ztex" = xnononono; then
+		if test "x$cpumining$bitforce$icarus$ztex$modminer" = xnonononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$cpumining$bitforce$icarus$ztex" = xnononono; then
+	if test "x$cpumining$bitforce$icarus$ztex$modminer" = xnonononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 fi
@@ -450,13 +461,19 @@ else
 	echo "  Icarus.FPGAs.........: Disabled"
 fi
 
+if test "x$modminer" = xyes; then
+	echo "  ModMiner.FPGAs.......: Enabled"
+else
+	echo "  ModMiner.FPGAs.......: Disabled"
+fi
+
 if test "x$ztex" = xyes; then
 	echo "  Ztex.FPGAs...........: Enabled"
 else
 	echo "  Ztex.FPGAs...........: Disabled"
 fi
 
-if test "x$bitforce" != xno; then
+if test "x$bitforce$modminer" != xnono; then
 	echo "  libudev.detection....: $libudev"
 fi
 

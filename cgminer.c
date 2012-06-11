@@ -664,8 +664,12 @@ static void load_temp_cutoffs()
 			devices[device]->cutofftemp = val;
 		}
 	}
-	else
-		val = opt_cutofftemp;
+	else {
+		for (i = device; i < total_devices; ++i)
+			if (!devices[i]->cutofftemp)
+				devices[i]->cutofftemp = opt_cutofftemp;
+		return;
+	}
 	if (device <= 1) {
 		for (i = device; i < total_devices; ++i)
 			devices[i]->cutofftemp = val;
@@ -1136,6 +1140,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_ICARUS
 		"icarus "
+#endif
+#ifdef USE_MODMINER
+		"modminer "
 #endif
 #ifdef USE_ZTEX
 		"ztex "
@@ -4730,6 +4737,10 @@ extern struct device_api bitforce_api;
 extern struct device_api icarus_api;
 #endif
 
+#ifdef USE_MODMINER
+extern struct device_api modminer_api;
+#endif
+
 #ifdef USE_ZTEX
 extern struct device_api ztex_api;
 #endif
@@ -4970,6 +4981,10 @@ int main(int argc, char *argv[])
 
 #ifdef USE_BITFORCE
 	bitforce_api.api_detect();
+#endif
+
+#ifdef USE_MODMINER
+	modminer_api.api_detect();
 #endif
 
 #ifdef USE_ZTEX
