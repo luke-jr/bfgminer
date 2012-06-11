@@ -292,6 +292,15 @@ struct cgminer_stats {
 	struct timeval getwork_wait_min;
 };
 
+// Just the actual network getworks to the pool
+struct cgminer_pool_stats {
+	uint32_t getwork_calls;
+	uint32_t getwork_attempts;
+	struct timeval getwork_wait;
+	struct timeval getwork_wait_max;
+	struct timeval getwork_wait_min;
+};
+
 struct cgpu_info {
 	int cgminer_id;
 	struct device_api *api;
@@ -701,6 +710,7 @@ struct pool {
 	time_t last_share_time;
 
 	struct cgminer_stats cgminer_stats;
+	struct cgminer_pool_stats cgminer_pool_stats;
 };
 
 struct work {
