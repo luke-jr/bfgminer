@@ -327,8 +327,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		}
 	}
 
-	usleep(4500000);
-	i = 4500;
+	i = 0;
 	while (1) {
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
