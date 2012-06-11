@@ -269,15 +269,14 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
-<<<<<<< HEAD
-static uint64_t bitforce_get_temp(struct cgpu_info *bitforce)
-=======
 static bool bitforce_init(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
 	char *devpath = bitforce->device_path;
 	char pdevbuf[0x100];
 	char *s;
+
+	applog(LOG_DEBUG, "BFL%i: Re-initalizing", bitforce->device_id);
 
 	BFclose(fdDev);
 
@@ -314,28 +313,10 @@ static bool bitforce_init(struct cgpu_info *bitforce)
 }
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
->>>>>>> origin/master
 {
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
 	char *s;
-<<<<<<< HEAD
-
-	BFwrite(fdDev, "ZLX", 3);
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "Error reading from BitForce (ZKX)");
-		return 0;
-	}
-	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
-		float temp = strtof(s + 1, NULL);
-		if (temp > 0) {
-			bitforce->temp = temp;
-			if (temp > bitforce->cutofftemp) {
-				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, disabling!", bitforce->api->name, bitforce->device_id);
-				bitforce->deven = DEV_RECOVER;
-
-=======
 
 	mutex_lock(&bitforce->dev_lock);
 	BFwrite(fdDev, "ZLX", 3);
@@ -354,28 +335,18 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 				applog(LOG_WARNING, "Hit thermal cutoff limit on %s %d, disabling!", bitforce->api->name, bitforce->device_id);
 				bitforce->deven = DEV_RECOVER;
 
->>>>>>> origin/master
 				bitforce->device_last_not_well = time(NULL);
 				bitforce->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
 				bitforce->dev_thermal_cutoff_count++;
 			}
 		}
 	}
-<<<<<<< HEAD
-    return 1;
-}
-
-
-static uint64_t bitforce_send_work(struct cgpu_info *bitforce, struct work *work)
-{
-=======
 	return true;
 }
 
 static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
->>>>>>> origin/master
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
 	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
@@ -413,11 +384,7 @@ static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 		applog(LOG_ERR, "BitForce block data reports: %s", pdevbuf);
 		return false;
 	}
-<<<<<<< HEAD
-    return 1;
-=======
 	return true;
->>>>>>> origin/master
 }
 
 static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
@@ -426,14 +393,6 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	int fdDev = bitforce->device_fd;
 
 	char pdevbuf[0x100];
-<<<<<<< HEAD
-	int i;
-	char *pnoncebuf;
-	uint32_t nonce;
-
-	i = 5000;
-	while (i < 10000) {
-=======
 	char *pnoncebuf;
 	uint32_t nonce;
 	int i;
@@ -441,7 +400,6 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	i = BITFORCE_SLEEP_MS;
 	while (i < BITFORCE_TIMEOUT_MS) {
     	mutex_lock(&bitforce->dev_lock);
->>>>>>> origin/master
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	    mutex_unlock(&bitforce->dev_lock);
@@ -456,12 +414,6 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		i += 10;
 	}
 
-<<<<<<< HEAD
-  if (i >= 10000) {
-    applog(LOG_DEBUG, "BitForce took longer than 10s");
-    return 0;
-  }
-=======
 	if (i >= BITFORCE_TIMEOUT_MS) {
 		applog(LOG_ERR, "BitForce took longer than 30s");
 		bitforce->device_last_not_well = time(NULL);
@@ -469,19 +421,13 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->thread_zero_hash_count++;
 		return 1;
 	}
->>>>>>> origin/master
 
 	applog(LOG_DEBUG, "BitForce waited %dms until %s\n", i, pdevbuf);
 	work->blk.nonce = 0xffffffff;
 	if (pdevbuf[2] == '-') 
 		return 0xffffffff;   /* No valid nonce found */
-<<<<<<< HEAD
-	else if (pdevbuf[0] == 'I')
-		return 0x1;          /* Device idle */
-=======
 	else if (pdevbuf[0] == 'I') 
 		return 1;          /* Device idle */
->>>>>>> origin/master
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		applog(LOG_WARNING, "BitForce result reports: %s", pdevbuf);
 		return 1;
@@ -494,37 +440,14 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 #ifndef __BIG_ENDIAN__
 		nonce = swab32(nonce);
 #endif
+
 		submit_nonce(thr, work, nonce);
 		if (pnoncebuf[8] != ',')
 			break;
 		pnoncebuf += 9;
 	}
-	
-	return 0xffffffff;  
-}
 
-static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
-{
-	struct cgpu_info *bitforce = thr->cgpu;
-  
-  if (bitforce->deven == DEV_ENABLED) {
-    if (!bitforce_send_work(bitforce, work))
-      return 0;
-  }
-
-  if (!bitforce_get_temp(bitforce))
-    return 0;
-	
-	usleep(5000000);
-  
-//  if (bitforce->deven == DEV_IDLE)
-//		applog(LOG_ERR, "BitForce idle mode");
-
-  if (bitforce->deven == DEV_ENABLED)
-    return bitforce_get_result(thr, work);
-  else
-    return 0x1;
-    
+	return 0xffffffff;
 }
 
 static void bitforce_shutdown(struct thr_info *thr)
@@ -535,11 +458,14 @@ static void bitforce_shutdown(struct thr_info *thr)
 	BFclose(fdDev);
 }
 
+#define CHECK_INTERVAL_MS 200
+
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	bool dev_enabled = (bitforce->deven == DEV_ENABLED);
 	static enum dev_enable last_dev_state = DEV_ENABLED;
+	int wait_ms = 0;
 	
 	if (bitforce->deven == DEV_DISABLED) {
 		bitforce_shutdown(thr);
@@ -549,17 +475,21 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	// if device has just gone from disabled to enabled, re-initialise it
 	if (last_dev_state == DEV_DISABLED && dev_enabled)
 		bitforce_init(bitforce);
+	last_dev_state = bitforce->deven;
 
-	if (dev_enabled)
-		if (!bitforce_send_work(thr, work))
-			return 0;
+	if (!bitforce_send_work(thr, work))
+		return 0;
 
-	usleep(BITFORCE_SLEEP_US);
+	while (wait_ms < BITFORCE_SLEEP_MS) {
+		usleep(CHECK_INTERVAL_MS * 1000);
+		wait_ms += CHECK_INTERVAL_MS;
+		if (work_restart[thr->id].restart) {
+			applog(LOG_DEBUG, "BFL%i: New work detected, discarding current job", bitforce->device_id);
+		    return 1; //we have discard all work; equivilent to 0 hashes done.
+		}
+	}
 
-	if (dev_enabled)
-		return bitforce_get_result(thr, work);
-	else
-		return 1;
+	return bitforce_get_result(thr, work);
 }
 
 static bool bitforce_get_stats(struct cgpu_info *bitforce)
