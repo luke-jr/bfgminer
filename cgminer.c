@@ -134,6 +134,7 @@ bool opt_api_listen;
 bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool = true;
+char *opt_icarus_timing = NULL;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -164,6 +165,9 @@ static pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
 
 pthread_rwlock_t netacc_lock;
+
+static pthread_mutex_t lp_lock;
+static pthread_cond_t lp_cond;
 
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
@@ -675,6 +679,15 @@ static char *set_api_description(const char *arg)
 	return NULL;
 }
 
+#ifdef USE_ICARUS
+static char *set_icarus_timing(const char *arg)
+{
+	opt_set_charp(arg, &opt_icarus_timing);
+
+	return NULL;
+}
+#endif
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 #ifdef WANT_CPUMINE
@@ -811,6 +824,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--kernel|-k",
 		     set_kernel, NULL, NULL,
 		     "Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
+#endif
+#ifdef USE_ICARUS
+	OPT_WITH_ARG("--icarus-timing",
+		     set_icarus_timing, NULL, NULL,
+		     opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -1718,8 +1736,10 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		/* Once we have more than a nominal amount of sequential rejects,
 		 * at least 10 and more than 3 mins at the current utility,
 		 * disable the pool because some pool error is likely to have
-		 * ensued. */
-		if (pool->seq_rejects > 10 && opt_disable_pool && total_pools > 1) {
+		 * ensued. Do not do this if we know the share just happened to
+		 * be stale due to networking delays.
+		 */
+		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && total_pools > 1) {
 			double utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 			if (pool->seq_rejects > utility * 3) {
@@ -2154,6 +2174,7 @@ static void *submit_work_thread(void *userdata)
 			pool->stale_shares++;
 			goto out;
 		}
+		work->stale = true;
 	}
 
 	ce = pop_curl_entry(pool);
@@ -2280,6 +2301,10 @@ void switch_pools(struct pool *selected)
 	mutex_lock(&qd_lock);
 	total_queued = 0;
 	mutex_unlock(&qd_lock);
+
+	mutex_lock(&lp_lock);
+	pthread_cond_broadcast(&lp_cond);
+	mutex_unlock(&lp_lock);
 }
 
 static void discard_work(struct work *work)
@@ -2618,22 +2643,15 @@ void remove_pool(struct pool *pool)
 
 void write_config(FILE *fcfg)
 {
-	int i = 0;
-	int j = 0;
+	int i;
 
-	/* Write pool values in priority order */
+	/* Write pool values */
 	fputs("{\n\"pools\" : [", fcfg);
-	while((j < total_pools) && (i < total_pools)) {
-	    if(pools[i]->prio == j) {
-		    fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
-		    fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
-		    fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);       
-            j++;
-            i=0;
-        }
-        else
-            i++;
-    }
+	for(i = 0; i < total_pools; i++) {
+		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
+		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
+		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);
+		}
 	fputs("\n]\n", fcfg);
 
 	if (nDevs) {
@@ -2766,6 +2784,8 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
+	if (opt_icarus_timing)
+		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", opt_icarus_timing);
 	fputs("\n}", fcfg);
 }
 
@@ -2986,6 +3006,23 @@ retry:
 }
 #endif
 
+void default_save_file(char *filename)
+{
+#if defined(unix)
+	if (getenv("HOME") && *getenv("HOME")) {
+	        strcpy(filename, getenv("HOME"));
+		strcat(filename, "/");
+	}
+	else
+		strcpy(filename, "");
+	strcat(filename, ".cgminer/");
+	mkdir(filename, 0777);
+#else
+	strcpy(filename, "");
+#endif
+	strcat(filename, def_conf);
+}
+
 #ifdef HAVE_CURSES
 static void set_options(void)
 {
@@ -3046,19 +3083,7 @@ retry:
 		FILE *fcfg;
 		char *str, filename[PATH_MAX], prompt[PATH_MAX + 50];
 
-#if defined(unix)
-		if (getenv("HOME") && *getenv("HOME")) {
-		        strcpy(filename, getenv("HOME"));
-			strcat(filename, "/");
-		}
-		else
-			strcpy(filename, "");
-		strcat(filename, ".cgminer/");
-		mkdir(filename, 0777);
-#else
-		strcpy(filename, "");
-#endif
-		strcat(filename, def_conf);
+		default_save_file(filename);
 		sprintf(prompt, "Config filename to write (Enter for default) [%s]", filename);
 		str = curses_input(prompt);
 		if (strcmp(str, "-1")) {
@@ -3997,6 +4022,21 @@ static struct pool *select_longpoll_pool(struct pool *cp)
 	return NULL;
 }
 
+/* This will make the longpoll thread wait till it's the current pool, or it
+ * has been flagged as rejecting, before attempting to open any connections.
+ */
+static void wait_lpcurrent(struct pool *pool)
+{
+	if (pool->enabled == POOL_REJECTING)
+		return;
+
+	while (pool != current_pool()) {
+		mutex_lock(&lp_lock);
+		pthread_cond_wait(&lp_cond, &lp_lock);
+		mutex_unlock(&lp_lock);
+	}
+}
+
 static void *longpoll_thread(void *userdata)
 {
 	struct pool *cp = (struct pool *)userdata;
@@ -4027,6 +4067,8 @@ retry_pool:
 	/* Any longpoll from any pool is enough for this to be true */
 	have_longpoll = true;
 
+	wait_lpcurrent(cp);
+
 	if (cp == pool)
 		applog(LOG_WARNING, "Long-polling activated for %s", pool->lp_url);
 	else
@@ -4034,6 +4076,8 @@ retry_pool:
 
 	while (42) {
 		json_t *val, *soval;
+
+		wait_lpcurrent(cp);
 
 		gettimeofday(&start, NULL);
 
@@ -4230,13 +4274,17 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			}
 		}
 
-#ifdef HAVE_OPENCL
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
 			struct thr_info *thr = cgpu->thread;
 			enum dev_enable *denable;
 			int gpu;
+			
+			if (cgpu->api->get_stats) {
+				cgpu->api->get_stats(cgpu);
+			}
 
+#ifdef HAVE_OPENCL
 			if (cgpu->api != &opencl_api)
 				continue;
 			/* Use only one thread per device to determine if the GPU is healthy */
@@ -4256,6 +4304,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 			}
 #endif
+			
 			/* Thread is waiting on getwork or disabled */
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
@@ -4303,8 +4352,9 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				if (opt_restart)
 					reinit_device(thr->cgpu);
 			}
+#endif /* HAVE_OPENCL */
 		}
-#endif
+
 	}
 
 	return NULL;
@@ -4729,6 +4779,10 @@ int main(int argc, char *argv[])
 	mutex_init(&ch_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
+
+	mutex_init(&lp_lock);
+	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
+		quit(1, "Failed to pthread_cond_init lp_cond");
 
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 

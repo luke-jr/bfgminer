@@ -235,6 +235,7 @@ struct device_api {
 	void (*get_statline_before)(char*, struct cgpu_info*);
 	void (*get_statline)(char*, struct cgpu_info*);
 	void (*get_api_stats)(char*, struct cgpu_info*, bool);
+	bool (*get_stats)(struct cgpu_info*);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info*);
@@ -366,6 +367,8 @@ struct cgpu_info {
 	int dev_thermal_cutoff_count;
 
 	struct cgminer_stats cgminer_stats;
+	
+	pthread_mutex_t dev_lock;
 };
 
 extern bool add_cgpu(struct cgpu_info*);
@@ -515,6 +518,7 @@ extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
 extern bool opt_restart;
+extern char *opt_icarus_timing;
 
 extern pthread_rwlock_t netacc_lock;
 
@@ -717,11 +721,13 @@ struct work {
 	int		thr_id;
 	struct pool	*pool;
 	struct timeval	tv_staged;
+
 	bool		mined;
 	bool		clone;
 	bool		cloned;
 	bool		rolltime;
 	bool		longpoll;
+	bool		stale;
 
 	unsigned int	work_block;
 	int		id;
@@ -740,6 +746,7 @@ extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
+extern void default_save_file(char *filename);
 extern void log_curses(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
