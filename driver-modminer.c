@@ -504,7 +504,7 @@ modminer_fpga_shutdown(struct thr_info *thr)
 
 struct device_api modminer_api = {
 	.dname = "modminer",
-	.name = "PGA",
+	.name = "MMQ",
 	.api_detect = modminer_detect,
 	.get_statline_before = get_modminer_statline_before,
 	.thread_prepare = modminer_fpga_prepare,
