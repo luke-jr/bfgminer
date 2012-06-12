@@ -106,17 +106,6 @@ modminer_detect()
 	serial_detect_auto("modminer", modminer_detect_one, modminer_detect_auto);
 }
 
-static void
-get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
-{
-	float gt = modminer->temp;
-	if (gt > 0)
-		tailsprintf(buf, "%5.1fC ", gt);
-	else
-		tailsprintf(buf, "       ", gt);
-	tailsprintf(buf, "        | ");
-}
-
 #define bailout(...)  return _bailout(-1, modminer, __VA_ARGS__);
 #define bailout2(...)  return _bailout(fd, modminer, __VA_ARGS__);
 
@@ -255,6 +244,8 @@ struct modminer_fpga_state {
 	int no_nonce_counter;
 	int good_share_counter;
 	time_t last_cutoff_reduced;
+
+	unsigned char temp;
 };
 
 static bool
@@ -346,6 +337,39 @@ modminer_fpga_init(struct thr_info *thr)
 	return true;
 }
 
+static void
+get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
+{
+	char info[18] = "               | ";
+	int tc = modminer->threads;
+	bool havetemp = false;
+	int i;
+
+	if (tc > 4)
+		tc = 4;
+
+	for (i = tc - 1; i >= 0; --i) {
+		struct thr_info*thr = modminer->thr[i];
+		struct modminer_fpga_state *state = thr->cgpu_data;
+		unsigned char temp = state->temp;
+
+		info[i*3+2] = '/';
+		if (temp) {
+			havetemp = true;
+			if (temp > 9)
+				info[i*3+0] = 0x30 + (temp / 10);
+			info[i*3+1] = 0x30 + (temp % 10);
+		}
+	}
+	if (havetemp) {
+		info[tc*3-1] = ' ';
+		info[tc*3] = 'C';
+		strcat(buf, info);
+	}
+	else
+		strcat(buf, "               | ");
+}
+
 static bool
 modminer_prepare_next_work(struct modminer_fpga_state*state, struct work*work)
 {
@@ -401,7 +425,9 @@ modminer_process_results(struct thr_info*thr)
 	mutex_lock(&modminer->device_mutex);
 	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 1) == 1)
 	{
-		modminer->temp = (float)temperature;
+		state->temp = temperature;
+		if (!fpgaid)
+			modminer->temp = (float)temperature;
 		if (temperature > modminer->cutofftemp - 2) {
 			if (temperature > modminer->cutofftemp) {
 				applog(LOG_WARNING, "%s %u.%u: Hit thermal cutoff limit, disabling device!", modminer->api->name, modminer->device_id, fpgaid);
