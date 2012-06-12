@@ -422,6 +422,8 @@ static bool icarus_detect_one(const char *devpath)
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *nonce_hex;
 
+	applog(LOG_DEBUG, "Icarus Detect: Attempting to open %s", devpath);
+
 	fd = icarus_open2(devpath, true);
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Icarus Detect: Failed to open %s", devpath);
@@ -487,7 +489,7 @@ static bool icarus_detect_one(const char *devpath)
 
 static void icarus_detect()
 {
-	serial_detect("icarus", icarus_detect_one);
+	serial_detect(icarus_api.dname, icarus_detect_one);
 }
 
 struct icarus_state {
