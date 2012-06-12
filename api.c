@@ -2015,7 +2015,8 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 
 		sprintf(buf, isjson
 			? "%s}"
-			: "%s" SEPSTR);
+			: "%s" SEPSTR,
+			extra);
 
 		strcat(io_buffer, buf);
 
