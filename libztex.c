@@ -22,6 +22,8 @@
 
 #include <stdio.h>
 #include <unistd.h>
+
+#include "fpgautils.h"
 #include "miner.h"
 #include "libztex.h"
 
@@ -150,7 +152,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	libusb_claim_interface(ztex->hndl, settings[1]);
 
 	for (tries = 3; tries > 0; tries--) {
-		fp = fopen(firmware, "rb");
+		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
 			applog(LOG_ERR, "%s: failed to read firmware '%s'", ztex->repr, firmware);
 			return -2;
@@ -245,7 +247,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 	}
 
 	for (tries = 10; tries > 0; tries--) {
-		fp = fopen(firmware, "rb");
+		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
 			applog(LOG_ERR, "%s: failed to read firmware '%s'", ztex->repr, firmware);
 			return -2;
@@ -316,12 +318,11 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 
 int libztex_configureFpga(struct libztex_device *ztex)
 {
-	char buf[256] = "bitstreams/";
+	char buf[256];
 	int rv;
 
-	memset(&buf[11], 0, 245);
-	strcpy(&buf[11], ztex->bitFileName);
-	strcpy(&buf[strlen(buf)], ".bit");
+	strcpy(buf, ztex->bitFileName);
+	strcat(buf, ".bit");
 	rv = libztex_configureFpgaHS(ztex, buf, true, 2); 
 	if (rv != 0)
 		rv = libztex_configureFpgaLS(ztex, buf, true, 2); 
