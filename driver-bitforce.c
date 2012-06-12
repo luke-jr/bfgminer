@@ -13,28 +13,11 @@
 #include <stdio.h>
 #include <strings.h>
 #include <sys/time.h>
-#include <sys/types.h>
-#include <dirent.h>
-#ifndef WIN32
-#include <termios.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#ifndef O_CLOEXEC
-#define O_CLOEXEC 0
-#endif
-#else
-#include <windows.h>
-#include <io.h>
-#endif
 #include <unistd.h>
 
 #include "config.h"
 
-#ifdef HAVE_LIBUDEV
-#include <libudev.h>
-#endif
-
-#include "elist.h"
+#include "fpgautils.h"
 #include "miner.h"
 
 #define BITFORCE_SLEEP_US 4500000
@@ -43,35 +26,7 @@
 
 struct device_api bitforce_api;
 
-static int BFopen(const char *devpath)
-{
-#ifdef WIN32
-	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
-		return -1;
-	
-	COMMTIMEOUTS cto = {30000, 0, 30000, 0, 30000};
-	SetCommTimeouts(hSerial, &cto);
-	
-	return _open_osfhandle((LONG)hSerial, 0);
-#else
-	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
-	if (likely(fdDev != -1)) {
-		struct termios pattr;
-		
-		tcgetattr(fdDev, &pattr);
-		pattr.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-		pattr.c_oflag &= ~OPOST;
-		pattr.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-		pattr.c_cflag &= ~(CSIZE | PARENB);
-		pattr.c_cflag |= CS8;
-		tcsetattr(fdDev, TCSANOW, &pattr);
-	}
-	tcflush(fdDev, TCOFLUSH);
-	tcflush(fdDev, TCIFLUSH);
-	return fdDev;
-#endif
-}
+#define BFopen(devpath)  serial_open(devpath, 0, -1, true)
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {
@@ -100,9 +55,6 @@ static bool bitforce_detect_one(const char *devpath)
 {
 	char *s;
 	char pdevbuf[0x100];
-
-	if (total_devices == MAX_DEVICES)
-		return false;
 
 	int fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
@@ -139,103 +91,17 @@ static bool bitforce_detect_one(const char *devpath)
 	return add_cgpu(bitforce);
 }
 
-static bool bitforce_detect_auto_udev()
+static char bitforce_detect_auto()
 {
-#ifdef HAVE_LIBUDEV
-	struct udev *udev = udev_new();
-	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
-	struct udev_list_entry *list_entry;
-	bool foundany = false;
-	
-	udev_enumerate_add_match_subsystem(enumerate, "tty");
-	udev_enumerate_add_match_property(enumerate, "ID_MODEL", "BitFORCE*SHA256");
-	udev_enumerate_scan_devices(enumerate);
-	udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(enumerate)) {
-		struct udev_device *device = udev_device_new_from_syspath(
-			udev_enumerate_get_udev(enumerate),
-			udev_list_entry_get_name(list_entry)
-		);
-		if (!device)
-			continue;
-		
-		const char *devpath = udev_device_get_devnode(device);
-		if (devpath) {
-			foundany = true;
-			bitforce_detect_one(devpath);
-		}
-		
-		udev_device_unref(device);
-	}
-	udev_enumerate_unref(enumerate);
-	udev_unref(udev);
-	
-	return foundany;
-#else
-	return false;
-#endif
-}
-
-static bool bitforce_detect_auto_devserial()
-{
-#ifndef WIN32
-	DIR *D;
-	struct dirent *de;
-	const char udevdir[] = "/dev/serial/by-id";
-	char devpath[sizeof(udevdir) + 1 + NAME_MAX];
-	char *devfile = devpath + sizeof(udevdir);
-	bool foundany = false;
-	
-	D = opendir(udevdir);
-	if (!D)
-		return false;
-	memcpy(devpath, udevdir, sizeof(udevdir) - 1);
-	devpath[sizeof(udevdir) - 1] = '/';
-	while ( (de = readdir(D)) ) {
-		if (!strstr(de->d_name, "BitFORCE_SHA256"))
-			continue;
-		foundany = true;
-		strcpy(devfile, de->d_name);
-		bitforce_detect_one(devpath);
-	}
-	closedir(D);
-	
-	return foundany;
-#else
-	return false;
-#endif
-}
-
-static void bitforce_detect_auto()
-{
-	bitforce_detect_auto_udev() ?:
-	bitforce_detect_auto_devserial() ?:
+	return
+	serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
+	serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
 	0;
 }
 
 static void bitforce_detect()
 {
-	struct string_elist *iter, *tmp;
-	const char*s;
-	bool found = false;
-	bool autoscan = false;
-
-	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
-		s = iter->string;
-		if (!strncmp("bitforce:", iter->string, 9))
-			s += 9;
-		if (!strcmp(s, "auto"))
-			autoscan = true;
-		else
-		if (!strcmp(s, "noauto"))
-			found = true;
-		else if (bitforce_detect_one(s)) {
-			string_elist_del(iter);
-			found = true;
-		}
-	}
-
-	if (autoscan || !found)
-		bitforce_detect_auto();
+	serial_detect_auto("bitforce", bitforce_detect_one, bitforce_detect_auto);
 }
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
