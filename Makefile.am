@@ -68,12 +68,22 @@ endif # HAVE_x86_64
 endif # HAS_YASM
 endif # HAS_CPUMINE
 
+if NEED_FPGAUTILS
+bfgminer_SOURCES += fpgautils.c
+endif
+
 if HAS_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
 endif
 
 if HAS_ICARUS
 bfgminer_SOURCES += driver-icarus.c
+endif
+
+if HAS_MODMINER
+bfgminer_SOURCES += driver-modminer.c
+bitstreamsdir = $(bindir)/bitstreams
+dist_bitstreams_DATA = bitstreams/*
 endif
 
 if HAS_ZTEX

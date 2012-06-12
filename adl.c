@@ -1009,8 +1009,10 @@ static int set_powertune(int gpu, int iPercentage)
 	return ret;
 }
 
-/* Returns whether the fanspeed is optimal already or not */
-static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp)
+/* Returns whether the fanspeed is optimal already or not. The fan_window bool
+ * tells us whether the current fanspeed is in the target range for fanspeeds.
+ */
+static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *fan_window)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
 	struct gpu_adl *ga = &cgpu->adl;
@@ -1054,6 +1056,12 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp)
 		newpercent = iMax;
 	else if (newpercent < iMin)
 		newpercent = iMin;
+
+	if (newpercent <= top)
+		*fan_window = true;
+	else
+		*fan_window = false;
+
 	if (newpercent != fanpercent) {
 		applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
 		set_fanspeed(gpu, newpercent);
@@ -1065,7 +1073,7 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp)
 void gpu_autotune(int gpu, enum dev_enable *denable)
 {
 	int temp, fanpercent, engine, newengine, twintemp = 0;
-	bool fan_optimal = true;
+	bool fan_optimal = true, fan_window = true;
 	struct cgpu_info *cgpu;
 	struct gpu_adl *ga;
 
@@ -1084,7 +1092,7 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 
 	if (temp && fanpercent >= 0 && ga->autofan) {
 		if (!ga->twin)
-			fan_optimal = fan_autotune(gpu, temp, fanpercent, ga->lasttemp);
+			fan_optimal = fan_autotune(gpu, temp, fanpercent, ga->lasttemp, &fan_window);
 		else if (ga->autofan && (ga->has_fanspeed || !ga->twin->autofan)) {
 			/* On linked GPUs, we autotune the fan only once, based
 			 * on the highest temperature from either GPUs */
@@ -1102,7 +1110,7 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 				fan_gpu = gpu;
 			else
 				fan_gpu = ga->twin->gpu;
-			fan_optimal = fan_autotune(fan_gpu, hightemp, fanpercent, lasttemp);
+			fan_optimal = fan_autotune(fan_gpu, hightemp, fanpercent, lasttemp, &fan_window);
 		}
 	}
 
@@ -1126,7 +1134,7 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 			applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
 			/* Only try to tune engine speed up if this GPU is not disabled */
-		} else if (temp < ga->targettemp && engine < ga->maxspeed && *denable == DEV_ENABLED) {
+		} else if (temp < ga->targettemp && engine < ga->maxspeed && fan_window && *denable == DEV_ENABLED) {
 			applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
 			if (temp < ga->targettemp - opt_hysteresis)
 				newengine = ga->maxspeed;

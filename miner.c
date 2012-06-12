@@ -54,6 +54,13 @@
 	#include <sys/wait.h>
 #endif
 
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
+#	define USE_FPGA
+#	define USE_FPGA_SERIAL
+#elif defined(USE_ZTEX)
+#	define USE_FPGA
+#endif
+
 enum workio_commands {
 	WC_GET_WORK,
 	WC_SUBMIT_WORK,
@@ -467,7 +474,7 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#ifdef USE_FPGA_SERIAL
 static char *add_serial(char *arg)
 {
 	string_elist_add(arg, &scan_devices);
@@ -656,8 +663,12 @@ static void load_temp_cutoffs()
 			devices[device]->cutofftemp = val;
 		}
 	}
-	else
-		val = opt_cutofftemp;
+	else {
+		for (i = device; i < total_devices; ++i)
+			if (!devices[i]->cutofftemp)
+				devices[i]->cutofftemp = opt_cutofftemp;
+		return;
+	}
 	if (device <= 1) {
 		for (i = device; i < total_devices; ++i)
 			devices[i]->cutofftemp = val;
@@ -767,7 +778,7 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
-#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_BITFORCE) || defined(USE_ICARUS))
+#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_FPGA))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
 			"Enable CPU mining with other mining (default: no CPU mining if other devices exist)"),
@@ -817,9 +828,13 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--intensity|-I",
 		     set_intensity, NULL, NULL,
 		     "Intensity of GPU scanning (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ", default: d to maintain desktop interactivity)"),
+#endif
+#if defined(HAVE_OPENCL) || defined(HAVE_MODMINER)
 	OPT_WITH_ARG("--kernel-path|-K",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
-	             "Specify a path to where the kernel .cl files are"),
+	             "Specify a path to where bitstream and kernel files are"),
+#endif
+#ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--kernel|-k",
 		     set_kernel, NULL, NULL,
 		     "Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
@@ -901,7 +916,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--round-robin",
 		     set_rr, &pool_strategy,
 		     "Change multipool strategy from failover to round robin on failure"),
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#ifdef USE_FPGA_SERIAL
 	OPT_WITH_ARG("--scan-serial|-S",
 		     add_serial, NULL, NULL,
 		     "Serial port to probe for FPGA Mining device"),
@@ -932,7 +947,7 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
-#if defined(HAVE_ADL) || defined(USE_BITFORCE)
+#if defined(HAVE_ADL) || defined(USE_BITFORCE) || defined(USE_MODMINER)
 	OPT_WITH_ARG("--temp-cutoff",
 		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
 		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
@@ -1138,6 +1153,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_ICARUS
 		"icarus "
+#endif
+#ifdef USE_MODMINER
+		"modminer "
 #endif
 #ifdef USE_ZTEX
 		"ztex "
@@ -3765,15 +3783,21 @@ bool hashtest(const struct work *work)
 
 }
 
-bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+bool test_nonce(struct work *work, uint32_t nonce)
 {
 	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
 	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
 	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
 	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
 
+	return hashtest(work);
+}
+
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+{
 	/* Do one last check before attempting to submit the work */
-	if (!hashtest(work)) {
+	/* Side effect: sets work->data for us */
+	if (!test_nonce(work, nonce)) {
 		applog(LOG_INFO, "Share below target");
 		return true;
 	}
@@ -4785,6 +4809,10 @@ extern struct device_api bitforce_api;
 extern struct device_api icarus_api;
 #endif
 
+#ifdef USE_MODMINER
+extern struct device_api modminer_api;
+#endif
+
 #ifdef USE_ZTEX
 extern struct device_api ztex_api;
 #endif
@@ -5028,6 +5056,10 @@ int main(int argc, char *argv[])
 
 #ifdef USE_BITFORCE
 	bitforce_api.api_detect();
+#endif
+
+#ifdef USE_MODMINER
+	modminer_api.api_detect();
 #endif
 
 #ifdef USE_ZTEX
