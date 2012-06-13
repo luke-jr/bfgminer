@@ -4318,7 +4318,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 #ifdef HAVE_OPENCL
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
-			struct thr_info *thr = cgpu->thread;
+			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			int gpu;
 
@@ -5200,6 +5200,8 @@ begin_bench:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
+		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr[cgpu->threads] = NULL;
 
 		for (j = 0; j < cgpu->threads; ++j, ++k) {
 			thr = &thr_info[k];
@@ -5227,7 +5229,7 @@ begin_bench:
 			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 				quit(1, "thread %d create failed", thr->id);
 
-			cgpu->thread = thr;
+			cgpu->thr[j] = thr;
 		}
 	}
 
