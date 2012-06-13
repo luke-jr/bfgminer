@@ -18,11 +18,11 @@ typedef char(*autoscan_func_t)();
 
 extern char _serial_detect(const char*dnamec, size_t dnamel, detectone_func_t, autoscan_func_t, bool force_autoscan);
 #define serial_detect_fauto(dname, detectone, autoscan)  \
-	_serial_detect(dname ":", sizeof(dname)+1, detectone, autoscan, true)
+	_serial_detect(dname ":", sizeof(dname), detectone, autoscan, true)
 #define serial_detect_auto(dname, detectone, autoscan)  \
-	_serial_detect(dname ":", sizeof(dname)+1, detectone, autoscan, false)
+	_serial_detect(dname ":", sizeof(dname), detectone, autoscan, false)
 #define serial_detect(dname, detectone)  \
-	_serial_detect(dname ":", sizeof(dname)+1, detectone,     NULL, false)
+	_serial_detect(dname ":", sizeof(dname), detectone,     NULL, false)
 extern char serial_autodetect_devserial(detectone_func_t, const char*prodname);
 extern char serial_autodetect_udev     (detectone_func_t, const char*prodname);
 
