@@ -3959,7 +3959,7 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven == DEV_DISABLED || cgpu->deven == DEV_RECOVER)) {
+			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
 				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 disabled:
 				mythr->rolling = mythr->cgpu->rolling = 0;
@@ -3968,6 +3968,7 @@ disabled:
 				tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
 				thread_reportin(mythr);
 				applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
+				if (api->thread_enable) api->thread_enable(mythr);
 			}
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;

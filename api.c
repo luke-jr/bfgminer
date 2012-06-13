@@ -465,7 +465,7 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_GPUFAN,	PARAM_BOTH,	"Setting GPU %d fan to (%s) reported succeess" },
  { SEVERITY_ERR,   MSG_MISFN,	PARAM_NONE,	"Missing save filename parameter" },
  { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
- { SEVERITY_ERR,   MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
+ { SEVERITY_SUCC,  MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
  { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
  { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
  { SEVERITY_SUCC,  MSG_ENAPOOL,	PARAM_POOL,	"Enabling pool %d:'%s'" },
@@ -879,7 +879,7 @@ static void pgastatus(int pga, bool isjson)
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-		if (cgpu->deven == DEV_ENABLED)
+		if (cgpu->deven != DEV_DISABLED)
 			enabled = (char *)YES;
 		else
 			enabled = (char *)NO;
@@ -1092,7 +1092,7 @@ static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	struct cgpu_info *cgpu = devices[dev];
 
-	if (cgpu->deven == DEV_ENABLED) {
+	if (cgpu->deven != DEV_DISABLED) {
 		strcpy(io_buffer, message(MSG_PGALRENA, id, NULL, isjson));
 		return;
 	}
@@ -1143,12 +1143,12 @@ static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	struct cgpu_info *cgpu = devices[dev];
 
-	if (cgpu->deven != DEV_ENABLED) {
+	if (cgpu->deven == DEV_DISABLED) {
 		strcpy(io_buffer, message(MSG_PGALRDIS, id, NULL, isjson));
 		return;
 	}
 
-	cgpu->deven = DEV_IDLE;
+	cgpu->deven = DEV_DISABLED;
 
 	strcpy(io_buffer, message(MSG_PGADIS, id, NULL, isjson));
 }
@@ -1979,12 +1979,13 @@ static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 
 void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
+	char filename[PATH_MAX];
 	FILE *fcfg;
 	char *ptr;
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISFN, 0, NULL, isjson));
-		return;
+		default_save_file(filename);
+		param = filename;
 	}
 
 	fcfg = fopen(param, "w");
@@ -2584,4 +2585,3 @@ die:
 
 	mutex_unlock(&quit_restart_lock);
 }
-

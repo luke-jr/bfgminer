@@ -245,13 +245,13 @@ struct device_api {
 	bool (*prepare_work)(struct thr_info*, struct work*);
 	uint64_t (*scanhash)(struct thr_info*, struct work*, uint64_t);
 	void (*thread_shutdown)(struct thr_info*);
+	void (*thread_enable)(struct thr_info*);
 };
 
 enum dev_enable {
 	DEV_ENABLED,
 	DEV_DISABLED,
 	DEV_RECOVER,
-	DEV_IDLE,
 };
 
 enum cl_kernels {
@@ -377,8 +377,6 @@ struct cgpu_info {
 	int dev_thermal_cutoff_count;
 
 	struct cgminer_stats cgminer_stats;
-	
-	pthread_mutex_t dev_lock;
 };
 
 extern bool add_cgpu(struct cgpu_info*);
