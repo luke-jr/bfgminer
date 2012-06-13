@@ -333,7 +333,7 @@ struct cgpu_info {
 	struct timeval last_message_tv;
 
 	int threads;
-	struct thr_info *thread;
+	struct thr_info **thr;
 
 	unsigned int max_hashes;
 
