@@ -20,13 +20,10 @@
 #include "fpgautils.h"
 #include "miner.h"
 
-/* @832MH/s wait time is ~4500ms 
-   @864MH/s wait time is ~4430ms 
--> @896MH/s wait time will be ~4350ms */
-#define BITFORCE_SLEEP_MS 4300
+#define BITFORCE_SLEEP_MS 2000
 #define BITFORCE_TIMEOUT_MS 15000
 #define BITFORCE_CHECK_INTERVAL_MS 10
-#define WORK_CHECK_INTERVAL_MS 100
+#define WORK_CHECK_INTERVAL_MS 50
 
 struct device_api bitforce_api;
 
@@ -84,6 +81,7 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
+	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
 	{
 		s[0] = '\0';
@@ -273,9 +271,8 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	char pdevbuf[0x100];
 	char *pnoncebuf;
 	uint32_t nonce;
-	unsigned int wait_ms = BITFORCE_SLEEP_MS;
 
-	while (wait_ms < BITFORCE_TIMEOUT_MS) {
+	while (bitforce->wait_ms < BITFORCE_TIMEOUT_MS) {
 		mutex_lock(&bitforce->device_mutex);
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
@@ -288,17 +285,24 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		if (pdevbuf[0] != 'B')
 			break;
 		usleep(BITFORCE_CHECK_INTERVAL_MS*1000);
-		wait_ms += BITFORCE_CHECK_INTERVAL_MS;
+		bitforce->wait_ms += BITFORCE_CHECK_INTERVAL_MS;
 	}
-	if (wait_ms >= BITFORCE_TIMEOUT_MS) {
+	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
 		applog(LOG_ERR, "BFL%i took longer than 15s");
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_THREAD_ZERO_HASH;
 		bitforce->thread_zero_hash_count++;
 		return 1;
+	} else {
+	    /* Simple timing adjustment */
+		// applog(LOG_WARNING, "BFL%i: Waited: %ums, sleep is:%ums", bitforce->device_id, bitforce->wait_ms, bitforce->sleep_ms);
+		if (bitforce->wait_ms > (bitforce->sleep_ms + WORK_CHECK_INTERVAL_MS))
+			bitforce->sleep_ms += WORK_CHECK_INTERVAL_MS;
+		else if (bitforce->wait_ms == bitforce->sleep_ms)
+			bitforce->sleep_ms -= WORK_CHECK_INTERVAL_MS;		
 	}
 
-	applog(LOG_DEBUG, "BFL%i: waited %dms until %s\n", bitforce->device_id, wait_ms, pdevbuf);
+	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
 	work->blk.nonce = 0xffffffff;
 	if (pdevbuf[2] == '-') 
 		return 0xffffffff;   /* No valid nonce found */
@@ -344,16 +348,16 @@ static void biforce_thread_enable(struct thr_info *thr)
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	unsigned int wait_ms = 0;
+	bitforce->wait_ms = 0;
 
 	if (!bitforce_send_work(thr, work))
 		return 0;
 	
-	while (wait_ms < BITFORCE_SLEEP_MS) {
+	while (bitforce->wait_ms < bitforce->sleep_ms) {
 		usleep(WORK_CHECK_INTERVAL_MS*1000);
-		wait_ms += WORK_CHECK_INTERVAL_MS;
+		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
 		if (work_restart[thr->id].restart) {
-			applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, wait_ms);
+			applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
 			return 1; //we have discarded all work; equivilent to 0 hashes done.
 		}
 	}

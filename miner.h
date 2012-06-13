@@ -315,6 +315,10 @@ struct cgpu_info {
 #endif
 		int device_fd;
 	};
+#ifdef USE_BITFORCE
+	unsigned int wait_ms;
+	unsigned int sleep_ms;
+#endif
 	pthread_mutex_t		device_mutex;
 
 	enum dev_enable deven;
