@@ -21,8 +21,8 @@ void gpu_autotune(int gpu, enum dev_enable *denable);
 void clear_adl(int nDevs);
 #else /* HAVE_ADL */
 #define adl_active (0)
-static inline void init_adl(int nDevs) {}
-static inline void change_gpusettings(int gpu) { }
-static inline void clear_adl(int nDevs) {}
+static inline void init_adl(__maybe_unused int nDevs) {}
+static inline void change_gpusettings(__maybe_unused int gpu) { }
+static inline void clear_adl(__maybe_unused int nDevs) {}
 #endif
 #endif
