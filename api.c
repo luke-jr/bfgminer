@@ -912,11 +912,11 @@ static void pgastatus(int pga, bool isjson)
 			for (i = 0; i < tc; i++) {
 				struct thr_info *thr = cgpu->thr[i];
 				struct modminer_fpga_state *state = thr->cgpu_data;
-				if (temp && ((state->temp + 0x30) > temp))
-					temp = state->temp + 0x30;
+				if (state->temp > temp)
+					temp = state->temp;
 				frequency += state->clock;
 			}
-			frequency /= tc;
+			frequency /= (tc ? tc : 1);
 		}
 #endif
 
