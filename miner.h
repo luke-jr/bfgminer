@@ -245,6 +245,7 @@ struct device_api {
 	bool (*prepare_work)(struct thr_info*, struct work*);
 	uint64_t (*scanhash)(struct thr_info*, struct work*, uint64_t);
 	void (*thread_shutdown)(struct thr_info*);
+	void (*thread_enable)(struct thr_info*);
 };
 
 enum dev_enable {
@@ -314,6 +315,11 @@ struct cgpu_info {
 #endif
 		int device_fd;
 	};
+#ifdef USE_BITFORCE
+	unsigned int wait_ms;
+	unsigned int sleep_ms;
+#endif
+	pthread_mutex_t		device_mutex;
 
 	enum dev_enable deven;
 	int accepted;
@@ -327,7 +333,7 @@ struct cgpu_info {
 	struct timeval last_message_tv;
 
 	int threads;
-	struct thr_info *thread;
+	struct thr_info **thr;
 
 	unsigned int max_hashes;
 
@@ -336,7 +342,7 @@ struct cgpu_info {
 	int virtual_adl;
 	int intensity;
 	bool dynamic;
-	char *kname;
+	const char *kname;
 #ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;
@@ -375,8 +381,6 @@ struct cgpu_info {
 	int dev_thermal_cutoff_count;
 
 	struct cgminer_stats cgminer_stats;
-	
-	pthread_mutex_t dev_lock;
 };
 
 extern bool add_cgpu(struct cgpu_info*);
@@ -746,6 +750,7 @@ struct work {
 };
 
 extern void get_datestamp(char *, struct timeval *);
+extern bool test_nonce(struct work *work, uint32_t nonce);
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);

@@ -55,6 +55,7 @@ CGMiner specific configuration options:
 	--disable-adl           Override detection and disable building with adl
 	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
 	--enable-icarus         Compile support for Icarus Board(default disabled)
+	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
 	--enable-ztex           Compile support for Ztex Board(default disabled)
 
 Basic *nix build instructions:
@@ -129,6 +130,7 @@ Options for both config file and command line:
 --debug|-D          Enable debug output
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
+--kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
 --load-balance      Change multipool strategy from failover to even load balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
@@ -184,7 +186,6 @@ GPU only options:
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
 --intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
 --kernel|-k <arg>   Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
---kernel-path|-K <arg> Specify a path to where the kernel .cl files are (default: "/usr/local/bin")
 --ndevs|-n          Enumerate number of detected GPUs and exit
 --no-restart        Do not attempt to restart GPUs that hang
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
@@ -194,7 +195,7 @@ GPU only options:
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 
 
-FPGA mining boards(BitForce, Icarus, Ztex) only options:
+FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
@@ -797,7 +798,7 @@ working in the logs?
 A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
-A: At the moment, cgminer supports 3 FPGA's: Icarus, Ztex and BitForce.
+A: At the moment, cgminer supports 4 FPGAs: BitForce, Icarus, ModMiner, and Ztex.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.

@@ -49,6 +49,7 @@
 #endif
 
 #include "elist.h"
+#include "fpgautils.h"
 #include "miner.h"
 
 // The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
@@ -69,10 +70,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 // Fraction of a second, USB timeout is measured in
 // i.e. 10 means 1/10 of a second
 #define TIME_FACTOR 10
-// In Linux it's 10 per second, thus value = 10/TIME_FACTOR =
-#define LINUX_TIMEOUT_VALUE 1
-// In Windows it's 1000 per second, thus value = 1000/TIME_FACTOR =
-#define WINDOWS_TIMEOUT_VALUE 100
+// It's 10 per second, thus value = 10/TIME_FACTOR =
+#define ICARUS_READ_FAULT_DECISECONDS 1
 
 // In timing mode: Default starting value until an estimate can be obtained
 // 5 seconds allows for up to a ~840MH/s device
@@ -196,63 +195,8 @@ static void rev(unsigned char *s, size_t l)
 	}
 }
 
-static int icarus_open(const char *devpath)
-{
-#ifndef WIN32
-	struct termios my_termios;
-
-	int serialfd = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
-
-	if (serialfd == -1)
-		return -1;
-
-	tcgetattr(serialfd, &my_termios);
-	my_termios.c_cflag = B115200;
-	my_termios.c_cflag |= CS8;
-	my_termios.c_cflag |= CREAD;
-	my_termios.c_cflag |= CLOCAL;
-	my_termios.c_cflag &= ~(CSIZE | PARENB);
-
-	my_termios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK |
-				ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-	my_termios.c_oflag &= ~OPOST;
-	my_termios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-	my_termios.c_cc[VTIME] = LINUX_TIMEOUT_VALUE; /* how long to block */
-	my_termios.c_cc[VMIN] = 0;
-	tcsetattr(serialfd, TCSANOW, &my_termios);
-
-	tcflush(serialfd, TCOFLUSH);
-	tcflush(serialfd, TCIFLUSH);
-
-	return serialfd;
-#else
-	COMMCONFIG comCfg;
-
-	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0,
-				    NULL, OPEN_EXISTING, 0, NULL);
-	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
-		return -1;
-
-	// thanks to af_newbie for pointers about this
-	memset(&comCfg, 0 , sizeof(comCfg));
-	comCfg.dwSize = sizeof(COMMCONFIG);
-	comCfg.wVersion = 1;
-	comCfg.dcb.DCBlength = sizeof(DCB);
-	comCfg.dcb.BaudRate = ICARUS_IO_SPEED;
-	comCfg.dcb.fBinary = 1;
-	comCfg.dcb.fDtrControl = DTR_CONTROL_ENABLE;
-	comCfg.dcb.fRtsControl = RTS_CONTROL_ENABLE;
-	comCfg.dcb.ByteSize = 8;
-
-	SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
-
-	// How long to block
-	COMMTIMEOUTS cto = {WINDOWS_TIMEOUT_VALUE, 0, WINDOWS_TIMEOUT_VALUE, 0, WINDOWS_TIMEOUT_VALUE};
-	SetCommTimeouts(hSerial, &cto);
-
-	return _open_osfhandle((LONG)hSerial, 0);
-#endif
-}
+#define icarus_open2(devpath, purge)  serial_open(devpath, 115200, ICARUS_READ_FAULT_DECISECONDS, purge)
+#define icarus_open(devpath)  icarus_open2(devpath, false)
 
 static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, int thr_id, int read_count)
 {
@@ -435,10 +379,7 @@ static bool icarus_detect_one(const char *devpath)
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *nonce_hex;
 
-	if (total_devices == MAX_DEVICES)
-		return false;
-
-	fd = icarus_open(devpath);
+	fd = icarus_open2(devpath, true);
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Icarus Detect: Failed to open %s", devpath);
 		return false;
@@ -503,18 +444,7 @@ static bool icarus_detect_one(const char *devpath)
 
 static void icarus_detect()
 {
-	struct string_elist *iter, *tmp;
-	const char*s;
-
-	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
-		s = iter->string;
-		if (!strncmp("icarus:", iter->string, 7))
-			s += 7;
-		if (!strcmp(s, "auto") || !strcmp(s, "noauto"))
-			continue;
-		if (icarus_detect_one(s))
-			string_elist_del(iter);
-	}
+	serial_detect("icarus", icarus_detect_one);
 }
 
 static bool icarus_prepare(struct thr_info *thr)

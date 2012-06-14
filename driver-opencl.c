@@ -1110,7 +1110,7 @@ out:
 	return NULL;
 }
 #else
-void *reinit_gpu(void *userdata)
+void *reinit_gpu(__maybe_unused void *userdata)
 {
 	return NULL;
 }
