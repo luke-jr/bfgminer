@@ -3632,11 +3632,26 @@ retry:
 		goto out;
 	}
 
-	if (requested && !newreq && !requests_staged() && requests_queued() >= mining_threads &&
-	    !pool_tset(pool, &pool->lagging)) {
-		applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
-		pool->getfail_occasions++;
-		total_go++;
+	if (!pool->lagging && requested && !newreq && !requests_staged() && requests_queued() >= mining_threads) {
+		struct cgpu_info *cgpu = thr->cgpu;
+		bool stalled = true;
+		int i;
+
+		/* Check to see if all the threads on the device that called
+		 * get_work are waiting on work and only consider the pool
+		 * lagging if true */
+		for (i = 0; i < cgpu->threads; i++) {
+			if (!cgpu->thr[i]->getwork) {
+				stalled = false;
+				break;
+			}
+		}
+
+		if (stalled && !pool_tset(pool, &pool->lagging)) {
+			applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
+			pool->getfail_occasions++;
+			total_go++;
+		}
 	}
 
 	newreq = requested = false;
