@@ -372,8 +372,9 @@ static bool bitforce_get_stats(struct cgpu_info *bitforce)
 
 static bool bitforce_thread_init(struct thr_info *thr)
 {
+	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int wait;
-	thr;
+
 	/* Pause each new thread a random time between 0-100ms 
 	so the devices aren't making calls all at the same time. */
 	wait = (rand() * MAX_START_DELAY_US)/RAND_MAX;
