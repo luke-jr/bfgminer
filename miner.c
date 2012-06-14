@@ -1638,7 +1638,6 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	bool rolltime;
 	uint32_t *hash32;
 	char hashshow[64+1] = "";
-	bool isblock;
 
 #ifdef __BIG_ENDIAN__
         int swapcounter = 0;
@@ -1679,17 +1678,9 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	res = json_object_get(val, "result");
 
 	if (!QUIET) {
-#ifndef MIPSEB
-// This one segfaults on my router for some reason
-		isblock = regeneratehash(work);
-		if (unlikely(isblock)) {
-			pool->solved++;
-			found_blocks++;
-		}
 		hash32 = (uint32_t *)(work->hash);
 		sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
-			isblock ? " BLOCK!" : "");
-#endif
+			work->block? " BLOCK!" : "");
 	}
 
 	/* Theoretically threads could race when modifying accepted and
@@ -1842,6 +1833,7 @@ static void get_benchmark_work(struct work *work)
 	size_t min_size = (work_size < bench_size ? work_size : bench_size);
 	memset(work, 0, sizeof(work));
 	memcpy(work, &bench_block, min_size);
+	work->mandatory = true;
 }
 
 static bool get_upstream_work(struct work *work, CURL *curl)
@@ -2180,7 +2172,7 @@ static bool stale_work(struct work *work, bool share)
 	struct timeval now;
 	struct pool *pool;
 
-	if (opt_benchmark)
+	if (work->mandatory)
 		return false;
 
 	gettimeofday(&now, NULL);
@@ -2200,6 +2192,16 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
+static void check_solve(struct work *work)
+{
+	work->block = regeneratehash(work);
+	if (unlikely(work->block)) {
+		work->pool->solved++;
+		found_blocks++;
+		work->mandatory = true;
+		applog(LOG_NOTICE, "Found block for pool %d!", work->pool);
+	}
+}
 
 static void *submit_work_thread(void *userdata)
 {
@@ -2212,6 +2214,8 @@ static void *submit_work_thread(void *userdata)
 	pthread_detach(pthread_self());
 
 	applog(LOG_DEBUG, "Creating extra submit work thread");
+
+	check_solve(work);
 
 	if (stale_work(work, true)) {
 		if (opt_submit_stale)
@@ -2296,7 +2300,7 @@ static struct pool *priority_pool(int choice)
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
-	int i, pool_no;
+	int i, pool_no, next_pool;
 
 	mutex_lock(&control_lock);
 	last_pool = currentpool;
@@ -2329,13 +2333,22 @@ void switch_pools(struct pool *selected)
 		/* Both of these simply increment and cycle */
 		case POOL_ROUNDROBIN:
 		case POOL_ROTATE:
-			if (selected) {
+			if (selected && !selected->idle) {
 				pool_no = selected->pool_no;
 				break;
 			}
-			pool_no++;
-			if (pool_no >= total_pools)
-				pool_no = 0;
+			next_pool = pool_no;
+			/* Select the next alive pool */
+			for (i = 1; i < total_pools; i++) {
+				next_pool++;
+				if (next_pool >= total_pools)
+					next_pool = 0;
+				pool = pools[next_pool];
+				if (!pool->idle && pool->enabled == POOL_ENABLED) {
+					pool_no = next_pool;
+					break;
+				}
+			}
 			break;
 		default:
 			break;
@@ -2507,7 +2520,7 @@ static void test_work_current(struct work *work)
 {
 	char *hexstr;
 
-	if (opt_benchmark)
+	if (work->mandatory)
 		return;
 
 	hexstr = bin2hex(work->data, 18);
@@ -3325,12 +3338,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 		/* Rolling average for each thread and each device */
 		decay_time(&thr->rolling, local_mhashes / secs);
-		for (i = 0; i < mining_threads; i++) {
-			struct thr_info *th = &thr_info[i];
+		for (i = 0; i < cgpu->threads; i++)
+			thread_rolling += cgpu->thr[i]->rolling;
 
-			if (th->cgpu == cgpu)
-				thread_rolling += th->rolling;
-		}
 		mutex_lock(&hash_lock);
 		decay_time(&cgpu->rolling, thread_rolling);
 		cgpu->total_mhashes += local_mhashes;
@@ -3658,11 +3668,26 @@ retry:
 		goto out;
 	}
 
-	if (requested && !newreq && !requests_staged() && requests_queued() >= mining_threads &&
-	    !pool_tset(pool, &pool->lagging)) {
-		applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
-		pool->getfail_occasions++;
-		total_go++;
+	if (!pool->lagging && requested && !newreq && !requests_staged() && requests_queued() >= mining_threads) {
+		struct cgpu_info *cgpu = thr->cgpu;
+		bool stalled = true;
+		int i;
+
+		/* Check to see if all the threads on the device that called
+		 * get_work are waiting on work and only consider the pool
+		 * lagging if true */
+		for (i = 0; i < cgpu->threads; i++) {
+			if (!cgpu->thr[i]->getwork) {
+				stalled = false;
+				break;
+			}
+		}
+
+		if (stalled && !pool_tset(pool, &pool->lagging)) {
+			applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
+			pool->getfail_occasions++;
+			total_go++;
+		}
 	}
 
 	newreq = requested = false;
@@ -4045,6 +4070,9 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	work->rolltime = rolltime;
 	work->longpoll = true;
 
+	if (pool->enabled == POOL_REJECTING)
+		work->mandatory = true;
+
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
 	 * rather than waiting for it to hit the stage thread. This also
@@ -4104,7 +4132,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	if (pool->enabled == POOL_REJECTING)
+	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE)
 		return;
 
 	while (pool != current_pool()) {
