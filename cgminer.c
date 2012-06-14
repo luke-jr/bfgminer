@@ -3814,8 +3814,7 @@ void *miner_thread(void *userdata)
 	struct timeval getwork_start;
 
 	/* Try to cycle approximately 5 times before each log update */
-	const unsigned long def_cycle = opt_log_interval / 5 ? : 1;
-	long cycle;
+	const unsigned long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
@@ -3854,7 +3853,6 @@ void *miner_thread(void *userdata)
 			break;
 		}
 		requested = false;
-		cycle = (can_roll(work) && should_roll(work)) ? 1 : def_cycle;
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
 		cgpu->max_hashes = 0;
