@@ -24,6 +24,7 @@
 #define BITFORCE_TIMEOUT_MS 15000
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
+#define MAX_START_DELAY_US 100000
 
 struct device_api bitforce_api;
 
@@ -369,6 +370,19 @@ static bool bitforce_get_stats(struct cgpu_info *bitforce)
 	return bitforce_get_temp(bitforce);
 }
 
+static bool bitforce_thread_init(struct thr_info *thr)
+{
+	unsigned int wait;
+	thr;
+	/* Pause each new thread a random time between 0-100ms 
+	so the devices aren't making calls all at the same time. */
+	wait = (rand() * MAX_START_DELAY_US)/RAND_MAX;
+	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait/1000);
+	usleep(wait);
+
+	return true;
+}
+
 struct device_api bitforce_api = {
 	.dname = "bitforce",
 	.name = "BFL",
@@ -377,6 +391,7 @@ struct device_api bitforce_api = {
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.thread_prepare = bitforce_thread_prepare,
+	.thread_init = bitforce_thread_init,
 	.scanhash = bitforce_scanhash,
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
