@@ -745,6 +745,24 @@ struct work {
 	time_t share_found_time;
 };
 
+#ifdef USE_MODMINER 
+struct modminer_fpga_state {
+	bool work_running;
+	struct work running_work;
+	struct timeval tv_workstart;
+	uint32_t hashes;
+
+	char next_work_cmd[46];
+
+	unsigned char clock;
+	int no_nonce_counter;
+	int good_share_counter;
+	time_t last_cutoff_reduced;
+
+	unsigned char temp;
+};
+#endif
+
 extern void get_datestamp(char *, struct timeval *);
 extern bool test_nonce(struct work *work, uint32_t nonce);
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
