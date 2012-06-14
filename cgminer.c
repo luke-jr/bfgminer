@@ -3302,12 +3302,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 		/* Rolling average for each thread and each device */
 		decay_time(&thr->rolling, local_mhashes / secs);
-		for (i = 0; i < mining_threads; i++) {
-			struct thr_info *th = &thr_info[i];
+		for (i = 0; i < cgpu->threads; i++)
+			thread_rolling += cgpu->thr[i]->rolling;
 
-			if (th->cgpu == cgpu)
-				thread_rolling += th->rolling;
-		}
 		mutex_lock(&hash_lock);
 		decay_time(&cgpu->rolling, thread_rolling);
 		cgpu->total_mhashes += local_mhashes;
