@@ -370,6 +370,28 @@ get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 		strcat(buf, "               | ");
 }
 
+static json_t*
+get_modminer_extra_device_status(struct cgpu_info*modminer)
+{
+	json_t *info = json_object();
+	char k[7] = "BoardN";
+	int i;
+
+	for (i = modminer->threads - 1; i >= 0; --i) {
+		struct thr_info*thr = modminer->thr[i];
+		struct modminer_fpga_state *state = thr->cgpu_data;
+		json_t *o = json_object();
+
+		json_object_set(o, "Temperature", json_integer(state->temp));
+		json_object_set(o, "Frequency", json_real((double)state->clock * 1000000.));
+
+		k[5] = 0x30 + i;
+		json_object_set(info, k, o);
+	}
+
+	return info;
+}
+
 static bool
 modminer_prepare_next_work(struct modminer_fpga_state*state, struct work*work)
 {
@@ -534,6 +556,7 @@ struct device_api modminer_api = {
 	.name = "PGA",
 	.api_detect = modminer_detect,
 	.get_statline_before = get_modminer_statline_before,
+	.get_extra_device_status = get_modminer_extra_device_status,
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,
 	.scanhash = modminer_scanhash,
