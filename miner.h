@@ -741,6 +741,8 @@ struct work {
 	bool		rolltime;
 	bool		longpoll;
 	bool		stale;
+	bool		mandatory;
+	bool		block;
 
 	unsigned int	work_block;
 	int		id;
