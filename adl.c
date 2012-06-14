@@ -1065,6 +1065,11 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *
 	if (newpercent != fanpercent) {
 		applog(LOG_INFO, "Setting GPU %d fan percentage to %d", gpu, newpercent);
 		set_fanspeed(gpu, newpercent);
+		/* If the fanspeed is going down and we're below the top speed,
+		 * consider the fan optimal to prevent minute changes in
+		 * fanspeed delaying GPU engine speed changes */
+		if (newpercent < fanpercent && *fan_window)
+			return true;
 		return false;
 	}
 	return true;
