@@ -2455,7 +2455,7 @@ static void restart_threads(void)
 		cgpu = devices[i];
 		for (j = 0; j < cgpu->threads; ++j)
 		{
-			thr = &cgpu->thread[j];
+			thr = cgpu->thr[j];
 			fd = thr->_work_restart_fd_w;
 			thr->work_restart = true;
 			if (fd != -1)
