@@ -2284,7 +2284,7 @@ static struct pool *priority_pool(int choice)
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
-	int i, pool_no;
+	int i, pool_no, next_pool;
 
 	mutex_lock(&control_lock);
 	last_pool = currentpool;
@@ -2317,13 +2317,22 @@ void switch_pools(struct pool *selected)
 		/* Both of these simply increment and cycle */
 		case POOL_ROUNDROBIN:
 		case POOL_ROTATE:
-			if (selected) {
+			if (selected && !selected->idle) {
 				pool_no = selected->pool_no;
 				break;
 			}
-			pool_no++;
-			if (pool_no >= total_pools)
-				pool_no = 0;
+			next_pool = pool_no;
+			/* Select the next alive pool */
+			for (i = 1; i < total_pools; i++) {
+				next_pool++;
+				if (next_pool >= total_pools)
+					next_pool = 0;
+				pool = pools[next_pool];
+				if (!pool->idle && pool->enabled == POOL_ENABLED) {
+					pool_no = next_pool;
+					break;
+				}
+			}
 			break;
 		default:
 			break;
