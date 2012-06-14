@@ -1710,7 +1710,7 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 
 struct device_api opencl_api = {
 	.dname = "opencl",
-	.name = "GPU",
+	.name = "OCL",
 	.api_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 #ifdef HAVE_ADL
