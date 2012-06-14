@@ -3850,7 +3850,7 @@ void *miner_thread(void *userdata)
 	struct timeval getwork_start;
 
 	/* Try to cycle approximately 5 times before each log update */
-	const unsigned long cycle = opt_log_interval / 5 ? : 1;
+	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
@@ -3993,7 +3993,7 @@ void *miner_thread(void *userdata)
 				}
 			}
 
-			if (unlikely(sdiff.tv_sec < cycle)) {
+			if (unlikely((long)sdiff.tv_sec < cycle)) {
 				if (likely(!api->can_limit_work || max_nonce == 0xffffffff))
 					continue;
 

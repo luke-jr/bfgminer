@@ -60,6 +60,14 @@ $warnfont = '<font color=red><b>';
 $warnoff = '</b></font>';
 $dfmt = 'H:i:s j-M-Y \U\T\CP';
 #
+# This below allows you to put your own settings into a seperate file
+# so you don't need to update miner.php with your preferred settings
+# every time a new version is released
+# Just create the file 'myminer.php' in the same directory as
+# 'miner.php' - and put your own settings in there
+if (file_exists('myminer.php'))
+ include_once('myminer.php');
+#
 # Ensure it is only ever shown once
 global $showndate;
 $showndate = false;
