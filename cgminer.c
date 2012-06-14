@@ -1625,7 +1625,6 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	bool rolltime;
 	uint32_t *hash32;
 	char hashshow[64+1] = "";
-	bool isblock;
 
 #ifdef __BIG_ENDIAN__
         int swapcounter = 0;
@@ -1666,17 +1665,9 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	res = json_object_get(val, "result");
 
 	if (!QUIET) {
-#ifndef MIPSEB
-// This one segfaults on my router for some reason
-		isblock = regeneratehash(work);
-		if (unlikely(isblock)) {
-			pool->solved++;
-			found_blocks++;
-		}
 		hash32 = (uint32_t *)(work->hash);
 		sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
-			isblock ? " BLOCK!" : "");
-#endif
+			work->block? " BLOCK!" : "");
 	}
 
 	/* Theoretically threads could race when modifying accepted and
@@ -1829,6 +1820,7 @@ static void get_benchmark_work(struct work *work)
 	size_t min_size = (work_size < bench_size ? work_size : bench_size);
 	memset(work, 0, sizeof(work));
 	memcpy(work, &bench_block, min_size);
+	work->mandatory = true;
 }
 
 static bool get_upstream_work(struct work *work, CURL *curl)
@@ -2164,7 +2156,7 @@ static bool stale_work(struct work *work, bool share)
 	struct timeval now;
 	struct pool *pool;
 
-	if (opt_benchmark)
+	if (work->mandatory)
 		return false;
 
 	gettimeofday(&now, NULL);
@@ -2184,6 +2176,16 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
+static void check_solve(struct work *work)
+{
+	work->block = regeneratehash(work);
+	if (unlikely(work->block)) {
+		work->pool->solved++;
+		found_blocks++;
+		work->mandatory = true;
+		applog(LOG_NOTICE, "Found block for pool %d!", work->pool);
+	}
+}
 
 static void *submit_work_thread(void *userdata)
 {
@@ -2196,6 +2198,8 @@ static void *submit_work_thread(void *userdata)
 	pthread_detach(pthread_self());
 
 	applog(LOG_DEBUG, "Creating extra submit work thread");
+
+	check_solve(work);
 
 	if (stale_work(work, true)) {
 		if (opt_submit_stale)
@@ -2479,7 +2483,7 @@ static void test_work_current(struct work *work)
 {
 	char *hexstr;
 
-	if (opt_benchmark)
+	if (work->mandatory)
 		return;
 
 	hexstr = bin2hex(work->data, 18);
@@ -4008,6 +4012,9 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 	work->pool = pool;
 	work->rolltime = rolltime;
 	work->longpoll = true;
+
+	if (pool->enabled == POOL_REJECTING)
+		work->mandatory = true;
 
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
