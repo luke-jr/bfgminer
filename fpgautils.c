@@ -36,10 +36,10 @@
 #include "logging.h"
 #include "miner.h"
 
+#ifdef HAVE_LIBUDEV
 char
 serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 {
-#ifdef HAVE_LIBUDEV
 	if (total_devices == MAX_DEVICES)
 		return 0;
 
@@ -72,10 +72,14 @@ serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 	udev_unref(udev);
 
 	return found;
-#else
-	return 0;
-#endif
 }
+#else
+char
+serial_autodetect_udev(__maybe_unused detectone_func_t detectone, __maybe_unused const char*prodname)
+{
+	return 0;
+}
+#endif
 
 char
 serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
@@ -115,7 +119,7 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 }
 
 char
-_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool force_autoscan)
+_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
 {
 	if (total_devices == MAX_DEVICES)
 		return 0;
@@ -123,7 +127,6 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 	struct string_elist *iter, *tmp;
 	const char*s, *p;
 	bool inhibitauto = false;
-	bool forceauto = false;
 	char found = 0;
 	size_t dnamel = strlen(dname);
 

@@ -3833,7 +3833,7 @@ void *miner_thread(void *userdata)
 	unsigned long long hashes_done = 0;
 	unsigned long long hashes;
 	struct work *work = make_work();
-	unsigned const int request_interval = opt_scantime * 2 / 3 ? : 1;
+	const time_t request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = false;
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);

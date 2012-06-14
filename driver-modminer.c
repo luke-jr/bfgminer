@@ -164,7 +164,7 @@ fd_set fds;
 	p = strrchr(buf, '=') ?: p;
 	if (p[0] == '=')
 		++p;
-	long fwusercode = strtol(p, &p, 16);
+	unsigned long fwusercode = (unsigned long)strtoll(p, &p, 16);
 	if (p[0] != '\0')
 		bailout(LOG_ERR, "Bad usercode in ModMiner firmware file");
 	if (fwusercode == 0xffffffff)
@@ -197,7 +197,7 @@ fd_set fds;
 	if (6 != write(fd, buf, 6))
 		bailout2(LOG_ERR, "%s %u: Error programming %s (cmd)", modminer->api->name, modminer->device_id, modminer->device_path);
 	status_read("cmd reply");
-	size_t buflen;
+	ssize_t buflen;
 	while (len) {
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
