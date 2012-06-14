@@ -336,7 +336,7 @@ struct cgpu_info {
 	int virtual_adl;
 	int intensity;
 	bool dynamic;
-	char *kname;
+	const char *kname;
 #ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;
