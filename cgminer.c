@@ -3302,12 +3302,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 		/* Rolling average for each thread and each device */
 		decay_time(&thr->rolling, local_mhashes / secs);
-		for (i = 0; i < mining_threads; i++) {
-			struct thr_info *th = &thr_info[i];
+		for (i = 0; i < cgpu->threads; i++)
+			thread_rolling += cgpu->thr[i]->rolling;
 
-			if (th->cgpu == cgpu)
-				thread_rolling += th->rolling;
-		}
 		mutex_lock(&hash_lock);
 		decay_time(&cgpu->rolling, thread_rolling);
 		cgpu->total_mhashes += local_mhashes;
@@ -3635,11 +3632,26 @@ retry:
 		goto out;
 	}
 
-	if (requested && !newreq && !requests_staged() && requests_queued() >= mining_threads &&
-	    !pool_tset(pool, &pool->lagging)) {
-		applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
-		pool->getfail_occasions++;
-		total_go++;
+	if (!pool->lagging && requested && !newreq && !requests_staged() && requests_queued() >= mining_threads) {
+		struct cgpu_info *cgpu = thr->cgpu;
+		bool stalled = true;
+		int i;
+
+		/* Check to see if all the threads on the device that called
+		 * get_work are waiting on work and only consider the pool
+		 * lagging if true */
+		for (i = 0; i < cgpu->threads; i++) {
+			if (!cgpu->thr[i]->getwork) {
+				stalled = false;
+				break;
+			}
+		}
+
+		if (stalled && !pool_tset(pool, &pool->lagging)) {
+			applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
+			pool->getfail_occasions++;
+			total_go++;
+		}
 	}
 
 	newreq = requested = false;
@@ -3802,8 +3814,7 @@ void *miner_thread(void *userdata)
 	struct timeval getwork_start;
 
 	/* Try to cycle approximately 5 times before each log update */
-	const unsigned long def_cycle = opt_log_interval / 5 ? : 1;
-	long cycle;
+	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
@@ -3842,7 +3853,6 @@ void *miner_thread(void *userdata)
 			break;
 		}
 		requested = false;
-		cycle = (can_roll(work) && should_roll(work)) ? 1 : def_cycle;
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
 		cgpu->max_hashes = 0;
@@ -3947,7 +3957,7 @@ void *miner_thread(void *userdata)
 				}
 			}
 
-			if (unlikely(sdiff.tv_sec < cycle)) {
+			if (unlikely((long)sdiff.tv_sec < cycle)) {
 				if (likely(!api->can_limit_work || max_nonce == 0xffffffff))
 					continue;
 
@@ -4088,7 +4098,7 @@ static void wait_lpcurrent(struct pool *pool)
 	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE)
 		return;
 
-	while (pool != current_pool()) {
+	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE) {
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
 		mutex_unlock(&lp_lock);

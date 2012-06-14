@@ -69,7 +69,7 @@ endif # HAS_YASM
 endif # HAS_CPUMINE
 
 if NEED_FPGAUTILS
-cgminer_SOURCES += fpgautils.c
+cgminer_SOURCES += fpgautils.c fpgautils.h
 endif
 
 if HAS_BITFORCE
