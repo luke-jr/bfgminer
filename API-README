@@ -80,7 +80,7 @@ The STATUS section is:
    This defaults to the BFGMiner version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.9:
+For API version 1.10 and later:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
@@ -290,6 +290,8 @@ API V1.12
 
 Modified API commands:
  'stats' - more pool stats added
+
+Support for the ModMinerQuad FPGA was added
 
 ----------
 

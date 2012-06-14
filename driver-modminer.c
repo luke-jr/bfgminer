@@ -232,22 +232,6 @@ modminer_device_prepare(struct cgpu_info *modminer)
 
 #undef bailout
 
-struct modminer_fpga_state {
-	bool work_running;
-	struct work running_work;
-	struct timeval tv_workstart;
-	uint32_t hashes;
-
-	char next_work_cmd[46];
-
-	unsigned char clock;
-	int no_nonce_counter;
-	int good_share_counter;
-	time_t last_cutoff_reduced;
-
-	unsigned char temp;
-};
-
 static bool
 modminer_fpga_prepare(struct thr_info *thr)
 {
