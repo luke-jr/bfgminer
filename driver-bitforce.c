@@ -39,17 +39,14 @@ static void BFgets(char *buf, size_t bufLen, int fd)
 	buf[0] = '\0';
 }
 
-static ssize_t BFwrite2(int fd, const void *buf, ssize_t bufLen)
+static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 {
-	return write(fd, buf, bufLen);
+	if ((bufLen) != write(fd, buf, bufLen)) {
+		applog(LOG_ERR, "BFL: Error writing: %s", buf); 
+		return 0;
+	} else
+		return bufLen;
 }
-
-#define BFwrite(fd, buf, bufLen)  do {  \
-	if ((bufLen) != BFwrite2(fd, buf, bufLen)) {  \
-		applog(LOG_ERR, "BFL: Error writing (" #buf ")");  \
-		return 0;  \
-	}  \
-} while(0)
 
 #define BFclose(fd) close(fd)
 
@@ -83,6 +80,7 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
+	bitforce->kname = __FILE__;
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
 	{
 		s[0] = '\0';
@@ -138,7 +136,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
-static bool bitforce_init(struct cgpu_info *bitforce)
+void bitforce_init(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
 	char *devpath = bitforce->device_path;
@@ -155,7 +153,7 @@ static bool bitforce_init(struct cgpu_info *bitforce)
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
 		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, devpath);
-		return false;
+		return;
 	}
 
 	bitforce->device_fd = fdDev;
@@ -167,12 +165,12 @@ static bool bitforce_init(struct cgpu_info *bitforce)
 	
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL%i: Error reading (ZGX)", bitforce->device_id);
-		return false;
+		return;
 	}
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s", bitforce->device_id, devpath);
-		return false;
+		return;
 	}
 	
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
@@ -180,8 +178,6 @@ static bool bitforce_init(struct cgpu_info *bitforce)
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
-	
-	return true;
 }
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
