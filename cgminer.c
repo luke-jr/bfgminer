@@ -4347,19 +4347,18 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			int gpu;
+			char dev_str[8];
 			
-			if (cgpu->api->get_stats) {
-				cgpu->api->get_stats(cgpu);
-			}
+			if (cgpu->api->get_stats)
+			  cgpu->api->get_stats(cgpu);
 
-#ifdef HAVE_OPENCL
-			if (cgpu->api != &opencl_api)
-				continue;
 			/* Use only one thread per device to determine if the GPU is healthy */
 			if (i >= nDevs)
 				break;
 			gpu = thr->cgpu->device_id;
 			denable = &cgpu->deven;
+			sprintf(dev_str, "%s%d", cgpu->api->name, gpu);
+
 #ifdef HAVE_ADL
 			if (adl_active && gpus[gpu].has_adl)
 				gpu_autotune(gpu, denable);
@@ -4378,13 +4377,13 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				continue;
 
 			if (gpus[gpu].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
-				applog(LOG_ERR, "Device %d recovered, GPU %d declared WELL!", i, gpu);
+				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				gpus[gpu].status = LIFE_WELL;
 				gpus[gpu].device_last_well = time(NULL);
 			} else if (now.tv_sec - thr->last.tv_sec > 60 && gpus[gpu].status == LIFE_WELL) {
 				thr->rolling = thr->cgpu->rolling = 0;
 				gpus[gpu].status = LIFE_SICK;
-				applog(LOG_ERR, "Device %d idle for more than 60 seconds, GPU %d declared SICK!", i, gpu);
+				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
 				gettimeofday(&thr->sick, NULL);
 
 				gpus[gpu].device_last_not_well = time(NULL);
@@ -4397,12 +4396,12 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				} else
 #endif
 				if (opt_restart) {
-					applog(LOG_ERR, "Attempting to restart GPU");
+					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(thr->cgpu);
 				}
 			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
 				gpus[gpu].status = LIFE_DEAD;
-				applog(LOG_ERR, "Device %d not responding for more than 10 minutes, GPU %d declared DEAD!", i, gpu);
+				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				gettimeofday(&thr->sick, NULL);
 
 				gpus[gpu].device_last_not_well = time(NULL);
@@ -4420,9 +4419,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				if (opt_restart)
 					reinit_device(thr->cgpu);
 			}
-#endif /* HAVE_OPENCL */
 		}
-
 	}
 
 	return NULL;
@@ -5296,6 +5293,7 @@ begin_bench:
 		quit(1, "watchdog thread create failed");
 	pthread_detach(thr->pth);
 
+#ifdef HAVE_OPENCL
 	/* Create reinit gpu thread */
 	gpur_thr_id = mining_threads + 4;
 	thr = &thr_info[gpur_thr_id];
@@ -5304,6 +5302,7 @@ begin_bench:
 		quit(1, "tq_new failed for gpur_thr_id");
 	if (thr_info_create(thr, NULL, reinit_gpu, thr))
 		quit(1, "reinit_gpu thread create failed");
+#endif	
 
 	/* Create API socket thread */
 	api_thr_id = mining_threads + 5;
@@ -5311,6 +5310,7 @@ begin_bench:
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
 	pthread_detach(thr->pth);
+
 
 #ifdef HAVE_CURSES
 	/* Create curses input thread for keyboard input. Create this last so
