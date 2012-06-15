@@ -1,5 +1,15 @@
 Version 2.4.3 - June 14, 2012
 
+- Change device API "name" to reflect driver name abbreviation instead of device type name
+- miner.php allow a separate user settings file
+- modminer: Implement extended device stats to expose each Board to the RPC API
+- Bugfix: Use new cgpu->thr for longpoll waking
+- bitforce: Remove 4.5s delay before polling starts, since MiniRig finishes sooner
+- FPGA - allow device detect override without an open failure
+- Bugfix: Missing printf value in merge from cgminer
+- Ensure C compiler is in C99 mode
+- Add CPU core count detection for BSD/Mac
+- Set CPU mining idle priority on Windows
 - can_roll and should_roll should have no bearing on the cycle period within the miner_thread so remove it.
 - Check for strategy being changed to load balance when enabling LPs.
 - Check that all threads on the device that called get_work are waiting on getwork before considering the pool lagging.
