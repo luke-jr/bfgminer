@@ -2178,6 +2178,8 @@ static bool stale_work(struct work *work, bool share)
 
 static void check_solve(struct work *work)
 {
+#ifndef MIPSEB
+	/* This segfaults on openwrt */
 	work->block = regeneratehash(work);
 	if (unlikely(work->block)) {
 		work->pool->solved++;
@@ -2185,6 +2187,7 @@ static void check_solve(struct work *work)
 		work->mandatory = true;
 		applog(LOG_NOTICE, "Found block for pool %d!", work->pool);
 	}
+#endif
 }
 
 static void *submit_work_thread(void *userdata)
