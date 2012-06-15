@@ -4348,13 +4348,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			enum dev_enable *denable;
 			int gpu;
 			char dev_str[8];
-			
+
 			if (cgpu->api->get_stats)
 			  cgpu->api->get_stats(cgpu);
 
-			/* Use only one thread per device to determine if the GPU is healthy */
-			if (i >= nDevs)
-				break;
 			gpu = thr->cgpu->device_id;
 			denable = &cgpu->deven;
 			sprintf(dev_str, "%s%d", cgpu->api->name, gpu);
