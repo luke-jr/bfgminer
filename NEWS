@@ -1,13 +1,20 @@
 Version 2.4.3 - June 14, 2012
 
-- can_roll and should_roll should have no bearing on the cycle period within the miner_thread so remove it.
+- can_roll and should_roll should have no bearing on the cycle period within the
+miner_thread so remove it.
 - Check for strategy being changed to load balance when enabling LPs.
-- Check that all threads on the device that called get_work are waiting on getwork before considering the pool lagging.
-- Iterate over each thread belonging to each device in the hashmeter instead of searching for them now that they're a list.
-- When using rotate pool strategy, ensure we only select from alive enabled pools.
+- Check that all threads on the device that called get_work are waiting on
+getwork before considering the pool lagging.
+- Iterate over each thread belonging to each device in the hashmeter instead of
+searching for them now that they're a list.
+- When using rotate pool strategy, ensure we only select from alive enabled
+pools.
 - Start longpoll from every pool when load balance strategy is in use.
-- Add mandatory and block fields to the work struct. Flag any shares that are detected as blocks as mandatory to submit, along with longpoll work from a previously rejecting pool.
-- Consider the fan optimal if fanspeed is dropping but within the optimal speed window.
+- Add mandatory and block fields to the work struct. Flag any shares that are
+detected as blocks as mandatory to submit, along with longpoll work from a
+previously rejecting pool.
+- Consider the fan optimal if fanspeed is dropping but within the optimal speed
+window.
 - Fix typo in some API messages (succeess/success)
 - api.c MMQ stat bugs
 - Bugfix: Fix warnings when built without libudev support
@@ -17,7 +24,8 @@ Version 2.4.3 - June 14, 2012
 - Bugfix: Honour forceauto parameter in serial_detect functions
 - modminer: Temperature sensor improvements
 - modminer: Make log messages more consistent in format
-- Only adjust GPU speed up if the fanspeed is within the normal fanrange and hasn't been turned to maximum speed under overheat conditions.
+- Only adjust GPU speed up if the fanspeed is within the normal fanrange and
+hasn't been turned to maximum speed under overheat conditions.
 - ModMiner use valid .name
 - New driver: BTCFPGA ModMiner
 - Abstract generally useful FPGA code into fpgautils.c
