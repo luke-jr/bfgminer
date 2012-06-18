@@ -495,6 +495,7 @@ static void icarus_detect()
 struct icarus_state {
 	bool firstrun;
 	struct timeval tv_workstart;
+	struct timeval tv_workfinish;
 	struct work last_work;
 	bool changework;
 };
@@ -547,7 +548,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	char *ob_hex;
 	uint32_t nonce;
 	uint64_t hash_count;
-	struct timeval tv_start, tv_finish, elapsed;
+	struct timeval tv_start, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
 	int i;
@@ -573,6 +574,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
+	info = icarus_info[icarus->device_id];
 
 	if (!state->firstrun) {
 		if (state->changework)
@@ -580,8 +582,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		else
 		{
 			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
-			info = icarus_info[icarus->device_id];
-			lret = icarus_gets(nonce_bin, fd, &tv_finish, thr, info->read_count);
+			lret = icarus_gets(nonce_bin, fd, &state->tv_workfinish, thr, info->read_count);
 			if (lret && thr->work_restart) {
 				// The prepared work is invalid, and the current work is abandoned
 				// Go back to the main loop to get the next work, and stuff
@@ -592,7 +593,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 
 		tv_start = state->tv_workstart;
-		timeval_subtract(&elapsed, &tv_finish, &tv_start);
+		timeval_subtract(&elapsed, &state->tv_workfinish, &tv_start);
 	}
 
 #ifndef WIN32
