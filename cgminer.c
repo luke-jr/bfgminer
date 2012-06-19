@@ -3829,6 +3829,8 @@ void *miner_thread(void *userdata)
 	const time_t request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = false;
+	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
+
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	gettimeofday(&getwork_start, NULL);
@@ -3910,7 +3912,7 @@ void *miner_thread(void *userdata)
 				 * starting of every next thread to try and get
 				 * all devices busy before worrying about
 				 * getting work for their extra threads */
-				if (mythr->device_thread) {
+				if (!primary) {
 					struct timespec rgtp;
 
 					rgtp.tv_sec = 0;

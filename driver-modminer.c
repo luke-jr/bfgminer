@@ -103,7 +103,7 @@ modminer_detect_auto()
 static void
 modminer_detect()
 {
-	serial_detect_auto("modminer", modminer_detect_one, modminer_detect_auto);
+	serial_detect_auto(modminer_api.dname, modminer_detect_one, modminer_detect_auto);
 }
 
 #define bailout(...)  return _bailout(-1, modminer, __VA_ARGS__);
@@ -317,6 +317,8 @@ modminer_fpga_init(struct thr_info *thr)
 	modminer_reduce_clock(thr, false);
 
 	mutex_unlock(&modminer->device_mutex);
+
+	thr->primary_thread = true;
 
 	return true;
 }

@@ -55,6 +55,8 @@ static bool bitforce_detect_one(const char *devpath)
 	char *s;
 	char pdevbuf[0x100];
 
+	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
+
 	int fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
 		applog(LOG_ERR, "BFL: Failed to open %s", devpath);
@@ -101,7 +103,7 @@ static char bitforce_detect_auto()
 
 static void bitforce_detect()
 {
-	serial_detect_auto("bitforce", bitforce_detect_one, bitforce_detect_auto);
+	serial_detect_auto(bitforce_api.dname, bitforce_detect_one, bitforce_detect_auto);
 }
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
