@@ -80,7 +80,6 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-	bitforce->kname = __FILE__;
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
 	{
 		s[0] = '\0';
@@ -193,6 +192,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL%i: Error reading (ZLX)", bitforce->device_id);
+		bitforce->temp = 0;
 		return false;
 	}
 	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
@@ -285,14 +285,13 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->wait_ms += BITFORCE_CHECK_INTERVAL_MS;
 	}
 	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
-		applog(LOG_ERR, "BFL%i took longer than 15s");
+		applog(LOG_ERR, "BFL%i: took longer than 15s", bitforce->device_id);
 		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_THREAD_ZERO_HASH;
-		bitforce->thread_zero_hash_count++;
+		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
+		bitforce->dev_over_heat_count++;
 		return 1;
 	} else {
 	    /* Simple timing adjustment */
-		// applog(LOG_WARNING, "BFL%i: Waited: %ums, sleep is:%ums", bitforce->device_id, bitforce->wait_ms, bitforce->sleep_ms);
 		if (bitforce->wait_ms > (bitforce->sleep_ms + WORK_CHECK_INTERVAL_MS))
 			bitforce->sleep_ms += WORK_CHECK_INTERVAL_MS;
 		else if (bitforce->wait_ms == bitforce->sleep_ms)
@@ -346,19 +345,29 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	bitforce->wait_ms = 0;
+	uint64_t ret;
 
-	if (!bitforce_send_work(thr, work))
-		return 0;
-	
-	while (bitforce->wait_ms < bitforce->sleep_ms) {
-		usleep(WORK_CHECK_INTERVAL_MS*1000);
-		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
-		if (work_restart[thr->id].restart) {
-			applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
-			return 1; //we have discarded all work; equivilent to 0 hashes done.
+	if (ret = bitforce_send_work(thr, work)) {
+		while (bitforce->wait_ms < bitforce->sleep_ms) {
+			usleep(WORK_CHECK_INTERVAL_MS*1000);
+			bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
+			if (work_restart[thr->id].restart) {
+				applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
+				return 1; //we have discarded all work; equivilent to 0 hashes done.
+			}
 		}
+		ret = bitforce_get_result(thr, work);
 	}
-	return bitforce_get_result(thr, work);
+
+	if (!ret) {
+		ret = 1;
+ 		applog(LOG_ERR, "BFL%i: Comms error, going to recover mode", bitforce->device_id);
+		bitforce->device_last_not_well = time(NULL);
+		bitforce->device_not_well_reason = REASON_THREAD_ZERO_HASH;
+		bitforce->thread_zero_hash_count++;
+		bitforce->deven = DEV_RECOVER;
+	}
+	return ret;
 }
 
 static bool bitforce_get_stats(struct cgpu_info *bitforce)
