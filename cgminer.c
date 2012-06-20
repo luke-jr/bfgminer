@@ -2694,15 +2694,21 @@ void remove_pool(struct pool *pool)
 
 void write_config(FILE *fcfg)
 {
-	int i;
+	int i = 0;
+	int j = 0;
 
-	/* Write pool values */
+	/* Write pool values in priority order */
 	fputs("{\n\"pools\" : [", fcfg);
-	for(i = 0; i < total_pools; i++) {
-		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
-		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
-		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);
-		}
+	while((j < total_pools) && (i < total_pools)) {
+		if(pools[i]->prio == j) {
+			fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
+			fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
+			fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);
+			j++;
+			i=0;
+		} else
+			i++;
+	}
 	fputs("\n]\n", fcfg);
 
 #ifdef HAVE_OPENCL
