@@ -695,6 +695,11 @@ int gpu_fanpercent(int gpu)
 		applog(LOG_WARNING, "You will need to start cgminer from scratch to correct this");
 		applog(LOG_WARNING, "Disabling fanspeed monitoring on this device");
 		ga->has_fanspeed = false;
+		if (ga->twin) {
+			applog(LOG_WARNING, "Disabling fanspeed linking on GPU twins");
+			ga->twin->twin = NULL;;
+			ga->twin = NULL;
+		}
 	}
 	return ret;
 }
