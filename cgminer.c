@@ -1622,7 +1622,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	struct pool *pool = work->pool;
-	bool rolltime;
+	int rolltime;
 	uint32_t *hash32;
 	char hashshow[64+1] = "";
 
@@ -2162,6 +2162,9 @@ static bool stale_work(struct work *work, bool share)
 	gettimeofday(&now, NULL);
 	if (share) {
 		if ((now.tv_sec - work->tv_staged.tv_sec) >= opt_expiry)
+			return true;
+	} else if (work->rolls) {
+		if ((now.tv_sec - work->tv_staged.tv_sec) >= work->rolltime)
 			return true;
 	} else if ((now.tv_sec - work->tv_staged.tv_sec) >= opt_scantime)
 		return true;
@@ -3385,7 +3388,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	bool ret = false;
 	json_t *val;
 	CURL *curl;
-	bool rolltime;
+	int rolltime;
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
@@ -3571,8 +3574,7 @@ static inline bool should_roll(struct work *work)
 
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && !stale_work(work, false) && work->rolltime &&
-		work->rolls < 11 && !work->clone);
+	return (work->pool && !stale_work(work, false) && work->rolltime && !work->clone);
 }
 
 static void roll_work(struct work *work)
@@ -4022,9 +4024,10 @@ enum {
 };
 
 /* Stage another work item from the work returned in a longpoll */
-static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
+static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
 {
 	struct work *work, *work_clone;
+	int rolled = 0;
 	bool rc;
 
 	work = make_work();
@@ -4059,7 +4062,7 @@ static void convert_to_work(json_t *val, bool rolltime, struct pool *pool)
 
 	work_clone = make_work();
 	memcpy(work_clone, work, sizeof(struct work));
-	while (reuse_work(work)) {
+	while (reuse_work(work) && rolled++ < mining_threads) {
 		work_clone->clone = true;
 		work_clone->longpoll = false;
 		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
@@ -4120,7 +4123,7 @@ static void *longpoll_thread(void *userdata)
 	struct timeval start, end;
 	CURL *curl = NULL;
 	int failures = 0;
-	bool rolltime;
+	int rolltime;
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
