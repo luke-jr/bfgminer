@@ -199,6 +199,8 @@ FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
+     This option is only for BitForce, Icarus, and/or ModMiner FPGAs
+
      By default, cgminer will scan for autodetected FPGAs unless at least one
      -S is specified for that driver. If you specify -S and still want cgminer
      to scan, you must also use "-S auto". If you want to prevent cgminer from
@@ -209,6 +211,11 @@ FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:
      On linux <arg> is usually of the format /dev/ttyUSBn
      On windows <arg> is usually of the format \\.\COMn
        (where n = the correct device number for the FPGA device)
+
+     The official supplied binaries are compiled with support for all FPGAs.
+     To force the code to only attempt detection with a specific driver,
+     prepend the argument with the driver name followed by a colon.
+     For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
 
 For other FPGA details see the FPGA-README
 

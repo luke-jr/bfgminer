@@ -331,13 +331,13 @@ struct cgpu_info {
 
 	unsigned int max_hashes;
 
+	const char *kname;
+#ifdef HAVE_OPENCL
 	bool mapped;
 	int virtual_gpu;
 	int virtual_adl;
 	int intensity;
 	bool dynamic;
-	const char *kname;
-#ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;
@@ -391,6 +391,7 @@ struct thread_q {
 struct thr_info {
 	int		id;
 	int		device_thread;
+	bool		primary_thread;
 
 	pthread_t	pth;
 	struct thread_q	*q;

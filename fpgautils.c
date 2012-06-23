@@ -119,20 +119,25 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 }
 
 char
-_serial_detect(const char*dnamec, size_t dnamel, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
+_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
 {
 	if (total_devices == MAX_DEVICES)
 		return 0;
 
 	struct string_elist *iter, *tmp;
-	const char*s;
+	const char*s, *p;
 	bool inhibitauto = false;
 	char found = 0;
+	size_t dnamel = strlen(dname);
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
 		s = iter->string;
-		if (!strncmp(dnamec, iter->string, dnamel))
-			s += dnamel;
+		if ((p = strchr(s, ':')) && p[1] != '\0') {
+			size_t plen = p - s;
+			if (plen != dnamel || strncasecmp(s, dname, plen))
+				continue;
+			s = p + 1;
+		}
 		if (!strcmp(s, "auto"))
 			forceauto = true;
 		else
