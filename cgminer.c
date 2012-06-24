@@ -3647,6 +3647,9 @@ static struct work *clone_work(struct work *work)
 		}
 		roll_work(work);
 		work_clone = make_clone(work);
+		/* Roll it again to prevent duplicates should this be used
+		 * directly later on */
+		roll_work(work);
 		cloned = true;
 	}
 
