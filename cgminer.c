@@ -3655,6 +3655,7 @@ static struct work *clone_work(struct work *work)
 			cloned = false;
 			break;
 		}
+		inc_queued();
 		roll_work(work);
 		work_clone = make_clone(work);
 		/* Roll it again to prevent duplicates should this be used
@@ -3760,8 +3761,7 @@ retry:
 	work_heap = clone_work(work_heap);
 	memcpy(work, work_heap, sizeof(struct work));
 	free_work(work_heap);
-	if (!work->clone)
-		dec_queued();
+	dec_queued();
 
 	ret = true;
 out:
