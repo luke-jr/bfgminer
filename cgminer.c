@@ -3512,20 +3512,27 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-static long requested_tv_sec;
+static time_t requested_tv_sec;
 
 static bool queue_request(struct thr_info *thr, bool needed)
 {
 	int rq = requests_queued();
 	struct workio_cmd *wc;
 	struct timeval now;
+	time_t scan_post;
+
+	/* Grab more work every 2/3 of the scan time to avoid all work expiring
+	 * at the same time */
+	scan_post = opt_scantime * 2 / 3;
+	if (scan_post < 5)
+		scan_post = 5;
 
 	gettimeofday(&now, NULL);
 
-	/* Space out retrieval of extra work according to the number of mining
-	 * threads */
-	if (rq >= mining_threads + staged_extras &&
-	    (now.tv_sec - requested_tv_sec) < opt_scantime / (mining_threads + 1))
+	/* Test to make sure we have enough work for pools without rolltime
+	 * and enough original work for pools with rolltime */
+	if (rq >= mining_threads && rq > staged_extras + opt_queue &&
+	    now.tv_sec - requested_tv_sec < scan_post)
 		return true;
 
 	/* fill out work request message */
@@ -4329,7 +4336,7 @@ static void age_work(void)
 {
 	int discarded = 0;
 
-	while (requests_staged() > mining_threads * 4 / 3) {
+	while (requests_staged() > mining_threads * 4 / 3 + opt_queue) {
 		struct work *work = hash_pop(NULL);
 
 		if (unlikely(!work))
