@@ -3536,10 +3536,13 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	    now.tv_sec - requested_tv_sec < scan_post)
 		return true;
 
+	inc_queued();
+
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
 		applog(LOG_ERR, "Failed to calloc wc in queue_request");
+		dec_queued();
 		return false;
 	}
 
@@ -3561,11 +3564,11 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
 		applog(LOG_ERR, "Failed to tq_push in queue_request");
 		workio_cmd_free(wc);
+		dec_queued();
 		return false;
 	}
 
 	requested_tv_sec = now.tv_sec;
-	inc_queued();
 	return true;
 }
 
