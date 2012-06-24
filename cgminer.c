@@ -3501,8 +3501,9 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	int rs = requests_staged(), rq = requests_queued();
 	struct workio_cmd *wc;
 
-	if (rq >= mining_threads || (rq >= opt_queue && rs >= mining_threads))
-		return true;
+	if ((rq >= mining_threads || (rq >= opt_queue && rs >= mining_threads)) &&
+		total_queued >= opt_queue)
+			return true;
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -4335,7 +4336,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		struct timeval now;
 
 		sleep(interval);
-		if (requests_queued() < opt_queue)
+		if (requests_queued() < opt_queue || total_queued < opt_queue)
 			queue_request(NULL, false);
 
 		age_work();
