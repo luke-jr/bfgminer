@@ -3625,6 +3625,9 @@ static struct work *make_clone(struct work *work)
 	memcpy(work_clone, work, sizeof(struct work));
 	work_clone->clone = true;
 	work_clone->longpoll = false;
+	/* Make cloned work appear slightly older to bias towards keeping the
+	 * master work item which can be further rolled */
+	work_clone->tv_staged.tv_sec -= 1;
 
 	return work_clone;
 }
@@ -4312,6 +4315,23 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
+/* Work is sorted according to age, so discard the oldest work items, leaving
+ * only 1 staged work item per mining thread */
+static void age_work(void)
+{
+	int discarded = 0;
+
+	while (requests_staged() > mining_threads) {
+		struct work *work = hash_pop(NULL);
+
+		if (unlikely(!work))
+			break;
+		discard_work(work);
+		discarded++;
+	}
+	if (discarded)
+		applog(LOG_DEBUG, "Aged %d work items", discarded);
+}
 
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
@@ -4333,6 +4353,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		sleep(interval);
 		if (requests_queued() < opt_queue)
 			queue_request(NULL, false);
+
+		age_work();
 
 		hashmeter(-1, &zero_tv, 0);
 
