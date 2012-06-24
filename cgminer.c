@@ -4137,8 +4137,10 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
 
 	if (unlikely(!stage_work(work)))
 		free_work(work);
-	else
+	else {
+		inc_queued();
 		applog(LOG_DEBUG, "Converted longpoll data to work");
+	}
 }
 
 /* If we want longpoll, enable it for the chosen default pool, or, if
