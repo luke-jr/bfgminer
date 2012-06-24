@@ -1837,16 +1837,15 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 
 	url = pool->rpc_url;
 
+	gettimeofday(&tv_start, NULL);
 retry:
 	/* A single failure response here might be reported as a dead pool and
 	 * there may be temporary denied messages etc. falsely reporting
 	 * failure so retry a few times before giving up */
 	while (!val && retries++ < 3) {
 		pool_stats->getwork_attempts++;
-		gettimeofday(&tv_start, NULL);
 		val = json_rpc_call(curl, url, pool->rpc_userpass, rpc_req,
 			    false, false, &work->rolltime, pool, false);
-		gettimeofday(&tv_end, NULL);
 	}
 	if (unlikely(!val)) {
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
@@ -1856,11 +1855,13 @@ retry:
 	rc = work_decode(json_object_get(val, "result"), work);
 	if (!rc && retries < 3)
 		goto retry;
+
 	work->pool = pool;
 	work->longpoll = false;
 	total_getworks++;
 	pool->getwork_requested++;
 
+	gettimeofday(&tv_end, NULL);
 	timersub(&tv_end, &tv_start, &tv_elapsed);
 	timeradd(&tv_elapsed, &(pool_stats->getwork_wait), &(pool_stats->getwork_wait));
 	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_max), >)) {
