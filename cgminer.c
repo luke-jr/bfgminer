@@ -2575,7 +2575,7 @@ static bool hash_push(struct work *work)
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
 		HASH_SORT(staged_work, tv_sort);
-		if (work->clone || work->longpoll)
+		if (work->clone)
 			++staged_extras;
 	} else
 		rc = false;
@@ -3573,7 +3573,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 	if (HASH_COUNT(staged_work)) {
 		work = staged_work;
 		HASH_DEL(staged_work, work);
-		if (work->clone || work->longpoll)
+		if (work->clone)
 			--staged_extras;
 	}
 	mutex_unlock(stgd_lock);
