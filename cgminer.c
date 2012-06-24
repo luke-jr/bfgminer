@@ -2425,7 +2425,7 @@ static int discard_stale(void)
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work, false)) {
 			HASH_DEL(staged_work, work);
-			if (work->clone || work->longpoll)
+			if (work->clone)
 				--staged_extras;
 			discard_work(work);
 			stale++;
