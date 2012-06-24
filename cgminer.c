@@ -2371,18 +2371,6 @@ void switch_pools(struct pool *selected)
 	mutex_unlock(&lp_lock);
 }
 
-static void discard_work(struct work *work)
-{
-	if (!work->clone && !work->rolls && !work->mined) {
-		if (work->pool)
-			work->pool->discarded_work++;
-		total_discarded++;
-		applog(LOG_DEBUG, "Discarded work");
-	} else
-		applog(LOG_DEBUG, "Discarded cloned or rolled work");
-	free_work(work);
-}
-
 /* Done lockless since this is not a critical value */
 static inline void inc_queued(void)
 {
@@ -2395,15 +2383,25 @@ static inline void dec_queued(void)
 		total_queued--;
 }
 
-static int requests_queued(void)
+static void discard_work(struct work *work)
 {
-	return requests_staged() - staged_extras;
+	if (!work->clone)
+		dec_queued();
+
+	if (!work->clone && !work->rolls && !work->mined) {
+		if (work->pool)
+			work->pool->discarded_work++;
+		total_discarded++;
+		applog(LOG_DEBUG, "Discarded work");
+	} else
+		applog(LOG_DEBUG, "Discarded cloned or rolled work");
+	free_work(work);
 }
 
 static int discard_stale(void)
 {
 	struct work *work, *tmp;
-	int i, stale = 0;
+	int stale = 0;
 
 	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
@@ -2418,10 +2416,6 @@ static int discard_stale(void)
 	mutex_unlock(stgd_lock);
 
 	applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
-
-	/* Dec queued outside the loop to not have recursive locks */
-	for (i = 0; i < stale; i++)
-		dec_queued();
 
 	return stale;
 }
@@ -3498,11 +3492,11 @@ static void pool_resus(struct pool *pool)
 
 static bool queue_request(struct thr_info *thr, bool needed)
 {
-	int rs = requests_staged(), rq = requests_queued();
+	int rs = requests_staged();
 	struct workio_cmd *wc;
 
-	if ((rq >= mining_threads || (rq >= opt_queue && rs >= mining_threads)) &&
-		total_queued >= opt_queue)
+	if ((total_queued >= opt_queue && rs >= mining_threads) ||
+		total_queued >= mining_threads)
 			return true;
 
 	/* fill out work request message */
@@ -3521,7 +3515,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	/* If we're queueing work faster than we can stage it, consider the
 	 * system lagging and allow work to be gathered from another pool if
 	 * possible */
-	if (rq && needed && !requests_staged() && !opt_fail_only)
+	if (total_queued && needed && !rs && !opt_fail_only)
 		wc->lagging = true;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
@@ -3671,7 +3665,7 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 	}
 retry:
 	pool = current_pool();
-	if (!requested || requests_queued() < opt_queue) {
+	if (!requested || total_queued < opt_queue) {
 		if (unlikely(!queue_request(thr, true))) {
 			applog(LOG_WARNING, "Failed to queue_request in get_work");
 			goto out;
@@ -3721,7 +3715,6 @@ retry:
 	}
 
 	if (stale_work(work_heap, false)) {
-		dec_queued();
 		discard_work(work_heap);
 		goto retry;
 	}
@@ -3737,8 +3730,6 @@ retry:
 	work_heap = clone_work(work_heap);
 	memcpy(work, work_heap, sizeof(struct work));
 	free_work(work_heap);
-	if (!work->clone)
-		dec_queued();
 
 	ret = true;
 out:
@@ -4336,8 +4327,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		struct timeval now;
 
 		sleep(interval);
-		if (requests_queued() < opt_queue || total_queued < opt_queue)
-			queue_request(NULL, false);
+		queue_request(NULL, false);
 
 		age_work();
 
