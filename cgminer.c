@@ -1892,8 +1892,17 @@ static struct work *make_work(void)
 	return work;
 }
 
+static inline void dec_queued(void)
+{
+	if (likely(total_queued > 0))
+		total_queued--;
+}
+
 static void free_work(struct work *work)
 {
+	if (!work->clone)
+		dec_queued();
+
 	free(work);
 }
 
@@ -2377,17 +2386,8 @@ static inline void inc_queued(void)
 	total_queued++;
 }
 
-static inline void dec_queued(void)
-{
-	if (likely(total_queued > 0))
-		total_queued--;
-}
-
 static void discard_work(struct work *work)
 {
-	if (!work->clone)
-		dec_queued();
-
 	if (!work->clone && !work->rolls && !work->mined) {
 		if (work->pool)
 			work->pool->discarded_work++;
@@ -3496,7 +3496,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	struct workio_cmd *wc;
 
 	if ((total_queued >= opt_queue && rs >= mining_threads) ||
-		total_queued >= mining_threads)
+		(total_queued >= mining_threads && rs))
 			return true;
 
 	/* fill out work request message */
