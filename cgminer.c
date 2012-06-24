@@ -2167,7 +2167,7 @@ static bool stale_work(struct work *work, bool share)
 
 	if (share)
 		work_expiry = opt_expiry;
-	else if (work->rolls)
+	else if (work->rolltime)
 		work_expiry = work->rolltime;
 	else
 		work_expiry = opt_scantime;
