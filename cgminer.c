@@ -3529,7 +3529,7 @@ static time_t requested_tv_sec;
 
 static bool queue_request(struct thr_info *thr, bool needed)
 {
-	int rq = requests_queued(), rs = requests_staged();
+	int toq, rq = requests_queued(), rs = requests_staged();
 	struct workio_cmd *wc;
 	struct timeval now;
 	time_t scan_post;
@@ -3549,37 +3549,46 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	    now.tv_sec - requested_tv_sec < scan_post)
 		return true;
 
-	inc_queued();
-
-	/* fill out work request message */
-	wc = calloc(1, sizeof(*wc));
-	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to calloc wc in queue_request");
-		return false;
-	}
-
-	wc->cmd = WC_GET_WORK;
-	if (thr)
-		wc->thr = thr;
-	else
-		wc->thr = NULL;
-
-	/* If we're queueing work faster than we can stage it, consider the
-	 * system lagging and allow work to be gathered from another pool if
-	 * possible */
-	if (rq && needed && !rs && !opt_fail_only)
-		wc->lagging = true;
-
-	applog(LOG_DEBUG, "Queueing getwork request to work thread");
-
-	/* send work request to workio thread */
-	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
-		applog(LOG_ERR, "Failed to tq_push in queue_request");
-		workio_cmd_free(wc);
-		return false;
-	}
-
 	requested_tv_sec = now.tv_sec;
+
+	if (rq > rs)
+		toq = rq - mining_threads;
+	else
+		toq = rs - mining_threads;
+
+	do {
+		inc_queued();
+
+		/* fill out work request message */
+		wc = calloc(1, sizeof(*wc));
+		if (unlikely(!wc)) {
+			applog(LOG_ERR, "Failed to calloc wc in queue_request");
+			return false;
+		}
+
+		wc->cmd = WC_GET_WORK;
+		if (thr)
+			wc->thr = thr;
+		else
+			wc->thr = NULL;
+
+		/* If we're queueing work faster than we can stage it, consider the
+		 * system lagging and allow work to be gathered from another pool if
+		 * possible */
+		if (rq && needed && !rs && !opt_fail_only)
+			wc->lagging = true;
+
+		applog(LOG_DEBUG, "Queueing getwork request to work thread");
+
+		/* send work request to workio thread */
+		if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
+			applog(LOG_ERR, "Failed to tq_push in queue_request");
+			workio_cmd_free(wc);
+			return false;
+		}
+
+	} while (--toq > 0);
+
 	return true;
 }
 
