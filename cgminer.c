@@ -2159,6 +2159,7 @@ static bool stale_work(struct work *work, bool share)
 	struct timeval now;
 	time_t work_expiry;
 	struct pool *pool;
+	int getwork_delay;
 
 	if (work->mandatory)
 		return false;
@@ -2172,13 +2173,13 @@ static bool stale_work(struct work *work, bool share)
 	pool = work->pool;
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
+	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
 	if (!share) {
-		int getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
-
 		work_expiry -= getwork_delay;
 		if (unlikely(work_expiry < 5))
 			work_expiry = 5;
-	}
+	} else
+		work_expiry += getwork_delay;
 
 	gettimeofday(&now, NULL);
 	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry)
