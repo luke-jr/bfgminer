@@ -3516,7 +3516,7 @@ static time_t requested_tv_sec;
 
 static bool queue_request(struct thr_info *thr, bool needed)
 {
-	int rq = requests_queued();
+	int rq = requests_queued(), rs = requests_staged();
 	struct workio_cmd *wc;
 	struct timeval now;
 	time_t scan_post;
@@ -3531,7 +3531,8 @@ static bool queue_request(struct thr_info *thr, bool needed)
 
 	/* Test to make sure we have enough work for pools without rolltime
 	 * and enough original work for pools with rolltime */
-	if (rq >= mining_threads && rq > staged_extras + opt_queue &&
+	if ((rq >= mining_threads || rs >= mining_threads) &&
+	    rq > staged_extras + opt_queue &&
 	    now.tv_sec - requested_tv_sec < scan_post)
 		return true;
 
@@ -3551,7 +3552,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	/* If we're queueing work faster than we can stage it, consider the
 	 * system lagging and allow work to be gathered from another pool if
 	 * possible */
-	if (rq && needed && !requests_staged() && !opt_fail_only)
+	if (rq && needed && !rs && !opt_fail_only)
 		wc->lagging = true;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
