@@ -4324,7 +4324,7 @@ static void age_work(void)
 {
 	int discarded = 0;
 
-	while (requests_staged() > mining_threads) {
+	while (requests_staged() > mining_threads * 4 / 3) {
 		struct work *work = hash_pop(NULL);
 
 		if (unlikely(!work))
