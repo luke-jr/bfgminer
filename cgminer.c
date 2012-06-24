@@ -1856,13 +1856,11 @@ retry:
 	if (!rc && retries < 3)
 		goto retry;
 
-	work->pool = pool;
-	work->longpoll = false;
-	total_getworks++;
-	pool->getwork_requested++;
-
 	gettimeofday(&tv_end, NULL);
 	timersub(&tv_end, &tv_start, &tv_elapsed);
+	pool_stats->getwork_wait_rolling += ((double)tv_elapsed.tv_sec + ((double)tv_elapsed.tv_usec / 1000000)) * 0.63;
+	pool_stats->getwork_wait_rolling /= 1.63;
+
 	timeradd(&tv_elapsed, &(pool_stats->getwork_wait), &(pool_stats->getwork_wait));
 	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_max), >)) {
 		pool_stats->getwork_wait_max.tv_sec = tv_elapsed.tv_sec;
@@ -1873,6 +1871,11 @@ retry:
 		pool_stats->getwork_wait_min.tv_usec = tv_elapsed.tv_usec;
 	}
 	pool_stats->getwork_calls++;
+
+	work->pool = pool;
+	work->longpoll = false;
+	total_getworks++;
+	pool->getwork_requested++;
 
 	json_decref(val);
 out:

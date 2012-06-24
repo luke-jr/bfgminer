@@ -298,6 +298,7 @@ struct cgminer_pool_stats {
 	struct timeval getwork_wait;
 	struct timeval getwork_wait_max;
 	struct timeval getwork_wait_min;
+	double getwork_wait_rolling;
 };
 
 struct cgpu_info {
