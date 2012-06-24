@@ -3640,11 +3640,16 @@ static struct work *make_clone(struct work *work)
  * the future */
 static struct work *clone_work(struct work *work)
 {
+	int mrs = mining_threads - requests_staged();
 	struct work *work_clone;
-	bool cloned = false;
+	bool cloned;
 
+	if (mrs < 1)
+		return work;
+
+	cloned = false;
 	work_clone = make_clone(work);
-	while (requests_staged() < mining_threads && can_roll(work) && should_roll(work)) {
+	while (mrs-- > 0 && can_roll(work) && should_roll(work)) {
 		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
 		if (unlikely(!stage_work(work_clone))) {
 			cloned = false;
