@@ -3618,6 +3618,48 @@ static bool reuse_work(struct work *work)
 	return false;
 }
 
+static struct work *make_clone(struct work *work)
+{
+	struct work *work_clone = make_work();
+
+	memcpy(work_clone, work, sizeof(struct work));
+	work_clone->clone = true;
+	work_clone->longpoll = false;
+
+	return work_clone;
+}
+
+/* Clones work by rolling it if possible, and returning a clone instead of the
+ * original work item which gets staged again to possibly be rolled again in
+ * the future */
+static struct work *clone_work(struct work *work)
+{
+	struct work *work_clone;
+	bool cloned = false;
+	int rolled = 0;
+
+	work_clone = make_clone(work);
+	while (rolled++ < mining_threads && can_roll(work) && should_roll(work)) {
+		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
+		if (unlikely(!stage_work(work_clone))) {
+			cloned = false;
+			break;
+		}
+		roll_work(work);
+		work_clone = make_clone(work);
+		cloned = true;
+	}
+
+	if (cloned) {
+		stage_work(work);
+		return work_clone;
+	}
+
+	free_work(work_clone);
+
+	return work;
+}
+
 static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 		     const int thr_id)
 {
@@ -3702,18 +3744,11 @@ retry:
 			pool_resus(pool);
 	}
 
-	memcpy(work, work_heap, sizeof(*work));
-
-	/* Hand out a clone if we can roll this work item */
-	if (reuse_work(work_heap)) {
-		applog(LOG_DEBUG, "Pushing divided work to get queue head");
-
-		stage_work(work_heap);
-		work->clone = true;
-	} else {
+	work_heap = clone_work(work_heap);
+	memcpy(work, work_heap, sizeof(struct work));
+	free_work(work_heap);
+	if (!work->clone)
 		dec_queued();
-		free_work(work_heap);
-	}
 
 	ret = true;
 out:
@@ -4039,8 +4074,7 @@ enum {
 /* Stage another work item from the work returned in a longpoll */
 static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
 {
-	struct work *work, *work_clone;
-	int rolled = 0;
+	struct work *work;
 	bool rc;
 
 	work = make_work();
@@ -4073,18 +4107,7 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
 		return;
 	}
 
-	work_clone = make_work();
-	memcpy(work_clone, work, sizeof(struct work));
-	while (reuse_work(work) && rolled++ < mining_threads) {
-		work_clone->clone = true;
-		work_clone->longpoll = false;
-		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
-		if (unlikely(!stage_work(work_clone)))
-			break;
-		work_clone = make_work();
-		memcpy(work_clone, work, sizeof(struct work));
-	}
-	free_work(work_clone);
+	work = clone_work(work);
 
 	applog(LOG_DEBUG, "Pushing converted work to stage thread");
 
