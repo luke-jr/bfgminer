@@ -2057,7 +2057,7 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 
 		if (pool_stats) {
 			sprintf(buf, isjson
-				? ",\"Pool Calls\":%d,\"Pool Attempts\":%d,\"Pool Wait\":%ld.%06ld,\"Pool Max\":%ld.%06ld,\"Pool Min\":%ld.%06ld"
+				? ",\"Pool Calls\":%d,\"Pool Attempts\":%d,\"Pool Wait\":%ld.%06ld,\"Pool Max\":%ld.%06ld,\"Pool Min\":%ld.%06ld,\"Pool Av\":%f"
 				: ",Pool Calls=%d,Pool Attempts=%d,Pool Wait=%ld.%06ld,Pool Max=%ld.%06ld,Pool Min=%ld.%06ld,Pool Av=%f",
 				pool_stats->getwork_calls, pool_stats->getwork_attempts,
 				pool_stats->getwork_wait.tv_sec, pool_stats->getwork_wait.tv_usec,
