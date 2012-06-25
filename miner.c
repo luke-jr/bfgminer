@@ -160,7 +160,6 @@ static int api_thr_id;
 static int total_threads;
 
 static pthread_mutex_t hash_lock;
-static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 #ifdef HAVE_CURSES
 static pthread_mutex_t curses_lock;
@@ -2380,11 +2379,6 @@ void switch_pools(struct pool *selected)
 	if (pool != last_pool)
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
 
-	/* Reset the queued amount to allow more to be queued for the new pool */
-	mutex_lock(&qd_lock);
-	total_queued = 0;
-	mutex_unlock(&qd_lock);
-
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
@@ -2402,31 +2396,21 @@ static void discard_work(struct work *work)
 	free_work(work);
 }
 
-/* This is overkill, but at least we'll know accurately how much work is
- * queued to prevent ever being left without work */
-static void inc_queued(void)
+/* Done lockless since this is not a critical value */
+static inline void inc_queued(void)
 {
-	mutex_lock(&qd_lock);
 	total_queued++;
-	mutex_unlock(&qd_lock);
 }
 
-static void dec_queued(void)
+static inline void dec_queued(void)
 {
-	mutex_lock(&qd_lock);
-	if (total_queued > 0)
+	if (likely(total_queued > 0))
 		total_queued--;
-	mutex_unlock(&qd_lock);
 }
 
 static int requests_queued(void)
 {
-	int ret;
-
-	mutex_lock(&qd_lock);
-	ret = total_queued;
-	mutex_unlock(&qd_lock);
-	return ret;
+	return requests_staged() - staged_extras;
 }
 
 static int discard_stale(void)
@@ -3545,20 +3529,12 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-static long requested_tv_sec;
-
 static bool queue_request(struct thr_info *thr, bool needed)
 {
-	int rq = requests_queued();
+	int rs = requests_staged(), rq = requests_queued();
 	struct workio_cmd *wc;
-	struct timeval now;
 
-	gettimeofday(&now, NULL);
-
-	/* Space out retrieval of extra work according to the number of mining
-	 * threads */
-	if (rq >= mining_threads + staged_extras &&
-	    (now.tv_sec - requested_tv_sec) < (opt_scantime / (mining_threads + 1) ?: 1))
+	if (rq >= mining_threads || (rq >= opt_queue && rs >= mining_threads))
 		return true;
 
 	/* fill out work request message */
@@ -3589,7 +3565,6 @@ static bool queue_request(struct thr_info *thr, bool needed)
 		return false;
 	}
 
-	requested_tv_sec = now.tv_sec;
 	inc_queued();
 	return true;
 }
@@ -3673,11 +3648,17 @@ static struct work *make_clone(struct work *work)
  * the future */
 static struct work *clone_work(struct work *work)
 {
+	int mrs = mining_threads - requests_staged();
 	struct work *work_clone;
-	bool cloned = false;
+	bool cloned;
+
+	if (mrs < 1)
+		return work;
+
+	cloned = false;
 
 	work_clone = make_clone(work);
-	while (requests_staged() < mining_threads && can_roll(work) && should_roll(work)) {
+	while (mrs-- > 0 && can_roll(work) && should_roll(work)) {
 		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
 		if (unlikely(!stage_work(work_clone))) {
 			cloned = false;
@@ -3735,7 +3716,7 @@ retry:
 		goto out;
 	}
 
-	if (!pool->lagging && requested && !newreq && !requests_staged() && requests_queued() >= mining_threads) {
+	if (!pool->lagging && requested && !newreq && !requests_staged()) {
 		struct cgpu_info *cgpu = thr->cgpu;
 		bool stalled = true;
 		int i;
@@ -4393,7 +4374,7 @@ static void age_work(void)
 {
 	int discarded = 0;
 
-	while (requests_staged() > mining_threads) {
+	while (requests_staged() > mining_threads * 4 / 3) {
 		struct work *work = hash_pop(NULL);
 
 		if (unlikely(!work))
@@ -4977,7 +4958,6 @@ int main(int argc, char *argv[])
 #endif
 
 	mutex_init(&hash_lock);
-	mutex_init(&qd_lock);
 #ifdef HAVE_CURSES
 	mutex_init(&curses_lock);
 #endif
