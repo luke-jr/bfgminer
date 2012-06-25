@@ -60,6 +60,11 @@ $warnfont = '<font color=red><b>';
 $warnoff = '</b></font>';
 $dfmt = 'H:i:s j-M-Y \U\T\CP';
 #
+global $miner_font_family, $miner_font_size;
+#
+$miner_font_family = 'verdana,arial,sans';
+$miner_font_size = '13pt';
+#
 # This below allows you to put your own settings into a seperate file
 # so you don't need to update miner.php with your preferred settings
 # every time a new version is released
@@ -78,6 +83,7 @@ $rigerror = array();
 #
 function htmlhead($checkapi)
 {
+ global $miner_font_family, $miner_font_size;
  global $error, $readonly, $here;
  if ($readonly === false && $checkapi === true)
  {
@@ -87,21 +93,22 @@ function htmlhead($checkapi)
 	||  $access['STATUS']['STATUS'] != 'S')
 		$readonly = true;
  }
-?>
-<html><head><title>Mine</title>
+ $miner_font = "font-family:$miner_font_family; font-size:$miner_font_size;";
+
+ echo "<html><head><title>Mine</title>
 <style type='text/css'>
-td { color:blue; font-family:verdana,arial,sans; font-size:13pt; }
-td.h { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#d0ffff }
-td.err { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ff3050 }
-td.warn { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ffb050 }
-td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
-td.tot { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#fff8f2 }
-td.lst { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#ffffdd }
+td { color:blue; $miner_font }
+td.h { color:blue; $miner_font background:#d0ffff }
+td.err { color:black; $miner_font background:#ff3050 }
+td.warn { color:black; $miner_font background:#ffb050 }
+td.sta { color:green; $miner_font }
+td.tot { color:blue; $miner_font background:#fff8f2 }
+td.lst { color:blue; $miner_font background:#ffffdd }
 </style>
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
-function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<?php echo $here ?>"+a}
-<?php
+function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location=\"$here\"+a}\n";
+
  if ($readonly === false && $checkapi === true)
  {
 ?>
