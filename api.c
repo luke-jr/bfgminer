@@ -14,6 +14,7 @@
 
 #include "config.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -794,6 +795,36 @@ status2str(enum alive status)
 	}
 }
 
+#ifdef JSON_ENCODE_ANY
+#	define json_dumps_val(value, flags)  json_dumps(value, (flags) | JSON_ENCODE_ANY)
+#else
+static char*
+json_dumps_val(json_t*root, unsigned long flags)
+{
+	json_t *json;
+	char *s, *d;
+	size_t l;
+	
+	json = json_array();
+	json_array_append(json, root);
+	s = json_dumps(json, flags);
+	json_decref(json);
+	if (!s)
+		return s;
+	
+	assert(s[0] == '[');
+	d = strdup(&s[1]);
+	free(s);
+	l = strlen(d);
+	assert(l);
+	--l;
+	assert(d[l] == ']');
+	d[l] = '\0';
+	
+	return d;
+}
+#endif
+
 static void
 append_kv(char *buf, json_t*info, bool isjson)
 {
@@ -807,7 +838,7 @@ append_kv(char *buf, json_t*info, bool isjson)
 		value = json_object_iter_value(it);
 
 		if (isjson || !json_is_string(value))
-			vdump = json_dumps(value, JSON_COMPACT | JSON_ENCODE_ANY);
+			vdump = json_dumps_val(value, JSON_COMPACT);
 		else
 			vdump = strdup(json_string_value(value));
 		tailsprintf(buf, tmpl, key, vdump);
