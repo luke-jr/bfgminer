@@ -190,7 +190,7 @@ unsigned int found_blocks;
 unsigned int local_work;
 unsigned int total_go, total_ro;
 
-struct pool *pools[MAX_POOLS];
+struct pool **pools;
 static struct pool *currentpool = NULL;
 
 int total_pools;
@@ -395,6 +395,7 @@ static struct pool *add_pool(void)
 	if (!pool)
 		quit(1, "Failed to malloc pool in add_pool");
 	pool->pool_no = pool->prio = total_pools;
+	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
 	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init in add_pool");
@@ -4702,12 +4703,9 @@ char *curses_input(const char *query)
 }
 #endif
 
-int add_pool_details(bool live, char *url, char *user, char *pass)
+void add_pool_details(bool live, char *url, char *user, char *pass)
 {
 	struct pool *pool;
-
-	if (total_pools == MAX_POOLS)
-		return ADD_POOL_MAXIMUM;
 
 	pool = add_pool();
 
@@ -4724,8 +4722,6 @@ int add_pool_details(bool live, char *url, char *user, char *pass)
 	pool->enabled = POOL_ENABLED;
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
-
-	return ADD_POOL_OK;
 }
 
 #ifdef HAVE_CURSES
@@ -4735,10 +4731,6 @@ static bool input_pool(bool live)
 	bool ret = false;
 
 	immedok(logwin, true);
-	if (total_pools == MAX_POOLS) {
-		wlogprint("Reached maximum number of pools.\n");
-		goto out;
-	}
 	wlogprint("Input server details.\n");
 
 	url = curses_input("URL");
@@ -4766,7 +4758,8 @@ static bool input_pool(bool live)
 	if (!pass)
 		goto out;
 
-	ret = (add_pool_details(live, url, user, pass) == ADD_POOL_OK);
+	add_pool_details(live, url, user, pass);
+	ret = true;
 out:
 	immedok(logwin, false);
 
