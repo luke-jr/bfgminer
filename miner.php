@@ -98,7 +98,7 @@ function htmlhead($checkapi, $rig)
 
  $paramrig = '';
  if ($rig != null && $rig != '')
-	$paramrig .= "&rig=$rig";
+	$paramrig = "&rig=$rig";
 
  if ($ignorerefresh == true || $autorefresh == 0)
 	$refreshmeta = '';
@@ -947,7 +947,7 @@ function doOne($rig, $preprocess)
  {
 	$rg = '';
 	if (count($rigs) > 1)
-		$rg .= " Rig $rig";
+		$rg = " Rig $rig";
 	echo "<input type=button value='Restart' onclick='prc(\"restart&rig=$rig\",\"Restart CGMiner$rg\")'>";
 	echo "&nbsp;<input type=button value='Quit' onclick='prc(\"quit&rig=$rig\",\"Quit CGMiner$rg\")'>";
  }
