@@ -363,11 +363,10 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 
 	if (!ret) {
 		ret = 1;
- 		applog(LOG_ERR, "BFL%i: Comms error, going to recover mode", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
 		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_THREAD_ZERO_HASH;
-		bitforce->thread_zero_hash_count++;
-		bitforce->deven = DEV_RECOVER;
+		bitforce->device_not_well_reason = REASON_DEV_NOSTART;
+		bitforce->dev_nostart_count++;
 	}
 	return ret;
 }
