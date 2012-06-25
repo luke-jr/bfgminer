@@ -84,8 +84,6 @@ struct strategies strategies[] = {
 
 static char packagename[255];
 
-int gpu_threads;
-
 bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
@@ -108,19 +106,19 @@ static const bool opt_time = true;
 
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
+int nDevs;
+int opt_g_threads = 2;
+int gpu_threads;
 #endif
 bool opt_restart = true;
 static bool opt_nogpu;
 
 struct list_head scan_devices;
-int nDevs;
-int opt_g_threads = 2;
 static signed int devices_enabled;
 static bool opt_removedisabled;
 int total_devices;
 struct cgpu_info *devices[MAX_DEVICES];
 bool have_opencl;
-int gpu_threads;
 int opt_n_threads = -1;
 int mining_threads;
 int num_processors;
@@ -1302,7 +1300,9 @@ static char statusline[256];
 static int devcursor, logstart, logcursor;
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
 static int statusy;
+#ifdef HAVE_OPENCL
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
+#endif
 struct cgpu_info *cpus;
 
 #ifdef HAVE_CURSES
@@ -2733,12 +2733,12 @@ void write_config(FILE *fcfg)
 		}
 	fputs("\n]\n", fcfg);
 
+#ifdef HAVE_OPENCL
 	if (nDevs) {
 		/* Write GPU device values */
 		fputs(",\n\"intensity\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
-#ifdef HAVE_OPENCL
 		fputs("\",\n\"vectors\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
@@ -2796,9 +2796,9 @@ void write_config(FILE *fcfg)
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
 #endif
-#endif
 		fputs("\"", fcfg);
 	}
+#endif
 #ifdef HAVE_ADL
 	if (opt_reorder)
 		fprintf(fcfg, ",\n\"gpu-reorder\" : true");
@@ -2852,6 +2852,7 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", opt_socks_proxy);
+#ifdef HAVE_OPENCL
 	for(i = 0; i < nDevs; i++)
 		if (gpus[i].deven == DEV_DISABLED)
 			break;
@@ -2859,6 +2860,7 @@ void write_config(FILE *fcfg)
 		for (i = 0; i < nDevs; i++)
 			if (gpus[i].deven != DEV_DISABLED)
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
+#endif
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
@@ -4967,9 +4969,11 @@ int main(int argc, char *argv[])
 
 	INIT_LIST_HEAD(&scan_devices);
 
+#ifdef HAVE_OPENCL
 	memset(gpus, 0, sizeof(gpus));
 	for (i = 0; i < MAX_GPUDEVICES; i++)
 		gpus[i].dynamic = true;
+#endif
 
 	memset(devices, 0, sizeof(devices));
 
@@ -5077,6 +5081,7 @@ int main(int argc, char *argv[])
 #ifdef HAVE_OPENCL
 	if (!opt_nogpu)
 		opencl_api.api_detect();
+	gpu_threads = 0;
 #endif
 
 #ifdef USE_ICARUS
@@ -5112,7 +5117,6 @@ int main(int argc, char *argv[])
 	}
 
 	mining_threads = 0;
-	gpu_threads = 0;
 	if (devices_enabled) {
 		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
 			if (devices_enabled & (1 << i)) {
@@ -5292,10 +5296,6 @@ begin_bench:
 	gettimeofday(&total_tv_end, NULL);
 	get_datestamp(datestamp, &total_tv_start);
 
-#ifndef HAVE_OPENCL
-	opt_g_threads = 0;
-#endif
-
 	// Start threads
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
@@ -5378,6 +5378,7 @@ begin_bench:
 		quit(1, "watchdog thread create failed");
 	pthread_detach(thr->pth);
 
+#ifdef HAVE_OPENCL
 	/* Create reinit gpu thread */
 	gpur_thr_id = mining_threads + 4;
 	thr = &thr_info[gpur_thr_id];
@@ -5386,6 +5387,7 @@ begin_bench:
 		quit(1, "tq_new failed for gpur_thr_id");
 	if (thr_info_create(thr, NULL, reinit_gpu, thr))
 		quit(1, "reinit_gpu thread create failed");
+#endif
 
 	/* Create API socket thread */
 	api_thr_id = mining_threads + 5;

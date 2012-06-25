@@ -329,13 +329,13 @@ struct cgpu_info {
 
 	unsigned int max_hashes;
 
+	const char *kname;
+#ifdef HAVE_OPENCL
 	bool mapped;
 	int virtual_gpu;
 	int virtual_adl;
 	int intensity;
 	bool dynamic;
-	const char *kname;
-#ifdef HAVE_OPENCL
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;

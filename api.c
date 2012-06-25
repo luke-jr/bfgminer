@@ -399,21 +399,32 @@ struct CODES {
 	const enum code_parameters params;
 	const char *description;
 } codes[] = {
+#ifdef HAVE_OPENCL
  { SEVERITY_ERR,   MSG_INVGPU,	PARAM_GPUMAX,	"Invalid GPU id %d - range is 0 - %d" },
  { SEVERITY_INFO,  MSG_ALRENA,	PARAM_GPU,	"GPU %d already enabled" },
  { SEVERITY_INFO,  MSG_ALRDIS,	PARAM_GPU,	"GPU %d already disabled" },
  { SEVERITY_WARN,  MSG_GPUMRE,	PARAM_GPU,	"GPU %d must be restarted first" },
  { SEVERITY_INFO,  MSG_GPUREN,	PARAM_GPU,	"GPU %d sent enable message" },
+#endif
  { SEVERITY_ERR,   MSG_GPUNON,	PARAM_NONE,	"No GPUs" },
  { SEVERITY_SUCC,  MSG_POOL,	PARAM_PMAX,	"%d Pool(s)" },
  { SEVERITY_ERR,   MSG_NOPOOL,	PARAM_NONE,	"No pools" },
 
- { SEVERITY_SUCC,  MSG_DEVS,	PARAM_DMAX,	"%d GPU(s)"
+ { SEVERITY_SUCC,  MSG_DEVS,	PARAM_DMAX,
+#ifdef HAVE_OPENCL
+		 	 	 	 	"%d GPU(s)"
+#endif
+#if defined(HAVE_AN_FPGA) && defined(HAVE_OPENCL)
+						" - "
+#endif
 #ifdef HAVE_AN_FPGA
-						" - %d PGA(s)"
+						"%d PGA(s)"
+#endif
+#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA))
+						" - "
 #endif
 #ifdef WANT_CPUMINE
-						" - %d CPU(s)"
+						"%d CPU(s)"
 #endif
  },
 
@@ -427,11 +438,15 @@ struct CODES {
  },
 
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
+#ifdef HAVE_OPENCL
  { SEVERITY_INFO,  MSG_GPUDIS,	PARAM_GPU,	"GPU %d set disable flag" },
  { SEVERITY_INFO,  MSG_GPUREI,	PARAM_GPU,	"GPU %d restart attempted" },
+#endif
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
+#ifdef HAVE_OPENCL
  { SEVERITY_SUCC,  MSG_GPUDEV,	PARAM_GPU,	"GPU%d" },
+#endif
 #ifdef HAVE_AN_FPGA
  { SEVERITY_ERR,   MSG_PGANON,	PARAM_NONE,	"No PGAs" },
  { SEVERITY_SUCC,  MSG_PGADEV,	PARAM_PGA,	"PGA%d" },
@@ -462,6 +477,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " _MIN_INTENSITY_STR " - " _MAX_INTENSITY_STR },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECON, PARAM_NONE,	"BFGMiner config" },
+#ifdef HAVE_OPENCL
  { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
  { SEVERITY_SUCC,  MSG_GPUMEM,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported success" },
  { SEVERITY_ERR,   MSG_GPUEERR,	PARAM_BOTH,	"Setting GPU %d clock to (%s) reported failure" },
@@ -470,6 +486,7 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_GPUVDDC,	PARAM_BOTH,	"Setting GPU %d vddc to (%s) reported success" },
  { SEVERITY_ERR,   MSG_GPUFERR,	PARAM_BOTH,	"Setting GPU %d fan to (%s) reported failure" },
  { SEVERITY_SUCC,  MSG_GPUFAN,	PARAM_BOTH,	"Setting GPU %d fan to (%s) reported success" },
+#endif
  { SEVERITY_ERR,   MSG_MISFN,	PARAM_NONE,	"Missing save filename parameter" },
  { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
  { SEVERITY_SUCC,  MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
@@ -697,9 +714,11 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 			case PARAM_POOL:
 				sprintf(ptr, codes[i].description, paramid, pools[paramid]->rpc_url);
 				break;
+#ifdef HAVE_OPENCL
 			case PARAM_GPUMAX:
 				sprintf(ptr, codes[i].description, paramid, nDevs - 1);
 				break;
+#endif
 #ifdef HAVE_AN_FPGA
 			case PARAM_PGAMAX:
 				pga = numpgas();
@@ -732,7 +751,10 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 					cpu = 0;
 #endif
 
-				sprintf(ptr, codes[i].description, nDevs
+				sprintf(ptr, codes[i].description
+#ifdef HAVE_OPENCL
+					, nDevs
+#endif
 #ifdef HAVE_AN_FPGA
 					, pga
 #endif
@@ -786,6 +808,7 @@ static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[TMPBUFSIZ];
+	int gpucount = 0;
 	int pgacount = 0;
 	int cpucount = 0;
 	char *adlinuse = (char *)NO;
@@ -803,6 +826,10 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	const char *adl = NO;
 #endif
 
+#ifdef HAVE_OPENCL
+	gpucount = nDevs;
+#endif
+
 #ifdef HAVE_AN_FPGA
 	pgacount = numpgas();
 #endif
@@ -817,7 +844,7 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 		? "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":%d,\"Device Code\":\"%s\",\"OS\":\"%s\"}" JSON_CLOSE
 		: _MINECON ",GPU Count=%d,PGA Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d,Device Code=%s,OS=%s" SEPSTR,
 
-		nDevs, pgacount, cpucount, total_pools, adl, adlinuse,
+		gpucount, pgacount, cpucount, total_pools, adl, adlinuse,
 		strategies[pool_strategy].s, opt_log_interval, DEVICECODE, OSINFO);
 
 	strcat(io_buffer, buf);
@@ -918,13 +945,14 @@ static void devstatus_an(char *buf, struct cgpu_info *cgpu, bool isjson)
 	tailsprintf(buf, "%c", isjson ? '}' : SEPARATOR);
 }
 
+#ifdef HAVE_OPENCL
 static void gpustatus(int gpu, bool isjson)
 {
 	if (gpu < 0 || gpu >= nDevs)
 		return;
 	devstatus_an(io_buffer, &gpus[gpu], isjson);
 }
-
+#endif
 #ifdef HAVE_AN_FPGA
 static void pgastatus(int pga, bool isjson)
 {
@@ -984,6 +1012,7 @@ devstatus(SOCKETTYPE c, char *param, bool isjson)
 	return devinfo_internal(devstatus_an, c, param, isjson);
 }
 
+#ifdef HAVE_OPENCL
 static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
@@ -1016,7 +1045,7 @@ static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
-
+#endif
 #ifdef HAVE_AN_FPGA
 static void pgadev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
@@ -1291,7 +1320,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 		total_go, local_work, total_ro, new_blocks, total_mhashes_done);
 #endif
 }
-
+#ifdef HAVE_OPENCL
 static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	struct thr_info *thr;
@@ -1392,20 +1421,26 @@ static void gpurestart(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 
 	strcpy(io_buffer, message(MSG_GPUREI, id, NULL, isjson));
 }
-
+#endif
 static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	char buf[TMPBUFSIZ];
+	int numgpu = 0;
+
+#ifdef HAVE_OPENCL
+	numgpu = nDevs;
+#endif
 
 	strcpy(io_buffer, message(MSG_NUMGPU, 0, NULL, isjson));
 
 	sprintf(buf, isjson
 		? "," JSON_GPUS "{\"Count\":%d}" JSON_CLOSE
 		: _GPUS ",Count=%d" SEPSTR,
-		nDevs);
+		numgpu);
 
 	strcat(io_buffer, buf);
 }
+
 
 static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
@@ -1681,6 +1716,7 @@ static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	rpc_url = NULL;
 }
 
+#ifdef HAVE_OPENCL
 static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 {
 	int id;
@@ -1715,7 +1751,6 @@ static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 
 	return true;
 }
-
 static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 {
 	int id;
@@ -1828,7 +1863,7 @@ static void gpuvddc(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
 #endif
 }
-
+#endif
 void doquit(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
 {
 	if (isjson)
@@ -2094,10 +2129,12 @@ struct CMDS {
 	{ "devdetail",	devdetail,	false },
 	{ "pools",		poolstatus,	false },
 	{ "summary",		summary,	false },
+#ifdef HAVE_OPENCL
 	{ "gpuenable",		gpuenable,	true },
 	{ "gpudisable",		gpudisable,	true },
 	{ "gpurestart",		gpurestart,	true },
 	{ "gpu",		gpudev,		false },
+#endif
 #ifdef HAVE_AN_FPGA
 	{ "pga",		pgadev,		false },
 	{ "pgaenable",		pgaenable,	true },
@@ -2114,11 +2151,13 @@ struct CMDS {
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
 	{ "removepool",		removepool,	true },
+#ifdef HAVE_OPENCL
 	{ "gpuintensity",	gpuintensity,	true },
 	{ "gpumem",		gpumem,		true },
 	{ "gpuengine",		gpuengine,	true },
 	{ "gpufan",		gpufan,		true },
 	{ "gpuvddc",		gpuvddc,	true },
+#endif
 	{ "save",		dosave,		true },
 	{ "quit",		doquit,		true },
 	{ "privileged",		privileged,	true },
