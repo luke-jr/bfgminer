@@ -186,8 +186,14 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	tcgetattr(fdDev, &my_termios);
 
 	switch (baud) {
-	case 0: break;
-	case 115200: my_termios.c_cflag = B115200; break;
+	case 0:
+		break;
+	case 115200:
+		my_termios.c_cflag &= ~CBAUD;
+		my_termios.c_cflag |= B115200;
+		break;
+	// TODO: try some higher speeds with the Icarus and BFL to see
+	// if they support them and if setting them makes any difference
 	default:
 		applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
 	}
