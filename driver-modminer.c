@@ -334,6 +334,8 @@ modminer_fpga_init(struct thr_info *thr)
 
 	mutex_unlock(&modminer->device_mutex);
 
+	thr->primary_thread = true;
+
 	return true;
 }
 
