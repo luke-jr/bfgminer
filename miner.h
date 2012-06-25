@@ -342,6 +342,10 @@ struct cgpu_info {
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;
+
+	struct timeval tv_gpustart;;
+	struct timeval tv_gpuend;
+	double gpu_ms_average;
 #endif
 
 	float temp;
