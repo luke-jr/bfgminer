@@ -904,13 +904,14 @@ function doOne($rig, $preprocess)
  echo "<input type=button value='Refresh' onclick='pr(\"?rig=$rig\",null)'></td>";
  if (count($rigs) > 1)
 	echo "<td><input type=button value='Summary' onclick='pr(\"\",null)'></td>";
- echo "<td width=100%>&nbsp;</td><td>";
+ echo "<td width=100%>&nbsp;</td><td nowrap>";
  if ($readonly === false)
  {
-	$msg = 'Quit CGMiner';
+	$rg = '';
 	if (count($rigs) > 1)
-		$msg .= " Rig $rig";
-	echo "<input type=button value='Quit' onclick='prc(\"quit&rig=$rig\",\"$msg\")'>";
+		$rg .= " Rig $rig";
+	echo "<input type=button value='Restart' onclick='prc(\"restart&rig=$rig\",\"Restart CGMiner$rg\")'>";
+	echo "&nbsp;<input type=button value='Quit' onclick='prc(\"quit&rig=$rig\",\"Quit CGMiner$rg\")'>";
  }
  echo "</td></tr></table></td></tr>";
 
