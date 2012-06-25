@@ -755,15 +755,11 @@ struct cgpu_info *cpus;
 void pause_dynamic_threads(int gpu)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
-	int i, thread_no = 0;
+	int i;
 
-	for (i = 0; i < mining_threads; i++) {
+	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr = &thr_info[i];
 
-		if (thr->cgpu != cgpu)
-			continue;
-		if (!thread_no++)
-			continue;
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
 			applog(LOG_WARNING, "Tune dynamic intensity with --gpu-dyninterval");

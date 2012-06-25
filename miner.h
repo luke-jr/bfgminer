@@ -296,6 +296,7 @@ struct cgminer_pool_stats {
 	struct timeval getwork_wait;
 	struct timeval getwork_wait_max;
 	struct timeval getwork_wait_min;
+	double getwork_wait_rolling;
 };
 
 struct cgpu_info {
@@ -533,7 +534,7 @@ extern pthread_rwlock_t netacc_lock;
 
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
-			     const char *rpc_req, bool, bool, bool *,
+			     const char *rpc_req, bool, bool, int *,
 			     struct pool *pool, bool);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
@@ -729,7 +730,7 @@ struct work {
 	bool		mined;
 	bool		clone;
 	bool		cloned;
-	bool		rolltime;
+	int		rolltime;
 	bool		longpoll;
 	bool		stale;
 	bool		mandatory;
