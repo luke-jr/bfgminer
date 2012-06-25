@@ -2444,7 +2444,7 @@ static void subtract_queued(int work_units)
 	mutex_unlock(&qd_lock);
 }
 
-static int discard_stale(void)
+static void discard_stale(void)
 {
 	struct work *work, *tmp;
 	int stale = 0, nonclone = 0;
@@ -2467,23 +2467,20 @@ static int discard_stale(void)
 
 	/* Dec queued outside the loop to not have recursive locks */
 	subtract_queued(nonclone);
-
-	return stale;
 }
 
 static bool queue_request(struct thr_info *thr, bool needed);
 
 static void restart_threads(void)
 {
-	int i, j, stale, fd;
+	int i, j, fd;
 	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 
 	/* Discard staged work that is now stale */
-	stale = discard_stale();
+	discard_stale();
 
-	for (i = 0; i < stale; i++)
-		queue_request(NULL, true);
+	queue_request(NULL, true);
 
 	for (i = 0; i < total_devices; ++i)
 	{
@@ -3563,12 +3560,41 @@ static void pool_resus(struct pool *pool)
 
 static time_t requested_tv_sec;
 
+static bool control_tset(bool *var)
+{
+	bool ret;
+
+	mutex_lock(&control_lock);
+	ret = *var;
+	*var = true;
+	mutex_unlock(&control_lock);
+
+	return ret;
+}
+
+static void control_tclear(bool *var)
+{
+	mutex_lock(&control_lock);
+	*var = false;
+	mutex_unlock(&control_lock);
+}
+
+static bool queueing;
+
 static bool queue_request(struct thr_info *thr, bool needed)
 {
-	int toq, rq = requests_queued(), rs = requests_staged();
 	struct workio_cmd *wc;
 	struct timeval now;
 	time_t scan_post;
+	int toq, rq, rs;
+	bool ret = true;
+
+	/* Prevent multiple requests being executed at once */
+	if (control_tset(&queueing))
+		return ret;
+
+	rq = requests_queued();
+	rs = requests_staged();
 
 	/* Grab more work every 2/3 of the scan time to avoid all work expiring
 	 * at the same time */
@@ -3583,7 +3609,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	if ((rq >= mining_threads || rs >= mining_threads) &&
 	    rq > staged_extras + opt_queue &&
 	    now.tv_sec - requested_tv_sec < scan_post)
-		return true;
+		goto out;
 
 	requested_tv_sec = now.tv_sec;
 
@@ -3599,14 +3625,12 @@ static bool queue_request(struct thr_info *thr, bool needed)
 		wc = calloc(1, sizeof(*wc));
 		if (unlikely(!wc)) {
 			applog(LOG_ERR, "Failed to calloc wc in queue_request");
-			return false;
+			ret = false;
+			break;
 		}
 
 		wc->cmd = WC_GET_WORK;
-		if (thr)
-			wc->thr = thr;
-		else
-			wc->thr = NULL;
+		wc->thr = thr;
 
 		/* If we're queueing work faster than we can stage it, consider the
 		 * system lagging and allow work to be gathered from another pool if
@@ -3620,12 +3644,16 @@ static bool queue_request(struct thr_info *thr, bool needed)
 		if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
 			applog(LOG_ERR, "Failed to tq_push in queue_request");
 			workio_cmd_free(wc);
-			return false;
+			ret = false;
+			break;
 		}
 
 	} while (--toq > 0);
 
-	return true;
+out:
+	control_tclear(&queueing);
+
+	return ret;
 }
 
 static struct work *hash_pop(const struct timespec *abstime)
