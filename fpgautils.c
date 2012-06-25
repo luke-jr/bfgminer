@@ -181,28 +181,33 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	if (unlikely(fdDev == -1))
 		return -1;
 
-	struct termios pattr;
-	tcgetattr(fdDev, &pattr);
-	pattr.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-	pattr.c_oflag &= ~OPOST;
-	pattr.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-	pattr.c_cflag &= ~(CSIZE | PARENB);
-	pattr.c_cflag |= CS8;
+	struct termios my_termios;
+
+	tcgetattr(fdDev, &my_termios);
 
 	switch (baud) {
 	case 0: break;
-	case 115200: pattr.c_cflag = B115200; break;
+	case 115200: my_termios.c_cflag = B115200; break;
 	default:
 		applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
 	}
-	pattr.c_cflag |= CREAD | CLOCAL;
+
+	my_termios.c_cflag |= CS8;
+	my_termios.c_cflag |= CREAD;
+	my_termios.c_cflag |= CLOCAL;
+	my_termios.c_cflag &= ~(CSIZE | PARENB);
+
+	my_termios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK |
+				ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+	my_termios.c_oflag &= ~OPOST;
+	my_termios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
 
 	if (timeout >= 0) {
-		pattr.c_cc[VTIME] = (cc_t)timeout;
-		pattr.c_cc[VMIN] = 0;
+		my_termios.c_cc[VTIME] = (cc_t)timeout;
+		my_termios.c_cc[VMIN] = 0;
 	}
 
-	tcsetattr(fdDev, TCSANOW, &pattr);
+	tcsetattr(fdDev, TCSANOW, &my_termios);
 	if (purge)
 		tcflush(fdDev, TCIOFLUSH);
 	return fdDev;
