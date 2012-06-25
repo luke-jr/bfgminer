@@ -731,8 +731,6 @@ static void cpu_detect()
 	if (num_processors < 1)
 		return;
 
-	if (total_devices + opt_n_threads > MAX_DEVICES)
-		opt_n_threads = MAX_DEVICES - total_devices;
 	cpus = calloc(opt_n_threads, sizeof(struct cgpu_info));
 	if (unlikely(!cpus))
 		quit(1, "Failed to calloc cpus");

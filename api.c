@@ -1636,10 +1636,7 @@ static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	if (add_pool_details(true, url, user, pass) == ADD_POOL_MAXIMUM) {
-		strcpy(io_buffer, message(MSG_TOOMANYP, MAX_POOLS, NULL, isjson));
-		return;
-	}
+	add_pool_details(true, url, user, pass);
 
 	ptr = escape_string(url, isjson);
 	strcpy(io_buffer, message(MSG_ADDPOOL, 0, ptr, isjson));
@@ -2113,12 +2110,13 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 
 		if (pool_stats) {
 			sprintf(buf, isjson
-				? ",\"Pool Calls\":%d,\"Pool Attempts\":%d,\"Pool Wait\":%ld.%06ld,\"Pool Max\":%ld.%06ld,\"Pool Min\":%ld.%06ld"
-				: ",Pool Calls=%d,Pool Attempts=%d,Pool Wait=%ld.%06ld,Pool Max=%ld.%06ld,Pool Min=%ld.%06ld",
+				? ",\"Pool Calls\":%d,\"Pool Attempts\":%d,\"Pool Wait\":%ld.%06ld,\"Pool Max\":%ld.%06ld,\"Pool Min\":%ld.%06ld,\"Pool Av\":%f"
+				: ",Pool Calls=%d,Pool Attempts=%d,Pool Wait=%ld.%06ld,Pool Max=%ld.%06ld,Pool Min=%ld.%06ld,Pool Av=%f",
 				pool_stats->getwork_calls, pool_stats->getwork_attempts,
 				pool_stats->getwork_wait.tv_sec, pool_stats->getwork_wait.tv_usec,
 				pool_stats->getwork_wait_max.tv_sec, pool_stats->getwork_wait_max.tv_usec,
-				pool_stats->getwork_wait_min.tv_sec, pool_stats->getwork_wait_min.tv_usec);
+				pool_stats->getwork_wait_min.tv_sec, pool_stats->getwork_wait_min.tv_usec,
+				pool_stats->getwork_wait_rolling);
 
 			strcat(io_buffer, buf);
 		}

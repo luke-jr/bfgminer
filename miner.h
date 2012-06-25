@@ -300,6 +300,7 @@ struct cgminer_pool_stats {
 	struct timeval getwork_wait;
 	struct timeval getwork_wait_max;
 	struct timeval getwork_wait_min;
+	double getwork_wait_rolling;
 };
 
 struct cgpu_info {
@@ -347,6 +348,10 @@ struct cgpu_info {
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;
+
+	struct timeval tv_gpustart;;
+	struct timeval tv_gpuend;
+	double gpu_ms_average;
 #endif
 
 	float temp;
@@ -537,7 +542,7 @@ extern pthread_rwlock_t netacc_lock;
 
 extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
-			     const char *rpc_req, bool, bool, bool *,
+			     const char *rpc_req, bool, bool, int *,
 			     struct pool *pool, bool);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
@@ -580,14 +585,9 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int active_pools(void);
-extern int add_pool_details(bool live, char *url, char *user, char *pass);
-
-#define ADD_POOL_MAXIMUM 1
-#define ADD_POOL_OK 0
+extern void add_pool_details(bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
-#define MAX_DEVICES 64
-#define MAX_POOLS (32)
 
 #define MIN_INTENSITY -10
 #define _MIN_INTENSITY_STR "-10"
@@ -608,9 +608,9 @@ extern double total_secs;
 extern int mining_threads;
 extern struct cgpu_info *cpus;
 extern int total_devices;
-extern struct cgpu_info *devices[];
+extern struct cgpu_info **devices;
 extern int total_pools;
-extern struct pool *pools[MAX_POOLS];
+extern struct pool **pools;
 extern const char *algo_names[];
 extern enum sha256_algos opt_algo;
 extern struct strategies strategies[];
@@ -739,7 +739,7 @@ struct work {
 	bool		mined;
 	bool		clone;
 	bool		cloned;
-	bool		rolltime;
+	int		rolltime;
 	bool		longpoll;
 	bool		stale;
 	bool		mandatory;

@@ -56,7 +56,7 @@ struct upload_buffer {
 
 struct header_info {
 	char		*lp_path;
-	bool		has_rolltime;
+	int		rolltime;
 	char		*reason;
 };
 
@@ -160,8 +160,13 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		if (!strncasecmp("N", val, 1)) {
 			applog(LOG_DEBUG, "X-Roll-Ntime: N found");
 		} else {
-			applog(LOG_DEBUG, "X-Roll-Ntime found");
-			hi->has_rolltime = true;
+			/* Check to see if expire= is supported and if not, set
+			 * the rolltime to the default scantime */
+			if (strlen(val) > 7 && !strncasecmp("expire=", val, 7))
+				sscanf(val + 7, "%d", &hi->rolltime);
+			else
+				hi->rolltime = opt_scantime;
+			applog(LOG_DEBUG, "X-Roll-Ntime expiry set to %d", hi->rolltime);
 		}
 	}
 
@@ -248,7 +253,7 @@ static void set_nettime(void)
 
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
-		      bool probe, bool longpoll, bool *rolltime,
+		      bool probe, bool longpoll, int *rolltime,
 		      struct pool *pool, bool share)
 {
 	json_t *val, *err_val, *res_val;
@@ -260,7 +265,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	long timeout = longpoll ? (60 * 60) : 60;
-	struct header_info hi = {NULL, false, NULL};
+	struct header_info hi = {NULL, 0, NULL};
 	bool probing = false;
 
 	memset(&err, 0, sizeof(err));
@@ -375,7 +380,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		hi.lp_path = NULL;
 	}
 
-	*rolltime = hi.has_rolltime;
+	*rolltime = hi.rolltime;
 
 	val = JSON_LOADS(all_data.buf, &err);
 	if (!val) {

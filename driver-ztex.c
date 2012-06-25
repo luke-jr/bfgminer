@@ -66,8 +66,6 @@ static void ztex_detect(void)
 	applog(LOG_WARNING, "Found %d ztex board(s)", cnt);
 
 	for (i = 0; i < cnt; i++) {
-		if (total_devices == MAX_DEVICES)
-			break;
 		ztex = calloc(1, sizeof(struct cgpu_info));
 		ztex->api = &ztex_api;
 		ztex->device_ztex = ztex_devices[i]->dev;

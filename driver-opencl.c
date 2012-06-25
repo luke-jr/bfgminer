@@ -538,15 +538,11 @@ struct cgpu_info *cpus;
 void pause_dynamic_threads(int gpu)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
-	int i, thread_no = 0;
+	int i;
 
-	for (i = 0; i < mining_threads; i++) {
+	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr = &thr_info[i];
 
-		if (thr->cgpu != cgpu)
-			continue;
-		if (!thread_no++)
-			continue;
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
 			applog(LOG_WARNING, "Tune dynamic intensity with --gpu-dyninterval");
@@ -1130,9 +1126,6 @@ static void opencl_detect()
 		nDevs = 0;
 	}
 
-	if (MAX_DEVICES - total_devices < nDevs)
-		nDevs = MAX_DEVICES - total_devices;
-
 	if (!nDevs)
 		return;
 
@@ -1354,34 +1347,32 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
 
-	double gpu_ms_average = 7;
 	cl_int status;
-
 	size_t globalThreads[1];
 	size_t localThreads[1] = { clState->wsize };
 	unsigned int threads;
 	unsigned int hashes;
 
-
-	struct timeval tv_gpustart, tv_gpuend, diff;
-	suseconds_t gpu_us;
-
-	gettimeofday(&tv_gpustart, NULL);
-	timeval_subtract(&diff, &tv_gpustart, &tv_gpuend);
+	gettimeofday(&gpu->tv_gpustart, NULL);
 	/* This finish flushes the readbuffer set with CL_FALSE later */
 	clFinish(clState->commandQueue);
-	gettimeofday(&tv_gpuend, NULL);
-	timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
-	gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
-	decay_time(&gpu_ms_average, gpu_us / 1000);
+	gettimeofday(&gpu->tv_gpuend, NULL);
+
 	if (gpu->dynamic) {
+		struct timeval diff;
+		suseconds_t gpu_ms;
+
+		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
+		gpu_ms = diff.tv_sec * 1000 + diff.tv_usec / 1000;
+		gpu->gpu_ms_average = (gpu->gpu_ms_average + gpu_ms * 0.63) / 1.63;
+
 		/* Try to not let the GPU be out for longer than 6ms, but
 		 * increase intensity when the system is idle, unless
 		 * dynamic is disabled. */
-		if (gpu_ms_average > opt_dynamic_interval) {
+		if (gpu->gpu_ms_average > opt_dynamic_interval) {
 			if (gpu->intensity > MIN_INTENSITY)
 				--gpu->intensity;
-		} else if (gpu_ms_average < ((opt_dynamic_interval / 2) ? : 1)) {
+		} else if (gpu->gpu_ms_average < ((opt_dynamic_interval / 2) ? : 1)) {
 			if (gpu->intensity < MAX_INTENSITY)
 				++gpu->intensity;
 		}
