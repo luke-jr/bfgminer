@@ -585,7 +585,6 @@ extern int add_pool_details(bool live, char *url, char *user, char *pass);
 #define ADD_POOL_OK 0
 
 #define MAX_GPUDEVICES 16
-#define MAX_DEVICES 64
 #define MAX_POOLS (32)
 
 #define MIN_INTENSITY -10
@@ -607,7 +606,7 @@ extern double total_secs;
 extern int mining_threads;
 extern struct cgpu_info *cpus;
 extern int total_devices;
-extern struct cgpu_info *devices[];
+extern struct cgpu_info **devices;
 extern int total_pools;
 extern struct pool *pools[MAX_POOLS];
 extern const char *algo_names[];

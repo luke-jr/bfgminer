@@ -116,7 +116,7 @@ struct list_head scan_devices;
 static signed int devices_enabled;
 static bool opt_removedisabled;
 int total_devices;
-struct cgpu_info *devices[MAX_DEVICES];
+struct cgpu_info **devices;
 bool have_opencl;
 int opt_n_threads = -1;
 int mining_threads;
@@ -4936,6 +4936,7 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
+	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + 2));
 	devices[total_devices++] = cgpu;
 	return true;
 }
@@ -5024,8 +5025,6 @@ int main(int argc, char *argv[])
 	for (i = 0; i < MAX_GPUDEVICES; i++)
 		gpus[i].dynamic = true;
 #endif
-
-	memset(devices, 0, sizeof(devices));
 
 	/* parse command line */
 	opt_register_table(opt_config_table,

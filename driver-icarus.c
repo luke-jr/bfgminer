@@ -179,7 +179,7 @@ struct ICARUS_INFO {
 };
 
 // One for each possible device
-static struct ICARUS_INFO *icarus_info[MAX_DEVICES];
+static struct ICARUS_INFO **icarus_info;
 
 struct device_api icarus_api;
 
@@ -421,6 +421,7 @@ static bool icarus_detect_one(const char *devpath)
 	icarus->device_path = strdup(devpath);
 	icarus->threads = 1;
 	add_cgpu(icarus);
+	icarus_info = realloc(icarus_info, sizeof(struct ICARUS_INFO *) * (total_devices + 2));
 
 	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
 		devpath, icarus->device_id);

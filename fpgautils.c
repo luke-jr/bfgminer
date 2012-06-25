@@ -40,9 +40,6 @@
 char
 serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 {
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	struct udev *udev = udev_new();
 	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
 	struct udev_list_entry *list_entry;
@@ -64,9 +61,6 @@ serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 			++found;
 
 		udev_device_unref(device);
-
-		if (total_devices == MAX_DEVICES)
-			break;
 	}
 	udev_enumerate_unref(enumerate);
 	udev_unref(udev);
@@ -85,9 +79,6 @@ char
 serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 {
 #ifndef WIN32
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	DIR *D;
 	struct dirent *de;
 	const char udevdir[] = "/dev/serial/by-id";
@@ -104,11 +95,8 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 		if (!strstr(de->d_name, prodname))
 			continue;
 		strcpy(devfile, de->d_name);
-		if (detectone(devpath)) {
+		if (detectone(devpath))
 			++found;
-			if (total_devices == MAX_DEVICES)
-				break;
-		}
 	}
 	closedir(D);
 
@@ -121,9 +109,6 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 char
 _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
 {
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	struct string_elist *iter, *tmp;
 	const char*s, *p;
 	bool inhibitauto = false;
@@ -148,12 +133,10 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 			string_elist_del(iter);
 			inhibitauto = true;
 			++found;
-			if (total_devices == MAX_DEVICES)
-				break;
 		}
 	}
 
-	if ((forceauto || !inhibitauto) && autoscan && total_devices < MAX_DEVICES)
+	if ((forceauto || !inhibitauto) && autoscan)
 		found += autoscan();
 
 	return found;

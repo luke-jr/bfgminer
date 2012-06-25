@@ -1126,9 +1126,6 @@ static void opencl_detect()
 		nDevs = 0;
 	}
 
-	if (MAX_DEVICES - total_devices < nDevs)
-		nDevs = MAX_DEVICES - total_devices;
-
 	if (!nDevs)
 		return;
 
