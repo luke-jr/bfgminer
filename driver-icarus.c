@@ -421,7 +421,7 @@ static bool icarus_detect_one(const char *devpath)
 	icarus->device_path = strdup(devpath);
 	icarus->threads = 1;
 	add_cgpu(icarus);
-	icarus_info = realloc(icarus_info, sizeof(struct ICARUS_INFO *) * (total_devices + 2));
+	icarus_info = realloc(icarus_info, sizeof(struct ICARUS_INFO *) * (total_devices + 1));
 
 	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
 		devpath, icarus->device_id);
