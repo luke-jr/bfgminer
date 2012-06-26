@@ -3,6 +3,7 @@ session_start();
 #
 global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
 global $checklastshare, $hidefields;
+global $ignorerefresh, $changerefresh, $autorefresh;
 #
 # Don't touch these 2 - see $rigs below
 $miner = null;
@@ -50,6 +51,14 @@ $socktimeoutsec = 10;
 #$hidefields = array('POOL.URL' => 1, 'POOL.User' => 1);
 $hidefields = array();
 #
+# Auto-refresh of the page (in seconds)
+# $ignorerefresh = true/false always ignore refresh parameters
+# $changerefresh = true/false show buttons to change the value
+# $autorefresh = default value, 0 means dont auto-refresh
+$ignorerefresh = false;
+$changerefresh = true;
+$autorefresh = 0;
+#
 $here = $_SERVER['PHP_SELF'];
 #
 global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
@@ -81,10 +90,24 @@ $showndate = false;
 global $rigerror;
 $rigerror = array();
 #
-function htmlhead($checkapi)
+function htmlhead($checkapi, $rig)
 {
  global $miner_font_family, $miner_font_size;
  global $error, $readonly, $here;
+ global $ignorerefresh, $autorefresh;
+
+ $paramrig = '';
+ if ($rig != null && $rig != '')
+	$paramrig .= "&rig=$rig";
+
+ if ($ignorerefresh == true || $autorefresh == 0)
+	$refreshmeta = '';
+ else
+ {
+	$url = "$here?ref=$autorefresh$paramrig";
+	$refreshmeta = "\n<meta http-equiv='refresh' content='$autorefresh;url=$url'>";
+ }
+
  if ($readonly === false && $checkapi === true)
  {
 	$access = api('privileged');
@@ -95,7 +118,8 @@ function htmlhead($checkapi)
  }
  $miner_font = "font-family:$miner_font_family; font-size:$miner_font_size;";
 
- echo "<html><head><title>Mine</title>
+ echo "<html><head>$refreshmeta
+<title>Mine</title>
 <style type='text/css'>
 td { color:blue; $miner_font }
 td.h { color:blue; $miner_font background:#d0ffff }
@@ -107,15 +131,16 @@ td.lst { color:blue; $miner_font background:#ffffdd }
 </style>
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
-function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location=\"$here\"+a}\n";
+function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location='$here?ref=$autorefresh'+a}\n";
+
+if ($ignorerefresh == false)
+ echo "function prr(a){if(a){v=document.getElementById('refval').value}else{v=0}window.location='$here?ref='+v+'$paramrig'}\n";
 
  if ($readonly === false && $checkapi === true)
  {
-?>
-function prc(a,m){pr('?arg='+a,m)}
+echo "function prc(a,m){pr('&arg='+a,m)}
 function prs(a,r){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a+'&rig='+r,m)}
-function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v+'&rig='+r,m)}
-<?php
+function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v+'&rig='+r,m)}\n";
  }
 ?>
 </script>
@@ -785,7 +810,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 			foreach ($dthead as $name => $x)
 			{
 				if ($item == 'STATUS' && $name == '')
-					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"?rig=$rig\",null)'></td>";
+					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"&rig=$rig\",null)'></td>";
 				else
 				{
 					if (isset($row[$name]))
@@ -868,7 +893,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 				if ($rig === 'total')
 					echo "<td align=right class=tot>Total:</td>";
 				else
-					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"?rig=$rig\",null)'></td>";
+					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"&rig=$rig\",null)'></td>";
 			}
 			else
 			{
@@ -891,17 +916,30 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
  }
 }
 #
+function refreshbuttons()
+{
+ global $readonly;
+ global $ignorerefresh, $changerefresh, $autorefresh;
+
+ if ($ignorerefresh == false && $changerefresh == true)
+ {
+	echo '&nbsp;&nbsp;&nbsp;&nbsp;';
+	echo "<input type=button value='Refresh:' onclick='prr(true)'>";
+	echo "<input type=text name='refval' id='refval' size=2 value='$autorefresh'>";
+	echo "<input type=button value='Off' onclick='prr(false)'>";
+ }
+}
+#
 function doOne($rig, $preprocess)
 {
- global $error, $readonly, $notify;
- global $rigs;
+ global $error, $readonly, $notify, $rigs;
 
- htmlhead(true);
+ htmlhead(true, $rig);
 
  $error = null;
 
  echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
- echo "<input type=button value='Refresh' onclick='pr(\"?rig=$rig\",null)'></td>";
+ echo "<input type=button value='Refresh' onclick='pr(\"&rig=$rig\",null)'></td>";
  if (count($rigs) > 1)
 	echo "<td><input type=button value='Summary' onclick='pr(\"\",null)'></td>";
  echo "<td width=100%>&nbsp;</td><td nowrap>";
@@ -913,6 +951,7 @@ function doOne($rig, $preprocess)
 	echo "<input type=button value='Restart' onclick='prc(\"restart&rig=$rig\",\"Restart BFGMiner$rg\")'>";
 	echo "&nbsp;<input type=button value='Quit' onclick='prc(\"quit&rig=$rig\",\"Quit BFGMiner$rg\")'>";
  }
+ refreshbuttons();
  echo "</td></tr></table></td></tr>";
 
  if ($preprocess != null)
@@ -938,6 +977,14 @@ function display()
  global $tablebegin, $tableend;
  global $miner, $port;
  global $error, $readonly, $notify, $rigs;
+ global $ignorerefresh, $autorefresh;
+
+ if ($ignorerefresh == false)
+ {
+	$ref = trim(getparam('ref', true));
+	if ($ref != null && $ref != '')
+		$autorefresh = intval($ref);
+ }
 
  $rig = trim(getparam('rig', true));
 
@@ -1006,10 +1053,12 @@ function display()
 	return;
  }
 
- htmlhead(false);
+ htmlhead(false, null);
 
  echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
  echo "<input type=button value='Refresh' onclick='pr(\"\",null)'>";
+ echo "<td width=100%>&nbsp;</td><td nowrap>";
+ refreshbuttons();
  echo "</td></tr></table></td></tr>";
 
  if ($preprocess != null)
