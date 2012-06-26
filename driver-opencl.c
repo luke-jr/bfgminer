@@ -1353,7 +1353,6 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	unsigned int threads;
 	unsigned int hashes;
 
-	gettimeofday(&gpu->tv_gpustart, NULL);
 	/* This finish flushes the readbuffer set with CL_FALSE later */
 	clFinish(clState->commandQueue);
 	gettimeofday(&gpu->tv_gpuend, NULL);
@@ -1372,7 +1371,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		if (gpu->gpu_ms_average > opt_dynamic_interval) {
 			if (gpu->intensity > MIN_INTENSITY)
 				--gpu->intensity;
-		} else if (gpu->gpu_ms_average < ((opt_dynamic_interval / 2) ? : 1)) {
+		} else if (gpu->gpu_ms_average < (float)opt_dynamic_interval / 2) {
 			if (gpu->intensity < MAX_INTENSITY)
 				++gpu->intensity;
 		}
@@ -1407,6 +1406,8 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		memset(thrdata->res, 0, BUFFERSIZE);
 		clFinish(clState->commandQueue);
 	}
+
+	gettimeofday(&gpu->tv_gpustart, NULL);
 
 	if (clState->goffset) {
 		size_t global_work_offset[1];
