@@ -1611,10 +1611,7 @@ static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		return;
 	}
 
-	if (add_pool_details(true, url, user, pass) == ADD_POOL_MAXIMUM) {
-		strcpy(io_buffer, message(MSG_TOOMANYP, MAX_POOLS, NULL, isjson));
-		return;
-	}
+	add_pool_details(true, url, user, pass);
 
 	ptr = escape_string(url, isjson);
 	strcpy(io_buffer, message(MSG_ADDPOOL, 0, ptr, isjson));

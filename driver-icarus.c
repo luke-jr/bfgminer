@@ -181,7 +181,7 @@ struct ICARUS_INFO {
 };
 
 // One for each possible device
-static struct ICARUS_INFO *icarus_info[MAX_DEVICES];
+static struct ICARUS_INFO **icarus_info;
 
 struct device_api icarus_api;
 
@@ -467,15 +467,15 @@ static bool icarus_detect_one(const char *devpath)
 	icarus->device_path = strdup(devpath);
 	icarus->threads = 1;
 	add_cgpu(icarus);
+	icarus_info = realloc(icarus_info, sizeof(struct ICARUS_INFO *) * (total_devices + 1));
 
 	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
 		devpath, icarus->device_id);
 
-	if (icarus_info[icarus->device_id] == NULL) {
-		icarus_info[icarus->device_id] = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
-		if (unlikely(!(icarus_info[icarus->device_id])))
-			quit(1, "Failed to malloc ICARUS_INFO");
-	}
+	// Since we are adding a new device on the end it needs to always be allocated
+	icarus_info[icarus->device_id] = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
+	if (unlikely(!(icarus_info[icarus->device_id])))
+		quit(1, "Failed to malloc ICARUS_INFO");
 
 	info = icarus_info[icarus->device_id];
 

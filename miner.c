@@ -117,7 +117,7 @@ struct list_head scan_devices;
 static signed int devices_enabled;
 static bool opt_removedisabled;
 int total_devices;
-struct cgpu_info *devices[MAX_DEVICES];
+struct cgpu_info **devices;
 bool have_opencl;
 int opt_n_threads = -1;
 int mining_threads;
@@ -189,7 +189,7 @@ unsigned int found_blocks;
 unsigned int local_work;
 unsigned int total_go, total_ro;
 
-struct pool *pools[MAX_POOLS];
+struct pool **pools;
 static struct pool *currentpool = NULL;
 
 int total_pools;
@@ -394,6 +394,7 @@ static struct pool *add_pool(void)
 	if (!pool)
 		quit(1, "Failed to malloc pool in add_pool");
 	pool->pool_no = pool->prio = total_pools;
+	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
 	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init in add_pool");
@@ -2190,7 +2191,7 @@ static bool stale_work(struct work *work, bool share)
 	pool = work->pool;
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
-	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
+	getwork_delay = (pool->cgminer_pool_stats.getwork_wait_rolling + 1) * 5;
 	if (!share) {
 		work_expiry -= getwork_delay;
 		if (unlikely(work_expiry < 5))
@@ -4774,12 +4775,9 @@ char *curses_input(const char *query)
 }
 #endif
 
-int add_pool_details(bool live, char *url, char *user, char *pass)
+void add_pool_details(bool live, char *url, char *user, char *pass)
 {
 	struct pool *pool;
-
-	if (total_pools == MAX_POOLS)
-		return ADD_POOL_MAXIMUM;
 
 	pool = add_pool();
 
@@ -4796,8 +4794,6 @@ int add_pool_details(bool live, char *url, char *user, char *pass)
 	pool->enabled = POOL_ENABLED;
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
-
-	return ADD_POOL_OK;
 }
 
 #ifdef HAVE_CURSES
@@ -4807,10 +4803,6 @@ static bool input_pool(bool live)
 	bool ret = false;
 
 	immedok(logwin, true);
-	if (total_pools == MAX_POOLS) {
-		wlogprint("Reached maximum number of pools.\n");
-		goto out;
-	}
 	wlogprint("Input server details.\n");
 
 	url = curses_input("URL");
@@ -4838,7 +4830,8 @@ static bool input_pool(bool live)
 	if (!pass)
 		goto out;
 
-	ret = (add_pool_details(live, url, user, pass) == ADD_POOL_OK);
+	add_pool_details(live, url, user, pass);
+	ret = true;
 out:
 	immedok(logwin, false);
 
@@ -5008,6 +5001,7 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
+	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + 2));
 	devices[total_devices++] = cgpu;
 	return true;
 }
@@ -5098,8 +5092,6 @@ int main(int argc, char *argv[])
 	for (i = 0; i < MAX_GPUDEVICES; i++)
 		gpus[i].dynamic = true;
 #endif
-
-	memset(devices, 0, sizeof(devices));
 
 	/* parse command line */
 	opt_register_table(opt_config_table,

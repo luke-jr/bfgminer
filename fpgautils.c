@@ -40,9 +40,6 @@
 char
 serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 {
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	struct udev *udev = udev_new();
 	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
 	struct udev_list_entry *list_entry;
@@ -64,9 +61,6 @@ serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 			++found;
 
 		udev_device_unref(device);
-
-		if (total_devices == MAX_DEVICES)
-			break;
 	}
 	udev_enumerate_unref(enumerate);
 	udev_unref(udev);
@@ -85,9 +79,6 @@ char
 serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 {
 #ifndef WIN32
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	DIR *D;
 	struct dirent *de;
 	const char udevdir[] = "/dev/serial/by-id";
@@ -104,11 +95,8 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 		if (!strstr(de->d_name, prodname))
 			continue;
 		strcpy(devfile, de->d_name);
-		if (detectone(devpath)) {
+		if (detectone(devpath))
 			++found;
-			if (total_devices == MAX_DEVICES)
-				break;
-		}
 	}
 	closedir(D);
 
@@ -121,9 +109,6 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 char
 _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
 {
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	struct string_elist *iter, *tmp;
 	const char*s, *p;
 	bool inhibitauto = false;
@@ -148,12 +133,10 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 			string_elist_del(iter);
 			inhibitauto = true;
 			++found;
-			if (total_devices == MAX_DEVICES)
-				break;
 		}
 	}
 
-	if ((forceauto || !inhibitauto) && autoscan && total_devices < MAX_DEVICES)
+	if ((forceauto || !inhibitauto) && autoscan)
 		found += autoscan();
 
 	return found;
@@ -198,28 +181,33 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	if (unlikely(fdDev == -1))
 		return -1;
 
-	struct termios pattr;
-	tcgetattr(fdDev, &pattr);
-	pattr.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-	pattr.c_oflag &= ~OPOST;
-	pattr.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-	pattr.c_cflag &= ~(CSIZE | PARENB);
-	pattr.c_cflag |= CS8;
+	struct termios my_termios;
+
+	tcgetattr(fdDev, &my_termios);
 
 	switch (baud) {
 	case 0: break;
-	case 115200: pattr.c_cflag = B115200; break;
+	case 115200: my_termios.c_cflag = B115200; break;
 	default:
 		applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
 	}
-	pattr.c_cflag |= CREAD | CLOCAL;
+
+	my_termios.c_cflag |= CS8;
+	my_termios.c_cflag |= CREAD;
+	my_termios.c_cflag |= CLOCAL;
+	my_termios.c_cflag &= ~(CSIZE | PARENB);
+
+	my_termios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK |
+				ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+	my_termios.c_oflag &= ~OPOST;
+	my_termios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
 
 	if (timeout >= 0) {
-		pattr.c_cc[VTIME] = (cc_t)timeout;
-		pattr.c_cc[VMIN] = 0;
+		my_termios.c_cc[VTIME] = (cc_t)timeout;
+		my_termios.c_cc[VMIN] = 0;
 	}
 
-	tcsetattr(fdDev, TCSANOW, &pattr);
+	tcsetattr(fdDev, TCSANOW, &my_termios);
 	if (purge)
 		tcflush(fdDev, TCIOFLUSH);
 	return fdDev;

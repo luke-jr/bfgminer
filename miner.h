@@ -340,6 +340,10 @@ struct cgpu_info {
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;
+
+	struct timeval tv_gpustart;;
+	struct timeval tv_gpuend;
+	double gpu_us_average;
 #endif
 
 	float temp;
@@ -572,14 +576,9 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int active_pools(void);
-extern int add_pool_details(bool live, char *url, char *user, char *pass);
-
-#define ADD_POOL_MAXIMUM 1
-#define ADD_POOL_OK 0
+extern void add_pool_details(bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
-#define MAX_DEVICES 64
-#define MAX_POOLS (32)
 
 #define MIN_INTENSITY -10
 #define _MIN_INTENSITY_STR "-10"
@@ -599,9 +598,9 @@ extern double total_secs;
 extern int mining_threads;
 extern struct cgpu_info *cpus;
 extern int total_devices;
-extern struct cgpu_info *devices[];
+extern struct cgpu_info **devices;
 extern int total_pools;
-extern struct pool *pools[MAX_POOLS];
+extern struct pool **pools;
 extern const char *algo_names[];
 extern enum sha256_algos opt_algo;
 extern struct strategies strategies[];
