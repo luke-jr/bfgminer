@@ -1363,7 +1363,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		suseconds_t gpu_us;
 
 		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
-		gpu_us = diff.tv_sec * 1000 + diff.tv_usec;
+		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
 		if (likely(gpu_us > 0)) {
 			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
 
