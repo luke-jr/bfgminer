@@ -2175,7 +2175,7 @@ static bool stale_work(struct work *work, bool share)
 	pool = work->pool;
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
-	getwork_delay = (pool->cgminer_pool_stats.getwork_wait_rolling + 1) * 5;
+	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
 	if (!share) {
 		work_expiry -= getwork_delay;
 		if (unlikely(work_expiry < 5))
