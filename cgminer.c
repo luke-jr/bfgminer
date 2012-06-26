@@ -2166,22 +2166,26 @@ static bool stale_work(struct work *work, bool share)
 	if (work->mandatory)
 		return false;
 
-	if (share)
-		work_expiry = opt_expiry;
-	else if (work->rolltime)
-		work_expiry = work->rolltime;
-	else
-		work_expiry = opt_scantime;
+	if (share) {
+		if (work->rolltime)
+			work_expiry = work->rolltime;
+		else
+			work_expiry = opt_expiry;
+	} else {
+		/* Don't keep rolling work right up to the expiration */
+		if (work->rolltime > opt_scantime)
+			work_expiry = (work->rolltime - opt_scantime) * 2 / 3 + opt_scantime;
+		else /* Shouldn't happen unless someone increases scantime */
+			work_expiry = opt_scantime;
+	}
+
 	pool = work->pool;
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
 	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
-	if (!share) {
-		work_expiry -= getwork_delay;
-		if (unlikely(work_expiry < 5))
-			work_expiry = 5;
-	} else
-		work_expiry += getwork_delay;
+	work_expiry -= getwork_delay;
+	if (unlikely(work_expiry < 5))
+		work_expiry = 5;
 
 	gettimeofday(&now, NULL);
 	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry)
