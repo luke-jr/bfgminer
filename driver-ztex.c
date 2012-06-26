@@ -63,7 +63,8 @@ static void ztex_detect(void)
 	struct cgpu_info *ztex;
 
 	cnt = libztex_scanDevices(&ztex_devices);
-	applog(LOG_WARNING, "Found %d ztex board(s)", cnt);
+	if (cnt > 0)
+		applog(LOG_WARNING, "Found %d ztex board%s", cnt, cnt > 1 ? "s" : "");
 
 	for (i = 0; i < cnt; i++) {
 		ztex = calloc(1, sizeof(struct cgpu_info));
