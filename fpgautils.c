@@ -15,6 +15,7 @@
 #include <string.h>
 
 #ifndef WIN32
+#include <errno.h>
 #include <termios.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -148,7 +149,20 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 #ifdef WIN32
 	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
+	{
+		DWORD e = GetLastError();
+		switch (e) {
+		case ERROR_ACCESS_DENIED:
+			applog(LOG_ERR, "Do not have user privileges required to open %s", devpath);
+			break;
+		case ERROR_SHARING_VIOLATION:
+			applog(LOG_ERR, "%s is already in use by another process", devpath);
+			break;
+		default:
+			break;
+		}
 		return -1;
+	}
 
 	// thanks to af_newbie for pointers about this
 	COMMCONFIG comCfg = {0};
@@ -179,7 +193,11 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
 
 	if (unlikely(fdDev == -1))
+	{
+		if (errno == EACCES)
+			applog(LOG_ERR, "Do not have user privileges required to open %s", devpath);
 		return -1;
+	}
 
 	struct termios my_termios;
 
