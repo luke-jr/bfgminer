@@ -4484,14 +4484,14 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (cgpu->api->get_stats)
 			  cgpu->api->get_stats(cgpu);
 
-			gpu = thr->cgpu->device_id;
+			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
 			sprintf(dev_str, "%s%d", cgpu->api->name, gpu);
 
 #ifdef HAVE_ADL
-			if (adl_active && gpus[gpu].has_adl)
+			if (adl_active && cgpu->has_adl)
 				gpu_autotune(gpu, denable);
-			if (opt_debug && gpus[gpu].has_adl) {
+			if (opt_debug && cgpu->has_adl) {
 				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
 				float temp = 0, vddc = 0;
 
@@ -4505,48 +4505,48 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
 
-			if (gpus[gpu].status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
+			if (cgpu->status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
-				gpus[gpu].status = LIFE_WELL;
-				gpus[gpu].device_last_well = time(NULL);
-			} else if (now.tv_sec - thr->last.tv_sec > 60 && gpus[gpu].status == LIFE_WELL) {
-				thr->rolling = thr->cgpu->rolling = 0;
-				gpus[gpu].status = LIFE_SICK;
+				cgpu->status = LIFE_WELL;
+				cgpu->device_last_well = time(NULL);
+			} else if (now.tv_sec - thr->last.tv_sec > 60 && cgpu->status == LIFE_WELL) {
+				thr->rolling = cgpu->rolling = 0;
+				cgpu->status = LIFE_SICK;
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
 				gettimeofday(&thr->sick, NULL);
 
-				gpus[gpu].device_last_not_well = time(NULL);
-				gpus[gpu].device_not_well_reason = REASON_DEV_SICK_IDLE_60;
-				gpus[gpu].dev_sick_idle_60_count++;
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_DEV_SICK_IDLE_60;
+				cgpu->dev_sick_idle_60_count++;
 #ifdef HAVE_ADL
-				if (adl_active && gpus[gpu].has_adl && gpu_activity(gpu) > 50) {
+				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
 					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
 					applog(LOG_ERR, "Will not attempt to auto-restart it.");
 				} else
 #endif
 				if (opt_restart) {
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
-					reinit_device(thr->cgpu);
+					reinit_device(cgpu);
 				}
-			} else if (now.tv_sec - thr->last.tv_sec > 600 && gpus[i].status == LIFE_SICK) {
-				gpus[gpu].status = LIFE_DEAD;
+			} else if (now.tv_sec - thr->last.tv_sec > 600 && cgpu->status == LIFE_SICK) {
+				cgpu->status = LIFE_DEAD;
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				gettimeofday(&thr->sick, NULL);
 
-				gpus[gpu].device_last_not_well = time(NULL);
-				gpus[gpu].device_not_well_reason = REASON_DEV_DEAD_IDLE_600;
-				gpus[gpu].dev_dead_idle_600_count++;
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_DEV_DEAD_IDLE_600;
+				cgpu->dev_dead_idle_600_count++;
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
-				   (gpus[i].status == LIFE_SICK || gpus[i].status == LIFE_DEAD)) {
+				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
 				gettimeofday(&thr->sick, NULL);
 #ifdef HAVE_ADL
-				if (adl_active && gpus[gpu].has_adl && gpu_activity(gpu) > 50) {
+				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
 					/* Again do not attempt to restart a device that may have hard hung */
 				} else
 #endif
 				if (opt_restart)
-					reinit_device(thr->cgpu);
+					reinit_device(cgpu);
 			}
 		}
 	}

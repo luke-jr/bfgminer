@@ -292,7 +292,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
 		return 1;
-	} else {
+	} else if (pdevbuf[0] == 'N') {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 	    /* Simple timing adjustment */
 		if (bitforce->wait_ms > (bitforce->sleep_ms + WORK_CHECK_INTERVAL_MS))
 			bitforce->sleep_ms += WORK_CHECK_INTERVAL_MS;
