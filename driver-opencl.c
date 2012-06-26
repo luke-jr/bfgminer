@@ -1363,7 +1363,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 
 		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
 		gpu_ms = diff.tv_sec * 1000 + diff.tv_usec / 1000;
-		gpu->gpu_ms_average = (gpu->gpu_ms_average + gpu_ms * 0.63) / 1.63;
+		gpu->gpu_ms_average = (gpu->gpu_ms_average + gpu_ms * 0.05) / 1.05;
 
 		/* Try to not let the GPU be out for longer than 6ms, but
 		 * increase intensity when the system is idle, unless
