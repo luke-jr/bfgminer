@@ -1346,6 +1346,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	struct cgpu_info *gpu = thr->cgpu;
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
+	const int dynamic_us = opt_dynamic_interval * 1000;
 
 	cl_int status;
 	size_t globalThreads[1];
@@ -1359,21 +1360,23 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 
 	if (gpu->dynamic) {
 		struct timeval diff;
-		suseconds_t gpu_ms;
+		suseconds_t gpu_us;
 
 		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
-		gpu_ms = diff.tv_sec * 1000 + diff.tv_usec / 1000;
-		gpu->gpu_ms_average = (gpu->gpu_ms_average + gpu_ms * 0.63) / 1.63;
+		gpu_us = diff.tv_sec * 1000 + diff.tv_usec;
+		if (likely(gpu_us > 0)) {
+			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
 
-		/* Try to not let the GPU be out for longer than 6ms, but
-		 * increase intensity when the system is idle, unless
-		 * dynamic is disabled. */
-		if (gpu->gpu_ms_average > opt_dynamic_interval) {
-			if (gpu->intensity > MIN_INTENSITY)
-				--gpu->intensity;
-		} else if (gpu->gpu_ms_average < (float)opt_dynamic_interval / 2) {
-			if (gpu->intensity < MAX_INTENSITY)
-				++gpu->intensity;
+			/* Try to not let the GPU be out for longer than 
+			 * opt_dynamic_interval in ms, but increase
+			 * intensity when the system is idle in dynamic mode */
+			if (gpu->gpu_us_average > dynamic_us) {
+				if (gpu->intensity > MIN_INTENSITY)
+					--gpu->intensity;
+			} else if (gpu->gpu_us_average < dynamic_us / 2) {
+				if (gpu->intensity < MAX_INTENSITY)
+					++gpu->intensity;
+			}
 		}
 	}
 	set_threads_hashes(clState->vwidth, &threads, &hashes, globalThreads,
