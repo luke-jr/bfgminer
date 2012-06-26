@@ -126,7 +126,7 @@ bool use_curses = true;
 #else
 bool use_curses;
 #endif
-static bool opt_submit_stale = true;
+bool opt_submit_stale = true;
 static int opt_shares;
 static bool opt_fail_only;
 bool opt_autofan;
