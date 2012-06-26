@@ -159,6 +159,7 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 			applog(LOG_ERR, "%s is already in use by another process", devpath);
 			break;
 		default:
+			applog(LOG_DEBUG, "Open %s failed, GetLastError:%u", devpath, e);
 			break;
 		}
 		return -1;
@@ -196,6 +197,9 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	{
 		if (errno == EACCES)
 			applog(LOG_ERR, "Do not have user privileges required to open %s", devpath);
+		else
+			applog(LOG_DEBUG, "Open %s failed, errno:%d", devpath, errno);
+
 		return -1;
 	}
 
