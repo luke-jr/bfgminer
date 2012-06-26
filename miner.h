@@ -351,7 +351,7 @@ struct cgpu_info {
 
 	struct timeval tv_gpustart;;
 	struct timeval tv_gpuend;
-	double gpu_ms_average;
+	double gpu_us_average;
 #endif
 
 	float temp;

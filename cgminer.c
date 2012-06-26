@@ -69,9 +69,7 @@ enum workio_commands {
 struct workio_cmd {
 	enum workio_commands	cmd;
 	struct thr_info		*thr;
-	union {
-		struct work	*work;
-	} u;
+	struct work		*work;
 	bool			lagging;
 };
 
@@ -1906,7 +1904,7 @@ static void workio_cmd_free(struct workio_cmd *wc)
 
 	switch (wc->cmd) {
 	case WC_SUBMIT_WORK:
-		free_work(wc->u.work);
+		free_work(wc->work);
 		break;
 	default: /* do nothing */
 		break;
@@ -2166,22 +2164,26 @@ static bool stale_work(struct work *work, bool share)
 	if (work->mandatory)
 		return false;
 
-	if (share)
-		work_expiry = opt_expiry;
-	else if (work->rolltime)
-		work_expiry = work->rolltime;
-	else
-		work_expiry = opt_scantime;
+	if (share) {
+		if (work->rolltime)
+			work_expiry = work->rolltime;
+		else
+			work_expiry = opt_expiry;
+	} else {
+		/* Don't keep rolling work right up to the expiration */
+		if (work->rolltime > opt_scantime)
+			work_expiry = (work->rolltime - opt_scantime) * 2 / 3 + opt_scantime;
+		else /* Shouldn't happen unless someone increases scantime */
+			work_expiry = opt_scantime;
+	}
+
 	pool = work->pool;
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
 	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
-	if (!share) {
-		work_expiry -= getwork_delay;
-		if (unlikely(work_expiry < 5))
-			work_expiry = 5;
-	} else
-		work_expiry += getwork_delay;
+	work_expiry -= getwork_delay;
+	if (unlikely(work_expiry < 5))
+		work_expiry = 5;
 
 	gettimeofday(&now, NULL);
 	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry)
@@ -2213,7 +2215,7 @@ static void check_solve(struct work *work)
 static void *submit_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct work *work = wc->u.work;
+	struct work *work = wc->work;
 	struct pool *pool = work->pool;
 	struct curl_ent *ce;
 	int failures = 0;
@@ -3845,11 +3847,11 @@ bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
 		return false;
 	}
 
-	wc->u.work = make_work();
+	wc->work = make_work();
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
-	memcpy(wc->u.work, work_in, sizeof(*work_in));
-	wc->u.work->share_found_time = time(NULL);
+	memcpy(wc->work, work_in, sizeof(*work_in));
+	wc->work->share_found_time = time(NULL);
 
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
