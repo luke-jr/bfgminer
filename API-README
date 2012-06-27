@@ -31,8 +31,11 @@ With "--api-allow", 127.0.0.1 is not by default given access unless specified
 
 More groups (like the privileged group W:) can be defined using the
 --api-groups command
-Valid groups are only the letters A-V,X-Z and are not case sensitive
-To give an IP address/subnet access to a group you the use group letter
+Valid groups are only the letters A-Z (except R & W are predfined) and are
+not case sensitive
+The R: group is the same as not privileged access
+The W: group is (as stated) privileged access (thus all API commands)
+To give an IP address/subnet access to a group you use the group letter
 in front of the IP address instead of W: e.g. P:192.168.0/32
 An IP address/subnet can only be a member of one group
 A sample API group would be:
@@ -309,7 +312,7 @@ Feature Changelog for external applications using the API:
 API V1.13
 
 Added API commands:
- 'checkcommand'
+ 'check'
 
 Support was added to cgminer for API access groups with the --api-groups option
 It's 100% backwards compatible with previous --api-access commands
