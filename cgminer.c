@@ -69,9 +69,7 @@ enum workio_commands {
 struct workio_cmd {
 	enum workio_commands	cmd;
 	struct thr_info		*thr;
-	union {
-		struct work	*work;
-	} u;
+	struct work		*work;
 	bool			lagging;
 };
 
@@ -1906,7 +1904,7 @@ static void workio_cmd_free(struct workio_cmd *wc)
 
 	switch (wc->cmd) {
 	case WC_SUBMIT_WORK:
-		free_work(wc->u.work);
+		free_work(wc->work);
 		break;
 	default: /* do nothing */
 		break;
@@ -2220,7 +2218,7 @@ static void check_solve(struct work *work)
 static void *submit_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct work *work = wc->u.work;
+	struct work *work = wc->work;
 	struct pool *pool = work->pool;
 	struct curl_ent *ce;
 	int failures = 0;
@@ -3852,11 +3850,11 @@ bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
 		return false;
 	}
 
-	wc->u.work = make_work();
+	wc->work = make_work();
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
-	memcpy(wc->u.work, work_in, sizeof(*work_in));
-	wc->u.work->share_found_time = time(NULL);
+	memcpy(wc->work, work_in, sizeof(*work_in));
+	wc->work->share_found_time = time(NULL);
 
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
