@@ -2165,7 +2165,10 @@ static bool stale_work(struct work *work, bool share)
 		return false;
 
 	if (share) {
-		if (work->rolltime)
+		/* Technically the rolltime should be correct but some pools
+		 * advertise a broken expire= that is lower than a meaningful
+		 * scantime */
+		if (work->rolltime > opt_scantime)
 			work_expiry = work->rolltime;
 		else
 			work_expiry = opt_expiry;
