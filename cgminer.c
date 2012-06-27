@@ -3646,13 +3646,17 @@ static inline bool can_roll(struct work *work)
 	return (work->pool && !stale_work(work, false) && work->rolltime && !work->clone);
 }
 
-static void roll_work(struct work *work)
+static bool roll_work(struct work *work)
 {
 	uint32_t *work_ntime;
 	uint32_t ntime;
 
 	work_ntime = (uint32_t *)(work->data + 68);
 	ntime = be32toh(*work_ntime);
+	if (unlikely(ntime == 0xFFFFFFFF)) {
+		applog(LOG_DEBUG, "Exhausted ntime space, cannot roll work");
+		return false;
+	}
 	ntime++;
 	*work_ntime = htobe32(ntime);
 	local_work++;
@@ -3663,13 +3667,14 @@ static void roll_work(struct work *work)
 	/* This is now a different work item so it needs a different ID for the
 	 * hashtable */
 	work->id = total_work++;
+	return true;
 }
 
 static bool reuse_work(struct work *work)
 {
 	if (can_roll(work) && should_roll(work)) {
-		roll_work(work);
-		return true;
+		if (likely(roll_work(work)))
+			return true;
 	}
 	return false;
 }
