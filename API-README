@@ -31,7 +31,7 @@ With "--api-allow", 127.0.0.1 is not by default given access unless specified
 
 More groups (like the privileged group W:) can be defined using the
 --api-groups command
-Valid groups are only the letters A-Z (except R & W are predfined) and are
+Valid groups are only the letters A-Z (except R & W are predefined) and are
 not case sensitive
 The R: group is the same as not privileged access
 The W: group is (as stated) privileged access (thus all API commands)
