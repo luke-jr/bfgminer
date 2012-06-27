@@ -133,6 +133,7 @@ bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
 char *opt_api_allow = NULL;
+char *opt_api_groups;
 char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
 bool opt_api_listen;
@@ -682,6 +683,13 @@ static char *set_api_allow(const char *arg)
 	return NULL;
 }
 
+static char *set_api_groups(const char *arg)
+{
+	opt_set_charp(arg, &opt_api_groups);
+
+	return NULL;
+}
+
 static char *set_api_description(const char *arg)
 {
 	opt_set_charp(arg, &opt_api_description);
@@ -732,10 +740,13 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
-		     "Allow API access only to the given list of IP[/Prefix] addresses[/subnets]"),
+		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
 	OPT_WITH_ARG("--api-description",
 		     set_api_description, NULL, NULL,
 		     "Description placed in the API status header, default: cgminer version"),
+	OPT_WITH_ARG("--api-groups",
+		     set_api_groups, NULL, NULL,
+		     "API one letter groups G:cmd:cmd[,P:cmd:*...] defining the cmds a groups can use"),
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
 			"Enable API, default: disabled"),
@@ -2871,6 +2882,8 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
+	if (opt_api_groups)
+		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", opt_api_groups);
 	if (opt_icarus_timing)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", opt_icarus_timing);
 	fputs("\n}", fcfg);
