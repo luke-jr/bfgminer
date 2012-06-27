@@ -146,6 +146,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	applog(LOG_INFO, "BFL%i: Re-initalizing", bitforce->device_id);
 
+	mutex_lock(&bitforce->device_mutex);
 	if (fdDev) {
 		BFclose(fdDev);
 		bitforce->device_fd = 0;
@@ -154,23 +155,22 @@ void bitforce_init(struct cgpu_info *bitforce)
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
 		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, devpath);
+		mutex_unlock(&bitforce->device_mutex);
 		return;
 	}
 
-	bitforce->device_fd = fdDev;
-
-	mutex_lock(&bitforce->device_mutex);
 	BFwrite(fdDev, "ZGX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	mutex_unlock(&bitforce->device_mutex);
 	
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL%i: Error reading (ZGX)", bitforce->device_id);
+		mutex_unlock(&bitforce->device_mutex);
 		return;
 	}
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
-		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s", bitforce->device_id, devpath);
+		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s returned: %s", bitforce->device_id, devpath, pdevbuf);
+		mutex_unlock(&bitforce->device_mutex);
 		return;
 	}
 	
@@ -179,6 +179,9 @@ void bitforce_init(struct cgpu_info *bitforce)
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
+
+	bitforce->device_fd = fdDev;
+	mutex_unlock(&bitforce->device_mutex);
 }
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
@@ -186,6 +189,9 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
 	char *s;
+
+	if (!fdDev)
+		return false;
 
 	mutex_lock(&bitforce->device_mutex);
 	BFwrite(fdDev, "ZLX", 3);
@@ -352,22 +358,24 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	bitforce->wait_ms = 0;
 	uint64_t ret;
 
-	if (ret = bitforce_send_work(thr, work)) {
-		if(!opt_submit_stale || !submit_old) {
-			while (bitforce->wait_ms < bitforce->sleep_ms) {
-				usleep(WORK_CHECK_INTERVAL_MS*1000);
-				bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
-				if (work_restart[thr->id].restart) {
-					applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
-					return 1; //we have discarded all work; equivilent to 0 hashes done.
-				}
+	ret = bitforce_send_work(thr, work);
+
+	if(!opt_submit_stale || !submit_old) {
+		while (bitforce->wait_ms < bitforce->sleep_ms) {
+			usleep(WORK_CHECK_INTERVAL_MS*1000);
+			bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
+			if (work_restart[thr->id].restart) {
+				applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
+				return 1; //we have discarded all work; equivilent to 0 hashes done.
 			}
-		} else {
-			usleep(bitforce->sleep_ms*1000);
-			bitforce->wait_ms = bitforce->sleep_ms;
 		}
-		ret = bitforce_get_result(thr, work);
+	} else {
+		usleep(bitforce->sleep_ms*1000);
+		bitforce->wait_ms = bitforce->sleep_ms;
 	}
+
+	if (ret)
+		ret = bitforce_get_result(thr, work);
 
 	if (!ret) {
 		ret = 1;
@@ -411,3 +419,4 @@ struct device_api bitforce_api = {
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
 };
+
