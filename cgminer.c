@@ -3644,9 +3644,12 @@ static inline bool should_roll(struct work *work)
 	return false;
 }
 
+/* Limit rolls to 7000 to not beyond 2 hours in the future where bitcoind will
+ * reject blocks as invalid. */
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && !stale_work(work, false) && work->rolltime && !work->clone);
+	return (work->pool && work->rolltime && !work->clone &&
+		work->rolls < 7000 && !stale_work(work, false));
 }
 
 static void roll_work(struct work *work)
