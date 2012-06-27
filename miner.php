@@ -159,6 +159,8 @@ td.warn { color:black; $miner_font background:#ffb050 }
 td.sta { color:green; $miner_font }
 td.tot { color:blue; $miner_font background:#fff8f2 }
 td.lst { color:blue; $miner_font background:#ffffdd }
+td.hi { color:blue; $miner_font background:#99ff99 }
+td.lo { color:blue; $miner_font background:#ff9999 }
 </style>
 </head><body bgcolor=#ecffff>
 <script type='text/javascript'>
@@ -364,6 +366,8 @@ function fmt($section, $name, $value, $when, $alldata)
  $errorclass = ' class=err';
  $warnclass = ' class=warn';
  $lstclass = ' class=lst';
+ $hiclass = ' class=hi';
+ $loclass = ' class=lo';
  $b = '&nbsp;';
 
  $ret = $value;
@@ -461,7 +465,20 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'SUMMARY.Utility':
 		$ret = $value.'/m';
 		if ($value == 0)
-			$class = $warnclass;
+			$class = $errorclass;
+		else
+			if (isset($alldata['MHS av']))
+			{
+				$expected = 60 * $alldata['MHS av'] * (pow(10, 6) / pow(2, 32));
+				if ($expected == 0)
+					$expected = 0.000001; // 1 H/s
+				$ratio = $value / $expected;
+				if ($ratio < 0.9)
+					$class = $loclass;
+				else
+					if ($ratio > 1.1)
+						$class = $hiclass;
+			}
 		break;
 	case 'PGA.Temperature':
 		$ret = $value.'&deg;C';
@@ -504,6 +521,28 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'GPU.MHS av':
 	case 'PGA.MHS av':
 	case 'SUMMARY.MHS av':
+		$parts = explode('.', $value, 2);
+		if (count($parts) == 1)
+			$dec = '';
+		else
+			$dec = '.'.$parts[1];
+		$ret = number_format($parts[0]).$dec;
+
+		if ($value == 0)
+			$class = $errorclass;
+		else
+			if (isset($alldata['Utility']))
+			{
+				$expected = 60 * $value * (pow(10, 6) / pow(2, 32));
+				$utility = $alldata['Utility'];
+				$ratio = $utility / $expected;
+				if ($ratio < 0.9)
+					$class = $hiclass;
+				else
+					if ($ratio > 1.1)
+						$class = $loclass;
+			}
+		break;
 	case 'GPU.Total MH':
 	case 'PGA.Total MH':
 	case 'SUMMARY.Total MH':
