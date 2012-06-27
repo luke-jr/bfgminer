@@ -2284,9 +2284,6 @@ static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 		access ? YES : NO);
 
 	strcat(io_buffer, buf);
-
-	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
 }
 
 static void send_result(SOCKETTYPE c, bool isjson)
