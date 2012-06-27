@@ -4,6 +4,7 @@ session_start();
 global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
 global $checklastshare, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
+global $allowcustompages, $customsummarypages;
 #
 # Don't touch these 2 - see $rigs below
 $miner = null;
@@ -59,6 +60,32 @@ $ignorerefresh = false;
 $changerefresh = true;
 $autorefresh = 0;
 #
+# Should we allow custom pages?
+# (or just completely ignore then and don't display the buttons)
+$allowcustompages = true;
+#
+# OK this is a bit more complex item: Custom Summary Pages
+# A custom summary page in an array of 'section' => array('FieldA','FieldB'...)
+# This makes up what is displayed with each 'section' separately as a table
+# - empty tables are not shown
+# - empty columns (an unknown field) are not shown
+# - and missing field data shows as blank
+# There is a second array, listing fields to be totaled for each section
+# see the example below (if there is no matching data, no total will show)
+$mobilepage = array(
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
+ 'GPU' => array('GPU', 'Status', 'MHS av', 'Accepted', 'Rejected', 'Utility'),
+ 'PGA' => array('ID', 'Name', 'Status', 'MHS av', 'Accepted', 'Rejected', 'Utility'),
+ 'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected', 'Last Share Time'));
+$mobilesum = array(
+ 'SUMMARY' => array('MHS av' => 1, 'Found Blocks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
+ 'GPU' => array('MHS av' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
+ 'PGA' => array('MHS av' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
+ 'POOL' => array('Accepted' => 1, 'Rejected' => 1));
+#
+# customsummarypages is an array of these Custom Summary Pages
+$customsummarypages = array('Mobile' => array($mobilepage, $mobilesum));
+#
 $here = $_SERVER['PHP_SELF'];
 #
 global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
@@ -110,6 +137,7 @@ function htmlhead($checkapi, $rig)
 
  if ($readonly === false && $checkapi === true)
  {
+	$error = null;
 	$access = api('privileged');
 	if ($error != null
 	||  !isset($access['STATUS']['STATUS'])
@@ -150,17 +178,20 @@ function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(
 <?php
 }
 #
-global $error;
+global $haderror, $error;
+$haderror = false;
 $error = null;
 #
 function getsock($addr, $port)
 {
- global $error, $socktimeoutsec;
+ global $haderror, $error, $socktimeoutsec;
 
+ $error = null;
  $socket = null;
  $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
  if ($socket === false || $socket === null)
  {
+	$haderror = true;
 	$error = socket_strerror(socket_last_error());
 	$msg = "socket create(TCP) failed";
 	$error = "ERR: $msg '$error'\n";
@@ -175,6 +206,7 @@ function getsock($addr, $port)
  $res = socket_connect($socket, $addr, $port);
  if ($res === false)
  {
+	$haderror = true;
 	$error = socket_strerror(socket_last_error());
 	$msg = "socket connect($addr,$port) failed";
 	$error = "ERR: $msg '$error'\n";
@@ -201,6 +233,7 @@ function readsockline($socket)
 #
 function api($cmd)
 {
+ global $haderror, $error;
  global $miner, $port, $hidefields;
 
  $socket = getsock($miner, $port);
@@ -212,6 +245,7 @@ function api($cmd)
 
 	if (strlen($line) == 0)
 	{
+		$haderror = true;
 		$error = "WARN: '$cmd' returned nothing\n";
 		return $line;
 	}
@@ -519,7 +553,7 @@ $poolcmd = array(	'Switch to'	=> 'switchpool',
 			'Enable'	=> 'enablepool',
 			'Disable'	=> 'disablepool' );
 #
-function showhead($cmd, $item, $values)
+function showhead($cmd, $values, $justnames = false)
 {
  global $poolcmd, $readonly;
 
@@ -532,7 +566,7 @@ function showhead($cmd, $item, $values)
 	echo "<td valign=bottom class=h>$name</td>";
  }
 
- if ($cmd == 'pools' && $readonly === false)
+ if ($justnames === false && $cmd == 'pools' && $readonly === false)
 	foreach ($poolcmd as $name => $pcmd)
 		echo "<td valign=bottom class=h>$name</td>";
 
@@ -588,7 +622,7 @@ function details($cmd, $list, $rig)
 	if ($sectionname != $section)
 	{
 		echo $tableend.$tablebegin;
-		showhead($cmd, $item, $values);
+		showhead($cmd, $values);
 		$section = $sectionname;
 	}
 
@@ -796,7 +830,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 	echo $tableend.$tablebegin;
 
 	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1, 'API' => 1, 'CGMiner' => 1);
-	showhead('', null, $dthead);
+	showhead('', $dthead);
 
 	foreach ($anss as $rig => $ans)
 	{
@@ -865,7 +899,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
  if ($sum != null)
 	$anss['total']['total'] = $total;
 
- showhead('', null, $header);
+ showhead('', $header);
 
  $section = '';
 
@@ -924,26 +958,38 @@ function refreshbuttons()
  if ($ignorerefresh == false && $changerefresh == true)
  {
 	echo '&nbsp;&nbsp;&nbsp;&nbsp;';
-	echo "<input type=button value='Refresh:' onclick='prr(true)'>";
+	echo "<input type=button value='Auto Refresh:' onclick='prr(true)'>";
 	echo "<input type=text name='refval' id='refval' size=2 value='$autorefresh'>";
 	echo "<input type=button value='Off' onclick='prr(false)'>";
  }
 }
 #
-function doOne($rig, $preprocess)
+function pagetop($rig, $pg)
 {
- global $error, $readonly, $notify, $rigs;
+ global $readonly, $rigs;
+ global $allowcustompages, $customsummarypages;
 
- htmlhead(true, $rig);
+ if ($rig === null)
+ {
+	if ($pg === null)
+		$refresh = '';
+	else
+		$refresh = "&pg=$pg";
+ }
+ else
+	$refresh = "&rig=$rig";
 
- $error = null;
-
- echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
- echo "<input type=button value='Refresh' onclick='pr(\"&rig=$rig\",null)'></td>";
+ echo '<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td nowrap>';
+ echo "<input type=button value='Refresh' onclick='pr(\"$refresh\",null)'>&nbsp;";
  if (count($rigs) > 1)
-	echo "<td><input type=button value='Summary' onclick='pr(\"\",null)'></td>";
- echo "<td width=100%>&nbsp;</td><td nowrap>";
- if ($readonly === false)
+	echo "<input type=button value='Summary' onclick='pr(\"\",null)'>&nbsp;";
+
+ if ($allowcustompages === true)
+	foreach ($customsummarypages as $pagename => $data)
+		echo "<input type=button value='$pagename' onclick='pr(\"&pg=$pagename\",null)'>&nbsp;";
+
+ echo '</td><td width=100%>&nbsp;</td><td nowrap>';
+ if ($rig !== null && $readonly === false)
  {
 	$rg = '';
 	if (count($rigs) > 1)
@@ -953,6 +999,15 @@ function doOne($rig, $preprocess)
  }
  refreshbuttons();
  echo "</td></tr></table></td></tr>";
+}
+#
+function doOne($rig, $preprocess)
+{
+ global $haderror, $readonly, $notify, $rigs;
+
+ htmlhead(true, $rig);
+
+ pagetop($rig, null);
 
  if ($preprocess != null)
 	process(array($preprocess => $preprocess), $rig);
@@ -968,16 +1023,226 @@ function doOne($rig, $preprocess)
 
  process($cmds, $rig);
 
- if ($error == null && $readonly === false)
+ if ($haderror == false && $readonly === false)
 	processgpus($rig);
+}
+#
+global $sectionmap;
+# map sections to their api command
+$sectionmap = array(
+	'SUMMARY' => 'summary',
+	'POOL' => 'pools',
+	'GPU' => 'devs',
+	'PGA' => 'devs',
+	'NOTIFY' => 'notify',
+	'CONFIG' => 'config');
+#
+function customset($showfields, $sum, $section, $num, $result, $total)
+{
+ foreach ($result as $sec => $row)
+ {
+	$secname = preg_replace('/\d/', '', $sec);
+
+	if ($sec != 'total')
+	{
+		if ($secname != $section)
+			continue;
+	}
+
+	echo '<tr>';
+
+	$when = 0;
+	if (isset($result['STATUS']['When']))
+		$when = $result['STATUS']['When'];
+
+	if ($sec === 'total')
+		$class = ' class=tot';
+	else
+		$class = '';
+
+	echo "<td align=middle$class>$num</td>";
+
+	foreach ($showfields as $name => $one)
+	{
+		if (isset($row[$name]))
+		{
+			$value = $row[$name];
+
+			if (isset($sum[$secname][$name]))
+			{
+				if (isset($total[$name]))
+					$total[$name] += $value;
+				else
+					$total[$name] = $value;
+			}
+		}
+		else
+		{
+			if ($sec == 'total' && isset($total[$name]))
+				$value = $total[$name];
+			else
+				$value = null;
+		}
+
+		list($showvalue, $class) = fmt($section, $name, $value, $when, $row);
+
+		if ($sec === 'total' and $class == '')
+			$class = ' class=tot';
+
+
+		echo "<td$class align=right>$showvalue</td>";
+	}
+
+	echo '</tr>';
+ }
+ return $total;
+}
+#
+function processcustompage($pagename, $sections, $sum)
+{
+ global $sectionmap;
+ global $miner, $port;
+ global $rigs, $error;
+ global $warnfont, $warnoff;
+ global $tablebegin, $tableend, $dfmt;
+ global $readonly, $showndate;
+
+ $cmds = array();
+ $errors = array();
+ foreach ($sections as $section => $fields)
+ {
+	if (isset($sectionmap[$section]))
+	{
+		$cmd = $sectionmap[$section];
+		if (!isset($cmds[$cmd]))
+			$cmds[$cmd] = 1;
+	}
+	else
+		$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
+ }
+
+ $results = array();
+ foreach ($rigs as $num => $rig)
+ {
+	$parts = explode(':', $rig, 2);
+	if (count($parts) == 2)
+	{
+		$miner = $parts[0];
+		$port = $parts[1];
+
+		foreach ($cmds as $cmd => $one)
+		{
+			$process = api($cmd);
+
+			if ($error != null)
+			{
+				$errors[] = "Error getting $cmd for $rig $warnfont$error$warnoff";
+				break;
+			}
+			else
+				$results[$cmd][$num] = $process;
+		}
+	}
+ }
+
+ if (count($results) > 0)
+ {
+	$first = true;
+	foreach ($sections as $section => $fields)
+	{
+		if (isset($results[$sectionmap[$section]]))
+		{
+			$rigresults = $results[$sectionmap[$section]];
+			$showfields = array();
+			foreach ($fields as $field)
+				foreach ($rigresults as $result)
+					foreach ($result as $sec => $row)
+					{
+						$secname = preg_replace('/\d/', '', $sec);
+						if ($secname == $section && isset($row[$field]))
+							$showfields[$field] = 1;
+					}
+
+			if (count($showfields) > 0)
+			{
+				if ($first === false)
+					echo '<tr><td>&nbsp;</td></tr>';
+
+				echo $tablebegin;
+
+				showhead('', array('Rig'=>1)+$showfields, true);
+
+				$total = array();
+				$add = array('total' => array());
+
+				foreach ($rigresults as $num => $result)
+				{
+					$rg = "<input type=button value='$num' onclick='pr(\"&rig=$num\",null)'>";
+					$total = customset($showfields, $sum, $section, $rg, $result, $total);
+				}
+
+				if (count($total) > 0)
+					customset($showfields, $sum, $section, '&Sigma;', $add, $total);
+
+				$first = false;
+
+				echo $tableend;
+			}
+		}
+	}
+ }
+
+ if (count($errors) > 0)
+ {
+	if (count($results) > 0)
+		echo '<tr><td>&nbsp;</td></tr>';
+
+	foreach ($errors as $err)
+		echo "<tr><td colspan=100>$err</td></tr>";
+ }
+}
+#
+function showcustompage($pagename)
+{
+ global $customsummarypages;
+
+ htmlhead(false, null);
+
+ pagetop(null, $pagename);
+
+ if (!isset($customsummarypages[$pagename]))
+ {
+	echo "<tr><td colspan=100>Unknown custom summary page '$pagename'</td></tr>";
+	return;
+ }
+
+ if (count($customsummarypages[$pagename]) != 2)
+ {
+	echo "<tr><td colspan=100>Invalid custom summary page '$pagename' (".count($customsummarypages[$pagename]).")</td></tr>";
+	return;
+ }
+
+ $page = $customsummarypages[$pagename][0];
+ $sum = $customsummarypages[$pagename][1];
+ if ($sum === null)
+	$sum = array();
+
+ if (count($page) <= 1)
+ {
+	echo "<tr><td colspan=100>Invalid custom summary page '$pagename' no content </td></tr>";
+	return;
+ }
+
+ processcustompage($pagename, $page, $sum);
 }
 #
 function display()
 {
  global $tablebegin, $tableend;
  global $miner, $port;
- global $error, $readonly, $notify, $rigs;
+ global $readonly, $notify, $rigs;
  global $ignorerefresh, $autorefresh;
+ global $allowcustompages;
 
  if ($ignorerefresh == false)
  {
@@ -1021,6 +1286,16 @@ function display()
 	return;
  }
 
+ if ($allowcustompages === true)
+ {
+	$pg = trim(getparam('pg', true));
+	if ($pg != null && $pg != '')
+	{
+		showcustompage($pg);
+		return;
+	}
+ }
+
  if (count($rigs) == 1)
  {
 	$parts = explode(':', $rigs[0], 2);
@@ -1055,11 +1330,7 @@ function display()
 
  htmlhead(false, null);
 
- echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
- echo "<input type=button value='Refresh' onclick='pr(\"\",null)'>";
- echo "<td width=100%>&nbsp;</td><td nowrap>";
- refreshbuttons();
- echo "</td></tr></table></td></tr>";
+ pagetop(null, null);
 
  if ($preprocess != null)
 	process(array($preprocess => $preprocess), $rig);
