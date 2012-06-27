@@ -119,6 +119,8 @@ Options for both config file and command line:
                     This overrides --api-network and you must specify 127.0.0.1 if it is required
                     W: in front of the IP address gives that address privileged access to all api commands
 --api-description   Description placed in the API status header (default: cgminer version)
+--api-groups        API one letter groups G:cmd:cmd[,P:cmd:*...]
+                    See API-README for usage
 --api-listen        Listen for API requests (default: disabled)
                     By default any command that does not just display data returns access denied
                     See --api-allow to overcome this
