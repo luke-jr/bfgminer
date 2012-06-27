@@ -117,21 +117,24 @@ $showndate = false;
 global $rigerror;
 $rigerror = array();
 #
-function htmlhead($checkapi, $rig)
+function htmlhead($checkapi, $rig, $pg = null)
 {
  global $miner_font_family, $miner_font_size;
  global $error, $readonly, $here;
  global $ignorerefresh, $autorefresh;
 
- $paramrig = '';
+ $extraparams = '';
  if ($rig != null && $rig != '')
-	$paramrig = "&rig=$rig";
+	$extraparams = "&rig=$rig";
+ else
+	if ($pg != null && $pg != '')
+		$extraparams = "&pg=$pg";
 
  if ($ignorerefresh == true || $autorefresh == 0)
 	$refreshmeta = '';
  else
  {
-	$url = "$here?ref=$autorefresh$paramrig";
+	$url = "$here?ref=$autorefresh$extraparams";
 	$refreshmeta = "\n<meta http-equiv='refresh' content='$autorefresh;url=$url'>";
  }
 
@@ -162,7 +165,7 @@ td.lst { color:blue; $miner_font background:#ffffdd }
 function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location='$here?ref=$autorefresh'+a}\n";
 
 if ($ignorerefresh == false)
- echo "function prr(a){if(a){v=document.getElementById('refval').value}else{v=0}window.location='$here?ref='+v+'$paramrig'}\n";
+ echo "function prr(a){if(a){v=document.getElementById('refval').value}else{v=0}window.location='$here?ref='+v+'$extraparams'}\n";
 
  if ($readonly === false && $checkapi === true)
  {
@@ -1206,7 +1209,7 @@ function showcustompage($pagename)
 {
  global $customsummarypages;
 
- htmlhead(false, null);
+ htmlhead(false, null, $pagename);
 
  pagetop(null, $pagename);
 
