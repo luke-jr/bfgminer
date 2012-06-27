@@ -693,7 +693,7 @@ int gpu_fanpercent(int gpu)
 	if (unlikely(ga->has_fanspeed && ret == -1)) {
 		applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
 		if (opt_restart) {
-			applog(LOG_WARNING, "Restart enabled, will restart cgminer");
+			applog(LOG_WARNING, "Restart enabled, will attempt to restart cgminer");
 			applog(LOG_WARNING, "You can disable this with the --no-restart option");
 			app_restart();
 		}
