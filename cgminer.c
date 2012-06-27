@@ -2165,7 +2165,10 @@ static bool stale_work(struct work *work, bool share)
 		return false;
 
 	if (share) {
-		if (work->rolltime)
+		/* Technically the rolltime should be correct but some pools
+		 * advertise a broken expire= that is lower than a meaningful
+		 * scantime */
+		if (work->rolltime > opt_scantime)
 			work_expiry = work->rolltime;
 		else
 			work_expiry = opt_expiry;
@@ -3641,9 +3644,11 @@ static inline bool should_roll(struct work *work)
 	return false;
 }
 
+/* Limit rolls to 7000 to not beyond 2 hours in the future where bitcoind will
+ * reject blocks as invalid. */
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && !stale_work(work, false) && work->rolltime && !work->clone);
+	return (work->pool && work->rolltime && !work->clone && work->rolls < 7000);
 }
 
 static void roll_work(struct work *work)
