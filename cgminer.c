@@ -3648,8 +3648,7 @@ static inline bool should_roll(struct work *work)
  * reject blocks as invalid. */
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && work->rolltime && !work->clone &&
-		work->rolls < 7000 && !stale_work(work, false));
+	return (work->pool && work->rolltime && !work->clone && work->rolls < 7000);
 }
 
 static void roll_work(struct work *work)
