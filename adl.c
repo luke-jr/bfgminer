@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #ifdef HAVE_CURSES
 #include <curses.h>
@@ -1050,14 +1051,16 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *
 		applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
 		newpercent = ga->targetfan - 1;
 	} else {
+		int tdiff = round(temp - lasttemp);
+
 		/* We're in the optimal range, make minor adjustments if the
 		 * temp is still drifting */
-		if (fanpercent > bot && temp < lasttemp && lasttemp < ga->targettemp) {
+		if (fanpercent > bot && tdiff < 0 && lasttemp < ga->targettemp) {
 			applog(LOG_DEBUG, "Temperature dropping while in target range, decreasing fanspeed");
-			newpercent = ga->targetfan - 1;
-		} else if (fanpercent < top && temp > lasttemp && temp > ga->targettemp - opt_hysteresis) {
+			newpercent = ga->targetfan + tdiff;
+		} else if (fanpercent < top && tdiff > 0 && temp > ga->targettemp - opt_hysteresis) {
 			applog(LOG_DEBUG, "Temperature rising while in target range, increasing fanspeed");
-			newpercent = ga->targetfan + 1;
+			newpercent = ga->targetfan + tdiff;
 		}
 	}
 
