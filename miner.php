@@ -5,6 +5,8 @@ global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
 global $checklastshare, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
 global $allowcustompages, $customsummarypages;
+global $miner_font_family, $miner_font_size;
+global $colouroverride, $placebuttons;
 #
 # Don't touch these 2 - see $rigs below
 $miner = null;
@@ -96,10 +98,16 @@ $warnfont = '<font color=red><b>';
 $warnoff = '</b></font>';
 $dfmt = 'H:i:s j-M-Y \U\T\CP';
 #
-global $miner_font_family, $miner_font_size;
-#
 $miner_font_family = 'verdana,arial,sans';
 $miner_font_size = '13pt';
+#
+# Edit this or redefine it in myminer.php to change the colour scheme
+# See $colourtable below for the list of names
+$colouroverride = array();
+#
+# Where to place the buttons: 'top' 'bot' 'both'
+#  anything else means don't show them - case sensitive
+$placebuttons = 'top';
 #
 # This below allows you to put your own settings into a seperate file
 # so you don't need to update miner.php with your preferred settings
@@ -109,6 +117,32 @@ $miner_font_size = '13pt';
 if (file_exists('myminer.php'))
  include_once('myminer.php');
 #
+# This is the system default that must always contain all necessary
+# colours so it must be a constant
+# You can override these values with $colouroverride
+# The only one missing is in $warnfont
+# - which you can override directly anyway
+global $colourtable;
+$colourtable = array(
+	'body bgcolor'		=> '#ecffff',
+	'td color'		=> 'blue',
+	'td.h color'		=> 'blue',
+	'td.h background'	=> '#c4ffff',
+	'td.err color'		=> 'black',
+	'td.err background'	=> '#ff3050',
+	'td.warn color'		=> 'black',
+	'td.warn background'	=> '#ffb050',
+	'td.sta color'		=> 'green',
+	'td.tot color'		=> 'blue',
+	'td.tot background'	=> '#fff8f2',
+	'td.lst color'		=> 'blue',
+	'td.lst background'	=> '#ffffdd',
+	'td.hi color'		=> 'blue',
+	'td.hi background'	=> '#f6ffff',
+	'td.lo color'		=> 'blue',
+	'td.lo background'	=> '#deffff'
+);
+#
 # Ensure it is only ever shown once
 global $showndate;
 $showndate = false;
@@ -116,6 +150,28 @@ $showndate = false;
 # For summary page to stop retrying failed rigs
 global $rigerror;
 $rigerror = array();
+#
+function getcss($cssname, $dom = false)
+{
+ global $colourtable, $colouroverride;
+
+ $css = '';
+ foreach ($colourtable as $cssdata => $colour)
+ {
+	$cssobj = split(' ', $cssdata, 2);
+	if ($cssobj[0] == $cssname)
+	{
+		if (isset($colouroverride[$cssdata]))
+			$color = $colouroverride[$cssdata];
+
+		if ($dom == true)
+			$css .= ' '.$cssobj[1].'='.$colour;
+		else
+			$css .= $cssobj[1].':'.$colour.'; ';
+	}
+ }
+ return $css;
+}
 #
 function htmlhead($checkapi, $rig, $pg = null)
 {
@@ -152,17 +208,17 @@ function htmlhead($checkapi, $rig, $pg = null)
  echo "<html><head>$refreshmeta
 <title>Mine</title>
 <style type='text/css'>
-td { color:blue; $miner_font }
-td.h { color:blue; $miner_font background:#d0ffff }
-td.err { color:black; $miner_font background:#ff3050 }
-td.warn { color:black; $miner_font background:#ffb050 }
-td.sta { color:green; $miner_font }
-td.tot { color:blue; $miner_font background:#fff8f2 }
-td.lst { color:blue; $miner_font background:#ffffdd }
-td.hi { color:blue; $miner_font background:#99ff99 }
-td.lo { color:blue; $miner_font background:#ff9999 }
+td { $miner_font ".getcss('td')."}
+td.h { $miner_font ".getcss('td.h')."}
+td.err { $miner_font ".getcss('td.err')."}
+td.warn { $miner_font ".getcss('td.warn')."}
+td.sta { $miner_font ".getcss('td.sta')."}
+td.tot { $miner_font ".getcss('td.tot')."}
+td.lst { $miner_font ".getcss('td.lst')."}
+td.hi { $miner_font ".getcss('td.hi')."}
+td.lo { $miner_font ".getcss('td.lo')."}
 </style>
-</head><body bgcolor=#ecffff>
+</head><body".getcss('body',true).">
 <script type='text/javascript'>
 function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location='$here?ref=$autorefresh'+a}\n";
 
@@ -795,6 +851,7 @@ function process($cmds, $rig)
  global $error, $devs;
  global $warnfont, $warnoff;
 
+ $count = count($cmds);
  foreach ($cmds as $cmd => $des)
  {
 	$process = api($cmd);
@@ -808,7 +865,11 @@ function process($cmds, $rig)
 	else
 	{
 		details($cmd, $process, $rig);
-		echo '<tr><td><br><br></td></tr>';
+
+		# Not after the last one
+		if (--$count > 0)
+			echo '<tr><td><br><br></td></tr>';
+
 		if ($cmd == 'devs')
 			$devs = $process;
 	}
@@ -1006,7 +1067,7 @@ function refreshbuttons()
  }
 }
 #
-function pagetop($rig, $pg)
+function pagebuttons($rig, $pg)
 {
  global $readonly, $rigs;
  global $allowcustompages, $customsummarypages;
@@ -1046,10 +1107,12 @@ function pagetop($rig, $pg)
 function doOne($rig, $preprocess)
 {
  global $haderror, $readonly, $notify, $rigs;
+ global $placebuttons;
 
  htmlhead(true, $rig);
 
- pagetop($rig, null);
+ if ($placebuttons == 'top' || $placebuttons == 'both')
+	pagebuttons($rig, null);
 
  if ($preprocess != null)
 	process(array($preprocess => $preprocess), $rig);
@@ -1067,6 +1130,9 @@ function doOne($rig, $preprocess)
 
  if ($haderror == false && $readonly === false)
 	processgpus($rig);
+
+ if ($placebuttons == 'bot' || $placebuttons == 'both')
+	pagebuttons($rig, null);
 }
 #
 global $sectionmap;
@@ -1247,10 +1313,12 @@ function processcustompage($pagename, $sections, $sum)
 function showcustompage($pagename)
 {
  global $customsummarypages;
+ global $placebuttons;
 
  htmlhead(false, null, $pagename);
 
- pagetop(null, $pagename);
+ if ($placebuttons == 'top' || $placebuttons == 'both')
+	pagebuttons(null, $pagename);
 
  if (!isset($customsummarypages[$pagename]))
  {
@@ -1276,6 +1344,9 @@ function showcustompage($pagename)
  }
 
  processcustompage($pagename, $page, $sum);
+
+ if ($placebuttons == 'bot' || $placebuttons == 'both')
+	pagebuttons(null, $pagename);
 }
 #
 function display()
@@ -1285,6 +1356,7 @@ function display()
  global $readonly, $notify, $rigs;
  global $ignorerefresh, $autorefresh;
  global $allowcustompages;
+ global $placebuttons;
 
  if ($ignorerefresh == false)
  {
@@ -1372,7 +1444,8 @@ function display()
 
  htmlhead(false, null);
 
- pagetop(null, null);
+ if ($placebuttons == 'top' || $placebuttons == 'both')
+	pagebuttons(null, null);
 
  if ($preprocess != null)
 	process(array($preprocess => $preprocess), $rig);
@@ -1390,6 +1463,9 @@ function display()
  echo $tablebegin;
  doforeach('pools', 'pool list', $sum, array(''=>''), false);
  echo $tableend;
+
+ if ($placebuttons == 'bot' || $placebuttons == 'both')
+	pagebuttons(null, null);
 }
 #
 display();
