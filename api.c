@@ -158,6 +158,7 @@ static char *msg_buffer = NULL;
 static SOCKETTYPE sock = INVSOCK;
 
 static const char *UNAVAILABLE = " - API will not be available";
+static const char *INVAPIGROUPS = "Invalid --api-groups parameter";
 
 static const char *BLANK = "";
 static const char *COMMA = ",";
@@ -165,7 +166,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.12";
+static const char *APIVERSION = "1.13";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -243,6 +244,7 @@ static const char *OSINFO =
 #define _BYE		"BYE"
 #define _RESTART	"RESTART"
 #define _MINESTATS	"STATS"
+#define _CHECK		"CHECK"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -277,6 +279,7 @@ static const char ISJSON = '{';
 #define JSON_RESTART	JSON1 _RESTART JSON1
 #define JSON_CLOSE	JSON3
 #define JSON_MINESTATS	JSON1 _MINESTATS JSON2
+#define JSON_CHECK	JSON1 _CHECK JSON2
 #define JSON_END	JSON4
 
 static const char *JSON_COMMAND = "command";
@@ -364,6 +367,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_REMPOOL 68
 #define MSG_DEVDETAILS 69
 #define MSG_MINESTATS 70
+#define MSG_MISCHK 71
+#define MSG_CHECK 72
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -507,6 +512,8 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
  { SEVERITY_SUCC,  MSG_DEVDETAILS,PARAM_NONE,	"Device Details" },
  { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"CGMiner stats" },
+ { SEVERITY_ERR,   MSG_MISCHK,	PARAM_NONE,	"Missing check cmd" },
+ { SEVERITY_SUCC,  MSG_CHECK,	PARAM_NONE,	"Check command" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -525,8 +532,22 @@ static time_t when = 0;	// when the request occurred
 struct IP4ACCESS {
 	in_addr_t ip;
 	in_addr_t mask;
-	bool writemode;
+	char group;
 };
+
+#define GROUP(g) (toupper(g))
+#define PRIVGROUP GROUP('W')
+#define NOPRIVGROUP GROUP('R')
+#define ISPRIVGROUP(g) (GROUP(g) == PRIVGROUP)
+#define GROUPOFFSET(g) (GROUP(g) - GROUP('A'))
+#define VALIDGROUP(g) (GROUP(g) >= GROUP('A') && GROUP(g) <= GROUP('Z'))
+#define COMMANDS(g) (apigroups[GROUPOFFSET(g)].commands)
+#define DEFINEDGROUP(g) (ISPRIVGROUP(g) || COMMANDS(g) != NULL)
+
+struct APIGROUPS {
+	// This becomes a string like: "|cmd1|cmd2|cmd3|" so it's quick to search
+	char *commands;
+} apigroups['Z' - 'A' + 1]; // only A=0 to Z=25 (R: noprivs, W: allprivs)
 
 static struct IP4ACCESS *ipaccess = NULL;
 static int ips = 0;
@@ -796,7 +817,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 	return msg_buffer;
 }
 
-static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	sprintf(io_buffer, isjson
 		? "%s," JSON_VERSION "{\"CGMiner\":\"%s\",\"API\":\"%s\"}" JSON_CLOSE
@@ -805,7 +826,7 @@ static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		VERSION, APIVERSION);
 }
 
-static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	char buf[TMPBUFSIZ];
 	int gpucount = 0;
@@ -1003,7 +1024,7 @@ static void cpustatus(int cpu, bool isjson)
 }
 #endif
 
-static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	int devcount = 0;
 	int numgpu = 0;
@@ -1069,7 +1090,7 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 }
 
 #ifdef HAVE_OPENCL
-static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
 
@@ -1103,7 +1124,7 @@ static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 }
 #endif
 #ifdef HAVE_AN_FPGA
-static void pgadev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void pgadev(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int numpga = numpgas();
 	int id;
@@ -1137,7 +1158,7 @@ static void pgadev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int numpga = numpgas();
 	struct thr_info *thr;
@@ -1193,7 +1214,7 @@ static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_PGAENA, id, NULL, isjson));
 }
 
-static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int numpga = numpgas();
 	int id;
@@ -1234,7 +1255,7 @@ static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 #endif
 
 #ifdef WANT_CPUMINE
-static void cpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void cpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
 
@@ -1268,7 +1289,7 @@ static void cpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 }
 #endif
 
-static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	char buf[TMPBUFSIZ];
 	char *status, *lp;
@@ -1345,7 +1366,7 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	double utility, mhs;
 
@@ -1379,7 +1400,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 #endif
 }
 #ifdef HAVE_OPENCL
-static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct thr_info *thr;
 	int gpu;
@@ -1425,7 +1446,7 @@ static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUREN, id, NULL, isjson));
 }
 
-static void gpudisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void gpudisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
 
@@ -1455,7 +1476,7 @@ static void gpudisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUDIS, id, NULL, isjson));
 }
 
-static void gpurestart(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void gpurestart(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
 
@@ -1480,7 +1501,7 @@ static void gpurestart(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUREI, id, NULL, isjson));
 }
 #endif
-static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	char buf[TMPBUFSIZ];
 	int numgpu = 0;
@@ -1499,8 +1520,7 @@ static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 	strcat(io_buffer, buf);
 }
 
-
-static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	char buf[TMPBUFSIZ];
 	int count = 0;
@@ -1519,7 +1539,7 @@ static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 	strcat(io_buffer, buf);
 }
 
-static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	char buf[TMPBUFSIZ];
 	int count = 0;
@@ -1538,7 +1558,7 @@ static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 	strcat(io_buffer, buf);
 }
 
-static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
 	int id;
@@ -1619,7 +1639,7 @@ exitsama:
 	return false;
 }
 
-static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char *url, *user, *pass;
 	char *ptr;
@@ -1647,7 +1667,7 @@ static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	ptr = NULL;
 }
 
-static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
 	int id;
@@ -1681,7 +1701,7 @@ static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_ENAPOOL, id, NULL, isjson));
 }
 
-static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
 	int id;
@@ -1720,7 +1740,7 @@ static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_DISPOOL, id, NULL, isjson));
 }
 
-static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
 	char *rpc_url;
@@ -1806,7 +1826,7 @@ static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 
 	return true;
 }
-static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
 	char *value;
@@ -1835,7 +1855,7 @@ static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
 	strcpy(io_buffer, message(MSG_GPUINT, id, intensitystr, isjson));
 }
 
-static void gpumem(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void gpumem(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1856,7 +1876,7 @@ static void gpumem(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool
 #endif
 }
 
-static void gpuengine(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void gpuengine(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1877,7 +1897,7 @@ static void gpuengine(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 #endif
 }
 
-static void gpufan(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void gpufan(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1898,7 +1918,7 @@ static void gpufan(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool
 #endif
 }
 
-static void gpuvddc(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void gpuvddc(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 #ifdef HAVE_ADL
 	int id;
@@ -1919,7 +1939,7 @@ static void gpuvddc(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 #endif
 }
 #endif
-void doquit(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+void doquit(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	if (isjson)
 		strcpy(io_buffer, JSON_START JSON_BYE);
@@ -1930,7 +1950,7 @@ void doquit(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson
 	do_a_quit = true;
 }
 
-void dorestart(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+void dorestart(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	if (isjson)
 		strcpy(io_buffer, JSON_START JSON_RESTART);
@@ -1941,12 +1961,12 @@ void dorestart(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isj
 	do_a_restart = true;
 }
 
-void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	strcpy(io_buffer, message(MSG_ACCOK, 0, NULL, isjson));
 }
 
-void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
+void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unused char group)
 {
 	char buf[TMPBUFSIZ];
 	char *reason;
@@ -2000,7 +2020,7 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson)
 	strcat(io_buffer, buf);
 }
 
-static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
 {
 	int i;
 
@@ -2017,13 +2037,13 @@ static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool
 	}
 
 	for (i = 0; i < total_devices; i++)
-		notifystatus(i, devices[i], isjson);
+		notifystatus(i, devices[i], isjson, group);
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	char buf[TMPBUFSIZ];
 	struct cgpu_info *cgpu;
@@ -2059,7 +2079,7 @@ static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		strcat(io_buffer, JSON_CLOSE);
 }
 
-void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson)
+void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char filename[PATH_MAX];
 	FILE *fcfg;
@@ -2135,7 +2155,8 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 
 	return i;
 }
-static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson)
+
+static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	char extra[TMPBUFSIZ];
 	char id[20];
@@ -2174,10 +2195,12 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		strcat(io_buffer, JSON_CLOSE);
 }
 
+static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
+
 struct CMDS {
 	char *name;
-	void (*func)(SOCKETTYPE, char *, bool);
-	bool requires_writemode;
+	void (*func)(SOCKETTYPE, char *, bool, char);
+	bool iswritemode;
 } cmds[] = {
 	{ "version",		apiversion,	false },
 	{ "config",		minerconfig,	false },
@@ -2220,8 +2243,46 @@ struct CMDS {
 	{ "devdetails",		devdetails,	false },
 	{ "restart",		dorestart,	true },
 	{ "stats",		minerstats,	false },
+	{ "check",		checkcommand,	false },
 	{ NULL,			NULL,		false }
 };
+
+static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group)
+{
+	char buf[TMPBUFSIZ];
+	char cmdbuf[100];
+	bool found, access;
+	int i;
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISCHK, 0, NULL, isjson));
+		return;
+	}
+
+	found = false;
+	access = false;
+	for (i = 0; cmds[i].name != NULL; i++) {
+		if (strcmp(cmds[i].name, param) == 0) {
+			found = true;
+
+			sprintf(cmdbuf, "|%s|", param);
+			if (ISPRIVGROUP(group) || strstr(COMMANDS(group), cmdbuf))
+				access = true;
+
+			break;
+		}
+	}
+
+	strcpy(io_buffer, message(MSG_CHECK, 0, NULL, isjson));
+
+	sprintf(buf, isjson
+		? "," JSON_CHECK "{\"Exists\":\"%s\",\"Access\":\"%s\"}" JSON_CLOSE
+		: _CHECK ",Exists=%s,Access=%s" SEPSTR,
+		found ? YES : NO,
+		access ? YES : NO);
+
+	strcat(io_buffer, buf);
+}
 
 static void send_result(SOCKETTYPE c, bool isjson)
 {
@@ -2277,7 +2338,153 @@ static void tidyup(__maybe_unused void *arg)
 }
 
 /*
- * Interpret [R|W:]IP[/Prefix][,[R|W:]IP2[/Prefix2][,...]] --api-allow option
+ * Interpret --api-groups G:cmd1:cmd2:cmd3,P:cmd4,*,...
+ */
+static void setup_groups()
+{
+	char *api_groups = opt_api_groups ? opt_api_groups : (char *)BLANK;
+	char *buf, *ptr, *next, *colon;
+	char group;
+	char commands[TMPBUFSIZ];
+	char cmdbuf[100];
+	char *cmd;
+	bool addstar, did;
+	int i;
+
+	buf = malloc(strlen(api_groups) + 1);
+	if (unlikely(!buf))
+		quit(1, "Failed to malloc ipgroups buf");
+
+	strcpy(buf, api_groups);
+
+	next = buf;
+	// for each group defined
+	while (next && *next) {
+		ptr = next;
+		next = strchr(ptr, ',');
+		if (next)
+			*(next++) = '\0';
+
+		// Validate the group
+		if (*(ptr+1) != ':') {
+			colon = strchr(ptr, ':');
+			if (colon)
+				*colon = '\0';
+			applog(LOG_WARNING, "API invalid group name '%s'", ptr);
+			quit(1, INVAPIGROUPS);
+		}
+
+		group = GROUP(*ptr);
+		if (!VALIDGROUP(group)) {
+			applog(LOG_WARNING, "API invalid group name '%c'", *ptr);
+			quit(1, INVAPIGROUPS);
+		}
+
+		if (group == PRIVGROUP) {
+			applog(LOG_WARNING, "API group name can't be '%c'", PRIVGROUP);
+			quit(1, INVAPIGROUPS);
+		}
+
+		if (group == NOPRIVGROUP) {
+			applog(LOG_WARNING, "API group name can't be '%c'", NOPRIVGROUP);
+			quit(1, INVAPIGROUPS);
+		}
+
+		if (apigroups[GROUPOFFSET(group)].commands != NULL) {
+			applog(LOG_WARNING, "API duplicate group name '%c'", *ptr);
+			quit(1, INVAPIGROUPS);
+		}
+
+		ptr += 2;
+
+		// Validate the command list (and handle '*')
+		cmd = &(commands[0]);
+		*(cmd++) = SEPARATOR;
+		*cmd = '\0';
+		addstar = false;
+		while (ptr && *ptr) {
+			colon = strchr(ptr, ':');
+			if (colon)
+				*(colon++) = '\0';
+
+			if (strcmp(ptr, "*") == 0)
+				addstar = true;
+			else {
+				did = false;
+				for (i = 0; cmds[i].name != NULL; i++) {
+					if (strcasecmp(ptr, cmds[i].name) == 0) {
+						did = true;
+						break;
+					}
+				}
+				if (did) {
+					// skip duplicates
+					sprintf(cmdbuf, "|%s|", cmds[i].name);
+					if (strstr(commands, cmdbuf) == NULL) {
+						strcpy(cmd, cmds[i].name);
+						cmd += strlen(cmds[i].name);
+						*(cmd++) = SEPARATOR;
+						*cmd = '\0';
+					}
+				} else {
+					applog(LOG_WARNING, "API unknown command '%s' in group '%c'", ptr, group);
+					quit(1, INVAPIGROUPS);
+				}
+			}
+
+			ptr = colon;
+		}
+
+		// * = allow all non-iswritemode commands
+		if (addstar) {
+			for (i = 0; cmds[i].name != NULL; i++) {
+				if (cmds[i].iswritemode == false) {
+					// skip duplicates
+					sprintf(cmdbuf, "|%s|", cmds[i].name);
+					if (strstr(commands, cmdbuf) == NULL) {
+						strcpy(cmd, cmds[i].name);
+						cmd += strlen(cmds[i].name);
+						*(cmd++) = SEPARATOR;
+						*cmd = '\0';
+					}
+				}
+			}
+		}
+
+		ptr = apigroups[GROUPOFFSET(group)].commands = malloc(strlen(commands) + 1);
+		if (unlikely(!ptr))
+			quit(1, "Failed to malloc group commands buf");
+
+		strcpy(ptr, commands);
+	}
+
+	// Now define R (NOPRIVGROUP) as all non-iswritemode commands
+	cmd = &(commands[0]);
+	*(cmd++) = SEPARATOR;
+	*cmd = '\0';
+	for (i = 0; cmds[i].name != NULL; i++) {
+		if (cmds[i].iswritemode == false) {
+			strcpy(cmd, cmds[i].name);
+			cmd += strlen(cmds[i].name);
+			*(cmd++) = SEPARATOR;
+			*cmd = '\0';
+		}
+	}
+
+	ptr = apigroups[GROUPOFFSET(NOPRIVGROUP)].commands = malloc(strlen(commands) + 1);
+	if (unlikely(!ptr))
+		quit(1, "Failed to malloc noprivgroup commands buf");
+
+	strcpy(ptr, commands);
+
+	// W (PRIVGROUP) is handled as a special case since it simply means all commands
+
+	free(buf);
+	return;
+}
+
+/*
+ * Interpret [W:]IP[/Prefix][,[R|W:]IP2[/Prefix2][,...]] --api-allow option
  *	special case of 0/0 allows /0 (means all IP addresses)
  */
 #define ALLIP4 "0/0"
@@ -2288,7 +2495,7 @@ static void setup_ipaccess()
 {
 	char *buf, *ptr, *comma, *slash, *dot;
 	int ipcount, mask, octet, i;
-	bool writemode;
+	char group;
 
 	buf = malloc(strlen(opt_api_allow) + 1);
 	if (unlikely(!buf))
@@ -2322,16 +2529,16 @@ static void setup_ipaccess()
 		if (comma)
 			*(comma++) = '\0';
 
-		writemode = false;
+		group = NOPRIVGROUP;
 
 		if (isalpha(*ptr) && *(ptr+1) == ':') {
-			if (tolower(*ptr) == 'w')
-				writemode = true;
+			if (DEFINEDGROUP(*ptr))
+				group = GROUP(*ptr);
 
 			ptr += 2;
 		}
 
-		ipaccess[ips].writemode = writemode;
+		ipaccess[ips].group = group;
 
 		if (strcmp(ptr, ALLIP4) == 0)
 			ipaccess[ips].ip = ipaccess[ips].mask = 0;
@@ -2421,10 +2628,11 @@ void api(int api_thr_id)
 	struct sockaddr_in serv;
 	struct sockaddr_in cli;
 	socklen_t clisiz;
+	char cmdbuf[100];
 	char *cmd;
 	char *param;
 	bool addrok;
-	bool writemode;
+	char group;
 	json_error_t json_err;
 	json_t *json_config;
 	json_t *json_val;
@@ -2437,13 +2645,12 @@ void api(int api_thr_id)
 	pthread_cleanup_push(tidyup, NULL);
 	my_thr_id = api_thr_id;
 
-	/* This should be done first to ensure curl has already called WSAStartup() in windows */
-	sleep(opt_log_interval);
-
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
 		return;
 	}
+
+	setup_groups();
 
 	if (opt_api_allow) {
 		setup_ipaccess();
@@ -2453,6 +2660,10 @@ void api(int api_thr_id)
 			return;
 		}
 	}
+
+	/* This should be done before curl in needed
+	 * to ensure curl has already called WSAStartup() in windows */
+	sleep(opt_log_interval);
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
@@ -2523,12 +2734,12 @@ void api(int api_thr_id)
 		connectaddr = inet_ntoa(cli.sin_addr);
 
 		addrok = false;
-		writemode = false;
+		group = NOPRIVGROUP;
 		if (opt_api_allow) {
 			for (i = 0; i < ips; i++) {
 				if ((cli.sin_addr.s_addr & ipaccess[i].mask) == ipaccess[i].ip) {
 					addrok = true;
-					writemode = ipaccess[i].writemode;
+					group = ipaccess[i].group;
 					break;
 				}
 			}
@@ -2622,12 +2833,13 @@ void api(int api_thr_id)
 				if (!did)
 					for (i = 0; cmds[i].name != NULL; i++) {
 						if (strcmp(cmd, cmds[i].name) == 0) {
-							if (cmds[i].requires_writemode && !writemode) {
+							sprintf(cmdbuf, "|%s|", cmd);
+							if (ISPRIVGROUP(group) || strstr(COMMANDS(group), cmdbuf))
+								(cmds[i].func)(c, param, isjson, group);
+							else {
 								strcpy(io_buffer, message(MSG_ACCDENY, 0, cmds[i].name, isjson));
 								applog(LOG_DEBUG, "API: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
 							}
-							else
-								(cmds[i].func)(c, param, isjson);
 
 							send_result(c, isjson);
 							did = true;

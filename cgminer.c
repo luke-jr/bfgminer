@@ -100,6 +100,7 @@ int opt_scantime = 60;
 int opt_expiry = 120;
 int opt_bench_algo = -1;
 static const bool opt_time = true;
+unsigned long long global_hashrate;
 
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
@@ -131,6 +132,7 @@ bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
 char *opt_api_allow = NULL;
+char *opt_api_groups;
 char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
 bool opt_api_listen;
@@ -680,6 +682,13 @@ static char *set_api_allow(const char *arg)
 	return NULL;
 }
 
+static char *set_api_groups(const char *arg)
+{
+	opt_set_charp(arg, &opt_api_groups);
+
+	return NULL;
+}
+
 static char *set_api_description(const char *arg)
 {
 	opt_set_charp(arg, &opt_api_description);
@@ -730,10 +739,13 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
-		     "Allow API access only to the given list of IP[/Prefix] addresses[/subnets]"),
+		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
 	OPT_WITH_ARG("--api-description",
 		     set_api_description, NULL, NULL,
 		     "Description placed in the API status header, default: cgminer version"),
+	OPT_WITH_ARG("--api-groups",
+		     set_api_groups, NULL, NULL,
+		     "API one letter groups G:cmd:cmd[,P:cmd:*...] defining the cmds a groups can use"),
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
 			"Enable API, default: disabled"),
@@ -2872,6 +2884,8 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
+	if (opt_api_groups)
+		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", opt_api_groups);
 	if (opt_icarus_timing)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", opt_icarus_timing);
 	fputs("\n}", fcfg);
@@ -3387,6 +3401,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 	decay_time(&rolling, local_mhashes_done / local_secs);
+	global_hashrate = roundl(rolling) * 1000000;
 
 	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
 	total_secs = (double)total_diff.tv_sec +
@@ -3649,7 +3664,7 @@ static inline bool should_roll(struct work *work)
 static inline bool can_roll(struct work *work)
 {
 	return (work->pool && work->rolltime && !work->clone &&
-work->rolls < 7000 && !stale_work(work, false));
+		work->rolls < 7000 && !stale_work(work, false));
 }
 
 static void roll_work(struct work *work)
