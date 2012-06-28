@@ -353,29 +353,21 @@ static void biforce_thread_enable(struct thr_info *thr)
 	bitforce_init(bitforce);
 }
 
-extern bool opt_submit_stale;
-
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	bool submit_old = work->pool->submit_old;
 	bitforce->wait_ms = 0;
 	uint64_t ret;
 
 	ret = bitforce_send_work(thr, work);
 
-	if(!opt_submit_stale || !submit_old) {
-		while (bitforce->wait_ms < bitforce->sleep_ms) {
-			usleep(WORK_CHECK_INTERVAL_MS*1000);
-			bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
-			if (work_restart[thr->id].restart) {
-				applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
-				return 1; //we have discarded all work; equivalent to 0 hashes done.
-			}
+	while (bitforce->wait_ms < bitforce->sleep_ms) {
+		usleep(WORK_CHECK_INTERVAL_MS*1000);
+		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
+		if (work_restart[thr->id].restart) {
+			applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
+			return 1; //we have discarded all work; equivilent to 0 hashes done.
 		}
-	} else {
-		usleep(bitforce->sleep_ms*1000);
-		bitforce->wait_ms = bitforce->sleep_ms;
 	}
 
 	if (ret)
