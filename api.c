@@ -158,7 +158,7 @@ static char *msg_buffer = NULL;
 static SOCKETTYPE sock = INVSOCK;
 
 static const char *UNAVAILABLE = " - API will not be available";
-static const char *GROUPDIS = " - groups will be disabled";
+static const char *INVAPIGROUPS = "Invalid --api-groups parameter";
 
 static const char *BLANK = "";
 static const char *COMMA = ",";
@@ -548,8 +548,6 @@ struct APIGROUPS {
 	// This becomes a string like: "|cmd1|cmd2|cmd3|" so it's quick to search
 	char *commands;
 } apigroups['Z' - 'A' + 1]; // only A=0 to Z=25 (R: noprivs, W: allprivs)
-
-static bool groups_enabled = false;
 
 static struct IP4ACCESS *ipaccess = NULL;
 static int ips = 0;
@@ -2022,7 +2020,7 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unuse
 	strcat(io_buffer, buf);
 }
 
-static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
 {
 	int i;
 
@@ -2344,6 +2342,7 @@ static void tidyup(__maybe_unused void *arg)
  */
 static void setup_groups()
 {
+	char *api_groups = opt_api_groups ? opt_api_groups : (char *)BLANK;
 	char *buf, *ptr, *next, *colon;
 	char group;
 	char commands[TMPBUFSIZ];
@@ -2352,11 +2351,11 @@ static void setup_groups()
 	bool addstar, did;
 	int i;
 
-	buf = malloc(strlen(opt_api_groups) + 1);
+	buf = malloc(strlen(api_groups) + 1);
 	if (unlikely(!buf))
 		quit(1, "Failed to malloc ipgroups buf");
 
-	strcpy(buf, opt_api_groups);
+	strcpy(buf, api_groups);
 
 	next = buf;
 	// for each group defined
@@ -2371,29 +2370,29 @@ static void setup_groups()
 			colon = strchr(ptr, ':');
 			if (colon)
 				*colon = '\0';
-			applog(LOG_WARNING, "API invalid group name '%s'%s", ptr, GROUPDIS);
-			goto shin;
+			applog(LOG_WARNING, "API invalid group name '%s'", ptr);
+			quit(1, INVAPIGROUPS);
 		}
 
 		group = GROUP(*ptr);
 		if (!VALIDGROUP(group)) {
-			applog(LOG_WARNING, "API invalid group name '%c'%s", *ptr, GROUPDIS);
-			goto shin;
+			applog(LOG_WARNING, "API invalid group name '%c'", *ptr);
+			quit(1, INVAPIGROUPS);
 		}
 
 		if (group == PRIVGROUP) {
-			applog(LOG_WARNING, "API group name can't be '%c'%s", PRIVGROUP, GROUPDIS);
-			goto shin;
+			applog(LOG_WARNING, "API group name can't be '%c'", PRIVGROUP);
+			quit(1, INVAPIGROUPS);
 		}
 
 		if (group == NOPRIVGROUP) {
-			applog(LOG_WARNING, "API group name can't be '%c'%s", NOPRIVGROUP, GROUPDIS);
-			goto shin;
+			applog(LOG_WARNING, "API group name can't be '%c'", NOPRIVGROUP);
+			quit(1, INVAPIGROUPS);
 		}
 
 		if (apigroups[GROUPOFFSET(group)].commands != NULL) {
-			applog(LOG_WARNING, "API duplicate group name '%c'%s", *ptr, GROUPDIS);
-			goto shin;
+			applog(LOG_WARNING, "API duplicate group name '%c'", *ptr);
+			quit(1, INVAPIGROUPS);
 		}
 
 		ptr += 2;
@@ -2428,8 +2427,8 @@ static void setup_groups()
 						*cmd = '\0';
 					}
 				} else {
-					applog(LOG_WARNING, "API unknown command '%s' in group '%c'%s", ptr, group, GROUPDIS);
-					goto shin;
+					applog(LOG_WARNING, "API unknown command '%s' in group '%c'", ptr, group);
+					quit(1, INVAPIGROUPS);
 				}
 			}
 
@@ -2480,8 +2479,6 @@ static void setup_groups()
 
 	// W (PRIVGROUP) is handled as a special case since it simply means all commands
 
-	groups_enabled = true;
-shin:
 	free(buf);
 	return;
 }
@@ -2648,16 +2645,12 @@ void api(int api_thr_id)
 	pthread_cleanup_push(tidyup, NULL);
 	my_thr_id = api_thr_id;
 
-	/* This should be done first to ensure curl has already called WSAStartup() in windows */
-	sleep(opt_log_interval);
-
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
 		return;
 	}
 
-	if (opt_api_groups)
-		setup_groups();
+	setup_groups();
 
 	if (opt_api_allow) {
 		setup_ipaccess();
@@ -2667,6 +2660,10 @@ void api(int api_thr_id)
 			return;
 		}
 	}
+
+	/* This should be done before curl in needed
+	 * to ensure curl has already called WSAStartup() in windows */
+	sleep(opt_log_interval);
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
@@ -2739,14 +2736,13 @@ void api(int api_thr_id)
 		addrok = false;
 		group = NOPRIVGROUP;
 		if (opt_api_allow) {
-			if (groups_enabled)
-				for (i = 0; i < ips; i++) {
-					if ((cli.sin_addr.s_addr & ipaccess[i].mask) == ipaccess[i].ip) {
-						addrok = true;
-						group = ipaccess[i].group;
-						break;
-					}
+			for (i = 0; i < ips; i++) {
+				if ((cli.sin_addr.s_addr & ipaccess[i].mask) == ipaccess[i].ip) {
+					addrok = true;
+					group = ipaccess[i].group;
+					break;
 				}
+			}
 		} else {
 			if (opt_api_network)
 				addrok = true;
