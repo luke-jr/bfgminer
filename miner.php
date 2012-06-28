@@ -76,13 +76,11 @@ $allowcustompages = true;
 # see the example below (if there is no matching data, no total will show)
 $mobilepage = array(
  'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
- 'GPU' => array('GPU', 'Status', 'MHS av', 'Accepted', 'Rejected', 'Utility'),
- 'PGA' => array('ID', 'Name', 'Status', 'MHS av', 'Accepted', 'Rejected', 'Utility'),
+ 'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected', 'Utility'),
  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected', 'Last Share Time'));
 $mobilesum = array(
  'SUMMARY' => array('MHS av' => 1, 'Found Blocks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
- 'GPU' => array('MHS av' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
- 'PGA' => array('MHS av' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
+ 'DEVS' => array('MHS av' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
  'POOL' => array('Accepted' => 1, 'Rejected' => 1));
 #
 # customsummarypages is an array of these Custom Summary Pages
@@ -1137,13 +1135,28 @@ function doOne($rig, $preprocess)
 #
 global $sectionmap;
 # map sections to their api command
+# DEVS is a special case that will match GPU or PGA
+# so you can have a single table with both in it
 $sectionmap = array(
 	'SUMMARY' => 'summary',
 	'POOL' => 'pools',
-	'GPU' => 'devs',
-	'PGA' => 'devs',
+	'DEVS' => 'devs',
+	'GPU' => 'devs',	// You would normally use DEVS
+	'PGA' => 'devs',	// You would normally use DEVS
 	'NOTIFY' => 'notify',
 	'CONFIG' => 'config');
+#
+function secmatch($section, $field)
+{
+ if ($section == $field)
+	return true;
+
+ if ($section == 'DEVS'
+ &&  ($field == 'GPU' || $field == 'PGA'))
+	return true;
+
+ return false;
+}
 #
 function customset($showfields, $sum, $section, $num, $result, $total)
 {
@@ -1152,10 +1165,8 @@ function customset($showfields, $sum, $section, $num, $result, $total)
 	$secname = preg_replace('/\d/', '', $sec);
 
 	if ($sec != 'total')
-	{
-		if ($secname != $section)
+		if (!secmatch($section, $secname))
 			continue;
-	}
 
 	echo '<tr>';
 
@@ -1176,7 +1187,7 @@ function customset($showfields, $sum, $section, $num, $result, $total)
 		{
 			$value = $row[$name];
 
-			if (isset($sum[$secname][$name]))
+			if (isset($sum[$section][$name]))
 			{
 				if (isset($total[$name]))
 					$total[$name] += $value;
@@ -1192,7 +1203,7 @@ function customset($showfields, $sum, $section, $num, $result, $total)
 				$value = null;
 		}
 
-		list($showvalue, $class) = fmt($section, $name, $value, $when, $row);
+		list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
 
 		if ($sec === 'total' and $class == '')
 			$class = ' class=tot';
@@ -1267,7 +1278,7 @@ function processcustompage($pagename, $sections, $sum)
 					foreach ($result as $sec => $row)
 					{
 						$secname = preg_replace('/\d/', '', $sec);
-						if ($secname == $section && isset($row[$field]))
+						if (secmatch($section, $secname) && isset($row[$field]))
 							$showfields[$field] = 1;
 					}
 
