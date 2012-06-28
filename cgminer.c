@@ -3648,7 +3648,8 @@ static inline bool should_roll(struct work *work)
  * reject blocks as invalid. */
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && work->rolltime && !work->clone && work->rolls < 7000);
+	return (work->pool && work->rolltime && !work->clone &&
+work->rolls < 7000 && !stale_work(work, false));
 }
 
 static void roll_work(struct work *work)
@@ -4404,9 +4405,16 @@ static void age_work(void)
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
+#define WATCHDOG_INTERVAL		3
+#define WATCHDOG_SICK_TIME		60
+#define WATCHDOG_DEAD_TIME		600
+#define WATCHDOG_SICK_COUNT		(WATCHDOG_SICK_TIME/WATCHDOG_INTERVAL)
+#define WATCHDOG_DEAD_COUNT		(WATCHDOG_DEAD_TIME/WATCHDOG_INTERVAL)
+#define WATCHDOG_LOW_HASH		1.0 /* consider < 1MH too low for any device */
+
 static void *watchdog_thread(void __maybe_unused *userdata)
 {
-	const unsigned int interval = 3;
+	const unsigned int interval = WATCHDOG_INTERVAL;
 	struct timeval zero_tv;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -4510,11 +4518,24 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
 
-			if (cgpu->status != LIFE_WELL && now.tv_sec - thr->last.tv_sec < 60) {
+			if (cgpu->rolling < WATCHDOG_LOW_HASH)
+				cgpu->low_count++;
+			else
+				cgpu->low_count = 0;
+
+			uint64_t hashtime = now.tv_sec - thr->last.tv_sec;
+			bool dev_time_well = hashtime < WATCHDOG_SICK_TIME;
+			bool dev_time_sick = hashtime > WATCHDOG_SICK_TIME;
+			bool dev_time_dead = hashtime > WATCHDOG_DEAD_TIME;
+			bool dev_count_well = cgpu->low_count < WATCHDOG_SICK_COUNT;
+			bool dev_count_sick = cgpu->low_count > WATCHDOG_SICK_COUNT;
+			bool dev_count_dead = cgpu->low_count > WATCHDOG_DEAD_COUNT;
+
+			if (cgpu->status != LIFE_WELL && dev_time_well && dev_count_well) {
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
-			} else if (now.tv_sec - thr->last.tv_sec > 60 && cgpu->status == LIFE_WELL) {
+			} else if (cgpu->status == LIFE_WELL && (dev_time_sick || dev_count_sick)) {
 				thr->rolling = cgpu->rolling = 0;
 				cgpu->status = LIFE_SICK;
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
@@ -4533,7 +4554,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
 				}
-			} else if (now.tv_sec - thr->last.tv_sec > 600 && cgpu->status == LIFE_SICK) {
+			} else if (cgpu->status == LIFE_SICK && (dev_time_dead || dev_count_dead)) {
 				cgpu->status = LIFE_DEAD;
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				gettimeofday(&thr->sick, NULL);
@@ -5473,3 +5494,4 @@ begin_bench:
 
 	return 0;
 }
+

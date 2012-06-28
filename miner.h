@@ -326,6 +326,7 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int hw_errors;
+	unsigned int low_count;
 	double rolling;
 	double total_mhashes;
 	double utility;
@@ -796,3 +797,4 @@ extern void adl(void);
 extern void app_restart(void);
 
 #endif /* __MINER_H__ */
+
