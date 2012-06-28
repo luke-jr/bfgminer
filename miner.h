@@ -326,6 +326,7 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int hw_errors;
+	unsigned int low_count;
 	double rolling;
 	double total_mhashes;
 	double utility;
@@ -530,6 +531,7 @@ extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
 extern char *opt_api_allow;
+extern char *opt_api_groups;
 extern char *opt_api_description;
 extern int opt_api_port;
 extern bool opt_api_listen;
@@ -625,6 +627,7 @@ extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
 extern const int opt_cutofftemp;
 extern int opt_log_interval;
+extern unsigned long long global_hashrate;
 
 #ifdef HAVE_OPENCL
 typedef struct {
@@ -796,3 +799,4 @@ extern void adl(void);
 extern void app_restart(void);
 
 #endif /* __MINER_H__ */
+

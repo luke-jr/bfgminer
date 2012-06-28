@@ -144,13 +144,12 @@ void bitforce_init(struct cgpu_info *bitforce)
 	char pdevbuf[0x100];
 	char *s;
 
-	applog(LOG_INFO, "BFL%i: Re-initalizing", bitforce->device_id);
+	applog(LOG_WARNING, "BFL%i: Re-initalizing", bitforce->device_id);
 
 	mutex_lock(&bitforce->device_mutex);
-	if (fdDev) {
+	if (fdDev)
 		BFclose(fdDev);
-		bitforce->device_fd = 0;
-	}
+	bitforce->device_fd = 0;
 
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
@@ -228,6 +227,9 @@ static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
 	char *s;
 
+	if (!fdDev)
+		return false;
+
 	mutex_lock(&bitforce->device_mutex);
 	BFwrite(fdDev, "ZDX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
@@ -277,6 +279,9 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	char *pnoncebuf;
 	uint32_t nonce;
 
+	if (!fdDev)
+		return 0;
+
 	while (bitforce->wait_ms < BITFORCE_TIMEOUT_MS) {
 		mutex_lock(&bitforce->device_mutex);
 		BFwrite(fdDev, "ZFX", 3);
@@ -284,7 +289,6 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		mutex_unlock(&bitforce->device_mutex);
 		if (unlikely(!pdevbuf[0])) {
 			applog(LOG_ERR, "BFL%i: Error reading (ZFX)", bitforce->device_id);
-			mutex_unlock(&bitforce->device_mutex);
 			return 0;
 		}
 		if (pdevbuf[0] != 'B')
@@ -366,7 +370,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 			bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
 			if (work_restart[thr->id].restart) {
 				applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
-				return 1; //we have discarded all work; equivilent to 0 hashes done.
+				return 1; //we have discarded all work; equivalent to 0 hashes done.
 			}
 		}
 	} else {
@@ -419,4 +423,5 @@ struct device_api bitforce_api = {
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
 };
+
 
