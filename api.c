@@ -630,6 +630,195 @@ static char *escape_string(char *str, bool isjson)
 	return buf;
 }
 
+struct api_data *api_add_data_full(struct api_data *root, char *name, enum api_data_type type, void *data, bool copy_data)
+{
+	struct api_data *api_data;
+
+	api_data = (struct api_data *)malloc(sizeof(struct api_data));
+
+	api_data->type = type;
+	api_data->name = name;
+
+	if (root == NULL) {
+		root = api_data;
+		root->prev = root;
+		root->next = root;
+	}
+	else {
+		api_data->prev = root->prev;
+		root->prev = api_data;
+		api_data->next = root;
+		api_data->prev->next = api_data;
+	}
+
+	api_data->data_was_malloc = copy_data;
+
+	if (!copy_data)
+		api_data->data = data;
+	else
+		switch(type) {
+		case API_ESCAPE:
+		case API_STRING:
+			api_data->data = (void *)malloc(strlen((char *)data) + 1);
+			strcpy((char*)(api_data->data), (char *)data);
+			break;
+		case API_INT:
+			api_data->data = (void *)malloc(sizeof(int));
+			*((int *)(api_data->data)) = *((int *)data);
+			break;
+		case API_UINT:
+			api_data->data = (void *)malloc(sizeof(unsigned int));
+			*((unsigned int *)(api_data->data)) = *((unsigned int *)data);
+			break;
+		case API_UINT64:
+			api_data->data = (void *)malloc(sizeof(uint64_t));
+			*((uint64_t *)(api_data->data)) = *((uint64_t *)data);
+			break;
+		case API_ULONG:
+			api_data->data = (void *)malloc(sizeof(unsigned long));
+			*((unsigned long *)(api_data->data)) = *((unsigned long *)data);
+			break;
+		case API_DOUBLE:
+		case API_MHS:
+		case API_MHTOTAL:
+		case API_UTILITY:
+		case API_VOLTS:
+		case API_HS:
+			api_data->data = (void *)malloc(sizeof(double));
+			*((double *)(api_data->data)) = *((double *)data);
+			break;
+		case API_BOOL:
+			api_data->data = (void *)malloc(sizeof(bool));
+			*((bool *)(api_data->data)) = *((bool *)data);
+			break;
+		case API_TIMEVAL:
+			api_data->data = (void *)malloc(sizeof(struct timeval));
+			memcpy(api_data->data, data, sizeof(struct timeval));
+			break;
+		case API_TIME:
+			api_data->data = (void *)malloc(sizeof(time_t));
+			*(time_t *)(api_data->data) = *((time_t *)data);
+			break;
+		case API_TEMP:
+			api_data->data = (void *)malloc(sizeof(float));
+			*((float *)(api_data->data)) = *((float *)data);
+			break;
+		default:
+			applog(LOG_ERR, "API: unknown1 data type %d ignored", type);
+			api_data->type = API_STRING;
+			api_data->data_was_malloc = false;
+			api_data->data = (void *)UNKNOWN;
+			break;
+		}
+
+	return root;
+}
+
+static struct api_data *print_data(struct api_data *root, char *buf, bool isjson)
+{
+	struct api_data *tmp;
+	bool first = true;
+	char *quote;
+
+	if (isjson) {
+		strcpy(buf, JSON0);
+		quote = JSON1;
+	} else {
+		strcpy(buf, COMMA);
+		quote = (char *)BLANK;
+	}
+
+	buf = strchr(buf, '\0');
+
+	while (root) {
+		if (!first)
+			*(buf++) = *COMMA;
+		else
+			first = false;
+
+		sprintf(buf, "%s%s%s%s", quote, root->name, quote, isjson ? ":" : "=");
+
+		buf = strchr(buf, '\0');
+
+		switch(root->type) {
+		case API_STRING:
+			sprintf(buf, "%s%s%s", quote, (char *)(root->data), quote);
+			break;
+		case API_ESCAPE:
+			sprintf(buf, "%s%s%s",
+				quote,
+				escape_string((char *)(root->data), isjson),
+				quote);
+			break;
+		case API_INT:
+			sprintf(buf, "%d", *((int *)(root->data)));
+			break;
+		case API_UINT:
+			sprintf(buf, "%u", *((unsigned int *)(root->data)));
+			break;
+		case API_UINT64:
+			sprintf(buf, "%"PRIu64, *((uint64_t *)(root->data)));
+			break;
+		case API_ULONG:
+		case API_TIME:
+			sprintf(buf, "%lu", *((unsigned long *)(root->data)));
+			break;
+		case API_DOUBLE:
+			sprintf(buf, "%f", *((double *)(root->data)));
+			break;
+		case API_UTILITY:
+		case API_MHS:
+			sprintf(buf, "%.2f", *((double *)(root->data)));
+			break;
+		case API_VOLTS:
+			sprintf(buf, "%.3f", *((double *)(root->data)));
+			break;
+		case API_MHTOTAL:
+			sprintf(buf, "%.4f", *((double *)(root->data)));
+			break;
+		case API_HS:
+			sprintf(buf, "%.15f", *((double *)(root->data)));
+			break;
+		case API_BOOL:
+			sprintf(buf, "%s", *((bool *)(root->data)) ? "true" : "false");
+			break;
+		case API_TIMEVAL:
+			sprintf(buf, "%ld.%06ld",
+				((struct timeval *)(root->data))->tv_sec,
+				((struct timeval *)(root->data))->tv_usec);
+			break;
+		case API_TEMP:
+			sprintf(buf, "%.2f", *((float *)(root->data)));
+			break;
+		default:
+			applog(LOG_ERR, "API: unknown2 data type %d ignored", root->type);
+			sprintf(buf, "%s%s%s", quote, UNKNOWN, quote);
+			break;
+		}
+
+		buf = strchr(buf, '\0');
+
+		if (root->data_was_malloc)
+			free(root->data);
+
+		if (root->next == root) {
+			free(root);
+			root = NULL;
+		} else {
+			tmp = root;
+			root = tmp->next;
+			root->prev = tmp->prev;
+			root->prev->next = root;
+			free(tmp);
+		}
+	}
+
+	if (isjson)
+		strcat(buf, "}");
+
+	return root;
+}
+
 #ifdef HAVE_AN_FPGA
 static int numpgas()
 {
@@ -819,15 +1008,33 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 
 static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+
+	sprintf(io_buffer, isjson
+		? "%s," JSON_VERSION
+		: "%s" _VERSION,
+		message(MSG_VERSION, 0, NULL, isjson));
+
+	root = api_add_data(root, "CGMiner", API_STRING, VERSION);
+	root = api_add_data(root, "API", API_STRING, APIVERSION);
+
+/*
 	sprintf(io_buffer, isjson
 		? "%s," JSON_VERSION "{\"CGMiner\":\"%s\",\"API\":\"%s\"}" JSON_CLOSE
 		: "%s" _VERSION ",CGMiner=%s,API=%s" SEPSTR,
 		message(MSG_VERSION, 0, NULL, isjson),
 		VERSION, APIVERSION);
+*/
+
+	root = print_data(root, buf, isjson);
+	strcat(io_buffer, buf);
+	strcat(io_buffer, isjson ? JSON_CLOSE : SEPSTR);
 }
 
 static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 	int gpucount = 0;
 	int pgacount = 0;
@@ -859,6 +1066,23 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	cpucount = opt_n_threads > 0 ? num_processors : 0;
 #endif
 
+	sprintf(io_buffer, isjson
+		? "%s," JSON_MINECON
+		: "%s" _MINECON ",",
+		message(MSG_MINECON, 0, NULL, isjson));
+
+	root = api_add_data(root, "GPU Count", API_INT, &gpucount);
+	root = api_add_data(root, "PGA Count", API_INT, &pgacount);
+	root = api_add_data(root, "CPU Count", API_INT, &cpucount);
+	root = api_add_data(root, "Pool Count", API_INT, &total_pools);
+	root = api_add_data(root, "ADL", API_STRING, adl);
+	root = api_add_data(root, "ADL in use", API_STRING, adlinuse);
+	root = api_add_data(root, "Strategy", API_STRING, strategies[pool_strategy].s);
+	root = api_add_data(root, "Log Interval", API_INT, &opt_log_interval);
+	root = api_add_data(root, "Device Code", API_STRING, DEVICECODE);
+	root = api_add_data(root, "OS", API_STRING, OSINFO);
+
+/*
 	strcpy(io_buffer, message(MSG_MINECON, 0, NULL, isjson));
 
 	sprintf(buf, isjson
@@ -869,10 +1093,16 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 		strategies[pool_strategy].s, opt_log_interval, DEVICECODE, OSINFO);
 
 	strcat(io_buffer, buf);
+*/
+
+	root = print_data(root, buf, isjson);
+	strcat(io_buffer, buf);
+	strcat(io_buffer, isjson ? JSON_CLOSE : SEPSTR);
 }
 #ifdef HAVE_OPENCL
 static void gpustatus(int gpu, bool isjson)
 {
+	struct api_data *root = NULL;
 	char intensity[20];
 	char buf[TMPBUFSIZ];
 	char *enabled;
@@ -909,6 +1139,38 @@ static void gpustatus(int gpu, bool isjson)
 		else
 			sprintf(intensity, "%d", cgpu->intensity);
 
+		root = api_add_data(root, "GPU", API_INT, &gpu);
+		root = api_add_data(root, "Enabled", API_STRING, &enabled);
+		root = api_add_data(root, "Status", API_STRING, &status);
+		root = api_add_data(root, "Temperature", API_TEMP, &gt);
+		root = api_add_data(root, "Fan Speed", API_INT, &gf);
+		root = api_add_data(root, "Fan Percent", API_INT, &gp);
+		root = api_add_data(root, "GPU Clock", API_INT, &gc);
+		root = api_add_data(root, "Memory Clock", API_INT, &gm);
+		root = api_add_data(root, "GPU Voltage", API_VOLTS, &gv);
+		root = api_add_data(root, "GPU Activity", API_INT, &ga);
+		root = api_add_data(root, "Powertune", API_INT, &pt);
+
+		double mhs = cgpu->total_mhashes / total_secs;
+		root = api_add_data(root, "MHS av", API_MHS, &mhs);
+
+		char mhsname[27];
+		sprintf(mhsname, "MHS %ds", opt_log_interval);
+		root = api_add_data(root, mhsname, API_MHS, &(cgpu->rolling));
+
+		root = api_add_data(root, "Accepted", API_INT, &(cgpu->accepted));
+		root = api_add_data(root, "Rejected", API_INT, &(cgpu->rejected));
+		root = api_add_data(root, "Hardware Errors", API_INT, &(cgpu->hw_errors));
+		root = api_add_data(root, "Utility", API_UTILITY, &(cgpu->utility));
+		root = api_add_data(root, "Intensity", API_STRING, intensity);
+
+		unsigned long last_share_pool = cgpu->last_share_pool_time > 0 ? cgpu->last_share_pool : -1;
+		root = api_add_data(root, "Last Share Pool", API_INT, &last_share_pool);
+
+		root = api_add_data(root, "Last Share Time", API_ULONG, &(cgpu->last_share_pool_time));
+		root = api_add_data(root, "Total MH", API_MHTOTAL, &(cgpu->total_mhashes));
+
+		/*
 		sprintf(buf, isjson
 			? "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
 			: "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f" SEPSTR,
@@ -920,6 +1182,10 @@ static void gpustatus(int gpu, bool isjson)
 			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
 
 		strcat(io_buffer, buf);
+		*/
+		root = print_data(root, buf, isjson);
+		strcat(io_buffer, buf);
+		strcat(io_buffer, isjson ? BLANK : SEPSTR);
 	}
 }
 #endif

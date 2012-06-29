@@ -791,4 +791,36 @@ extern bool successful_connect;
 extern void adl(void);
 extern void app_restart(void);
 
+enum api_data_type {
+	API_ESCAPE,
+	API_STRING,
+	API_INT,
+	API_UINT,
+	API_UINT64,
+	API_ULONG,
+	API_DOUBLE,
+	API_BOOL,
+	API_TIMEVAL,
+	API_TIME,
+	API_MHS,
+	API_MHTOTAL,
+	API_TEMP,
+	API_UTILITY,
+	API_VOLTS,
+	API_HS
+};
+
+struct api_data {
+	enum api_data_type type;
+	char *name;
+	void *data;
+	bool data_was_malloc;
+	struct api_data *prev;
+	struct api_data *next;
+};
+
+extern struct api_data *api_add_data_full(struct api_data *root, char *name, enum api_data_type type, void *data, bool copy_data);
+#define api_add_data_copy(r, n, t, d) api_add_data_full((r), (n), (t), (void *)(d), true)
+#define api_add_data(r, n, t, d) api_add_data_full((r), (n), (t), (void *)(d), false)
+
 #endif /* __MINER_H__ */
