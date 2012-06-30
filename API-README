@@ -314,8 +314,13 @@ API V1.13
 Added API commands:
  'check'
 
+Modified API commands:
+ 'stats' - more icarus timing stats added
+
 Support was added to cgminer for API access groups with the --api-groups option
-It's 100% backwards compatible with previous --api-access commands
+It's 100% backward compatible with previous --api-access commands
+The internal code for handling data was rewritten (~25% of the code)
+Also completely backward compatible
 
 ----------
 
