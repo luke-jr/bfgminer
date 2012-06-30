@@ -801,6 +801,7 @@ enum api_data_type {
 	API_UINT32,
 	API_UINT64,
 	API_DOUBLE,
+	API_ELAPSED,
 	API_BOOL,
 	API_TIMEVAL,
 	API_TIME,
@@ -830,6 +831,7 @@ extern struct api_data *api_add_uint(struct api_data *root, char *name, unsigned
 extern struct api_data *api_add_uint32(struct api_data *root, char *name, uint32_t *data, bool copy_data);
 extern struct api_data *api_add_uint64(struct api_data *root, char *name, uint64_t *data, bool copy_data);
 extern struct api_data *api_add_double(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_elapsed(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_bool(struct api_data *root, char *name, bool *data, bool copy_data);
 extern struct api_data *api_add_timeval(struct api_data *root, char *name, struct timeval *data, bool copy_data);
 extern struct api_data *api_add_time(struct api_data *root, char *name, time_t *data, bool copy_data);

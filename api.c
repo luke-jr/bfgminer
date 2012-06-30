@@ -710,6 +710,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			*((uint64_t *)(api_data->data)) = *((uint64_t *)data);
 			break;
 		case API_DOUBLE:
+		case API_ELAPSED:
 		case API_MHS:
 		case API_MHTOTAL:
 		case API_UTILITY:
@@ -784,6 +785,11 @@ struct api_data *api_add_uint64(struct api_data *root, char *name, uint64_t *dat
 struct api_data *api_add_double(struct api_data *root, char *name, double *data, bool copy_data)
 {
 	return api_add_data_full(root, name, API_DOUBLE, (void *)data, copy_data);
+}
+
+struct api_data *api_add_elapsed(struct api_data *root, char *name, double *data, bool copy_data)
+{
+	return api_add_data_full(root, name, API_ELAPSED, (void *)data, copy_data);
 }
 
 struct api_data *api_add_bool(struct api_data *root, char *name, bool *data, bool copy_data)
@@ -889,6 +895,9 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 			break;
 		case API_DOUBLE:
 			sprintf(buf, "%f", *((double *)(root->data)));
+			break;
+		case API_ELAPSED:
+			sprintf(buf, "%.0f", *((double *)(root->data)));
 			break;
 		case API_UTILITY:
 		case API_FREQ:
@@ -1139,14 +1148,6 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 	if (isjson)
 		strcat(ptr, JSON_CLOSE);
 	return msg_buffer;
-/*
-	sprintf(msg_buffer, isjson
-		? JSON_START JSON_STATUS "{\"" _STATUS "\":\"F\",\"When\":%lu,\"Code\":-1,\"Msg\":\"%d\",\"Description\":\"%s\"}" JSON_CLOSE
-		: _STATUS "=F,When=%lu,Code=-1,Msg=%d,Description=%s" SEPSTR,
-		(unsigned long)when, messageid, opt_api_description);
-
-	return msg_buffer;
-*/
 }
 
 static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
@@ -1161,14 +1162,6 @@ static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 
 	root = api_add_string(root, "CGMiner", VERSION, false);
 	root = api_add_const(root, "API", APIVERSION, false);
-
-/*
-	sprintf(io_buffer, isjson
-		? "%s," JSON_VERSION "{\"CGMiner\":\"%s\",\"API\":\"%s\"}" JSON_CLOSE
-		: "%s" _VERSION ",CGMiner=%s,API=%s" SEPSTR,
-		message(MSG_VERSION, 0, NULL, isjson),
-		VERSION, APIVERSION);
-*/
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -1225,19 +1218,6 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
 	root = api_add_const(root, "OS", OSINFO, false);
-
-/*
-	strcpy(io_buffer, message(MSG_MINECON, 0, NULL, isjson));
-
-	sprintf(buf, isjson
-		? "," JSON_MINECON "{\"GPU Count\":%d,\"PGA Count\":%d,\"CPU Count\":%d,\"Pool Count\":%d,\"ADL\":\"%s\",\"ADL in use\":\"%s\",\"Strategy\":\"%s\",\"Log Interval\":%d,\"Device Code\":\"%s\",\"OS\":\"%s\"}" JSON_CLOSE
-		: _MINECON ",GPU Count=%d,PGA Count=%d,CPU Count=%d,Pool Count=%d,ADL=%s,ADL in use=%s,Strategy=%s,Log Interval=%d,Device Code=%s,OS=%s" SEPSTR,
-
-		gpucount, pgacount, cpucount, total_pools, adl, adlinuse,
-		strategies[pool_strategy].s, opt_log_interval, DEVICECODE, OSINFO);
-
-	strcat(io_buffer, buf);
-*/
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -1311,19 +1291,6 @@ static void gpustatus(int gpu, bool isjson)
 		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
 		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
 
-		/*
-		sprintf(buf, isjson
-			? "{\"GPU\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"Fan Speed\":%d,\"Fan Percent\":%d,\"GPU Clock\":%d,\"Memory Clock\":%d,\"GPU Voltage\":%.3f,\"GPU Activity\":%d,\"Powertune\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Intensity\":\"%s\",\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
-			: "GPU=%d,Enabled=%s,Status=%s,Temperature=%.2f,Fan Speed=%d,Fan Percent=%d,GPU Clock=%d,Memory Clock=%d,GPU Voltage=%.3f,GPU Activity=%d,Powertune=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Intensity=%s,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f" SEPSTR,
-			gpu, enabled, status, gt, gf, gp, gc, gm, gv, ga, pt,
-			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility, intensity,
-			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-
-		strcat(io_buffer, buf);
-		*/
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
 	}
@@ -1415,19 +1382,6 @@ static void pgastatus(int pga, bool isjson)
 
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
-/*
-		sprintf(buf, isjson
-			? "{\"PGA\":%d,\"Name\":\"%s\",\"ID\":%d,\"Enabled\":\"%s\",\"Status\":\"%s\",\"Temperature\":%.2f,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f,\"Frequency\":%.2f}"
-			: "PGA=%d,Name=%s,ID=%d,Enabled=%s,Status=%s,Temperature=%.2f,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f,Frequency=%.2f" SEPSTR,
-			pga, cgpu->api->name, cgpu->device_id,
-			enabled, status, temp,
-			cgpu->total_mhashes / total_secs, opt_log_interval, cgpu->rolling,
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors, cgpu->utility,
-			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes, frequency);
-
-		strcat(io_buffer, buf);
-*/
 	}
 }
 #endif
@@ -1460,19 +1414,6 @@ static void cpustatus(int cpu, bool isjson)
 
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
-/*
-		sprintf(buf, isjson
-			? "{\"CPU\":%d,\"MHS av\":%.2f,\"MHS %ds\":%.2f,\"Accepted\":%d,\"Rejected\":%d,\"Utility\":%.2f,\"Last Share Pool\":%d,\"Last Share Time\":%lu,\"Total MH\":%.4f}"
-			: "CPU=%d,MHS av=%.2f,MHS %ds=%.2f,Accepted=%d,Rejected=%d,Utility=%.2f,Last Share Pool=%d,Last Share Time=%lu,Total MH=%.4f" SEPSTR,
-			cpu, cgpu->total_mhashes / total_secs,
-			opt_log_interval, cgpu->rolling,
-			cgpu->accepted, cgpu->rejected,
-			cgpu->utility,
-			((unsigned long)(cgpu->last_share_pool_time) > 0) ? cgpu->last_share_pool : -1,
-			(unsigned long)(cgpu->last_share_pool_time), cgpu->total_mhashes);
-
-		strcat(io_buffer, buf);
-*/
 	}
 }
 #endif
@@ -1802,33 +1743,6 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_escape(root, "User", pool->rpc_user, false);
 		root = api_add_time(root, "Last Share Time", &(pool->last_share_time), false);
 
-/*
-		rpc_url = escape_string(pool->rpc_url, isjson);
-		rpc_user = escape_string(pool->rpc_user, isjson);
-
-		sprintf(buf, isjson
-			? "%s{\"POOL\":%d,\"URL\":\"%s\",\"Status\":\"%s\",\"Priority\":%d,\"Long Poll\":\"%s\",\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Remote Failures\":%d,\"User\":\"%s\",\"Last Share Time\":%lu}"
-			: "%sPOOL=%d,URL=%s,Status=%s,Priority=%d,Long Poll=%s,Getworks=%d,Accepted=%d,Rejected=%d,Discarded=%d,Stale=%d,Get Failures=%d,Remote Failures=%d,User=%s,Last Share Time=%lu" SEPSTR,
-			(isjson && (i > 0)) ? COMMA : BLANK,
-			i, rpc_url, status, pool->prio, lp,
-			pool->getwork_requested,
-			pool->accepted, pool->rejected,
-			pool->discarded_work,
-			pool->stale_shares,
-			pool->getfail_occasions,
-			pool->remotefail_occasions,
-			rpc_user, pool->last_share_time);
-
-		strcat(io_buffer, buf);
-
-		if (rpc_url != pool->rpc_url)
-			free(rpc_url);
-		rpc_url = NULL;
-
-		if (rpc_user != pool->rpc_user)
-			free(rpc_user);
-		rpc_user = NULL;
-*/
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);
 
@@ -1860,7 +1774,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 		: "%s" _SUMMARY ",",
 		message(MSG_SUMM, 0, NULL, isjson));
 
-	root = api_add_double(root, "Elapsed", &(total_secs), false);
+	root = api_add_elapsed(root, "Elapsed", &(total_secs), false);
 #ifdef WANT_CPUMINE
 	root = api_add_string(root, "Algorithm", algo, false);
 #endif
@@ -1877,28 +1791,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 	root = api_add_uint(root, "Local Work", &(local_work), false);
 	root = api_add_uint(root, "Remote Failures", &(total_ro), false);
 	root = api_add_uint(root, "Network Blocks", &(new_blocks), false);
-	root = api_add_mhs(root, "Total MH", &(total_mhashes_done), false);
-/*
-#ifdef WANT_CPUMINE
-	sprintf(io_buffer, isjson
-		? "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"Algorithm\":\"%s\",\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE
-		: "%s" _SUMMARY ",Elapsed=%.0f,Algorithm=%s,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f" SEPSTR,
-		message(MSG_SUMM, 0, NULL, isjson),
-		total_secs, algo, mhs, found_blocks,
-		total_getworks, total_accepted, total_rejected,
-		hw_errors, utility, total_discarded, total_stale,
-		total_go, local_work, total_ro, new_blocks, total_mhashes_done);
-#else
-	sprintf(io_buffer, isjson
-		? "%s," JSON_SUMMARY "{\"Elapsed\":%.0f,\"MHS av\":%.2f,\"Found Blocks\":%d,\"Getworks\":%d,\"Accepted\":%d,\"Rejected\":%d,\"Hardware Errors\":%d,\"Utility\":%.2f,\"Discarded\":%d,\"Stale\":%d,\"Get Failures\":%d,\"Local Work\":%u,\"Remote Failures\":%u,\"Network Blocks\":%u,\"Total MH\":%.4f}" JSON_CLOSE
-		: "%s" _SUMMARY ",Elapsed=%.0f,MHS av=%.2f,Found Blocks=%d,Getworks=%d,Accepted=%d,Rejected=%d,Hardware Errors=%d,Utility=%.2f,Discarded=%d,Stale=%d,Get Failures=%d,Local Work=%u,Remote Failures=%u,Network Blocks=%u,Total MH=%.4f" SEPSTR,
-		message(MSG_SUMM, 0, NULL, isjson),
-		total_secs, mhs, found_blocks,
-		total_getworks, total_accepted, total_rejected,
-		hw_errors, utility, total_discarded, total_stale,
-		total_go, local_work, total_ro, new_blocks, total_mhashes_done);
-#endif
-*/
+	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2023,16 +1916,6 @@ static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 		message(MSG_NUMGPU, 0, NULL, isjson));
 
 	root = api_add_int(root, "Count", &numgpu, false);
-/*
-	strcpy(io_buffer, message(MSG_NUMGPU, 0, NULL, isjson));
-
-	sprintf(buf, isjson
-		? "," JSON_GPUS "{\"Count\":%d}" JSON_CLOSE
-		: _GPUS ",Count=%d" SEPSTR,
-		numgpu);
-
-	strcat(io_buffer, buf);
-*/
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2056,16 +1939,6 @@ static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 		message(MSG_NUMPGA, 0, NULL, isjson));
 
 	root = api_add_int(root, "Count", &count, false);
-/*
-	strcpy(io_buffer, message(MSG_NUMPGA, 0, NULL, isjson));
-
-	sprintf(buf, isjson
-		? "," JSON_PGAS "{\"Count\":%d}" JSON_CLOSE
-		: _PGAS ",Count=%d" SEPSTR,
-		count);
-
-	strcat(io_buffer, buf);
-*/
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2089,16 +1962,6 @@ static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 		message(MSG_NUMCPU, 0, NULL, isjson));
 
 	root = api_add_int(root, "Count", &count, false);
-/*
-	strcpy(io_buffer, message(MSG_NUMCPU, 0, NULL, isjson));
-
-	sprintf(buf, isjson
-		? "," JSON_CPUS "{\"Count\":%d}" JSON_CLOSE
-		: _CPUS ",Count=%d" SEPSTR,
-		count);
-
-	strcat(io_buffer, buf);
-*/
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2570,21 +2433,6 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unuse
 	root = api_add_int(root, "*Dev Over Heat", &(cgpu->dev_over_heat_count), false);
 	root = api_add_int(root, "*Dev Thermal Cutoff", &(cgpu->dev_thermal_cutoff_count), false);
 
-/*
-	sprintf(buf, isjson
-		? "%s{\"NOTIFY\":%d,\"Name\":\"%s\",\"ID\":%d,\"Last Well\":%lu,\"Last Not Well\":%lu,\"Reason Not Well\":\"%s\",\"*Thread Fail Init\":%d,\"*Thread Zero Hash\":%d,\"*Thread Fail Queue\":%d,\"*Dev Sick Idle 60s\":%d,\"*Dev Dead Idle 600s\":%d,\"*Dev Nostart\":%d,\"*Dev Over Heat\":%d,\"*Dev Thermal Cutoff\":%d}"
-		: "%sNOTIFY=%d,Name=%s,ID=%d,Last Well=%lu,Last Not Well=%lu,Reason Not Well=%s,*Thread Fail Init=%d,*Thread Zero Hash=%d,*Thread Fail Queue=%d,*Dev Sick Idle 60s=%d,*Dev Dead Idle 600s=%d,*Dev Nostart=%d,*Dev Over Heat=%d,*Dev Thermal Cutoff=%d" SEPSTR,
-		(isjson && (device > 0)) ? COMMA : BLANK,
-		device, cgpu->api->name, cgpu->device_id,
-		cgpu->device_last_well, cgpu->device_last_not_well, reason,
-		cgpu->thread_fail_init_count, cgpu->thread_zero_hash_count,
-		cgpu->thread_fail_queue_count, cgpu->dev_sick_idle_60_count,
-		cgpu->dev_dead_idle_600_count, cgpu->dev_nostart_count,
-		cgpu->dev_over_heat_count, cgpu->dev_thermal_cutoff_count);
-
-	strcat(io_buffer, buf);
-*/
-
 	if (isjson && (device > 0))
 		strcat(io_buffer, COMMA);
 
@@ -2645,17 +2493,6 @@ static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_const(root, "Model", cgpu->name ? : BLANK, false);
 		root = api_add_const(root, "Device Path", cgpu->device_path ? : BLANK, false);
 
-/*
-		sprintf(buf, isjson
-			? "%s{\"DEVDETAILS\":%d,\"Name\":\"%s\",\"ID\":%d,\"Driver\":\"%s\",\"Kernel\":\"%s\",\"Model\":\"%s\",\"Device Path\":\"%s\"}"
-			: "%sDEVDETAILS=%d,Name=%s,ID=%d,Driver=%s,Kernel=%s,Model=%s,Device Path=%s" SEPSTR,
-			(isjson && (i > 0)) ? COMMA : BLANK,
-			i, cgpu->api->name, cgpu->device_id,
-			cgpu->api->dname, cgpu->kname ? : BLANK,
-			cgpu->name ? : BLANK, cgpu->device_path ? : BLANK);
-
-		strcat(io_buffer, buf);
-*/
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);
 
@@ -2703,15 +2540,9 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 
-/*
-	if (stats->getwork_calls || (extra != NULL && *extra)) {
-		if (extra == NULL)
-			extra = (char *)BLANK;
-*/
-
 	root = api_add_int(root, "STATS", &i, false);
 	root = api_add_string(root, "ID", id, false);
-	root = api_add_double(root, "Elapsed", &(total_secs), false);
+	root = api_add_elapsed(root, "Elapsed", &(total_secs), false);
 	root = api_add_uint32(root, "Calls", &(stats->getwork_calls), false);
 	root = api_add_timeval(root, "Wait", &(stats->getwork_wait), false);
 	root = api_add_timeval(root, "Max", &(stats->getwork_wait_max), false);
@@ -2729,48 +2560,13 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 	if (extra)
 		root = api_add_extra(root, extra);
 
-/*
-		sprintf(buf, isjson
-			? "%s{\"STATS\":%d,\"ID\":\"%s\",\"Elapsed\":%.0f,\"Calls\":%d,\"Wait\":%ld.%06ld,\"Max\":%ld.%06ld,\"Min\":%ld.%06ld"
-			: "%sSTATS=%d,ID=%s,Elapsed=%.0f,Calls=%d,Wait=%ld.%06ld,Max=%ld.%06ld,Min=%ld.%06ld",
-			(isjson && (i > 0)) ? COMMA : BLANK,
-			i, id, total_secs, stats->getwork_calls,
-			stats->getwork_wait.tv_sec, stats->getwork_wait.tv_usec,
-			stats->getwork_wait_max.tv_sec, stats->getwork_wait_max.tv_usec,
-			stats->getwork_wait_min.tv_sec, stats->getwork_wait_min.tv_usec);
-
-		strcat(io_buffer, buf);
-
-		if (pool_stats) {
-			sprintf(buf, isjson
-				? ",\"Pool Calls\":%d,\"Pool Attempts\":%d,\"Pool Wait\":%ld.%06ld,\"Pool Max\":%ld.%06ld,\"Pool Min\":%ld.%06ld,\"Pool Av\":%f"
-				: ",Pool Calls=%d,Pool Attempts=%d,Pool Wait=%ld.%06ld,Pool Max=%ld.%06ld,Pool Min=%ld.%06ld,Pool Av=%f",
-				pool_stats->getwork_calls, pool_stats->getwork_attempts,
-				pool_stats->getwork_wait.tv_sec, pool_stats->getwork_wait.tv_usec,
-				pool_stats->getwork_wait_max.tv_sec, pool_stats->getwork_wait_max.tv_usec,
-				pool_stats->getwork_wait_min.tv_sec, pool_stats->getwork_wait_min.tv_usec,
-				pool_stats->getwork_wait_rolling);
-
-			strcat(io_buffer, buf);
-		}
-
-		sprintf(buf, isjson
-			? "%s%s}"
-			: "%s%s" SEPSTR,
-			*extra ? COMMA : BLANK, extra);
-
-		strcat(io_buffer, buf);
-*/
 	if (isjson && (i > 0))
 		strcat(io_buffer, COMMA);
 
 	root = print_data(root, buf, isjson);
 	strcat(io_buffer, buf);
 
-	i++;
-//	}
-
-	return i;
+	return ++i;
 }
 
 static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
@@ -2898,17 +2694,6 @@ static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 
 	root = api_add_const(root, "Exists", found ? YES : NO, false);
 	root = api_add_const(root, "Access", access ? YES : NO, false);
-/*
-	strcpy(io_buffer, message(MSG_CHECK, 0, NULL, isjson));
-
-	sprintf(buf, isjson
-		? "," JSON_CHECK "{\"Exists\":\"%s\",\"Access\":\"%s\"}" JSON_CLOSE
-		: _CHECK ",Exists=%s,Access=%s" SEPSTR,
-		found ? YES : NO,
-		access ? YES : NO);
-
-	strcat(io_buffer, buf);
-*/
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
