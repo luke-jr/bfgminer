@@ -794,10 +794,11 @@ extern void app_restart(void);
 enum api_data_type {
 	API_ESCAPE,
 	API_STRING,
+	API_CONST,
 	API_INT,
 	API_UINT,
+	API_UINT32,
 	API_UINT64,
-	API_ULONG,
 	API_DOUBLE,
 	API_BOOL,
 	API_TIMEVAL,
@@ -806,6 +807,7 @@ enum api_data_type {
 	API_MHTOTAL,
 	API_TEMP,
 	API_UTILITY,
+	API_FREQ,
 	API_VOLTS,
 	API_HS
 };
@@ -819,8 +821,23 @@ struct api_data {
 	struct api_data *next;
 };
 
-extern struct api_data *api_add_data_full(struct api_data *root, char *name, enum api_data_type type, void *data, bool copy_data);
-#define api_add_data_copy(r, n, t, d) api_add_data_full((r), (n), (t), (void *)(d), true)
-#define api_add_data(r, n, t, d) api_add_data_full((r), (n), (t), (void *)(d), false)
+extern struct api_data *api_add_escape(struct api_data *root, char *name, char *data, bool copy_data);
+extern struct api_data *api_add_string(struct api_data *root, char *name, char *data, bool copy_data);
+extern struct api_data *api_add_const(struct api_data *root, char *name, const char *data, bool copy_data);
+extern struct api_data *api_add_int(struct api_data *root, char *name, int *data, bool copy_data);
+extern struct api_data *api_add_uint(struct api_data *root, char *name, unsigned int *data, bool copy_data);
+extern struct api_data *api_add_uint32(struct api_data *root, char *name, uint32_t *data, bool copy_data);
+extern struct api_data *api_add_uint64(struct api_data *root, char *name, uint64_t *data, bool copy_data);
+extern struct api_data *api_add_double(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_bool(struct api_data *root, char *name, bool *data, bool copy_data);
+extern struct api_data *api_add_timeval(struct api_data *root, char *name, struct timeval *data, bool copy_data);
+extern struct api_data *api_add_time(struct api_data *root, char *name, time_t *data, bool copy_data);
+extern struct api_data *api_add_mhs(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_mhstotal(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_temp(struct api_data *root, char *name, float *data, bool copy_data);
+extern struct api_data *api_add_utility(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_freq(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_volts(struct api_data *root, char *name, float *data, bool copy_data);
+extern struct api_data *api_add_hs(struct api_data *root, char *name, double *data, bool copy_data);
 
 #endif /* __MINER_H__ */
