@@ -220,6 +220,7 @@ struct gpu_adl {
 };
 #endif
 
+struct api_data;
 struct thr_info;
 struct work;
 
@@ -234,7 +235,7 @@ struct device_api {
 	void (*reinit_device)(struct cgpu_info*);
 	void (*get_statline_before)(char*, struct cgpu_info*);
 	void (*get_statline)(char*, struct cgpu_info*);
-	void (*get_api_stats)(char*, struct cgpu_info*, bool);
+	struct api_data *(*get_api_stats)(struct cgpu_info*);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info*);

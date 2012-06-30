@@ -631,6 +631,35 @@ static char *escape_string(char *str, bool isjson)
 	return buf;
 }
 
+static struct api_data *api_add_extra(struct api_data *root, struct api_data *extra)
+{
+	struct api_data *tmp;
+
+	if (root)
+	{
+		if (extra) {
+			// extra tail
+			tmp = extra->prev;
+
+			// extra prev = root tail
+			extra->prev = root->prev;
+
+			// root tail next = extra
+			root->prev->next = extra;
+
+			// extra tail next = root
+			tmp->next = root;
+
+			// root prev = extra tail
+			root->prev = tmp;
+		}
+	}
+	else
+		root = extra;
+
+	return root;
+}
+
 static struct api_data *api_add_data_full(struct api_data *root, char *name, enum api_data_type type, void *data, bool copy_data)
 {
 	struct api_data *api_data;
@@ -2669,33 +2698,36 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unuse
 	ptr = NULL;
 }
 
-static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgminer_pool_stats *pool_stats, char *extra, bool isjson)
+static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgminer_pool_stats *pool_stats, struct api_data *extra, bool isjson)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 
+/*
 	if (stats->getwork_calls || (extra != NULL && *extra)) {
 		if (extra == NULL)
 			extra = (char *)BLANK;
+*/
 
-		root = api_add_int(root, "STATS", &i, false);
-		root = api_add_string(root, "ID", id, false);
-		root = api_add_double(root, "Elapsed", &(total_secs), false);
-		root = api_add_uint32(root, "Calls", &(stats->getwork_calls), false);
-		root = api_add_timeval(root, "Wait", &(stats->getwork_wait), false);
-		root = api_add_timeval(root, "Max", &(stats->getwork_wait_max), false);
-		root = api_add_timeval(root, "Min", &(stats->getwork_wait_min), false);
+	root = api_add_int(root, "STATS", &i, false);
+	root = api_add_string(root, "ID", id, false);
+	root = api_add_double(root, "Elapsed", &(total_secs), false);
+	root = api_add_uint32(root, "Calls", &(stats->getwork_calls), false);
+	root = api_add_timeval(root, "Wait", &(stats->getwork_wait), false);
+	root = api_add_timeval(root, "Max", &(stats->getwork_wait_max), false);
+	root = api_add_timeval(root, "Min", &(stats->getwork_wait_min), false);
 
-		if (pool_stats) {
-			root = api_add_uint32(root, "Pool Calls", &(pool_stats->getwork_calls), false);
-			root = api_add_uint32(root, "Pool Attempts", &(pool_stats->getwork_attempts), false);
-			root = api_add_timeval(root, "Pool Wait", &(pool_stats->getwork_wait), false);
-			root = api_add_timeval(root, "Pool Max", &(pool_stats->getwork_wait_max), false);
-			root = api_add_timeval(root, "Pool Min", &(pool_stats->getwork_wait_min), false);
-			root = api_add_double(root, "Pool Av", &(pool_stats->getwork_wait_rolling), false);
-		}
+	if (pool_stats) {
+		root = api_add_uint32(root, "Pool Calls", &(pool_stats->getwork_calls), false);
+		root = api_add_uint32(root, "Pool Attempts", &(pool_stats->getwork_attempts), false);
+		root = api_add_timeval(root, "Pool Wait", &(pool_stats->getwork_wait), false);
+		root = api_add_timeval(root, "Pool Max", &(pool_stats->getwork_wait_max), false);
+		root = api_add_timeval(root, "Pool Min", &(pool_stats->getwork_wait_min), false);
+		root = api_add_double(root, "Pool Av", &(pool_stats->getwork_wait_rolling), false);
+	}
 
-// TODO: zzzz handle extra <- rewrite the api interface
+	if (extra)
+		root = api_add_extra(root, extra);
 
 /*
 		sprintf(buf, isjson
@@ -2729,21 +2761,21 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 
 		strcat(io_buffer, buf);
 */
-		if (isjson && (i > 0))
-			strcat(io_buffer, COMMA);
+	if (isjson && (i > 0))
+		strcat(io_buffer, COMMA);
 
-		root = print_data(root, buf, isjson);
-		strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson);
+	strcat(io_buffer, buf);
 
-		i++;
-	}
+	i++;
+//	}
 
 	return i;
 }
 
 static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
-	char extra[TMPBUFSIZ];
+	struct api_data *extra;
 	char id[20];
 	int i, j;
 
@@ -2760,9 +2792,9 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 
 		if (cgpu && cgpu->api) {
 			if (cgpu->api->get_api_stats)
-				cgpu->api->get_api_stats(extra, cgpu, isjson);
+				extra = cgpu->api->get_api_stats(cgpu);
 			else
-				extra[0] = '\0';
+				extra = NULL;
 
 			sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
 			i = itemstats(i, id, &(cgpu->cgminer_stats), NULL, extra, isjson);
