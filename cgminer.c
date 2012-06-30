@@ -3338,10 +3338,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		thr_info[thr_id].cgpu->device_last_well = time(NULL);
 	}
 
-	/* Don't bother calculating anything if we're not displaying it */
-	if (opt_realquiet || !opt_log_interval)
-		return;
-
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
 
 	/* So we can call hashmeter from a non worker thread */
