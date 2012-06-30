@@ -154,21 +154,26 @@ function getcss($cssname, $dom = false)
  global $colourtable, $colouroverride;
 
  $css = '';
- foreach ($colourtable as $cssdata => $colour)
+ foreach ($colourtable as $cssdata => $value)
  {
 	$cssobj = split(' ', $cssdata, 2);
 	if ($cssobj[0] == $cssname)
 	{
 		if (isset($colouroverride[$cssdata]))
-			$color = $colouroverride[$cssdata];
+			$value = $colouroverride[$cssdata];
 
 		if ($dom == true)
-			$css .= ' '.$cssobj[1].'='.$colour;
+			$css .= ' '.$cssobj[1].'='.$value;
 		else
-			$css .= $cssobj[1].':'.$colour.'; ';
+			$css .= $cssobj[1].':'.$value.'; ';
 	}
  }
  return $css;
+}
+#
+function getdom($domname)
+{
+ return getcss($domname, true);
 }
 #
 function htmlhead($checkapi, $rig, $pg = null)
@@ -216,7 +221,7 @@ td.lst { $miner_font ".getcss('td.lst')."}
 td.hi { $miner_font ".getcss('td.hi')."}
 td.lo { $miner_font ".getcss('td.lo')."}
 </style>
-</head><body".getcss('body',true).">
+</head><body".getdom('body').">
 <script type='text/javascript'>
 function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location='$here?ref=$autorefresh'+a}\n";
 
@@ -517,6 +522,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'GPU.Utility':
 	case 'PGA.Utility':
 	case 'SUMMARY.Utility':
+	case 'total.Utility':
 		$ret = $value.'/m';
 		if ($value == 0)
 			$class = $errorclass;
@@ -575,6 +581,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'GPU.MHS av':
 	case 'PGA.MHS av':
 	case 'SUMMARY.MHS av':
+	case 'total.MHS av':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -600,18 +607,25 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'GPU.Total MH':
 	case 'PGA.Total MH':
 	case 'SUMMARY.Total MH':
+	case 'total.Total MH':
 	case 'SUMMARY.Getworks':
+	case 'POOL.Getworks':
+	case 'total.Getworks':
 	case 'GPU.Accepted':
 	case 'PGA.Accepted':
 	case 'SUMMARY.Accepted':
+	case 'POOL.Accepted':
+	case 'total.Accepted':
 	case 'GPU.Rejected':
 	case 'PGA.Rejected':
 	case 'SUMMARY.Rejected':
-	case 'SUMMARY.Local Work':
-	case 'POOL.Getworks':
-	case 'POOL.Accepted':
 	case 'POOL.Rejected':
+	case 'total.Rejected':
+	case 'SUMMARY.Local Work':
+	case 'total.Local Work':
+	case 'SUMMARY.Discarded':
 	case 'POOL.Discarded':
+	case 'total.Discarded':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -1002,8 +1016,6 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  showhead('', $header);
 
- $section = '';
-
  foreach ($anss as $rig => $ans)
  {
 	$when = 0;
@@ -1017,9 +1029,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
 		echo '<tr>';
 
-		$newsection = preg_replace('/\d/', '', $item);
-		if ($newsection != 'total')
-			$section = $newsection;
+		$section = preg_replace('/\d/', '', $item);
 
 		foreach ($header as $name => $x)
 		{
