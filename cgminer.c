@@ -4534,19 +4534,15 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			else
 				cgpu->low_count = 0;
 
-			uint64_t hashtime = now.tv_sec - thr->last.tv_sec;
-			bool dev_time_well = hashtime < WATCHDOG_SICK_TIME;
-			bool dev_time_sick = hashtime > WATCHDOG_SICK_TIME;
-			bool dev_time_dead = hashtime > WATCHDOG_DEAD_TIME;
-			bool dev_count_well = cgpu->low_count < WATCHDOG_SICK_COUNT;
-			bool dev_count_sick = cgpu->low_count > WATCHDOG_SICK_COUNT;
-			bool dev_count_dead = cgpu->low_count > WATCHDOG_DEAD_COUNT;
+			bool dev_count_well = (cgpu->low_count < WATCHDOG_SICK_COUNT);
+			bool dev_count_sick = (cgpu->low_count > WATCHDOG_SICK_COUNT);
+			bool dev_count_dead = (cgpu->low_count > WATCHDOG_DEAD_COUNT);
 
-			if (cgpu->status != LIFE_WELL && dev_time_well && dev_count_well) {
+			if (gpus[gpu].status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME) && dev_count_well) {
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
-			} else if (cgpu->status == LIFE_WELL && (dev_time_sick || dev_count_sick)) {
+			} else if (cgpu->status == LIFE_WELL && ((now.tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME) || dev_count_sick)) {
 				thr->rolling = cgpu->rolling = 0;
 				cgpu->status = LIFE_SICK;
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
@@ -4565,7 +4561,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
 				}
-			} else if (cgpu->status == LIFE_SICK && (dev_time_dead || dev_count_dead)) {
+			} else if (cgpu->status == LIFE_SICK && ((now.tv_sec - thr->last.tv_sec > WATCHDOG_DEAD_TIME) || dev_count_dead)) {
 				cgpu->status = LIFE_DEAD;
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				gettimeofday(&thr->sick, NULL);
