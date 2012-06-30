@@ -179,6 +179,7 @@ static const char *DYNAMIC = _DYNAMIC;
 
 static const char *YES = "Y";
 static const char *NO = "N";
+static const char *NULLSTR = "(null)";
 
 static const char *DEVICECODE = ""
 #ifdef HAVE_OPENCL
@@ -682,6 +683,13 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 	}
 
 	api_data->data_was_malloc = copy_data;
+
+	// Avoid crashing on bad data
+	if (data == NULL) {
+		api_data->type = type = API_CONST;
+		data = (void *)NULLSTR;
+		api_data->data_was_malloc = copy_data = false;
+	}
 
 	if (!copy_data)
 		api_data->data = data;
@@ -1763,7 +1771,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 #ifdef WANT_CPUMINE
 	char *algo = (char *)(algo_names[opt_algo]);
 	if (algo == NULL)
-		algo = "(null)";
+		algo = (char *)NULLSTR;
 #endif
 
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
