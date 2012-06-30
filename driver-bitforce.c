@@ -21,7 +21,7 @@
 #include "miner.h"
 
 #define BITFORCE_SLEEP_MS 2000
-#define BITFORCE_TIMEOUT_MS 15000
+#define BITFORCE_TIMEOUT_MS 10000
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
 #define MAX_START_DELAY_US 100000
@@ -34,8 +34,7 @@ static void BFgets(char *buf, size_t bufLen, int fd)
 {
 	do
 		--bufLen;
-	while (likely(bufLen && read(fd, buf, 1) && (buf++)[0] != '\n'))
-		;
+	while (likely(bufLen && read(fd, buf, 1) && (buf++)[0] != '\n'));
 	buf[0] = '\0';
 }
 
@@ -137,6 +136,21 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
+static void biforce_clear_buffer(struct cgpu_info *bitforce)
+{
+	int fdDev = bitforce->device_fd;
+	char pdevbuf[0x100];
+
+	applog(LOG_DEBUG, "BFL%i: Clearing read buffer", bitforce->device_id);
+
+	mutex_lock(&bitforce->device_mutex);
+	do {
+		pdevbuf[0] = '\0';
+		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	} while (pdevbuf[0]);
+	mutex_unlock(&bitforce->device_mutex);
+}
+
 void bitforce_init(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
@@ -145,6 +159,8 @@ void bitforce_init(struct cgpu_info *bitforce)
 	char *s;
 
 	applog(LOG_WARNING, "BFL%i: Re-initalizing", bitforce->device_id);
+
+	biforce_clear_buffer(bitforce);
 
 	mutex_lock(&bitforce->device_mutex);
 	if (fdDev)
@@ -297,7 +313,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->wait_ms += BITFORCE_CHECK_INTERVAL_MS;
 	}
 	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
-		applog(LOG_ERR, "BFL%i: took longer than 15s", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: took longer than 10s", bitforce->device_id);
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
@@ -353,6 +369,8 @@ static void biforce_thread_enable(struct thr_info *thr)
 	bitforce_init(bitforce);
 }
 
+
+
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
@@ -379,6 +397,8 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_NOSTART;
 		bitforce->dev_nostart_count++;
+		/* empty read buffer */
+		biforce_clear_buffer(bitforce);
 	}
 	return ret;
 }
