@@ -550,9 +550,6 @@ typedef bool (*sha256_func)(int thr_id, const unsigned char *pmidstate,
 	uint32_t *last_nonce,
 	uint32_t nonce);
 
-extern int
-timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);
-
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_scantime;
