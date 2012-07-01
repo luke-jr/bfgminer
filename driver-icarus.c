@@ -593,7 +593,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 
 		tv_start = state->tv_workstart;
-		timeval_subtract(&elapsed, &state->tv_workfinish, &tv_start);
+		timersub(&state->tv_workfinish, &tv_start, &elapsed);
 	}
 
 #ifndef WIN32

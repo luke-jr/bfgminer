@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #ifdef HAVE_CURSES
 #include <curses.h>
@@ -1024,6 +1025,7 @@ static int set_powertune(int gpu, int iPercentage)
 static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *fan_window)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
+	int tdiff = round(temp - lasttemp);
 	struct gpu_adl *ga = &cgpu->adl;
 	int top = gpus[gpu].gpu_fan;
 	int bot = gpus[gpu].min_fan;
@@ -1038,7 +1040,7 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *
 		cgpu->device_last_not_well = time(NULL);
 		cgpu->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		cgpu->dev_over_heat_count++;
-	} else if (temp > ga->targettemp && fanpercent < top && temp >= lasttemp) {
+	} else if (temp > ga->targettemp && fanpercent < top && tdiff >= 0) {
 		applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 		if (temp > ga->targettemp + opt_hysteresis)
 			newpercent = ga->targetfan + 10;
@@ -1046,18 +1048,26 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *
 			newpercent = ga->targetfan + 5;
 		if (newpercent > top)
 			newpercent = top;
-	} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis && temp <= lasttemp) {
-		applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
-		newpercent = ga->targetfan - 1;
+	} else if (fanpercent > bot && temp < ga->targettemp - opt_hysteresis) {
+		/* Detect large swings of 5 degrees or more and change fan by
+		 * a proportion more */
+		if (tdiff <= 0) {
+			applog(LOG_DEBUG, "Temperature %d degrees below target, decreasing fanspeed", opt_hysteresis);
+			newpercent = ga->targetfan - 1 + tdiff / 5;
+		} else if (tdiff >= 5) {
+			applog(LOG_DEBUG, "Temperature climbed %d while below target, increasing fanspeed", tdiff);
+			newpercent = ga->targetfan + tdiff / 5;
+		}
 	} else {
+
 		/* We're in the optimal range, make minor adjustments if the
 		 * temp is still drifting */
-		if (fanpercent > bot && temp < lasttemp && lasttemp < ga->targettemp) {
+		if (fanpercent > bot && tdiff < 0 && lasttemp < ga->targettemp) {
 			applog(LOG_DEBUG, "Temperature dropping while in target range, decreasing fanspeed");
-			newpercent = ga->targetfan - 1;
-		} else if (fanpercent < top && temp > lasttemp && temp > ga->targettemp - opt_hysteresis) {
+			newpercent = ga->targetfan + tdiff;
+		} else if (fanpercent < top && tdiff > 0 && temp > ga->targettemp - opt_hysteresis) {
 			applog(LOG_DEBUG, "Temperature rising while in target range, increasing fanspeed");
-			newpercent = ga->targetfan + 1;
+			newpercent = ga->targetfan + tdiff;
 		}
 	}
 

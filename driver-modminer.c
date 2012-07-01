@@ -504,7 +504,7 @@ modminer_process_results(struct thr_info*thr)
 
 	struct timeval tv_workend, elapsed;
 	gettimeofday(&tv_workend, NULL);
-	timeval_subtract(&elapsed, &tv_workend, &state->tv_workstart);
+	timersub(&tv_workend, &state->tv_workstart, &elapsed);
 
 	uint64_t hashes = (uint64_t)state->clock * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
 	if (hashes > 0xffffffff)

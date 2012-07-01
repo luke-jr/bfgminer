@@ -101,6 +101,7 @@ int opt_scantime = 60;
 int opt_expiry = 120;
 int opt_bench_algo = -1;
 static const bool opt_time = true;
+unsigned long long global_hashrate;
 
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
@@ -3403,8 +3404,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		if (want_per_device_stats) {
 			struct timeval now;
 			struct timeval elapsed;
+
 			gettimeofday(&now, NULL);
-			timeval_subtract(&elapsed, &now, &thr->cgpu->last_message_tv);
+			timersub(&now, &thr->cgpu->last_message_tv, &elapsed);
 			if (opt_log_interval <= elapsed.tv_sec) {
 				struct cgpu_info *cgpu = thr->cgpu;
 				char logline[255];
@@ -3424,7 +3426,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	/* Totals are updated by all threads so can race without locking */
 	mutex_lock(&hash_lock);
 	gettimeofday(&temp_tv_end, NULL);
-	timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
+	timersub(&temp_tv_end, &total_tv_end, &total_diff);
 
 	total_mhashes_done += local_mhashes;
 	local_mhashes_done += local_mhashes;
@@ -3436,8 +3438,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 	decay_time(&rolling, local_mhashes_done / local_secs);
+	global_hashrate = roundl(rolling) * 1000000;
 
-	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
+	timersub(&total_tv_end, &total_tv_start, &total_diff);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
@@ -3991,7 +3994,7 @@ void *miner_thread(void *userdata)
 	/* Try to cycle approximately 5 times before each log update */
 	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
-	struct timeval diff, sdiff, wdiff;
+	struct timeval diff, sdiff, wdiff = {0, 0};
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	unsigned long long hashes_done = 0;
 	unsigned long long hashes;
@@ -4108,7 +4111,7 @@ void *miner_thread(void *userdata)
 				cgpu->max_hashes = hashes;
 
 			gettimeofday(&tv_end, NULL);
-			timeval_subtract(&diff, &tv_end, &tv_start);
+			timersub(&tv_end, &tv_start, &diff);
 			sdiff.tv_sec += diff.tv_sec;
 			sdiff.tv_usec += diff.tv_usec;
 			if (sdiff.tv_usec > 1000000) {
@@ -4116,7 +4119,7 @@ void *miner_thread(void *userdata)
 				sdiff.tv_usec -= 1000000;
 			}
 
-			timeval_subtract(&wdiff, &tv_end, &tv_workstart);
+			timersub(&tv_end, &tv_workstart, &wdiff);
 			if (!requested) {
 				if (wdiff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
 					thread_reportout(mythr);
@@ -4152,7 +4155,7 @@ void *miner_thread(void *userdata)
 				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
 			}
 
-			timeval_subtract(&diff, &tv_end, &tv_lastupdate);
+			timersub(&tv_end, &tv_lastupdate, &diff);
 			if (diff.tv_sec >= opt_log_interval) {
 				hashmeter(thr_id, &diff, hashes_done);
 				hashes_done = 0;
@@ -4658,7 +4661,7 @@ static void print_summary(void)
 	int hours, mins, secs, i;
 	double utility, efficiency = 0.0;
 
-	timeval_subtract(&diff, &total_tv_end, &total_tv_start);
+	timersub(&total_tv_end, &total_tv_start, &diff);
 	hours = diff.tv_sec / 3600;
 	mins = (diff.tv_sec % 3600) / 60;
 	secs = diff.tv_sec % 60;
