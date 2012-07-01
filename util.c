@@ -326,8 +326,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	headers = curl_slist_append(headers,
 		"X-Mining-Extensions: longpoll midstate rollntime submitold");
 
-	if (likely(global_hashrate)) {
-		asprintf(&ghashrate, "X-Mining-Hashrate: %llu", global_hashrate);
+	if (likely(global_hashrate && asprintf(&ghashrate, "X-Mining-Hashrate: %llu", global_hashrate) != -1)) {
 		headers = curl_slist_append(headers, ghashrate);
 		free(ghashrate);
 	}
