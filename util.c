@@ -147,9 +147,9 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 
 	memcpy(val, rem, remlen);	/* store value, trim trailing ws */
 	val[remlen] = 0;
-	while ((*val) && (isspace(val[strlen(val) - 1]))) {
+	while ((*val) && (isspace(val[strlen(val) - 1])))
 		val[strlen(val) - 1] = 0;
-	}
+
 	if (!*val)			/* skip blank value */
 		goto out;
 
@@ -157,9 +157,9 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		applog(LOG_DEBUG, "HTTP hdr(%s): %s", key, val);
 
 	if (!strcasecmp("X-Roll-Ntime", key)) {
-		if (!strncasecmp("N", val, 1)) {
+		if (!strncasecmp("N", val, 1))
 			applog(LOG_DEBUG, "X-Roll-Ntime: N found");
-		} else {
+		else {
 			/* Check to see if expire= is supported and if not, set
 			 * the rolltime to the default scantime */
 			if (strlen(val) > 7 && !strncasecmp("expire=", val, 7))
@@ -378,9 +378,8 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 			if (pool->hdr_path != NULL)
 				free(pool->hdr_path);
 			pool->hdr_path = hi.lp_path;
-		} else {
+		} else
 			pool->hdr_path = NULL;
-		}
 	} else if (hi.lp_path) {
 		free(hi.lp_path);
 		hi.lp_path = NULL;
@@ -400,6 +399,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	if (opt_protocol) {
 		char *s = json_dumps(val, JSON_INDENT(3));
+
 		applog(LOG_DEBUG, "JSON protocol response:\n%s", s);
 		free(s);
 	}
@@ -449,8 +449,8 @@ err_out:
 
 char *bin2hex(const unsigned char *p, size_t len)
 {
-	unsigned int i;
 	char *s = malloc((len * 2) + 1);
+	unsigned int i;
 
 	if (!s)
 		return NULL;
@@ -525,9 +525,9 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 	unsigned char hash_swap[32], target_swap[32];
 	uint32_t *hash32 = (uint32_t *) hash_swap;
 	uint32_t *target32 = (uint32_t *) target_swap;
-	int i;
-	bool rc = true;
 	char *hash_str, *target_str;
+	bool rc = true;
+	int i;
 
 	swap256(hash_swap, hash);
 	swap256(target_swap, target);
@@ -680,10 +680,7 @@ out:
 
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg)
 {
-	int ret;
-
-	ret = pthread_create(&thr->pth, attr, start, arg);
-	return ret;
+	return pthread_create(&thr->pth, attr, start, arg);
 }
 
 void thr_info_freeze(struct thr_info *thr)
