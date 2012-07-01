@@ -43,8 +43,10 @@ static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 	if ((bufLen) != write(fd, buf, bufLen)) {
 		applog(LOG_ERR, "BFL: Error writing: %s", buf); 
 		return 0;
-	} else
+	} else {
+		usleep(100);
 		return bufLen;
+	}
 }
 
 #define BFclose(fd) close(fd)
@@ -214,7 +216,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	mutex_unlock(&bitforce->device_mutex);
 	
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error reading (ZLX)", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string", bitforce->device_id);
 		bitforce->temp = 0;
 		return false;
 	}
@@ -245,22 +247,21 @@ static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 
 	if (!fdDev)
 		return false;
-
+re_send:
 	mutex_lock(&bitforce->device_mutex);
 	BFwrite(fdDev, "ZDX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error reading (ZDX)", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Error: Send work returned empty string", bitforce->device_id);
 		mutex_unlock(&bitforce->device_mutex);
 		return false;
-	}
-	if (pdevbuf[0] == 'B'){
-		applog(LOG_WARNING, "BFL%i: Throttling", bitforce->device_id);
+	} else if (pdevbuf[0] == 'B'){
+		applog(LOG_DEBUG, "BFL%i: Busy", bitforce->device_id);
 		mutex_unlock(&bitforce->device_mutex);
-		return true;
-	}
-	else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
-		applog(LOG_ERR, "BFL%i: ZDX reports: %s", bitforce->device_id, pdevbuf);
+		usleep(BITFORCE_CHECK_INTERVAL_MS*1000);
+		goto re_send;
+	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
+		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
 		mutex_unlock(&bitforce->device_mutex);
 		return false;
 	}
@@ -276,11 +277,11 @@ static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error reading (block data)", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string", bitforce->device_id);
 		return false;
 	}
 	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
-		applog(LOG_ERR, "BFL%i: block data reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
 		return false;
 	}
 	return true;
@@ -304,7 +305,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
 		if (unlikely(!pdevbuf[0])) {
-			applog(LOG_ERR, "BFL%i: Error reading (ZFX)", bitforce->device_id);
+			applog(LOG_ERR, "BFL%i: Error: Get result returned empty string", bitforce->device_id);
 			return 0;
 		}
 		if (pdevbuf[0] != 'B')
@@ -333,7 +334,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	else if (pdevbuf[0] == 'I') 
 		return 1;          /* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
-		applog(LOG_WARNING, "BFL%i: result reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
 		return 1;
 	}
 
