@@ -256,10 +256,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		      bool probe, bool longpoll, int *rolltime,
 		      struct pool *pool, bool share)
 {
-	char len_hdr[64], user_agent_hdr[128], *ghashrate;
 	long timeout = longpoll ? (60 * 60) : 60;
 	struct data_buffer all_data = {NULL, 0};
 	struct header_info hi = {NULL, 0, NULL};
+	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	struct curl_slist *headers = NULL;
 	struct upload_buffer upload_data;
@@ -326,9 +326,11 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	headers = curl_slist_append(headers,
 		"X-Mining-Extensions: longpoll midstate rollntime submitold");
 
-	if (likely(global_hashrate && asprintf(&ghashrate, "X-Mining-Hashrate: %llu", global_hashrate) != -1)) {
+	if (likely(global_hashrate)) {
+		char ghashrate[255];
+
+		sprintf(ghashrate, "X-Mining-Hashrate: %llu", global_hashrate);
 		headers = curl_slist_append(headers, ghashrate);
-		free(ghashrate);
 	}
 
 	headers = curl_slist_append(headers, len_hdr);
