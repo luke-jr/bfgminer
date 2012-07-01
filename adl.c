@@ -692,7 +692,11 @@ int gpu_fanpercent(int gpu)
 	unlock_adl();
 	if (unlikely(ga->has_fanspeed && ret == -1)) {
 		applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
-		applog(LOG_WARNING, "You will need to start BFGMiner from scratch to correct this");
+		if (opt_restart) {
+			applog(LOG_WARNING, "Restart enabled, will restart BFGMiner");
+			applog(LOG_WARNING, "You can disable this with the --no-restart option");
+			app_restart();
+		}
 		applog(LOG_WARNING, "Disabling fanspeed monitoring on this device");
 		ga->has_fanspeed = false;
 		if (ga->twin) {
