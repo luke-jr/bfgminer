@@ -1,4 +1,4 @@
-Version 2.4.4 - July 1, 2012
+BFGMiner Version 2.4.4 - July 1, 2012
 
 - Fix builds on non gnu platforms.
 - api.c ensure old mode is always available when not using --api-groups + quit()
@@ -43,6 +43,7 @@ be added.
 unlimited devices.
 - Dynamic intensity for GPUs should be calculated on a per device basis. Clean
 up the code to only calculate it if required as well.
+- Bugfix: Provide alternative to JSON_ENCODE_ANY for Jansson 1.x
 - Use a queueing bool set under control_lock to prevent multiple calls to
 queue_request racing.
 - Use the work clone flag to determine if we should subtract it from the total
@@ -77,9 +78,12 @@ cards when ADL failed.
 - Fix openwrt crashing on regeneratehash() by making check_solve a noop.
 - FPGA - allow device detect override without an open failure
 - Fix sign warning.
+- Bugfix: icarus: properly store/restore info and work end times across longpoll
+restarts
+- Enable modminer for release builds
 
 
-Version 2.4.3 - June 14, 2012
+BFGMiner Version 2.4.3 - June 14, 2012
 
 - Change device API "name" to reflect driver name abbreviation instead of device type name
 - miner.php allow a separate user settings file
