@@ -445,6 +445,7 @@ struct pool *current_pool(void)
 char *set_int_range(const char *arg, int *i, int min, int max)
 {
 	char *err = opt_set_intval(arg, i);
+
 	if (err)
 		return err;
 
@@ -594,7 +595,7 @@ static char *set_userpass(const char *arg)
 static char *enable_debug(bool *flag)
 {
 	*flag = true;
-	/* Turn out verbose output, too. */
+	/* Turn on verbose output, too. */
 	opt_log_output = true;
 	return NULL;
 }
@@ -609,8 +610,8 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 	return NULL;
 }
 
-static char*
-set_sharelog(char *arg) {
+static char* set_sharelog(char *arg)
+{
 	char *r = "";
 	long int i = strtol(arg, &r, 10);
 
@@ -662,11 +663,11 @@ static void load_temp_cutoffs()
 
 			devices[device]->cutofftemp = val;
 		}
-	}
-	else {
-		for (i = device; i < total_devices; ++i)
+	} else {
+		for (i = device; i < total_devices; ++i) {
 			if (!devices[i]->cutofftemp)
 				devices[i]->cutofftemp = opt_cutofftemp;
+		}
 		return;
 	}
 	if (device <= 1) {
@@ -1025,6 +1026,7 @@ static char *parse_config(json_t *config, bool fileconf)
 		name = strdup(opt->names);
 		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
 			char *err = NULL;
+
 			/* Ignore short options. */
 			if (p[1] != '-')
 				continue;
@@ -1117,8 +1119,7 @@ static void load_default_config(void)
 	if (getenv("HOME") && *getenv("HOME")) {
 	        strcpy(cnfbuf, getenv("HOME"));
 		strcat(cnfbuf, "/");
-	}
-	else
+	} else
 		strcpy(cnfbuf, "");
 	strcat(cnfbuf, ".cgminer/");
 #else
@@ -3364,8 +3365,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		if (want_per_device_stats) {
 			struct timeval now;
 			struct timeval elapsed;
+
 			gettimeofday(&now, NULL);
-			timeval_subtract(&elapsed, &now, &thr->cgpu->last_message_tv);
+			timersub(&now, &thr->cgpu->last_message_tv, &elapsed);
 			if (opt_log_interval <= elapsed.tv_sec) {
 				struct cgpu_info *cgpu = thr->cgpu;
 				char logline[255];
@@ -3385,7 +3387,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	/* Totals are updated by all threads so can race without locking */
 	mutex_lock(&hash_lock);
 	gettimeofday(&temp_tv_end, NULL);
-	timeval_subtract(&total_diff, &temp_tv_end, &total_tv_end);
+	timersub(&temp_tv_end, &total_tv_end, &total_diff);
 
 	total_mhashes_done += local_mhashes;
 	local_mhashes_done += local_mhashes;
@@ -3399,7 +3401,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	decay_time(&rolling, local_mhashes_done / local_secs);
 	global_hashrate = roundl(rolling) * 1000000;
 
-	timeval_subtract(&total_diff, &total_tv_end, &total_tv_start);
+	timersub(&total_tv_end, &total_tv_start, &total_diff);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
@@ -3953,7 +3955,7 @@ void *miner_thread(void *userdata)
 	/* Try to cycle approximately 5 times before each log update */
 	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
-	struct timeval diff, sdiff, wdiff;
+	struct timeval diff, sdiff, wdiff = {0, 0};
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	unsigned long long hashes_done = 0;
 	unsigned long long hashes;
@@ -4070,7 +4072,7 @@ void *miner_thread(void *userdata)
 				cgpu->max_hashes = hashes;
 
 			gettimeofday(&tv_end, NULL);
-			timeval_subtract(&diff, &tv_end, &tv_start);
+			timersub(&tv_end, &tv_start, &diff);
 			sdiff.tv_sec += diff.tv_sec;
 			sdiff.tv_usec += diff.tv_usec;
 			if (sdiff.tv_usec > 1000000) {
@@ -4078,7 +4080,7 @@ void *miner_thread(void *userdata)
 				sdiff.tv_usec -= 1000000;
 			}
 
-			timeval_subtract(&wdiff, &tv_end, &tv_workstart);
+			timersub(&tv_end, &tv_workstart, &wdiff);
 			if (!requested) {
 				if (wdiff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
 					thread_reportout(mythr);
@@ -4114,7 +4116,7 @@ void *miner_thread(void *userdata)
 				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
 			}
 
-			timeval_subtract(&diff, &tv_end, &tv_lastupdate);
+			timersub(&tv_end, &tv_lastupdate, &diff);
 			if (diff.tv_sec >= opt_log_interval) {
 				hashmeter(thr_id, &diff, hashes_done);
 				hashes_done = 0;
@@ -4601,7 +4603,7 @@ static void print_summary(void)
 	int hours, mins, secs, i;
 	double utility, efficiency = 0.0;
 
-	timeval_subtract(&diff, &total_tv_end, &total_tv_start);
+	timersub(&total_tv_end, &total_tv_start, &diff);
 	hours = diff.tv_sec / 3600;
 	mins = (diff.tv_sec % 3600) / 60;
 	secs = diff.tv_sec % 60;
@@ -4812,71 +4814,72 @@ out:
 #endif
 
 #if defined(unix)
-	static void fork_monitor()
-	{
-		// Make a pipe: [readFD, writeFD]
-		int pfd[2];
-		int r = pipe(pfd);
-		if (r<0) {
-			perror("pipe - failed to create pipe for --monitor");
-			exit(1);
-		}
+static void fork_monitor()
+{
+	// Make a pipe: [readFD, writeFD]
+	int pfd[2];
+	int r = pipe(pfd);
 
-		// Make stderr write end of pipe
-		fflush(stderr);
-		r = dup2(pfd[1], 2);
-		if (r<0) {
-			perror("dup2 - failed to alias stderr to write end of pipe for --monitor");
-			exit(1);
-		}
-		r = close(pfd[1]);
-		if (r<0) {
-			perror("close - failed to close write end of pipe for --monitor");
-			exit(1);
-		}
-
-		// Don't allow a dying monitor to kill the main process
-		sighandler_t sr0 = signal(SIGPIPE, SIG_IGN);
-		sighandler_t sr1 = signal(SIGPIPE, SIG_IGN);
-		if (SIG_ERR==sr0 || SIG_ERR==sr1) {
-			perror("signal - failed to edit signal mask for --monitor");
-			exit(1);
-		}
-
-		// Fork a child process
-		forkpid = fork();
-		if (forkpid<0) {
-			perror("fork - failed to fork child process for --monitor");
-			exit(1);
-		}
-
-		// Child: launch monitor command
-		if (0==forkpid) {
-			// Make stdin read end of pipe
-			r = dup2(pfd[0], 0);
-			if (r<0) {
-				perror("dup2 - in child, failed to alias read end of pipe to stdin for --monitor");
-				exit(1);
-			}
-			close(pfd[0]);
-			if (r<0) {
-				perror("close - in child, failed to close read end of  pipe for --monitor");
-				exit(1);
-			}
-
-			// Launch user specified command
-			execl("/bin/bash", "/bin/bash", "-c", opt_stderr_cmd, (char*)NULL);
-			perror("execl - in child failed to exec user specified command for --monitor");
-			exit(1);
-		}
-
-		// Parent: clean up unused fds and bail
-		r = close(pfd[0]);
-		if (r<0) {
-			perror("close - failed to close read end of pipe for --monitor");
-			exit(1);
-		}
+	if (r < 0) {
+		perror("pipe - failed to create pipe for --monitor");
+		exit(1);
 	}
+
+	// Make stderr write end of pipe
+	fflush(stderr);
+	r = dup2(pfd[1], 2);
+	if (r < 0) {
+		perror("dup2 - failed to alias stderr to write end of pipe for --monitor");
+		exit(1);
+	}
+	r = close(pfd[1]);
+	if (r < 0) {
+		perror("close - failed to close write end of pipe for --monitor");
+		exit(1);
+	}
+
+	// Don't allow a dying monitor to kill the main process
+	sighandler_t sr0 = signal(SIGPIPE, SIG_IGN);
+	sighandler_t sr1 = signal(SIGPIPE, SIG_IGN);
+	if (SIG_ERR == sr0 || SIG_ERR == sr1) {
+		perror("signal - failed to edit signal mask for --monitor");
+		exit(1);
+	}
+
+	// Fork a child process
+	forkpid = fork();
+	if (forkpid < 0) {
+		perror("fork - failed to fork child process for --monitor");
+		exit(1);
+	}
+
+	// Child: launch monitor command
+	if (0 == forkpid) {
+		// Make stdin read end of pipe
+		r = dup2(pfd[0], 0);
+		if (r < 0) {
+			perror("dup2 - in child, failed to alias read end of pipe to stdin for --monitor");
+			exit(1);
+		}
+		close(pfd[0]);
+		if (r < 0) {
+			perror("close - in child, failed to close read end of  pipe for --monitor");
+			exit(1);
+		}
+
+		// Launch user specified command
+		execl("/bin/bash", "/bin/bash", "-c", opt_stderr_cmd, (char*)NULL);
+		perror("execl - in child failed to exec user specified command for --monitor");
+		exit(1);
+	}
+
+	// Parent: clean up unused fds and bail
+	r = close(pfd[0]);
+	if (r < 0) {
+		perror("close - failed to close read end of pipe for --monitor");
+		exit(1);
+	}
+}
 #endif // defined(unix)
 
 #ifdef HAVE_CURSES
@@ -4958,8 +4961,7 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	HASH_FIND_STR(devids, cgpu->api->name, d);
 	if (d)
 		cgpu->device_id = ++d->lastid;
-	else
-	{
+	else {
 		d = malloc(sizeof(*d));
 		memcpy(d->name, cgpu->api->name, sizeof(d->name));
 		cgpu->device_id = d->lastid = 0;
@@ -5118,14 +5120,16 @@ int main(int argc, char *argv[])
 		opt_log_output = true;
 
 #ifdef WANT_CPUMINE
-	if (0<=opt_bench_algo) {
+	if (0 <= opt_bench_algo) {
 		double rate = bench_algo_stage3(opt_bench_algo);
-		if (!skip_to_bench) {
+
+		if (!skip_to_bench)
 			printf("%.5f (%s)\n", rate, algo_names[opt_bench_algo]);
-		} else {
+		else {
 			// Write result to shared memory for parent
-			#if defined(WIN32)
+#if defined(WIN32)
 				char unique_name[64];
+
 				if (GetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name, 32)) {
 					HANDLE map_handle = CreateFileMapping(
 						INVALID_HANDLE_VALUE,   // use paging file
@@ -5135,7 +5139,7 @@ int main(int argc, char *argv[])
 						4096,			// size: low 32-bits
 						unique_name		// name of map object
 					);
-					if (NULL!=map_handle) {
+					if (NULL != map_handle) {
 						void *shared_mem = MapViewOfFile(
 							map_handle,	// object to map view of
 							FILE_MAP_WRITE, // read/write access
@@ -5143,13 +5147,13 @@ int main(int argc, char *argv[])
 							0,              // low offset:   beginning
 							0		// default: map entire file
 						);
-						if (NULL!=shared_mem)
+						if (NULL != shared_mem)
 							CopyMemory(shared_mem, &rate, sizeof(rate));
 						(void)UnmapViewOfFile(shared_mem);
 					}
 					(void)CloseHandle(map_handle);
 				}
-			#endif
+#endif
 		}
 		exit(0);
 	}
