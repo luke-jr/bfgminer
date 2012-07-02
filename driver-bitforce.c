@@ -20,7 +20,7 @@
 #include "fpgautils.h"
 #include "miner.h"
 
-#define BITFORCE_SLEEP_MS 2000
+#define BITFORCE_SLEEP_MS 3000
 #define BITFORCE_TIMEOUT_MS 10000
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
@@ -43,10 +43,8 @@ static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 	if ((bufLen) != write(fd, buf, bufLen)) {
 		applog(LOG_ERR, "BFL: Error writing: %s", buf); 
 		return 0;
-	} else {
-		usleep(100);
+	} else
 		return bufLen;
-	}
 }
 
 #define BFclose(fd) close(fd)
@@ -297,6 +295,8 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		return 0;
 
 	while (bitforce->wait_ms < BITFORCE_TIMEOUT_MS) {
+		if (unlikely(work_restart[thr->id].restart))
+			return 1;
 		mutex_lock(&bitforce->device_mutex);
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
@@ -371,10 +371,30 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	uint64_t ret;
+	struct timeval tdiff;
+	unsigned int sleep_time;
 
 	bitforce->wait_ms = 0;
 	ret = bitforce_send_work(thr, work);
 
+	/* Initially wait 2/3 of the average cycle time so we can request more
+	work before full scan is up */
+	sleep_time = (2*bitforce->sleep_ms) / 3;
+	tdiff.tv_sec = sleep_time/1000;
+	tdiff.tv_usec = sleep_time*1000 - (tdiff.tv_sec * 1000000);
+	if (!restart_wait(&tdiff))
+		return 1;
+	bitforce->wait_ms += sleep_time;
+	queue_request(thr, false);
+
+	/* Now wait athe final 1/3rd; no bitforce should be finished by now */
+	sleep_time = bitforce->sleep_ms - sleep_time;
+	tdiff.tv_sec = sleep_time/1000;
+	tdiff.tv_usec = sleep_time*1000 - (tdiff.tv_sec * 1000000);
+	if (!restart_wait(&tdiff))
+		return 1;
+	bitforce->wait_ms += sleep_time;
+/*
 	while (bitforce->wait_ms < bitforce->sleep_ms) {
 		usleep(WORK_CHECK_INTERVAL_MS*1000);
 		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
@@ -383,7 +403,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 			return 1; //we have discarded all work; equivilent to 0 hashes done.
 		}
 	}
-
+*/
 	if (ret)
 		ret = bitforce_get_result(thr, work);
 
