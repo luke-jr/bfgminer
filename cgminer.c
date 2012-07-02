@@ -224,7 +224,7 @@ static const char def_conf[] = "cgminer.conf";
 static bool config_loaded;
 static int include_count;
 #define JSON_INCLUDE_CONF "include"
-#define JSON_LOAD_ERROR "JSON decode of file '%s' failed"
+#define JSON_LOAD_ERROR "JSON decode of file '%s' failed\n %s"
 #define JSON_LOAD_ERROR_LEN strlen(JSON_LOAD_ERROR)
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
@@ -1105,11 +1105,11 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	config = json_load_file(arg, &err);
 #endif
 	if (!json_is_object(config)) {
-		json_error = malloc(JSON_LOAD_ERROR_LEN + strlen(arg));
+		json_error = malloc(JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text));
 		if (!json_error)
 			quit(1, "Malloc failure in json error");
 
-		sprintf(json_error, JSON_LOAD_ERROR, arg);
+		sprintf(json_error, JSON_LOAD_ERROR, arg, err.text);
 		return json_error;
 	}
 
