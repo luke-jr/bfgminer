@@ -20,7 +20,7 @@
 #include "fpgautils.h"
 #include "miner.h"
 
-#define BITFORCE_SLEEP_MS 2000
+#define BITFORCE_SLEEP_MS 3000
 #define BITFORCE_TIMEOUT_MS 10000
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
@@ -214,7 +214,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	mutex_unlock(&bitforce->device_mutex);
 	
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error reading (ZLX)", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string", bitforce->device_id);
 		bitforce->temp = 0;
 		return false;
 	}
@@ -245,22 +245,17 @@ static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 
 	if (!fdDev)
 		return false;
-
+re_send:
 	mutex_lock(&bitforce->device_mutex);
 	BFwrite(fdDev, "ZDX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error reading (ZDX)", bitforce->device_id);
+	if (!pdevbuf[0] || (pdevbuf[0] == 'B')) {
 		mutex_unlock(&bitforce->device_mutex);
-		return false;
-	}
-	if (pdevbuf[0] == 'B'){
-		applog(LOG_WARNING, "BFL%i: Throttling", bitforce->device_id);
-		mutex_unlock(&bitforce->device_mutex);
-		return true;
-	}
-	else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
-		applog(LOG_ERR, "BFL%i: ZDX reports: %s", bitforce->device_id, pdevbuf);
+		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
+		usleep(WORK_CHECK_INTERVAL_MS*1000);
+		goto re_send;
+	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
+		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
 		mutex_unlock(&bitforce->device_mutex);
 		return false;
 	}
@@ -276,11 +271,11 @@ static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error reading (block data)", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string", bitforce->device_id);
 		return false;
 	}
 	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
-		applog(LOG_ERR, "BFL%i: block data reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
 		return false;
 	}
 	return true;
@@ -294,23 +289,24 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	char pdevbuf[0x100];
 	char *pnoncebuf;
 	uint32_t nonce;
+	unsigned int delay_time_ms = BITFORCE_CHECK_INTERVAL_MS;
 
 	if (!fdDev)
 		return 0;
 
 	while (bitforce->wait_ms < BITFORCE_TIMEOUT_MS) {
+		if (unlikely(work_restart[thr->id].restart))
+			return 1;
 		mutex_lock(&bitforce->device_mutex);
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
-		if (unlikely(!pdevbuf[0])) {
-			applog(LOG_ERR, "BFL%i: Error reading (ZFX)", bitforce->device_id);
-			return 0;
-		}
-		if (pdevbuf[0] != 'B')
+		if (pdevbuf[0] && pdevbuf[0] != 'B') /* BFL does not respond during throttling */
 			break;
-		usleep(BITFORCE_CHECK_INTERVAL_MS*1000);
-		bitforce->wait_ms += BITFORCE_CHECK_INTERVAL_MS;
+		/* if BFL is throttling, no point checking so quickly */
+		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2*WORK_CHECK_INTERVAL_MS);
+		usleep(delay_time_ms*1000);
+		bitforce->wait_ms += delay_time_ms;
 	}
 	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
 		applog(LOG_ERR, "BFL%i: took longer than 10s", bitforce->device_id);
@@ -333,7 +329,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	else if (pdevbuf[0] == 'I') 
 		return 1;          /* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
-		applog(LOG_WARNING, "BFL%i: result reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
 		return 1;
 	}
 
@@ -369,16 +365,34 @@ static void biforce_thread_enable(struct thr_info *thr)
 	bitforce_init(bitforce);
 }
 
-
-
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	bitforce->wait_ms = 0;
 	uint64_t ret;
+	struct timeval tdiff;
+	unsigned int sleep_time;
 
+	bitforce->wait_ms = 0;
 	ret = bitforce_send_work(thr, work);
 
+	/* Initially wait 2/3 of the average cycle time so we can request more
+	work before full scan is up */
+	sleep_time = (2*bitforce->sleep_ms) / 3;
+	tdiff.tv_sec = sleep_time/1000;
+	tdiff.tv_usec = sleep_time*1000 - (tdiff.tv_sec * 1000000);
+	if (!restart_wait(&tdiff))
+		return 1;
+	bitforce->wait_ms += sleep_time;
+	queue_request(thr, false);
+
+	/* Now wait athe final 1/3rd; no bitforce should be finished by now */
+	sleep_time = bitforce->sleep_ms - sleep_time;
+	tdiff.tv_sec = sleep_time/1000;
+	tdiff.tv_usec = sleep_time*1000 - (tdiff.tv_sec * 1000000);
+	if (!restart_wait(&tdiff))
+		return 1;
+	bitforce->wait_ms += sleep_time;
+/*
 	while (bitforce->wait_ms < bitforce->sleep_ms) {
 		usleep(WORK_CHECK_INTERVAL_MS*1000);
 		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
@@ -387,7 +401,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 			return 1; //we have discarded all work; equivilent to 0 hashes done.
 		}
 	}
-
+*/
 	if (ret)
 		ret = bitforce_get_result(thr, work);
 

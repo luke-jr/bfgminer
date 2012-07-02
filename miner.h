@@ -561,9 +561,6 @@ typedef bool (*sha256_func)(int thr_id, const unsigned char *pmidstate,
 	uint32_t *last_nonce,
 	uint32_t nonce);
 
-extern int
-timeval_subtract (struct timeval *result, struct timeval *x, struct timeval *y);
-
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_scantime;
@@ -573,7 +570,12 @@ struct work_restart {
 	char			padding[128 - sizeof(unsigned long)];
 };
 
+extern pthread_mutex_t restart_lock;
+extern pthread_cond_t restart_cond;
+
 extern void thread_reportin(struct thr_info *thr);
+extern bool queue_request(struct thr_info *thr, bool needed);
+extern int restart_wait(struct timeval *tdiff);
 
 extern void kill_work(void);
 
