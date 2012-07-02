@@ -339,25 +339,35 @@ static FILE *sharelog_file = NULL;
 
 static void sharelog(const char*disposition, const struct work*work)
 {
+	char *target, *hash, *data;
+	struct cgpu_info *cgpu;
+	unsigned long int t;
+	struct pool *pool;
+	int thr_id, rv;
+	char s[1024];
+	size_t ret;
+
 	if (!sharelog_file)
 		return;
 
-	int thr_id = work->thr_id;
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
-	struct pool *pool = work->pool;
-	unsigned long int t = (unsigned long int)work->share_found_time;
-	char *target = bin2hex(work->target, sizeof(work->target));
+	thr_id = work->thr_id;
+	cgpu = thr_info[thr_id].cgpu;
+	pool = work->pool;
+	t = (unsigned long int)work->share_found_time;
+	target = bin2hex(work->target, sizeof(work->target));
 	if (unlikely(!target)) {
 		applog(LOG_ERR, "sharelog target OOM");
 		return;
 	}
-	char *hash = bin2hex(work->hash, sizeof(work->hash));
+
+	hash = bin2hex(work->hash, sizeof(work->hash));
 	if (unlikely(!hash)) {
 		free(target);
 		applog(LOG_ERR, "sharelog hash OOM");
 		return;
 	}
-	char *data = bin2hex(work->data, sizeof(work->data));
+
+	data = bin2hex(work->data, sizeof(work->data));
 	if (unlikely(!data)) {
 		free(target);
 		free(hash);
@@ -366,26 +376,22 @@ static void sharelog(const char*disposition, const struct work*work)
 	}
 
 	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
-	char s[1024];
-	int rv;
 	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s%u,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->api->name, cgpu->device_id, thr_id, hash, data);
 	free(target);
 	free(hash);
 	free(data);
 	if (rv >= (int)(sizeof(s)))
 		s[sizeof(s) - 1] = '\0';
-	else
-	if (rv < 0) {
+	else if (rv < 0) {
 		applog(LOG_ERR, "sharelog printf error");
 		return;
 	}
 
-	size_t ret;
 	mutex_lock(&sharelog_lock);
 	ret = fwrite(s, rv, 1, sharelog_file);
 	fflush(sharelog_file);
 	mutex_unlock(&sharelog_lock);
-	if (1 != ret)
+	if (ret != 1)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
@@ -1013,8 +1019,8 @@ static int fileconf_load;
 static char *parse_config(json_t *config, bool fileconf)
 {
 	static char err_buf[200];
-	json_t *val;
 	struct opt_table *opt;
+	json_t *val;
 
 	if (fileconf && !fileconf_load)
 		fileconf_load = 1;

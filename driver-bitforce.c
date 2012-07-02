@@ -365,8 +365,6 @@ static void biforce_thread_enable(struct thr_info *thr)
 	bitforce_init(bitforce);
 }
 
-
-
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
