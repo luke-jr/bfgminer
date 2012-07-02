@@ -2486,13 +2486,17 @@ int restart_wait(struct timeval *tdiff)
 {
 	struct timeval now, then;
 	struct timespec abstime;
+	int rc;
 
 	gettimeofday(&now, NULL);
 	timeradd(&now, tdiff, &then);
 	abstime.tv_sec = then.tv_sec;
 	abstime.tv_nsec = then.tv_usec * 1000;
 	mutex_lock(&restart_lock);
-	return pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
+	rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
+	if (!rc)
+		mutex_unlock(&restart_lock);
+	return rc;
 }
 	
 static void restart_threads(void)
