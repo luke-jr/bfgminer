@@ -251,15 +251,10 @@ re_send:
 	mutex_lock(&bitforce->device_mutex);
 	BFwrite(fdDev, "ZDX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Send work returned empty string", bitforce->device_id);
+	if (!pdevbuf[0] || (pdevbuf[0] == 'B')) {
 		mutex_unlock(&bitforce->device_mutex);
-		return false;
-	} else if (pdevbuf[0] == 'B') {
-		applog(LOG_DEBUG, "BFL%i: Busy", bitforce->device_id);
-		mutex_unlock(&bitforce->device_mutex);
-		bitforce->wait_ms += BITFORCE_CHECK_INTERVAL_MS;
-		usleep(BITFORCE_CHECK_INTERVAL_MS*1000);
+		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
+		usleep(WORK_CHECK_INTERVAL_MS*1000);
 		goto re_send;
 	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
@@ -296,6 +291,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	char pdevbuf[0x100];
 	char *pnoncebuf;
 	uint32_t nonce;
+	unsigned int delay_time_ms = BITFORCE_CHECK_INTERVAL_MS;
 
 	if (!fdDev)
 		return 0;
@@ -305,14 +301,12 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
-		if (unlikely(!pdevbuf[0])) {
-			applog(LOG_ERR, "BFL%i: Error: Get result returned empty string", bitforce->device_id);
-			return 0;
-		}
-		if (pdevbuf[0] != 'B')
+		if (pdevbuf[0] && pdevbuf[0] != 'B') /* BFL does not respond during throttling */
 			break;
-		usleep(BITFORCE_CHECK_INTERVAL_MS*1000);
-		bitforce->wait_ms += BITFORCE_CHECK_INTERVAL_MS;
+		/* if BFL is throttling, no point checking so quickly */
+		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2*WORK_CHECK_INTERVAL_MS);
+		usleep(delay_time_ms*1000);
+		bitforce->wait_ms += delay_time_ms;
 	}
 	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
 		applog(LOG_ERR, "BFL%i: took longer than 10s", bitforce->device_id);
@@ -376,9 +370,9 @@ static void biforce_thread_enable(struct thr_info *thr)
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	bitforce->wait_ms = 0;
 	uint64_t ret;
 
+	bitforce->wait_ms = 0;
 	ret = bitforce_send_work(thr, work);
 
 	while (bitforce->wait_ms < bitforce->sleep_ms) {
