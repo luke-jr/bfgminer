@@ -255,9 +255,10 @@ re_send:
 		applog(LOG_ERR, "BFL%i: Error: Send work returned empty string", bitforce->device_id);
 		mutex_unlock(&bitforce->device_mutex);
 		return false;
-	} else if (pdevbuf[0] == 'B'){
+	} else if (pdevbuf[0] == 'B') {
 		applog(LOG_DEBUG, "BFL%i: Busy", bitforce->device_id);
 		mutex_unlock(&bitforce->device_mutex);
+		bitforce->wait_ms += BITFORCE_CHECK_INTERVAL_MS;
 		usleep(BITFORCE_CHECK_INTERVAL_MS*1000);
 		goto re_send;
 	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
