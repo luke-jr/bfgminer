@@ -5200,9 +5200,10 @@ begin_bench:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr = calloc(cgpu->threads+1, sizeof(*cgpu->thr));
 		cgpu->thr[cgpu->threads] = NULL;
 
+		// Setup thread structs before starting any of the threads, in case they try to interact
 		for (j = 0; j < cgpu->threads; ++j, ++k) {
 			thr = &thr_info[k];
 			thr->id = k;
@@ -5221,6 +5222,12 @@ begin_bench:
 				tq_push(thr->q, &ping);
 			}
 
+			cgpu->thr[j] = thr;
+		}
+
+		for (j = 0; j < cgpu->threads; ++j) {
+			thr = cgpu->thr[j];
+
 			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
 				continue;
 
@@ -5228,8 +5235,6 @@ begin_bench:
 
 			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 				quit(1, "thread %d create failed", thr->id);
-
-			cgpu->thr[j] = thr;
 		}
 	}
 
