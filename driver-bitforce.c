@@ -139,6 +139,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 
 	char pdevbuf[0x100];
 	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
+	struct timeval tdiff;
 	int i;
 	char *pnoncebuf;
 	char *s;
@@ -195,9 +196,28 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		}
 	}
 
-	usleep(4500000);
-	i = 4500;
-	while (1) {
+	/* Initially wait 2/3 of the average cycle time so we can request more
+	 * work before full scan is up ~ 3.4 seconds */
+	tdiff.tv_sec = 3;
+	tdiff.tv_usec = 4000000;
+	if (!restart_wait(&tdiff))
+		return 0;
+	queue_request(thr, false);
+	i = 3400;
+
+	/* Now wait another second; no bistream should be finished by now */
+	tdiff.tv_sec = 1;
+	tdiff.tv_usec = 0;
+	if (!restart_wait(&tdiff))
+		return 0;
+	i += 1000;
+
+	/* Now start looking for results. Stupid polling every 10ms... */
+	tdiff.tv_sec = 0;
+	tdiff.tv_usec = 10000;
+	while (42) {
+		int rc = restart_wait(&tdiff);
+
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		if (unlikely(!pdevbuf[0])) {
@@ -206,7 +226,8 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		}
 		if (pdevbuf[0] != 'B')
 		    break;
-		usleep(10000);
+		if (!rc)
+			return 0;
 		i += 10;
 	}
 	applog(LOG_DEBUG, "BitForce waited %dms until %s\n", i, pdevbuf);

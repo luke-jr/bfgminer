@@ -559,7 +559,12 @@ struct work_restart {
 	char			padding[128 - sizeof(unsigned long)];
 };
 
+extern pthread_mutex_t restart_lock;
+extern pthread_cond_t restart_cond;
+
 extern void thread_reportin(struct thr_info *thr);
+extern bool queue_request(struct thr_info *thr, bool needed);
+extern int restart_wait(struct timeval *tdiff);
 
 extern void kill_work(void);
 
