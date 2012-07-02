@@ -2494,8 +2494,7 @@ int restart_wait(struct timeval *tdiff)
 	abstime.tv_nsec = then.tv_usec * 1000;
 	mutex_lock(&restart_lock);
 	rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
-	if (!rc)
-		mutex_unlock(&restart_lock);
+	mutex_unlock(&restart_lock);
 	return rc;
 }
 	
