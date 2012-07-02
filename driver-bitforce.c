@@ -316,10 +316,13 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		return 1;
 	} else if (pdevbuf[0] == 'N') {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 	    /* Simple timing adjustment */
-		if (bitforce->wait_ms > (bitforce->sleep_ms + WORK_CHECK_INTERVAL_MS))
-			bitforce->sleep_ms += WORK_CHECK_INTERVAL_MS;
+        delay_time_ms = bitforce->sleep_ms;
+		if (bitforce->wait_ms > (bitforce->sleep_ms + BITFORCE_CHECK_INTERVAL_MS))
+			bitforce->sleep_ms += (unsigned int) ((double) (bitforce->wait_ms - bitforce->sleep_ms) / 1.6);
 		else if (bitforce->wait_ms == bitforce->sleep_ms)
-			bitforce->sleep_ms -= WORK_CHECK_INTERVAL_MS;		
+			bitforce->sleep_ms -= BITFORCE_CHECK_INTERVAL_MS;
+        if (delay_time_ms != bitforce->sleep_ms)
+		  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d. Waited: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
@@ -392,16 +395,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	if (!restart_wait(&tdiff))
 		return 1;
 	bitforce->wait_ms += sleep_time;
-/*
-	while (bitforce->wait_ms < bitforce->sleep_ms) {
-		usleep(WORK_CHECK_INTERVAL_MS*1000);
-		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
-		if (work_restart[thr->id].restart) {
-			applog(LOG_DEBUG, "BFL%i: Work restart, discarding after %dms", bitforce->device_id, bitforce->wait_ms);
-			return 1; //we have discarded all work; equivilent to 0 hashes done.
-		}
-	}
-*/
+
 	if (ret)
 		ret = bitforce_get_result(thr, work);
 
