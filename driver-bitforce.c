@@ -412,8 +412,8 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		ret = 1;
 		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
 		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_DEV_NOSTART;
-		bitforce->dev_nostart_count++;
+		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
+		bitforce->dev_comms_error_count++;
 		/* empty read buffer */
 		biforce_clear_buffer(bitforce);
 	}
