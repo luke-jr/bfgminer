@@ -35,6 +35,7 @@ static void BFgets(char *buf, size_t bufLen, int fd)
 	do
 		--bufLen;
 	while (likely(bufLen && read(fd, buf, 1) && (buf++)[0] != '\n'));
+
 	buf[0] = '\0';
 }
 
@@ -51,22 +52,25 @@ static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 
 static bool bitforce_detect_one(const char *devpath)
 {
-	char *s;
+	int fdDev = BFopen(devpath);
+	struct cgpu_info *bitforce;
 	char pdevbuf[0x100];
+	char *s;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
 
-	int fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
 		applog(LOG_ERR, "BFL: Failed to open %s", devpath);
 		return false;
 	}
+
 	BFwrite(fdDev, "ZGX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL: Error reading (ZGX)");
 		return 0;
 	}
+
 	BFclose(fdDev);
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		applog(LOG_ERR, "BFL: Didn't recognise BitForce on %s", devpath);
@@ -74,15 +78,14 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 
 	// We have a real BitForce!
-	struct cgpu_info *bitforce;
 	bitforce = calloc(1, sizeof(*bitforce));
 	bitforce->api = &bitforce_api;
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
-	{
+
+	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
@@ -108,6 +111,7 @@ static void bitforce_detect()
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 {
 	float gt = bitforce->temp;
+
 	if (gt > 0)
 		tailsprintf(buf, "%5.1fC ", gt);
 	else
@@ -118,10 +122,9 @@ static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 static bool bitforce_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-
+	int fdDev = BFopen(bitforce->device_path);
 	struct timeval now;
 
-	int fdDev = BFopen(bitforce->device_path);
 	if (unlikely(-1 == fdDev)) {
 		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, bitforce->device_path);
 		return false;
@@ -153,8 +156,8 @@ static void biforce_clear_buffer(struct cgpu_info *bitforce)
 
 void bitforce_init(struct cgpu_info *bitforce)
 {
-	int fdDev = bitforce->device_fd;
 	char *devpath = bitforce->device_path;
+	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
 	char *s;
 
@@ -218,8 +221,10 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		bitforce->temp = 0;
 		return false;
 	}
+
 	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
 		float temp = strtof(s + 1, NULL);
+
 		if (temp > 0) {
 			bitforce->temp = temp;
 			if (temp > bitforce->cutofftemp) {
@@ -237,10 +242,10 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 
 static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 {
+	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
-	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
 	char *s;
 
 	if (!fdDev)
@@ -259,6 +264,7 @@ re_send:
 		mutex_unlock(&bitforce->device_mutex);
 		return false;
 	}
+
 	memcpy(ob + 8, work->midstate, 32);
 	memcpy(ob + 8 + 32, work->data + 64, 12);
 
@@ -274,22 +280,24 @@ re_send:
 		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string", bitforce->device_id);
 		return false;
 	}
+
 	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
 		return false;
 	}
+
 	return true;
 }
 
 static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 {
+	unsigned int delay_time_ms = BITFORCE_CHECK_INTERVAL_MS;
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
-
 	char pdevbuf[0x100];
 	char *pnoncebuf;
 	uint32_t nonce;
-	unsigned int delay_time_ms = BITFORCE_CHECK_INTERVAL_MS;
+
 
 	if (!fdDev)
 		return 0;
@@ -308,6 +316,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		usleep(delay_time_ms*1000);
 		bitforce->wait_ms += delay_time_ms;
 	}
+
 	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
 		applog(LOG_ERR, "BFL%i: took longer than 10s", bitforce->device_id);
 		bitforce->device_last_not_well = time(NULL);
@@ -315,14 +324,14 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->dev_over_heat_count++;
 		return 1;
 	} else if (pdevbuf[0] == 'N') {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
-	    /* Simple timing adjustment */
-        delay_time_ms = bitforce->sleep_ms;
+		    /* Simple timing adjustment */
+	        delay_time_ms = bitforce->sleep_ms;
 		if (bitforce->wait_ms > (bitforce->sleep_ms + BITFORCE_CHECK_INTERVAL_MS))
 			bitforce->sleep_ms += (unsigned int) ((double) (bitforce->wait_ms - bitforce->sleep_ms) / 1.6);
 		else if (bitforce->wait_ms == bitforce->sleep_ms)
 			bitforce->sleep_ms -= BITFORCE_CHECK_INTERVAL_MS;
-        if (delay_time_ms != bitforce->sleep_ms)
-		  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d. Waited: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+		if (delay_time_ms != bitforce->sleep_ms)
+			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d. Waited: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
@@ -343,7 +352,6 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 #ifndef __BIG_ENDIAN__
 		nonce = swab32(nonce);
 #endif
-
 		submit_nonce(thr, work, nonce);
 		if (pnoncebuf[8] != ',')
 			break;
@@ -371,9 +379,9 @@ static void biforce_thread_enable(struct thr_info *thr)
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	uint64_t ret;
-	struct timeval tdiff;
 	unsigned int sleep_time;
+	struct timeval tdiff;
+	uint64_t ret;
 
 	bitforce->wait_ms = 0;
 	ret = bitforce_send_work(thr, work);
@@ -385,6 +393,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	tdiff.tv_usec = sleep_time*1000 - (tdiff.tv_sec * 1000000);
 	if (!restart_wait(&tdiff))
 		return 1;
+
 	bitforce->wait_ms += sleep_time;
 	queue_request(thr, false);
 
@@ -394,6 +403,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	tdiff.tv_usec = sleep_time*1000 - (tdiff.tv_sec * 1000000);
 	if (!restart_wait(&tdiff))
 		return 1;
+
 	bitforce->wait_ms += sleep_time;
 
 	if (ret)
@@ -443,5 +453,3 @@ struct device_api bitforce_api = {
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
 };
-
-
