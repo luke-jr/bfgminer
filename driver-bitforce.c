@@ -96,10 +96,9 @@ static bool bitforce_detect_one(const char *devpath)
 
 static char bitforce_detect_auto()
 {
-	return
-	serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
-	serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
-	0;
+	return (serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
+		serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
+		0);
 }
 
 static void bitforce_detect()
@@ -124,7 +123,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	int fdDev = BFopen(bitforce->device_path);
 	struct timeval now;
 
-	if (unlikely(-1 == fdDev)) {
+	if (unlikely(fdDev == -1)) {
 		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, bitforce->device_path);
 		return false;
 	}
@@ -255,7 +254,7 @@ re_send:
 	if (!pdevbuf[0] || (pdevbuf[0] == 'B')) {
 		mutex_unlock(&bitforce->device_mutex);
 		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
-		usleep(WORK_CHECK_INTERVAL_MS*1000);
+		usleep(WORK_CHECK_INTERVAL_MS * 1000);
 		goto re_send;
 	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
 		mutex_unlock(&bitforce->device_mutex);
@@ -313,7 +312,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 			break;
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2*WORK_CHECK_INTERVAL_MS);
-		usleep(delay_time_ms*1000);
+		usleep(delay_time_ms * 1000);
 		bitforce->wait_ms += delay_time_ms;
 	}
 
@@ -388,9 +387,9 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 
 	/* Initially wait 2/3 of the average cycle time so we can request more
 	work before full scan is up */
-	sleep_time = (2*bitforce->sleep_ms) / 3;
-	tdiff.tv_sec = sleep_time/1000;
-	tdiff.tv_usec = sleep_time*1000 - (tdiff.tv_sec * 1000000);
+	sleep_time = (2 * bitforce->sleep_ms) / 3;
+	tdiff.tv_sec = sleep_time / 1000;
+	tdiff.tv_usec = sleep_time * 1000 - (tdiff.tv_sec * 1000000);
 	if (!restart_wait(&tdiff))
 		return 1;
 
@@ -399,8 +398,8 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 
 	/* Now wait athe final 1/3rd; no bitforce should be finished by now */
 	sleep_time = bitforce->sleep_ms - sleep_time;
-	tdiff.tv_sec = sleep_time/1000;
-	tdiff.tv_usec = sleep_time*1000 - (tdiff.tv_sec * 1000000);
+	tdiff.tv_sec = sleep_time / 1000;
+	tdiff.tv_usec = sleep_time * 1000 - (tdiff.tv_sec * 1000000);
 	if (!restart_wait(&tdiff))
 		return 1;
 
@@ -434,7 +433,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	/* Pause each new thread a random time between 0-100ms 
 	so the devices aren't making calls all at the same time. */
 	wait = (rand() * MAX_START_DELAY_US)/RAND_MAX;
-	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait/1000);
+	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
 	usleep(wait);
 
 	return true;
