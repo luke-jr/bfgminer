@@ -442,10 +442,24 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	return true;
 }
 
+static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
+{
+	struct api_data *root = NULL;
+
+	// Warning, access to these is not locked - but we don't really
+	// care since hashing performance is way more important than
+	// locking access to displaying API debug 'stats'
+	// If locking becomes an issue for any of them, use copy_data=true also
+	root = api_add_int(root, "Sleep Time", &(cgpu->sleep_ms), false);
+
+	return root;
+}
+
 struct device_api bitforce_api = {
 	.dname = "bitforce",
 	.name = "BFL",
 	.api_detect = bitforce_detect,
+	.get_api_stats = bitforce_api_stats,
 	.reinit_device = bitforce_init,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
