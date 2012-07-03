@@ -21,7 +21,8 @@
 #include "miner.h"
 
 #define BITFORCE_SLEEP_MS 3000
-#define BITFORCE_TIMEOUT_MS 10000
+#define BITFORCE_TIMEOUT_MS 7000
+#define BITFORCE_LONG_TIMEOUT_MS 15000
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
 #define MAX_START_DELAY_US 100000
@@ -196,6 +197,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	}
 
 	bitforce->device_fd = fdDev;
+	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 	mutex_unlock(&bitforce->device_mutex);
 }
 
@@ -301,7 +303,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	if (!fdDev)
 		return 0;
 
-	while (bitforce->wait_ms < BITFORCE_TIMEOUT_MS) {
+	while (bitforce->wait_ms < BITFORCE_LONG_TIMEOUT_MS) {
 		if (unlikely(work_restart[thr->id].restart))
 			return 1;
 		mutex_lock(&bitforce->device_mutex);
@@ -317,20 +319,21 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
-		applog(LOG_ERR, "BFL%i: took longer than 10s", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: took longer than %dms", bitforce->device_id, BITFORCE_TIMEOUT_MS);
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
-		return 1;
+		if (!pdevbuf[0])           /* Only return if we got nothing after timeout - there still may be results */
+            return 1;
 	} else if (pdevbuf[0] == 'N') {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		    /* Simple timing adjustment */
 	        delay_time_ms = bitforce->sleep_ms;
 		if (bitforce->wait_ms > (bitforce->sleep_ms + BITFORCE_CHECK_INTERVAL_MS))
 			bitforce->sleep_ms += (unsigned int) ((double) (bitforce->wait_ms - bitforce->sleep_ms) / 1.6);
 		else if (bitforce->wait_ms == bitforce->sleep_ms)
-			bitforce->sleep_ms -= BITFORCE_CHECK_INTERVAL_MS;
+			bitforce->sleep_ms -= WORK_CHECK_INTERVAL_MS;
 		if (delay_time_ms != bitforce->sleep_ms)
-			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d. Waited: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
