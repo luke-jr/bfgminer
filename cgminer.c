@@ -4538,8 +4538,11 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			struct cgpu_info *cgpu = devices[i];
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
-			int gpu;
+			bool dev_count_well;
+			bool dev_count_sick;
+			bool dev_count_dead;
 			char dev_str[8];
+			int gpu;
 
 			if (cgpu->api->get_stats)
 			  cgpu->api->get_stats(cgpu);
@@ -4570,9 +4573,9 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			else
 				cgpu->low_count = 0;
 
-			bool dev_count_well = (cgpu->low_count < WATCHDOG_SICK_COUNT);
-			bool dev_count_sick = (cgpu->low_count > WATCHDOG_SICK_COUNT);
-			bool dev_count_dead = (cgpu->low_count > WATCHDOG_DEAD_COUNT);
+			dev_count_well = (cgpu->low_count < WATCHDOG_SICK_COUNT);
+			dev_count_sick = (cgpu->low_count > WATCHDOG_SICK_COUNT);
+			dev_count_dead = (cgpu->low_count > WATCHDOG_DEAD_COUNT);
 
 			if (gpus[gpu].status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME) && dev_count_well) {
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
