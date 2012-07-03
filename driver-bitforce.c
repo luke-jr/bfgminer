@@ -41,10 +41,9 @@ static void BFgets(char *buf, size_t bufLen, int fd)
 
 static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 {
-	if ((bufLen) != write(fd, buf, bufLen)) {
-		applog(LOG_ERR, "BFL: Error writing: %s", buf); 
+	if ((bufLen) != write(fd, buf, bufLen))
 		return 0;
-	} else
+	else
 		return bufLen;
 }
 
