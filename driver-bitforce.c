@@ -171,8 +171,8 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
-		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, devpath);
 		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, devpath);
 		return;
 	}
 
@@ -180,19 +180,18 @@ void bitforce_init(struct cgpu_info *bitforce)
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error reading (ZGX)", bitforce->device_id);
 		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "BFL%i: Error reading (ZGX)", bitforce->device_id);
 		return;
 	}
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
-		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s returned: %s", bitforce->device_id, devpath, pdevbuf);
 		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s returned: %s", bitforce->device_id, devpath, pdevbuf);
 		return;
 	}
 	
-	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
-	{
+	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
@@ -259,8 +258,8 @@ re_send:
 		usleep(WORK_CHECK_INTERVAL_MS*1000);
 		goto re_send;
 	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
-		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
 		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
 		return false;
 	}
 
@@ -268,13 +267,15 @@ re_send:
 	memcpy(ob + 8 + 32, work->data + 64, 12);
 
 	BFwrite(fdDev, ob, 60);
+	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	mutex_unlock(&bitforce->device_mutex);
+
 	if (opt_debug) {
 		s = bin2hex(ob + 8, 44);
 		applog(LOG_DEBUG, "BFL%i: block data: %s", bitforce->device_id, s);
 		free(s);
 	}
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	mutex_unlock(&bitforce->device_mutex);
+
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string", bitforce->device_id);
 		return false;
