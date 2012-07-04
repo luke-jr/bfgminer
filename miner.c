@@ -173,6 +173,9 @@ pthread_rwlock_t netacc_lock;
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
 
+pthread_mutex_t restart_lock;
+pthread_cond_t restart_cond;
+
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
@@ -2488,8 +2491,26 @@ static void discard_stale(void)
 	subtract_queued(nonclone);
 }
 
-static bool queue_request(struct thr_info *thr, bool needed);
+bool queue_request(struct thr_info *thr, bool needed);
 
+/* A generic wait function for threads that poll that will wait a specified
+ * time tdiff waiting on the pthread conditional that is broadcast when a
+ * work restart is required. Returns the value of pthread_cond_timedwait
+ * which is zero if the condition was met or ETIMEDOUT if not.
+ */
+int restart_wait(struct timeval *tdiff)
+{
+	struct timeval now, then;
+	struct timespec abstime;
+
+	gettimeofday(&now, NULL);
+	timeradd(&now, tdiff, &then);
+	abstime.tv_sec = then.tv_sec;
+	abstime.tv_nsec = then.tv_usec * 1000;
+	mutex_lock(&restart_lock);
+	return pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
+}
+	
 static void restart_threads(void)
 {
 	int i, j, fd;
@@ -2513,6 +2534,10 @@ static void restart_threads(void)
 				write(fd, "\0", 1);
 		}
 	}
+
+	mutex_lock(&restart_lock);
+	pthread_cond_broadcast(&restart_cond);
+	mutex_unlock(&restart_lock);
 }
 
 static void set_curblock(char *hexstr, unsigned char *hash)
@@ -3604,7 +3629,7 @@ static void control_tclear(bool *var)
 
 static bool queueing;
 
-static bool queue_request(struct thr_info *thr, bool needed)
+bool queue_request(struct thr_info *thr, bool needed)
 {
 	struct workio_cmd *wc;
 	struct timeval now;
@@ -5068,6 +5093,10 @@ int main(int argc, char *argv[])
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init lp_cond");
+
+	mutex_init(&restart_lock);
+	if (unlikely(pthread_cond_init(&restart_cond, NULL)))
+		quit(1, "Failed to pthread_cond_init restart_cond");
 
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 

@@ -139,6 +139,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 
 	char pdevbuf[0x100];
 	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
+	struct timeval tdiff;
 	int i;
 	char *pnoncebuf;
 	char *s;
@@ -196,7 +197,12 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	}
 
 	i = 0;
-	while (1) {
+	/* Start looking for results. Stupid polling every 10ms... */
+	tdiff.tv_sec = 0;
+	tdiff.tv_usec = 10000;
+	while (42) {
+		int rc = restart_wait(&tdiff);
+
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		if (unlikely(!pdevbuf[0])) {
@@ -205,8 +211,13 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		}
 		if (pdevbuf[0] != 'B')
 		    break;
-		usleep(10000);
+		if (!rc)
+			return 0;
 		i += 10;
+
+		/* After 2/3 of the average cycle time (~3.4s), request more work */
+		if (i == 3400)
+			queue_request(thr, false);
 	}
 	applog(LOG_DEBUG, "BitForce waited %dms until %s\n", i, pdevbuf);
 	work->blk.nonce = 0xffffffff;
