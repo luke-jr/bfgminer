@@ -322,6 +322,7 @@ struct cgpu_info {
 #ifdef USE_BITFORCE
 	unsigned int wait_ms;
 	unsigned int sleep_ms;
+	bool nonce_range;
 #endif
 	pthread_mutex_t		device_mutex;
 

@@ -203,6 +203,26 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	bitforce->device_fd = fdDev;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
+
+	/* Look for nonce range support */
+	BFwrite(fdDev, "ZPX", 3);
+	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	if (strncasecmp(pdevbuf, "ERR", 3)) {
+		unsigned char ob[70];
+		uint32_t *nonce;
+
+		memset(ob, 0, 68);
+		sprintf((char *)ob, ">>>>>>>>");
+		sprintf((char *)ob + 60, ">>>>>>>>");
+		nonce = (uint32_t *)(ob + 56);
+		*nonce = htobe32(0x7FFFFFFF);
+		BFwrite(fdDev, ob, 68);
+		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+		if (!strncasecmp(pdevbuf, "OK", 2)) {
+			applog(LOG_DEBUG, "BFL%i: Found nonce range support");
+			bitforce->nonce_range = true;
+		}
+	}
 	mutex_unlock(&bitforce->device_mutex);
 }
 
