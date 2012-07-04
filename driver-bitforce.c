@@ -286,7 +286,7 @@ re_send:
 	memcpy(ob + 8 + 32, work->data + 64, 12);
 	if (!bitforce->nonce_range) {
 		sprintf((char *)ob + 8 + 32 + 12, ">>>>>>>>");
-		bitforce->end_nonce = 0xffffffff;
+		work->blk.nonce = bitforce->nonces = 0xffffffff;
 		BFwrite(fdDev, ob, 60);
 	} else {
 		uint32_t *nonce;
@@ -294,12 +294,12 @@ re_send:
 		nonce = (uint32_t *)(ob + 8 + 32 + 12);
 		*nonce = htobe32(work->blk.nonce);
 		nonce = (uint32_t *)(ob + 8 + 32 + 12 + 4);
-		bitforce->end_nonce = work->blk.nonce + 0x40000000;
-		*nonce = htobe32(bitforce->end_nonce);
+		bitforce->nonces = 0x3fffffff;
+		*nonce = htobe32(work->blk.nonce + bitforce->nonces);
+		work->blk.nonce += bitforce->nonces + 1;
 		sprintf((char *)ob + 8 + 32 + 12 + 8, ">>>>>>>>");
 		BFwrite(fdDev, ob, 68);
 	}
-	work->blk.nonce = bitforce->end_nonce;
 
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
@@ -371,7 +371,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
 	if (pdevbuf[2] == '-') 
-		return bitforce->end_nonce;   /* No valid nonce found */
+		return bitforce->nonces;   /* No valid nonce found */
 	else if (pdevbuf[0] == 'I') 
 		return 1;          /* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
@@ -392,7 +392,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		pnoncebuf += 9;
 	}
 
-	return bitforce->end_nonce;
+	return bitforce->nonces;
 }
 
 static void bitforce_shutdown(struct thr_info *thr)
@@ -449,9 +449,6 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		ms_to_timeval(sleep_time, &tdiff);
 		if (!restart_wait(&tdiff))
 			return 1;
-		/* queue extra request once more than 2/3 is done */
-		if (work->blk.nonce > 0xffffffff / 3 * 2)
-			queue_request(thr, false);
 	}
 
 	if (ret)
