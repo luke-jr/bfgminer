@@ -777,31 +777,44 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	return hash_count;
 }
 
-static json_t*
-icarus_perf_stats(struct cgpu_info *cgpu)
+//static void icarus_api_stats(char *buf, struct cgpu_info *cgpu, bool isjson)
+static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 {
+	struct api_data *root = NULL;
 	struct ICARUS_INFO *info = icarus_info[cgpu->device_id];
 	json_t *ji = json_object();
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
 	// locking access to displaying API debug 'stats'
-	json_object_set(ji, "read_count"    , json_integer(info->read_count    ));
-	json_object_set(ji, "fullnonce"     , json_real   (info->fullnonce     ));
-	json_object_set(ji, "count"         , json_integer(info->count         ));
-	json_object_set(ji, "Hs"            , json_real   (info->Hs            ));
-	json_object_set(ji, "W"             , json_real   (info->W             ));
-	json_object_set(ji, "total_values"  , json_integer(info->values        ));
-	json_object_set(ji, "range"         , json_integer(info->hash_count_range));
-	json_object_set(ji, "history_count" , json_integer(info->history_count ));
-	json_object_set(ji, "history_time"  , json_real   (
+	// If locking becomes an issue for any of them, use copy_data=true also
+	root = api_add_int(root, "read_count", &(info->read_count), false);
+	root = api_add_double(root, "fullnonce", &(info->fullnonce), false);
+	root = api_add_int(root, "count", &(info->count), false);
+	root = api_add_hs(root, "Hs", &(info->Hs), false);
+	root = api_add_double(root, "W", &(info->W), false);
+	root = api_add_uint(root, "total_values", &(info->values), false);
+	root = api_add_uint64(root, "range", &(info->hash_count_range), false);
+	root = api_add_uint64(root, "history_count", &(info->history_count), false);
+	root = api_add_timeval(root, "history_time", &(info->history_time), false);
+	root = api_add_uint(root, "min_data_count", &(info->min_data_count), false);
+	root = api_add_uint(root, "timing_values", &(info->history[0].values), false);
+	root = api_add_const(root, "timing_mode", timing_mode_str(info->timing_mode), false);
+	root = api_add_bool(root, "is_timing", &(info->do_icarus_timing), false);
+/*
+	sprintf(buf, isjson
+		? "\"read_count\":%d,\"fullnonce\":%f,\"count\":%d,\"Hs\":%.15f,\"W\":%f,\"total_values\":%u,\"range\":%"PRIu64",\"history_count\":%"PRIu64",\"history_time\":%f,\"min_data_count\":%u,\"timing_values\":%u"
+		: "read_count=%d,fullnonce=%f,count=%d,Hs=%.15f,W=%f,total_values=%u,range=%"PRIu64",history_count=%"PRIu64",history_time=%f,min_data_count=%u,timing_values=%u",
+		info->read_count, info->fullnonce,
+		info->count, info->Hs, info->W,
+		info->values, info->hash_count_range,
+		info->history_count,
 		(double)(info->history_time.tv_sec)
-			+ ((double)(info->history_time.tv_usec))/((double)1000000)
-	));
-	json_object_set(ji, "min_data_count", json_integer(info->min_data_count));
-	json_object_set(ji, "timing_values" , json_integer(info->history[0].values));
+			+ ((double)(info->history_time.tv_usec))/((double)1000000),
+		info->min_data_count, info->history[0].values);
+*/
 
-	return ji;
+	return root;
 }
 
 static void icarus_shutdown(struct thr_info *thr)

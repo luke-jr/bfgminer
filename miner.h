@@ -216,6 +216,7 @@ struct gpu_adl {
 };
 #endif
 
+struct api_data;
 struct thr_info;
 struct work;
 
@@ -232,7 +233,7 @@ struct device_api {
 	void (*get_statline)(char*, struct cgpu_info*);
 	json_t* (*get_extra_device_detail)(struct cgpu_info*);
 	json_t* (*get_extra_device_status)(struct cgpu_info*);
-	json_t* (*get_extra_device_perf_stats)(struct cgpu_info*);
+	struct api_data *(*get_api_stats)(struct cgpu_info*);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info*);
@@ -770,5 +771,56 @@ extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
 extern void app_restart(void);
+
+enum api_data_type {
+	API_ESCAPE,
+	API_STRING,
+	API_CONST,
+	API_INT,
+	API_UINT,
+	API_UINT32,
+	API_UINT64,
+	API_DOUBLE,
+	API_ELAPSED,
+	API_BOOL,
+	API_TIMEVAL,
+	API_TIME,
+	API_MHS,
+	API_MHTOTAL,
+	API_TEMP,
+	API_UTILITY,
+	API_FREQ,
+	API_VOLTS,
+	API_HS
+};
+
+struct api_data {
+	enum api_data_type type;
+	char *name;
+	void *data;
+	bool data_was_malloc;
+	struct api_data *prev;
+	struct api_data *next;
+};
+
+extern struct api_data *api_add_escape(struct api_data *root, char *name, char *data, bool copy_data);
+extern struct api_data *api_add_string(struct api_data *root, char *name, char *data, bool copy_data);
+extern struct api_data *api_add_const(struct api_data *root, char *name, const char *data, bool copy_data);
+extern struct api_data *api_add_int(struct api_data *root, char *name, int *data, bool copy_data);
+extern struct api_data *api_add_uint(struct api_data *root, char *name, unsigned int *data, bool copy_data);
+extern struct api_data *api_add_uint32(struct api_data *root, char *name, uint32_t *data, bool copy_data);
+extern struct api_data *api_add_uint64(struct api_data *root, char *name, uint64_t *data, bool copy_data);
+extern struct api_data *api_add_double(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_elapsed(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_bool(struct api_data *root, char *name, bool *data, bool copy_data);
+extern struct api_data *api_add_timeval(struct api_data *root, char *name, struct timeval *data, bool copy_data);
+extern struct api_data *api_add_time(struct api_data *root, char *name, time_t *data, bool copy_data);
+extern struct api_data *api_add_mhs(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_mhstotal(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_temp(struct api_data *root, char *name, float *data, bool copy_data);
+extern struct api_data *api_add_utility(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_freq(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_volts(struct api_data *root, char *name, float *data, bool copy_data);
+extern struct api_data *api_add_hs(struct api_data *root, char *name, double *data, bool copy_data);
 
 #endif /* __MINER_H__ */
