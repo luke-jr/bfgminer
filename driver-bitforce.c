@@ -84,6 +84,9 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
+	/* Initially enable support for nonce range and disable it later if it
+	 * fails */
+	bitforce->nonce_range = true;
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
 		s[0] = '\0';
@@ -201,9 +204,6 @@ void bitforce_init(struct cgpu_info *bitforce)
 		bitforce->name = strdup(pdevbuf + 7);
 	}
 
-	/* Initially enable support for nonce range and disable it later if it
-	 * fails */
-	bitforce->nonce_range = true;
 	bitforce->device_fd = fdDev;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 
