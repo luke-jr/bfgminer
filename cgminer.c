@@ -4577,7 +4577,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			dev_count_sick = (cgpu->low_count > WATCHDOG_SICK_COUNT);
 			dev_count_dead = (cgpu->low_count > WATCHDOG_DEAD_COUNT);
 
-			if (gpus[gpu].status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME) && dev_count_well) {
+			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME) && dev_count_well) {
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
