@@ -241,9 +241,9 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 
 static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 {
-	unsigned char ob[61] = ">>>>>>>>12345678901234567890123456789012123456789012>>>>>>>>";
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
+	unsigned char ob[70];
 	char pdevbuf[0x100];
 	char *s;
 
@@ -264,8 +264,10 @@ re_send:
 		return false;
 	}
 
+	sprintf((char *)ob, ">>>>>>>>");
 	memcpy(ob + 8, work->midstate, 32);
 	memcpy(ob + 8 + 32, work->data + 64, 12);
+	sprintf((char *)ob + 8 + 32 + 12, ">>>>>>>>");
 
 	BFwrite(fdDev, ob, 60);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
