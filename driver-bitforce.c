@@ -450,7 +450,7 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 	// care since hashing performance is way more important than
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
-	root = api_add_int(root, "Sleep Time", &(cgpu->sleep_ms), false);
+	root = api_add_uint(root, "Sleep Time", &(cgpu->sleep_ms), false);
 
 	return root;
 }
