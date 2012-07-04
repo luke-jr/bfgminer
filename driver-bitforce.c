@@ -378,6 +378,12 @@ static void biforce_thread_enable(struct thr_info *thr)
 	bitforce_init(bitforce);
 }
 
+static void ms_to_timeval(unsigned int mstime, struct timeval *ttime)
+{
+	ttime->tv_sec = mstime / 1000;
+	ttime->tv_usec = mstime * 1000 - (ttime->tv_sec * 1000000);
+}
+
 static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
@@ -391,8 +397,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	/* Initially wait 2/3 of the average cycle time so we can request more
 	work before full scan is up */
 	sleep_time = (2 * bitforce->sleep_ms) / 3;
-	tdiff.tv_sec = sleep_time / 1000;
-	tdiff.tv_usec = sleep_time * 1000 - (tdiff.tv_sec * 1000000);
+	ms_to_timeval(sleep_time, &tdiff);
 	if (!restart_wait(&tdiff))
 		return 1;
 
@@ -401,8 +406,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 
 	/* Now wait athe final 1/3rd; no bitforce should be finished by now */
 	sleep_time = bitforce->sleep_ms - sleep_time;
-	tdiff.tv_sec = sleep_time / 1000;
-	tdiff.tv_usec = sleep_time * 1000 - (tdiff.tv_sec * 1000000);
+	ms_to_timeval(sleep_time, &tdiff);
 	if (!restart_wait(&tdiff))
 		return 1;
 
