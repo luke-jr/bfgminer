@@ -79,9 +79,9 @@ $mobilepage = array(
  'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected', 'Utility'),
  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected', 'Last Share Time'));
 $mobilesum = array(
- 'SUMMARY' => array('MHS av' => 1, 'Found Blocks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
- 'DEVS' => array('MHS av' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Utility' => 1),
- 'POOL' => array('Accepted' => 1, 'Rejected' => 1));
+ 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
+ 'DEVS' => array('MHS av', 'Accepted', 'Rejected', 'Utility'),
+ 'POOL' => array('Accepted', 'Rejected'));
 #
 # customsummarypages is an array of these Custom Summary Pages
 $customsummarypages = array('Mobile' => array($mobilepage, $mobilesum));
@@ -1357,6 +1357,15 @@ function showcustompage($pagename)
  $sum = $customsummarypages[$pagename][1];
  if ($sum === null)
 	$sum = array();
+
+ // convert them to searchable via isset()
+ foreach ($sum as $section => $fields)
+ {
+	$newfields = array();
+	foreach ($fields as $field)
+		$newfields[$field] = 1;
+	$sum[$section] = $newfields;
+ }
 
  if (count($page) <= 1)
  {
