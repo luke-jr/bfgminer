@@ -1415,6 +1415,8 @@ static void adj_width(int var, int *length)
 		(*length)++;
 }
 
+static int dev_width;
+
 static void curses_print_devstatus(int thr_id)
 {
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
@@ -1426,7 +1428,7 @@ static void curses_print_devstatus(int thr_id)
 	/* Check this isn't out of the window size */
 	if (wmove(statuswin,devcursor + cgpu->cgminer_id, 0) == ERR)
 		return;
-	wprintw(statuswin, " %s %d: ", cgpu->api->name, cgpu->device_id);
+	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
 	if (cgpu->api->get_statline_before) {
 		logline[0] = '\0';
 		cgpu->api->get_statline_before(logline, cgpu);
@@ -4977,6 +4979,7 @@ void enable_device(struct cgpu_info *cgpu)
 	cgpu->deven = DEV_ENABLED;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
 	mining_threads += cgpu->threads;
+	adj_width(mining_threads, &dev_width);
 #ifdef HAVE_OPENCL
 	if (cgpu->api == &opencl_api) {
 		gpu_threads += cgpu->threads;
