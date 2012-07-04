@@ -292,9 +292,10 @@ re_send:
 		uint32_t *nonce;
 
 		nonce = (uint32_t *)(ob + 8 + 32 + 12);
-		*nonce = work->blk.nonce;
+		*nonce = htobe32(work->blk.nonce);
 		nonce = (uint32_t *)(ob + 8 + 32 + 12 + 4);
-		bitforce->end_nonce = *nonce = work->blk.nonce + 0x40000000;
+		bitforce->end_nonce = work->blk.nonce + 0x40000000;
+		*nonce = htobe32(bitforce->end_nonce);
 		sprintf((char *)ob + 8 + 32 + 12 + 8, ">>>>>>>>");
 		BFwrite(fdDev, ob, 68);
 	}
