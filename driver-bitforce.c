@@ -196,9 +196,8 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		}
 	}
 
-	i = 0;
 	/* Start looking for results. Stupid polling every 10ms... */
-	thr->work_restart = 0;
+	i = 0;
 	while (42) {
 		if (unlikely(thr->work_restart))
 			return 0;
