@@ -298,6 +298,7 @@ re_send:
 		sprintf((char *)ob + 8 + 32 + 12 + 8, ">>>>>>>>");
 		BFwrite(fdDev, ob, 68);
 	}
+	work->blk.nonce = bitforce->end_nonce;
 
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
@@ -368,7 +369,6 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
-	work->blk.nonce = bitforce->end_nonce;
 	if (pdevbuf[2] == '-') 
 		return bitforce->end_nonce;   /* No valid nonce found */
 	else if (pdevbuf[0] == 'I') 
