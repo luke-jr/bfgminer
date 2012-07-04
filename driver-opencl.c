@@ -1606,6 +1606,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	unsigned int hashes;
 
 	/* This finish flushes the readbuffer set with CL_FALSE later */
+	gettimeofday(&gpu->tv_gpustart, NULL);
 	clFinish(clState->commandQueue);
 	gettimeofday(&gpu->tv_gpuend, NULL);
 
@@ -1615,7 +1616,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 
 		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
 		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
-		if (likely(gpu_us > 0)) {
+		if (likely(gpu_us >= 0)) {
 			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
 
 			/* Try to not let the GPU be out for longer than 
@@ -1660,8 +1661,6 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		memset(thrdata->res, 0, BUFFERSIZE);
 		clFinish(clState->commandQueue);
 	}
-
-	gettimeofday(&gpu->tv_gpustart, NULL);
 
 	if (clState->goffset) {
 		size_t global_work_offset[1];
