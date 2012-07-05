@@ -271,7 +271,6 @@ re_send:
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
-		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
 		usleep(WORK_CHECK_INTERVAL_MS * 1000);
 		goto re_send;
 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
