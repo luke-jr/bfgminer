@@ -580,19 +580,19 @@ static char *escape_string(char *str, bool isjson)
 	count = 0;
 	for (ptr = str; *ptr; ptr++) {
 		switch (*ptr) {
-		case ',':
-		case '|':
-		case '=':
-			if (!isjson)
+			case ',':
+			case '|':
+			case '=':
+				if (!isjson)
+					count++;
+				break;
+			case '"':
+				if (isjson)
+					count++;
+				break;
+			case '\\':
 				count++;
-			break;
-		case '"':
-			if (isjson)
-				count++;
-			break;
-		case '\\':
-			count++;
-			break;
+				break;
 		}
 	}
 
@@ -606,25 +606,25 @@ static char *escape_string(char *str, bool isjson)
 	ptr = buf;
 	while (*str)
 		switch (*str) {
-		case ',':
-		case '|':
-		case '=':
-			if (!isjson)
+			case ',':
+			case '|':
+			case '=':
+				if (!isjson)
+					*(ptr++) = '\\';
+				*(ptr++) = *(str++);
+				break;
+			case '"':
+				if (isjson)
+					*(ptr++) = '\\';
+				*(ptr++) = *(str++);
+				break;
+			case '\\':
 				*(ptr++) = '\\';
-			*(ptr++) = *(str++);
-			break;
-		case '"':
-			if (isjson)
-				*(ptr++) = '\\';
-			*(ptr++) = *(str++);
-			break;
-		case '\\':
-			*(ptr++) = '\\';
-			*(ptr++) = *(str++);
-			break;
-		default:
-			*(ptr++) = *(str++);
-			break;
+				*(ptr++) = *(str++);
+				break;
+			default:
+				*(ptr++) = *(str++);
+				break;
 		}
 
 	*ptr = '\0';
@@ -636,8 +636,7 @@ static struct api_data *api_add_extra(struct api_data *root, struct api_data *ex
 {
 	struct api_data *tmp;
 
-	if (root)
-	{
+	if (root) {
 		if (extra) {
 			// extra tail
 			tmp = extra->prev;
@@ -654,8 +653,7 @@ static struct api_data *api_add_extra(struct api_data *root, struct api_data *ex
 			// root prev = extra tail
 			root->prev = tmp;
 		}
-	}
-	else
+	} else
 		root = extra;
 
 	return root;
@@ -699,65 +697,65 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 	}
 	else
 		switch(type) {
-		case API_ESCAPE:
-		case API_STRING:
-		case API_CONST:
-			api_data->data = (void *)malloc(strlen((char *)data) + 1);
-			strcpy((char*)(api_data->data), (char *)data);
-			break;
-		case API_INT:
-			api_data->data = (void *)malloc(sizeof(int));
-			*((int *)(api_data->data)) = *((int *)data);
-			break;
-		case API_UINT:
-			api_data->data = (void *)malloc(sizeof(unsigned int));
-			*((unsigned int *)(api_data->data)) = *((unsigned int *)data);
-			break;
-		case API_UINT32:
-			api_data->data = (void *)malloc(sizeof(uint32_t));
-			*((uint32_t *)(api_data->data)) = *((uint32_t *)data);
-			break;
-		case API_UINT64:
-			api_data->data = (void *)malloc(sizeof(uint64_t));
-			*((uint64_t *)(api_data->data)) = *((uint64_t *)data);
-			break;
-		case API_DOUBLE:
-		case API_ELAPSED:
-		case API_MHS:
-		case API_MHTOTAL:
-		case API_UTILITY:
-		case API_FREQ:
-		case API_HS:
-			api_data->data = (void *)malloc(sizeof(double));
-			*((double *)(api_data->data)) = *((double *)data);
-			break;
-		case API_BOOL:
-			api_data->data = (void *)malloc(sizeof(bool));
-			*((bool *)(api_data->data)) = *((bool *)data);
-			break;
-		case API_TIMEVAL:
-			api_data->data = (void *)malloc(sizeof(struct timeval));
-			memcpy(api_data->data, data, sizeof(struct timeval));
-			break;
-		case API_TIME:
-			api_data->data = (void *)malloc(sizeof(time_t));
-			*(time_t *)(api_data->data) = *((time_t *)data);
-			break;
-		case API_VOLTS:
-		case API_TEMP:
-			api_data->data = (void *)malloc(sizeof(float));
-			*((float *)(api_data->data)) = *((float *)data);
-			break;
-		case API_JSON:
-			api_data->data_was_malloc = false;
-			api_data->data = (void *)json_deep_copy((json_t *)data);
-			break;
-		default:
-			applog(LOG_ERR, "API: unknown1 data type %d ignored", type);
-			api_data->type = API_STRING;
-			api_data->data_was_malloc = false;
-			api_data->data = (void *)UNKNOWN;
-			break;
+			case API_ESCAPE:
+			case API_STRING:
+			case API_CONST:
+				api_data->data = (void *)malloc(strlen((char *)data) + 1);
+				strcpy((char*)(api_data->data), (char *)data);
+				break;
+			case API_INT:
+				api_data->data = (void *)malloc(sizeof(int));
+				*((int *)(api_data->data)) = *((int *)data);
+				break;
+			case API_UINT:
+				api_data->data = (void *)malloc(sizeof(unsigned int));
+				*((unsigned int *)(api_data->data)) = *((unsigned int *)data);
+				break;
+			case API_UINT32:
+				api_data->data = (void *)malloc(sizeof(uint32_t));
+				*((uint32_t *)(api_data->data)) = *((uint32_t *)data);
+				break;
+			case API_UINT64:
+				api_data->data = (void *)malloc(sizeof(uint64_t));
+				*((uint64_t *)(api_data->data)) = *((uint64_t *)data);
+				break;
+			case API_DOUBLE:
+			case API_ELAPSED:
+			case API_MHS:
+			case API_MHTOTAL:
+			case API_UTILITY:
+			case API_FREQ:
+			case API_HS:
+				api_data->data = (void *)malloc(sizeof(double));
+				*((double *)(api_data->data)) = *((double *)data);
+				break;
+			case API_BOOL:
+				api_data->data = (void *)malloc(sizeof(bool));
+				*((bool *)(api_data->data)) = *((bool *)data);
+				break;
+			case API_TIMEVAL:
+				api_data->data = (void *)malloc(sizeof(struct timeval));
+				memcpy(api_data->data, data, sizeof(struct timeval));
+				break;
+			case API_TIME:
+				api_data->data = (void *)malloc(sizeof(time_t));
+				*(time_t *)(api_data->data) = *((time_t *)data);
+				break;
+			case API_VOLTS:
+			case API_TEMP:
+				api_data->data = (void *)malloc(sizeof(float));
+				*((float *)(api_data->data)) = *((float *)data);
+				break;
+			case API_JSON:
+				api_data->data_was_malloc = false;
+				api_data->data = (void *)json_deep_copy((json_t *)data);
+				break;
+			default:
+				applog(LOG_ERR, "API: unknown1 data type %d ignored", type);
+				api_data->type = API_STRING;
+				api_data->data_was_malloc = false;
+				api_data->data = (void *)UNKNOWN;
+				break;
 		}
 
 	return root;
@@ -888,72 +886,72 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 		buf = strchr(buf, '\0');
 
 		switch(root->type) {
-		case API_STRING:
-		case API_CONST:
-			sprintf(buf, "%s%s%s", quote, (char *)(root->data), quote);
-			break;
-		case API_ESCAPE:
-			original = (char *)(root->data);
-			escape = escape_string((char *)(root->data), isjson);
-			sprintf(buf, "%s%s%s", quote, escape, quote);
-			if (escape != original)
+			case API_STRING:
+			case API_CONST:
+				sprintf(buf, "%s%s%s", quote, (char *)(root->data), quote);
+				break;
+			case API_ESCAPE:
+				original = (char *)(root->data);
+				escape = escape_string((char *)(root->data), isjson);
+				sprintf(buf, "%s%s%s", quote, escape, quote);
+				if (escape != original)
+					free(escape);
+				break;
+			case API_INT:
+				sprintf(buf, "%d", *((int *)(root->data)));
+				break;
+			case API_UINT:
+				sprintf(buf, "%u", *((unsigned int *)(root->data)));
+				break;
+			case API_UINT32:
+				sprintf(buf, "%"PRIu32, *((uint32_t *)(root->data)));
+				break;
+			case API_UINT64:
+				sprintf(buf, "%"PRIu64, *((uint64_t *)(root->data)));
+				break;
+			case API_TIME:
+				sprintf(buf, "%lu", *((unsigned long *)(root->data)));
+				break;
+			case API_DOUBLE:
+				sprintf(buf, "%f", *((double *)(root->data)));
+				break;
+			case API_ELAPSED:
+				sprintf(buf, "%.0f", *((double *)(root->data)));
+				break;
+			case API_UTILITY:
+			case API_FREQ:
+			case API_MHS:
+				sprintf(buf, "%.2f", *((double *)(root->data)));
+				break;
+			case API_VOLTS:
+				sprintf(buf, "%.3f", *((float *)(root->data)));
+				break;
+			case API_MHTOTAL:
+				sprintf(buf, "%.4f", *((double *)(root->data)));
+				break;
+			case API_HS:
+				sprintf(buf, "%.15f", *((double *)(root->data)));
+				break;
+			case API_BOOL:
+				sprintf(buf, "%s", *((bool *)(root->data)) ? "true" : "false");
+				break;
+			case API_TIMEVAL:
+				sprintf(buf, "%ld.%06ld",
+					((struct timeval *)(root->data))->tv_sec,
+					((struct timeval *)(root->data))->tv_usec);
+				break;
+			case API_TEMP:
+				sprintf(buf, "%.2f", *((float *)(root->data)));
+				break;
+			case API_JSON:
+				escape = json_dumps((json_t *)(root->data), JSON_COMPACT);
+				strcpy(buf, escape);
 				free(escape);
-			break;
-		case API_INT:
-			sprintf(buf, "%d", *((int *)(root->data)));
-			break;
-		case API_UINT:
-			sprintf(buf, "%u", *((unsigned int *)(root->data)));
-			break;
-		case API_UINT32:
-			sprintf(buf, "%"PRIu32, *((uint32_t *)(root->data)));
-			break;
-		case API_UINT64:
-			sprintf(buf, "%"PRIu64, *((uint64_t *)(root->data)));
-			break;
-		case API_TIME:
-			sprintf(buf, "%lu", *((unsigned long *)(root->data)));
-			break;
-		case API_DOUBLE:
-			sprintf(buf, "%f", *((double *)(root->data)));
-			break;
-		case API_ELAPSED:
-			sprintf(buf, "%.0f", *((double *)(root->data)));
-			break;
-		case API_UTILITY:
-		case API_FREQ:
-		case API_MHS:
-			sprintf(buf, "%.2f", *((double *)(root->data)));
-			break;
-		case API_VOLTS:
-			sprintf(buf, "%.3f", *((float *)(root->data)));
-			break;
-		case API_MHTOTAL:
-			sprintf(buf, "%.4f", *((double *)(root->data)));
-			break;
-		case API_HS:
-			sprintf(buf, "%.15f", *((double *)(root->data)));
-			break;
-		case API_BOOL:
-			sprintf(buf, "%s", *((bool *)(root->data)) ? "true" : "false");
-			break;
-		case API_TIMEVAL:
-			sprintf(buf, "%ld.%06ld",
-				((struct timeval *)(root->data))->tv_sec,
-				((struct timeval *)(root->data))->tv_usec);
-			break;
-		case API_TEMP:
-			sprintf(buf, "%.2f", *((float *)(root->data)));
-			break;
-		case API_JSON:
-			escape = json_dumps((json_t *)(root->data), JSON_COMPACT);
-			strcpy(buf, escape);
-			free(escape);
-			break;
-		default:
-			applog(LOG_ERR, "API: unknown2 data type %d ignored", root->type);
-			sprintf(buf, "%s%s%s", quote, UNKNOWN, quote);
-			break;
+				break;
+			default:
+				applog(LOG_ERR, "API: unknown2 data type %d ignored", root->type);
+				sprintf(buf, "%s%s%s", quote, UNKNOWN, quote);
+				break;
 		}
 
 		buf = strchr(buf, '\0');
@@ -1063,92 +1061,92 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 	for (i = 0; codes[i].severity != SEVERITY_FAIL; i++) {
 		if (codes[i].code == messageid) {
 			switch (codes[i].severity) {
-			case SEVERITY_WARN:
-				severity[0] = 'W';
-				break;
-			case SEVERITY_INFO:
-				severity[0] = 'I';
-				break;
-			case SEVERITY_SUCC:
-				severity[0] = 'S';
-				break;
-			case SEVERITY_ERR:
-			default:
-				severity[0] = 'E';
-				break;
+				case SEVERITY_WARN:
+					severity[0] = 'W';
+					break;
+				case SEVERITY_INFO:
+					severity[0] = 'I';
+					break;
+				case SEVERITY_SUCC:
+					severity[0] = 'S';
+					break;
+				case SEVERITY_ERR:
+				default:
+					severity[0] = 'E';
+					break;
 			}
 			severity[1] = '\0';
 
 			switch(codes[i].params) {
-			case PARAM_GPU:
-			case PARAM_PGA:
-			case PARAM_CPU:
-				sprintf(buf, codes[i].description, paramid);
-				break;
-			case PARAM_POOL:
-				sprintf(buf, codes[i].description, paramid, pools[paramid]->rpc_url);
-				break;
+				case PARAM_GPU:
+				case PARAM_PGA:
+				case PARAM_CPU:
+					sprintf(buf, codes[i].description, paramid);
+					break;
+				case PARAM_POOL:
+					sprintf(buf, codes[i].description, paramid, pools[paramid]->rpc_url);
+					break;
 #ifdef HAVE_OPENCL
-			case PARAM_GPUMAX:
-				sprintf(buf, codes[i].description, paramid, nDevs - 1);
-				break;
+				case PARAM_GPUMAX:
+					sprintf(buf, codes[i].description, paramid, nDevs - 1);
+					break;
 #endif
 #ifdef HAVE_AN_FPGA
-			case PARAM_PGAMAX:
-				pga = numpgas();
-				sprintf(buf, codes[i].description, paramid, pga - 1);
-				break;
+				case PARAM_PGAMAX:
+					pga = numpgas();
+					sprintf(buf, codes[i].description, paramid, pga - 1);
+					break;
 #endif
 #ifdef WANT_CPUMINE
-			case PARAM_CPUMAX:
-				if (opt_n_threads > 0)
-					cpu = num_processors;
-				else
-					cpu = 0;
-				sprintf(buf, codes[i].description, paramid, cpu - 1);
-				break;
+				case PARAM_CPUMAX:
+					if (opt_n_threads > 0)
+						cpu = num_processors;
+					else
+						cpu = 0;
+					sprintf(buf, codes[i].description, paramid, cpu - 1);
+					break;
 #endif
-			case PARAM_PMAX:
-				sprintf(buf, codes[i].description, total_pools);
-				break;
-			case PARAM_POOLMAX:
-				sprintf(buf, codes[i].description, paramid, total_pools - 1);
-				break;
-			case PARAM_DMAX:
+				case PARAM_PMAX:
+					sprintf(buf, codes[i].description, total_pools);
+					break;
+				case PARAM_POOLMAX:
+					sprintf(buf, codes[i].description, paramid, total_pools - 1);
+					break;
+				case PARAM_DMAX:
 #ifdef HAVE_AN_FPGA
-				pga = numpgas();
+					pga = numpgas();
 #endif
 #ifdef WANT_CPUMINE
-				if (opt_n_threads > 0)
-					cpu = num_processors;
-				else
-					cpu = 0;
+					if (opt_n_threads > 0)
+						cpu = num_processors;
+					else
+						cpu = 0;
 #endif
 
-				sprintf(buf, codes[i].description
+					sprintf(buf, codes[i].description
 #ifdef HAVE_OPENCL
-					, nDevs
+						, nDevs
 #endif
 #ifdef HAVE_AN_FPGA
-					, pga
+						, pga
 #endif
 #ifdef WANT_CPUMINE
-					, cpu
+						, cpu
 #endif
-					);
-				break;
-			case PARAM_CMD:
-				sprintf(buf, codes[i].description, JSON_COMMAND);
-				break;
-			case PARAM_STR:
-				sprintf(buf, codes[i].description, param2);
-				break;
-			case PARAM_BOTH:
-				sprintf(buf, codes[i].description, paramid, param2);
-				break;
-			case PARAM_NONE:
-			default:
-				strcpy(buf, codes[i].description);
+						);
+					break;
+				case PARAM_CMD:
+					sprintf(buf, codes[i].description, JSON_COMMAND);
+					break;
+				case PARAM_STR:
+					sprintf(buf, codes[i].description, param2);
+					break;
+				case PARAM_BOTH:
+					sprintf(buf, codes[i].description, paramid, param2);
+					break;
+				case PARAM_NONE:
+				default:
+					strcpy(buf, codes[i].description);
 			}
 
 			root = api_add_string(root, _STATUS, severity, false);
@@ -1642,21 +1640,21 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		struct pool *pool = pools[i];
 
 		switch (pool->enabled) {
-		case POOL_DISABLED:
-			status = (char *)DISABLED;
-			break;
-		case POOL_REJECTING:
-			status = (char *)REJECTING;
-			break;
-		case POOL_ENABLED:
-			if (pool->idle)
-				status = (char *)DEAD;
-			else
-				status = (char *)ALIVE;
-			break;
-		default:
-			status = (char *)UNKNOWN;
-			break;
+			case POOL_DISABLED:
+				status = (char *)DISABLED;
+				break;
+			case POOL_REJECTING:
+				status = (char *)REJECTING;
+				break;
+			case POOL_ENABLED:
+				if (pool->idle)
+					status = (char *)DEAD;
+				else
+					status = (char *)ALIVE;
+				break;
+			default:
+				status = (char *)UNKNOWN;
+				break;
 		}
 
 		if (pool->hdr_path)
@@ -2323,33 +2321,33 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unuse
 		reason = REASON_NONE;
 	else
 		switch(cgpu->device_not_well_reason) {
-		case REASON_THREAD_FAIL_INIT:
-			reason = REASON_THREAD_FAIL_INIT_STR;
-			break;
-		case REASON_THREAD_ZERO_HASH:
-			reason = REASON_THREAD_ZERO_HASH_STR;
-			break;
-		case REASON_THREAD_FAIL_QUEUE:
-			reason = REASON_THREAD_FAIL_QUEUE_STR;
-			break;
-		case REASON_DEV_SICK_IDLE_60:
-			reason = REASON_DEV_SICK_IDLE_60_STR;
-			break;
-		case REASON_DEV_DEAD_IDLE_600:
-			reason = REASON_DEV_DEAD_IDLE_600_STR;
-			break;
-		case REASON_DEV_NOSTART:
-			reason = REASON_DEV_NOSTART_STR;
-			break;
-		case REASON_DEV_OVER_HEAT:
-			reason = REASON_DEV_OVER_HEAT_STR;
-			break;
-		case REASON_DEV_THERMAL_CUTOFF:
-			reason = REASON_DEV_THERMAL_CUTOFF_STR;
-			break;
-		default:
-			reason = REASON_UNKNOWN_STR;
-			break;
+			case REASON_THREAD_FAIL_INIT:
+				reason = REASON_THREAD_FAIL_INIT_STR;
+				break;
+			case REASON_THREAD_ZERO_HASH:
+				reason = REASON_THREAD_ZERO_HASH_STR;
+				break;
+			case REASON_THREAD_FAIL_QUEUE:
+				reason = REASON_THREAD_FAIL_QUEUE_STR;
+				break;
+			case REASON_DEV_SICK_IDLE_60:
+				reason = REASON_DEV_SICK_IDLE_60_STR;
+				break;
+			case REASON_DEV_DEAD_IDLE_600:
+				reason = REASON_DEV_DEAD_IDLE_600_STR;
+				break;
+			case REASON_DEV_NOSTART:
+				reason = REASON_DEV_NOSTART_STR;
+				break;
+			case REASON_DEV_OVER_HEAT:
+				reason = REASON_DEV_OVER_HEAT_STR;
+				break;
+			case REASON_DEV_THERMAL_CUTOFF:
+				reason = REASON_DEV_THERMAL_CUTOFF_STR;
+				break;
+			default:
+				reason = REASON_UNKNOWN_STR;
+				break;
 		}
 
 	// ALL counters (and only counters) must start the name with a '*'
