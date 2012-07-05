@@ -1428,6 +1428,8 @@ static void adj_width(int var, int *length)
 		(*length)++;
 }
 
+static int dev_width;
+
 static void curses_print_devstatus(int thr_id)
 {
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
@@ -1439,7 +1441,7 @@ static void curses_print_devstatus(int thr_id)
 	/* Check this isn't out of the window size */
 	if (wmove(statuswin,devcursor + cgpu->cgminer_id, 0) == ERR)
 		return;
-	wprintw(statuswin, " %s %d: ", cgpu->api->name, cgpu->device_id);
+	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
 	if (cgpu->api->get_statline_before) {
 		logline[0] = '\0';
 		cgpu->api->get_statline_before(logline, cgpu);
@@ -4649,7 +4651,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			dev_count_sick = (cgpu->low_count > WATCHDOG_SICK_COUNT);
 			dev_count_dead = (cgpu->low_count > WATCHDOG_DEAD_COUNT);
 
-			if (gpus[gpu].status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME) && dev_count_well) {
+			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME) && dev_count_well) {
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
@@ -5049,6 +5051,7 @@ void enable_device(struct cgpu_info *cgpu)
 	cgpu->deven = DEV_ENABLED;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
 	mining_threads += cgpu->threads;
+	adj_width(mining_threads, &dev_width);
 #ifdef HAVE_OPENCL
 	if (cgpu->api == &opencl_api) {
 		gpu_threads += cgpu->threads;

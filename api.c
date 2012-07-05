@@ -2345,6 +2345,9 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unuse
 			case REASON_DEV_THERMAL_CUTOFF:
 				reason = REASON_DEV_THERMAL_CUTOFF_STR;
 				break;
+			case REASON_DEV_COMMS_ERROR:
+				reason = REASON_DEV_COMMS_ERROR_STR;
+				break;
 			default:
 				reason = REASON_UNKNOWN_STR;
 				break;
@@ -2366,6 +2369,7 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unuse
 	root = api_add_int(root, "*Dev Nostart", &(cgpu->dev_nostart_count), false);
 	root = api_add_int(root, "*Dev Over Heat", &(cgpu->dev_over_heat_count), false);
 	root = api_add_int(root, "*Dev Thermal Cutoff", &(cgpu->dev_thermal_cutoff_count), false);
+	root = api_add_int(root, "*Dev Comms Error", &(cgpu->dev_comms_error_count), false);
 
 	if (isjson && (device > 0))
 		strcat(io_buffer, COMMA);

@@ -314,6 +314,7 @@ API V1.14
 
 Modified API commands:
  'stats' - more icarus timing stats added
+ 'notify' - include new device comms error counter
 
 The internal code for handling data was rewritten (~25% of the code)
 Completely backward compatible
