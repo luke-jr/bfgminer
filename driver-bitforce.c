@@ -298,7 +298,8 @@ re_send:
 		nonce = (uint32_t *)(ob + 8 + 32 + 12);
 		*nonce = htobe32(work->blk.nonce);
 		nonce = (uint32_t *)(ob + 8 + 32 + 12 + 4);
-		bitforce->nonces = 0x3fffffff;
+		/* Split work up into 1/5th nonce ranges */
+		bitforce->nonces = 0x33333332;
 		*nonce = htobe32(work->blk.nonce + bitforce->nonces);
 		work->blk.nonce += bitforce->nonces + 1;
 		sprintf((char *)ob + 8 + 32 + 12 + 8, ">>>>>>>>");
