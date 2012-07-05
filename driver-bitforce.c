@@ -431,7 +431,6 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	unsigned int sleep_time;
 	uint64_t ret;
 
-	bitforce->wait_ms = 0;
 	ret = bitforce_send_work(thr, work);
 
 	if (!bitforce->nonce_range) {
@@ -441,7 +440,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		if (!restart_wait(sleep_time))
 			return 1;
 
-		bitforce->wait_ms += sleep_time;
+		bitforce->wait_ms = sleep_time;
 		queue_request(thr, false);
 
 		/* Now wait athe final 1/3rd; no bitforce should be finished by now */
@@ -455,7 +454,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		if (!restart_wait(sleep_time))
 			return 1;
 
-		bitforce->wait_ms += sleep_time;
+		bitforce->wait_ms = sleep_time;
 	}
 
 	if (ret)
