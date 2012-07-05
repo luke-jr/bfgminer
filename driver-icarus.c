@@ -782,7 +782,6 @@ static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct ICARUS_INFO *info = icarus_info[cgpu->device_id];
-	json_t *ji = json_object();
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
@@ -828,7 +827,7 @@ struct device_api icarus_api = {
 	.dname = "icarus",
 	.name = "ICA",
 	.api_detect = icarus_detect,
-	.get_extra_device_perf_stats = icarus_perf_stats,
+	.get_api_stats = icarus_api_stats,
 	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,
 	.thread_shutdown = icarus_shutdown,

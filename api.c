@@ -684,7 +684,11 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 	api_data->data_was_malloc = copy_data;
 
 	if (!copy_data)
+	{
 		api_data->data = data;
+		if (type == API_JSON)
+			json_incref((json_t *)data);
+	}
 	else
 		switch(type) {
 		case API_ESCAPE:
@@ -736,6 +740,10 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			api_data->data = (void *)malloc(sizeof(float));
 			*((float *)(api_data->data)) = *((float *)data);
 			break;
+		case API_JSON:
+			api_data->data_was_malloc = false;
+			api_data->data = (void *)json_deep_copy((json_t *)data);
+			break;
 		default:
 			applog(LOG_ERR, "API: unknown1 data type %d ignored", type);
 			api_data->type = API_STRING;
@@ -752,7 +760,7 @@ struct api_data *api_add_escape(struct api_data *root, char *name, char *data, b
 	return api_add_data_full(root, name, API_ESCAPE, (void *)data, copy_data);
 }
 
-struct api_data *api_add_string(struct api_data *root, char *name, char *data, bool copy_data)
+struct api_data *api_add_string(struct api_data *root, char *name, const char *data, bool copy_data)
 {
 	return api_add_data_full(root, name, API_STRING, (void *)data, copy_data);
 }
@@ -842,6 +850,11 @@ struct api_data *api_add_hs(struct api_data *root, char *name, double *data, boo
 	return api_add_data_full(root, name, API_HS, (void *)data, copy_data);
 }
 
+struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, bool copy_data)
+{
+	return api_add_data_full(root, name, API_JSON, (void *)data, copy_data);
+}
+
 static struct api_data *print_data(struct api_data *root, char *buf, bool isjson)
 {
 	struct api_data *tmp;
@@ -924,6 +937,11 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 		case API_TEMP:
 			sprintf(buf, "%.2f", *((float *)(root->data)));
 			break;
+		case API_JSON:
+			escape = json_dumps((json_t *)(root->data), JSON_COMPACT);
+			strcpy(buf, escape);
+			free(escape);
+			break;
 		default:
 			applog(LOG_ERR, "API: unknown2 data type %d ignored", root->type);
 			sprintf(buf, "%s%s%s", quote, UNKNOWN, quote);
@@ -932,6 +950,8 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 
 		buf = strchr(buf, '\0');
 
+		if (root->type == API_JSON)
+			json_decref((json_t *)root->data);
 		if (root->data_was_malloc)
 			free(root->data);
 
@@ -1224,216 +1244,106 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 		strcat(buf, JSON_CLOSE);
 	strcat(io_buffer, buf);
 }
+
+static const char*
+bool2str(bool b)
+{
+	return b ? YES : NO;
+}
+
+static const char*
+status2str(enum alive status)
+{
+	switch (status) {
+	case LIFE_WELL:
+		return ALIVE;
+	case LIFE_SICK:
+		return SICK;
+	case LIFE_DEAD:
+		return DEAD;
+	case LIFE_NOSTART:
+		return NOSTART;
+	default:
+		return UNKNOWN;
+	}
+}
+
+static void devstatus_an(struct cgpu_info *cgpu, bool isjson)
+{
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+	int n = 0, i;
+
+	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+
+	for (i = 0; i < total_devices; ++i) {
+		if (devices[i] == cgpu)
+			break;
+		if (cgpu->devtype == devices[i]->devtype)
+			++n;
+	}
+
+	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
+	root = api_add_string(root, "Name", cgpu->api->name, false);
+	root = api_add_int(root, "ID", &(cgpu->device_id), false);
+	root = api_add_string(root, "Enabled", bool2str(cgpu->deven != DEV_DISABLED), false);
+	root = api_add_string(root, "Status", status2str(cgpu->status), false);
+	if (cgpu->temp)
+		root = api_add_temp(root, "Temperature", &cgpu->temp, false);
+	double mhs = cgpu->total_mhashes / total_secs;
+	root = api_add_mhs(root, "MHS av", &mhs, false);
+	char mhsname[27];
+	sprintf(mhsname, "MHS %ds", opt_log_interval);
+	root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
+	root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
+	root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
+	root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
+	root = api_add_utility(root, "Utility", &(cgpu->utility), false);
+	int last_share_pool = cgpu->last_share_pool_time > 0 ?
+				cgpu->last_share_pool : -1;
+	root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
+	root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
+	root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
+
+	if (cgpu->api->get_api_extra_device_status)
+		root = api_add_extra(root, cgpu->api->get_api_extra_device_status(cgpu));
+
+	root = print_data(root, buf, isjson);
+	strcat(io_buffer, buf);
+}
+
 #ifdef HAVE_OPENCL
 static void gpustatus(int gpu, bool isjson)
 {
-	struct api_data *root = NULL;
-	char intensity[20];
-	char buf[TMPBUFSIZ];
-	char *enabled;
-	char *status;
-	float gt, gv;
-	int ga, gf, gp, gc, gm, pt;
-
-	if (gpu >= 0 && gpu < nDevs) {
-		struct cgpu_info *cgpu = &gpus[gpu];
-
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-
-#ifdef HAVE_ADL
-		if (!gpu_stats(gpu, &gt, &gc, &gm, &gv, &ga, &gf, &gp, &pt))
-#endif
-			gt = gv = gm = gc = ga = gf = gp = pt = 0;
-
-		if (cgpu->deven != DEV_DISABLED)
-			enabled = (char *)YES;
-		else
-			enabled = (char *)NO;
-
-		if (cgpu->status == LIFE_DEAD)
-			status = (char *)DEAD;
-		else if (cgpu->status == LIFE_SICK)
-			status = (char *)SICK;
-		else if (cgpu->status == LIFE_NOSTART)
-			status = (char *)NOSTART;
-		else
-			status = (char *)ALIVE;
-
-		if (cgpu->dynamic)
-			strcpy(intensity, DYNAMIC);
-		else
-			sprintf(intensity, "%d", cgpu->intensity);
-
-		root = api_add_int(root, "GPU", &gpu, false);
-		root = api_add_string(root, "Enabled", enabled, false);
-		root = api_add_string(root, "Status", status, false);
-		root = api_add_temp(root, "Temperature", &gt, false);
-		root = api_add_int(root, "Fan Speed", &gf, false);
-		root = api_add_int(root, "Fan Percent", &gp, false);
-		root = api_add_int(root, "GPU Clock", &gc, false);
-		root = api_add_int(root, "Memory Clock", &gm, false);
-		root = api_add_volts(root, "GPU Voltage", &gv, false);
-		root = api_add_int(root, "GPU Activity", &ga, false);
-		root = api_add_int(root, "Powertune", &pt, false);
-		double mhs = cgpu->total_mhashes / total_secs;
-		root = api_add_mhs(root, "MHS av", &mhs, false);
-		char mhsname[27];
-		sprintf(mhsname, "MHS %ds", opt_log_interval);
-		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
-		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
-		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
-		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
-		root = api_add_utility(root, "Utility", &(cgpu->utility), false);
-		root = api_add_string(root, "Intensity", intensity, false);
-		int last_share_pool = cgpu->last_share_pool_time > 0 ?
-					cgpu->last_share_pool : -1;
-		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
-		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
-		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
-
-		root = print_data(root, buf, isjson);
-		strcat(io_buffer, buf);
-	}
+        if (gpu < 0 || gpu >= nDevs)
+                return;
+        devstatus_an(&gpus[gpu], isjson);
 }
 #endif
 #ifdef HAVE_AN_FPGA
 static void pgastatus(int pga, bool isjson)
 {
-	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
-	char *enabled;
-	char *status;
-	int numpga = numpgas();
-
-	if (numpga > 0 && pga >= 0 && pga < numpga) {
-		int dev = pgadevice(pga);
-		if (dev < 0) // Should never happen
-			return;
-
-		struct cgpu_info *cgpu = devices[dev];
-		double frequency = 0;
-		float temp = cgpu->temp;
-
-#ifdef USE_ZTEX
-		if (cgpu->api == &ztex_api && cgpu->device_ztex)
-			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
-#endif
-#ifdef USE_MODMINER
-// TODO: a modminer has up to 4 devices but only 1 set of data for all ...
-// except 4 sets of data for temp/clock
-// So this should change in the future to just find the single temp/clock
-// if the modminer code splits the device into seperate devices later
-// For now, just display the highest temp and the average clock
-		if (cgpu->api == &modminer_api) {
-			int tc = cgpu->threads;
-			int i;
-
-			temp = 0;
-			if (tc > 4)
-				tc = 4;
-			for (i = 0; i < tc; i++) {
-				struct thr_info *thr = cgpu->thr[i];
-				struct modminer_fpga_state *state = thr->cgpu_data;
-				if (state->temp > temp)
-					temp = state->temp;
-				frequency += state->clock;
-			}
-			frequency /= (tc ? tc : 1);
-		}
-#endif
-
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-
-		if (cgpu->deven != DEV_DISABLED)
-			enabled = (char *)YES;
-		else
-			enabled = (char *)NO;
-
-		if (cgpu->status == LIFE_DEAD)
-			status = (char *)DEAD;
-		else if (cgpu->status == LIFE_SICK)
-			status = (char *)SICK;
-		else if (cgpu->status == LIFE_NOSTART)
-			status = (char *)NOSTART;
-		else
-			status = (char *)ALIVE;
-
-		root = api_add_int(root, "PGA", &pga, false);
-		root = api_add_string(root, "Name", cgpu->api->name, false);
-		root = api_add_int(root, "ID", &(cgpu->device_id), false);
-		root = api_add_string(root, "Enabled", enabled, false);
-		root = api_add_string(root, "Status", status, false);
-		root = api_add_temp(root, "Temperature", &temp, false);
-		double mhs = cgpu->total_mhashes / total_secs;
-		root = api_add_mhs(root, "MHS av", &mhs, false);
-		char mhsname[27];
-		sprintf(mhsname, "MHS %ds", opt_log_interval);
-		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
-		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
-		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
-		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
-		root = api_add_utility(root, "Utility", &(cgpu->utility), false);
-		int last_share_pool = cgpu->last_share_pool_time > 0 ?
-					cgpu->last_share_pool : -1;
-		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
-		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
-		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
-		root = api_add_freq(root, "Frequency", &frequency, false);
-
-		root = print_data(root, buf, isjson);
-		strcat(io_buffer, buf);
-	}
+        int dev = pgadevice(pga);
+        if (dev < 0) // Should never happen
+                return;
+        devstatus_an(devices[dev], isjson);
 }
 #endif
 
 #ifdef WANT_CPUMINE
 static void cpustatus(int cpu, bool isjson)
 {
-	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
-
-	if (opt_n_threads > 0 && cpu >= 0 && cpu < num_processors) {
-		struct cgpu_info *cgpu = &cpus[cpu];
-
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-
-		root = api_add_int(root, "CPU", &cpu, false);
-		double mhs = cgpu->total_mhashes / total_secs;
-		root = api_add_mhs(root, "MHS av", &mhs, false);
-		char mhsname[27];
-		sprintf(mhsname, "MHS %ds", opt_log_interval);
-		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
-		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
-		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
-		root = api_add_utility(root, "Utility", &(cgpu->utility), false);
-		int last_share_pool = cgpu->last_share_pool_time > 0 ?
-					cgpu->last_share_pool : -1;
-		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
-		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
-		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
-
-		root = print_data(root, buf, isjson);
-		strcat(io_buffer, buf);
-	}
+        if (opt_n_threads <= 0 || cpu < 0 || cpu >= num_processors)
+                return;
+        devstatus_an(&cpus[cpu], isjson);
 }
 #endif
 
 static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
-	int devcount = 0;
-	int numgpu = 0;
-	int numpga = 0;
 	int i;
 
-#ifdef HAVE_OPENCL
-	numgpu = nDevs;
-#endif
-
-#ifdef HAVE_AN_FPGA
-	numpga = numpgas();
-#endif
-
-	if (numgpu == 0 && opt_n_threads == 0 && numpga == 0) {
+	if (total_devices == 0) {
 		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
 		return;
 	}
@@ -1445,39 +1355,12 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 		strcat(io_buffer, JSON_DEVS);
 	}
 
-#ifdef HAVE_OPENCL
-	for (i = 0; i < nDevs; i++) {
-		if (isjson && devcount > 0)
+	for (i = 0; i < total_devices; ++i) {
+		if (isjson && i > 0)
 			strcat(io_buffer, COMMA);
 
-		gpustatus(i, isjson);
-
-		devcount++;
+		devstatus_an(devices[i], isjson);
 	}
-#endif
-#ifdef HAVE_AN_FPGA
-	if (numpga > 0)
-		for (i = 0; i < numpga; i++) {
-			if (isjson && devcount > 0)
-				strcat(io_buffer, COMMA);
-
-			pgastatus(i, isjson);
-
-			devcount++;
-		}
-#endif
-
-#ifdef WANT_CPUMINE
-	if (opt_n_threads > 0)
-		for (i = 0; i < num_processors; i++) {
-			if (isjson && devcount > 0)
-				strcat(io_buffer, COMMA);
-
-			cpustatus(i, isjson);
-
-			devcount++;
-		}
-#endif
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);

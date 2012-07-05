@@ -372,11 +372,11 @@ get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 		strcat(buf, "               | ");
 }
 
-static json_t*
-get_modminer_extra_device_status(struct cgpu_info*modminer)
+static struct api_data*
+get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 {
-	json_t *info = json_object();
-	char k[7] = "BoardN";
+	struct api_data*root = NULL;
+	static char *k[4] = {"Board0", "Board1", "Board2", "Board3"};
 	int i;
 
 	for (i = modminer->threads - 1; i >= 0; --i) {
@@ -387,11 +387,11 @@ get_modminer_extra_device_status(struct cgpu_info*modminer)
 		json_object_set(o, "Temperature", json_integer(state->temp));
 		json_object_set(o, "Frequency", json_real((double)state->clock * 1000000.));
 
-		k[5] = 0x30 + i;
-		json_object_set(info, k, o);
+		root = api_add_json(root, k[i], o, false);
+		json_decref(o);
 	}
 
-	return info;
+	return root;
 }
 
 static bool
@@ -558,7 +558,7 @@ struct device_api modminer_api = {
 	.name = "MMQ",
 	.api_detect = modminer_detect,
 	.get_statline_before = get_modminer_statline_before,
-	.get_extra_device_status = get_modminer_extra_device_status,
+	.get_api_extra_device_status = get_modminer_api_extra_device_status,
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,
 	.scanhash = modminer_scanhash,

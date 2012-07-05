@@ -1356,6 +1356,7 @@ static void opencl_detect()
 		struct cgpu_info *cgpu;
 
 		cgpu = &gpus[i];
+		cgpu->devtype = "GPU";
 		cgpu->deven = DEV_ENABLED;
 		cgpu->api = &opencl_api;
 		cgpu->device_id = i;
@@ -1402,10 +1403,10 @@ static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
 	tailsprintf(buf, " I:%2d", gpu->intensity);
 }
 
-static json_t*
-get_opencl_extra_device_status(struct cgpu_info *gpu)
+static struct api_data*
+get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 {
-	json_t *info = json_object();
+	struct api_data*root = NULL;
 
 	float gt, gv;
 	int ga, gf, gp, gc, gm, pt;
@@ -1413,21 +1414,22 @@ get_opencl_extra_device_status(struct cgpu_info *gpu)
 	if (!gpu_stats(gpu->device_id, &gt, &gc, &gm, &gv, &ga, &gf, &gp, &pt))
 #endif
 		gt = gv = gm = gc = ga = gf = gp = pt = 0;
-	json_object_set(info, "Fan Speed", json_integer(gf));
-	json_object_set(info, "Fan Percent", json_integer(gp));
-	json_object_set(info, "GPU Clock", json_integer(gc));
-	json_object_set(info, "Memory Clock", json_integer(gm));
-	json_object_set(info, "GPU Voltage", json_real(gv));
-	json_object_set(info, "GPU Activity", json_integer(ga));
-	json_object_set(info, "Powertune", json_integer(pt));
+	root = api_add_int(root, "Fan Speed", &gf, true);
+	root = api_add_int(root, "Fan Percent", &gp, true);
+	root = api_add_int(root, "GPU Clock", &gc, true);
+	root = api_add_int(root, "Memory Clock", &gm, true);
+	root = api_add_volts(root, "GPU Voltage", &gv, true);
+	root = api_add_int(root, "GPU Activity", &ga, true);
+	root = api_add_int(root, "Powertune", &pt, true);
 
-	json_object_set(info, "Intensity",
-					gpu->dynamic
-						? json_string("D")
-						: json_integer(gpu->intensity)
-	);
+	char intensity[20];
+	if (gpu->dynamic)
+		strcpy(intensity, "D");
+	else
+		sprintf(intensity, "%d", gpu->intensity);
+	root = api_add_string(root, "Intensity", intensity, true);
 
-	return info;
+	return root;
 }
 
 struct opencl_thread_data {
@@ -1711,7 +1713,7 @@ struct device_api opencl_api = {
 	.get_statline_before = get_opencl_statline_before,
 #endif
 	.get_statline = get_opencl_statline,
-	.get_extra_device_status = get_opencl_extra_device_status,
+	.get_api_extra_device_status = get_opencl_api_extra_device_status,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
 	.free_work = opencl_free_work,

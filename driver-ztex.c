@@ -351,18 +351,18 @@ static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 	}
 }
 
-static json_t*
-get_ztex_extra_device_status(struct cgpu_info *ztex)
+static struct api_data*
+get_ztex_api_extra_device_status(struct cgpu_info *ztex)
 {
-	json_t *info = json_object();
+	struct api_data*root = NULL;
 	struct libztex_device *ztexr = ztex->device_ztex;
 
 	if (ztexr) {
 		double frequency = ztexr->freqM1 * (ztexr->freqM + 1);
-		json_object_set(info, "Frequency", json_real(frequency));
+		root = api_add_freq(root, "Frequency", &frequency, true);
 	}
 
-	return info;
+	return root;
 }
 
 static bool ztex_prepare(struct thr_info *thr)
@@ -408,7 +408,7 @@ struct device_api ztex_api = {
 	.name = "ZTX",
 	.api_detect = ztex_detect,
 	.get_statline_before = ztex_statline_before,
-	.get_extra_device_status = get_ztex_extra_device_status,
+	.get_api_extra_device_status = get_ztex_api_extra_device_status,
 	.thread_prepare = ztex_prepare,
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,

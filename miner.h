@@ -231,8 +231,8 @@ struct device_api {
 	void (*reinit_device)(struct cgpu_info*);
 	void (*get_statline_before)(char*, struct cgpu_info*);
 	void (*get_statline)(char*, struct cgpu_info*);
-	json_t* (*get_extra_device_detail)(struct cgpu_info*);
-	json_t* (*get_extra_device_status)(struct cgpu_info*);
+	struct api_data* (*get_api_extra_device_detail)(struct cgpu_info*);
+	struct api_data* (*get_api_extra_device_status)(struct cgpu_info*);
 	struct api_data *(*get_api_stats)(struct cgpu_info*);
 
 	// Thread-specific functions
@@ -303,6 +303,7 @@ struct cgminer_pool_stats {
 struct cgpu_info {
 	int cgminer_id;
 	const struct device_api *api;
+	const char *devtype;
 	int device_id;
 	const char *name;
 	const char *device_path;
@@ -791,7 +792,8 @@ enum api_data_type {
 	API_UTILITY,
 	API_FREQ,
 	API_VOLTS,
-	API_HS
+	API_HS,
+	API_JSON,
 };
 
 struct api_data {
@@ -804,7 +806,7 @@ struct api_data {
 };
 
 extern struct api_data *api_add_escape(struct api_data *root, char *name, char *data, bool copy_data);
-extern struct api_data *api_add_string(struct api_data *root, char *name, char *data, bool copy_data);
+extern struct api_data *api_add_string(struct api_data *root, char *name, const char *data, bool copy_data);
 extern struct api_data *api_add_const(struct api_data *root, char *name, const char *data, bool copy_data);
 extern struct api_data *api_add_int(struct api_data *root, char *name, int *data, bool copy_data);
 extern struct api_data *api_add_uint(struct api_data *root, char *name, unsigned int *data, bool copy_data);
@@ -822,5 +824,6 @@ extern struct api_data *api_add_utility(struct api_data *root, char *name, doubl
 extern struct api_data *api_add_freq(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_volts(struct api_data *root, char *name, float *data, bool copy_data);
 extern struct api_data *api_add_hs(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, bool copy_data);
 
 #endif /* __MINER_H__ */

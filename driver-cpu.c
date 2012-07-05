@@ -743,6 +743,7 @@ static void cpu_detect()
 
 		cgpu = &cpus[i];
 		cgpu->api = &cpu_api;
+		cgpu->devtype = "CPU";
 		cgpu->deven = DEV_ENABLED;
 		cgpu->threads = 1;
 		cgpu->kname = algo_names[opt_algo];

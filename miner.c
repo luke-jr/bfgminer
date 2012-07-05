@@ -5285,6 +5285,10 @@ int main(int argc, char *argv[])
 	cpu_api.api_detect();
 #endif
 
+	for (i = 0; i < total_devices; ++i)
+		if (!devices[i]->devtype)
+			devices[i]->devtype = "PGA";
+
 	if (devices_enabled == -1) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
