@@ -277,7 +277,7 @@ re_send:
 	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
 		mutex_unlock(&bitforce->device_mutex);
 		if (bitforce->nonce_range) {
-			applog(LOG_DEBUG, "BFL%i: Disabling nonce range support");
+			applog(LOG_DEBUG, "BFL%i: Disabling nonce range support", bitforce->device_id);
 			bitforce->nonce_range = false;
 			goto re_send;
 		}
@@ -374,6 +374,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 			bitforce->sleep_ms += (unsigned int) ((double) (bitforce->wait_ms - bitforce->sleep_ms) / 1.6);
 		else if (bitforce->wait_ms == bitforce->sleep_ms)
 			bitforce->sleep_ms -= WORK_CHECK_INTERVAL_MS;
+
 		if (delay_time_ms != bitforce->sleep_ms)
 			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 	}
