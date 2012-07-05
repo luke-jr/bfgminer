@@ -269,12 +269,12 @@ re_send:
 	else
 		BFwrite(fdDev, "ZDX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (!pdevbuf[0] || (pdevbuf[0] == 'B')) {
+	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
 		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
 		usleep(WORK_CHECK_INTERVAL_MS * 1000);
 		goto re_send;
-	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
+	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
 		if (bitforce->nonce_range) {
 			applog(LOG_DEBUG, "BFL%i: Disabling nonce range support", bitforce->device_id);
@@ -320,7 +320,7 @@ re_send:
 		return false;
 	}
 
-	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
+	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
 		return false;
 	}
@@ -403,7 +403,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		}
 			
 		submit_nonce(thr, work, nonce);
-		if (pnoncebuf[8] != ',')
+		if (strncmp(&pnoncebuf[8], ",", 1))
 			break;
 		pnoncebuf += 9;
 	}
