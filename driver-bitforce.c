@@ -454,6 +454,8 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		sleep_time = bitforce->sleep_ms;
 		if (!restart_wait(sleep_time))
 			return 1;
+
+		bitforce->wait_ms += sleep_time;
 	}
 
 	if (ret)
