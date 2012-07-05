@@ -1268,7 +1268,8 @@ function processcustompage($pagename, $sections, $sum)
 			$cmds[$cmd] = 1;
 	}
 	else
-		$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
+		if ($section != 'DATE')
+			$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
  }
 
  $results = array();
