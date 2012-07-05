@@ -350,7 +350,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
 
-		if (pdevbuf[0] && pdevbuf[0] != 'B') /* BFL does not respond during throttling */
+		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
 		/* if BFL is throttling, no point checking so quickly */
@@ -367,7 +367,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		if (!pdevbuf[0])           /* Only return if we got nothing after timeout - there still may be results */
 			return 1;
-	} else if (pdevbuf[0] == 'N') {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
+	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		    /* Simple timing adjustment */
 	        delay_time_ms = bitforce->sleep_ms;
 		if (bitforce->wait_ms > (bitforce->sleep_ms + BITFORCE_CHECK_INTERVAL_MS))
@@ -380,9 +380,9 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
-	if (pdevbuf[2] == '-')
+	if (!strncasecmp(&pdevbuf[2], "-", 1))
 		return bitforce->nonces;   /* No valid nonce found */
-	else if (pdevbuf[0] == 'I') 
+	else if (!strncasecmp(pdevbuf, "I", 1))
 		return 1;          /* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
