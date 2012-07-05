@@ -143,6 +143,9 @@ static void biforce_clear_buffer(struct cgpu_info *bitforce)
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
 
+	if (!fdDev)
+		return;
+
 	applog(LOG_DEBUG, "BFL%i: Clearing read buffer", bitforce->device_id);
 
 	mutex_lock(&bitforce->device_mutex);
