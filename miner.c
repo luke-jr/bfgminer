@@ -5051,7 +5051,9 @@ void enable_device(struct cgpu_info *cgpu)
 	cgpu->deven = DEV_ENABLED;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
 	mining_threads += cgpu->threads;
+#ifdef HAVE_CURSES
 	adj_width(mining_threads, &dev_width);
+#endif
 #ifdef HAVE_OPENCL
 	if (cgpu->api == &opencl_api) {
 		gpu_threads += cgpu->threads;
