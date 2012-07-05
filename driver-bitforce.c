@@ -304,8 +304,6 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		return 0;
 
 	while (bitforce->wait_ms < BITFORCE_LONG_TIMEOUT_MS) {
-		if (unlikely(thr->work_restart))
-			return 1;
 		mutex_lock(&bitforce->device_mutex);
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
