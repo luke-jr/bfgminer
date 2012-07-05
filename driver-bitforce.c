@@ -398,7 +398,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 #endif
 		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
-				applog(LOG_DEBUG, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
+				applog(LOG_INFO, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 		}
