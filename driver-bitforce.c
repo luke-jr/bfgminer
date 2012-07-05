@@ -359,7 +359,8 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
-		applog(LOG_ERR, "BFL%i: took longer than %dms", bitforce->device_id, BITFORCE_TIMEOUT_MS);
+		applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
+		       bitforce->wait_ms, BITFORCE_TIMEOUT_MS);
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
