@@ -72,9 +72,13 @@ $allowcustompages = true;
 # - empty tables are not shown
 # - empty columns (an unknown field) are not shown
 # - and missing field data shows as blank
+# - section = 'DATE' displays a date table like 'Summary'
+# - section = 'RIGS' displays a rig table like 'Summary'
 # There is a second array, listing fields to be totaled for each section
 # see the example below (if there is no matching data, no total will show)
 $mobilepage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
  'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
  'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected', 'Utility'),
  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected', 'Last Share Time'));
@@ -888,6 +892,50 @@ function process($cmds, $rig)
  }
 }
 #
+function showdatetime()
+{
+ global $dfmt;
+
+ echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
+}
+#
+function showrigs($anss, $headname, $rigname)
+{
+ $dthead = array($headname => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1, 'API' => 1, 'CGMiner' => 1);
+ showhead('', $dthead);
+
+ foreach ($anss as $rig => $ans)
+ {
+	echo '<tr>';
+
+	$when = 0;
+	if (isset($ans['STATUS']['When']))
+		$when = $ans['STATUS']['When'];
+
+	foreach ($ans as $item => $row)
+	{
+		if ($item != 'STATUS' && $item != 'VERSION')
+			continue;
+
+		foreach ($dthead as $name => $x)
+		{
+			if ($item == 'STATUS' && $name == $headname)
+				echo "<td align=right><input type=button value='$rigname$rig' onclick='pr(\"&rig=$rig\",null)'></td>";
+			else
+			{
+				if (isset($row[$name]))
+				{
+					list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
+					echo "<td$class align=right>$showvalue</td>";
+				}
+			}
+		}
+	}
+
+	echo '</tr>';
+ }
+}
+#
 # $head is a hack but this is just a demo anyway :)
 function doforeach($cmd, $des, $sum, $head, $datetime)
 {
@@ -940,39 +988,10 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  if ($datetime)
  {
-	echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
-
+	showdatetime();
 	echo $tableend.$tablebegin;
 
-	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1, 'API' => 1, 'CGMiner' => 1);
-	showhead('', $dthead);
-
-	foreach ($anss as $rig => $ans)
-	{
-		echo '<tr>';
-
-		foreach ($ans as $item => $row)
-		{
-			if ($item != 'STATUS' && $item != 'VERSION')
-				continue;
-
-			foreach ($dthead as $name => $x)
-			{
-				if ($item == 'STATUS' && $name == '')
-					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"&rig=$rig\",null)'></td>";
-				else
-				{
-					if (isset($row[$name]))
-					{
-						list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
-						echo "<td$class align=right>$showvalue</td>";
-					}
-				}
-			}
-		}
-
-		echo '</tr>';
-	}
+	showrigs($anss, '', 'Rig ');
 	echo $tableend;
 	echo '<tr><td><br><br></td></tr>';
 	echo $tablebegin;
@@ -1147,7 +1166,9 @@ global $sectionmap;
 # map sections to their api command
 # DEVS is a special case that will match GPU or PGA
 # so you can have a single table with both in it
+# DATE is hard coded so not in here
 $sectionmap = array(
+	'RIGS' => 'version',
 	'SUMMARY' => 'summary',
 	'POOL' => 'pools',
 	'DEVS' => 'devs',
@@ -1274,11 +1295,37 @@ function processcustompage($pagename, $sections, $sum)
 	}
  }
 
+ $shownsomething = false;
  if (count($results) > 0)
  {
 	$first = true;
 	foreach ($sections as $section => $fields)
 	{
+		if ($section === 'DATE')
+		{
+			if ($shownsomething)
+				echo '<tr><td>&nbsp;</td></tr>';
+
+			echo $tablebegin;
+			showdatetime();
+			echo $tableend;
+			// On top of the next table
+			$shownsomething = false;
+			continue;
+		}
+
+		if ($section === 'RIGS')
+		{
+			if ($shownsomething)
+				echo '<tr><td>&nbsp;</td></tr>';
+
+			echo $tablebegin;
+			showrigs($results['version'], 'Rig', '');
+			echo $tableend;
+			$shownsomething = true;
+			continue;
+		}
+
 		if (isset($results[$sectionmap[$section]]))
 		{
 			$rigresults = $results[$sectionmap[$section]];
@@ -1294,7 +1341,7 @@ function processcustompage($pagename, $sections, $sum)
 
 			if (count($showfields) > 0)
 			{
-				if ($first === false)
+				if ($shownsomething)
 					echo '<tr><td>&nbsp;</td></tr>';
 
 				echo $tablebegin;
@@ -1316,6 +1363,7 @@ function processcustompage($pagename, $sections, $sum)
 				$first = false;
 
 				echo $tableend;
+				$shownsomething = true;
 			}
 		}
 	}
@@ -1354,6 +1402,11 @@ function showcustompage($pagename)
  }
 
  $page = $customsummarypages[$pagename][0];
+
+ foreach ($page as $name => $fields)
+	if ($fields === null)
+		$page[$name] = array();
+
  $sum = $customsummarypages[$pagename][1];
  if ($sum === null)
 	$sum = array();
