@@ -1268,6 +1268,38 @@ status2str(enum alive status)
 	}
 }
 
+static void
+devdetail_an(struct cgpu_info *cgpu, bool isjson)
+{
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+	int n = 0, i;
+
+	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+
+	for (i = 0; i < total_devices; ++i) {
+		if (devices[i] == cgpu)
+			break;
+		if (cgpu->devtype == devices[i]->devtype)
+			++n;
+	}
+
+	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
+	root = api_add_string(root, "Driver", cgpu->api->dname, false);
+	if (cgpu->kname)
+		root = api_add_string(root, "Kernel", cgpu->kname, false);
+	if (cgpu->name)
+		root = api_add_string(root, "Model", cgpu->name, false);
+	if (cgpu->device_path)
+		root = api_add_string(root, "Device Path", cgpu->device_path, false);
+
+	if (cgpu->api->get_api_extra_device_detail)
+		root = api_add_extra(root, cgpu->api->get_api_extra_device_detail(cgpu));
+
+	root = print_data(root, buf, isjson);
+	strcat(io_buffer, buf);
+}
+
 static void devstatus_an(struct cgpu_info *cgpu, bool isjson)
 {
 	struct api_data *root = NULL;
@@ -1339,7 +1371,8 @@ static void cpustatus(int cpu, bool isjson)
 }
 #endif
 
-static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void
+devinfo_internal(void (*func)(struct cgpu_info*, bool), __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	int i;
 
@@ -1359,11 +1392,23 @@ static void devstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, b
 		if (isjson && i > 0)
 			strcat(io_buffer, COMMA);
 
-		devstatus_an(devices[i], isjson);
+		func(devices[i], isjson);
 	}
 
 	if (isjson)
 		strcat(io_buffer, JSON_CLOSE);
+}
+
+static void
+devdetail(SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	return devinfo_internal(devdetail_an, c, param, isjson, group);
+}
+
+static void
+devstatus(SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	return devinfo_internal(devstatus_an, c, param, isjson, group);
 }
 
 #ifdef HAVE_OPENCL
@@ -2501,6 +2546,7 @@ struct CMDS {
 	{ "version",		apiversion,	false },
 	{ "config",		minerconfig,	false },
 	{ "devs",		devstatus,	false },
+	{ "devdetail",	devdetail,	false },
 	{ "pools",		poolstatus,	false },
 	{ "summary",		summary,	false },
 #ifdef HAVE_OPENCL
