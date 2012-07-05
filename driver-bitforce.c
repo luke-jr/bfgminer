@@ -370,10 +370,11 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		    /* Simple timing adjustment */
 	        delay_time_ms = bitforce->sleep_ms;
-		if (bitforce->wait_ms > (bitforce->sleep_ms + BITFORCE_CHECK_INTERVAL_MS))
-			bitforce->sleep_ms += (unsigned int) ((double) (bitforce->wait_ms - bitforce->sleep_ms) / 1.6);
-		else if (bitforce->wait_ms == bitforce->sleep_ms)
-			bitforce->sleep_ms -= WORK_CHECK_INTERVAL_MS;
+		if (bitforce->wait_ms > bitforce->sleep_ms + (WORK_CHECK_INTERVAL_MS * 2))
+			bitforce->sleep_ms += (bitforce->wait_ms - bitforce->sleep_ms) / 2;
+		else if (bitforce->wait_ms > bitforce->sleep_ms - WORK_CHECK_INTERVAL_MS &&
+			 bitforce->wait_ms <= bitforce->sleep_ms)
+				bitforce->sleep_ms -= BITFORCE_CHECK_INTERVAL_MS;
 
 		if (delay_time_ms != bitforce->sleep_ms)
 			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
