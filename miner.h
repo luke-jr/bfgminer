@@ -234,6 +234,7 @@ struct device_api {
 	struct api_data* (*get_api_extra_device_detail)(struct cgpu_info*);
 	struct api_data* (*get_api_extra_device_status)(struct cgpu_info*);
 	struct api_data *(*get_api_stats)(struct cgpu_info*);
+	bool (*get_stats)(struct cgpu_info*);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info*);
@@ -243,6 +244,7 @@ struct device_api {
 	bool (*prepare_work)(struct thr_info*, struct work*);
 	uint64_t (*scanhash)(struct thr_info*, struct work*, uint64_t);
 	void (*thread_shutdown)(struct thr_info*);
+	void (*thread_enable)(struct thr_info*);
 };
 
 enum dev_enable {
@@ -314,12 +316,17 @@ struct cgpu_info {
 #endif
 		int device_fd;
 	};
+#ifdef USE_BITFORCE
+	unsigned int wait_ms;
+	unsigned int sleep_ms;
+#endif
 	pthread_mutex_t		device_mutex;
 
 	enum dev_enable deven;
 	int accepted;
 	int rejected;
 	int hw_errors;
+	unsigned int low_count;
 	double rolling;
 	double total_mhashes;
 	double utility;
