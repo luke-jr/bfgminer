@@ -142,6 +142,7 @@ static void biforce_clear_buffer(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
+	int count = 0;
 
 	if (!fdDev)
 		return;
@@ -152,7 +153,7 @@ static void biforce_clear_buffer(struct cgpu_info *bitforce)
 	do {
 		pdevbuf[0] = '\0';
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	} while (pdevbuf[0]);
+	} while (pdevbuf[0] && (++count < 10));
 	mutex_unlock(&bitforce->device_mutex);
 }
 
