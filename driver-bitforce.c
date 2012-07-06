@@ -194,7 +194,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 		}
 
 		if (retries++)
-			usleep(10000);
+			nmsleep(10);
 	} while (!strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
@@ -271,7 +271,7 @@ re_send:
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
-		usleep(WORK_CHECK_INTERVAL_MS * 1000);
+		nmsleep(WORK_CHECK_INTERVAL_MS);
 		goto re_send;
 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
@@ -354,7 +354,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
-		usleep(delay_time_ms * 1000);
+		nmsleep(delay_time_ms);
 		bitforce->wait_ms += delay_time_ms;
 	}
 
