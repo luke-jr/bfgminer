@@ -145,6 +145,9 @@ char *opt_icarus_timing = NULL;
 char *opt_kernel_path;
 char *cgminer_path;
 
+#if defined(USE_BITFORCE)
+bool opt_bfl_noncerange;
+#endif
 #define QUIET	(opt_quiet || opt_realquiet)
 
 struct thr_info *thr_info;
@@ -775,6 +778,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--benchmark",
 			opt_set_bool, &opt_benchmark,
 			"Run BFGMiner in benchmark mode - produces no shares"),
+#if defined(USE_BITFORCE)
+	OPT_WITHOUT_ARG("--bfl-range",
+			opt_set_bool, &opt_bfl_noncerange,
+			"Use nonce range on bitforce devices if supported"),
+#endif
 #ifdef WANT_CPUMINE
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
