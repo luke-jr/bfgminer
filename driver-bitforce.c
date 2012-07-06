@@ -397,7 +397,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	sleep_time = (2 * bitforce->sleep_ms) / 3;
 	ms_to_timeval(sleep_time, &tdiff);
 	if (!restart_wait(&tdiff))
-		return 1;
+		;
 
 	bitforce->wait_ms += sleep_time;
 	queue_request(thr, false);
@@ -406,7 +406,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	sleep_time = bitforce->sleep_ms - sleep_time;
 	ms_to_timeval(sleep_time, &tdiff);
 	if (!restart_wait(&tdiff))
-		return 1;
+		;
 
 	bitforce->wait_ms += sleep_time;
 
