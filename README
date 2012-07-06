@@ -202,23 +202,23 @@ FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
-     This option is only for BitForce, Icarus, and/or ModMiner FPGAs
+This option is only for BitForce, Icarus, and/or ModMiner FPGAs
 
-     By default, BFGMiner will scan for autodetected FPGAs unless at least one
-     -S is specified for that driver. If you specify -S and still want BFGMiner
-     to scan, you must also use "-S auto". If you want to prevent BFGMiner from
-     scanning without specifying a device, you can use "-S noauto". Note that
-     presently, autodetection only works on Linux, and might only detect one
-     device depending on the version of udev being used.
+By default, BFGMiner will scan for autodetected FPGAs unless at least one
+-S is specified for that driver. If you specify -S and still want BFGMiner
+to scan, you must also use "-S auto". If you want to prevent BFGMiner from
+scanning without specifying a device, you can use "-S noauto". Note that
+presently, autodetection only works on Linux, and might only detect one
+device depending on the version of udev being used.
 
-     On linux <arg> is usually of the format /dev/ttyUSBn
-     On windows <arg> is usually of the format \\.\COMn
-       (where n = the correct device number for the FPGA device)
+On linux <arg> is usually of the format /dev/ttyUSBn
+On windows <arg> is usually of the format \\.\COMn
+(where n = the correct device number for the FPGA device)
 
-     The official supplied binaries are compiled with support for all FPGAs.
-     To force the code to only attempt detection with a specific driver,
-     prepend the argument with the driver name followed by a colon.
-     For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
+The official supplied binaries are compiled with support for all FPGAs.
+To force the code to only attempt detection with a specific driver,
+prepend the argument with the driver name followed by a colon.
+For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
 
 For other FPGA details see the FPGA-README
 
@@ -797,7 +797,9 @@ A; Try the --net-delay option.
 Q: How do I tune for p2pool?
 A: p2pool has very rapid expiration of work and new blocks, it is suggested you
 decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
-with -g 1.
+with -g 1. It is also recommended to use --failover-only since the work is
+effectively like a different block chain. If mining with a minirig, it is worth
+adding the --bfl-range option.
 
 Q: Are kernels from other mining software useable in BFGMiner?
 A: No, the APIs are slightly different between the different software and they
@@ -813,6 +815,13 @@ A: At the moment, BFGMiner supports 4 FPGAs: BitForce, Icarus, ModMiner, and Zte
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
+
+Q: How do I get my BFL device to auto-recognise?
+A: They are only automatically recognised on linux, and no option needs to be
+passed to them. The only thing that needs to be done is to load the driver for
+them, which on linux would require:
+sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+
 
 ---
 
