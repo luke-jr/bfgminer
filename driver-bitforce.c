@@ -160,7 +160,7 @@ static void biforce_clear_buffer(struct cgpu_info *bitforce)
 void bitforce_init(struct cgpu_info *bitforce)
 {
 	const char *devpath = bitforce->device_path;
-	int fdDev = bitforce->device_fd;
+	int fdDev = bitforce->device_fd, retries = 0;
 	char pdevbuf[0x100];
 	char *s;
 
@@ -189,7 +189,10 @@ void bitforce_init(struct cgpu_info *bitforce)
 			applog(LOG_ERR, "BFL%i: Error reading (ZGX)", bitforce->device_id);
 			return;
 		}
-	} while (!strstr(pdevbuf, "BUSY"));
+
+		if (retries++)
+			usleep(10000);
+	} while (!strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		mutex_unlock(&bitforce->device_mutex);
