@@ -84,6 +84,9 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
+	/* Initially enable support for nonce range and disable it later if it
+	 * fails */
+	bitforce->nonce_range = true;
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
 		s[0] = '\0';
@@ -205,9 +208,6 @@ void bitforce_init(struct cgpu_info *bitforce)
 		bitforce->name = strdup(pdevbuf + 7);
 	}
 
-	/* Initially enable support for nonce range and disable it later if it
-	 * fails */
-	bitforce->nonce_range = true;
 	bitforce->device_fd = fdDev;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 
@@ -296,12 +296,14 @@ re_send:
 		uint32_t *nonce;
 
 		nonce = (uint32_t *)(ob + 8 + 32 + 12);
-		*nonce = work->blk.nonce;
+		*nonce = htobe32(work->blk.nonce);
 		nonce = (uint32_t *)(ob + 8 + 32 + 12 + 4);
-		bitforce->end_nonce = *nonce = work->blk.nonce + 0x40000000;
+		bitforce->end_nonce = work->blk.nonce + 0x40000000;
+		*nonce = htobe32(bitforce->end_nonce);
 		sprintf((char *)ob + 8 + 32 + 12 + 8, ">>>>>>>>");
 		BFwrite(fdDev, ob, 68);
 	}
+	work->blk.nonce = bitforce->end_nonce;
 
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
@@ -370,7 +372,6 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
-	work->blk.nonce = bitforce->end_nonce;
 	if (pdevbuf[2] == '-') 
 		return bitforce->end_nonce;   /* No valid nonce found */
 	else if (pdevbuf[0] == 'I') 
