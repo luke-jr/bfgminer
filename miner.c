@@ -1865,6 +1865,7 @@ static void get_benchmark_work(struct work *work)
 	memset(work, 0, sizeof(work));
 	memcpy(work, &bench_block, min_size);
 	work->mandatory = true;
+	work->pool = pools[0];
 }
 
 static bool get_upstream_work(struct work *work, CURL *curl)
@@ -5206,10 +5207,7 @@ int main(int argc, char *argv[])
 		struct pool *pool;
 
 		want_longpoll = false;
-		pool = calloc(sizeof(struct pool), 1);
-		pool->pool_no = 0;
-		pools[total_pools++] = pool;
-		pthread_mutex_init(&pool->pool_lock, NULL);
+		pool = add_pool();
 		pool->rpc_url = malloc(255);
 		strcpy(pool->rpc_url, "Benchmark");
 		pool->rpc_user = pool->rpc_url;
