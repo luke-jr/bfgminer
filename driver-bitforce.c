@@ -20,7 +20,7 @@
 #include "fpgautils.h"
 #include "miner.h"
 
-#define BITFORCE_SLEEP_MS 3000
+#define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_MS 7000
 #define BITFORCE_LONG_TIMEOUT_MS 15000
 #define BITFORCE_CHECK_INTERVAL_MS 10
@@ -194,7 +194,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 		}
 
 		if (retries++)
-			usleep(10000);
+			nmsleep(10);
 	} while (!strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
@@ -269,16 +269,16 @@ re_send:
 	else
 		BFwrite(fdDev, "ZDX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (!pdevbuf[0] || (pdevbuf[0] == 'B')) {
+	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
-		bitforce->wait_ms += WORK_CHECK_INTERVAL_MS;
-		usleep(WORK_CHECK_INTERVAL_MS * 1000);
+		nmsleep(WORK_CHECK_INTERVAL_MS);
 		goto re_send;
-	} else if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
+	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
 		if (bitforce->nonce_range) {
-			applog(LOG_DEBUG, "BFL%i: Disabling nonce range support");
+			applog(LOG_DEBUG, "BFL%i: Disabling nonce range support", bitforce->device_id);
 			bitforce->nonce_range = false;
+			bitforce->sleep_ms *= 5;
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
@@ -320,7 +320,7 @@ re_send:
 		return false;
 	}
 
-	if (unlikely(pdevbuf[0] != 'O' || pdevbuf[1] != 'K')) {
+	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
 		return false;
 	}
@@ -330,9 +330,9 @@ re_send:
 
 static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 {
-	unsigned int delay_time_ms = BITFORCE_CHECK_INTERVAL_MS;
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
+	unsigned int delay_time_ms;
 	char pdevbuf[0x100];
 	char *pnoncebuf;
 	uint32_t nonce;
@@ -347,38 +347,47 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
 
-		if (pdevbuf[0] && pdevbuf[0] != 'B') /* BFL does not respond during throttling */
+		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
-		usleep(delay_time_ms * 1000);
+		nmsleep(delay_time_ms);
 		bitforce->wait_ms += delay_time_ms;
 	}
 
 	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
-		applog(LOG_ERR, "BFL%i: took longer than %dms", bitforce->device_id, BITFORCE_TIMEOUT_MS);
+		applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
+		       bitforce->wait_ms, BITFORCE_TIMEOUT_MS);
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
 
 		if (!pdevbuf[0])           /* Only return if we got nothing after timeout - there still may be results */
 			return 1;
-	} else if (pdevbuf[0] == 'N') {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
-		    /* Simple timing adjustment */
+	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
+		    /* Simple timing adjustment. Allow a few polls to cope with
+		     * OS timer delays being variably reliable. wait_ms will
+		     * always equal sleep_ms when we've waited greater than or
+		     * equal to the result return time.*/
 	        delay_time_ms = bitforce->sleep_ms;
-		if (bitforce->wait_ms > (bitforce->sleep_ms + BITFORCE_CHECK_INTERVAL_MS))
-			bitforce->sleep_ms += (unsigned int) ((double) (bitforce->wait_ms - bitforce->sleep_ms) / 1.6);
-		else if (bitforce->wait_ms == bitforce->sleep_ms)
-			bitforce->sleep_ms -= WORK_CHECK_INTERVAL_MS;
+		if (bitforce->wait_ms > bitforce->sleep_ms + (WORK_CHECK_INTERVAL_MS * 2))
+			bitforce->sleep_ms += (bitforce->wait_ms - bitforce->sleep_ms) / 2;
+		else if (bitforce->wait_ms == bitforce->sleep_ms) {
+			if (bitforce->sleep_ms > WORK_CHECK_INTERVAL_MS)
+				bitforce->sleep_ms -= WORK_CHECK_INTERVAL_MS;
+			else if (bitforce->sleep_ms > BITFORCE_CHECK_INTERVAL_MS)
+				bitforce->sleep_ms -= BITFORCE_CHECK_INTERVAL_MS;
+		}
+
 		if (delay_time_ms != bitforce->sleep_ms)
 			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
-	if (pdevbuf[2] == '-')
+	if (!strncasecmp(&pdevbuf[2], "-", 1))
 		return bitforce->nonces;   /* No valid nonce found */
-	else if (pdevbuf[0] == 'I') 
+	else if (!strncasecmp(pdevbuf, "I", 1))
 		return 1;          /* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
@@ -394,12 +403,14 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 #endif
 		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
-				applog(LOG_DEBUG, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
+				applog(LOG_INFO, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
 				bitforce->nonce_range = false;
+				work->blk.nonce = 0xffffffff;
+				bitforce->sleep_ms *= 5;
 		}
 			
 		submit_nonce(thr, work, nonce);
-		if (pnoncebuf[8] != ',')
+		if (strncmp(&pnoncebuf[8], ",", 1))
 			break;
 		pnoncebuf += 9;
 	}
@@ -428,7 +439,6 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	unsigned int sleep_time;
 	uint64_t ret;
 
-	bitforce->wait_ms = 0;
 	ret = bitforce_send_work(thr, work);
 
 	if (!bitforce->nonce_range) {
@@ -438,7 +448,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		if (!restart_wait(sleep_time))
 		{}
 
-		bitforce->wait_ms += sleep_time;
+		bitforce->wait_ms = sleep_time;
 		queue_request(thr, false);
 
 		/* Now wait athe final 1/3rd; no bitforce should be finished by now */
@@ -452,7 +462,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		if (!restart_wait(sleep_time))
 		{}
 
-		bitforce->wait_ms += sleep_time;
+		bitforce->wait_ms = sleep_time;
 	}
 
 	if (ret)

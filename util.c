@@ -687,3 +687,14 @@ void thr_info_cancel(struct thr_info *thr)
 		PTH(thr) = 0L;
 	}
 }
+
+/* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
+ * on SMP machines */
+void nmsleep(unsigned int msecs)
+{
+	struct timespec twait;
+
+	twait.tv_sec = msecs / 1000;
+	twait.tv_nsec = (uint64_t)(msecs * 1000000) - (uint64_t)(twait.tv_sec / 1000000000);
+	nanosleep(&twait, NULL);
+}

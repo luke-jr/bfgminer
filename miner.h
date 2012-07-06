@@ -429,7 +429,7 @@ struct thr_info {
 extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
-
+extern void nmsleep(unsigned int msecs);
 
 struct string_elist {
 	char *string;
