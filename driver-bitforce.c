@@ -20,7 +20,7 @@
 #include "fpgautils.h"
 #include "miner.h"
 
-#define BITFORCE_SLEEP_MS 3000
+#define BITFORCE_SLEEP_MS 666
 #define BITFORCE_TIMEOUT_MS 7000
 #define BITFORCE_LONG_TIMEOUT_MS 15000
 #define BITFORCE_CHECK_INTERVAL_MS 10
@@ -278,6 +278,7 @@ re_send:
 		if (bitforce->nonce_range) {
 			applog(LOG_DEBUG, "BFL%i: Disabling nonce range support", bitforce->device_id);
 			bitforce->nonce_range = false;
+			bitforce->sleep_ms *= 5;
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
@@ -404,6 +405,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 				applog(LOG_INFO, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
+				bitforce->sleep_ms *= 5;
 		}
 			
 		submit_nonce(thr, work, nonce);
