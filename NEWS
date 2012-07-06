@@ -1,3 +1,89 @@
+Version 2.5.0 - July 6, 2012
+
+- Make disabling BFL nonce range support a warning since it has to be explicitly
+enabled on the command line now.
+- miner.php allow renaming table headers
+- Make bitforce nonce range support a command line option --bfl-range since
+enabling it decrease hashrate by 1%.
+- Add sanity checking to make sure we don't make sleep_ms less than 0 in
+bitforce.
+- The fastest minirig devices need a significantly smaller starting sleep time.
+- Use a much shorter initial sleep time to account for faster devices and nonce
+range working, and increase it if nonce range fails to work.
+- Use nmsleep instead of usleep in bitforce.
+- Provide a ms based sleep function that uses nanosleep to avoid the inaccuracy
+of usleep on SMP systems.
+- delay_time_ms is always set so need not be initialised in bitforce.
+- Increase bitforce timeout to 10 seconds.
+- Add more hysteresis and poll ~5 times to allow for timer delays in bitforce
+devices.
+- miner.php allow alternating line colours (off by default)
+- Display the actual duration of wait when it is greater than the cutoff.
+- Set nonce to maximum once we determine nonce range support is broken.
+- Initial wait time is always known so no need to zero it beforehand in
+bitforce.
+- No point counting wait time until the work is actually sent to bitforce
+devices.
+- Use string comparison functions instead of explicit comparisons.
+- Account for wait_ms time when nonce_range is in use on BFL.
+- Split nonces up into 1/5 chunks when nonce range is supported.
+- limit clear buffer iterations.
+- Ad fd check to clear buffer.
+- miner.php remove incorrect 'DATE' error message
+- miner.php allow summary header in custom pages
+- Disable nonce range support in BFL when broken support is detected.
+- Restart_wait is only called with a ms value so incorporate that into the
+function.
+- Only try to adjust dev width when curses is built in.
+- miner.php define custom sum fields as a simple array
+- Fix off-by-one error in nonce increment in bfl.
+- Use BE when setting nonce in bitforce nonce range work.
+- Enable nonce range in the normal init sequence for bfl.
+- Queue extra work at 2/3 differently depending on whether we're using nonce
+range or not.
+- Initially enable support for nonce range support on bfl, splitting nonces up
+into 3/4 size and only disable it if it fails on work submit.
+- Attempt to detect nonce range support in BFL by sending work requring its
+support.
+- Limit retrying on busy for up to BITFORCE_TIMEOUT_MS
+- Attempt to initialise while bitforce device returns BUSY.
+- Extend length of string that can be passed to BFL devices.
+- Fix signedness warning.
+- Adjust device width column to be consistent.
+- Use cgpu-> not gpus[] in watchdog thread.
+- Add api stats (sleep time)
+- Timing tweaks Added long and short timeouts, short for detecting throttling,
+long to give up totally. Reset sleep time when device re-initialised Still check
+results after timeout Back up a larger time if result on first poll.
+- Add API Notify counter 'Comms Error'
+- Style police on api.c
+- Do all logging outside of the bitforce mutex locking to avoid deadlocks.
+- Remove applog call from bfwrite to prevent grabbing nested mutexes.
+- Bitforce style changes.
+- Minor style changes.
+- Remove needless roundl define.
+- Made JSON error message verbose.
+- Fine-tune timing adjustment. Also remove old work_restart timing.
+- Check for gpu return times of >= 0, not just 0, to fix intensity dropping to
+-10.
+- Restart is zeroed in the mining thread so no need to do it inside the bitforce
+code.
+- More improvements to comms. BFL return nothing when throttling, so should not
+be considered an error. Instead repeat with a longer delay.
+- Polling every 10ms there's not much point checking the pthread_cond_timedwait
+as it just adds overhead. Simply check the value of work_restart in the bfl main
+polling loop.
+- Use a pthread conditional that is broadcast whenever work restarts are
+required. Create a generic wait function waiting a specified time on that
+conditional that returns if the condition is met or a specified time passed to
+it has elapsed. Use this to do smarter polling in bitforce to abort work, queue
+more work, and check for results to minimise time spent working needlessly.
+- Add busy time to wait time.
+- api.c put version up to 1.14
+- Add tiny delay after writing to BFL Change BFL errors to something more human
+readable Send work busy re-tries after 10ms delay
+
+
 Version 2.4.4 - July 1, 2012
 
 - Fix builds on non gnu platforms.
