@@ -64,27 +64,25 @@
 // The size of a successful nonce read
 #define ICARUS_READ_SIZE 4
 
-// A stupid constant that must be 10. Don't change it.
-#define TIME_FACTOR 10
-
 // Ensure the sizes are correct for the Serial read
 #if (ICARUS_READ_SIZE != 4)
 #error ICARUS_READ_SIZE must be 4
-#endif
-#if (TIME_FACTOR != 10)
-#error TIME_FACTOR must be 10
 #endif
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
 #define ICARUS_READ_TIME ((double)ICARUS_READ_SIZE * (double)8.0 / (double)ICARUS_IO_SPEED)
 
-// Minimum precision of longpolls, in deciseconds
-#define ICARUS_READ_FAULT_DECISECONDS (1)
+// Fraction of a second, USB timeout is measured in
+// i.e. 10 means 1/10 of a second
+// Right now, it MUST be 10 due to other assumptions.
+#define TIME_FACTOR 10
+// It's 10 per second, thus value = 10/TIME_FACTOR =
+#define ICARUS_READ_FAULT_DECISECONDS 1
 
 // In timing mode: Default starting value until an estimate can be obtained
 // 5 seconds allows for up to a ~840MH/s device
-#define ICARUS_READ_FAULT_COUNT_DEFAULT	(50)
+#define ICARUS_READ_COUNT_TIMING	(5 * TIME_FACTOR)
 
 // For a standard Icarus REV3
 #define ICARUS_REV3_HASH_TIME 0.00000000264083
@@ -130,6 +128,10 @@ ASSERT1(sizeof(uint32_t) == 4);
 // The value above used is doubled each history until it exceeds:
 #define MAX_MIN_DATA_COUNT 100
 
+#if (TIME_FACTOR != 10)
+#error TIME_FACTOR must be 10
+#endif
+
 static struct timeval history_sec = { HISTORY_SEC, 0 };
 
 // Store the last INFO_HISTORY data sets
@@ -158,6 +160,10 @@ static const char *MODE_VALUE_STR = "value";
 static const char *MODE_UNKNOWN_STR = "unknown";
 
 struct ICARUS_INFO {
+	// time to calculate the golden_ob
+	uint64_t golden_hashes;
+	struct timeval golden_tv;
+
 	struct ICARUS_HISTORY history[INFO_HISTORY+1];
 	uint32_t min_data_count;
 
@@ -354,13 +360,13 @@ static void set_timing_mode(struct cgpu_info *icarus)
 
 	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
 		info->Hs = ICARUS_REV3_HASH_TIME;
-		info->read_count = ICARUS_READ_FAULT_COUNT_DEFAULT;
+		info->read_count = ICARUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
 	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
 		info->Hs = ICARUS_REV3_HASH_TIME;
-		info->read_count = ICARUS_READ_FAULT_COUNT_DEFAULT;
+		info->read_count = ICARUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_LONG;
 		info->do_icarus_timing = true;
@@ -405,6 +411,7 @@ static void set_timing_mode(struct cgpu_info *icarus)
 static bool icarus_detect_one(const char *devpath)
 {
 	struct ICARUS_INFO *info;
+	struct timeval tv_start, tv_finish;
 	int fd;
 
 	// Block 171874 nonce = (0xa2870100) = 0x000187a2
@@ -418,6 +425,7 @@ static bool icarus_detect_one(const char *devpath)
 		"0000000087320b1a1426674f2fa722ce";
 
 	const char golden_nonce[] = "000187a2";
+	const uint32_t golden_nonce_val = 0x000187a2;
 
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *nonce_hex;
@@ -432,12 +440,12 @@ static bool icarus_detect_one(const char *devpath)
 
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
+	gettimeofday(&tv_start, NULL);
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	struct thr_info dummy = {
 		.work_restart_fd = -1,
 	};
-	struct timeval tv_finish;
 	icarus_gets(nonce_bin, fd, &tv_finish, &dummy, 1);
 
 	icarus_close(fd);
@@ -481,6 +489,9 @@ static bool icarus_detect_one(const char *devpath)
 
 	// Initialise everything to zero for a new device
 	memset(info, 0, sizeof(struct ICARUS_INFO));
+
+	info->golden_hashes = (golden_nonce_val & 0x7fffffff) << 1;
+	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
 	set_timing_mode(icarus);
 
