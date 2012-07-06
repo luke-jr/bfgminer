@@ -20,7 +20,7 @@
 #include "fpgautils.h"
 #include "miner.h"
 
-#define BITFORCE_SLEEP_MS 666
+#define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_MS 7000
 #define BITFORCE_LONG_TIMEOUT_MS 15000
 #define BITFORCE_CHECK_INTERVAL_MS 10
