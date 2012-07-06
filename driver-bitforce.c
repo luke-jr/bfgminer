@@ -427,23 +427,33 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 	bitforce->wait_ms = 0;
 	ret = bitforce_send_work(thr, work);
 
-	/* Initially wait 2/3 of the average cycle time so we can request more
-	work before full scan is up */
-	sleep_time = (2 * bitforce->sleep_ms) / 3;
-	ms_to_timeval(sleep_time, &tdiff);
-	if (!restart_wait(&tdiff))
-		;
+	if (!bitforce->nonce_range) {
+		/* Initially wait 2/3 of the average cycle time so we can request more
+		work before full scan is up */
+		sleep_time = (2 * bitforce->sleep_ms) / 3;
+		ms_to_timeval(sleep_time, &tdiff);
+		if (!restart_wait(&tdiff))
+		{}
 
-	bitforce->wait_ms += sleep_time;
-	queue_request(thr, false);
+		bitforce->wait_ms += sleep_time;
+		queue_request(thr, false);
 
-	/* Now wait athe final 1/3rd; no bitforce should be finished by now */
-	sleep_time = bitforce->sleep_ms - sleep_time;
-	ms_to_timeval(sleep_time, &tdiff);
-	if (!restart_wait(&tdiff))
-		;
+		/* Now wait athe final 1/3rd; no bitforce should be finished by now */
+		sleep_time = bitforce->sleep_ms - sleep_time;
+		ms_to_timeval(sleep_time, &tdiff);
+		if (!restart_wait(&tdiff))
+		{}
 
-	bitforce->wait_ms += sleep_time;
+		bitforce->wait_ms += sleep_time;
+	} else {
+		sleep_time = bitforce->sleep_ms;
+		ms_to_timeval(sleep_time, &tdiff);
+		if (!restart_wait(&tdiff))
+		{}
+		/* queue extra request once more than 2/3 is done */
+		if (work->blk.nonce > 0xffffffff / 3 * 2)
+			queue_request(thr, false);
+	}
 
 	if (ret)
 		ret = bitforce_get_result(thr, work);
