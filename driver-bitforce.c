@@ -391,6 +391,12 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 #ifndef __BIG_ENDIAN__
 		nonce = swab32(nonce);
 #endif
+		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
+			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
+				applog(LOG_DEBUG, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
+				bitforce->nonce_range = false;
+		}
+			
 		submit_nonce(thr, work, nonce);
 		if (pnoncebuf[8] != ',')
 			break;
