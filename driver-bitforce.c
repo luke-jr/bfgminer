@@ -345,10 +345,12 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
+
 		if (pdevbuf[0] && pdevbuf[0] != 'B') /* BFL does not respond during throttling */
 			break;
+
 		/* if BFL is throttling, no point checking so quickly */
-		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2*WORK_CHECK_INTERVAL_MS);
+		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
 		usleep(delay_time_ms * 1000);
 		bitforce->wait_ms += delay_time_ms;
 	}
@@ -358,8 +360,9 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
+
 		if (!pdevbuf[0])           /* Only return if we got nothing after timeout - there still may be results */
-            return 1;
+			return 1;
 	} else if (pdevbuf[0] == 'N') {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		    /* Simple timing adjustment */
 	        delay_time_ms = bitforce->sleep_ms;
@@ -372,7 +375,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
-	if (pdevbuf[2] == '-') 
+	if (pdevbuf[2] == '-')
 		return bitforce->nonces;   /* No valid nonce found */
 	else if (pdevbuf[0] == 'I') 
 		return 1;          /* Device idle */
