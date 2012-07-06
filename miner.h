@@ -575,7 +575,7 @@ extern pthread_cond_t restart_cond;
 
 extern void thread_reportin(struct thr_info *thr);
 extern bool queue_request(struct thr_info *thr, bool needed);
-extern int restart_wait(struct timeval *tdiff);
+extern int restart_wait(unsigned int mstime);
 
 extern void kill_work(void);
 

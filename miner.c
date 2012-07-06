@@ -2506,19 +2506,23 @@ bool queue_request(struct thr_info *thr, bool needed);
  * work restart is required. Returns the value of pthread_cond_timedwait
  * which is zero if the condition was met or ETIMEDOUT if not.
  */
-int restart_wait(struct timeval *tdiff)
+int restart_wait(unsigned int mstime)
 {
-	struct timeval now, then;
+	struct timeval now, then, tdiff;
 	struct timespec abstime;
 	int rc;
 
+	tdiff.tv_sec = mstime / 1000;
+	tdiff.tv_usec = mstime * 1000 - (tdiff.tv_sec * 1000000);
 	gettimeofday(&now, NULL);
-	timeradd(&now, tdiff, &then);
+	timeradd(&now, &tdiff, &then);
 	abstime.tv_sec = then.tv_sec;
 	abstime.tv_nsec = then.tv_usec * 1000;
+
 	mutex_lock(&restart_lock);
 	rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
 	mutex_unlock(&restart_lock);
+
 	return rc;
 }
 	
