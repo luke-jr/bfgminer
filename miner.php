@@ -68,6 +68,7 @@ $allowcustompages = true;
 #
 # OK this is a bit more complex item: Custom Summary Pages
 # A custom summary page in an array of 'section' => array('FieldA','FieldB'...)
+#  Field can be 'name=new name' to display 'name' with a different heading 'new name'
 # This makes up what is displayed with each 'section' separately as a table
 # - empty tables are not shown
 # - empty columns (an unknown field) are not shown
@@ -79,9 +80,9 @@ $allowcustompages = true;
 $mobilepage = array(
  'DATE' => null,
  'RIGS' => null,
- 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
- 'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected', 'Utility'),
- 'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected', 'Last Share Time'));
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej', 'Utility'),
+ 'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected=Rej', 'Utility'),
+ 'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej', 'Last Share Time'));
 $mobilesum = array(
  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
  'DEVS' => array('MHS av', 'Accepted', 'Rejected', 'Utility'),
@@ -1308,7 +1309,7 @@ function customset($showfields, $sum, $section, $rig, $result, $total)
  return $total;
 }
 #
-function processcustompage($pagename, $sections, $sum)
+function processcustompage($pagename, $sections, $sum, $namemap)
 {
  global $sectionmap;
  global $miner, $port;
@@ -1391,13 +1392,21 @@ function processcustompage($pagename, $sections, $sum)
 		{
 			$rigresults = $results[$sectionmap[$section]];
 			$showfields = array();
+			$showhead = array();
 			foreach ($fields as $field)
 				foreach ($rigresults as $result)
 					foreach ($result as $sec => $row)
 					{
 						$secname = preg_replace('/\d/', '', $sec);
 						if (secmatch($section, $secname) && isset($row[$field]))
+						{
 							$showfields[$field] = 1;
+							$map = $section.'.'.$field;
+							if (isset($namemap[$map]))
+								$showhead[$namemap[$map]] = 1;
+							else
+								$showhead[$field] = 1;
+						}
 					}
 
 			if (count($showfields) > 0)
@@ -1406,7 +1415,7 @@ function processcustompage($pagename, $sections, $sum)
 					otherrow('<td>&nbsp;</td>');
 
 				newtable();
-				showhead('', array('Rig'=>1)+$showfields, true);
+				showhead('', array('Rig'=>1)+$showhead, true);
 
 				$total = array();
 				$add = array('total' => array());
@@ -1461,10 +1470,24 @@ function showcustompage($pagename)
  }
 
  $page = $customsummarypages[$pagename][0];
-
+ $namemap = array();
  foreach ($page as $name => $fields)
+ {
 	if ($fields === null)
 		$page[$name] = array();
+	else
+		foreach ($fields as $num => $field)
+		{
+			$pos = strpos($field, '=');
+			if ($pos !== false)
+			{
+				$names = explode('=', $field, 2);
+				if (strlen($names[1]) > 0)
+					$namemap[$name.'.'.$names[0]] = $names[1];
+				$page[$name][$num] = $names[0];
+			}
+		}
+ }
 
  $sum = $customsummarypages[$pagename][1];
  if ($sum === null)
@@ -1485,7 +1508,7 @@ function showcustompage($pagename)
 	return;
  }
 
- processcustompage($pagename, $page, $sum);
+ processcustompage($pagename, $page, $sum, $namemap);
 
  if ($placebuttons == 'bot' || $placebuttons == 'both')
 	pagebuttons(null, $pagename);
