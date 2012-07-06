@@ -88,8 +88,11 @@ static bool bitforce_detect_one(const char *devpath)
 	if (opt_bfl_noncerange) {
 		bitforce->nonce_range = true;
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-	} else
+		bitforce->kname = "Mini-rig";
+	} else {
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS * 5;
+		bitforce->kname = "Single";
+	}
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
 		s[0] = '\0';
@@ -172,11 +175,11 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	applog(LOG_WARNING, "BFL%i: Re-initalizing", bitforce->device_id);
 
-	biforce_clear_buffer(bitforce);
-
 	mutex_lock(&bitforce->device_mutex);
-	if (fdDev)
+	if (fdDev) {
 		BFclose(fdDev);
+		sleep(5);
+	}
 	bitforce->device_fd = 0;
 
 	fdDev = BFopen(devpath);
@@ -282,6 +285,7 @@ re_send:
 			applog(LOG_WARNING, "BFL%i: Does not support nonce range, disabling", bitforce->device_id);
 			bitforce->nonce_range = false;
 			bitforce->sleep_ms *= 5;
+			bitforce->kname = "Single";
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
