@@ -279,7 +279,7 @@ re_send:
 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
 		if (bitforce->nonce_range) {
-			applog(LOG_DEBUG, "BFL%i: Disabling nonce range support", bitforce->device_id);
+			applog(LOG_WARNING, "BFL%i: Does not support nonce range, disabling", bitforce->device_id);
 			bitforce->nonce_range = false;
 			bitforce->sleep_ms *= 5;
 			goto re_send;
@@ -409,7 +409,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 #endif
 		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
-				applog(LOG_INFO, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
+				applog(LOG_WARNING, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 				bitforce->sleep_ms *= 5;
