@@ -21,7 +21,7 @@
 #include "miner.h"
 
 #define BITFORCE_SLEEP_MS 3000
-#define BITFORCE_TIMEOUT_MS 10000
+#define BITFORCE_TIMEOUT_MS 7000
 #define BITFORCE_LONG_TIMEOUT_MS 15000
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
@@ -329,9 +329,9 @@ re_send:
 
 static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 {
-	unsigned int delay_time_ms = BITFORCE_CHECK_INTERVAL_MS;
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
+	unsigned int delay_time_ms;
 	char pdevbuf[0x100];
 	char *pnoncebuf;
 	uint32_t nonce;
