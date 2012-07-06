@@ -1,5 +1,7 @@
 BFGMiner Version 2.5.0 - July 7, 2012
 
+- Fix BitFORCE driver to not silenty discard valid shares (bug introduced by
+CGMiner merges)
 - Fix --benchmark not working since the dynamic addition of pools and pool
 stats.
 - Make disabling BFL nonce range support a warning since it has to be explicitly
@@ -84,6 +86,8 @@ more work, and check for results to minimise time spent working needlessly.
 - api.c put version up to 1.14
 - Add tiny delay after writing to BFL Change BFL errors to something more human
 readable Send work busy re-tries after 10ms delay
+- Fix race condition in thread creation that could under some conditions crash
+BFGMiner at startup
 
 
 BFGMiner Version 2.4.4 - July 1, 2012
