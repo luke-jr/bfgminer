@@ -545,6 +545,9 @@ extern bool opt_api_network;
 extern bool opt_delaynet;
 extern bool opt_restart;
 extern char *opt_icarus_timing;
+#ifdef USE_BITFORCE
+extern bool opt_bfl_noncerange;
+#endif
 
 extern pthread_rwlock_t netacc_lock;
 
