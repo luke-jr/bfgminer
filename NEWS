@@ -1,5 +1,7 @@
 Version 2.5.0 - July 6, 2012
 
+- Fix --benchmark not working since the dynamic addition of pools and pool
+stats.
 - Make disabling BFL nonce range support a warning since it has to be explicitly
 enabled on the command line now.
 - miner.php allow renaming table headers
