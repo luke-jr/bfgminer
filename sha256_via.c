@@ -19,7 +19,7 @@ static void via_sha256(void *hash, void *buf, unsigned len)
 		     :"memory");
 }
 
-bool scanhash_via(int thr_id, const unsigned char *pmidstate,
+bool scanhash_via(struct thr_info*thr, const unsigned char *pmidstate,
 	unsigned char *data_inout,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *target,
@@ -74,7 +74,7 @@ bool scanhash_via(int thr_id, const unsigned char *pmidstate,
 			return true;
 		}
 
-		if ((n >= max_nonce) || work_restart[thr_id].restart) {
+		if ((n >= max_nonce) || thr->work_restart) {
 			*last_nonce = n;
 			return false;
 		}
