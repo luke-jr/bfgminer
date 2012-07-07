@@ -166,7 +166,7 @@ function getcss($cssname, $dom = false)
  $css = '';
  foreach ($colourtable as $cssdata => $value)
  {
-	$cssobj = split(' ', $cssdata, 2);
+	$cssobj = explode(' ', $cssdata, 2);
 	if ($cssobj[0] == $cssname)
 	{
 		if (isset($colouroverride[$cssdata]))
