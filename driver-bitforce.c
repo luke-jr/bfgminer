@@ -448,22 +448,19 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		/* Initially wait 2/3 of the average cycle time so we can request more
 		work before full scan is up */
 		sleep_time = (2 * bitforce->sleep_ms) / 3;
-		if (!restart_wait(sleep_time))
-		{}
+		nmsleep(sleep_time);
 
 		bitforce->wait_ms = sleep_time;
 		queue_request(thr, false);
 
 		/* Now wait athe final 1/3rd; no bitforce should be finished by now */
 		sleep_time = bitforce->sleep_ms - sleep_time;
-		if (!restart_wait(sleep_time))
-		{}
+		nmsleep(sleep_time);
 
 		bitforce->wait_ms += sleep_time;
 	} else {
 		sleep_time = bitforce->sleep_ms;
-		if (!restart_wait(sleep_time))
-		{}
+		nmsleep(sleep_time);
 
 		bitforce->wait_ms = sleep_time;
 	}
