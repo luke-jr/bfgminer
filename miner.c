@@ -2537,8 +2537,7 @@ int restart_wait(unsigned int mstime)
 	
 static void restart_threads(void)
 {
-	int i, j, fd;
-	struct cgpu_info *cgpu;
+	int i, fd;
 	struct thr_info *thr;
 
 	/* Discard staged work that is now stale */
@@ -2546,17 +2545,13 @@ static void restart_threads(void)
 
 	queue_request(NULL, true);
 
-	for (i = 0; i < total_devices; ++i)
+	for (i = 0; i < mining_threads; i++)
 	{
-		cgpu = devices[i];
-		for (j = 0; j < cgpu->threads; ++j)
-		{
-			thr = cgpu->thr[j];
-			fd = thr->_work_restart_fd_w;
-			thr->work_restart = true;
-			if (fd != -1)
-				write(fd, "\0", 1);
-		}
+		thr = &thr_info[i];
+		fd = thr->_work_restart_fd_w;
+		thr->work_restart = true;
+		if (fd != -1)
+			write(fd, "\0", 1);
 	}
 
 	mutex_lock(&restart_lock);
