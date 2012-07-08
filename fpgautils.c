@@ -211,8 +211,8 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	case 0:
 		break;
 	case 115200:
-		my_termios.c_cflag &= ~CBAUD;
-		my_termios.c_cflag |= B115200;
+		cfsetispeed( &my_termios, B115200 );
+		cfsetospeed( &my_termios, B115200 );
 		break;
 	// TODO: try some higher speeds with the Icarus and BFL to see
 	// if they support them and if setting them makes any difference
