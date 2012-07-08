@@ -692,9 +692,14 @@ void thr_info_cancel(struct thr_info *thr)
  * on SMP machines */
 void nmsleep(unsigned int msecs)
 {
-	struct timespec twait;
+	struct timespec twait, tleft;
+	int ret;
 
-	twait.tv_sec = msecs / 1000;
-	twait.tv_nsec = (uint64_t)(msecs * 1000000) - (uint64_t)(twait.tv_sec / 1000000000);
-	nanosleep(&twait, NULL);
+	tleft.tv_sec = msecs / 1000;
+	tleft.tv_nsec = (uint64_t)(msecs * 1000000) - (uint64_t)(twait.tv_sec / 1000000000);
+	do {
+		twait.tv_sec = tleft.tv_sec;
+		twait.tv_nsec = tleft.tv_nsec;
+		ret = nanosleep(&twait, &tleft);
+	} while (ret == -1 && errno == EINTR);
 }
