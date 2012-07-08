@@ -2984,7 +2984,7 @@ static void setup_ipaccess()
 				ipaccess[ips].mask = 0;
 				while (mask-- >= 0) {
 					octet = 1 << (mask % 8);
-					ipaccess[ips].mask |= (octet << (8 * (mask >> 3)));
+					ipaccess[ips].mask |= (octet << (24 - (8 * (mask >> 3))));
 				}
 			}
 
@@ -2998,7 +2998,7 @@ static void setup_ipaccess()
 				if (octet < 0 || octet > 0xff)
 					goto popipo; // skip invalid
 
-				ipaccess[ips].ip |= (octet << (i * 8));
+				ipaccess[ips].ip |= (octet << (24 - (i * 8)));
 
 				ptr = dot;
 			}
@@ -3165,8 +3165,9 @@ void api(int api_thr_id)
 		addrok = false;
 		group = NOPRIVGROUP;
 		if (opt_api_allow) {
+			int client_ip = htonl(cli.sin_addr.s_addr);
 			for (i = 0; i < ips; i++) {
-				if ((cli.sin_addr.s_addr & ipaccess[i].mask) == ipaccess[i].ip) {
+				if ((client_ip & ipaccess[i].mask) == ipaccess[i].ip) {
 					addrok = true;
 					group = ipaccess[i].group;
 					break;
