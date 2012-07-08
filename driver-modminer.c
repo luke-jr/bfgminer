@@ -390,7 +390,7 @@ fd_set fds;
 	return true;
 }
 
-#define work_restart(thr)  work_restart[thr->id].restart
+#define work_restart(thr)  thr->work_restart
 
 static uint64_t
 modminer_process_results(struct thr_info*thr)
