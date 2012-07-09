@@ -47,7 +47,7 @@ static uint32_t g_sha256_hinit[8] =
 
 __m128i g_4sha256_k[64];
 
-bool scanhash_sse4_64(int thr_id, const unsigned char *pmidstate,
+bool scanhash_sse4_64(struct thr_info*thr, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
@@ -118,7 +118,7 @@ bool scanhash_sse4_64(int thr_id, const unsigned char *pmidstate,
 		}
 	}
 
-        if (unlikely((nonce >= max_nonce) || work_restart[thr_id].restart))
+        if (unlikely((nonce >= max_nonce) || thr->work_restart))
         {
 			*last_nonce = nonce;
 			return false;

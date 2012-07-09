@@ -198,7 +198,7 @@ static void rev(unsigned char *s, size_t l)
 #define icarus_open2(devpath, purge)  serial_open(devpath, 115200, ICARUS_READ_FAULT_DECISECONDS, purge)
 #define icarus_open(devpath)  icarus_open2(devpath, false)
 
-static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, int thr_id, int read_count)
+static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
@@ -232,7 +232,7 @@ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, in
 			return 1;
 		}
 
-		if (thr_id >= 0 && work_restart[thr_id].restart) {
+		if (thr->work_restart) {
 			if (opt_debug) {
 				applog(LOG_DEBUG,
 					"Icarus Read: Work restart at %.2f seconds",
@@ -392,7 +392,10 @@ static bool icarus_detect_one(const char *devpath)
 	gettimeofday(&tv_start, NULL);
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	icarus_gets(nonce_bin, fd, &tv_finish, -1, 1);
+	struct thr_info dummy = {
+		.work_restart = false,
+	};
+	icarus_gets(nonce_bin, fd, &tv_finish, &dummy, 1);
 
 	icarus_close(fd);
 
@@ -474,7 +477,6 @@ static bool icarus_prepare(struct thr_info *thr)
 static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused uint64_t max_nonce)
 {
-	const int thr_id = thr->id;
 	struct cgpu_info *icarus;
 	int fd;
 	int ret;
@@ -529,7 +531,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	info = icarus_info[icarus->device_id];
-	ret = icarus_gets(nonce_bin, fd, &tv_finish, thr_id, info->read_count);
+	ret = icarus_gets(nonce_bin, fd, &tv_finish, thr, info->read_count);
 
 	work->blk.nonce = 0xffffffff;
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
