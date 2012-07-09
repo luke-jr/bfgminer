@@ -21,11 +21,14 @@
 #include "miner.h"
 
 #define BITFORCE_SLEEP_MS 500
-#define BITFORCE_TIMEOUT_MS 10000
-#define BITFORCE_LONG_TIMEOUT_MS 15000
+#define BITFORCE_TIMEOUT_S 7
+#define BITFORCE_TIMEOUT_MS (BITFORCE_TIMEOUT_S * 1000)
+#define BITFORCE_LONG_TIMEOUT_S 15
+#define BITFORCE_LONG_TIMEOUT_MS (BITFORCE_LONG_TIMEOUT_S * 1000)
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
 #define MAX_START_DELAY_US 100000
+#define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
 
 struct device_api bitforce_api;
 
@@ -332,6 +335,7 @@ re_send:
 		return false;
 	}
 
+	gettimeofday(&bitforce->work_start_tv, NULL);
 	return true;
 }
 
@@ -340,6 +344,8 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
 	unsigned int delay_time_ms;
+	struct timeval elapsed;
+	struct timeval now;
 	char pdevbuf[0x100];
 	char *pnoncebuf;
 	uint32_t nonce;
@@ -348,7 +354,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	if (!fdDev)
 		return 0;
 
-	while (bitforce->wait_ms < BITFORCE_LONG_TIMEOUT_MS) {
+	while (1) {
 		if (unlikely(thr->work_restart))
 			return 1;
 
@@ -356,6 +362,15 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
+
+		gettimeofday(&now, NULL);
+		timersub(&now, &bitforce->work_start_tv, &elapsed);
+
+		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
+			applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
+				tv_to_ms(elapsed), BITFORCE_LONG_TIMEOUT_MS);
+			return 0;
+		}
 
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
@@ -366,9 +381,9 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->wait_ms += delay_time_ms;
 	}
 
-	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
+	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
 		applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
-		       bitforce->wait_ms, BITFORCE_TIMEOUT_MS);
+			tv_to_ms(elapsed), BITFORCE_TIMEOUT_MS);
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
