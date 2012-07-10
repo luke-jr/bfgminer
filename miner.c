@@ -5227,16 +5227,16 @@ int main(int argc, char *argv[])
 	gpu_threads = 0;
 #endif
 
+#ifdef USE_MODMINER
+	modminer_api.api_detect();
+#endif
+
 #ifdef USE_ICARUS
 	icarus_api.api_detect();
 #endif
 
 #ifdef USE_BITFORCE
 	bitforce_api.api_detect();
-#endif
-
-#ifdef USE_MODMINER
-	modminer_api.api_detect();
 #endif
 
 #ifdef USE_ZTEX
