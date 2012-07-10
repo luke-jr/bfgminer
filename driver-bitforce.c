@@ -484,20 +484,6 @@ static bool bitforce_get_stats(struct cgpu_info *bitforce)
 	return bitforce_get_temp(bitforce);
 }
 
-static bool bitforce_thread_init(struct thr_info *thr)
-{
-	struct cgpu_info *bitforce = thr->cgpu;
-	unsigned int wait;
-
-	/* Pause each new thread at least 100ms between initialising
-	 * so the devices aren't making calls all at the same time. */
-	wait = thr->id * MAX_START_DELAY_US;
-	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
-	usleep(wait);
-
-	return true;
-}
-
 static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
@@ -520,7 +506,6 @@ struct device_api bitforce_api = {
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.thread_prepare = bitforce_thread_prepare,
-	.thread_init = bitforce_thread_init,
 	.scanhash = bitforce_scanhash,
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
