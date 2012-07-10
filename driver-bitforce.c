@@ -29,6 +29,8 @@
 #define WORK_CHECK_INTERVAL_MS 50
 #define MAX_START_DELAY_US 100000
 #define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
+#define TIME_AVE_CONSTANT 16
+#define TIME_AVE_ROUND (TIME_AVE_CONSTANT/2)
 
 struct device_api bitforce_api;
 
@@ -101,7 +103,7 @@ static bool bitforce_detect_one(const char *devpath)
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
-	
+
 	mutex_init(&bitforce->device_mutex);
 
 	return add_cgpu(bitforce);
@@ -407,6 +409,9 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		if (delay_time_ms != bitforce->sleep_ms)
 			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+        
+        /* Work out the averge time taken. This method (pre mutiplier) maintains the fractional part accuracy */
+        bitforce->ave_wait += (tv_to_ms(elapsed) * TIME_AVE_CONSTANT) - bitforce->ave_wait;
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
@@ -513,12 +518,14 @@ static bool bitforce_get_stats(struct cgpu_info *bitforce)
 static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
+	unsigned int ave_wait_ms = (cgpu->ave_wait + TIME_AVE_ROUND)/TIME_AVE_CONSTANT;  /* Now remove the multiplier */
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
 	root = api_add_uint(root, "Sleep Time", &(cgpu->sleep_ms), false);
+	root = api_add_uint(root, "Ave Wait", &(ave_wait_ms), false);
 
 	return root;
 }
