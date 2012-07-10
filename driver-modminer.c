@@ -329,7 +329,7 @@ modminer_fpga_init(struct thr_info *thr)
 	else
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)", modminer->api->name, modminer->device_id, fpgaid);
 
-	state->clock = 212;  // Will be reduced to 210 by modminer_reduce_clock
+	state->clock = 202;  // Will be reduced to 210 by modminer_reduce_clock
 	modminer_reduce_clock(thr, false);
 
 	mutex_unlock(&modminer->device_mutex);
