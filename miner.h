@@ -321,7 +321,6 @@ struct cgpu_info {
 	};
 #ifdef USE_BITFORCE
 	struct timeval work_start_tv;
-	unsigned int ave_wait;
 	unsigned int wait_ms;
 	unsigned int sleep_ms;
 	uint32_t nonces;
