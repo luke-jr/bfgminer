@@ -323,8 +323,8 @@ struct cgpu_info {
 	struct timeval work_start_tv;
 	unsigned int wait_ms;
 	unsigned int sleep_ms;
-	double ave_wait_f;
-	unsigned int ave_wait_d;
+	double avg_wait_f;
+	unsigned int avg_wait_d;
 	uint32_t nonces;
 	bool nonce_range;
 #endif

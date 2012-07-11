@@ -29,7 +29,7 @@
 #define WORK_CHECK_INTERVAL_MS 50
 #define MAX_START_DELAY_US 100000
 #define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
-#define TIME_AVE_CONSTANT 8
+#define TIME_AVG_CONSTANT 8
 
 struct device_api bitforce_api;
 
@@ -410,8 +410,8 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 
         /* Work out the average time taken. Float for calculation, uint for display */
-        bitforce->ave_wait_f += (tv_to_ms(elapsed) - bitforce->ave_wait_f) / TIME_AVE_CONSTANT;
-        bitforce->ave_wait_d = (unsigned int) (bitforce->ave_wait_f + 0.5);
+        bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
+        bitforce->avg_wait_d = (unsigned int) (bitforce->avg_wait_f + 0.5);
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
@@ -525,7 +525,7 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
 	root = api_add_uint(root, "Sleep Time", &(cgpu->sleep_ms), false);
-	root = api_add_uint(root, "Ave Wait", &(cgpu->ave_wait_d), false);
+	root = api_add_uint(root, "Avg Wait", &(cgpu->avg_wait_d), false);
 
 	return root;
 }
