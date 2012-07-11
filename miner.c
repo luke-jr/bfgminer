@@ -4663,6 +4663,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			dev_count_dead = (cgpu->low_count > WATCHDOG_DEAD_COUNT);
 
 			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME) && dev_count_well) {
+				if (cgpu->status != LIFE_INIT)
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
@@ -5516,6 +5517,7 @@ begin_bench:
 		struct cgpu_info *cgpu = devices[i];
 		cgpu->thr = calloc(cgpu->threads+1, sizeof(*cgpu->thr));
 		cgpu->thr[cgpu->threads] = NULL;
+		cgpu->status = LIFE_INIT;
 
 		// Setup thread structs before starting any of the threads, in case they try to interact
 		for (j = 0; j < cgpu->threads; ++j, ++k) {

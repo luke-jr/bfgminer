@@ -170,6 +170,7 @@ static const char *APIVERSION = "1.14";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
+static const char *INIT = "Initializing";
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
@@ -1269,6 +1270,8 @@ status2str(enum alive status)
 		return DEAD;
 	case LIFE_NOSTART:
 		return NOSTART;
+	case LIFE_INIT:
+		return INIT;
 	default:
 		return UNKNOWN;
 	}

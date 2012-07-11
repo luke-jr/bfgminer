@@ -856,6 +856,7 @@ retry:
 				case LIFE_DEAD:
 					wlog("DEAD reported in %s", checkin);
 					break;
+				case LIFE_INIT:
 				case LIFE_NOSTART:
 					wlog("Never started");
 					break;
