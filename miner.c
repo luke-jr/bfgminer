@@ -4023,7 +4023,7 @@ static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64
 }
 
 static void mt_disable(struct thr_info *mythr, const int thr_id,
-		       struct device_api *api)
+		       const struct device_api *api)
 {
 	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 	mythr->rolling = mythr->cgpu->rolling = 0;
