@@ -3989,6 +3989,20 @@ static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64
 	return false;
 }
 
+static void mt_disable(struct thr_info *mythr, const int thr_id,
+		       struct device_api *api)
+{
+	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
+	mythr->rolling = mythr->cgpu->rolling = 0;
+	applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
+	thread_reportout(mythr);
+	tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+	thread_reportin(mythr);
+	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
+	if (api->thread_enable)
+		api->thread_enable(mythr);
+}
+
 void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -4111,7 +4125,7 @@ void *miner_thread(void *userdata)
 				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
 				cgpu->thread_zero_hash_count++;
 
-				goto disabled;
+				mt_disable(mythr, thr_id, api);
 			}
 
 			hashes_done += hashes;
@@ -4169,17 +4183,8 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
-				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
-disabled:
-				mythr->rolling = mythr->cgpu->rolling = 0;
-				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
-				thread_reportout(mythr);
-				tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
-				thread_reportin(mythr);
-				applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
-				if (api->thread_enable) api->thread_enable(mythr);
-			}
+			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+				mt_disable(mythr, thr_id, api);
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
 		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
