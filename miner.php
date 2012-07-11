@@ -30,11 +30,12 @@ $notify = true;
 $checklastshare = true;
 #
 # Set $rigs to an array of your BFGMiner rigs that are running
-#  format: 'IP:Port' or 'Host:Port'
+#  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
 # If you only have one rig, it will just show the detail of that rig
 # If you have more than one rig it will show a summary of all the rigs
-#  with buttons to show the details of each rig
-# e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028');
+#  with buttons to show the details of each rig -
+#  the button contents will be 'Name' if that was specified
+# e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 $rigs = array('127.0.0.1:4028');
 #
 # This should be OK for most cases
@@ -54,7 +55,7 @@ $socktimeoutsec = 10;
 #$hidefields = array('POOL.URL' => 1, 'POOL.User' => 1);
 $hidefields = array();
 #
-# Auto-refresh of the page (in seconds)
+# Auto-refresh of the page (in seconds) - integers only
 # $ignorerefresh = true/false always ignore refresh parameters
 # $changerefresh = true/false show buttons to change the value
 # $autorefresh = default value, 0 means dont auto-refresh
@@ -957,9 +958,18 @@ function process($cmds, $rig)
 #
 function rigbutton($rig, $rigname, $when, $row)
 {
+ global $rigs;
+
+ if (isset($rigs[$rig]))
+ {
+	$parts = explode(':', $rigs[$rig], 3);
+	if (count($parts) == 3)
+		$rigname = $parts[2];
+ }
+
  list($value, $class) = fmt('BUTTON', 'Rig', '', $when, $row);
 
- $button = "<td align=middle$class><input type=button value='$rigname$rig'";
+ $button = "<td align=middle$class><input type=button value='$rigname'";
  $button .= " onclick='pr(\"&rig=$rig\",null)'></td>";
 
  return $button;
@@ -986,7 +996,7 @@ function showrigs($anss, $headname, $rigname)
 		foreach ($dthead as $name => $x)
 		{
 			if ($item == 'STATUS' && $name == $headname)
-				echo rigbutton($rig, $rigname, $when, null);
+				echo rigbutton($rig, $rigname.$rig, $when, null);
 			else
 			{
 				if (isset($row[$name]))
@@ -1021,17 +1031,22 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 	if (isset($rigerror[$rig]))
 		continue;
 
-	$parts = explode(':', $rig, 2);
-	if (count($parts) == 2)
+	$parts = explode(':', $rig, 3);
+	if (count($parts) >= 2)
 	{
 		$miner = $parts[0];
 		$port = $parts[1];
+
+		if (count($parts) > 2)
+			$name = $parts[2];
+		else
+			$name = $count;
 
 		$ans = api($cmd);
 
 		if ($error != null)
 		{
-			$rw = "<td colspan=100>Error on rig $count getting ";
+			$rw = "<td colspan=100>Error on rig $name getting ";
 			$rw .= "$des: $warnfont$error$warnoff</td>";
 			otherrow($rw);
 			$rigerror[$rig] = $error;
@@ -1127,7 +1142,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 					echo "<td align=right$class>Total:</td>";
 				}
 				else
-					echo rigbutton($rig, 'Rig ', $when, $row);
+					echo rigbutton($rig, "Rig $rig", $when, $row);
 			}
 			else
 			{
@@ -1254,7 +1269,7 @@ function secmatch($section, $field)
  return false;
 }
 #
-function customset($showfields, $sum, $section, $rig, $result, $total)
+function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total)
 {
  foreach ($result as $sec => $row)
  {
@@ -1271,8 +1286,8 @@ function customset($showfields, $sum, $section, $rig, $result, $total)
 		$when = $result['STATUS']['When'];
 
 
-	if (is_numeric($rig))
-		echo rigbutton($rig, '', $when, $row);
+	if ($isbutton)
+		echo rigbutton($rig, $rig, $when, $row);
 	else
 	{
 		list($ignore, $class) = fmt('total', '', '', $when, $row);
@@ -1336,11 +1351,16 @@ function processcustompage($pagename, $sections, $sum, $namemap)
  $results = array();
  foreach ($rigs as $num => $rig)
  {
-	$parts = explode(':', $rig, 2);
-	if (count($parts) == 2)
+	$parts = explode(':', $rig, 3);
+	if (count($parts) >= 2)
 	{
 		$miner = $parts[0];
 		$port = $parts[1];
+
+		if (count($parts) > 2)
+			$name = $parts[2];
+		else
+			$name = $rig;
 
 		foreach ($cmds as $cmd => $one)
 		{
@@ -1348,7 +1368,7 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 
 			if ($error != null)
 			{
-				$errors[] = "Error getting $cmd for $rig $warnfont$error$warnoff";
+				$errors[] = "Error getting $cmd for $name $warnfont$error$warnoff";
 				break;
 			}
 			else
@@ -1421,10 +1441,10 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 				$add = array('total' => array());
 
 				foreach ($rigresults as $num => $result)
-					$total = customset($showfields, $sum, $section, $num, $result, $total);
+					$total = customset($showfields, $sum, $section, $num, true, $result, $total);
 
 				if (count($total) > 0)
-					customset($showfields, $sum, $section, '&Sigma;', $add, $total, 0);
+					customset($showfields, $sum, $section, '&Sigma;', false, $add, $total);
 
 				$first = false;
 
@@ -1547,8 +1567,8 @@ function display()
 
 	if ($num != null)
 	{
-		$parts = explode(':', $rigs[$num], 2);
-		if (count($parts) == 2)
+		$parts = explode(':', $rigs[$num], 3);
+		if (count($parts) >= 2)
 		{
 			$miner = $parts[0];
 			$port = $parts[1];
@@ -1576,8 +1596,8 @@ function display()
 
  if (count($rigs) == 1)
  {
-	$parts = explode(':', $rigs[0], 2);
-	if (count($parts) == 2)
+	$parts = explode(':', $rigs[0], 3);
+	if (count($parts) >= 2)
 	{
 		$miner = $parts[0];
 		$port = $parts[1];
@@ -1592,8 +1612,8 @@ function display()
 
  if ($rig != null and $rig != '' and $rig >= 0 and $rig < count($rigs))
  {
-	$parts = explode(':', $rigs[$rig], 2);
-	if (count($parts) == 2)
+	$parts = explode(':', $rigs[$rig], 3);
+	if (count($parts) >= 2)
 	{
 		$miner = $parts[0];
 		$port = $parts[1];
