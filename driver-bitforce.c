@@ -170,7 +170,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	char pdevbuf[0x100];
 	char *s;
 
-	applog(LOG_WARNING, "BFL%i: Re-initalizing", bitforce->device_id);
+	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
 
 	biforce_clear_buffer(bitforce);
 
