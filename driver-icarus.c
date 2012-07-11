@@ -474,8 +474,8 @@ static bool icarus_prepare(struct thr_info *thr)
 	return true;
 }
 
-static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
-				__maybe_unused uint64_t max_nonce)
+static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
+				__maybe_unused int64_t max_nonce)
 {
 	struct cgpu_info *icarus;
 	int fd;
@@ -486,7 +486,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *ob_hex;
 	uint32_t nonce;
-	uint64_t hash_count;
+	int64_t hash_count;
 	struct timeval tv_start, tv_finish, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
@@ -496,9 +496,9 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	int count;
 	double Hs, W, fullnonce;
 	int read_count;
-	uint64_t estimate_hashes;
+	int64_t estimate_hashes;
 	uint32_t values;
-	uint64_t hash_count_range;
+	int64_t hash_count_range;
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
@@ -515,7 +515,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 #endif
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
 	if (ret)
-		return 0;	/* This should never happen */
+		return -1;	/* This should never happen */
 
 	gettimeofday(&tv_start, NULL);
 

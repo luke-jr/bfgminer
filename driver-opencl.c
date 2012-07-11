@@ -986,7 +986,7 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 }
 
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
-			       unsigned int *hashes, size_t *globalThreads,
+			       int64_t *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
 {
 	*threads = 1 << (15 + intensity);
@@ -1338,8 +1338,8 @@ static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work
 
 extern int opt_dynamic_interval;
 
-static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
-				uint64_t __maybe_unused max_nonce)
+static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
+				int64_t __maybe_unused max_nonce)
 {
 	const int thr_id = thr->id;
 	struct opencl_thread_data *thrdata = thr->cgpu_data;
@@ -1352,7 +1352,7 @@ static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	size_t globalThreads[1];
 	size_t localThreads[1] = { clState->wsize };
 	unsigned int threads;
-	unsigned int hashes;
+	int64_t hashes;
 
 	/* This finish flushes the readbuffer set with CL_FALSE later */
 	gettimeofday(&gpu->tv_gpustart, NULL);

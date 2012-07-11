@@ -4018,8 +4018,8 @@ void *miner_thread(void *userdata)
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff = {0, 0};
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
-	unsigned long long hashes_done = 0;
-	unsigned long long hashes;
+	int64_t hashes_done = 0;
+	int64_t hashes;
 	struct work *work = make_work();
 	const time_t request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
@@ -4101,7 +4101,7 @@ void *miner_thread(void *userdata)
 
 			gettimeofday(&getwork_start, NULL);
 
-			if (unlikely(!hashes)) {
+			if (unlikely(hashes == -1)) {
 				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
 				cgpu->deven = DEV_DISABLED;
 

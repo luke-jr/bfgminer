@@ -244,7 +244,7 @@ struct device_api {
 	bool (*thread_init)(struct thr_info*);
 	void (*free_work)(struct thr_info*, struct work*);
 	bool (*prepare_work)(struct thr_info*, struct work*);
-	uint64_t (*scanhash)(struct thr_info*, struct work*, uint64_t);
+	int64_t (*scanhash)(struct thr_info*, struct work*, int64_t);
 	void (*thread_shutdown)(struct thr_info*);
 	void (*thread_enable)(struct thr_info*);
 };
