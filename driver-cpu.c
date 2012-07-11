@@ -784,7 +784,7 @@ static bool cpu_thread_init(struct thr_info *thr)
 	return true;
 }
 
-static uint64_t cpu_scanhash(struct thr_info *thr, struct work *work, uint64_t max_nonce)
+static int64_t cpu_scanhash(struct thr_info *thr, struct work *work, int64_t max_nonce)
 {
 	const int thr_id = thr->id;
 

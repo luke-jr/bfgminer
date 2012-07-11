@@ -547,8 +547,8 @@ static bool icarus_prepare(struct thr_info *thr)
 	return true;
 }
 
-static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
-				__maybe_unused uint64_t max_nonce)
+static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
+				__maybe_unused int64_t max_nonce)
 {
 	struct cgpu_info *icarus;
 	int fd;
@@ -559,7 +559,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	unsigned char ob_bin[64] = {0}, nonce_bin[ICARUS_READ_SIZE] = {0};
 	char *ob_hex;
 	uint32_t nonce;
-	uint64_t hash_count;
+	int64_t hash_count;
 	struct timeval tv_start, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
@@ -569,9 +569,9 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	int count;
 	double Hs, W, fullnonce;
 	int read_count;
-	uint64_t estimate_hashes;
+	int64_t estimate_hashes;
 	uint32_t values;
-	uint64_t hash_count_range;
+	int64_t hash_count_range;
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
@@ -600,7 +600,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				// Go back to the main loop to get the next work, and stuff
 				// Returning to the main loop will clear work_restart, so use a flag...
 				state->changework = true;
-				return 1;
+				return 0;
 			}
 		}
 
@@ -617,7 +617,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
 	if (ret) {
 		icarus_close(fd);
-		return 0;	/* This should never happen */
+		return -1;	/* This should never happen */
 	}
 
 	if (opt_debug) {
@@ -644,7 +644,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (state->firstrun) {
 		state->firstrun = false;
 		memcpy(&state->last_work, work, sizeof(state->last_work));
-		return 1;
+		return 0;
 	}
 
 	// OK, done starting Icarus's next job... now process the last run's result!

@@ -185,8 +185,8 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	return true;
 }
 
-static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
-                              __maybe_unused uint64_t max_nonce)
+static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
+                              __maybe_unused int64_t max_nonce)
 {
 	struct libztex_device *ztex;
 	unsigned char sendbuf[44];
@@ -215,7 +215,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			ztex_disable(thr);
 			applog(LOG_ERR, "%s: Failed to send hash data with err %d, giving up", ztex->repr, i);
 			ztex_releaseFpga(ztex);
-			return 0;
+			return -1;
 		}
 	}
 	ztex_releaseFpga(ztex);
@@ -225,7 +225,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	lastnonce = malloc(sizeof(uint32_t)*ztex->numNonces);
 	if (lastnonce == NULL) {
 		applog(LOG_ERR, "%s: failed to allocate lastnonce[%d]", ztex->repr, ztex->numNonces);
-		return 0;
+		return -1;
 	}
 	memset(lastnonce, 0, sizeof(uint32_t)*ztex->numNonces);
 	
@@ -233,7 +233,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	backlog = malloc(sizeof(uint32_t) * backlog_max);
 	if (backlog == NULL) {
 		applog(LOG_ERR, "%s: failed to allocate backlog[%d]", ztex->repr, backlog_max);
-		return 0;
+		return -1;
 	}
 	memset(backlog, 0, sizeof(uint32_t) * backlog_max);
 	
@@ -260,7 +260,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				free(lastnonce);
 				free(backlog);
 				ztex_releaseFpga(ztex);
-				return 0;
+				return -1;
 			}
 		}
 		ztex_releaseFpga(ztex);
@@ -330,7 +330,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		free(lastnonce);
 		free(backlog);
 		
-		return 0;
+		return -1;
 	}
 
 	applog(LOG_DEBUG, "%s: exit %1.8X", ztex->repr, noncecnt);
@@ -340,7 +340,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	free(lastnonce);
 	free(backlog);
 	
-	return noncecnt > 0? noncecnt: 1;
+	return noncecnt;
 }
 
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)

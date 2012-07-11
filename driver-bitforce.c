@@ -170,7 +170,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	char pdevbuf[0x100];
 	char *s;
 
-	applog(LOG_WARNING, "BFL%i: Re-initalizing", bitforce->device_id);
+	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
 
 	biforce_clear_buffer(bitforce);
 
@@ -331,7 +331,7 @@ re_send:
 	return true;
 }
 
-static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
+static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
@@ -340,9 +340,8 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	char *pnoncebuf;
 	uint32_t nonce;
 
-
 	if (!fdDev)
-		return 0;
+		return -1;
 
 	while (bitforce->wait_ms < BITFORCE_LONG_TIMEOUT_MS) {
 		mutex_lock(&bitforce->device_mutex);
@@ -367,7 +366,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->dev_over_heat_count++;
 
 		if (!pdevbuf[0])           /* Only return if we got nothing after timeout - there still may be results */
-			return 1;
+			return 0;
 	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		    /* Simple timing adjustment. Allow a few polls to cope with
 		     * OS timer delays being variably reliable. wait_ms will
@@ -391,10 +390,10 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	if (!strncasecmp(&pdevbuf[2], "-", 1))
 		return bitforce->nonces;   /* No valid nonce found */
 	else if (!strncasecmp(pdevbuf, "I", 1))
-		return 1;          /* Device idle */
+		return 0;          /* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
-		return 1;
+		return 0;
 	}
 
 	pnoncebuf = &pdevbuf[12];
@@ -436,11 +435,11 @@ static void biforce_thread_enable(struct thr_info *thr)
 	bitforce_init(bitforce);
 }
 
-static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint64_t __maybe_unused max_nonce)
+static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int sleep_time;
-	uint64_t ret;
+	int64_t ret;
 
 	ret = bitforce_send_work(thr, work);
 
@@ -469,7 +468,7 @@ static uint64_t bitforce_scanhash(struct thr_info *thr, struct work *work, uint6
 		ret = bitforce_get_result(thr, work);
 
 	if (!ret) {
-		ret = 1;
+		ret = 0;
 		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
@@ -490,9 +489,9 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int wait;
 
-	/* Pause each new thread a random time between 0-100ms 
-	so the devices aren't making calls all at the same time. */
-	wait = (rand() * MAX_START_DELAY_US)/RAND_MAX;
+	/* Pause each new thread at least 100ms between initialising
+	 * so the devices aren't making calls all at the same time. */
+	wait = thr->id * MAX_START_DELAY_US;
 	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
 	usleep(wait);
 

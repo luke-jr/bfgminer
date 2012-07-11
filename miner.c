@@ -4022,6 +4022,20 @@ static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64
 	return false;
 }
 
+static void mt_disable(struct thr_info *mythr, const int thr_id,
+		       struct device_api *api)
+{
+	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
+	mythr->rolling = mythr->cgpu->rolling = 0;
+	applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
+	thread_reportout(mythr);
+	tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+	thread_reportin(mythr);
+	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
+	if (api->thread_enable)
+		api->thread_enable(mythr);
+}
+
 void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -4037,8 +4051,8 @@ void *miner_thread(void *userdata)
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff = {0, 0};
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
-	unsigned long long hashes_done = 0;
-	unsigned long long hashes;
+	int64_t hashes_done = 0;
+	int64_t hashes;
 	struct work *work = make_work();
 	const time_t request_interval = opt_scantime * 2 / 3 ? : 1;
 	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
@@ -4120,23 +4134,7 @@ void *miner_thread(void *userdata)
 
 			gettimeofday(&getwork_start, NULL);
 
-			if (unlikely(mythr->work_restart)) {
-
-				/* Apart from device_thread 0, we stagger the
-				 * starting of every next thread to try and get
-				 * all devices busy before worrying about
-				 * getting work for their extra threads */
-				if (!primary) {
-					struct timespec rgtp;
-
-					rgtp.tv_sec = 0;
-					rgtp.tv_nsec = 250 * mythr->device_thread * 1000000;
-					nanosleep(&rgtp, NULL);
-				}
-				break;
-			}
-
-			if (unlikely(!hashes)) {
+			if (unlikely(hashes == -1)) {
 				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
 				cgpu->deven = DEV_DISABLED;
 
@@ -4144,7 +4142,7 @@ void *miner_thread(void *userdata)
 				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
 				cgpu->thread_zero_hash_count++;
 
-				goto disabled;
+				mt_disable(mythr, thr_id, api);
 			}
 
 			hashes_done += hashes;
@@ -4179,22 +4177,21 @@ void *miner_thread(void *userdata)
 			}
 
 			if (unlikely((long)sdiff.tv_sec < cycle)) {
+				int mult;
+
 				if (likely(!api->can_limit_work || max_nonce == 0xffffffff))
 					continue;
 
-				{
-					int mult = 1000000 / ((sdiff.tv_usec + 0x400) / 0x400) + 0x10;
-					mult *= cycle;
-					if (max_nonce > (0xffffffff * 0x400) / mult)
-						max_nonce = 0xffffffff;
-					else
-						max_nonce = (max_nonce * mult) / 0x400;
-				}
-			} else if (unlikely(sdiff.tv_sec > cycle) && api->can_limit_work) {
+				mult = 1000000 / ((sdiff.tv_usec + 0x400) / 0x400) + 0x10;
+				mult *= cycle;
+				if (max_nonce > (0xffffffff * 0x400) / mult)
+					max_nonce = 0xffffffff;
+				else
+					max_nonce = (max_nonce * mult) / 0x400;
+			} else if (unlikely(sdiff.tv_sec > cycle) && api->can_limit_work)
 				max_nonce = max_nonce * cycle / sdiff.tv_sec;
-			} else if (unlikely(sdiff.tv_usec > 100000) && api->can_limit_work) {
+			else if (unlikely(sdiff.tv_usec > 100000) && api->can_limit_work)
 				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
-			}
 
 			timersub(&tv_end, &tv_lastupdate, &diff);
 			if (diff.tv_sec >= opt_log_interval) {
@@ -4203,17 +4200,23 @@ void *miner_thread(void *userdata)
 				tv_lastupdate = tv_end;
 			}
 
-			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED)) {
-				applog(LOG_WARNING, "Thread %d being disabled", thr_id);
-disabled:
-				mythr->rolling = mythr->cgpu->rolling = 0;
-				applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
-				thread_reportout(mythr);
-				tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
-				thread_reportin(mythr);
-				applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
-				if (api->thread_enable) api->thread_enable(mythr);
+			if (unlikely(mythr->work_restart)) {
+				/* Apart from device_thread 0, we stagger the
+				 * starting of every next thread to try and get
+				 * all devices busy before worrying about
+				 * getting work for their extra threads */
+				if (!primary) {
+					struct timespec rgtp;
+
+					rgtp.tv_sec = 0;
+					rgtp.tv_nsec = 250 * mythr->device_thread * 1000000;
+					nanosleep(&rgtp, NULL);
+				}
+				break;
 			}
+
+			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+				mt_disable(mythr, thr_id, api);
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
 		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
