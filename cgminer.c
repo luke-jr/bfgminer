@@ -4146,22 +4146,21 @@ void *miner_thread(void *userdata)
 			}
 
 			if (unlikely((long)sdiff.tv_sec < cycle)) {
+				int mult;
+
 				if (likely(!api->can_limit_work || max_nonce == 0xffffffff))
 					continue;
 
-				{
-					int mult = 1000000 / ((sdiff.tv_usec + 0x400) / 0x400) + 0x10;
-					mult *= cycle;
-					if (max_nonce > (0xffffffff * 0x400) / mult)
-						max_nonce = 0xffffffff;
-					else
-						max_nonce = (max_nonce * mult) / 0x400;
-				}
-			} else if (unlikely(sdiff.tv_sec > cycle) && api->can_limit_work) {
+				mult = 1000000 / ((sdiff.tv_usec + 0x400) / 0x400) + 0x10;
+				mult *= cycle;
+				if (max_nonce > (0xffffffff * 0x400) / mult)
+					max_nonce = 0xffffffff;
+				else
+					max_nonce = (max_nonce * mult) / 0x400;
+			} else if (unlikely(sdiff.tv_sec > cycle) && api->can_limit_work)
 				max_nonce = max_nonce * cycle / sdiff.tv_sec;
-			} else if (unlikely(sdiff.tv_usec > 100000) && api->can_limit_work) {
+			else if (unlikely(sdiff.tv_usec > 100000) && api->can_limit_work)
 				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
-			}
 
 			timersub(&tv_end, &tv_lastupdate, &diff);
 			if (diff.tv_sec >= opt_log_interval) {
