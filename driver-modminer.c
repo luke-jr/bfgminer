@@ -447,6 +447,10 @@ modminer_process_results(struct thr_info*thr)
 				++state->good_share_counter;
 				submit_nonce(thr, work, nonce);
 			}
+			else
+			if (unlikely((!state->good_share_counter) && nonce == 0xffffff00))
+				// Firmware returns 0xffffff00 immediately if we set clockspeed too high; but it's not a hw error and shouldn't affect future downclocking
+				modminer_reduce_clock(thr, true);
 			else {
 				++hw_errors;
 				if (++modminer->hw_errors * 100 > 1000 + state->good_share_counter)
