@@ -437,6 +437,7 @@ static uint64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 				bitforce->sleep_ms *= 5;
+				bitforce->kname = "Single";
 		}
 			
 		submit_nonce(thr, work, nonce);
