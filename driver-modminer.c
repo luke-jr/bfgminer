@@ -443,7 +443,10 @@ modminer_process_results(struct thr_info*thr)
 			state->no_nonce_counter = 0;
 			bad = !test_nonce(work, nonce);
 			if (!bad)
+			{
+				++state->good_share_counter;
 				submit_nonce(thr, work, nonce);
+			}
 			else {
 				++hw_errors;
 				if (++modminer->hw_errors * 100 > 1000 + state->good_share_counter)
