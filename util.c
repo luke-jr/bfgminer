@@ -694,9 +694,11 @@ void nmsleep(unsigned int msecs)
 {
 	struct timespec twait, tleft;
 	int ret;
+	ldiv_t d;
 
-	tleft.tv_sec = msecs / 1000;
-	tleft.tv_nsec = (uint64_t)(msecs * 1000000) - (uint64_t)(twait.tv_sec / 1000000000);
+	d = ldiv(msecs, 1000);
+	tleft.tv_sec = d.quot;
+	tleft.tv_nsec = d.rem * 1000000;
 	do {
 		twait.tv_sec = tleft.tv_sec;
 		twait.tv_nsec = tleft.tv_nsec;
