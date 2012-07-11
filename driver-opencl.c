@@ -1355,7 +1355,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	int64_t hashes;
 
 	/* This finish flushes the readbuffer set with CL_FALSE later */
-	gettimeofday(&gpu->tv_gpustart, NULL);
 	clFinish(clState->commandQueue);
 	gettimeofday(&gpu->tv_gpuend, NULL);
 
@@ -1410,6 +1409,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		memset(thrdata->res, 0, BUFFERSIZE);
 		clFinish(clState->commandQueue);
 	}
+
+	gettimeofday(&gpu->tv_gpustart, NULL);
 
 	if (clState->goffset) {
 		size_t global_work_offset[1];
