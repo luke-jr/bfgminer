@@ -4101,22 +4101,6 @@ void *miner_thread(void *userdata)
 
 			gettimeofday(&getwork_start, NULL);
 
-			if (unlikely(mythr->work_restart)) {
-
-				/* Apart from device_thread 0, we stagger the
-				 * starting of every next thread to try and get
-				 * all devices busy before worrying about
-				 * getting work for their extra threads */
-				if (!primary) {
-					struct timespec rgtp;
-
-					rgtp.tv_sec = 0;
-					rgtp.tv_nsec = 250 * mythr->device_thread * 1000000;
-					nanosleep(&rgtp, NULL);
-				}
-				break;
-			}
-
 			if (unlikely(!hashes)) {
 				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
 				cgpu->deven = DEV_DISABLED;
@@ -4181,6 +4165,21 @@ void *miner_thread(void *userdata)
 				hashmeter(thr_id, &diff, hashes_done);
 				hashes_done = 0;
 				tv_lastupdate = tv_end;
+			}
+
+			if (unlikely(mythr->work_restart)) {
+				/* Apart from device_thread 0, we stagger the
+				 * starting of every next thread to try and get
+				 * all devices busy before worrying about
+				 * getting work for their extra threads */
+				if (!primary) {
+					struct timespec rgtp;
+
+					rgtp.tv_sec = 0;
+					rgtp.tv_nsec = 250 * mythr->device_thread * 1000000;
+					nanosleep(&rgtp, NULL);
+				}
+				break;
 			}
 
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
