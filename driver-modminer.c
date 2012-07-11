@@ -142,7 +142,7 @@ modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 fd_set fds;
 	char buf[0x100];
 	unsigned char *ubuf = (unsigned char*)buf;
-	unsigned long len;
+	unsigned long len, flen;
 	char *p;
 	const char *fwfile = BITSTREAM_FILENAME;
 	char fpgaid = 4;  // "all FPGAs"
@@ -183,6 +183,7 @@ fd_set fds;
 	if (1 != fread(buf, 4, 1, f))
 		bailout(LOG_ERR, "Error reading ModMiner firmware (data len)");
 	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
+	flen = len;
 	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
 
 	int fd = modminer->device_fd;
@@ -198,12 +199,19 @@ fd_set fds;
 		bailout2(LOG_ERR, "%s %u: Error programming %s (cmd)", modminer->api->name, modminer->device_id, modminer->device_path);
 	status_read("cmd reply");
 	ssize_t buflen;
+	time_t nextstatus = time(NULL) + opt_log_interval, now;
 	while (len) {
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
 			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", modminer->api->name, modminer->device_id, modminer->device_path, len);
 		if (write(fd, buf, buflen) != buflen)
 			bailout2(LOG_ERR, "%s %u: Error programming %s (data)", modminer->api->name, modminer->device_id,  modminer->device_path);
+		time(&now);
+		if (now >= nextstatus)
+		{
+			nextstatus = now + opt_log_interval;
+			applog(LOG_WARNING, "%s %u: Programming %s... %d%% complete...", modminer->api->name, modminer->device_id, modminer->device_path, 100 - ((len * 100) / flen));
+		}
 		status_read("status");
 		len -= buflen;
 	}
