@@ -1983,6 +1983,9 @@ static void __kill_work(void)
 	struct thr_info *thr;
 	int i;
 
+	if (!successful_connect)
+		return;
+
 	applog(LOG_INFO, "Received kill message");
 
 	applog(LOG_DEBUG, "Killing off watchpool thread");
