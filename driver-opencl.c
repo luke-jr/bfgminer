@@ -1386,7 +1386,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
-		return 0;
+		return -1;
 	}
 
 	/* MAXBUFFERS entry is used as a flag to say nonces exist */
@@ -1396,7 +1396,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 				BUFFERSIZE, blank_res, 0, NULL, NULL);
 		if (unlikely(status != CL_SUCCESS)) {
 			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
-			return 0;
+			return -1;
 		}
 		if (unlikely(thrdata->last_work)) {
 			applog(LOG_DEBUG, "GPU %d found something in last work?", gpu->device_id);
@@ -1423,14 +1423,14 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 						globalThreads, localThreads, 0,  NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)");
-		return 0;
+		return -1;
 	}
 
 	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 			BUFFERSIZE, thrdata->res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)");
-		return 0;
+		return -1;
 	}
 
 	/* The amount of work scanned can fluctuate when intensity changes
