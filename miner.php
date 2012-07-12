@@ -982,6 +982,9 @@ function showrigs($anss, $headname, $rigname)
 
  foreach ($anss as $rig => $ans)
  {
+	if ($ans == null)
+		continue;
+
 	newrow();
 
 	$when = 0;
@@ -1026,8 +1029,10 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  $count = 0;
  $preverr = count($rigerror);
- foreach ($rigs as $rig)
+ foreach ($rigs as $num => $rig)
  {
+	$anss[$num] = null;
+
 	if (isset($rigerror[$rig]))
 		continue;
 
@@ -1040,7 +1045,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 		if (count($parts) > 2)
 			$name = $parts[2];
 		else
-			$name = $count;
+			$name = $num;
 
 		$ans = api($cmd);
 
@@ -1053,12 +1058,14 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 			$error = null;
 		}
 		else
-			$anss[$count] = $ans;
+		{
+			$anss[$num] = $ans;
+			$count++;
+		}
 	}
-	$count++;
  }
 
- if (count($anss) == 0)
+ if ($count == 0)
  {
 	$rw = '<td>Failed to access any rigs successfully';
 	if ($preverr > 0)
@@ -1085,6 +1092,9 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  foreach ($anss as $rig => $ans)
  {
+	if ($ans == null)
+		continue;
+
 	foreach ($ans as $item => $row)
 	{
 		if ($item == 'STATUS')
@@ -1119,6 +1129,9 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  foreach ($anss as $rig => $ans)
  {
+	if ($ans == null)
+		continue;
+
 	$when = 0;
 	if (isset($ans['STATUS']['When']))
 		$when = $ans['STATUS']['When'];
