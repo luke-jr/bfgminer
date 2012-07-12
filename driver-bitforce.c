@@ -17,6 +17,7 @@
 
 #include "config.h"
 
+#include "compat.h"
 #include "fpgautils.h"
 #include "miner.h"
 
