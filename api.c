@@ -170,7 +170,7 @@ static const char *APIVERSION = "1.14";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
-static const char *INIT = "Initializing";
+static const char *INIT = "Initialising";
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
@@ -1257,16 +1257,23 @@ static void gpustatus(int gpu, bool isjson)
 		else
 			enabled = (char *)NO;
 
-		if (cgpu->status == LIFE_DEAD)
-			status = (char *)DEAD;
-		else if (cgpu->status == LIFE_SICK)
-			status = (char *)SICK;
-		else if (cgpu->status == LIFE_NOSTART)
-			status = (char *)NOSTART;
-		else if (cgpu->status == LIFE_INIT)
-			status = (char *)INIT;
-		else
-			status = (char *)ALIVE;
+		switch(cgpu->status) {
+			case LIFE_DEAD:
+				status = (char *)DEAD;
+				break;
+			case LIFE_SICK:
+				status = (char *)SICK;
+				break;
+			case LIFE_NOSTART:
+				status = (char *)NOSTART;
+				break;
+			case LIFE_INIT:
+				status = (char *)INIT;
+				break;
+			default:
+				status = (char *)ALIVE;
+				break;
+		}
 
 		if (cgpu->dynamic)
 			strcpy(intensity, DYNAMIC);
