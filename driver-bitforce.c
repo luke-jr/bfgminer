@@ -388,14 +388,15 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
 
-		if (!pdevbuf[0])           /* Only return if we got nothing after timeout - there still may be results */
+		if (!pdevbuf[0])	/* Only return if we got nothing after timeout - there still may be results */
 			return 0;
 	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
-		    /* Simple timing adjustment. Allow a few polls to cope with
-		     * OS timer delays being variably reliable. wait_ms will
-		     * always equal sleep_ms when we've waited greater than or
-		     * equal to the result return time.*/
-	        delay_time_ms = bitforce->sleep_ms;
+		/* Simple timing adjustment. Allow a few polls to cope with
+		 * OS timer delays being variably reliable. wait_ms will
+		 * always equal sleep_ms when we've waited greater than or
+		 * equal to the result return time.*/
+		delay_time_ms = bitforce->sleep_ms;
+
 		if (bitforce->wait_ms > bitforce->sleep_ms + (WORK_CHECK_INTERVAL_MS * 2))
 			bitforce->sleep_ms += (bitforce->wait_ms - bitforce->sleep_ms) / 2;
 		else if (bitforce->wait_ms == bitforce->sleep_ms) {
@@ -408,16 +409,16 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		if (delay_time_ms != bitforce->sleep_ms)
 			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 
-        /* Work out the average time taken. Float for calculation, uint for display */
-        bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
-        bitforce->avg_wait_d = (unsigned int) (bitforce->avg_wait_f + 0.5);
+		/* Work out the average time taken. Float for calculation, uint for display */
+		bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
+		bitforce->avg_wait_d = (unsigned int) (bitforce->avg_wait_f + 0.5);
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
 	if (!strncasecmp(&pdevbuf[2], "-", 1))
 		return bitforce->nonces;   /* No valid nonce found */
 	else if (!strncasecmp(pdevbuf, "I", 1))
-		return 0;          /* Device idle */
+		return 0;	/* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
 		return 0;
