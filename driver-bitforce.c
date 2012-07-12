@@ -21,11 +21,15 @@
 #include "miner.h"
 
 #define BITFORCE_SLEEP_MS 500
-#define BITFORCE_TIMEOUT_MS 10000
-#define BITFORCE_LONG_TIMEOUT_MS 15000
+#define BITFORCE_TIMEOUT_S 7
+#define BITFORCE_TIMEOUT_MS (BITFORCE_TIMEOUT_S * 1000)
+#define BITFORCE_LONG_TIMEOUT_S 15
+#define BITFORCE_LONG_TIMEOUT_MS (BITFORCE_LONG_TIMEOUT_S * 1000)
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
 #define MAX_START_DELAY_US 100000
+#define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
+#define TIME_AVG_CONSTANT 8
 
 struct device_api bitforce_api;
 
@@ -88,14 +92,17 @@ static bool bitforce_detect_one(const char *devpath)
 	if (opt_bfl_noncerange) {
 		bitforce->nonce_range = true;
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-	} else
+		bitforce->kname = "Mini-rig";
+	} else {
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS * 5;
+		bitforce->kname = "Single";
+	}
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
-	
+
 	mutex_init(&bitforce->device_mutex);
 
 	return add_cgpu(bitforce);
@@ -172,11 +179,11 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
 
-	biforce_clear_buffer(bitforce);
-
 	mutex_lock(&bitforce->device_mutex);
-	if (fdDev)
+	if (fdDev) {
 		BFclose(fdDev);
+		sleep(5);
+	}
 	bitforce->device_fd = 0;
 
 	fdDev = BFopen(devpath);
@@ -282,6 +289,7 @@ re_send:
 			applog(LOG_WARNING, "BFL%i: Does not support nonce range, disabling", bitforce->device_id);
 			bitforce->nonce_range = false;
 			bitforce->sleep_ms *= 5;
+			bitforce->kname = "Single";
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
@@ -328,6 +336,7 @@ re_send:
 		return false;
 	}
 
+	gettimeofday(&bitforce->work_start_tv, NULL);
 	return true;
 }
 
@@ -336,6 +345,8 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = bitforce->device_fd;
 	unsigned int delay_time_ms;
+	struct timeval elapsed;
+	struct timeval now;
 	char pdevbuf[0x100];
 	char *pnoncebuf;
 	uint32_t nonce;
@@ -343,7 +354,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	if (!fdDev)
 		return -1;
 
-	while (bitforce->wait_ms < BITFORCE_LONG_TIMEOUT_MS) {
+	while (1) {
 		if (unlikely(thr->work_restart))
 			return 0;
 
@@ -351,6 +362,15 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		BFwrite(fdDev, "ZFX", 3);
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
+
+		gettimeofday(&now, NULL);
+		timersub(&now, &bitforce->work_start_tv, &elapsed);
+
+		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
+			applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
+				tv_to_ms(elapsed), BITFORCE_LONG_TIMEOUT_MS);
+			return 0;
+		}
 
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
@@ -361,9 +381,9 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->wait_ms += delay_time_ms;
 	}
 
-	if (bitforce->wait_ms >= BITFORCE_TIMEOUT_MS) {
+	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
 		applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
-		       bitforce->wait_ms, BITFORCE_TIMEOUT_MS);
+			tv_to_ms(elapsed), BITFORCE_TIMEOUT_MS);
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
@@ -387,6 +407,10 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		if (delay_time_ms != bitforce->sleep_ms)
 			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+
+        /* Work out the average time taken. Float for calculation, uint for display */
+        bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
+        bitforce->avg_wait_d = (unsigned int) (bitforce->avg_wait_f + 0.5);
 	}
 
 	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
@@ -412,6 +436,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 				bitforce->sleep_ms *= 5;
+				bitforce->kname = "Single";
 		}
 			
 		submit_nonce(thr, work, nonce);
@@ -490,20 +515,6 @@ static bool bitforce_get_stats(struct cgpu_info *bitforce)
 	return bitforce_get_temp(bitforce);
 }
 
-static bool bitforce_thread_init(struct thr_info *thr)
-{
-	struct cgpu_info *bitforce = thr->cgpu;
-	unsigned int wait;
-
-	/* Pause each new thread a random time between 0-100ms 
-	so the devices aren't making calls all at the same time. */
-	wait = (rand() * MAX_START_DELAY_US)/RAND_MAX;
-	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
-	usleep(wait);
-
-	return true;
-}
-
 static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
@@ -513,6 +524,7 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
 	root = api_add_uint(root, "Sleep Time", &(cgpu->sleep_ms), false);
+	root = api_add_uint(root, "Avg Wait", &(cgpu->avg_wait_d), false);
 
 	return root;
 }
@@ -526,7 +538,6 @@ struct device_api bitforce_api = {
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.thread_prepare = bitforce_thread_prepare,
-	.thread_init = bitforce_thread_init,
 	.scanhash = bitforce_scanhash,
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
