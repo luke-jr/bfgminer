@@ -31,6 +31,9 @@
 #define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
 #define TIME_AVG_CONSTANT 8
 
+#define KNAME_WORK  "full work"
+#define KNAME_RANGE "nonce range"
+
 struct device_api bitforce_api;
 
 #define BFopen(devpath)  serial_open(devpath, 0, -1, true)
@@ -92,10 +95,10 @@ static bool bitforce_detect_one(const char *devpath)
 	if (opt_bfl_noncerange) {
 		bitforce->nonce_range = true;
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-		bitforce->kname = "Mini-rig";
+		bitforce->kname = KNAME_RANGE;
 	} else {
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS * 5;
-		bitforce->kname = "Single";
+		bitforce->kname = KNAME_WORK;
 	}
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
@@ -289,7 +292,7 @@ re_send:
 			applog(LOG_WARNING, "BFL%i: Does not support nonce range, disabling", bitforce->device_id);
 			bitforce->nonce_range = false;
 			bitforce->sleep_ms *= 5;
-			bitforce->kname = "Single";
+			bitforce->kname = KNAME_WORK;
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
@@ -433,7 +436,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 				bitforce->sleep_ms *= 5;
-				bitforce->kname = "Single";
+				bitforce->kname = KNAME_WORK;
 		}
 			
 		submit_nonce(thr, work, nonce);
