@@ -232,8 +232,13 @@ static void *postcalc_hash(void *userdata)
 	pthread_detach(pthread_self());
 
 	for (entry = 0; entry < FOUND; entry++) {
-		if (pcd->res[entry])
-			send_nonce(pcd, pcd->res[entry]);
+		if (pcd->res[entry]) {
+#ifdef USE_SCRYPT
+			if (opt_scrypt)
+				submit_nonce(thr, work, entry);
+			else
+#endif
+				send_nonce(pcd, pcd->res[entry]);
 		nonces++;
 	}
 
