@@ -185,6 +185,7 @@ pthread_mutex_t control_lock;
 
 int hw_errors;
 int total_accepted, total_rejected;
+float total_accepted_weighed;
 int total_getworks, total_stale, total_discarded;
 static int total_queued;
 unsigned int new_blocks;
@@ -1224,6 +1225,8 @@ static bool jobj_binary(const json_t *obj, const char *key,
 
 static bool work_decode(const json_t *val, struct work *work)
 {
+	unsigned char bits = 0, i;
+	
 	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data), true))) {
 		applog(LOG_ERR, "JSON inval data");
 		goto err_out;
@@ -1259,6 +1262,22 @@ static bool work_decode(const json_t *val, struct work *work)
 		applog(LOG_ERR, "JSON inval target");
 		goto err_out;
 	}
+	
+	for (i = 32; i--; )
+	{
+		if (work->target[i])
+		{
+			unsigned char j = ~work->target[i];
+			while (j & 0x80)
+			{
+				++bits;
+				j <<= 1;
+			}
+			break;
+		}
+		bits += 8;
+	}
+	work->difficulty = pow(2, bits - 32);
 
 	memset(work->hash, 0, sizeof(work->hash));
 
@@ -1444,7 +1463,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		(char*[]){cHr, aHr, uHr},
 		1e6*cgpu->rolling,
 		1e6*cgpu->total_mhashes / total_secs,
-		utility_to_hashrate(cgpu->utility),
+		utility_to_hashrate(cgpu->utility_diff1),
 		H2B_SPACED);
 	tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
@@ -1518,6 +1537,7 @@ static void curses_print_devstatus(int thr_id)
 	char logline[255];
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility_diff1 = cgpu->accepted_weighed / ( total_secs ?: 1 ) * 60;
 
 	/* Check this isn't out of the window size */
 	if (wmove(statuswin,devcursor + cgpu->cgminer_id, 0) == ERR)
@@ -1536,7 +1556,7 @@ static void curses_print_devstatus(int thr_id)
 		(char*[]){cHr, aHr, uHr},
 		1e6*cgpu->rolling,
 		1e6*cgpu->total_mhashes / total_secs,
-		utility_to_hashrate(cgpu->utility),
+		utility_to_hashrate(cgpu->utility_diff1),
 		H2B_SHORT);
 	if (cgpu->status == LIFE_DEAD)
 		wprintw(statuswin, "DEAD ");
@@ -1800,7 +1820,9 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	 * same time is zero so there is no point adding extra locking */
 	if (json_is_true(res)) {
 		cgpu->accepted++;
+		cgpu->accepted_weighed += work->difficulty;
 		total_accepted++;
+		total_accepted_weighed += work->difficulty;
 		pool->accepted++;
 		pool->seq_rejects = 0;
 		cgpu->last_share_pool = pool->pool_no;
@@ -1888,6 +1910,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	}
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility_diff1 = cgpu->accepted_weighed / ( total_secs ?: 1 ) * 60;
 
 	if (!opt_realquiet)
 		print_status(thr_id);
@@ -3559,7 +3582,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		(char*[]){cHr, aHr, uHr},
 		1e6*rolling,
 		1e6*total_mhashes_done / total_secs,
-		utility_to_hashrate(utility),
+		utility_to_hashrate(total_accepted_weighed / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 	sprintf(statusline, "%s%ds:%s avg:%s u:%s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
