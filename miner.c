@@ -181,6 +181,7 @@ pthread_cond_t restart_cond;
 
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
+static struct timeval miner_started;
 
 pthread_mutex_t control_lock;
 
@@ -1508,13 +1509,29 @@ static void text_print_status(int thr_id)
 static void curses_print_status(void)
 {
 	struct pool *pool = current_pool();
+	struct timeval now, tv;
 
 	wattron(statuswin, A_BOLD);
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
-#ifdef WANT_CPUMINE
-	if (opt_n_threads)
-		wprintw(statuswin, " CPU Algo: %s", algo_names[opt_algo]);
-#endif
+	if (!gettimeofday(&now, NULL))
+	{
+		unsigned int days, hours;
+		div_t d;
+		
+		timersub(&now, &miner_started, &tv);
+		d = div(tv.tv_sec, 86400);
+		days = d.quot;
+		d = div(d.rem, 3600);
+		hours = d.quot;
+		d = div(d.rem, 60);
+		wprintw(statuswin, " - [%3u day%c %02d:%02d:%02d]"
+			, days
+			, (days == 1) ? ' ' : 's'
+			, hours
+			, d.quot
+			, d.rem
+		);
+	}
 	wattroff(statuswin, A_BOLD);
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
@@ -5640,6 +5657,7 @@ begin_bench:
 	
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
+	miner_started = total_tv_start;
 	get_datestamp(datestamp, &total_tv_start);
 
 	// Start threads
