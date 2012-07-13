@@ -497,7 +497,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 	if (ret)
 		ret = bitforce_get_result(thr, work);
 
-	if (!ret) {
+	if (ret == -1) {
 		ret = 0;
 		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
 		bitforce->device_last_not_well = time(NULL);
