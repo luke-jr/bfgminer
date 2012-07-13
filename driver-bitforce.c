@@ -39,7 +39,7 @@ static void BFgets(char *buf, size_t bufLen, int fd)
 {
 	do
 		--bufLen;
-	while (likely(bufLen && read(fd, buf, 1) && (buf++)[0] != '\n'));
+	while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
 
 	buf[0] = '\0';
 }
