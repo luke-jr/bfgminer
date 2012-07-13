@@ -3971,6 +3971,9 @@ bool hashtest(const struct work *work)
 
 bool test_nonce(struct work *work, uint32_t nonce)
 {
+	if (opt_scrypt)
+		return true;
+
 	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
 	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
 	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
