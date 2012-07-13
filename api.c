@@ -1262,18 +1262,18 @@ static const char*
 status2str(enum alive status)
 {
 	switch (status) {
-	case LIFE_WELL:
-		return ALIVE;
-	case LIFE_SICK:
-		return SICK;
-	case LIFE_DEAD:
-		return DEAD;
-	case LIFE_NOSTART:
-		return NOSTART;
-	case LIFE_INIT:
-		return INIT;
-	default:
-		return UNKNOWN;
+		case LIFE_WELL:
+			return ALIVE;
+		case LIFE_SICK:
+			return SICK;
+		case LIFE_DEAD:
+			return DEAD;
+		case LIFE_NOSTART:
+			return NOSTART;
+		case LIFE_INIT:
+			return INIT;
+		default:
+			return UNKNOWN;
 	}
 }
 
@@ -1361,6 +1361,7 @@ static void gpustatus(int gpu, bool isjson)
         devstatus_an(&gpus[gpu], isjson);
 }
 #endif
+
 #ifdef HAVE_AN_FPGA
 static void pgastatus(int pga, bool isjson)
 {
