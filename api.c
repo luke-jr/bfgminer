@@ -1231,6 +1231,26 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 		strcat(buf, JSON_CLOSE);
 	strcat(io_buffer, buf);
 }
+
+static const char*
+status2str(enum alive status)
+{
+	switch (status) {
+		case LIFE_WELL:
+			return ALIVE;
+		case LIFE_SICK:
+			return SICK;
+		case LIFE_DEAD:
+			return DEAD;
+		case LIFE_NOSTART:
+			return NOSTART;
+		case LIFE_INIT:
+			return INIT;
+		default:
+			return UNKNOWN;
+	}
+}
+
 #ifdef HAVE_OPENCL
 static void gpustatus(int gpu, bool isjson)
 {
@@ -1257,23 +1277,7 @@ static void gpustatus(int gpu, bool isjson)
 		else
 			enabled = (char *)NO;
 
-		switch(cgpu->status) {
-			case LIFE_DEAD:
-				status = (char *)DEAD;
-				break;
-			case LIFE_SICK:
-				status = (char *)SICK;
-				break;
-			case LIFE_NOSTART:
-				status = (char *)NOSTART;
-				break;
-			case LIFE_INIT:
-				status = (char *)INIT;
-				break;
-			default:
-				status = (char *)ALIVE;
-				break;
-		}
+		status = (char *)status2str(cgpu->status);
 
 		if (cgpu->dynamic)
 			strcpy(intensity, DYNAMIC);
@@ -1312,6 +1316,7 @@ static void gpustatus(int gpu, bool isjson)
 	}
 }
 #endif
+
 #ifdef HAVE_AN_FPGA
 static void pgastatus(int pga, bool isjson)
 {
@@ -1365,16 +1370,7 @@ static void pgastatus(int pga, bool isjson)
 		else
 			enabled = (char *)NO;
 
-		if (cgpu->status == LIFE_DEAD)
-			status = (char *)DEAD;
-		else if (cgpu->status == LIFE_SICK)
-			status = (char *)SICK;
-		else if (cgpu->status == LIFE_NOSTART)
-			status = (char *)NOSTART;
-		else if (cgpu->status == LIFE_INIT)
-			status = (char *)INIT;
-		else
-			status = (char *)ALIVE;
+		status = (char *)status2str(cgpu->status);
 
 		root = api_add_int(root, "PGA", &pga, false);
 		root = api_add_string(root, "Name", cgpu->api->name, false);
