@@ -733,8 +733,10 @@ built:
 	}
 
 #ifdef USE_SCRYPT
-	if (opt_scrypt)
+	if (opt_scrypt) {
 		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
+		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 402653184, NULL, &status);
+	}
 #endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
