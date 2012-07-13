@@ -672,6 +672,9 @@ typedef struct {
 	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
 	cl_uint zeroA, zeroB;
 	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
+#ifdef USE_SCRYPT
+	unsigned char *midstate;
+#endif
 } dev_blk_ctx;
 #else
 typedef struct {

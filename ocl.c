@@ -536,7 +536,7 @@ build:
 	char *CompilerOptions = calloc(1, 256);
 
 	if (opt_scrypt) {
-		sprintf(CompilerOptions, "-D LOOKUP_GAP=2 -D CONCURRENT_THREADS=6144 -D WORKSIZE=%d",
+		sprintf(CompilerOptions, "-D LOOKUP_GAP=2 -D CONCURRENT_THREADS=512 -D WORKSIZE=%d",
 			(int)clState->wsize);
 	} else {
 		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
@@ -732,6 +732,10 @@ built:
 		return NULL;
 	}
 
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
+#endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);

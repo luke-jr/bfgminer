@@ -995,8 +995,25 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 #ifdef USE_SCRYPT
 static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
+	cl_uint4 *midstate = (cl_uint4 *)blk->midstate;
+	cl_kernel *kernel = &clState->kernel;
+	unsigned int num = 0;
 	cl_int status = 0;
+	int i;
 
+	CL_SET_ARG(clState->CLbuffer0);
+	CL_SET_ARG(clState->outputBuffer);
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_VARG(4, &midstate[0]);
+	CL_SET_VARG(4, &midstate[16]);
+
+#if 0
+	clSetKernelArg(clState->kernel,0,sizeof(cl_mem), &clState->CLbuffer[0]);
+	clSetKernelArg(clState->kernel,1,sizeof(cl_mem), &clState->CLbuffer[1]);
+	clSetKernelArg(clState->kernel,2,sizeof(cl_mem), &clState->padbuffer8);
+	clSetKernelArg(clState->kernel,3,sizeof(cl_uint4), &midstate[0]);
+	clSetKernelArg(clState->kernel,4,sizeof(cl_uint4), &midstate[16]);
+#endif
 	return status;
 }
 #endif
@@ -1330,6 +1347,10 @@ static bool opencl_thread_init(struct thr_info *thr)
 		return false;
 	}
 
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, BUFFERSIZE, blank_res, 0, NULL,NULL);
+#endif
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
@@ -1456,7 +1477,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 			BUFFERSIZE, thrdata->res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)");
+		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);
 		return -1;
 	}
 
