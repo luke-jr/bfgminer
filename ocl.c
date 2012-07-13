@@ -354,8 +354,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char numbuf[10];
 
 	if (gpus[gpu].kernel == KL_NONE) {
-		/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
-		if (!strstr(name, "Tahiti") &&
+		if (opt_scrypt) {
+			applog(LOG_INFO, "Selecting scrypt kernel");
+			clState->chosen_kernel = KL_SCRYPT;
+		} else if (!strstr(name, "Tahiti") &&
+			/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
 			(strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
 			 strstr(vbuff, "851.4") ||  // Windows 64 bit ""
 			 strstr(vbuff, "831.4") ||
@@ -406,6 +409,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		case KL_DIAKGCN:
 			strcpy(filename, DIAKGCN_KERNNAME".cl");
 			strcpy(binaryfilename, DIAKGCN_KERNNAME);
+			break;
+		case KL_SCRYPT:
+			strcpy(filename, SCRYPT_KERNNAME".cl");
+			strcpy(binaryfilename, SCRYPT_KERNNAME);
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_DIABLO:
@@ -528,8 +535,13 @@ build:
 	/* create a cl program executable for all the devices specified */
 	char *CompilerOptions = calloc(1, 256);
 
-	sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
-		(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
+	if (opt_scrypt) {
+		sprintf(CompilerOptions, "-D LOOKUP_GAP=2 -D CONCURRENT_THREADS=6144 -D WORKSIZE=%d",
+			(int)clState->wsize);
+	} else {
+		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
+			(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
+	}
 	applog(LOG_DEBUG, "Setting worksize to %d", clState->wsize);
 	if (clState->vwidth > 1)
 		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);

@@ -137,7 +137,7 @@ static enum cl_kernels select_kernel(char *arg)
 		return KL_POCLBM;
 	if (!strcmp(arg, "phatk"))
 		return KL_PHATK;
-#ifdef HAVE_SCRYPT
+#ifdef USE_SCRYPT
 	if (!strcmp(arg, "scrypt"))
 		return KL_SCRYPT;
 #endif
@@ -150,6 +150,8 @@ char *set_kernel(char *arg)
 	int i, device = 0;
 	char *nextptr;
 
+	if (opt_scrypt)
+		return "Cannot use sha256 kernel with scrypt";
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set kernel";
@@ -990,7 +992,7 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	return status;
 }
 
-#ifdef HAVE_SCRYPT
+#ifdef USE_SCRYPT
 static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
 	cl_int status = 0;
@@ -1254,25 +1256,25 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	if (!cgpu->kname)
 	{
 		switch (clStates[i]->chosen_kernel) {
-		case KL_DIABLO:
-			cgpu->kname = "diablo";
-			break;
-		case KL_DIAKGCN:
-			cgpu->kname = "diakgcn";
-			break;
-		case KL_PHATK:
-			cgpu->kname = "phatk";
-			break;
-#ifdef HAVE_SCRYPT
-		case KL_SCRYPT:
-			cgpu->kname = "scrypt";
-			break;
+			case KL_DIABLO:
+				cgpu->kname = "diablo";
+				break;
+			case KL_DIAKGCN:
+				cgpu->kname = "diakgcn";
+				break;
+			case KL_PHATK:
+				cgpu->kname = "phatk";
+				break;
+#ifdef USE_SCRYPT
+			case KL_SCRYPT:
+				cgpu->kname = "scrypt";
+				break;
 #endif
-		case KL_POCLBM:
-			cgpu->kname = "poclbm";
-			break;
-		default:
-			break;
+			case KL_POCLBM:
+				cgpu->kname = "poclbm";
+				break;
+			default:
+				break;
 		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
@@ -1309,7 +1311,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 		case KL_DIAKGCN:
 			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
 			break;
-#ifdef HAVE_SCRYPT
+#ifdef USE_SCRYPT
 		case KL_SCRYPT:
 			thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
 			break;

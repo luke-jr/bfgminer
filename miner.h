@@ -262,7 +262,7 @@ enum cl_kernels {
 	KL_PHATK,
 	KL_DIAKGCN,
 	KL_DIABLO,
-#ifdef HAVE_SCRYPT
+#ifdef USE_SCRYPT
 	KL_SCRYPT,
 #endif
 };
@@ -620,6 +620,11 @@ extern bool use_syslog;
 extern struct thr_info *thr_info;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
+#ifdef USE_SCRYPT
+extern bool opt_scrypt;
+#else
+#define opt_scrypt (0)
+#endif
 extern double total_secs;
 extern int mining_threads;
 extern struct cgpu_info *cpus;
