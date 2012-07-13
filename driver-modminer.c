@@ -549,7 +549,7 @@ modminer_scanhash(struct thr_info*thr, struct work*work, int64_t __maybe_unused 
 		hashes = modminer_process_results(thr);
 		if (work_restart(thr)) {
 			state->work_running = false;
-			return 0;
+			return hashes;
 		}
 	} else
 		state->work_running = true;
