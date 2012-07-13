@@ -339,11 +339,12 @@ dedicated to this program,
 	http://forum.bitcoin.org/index.php?topic=28402.0
 
 The output line shows the following:
-(5s):1713.6 (avg):1707.8 Mh/s | Q:301  A:729  R:8  HW:0  E:242%  U:22.53/m
+5s:1713.6 avg:1707.8 u:1710.2 Mh/s | Q:301  A:729  R:8  HW:0  E:242%  U:22.53/m
 
 Each column is as follows:
 5s:  A 5 second exponentially decaying average hash rate
 avg: An all time average hash rate
+u:   An all time average hash rate based on actual accepted shares
 Q:   The number of requested (Queued) work items from the pools
 A:   The number of Accepted shares
 R:   The number of Rejected shares
@@ -351,13 +352,14 @@ HW:  The number of HardWare errors
 E:   The Efficiency defined as number of shares returned / work item
 U:   The Utility defined as the number of shares / minute
 
- GPU 1: 73.5C 2551RPM | 427.3/443.0Mh/s | A:8 R:0 HW:0 U:4.39/m
+ GPU 1: 73.5C 2551RPM | 427.3/443.0/442.1Mh/s | A:8 R:0 HW:0 U:4.39/m
 
 Each column is as follows:
 Temperature (if supported)
 Fanspeed (if supported)
 A 5 second exponentially decaying average hash rate
 An all time average hash rate
+An all time average hash rate based on actual accepted shares
 The number of accepted shares
 The number of rejected shares
 The number of hardware erorrs

@@ -1351,6 +1351,12 @@ void tailsprintf(char *f, const char *fmt, ...)
 	va_end(ap);
 }
 
+static float
+utility_to_hashrate(double utility)
+{
+	return utility * 0x4444444;
+}
+
 static const char*_unitchar = "kMGTPEZY?";
 
 static void
@@ -1375,9 +1381,16 @@ enum h2bs_fmt {
 static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
 static char*
-hashrate_to_bufstr(char*buf, float hashrate, unsigned char unit, enum h2bs_fmt fmt)
+hashrate_to_bufstr(char*buf, float hashrate, signed char unitin, enum h2bs_fmt fmt)
 {
-	unsigned char prec, i, ucp;
+	unsigned char prec, i, ucp, unit;
+	if (unitin == -1)
+	{
+		unit = 0;
+		hashrate_pick_unit(hashrate, &unit);
+	}
+	else
+		unit = unitin;
 	
 	i = 5;
 	switch (fmt) {
@@ -1406,15 +1419,17 @@ hashrate_to_bufstr(char*buf, float hashrate, unsigned char unit, enum h2bs_fmt f
 }
 
 static void
-dual_hashrate_sstr(char**out, float current, float average, enum h2bs_fmt longfmt)
+ti_hashrate_bufstr(char**out, float current, float average, float sharebased, enum h2bs_fmt longfmt)
 {
-	char *bufA = out[0], *bufB = out[1];
 	unsigned char unit = 0;
 	
 	hashrate_pick_unit(current, &unit);
 	hashrate_pick_unit(average, &unit);
-	hashrate_to_bufstr(bufA, current, unit, H2B_NOUNIT);
-	hashrate_to_bufstr(bufB, average, unit, longfmt);
+	hashrate_pick_unit(sharebased, &unit);
+	
+	hashrate_to_bufstr(out[0], current, unit, H2B_NOUNIT);
+	hashrate_to_bufstr(out[1], average, unit, H2B_NOUNIT);
+	hashrate_to_bufstr(out[2], sharebased, unit, longfmt);
 }
 
 static void get_statline(char *buf, struct cgpu_info *cgpu)
@@ -1424,15 +1439,17 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->api->get_statline_before(buf, cgpu);
 	else
 		tailsprintf(buf, "               | ");
-	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_SPACED]];
-	dual_hashrate_sstr(
-		(char*[2]){cHr, aHr},
+	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
+	ti_hashrate_bufstr(
+		(char*[]){cHr, aHr, uHr},
 		1e6*cgpu->rolling,
 		1e6*cgpu->total_mhashes / total_secs,
+		utility_to_hashrate(cgpu->utility),
 		H2B_SPACED);
-	tailsprintf(buf, "(%ds):%s (avg):%s | A:%d R:%d HW:%d U:%.1f/m",
+	tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
 		cHr, aHr,
+		uHr,
 		cgpu->accepted,
 		cgpu->rejected,
 		cgpu->hw_errors,
@@ -1514,11 +1531,12 @@ static void curses_print_devstatus(int thr_id)
 	else
 		wprintw(statuswin, "               | ");
 
-	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_SHORT]];
-	dual_hashrate_sstr(
-		(char*[2]){cHr, aHr},
+	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SHORT]];
+	ti_hashrate_bufstr(
+		(char*[]){cHr, aHr, uHr},
 		1e6*cgpu->rolling,
 		1e6*cgpu->total_mhashes / total_secs,
+		utility_to_hashrate(cgpu->utility),
 		H2B_SHORT);
 	if (cgpu->status == LIFE_DEAD)
 		wprintw(statuswin, "DEAD ");
@@ -1534,8 +1552,9 @@ static void curses_print_devstatus(int thr_id)
 	adj_width(cgpu->rejected, &rwidth);
 	adj_width(cgpu->hw_errors, &hwwidth);
 	adj_width(cgpu->utility, &uwidth);
-	wprintw(statuswin, "/%s | A:%*d R:%*d HW:%*d U:%*.2f/m",
+	wprintw(statuswin, "/%s/%s | A:%*d R:%*d HW:%*d U:%*.2f/m",
 			aHr,
+			uHr,
 			awidth, cgpu->accepted,
 			rwidth, cgpu->rejected,
 			hwwidth, cgpu->hw_errors,
@@ -3459,7 +3478,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	bool showlog = false;
-	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_SPACED]];
+	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
 
 	/* Update the last time this thread reported in */
 	if (thr_id >= 0) {
@@ -3536,15 +3555,17 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
-	dual_hashrate_sstr(
-		(char*[2]){cHr, aHr},
+	ti_hashrate_bufstr(
+		(char*[]){cHr, aHr, uHr},
 		1e6*rolling,
 		1e6*total_mhashes_done / total_secs,
+		utility_to_hashrate(utility),
 		H2B_SPACED);
-	sprintf(statusline, "%s(%ds):%s (avg):%s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
+		uHr,
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
 
 
