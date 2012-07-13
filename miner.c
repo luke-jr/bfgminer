@@ -1251,6 +1251,7 @@ static bool work_decode(const json_t *val, struct work *work)
 
 	if (likely(!jobj_binary(val, "midstate",
 			 work->midstate, sizeof(work->midstate), false))) {
+		applog(LOG_DEBUG, "Calculating midstate locally");
 		// Calculate it ourselves
 		union {
 			unsigned char c[64];
