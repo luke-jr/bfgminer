@@ -428,8 +428,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		gpus[gpu].vwidth = preferred_vwidth;
 	}
 
-	if ((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO || clState->chosen_kernel == KL_DIAKGCN) &&
-		clState->vwidth == 1 && clState->hasOpenCL11plus)
+	if (((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO || clState->chosen_kernel == KL_DIAKGCN) &&
+		clState->vwidth == 1 && clState->hasOpenCL11plus) || opt_scrypt)
 			clState->goffset = true;
 
 	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
@@ -536,7 +536,7 @@ build:
 	char *CompilerOptions = calloc(1, 256);
 
 	if (opt_scrypt) {
-		sprintf(CompilerOptions, "-D LOOKUP_GAP=2 -D CONCURRENT_THREADS=6144 -D WORKSIZE=%d",
+		sprintf(CompilerOptions, "-D LOOKUP_GAP=1 -D CONCURRENT_THREADS=1 -D WORKSIZE=%d",
 			(int)clState->wsize);
 	} else {
 		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
@@ -735,7 +735,7 @@ built:
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
 		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
-		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 402653184, NULL, &status);
+		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 131072, NULL, &status);
 	}
 #endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);

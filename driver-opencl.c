@@ -1470,7 +1470,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
 						globalThreads, localThreads, 0,  NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)");
+		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
 		return -1;
 	}
 
