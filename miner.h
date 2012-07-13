@@ -332,12 +332,14 @@ struct cgpu_info {
 
 	enum dev_enable deven;
 	int accepted;
+	double accepted_weighed;
 	int rejected;
 	int hw_errors;
 	unsigned int low_count;
 	double rolling;
 	double total_mhashes;
 	double utility;
+	double utility_diff1;
 	enum alive status;
 	char init[40];
 	struct timeval last_message_tv;
@@ -763,6 +765,8 @@ struct work {
 	unsigned int	work_block;
 	int		id;
 	UT_hash_handle hh;
+	
+	float		difficulty;
 
 	time_t share_found_time;
 };
