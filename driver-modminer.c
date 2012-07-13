@@ -108,6 +108,7 @@ modminer_detect()
 
 #define bailout(...)  return _bailout(-1, modminer, __VA_ARGS__);
 #define bailout2(...)  return _bailout(fd, modminer, __VA_ARGS__);
+#define bailout3(...)  _bailout(fd, modminer, __VA_ARGS__);
 
 #define check_magic(L)  do {  \
 	if (1 != fread(buf, 1, 1, f))  \
@@ -438,7 +439,7 @@ fd_set fds;
 
 #define work_restart(thr)  thr->work_restart
 
-static uint64_t
+static int64_t
 modminer_process_results(struct thr_info*thr)
 {
 	struct cgpu_info*modminer = thr->cgpu;
@@ -482,7 +483,10 @@ modminer_process_results(struct thr_info*thr)
 	iter = 200;
 	while (1) {
 		if (write(fd, cmd, 2) != 2)
-			bailout2(LOG_ERR, "%s %u.%u: Error reading (get nonce)", modminer->api->name, modminer->device_id, fpgaid);
+		{
+			bailout3(LOG_ERR, "%s %u.%u: Error reading (get nonce)", modminer->api->name, modminer->device_id, fpgaid);
+			return -1;
+		}
 		serial_read(fd, &nonce, 4);
 		mutex_unlock(&modminer->device_mutex);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
