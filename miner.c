@@ -4845,6 +4845,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
 
+#ifdef WANT_CPUMINE
+			if (!strcmp(cgpu->api->dname, "cpu"))
+				continue;
+#endif
 			if (cgpu->rolling < WATCHDOG_LOW_HASH)
 				cgpu->low_count++;
 			else
