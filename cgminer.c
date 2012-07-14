@@ -1372,10 +1372,11 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->api->get_statline_before(buf, cgpu);
 	else
 		tailsprintf(buf, "               | ");
-	tailsprintf(buf, "(%ds):%.1f (avg):%.1f Mh/s | A:%d R:%d HW:%d U:%.1f/m",
+	tailsprintf(buf, "(%ds):%.1f (avg):%.1f %sh/s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
 		cgpu->rolling,
 		cgpu->total_mhashes / total_secs,
+	        opt_scrypt ? "K" : "M",
 		cgpu->accepted,
 		cgpu->rejected,
 		cgpu->hw_errors,
@@ -1471,8 +1472,9 @@ static void curses_print_devstatus(int thr_id)
 	adj_width(cgpu->rejected, &rwidth);
 	adj_width(cgpu->hw_errors, &hwwidth);
 	adj_width(cgpu->utility, &uwidth);
-	wprintw(statuswin, "/%5.1fMh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
+	wprintw(statuswin, "/%5.1f%sh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
 			cgpu->total_mhashes / total_secs,
+			opt_scrypt ? "K" : "M",
 			awidth, cgpu->accepted,
 			rwidth, cgpu->rejected,
 			hwwidth, cgpu->hw_errors,
@@ -4703,7 +4705,7 @@ static void print_summary(void)
 #endif
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
 	if (total_secs)
-		applog(LOG_WARNING, "Average hashrate: %.1f Megahash/s", total_mhashes_done / total_secs);
+		applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", total_mhashes_done / total_secs, opt_scrypt? "Kilo" : "Mega");
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
