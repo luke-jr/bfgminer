@@ -1,3 +1,70 @@
+BFGMiner Version 2.5.1 - July 13, 2012
+
+- Replace CPU Algo in header with runtime
+- Bugfix: Calculate diff-1 utility to fix utility-hashrate on pools with
+diff!=1
+- Add utility hashrate to curses display
+- Show units in kh, Gh, Th, etc as needed to use at most 3 integer digits
+- Use FTD2XX.DLL on Windows to autodetect BitFORCE SHA256 devices
+- bitforce_get_result returns -1 on error now.
+- Check return value of read in BFgets
+- Bugfix: modminer: Count hashes done before work restart
+- Bugfix: modminer: Adapt "get nonce" error condition to new scanhash=>-1
+error API
+- Bugfix: Make our Windows nanosleep/sleep replacements standards-compliant
+(which fixes nmsleep) and include compat.h for bitforce (for sleep)
+- miner.php fix rig # when miners fail
+- Fix whitespace mangling.
+- bitforce: Use "full work" vs "nonce range" for kernel name
+- Abbrv. correction
+- Remove superfluous ave_wait
+- Put kname change for broken nonce-range back in
+- Add average wait time to api stats
+- Revert "Merge branch 'ave_time' of https://github.com/pshep/cgminer.git"
+- Add average return time to api stats
+- Missed one nonce-range disabling.
+- Remove bitforce_thread_init The delay thing does nothing useful... when long
+poll comes around, all threads restart at the same time anyway.
+- Change timeouts to time-vals for accuracy.
+- More BFL tweaks. Add delay between closing and reopening port. Remove buffer
+clear in re-init Add kernel type (mini-rig or single)
+- Revert "Change BFL driver thread initialising to a constant 100ms delay
+between devices instead of a random arrangement."
+- Only try to shut down work cleanly if we've successfully connected and started
+mining.
+- Use switch statement for cgpu->status and fix spelling.
+- modminer: Firmware returns 0xffffff00 immediately if we set clockspeed too
+high
+- Bugfix: modminer: Actually count good shares
+- Bugfix: Adapt OpenCL scanhash errors to driver API change (errors are now -1,
+not 0)
+- Remove bitforce_thread_init The delay thing does nothing useful... when long
+poll comes around, all threads restart at the same time anyway.
+- fix API support for big endian machines
+- Bugfix: Use const struct device_api* for mt_disable
+- modminer: Show progress of bitstream upload
+- Bugfix: Don't declare devices SICK if they're just busy initializing
+- Bugfix: Calculate nsec in nmsleep correctly
+- miner.php allow rig names in number buttons
+- Change BFL driver thread initialising to a constant 100ms delay between
+devices instead of a random arrangement.
+- Spelling typo.
+- Time opencl work from start of queueing a kernel till it's flushed when
+calculating dynamic intensity.
+- Modify te scanhash API to use an int64_t and return -1 on error, allowing zero
+to be a valid return value.
+- Check for work restart after the hashmeter is invoked for we lose the hashes
+otherwise contributed in the count.
+- Remove disabled: label from mining thread function, using a separate
+mt_disable function.
+- Style changes.
+- Cope with signals interrupting the nanosleep of nmsleep.
+- Turn work_restart array into a bool in thr_info
+- Use standard cfsetispeed/cfsetospeed to set baud rate on *nix
+- miner.php split() flagged deprecated in PHP 5.3.0
+- Bugfix: Use nmsleep instead of restart_wait, so we always wait the full time
+
+
 BFGMiner Version 2.5.0 - July 7, 2012
 
 - Fix BitFORCE driver to not silenty discard valid shares (bug introduced by
