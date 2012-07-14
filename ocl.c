@@ -464,6 +464,13 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
+#ifdef USE_SCRYPT
+	if (opt_scrypt) {
+		clState->lookup_gap = 1;
+		clState->thread_concurrency = 1;
+	}
+#endif
+
 	strcat(binaryfilename, name);
 	if (clState->goffset)
 		strcat(binaryfilename, "g");
@@ -535,10 +542,13 @@ build:
 	/* create a cl program executable for all the devices specified */
 	char *CompilerOptions = calloc(1, 256);
 
-	if (opt_scrypt) {
-		sprintf(CompilerOptions, "-D LOOKUP_GAP=1 -D CONCURRENT_THREADS=1 -D WORKSIZE=%d",
-			(int)clState->wsize);
-	} else {
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
+			(int)clState->lookup_gap, (int)clState->thread_concurrency, (int)clState->wsize);
+	else
+#endif
+	{
 		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
 			(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
 	}
@@ -734,8 +744,11 @@ built:
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
+		size_t ipt = (1024 / clState->lookup_gap + (1024 % clState->lookup_gap > 0));
+		size_t bufsize = 128 * ipt * clState->thread_concurrency;
+
 		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
-		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 131072, NULL, &status);
+		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
 	}
 #endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);

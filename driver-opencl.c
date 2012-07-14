@@ -1004,8 +1004,8 @@ static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	CL_SET_ARG(clState->CLbuffer0);
 	CL_SET_ARG(clState->outputBuffer);
 	CL_SET_ARG(clState->padbuffer8);
-	CL_SET_VARG(4, &midstate[0]);
-	CL_SET_VARG(4, &midstate[16]);
+	CL_SET_ARG(midstate[0]);
+	CL_SET_ARG(midstate[16]);
 
 #if 0
 	clSetKernelArg(clState->kernel,0,sizeof(cl_mem), &clState->CLbuffer[0]);
