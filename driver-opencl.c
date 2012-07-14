@@ -1428,6 +1428,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			if (gpu->gpu_us_average > dynamic_us) {
 				if (gpu->intensity > MIN_INTENSITY)
 					--gpu->intensity;
+				else
+					nmsleep(opt_dynamic_interval / 2 ? : 1);
 			} else if (gpu->gpu_us_average < dynamic_us / 2) {
 				if (gpu->intensity < MAX_INTENSITY)
 					++gpu->intensity;
