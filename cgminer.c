@@ -3394,9 +3394,13 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double utility, efficiency = 0.0;
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
-	double local_mhashes = (double)hashes_done / 1000000.0;
+	double local_mhashes;
 	bool showlog = false;
 
+	if (opt_scrypt)
+		local_mhashes = (double)hashes_done / 1000.0;
+	else
+		local_mhashes = (double)hashes_done / 1000000.0;
 	/* Update the last time this thread reported in */
 	if (thr_id >= 0) {
 		gettimeofday(&thr_info[thr_id].last, NULL);
@@ -3472,9 +3476,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
-	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f Mh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
+	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f %sh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
-		opt_log_interval, rolling, total_mhashes_done / total_secs,
+		opt_log_interval, rolling, total_mhashes_done / total_secs, opt_scrypt ? "K" : "M",
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
 
 
@@ -4604,6 +4608,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
 
+#ifdef WANT_CPUMINE
+			if (!strcmp(cgpu->api->dname, "cpu"))
+				continue;
+#endif
 			if (cgpu->rolling < WATCHDOG_LOW_HASH)
 				cgpu->low_count++;
 			else

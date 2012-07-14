@@ -434,19 +434,20 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char *pmidstate, unsig
 		data[19] = n;
 		tmp_hash7 = scrypt_1024_1_1_256_sp(data, scratchbuf);
 
-		if (tmp_hash7 <= Htarg) {
+		if (unlikely(tmp_hash7 <= Htarg)) {
 			((uint32_t *)pdata)[19] = byteswap(n);
 			*last_nonce = n;
 			ret = true;
 			break;
 		}
 
-		if ((n >= max_nonce) || thr->work_restart) {
+		if (unlikely((n >= max_nonce) || thr->work_restart)) {
 			*last_nonce = n;
 			break;
 		}
 	}
 out_ret:
+	free(scratchbuf);;
 	return ret;
 }
 
