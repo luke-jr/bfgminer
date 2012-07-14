@@ -131,6 +131,9 @@ extern bool scanhash_sse2_32(struct thr_info*, const unsigned char *pmidstate, u
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce);
 
+extern bool scanhash_scrypt(struct thr_info *thr, int thr_id, unsigned char *pdata, unsigned char *scratchbuf,
+	const unsigned char *ptarget,
+	uint32_t max_nonce, unsigned long *hashes_done);
 
 
 
@@ -161,6 +164,9 @@ const char *algo_names[] = {
 #ifdef WANT_ALTIVEC_4WAY
     [ALGO_ALTIVEC_4WAY] = "altivec_4way",
 #endif
+#ifdef WANT_SCRYPT
+    [ALGO_SCRYPT] = "scrypt",
+#endif
 };
 
 static const sha256_func sha256_funcs[] = {
@@ -185,7 +191,10 @@ static const sha256_func sha256_funcs[] = {
 	[ALGO_SSE2_64]		= (sha256_func)scanhash_sse2_64,
 #endif
 #ifdef WANT_X8664_SSE4
-	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64
+	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64,
+#endif
+#ifdef WANT_SCRYPT
+	[ALGO_SCRYPT]		= (sha256_func)scanhash_scrypt
 #endif
 };
 #endif
@@ -662,6 +671,9 @@ char *set_algo(const char *arg, enum sha256_algos *algo)
 {
 	enum sha256_algos i;
 
+	if (opt_scrypt)
+		return "Can only use scrypt algorithm";
+
 	if (!strcmp(arg, "auto")) {
 		*algo = pick_fastest_algo();
 		return NULL;
@@ -675,6 +687,13 @@ char *set_algo(const char *arg, enum sha256_algos *algo)
 	}
 	return "Unknown algorithm";
 }
+
+#ifdef WANT_SCRYPT
+void set_scrypt_algo(enum sha256_algos *algo)
+{
+	*algo = ALGO_SCRYPT;
+}
+#endif
 
 void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo)
 {
