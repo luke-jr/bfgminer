@@ -382,7 +382,8 @@ get_modminer_extra_device_status(struct cgpu_info*modminer)
 		struct modminer_fpga_state *state = thr->cgpu_data;
 		json_t *o = json_object();
 
-		json_object_set(o, "Temperature", json_integer(state->temp));
+		if (state->temp)
+			json_object_set(o, "Temperature", json_integer(state->temp));
 		json_object_set(o, "Frequency", json_real((double)state->clock * 1000000.));
 
 		k[5] = 0x30 + i;
