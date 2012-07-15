@@ -33,6 +33,10 @@
 #endif
 #include "adl_functions.h"
 
+#ifndef HAVE_CURSES
+#define wlogprint(...)  applog(LOG_WARNING, __VA_ARGS__)
+#endif
+
 bool adl_active;
 bool opt_reorder = false;
 
@@ -764,6 +768,7 @@ bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vdd
 	return true;
 }
 
+#ifdef HAVE_CURSES
 static void get_enginerange(int gpu, int *imin, int *imax)
 {
 	struct gpu_adl *ga;
@@ -776,6 +781,7 @@ static void get_enginerange(int gpu, int *imin, int *imax)
 	*imin = ga->lpOdParameters.sEngineClock.iMin / 100;
 	*imax = ga->lpOdParameters.sEngineClock.iMax / 100;
 }
+#endif
 
 int set_engineclock(int gpu, int iEngineClock)
 {
@@ -824,6 +830,7 @@ out:
 	return ret;
 }
 
+#ifdef HAVE_CURSES
 static void get_memoryrange(int gpu, int *imin, int *imax)
 {
 	struct gpu_adl *ga;
@@ -836,6 +843,7 @@ static void get_memoryrange(int gpu, int *imin, int *imax)
 	*imin = ga->lpOdParameters.sMemoryClock.iMin / 100;
 	*imax = ga->lpOdParameters.sMemoryClock.iMax / 100;
 }
+#endif
 
 int set_memoryclock(int gpu, int iMemoryClock)
 {
@@ -876,6 +884,7 @@ out:
 	return ret;
 }
 
+#ifdef HAVE_CURSES
 static void get_vddcrange(int gpu, float *imin, float *imax)
 {
 	struct gpu_adl *ga;
@@ -889,7 +898,6 @@ static void get_vddcrange(int gpu, float *imin, float *imax)
 	*imax = (float)ga->lpOdParameters.sVddc.iMax / 1000;
 }
 
-#ifdef HAVE_CURSES
 static float curses_float(const char *query)
 {
 	float ret;
@@ -997,6 +1005,7 @@ int set_fanspeed(int gpu, int iFanSpeed)
 	return ret;
 }
 
+#ifdef HAVE_CURSES
 static int set_powertune(int gpu, int iPercentage)
 {
 	struct gpu_adl *ga;
@@ -1018,6 +1027,7 @@ static int set_powertune(int gpu, int iPercentage)
 	unlock_adl();
 	return ret;
 }
+#endif
 
 /* Returns whether the fanspeed is optimal already or not. The fan_window bool
  * tells us whether the current fanspeed is in the target range for fanspeeds.
