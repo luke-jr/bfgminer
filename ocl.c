@@ -115,7 +115,7 @@ int clDevicesNum(void) {
 		status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
 		if (status == CL_SUCCESS)
 			applog(LOG_INFO, "CL Platform %d version: %s", i, pbuff);
-		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
 			if (i < numPlatforms - 1)
@@ -132,7 +132,7 @@ int clDevicesNum(void) {
 			char pbuff[256];
 			cl_device_id *devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
 
-			clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+			clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, numDevices, devices, NULL);
 			for (j = 0; j < numDevices; j++) {
 				clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 				applog(LOG_INFO, "\t%i\t%s", j, pbuff);
@@ -255,7 +255,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (status == CL_SUCCESS)
 		applog(LOG_INFO, "CL Platform version: %s", vbuff);
 
-	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
 		return NULL;
@@ -266,7 +266,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 		/* Now, get the device list data */
 
-		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, numDevices, devices, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (list)", status);
 			return NULL;
@@ -303,7 +303,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
 
-	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
+	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_ALL, NULL, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Creating Context. (clCreateContextFromType)", status);
 		return NULL;
