@@ -210,7 +210,7 @@ CL_API_ENTRY cl_int CL_API_CALL
                        const cl_event * /* event_wait_list */,
                        cl_event *       /* event */) CL_API_SUFFIX__VERSION_1_0;
 
-int opt_platform_id;
+int opt_platform_id = -1;
 
 char *file_contents(const char *filename, int *length)
 {
@@ -257,7 +257,7 @@ int clDevicesNum(void) {
 	cl_uint numPlatforms;
 	cl_platform_id *platforms;
 	cl_platform_id platform = NULL;
-	unsigned int most_devices = 0, i;
+	unsigned int most_devices = 0, i, mdplatform;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	/* If this fails, assume no GPUs. */
@@ -300,8 +300,10 @@ int clDevicesNum(void) {
 			return -1;
 		}
 		applog(LOG_INFO, "Platform %d devices: %d", i, numDevices);
-		if (numDevices > most_devices)
+		if (numDevices > most_devices) {
 			most_devices = numDevices;
+			mdplatform = i;
+		}
 		if (numDevices) {
 			unsigned int j;
 			char pbuff[256];
@@ -315,6 +317,9 @@ int clDevicesNum(void) {
 			free(devices);
 		}
 	}
+
+	if (opt_platform_id < 0)
+		opt_platform_id = mdplatform;;
 
 	return most_devices;
 }
