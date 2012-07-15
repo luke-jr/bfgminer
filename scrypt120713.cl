@@ -239,191 +239,191 @@ void SHA256_fresh(uint4*restrict state0,uint4*restrict state1, const uint4 block
 
 	uint4 W[4];
 
-	W[ 0].x = block0.x;
+	W[0].x = block0.x;
 	D=0x98c7e2a2U+W[0].x;
 	H=0xfc08884dU+W[0].x;
 
-	W[ 0].y = block0.y;
+	W[0].y = block0.y;
 	C=0xcd2a11aeU+Tr1(D)+Ch(D,0x510e527fU,0x9b05688cU)+W[0].y;
 	G=0xC3910C8EU+C+Tr2(H)+Ch(H,0xfb6feee7U,0x2a01a605U);
 
-	W[ 0].z = block0.z;
+	W[0].z = block0.z;
 	B=0x0c2e12e0U+Tr1(C)+Ch(C,D,0x510e527fU)+W[0].z;
 	F=0x4498517BU+B+Tr2(G)+Maj(G,H,0x6a09e667U);
 
-	W[ 0].w = block0.w;
+	W[0].w = block0.w;
 	A=0xa4ce148bU+Tr1(B)+Ch(B,C,D)+W[0].w; 
 	E=0x95F61999U+A+Tr2(F)+Maj(F,G,H);
 
-	W[ 1].x = block1.x;
+	W[1].x = block1.x;
 	RND(E,F,G,H,A,B,C,D, W[1].x+0x3956c25bU);
-	W[ 1].y = block1.y;
+	W[1].y = block1.y;
 	RND(D,E,F,G,H,A,B,C, W[1].y+0x59f111f1U);
-	W[ 1].z = block1.z;
+	W[1].z = block1.z;
 	RND(C,D,E,F,G,H,A,B, W[1].z+0x923f82a4U);
-	W[ 1].w = block1.w;
+	W[1].w = block1.w;
 	RND(B,C,D,E,F,G,H,A, W[1].w+0xab1c5ed5U);
 	
-	W[ 2].x = block2.x;
+	W[2].x = block2.x;
 	RND(A,B,C,D,E,F,G,H, W[2].x+0xd807aa98U);
-	W[ 2].y = block2.y;
+	W[2].y = block2.y;
 	RND(H,A,B,C,D,E,F,G, W[2].y+0x12835b01U);
-	W[ 2].z = block2.z;
+	W[2].z = block2.z;
 	RND(G,H,A,B,C,D,E,F, W[2].z+0x243185beU);
-	W[ 2].w = block2.w;
+	W[2].w = block2.w;
 	RND(F,G,H,A,B,C,D,E, W[2].w+0x550c7dc3U);
 	
-	W[ 3].x = block3.x;
+	W[3].x = block3.x;
 	RND(E,F,G,H,A,B,C,D, W[3].x+0x72be5d74U);
-	W[ 3].y = block3.y;
+	W[3].y = block3.y;
 	RND(D,E,F,G,H,A,B,C, W[3].y+0x80deb1feU);
-	W[ 3].z = block3.z;
+	W[3].z = block3.z;
 	RND(C,D,E,F,G,H,A,B, W[3].z+0x9bdc06a7U);
-	W[ 3].w = block3.w;
+	W[3].w = block3.w;
 	RND(B,C,D,E,F,G,H,A, W[3].w+0xc19bf174U);
 
-	W[ 0].x += Wr1(W[ 3].z) + W[ 2].y + Wr2(W[ 0].y);
+	W[0].x += Wr1(W[3].z) + W[2].y + Wr2(W[0].y);
 	RND(A,B,C,D,E,F,G,H, W[0].x+0xe49b69c1U);
 
-	W[ 0].y += Wr1(W[ 3].w) + W[ 2].z + Wr2(W[ 0].z);
+	W[0].y += Wr1(W[3].w) + W[2].z + Wr2(W[0].z);
 	RND(H,A,B,C,D,E,F,G, W[0].y+0xefbe4786U);
 
-	W[ 0].z += Wr1(W[ 0].x) + W[ 2].w + Wr2(W[ 0].w);
+	W[0].z += Wr1(W[0].x) + W[2].w + Wr2(W[0].w);
 	RND(G,H,A,B,C,D,E,F, W[0].z+0x0fc19dc6U);
 
-	W[ 0].w += Wr1(W[ 0].y) + W[ 3].x + Wr2(W[ 1].x);
+	W[0].w += Wr1(W[0].y) + W[3].x + Wr2(W[1].x);
 	RND(F,G,H,A,B,C,D,E, W[0].w+0x240ca1ccU);
 
-	W[ 1].x += Wr1(W[ 0].z) + W[ 3].y + Wr2(W[ 1].y);
+	W[1].x += Wr1(W[0].z) + W[3].y + Wr2(W[1].y);
 	RND(E,F,G,H,A,B,C,D, W[1].x+0x2de92c6fU);
 
-	W[ 1].y += Wr1(W[ 0].w) + W[ 3].z + Wr2(W[ 1].z);
+	W[1].y += Wr1(W[0].w) + W[3].z + Wr2(W[1].z);
 	RND(D,E,F,G,H,A,B,C, W[1].y+0x4a7484aaU);
 
-	W[ 1].z += Wr1(W[ 1].x) + W[ 3].w + Wr2(W[ 1].w);
+	W[1].z += Wr1(W[1].x) + W[3].w + Wr2(W[1].w);
 	RND(C,D,E,F,G,H,A,B, W[1].z+0x5cb0a9dcU);
 
-	W[ 1].w += Wr1(W[ 1].y) + W[ 0].x + Wr2(W[ 2].x);
+	W[1].w += Wr1(W[1].y) + W[0].x + Wr2(W[2].x);
 	RND(B,C,D,E,F,G,H,A, W[1].w+0x76f988daU);
 
-	W[ 2].x += Wr1(W[ 1].z) + W[ 0].y + Wr2(W[ 2].y);
+	W[2].x += Wr1(W[1].z) + W[0].y + Wr2(W[2].y);
 	RND(A,B,C,D,E,F,G,H, W[2].x+0x983e5152U);
 
-	W[ 2].y += Wr1(W[ 1].w) + W[ 0].z + Wr2(W[ 2].z);
+	W[2].y += Wr1(W[1].w) + W[0].z + Wr2(W[2].z);
 	RND(H,A,B,C,D,E,F,G, W[2].y+0xa831c66dU);
 
-	W[ 2].z += Wr1(W[ 2].x) + W[ 0].w + Wr2(W[ 2].w);
+	W[2].z += Wr1(W[2].x) + W[0].w + Wr2(W[2].w);
 	RND(G,H,A,B,C,D,E,F, W[2].z+0xb00327c8U);
 
-	W[ 2].w += Wr1(W[ 2].y) + W[ 1].x + Wr2(W[ 3].x);
+	W[2].w += Wr1(W[2].y) + W[1].x + Wr2(W[3].x);
 	RND(F,G,H,A,B,C,D,E, W[2].w+0xbf597fc7U);
 
-	W[ 3].x += Wr1(W[ 2].z) + W[ 1].y + Wr2(W[ 3].y);
+	W[3].x += Wr1(W[2].z) + W[1].y + Wr2(W[3].y);
 	RND(E,F,G,H,A,B,C,D, W[3].x+0xc6e00bf3U);
 
-	W[ 3].y += Wr1(W[ 2].w) + W[ 1].z + Wr2(W[ 3].z);
+	W[3].y += Wr1(W[2].w) + W[1].z + Wr2(W[3].z);
 	RND(D,E,F,G,H,A,B,C, W[3].y+0xd5a79147U);
 
-	W[ 3].z += Wr1(W[ 3].x) + W[ 1].w + Wr2(W[ 3].w);
+	W[3].z += Wr1(W[3].x) + W[1].w + Wr2(W[3].w);
 	RND(C,D,E,F,G,H,A,B, W[3].z+0x06ca6351U);
 
-	W[ 3].w += Wr1(W[ 3].y) + W[ 2].x + Wr2(W[ 0].x);
+	W[3].w += Wr1(W[3].y) + W[2].x + Wr2(W[0].x);
 	RND(B,C,D,E,F,G,H,A, W[3].w+0x14292967U);
 
-	W[ 0].x += Wr1(W[ 3].z) + W[ 2].y + Wr2(W[ 0].y);
+	W[0].x += Wr1(W[3].z) + W[2].y + Wr2(W[0].y);
 	RND(A,B,C,D,E,F,G,H, W[0].x+0x27b70a85U);
 
-	W[ 0].y += Wr1(W[ 3].w) + W[ 2].z + Wr2(W[ 0].z);
+	W[0].y += Wr1(W[3].w) + W[2].z + Wr2(W[0].z);
 	RND(H,A,B,C,D,E,F,G, W[0].y+0x2e1b2138U);
 
-	W[ 0].z += Wr1(W[ 0].x) + W[ 2].w + Wr2(W[ 0].w);
+	W[0].z += Wr1(W[0].x) + W[2].w + Wr2(W[0].w);
 	RND(G,H,A,B,C,D,E,F, W[0].z+0x4d2c6dfcU);
 
-	W[ 0].w += Wr1(W[ 0].y) + W[ 3].x + Wr2(W[ 1].x);
+	W[0].w += Wr1(W[0].y) + W[3].x + Wr2(W[1].x);
 	RND(F,G,H,A,B,C,D,E, W[0].w+0x53380d13U);
 
-	W[ 1].x += Wr1(W[ 0].z) + W[ 3].y + Wr2(W[ 1].y);
+	W[1].x += Wr1(W[0].z) + W[3].y + Wr2(W[1].y);
 	RND(E,F,G,H,A,B,C,D, W[1].x+0x650a7354U);
 
-	W[ 1].y += Wr1(W[ 0].w) + W[ 3].z + Wr2(W[ 1].z);
+	W[1].y += Wr1(W[0].w) + W[3].z + Wr2(W[1].z);
 	RND(D,E,F,G,H,A,B,C, W[1].y+0x766a0abbU);
 
-	W[ 1].z += Wr1(W[ 1].x) + W[ 3].w + Wr2(W[ 1].w);
+	W[1].z += Wr1(W[1].x) + W[3].w + Wr2(W[1].w);
 	RND(C,D,E,F,G,H,A,B, W[1].z+0x81c2c92eU);
 
-	W[ 1].w += Wr1(W[ 1].y) + W[ 0].x + Wr2(W[ 2].x);
+	W[1].w += Wr1(W[1].y) + W[0].x + Wr2(W[2].x);
 	RND(B,C,D,E,F,G,H,A, W[1].w+0x92722c85U);
 
-	W[ 2].x += Wr1(W[ 1].z) + W[ 0].y + Wr2(W[ 2].y);
+	W[2].x += Wr1(W[1].z) + W[0].y + Wr2(W[2].y);
 	RND(A,B,C,D,E,F,G,H, W[2].x+0xa2bfe8a1U);
 
-	W[ 2].y += Wr1(W[ 1].w) + W[ 0].z + Wr2(W[ 2].z);
+	W[2].y += Wr1(W[1].w) + W[0].z + Wr2(W[2].z);
 	RND(H,A,B,C,D,E,F,G, W[2].y+0xa81a664bU);
 
-	W[ 2].z += Wr1(W[ 2].x) + W[ 0].w + Wr2(W[ 2].w);
+	W[2].z += Wr1(W[2].x) + W[0].w + Wr2(W[2].w);
 	RND(G,H,A,B,C,D,E,F, W[2].z+0xc24b8b70U);
 
-	W[ 2].w += Wr1(W[ 2].y) + W[ 1].x + Wr2(W[ 3].x);
+	W[2].w += Wr1(W[2].y) + W[1].x + Wr2(W[3].x);
 	RND(F,G,H,A,B,C,D,E, W[2].w+0xc76c51a3U);
 
-	W[ 3].x += Wr1(W[ 2].z) + W[ 1].y + Wr2(W[ 3].y);
+	W[3].x += Wr1(W[2].z) + W[1].y + Wr2(W[3].y);
 	RND(E,F,G,H,A,B,C,D, W[3].x+0xd192e819U);
 
-	W[ 3].y += Wr1(W[ 2].w) + W[ 1].z + Wr2(W[ 3].z);
+	W[3].y += Wr1(W[2].w) + W[1].z + Wr2(W[3].z);
 	RND(D,E,F,G,H,A,B,C, W[3].y+0xd6990624U);
 
-	W[ 3].z += Wr1(W[ 3].x) + W[ 1].w + Wr2(W[ 3].w);
+	W[3].z += Wr1(W[3].x) + W[1].w + Wr2(W[3].w);
 	RND(C,D,E,F,G,H,A,B, W[3].z+0xf40e3585U);
 
-	W[ 3].w += Wr1(W[ 3].y) + W[ 2].x + Wr2(W[ 0].x);
+	W[3].w += Wr1(W[3].y) + W[2].x + Wr2(W[0].x);
 	RND(B,C,D,E,F,G,H,A, W[3].w+0x106aa070U);
 
-	W[ 0].x += Wr1(W[ 3].z) + W[ 2].y + Wr2(W[ 0].y);
+	W[0].x += Wr1(W[3].z) + W[2].y + Wr2(W[0].y);
 	RND(A,B,C,D,E,F,G,H, W[0].x+0x19a4c116U);
 
-	W[ 0].y += Wr1(W[ 3].w) + W[ 2].z + Wr2(W[ 0].z);
+	W[0].y += Wr1(W[3].w) + W[2].z + Wr2(W[0].z);
 	RND(H,A,B,C,D,E,F,G, W[0].y+0x1e376c08U);
 
-	W[ 0].z += Wr1(W[ 0].x) + W[ 2].w + Wr2(W[ 0].w);
+	W[0].z += Wr1(W[0].x) + W[2].w + Wr2(W[0].w);
 	RND(G,H,A,B,C,D,E,F, W[0].z+0x2748774cU);
 
-	W[ 0].w += Wr1(W[ 0].y) + W[ 3].x + Wr2(W[ 1].x);
+	W[0].w += Wr1(W[0].y) + W[3].x + Wr2(W[1].x);
 	RND(F,G,H,A,B,C,D,E, W[0].w+0x34b0bcb5U);
 
-	W[ 1].x += Wr1(W[ 0].z) + W[ 3].y + Wr2(W[ 1].y);
+	W[1].x += Wr1(W[0].z) + W[3].y + Wr2(W[1].y);
 	RND(E,F,G,H,A,B,C,D, W[1].x+0x391c0cb3U);
 
-	W[ 1].y += Wr1(W[ 0].w) + W[ 3].z + Wr2(W[ 1].z);
+	W[1].y += Wr1(W[0].w) + W[3].z + Wr2(W[1].z);
 	RND(D,E,F,G,H,A,B,C, W[1].y+0x4ed8aa4aU);
 
-	W[ 1].z += Wr1(W[ 1].x) + W[ 3].w + Wr2(W[ 1].w);
+	W[1].z += Wr1(W[1].x) + W[3].w + Wr2(W[1].w);
 	RND(C,D,E,F,G,H,A,B, W[1].z+0x5b9cca4fU);
 
-	W[ 1].w += Wr1(W[ 1].y) + W[ 0].x + Wr2(W[ 2].x);
+	W[1].w += Wr1(W[1].y) + W[0].x + Wr2(W[2].x);
 	RND(B,C,D,E,F,G,H,A, W[1].w+0x682e6ff3U);
 
-	W[ 2].x += Wr1(W[ 1].z) + W[ 0].y + Wr2(W[ 2].y);
+	W[2].x += Wr1(W[1].z) + W[0].y + Wr2(W[2].y);
 	RND(A,B,C,D,E,F,G,H, W[2].x+0x748f82eeU);
 
-	W[ 2].y += Wr1(W[ 1].w) + W[ 0].z + Wr2(W[ 2].z);
+	W[2].y += Wr1(W[1].w) + W[0].z + Wr2(W[2].z);
 	RND(H,A,B,C,D,E,F,G, W[2].y+0x78a5636fU);
 
-	W[ 2].z += Wr1(W[ 2].x) + W[ 0].w + Wr2(W[ 2].w);
+	W[2].z += Wr1(W[2].x) + W[0].w + Wr2(W[2].w);
 	RND(G,H,A,B,C,D,E,F, W[2].z+0x84c87814U);
 
-	W[ 2].w += Wr1(W[ 2].y) + W[ 1].x + Wr2(W[ 3].x);
+	W[2].w += Wr1(W[2].y) + W[1].x + Wr2(W[3].x);
 	RND(F,G,H,A,B,C,D,E, W[2].w+0x8cc70208U);
 
-	W[ 3].x += Wr1(W[ 2].z) + W[ 1].y + Wr2(W[ 3].y);
+	W[3].x += Wr1(W[2].z) + W[1].y + Wr2(W[3].y);
 	RND(E,F,G,H,A,B,C,D, W[3].x+0x90befffaU);
 
-	W[ 3].y += Wr1(W[ 2].w) + W[ 1].z + Wr2(W[ 3].z);
+	W[3].y += Wr1(W[2].w) + W[1].z + Wr2(W[3].z);
 	RND(D,E,F,G,H,A,B,C, W[3].y+0xa4506cebU);
 
-	W[ 3].z += Wr1(W[ 3].x) + W[ 1].w + Wr2(W[ 3].w);
+	W[3].z += Wr1(W[3].x) + W[1].w + Wr2(W[3].w);
 	RND(C,D,E,F,G,H,A,B, W[3].z+0xbef9a3f7U);
 
-	W[ 3].w += Wr1(W[ 3].y) + W[ 2].x + Wr2(W[ 0].x);
+	W[3].w += Wr1(W[3].y) + W[2].x + Wr2(W[0].x);
 	RND(B,C,D,E,F,G,H,A, W[3].w+0xc67178f2U);
 	
 #undef A
@@ -709,7 +709,7 @@ __kernel void search(__global uint4*restrict input, __global uint*restrict outpu
 	{
 		pad0 = tstate0;
 		pad1 = tstate1;
-		X[i*2  ] = ostate0;
+		X[i*2 ] = ostate0;
 		X[i*2+1] = ostate1;
 
 		SHA256(&pad0,&pad1, data, (uint4)(i+1,0x80000000U,0,0), (uint4)(0,0,0,0), (uint4)(0,0,0,0x4a0U));
