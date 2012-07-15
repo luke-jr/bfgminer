@@ -1210,16 +1210,17 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	applog(LOG_INFO, "Init GPU thread %i GPU %i virtual GPU %i", i, gpu, virtual_gpu);
 	clStates[i] = initCl(virtual_gpu, name, sizeof(name));
 	if (!clStates[i]) {
+#ifdef HAVE_CURSES
 		if (use_curses)
 			enable_curses();
+#endif
 		applog(LOG_ERR, "Failed to init GPU thread %d, disabling device %d", i, gpu);
 		if (!failmessage) {
-			char *buf;
-
 			applog(LOG_ERR, "Restarting the GPU from the menu will not fix this.");
 			applog(LOG_ERR, "Try restarting cgminer.");
 			failmessage = true;
 #ifdef HAVE_CURSES
+			char *buf;
 			if (use_curses) {
 				buf = curses_input("Press enter to continue");
 				if (buf)

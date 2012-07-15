@@ -202,10 +202,11 @@ enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses;
 
+static
 #ifndef HAVE_CURSES
 const
 #endif
-static bool curses_active;
+bool curses_active;
 
 static char current_block[37];
 static char *current_hash;
@@ -1312,8 +1313,10 @@ double total_secs = 0.1;
 static char statusline[256];
 /* logstart is where the log window should start */
 static int devcursor, logstart, logcursor;
+#ifdef HAVE_CURSES
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
 static int statusy;
+#endif
 #ifdef HAVE_OPENCL
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 #endif
