@@ -118,6 +118,8 @@ int clDevicesNum(void) {
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
+			if (i < numPlatforms - 1)
+				continue;
 			return -1;
 		}
 		applog(LOG_INFO, "Platform %d devices: %d", i, numDevices);
