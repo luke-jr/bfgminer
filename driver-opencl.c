@@ -993,14 +993,14 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 }
 
 #ifdef USE_SCRYPT
-static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
+static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
-	cl_uint4 *midstate = (cl_uint4 *)blk->midstate;
+	cl_uint4 *midstate = (cl_uint4 *)blk->work->midstate;
 	cl_kernel *kernel = &clState->kernel;
 	unsigned int num = 0;
 	cl_int status = 0;
-	int i;
 
+	clState->cldata = blk->work->data;
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL,NULL);
 
 	CL_SET_ARG(clState->CLbuffer0);
@@ -1349,13 +1349,6 @@ static bool opencl_thread_init(struct thr_info *thr)
 		return false;
 	}
 
-#ifdef USE_SCRYPT
-	if (opt_scrypt) {
-		if (clState->padbufsize > BUFFERSIZE)
-			blank_res = realloc(blank_res, clState->padbufsize);
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->padbuffer8, true, 0, clState->padbufsize, blank_res, 0, NULL,NULL);
-	}
-#endif
 	status |= clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
@@ -1385,7 +1378,12 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
-	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		work->blk.work = work;
+	else
+#endif
+		precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 	return true;
 }
 
@@ -1446,9 +1444,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 
-#ifdef USE_SCRYPT
-	clState->cldata = work->data;
-#endif
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
