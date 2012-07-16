@@ -3349,6 +3349,7 @@ static void *api_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 
+	pthread_detach(pthread_self());
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	api(api_thr_id);
@@ -5522,8 +5523,6 @@ begin_bench:
 	thr = &thr_info[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
-	pthread_detach(thr->pth);
-
 
 #ifdef HAVE_CURSES
 	/* Create curses input thread for keyboard input. Create this last so
