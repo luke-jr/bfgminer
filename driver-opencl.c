@@ -1001,6 +1001,8 @@ static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	cl_int status = 0;
 	int i;
 
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL,NULL);
+
 	CL_SET_ARG(clState->CLbuffer0);
 	CL_SET_ARG(clState->outputBuffer);
 	CL_SET_ARG(clState->padbuffer8);
@@ -1309,7 +1311,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 	struct cgpu_info *gpu = thr->cgpu;
 	struct opencl_thread_data *thrdata;
 	_clState *clState = clStates[thr_id];
-	cl_int status;
+	cl_int status = 0;
 	thrdata = calloc(1, sizeof(*thrdata));
 	thr->cgpu_data = thrdata;
 
@@ -1348,10 +1350,13 @@ static bool opencl_thread_init(struct thr_info *thr)
 	}
 
 #ifdef USE_SCRYPT
-	if (opt_scrypt)
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, BUFFERSIZE, blank_res, 0, NULL,NULL);
+	if (opt_scrypt) {
+		if (clState->padbufsize > BUFFERSIZE)
+			blank_res = realloc(blank_res, clState->padbufsize);
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->padbuffer8, true, 0, clState->padbufsize, blank_res, 0, NULL,NULL);
+	}
 #endif
-	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+	status |= clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
@@ -1440,6 +1445,10 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			   localThreads[0], gpu->intensity);
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
+
+#ifdef USE_SCRYPT
+	clState->cldata = work->data;
+#endif
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");

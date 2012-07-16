@@ -754,8 +754,9 @@ built:
 		size_t ipt = (1024 / clState->lookup_gap + (1024 % clState->lookup_gap > 0));
 		size_t bufsize = 128 * ipt * clState->thread_concurrency;
 
-		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
+		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 80, NULL, &status);
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
+		clState->padbufsize = bufsize;
 	}
 #endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
