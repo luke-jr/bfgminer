@@ -420,6 +420,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		case KL_SCRYPT:
 			strcpy(filename, SCRYPT_KERNNAME".cl");
 			strcpy(binaryfilename, SCRYPT_KERNNAME);
+			/* Scrypt only supports vector 1 */
+			gpus[gpu].vwidth = 1;
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_DIABLO:
