@@ -3423,8 +3423,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		double thread_rolling = 0.0;
 		int i;
 
-		applog(LOG_DEBUG, "[thread %d: %llu hashes, %.0f khash/sec]",
-			thr_id, hashes_done, hashes_done / secs);
+		applog(LOG_DEBUG, "[thread %d: %llu hashes, %.1f khash/sec]",
+			thr_id, hashes_done, hashes_done / 1000 / secs);
 
 		/* Rolling average for each thread and each device */
 		decay_time(&thr->rolling, local_mhashes / secs);
