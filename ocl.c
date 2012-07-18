@@ -309,6 +309,18 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
+	/////////////////////////////////////////////////////////////////
+	// Create an OpenCL command queue
+	/////////////////////////////////////////////////////////////////
+	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
+						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
+	if (status != CL_SUCCESS) /* Try again without OOE enable */
+		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error %d: Creating Command Queue. (clCreateCommandQueue)", status);
+		return NULL;
+	}
+
 	/* Check for BFI INT support. Hopefully people don't mix devices with
 	 * and without it! */
 	char * extensions = malloc(1024);
@@ -736,18 +748,6 @@ built:
 	clState->kernel = clCreateKernel(clState->program, "search", &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Creating Kernel from program. (clCreateKernel)", status);
-		return NULL;
-	}
-
-	/////////////////////////////////////////////////////////////////
-	// Create an OpenCL command queue
-	/////////////////////////////////////////////////////////////////
-	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
-						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
-	if (status != CL_SUCCESS) /* Try again without OOE enable */
-		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: Creating Command Queue. (clCreateCommandQueue)", status);
 		return NULL;
 	}
 
