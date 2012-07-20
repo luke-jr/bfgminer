@@ -3106,19 +3106,19 @@ static void *input_thread(void __maybe_unused *userdata)
 
 		input = getch();
 		switch (input) {
-		case 'q':
+		case 'q': case 'Q':
 			kill_work();
 			return NULL;
-		case 'd':
+		case 'd': case 'D':
 			display_options();
 			break;
-		case 'p':
+		case 'p': case 'P':
 			display_pools();
 			break;
-		case 's':
+		case 's': case 'S':
 			set_options();
 			break;
-		case 'g':
+		case 'g': case 'G':
 			if (have_opencl)
 				manage_gpu();
 			break;
