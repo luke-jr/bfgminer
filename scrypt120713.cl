@@ -689,12 +689,13 @@ void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
 #define NFLAG (0x7F)
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-__kernel void search(__global const uint4 * restrict input, __global uint*restrict output, __global uint4*restrict padcache, uint4 pad0, uint4 pad1)
+__kernel void search(__global const uint4 * restrict input, __global uint*restrict output, __global uint4*restrict padcache, const uint4 midstate0, const uint4 midstate16)
 {
 	uint gid = get_global_id(0);
 	uint4 X[8];
 	uint4 tstate0, tstate1, ostate0, ostate1, tmp0, tmp1;
 	uint4 data = (uint4)(input[4].x,input[4].y,input[4].z,gid);
+	uint4 pad0 = midstate0, pad1 = midstate16;
 
 	SHA256(&pad0,&pad1, data, (uint4)(0x80000000U,0,0,0), (uint4)(0,0,0,0), (uint4)(0,0,0,0x280));
 	SHA256_fresh(&ostate0,&ostate1, pad0^0x5C5C5C5CU, pad1^0x5C5C5C5CU, 0x5C5C5C5CU, 0x5C5C5C5CU);
