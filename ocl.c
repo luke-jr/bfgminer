@@ -487,7 +487,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
-		clState->lookup_gap = 2;
+		clState->lookup_gap = 1;
 		clState->thread_concurrency = 6144;
 	}
 #endif
