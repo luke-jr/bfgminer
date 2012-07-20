@@ -3102,20 +3102,27 @@ static void *input_thread(void __maybe_unused *userdata)
 		return NULL;
 
 	while (1) {
-		char input;
+		int input;
 
 		input = getch();
-		if (!strncasecmp(&input, "q", 1)) {
+		switch (input) {
+		case 'q':
 			kill_work();
 			return NULL;
-		} else if (!strncasecmp(&input, "d", 1))
+		case 'd':
 			display_options();
-		else if (!strncasecmp(&input, "p", 1))
+			break;
+		case 'p':
 			display_pools();
-		else if (!strncasecmp(&input, "s", 1))
+			break;
+		case 's':
 			set_options();
-		else if (have_opencl && !strncasecmp(&input, "g", 1))
-			manage_gpu();
+			break;
+		case 'g':
+			if (have_opencl)
+				manage_gpu();
+			break;
+		}
 		if (opt_realquiet) {
 			disable_curses();
 			break;
