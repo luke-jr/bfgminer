@@ -995,7 +995,7 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 #ifdef USE_SCRYPT
 static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
-	cl_uint4 *midstate = (cl_uint4 *)blk->work->midstate;
+	char *midstate = blk->work->midstate;
 	cl_kernel *kernel = &clState->kernel;
 	unsigned int num = 0;
 	cl_int status = 0;
@@ -1006,16 +1006,9 @@ static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 	CL_SET_ARG(clState->CLbuffer0);
 	CL_SET_ARG(clState->outputBuffer);
 	CL_SET_ARG(clState->padbuffer8);
-	CL_SET_ARG(midstate[0]);
-	CL_SET_ARG(midstate[16]);
+	CL_SET_VARG(4, &midstate[0]);
+	CL_SET_VARG(4, &midstate[16]);
 
-#if 0
-	clSetKernelArg(clState->kernel,0,sizeof(cl_mem), &clState->CLbuffer[0]);
-	clSetKernelArg(clState->kernel,1,sizeof(cl_mem), &clState->CLbuffer[1]);
-	clSetKernelArg(clState->kernel,2,sizeof(cl_mem), &clState->padbuffer8);
-	clSetKernelArg(clState->kernel,3,sizeof(cl_uint4), &midstate[0]);
-	clSetKernelArg(clState->kernel,4,sizeof(cl_uint4), &midstate[16]);
-#endif
 	return status;
 }
 #endif

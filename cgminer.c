@@ -1711,8 +1711,13 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 
 	if (!QUIET) {
 		hash32 = (uint32_t *)(work->hash);
-		sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
-			work->block? " BLOCK!" : "");
+		if (opt_scrypt) {
+			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]),
+				work->block? " BLOCK!" : "");
+		} else {
+			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
+				work->block? " BLOCK!" : "");
+		}
 	}
 
 	/* Theoretically threads could race when modifying accepted and
@@ -3991,10 +3996,13 @@ bool test_nonce(struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 
+	if (opt_scrypt) {
+		*work_nonce = nonce;
+		return true;
+	}
+
 	*work_nonce = htobe32(nonce);
 
-	if (opt_scrypt)
-		return true;
 
 	return hashtest(work);
 }

@@ -229,13 +229,16 @@ static void *postcalc_hash(void *userdata)
 	pthread_detach(pthread_self());
 
 	for (entry = 0; entry < FOUND; entry++) {
-		if (pcd->res[entry]) {
+		uint32_t nonce = pcd->res[entry];
+
+		if (nonce) {
+			applog(LOG_DEBUG, "OCL NONCE %u", nonce);
 #ifdef USE_SCRYPT
 			if (opt_scrypt)
-				submit_nonce(thr, pcd->work, pcd->res[entry]);
+				submit_nonce(thr, pcd->work, nonce);
 			else
 #endif
-				send_nonce(pcd, pcd->res[entry]);
+				send_nonce(pcd, nonce);
 		nonces++;
 		}
 	}
