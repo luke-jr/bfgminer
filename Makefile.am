@@ -45,6 +45,10 @@ cgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 cgminer_SOURCES += adl.c adl.h adl_functions.h
 cgminer_SOURCES += *.cl
 
+if HAS_SCRYPT
+cgminer_SOURCES += scrypt.c
+endif
+
 if HAS_CPUMINE
 # original CPU related sources, unchanged
 cgminer_SOURCES	+= \
@@ -55,10 +59,6 @@ cgminer_SOURCES	+= \
 
 # the CPU portion extracted from original main.c
 cgminer_SOURCES += driver-cpu.h driver-cpu.c
-
-if HAS_SCRYPT
-cgminer_SOURCES += scrypt.c
-endif
 
 if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM

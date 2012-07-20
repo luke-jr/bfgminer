@@ -220,6 +220,8 @@ static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 	}
 }
 
+extern bool scrypt_scan_nonce(unsigned char *pdata, uint32_t nonce);
+
 static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
@@ -234,9 +236,13 @@ static void *postcalc_hash(void *userdata)
 		if (nonce) {
 			applog(LOG_DEBUG, "OCL NONCE %u", nonce);
 #ifdef USE_SCRYPT
-			if (opt_scrypt)
-				submit_nonce(thr, pcd->work, nonce);
-			else
+			if (opt_scrypt) {
+				struct work *work = pcd->work;
+				if (scrypt_scan_nonce(work, nonce))
+					submit_nonce(thr, work, nonce);
+				else
+					applog(LOG_INFO, "Pool %d share below target", work->pool->pool_no);
+			} else
 #endif
 				send_nonce(pcd, nonce);
 		nonces++;
