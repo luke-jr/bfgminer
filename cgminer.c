@@ -1260,6 +1260,7 @@ static char statusline[256];
 static int devcursor, logstart, logcursor;
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
 static int statusy;
+static int devsummaryYOffset;
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
@@ -1375,7 +1376,11 @@ static void curses_print_devstatus(int thr_id)
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 	/* Check this isn't out of the window size */
-	ypos = devcursor + cgpu->cgminer_id;
+	ypos = cgpu->cgminer_id;
+	ypos += devsummaryYOffset;
+	if (ypos < 0)
+		return;
+	ypos += devcursor;
 	if (ypos >= statusy - 1)
 		return;
 	if (wmove(statuswin, ypos, 0) == ERR)
@@ -3126,6 +3131,25 @@ static void *input_thread(void __maybe_unused *userdata)
 			if (have_opencl)
 				manage_gpu();
 			break;
+#ifdef HAVE_CURSES
+		case KEY_DOWN:
+			if (devsummaryYOffset < -(total_devices + devcursor - statusy))
+				break;
+			devsummaryYOffset -= 2;
+		case KEY_UP:
+			if (devsummaryYOffset == 0)
+				break;
+			++devsummaryYOffset;
+			if (curses_active_locked()) {
+				int i;
+				for (i = 0; i < mining_threads; i++)
+					curses_print_devstatus(i);
+				touchwin(statuswin);
+				wrefresh(statuswin);
+				unlock_curses();
+			}
+			break;
+#endif
 		}
 		if (opt_realquiet) {
 			disable_curses();
@@ -4593,6 +4617,7 @@ void enable_curses(void) {
 	}
 
 	mainwin = initscr();
+	keypad(mainwin, true);
 	getmaxyx(mainwin, y, x);
 	statuswin = newwin(logstart, x, 0, 0);
 	leaveok(statuswin, true);
