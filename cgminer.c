@@ -1370,11 +1370,15 @@ static void curses_print_devstatus(int thr_id)
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	char logline[255];
+	int ypos;
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 	/* Check this isn't out of the window size */
-	if (wmove(statuswin,devcursor + cgpu->cgminer_id, 0) == ERR)
+	ypos = devcursor + cgpu->cgminer_id;
+	if (ypos >= statusy - 1)
+		return;
+	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
 	wprintw(statuswin, " %s %d: ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before) {
