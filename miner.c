@@ -1351,6 +1351,7 @@ static int devcursor, logstart, logcursor;
 #ifdef HAVE_CURSES
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
 static int statusy;
+static int devsummaryYOffset;
 #endif
 #ifdef HAVE_OPENCL
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
@@ -1576,7 +1577,11 @@ static void curses_print_devstatus(int thr_id)
 	cgpu->utility_diff1 = cgpu->accepted_weighed / ( total_secs ?: 1 ) * 60;
 
 	/* Check this isn't out of the window size */
-	ypos = devcursor + cgpu->cgminer_id;
+	ypos = cgpu->cgminer_id;
+	ypos += devsummaryYOffset;
+	if (ypos < 0)
+		return;
+	ypos += devcursor;
 	if (ypos >= statusy - 1)
 		return;
 	if (wmove(statuswin, ypos, 0) == ERR)
@@ -3457,20 +3462,46 @@ static void *input_thread(void __maybe_unused *userdata)
 		return NULL;
 
 	while (1) {
-		char input;
+		int input;
 
 		input = getch();
-		if (!strncasecmp(&input, "q", 1)) {
+		switch (input) {
+		case 'q':
 			kill_work();
 			return NULL;
-		} else if (!strncasecmp(&input, "d", 1))
+		case 'd':
 			display_options();
-		else if (!strncasecmp(&input, "p", 1))
+			break;
+		case 'p':
 			display_pools();
-		else if (!strncasecmp(&input, "s", 1))
+			break;
+		case 's':
 			set_options();
-		else if (have_opencl && !strncasecmp(&input, "g", 1))
-			manage_gpu();
+			break;
+		case 'g':
+			if (have_opencl)
+				manage_gpu();
+			break;
+#ifdef HAVE_CURSES
+		case KEY_DOWN:
+			if (devsummaryYOffset < -(total_devices + devcursor - statusy))
+				break;
+			devsummaryYOffset -= 2;
+		case KEY_UP:
+			if (devsummaryYOffset == 0)
+				break;
+			++devsummaryYOffset;
+			if (curses_active_locked()) {
+				int i;
+				for (i = 0; i < mining_threads; i++)
+					curses_print_devstatus(i);
+				touchwin(statuswin);
+				wrefresh(statuswin);
+				unlock_curses();
+			}
+			break;
+#endif
+		}
 		if (opt_realquiet) {
 			disable_curses();
 			break;
@@ -5171,6 +5202,7 @@ void enable_curses(void) {
 	}
 
 	mainwin = initscr();
+	keypad(mainwin, true);
 	getmaxyx(mainwin, y, x);
 	statuswin = newwin(logstart, x, 0, 0);
 	leaveok(statuswin, true);
