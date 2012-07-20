@@ -689,7 +689,7 @@ void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
 #define NFLAG (0x7F)
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-__kernel void search(__global uint4*restrict input, __global uint*restrict output, __global uint4*restrict padcache, uint4 pad0, uint4 pad1)
+__kernel void search(__global const uint4 * restrict input, __global uint*restrict output, __global uint4*restrict padcache, uint4 pad0, uint4 pad1)
 {
 	uint gid = get_global_id(0);
 	uint4 X[8];
