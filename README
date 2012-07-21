@@ -223,7 +223,7 @@ For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
 For other FPGA details see the FPGA-README
 
 
-CPU only options (deprecated, not included in binaries!):
+CPU only options (not included in binaries):
 
 --algo|-a <arg>     Specify sha256 implementation for CPU mining:
         auto            Benchmark at startup and pick fastest algorithm
