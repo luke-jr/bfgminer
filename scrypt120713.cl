@@ -724,7 +724,7 @@ const uint4 midstate0, const uint4 midstate16, const uint target)
 	SHA256_fixed(&tmp0,&tmp1);
 	SHA256(&ostate0,&ostate1, tmp0, tmp1, (uint4)(0x80000000U, 0U, 0U, 0U), (uint4)(0U, 0U, 0U, 0x300U));
 	
-	if (!(ostate1.w&target))
+	if (!(ostate1.w & target))
 		output[FOUND] = output[NFLAG & gid] = gid;
 }
 
