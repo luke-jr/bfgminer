@@ -126,8 +126,6 @@ Options for both config file and command line:
                     See --api-allow to overcome this
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-port          Port number of miner API (default: 4028)
---auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
---auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
 --benchmark         Run BFGMiner in benchmark mode - produces no shares
 --debug|-D          Enable debug output
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
