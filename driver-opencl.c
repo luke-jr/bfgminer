@@ -998,8 +998,10 @@ static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 	char *midstate = blk->work->midstate;
 	cl_kernel *kernel = &clState->kernel;
 	unsigned int num = 0;
+	cl_uint le_target;
 	cl_int status = 0;
 
+	le_target = ~swab32((uint32_t)blk->work->target[7]);
 	clState->cldata = blk->work->data;
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL,NULL);
 
@@ -1008,6 +1010,7 @@ static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 	CL_SET_ARG(clState->padbuffer8);
 	CL_SET_VARG(4, &midstate[0]);
 	CL_SET_VARG(4, &midstate[16]);
+	CL_SET_ARG(le_target);
 
 	return status;
 }
