@@ -1020,7 +1020,12 @@ static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       int64_t *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
 {
-	*threads = 1 << ((opt_scrypt ? 0 : 15) + intensity);
+	if (opt_scrypt) {
+		if (intensity < 0)
+			intensity = 0;
+		*threads = 1 << intensity;
+	} else
+		*threads = 1 << (15 + intensity);
 	if (*threads < minthreads)
 		*threads = minthreads;
 	*globalThreads = *threads;
