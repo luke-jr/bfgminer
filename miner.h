@@ -360,6 +360,10 @@ struct cgpu_info {
 	size_t work_size;
 	enum cl_kernels kernel;
 
+#ifdef USE_SCRYPT
+	int lookup_gap;
+	int thread_concurrency;
+#endif
 	struct timeval tv_gpustart;;
 	struct timeval tv_gpuend;
 	double gpu_us_average;

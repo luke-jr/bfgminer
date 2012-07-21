@@ -367,6 +367,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	 * compiler to ensure we only load a binary that matches what would
 	 * have otherwise created. The filename is:
 	 * name + kernelname +/- g(offset) + v + vectors + w + work_size + l + sizeof(long) + .bin
+	 * For scrypt the filename is:
+	 * name + kernelname + g + lg + lookup_gap + tc + thread_concurrency + w + work_size + l + sizeof(long) + .bin
 	 */
 	char binaryfilename[255];
 	char filename[255];
@@ -461,6 +463,15 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
 	gpus[gpu].work_size = clState->wsize;
 
+#ifdef USE_SCRYPT
+	if (opt_scrypt) {
+		if (!gpus[gpu].lookup_gap)
+			gpus[gpu].lookup_gap = 2;
+		if (!gpus[gpu].thread_concurrency)
+			gpus[gpu].thread_concurrency = 2048;
+	}
+#endif
+
 	FILE *binaryfile;
 	size_t *binary_sizes;
 	char **binaries;
@@ -485,24 +496,19 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
-#ifdef USE_SCRYPT
-	if (opt_scrypt) {
-		clState->lookup_gap = 1;
-		clState->thread_concurrency = 6144;
-	}
-#endif
-
 	strcat(binaryfilename, name);
 	if (clState->goffset)
 		strcat(binaryfilename, "g");
-	strcat(binaryfilename, "v");
-	sprintf(numbuf, "%d", clState->vwidth);
+	if (opt_scrypt) {
+		sprintf(numbuf, "lg%dtc%d", gpus[gpu].lookup_gap, gpus[gpu].thread_concurrency);
+		strcat(binaryfilename, numbuf);
+	} else {
+		sprintf(numbuf, "v%d", clState->vwidth);
+		strcat(binaryfilename, numbuf);
+	}
+	sprintf(numbuf, "w%d", (int)clState->wsize);
 	strcat(binaryfilename, numbuf);
-	strcat(binaryfilename, "w");
-	sprintf(numbuf, "%d", (int)clState->wsize);
-	strcat(binaryfilename, numbuf);
-	strcat(binaryfilename, "l");
-	sprintf(numbuf, "%d", (int)sizeof(long));
+	sprintf(numbuf, "l%d", (int)sizeof(long));
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, ".bin");
 
@@ -566,7 +572,7 @@ build:
 #ifdef USE_SCRYPT
 	if (opt_scrypt)
 		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
-			(int)clState->lookup_gap, (int)clState->thread_concurrency, (int)clState->wsize);
+			gpus[gpu].lookup_gap, gpus[gpu].thread_concurrency, (int)clState->wsize);
 	else
 #endif
 	{
@@ -753,8 +759,8 @@ built:
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
-		size_t ipt = (1024 / clState->lookup_gap + (1024 % clState->lookup_gap > 0));
-		size_t bufsize = 128 * ipt * clState->thread_concurrency;
+		size_t ipt = (1024 / gpus[gpu].lookup_gap + (1024 % gpus[gpu].lookup_gap > 0));
+		size_t bufsize = 128 * ipt * gpus[gpu].thread_concurrency;
 
 		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 80, NULL, &status);
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);

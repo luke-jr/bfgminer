@@ -127,6 +127,58 @@ char *set_worksize(char *arg)
 	return NULL;
 }
 
+#ifdef USE_SCRYPT
+char *set_lookup_gap(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set lookup gap";
+	val = atoi(nextptr);
+
+	gpus[device++].lookup_gap = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].lookup_gap = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].lookup_gap = gpus[0].lookup_gap;
+	}
+
+	return NULL;
+}
+
+char *set_thread_concurrency(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set thread concurrency";
+	val = atoi(nextptr);
+
+	gpus[device++].thread_concurrency = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].thread_concurrency = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].thread_concurrency = gpus[0].thread_concurrency;
+	}
+
+	return NULL;
+}
+#endif
+
 static enum cl_kernels select_kernel(char *arg)
 {
 	if (!strcmp(arg, "diablo"))
