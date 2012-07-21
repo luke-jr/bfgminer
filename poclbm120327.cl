@@ -1311,8 +1311,8 @@ Vals[1]+=(rotr(W[9],17)^rotr(W[9],19)^(W[9]>>10U));
 Vals[1]+=K[59];
 Vals[1]+=Vals[5];
 
-#define FOUND (0x80)
-#define NFLAG (0x7F)
+#define FOUND (0x800)
+#define NFLAG (0x7FF)
 
 #if defined(VECTORS2) || defined(VECTORS4)
 	Vals[2]+=Ma(Vals[6],Vals[5],Vals[7]);
