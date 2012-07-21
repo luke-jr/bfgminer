@@ -610,8 +610,13 @@ extern void add_pool_details(bool live, char *url, char *user, char *pass);
 
 #define MIN_INTENSITY -10
 #define _MIN_INTENSITY_STR "-10"
+#ifdef USE_SCRYPT
+#define MAX_INTENSITY 20
+#define _MAX_INTENSITY_STR "20"
+#else
 #define MAX_INTENSITY 14
 #define _MAX_INTENSITY_STR "14"
+#endif
 
 extern struct list_head scan_devices;
 extern int nDevs;
