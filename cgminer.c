@@ -4012,7 +4012,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
 	if (!test_nonce(work, nonce)) {
-		applog(LOG_INFO, "Pool %d share below target", work->pool->pool_no);
+		applog(LOG_INFO, "Share below target");
 		return true;
 	}
 	return submit_work_sync(thr, work);

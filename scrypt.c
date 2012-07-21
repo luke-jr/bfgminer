@@ -407,20 +407,6 @@ static uint32_t scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad)
 	return PBKDF2_SHA256_80_128_32(input, X);
 }
 
-bool scrypt_scan_nonce(struct work *work, uint32_t nonce)
-{
-	uint32_t Htarg, tmp_hash7, data[20];
-	unsigned char *scratchbuf;
-
-	be32enc_vect(data, (const uint32_t *)work->data, 19);
-	data[19] = htobe32(nonce);
-
-	Htarg = ((const uint32_t *)work->target)[7];
-	scratchbuf = alloca(131584);
-	tmp_hash7 = scrypt_1024_1_1_256_sp(data, scratchbuf);
-	return (tmp_hash7 <= Htarg);
-}
-
 bool scanhash_scrypt(struct thr_info *thr, const unsigned char *pmidstate, unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
@@ -437,7 +423,7 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char *pmidstate, unsig
 
 	be32enc_vect(data, (const uint32_t *)pdata, 19);
 
-	scratchbuf = malloc(131584);
+	scratchbuf = malloc(131583);
 	if (unlikely(!scratchbuf)) {
 		applog(LOG_ERR, "Failed to malloc scratchbuf in scanhash_scrypt");
 		return ret;
