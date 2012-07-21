@@ -729,7 +729,8 @@ const uint4 midstate0, const uint4 midstate16, const uint target)
 }
 
 /*-
- * Copyright 2009 Colin Percival, 2011 ArtForz, 2011 pooler, 2012 mtrlt
+ * Copyright 2009 Colin Percival, 2011 ArtForz, 2011 pooler, 2012 mtrlt,
+ * 2012 Con Kolivas.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
