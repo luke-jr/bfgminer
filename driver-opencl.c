@@ -995,7 +995,7 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 #ifdef USE_SCRYPT
 static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
-	char *midstate = blk->work->midstate;
+	unsigned char *midstate = blk->work->midstate;
 	cl_kernel *kernel = &clState->kernel;
 	unsigned int num = 0;
 	cl_uint le_target;
@@ -1020,7 +1020,7 @@ static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       int64_t *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
 {
-	*threads = 1 << (15 + intensity);
+	*threads = 1 << ((opt_scrypt ? 0 : 15) + intensity);
 	if (*threads < minthreads)
 		*threads = minthreads;
 	*globalThreads = *threads;
