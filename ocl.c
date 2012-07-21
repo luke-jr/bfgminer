@@ -761,6 +761,7 @@ built:
 	if (opt_scrypt) {
 		size_t ipt = (1024 / gpus[gpu].lookup_gap + (1024 % gpus[gpu].lookup_gap > 0));
 		size_t bufsize = 128 * ipt * gpus[gpu].thread_concurrency;
+		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
 
 		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 80, NULL, &status);
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
