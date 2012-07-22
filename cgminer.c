@@ -4004,15 +4004,17 @@ bool hashtest(const struct work *work)
 
 bool test_nonce(struct work *work, uint32_t nonce)
 {
-	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-
 	if (opt_scrypt) {
+		uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
+
 		*work_nonce = nonce;
 		return true;
 	}
 
-	*work_nonce = htobe32(nonce);
-
+	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
+	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
+	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
+	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
 
 	return hashtest(work);
 }
