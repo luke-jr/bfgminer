@@ -773,11 +773,14 @@ built:
 		size_t ipt = (1024 / gpus[gpu].lookup_gap + (1024 % gpus[gpu].lookup_gap > 0));
 		size_t bufsize = 128 * ipt * gpus[gpu].thread_concurrency;
 
-		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
+		/* Always allocate the largest possible buffer allowed, even if we're not initially requiring it
+		 * based on thread_concurrency, giving us some headroom for intensity levels. */
 		if (bufsize > gpus[gpu].max_alloc) {
 			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u, your scrypt settings come to %u",
 			       gpu, gpus[gpu].max_alloc, bufsize);
-		}
+		} else
+			bufsize = gpus[gpu].max_alloc;
+		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
 		clState->padbufsize = bufsize;
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
 		if (status != CL_SUCCESS) {
