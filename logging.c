@@ -39,49 +39,14 @@ static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
 	}
 }
 
+static void log_generic(int prio, const char *fmt, va_list ap);
+
 void vapplog(int prio, const char *fmt, va_list ap)
 {
 	if (!opt_debug && prio == LOG_DEBUG)
 		return;
-
-#ifdef HAVE_SYSLOG_H
-	if (use_syslog) {
-		vsyslog(prio, fmt, ap);
-	}
-#else
-	if (0) {}
-#endif
-	else if (opt_log_output || prio <= LOG_NOTICE) {
-		char *f;
-		int len;
-		struct timeval tv = {0, 0};
-		struct tm *tm;
-
-		gettimeofday(&tv, NULL);
-
-		tm = localtime(&tv.tv_sec);
-
-		len = 40 + strlen(fmt) + 22;
-		f = alloca(len);
-		sprintf(f, " [%d-%02d-%02d %02d:%02d:%02d] %s\n",
-			tm->tm_year + 1900,
-			tm->tm_mon + 1,
-			tm->tm_mday,
-			tm->tm_hour,
-			tm->tm_min,
-			tm->tm_sec,
-			fmt);
-		/* Only output to stderr if it's not going to the screen as well */
-		if (!isatty(fileno((FILE *)stderr))) {
-			va_list apc;
-
-			va_copy(apc, ap);
-			vfprintf(stderr, f, apc);	/* atomic write to stderr */
-			fflush(stderr);
-		}
-
-		my_log_curses(prio, f, ap);
-	}
+	if (use_syslog || opt_log_output || prio <= LOG_NOTICE)
+		log_generic(prio, fmt, ap);
 }
 
 void applog(int prio, const char *fmt, ...)
@@ -100,7 +65,7 @@ void applog(int prio, const char *fmt, ...)
  * generic log function used by priority specific ones
  * equals vapplog() without additional priority checks
  */
-static void __maybe_unused log_generic(int prio, const char *fmt, va_list ap)
+static void log_generic(int prio, const char *fmt, va_list ap)
 {
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog) {
