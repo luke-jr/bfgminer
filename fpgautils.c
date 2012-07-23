@@ -178,7 +178,8 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 
 	SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
 
-	const DWORD ctoms = (timeout == -1) ? 30000 : (timeout * 100);
+	// Code must specify a valid timeout value (0 means don't timeout)
+	const DWORD ctoms = (timeout * 100);
 	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
 	SetCommTimeouts(hSerial, &cto);
 
@@ -230,10 +231,9 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	my_termios.c_oflag &= ~OPOST;
 	my_termios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
 
-	if (timeout >= 0) {
-		my_termios.c_cc[VTIME] = (cc_t)timeout;
-		my_termios.c_cc[VMIN] = 0;
-	}
+	// Code must specify a valid timeout value (0 means don't timeout)
+	my_termios.c_cc[VTIME] = (cc_t)timeout;
+	my_termios.c_cc[VMIN] = 0;
 
 	tcsetattr(fdDev, TCSANOW, &my_termios);
 	if (purge)
