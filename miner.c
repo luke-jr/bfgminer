@@ -1240,6 +1240,27 @@ static bool jobj_binary(const json_t *obj, const char *key,
 	return true;
 }
 
+static void calc_midstate(struct work *work)
+{
+	union {
+		unsigned char c[64];
+		uint32_t i[16];
+	} data;
+	int swapcounter;
+
+	for (swapcounter = 0; swapcounter < 16; swapcounter++)
+		data.i[swapcounter] = swab32(((uint32_t*) (work->data))[swapcounter]);
+	sha2_context ctx;
+	sha2_starts( &ctx, 0 );
+	sha2_update( &ctx, data.c, 64 );
+	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
+#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
+	int i;
+	for (i = 0; i < 8; i++)
+		(((uint32_t*) (work->midstate))[i]) = swab32(((uint32_t*) (work->midstate))[i]);
+#endif
+}
+
 static bool work_decode(const json_t *val, struct work *work)
 {
 	unsigned char bits = 0, i;
@@ -1249,28 +1270,13 @@ static bool work_decode(const json_t *val, struct work *work)
 		goto err_out;
 	}
 
-	if (likely(!jobj_binary(val, "midstate",
-			 work->midstate, sizeof(work->midstate), false))) {
+	if (!jobj_binary(val, "midstate", work->midstate, sizeof(work->midstate), false)) {
 		// Calculate it ourselves
-		union {
-			unsigned char c[64];
-			uint32_t i[16];
-		} data;
-		int swapcounter;
-		for (swapcounter = 0; swapcounter < 16; swapcounter++)
-			data.i[swapcounter] = swab32(((uint32_t*) (work->data))[swapcounter]);
-		sha2_context ctx;
-		sha2_starts( &ctx, 0 );
-		sha2_update( &ctx, data.c, 64 );
-		memcpy(work->midstate, ctx.state, sizeof(work->midstate));
-#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
-		int i;
-		for (i = 0; i < 8; i++)
-			(((uint32_t*) (work->midstate))[i]) = swab32(((uint32_t*) (work->midstate))[i]);
-#endif
+		applog(LOG_DEBUG, "Calculating midstate locally");
+		calc_midstate(work);
 	}
 
-	if (likely(!jobj_binary(val, "hash1", work->hash1, sizeof(work->hash1), false))) {
+	if (!jobj_binary(val, "hash1", work->hash1, sizeof(work->hash1), false)) {
 		// Always the same anyway
 		memcpy(work->hash1, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\1\0\0", 64);
 	}
@@ -3556,6 +3562,7 @@ static void *api_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
 
+	pthread_detach(pthread_self());
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	api(api_thr_id);
@@ -3606,8 +3613,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		double thread_rolling = 0.0;
 		int i;
 
-		applog(LOG_DEBUG, "[thread %d: %llu hashes, %.0f khash/sec]",
-			thr_id, hashes_done, hashes_done / secs);
+		applog(LOG_DEBUG, "[thread %d: %llu hashes, %.1f khash/sec]",
+			thr_id, hashes_done, hashes_done / 1000 / secs);
 
 		/* Rolling average for each thread and each device */
 		decay_time(&thr->rolling, local_mhashes / secs);
@@ -4839,6 +4846,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
 
+#ifdef WANT_CPUMINE
+			if (!strcmp(cgpu->api->dname, "cpu"))
+				continue;
+#endif
 			if (cgpu->rolling < WATCHDOG_LOW_HASH)
 				cgpu->low_count++;
 			else
@@ -5803,8 +5814,6 @@ begin_bench:
 	thr = &thr_info[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
-	pthread_detach(thr->pth);
-
 
 #ifdef HAVE_CURSES
 	/* Create curses input thread for keyboard input. Create this last so
