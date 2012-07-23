@@ -5303,6 +5303,7 @@ int main(int argc, char *argv[])
 	bool pools_active = false;
 	struct sigaction handler;
 	struct thr_info *thr;
+	char *s;
 	unsigned int k;
 	int i, j;
 
@@ -5353,7 +5354,9 @@ int main(int argc, char *argv[])
 	opt_kernel_path = alloca(PATH_MAX);
 	strcpy(opt_kernel_path, CGMINER_PREFIX);
 	cgminer_path = alloca(PATH_MAX);
-	strcpy(cgminer_path, dirname(argv[0]));
+	s = strdup(argv[0]);
+	strcpy(cgminer_path, dirname(s));
+	free(s);
 	strcat(cgminer_path, "/");
 #ifdef WANT_CPUMINE
 	// Hack to make cgminer silent when called recursively on WIN32
