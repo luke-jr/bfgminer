@@ -1544,8 +1544,9 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  GW: %d  LW: %d  GF: %d  RF: %d",
 		total_queued, requests_staged(), total_stale, total_discarded, new_blocks,
+		total_getworks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
 	if (pool_strategy == POOL_LOADBALANCE && total_pools > 1)
@@ -3675,12 +3676,12 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		1e6*total_mhashes_done / total_secs,
 		utility_to_hashrate(total_accepted_weighed / (total_secs ?: 1) * 60),
 		H2B_SPACED);
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
-		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
+		total_accepted, total_rejected, hw_errors, efficiency, utility);
 
 
 	local_mhashes_done = 0;
