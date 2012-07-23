@@ -88,7 +88,7 @@ static bool want_longpoll = true;
 static bool have_longpoll;
 static bool want_per_device_stats;
 bool use_syslog;
-static bool opt_quiet;
+bool opt_quiet;
 static bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
@@ -165,9 +165,7 @@ static int total_threads;
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
-#ifdef HAVE_CURSES
-static pthread_mutex_t curses_lock;
-#endif
+pthread_mutex_t console_lock;
 static pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
 
@@ -1367,12 +1365,12 @@ struct cgpu_info *cpus;
 #ifdef HAVE_CURSES
 static inline void unlock_curses(void)
 {
-	mutex_unlock(&curses_lock);
+	mutex_unlock(&console_lock);
 }
 
 static inline void lock_curses(void)
 {
-	mutex_lock(&curses_lock);
+	mutex_lock(&console_lock);
 }
 
 static bool curses_active_locked(void)
@@ -1725,12 +1723,9 @@ void wlogprint(const char *f, ...)
 #endif
 
 #ifdef HAVE_CURSES
-void log_curses(int prio, const char *f, va_list ap)
+bool log_curses_only(int prio, const char *f, va_list ap)
 {
 	bool high_prio;
-
-	if (opt_quiet && prio != LOG_ERR)
-		return;
 
 	high_prio = (prio == LOG_WARNING || prio == LOG_ERR);
 
@@ -1743,8 +1738,9 @@ void log_curses(int prio, const char *f, va_list ap)
 			}
 		}
 		unlock_curses();
-	} else
-		vprintf(f, ap);
+		return true;
+	}
+	return false;
 }
 
 void clear_logwin(void)
@@ -5322,9 +5318,7 @@ int main(int argc, char *argv[])
 
 	mutex_init(&hash_lock);
 	mutex_init(&qd_lock);
-#ifdef HAVE_CURSES
-	mutex_init(&curses_lock);
-#endif
+	mutex_init(&console_lock);
 	mutex_init(&control_lock);
 	mutex_init(&sharelog_lock);
 	mutex_init(&ch_lock);
