@@ -472,10 +472,14 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
-		if (!gpus[gpu].lookup_gap)
+		if (!gpus[gpu].lookup_gap) {
+			applog(LOG_DEBUG, "GPU %d: selecting lookup gap of 2", gpu);
 			gpus[gpu].lookup_gap = 2;
-		if (!gpus[gpu].thread_concurrency)
-			gpus[gpu].thread_concurrency = 2048;
+		}
+		if (!gpus[gpu].thread_concurrency) {
+			gpus[gpu].thread_concurrency = gpus[gpu].max_alloc / 32768 / gpus[gpu].lookup_gap;
+			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %u",gpu,  gpus[gpu].thread_concurrency);
+		}
 	}
 #endif
 
@@ -769,9 +773,11 @@ built:
 		size_t ipt = (1024 / gpus[gpu].lookup_gap + (1024 % gpus[gpu].lookup_gap > 0));
 		size_t bufsize = 128 * ipt * gpus[gpu].thread_concurrency;
 
-		if (bufsize % 256)
-			bufsize += (256 - bufsize % 256);
 		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
+		if (bufsize > gpus[gpu].max_alloc) {
+			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u, your scrypt settings come to %u",
+			       gpu, gpus[gpu].max_alloc, bufsize);
+		}
 		clState->padbufsize = bufsize;
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
 		if (status != CL_SUCCESS) {
