@@ -576,6 +576,8 @@ extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_scantime;
 
+extern pthread_mutex_t console_lock;
+
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 

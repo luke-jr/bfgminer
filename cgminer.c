@@ -164,7 +164,7 @@ static int total_threads;
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
-static pthread_mutex_t curses_lock;
+pthread_mutex_t console_lock;
 static pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
 
@@ -1323,12 +1323,12 @@ struct cgpu_info *cpus;
 #ifdef HAVE_CURSES
 static inline void unlock_curses(void)
 {
-	mutex_unlock(&curses_lock);
+	mutex_unlock(&console_lock);
 }
 
 static inline void lock_curses(void)
 {
-	mutex_lock(&curses_lock);
+	mutex_lock(&console_lock);
 }
 
 static bool curses_active_locked(void)
@@ -5056,9 +5056,7 @@ int main(int argc, char *argv[])
 
 	mutex_init(&hash_lock);
 	mutex_init(&qd_lock);
-#ifdef HAVE_CURSES
-	mutex_init(&curses_lock);
-#endif
+	mutex_init(&console_lock);
 	mutex_init(&control_lock);
 	mutex_init(&sharelog_lock);
 	mutex_init(&ch_lock);
