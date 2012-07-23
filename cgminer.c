@@ -164,9 +164,7 @@ static int total_threads;
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
-#ifdef HAVE_CURSES
 static pthread_mutex_t curses_lock;
-#endif
 static pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
 
@@ -1562,7 +1560,7 @@ void wlogprint(const char *f, ...)
 #endif
 
 #ifdef HAVE_CURSES
-void log_curses(int prio, const char *f, va_list ap)
+bool log_curses_only(int prio, const char *f, va_list ap)
 {
 	bool high_prio;
 
@@ -1577,8 +1575,9 @@ void log_curses(int prio, const char *f, va_list ap)
 			}
 		}
 		unlock_curses();
-	} else
-		vprintf(f, ap);
+		return true;
+	}
+	return false;
 }
 
 void clear_logwin(void)

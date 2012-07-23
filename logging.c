@@ -25,8 +25,8 @@ static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
 
 #ifdef HAVE_CURSES
 	extern bool use_curses;
-	if (use_curses)
-		log_curses(prio, f, ap);
+	if (use_curses && log_curses_only(prio, f, ap))
+		;
 	else
 #endif
 	{
@@ -34,11 +34,7 @@ static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
 
 		strcpy(f + len - 1, "                    \n");
 
-#ifdef HAVE_CURSES
-		log_curses(prio, f, ap);
-#else
 		vprintf(f, ap);
-#endif
 	}
 }
 
