@@ -20,6 +20,9 @@ int opt_log_level = LOG_NOTICE;
 
 static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
 {
+	if (opt_quiet && prio != LOG_ERR)
+		return;
+
 #ifdef HAVE_CURSES
 	extern bool use_curses;
 	if (use_curses)

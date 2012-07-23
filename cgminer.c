@@ -87,7 +87,7 @@ static bool opt_benchmark;
 static bool have_longpoll;
 static bool want_per_device_stats;
 bool use_syslog;
-static bool opt_quiet;
+bool opt_quiet;
 static bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
@@ -1565,9 +1565,6 @@ void wlogprint(const char *f, ...)
 void log_curses(int prio, const char *f, va_list ap)
 {
 	bool high_prio;
-
-	if (opt_quiet && prio != LOG_ERR)
-		return;
 
 	high_prio = (prio == LOG_WARNING || prio == LOG_ERR);
 

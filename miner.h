@@ -614,6 +614,7 @@ extern int opt_n_threads;
 extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
+extern bool opt_quiet;
 extern struct thr_info *thr_info;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
