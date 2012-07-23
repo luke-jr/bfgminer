@@ -356,9 +356,11 @@ struct cgpu_info {
 	int virtual_adl;
 	int intensity;
 	bool dynamic;
+
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;
+	cl_ulong max_alloc;
 
 #ifdef USE_SCRYPT
 	int lookup_gap;
