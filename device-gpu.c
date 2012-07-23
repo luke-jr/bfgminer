@@ -959,11 +959,6 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 }
 #endif
 
-static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
-{
-	tailsprintf(buf, " I:%2d", gpu->intensity);
-}
-
 struct opencl_thread_data {
 	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *);
 	uint32_t *res;
@@ -1192,7 +1187,6 @@ struct device_api opencl_api = {
 #ifdef HAVE_ADL
 	.get_statline_before = get_opencl_statline_before,
 #endif
-	.get_statline = get_opencl_statline,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
 	.free_work = opencl_free_work,
