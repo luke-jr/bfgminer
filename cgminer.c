@@ -857,7 +857,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_SCRYPT
 	OPT_WITH_ARG("--lookup-gap",
 		     set_lookup_gap, NULL, NULL,
-		     "Set GPU lookup gap for scrypt mining, comma separated"),
+		     opt_hidden),
 #endif
 	OPT_WITH_ARG("--intensity|-I",
 		     set_intensity, NULL, NULL,
@@ -965,6 +965,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--scrypt",
 			opt_set_bool, &opt_scrypt,
 			"Use the scrypt algorithm for mining (litecoin only)"),
+	OPT_WITH_ARG("--shaders",
+		     set_shaders, NULL, NULL,
+		     "GPU shaders per card for tuning scrypt, comma separated"),
 #endif
 	OPT_WITH_ARG("--sharelog",
 		     set_sharelog, NULL, NULL,
@@ -1007,7 +1010,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_SCRYPT
 	OPT_WITH_ARG("--thread-concurrency",
 		     set_thread_concurrency, NULL, NULL,
-		     "Set GPU thread concurrency for scrypt mining, comma separated"),
+		     opt_hidden),
 #endif
 	OPT_WITH_ARG("--url|-o",
 		     set_url, NULL, NULL,

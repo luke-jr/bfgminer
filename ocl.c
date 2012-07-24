@@ -478,6 +478,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		}
 		if (!gpus[gpu].thread_concurrency) {
 			gpus[gpu].thread_concurrency = gpus[gpu].max_alloc / 32768 / gpus[gpu].lookup_gap;
+			if (gpus[gpu].shaders && gpus[gpu].thread_concurrency > gpus[gpu].shaders)
+				gpus[gpu].thread_concurrency -= gpus[gpu].thread_concurrency % gpus[gpu].shaders;
+				
 			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %u",gpu,  gpus[gpu].thread_concurrency);
 		}
 	}

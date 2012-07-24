@@ -128,6 +128,31 @@ char *set_worksize(char *arg)
 }
 
 #ifdef USE_SCRYPT
+char *set_shaders(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set lookup gap";
+	val = atoi(nextptr);
+
+	gpus[device++].shaders = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].shaders = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].shaders = gpus[0].shaders;
+	}
+
+	return NULL;
+}
+
 char *set_lookup_gap(char *arg)
 {
 	int i, val = 0, device = 0;

@@ -365,6 +365,7 @@ struct cgpu_info {
 #ifdef USE_SCRYPT
 	int lookup_gap;
 	int thread_concurrency;
+	int shaders;
 #endif
 	struct timeval tv_gpustart;;
 	struct timeval tv_gpuend;
