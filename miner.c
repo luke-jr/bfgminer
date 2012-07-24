@@ -4179,7 +4179,7 @@ err_out:
 	return false;
 }
 
-bool hashtest(const struct work *work)
+bool hashtest(const struct work *work, bool checktarget)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[128];
@@ -4195,6 +4195,9 @@ bool hashtest(const struct work *work)
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
 
+	if (!checktarget)
+		return hash2_32[7] == 0;
+
 	for (i = 0; i < 32 / 4; i++)
 		hash2_32[i] = swab32(hash2_32[i]);
 
@@ -4204,21 +4207,21 @@ bool hashtest(const struct work *work)
 
 }
 
-bool test_nonce(struct work *work, uint32_t nonce)
+bool test_nonce(struct work *work, uint32_t nonce, bool checktarget)
 {
 	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
 	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
 	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
 	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
 
-	return hashtest(work);
+	return hashtest(work, checktarget);
 }
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
-	if (!test_nonce(work, nonce)) {
+	if (!test_nonce(work, nonce, true)) {
 		applog(LOG_INFO, "Share below target");
 		return true;
 	}
