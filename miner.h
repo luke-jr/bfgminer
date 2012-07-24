@@ -165,6 +165,7 @@ enum alive {
 	LIFE_DEAD,
 	LIFE_NOSTART,
 	LIFE_INIT,
+	LIFE_WAIT,
 };
 
 
@@ -423,7 +424,7 @@ struct thr_info {
 	struct timeval sick;
 
 	bool	pause;
-	bool	getwork;
+	time_t	getwork;
 	double	rolling;
 
 	bool	work_restart;
