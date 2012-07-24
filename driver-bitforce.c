@@ -59,18 +59,18 @@ static bool bitforce_detect_one(const char *devpath)
 
 	int fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
-		applog(LOG_ERR, "BFL: Failed to open %s", devpath);
+		applog(LOG_DEBUG, "BFL: Failed to open %s", devpath);
 		return false;
 	}
 	BFwrite(fdDev, "ZGX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL: Error reading (ZGX)");
+		applog(LOG_DEBUG, "BFL: Error reading (ZGX)");
 		return 0;
 	}
 	BFclose(fdDev);
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
-		applog(LOG_ERR, "BFL: Didn't recognise BitForce on %s", devpath);
+		applog(LOG_DEBUG, "BFL: Didn't recognise BitForce on %s", devpath);
 		return false;
 	}
 
