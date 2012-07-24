@@ -1484,7 +1484,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	unsigned int threads;
 	int64_t hashes;
 
-	if (gpu->dynamic || opt_scrypt)
+	if (gpu->dynamic)
 		blocking = CL_TRUE;
 	else
 		blocking = CL_FALSE;
