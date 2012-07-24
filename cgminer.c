@@ -2240,8 +2240,8 @@ static void *submit_work_thread(void *userdata)
 			staleexpire = time(NULL) + 300;
 		}
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-			applog(LOG_ERR, "Failed %d retries ...terminating workio thread", opt_retries);
-			kill_work();
+			applog(LOG_ERR, "Failed %d retries, discarding", opt_retries);
+			submit_discard_share(work);
 			break;
 		}
 		else if (unlikely(work->stale && opt_retries < 0)) {
