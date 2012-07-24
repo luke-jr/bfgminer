@@ -257,7 +257,7 @@ int clDevicesNum(void) {
 	cl_uint numPlatforms;
 	cl_platform_id *platforms;
 	cl_platform_id platform = NULL;
-	unsigned int most_devices = 0, i, mdplatform;
+	unsigned int most_devices = 0, i, mdplatform = 0;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	/* If this fails, assume no GPUs. */
