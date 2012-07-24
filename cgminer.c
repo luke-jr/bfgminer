@@ -2221,6 +2221,7 @@ static void *submit_work_thread(void *userdata)
 	while (!submit_upstream_work(work, ce->curl)) {
 		if (stale_work(work, true)) {
 			applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
+			sharelog("discard", work);
 			total_stale++;
 			pool->stale_shares++;
 			break;
