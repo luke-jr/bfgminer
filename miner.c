@@ -1611,6 +1611,8 @@ static void curses_print_devstatus(int thr_id)
 		wprintw(statuswin, "DEAD ");
 	else if (cgpu->status == LIFE_SICK)
 		wprintw(statuswin, "SICK ");
+	else if (cgpu->status == LIFE_WAIT)
+		wprintw(statuswin, "WAIT ");
 	else if (cgpu->deven == DEV_DISABLED)
 		wprintw(statuswin, "OFF  ");
 	else if (cgpu->deven == DEV_RECOVER)
@@ -3594,13 +3596,13 @@ void thread_reportin(struct thr_info *thr)
 {
 	gettimeofday(&thr->last, NULL);
 	thr->cgpu->status = LIFE_WELL;
-	thr->getwork = false;
+	thr->getwork = 0;
 	thr->cgpu->device_last_well = time(NULL);
 }
 
 static inline void thread_reportout(struct thr_info *thr)
 {
-	thr->getwork = true;
+	thr->getwork = time(NULL);
 }
 
 static void hashmeter(int thr_id, struct timeval *diff,
@@ -4860,9 +4862,27 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			}
 #endif
 			
-			/* Thread is waiting on getwork or disabled */
-			if (thr->getwork || *denable == DEV_DISABLED)
+			/* Thread is disabled */
+			if (*denable == DEV_DISABLED)
 				continue;
+
+			if (thr->getwork) {
+				if (cgpu->status == LIFE_WELL && thr->getwork < now.tv_sec - opt_log_interval) {
+					int thrid;
+					bool cgpu_idle = true;
+					thr->rolling = 0;
+					for (thrid = 0; thrid < cgpu->threads; ++thrid)
+						if (!cgpu->thr[thrid]->getwork)
+							cgpu_idle = false;
+					if (cgpu_idle) {
+						cgpu->rolling = 0;
+						cgpu->status = LIFE_WAIT;
+					}
+				}
+				continue;
+			}
+			else if (cgpu->status == LIFE_WAIT)
+				cgpu->status = LIFE_WELL;
 
 #ifdef WANT_CPUMINE
 			if (!strcmp(cgpu->api->dname, "cpu"))

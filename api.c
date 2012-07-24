@@ -171,6 +171,7 @@ static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
 static const char *INIT = "Initialising";
+static const char *WAIT = "Waiting";
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
@@ -1272,6 +1273,8 @@ status2str(enum alive status)
 			return NOSTART;
 		case LIFE_INIT:
 			return INIT;
+		case LIFE_WAIT:
+			return WAIT;
 		default:
 			return UNKNOWN;
 	}
