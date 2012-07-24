@@ -434,7 +434,7 @@ static bool icarus_detect_one(const char *devpath)
 
 	fd = icarus_open2(devpath, true);
 	if (unlikely(fd == -1)) {
-		applog(LOG_ERR, "Icarus Detect: Failed to open %s", devpath);
+		applog(LOG_DEBUG, "Icarus Detect: Failed to open %s", devpath);
 		return false;
 	}
 
@@ -454,7 +454,7 @@ static bool icarus_detect_one(const char *devpath)
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 	if (nonce_hex) {
 		if (strncmp(nonce_hex, golden_nonce, 8)) {
-			applog(LOG_ERR, 
+			applog(LOG_DEBUG,
 				"Icarus Detect: "
 				"Test failed at %s: get %s, should: %s",
 				devpath, nonce_hex, golden_nonce);
