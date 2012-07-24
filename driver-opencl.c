@@ -1053,7 +1053,7 @@ static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 	cl_uint le_target;
 	cl_int status = 0;
 
-	le_target = ~swab32(*(cl_uint *)(blk->work->target + 28));
+	le_target = *(cl_uint *)(blk->work->target + 28);
 	clState->cldata = blk->work->data;
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL,NULL);
 
