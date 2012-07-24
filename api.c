@@ -1833,6 +1833,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 
 	root = api_add_double(root, "Elapsed", &(total_secs), false);
 #ifdef WANT_CPUMINE
+	if (opt_n_threads)
 	root = api_add_string(root, "Algorithm", algo, false);
 #endif
 	root = api_add_mhs(root, "MHS av", &(mhs), false);
