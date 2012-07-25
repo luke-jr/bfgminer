@@ -472,16 +472,34 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
+		cl_ulong ma = gpus[gpu].max_alloc, mt;
+		int pow2 = 0;
+
 		if (!gpus[gpu].lookup_gap) {
 			applog(LOG_DEBUG, "GPU %d: selecting lookup gap of 2", gpu);
 			gpus[gpu].lookup_gap = 2;
 		}
 		if (!gpus[gpu].thread_concurrency) {
-			gpus[gpu].thread_concurrency = gpus[gpu].max_alloc / 32768 / gpus[gpu].lookup_gap;
+			gpus[gpu].thread_concurrency = ma / 32768 / gpus[gpu].lookup_gap;
 			if (gpus[gpu].shaders && gpus[gpu].thread_concurrency > gpus[gpu].shaders)
 				gpus[gpu].thread_concurrency -= gpus[gpu].thread_concurrency % gpus[gpu].shaders;
 				
 			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %u",gpu,  gpus[gpu].thread_concurrency);
+		}
+
+		/* If we have memory to spare, try to find a power of 2 value
+		 * >= required amount to map nicely to an intensity */
+		mt = gpus[gpu].thread_concurrency * 32768 * gpus[gpu].lookup_gap;
+		if (ma > mt) {
+			while (ma >>= 1)
+				pow2++;
+			ma = 1;
+			while (--pow2 && ma < mt)
+				ma <<= 1;
+			if (ma >= mt) {
+				gpus[gpu].max_alloc = ma;
+				applog(LOG_DEBUG, "Max alloc decreased to %lu", gpus[gpu].max_alloc);
+			}
 		}
 	}
 #endif
@@ -776,8 +794,8 @@ built:
 		size_t ipt = (1024 / gpus[gpu].lookup_gap + (1024 % gpus[gpu].lookup_gap > 0));
 		size_t bufsize = 128 * ipt * gpus[gpu].thread_concurrency;
 
-		/* Always allocate the largest possible buffer allowed, even if we're not initially requiring it
-		 * based on thread_concurrency, giving us some headroom for intensity levels. */
+		/* Use the max alloc value which has been rounded to a power of
+		 * 2 greater >= required amount earlier */
 		if (bufsize > gpus[gpu].max_alloc) {
 			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u, your scrypt settings come to %u",
 			       gpu, gpus[gpu].max_alloc, bufsize);
