@@ -857,7 +857,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_SCRYPT
 	OPT_WITH_ARG("--lookup-gap",
 		     set_lookup_gap, NULL, NULL,
-		     opt_hidden),
+		     "Set GPU lookup gap for scrypt mining, comma separated"),
 #endif
 	OPT_WITH_ARG("--intensity|-I",
 		     set_intensity, NULL, NULL,
@@ -1010,7 +1010,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_SCRYPT
 	OPT_WITH_ARG("--thread-concurrency",
 		     set_thread_concurrency, NULL, NULL,
-		     opt_hidden),
+		     "Set GPU thread concurrency for scrypt mining, comma separated"),
 #endif
 	OPT_WITH_ARG("--url|-o",
 		     set_url, NULL, NULL,
