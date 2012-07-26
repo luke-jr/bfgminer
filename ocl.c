@@ -482,8 +482,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		}
 		if (!cgpu->thread_concurrency) {
 			cgpu->thread_concurrency = ma / 32768 / cgpu->lookup_gap;
-			if (cgpu->shaders && cgpu->thread_concurrency > cgpu->shaders)
+			if (cgpu->shaders && cgpu->thread_concurrency > cgpu->shaders) {
 				cgpu->thread_concurrency -= cgpu->thread_concurrency % cgpu->shaders;
+				if (cgpu->thread_concurrency > cgpu->shaders * 5)
+					cgpu->thread_concurrency = cgpu->shaders * 5;
+			}
 				
 			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %u",gpu,  cgpu->thread_concurrency);
 		}
