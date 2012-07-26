@@ -60,13 +60,15 @@ enum {
 
 struct device_api bitforce_api;
 
-#define BFopen(devpath)  serial_open(devpath, 0, -1, true)
+// Code must deal with a timeout
+#define BFopen(devpath)  serial_open(devpath, 0, 1, true)
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {
-	do
+	do {
+		buf[0] = '\0';
 		--bufLen;
-	while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
+	} while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
 
 	buf[0] = '\0';
 }
@@ -98,7 +100,7 @@ static bool bitforce_detect_one(const char *devpath)
 	BFwrite(fdDev, "ZGX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_DEBUG, "BFL: Error reading (ZGX)");
+		applog(LOG_DEBUG, "BFL: Error reading/timeout (ZGX)");
 		return 0;
 	}
 
@@ -305,7 +307,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(&bitforce->device_mutex);
-			applog(LOG_ERR, "BFL%i: Error reading (ZGX)", bitforce->device_id);
+			applog(LOG_ERR, "BFL%i: Error reading/timeout (ZGX)", bitforce->device_id);
 			return;
 		}
 
@@ -345,7 +347,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	mutex_unlock(&bitforce->device_mutex);
 	
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string/timed out", bitforce->device_id);
 		bitforce->temp = 0;
 		return false;
 	}
@@ -433,7 +435,7 @@ re_send:
 	}
 
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string/timed out", bitforce->device_id);
 		return false;
 	}
 
