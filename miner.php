@@ -1,7 +1,8 @@
 <?php
 session_start();
 #
-global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
+global $miner, $port, $readonly, $notify, $rigs;
+global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
 global $allowcustompages, $customsummarypages;
@@ -38,12 +39,16 @@ $checklastshare = true;
 # e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 $rigs = array('127.0.0.1:4028');
 #
-# This should be OK for most cases
-# However, the longer it is the longer you have to wait while php
-# hangs if the target cgminer isn't runnning or listening
-# Feel free to increase it if your network is very slow
+# These should be OK for most cases
+# However, the longer SND is, the longer you have to wait while
+# php hangs if the target cgminer isn't runnning or listening
+# RCV should only ever be relevant if cgminer has hung but the
+# API thread is still running, RCV would normally be >= SND
+# Feel free to increase SND if your network is very slow
+# or decrease RCV if that happens often to you
 # Also, on some windows PHP, apparently the $usec is ignored
-$socktimeoutsec = 10;
+$socksndtimeoutsec = 10;
+$sockrcvtimeoutsec = 40;
 #
 # List of fields NOT to be displayed
 # You can use this to hide data you don't want to see or don't want
@@ -260,7 +265,7 @@ $error = null;
 #
 function getsock($addr, $port)
 {
- global $haderror, $error, $socktimeoutsec;
+ global $haderror, $error, $socksndtimeoutsec, $sockrcvtimeoutsec;
 
  $error = null;
  $socket = null;
@@ -277,7 +282,8 @@ function getsock($addr, $port)
  // Ignore if this fails since the socket connect may work anyway
  //  and nothing is gained by aborting if the option cannot be set
  //  since we don't know in advance if it can connect
- socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, array('sec' => $socktimeoutsec, 'usec' => 0));
+ socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, array('sec' => $socksndtimeoutsec, 'usec' => 0));
+ socket_set_option($socket, SOL_SOCKET, SO_RCVTIMEO, array('sec' => $sockrcvtimeoutsec, 'usec' => 0));
 
  $res = socket_connect($socket, $addr, $port);
  if ($res === false)
