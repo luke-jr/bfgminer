@@ -1040,7 +1040,7 @@ static char *parse_config(json_t *config, bool fileconf)
 		/* Pull apart the option name(s). */
 		name = strdup(opt->names);
 		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
-			char *err = NULL;
+			char *err = "Invalid value";
 
 			/* Ignore short options. */
 			if (p[1] != '-')
@@ -1056,16 +1056,23 @@ static char *parse_config(json_t *config, bool fileconf)
 			} else if ((opt->type & OPT_HASARG) && json_is_array(val)) {
 				int n, size = json_array_size(val);
 
+				err = NULL;
 				for (n = 0; n < size && !err; n++) {
 					if (json_is_string(json_array_get(val, n)))
 						err = opt->cb_arg(json_string_value(json_array_get(val, n)), opt->u.arg);
 					else if (json_is_object(json_array_get(val, n)))
 						err = parse_config(json_array_get(val, n), false);
 				}
-			} else if ((opt->type & OPT_NOARG) && json_is_true(val))
-				err = opt->cb(opt->u.arg);
-			else
-				err = "Invalid value";
+			} else if (opt->type & OPT_NOARG) {
+				if (json_is_true(val))
+					err = opt->cb(opt->u.arg);
+				else if (json_is_boolean(val)) {
+					if (opt->cb == (void*)opt_set_bool)
+						err = opt_set_invbool(opt->u.arg);
+					else if (opt->cb == (void*)opt_set_invbool)
+						err = opt_set_bool(opt->u.arg);
+				}
+			}
 
 			if (err) {
 				/* Allow invalid values to be in configuration
