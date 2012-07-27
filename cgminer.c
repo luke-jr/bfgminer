@@ -1050,10 +1050,11 @@ static char *parse_config(json_t *config, bool fileconf)
 			if (!val)
 				continue;
 
-			if ((opt->type & OPT_HASARG) && json_is_string(val)) {
+			if (opt->type & OPT_HASARG) {
+			  if (json_is_string(val)) {
 				err = opt->cb_arg(json_string_value(val),
 						  opt->u.arg);
-			} else if ((opt->type & OPT_HASARG) && json_is_array(val)) {
+			  } else if (json_is_array(val)) {
 				int n, size = json_array_size(val);
 
 				err = NULL;
@@ -1063,6 +1064,7 @@ static char *parse_config(json_t *config, bool fileconf)
 					else if (json_is_object(json_array_get(val, n)))
 						err = parse_config(json_array_get(val, n), false);
 				}
+			  }
 			} else if (opt->type & OPT_NOARG) {
 				if (json_is_true(val))
 					err = opt->cb(opt->u.arg);
