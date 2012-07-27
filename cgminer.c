@@ -1054,6 +1054,17 @@ static char *parse_config(json_t *config, bool fileconf)
 			  if (json_is_string(val)) {
 				err = opt->cb_arg(json_string_value(val),
 						  opt->u.arg);
+			  } else if (json_is_number(val)) {
+					char buf[256], *p, *q;
+					snprintf(buf, 256, "%f", json_number_value(val));
+					if ( (p = strchr(buf, '.')) ) {
+						// Trim /\.0*$/ to work properly with integer-only arguments
+						q = p;
+						while (*(++q) == '0') {}
+						if (*q == '\0')
+							*p = '\0';
+					}
+					err = opt->cb_arg(buf, opt->u.arg);
 			  } else if (json_is_array(val)) {
 				int n, size = json_array_size(val);
 
