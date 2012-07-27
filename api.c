@@ -2139,7 +2139,7 @@ static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 	SETUP_STRTOK_TS;
 	int total_pools_ = total_pools;  // Keep a local copy, to be more threadsafe
 	char *a;
-	int i, prio = 0;
+	int i, prio = 0, e = -1;
 
 	if (total_pools_ == 0) {
 		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
@@ -2152,7 +2152,11 @@ static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 
 	a = strtok_ts(param, ",");
 	do {
-		i = atoi(a);
+		i = strtol(a, &a, 10);
+		if (unlikely(*a > 0x20 || i < 0 || i >= total_pools)) {
+			e = (*a > 0x20) ? -2 : i;
+			continue;
+		}
 		pools[i]->prio = prio++;
 		pools_changed[i] = true;
 	} while ( (a = strtok_ts(NULL, ",")) );
@@ -2163,6 +2167,14 @@ static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 
 	if (current_pool()->prio)
 		switch_pools(NULL);
+
+	if (e != -1) {
+		if (e == -2)
+			strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		else
+			strcpy(io_buffer, message(MSG_INVPID, e, NULL, isjson));
+		return;
+	}
 
 	strcpy(io_buffer, message(MSG_POOLPRIO, 0, NULL, isjson));
 }
