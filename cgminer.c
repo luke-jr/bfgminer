@@ -2591,17 +2591,29 @@ static void test_work_current(struct work *work)
 			applog(LOG_NOTICE, "New block detected on network");
 		restart_threads();
 	} else {
-		if (block_id == current_block_id)
+		bool restart = false;
+		struct pool *curpool = NULL;
+		if (unlikely(work->pool->block_id != block_id && block_id == current_block_id)) {
 			work->pool->block_id = block_id;
+			curpool = current_pool();
+			if (work->pool == curpool) {
+				applog(LOG_NOTICE, "%s %d caught up to new block",
+				       work->longpoll ? "LONGPOLL from pool" : "Pool",
+				       work->pool->pool_no);
+				restart = true;
+			}
+		}
 	  if (work->longpoll) {
 		work->longpoll = false;
 		++work->pool->work_restart_id;
-		if (work->pool == current_pool()) {
+		if ((!restart) && work->pool == current_pool()) {
 			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
 				work->pool->pool_no);
-			restart_threads();
+			restart = true;
 		}
 	  }
+		if (restart)
+			restart_threads();
 	}
 out_free:
 	free(hexstr);
