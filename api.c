@@ -340,6 +340,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ACCDENY 45
 #define MSG_ACCOK 46
 #define MSG_ENAPOOL 47
+#define MSG_POOLPRIO 73
 #define MSG_DISPOOL 48
 #define MSG_ALRENAP 49
 #define MSG_ALRDISP 50
@@ -502,6 +503,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
  { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
  { SEVERITY_SUCC,  MSG_ENAPOOL,	PARAM_POOL,	"Enabling pool %d:'%s'" },
+ { SEVERITY_SUCC,  MSG_POOLPRIO,PARAM_NONE,	"Changed pool priorities" },
  { SEVERITY_SUCC,  MSG_DISPOOL,	PARAM_POOL,	"Disabling pool %d:'%s'" },
  { SEVERITY_INFO,  MSG_ALRENAP,	PARAM_POOL,	"Pool %d:'%s' already enabled" },
  { SEVERITY_INFO,  MSG_ALRDISP,	PARAM_POOL,	"Pool %d:'%s' already disabled" },
@@ -2054,6 +2056,51 @@ static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	strcpy(io_buffer, message(MSG_ENAPOOL, id, NULL, isjson));
 }
 
+static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	SETUP_STRTOK_TS;
+	int total_pools_ = total_pools;  // Keep a local copy, to be more threadsafe
+	char *a;
+	int i, prio = 0, e = -1;
+
+	if (total_pools_ == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	bool pools_changed[total_pools_];
+	for (i = 0; i < total_pools_; ++i)
+		pools_changed[i] = false;
+
+	a = strtok_ts(param, ",");
+	do {
+		i = strtol(a, &a, 10);
+		if (unlikely(*a > 0x20 || i < 0 || i >= total_pools)) {
+			e = (*a > 0x20) ? -2 : i;
+			continue;
+		}
+		pools[i]->prio = prio++;
+		pools_changed[i] = true;
+	} while ( (a = strtok_ts(NULL, ",")) );
+
+	for (i = 0; i < total_pools_; ++i)
+		if (!pools_changed[i])
+			pools[i]->prio = prio++;
+
+	if (current_pool()->prio)
+		switch_pools(NULL);
+
+	if (e != -1) {
+		if (e == -2)
+			strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		else
+			strcpy(io_buffer, message(MSG_INVPID, e, NULL, isjson));
+		return;
+	}
+
+	strcpy(io_buffer, message(MSG_POOLPRIO, 0, NULL, isjson));
+}
+
 static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
@@ -2586,6 +2633,7 @@ struct CMDS {
 	{ "cpucount",		cpucount,	false },
 	{ "switchpool",		switchpool,	true },
 	{ "addpool",		addpool,	true },
+	{ "poolpriority",	poolpriority,	true },
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
 	{ "removepool",		removepool,	true },
