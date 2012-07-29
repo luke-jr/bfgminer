@@ -1,4 +1,4 @@
-BFGMiner Version 2.6.0 - July 29, 2012
+BFGMiner Version 2.6.1 - July 29, 2012
 
 - Autoselect --scrypt iff all pools send scrypt work
 - Adapt SCRYPT-README to BFGMiner (directing Bitcoin donations the correct
