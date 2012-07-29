@@ -235,7 +235,7 @@ static void *postcalc_hash(void *userdata)
 		if (pcd->res[entry]) {
 #ifdef USE_SCRYPT
 			if (opt_scrypt)
-				submit_nonce(thr, pcd->work, entry);
+				submit_nonce(thr, pcd->work, pcd->res[entry]);
 			else
 #endif
 				send_nonce(pcd, pcd->res[entry]);
