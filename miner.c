@@ -1616,9 +1616,6 @@ static void curses_print_devstatus(int thr_id)
 	char logline[255];
 	int ypos;
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-	cgpu->utility_diff1 = cgpu->accepted_weighed / ( total_secs ?: 1 ) * 60;
-
 	/* Check this isn't out of the window size */
 	ypos = cgpu->cgminer_id;
 	ypos += devsummaryYOffset;
@@ -1627,6 +1624,10 @@ static void curses_print_devstatus(int thr_id)
 	ypos += devcursor;
 	if (ypos >= statusy - 1)
 		return;
+
+	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility_diff1 = cgpu->accepted_weighed / ( total_secs ?: 1 ) * 60;
+
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
 	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
