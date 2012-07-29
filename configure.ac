@@ -135,8 +135,6 @@ AC_ARG_ENABLE([adl],
 	[adl=$enableval]
 	)
 
-scrypt="no"
-
 if test "x$opencl" = xyes; then
 	if test "x$adl" != xno; then
 		if test -f ADL_SDK/adl_sdk.h; then
@@ -151,19 +149,9 @@ if test "x$opencl" = xyes; then
 			DLOPEN_FLAGS=""
 		fi
 	fi
-
-	AC_ARG_ENABLE([scrypt],
-		[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt litecoin mining (default disabled)])],
-		[scrypt=$enableval]
-		)
-	if test "x$scrypt" = xyes; then
-		AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
-	fi
 else
 	DLOPEN_FLAGS=""
 fi
-
-AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 
 bitforce="no"
 
@@ -209,6 +197,18 @@ if test "x$ztex" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
+
+scrypt="no"
+
+AC_ARG_ENABLE([scrypt],
+	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt litecoin mining (default disabled)])],
+	[scrypt=$enableval]
+	)
+if test "x$scrypt" = xyes; then
+	AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
+fi
+
+
 curses="auto"
 
 AC_ARG_WITH([curses],
@@ -235,6 +235,7 @@ fi
 
 
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
+AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
@@ -398,19 +399,18 @@ echo "Configuration Options Summary:"
 echo
 
 echo "  curses.TUI...........: $cursesmsg"
+if test "x$scrypt" != xno; then
+	echo "  scrypt...............: Enabled"
+else
+	echo "  scrypt...............: Disabled"
+fi
 
 echo
 
 if test "x$opencl" = xyes; then
 	echo "  OpenCL...............: Enabled"
-	if test "x$scrypt" != xno; then
-		echo "  scrypt...............: Enabled"
-	else
-		echo "  scrypt...............: Disabled"
-	fi
 else
 	echo "  OpenCL...............: Disabled"
-	echo "  scrypt...............: Disabled (needs OpenCL)"
 fi
 
 if test "x$adl" != xno; then

@@ -108,9 +108,9 @@ int opt_dynamic_interval = 7;
 int nDevs;
 int opt_g_threads = 2;
 int gpu_threads;
+#endif
 #ifdef USE_SCRYPT
 bool opt_scrypt;
-#endif
 #endif
 bool opt_restart = true;
 static bool opt_nogpu;
@@ -970,9 +970,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--scrypt",
 			opt_set_bool, &opt_scrypt,
 			"Use the scrypt algorithm for mining (litecoin only)"),
+#ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--shaders",
 		     set_shaders, NULL, NULL,
 		     "GPU shaders per card for tuning scrypt, comma separated"),
+#endif
 #endif
 	OPT_WITH_ARG("--sharelog",
 		     set_sharelog, NULL, NULL,
@@ -1015,7 +1017,7 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
-#ifdef USE_SCRYPT
+#if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
 	OPT_WITH_ARG("--thread-concurrency",
 		     set_thread_concurrency, NULL, NULL,
 		     "Set GPU thread concurrency for scrypt mining, comma separated"),
