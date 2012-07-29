@@ -1,3 +1,76 @@
+Version 2.6.0 - July 29, 2012
+
+- Add scrypt documentation in the form of a separate readme.
+- Fix build error without scrypt enabled.
+- Limit thread concurrency for scrypt to 5xshaders if shaders is specified.
+- Simplify repeated use of gpus[gpu]. in ocl.c
+- Find the nearest power of 2 maximum alloc size for the scrypt buffer that can
+successfully be allocated and is large enough to accomodate the thread
+concurrency chosen, thus mapping it to an intensity.
+- Don't make opt_scrypt mandatory blocking with opencl code.
+- Update kernel versions reflecting changes in the API.
+- Make the thread concurrency and lookup gap options hidden on the command line
+and autotune parameters with a newly parsed --shaders option.
+- Fix target testing with scrypt kernel as it would have been missing shares
+below target.
+- Always create the largest possible padbuffer for scrypt kernels even if not
+needed for thread_concurrency, giving us some headroom for intensity levels.
+- Use the detected maximum allocable memory on a GPU to determine the optimal
+scrypt settings when lookup_gap and thread_concurrency parameters are not given.
+- Check the maximum allocable memory size per opencl device.
+- Add debugging output if buffer allocation fails for scrypt and round up
+bufsize to a multiple of 256.
+- Nonce testing for btc got screwed up, leading to no accepted shares. Fix it.
+- Display size of scrypt buffer used in debug.
+- Allow intensities up to 20 if scrypt is compiled in.
+- Add name to scrypt kernel copyright.
+- Allow lookup gap and thread concurrency to be passed per device and store
+details in kernel binary filename.
+- Ignore negative intensities for scrypt.
+- Change the scale of intensity for scrypt kernel and fix a build warning.
+- Correct target value passed to scrypt kernel.
+- Use 256 output slots for kernels to allow 1 for each worksize.
+- Test the target in the actual scrypt kernel itself saving further
+calculations.
+- Reinstate GPU only opencl device detection.
+- Decrease lookup gap to 1. Does not seem to help in any way being 2.
+- Fix build.
+- Make pad0 and pad1 local variable in scrypt kernel.
+- Constify input variable in scrypt kernel.
+- Send correct values to scrypt kernel to get it finally working.
+- Create command queue before compiling program in opencl.
+- Fix external scrypt algo missing.
+- Limit scrypt to 1 vector.
+- Handle KL_SCRYPT in config write.
+- Get rid of stuff.
+- Don't enqueuewrite buffer at all for pad8 and pass work details around for
+scrypt in dev_blk.
+- Set the correct data for cldata and prepare for pad8 fixes.
+- Get rid of spaces in arrays in scrypt kernel.
+- Start with smaller amount of hashes in cpu mining to enable scrypt to return
+today sometime.
+- Free the scratchbuf memory allocated in scrypt and don't check if CPUs are
+sick since they can't be. Prepare for khash hash rates in display.
+- Add cpumining capability for scrypt.
+- Set scrypt settings and buffer size in ocl.c code to be future modifiable.
+- Cope with when we cannot set intensity low enough to meet dynamic interval by
+inducing a forced sleep.
+- Make dynamic and scrypt opencl calls blocking.
+- Fix nonce submission code for scrypt.
+- Make sure goffset is set for scrypt and drop padbuffer8 to something
+manageable for now.
+- Set up buffer8 for scrypt.
+- Build fix for opt scrypt.
+- Don't check postcalc nonce with sha256 in scrypt.
+- Don't test nonce with sha and various fixes for scrypt.
+- Make scrypt buffers and midstate compatible with cgminer.
+- Use cgminer specific output array entries in scrypt kernel.
+- Provide initial support for the scrypt kernel to compile with and mine scrypt
+with the --scrypt option.
+- Enable completely compiling scrypt out.
+- Begin import of scrypt opencl kernel from reaper.
+
+
 BFGMiner Version 2.5.2 - July 29, 2012
 
 - Limit total number of curls recruited per pool to the number of mining threads
@@ -153,6 +226,8 @@ mt_disable function.
 - Use standard cfsetispeed/cfsetospeed to set baud rate on *nix
 - miner.php split() flagged deprecated in PHP 5.3.0
 - Bugfix: Use nmsleep instead of restart_wait, so we always wait the full time
+- Make long timeout 10seconds on bitforce for when usleep or nanosleep just
+can't be accurate...
 
 
 BFGMiner Version 2.5.0 - July 7, 2012
