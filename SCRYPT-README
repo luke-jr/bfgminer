@@ -1,9 +1,8 @@
-If you wish to donate to the author, Con Kolivas, in LTC, please submit your
-donations to:
+If you wish to donate to the author of scrypt support, Con Kolivas, please send
+your donations to:
 
-Lc8TWMiKM7gRUrG8VB8pPNP1Yvt1SGZnoH
-
-Otherwise, please donate in BTC as per the main README.
+Bitcoin : 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+Litecoin: Lc8TWMiKM7gRUrG8VB8pPNP1Yvt1SGZnoH
 
 ---
 
@@ -16,8 +15,8 @@ GPU ram.
 
 There are 5 main parameters to tuning scrypt, 2 of which you MUST set, and
 the others are optional for further fine tuning. When you start scrypt mining
-with the --scrypt option, cgminer will fail IN RANDOM WAYS. They are all due
-to parameters being outside what the GPU can cope with. Not giving cgminer a
+with the --scrypt option, BFGMiner will fail IN RANDOM WAYS. They are all due
+to parameters being outside what the GPU can cope with. Not giving BFGMiner a
 hint as to your GPU type, it will hardly ever perform well.
 
 
@@ -31,8 +30,8 @@ may help CPU usage a little as well.
 
 --shaders XXX
 
-is a new option where you tell cgminer how many shaders your GPU has. This
-helps cgminer try to choose some meaningful baseline parameters. Use this table
+is a new option where you tell BFGMiner how many shaders your GPU has. This
+helps BFGMiner try to choose some meaningful baseline parameters. Use this table
 below to determine how many shaders your GPU has, and note that there are some
 variants of these cards, and nvidia shaders are much much lower and virtually
 pointless trying to mine on.
@@ -65,7 +64,7 @@ GPU  Shaders
 5870 1600
 5970 (5870x2)
 
-These are only used as a rough guide for cgminer, and it is rare that this is
+These are only used as a rough guide for BFGMiner, and it is rare that this is
 all you will need to set.
 
 
@@ -85,12 +84,12 @@ Optional parameters to tune:
 
 -g:
 Once you have found the optimal shaders and intensity, you can start increasing
-the -g value till cgminer fails to start. Rarely will you be able to go over
+the -g value till BFGMiner fails to start. Rarely will you be able to go over
 about -g 4 and each increase in -g only increases hashrate slightly.
 
 --thread-concurrency:
 This tunes the optimal size of work that scrypt can do. It is internally tuned
-by cgminer to be the highest reasonable multiple of shaders that it can
+by BFGMiner to be the highest reasonable multiple of shaders that it can
 allocate on your GPU. Ideally it should be a multiple of your shader count.
 vliw5 architecture (R5XXX) would be best at 5x shaders, while VLIW4 (R6xxx and
 R7xxx) are best at 4x. Setting thread concurrency overrides anything you put
@@ -100,7 +99,7 @@ into --shaders.
 This tunes a compromise between ram usage and performance. Performance peaks
 at a gap of 2, but increasing the gap can save you some GPU ram, but almost
 always at the cost of significant loss of hashrate. Setting lookup gap
-overrides the default of 2, but cgminer will use the --shaders value to choose
+overrides the default of 2, but BFGMiner will use the --shaders value to choose
 a thread-concurrency if you haven't chosen one.
 
 
@@ -125,9 +124,8 @@ export GPU_MAX_ALLOC_PERCENT=100
 
 ---
 
-If you wish to donate to the author, Con Kolivas, in LTC, please submit your
-donations to:
+If you wish to donate to the author of scrypt support, Con Kolivas, please send
+your donations to:
 
-Lc8TWMiKM7gRUrG8VB8pPNP1Yvt1SGZnoH
-
-Otherwise, please donate in BTC as per the main README.
+Bitcoin : 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+Litecoin: Lc8TWMiKM7gRUrG8VB8pPNP1Yvt1SGZnoH

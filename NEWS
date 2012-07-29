@@ -63,8 +63,8 @@ manageable for now.
 - Build fix for opt scrypt.
 - Don't check postcalc nonce with sha256 in scrypt.
 - Don't test nonce with sha and various fixes for scrypt.
-- Make scrypt buffers and midstate compatible with cgminer.
-- Use cgminer specific output array entries in scrypt kernel.
+- Make scrypt buffers and midstate compatible.
+- Use specific output array entries in scrypt kernel.
 - Provide initial support for the scrypt kernel to compile with and mine scrypt
 with the --scrypt option.
 - Enable completely compiling scrypt out.
