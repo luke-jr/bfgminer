@@ -81,7 +81,10 @@ reason this is crucial is that too high an intensity can actually be
 disastrous with scrypt because it CAN run out of ram. Intensities over 13
 start writing over the same ram and it is highly dependent on the GPU, but they
 can start actually DECREASING your hashrate, or even worse, start producing
-garbage with rejects skyrocketing.
+garbage with rejects skyrocketing. The low level detail is that intensity is
+only guaranteed up to the power of 2 that most closely matches the thread
+concurrency. i.e. a thread concurrency of 6144 has 8192 as the nearest power
+of two above it, thus as 2^13=8192, that is an intensity of 13.
 
 
 Optional parameters to tune:
