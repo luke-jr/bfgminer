@@ -326,6 +326,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	headers = curl_slist_append(headers,
 		"X-Mining-Extensions: longpoll midstate rollntime submitold");
 
+	if (longpoll)
+		headers = curl_slist_append(headers,
+			"X-Minimum-Wait: 0");
+
 	if (likely(global_hashrate)) {
 		char ghashrate[255];
 
