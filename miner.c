@@ -110,7 +110,10 @@ int opt_g_threads = 2;
 int gpu_threads;
 #endif
 #ifdef USE_SCRYPT
+static char detect_algo = 1;
 bool opt_scrypt;
+#else
+static char detect_algo;
 #endif
 bool opt_restart = true;
 static bool opt_nogpu;
@@ -1302,6 +1305,13 @@ static void calc_midstate(struct work *work)
 static bool work_decode(const json_t *val, struct work *work)
 {
 	unsigned char bits = 0, i;
+	
+	if (unlikely(detect_algo == 1)) {
+		json_t *tmp = json_object_get(val, "algorithm");
+		const char *v = tmp ? json_string_value(tmp) : "";
+		if (strncasecmp(v, "scrypt", 6))
+			detect_algo = 2;
+	}
 	
 	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data), true))) {
 		applog(LOG_ERR, "JSON inval data");
@@ -5901,6 +5911,14 @@ int main(int argc, char *argv[])
 				quit(0, "No servers could be used! Exiting.");
 		}
 	} while (!pools_active);
+
+#ifdef USE_SCRYPT
+	if (detect_algo == 1 && !opt_scrypt) {
+		applog(LOG_NOTICE, "Detected scrypt algorithm");
+		opt_scrypt = true;
+	}
+#endif
+	detect_algo = 0;
 
 begin_bench:
 	total_mhashes_done = 0;
