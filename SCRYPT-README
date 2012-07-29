@@ -1,0 +1,136 @@
+If you wish to donate to the author, Con Kolivas, in LTC, please submit your
+donations to:
+
+Lc8TWMiKM7gRUrG8VB8pPNP1Yvt1SGZnoH
+
+Otherwise, please donate in BTC as per the main README.
+
+---
+
+
+Scrypt mining, AKA litecoin mining, for GPU is completely different to sha256
+used for bitcoin mining. The algorithm was originally developed in a manner
+that it was anticipated would make it suitable for mining on CPU but NOT GPU.
+Thanks to some innovative work by Artforz and mtrlt, this was proven to be
+wrong. However, it has very different requirements to bitcoin mining and is a
+lot more complicated to get working well. Note that it is a ram dependent
+workload, and requires you to have enough system ram as well as fast enough
+GPU ram.
+
+There are 5 main parameters to tuning scrypt, 2 of which you MUST set, and
+the others are optional for further fine tuning. When you start scrypt mining
+with the --scrypt option, cgminer will fail IN RANDOM WAYS. They are all due
+to parameters being outside what the GPU can cope with. Not giving cgminer a
+hint as to your GPU type, it will hardly ever perform well.
+
+
+Step 1 on linux:
+export GPU_MAX_ALLOC_PERCENT=100
+If you do not do this, you may find it impossible to scrypt mine. You may find
+a value of 40 is enough and increasing this further has little effect.
+
+export GPU_USE_SYNC_OBJECTS=1
+may help CPU usage a little as well.
+
+--shaders XXX
+
+is a new option where you tell cgminer how many shaders your GPU has. This
+helps cgminer try to choose some meaningful baseline parameters. Use this table
+below to determine how many shaders your GPU has, and note that there are some
+variants of these cards, and nvidia shaders are much much lower and virtually
+pointless trying to mine on.
+
+GPU  Shaders
+7750 512
+7770 640
+7850 1024
+7870 1280
+7950 1792
+7970 2048
+
+6850 960
+6870 1120
+6950 1408
+6970 1536
+6990 (6970x2)
+
+6570 480
+6670 480
+6790 800
+
+6450 160
+
+5670 400
+5750 720
+5770 800
+5830 1120
+5850 1440
+5870 1600
+5970 (5870x2)
+
+These are only used as a rough guide for cgminer, and it is rare that this is
+all you will need to set.
+
+
+--intensity XX
+
+Just like in bitcoin mining, scrypt mining takes an intensity, however the
+scale goes from 0 to 20 to mimic the "Aggression" used in mtrlt's reaper. The
+reason this is crucial is that too high an intensity can actually be
+disastrous with scrypt because it CAN run out of ram. Intensities over 13
+start writing over the same ram and it is highly dependent on the GPU, but they
+can start actually DECREASING your hashrate, or even worse, start producing
+garbage with rejects skyrocketing.
+
+
+Optional parameters to tune:
+-g, --thread-concurrency, --lookup-gap
+
+-g:
+Once you have found the optimal shaders and intensity, you can start increasing
+the -g value till cgminer fails to start. Rarely will you be able to go over
+about -g 4 and each increase in -g only increases hashrate slightly.
+
+--thread-concurrency:
+This tunes the optimal size of work that scrypt can do. It is internally tuned
+by cgminer to be the highest reasonable multiple of shaders that it can
+allocate on your GPU. Ideally it should be a multiple of your shader count.
+vliw5 architecture (R5XXX) would be best at 5x shaders, while VLIW4 (R6xxx and
+R7xxx) are best at 4x. Setting thread concurrency overrides anything you put
+into --shaders.
+
+--lookup-gap
+This tunes a compromise between ram usage and performance. Performance peaks
+at a gap of 2, but increasing the gap can save you some GPU ram, but almost
+always at the cost of significant loss of hashrate. Setting lookup gap
+overrides the default of 2, but cgminer will use the --shaders value to choose
+a thread-concurrency if you haven't chosen one.
+
+
+Overclocking for scrypt mining:
+First of all, do not underclock your memory initially. Scrypt mining requires
+memory speed and on most, but not all, GPUs, lowering memory speed lowers
+mining performance.
+
+Second, absolute engine clock speeds do NOT correlate with hashrate. The ratio
+of engine clock speed to memory matters, so if you set your memory to the
+default value, and then start overclocking as you are running it, you should
+find a sweet spot where the hashrate peaks and then it might actually drop if
+you increase the engine clock speed further. Unless you wish to run with a
+dynamic intensity, do not go over 13 without testing it while it's running to
+see that it increases hashrate AND utility WITHOUT increasing your rejects.
+
+
+Suggested values for 7970 for example:
+export GPU_MAX_ALLOC_PERCENT=100
+--shaders 2048 -g 5 --gpu-engine 1135 --gpu-memclock 1375
+
+
+---
+
+If you wish to donate to the author, Con Kolivas, in LTC, please submit your
+donations to:
+
+Lc8TWMiKM7gRUrG8VB8pPNP1Yvt1SGZnoH
+
+Otherwise, please donate in BTC as per the main README.

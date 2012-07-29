@@ -856,6 +856,11 @@ static struct opt_table opt_config_table[] = {
 		     set_gpu_vddc, NULL, NULL,
 		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card"),
 #endif
+#ifdef USE_SCRYPT
+	OPT_WITH_ARG("--lookup-gap",
+		     set_lookup_gap, NULL, NULL,
+		     "Set GPU lookup gap for scrypt mining, comma separated"),
+#endif
 	OPT_WITH_ARG("--intensity|-I",
 		     set_intensity, NULL, NULL,
 		     "Intensity of GPU scanning (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ", default: d to maintain desktop interactivity)"),
@@ -965,6 +970,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--scrypt",
 			opt_set_bool, &opt_scrypt,
 			"Use the scrypt algorithm for mining (litecoin only)"),
+	OPT_WITH_ARG("--shaders",
+		     set_shaders, NULL, NULL,
+		     "GPU shaders per card for tuning scrypt, comma separated"),
 #endif
 	OPT_WITH_ARG("--sharelog",
 		     set_sharelog, NULL, NULL,
@@ -1007,6 +1015,11 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+#ifdef USE_SCRYPT
+	OPT_WITH_ARG("--thread-concurrency",
+		     set_thread_concurrency, NULL, NULL,
+		     "Set GPU thread concurrency for scrypt mining, comma separated"),
+#endif
 	OPT_WITH_ARG("--url|-o",
 		     set_url, NULL, NULL,
 		     "URL for bitcoin JSON-RPC server"),
@@ -4344,15 +4357,17 @@ bool hashtest(const struct work *work, bool checktarget)
 
 bool test_nonce(struct work *work, uint32_t nonce, bool checktarget)
 {
-	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-
 	if (opt_scrypt) {
+		uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
+
 		*work_nonce = nonce;
 		return true;
 	}
 
-	*work_nonce = htobe32(nonce);
-
+	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
+	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
+	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
+	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
 
 	return hashtest(work, checktarget);
 }

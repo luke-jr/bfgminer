@@ -387,8 +387,8 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	W[117] += W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]) -
 		(-(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64)));
 
-#define FOUND (0x80)
-#define NFLAG (0x7F)
+#define FOUND (0x800)
+#define NFLAG (0x7FF)
 
 #ifdef VECTORS4
 	bool result = W[117].x & W[117].y & W[117].z & W[117].w;

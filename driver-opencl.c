@@ -344,6 +344,83 @@ char *set_worksize(char *arg)
 	return NULL;
 }
 
+#ifdef USE_SCRYPT
+char *set_shaders(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set lookup gap";
+	val = atoi(nextptr);
+
+	gpus[device++].shaders = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].shaders = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].shaders = gpus[0].shaders;
+	}
+
+	return NULL;
+}
+
+char *set_lookup_gap(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set lookup gap";
+	val = atoi(nextptr);
+
+	gpus[device++].lookup_gap = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].lookup_gap = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].lookup_gap = gpus[0].lookup_gap;
+	}
+
+	return NULL;
+}
+
+char *set_thread_concurrency(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set thread concurrency";
+	val = atoi(nextptr);
+
+	gpus[device++].thread_concurrency = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].thread_concurrency = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].thread_concurrency = gpus[0].thread_concurrency;
+	}
+
+	return NULL;
+}
+#endif
+
 static enum cl_kernels select_kernel(char *arg)
 {
 	if (!strcmp(arg, "diablo"))
@@ -1212,13 +1289,13 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 #ifdef USE_SCRYPT
 static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
-	char *midstate = blk->work->midstate;
+	unsigned char *midstate = blk->work->midstate;
 	cl_kernel *kernel = &clState->kernel;
 	unsigned int num = 0;
 	cl_uint le_target;
 	cl_int status = 0;
 
-	le_target = ~swab32((uint32_t)blk->work->target[7]);
+	le_target = *(cl_uint *)(blk->work->target + 28);
 	clState->cldata = blk->work->data;
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL,NULL);
 
@@ -1237,7 +1314,12 @@ static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       int64_t *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
 {
-	*threads = 1 << (15 + intensity);
+	if (opt_scrypt) {
+		if (intensity < 0)
+			intensity = 0;
+		*threads = 1 << intensity;
+	} else
+		*threads = 1 << (15 + intensity);
 	if (*threads < minthreads)
 		*threads = minthreads;
 	*globalThreads = *threads;
@@ -1651,7 +1733,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	unsigned int threads;
 	int64_t hashes;
 
-	if (gpu->dynamic || opt_scrypt)
+	if (gpu->dynamic)
 		blocking = CL_TRUE;
 	else
 		blocking = CL_FALSE;
@@ -1676,8 +1758,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			if (gpu->gpu_us_average > dynamic_us) {
 				if (gpu->intensity > MIN_INTENSITY)
 					--gpu->intensity;
-				else
-					nmsleep(opt_dynamic_interval / 2 ? : 1);
 			} else if (gpu->gpu_us_average < dynamic_us / 2) {
 				if (gpu->intensity < MAX_INTENSITY)
 					++gpu->intensity;

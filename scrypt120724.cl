@@ -2,10 +2,7 @@
 #define Ch(x,y,z) bitselect(z,y,x)
 #define Maj(x,y,z) Ch((x^z),y,z)
 
-uint4 EndianSwap4(uint4 n)
-{
-	return rotl(n&0x00FF00FF,24U)|rotl(n&0xFF00FF00,8U);
-}
+#define EndianSwap(n) (rotl(n&0x00FF00FF,24U)|rotl(n&0xFF00FF00,8U))
 
 #define Tr2(x)		(rotl(x, 30U) ^ rotl(x, 19U) ^ rotl(x, 10U))
 #define Tr1(x)		(rotl(x, 26U) ^ rotl(x, 21U) ^ rotl(x, 7U))
@@ -552,7 +549,7 @@ void shittify(uint4 B[8])
 	
 #pragma unroll
 	for(uint i=0; i<4; ++i)
-		B[i] = EndianSwap4(tmp[i]); 
+		B[i] = EndianSwap(tmp[i]);
 
 	tmp[0] = (uint4)(B[5].x,B[6].y,B[7].z,B[4].w);
 	tmp[1] = (uint4)(B[6].x,B[7].y,B[4].z,B[5].w);
@@ -561,7 +558,7 @@ void shittify(uint4 B[8])
 	
 #pragma unroll
 	for(uint i=0; i<4; ++i)
-		B[i+4] = EndianSwap4(tmp[i]); 
+		B[i+4] = EndianSwap(tmp[i]);
 }
 
 void unshittify(uint4 B[8])
@@ -574,7 +571,7 @@ void unshittify(uint4 B[8])
 	
 #pragma unroll
 	for(uint i=0; i<4; ++i)
-		B[i] = EndianSwap4(tmp[i]); 
+		B[i] = EndianSwap(tmp[i]);
 
 	tmp[0] = (uint4)(B[7].x,B[6].y,B[5].z,B[4].w);
 	tmp[1] = (uint4)(B[4].x,B[7].y,B[6].z,B[5].w);
@@ -583,7 +580,7 @@ void unshittify(uint4 B[8])
 	
 #pragma unroll
 	for(uint i=0; i<4; ++i)
-		B[i+4] = EndianSwap4(tmp[i]); 
+		B[i+4] = EndianSwap(tmp[i]);
 }
 
 void salsa(uint4 B[8])
@@ -685,8 +682,8 @@ void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
 	unshittify(X);
 }
 
-#define FOUND (0x80)
-#define NFLAG (0x7F)
+#define FOUND (0x800)
+#define NFLAG (0x7FF)
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 __kernel void search(__global const uint4 * restrict input,
@@ -723,13 +720,15 @@ const uint4 midstate0, const uint4 midstate16, const uint target)
 	SHA256(&tmp0,&tmp1, X[4], X[5], X[6], X[7]);
 	SHA256_fixed(&tmp0,&tmp1);
 	SHA256(&ostate0,&ostate1, tmp0, tmp1, (uint4)(0x80000000U, 0U, 0U, 0U), (uint4)(0U, 0U, 0U, 0x300U));
-	
-	if (!(ostate1.w&target))
+
+	bool found = (EndianSwap(ostate1.w) <= target);
+	if (found)
 		output[FOUND] = output[NFLAG & gid] = gid;
 }
 
 /*-
- * Copyright 2009 Colin Percival, 2011 ArtForz, 2011 pooler, 2012 mtrlt
+ * Copyright 2009 Colin Percival, 2011 ArtForz, 2011 pooler, 2012 mtrlt,
+ * 2012 Con Kolivas.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

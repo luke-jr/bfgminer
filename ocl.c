@@ -385,6 +385,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	_clState *clState = calloc(1, sizeof(_clState));
 	bool patchbfi = false, prog_built = false;
+	struct cgpu_info *cgpu = &gpus[gpu];
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
 	cl_platform_id* platforms;
@@ -540,16 +541,25 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	applog(LOG_DEBUG, "Max work group size reported %d", clState->max_work_size);
 
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&cgpu->max_alloc, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_MEM_ALLOC_SIZE", status);
+		return NULL;
+	}
+	applog(LOG_DEBUG, "Max mem alloc size is %u", cgpu->max_alloc);
+
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
 	 * have otherwise created. The filename is:
 	 * name + kernelname +/- g(offset) + v + vectors + w + work_size + l + sizeof(long) + .bin
+	 * For scrypt the filename is:
+	 * name + kernelname + g + lg + lookup_gap + tc + thread_concurrency + w + work_size + l + sizeof(long) + .bin
 	 */
 	char binaryfilename[255];
 	char filename[255];
 	char numbuf[10];
 
-	if (gpus[gpu].kernel == KL_NONE) {
+	if (cgpu->kernel == KL_NONE) {
 		if (opt_scrypt) {
 			applog(LOG_INFO, "Selecting scrypt kernel");
 			clState->chosen_kernel = KL_SCRYPT;
@@ -571,9 +581,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			applog(LOG_INFO, "Selecting phatk kernel");
 			clState->chosen_kernel = KL_PHATK;
 		}
-		gpus[gpu].kernel = clState->chosen_kernel;
+		cgpu->kernel = clState->chosen_kernel;
 	} else {
-		clState->chosen_kernel = gpus[gpu].kernel;
+		clState->chosen_kernel = cgpu->kernel;
 		if (clState->chosen_kernel == KL_PHATK &&
 		    (strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
 		     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
@@ -610,7 +620,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			strcpy(filename, SCRYPT_KERNNAME".cl");
 			strcpy(binaryfilename, SCRYPT_KERNNAME);
 			/* Scrypt only supports vector 1 */
-			gpus[gpu].vwidth = 1;
+			cgpu->vwidth = 1;
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_DIABLO:
@@ -619,24 +629,61 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			break;
 	}
 
-	if (gpus[gpu].vwidth)
-		clState->vwidth = gpus[gpu].vwidth;
+	if (cgpu->vwidth)
+		clState->vwidth = cgpu->vwidth;
 	else {
 		clState->vwidth = preferred_vwidth;
-		gpus[gpu].vwidth = preferred_vwidth;
+		cgpu->vwidth = preferred_vwidth;
 	}
 
 	if (((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO || clState->chosen_kernel == KL_DIAKGCN) &&
 		clState->vwidth == 1 && clState->hasOpenCL11plus) || opt_scrypt)
 			clState->goffset = true;
 
-	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
-		clState->wsize = gpus[gpu].work_size;
+	if (cgpu->work_size && cgpu->work_size <= clState->max_work_size)
+		clState->wsize = cgpu->work_size;
 	else if (strstr(name, "Tahiti"))
 		clState->wsize = 64;
 	else
 		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
-	gpus[gpu].work_size = clState->wsize;
+	cgpu->work_size = clState->wsize;
+
+#ifdef USE_SCRYPT
+	if (opt_scrypt) {
+		cl_ulong ma = cgpu->max_alloc, mt;
+		int pow2 = 0;
+
+		if (!cgpu->lookup_gap) {
+			applog(LOG_DEBUG, "GPU %d: selecting lookup gap of 2", gpu);
+			cgpu->lookup_gap = 2;
+		}
+		if (!cgpu->thread_concurrency) {
+			cgpu->thread_concurrency = ma / 32768 / cgpu->lookup_gap;
+			if (cgpu->shaders && cgpu->thread_concurrency > cgpu->shaders) {
+				cgpu->thread_concurrency -= cgpu->thread_concurrency % cgpu->shaders;
+				if (cgpu->thread_concurrency > cgpu->shaders * 5)
+					cgpu->thread_concurrency = cgpu->shaders * 5;
+			}
+				
+			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %u",gpu,  cgpu->thread_concurrency);
+		}
+
+		/* If we have memory to spare, try to find a power of 2 value
+		 * >= required amount to map nicely to an intensity */
+		mt = cgpu->thread_concurrency * 32768 * cgpu->lookup_gap;
+		if (ma > mt) {
+			while (ma >>= 1)
+				pow2++;
+			ma = 1;
+			while (--pow2 && ma < mt)
+				ma <<= 1;
+			if (ma >= mt) {
+				cgpu->max_alloc = ma;
+				applog(LOG_DEBUG, "Max alloc decreased to %lu", cgpu->max_alloc);
+			}
+		}
+	}
+#endif
 
 	FILE *binaryfile;
 	size_t *binary_sizes;
@@ -662,24 +709,21 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 
-#ifdef USE_SCRYPT
-	if (opt_scrypt) {
-		clState->lookup_gap = 1;
-		clState->thread_concurrency = 6144;
-	}
-#endif
-
 	strcat(binaryfilename, name);
 	if (clState->goffset)
 		strcat(binaryfilename, "g");
-	strcat(binaryfilename, "v");
-	sprintf(numbuf, "%d", clState->vwidth);
+	if (opt_scrypt) {
+#ifdef USE_SCRYPT
+		sprintf(numbuf, "lg%dtc%d", cgpu->lookup_gap, cgpu->thread_concurrency);
+		strcat(binaryfilename, numbuf);
+#endif
+	} else {
+		sprintf(numbuf, "v%d", clState->vwidth);
+		strcat(binaryfilename, numbuf);
+	}
+	sprintf(numbuf, "w%d", (int)clState->wsize);
 	strcat(binaryfilename, numbuf);
-	strcat(binaryfilename, "w");
-	sprintf(numbuf, "%d", (int)clState->wsize);
-	strcat(binaryfilename, numbuf);
-	strcat(binaryfilename, "l");
-	sprintf(numbuf, "%d", (int)sizeof(long));
+	sprintf(numbuf, "l%d", (int)sizeof(long));
 	strcat(binaryfilename, numbuf);
 	strcat(binaryfilename, ".bin");
 
@@ -743,7 +787,7 @@ build:
 #ifdef USE_SCRYPT
 	if (opt_scrypt)
 		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
-			(int)clState->lookup_gap, (int)clState->thread_concurrency, (int)clState->wsize);
+			cgpu->lookup_gap, cgpu->thread_concurrency, (int)clState->wsize);
 	else
 #endif
 	{
@@ -930,12 +974,29 @@ built:
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
-		size_t ipt = (1024 / clState->lookup_gap + (1024 % clState->lookup_gap > 0));
-		size_t bufsize = 128 * ipt * clState->thread_concurrency;
+		size_t ipt = (1024 / cgpu->lookup_gap + (1024 % cgpu->lookup_gap > 0));
+		size_t bufsize = 128 * ipt * cgpu->thread_concurrency;
 
-		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 80, NULL, &status);
-		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
+		/* Use the max alloc value which has been rounded to a power of
+		 * 2 greater >= required amount earlier */
+		if (bufsize > cgpu->max_alloc) {
+			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u, your scrypt settings come to %u",
+			       gpu, cgpu->max_alloc, bufsize);
+		} else
+			bufsize = cgpu->max_alloc;
+		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
 		clState->padbufsize = bufsize;
+		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error %d: clCreateBuffer (padbuffer8), decrease CT or increase LG", status);
+			return NULL;
+		}
+
+		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
+		if (status != CL_SUCCESS) {
+			applog(LOG_ERR, "Error %d: clCreateBuffer (CLbuffer0)", status);
+			return NULL;
+		}
 	}
 #endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);

@@ -358,10 +358,17 @@ struct cgpu_info {
 	int virtual_adl;
 	int intensity;
 	bool dynamic;
+
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;
+	cl_ulong max_alloc;
 
+#ifdef USE_SCRYPT
+	int lookup_gap;
+	int thread_concurrency;
+	int shaders;
+#endif
 	struct timeval tv_gpustart;;
 	struct timeval tv_gpuend;
 	double gpu_us_average;
@@ -613,8 +620,13 @@ extern void add_pool_details(bool live, char *url, char *user, char *pass);
 
 #define MIN_INTENSITY -10
 #define _MIN_INTENSITY_STR "-10"
+#ifdef USE_SCRYPT
+#define MAX_INTENSITY 20
+#define _MAX_INTENSITY_STR "20"
+#else
 #define MAX_INTENSITY 14
 #define _MAX_INTENSITY_STR "14"
+#endif
 
 extern struct list_head scan_devices;
 extern int nDevs;
