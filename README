@@ -33,21 +33,31 @@ READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
 Dependencies:
 	curl dev library 	http://curl.haxx.se/libcurl/
 	(libcurl4-openssl-dev)
+
 	curses dev library
 	(libncurses5-dev or libpdcurses on WIN32)
+
 	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
+	libtool			http://www.gnu.org/software/libtool/
+
 	jansson			http://www.digip.org/jansson/
 	(jansson is included in-tree and not necessary)
+
 	yasm 1.0.1+ http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
+
 	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
 	(This sdk is mandatory for GPU mining)
+
 	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
 	(This sdk is mandatory for ATI GPU monitoring & clocking)
+
 	libudev headers
 	(This is only required for FPGA auto-detection and is linux only)
+
 	libusb headers
 	(This is only required for ZTEX support)
+
 
 CGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
@@ -57,6 +67,9 @@ CGMiner specific configuration options:
 	--enable-icarus         Compile support for Icarus Board(default disabled)
 	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
 	--enable-ztex           Compile support for Ztex Board(default disabled)
+	--enable-scrypt         Compile support for scrypt litecoin mining (default disabled)
+	--without-curses        Compile support for curses TUI (default enabled)
+	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
