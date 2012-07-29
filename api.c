@@ -166,7 +166,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.14";
+static const char *APIVERSION = "1.15";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -372,6 +372,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MINESTATS 70
 #define MSG_MISCHK 71
 #define MSG_CHECK 72
+#define MSG_POOLPRIO 73
+#define MSG_DUPPID 74
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -385,6 +387,7 @@ enum code_parameters {
 	PARAM_GPU,
 	PARAM_PGA,
 	PARAM_CPU,
+	PARAM_PID,
 	PARAM_GPUMAX,
 	PARAM_PGAMAX,
 	PARAM_CPUMAX,
@@ -501,6 +504,8 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
  { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
  { SEVERITY_SUCC,  MSG_ENAPOOL,	PARAM_POOL,	"Enabling pool %d:'%s'" },
+ { SEVERITY_SUCC,  MSG_POOLPRIO,PARAM_NONE,	"Changed pool priorities" },
+ { SEVERITY_ERR,   MSG_DUPPID,	PARAM_PID,	"Duplicate pool specified %d" },
  { SEVERITY_SUCC,  MSG_DISPOOL,	PARAM_POOL,	"Disabling pool %d:'%s'" },
  { SEVERITY_INFO,  MSG_ALRENAP,	PARAM_POOL,	"Pool %d:'%s' already enabled" },
  { SEVERITY_INFO,  MSG_ALRDISP,	PARAM_POOL,	"Pool %d:'%s' already disabled" },
@@ -1062,6 +1067,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 				case PARAM_GPU:
 				case PARAM_PGA:
 				case PARAM_CPU:
+				case PARAM_PID:
 					sprintf(buf, codes[i].description, paramid);
 					break;
 				case PARAM_POOL:
@@ -2128,6 +2134,74 @@ static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	strcpy(io_buffer, message(MSG_ENAPOOL, id, NULL, isjson));
 }
 
+static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	char *ptr, *next;
+	int i, pr, prio = 0;
+
+	// TODO: all cgminer code needs a mutex added everywhere for change
+	//	access to total_pools and also parts of the pools[] array,
+	//	just copying total_pools here wont solve that
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	bool pools_changed[total_pools];
+	int new_prio[total_pools];
+	for (i = 0; i < total_pools; ++i)
+		pools_changed[i] = false;
+
+	next = param;
+	while (next && *next) {
+		ptr = next;
+		next = strchr(ptr, ',');
+		if (next)
+			*(next++) = '\0';
+
+		i = atoi(ptr);
+		if (i < 0 || i >= total_pools) {
+			strcpy(io_buffer, message(MSG_INVPID, i, NULL, isjson));
+			return;
+		}
+
+		if (pools_changed[i]) {
+			strcpy(io_buffer, message(MSG_DUPPID, i, NULL, isjson));
+			return;
+		}
+
+		pools_changed[i] = true;
+		new_prio[i] = prio++;
+	}
+
+	// Only change them if no errors
+	for (i = 0; i < total_pools; i++) {
+		if (pools_changed[i])
+			pools[i]->prio = new_prio[i];
+	}
+
+	// In priority order, cycle through the unchanged pools and append them
+	for (pr = 0; pr < total_pools; pr++)
+		for (i = 0; i < total_pools; i++) {
+			if (!pools_changed[i] && pools[i]->prio == pr) {
+				pools[i]->prio = prio++;
+				pools_changed[i] = true;
+				break;
+			}
+		}
+
+	if (current_pool()->prio)
+		switch_pools(NULL);
+
+	strcpy(io_buffer, message(MSG_POOLPRIO, 0, NULL, isjson));
+}
+
 static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
@@ -2659,6 +2733,7 @@ struct CMDS {
 	{ "cpucount",		cpucount,	false },
 	{ "switchpool",		switchpool,	true },
 	{ "addpool",		addpool,	true },
+	{ "poolpriority",	poolpriority,	true },
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
 	{ "removepool",		removepool,	true },
