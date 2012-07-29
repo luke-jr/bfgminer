@@ -135,6 +135,8 @@ AC_ARG_ENABLE([adl],
 	[adl=$enableval]
 	)
 
+scrypt="no"
+
 if test "x$opencl" = xyes; then
 	if test "x$adl" != xno; then
 		if test -f ADL_SDK/adl_sdk.h; then
@@ -149,9 +151,19 @@ if test "x$opencl" = xyes; then
 			DLOPEN_FLAGS=""
 		fi
 	fi
+
+	AC_ARG_ENABLE([scrypt],
+		[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt litecoin mining (default disabled)])],
+		[scrypt=$enableval]
+		)
+	if test "x$scrypt" = xyes; then
+		AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
+	fi
 else
 	DLOPEN_FLAGS=""
 fi
+
+AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 
 bitforce="no"
 
@@ -347,6 +359,7 @@ AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120223"], [Filename for phatk kernel
 AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120327"], [Filename for poclbm kernel])
 AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120427"], [Filename for diakgcn kernel])
 AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120328"], [Filename for diablo kernel])
+AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt120713"], [Filename for scrypt kernel])
 
 
 AC_SUBST(JANSSON_LIBS)
@@ -390,8 +403,14 @@ echo
 
 if test "x$opencl" = xyes; then
 	echo "  OpenCL...............: Enabled"
+	if test "x$scrypt" != xno; then
+		echo "  scrypt...............: Enabled"
+	else
+		echo "  scrypt...............: Disabled"
+	fi
 else
 	echo "  OpenCL...............: Disabled"
+	echo "  scrypt...............: Disabled (needs OpenCL)"
 fi
 
 if test "x$adl" != xno; then

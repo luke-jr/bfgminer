@@ -261,6 +261,7 @@ enum cl_kernels {
 	KL_PHATK,
 	KL_DIAKGCN,
 	KL_DIABLO,
+	KL_SCRYPT,
 };
 
 enum dev_reason {

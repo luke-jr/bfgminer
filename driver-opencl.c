@@ -354,6 +354,8 @@ static enum cl_kernels select_kernel(char *arg)
 		return KL_POCLBM;
 	if (!strcmp(arg, "phatk"))
 		return KL_PHATK;
+	if (!strcmp(arg, "scrypt"))
+		return KL_SCRYPT;
 	return KL_NONE;
 }
 
@@ -1203,6 +1205,12 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	return status;
 }
 
+static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
+{
+	cl_int status = 0;
+
+	return status;
+}
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       int64_t *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
@@ -1499,8 +1507,12 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		case KL_PHATK:
 			cgpu->kname = "phatk";
 			break;
+		case KL_SCRYPT:
+			cgpu->kname = "scrypt";
+			break;
 		case KL_POCLBM:
 			cgpu->kname = "poclbm";
+			break;
 		default:
 			break;
 		}
@@ -1538,6 +1550,9 @@ static bool opencl_thread_init(struct thr_info *thr)
 			break;
 		case KL_DIAKGCN:
 			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
+			break;
+		case KL_SCRYPT:
+			thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
 			break;
 		default:
 		case KL_DIABLO:
