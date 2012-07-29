@@ -200,7 +200,7 @@ unsigned int total_go, total_ro;
 struct pool **pools;
 static struct pool *currentpool = NULL;
 
-int total_pools;
+int total_pools, enabled_pools;
 enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses;
@@ -1671,6 +1671,28 @@ bool regeneratehash(const struct work *work)
 		return false;
 }
 
+static void enable_pool(struct pool *pool)
+{
+	if (pool->enabled != POOL_ENABLED) {
+		enabled_pools++;
+		pool->enabled = POOL_ENABLED;
+	}
+}
+
+static void disable_pool(struct pool *pool)
+{
+	if (pool->enabled == POOL_ENABLED)
+		enabled_pools--;
+	pool->enabled = POOL_DISABLED;
+}
+
+static void reject_pool(struct pool *pool)
+{
+	if (pool->enabled == POOL_ENABLED)
+		enabled_pools--;
+	pool->enabled = POOL_REJECTING;
+}
+
 static bool submit_upstream_work(const struct work *work, CURL *curl)
 {
 	char *hexstr = NULL;
@@ -1766,7 +1788,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		 * longpoll */
 		if (unlikely(pool->enabled == POOL_REJECTING)) {
 			applog(LOG_WARNING, "Rejecting pool %d now accepting shares, re-enabling!", pool->pool_no);
-			pool->enabled = POOL_ENABLED;
+			enable_pool(pool);
 			switch_pools(NULL);
 		}
 	} else {
@@ -1811,13 +1833,13 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		 * ensued. Do not do this if we know the share just happened to
 		 * be stale due to networking delays.
 		 */
-		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && total_pools > 1) {
+		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && enabled_pools > 1) {
 			double utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 
 			if (pool->seq_rejects > utility * 3) {
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
 				       pool->pool_no, pool->seq_rejects);
-				pool->enabled = POOL_REJECTING;
+				reject_pool(pool);
 				if (pool == current_pool())
 					switch_pools(NULL);
 				pool->seq_rejects = 0;
@@ -2759,18 +2781,6 @@ int curses_int(const char *query)
 static bool input_pool(bool live);
 #endif
 
-int active_pools(void)
-{
-	int ret = 0;
-	int i;
-
-	for (i = 0; i < total_pools; i++) {
-		if ((pools[i])->enabled == POOL_ENABLED)
-			ret++;
-	}
-	return ret;
-}
-
 #ifdef HAVE_CURSES
 static void display_pool_summary(struct pool *pool)
 {
@@ -3047,7 +3057,7 @@ retry:
 			wlogprint("Unable to remove pool due to activity\n");
 			goto retry;
 		}
-		pool->enabled = POOL_DISABLED;
+		disable_pool(pool);
 		remove_pool(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "s", 1)) {
@@ -3057,11 +3067,11 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		pool->enabled = POOL_ENABLED;
+		enable_pool(pool);
 		switch_pools(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "d", 1)) {
-		if (active_pools() <= 1) {
+		if (enabled_pools <= 1) {
 			wlogprint("Cannot disable last pool");
 			goto retry;
 		}
@@ -3071,7 +3081,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		pool->enabled = POOL_DISABLED;
+		disable_pool(pool);
 		if (pool == current_pool())
 			switch_pools(NULL);
 		goto updated;
@@ -3082,7 +3092,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		pool->enabled = POOL_ENABLED;
+		enable_pool(pool);
 		if (pool->prio < current_pool()->prio)
 			switch_pools(pool);
 		goto updated;
@@ -4869,7 +4879,7 @@ void add_pool_details(bool live, char *url, char *user, char *pass)
 
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
-	pool->enabled = POOL_ENABLED;
+	enable_pool(pool);
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
 }
@@ -5197,7 +5207,7 @@ int main(int argc, char *argv[])
 		strcpy(pool->rpc_url, "Benchmark");
 		pool->rpc_user = pool->rpc_url;
 		pool->rpc_pass = pool->rpc_url;
-		pool->enabled = POOL_ENABLED;
+		enable_pool(pool);
 		pool->idle = false;
 		successful_connect = true;
 	}
@@ -5440,7 +5450,7 @@ int main(int argc, char *argv[])
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool  = pools[i];
 
-		pool->enabled = POOL_ENABLED;
+		enable_pool(pool);
 		pool->idle = true;
 	}
 

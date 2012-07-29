@@ -2155,7 +2155,7 @@ static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, _
 		return;
 	}
 
-	if (active_pools() <= 1) {
+	if (enabled_pools <= 1) {
 		strcpy(io_buffer, message(MSG_DISLASTP, id, NULL, isjson));
 		return;
 	}
