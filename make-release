@@ -31,7 +31,7 @@ cd ..
 zip -r "$IDIR/${sw}.zip" "$sw"
 tar cjvpf "$IDIR/${sw}.tbz2" "$sw"
 SRCDIR="$TMPDIR/$sw"
-for txt in AUTHORS COPYING NEWS README API-README FPGA-README; do
+for txt in AUTHORS COPYING NEWS README API-README FPGA-README SCRYPT-README; do
 	cp -v "$txt" "$OUTDIR/${txt}.txt"
 done
 cp -av "bitstreams" "$OUTDIR/"
