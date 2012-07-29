@@ -174,6 +174,11 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Use '\\' to get a '\' and '\,' to include a comma
                               inside URL, USR or PASS
 
+ poolpriority|N,... (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of changing pool priorities
+                              See usage below
+
  disablepool|N (*)
                none           There is no reply section just the STATUS section
                               stating the results of disabling pool N
@@ -270,8 +275,15 @@ The list of requests - a (*) means it requires privileged access - and replies a
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
-When you switch to a different pool to the current one, you will get a
-'Switching to URL' message in the cgminer status windows
+The 'poolpriority' command can be used to reset the priority order of pools.
+Each pool should be listed by id number in order of preference (first = most
+preferred). Any pools not listed will be prioritized after the ones that are,
+in an undefined order. If the priority change affects the miner's preference
+for mining, it may switch immediately.
+
+When you switch to a different pool to the current one (including by priority
+change), you will get a 'Switching to URL' message in the cgminer status
+windows
 
 Obviously, the JSON format is simply just the names as given before the '='
 with the values after the '='
