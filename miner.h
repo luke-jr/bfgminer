@@ -626,6 +626,11 @@ extern bool opt_quiet;
 extern struct thr_info *thr_info;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
+#ifdef USE_SCRYPT
+extern bool opt_scrypt;
+#else
+#define opt_scrypt (0)
+#endif
 extern double total_secs;
 extern int mining_threads;
 extern struct cgpu_info *cpus;
@@ -673,6 +678,9 @@ typedef struct {
 	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
 	cl_uint zeroA, zeroB;
 	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
+#ifdef USE_SCRYPT
+	unsigned char *midstate;
+#endif
 } dev_blk_ctx;
 #else
 typedef struct {

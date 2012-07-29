@@ -127,6 +127,10 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
 	blk->fiveA = blk->ctx_f + SHA256_K[5];
 	blk->sixA = blk->ctx_g + SHA256_K[6];
 	blk->sevenA = blk->ctx_h + SHA256_K[7];
+
+#ifdef USE_SCRYPT
+	blk->midstate = (unsigned char *)state;
+#endif
 }
 
 #define P(t) (W[(t)&0xF] = W[(t-16)&0xF] + (rotate(W[(t-15)&0xF], 25) ^ rotate(W[(t-15)&0xF], 14) ^ (W[(t-15)&0xF] >> 3)) + W[(t-7)&0xF] + (rotate(W[(t-2)&0xF], 15) ^ rotate(W[(t-2)&0xF], 13) ^ (W[(t-2)&0xF] >> 10)))
@@ -228,9 +232,15 @@ static void *postcalc_hash(void *userdata)
 	pthread_detach(pthread_self());
 
 	for (entry = 0; entry < FOUND; entry++) {
-		if (pcd->res[entry])
-			send_nonce(pcd, pcd->res[entry]);
+		if (pcd->res[entry]) {
+#ifdef USE_SCRYPT
+			if (opt_scrypt)
+				submit_nonce(thr, pcd->work, entry);
+			else
+#endif
+				send_nonce(pcd, pcd->res[entry]);
 		nonces++;
+		}
 	}
 
 	free(pcd);

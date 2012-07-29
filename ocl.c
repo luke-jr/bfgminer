@@ -538,8 +538,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char numbuf[10];
 
 	if (gpus[gpu].kernel == KL_NONE) {
-		/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
-		if (!strstr(name, "Tahiti") &&
+		if (opt_scrypt) {
+			applog(LOG_INFO, "Selecting scrypt kernel");
+			clState->chosen_kernel = KL_SCRYPT;
+		} else if (!strstr(name, "Tahiti") &&
+			/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
 			(strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
 			 strstr(vbuff, "851.4") ||  // Windows 64 bit ""
 			 strstr(vbuff, "831.4") ||
@@ -591,6 +594,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			strcpy(filename, DIAKGCN_KERNNAME".cl");
 			strcpy(binaryfilename, DIAKGCN_KERNNAME);
 			break;
+		case KL_SCRYPT:
+			strcpy(filename, SCRYPT_KERNNAME".cl");
+			strcpy(binaryfilename, SCRYPT_KERNNAME);
+			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_DIABLO:
 			strcpy(filename, DIABLO_KERNNAME".cl");
@@ -605,8 +612,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		gpus[gpu].vwidth = preferred_vwidth;
 	}
 
-	if ((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO || clState->chosen_kernel == KL_DIAKGCN) &&
-		clState->vwidth == 1 && clState->hasOpenCL11plus)
+	if (((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO || clState->chosen_kernel == KL_DIAKGCN) &&
+		clState->vwidth == 1 && clState->hasOpenCL11plus) || opt_scrypt)
 			clState->goffset = true;
 
 	if (gpus[gpu].work_size && gpus[gpu].work_size <= clState->max_work_size)
@@ -712,8 +719,13 @@ build:
 	/* create a cl program executable for all the devices specified */
 	char *CompilerOptions = calloc(1, 256);
 
-	sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
-		(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
+	if (opt_scrypt) {
+		sprintf(CompilerOptions, "-D LOOKUP_GAP=1 -D CONCURRENT_THREADS=1 -D WORKSIZE=%d",
+			(int)clState->wsize);
+	} else {
+		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
+			(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
+	}
 	applog(LOG_DEBUG, "Setting worksize to %d", clState->wsize);
 	if (clState->vwidth > 1)
 		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
@@ -904,6 +916,12 @@ built:
 		return NULL;
 	}
 
+#ifdef USE_SCRYPT
+	if (opt_scrypt) {
+		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
+		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, 131072, NULL, &status);
+	}
+#endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);

@@ -354,8 +354,10 @@ static enum cl_kernels select_kernel(char *arg)
 		return KL_POCLBM;
 	if (!strcmp(arg, "phatk"))
 		return KL_PHATK;
+#ifdef USE_SCRYPT
 	if (!strcmp(arg, "scrypt"))
 		return KL_SCRYPT;
+#endif
 	return KL_NONE;
 }
 
@@ -365,6 +367,8 @@ char *set_kernel(char *arg)
 	int i, device = 0;
 	char *nextptr;
 
+	if (opt_scrypt)
+		return "Cannot use sha256 kernel with scrypt";
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set kernel";
@@ -1205,12 +1209,32 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	return status;
 }
 
+#ifdef USE_SCRYPT
 static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint threads)
 {
+	cl_uint4 *midstate = (cl_uint4 *)blk->midstate;
+	cl_kernel *kernel = &clState->kernel;
+	unsigned int num = 0;
 	cl_int status = 0;
+	int i;
 
+	CL_SET_ARG(clState->CLbuffer0);
+	CL_SET_ARG(clState->outputBuffer);
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_VARG(4, &midstate[0]);
+	CL_SET_VARG(4, &midstate[16]);
+
+#if 0
+	clSetKernelArg(clState->kernel,0,sizeof(cl_mem), &clState->CLbuffer[0]);
+	clSetKernelArg(clState->kernel,1,sizeof(cl_mem), &clState->CLbuffer[1]);
+	clSetKernelArg(clState->kernel,2,sizeof(cl_mem), &clState->padbuffer8);
+	clSetKernelArg(clState->kernel,3,sizeof(cl_uint4), &midstate[0]);
+	clSetKernelArg(clState->kernel,4,sizeof(cl_uint4), &midstate[16]);
+#endif
 	return status;
 }
+#endif
+
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       int64_t *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
@@ -1498,23 +1522,25 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	if (!cgpu->kname)
 	{
 		switch (clStates[i]->chosen_kernel) {
-		case KL_DIABLO:
-			cgpu->kname = "diablo";
-			break;
-		case KL_DIAKGCN:
-			cgpu->kname = "diakgcn";
-			break;
-		case KL_PHATK:
-			cgpu->kname = "phatk";
-			break;
-		case KL_SCRYPT:
-			cgpu->kname = "scrypt";
-			break;
-		case KL_POCLBM:
-			cgpu->kname = "poclbm";
-			break;
-		default:
-			break;
+			case KL_DIABLO:
+				cgpu->kname = "diablo";
+				break;
+			case KL_DIAKGCN:
+				cgpu->kname = "diakgcn";
+				break;
+			case KL_PHATK:
+				cgpu->kname = "phatk";
+				break;
+#ifdef USE_SCRYPT
+			case KL_SCRYPT:
+				cgpu->kname = "scrypt";
+				break;
+#endif
+			case KL_POCLBM:
+				cgpu->kname = "poclbm";
+				break;
+			default:
+				break;
 		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
@@ -1551,9 +1577,11 @@ static bool opencl_thread_init(struct thr_info *thr)
 		case KL_DIAKGCN:
 			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
 			break;
+#ifdef USE_SCRYPT
 		case KL_SCRYPT:
 			thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
 			break;
+#endif
 		default:
 		case KL_DIABLO:
 			thrdata->queue_kernel_parameters = &queue_diablo_kernel;
@@ -1568,6 +1596,10 @@ static bool opencl_thread_init(struct thr_info *thr)
 		return false;
 	}
 
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, BUFFERSIZE, blank_res, 0, NULL,NULL);
+#endif
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
@@ -1687,14 +1719,14 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
 						globalThreads, localThreads, 0,  NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)");
+		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
 		return -1;
 	}
 
 	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 			BUFFERSIZE, thrdata->res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)");
+		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);
 		return -1;
 	}
 

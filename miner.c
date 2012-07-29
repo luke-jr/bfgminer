@@ -108,6 +108,9 @@ int opt_dynamic_interval = 7;
 int nDevs;
 int opt_g_threads = 2;
 int gpu_threads;
+#ifdef USE_SCRYPT
+bool opt_scrypt;
+#endif
 #endif
 bool opt_restart = true;
 static bool opt_nogpu;
@@ -865,7 +868,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--kernel|-k",
 		     set_kernel, NULL, NULL,
-		     "Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
+		     "Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
 #endif
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--icarus-timing",
@@ -958,6 +961,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--sched-stop",
 		     set_schedtime, NULL, &schedstop,
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
+#ifdef USE_SCRYPT
+	OPT_WITHOUT_ARG("--scrypt",
+			opt_set_bool, &opt_scrypt,
+			"Use the scrypt algorithm for mining (litecoin only)"),
+#endif
 	OPT_WITH_ARG("--sharelog",
 		     set_sharelog, NULL, NULL,
 		     "Append share log to file"),
@@ -4326,6 +4334,9 @@ bool hashtest(const struct work *work, bool checktarget)
 
 bool test_nonce(struct work *work, uint32_t nonce, bool checktarget)
 {
+	if (opt_scrypt)
+		return true;
+
 	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
 	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
 	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
