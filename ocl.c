@@ -536,8 +536,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (clState->goffset)
 		strcat(binaryfilename, "g");
 	if (opt_scrypt) {
+#ifdef USE_SCRYPT
 		sprintf(numbuf, "lg%dtc%d", cgpu->lookup_gap, cgpu->thread_concurrency);
 		strcat(binaryfilename, numbuf);
+#endif
 	} else {
 		sprintf(numbuf, "v%d", clState->vwidth);
 		strcat(binaryfilename, numbuf);
