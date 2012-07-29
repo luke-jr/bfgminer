@@ -2155,9 +2155,8 @@ static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 
 	bool pools_changed[total_pools];
 	int new_prio[total_pools];
-	for (i = 0; i < total_pools; ++i) {
+	for (i = 0; i < total_pools; ++i)
 		pools_changed[i] = false;
-	}
 
 	next = param;
 	while (next && *next) {
