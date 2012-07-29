@@ -2154,8 +2154,10 @@ static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 	}
 
 	bool pools_changed[total_pools];
-	for (i = 0; i < total_pools; ++i)
+	int new_prio[total_pools];
+	for (i = 0; i < total_pools; ++i) {
 		pools_changed[i] = false;
+	}
 
 	next = param;
 	while (next && *next) {
@@ -2175,8 +2177,14 @@ static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 			return;
 		}
 
-		pools[i]->prio = prio++;
 		pools_changed[i] = true;
+		new_prio[i] = prio++;
+	}
+
+	// Only change them if no errors
+	for (i = 0; i < total_pools; i++) {
+		if (pools_changed[i])
+			pools[i]->prio = new_prio[i];
 	}
 
 	// In priority order, cycle through the unchanged pools and append them
