@@ -39,7 +39,7 @@ To give an IP address/subnet access to a group you use the group letter
 in front of the IP address instead of W: e.g. P:192.168.0/32
 An IP address/subnet can only be a member of one group
 A sample API group would be:
- --api-groups P:switchpool:enablepool:addpool:disablepool:removepool:*
+ --api-groups P:switchpool:enablepool:addpool:disablepool:removepool.poolpriority:*
 This would create a group 'P' that can do all current pool commands and all
 non-priviliged commands - the '*' means all non-priviledged commands
 Without the '*' the group would only have access to the pool commands
@@ -275,11 +275,14 @@ The list of requests - a (*) means it requires privileged access - and replies a
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
-The 'poolpriority' command can be used to reset the priority order of pools.
+The 'poolpriority' command can be used to reset the priority order of multiple
+pools with a single command - 'switchpool' only sets a single pool to first priority
 Each pool should be listed by id number in order of preference (first = most
-preferred). Any pools not listed will be prioritized after the ones that are,
-in an undefined order. If the priority change affects the miner's preference
-for mining, it may switch immediately.
+preferred)
+Any pools not listed will be prioritised after the ones that are listed, in the
+priority order they were originally
+If the priority change affects the miner's preference for mining, it may switch
+immediately
 
 When you switch to a different pool to the current one (including by priority
 change), you will get a 'Switching to URL' message in the cgminer status
