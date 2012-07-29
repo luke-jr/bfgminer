@@ -1381,6 +1381,16 @@ void tailsprintf(char *f, const char *fmt, ...)
 
 static void get_statline(char *buf, struct cgpu_info *cgpu)
 {
+	double displayed_hashes, displayed_rolling = cgpu->rolling;
+	bool mhash_base = true;
+
+	displayed_hashes = cgpu->total_mhashes / total_secs;
+	if (displayed_hashes < 1) {
+		displayed_hashes *= 1000;
+		displayed_rolling *= 1000;
+		mhash_base = false;
+	}
+
 	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before)
 		cgpu->api->get_statline_before(buf, cgpu);
@@ -1388,9 +1398,9 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		tailsprintf(buf, "               | ");
 	tailsprintf(buf, "(%ds):%.1f (avg):%.1f %sh/s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
-		cgpu->rolling,
-		cgpu->total_mhashes / total_secs,
-	        opt_scrypt ? "K" : "M",
+		displayed_rolling,
+		displayed_hashes,
+	        mhash_base ? "M" : "K",
 		cgpu->accepted,
 		cgpu->rejected,
 		cgpu->hw_errors,
@@ -1456,6 +1466,8 @@ static void curses_print_devstatus(int thr_id)
 {
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	double displayed_hashes, displayed_rolling;
+	bool mhash_base = true;
 	char logline[255];
 
 	if (devcursor + cgpu->cgminer_id > LINES - 2)
@@ -1473,6 +1485,14 @@ static void curses_print_devstatus(int thr_id)
 	else
 		wprintw(statuswin, "               | ");
 
+	displayed_hashes = cgpu->total_mhashes / total_secs;
+	displayed_rolling = cgpu->rolling;
+	if (displayed_hashes < 1) {
+		displayed_hashes *= 1000;
+		displayed_rolling *= 1000;
+		mhash_base = false;
+	}
+
 	if (cgpu->status == LIFE_DEAD)
 		wprintw(statuswin, "DEAD ");
 	else if (cgpu->status == LIFE_SICK)
@@ -1482,14 +1502,15 @@ static void curses_print_devstatus(int thr_id)
 	else if (cgpu->deven == DEV_RECOVER)
 		wprintw(statuswin, "REST  ");
 	else
-		wprintw(statuswin, "%5.1f", cgpu->rolling);
+		wprintw(statuswin, "%5.1f", displayed_rolling);
 	adj_width(cgpu->accepted, &awidth);
 	adj_width(cgpu->rejected, &rwidth);
 	adj_width(cgpu->hw_errors, &hwwidth);
 	adj_width(cgpu->utility, &uwidth);
+
 	wprintw(statuswin, "/%5.1f%sh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
-			cgpu->total_mhashes / total_secs,
-			opt_scrypt ? "K" : "M",
+			displayed_hashes,
+			mhash_base ? "M" : "K",
 			awidth, cgpu->accepted,
 			rwidth, cgpu->rejected,
 			hwwidth, cgpu->hw_errors,
@@ -3433,13 +3454,11 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double utility, efficiency = 0.0;
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
-	double local_mhashes;
+	double local_mhashes, displayed_hashes, displayed_rolling;
+	bool mhash_base = true;
 	bool showlog = false;
 
-	if (opt_scrypt)
-		local_mhashes = (double)hashes_done / 1000.0;
-	else
-		local_mhashes = (double)hashes_done / 1000000.0;
+	local_mhashes = (double)hashes_done / 1000000.0;
 	/* Update the last time this thread reported in */
 	if (thr_id >= 0) {
 		gettimeofday(&thr_info[thr_id].last, NULL);
@@ -3515,9 +3534,17 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
+	displayed_hashes = total_mhashes_done / total_secs;
+	displayed_rolling = rolling;
+	if (displayed_hashes < 1) {
+		displayed_hashes *= 1000;
+		displayed_rolling *= 1000;
+		mhash_base = false;
+	}
+
 	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f %sh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
-		opt_log_interval, rolling, total_mhashes_done / total_secs, opt_scrypt ? "K" : "M",
+		opt_log_interval, displayed_rolling, displayed_hashes, mhash_base ? "M" : "K",
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
 
 
@@ -4726,7 +4753,8 @@ static void print_summary(void)
 {
 	struct timeval diff;
 	int hours, mins, secs, i;
-	double utility, efficiency = 0.0;
+	double utility, efficiency = 0.0, displayed_hashes;
+	bool mhash_base = true;
 
 	timersub(&total_tv_end, &total_tv_start, &diff);
 	hours = diff.tv_sec / 3600;
@@ -4745,8 +4773,14 @@ static void print_summary(void)
 		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
 #endif
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
+	displayed_hashes = total_mhashes_done / total_secs;
+	if (displayed_hashes < 1) {
+		displayed_hashes *= 1000;
+		mhash_base = false;
+	}
+
 	if (total_secs)
-		applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", total_mhashes_done / total_secs, opt_scrypt? "Kilo" : "Mega");
+		applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", displayed_hashes, mhash_base? "Mega" : "Kilo");
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
