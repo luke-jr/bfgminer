@@ -1090,15 +1090,12 @@ static void load_default_config(void)
 	strcpy(dirp, ".bfgminer/");
 	strcat(dirp, def_conf);
 	if (access(cnfbuf, R_OK))
-	{
 		// No BFGMiner config, try Cgminer's...
-		strcpy(dirp, ".cgminer/");
-		strcat(dirp, def_conf);
-	}
+		strcpy(dirp, ".cgminer/cgminer.conf");
 #else
 	strcpy(cnfbuf, "");
-#endif
 	strcat(cnfbuf, def_conf);
+#endif
 	if (!access(cnfbuf, R_OK))
 		load_config(cnfbuf, NULL);
 	else {
