@@ -4567,7 +4567,6 @@ static void age_work(void)
 #define WATCHDOG_DEAD_TIME		600
 #define WATCHDOG_SICK_COUNT		(WATCHDOG_SICK_TIME/WATCHDOG_INTERVAL)
 #define WATCHDOG_DEAD_COUNT		(WATCHDOG_DEAD_TIME/WATCHDOG_INTERVAL)
-#define WATCHDOG_LOW_HASH		1.0 /* consider < 1MH too low for any device */
 
 static void *watchdog_thread(void __maybe_unused *userdata)
 {
@@ -4648,9 +4647,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			struct cgpu_info *cgpu = devices[i];
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
-			bool dev_count_well;
-			bool dev_count_sick;
-			bool dev_count_dead;
 			char dev_str[8];
 			int gpu;
 
@@ -4682,21 +4678,12 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (!strcmp(cgpu->api->dname, "cpu"))
 				continue;
 #endif
-			if (cgpu->rolling < WATCHDOG_LOW_HASH)
-				cgpu->low_count++;
-			else
-				cgpu->low_count = 0;
-
-			dev_count_well = (cgpu->low_count < WATCHDOG_SICK_COUNT);
-			dev_count_sick = (cgpu->low_count > WATCHDOG_SICK_COUNT);
-			dev_count_dead = (cgpu->low_count > WATCHDOG_DEAD_COUNT);
-
-			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME) && dev_count_well) {
+			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
 				if (cgpu->status != LIFE_INIT)
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
-			} else if (cgpu->status == LIFE_WELL && ((now.tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME) || dev_count_sick)) {
+			} else if (cgpu->status == LIFE_WELL && (now.tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME)) {
 				thr->rolling = cgpu->rolling = 0;
 				cgpu->status = LIFE_SICK;
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
@@ -4715,7 +4702,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
 				}
-			} else if (cgpu->status == LIFE_SICK && ((now.tv_sec - thr->last.tv_sec > WATCHDOG_DEAD_TIME) || dev_count_dead)) {
+			} else if (cgpu->status == LIFE_SICK && (now.tv_sec - thr->last.tv_sec > WATCHDOG_DEAD_TIME)) {
 				cgpu->status = LIFE_DEAD;
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				gettimeofday(&thr->sick, NULL);

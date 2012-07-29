@@ -336,7 +336,6 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int hw_errors;
-	unsigned int low_count;
 	double rolling;
 	double total_mhashes;
 	double utility;
