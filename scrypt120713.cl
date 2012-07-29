@@ -31,187 +31,187 @@ void SHA256(uint4*restrict state0,uint4*restrict state1, const uint4 block0, con
 #define G S1.z
 #define H S1.w
 
-	uint16 W;
+	uint4 W[4];
 
-	W.s0 = block0.x;
-	RND(A,B,C,D,E,F,G,H, W.s0+0x428a2f98U);
-	W.s1 = block0.y;
-	RND(H,A,B,C,D,E,F,G, W.s1+0x71374491U);
-	W.s2 = block0.z;
-	RND(G,H,A,B,C,D,E,F, W.s2+0xb5c0fbcfU);
-	W.s3 = block0.w;
-	RND(F,G,H,A,B,C,D,E, W.s3+0xe9b5dba5U);
+	W[ 0].x = block0.x;
+	RND(A,B,C,D,E,F,G,H, W[0].x+0x428a2f98U);
+	W[ 0].y = block0.y;
+	RND(H,A,B,C,D,E,F,G, W[0].y+0x71374491U);
+	W[ 0].z = block0.z;
+	RND(G,H,A,B,C,D,E,F, W[0].z+0xb5c0fbcfU);
+	W[ 0].w = block0.w;
+	RND(F,G,H,A,B,C,D,E, W[0].w+0xe9b5dba5U);
 
-	W.s4 = block1.x;
-	RND(E,F,G,H,A,B,C,D, W.s4+0x3956c25bU);
-	W.s5 = block1.y;
-	RND(D,E,F,G,H,A,B,C, W.s5+0x59f111f1U);
-	W.s6 = block1.z;
-	RND(C,D,E,F,G,H,A,B, W.s6+0x923f82a4U);
-	W.s7 = block1.w;
-	RND(B,C,D,E,F,G,H,A, W.s7+0xab1c5ed5U);
+	W[ 1].x = block1.x;
+	RND(E,F,G,H,A,B,C,D, W[1].x+0x3956c25bU);
+	W[ 1].y = block1.y;
+	RND(D,E,F,G,H,A,B,C, W[1].y+0x59f111f1U);
+	W[ 1].z = block1.z;
+	RND(C,D,E,F,G,H,A,B, W[1].z+0x923f82a4U);
+	W[ 1].w = block1.w;
+	RND(B,C,D,E,F,G,H,A, W[1].w+0xab1c5ed5U);
 
-	W.s8 = block2.x;
-	RND(A,B,C,D,E,F,G,H, W.s8+0xd807aa98U);
-	W.s9 = block2.y;
-	RND(H,A,B,C,D,E,F,G, W.s9+0x12835b01U);
-	W.sa = block2.z;
-	RND(G,H,A,B,C,D,E,F, W.sa+0x243185beU);
-	W.sb = block2.w;
-	RND(F,G,H,A,B,C,D,E, W.sb+0x550c7dc3U);
+	W[ 2].x = block2.x;
+	RND(A,B,C,D,E,F,G,H, W[2].x+0xd807aa98U);
+	W[ 2].y = block2.y;
+	RND(H,A,B,C,D,E,F,G, W[2].y+0x12835b01U);
+	W[ 2].z = block2.z;
+	RND(G,H,A,B,C,D,E,F, W[2].z+0x243185beU);
+	W[ 2].w = block2.w;
+	RND(F,G,H,A,B,C,D,E, W[2].w+0x550c7dc3U);
 
-	W.sc = block3.x;
-	RND(E,F,G,H,A,B,C,D, W.sc+0x72be5d74U);
-	W.sd = block3.y;
-	RND(D,E,F,G,H,A,B,C, W.sd+0x80deb1feU);
-	W.se = block3.z;
-	RND(C,D,E,F,G,H,A,B, W.se+0x9bdc06a7U);
-	W.sf = block3.w;
-	RND(B,C,D,E,F,G,H,A, W.sf+0xc19bf174U);
+	W[ 3].x = block3.x;
+	RND(E,F,G,H,A,B,C,D, W[3].x+0x72be5d74U);
+	W[ 3].y = block3.y;
+	RND(D,E,F,G,H,A,B,C, W[3].y+0x80deb1feU);
+	W[ 3].z = block3.z;
+	RND(C,D,E,F,G,H,A,B, W[3].z+0x9bdc06a7U);
+	W[ 3].w = block3.w;
+	RND(B,C,D,E,F,G,H,A, W[3].w+0xc19bf174U);
 
-	W.s0 += Wr1(W.se) + W.s9 + Wr2(W.s1);
-	RND(A,B,C,D,E,F,G,H, W.s0+0xe49b69c1U);
+	W[ 0].x += Wr1(W[ 3].z) + W[ 2].y + Wr2(W[ 0].y);
+	RND(A,B,C,D,E,F,G,H, W[0].x+0xe49b69c1U);
 
-	W.s1 += Wr1(W.sf) + W.sa + Wr2(W.s2);
-	RND(H,A,B,C,D,E,F,G, W.s1+0xefbe4786U);
+	W[ 0].y += Wr1(W[ 3].w) + W[ 2].z + Wr2(W[ 0].z);
+	RND(H,A,B,C,D,E,F,G, W[0].y+0xefbe4786U);
 
-	W.s2 += Wr1(W.s0) + W.sb + Wr2(W.s3);
-	RND(G,H,A,B,C,D,E,F, W.s2+0x0fc19dc6U);
+	W[ 0].z += Wr1(W[ 0].x) + W[ 2].w + Wr2(W[ 0].w);
+	RND(G,H,A,B,C,D,E,F, W[0].z+0x0fc19dc6U);
 
-	W.s3 += Wr1(W.s1) + W.sc + Wr2(W.s4);
-	RND(F,G,H,A,B,C,D,E, W.s3+0x240ca1ccU);
+	W[ 0].w += Wr1(W[ 0].y) + W[ 3].x + Wr2(W[ 1].x);
+	RND(F,G,H,A,B,C,D,E, W[0].w+0x240ca1ccU);
 
-	W.s4 += Wr1(W.s2) + W.sd + Wr2(W.s5);
-	RND(E,F,G,H,A,B,C,D, W.s4+0x2de92c6fU);
+	W[ 1].x += Wr1(W[ 0].z) + W[ 3].y + Wr2(W[ 1].y);
+	RND(E,F,G,H,A,B,C,D, W[1].x+0x2de92c6fU);
 
-	W.s5 += Wr1(W.s3) + W.se + Wr2(W.s6);
-	RND(D,E,F,G,H,A,B,C, W.s5+0x4a7484aaU);
+	W[ 1].y += Wr1(W[ 0].w) + W[ 3].z + Wr2(W[ 1].z);
+	RND(D,E,F,G,H,A,B,C, W[1].y+0x4a7484aaU);
 
-	W.s6 += Wr1(W.s4) + W.sf + Wr2(W.s7);
-	RND(C,D,E,F,G,H,A,B, W.s6+0x5cb0a9dcU);
+	W[ 1].z += Wr1(W[ 1].x) + W[ 3].w + Wr2(W[ 1].w);
+	RND(C,D,E,F,G,H,A,B, W[1].z+0x5cb0a9dcU);
 
-	W.s7 += Wr1(W.s5) + W.s0 + Wr2(W.s8);
-	RND(B,C,D,E,F,G,H,A, W.s7+0x76f988daU);
+	W[ 1].w += Wr1(W[ 1].y) + W[ 0].x + Wr2(W[ 2].x);
+	RND(B,C,D,E,F,G,H,A, W[1].w+0x76f988daU);
 
-	W.s8 += Wr1(W.s6) + W.s1 + Wr2(W.s9);
-	RND(A,B,C,D,E,F,G,H, W.s8+0x983e5152U);
+	W[ 2].x += Wr1(W[ 1].z) + W[ 0].y + Wr2(W[ 2].y);
+	RND(A,B,C,D,E,F,G,H, W[2].x+0x983e5152U);
 
-	W.s9 += Wr1(W.s7) + W.s2 + Wr2(W.sa);
-	RND(H,A,B,C,D,E,F,G, W.s9+0xa831c66dU);
+	W[ 2].y += Wr1(W[ 1].w) + W[ 0].z + Wr2(W[ 2].z);
+	RND(H,A,B,C,D,E,F,G, W[2].y+0xa831c66dU);
 
-	W.sa += Wr1(W.s8) + W.s3 + Wr2(W.sb);
-	RND(G,H,A,B,C,D,E,F, W.sa+0xb00327c8U);
+	W[ 2].z += Wr1(W[ 2].x) + W[ 0].w + Wr2(W[ 2].w);
+	RND(G,H,A,B,C,D,E,F, W[2].z+0xb00327c8U);
 
-	W.sb += Wr1(W.s9) + W.s4 + Wr2(W.sc);
-	RND(F,G,H,A,B,C,D,E, W.sb+0xbf597fc7U);
+	W[ 2].w += Wr1(W[ 2].y) + W[ 1].x + Wr2(W[ 3].x);
+	RND(F,G,H,A,B,C,D,E, W[2].w+0xbf597fc7U);
 
-	W.sc += Wr1(W.sa) + W.s5 + Wr2(W.sd);
-	RND(E,F,G,H,A,B,C,D, W.sc+0xc6e00bf3U);
+	W[ 3].x += Wr1(W[ 2].z) + W[ 1].y + Wr2(W[ 3].y);
+	RND(E,F,G,H,A,B,C,D, W[3].x+0xc6e00bf3U);
 
-	W.sd += Wr1(W.sb) + W.s6 + Wr2(W.se);
-	RND(D,E,F,G,H,A,B,C, W.sd+0xd5a79147U);
+	W[ 3].y += Wr1(W[ 2].w) + W[ 1].z + Wr2(W[ 3].z);
+	RND(D,E,F,G,H,A,B,C, W[3].y+0xd5a79147U);
 
-	W.se += Wr1(W.sc) + W.s7 + Wr2(W.sf);
-	RND(C,D,E,F,G,H,A,B, W.se+0x06ca6351U);
+	W[ 3].z += Wr1(W[ 3].x) + W[ 1].w + Wr2(W[ 3].w);
+	RND(C,D,E,F,G,H,A,B, W[3].z+0x06ca6351U);
 
-	W.sf += Wr1(W.sd) + W.s8 + Wr2(W.s0);
-	RND(B,C,D,E,F,G,H,A, W.sf+0x14292967U);
+	W[ 3].w += Wr1(W[ 3].y) + W[ 2].x + Wr2(W[ 0].x);
+	RND(B,C,D,E,F,G,H,A, W[3].w+0x14292967U);
 
-	W.s0 += Wr1(W.se) + W.s9 + Wr2(W.s1);
-	RND(A,B,C,D,E,F,G,H, W.s0+0x27b70a85U);
+	W[ 0].x += Wr1(W[ 3].z) + W[ 2].y + Wr2(W[ 0].y);
+	RND(A,B,C,D,E,F,G,H, W[0].x+0x27b70a85U);
 
-	W.s1 += Wr1(W.sf) + W.sa + Wr2(W.s2);
-	RND(H,A,B,C,D,E,F,G, W.s1+0x2e1b2138U);
+	W[ 0].y += Wr1(W[ 3].w) + W[ 2].z + Wr2(W[ 0].z);
+	RND(H,A,B,C,D,E,F,G, W[0].y+0x2e1b2138U);
 
-	W.s2 += Wr1(W.s0) + W.sb + Wr2(W.s3);
-	RND(G,H,A,B,C,D,E,F, W.s2+0x4d2c6dfcU);
+	W[ 0].z += Wr1(W[ 0].x) + W[ 2].w + Wr2(W[ 0].w);
+	RND(G,H,A,B,C,D,E,F, W[0].z+0x4d2c6dfcU);
 
-	W.s3 += Wr1(W.s1) + W.sc + Wr2(W.s4);
-	RND(F,G,H,A,B,C,D,E, W.s3+0x53380d13U);
+	W[ 0].w += Wr1(W[ 0].y) + W[ 3].x + Wr2(W[ 1].x);
+	RND(F,G,H,A,B,C,D,E, W[0].w+0x53380d13U);
 
-	W.s4 += Wr1(W.s2) + W.sd + Wr2(W.s5);
-	RND(E,F,G,H,A,B,C,D, W.s4+0x650a7354U);
+	W[ 1].x += Wr1(W[ 0].z) + W[ 3].y + Wr2(W[ 1].y);
+	RND(E,F,G,H,A,B,C,D, W[1].x+0x650a7354U);
 
-	W.s5 += Wr1(W.s3) + W.se + Wr2(W.s6);
-	RND(D,E,F,G,H,A,B,C, W.s5+0x766a0abbU);
+	W[ 1].y += Wr1(W[ 0].w) + W[ 3].z + Wr2(W[ 1].z);
+	RND(D,E,F,G,H,A,B,C, W[1].y+0x766a0abbU);
 
-	W.s6 += Wr1(W.s4) + W.sf + Wr2(W.s7);
-	RND(C,D,E,F,G,H,A,B, W.s6+0x81c2c92eU);
+	W[ 1].z += Wr1(W[ 1].x) + W[ 3].w + Wr2(W[ 1].w);
+	RND(C,D,E,F,G,H,A,B, W[1].z+0x81c2c92eU);
 
-	W.s7 += Wr1(W.s5) + W.s0 + Wr2(W.s8);
-	RND(B,C,D,E,F,G,H,A, W.s7+0x92722c85U);
+	W[ 1].w += Wr1(W[ 1].y) + W[ 0].x + Wr2(W[ 2].x);
+	RND(B,C,D,E,F,G,H,A, W[1].w+0x92722c85U);
 
-	W.s8 += Wr1(W.s6) + W.s1 + Wr2(W.s9);
-	RND(A,B,C,D,E,F,G,H, W.s8+0xa2bfe8a1U);
+	W[ 2].x += Wr1(W[ 1].z) + W[ 0].y + Wr2(W[ 2].y);
+	RND(A,B,C,D,E,F,G,H, W[2].x+0xa2bfe8a1U);
 
-	W.s9 += Wr1(W.s7) + W.s2 + Wr2(W.sa);
-	RND(H,A,B,C,D,E,F,G, W.s9+0xa81a664bU);
+	W[ 2].y += Wr1(W[ 1].w) + W[ 0].z + Wr2(W[ 2].z);
+	RND(H,A,B,C,D,E,F,G, W[2].y+0xa81a664bU);
 
-	W.sa += Wr1(W.s8) + W.s3 + Wr2(W.sb);
-	RND(G,H,A,B,C,D,E,F, W.sa+0xc24b8b70U);
+	W[ 2].z += Wr1(W[ 2].x) + W[ 0].w + Wr2(W[ 2].w);
+	RND(G,H,A,B,C,D,E,F, W[2].z+0xc24b8b70U);
 
-	W.sb += Wr1(W.s9) + W.s4 + Wr2(W.sc);
-	RND(F,G,H,A,B,C,D,E, W.sb+0xc76c51a3U);
+	W[ 2].w += Wr1(W[ 2].y) + W[ 1].x + Wr2(W[ 3].x);
+	RND(F,G,H,A,B,C,D,E, W[2].w+0xc76c51a3U);
 
-	W.sc += Wr1(W.sa) + W.s5 + Wr2(W.sd);
-	RND(E,F,G,H,A,B,C,D, W.sc+0xd192e819U);
+	W[ 3].x += Wr1(W[ 2].z) + W[ 1].y + Wr2(W[ 3].y);
+	RND(E,F,G,H,A,B,C,D, W[3].x+0xd192e819U);
 
-	W.sd += Wr1(W.sb) + W.s6 + Wr2(W.se);
-	RND(D,E,F,G,H,A,B,C, W.sd+0xd6990624U);
+	W[ 3].y += Wr1(W[ 2].w) + W[ 1].z + Wr2(W[ 3].z);
+	RND(D,E,F,G,H,A,B,C, W[3].y+0xd6990624U);
 
-	W.se += Wr1(W.sc) + W.s7 + Wr2(W.sf);
-	RND(C,D,E,F,G,H,A,B, W.se+0xf40e3585U);
+	W[ 3].z += Wr1(W[ 3].x) + W[ 1].w + Wr2(W[ 3].w);
+	RND(C,D,E,F,G,H,A,B, W[3].z+0xf40e3585U);
 
-	W.sf += Wr1(W.sd) + W.s8 + Wr2(W.s0);
-	RND(B,C,D,E,F,G,H,A, W.sf+0x106aa070U);
+	W[ 3].w += Wr1(W[ 3].y) + W[ 2].x + Wr2(W[ 0].x);
+	RND(B,C,D,E,F,G,H,A, W[3].w+0x106aa070U);
 
-	W.s0 += Wr1(W.se) + W.s9 + Wr2(W.s1);
-	RND(A,B,C,D,E,F,G,H, W.s0+0x19a4c116U);
+	W[ 0].x += Wr1(W[ 3].z) + W[ 2].y + Wr2(W[ 0].y);
+	RND(A,B,C,D,E,F,G,H, W[0].x+0x19a4c116U);
 
-	W.s1 += Wr1(W.sf) + W.sa + Wr2(W.s2);
-	RND(H,A,B,C,D,E,F,G, W.s1+0x1e376c08U);
+	W[ 0].y += Wr1(W[ 3].w) + W[ 2].z + Wr2(W[ 0].z);
+	RND(H,A,B,C,D,E,F,G, W[0].y+0x1e376c08U);
 
-	W.s2 += Wr1(W.s0) + W.sb + Wr2(W.s3);
-	RND(G,H,A,B,C,D,E,F, W.s2+0x2748774cU);
+	W[ 0].z += Wr1(W[ 0].x) + W[ 2].w + Wr2(W[ 0].w);
+	RND(G,H,A,B,C,D,E,F, W[0].z+0x2748774cU);
 
-	W.s3 += Wr1(W.s1) + W.sc + Wr2(W.s4);
-	RND(F,G,H,A,B,C,D,E, W.s3+0x34b0bcb5U);
+	W[ 0].w += Wr1(W[ 0].y) + W[ 3].x + Wr2(W[ 1].x);
+	RND(F,G,H,A,B,C,D,E, W[0].w+0x34b0bcb5U);
 
-	W.s4 += Wr1(W.s2) + W.sd + Wr2(W.s5);
-	RND(E,F,G,H,A,B,C,D, W.s4+0x391c0cb3U);
+	W[ 1].x += Wr1(W[ 0].z) + W[ 3].y + Wr2(W[ 1].y);
+	RND(E,F,G,H,A,B,C,D, W[1].x+0x391c0cb3U);
 
-	W.s5 += Wr1(W.s3) + W.se + Wr2(W.s6);
-	RND(D,E,F,G,H,A,B,C, W.s5+0x4ed8aa4aU);
+	W[ 1].y += Wr1(W[ 0].w) + W[ 3].z + Wr2(W[ 1].z);
+	RND(D,E,F,G,H,A,B,C, W[1].y+0x4ed8aa4aU);
 
-	W.s6 += Wr1(W.s4) + W.sf + Wr2(W.s7);
-	RND(C,D,E,F,G,H,A,B, W.s6+0x5b9cca4fU);
+	W[ 1].z += Wr1(W[ 1].x) + W[ 3].w + Wr2(W[ 1].w);
+	RND(C,D,E,F,G,H,A,B, W[1].z+0x5b9cca4fU);
 
-	W.s7 += Wr1(W.s5) + W.s0 + Wr2(W.s8);
-	RND(B,C,D,E,F,G,H,A, W.s7+0x682e6ff3U);
+	W[ 1].w += Wr1(W[ 1].y) + W[ 0].x + Wr2(W[ 2].x);
+	RND(B,C,D,E,F,G,H,A, W[1].w+0x682e6ff3U);
 
-	W.s8 += Wr1(W.s6) + W.s1 + Wr2(W.s9);
-	RND(A,B,C,D,E,F,G,H, W.s8+0x748f82eeU);
+	W[ 2].x += Wr1(W[ 1].z) + W[ 0].y + Wr2(W[ 2].y);
+	RND(A,B,C,D,E,F,G,H, W[2].x+0x748f82eeU);
 
-	W.s9 += Wr1(W.s7) + W.s2 + Wr2(W.sa);
-	RND(H,A,B,C,D,E,F,G, W.s9+0x78a5636fU);
+	W[ 2].y += Wr1(W[ 1].w) + W[ 0].z + Wr2(W[ 2].z);
+	RND(H,A,B,C,D,E,F,G, W[2].y+0x78a5636fU);
 
-	W.sa += Wr1(W.s8) + W.s3 + Wr2(W.sb);
-	RND(G,H,A,B,C,D,E,F, W.sa+0x84c87814U);
+	W[ 2].z += Wr1(W[ 2].x) + W[ 0].w + Wr2(W[ 2].w);
+	RND(G,H,A,B,C,D,E,F, W[2].z+0x84c87814U);
 
-	W.sb += Wr1(W.s9) + W.s4 + Wr2(W.sc);
-	RND(F,G,H,A,B,C,D,E, W.sb+0x8cc70208U);
+	W[ 2].w += Wr1(W[ 2].y) + W[ 1].x + Wr2(W[ 3].x);
+	RND(F,G,H,A,B,C,D,E, W[2].w+0x8cc70208U);
 
-	W.sc += Wr1(W.sa) + W.s5 + Wr2(W.sd);
-	RND(E,F,G,H,A,B,C,D, W.sc+0x90befffaU);
+	W[ 3].x += Wr1(W[ 2].z) + W[ 1].y + Wr2(W[ 3].y);
+	RND(E,F,G,H,A,B,C,D, W[3].x+0x90befffaU);
 
-	W.sd += Wr1(W.sb) + W.s6 + Wr2(W.se);
-	RND(D,E,F,G,H,A,B,C, W.sd+0xa4506cebU);
+	W[ 3].y += Wr1(W[ 2].w) + W[ 1].z + Wr2(W[ 3].z);
+	RND(D,E,F,G,H,A,B,C, W[3].y+0xa4506cebU);
 
-	W.se += Wr1(W.sc) + W.s7 + Wr2(W.sf);
-	RND(C,D,E,F,G,H,A,B, W.se+0xbef9a3f7U);
+	W[ 3].z += Wr1(W[ 3].x) + W[ 1].w + Wr2(W[ 3].w);
+	RND(C,D,E,F,G,H,A,B, W[3].z+0xbef9a3f7U);
 
-	W.sf += Wr1(W.sd) + W.s8 + Wr2(W.s0);
-	RND(B,C,D,E,F,G,H,A, W.sf+0xc67178f2U);
+	W[ 3].w += Wr1(W[ 3].y) + W[ 2].x + Wr2(W[ 0].x);
+	RND(B,C,D,E,F,G,H,A, W[3].w+0xc67178f2U);
 	
 #undef A
 #undef B
@@ -237,194 +237,194 @@ void SHA256_fresh(uint4*restrict state0,uint4*restrict state1, const uint4 block
 #define G (*state1).z
 #define H (*state1).w
 
-	uint16 W;
+	uint4 W[4];
 
-	W.s0 = block0.x;
-	D=0x98c7e2a2U+W.s0;
-	H=0xfc08884dU+W.s0;
+	W[0].x = block0.x;
+	D=0x98c7e2a2U+W[0].x;
+	H=0xfc08884dU+W[0].x;
 
-	W.s1 = block0.y;
-	C=0xcd2a11aeU+Tr1(D)+Ch(D,0x510e527fU,0x9b05688cU)+W.s1;
+	W[0].y = block0.y;
+	C=0xcd2a11aeU+Tr1(D)+Ch(D,0x510e527fU,0x9b05688cU)+W[0].y;
 	G=0xC3910C8EU+C+Tr2(H)+Ch(H,0xfb6feee7U,0x2a01a605U);
 
-	W.s2 = block0.z;
-	B=0x0c2e12e0U+Tr1(C)+Ch(C,D,0x510e527fU)+W.s2;
+	W[0].z = block0.z;
+	B=0x0c2e12e0U+Tr1(C)+Ch(C,D,0x510e527fU)+W[0].z;
 	F=0x4498517BU+B+Tr2(G)+Maj(G,H,0x6a09e667U);
 
-	W.s3 = block0.w;
-	A=0xa4ce148bU+Tr1(B)+Ch(B,C,D)+W.s3;
+	W[0].w = block0.w;
+	A=0xa4ce148bU+Tr1(B)+Ch(B,C,D)+W[0].w; 
 	E=0x95F61999U+A+Tr2(F)+Maj(F,G,H);
 
-	W.s4 = block1.x;
-	RND(E,F,G,H,A,B,C,D, W.s4+0x3956c25bU);
-	W.s5 = block1.y;
-	RND(D,E,F,G,H,A,B,C, W.s5+0x59f111f1U);
-	W.s6 = block1.z;
-	RND(C,D,E,F,G,H,A,B, W.s6+0x923f82a4U);
-	W.s7 = block1.w;
-	RND(B,C,D,E,F,G,H,A, W.s7+0xab1c5ed5U);
+	W[1].x = block1.x;
+	RND(E,F,G,H,A,B,C,D, W[1].x+0x3956c25bU);
+	W[1].y = block1.y;
+	RND(D,E,F,G,H,A,B,C, W[1].y+0x59f111f1U);
+	W[1].z = block1.z;
+	RND(C,D,E,F,G,H,A,B, W[1].z+0x923f82a4U);
+	W[1].w = block1.w;
+	RND(B,C,D,E,F,G,H,A, W[1].w+0xab1c5ed5U);
 	
-	W.s8 = block2.x;
-	RND(A,B,C,D,E,F,G,H, W.s8+0xd807aa98U);
-	W.s9 = block2.y;
-	RND(H,A,B,C,D,E,F,G, W.s9+0x12835b01U);
-	W.sa = block2.z;
-	RND(G,H,A,B,C,D,E,F, W.sa+0x243185beU);
-	W.sb = block2.w;
-	RND(F,G,H,A,B,C,D,E, W.sb+0x550c7dc3U);
+	W[2].x = block2.x;
+	RND(A,B,C,D,E,F,G,H, W[2].x+0xd807aa98U);
+	W[2].y = block2.y;
+	RND(H,A,B,C,D,E,F,G, W[2].y+0x12835b01U);
+	W[2].z = block2.z;
+	RND(G,H,A,B,C,D,E,F, W[2].z+0x243185beU);
+	W[2].w = block2.w;
+	RND(F,G,H,A,B,C,D,E, W[2].w+0x550c7dc3U);
 	
-	W.sc = block3.x;
-	RND(E,F,G,H,A,B,C,D, W.sc+0x72be5d74U);
-	W.sd = block3.y;
-	RND(D,E,F,G,H,A,B,C, W.sd+0x80deb1feU);
-	W.se = block3.z;
-	RND(C,D,E,F,G,H,A,B, W.se+0x9bdc06a7U);
-	W.sf = block3.w;
-	RND(B,C,D,E,F,G,H,A, W.sf+0xc19bf174U);
+	W[3].x = block3.x;
+	RND(E,F,G,H,A,B,C,D, W[3].x+0x72be5d74U);
+	W[3].y = block3.y;
+	RND(D,E,F,G,H,A,B,C, W[3].y+0x80deb1feU);
+	W[3].z = block3.z;
+	RND(C,D,E,F,G,H,A,B, W[3].z+0x9bdc06a7U);
+	W[3].w = block3.w;
+	RND(B,C,D,E,F,G,H,A, W[3].w+0xc19bf174U);
 
-	W.s0 += Wr1(W.se) + W.s9 + Wr2(W.s1);
-	RND(A,B,C,D,E,F,G,H, W.s0+0xe49b69c1U);
+	W[0].x += Wr1(W[3].z) + W[2].y + Wr2(W[0].y);
+	RND(A,B,C,D,E,F,G,H, W[0].x+0xe49b69c1U);
 
-	W.s1 += Wr1(W.sf) + W.sa + Wr2(W.s2);
-	RND(H,A,B,C,D,E,F,G, W.s1+0xefbe4786U);
+	W[0].y += Wr1(W[3].w) + W[2].z + Wr2(W[0].z);
+	RND(H,A,B,C,D,E,F,G, W[0].y+0xefbe4786U);
 
-	W.s2 += Wr1(W.s0) + W.sb + Wr2(W.s3);
-	RND(G,H,A,B,C,D,E,F, W.s2+0x0fc19dc6U);
+	W[0].z += Wr1(W[0].x) + W[2].w + Wr2(W[0].w);
+	RND(G,H,A,B,C,D,E,F, W[0].z+0x0fc19dc6U);
 
-	W.s3 += Wr1(W.s1) + W.sc + Wr2(W.s4);
-	RND(F,G,H,A,B,C,D,E, W.s3+0x240ca1ccU);
+	W[0].w += Wr1(W[0].y) + W[3].x + Wr2(W[1].x);
+	RND(F,G,H,A,B,C,D,E, W[0].w+0x240ca1ccU);
 
-	W.s4 += Wr1(W.s2) + W.sd + Wr2(W.s5);
-	RND(E,F,G,H,A,B,C,D, W.s4+0x2de92c6fU);
+	W[1].x += Wr1(W[0].z) + W[3].y + Wr2(W[1].y);
+	RND(E,F,G,H,A,B,C,D, W[1].x+0x2de92c6fU);
 
-	W.s5 += Wr1(W.s3) + W.se + Wr2(W.s6);
-	RND(D,E,F,G,H,A,B,C, W.s5+0x4a7484aaU);
+	W[1].y += Wr1(W[0].w) + W[3].z + Wr2(W[1].z);
+	RND(D,E,F,G,H,A,B,C, W[1].y+0x4a7484aaU);
 
-	W.s6 += Wr1(W.s4) + W.sf + Wr2(W.s7);
-	RND(C,D,E,F,G,H,A,B, W.s6+0x5cb0a9dcU);
+	W[1].z += Wr1(W[1].x) + W[3].w + Wr2(W[1].w);
+	RND(C,D,E,F,G,H,A,B, W[1].z+0x5cb0a9dcU);
 
-	W.s7 += Wr1(W.s5) + W.s0 + Wr2(W.s8);
-	RND(B,C,D,E,F,G,H,A, W.s7+0x76f988daU);
+	W[1].w += Wr1(W[1].y) + W[0].x + Wr2(W[2].x);
+	RND(B,C,D,E,F,G,H,A, W[1].w+0x76f988daU);
 
-	W.s8 += Wr1(W.s6) + W.s1 + Wr2(W.s9);
-	RND(A,B,C,D,E,F,G,H, W.s8+0x983e5152U);
+	W[2].x += Wr1(W[1].z) + W[0].y + Wr2(W[2].y);
+	RND(A,B,C,D,E,F,G,H, W[2].x+0x983e5152U);
 
-	W.s9 += Wr1(W.s7) + W.s2 + Wr2(W.sa);
-	RND(H,A,B,C,D,E,F,G, W.s9+0xa831c66dU);
+	W[2].y += Wr1(W[1].w) + W[0].z + Wr2(W[2].z);
+	RND(H,A,B,C,D,E,F,G, W[2].y+0xa831c66dU);
 
-	W.sa += Wr1(W.s8) + W.s3 + Wr2(W.sb);
-	RND(G,H,A,B,C,D,E,F, W.sa+0xb00327c8U);
+	W[2].z += Wr1(W[2].x) + W[0].w + Wr2(W[2].w);
+	RND(G,H,A,B,C,D,E,F, W[2].z+0xb00327c8U);
 
-	W.sb += Wr1(W.s9) + W.s4 + Wr2(W.sc);
-	RND(F,G,H,A,B,C,D,E, W.sb+0xbf597fc7U);
+	W[2].w += Wr1(W[2].y) + W[1].x + Wr2(W[3].x);
+	RND(F,G,H,A,B,C,D,E, W[2].w+0xbf597fc7U);
 
-	W.sc += Wr1(W.sa) + W.s5 + Wr2(W.sd);
-	RND(E,F,G,H,A,B,C,D, W.sc+0xc6e00bf3U);
+	W[3].x += Wr1(W[2].z) + W[1].y + Wr2(W[3].y);
+	RND(E,F,G,H,A,B,C,D, W[3].x+0xc6e00bf3U);
 
-	W.sd += Wr1(W.sb) + W.s6 + Wr2(W.se);
-	RND(D,E,F,G,H,A,B,C, W.sd+0xd5a79147U);
+	W[3].y += Wr1(W[2].w) + W[1].z + Wr2(W[3].z);
+	RND(D,E,F,G,H,A,B,C, W[3].y+0xd5a79147U);
 
-	W.se += Wr1(W.sc) + W.s7 + Wr2(W.sf);
-	RND(C,D,E,F,G,H,A,B, W.se+0x06ca6351U);
+	W[3].z += Wr1(W[3].x) + W[1].w + Wr2(W[3].w);
+	RND(C,D,E,F,G,H,A,B, W[3].z+0x06ca6351U);
 
-	W.sf += Wr1(W.sd) + W.s8 + Wr2(W.s0);
-	RND(B,C,D,E,F,G,H,A, W.sf+0x14292967U);
+	W[3].w += Wr1(W[3].y) + W[2].x + Wr2(W[0].x);
+	RND(B,C,D,E,F,G,H,A, W[3].w+0x14292967U);
 
-	W.s0 += Wr1(W.se) + W.s9 + Wr2(W.s1);
-	RND(A,B,C,D,E,F,G,H, W.s0+0x27b70a85U);
+	W[0].x += Wr1(W[3].z) + W[2].y + Wr2(W[0].y);
+	RND(A,B,C,D,E,F,G,H, W[0].x+0x27b70a85U);
 
-	W.s1 += Wr1(W.sf) + W.sa + Wr2(W.s2);
-	RND(H,A,B,C,D,E,F,G, W.s1+0x2e1b2138U);
+	W[0].y += Wr1(W[3].w) + W[2].z + Wr2(W[0].z);
+	RND(H,A,B,C,D,E,F,G, W[0].y+0x2e1b2138U);
 
-	W.s2 += Wr1(W.s0) + W.sb + Wr2(W.s3);
-	RND(G,H,A,B,C,D,E,F, W.s2+0x4d2c6dfcU);
+	W[0].z += Wr1(W[0].x) + W[2].w + Wr2(W[0].w);
+	RND(G,H,A,B,C,D,E,F, W[0].z+0x4d2c6dfcU);
 
-	W.s3 += Wr1(W.s1) + W.sc + Wr2(W.s4);
-	RND(F,G,H,A,B,C,D,E, W.s3+0x53380d13U);
+	W[0].w += Wr1(W[0].y) + W[3].x + Wr2(W[1].x);
+	RND(F,G,H,A,B,C,D,E, W[0].w+0x53380d13U);
 
-	W.s4 += Wr1(W.s2) + W.sd + Wr2(W.s5);
-	RND(E,F,G,H,A,B,C,D, W.s4+0x650a7354U);
+	W[1].x += Wr1(W[0].z) + W[3].y + Wr2(W[1].y);
+	RND(E,F,G,H,A,B,C,D, W[1].x+0x650a7354U);
 
-	W.s5 += Wr1(W.s3) + W.se + Wr2(W.s6);
-	RND(D,E,F,G,H,A,B,C, W.s5+0x766a0abbU);
+	W[1].y += Wr1(W[0].w) + W[3].z + Wr2(W[1].z);
+	RND(D,E,F,G,H,A,B,C, W[1].y+0x766a0abbU);
 
-	W.s6 += Wr1(W.s4) + W.sf + Wr2(W.s7);
-	RND(C,D,E,F,G,H,A,B, W.s6+0x81c2c92eU);
+	W[1].z += Wr1(W[1].x) + W[3].w + Wr2(W[1].w);
+	RND(C,D,E,F,G,H,A,B, W[1].z+0x81c2c92eU);
 
-	W.s7 += Wr1(W.s5) + W.s0 + Wr2(W.s8);
-	RND(B,C,D,E,F,G,H,A, W.s7+0x92722c85U);
+	W[1].w += Wr1(W[1].y) + W[0].x + Wr2(W[2].x);
+	RND(B,C,D,E,F,G,H,A, W[1].w+0x92722c85U);
 
-	W.s8 += Wr1(W.s6) + W.s1 + Wr2(W.s9);
-	RND(A,B,C,D,E,F,G,H, W.s8+0xa2bfe8a1U);
+	W[2].x += Wr1(W[1].z) + W[0].y + Wr2(W[2].y);
+	RND(A,B,C,D,E,F,G,H, W[2].x+0xa2bfe8a1U);
 
-	W.s9 += Wr1(W.s7) + W.s2 + Wr2(W.sa);
-	RND(H,A,B,C,D,E,F,G, W.s9+0xa81a664bU);
+	W[2].y += Wr1(W[1].w) + W[0].z + Wr2(W[2].z);
+	RND(H,A,B,C,D,E,F,G, W[2].y+0xa81a664bU);
 
-	W.sa += Wr1(W.s8) + W.s3 + Wr2(W.sb);
-	RND(G,H,A,B,C,D,E,F, W.sa+0xc24b8b70U);
+	W[2].z += Wr1(W[2].x) + W[0].w + Wr2(W[2].w);
+	RND(G,H,A,B,C,D,E,F, W[2].z+0xc24b8b70U);
 
-	W.sb += Wr1(W.s9) + W.s4 + Wr2(W.sc);
-	RND(F,G,H,A,B,C,D,E, W.sb+0xc76c51a3U);
+	W[2].w += Wr1(W[2].y) + W[1].x + Wr2(W[3].x);
+	RND(F,G,H,A,B,C,D,E, W[2].w+0xc76c51a3U);
 
-	W.sc += Wr1(W.sa) + W.s5 + Wr2(W.sd);
-	RND(E,F,G,H,A,B,C,D, W.sc+0xd192e819U);
+	W[3].x += Wr1(W[2].z) + W[1].y + Wr2(W[3].y);
+	RND(E,F,G,H,A,B,C,D, W[3].x+0xd192e819U);
 
-	W.sd += Wr1(W.sb) + W.s6 + Wr2(W.se);
-	RND(D,E,F,G,H,A,B,C, W.sd+0xd6990624U);
+	W[3].y += Wr1(W[2].w) + W[1].z + Wr2(W[3].z);
+	RND(D,E,F,G,H,A,B,C, W[3].y+0xd6990624U);
 
-	W.se += Wr1(W.sc) + W.s7 + Wr2(W.sf);
-	RND(C,D,E,F,G,H,A,B, W.se+0xf40e3585U);
+	W[3].z += Wr1(W[3].x) + W[1].w + Wr2(W[3].w);
+	RND(C,D,E,F,G,H,A,B, W[3].z+0xf40e3585U);
 
-	W.sf += Wr1(W.sd) + W.s8 + Wr2(W.s0);
-	RND(B,C,D,E,F,G,H,A, W.sf+0x106aa070U);
+	W[3].w += Wr1(W[3].y) + W[2].x + Wr2(W[0].x);
+	RND(B,C,D,E,F,G,H,A, W[3].w+0x106aa070U);
 
-	W.s0 += Wr1(W.se) + W.s9 + Wr2(W.s1);
-	RND(A,B,C,D,E,F,G,H, W.s0+0x19a4c116U);
+	W[0].x += Wr1(W[3].z) + W[2].y + Wr2(W[0].y);
+	RND(A,B,C,D,E,F,G,H, W[0].x+0x19a4c116U);
 
-	W.s1 += Wr1(W.sf) + W.sa + Wr2(W.s2);
-	RND(H,A,B,C,D,E,F,G, W.s1+0x1e376c08U);
+	W[0].y += Wr1(W[3].w) + W[2].z + Wr2(W[0].z);
+	RND(H,A,B,C,D,E,F,G, W[0].y+0x1e376c08U);
 
-	W.s2 += Wr1(W.s0) + W.sb + Wr2(W.s3);
-	RND(G,H,A,B,C,D,E,F, W.s2+0x2748774cU);
+	W[0].z += Wr1(W[0].x) + W[2].w + Wr2(W[0].w);
+	RND(G,H,A,B,C,D,E,F, W[0].z+0x2748774cU);
 
-	W.s3 += Wr1(W.s1) + W.sc + Wr2(W.s4);
-	RND(F,G,H,A,B,C,D,E, W.s3+0x34b0bcb5U);
+	W[0].w += Wr1(W[0].y) + W[3].x + Wr2(W[1].x);
+	RND(F,G,H,A,B,C,D,E, W[0].w+0x34b0bcb5U);
 
-	W.s4 += Wr1(W.s2) + W.sd + Wr2(W.s5);
-	RND(E,F,G,H,A,B,C,D, W.s4+0x391c0cb3U);
+	W[1].x += Wr1(W[0].z) + W[3].y + Wr2(W[1].y);
+	RND(E,F,G,H,A,B,C,D, W[1].x+0x391c0cb3U);
 
-	W.s5 += Wr1(W.s3) + W.se + Wr2(W.s6);
-	RND(D,E,F,G,H,A,B,C, W.s5+0x4ed8aa4aU);
+	W[1].y += Wr1(W[0].w) + W[3].z + Wr2(W[1].z);
+	RND(D,E,F,G,H,A,B,C, W[1].y+0x4ed8aa4aU);
 
-	W.s6 += Wr1(W.s4) + W.sf + Wr2(W.s7);
-	RND(C,D,E,F,G,H,A,B, W.s6+0x5b9cca4fU);
+	W[1].z += Wr1(W[1].x) + W[3].w + Wr2(W[1].w);
+	RND(C,D,E,F,G,H,A,B, W[1].z+0x5b9cca4fU);
 
-	W.s7 += Wr1(W.s5) + W.s0 + Wr2(W.s8);
-	RND(B,C,D,E,F,G,H,A, W.s7+0x682e6ff3U);
+	W[1].w += Wr1(W[1].y) + W[0].x + Wr2(W[2].x);
+	RND(B,C,D,E,F,G,H,A, W[1].w+0x682e6ff3U);
 
-	W.s8 += Wr1(W.s6) + W.s1 + Wr2(W.s9);
-	RND(A,B,C,D,E,F,G,H, W.s8+0x748f82eeU);
+	W[2].x += Wr1(W[1].z) + W[0].y + Wr2(W[2].y);
+	RND(A,B,C,D,E,F,G,H, W[2].x+0x748f82eeU);
 
-	W.s9 += Wr1(W.s7) + W.s2 + Wr2(W.sa);
-	RND(H,A,B,C,D,E,F,G, W.s9+0x78a5636fU);
+	W[2].y += Wr1(W[1].w) + W[0].z + Wr2(W[2].z);
+	RND(H,A,B,C,D,E,F,G, W[2].y+0x78a5636fU);
 
-	W.sa += Wr1(W.s8) + W.s3 + Wr2(W.sb);
-	RND(G,H,A,B,C,D,E,F, W.sa+0x84c87814U);
+	W[2].z += Wr1(W[2].x) + W[0].w + Wr2(W[2].w);
+	RND(G,H,A,B,C,D,E,F, W[2].z+0x84c87814U);
 
-	W.sb += Wr1(W.s9) + W.s4 + Wr2(W.sc);
-	RND(F,G,H,A,B,C,D,E, W.sb+0x8cc70208U);
+	W[2].w += Wr1(W[2].y) + W[1].x + Wr2(W[3].x);
+	RND(F,G,H,A,B,C,D,E, W[2].w+0x8cc70208U);
 
-	W.sc += Wr1(W.sa) + W.s5 + Wr2(W.sd);
-	RND(E,F,G,H,A,B,C,D, W.sc+0x90befffaU);
+	W[3].x += Wr1(W[2].z) + W[1].y + Wr2(W[3].y);
+	RND(E,F,G,H,A,B,C,D, W[3].x+0x90befffaU);
 
-	W.sd += Wr1(W.sb) + W.s6 + Wr2(W.se);
-	RND(D,E,F,G,H,A,B,C, W.sd+0xa4506cebU);
+	W[3].y += Wr1(W[2].w) + W[1].z + Wr2(W[3].z);
+	RND(D,E,F,G,H,A,B,C, W[3].y+0xa4506cebU);
 
-	W.se += Wr1(W.sc) + W.s7 + Wr2(W.sf);
-	RND(C,D,E,F,G,H,A,B, W.se+0xbef9a3f7U);
+	W[3].z += Wr1(W[3].x) + W[1].w + Wr2(W[3].w);
+	RND(C,D,E,F,G,H,A,B, W[3].z+0xbef9a3f7U);
 
-	W.sf += Wr1(W.sd) + W.s8 + Wr2(W.s0);
-	RND(B,C,D,E,F,G,H,A, W.sf+0xc67178f2U);
+	W[3].w += Wr1(W[3].y) + W[2].x + Wr2(W[0].x);
+	RND(B,C,D,E,F,G,H,A, W[3].w+0xc67178f2U);
 	
 #undef A
 #undef B
@@ -689,12 +689,13 @@ void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
 #define NFLAG (0x7F)
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-__kernel void search(__global uint4*restrict input, __global uint*restrict output, __global uint4*restrict padcache, uint4 pad0, uint4 pad1)
+__kernel void search(__global const uint4 * restrict input, __global uint*restrict output, __global uint4*restrict padcache, const uint4 midstate0, const uint4 midstate16)
 {
 	uint gid = get_global_id(0);
 	uint4 X[8];
 	uint4 tstate0, tstate1, ostate0, ostate1, tmp0, tmp1;
 	uint4 data = (uint4)(input[4].x,input[4].y,input[4].z,gid);
+	uint4 pad0 = midstate0, pad1 = midstate16;
 
 	SHA256(&pad0,&pad1, data, (uint4)(0x80000000U,0,0,0), (uint4)(0,0,0,0), (uint4)(0,0,0,0x280));
 	SHA256_fresh(&ostate0,&ostate1, pad0^0x5C5C5C5CU, pad1^0x5C5C5C5CU, 0x5C5C5C5CU, 0x5C5C5C5CU);

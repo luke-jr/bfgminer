@@ -1907,8 +1907,13 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 
 	if (!QUIET) {
 		hash32 = (uint32_t *)(work->hash);
-		sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
-			work->block? " BLOCK!" : "");
+		if (opt_scrypt) {
+			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]),
+				work->block? " BLOCK!" : "");
+		} else {
+			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
+				work->block? " BLOCK!" : "");
+		}
 	}
 
 	/* Theoretically threads could race when modifying accepted and
@@ -3157,6 +3162,11 @@ void write_config(FILE *fcfg)
 				case KL_DIABLO:
 					fprintf(fcfg, "diablo");
 					break;
+#ifdef USE_SCRYPT
+				case KL_SCRYPT:
+					fprintf(fcfg, "scrypt");
+					break;
+#endif
 			}
 		}
 #ifdef HAVE_ADL
@@ -4334,13 +4344,15 @@ bool hashtest(const struct work *work, bool checktarget)
 
 bool test_nonce(struct work *work, uint32_t nonce, bool checktarget)
 {
-	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
-	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
-	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
-	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
+	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 
-	if (opt_scrypt)
+	if (opt_scrypt) {
+		*work_nonce = nonce;
 		return true;
+	}
+
+	*work_nonce = htobe32(nonce);
+
 
 	return hashtest(work, checktarget);
 }

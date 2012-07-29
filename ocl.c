@@ -292,7 +292,7 @@ int clDevicesNum(void) {
 		status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(pbuff), pbuff, NULL);
 		if (status == CL_SUCCESS)
 			applog(LOG_INFO, "CL Platform %d version: %s", i, pbuff);
-		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
 			if (i < numPlatforms - 1)
@@ -309,7 +309,7 @@ int clDevicesNum(void) {
 			char pbuff[256];
 			cl_device_id *devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
 
-			clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+			clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, numDevices, devices, NULL);
 			for (j = 0; j < numDevices; j++) {
 				clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 				applog(LOG_INFO, "\t%i\t%s", j, pbuff);
@@ -432,7 +432,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (status == CL_SUCCESS)
 		applog(LOG_INFO, "CL Platform version: %s", vbuff);
 
-	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
+	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
 		return NULL;
@@ -443,7 +443,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 		/* Now, get the device list data */
 
-		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
+		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, numDevices, devices, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (list)", status);
 			return NULL;
@@ -480,9 +480,21 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
 
-	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
+	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_ALL, NULL, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Creating Context. (clCreateContextFromType)", status);
+		return NULL;
+	}
+
+	/////////////////////////////////////////////////////////////////
+	// Create an OpenCL command queue
+	/////////////////////////////////////////////////////////////////
+	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
+						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
+	if (status != CL_SUCCESS) /* Try again without OOE enable */
+		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error %d: Creating Command Queue. (clCreateCommandQueue)", status);
 		return NULL;
 	}
 
@@ -597,6 +609,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		case KL_SCRYPT:
 			strcpy(filename, SCRYPT_KERNNAME".cl");
 			strcpy(binaryfilename, SCRYPT_KERNNAME);
+			/* Scrypt only supports vector 1 */
+			gpus[gpu].vwidth = 1;
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_DIABLO:
@@ -650,8 +664,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
-		clState->lookup_gap = 1;
-		clState->thread_concurrency = 1;
+		clState->lookup_gap = 2;
+		clState->thread_concurrency = 6144;
 	}
 #endif
 
@@ -914,25 +928,14 @@ built:
 		return NULL;
 	}
 
-	/////////////////////////////////////////////////////////////////
-	// Create an OpenCL command queue
-	/////////////////////////////////////////////////////////////////
-	clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu],
-						     CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &status);
-	if (status != CL_SUCCESS) /* Try again without OOE enable */
-		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: Creating Command Queue. (clCreateCommandQueue)", status);
-		return NULL;
-	}
-
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
 		size_t ipt = (1024 / clState->lookup_gap + (1024 % clState->lookup_gap > 0));
 		size_t bufsize = 128 * ipt * clState->thread_concurrency;
 
-		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
+		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 80, NULL, &status);
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
+		clState->padbufsize = bufsize;
 	}
 #endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);

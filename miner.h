@@ -679,7 +679,7 @@ typedef struct {
 	cl_uint zeroA, zeroB;
 	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
 #ifdef USE_SCRYPT
-	unsigned char *midstate;
+	struct work *work;
 #endif
 } dev_blk_ctx;
 #else
