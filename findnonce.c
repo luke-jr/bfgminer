@@ -220,7 +220,7 @@ static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 	}
 }
 
-extern bool scrypt_scan_nonce(unsigned char *pdata, uint32_t nonce);
+extern bool scrypt_scan_nonce(struct work *work, uint32_t nonce);
 
 static void *postcalc_hash(void *userdata)
 {
