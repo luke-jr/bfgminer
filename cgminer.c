@@ -1458,11 +1458,12 @@ static void curses_print_devstatus(int thr_id)
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	char logline[255];
 
+	if (devcursor + cgpu->cgminer_id > LINES - 2)
+		return;
+
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-	/* Check this isn't out of the window size */
-	if (wmove(statuswin,devcursor + cgpu->cgminer_id, 0) == ERR)
-		return;
+	wmove(statuswin,devcursor + cgpu->cgminer_id, 0);
 	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
 	if (cgpu->api->get_statline_before) {
 		logline[0] = '\0';
