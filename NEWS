@@ -1,3 +1,94 @@
+BFGMiner Version 2.5.2 - July 29, 2012
+
+- Limit total number of curls recruited per pool to the number of mining threads
+to prevent blasting the network when we only have one pool to talk to.
+- Bugfix: Skip writing configuration of range-limited int options with negative
+values
+- Bugfix: Correctly attempt to load ~/.bfgminer/bfgminer.conf or
+~/.cgminer/cgminer.conf as defaults
+- Send X-Minimum-Wait header on longpolls, to explicitly inform pools we will
+handle a response with no delay
+- bitforce: Abandon (only) stale searches for work restarts
+- Keep a counter of enabled pools and use that instead of iterating over the
+pool list. Use that value to ensure we don't set the last remaining active pool
+to the rejecting state.
+- bitforce: Skip out of sending work if work restart requested
+- RPC: Writeup on poolpriority command usage
+- Bugfix: API: Report errors from poolpriority command
+- RPC: New "poolpriority" command to set the order of pool priorities
+- strtok_ts: Thread-safe strtok that work on POSIX or Windows
+- Bugfix: Supress "caught up" event when first switching to a pool
+- Announce and restart work immediately when current pool has caught up to the
+current block
+- Bugfix: Don't consider work stale due to other pools' longpolls, if
+--failover-only is active
+- Refactor stale_work function to only flag actual stale shares
+- stale_work: Don't factor getwork delay into expiry for shares (only for work
+itself)
+- Bugfix: Use pool number rather than numeric pointer to strict pool, in block
+found notice
+- Accept JSON Numbers in config file parameters
+- Improve readability of OPT_HASARG in parse_config
+- Allow JSON false as a valid value for strictly boolean options
+- Include scan-serial in example configuration file
+- fpgautils: add support for 57.6 kBd serial
+- miner.php add a socket RCV timeout for if cgminer is hung and the API thread
+is still running
+- BFL force all code to timeout to avoid hanging
+- Detach pthread from within the api thread in case it is terminated due to not
+being instantiated before pthread_cancel is called from main, leading to a
+segfault.
+- Initialise mdplatform.
+- Find the gpu platform with the most devices and use that if no platform option
+is passed.
+- Allow more platforms to be probed if first does not return GPUs.
+- Bugfix: It is not a hardware error if nonces returned from modminer don't
+meet the pool target
+- bitforce & icarus: Log detection failures at debug log level, so we don't
+confuse users who have different devices (which is why these drivers are
+failing detection!)
+- Show "WAIT" (LIFE_WAIT status) if a cgpu is idle waiting for work (pool
+slow/dead)
+- Instead of quitting on failing N retries, just discard the share
+- Bugfix: Don't discard stale shares after submission failure, if user or pool
+wants stales submitted
+- Bugfix: Record discard-during-retry shares in the sharelog
+- Bugfix: Only show Algorithm in RPC summary if CPU mining is actually active
+- OpenCL: Remove intensity from statline, since it overflowed
+- Move "Q" (requested getworks) to second status line as "GW" to balance out
+better
+- Bugfix: Use a mutex to control non-curses output
+- Simplify code to a single vprintf path for curses-less printing
+- Move opt_quiet check to my_log_curses, so it works for curses-less builds
+- Use log_generic for vapplog to cut down on code duplication
+- Add space to log output now that there is more screen real estate available.
+- Bugfix: Copy argv[0] given to dirname()
+- Find the gpu platform with the most devices and use that if no platform
+option is passed.
+- Allow more platforms to be probed if first does not return GPUs.
+- Detach pthread from within the api thread in case it is terminated due to not
+being instantiated before pthread_cancel is called from main, leading to a
+segfault.
+- Debug output per thread hashrate is out by a factor of 1000.
+- Don't check if CPUs are sick since they can't be.
+- Calculate midstate in separate function and remove likely/unlikely macros
+since they're dependent on pools, not code design.
+- Display in debug mode when we're making the midstate locally.
+- Bugfix: Document --no-adl and --gpu-platform
+- Bugfix: Remove redundant documentation of --auto-fan and --auto-gpu (they
+are in GPU-specific options)
+- CPU mining may not be included in binaries, but it's not deprecated for
+BFGMiner either
+- Bugfix: Restore case-insensitivity to input
+- Scroll the device list with up/down arrow keys, if it is overflowed
+- Use select statement to handle input
+- Bugfix: Actually check that the device fits in the individual summary window
+before trying to print it
+- Bugfix: Fix build without curses but with OpenCL
+- Bugfix: Don't show a Temperature key if it isn't known
+- BFGMiner-specific NEWS fix
+
+
 BFGMiner Version 2.5.1 - July 13, 2012
 
 - Replace CPU Algo in header with runtime
