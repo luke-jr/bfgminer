@@ -8,11 +8,8 @@ Otherwise, please donate in BTC as per the main README.
 ---
 
 
-Scrypt mining, AKA litecoin mining, for GPU is completely different to sha256
-used for bitcoin mining. The algorithm was originally developed in a manner
-that it was anticipated would make it suitable for mining on CPU but NOT GPU.
-Thanks to some innovative work by Artforz and mtrlt, this was proven to be
-wrong. However, it has very different requirements to bitcoin mining and is a
+Scrypt mining for GPU is completely different to sha256 used for bitcoin
+mining. It has very different requirements to bitcoin mining and is a
 lot more complicated to get working well. Note that it is a ram dependent
 workload, and requires you to have enough system ram as well as fast enough
 GPU ram.

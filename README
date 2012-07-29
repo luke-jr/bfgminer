@@ -152,7 +152,7 @@ Options for both config file and command line:
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
---scrypt            Use the scrypt algorithm for mining (litecoin only)
+--scrypt            Use the scrypt algorithm for mining (non-bitcoin)
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --socks-proxy <arg> Set socks4 proxy (host:port)
@@ -204,7 +204,7 @@ SCRYPT only options:
 --lookup-gap <arg>  Set GPU lookup gap for scrypt mining, comma separated
 --thread-concurrency <arg> Set GPU thread concurrency for scrypt mining, comma separated
 
-See SCRYPT-README for more information regarding litecoin mining.
+See SCRYPT-README for more information regarding (non-bitcoin) scrypt mining.
 
 
 FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:

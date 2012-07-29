@@ -201,7 +201,7 @@ AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 scrypt="no"
 
 AC_ARG_ENABLE([scrypt],
-	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt litecoin mining (default disabled)])],
+	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt mining (default disabled)])],
 	[scrypt=$enableval]
 	)
 if test "x$scrypt" = xyes; then
