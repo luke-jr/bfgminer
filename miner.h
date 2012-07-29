@@ -584,6 +584,8 @@ extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_scantime;
 
+extern pthread_mutex_t console_lock;
+
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
@@ -627,6 +629,7 @@ extern int opt_n_threads;
 extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
+extern bool opt_quiet;
 extern struct thr_info *thr_info;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
@@ -817,7 +820,7 @@ extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
 extern void default_save_file(char *filename);
-extern void log_curses(int prio, const char *f, va_list ap);
+extern bool log_curses_only(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
 extern struct thread_q *tq_new(void);
