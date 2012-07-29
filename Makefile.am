@@ -45,10 +45,6 @@ bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 bfgminer_SOURCES += adl.c adl.h adl_functions.h
 bfgminer_SOURCES += *.cl
 
-if HAS_SCRYPT
-cgminer_SOURCES += scrypt.c
-endif
-
 if HAS_CPUMINE
 # original CPU related sources, unchanged
 bfgminer_SOURCES	+= \
@@ -59,6 +55,10 @@ bfgminer_SOURCES	+= \
 
 # the CPU portion extracted from original main.c
 bfgminer_SOURCES += driver-cpu.h driver-cpu.c
+
+if HAS_SCRYPT
+bfgminer_SOURCES += scrypt.c
+endif
 
 if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM
