@@ -331,6 +331,16 @@ re_send:
 	return true;
 }
 
+static inline int noisy_stale_wait(unsigned int mstime, struct work*work, bool checkend, struct cgpu_info*bitforce)
+{
+	int rv = stale_wait(mstime, work, checkend);
+	if (rv)
+		applog(LOG_NOTICE, "BFL%i: Abandoning stale search to restart after %ums",
+		       bitforce->device_id, bitforce->wait_ms);
+	return rv;
+}
+#define noisy_stale_wait(mstime, work, checkend)  noisy_stale_wait(mstime, work, checkend, bitforce)
+
 static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
@@ -354,7 +364,8 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
-		nmsleep(delay_time_ms);
+		if (noisy_stale_wait(delay_time_ms, work, true))
+			return 0;
 		bitforce->wait_ms += delay_time_ms;
 	}
 
@@ -447,19 +458,22 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		/* Initially wait 2/3 of the average cycle time so we can request more
 		work before full scan is up */
 		sleep_time = (2 * bitforce->sleep_ms) / 3;
-		nmsleep(sleep_time);
+		if (noisy_stale_wait(sleep_time, work, true))
+			return 0;
 
 		bitforce->wait_ms = sleep_time;
 		queue_request(thr, false);
 
 		/* Now wait athe final 1/3rd; no bitforce should be finished by now */
 		sleep_time = bitforce->sleep_ms - sleep_time;
-		nmsleep(sleep_time);
+		if (noisy_stale_wait(sleep_time, work, true))
+			return 0;
 
 		bitforce->wait_ms += sleep_time;
 	} else {
 		sleep_time = bitforce->sleep_ms;
-		nmsleep(sleep_time);
+		if (noisy_stale_wait(sleep_time, work, true))
+			return 0;
 
 		bitforce->wait_ms = sleep_time;
 	}

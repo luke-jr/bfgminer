@@ -2510,6 +2510,18 @@ static void discard_stale(void)
 
 bool queue_request(struct thr_info *thr, bool needed);
 
+void ms_to_abstime(unsigned int mstime, struct timespec *abstime)
+{
+	struct timeval now, then, tdiff;
+
+	tdiff.tv_sec = mstime / 1000;
+	tdiff.tv_usec = mstime * 1000 - (tdiff.tv_sec * 1000000);
+	gettimeofday(&now, NULL);
+	timeradd(&now, &tdiff, &then);
+	abstime->tv_sec = then.tv_sec;
+	abstime->tv_nsec = then.tv_usec * 1000;
+}
+
 /* A generic wait function for threads that poll that will wait a specified
  * time tdiff waiting on the pthread conditional that is broadcast when a
  * work restart is required. Returns the value of pthread_cond_timedwait
@@ -2517,22 +2529,55 @@ bool queue_request(struct thr_info *thr, bool needed);
  */
 int restart_wait(unsigned int mstime)
 {
-	struct timeval now, then, tdiff;
 	struct timespec abstime;
 	int rc;
 
-	tdiff.tv_sec = mstime / 1000;
-	tdiff.tv_usec = mstime * 1000 - (tdiff.tv_sec * 1000000);
-	gettimeofday(&now, NULL);
-	timeradd(&now, &tdiff, &then);
-	abstime.tv_sec = then.tv_sec;
-	abstime.tv_nsec = then.tv_usec * 1000;
-
+	ms_to_abstime(mstime, &abstime);
 	mutex_lock(&restart_lock);
 	rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
 	mutex_unlock(&restart_lock);
 
 	return rc;
+}
+
+/* A generic wait function for threads that poll that will wait a specified
+ * time waiting on a share to become stale. Returns positive if the share
+ * became stale or zero if the timer expired first. If checkend is true, will
+ * immediatley return negative if the share is guaranteed to become stale
+ * before the timer expires.
+ */
+int stale_wait(unsigned int mstime, struct work*work, bool checkend)
+{
+	struct timespec abstime;
+	int rc;
+
+	if (checkend) {
+		struct timeval tv, orig;
+		ldiv_t d;
+		d = ldiv(mstime, 1000);
+		tv.tv_sec = d.quot;
+		tv.tv_usec = d.rem * 1000;
+		orig = work->tv_staged;
+		timersub(&orig, &tv, &work->tv_staged);
+		rc = stale_work(work, true);
+		work->tv_staged = orig;
+		if (rc)
+			return -1;
+	}
+
+	ms_to_abstime(mstime, &abstime);
+	rc = -1;
+	while (1) {
+		mutex_lock(&restart_lock);
+		if (stale_work(work, true)) {
+			rc = 1;
+		} else if (pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime)) {
+			rc = 0;
+		}
+		mutex_unlock(&restart_lock);
+		if (rc != -1)
+			return rc;
+	}
 }
 	
 static void restart_threads(void)
