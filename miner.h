@@ -604,7 +604,7 @@ extern int set_memoryclock(int gpu, int iMemoryClock);
 extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
-extern int active_pools(void);
+extern int enabled_pools;
 extern void add_pool_details(bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
