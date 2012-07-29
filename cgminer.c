@@ -2391,6 +2391,7 @@ void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
+	pool->block_id = 0;
 	mutex_unlock(&control_lock);
 
 	if (pool != last_pool)
@@ -2594,9 +2595,9 @@ static void test_work_current(struct work *work)
 		bool restart = false;
 		struct pool *curpool = NULL;
 		if (unlikely(work->pool->block_id != block_id && block_id == current_block_id)) {
+			bool was_active = work->pool->block_id != 0;
 			work->pool->block_id = block_id;
-			curpool = current_pool();
-			if (work->pool == curpool) {
+			if (was_active && work->pool == (curpool = current_pool())) {
 				applog(LOG_NOTICE, "%s %d caught up to new block",
 				       work->longpoll ? "LONGPOLL from pool" : "Pool",
 				       work->pool->pool_no);
