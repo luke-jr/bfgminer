@@ -189,7 +189,6 @@ float total_accepted_weighed;
 int total_getworks, total_stale, total_discarded;
 static int total_queued;
 unsigned int new_blocks;
-static unsigned int work_block;
 unsigned int found_blocks;
 
 unsigned int local_work;
@@ -211,6 +210,7 @@ bool curses_active;
 
 static char current_block[37];
 static char *current_hash;
+static uint32_t current_block_id;
 static char datestamp[40];
 static char blocktime[30];
 
@@ -2384,12 +2384,25 @@ static bool stale_work(struct work *work, bool share)
 	struct timeval now;
 	time_t work_expiry;
 	struct pool *pool;
+	uint32_t block_id;
 	int getwork_delay;
 
 	if (work->mandatory)
 		return false;
 
+	block_id = ((uint32_t*)work->data)[1];
+	pool = work->pool;
+
 	if (share) {
+		/* If the share isn't on this pool's latest block, it's stale */
+		if (pool->block_id != block_id)
+			return true;
+
+		/* If the pool doesn't want old shares, then any found in work before
+		 * the most recent longpoll is stale */
+		if ((!pool->submit_old) && work->work_restart_id != pool->work_restart_id)
+			return true;
+
 		/* Technically the rolltime should be correct but some pools
 		 * advertise a broken expire= that is lower than a meaningful
 		 * scantime */
@@ -2398,14 +2411,21 @@ static bool stale_work(struct work *work, bool share)
 		else
 			work_expiry = opt_expiry;
 	} else {
+		/* If this work isn't for the latest Bitcoin block, it's stale */
+		/* But only care about the current pool if failover-only */
+		if (block_id != (opt_fail_only ? pool->block_id : current_block_id))
+			return true;
+
+		/* If the pool has asked us to restart since this work, it's stale */
+		if (work->work_restart_id != pool->work_restart_id)
+			return true;
+
 		/* Don't keep rolling work right up to the expiration */
 		if (work->rolltime > opt_scantime)
 			work_expiry = (work->rolltime - opt_scantime) * 2 / 3 + opt_scantime;
 		else /* Shouldn't happen unless someone increases scantime */
 			work_expiry = opt_scantime;
-	}
 
-	pool = work->pool;
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
 	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
@@ -2413,13 +2433,14 @@ static bool stale_work(struct work *work, bool share)
 	if (unlikely(work_expiry < 5))
 		work_expiry = 5;
 
+	}
+
 	gettimeofday(&now, NULL);
 	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry)
 		return true;
 
-	if (work->work_block != work_block)
-		return true;
-
+	/* If the user only wants strict failover, any work from a pool other than
+	 * the current one is always considered stale */
 	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING)
 		return true;
 
@@ -2614,6 +2635,7 @@ void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
+	pool->block_id = 0;
 	mutex_unlock(&control_lock);
 
 	if (pool != last_pool)
@@ -2762,6 +2784,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	struct timeval tv_now;
 	char *old_hash;
 
+	current_block_id = ((uint32_t*)hash)[1];
 	strcpy(current_block, hexstr);
 	gettimeofday(&tv_now, NULL);
 	get_timestamp(blocktime, &tv_now);
@@ -2815,6 +2838,8 @@ static void test_work_current(struct work *work)
 	if (work->mandatory)
 		return;
 
+	uint32_t block_id = ((uint32_t*)(work->data))[1];
+
 	hexstr = bin2hex(work->data, 18);
 	if (unlikely(!hexstr)) {
 		applog(LOG_ERR, "stage_thread OOM");
@@ -2832,11 +2857,10 @@ static void test_work_current(struct work *work)
 		wr_lock(&blk_lock);
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
+		work->pool->block_id = block_id;
 		set_curblock(hexstr, work->data);
 		if (unlikely(++new_blocks == 1))
 			goto out_free;
-
-		work_block++;
 
 		if (work->longpoll) {
 			applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
@@ -2847,14 +2871,30 @@ static void test_work_current(struct work *work)
 		else
 			applog(LOG_NOTICE, "New block detected on network");
 		restart_threads();
-	} else if (work->longpoll) {
+	} else {
+		bool restart = false;
+		struct pool *curpool = NULL;
+		if (unlikely(work->pool->block_id != block_id && block_id == current_block_id)) {
+			bool was_active = work->pool->block_id != 0;
+			work->pool->block_id = block_id;
+			if (was_active && work->pool == (curpool = current_pool())) {
+				applog(LOG_NOTICE, "%s %d caught up to new block",
+				       work->longpoll ? "LONGPOLL from pool" : "Pool",
+				       work->pool->pool_no);
+				restart = true;
+			}
+		}
+	  if (work->longpoll) {
 		work->longpoll = false;
-		if (work->pool == current_pool()) {
+		++work->pool->work_restart_id;
+		if ((!restart) && work->pool == current_pool()) {
 			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
 				work->pool->pool_no);
-			work_block++;
-			restart_threads();
+			restart = true;
 		}
+	  }
+		if (restart)
+			restart_threads();
 	}
 out_free:
 	free(hexstr);
@@ -2900,7 +2940,7 @@ static void *stage_thread(void *userdata)
 			ok = false;
 			break;
 		}
-		work->work_block = work_block;
+		work->work_restart_id = work->pool->work_restart_id;
 
 		test_work_current(work);
 
