@@ -18,6 +18,8 @@ typedef struct {
 #ifdef USE_SCRYPT
 	cl_mem CLbuffer0;
 	cl_mem padbuffer8;
+	size_t lookup_gap;
+	size_t thread_concurrency;
 #endif
 	bool hasBitAlign;
 	bool hasOpenCL11plus;

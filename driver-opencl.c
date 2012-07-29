@@ -1221,8 +1221,8 @@ static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	CL_SET_ARG(clState->CLbuffer0);
 	CL_SET_ARG(clState->outputBuffer);
 	CL_SET_ARG(clState->padbuffer8);
-	CL_SET_VARG(4, &midstate[0]);
-	CL_SET_VARG(4, &midstate[16]);
+	CL_SET_ARG(midstate[0]);
+	CL_SET_ARG(midstate[16]);
 
 #if 0
 	clSetKernelArg(clState->kernel,0,sizeof(cl_mem), &clState->CLbuffer[0]);
@@ -1644,6 +1644,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
 	const int dynamic_us = opt_dynamic_interval * 1000;
+	cl_bool blocking;
 
 	cl_int status;
 	size_t globalThreads[1];
@@ -1651,14 +1652,20 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	unsigned int threads;
 	int64_t hashes;
 
+	if (gpu->dynamic || opt_scrypt)
+		blocking = CL_TRUE;
+	else
+		blocking = CL_FALSE;
+
 	/* This finish flushes the readbuffer set with CL_FALSE later */
-	clFinish(clState->commandQueue);
-	gettimeofday(&gpu->tv_gpuend, NULL);
+	if (!blocking)
+		clFinish(clState->commandQueue);
 
 	if (gpu->dynamic) {
 		struct timeval diff;
 		suseconds_t gpu_us;
 
+		gettimeofday(&gpu->tv_gpuend, NULL);
 		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
 		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
 		if (likely(gpu_us >= 0)) {
@@ -1670,6 +1677,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			if (gpu->gpu_us_average > dynamic_us) {
 				if (gpu->intensity > MIN_INTENSITY)
 					--gpu->intensity;
+				else
+					nmsleep(opt_dynamic_interval / 2 ? : 1);
 			} else if (gpu->gpu_us_average < dynamic_us / 2) {
 				if (gpu->intensity < MAX_INTENSITY)
 					++gpu->intensity;
@@ -1689,7 +1698,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	/* MAXBUFFERS entry is used as a flag to say nonces exist */
 	if (thrdata->res[FOUND]) {
 		/* Clear the buffer again */
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, blocking, 0,
 				BUFFERSIZE, blank_res, 0, NULL, NULL);
 		if (unlikely(status != CL_SUCCESS)) {
 			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
@@ -1704,7 +1713,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			postcalc_hash_async(thr, work, thrdata->res);
 		}
 		memset(thrdata->res, 0, BUFFERSIZE);
-		clFinish(clState->commandQueue);
+		if (!blocking)
+			clFinish(clState->commandQueue);
 	}
 
 	gettimeofday(&gpu->tv_gpustart, NULL);
@@ -1723,7 +1733,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		return -1;
 	}
 
-	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, blocking, 0,
 			BUFFERSIZE, thrdata->res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);

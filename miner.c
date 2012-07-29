@@ -5618,6 +5618,11 @@ int main(int argc, char *argv[])
 		opt_log_output = true;
 
 #ifdef WANT_CPUMINE
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		set_scrypt_algo(&opt_algo);
+	else
+#endif
 	if (0 <= opt_bench_algo) {
 		double rate = bench_algo_stage3(opt_bench_algo);
 

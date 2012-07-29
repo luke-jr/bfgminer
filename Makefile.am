@@ -56,6 +56,10 @@ bfgminer_SOURCES	+= \
 # the CPU portion extracted from original main.c
 bfgminer_SOURCES += driver-cpu.h driver-cpu.c
 
+if HAS_SCRYPT
+cgminer_SOURCES += scrypt.c
+endif
+
 if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM
 if HAVE_x86_64
