@@ -5059,7 +5059,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (!strcmp(cgpu->api->dname, "cpu"))
 				continue;
 #endif
-			if (cgpu->rolling < WATCHDOG_LOW_HASH)
+			if (max(WATCHDOG_LOW_HASH, cgpu->rolling) < cgpu->total_mhashes / total_secs / 3)
 				cgpu->low_count++;
 			else
 				cgpu->low_count = 0;

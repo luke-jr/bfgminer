@@ -80,6 +80,13 @@ manageable for now.
 with the --scrypt option.
 - Enable completely compiling scrypt out.
 - Begin import of scrypt opencl kernel from reaper.
+
+
+BFGMiner Version 2.5.3 - July 29, 2012
+
+- Bugfix: Add zlib1.dll to Win32 release archive
+- Bugfix: SICK low-hashrate is now determined by being under 1/3 the runtime
+average hashrate
 - Bugfix: cpu_set_t is never #defined, so use CPU_ZERO which is a macro
 
 
