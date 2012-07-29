@@ -15,7 +15,8 @@ Thanks to some innovative work by Artforz and mtrlt, this was proven to be
 wrong. However, it has very different requirements to bitcoin mining and is a
 lot more complicated to get working well. Note that it is a ram dependent
 workload, and requires you to have enough system ram as well as fast enough
-GPU ram.
+GPU ram. If you have less system ram than your GPU has, it may not be possible
+to mine at any reasonable rate.
 
 There are 5 main parameters to tuning scrypt, 2 of which you MUST set, and
 the others are optional for further fine tuning. When you start scrypt mining
@@ -123,7 +124,7 @@ see that it increases hashrate AND utility WITHOUT increasing your rejects.
 
 Suggested values for 7970 for example:
 export GPU_MAX_ALLOC_PERCENT=100
---shaders 2048 -g 5 --gpu-engine 1135 --gpu-memclock 1375
+--thread-concurrency 8192 -g 4 --gpu-engine 1135 --gpu-memclock 1375
 
 
 ---
