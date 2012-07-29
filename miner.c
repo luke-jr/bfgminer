@@ -2294,16 +2294,19 @@ static void recruit_curl(struct pool *pool)
 
 /* Grab an available curl if there is one. If not, then recruit extra curls
  * unless we are in a submit_fail situation, or we have opt_delaynet enabled
- * and there are already 5 curls in circulation */
+ * and there are already 5 curls in circulation. Limit total number to the
+ * number of mining threads per pool as well to prevent blasting a pool during
+ * network delays/outages. */
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
+	int curl_limit = opt_delaynet ? 5 : mining_threads;
 	struct curl_ent *ce;
 
 	mutex_lock(&pool->pool_lock);
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if ((pool->submit_fail || opt_delaynet) && pool->curls > 4)
+		if (pool->curls >= curl_limit)
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
 		else
 			recruit_curl(pool);
