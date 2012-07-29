@@ -1,5 +1,16 @@
-Version 2.6.0 - July 29, 2012
+BFGMiner Version 2.6.0 - July 29, 2012
 
+- Autoselect --scrypt iff all pools send scrypt work
+- Adapt SCRYPT-README to BFGMiner (directing Bitcoin donations the correct
+direction to reach Con)
+- Remove mentions of Litecoin specifically
+- Bugfix: Fix build without OpenCL but with scrypt
+- make-release: Add SCRYPT-README
+- Bump version 2.6.0, adding SCRYPT README to makefile.
+- Smarter autogen.sh script.
+- Sleeping on intensity decrease is broken, remove it.
+- Sleep only the extra amount of time we overran the dynamic interval in dynamic
+mode.
 - Add scrypt documentation in the form of a separate readme.
 - Fix build error without scrypt enabled.
 - Limit thread concurrency for scrypt to 5xshaders if shaders is specified.
@@ -69,6 +80,7 @@ manageable for now.
 with the --scrypt option.
 - Enable completely compiling scrypt out.
 - Begin import of scrypt opencl kernel from reaper.
+- Bugfix: cpu_set_t is never #defined, so use CPU_ZERO which is a macro
 
 
 BFGMiner Version 2.5.2 - July 29, 2012
