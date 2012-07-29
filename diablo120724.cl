@@ -1242,8 +1242,8 @@ void search(
     
     ZA[924] = (ZCh(ZA[922], ZA[920], ZA[918]) + ZA[923]) + ZR26(ZA[922]);
     
-#define FOUND (0x80)
-#define NFLAG (0x7F)
+#define FOUND (0x800)
+#define NFLAG (0x7FF)
 
 #if defined(VECTORS4)
 	bool result = any(ZA[924] == 0x136032EDU);

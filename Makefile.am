@@ -10,7 +10,7 @@ endif
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 		  ADL_SDK/readme.txt api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
-		  bitstreams/* API-README FPGA-README
+		  bitstreams/* API-README FPGA-README SCRYPT-README
 
 SUBDIRS		= lib compat ccan
 
@@ -55,6 +55,10 @@ bfgminer_SOURCES	+= \
 
 # the CPU portion extracted from original main.c
 bfgminer_SOURCES += driver-cpu.h driver-cpu.c
+
+if HAS_SCRYPT
+bfgminer_SOURCES += scrypt.c
+endif
 
 if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM

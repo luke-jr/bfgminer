@@ -109,6 +109,12 @@ int nDevs;
 int opt_g_threads = 2;
 int gpu_threads;
 #endif
+#ifdef USE_SCRYPT
+static char detect_algo = 1;
+bool opt_scrypt;
+#else
+static char detect_algo;
+#endif
 bool opt_restart = true;
 static bool opt_nogpu;
 
@@ -853,6 +859,11 @@ static struct opt_table opt_config_table[] = {
 		     set_gpu_vddc, NULL, NULL,
 		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card"),
 #endif
+#ifdef USE_SCRYPT
+	OPT_WITH_ARG("--lookup-gap",
+		     set_lookup_gap, NULL, NULL,
+		     "Set GPU lookup gap for scrypt mining, comma separated"),
+#endif
 	OPT_WITH_ARG("--intensity|-I",
 		     set_intensity, NULL, NULL,
 		     "Intensity of GPU scanning (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ", default: d to maintain desktop interactivity)"),
@@ -865,7 +876,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--kernel|-k",
 		     set_kernel, NULL, NULL,
-		     "Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
+		     "Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
 #endif
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--icarus-timing",
@@ -958,6 +969,16 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--sched-stop",
 		     set_schedtime, NULL, &schedstop,
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
+#ifdef USE_SCRYPT
+	OPT_WITHOUT_ARG("--scrypt",
+			opt_set_bool, &opt_scrypt,
+			"Use the scrypt algorithm for mining (non-bitcoin)"),
+#ifdef HAVE_OPENCL
+	OPT_WITH_ARG("--shaders",
+		     set_shaders, NULL, NULL,
+		     "GPU shaders per card for tuning scrypt, comma separated"),
+#endif
+#endif
 	OPT_WITH_ARG("--sharelog",
 		     set_sharelog, NULL, NULL,
 		     "Append share log to file"),
@@ -999,6 +1020,11 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+#if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
+	OPT_WITH_ARG("--thread-concurrency",
+		     set_thread_concurrency, NULL, NULL,
+		     "Set GPU thread concurrency for scrypt mining, comma separated"),
+#endif
 	OPT_WITH_ARG("--url|-o",
 		     set_url, NULL, NULL,
 		     "URL for bitcoin JSON-RPC server"),
@@ -1279,6 +1305,13 @@ static void calc_midstate(struct work *work)
 static bool work_decode(const json_t *val, struct work *work)
 {
 	unsigned char bits = 0, i;
+	
+	if (unlikely(detect_algo == 1)) {
+		json_t *tmp = json_object_get(val, "algorithm");
+		const char *v = tmp ? json_string_value(tmp) : "";
+		if (strncasecmp(v, "scrypt", 6))
+			detect_algo = 2;
+	}
 	
 	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data), true))) {
 		applog(LOG_ERR, "JSON inval data");
@@ -1595,9 +1628,6 @@ static void curses_print_devstatus(int thr_id)
 	char logline[255];
 	int ypos;
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-	cgpu->utility_diff1 = cgpu->accepted_weighed / ( total_secs ?: 1 ) * 60;
-
 	/* Check this isn't out of the window size */
 	ypos = cgpu->cgminer_id;
 	ypos += devsummaryYOffset;
@@ -1606,6 +1636,10 @@ static void curses_print_devstatus(int thr_id)
 	ypos += devcursor;
 	if (ypos >= statusy - 1)
 		return;
+
+	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility_diff1 = cgpu->accepted_weighed / ( total_secs ?: 1 ) * 60;
+
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
 	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
@@ -1899,8 +1933,13 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 
 	if (!QUIET) {
 		hash32 = (uint32_t *)(work->hash);
-		sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
-			work->block? " BLOCK!" : "");
+		if (opt_scrypt) {
+			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]),
+				work->block? " BLOCK!" : "");
+		} else {
+			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
+				work->block? " BLOCK!" : "");
+		}
 	}
 
 	/* Theoretically threads could race when modifying accepted and
@@ -3149,6 +3188,11 @@ void write_config(FILE *fcfg)
 				case KL_DIABLO:
 					fprintf(fcfg, "diablo");
 					break;
+#ifdef USE_SCRYPT
+				case KL_SCRYPT:
+					fprintf(fcfg, "scrypt");
+					break;
+#endif
 			}
 		}
 #ifdef HAVE_ADL
@@ -4326,6 +4370,13 @@ bool hashtest(const struct work *work, bool checktarget)
 
 bool test_nonce(struct work *work, uint32_t nonce, bool checktarget)
 {
+	if (opt_scrypt) {
+		uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
+
+		*work_nonce = nonce;
+		return true;
+	}
+
 	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
 	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
 	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
@@ -4339,7 +4390,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
 	if (!test_nonce(work, nonce, true)) {
-		applog(LOG_INFO, "Share below target");
+		applog(LOG_INFO, "Pool %d share below target", work->pool->pool_no);
 		return true;
 	}
 	return submit_work_sync(thr, work);
@@ -5607,6 +5658,11 @@ int main(int argc, char *argv[])
 		opt_log_output = true;
 
 #ifdef WANT_CPUMINE
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		set_scrypt_algo(&opt_algo);
+	else
+#endif
 	if (0 <= opt_bench_algo) {
 		double rate = bench_algo_stage3(opt_bench_algo);
 
@@ -5855,6 +5911,14 @@ int main(int argc, char *argv[])
 				quit(0, "No servers could be used! Exiting.");
 		}
 	} while (!pools_active);
+
+#ifdef USE_SCRYPT
+	if (detect_algo == 1 && !opt_scrypt) {
+		applog(LOG_NOTICE, "Detected scrypt algorithm");
+		opt_scrypt = true;
+	}
+#endif
+	detect_algo = 0;
 
 begin_bench:
 	total_mhashes_done = 0;

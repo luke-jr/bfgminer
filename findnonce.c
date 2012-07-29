@@ -45,7 +45,8 @@ const uint32_t SHA256_K[64] = {
 	d = d + h; \
 	h = h + (rotate(a, 30) ^ rotate(a, 19) ^ rotate(a, 10)) + ((a & b) | (c & (a | b)))
 
-void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
+void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
+{
 	cl_uint A, B, C, D, E, F, G, H;
 
 	A = state[0];
@@ -228,9 +229,18 @@ static void *postcalc_hash(void *userdata)
 	pthread_detach(pthread_self());
 
 	for (entry = 0; entry < FOUND; entry++) {
-		if (pcd->res[entry])
-			send_nonce(pcd, pcd->res[entry]);
+		uint32_t nonce = pcd->res[entry];
+
+		if (nonce) {
+			applog(LOG_DEBUG, "OCL NONCE %u", nonce);
+#ifdef USE_SCRYPT
+			if (opt_scrypt)
+				submit_nonce(thr, pcd->work, nonce);
+			else
+#endif
+				send_nonce(pcd, nonce);
 		nonces++;
+		}
 	}
 
 	free(pcd);
