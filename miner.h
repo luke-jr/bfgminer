@@ -134,6 +134,10 @@ void *alloca (size_t);
 #endif
 #endif
 
+#ifndef max
+#  define max(a, b)  ((a) > (b) ? (a) : (b))
+#endif
+
 #undef unlikely
 #undef likely
 #if defined(__GNUC__) && (__GNUC__ > 2) && defined(__OPTIMIZE__)
