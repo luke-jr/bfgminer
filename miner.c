@@ -2435,7 +2435,7 @@ static void check_solve(struct work *work)
 		work->pool->solved++;
 		found_blocks++;
 		work->mandatory = true;
-		applog(LOG_NOTICE, "Found block for pool %d!", work->pool);
+		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
 	}
 #endif
 }
