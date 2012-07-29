@@ -2893,7 +2893,9 @@ void write_config(FILE *fcfg)
 			   ((void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
 			   (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
 			   (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
-			   (void *)opt->cb_arg == (void *)set_int_1_to_10) && opt->desc != opt_hidden)
+			   (void *)opt->cb_arg == (void *)set_int_1_to_10) &&
+			   opt->desc != opt_hidden &&
+			   0 <= *(int *)opt->u.arg)
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 		}
 	}
