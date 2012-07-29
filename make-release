@@ -19,6 +19,7 @@ cp -v \
 	libcurl-4.dll \
 	pthreadGC2.dll \
 	libusb-1.0.dll \
+	zlib1.dll \
 	"$OUTDIR/"
 git branch TMP "$tag"
 git clone . "$TMPDIR" -b TMP --depth 1
