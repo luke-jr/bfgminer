@@ -211,6 +211,10 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	switch (baud) {
 	case 0:
 		break;
+	case 57600:
+		cfsetispeed( &my_termios, B57600 );
+		cfsetospeed( &my_termios, B57600 );
+		break;
 	case 115200:
 		cfsetispeed( &my_termios, B115200 );
 		cfsetospeed( &my_termios, B115200 );
