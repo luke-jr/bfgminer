@@ -1192,6 +1192,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_ZTEX
 		"ztex "
 #endif
+#ifdef USE_SCRYPT
+		"scrypt "
+#endif
 		"mining support.\n"
 		, packagename);
 	printf("%s", opt_usage(opt_argv0, extra));
