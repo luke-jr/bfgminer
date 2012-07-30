@@ -480,6 +480,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 	if (!bitforce_send_work(thr, work)) {
 		if (thr->work_restart)
 			return 0;
+		sleep(opt_fail_pause);
 		goto commerr;
 	}
 

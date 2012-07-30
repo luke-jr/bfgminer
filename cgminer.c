@@ -92,7 +92,7 @@ static bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
 static int opt_retries = -1;
-static int opt_fail_pause = 5;
+int opt_fail_pause = 5;
 static int fail_pause = 5;
 int opt_log_interval = 5;
 static int opt_queue = 1;
