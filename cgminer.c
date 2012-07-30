@@ -2903,11 +2903,9 @@ void write_config(FILE *fcfg)
 				case KL_DIABLO:
 					fprintf(fcfg, "diablo");
 					break;
-#ifdef USE_SCRYPT
 				case KL_SCRYPT:
 					fprintf(fcfg, "scrypt");
 					break;
-#endif
 			}
 		}
 #ifdef HAVE_ADL
