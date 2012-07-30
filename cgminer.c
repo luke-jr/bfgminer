@@ -1249,19 +1249,13 @@ static void calc_midstate(struct work *work)
 		unsigned char c[64];
 		uint32_t i[16];
 	} data;
-	int swapcounter;
 
-	for (swapcounter = 0; swapcounter < 16; swapcounter++)
-		data.i[swapcounter] = swab32(((uint32_t*) (work->data))[swapcounter]);
+	swap32yes(&data.i[0], work->data, 16);
 	sha2_context ctx;
 	sha2_starts( &ctx, 0 );
 	sha2_update( &ctx, data.c, 64 );
 	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
-#if __BYTE_ORDER != __LITTLE_ENDIAN
-	int i;
-	for (i = 0; i < 8; i++)
-		(((uint32_t*) (work->midstate))[i]) = htole32(((uint32_t*) (work->midstate))[i]);
-#endif
+	swap32tole(work->midstate, work->midstate, 8);
 }
 
 static bool work_decode(const json_t *val, struct work *work)
@@ -1656,8 +1650,7 @@ bool regeneratehash(const struct work *work)
 	int diffshift = 0;
 	int i;
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
+	swap32yes(swap32, data32, 80 / 4);
 
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, (unsigned char *)(work->hash), false);
@@ -4018,16 +4011,13 @@ bool hashtest(const struct work *work)
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	int i;
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
+	swap32yes(swap32, data32, 80 / 4);
 
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
 
-	for (i = 0; i < 32 / 4; i++)
-		hash2_32[i] = swab32(hash2_32[i]);
+	swap32yes(hash2_32, hash2_32, 32 / 4);
 
 	memcpy((void*)work->hash, hash2, 32);
 

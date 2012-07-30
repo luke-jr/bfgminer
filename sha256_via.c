@@ -33,15 +33,13 @@ bool scanhash_via(struct thr_info*thr, const unsigned char *pmidstate,
 	uint32_t *hash32 = (uint32_t *) tmp_hash;
 	uint32_t *nonce = (uint32_t *)(data + 64 + 12);
 	unsigned long stat_ctr = 0;
-	int i;
 
 	/* bitcoin gives us big endian input, but via wants LE,
 	 * so we reverse the swapping bitcoin has already done (extra work)
 	 * in order to permit the hardware to swap everything
 	 * back to BE again (extra work).
 	 */
-	for (i = 0; i < 128/4; i++)
-		data32[i] = swab32(((uint32_t *)data_inout)[i]);
+	swap32yes(data32, data_inout, 128/4);
 
 	while (1) {
 		n++;
@@ -51,9 +49,7 @@ bool scanhash_via(struct thr_info*thr, const unsigned char *pmidstate,
 		memcpy(tmp_hash1, sha256_init_state, 32);
 		via_sha256(tmp_hash1, data, 80);	/* or maybe 128? */
 
-		for (i = 0; i < 32/4; i++)
-			((uint32_t *)tmp_hash1)[i] =
-				swab32(((uint32_t *)tmp_hash1)[i]);
+		swap32yes(tmp_hash1, tmp_hash1, 32/4);
 
 		/* second SHA256 transform */
 		memcpy(tmp_hash, sha256_init_state, 32);
@@ -65,10 +61,7 @@ bool scanhash_via(struct thr_info*thr, const unsigned char *pmidstate,
 			/* swap nonce'd data back into original storage area;
 			 * TODO: only swap back the nonce, rather than all data
 			 */
-			for (i = 0; i < 128/4; i++) {
-				uint32_t *dout32 = (uint32_t *) data_inout;
-				dout32[i] = swab32(data32[i]);
-			}
+			swap32yes(data_inout, data32, 128/4);
 
 			*last_nonce = n;
 			return true;

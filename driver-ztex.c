@@ -157,7 +157,6 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	int i;
 
 	hdata->nonce = le32toh(hdata->nonce);
 	hdata->hash7 = le32toh(hdata->hash7);
@@ -167,8 +166,7 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	work->data[64 + 12 + 2] = (hdata->nonce >> 16) & 0xff;
 	work->data[64 + 12 + 3] = (hdata->nonce >> 24) & 0xff;
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
+	swap32yes(swap32, data32, 80 / 4);
 	
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);

@@ -491,6 +491,20 @@ static inline void swap256(void *dest_p, const void *src_p)
 	dest[7] = src[0];
 }
 
+static inline void swap32yes(void*out, const void*in, size_t sz) {
+	size_t swapcounter = 0;
+	for (swapcounter = 0; swapcounter < sz; ++swapcounter)
+		(((uint32_t*)out)[swapcounter]) = swab32(((uint32_t*)in)[swapcounter]);
+}
+
+#ifdef __BIG_ENDIAN__
+#  define swap32tobe(out, in, sz)  (void)0
+#  define swap32tole(out, in, sz)  swap32yes(out, in, sz)
+#else
+#  define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
+#  define swap32tole(out, in, sz)  (void)0
+#endif
+
 extern void quit(int status, const char *format, ...);
 
 static inline void mutex_lock(pthread_mutex_t *lock)
