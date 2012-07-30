@@ -748,7 +748,8 @@ A: BFGMiner is being packaged with other trojan scripts and some antivirus
 software is falsely accusing bfgminer.exe as being the actual virus, rather
 than whatever it is being packaged with. If you installed BFGMiner yourself,
 then you do not have a virus on your computer. Complain to your antivirus
-software company.
+software company. They seem to be flagging even source code now from cgminer
+as viruses, even though text source files can't do anything by themself.
 
 Q: Can you modify the display to include more of one thing in the output and
 less of another, or can you change the quiet mode or can you add yet another

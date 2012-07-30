@@ -11,7 +11,8 @@ Scrypt mining for GPU is completely different to sha256 used for bitcoin
 mining. It has very different requirements to bitcoin mining and is a
 lot more complicated to get working well. Note that it is a ram dependent
 workload, and requires you to have enough system ram as well as fast enough
-GPU ram.
+GPU ram. If you have less system ram than your GPU has, it may not be possible
+to mine at any reasonable rate.
 
 There are 5 main parameters to tuning scrypt, 2 of which you MUST set, and
 the others are optional for further fine tuning. When you start scrypt mining
@@ -76,7 +77,10 @@ reason this is crucial is that too high an intensity can actually be
 disastrous with scrypt because it CAN run out of ram. Intensities over 13
 start writing over the same ram and it is highly dependent on the GPU, but they
 can start actually DECREASING your hashrate, or even worse, start producing
-garbage with rejects skyrocketing.
+garbage with rejects skyrocketing. The low level detail is that intensity is
+only guaranteed up to the power of 2 that most closely matches the thread
+concurrency. i.e. a thread concurrency of 6144 has 8192 as the nearest power
+of two above it, thus as 2^13=8192, that is an intensity of 13.
 
 
 Optional parameters to tune:
@@ -119,7 +123,7 @@ see that it increases hashrate AND utility WITHOUT increasing your rejects.
 
 Suggested values for 7970 for example:
 export GPU_MAX_ALLOC_PERCENT=100
---shaders 2048 -g 5 --gpu-engine 1135 --gpu-memclock 1375
+--thread-concurrency 8192 -g 4 --gpu-engine 1135 --gpu-memclock 1375
 
 
 ---
