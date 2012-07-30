@@ -130,9 +130,13 @@ void *alloca (size_t);
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  define be32toh(x) bswap_32(x)
 #  define htobe32(x) bswap_32(x)
+#  define le32toh(x) (x)
+#  define htole32(x) (x)
 # elif __BYTE_ORDER == __BIG_ENDIAN
 #  define be32toh(x) (x)
 #  define htobe32(x) (x)
+#  define le32toh(x) bswap_32(x)
+#  define htole32(x) bswap_32(x)
 #else
 #error UNKNOWN BYTE ORDER
 #endif

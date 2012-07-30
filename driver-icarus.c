@@ -559,9 +559,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		return estimate_hashes;
 	}
 
-#if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
-	nonce = swab32(nonce);
-#endif
+	nonce = be32toh(nonce);
 
 	submit_nonce(thr, work, nonce);
 

@@ -15,6 +15,7 @@
 #include <curses.h>
 #endif
 
+#include <endian.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1256,10 +1257,10 @@ static void calc_midstate(struct work *work)
 	sha2_starts( &ctx, 0 );
 	sha2_update( &ctx, data.c, 64 );
 	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
-#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
+#if __BYTE_ORDER != __LITTLE_ENDIAN
 	int i;
 	for (i = 0; i < 8; i++)
-		(((uint32_t*) (work->midstate))[i]) = swab32(((uint32_t*) (work->midstate))[i]);
+		(((uint32_t*) (work->midstate))[i]) = htole32(((uint32_t*) (work->midstate))[i]);
 #endif
 }
 
@@ -1661,7 +1662,7 @@ bool regeneratehash(const struct work *work)
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, (unsigned char *)(work->hash), false);
 
-	difficulty = swab32(*((uint32_t *)(work->data + 72)));
+	difficulty = be32toh(*((uint32_t *)(work->data + 72)));
 
 	diffbytes = ((difficulty >> 24) & 0xff) - 3;
 	diffvalue = difficulty & 0x00ffffff;
@@ -1677,19 +1678,17 @@ bool regeneratehash(const struct work *work)
 	diffcmp[diffbytes >> 2] = diffvalue << diffshift;
 
 	for (i = 7; i >= 0; i--) {
-		if (hash32[i] > diffcmp[i])
+		uint32_t hash32i = be32toh(hash32[i]);
+		if (hash32i > diffcmp[i])
 			return false;
-		if (hash32[i] < diffcmp[i])
+		if (hash32i < diffcmp[i])
 			return true;
 	}
 
 	// https://en.bitcoin.it/wiki/Block says: "numerically below"
 	// https://en.bitcoin.it/wiki/Target says: "lower than or equal to"
 	// code in bitcoind 0.3.24 main.cpp CheckWork() says: if (hash > hashTarget) return false;
-	if (hash32[0] == diffcmp[0])
-		return true;
-	else
-		return false;
+	return true;
 }
 
 static void enable_pool(struct pool *pool)
@@ -1726,12 +1725,6 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	int rolltime;
 	uint32_t *hash32;
 	char hashshow[64+1] = "";
-
-#ifdef __BIG_ENDIAN__
-        int swapcounter = 0;
-        for (swapcounter = 0; swapcounter < 32; swapcounter++)
-            (((uint32_t*) (work->data))[swapcounter]) = swab32(((uint32_t*) (work->data))[swapcounter]);
-#endif
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
@@ -2317,8 +2310,6 @@ static bool stale_work(struct work *work, bool share)
 
 static void check_solve(struct work *work)
 {
-#ifndef MIPSEB
-	/* This segfaults on openwrt */
 	work->block = regeneratehash(work);
 	if (unlikely(work->block)) {
 		work->pool->solved++;
@@ -2326,7 +2317,6 @@ static void check_solve(struct work *work)
 		work->mandatory = true;
 		applog(LOG_NOTICE, "Found block for pool %d!", work->pool);
 	}
-#endif
 }
 
 static void *submit_work_thread(void *userdata)
