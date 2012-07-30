@@ -1,8 +1,21 @@
 BFGMiner Version 2.6.2 - Future
 
+- Display scrypt as being built in as well.
+- Fix build warning about KL_SCRYPT when built without scrypt support.
+- News update.
+- More scrypt intensity information.
+- Minor readme updates.
+- Update README with more build instructions.
 - Remove the low hash count determinant of hardware being sick. A low hash rate
-can be for poor network connectivity or scrypt mining, neither of which a
+can be for poor network connectivity or scrypt mining, neither of which are due
+to sick hardware.
+- Style
+- API-README poolpriority changes
+- api.c verify poolpriority parameters before changing pools
 - api.c poolpriority changes
+- Implement shared swap32(yes|tole|tobe) function to handle endian flipping
+32-bit chunks in blocks
+- Use correct macros for endian handling code
 
 
 BFGMiner Version 2.6.1 - July 29, 2012
