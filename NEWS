@@ -1,3 +1,10 @@
+Version 2.6.1 - July 30, 2012
+
+- Remove the low hash count determinant of hardware being sick. A low hash rate
+can be for poor network connectivity or scrypt mining, neither of which a
+- api.c poolpriority changes
+
+
 Version 2.6.0 - July 29, 2012
 
 - Display kilohash when suitable, but store the global mhash value still truly
