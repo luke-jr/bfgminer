@@ -505,6 +505,8 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 
 	if (ret)
 		ret = bitforce_get_result(thr, work);
+	else
+		ret = -1;
 
 	if (ret == -1) {
 		ret = 0;
