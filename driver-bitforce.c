@@ -477,7 +477,11 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 	unsigned int sleep_time;
 	int64_t ret;
 
-	ret = bitforce_send_work(thr, work);
+	if (!bitforce_send_work(thr, work)) {
+		if (thr->work_restart)
+			return 0;
+		goto commerr;
+	}
 
 	if (!bitforce->nonce_range) {
 		/* Initially wait 2/3 of the average cycle time so we can request more
@@ -503,12 +507,10 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce->wait_ms = sleep_time;
 	}
 
-	if (ret)
-		ret = bitforce_get_result(thr, work);
-	else
-		ret = -1;
+	ret = bitforce_get_result(thr, work);
 
 	if (ret == -1) {
+commerr:
 		ret = 0;
 		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
 		bitforce->device_last_not_well = time(NULL);
