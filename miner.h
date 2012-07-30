@@ -126,9 +126,13 @@ void *alloca (size_t);
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  define be32toh(x) bswap_32(x)
 #  define htobe32(x) bswap_32(x)
+#  define le32toh(x) (x)
+#  define htole32(x) (x)
 # elif __BYTE_ORDER == __BIG_ENDIAN
 #  define be32toh(x) (x)
 #  define htobe32(x) (x)
+#  define le32toh(x) bswap_32(x)
+#  define htole32(x) bswap_32(x)
 #else
 #error UNKNOWN BYTE ORDER
 #endif
@@ -494,6 +498,20 @@ static inline void swap256(void *dest_p, const void *src_p)
 	dest[6] = src[1];
 	dest[7] = src[0];
 }
+
+static inline void swap32yes(void*out, const void*in, size_t sz) {
+	size_t swapcounter = 0;
+	for (swapcounter = 0; swapcounter < sz; ++swapcounter)
+		(((uint32_t*)out)[swapcounter]) = swab32(((uint32_t*)in)[swapcounter]);
+}
+
+#ifdef __BIG_ENDIAN__
+#  define swap32tobe(out, in, sz)  (void)0
+#  define swap32tole(out, in, sz)  swap32yes(out, in, sz)
+#else
+#  define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
+#  define swap32tole(out, in, sz)  (void)0
+#endif
 
 extern void quit(int status, const char *format, ...);
 

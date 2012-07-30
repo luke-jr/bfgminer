@@ -545,9 +545,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 	while (1) {
 		hex2bin((void*)&nonce, pnoncebuf, 4);
-#ifndef __BIG_ENDIAN__
-		nonce = swab32(nonce);
-#endif
+		nonce = be32toh(nonce);
 		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
 				applog(LOG_WARNING, "BFL%i: Disabling broken nonce range support", bitforce->device_id);

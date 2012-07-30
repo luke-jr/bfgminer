@@ -560,10 +560,8 @@ static inline bool HasSSE2(void) { return false; }
 static void SHA256_Transform32(word32 *state, const word32 *data)
 {
 	word32 W[16];
-	int i;
 
-	for (i = 0; i < 16; i++)
-		W[i] = swab32(((word32 *)(data))[i]);
+	swap32yes(W, data, 16);
 
 	X86_SHA256_HashBlocks(state, W, 16 * 4);
 }

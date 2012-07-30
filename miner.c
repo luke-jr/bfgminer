@@ -15,6 +15,7 @@
 #include <curses.h>
 #endif
 
+#include <endian.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1287,19 +1288,13 @@ static void calc_midstate(struct work *work)
 		unsigned char c[64];
 		uint32_t i[16];
 	} data;
-	int swapcounter;
 
-	for (swapcounter = 0; swapcounter < 16; swapcounter++)
-		data.i[swapcounter] = swab32(((uint32_t*) (work->data))[swapcounter]);
+	swap32yes(&data.i[0], work->data, 16);
 	sha2_context ctx;
 	sha2_starts( &ctx, 0 );
 	sha2_update( &ctx, data.c, 64 );
 	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
-#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
-	int i;
-	for (i = 0; i < 8; i++)
-		(((uint32_t*) (work->midstate))[i]) = swab32(((uint32_t*) (work->midstate))[i]);
-#endif
+	swap32tole(work->midstate, work->midstate, 8);
 }
 
 static bool work_decode(const json_t *val, struct work *work)
@@ -1821,13 +1816,12 @@ bool regeneratehash(const struct work *work)
 	int diffshift = 0;
 	int i;
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
+	swap32yes(swap32, data32, 80 / 4);
 
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, (unsigned char *)(work->hash), false);
 
-	difficulty = swab32(*((uint32_t *)(work->data + 72)));
+	difficulty = be32toh(*((uint32_t *)(work->data + 72)));
 
 	diffbytes = ((difficulty >> 24) & 0xff) - 3;
 	diffvalue = difficulty & 0x00ffffff;
@@ -1843,19 +1837,17 @@ bool regeneratehash(const struct work *work)
 	diffcmp[diffbytes >> 2] = diffvalue << diffshift;
 
 	for (i = 7; i >= 0; i--) {
-		if (hash32[i] > diffcmp[i])
+		uint32_t hash32i = be32toh(hash32[i]);
+		if (hash32i > diffcmp[i])
 			return false;
-		if (hash32[i] < diffcmp[i])
+		if (hash32i < diffcmp[i])
 			return true;
 	}
 
 	// https://en.bitcoin.it/wiki/Block says: "numerically below"
 	// https://en.bitcoin.it/wiki/Target says: "lower than or equal to"
 	// code in bitcoind 0.3.24 main.cpp CheckWork() says: if (hash > hashTarget) return false;
-	if (hash32[0] == diffcmp[0])
-		return true;
-	else
-		return false;
+	return true;
 }
 
 static void enable_pool(struct pool *pool)
@@ -1892,12 +1884,6 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 	int rolltime;
 	uint32_t *hash32;
 	char hashshow[64+1] = "";
-
-#ifdef __BIG_ENDIAN__
-        int swapcounter = 0;
-        for (swapcounter = 0; swapcounter < 32; swapcounter++)
-            (((uint32_t*) (work->data))[swapcounter]) = swab32(((uint32_t*) (work->data))[swapcounter]);
-#endif
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
@@ -2510,8 +2496,6 @@ static bool stale_work(struct work *work, bool share)
 
 static void check_solve(struct work *work)
 {
-#ifndef MIPSEB
-	/* This segfaults on openwrt */
 	work->block = regeneratehash(work);
 	if (unlikely(work->block)) {
 		work->pool->solved++;
@@ -2519,7 +2503,6 @@ static void check_solve(struct work *work)
 		work->mandatory = true;
 		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
 	}
-#endif
 }
 
 static void submit_discard_share(struct work *work)
@@ -4348,10 +4331,8 @@ bool hashtest(const struct work *work, bool checktarget)
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	int i;
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
+	swap32yes(swap32, data32, 80 / 4);
 
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
@@ -4359,8 +4340,7 @@ bool hashtest(const struct work *work, bool checktarget)
 	if (!checktarget)
 		return hash2_32[7] == 0;
 
-	for (i = 0; i < 32 / 4; i++)
-		hash2_32[i] = swab32(hash2_32[i]);
+	swap32yes(hash2_32, hash2_32, 32 / 4);
 
 	memcpy((void*)work->hash, hash2, 32);
 
