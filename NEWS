@@ -1,3 +1,10 @@
+BFGMiner Version 2.6.2 - Future
+
+- Remove the low hash count determinant of hardware being sick. A low hash rate
+can be for poor network connectivity or scrypt mining, neither of which a
+- api.c poolpriority changes
+
+
 BFGMiner Version 2.6.1 - July 29, 2012
 
 - Autoselect --scrypt iff all pools send scrypt work
