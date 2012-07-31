@@ -474,9 +474,10 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int sleep_time;
+	bool send_ret;
 	int64_t ret;
 
-	ret = bitforce_send_work(thr, work);
+	send_ret = bitforce_send_work(thr, work);
 
 	if (!bitforce->nonce_range) {
 		/* Initially wait 2/3 of the average cycle time so we can request more
@@ -502,8 +503,10 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce->wait_ms = sleep_time;
 	}
 
-	if (ret)
+	if (send_ret)
 		ret = bitforce_get_result(thr, work);
+	else
+		ret = -1;
 
 	if (ret == -1) {
 		ret = 0;
