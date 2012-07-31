@@ -453,8 +453,8 @@ static inline int noisy_stale_wait(unsigned int mstime, struct work*work, bool c
 {
 	int rv = stale_wait(mstime, work, checkend);
 	if (rv)
-		applog(LOG_NOTICE, "BFL%i: Abandoning stale search to restart after %ums",
-		       bitforce->device_id, bitforce->wait_ms);
+		applog(LOG_NOTICE, "BFL%i: Abandoning stale search to restart",
+		       bitforce->device_id);
 	return rv;
 }
 #define noisy_stale_wait(mstime, work, checkend)  noisy_stale_wait(mstime, work, checkend, bitforce)
