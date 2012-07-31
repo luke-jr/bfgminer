@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2003-2011, Troy D. Hanson     http://uthash.sourceforge.net
+Copyright (c) 2003-2012, Troy D. Hanson     http://uthash.sourceforge.net
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -22,7 +22,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #ifndef UTHASH_H
-#define UTHASH_H
+#define UTHASH_H 
 
 #include <string.h>   /* memcmp,strlen */
 #include <stddef.h>   /* ptrdiff_t */
@@ -49,7 +49,7 @@ do {                                                                            
   char **_da_dst = (char**)(&(dst));                                             \
   *_da_dst = (char*)(src);                                                       \
 } while(0)
-#else
+#else 
 #define DECLTYPE_ASSIGN(dst,src)                                                 \
 do {                                                                             \
   (dst) = DECLTYPE(dst)(src);                                                    \
@@ -64,14 +64,24 @@ typedef unsigned char uint8_t;
 #include <inttypes.h>   /* uint32_t */
 #endif
 
-#define UTHASH_VERSION 1.9.4
+#define UTHASH_VERSION 1.9.6
 
+#ifndef uthash_fatal
 #define uthash_fatal(msg) exit(-1)        /* fatal error (out of memory,etc) */
+#endif
+#ifndef uthash_malloc
 #define uthash_malloc(sz) malloc(sz)      /* malloc fcn                      */
+#endif
+#ifndef uthash_free
 #define uthash_free(ptr,sz) free(ptr)     /* free fcn                        */
+#endif
 
+#ifndef uthash_noexpand_fyi
 #define uthash_noexpand_fyi(tbl)          /* can be defined to log noexpand  */
+#endif
+#ifndef uthash_expand_fyi
 #define uthash_expand_fyi(tbl)            /* can be defined to log expands   */
+#endif
 
 /* initial number of buckets */
 #define HASH_INITIAL_NUM_BUCKETS 32      /* initial number of buckets        */
@@ -104,12 +114,12 @@ do {                                                                            
   if (!((tbl)->bloom_bv))  { uthash_fatal( "out of memory"); }                   \
   memset((tbl)->bloom_bv, 0, HASH_BLOOM_BYTELEN);                                \
   (tbl)->bloom_sig = HASH_BLOOM_SIGNATURE;                                       \
-} while (0);
+} while (0) 
 
 #define HASH_BLOOM_FREE(tbl)                                                     \
 do {                                                                             \
   uthash_free((tbl)->bloom_bv, HASH_BLOOM_BYTELEN);                              \
-} while (0);
+} while (0) 
 
 #define HASH_BLOOM_BITSET(bv,idx) (bv[(idx)/8] |= (1U << ((idx)%8)))
 #define HASH_BLOOM_BITTEST(bv,idx) (bv[(idx)/8] & (1U << ((idx)%8)))
@@ -121,9 +131,9 @@ do {                                                                            
   HASH_BLOOM_BITTEST((tbl)->bloom_bv, (hashv & (uint32_t)((1ULL << (tbl)->bloom_nbits) - 1)))
 
 #else
-#define HASH_BLOOM_MAKE(tbl)
-#define HASH_BLOOM_FREE(tbl)
-#define HASH_BLOOM_ADD(tbl,hashv)
+#define HASH_BLOOM_MAKE(tbl) 
+#define HASH_BLOOM_FREE(tbl) 
+#define HASH_BLOOM_ADD(tbl,hashv) 
 #define HASH_BLOOM_TEST(tbl,hashv) (1)
 #endif
 
@@ -147,14 +157,14 @@ do {                                                                            
 } while(0)
 
 #define HASH_ADD(hh,head,fieldname,keylen_in,add)                                \
-        HASH_ADD_KEYPTR(hh,head,&add->fieldname,keylen_in,add)
-
+        HASH_ADD_KEYPTR(hh,head,&((add)->fieldname),keylen_in,add)
+ 
 #define HASH_ADD_KEYPTR(hh,head,keyptr,keylen_in,add)                            \
 do {                                                                             \
  unsigned _ha_bkt;                                                               \
  (add)->hh.next = NULL;                                                          \
  (add)->hh.key = (char*)keyptr;                                                  \
- (add)->hh.keylen = keylen_in;                                                   \
+ (add)->hh.keylen = (unsigned)keylen_in;                                                   \
  if (!(head)) {                                                                  \
     head = (add);                                                                \
     (head)->hh.prev = NULL;                                                      \
@@ -300,10 +310,10 @@ do {                                                                            
     }                                                                            \
 } while (0)
 #else
-#define HASH_FSCK(hh,head)
+#define HASH_FSCK(hh,head) 
 #endif
 
-/* When compiled with -DHASH_EMIT_KEYS, length-prefixed keys are emitted to
+/* When compiled with -DHASH_EMIT_KEYS, length-prefixed keys are emitted to 
  * the descriptor to which this macro is defined for tuning the hash function.
  * The app can #include <unistd.h> to get the prototype for write(2). */
 #ifdef HASH_EMIT_KEYS
@@ -313,12 +323,12 @@ do {                                                                            
     write(HASH_EMIT_KEYS, &_klen, sizeof(_klen));                                \
     write(HASH_EMIT_KEYS, keyptr, fieldlen);                                     \
 } while (0)
-#else
-#define HASH_EMIT_KEY(hh,head,keyptr,fieldlen)
+#else 
+#define HASH_EMIT_KEY(hh,head,keyptr,fieldlen)                    
 #endif
 
 /* default to Jenkin's hash unless overridden e.g. DHASH_FUNCTION=HASH_SAX */
-#ifdef HASH_FUNCTION
+#ifdef HASH_FUNCTION 
 #define HASH_FCN HASH_FUNCTION
 #else
 #define HASH_FCN HASH_JEN
@@ -335,7 +345,7 @@ do {                                                                            
 } while (0)
 
 
-/* SAX/FNV/OAT/JEN hash functions are macro variants of those listed at
+/* SAX/FNV/OAT/JEN hash functions are macro variants of those listed at 
  * http://eternallyconfuzzled.com/tuts/algorithms/jsw_tut_hashing.aspx */
 #define HASH_SAX(key,keylen,num_bkts,hashv,bkt)                                  \
 do {                                                                             \
@@ -355,8 +365,8 @@ do {                                                                            
   for(_fn_i=0; _fn_i < keylen; _fn_i++)                                          \
       hashv = (hashv * 16777619) ^ _hf_key[_fn_i];                               \
   bkt = hashv & (num_bkts-1);                                                    \
-} while(0);
-
+} while(0) 
+ 
 #define HASH_OAT(key,keylen,num_bkts,hashv,bkt)                                  \
 do {                                                                             \
   unsigned _ho_i;                                                                \
@@ -392,7 +402,7 @@ do {                                                                            
   char *_hj_key=(char*)(key);                                                    \
   hashv = 0xfeedbeef;                                                            \
   _hj_i = _hj_j = 0x9e3779b9;                                                    \
-  _hj_k = keylen;                                                                \
+  _hj_k = (unsigned)keylen;                                                                \
   while (_hj_k >= 12) {                                                          \
     _hj_i +=    (_hj_key[0] + ( (unsigned)_hj_key[1] << 8 )                      \
         + ( (unsigned)_hj_key[2] << 16 )                                         \
@@ -480,19 +490,19 @@ do {                                                                            
     hashv ^= hashv << 25;                                                        \
     hashv += hashv >> 6;                                                         \
     bkt = hashv & (num_bkts-1);                                                  \
-} while(0);
+} while(0) 
 
 #ifdef HASH_USING_NO_STRICT_ALIASING
 /* The MurmurHash exploits some CPU's (x86,x86_64) tolerance for unaligned reads.
  * For other types of CPU's (e.g. Sparc) an unaligned read causes a bus error.
- * MurmurHash uses the faster approach only on CPU's where we know it's safe.
+ * MurmurHash uses the faster approach only on CPU's where we know it's safe. 
  *
  * Note the preprocessor built-in defines can be emitted using:
  *
  *   gcc -m64 -dM -E - < /dev/null                  (on gcc)
  *   cc -## a.c (where a.c is a simple test file)   (Sun Studio)
  */
-#if (defined(__i386__) || defined(__x86_64__))
+#if (defined(__i386__) || defined(__x86_64__)) 
 #define MUR_GETBLOCK(p,i) p[i]
 #else /* non intel */
 #define MUR_PLUS0_ALIGNED(p) (((unsigned long)p & 0x3) == 0)
@@ -500,16 +510,14 @@ do {                                                                            
 #define MUR_PLUS2_ALIGNED(p) (((unsigned long)p & 0x3) == 2)
 #define MUR_PLUS3_ALIGNED(p) (((unsigned long)p & 0x3) == 3)
 #define WP(p) ((uint32_t*)((unsigned long)(p) & ~3UL))
-#if __BYTE_ORDER == __BIG_ENDIAN
+#if (defined(__BIG_ENDIAN__) || defined(SPARC) || defined(__ppc__) || defined(__ppc64__))
 #define MUR_THREE_ONE(p) ((((*WP(p))&0x00ffffff) << 8) | (((*(WP(p)+1))&0xff000000) >> 24))
 #define MUR_TWO_TWO(p)   ((((*WP(p))&0x0000ffff) <<16) | (((*(WP(p)+1))&0xffff0000) >> 16))
 #define MUR_ONE_THREE(p) ((((*WP(p))&0x000000ff) <<24) | (((*(WP(p)+1))&0xffffff00) >>  8))
-#elif __BYTE_ORDER == __LITTLE_ENDIAN
+#else /* assume little endian non-intel */
 #define MUR_THREE_ONE(p) ((((*WP(p))&0xffffff00) >> 8) | (((*(WP(p)+1))&0x000000ff) << 24))
 #define MUR_TWO_TWO(p)   ((((*WP(p))&0xffff0000) >>16) | (((*(WP(p)+1))&0x0000ffff) << 16))
 #define MUR_ONE_THREE(p) ((((*WP(p))&0xff000000) >>24) | (((*(WP(p)+1))&0x00ffffff) <<  8))
-#else
-#error "Port me to your endian, please :)"
 #endif
 #define MUR_GETBLOCK(p,i) (MUR_PLUS0_ALIGNED(p) ? ((p)[i]) :           \
                             (MUR_PLUS1_ALIGNED(p) ? MUR_THREE_ONE(p) : \
@@ -564,7 +572,7 @@ do {                                                                   \
 #endif  /* HASH_USING_NO_STRICT_ALIASING */
 
 /* key comparison function; return 0 if keys equal */
-#define HASH_KEYCMP(a,b,len) memcmp(a,b,len)
+#define HASH_KEYCMP(a,b,len) memcmp(a,b,len) 
 
 /* iterate over items in a known bucket to find desired item */
 #define HASH_FIND_IN_BKT(tbl,hh,head,keyptr,keylen_in,out)                       \
@@ -572,10 +580,10 @@ do {                                                                            
  if (head.hh_head) DECLTYPE_ASSIGN(out,ELMT_FROM_HH(tbl,head.hh_head));          \
  else out=NULL;                                                                  \
  while (out) {                                                                   \
-    if (out->hh.keylen == keylen_in) {                                           \
-        if ((HASH_KEYCMP(out->hh.key,keyptr,keylen_in)) == 0) break;             \
+    if ((out)->hh.keylen == keylen_in) {                                           \
+        if ((HASH_KEYCMP((out)->hh.key,keyptr,keylen_in)) == 0) break;             \
     }                                                                            \
-    if (out->hh.hh_next) DECLTYPE_ASSIGN(out,ELMT_FROM_HH(tbl,out->hh.hh_next)); \
+    if ((out)->hh.hh_next) DECLTYPE_ASSIGN(out,ELMT_FROM_HH(tbl,(out)->hh.hh_next)); \
     else out = NULL;                                                             \
  }                                                                               \
 } while(0)
@@ -605,36 +613,36 @@ do {                                                                            
     }                                                                            \
     if (hh_del->hh_next) {                                                       \
         hh_del->hh_next->hh_prev = hh_del->hh_prev;                              \
-    }
+    }                                                                
 
 /* Bucket expansion has the effect of doubling the number of buckets
  * and redistributing the items into the new buckets. Ideally the
  * items will distribute more or less evenly into the new buckets
  * (the extent to which this is true is a measure of the quality of
- * the hash function as it applies to the key domain).
- *
+ * the hash function as it applies to the key domain). 
+ * 
  * With the items distributed into more buckets, the chain length
  * (item count) in each bucket is reduced. Thus by expanding buckets
- * the hash keeps a bound on the chain length. This bounded chain
+ * the hash keeps a bound on the chain length. This bounded chain 
  * length is the essence of how a hash provides constant time lookup.
- *
+ * 
  * The calculation of tbl->ideal_chain_maxlen below deserves some
  * explanation. First, keep in mind that we're calculating the ideal
  * maximum chain length based on the *new* (doubled) bucket count.
  * In fractions this is just n/b (n=number of items,b=new num buckets).
- * Since the ideal chain length is an integer, we want to calculate
+ * Since the ideal chain length is an integer, we want to calculate 
  * ceil(n/b). We don't depend on floating point arithmetic in this
  * hash, so to calculate ceil(n/b) with integers we could write
- *
+ * 
  *      ceil(n/b) = (n/b) + ((n%b)?1:0)
- *
+ * 
  * and in fact a previous version of this hash did just that.
  * But now we have improved things a bit by recognizing that b is
  * always a power of two. We keep its base 2 log handy (call it lb),
  * so now we can write this with a bit shift and logical AND:
- *
+ * 
  *      ceil(n/b) = (n>>lb) + ( (n & (b-1)) ? 1:0)
- *
+ * 
  */
 #define HASH_EXPAND_BUCKETS(tbl)                                                 \
 do {                                                                             \
@@ -686,7 +694,7 @@ do {                                                                            
 
 
 /* This is an adaptation of Simon Tatham's O(n log(n)) mergesort */
-/* Note that HASH_SORT assumes the hash handle name to be hh.
+/* Note that HASH_SORT assumes the hash handle name to be hh. 
  * HASH_SRT was added to allow the hash handle name to be passed in. */
 #define HASH_SORT(head,cmpfcn) HASH_SRT(hh,head,cmpfcn)
 #define HASH_SRT(hh,head,cmpfcn)                                                 \
@@ -768,10 +776,10 @@ do {                                                                            
  }                                                                               \
 } while (0)
 
-/* This function selects items from one hash into another hash.
- * The end result is that the selected items have dual presence
- * in both hashes. There is no copy of the items made; rather
- * they are added into the new hash through a secondary hash
+/* This function selects items from one hash into another hash. 
+ * The end result is that the selected items have dual presence 
+ * in both hashes. There is no copy of the items made; rather 
+ * they are added into the new hash through a secondary hash 
  * hash handle that must be present in the structure. */
 #define HASH_SELECT(hh_dst, dst, hh_src, src, cond)                              \
 do {                                                                             \
@@ -816,6 +824,7 @@ do {                                                                            
   if (head) {                                                                    \
     uthash_free((head)->hh.tbl->buckets,                                         \
                 (head)->hh.tbl->num_buckets*sizeof(struct UT_hash_bucket));      \
+    HASH_BLOOM_FREE((head)->hh.tbl);                                             \
     uthash_free((head)->hh.tbl, sizeof(UT_hash_table));                          \
     (head)=NULL;                                                                 \
   }                                                                              \
@@ -824,7 +833,7 @@ do {                                                                            
 #ifdef NO_DECLTYPE
 #define HASH_ITER(hh,head,el,tmp)                                                \
 for((el)=(head), (*(char**)(&(tmp)))=(char*)((head)?(head)->hh.next:NULL);       \
-  el; (el)=(tmp),(*(char**)(&(tmp)))=(char*)((tmp)?(tmp)->hh.next:NULL))
+  el; (el)=(tmp),(*(char**)(&(tmp)))=(char*)((tmp)?(tmp)->hh.next:NULL)) 
 #else
 #define HASH_ITER(hh,head,el,tmp)                                                \
 for((el)=(head),(tmp)=DECLTYPE(el)((head)?(head)->hh.next:NULL);                 \
@@ -832,7 +841,7 @@ for((el)=(head),(tmp)=DECLTYPE(el)((head)?(head)->hh.next:NULL);                
 #endif
 
 /* obtain a count of items in the hash */
-#define HASH_COUNT(head) HASH_CNT(hh,head)
+#define HASH_COUNT(head) HASH_CNT(hh,head) 
 #define HASH_CNT(hh,head) ((head)?((head)->hh.tbl->num_items):0)
 
 typedef struct UT_hash_bucket {
@@ -841,7 +850,7 @@ typedef struct UT_hash_bucket {
 
    /* expand_mult is normally set to 0. In this situation, the max chain length
     * threshold is enforced at its default value, HASH_BKT_CAPACITY_THRESH. (If
-    * the bucket's chain exceeds this length, bucket expansion is triggered).
+    * the bucket's chain exceeds this length, bucket expansion is triggered). 
     * However, setting expand_mult to a non-zero value delays bucket expansion
     * (that would be triggered by additions to this particular bucket)
     * until its chain length reaches a *multiple* of HASH_BKT_CAPACITY_THRESH.
@@ -849,7 +858,7 @@ typedef struct UT_hash_bucket {
     * multiplier is to reduce bucket expansions, since they are expensive, in
     * situations where we know that a particular bucket tends to be overused.
     * It is better to let its chain length grow to a longer yet-still-bounded
-    * value, than to do an O(n) bucket expansion too often.
+    * value, than to do an O(n) bucket expansion too often. 
     */
    unsigned expand_mult;
 
@@ -875,7 +884,7 @@ typedef struct UT_hash_table {
     * hash distribution; reaching them in a chain traversal takes >ideal steps */
    unsigned nonideal_items;
 
-   /* ineffective expands occur when a bucket doubling was performed, but
+   /* ineffective expands occur when a bucket doubling was performed, but 
     * afterward, more than half the items in the hash had nonideal chain
     * positions. If this happens on two consecutive expansions we inhibit any
     * further expansion, as it's not helping; this happens when the hash
