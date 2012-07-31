@@ -121,6 +121,18 @@ void *alloca (size_t);
 #endif
 #endif /* !defined(__GLXBYTEORDER_H__) */
 
+#ifdef WIN32
+  #ifndef __LITTLE_ENDIAN
+    #define __LITTLE_ENDIAN 1234
+    #define __BIG_ENDIAN    4321
+  #endif
+  #ifndef __BYTE_ORDER
+    #define __BYTE_ORDER __LITTLE_ENDIAN
+  #endif
+#else
+  #include <endian.h>
+#endif
+
 /* This assumes htobe32 is a macro in endian.h */
 #ifndef htobe32
 # if __BYTE_ORDER == __LITTLE_ENDIAN
