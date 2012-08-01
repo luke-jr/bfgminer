@@ -3590,6 +3590,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 		struct work *work = make_work();
 		bool rc;
 
+		work->mandatory = true;
 		rc = work_decode(json_object_get(val, "result"), work);
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
