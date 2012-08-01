@@ -185,6 +185,8 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
 
+	biforce_clear_buffer(bitforce);
+
 	mutex_lock(&bitforce->device_mutex);
 	if (fdDev) {
 		BFclose(fdDev);
