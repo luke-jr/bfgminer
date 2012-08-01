@@ -2306,14 +2306,20 @@ static bool stale_work(struct work *work, bool share)
 		work_expiry = 5;
 
 	gettimeofday(&now, NULL);
-	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry)
+	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry) {
+		applog(LOG_DEBUG, "Work stale due to expiry");
 		return true;
+	}
 
-	if (work->work_block != work_block)
+	if (work->work_block != work_block) {
+		applog(LOG_DEBUG, "Work stale due to block mismatch");
 		return true;
+	}
 
-	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING)
+	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING) {
+		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch");
 		return true;
+	}
 
 	return false;
 }
