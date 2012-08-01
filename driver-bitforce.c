@@ -61,7 +61,7 @@ enum {
 struct device_api bitforce_api;
 
 // Code must deal with a timeout
-#define BFopen(devpath)  serial_open(devpath, 0, 1, true)
+#define BFopen(devpath)  serial_open(devpath, 0, 10, true)
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {
