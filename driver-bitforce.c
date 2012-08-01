@@ -287,6 +287,8 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
 
+	biforce_clear_buffer(bitforce);
+
 	mutex_lock(&bitforce->device_mutex);
 	if (fdDev) {
 		BFclose(fdDev);
@@ -524,7 +526,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		}
 
 		if (delay_time_ms != bitforce->sleep_ms)
-			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d, waited %u", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 
 		/* Work out the average time taken. Float for calculation, uint for display */
 		bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
@@ -636,6 +638,20 @@ static bool bitforce_get_stats(struct cgpu_info *bitforce)
 	return bitforce_get_temp(bitforce);
 }
 
+static bool bitforce_thread_init(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	unsigned int wait;
+
+	/* Pause each new thread at least 100ms between initialising
+	 * so the devices aren't making calls all at the same time. */
+	wait = thr->id * MAX_START_DELAY_US;
+	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
+	usleep(wait);
+
+	return true;
+}
+
 static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
@@ -659,6 +675,7 @@ struct device_api bitforce_api = {
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.thread_prepare = bitforce_thread_prepare,
+	.thread_init = bitforce_thread_init,
 	.scanhash = bitforce_scanhash,
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable

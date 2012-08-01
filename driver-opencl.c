@@ -877,9 +877,19 @@ retry:
 
 	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct cgpu_info *cgpu = &gpus[gpu];
+		double displayed_rolling, displayed_total;
+		bool mhash_base = true;
 
-		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
-			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
+		displayed_rolling = cgpu->rolling;
+		displayed_total = cgpu->total_mhashes / total_secs;
+		if (displayed_rolling < 1) {
+			displayed_rolling *= 1000;
+			displayed_total *= 1000;
+			mhash_base = false;
+		}
+
+		wlog("GPU %d: %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
+			gpu, displayed_rolling, displayed_total, mhash_base ? "M" : "K",
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, cgpu->intensity);
 #ifdef HAVE_ADL
@@ -927,7 +937,10 @@ retry:
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
-			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
+			displayed_rolling = thr->rolling;
+			if (!mhash_base)
+				displayed_rolling *= 1000;
+			wlog("Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
 			switch (cgpu->status) {
 				default:
 				case LIFE_WELL:
