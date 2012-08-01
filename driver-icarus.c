@@ -470,9 +470,10 @@ static void get_options(int this_option_offset, int *baud, int *work_division, i
 
 			if (*colon) {
 				tmp = atoi(colon);
-				if (tmp == 1 || tmp == 2 || tmp == 4 || tmp == 8)
+				if (tmp == 1 || tmp == 2 || tmp == 4 || tmp == 8) {
 					*work_division = tmp;
-				else {
+					*fpga_count = tmp;	// default to the same
+				} else {
 					sprintf(err_buf, "Invalid icarus-options for work_division (%s) must be 1, 2, 4 or 8", colon);
 					quit(1, err_buf);
 				}

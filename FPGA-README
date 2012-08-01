@@ -26,6 +26,8 @@ There are two hidden options in cgminer when Icarus support is compiled in:
                           e.g. 2 means each FPGA does half the nonce range - default 2
            fpga_count     The actual number of FPGA working - this would normally be the same
                           as work_division - range is from 1 up to 'work_division'
+                          It defaults to the value of work_division - or 2 if you don't specify
+                          work_division
 
 If you define fewer comma seperated values than Icarus devices, the last values will be used
 for all extra devices
