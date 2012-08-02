@@ -2278,9 +2278,6 @@ static bool stale_work(struct work *work, bool share)
 	struct pool *pool;
 	int getwork_delay;
 
-	if (work->mandatory)
-		return false;
-
 	if (share) {
 		/* Technically the rolltime should be correct but some pools
 		 * advertise a broken expire= that is lower than a meaningful
@@ -2316,7 +2313,7 @@ static bool stale_work(struct work *work, bool share)
 		return true;
 	}
 
-	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING) {
+	if (opt_fail_only && !share && pool != current_pool() && !work->mandatory) {
 		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch");
 		return true;
 	}
@@ -3842,6 +3839,7 @@ static struct work *make_clone(struct work *work)
 	memcpy(work_clone, work, sizeof(struct work));
 	work_clone->clone = true;
 	work_clone->longpoll = false;
+	work_clone->mandatory = false;
 	/* Make cloned work appear slightly older to bias towards keeping the
 	 * master work item which can be further rolled */
 	work_clone->tv_staged.tv_sec -= 1;
