@@ -4197,7 +4197,9 @@ void *miner_thread(void *userdata)
 			}
 			pool_stats->getwork_calls++;
 
+			thread_reportin(mythr);
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
+			thread_reportin(mythr);
 
 			gettimeofday(&getwork_start, NULL);
 
