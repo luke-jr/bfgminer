@@ -500,6 +500,11 @@ static inline void mutex_unlock(pthread_mutex_t *lock)
 		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
 }
 
+static inline int mutex_trylock(pthread_mutex_t *lock)
+{
+	return pthread_mutex_trylock(lock);
+}
+
 static inline void wr_lock(pthread_rwlock_t *lock)
 {
 	if (unlikely(pthread_rwlock_wrlock(lock)))
