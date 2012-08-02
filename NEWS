@@ -1,7 +1,8 @@
 Version 2.6.1 - July 30, 2012
 
 - Remove the low hash count determinant of hardware being sick. A low hash rate
-can be for poor network connectivity or scrypt mining, neither of which a
+can be for poor network connectivity or scrypt mining, neither of which are due
+to a sick device.
 - api.c poolpriority changes
 
 
