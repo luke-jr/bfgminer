@@ -2445,12 +2445,18 @@ static bool stale_work(struct work *work, bool share)
 	if (share) {
 		/* If the share isn't on this pool's latest block, it's stale */
 		if (pool->block_id != block_id)
+		{
+			applog(LOG_DEBUG, "Share stale due to block mismatch");
 			return true;
+		}
 
 		/* If the pool doesn't want old shares, then any found in work before
 		 * the most recent longpoll is stale */
 		if ((!pool->submit_old) && work->work_restart_id != pool->work_restart_id)
+		{
+			applog(LOG_DEBUG, "Share stale due to work restart");
 			return true;
+		}
 
 		/* Technically the rolltime should be correct but some pools
 		 * advertise a broken expire= that is lower than a meaningful
@@ -2463,11 +2469,17 @@ static bool stale_work(struct work *work, bool share)
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
 		if (block_id != (opt_fail_only ? pool->block_id : current_block_id))
+		{
+			applog(LOG_DEBUG, "Work stale due to block mismatch");
 			return true;
+		}
 
 		/* If the pool has asked us to restart since this work, it's stale */
 		if (work->work_restart_id != pool->work_restart_id)
+		{
+			applog(LOG_DEBUG, "Share stale due to work restart");
 			return true;
+		}
 
 		/* Don't keep rolling work right up to the expiration */
 		if (work->rolltime > opt_scantime)
@@ -2485,13 +2497,17 @@ static bool stale_work(struct work *work, bool share)
 	}
 
 	gettimeofday(&now, NULL);
-	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry)
+	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry) {
+		applog(LOG_DEBUG, "%s stale due to expiry", share?"Share":"Work");
 		return true;
+	}
 
 	/* If the user only wants strict failover, any work from a pool other than
 	 * the current one is always considered stale */
-	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING)
+	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING) {
+		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch");
 		return true;
+	}
 
 	return false;
 }
