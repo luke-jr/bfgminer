@@ -1,5 +1,38 @@
+Version 2.6.2 - August 3, 2012
+
+- Clear the bitforce buffer whenever we get an unexpected result as it has
+likely throttled and we are getting cached responses out of order, and use the
+temperature monitoring as a kind of watchdog to flush unexpected results.
+- It is not critical getting the temperature response in bitforce so don't
+mandatorily wait on the mutex lock.
+- Check there is a cutoff temp actually set in bitforce before using it as a cut
+off value otherwise it may think it's set to zero degrees.
+- We dropped the temporary stopping of curl recruiting on submit_fail by
+mistake, reinstate it.
+- Make threads report in either side of the scanhash function in case we miss
+reporting in when restarting work.
+- Don't make mandatory work and its clones last forever.
+- Make test work for pool_active mandatory work items to smooth out staged work
+counts when in failover-only mode.
+- Add debugging output when work is found stale as to why.
+- Print the 3 parameters that are passed to applog for a debug line in
+bitforce.c
+- Clear bitforce buffer on init as previously.
+- Add some headroom to the number of curls available per pool to allow for
+longpoll and sendwork curls.
+- Revert "Revert "Change BFL driver thread initialising to a constant 100ms
+delay between devices instead of a random arrangement.""
+- Revert "Remove bitforce_thread_init"
+- Show the correct base units on GPU summary.
+- Differentiate between the send return value being a bool and the get return
+value when managing them in bitforce scanhash.
+- 23a8c60 Revert "bitforce: Skip out of sending work if work restart requested"
+
+
 Version 2.6.1 - July 30, 2012
 
+- Display scrypt as being built in as well.
+- Fix build warning about KL_SCRYPT when built without scrypt support.
 - Remove the low hash count determinant of hardware being sick. A low hash rate
 can be for poor network connectivity or scrypt mining, neither of which are due
 to a sick device.
