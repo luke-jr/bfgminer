@@ -95,7 +95,7 @@ static char
 modminer_detect_auto()
 {
 	return
-	serial_autodetect_udev     (modminer_detect_one, "BTCFPGA*ModMiner") ?:
+	serial_autodetect_udev     (modminer_detect_one, "*ModMiner*") ?:
 	serial_autodetect_devserial(modminer_detect_one, "BTCFPGA_ModMiner") ?:
 	0;
 }
