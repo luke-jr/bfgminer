@@ -1,5 +1,9 @@
 BFGMiner Version 2.6.2 - Future
 
+- miner.php support custom report section joins
+- ICA default fpga_count to work_division if specified
+- FPGA-README document new hidden --icarus-options
+- ICA support 57600 baud rate, up to 8 FPGA and partial working FPGA boards
 - Scrypt mining does not support block testing yet so don't try to print it.
 - Clear the bitforce buffer whenever we get an unexpected result as it has
 likely throttled and we are getting cached responses out of order, and use the
@@ -19,6 +23,16 @@ bitforce.c
 - Add some headroom to the number of curls available per pool to allow for
 longpoll and sendwork curls.
 - Show the correct base units on GPU summary.
+- Bugfix: bitforce: 1 decisecond timeout is unreasonably short, give it a
+second
+- Bugfix: Don't try to log abandon time, since we aren't keeping track
+reasonably
+- Import uthash 1.9.6
+- Bugfix: bitforce: Pause after send_work failures
+- Fix comm error handling to not consider work restarts an error condition
+- comm error bug fix
+- Bugfix: No endian.h on Windows
+- Remove unused mkinstalldirs
 - Display scrypt as being built in as well.
 - Fix build warning about KL_SCRYPT when built without scrypt support.
 - News update.
