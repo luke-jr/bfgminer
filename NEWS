@@ -1,5 +1,23 @@
 BFGMiner Version 2.6.2 - Future
 
+- Clear the bitforce buffer whenever we get an unexpected result as it has
+likely throttled and we are getting cached responses out of order, and use the
+temperature monitoring as a kind of watchdog to flush unexpected results.
+- It is not critical getting the temperature response in bitforce so don't
+mandatorily wait on the mutex lock.
+- Check there is a cutoff temp actually set in bitforce before using it as a cut
+off value otherwise it may think it's set to zero degrees.
+- We dropped the temporary stopping of curl recruiting on submit_fail by
+mistake, reinstate it.
+- Make threads report in either side of the scanhash function in case we miss
+reporting in when restarting work.
+- Add debugging output when work is found stale as to why.
+- Print the 3 parameters that are passed to applog for a debug line in
+bitforce.c
+- Clear bitforce buffer on init as previously.
+- Add some headroom to the number of curls available per pool to allow for
+longpoll and sendwork curls.
+- Show the correct base units on GPU summary.
 - Display scrypt as being built in as well.
 - Fix build warning about KL_SCRYPT when built without scrypt support.
 - News update.
