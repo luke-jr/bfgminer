@@ -1,5 +1,6 @@
 BFGMiner Version 2.6.2 - Future
 
+- Scrypt mining does not support block testing yet so don't try to print it.
 - Clear the bitforce buffer whenever we get an unexpected result as it has
 likely throttled and we are getting cached responses out of order, and use the
 temperature monitoring as a kind of watchdog to flush unexpected results.
