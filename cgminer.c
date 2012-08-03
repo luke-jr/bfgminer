@@ -1770,10 +1770,9 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 
 	if (!QUIET) {
 		hash32 = (uint32_t *)(work->hash);
-		if (opt_scrypt) {
-			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]),
-				work->block? " BLOCK!" : "");
-		} else {
+		if (opt_scrypt)
+			sprintf(hashshow, "%08lx.%08lx", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]));
+		else {
 			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
 				work->block? " BLOCK!" : "");
 		}
