@@ -87,11 +87,13 @@ $mobilepage = array(
  'DATE' => null,
  'RIGS' => null,
  'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej', 'Utility'),
- 'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected=Rej', 'Utility'),
+ 'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.Status=Status', 'DEVS.Temperature=Temp',
+			'DEVS.MHS av=MHS av', 'DEVS.Accepted=Accept', 'DEVS.Rejected=Rej',
+			'DEVS.Utility=Utility', 'NOTIFY.Last Not Well=Not Well'),
  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej', 'Last Share Time'));
 $mobilesum = array(
  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
- 'DEVS' => array('MHS av', 'Accepted', 'Rejected', 'Utility'),
+ 'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Accepted', 'DEVS.Rejected', 'DEVS.Utility'),
  'POOL' => array('Accepted', 'Rejected'));
 #
 # customsummarypages is an array of these Custom Summary Pages
@@ -716,6 +718,9 @@ function fmt($section, $name, $value, $when, $alldata)
  if ($class == '' && ($rownum % 2) == 0)
 	$class = $c2class;
 
+ if ($ret == '')
+	$ret = $b;
+
  return array($ret, $class);
 }
 #
@@ -1274,7 +1279,170 @@ $sectionmap = array(
 	'GPU' => 'devs',	// You would normally use DEVS
 	'PGA' => 'devs',	// You would normally use DEVS
 	'NOTIFY' => 'notify',
+	'DEVDETAILS' => 'devdetails',
+	'STATS' => 'stats',
 	'CONFIG' => 'config');
+#
+function joinfields($section1, $section2, $join, $results)
+{
+ global $sectionmap;
+
+ $name1 = $sectionmap[$section1];
+ $name2 = $sectionmap[$section2];
+ $newres = array();
+
+ // foreach rig in section1
+ foreach ($results[$name1] as $rig => $result)
+ {
+	$status = null;
+
+	// foreach answer section in the rig api call
+	foreach ($result as $name1b => $fields1b)
+	{
+		if ($name1b == 'STATUS')
+		{
+			// remember the STATUS from section1
+			$status = $result[$name1b];
+			continue;
+		}
+
+		// foreach answer section in the rig api call (for the other api command)
+		foreach ($results[$name2][$rig] as $name2b => $fields2b)
+		{
+			if ($name2b == 'STATUS')
+				continue;
+
+			// If match the same field values of fields in $join
+			$match = true;
+			foreach ($join as $field)
+				if ($fields1b[$field] != $fields2b[$field])
+				{
+					$match = false;
+					break;
+				}
+
+			if ($match === true)
+			{
+				if ($status != null)
+				{
+					$newres[$rig]['STATUS'] = $status;
+					$status = null;
+				}
+
+				$subsection = $section1.'+'.$section2;
+				$subsection .= preg_replace('/[^0-9]/', '', $name1b.$name2b);
+
+				foreach ($fields1b as $nam => $val)
+					$newres[$rig][$subsection]["$section1.$nam"] = $val;
+				foreach ($fields2b as $nam => $val)
+					$newres[$rig][$subsection]["$section2.$nam"] = $val;
+			}
+		}
+	}
+ }
+ return $newres;
+}
+#
+function joinall($section1, $section2, $results)
+{
+ global $sectionmap;
+
+ $name1 = $sectionmap[$section1];
+ $name2 = $sectionmap[$section2];
+ $newres = array();
+
+ // foreach rig in section1
+ foreach ($results[$name1] as $rig => $result)
+ {
+	// foreach answer section in the rig api call
+	foreach ($result as $name1b => $fields1b)
+	{
+		if ($name1b == 'STATUS')
+		{
+			// copy the STATUS from section1
+			$newres[$rig][$name1b] = $result[$name1b];
+			continue;
+		}
+
+		// foreach answer section in the rig api call (for the other api command)
+		foreach ($results[$name2][$rig] as $name2b => $fields2b)
+		{
+			if ($name2b == 'STATUS')
+				continue;
+
+			$subsection = $section1.'+'.$section2;
+			$subsection .= preg_replace('/[^0-9]/', '', $name1b.$name2b);
+
+			foreach ($fields1b as $nam => $val)
+				$newres[$rig][$subsection]["$section1.$nam"] = $val;
+			foreach ($fields2b as $nam => $val)
+				$newres[$rig][$subsection]["$section2.$nam"] = $val;
+		}
+	}
+ }
+ return $newres;
+}
+#
+function joinsections($sections, $results, $errors)
+{
+ global $sectionmap;
+
+#echo "results['pools']=".print_r($results['pools'],true)."<br>";
+
+ // GPU's don't have Name,ID fields - so create them
+ foreach ($results as $section => $res)
+	foreach ($res as $rig => $result)
+		foreach ($result as $name => $fields)
+		{
+			$subname = preg_replace('/[0-9]/', '', $name);
+			if ($subname == 'GPU' and isset($result[$name]['GPU']))
+			{
+				$results[$section][$rig][$name]['Name'] = 'GPU';
+				$results[$section][$rig][$name]['ID'] = $result[$name]['GPU'];
+			}
+		}
+
+ foreach ($sections as $section => $fields)
+	if ($section != 'DATE' && !isset($sectionmap[$section]))
+	{
+		$both = explode('+', $section, 2);
+		if (count($both) > 1)
+		{
+			switch($both[0])
+			{
+			case 'SUMMARY':
+				switch($both[1])
+				{
+				case 'POOL':
+				case 'DEVS':
+				case 'CONFIG':
+					$sectionmap[$section] = $section;
+					$results[$section] = joinall($both[0], $both[1], $results);
+					break;
+				}
+				break;
+			case 'DEVS':
+				$join = array('Name', 'ID');
+				switch($both[1])
+				{
+				case 'NOTIFY':
+				case 'DEVDETAILS':
+					$sectionmap[$section] = $section;
+					$results[$section] = joinfields($both[0], $both[1], $join, $results);
+					break;
+				}
+				break;
+			default:
+				$errors[] = "Error: Invalid section '$section'";
+				break;
+			}
+		}
+		else
+			$errors[] = "Error: Invalid section '$section'";
+	}
+
+ return array($results, $errors);
+}
 #
 function secmatch($section, $field)
 {
@@ -1335,7 +1503,14 @@ function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total
 				$value = null;
 		}
 
-		list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
+		if (strpos($secname, '+') === false)
+			list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
+		else
+		{
+			$parts = explode('.', $name, 2);
+			list($showvalue, $class) = fmt($parts[0], $parts[1], $value, $when, $row);
+		}
+
 		echo "<td$class align=right>$showvalue</td>";
 	}
 	endrow();
@@ -1356,15 +1531,19 @@ function processcustompage($pagename, $sections, $sum, $namemap)
  $errors = array();
  foreach ($sections as $section => $fields)
  {
-	if (isset($sectionmap[$section]))
+	$all = explode('+', $section);
+	foreach ($all as $section)
 	{
-		$cmd = $sectionmap[$section];
-		if (!isset($cmds[$cmd]))
-			$cmds[$cmd] = 1;
+		if (isset($sectionmap[$section]))
+		{
+			$cmd = $sectionmap[$section];
+			if (!isset($cmds[$cmd]))
+				$cmds[$cmd] = 1;
+		}
+		else
+			if ($section != 'DATE')
+				$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
 	}
-	else
-		if ($section != 'DATE')
-			$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
  }
 
  $results = array();
@@ -1399,6 +1578,7 @@ function processcustompage($pagename, $sections, $sum, $namemap)
  $shownsomething = false;
  if (count($results) > 0)
  {
+	list($results, $errors) = joinsections($sections, $results, $errors);
 	$first = true;
 	foreach ($sections as $section => $fields)
 	{
