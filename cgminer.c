@@ -142,6 +142,7 @@ bool opt_api_listen;
 bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool = true;
+char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 
 char *opt_kernel_path;
@@ -710,6 +711,13 @@ static char *set_api_description(const char *arg)
 }
 
 #ifdef USE_ICARUS
+static char *set_icarus_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_icarus_options);
+
+	return NULL;
+}
+
 static char *set_icarus_timing(const char *arg)
 {
 	opt_set_charp(arg, &opt_icarus_timing);
@@ -873,6 +881,9 @@ static struct opt_table opt_config_table[] = {
 		     "Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
 #endif
 #ifdef USE_ICARUS
+	OPT_WITH_ARG("--icarus-options",
+		     set_icarus_options, NULL, NULL,
+		     opt_hidden),
 	OPT_WITH_ARG("--icarus-timing",
 		     set_icarus_timing, NULL, NULL,
 		     opt_hidden),
@@ -3013,6 +3024,8 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
 	if (opt_api_groups)
 		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", opt_api_groups);
+	if (opt_icarus_options)
+		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", opt_icarus_options);
 	if (opt_icarus_timing)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", opt_icarus_timing);
 	fputs("\n}", fcfg);
