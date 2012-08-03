@@ -48,6 +48,7 @@ cp -av "$IDIR/"ADL_SDK/adl_{defines,sdk,structures}.h "ADL_SDK/"
 	--enable-icarus \
 	--enable-modminer \
 	--enable-ztex \
+	--enable-scrypt \
 	--build=i686-pc-linux-gnu \
 	--host=i686-pc-mingw32
 make -j4
