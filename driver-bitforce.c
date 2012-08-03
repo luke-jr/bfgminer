@@ -259,7 +259,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void biforce_clear_buffer(struct cgpu_info *bitforce)
+static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
@@ -287,7 +287,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
 
-	biforce_clear_buffer(bitforce);
+	bitforce_clear_buffer(bitforce);
 
 	mutex_lock(&bitforce->device_mutex);
 	if (fdDev) {
@@ -343,7 +343,11 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (!fdDev)
 		return false;
 
-	mutex_lock(&bitforce->device_mutex);
+	/* It is not critical getting temperature so don't get stuck if  we
+	 * can't grab the mutex here */
+	if (mutex_trylock(&bitforce->device_mutex))
+		return false;
+
 	BFwrite(fdDev, "ZLX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
@@ -359,7 +363,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 
 		if (temp > 0) {
 			bitforce->temp = temp;
-			if (temp > bitforce->cutofftemp) {
+			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
 				applog(LOG_WARNING, "BFL%i: Hit thermal cutoff limit, disabling!", bitforce->device_id);
 				bitforce->deven = DEV_RECOVER;
 
@@ -368,7 +372,15 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 				bitforce->dev_thermal_cutoff_count++;
 			}
 		}
+	} else {
+		/* Use the temperature monitor as a kind of watchdog for when
+		 * our responses are out of sync and flush the buffer to
+		 * hopefully recover */
+		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer");
+		bitforce_clear_buffer(bitforce);
+		return false;;
 	}
+
 	return true;
 }
 
@@ -404,6 +416,7 @@ re_send:
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
+		bitforce_clear_buffer(bitforce);
 		return false;
 	}
 
@@ -444,6 +457,7 @@ re_send:
 
 	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
+		bitforce_clear_buffer(bitforce);
 		return false;
 	}
 
@@ -540,6 +554,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		return 0;	/* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
+		bitforce_clear_buffer(bitforce);
 		return 0;
 	}
 
@@ -628,7 +643,7 @@ commerr:
 		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
 		bitforce->dev_comms_error_count++;
 		/* empty read buffer */
-		biforce_clear_buffer(bitforce);
+		bitforce_clear_buffer(bitforce);
 	}
 	return ret;
 }

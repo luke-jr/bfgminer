@@ -2333,7 +2333,7 @@ static struct curl_ent *pop_curl_entry(struct pool *pool)
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if (pool->curls >= curl_limit)
+		if (pool->submit_fail || pool->curls >= curl_limit)
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
 		else
 			recruit_curl(pool);
@@ -4510,7 +4510,9 @@ void *miner_thread(void *userdata)
 			}
 			pool_stats->getwork_calls++;
 
+			thread_reportin(mythr);
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
+			thread_reportin(mythr);
 
 			gettimeofday(&getwork_start, NULL);
 
