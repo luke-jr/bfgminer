@@ -176,7 +176,9 @@ static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
 static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
+#ifdef HAVE_OPENCL
 static const char *DYNAMIC = _DYNAMIC;
+#endif
 
 static const char *YES = "Y";
 static const char *NO = "N";
