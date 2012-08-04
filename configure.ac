@@ -153,45 +153,60 @@ else
 	DLOPEN_FLAGS=""
 fi
 
-bitforce="no"
-
 AC_ARG_ENABLE([bitforce],
-	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs(default disabled)])],
-	[bitforce=$enableval]
+	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
+	[bitforce=$enableval],
+	[bitforce=yes]
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
-icarus="no"
-
 AC_ARG_ENABLE([icarus],
-	[AC_HELP_STRING([--enable-icarus],[Compile support for Icarus (default disabled)])],
-	[icarus=$enableval]
+	[AC_HELP_STRING([--disable-icarus],[Compile support for Icarus (default enabled)])],
+	[icarus=$enableval],
+	[icarus=yes]
 	)
 if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
-modminer="no"
-
 AC_ARG_ENABLE([modminer],
-	[AC_HELP_STRING([--enable-modminer],[Compile support for ModMiner FPGAs(default disabled)])],
-	[modminer=$enableval]
+	[AC_HELP_STRING([--enable-modminer],[Compile support for ModMiner (default enabled)])],
+	[modminer=$enableval],
+	[modminer=yes]
 	)
 if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
-ztex="no"
+AC_CHECK_LIB(usb-1.0, libusb_init,
+	[
+		libusb=yes
+		AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
+		USB_LIBS="-lusb-1.0"
+		USB_FLAGS=""
+	],
+	[libusb=no]
+)
 
 AC_ARG_ENABLE([ztex],
-	[AC_HELP_STRING([--enable-ztex],[Compile support for Ztex (default disabled)])],
-	[ztex=$enableval]
+	[AC_HELP_STRING([--disable-ztex],[Compile support for Ztex (default if libusb)])],
+	[ztex=$enableval],
+	[ztex=auto]
 	)
+if test "x$ztex$libusb" = xyesno; then
+	AC_MSG_ERROR([Could not find libusb, required for Ztex support])
+elif test "x$ztex" = xauto; then
+	ztex="$libusb"
+	if test "x$libusb" = xno; then
+		AC_MSG_WARN([Could not find libusb, required for Ztex support])
+		ztexwarn=yes
+	fi
+fi
 if test "x$ztex" = xyes; then
 	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if Ztex support is wanted])
 fi
@@ -303,14 +318,6 @@ if test "x$bitforce$modminer" != xnono; then
 	fi
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
-
-if test "x$ztex" != xno; then
-  AC_CHECK_LIB(usb-1.0, libusb_init, ,
-          AC_MSG_ERROR([Could not find usb library - please install libusb]))
-  AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
-  USB_LIBS="-lusb-1.0"
-  USB_FLAGS=""
-fi
 
 PKG_PROG_PKG_CONFIG()
 
@@ -443,6 +450,8 @@ fi
 
 if test "x$ztex" = xyes; then
 	echo "  Ztex.FPGAs...........: Enabled"
+elif test "x$ztexwarn" = xyes; then
+	echo "  Ztex.FPGAs...........: Disabled (libusb not found)"
 else
 	echo "  Ztex.FPGAs...........: Disabled"
 fi
