@@ -5423,7 +5423,9 @@ void enable_curses(void) {
 	getmaxyx(mainwin, y, x);
 	statuswin = newwin(logstart, x, 0, 0);
 	leaveok(statuswin, true);
-	logwin = newwin(y - logcursor, 0, logcursor, 0);
+	// For whatever reason, PDCurses crashes if the logwin is initialized to height y-logcursor
+	// We resize the window later anyway, so just start it off at 1 :)
+	logwin = newwin(1, 0, logcursor, 0);
 	idlok(logwin, true);
 	scrollok(logwin, true);
 	leaveok(logwin, true);
