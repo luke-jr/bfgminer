@@ -3712,17 +3712,25 @@ bool queue_request(struct thr_info *thr, bool needed)
 {
 	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
+	bool lag = false;
 
 	cq = current_queued();
 	cs = current_staged();
 	ts = total_staged();
 	tq = global_queued();
 
-	/* Test to make sure we have enough work for pools without rolltime
-	 * and enough original work for pools with rolltime */
-	if (((cs || cq >= opt_queue) && ts >= maxq) ||
-	    ((cs || cq) && tq >= maxq))
-		return true;
+	if (needed && cq >= maxq && !ts && !opt_fail_only) {
+		/* If we're queueing work faster than we can stage it, consider
+		 * the system lagging and allow work to be gathered from
+		 * another pool if possible */
+		lag = true;
+	} else {
+		/* Test to make sure we have enough work for pools without rolltime
+		 * and enough original work for pools with rolltime */
+		if (((cs || cq >= opt_queue) && ts >= maxq) ||
+		    ((cs || cq) && tq >= maxq))
+			return true;
+	}
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -3733,6 +3741,7 @@ bool queue_request(struct thr_info *thr, bool needed)
 
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
+	wc->lagging = lag;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
