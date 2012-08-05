@@ -3713,7 +3713,6 @@ bool queue_request(struct thr_info *thr, bool needed)
 {
 	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
-	bool ret = true;
 
 	cq = current_queued();
 	cs = current_staged();
@@ -3762,7 +3761,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 		work = staged_work;
 		HASH_DEL(staged_work, work);
 		work->pool->staged--;
-		if (HASH_COUNT(staged_work) < mining_threads)
+		if (HASH_COUNT(staged_work) < (unsigned int)mining_threads)
 			queue = true;
 	}
 	mutex_unlock(stgd_lock);
