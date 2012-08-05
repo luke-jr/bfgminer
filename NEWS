@@ -1,5 +1,6 @@
 Version 2.6.3 - August 5, 2012
 
+- Count likely throttling episodes on bitforce devices as hardware errors.
 - Style cleanups.
 - Use FTD2XX.DLL on Windows to autodetect BitFORCE SHA256 devices.
 - Make pool_disabled the first in the enums == 0, fixing the pool enabled count
