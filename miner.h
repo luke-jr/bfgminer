@@ -362,8 +362,8 @@ struct cgpu_info {
 	cl_ulong max_alloc;
 
 #ifdef USE_SCRYPT
-	int lookup_gap;
-	int thread_concurrency;
+	int opt_lg, lookup_gap;
+	int opt_tc, thread_concurrency;
 	int shaders;
 #endif
 	struct timeval tv_gpustart;;

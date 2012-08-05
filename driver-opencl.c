@@ -163,16 +163,16 @@ char *set_lookup_gap(char *arg)
 		return "Invalid parameters for set lookup gap";
 	val = atoi(nextptr);
 
-	gpus[device++].lookup_gap = val;
+	gpus[device++].opt_lg = val;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 
-		gpus[device++].lookup_gap = val;
+		gpus[device++].opt_lg = val;
 	}
 	if (device == 1) {
 		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].lookup_gap = gpus[0].lookup_gap;
+			gpus[i].opt_lg = gpus[0].opt_lg;
 	}
 
 	return NULL;
@@ -188,16 +188,16 @@ char *set_thread_concurrency(char *arg)
 		return "Invalid parameters for set thread concurrency";
 	val = atoi(nextptr);
 
-	gpus[device++].thread_concurrency = val;
+	gpus[device++].opt_tc = val;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 
-		gpus[device++].thread_concurrency = val;
+		gpus[device++].opt_tc = val;
 	}
 	if (device == 1) {
 		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].thread_concurrency = gpus[0].thread_concurrency;
+			gpus[i].opt_tc = gpus[0].opt_tc;
 	}
 
 	return NULL;
