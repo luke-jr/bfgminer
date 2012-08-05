@@ -3241,12 +3241,12 @@ void api(int api_thr_id)
 	}
 
 	if (opt_api_allow)
-		applog(LOG_WARNING, "API running in IP access mode");
+		applog(LOG_WARNING, "API running in IP access mode on port %d", port);
 	else {
 		if (opt_api_network)
-			applog(LOG_WARNING, "API running in UNRESTRICTED access mode");
+			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d", port);
 		else
-			applog(LOG_WARNING, "API running in local access mode");
+			applog(LOG_WARNING, "API running in local read access mode on port %d", port);
 	}
 
 	io_buffer = malloc(MYBUFSIZ+1);
