@@ -10,12 +10,35 @@
 
 #include <limits.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <strings.h>
 #include <sys/time.h>
 #include <unistd.h>
 
 #include "config.h"
+
+#ifdef WIN32
+
+#include <windows.h>
+
+#define dlsym (void*)GetProcAddress
+#define dlclose FreeLibrary
+
+typedef unsigned long FT_STATUS;
+typedef PVOID FT_HANDLE;
+__stdcall FT_STATUS (*FT_ListDevices)(PVOID pArg1, PVOID pArg2, DWORD Flags);
+__stdcall FT_STATUS (*FT_Open)(int idx, FT_HANDLE*);
+__stdcall FT_STATUS (*FT_GetComPortNumber)(FT_HANDLE, LPLONG lplComPortNumber);
+__stdcall FT_STATUS (*FT_Close)(FT_HANDLE);
+const uint32_t FT_OPEN_BY_DESCRIPTION =       2;
+const uint32_t FT_LIST_ALL         = 0x20000000;
+const uint32_t FT_LIST_NUMBER_ONLY = 0x80000000;
+enum {
+	FT_OK,
+};
+
+#endif /* WIN32 */
 
 #include "compat.h"
 #include "fpgautils.h"
@@ -114,10 +137,89 @@ static bool bitforce_detect_one(const char *devpath)
 	return add_cgpu(bitforce);
 }
 
+#define LOAD_SYM(sym)  do { \
+	if (!(sym = dlsym(dll, #sym))) {  \
+		applog(LOG_DEBUG, "Failed to load " #sym ", not using FTDI bitforce autodetect");  \
+		goto nogood;  \
+	}  \
+} while(0)
+
+static char bitforce_autodetect_ftdi()
+{
+#ifdef WIN32
+	FT_STATUS ftStatus;
+	DWORD numDevs;
+	HMODULE dll = LoadLibrary("FTD2XX.DLL");
+	if (!dll)
+	{
+		applog(LOG_DEBUG, "FTD2XX.DLL failed to load, not using FTDI bitforce autodetect");
+		return 0;
+	}
+	LOAD_SYM(FT_ListDevices);
+	LOAD_SYM(FT_Open);
+	LOAD_SYM(FT_GetComPortNumber);
+	LOAD_SYM(FT_Close);
+	
+	ftStatus = FT_ListDevices(&numDevs, NULL, FT_LIST_NUMBER_ONLY);
+	if (ftStatus != FT_OK)
+	{
+		applog(LOG_DEBUG, "FTDI device count failed, not using FTDI bitforce autodetect");
+nogood:
+		dlclose(dll);
+		return 0;
+	}
+	applog(LOG_DEBUG, "FTDI reports %u devices", (unsigned)numDevs);
+	
+	char buf[65 * numDevs];
+	char*bufptrs[numDevs + 1];
+	int i;
+	for (i = 0; i < numDevs; ++i)
+		bufptrs[i] = &buf[i * 65];
+	bufptrs[numDevs] = NULL;
+	ftStatus = FT_ListDevices(bufptrs, &numDevs, FT_LIST_ALL | FT_OPEN_BY_DESCRIPTION);
+	if (ftStatus != FT_OK)
+	{
+		applog(LOG_DEBUG, "FTDI device list failed, not using FTDI bitforce autodetect");
+		goto nogood;
+	}
+	
+	char devpath[] = "\\\\.\\COMnnnnn";
+	char *devpathnum = &devpath[7];
+	char found = 0;
+	for (i = numDevs; i > 0; )
+	{
+		--i;
+		bufptrs[i][64] = '\0';
+		
+		if (!(strstr(bufptrs[i], "BitFORCE") && strstr(bufptrs[i], "SHA256")))
+			continue;
+		
+		FT_HANDLE ftHandle;
+		if (FT_OK != FT_Open(i, &ftHandle))
+			continue;
+		LONG lComPortNumber;
+		ftStatus = FT_GetComPortNumber(ftHandle, &lComPortNumber);
+		FT_Close(ftHandle);
+		if (FT_OK != ftStatus || lComPortNumber < 0)
+			continue;
+		
+		sprintf(devpathnum, "%d", (int)lComPortNumber);
+		
+		if (bitforce_detect_one(devpath))
+			++found;
+	}
+	dlclose(dll);
+	return found;
+#else  /* NOT WIN32 */
+	return 0;
+#endif
+}
+
 static char bitforce_detect_auto()
 {
 	return (serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
 		serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
+		bitforce_autodetect_ftdi() ?:
 		0);
 }
 
