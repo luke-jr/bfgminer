@@ -541,10 +541,10 @@ modminer_process_results(struct thr_info*thr)
 			state->no_nonce_counter = 0;
 			modminer_reduce_clock(thr, true);
 		}
-		if (work_restart(thr))
-			break;
-		usleep(10000);
 		if (work_restart(thr) || !--iter)
+			break;
+		usleep(1000);
+		if (work_restart(thr))
 			break;
 		mutex_lock(&modminer->device_mutex);
 		fd = modminer->device_fd;
