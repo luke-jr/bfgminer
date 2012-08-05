@@ -1354,6 +1354,13 @@ static int pool_staged(struct pool *pool)
 	return ret;
 }
 
+static int current_staged(void)
+{
+	struct pool *pool = current_pool();
+
+	return pool_staged(pool);
+}
+
 #ifdef HAVE_CURSES
 WINDOW *mainwin, *statuswin, *logwin;
 #endif
@@ -1443,6 +1450,8 @@ static void text_print_status(int thr_id)
 	}
 }
 
+static int global_queued(void);
+
 #ifdef HAVE_CURSES
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
@@ -1460,7 +1469,7 @@ static void curses_print_status(void)
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
-		total_queued, total_staged(), total_stale, total_discarded, new_blocks,
+		global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
 	if (pool_strategy == POOL_LOADBALANCE && total_pools > 1)
@@ -2251,6 +2260,16 @@ static int current_queued(void)
 	return ret;
 }
 
+static int global_queued(void)
+{
+	int ret;
+
+	mutex_lock(&qd_lock);
+	ret = total_queued;
+	mutex_unlock(&qd_lock);
+	return ret;
+}
+
 /* ce and pool may appear uninitialised at push_curl_entry, but they're always
  * set when we don't have opt_benchmark enabled */
 static void *get_work_thread(void *userdata)
@@ -2567,6 +2586,8 @@ static void discard_work(struct work *work)
 	free_work(work);
 }
 
+bool queue_request(struct thr_info *thr, bool needed);
+
 static void discard_stale(void)
 {
 	struct work *work, *tmp;
@@ -2583,10 +2604,11 @@ static void discard_stale(void)
 	}
 	mutex_unlock(stgd_lock);
 
-	applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
+	if (stale) {
+		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
+		queue_request(NULL, false);
+	}
 }
-
-bool queue_request(struct thr_info *thr, bool needed);
 
 /* A generic wait function for threads that poll that will wait a specified
  * time tdiff waiting on the pthread conditional that is broadcast when a
@@ -3689,25 +3711,20 @@ static void pool_resus(struct pool *pool)
 
 bool queue_request(struct thr_info *thr, bool needed)
 {
-	int cq, ts, maxq = opt_queue + mining_threads;
+	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
 	bool ret = true;
 
 	cq = current_queued();
+	cs = current_staged();
 	ts = total_staged();
+	tq = global_queued();
 
 	/* Test to make sure we have enough work for pools without rolltime
 	 * and enough original work for pools with rolltime */
-	if ((cq >= opt_queue && ts >= maxq) || cq >= maxq) {
-		/* If we're queueing work faster than we can stage it, consider the
-		 * system lagging and allow work to be gathered from another pool if
-		 * possible */
-		if (needed & !ts) {
-			wc->lagging = true;
-			applog(LOG_DEBUG, "Pool lagging");
-		}
+	if (((cs || cq >= opt_queue) && ts >= maxq) ||
+	    ((cs || cq) && tq >= maxq))
 		return true;
-	}
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -3744,6 +3761,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 	if (HASH_COUNT(staged_work)) {
 		work = staged_work;
 		HASH_DEL(staged_work, work);
+		work->pool->staged--;
 		if (HASH_COUNT(staged_work) < mining_threads)
 			queue = true;
 	}
@@ -4517,9 +4535,9 @@ static void *watchpool_thread(void __maybe_unused *userdata)
  * only 1/3 more staged work item than mining threads */
 static void age_work(void)
 {
-	int discarded = 0;
+	int discarded = 0, maxq = (mining_threads + opt_queue) * 4 / 3;
 
-	while (total_staged() > mining_threads * 4 / 3 + opt_queue) {
+	while (total_staged() > maxq) {
 		struct work *work = hash_pop(NULL);
 
 		if (unlikely(!work))
@@ -4556,9 +4574,11 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 		sleep(interval);
 
-		queue_request(NULL, false);
+		discard_stale();
 
 		age_work();
+
+		queue_request(NULL, false);
 
 		hashmeter(-1, &zero_tv, 0);
 
