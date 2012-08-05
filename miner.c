@@ -4098,6 +4098,7 @@ out:
 static struct work *hash_pop(const struct timespec *abstime)
 {
 	struct work *work = NULL;
+	bool queue = false;
 	int rc = 0;
 
 	mutex_lock(stgd_lock);
@@ -4109,8 +4110,13 @@ static struct work *hash_pop(const struct timespec *abstime)
 		HASH_DEL(staged_work, work);
 		if (work->clone)
 			--staged_extras;
+		if (HASH_COUNT(staged_work) < mining_threads)
+			queue = true;
 	}
 	mutex_unlock(stgd_lock);
+
+	if (queue)
+		queue_request(NULL, false);
 
 	return work;
 }
