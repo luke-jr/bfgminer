@@ -373,6 +373,8 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
 		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer");
+		/* Count throttling episodes as hardware errors */
+		bitforce->hw_errors++;
 		bitforce_clear_buffer(bitforce);
 		return false;;
 	}
@@ -411,6 +413,7 @@ re_send:
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
+		bitforce->hw_errors++;
 		bitforce_clear_buffer(bitforce);
 		return false;
 	}
@@ -452,6 +455,7 @@ re_send:
 
 	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
+		bitforce->hw_errors++;
 		bitforce_clear_buffer(bitforce);
 		return false;
 	}
@@ -540,6 +544,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	else if (!strncasecmp(pdevbuf, "I", 1))
 		return 0;	/* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
+		bitforce->hw_errors++;
 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
 		bitforce_clear_buffer(bitforce);
 		return 0;
@@ -629,6 +634,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
 		bitforce->dev_comms_error_count++;
+		bitforce->hw_errors++;
 		/* empty read buffer */
 		bitforce_clear_buffer(bitforce);
 	}
