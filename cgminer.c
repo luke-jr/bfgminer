@@ -3090,6 +3090,7 @@ retry:
 		strategies[pool_strategy]);
 	if (pool_strategy == POOL_ROTATE)
 		wlogprint("Set to rotate every %d minutes\n", opt_rotate_period);
+	wlogprint("[F]ailover only %s\n", opt_fail_only ? "enabled" : "disabled");
 	wlogprint("[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
 	wlogprint("[C]hange management strategy [S]witch pool [I]nformation\n");
 	wlogprint("Or press any other key to continue\n");
@@ -3183,6 +3184,9 @@ retry:
 		pool = pools[selected];
 		display_pool_summary(pool);
 		goto retry;
+	} else if (!strncasecmp(&input, "f", 1)) {
+		opt_fail_only ^= true;
+		goto updated;
 	} else
 		clear_logwin();
 
