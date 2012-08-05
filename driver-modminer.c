@@ -110,6 +110,27 @@ modminer_detect()
 #define bailout2(...)  return _bailout(fd, modminer, __VA_ARGS__);
 #define bailout3(...)  _bailout(fd, modminer, __VA_ARGS__);
 
+static bool
+modminer_reopen(struct cgpu_info*modminer)
+{
+	close(modminer->device_fd);
+	int fd = serial_open(modminer->device_path, 0, 10, true);
+	if (unlikely(-1 == fd)) {
+		applog(LOG_ERR, "%s %u: Failed to reopen %s", modminer->api->name, modminer->device_id, modminer->device_path);
+		return false;
+	}
+	modminer->device_fd = fd;
+	return true;
+}
+#define safebailout(...) do {  \
+	bool _safebailoutrv;  \
+	applog(__VA_ARGS__);  \
+	state->work_running = false;  \
+	_safebailoutrv = modminer_reopen(modminer);  \
+	mutex_unlock(&modminer->device_mutex);  \
+	return _safebailoutrv ? 0 : -1;  \
+} while(0)
+
 #define check_magic(L)  do {  \
 	if (1 != fread(buf, 1, 1, f))  \
 		bailout(LOG_ERR, "Error reading ModMiner firmware ('%c')", L);  \
@@ -217,7 +238,7 @@ fd_set fds;
 static bool
 modminer_device_prepare(struct cgpu_info *modminer)
 {
-	int fd = serial_open(modminer->device_path, 0, /*FIXME=-1*/3000, true);
+	int fd = serial_open(modminer->device_path, 0, 10, true);
 	if (unlikely(-1 == fd))
 		bailout(LOG_ERR, "%s %u: Failed to open %s", modminer->api->name, modminer->device_id, modminer->device_path);
 
@@ -256,7 +277,7 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	char fpgaid = thr->device_thread;
-	int fd = modminer->device_fd;
+	int fd;
 	unsigned char cmd[6], buf[1];
 
 	if (state->clock <= 100)
@@ -269,6 +290,7 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 
 	if (needlock)
 		mutex_lock(&modminer->device_mutex);
+	fd = modminer->device_fd;
 	if (6 != write(fd, cmd, 6))
 		bailout2(LOG_ERR, "%s %u.%u: Error writing (set clock speed)", modminer->api->name, modminer->device_id, fpgaid);
 	if (serial_read(fd, &buf, 1) != 1)
@@ -376,11 +398,12 @@ fd_set fds;
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	char fpgaid = thr->device_thread;
-	int fd = modminer->device_fd;
+	int fd;
 
 	char buf[1];
 
 	mutex_lock(&modminer->device_mutex);
+	fd = modminer->device_fd;
 	if (46 != write(fd, state->next_work_cmd, 46))
 		bailout2(LOG_ERR, "%s %u.%u: Error writing (start work)", modminer->api->name, modminer->device_id, fpgaid);
 	gettimeofday(&state->tv_workstart, NULL);
@@ -399,7 +422,7 @@ modminer_process_results(struct thr_info*thr)
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	char fpgaid = thr->device_thread;
-	int fd = modminer->device_fd;
+	int fd;
 	struct work *work = &state->running_work;
 
 	char cmd[2], temperature;
@@ -410,6 +433,12 @@ modminer_process_results(struct thr_info*thr)
 	cmd[1] = fpgaid;
 
 	mutex_lock(&modminer->device_mutex);
+#ifdef WIN32
+	/* Workaround for bug in Windows driver */
+	if (!modminer_reopen(modminer))
+		return -1;
+#endif
+	fd = modminer->device_fd;
 	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 1) == 1)
 	{
 		state->temp = temperature;
@@ -437,11 +466,9 @@ modminer_process_results(struct thr_info*thr)
 	iter = 200;
 	while (1) {
 		if (write(fd, cmd, 2) != 2)
-		{
-			bailout3(LOG_ERR, "%s %u.%u: Error reading (get nonce)", modminer->api->name, modminer->device_id, fpgaid);
-			return -1;
-		}
-		serial_read(fd, &nonce, 4);
+			safebailout(LOG_ERR, "%s %u: Error writing (get nonce %u)", modminer->api->name, modminer->device_id, fpgaid);
+		if (4 != serial_read(fd, &nonce, 4))
+			safebailout(LOG_ERR, "%s %u: Short read (get nonce %u)", modminer->api->name, modminer->device_id, fpgaid);
 		mutex_unlock(&modminer->device_mutex);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
 			state->no_nonce_counter = 0;
@@ -466,6 +493,7 @@ modminer_process_results(struct thr_info*thr)
 		if (work_restart(thr) || !--iter)
 			break;
 		mutex_lock(&modminer->device_mutex);
+		fd = modminer->device_fd;
 	}
 
 	struct timeval tv_workend, elapsed;
