@@ -1891,7 +1891,8 @@ function display()
 			$miner = $parts[0];
 			$port = $parts[1];
 
-			$preprocess = $arg;
+			if ($readonly !== true)
+				$preprocess = $arg;
 		}
 	}
  }
