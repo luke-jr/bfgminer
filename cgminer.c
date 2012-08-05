@@ -2572,6 +2572,8 @@ void switch_pools(struct pool *selected)
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
+
+	queue_request(NULL, false);
 }
 
 static void discard_work(struct work *work)
