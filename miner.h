@@ -706,9 +706,11 @@ struct curl_ent {
 	struct timeval tv;
 };
 
+/* Disabled needs to be the lowest enum as a freshly calloced value will then
+ * equal disabled */
 enum pool_enable {
-	POOL_ENABLED,
 	POOL_DISABLED,
+	POOL_ENABLED,
 	POOL_REJECTING,
 };
 
