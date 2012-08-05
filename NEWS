@@ -1,5 +1,6 @@
 BFGMiner Version 2.6.2 - Future
 
+- Count likely throttling episodes on bitforce devices as hardware errors.
 - Style cleanups.
 - Make pool_disabled the first in the enums == 0, fixing the pool enabled count
 which compares if value is not enabled before enabling it.
