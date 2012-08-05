@@ -150,8 +150,7 @@ static char bitforce_autodetect_ftdi()
 	FT_STATUS ftStatus;
 	DWORD numDevs;
 	HMODULE dll = LoadLibrary("FTD2XX.DLL");
-	if (!dll)
-	{
+	if (!dll) {
 		applog(LOG_DEBUG, "FTD2XX.DLL failed to load, not using FTDI bitforce autodetect");
 		return 0;
 	}
@@ -161,8 +160,7 @@ static char bitforce_autodetect_ftdi()
 	LOAD_SYM(FT_Close);
 	
 	ftStatus = FT_ListDevices(&numDevs, NULL, FT_LIST_NUMBER_ONLY);
-	if (ftStatus != FT_OK)
-	{
+	if (ftStatus != FT_OK) {
 		applog(LOG_DEBUG, "FTDI device count failed, not using FTDI bitforce autodetect");
 nogood:
 		dlclose(dll);
@@ -177,8 +175,7 @@ nogood:
 		bufptrs[i] = &buf[i * 65];
 	bufptrs[numDevs] = NULL;
 	ftStatus = FT_ListDevices(bufptrs, &numDevs, FT_LIST_ALL | FT_OPEN_BY_DESCRIPTION);
-	if (ftStatus != FT_OK)
-	{
+	if (ftStatus != FT_OK) {
 		applog(LOG_DEBUG, "FTDI device list failed, not using FTDI bitforce autodetect");
 		goto nogood;
 	}
@@ -186,8 +183,7 @@ nogood:
 	char devpath[] = "\\\\.\\COMnnnnn";
 	char *devpathnum = &devpath[7];
 	char found = 0;
-	for (i = numDevs; i > 0; )
-	{
+	for (i = numDevs; i > 0; ) {
 		--i;
 		bufptrs[i][64] = '\0';
 		
