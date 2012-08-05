@@ -2339,7 +2339,7 @@ static void recruit_curl(struct pool *pool)
 	struct curl_ent *ce = calloc(sizeof(struct curl_ent), 1);
 
 	ce->curl = curl_easy_init();
-	if (unlikely(!ce->curl || !ce))
+	if (unlikely(!ce || !ce->curl))
 		quit(1, "Failed to init in recruit_curl");
 
 	list_add(&ce->node, &pool->curlring);
@@ -2376,6 +2376,8 @@ static struct curl_ent *pop_curl_entry(struct pool *pool)
 static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 {
 	mutex_lock(&pool->pool_lock);
+	if (!ce || !ce->curl)
+		quit(1, "Attempted to add NULL in push_curl_entry");
 	list_add_tail(&ce->node, &pool->curlring);
 	gettimeofday(&ce->tv, NULL);
 	pthread_cond_signal(&pool->cr_cond);
@@ -5236,6 +5238,15 @@ void quit(int status, const char *format, ...)
 	}
 	fprintf(stderr, "\n");
 	fflush(stderr);
+
+	if (status) {
+		const char *ev = getenv("__BFGMINER_SEGFAULT_ERRQUIT");
+		if (unlikely(ev && ev[0] && ev[0] != '0')) {
+			const char **p = NULL;
+			// NOTE debugger can bypass with: p = &p
+			*p = format;  // Segfault, hopefully dumping core
+		}
+	}
 
 #if defined(unix)
 	if (forkpid > 0) {
