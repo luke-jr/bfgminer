@@ -2948,11 +2948,11 @@ void write_config(FILE *fcfg)
 		fputs("\",\n\"lookup-gap\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].lookup_gap);
+				(int)gpus[i].opt_lg);
 		fputs("\",\n\"thread-concurrency\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].thread_concurrency);
+				(int)gpus[i].opt_tc);
 		fputs("\",\n\"shaders\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
