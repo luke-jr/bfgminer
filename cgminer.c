@@ -2944,6 +2944,20 @@ void write_config(FILE *fcfg)
 					break;
 			}
 		}
+#ifdef USE_SCRYPT
+		fputs("\",\n\"lookup-gap\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
+				(int)gpus[i].lookup_gap);
+		fputs("\",\n\"thread-concurrency\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
+				(int)gpus[i].thread_concurrency);
+		fputs("\",\n\"shaders\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
+				(int)gpus[i].shaders);
+#endif
 #ifdef HAVE_ADL
 		fputs("\",\n\"gpu-engine\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
