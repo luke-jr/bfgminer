@@ -4361,6 +4361,15 @@ void quit(int status, const char *format, ...)
 	fprintf(stderr, "\n");
 	fflush(stderr);
 
+	if (status) {
+		const char *ev = getenv("__BFGMINER_SEGFAULT_ERRQUIT");
+		if (unlikely(ev && ev[0] && ev[0] != '0')) {
+			const char **p = NULL;
+			// NOTE debugger can bypass with: p = &p
+			*p = format;  // Segfault, hopefully dumping core
+		}
+	}
+
 #if defined(unix)
 	if (forkpid > 0) {
 		kill(forkpid, SIGTERM);
