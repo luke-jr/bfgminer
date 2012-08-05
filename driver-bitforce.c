@@ -61,7 +61,7 @@ enum {
 struct device_api bitforce_api;
 
 // Code must deal with a timeout
-#define BFopen(devpath)  serial_open(devpath, 0, 10, true)
+#define BFopen(devpath)  serial_open(devpath, 0, 300, true)
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {
@@ -85,7 +85,7 @@ static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 
 static bool bitforce_detect_one(const char *devpath)
 {
-	int fdDev = BFopen(devpath);
+	int fdDev = serial_open(devpath, 0, 10, true);
 	struct cgpu_info *bitforce;
 	char pdevbuf[0x100];
 	char *s;
