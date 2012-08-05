@@ -1,3 +1,34 @@
+Version 2.6.3 - August 5, 2012
+
+- Style cleanups.
+- Use FTD2XX.DLL on Windows to autodetect BitFORCE SHA256 devices.
+- Make pool_disabled the first in the enums == 0, fixing the pool enabled count
+which compares if value is not enabled before enabling it.
+- Correct writing of scrypt parameters to config file based on command line
+parameters only.
+- Use different variables for command line specified lookup gap and thread
+concurrency to differentiate user defined versus auto chosen values.
+- Queue a request on pool switch in case we have no work from the new pool yet.
+- Display failover only mode in pool menu and allow it to be toggled live.
+- Reinstate check for system queueing lag when the current pool's queue is maxed
+out, there is no staged work, and the work is needed now.
+- There is no need for pool active testing to be mandatory any more with queue
+request changes.
+- Fix harmless warnings.
+- Check the current staged and global queued as well before queueing requests.
+Discard stales before ageing work in the watchdog thread. Queue requests after
+discarding and ageing work in watchdog thread. Display accurate global queued in
+curses output. Reuse variable in age_work().
+- The queueing mechanism has become a complex state machine that is no longer
+predictable. Rewrite it from scratch watching only current queues in flight and
+staged work available on a pool by pool basis.
+- API remove unused warning in non-GPU compile
+- api.c in linux allow to open a closed socket in TIME_WAIT
+- Queue an extra request whenever staged work drops below mining thread count in
+hash_pop.
+- Update debian package configs to v2.6.2
+
+
 Version 2.6.2 - August 3, 2012
 
 - Scrypt mining does not support block testing yet so don't try to print it.
