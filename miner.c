@@ -2782,6 +2782,8 @@ void switch_pools(struct pool *selected)
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
+
+	queue_request(NULL, false);
 }
 
 static void discard_work(struct work *work)
@@ -3222,6 +3224,20 @@ void write_config(FILE *fcfg)
 					break;
 			}
 		}
+#ifdef USE_SCRYPT
+		fputs("\",\n\"lookup-gap\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
+				(int)gpus[i].opt_lg);
+		fputs("\",\n\"thread-concurrency\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
+				(int)gpus[i].opt_tc);
+		fputs("\",\n\"shaders\" : \"", fcfg);
+		for(i = 0; i < nDevs; i++)
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
+				(int)gpus[i].shaders);
+#endif
 #ifdef HAVE_ADL
 		fputs("\",\n\"gpu-engine\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
@@ -3372,6 +3388,7 @@ retry:
 		strategies[pool_strategy]);
 	if (pool_strategy == POOL_ROTATE)
 		wlogprint("Set to rotate every %d minutes\n", opt_rotate_period);
+	wlogprint("[F]ailover only %s\n", opt_fail_only ? "enabled" : "disabled");
 	wlogprint("[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
 	wlogprint("[C]hange management strategy [S]witch pool [I]nformation\n");
 	wlogprint("Or press any other key to continue\n");
@@ -3465,6 +3482,9 @@ retry:
 		pool = pools[selected];
 		display_pool_summary(pool);
 		goto retry;
+	} else if (!strncasecmp(&input, "f", 1)) {
+		opt_fail_only ^= true;
+		goto updated;
 	} else
 		clear_logwin();
 
@@ -4027,18 +4047,25 @@ bool queue_request(struct thr_info *thr, bool needed)
 {
 	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
 	struct workio_cmd *wc;
-	bool ret = true;
+	bool lag = false;
 
 	cq = current_queued();
 	cs = current_staged();
 	ts = total_staged();
 	tq = global_queued();
 
-	/* Test to make sure we have enough work for pools without rolltime
-	 * and enough original work for pools with rolltime */
-	if (((cs || cq >= opt_queue) && ts >= maxq) ||
-	    ((cs || cq) && tq >= maxq))
-		return true;
+	if (needed && cq >= maxq && !ts && !opt_fail_only) {
+		/* If we're queueing work faster than we can stage it, consider
+		 * the system lagging and allow work to be gathered from
+		 * another pool if possible */
+		lag = true;
+	} else {
+		/* Test to make sure we have enough work for pools without rolltime
+		 * and enough original work for pools with rolltime */
+		if (((cs || cq >= opt_queue) && ts >= maxq) ||
+		    ((cs || cq) && tq >= maxq))
+			return true;
+	}
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -4049,6 +4076,7 @@ bool queue_request(struct thr_info *thr, bool needed)
 
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
+	wc->lagging = lag;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
@@ -4076,7 +4104,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 		work = staged_work;
 		HASH_DEL(staged_work, work);
 		work->pool->staged--;
-		if (HASH_COUNT(staged_work) < mining_threads)
+		if (HASH_COUNT(staged_work) < (unsigned int)mining_threads)
 			queue = true;
 	}
 	mutex_unlock(stgd_lock);

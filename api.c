@@ -177,7 +177,9 @@ static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
 static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
+#ifdef HAVE_OPENCL
 static const char *DYNAMIC = _DYNAMIC;
+#endif
 
 static const char *YES = "Y";
 static const char *NO = "N";
@@ -3123,6 +3125,20 @@ void api(int api_thr_id)
 	}
 
 	serv.sin_port = htons(port);
+
+#ifndef WIN32
+	// On linux with SO_REUSEADDR, bind will get the port if the previous
+	// socket is closed (even if it is still in TIME_WAIT) but fail if
+	// another program has it open - which is what we want
+	int optval = 1;
+	// If it doesn't work, we don't really care - just show a debug message
+	if (SOCKETFAIL(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval))))
+		applog(LOG_DEBUG, "API setsockopt SO_REUSEADDR failed (ignored): %s", SOCKERRMSG);
+#else
+	// On windows a 2nd program can bind to a port>1024 already in use unless
+	// SO_EXCLUSIVEADDRUSE is used - however then the bind to a closed port
+	// in TIME_WAIT will fail until the timeout - so we leave the options alone
+#endif
 
 	// try for more than 1 minute ... in case the old one hasn't completely gone yet
 	bound = 0;

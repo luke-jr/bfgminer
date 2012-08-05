@@ -384,8 +384,8 @@ struct cgpu_info {
 	cl_ulong max_alloc;
 
 #ifdef USE_SCRYPT
-	int lookup_gap;
-	int thread_concurrency;
+	int opt_lg, lookup_gap;
+	int opt_tc, thread_concurrency;
 	int shaders;
 #endif
 	struct timeval tv_gpustart;;
@@ -746,9 +746,11 @@ struct curl_ent {
 	struct timeval tv;
 };
 
+/* Disabled needs to be the lowest enum as a freshly calloced value will then
+ * equal disabled */
 enum pool_enable {
-	POOL_ENABLED,
 	POOL_DISABLED,
+	POOL_ENABLED,
 	POOL_REJECTING,
 };
 
