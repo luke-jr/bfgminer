@@ -1,14 +1,20 @@
 BFGMiner Version 2.6.2 - Future
 
+- modminer: Workaround Windows driver failures
 - Count likely throttling episodes on bitforce devices as hardware errors.
+- Bugfix: bitforce: Increase serial read timeout to 30 seconds during actual
+mining, to tolerate more throttling
 - Style cleanups.
 - Make pool_disabled the first in the enums == 0, fixing the pool enabled count
 which compares if value is not enabled before enabling it.
 - Correct writing of scrypt parameters to config file based on command line
 parameters only.
+- Add scrypt support while writing conf
 - Use different variables for command line specified lookup gap and thread
 concurrency to differentiate user defined versus auto chosen values.
 - Queue a request on pool switch in case we have no work from the new pool yet.
+- API remove unused warning in non-GPU compile
+- api.c in linux allow to open a closed socket in TIME_WAIT
 - Display failover only mode in pool menu and allow it to be toggled live.
 - Reinstate check for system queueing lag when the current pool's queue is maxed
 out, there is no staged work, and the work is needed now.
@@ -20,11 +26,13 @@ curses output. Reuse variable in age_work().
 - The queueing mechanism has become a complex state machine that is no longer
 predictable. Rewrite it from scratch watching only current queues in flight and
 staged work available on a pool by pool basis.
-- API remove unused warning in non-GPU compile
-- api.c in linux allow to open a closed socket in TIME_WAIT
+- Update debian package configs to v2.6.2
 - Queue an extra request whenever staged work drops below mining thread count in
 hash_pop.
-- Update debian package configs to v2.6.2
+- Bugfix: Initialize logwin to 1 line high temporarily, to avert PDCurses crash
+- Enable FPGA support by default, as long as their dependencies are met
+- Bugfix: modminer: Search for *ModMiner* in udev ID_MODEL
+- make-release: build with --enable-scrypt
 - miner.php support custom report section joins
 - ICA default fpga_count to work_division if specified
 - FPGA-README document new hidden --icarus-options
