@@ -1,5 +1,23 @@
 BFGMiner Version 2.6.2 - Future
 
+- modminer: Shorten upload warning message to fit better
+- modminer: Sending a "ping" first, to workaround bug in new firmware betas
+- modminer: Include Hardware Errors and Valid Nonces in extra device status
+- Bugfix: modminer: Calculate bad-nonce percentage based only on the same
+FPGA's hardware errors, accurately
+- modminer: Show bitstream upload progress in statline, and only report to log
+every 10%
+- modminer: Be more verbose about why the clock is getting reduced
+- Document how Icarus golden nonce is handled by other FPGAs
+- Rewrite should_run for sched, to properly handle one-shot schedules spanning
+midnight
+- Bugfix: Check list_empty in pop_curl_entry after condition wait
+- Bugfix: Only add new pools to array after completing basic structure
+initialization
+- If __BFGMINER_SEGFAULT_ERRQUIT is set in the environment, segfault on
+non-zero quit()s
+- Check against NULL pointers getting into curlring
+- modminer: Finish a process results run with a nonce poll, rather than sleep
 - modminer: Workaround Windows driver failures
 - Count likely throttling episodes on bitforce devices as hardware errors.
 - Bugfix: bitforce: Increase serial read timeout to 30 seconds during actual
