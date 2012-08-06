@@ -51,12 +51,12 @@ Dependencies:
 
 CGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
-	--disable-opencl        Override detection and disable building with opencl
+	--disable-opencl        Build without support for OpenCL (default enabled)
 	--disable-adl           Override detection and disable building with adl
-	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
-	--enable-icarus         Compile support for Icarus Board(default disabled)
-	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
-	--enable-ztex           Compile support for Ztex Board(default disabled)
+	--disable-bitforce      Compile support for BitForce (default enabled)
+	--disable-icarus        Compile support for Icarus (default enabled)
+	--disable-modminer      Compile support for ModMiner (default enabled)
+	--disable-ztex          Compile support for Ztex (default if libusb)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
