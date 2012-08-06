@@ -274,38 +274,26 @@ static bool time_before(struct tm *tm1, struct tm *tm2)
 static bool should_run(void)
 {
 	struct timeval tv;
-	struct tm *tm;
+	struct tm tm;
+	bool within_range;
 
 	if (!schedstart.enable && !schedstop.enable)
 		return true;
 
 	gettimeofday(&tv, NULL);
-	tm = localtime(&tv.tv_sec);
-	if (schedstart.enable) {
-		if (!schedstop.enable) {
-			if (time_before(tm, &schedstart.tm))
-				return false;
+	tm = *localtime(&tv.tv_sec);
 
-			/* This is a once off event with no stop time set */
-			schedstart.enable = false;
-			return true;
-		}
-		if (time_before(&schedstart.tm, &schedstop.tm)) {
-			if (time_before(tm, &schedstop.tm) && !time_before(tm, &schedstart.tm))
-				return true;
-			return false;
-		} /* Times are reversed */
-		if (time_before(tm, &schedstart.tm)) {
-			if (time_before(tm, &schedstop.tm))
-				return true;
-			return false;
-		}
-		return true;
-	}
-	/* only schedstop.enable == true */
-	if (!time_before(tm, &schedstop.tm))
-		return false;
-	return true;
+	// NOTE: This is delicately balanced so that should_run is always false if schedstart==schedstop
+	if (time_before(&schedstop.tm, &schedstart.tm))
+		within_range = (time_before(&tm, &schedstop.tm) || !time_before(&tm, &schedstart.tm));
+	else
+		within_range = (time_before(&tm, &schedstop.tm) && !time_before(&tm, &schedstart.tm));
+
+	if (within_range && !schedstop.enable)
+		/* This is a once off event with no stop time set */
+		schedstart.enable = false;
+
+	return within_range;
 }
 
 void get_datestamp(char *f, struct timeval *tv)
@@ -622,7 +610,11 @@ static char *enable_debug(bool *flag)
 static char *set_schedtime(const char *arg, struct schedtime *st)
 {
 	if (sscanf(arg, "%d:%d", &st->tm.tm_hour, &st->tm.tm_min) != 2)
+	{
+		if (strcasecmp(arg, "now"))
 		return "Invalid time set, should be HH:MM";
+	} else
+		schedstop.tm.tm_sec = 0;
 	if (st->tm.tm_hour > 23 || st->tm.tm_min > 59 || st->tm.tm_hour < 0 || st->tm.tm_min < 0)
 		return "Invalid time set.";
 	st->enable = true;
@@ -5609,6 +5601,9 @@ int main(int argc, char *argv[])
 		gpus[i].dynamic = true;
 #endif
 
+	schedstart.tm.tm_sec = 1;
+	schedstop .tm.tm_sec = 1;
+
 	/* parse command line */
 	opt_register_table(opt_config_table,
 			   "Options for both config file and command line");
@@ -5943,6 +5938,10 @@ begin_bench:
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
 	miner_started = total_tv_start;
+	if (schedstart.tm.tm_sec)
+		schedstart.tm = *localtime(&miner_started.tv_sec);
+	if (schedstop.tm.tm_sec)
+		schedstop .tm = *localtime(&miner_started.tv_sec);
 	get_datestamp(datestamp, &total_tv_start);
 
 	// Start threads
