@@ -67,7 +67,7 @@ BFGMiner specific configuration options:
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
 	--disable-ztex          Compile support for Ztex (default if libusb)
-	--enable-scrypt         Compile support for scrypt litecoin mining (default disabled)
+	--enable-scrypt         Compile support for scrypt mining (default disabled)
 	--without-curses        Compile support for curses TUI (default enabled)
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
