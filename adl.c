@@ -241,6 +241,8 @@ void init_adl(int nDevs)
 		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
 		if (result != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
+			if (result == -10)
+				applog(LOG_INFO, "This error says the device is not enabled");
 			continue;
 		}
 
