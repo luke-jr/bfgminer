@@ -27,6 +27,7 @@ git branch -D TMP
 cd "$TMPDIR"
 git archive --prefix "$sw"/ --format tar "$tag" | tar xvp
 cd "$sw"
+NOCONFIGURE=1 \
 ./autogen.sh
 cd ..
 zip -r "$IDIR/${sw}.zip" "$sw"
@@ -37,6 +38,7 @@ for txt in AUTHORS COPYING NEWS README API-README FPGA-README SCRYPT-README; do
 done
 cp -av "bitstreams" "$OUTDIR/"
 cp -av "$IDIR/"ADL_SDK/adl_{defines,sdk,structures}.h "ADL_SDK/"
+NOCONFIGURE=1 \
 ./autogen.sh
 ./configure \
 	--prefix='C:\\Program Files\\BFGMiner\' \
