@@ -231,7 +231,7 @@ fd_set fds;
 
 	int fd = modminer->device_fd;
 
-	applog(LOG_WARNING, "%s %u: Programming %s... DO NOT EXIT CGMINER UNTIL COMPLETE", modminer->api->name, modminer->device_id, modminer->device_path);
+	applog(LOG_WARNING, "%s %u: Programming %s... DO NOT EXIT UNTIL COMPLETE", modminer->api->name, modminer->device_id, modminer->device_path);
 	buf[0] = '\x05';  // Program Bitstream
 	buf[1] = fpgaid;
 	buf[2] = (len >>  0) & 0xff;
