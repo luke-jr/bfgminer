@@ -556,7 +556,7 @@ modminer_process_results(struct thr_info*thr)
 				{
 					// Only reduce clocks if hardware errors are more than ~1% of results
 					modminer_reduce_clock(thr, true);
-					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, modminer->hw_errors * 100 / (state->bad_share_counter + state->good_share_counter));
+					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, state->bad_share_counter * 100 / (state->bad_share_counter + state->good_share_counter));
 				}
 			}
 		}
