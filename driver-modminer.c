@@ -561,7 +561,7 @@ modminer_process_results(struct thr_info*thr)
 			}
 		}
 		else
-		if (++state->no_nonce_counter > 18000) {
+		if (++state->no_nonce_counter > 0x20000) {
 			state->no_nonce_counter = 0;
 			modminer_reduce_clock(thr, true);
 			applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (no nonces)", modminer->api->name, modminer->device_id, fpgaid, state->clock);
