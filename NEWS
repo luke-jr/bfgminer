@@ -1,5 +1,7 @@
 BFGMiner Version 2.6.2 - Future
 
+- Add specific information when ADL detects error -10 saying the device is not
+enabled.
 - modminer: Shorten upload warning message to fit better
 - modminer: Sending a "ping" first, to workaround bug in new firmware betas
 - modminer: Include Hardware Errors and Valid Nonces in extra device status
