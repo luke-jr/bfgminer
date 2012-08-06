@@ -384,6 +384,8 @@ get_modminer_extra_device_status(struct cgpu_info*modminer)
 
 		json_object_set(o, "Temperature", json_integer(state->temp));
 		json_object_set(o, "Frequency", json_real((double)state->clock * 1000000.));
+		json_object_set(o, "Hardware Errors", json_integer(state->bad_share_counter));
+		json_object_set(o, "Valid Nonces", json_integer(state->good_share_counter));
 
 		k[5] = 0x30 + i;
 		json_object_set(info, k, o);
