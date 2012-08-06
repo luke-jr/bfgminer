@@ -430,6 +430,8 @@ get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 		if (state->temp)
 			json_object_set(o, "Temperature", json_integer(state->temp));
 		json_object_set(o, "Frequency", json_real((double)state->clock * 1000000.));
+		json_object_set(o, "Hardware Errors", json_integer(state->bad_share_counter));
+		json_object_set(o, "Valid Nonces", json_integer(state->good_share_counter));
 
 		root = api_add_json(root, k[i], o, false);
 		json_decref(o);
