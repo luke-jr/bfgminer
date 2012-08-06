@@ -560,6 +560,12 @@ static bool icarus_detect_one(const char *devpath)
 		"4df6c356451471139a3afa71e48f544a"
 		"00000000000000000000000000000000"
 		"0000000087320b1a1426674f2fa722ce";
+	/* NOTE: This gets sent to basically every port specified in --scan-serial,
+	 *       even ones that aren't Icarus; be sure they can all handle it, when
+	 *       this is changed...
+	 *       BitForce: Ignores entirely
+	 *       ModMiner: Starts (useless) work, gets back to clean state
+	 */
 
 	const char golden_nonce[] = "000187a2";
 	const uint32_t golden_nonce_val = 0x000187a2;
