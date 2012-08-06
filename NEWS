@@ -1,5 +1,10 @@
-BFGMiner Version 2.6.2 - Future
+BFGMiner Version 2.6.3 - August 6, 2012
 
+- modminer: Relax no-nonces downclocking condition to be more reasonable
+- README: Update scrypt configure option
+- README: Update configure options
+- Bugfix: Display --disable-modminer in configure --help now that it is
+enabled by default
 - Add specific information when ADL detects error -10 saying the device is not
 enabled.
 - modminer: Shorten upload warning message to fit better
