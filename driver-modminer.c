@@ -32,6 +32,7 @@ struct modminer_fpga_state {
 
 	unsigned char clock;
 	int no_nonce_counter;
+	int bad_share_counter;
 	int good_share_counter;
 	time_t last_cutoff_reduced;
 
@@ -546,11 +547,13 @@ modminer_process_results(struct thr_info*thr)
 			}
 			else {
 				++hw_errors;
-				if (++modminer->hw_errors * 100 > 1000 + state->good_share_counter)
+				++modminer->hw_errors;
+				++state->bad_share_counter;
+				if (state->bad_share_counter * 100 > 1000 + state->bad_share_counter + state->good_share_counter)
 				{
 					// Only reduce clocks if hardware errors are more than ~1% of results
 					modminer_reduce_clock(thr, true);
-					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, modminer->hw_errors * 100 / state->good_share_counter);
+					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, modminer->hw_errors * 100 / (state->bad_share_counter + state->good_share_counter));
 				}
 			}
 		}
