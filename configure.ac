@@ -174,7 +174,7 @@ fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
 AC_ARG_ENABLE([modminer],
-	[AC_HELP_STRING([--enable-modminer],[Compile support for ModMiner (default enabled)])],
+	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
 	[modminer=$enableval],
 	[modminer=yes]
 	)
