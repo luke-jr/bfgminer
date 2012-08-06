@@ -22,6 +22,24 @@
 
 struct device_api modminer_api;
 
+struct modminer_fpga_state {
+	bool work_running;
+	struct work running_work;
+	struct timeval tv_workstart;
+	uint32_t hashes;
+
+	char next_work_cmd[46];
+
+	unsigned char clock;
+	int no_nonce_counter;
+	int good_share_counter;
+	time_t last_cutoff_reduced;
+
+	unsigned char temp;
+
+	unsigned char pdone;
+};
+
 static inline bool
 _bailout(int fd, struct cgpu_info*modminer, int prio, const char *fmt, ...)
 {
@@ -139,10 +157,11 @@ select(fd+1, &fds, NULL, NULL, NULL);  \
 static bool
 modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 {
+	struct modminer_fpga_state *state = modminer->thr[0]->cgpu_data;
 fd_set fds;
 	char buf[0x100];
 	unsigned char *ubuf = (unsigned char*)buf;
-	unsigned long len;
+	unsigned long len, flen;
 	char *p;
 	const char *fwfile = BITSTREAM_FILENAME;
 	char fpgaid = 4;  // "all FPGAs"
@@ -183,6 +202,7 @@ fd_set fds;
 	if (1 != fread(buf, 4, 1, f))
 		bailout(LOG_ERR, "Error reading ModMiner firmware (data len)");
 	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
+	flen = len;
 	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
 
 	int fd = modminer->device_fd;
@@ -198,12 +218,19 @@ fd_set fds;
 		bailout2(LOG_ERR, "%s %u: Error programming %s (cmd)", modminer->api->name, modminer->device_id, modminer->device_path);
 	status_read("cmd reply");
 	ssize_t buflen;
+	char nextstatus = 10;
 	while (len) {
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
 			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", modminer->api->name, modminer->device_id, modminer->device_path, len);
 		if (write(fd, buf, buflen) != buflen)
 			bailout2(LOG_ERR, "%s %u: Error programming %s (data)", modminer->api->name, modminer->device_id,  modminer->device_path);
+		state->pdone = 100 - ((len * 100) / flen);
+		if (state->pdone >= nextstatus)
+		{
+			nextstatus += 10;
+			applog(LOG_WARNING, "%s %u: Programming %s... %d%% complete...", modminer->api->name, modminer->device_id, modminer->device_path, state->pdone);
+		}
 		status_read("status");
 		len -= buflen;
 	}
@@ -310,6 +337,7 @@ modminer_fpga_init(struct thr_info *thr)
 	}
 	else
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)", modminer->api->name, modminer->device_id, fpgaid);
+	state->pdone = 101;
 
 	state->clock = 212;  // Will be reduced to 210 by modminer_reduce_clock
 	modminer_reduce_clock(thr, false);
@@ -329,6 +357,14 @@ get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 	int tc = modminer->threads;
 	bool havetemp = false;
 	int i;
+
+	char pdone = ((struct modminer_fpga_state*)(modminer->thr[0]->cgpu_data))->pdone;
+	if (pdone != 101) {
+		sprintf(&info[1], "%3d%%", pdone);
+		info[5] = ' ';
+		strcat(buf, info);
+		return;
+	}
 
 	if (tc > 4)
 		tc = 4;
