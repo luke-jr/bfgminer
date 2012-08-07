@@ -20,6 +20,9 @@ with the --scrypt option, BFGMiner will fail IN RANDOM WAYS. They are all due
 to parameters being outside what the GPU can cope with. Not giving BFGMiner a
 hint as to your GPU type, it will hardly ever perform well.
 
+NOTE that if it does not fail at startup, the presence of hardware errors (HW)
+are a sure sign that you have set the parameters too high.
+
 
 Step 1 on linux:
 export GPU_MAX_ALLOC_PERCENT=100
@@ -77,7 +80,7 @@ reason this is crucial is that too high an intensity can actually be
 disastrous with scrypt because it CAN run out of ram. Intensities over 13
 start writing over the same ram and it is highly dependent on the GPU, but they
 can start actually DECREASING your hashrate, or even worse, start producing
-garbage with rejects skyrocketing. The low level detail is that intensity is
+garbage with HW errors skyrocketing. The low level detail is that intensity is
 only guaranteed up to the power of 2 that most closely matches the thread
 concurrency. i.e. a thread concurrency of 6144 has 8192 as the nearest power
 of two above it, thus as 2^13=8192, that is an intensity of 13.
@@ -118,7 +121,7 @@ default value, and then start overclocking as you are running it, you should
 find a sweet spot where the hashrate peaks and then it might actually drop if
 you increase the engine clock speed further. Unless you wish to run with a
 dynamic intensity, do not go over 13 without testing it while it's running to
-see that it increases hashrate AND utility WITHOUT increasing your rejects.
+see that it increases hashrate AND utility WITHOUT increasing your HW errors.
 
 
 Suggested values for 7970 for example:
