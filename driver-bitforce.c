@@ -350,7 +350,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string/timed out", bitforce->device_id);
-		bitforce->temp = 0;
+		bitforce->hw_errors++;
 		return false;
 	}
 
