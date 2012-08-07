@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "findnonce.h"
+#include "scrypt.h"
 
 const uint32_t SHA256_K[64] = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -173,7 +174,7 @@ struct pc_data {
 	pthread_t pth;
 };
 
-static void send_nonce(struct pc_data *pcd, cl_uint nonce)
+static void send_sha_nonce(struct pc_data *pcd, cl_uint nonce)
 {
 	dev_blk_ctx *blk = &pcd->work->blk;
 	struct thr_info *thr = pcd->thr;
@@ -220,6 +221,19 @@ static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 	}
 }
 
+static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
+{
+	struct thr_info *thr = pcd->thr;
+	struct work *work = pcd->work;
+
+	if (scrypt_test(work->data, work->target, nonce))
+		submit_nonce(thr, pcd->work, nonce);
+	else {
+		applog(LOG_INFO, "Scrypt error, review settings");
+		thr->cgpu->hw_errors++;
+	}
+}
+
 static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
@@ -233,13 +247,11 @@ static void *postcalc_hash(void *userdata)
 
 		if (nonce) {
 			applog(LOG_DEBUG, "OCL NONCE %u", nonce);
-#ifdef USE_SCRYPT
 			if (opt_scrypt)
-				submit_nonce(thr, pcd->work, nonce);
+				send_scrypt_nonce(pcd, nonce);
 			else
-#endif
-				send_nonce(pcd, nonce);
-		nonces++;
+				send_sha_nonce(pcd, nonce);
+			nonces++;
 		}
 	}
 
