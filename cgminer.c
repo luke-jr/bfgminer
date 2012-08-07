@@ -2185,10 +2185,8 @@ static void recruit_curl(struct pool *pool)
 	if (unlikely(!ce->curl || !ce))
 		quit(1, "Failed to init in recruit_curl");
 
-	mutex_lock(&pool->pool_lock);
 	list_add(&ce->node, &pool->curlring);
 	pool->curls++;
-	mutex_unlock(&pool->pool_lock);
 	applog(LOG_DEBUG, "Recruited curl %d for pool %d", pool->curls, pool->pool_no);
 }
 
