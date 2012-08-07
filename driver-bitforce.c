@@ -38,6 +38,10 @@ enum {
 	FT_OK,
 };
 
+// Code must deal with a timeout. Make it 1 second on windows, 0.1 on linux.
+#define BFopen(devpath)  serial_open(devpath, 0, 10, true)
+#else /* WIN32 */
+#define BFopen(devpath)  serial_open(devpath, 0, 1, true)
 #endif /* WIN32 */
 
 #include "compat.h"
@@ -59,9 +63,6 @@ enum {
 #define KNAME_RANGE "nonce range"
 
 struct device_api bitforce_api;
-
-// Code must deal with a timeout
-#define BFopen(devpath)  serial_open(devpath, 0, 1, true)
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {
