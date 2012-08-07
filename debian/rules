@@ -9,7 +9,7 @@ override_dh_auto_configure:
 	unzip ADL_SDK/adl.zip include/* -d ADL_SDK/;
 	mv ADL_SDK/include/* ADL_SDK/;
 	rm -rf ADL_SDK/adl.zip ADL_SDK/include/;
-	dh_auto_configure -- --enable-ztex --enable-bitforce --enable-icarus
+	dh_auto_configure -- --enable-ztex --enable-bitforce --enable-icarus --enable-cpumining
 
 
 override_dh_auto_install:
