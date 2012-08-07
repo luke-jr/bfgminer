@@ -635,6 +635,12 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
 		bitforce->dev_comms_error_count++;
 		bitforce->hw_errors++;
+		BFclose(bitforce->device_fd);
+		int fd = bitforce->device_fd = BFopen(bitforce->device_path);
+		if (fd == -1) {
+			applog(LOG_ERR, "BFL%i: Error reopening");
+			return -1;
+		}
 		/* empty read buffer */
 		bitforce_clear_buffer(bitforce);
 	}
