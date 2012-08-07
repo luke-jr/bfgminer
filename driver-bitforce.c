@@ -144,9 +144,16 @@ static bool bitforce_detect_one(const char *devpath)
 	}  \
 } while(0)
 
-static char bitforce_autodetect_ftdi()
-{
 #ifdef WIN32
+static char bitforce_autodetect_ftdi(void)
+{
+	char buf[65 * numDevs];
+	char*bufptrs[numDevs + 1];
+	char devpath[] = "\\\\.\\COMnnnnn";
+	char *devpathnum = &devpath[7];
+	char found = 0;
+	int i;
+
 	FT_STATUS ftStatus;
 	DWORD numDevs;
 	HMODULE dll = LoadLibrary("FTD2XX.DLL");
@@ -162,27 +169,19 @@ static char bitforce_autodetect_ftdi()
 	ftStatus = FT_ListDevices(&numDevs, NULL, FT_LIST_NUMBER_ONLY);
 	if (ftStatus != FT_OK) {
 		applog(LOG_DEBUG, "FTDI device count failed, not using FTDI bitforce autodetect");
-nogood:
-		dlclose(dll);
-		return 0;
+		goto out;
 	}
 	applog(LOG_DEBUG, "FTDI reports %u devices", (unsigned)numDevs);
 	
-	char buf[65 * numDevs];
-	char*bufptrs[numDevs + 1];
-	int i;
 	for (i = 0; i < numDevs; ++i)
 		bufptrs[i] = &buf[i * 65];
 	bufptrs[numDevs] = NULL;
 	ftStatus = FT_ListDevices(bufptrs, &numDevs, FT_LIST_ALL | FT_OPEN_BY_DESCRIPTION);
 	if (ftStatus != FT_OK) {
 		applog(LOG_DEBUG, "FTDI device list failed, not using FTDI bitforce autodetect");
-		goto nogood;
+		goto out;
 	}
 	
-	char devpath[] = "\\\\.\\COMnnnnn";
-	char *devpathnum = &devpath[7];
-	char found = 0;
 	for (i = numDevs; i > 0; ) {
 		--i;
 		bufptrs[i][64] = '\0';
@@ -204,14 +203,19 @@ nogood:
 		if (bitforce_detect_one(devpath))
 			++found;
 	}
+
+out:
 	dlclose(dll);
 	return found;
-#else  /* NOT WIN32 */
-	return 0;
-#endif
 }
+#else
+static char bitforce_autodetect_ftdi(void)
+{
+	return 0;
+}
+#endif
 
-static char bitforce_detect_auto()
+static char bitforce_detect_auto(void)
 {
 	return (serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
 		serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
@@ -219,7 +223,7 @@ static char bitforce_detect_auto()
 		0);
 }
 
-static void bitforce_detect()
+static void bitforce_detect(void)
 {
 	serial_detect_auto(bitforce_api.dname, bitforce_detect_one, bitforce_detect_auto);
 }
