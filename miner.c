@@ -2351,13 +2351,14 @@ static struct curl_ent *pop_curl_entry(struct pool *pool)
 	struct curl_ent *ce;
 
 	mutex_lock(&pool->pool_lock);
+retry:
 	if (!pool->curls)
 		recruit_curl(pool);
-	else
-	while (list_empty(&pool->curlring)) {
-		if (pool->submit_fail || pool->curls >= curl_limit)
+	else if (list_empty(&pool->curlring)) {
+		if (pool->submit_fail || pool->curls >= curl_limit) {
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
-		else
+			goto retry;
+		} else
 			recruit_curl(pool);
 	}
 	ce = list_entry(pool->curlring.next, struct curl_ent, node);
@@ -4853,12 +4854,13 @@ static void reap_curl(struct pool *pool)
 {
 	struct curl_ent *ent, *iter;
 	struct timeval now;
+	int reaped = 0;
 
 	gettimeofday(&now, NULL);
 	mutex_lock(&pool->pool_lock);
 	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
 		if (now.tv_sec - ent->tv.tv_sec > 60) {
-			applog(LOG_DEBUG, "Reaped curl %d from pool %d", pool->curls, pool->pool_no);
+			reaped++;
 			pool->curls--;
 			list_del(&ent->node);
 			curl_easy_cleanup(ent->curl);
@@ -4866,6 +4868,8 @@ static void reap_curl(struct pool *pool)
 		}
 	}
 	mutex_unlock(&pool->pool_lock);
+	if (reaped)
+		applog(LOG_DEBUG, "Reaped %d curl%s from pool %d", reaped, reaped > 1 ? "s" : "", pool->pool_no);
 }
 
 static void *watchpool_thread(void __maybe_unused *userdata)
