@@ -46,7 +46,7 @@ bfgminer_SOURCES += adl.c adl.h adl_functions.h
 bfgminer_SOURCES += *.cl
 
 if HAS_SCRYPT
-bfgminer_SOURCES += scrypt.c
+bfgminer_SOURCES += scrypt.c scrypt.h
 endif
 
 if HAS_CPUMINE
