@@ -146,13 +146,13 @@ static bool bitforce_detect_one(const char *devpath)
 } while(0)
 
 #ifdef WIN32
-static char bitforce_autodetect_ftdi(void)
+static int bitforce_autodetect_ftdi(void)
 {
 	char buf[65 * numDevs];
 	char*bufptrs[numDevs + 1];
 	char devpath[] = "\\\\.\\COMnnnnn";
 	char *devpathnum = &devpath[7];
-	char found = 0;
+	int found = 0;
 	int i;
 
 	FT_STATUS ftStatus;
@@ -210,13 +210,13 @@ out:
 	return found;
 }
 #else
-static char bitforce_autodetect_ftdi(void)
+static int bitforce_autodetect_ftdi(void)
 {
 	return 0;
 }
 #endif
 
-static char bitforce_detect_auto(void)
+static int bitforce_detect_auto(void)
 {
 	return (serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
 		serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
