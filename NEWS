@@ -1,3 +1,26 @@
+Version 2.6.4 - August 7, 2012
+
+- Convert the serial autodetect functions to use int instead of char to
+enumerate devices.
+- Make the serial open timeout for BFL generically 1 second on windows.
+- Deuglify windows autodetect code for BFL.
+- There is no point zeroing temperature in BFL if we fail to get a response, and
+we should register it as a HW error, suggesting throttling.
+- Update SCRYPT README with information about HW errors.
+- Use the scrypt CPU code to confirm results from OCL code, and mark failures as
+HW errors, making it easier to tune scrypt parameters.
+- We may as well leave one curl still available per pool instead of reaping the
+last one.
+- Need to recheck the pool->curls count on regaining the pool lock after the
+pthread conditional wait returns.
+- Display reaped debug message outside mutex lock to avoid recursive locking.
+- Add specific information when ADL detects error -10 saying the device is not
+enabled.
+- api.c update API start message and include port number
+- miner.php ignore arg when readonly
+- miner.php allow pool inputs: delete, addpool, poolpriority
+
+
 Version 2.6.3 - August 5, 2012
 
 - Count likely throttling episodes on bitforce devices as hardware errors.
