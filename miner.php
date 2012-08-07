@@ -3,7 +3,7 @@ session_start();
 #
 global $miner, $port, $readonly, $notify, $rigs;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
-global $checklastshare, $hidefields;
+global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
 global $allowcustompages, $customsummarypages;
 global $miner_font_family, $miner_font_size;
@@ -23,12 +23,17 @@ $readonly = false;
 #  coz it doesn't have notify - it just shows the error status table
 $notify = true;
 #
-# set $checklastshare to true to do the following checks:
+# Set $checklastshare to true to do the following checks:
 # If a device's last share is 12x expected ago then display as an error
 # If a device's last share is 8x expected ago then display as a warning
 # If either of the above is true, also display the whole line highlighted
 # This assumes shares are 1 difficulty shares
 $checklastshare = true;
+#
+# Set $poolinputs to true to show the input fields for adding a pool
+# and changing the pool priorities
+# N.B. also if $readonly is true, it will not display the fields
+$poolinputs = false;
 #
 # Set $rigs to an array of your cgminer rigs that are running
 #  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
@@ -197,7 +202,7 @@ function getdom($domname)
 function htmlhead($checkapi, $rig, $pg = null)
 {
  global $miner_font_family, $miner_font_size;
- global $error, $readonly, $here;
+ global $error, $readonly, $poolinputs, $here;
  global $ignorerefresh, $autorefresh;
 
  $extraparams = '';
@@ -252,6 +257,8 @@ if ($ignorerefresh == false)
 echo "function prc(a,m){pr('&arg='+a,m)}
 function prs(a,r){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a+'&rig='+r,m)}
 function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v+'&rig='+r,m)}\n";
+	if ($poolinputs === true)
+		echo "function cbs(s){var t=s.replace(/\\\\/g,'\\\\\\\\'); return t.replace(/,/g, '\\\\,')}\nfunction pla(r){var u=document.getElementById('purl').value;var w=document.getElementById('pwork').value;var p=document.getElementById('ppass').value;pr('&rig='+r+'&arg=addpool|'+cbs(u)+','+cbs(w)+','+cbs(p),'Add Pool '+u)}\nfunction psp(r){var p=document.getElementById('prio').value;pr('&rig='+r+'&arg=poolpriority|'+p,'Set Pool Priorities to '+p)}\n";
  }
 ?>
 </script>
@@ -315,6 +322,46 @@ function readsockline($socket)
  return $line;
 }
 #
+function api_convert_escape($str)
+{
+ $res = '';
+ $len = strlen($str);
+ for ($i = 0; $i < $len; $i++)
+ {
+	$ch = substr($str, $i, 1);
+	if ($ch != '\\' || $i == ($len-1))
+		$res .= $ch;
+	else
+	{
+		$i++;
+		$ch = substr($str, $i, 1);
+		switch ($ch)
+		{
+		case '|':
+			$res .= "\1";
+			break;
+		case '\\':
+			$res .= "\2";
+			break;
+		case '=':
+			$res .= "\3";
+			break;
+		case ',':
+			$res .= "\4";
+			break;
+		default:
+			$res .= $ch;
+		}
+	}
+ }
+ return $res;
+}
+#
+function revert($str)
+{
+ return str_replace(array("\1", "\2", "\3", "\4"), array("|", "\\", "=", ","), $str);
+}
+#
 function api($cmd)
 {
  global $haderror, $error;
@@ -335,6 +382,8 @@ function api($cmd)
 	}
 
 #	print "$cmd returned '$line'\n";
+
+	$line = api_convert_escape($line);
 
 	$data = array();
 
@@ -373,7 +422,7 @@ function api($cmd)
 					continue;
 
 				if (count($id) == 2)
-					$data[$name][$id[0]] = $id[1];
+					$data[$name][$id[0]] = revert($id[1]);
 				else
 					$data[$name][$counter] = $id[0];
 
@@ -448,6 +497,9 @@ function classlastshare($when, $alldata, $warnclass, $errorclass)
  if (!isset($alldata['MHS av']))
 	return '';
 
+ if ($alldata['MHS av'] == 0)
+	return '';
+
  if (!isset($alldata['Last Share Time']))
 	return '';
 
@@ -484,6 +536,10 @@ function fmt($section, $name, $value, $when, $alldata)
  $ret = $value;
  $class = '';
 
+ $nams = explode('.', $name);
+ if (count($nams) > 1)
+	$name = $nams[count($nams)-1];
+
  if ($value === null)
 	$ret = $b;
  else
@@ -491,6 +547,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	{
 	case 'GPU.Last Share Time':
 	case 'PGA.Last Share Time':
+	case 'DEVS.Last Share Time':
 		if ($value == 0
 		||  (isset($alldata['Last Share Pool']) && $alldata['Last Share Pool'] == -1))
 		{
@@ -511,6 +568,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Last Share Pool':
 	case 'PGA.Last Share Pool':
+	case 'DEVS.Last Share Pool':
 		if ($value == -1)
 		{
 			$ret = 'None';
@@ -573,6 +631,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Utility':
 	case 'PGA.Utility':
+	case 'DEVS.Utility':
 	case 'SUMMARY.Utility':
 	case 'total.Utility':
 		$ret = $value.'/m';
@@ -593,18 +652,24 @@ function fmt($section, $name, $value, $when, $alldata)
 			}
 		break;
 	case 'PGA.Temperature':
-		$ret = $value.'&deg;C';
-		break;
 	case 'GPU.Temperature':
+	case 'DEVS.Temperature':
 		$ret = $value.'&deg;C';
+		if (!isset($alldata['GPU']))
+			break;
 	case 'GPU.GPU Clock':
+	case 'DEVS.GPU Clock':
 	case 'GPU.Memory Clock':
+	case 'DEVS.Memory Clock':
 	case 'GPU.GPU Voltage':
+	case 'DEVS.GPU Voltage':
 	case 'GPU.GPU Activity':
+	case 'DEVS.GPU Activity':
 		if ($value == 0)
 			$class = $warnclass;
 		break;
 	case 'GPU.Fan Percent':
+	case 'DEVS.Fan Percent':
 		if ($value == 0)
 			$class = $warnclass;
 		else
@@ -617,6 +682,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		}
 		break;
 	case 'GPU.Fan Speed':
+	case 'DEVS.Fan Speed':
 		if ($value == 0)
 			$class = $warnclass;
 		else
@@ -632,6 +698,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.MHS av':
 	case 'PGA.MHS av':
+	case 'DEVS.MHS av':
 	case 'SUMMARY.MHS av':
 	case 'total.MHS av':
 		$parts = explode('.', $value, 2);
@@ -658,6 +725,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Total MH':
 	case 'PGA.Total MH':
+	case 'DEVS.Total MH':
 	case 'SUMMARY.Total MH':
 	case 'total.Total MH':
 	case 'SUMMARY.Getworks':
@@ -665,11 +733,13 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Getworks':
 	case 'GPU.Accepted':
 	case 'PGA.Accepted':
+	case 'DEVS.Accepted':
 	case 'SUMMARY.Accepted':
 	case 'POOL.Accepted':
 	case 'total.Accepted':
 	case 'GPU.Rejected':
 	case 'PGA.Rejected':
+	case 'DEVS.Rejected':
 	case 'SUMMARY.Rejected':
 	case 'POOL.Rejected':
 	case 'total.Rejected':
@@ -687,12 +757,14 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Status':
 	case 'PGA.Status':
+	case 'DEVS.Status':
 	case 'POOL.Status':
 		if ($value != 'Alive')
 			$class = $errorclass;
 		break;
 	case 'GPU.Enabled':
 	case 'PGA.Enabled':
+	case 'DEVS.Enabled':
 		if ($value != 'Y')
 			$class = $warnclass;
 		break;
@@ -727,7 +799,8 @@ function fmt($section, $name, $value, $when, $alldata)
 global $poolcmd;
 $poolcmd = array(	'Switch to'	=> 'switchpool',
 			'Enable'	=> 'enablepool',
-			'Disable'	=> 'disablepool' );
+			'Disable'	=> 'disablepool',
+			'Remove'	=> 'removepool' );
 #
 function showhead($cmd, $values, $justnames = false)
 {
@@ -938,6 +1011,43 @@ function processgpus($rig)
  }
 }
 #
+function showpoolinputs($rig, $ans)
+{
+ global $readonly, $poolinputs;
+
+ if ($readonly === true || $poolinputs === false)
+	return;
+
+ newtable();
+ newrow();
+
+ $inps = array('Pool URL' => array('purl', 20),
+		'Worker Name' => array('pwork', 10),
+		'Worker Password' => array('ppass', 10));
+ $b = '&nbsp;';
+
+ echo "<td align=right class=h> Add a pool: </td><td>";
+
+ foreach ($inps as $text => $name)
+	echo "$text: <input name='".$name[0]."' id='".$name[0]."' value='' type=text size=".$name[1]."> ";
+
+ echo "</td><td align=middle><input type=button value='Add' onclick='pla($rig)'></td>";
+
+ endrow();
+
+ if (count($ans) > 1)
+ {
+	newrow();
+
+	echo '<td align=right class=h> Set pool priorities: </td>';
+	echo "<td> Comma list of pool numbers: <input type=text name=prio id=prio size=20>";
+	echo "</td><td align=middle><input type=button value='Set' onclick='psp($rig)'></td>";
+
+	endrow();
+ }
+ endtable();
+}
+#
 function process($cmds, $rig)
 {
  global $error, $devs;
@@ -957,12 +1067,15 @@ function process($cmds, $rig)
 	{
 		details($cmd, $process, $rig);
 
+		if ($cmd == 'devs')
+			$devs = $process;
+
+		if ($cmd == 'pools')
+			showpoolinputs($rig, $process);
+
 		# Not after the last one
 		if (--$count > 0)
 			otherrow('<td><br><br></td>');
-
-		if ($cmd == 'devs')
-			$devs = $process;
 	}
  }
 }
@@ -1419,6 +1532,9 @@ function joinsections($sections, $results, $errors)
 					$sectionmap[$section] = $section;
 					$results[$section] = joinall($both[0], $both[1], $results);
 					break;
+				default:
+					$errors[] = "Error: Invalid section '$section'";
+					break;
 				}
 				break;
 			case 'DEVS':
@@ -1429,6 +1545,9 @@ function joinsections($sections, $results, $errors)
 				case 'DEVDETAILS':
 					$sectionmap[$section] = $section;
 					$results[$section] = joinfields($both[0], $both[1], $join, $results);
+					break;
+				default:
+					$errors[] = "Error: Invalid section '$section'";
 					break;
 				}
 				break;
@@ -1772,7 +1891,8 @@ function display()
 			$miner = $parts[0];
 			$port = $parts[1];
 
-			$preprocess = $arg;
+			if ($readonly !== true)
+				$preprocess = $arg;
 		}
 	}
  }
