@@ -141,17 +141,17 @@ static bool bitforce_detect_one(const char *devpath)
 #define LOAD_SYM(sym)  do { \
 	if (!(sym = dlsym(dll, #sym))) {  \
 		applog(LOG_DEBUG, "Failed to load " #sym ", not using FTDI bitforce autodetect");  \
-		goto nogood;  \
+		goto out;  \
 	}  \
 } while(0)
 
 #ifdef WIN32
 static int bitforce_autodetect_ftdi(void)
 {
-	char buf[65 * numDevs];
-	char*bufptrs[numDevs + 1];
 	char devpath[] = "\\\\.\\COMnnnnn";
 	char *devpathnum = &devpath[7];
+	char **bufptrs;
+	char *buf;
 	int found = 0;
 	int i;
 
@@ -173,7 +173,10 @@ static int bitforce_autodetect_ftdi(void)
 		goto out;
 	}
 	applog(LOG_DEBUG, "FTDI reports %u devices", (unsigned)numDevs);
-	
+
+	buf = alloca(65 * numDevs);
+	bufptrs = alloca(numDevs + 1);
+
 	for (i = 0; i < numDevs; ++i)
 		bufptrs[i] = &buf[i * 65];
 	bufptrs[numDevs] = NULL;
