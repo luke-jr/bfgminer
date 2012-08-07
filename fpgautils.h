@@ -14,17 +14,17 @@
 #include <stdio.h>
 
 typedef bool(*detectone_func_t)(const char*);
-typedef char(*autoscan_func_t)();
+typedef int(*autoscan_func_t)();
 
-extern char _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, bool force_autoscan);
+extern int _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, bool force_autoscan);
 #define serial_detect_fauto(dname, detectone, autoscan)  \
 	_serial_detect(dname, detectone, autoscan, true)
 #define serial_detect_auto(dname, detectone, autoscan)  \
 	_serial_detect(dname, detectone, autoscan, false)
 #define serial_detect(dname, detectone)  \
 	_serial_detect(dname, detectone,     NULL, false)
-extern char serial_autodetect_devserial(detectone_func_t, const char*prodname);
-extern char serial_autodetect_udev     (detectone_func_t, const char*prodname);
+extern int serial_autodetect_devserial(detectone_func_t, const char*prodname);
+extern int serial_autodetect_udev     (detectone_func_t, const char*prodname);
 
 extern int serial_open(const char*devpath, unsigned long baud, signed short timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char*eol);

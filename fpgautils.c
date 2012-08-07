@@ -38,7 +38,7 @@
 #include "miner.h"
 
 #ifdef HAVE_LIBUDEV
-char
+int
 serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 {
 	struct udev *udev = udev_new();
@@ -69,14 +69,14 @@ serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 	return found;
 }
 #else
-char
+int
 serial_autodetect_udev(__maybe_unused detectone_func_t detectone, __maybe_unused const char*prodname)
 {
 	return 0;
 }
 #endif
 
-char
+int
 serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 {
 #ifndef WIN32
@@ -107,7 +107,7 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 #endif
 }
 
-char
+int
 _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
 {
 	struct string_elist *iter, *tmp;

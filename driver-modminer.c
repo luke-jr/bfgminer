@@ -111,7 +111,7 @@ modminer_detect_one(const char *devpath)
 
 #undef bailout
 
-static char
+static int
 modminer_detect_auto()
 {
 	return
