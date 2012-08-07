@@ -2201,12 +2201,14 @@ static struct curl_ent *pop_curl_entry(struct pool *pool)
 	struct curl_ent *ce;
 
 	mutex_lock(&pool->pool_lock);
+retry:
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if (pool->submit_fail || pool->curls >= curl_limit)
+		if (pool->submit_fail || pool->curls >= curl_limit) {
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
-		else
+			goto retry;
+		} else
 			recruit_curl(pool);
 	}
 	ce = list_entry(pool->curlring.next, struct curl_ent, node);
