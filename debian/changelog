@@ -1,180 +1,24 @@
-cgminer (2.6.2-1) precise; urgency=low
-  Version 2.6.2 - August 3, 2012
+bfgminer (2.6.3.1-0precise1) precise; urgency=medium
+  Version 2.6.3.1 - August 7, 2012
 
-  * Scrypt mining does not support block testing yet so don't try to print it.
-  * Clear the bitforce buffer whenever we get an unexpected result as it has
-    likely throttled and we are getting cached responses out of order, and use the
-    temperature monitoring as a kind of watchdog to flush unexpected results.
-  * It is not critical getting the temperature response in bitforce so don't
-    mandatorily wait on the mutex lock.
-  * Check there is a cutoff temp actually set in bitforce before using it as a cut
-    off value otherwise it may think it's set to zero degrees.
-  * We dropped the temporary stopping of curl recruiting on submit_fail by
-    mistake, reinstate it.
-  * Make threads report in either side of the scanhash function in case we miss
-    reporting in when restarting work.
-  * Don't make mandatory work and its clones last forever.
-  * Make test work for pool_active mandatory work items to smooth out staged work
-    counts when in failover-only mode.
-  * Add debugging output when work is found stale as to why.
-  * Print the 3 parameters that are passed to applog for a debug line in
-    bitforce.c
-  * Clear bitforce buffer on init as previously.
-  * Add some headroom to the number of curls available per pool to allow for
-    longpoll and sendwork curls.
-  * Revert "Revert "Change BFL driver thread initialising to a constant 100ms
-    delay between devices instead of a random arrangement.""
-  * Revert "Remove bitforce_thread_init"
-  * Show the correct base units on GPU summary.
-  * Differentiate between the send return value being a bool and the get return
-    value when managing them in bitforce scanhash.
-  * 23a8c60 Revert "bitforce: Skip out of sending work if work restart requested" 
+  * Added minor version increment so that Launchpad will accept new orig.tar.xz upload. :/
 
- -- nushor <nushor@nushor-desktop>  Fri, 03 Aug 2012 11:27:44 -0500
+ -- graeme <graeme@sudo.ca>  Wed, 08 Aug 2012 11:11:28 -0700
 
-cgminer (2.4.2-1) stable; urgency=medium
-  Version 2.4.2 - June 2, 2012
+bfgminer (2.6.3-1precise1) precise; urgency=medium
+  Version 2.6.3 - August 6, 2012
 
-  * API.class compiled with Java SE 6.0_03 - works with Win7x64
-  * miner.php highlight devs too slow finding shares (possibly failing)
-  * API update version to V1.11 and document changes
-  * API save default config file if none specified
-  * api.c save success incorrectly returns error
-  * api.c replace BUFSIZ (linux/windows have different values)
-  * Move RPC API content out of README to API-README
-  * Open a longpoll connection if a pool is in the REJECTING state as it's the
-    only way to re-enable it automatically.
-  * Use only one longpoll as much as possible by using a pthread conditional
-    broadcast that each longpoll thread waits on and checks if it's the current pool
-    before
-  * If shares are known stale, don't use them to decide to disable a pool for
-    sequential rejects.
-  * Restarting cgminer from within after ADL has been corrupted only leads to a
-    crash. Display a warning only and disable fanspeed monitoring.
-  * Icarus: fix abort calculation/allow user specified abort
-  * Icarus: make --icarus-timing hidden and document it in FPGA-README
-  * Icarus: high accuracy timing and other bitstream speed support
-  * add-MIPSEB-to-icarus-for-BIG_ENDIAN
-  * work_decode only needs swab32 on midstate under BIG ENDIAN
-  * add compile command to api-example.c
-  * save config bugfix: writing an extra ',' when no gpus
-  * Add dpkg-source commits
+  * First release to attempt Debian packaging.
+  * Complete rewrite of the queueing mechanism which gets new work from the pools. The code in that section had gotten out of hand and become a "state machine" that was difficult to model its behaviour and occasionally led to stalls during startup and what-not without work and perhaps queued too much work in general. Now it monitors carefully the amount of queued and available work on a pool-by-pool basis and only queues when needed, but tries hard to make sure it doesn't run empty. You will notice the the TQ value now hovers around zero when all is well, and only jumps up transiently, all going well. Hopefully the efficiency is even higher now too. Detection of pool lag should be more accurate now, and less shares should leak to backup pools now as well.
+  * Numerous bugfixes and workarounds for ModMiner driver, bringing it to a functional level even on Windows.
+  * Scrypt support enabled for Windows binaries.
+  * Can set failover-only mode now from the menu during runtime.
+  * One-shot schedules (exactly one of --sched-stop or --sched-start) now handle times beyond midnight properly.
+  * ModMiner now shows bitstream upload in summary line rather than spamming the log (progress is still logged every 10% for timestamps).
+  * The RPC API should be able to bind to the port immediately on linux now instead of having to wait 60 seconds as it used to.
+  * Proper big endian (routers) support, including fixing and enabling functionality that crashed before.
+  * Minimal support for the Enterpoint's Cairnsmore1 FPGA mining board.
+  * Throttling episodes on bitforce devices will now perform reasonably (given the circumstances) and/or register as HW errors.
+  * Support for all FPGA drivers enabled by default when compiling from source.
 
- -- nushor <nushor11@gmail.com>  Sun, 03 Jun 2012 22:02:03 -0500
-
-cgminer (2.4.1-1) stable; urgency=low
-  Version 2.4.1-1 - May 6, 2012
-  * In the unlikely event of finding a block, display the block solved count with
-    the pool it came from for auditing.
-  * Display the device summary on exit even if a device has been disabled.
-  * Use correct pool enabled enums in api.c.
-  * Import Debian packaging configs
-  * Ensure we test for a pool recovering from idle so long as it's not set to
-    disabled.
-  * Fix pool number display.
-  * Give cgminer -T message only if curses is in use.
-  * Reinit_adl is no longer used.
-  * API 'stats' allow devices to add their own stats also for testing/debug
-  * API add getwork stats to cgminer - accesable from API 'stats'
-  * Don't initialise variables to zero when in global scope since they're already
-    initialised.
-  * Get rid of unitialised variable warning when it's false.
-  * Move a pool to POOL_REJECTING to be disabled only after 3 minutes of
-    continuous rejected shares.
-  * Some tweaks to reporting and logging.
-  * Change FPGA detection order since BFL hangs on an ICA
-  * API support new pool status
-  * Add a temporarily disabled state for enabled pools called POOL_REJECTING and
-    use the work from each longpoll to help determine when a rejecting pool has
-    started working again. Switch pools based on the multipool strategy once a pool
-    is re-enabled.
-  * Removing extra debug
-  * Fix the benchmark feature by bypassing the new networking code.
-  * Reset sequential reject counter after a pool is disabled for when it is
-    re-enabled.
-  * Icarus - correct MH/s and U: with work restart set at 8 seconds
-  * ztex updateFreq was always reporting on fpga 0
-  * Trying harder to get 1.15y working
-  * Specifying threads on multi fpga boards extra cgpu
-  * Missing the add cgpu per extra fpga on 1.15y boards
-  * API add last share time to each pool
-  * Don't try to reap curls if benchmarking is enabled.
-
- -- nushor <nushor11@gmail.com>  Sun, 06 May 2012 11:09:46 -0500
-
-cgminer (2.4.0-1) stable; urgency=low
-  Version 2.4.0 - May 3, 2012
-
-  * Only show longpoll warning once when it has failed.
-  * Convert hashes to an unsigned long long as well.
-  * Detect pools that have issues represented by endless rejected shares and
-    disable them, with a parameter to optionally disable this feature.
-  * Bugfix: Use a 64-bit type for hashes_done (miner_thread) since it can overflow
-    32-bit on some FPGAs
-  * Implement an older header fix for a label existing before the pthread_cleanup
-    macro.
-  * Limit the number of curls we recruit on communication failures and with
-    delaynet enabled to 5 by maintaining a per-pool curl count, and using a pthread
-    conditional that wakes up when one is returned to the ring buffer.
-  * Generalise add_pool() functions since they're repeated in add_pool_details.
-  * Bugfix: Return failure, rather than quit, if BFwrite fails
-  * Disable failing devices such that the user can attempt to re-enable them
-  * Bugfix: thread_shutdown shouldn't try to free the device, since it's needed
-    afterward
-  * API bool's and 1TBS fixes
-  * Icarus - minimise code delays and name timer variables
-  * api.c V1.9 add 'restart' + redesign 'quit' so thread exits cleanly
-  * api.c bug - remove extra ']'s in notify command
-  * Increase pool watch interval to 30 seconds.
-  * Reap curls that are unused for over a minute. This allows connections to be
-    closed, thereby allowing the number of curl handles to always be the minimum
-    necessary to not delay networking.
-  * Use the ringbuffer of curls from the same pool for submit as well as getwork
-    threads. Since the curl handles were already connected to the same pool and are
-    immediately available, share submission will not be delayed by getworks.
-  * Implement a scaleable networking framework designed to cope with any sized
-    network requirements, yet minimise the number of connections being reopened. Do
-    this by create a ring buffer linked list of curl handles to be used by getwork,
-    recruiting extra handles when none is immediately available.
-  * There is no need for the submit and getwork curls to be tied to the pool
-    struct.
-  * Do not recruit extra connection threads if there have been connection errors
-    to the pool in question.
-  * We should not retry submitting shares indefinitely or we may end up with a
-    huge backlog during network outages, so discard stale shares if we failed to
-    submit them and they've become stale in the interim.
-
- -- nushor <nushor11@gmail.com>  Thurs, 03 May 2012 10:43:22 -0500
-
-cgminer (2.3.6-3) stable; urgency=low
-  Version 2.3.6-3 - may 3, 2012
-  * More bug fixes, Pre 2.4.1 release.
-
- -- nushor <nushor11@gmail.com>  Thurs, 03 May 2012 00:36:50 -0500
-
-cgminer (2.3.6-2) stable; urgency=low
-  Version 2.3.6-2 - May 2, 2012
-  * Various bug fixes, latest build from repository.
-
- -- nushor <nushor11@gmail.com>  Wed, 02 May 2012 18:17:49 -0500
-
-cgminer (2.3.6-1) stable; urgency=low
-
-  Version 2.3.6 - April 29, 2012
-  * Shorten stale share messages slightly.
-  * Protect the freeing of current_hash under mutex_lock to prevent racing on it
-    when set_curblock is hit concurrently.
-  * Change default behaviour to submitting stale, removing the --submit-stale
-    option and adding a --no-submit-stale option.
-  * Make sure to start the getwork and submit threads when a pool is added on the
-    fly. This fixes a crash when a pool is added to running cgminer and then
-    switched to.
-  * Faster hardware can easily outstrip the speed we can get work and submit
-    shares when using only one connection per pool.
-  * Test the queued list to see if any get/submits are already queued and if they
-    are, start recruiting extra connections by generating new threads.
-  * This allows us to reuse network connections at low loads but recuit new open
-    connections as they're needed, so that cgminer can scale to hardware of any
-    size.
-
- -- nushor <nushor11@gmail.com>  Tue, 01 May 2012 13:26:09 -0500
+ -- graeme <graeme@sudo.ca>  Tue, 07 Aug 2012 10:51:00 -0500
