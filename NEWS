@@ -1,5 +1,16 @@
 BFGMiner Version 2.6.4 - Future
 
+- Cleaned out refs to AMD SDKs.
+- Updated README about debian packaging, changelog with minor version bump to
+work around Launchpad reqs.
+- Updated changelog with Ubuntu release specific version, needed to build for
+multiple releases. Also stripped out ADL SDK stuff in the build rules.
+- Initial work to adjust debian packaging from cgminer. Should build correctly
+now with pbuilder/pdebuild, and include docs.
+- Adapt miner code to free ADL structures
+- Import free ADL interfaces
+- Include scrypt.h in Makefile.
+- Fix windows bitforce build.
 - Convert the serial autodetect functions to use int instead of char to
 enumerate devices.
 - Deuglify windows autodetect code for BFL.
@@ -11,11 +22,12 @@ HW errors, making it easier to tune scrypt parameters.
 - We may as well leave one curl still available per pool instead of reaping the
 last one.
 - Display reaped debug message outside mutex lock to avoid recursive locking.
-- Add specific information when ADL detects error -10 saying the device is not
-enabled.
 - api.c update API start message and include port number
 - miner.php ignore arg when readonly
 - miner.php allow pool inputs: delete, addpool, poolpriority
+- bitforce: Reopen on communication error
+- Bugfix: Calculate hw err percent for the affected FPGA only
+- make-release: Adapt to new autogen by using NOCONFIGURE var
 
 
 BFGMiner Version 2.6.3 - August 6, 2012
