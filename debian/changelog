@@ -1,4 +1,4 @@
-bfgminer (2.6.3-1) precise; urgency=low
+bfgminer (2.6.3-1precise1) precise; urgency=normal
   Version 2.6.3 - August 6, 2012
 
   * First release to attempt Debian packaging.
