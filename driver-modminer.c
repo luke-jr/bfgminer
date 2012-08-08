@@ -375,8 +375,8 @@ modminer_fpga_init(struct thr_info *thr)
 	state->pdone = 101;
 
 	state->clock = 212;  // Will be reduced to 210 by modminer_reduce_clock
-	modminer_reduce_clock(thr, false);
-	applog(LOG_WARNING, "%s %u.%u: Setting clock speed to %u", modminer->api->name, modminer->device_id, fpgaid, state->clock);
+	if (modminer_reduce_clock(thr, false))
+		applog(LOG_WARNING, "%s %u.%u: Setting clock speed to %u", modminer->api->name, modminer->device_id, fpgaid, state->clock);
 
 	mutex_unlock(&modminer->device_mutex);
 
@@ -528,8 +528,8 @@ modminer_process_results(struct thr_info*thr)
 				time_t now = time(NULL);
 				if (state->last_cutoff_reduced != now) {
 					state->last_cutoff_reduced = now;
-					modminer_reduce_clock(thr, false);
-					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (temp: %d)", modminer->api->name, modminer->device_id, fpgaid, state->clock, temperature);
+					if (modminer_reduce_clock(thr, false))
+						applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (temp: %d)", modminer->api->name, modminer->device_id, fpgaid, state->clock, temperature);
 				}
 			}
 		}
@@ -556,8 +556,8 @@ modminer_process_results(struct thr_info*thr)
 			if (unlikely((!state->good_share_counter) && nonce == 0xffffff00))
 			{
 				// Firmware returns 0xffffff00 immediately if we set clockspeed too high; but it's not a hw error and shouldn't affect future downclocking
-				modminer_reduce_clock(thr, true);
-				applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (init)", modminer->api->name, modminer->device_id, fpgaid, state->clock);
+				if (modminer_reduce_clock(thr, true))
+					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (init)", modminer->api->name, modminer->device_id, fpgaid, state->clock);
 			}
 			else {
 				++hw_errors;
@@ -568,16 +568,16 @@ modminer_process_results(struct thr_info*thr)
 				{
 					// Only reduce clocks if hardware errors are more than ~2% of results
 					int pchwe = state->bad_nonce_counter * 100 / state->nonce_counter;
-					modminer_reduce_clock(thr, true);
-					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, pchwe);
+					if (modminer_reduce_clock(thr, true))
+						applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, pchwe);
 				}
 			}
 		}
 		else
 		if (++state->no_nonce_counter > 0x20000) {
 			state->no_nonce_counter = 0;
-			modminer_reduce_clock(thr, true);
-			applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (no nonces)", modminer->api->name, modminer->device_id, fpgaid, state->clock);
+			if (modminer_reduce_clock(thr, true))
+				applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (no nonces)", modminer->api->name, modminer->device_id, fpgaid, state->clock);
 		}
 		if (work_restart(thr) || !--iter)
 			break;
