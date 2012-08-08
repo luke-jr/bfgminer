@@ -1,0 +1,4 @@
+--- /dev/null
++++ b/bfgminer-bitforce.conf
+@@ -0,0 +1 @@
++options ftdi_sio vendor=0x0403 product=0x6014
