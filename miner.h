@@ -81,7 +81,7 @@ void *alloca (size_t);
 
 
 #ifdef HAVE_ADL
- #include "ADL_SDK/adl_sdk.h"
+ #include "ADL/adl_sdk.h"
 #endif
 
 #ifdef HAVE_LIBUSB

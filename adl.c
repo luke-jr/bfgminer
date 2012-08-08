@@ -20,7 +20,7 @@
 #endif
 
 #include "miner.h"
-#include "ADL_SDK/adl_sdk.h"
+#include "ADL/adl_sdk.h"
 #include "compat.h"
 
 #if defined (__linux)
@@ -32,6 +32,10 @@
 #include <tchar.h>
 #endif
 #include "adl_functions.h"
+
+#ifndef WIN32
+#define __stdcall
+#endif
 
 #ifndef HAVE_CURSES
 #define wlogprint(...)  applog(LOG_WARNING, __VA_ARGS__)
