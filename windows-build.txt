@@ -102,16 +102,6 @@ Note: If you are on a 32 bit version of windows "Program Files (x86)" will be
 Note2: If you update your APP SDK later you might want to recopy the above files 
 
 **************************************************************************************
-* Install AMD ADL SDK, latest version (only if you want GPU monitoring)              *
-**************************************************************************************
-Note: You do not need to install the AMD ADL SDK if you are only using Nvidia GPU's	
-Go to this url ==> http://developer.amd.com/sdks/ADLSDK/Pages/default.aspx
-Download and unzip the file you downloaded.
-Pull adl_defines.h, adl_sdk.h, and adl_structures.h out of the include folder 
-Put those files into the ADL_SDK folder in your source tree as shown below.
-\MinGW\msys\1.0\home\(folder with your user name)\bfgminer-x.x.x\ADL_SDK
-
-**************************************************************************************
 * Install GTK-WIN, required for Pkg-config in the next step                          *
 **************************************************************************************
 Go to this url ==> http://sourceforge.net/projects/gtk-win/ 
@@ -197,23 +187,10 @@ If you simply just want to update the source after you have already cloned, type
 Now you can get the latest source directly from github.
 
 **************************************************************************************
-* Optional - Make a .sh file to automate copying over ADL files                      *
-**************************************************************************************
-Make a folder/directory in your home folder and name it ADL_SDK.
- (ref:  \MinGW\msys\1.0\home\(folder with your user name)\ADL_SDK)
-Copy the ADL .h files into that folder/directory.
-Open your favorite text editor and type the following into it.
- cp -av ../ADL_SDK/*.h ADL_SDK
-Save the file as "adl.sh" and then place the file into "\MinGW\msys\1.0\bin".
-From now on when your current working directory is the bfgminer source directory
-You can simply type "adl.sh" and it will place the ADL header files into place
-For you. Make sure you never remove the ADL_SDK folder from your home folder.
-
-**************************************************************************************
 * Some ./configure options                                                           *
 **************************************************************************************
---disable-opencl        Override detection and disable building with opencl
---disable-adl           Override detection and disable building with adl
+--disable-opencl        Build without support for OpenCL (default enabled)
+--disable-adl           Build without ADL monitoring (default enabled)
 --enable-bitforce       Compile support for BitForce FPGAs(default disabled)
 --enable-icarus         Compile support for Icarus Board(default disabled)
 

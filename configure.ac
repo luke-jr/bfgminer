@@ -121,6 +121,8 @@ AC_ARG_ENABLE([opencl],
 	)
 if test "x$opencl" = xyes; then
 	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL support is wanted])
+else
+	DLOPEN_FLAGS=""
 fi
 AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 
@@ -130,27 +132,20 @@ PTHREAD_LIBS=-lpthread
 
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 
+if test "x$opencl" = xyes; then
+	adl="yes"
+	
 AC_ARG_ENABLE([adl],
-	[AC_HELP_STRING([--disable-adl],[Override detection and disable building with adl])],
+	[AC_HELP_STRING([--disable-adl],[Build without ADL monitoring (default enabled)])],
 	[adl=$enableval]
 	)
 
-if test "x$opencl" = xyes; then
-	if test "x$adl" != xno; then
-		if test -f ADL_SDK/adl_sdk.h; then
-			have_adl=true
-		else
-			have_adl=false
-		fi
-		if test x$have_adl = xtrue
+	if test x$adl = xyes
 		then
 			AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
-		else
-			DLOPEN_FLAGS=""
 		fi
-	fi
 else
-	DLOPEN_FLAGS=""
+	adl="no"
 fi
 
 AC_ARG_ENABLE([bitforce],
@@ -420,14 +415,12 @@ else
 	echo "  OpenCL...............: Disabled"
 fi
 
-if test "x$adl" != xno; then
-	if test x$have_adl = xtrue; then
-		echo "    ADL................: SDK found, GPU monitoring support enabled"
-	else
-		echo "    ADL................: SDK NOT found, GPU monitoring support DISABLED"
-	fi
+if test "x$adl" = xyes; then
+	echo "    ADL.monitoring.....: Enabled"
+elif test "x$opencl" = xyes; then
+	echo "    ADL.monitoring.....: Disabled"
 else
-	echo "    ADL................: Detection overrided. GPU monitoring support DISABLED"
+	echo "    ADL.monitoring.....: n/a"
 fi
 
 if test "x$bitforce" = xyes; then

@@ -38,7 +38,7 @@
  #include <tchar.h>
 #endif
 
-#include "ADL_SDK/adl_sdk.h"
+#include "ADL/adl_sdk.h"
 
 // Definitions of the used function pointers. Add more if you use other ADL APIs
 
