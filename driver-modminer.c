@@ -31,6 +31,7 @@ struct modminer_fpga_state {
 	char next_work_cmd[46];
 
 	unsigned char clock;
+	unsigned char max_clock;
 	// Number of iterations since we last got a nonce
 	int no_nonce_counter;
 	// Number of nonces didn't meet pdiff 1, ever
@@ -41,6 +42,8 @@ struct modminer_fpga_state {
 	int bad_nonce_counter;
 	// Number of nonces total, since last clock change
 	int nonce_counter;
+	// Number of good nonces, since last clock change OR bad nonce
+	int good_nonce_counter;
 	// Time the clock was last reduced due to temperature
 	time_t last_cutoff_reduced;
 
@@ -309,7 +312,7 @@ modminer_fpga_prepare(struct thr_info *thr)
 }
 
 static bool
-modminer_reduce_clock(struct thr_info*thr, bool needlock)
+modminer_change_clock(struct thr_info*thr, bool needlock)
 {
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
@@ -317,12 +320,9 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 	int fd;
 	unsigned char cmd[6], buf[1];
 
-	if (state->clock <= 100)
-		return false;
-
 	cmd[0] = '\x06';  // set clock speed
 	cmd[1] = fpgaid;
-	cmd[2] = state->clock -= 2;
+	cmd[2] = state->clock;
 	cmd[3] = cmd[4] = cmd[5] = '\0';
 
 	if (needlock)
@@ -336,8 +336,35 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 		mutex_unlock(&modminer->device_mutex);
 
 	state->bad_nonce_counter = state->nonce_counter = 0;
+	state->good_nonce_counter = 0;
 
 	return true;
+}
+
+static bool
+modminer_reduce_clock(struct thr_info*thr, bool needlock)
+{
+	struct modminer_fpga_state *state = thr->cgpu_data;
+
+	if (state->clock <= 100)
+		return false;
+
+	state->clock -= 2;
+
+	return modminer_change_clock(thr, needlock);
+}
+
+static bool
+modminer_increase_clock(struct thr_info*thr, bool needlock)
+{
+	struct modminer_fpga_state *state = thr->cgpu_data;
+
+	if (state->clock >= state->max_clock)
+		return false;
+
+	state->clock += 2;
+
+	return modminer_change_clock(thr, needlock);
 }
 
 static bool
@@ -374,6 +401,7 @@ modminer_fpga_init(struct thr_info *thr)
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)", modminer->api->name, modminer->device_id, fpgaid);
 	state->pdone = 101;
 
+	state->max_clock = 210;
 	state->clock = 212;  // Will be reduced to 210 by modminer_reduce_clock
 	if (modminer_reduce_clock(thr, false))
 		applog(LOG_WARNING, "%s %u.%u: Setting clock speed to %u", modminer->api->name, modminer->device_id, fpgaid, state->clock);
@@ -551,19 +579,27 @@ modminer_process_results(struct thr_info*thr)
 			{
 				++state->good_share_counter;
 				submit_nonce(thr, work, nonce);
+				++state->good_nonce_counter;
+				if (state->good_nonce_counter >= 100 && ((!state->temp) || state->temp < modminer->cutofftemp - 2)) {
+					if (modminer_increase_clock(thr, true))
+						applog(LOG_NOTICE, "%s %u.%u: Raise clock speed to %u", modminer->api->name, modminer->device_id, fpgaid, state->clock);
+				}
 			}
 			else
 			if (unlikely((!state->good_share_counter) && nonce == 0xffffff00))
 			{
 				// Firmware returns 0xffffff00 immediately if we set clockspeed too high; but it's not a hw error and shouldn't affect future downclocking
-				if (modminer_reduce_clock(thr, true))
+				if (modminer_reduce_clock(thr, true)) {
 					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (init)", modminer->api->name, modminer->device_id, fpgaid, state->clock);
+					state->max_clock = state->clock;
+				}
 			}
 			else {
 				++hw_errors;
 				++modminer->hw_errors;
 				++state->bad_share_counter;
 				++state->bad_nonce_counter;
+				state->good_nonce_counter = 0;
 				if (state->bad_nonce_counter * 50 > 500 + state->nonce_counter)
 				{
 					// Only reduce clocks if hardware errors are more than ~2% of results
