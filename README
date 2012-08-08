@@ -49,9 +49,6 @@ Dependencies:
 	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
 	(This sdk is mandatory for GPU mining)
 
-	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
-	(This sdk is mandatory for ATI GPU monitoring & clocking)
-
 	libudev headers
 	(This is only required for FPGA auto-detection and is linux only)
 
@@ -62,7 +59,7 @@ Dependencies:
 BFGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-opencl        Build without support for OpenCL (default enabled)
-	--disable-adl           Override detection and disable building with adl
+	--disable-adl           Build without ADL monitoring (default enabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
@@ -77,10 +74,6 @@ Basic *nix build instructions:
 	install it so just keep track of where it is if you're not installing
 	the include files and library files into the system directory.
 	(Do NOT install the ati amd sdk if you are on nvidia.)
-	To build with GPU monitoring & clocking support:
-	Extract the AMD ADL SDK, latest version - there is also no official
-	place for these files. Copy all the *.h files in the "include"
-	directory into BFGMiner's ADL_SDK directory.
 
 The easiest way to install the ATI AMD SPP sdk on linux is to actually put it
 into a system location. Then building will be simpler. Download the correct
