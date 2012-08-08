@@ -1,9 +1,7 @@
 Debian packaging notes by Graeme Humphries <graeme@sudo.ca>:
 
-Because the build depends on the AMD App SDK (which isn't packaged for Debian yet), this can't be built precisely like
-a normal Debian package. Here's a few short steps on how to get it building correctly:
+Here's the short list on how to build your own Debian/Ubuntu package:
 
-* Install AMD App SDK per the README.
 * Install and configure pbuilder (https://wiki.ubuntu.com/PbuilderHowto)
 * cd into this source directory, and create a fake upstream tarball:
 	tar -cJvf ../bfgminer_${VERSION}.orig.tar.xz *
