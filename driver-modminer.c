@@ -564,9 +564,9 @@ modminer_process_results(struct thr_info*thr)
 				++modminer->hw_errors;
 				++state->bad_share_counter;
 				++state->bad_nonce_counter;
-				if (state->bad_nonce_counter * 100 > 1000 + state->nonce_counter)
+				if (state->bad_nonce_counter * 50 > 500 + state->nonce_counter)
 				{
-					// Only reduce clocks if hardware errors are more than ~1% of results
+					// Only reduce clocks if hardware errors are more than ~2% of results
 					int pchwe = state->bad_nonce_counter * 100 / state->nonce_counter;
 					modminer_reduce_clock(thr, true);
 					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, pchwe);
