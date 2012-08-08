@@ -10,3 +10,10 @@ a normal Debian package. Here's a few short steps on how to get it building corr
 * Build the package using pbuilder:
 	pdebuild
 * The built package should end up in /var/cache/pbuilder/results
+
+Debian packaging depends on new release versions being entered into debian/changelog. The versions in that file need
+the Debian/Ubuntu release specific suffix (0precise1) as all packages go into a shared pool, and so they need to have distinct
+names for different releases.
+
+When a new release happens, just add it with some brief changelog notes to that file, and it should be ready
+to generate a new source package and upload to the Launchpad PPA.
