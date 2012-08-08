@@ -31,9 +31,17 @@ struct modminer_fpga_state {
 	char next_work_cmd[46];
 
 	unsigned char clock;
+	// Number of iterations since we last got a nonce
 	int no_nonce_counter;
+	// Number of nonces didn't meet pdiff 1, ever
 	int bad_share_counter;
+	// Number of nonces did meet pdiff 1, ever
 	int good_share_counter;
+	// Number of nonces didn't meet pdiff 1, since last clock change
+	int bad_nonce_counter;
+	// Number of nonces total, since last clock change
+	int nonce_counter;
+	// Time the clock was last reduced due to temperature
 	time_t last_cutoff_reduced;
 
 	unsigned char temp;
@@ -327,6 +335,8 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 	if (needlock)
 		mutex_unlock(&modminer->device_mutex);
 
+	state->bad_nonce_counter = state->nonce_counter = 0;
+
 	return true;
 }
 
@@ -535,6 +545,7 @@ modminer_process_results(struct thr_info*thr)
 		mutex_unlock(&modminer->device_mutex);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
 			state->no_nonce_counter = 0;
+			++state->nonce_counter;
 			bad = !test_nonce(work, nonce, false);
 			if (!bad)
 			{
@@ -552,11 +563,13 @@ modminer_process_results(struct thr_info*thr)
 				++hw_errors;
 				++modminer->hw_errors;
 				++state->bad_share_counter;
-				if (state->bad_share_counter * 100 > 1000 + state->bad_share_counter + state->good_share_counter)
+				++state->bad_nonce_counter;
+				if (state->bad_nonce_counter * 100 > 1000 + state->nonce_counter)
 				{
 					// Only reduce clocks if hardware errors are more than ~1% of results
+					int pchwe = state->bad_nonce_counter * 100 / state->nonce_counter;
 					modminer_reduce_clock(thr, true);
-					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, state->bad_share_counter * 100 / (state->bad_share_counter + state->good_share_counter));
+					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, pchwe);
 				}
 			}
 		}
