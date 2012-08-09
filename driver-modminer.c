@@ -216,7 +216,7 @@ fd_set fds;
 static bool
 modminer_device_prepare(struct cgpu_info *modminer)
 {
-	int fd = serial_open(modminer->device_path, 0, /*FIXME=-1*/3000, true);
+	int fd = serial_open(modminer->device_path, 0, 250, true);
 	if (unlikely(-1 == fd))
 		bailout(LOG_ERR, "%s %u: Failed to open %s", modminer->api->name, modminer->device_id, modminer->device_path);
 
