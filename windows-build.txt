@@ -87,21 +87,6 @@ Copy BFGMiner source code directory into:
 \MinGW\msys\1.0\home\(folder with your user name)
 
 **************************************************************************************
-* Install AMD APP SDK, latest version (only if you want GPU mining)                  *
-**************************************************************************************
-Note: You do not need to install the AMD APP SDK if you are only using Nvidia GPU's
-Go to this url for the latest AMD APP SDK: 
- http://developer.amd.com/sdks/AMDAPPSDK/downloads/Pages/default.aspx
-Go to this url for legacy AMD APP SDK's:
- http://developer.amd.com/sdks/AMDAPPSDK/downloads/pages/AMDAPPSDKDownloadArchive.aspx
-Download and install whichever version you like best.
-Copy the folders in \Program Files (x86)\AMD APP\include to \MinGW\include 
-Copy \Program Files (x86)\AMD APP\lib\x86\libOpenCL.a to \MinGW\lib
-Note: If you are on a 32 bit version of windows "Program Files (x86)" will be 
-"Program Files".
-Note2: If you update your APP SDK later you might want to recopy the above files 
-
-**************************************************************************************
 * Install GTK-WIN, required for Pkg-config in the next step                          *
 **************************************************************************************
 Go to this url ==> http://sourceforge.net/projects/gtk-win/ 
