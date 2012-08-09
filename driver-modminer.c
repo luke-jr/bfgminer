@@ -475,7 +475,7 @@ modminer_process_results(struct thr_info*thr)
 		mutex_unlock(&modminer->device_mutex);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
 			state->no_nonce_counter = 0;
-			bad = !test_nonce(work, nonce);
+			bad = !test_nonce(work, nonce, false);
 			if (!bad)
 				submit_nonce(thr, work, nonce);
 			else {
