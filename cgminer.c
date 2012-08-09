@@ -826,7 +826,7 @@ static struct opt_table opt_config_table[] = {
 		     set_intensity, NULL, NULL,
 		     "Intensity of GPU scanning (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ", default: d to maintain desktop interactivity)"),
 #endif
-#if defined(HAVE_OPENCL) || defined(HAVE_MODMINER)
+#if defined(HAVE_OPENCL) || defined(USE_MODMINER) || defined(USE_ZTEX)
 	OPT_WITH_ARG("--kernel-path|-K",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             "Specify a path to where bitstream and kernel files are"),
