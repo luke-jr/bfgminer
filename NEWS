@@ -1,3 +1,211 @@
+Version 2.5.0 - July 6, 2012
+
+- Fix --benchmark not working since the dynamic addition of pools and pool
+stats.
+- Make disabling BFL nonce range support a warning since it has to be explicitly
+enabled on the command line now.
+- miner.php allow renaming table headers
+- Make bitforce nonce range support a command line option --bfl-range since
+enabling it decrease hashrate by 1%.
+- Add sanity checking to make sure we don't make sleep_ms less than 0 in
+bitforce.
+- The fastest minirig devices need a significantly smaller starting sleep time.
+- Use a much shorter initial sleep time to account for faster devices and nonce
+range working, and increase it if nonce range fails to work.
+- Use nmsleep instead of usleep in bitforce.
+- Provide a ms based sleep function that uses nanosleep to avoid the inaccuracy
+of usleep on SMP systems.
+- delay_time_ms is always set so need not be initialised in bitforce.
+- Increase bitforce timeout to 10 seconds.
+- Add more hysteresis and poll ~5 times to allow for timer delays in bitforce
+devices.
+- miner.php allow alternating line colours (off by default)
+- Display the actual duration of wait when it is greater than the cutoff.
+- Set nonce to maximum once we determine nonce range support is broken.
+- Initial wait time is always known so no need to zero it beforehand in
+bitforce.
+- No point counting wait time until the work is actually sent to bitforce
+devices.
+- Use string comparison functions instead of explicit comparisons.
+- Account for wait_ms time when nonce_range is in use on BFL.
+- Split nonces up into 1/5 chunks when nonce range is supported.
+- limit clear buffer iterations.
+- Ad fd check to clear buffer.
+- miner.php remove incorrect 'DATE' error message
+- miner.php allow summary header in custom pages
+- Disable nonce range support in BFL when broken support is detected.
+- Restart_wait is only called with a ms value so incorporate that into the
+function.
+- Only try to adjust dev width when curses is built in.
+- miner.php define custom sum fields as a simple array
+- Fix off-by-one error in nonce increment in bfl.
+- Use BE when setting nonce in bitforce nonce range work.
+- Enable nonce range in the normal init sequence for bfl.
+- Queue extra work at 2/3 differently depending on whether we're using nonce
+range or not.
+- Initially enable support for nonce range support on bfl, splitting nonces up
+into 3/4 size and only disable it if it fails on work submit.
+- Attempt to detect nonce range support in BFL by sending work requring its
+support.
+- Limit retrying on busy for up to BITFORCE_TIMEOUT_MS
+- Attempt to initialise while bitforce device returns BUSY.
+- Extend length of string that can be passed to BFL devices.
+- Fix signedness warning.
+- Adjust device width column to be consistent.
+- Use cgpu-> not gpus[] in watchdog thread.
+- Add api stats (sleep time)
+- Timing tweaks Added long and short timeouts, short for detecting throttling,
+long to give up totally. Reset sleep time when device re-initialised Still check
+results after timeout Back up a larger time if result on first poll.
+- Add API Notify counter 'Comms Error'
+- Style police on api.c
+- Do all logging outside of the bitforce mutex locking to avoid deadlocks.
+- Remove applog call from bfwrite to prevent grabbing nested mutexes.
+- Bitforce style changes.
+- Minor style changes.
+- Remove needless roundl define.
+- Made JSON error message verbose.
+- Fine-tune timing adjustment. Also remove old work_restart timing.
+- Check for gpu return times of >= 0, not just 0, to fix intensity dropping to
+-10.
+- Restart is zeroed in the mining thread so no need to do it inside the bitforce
+code.
+- More improvements to comms. BFL return nothing when throttling, so should not
+be considered an error. Instead repeat with a longer delay.
+- Polling every 10ms there's not much point checking the pthread_cond_timedwait
+as it just adds overhead. Simply check the value of work_restart in the bfl main
+polling loop.
+- Use a pthread conditional that is broadcast whenever work restarts are
+required. Create a generic wait function waiting a specified time on that
+conditional that returns if the condition is met or a specified time passed to
+it has elapsed. Use this to do smarter polling in bitforce to abort work, queue
+more work, and check for results to minimise time spent working needlessly.
+- Add busy time to wait time.
+- api.c put version up to 1.14
+- Add tiny delay after writing to BFL Change BFL errors to something more human
+readable Send work busy re-tries after 10ms delay
+
+
+Version 2.4.4 - July 1, 2012
+
+- Fix builds on non gnu platforms.
+- api.c ensure old mode is always available when not using --api-groups + quit()
+on param errors
+- Implement rudimentary X-Mining-Hashrate support.
+- Detect large swings in temperature when below the target temperature range and
+change fan by amounts dependant on the value of tdiff.
+- Adjust the fanspeed by the magnitude of the temperature difference when in the
+optimal range.
+- Revert "Restarting cgminer from within after ADL has been corrupted only leads
+to a crash. Display a warning only and disable fanspeed monitoring."
+- api.c fix json already closed
+- implement and document API option --api-groups
+- Put upper bounds to under 2 hours that work can be rolled into the future for
+bitcoind will deem it invalid beyond that.
+- define API option --api-groups
+- api.c allow unwell devices to be enabled so they can be cured
+- miner.php - fix/enable autorefresh for custom pages
+- miner.php allow custom summary pages - new 'Mobile' summary
+- Work around pools that advertise very low expire= time inappropriately as this
+leads to many false positives for stale shares detected.
+- Only show ztex board count if any exist.
+- There is no need for work to be a union in struct workio_cmd
+- fpgautils.c include a debug message for all unknown open errors
+- Don't keep rolling work right up to the expire= cut off. Use 2/3 of the time
+between the scantime and the expiry as cutoff for reusing work.
+- Log a specific error when serial opens fail due to lack of user permissions
+- Increase GPU timing resolution to microsecond and add sanity check to ensure
+times are positive.
+- Opencl code may start executing before the clfinish order is given to it so
+get the start timing used for dynamic intensity from before the kernel is
+queued.
+- fpgautils.c - set BAUD rate according to termio spec
+- fpgautils.c - linux ordering back to the correct way
+- miner.php remove unneeded '.'s
+- miner.php add auto refresh options
+- miner.php add 'restart' next to 'quit'
+- miner.php make fontname/size configurable with myminer.php
+- Make the pools array a dynamically allocated array to allow unlimited pools to
+be added.
+- Make the devices array a dynamically allocated array of pointers to allow
+unlimited devices.
+- Dynamic intensity for GPUs should be calculated on a per device basis. Clean
+up the code to only calculate it if required as well.
+- Use a queueing bool set under control_lock to prevent multiple calls to
+queue_request racing.
+- Use the work clone flag to determine if we should subtract it from the total
+queued variable and provide a subtract queued function to prevent looping over
+locked code.
+- Don't decrement staged extras count from longpoll work.
+- Count longpoll's contribution to the queue.
+- Increase queued count before pushing message.
+- Test we have enough work queued for pools with and without rolltime
+capability.
+- As work is sorted by age, we can discard the oldest work at regular intervals
+to keep only 1 of the newest work items per mining thread.
+- Roll work again after duplicating it to prevent duplicates on return to the
+clone function.
+- Abstract out work cloning and clone $mining_threads copies whenever a rollable
+work item is found and return a clone instead.
+- api.c display Pool Av in json
+- Take into account average getwork delay as a marker of pool communications
+when considering work stale.
+- Work out a rolling average getwork delay stored in pool_stats.
+- Getwork delay in stats should include retries for each getwork call.
+- Walk through the thread list instead of searching for them when disabling
+threads for dynamic mode.
+- Extend nrolltime to support the expiry= parameter. Do this by turning the
+rolltime bool into an integer set to the expiry time. If the pool supports
+rolltime but not expiry= then set the expiry time to the standard scantime.
+- When disabling fanspeed monitoring on adl failure, remove any twin GPU
+association. This could have been leading to hangs on machines with dual GPU
+cards when ADL failed.
+- modminer: Don't delay 2nd+ FPGAs during work restart
+- Disable OpenCL code when not available.
+- Fix openwrt crashing on regeneratehash() by making check_solve a noop.
+- FPGA - allow device detect override without an open failure
+- Fix sign warning.
+
+
+Version 2.4.3 - June 14, 2012
+
+- can_roll and should_roll should have no bearing on the cycle period within the
+miner_thread so remove it.
+- Check for strategy being changed to load balance when enabling LPs.
+- Check that all threads on the device that called get_work are waiting on
+getwork before considering the pool lagging.
+- Iterate over each thread belonging to each device in the hashmeter instead of
+searching for them now that they're a list.
+- When using rotate pool strategy, ensure we only select from alive enabled
+pools.
+- Start longpoll from every pool when load balance strategy is in use.
+- Add mandatory and block fields to the work struct. Flag any shares that are
+detected as blocks as mandatory to submit, along with longpoll work from a
+previously rejecting pool.
+- Consider the fan optimal if fanspeed is dropping but within the optimal speed
+window.
+- Fix typo in some API messages (succeess/success)
+- api.c MMQ stat bugs
+- Bugfix: Fix warnings when built without libudev support
+- Bugfix: slay a variety of warnings
+- Bugfix: modminer: Fix unsigned/signed comparison and similar warnings
+- API add ModMinerQuad support
+- Bugfix: Honour forceauto parameter in serial_detect functions
+- modminer: Temperature sensor improvements
+- modminer: Make log messages more consistent in format
+- Only adjust GPU speed up if the fanspeed is within the normal fanrange and
+hasn't been turned to maximum speed under overheat conditions.
+- ModMiner use valid .name
+- New driver: BTCFPGA ModMiner
+- Abstract generally useful FPGA code into fpgautils.c
+- API add stats for pool getworks
+- miner.php option to hide specific fields from the display
+- miner.php add version numbers to the summary page
+- Update debian configs to v2.4.2
+- Add API and FPGA READMEs into Makefile to be included in source distribution.
+- Icarus - fix unit64_t printf warnings
+
+
 Version 2.4.2 - June 2, 2012
 
 - API.class compiled with Java SE 6.0_03 - works with Win7x64

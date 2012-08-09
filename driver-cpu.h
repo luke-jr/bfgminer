@@ -1,7 +1,7 @@
 #ifndef __DEVICE_CPU_H__
 #define __DEVICE_CPU_H__
 
-#include "miner.h" /* for work_restart, TODO: re-factor dependency */
+#include "miner.h"
 
 #include "config.h"
 #include <stdbool.h>

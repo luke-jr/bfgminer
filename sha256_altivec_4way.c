@@ -73,7 +73,7 @@ static const unsigned int pSHA256InitState[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
 
-bool ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
+bool ScanHash_altivec_4way(struct thr_info*thr, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
 	const unsigned char *ptarget,
@@ -111,7 +111,7 @@ bool ScanHash_altivec_4way(int thr_id, const unsigned char *pmidstate,
             }
         }
 
-        if ((nonce >= max_nonce) || work_restart[thr_id].restart)
+        if ((nonce >= max_nonce) || thr->work_restart)
         {
             *last_nonce = nonce;
             return false;

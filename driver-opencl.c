@@ -538,15 +538,11 @@ struct cgpu_info *cpus;
 void pause_dynamic_threads(int gpu)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
-	int i, thread_no = 0;
+	int i;
 
-	for (i = 0; i < mining_threads; i++) {
+	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr = &thr_info[i];
 
-		if (thr->cgpu != cgpu)
-			continue;
-		if (!thread_no++)
-			continue;
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
 			applog(LOG_WARNING, "Tune dynamic intensity with --gpu-dyninterval");
@@ -990,7 +986,7 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 }
 
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
-			       unsigned int *hashes, size_t *globalThreads,
+			       int64_t *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
 {
 	*threads = 1 << (15 + intensity);
@@ -1110,7 +1106,7 @@ out:
 	return NULL;
 }
 #else
-void *reinit_gpu(void *userdata)
+void *reinit_gpu(__maybe_unused void *userdata)
 {
 	return NULL;
 }
@@ -1129,9 +1125,6 @@ static void opencl_detect()
 		applog(LOG_ERR, "clDevicesNum returned error, no GPUs usable");
 		nDevs = 0;
 	}
-
-	if (MAX_DEVICES - total_devices < nDevs)
-		nDevs = MAX_DEVICES - total_devices;
 
 	if (!nDevs)
 		return;
@@ -1345,45 +1338,46 @@ static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work
 
 extern int opt_dynamic_interval;
 
-static uint64_t opencl_scanhash(struct thr_info *thr, struct work *work,
-				uint64_t __maybe_unused max_nonce)
+static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
+				int64_t __maybe_unused max_nonce)
 {
 	const int thr_id = thr->id;
 	struct opencl_thread_data *thrdata = thr->cgpu_data;
 	struct cgpu_info *gpu = thr->cgpu;
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
+	const int dynamic_us = opt_dynamic_interval * 1000;
 
-	double gpu_ms_average = 7;
 	cl_int status;
-
 	size_t globalThreads[1];
 	size_t localThreads[1] = { clState->wsize };
 	unsigned int threads;
-	unsigned int hashes;
+	int64_t hashes;
 
-
-	struct timeval tv_gpustart, tv_gpuend, diff;
-	suseconds_t gpu_us;
-
-	gettimeofday(&tv_gpustart, NULL);
-	timeval_subtract(&diff, &tv_gpustart, &tv_gpuend);
 	/* This finish flushes the readbuffer set with CL_FALSE later */
+	gettimeofday(&gpu->tv_gpustart, NULL);
 	clFinish(clState->commandQueue);
-	gettimeofday(&tv_gpuend, NULL);
-	timeval_subtract(&diff, &tv_gpuend, &tv_gpustart);
-	gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
-	decay_time(&gpu_ms_average, gpu_us / 1000);
+	gettimeofday(&gpu->tv_gpuend, NULL);
+
 	if (gpu->dynamic) {
-		/* Try to not let the GPU be out for longer than 6ms, but
-		 * increase intensity when the system is idle, unless
-		 * dynamic is disabled. */
-		if (gpu_ms_average > opt_dynamic_interval) {
-			if (gpu->intensity > MIN_INTENSITY)
-				--gpu->intensity;
-		} else if (gpu_ms_average < ((opt_dynamic_interval / 2) ? : 1)) {
-			if (gpu->intensity < MAX_INTENSITY)
-				++gpu->intensity;
+		struct timeval diff;
+		suseconds_t gpu_us;
+
+		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
+		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
+		if (likely(gpu_us >= 0)) {
+			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
+
+			/* Try to not let the GPU be out for longer than 
+			 * opt_dynamic_interval in ms, but increase
+			 * intensity when the system is idle in dynamic mode */
+			if (gpu->gpu_us_average > dynamic_us) {
+				if (gpu->intensity > MIN_INTENSITY)
+					--gpu->intensity;
+			} else if (gpu->gpu_us_average < dynamic_us / 2) {
+				if (gpu->intensity < MAX_INTENSITY)
+					++gpu->intensity;
+			}
 		}
 	}
 	set_threads_hashes(clState->vwidth, &threads, &hashes, globalThreads,

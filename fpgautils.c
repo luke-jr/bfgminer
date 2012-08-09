@@ -15,6 +15,7 @@
 #include <string.h>
 
 #ifndef WIN32
+#include <errno.h>
 #include <termios.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -36,13 +37,10 @@
 #include "logging.h"
 #include "miner.h"
 
+#ifdef HAVE_LIBUDEV
 char
 serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 {
-#ifdef HAVE_LIBUDEV
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	struct udev *udev = udev_new();
 	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
 	struct udev_list_entry *list_entry;
@@ -64,26 +62,24 @@ serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 			++found;
 
 		udev_device_unref(device);
-
-		if (total_devices == MAX_DEVICES)
-			break;
 	}
 	udev_enumerate_unref(enumerate);
 	udev_unref(udev);
 
 	return found;
-#else
-	return 0;
-#endif
 }
+#else
+char
+serial_autodetect_udev(__maybe_unused detectone_func_t detectone, __maybe_unused const char*prodname)
+{
+	return 0;
+}
+#endif
 
 char
 serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 {
 #ifndef WIN32
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	DIR *D;
 	struct dirent *de;
 	const char udevdir[] = "/dev/serial/by-id";
@@ -100,11 +96,8 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 		if (!strstr(de->d_name, prodname))
 			continue;
 		strcpy(devfile, de->d_name);
-		if (detectone(devpath)) {
+		if (detectone(devpath))
 			++found;
-			if (total_devices == MAX_DEVICES)
-				break;
-		}
 	}
 	closedir(D);
 
@@ -115,20 +108,22 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 }
 
 char
-_serial_detect(const char*dnamec, size_t dnamel, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
+_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
 {
-	if (total_devices == MAX_DEVICES)
-		return 0;
-
 	struct string_elist *iter, *tmp;
-	const char*s;
+	const char*s, *p;
 	bool inhibitauto = false;
 	char found = 0;
+	size_t dnamel = strlen(dname);
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
 		s = iter->string;
-		if (!strncmp(dnamec, iter->string, dnamel))
-			s += dnamel;
+		if ((p = strchr(s, ':')) && p[1] != '\0') {
+			size_t plen = p - s;
+			if (plen != dnamel || strncasecmp(s, dname, plen))
+				continue;
+			s = p + 1;
+		}
 		if (!strcmp(s, "auto"))
 			forceauto = true;
 		else
@@ -139,12 +134,10 @@ _serial_detect(const char*dnamec, size_t dnamel, detectone_func_t detectone, aut
 			string_elist_del(iter);
 			inhibitauto = true;
 			++found;
-			if (total_devices == MAX_DEVICES)
-				break;
 		}
 	}
 
-	if ((forceauto || !inhibitauto) && autoscan && total_devices < MAX_DEVICES)
+	if ((forceauto || !inhibitauto) && autoscan)
 		found += autoscan();
 
 	return found;
@@ -156,7 +149,21 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 #ifdef WIN32
 	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
+	{
+		DWORD e = GetLastError();
+		switch (e) {
+		case ERROR_ACCESS_DENIED:
+			applog(LOG_ERR, "Do not have user privileges required to open %s", devpath);
+			break;
+		case ERROR_SHARING_VIOLATION:
+			applog(LOG_ERR, "%s is already in use by another process", devpath);
+			break;
+		default:
+			applog(LOG_DEBUG, "Open %s failed, GetLastError:%u", devpath, e);
+			break;
+		}
 		return -1;
+	}
 
 	// thanks to af_newbie for pointers about this
 	COMMCONFIG comCfg = {0};
@@ -187,30 +194,48 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
 
 	if (unlikely(fdDev == -1))
-		return -1;
+	{
+		if (errno == EACCES)
+			applog(LOG_ERR, "Do not have user privileges required to open %s", devpath);
+		else
+			applog(LOG_DEBUG, "Open %s failed, errno:%d", devpath, errno);
 
-	struct termios pattr;
-	tcgetattr(fdDev, &pattr);
-	pattr.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-	pattr.c_oflag &= ~OPOST;
-	pattr.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-	pattr.c_cflag &= ~(CSIZE | PARENB);
-	pattr.c_cflag |= CS8;
+		return -1;
+	}
+
+	struct termios my_termios;
+
+	tcgetattr(fdDev, &my_termios);
 
 	switch (baud) {
-	case 0: break;
-	case 115200: pattr.c_cflag = B115200; break;
+	case 0:
+		break;
+	case 115200:
+		cfsetispeed( &my_termios, B115200 );
+		cfsetospeed( &my_termios, B115200 );
+		break;
+	// TODO: try some higher speeds with the Icarus and BFL to see
+	// if they support them and if setting them makes any difference
 	default:
 		applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
 	}
-	pattr.c_cflag |= CREAD | CLOCAL;
+
+	my_termios.c_cflag |= CS8;
+	my_termios.c_cflag |= CREAD;
+	my_termios.c_cflag |= CLOCAL;
+	my_termios.c_cflag &= ~(CSIZE | PARENB);
+
+	my_termios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK |
+				ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+	my_termios.c_oflag &= ~OPOST;
+	my_termios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
 
 	if (timeout >= 0) {
-		pattr.c_cc[VTIME] = (cc_t)timeout;
-		pattr.c_cc[VMIN] = 0;
+		my_termios.c_cc[VTIME] = (cc_t)timeout;
+		my_termios.c_cc[VMIN] = 0;
 	}
 
-	tcsetattr(fdDev, TCSANOW, &pattr);
+	tcsetattr(fdDev, TCSANOW, &my_termios);
 	if (purge)
 		tcflush(fdDev, TCIOFLUSH);
 	return fdDev;

@@ -56,7 +56,7 @@ struct upload_buffer {
 
 struct header_info {
 	char		*lp_path;
-	bool		has_rolltime;
+	int		rolltime;
 	char		*reason;
 };
 
@@ -147,9 +147,9 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 
 	memcpy(val, rem, remlen);	/* store value, trim trailing ws */
 	val[remlen] = 0;
-	while ((*val) && (isspace(val[strlen(val) - 1]))) {
+	while ((*val) && (isspace(val[strlen(val) - 1])))
 		val[strlen(val) - 1] = 0;
-	}
+
 	if (!*val)			/* skip blank value */
 		goto out;
 
@@ -157,11 +157,16 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		applog(LOG_DEBUG, "HTTP hdr(%s): %s", key, val);
 
 	if (!strcasecmp("X-Roll-Ntime", key)) {
-		if (!strncasecmp("N", val, 1)) {
+		if (!strncasecmp("N", val, 1))
 			applog(LOG_DEBUG, "X-Roll-Ntime: N found");
-		} else {
-			applog(LOG_DEBUG, "X-Roll-Ntime found");
-			hi->has_rolltime = true;
+		else {
+			/* Check to see if expire= is supported and if not, set
+			 * the rolltime to the default scantime */
+			if (strlen(val) > 7 && !strncasecmp("expire=", val, 7))
+				sscanf(val + 7, "%d", &hi->rolltime);
+			else
+				hi->rolltime = opt_scantime;
+			applog(LOG_DEBUG, "X-Roll-Ntime expiry set to %d", hi->rolltime);
 		}
 	}
 
@@ -248,20 +253,20 @@ static void set_nettime(void)
 
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
-		      bool probe, bool longpoll, bool *rolltime,
+		      bool probe, bool longpoll, int *rolltime,
 		      struct pool *pool, bool share)
 {
-	json_t *val, *err_val, *res_val;
-	int rc;
+	long timeout = longpoll ? (60 * 60) : 60;
 	struct data_buffer all_data = {NULL, 0};
-	struct upload_buffer upload_data;
-	json_error_t err;
-	struct curl_slist *headers = NULL;
+	struct header_info hi = {NULL, 0, NULL};
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
-	long timeout = longpoll ? (60 * 60) : 60;
-	struct header_info hi = {NULL, false, NULL};
+	struct curl_slist *headers = NULL;
+	struct upload_buffer upload_data;
+	json_t *val, *err_val, *res_val;
 	bool probing = false;
+	json_error_t err;
+	int rc;
 
 	memset(&err, 0, sizeof(err));
 
@@ -320,6 +325,14 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		"Content-type: application/json");
 	headers = curl_slist_append(headers,
 		"X-Mining-Extensions: longpoll midstate rollntime submitold");
+
+	if (likely(global_hashrate)) {
+		char ghashrate[255];
+
+		sprintf(ghashrate, "X-Mining-Hashrate: %llu", global_hashrate);
+		headers = curl_slist_append(headers, ghashrate);
+	}
+
 	headers = curl_slist_append(headers, len_hdr);
 	headers = curl_slist_append(headers, user_agent_hdr);
 	headers = curl_slist_append(headers, "Expect:"); /* disable Expect hdr*/
@@ -367,15 +380,14 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 			if (pool->hdr_path != NULL)
 				free(pool->hdr_path);
 			pool->hdr_path = hi.lp_path;
-		} else {
+		} else
 			pool->hdr_path = NULL;
-		}
 	} else if (hi.lp_path) {
 		free(hi.lp_path);
 		hi.lp_path = NULL;
 	}
 
-	*rolltime = hi.has_rolltime;
+	*rolltime = hi.rolltime;
 
 	val = JSON_LOADS(all_data.buf, &err);
 	if (!val) {
@@ -389,6 +401,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 
 	if (opt_protocol) {
 		char *s = json_dumps(val, JSON_INDENT(3));
+
 		applog(LOG_DEBUG, "JSON protocol response:\n%s", s);
 		free(s);
 	}
@@ -438,8 +451,8 @@ err_out:
 
 char *bin2hex(const unsigned char *p, size_t len)
 {
-	unsigned int i;
 	char *s = malloc((len * 2) + 1);
+	unsigned int i;
 
 	if (!s)
 		return NULL;
@@ -480,43 +493,14 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 	return (len == 0 && *hexstr == 0) ? true : false;
 }
 
-/* Subtract the `struct timeval' values X and Y,
-   storing the result in RESULT.
-   Return 1 if the difference is negative, otherwise 0.  */
-
-int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y)
-{
-	/* Perform the carry for the later subtraction by updating Y. */
-	if (x->tv_usec < y->tv_usec) {
-		int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
-
-		y->tv_usec -= 1000000 * nsec;
-		y->tv_sec += nsec;
-	}
-	if (x->tv_usec - y->tv_usec > 1000000) {
-		int nsec = (x->tv_usec - y->tv_usec) / 1000000;
-
-		y->tv_usec += 1000000 * nsec;
-		y->tv_sec -= nsec;
-	}
-
-	/* Compute the time remaining to wait.
-	 * `tv_usec' is certainly positive. */
-	result->tv_sec = x->tv_sec - y->tv_sec;
-	result->tv_usec = x->tv_usec - y->tv_usec;
-
-	/* Return 1 if result is negative. */
-	return x->tv_sec < y->tv_sec;
-}
-
 bool fulltest(const unsigned char *hash, const unsigned char *target)
 {
 	unsigned char hash_swap[32], target_swap[32];
 	uint32_t *hash32 = (uint32_t *) hash_swap;
 	uint32_t *target32 = (uint32_t *) target_swap;
-	int i;
-	bool rc = true;
 	char *hash_str, *target_str;
+	bool rc = true;
+	int i;
 
 	swap256(hash_swap, hash);
 	swap256(target_swap, target);
@@ -669,10 +653,7 @@ out:
 
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg)
 {
-	int ret;
-
-	ret = pthread_create(&thr->pth, attr, start, arg);
-	return ret;
+	return pthread_create(&thr->pth, attr, start, arg);
 }
 
 void thr_info_freeze(struct thr_info *thr)
@@ -705,4 +686,20 @@ void thr_info_cancel(struct thr_info *thr)
 		pthread_cancel(thr->pth);
 		PTH(thr) = 0L;
 	}
+}
+
+/* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
+ * on SMP machines */
+void nmsleep(unsigned int msecs)
+{
+	struct timespec twait, tleft;
+	int ret;
+
+	tleft.tv_sec = msecs / 1000;
+	tleft.tv_nsec = (uint64_t)(msecs * 1000000) - (uint64_t)(twait.tv_sec / 1000000000);
+	do {
+		twait.tv_sec = tleft.tv_sec;
+		twait.tv_nsec = tleft.tv_nsec;
+		ret = nanosleep(&twait, &tleft);
+	} while (ret == -1 && errno == EINTR);
 }

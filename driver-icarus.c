@@ -179,7 +179,7 @@ struct ICARUS_INFO {
 };
 
 // One for each possible device
-static struct ICARUS_INFO *icarus_info[MAX_DEVICES];
+static struct ICARUS_INFO **icarus_info;
 
 struct device_api icarus_api;
 
@@ -198,7 +198,7 @@ static void rev(unsigned char *s, size_t l)
 #define icarus_open2(devpath, purge)  serial_open(devpath, 115200, ICARUS_READ_FAULT_DECISECONDS, purge)
 #define icarus_open(devpath)  icarus_open2(devpath, false)
 
-static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, int thr_id, int read_count)
+static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
@@ -232,7 +232,7 @@ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, in
 			return 1;
 		}
 
-		if (thr_id >= 0 && work_restart[thr_id].restart) {
+		if (thr->work_restart) {
 			if (opt_debug) {
 				applog(LOG_DEBUG,
 					"Icarus Read: Work restart at %.2f seconds",
@@ -379,6 +379,8 @@ static bool icarus_detect_one(const char *devpath)
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *nonce_hex;
 
+	applog(LOG_DEBUG, "Icarus Detect: Attempting to open %s", devpath);
+
 	fd = icarus_open2(devpath, true);
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Icarus Detect: Failed to open %s", devpath);
@@ -390,7 +392,10 @@ static bool icarus_detect_one(const char *devpath)
 	gettimeofday(&tv_start, NULL);
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	icarus_gets(nonce_bin, fd, &tv_finish, -1, 1);
+	struct thr_info dummy = {
+		.work_restart = false,
+	};
+	icarus_gets(nonce_bin, fd, &tv_finish, &dummy, 1);
 
 	icarus_close(fd);
 
@@ -419,15 +424,15 @@ static bool icarus_detect_one(const char *devpath)
 	icarus->device_path = strdup(devpath);
 	icarus->threads = 1;
 	add_cgpu(icarus);
+	icarus_info = realloc(icarus_info, sizeof(struct ICARUS_INFO *) * (total_devices + 1));
 
 	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
 		devpath, icarus->device_id);
 
-	if (icarus_info[icarus->device_id] == NULL) {
-		icarus_info[icarus->device_id] = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
-		if (unlikely(!(icarus_info[icarus->device_id])))
-			quit(1, "Failed to malloc ICARUS_INFO");
-	}
+	// Since we are adding a new device on the end it needs to always be allocated
+	icarus_info[icarus->device_id] = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
+	if (unlikely(!(icarus_info[icarus->device_id])))
+		quit(1, "Failed to malloc ICARUS_INFO");
 
 	info = icarus_info[icarus->device_id];
 
@@ -444,7 +449,7 @@ static bool icarus_detect_one(const char *devpath)
 
 static void icarus_detect()
 {
-	serial_detect("icarus", icarus_detect_one);
+	serial_detect(icarus_api.dname, icarus_detect_one);
 }
 
 static bool icarus_prepare(struct thr_info *thr)
@@ -469,10 +474,9 @@ static bool icarus_prepare(struct thr_info *thr)
 	return true;
 }
 
-static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
-				__maybe_unused uint64_t max_nonce)
+static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
+				__maybe_unused int64_t max_nonce)
 {
-	const int thr_id = thr->id;
 	struct cgpu_info *icarus;
 	int fd;
 	int ret;
@@ -482,7 +486,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *ob_hex;
 	uint32_t nonce;
-	uint64_t hash_count;
+	int64_t hash_count;
 	struct timeval tv_start, tv_finish, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
@@ -492,9 +496,9 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	int count;
 	double Hs, W, fullnonce;
 	int read_count;
-	uint64_t estimate_hashes;
+	int64_t estimate_hashes;
 	uint32_t values;
-	uint64_t hash_count_range;
+	int64_t hash_count_range;
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
@@ -511,7 +515,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 #endif
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
 	if (ret)
-		return 0;	/* This should never happen */
+		return -1;	/* This should never happen */
 
 	gettimeofday(&tv_start, NULL);
 
@@ -527,7 +531,7 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	info = icarus_info[icarus->device_id];
-	ret = icarus_gets(nonce_bin, fd, &tv_finish, thr_id, info->read_count);
+	ret = icarus_gets(nonce_bin, fd, &tv_finish, thr, info->read_count);
 
 	work->blk.nonce = 0xffffffff;
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
@@ -674,23 +678,30 @@ static uint64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	return hash_count;
 }
 
-static void icarus_api_stats(char *buf, struct cgpu_info *cgpu, bool isjson)
+static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 {
+	struct api_data *root = NULL;
 	struct ICARUS_INFO *info = icarus_info[cgpu->device_id];
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
 	// locking access to displaying API debug 'stats'
-	sprintf(buf, isjson
-		? "\"read_count\":%d,\"fullnonce\":%f,\"count\":%d,\"Hs\":%.15f,\"W\":%f,\"total_values\":%u,\"range\":%"PRIu64",\"history_count\":%"PRIu64",\"history_time\":%f,\"min_data_count\":%u,\"timing_values\":%u"
-		: "read_count=%d,fullnonce=%f,count=%d,Hs=%.15f,W=%f,total_values=%u,range=%"PRIu64",history_count=%"PRIu64",history_time=%f,min_data_count=%u,timing_values=%u",
-		info->read_count, info->fullnonce,
-		info->count, info->Hs, info->W,
-		info->values, info->hash_count_range,
-		info->history_count,
-		(double)(info->history_time.tv_sec)
-			+ ((double)(info->history_time.tv_usec))/((double)1000000),
-		info->min_data_count, info->history[0].values);
+	// If locking becomes an issue for any of them, use copy_data=true also
+	root = api_add_int(root, "read_count", &(info->read_count), false);
+	root = api_add_double(root, "fullnonce", &(info->fullnonce), false);
+	root = api_add_int(root, "count", &(info->count), false);
+	root = api_add_hs(root, "Hs", &(info->Hs), false);
+	root = api_add_double(root, "W", &(info->W), false);
+	root = api_add_uint(root, "total_values", &(info->values), false);
+	root = api_add_uint64(root, "range", &(info->hash_count_range), false);
+	root = api_add_uint64(root, "history_count", &(info->history_count), false);
+	root = api_add_timeval(root, "history_time", &(info->history_time), false);
+	root = api_add_uint(root, "min_data_count", &(info->min_data_count), false);
+	root = api_add_uint(root, "timing_values", &(info->history[0].values), false);
+	root = api_add_const(root, "timing_mode", timing_mode_str(info->timing_mode), false);
+	root = api_add_bool(root, "is_timing", &(info->do_icarus_timing), false);
+
+	return root;
 }
 
 static void icarus_shutdown(struct thr_info *thr)

@@ -3,6 +3,10 @@ session_start();
 #
 global $miner, $port, $readonly, $notify, $rigs, $socktimeoutsec;
 global $checklastshare, $hidefields;
+global $ignorerefresh, $changerefresh, $autorefresh;
+global $allowcustompages, $customsummarypages;
+global $miner_font_family, $miner_font_size;
+global $colouroverride, $placebuttons;
 #
 # Don't touch these 2 - see $rigs below
 $miner = null;
@@ -50,6 +54,43 @@ $socktimeoutsec = 10;
 #$hidefields = array('POOL.URL' => 1, 'POOL.User' => 1);
 $hidefields = array();
 #
+# Auto-refresh of the page (in seconds)
+# $ignorerefresh = true/false always ignore refresh parameters
+# $changerefresh = true/false show buttons to change the value
+# $autorefresh = default value, 0 means dont auto-refresh
+$ignorerefresh = false;
+$changerefresh = true;
+$autorefresh = 0;
+#
+# Should we allow custom pages?
+# (or just completely ignore then and don't display the buttons)
+$allowcustompages = true;
+#
+# OK this is a bit more complex item: Custom Summary Pages
+# A custom summary page in an array of 'section' => array('FieldA','FieldB'...)
+#  Field can be 'name=new name' to display 'name' with a different heading 'new name'
+# This makes up what is displayed with each 'section' separately as a table
+# - empty tables are not shown
+# - empty columns (an unknown field) are not shown
+# - and missing field data shows as blank
+# - section = 'DATE' displays a date table like 'Summary'
+# - section = 'RIGS' displays a rig table like 'Summary'
+# There is a second array, listing fields to be totaled for each section
+# see the example below (if there is no matching data, no total will show)
+$mobilepage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej', 'Utility'),
+ 'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected=Rej', 'Utility'),
+ 'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej', 'Last Share Time'));
+$mobilesum = array(
+ 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
+ 'DEVS' => array('MHS av', 'Accepted', 'Rejected', 'Utility'),
+ 'POOL' => array('Accepted', 'Rejected'));
+#
+# customsummarypages is an array of these Custom Summary Pages
+$customsummarypages = array('Mobile' => array($mobilepage, $mobilesum));
+#
 $here = $_SERVER['PHP_SELF'];
 #
 global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
@@ -60,6 +101,53 @@ $warnfont = '<font color=red><b>';
 $warnoff = '</b></font>';
 $dfmt = 'H:i:s j-M-Y \U\T\CP';
 #
+$miner_font_family = 'verdana,arial,sans';
+$miner_font_size = '13pt';
+#
+# Edit this or redefine it in myminer.php to change the colour scheme
+# See $colourtable below for the list of names
+$colouroverride = array();
+#
+# Where to place the buttons: 'top' 'bot' 'both'
+#  anything else means don't show them - case sensitive
+$placebuttons = 'top';
+#
+# This below allows you to put your own settings into a seperate file
+# so you don't need to update miner.php with your preferred settings
+# every time a new version is released
+# Just create the file 'myminer.php' in the same directory as
+# 'miner.php' - and put your own settings in there
+if (file_exists('myminer.php'))
+ include_once('myminer.php');
+#
+# This is the system default that must always contain all necessary
+# colours so it must be a constant
+# You can override these values with $colouroverride
+# The only one missing is in $warnfont
+# - which you can override directly anyway
+global $colourtable;
+$colourtable = array(
+	'body bgcolor'		=> '#ecffff',
+	'td color'		=> 'blue',
+	'td.two color'		=> 'blue',
+	'td.two background'	=> '#ecffff',
+	'td.h color'		=> 'blue',
+	'td.h background'	=> '#c4ffff',
+	'td.err color'		=> 'black',
+	'td.err background'	=> '#ff3050',
+	'td.warn color'		=> 'black',
+	'td.warn background'	=> '#ffb050',
+	'td.sta color'		=> 'green',
+	'td.tot color'		=> 'blue',
+	'td.tot background'	=> '#fff8f2',
+	'td.lst color'		=> 'blue',
+	'td.lst background'	=> '#ffffdd',
+	'td.hi color'		=> 'blue',
+	'td.hi background'	=> '#f6ffff',
+	'td.lo color'		=> 'blue',
+	'td.lo background'	=> '#deffff'
+);
+#
 # Ensure it is only ever shown once
 global $showndate;
 $showndate = false;
@@ -68,39 +156,94 @@ $showndate = false;
 global $rigerror;
 $rigerror = array();
 #
-function htmlhead($checkapi)
+global $rownum;
+$rownum = 0;
+#
+function getcss($cssname, $dom = false)
 {
+ global $colourtable, $colouroverride;
+
+ $css = '';
+ foreach ($colourtable as $cssdata => $value)
+ {
+	$cssobj = explode(' ', $cssdata, 2);
+	if ($cssobj[0] == $cssname)
+	{
+		if (isset($colouroverride[$cssdata]))
+			$value = $colouroverride[$cssdata];
+
+		if ($dom == true)
+			$css .= ' '.$cssobj[1].'='.$value;
+		else
+			$css .= $cssobj[1].':'.$value.'; ';
+	}
+ }
+ return $css;
+}
+#
+function getdom($domname)
+{
+ return getcss($domname, true);
+}
+#
+function htmlhead($checkapi, $rig, $pg = null)
+{
+ global $miner_font_family, $miner_font_size;
  global $error, $readonly, $here;
+ global $ignorerefresh, $autorefresh;
+
+ $extraparams = '';
+ if ($rig != null && $rig != '')
+	$extraparams = "&rig=$rig";
+ else
+	if ($pg != null && $pg != '')
+		$extraparams = "&pg=$pg";
+
+ if ($ignorerefresh == true || $autorefresh == 0)
+	$refreshmeta = '';
+ else
+ {
+	$url = "$here?ref=$autorefresh$extraparams";
+	$refreshmeta = "\n<meta http-equiv='refresh' content='$autorefresh;url=$url'>";
+ }
+
  if ($readonly === false && $checkapi === true)
  {
+	$error = null;
 	$access = api('privileged');
 	if ($error != null
 	||  !isset($access['STATUS']['STATUS'])
 	||  $access['STATUS']['STATUS'] != 'S')
 		$readonly = true;
  }
-?>
-<html><head><title>Mine</title>
+ $miner_font = "font-family:$miner_font_family; font-size:$miner_font_size;";
+
+ echo "<html><head>$refreshmeta
+<title>Mine</title>
 <style type='text/css'>
-td { color:blue; font-family:verdana,arial,sans; font-size:13pt; }
-td.h { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#d0ffff }
-td.err { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ff3050 }
-td.warn { color:black; font-family:verdana,arial,sans; font-size:13pt; background:#ffb050 }
-td.sta { color:green; font-family:verdana,arial,sans; font-size:13pt; }
-td.tot { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#fff8f2 }
-td.lst { color:blue; font-family:verdana,arial,sans; font-size:13pt; background:#ffffdd }
+td { $miner_font ".getcss('td')."}
+td.two { $miner_font ".getcss('td.two')."}
+td.h { $miner_font ".getcss('td.h')."}
+td.err { $miner_font ".getcss('td.err')."}
+td.warn { $miner_font ".getcss('td.warn')."}
+td.sta { $miner_font ".getcss('td.sta')."}
+td.tot { $miner_font ".getcss('td.tot')."}
+td.lst { $miner_font ".getcss('td.lst')."}
+td.hi { $miner_font ".getcss('td.hi')."}
+td.lo { $miner_font ".getcss('td.lo')."}
 </style>
-</head><body bgcolor=#ecffff>
+</head><body".getdom('body').">
 <script type='text/javascript'>
-function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location="<?php echo $here ?>"+a}
-<?php
+function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location='$here?ref=$autorefresh'+a}\n";
+
+if ($ignorerefresh == false)
+ echo "function prr(a){if(a){v=document.getElementById('refval').value}else{v=0}window.location='$here?ref='+v+'$extraparams'}\n";
+
  if ($readonly === false && $checkapi === true)
  {
-?>
-function prc(a,m){pr('?arg='+a,m)}
+echo "function prc(a,m){pr('&arg='+a,m)}
 function prs(a,r){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a+'&rig='+r,m)}
-function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v+'&rig='+r,m)}
-<?php
+function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v+'&rig='+r,m)}\n";
  }
 ?>
 </script>
@@ -110,17 +253,20 @@ function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(
 <?php
 }
 #
-global $error;
+global $haderror, $error;
+$haderror = false;
 $error = null;
 #
 function getsock($addr, $port)
 {
- global $error, $socktimeoutsec;
+ global $haderror, $error, $socktimeoutsec;
 
+ $error = null;
  $socket = null;
  $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
  if ($socket === false || $socket === null)
  {
+	$haderror = true;
 	$error = socket_strerror(socket_last_error());
 	$msg = "socket create(TCP) failed";
 	$error = "ERR: $msg '$error'\n";
@@ -135,6 +281,7 @@ function getsock($addr, $port)
  $res = socket_connect($socket, $addr, $port);
  if ($res === false)
  {
+	$haderror = true;
 	$error = socket_strerror(socket_last_error());
 	$msg = "socket connect($addr,$port) failed";
 	$error = "ERR: $msg '$error'\n";
@@ -161,6 +308,7 @@ function readsockline($socket)
 #
 function api($cmd)
 {
+ global $haderror, $error;
  global $miner, $port, $hidefields;
 
  $socket = getsock($miner, $port);
@@ -172,6 +320,7 @@ function api($cmd)
 
 	if (strlen($line) == 0)
 	{
+		$haderror = true;
 		$error = "WARN: '$cmd' returned nothing\n";
 		return $line;
 	}
@@ -247,6 +396,36 @@ function getparam($name, $both = false)
  return substr($a, 0, 1024);
 }
 #
+function newtable()
+{
+ global $tablebegin, $rownum;
+ echo $tablebegin;
+ $rownum = 0;
+}
+#
+function newrow()
+{
+ echo '<tr>';
+}
+#
+function otherrow($row)
+{
+ echo "<tr>$row</tr>";
+}
+#
+function endrow()
+{
+ global $rownum;
+ echo '</tr>';
+ $rownum++;
+}
+#
+function endtable()
+{
+ global $tableend;
+ echo $tableend;
+}
+#
 function classlastshare($when, $alldata, $warnclass, $errorclass)
 {
  global $checklastshare;
@@ -279,7 +458,7 @@ function classlastshare($when, $alldata, $warnclass, $errorclass)
 #
 function fmt($section, $name, $value, $when, $alldata)
 {
- global $dfmt;
+ global $dfmt, $rownum;
 
  if ($alldata == null)
 	$alldata = array();
@@ -287,6 +466,10 @@ function fmt($section, $name, $value, $when, $alldata)
  $errorclass = ' class=err';
  $warnclass = ' class=warn';
  $lstclass = ' class=lst';
+ $hiclass = ' class=hi';
+ $loclass = ' class=lo';
+ $c2class = ' class=two';
+ $totclass = ' class=tot';
  $b = '&nbsp;';
 
  $ret = $value;
@@ -382,9 +565,23 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'GPU.Utility':
 	case 'PGA.Utility':
 	case 'SUMMARY.Utility':
+	case 'total.Utility':
 		$ret = $value.'/m';
 		if ($value == 0)
-			$class = $warnclass;
+			$class = $errorclass;
+		else
+			if (isset($alldata['MHS av']))
+			{
+				$expected = 60 * $alldata['MHS av'] * (pow(10, 6) / pow(2, 32));
+				if ($expected == 0)
+					$expected = 0.000001; // 1 H/s
+				$ratio = $value / $expected;
+				if ($ratio < 0.9)
+					$class = $loclass;
+				else
+					if ($ratio > 1.1)
+						$class = $hiclass;
+			}
 		break;
 	case 'PGA.Temperature':
 		$ret = $value.'&deg;C';
@@ -427,21 +624,51 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'GPU.MHS av':
 	case 'PGA.MHS av':
 	case 'SUMMARY.MHS av':
+	case 'total.MHS av':
+		$parts = explode('.', $value, 2);
+		if (count($parts) == 1)
+			$dec = '';
+		else
+			$dec = '.'.$parts[1];
+		$ret = number_format($parts[0]).$dec;
+
+		if ($value == 0)
+			$class = $errorclass;
+		else
+			if (isset($alldata['Utility']))
+			{
+				$expected = 60 * $value * (pow(10, 6) / pow(2, 32));
+				$utility = $alldata['Utility'];
+				$ratio = $utility / $expected;
+				if ($ratio < 0.9)
+					$class = $hiclass;
+				else
+					if ($ratio > 1.1)
+						$class = $loclass;
+			}
+		break;
 	case 'GPU.Total MH':
 	case 'PGA.Total MH':
 	case 'SUMMARY.Total MH':
+	case 'total.Total MH':
 	case 'SUMMARY.Getworks':
+	case 'POOL.Getworks':
+	case 'total.Getworks':
 	case 'GPU.Accepted':
 	case 'PGA.Accepted':
 	case 'SUMMARY.Accepted':
+	case 'POOL.Accepted':
+	case 'total.Accepted':
 	case 'GPU.Rejected':
 	case 'PGA.Rejected':
 	case 'SUMMARY.Rejected':
-	case 'SUMMARY.Local Work':
-	case 'POOL.Getworks':
-	case 'POOL.Accepted':
 	case 'POOL.Rejected':
+	case 'total.Rejected':
+	case 'SUMMARY.Local Work':
+	case 'total.Local Work':
+	case 'SUMMARY.Discarded':
 	case 'POOL.Discarded':
+	case 'total.Discarded':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -463,6 +690,11 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'STATUS.When':
 		$ret = date($dfmt, $value);
 		break;
+	case 'BUTTON.Rig':
+	case 'BUTTON.Pool':
+	case 'BUTTON.GPU':
+		$ret = $value;
+		break;
 	}
 
  if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
@@ -470,6 +702,12 @@ function fmt($section, $name, $value, $when, $alldata)
 
  if ($class == '' && $section != 'POOL')
 	$class = classlastshare($when, $alldata, $lstclass, $lstclass);
+
+ if ($class == '' && $section == 'total')
+	$class = $totclass;
+
+ if ($class == '' && ($rownum % 2) == 0)
+	$class = $c2class;
 
  return array($ret, $class);
 }
@@ -479,11 +717,11 @@ $poolcmd = array(	'Switch to'	=> 'switchpool',
 			'Enable'	=> 'enablepool',
 			'Disable'	=> 'disablepool' );
 #
-function showhead($cmd, $item, $values)
+function showhead($cmd, $values, $justnames = false)
 {
  global $poolcmd, $readonly;
 
- echo '<tr>';
+ newrow();
 
  foreach ($values as $name => $value)
  {
@@ -492,37 +730,43 @@ function showhead($cmd, $item, $values)
 	echo "<td valign=bottom class=h>$name</td>";
  }
 
- if ($cmd == 'pools' && $readonly === false)
+ if ($justnames === false && $cmd == 'pools' && $readonly === false)
 	foreach ($poolcmd as $name => $pcmd)
 		echo "<td valign=bottom class=h>$name</td>";
 
- echo '</tr>';
+ endrow();
+}
+#
+function showdatetime()
+{
+ global $dfmt;
+
+ otherrow('<td class=sta>Date: '.date($dfmt).'</td>');
 }
 #
 function details($cmd, $list, $rig)
 {
- global $tablebegin, $tableend, $dfmt;
- global $poolcmd, $readonly;
- global $showndate;
+ global $dfmt, $poolcmd, $readonly, $showndate;
 
  $when = 0;
 
  $stas = array('S' => 'Success', 'W' => 'Warning', 'I' => 'Informational', 'E' => 'Error', 'F' => 'Fatal');
 
- echo $tablebegin;
+ newtable();
 
  if ($showndate === false)
  {
-	echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
+	showdatetime();
 
-	echo $tableend.$tablebegin;
+	endtable();
+	newtable();
 
 	$showndate = true;
  }
 
  if (isset($list['STATUS']))
  {
-	echo '<tr>';
+	newrow();
 	echo '<td>Computer: '.$list['STATUS']['Description'].'</td>';
 	if (isset($list['STATUS']['When']))
 	{
@@ -532,12 +776,11 @@ function details($cmd, $list, $rig)
 	$sta = $list['STATUS']['STATUS'];
 	echo '<td>Status: '.$stas[$sta].'</td>';
 	echo '<td>Message: '.$list['STATUS']['Msg'].'</td>';
-	echo '</tr>';
+	endrow();
  }
 
 
  $section = '';
-
  foreach ($list as $item => $values)
  {
 	if ($item == 'STATUS')
@@ -547,12 +790,13 @@ function details($cmd, $list, $rig)
 
 	if ($sectionname != $section)
 	{
-		echo $tableend.$tablebegin;
-		showhead($cmd, $item, $values);
+		endtable();
+		newtable();
+		showhead($cmd, $values);
 		$section = $sectionname;
 	}
 
-	echo '<tr>';
+	newrow();
 
 	foreach ($values as $name => $value)
 	{
@@ -566,7 +810,8 @@ function details($cmd, $list, $rig)
 		$pool = current($values);
 		foreach ($poolcmd as $name => $pcmd)
 		{
-			echo '<td>';
+			list($ignore, $class) = fmt('BUTTON', 'Pool', '', $when, $values);
+			echo "<td$class>";
 			if ($pool === false)
 				echo '&nbsp;';
 			else
@@ -577,11 +822,9 @@ function details($cmd, $list, $rig)
 			echo '</td>';
 		}
 	}
-
-	echo '</tr>';
+	endrow();
  }
-
- echo $tableend;
+ endtable();
 }
 #
 global $devs;
@@ -589,7 +832,6 @@ $devs = null;
 #
 function gpubuttons($count, $rig)
 {
- global $tablebegin, $tableend;
  global $devs;
 
  $basic = array( 'GPU', 'Enable', 'Disable', 'Restart' );
@@ -600,22 +842,25 @@ function gpubuttons($count, $rig)
 			'mem' => 'Memory Clock',
 			'vddc' => 'GPU Voltage' );
 
- echo $tablebegin.'<tr>';
+ newtable();
+ newrow();
 
  foreach ($basic as $head)
-	echo "<td>$head</td>";
+	echo "<td class=h>$head</td>";
 
  foreach ($options as $name => $des)
-	echo "<td nowrap>$des</td>";
+	echo "<td class=h nowrap>$des</td>";
 
  $n = 0;
  for ($c = 0; $c < $count; $c++)
  {
-	echo '</tr><tr>';
+	endrow();
+	newrow();
 
 	foreach ($basic as $name)
 	{
-		echo '<td>';
+		list($ignore, $class) = fmt('BUTTON', 'GPU', '', 0, null);
+		echo "<td$class>";
 
 		if ($name == 'GPU')
 			echo $c;
@@ -631,7 +876,9 @@ function gpubuttons($count, $rig)
 
 	foreach ($options as $name => $des)
 	{
-		echo '<td>';
+		list($ignore, $class) = fmt('BUTTON', 'GPU', '', 0, null);
+		echo "<td$class>";
+
 		if (!isset($devs["GPU$c"][$des]))
 			echo '&nbsp;';
 		else
@@ -646,8 +893,8 @@ function gpubuttons($count, $rig)
 	}
 
  }
-
- echo '</tr>'.$tableend;
+ endrow();
+ endtable();
 }
 #
 function processgpus($rig)
@@ -658,16 +905,21 @@ function processgpus($rig)
  $gpus = api('gpucount');
 
  if ($error != null)
-	echo '<tr><td>Error getting GPU count: '.$warnfont.$error.$warnoff.'</td></tr>';
+	otherrow("<td>Error getting GPU count: $warnfont$error$warnoff</td>");
  else
  {
 	if (!isset($gpus['GPUS']['Count']))
-		echo '<tr><td>No GPU count returned: '.$warnfont.$gpus['STATUS']['STATUS'].' '.$gpus['STATUS']['Msg'].$ro.'</td></tr>';
+	{
+		$rw = '<td>No GPU count returned: '.$warnfont;
+		$rw .= $gpus['STATUS']['STATUS'].' '.$gpus['STATUS']['Msg'];
+		$rw .= $warnoff.'</td>';
+		otherrow($rw);
+	}
 	else
 	{
 		$count = $gpus['GPUS']['Count'];
 		if ($count == 0)
-			echo '<tr><td>No GPUs</td></tr>';
+			otherrow('<td>No GPUs</td>');
 		else
 			gpubuttons($count, $rig);
 	}
@@ -679,23 +931,73 @@ function process($cmds, $rig)
  global $error, $devs;
  global $warnfont, $warnoff;
 
+ $count = count($cmds);
  foreach ($cmds as $cmd => $des)
  {
 	$process = api($cmd);
 
 	if ($error != null)
 	{
-		echo "<tr><td colspan=100>Error getting $des: ";
-		echo $warnfont.$error.$warnoff.'</td></tr>';
+		otherrow("<td colspan=100>Error getting $des: $warnfont$error$warnoff</td>");
 		break;
 	}
 	else
 	{
 		details($cmd, $process, $rig);
-		echo '<tr><td><br><br></td></tr>';
+
+		# Not after the last one
+		if (--$count > 0)
+			otherrow('<td><br><br></td>');
+
 		if ($cmd == 'devs')
 			$devs = $process;
 	}
+ }
+}
+#
+function rigbutton($rig, $rigname, $when, $row)
+{
+ list($value, $class) = fmt('BUTTON', 'Rig', '', $when, $row);
+
+ $button = "<td align=middle$class><input type=button value='$rigname$rig'";
+ $button .= " onclick='pr(\"&rig=$rig\",null)'></td>";
+
+ return $button;
+}
+#
+function showrigs($anss, $headname, $rigname)
+{
+ $dthead = array($headname => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1, 'API' => 1, 'CGMiner' => 1);
+ showhead('', $dthead);
+
+ foreach ($anss as $rig => $ans)
+ {
+	newrow();
+
+	$when = 0;
+	if (isset($ans['STATUS']['When']))
+		$when = $ans['STATUS']['When'];
+
+	foreach ($ans as $item => $row)
+	{
+		if ($item != 'STATUS' && $item != 'VERSION')
+			continue;
+
+		foreach ($dthead as $name => $x)
+		{
+			if ($item == 'STATUS' && $name == $headname)
+				echo rigbutton($rig, $rigname, $when, null);
+			else
+			{
+				if (isset($row[$name]))
+				{
+					list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
+					echo "<td$class align=right>$showvalue</td>";
+				}
+			}
+		}
+	}
+	endrow();
  }
 }
 #
@@ -704,7 +1006,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 {
  global $miner, $port;
  global $error, $readonly, $notify, $rigs;
- global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
+ global $warnfont, $warnoff, $dfmt;
  global $rigerror;
 
  $when = 0;
@@ -729,8 +1031,9 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
 		if ($error != null)
 		{
-			echo "<tr><td colspan=100>Error on rig $count getting $des: ";
-			echo $warnfont.$error.$warnoff.'</td></tr>';
+			$rw = "<td colspan=100>Error on rig $count getting ";
+			$rw .= "$des: $warnfont$error$warnoff</td>";
+			otherrow($rw);
 			$rigerror[$rig] = $error;
 			$error = null;
 		}
@@ -742,51 +1045,23 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 
  if (count($anss) == 0)
  {
-	echo '<tr><td>Failed to access any rigs successfully';
+	$rw = '<td>Failed to access any rigs successfully';
 	if ($preverr > 0)
-		echo ' (or rigs had previous errors)';
-	echo '</td></tr>';
+		$rw .= ' (or rigs had previous errors)';
+	$rw .= '</td>';
+	otherrow($rw);
 	return;
  }
 
  if ($datetime)
  {
-	echo '<tr><td class=sta>Date: '.date($dfmt).'</td></tr>';
-
-	echo $tableend.$tablebegin;
-
-	$dthead = array('' => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1, 'API' => 1, 'CGMiner' => 1);
-	showhead('', null, $dthead);
-
-	foreach ($anss as $rig => $ans)
-	{
-		echo '<tr>';
-
-		foreach ($ans as $item => $row)
-		{
-			if ($item != 'STATUS' && $item != 'VERSION')
-				continue;
-
-			foreach ($dthead as $name => $x)
-			{
-				if ($item == 'STATUS' && $name == '')
-					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"?rig=$rig\",null)'></td>";
-				else
-				{
-					if (isset($row[$name]))
-					{
-						list($showvalue, $class) = fmt('STATUS', $name, $row[$name], $when, null);
-						echo "<td$class align=right>$showvalue</td>";
-					}
-				}
-			}
-		}
-
-		echo '</tr>';
-	}
-	echo $tableend;
-	echo '<tr><td><br><br></td></tr>';
-	echo $tablebegin;
+	showdatetime();
+	endtable();
+	newtable();
+	showrigs($anss, '', 'Rig ');
+	endtable();
+	otherrow('<td><br><br></td>');
+	newtable();
 
 	return;
  }
@@ -825,9 +1100,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
  if ($sum != null)
 	$anss['total']['total'] = $total;
 
- showhead('', null, $header);
-
- $section = '';
+ showhead('', $header);
 
  foreach ($anss as $rig => $ans)
  {
@@ -840,20 +1113,21 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 		if ($item == 'STATUS')
 			continue;
 
-		echo '<tr>';
+		newrow();
 
-		$newsection = preg_replace('/\d/', '', $item);
-		if ($newsection != 'total')
-			$section = $newsection;
+		$section = preg_replace('/\d/', '', $item);
 
 		foreach ($header as $name => $x)
 		{
 			if ($name == '')
 			{
 				if ($rig === 'total')
-					echo "<td align=right class=tot>Total:</td>";
+				{
+					list($ignore, $class) = fmt($rig, '', '', $when, $row);
+					echo "<td align=right$class>Total:</td>";
+				}
 				else
-					echo "<td align=right><input type=button value='Rig $rig' onclick='pr(\"?rig=$rig\",null)'></td>";
+					echo rigbutton($rig, 'Rig ', $when, $row);
 			}
 			else
 			{
@@ -863,41 +1137,74 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 					$value = null;
 
 				list($showvalue, $class) = fmt($section, $name, $value, $when, $row);
-
-				if ($rig === 'total' and $class == '')
-					$class = ' class=tot';
-
 				echo "<td$class align=right>$showvalue</td>";
 			}
 		}
-
-		echo '</tr>';
+		endrow();
 	}
  }
 }
 #
+function refreshbuttons()
+{
+ global $readonly;
+ global $ignorerefresh, $changerefresh, $autorefresh;
+
+ if ($ignorerefresh == false && $changerefresh == true)
+ {
+	echo '&nbsp;&nbsp;&nbsp;&nbsp;';
+	echo "<input type=button value='Auto Refresh:' onclick='prr(true)'>";
+	echo "<input type=text name='refval' id='refval' size=2 value='$autorefresh'>";
+	echo "<input type=button value='Off' onclick='prr(false)'>";
+ }
+}
+#
+function pagebuttons($rig, $pg)
+{
+ global $readonly, $rigs;
+ global $allowcustompages, $customsummarypages;
+
+ if ($rig === null)
+ {
+	if ($pg === null)
+		$refresh = '';
+	else
+		$refresh = "&pg=$pg";
+ }
+ else
+	$refresh = "&rig=$rig";
+
+ echo '<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td nowrap>';
+ echo "<input type=button value='Refresh' onclick='pr(\"$refresh\",null)'>&nbsp;";
+ if (count($rigs) > 1)
+	echo "<input type=button value='Summary' onclick='pr(\"\",null)'>&nbsp;";
+
+ if ($allowcustompages === true)
+	foreach ($customsummarypages as $pagename => $data)
+		echo "<input type=button value='$pagename' onclick='pr(\"&pg=$pagename\",null)'>&nbsp;";
+
+ echo '</td><td width=100%>&nbsp;</td><td nowrap>';
+ if ($rig !== null && $readonly === false)
+ {
+	$rg = '';
+	if (count($rigs) > 1)
+		$rg = " Rig $rig";
+	echo "<input type=button value='Restart' onclick='prc(\"restart&rig=$rig\",\"Restart CGMiner$rg\")'>";
+	echo "&nbsp;<input type=button value='Quit' onclick='prc(\"quit&rig=$rig\",\"Quit CGMiner$rg\")'>";
+ }
+ refreshbuttons();
+ echo "</td></tr></table></td></tr>";
+}
+#
 function doOne($rig, $preprocess)
 {
- global $error, $readonly, $notify;
- global $rigs;
+ global $haderror, $readonly, $notify, $rigs;
+ global $placebuttons;
 
- htmlhead(true);
+ htmlhead(true, $rig);
 
- $error = null;
-
- echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
- echo "<input type=button value='Refresh' onclick='pr(\"?rig=$rig\",null)'></td>";
- if (count($rigs) > 1)
-	echo "<td><input type=button value='Summary' onclick='pr(\"\",null)'></td>";
- echo "<td width=100%>&nbsp;</td><td>";
- if ($readonly === false)
- {
-	$msg = 'Quit CGMiner';
-	if (count($rigs) > 1)
-		$msg .= " Rig $rig";
-	echo "<input type=button value='Quit' onclick='prc(\"quit&rig=$rig\",\"$msg\")'>";
- }
- echo "</td></tr></table></td></tr>";
+ if ($placebuttons == 'top' || $placebuttons == 'both')
+	pagebuttons($rig, null);
 
  if ($preprocess != null)
 	process(array($preprocess => $preprocess), $rig);
@@ -913,15 +1220,314 @@ function doOne($rig, $preprocess)
 
  process($cmds, $rig);
 
- if ($error == null && $readonly === false)
+ if ($haderror == false && $readonly === false)
 	processgpus($rig);
+
+ if ($placebuttons == 'bot' || $placebuttons == 'both')
+	pagebuttons($rig, null);
+}
+#
+global $sectionmap;
+# map sections to their api command
+# DEVS is a special case that will match GPU or PGA
+# so you can have a single table with both in it
+# DATE is hard coded so not in here
+$sectionmap = array(
+	'RIGS' => 'version',
+	'SUMMARY' => 'summary',
+	'POOL' => 'pools',
+	'DEVS' => 'devs',
+	'GPU' => 'devs',	// You would normally use DEVS
+	'PGA' => 'devs',	// You would normally use DEVS
+	'NOTIFY' => 'notify',
+	'CONFIG' => 'config');
+#
+function secmatch($section, $field)
+{
+ if ($section == $field)
+	return true;
+
+ if ($section == 'DEVS'
+ &&  ($field == 'GPU' || $field == 'PGA'))
+	return true;
+
+ return false;
+}
+#
+function customset($showfields, $sum, $section, $rig, $result, $total)
+{
+ foreach ($result as $sec => $row)
+ {
+	$secname = preg_replace('/\d/', '', $sec);
+
+	if ($sec != 'total')
+		if (!secmatch($section, $secname))
+			continue;
+
+	newrow();
+
+	$when = 0;
+	if (isset($result['STATUS']['When']))
+		$when = $result['STATUS']['When'];
+
+
+	if (is_numeric($rig))
+		echo rigbutton($rig, '', $when, $row);
+	else
+	{
+		list($ignore, $class) = fmt('total', '', '', $when, $row);
+		echo "<td align=middle$class>$rig</td>";
+	}
+
+	foreach ($showfields as $name => $one)
+	{
+		if (isset($row[$name]))
+		{
+			$value = $row[$name];
+
+			if (isset($sum[$section][$name]))
+			{
+				if (isset($total[$name]))
+					$total[$name] += $value;
+				else
+					$total[$name] = $value;
+			}
+		}
+		else
+		{
+			if ($sec == 'total' && isset($total[$name]))
+				$value = $total[$name];
+			else
+				$value = null;
+		}
+
+		list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
+		echo "<td$class align=right>$showvalue</td>";
+	}
+	endrow();
+ }
+ return $total;
+}
+#
+function processcustompage($pagename, $sections, $sum, $namemap)
+{
+ global $sectionmap;
+ global $miner, $port;
+ global $rigs, $error;
+ global $warnfont, $warnoff;
+ global $dfmt;
+ global $readonly, $showndate;
+
+ $cmds = array();
+ $errors = array();
+ foreach ($sections as $section => $fields)
+ {
+	if (isset($sectionmap[$section]))
+	{
+		$cmd = $sectionmap[$section];
+		if (!isset($cmds[$cmd]))
+			$cmds[$cmd] = 1;
+	}
+	else
+		if ($section != 'DATE')
+			$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
+ }
+
+ $results = array();
+ foreach ($rigs as $num => $rig)
+ {
+	$parts = explode(':', $rig, 2);
+	if (count($parts) == 2)
+	{
+		$miner = $parts[0];
+		$port = $parts[1];
+
+		foreach ($cmds as $cmd => $one)
+		{
+			$process = api($cmd);
+
+			if ($error != null)
+			{
+				$errors[] = "Error getting $cmd for $rig $warnfont$error$warnoff";
+				break;
+			}
+			else
+				$results[$cmd][$num] = $process;
+		}
+	}
+ }
+
+ $shownsomething = false;
+ if (count($results) > 0)
+ {
+	$first = true;
+	foreach ($sections as $section => $fields)
+	{
+		if ($section === 'DATE')
+		{
+			if ($shownsomething)
+				otherrow('<td>&nbsp;</td>');
+
+			newtable();
+			showdatetime();
+			endtable();
+			// On top of the next table
+			$shownsomething = false;
+			continue;
+		}
+
+		if ($section === 'RIGS')
+		{
+			if ($shownsomething)
+				otherrow('<td>&nbsp;</td>');
+
+			newtable();
+			showrigs($results['version'], 'Rig', '');
+			endtable();
+			$shownsomething = true;
+			continue;
+		}
+
+		if (isset($results[$sectionmap[$section]]))
+		{
+			$rigresults = $results[$sectionmap[$section]];
+			$showfields = array();
+			$showhead = array();
+			foreach ($fields as $field)
+				foreach ($rigresults as $result)
+					foreach ($result as $sec => $row)
+					{
+						$secname = preg_replace('/\d/', '', $sec);
+						if (secmatch($section, $secname) && isset($row[$field]))
+						{
+							$showfields[$field] = 1;
+							$map = $section.'.'.$field;
+							if (isset($namemap[$map]))
+								$showhead[$namemap[$map]] = 1;
+							else
+								$showhead[$field] = 1;
+						}
+					}
+
+			if (count($showfields) > 0)
+			{
+				if ($shownsomething)
+					otherrow('<td>&nbsp;</td>');
+
+				newtable();
+				showhead('', array('Rig'=>1)+$showhead, true);
+
+				$total = array();
+				$add = array('total' => array());
+
+				foreach ($rigresults as $num => $result)
+					$total = customset($showfields, $sum, $section, $num, $result, $total);
+
+				if (count($total) > 0)
+					customset($showfields, $sum, $section, '&Sigma;', $add, $total, 0);
+
+				$first = false;
+
+				endtable();
+				$shownsomething = true;
+			}
+		}
+	}
+ }
+
+ if (count($errors) > 0)
+ {
+	if (count($results) > 0)
+		otherrow('<td>&nbsp;</td>');
+
+	foreach ($errors as $err)
+		otherrow("<td colspan=100>$err</td>");
+ }
+}
+#
+function showcustompage($pagename)
+{
+ global $customsummarypages;
+ global $placebuttons;
+
+ htmlhead(false, null, $pagename);
+
+ if ($placebuttons == 'top' || $placebuttons == 'both')
+	pagebuttons(null, $pagename);
+
+ if (!isset($customsummarypages[$pagename]))
+ {
+	otherrow("<td colspan=100>Unknown custom summary page '$pagename'</td>");
+	return;
+ }
+
+ if (count($customsummarypages[$pagename]) != 2)
+ {
+	$rw = "<td colspan=100>Invalid custom summary page '$pagename' (";
+	$rw .= count($customsummarypages[$pagename]).')</td>';
+	otherrow($rw);
+	return;
+ }
+
+ $page = $customsummarypages[$pagename][0];
+ $namemap = array();
+ foreach ($page as $name => $fields)
+ {
+	if ($fields === null)
+		$page[$name] = array();
+	else
+		foreach ($fields as $num => $field)
+		{
+			$pos = strpos($field, '=');
+			if ($pos !== false)
+			{
+				$names = explode('=', $field, 2);
+				if (strlen($names[1]) > 0)
+					$namemap[$name.'.'.$names[0]] = $names[1];
+				$page[$name][$num] = $names[0];
+			}
+		}
+ }
+
+ $sum = $customsummarypages[$pagename][1];
+ if ($sum === null)
+	$sum = array();
+
+ // convert them to searchable via isset()
+ foreach ($sum as $section => $fields)
+ {
+	$newfields = array();
+	foreach ($fields as $field)
+		$newfields[$field] = 1;
+	$sum[$section] = $newfields;
+ }
+
+ if (count($page) <= 1)
+ {
+	otherrow("<td colspan=100>Invalid custom summary page '$pagename' no content </td>");
+	return;
+ }
+
+ processcustompage($pagename, $page, $sum, $namemap);
+
+ if ($placebuttons == 'bot' || $placebuttons == 'both')
+	pagebuttons(null, $pagename);
 }
 #
 function display()
 {
- global $tablebegin, $tableend;
  global $miner, $port;
- global $error, $readonly, $notify, $rigs;
+ global $readonly, $notify, $rigs;
+ global $ignorerefresh, $autorefresh;
+ global $allowcustompages;
+ global $placebuttons;
+
+ if ($ignorerefresh == false)
+ {
+	$ref = trim(getparam('ref', true));
+	if ($ref != null && $ref != '')
+		$autorefresh = intval($ref);
+ }
 
  $rig = trim(getparam('rig', true));
 
@@ -954,8 +1560,18 @@ function display()
 
  if ($rigs == null or count($rigs) == 0)
  {
-	echo "<tr><td>No rigs defined</td></tr>";
+	otherrow("<td>No rigs defined</td>");
 	return;
+ }
+
+ if ($allowcustompages === true)
+ {
+	$pg = trim(getparam('pg', true));
+	if ($pg != null && $pg != '')
+	{
+		showcustompage($pg);
+		return;
+	}
  }
 
  if (count($rigs) == 1)
@@ -969,7 +1585,7 @@ function display()
 		doOne(0, $preprocess);
 	}
 	else
-		echo '<tr><td>Invalid "$rigs" array</td></tr>';
+		otherrow('<td>Invalid "$rigs" array</td>');
 
 	return;
  }
@@ -985,33 +1601,35 @@ function display()
 		doOne($rig, $preprocess);
 	}
 	else
-		echo '<tr><td>Invalid "$rigs" array</td></tr>';
+		otherrow('<td>Invalid "$rigs" array</td>');
 
 	return;
  }
 
- htmlhead(false);
+ htmlhead(false, null);
 
- echo "<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td>";
- echo "<input type=button value='Refresh' onclick='pr(\"\",null)'>";
- echo "</td></tr></table></td></tr>";
+ if ($placebuttons == 'top' || $placebuttons == 'both')
+	pagebuttons(null, null);
 
  if ($preprocess != null)
 	process(array($preprocess => $preprocess), $rig);
 
- echo $tablebegin;
+ newtable();
  doforeach('version', 'rig summary', array(), array(), true);
  $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH');
  doforeach('summary', 'summary information', $sum, array(), false);
- echo $tableend;
- echo '<tr><td><br><br></td></tr>';
- echo $tablebegin;
+ endtable();
+ otherrow('<td><br><br></td>');
+ newtable();
  doforeach('devs', 'device list', $sum, array(''=>'','ID'=>'','Name'=>''), false);
- echo $tableend;
- echo '<tr><td><br><br></td></tr>';
- echo $tablebegin;
+ endtable();
+ otherrow('<td><br><br></td>');
+ newtable();
  doforeach('pools', 'pool list', $sum, array(''=>''), false);
- echo $tableend;
+ endtable();
+
+ if ($placebuttons == 'bot' || $placebuttons == 'both')
+	pagebuttons(null, null);
 }
 #
 display();

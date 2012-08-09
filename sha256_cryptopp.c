@@ -93,7 +93,7 @@ static void runhash(void *state, const void *input, const void *init)
 }
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
+bool scanhash_cryptopp(struct thr_info*thr, const unsigned char *midstate,
 		unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
 		const unsigned char *target,
@@ -104,8 +104,6 @@ bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
 	uint32_t *nonce = (uint32_t *)(data + 76);
 
 	data += 64;
-
-	work_restart[thr_id].restart = 0;
 
 	while (1) {
 		n++;
@@ -119,7 +117,7 @@ bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
 			return true;
 		}
 
-		if ((n >= max_nonce) || work_restart[thr_id].restart) {
+		if ((n >= max_nonce) || thr->work_restart) {
 			*last_nonce = n;
 			return false;
 		}
@@ -577,7 +575,7 @@ static void runhash32(void *state, const void *input, const void *init)
 }
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_asm32(int thr_id, const unsigned char *midstate,
+bool scanhash_asm32(struct thr_info*thr, const unsigned char *midstate,
 		unsigned char *data,
 	        unsigned char *hash1, unsigned char *hash,
 		const unsigned char *target,
@@ -601,7 +599,7 @@ bool scanhash_asm32(int thr_id, const unsigned char *midstate,
 			return true;
 		}
 
-		if ((n >= max_nonce) || work_restart[thr_id].restart) {
+		if ((n >= max_nonce) || thr->work_restart) {
 			*last_nonce = n;
 			return false;
 		}

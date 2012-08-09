@@ -19,14 +19,35 @@ IP addresses are automatically padded with extra '.0's as needed
 Without a /prefix is the same as specifying /32
 0/0 means all IP addresses.
 The 'W:' on the front gives that address/subnet privileged access to commands
-that modify cgminer.
+that modify cgminer (thus all API commands)
 Without it those commands return an access denied status.
+See --api-groups below to define other groups like W:
 Privileged access is checked in the order the IP addresses were supplied to
 "--api-allow"
 The first match determines the privilege level.
 Using the "--api-allow" option overides the "--api-network" option if they
 are both specified
 With "--api-allow", 127.0.0.1 is not by default given access unless specified
+
+More groups (like the privileged group W:) can be defined using the
+--api-groups command
+Valid groups are only the letters A-Z (except R & W are predefined) and are
+not case sensitive
+The R: group is the same as not privileged access
+The W: group is (as stated) privileged access (thus all API commands)
+To give an IP address/subnet access to a group you use the group letter
+in front of the IP address instead of W: e.g. P:192.168.0/32
+An IP address/subnet can only be a member of one group
+A sample API group would be:
+ --api-groups P:switchpool:enablepool:addpool:disablepool:removepool:*
+This would create a group 'P' that can do all current pool commands and all
+non-priviliged commands - the '*' means all non-priviledged commands
+Without the '*' the group would only have access to the pool commands
+Defining multiple groups example:
+ --api-groups Q:quit:restart:*,S:save
+This would define 2 groups:
+ Q: that can 'quit' and 'restart' as well as all non-priviledged commands
+ S: that can only 'save' and no other commands
 
 The RPC API request can be either simple text or JSON.
 
@@ -80,14 +101,14 @@ The STATUS section is:
    This defaults to the cgminer version but is the value of --api-description
    if it was specified at runtime.
 
-For API version 1.9:
+For API version 1.10 and later:
 
 The list of requests - a (*) means it requires privileged access - and replies are:
 
  Request       Reply Section  Details
  -------       -------------  -------
- version       VERSION        CGMiner=cgminer version
-                              API=API version
+ version       VERSION        CGMiner=cgminer, version
+                              API=API| version
 
  config        CONFIG         Some miner configuration information:
                               GPU Count=N, <- the number of GPUs
@@ -243,6 +264,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Device drivers are also able to add stats to the
                               end of the details returned
 
+ check|cmd     COMMAND        Exists=Y/N, <- 'cmd' exists in this version
+                              Access=Y/N| <- you have access to use 'cmd'
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
@@ -285,10 +309,33 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.12
+API V1.14
+
+Modified API commands:
+ 'stats' - more icarus timing stats added
+ 'notify' - include new device comms error counter
+
+The internal code for handling data was rewritten (~25% of the code)
+Completely backward compatible
+
+----------
+
+API V1.13 (cgminer v2.4.4)
+
+Added API commands:
+ 'check'
+
+Support was added to cgminer for API access groups with the --api-groups option
+It's 100% backward compatible with previous --api-access commands
+
+----------
+
+API V1.12 (cgminer v2.4.3)
 
 Modified API commands:
  'stats' - more pool stats added
+
+Support for the ModMinerQuad FPGA was added
 
 ----------
 
