@@ -274,7 +274,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
-		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer");
+		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer", bitforce->device_id);
 		bitforce_clear_buffer(bitforce);
 		return false;;
 	}
