@@ -2,6 +2,7 @@
 session_start();
 #
 global $miner, $port, $readonly, $notify, $rigs;
+global $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
@@ -44,6 +45,19 @@ $poolinputs = false;
 # e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 $rigs = array('127.0.0.1:4028');
 #
+# Set $rigtotals to true to display totals on the single rig page
+# 'false' means no totals (and ignores $forcerigtotals)
+# If $rigtotals is true, all data is also right aligned
+#	with false, it's as before, left aligned
+# This option is just here to allow people to set it to false
+# if they prefer the old non-total display when viewing a single rig
+# Also, if there is only one line shown in any section, then no
+# total will be shown (to save screen space)
+# You can force it to always show rig totals when there is only
+# one line by setting $forcerigtotals = true;
+$rigtotals = true;
+$forcerigtotals = false;
+#
 # These should be OK for most cases
 # However, the longer SND is, the longer you have to wait while
 # php hangs if the target cgminer isn't runnning or listening
@@ -58,7 +72,8 @@ $sockrcvtimeoutsec = 40;
 # List of fields NOT to be displayed
 # You can use this to hide data you don't want to see or don't want
 # shown on a public web page
-# The list of sections are: SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG
+# The list of sections are:
+#  SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, NOTIFY, DEVDETAILS, DEVS
 # See the web page for the list of field names (the table headers)
 # It is an array of 'SECTION.Field Name' => 1
 # This example would hide the slightly more sensitive pool information
@@ -74,7 +89,7 @@ $changerefresh = true;
 $autorefresh = 0;
 #
 # Should we allow custom pages?
-# (or just completely ignore then and don't display the buttons)
+# (or just completely ignore them and don't display the buttons)
 $allowcustompages = true;
 #
 # OK this is a bit more complex item: Custom Summary Pages
@@ -790,7 +805,7 @@ function fmt($section, $name, $value, $when, $alldata)
  if ($class == '' && ($rownum % 2) == 0)
 	$class = $c2class;
 
- if ($ret == '')
+ if ($ret === '')
 	$ret = $b;
 
  return array($ret, $class);
@@ -829,9 +844,47 @@ function showdatetime()
  otherrow('<td class=sta>Date: '.date($dfmt).'</td>');
 }
 #
+global $singlerigsum;
+$singlerigsum = array(
+ 'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
+			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
+ 'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
+			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1),
+ 'notify' => array('*' => 1));
+#
+function showtotal($total, $when, $oldvalues)
+{
+ global $rigtotals;
+
+ list($showvalue, $class) = fmt('total', '', 'Total:', $when, null);
+ echo "<td$class align=right>$showvalue</td>";
+
+ $skipfirst = true;
+ foreach ($oldvalues as $name => $value)
+ {
+	if ($skipfirst === true)
+	{
+		$skipfirst = false;
+		continue;
+	}
+
+	if (isset($total[$name]))
+		$newvalue = $total[$name];
+	else
+		$newvalue = '';
+
+	list($showvalue, $class) = fmt('total', $name, $newvalue, $when, null);
+	echo "<td$class";
+	if ($rigtotals === true)
+		echo ' align=right';
+	echo ">$showvalue</td>";
+ }
+}
+#
 function details($cmd, $list, $rig)
 {
  global $dfmt, $poolcmd, $readonly, $showndate;
+ global $rownum, $rigtotals, $forcerigtotals, $singlerigsum;
 
  $when = 0;
 
@@ -864,8 +917,15 @@ function details($cmd, $list, $rig)
 	endrow();
  }
 
+ if ($rigtotals === true && isset($singlerigsum[$cmd]))
+	$dototal = $singlerigsum[$cmd];
+ else
+	$dototal = array();
+
+ $total = array();
 
  $section = '';
+ $oldvalues = null;
  foreach ($list as $item => $values)
  {
 	if ($item == 'STATUS')
@@ -873,8 +933,13 @@ function details($cmd, $list, $rig)
 
 	$sectionname = preg_replace('/\d/', '', $item);
 
+	// Handle 'devs' possibly containing >1 table
 	if ($sectionname != $section)
 	{
+		if ($oldvalues != null && count($total) > 0
+		&&  ($rownum > 2 || $forcerigtotals === true))
+			showtotal($total, $when, $oldvalues);
+
 		endtable();
 		newtable();
 		showhead($cmd, $values);
@@ -886,7 +951,19 @@ function details($cmd, $list, $rig)
 	foreach ($values as $name => $value)
 	{
 		list($showvalue, $class) = fmt($section, $name, $value, $when, $values);
-		echo "<td$class>$showvalue</td>";
+		echo "<td$class";
+		if ($rigtotals === true)
+			echo ' align=right';
+		echo ">$showvalue</td>";
+
+		if (isset($dototal[$name])
+		||  (isset($dototal['*']) and substr($name, 0, 1) == '*'))
+		{
+			if (isset($total[$name]))
+				$total[$name] += $value;
+			else
+				$total[$name] = $value;
+		}
 	}
 
 	if ($cmd == 'pools' && $readonly === false)
@@ -908,7 +985,14 @@ function details($cmd, $list, $rig)
 		}
 	}
 	endrow();
+
+	$oldvalues = $values;
  }
+
+ if ($oldvalues != null && count($total) > 0
+ &&  ($rownum > 2 || $forcerigtotals === true))
+	showtotal($total, $when, $oldvalues);
+
  endtable();
 }
 #
