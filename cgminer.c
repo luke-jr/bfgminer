@@ -2737,6 +2737,26 @@ void remove_pool(struct pool *pool)
 	total_pools--;
 }
 
+static char*
+json_escape_string_dup(const char*s)
+{
+	int slen = strlen(s);
+	char *o = malloc(1 + slen * 2);
+	int i, j;
+
+	++slen;
+	for (i = j = 0; i < slen; ++i, ++j) {
+		switch (s[i]) {
+			case '"':
+			case '\\':
+				o[j++] = '\\';
+		}
+		o[j] = s[i];
+	}
+
+	return o;
+}
+
 void write_config(FILE *fcfg)
 {
 	int i;
@@ -2855,13 +2875,18 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
 #if defined(unix)
 	if (opt_stderr_cmd && *opt_stderr_cmd)
-		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", opt_stderr_cmd);
+	{
+		char *monitorcmd = json_escape_string_dup(opt_stderr_cmd);
+		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", monitorcmd);
+		free(monitorcmd);
+	}
 #endif // defined(unix)
 	if (opt_kernel_path && *opt_kernel_path) {
-		char *kpath = strdup(opt_kernel_path);
+		char *kpath = json_escape_string_dup(opt_kernel_path);
 		if (kpath[strlen(kpath)-1] == '/')
 			kpath[strlen(kpath)-1] = 0;
 		fprintf(fcfg, ",\n\"kernel-path\" : \"%s\"", kpath);
+		free(kpath);
 	}
 	if (schedstart.enable)
 		fprintf(fcfg, ",\n\"sched-time\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
@@ -2881,7 +2906,11 @@ void write_config(FILE *fcfg)
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
-		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
+	{
+		char *apidesc = json_escape_string_dup(opt_api_description);
+		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", apidesc);
+		free(apidesc);
+	}
 	if (opt_api_groups)
 		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", opt_api_groups);
 	if (opt_icarus_timing)
