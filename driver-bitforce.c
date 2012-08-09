@@ -388,7 +388,11 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
 
-		if (!pdevbuf[0])	/* Only return if we got nothing after timeout - there still may be results */
+		/* If the device truly throttled, it didn't process the job and there
+		 * are no results. But check first, just in case we're wrong about it
+		 * throttling.
+		 */
+		if (strncasecmp(pdevbuf, "NONCE-FOUND", 11))
 			return 0;
 	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		/* Simple timing adjustment. Allow a few polls to cope with
