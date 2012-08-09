@@ -1,5 +1,5 @@
 
-This is a multi-threaded multi-pool GPU, FPGA and CPU miner with ATI GPU
+This is a multi-threaded multi-pool FPGA, GPU and CPU miner with ATI GPU
 monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
 
@@ -50,7 +50,7 @@ Dependencies:
 	(This sdk is mandatory for GPU mining)
 
 	libudev headers
-	(This is only required for FPGA auto-detection and is linux only)
+	(This is only required for multi-FPGA auto-detection on Linux)
 
 	libusb headers
 	(This is only required for ZTEX support)
