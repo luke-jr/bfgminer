@@ -457,7 +457,10 @@ modminer_process_results(struct thr_info*thr)
 
 	uint64_t hashes = (uint64_t)state->clock * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
 	if (hashes > 0xffffffff)
+	{
+		applog(LOG_WARNING, "%s %u.%u: Finished work before new one sent", modminer->api->name, modminer->device_id, fpgaid);
 		hashes = 0xffffffff;
+	}
 	if (hashes <= state->hashes)
 		hashes = 1;
 	else
@@ -474,6 +477,13 @@ modminer_scanhash(struct thr_info*thr, struct work*work, uint64_t __maybe_unused
 	bool startwork;
 
 	startwork = modminer_prepare_next_work(state, work);
+	if (startwork) {
+		/* HACK: For some reason, this is delayed a bit
+		 *       Let last_work handle the end of the work,
+		 *       and start the next one immediately
+		 */
+	}
+	else
 	if (state->work_running) {
 		hashes = modminer_process_results(thr);
 		if (work_restart(thr)) {
