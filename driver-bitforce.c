@@ -47,7 +47,7 @@ enum {
 #define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_S 7
 #define BITFORCE_TIMEOUT_MS (BITFORCE_TIMEOUT_S * 1000)
-#define BITFORCE_LONG_TIMEOUT_S 15
+#define BITFORCE_LONG_TIMEOUT_S 25
 #define BITFORCE_LONG_TIMEOUT_MS (BITFORCE_LONG_TIMEOUT_S * 1000)
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
@@ -61,7 +61,7 @@ enum {
 struct device_api bitforce_api;
 
 // Code must deal with a timeout
-#define BFopen(devpath)  serial_open(devpath, 0, 300, true)
+#define BFopen(devpath)  serial_open(devpath, 0, 250, true)
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {

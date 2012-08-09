@@ -10,6 +10,7 @@
 
 #include "config.h"
 
+#include <stdint.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <string.h>
@@ -143,8 +144,11 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 	return found;
 }
 
+/* NOTE: Linux only supports uint8_t (decisecond) timeouts; limiting it in
+ *       this interface buys us warnings when bad constants are passed in.
+ */
 int
-serial_open(const char*devpath, unsigned long baud, signed short timeout, bool purge)
+serial_open(const char*devpath, unsigned long baud, uint8_t timeout, bool purge)
 {
 #ifdef WIN32
 	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
@@ -179,7 +183,7 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
 
 	// Code must specify a valid timeout value (0 means don't timeout)
-	const DWORD ctoms = (timeout * 100);
+	const DWORD ctoms = ((DWORD)timeout * 100);
 	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
 	SetCommTimeouts(hSerial, &cto);
 

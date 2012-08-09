@@ -11,6 +11,7 @@
 #define FPGAUTILS_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 typedef bool(*detectone_func_t)(const char*);
@@ -26,7 +27,7 @@ extern int _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, b
 extern int serial_autodetect_devserial(detectone_func_t, const char*prodname);
 extern int serial_autodetect_udev     (detectone_func_t, const char*prodname);
 
-extern int serial_open(const char*devpath, unsigned long baud, signed short timeout, bool purge);
+extern int serial_open(const char*devpath, unsigned long baud, uint8_t timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char*eol);
 #define serial_read(fd, buf, count)  \
 	_serial_read(fd, (char*)(buf), count, NULL)
