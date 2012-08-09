@@ -25,6 +25,7 @@ struct device_api modminer_api;
 struct modminer_fpga_state {
 	bool work_running;
 	struct work running_work;
+	struct work last_work;
 	struct timeval tv_workstart;
 	uint32_t hashes;
 
@@ -478,6 +479,12 @@ modminer_process_results(struct thr_info*thr)
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
 			state->no_nonce_counter = 0;
 			bad = !test_nonce(work, nonce, false);
+			if (bad && test_nonce(&state->last_work, nonce, false))
+			{
+				applog(LOG_DEBUG, "%s %u.%u: Found nonce for previous work!", modminer->api->name, modminer->device_id, fpgaid);
+				work = &state->last_work;
+				bad = false;
+			}
 			if (!bad)
 				submit_nonce(thr, work, nonce);
 			else {
@@ -536,6 +543,7 @@ modminer_scanhash(struct thr_info*thr, struct work*work, int64_t __maybe_unused 
 	if (startwork) {
 		if (!modminer_start_work(thr))
 			return -1;
+		memcpy(&state->last_work, &state->running_work, sizeof(state->last_work));
 		memcpy(&state->running_work, work, sizeof(state->running_work));
 	}
 
