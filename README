@@ -204,6 +204,11 @@ FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:
 
 This option is only for BitForce, Icarus, and/or ModMiner FPGAs
 
+To use FPGAs, you will need to be sure the user BFGMiner is running as has
+appropriate permissions. This varies by operating system.
+On Gentoo: sudo usermod <username> -a -G uucp
+On Ubuntu: sudo usermod <username> -a -G dialout
+
 By default, BFGMiner will scan for autodetected FPGAs unless at least one
 -S is specified for that driver. If you specify -S and still want BFGMiner
 to scan, you must also use "-S auto". If you want to prevent BFGMiner from
