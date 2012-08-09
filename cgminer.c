@@ -2896,6 +2896,53 @@ void remove_pool(struct pool *pool)
 	total_pools--;
 }
 
+/* add a mutex if this needs to be thread safe in the future */
+static struct JE {
+	char *buf;
+	struct JE *next;
+} *jedata = NULL;
+
+static void json_escape_free()
+{
+	struct JE *jeptr = jedata;
+	struct JE *jenext;
+
+	jedata = NULL;
+
+	while (jeptr) {
+		jenext = jeptr->next;
+		free(jeptr->buf);
+		free(jeptr);
+		jeptr = jenext;
+	}
+}
+
+static char *json_escape(char *str)
+{
+	struct JE *jeptr;
+	char *buf, *ptr;
+
+	/* 2x is the max, may as well just allocate that */
+	ptr = buf = malloc(strlen(str) * 2 + 1);
+
+	jeptr = malloc(sizeof(*jeptr));
+
+	jeptr->buf = buf;
+	jeptr->next = jedata;
+	jedata = jeptr;
+
+	while (*str) {
+		if (*str == '\\' || *str == '"')
+			*(ptr++) = '\\';
+
+		*(ptr++) = *(str++);
+	}
+
+	*ptr = '\0';
+
+	return buf;
+}
+
 void write_config(FILE *fcfg)
 {
 	int i;
@@ -2903,9 +2950,9 @@ void write_config(FILE *fcfg)
 	/* Write pool values */
 	fputs("{\n\"pools\" : [", fcfg);
 	for(i = 0; i < total_pools; i++) {
-		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", pools[i]->rpc_url);
-		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", pools[i]->rpc_user);
-		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", pools[i]->rpc_pass);
+		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", json_escape(pools[i]->rpc_url));
+		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pools[i]->rpc_user));
+		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", json_escape(pools[i]->rpc_pass));
 		}
 	fputs("\n]\n", fcfg);
 
@@ -3031,20 +3078,20 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
 #if defined(unix)
 	if (opt_stderr_cmd && *opt_stderr_cmd)
-		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", opt_stderr_cmd);
+		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", json_escape(opt_stderr_cmd));
 #endif // defined(unix)
 	if (opt_kernel_path && *opt_kernel_path) {
 		char *kpath = strdup(opt_kernel_path);
 		if (kpath[strlen(kpath)-1] == '/')
 			kpath[strlen(kpath)-1] = 0;
-		fprintf(fcfg, ",\n\"kernel-path\" : \"%s\"", kpath);
+		fprintf(fcfg, ",\n\"kernel-path\" : \"%s\"", json_escape(kpath));
 	}
 	if (schedstart.enable)
 		fprintf(fcfg, ",\n\"sched-time\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
 	if (schedstop.enable)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	if (opt_socks_proxy && *opt_socks_proxy)
-		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", opt_socks_proxy);
+		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 #ifdef HAVE_OPENCL
 	for(i = 0; i < nDevs; i++)
 		if (gpus[i].deven == DEV_DISABLED)
@@ -3055,16 +3102,18 @@ void write_config(FILE *fcfg)
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
 #endif
 	if (opt_api_allow)
-		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", opt_api_allow);
+		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
-		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
+		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", json_escape(opt_api_description));
 	if (opt_api_groups)
-		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", opt_api_groups);
+		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", json_escape(opt_api_groups));
 	if (opt_icarus_options)
-		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", opt_icarus_options);
+		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
 	if (opt_icarus_timing)
-		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", opt_icarus_timing);
-	fputs("\n}", fcfg);
+		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
+	fputs("\n}\n", fcfg);
+
+	json_escape_free();
 }
 
 #ifdef HAVE_CURSES
