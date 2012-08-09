@@ -19,6 +19,7 @@ enum {
 
 /* original / legacy debug flags */
 extern bool opt_debug;
+extern bool opt_debug_console;
 extern bool opt_log_output;
 
 /* global log_level, messages with lower or equal prio are logged */

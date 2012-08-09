@@ -134,6 +134,7 @@ Options for both config file and command line:
 --api-port          Port number of miner API (default: 4028)
 --benchmark         Run BFGMiner in benchmark mode - produces no shares
 --debug|-D          Enable debug output
+--debuglog          Enable debug logging
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")

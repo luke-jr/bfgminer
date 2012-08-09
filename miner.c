@@ -602,6 +602,7 @@ static char *set_userpass(const char *arg)
 static char *enable_debug(bool *flag)
 {
 	*flag = true;
+	opt_debug_console = true;
 	/* Turn on verbose output, too. */
 	opt_log_output = true;
 	return NULL;
@@ -801,6 +802,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
 		     "Enable debug output"),
+	OPT_WITHOUT_ARG("--debuglog",
+		     opt_set_bool, &opt_debug,
+		     "Enable debug logging"),
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
 	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
@@ -3529,7 +3533,7 @@ static void display_options(void)
 retry:
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n[R]PC debug:%s\n[L]og interval:%d\n",
-		opt_debug ? "on" : "off",
+		opt_debug_console ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
 		opt_quiet ? "on" : "off",
 		opt_log_output ? "on" : "off",
@@ -3549,18 +3553,19 @@ retry:
 		goto retry;
 	} else if (!strncasecmp(&input, "n", 1)) {
 		opt_log_output = false;
-		opt_debug = false;
+		opt_debug_console = false;
 		opt_quiet = false;
 		opt_protocol = false;
 		want_per_device_stats = false;
 		wlogprint("Output mode reset to normal\n");
 		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
-		opt_debug ^= true;
-		opt_log_output = opt_debug;
-		if (opt_debug)
+		opt_debug = true;
+		opt_debug_console ^= true;
+		opt_log_output = opt_debug_console;
+		if (opt_debug_console)
 			opt_quiet = false;
-		wlogprint("Debug mode %s\n", opt_debug ? "enabled" : "disabled");
+		wlogprint("Debug mode %s\n", opt_debug_console ? "enabled" : "disabled");
 		goto retry;
 	} else if (!strncasecmp(&input, "p", 1)) {
 		want_per_device_stats ^= true;
