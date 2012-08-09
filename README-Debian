@@ -3,8 +3,8 @@ Debian packaging notes by Graeme Humphries <graeme@sudo.ca>:
 Here's the short list on how to build your own Debian/Ubuntu package:
 
 * Install and configure pbuilder (https://wiki.ubuntu.com/PbuilderHowto)
-* cd into this source directory, and create a fake upstream tarball:
-	tar -cJvf ../bfgminer_${VERSION}.orig.tar.xz *
+* Create the Debian specific bitforce module config from its patch:
+	patch -p1 < debian/patches/bfgminer-bitforce.diff
 * Build the package using pbuilder:
 	pdebuild
 * The built package should end up in /var/cache/pbuilder/results

@@ -43,3 +43,6 @@ lib/string.h
 lib/warn-on-use.h
 
 mkinstalldirs
+
+.pc
+bfgminer-bitforce.conf
