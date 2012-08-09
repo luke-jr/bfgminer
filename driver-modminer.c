@@ -458,7 +458,6 @@ modminer_process_results(struct thr_info*thr)
 	uint64_t hashes = (uint64_t)state->clock * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
 	if (hashes > 0xffffffff)
 		hashes = 0xffffffff;
-	else
 	if (hashes <= state->hashes)
 		hashes = 1;
 	else
