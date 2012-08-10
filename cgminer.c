@@ -2594,14 +2594,27 @@ static void test_work_current(struct work *work)
 	} else {
 		bool restart = false;
 		struct pool *curpool = NULL;
-		if (unlikely(work->pool->block_id != block_id && block_id == current_block_id)) {
+		if (unlikely(work->pool->block_id != block_id)) {
 			bool was_active = work->pool->block_id != 0;
 			work->pool->block_id = block_id;
-			if (was_active && work->pool == (curpool = current_pool())) {
-				applog(LOG_NOTICE, "%s %d caught up to new block",
-				       work->longpoll ? "LONGPOLL from pool" : "Pool",
-				       work->pool->pool_no);
-				restart = true;
+			if (was_active) {  // Pool actively changed block
+				if (work->pool == (curpool = current_pool()))
+					restart = true;
+				if (block_id == current_block_id) {
+					// Caught up, only announce if this pool is the one in use
+					if (restart)
+						applog(LOG_NOTICE, "%s %d caught up to new block",
+						       work->longpoll ? "LONGPOLL from pool" : "Pool",
+						       work->pool->pool_no);
+				} else
+					// Switched to a block we know, but not the latest... why?
+					// This might detect pools trying to double-spend or 51%,
+					// but let's not make any accusations until it's had time
+					// in the real world.
+					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
+					       work->longpoll ? "LONGPOLL from pool" : "Pool",
+					       work->pool->pool_no,
+					       hexstr);
 			}
 		}
 	  if (work->longpoll) {
