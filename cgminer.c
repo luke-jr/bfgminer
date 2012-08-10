@@ -2212,6 +2212,13 @@ static void check_solve(struct work *work)
 #endif
 }
 
+static void submit_discard_share(struct work *work)
+{
+	sharelog("discard", work);
+	++total_stale;
+	++(work->pool->stale_shares);
+}
+
 static void *submit_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
@@ -2219,6 +2226,7 @@ static void *submit_work_thread(void *userdata)
 	struct pool *pool = work->pool;
 	struct curl_ent *ce;
 	int failures = 0;
+	time_t staleexpire;
 
 	pthread_detach(pthread_self());
 
@@ -2227,33 +2235,46 @@ static void *submit_work_thread(void *userdata)
 	check_solve(work);
 
 	if (stale_work(work, true)) {
+		work->stale = true;
 		if (opt_submit_stale)
 			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
 		else if (pool->submit_old)
 			applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
 		else {
 			applog(LOG_NOTICE, "Stale share detected, discarding");
-			sharelog("discard", work);
-			total_stale++;
-			pool->stale_shares++;
+			submit_discard_share(work);
 			goto out;
 		}
-		work->stale = true;
+		staleexpire = time(NULL) + 300;
 	}
 
 	ce = pop_curl_entry(pool);
 	/* submit solution to bitcoin via JSON-RPC */
 	while (!submit_upstream_work(work, ce->curl)) {
-		if (stale_work(work, true)) {
-			applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
-			total_stale++;
-			pool->stale_shares++;
-			break;
+		if ((!work->stale) && stale_work(work, true)) {
+			work->stale = true;
+			if (opt_submit_stale)
+				applog(LOG_NOTICE, "Share become stale during submission failure, will retry as user requested");
+			else if (pool->submit_old)
+				applog(LOG_NOTICE, "Share become stale during submission failure, will retry as pool requested");
+			else {
+				applog(LOG_NOTICE, "Share become stale during submission failure, discarding");
+				submit_discard_share(work);
+				break;
+			}
+			staleexpire = time(NULL) + 300;
 		}
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
 			applog(LOG_ERR, "Failed %d retries ...terminating workio thread", opt_retries);
 			kill_work();
 			break;
+		}
+		else if (unlikely(work->stale && opt_retries < 0)) {
+			if (staleexpire <= time(NULL)) {
+				applog(LOG_NOTICE, "Stale share failed to submit for 5 minutes, discarding");
+				submit_discard_share(work);
+				break;
+			}
 		}
 
 		/* pause, then restart work-request loop */
