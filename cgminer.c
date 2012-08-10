@@ -3731,6 +3731,82 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
+static struct work *make_clone(struct work *work)
+{
+	struct work *work_clone = make_work();
+
+	memcpy(work_clone, work, sizeof(struct work));
+	work_clone->clone = true;
+	work_clone->longpoll = false;
+	work_clone->mandatory = false;
+	/* Make cloned work appear slightly older to bias towards keeping the
+	 * master work item which can be further rolled */
+	work_clone->tv_staged.tv_sec -= 1;
+
+	return work_clone;
+}
+
+static inline bool should_roll(struct work *work)
+{
+	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE)
+		return true;
+	return false;
+}
+
+/* Limit rolls to 7000 to not beyond 2 hours in the future where bitcoind will
+ * reject blocks as invalid. */
+static inline bool can_roll(struct work *work)
+{
+	return (work->pool && work->rolltime && !work->clone &&
+		work->rolls < 7000 && !stale_work(work, false));
+}
+
+static void roll_work(struct work *work)
+{
+	uint32_t *work_ntime;
+	uint32_t ntime;
+
+	work_ntime = (uint32_t *)(work->data + 68);
+	ntime = be32toh(*work_ntime);
+	ntime++;
+	*work_ntime = htobe32(ntime);
+	local_work++;
+	work->rolls++;
+	work->blk.nonce = 0;
+	applog(LOG_DEBUG, "Successfully rolled work");
+
+	/* This is now a different work item so it needs a different ID for the
+	 * hashtable */
+	work->id = total_work++;
+}
+
+static bool clone_available(void)
+{
+	struct work *work, *tmp;
+	bool cloned = false;
+	
+	mutex_lock(stgd_lock);
+	HASH_ITER(hh, staged_work, work, tmp) {
+		if (can_roll(work) && should_roll(work)) {
+			struct work *work_clone;
+
+			roll_work(work);
+			work_clone = make_clone(work);
+			roll_work(work);
+			applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
+			if (unlikely(!stage_work(work_clone))) {
+				free(work_clone);
+				break;
+			}
+			cloned = true;
+			break;
+		}
+	}
+	mutex_unlock(stgd_lock);
+
+	return cloned;
+}
+
 bool queue_request(struct thr_info *thr, bool needed)
 {
 	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
@@ -3754,6 +3830,9 @@ bool queue_request(struct thr_info *thr, bool needed)
 		    ((cs || cq) && tq >= maxq))
 			return true;
 	}
+
+	if (clone_available())
+		return true;
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -3799,40 +3878,6 @@ static struct work *hash_pop(const struct timespec *abstime)
 	return work;
 }
 
-static inline bool should_roll(struct work *work)
-{
-	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE)
-		return true;
-	return false;
-}
-
-/* Limit rolls to 7000 to not beyond 2 hours in the future where bitcoind will
- * reject blocks as invalid. */
-static inline bool can_roll(struct work *work)
-{
-	return (work->pool && work->rolltime && !work->clone &&
-		work->rolls < 7000 && !stale_work(work, false));
-}
-
-static void roll_work(struct work *work)
-{
-	uint32_t *work_ntime;
-	uint32_t ntime;
-
-	work_ntime = (uint32_t *)(work->data + 68);
-	ntime = be32toh(*work_ntime);
-	ntime++;
-	*work_ntime = htobe32(ntime);
-	local_work++;
-	work->rolls++;
-	work->blk.nonce = 0;
-	applog(LOG_DEBUG, "Successfully rolled work");
-
-	/* This is now a different work item so it needs a different ID for the
-	 * hashtable */
-	work->id = total_work++;
-}
-
 static bool reuse_work(struct work *work)
 {
 	if (can_roll(work) && should_roll(work)) {
@@ -3840,21 +3885,6 @@ static bool reuse_work(struct work *work)
 		return true;
 	}
 	return false;
-}
-
-static struct work *make_clone(struct work *work)
-{
-	struct work *work_clone = make_work();
-
-	memcpy(work_clone, work, sizeof(struct work));
-	work_clone->clone = true;
-	work_clone->longpoll = false;
-	work_clone->mandatory = false;
-	/* Make cloned work appear slightly older to bias towards keeping the
-	 * master work item which can be further rolled */
-	work_clone->tv_staged.tv_sec -= 1;
-
-	return work_clone;
 }
 
 /* Clones work by rolling it if possible, and returning a clone instead of the
