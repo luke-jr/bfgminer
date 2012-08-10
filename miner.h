@@ -176,6 +176,7 @@ void *alloca (size_t);
 #endif
 
 #ifdef HAVE_CURSES
+	extern int my_cancellable_getch(void);
 #	ifdef getch
 		// getch() is a macro
 		static int __maybe_unused __real_getch(void) {
