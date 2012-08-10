@@ -1,3 +1,253 @@
+Version 2.6.4 - August 7, 2012
+
+- Convert the serial autodetect functions to use int instead of char to
+enumerate devices.
+- Make the serial open timeout for BFL generically 1 second on windows.
+- Deuglify windows autodetect code for BFL.
+- There is no point zeroing temperature in BFL if we fail to get a response, and
+we should register it as a HW error, suggesting throttling.
+- Update SCRYPT README with information about HW errors.
+- Use the scrypt CPU code to confirm results from OCL code, and mark failures as
+HW errors, making it easier to tune scrypt parameters.
+- We may as well leave one curl still available per pool instead of reaping the
+last one.
+- Need to recheck the pool->curls count on regaining the pool lock after the
+pthread conditional wait returns.
+- Display reaped debug message outside mutex lock to avoid recursive locking.
+- Add specific information when ADL detects error -10 saying the device is not
+enabled.
+- api.c update API start message and include port number
+- miner.php ignore arg when readonly
+- miner.php allow pool inputs: delete, addpool, poolpriority
+
+
+Version 2.6.3 - August 5, 2012
+
+- Count likely throttling episodes on bitforce devices as hardware errors.
+- Style cleanups.
+- Use FTD2XX.DLL on Windows to autodetect BitFORCE SHA256 devices.
+- Make pool_disabled the first in the enums == 0, fixing the pool enabled count
+which compares if value is not enabled before enabling it.
+- Correct writing of scrypt parameters to config file based on command line
+parameters only.
+- Use different variables for command line specified lookup gap and thread
+concurrency to differentiate user defined versus auto chosen values.
+- Queue a request on pool switch in case we have no work from the new pool yet.
+- Display failover only mode in pool menu and allow it to be toggled live.
+- Reinstate check for system queueing lag when the current pool's queue is maxed
+out, there is no staged work, and the work is needed now.
+- There is no need for pool active testing to be mandatory any more with queue
+request changes.
+- Fix harmless warnings.
+- Check the current staged and global queued as well before queueing requests.
+Discard stales before ageing work in the watchdog thread. Queue requests after
+discarding and ageing work in watchdog thread. Display accurate global queued in
+curses output. Reuse variable in age_work().
+- The queueing mechanism has become a complex state machine that is no longer
+predictable. Rewrite it from scratch watching only current queues in flight and
+staged work available on a pool by pool basis.
+- API remove unused warning in non-GPU compile
+- api.c in linux allow to open a closed socket in TIME_WAIT
+- Queue an extra request whenever staged work drops below mining thread count in
+hash_pop.
+- Update debian package configs to v2.6.2
+
+
+Version 2.6.2 - August 3, 2012
+
+- Scrypt mining does not support block testing yet so don't try to print it.
+- Clear the bitforce buffer whenever we get an unexpected result as it has
+likely throttled and we are getting cached responses out of order, and use the
+temperature monitoring as a kind of watchdog to flush unexpected results.
+- It is not critical getting the temperature response in bitforce so don't
+mandatorily wait on the mutex lock.
+- Check there is a cutoff temp actually set in bitforce before using it as a cut
+off value otherwise it may think it's set to zero degrees.
+- We dropped the temporary stopping of curl recruiting on submit_fail by
+mistake, reinstate it.
+- Make threads report in either side of the scanhash function in case we miss
+reporting in when restarting work.
+- Don't make mandatory work and its clones last forever.
+- Make test work for pool_active mandatory work items to smooth out staged work
+counts when in failover-only mode.
+- Add debugging output when work is found stale as to why.
+- Print the 3 parameters that are passed to applog for a debug line in
+bitforce.c
+- Clear bitforce buffer on init as previously.
+- Add some headroom to the number of curls available per pool to allow for
+longpoll and sendwork curls.
+- Revert "Revert "Change BFL driver thread initialising to a constant 100ms
+delay between devices instead of a random arrangement.""
+- Revert "Remove bitforce_thread_init"
+- Show the correct base units on GPU summary.
+- Differentiate between the send return value being a bool and the get return
+value when managing them in bitforce scanhash.
+- 23a8c60 Revert "bitforce: Skip out of sending work if work restart requested"
+
+
+Version 2.6.1 - July 30, 2012
+
+- Display scrypt as being built in as well.
+- Fix build warning about KL_SCRYPT when built without scrypt support.
+- Remove the low hash count determinant of hardware being sick. A low hash rate
+can be for poor network connectivity or scrypt mining, neither of which are due
+to a sick device.
+- api.c poolpriority changes
+
+
+Version 2.6.0 - July 29, 2012
+
+- Display kilohash when suitable, but store the global mhash value still truly
+in megahashes to not break the API output.
+- Don't try and print curses output for devices that won't fit on the screen.
+- Add scrypt documentation in the form of a separate readme.
+- Fix build error without scrypt enabled.
+- Limit total number of curls recruited per pool to the number of mining threads
+to prevent blasting the network when we only have one pool to talk to.
+- bitforce: Skip out of sending work if work restart requested
+- Keep a counter of enabled pools and use that instead of iterating over the
+pool list. Use that value to ensure we don't set the last remaining active pool
+to the rejecting state.
+- fpgautils: add support for 57.6 kBd serial
+- miner.php add a socket RCV timeout for if cgminer is hung and the API thread
+is still running
+- Limit thread concurrency for scrypt to 5xshaders if shaders is specified.
+- Simplify repeated use of gpus[gpu]. in ocl.c
+- Find the nearest power of 2 maximum alloc size for the scrypt buffer that can
+successfully be allocated and is large enough to accomodate the thread
+concurrency chosen, thus mapping it to an intensity.
+- Don't make opt_scrypt mandatory blocking with opencl code.
+- Update kernel versions reflecting changes in the API.
+- Make the thread concurrency and lookup gap options hidden on the command line
+and autotune parameters with a newly parsed --shaders option.
+- Fix target testing with scrypt kernel as it would have been missing shares
+below target.
+- Bugfix: Use a mutex to control non-curses output
+- Simplify code to a single vprintf path for curses-less printing
+- Move opt_quiet check to my_log_curses, so it works for curses-less builds
+- Use log_generic for vapplog to cut down on code duplication
+- Add space to log output now that there is more screen real estate available.
+- BFL force all code to timeout to avoid hanging
+- Bugfix: Copy argv[0] given to dirname()
+- Always create the largest possible padbuffer for scrypt kernels even if not
+needed for thread_concurrency, giving us some headroom for intensity levels.
+- Use the detected maximum allocable memory on a GPU to determine the optimal
+scrypt settings when lookup_gap and thread_concurrency parameters are not given.
+- Check the maximum allocable memory size per opencl device.
+- Add debugging output if buffer allocation fails for scrypt and round up
+bufsize to a multiple of 256.
+- Nonce testing for btc got screwed up, leading to no accepted shares. Fix it.
+- Display size of scrypt buffer used in debug.
+- Allow intensities up to 20 if scrypt is compiled in.
+- Add name to scrypt kernel copyright.
+- Allow lookup gap and thread concurrency to be passed per device and store
+details in kernel binary filename.
+- Ignore negative intensities for scrypt.
+- Change the scale of intensity for scrypt kernel and fix a build warning.
+- Correct target value passed to scrypt kernel.
+- Use 256 output slots for kernels to allow 1 for each worksize.
+- Test the target in the actual scrypt kernel itself saving further
+calculations.
+- Reinstate GPU only opencl device detection.
+- Decrease lookup gap to 1. Does not seem to help in any way being 2.
+- Fix build.
+- Make pad0 and pad1 local variable in scrypt kernel.
+- Constify input variable in scrypt kernel.
+- Send correct values to scrypt kernel to get it finally working.
+- Create command queue before compiling program in opencl.
+- Detach pthread from within the api thread in case it is terminated due to not
+being instantiated before pthread_cancel is called from main, leading to a
+segfault.
+- Debug output per thread hashrate is out by a factor of 1000.
+- Initialise mdplatform.
+- Find the gpu platform with the most devices and use that if no platform option
+is passed.
+- Allow more platforms to be probed if first does not return GPUs.
+- Fix external scrypt algo missing.
+- Limit scrypt to 1 vector.
+- Handle KL_SCRYPT in config write.
+- Get rid of stuff.
+- Don't enqueuewrite buffer at all for pad8 and pass work details around for
+scrypt in dev_blk.
+- Set the correct data for cldata and prepare for pad8 fixes.
+- Bugfix: Fix build without curses but with OpenCL
+- Find the gpu platform with the most devices and use that if no platform option
+is passed.
+- Allow more platforms to be probed if first does not return GPUs.
+- Get rid of spaces in arrays in scrypt kernel.
+- Start with smaller amount of hashes in cpu mining to enable scrypt to return
+today sometime.
+- Show Khash hashrates when scrypt is in use.
+- Free the scratchbuf memory allocated in scrypt and don't check if CPUs are
+sick since they can't be. Prepare for khash hash rates in display.
+- Add cpumining capability for scrypt.
+- Set scrypt settings and buffer size in ocl.c code to be future modifiable.
+- Cope with when we cannot set intensity low enough to meet dynamic interval by
+inducing a forced sleep.
+- Make dynamic and scrypt opencl calls blocking.
+- Calculate midstate in separate function and remove likely/unlikely macros
+since they're dependent on pools, not code design.
+- bitforce: Use "full work" vs "nonce range" for kernel name
+- Display in debug mode when we're making the midstate locally.
+- Fix nonce submission code for scrypt.
+- Make sure goffset is set for scrypt and drop padbuffer8 to something
+manageable for now.
+- Set up buffer8 for scrypt.
+- Build fix for opt scrypt.
+- Don't check postcalc nonce with sha256 in scrypt.
+- Don't test nonce with sha and various fixes for scrypt.
+- Make scrypt buffers and midstate compatible with cgminer.
+- Use cgminer specific output array entries in scrypt kernel.
+- Provide initial support for the scrypt kernel to compile with and mine scrypt
+with the --scrypt option.
+- Enable completely compiling scrypt out.
+- Begin import of scrypt opencl kernel from reaper.
+- bitforce_get_result returns -1 on error now.
+- Check return value of read in BFgets
+- Bugfix: Make our Windows nanosleep/sleep replacements standards-compliant
+(which fixes nmsleep) and include compat.h for bitforce (for sleep)
+- rpc: Use a single switch statement for both stringifications of cgpu->status
+- Fix whitespace mangling.
+- miner.php fix rig # when miners fail
+- Only try to shut down work cleanly if we've successfully connected and started
+mining.
+- Use switch statement for cgpu->status and fix spelling.
+- Abbrv. correction
+- Bugfix: Don't declare devices SICK if they're just busy initialising
+- Bugfix: Calculate nsec in nmsleep correctly
+- Bugfix: Adapt OpenCL scanhash errors to driver API change (errors are now -1,
+not 0)
+- Remove superfluous ave_wait
+- Put kname change for broken nonce-range back in
+- Add average wait time to api stats
+- Change BFL driver thread initialising to a constant 100ms delay between
+devices instead of a random arrangement.
+- Spelling typo.
+- Time opencl work from start of queueing a kernel till it's flushed when
+calculating dynamic intensity.
+- Modify te scanhash API to use an int64_t and return -1 on error, allowing zero
+to be a valid return value.
+- Check for work restart after the hashmeter is invoked for we lose the hashes
+otherwise contributed in the count.
+- Remove disabled: label from mining thread function, using a separate
+mt_disable function.
+- Style changes.
+- Missed one nonce-range disabling.
+- Add average return time to api stats
+- miner.php allow rig names in number buttons
+- Remove bitforce_thread_init The delay thing does nothing useful... when long
+poll comes around, all threads restart at the same time anyway.
+- Change timeouts to time-vals for accuracy.
+- fix API support for big endian machines
+- Cope with signals interrupting the nanosleep of nmsleep.
+- Use standard cfsetispeed/cfsetospeed to set baud rate on *nix
+- miner.php split() flagged deprecated in PHP 5.3.0
+- More BFL tweaks. Add delay between closing and reopening port. Remove buffer
+clear in re-init Add kernel type (mini-rig or single)
+- Make long timeout 10seconds on bitforce for when usleep or nanosleep just
+can't be accurate...
+
+
 Version 2.5.0 - July 6, 2012
 
 - Fix --benchmark not working since the dynamic addition of pools and pool

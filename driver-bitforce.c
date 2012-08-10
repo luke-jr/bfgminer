@@ -10,12 +10,39 @@
 
 #include <limits.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <strings.h>
 #include <sys/time.h>
 #include <unistd.h>
 
 #include "config.h"
+
+#ifdef WIN32
+
+#include <windows.h>
+
+#define dlsym (void*)GetProcAddress
+#define dlclose FreeLibrary
+
+typedef unsigned long FT_STATUS;
+typedef PVOID FT_HANDLE;
+__stdcall FT_STATUS (*FT_ListDevices)(PVOID pArg1, PVOID pArg2, DWORD Flags);
+__stdcall FT_STATUS (*FT_Open)(int idx, FT_HANDLE*);
+__stdcall FT_STATUS (*FT_GetComPortNumber)(FT_HANDLE, LPLONG lplComPortNumber);
+__stdcall FT_STATUS (*FT_Close)(FT_HANDLE);
+const uint32_t FT_OPEN_BY_DESCRIPTION =       2;
+const uint32_t FT_LIST_ALL         = 0x20000000;
+const uint32_t FT_LIST_NUMBER_ONLY = 0x80000000;
+enum {
+	FT_OK,
+};
+
+// Code must deal with a timeout. Make it 1 second on windows, 0.1 on linux.
+#define BFopen(devpath)  serial_open(devpath, 0, 10, true)
+#else /* WIN32 */
+#define BFopen(devpath)  serial_open(devpath, 0, 1, true)
+#endif /* WIN32 */
 
 #include "compat.h"
 #include "fpgautils.h"
@@ -32,15 +59,17 @@
 #define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
 #define TIME_AVG_CONSTANT 8
 
-struct device_api bitforce_api;
+#define KNAME_WORK  "full work"
+#define KNAME_RANGE "nonce range"
 
-#define BFopen(devpath)  serial_open(devpath, 0, -1, true)
+struct device_api bitforce_api;
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {
-	do
+	do {
+		buf[0] = '\0';
 		--bufLen;
-	while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
+	} while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
 
 	buf[0] = '\0';
 }
@@ -72,7 +101,7 @@ static bool bitforce_detect_one(const char *devpath)
 	BFwrite(fdDev, "ZGX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL: Error reading (ZGX)");
+		applog(LOG_ERR, "BFL: Error reading/timeout (ZGX)");
 		return 0;
 	}
 
@@ -93,10 +122,10 @@ static bool bitforce_detect_one(const char *devpath)
 	if (opt_bfl_noncerange) {
 		bitforce->nonce_range = true;
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-		bitforce->kname = "Mini-rig";
+		bitforce->kname = KNAME_RANGE;
 	} else {
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS * 5;
-		bitforce->kname = "Single";
+		bitforce->kname = KNAME_WORK;
 	}
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
@@ -109,14 +138,96 @@ static bool bitforce_detect_one(const char *devpath)
 	return add_cgpu(bitforce);
 }
 
-static char bitforce_detect_auto()
+#define LOAD_SYM(sym)  do { \
+	if (!(sym = dlsym(dll, #sym))) {  \
+		applog(LOG_DEBUG, "Failed to load " #sym ", not using FTDI bitforce autodetect");  \
+		goto out;  \
+	}  \
+} while(0)
+
+#ifdef WIN32
+static int bitforce_autodetect_ftdi(void)
+{
+	char devpath[] = "\\\\.\\COMnnnnn";
+	char *devpathnum = &devpath[7];
+	char **bufptrs;
+	char *buf;
+	int found = 0;
+	int i;
+
+	FT_STATUS ftStatus;
+	DWORD numDevs;
+	HMODULE dll = LoadLibrary("FTD2XX.DLL");
+	if (!dll) {
+		applog(LOG_DEBUG, "FTD2XX.DLL failed to load, not using FTDI bitforce autodetect");
+		return 0;
+	}
+	LOAD_SYM(FT_ListDevices);
+	LOAD_SYM(FT_Open);
+	LOAD_SYM(FT_GetComPortNumber);
+	LOAD_SYM(FT_Close);
+	
+	ftStatus = FT_ListDevices(&numDevs, NULL, FT_LIST_NUMBER_ONLY);
+	if (ftStatus != FT_OK) {
+		applog(LOG_DEBUG, "FTDI device count failed, not using FTDI bitforce autodetect");
+		goto out;
+	}
+	applog(LOG_DEBUG, "FTDI reports %u devices", (unsigned)numDevs);
+
+	buf = alloca(65 * numDevs);
+	bufptrs = alloca(numDevs + 1);
+
+	for (i = 0; i < numDevs; ++i)
+		bufptrs[i] = &buf[i * 65];
+	bufptrs[numDevs] = NULL;
+	ftStatus = FT_ListDevices(bufptrs, &numDevs, FT_LIST_ALL | FT_OPEN_BY_DESCRIPTION);
+	if (ftStatus != FT_OK) {
+		applog(LOG_DEBUG, "FTDI device list failed, not using FTDI bitforce autodetect");
+		goto out;
+	}
+	
+	for (i = numDevs; i > 0; ) {
+		--i;
+		bufptrs[i][64] = '\0';
+		
+		if (!(strstr(bufptrs[i], "BitFORCE") && strstr(bufptrs[i], "SHA256")))
+			continue;
+		
+		FT_HANDLE ftHandle;
+		if (FT_OK != FT_Open(i, &ftHandle))
+			continue;
+		LONG lComPortNumber;
+		ftStatus = FT_GetComPortNumber(ftHandle, &lComPortNumber);
+		FT_Close(ftHandle);
+		if (FT_OK != ftStatus || lComPortNumber < 0)
+			continue;
+		
+		sprintf(devpathnum, "%d", (int)lComPortNumber);
+		
+		if (bitforce_detect_one(devpath))
+			++found;
+	}
+
+out:
+	dlclose(dll);
+	return found;
+}
+#else
+static int bitforce_autodetect_ftdi(void)
+{
+	return 0;
+}
+#endif
+
+static int bitforce_detect_auto(void)
 {
 	return (serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
 		serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
+		bitforce_autodetect_ftdi() ?:
 		0);
 }
 
-static void bitforce_detect()
+static void bitforce_detect(void)
 {
 	serial_detect_auto(bitforce_api.dname, bitforce_detect_one, bitforce_detect_auto);
 }
@@ -152,7 +263,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void biforce_clear_buffer(struct cgpu_info *bitforce)
+static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
@@ -180,6 +291,8 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
 
+	bitforce_clear_buffer(bitforce);
+
 	mutex_lock(&bitforce->device_mutex);
 	if (fdDev) {
 		BFclose(fdDev);
@@ -200,7 +313,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(&bitforce->device_mutex);
-			applog(LOG_ERR, "BFL%i: Error reading (ZGX)", bitforce->device_id);
+			applog(LOG_ERR, "BFL%i: Error reading/timeout (ZGX)", bitforce->device_id);
 			return;
 		}
 
@@ -234,14 +347,18 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (!fdDev)
 		return false;
 
-	mutex_lock(&bitforce->device_mutex);
+	/* It is not critical getting temperature so don't get stuck if  we
+	 * can't grab the mutex here */
+	if (mutex_trylock(&bitforce->device_mutex))
+		return false;
+
 	BFwrite(fdDev, "ZLX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
 	
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string", bitforce->device_id);
-		bitforce->temp = 0;
+		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string/timed out", bitforce->device_id);
+		bitforce->hw_errors++;
 		return false;
 	}
 
@@ -250,7 +367,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 
 		if (temp > 0) {
 			bitforce->temp = temp;
-			if (temp > bitforce->cutofftemp) {
+			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
 				applog(LOG_WARNING, "BFL%i: Hit thermal cutoff limit, disabling!", bitforce->device_id);
 				bitforce->deven = DEV_RECOVER;
 
@@ -259,7 +376,17 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 				bitforce->dev_thermal_cutoff_count++;
 			}
 		}
+	} else {
+		/* Use the temperature monitor as a kind of watchdog for when
+		 * our responses are out of sync and flush the buffer to
+		 * hopefully recover */
+		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer");
+		/* Count throttling episodes as hardware errors */
+		bitforce->hw_errors++;
+		bitforce_clear_buffer(bitforce);
+		return false;;
 	}
+
 	return true;
 }
 
@@ -290,10 +417,12 @@ re_send:
 			applog(LOG_WARNING, "BFL%i: Does not support nonce range, disabling", bitforce->device_id);
 			bitforce->nonce_range = false;
 			bitforce->sleep_ms *= 5;
-			bitforce->kname = "Single";
+			bitforce->kname = KNAME_WORK;
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
+		bitforce->hw_errors++;
+		bitforce_clear_buffer(bitforce);
 		return false;
 	}
 
@@ -328,12 +457,14 @@ re_send:
 	}
 
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string", bitforce->device_id);
+		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string/timed out", bitforce->device_id);
 		return false;
 	}
 
 	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
+		bitforce->hw_errors++;
+		bitforce_clear_buffer(bitforce);
 		return false;
 	}
 
@@ -408,7 +539,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		}
 
 		if (delay_time_ms != bitforce->sleep_ms)
-			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d, waited %u", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
 
 		/* Work out the average time taken. Float for calculation, uint for display */
 		bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
@@ -421,7 +552,9 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	else if (!strncasecmp(pdevbuf, "I", 1))
 		return 0;	/* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
+		bitforce->hw_errors++;
 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
+		bitforce_clear_buffer(bitforce);
 		return 0;
 	}
 
@@ -438,7 +571,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 				bitforce->sleep_ms *= 5;
-				bitforce->kname = "Single";
+				bitforce->kname = KNAME_WORK;
 		}
 			
 		submit_nonce(thr, work, nonce);
@@ -469,9 +602,10 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int sleep_time;
+	bool send_ret;
 	int64_t ret;
 
-	ret = bitforce_send_work(thr, work);
+	send_ret = bitforce_send_work(thr, work);
 
 	if (!bitforce->nonce_range) {
 		/* Initially wait 2/3 of the average cycle time so we can request more
@@ -497,8 +631,10 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce->wait_ms = sleep_time;
 	}
 
-	if (ret)
+	if (send_ret)
 		ret = bitforce_get_result(thr, work);
+	else
+		ret = -1;
 
 	if (ret == -1) {
 		ret = 0;
@@ -506,8 +642,9 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
 		bitforce->dev_comms_error_count++;
+		bitforce->hw_errors++;
 		/* empty read buffer */
-		biforce_clear_buffer(bitforce);
+		bitforce_clear_buffer(bitforce);
 	}
 	return ret;
 }
@@ -515,6 +652,20 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 static bool bitforce_get_stats(struct cgpu_info *bitforce)
 {
 	return bitforce_get_temp(bitforce);
+}
+
+static bool bitforce_thread_init(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	unsigned int wait;
+
+	/* Pause each new thread at least 100ms between initialising
+	 * so the devices aren't making calls all at the same time. */
+	wait = thr->id * MAX_START_DELAY_US;
+	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
+	usleep(wait);
+
+	return true;
 }
 
 static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
@@ -540,6 +691,7 @@ struct device_api bitforce_api = {
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.thread_prepare = bitforce_thread_prepare,
+	.thread_init = bitforce_thread_init,
 	.scanhash = bitforce_scanhash,
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable

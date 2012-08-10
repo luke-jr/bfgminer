@@ -262,6 +262,7 @@ enum cl_kernels {
 	KL_PHATK,
 	KL_DIAKGCN,
 	KL_DIABLO,
+	KL_SCRYPT,
 };
 
 enum dev_reason {
@@ -335,7 +336,6 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int hw_errors;
-	unsigned int low_count;
 	double rolling;
 	double total_mhashes;
 	double utility;
@@ -355,10 +355,17 @@ struct cgpu_info {
 	int virtual_adl;
 	int intensity;
 	bool dynamic;
+
 	cl_uint vwidth;
 	size_t work_size;
 	enum cl_kernels kernel;
+	cl_ulong max_alloc;
 
+#ifdef USE_SCRYPT
+	int opt_lg, lookup_gap;
+	int opt_tc, thread_concurrency;
+	int shaders;
+#endif
 	struct timeval tv_gpustart;;
 	struct timeval tv_gpuend;
 	double gpu_us_average;
@@ -493,6 +500,11 @@ static inline void mutex_unlock(pthread_mutex_t *lock)
 		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
 }
 
+static inline int mutex_trylock(pthread_mutex_t *lock)
+{
+	return pthread_mutex_trylock(lock);
+}
+
 static inline void wr_lock(pthread_rwlock_t *lock)
 {
 	if (unlikely(pthread_rwlock_wrlock(lock)))
@@ -550,6 +562,7 @@ extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
 extern bool opt_restart;
+extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
@@ -576,6 +589,8 @@ extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_scantime;
 
+extern pthread_mutex_t console_lock;
+
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
@@ -598,15 +613,20 @@ extern int set_memoryclock(int gpu, int iMemoryClock);
 extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
-extern int active_pools(void);
+extern int enabled_pools;
 extern void add_pool_details(bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
 
 #define MIN_INTENSITY -10
 #define _MIN_INTENSITY_STR "-10"
+#ifdef USE_SCRYPT
+#define MAX_INTENSITY 20
+#define _MAX_INTENSITY_STR "20"
+#else
 #define MAX_INTENSITY 14
 #define _MAX_INTENSITY_STR "14"
+#endif
 
 extern struct list_head scan_devices;
 extern int nDevs;
@@ -614,9 +634,15 @@ extern int opt_n_threads;
 extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
+extern bool opt_quiet;
 extern struct thr_info *thr_info;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
+#ifdef USE_SCRYPT
+extern bool opt_scrypt;
+#else
+#define opt_scrypt (0)
+#endif
 extern double total_secs;
 extern int mining_threads;
 extern struct cgpu_info *cpus;
@@ -664,6 +690,9 @@ typedef struct {
 	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
 	cl_uint zeroA, zeroB;
 	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
+#ifdef USE_SCRYPT
+	struct work *work;
+#endif
 } dev_blk_ctx;
 #else
 typedef struct {
@@ -677,9 +706,11 @@ struct curl_ent {
 	struct timeval tv;
 };
 
+/* Disabled needs to be the lowest enum as a freshly calloced value will then
+ * equal disabled */
 enum pool_enable {
-	POOL_ENABLED,
 	POOL_DISABLED,
+	POOL_ENABLED,
 	POOL_REJECTING,
 };
 
@@ -689,6 +720,8 @@ struct pool {
 	int accepted, rejected;
 	int seq_rejects;
 	int solved;
+	int queued;
+	int staged;
 
 	bool submit_fail;
 	bool idle;
@@ -796,7 +829,7 @@ extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
 extern void default_save_file(char *filename);
-extern void log_curses(int prio, const char *f, va_list ap);
+extern bool log_curses_only(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
 extern struct thread_q *tq_new(void);

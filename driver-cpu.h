@@ -34,6 +34,10 @@
 #define WANT_X8664_SSE4 1
 #endif
 
+#ifdef USE_SCRYPT
+#define WANT_SCRYPT
+#endif
+
 enum sha256_algos {
 	ALGO_C,			/* plain C */
 	ALGO_4WAY,		/* parallel SSE2 */
@@ -44,6 +48,7 @@ enum sha256_algos {
 	ALGO_SSE2_64,		/* SSE2 for x86_64 */
 	ALGO_SSE4_64,		/* SSE4 for x86_64 */
 	ALGO_ALTIVEC_4WAY,	/* parallel Altivec */
+	ALGO_SCRYPT,		/* scrypt */
 };
 
 extern const char *algo_names[];
@@ -55,5 +60,6 @@ extern void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo);
 extern char *force_nthreads_int(const char *arg, int *i);
 extern void init_max_name_len();
 extern double bench_algo_stage3(enum sha256_algos algo);
+extern void set_scrypt_algo(enum sha256_algos *algo);
 
 #endif /* __DEVICE_CPU_H__ */

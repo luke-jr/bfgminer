@@ -166,7 +166,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.14";
+static const char *APIVERSION = "1.15";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -176,7 +176,9 @@ static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
 static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
+#ifdef HAVE_OPENCL
 static const char *DYNAMIC = _DYNAMIC;
+#endif
 
 static const char *YES = "Y";
 static const char *NO = "N";
@@ -372,6 +374,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MINESTATS 70
 #define MSG_MISCHK 71
 #define MSG_CHECK 72
+#define MSG_POOLPRIO 73
+#define MSG_DUPPID 74
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -385,6 +389,7 @@ enum code_parameters {
 	PARAM_GPU,
 	PARAM_PGA,
 	PARAM_CPU,
+	PARAM_PID,
 	PARAM_GPUMAX,
 	PARAM_PGAMAX,
 	PARAM_CPUMAX,
@@ -501,6 +506,8 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ACCDENY,	PARAM_STR,	"Access denied to '%s' command" },
  { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
  { SEVERITY_SUCC,  MSG_ENAPOOL,	PARAM_POOL,	"Enabling pool %d:'%s'" },
+ { SEVERITY_SUCC,  MSG_POOLPRIO,PARAM_NONE,	"Changed pool priorities" },
+ { SEVERITY_ERR,   MSG_DUPPID,	PARAM_PID,	"Duplicate pool specified %d" },
  { SEVERITY_SUCC,  MSG_DISPOOL,	PARAM_POOL,	"Disabling pool %d:'%s'" },
  { SEVERITY_INFO,  MSG_ALRENAP,	PARAM_POOL,	"Pool %d:'%s' already enabled" },
  { SEVERITY_INFO,  MSG_ALRDISP,	PARAM_POOL,	"Pool %d:'%s' already disabled" },
@@ -1062,6 +1069,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 				case PARAM_GPU:
 				case PARAM_PGA:
 				case PARAM_CPU:
+				case PARAM_PID:
 					sprintf(buf, codes[i].description, paramid);
 					break;
 				case PARAM_POOL:
@@ -2128,6 +2136,74 @@ static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	strcpy(io_buffer, message(MSG_ENAPOOL, id, NULL, isjson));
 }
 
+static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	char *ptr, *next;
+	int i, pr, prio = 0;
+
+	// TODO: all cgminer code needs a mutex added everywhere for change
+	//	access to total_pools and also parts of the pools[] array,
+	//	just copying total_pools here wont solve that
+
+	if (total_pools == 0) {
+		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	bool pools_changed[total_pools];
+	int new_prio[total_pools];
+	for (i = 0; i < total_pools; ++i)
+		pools_changed[i] = false;
+
+	next = param;
+	while (next && *next) {
+		ptr = next;
+		next = strchr(ptr, ',');
+		if (next)
+			*(next++) = '\0';
+
+		i = atoi(ptr);
+		if (i < 0 || i >= total_pools) {
+			strcpy(io_buffer, message(MSG_INVPID, i, NULL, isjson));
+			return;
+		}
+
+		if (pools_changed[i]) {
+			strcpy(io_buffer, message(MSG_DUPPID, i, NULL, isjson));
+			return;
+		}
+
+		pools_changed[i] = true;
+		new_prio[i] = prio++;
+	}
+
+	// Only change them if no errors
+	for (i = 0; i < total_pools; i++) {
+		if (pools_changed[i])
+			pools[i]->prio = new_prio[i];
+	}
+
+	// In priority order, cycle through the unchanged pools and append them
+	for (pr = 0; pr < total_pools; pr++)
+		for (i = 0; i < total_pools; i++) {
+			if (!pools_changed[i] && pools[i]->prio == pr) {
+				pools[i]->prio = prio++;
+				pools_changed[i] = true;
+				break;
+			}
+		}
+
+	if (current_pool()->prio)
+		switch_pools(NULL);
+
+	strcpy(io_buffer, message(MSG_POOLPRIO, 0, NULL, isjson));
+}
+
 static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
@@ -2155,7 +2231,7 @@ static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, _
 		return;
 	}
 
-	if (active_pools() <= 1) {
+	if (enabled_pools <= 1) {
 		strcpy(io_buffer, message(MSG_DISLASTP, id, NULL, isjson));
 		return;
 	}
@@ -2659,6 +2735,7 @@ struct CMDS {
 	{ "cpucount",		cpucount,	false },
 	{ "switchpool",		switchpool,	true },
 	{ "addpool",		addpool,	true },
+	{ "poolpriority",	poolpriority,	true },
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
 	{ "removepool",		removepool,	true },
@@ -3122,6 +3199,20 @@ void api(int api_thr_id)
 
 	serv.sin_port = htons(port);
 
+#ifndef WIN32
+	// On linux with SO_REUSEADDR, bind will get the port if the previous
+	// socket is closed (even if it is still in TIME_WAIT) but fail if
+	// another program has it open - which is what we want
+	int optval = 1;
+	// If it doesn't work, we don't really care - just show a debug message
+	if (SOCKETFAIL(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval))))
+		applog(LOG_DEBUG, "API setsockopt SO_REUSEADDR failed (ignored): %s", SOCKERRMSG);
+#else
+	// On windows a 2nd program can bind to a port>1024 already in use unless
+	// SO_EXCLUSIVEADDRUSE is used - however then the bind to a closed port
+	// in TIME_WAIT will fail until the timeout - so we leave the options alone
+#endif
+
 	// try for more than 1 minute ... in case the old one hasn't completely gone yet
 	bound = 0;
 	bindstart = time(NULL);
@@ -3150,12 +3241,12 @@ void api(int api_thr_id)
 	}
 
 	if (opt_api_allow)
-		applog(LOG_WARNING, "API running in IP access mode");
+		applog(LOG_WARNING, "API running in IP access mode on port %d", port);
 	else {
 		if (opt_api_network)
-			applog(LOG_WARNING, "API running in UNRESTRICTED access mode");
+			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d", port);
 		else
-			applog(LOG_WARNING, "API running in local access mode");
+			applog(LOG_WARNING, "API running in local read access mode on port %d", port);
 	}
 
 	io_buffer = malloc(MYBUFSIZ+1);

@@ -127,6 +127,83 @@ char *set_worksize(char *arg)
 	return NULL;
 }
 
+#ifdef USE_SCRYPT
+char *set_shaders(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set lookup gap";
+	val = atoi(nextptr);
+
+	gpus[device++].shaders = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].shaders = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].shaders = gpus[0].shaders;
+	}
+
+	return NULL;
+}
+
+char *set_lookup_gap(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set lookup gap";
+	val = atoi(nextptr);
+
+	gpus[device++].opt_lg = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].opt_lg = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].opt_lg = gpus[0].opt_lg;
+	}
+
+	return NULL;
+}
+
+char *set_thread_concurrency(char *arg)
+{
+	int i, val = 0, device = 0;
+	char *nextptr;
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set thread concurrency";
+	val = atoi(nextptr);
+
+	gpus[device++].opt_tc = val;
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		val = atoi(nextptr);
+
+		gpus[device++].opt_tc = val;
+	}
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			gpus[i].opt_tc = gpus[0].opt_tc;
+	}
+
+	return NULL;
+}
+#endif
+
 static enum cl_kernels select_kernel(char *arg)
 {
 	if (!strcmp(arg, "diablo"))
@@ -137,6 +214,10 @@ static enum cl_kernels select_kernel(char *arg)
 		return KL_POCLBM;
 	if (!strcmp(arg, "phatk"))
 		return KL_PHATK;
+#ifdef USE_SCRYPT
+	if (!strcmp(arg, "scrypt"))
+		return KL_SCRYPT;
+#endif
 	return KL_NONE;
 }
 
@@ -146,6 +227,8 @@ char *set_kernel(char *arg)
 	int i, device = 0;
 	char *nextptr;
 
+	if (opt_scrypt)
+		return "Cannot use sha256 kernel with scrypt";
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set kernel";
@@ -577,9 +660,19 @@ retry:
 
 	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct cgpu_info *cgpu = &gpus[gpu];
+		double displayed_rolling, displayed_total;
+		bool mhash_base = true;
 
-		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
-			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
+		displayed_rolling = cgpu->rolling;
+		displayed_total = cgpu->total_mhashes / total_secs;
+		if (displayed_rolling < 1) {
+			displayed_rolling *= 1000;
+			displayed_total *= 1000;
+			mhash_base = false;
+		}
+
+		wlog("GPU %d: %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
+			gpu, displayed_rolling, displayed_total, mhash_base ? "M" : "K",
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, cgpu->intensity);
 #ifdef HAVE_ADL
@@ -627,7 +720,10 @@ retry:
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
-			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
+			displayed_rolling = thr->rolling;
+			if (!mhash_base)
+				displayed_rolling *= 1000;
+			wlog("Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
 			switch (cgpu->status) {
 				default:
 				case LIFE_WELL:
@@ -986,11 +1082,40 @@ static cl_int queue_diablo_kernel(_clState *clState, dev_blk_ctx *blk, cl_uint t
 	return status;
 }
 
+#ifdef USE_SCRYPT
+static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_unused cl_uint threads)
+{
+	unsigned char *midstate = blk->work->midstate;
+	cl_kernel *kernel = &clState->kernel;
+	unsigned int num = 0;
+	cl_uint le_target;
+	cl_int status = 0;
+
+	le_target = *(cl_uint *)(blk->work->target + 28);
+	clState->cldata = blk->work->data;
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL,NULL);
+
+	CL_SET_ARG(clState->CLbuffer0);
+	CL_SET_ARG(clState->outputBuffer);
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_VARG(4, &midstate[0]);
+	CL_SET_VARG(4, &midstate[16]);
+	CL_SET_ARG(le_target);
+
+	return status;
+}
+#endif
+
 static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
 			       int64_t *hashes, size_t *globalThreads,
 			       unsigned int minthreads, int intensity)
 {
-	*threads = 1 << (15 + intensity);
+	if (opt_scrypt) {
+		if (intensity < 0)
+			intensity = 0;
+		*threads = 1 << intensity;
+	} else
+		*threads = 1 << (15 + intensity);
 	if (*threads < minthreads)
 		*threads = minthreads;
 	*globalThreads = *threads;
@@ -1210,16 +1335,17 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	applog(LOG_INFO, "Init GPU thread %i GPU %i virtual GPU %i", i, gpu, virtual_gpu);
 	clStates[i] = initCl(virtual_gpu, name, sizeof(name));
 	if (!clStates[i]) {
+#ifdef HAVE_CURSES
 		if (use_curses)
 			enable_curses();
+#endif
 		applog(LOG_ERR, "Failed to init GPU thread %d, disabling device %d", i, gpu);
 		if (!failmessage) {
-			char *buf;
-
 			applog(LOG_ERR, "Restarting the GPU from the menu will not fix this.");
 			applog(LOG_ERR, "Try restarting cgminer.");
 			failmessage = true;
 #ifdef HAVE_CURSES
+			char *buf;
 			if (use_curses) {
 				buf = curses_input("Press enter to continue");
 				if (buf)
@@ -1241,19 +1367,25 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	if (!cgpu->kname)
 	{
 		switch (clStates[i]->chosen_kernel) {
-		case KL_DIABLO:
-			cgpu->kname = "diablo";
-			break;
-		case KL_DIAKGCN:
-			cgpu->kname = "diakgcn";
-			break;
-		case KL_PHATK:
-			cgpu->kname = "phatk";
-			break;
-		case KL_POCLBM:
-			cgpu->kname = "poclbm";
-		default:
-			break;
+			case KL_DIABLO:
+				cgpu->kname = "diablo";
+				break;
+			case KL_DIAKGCN:
+				cgpu->kname = "diakgcn";
+				break;
+			case KL_PHATK:
+				cgpu->kname = "phatk";
+				break;
+#ifdef USE_SCRYPT
+			case KL_SCRYPT:
+				cgpu->kname = "scrypt";
+				break;
+#endif
+			case KL_POCLBM:
+				cgpu->kname = "poclbm";
+				break;
+			default:
+				break;
 		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
@@ -1271,7 +1403,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 	struct cgpu_info *gpu = thr->cgpu;
 	struct opencl_thread_data *thrdata;
 	_clState *clState = clStates[thr_id];
-	cl_int status;
+	cl_int status = 0;
 	thrdata = calloc(1, sizeof(*thrdata));
 	thr->cgpu_data = thrdata;
 
@@ -1290,6 +1422,11 @@ static bool opencl_thread_init(struct thr_info *thr)
 		case KL_DIAKGCN:
 			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
 			break;
+#ifdef USE_SCRYPT
+		case KL_SCRYPT:
+			thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
+			break;
+#endif
 		default:
 		case KL_DIABLO:
 			thrdata->queue_kernel_parameters = &queue_diablo_kernel;
@@ -1304,7 +1441,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 		return false;
 	}
 
-	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
+	status |= clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
 			BUFFERSIZE, blank_res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
@@ -1333,7 +1470,12 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
-	precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		work->blk.work = work;
+	else
+#endif
+		precalc_hash(&work->blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 	return true;
 }
 
@@ -1348,6 +1490,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
 	const int dynamic_us = opt_dynamic_interval * 1000;
+	cl_bool blocking;
 
 	cl_int status;
 	size_t globalThreads[1];
@@ -1355,14 +1498,20 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	unsigned int threads;
 	int64_t hashes;
 
+	if (gpu->dynamic)
+		blocking = CL_TRUE;
+	else
+		blocking = CL_FALSE;
+
 	/* This finish flushes the readbuffer set with CL_FALSE later */
-	clFinish(clState->commandQueue);
-	gettimeofday(&gpu->tv_gpuend, NULL);
+	if (!blocking)
+		clFinish(clState->commandQueue);
 
 	if (gpu->dynamic) {
 		struct timeval diff;
 		suseconds_t gpu_us;
 
+		gettimeofday(&gpu->tv_gpuend, NULL);
 		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
 		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
 		if (likely(gpu_us >= 0)) {
@@ -1384,6 +1533,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			   localThreads[0], gpu->intensity);
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
+
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
@@ -1393,7 +1543,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	/* MAXBUFFERS entry is used as a flag to say nonces exist */
 	if (thrdata->res[FOUND]) {
 		/* Clear the buffer again */
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, blocking, 0,
 				BUFFERSIZE, blank_res, 0, NULL, NULL);
 		if (unlikely(status != CL_SUCCESS)) {
 			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
@@ -1408,7 +1558,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			postcalc_hash_async(thr, work, thrdata->res);
 		}
 		memset(thrdata->res, 0, BUFFERSIZE);
-		clFinish(clState->commandQueue);
+		if (!blocking)
+			clFinish(clState->commandQueue);
 	}
 
 	gettimeofday(&gpu->tv_gpustart, NULL);
@@ -1423,14 +1574,14 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		status = clEnqueueNDRangeKernel(clState->commandQueue, *kernel, 1, NULL,
 						globalThreads, localThreads, 0,  NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)");
+		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
 		return -1;
 	}
 
-	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, blocking, 0,
 			BUFFERSIZE, thrdata->res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed. (clEnqueueReadBuffer)");
+		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);
 		return -1;
 	}
 

@@ -4,10 +4,10 @@
 #include "config.h"
 
 #define MAXTHREADS (0xFFFFFFFEULL)
-#define MAXBUFFERS (0xFF)
+#define MAXBUFFERS (0xFFF)
 #define BUFFERSIZE (sizeof(uint32_t) * MAXBUFFERS)
-#define FOUND (0x80)
-/* #define NFLAG (0x7F) Just for reference */
+#define FOUND (0x800)
+/* #define NFLAG (0x7FF) Just for reference */
 
 #ifdef HAVE_OPENCL
 extern void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data);

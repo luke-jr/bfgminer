@@ -10,7 +10,7 @@ endif
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
 		  ADL_SDK/readme.txt api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
-		  bitstreams/* API-README FPGA-README
+		  bitstreams/* API-README FPGA-README SCRYPT-README
 
 SUBDIRS		= lib compat ccan
 
@@ -44,6 +44,10 @@ cgminer_SOURCES += driver-opencl.h driver-opencl.c
 cgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 cgminer_SOURCES += adl.c adl.h adl_functions.h
 cgminer_SOURCES += *.cl
+
+if HAS_SCRYPT
+cgminer_SOURCES += scrypt.c scrypt.h
+endif
 
 if HAS_CPUMINE
 # original CPU related sources, unchanged

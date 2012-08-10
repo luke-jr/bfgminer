@@ -571,8 +571,8 @@ __kernel
 
 	V[7] += V[3] + W[12] + ch(V[0], V[1], V[2]) + rotr26(V[0]);
 
-#define FOUND (0x80)
-#define NFLAG (0x7F)
+#define FOUND (0x800)
+#define NFLAG (0x7FF)
 
 #ifdef VECTORS4
 	if ((V[7].x == 0x136032edU) ^ (V[7].y == 0x136032edU) ^ (V[7].z == 0x136032edU) ^ (V[7].w == 0x136032edU))

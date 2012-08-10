@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [2])
-m4_define([v_min], [5])
-m4_define([v_mic], [0])
+m4_define([v_min], [6])
+m4_define([v_mic], [4])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -173,6 +173,8 @@ AC_ARG_ENABLE([adl],
 	[adl=$enableval]
 	)
 
+scrypt="no"
+
 if test "$found_opencl" = 1; then
 	if test "x$adl" != xno; then
 		AC_CHECK_FILE([ADL_SDK/adl_sdk.h], have_adl=true, have_adl=false,)
@@ -183,9 +185,19 @@ if test "$found_opencl" = 1; then
 			DLOPEN_FLAGS=""
 		fi
 	fi
+
+	AC_ARG_ENABLE([scrypt],
+		[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt litecoin mining (default disabled)])],
+		[scrypt=$enableval]
+		)
+	if test "x$scrypt" = xyes; then
+		AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
+	fi
 else
 	DLOPEN_FLAGS=""
 fi
+
+AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 
 bitforce="no"
 
@@ -377,10 +389,11 @@ fi
 
 AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to cgminer install])
 
-AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120223"], [Filename for phatk kernel])
-AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120327"], [Filename for poclbm kernel])
-AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120427"], [Filename for diakgcn kernel])
-AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120328"], [Filename for diablo kernel])
+AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120724"], [Filename for phatk kernel])
+AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120724"], [Filename for poclbm kernel])
+AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120724"], [Filename for diakgcn kernel])
+AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120724"], [Filename for diablo kernel])
+AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt120724"], [Filename for scrypt kernel])
 
 
 AC_SUBST(OPENCL_LIBS)
@@ -425,17 +438,25 @@ echo "  curses.TUI...........: $cursesmsg"
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then
 		echo "  OpenCL...............: FOUND. GPU mining support enabled"
+	if test "x$scrypt" != xno; then
+		echo "  scrypt...............: Enabled"
+	else
+		echo "  scrypt...............: Disabled"
+	fi
+
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
 		if test "x$cpumining$bitforce$icarus$ztex$modminer" = xnonononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
+		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
 	if test "x$cpumining$bitforce$icarus$ztex$modminer" = xnonononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
+	echo "  scrypt...............: Disabled (needs OpenCL)"
 fi
 
 if test "x$adl" != xno; then

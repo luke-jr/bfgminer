@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "findnonce.h"
+#include "scrypt.h"
 
 const uint32_t SHA256_K[64] = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -45,7 +46,8 @@ const uint32_t SHA256_K[64] = {
 	d = d + h; \
 	h = h + (rotate(a, 30) ^ rotate(a, 19) ^ rotate(a, 10)) + ((a & b) | (c & (a | b)))
 
-void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data) {
+void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
+{
 	cl_uint A, B, C, D, E, F, G, H;
 
 	A = state[0];
@@ -172,7 +174,7 @@ struct pc_data {
 	pthread_t pth;
 };
 
-static void send_nonce(struct pc_data *pcd, cl_uint nonce)
+static void send_sha_nonce(struct pc_data *pcd, cl_uint nonce)
 {
 	dev_blk_ctx *blk = &pcd->work->blk;
 	struct thr_info *thr = pcd->thr;
@@ -219,6 +221,19 @@ static void send_nonce(struct pc_data *pcd, cl_uint nonce)
 	}
 }
 
+static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
+{
+	struct thr_info *thr = pcd->thr;
+	struct work *work = pcd->work;
+
+	if (scrypt_test(work->data, work->target, nonce))
+		submit_nonce(thr, pcd->work, nonce);
+	else {
+		applog(LOG_INFO, "Scrypt error, review settings");
+		thr->cgpu->hw_errors++;
+	}
+}
+
 static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
@@ -228,9 +243,16 @@ static void *postcalc_hash(void *userdata)
 	pthread_detach(pthread_self());
 
 	for (entry = 0; entry < FOUND; entry++) {
-		if (pcd->res[entry])
-			send_nonce(pcd, pcd->res[entry]);
-		nonces++;
+		uint32_t nonce = pcd->res[entry];
+
+		if (nonce) {
+			applog(LOG_DEBUG, "OCL NONCE %u", nonce);
+			if (opt_scrypt)
+				send_scrypt_nonce(pcd, nonce);
+			else
+				send_sha_nonce(pcd, nonce);
+			nonces++;
+		}
 	}
 
 	free(pcd);

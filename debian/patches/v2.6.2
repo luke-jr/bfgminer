@@ -1,0 +1,1275 @@
+--- a/FPGA-README
++++ b/FPGA-README
+@@ -16,7 +16,25 @@
+ 
+ Icarus
+ 
+-There is a hidden option in cgminer when Icarus support is compiled in:
++There are two hidden options in cgminer when Icarus support is compiled in:
++
++--icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
++           baud:work_division:fpga_count
++
++           baud           The Serial/USB baud rate - 115200 or 57600 only - default 115200
++           work_division  The fraction of work divided up for each FPGA chip - 1, 2, 4 or 8
++                          e.g. 2 means each FPGA does half the nonce range - default 2
++           fpga_count     The actual number of FPGA working - this would normally be the same
++                          as work_division - range is from 1 up to 'work_division'
++                          It defaults to the value of work_division - or 2 if you don't specify
++                          work_division
++
++If you define fewer comma seperated values than Icarus devices, the last values will be used
++for all extra devices
++
++An example would be: --icarus-options 57600:2:1
++This would mean: use 57600 baud, the FPGA board divides the work in half however
++only 1 FPGA actually runs on the board (e.g. like an early CM1 Icarus copy bitstream)
+ 
+ --icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
+            default[=N]   Use the default Icarus hash time (2.6316ns)
+@@ -24,6 +42,9 @@
+            long          Re-calculate the hash time continuously
+            value[=N]     Specify the hash time in nanoseconds (e.g. 2.6316) and abort time (e.g. 2.6316=80)
+ 
++If you define fewer comma seperated values than Icarus devices, the last values will be used
++for all extra devices
++
+ Icarus timing is required for devices that do not exactly match a default Icarus Rev3 in
+ processing speed
+ If you have an Icarus Rev3 you should not normally need to use --icarus-timing since the
+@@ -55,9 +76,9 @@
+ 'short' mode and take note of the final hash time value (Hs) calculated
+ You can also use the RPC API 'stats' command to see the current hash time (Hs) at any time
+ 
+-The Icarus code currently only works with a dual FPGA device that supports the same commands as
++The Icarus code currently only works with an FPGA device that supports the same commands as
+ Icarus Rev3 requires and also is less than ~840MH/s and greater than 2MH/s
+-If a dual FPGA device does hash faster than ~840MH/s it should work correctly if you supply the
++If an FPGA device does hash faster than ~840MH/s it should work correctly if you supply the
+ correct hash time nanoseconds value
+ 
+ The timing code itself will affect the Icarus performance since it increases the delay after
+--- a/NEWS
++++ b/NEWS
+@@ -1,7 +1,42 @@
++Version 2.6.2 - August 3, 2012
++
++- Scrypt mining does not support block testing yet so don't try to print it.
++- Clear the bitforce buffer whenever we get an unexpected result as it has
++likely throttled and we are getting cached responses out of order, and use the
++temperature monitoring as a kind of watchdog to flush unexpected results.
++- It is not critical getting the temperature response in bitforce so don't
++mandatorily wait on the mutex lock.
++- Check there is a cutoff temp actually set in bitforce before using it as a cut
++off value otherwise it may think it's set to zero degrees.
++- We dropped the temporary stopping of curl recruiting on submit_fail by
++mistake, reinstate it.
++- Make threads report in either side of the scanhash function in case we miss
++reporting in when restarting work.
++- Don't make mandatory work and its clones last forever.
++- Make test work for pool_active mandatory work items to smooth out staged work
++counts when in failover-only mode.
++- Add debugging output when work is found stale as to why.
++- Print the 3 parameters that are passed to applog for a debug line in
++bitforce.c
++- Clear bitforce buffer on init as previously.
++- Add some headroom to the number of curls available per pool to allow for
++longpoll and sendwork curls.
++- Revert "Revert "Change BFL driver thread initialising to a constant 100ms
++delay between devices instead of a random arrangement.""
++- Revert "Remove bitforce_thread_init"
++- Show the correct base units on GPU summary.
++- Differentiate between the send return value being a bool and the get return
++value when managing them in bitforce scanhash.
++- 23a8c60 Revert "bitforce: Skip out of sending work if work restart requested"
++
++
+ Version 2.6.1 - July 30, 2012
+ 
++- Display scrypt as being built in as well.
++- Fix build warning about KL_SCRYPT when built without scrypt support.
+ - Remove the low hash count determinant of hardware being sick. A low hash rate
+-can be for poor network connectivity or scrypt mining, neither of which a
++can be for poor network connectivity or scrypt mining, neither of which are due
++to a sick device.
+ - api.c poolpriority changes
+ 
+ 
+--- a/cgminer.c
++++ b/cgminer.c
+@@ -142,6 +142,7 @@
+ bool opt_api_network;
+ bool opt_delaynet;
+ bool opt_disable_pool = true;
++char *opt_icarus_options = NULL;
+ char *opt_icarus_timing = NULL;
+ 
+ char *opt_kernel_path;
+@@ -710,6 +711,13 @@
+ }
+ 
+ #ifdef USE_ICARUS
++static char *set_icarus_options(const char *arg)
++{
++	opt_set_charp(arg, &opt_icarus_options);
++
++	return NULL;
++}
++
+ static char *set_icarus_timing(const char *arg)
+ {
+ 	opt_set_charp(arg, &opt_icarus_timing);
+@@ -873,6 +881,9 @@
+ 		     "Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
+ #endif
+ #ifdef USE_ICARUS
++	OPT_WITH_ARG("--icarus-options",
++		     set_icarus_options, NULL, NULL,
++		     opt_hidden),
+ 	OPT_WITH_ARG("--icarus-timing",
+ 		     set_icarus_timing, NULL, NULL,
+ 		     opt_hidden),
+@@ -1770,10 +1781,9 @@
+ 
+ 	if (!QUIET) {
+ 		hash32 = (uint32_t *)(work->hash);
+-		if (opt_scrypt) {
+-			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]),
+-				work->block? " BLOCK!" : "");
+-		} else {
++		if (opt_scrypt)
++			sprintf(hashshow, "%08lx.%08lx", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]));
++		else {
+ 			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
+ 				work->block? " BLOCK!" : "");
+ 		}
+@@ -2169,14 +2179,14 @@
+  * network delays/outages. */
+ static struct curl_ent *pop_curl_entry(struct pool *pool)
+ {
+-	int curl_limit = opt_delaynet ? 5 : mining_threads;
++	int curl_limit = opt_delaynet ? 5 : mining_threads * 4 / 3;
+ 	struct curl_ent *ce;
+ 
+ 	mutex_lock(&pool->pool_lock);
+ 	if (!pool->curls)
+ 		recruit_curl(pool);
+ 	else if (list_empty(&pool->curlring)) {
+-		if (pool->curls >= curl_limit)
++		if (pool->submit_fail || pool->curls >= curl_limit)
+ 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
+ 		else
+ 			recruit_curl(pool);
+@@ -2278,9 +2288,6 @@
+ 	struct pool *pool;
+ 	int getwork_delay;
+ 
+-	if (work->mandatory)
+-		return false;
+-
+ 	if (share) {
+ 		/* Technically the rolltime should be correct but some pools
+ 		 * advertise a broken expire= that is lower than a meaningful
+@@ -2306,14 +2313,20 @@
+ 		work_expiry = 5;
+ 
+ 	gettimeofday(&now, NULL);
+-	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry)
++	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry) {
++		applog(LOG_DEBUG, "Work stale due to expiry");
+ 		return true;
++	}
+ 
+-	if (work->work_block != work_block)
++	if (work->work_block != work_block) {
++		applog(LOG_DEBUG, "Work stale due to block mismatch");
+ 		return true;
++	}
+ 
+-	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING)
++	if (opt_fail_only && !share && pool != current_pool() && !work->mandatory) {
++		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch");
+ 		return true;
++	}
+ 
+ 	return false;
+ }
+@@ -3011,6 +3024,8 @@
+ 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", opt_api_description);
+ 	if (opt_api_groups)
+ 		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", opt_api_groups);
++	if (opt_icarus_options)
++		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", opt_icarus_options);
+ 	if (opt_icarus_timing)
+ 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", opt_icarus_timing);
+ 	fputs("\n}", fcfg);
+@@ -3584,6 +3599,7 @@
+ 		struct work *work = make_work();
+ 		bool rc;
+ 
++		work->mandatory = true;
+ 		rc = work_decode(json_object_get(val, "result"), work);
+ 		if (rc) {
+ 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
+@@ -3835,6 +3851,7 @@
+ 	memcpy(work_clone, work, sizeof(struct work));
+ 	work_clone->clone = true;
+ 	work_clone->longpoll = false;
++	work_clone->mandatory = false;
+ 	/* Make cloned work appear slightly older to bias towards keeping the
+ 	 * master work item which can be further rolled */
+ 	work_clone->tv_staged.tv_sec -= 1;
+@@ -4192,7 +4209,9 @@
+ 			}
+ 			pool_stats->getwork_calls++;
+ 
++			thread_reportin(mythr);
+ 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
++			thread_reportin(mythr);
+ 
+ 			gettimeofday(&getwork_start, NULL);
+ 
+--- a/configure.ac
++++ b/configure.ac
+@@ -2,7 +2,7 @@
+ ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
+ m4_define([v_maj], [2])
+ m4_define([v_min], [6])
+-m4_define([v_mic], [1])
++m4_define([v_mic], [2])
+ ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
+ m4_define([v_ver], [v_maj.v_min.v_mic])
+ m4_define([lt_rev], m4_eval(v_maj + v_min))
+--- a/debian/changelog
++++ b/debian/changelog
+@@ -1,112 +1,151 @@
++cgminer (2.4.3-1) stable; urgency=medium
++  Version 2.4.3 - June 14, 2012
++
++  * can_roll and should_roll should have no bearing on the cycle period within the 
++    miner_thread so remove it.
++  * Check for strategy being changed to load balance when enabling LPs.
++  * Check that all threads on the device that called get_work are waiting on getwork 
++    before considering the pool lagging.
++  * Iterate over each thread belonging to each device in the hashmeter instead of 
++    searching for them now that they're a list.
++  * When using rotate pool strategy, ensure we only select from alive enabled pools.
++  * Start longpoll from every pool when load balance strategy is in use.
++  * Add mandatory and block fields to the work struct. Flag any shares that are 
++    detected as blocks as mandatory to submit, along with longpoll work from a previously 
++    rejecting pool.
++  * Consider the fan optimal if fanspeed is dropping but within the optimal speed window.
++  * Fix typo in some API messages (succeess/success)
++  * api.c MMQ stat bugs
++  * Bugfix: Fix warnings when built without libudev support
++  * Bugfix: slay a variety of warnings
++  * Bugfix: modminer: Fix unsigned/signed comparison and similar warnings
++  * API add ModMinerQuad support
++  * Bugfix: Honour forceauto parameter in serial_detect functions
++  * modminer: Temperature sensor improvements
++  * modminer: Make log messages more consistent in format
++  * Only adjust GPU speed up if the fanspeed is within the normal fanrange and hasn't been
++    turned to maximum speed under overheat conditions.
++  * ModMiner use valid .name
++  * New driver: BTCFPGA ModMiner
++  * Abstract generally useful FPGA code into fpgautils.c
++  * API add stats for pool getworks
++  * miner.php option to hide specific fields from the display
++  * miner.php add version numbers to the summary page
++  * Update debian configs to v2.4.2
++  * Add API and FPGA READMEs into Makefile to be included in source distribution.
++  * Icarus - fix unit64_t printf warnings
++
++ -- nushor <nushor11@gmail.com>  Fri, 15 Jun 2012 11:31:51 -0500
++
+ cgminer (2.4.2-1) stable; urgency=medium
+   Version 2.4.2 - June 2, 2012
+ 
+-  - API.class compiled with Java SE 6.0_03 - works with Win7x64
+-  - miner.php highlight devs too slow finding shares (possibly failing)
+-  - API update version to V1.11 and document changes
+-  - API save default config file if none specified
+-  - api.c save success incorrectly returns error
+-  - api.c replace BUFSIZ (linux/windows have different values)
+-  - Move RPC API content out of README to API-README
+-  - Open a longpoll connection if a pool is in the REJECTING state as it's the
++  * API.class compiled with Java SE 6.0_03 - works with Win7x64
++  * miner.php highlight devs too slow finding shares (possibly failing)
++  * API update version to V1.11 and document changes
++  * API save default config file if none specified
++  * api.c save success incorrectly returns error
++  * api.c replace BUFSIZ (linux/windows have different values)
++  * Move RPC API content out of README to API-README
++  * Open a longpoll connection if a pool is in the REJECTING state as it's the
+     only way to re-enable it automatically.
+-  - Use only one longpoll as much as possible by using a pthread conditional
++  * Use only one longpoll as much as possible by using a pthread conditional
+     broadcast that each longpoll thread waits on and checks if it's the current pool
+     before
+-  - If shares are known stale, don't use them to decide to disable a pool for
++  * If shares are known stale, don't use them to decide to disable a pool for
+     sequential rejects.
+-  - Restarting cgminer from within after ADL has been corrupted only leads to a
++  * Restarting cgminer from within after ADL has been corrupted only leads to a
+     crash. Display a warning only and disable fanspeed monitoring.
+-  - Icarus: fix abort calculation/allow user specified abort
+-  - Icarus: make --icarus-timing hidden and document it in FPGA-README
+-  - Icarus: high accuracy timing and other bitstream speed support
+-  - add-MIPSEB-to-icarus-for-BIG_ENDIAN
+-  - work_decode only needs swab32 on midstate under BIG ENDIAN
+-  - add compile command to api-example.c
+-  - save config bugfix: writing an extra ',' when no gpus
+-  - Add dpkg-source commits
++  * Icarus: fix abort calculation/allow user specified abort
++  * Icarus: make --icarus-timing hidden and document it in FPGA-README
++  * Icarus: high accuracy timing and other bitstream speed support
++  * add-MIPSEB-to-icarus-for-BIG_ENDIAN
++  * work_decode only needs swab32 on midstate under BIG ENDIAN
++  * add compile command to api-example.c
++  * save config bugfix: writing an extra ',' when no gpus
++  * Add dpkg-source commits
+ 
+  -- nushor <nushor11@gmail.com>  Sun, 03 Jun 2012 22:02:03 -0500
+ 
+ cgminer (2.4.1-1) stable; urgency=low
+   Version 2.4.1-1 - May 6, 2012
+-  - In the unlikely event of finding a block, display the block solved count with
++  * In the unlikely event of finding a block, display the block solved count with
+     the pool it came from for auditing.
+-  - Display the device summary on exit even if a device has been disabled.
+-  - Use correct pool enabled enums in api.c.
+-  - Import Debian packaging configs
+-  - Ensure we test for a pool recovering from idle so long as it's not set to
++  * Display the device summary on exit even if a device has been disabled.
++  * Use correct pool enabled enums in api.c.
++  * Import Debian packaging configs
++  * Ensure we test for a pool recovering from idle so long as it's not set to
+     disabled.
+-  - Fix pool number display.
+-  - Give cgminer -T message only if curses is in use.
+-  - Reinit_adl is no longer used.
+-  - API 'stats' allow devices to add their own stats also for testing/debug
+-  - API add getwork stats to cgminer - accesable from API 'stats'
+-  - Don't initialise variables to zero when in global scope since they're already
++  * Fix pool number display.
++  * Give cgminer -T message only if curses is in use.
++  * Reinit_adl is no longer used.
++  * API 'stats' allow devices to add their own stats also for testing/debug
++  * API add getwork stats to cgminer - accesable from API 'stats'
++  * Don't initialise variables to zero when in global scope since they're already
+     initialised.
+-  - Get rid of unitialised variable warning when it's false.
+-  - Move a pool to POOL_REJECTING to be disabled only after 3 minutes of
++  * Get rid of unitialised variable warning when it's false.
++  * Move a pool to POOL_REJECTING to be disabled only after 3 minutes of
+     continuous rejected shares.
+-  - Some tweaks to reporting and logging.
+-  - Change FPGA detection order since BFL hangs on an ICA
+-  - API support new pool status
+-  - Add a temporarily disabled state for enabled pools called POOL_REJECTING and
++  * Some tweaks to reporting and logging.
++  * Change FPGA detection order since BFL hangs on an ICA
++  * API support new pool status
++  * Add a temporarily disabled state for enabled pools called POOL_REJECTING and
+     use the work from each longpoll to help determine when a rejecting pool has
+     started working again. Switch pools based on the multipool strategy once a pool
+     is re-enabled.
+-  - Removing extra debug
+-  - Fix the benchmark feature by bypassing the new networking code.
+-  - Reset sequential reject counter after a pool is disabled for when it is
++  * Removing extra debug
++  * Fix the benchmark feature by bypassing the new networking code.
++  * Reset sequential reject counter after a pool is disabled for when it is
+     re-enabled.
+-  - Icarus - correct MH/s and U: with work restart set at 8 seconds
+-  - ztex updateFreq was always reporting on fpga 0
+-  - Trying harder to get 1.15y working
+-  - Specifying threads on multi fpga boards extra cgpu
+-  - Missing the add cgpu per extra fpga on 1.15y boards
+-  - API add last share time to each pool
+-  - Don't try to reap curls if benchmarking is enabled.
++  * Icarus - correct MH/s and U: with work restart set at 8 seconds
++  * ztex updateFreq was always reporting on fpga 0
++  * Trying harder to get 1.15y working
++  * Specifying threads on multi fpga boards extra cgpu
++  * Missing the add cgpu per extra fpga on 1.15y boards
++  * API add last share time to each pool
++  * Don't try to reap curls if benchmarking is enabled.
+ 
+  -- nushor <nushor11@gmail.com>  Sun, 06 May 2012 11:09:46 -0500
+ 
+ cgminer (2.4.0-1) stable; urgency=low
+   Version 2.4.0 - May 3, 2012
+ 
+-  - Only show longpoll warning once when it has failed.
+-  - Convert hashes to an unsigned long long as well.
+-  - Detect pools that have issues represented by endless rejected shares and
++  * Only show longpoll warning once when it has failed.
++  * Convert hashes to an unsigned long long as well.
++  * Detect pools that have issues represented by endless rejected shares and
+     disable them, with a parameter to optionally disable this feature.
+-  - Bugfix: Use a 64-bit type for hashes_done (miner_thread) since it can overflow
++  * Bugfix: Use a 64-bit type for hashes_done (miner_thread) since it can overflow
+     32-bit on some FPGAs
+-  - Implement an older header fix for a label existing before the pthread_cleanup
++  * Implement an older header fix for a label existing before the pthread_cleanup
+     macro.
+-  - Limit the number of curls we recruit on communication failures and with
++  * Limit the number of curls we recruit on communication failures and with
+     delaynet enabled to 5 by maintaining a per-pool curl count, and using a pthread
+     conditional that wakes up when one is returned to the ring buffer.
+-  - Generalise add_pool() functions since they're repeated in add_pool_details.
+-  - Bugfix: Return failure, rather than quit, if BFwrite fails
+-  - Disable failing devices such that the user can attempt to re-enable them
+-  - Bugfix: thread_shutdown shouldn't try to free the device, since it's needed
++  * Generalise add_pool() functions since they're repeated in add_pool_details.
++  * Bugfix: Return failure, rather than quit, if BFwrite fails
++  * Disable failing devices such that the user can attempt to re-enable them
++  * Bugfix: thread_shutdown shouldn't try to free the device, since it's needed
+     afterward
+-  - API bool's and 1TBS fixes
+-  - Icarus - minimise code delays and name timer variables
+-  - api.c V1.9 add 'restart' + redesign 'quit' so thread exits cleanly
+-  - api.c bug - remove extra ']'s in notify command
+-  - Increase pool watch interval to 30 seconds.
+-  - Reap curls that are unused for over a minute. This allows connections to be
++  * API bool's and 1TBS fixes
++  * Icarus - minimise code delays and name timer variables
++  * api.c V1.9 add 'restart' + redesign 'quit' so thread exits cleanly
++  * api.c bug - remove extra ']'s in notify command
++  * Increase pool watch interval to 30 seconds.
++  * Reap curls that are unused for over a minute. This allows connections to be
+     closed, thereby allowing the number of curl handles to always be the minimum
+     necessary to not delay networking.
+-  - Use the ringbuffer of curls from the same pool for submit as well as getwork
++  * Use the ringbuffer of curls from the same pool for submit as well as getwork
+     threads. Since the curl handles were already connected to the same pool and are
+     immediately available, share submission will not be delayed by getworks.
+-  - Implement a scaleable networking framework designed to cope with any sized
++  * Implement a scaleable networking framework designed to cope with any sized
+     network requirements, yet minimise the number of connections being reopened. Do
+     this by create a ring buffer linked list of curl handles to be used by getwork,
+     recruiting extra handles when none is immediately available.
+-  - There is no need for the submit and getwork curls to be tied to the pool
++  * There is no need for the submit and getwork curls to be tied to the pool
+     struct.
+-  - Do not recruit extra connection threads if there have been connection errors
++  * Do not recruit extra connection threads if there have been connection errors
+     to the pool in question.
+-  - We should not retry submitting shares indefinitely or we may end up with a
++  * We should not retry submitting shares indefinitely or we may end up with a
+     huge backlog during network outages, so discard stale shares if we failed to
+     submit them and they've become stale in the interim.
+ 
+@@ -114,32 +153,32 @@
+ 
+ cgminer (2.3.6-3) stable; urgency=low
+   Version 2.3.6-3 - may 3, 2012
+-  - More bug fixes, Pre 2.4.1 release.
++  * More bug fixes, Pre 2.4.1 release.
+ 
+  -- nushor <nushor11@gmail.com>  Thurs, 03 May 2012 00:36:50 -0500
+ 
+ cgminer (2.3.6-2) stable; urgency=low
+   Version 2.3.6-2 - May 2, 2012
+-  - Various bug fixes, latest build from repository.
++  * Various bug fixes, latest build from repository.
+ 
+  -- nushor <nushor11@gmail.com>  Wed, 02 May 2012 18:17:49 -0500
+ 
+ cgminer (2.3.6-1) stable; urgency=low
+ 
+   Version 2.3.6 - April 29, 2012
+-  - Shorten stale share messages slightly.
+-  - Protect the freeing of current_hash under mutex_lock to prevent racing on it
++  * Shorten stale share messages slightly.
++  * Protect the freeing of current_hash under mutex_lock to prevent racing on it
+     when set_curblock is hit concurrently.
+-  - Change default behaviour to submitting stale, removing the --submit-stale
++  * Change default behaviour to submitting stale, removing the --submit-stale
+     option and adding a --no-submit-stale option.
+-  - Make sure to start the getwork and submit threads when a pool is added on the
++  * Make sure to start the getwork and submit threads when a pool is added on the
+     fly. This fixes a crash when a pool is added to running cgminer and then
+     switched to.
+-  - Faster hardware can easily outstrip the speed we can get work and submit
++  * Faster hardware can easily outstrip the speed we can get work and submit
+     shares when using only one connection per pool.
+-  - Test the queued list to see if any get/submits are already queued and if they
++  * Test the queued list to see if any get/submits are already queued and if they
+     are, start recruiting extra connections by generating new threads.
+-  - This allows us to reuse network connections at low loads but recuit new open
++  * This allows us to reuse network connections at low loads but recuit new open
+     connections as they're needed, so that cgminer can scale to hardware of any
+     size.
+ 
+--- a/driver-bitforce.c
++++ b/driver-bitforce.c
+@@ -157,7 +157,7 @@
+ 	return true;
+ }
+ 
+-static void biforce_clear_buffer(struct cgpu_info *bitforce)
++static void bitforce_clear_buffer(struct cgpu_info *bitforce)
+ {
+ 	int fdDev = bitforce->device_fd;
+ 	char pdevbuf[0x100];
+@@ -185,6 +185,8 @@
+ 
+ 	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
+ 
++	bitforce_clear_buffer(bitforce);
++
+ 	mutex_lock(&bitforce->device_mutex);
+ 	if (fdDev) {
+ 		BFclose(fdDev);
+@@ -239,7 +241,11 @@
+ 	if (!fdDev)
+ 		return false;
+ 
+-	mutex_lock(&bitforce->device_mutex);
++	/* It is not critical getting temperature so don't get stuck if  we
++	 * can't grab the mutex here */
++	if (mutex_trylock(&bitforce->device_mutex))
++		return false;
++
+ 	BFwrite(fdDev, "ZLX", 3);
+ 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+ 	mutex_unlock(&bitforce->device_mutex);
+@@ -255,7 +261,7 @@
+ 
+ 		if (temp > 0) {
+ 			bitforce->temp = temp;
+-			if (temp > bitforce->cutofftemp) {
++			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
+ 				applog(LOG_WARNING, "BFL%i: Hit thermal cutoff limit, disabling!", bitforce->device_id);
+ 				bitforce->deven = DEV_RECOVER;
+ 
+@@ -264,7 +270,15 @@
+ 				bitforce->dev_thermal_cutoff_count++;
+ 			}
+ 		}
++	} else {
++		/* Use the temperature monitor as a kind of watchdog for when
++		 * our responses are out of sync and flush the buffer to
++		 * hopefully recover */
++		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer");
++		bitforce_clear_buffer(bitforce);
++		return false;;
+ 	}
++
+ 	return true;
+ }
+ 
+@@ -287,8 +301,7 @@
+ 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+ 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
+ 		mutex_unlock(&bitforce->device_mutex);
+-		if (!restart_wait(WORK_CHECK_INTERVAL_MS))
+-			return false;
++		nmsleep(WORK_CHECK_INTERVAL_MS);
+ 		goto re_send;
+ 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
+ 		mutex_unlock(&bitforce->device_mutex);
+@@ -300,6 +313,7 @@
+ 			goto re_send;
+ 		}
+ 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
++		bitforce_clear_buffer(bitforce);
+ 		return false;
+ 	}
+ 
+@@ -340,6 +354,7 @@
+ 
+ 	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
+ 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
++		bitforce_clear_buffer(bitforce);
+ 		return false;
+ 	}
+ 
+@@ -414,7 +429,7 @@
+ 		}
+ 
+ 		if (delay_time_ms != bitforce->sleep_ms)
+-			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
++			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d, waited %u", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+ 
+ 		/* Work out the average time taken. Float for calculation, uint for display */
+ 		bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
+@@ -428,6 +443,7 @@
+ 		return 0;	/* Device idle */
+ 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
+ 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
++		bitforce_clear_buffer(bitforce);
+ 		return 0;
+ 	}
+ 
+@@ -475,9 +491,10 @@
+ {
+ 	struct cgpu_info *bitforce = thr->cgpu;
+ 	unsigned int sleep_time;
++	bool send_ret;
+ 	int64_t ret;
+ 
+-	ret = bitforce_send_work(thr, work);
++	send_ret = bitforce_send_work(thr, work);
+ 
+ 	if (!bitforce->nonce_range) {
+ 		/* Initially wait 2/3 of the average cycle time so we can request more
+@@ -503,8 +520,10 @@
+ 		bitforce->wait_ms = sleep_time;
+ 	}
+ 
+-	if (ret)
++	if (send_ret)
+ 		ret = bitforce_get_result(thr, work);
++	else
++		ret = -1;
+ 
+ 	if (ret == -1) {
+ 		ret = 0;
+@@ -513,7 +532,7 @@
+ 		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
+ 		bitforce->dev_comms_error_count++;
+ 		/* empty read buffer */
+-		biforce_clear_buffer(bitforce);
++		bitforce_clear_buffer(bitforce);
+ 	}
+ 	return ret;
+ }
+@@ -523,6 +542,20 @@
+ 	return bitforce_get_temp(bitforce);
+ }
+ 
++static bool bitforce_thread_init(struct thr_info *thr)
++{
++	struct cgpu_info *bitforce = thr->cgpu;
++	unsigned int wait;
++
++	/* Pause each new thread at least 100ms between initialising
++	 * so the devices aren't making calls all at the same time. */
++	wait = thr->id * MAX_START_DELAY_US;
++	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
++	usleep(wait);
++
++	return true;
++}
++
+ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
+ {
+ 	struct api_data *root = NULL;
+@@ -546,6 +579,7 @@
+ 	.get_statline_before = get_bitforce_statline_before,
+ 	.get_stats = bitforce_get_stats,
+ 	.thread_prepare = bitforce_thread_prepare,
++	.thread_init = bitforce_thread_init,
+ 	.scanhash = bitforce_scanhash,
+ 	.thread_shutdown = bitforce_shutdown,
+ 	.thread_enable = biforce_thread_enable
+--- a/driver-icarus.c
++++ b/driver-icarus.c
+@@ -65,7 +65,7 @@
+ #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
+ ASSERT1(sizeof(uint32_t) == 4);
+ 
+-#define ICARUS_READ_TIME ((double)ICARUS_READ_SIZE * (double)8.0 / (double)ICARUS_IO_SPEED)
++#define ICARUS_READ_TIME(baud) ((double)ICARUS_READ_SIZE * (double)8.0 / (double)(baud))
+ 
+ // Fraction of a second, USB timeout is measured in
+ // i.e. 10 means 1/10 of a second
+@@ -176,11 +176,36 @@
+ 	// (which will only affect W)
+ 	uint64_t history_count;
+ 	struct timeval history_time;
++
++	// icarus-options
++	int baud;
++	int work_division;
++	int fpga_count;
++	uint32_t nonce_mask;
+ };
+ 
++#define END_CONDITION 0x0000ffff
++
+ // One for each possible device
+ static struct ICARUS_INFO **icarus_info;
+ 
++// Looking for options in --icarus-timing and --icarus-options:
++//
++// Code increments this each time we start to look at a device
++// However, this means that if other devices are checked by
++// the Icarus code (e.g. BFL) they will count in the option offset
++//
++// This, however, is deterministic so that's OK
++//
++// If we were to increment after successfully finding an Icarus
++// that would be random since an Icarus may fail and thus we'd
++// not be able to predict the option order
++//
++// This also assumes that serial_detect() checks them sequentially
++// and in the order specified on the command line
++//
++static int option_offset = -1;
++
+ struct device_api icarus_api;
+ 
+ static void rev(unsigned char *s, size_t l)
+@@ -195,8 +220,8 @@
+ 	}
+ }
+ 
+-#define icarus_open2(devpath, purge)  serial_open(devpath, 115200, ICARUS_READ_FAULT_DECISECONDS, purge)
+-#define icarus_open(devpath)  icarus_open2(devpath, false)
++#define icarus_open2(devpath, baud, purge)  serial_open(devpath, baud, ICARUS_READ_FAULT_DECISECONDS, purge)
++#define icarus_open(devpath, baud)  icarus_open2(devpath, baud, false)
+ 
+ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count)
+ {
+@@ -272,7 +297,7 @@
+ 	}
+ }
+ 
+-static void set_timing_mode(struct cgpu_info *icarus)
++static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
+ {
+ 	struct ICARUS_INFO *info = icarus_info[icarus->device_id];
+ 	double Hs;
+@@ -285,7 +310,7 @@
+ 		buf[0] = '\0';
+ 	else {
+ 		ptr = opt_icarus_timing;
+-		for (i = 0; i < icarus->device_id; i++) {
++		for (i = 0; i < this_option_offset; i++) {
+ 			comma = strchr(ptr, ',');
+ 			if (comma == NULL)
+ 				break;
+@@ -354,11 +379,123 @@
+ 
+ 	applog(LOG_DEBUG, "Icarus: Init: %d mode=%s read_count=%d Hs=%e",
+ 		icarus->device_id, timing_mode_str(info->timing_mode), info->read_count, info->Hs);
++}
++
++static uint32_t mask(int work_division)
++{
++	char err_buf[BUFSIZ+1];
++	uint32_t nonce_mask = 0x7fffffff;
+ 
++	// yes we can calculate these, but this way it's easy to see what they are
++	switch (work_division) {
++	case 1:
++		nonce_mask = 0xffffffff;
++		break;
++	case 2:
++		nonce_mask = 0x7fffffff;
++		break;
++	case 4:
++		nonce_mask = 0x3fffffff;
++		break;
++	case 8:
++		nonce_mask = 0x1fffffff;
++		break;
++	default:
++		sprintf(err_buf, "Invalid2 icarus-options for work_division (%d) must be 1, 2, 4 or 8", work_division);
++		quit(1, err_buf);
++	}
++
++	return nonce_mask;
++}
++
++static void get_options(int this_option_offset, int *baud, int *work_division, int *fpga_count)
++{
++	char err_buf[BUFSIZ+1];
++	char buf[BUFSIZ+1];
++	char *ptr, *comma, *colon, *colon2;
++	size_t max;
++	int i, tmp;
++
++	if (opt_icarus_options == NULL)
++		buf[0] = '\0';
++	else {
++		ptr = opt_icarus_options;
++		for (i = 0; i < this_option_offset; i++) {
++			comma = strchr(ptr, ',');
++			if (comma == NULL)
++				break;
++			ptr = comma + 1;
++		}
++
++		comma = strchr(ptr, ',');
++		if (comma == NULL)
++			max = strlen(ptr);
++		else
++			max = comma - ptr;
++
++		if (max > BUFSIZ)
++			max = BUFSIZ;
++		strncpy(buf, ptr, max);
++		buf[max] = '\0';
++	}
++
++	*baud = ICARUS_IO_SPEED;
++	*work_division = 2;
++	*fpga_count = 2;
++
++	if (*buf) {
++		colon = strchr(buf, ':');
++		if (colon)
++			*(colon++) = '\0';
++
++		if (*buf) {
++			tmp = atoi(buf);
++			switch (tmp) {
++			case 115200:
++				*baud = 115200;
++				break;
++			case 57600:
++				*baud = 57600;
++				break;
++			default:
++				sprintf(err_buf, "Invalid icarus-options for baud (%s) must be 115200 or 57600", buf);
++				quit(1, err_buf);
++			}
++		}
++
++		if (colon && *colon) {
++			colon2 = strchr(colon, ':');
++			if (colon2)
++				*(colon2++) = '\0';
++
++			if (*colon) {
++				tmp = atoi(colon);
++				if (tmp == 1 || tmp == 2 || tmp == 4 || tmp == 8) {
++					*work_division = tmp;
++					*fpga_count = tmp;	// default to the same
++				} else {
++					sprintf(err_buf, "Invalid icarus-options for work_division (%s) must be 1, 2, 4 or 8", colon);
++					quit(1, err_buf);
++				}
++			}
++
++			if (colon2 && *colon2) {
++				tmp = atoi(colon2);
++				if (tmp > 0 && tmp <= *work_division)
++					*fpga_count = tmp;
++				else {
++					sprintf(err_buf, "Invalid icarus-options for fpga_count (%s) must be >0 and <=work_division (%d)", colon2, *work_division);
++					quit(1, err_buf);
++				}
++			}
++		}
++	}
+ }
+ 
+ static bool icarus_detect_one(const char *devpath)
+ {
++	int this_option_offset = ++option_offset;
++
+ 	struct ICARUS_INFO *info;
+ 	struct timeval tv_start, tv_finish;
+ 	int fd;
+@@ -379,9 +516,13 @@
+ 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
+ 	char *nonce_hex;
+ 
++	int baud, work_division, fpga_count;
++
++	get_options(this_option_offset, &baud, &work_division, &fpga_count);
++
+ 	applog(LOG_DEBUG, "Icarus Detect: Attempting to open %s", devpath);
+ 
+-	fd = icarus_open2(devpath, true);
++	fd = icarus_open2(devpath, baud, true);
+ 	if (unlikely(fd == -1)) {
+ 		applog(LOG_ERR, "Icarus Detect: Failed to open %s", devpath);
+ 		return false;
+@@ -429,6 +570,9 @@
+ 	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
+ 		devpath, icarus->device_id);
+ 
++	applog(LOG_DEBUG, "Icarus: Init: %d baud=%d work_division=%d fpga_count=%d",
++		icarus->device_id, baud, work_division, fpga_count);
++
+ 	// Since we are adding a new device on the end it needs to always be allocated
+ 	icarus_info[icarus->device_id] = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
+ 	if (unlikely(!(icarus_info[icarus->device_id])))
+@@ -439,10 +583,15 @@
+ 	// Initialise everything to zero for a new device
+ 	memset(info, 0, sizeof(struct ICARUS_INFO));
+ 
+-	info->golden_hashes = (golden_nonce_val & 0x7fffffff) << 1;
++	info->baud = baud;
++	info->work_division = work_division;
++	info->fpga_count = fpga_count;
++	info->nonce_mask = mask(work_division);
++
++	info->golden_hashes = (golden_nonce_val & info->nonce_mask) * fpga_count;
+ 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
+ 
+-	set_timing_mode(icarus);
++	set_timing_mode(this_option_offset, icarus);
+ 
+ 	return true;
+ }
+@@ -458,7 +607,7 @@
+ 
+ 	struct timeval now;
+ 
+-	int fd = icarus_open(icarus->device_path);
++	int fd = icarus_open(icarus->device_path, icarus_info[icarus->device_id]->baud);
+ 	if (unlikely(-1 == fd)) {
+ 		applog(LOG_ERR, "Failed to open Icarus on %s",
+ 		       icarus->device_path);
+@@ -565,11 +714,9 @@
+ 
+ 	submit_nonce(thr, work, nonce);
+ 
+-	hash_count = (nonce & 0x7fffffff);
+-	if (hash_count++ == 0x7fffffff)
+-		hash_count = 0xffffffff;
+-	else
+-		hash_count <<= 1;
++	hash_count = (nonce & info->nonce_mask);
++	hash_count++;
++	hash_count *= info->fpga_count;
+ 
+ 	if (opt_debug || info->do_icarus_timing)
+ 		timersub(&tv_finish, &tv_start, &elapsed);
+@@ -580,7 +727,9 @@
+ 	}
+ 
+ 	// ignore possible end condition values
+-	if (info->do_icarus_timing && (nonce & 0x7fffffff) > 0x000fffff && (nonce & 0x7fffffff) < 0x7ff00000) {
++	if (info->do_icarus_timing
++	&&  ((nonce & info->nonce_mask) > END_CONDITION)
++	&&  ((nonce & info->nonce_mask) < (info->nonce_mask & ~END_CONDITION))) {
+ 		gettimeofday(&tv_history_start, NULL);
+ 
+ 		history0 = &(info->history[0]);
+@@ -590,7 +739,7 @@
+ 
+ 		Ti = (double)(elapsed.tv_sec)
+ 			+ ((double)(elapsed.tv_usec))/((double)1000000)
+-			- ICARUS_READ_TIME;
++			- ((double)ICARUS_READ_TIME(info->baud));
+ 		Xi = (double)hash_count;
+ 		history0->sumXiTi += Xi * Ti;
+ 		history0->sumXi += Xi;
+@@ -700,6 +849,9 @@
+ 	root = api_add_uint(root, "timing_values", &(info->history[0].values), false);
+ 	root = api_add_const(root, "timing_mode", timing_mode_str(info->timing_mode), false);
+ 	root = api_add_bool(root, "is_timing", &(info->do_icarus_timing), false);
++	root = api_add_int(root, "baud", &(info->baud), false);
++	root = api_add_int(root, "work_division", &(info->work_division), false);
++	root = api_add_int(root, "fpga_count", &(info->fpga_count), false);
+ 
+ 	return root;
+ }
+--- a/driver-opencl.c
++++ b/driver-opencl.c
+@@ -660,9 +660,19 @@
+ 
+ 	for (gpu = 0; gpu < nDevs; gpu++) {
+ 		struct cgpu_info *cgpu = &gpus[gpu];
++		double displayed_rolling, displayed_total;
++		bool mhash_base = true;
+ 
+-		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
+-			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
++		displayed_rolling = cgpu->rolling;
++		displayed_total = cgpu->total_mhashes / total_secs;
++		if (displayed_rolling < 1) {
++			displayed_rolling *= 1000;
++			displayed_total *= 1000;
++			mhash_base = false;
++		}
++
++		wlog("GPU %d: %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
++			gpu, displayed_rolling, displayed_total, mhash_base ? "M" : "K",
+ 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
+ 			cgpu->utility, cgpu->intensity);
+ #ifdef HAVE_ADL
+@@ -710,7 +720,10 @@
+ 			if (thr->cgpu != cgpu)
+ 				continue;
+ 			get_datestamp(checkin, &thr->last);
+-			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
++			displayed_rolling = thr->rolling;
++			if (!mhash_base)
++				displayed_rolling *= 1000;
++			wlog("Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
+ 			switch (cgpu->status) {
+ 				default:
+ 				case LIFE_WELL:
+--- a/miner.h
++++ b/miner.h
+@@ -500,6 +500,11 @@
+ 		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
+ }
+ 
++static inline int mutex_trylock(pthread_mutex_t *lock)
++{
++	return pthread_mutex_trylock(lock);
++}
++
+ static inline void wr_lock(pthread_rwlock_t *lock)
+ {
+ 	if (unlikely(pthread_rwlock_wrlock(lock)))
+@@ -557,6 +562,7 @@
+ extern bool opt_api_network;
+ extern bool opt_delaynet;
+ extern bool opt_restart;
++extern char *opt_icarus_options;
+ extern char *opt_icarus_timing;
+ #ifdef USE_BITFORCE
+ extern bool opt_bfl_noncerange;
+--- a/miner.php
++++ b/miner.php
+@@ -87,11 +87,13 @@
+  'DATE' => null,
+  'RIGS' => null,
+  'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej', 'Utility'),
+- 'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected=Rej', 'Utility'),
++ 'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.Status=Status', 'DEVS.Temperature=Temp',
++			'DEVS.MHS av=MHS av', 'DEVS.Accepted=Accept', 'DEVS.Rejected=Rej',
++			'DEVS.Utility=Utility', 'NOTIFY.Last Not Well=Not Well'),
+  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej', 'Last Share Time'));
+ $mobilesum = array(
+  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
+- 'DEVS' => array('MHS av', 'Accepted', 'Rejected', 'Utility'),
++ 'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Accepted', 'DEVS.Rejected', 'DEVS.Utility'),
+  'POOL' => array('Accepted', 'Rejected'));
+ #
+ # customsummarypages is an array of these Custom Summary Pages
+@@ -716,6 +718,9 @@
+  if ($class == '' && ($rownum % 2) == 0)
+ 	$class = $c2class;
+ 
++ if ($ret == '')
++	$ret = $b;
++
+  return array($ret, $class);
+ }
+ #
+@@ -1274,8 +1279,171 @@
+ 	'GPU' => 'devs',	// You would normally use DEVS
+ 	'PGA' => 'devs',	// You would normally use DEVS
+ 	'NOTIFY' => 'notify',
++	'DEVDETAILS' => 'devdetails',
++	'STATS' => 'stats',
+ 	'CONFIG' => 'config');
+ #
++function joinfields($section1, $section2, $join, $results)
++{
++ global $sectionmap;
++
++ $name1 = $sectionmap[$section1];
++ $name2 = $sectionmap[$section2];
++ $newres = array();
++
++ // foreach rig in section1
++ foreach ($results[$name1] as $rig => $result)
++ {
++	$status = null;
++
++	// foreach answer section in the rig api call
++	foreach ($result as $name1b => $fields1b)
++	{
++		if ($name1b == 'STATUS')
++		{
++			// remember the STATUS from section1
++			$status = $result[$name1b];
++			continue;
++		}
++
++		// foreach answer section in the rig api call (for the other api command)
++		foreach ($results[$name2][$rig] as $name2b => $fields2b)
++		{
++			if ($name2b == 'STATUS')
++				continue;
++
++			// If match the same field values of fields in $join
++			$match = true;
++			foreach ($join as $field)
++				if ($fields1b[$field] != $fields2b[$field])
++				{
++					$match = false;
++					break;
++				}
++
++			if ($match === true)
++			{
++				if ($status != null)
++				{
++					$newres[$rig]['STATUS'] = $status;
++					$status = null;
++				}
++
++				$subsection = $section1.'+'.$section2;
++				$subsection .= preg_replace('/[^0-9]/', '', $name1b.$name2b);
++
++				foreach ($fields1b as $nam => $val)
++					$newres[$rig][$subsection]["$section1.$nam"] = $val;
++				foreach ($fields2b as $nam => $val)
++					$newres[$rig][$subsection]["$section2.$nam"] = $val;
++			}
++		}
++	}
++ }
++ return $newres;
++}
++#
++function joinall($section1, $section2, $results)
++{
++ global $sectionmap;
++
++ $name1 = $sectionmap[$section1];
++ $name2 = $sectionmap[$section2];
++ $newres = array();
++
++ // foreach rig in section1
++ foreach ($results[$name1] as $rig => $result)
++ {
++	// foreach answer section in the rig api call
++	foreach ($result as $name1b => $fields1b)
++	{
++		if ($name1b == 'STATUS')
++		{
++			// copy the STATUS from section1
++			$newres[$rig][$name1b] = $result[$name1b];
++			continue;
++		}
++
++		// foreach answer section in the rig api call (for the other api command)
++		foreach ($results[$name2][$rig] as $name2b => $fields2b)
++		{
++			if ($name2b == 'STATUS')
++				continue;
++
++			$subsection = $section1.'+'.$section2;
++			$subsection .= preg_replace('/[^0-9]/', '', $name1b.$name2b);
++
++			foreach ($fields1b as $nam => $val)
++				$newres[$rig][$subsection]["$section1.$nam"] = $val;
++			foreach ($fields2b as $nam => $val)
++				$newres[$rig][$subsection]["$section2.$nam"] = $val;
++		}
++	}
++ }
++ return $newres;
++}
++#
++function joinsections($sections, $results, $errors)
++{
++ global $sectionmap;
++
++#echo "results['pools']=".print_r($results['pools'],true)."<br>";
++
++ // GPU's don't have Name,ID fields - so create them
++ foreach ($results as $section => $res)
++	foreach ($res as $rig => $result)
++		foreach ($result as $name => $fields)
++		{
++			$subname = preg_replace('/[0-9]/', '', $name);
++			if ($subname == 'GPU' and isset($result[$name]['GPU']))
++			{
++				$results[$section][$rig][$name]['Name'] = 'GPU';
++				$results[$section][$rig][$name]['ID'] = $result[$name]['GPU'];
++			}
++		}
++
++ foreach ($sections as $section => $fields)
++	if ($section != 'DATE' && !isset($sectionmap[$section]))
++	{
++		$both = explode('+', $section, 2);
++		if (count($both) > 1)
++		{
++			switch($both[0])
++			{
++			case 'SUMMARY':
++				switch($both[1])
++				{
++				case 'POOL':
++				case 'DEVS':
++				case 'CONFIG':
++					$sectionmap[$section] = $section;
++					$results[$section] = joinall($both[0], $both[1], $results);
++					break;
++				}
++				break;
++			case 'DEVS':
++				$join = array('Name', 'ID');
++				switch($both[1])
++				{
++				case 'NOTIFY':
++				case 'DEVDETAILS':
++					$sectionmap[$section] = $section;
++					$results[$section] = joinfields($both[0], $both[1], $join, $results);
++					break;
++				}
++				break;
++			default:
++				$errors[] = "Error: Invalid section '$section'";
++				break;
++			}
++		}
++		else
++			$errors[] = "Error: Invalid section '$section'";
++	}
++
++ return array($results, $errors);
++}
++#
+ function secmatch($section, $field)
+ {
+  if ($section == $field)
+@@ -1335,7 +1503,14 @@
+ 				$value = null;
+ 		}
+ 
+-		list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
++		if (strpos($secname, '+') === false)
++			list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
++		else
++		{
++			$parts = explode('.', $name, 2);
++			list($showvalue, $class) = fmt($parts[0], $parts[1], $value, $when, $row);
++		}
++
+ 		echo "<td$class align=right>$showvalue</td>";
+ 	}
+ 	endrow();
+@@ -1356,15 +1531,19 @@
+  $errors = array();
+  foreach ($sections as $section => $fields)
+  {
+-	if (isset($sectionmap[$section]))
++	$all = explode('+', $section);
++	foreach ($all as $section)
+ 	{
+-		$cmd = $sectionmap[$section];
+-		if (!isset($cmds[$cmd]))
+-			$cmds[$cmd] = 1;
++		if (isset($sectionmap[$section]))
++		{
++			$cmd = $sectionmap[$section];
++			if (!isset($cmds[$cmd]))
++				$cmds[$cmd] = 1;
++		}
++		else
++			if ($section != 'DATE')
++				$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
+ 	}
+-	else
+-		if ($section != 'DATE')
+-			$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
+  }
+ 
+  $results = array();
+@@ -1399,6 +1578,7 @@
+  $shownsomething = false;
+  if (count($results) > 0)
+  {
++	list($results, $errors) = joinsections($sections, $results, $errors);
+ 	$first = true;
+ 	foreach ($sections as $section => $fields)
+ 	{
