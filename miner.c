@@ -2428,7 +2428,7 @@ static bool workio_get_work(struct workio_cmd *wc)
 	return true;
 }
 
-static bool stale_work(struct work *work, bool share)
+static bool stale_work3(struct work *work, bool share, bool failoveronly)
 {
 	struct timeval now;
 	time_t work_expiry;
@@ -2468,6 +2468,7 @@ static bool stale_work(struct work *work, bool share)
 	} else {
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
+		/* Note this intentionally uses the global option, not the param */
 		if (block_id != (opt_fail_only ? pool->block_id : current_block_id))
 		{
 			applog(LOG_DEBUG, "Work stale due to block mismatch");
@@ -2504,13 +2505,14 @@ static bool stale_work(struct work *work, bool share)
 
 	/* If the user only wants strict failover, any work from a pool other than
 	 * the current one is always considered stale */
-	if (opt_fail_only && !share && pool != current_pool() && pool->enabled != POOL_REJECTING) {
+	if (failoveronly && !share && pool != current_pool() && pool->enabled != POOL_REJECTING) {
 		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch");
 		return true;
 	}
 
 	return false;
 }
+#define stale_work(work, share)  stale_work3(work, share, opt_fail_only)
 
 static void check_solve(struct work *work)
 {
@@ -3050,6 +3052,20 @@ static void *stage_thread(void *userdata)
 		work->work_restart_id = work->pool->work_restart_id;
 
 		test_work_current(work);
+
+		if (stale_work3(work, false, false)) {
+			struct timeval now;
+			gettimeofday(&now, NULL);
+			if (work->tv_staged.tv_sec >= now.tv_sec - 2) {
+				// Only for freshly fetched work, disable the pool giving it to us stale
+				struct pool *pool = work->pool;
+				applog(LOG_WARNING, "Pool %u gave us stale-on-arrival work, disabling!", pool->pool_no);
+				reject_pool(pool);
+				if (pool == current_pool())
+					switch_pools(NULL);
+			}
+			continue;
+		}
 
 		applog(LOG_DEBUG, "Pushing work to getwork queue");
 
