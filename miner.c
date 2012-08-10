@@ -2868,7 +2868,8 @@ static void discard_stale(void)
 
 	if (stale) {
 		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
-		queue_request(NULL, false);
+		while (stale-- > 0)
+			queue_request(NULL, false);
 	}
 }
 
@@ -4216,7 +4217,6 @@ bool queue_request(struct thr_info *thr, bool needed)
 static struct work *hash_pop(const struct timespec *abstime)
 {
 	struct work *work = NULL;
-	bool queue = false;
 	int rc = 0;
 
 	mutex_lock(stgd_lock);
@@ -4227,13 +4227,10 @@ static struct work *hash_pop(const struct timespec *abstime)
 		work = staged_work;
 		HASH_DEL(staged_work, work);
 		work->pool->staged--;
-		if (HASH_COUNT(staged_work) < (unsigned int)mining_threads)
-			queue = true;
 	}
 	mutex_unlock(stgd_lock);
 
-	if (queue)
-		queue_request(NULL, false);
+	queue_request(NULL, false);
 
 	return work;
 }
