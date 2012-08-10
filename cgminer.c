@@ -1398,6 +1398,24 @@ static bool curses_active_locked(void)
 		unlock_curses();
 	return ret;
 }
+
+// Cancellable getch
+int my_cancellable_getch(void)
+{
+	// This only works because the macro only hits direct getch() calls
+	typedef int (*real_getch_t)(void);
+	const real_getch_t real_getch = __real_getch;
+
+	int type, rv;
+	bool sct;
+
+	sct = !pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &type);
+	rv = real_getch();
+	if (sct)
+		pthread_setcanceltype(type, &type);
+
+	return rv;
+}
 #endif
 
 void tailsprintf(char *f, const char *fmt, ...)
@@ -2789,7 +2807,6 @@ static void *stage_thread(void *userdata)
 	bool ok = true;
 
 	rename_thr("bfg-stage");
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	while (ok) {
 		struct work *work = NULL;
@@ -3408,7 +3425,6 @@ retry:
 static void *input_thread(void __maybe_unused *userdata)
 {
 	rename_thr("bfg-input");
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	if (!curses_active)
 		return NULL;
@@ -3445,7 +3461,6 @@ static void *workio_thread(void *userdata)
 	bool ok = true;
 
 	rename_thr("bfg-workio");
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	while (ok) {
 		struct workio_cmd *wc;
@@ -4546,7 +4561,6 @@ static void reap_curl(struct pool *pool)
 static void *watchpool_thread(void __maybe_unused *userdata)
 {
 	rename_thr("bfg-watchpool");
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	while (42) {
 		struct timeval now;
@@ -4613,7 +4627,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 	struct timeval zero_tv;
 
 	rename_thr("bfg-watchdog");
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	memset(&zero_tv, 0, sizeof(struct timeval));
 	gettimeofday(&rotate_tv, NULL);

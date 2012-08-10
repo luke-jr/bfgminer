@@ -159,6 +159,21 @@ void *alloca (size_t);
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+#ifdef HAVE_CURSES
+#	ifdef getch
+		// getch() is a macro
+		static int __maybe_unused __real_getch(void) {
+			return getch();
+		}
+#		undef getch
+#		define getch()  my_cancellable_getch()
+#	else
+		// getch() is a real function
+#		define __real_getch  getch
+#		define getch()  my_cancellable_getch()
+#	endif
+#endif
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,

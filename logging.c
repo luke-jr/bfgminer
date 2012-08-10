@@ -31,12 +31,17 @@ static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
 #endif
 	{
 		int len = strlen(f);
+		int cancelstate;
+		bool scs;
 
 		strcpy(f + len - 1, "                    \n");
 
+		scs = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancelstate);
 		mutex_lock(&console_lock);
 		vprintf(f, ap);
 		mutex_unlock(&console_lock);
+		if (scs)
+			pthread_setcancelstate(cancelstate, &cancelstate);
 	}
 }
 
