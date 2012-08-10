@@ -128,6 +128,7 @@ bool use_curses;
 #endif
 static bool opt_submit_stale = true;
 static int opt_shares;
+static int opt_submit_threads = 0x40;
 static bool opt_fail_only;
 bool opt_autofan;
 bool opt_autoengine;
@@ -940,6 +941,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
+	OPT_WITHOUT_ARG("--submit-threads",
+	                opt_set_intval, &opt_submit_threads,
+	                "Maximum number of share submission threads (default: 64)"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
@@ -3310,9 +3314,9 @@ static void *workio_thread(void *userdata)
 		case WC_SUBMIT_WORK:
 		{
 			mutex_lock(&submitting_lock);
-			if (submitting >= 0x40) {
+			if (submitting >= opt_submit_threads) {
 				if (list_empty(&submit_waiting))
-					applog(LOG_WARNING, "workio_thread queuing submissions");
+					applog(LOG_WARNING, "workio_thread queuing submissions (see --submit-threads)");
 				else
 					applog(LOG_DEBUG, "workio_thread queuing submission");
 				list_add_tail(&wc->list, &submit_waiting);
