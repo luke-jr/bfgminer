@@ -2554,7 +2554,7 @@ static bool stale_work(struct work *work, bool share)
 		/* If the pool has asked us to restart since this work, it's stale */
 		if (work->work_restart_id != pool->work_restart_id)
 		{
-			applog(LOG_DEBUG, "Share stale due to work restart");
+			applog(LOG_DEBUG, "Work stale due to work restart");
 			return true;
 		}
 
