@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "findnonce.h"
+#include "miner.h"
 #include "scrypt.h"
 
 const uint32_t SHA256_K[64] = {
@@ -241,6 +242,7 @@ static void *postcalc_hash(void *userdata)
 	int entry = 0, nonces = 0;
 
 	pthread_detach(pthread_self());
+	rename_thr("bfg-postcalchsh");
 
 	for (entry = 0; entry < FOUND; entry++) {
 		uint32_t nonce = pcd->res[entry];

@@ -3101,6 +3101,8 @@ popipo:
 
 static void *quit_thread(__maybe_unused void *userdata)
 {
+	rename_thr("bfg-rpc-quit");
+
 	// allow thread creator to finish whatever it's doing
 	mutex_lock(&quit_restart_lock);
 	mutex_unlock(&quit_restart_lock);
@@ -3115,6 +3117,8 @@ static void *quit_thread(__maybe_unused void *userdata)
 
 static void *restart_thread(__maybe_unused void *userdata)
 {
+	rename_thr("bfg-rpc-restart");
+
 	// allow thread creator to finish whatever it's doing
 	mutex_lock(&quit_restart_lock);
 	mutex_unlock(&quit_restart_lock);
