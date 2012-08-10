@@ -2449,6 +2449,7 @@ static void *get_work_thread(void *userdata)
 	int failures = 0;
 
 	pthread_detach(pthread_self());
+	rename_thr("bfg-get_work");
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
@@ -2629,6 +2630,7 @@ static void *submit_work_thread(void *userdata)
 	time_t staleexpire;
 
 	pthread_detach(pthread_self());
+	rename_thr("bfg-submit_work");
 
 	applog(LOG_DEBUG, "Creating extra submit work thread");
 
@@ -3107,6 +3109,7 @@ static void *stage_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	bool ok = true;
 
+	rename_thr("bfg-stage");
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	while (ok) {
@@ -3779,6 +3782,7 @@ retry:
 
 static void *input_thread(void __maybe_unused *userdata)
 {
+	rename_thr("bfg-input");
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	if (!curses_active)
@@ -3841,6 +3845,7 @@ static void *workio_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	bool ok = true;
 
+	rename_thr("bfg-workio");
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	while (ok) {
@@ -3895,6 +3900,7 @@ static void *api_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 
 	pthread_detach(pthread_self());
+	rename_thr("bfg-rpc");
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	api(api_thr_id);
@@ -4543,6 +4549,12 @@ void *miner_thread(void *userdata)
 	struct cgminer_stats *pool_stats;
 	struct timeval getwork_start;
 
+	{
+		char thrname[16];
+		sprintf(thrname, "bfg-miner-%s%d", api->name, cgpu->device_id);
+		rename_thr(thrname);
+	}
+
 	/* Try to cycle approximately 5 times before each log update */
 	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
@@ -4828,6 +4840,8 @@ static void *longpoll_thread(void *userdata)
 	int failures = 0;
 	int rolltime;
 
+	rename_thr("bfg-longpoll");
+
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
@@ -4984,6 +4998,7 @@ static void reap_curl(struct pool *pool)
 
 static void *watchpool_thread(void __maybe_unused *userdata)
 {
+	rename_thr("bfg-watchpool");
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	while (42) {
@@ -5050,6 +5065,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 	const unsigned int interval = WATCHDOG_INTERVAL;
 	struct timeval zero_tv;
 
+	rename_thr("bfg-watchdog");
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	memset(&zero_tv, 0, sizeof(struct timeval));
