@@ -4376,11 +4376,14 @@ retry:
 
 	applog(LOG_DEBUG, "Popping work from get queue to get work");
 
+keepwaiting:
 	/* wait for 1st response, or get cached response */
 	work_heap = hash_pop(&abstime);
 	if (unlikely(!work_heap)) {
 		/* Attempt to switch pools if this one times out */
 		pool_died(pool);
+		if (pool == current_pool())
+			goto keepwaiting;
 		goto retry;
 	}
 
