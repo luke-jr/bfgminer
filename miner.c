@@ -71,6 +71,8 @@ struct workio_cmd {
 	struct thr_info		*thr;
 	struct work		*work;
 	bool			lagging;
+
+	struct list_head list;
 };
 
 struct strategies strategies[] = {
@@ -134,6 +136,7 @@ bool use_curses;
 #endif
 static bool opt_submit_stale = true;
 static int opt_shares;
+static int opt_submit_threads = 0x40;
 static bool opt_fail_only;
 bool opt_autofan;
 bool opt_autoengine;
@@ -189,6 +192,10 @@ static struct timeval total_tv_start, total_tv_end;
 static struct timeval miner_started;
 
 pthread_mutex_t control_lock;
+
+static pthread_mutex_t submitting_lock;
+static int submitting;
+static struct list_head submit_waiting;
 
 int hw_errors;
 int total_accepted, total_rejected;
@@ -998,6 +1005,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--submit-stale",
 			opt_set_bool, &opt_submit_stale,
 	                opt_hidden),
+	OPT_WITHOUT_ARG("--submit-threads",
+	                opt_set_intval, &opt_submit_threads,
+	                "Maximum number of share submission threads (default: 64)"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
@@ -2612,15 +2622,20 @@ static void submit_discard_share(struct work *work)
 static void *submit_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct work *work = wc->work;
-	struct pool *pool = work->pool;
+	struct work *work;
+	struct pool *pool;
 	struct curl_ent *ce;
-	int failures = 0;
+	int failures;
 	time_t staleexpire;
 
 	pthread_detach(pthread_self());
 
 	applog(LOG_DEBUG, "Creating extra submit work thread");
+
+next_submit:
+	work = wc->work;
+	pool = work->pool;
+	failures = 0;
 
 	check_solve(work);
 
@@ -2677,6 +2692,18 @@ static void *submit_work_thread(void *userdata)
 	push_curl_entry(ce, pool);
 out:
 	workio_cmd_free(wc);
+
+	mutex_lock(&submitting_lock);
+	if (!list_empty(&submit_waiting)) {
+		applog(LOG_DEBUG, "submit_work continuing with queued submission");
+		wc = list_entry(submit_waiting.next, struct workio_cmd, list);
+		list_del(&wc->list);
+		mutex_unlock(&submitting_lock);
+		goto next_submit;
+	}
+	--submitting;
+	mutex_unlock(&submitting_lock);
+
 	return NULL;
 }
 
@@ -3835,8 +3862,23 @@ static void *workio_thread(void *userdata)
 			ok = workio_get_work(wc);
 			break;
 		case WC_SUBMIT_WORK:
+		{
+			mutex_lock(&submitting_lock);
+			if (submitting >= opt_submit_threads) {
+				if (list_empty(&submit_waiting))
+					applog(LOG_WARNING, "workio_thread queuing submissions (see --submit-threads)");
+				else
+					applog(LOG_DEBUG, "workio_thread queuing submission");
+				list_add_tail(&wc->list, &submit_waiting);
+				mutex_unlock(&submitting_lock);
+				break;
+			}
+			++submitting;
+			mutex_unlock(&submitting_lock);
+
 			ok = workio_submit_work(wc);
 			break;
+		}
 		default:
 			ok = false;
 			break;
@@ -5663,6 +5705,7 @@ int main(int argc, char *argv[])
 	strcpy(current_block, block->hash);
 
 	INIT_LIST_HEAD(&scan_devices);
+	INIT_LIST_HEAD(&submit_waiting);
 
 #ifdef HAVE_OPENCL
 	memset(gpus, 0, sizeof(gpus));
