@@ -5073,6 +5073,8 @@ int main(int argc, char *argv[])
 	strcpy(current_block, block->hash);
 
 	INIT_LIST_HEAD(&scan_devices);
+
+	mutex_init(&submitting_lock);
 	INIT_LIST_HEAD(&submit_waiting);
 
 #ifdef HAVE_OPENCL
