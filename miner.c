@@ -2523,7 +2523,7 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 		/* If the share isn't on this pool's latest block, it's stale */
 		if (pool->block_id != block_id)
 		{
-			applog(LOG_DEBUG, "Share stale due to block mismatch");
+			applog(LOG_DEBUG, "Share stale due to block mismatch (%08lx != %08lx)", (long)block_id, (long)pool->block_id);
 			return true;
 		}
 
@@ -2531,7 +2531,7 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 		 * the most recent longpoll is stale */
 		if ((!pool->submit_old) && work->work_restart_id != pool->work_restart_id)
 		{
-			applog(LOG_DEBUG, "Share stale due to work restart");
+			applog(LOG_DEBUG, "Share stale due to work restart (%02x != %02x)", work->work_restart_id, pool->work_restart_id);
 			return true;
 		}
 
@@ -2548,14 +2548,14 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 		/* Note this intentionally uses the global option, not the param */
 		if (block_id != (opt_fail_only ? pool->block_id : current_block_id))
 		{
-			applog(LOG_DEBUG, "Work stale due to block mismatch");
+			applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != %d ? %08lx : %08lx)", (long)block_id, (int)opt_fail_only, (long)pool->block_id, (long)current_block_id);
 			return true;
 		}
 
 		/* If the pool has asked us to restart since this work, it's stale */
 		if (work->work_restart_id != pool->work_restart_id)
 		{
-			applog(LOG_DEBUG, "Work stale due to work restart");
+			applog(LOG_DEBUG, "Work stale due to work restart (%02x != %02x)", work->work_restart_id, pool->work_restart_id);
 			return true;
 		}
 
@@ -2576,14 +2576,14 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 
 	gettimeofday(&now, NULL);
 	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry) {
-		applog(LOG_DEBUG, "%s stale due to expiry", share?"Share":"Work");
+		applog(LOG_DEBUG, "%s stale due to expiry (%d - %d >= %d)", share?"Share":"Work", now.tv_sec, work->tv_staged.tv_sec, work_expiry);
 		return true;
 	}
 
 	/* If the user only wants strict failover, any work from a pool other than
 	 * the current one is always considered stale */
 	if (failoveronly && !share && pool != current_pool() && pool->enabled != POOL_REJECTING) {
-		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch");
+		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch (pool %u vs %u)", pool->pool_no, current_pool()->pool_no);
 		return true;
 	}
 
