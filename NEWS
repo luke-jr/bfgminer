@@ -1,5 +1,57 @@
 BFGMiner Version 2.6.4 - Future
 
+- Bugfix: Avoid cancelling threads while locks are held
+- Set recognizable names on threads for debugging
+- Bugfix: Don't keep making new get_work threads if all pools are dead
+- Enable configuring submission thread limit with --submit-threads option
+- Bugfix: Limit active submission threads to 0x40 so we don't overflow
+- Bugfix: Properly handle switching to pools that aren't on the latest block,
+and warn if a pool actively switches to an old block
+- Log more details of reasons in stale_work debug messages
+- Failsafe against stale-on-arrival work: disable the pool
+- Bugfix: Debug message should show "Work stale due to work restart" when it's
+not a share
+- windows-build: Remove APP SDK section since it is no longer needed
+- modminer: HACK: Let last_work handle the end of the work, and start the next
+one immediately
+- Bugfix: modminer: Remove erroneous "else" statement, to fix hashrate
+reporting
+- README: Document user group required for FPGAs on Gentoo and Ubuntu
+- BFGMiner-specific README adjustments
+- Bugfix: opencl: Ignore error getting device ids from platforms unless they
+are explicitly chosen
+- New --debuglog option to include debug info in stderr logfile even if not in
+the console
+- Bumped down debhelper compatibility reqs so that this will build on Lucid.
+- Updated to match packaging changes.
+- Switched to native packages so we don't have to muck around creating fake
+upstream tarballs, and can easily generate minor versions for upload to
+Launchpad.
+- Removed accidentally included debugging line.
+- Minor version bump again because of launchpad. Will sort this out for next
+release.
+- Updated to patch bitforce module issue on Debian/Ubuntu.
+- Added local quilt config dir to ignore.
+- modminer: Check nonce against previous work, in case of race
+- Bugfix: Enable --kernel-path option if ModMiner or Ztex is enabled (even if
+no OpenCL)
+- Bugfix: Escape backslashes and double-quotes in strings that rightfully may
+have them, when writing JSON config file
+- Clean object (.o) and dependency (.d) files out of source tree
+- Bugfix: bitforce: Don't count hashes that never happened due to throttling
+- Bugfix: Deal with serial_open timeout maximum (25.5s)
+- - fpgautils: Linux only supports uint8_t decisecond values for timeouts, so
+use uint8_t for timeout value; this gets smart compilers to throw warnings
+when overflowed in some cases
+- - bitforce: Reduce serial timeout to 25 seconds (was 30) and increase job
+long timeout to 25 seconds (was 15) to handle throttling gracefully
+- modminer: Add debug info to API extra device stats
+- modminer: Raise clock speed when there's only good nonces for a while
+- modminer: Only print clock speed adjustments when they actually change
+- modminer: Increase tolerance for bad nonces to 2%
+- modminer: Reset bad-nonce ratio measurement when the clock speed changes
+- Bugfix: bitforce: Include the correct device id in "garbled response" warning
+- ADL: Add attribution and disclaimer to interfaces
 - Cleaned out refs to AMD SDKs.
 - Updated README about debian packaging, changelog with minor version bump to
 work around Launchpad reqs.
