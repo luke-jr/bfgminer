@@ -1820,14 +1820,29 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 					foreach ($result as $sec => $row)
 					{
 						$secname = preg_replace('/\d/', '', $sec);
-						if (secmatch($section, $secname) && isset($row[$field]))
+						if (secmatch($section, $secname))
 						{
-							$showfields[$field] = 1;
-							$map = $section.'.'.$field;
-							if (isset($namemap[$map]))
-								$showhead[$namemap[$map]] = 1;
-							else
-								$showhead[$field] = 1;
+							if ($field === '*')
+							{
+								foreach ($row as $f => $v)
+								{
+									$showfields[$f] = 1;
+									$map = $section.'.'.$f;
+									if (isset($namemap[$map]))
+										$showhead[$namemap[$map]] = 1;
+									else
+										$showhead[$f] = 1;
+								}
+							}
+							elseif (isset($row[$field]))
+							{
+								$showfields[$field] = 1;
+								$map = $section.'.'.$field;
+								if (isset($namemap[$map]))
+									$showhead[$namemap[$map]] = 1;
+								else
+									$showhead[$field] = 1;
+							}
 						}
 					}
 
