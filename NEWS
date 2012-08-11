@@ -1,5 +1,14 @@
-BFGMiner Version 2.6.4 - Future
+BFGMiner Version 2.6.4 - August 11, 2012
 
+- Bugfix: Define my_cancellable_getch in miner.h
+- Escape " and \ when writing json config file
+- miner.php allow a custom page section to select all fields with '*' - e.g. to
+create a STATS section on a custom page
+- miner.php optional single rig totals (on by default)
+- Bugfix: Initialize submitting mutex
+- Bugfix: bitforce: Allocate enough space for FTDI description pointers
+- Queue one request for each staged request removed, keeping the staged
+request count optimal at all times.
 - Bugfix: Avoid cancelling threads while locks are held
 - Set recognizable names on threads for debugging
 - Bugfix: Don't keep making new get_work threads if all pools are dead
@@ -65,7 +74,7 @@ now with pbuilder/pdebuild, and include docs.
 - Fix windows bitforce build.
 - Convert the serial autodetect functions to use int instead of char to
 enumerate devices.
-- Deuglify windows autodetect code for BFL.
+- Uglify windows autodetect code for BFL.
 - There is no point zeroing temperature in BFL if we fail to get a response, and
 we should register it as a HW error, suggesting throttling.
 - Update SCRYPT README with information about HW errors.

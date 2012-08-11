@@ -1,3 +1,19 @@
+bfgminer (2.6.4-0precise1) precise; urgency=low
+
+  * More drastic improvements to ModMiner clock adjustment algorithm. Downclocking should be more conservative, and BFGMiner will even raise the clock speed when it's doing well.
+  * ModMiners are now kept busier (less idle time) and nonces are checked against the previous work to catch races. This may result in a higher utility (effective hashrate).
+  * Tested and fixed problems managing throttling BitFORCE Singles. An 880 MH/s Single that was throttling to 440 MH/s before (and throwing lots of garbled errors) is now working cleanly at 590 MH/s - a 34% improvement in hashrate!
+  * A bunch of annoying crashes were fixed:
+  * * With high-share devices when network connectivity is lost.
+  * * GPU mining not functional when any OpenCL platform fails.
+  * * Occasional deadlock/hang during exit.
+  * New --debuglog option to include debug information in log file (see README) but not in main console.
+  * The scrypt code was updated - now ALL results from a GPU are checked to see if they're valid and if not, instead of being submitted where they are guaranteed to be rejected, they register as hardware errors. This will make tuning your scrypt parameters easier as HW error count will rise if you've set the parameters too high.
+  * Updated miner.php from Kano
+
+ -- graeme <graeme@sudo.ca>  Thu, 09 Aug 2012 10:39:00 -0700
+
+
 bfgminer (2.6.3.2-0precise2) precise; urgency=low
 
   * Switched to a Debian native package so that building minor packaging versions is easier.
