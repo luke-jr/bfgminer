@@ -2238,16 +2238,30 @@ static void __inc_queued(void)
 	total_queued++;
 }
 
-static void __dec_queued(void)
+static int __pool_pending_staged(struct pool *pool)
+{
+	return pool->queued + pool->staged;
+}
+
+static void inc_pool_queued(struct pool *pool)
+{
+	mutex_lock(stgd_lock);
+	pool->queued++;
+	mutex_unlock(stgd_lock);
+}
+
+static void __dec_queued(struct pool *pool)
 {
 	if (total_queued)
 		total_queued--;
+	if (pool && pool->queued)
+		pool->queued--;
 }
 
 static void dec_queued(void)
 {
 	mutex_lock(stgd_lock);
-	__dec_queued();
+	__dec_queued(NULL);
 	mutex_unlock(stgd_lock);
 }
 
@@ -2290,6 +2304,7 @@ static void *get_work_thread(void *userdata)
 	else {
 		pool = ret_work->pool = select_pool(wc->lagging);
 		ce = pop_curl_entry(pool);
+		inc_pool_queued(pool);
 
 		/* obtain new work from bitcoin via JSON-RPC */
 		while (!get_upstream_work(ret_work, ce->curl)) {
@@ -2762,7 +2777,8 @@ static bool hash_push(struct work *work)
 	mutex_lock(stgd_lock);
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
-		__dec_queued();
+		work->pool->staged++;
+		__dec_queued(work->pool);
 		HASH_SORT(staged_work, tv_sort);
 	} else
 		rc = false;
@@ -3795,9 +3811,10 @@ static bool clone_available(void)
 
 bool queue_request(struct thr_info *thr, bool needed)
 {
+	struct pool *cp = current_pool();
 	struct workio_cmd *wc;
+	int ps, ts, maxq, pps;
 	bool lag, ret, qing;
-	int ps, ts, maxq;
 
 	maxq = opt_queue + mining_threads;
 	lag = ret = qing = false;
@@ -3806,9 +3823,10 @@ bool queue_request(struct thr_info *thr, bool needed)
 	__inc_queued();
 	ps = __pending_staged();
 	ts = __total_staged();
+	pps = __pool_pending_staged(cp);
 	mutex_unlock(stgd_lock);
 
-	if (ps >= maxq) {
+	if (pps && ps >= maxq) {
 		ret = true;
 		goto out;
 	}
@@ -3860,6 +3878,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 		if (worka->clone) {
 			HASH_DEL(staged_work, worka);
 			work = worka;
+			work->pool->staged--;
 			goto out_unlock;
 		}
 	}
