@@ -516,11 +516,23 @@ fd_set fds;
 	state->hashes = 0;
 	status_read("start work");
 	mutex_unlock(&modminer->device_mutex);
+	if (opt_debug) {
+		char *xdata = bin2hex(state->running_work.data, 80);
+		applog(LOG_DEBUG, "%s %u.%u: Started work: %s",
+		       modminer->api->name, modminer->device_id, fpgaid, xdata);
+		free(xdata);
+	}
 
 	return true;
 }
 
 #define work_restart(thr)  thr->work_restart
+
+#define NONCE_CHARS(nonce)  \
+	(int)((unsigned char*)&nonce)[3],  \
+	(int)((unsigned char*)&nonce)[2],  \
+	(int)((unsigned char*)&nonce)[1],  \
+	(int)((unsigned char*)&nonce)[0]
 
 static int64_t
 modminer_process_results(struct thr_info*thr)
@@ -581,9 +593,16 @@ modminer_process_results(struct thr_info*thr)
 			state->no_nonce_counter = 0;
 			++state->nonce_counter;
 			bad = !test_nonce(work, nonce, false);
-			if (bad && test_nonce(&state->last_work, nonce, false))
+			if (!bad)
+				applog(LOG_DEBUG, "%s %u.%u: Nonce for current  work: %02x%02x%02x%02x",
+				       modminer->api->name, modminer->device_id, fpgaid,
+				       NONCE_CHARS(nonce));
+			else
+			if (test_nonce(&state->last_work, nonce, false))
 			{
-				applog(LOG_DEBUG, "%s %u.%u: Found nonce for previous work!", modminer->api->name, modminer->device_id, fpgaid);
+				applog(LOG_DEBUG, "%s %u.%u: Nonce for previous work: %02x%02x%02x%02x",
+				       modminer->api->name, modminer->device_id, fpgaid,
+				       NONCE_CHARS(nonce));
 				work = &state->last_work;
 				bad = false;
 			}
@@ -607,6 +626,9 @@ modminer_process_results(struct thr_info*thr)
 				}
 			}
 			else {
+				applog(LOG_DEBUG, "%s %u.%u: Nonce with H not zero  : %02x%02x%02x%02x",
+				       modminer->api->name, modminer->device_id, fpgaid,
+				       NONCE_CHARS(nonce));
 				++hw_errors;
 				++modminer->hw_errors;
 				++state->bad_share_counter;
@@ -670,10 +692,10 @@ modminer_scanhash(struct thr_info*thr, struct work*work, int64_t __maybe_unused 
 		state->work_running = true;
 
 	if (startwork) {
-		if (!modminer_start_work(thr))
-			return -1;
 		memcpy(&state->last_work, &state->running_work, sizeof(state->last_work));
 		memcpy(&state->running_work, work, sizeof(state->running_work));
+		if (!modminer_start_work(thr))
+			return -1;
 	}
 
 	// This is intentionally early
