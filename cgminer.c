@@ -1333,24 +1333,34 @@ void decay_time(double *f, double fadd)
 		*f = (fadd + *f * 0.58) / 1.58;
 }
 
+static int __total_staged(void)
+{
+	return HASH_COUNT(staged_work);
+}
+
 static int total_staged(void)
 {
 	int ret;
 
 	mutex_lock(stgd_lock);
-	ret = HASH_COUNT(staged_work);
+	ret = __total_staged();
 	mutex_unlock(stgd_lock);
 	return ret;
 }
 
 /* We count the total_queued as pending staged as these are requests in flight
  * one way or another which have not yet staged a work item but will */
+static int __pending_staged(void)
+{
+	return HASH_COUNT(staged_work) + total_queued;
+}
+
 static int pending_staged(void)
 {
 	int ret;
 
 	mutex_lock(stgd_lock);
-	ret = HASH_COUNT(staged_work) + total_queued;
+	ret = __pending_staged();
 	mutex_unlock(stgd_lock);
 	return ret;
 }
@@ -2223,11 +2233,9 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 
 /* This is overkill, but at least we'll know accurately how much work is
  * queued to prevent ever being left without work */
-static void inc_queued(void)
+static void __inc_queued(void)
 {
-	mutex_lock(stgd_lock);
 	total_queued++;
-	mutex_unlock(stgd_lock);
 }
 
 static void __dec_queued(void)
@@ -3791,12 +3799,14 @@ bool queue_request(struct thr_info *thr, bool needed)
 	bool lag, ret, qing;
 	int ps, ts, maxq;
 
-	inc_queued();
-
 	maxq = opt_queue + mining_threads;
 	lag = ret = qing = false;
-	ps = pending_staged();
-	ts = total_staged();
+
+	mutex_lock(stgd_lock);
+	__inc_queued();
+	ps = __pending_staged();
+	ts = __total_staged();
+	mutex_unlock(stgd_lock);
 
 	if (ps >= maxq) {
 		ret = true;
