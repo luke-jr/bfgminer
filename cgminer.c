@@ -3834,17 +3834,29 @@ out:
 
 static struct work *hash_pop(const struct timespec *abstime)
 {
-	struct work *work = NULL;
+	struct work *work = NULL, *worka, *workb;
 	int rc = 0;
 
 	mutex_lock(stgd_lock);
 	while (!getq->frozen && !HASH_COUNT(staged_work) && !rc)
 		rc = pthread_cond_timedwait(&getq->cond, stgd_lock, abstime);
 
-	if (HASH_COUNT(staged_work)) {
-		work = staged_work;
-		HASH_DEL(staged_work, work);
+	if (unlikely(!HASH_COUNT(staged_work)))
+		goto  out_unlock;
+
+	/* Look for cloned work first since original work can be used to
+	 * generate further clones */
+	HASH_ITER(hh, staged_work, worka, workb) {
+		if (worka->clone) {
+			HASH_DEL(staged_work, worka);
+			work = worka;
+			goto out_unlock;
+		}
 	}
+
+	work = staged_work;
+	HASH_DEL(staged_work, work);
+out_unlock:
 	mutex_unlock(stgd_lock);
 
 	queue_request(NULL, false);
