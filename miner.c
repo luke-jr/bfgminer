@@ -1399,14 +1399,24 @@ void decay_time(double *f, double fadd)
 		*f = (fadd + *f * 0.58) / 1.58;
 }
 
+static int __total_staged(void)
+{
+	return HASH_COUNT(staged_work);
+}
+
 static int total_staged(void)
 {
 	int ret;
 
 	mutex_lock(stgd_lock);
-	ret = HASH_COUNT(staged_work);
+	ret = __total_staged();
 	mutex_unlock(stgd_lock);
 	return ret;
+}
+
+static int __pool_staged(struct pool *pool)
+{
+	return pool->staged;
 }
 
 static int pool_staged(struct pool *pool)
@@ -1417,13 +1427,6 @@ static int pool_staged(struct pool *pool)
 	ret = pool->staged;
 	mutex_unlock(stgd_lock);
 	return ret;
-}
-
-static int current_staged(void)
-{
-	struct pool *pool = current_pool();
-
-	return pool_staged(pool);
 }
 
 #ifdef HAVE_CURSES
@@ -2435,15 +2438,25 @@ static void dec_queued(struct pool *pool)
 	mutex_unlock(&qd_lock);
 }
 
+static int __pool_queued(struct pool *pool)
+{
+	return pool->queued;
+}
+
 static int current_queued(void)
 {
 	struct pool *pool = current_pool();
 	int ret;
 
 	mutex_lock(&qd_lock);
-	ret = pool->queued;
+	ret = __pool_queued(pool);
 	mutex_unlock(&qd_lock);
 	return ret;
+}
+
+static int __global_queued(void)
+{
+	return total_queued;
 }
 
 static int global_queued(void)
@@ -2451,7 +2464,7 @@ static int global_queued(void)
 	int ret;
 
 	mutex_lock(&qd_lock);
-	ret = total_queued;
+	ret = __global_queued();
 	mutex_unlock(&qd_lock);
 	return ret;
 }
@@ -2459,11 +2472,17 @@ static int global_queued(void)
 static bool enough_work(void)
 {
 	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
+	struct pool *pool = current_pool();
 
-	cq = current_queued();
-	cs = current_staged();
-	ts = total_staged();
-	tq = global_queued();
+	mutex_lock(&qd_lock);
+	cq = __pool_queued(pool);
+	tq = __global_queued();
+	mutex_unlock(&qd_lock);
+
+	mutex_lock(stgd_lock);
+	cs = __pool_staged(pool);
+	ts = __total_staged();
+	mutex_unlock(stgd_lock);
 
 	if (((cs || cq >= opt_queue) && ts >= maxq) ||
 	    ((cs || cq) && tq >= maxq))
@@ -4207,13 +4226,19 @@ static void pool_resus(struct pool *pool)
 bool queue_request(struct thr_info *thr, bool needed)
 {
 	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
+	struct pool *pool = current_pool();
 	struct workio_cmd *wc;
 	bool lag = false;
 
-	cq = current_queued();
-	cs = current_staged();
-	ts = total_staged();
-	tq = global_queued();
+	mutex_lock(&qd_lock);
+	cq = __pool_queued(pool);
+	tq = __global_queued();
+	mutex_unlock(&qd_lock);
+
+	mutex_lock(stgd_lock);
+	cs = __pool_staged(pool);
+	ts = __total_staged();
+	mutex_unlock(stgd_lock);
 
 	if (needed && cq >= maxq && !ts && !opt_fail_only) {
 		/* If we're queueing work faster than we can stage it, consider
