@@ -394,6 +394,10 @@ while:
 will try to set the engine clock of card 0 to 950, 1 to 945, 2 to 930, 3 to
 960 and all memory clocks to 300.
 
+You can substitute 0 to leave the engine clock of a card at its default.
+For example, to keep the 2nd GPU to its default clocks:
+--gpu-engine 950,0,930,960 --gpu-memclock 300,0,300,300
+
 AUTO MODES:
 There are two "auto" modes in cgminer, --auto-fan and --auto-gpu. These can
 be used independently of each other and are complementary. Both auto modes
