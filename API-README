@@ -229,7 +229,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating success or failure saving the BFGMiner config
                               to filename
-                              The filename is optional and will use the cgminer
+                              The filename is optional and will use the BFGMiner
                               default if not specified
 
  quit (*)      none           There is no status section but just a single "BYE"
@@ -261,7 +261,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
 
  restart (*)   none           There is no status section but just a single "RESTART"
-                              reply before cgminer restarts
+                              reply before BFGMiner restarts
 
  stats         STATS          Each device or pool that has 1 or more getworks
                               with a list of stats regarding getwork times
@@ -325,14 +325,14 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.15 (cgminer v2.6.1)
+API V1.15 (BFGMiner v2.5.2)
 
 Added API commands:
  'poolpriority'
 
 ----------
 
-API V1.14 (cgminer v2.5.0)
+API V1.14 (BFGMiner v2.5.0)
 
 Modified API commands:
  'stats' - more icarus timing stats added
@@ -343,17 +343,17 @@ Completely backward compatible
 
 ----------
 
-API V1.13 (cgminer v2.4.4)
+API V1.13 (BFGMiner v2.4.4)
 
 Added API commands:
  'check'
 
-Support was added to cgminer for API access groups with the --api-groups option
+Support was added to BFGMiner for API access groups with the --api-groups option
 It's 100% backward compatible with previous --api-access commands
 
 ----------
 
-API V1.12 (cgminer v2.4.3)
+API V1.12 (BFGMiner v2.4.3)
 
 Modified API commands:
  'stats' - more pool stats added
@@ -362,7 +362,7 @@ Support for the ModMinerQuad FPGA was added
 
 ----------
 
-API V1.11 (cgminer v2.4.2)
+API V1.11 (BFGMiner v2.4.2)
 
 Modified API commands:
  'save' no longer requires a filename (use default if not specified)
@@ -372,7 +372,7 @@ It now correctly returns S (success)
 
 ----------
 
-API V1.10 (cgminer v2.4.1)
+API V1.10 (BFGMiner v2.4.1)
 
 Added API commands:
  'stats'
@@ -380,14 +380,14 @@ Added API commands:
 N.B. the 'stats' command can change at any time so any specific content
 present should not be relied upon.
 The data content is mainly used for debugging purposes or hidden options
-in cgminer and can change as development work requires
+in BFGMiner and can change as development work requires
 
 Modified API commands:
  'pools' added "Last Share Time"
 
 ----------
 
-API V1.9 (cgminer v2.4.0)
+API V1.9 (BFGMiner v2.4.0)
 
 Added API commands:
  'restart'
@@ -397,7 +397,7 @@ Modified API commands:
 
 ----------
 
-API V1.8 (cgminer v2.3.5)
+API V1.8 (BFGMiner v2.3.5)
 
 Added API commands:
  'devdetails'
@@ -406,7 +406,14 @@ Support for the ZTex FPGA was added
 
 ----------
 
-API V1.7 (cgminer v2.3.4)
+API V1.8-pre (BFGMiner v2.3.4)
+
+Added API commands:
+ 'devdetail'
+
+----------
+
+API V1.7 (BFGMiner v2.3.4)
 
 Added API commands:
  'removepool'
