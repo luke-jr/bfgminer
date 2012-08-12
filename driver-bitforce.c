@@ -421,6 +421,8 @@ re_send:
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
+		bitforce->hw_errors++;
+		bitforce_clear_buffer(bitforce);
 		return false;
 	}
 
@@ -461,6 +463,8 @@ re_send:
 
 	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
+		bitforce->hw_errors++;
+		bitforce_clear_buffer(bitforce);
 		return false;
 	}
 
