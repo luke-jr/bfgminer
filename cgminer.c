@@ -2272,20 +2272,39 @@ static int global_queued(void)
 	return ret;
 }
 
+static bool enough_work(void)
+{
+	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
+
+	cq = current_queued();
+	cs = current_staged();
+	ts = total_staged();
+	tq = global_queued();
+
+	if (((cs || cq >= opt_queue) && ts >= maxq) ||
+	    ((cs || cq) && tq >= maxq))
+		return true;
+	return false;
+}
+
 /* ce and pool may appear uninitialised at push_curl_entry, but they're always
  * set when we don't have opt_benchmark enabled */
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct curl_ent * uninitialised_var(ce);
 	struct pool * uninitialised_var(pool);
-	struct work *ret_work = make_work();
+	struct curl_ent *ce = NULL;
+	struct work *ret_work;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
+	if (enough_work())
+		goto out;
+
+	ret_work = make_work();
 	if (wc->thr)
 		ret_work->thr = wc->thr;
 	else
@@ -2330,7 +2349,7 @@ static void *get_work_thread(void *userdata)
 
 out:
 	workio_cmd_free(wc);
-	if (!opt_benchmark)
+	if (ce)
 		push_curl_entry(ce, pool);
 	return NULL;
 }
