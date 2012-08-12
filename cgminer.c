@@ -3826,7 +3826,12 @@ bool queue_request(struct thr_info *thr, bool needed)
 	pps = __pool_pending_staged(cp);
 	mutex_unlock(stgd_lock);
 
-	if (pps && ps >= maxq) {
+	if (opt_fail_only) {
+		if (pps >= maxq) {
+			ret = true;
+			goto out;
+		}
+	} else if (pps && ps >= maxq) {
 		ret = true;
 		goto out;
 	}
