@@ -3827,7 +3827,7 @@ bool queue_request(struct thr_info *thr, bool needed)
 	mutex_unlock(stgd_lock);
 
 	if (opt_fail_only) {
-		if (pps >= maxq) {
+		if (pps >= maxq && ps) {
 			ret = true;
 			goto out;
 		}
