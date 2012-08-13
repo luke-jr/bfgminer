@@ -2320,7 +2320,7 @@ static void *get_work_thread(void *userdata)
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
-	if (enough_work())
+	if (!wc->lagging && enough_work())
 		goto out;
 
 	ret_work = make_work();
