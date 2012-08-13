@@ -705,7 +705,7 @@ the last one
 
 So an example for 3 rigs would be:
 
- $rigs = array('192.168.0.100:4028:A', '192.168.0.102:4028:B', '192.168.0.110:C');
+ $rigs = array('192.168.0.100:4028:A', '192.168.0.102:4028:B', '192.168.0.110:4028:C');
 
 Of course each of the rigs listed would also have to have the API
 running and be set to allow the web server to access the API - as
