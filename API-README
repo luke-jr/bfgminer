@@ -996,7 +996,7 @@ Each table will have the chosen details for all the rigs specified in $rigs
 
 	This will list each of the devices on each rig and display the list of
 	fields as shown
-	If will also include the 'Last Not Well' field from the 'notify' command
+	It will also include the 'Last Not Well' field from the 'notify' command
 	so you know when the device was last not well
 
 	You will notice that you need to rename each field e.g. 'DEVS.Name=Name'
