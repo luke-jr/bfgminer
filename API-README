@@ -544,7 +544,7 @@ miner.php
 miner.php is a PHP based interface to the cgminer RPC API
 (referred to simply as the API below)
 
-It can show rig details, summaries and input fields to allow you change
+It can show rig details, summaries and input fields to allow you to change
 cgminer
 You can also create custom summary pages with it
 
