@@ -1003,9 +1003,9 @@ Each table will have the chosen details for all the rigs specified in $rigs
 	since each field name in the join between DEVS and NOTIFY is actually
 	section.fieldname, not just fieldname
 
-	The join code automatically adds 2 fields to each CPU device: 'Name' and 'ID'
+	The join code automatically adds 2 fields to each GPU device: 'Name' and 'ID'
 	They don't exist in the API 'devs' output but you can correctly calculate
-	them from the CPU device data
+	them from the GPU device data
 	These two fields are used to join DEVS to NOTIFY i.e. find the NOTIFY
 	record that has the same Name and ID as the DEVS record and join them
 
