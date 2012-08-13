@@ -845,7 +845,7 @@ List of fields NOT to be displayed
 You can use this to hide data you don't want to see or don't want
 shown on a public web page
 The list of sections are:
- SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, NOTIFY, DEVDETAILS, DEVS
+ SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS
 See the web page for the list of field names (the table headers)
 It is an array of 'SECTION.Field Name' => 1
 
@@ -924,7 +924,7 @@ The section defines what data you want in the summary table and the Fields
 define what data you want shown from that section
 
 Standard sections are:
- SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, NOTIFY, DEVDETAILS, DEVS, STATS
+ SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS, STATS
 
 Fields are the names as shown on the headers on the normal pages
 
