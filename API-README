@@ -122,7 +122,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               ADL in use=X, <- Y or N if any GPU has ADL
                               Strategy=Name, <- the current pool strategy
                               Log Interval=N, <- log interval (--log N)
-                              Device Code=GPU ICA | <- spaced list of compiled devices
+                              Device Code=GPU ICA , <- spaced list of compiled devices
+                              OS=Linux/Apple/..., <- operating System
+                              Failover-Only=true/false | <- failover-only setting
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -275,6 +277,10 @@ The list of requests - a (*) means it requires privileged access - and replies a
  check|cmd     COMMAND        Exists=Y/N, <- 'cmd' exists in this version
                               Access=Y/N| <- you have access to use 'cmd'
 
+ failover-only|true/false (*)
+               none           There is no reply section just the STATUS section
+                              stating what failover-only was set to
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
@@ -326,6 +332,16 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.16
+
+Added API commands:
+ 'failover-only'
+
+Modified API commands:
+ 'config' - include failover-only state
+
+----------
 
 API V1.15 (cgminer v2.6.1)
 

@@ -130,7 +130,7 @@ bool use_curses;
 #endif
 static bool opt_submit_stale = true;
 static int opt_shares;
-static bool opt_fail_only;
+bool opt_fail_only;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
