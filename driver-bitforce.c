@@ -338,19 +338,19 @@ void bitforce_init(struct cgpu_info *bitforce)
 	mutex_unlock(&bitforce->device_mutex);
 }
 
-static bool bitforce_get_temp(struct cgpu_info *bitforce)
+static void bitforce_get_temp(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
 	char *s;
 
 	if (!fdDev)
-		return false;
+		return;
 
 	/* It is not critical getting temperature so don't get stuck if  we
 	 * can't grab the mutex here */
 	if (mutex_trylock(&bitforce->device_mutex))
-		return false;
+		return;
 
 	BFwrite(fdDev, "ZLX", 3);
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
@@ -359,7 +359,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string/timed out", bitforce->device_id);
 		bitforce->hw_errors++;
-		return false;
+		return;
 	}
 
 	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
@@ -384,10 +384,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
 		bitforce_clear_buffer(bitforce);
-		return false;;
 	}
-
-	return true;
 }
 
 static bool bitforce_send_work(struct thr_info *thr, struct work *work)
@@ -603,6 +600,11 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 
 	send_ret = bitforce_send_work(thr, work);
 
+	/* A convenient time to ask for the temperature without risk of
+	 * interleaved responses */
+	if (send_ret && !work->blk.nonce)
+		bitforce_get_temp(bitforce);
+
 	if (!bitforce->nonce_range) {
 		/* Initially wait 2/3 of the average cycle time so we can request more
 		work before full scan is up */
@@ -613,7 +615,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce->wait_ms = sleep_time;
 		queue_request(thr, false);
 
-		/* Now wait athe final 1/3rd; no bitforce should be finished by now */
+		/* Now wait the final 1/3rd; no bitforce should be finished by now */
 		sleep_time = bitforce->sleep_ms - sleep_time;
 		if (!restart_wait(sleep_time))
 			return 0;
@@ -643,11 +645,6 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce_clear_buffer(bitforce);
 	}
 	return ret;
-}
-
-static bool bitforce_get_stats(struct cgpu_info *bitforce)
-{
-	return bitforce_get_temp(bitforce);
 }
 
 static bool bitforce_thread_init(struct thr_info *thr)
@@ -685,7 +682,6 @@ struct device_api bitforce_api = {
 	.get_api_stats = bitforce_api_stats,
 	.reinit_device = bitforce_init,
 	.get_statline_before = get_bitforce_statline_before,
-	.get_stats = bitforce_get_stats,
 	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
 	.scanhash = bitforce_scanhash,
