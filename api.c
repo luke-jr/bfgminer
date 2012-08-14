@@ -2733,7 +2733,7 @@ static void failoveronly(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 
 	bool tf = (*param == 't');
 
-	opt_fail_only = tf;;
+	opt_fail_only = tf;
 
 	strcpy(io_buffer, message(MSG_FOO, tf, NULL, isjson));
 }
