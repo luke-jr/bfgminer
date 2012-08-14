@@ -339,16 +339,17 @@ void init_adl(int nDevs)
 		}
 	}
 
-	for (gpu = 0; gpu < devices; gpu++) {
+	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct gpu_adl *ga;
 		int iAdapterIndex;
 		int lpAdapterID;
 		ADLODPerformanceLevels *lpOdPerformanceLevels;
-		int lev;
+		int lev, adlGpu;
 
-		i = vadapters[gpu].id;
+		adlGpu = gpus[gpu].virtual_adl;
+		i = vadapters[adlGpu].id;
 		iAdapterIndex = lpInfo[i].iAdapterIndex;
-		gpus[gpu].virtual_gpu = vadapters[gpu].virtual_gpu;
+		gpus[gpu].virtual_gpu = vadapters[adlGpu].virtual_gpu;
 
 		/* Get unique identifier of the adapter, 0 means not AMD */
 		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
@@ -358,11 +359,11 @@ void init_adl(int nDevs)
 		}
 
 		if (gpus[gpu].deven == DEV_DISABLED) {
-			gpus[i].gpu_engine =
-			gpus[i].gpu_memclock =
-			gpus[i].gpu_vddc =
-			gpus[i].gpu_fan =
-			gpus[i].gpu_powertune = 0;
+			gpus[gpu].gpu_engine =
+			gpus[gpu].gpu_memclock =
+			gpus[gpu].gpu_vddc =
+			gpus[gpu].gpu_fan =
+			gpus[gpu].gpu_powertune = 0;
 			continue;
 		}
 
