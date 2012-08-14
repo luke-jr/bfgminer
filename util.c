@@ -705,3 +705,9 @@ void nmsleep(unsigned int msecs)
 		ret = nanosleep(&twait, &tleft);
 	} while (ret == -1 && errno == EINTR);
 }
+
+/* Returns the microseconds difference between end and start times as a double */
+double us_tdiff(struct timeval *end, struct timeval *start)
+{
+	return end->tv_sec * 1000000 + end->tv_usec - start->tv_sec * 1000000 - start->tv_usec;
+}
