@@ -1367,7 +1367,7 @@ static int pool_staged(struct pool *pool)
 #ifdef HAVE_CURSES
 WINDOW *mainwin, *statuswin, *logwin;
 #endif
-double total_secs = 0.1;
+double total_secs = 1.0;
 static char statusline[256];
 /* logstart is where the log window should start */
 static int devcursor, logstart, logcursor;
@@ -1508,7 +1508,7 @@ static void curses_print_devstatus(int thr_id)
 	if (devcursor + cgpu->cgminer_id > LINES - 2)
 		return;
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility = cgpu->accepted / total_secs * 60;
 
 	wmove(statuswin,devcursor + cgpu->cgminer_id, 0);
 	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
@@ -1889,7 +1889,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		 * be stale due to networking delays.
 		 */
 		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && enabled_pools > 1) {
-			double utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+			double utility = total_accepted / total_secs * 60;
 
 			if (pool->seq_rejects > utility * 3) {
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
@@ -1902,7 +1902,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		}
 	}
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility = cgpu->accepted / total_secs * 60;
 
 	if (!opt_realquiet)
 		print_status(thr_id);
@@ -3686,7 +3686,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
-	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+	utility = total_accepted / total_secs * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	displayed_hashes = total_mhashes_done / total_secs;
@@ -4875,7 +4875,7 @@ static void print_summary(void)
 	mins = (diff.tv_sec % 3600) / 60;
 	secs = diff.tv_sec % 60;
 
-	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+	utility = total_accepted / total_secs * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	applog(LOG_WARNING, "\nSummary of runtime statistics:\n");
@@ -4893,8 +4893,7 @@ static void print_summary(void)
 		mhash_base = false;
 	}
 
-	if (total_secs)
-		applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", displayed_hashes, mhash_base? "Mega" : "Kilo");
+	applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", displayed_hashes, mhash_base? "Mega" : "Kilo");
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
