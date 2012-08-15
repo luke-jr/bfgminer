@@ -343,6 +343,9 @@ void init_adl(int nDevs)
 		}
 	}
 
+	if (devices > nDevs)
+		devices = nDevs;
+
 	for (gpu = 0; gpu < devices; gpu++) {
 		struct gpu_adl *ga;
 		int iAdapterIndex;
