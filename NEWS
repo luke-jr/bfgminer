@@ -6,8 +6,8 @@ minimise the chance of interleaved responses.
 allowing it to parallel manual changes from the menu as well.
 - Increase the timeout on bitforce as per Paul Sheppard's suggestion to account
 for throttling + work time + excess.
-- Fix ADL gpu-map not working when there are more ADL devices than openCL. Patch
-supplied and tested by Nite69.
+- Fix ADL gpu-map not working when there are more ADL devices than openCL.
+Initial patch supplied by Nite69. Modified to suit.
 - Windows' timer resolution is limited to 15ms accuracy. This was breaking
 dynamic intensity since it tries to measure below this. Since we are repeatedly
 sampling similar timeframes, we can average the gpu_us result over 5 different
