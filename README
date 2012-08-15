@@ -838,9 +838,8 @@ mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
 
 Q: How do I get my BFL device to auto-recognise?
-A: They are only automatically recognised on linux, and no option needs to be
-passed to them. The only thing that needs to be done is to load the driver for
-them, which on linux would require:
+A: The only thing that needs to be done is to load the driver for them, which
+on linux would require:
 sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
 
 
