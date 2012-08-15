@@ -2391,9 +2391,10 @@ static void *get_work_thread(void *userdata)
 
 	if (!ts)
 		lagging = true;
-	else if (((cs || cq >= opt_queue) && ts >= maxq) ||
-		 ((cs || cq) && tq >= maxq) || clone_available())
-			goto out;
+	if (((cs >= opt_queue || cq >= opt_queue) && ts >= maxq) ||
+	    ((cs >= opt_queue || cq >= opt_queue) && tq >= maxq) ||
+	    clone_available())
+		goto out;
 
 	ret_work = make_work();
 	if (wc->thr)
