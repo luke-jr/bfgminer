@@ -2679,6 +2679,12 @@ void switch_pools(struct pool *selected)
 	pool = currentpool;
 	mutex_unlock(&control_lock);
 
+	/* Set the lagging flag to avoid pool not providing work fast enough
+	 * messages in failover only mode since  we have to get all fresh work
+	 * as in restart_threads */
+	if (opt_fail_only)
+		pool_tset(pool, &pool->lagging);
+
 	if (pool != last_pool)
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
 
