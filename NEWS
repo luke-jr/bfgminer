@@ -1,3 +1,33 @@
+Version 2.6.5 - August 15, 2012
+
+- Don't try to get bitforce temperature if we're polling for a result to
+minimise the chance of interleaved responses.
+- Set memory clock based on memdiff if present from with engine changes,
+allowing it to parallel manual changes from the menu as well.
+- Increase the timeout on bitforce as per Paul Sheppard's suggestion to account
+for throttling + work time + excess.
+- Fix ADL gpu-map not working when there are more ADL devices than openCL. Patch
+supplied and tested by Nite69.
+- Windows' timer resolution is limited to 15ms accuracy. This was breaking
+dynamic intensity since it tries to measure below this. Since we are repeatedly
+sampling similar timeframes, we can average the gpu_us result over 5 different
+values to get very fine precision.
+- Fix harmless unused warnings in scrypt.h.
+- api.c typo
+- API allow display/change failover-only setting
+- Check we are not lagging as well as there is enough work in getwork.
+- Minimise locking and unlocking when getting counts by reusing shared mutex
+lock functions.
+- Avoid getting more work if by the time the getwork thread is spawned we find
+ourselves with enough work.
+- The bitforce buffer is cleared and hw error count incremented on return from a
+failed send_work already so no need to do it within the send_work function.
+- miner.php allow a custom page section to select all fields with '*' - e.g. to
+create a STATS section on a custom page
+- Escape " and \ when writing json config file
+- miner.php optional single rig totals (on by default)
+
+
 Version 2.6.4 - August 7, 2012
 
 - Convert the serial autodetect functions to use int instead of char to
