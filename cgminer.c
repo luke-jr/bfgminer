@@ -2680,7 +2680,12 @@ int restart_wait(unsigned int mstime)
 	
 static void restart_threads(void)
 {
+	struct pool *cp = current_pool();
 	int i;
+
+	/* Artificially set the lagging flag to avoid pool not providing work
+	 * fast enough  messages after every long poll */
+	pool_tset(cp, &cp->lagging);
 
 	/* Discard staged work that is now stale */
 	discard_stale();
