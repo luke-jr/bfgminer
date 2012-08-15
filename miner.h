@@ -735,6 +735,7 @@ struct pool {
 	bool submit_old;
 	bool removed;
 	bool lp_started;
+	bool currently_rolling;
 
 	char *hdr_path;
 	char *lp_url;
