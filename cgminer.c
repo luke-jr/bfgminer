@@ -2427,7 +2427,7 @@ static void *get_work_thread(void *userdata)
 		}
 		fail_pause = opt_fail_pause;
 
-		dec_queued(pool);
+		ret_work->queued = true;
 	}
 
 	applog(LOG_DEBUG, "Pushing work to requesting thread");
@@ -2890,7 +2890,12 @@ static int tv_sort(struct work *worka, struct work *workb)
 
 static bool hash_push(struct work *work)
 {
-	bool rc = true;
+	bool rc = true, dec = false;
+
+	if (work->queued) {
+		work->queued = false;
+		dec = true;
+	}
 
 	mutex_lock(stgd_lock);
 	if (likely(!getq->frozen)) {
@@ -2901,6 +2906,10 @@ static bool hash_push(struct work *work)
 		rc = false;
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
+
+	if (dec)
+		dec_queued(work->pool);
+
 	return rc;
 }
 
