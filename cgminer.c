@@ -2289,9 +2289,27 @@ static bool stale_work(struct work *work, bool share);
 
 static inline bool should_roll(struct work *work)
 {
-	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE)
-		return true;
-	return false;
+	struct timeval now;
+	double share_time;
+	time_t expiry;
+
+	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE)
+		return false;
+
+	share_time = total_secs * mining_threads / (total_accepted + 1);
+	if (work->rolltime > opt_scantime)
+		expiry = work->rolltime;
+	else
+		expiry = opt_scantime;
+	expiry -= share_time;
+
+	/* We shouldn't roll if we're unlikely to get one shares' duration
+	 * work out of doing so */
+	gettimeofday(&now, NULL);
+	if (now.tv_sec - work->tv_staged.tv_sec > expiry)
+		return false;
+	
+	return true;
 }
 
 /* Limit rolls to 7000 to not beyond 2 hours in the future where bitcoind will
@@ -2467,21 +2485,13 @@ static bool stale_work(struct work *work, bool share)
 	struct pool *pool;
 	int getwork_delay;
 
-	if (share) {
-		/* Technically the rolltime should be correct but some pools
-		 * advertise a broken expire= that is lower than a meaningful
-		 * scantime */
-		if (work->rolltime > opt_scantime)
-			work_expiry = work->rolltime;
-		else
-			work_expiry = opt_expiry;
-	} else {
-		/* Don't keep rolling work right up to the expiration */
-		if (work->rolltime > opt_scantime)
-			work_expiry = (work->rolltime - opt_scantime) * 2 / 3 + opt_scantime;
-		else /* Shouldn't happen unless someone increases scantime */
-			work_expiry = opt_scantime;
-	}
+	/* Technically the rolltime should be correct but some pools
+	 * advertise a broken expire= that is lower than a meaningful
+	 * scantime */
+	if (work->rolltime > opt_scantime)
+		work_expiry = work->rolltime;
+	else
+		work_expiry = opt_expiry;
 
 	pool = work->pool;
 	/* Factor in the average getwork delay of this pool, rounding it up to
