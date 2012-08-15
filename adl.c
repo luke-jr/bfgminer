@@ -789,6 +789,7 @@ static void get_enginerange(int gpu, int *imin, int *imax)
 int set_engineclock(int gpu, int iEngineClock)
 {
 	ADLODPerformanceLevels *lpOdPerformanceLevels;
+	struct cgpu_info *cgpu;
 	int i, lev, ret = 1;
 	struct gpu_adl *ga;
 
@@ -830,6 +831,11 @@ int set_engineclock(int gpu, int iEngineClock)
 	ga->managed = true;
 out:
 	unlock_adl();
+
+	cgpu = &gpus[gpu];
+	if (cgpu->gpu_memdiff)
+		set_memoryclock(gpu, iEngineClock / 100 + cgpu->gpu_memdiff);
+
 	return ret;
 }
 
@@ -1195,8 +1201,6 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 			newengine /= 100;
 			applog(LOG_INFO, "Setting GPU %d engine clock to %d", gpu, newengine);
 			set_engineclock(gpu, newengine);
-			if (cgpu->gpu_memdiff)
-				set_memoryclock(gpu, newengine + cgpu->gpu_memdiff);
 		}
 	}
 	ga->lasttemp = temp;
