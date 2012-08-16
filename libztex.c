@@ -607,16 +607,17 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 
 int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)
 {
-	int cnt, ret;
+	int cnt, ret, len;
 
 	if (ztex == NULL || ztex->hndl == NULL)
 		return 0;
-	ret = 44;
+	ret = 44; len = 0;
 	while (ret > 0) {
-		cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x80, 0, 0, sendbuf, ret, 1000);
-		if (cnt >= 0)
+		cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x80, 0, 0, sendbuf + len, ret, 1000);
+		if (cnt >= 0) {
 			ret -= cnt;
-		else
+			len += cnt;
+		} else
 			if (cnt != LIBUSB_ERROR_TIMEOUT)
 				break;
 	}
@@ -628,8 +629,8 @@ int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)
 
 int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data nonces[]) {
 	int bufsize = 12 + ztex->extraSolutions * 4;
+	int cnt, i, j, ret, len;
 	unsigned char *rbuf;
-	int cnt, i, j, ret;
 
 	if (ztex->hndl == NULL)
 		return 0;
@@ -639,12 +640,13 @@ int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data n
 		applog(LOG_ERR, "%s: Failed to allocate memory for reading nonces", ztex->repr);
 		return 0;
 	}
-	ret = bufsize * ztex->numNonces;
+	ret = bufsize * ztex->numNonces; len = 0;
 	while (ret > 0) {
-		cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x81, 0, 0, rbuf, ret, 1000);
-		if (cnt >= 0)
+		cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x81, 0, 0, rbuf + len, ret, 1000);
+		if (cnt >= 0) {
 			ret -= cnt;
-		else
+			len += cnt;
+		} else
 			if (cnt != LIBUSB_ERROR_TIMEOUT)
 				break;
 	}
