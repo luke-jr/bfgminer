@@ -2409,7 +2409,7 @@ static void *get_work_thread(void *userdata)
 	mutex_unlock(stgd_lock);
 
 	if (((cs >= opt_queue || cq >= opt_queue) && ts >= maxq) ||
-	    ((cs >= opt_queue || cq >= opt_queue) && tq >= maxq && cq < maxq) ||
+	    ((cs >= opt_queue || cq >= opt_queue) && tq >= maxq && ((cq < maxq && !opt_fail_only) || opt_fail_only)) ||
 	    clone_available())
 		goto out;
 
