@@ -2290,18 +2290,16 @@ static bool stale_work(struct work *work, bool share);
 static inline bool should_roll(struct work *work)
 {
 	struct timeval now;
-	double share_time;
 	time_t expiry;
 
 	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE)
 		return false;
 
-	share_time = total_secs * mining_threads / (total_accepted + 1);
 	if (work->rolltime > opt_scantime)
 		expiry = work->rolltime;
 	else
 		expiry = opt_scantime;
-	expiry -= share_time;
+	expiry = expiry * 2 / 3;
 
 	/* We shouldn't roll if we're unlikely to get one shares' duration
 	 * work out of doing so */
