@@ -143,6 +143,174 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 	return found;
 }
 
+// This code is purely for debugging but is very useful for that
+// It also took quite a bit of effort so I left it in
+// #define TERMIOS_DEBUG 1
+// Here to include it at compile time
+// It's off by default
+#ifndef WIN32
+#ifdef TERMIOS_DEBUG
+
+#define BITSSET "Y"
+#define BITSNOTSET "N"
+
+int tiospeed(speed_t speed)
+{
+	switch (speed) {
+	case B0:
+		return 0;
+	case B50:
+		return 50;
+	case B75:
+		return 75;
+	case B110:
+		return 110;
+	case B134:
+		return 134;
+	case B150:
+		return 150;
+	case B200:
+		return 200;
+	case B300:
+		return 300;
+	case B600:
+		return 600;
+	case B1200:
+		return 1200;
+	case B1800:
+		return 1800;
+	case B2400:
+		return 2400;
+	case B4800:
+		return 4800;
+	case B9600:
+		return 9600;
+	case B19200:
+		return 19200;
+	case B38400:
+		return 38400;
+	case B57600:
+		return 57600;
+	case B115200:
+		return 115200;
+	case B230400:
+		return 230400;
+	case B460800:
+		return 460800;
+	case B500000:
+		return 500000;
+	case B576000:
+		return 576000;
+	case B921600:
+		return 921600;
+	case B1000000:
+		return 1000000;
+	case B1152000:
+		return 1152000;
+	case B1500000:
+		return 1500000;
+	case B2000000:
+		return 2000000;
+	case B2500000:
+		return 2500000;
+	case B3000000:
+		return 3000000;
+	case B3500000:
+		return 3500000;
+	case B4000000:
+		return 4000000;
+	default:
+		return -1;
+	}
+}
+
+void termios_debug(const char *devpath, struct termios *my_termios, const char *msg)
+{
+	applog(LOG_DEBUG, "TIOS: Open %s attributes %s: ispeed=%d ospeed=%d",
+			devpath, msg, tiospeed(cfgetispeed(my_termios)), tiospeed(cfgetispeed(my_termios)));
+
+#define ISSETI(b) ((my_termios->c_iflag | (b)) ? BITSSET : BITSNOTSET)
+
+	applog(LOG_DEBUG, "TIOS:  c_iflag: IGNBRK=%s BRKINT=%s IGNPAR=%s PARMRK=%s INPCK=%s ISTRIP=%s INLCR=%s IGNCR=%s ICRNL=%s IUCLC=%s IXON=%s IXANY=%s IOFF=%s IMAXBEL=%s IUTF8=%s",
+			ISSETI(IGNBRK), ISSETI(BRKINT), ISSETI(IGNPAR), ISSETI(PARMRK),
+			ISSETI(INPCK), ISSETI(ISTRIP), ISSETI(INLCR), ISSETI(IGNCR),
+			ISSETI(ICRNL), ISSETI(IUCLC), ISSETI(IXON), ISSETI(IXANY),
+			ISSETI(IXOFF), ISSETI(IMAXBEL), ISSETI(IUTF8));
+
+#define ISSETO(b) ((my_termios->c_oflag | (b)) ? BITSSET : BITSNOTSET)
+#define VALO(b) (my_termios->c_oflag | (b))
+
+	applog(LOG_DEBUG, "TIOS:  c_oflag: OPOST=%s OLCUC=%s ONLCR=%s OCRNL=%s ONOCR=%s ONLRET=%s OFILL=%s OFDEL=%s NLDLY=%d CRDLY=%d TABDLY=%d BSDLY=%d VTDLY=%d FFDLY=%d",
+			ISSETO(OPOST), ISSETO(OLCUC), ISSETO(ONLCR), ISSETO(OCRNL),
+			ISSETO(ONOCR), ISSETO(ONLRET), ISSETO(OFILL), ISSETO(OFDEL),
+			VALO(NLDLY), VALO(CRDLY), VALO(TABDLY), VALO(BSDLY),
+			VALO(VTDLY), VALO(FFDLY));
+
+#define ISSETC(b) ((my_termios->c_cflag | (b)) ? BITSSET : BITSNOTSET)
+#define VALC(b) (my_termios->c_cflag | (b))
+
+	applog(LOG_DEBUG, "TIOS:  c_cflag: CBAUDEX=%s CSIZE=%d CSTOPB=%s CREAD=%s PARENB=%s PARODD=%s HUPCL=%s CLOCAL=%s"
+#ifdef LOBLK
+			" LOBLK=%s"
+#endif
+			" CMSPAR=%s CRTSCTS=%s",
+			ISSETC(CBAUDEX), VALC(CSIZE), ISSETC(CSTOPB), ISSETC(CREAD),
+			ISSETC(PARENB), ISSETC(PARODD), ISSETC(HUPCL), ISSETC(CLOCAL),
+#ifdef LOBLK
+			ISSETC(LOBLK),
+#endif
+			ISSETC(CMSPAR), ISSETC(CRTSCTS));
+
+#define ISSETL(b) ((my_termios->c_lflag | (b)) ? BITSSET : BITSNOTSET)
+
+	applog(LOG_DEBUG, "TIOS:  c_lflag: ISIG=%s ICANON=%s XCASE=%s ECHO=%s ECHOE=%s ECHOK=%s ECHONL=%s ECHOCTL=%s ECHOPRT=%s ECHOKE=%s"
+#ifdef DEFECHO
+			" DEFECHO=%s"
+#endif
+			" FLUSHO=%s NOFLSH=%s TOSTOP=%s PENDIN=%s IEXTEN=%s",
+			ISSETL(ISIG), ISSETL(ICANON), ISSETL(XCASE), ISSETL(ECHO),
+			ISSETL(ECHOE), ISSETL(ECHOK), ISSETL(ECHONL), ISSETL(ECHOCTL),
+			ISSETL(ECHOPRT), ISSETL(ECHOKE),
+#ifdef DEFECHO
+			ISSETL(DEFECHO),
+#endif
+			ISSETL(FLUSHO), ISSETL(NOFLSH), ISSETL(TOSTOP), ISSETL(PENDIN),
+			ISSETL(IEXTEN));
+
+#define VALCC(b) (my_termios->c_cc[b])
+	applog(LOG_DEBUG, "TIOS:  c_cc: VINTR=0x%02x VQUIT=0x%02x VERASE=0x%02x VKILL=0x%02x VEOF=0x%02x VMIN=%u VEOL=0x%02x VTIME=%u VEOL2=0x%02x"
+#ifdef VSWTCH
+			" VSWTCH=0x%02x"
+#endif
+			" VSTART=0x%02x VSTOP=0x%02x VSUSP=0x%02x"
+#ifdef VDSUSP
+			" VDSUSP=0x%02x"
+#endif
+			" VLNEXT=0x%02x VWERASE=0x%02x VREPRINT=0x%02x VDISCARD=0x%02x"
+#ifdef VSTATUS
+			" VSTATUS=0x%02x"
+#endif
+			,
+			VALCC(VINTR), VALCC(VQUIT), VALCC(VERASE), VALCC(VKILL),
+			VALCC(VEOF), VALCC(VMIN), VALCC(VEOL), VALCC(VTIME),
+			VALCC(VEOL2),
+#ifdef VSWTCH
+			VALCC(VSWTCH),
+#endif
+			VALCC(VSTART), VALCC(VSTOP), VALCC(VSUSP),
+#ifdef VDSUSP
+			VALCC(VDSUSP),
+#endif
+			VALCC(VLNEXT), VALCC(VWERASE),
+			VALCC(VREPRINT), VALCC(VDISCARD)
+#ifdef VSTATUS
+			,VALCC(VSTATUS)
+#endif
+			);
+}
+#endif
+#endif
+
 int
 serial_open(const char*devpath, unsigned long baud, signed short timeout, bool purge)
 {
@@ -208,19 +376,24 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 
 	tcgetattr(fdDev, &my_termios);
 
+#ifdef TERMIOS_DEBUG
+	termios_debug(devpath, &my_termios, "before");
+#endif
+
 	switch (baud) {
 	case 0:
 		break;
 	case 57600:
-		cfsetispeed( &my_termios, B57600 );
-		cfsetospeed( &my_termios, B57600 );
+		cfsetispeed(&my_termios, B57600);
+		cfsetospeed(&my_termios, B57600);
 		break;
 	case 115200:
-		cfsetispeed( &my_termios, B115200 );
-		cfsetospeed( &my_termios, B115200 );
+		cfsetispeed(&my_termios, B115200);
+		cfsetospeed(&my_termios, B115200);
 		break;
 	// TODO: try some higher speeds with the Icarus and BFL to see
 	// if they support them and if setting them makes any difference
+	// N.B. B3000000 doesn't work on Icarus
 	default:
 		applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
 	}
@@ -239,7 +412,17 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 	my_termios.c_cc[VTIME] = (cc_t)timeout;
 	my_termios.c_cc[VMIN] = 0;
 
+#ifdef TERMIOS_DEBUG
+	termios_debug(devpath, &my_termios, "settings");
+#endif
+
 	tcsetattr(fdDev, TCSANOW, &my_termios);
+
+#ifdef TERMIOS_DEBUG
+	tcgetattr(fdDev, &my_termios);
+	termios_debug(devpath, &my_termios, "after");
+#endif
+
 	if (purge)
 		tcflush(fdDev, TCIOFLUSH);
 	return fdDev;
