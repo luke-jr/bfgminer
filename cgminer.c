@@ -2485,6 +2485,11 @@ static bool stale_work(struct work *work, bool share)
 	struct pool *pool;
 	int getwork_delay;
 
+	if (work->work_block != work_block) {
+		applog(LOG_DEBUG, "Work stale due to block mismatch");
+		return true;
+	}
+
 	/* Technically the rolltime should be correct but some pools
 	 * advertise a broken expire= that is lower than a meaningful
 	 * scantime */
@@ -2504,11 +2509,6 @@ static bool stale_work(struct work *work, bool share)
 	gettimeofday(&now, NULL);
 	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry) {
 		applog(LOG_DEBUG, "Work stale due to expiry");
-		return true;
-	}
-
-	if (work->work_block != work_block) {
-		applog(LOG_DEBUG, "Work stale due to block mismatch");
 		return true;
 	}
 
