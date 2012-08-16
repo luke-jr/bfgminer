@@ -188,7 +188,7 @@ pthread_mutex_t control_lock;
 int hw_errors;
 int total_accepted, total_rejected;
 int total_getworks, total_stale, total_discarded;
-static int total_queued;
+static int total_queued, staged_rollable;
 unsigned int new_blocks;
 static unsigned int work_block;
 unsigned int found_blocks;
@@ -2359,6 +2359,9 @@ static bool clone_available(void)
 	struct work *work, *tmp;
 	bool cloned = false;
 
+	if (!staged_rollable)
+		goto out;
+
 	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (can_roll(work) && should_roll(work)) {
@@ -2378,6 +2381,7 @@ static bool clone_available(void)
 	}
 	mutex_unlock(stgd_lock);
 
+out:
 	return cloned;
 }
 
@@ -2896,6 +2900,11 @@ static int tv_sort(struct work *worka, struct work *workb)
 	return worka->tv_staged.tv_sec - workb->tv_staged.tv_sec;
 }
 
+static bool work_rollable(struct work *work)
+{
+	return (!work->clone && work->rolltime);
+}
+
 static bool hash_push(struct work *work)
 {
 	bool rc = true, dec = false;
@@ -2906,6 +2915,8 @@ static bool hash_push(struct work *work)
 	}
 
 	mutex_lock(stgd_lock);
+	if (work_rollable(work))
+		staged_rollable++;
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
 		work->pool->staged++;
@@ -3959,6 +3970,8 @@ static struct work *hash_pop(const struct timespec *abstime)
 		work = staged_work;
 		HASH_DEL(staged_work, work);
 		work->pool->staged--;
+		if (work_rollable(work))
+			staged_rollable--;
 	}
 	mutex_unlock(stgd_lock);
 
