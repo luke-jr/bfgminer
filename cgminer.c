@@ -3957,15 +3957,24 @@ static bool queue_request(struct thr_info *thr, bool needed)
 
 static struct work *hash_pop(const struct timespec *abstime)
 {
-	struct work *work = NULL;
-	int rc = 0;
+	struct work *work = NULL, *tmp;
+	int rc = 0, hc;
 
 	mutex_lock(stgd_lock);
 	while (!getq->frozen && !HASH_COUNT(staged_work) && !rc)
 		rc = pthread_cond_timedwait(&getq->cond, stgd_lock, abstime);
 
-	if (HASH_COUNT(staged_work)) {
-		work = staged_work;
+	hc = HASH_COUNT(staged_work);
+
+	if (likely(hc)) {
+		/* Find clone work if possible, to allow masters to be reused */
+		if (hc > staged_rollable) {
+			HASH_ITER(hh, staged_work, work, tmp) {
+				if (!work_rollable(work))
+					break;
+			}
+		} else
+			work = staged_work;
 		HASH_DEL(staged_work, work);
 		work->pool->staged--;
 		if (work_rollable(work))
@@ -4110,7 +4119,6 @@ retry:
 			pool_resus(pool);
 	}
 
-	work_heap = clone_work(work_heap);
 	memcpy(work, work_heap, sizeof(struct work));
 	free_work(work_heap);
 
