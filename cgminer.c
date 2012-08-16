@@ -2630,6 +2630,8 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
+static bool queue_request(struct thr_info *thr, bool needed);
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -2719,8 +2721,6 @@ static void discard_work(struct work *work)
 	free_work(work);
 }
 
-bool queue_request(struct thr_info *thr, bool needed);
-
 static void discard_stale(void)
 {
 	struct work *work, *tmp;
@@ -2780,8 +2780,6 @@ static void restart_threads(void)
 
 	/* Discard staged work that is now stale */
 	discard_stale();
-
-	queue_request(NULL, true);
 
 	for (i = 0; i < mining_threads; i++)
 		thr_info[i].work_restart = true;
@@ -3930,7 +3928,7 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-bool queue_request(struct thr_info *thr, bool needed)
+static bool queue_request(struct thr_info *thr, bool needed)
 {
 	struct workio_cmd *wc;
 
@@ -4370,22 +4368,6 @@ void *miner_thread(void *userdata)
 			}
 
 			timersub(&tv_end, &tv_workstart, &wdiff);
-			if (!requested) {
-				if (wdiff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
-					thread_reportout(mythr);
-					if (unlikely(!queue_request(mythr, false))) {
-						applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
-
-						cgpu->device_last_not_well = time(NULL);
-						cgpu->device_not_well_reason = REASON_THREAD_FAIL_QUEUE;
-						cgpu->thread_fail_queue_count++;
-
-						goto out;
-					}
-					thread_reportin(mythr);
-					requested = true;
-				}
-			}
 
 			if (unlikely((long)sdiff.tv_sec < cycle)) {
 				int mult;
@@ -4720,8 +4702,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		sleep(interval);
 
 		discard_stale();
-
-		queue_request(NULL, false);
 
 		hashmeter(-1, &zero_tv, 0);
 
