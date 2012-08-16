@@ -2392,7 +2392,6 @@ static void *get_work_thread(void *userdata)
 	struct pool *pool = current_pool();
 	struct curl_ent *ce = NULL;
 	struct work *ret_work;
-	bool lagging = false;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
@@ -2409,8 +2408,6 @@ static void *get_work_thread(void *userdata)
 	ts = __total_staged();
 	mutex_unlock(stgd_lock);
 
-	if (!ts)
-		lagging = true;
 	if (((cs >= opt_queue || cq >= opt_queue) && ts >= maxq) ||
 	    ((cs >= opt_queue || cq >= opt_queue) && tq >= maxq) ||
 	    clone_available())
@@ -2425,6 +2422,10 @@ static void *get_work_thread(void *userdata)
 	if (opt_benchmark)
 		get_benchmark_work(ret_work);
 	else {
+		bool lagging;
+
+		if (ts <= opt_queue)
+			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 		inc_queued(pool);
 		
