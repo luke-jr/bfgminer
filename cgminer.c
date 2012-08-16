@@ -2411,7 +2411,7 @@ static void *get_work_thread(void *userdata)
 	if (ts >= maxq)
 		goto out;
 
-	if (ts >= opt_queue && tq >= maxq)
+	if (ts >= opt_queue && tq >= maxq - 1)
 		goto out;
 
 	if (clone_available())
@@ -2426,9 +2426,9 @@ static void *get_work_thread(void *userdata)
 	if (opt_benchmark)
 		get_benchmark_work(ret_work);
 	else {
-		bool lagging;
+		bool lagging = false;
 
-		if (!ts)
+		if (ts <= opt_queue)
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 		inc_queued(pool);
@@ -4275,8 +4275,6 @@ void *miner_thread(void *userdata)
 	int64_t hashes_done = 0;
 	int64_t hashes;
 	struct work *work = make_work();
-	const time_t request_interval = opt_scantime * 2 / 3 ? : 1;
-	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = false;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
