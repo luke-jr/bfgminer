@@ -2424,7 +2424,7 @@ static void *get_work_thread(void *userdata)
 	else {
 		bool lagging;
 
-		if (ts <= opt_queue)
+		if (!ts)
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 		inc_queued(pool);
