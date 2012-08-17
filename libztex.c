@@ -618,8 +618,7 @@ int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)
 			ret -= cnt;
 			len += cnt;
 		} else
-			if (cnt != LIBUSB_ERROR_TIMEOUT)
-				break;
+			break;
 	}
 	if (unlikely(cnt < 0))
 		applog(LOG_ERR, "%s: Failed sendHashData with err %d", ztex->repr, cnt);
@@ -647,8 +646,7 @@ int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data n
 			ret -= cnt;
 			len += cnt;
 		} else
-			if (cnt != LIBUSB_ERROR_TIMEOUT)
-				break;
+			break;
 	}
 
 	if (unlikely(cnt < 0)) {
