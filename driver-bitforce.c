@@ -346,6 +346,11 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (!fdDev)
 		return false;
 
+	/* Do not try to get the temperature if we're polling for a result to
+	 * minimise the change of interleaved results */
+	if (bitforce->polling)
+		return true;
+
 	/* It is not critical getting temperature so don't get stuck if  we
 	 * can't grab the mutex here */
 	if (mutex_trylock(&bitforce->device_mutex))
@@ -641,7 +646,11 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		bitforce->wait_ms = sleep_time;
 	}
 
-	ret = bitforce_get_result(thr, work);
+	{
+		bitforce->polling = true;
+		ret = bitforce_get_result(thr, work);
+		bitforce->polling = false;
+	}
 
 	if (ret == -1) {
 commerr:
