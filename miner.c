@@ -70,7 +70,7 @@ struct workio_cmd {
 	enum workio_commands	cmd;
 	struct thr_info		*thr;
 	struct work		*work;
-	bool			lagging;
+	bool			needed;
 
 	struct list_head list;
 };
@@ -2112,7 +2112,7 @@ static inline struct pool *select_pool(bool lagging)
 
 	cp = current_pool();
 
-	if (pool_strategy != POOL_LOADBALANCE && !lagging)
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
 		pool = cp;
 	else
 		pool = NULL;
@@ -2175,6 +2175,8 @@ retry:
 	rc = work_decode(json_object_get(val, "result"), work);
 	if (!rc && retries < 3)
 		goto retry;
+
+	pool->currently_rolling = !!work->rolltime;
 
 	gettimeofday(&tv_end, NULL);
 	timersub(&tv_end, &tv_start, &tv_elapsed);
@@ -2469,10 +2471,20 @@ static int global_queued(void)
 	return ret;
 }
 
-static bool enough_work(void)
+static void *get_work_thread(void *userdata)
 {
+	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool = current_pool();
+	struct curl_ent *ce = NULL;
+	struct work *ret_work;
+	bool lagging = false;
+	int failures = 0;
+
+	pthread_detach(pthread_self());
+	rename_thr("bfg-get_work");
+
+	applog(LOG_DEBUG, "Creating extra get work thread");
 
 	mutex_lock(&qd_lock);
 	cq = __pool_queued(pool);
@@ -2484,28 +2496,9 @@ static bool enough_work(void)
 	ts = __total_staged();
 	mutex_unlock(stgd_lock);
 
-	if (((cs || cq >= opt_queue) && ts >= maxq) ||
-	    ((cs || cq) && tq >= maxq))
-		return true;
-	return false;
-}
-
-/* ce and pool may appear uninitialised at push_curl_entry, but they're always
- * set when we don't have opt_benchmark enabled */
-static void *get_work_thread(void *userdata)
-{
-	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct pool * uninitialised_var(pool);
-	struct curl_ent *ce = NULL;
-	struct work *ret_work;
-	int failures = 0;
-
-	pthread_detach(pthread_self());
-	rename_thr("bfg-get_work");
-
-	applog(LOG_DEBUG, "Creating extra get work thread");
-
-	if (!wc->lagging && enough_work())
+	if (!ts)
+		lagging = true;
+	else if (((cs || cq >= opt_queue) && ts >= maxq) || ((cs || cq) && tq >= maxq))
 		goto out;
 
 	ret_work = make_work();
@@ -2517,7 +2510,7 @@ static void *get_work_thread(void *userdata)
 	if (opt_benchmark)
 		get_benchmark_work(ret_work);
 	else {
-		pool = ret_work->pool = select_pool(wc->lagging);
+		pool = ret_work->pool = select_pool(lagging);
 		inc_queued(pool);
 		
 		ce = pop_curl_entry(pool);
@@ -4225,33 +4218,7 @@ static void pool_resus(struct pool *pool)
 
 bool queue_request(struct thr_info *thr, bool needed)
 {
-	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
-	struct pool *pool = current_pool();
 	struct workio_cmd *wc;
-	bool lag = false;
-
-	mutex_lock(&qd_lock);
-	cq = __pool_queued(pool);
-	tq = __global_queued();
-	mutex_unlock(&qd_lock);
-
-	mutex_lock(stgd_lock);
-	cs = __pool_staged(pool);
-	ts = __total_staged();
-	mutex_unlock(stgd_lock);
-
-	if (needed && cq >= maxq && !ts && !opt_fail_only) {
-		/* If we're queueing work faster than we can stage it, consider
-		 * the system lagging and allow work to be gathered from
-		 * another pool if possible */
-		lag = true;
-	} else {
-		/* Test to make sure we have enough work for pools without rolltime
-		 * and enough original work for pools with rolltime */
-		if (((cs || cq >= opt_queue) && ts >= maxq) ||
-		    ((cs || cq) && tq >= maxq))
-			return true;
-	}
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -4262,7 +4229,7 @@ bool queue_request(struct thr_info *thr, bool needed)
 
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
-	wc->lagging = lag;
+	wc->needed = needed;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
