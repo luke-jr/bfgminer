@@ -5107,24 +5107,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
-/* Work is sorted according to age, so discard the oldest work items, leaving
- * only 1/3 more staged work item than mining threads */
-static void age_work(void)
-{
-	int discarded = 0, maxq = (mining_threads + opt_queue) * 4 / 3;
-
-	while (total_staged() > maxq) {
-		struct work *work = hash_pop(NULL);
-
-		if (unlikely(!work))
-			break;
-		discard_work(work);
-		discarded++;
-	}
-	if (discarded)
-		applog(LOG_DEBUG, "Aged %d work items", discarded);
-}
-
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
@@ -5151,8 +5133,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		sleep(interval);
 
 		discard_stale();
-
-		age_work();
 
 		queue_request(NULL, false);
 
