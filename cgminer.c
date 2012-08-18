@@ -1334,32 +1334,12 @@ void decay_time(double *f, double fadd)
 		*f = (fadd + *f * 0.58) / 1.58;
 }
 
-static int __total_staged(void)
-{
-	return HASH_COUNT(staged_work);
-}
-
 static int total_staged(void)
 {
 	int ret;
 
 	mutex_lock(stgd_lock);
-	ret = __total_staged();
-	mutex_unlock(stgd_lock);
-	return ret;
-}
-
-static int __pool_staged(struct pool *pool)
-{
-	return pool->staged;
-}
-
-static int pool_staged(struct pool *pool)
-{
-	int ret;
-
-	mutex_lock(stgd_lock);
-	ret = pool->staged;
+	ret = HASH_COUNT(staged_work);
 	mutex_unlock(stgd_lock);
 	return ret;
 }
@@ -2232,42 +2212,18 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 
 /* This is overkill, but at least we'll know accurately how much work is
  * queued to prevent ever being left without work */
-static void inc_queued(struct pool *pool)
+static void inc_queued(void)
 {
-	if (unlikely(!pool))
-		return;
-
 	mutex_lock(&qd_lock);
-	pool->queued++;
 	total_queued++;
 	mutex_unlock(&qd_lock);
 }
 
-static void dec_queued(struct pool *pool)
+static void dec_queued(void)
 {
-	if (unlikely(!pool))
-		return;
-
 	mutex_lock(&qd_lock);
-	pool->queued--;
 	total_queued--;
 	mutex_unlock(&qd_lock);
-}
-
-static int __pool_queued(struct pool *pool)
-{
-	return pool->queued;
-}
-
-static int current_queued(void)
-{
-	struct pool *pool = current_pool();
-	int ret;
-
-	mutex_lock(&qd_lock);
-	ret = __pool_queued(pool);
-	mutex_unlock(&qd_lock);
-	return ret;
 }
 
 static int __global_queued(void)
@@ -2388,7 +2344,7 @@ out:
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
+	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool = current_pool();
 	struct curl_ent *ce = NULL;
 	struct work *ret_work;
@@ -2398,15 +2354,8 @@ static void *get_work_thread(void *userdata)
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
-	mutex_lock(&qd_lock);
-	cq = __pool_queued(pool);
-	tq = __global_queued();
-	mutex_unlock(&qd_lock);
-
-	mutex_lock(stgd_lock);
-	cs = __pool_staged(pool);
-	ts = __total_staged();
-	mutex_unlock(stgd_lock);
+	tq = global_queued();
+	ts = total_staged();
 
 	if (ts >= maxq)
 		goto out;
@@ -2431,7 +2380,7 @@ static void *get_work_thread(void *userdata)
 		if (ts <= opt_queue)
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
-		inc_queued(pool);
+		inc_queued();
 		
 		ce = pop_curl_entry(pool);
 
@@ -2735,7 +2684,6 @@ static void discard_stale(void)
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work, false)) {
 			HASH_DEL(staged_work, work);
-			work->pool->staged--;
 			discard_work(work);
 			stale++;
 		}
@@ -2922,7 +2870,6 @@ static bool hash_push(struct work *work)
 		staged_rollable++;
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
-		work->pool->staged++;
 		HASH_SORT(staged_work, tv_sort);
 	} else
 		rc = false;
@@ -2930,7 +2877,7 @@ static bool hash_push(struct work *work)
 	mutex_unlock(stgd_lock);
 
 	if (dec)
-		dec_queued(work->pool);
+		dec_queued();
 
 	return rc;
 }
@@ -3981,7 +3928,6 @@ static struct work *hash_pop(const struct timespec *abstime)
 		} else
 			work = staged_work;
 		HASH_DEL(staged_work, work);
-		work->pool->staged--;
 		if (work_rollable(work))
 			staged_rollable--;
 	}
@@ -4039,15 +3985,14 @@ static struct work *clone_work(struct work *work)
 	return work;
 }
 
-static bool get_work(struct work *work, bool requested, struct thr_info *thr,
-		     const int thr_id)
+static bool get_work(struct work *work, struct thr_info *thr, const int thr_id)
 {
-	bool newreq = false, ret = false;
 	struct timespec abstime = {0, 0};
-	struct timeval now;
 	struct work *work_heap;
-	int failures = 0, cq;
+	struct timeval now;
 	struct pool *pool;
+	int failures = 0;
+	bool ret = false;
 
 	/* Tell the watchdog thread this thread is waiting on getwork and
 	 * should not be restarted */
@@ -4059,23 +4004,15 @@ static bool get_work(struct work *work, bool requested, struct thr_info *thr,
 		return true;
 	}
 
-	cq = current_queued();
 retry:
 	pool = current_pool();
-	if (!requested || cq < opt_queue) {
-		if (unlikely(!queue_request(thr, true))) {
-			applog(LOG_WARNING, "Failed to queue_request in get_work");
-			goto out;
-		}
-		newreq = true;
-	}
 
 	if (reuse_work(work)) {
 		ret = true;
 		goto out;
 	}
 
-	if (!pool->lagging && requested && !newreq && !pool_staged(pool) && cq >= mining_threads + opt_queue) {
+	if (!pool->lagging && !total_staged() && global_queued() >= mining_threads + opt_queue) {
 		struct cgpu_info *cgpu = thr->cgpu;
 		bool stalled = true;
 		int i;
@@ -4097,7 +4034,6 @@ retry:
 		}
 	}
 
-	newreq = requested = false;
 	gettimeofday(&now, NULL);
 	abstime.tv_sec = now.tv_sec + 60;
 
@@ -4275,7 +4211,6 @@ void *miner_thread(void *userdata)
 	int64_t hashes_done = 0;
 	int64_t hashes;
 	struct work *work = make_work();
-	bool requested = false;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -4301,12 +4236,11 @@ void *miner_thread(void *userdata)
 		mythr->work_restart = false;
 		if (api->free_work && likely(work->pool))
 			api->free_work(mythr, work);
-		if (unlikely(!get_work(work, requested, mythr, thr_id))) {
+		if (unlikely(!get_work(work, mythr, thr_id))) {
 			applog(LOG_ERR, "work retrieval failed, exiting "
 				"mining thread %d", thr_id);
 			break;
 		}
-		requested = false;
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
 		cgpu->max_hashes = 0;
