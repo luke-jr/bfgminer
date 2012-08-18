@@ -612,7 +612,6 @@ static void biforce_thread_enable(struct thr_info *thr)
 static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	unsigned int sleep_time;
 	int64_t ret;
 
 	if (!bitforce_send_work(thr, work)) {
@@ -622,29 +621,10 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 		goto commerr;
 	}
 
-	if (!bitforce->nonce_range) {
-		/* Initially wait 2/3 of the average cycle time so we can request more
-		work before full scan is up */
-		sleep_time = (2 * bitforce->sleep_ms) / 3;
-		if (noisy_stale_wait(sleep_time, work, true))
-			return 0;
+	if (noisy_stale_wait(bitforce->sleep_ms, work, true))
+		return 0;
 
-		bitforce->wait_ms = sleep_time;
-		queue_request(thr, false);
-
-		/* Now wait athe final 1/3rd; no bitforce should be finished by now */
-		sleep_time = bitforce->sleep_ms - sleep_time;
-		if (noisy_stale_wait(sleep_time, work, true))
-			return 0;
-
-		bitforce->wait_ms += sleep_time;
-	} else {
-		sleep_time = bitforce->sleep_ms;
-		if (noisy_stale_wait(sleep_time, work, true))
-			return 0;
-
-		bitforce->wait_ms = sleep_time;
-	}
+	bitforce->wait_ms = bitforce->sleep_ms;
 
 	{
 		bitforce->polling = true;
