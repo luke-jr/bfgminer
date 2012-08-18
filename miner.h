@@ -599,7 +599,6 @@ extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
 extern void thread_reportin(struct thr_info *thr);
-extern bool queue_request(struct thr_info *thr, bool needed);
 extern int restart_wait(unsigned int mstime);
 
 extern void kill_work(void);
@@ -795,6 +794,7 @@ struct work {
 	bool		stale;
 	bool		mandatory;
 	bool		block;
+	bool		queued;
 
 	unsigned int	work_block;
 	int		id;

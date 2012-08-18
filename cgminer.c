@@ -70,7 +70,7 @@ struct workio_cmd {
 	enum workio_commands	cmd;
 	struct thr_info		*thr;
 	struct work		*work;
-	bool			lagging;
+	bool			needed;
 };
 
 struct strategies strategies[] = {
@@ -188,7 +188,7 @@ pthread_mutex_t control_lock;
 int hw_errors;
 int total_accepted, total_rejected;
 int total_getworks, total_stale, total_discarded;
-static int total_queued;
+static int total_queued, staged_rollable;
 unsigned int new_blocks;
 static unsigned int work_block;
 unsigned int found_blocks;
@@ -1367,7 +1367,7 @@ static int pool_staged(struct pool *pool)
 #ifdef HAVE_CURSES
 WINDOW *mainwin, *statuswin, *logwin;
 #endif
-double total_secs = 0.1;
+double total_secs = 1.0;
 static char statusline[256];
 /* logstart is where the log window should start */
 static int devcursor, logstart, logcursor;
@@ -1508,7 +1508,7 @@ static void curses_print_devstatus(int thr_id)
 	if (devcursor + cgpu->cgminer_id > LINES - 2)
 		return;
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility = cgpu->accepted / total_secs * 60;
 
 	wmove(statuswin,devcursor + cgpu->cgminer_id, 0);
 	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
@@ -1889,7 +1889,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		 * be stale due to networking delays.
 		 */
 		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && enabled_pools > 1) {
-			double utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+			double utility = total_accepted / total_secs * 60;
 
 			if (pool->seq_rejects > utility * 3) {
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
@@ -1902,7 +1902,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		}
 	}
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu->utility = cgpu->accepted / total_secs * 60;
 
 	if (!opt_realquiet)
 		print_status(thr_id);
@@ -1933,7 +1933,7 @@ static inline struct pool *select_pool(bool lagging)
 
 	cp = current_pool();
 
-	if (pool_strategy != POOL_LOADBALANCE && !lagging)
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
 		pool = cp;
 	else
 		pool = NULL;
@@ -2285,10 +2285,118 @@ static int global_queued(void)
 	return ret;
 }
 
-static bool enough_work(void)
+static bool stale_work(struct work *work, bool share);
+
+static inline bool should_roll(struct work *work)
 {
+	struct timeval now;
+	time_t expiry;
+
+	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE)
+		return false;
+
+	if (work->rolltime > opt_scantime)
+		expiry = work->rolltime;
+	else
+		expiry = opt_scantime;
+	expiry = expiry * 2 / 3;
+
+	/* We shouldn't roll if we're unlikely to get one shares' duration
+	 * work out of doing so */
+	gettimeofday(&now, NULL);
+	if (now.tv_sec - work->tv_staged.tv_sec > expiry)
+		return false;
+	
+	return true;
+}
+
+/* Limit rolls to 7000 to not beyond 2 hours in the future where bitcoind will
+ * reject blocks as invalid. */
+static inline bool can_roll(struct work *work)
+{
+	return (work->pool && work->rolltime && !work->clone &&
+		work->rolls < 7000 && !stale_work(work, false));
+}
+
+static void roll_work(struct work *work)
+{
+	uint32_t *work_ntime;
+	uint32_t ntime;
+
+	work_ntime = (uint32_t *)(work->data + 68);
+	ntime = be32toh(*work_ntime);
+	ntime++;
+	*work_ntime = htobe32(ntime);
+	local_work++;
+	work->rolls++;
+	work->blk.nonce = 0;
+	applog(LOG_DEBUG, "Successfully rolled work");
+
+	/* This is now a different work item so it needs a different ID for the
+	 * hashtable */
+	work->id = total_work++;
+}
+
+static struct work *make_clone(struct work *work)
+{
+	struct work *work_clone = make_work();
+
+	memcpy(work_clone, work, sizeof(struct work));
+	work_clone->clone = true;
+	work_clone->longpoll = false;
+	work_clone->mandatory = false;
+	/* Make cloned work appear slightly older to bias towards keeping the
+	 * master work item which can be further rolled */
+	work_clone->tv_staged.tv_sec -= 1;
+
+	return work_clone;
+}
+
+static bool stage_work(struct work *work);
+
+static bool clone_available(void)
+{
+	struct work *work, *tmp;
+	bool cloned = false;
+
+	if (!staged_rollable)
+		goto out;
+
+	mutex_lock(stgd_lock);
+	HASH_ITER(hh, staged_work, work, tmp) {
+		if (can_roll(work) && should_roll(work)) {
+			struct work *work_clone;
+
+			roll_work(work);
+			work_clone = make_clone(work);
+			roll_work(work);
+			applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
+			if (unlikely(!stage_work(work_clone))) {
+				free(work_clone);
+				break;
+			}
+			cloned = true;
+			break;
+		}
+	}
+	mutex_unlock(stgd_lock);
+
+out:
+	return cloned;
+}
+
+static void *get_work_thread(void *userdata)
+{
+	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool = current_pool();
+	struct curl_ent *ce = NULL;
+	struct work *ret_work;
+	int failures = 0;
+
+	pthread_detach(pthread_self());
+
+	applog(LOG_DEBUG, "Creating extra get work thread");
 
 	mutex_lock(&qd_lock);
 	cq = __pool_queued(pool);
@@ -2300,27 +2408,13 @@ static bool enough_work(void)
 	ts = __total_staged();
 	mutex_unlock(stgd_lock);
 
-	if (((cs || cq >= opt_queue) && ts >= maxq) ||
-	    ((cs || cq) && tq >= maxq))
-		return true;
-	return false;
-}
+	if (ts >= maxq)
+		goto out;
 
-/* ce and pool may appear uninitialised at push_curl_entry, but they're always
- * set when we don't have opt_benchmark enabled */
-static void *get_work_thread(void *userdata)
-{
-	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct pool * uninitialised_var(pool);
-	struct curl_ent *ce = NULL;
-	struct work *ret_work;
-	int failures = 0;
+	if (ts >= opt_queue && tq >= maxq - 1)
+		goto out;
 
-	pthread_detach(pthread_self());
-
-	applog(LOG_DEBUG, "Creating extra get work thread");
-
-	if (!wc->lagging && enough_work())
+	if (clone_available())
 		goto out;
 
 	ret_work = make_work();
@@ -2332,7 +2426,11 @@ static void *get_work_thread(void *userdata)
 	if (opt_benchmark)
 		get_benchmark_work(ret_work);
 	else {
-		pool = ret_work->pool = select_pool(wc->lagging);
+		bool lagging = false;
+
+		if (ts <= opt_queue)
+			lagging = true;
+		pool = ret_work->pool = select_pool(lagging);
 		inc_queued(pool);
 		
 		ce = pop_curl_entry(pool);
@@ -2354,7 +2452,7 @@ static void *get_work_thread(void *userdata)
 		}
 		fail_pause = opt_fail_pause;
 
-		dec_queued(pool);
+		ret_work->queued = true;
 	}
 
 	applog(LOG_DEBUG, "Pushing work to requesting thread");
@@ -2394,21 +2492,18 @@ static bool stale_work(struct work *work, bool share)
 	struct pool *pool;
 	int getwork_delay;
 
-	if (share) {
-		/* Technically the rolltime should be correct but some pools
-		 * advertise a broken expire= that is lower than a meaningful
-		 * scantime */
-		if (work->rolltime > opt_scantime)
-			work_expiry = work->rolltime;
-		else
-			work_expiry = opt_expiry;
-	} else {
-		/* Don't keep rolling work right up to the expiration */
-		if (work->rolltime > opt_scantime)
-			work_expiry = (work->rolltime - opt_scantime) * 2 / 3 + opt_scantime;
-		else /* Shouldn't happen unless someone increases scantime */
-			work_expiry = opt_scantime;
+	if (work->work_block != work_block) {
+		applog(LOG_DEBUG, "Work stale due to block mismatch");
+		return true;
 	}
+
+	/* Technically the rolltime should be correct but some pools
+	 * advertise a broken expire= that is lower than a meaningful
+	 * scantime */
+	if (work->rolltime > opt_scantime)
+		work_expiry = work->rolltime;
+	else
+		work_expiry = opt_expiry;
 
 	pool = work->pool;
 	/* Factor in the average getwork delay of this pool, rounding it up to
@@ -2421,11 +2516,6 @@ static bool stale_work(struct work *work, bool share)
 	gettimeofday(&now, NULL);
 	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry) {
 		applog(LOG_DEBUG, "Work stale due to expiry");
-		return true;
-	}
-
-	if (work->work_block != work_block) {
-		applog(LOG_DEBUG, "Work stale due to block mismatch");
 		return true;
 	}
 
@@ -2545,6 +2635,8 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
+static bool queue_request(struct thr_info *thr, bool needed);
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -2606,6 +2698,12 @@ void switch_pools(struct pool *selected)
 	pool = currentpool;
 	mutex_unlock(&control_lock);
 
+	/* Set the lagging flag to avoid pool not providing work fast enough
+	 * messages in failover only mode since  we have to get all fresh work
+	 * as in restart_threads */
+	if (opt_fail_only)
+		pool_tset(pool, &pool->lagging);
+
 	if (pool != last_pool)
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
 
@@ -2627,8 +2725,6 @@ static void discard_work(struct work *work)
 		applog(LOG_DEBUG, "Discarded cloned or rolled work");
 	free_work(work);
 }
-
-bool queue_request(struct thr_info *thr, bool needed);
 
 static void discard_stale(void)
 {
@@ -2680,12 +2776,15 @@ int restart_wait(unsigned int mstime)
 	
 static void restart_threads(void)
 {
+	struct pool *cp = current_pool();
 	int i;
+
+	/* Artificially set the lagging flag to avoid pool not providing work
+	 * fast enough  messages after every long poll */
+	pool_tset(cp, &cp->lagging);
 
 	/* Discard staged work that is now stale */
 	discard_stale();
-
-	queue_request(NULL, true);
 
 	for (i = 0; i < mining_threads; i++)
 		thr_info[i].work_restart = true;
@@ -2804,11 +2903,23 @@ static int tv_sort(struct work *worka, struct work *workb)
 	return worka->tv_staged.tv_sec - workb->tv_staged.tv_sec;
 }
 
+static bool work_rollable(struct work *work)
+{
+	return (!work->clone && work->rolltime);
+}
+
 static bool hash_push(struct work *work)
 {
-	bool rc = true;
+	bool rc = true, dec = false;
+
+	if (work->queued) {
+		work->queued = false;
+		dec = true;
+	}
 
 	mutex_lock(stgd_lock);
+	if (work_rollable(work))
+		staged_rollable++;
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
 		work->pool->staged++;
@@ -2817,6 +2928,10 @@ static bool hash_push(struct work *work)
 		rc = false;
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
+
+	if (dec)
+		dec_queued(work->pool);
+
 	return rc;
 }
 
@@ -3675,7 +3790,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
-	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+	utility = total_accepted / total_secs * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	displayed_hashes = total_mhashes_done / total_secs;
@@ -3818,35 +3933,9 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-bool queue_request(struct thr_info *thr, bool needed)
+static bool queue_request(struct thr_info *thr, bool needed)
 {
-	int cq, cs, ts, tq, maxq = opt_queue + mining_threads;
-	struct pool *pool = current_pool();
 	struct workio_cmd *wc;
-	bool lag = false;
-
-	mutex_lock(&qd_lock);
-	cq = __pool_queued(pool);
-	tq = __global_queued();
-	mutex_unlock(&qd_lock);
-
-	mutex_lock(stgd_lock);
-	cs = __pool_staged(pool);
-	ts = __total_staged();
-	mutex_unlock(stgd_lock);
-
-	if (needed && cq >= maxq && !ts && !opt_fail_only) {
-		/* If we're queueing work faster than we can stage it, consider
-		 * the system lagging and allow work to be gathered from
-		 * another pool if possible */
-		lag = true;
-	} else {
-		/* Test to make sure we have enough work for pools without rolltime
-		 * and enough original work for pools with rolltime */
-		if (((cs || cq >= opt_queue) && ts >= maxq) ||
-		    ((cs || cq) && tq >= maxq))
-			return true;
-	}
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -3857,7 +3946,7 @@ bool queue_request(struct thr_info *thr, bool needed)
 
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
-	wc->lagging = lag;
+	wc->needed = needed;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
@@ -3873,57 +3962,34 @@ bool queue_request(struct thr_info *thr, bool needed)
 
 static struct work *hash_pop(const struct timespec *abstime)
 {
-	struct work *work = NULL;
-	int rc = 0;
+	struct work *work = NULL, *tmp;
+	int rc = 0, hc;
 
 	mutex_lock(stgd_lock);
 	while (!getq->frozen && !HASH_COUNT(staged_work) && !rc)
 		rc = pthread_cond_timedwait(&getq->cond, stgd_lock, abstime);
 
-	if (HASH_COUNT(staged_work)) {
-		work = staged_work;
+	hc = HASH_COUNT(staged_work);
+
+	if (likely(hc)) {
+		/* Find clone work if possible, to allow masters to be reused */
+		if (hc > staged_rollable) {
+			HASH_ITER(hh, staged_work, work, tmp) {
+				if (!work_rollable(work))
+					break;
+			}
+		} else
+			work = staged_work;
 		HASH_DEL(staged_work, work);
 		work->pool->staged--;
+		if (work_rollable(work))
+			staged_rollable--;
 	}
 	mutex_unlock(stgd_lock);
 
 	queue_request(NULL, false);
 
 	return work;
-}
-
-static inline bool should_roll(struct work *work)
-{
-	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE)
-		return true;
-	return false;
-}
-
-/* Limit rolls to 7000 to not beyond 2 hours in the future where bitcoind will
- * reject blocks as invalid. */
-static inline bool can_roll(struct work *work)
-{
-	return (work->pool && work->rolltime && !work->clone &&
-		work->rolls < 7000 && !stale_work(work, false));
-}
-
-static void roll_work(struct work *work)
-{
-	uint32_t *work_ntime;
-	uint32_t ntime;
-
-	work_ntime = (uint32_t *)(work->data + 68);
-	ntime = be32toh(*work_ntime);
-	ntime++;
-	*work_ntime = htobe32(ntime);
-	local_work++;
-	work->rolls++;
-	work->blk.nonce = 0;
-	applog(LOG_DEBUG, "Successfully rolled work");
-
-	/* This is now a different work item so it needs a different ID for the
-	 * hashtable */
-	work->id = total_work++;
 }
 
 static bool reuse_work(struct work *work)
@@ -3933,21 +3999,6 @@ static bool reuse_work(struct work *work)
 		return true;
 	}
 	return false;
-}
-
-static struct work *make_clone(struct work *work)
-{
-	struct work *work_clone = make_work();
-
-	memcpy(work_clone, work, sizeof(struct work));
-	work_clone->clone = true;
-	work_clone->longpoll = false;
-	work_clone->mandatory = false;
-	/* Make cloned work appear slightly older to bias towards keeping the
-	 * master work item which can be further rolled */
-	work_clone->tv_staged.tv_sec -= 1;
-
-	return work_clone;
 }
 
 /* Clones work by rolling it if possible, and returning a clone instead of the
@@ -4224,8 +4275,6 @@ void *miner_thread(void *userdata)
 	int64_t hashes_done = 0;
 	int64_t hashes;
 	struct work *work = make_work();
-	const time_t request_interval = opt_scantime * 2 / 3 ? : 1;
-	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = false;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
@@ -4331,22 +4380,6 @@ void *miner_thread(void *userdata)
 			}
 
 			timersub(&tv_end, &tv_workstart, &wdiff);
-			if (!requested) {
-				if (wdiff.tv_sec > request_interval || work->blk.nonce > request_nonce) {
-					thread_reportout(mythr);
-					if (unlikely(!queue_request(mythr, false))) {
-						applog(LOG_ERR, "Failed to queue_request in miner_thread %d", thr_id);
-
-						cgpu->device_last_not_well = time(NULL);
-						cgpu->device_not_well_reason = REASON_THREAD_FAIL_QUEUE;
-						cgpu->thread_fail_queue_count++;
-
-						goto out;
-					}
-					thread_reportin(mythr);
-					requested = true;
-				}
-			}
 
 			if (unlikely((long)sdiff.tv_sec < cycle)) {
 				int mult;
@@ -4655,24 +4688,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
-/* Work is sorted according to age, so discard the oldest work items, leaving
- * only 1/3 more staged work item than mining threads */
-static void age_work(void)
-{
-	int discarded = 0, maxq = (mining_threads + opt_queue) * 4 / 3;
-
-	while (total_staged() > maxq) {
-		struct work *work = hash_pop(NULL);
-
-		if (unlikely(!work))
-			break;
-		discard_work(work);
-		discarded++;
-	}
-	if (discarded)
-		applog(LOG_DEBUG, "Aged %d work items", discarded);
-}
-
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
@@ -4699,10 +4714,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		sleep(interval);
 
 		discard_stale();
-
-		age_work();
-
-		queue_request(NULL, false);
 
 		hashmeter(-1, &zero_tv, 0);
 
@@ -4864,7 +4875,7 @@ static void print_summary(void)
 	mins = (diff.tv_sec % 3600) / 60;
 	secs = diff.tv_sec % 60;
 
-	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
+	utility = total_accepted / total_secs * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	applog(LOG_WARNING, "\nSummary of runtime statistics:\n");
@@ -4882,8 +4893,7 @@ static void print_summary(void)
 		mhash_base = false;
 	}
 
-	if (total_secs)
-		applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", displayed_hashes, mhash_base? "Mega" : "Kilo");
+	applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", displayed_hashes, mhash_base? "Mega" : "Kilo");
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
