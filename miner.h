@@ -606,6 +606,7 @@ extern bool opt_protocol;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
+extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;

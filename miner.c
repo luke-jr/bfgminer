@@ -137,7 +137,7 @@ bool use_curses;
 static bool opt_submit_stale = true;
 static int opt_shares;
 static int opt_submit_threads = 0x40;
-static bool opt_fail_only;
+bool opt_fail_only;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;

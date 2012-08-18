@@ -166,7 +166,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.15";
+static const char *APIVERSION = "1.16";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -184,6 +184,9 @@ static const char *DYNAMIC = _DYNAMIC;
 static const char *YES = "Y";
 static const char *NO = "N";
 static const char *NULLSTR = "(null)";
+
+static const char *TRUESTR = "true";
+static const char *FALSESTR = "false";
 
 static const char *DEVICECODE = ""
 #ifdef HAVE_OPENCL
@@ -377,6 +380,9 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_CHECK 72
 #define MSG_POOLPRIO 73
 #define MSG_DUPPID 74
+#define MSG_MISBOOL 75
+#define MSG_INVBOOL 76
+#define MSG_FOO 77
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -404,6 +410,7 @@ enum code_parameters {
 	PARAM_POOL,
 	PARAM_STR,
 	PARAM_BOTH,
+	PARAM_BOOL,
 	PARAM_NONE
 };
 
@@ -525,6 +532,9 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"CGMiner stats" },
  { SEVERITY_ERR,   MSG_MISCHK,	PARAM_NONE,	"Missing check cmd" },
  { SEVERITY_SUCC,  MSG_CHECK,	PARAM_NONE,	"Check command" },
+ { SEVERITY_ERR,   MSG_MISBOOL,	PARAM_NONE,	"Missing parameter: true/false" },
+ { SEVERITY_ERR,   MSG_INVBOOL,	PARAM_NONE,	"Invalid parameter should be true or false" },
+ { SEVERITY_SUCC,  MSG_FOO,	PARAM_BOOL,	"Failover-Only set to %s" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -942,7 +952,7 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				sprintf(buf, "%.15f", *((double *)(root->data)));
 				break;
 			case API_BOOL:
-				sprintf(buf, "%s", *((bool *)(root->data)) ? "true" : "false");
+				sprintf(buf, "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
 				break;
 			case API_TIMEVAL:
 				sprintf(buf, "%ld.%06ld",
@@ -1154,6 +1164,9 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 				case PARAM_BOTH:
 					sprintf(buf, codes[i].description, paramid, param2);
 					break;
+				case PARAM_BOOL:
+					sprintf(buf, codes[i].description, paramid ? TRUESTR : FALSESTR);
+					break;
 				case PARAM_NONE:
 				default:
 					strcpy(buf, codes[i].description);
@@ -1254,6 +1267,7 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
 	root = api_add_const(root, "OS", OSINFO, false);
+	root = api_add_bool(root, "Failover-Only", &opt_fail_only, false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -1267,8 +1281,7 @@ bool2str(bool b)
 	return b ? YES : NO;
 }
 
-static const char*
-status2str(enum alive status)
+static const char *status2str(enum alive status)
 {
 	switch (status) {
 		case LIFE_WELL:
@@ -2630,6 +2643,27 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		strcat(io_buffer, JSON_CLOSE);
 }
 
+static void failoveronly(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISBOOL, 0, NULL, isjson));
+		return;
+	}
+
+	*param = tolower(*param);
+
+	if (*param != 't' && *param != 'f') {
+		strcpy(io_buffer, message(MSG_INVBOOL, 0, NULL, isjson));
+		return;
+	}
+
+	bool tf = (*param == 't');
+
+	opt_fail_only = tf;
+
+	strcpy(io_buffer, message(MSG_FOO, tf, NULL, isjson));
+}
+
 static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -2681,6 +2715,7 @@ struct CMDS {
 	{ "restart",		dorestart,	true },
 	{ "stats",		minerstats,	false },
 	{ "check",		checkcommand,	false },
+	{ "failover-only",	failoveronly,	true },
 	{ NULL,			NULL,		false }
 };
 
