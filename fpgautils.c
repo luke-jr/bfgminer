@@ -256,7 +256,7 @@ _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 	ssize_t len, tlen = 0;
 	while (bufsiz) {
 		len = read(fd, buf, eol ? 1 : bufsiz);
-		if (unlikely(len == -1))
+		if (len < 1)
 			break;
 		tlen += len;
 		if (eol && *eol == buf[0])
