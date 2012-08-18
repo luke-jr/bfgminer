@@ -628,7 +628,7 @@ int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)
 
 int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data nonces[]) {
 	int bufsize = 12 + ztex->extraSolutions * 4;
-	int cnt, i, j, ret, len;
+	int cnt = 0, i, j, ret, len;
 	unsigned char *rbuf;
 
 	if (ztex->hndl == NULL)
