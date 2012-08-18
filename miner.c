@@ -2474,9 +2474,27 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly);
 
 static inline bool should_roll(struct work *work)
 {
-	if (work->pool == current_pool() || pool_strategy == POOL_LOADBALANCE)
-		return true;
-	return false;
+	struct timeval now;
+	double share_time;
+	time_t expiry;
+
+	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE)
+		return false;
+
+	share_time = total_secs * mining_threads / (total_accepted + 1);
+	if (work->rolltime > opt_scantime)
+		expiry = work->rolltime;
+	else
+		expiry = opt_scantime;
+	expiry -= share_time;
+
+	/* We shouldn't roll if we're unlikely to get one shares' duration
+	 * work out of doing so */
+	gettimeofday(&now, NULL);
+	if (now.tv_sec - work->tv_staged.tv_sec > expiry)
+		return false;
+	
+	return true;
 }
 
 /* Limit rolls to 7000 to not beyond 2 hours in the future where bitcoind will
@@ -2654,9 +2672,16 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 	uint32_t block_id;
 	int getwork_delay;
 
-
 	block_id = ((uint32_t*)work->data)[1];
 	pool = work->pool;
+
+	/* Technically the rolltime should be correct but some pools
+	 * advertise a broken expire= that is lower than a meaningful
+	 * scantime */
+	if (work->rolltime > opt_scantime)
+		work_expiry = work->rolltime;
+	else
+		work_expiry = opt_expiry;
 
 	if (share) {
 		/* If the share isn't on this pool's latest block, it's stale */
@@ -2673,14 +2698,6 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 			applog(LOG_DEBUG, "Share stale due to work restart (%02x != %02x)", work->work_restart_id, pool->work_restart_id);
 			return true;
 		}
-
-		/* Technically the rolltime should be correct but some pools
-		 * advertise a broken expire= that is lower than a meaningful
-		 * scantime */
-		if (work->rolltime > opt_scantime)
-			work_expiry = work->rolltime;
-		else
-			work_expiry = opt_expiry;
 	} else {
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
@@ -2697,12 +2714,6 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 			applog(LOG_DEBUG, "Work stale due to work restart (%02x != %02x)", work->work_restart_id, pool->work_restart_id);
 			return true;
 		}
-
-		/* Don't keep rolling work right up to the expiration */
-		if (work->rolltime > opt_scantime)
-			work_expiry = (work->rolltime - opt_scantime) * 2 / 3 + opt_scantime;
-		else /* Shouldn't happen unless someone increases scantime */
-			work_expiry = opt_scantime;
 
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
