@@ -390,7 +390,7 @@ The number of hardware erorrs
 The utility defines as the number of shares / minute
 
 The BFGMiner status line shows:
- TQ: 1  ST: 1  SS: 0  DW: 0  NB: 1  GW: 301  LW: 8  GF: 1  RF: 1  WU:4.4/m
+ TQ: 1  ST: 1  SS: 0  DW: 0  NB: 1  GW: 301  LW: 8  GF: 1  RF: 1
 
 TQ is Total Queued work items.
 ST is STaged work items (ready to use).
@@ -401,7 +401,6 @@ GW is GetWork requested (work items from pools)
 LW is Locally generated Work items
 GF is Getwork Fail Occasions (server slow to provide work)
 RF is Remote Fail occasions (server slow to accept work)
-WU is Work Utility (Rate of difficulty 1 shares solved per minute)
 
 NOTE: Running intensities above 9 with current hardware is likely to only
 diminish return performance even if the hash rate might appear better. A good
