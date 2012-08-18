@@ -206,9 +206,10 @@ enum pool_strategy {
 	POOL_ROUNDROBIN,
 	POOL_ROTATE,
 	POOL_LOADBALANCE,
+	POOL_BALANCE,
 };
 
-#define TOP_STRATEGY (POOL_LOADBALANCE)
+#define TOP_STRATEGY (POOL_BALANCE)
 
 struct strategies {
 	const char *s;
@@ -780,6 +781,7 @@ struct pool {
 	int accepted, rejected;
 	int seq_rejects;
 	int solved;
+	int diff1;
 
 	bool submit_fail;
 	bool idle;
@@ -801,6 +803,9 @@ struct pool {
 	unsigned int getfail_occasions;
 	unsigned int remotefail_occasions;
 	struct timeval tv_idle;
+
+	double utility;
+	int last_shares, shares;
 
 	char *rpc_url;
 	char *rpc_userpass;

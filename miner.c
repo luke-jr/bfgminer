@@ -80,6 +80,7 @@ struct strategies strategies[] = {
 	{ "Round Robin" },
 	{ "Rotate" },
 	{ "Load Balance" },
+	{ "Balance" },
 };
 
 static char packagename[255];
@@ -515,6 +516,12 @@ static char *set_devices(char *arg)
 	return NULL;
 }
 
+static char *set_balance(enum pool_strategy *strategy)
+{
+	*strategy = POOL_BALANCE;
+	return NULL;
+}
+
 static char *set_loadbalance(enum pool_strategy *strategy)
 {
 	*strategy = POOL_LOADBALANCE;
@@ -790,6 +797,9 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_autoengine,
 			"Automatically adjust all GPU engine clock speeds to maintain a target temperature"),
 #endif
+	OPT_WITHOUT_ARG("--balance",
+		     set_balance, &pool_strategy,
+		     "Change multipool strategy from failover to even share balance"),
 	OPT_WITHOUT_ARG("--benchmark",
 			opt_set_bool, &opt_benchmark,
 			"Run BFGMiner in benchmark mode - produces no shares"),
@@ -899,7 +909,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
-		     "Change multipool strategy from failover to even load balance"),
+		     "Change multipool strategy from failover to efficiency based balance"),
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
@@ -1633,7 +1643,7 @@ static void curses_print_status(void)
 		total_getworks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
-	if (pool_strategy == POOL_LOADBALANCE && total_pools > 1)
+	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1)
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	else
@@ -2084,6 +2094,31 @@ out_nofree:
 static const char *rpc_req =
 	"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
 
+/* In balanced mode, the amount of diff1 solutions per pool is monitored as a
+ * rolling average per 10 minutes and if pools start getting more, it biases
+ * away from them to distribute work evenly. The share count is reset to the
+ * rolling average every 10 minutes to not send all work to one pool after it
+ * has been disabled/out for an extended period. */
+static struct pool *select_balanced(struct pool *cp)
+{
+	int i, lowest = cp->shares;
+	struct pool *ret = cp;
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+
+		if (pool->idle || pool->enabled != POOL_ENABLED)
+			continue;
+		if (pool->shares < lowest) {
+			lowest = pool->shares;
+			ret = pool;
+		}
+	}
+
+	ret->shares++;
+	return ret;
+}
+
 /* Select any active pool in a rotating fashion when loadbalance is chosen */
 static inline struct pool *select_pool(bool lagging)
 {
@@ -2091,6 +2126,9 @@ static inline struct pool *select_pool(bool lagging)
 	struct pool *pool, *cp;
 
 	cp = current_pool();
+
+	if (pool_strategy == POOL_BALANCE)
+		return select_balanced(cp);
 
 	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
 		pool = cp;
@@ -2433,7 +2471,7 @@ static inline bool should_roll(struct work *work)
 	struct timeval now;
 	time_t expiry;
 
-	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE)
+	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE)
 		return false;
 
 	if (work->rolltime > opt_scantime)
@@ -2688,7 +2726,8 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 
 	/* If the user only wants strict failover, any work from a pool other than
 	 * the current one is always considered stale */
-	if (failoveronly && !share && pool != current_pool() && !work->mandatory) {
+	if (failoveronly && !share && pool != current_pool() && !work->mandatory &&
+	    pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch (pool %u vs %u)", pool->pool_no, current_pool()->pool_no);
 		return true;
 	}
@@ -2865,6 +2904,7 @@ void switch_pools(struct pool *selected)
 
 	switch (pool_strategy) {
 		/* Both of these set to the master pool */
+		case POOL_BALANCE:
 		case POOL_FAILOVER:
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
@@ -3527,6 +3567,8 @@ void write_config(FILE *fcfg)
 
 	/* Special case options */
 	fprintf(fcfg, ",\n\"shares\" : \"%d\"", opt_shares);
+	if (pool_strategy == POOL_BALANCE)
+		fputs(",\n\"balance\" : true", fcfg);
 	if (pool_strategy == POOL_LOADBALANCE)
 		fputs(",\n\"load-balance\" : true", fcfg);
 	if (pool_strategy == POOL_ROUNDROBIN)
@@ -4569,6 +4611,8 @@ bool test_nonce(struct work *work, uint32_t nonce, bool checktarget)
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	work->pool->diff1++;
+
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
 	if (!test_nonce(work, nonce, true)) {
@@ -4862,10 +4906,10 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE)
+	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE)
 		return;
 
-	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE) {
+	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
 		mutex_unlock(&lp_lock);
@@ -5041,12 +5085,16 @@ static void reap_curl(struct pool *pool)
 
 static void *watchpool_thread(void __maybe_unused *userdata)
 {
+	int intervals = 0;
+
 	rename_thr("bfg-watchpool");
 
 	while (42) {
 		struct timeval now;
 		int i;
 
+		if (++intervals > 20)
+			intervals = 0;
 		gettimeofday(&now, NULL);
 
 		for (i = 0; i < total_pools; i++) {
@@ -5063,6 +5111,15 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
+
+			/* Get a rolling utility per pool over 10 mins */
+			if (intervals > 19) {
+				int shares = pool->diff1 - pool->last_shares;
+
+				pool->last_shares = pool->diff1;
+				pool->utility = (pool->utility + (double)shares * 0.63) / 1.63;
+				pool->shares = pool->utility;
+			}
 		}
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
@@ -5071,6 +5128,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 		}
 
 		sleep(30);
+			
 	}
 	return NULL;
 }
