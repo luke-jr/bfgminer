@@ -141,12 +141,13 @@ Options for both config file and command line:
 --api-port          Port number of miner API (default: 4028)
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
+--balance           Change multipool strategy from failover to even share balance
 --benchmark         Run cgminer in benchmark mode - produces no shares
 --debug|-D          Enable debug output
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
---load-balance      Change multipool strategy from failover to even load balance
+--load-balance      Change multipool strategy from failover to efficiency based balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
@@ -425,8 +426,14 @@ This strategy moves at user-defined intervals from one active pool to the next,
 skipping pools that are idle.
 
 LOAD BALANCE:
-This strategy sends work in equal amounts to all the pools specified. If any
-pool falls idle, the rest will take up the slack keeping the miner busy.
+This strategy sends work to all the pools to maintain optimum load. The most
+efficient pools will tend to get a lot more shares. If any pool falls idle, the
+rest will tend to take up the slack keeping the miner busy.
+
+BALANCE:
+This strategy monitors the amount of difficulty 1 shares solved for each pool
+and uses it to try to end up doing the same amount of work for all pools.
+
 
 ---
 LOGGING
