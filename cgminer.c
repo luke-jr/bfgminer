@@ -4897,8 +4897,8 @@ static void print_summary(void)
 		applog(LOG_WARNING, "Reject ratio: %.1f%%", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
 	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
 	applog(LOG_WARNING, "Efficiency (accepted / queued): %.0f%%", efficiency);
-	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min\n", utility);
-	applog(LOG_WARNING, "Work Utility (diff1 shares solved / min): %.2f/min", work_util);
+	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min", utility);
+	applog(LOG_WARNING, "Work Utility (diff1 shares solved / min): %.2f/min\n", work_util);
 
 	applog(LOG_WARNING, "Discarded work due to new blocks: %d", total_discarded);
 	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %d", total_stale);
