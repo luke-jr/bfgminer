@@ -854,6 +854,7 @@ struct work {
 	bool		stale;
 	bool		mandatory;
 	bool		block;
+	bool		queued;
 
 	unsigned char	work_restart_id;
 	int		id;

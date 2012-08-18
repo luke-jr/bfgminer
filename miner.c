@@ -2613,7 +2613,7 @@ static void *get_work_thread(void *userdata)
 		}
 		fail_pause = opt_fail_pause;
 
-		dec_queued(pool);
+		ret_work->queued = true;
 	}
 
 	applog(LOG_DEBUG, "Pushing work to requesting thread");
@@ -2935,6 +2935,12 @@ void switch_pools(struct pool *selected)
 	pool->block_id = 0;
 	mutex_unlock(&control_lock);
 
+	/* Set the lagging flag to avoid pool not providing work fast enough
+	 * messages in failover only mode since  we have to get all fresh work
+	 * as in restart_threads */
+	if (opt_fail_only)
+		pool_tset(pool, &pool->lagging);
+
 	if (pool != last_pool)
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
 
@@ -3223,7 +3229,12 @@ static int tv_sort(struct work *worka, struct work *workb)
 
 static bool hash_push(struct work *work)
 {
-	bool rc = true;
+	bool rc = true, dec = false;
+
+	if (work->queued) {
+		work->queued = false;
+		dec = true;
+	}
 
 	mutex_lock(stgd_lock);
 	if (likely(!getq->frozen)) {
@@ -3234,6 +3245,10 @@ static bool hash_push(struct work *work)
 		rc = false;
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
+
+	if (dec)
+		dec_queued(work->pool);
+
 	return rc;
 }
 
