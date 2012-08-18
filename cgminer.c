@@ -187,7 +187,7 @@ static struct timeval total_tv_start, total_tv_end;
 pthread_mutex_t control_lock;
 
 int hw_errors;
-int total_accepted, total_rejected;
+int total_accepted, total_rejected, total_diff1;
 int total_getworks, total_stale, total_discarded;
 static int total_queued, staged_rollable;
 unsigned int new_blocks;
@@ -1461,9 +1461,9 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  WU: %.1f",
 		global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
-		local_work, total_go, total_ro);
+		local_work, total_go, total_ro, total_diff1 / total_secs * 60);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1)
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -4202,6 +4202,7 @@ bool test_nonce(struct work *work, uint32_t nonce)
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	total_diff1++;
 	work->pool->diff1++;
 
 	/* Do one last check before attempting to submit the work */
@@ -4859,7 +4860,7 @@ static void print_summary(void)
 {
 	struct timeval diff;
 	int hours, mins, secs, i;
-	double utility, efficiency = 0.0, displayed_hashes;
+	double utility, efficiency = 0.0, displayed_hashes, work_util;
 	bool mhash_base = true;
 
 	timersub(&total_tv_end, &total_tv_start, &diff);
@@ -4869,6 +4870,7 @@ static void print_summary(void)
 
 	utility = total_accepted / total_secs * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
+	work_util = total_diff1 / total_secs * 60;
 
 	applog(LOG_WARNING, "\nSummary of runtime statistics:\n");
 	applog(LOG_WARNING, "Started at %s", datestamp);
@@ -4896,6 +4898,7 @@ static void print_summary(void)
 	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
 	applog(LOG_WARNING, "Efficiency (accepted / queued): %.0f%%", efficiency);
 	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min\n", utility);
+	applog(LOG_WARNING, "Work Utility (diff1 shares solved / min): %.2f/min", work_util);
 
 	applog(LOG_WARNING, "Discarded work due to new blocks: %d", total_discarded);
 	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %d", total_stale);
