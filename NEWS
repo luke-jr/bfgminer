@@ -1,3 +1,53 @@
+Version 2.7.0 - August 18, 2012
+
+- Introduce a new statistic, Work Utility, which is the number of difficulty 1
+shares solved per minute. This is useful for measuring a relative rate of work
+that is independent of reject rate and target difficulty.
+- Implement a new pool strategy, BALANCE, which monitors work performed per pool
+as a rolling average every 10 minutes to try and distribute work evenly over all
+the pools. Do this by monitoring diff1 solutions to allow different difficulty
+target pools to be treated equally, along with solo mining. Update the
+documentation to describe this strategy and more accurately describe the
+load-balance one.
+- Getwork fail was not being detected. Remove a vast amount of unused variables
+and functions used in the old queue request mechanism and redefine the getfail
+testing.
+- Don't try to start devices that don't support scrypt when scrypt mining.
+- 0 is a valid return value for read so only break out if read returns -1.
+- Consider us lagging only once our queue is almost full and no staged work.
+- Simplify the enough work algorithm dramatically.
+- Only queue from backup pools once we have nothing staged.
+- Don't keep queueing work indefinitely if we're in opt failover mode.
+- Make sure we don't opt out of queueing more work if all the queued work is
+from one pool.
+- Set lagging flag if we're on the last of our staged items.
+- Reinstate clone on grabbing work.
+- Grab clones from hashlist wherever possible first.
+- Cull all the early queue requests since we request every time work is popped
+now.
+- Keep track of staged rollable work item counts to speed up clone_available.
+- Make expiry on should_roll to 2/3 time instead of share duration since some
+hardware will have very fast share times.
+- Do the cheaper comparison first.
+- Check that we'll get 1 shares' worth of work time by rolling before saying we
+should roll the work.
+- Simplify all those total_secs usages by initialising it to 1 second.
+- Overlap queued decrementing with staged incrementing.
+- Artificially set the pool lagging flag on pool switch in failover only mode as
+well.
+- Artificially set the pool lagging flag on work restart to avoid messages about
+slow pools after every longpoll.
+- Factor in opt_queue value into enough work queued or staged.
+- Roll work whenever we can on getwork.
+- Queue requests for getwork regardless and test whether we should send for a
+getwork from the getwork thread itself.
+- Get rid of age_work().
+- 0 is a valid return value for read so only break out if read returns -1.
+- Offset libusb reads/writes by length written as well in ztex.
+- Cope with timeouts and partial reads in ztex code.
+- fpga serial I/O extra debug (disabled by default)
+
+
 Version 2.6.5 - August 15, 2012
 
 - Don't try to get bitforce temperature if we're polling for a result to
