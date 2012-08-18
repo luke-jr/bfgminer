@@ -2577,7 +2577,6 @@ static void *get_work_thread(void *userdata)
 	struct pool *pool = current_pool();
 	struct curl_ent *ce = NULL;
 	struct work *ret_work;
-	bool lagging = false;
 	int failures = 0;
 
 	pthread_detach(pthread_self());
@@ -2595,11 +2594,13 @@ static void *get_work_thread(void *userdata)
 	ts = __total_staged();
 	mutex_unlock(stgd_lock);
 
-	if (!ts)
-		lagging = true;
-	if (((cs >= opt_queue || cq >= opt_queue) && ts >= maxq) ||
-	    ((cs >= opt_queue || cq >= opt_queue) && tq >= maxq) ||
-	    clone_available())
+	if (ts >= maxq)
+		goto out;
+
+	if (ts >= opt_queue && tq >= maxq - 1)
+		goto out;
+
+	if (clone_available())
 		goto out;
 
 	ret_work = make_work();
@@ -2611,6 +2612,10 @@ static void *get_work_thread(void *userdata)
 	if (opt_benchmark)
 		get_benchmark_work(ret_work);
 	else {
+		bool lagging = false;
+
+		if (ts <= opt_queue)
+			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 		inc_queued(pool);
 		
@@ -4363,15 +4368,24 @@ static bool queue_request(struct thr_info *thr, bool needed)
 
 static struct work *hash_pop(const struct timespec *abstime)
 {
-	struct work *work = NULL;
-	int rc = 0;
+	struct work *work = NULL, *tmp;
+	int rc = 0, hc;
 
 	mutex_lock(stgd_lock);
 	while (!getq->frozen && !HASH_COUNT(staged_work) && !rc)
 		rc = pthread_cond_timedwait(&getq->cond, stgd_lock, abstime);
 
-	if (HASH_COUNT(staged_work)) {
-		work = staged_work;
+	hc = HASH_COUNT(staged_work);
+
+	if (likely(hc)) {
+		/* Find clone work if possible, to allow masters to be reused */
+		if (hc > staged_rollable) {
+			HASH_ITER(hh, staged_work, work, tmp) {
+				if (!work_rollable(work))
+					break;
+			}
+		} else
+			work = staged_work;
 		HASH_DEL(staged_work, work);
 		work->pool->staged--;
 		if (work_rollable(work))
@@ -4676,8 +4690,6 @@ void *miner_thread(void *userdata)
 	int64_t hashes_done = 0;
 	int64_t hashes;
 	struct work *work = make_work();
-	const time_t request_interval = opt_scantime * 2 / 3 ? : 1;
-	unsigned const long request_nonce = MAXTHREADS / 3 * 2;
 	bool requested = false;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
