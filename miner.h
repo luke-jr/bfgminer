@@ -780,8 +780,6 @@ struct pool {
 	int accepted, rejected;
 	int seq_rejects;
 	int solved;
-	int queued;
-	int staged;
 
 	bool submit_fail;
 	bool idle;
