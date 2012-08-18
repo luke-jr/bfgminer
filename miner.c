@@ -5922,19 +5922,23 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef USE_ICARUS
-	icarus_api.api_detect();
+	if (!opt_scrypt)
+		icarus_api.api_detect();
 #endif
 
 #ifdef USE_BITFORCE
-	bitforce_api.api_detect();
+	if (!opt_scrypt)
+		bitforce_api.api_detect();
 #endif
 
 #ifdef USE_MODMINER
-	modminer_api.api_detect();
+	if (!opt_scrypt)
+		modminer_api.api_detect();
 #endif
 
 #ifdef USE_ZTEX
-	ztex_api.api_detect();
+	if (!opt_scrypt)
+		ztex_api.api_detect();
 #endif
 
 #ifdef WANT_CPUMINE
