@@ -794,7 +794,6 @@ struct pool {
 	bool lp_started;
 	unsigned char	work_restart_id;
 	uint32_t	block_id;
-	bool currently_rolling;
 
 	char *hdr_path;
 	char *lp_url;
