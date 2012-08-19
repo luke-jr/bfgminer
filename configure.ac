@@ -68,6 +68,7 @@ USB_LIBS=""
 USB_FLAGS=""
 DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
+TIMER_LIBS=""
 MATH_LIBS="-lm"
 
 case $target in
@@ -86,6 +87,7 @@ case $target in
 	PTHREAD_FLAGS=""
 	DLOPEN_FLAGS=""
 	WS2_LIBS="-lws2_32"
+	TIMER_LIBS="-lwinmm"
 	;;
   *-*-mingw*)
     have_x86_64=false
@@ -93,6 +95,7 @@ case $target in
     PTHREAD_FLAGS=""
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
+	TIMER_LIBS="-lwinmm"
     ;;
   powerpc-*-darwin*)
     CFLAGS="$CFLAGS -faltivec"
@@ -373,6 +376,7 @@ AC_SUBST(PTHREAD_LIBS)
 AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
+AC_SUBST(TIMER_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
 AC_SUBST(USB_LIBS)
@@ -467,7 +471,7 @@ echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $TIMER_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
