@@ -2030,7 +2030,7 @@ function display()
 
  newtable();
  doforeach('version', 'rig summary', array(), array(), true);
- $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility');
+ $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares');
  doforeach('summary', 'summary information', $sum, array(), false);
  endtable();
  otherrow('<td><br><br></td>');
