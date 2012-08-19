@@ -617,7 +617,6 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Utility':
 	case 'DEVS.Utility':
 	case 'SUMMARY.Utility':
-	case 'SUMMARY.Work Utility':
 	case 'total.Utility':
 		$ret = $value.'/m';
 		if ($value == 0)
@@ -635,6 +634,10 @@ function fmt($section, $name, $value, $when, $alldata)
 					if ($ratio > 1.1)
 						$class = $hiclass;
 			}
+		break;
+	case 'SUMMARY.Work Utility':
+	case 'total.Work Utility':
+		$ret = $value.'/m';
 		break;
 	case 'PGA.Temperature':
 	case 'GPU.Temperature':
@@ -2027,7 +2030,7 @@ function display()
 
  newtable();
  doforeach('version', 'rig summary', array(), array(), true);
- $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH');
+ $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility');
  doforeach('summary', 'summary information', $sum, array(), false);
  endtable();
  otherrow('<td><br><br></td>');
