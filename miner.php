@@ -2,6 +2,7 @@
 session_start();
 #
 global $miner, $port, $readonly, $notify, $rigs;
+global $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
@@ -9,9 +10,8 @@ global $allowcustompages, $customsummarypages;
 global $miner_font_family, $miner_font_size;
 global $colouroverride, $placebuttons;
 #
-# Don't touch these 2 - see $rigs below
-$miner = null;
-$port = null;
+# See API-README for more details of these variables and how
+# to configure miner.php
 #
 # Set $readonly to true to force miner.php to be readonly
 # Set $readonly to false then it will check cgminer 'privileged'
@@ -19,8 +19,6 @@ $readonly = false;
 #
 # Set $notify to false to NOT attempt to display the notify command
 # Set $notify to true to attempt to display the notify command
-# If your older version of cgminer returns an 'Invalid command'
-#  coz it doesn't have notify - it just shows the error status table
 $notify = true;
 #
 # Set $checklastshare to true to do the following checks:
@@ -37,30 +35,20 @@ $poolinputs = false;
 #
 # Set $rigs to an array of your cgminer rigs that are running
 #  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
-# If you only have one rig, it will just show the detail of that rig
-# If you have more than one rig it will show a summary of all the rigs
-#  with buttons to show the details of each rig -
-#  the button contents will be 'Name' if that was specified
-# e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 $rigs = array('127.0.0.1:4028');
 #
+# Set $rigtotals to true to display totals on the single rig page
+# 'false' means no totals (and ignores $forcerigtotals)
+# You can force it to always show rig totals when there is only
+# one line by setting $forcerigtotals = true;
+$rigtotals = true;
+$forcerigtotals = false;
+#
 # These should be OK for most cases
-# However, the longer SND is, the longer you have to wait while
-# php hangs if the target cgminer isn't runnning or listening
-# RCV should only ever be relevant if cgminer has hung but the
-# API thread is still running, RCV would normally be >= SND
-# Feel free to increase SND if your network is very slow
-# or decrease RCV if that happens often to you
-# Also, on some windows PHP, apparently the $usec is ignored
 $socksndtimeoutsec = 10;
 $sockrcvtimeoutsec = 40;
 #
 # List of fields NOT to be displayed
-# You can use this to hide data you don't want to see or don't want
-# shown on a public web page
-# The list of sections are: SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG
-# See the web page for the list of field names (the table headers)
-# It is an array of 'SECTION.Field Name' => 1
 # This example would hide the slightly more sensitive pool information
 #$hidefields = array('POOL.URL' => 1, 'POOL.User' => 1);
 $hidefields = array();
@@ -74,19 +62,11 @@ $changerefresh = true;
 $autorefresh = 0;
 #
 # Should we allow custom pages?
-# (or just completely ignore then and don't display the buttons)
+# (or just completely ignore them and don't display the buttons)
 $allowcustompages = true;
 #
 # OK this is a bit more complex item: Custom Summary Pages
-# A custom summary page in an array of 'section' => array('FieldA','FieldB'...)
-#  Field can be 'name=new name' to display 'name' with a different heading 'new name'
-# This makes up what is displayed with each 'section' separately as a table
-# - empty tables are not shown
-# - empty columns (an unknown field) are not shown
-# - and missing field data shows as blank
-# - section = 'DATE' displays a date table like 'Summary'
-# - section = 'RIGS' displays a rig table like 'Summary'
-# There is a second array, listing fields to be totaled for each section
+# As mentioned above, see API-README
 # see the example below (if there is no matching data, no total will show)
 $mobilepage = array(
  'DATE' => null,
@@ -160,6 +140,10 @@ $colourtable = array(
 	'td.lo color'		=> 'blue',
 	'td.lo background'	=> '#deffff'
 );
+#
+# Don't touch these 2
+$miner = null;
+$port = null;
 #
 # Ensure it is only ever shown once
 global $showndate;
@@ -790,7 +774,7 @@ function fmt($section, $name, $value, $when, $alldata)
  if ($class == '' && ($rownum % 2) == 0)
 	$class = $c2class;
 
- if ($ret == '')
+ if ($ret === '')
 	$ret = $b;
 
  return array($ret, $class);
@@ -829,9 +813,47 @@ function showdatetime()
  otherrow('<td class=sta>Date: '.date($dfmt).'</td>');
 }
 #
+global $singlerigsum;
+$singlerigsum = array(
+ 'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
+			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
+ 'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
+			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1),
+ 'notify' => array('*' => 1));
+#
+function showtotal($total, $when, $oldvalues)
+{
+ global $rigtotals;
+
+ list($showvalue, $class) = fmt('total', '', 'Total:', $when, null);
+ echo "<td$class align=right>$showvalue</td>";
+
+ $skipfirst = true;
+ foreach ($oldvalues as $name => $value)
+ {
+	if ($skipfirst === true)
+	{
+		$skipfirst = false;
+		continue;
+	}
+
+	if (isset($total[$name]))
+		$newvalue = $total[$name];
+	else
+		$newvalue = '';
+
+	list($showvalue, $class) = fmt('total', $name, $newvalue, $when, null);
+	echo "<td$class";
+	if ($rigtotals === true)
+		echo ' align=right';
+	echo ">$showvalue</td>";
+ }
+}
+#
 function details($cmd, $list, $rig)
 {
  global $dfmt, $poolcmd, $readonly, $showndate;
+ global $rownum, $rigtotals, $forcerigtotals, $singlerigsum;
 
  $when = 0;
 
@@ -864,8 +886,15 @@ function details($cmd, $list, $rig)
 	endrow();
  }
 
+ if ($rigtotals === true && isset($singlerigsum[$cmd]))
+	$dototal = $singlerigsum[$cmd];
+ else
+	$dototal = array();
+
+ $total = array();
 
  $section = '';
+ $oldvalues = null;
  foreach ($list as $item => $values)
  {
 	if ($item == 'STATUS')
@@ -873,8 +902,13 @@ function details($cmd, $list, $rig)
 
 	$sectionname = preg_replace('/\d/', '', $item);
 
+	// Handle 'devs' possibly containing >1 table
 	if ($sectionname != $section)
 	{
+		if ($oldvalues != null && count($total) > 0
+		&&  ($rownum > 2 || $forcerigtotals === true))
+			showtotal($total, $when, $oldvalues);
+
 		endtable();
 		newtable();
 		showhead($cmd, $values);
@@ -886,7 +920,19 @@ function details($cmd, $list, $rig)
 	foreach ($values as $name => $value)
 	{
 		list($showvalue, $class) = fmt($section, $name, $value, $when, $values);
-		echo "<td$class>$showvalue</td>";
+		echo "<td$class";
+		if ($rigtotals === true)
+			echo ' align=right';
+		echo ">$showvalue</td>";
+
+		if (isset($dototal[$name])
+		||  (isset($dototal['*']) and substr($name, 0, 1) == '*'))
+		{
+			if (isset($total[$name]))
+				$total[$name] += $value;
+			else
+				$total[$name] = $value;
+		}
 	}
 
 	if ($cmd == 'pools' && $readonly === false)
@@ -908,7 +954,14 @@ function details($cmd, $list, $rig)
 		}
 	}
 	endrow();
+
+	$oldvalues = $values;
  }
+
+ if ($oldvalues != null && count($total) > 0
+ &&  ($rownum > 2 || $forcerigtotals === true))
+	showtotal($total, $when, $oldvalues);
+
  endtable();
 }
 #
@@ -1736,14 +1789,29 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 					foreach ($result as $sec => $row)
 					{
 						$secname = preg_replace('/\d/', '', $sec);
-						if (secmatch($section, $secname) && isset($row[$field]))
+						if (secmatch($section, $secname))
 						{
-							$showfields[$field] = 1;
-							$map = $section.'.'.$field;
-							if (isset($namemap[$map]))
-								$showhead[$namemap[$map]] = 1;
-							else
-								$showhead[$field] = 1;
+							if ($field === '*')
+							{
+								foreach ($row as $f => $v)
+								{
+									$showfields[$f] = 1;
+									$map = $section.'.'.$f;
+									if (isset($namemap[$map]))
+										$showhead[$namemap[$map]] = 1;
+									else
+										$showhead[$f] = 1;
+								}
+							}
+							elseif (isset($row[$field]))
+							{
+								$showfields[$field] = 1;
+								$map = $section.'.'.$field;
+								if (isset($namemap[$map]))
+									$showhead[$namemap[$map]] = 1;
+								else
+									$showhead[$field] = 1;
+							}
 						}
 					}
 

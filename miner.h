@@ -173,9 +173,10 @@ enum pool_strategy {
 	POOL_ROUNDROBIN,
 	POOL_ROTATE,
 	POOL_LOADBALANCE,
+	POOL_BALANCE,
 };
 
-#define TOP_STRATEGY (POOL_LOADBALANCE)
+#define TOP_STRATEGY (POOL_BALANCE)
 
 struct strategies {
 	const char *s;
@@ -329,6 +330,7 @@ struct cgpu_info {
 	unsigned int avg_wait_d;
 	uint32_t nonces;
 	bool nonce_range;
+	bool polling;
 #endif
 	pthread_mutex_t		device_mutex;
 
@@ -366,9 +368,10 @@ struct cgpu_info {
 	int opt_tc, thread_concurrency;
 	int shaders;
 #endif
-	struct timeval tv_gpustart;;
-	struct timeval tv_gpuend;
+	struct timeval tv_gpustart;
+	struct timeval tv_gpumid;
 	double gpu_us_average;
+	int intervals, hit;
 #endif
 
 	float temp;
@@ -440,6 +443,7 @@ extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*s
 extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
+extern double us_tdiff(struct timeval *end, struct timeval *start);
 
 struct string_elist {
 	char *string;
@@ -551,6 +555,7 @@ extern bool opt_protocol;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
+extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
@@ -595,7 +600,6 @@ extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
 extern void thread_reportin(struct thr_info *thr);
-extern bool queue_request(struct thr_info *thr, bool needed);
 extern int restart_wait(unsigned int mstime);
 
 extern void kill_work(void);
@@ -658,7 +662,7 @@ extern int opt_rotate_period;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;
-extern int total_accepted, total_rejected;
+extern int total_accepted, total_rejected, total_diff1;;
 extern int total_getworks, total_stale, total_discarded;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
@@ -720,8 +724,7 @@ struct pool {
 	int accepted, rejected;
 	int seq_rejects;
 	int solved;
-	int queued;
-	int staged;
+	int diff1;
 
 	bool submit_fail;
 	bool idle;
@@ -741,6 +744,9 @@ struct pool {
 	unsigned int getfail_occasions;
 	unsigned int remotefail_occasions;
 	struct timeval tv_idle;
+
+	double utility;
+	int last_shares, shares;
 
 	char *rpc_url;
 	char *rpc_userpass;
@@ -791,6 +797,7 @@ struct work {
 	bool		stale;
 	bool		mandatory;
 	bool		block;
+	bool		queued;
 
 	unsigned int	work_block;
 	int		id;

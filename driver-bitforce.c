@@ -51,7 +51,7 @@ enum {
 #define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_S 7
 #define BITFORCE_TIMEOUT_MS (BITFORCE_TIMEOUT_S * 1000)
-#define BITFORCE_LONG_TIMEOUT_S 15
+#define BITFORCE_LONG_TIMEOUT_S 30
 #define BITFORCE_LONG_TIMEOUT_MS (BITFORCE_LONG_TIMEOUT_S * 1000)
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
@@ -347,6 +347,11 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (!fdDev)
 		return false;
 
+	/* Do not try to get the temperature if we're polling for a result to
+	 * minimise the change of interleaved results */
+	if (bitforce->polling)
+		return true;
+
 	/* It is not critical getting temperature so don't get stuck if  we
 	 * can't grab the mutex here */
 	if (mutex_trylock(&bitforce->device_mutex))
@@ -421,8 +426,6 @@ re_send:
 			goto re_send;
 		}
 		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
-		bitforce->hw_errors++;
-		bitforce_clear_buffer(bitforce);
 		return false;
 	}
 
@@ -463,8 +466,6 @@ re_send:
 
 	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
-		bitforce->hw_errors++;
-		bitforce_clear_buffer(bitforce);
 		return false;
 	}
 
@@ -601,39 +602,21 @@ static void biforce_thread_enable(struct thr_info *thr)
 static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	unsigned int sleep_time;
 	bool send_ret;
 	int64_t ret;
 
 	send_ret = bitforce_send_work(thr, work);
 
-	if (!bitforce->nonce_range) {
-		/* Initially wait 2/3 of the average cycle time so we can request more
-		work before full scan is up */
-		sleep_time = (2 * bitforce->sleep_ms) / 3;
-		if (!restart_wait(sleep_time))
-			return 0;
+	if (!restart_wait(bitforce->sleep_ms))
+		return 0;
 
-		bitforce->wait_ms = sleep_time;
-		queue_request(thr, false);
+	bitforce->wait_ms = bitforce->sleep_ms;
 
-		/* Now wait athe final 1/3rd; no bitforce should be finished by now */
-		sleep_time = bitforce->sleep_ms - sleep_time;
-		if (!restart_wait(sleep_time))
-			return 0;
-
-		bitforce->wait_ms += sleep_time;
-	} else {
-		sleep_time = bitforce->sleep_ms;
-		if (!restart_wait(sleep_time))
-			return 0;
-
-		bitforce->wait_ms = sleep_time;
-	}
-
-	if (send_ret)
+	if (send_ret) {
+		bitforce->polling = true;
 		ret = bitforce_get_result(thr, work);
-	else
+		bitforce->polling = false;
+	} else
 		ret = -1;
 
 	if (ret == -1) {
