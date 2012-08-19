@@ -617,6 +617,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'PGA.Utility':
 	case 'DEVS.Utility':
 	case 'SUMMARY.Utility':
+	case 'SUMMARY.Work Utility':
 	case 'total.Utility':
 		$ret = $value.'/m';
 		if ($value == 0)
@@ -732,6 +733,8 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'SUMMARY.Discarded':
 	case 'POOL.Discarded':
 	case 'total.Discarded':
+	case 'POOL.Diff1 Shares':
+	case 'total.Diff1 Shares':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -818,7 +821,8 @@ $singlerigsum = array(
  'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
 			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
-			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1),
+			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1,
+			'Diff1 Shares' => 1),
  'notify' => array('*' => 1));
 #
 function showtotal($total, $when, $oldvalues)
