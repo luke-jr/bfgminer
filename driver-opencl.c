@@ -749,6 +749,21 @@ struct cgpu_info *cpus;
 
 #ifdef HAVE_OPENCL
 
+#ifdef WIN32
+static UINT timeperiod_set;
+#endif
+
+void opencl_dynamic_cleanup() {
+#ifdef WIN32
+	if (timeperiod_set) {
+		timeEndPeriod(timeperiod_set);
+		timeperiod_set = 0;
+	}
+#endif
+}
+
+extern int opt_dynamic_interval;
+
 /* In dynamic mode, only the first thread of each device will be in use.
  * This potentially could start a thread that was stopped with the start-stop
  * options if one were to disable dynamic from the menu on a paused GPU */
@@ -756,9 +771,17 @@ void pause_dynamic_threads(int gpu)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
 	int i;
+#ifdef WIN32
+	bool any_dynamic = false;
+#endif
 
 	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr = &thr_info[i];
+
+#ifdef WIN32
+		if (cgpu->dynamic)
+			any_dynamic = true;
+#endif
 
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
@@ -769,6 +792,20 @@ void pause_dynamic_threads(int gpu)
 		if (!cgpu->dynamic && cgpu->deven != DEV_DISABLED)
 			tq_push(thr->q, &ping);
 	}
+
+#ifdef WIN32
+	if (any_dynamic) {
+		if (!timeperiod_set) {
+			timeperiod_set = opt_dynamic_interval > 3 ? (opt_dynamic_interval / 2) : 1;
+			if (TIMERR_NOERROR != timeBeginPeriod(timeperiod_set))
+				timeperiod_set = 0;
+		}
+	} else {
+		if (timeperiod_set) {
+			opencl_dynamic_cleanup();
+		}
+	}
+#endif
 }
 
 
