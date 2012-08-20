@@ -1917,19 +1917,15 @@ static void enable_pool(struct pool *pool)
 	}
 }
 
-static void disable_pool(struct pool *pool)
+static void disable_pool2(struct pool *pool, enum pool_enable pe)
 {
 	if (pool->enabled == POOL_ENABLED)
 		enabled_pools--;
-	pool->enabled = POOL_DISABLED;
+	pool->enabled = pe;
 }
 
-static void reject_pool(struct pool *pool)
-{
-	if (pool->enabled == POOL_ENABLED)
-		enabled_pools--;
-	pool->enabled = POOL_REJECTING;
-}
+#define disable_pool(pool)  disable_pool2(pool, POOL_DISABLED)
+#define  reject_pool(pool)  disable_pool2(pool, POOL_REJECTING)
 
 static bool submit_upstream_work(const struct work *work, CURL *curl)
 {
@@ -3190,18 +3186,24 @@ static void *stage_thread(void *userdata)
 
 		test_work_current(work);
 
+		struct pool *pool = work->pool;
 		if (stale_work3(work, false, false)) {
 			struct timeval now;
 			gettimeofday(&now, NULL);
-			if (work->tv_staged.tv_sec >= now.tv_sec - 2) {
+			if (work->tv_staged.tv_sec >= now.tv_sec - 2 && pool->enabled != POOL_REJECTING) {
 				// Only for freshly fetched work, disable the pool giving it to us stale
-				struct pool *pool = work->pool;
 				applog(LOG_WARNING, "Pool %u gave us stale-on-arrival work, disabling!", pool->pool_no);
-				reject_pool(pool);
+				disable_pool2(pool, POOL_STALE);
 				if (pool == current_pool())
 					switch_pools(NULL);
 			}
 			continue;
+		}
+
+		if (unlikely(pool->enabled == POOL_STALE)) {
+			applog(LOG_WARNING, "Stale pool %d no longer giving stale work, re-enabling!", pool->pool_no);
+			enable_pool(pool);
+			switch_pools(NULL);
 		}
 
 		applog(LOG_DEBUG, "Pushing work to getwork queue");
@@ -3547,6 +3549,9 @@ updated:
 				break;
 			case POOL_REJECTING:
 				wlogprint("Rejecting ");
+				break;
+			case POOL_STALE:
+				wlogprint("Stale ");
 				break;
 		}
 		wlogprint("%s Priority %d: %s  User:%s\n",
@@ -4903,7 +4908,9 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE)
+	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE
+	 || pool->enabled == POOL_STALE
+	)
 		return;
 
 	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE) {

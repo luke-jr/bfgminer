@@ -770,6 +770,7 @@ enum pool_enable {
 	POOL_DISABLED,
 	POOL_ENABLED,
 	POOL_REJECTING,
+	POOL_STALE,
 };
 
 struct pool {
