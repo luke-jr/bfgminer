@@ -703,6 +703,8 @@ int gpu_fanpercent(int gpu)
 	ret = __gpu_fanpercent(ga);
 	unlock_adl();
 	if (unlikely(ga->has_fanspeed && ret == -1)) {
+#if 0
+		/* Recursive calling applog causes a hang, so disable messages */
 		applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
 		if (opt_restart) {
 			applog(LOG_WARNING, "Restart enabled, will attempt to restart cgminer");
@@ -713,6 +715,14 @@ int gpu_fanpercent(int gpu)
 		ga->has_fanspeed = false;
 		if (ga->twin) {
 			applog(LOG_WARNING, "Disabling fanspeed linking on GPU twins");
+			ga->twin->twin = NULL;;
+			ga->twin = NULL;
+		}
+#endif
+		if (opt_restart)
+			app_restart();
+		ga->has_fanspeed = false;
+		if (ga->twin) {
 			ga->twin->twin = NULL;;
 			ga->twin = NULL;
 		}
