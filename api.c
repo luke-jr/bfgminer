@@ -175,7 +175,6 @@ static const char *WAIT = "Waiting";
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
-static const char *STALE = "Stale";
 static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
 #ifdef HAVE_OPENCL
@@ -1674,9 +1673,6 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 				break;
 			case POOL_REJECTING:
 				status = (char *)REJECTING;
-				break;
-			case POOL_STALE:
-				status = (char *)STALE;
 				break;
 			case POOL_ENABLED:
 				if (pool->idle)

@@ -1917,15 +1917,19 @@ static void enable_pool(struct pool *pool)
 	}
 }
 
-static void disable_pool2(struct pool *pool, enum pool_enable pe)
+static void disable_pool(struct pool *pool)
 {
 	if (pool->enabled == POOL_ENABLED)
 		enabled_pools--;
-	pool->enabled = pe;
+	pool->enabled = POOL_DISABLED;
 }
 
-#define disable_pool(pool)  disable_pool2(pool, POOL_DISABLED)
-#define  reject_pool(pool)  disable_pool2(pool, POOL_REJECTING)
+static void reject_pool(struct pool *pool)
+{
+	if (pool->enabled == POOL_ENABLED)
+		enabled_pools--;
+	pool->enabled = POOL_REJECTING;
+}
 
 static bool submit_upstream_work(const struct work *work, CURL *curl)
 {
@@ -2568,7 +2572,7 @@ static bool workio_get_work(struct workio_cmd *wc)
 	return true;
 }
 
-static bool stale_work3(struct work *work, bool share, bool failoveronly)
+static bool stale_work(struct work *work, bool share)
 {
 	struct timeval now;
 	time_t work_expiry;
@@ -2606,7 +2610,6 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 	} else {
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
-		/* Note this intentionally uses the global option, not the param */
 		if (block_id != (opt_fail_only ? pool->block_id : current_block_id))
 		{
 			applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != %d ? %08lx : %08lx)", (long)block_id, (int)opt_fail_only, (long)pool->block_id, (long)current_block_id);
@@ -2643,14 +2646,13 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 
 	/* If the user only wants strict failover, any work from a pool other than
 	 * the current one is always considered stale */
-	if (failoveronly && !share && pool != current_pool() && !work->mandatory) {
+	if (opt_fail_only && !share && pool != current_pool() && !work->mandatory) {
 		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch (pool %u vs %u)", pool->pool_no, current_pool()->pool_no);
 		return true;
 	}
 
 	return false;
 }
-#define stale_work(work, share)  stale_work3(work, share, opt_fail_only)
 
 static void check_solve(struct work *work)
 {
@@ -3186,26 +3188,6 @@ static void *stage_thread(void *userdata)
 
 		test_work_current(work);
 
-		struct pool *pool = work->pool;
-		if (stale_work3(work, false, false)) {
-			struct timeval now;
-			gettimeofday(&now, NULL);
-			if (work->tv_staged.tv_sec >= now.tv_sec - 2 && pool->enabled != POOL_REJECTING) {
-				// Only for freshly fetched work, disable the pool giving it to us stale
-				applog(LOG_WARNING, "Pool %u gave us stale-on-arrival work, disabling!", pool->pool_no);
-				disable_pool2(pool, POOL_STALE);
-				if (pool == current_pool())
-					switch_pools(NULL);
-			}
-			continue;
-		}
-
-		if (unlikely(pool->enabled == POOL_STALE)) {
-			applog(LOG_WARNING, "Stale pool %d no longer giving stale work, re-enabling!", pool->pool_no);
-			enable_pool(pool);
-			switch_pools(NULL);
-		}
-
 		applog(LOG_DEBUG, "Pushing work to getwork queue");
 
 		if (unlikely(!hash_push(work))) {
@@ -3549,9 +3531,6 @@ updated:
 				break;
 			case POOL_REJECTING:
 				wlogprint("Rejecting ");
-				break;
-			case POOL_STALE:
-				wlogprint("Stale ");
 				break;
 		}
 		wlogprint("%s Priority %d: %s  User:%s\n",
@@ -4908,9 +4887,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE
-	 || pool->enabled == POOL_STALE
-	)
+	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE)
 		return;
 
 	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE) {
