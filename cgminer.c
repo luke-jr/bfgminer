@@ -2882,12 +2882,7 @@ static bool work_rollable(struct work *work)
 
 static bool hash_push(struct work *work)
 {
-	bool rc = true, dec = false;
-
-	if (work->queued) {
-		work->queued = false;
-		dec = true;
-	}
+	bool rc = true;
 
 	mutex_lock(stgd_lock);
 	if (work_rollable(work))
@@ -2900,8 +2895,10 @@ static bool hash_push(struct work *work)
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
 
-	if (dec)
+	if (work->queued) {
+		work->queued = false;
 		dec_queued();
+	}
 
 	return rc;
 }
