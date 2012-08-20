@@ -93,7 +93,6 @@ static bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
 static int opt_fail_pause = 5;
-static int fail_pause = 5;
 int opt_log_interval = 5;
 static int opt_queue = 1;
 int opt_scantime = 60;
@@ -2422,11 +2421,9 @@ static void *get_work_thread(void *userdata)
 		while (!get_upstream_work(ret_work, ce->curl)) {
 			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
-				fail_pause);
-			sleep(fail_pause);
-			fail_pause += opt_fail_pause;
+				opt_fail_pause);
+			sleep(opt_fail_pause);
 		}
-		fail_pause = opt_fail_pause;
 
 		ret_work->queued = true;
 	}
@@ -2558,11 +2555,9 @@ static void *submit_work_thread(void *userdata)
 
 		/* pause, then restart work-request loop */
 		applog(LOG_INFO, "json_rpc_call failed on submit_work, retry after %d seconds",
-			fail_pause);
-		sleep(fail_pause);
-		fail_pause += opt_fail_pause;
+			opt_fail_pause);
+		sleep(opt_fail_pause);
 	}
-	fail_pause = opt_fail_pause;
 	push_curl_entry(ce, pool);
 out:
 	workio_cmd_free(wc);
