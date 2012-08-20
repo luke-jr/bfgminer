@@ -537,13 +537,13 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
  { SEVERITY_SUCC,  MSG_DEVDETAILS,PARAM_NONE,	"Device Details" },
- { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"CGMiner stats" },
+ { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"BFGMiner stats" },
  { SEVERITY_ERR,   MSG_MISCHK,	PARAM_NONE,	"Missing check cmd" },
  { SEVERITY_SUCC,  MSG_CHECK,	PARAM_NONE,	"Check command" },
  { SEVERITY_ERR,   MSG_MISBOOL,	PARAM_NONE,	"Missing parameter: true/false" },
  { SEVERITY_ERR,   MSG_INVBOOL,	PARAM_NONE,	"Invalid parameter should be true or false" },
  { SEVERITY_SUCC,  MSG_FOO,	PARAM_BOOL,	"Failover-Only set to %s" },
- { SEVERITY_SUCC,  MSG_MINECOIN,PARAM_NONE,	"CGMiner coin" },
+ { SEVERITY_SUCC,  MSG_MINECOIN,PARAM_NONE,	"BFGMiner coin" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -3116,7 +3116,7 @@ static void *quit_thread(__maybe_unused void *userdata)
 	mutex_unlock(&quit_restart_lock);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "API: killing cgminer");
+		applog(LOG_DEBUG, "API: killing BFGMiner");
 
 	kill_work();
 
@@ -3132,7 +3132,7 @@ static void *restart_thread(__maybe_unused void *userdata)
 	mutex_unlock(&quit_restart_lock);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "API: restarting cgminer");
+		applog(LOG_DEBUG, "API: restarting BFGMiner");
 
 	app_restart();
 
