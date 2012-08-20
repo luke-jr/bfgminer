@@ -2697,6 +2697,11 @@ next_submit:
 
 	if (stale_work(work, true)) {
 		work->stale = true;
+		if (unlikely(!list_empty(&submit_waiting))) {
+			applog(LOG_WARNING, "Stale share detected while queued submissions are waiting, discarding");
+			submit_discard_share(work);
+			goto out;
+		}
 		if (opt_submit_stale)
 			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
 		else if (pool->submit_old)
@@ -2730,8 +2735,12 @@ next_submit:
 			submit_discard_share(work);
 			break;
 		}
-		else if (unlikely(work->stale && opt_retries < 0)) {
-			if (staleexpire <= time(NULL)) {
+		else if (work->stale) {
+			if (unlikely(!list_empty(&submit_waiting))) {
+				applog(LOG_WARNING, "Stale share failed to submit while queued submissions are waiting, discarding");
+				submit_discard_share(work);
+				break;
+			} else if (unlikely(opt_retries < 0 && staleexpire <= time(NULL))) {
 				applog(LOG_NOTICE, "Stale share failed to submit for 5 minutes, discarding");
 				submit_discard_share(work);
 				break;
