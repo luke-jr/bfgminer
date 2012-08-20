@@ -92,7 +92,6 @@ bool opt_quiet;
 static bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
-static int opt_fail_pause = 5;
 int opt_log_interval = 5;
 static int opt_queue = 1;
 int opt_scantime = 60;
@@ -961,8 +960,8 @@ static struct opt_table opt_config_table[] = {
 		     set_null, NULL, NULL,
 		     opt_hidden),
 	OPT_WITH_ARG("--retry-pause|-R",
-		     set_int_0_to_9999, opt_show_intval, &opt_fail_pause,
-		     "Number of seconds to pause, between retries"),
+		     set_null, NULL, NULL,
+		     opt_hidden),
 	OPT_WITH_ARG("--rotate",
 		     set_rotate, opt_show_intval, &opt_rotate_period,
 		     "Change multipool strategy from failover to regularly rotate at N minutes"),
@@ -3493,8 +3492,8 @@ static void set_options(void)
 	clear_logwin();
 retry:
 	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n"
-		  "[P]ause: %d\n[W]rite config file\n[C]gminer restart\n",
-		opt_queue, opt_scantime, opt_expiry, opt_fail_pause);
+		  "[W]rite config file\n[C]gminer restart\n",
+		opt_queue, opt_scantime, opt_expiry);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 
@@ -3521,14 +3520,6 @@ retry:
 			goto retry;
 		}
 		opt_expiry = selected;
-		goto retry;
-	} else if  (!strncasecmp(&input, "p", 1)) {
-		selected = curses_int("Seconds to pause before network retries");
-		if (selected < 1 || selected > 9999) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		opt_fail_pause = selected;
 		goto retry;
 	} else if  (!strncasecmp(&input, "w", 1)) {
 		FILE *fcfg;
