@@ -3054,11 +3054,11 @@ static void *stage_thread(void *userdata)
 		test_work_current(work);
 
 		if (stale_work3(work, false, false)) {
+			struct pool *pool = work->pool;
 			struct timeval now;
 			gettimeofday(&now, NULL);
-			if (work->tv_staged.tv_sec >= now.tv_sec - 2) {
+			if (work->tv_staged.tv_sec >= now.tv_sec - 2 && pool->enabled != POOL_REJECTING) {
 				// Only for freshly fetched work, disable the pool giving it to us stale
-				struct pool *pool = work->pool;
 				applog(LOG_WARNING, "Pool %u gave us stale-on-arrival work, disabling!", pool->pool_no);
 				reject_pool(pool);
 				if (pool == current_pool())
