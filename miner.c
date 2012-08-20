@@ -1931,7 +1931,7 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
-static bool submit_upstream_work(const struct work *work, CURL *curl)
+static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
 	json_t *val, *res;
@@ -2002,11 +2002,11 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d pool %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s",
+				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "");
 			else
-				applog(LOG_NOTICE, "Accepted %s %s %d",
-				       hashshow, cgpu->api->name, cgpu->device_id);
+				applog(LOG_NOTICE, "Accepted %s %s %d %s",
+				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "");
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -2055,8 +2055,8 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 			} else
 				strcpy(reason, "");
 
-			applog(LOG_NOTICE, "Rejected %s %s %d %s%s",
-			       hashshow, cgpu->api->name, cgpu->device_id, where, reason);
+			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s",
+			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "");
 			sharelog(disposition, work);
 		}
 
@@ -2677,6 +2677,7 @@ static void *submit_work_thread(void *userdata)
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	struct work *work;
 	struct pool *pool;
+	bool resubmit;
 	struct curl_ent *ce;
 	int failures;
 	time_t staleexpire;
@@ -2689,6 +2690,7 @@ static void *submit_work_thread(void *userdata)
 next_submit:
 	work = wc->work;
 	pool = work->pool;
+	resubmit = false;
 	failures = 0;
 
 	check_solve(work);
@@ -2714,7 +2716,8 @@ next_submit:
 
 	ce = pop_curl_entry(pool);
 	/* submit solution to bitcoin via JSON-RPC */
-	while (!submit_upstream_work(work, ce->curl)) {
+	while (!submit_upstream_work(work, ce->curl, resubmit)) {
+		resubmit = true;
 		if ((!work->stale) && stale_work(work, true)) {
 			work->stale = true;
 			if (opt_submit_stale)
