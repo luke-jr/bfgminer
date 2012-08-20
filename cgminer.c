@@ -4553,7 +4553,7 @@ static void reap_curl(struct pool *pool)
 	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
 		if (pool->curls < 2)
 			break;
-		if (now.tv_sec - ent->tv.tv_sec > 60) {
+		if (now.tv_sec - ent->tv.tv_sec > 300) {
 			reaped++;
 			pool->curls--;
 			list_del(&ent->node);
