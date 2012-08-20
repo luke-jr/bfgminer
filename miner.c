@@ -87,7 +87,7 @@ static char packagename[255];
 bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
-static bool have_longpoll;
+bool have_longpoll;
 static bool want_per_device_stats;
 bool use_syslog;
 bool opt_quiet;
@@ -176,7 +176,7 @@ static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
-static pthread_mutex_t ch_lock;
+pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
 
 pthread_rwlock_t netacc_lock;
@@ -225,8 +225,10 @@ bool curses_active;
 static char current_block[37];
 static char *current_hash;
 static uint32_t current_block_id;
+char *current_fullhash;
 static char datestamp[40];
 static char blocktime[30];
+struct timeval block_timeval;
 
 struct block {
 	char hash[37];
@@ -3016,22 +3018,27 @@ static void restart_threads(void)
 static void set_curblock(char *hexstr, unsigned char *hash)
 {
 	unsigned char hash_swap[32];
-	struct timeval tv_now;
+	unsigned char block_hash_swap[32];
 	char *old_hash;
 
 	current_block_id = ((uint32_t*)hash)[1];
 	strcpy(current_block, hexstr);
-	gettimeofday(&tv_now, NULL);
-	get_timestamp(blocktime, &tv_now);
 	swap256(hash_swap, hash);
+	swap256(block_hash_swap, hash+4);
 
 	/* Don't free current_hash directly to avoid dereferencing when read
-	 * elsewhere */
+	 * elsewhere - and update block_timeval inside the same lock */
 	mutex_lock(&ch_lock);
+	gettimeofday(&block_timeval, NULL);
 	old_hash = current_hash;
 	current_hash = bin2hex(hash_swap, 16);
 	free(old_hash);
+	old_hash = current_fullhash;
+	current_fullhash = bin2hex(block_hash_swap, 32);
+	free(old_hash);
 	mutex_unlock(&ch_lock);
+
+	get_timestamp(blocktime, &block_timeval);
 
 	if (unlikely(!current_hash))
 		quit (1, "set_curblock OOM");
