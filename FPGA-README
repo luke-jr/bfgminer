@@ -13,6 +13,11 @@ a cost of 1% in overall hashrate so this feature is disabled by default. It
 is only recommended you enable this if you are mining with a minirig on
 p2pool.
 
+C source is included for a bitforce firmware flash utility on Linux only:
+ bitforce-firmware-flash.c
+Using this, you can change the bitstream firmware on bitforce singles.
+It is untested with other devices. Use at your own risk!
+
 
 Icarus
 
