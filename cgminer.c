@@ -2415,10 +2415,14 @@ retry:
 		if (ts <= opt_queue)
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
-		inc_queued();
 
 		if (!ce)
 			ce = pop_curl_entry(pool);
+
+		/* Inc queued count after ce is popped in case there're none
+		 * left and we think we've queued work when we're just waiting
+		 * for curls */
+		inc_queued();
 
 		/* obtain new work from bitcoin via JSON-RPC */
 		if (!get_upstream_work(ret_work, ce->curl)) {
