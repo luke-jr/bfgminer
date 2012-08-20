@@ -4002,13 +4002,12 @@ static struct work *clone_work(struct work *work)
 	return work;
 }
 
-static bool get_work(struct work *work, struct thr_info *thr, const int thr_id)
+static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 {
 	struct timespec abstime = {0, 0};
 	struct work *work_heap;
 	struct timeval now;
 	struct pool *pool;
-	bool ret = false;
 
 	/* Tell the watchdog thread this thread is waiting on getwork and
 	 * should not be restarted */
@@ -4016,17 +4015,14 @@ static bool get_work(struct work *work, struct thr_info *thr, const int thr_id)
 
 	if (opt_benchmark) {
 		get_benchmark_work(work);
-		thread_reportin(thr);
-		return true;
+		goto out;
 	}
 
 retry:
 	pool = current_pool();
 
-	if (reuse_work(work)) {
-		ret = true;
+	if (reuse_work(work))
 		goto out;
-	}
 
 	if (!pool->lagging && !total_staged() && global_queued() >= mining_threads + opt_queue) {
 		struct cgpu_info *cgpu = thr->cgpu;
@@ -4080,14 +4076,10 @@ retry:
 	memcpy(work, work_heap, sizeof(struct work));
 	free_work(work_heap);
 
-	ret = true;
 out:
-
 	work->thr_id = thr_id;
 	thread_reportin(thr);
-	if (ret)
-		work->mined = true;
-	return ret;
+	work->mined = true;
 }
 
 bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
@@ -4244,11 +4236,8 @@ void *miner_thread(void *userdata)
 		mythr->work_restart = false;
 		if (api->free_work && likely(work->pool))
 			api->free_work(mythr, work);
-		if (unlikely(!get_work(work, mythr, thr_id))) {
-			applog(LOG_ERR, "work retrieval failed, exiting "
-				"mining thread %d", thr_id);
-			break;
-		}
+		get_work(work, mythr, thr_id);
+
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
 		cgpu->max_hashes = 0;
