@@ -2251,6 +2251,11 @@ next_submit:
 
 	if (stale_work(work, true)) {
 		work->stale = true;
+		if (unlikely(!list_empty(&submit_waiting))) {
+			applog(LOG_WARNING, "Stale share detected while queued submissions are waiting, discarding");
+			submit_discard_share(work);
+			goto out;
+		}
 		if (opt_submit_stale)
 			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
 		else if (pool->submit_old)
