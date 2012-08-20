@@ -4082,13 +4082,6 @@ retry:
 
 	ret = true;
 out:
-	if (unlikely(ret == false)) {
-		applog(LOG_DEBUG, "Retrying after %d seconds", fail_pause);
-		sleep(fail_pause);
-		fail_pause += opt_fail_pause;
-		goto retry;
-	}
-	fail_pause = opt_fail_pause;
 
 	work->thr_id = thr_id;
 	thread_reportin(thr);
