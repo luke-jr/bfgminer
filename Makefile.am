@@ -79,6 +79,12 @@ endif
 
 if HAS_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
+
+if HAVE_WINDOWS
+else
+bin_PROGRAMS += bitforce-firmware-flash
+bitforce_firmware_flash_SOURCES = bitforce-firmware-flash.c
+endif
 endif
 
 if HAS_ICARUS
