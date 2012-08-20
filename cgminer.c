@@ -2554,9 +2554,7 @@ static void *submit_work_thread(void *userdata)
 		}
 
 		/* pause, then restart work-request loop */
-		applog(LOG_INFO, "json_rpc_call failed on submit_work, retry after %d seconds",
-			opt_fail_pause);
-		sleep(opt_fail_pause);
+		applog(LOG_INFO, "json_rpc_call failed on submit_work, retrying");
 	}
 	push_curl_entry(ce, pool);
 out:
