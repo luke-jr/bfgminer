@@ -4075,7 +4075,6 @@ retry:
 			pool_resus(pool);
 	}
 
-	work_heap = clone_work(work_heap);
 	memcpy(work, work_heap, sizeof(struct work));
 	free_work(work_heap);
 
