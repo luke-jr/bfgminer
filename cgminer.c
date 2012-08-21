@@ -3972,7 +3972,7 @@ static bool reuse_work(struct work *work)
  * the future */
 static struct work *clone_work(struct work *work)
 {
-	int mrs = mining_threads + opt_queue - total_staged();
+	int oq = opt_queue * mining_threads, mrs = mining_threads + oq - total_staged();
 	struct work *work_clone;
 	bool cloned;
 
