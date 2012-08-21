@@ -5701,6 +5701,9 @@ begin_bench:
 	pthread_detach(thr->pth);
 #endif
 
+	for (i = 0; i < mining_threads + opt_queue; i++)
+		queue_request(NULL, false);
+
 	/* main loop - simply wait for workio thread to exit. This is not the
 	 * normal exit path and only occurs should the workio_thread die
 	 * unexpectedly */
