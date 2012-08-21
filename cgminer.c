@@ -2382,8 +2382,8 @@ out:
 
 static void *get_work_thread(void *userdata)
 {
+	int ts, tq, oq = opt_queue * mining_threads, maxq = oq + mining_threads;
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool = current_pool();
 	struct work *ret_work= NULL;
 	struct curl_ent *ce = NULL;
@@ -2400,7 +2400,7 @@ retry:
 	if (ts >= maxq)
 		goto out;
 
-	if (ts >= opt_queue && tq >= maxq - 1)
+	if (ts >= oq && tq >= maxq)
 		goto out;
 
 	if (clone_available())
