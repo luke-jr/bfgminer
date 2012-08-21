@@ -2402,8 +2402,7 @@ retry:
 	if (clone_available())
 		goto out;
 
-	if (!ret_work)
-		ret_work = make_work();
+	ret_work = make_work();
 	if (wc->thr)
 		ret_work->thr = wc->thr;
 	else
@@ -2432,6 +2431,7 @@ retry:
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
 			lagging = true;
 			dec_queued();
+			free_work(ret_work);
 			goto retry;
 		}
 
@@ -2448,8 +2448,6 @@ retry:
 	}
 
 out:
-	if (ret_work && !ret_work->queued)
-		free_work(ret_work);
 	workio_cmd_free(wc);
 	if (ce)
 		push_curl_entry(ce, pool);
