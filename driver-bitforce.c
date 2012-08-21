@@ -175,7 +175,7 @@ static int bitforce_autodetect_ftdi(void)
 	applog(LOG_DEBUG, "FTDI reports %u devices", (unsigned)numDevs);
 
 	buf = alloca(65 * numDevs);
-	bufptrs = alloca(numDevs + 1);
+	bufptrs = alloca(sizeof(*bufptrs) * (numDevs + 1));
 
 	for (i = 0; i < numDevs; ++i)
 		bufptrs[i] = &buf[i * 65];
