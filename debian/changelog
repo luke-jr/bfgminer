@@ -1,3 +1,17 @@
+bfgminer (2.6.5-0precise1) precise; urgency=low
+
+  * New BitFORCE firmware flash utility. When compiled with BitFORCE support, run `bitforce-firmware-flash` to get usage.
+  * Fixed hanging when using "Switch User" on Windows. This feature still kills ADL, though, so use --no-restart (and don't enable fan control or overclocking) if you plan to use it.
+  * Fixed dynamic mode on Windows. By default, Windows timer resolution is only 15ms and we're trying to sample much smaller than that. This was leading to the time taken to do GPU work appearing as zero for many samples. Now, a Windows multimedia timing API will be used to request more precision.
+  * gpu-memdiff should now take effect when you change gpu engine clock from the menu as well.
+  * The ADL gpu-map feature should work now when you have more ADL devices than OpenCL (eg, ATI cards that don't support OpenCL).
+  * More tweaks to the queueing mechanism to increase efficiency and keep minirigs fully work laden.
+  * Failover-only can now be changed via the RPC API.
+  * Updated miner.php from Kano
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 20 Aug 2012 23:59:19 -0000
+
+
 bfgminer (2.6.4-0precise1) precise; urgency=low
 
   * More drastic improvements to ModMiner clock adjustment algorithm. Downclocking should be more conservative, and BFGMiner will even raise the clock speed when it's doing well.
