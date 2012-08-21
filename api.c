@@ -188,6 +188,11 @@ static const char *NULLSTR = "(null)";
 static const char *TRUESTR = "true";
 static const char *FALSESTR = "false";
 
+#ifdef USE_SCRYPT
+static const char *SCRYPTSTR = "scrypt";
+#endif
+static const char *SHA256STR = "sha256";
+
 static const char *DEVICECODE = ""
 #ifdef HAVE_OPENCL
 			"GPU "
@@ -233,7 +238,7 @@ static const char *OSINFO =
 #define _SUMMARY	"SUMMARY"
 #define _STATUS		"STATUS"
 #define _VERSION	"VERSION"
-#define _MINECON	"CONFIG"
+#define _MINECONFIG	"CONFIG"
 #define _GPU		"GPU"
 
 #ifdef HAVE_AN_FPGA
@@ -253,6 +258,7 @@ static const char *OSINFO =
 #define _RESTART	"RESTART"
 #define _MINESTATS	"STATS"
 #define _CHECK		"CHECK"
+#define _MINECOIN	"COIN"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -268,7 +274,7 @@ static const char ISJSON = '{';
 #define JSON_SUMMARY	JSON1 _SUMMARY JSON2
 #define JSON_STATUS	JSON1 _STATUS JSON2
 #define JSON_VERSION	JSON1 _VERSION JSON2
-#define JSON_MINECON	JSON1 _MINECON JSON2
+#define JSON_MINECONFIG	JSON1 _MINECONFIG JSON2
 #define JSON_GPU	JSON1 _GPU JSON2
 
 #ifdef HAVE_AN_FPGA
@@ -289,6 +295,7 @@ static const char ISJSON = '{';
 #define JSON_CLOSE	JSON3
 #define JSON_MINESTATS	JSON1 _MINESTATS JSON2
 #define JSON_CHECK	JSON1 _CHECK JSON2
+#define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_END	JSON4 JSON5
 
 static const char *JSON_COMMAND = "command";
@@ -330,7 +337,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_NOGPUADL 30
 #define MSG_INVINT 31
 #define MSG_GPUINT 32
-#define MSG_MINECON 33
+#define MSG_MINECONFIG 33
 #define MSG_GPUMERR 34
 #define MSG_GPUMEM 35
 #define MSG_GPUEERR 36
@@ -383,6 +390,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MISBOOL 75
 #define MSG_INVBOOL 76
 #define MSG_FOO 77
+#define MSG_MINECOIN 78
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -497,7 +505,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
  { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " _MIN_INTENSITY_STR " - " _MAX_INTENSITY_STR },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
- { SEVERITY_SUCC,  MSG_MINECON, PARAM_NONE,	"BFGMiner config" },
+ { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"BFGMiner config" },
 #ifdef HAVE_OPENCL
  { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
  { SEVERITY_SUCC,  MSG_GPUMEM,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported success" },
@@ -529,12 +537,13 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
  { SEVERITY_SUCC,  MSG_DEVDETAILS,PARAM_NONE,	"Device Details" },
- { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"CGMiner stats" },
+ { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"BFGMiner stats" },
  { SEVERITY_ERR,   MSG_MISCHK,	PARAM_NONE,	"Missing check cmd" },
  { SEVERITY_SUCC,  MSG_CHECK,	PARAM_NONE,	"Check command" },
  { SEVERITY_ERR,   MSG_MISBOOL,	PARAM_NONE,	"Missing parameter: true/false" },
  { SEVERITY_ERR,   MSG_INVBOOL,	PARAM_NONE,	"Invalid parameter should be true or false" },
  { SEVERITY_SUCC,  MSG_FOO,	PARAM_BOOL,	"Failover-Only set to %s" },
+ { SEVERITY_SUCC,  MSG_MINECOIN,PARAM_NONE,	"BFGMiner coin" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1253,9 +1262,9 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 #endif
 
 	sprintf(io_buffer, isjson
-		? "%s," JSON_MINECON
-		: "%s" _MINECON ",",
-		message(MSG_MINECON, 0, NULL, isjson));
+		? "%s," JSON_MINECONFIG
+		: "%s" _MINECONFIG ",",
+		message(MSG_MINECONFIG, 0, NULL, isjson));
 
 	root = api_add_int(root, "GPU Count", &gpucount, false);
 	root = api_add_int(root, "PGA Count", &pgacount, false);
@@ -2664,6 +2673,42 @@ static void failoveronly(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 	strcpy(io_buffer, message(MSG_FOO, tf, NULL, isjson));
 }
 
+static void minecoin(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+
+	sprintf(io_buffer, isjson
+		? "%s," JSON_MINECOIN
+		: "%s" _MINECOIN ",",
+		message(MSG_MINECOIN, 0, NULL, isjson));
+
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
+	else
+#endif
+		root = api_add_const(root, "Hash Method", SHA256STR, false);
+
+        mutex_lock(&ch_lock);
+	if (current_fullhash && *current_fullhash) {
+		root = api_add_timeval(root, "Current Block Time", &block_timeval, true);
+		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
+	} else {
+		struct timeval t = {0,0};
+		root = api_add_timeval(root, "Current Block Time", &t, true);
+		root = api_add_const(root, "Current Block Hash", BLANK, false);
+	}
+        mutex_unlock(&ch_lock);
+
+	root = api_add_bool(root, "LP", &have_longpoll, false);
+
+	root = print_data(root, buf, isjson);
+	if (isjson)
+		strcat(buf, JSON_CLOSE);
+	strcat(io_buffer, buf);
+}
+
 static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -2716,6 +2761,7 @@ struct CMDS {
 	{ "stats",		minerstats,	false },
 	{ "check",		checkcommand,	false },
 	{ "failover-only",	failoveronly,	true },
+	{ "coin",		minecoin,	false },
 	{ NULL,			NULL,		false }
 };
 
@@ -3070,7 +3116,7 @@ static void *quit_thread(__maybe_unused void *userdata)
 	mutex_unlock(&quit_restart_lock);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "API: killing cgminer");
+		applog(LOG_DEBUG, "API: killing BFGMiner");
 
 	kill_work();
 
@@ -3086,7 +3132,7 @@ static void *restart_thread(__maybe_unused void *userdata)
 	mutex_unlock(&quit_restart_lock);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "API: restarting cgminer");
+		applog(LOG_DEBUG, "API: restarting BFGMiner");
 
 	app_restart();
 

@@ -406,10 +406,9 @@ struct cgpu_info {
 	int opt_tc, thread_concurrency;
 	int shaders;
 #endif
-	struct timeval tv_gpustart;
-	struct timeval tv_gpumid;
+	struct timeval tv_gpustart;;
+	struct timeval tv_gpuend;
 	double gpu_us_average;
-	int intervals, hit;
 #endif
 
 	float temp;
@@ -483,7 +482,6 @@ extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*s
 extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
-extern double us_tdiff(struct timeval *end, struct timeval *start);
 extern void rename_thr(const char* name);
 
 struct string_elist {
@@ -607,6 +605,7 @@ static inline void rwlock_init(pthread_rwlock_t *lock)
 struct pool;
 
 extern bool opt_protocol;
+extern bool have_longpoll;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
@@ -650,6 +649,7 @@ extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 extern int opt_scantime;
 
 extern pthread_mutex_t console_lock;
+extern pthread_mutex_t ch_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
@@ -726,6 +726,8 @@ extern const int opt_cutofftemp;
 extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
+extern char *current_fullhash;
+extern struct timeval block_timeval;
 
 #ifdef HAVE_OPENCL
 typedef struct {

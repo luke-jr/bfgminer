@@ -88,7 +88,7 @@ static char packagename[255];
 bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
-static bool have_longpoll;
+bool have_longpoll;
 static bool want_per_device_stats;
 bool use_syslog;
 bool opt_quiet;
@@ -177,7 +177,7 @@ static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
-static pthread_mutex_t ch_lock;
+pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
 
 pthread_rwlock_t netacc_lock;
@@ -226,8 +226,10 @@ bool curses_active;
 static char current_block[37];
 static char *current_hash;
 static uint32_t current_block_id;
+char *current_fullhash;
 static char datestamp[40];
 static char blocktime[30];
+struct timeval block_timeval;
 
 struct block {
 	char hash[37];
@@ -1921,7 +1923,7 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
-static bool submit_upstream_work(const struct work *work, CURL *curl)
+static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
 	json_t *val, *res;
@@ -1992,11 +1994,11 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d pool %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s",
+				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "");
 			else
-				applog(LOG_NOTICE, "Accepted %s %s %d",
-				       hashshow, cgpu->api->name, cgpu->device_id);
+				applog(LOG_NOTICE, "Accepted %s %s %d %s",
+				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "");
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -2045,8 +2047,8 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 			} else
 				strcpy(reason, "");
 
-			applog(LOG_NOTICE, "Rejected %s %s %d %s%s",
-			       hashshow, cgpu->api->name, cgpu->device_id, where, reason);
+			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s",
+			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "");
 			sharelog(disposition, work);
 		}
 
@@ -2463,8 +2465,7 @@ static int global_queued(void)
 	return ret;
 }
 
-static bool stale_work3(struct work *work, bool share, bool failoveronly);
-#define stale_work(work, share)  stale_work3(work, share, opt_fail_only)
+static bool stale_work(struct work *work, bool share);
 
 static inline bool should_roll(struct work *work)
 {
@@ -2658,7 +2659,7 @@ static bool workio_get_work(struct workio_cmd *wc)
 	return true;
 }
 
-static bool stale_work3(struct work *work, bool share, bool failoveronly)
+static bool stale_work(struct work *work, bool share)
 {
 	struct timeval now;
 	time_t work_expiry;
@@ -2695,7 +2696,6 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 	} else {
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
-		/* Note this intentionally uses the global option, not the param */
 		if (block_id != (opt_fail_only ? pool->block_id : current_block_id))
 		{
 			applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != %d ? %08lx : %08lx)", (long)block_id, (int)opt_fail_only, (long)pool->block_id, (long)current_block_id);
@@ -2726,7 +2726,7 @@ static bool stale_work3(struct work *work, bool share, bool failoveronly)
 
 	/* If the user only wants strict failover, any work from a pool other than
 	 * the current one is always considered stale */
-	if (failoveronly && !share && pool != current_pool() && !work->mandatory &&
+	if (opt_fail_only && !share && pool != current_pool() && !work->mandatory &&
 	    pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch (pool %u vs %u)", pool->pool_no, current_pool()->pool_no);
 		return true;
@@ -2758,6 +2758,7 @@ static void *submit_work_thread(void *userdata)
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	struct work *work;
 	struct pool *pool;
+	bool resubmit;
 	struct curl_ent *ce;
 	int failures;
 	time_t staleexpire;
@@ -2770,12 +2771,18 @@ static void *submit_work_thread(void *userdata)
 next_submit:
 	work = wc->work;
 	pool = work->pool;
+	resubmit = false;
 	failures = 0;
 
 	check_solve(work);
 
 	if (stale_work(work, true)) {
 		work->stale = true;
+		if (unlikely(!list_empty(&submit_waiting))) {
+			applog(LOG_WARNING, "Stale share detected while queued submissions are waiting, discarding");
+			submit_discard_share(work);
+			goto out;
+		}
 		if (opt_submit_stale)
 			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
 		else if (pool->submit_old)
@@ -2790,7 +2797,8 @@ next_submit:
 
 	ce = pop_curl_entry(pool);
 	/* submit solution to bitcoin via JSON-RPC */
-	while (!submit_upstream_work(work, ce->curl)) {
+	while (!submit_upstream_work(work, ce->curl, resubmit)) {
+		resubmit = true;
 		if ((!work->stale) && stale_work(work, true)) {
 			work->stale = true;
 			if (opt_submit_stale)
@@ -2809,8 +2817,12 @@ next_submit:
 			submit_discard_share(work);
 			break;
 		}
-		else if (unlikely(work->stale && opt_retries < 0)) {
-			if (staleexpire <= time(NULL)) {
+		else if (work->stale) {
+			if (unlikely(!list_empty(&submit_waiting))) {
+				applog(LOG_WARNING, "Stale share failed to submit while queued submissions are waiting, discarding");
+				submit_discard_share(work);
+				break;
+			} else if (unlikely(opt_retries < 0 && staleexpire <= time(NULL))) {
 				applog(LOG_NOTICE, "Stale share failed to submit for 5 minutes, discarding");
 				submit_discard_share(work);
 				break;
@@ -3094,22 +3106,27 @@ static void restart_threads(void)
 static void set_curblock(char *hexstr, unsigned char *hash)
 {
 	unsigned char hash_swap[32];
-	struct timeval tv_now;
+	unsigned char block_hash_swap[32];
 	char *old_hash;
 
 	current_block_id = ((uint32_t*)hash)[1];
 	strcpy(current_block, hexstr);
-	gettimeofday(&tv_now, NULL);
-	get_timestamp(blocktime, &tv_now);
 	swap256(hash_swap, hash);
+	swap256(block_hash_swap, hash+4);
 
 	/* Don't free current_hash directly to avoid dereferencing when read
-	 * elsewhere */
+	 * elsewhere - and update block_timeval inside the same lock */
 	mutex_lock(&ch_lock);
+	gettimeofday(&block_timeval, NULL);
 	old_hash = current_hash;
 	current_hash = bin2hex(hash_swap, 16);
 	free(old_hash);
+	old_hash = current_fullhash;
+	current_fullhash = bin2hex(block_hash_swap, 32);
+	free(old_hash);
 	mutex_unlock(&ch_lock);
+
+	get_timestamp(blocktime, &block_timeval);
 
 	if (unlikely(!current_hash))
 		quit (1, "set_curblock OOM");
@@ -3283,20 +3300,6 @@ static void *stage_thread(void *userdata)
 		work->work_restart_id = work->pool->work_restart_id;
 
 		test_work_current(work);
-
-		if (stale_work3(work, false, false)) {
-			struct timeval now;
-			gettimeofday(&now, NULL);
-			if (work->tv_staged.tv_sec >= now.tv_sec - 2) {
-				// Only for freshly fetched work, disable the pool giving it to us stale
-				struct pool *pool = work->pool;
-				applog(LOG_WARNING, "Pool %u gave us stale-on-arrival work, disabling!", pool->pool_no);
-				reject_pool(pool);
-				if (pool == current_pool())
-					switch_pools(NULL);
-			}
-			continue;
-		}
 
 		applog(LOG_DEBUG, "Pushing work to getwork queue");
 
@@ -5409,6 +5412,7 @@ static void clean_up(void)
 {
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
+	opencl_dynamic_cleanup();
 #endif
 #ifdef HAVE_LIBUSB
         libusb_exit(NULL);

@@ -25,6 +25,7 @@ extern char *set_thread_concurrency(char *arg);
 #endif
 extern char *set_kernel(char *arg);
 void manage_gpu(void);
+extern void opencl_dynamic_cleanup();
 extern void pause_dynamic_threads(int gpu);
 
 extern bool have_opencl;

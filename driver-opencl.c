@@ -832,6 +832,21 @@ struct cgpu_info *cpus;
 
 #ifdef HAVE_OPENCL
 
+#ifdef WIN32
+static UINT timeperiod_set;
+#endif
+
+void opencl_dynamic_cleanup() {
+#ifdef WIN32
+	if (timeperiod_set) {
+		timeEndPeriod(timeperiod_set);
+		timeperiod_set = 0;
+	}
+#endif
+}
+
+extern int opt_dynamic_interval;
+
 /* In dynamic mode, only the first thread of each device will be in use.
  * This potentially could start a thread that was stopped with the start-stop
  * options if one were to disable dynamic from the menu on a paused GPU */
@@ -839,9 +854,17 @@ void pause_dynamic_threads(int gpu)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
 	int i;
+#ifdef WIN32
+	bool any_dynamic = false;
+#endif
 
 	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr = &thr_info[i];
+
+#ifdef WIN32
+		if (cgpu->dynamic)
+			any_dynamic = true;
+#endif
 
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
@@ -852,6 +875,20 @@ void pause_dynamic_threads(int gpu)
 		if (!cgpu->dynamic && cgpu->deven != DEV_DISABLED)
 			tq_push(thr->q, &ping);
 	}
+
+#ifdef WIN32
+	if (any_dynamic) {
+		if (!timeperiod_set) {
+			timeperiod_set = opt_dynamic_interval > 3 ? (opt_dynamic_interval / 2) : 1;
+			if (TIMERR_NOERROR != timeBeginPeriod(timeperiod_set))
+				timeperiod_set = 0;
+		}
+	} else {
+		if (timeperiod_set) {
+			opencl_dynamic_cleanup();
+		}
+	}
+#endif
 }
 
 
@@ -1741,7 +1778,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
 	const int dynamic_us = opt_dynamic_interval * 1000;
-	struct timeval tv_gpuend;
 	cl_bool blocking;
 
 	cl_int status;
@@ -1760,17 +1796,13 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		clFinish(clState->commandQueue);
 
 	if (gpu->dynamic) {
-		double gpu_us;
+		struct timeval diff;
+		suseconds_t gpu_us;
 
-		/* Windows returns the same time for gettimeofday due to its
-		 * 15ms timer resolution, so we must average the result over
-		 * at least 5 values that are actually different to get an
-		 * accurate result */
-		gpu->intervals++;
-		gettimeofday(&tv_gpuend, NULL);
-		gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpumid);
-		if (gpu_us > 0 && ++gpu->hit > 4) {
-			gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpustart) / gpu->intervals;
+		gettimeofday(&gpu->tv_gpuend, NULL);
+		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
+		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
+		if (likely(gpu_us >= 0)) {
 			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
 
 			/* Try to not let the GPU be out for longer than 
@@ -1783,7 +1815,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 				if (gpu->intensity < MAX_INTENSITY)
 					++gpu->intensity;
 			}
-			gpu->intervals = gpu->hit = 0;
 		}
 	}
 	set_threads_hashes(clState->vwidth, &threads, &hashes, globalThreads,
@@ -1819,11 +1850,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			clFinish(clState->commandQueue);
 	}
 
-	gettimeofday(&gpu->tv_gpumid, NULL);
-	if (!gpu->intervals) {
-		gpu->tv_gpustart.tv_sec = gpu->tv_gpumid.tv_sec;
-		gpu->tv_gpustart.tv_usec = gpu->tv_gpumid.tv_usec;
-	}
+	gettimeofday(&gpu->tv_gpustart, NULL);
 
 	if (clState->goffset) {
 		size_t global_work_offset[1];

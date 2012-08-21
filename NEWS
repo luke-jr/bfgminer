@@ -1,3 +1,54 @@
+BFGMiner Version 2.6.5 - August 20, 2012
+
+- API new command 'coin' with mining information
+- Add message to share if it's a resubmit.
+- Add virtual adl mapping for when none is specified on the command line to
+not crash without a map specified.
+- Fix ADL gpu-map not working when there are more ADL devices than openCL.
+Patch supplied and tested by Nite69.
+- bitforce: Initial import of Linux-only bitforce-firmware-flash utility
+- Revert stale-on-arrival failsafe, since it ends up needing exceptions for
+everything
+- Bugfix: opencl: Declare opencl_dynamic_cleanup in header
+- Even if we want to submit stale shares, give up if we have more submissions
+waiting on threads (even before failing)
+- Even if we want to submit stale shares, give up if they've failed and we
+have more submissions waiting on threads
+- opencl: Use timeBeginPeriod on Windows to ensure gettimeofday has sufficient
+precision for dynamic intensity
+- Bugfix: opencl: Move ADL fanspeed warning messages to a new thread to get
+around summary-update deadlocking
+- README: Note that user groups don't get updated until re-login
+- Initialise cnt in libztex.c
+- Don't try to start devices that don't support scrypt when scrypt mining.
+- Repeating on timeout in ztex could make the code never return.
+- Offset libusb reads/writes by length written as well in ztex.
+- Cope with timeouts and partial reads in ztex code.
+- If there are more devices than nDevs, don't iterate over them as they may
+overwrite devices mapped below that with the mapping option.
+- Fix README faq on bfl auto-detect.
+- Set memory clock based on memdiff if present from with engine changes,
+allowing it to parallel manual changes from the menu as well.
+- api.c typo
+- API allow display/change failover-only setting
+- API-README corrections
+- miner.php documentation (in API-README) v0.1
+- Bugfix: opencl: Show blank device-info statline area if GPU doesn't have
+ADL, to fix column alignment
+- README: Document usage of 0 to indicate "leave at default" for comma-
+delimited GPU options
+- Correct API-README versions to match when BFGMiner included them
+- API-README update changelog
+- Minimise locking and unlocking when getting counts by reusing shared mutex
+lock functions.
+- Avoid getting more work if by the time the getwork thread is spawned we find
+ourselves with enough work.
+- The bitforce buffer is cleared and hw error count incremented on return from a
+failed send_work already so no need to do it within the send_work function.
+- Don't make mandatory work and its clones last forever.
+- modminer: Log debug info for nonces found
+
+
 BFGMiner Version 2.6.4 - August 11, 2012
 
 - Bugfix: Define my_cancellable_getch in miner.h

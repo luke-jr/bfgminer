@@ -310,9 +310,10 @@ void init_adl(int nDevs)
 		if (gpus[i].mapped) {
 			vadapters[gpus[i].virtual_adl].virtual_gpu = i;
 			applog(LOG_INFO, "Mapping OpenCL device %d to ADL device %d", i, gpus[i].virtual_adl);
-		}
+		} else
+			gpus[i].virtual_adl = i;
 	}
-			
+
 	if (!devs_match) {
 		applog(LOG_ERR, "WARNING: Number of OpenCL and ADL devices did not match!");
 		applog(LOG_ERR, "Hardware monitoring may NOT match up with devices!");
@@ -351,11 +352,12 @@ void init_adl(int nDevs)
 		int iAdapterIndex;
 		int lpAdapterID;
 		ADLODPerformanceLevels *lpOdPerformanceLevels;
-		int lev;
+		int lev, adlGpu;
 
-		i = vadapters[gpu].id;
+		adlGpu = gpus[gpu].virtual_adl;
+		i = vadapters[adlGpu].id;
 		iAdapterIndex = lpInfo[i].iAdapterIndex;
-		gpus[gpu].virtual_gpu = vadapters[gpu].virtual_gpu;
+		gpus[gpu].virtual_gpu = vadapters[adlGpu].virtual_gpu;
 
 		/* Get unique identifier of the adapter, 0 means not AMD */
 		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
@@ -365,11 +367,11 @@ void init_adl(int nDevs)
 		}
 
 		if (gpus[gpu].deven == DEV_DISABLED) {
-			gpus[i].gpu_engine =
-			gpus[i].gpu_memclock =
-			gpus[i].gpu_vddc =
-			gpus[i].gpu_fan =
-			gpus[i].gpu_powertune = 0;
+			gpus[gpu].gpu_engine =
+			gpus[gpu].gpu_memclock =
+			gpus[gpu].gpu_vddc =
+			gpus[gpu].gpu_fan =
+			gpus[gpu].gpu_powertune = 0;
 			continue;
 		}
 
@@ -692,6 +694,29 @@ static int __gpu_fanpercent(struct gpu_adl *ga)
 	return ga->lpFanSpeedValue.iFanSpeed;
 }
 
+/* Failure log messages are handled by another (new) thread, since
+ * gpu_fanpercent is called inside a curses UI update (which holds
+ * the console lock, and would deadlock if we tried to log from
+ * within) */
+static void *gpu_fanpercent_failure(void *userdata)
+{
+	int *data = userdata;
+	bool had_twin = data[0];
+	int gpu = data[1];
+
+	applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
+	if (opt_restart) {
+		applog(LOG_WARNING, "Restart enabled, will attempt to restart BFGMiner");
+		applog(LOG_WARNING, "You can disable this with the --no-restart option");
+		app_restart();
+	}
+	applog(LOG_WARNING, "Disabling fanspeed monitoring on this device");
+	if (had_twin) {
+		applog(LOG_WARNING, "Disabling fanspeed linking on GPU twins");
+	}
+	return NULL;
+}
+
 int gpu_fanpercent(int gpu)
 {
 	struct gpu_adl *ga;
@@ -705,19 +730,16 @@ int gpu_fanpercent(int gpu)
 	ret = __gpu_fanpercent(ga);
 	unlock_adl();
 	if (unlikely(ga->has_fanspeed && ret == -1)) {
-		applog(LOG_WARNING, "GPU %d stopped reporting fanspeed due to driver corruption", gpu);
-		if (opt_restart) {
-			applog(LOG_WARNING, "Restart enabled, will attempt to restart BFGMiner");
-			applog(LOG_WARNING, "You can disable this with the --no-restart option");
-			app_restart();
-		}
-		applog(LOG_WARNING, "Disabling fanspeed monitoring on this device");
+		pthread_t thr;
+		int *data = malloc(sizeof(int) * 2);
+		data[0] = ga->twin ? 1 : 0;
+		data[1] = gpu;
 		ga->has_fanspeed = false;
 		if (ga->twin) {
-			applog(LOG_WARNING, "Disabling fanspeed linking on GPU twins");
 			ga->twin->twin = NULL;;
 			ga->twin = NULL;
 		}
+		pthread_create(&thr, NULL, gpu_fanpercent_failure, data);
 	}
 	return ret;
 }
