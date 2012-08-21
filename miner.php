@@ -756,6 +756,7 @@ function fmt($section, $name, $value, $when, $alldata)
 			$class = $warnclass;
 		break;
 	case 'STATUS.When':
+	case 'COIN.Current Block Time':
 		$ret = date($dfmt, $value);
 		break;
 	case 'BUTTON.Rig':
@@ -1450,7 +1451,8 @@ $sectionmap = array(
 	'NOTIFY' => 'notify',
 	'DEVDETAILS' => 'devdetails',
 	'STATS' => 'stats',
-	'CONFIG' => 'config');
+	'CONFIG' => 'config',
+	'COIN' => 'coin');
 #
 function joinfields($section1, $section2, $join, $results)
 {
@@ -1585,6 +1587,7 @@ function joinsections($sections, $results, $errors)
 				case 'POOL':
 				case 'DEVS':
 				case 'CONFIG':
+				case 'COIN':
 					$sectionmap[$section] = $section;
 					$results[$section] = joinall($both[0], $both[1], $results);
 					break;
