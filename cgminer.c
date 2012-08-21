@@ -2382,8 +2382,8 @@ out:
 
 static void *get_work_thread(void *userdata)
 {
-	int ts, tq, oq = opt_queue * mining_threads, maxq = oq + mining_threads;
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
+	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool = current_pool();
 	struct work *ret_work= NULL;
 	struct curl_ent *ce = NULL;
@@ -2400,7 +2400,7 @@ retry:
 	if (ts >= maxq)
 		goto out;
 
-	if (ts >= oq && tq >= maxq)
+	if (ts >= opt_queue && tq >= maxq - 1)
 		goto out;
 
 	if (clone_available())
@@ -3970,9 +3970,9 @@ static bool reuse_work(struct work *work)
 /* Clones work by rolling it if possible, and returning a clone instead of the
  * original work item which gets staged again to possibly be rolled again in
  * the future */
-static struct work *clone_lpwork(struct work *work)
+static struct work *clone_work(struct work *work)
 {
-	int oq = opt_queue * mining_threads, mrs = mining_threads + oq;
+	int mrs = mining_threads + opt_queue - total_staged();
 	struct work *work_clone;
 	bool cloned;
 
@@ -4075,6 +4075,7 @@ retry:
 			pool_resus(pool);
 	}
 
+	work_heap = clone_work(work_heap);
 	memcpy(work, work_heap, sizeof(struct work));
 	free_work(work_heap);
 
@@ -4413,7 +4414,7 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
 		return;
 	}
 
-	work = clone_lpwork(work);
+	work = clone_work(work);
 
 	applog(LOG_DEBUG, "Pushing converted work to stage thread");
 
