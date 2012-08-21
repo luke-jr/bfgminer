@@ -1,3 +1,42 @@
+BFGMiner Version 2.7.1 - August 22, 2012
+
+- Update windows build instructions courtesy of sharky.
+- Increase max curls to number of mining threads + queue * 2, accounting for up
+and downstream comms.
+- Queue enough requests to get started.
+- There is no point trying to clone_work in get_work() any more since we clone
+on every get_work_thread where possible.
+- There is no point subtracting 1 from maxq in get_work_thread.
+- miner.php allow page title to be defined in myminer.php
+- Only set lagging flag once there are no staged work items.
+- select_pool does not switch back to the primary once lagging is disabled.
+- Increment total work counter under mutex lock.
+- Increment the queued count after the curl is popped in case there's a delay
+waiting on curls and we think we've queued work when in fact we're waiting on
+curls.
+- Do the dynamic timing in opencl code over a single pass through scanhash to
+make sure we're only getting opencl times contributing to the measured
+intervals.
+- Increase curl reaping time to 5 minutes since comms between  curl requests can
+be 2 mins apart with lots of rolltime.
+- No need for extra variable in hash_push.
+- Remove short options -r and -R to allow them to be reused and remove readme
+entries for deprecated options.
+- Deprecate the opt_fail_pause parameter, leaving a null placeholder for
+existing configurations.
+- Free work before retrying in get_work_thread.
+- Don't pause after failed getwork, set lagging flag and reassess.
+- We should not be pausing in trying to resubmit shares.
+- Get rid of the extending fail pause on failed connects since we discard work
+after a period.
+- get_work always returns true so turn it into a void function.
+- get_work never returns false so get rid of fail pause loop.
+- Get rid of pause and retry from get_upstream_work so we only do it from one
+place.
+- Remove all cases where --retries aborts BFGMiner, making it for submission
+retries only, where it makes sense.
+
+
 BFGMiner Version 2.7.0 - August 21, 2012
 
 - Implement a new pool strategy, BALANCE, which monitors work performed per pool
