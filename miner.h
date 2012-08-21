@@ -552,6 +552,7 @@ static inline void rwlock_init(pthread_rwlock_t *lock)
 struct pool;
 
 extern bool opt_protocol;
+extern bool have_longpoll;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
@@ -595,6 +596,7 @@ extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 extern int opt_scantime;
 
 extern pthread_mutex_t console_lock;
+extern pthread_mutex_t ch_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
@@ -669,6 +671,8 @@ extern unsigned int total_go, total_ro;
 extern const int opt_cutofftemp;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
+extern char *current_fullhash;
+extern struct timeval block_timeval;
 
 #ifdef HAVE_OPENCL
 typedef struct {
