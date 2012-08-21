@@ -95,7 +95,6 @@ bool opt_quiet;
 static bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
-static int opt_retries = -1;
 int opt_fail_pause = 5;
 static int fail_pause = 5;
 int opt_log_interval = 5;
@@ -741,6 +740,11 @@ static char *set_icarus_timing(const char *arg)
 }
 #endif
 
+static char *set_null(const char __maybe_unused *arg)
+{
+	return NULL;
+}
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 #ifdef WANT_CPUMINE
@@ -970,8 +974,8 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_bool, &opt_removedisabled,
 	         "Remove disabled devices entirely, as if they didn't exist"),
 	OPT_WITH_ARG("--retries|-r",
-		     opt_set_intval, opt_show_intval, &opt_retries,
-		     "Number of times to retry before giving up, if JSON-RPC call fails (-1 means never)"),
+		     set_null, NULL, NULL,
+		     opt_hidden),
 	OPT_WITH_ARG("--retry-pause|-R",
 		     set_int_0_to_9999, opt_show_intval, &opt_fail_pause,
 		     "Number of seconds to pause, between retries"),
@@ -2572,7 +2576,6 @@ static void *get_work_thread(void *userdata)
 	struct pool *pool = current_pool();
 	struct curl_ent *ce = NULL;
 	struct work *ret_work;
-	int failures = 0;
 
 	pthread_detach(pthread_self());
 	rename_thr("bfg-get_work");
@@ -2611,13 +2614,6 @@ static void *get_work_thread(void *userdata)
 
 		/* obtain new work from bitcoin via JSON-RPC */
 		while (!get_upstream_work(ret_work, ce->curl)) {
-			if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-				applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
-				free_work(ret_work);
-				kill_work();
-				goto out;
-			}
-
 			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
 				fail_pause);
@@ -2760,7 +2756,6 @@ static void *submit_work_thread(void *userdata)
 	struct pool *pool;
 	bool resubmit;
 	struct curl_ent *ce;
-	int failures;
 	time_t staleexpire;
 
 	pthread_detach(pthread_self());
@@ -2772,7 +2767,6 @@ next_submit:
 	work = wc->work;
 	pool = work->pool;
 	resubmit = false;
-	failures = 0;
 
 	check_solve(work);
 
@@ -2812,17 +2806,12 @@ next_submit:
 			}
 			staleexpire = time(NULL) + 300;
 		}
-		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-			applog(LOG_ERR, "Failed %d retries, discarding", opt_retries);
-			submit_discard_share(work);
-			break;
-		}
-		else if (work->stale) {
+		if (work->stale) {
 			if (unlikely(!list_empty(&submit_waiting))) {
 				applog(LOG_WARNING, "Stale share failed to submit while queued submissions are waiting, discarding");
 				submit_discard_share(work);
 				break;
-			} else if (unlikely(opt_retries < 0 && staleexpire <= time(NULL))) {
+			} else if (unlikely(staleexpire <= time(NULL))) {
 				applog(LOG_NOTICE, "Stale share failed to submit for 5 minutes, discarding");
 				submit_discard_share(work);
 				break;
@@ -3868,9 +3857,9 @@ static void set_options(void)
 	clear_logwin();
 retry:
 	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n"
 		  "[P]ause: %d\n[W]rite config file\n[B]FGMiner restart\n",
-		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
+		opt_queue, opt_scantime, opt_expiry, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 
@@ -3904,14 +3893,6 @@ retry:
 			goto retry;
 		}
 		opt_expiry = selected;
-		goto retry;
-	} else if  (!strncasecmp(&input, "r", 1)) {
-		selected = curses_int("Retries before failing (-1 infinite)");
-		if (selected < -1 || selected > 9999) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		opt_retries = selected;
 		goto retry;
 	} else if  (!strncasecmp(&input, "p", 1)) {
 		selected = curses_int("Seconds to pause before network retries");
@@ -4442,7 +4423,6 @@ static bool get_work(struct work *work, struct thr_info *thr, const int thr_id)
 	struct work *work_heap;
 	struct timeval now;
 	struct pool *pool;
-	int failures = 0;
 	bool ret = false;
 
 	/* Tell the watchdog thread this thread is waiting on getwork and
@@ -4521,10 +4501,6 @@ keepwaiting:
 	ret = true;
 out:
 	if (unlikely(ret == false)) {
-		if ((opt_retries >= 0) && (++failures > opt_retries)) {
-			applog(LOG_ERR, "Failed %d times to get_work");
-			return ret;
-		}
 		applog(LOG_DEBUG, "Retrying after %d seconds", fail_pause);
 		sleep(fail_pause);
 		fail_pause += opt_fail_pause;
@@ -4990,16 +4966,9 @@ retry_pool:
 			gettimeofday(&end, NULL);
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
-			if (opt_retries == -1 || failures++ < opt_retries) {
-				if (failures == 1)
-					applog(LOG_WARNING,
-					       "longpoll failed for %s, retrying every 30s", pool->lp_url);
-				sleep(30);
-			} else {
-				applog(LOG_ERR,
-					"longpoll failed for %s, ending thread", pool->lp_url);
-				goto out;
-			}
+			if (failures == 1)
+				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", pool->lp_url);
+			sleep(30);
 		}
 		if (pool != cp) {
 			pool = select_longpoll_pool(cp);
