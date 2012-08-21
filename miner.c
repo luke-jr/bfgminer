@@ -2137,9 +2137,11 @@ static inline struct pool *select_pool(bool lagging)
 	if (pool_strategy == POOL_BALANCE)
 		return select_balanced(cp);
 
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
-		pool = cp;
-	else
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
+		if (cp->prio != 0)
+			switch_pools(NULL);
+		pool = current_pool();
+	} else
 		pool = NULL;
 
 	while (!pool) {
@@ -2603,7 +2605,7 @@ retry:
 		ret_work->queued = true;
 	} else {
 
-		if (ts <= opt_queue)
+		if (!ts)
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 
