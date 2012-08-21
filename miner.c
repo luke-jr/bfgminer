@@ -2404,7 +2404,7 @@ static void recruit_curl(struct pool *pool)
  * network delays/outages. */
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
-	int curl_limit = opt_delaynet ? 5 : mining_threads * 4 / 3;
+	int curl_limit = opt_delaynet ? 5 : (mining_threads + opt_queue) * 2;
 	struct curl_ent *ce;
 
 	mutex_lock(&pool->pool_lock);
@@ -6233,6 +6233,9 @@ begin_bench:
 		quit(1, "input thread create failed");
 	pthread_detach(thr->pth);
 #endif
+
+	for (i = 0; i < mining_threads + opt_queue; i++)
+		queue_request(NULL, false);
 
 	/* main loop - simply wait for workio thread to exit. This is not the
 	 * normal exit path and only occurs should the workio_thread die
