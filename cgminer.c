@@ -2407,7 +2407,7 @@ retry:
 	if (ts >= maxq)
 		goto out;
 
-	if (ts >= opt_queue && tq >= maxq - 1)
+	if (ts >= opt_queue && tq >= maxq)
 		goto out;
 
 	if (clone_available())
