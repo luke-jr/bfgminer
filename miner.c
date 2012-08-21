@@ -95,6 +95,7 @@ bool opt_quiet;
 static bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
+static int opt_retries = -1;
 int opt_fail_pause = 5;
 static int fail_pause = 5;
 int opt_log_interval = 5;
@@ -740,6 +741,7 @@ static char *set_icarus_timing(const char *arg)
 }
 #endif
 
+__maybe_unused
 static char *set_null(const char __maybe_unused *arg)
 {
 	return NULL;
@@ -974,8 +976,8 @@ static struct opt_table opt_config_table[] = {
 		     opt_set_bool, &opt_removedisabled,
 	         "Remove disabled devices entirely, as if they didn't exist"),
 	OPT_WITH_ARG("--retries|-r",
-		     set_null, NULL, NULL,
-		     opt_hidden),
+		     opt_set_intval, opt_show_intval, &opt_retries,
+		     "Number of times to retry failed submissions before giving up (-1 means never)"),
 	OPT_WITH_ARG("--retry-pause|-R",
 		     set_int_0_to_9999, opt_show_intval, &opt_fail_pause,
 		     "Number of seconds to pause, between retries"),
@@ -2756,6 +2758,7 @@ static void *submit_work_thread(void *userdata)
 	struct pool *pool;
 	bool resubmit;
 	struct curl_ent *ce;
+	int failures;
 	time_t staleexpire;
 
 	pthread_detach(pthread_self());
@@ -2767,6 +2770,7 @@ next_submit:
 	work = wc->work;
 	pool = work->pool;
 	resubmit = false;
+	failures = 0;
 
 	check_solve(work);
 
@@ -2806,12 +2810,17 @@ next_submit:
 			}
 			staleexpire = time(NULL) + 300;
 		}
-		if (work->stale) {
+		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
+			applog(LOG_ERR, "Failed %d retries, discarding", opt_retries);
+			submit_discard_share(work);
+			break;
+		}
+		else if (work->stale) {
 			if (unlikely(!list_empty(&submit_waiting))) {
 				applog(LOG_WARNING, "Stale share failed to submit while queued submissions are waiting, discarding");
 				submit_discard_share(work);
 				break;
-			} else if (unlikely(staleexpire <= time(NULL))) {
+			} else if (unlikely(opt_retries < 0 && staleexpire <= time(NULL))) {
 				applog(LOG_NOTICE, "Stale share failed to submit for 5 minutes, discarding");
 				submit_discard_share(work);
 				break;
@@ -3857,9 +3866,9 @@ static void set_options(void)
 	clear_logwin();
 retry:
 	wlogprint("\n[L]ongpoll: %s\n", want_longpoll ? "On" : "Off");
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n"
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
 		  "[P]ause: %d\n[W]rite config file\n[B]FGMiner restart\n",
-		opt_queue, opt_scantime, opt_expiry, opt_fail_pause);
+		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 
@@ -3893,6 +3902,14 @@ retry:
 			goto retry;
 		}
 		opt_expiry = selected;
+		goto retry;
+	} else if  (!strncasecmp(&input, "r", 1)) {
+		selected = curses_int("Retries before failing (-1 infinite)");
+		if (selected < -1 || selected > 9999) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		opt_retries = selected;
 		goto retry;
 	} else if  (!strncasecmp(&input, "p", 1)) {
 		selected = curses_int("Seconds to pause before network retries");
