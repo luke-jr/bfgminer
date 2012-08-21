@@ -2588,7 +2588,7 @@ retry:
 	if (ts >= maxq)
 		goto out;
 
-	if (ts >= opt_queue && tq >= maxq - 1)
+	if (ts >= opt_queue && tq >= maxq)
 		goto out;
 
 	if (clone_available())
@@ -4495,7 +4495,6 @@ keepwaiting:
 			pool_resus(pool);
 	}
 
-	work_heap = clone_work(work_heap);
 	memcpy(work, work_heap, sizeof(struct work));
 	free_work(work_heap);
 
