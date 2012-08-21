@@ -635,6 +635,10 @@ function fmt($section, $name, $value, $when, $alldata)
 						$class = $hiclass;
 			}
 		break;
+	case 'SUMMARY.Work Utility':
+	case 'total.Work Utility':
+		$ret = $value.'/m';
+		break;
 	case 'PGA.Temperature':
 	case 'GPU.Temperature':
 	case 'DEVS.Temperature':
@@ -732,6 +736,8 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'SUMMARY.Discarded':
 	case 'POOL.Discarded':
 	case 'total.Discarded':
+	case 'POOL.Diff1 Shares':
+	case 'total.Diff1 Shares':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -818,7 +824,8 @@ $singlerigsum = array(
  'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
 			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
-			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1),
+			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1,
+			'Diff1 Shares' => 1),
  'notify' => array('*' => 1));
 #
 function showtotal($total, $when, $oldvalues)
@@ -2023,7 +2030,7 @@ function display()
 
  newtable();
  doforeach('version', 'rig summary', array(), array(), true);
- $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH');
+ $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares');
  doforeach('summary', 'summary information', $sum, array(), false);
  endtable();
  otherrow('<td><br><br></td>');
