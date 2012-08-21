@@ -3970,9 +3970,9 @@ static bool reuse_work(struct work *work)
 /* Clones work by rolling it if possible, and returning a clone instead of the
  * original work item which gets staged again to possibly be rolled again in
  * the future */
-static struct work *clone_work(struct work *work)
+static struct work *clone_lpwork(struct work *work)
 {
-	int oq = opt_queue * mining_threads, mrs = mining_threads + oq - total_staged();
+	int oq = opt_queue * mining_threads, mrs = mining_threads + oq;
 	struct work *work_clone;
 	bool cloned;
 
@@ -4413,7 +4413,7 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
 		return;
 	}
 
-	work = clone_work(work);
+	work = clone_lpwork(work);
 
 	applog(LOG_DEBUG, "Pushing converted work to stage thread");
 
