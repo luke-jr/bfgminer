@@ -3244,12 +3244,7 @@ static bool work_rollable(struct work *work)
 
 static bool hash_push(struct work *work)
 {
-	bool rc = true, dec = false;
-
-	if (work->queued) {
-		work->queued = false;
-		dec = true;
-	}
+	bool rc = true;
 
 	mutex_lock(stgd_lock);
 	if (work_rollable(work))
@@ -3262,8 +3257,10 @@ static bool hash_push(struct work *work)
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
 
-	if (dec)
+	if (work->queued) {
+		work->queued = false;
 		dec_queued();
+	}
 
 	return rc;
 }
@@ -5025,7 +5022,7 @@ static void reap_curl(struct pool *pool)
 	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
 		if (pool->curls < 2)
 			break;
-		if (now.tv_sec - ent->tv.tv_sec > 60) {
+		if (now.tv_sec - ent->tv.tv_sec > 300) {
 			reaped++;
 			pool->curls--;
 			list_del(&ent->node);
