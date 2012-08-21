@@ -166,7 +166,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.16";
+static const char *APIVERSION = "1.17";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -1713,6 +1713,7 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_uint(root, "Remote Failures", &(pool->remotefail_occasions), false);
 		root = api_add_escape(root, "User", pool->rpc_user, false);
 		root = api_add_time(root, "Last Share Time", &(pool->last_share_time), false);
+		root = api_add_int(root, "Diff1 Shares", &(pool->diff1), false);
 
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);
@@ -1729,7 +1730,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
-	double utility, mhs;
+	double utility, mhs, work_utility;
 
 #ifdef WANT_CPUMINE
 	char *algo = (char *)(algo_names[opt_algo]);
@@ -1739,6 +1740,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
+	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
 
 	sprintf(io_buffer, isjson
 		? "%s," JSON_SUMMARY
@@ -1764,6 +1766,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 	root = api_add_uint(root, "Remote Failures", &(total_ro), false);
 	root = api_add_uint(root, "Network Blocks", &(new_blocks), false);
 	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), false);
+	root = api_add_utility(root, "Work Utility", &(work_utility), false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
