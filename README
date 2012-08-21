@@ -153,8 +153,7 @@ Options for both config file and command line:
 --quiet|-q          Disable logging output, display status and errors
 --real-quiet        Disable all output
 --remove-disabled   Remove disabled devices entirely, as if they didn't exist
---retries|-r <arg>  Number of times to retry before giving up, if JSON-RPC call fails (-1 means never) (default: -1)
---retry-pause|-R <arg> Number of seconds to pause, between retries (default: 5)
+--retries <arg>     Number of times to retry failed submissions before giving up (-1 means never) (default: -1)
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
