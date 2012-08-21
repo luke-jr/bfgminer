@@ -2219,15 +2219,8 @@ static void recruit_curl(struct pool *pool)
  * network delays/outages. */
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
+	int curl_limit = opt_delaynet ? 5 : mining_threads * 4 / 3;
 	struct curl_ent *ce;
-	int curl_limit;
-
-	if (!opt_delaynet) {
-		double work_util = total_diff1 / total_secs * 60;
-
-		curl_limit =  (mining_threads + work_util) * 4 / 3;
-	} else
-		curl_limit = 5;
 
 	mutex_lock(&pool->pool_lock);
 retry:
