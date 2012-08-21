@@ -128,8 +128,8 @@ Ref. http://old.nabble.com/gcc-working-with-libcurl-td20506927.html
 Run the MinGW MSYS shell
 (Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
 Change the working directory to your BFGMiner project folder.
-Example: cd bfgminer-2.1.2 [Enter Key] if you are unsure then type "ls -la"
-Another way is to type "cd cg" and then press the tab key; It will auto fill.
+Example: cd bfgminer-2.7.1 [Enter Key] if you are unsure then type "ls -la"
+Another way is to type "cd bfg" and then press the tab key; It will auto fill.
 Type the lines below one at a time. Look for problems after each one before going on
 to the next.
 
@@ -187,7 +187,7 @@ Extract the the following from the file and place in where directed.
 Copy libusb.h from include\libusbx-1.0 to \MinGW\include\libusb-1.0\libusb.h
 Copy contents of MinGW32\static \MinGW\lib
 Copy contents of MinGW32\dll to \MinGW\lib
-You will have to copy "libusb-1.0.dll" to your working cgminer binary directory.
+You will have to copy "libusb-1.0.dll" to your working BFGMiner binary directory.
 
 **************************************************************************************
 * Some ./configure options                                                           *
