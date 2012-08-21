@@ -2568,14 +2568,16 @@ static void *get_work_thread(void *userdata)
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool = current_pool();
+	struct work *ret_work= NULL;
 	struct curl_ent *ce = NULL;
-	struct work *ret_work;
+	bool lagging = false;
 
 	pthread_detach(pthread_self());
 	rename_thr("bfg-get_work");
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
+retry:
 	tq = global_queued();
 	ts = total_staged();
 
@@ -2594,24 +2596,27 @@ static void *get_work_thread(void *userdata)
 	else
 		ret_work->thr = NULL;
 
-	if (opt_benchmark)
+	if (opt_benchmark) {
 		get_benchmark_work(ret_work);
-	else {
-		bool lagging = false;
+		ret_work->queued = true;
+	} else {
 
 		if (ts <= opt_queue)
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 		inc_queued();
-		
-		ce = pop_curl_entry(pool);
+
+		if (!ce)
+			ce = pop_curl_entry(pool);
 
 		/* obtain new work from bitcoin via JSON-RPC */
-		while (!get_upstream_work(ret_work, ce->curl)) {
+		if (!get_upstream_work(ret_work, ce->curl)) {
 			/* pause, then restart work-request loop */
-			applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
-				opt_fail_pause);
-			sleep(opt_fail_pause);
+			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
+			lagging = true;
+			dec_queued();
+			free_work(ret_work);
+			goto retry;
 		}
 
 		ret_work->queued = true;
