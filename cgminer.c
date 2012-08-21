@@ -2417,7 +2417,7 @@ retry:
 		ret_work->queued = true;
 	} else {
 
-		if (ts <= opt_queue)
+		if (!ts)
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 
