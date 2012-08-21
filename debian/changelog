@@ -1,3 +1,13 @@
+bfgminer (2.7.0-0precise1) precise; urgency=low
+
+  * The main change in this version is a complete rewrite of the getwork requesting mechanism. Con had been slowly hacking away at the old one for some time, but finally gave up in disgust and has rewritten it to some extent. Previously, mining threads would occasionally throw out a request for more work, some arbitrary test would be done on whether more work should be requested, and it handed off the message to another thread which spawned another thread and that then sent the request and so on. Worse yet it was hard to find the right place to reuse work and so it was never reused to its utmost potential. The rewrite involves scheduling a new request based on the rate the old work items get used up, and is much better at predicting when it needs to leak work to backup pools and less likely to throw a "pool is not providing work fast enough" message. Overall you should now see much more Local Work (LW), the efficiency will be higher on pools that support rolltime, less work will be discarded, any magnitude rig will be kept solidly busy - note this MAY mean your overclocks will become that much more stressed if you have set clocks very aggressively. Thanks to Con and the numerous people who tested this during its development phase.
+  * New pool strategy: Balance.
+  * With the change to queueing and more roll work being possible than ever before, the imbalance between pools that support rolltime and those that don't will now be extreme in load balance strategy. To offset that, and since the number of people using load balance has been increasing, the new strategy was added to try and give roughly the same number of shares to each pool.
+  * Other minor bugfixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 21 Aug 2012 01:50:33 -0000
+
+
 bfgminer (2.6.5-0precise1) precise; urgency=low
 
   * New BitFORCE firmware flash utility. When compiled with BitFORCE support, run `bitforce-firmware-flash` to get usage.
