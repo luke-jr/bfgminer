@@ -1536,7 +1536,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		gettimeofday(&gpu->tv_gpumid, NULL);
 		if (gpu->new_work) {
 			gpu->new_work = false;
-			gpu->intervals = 0;
+			gpu->intervals = gpu->hit = 0;
 		}
 		if (!gpu->intervals) {
 			gpu->tv_gpustart.tv_sec = gpu->tv_gpumid.tv_sec;
