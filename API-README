@@ -42,7 +42,7 @@ To give an IP address/subnet access to a group you use the group letter
 in front of the IP address instead of W: e.g. P:192.168.0/32
 An IP address/subnet can only be a member of one group
 A sample API group would be:
- --api-groups P:switchpool:enablepool:addpool:disablepool:removepool.poolpriority:*
+ --api-groups P:switchpool:enablepool:addpool:disablepool:removepool:poolpriority:*
 This would create a group 'P' that can do all current pool commands and all
 non-priviliged commands - the '*' means all non-priviledged commands
 Without the '*' the group would only have access to the pool commands
