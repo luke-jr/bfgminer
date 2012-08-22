@@ -1532,10 +1532,16 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		clFinish(clState->commandQueue);
 	}
 
-	gettimeofday(&gpu->tv_gpumid, NULL);
-	if (!gpu->intervals) {
-		gpu->tv_gpustart.tv_sec = gpu->tv_gpumid.tv_sec;
-		gpu->tv_gpustart.tv_usec = gpu->tv_gpumid.tv_usec;
+	if (gpu->dynamic) {
+		gettimeofday(&gpu->tv_gpumid, NULL);
+		if (gpu->new_work) {
+			gpu->new_work = false;
+			gpu->intervals = 0;
+		}
+		if (!gpu->intervals) {
+			gpu->tv_gpustart.tv_sec = gpu->tv_gpumid.tv_sec;
+			gpu->tv_gpustart.tv_usec = gpu->tv_gpumid.tv_usec;
+		}
 	}
 
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
