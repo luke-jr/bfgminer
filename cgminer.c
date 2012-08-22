@@ -2227,7 +2227,7 @@ retry:
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if (pool->submit_fail || pool->curls >= curl_limit) {
+		if (pool->curls >= curl_limit) {
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
 			goto retry;
 		} else
