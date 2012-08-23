@@ -574,45 +574,31 @@ __kernel
 #define FOUND (0x0F)
 
 #if defined(OCL1)
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		(Xfound) = output[FOUND];	\
-		output[FOUND] += 1;		\
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 #else
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		Xfound = atomic_add(&output[FOUND], 1); \
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
 #endif
 
 #ifdef VECTORS4
 	if ((V[7].x == 0x136032edU) ^ (V[7].y == 0x136032edU) ^ (V[7].z == 0x136032edU) ^ (V[7].w == 0x136032edU)) {
-		uint found;
-
 		if (V[7].x == 0x136032edU)
-			SETFOUND(found, nonce.x);
+			SETFOUND(nonce.x);
 		if (V[7].y == 0x136032edU)
-			SETFOUND(found, nonce.y);
+			SETFOUND(nonce.y);
 		if (V[7].z == 0x136032edU)
-			SETFOUND(found, nonce.z);
+			SETFOUND(nonce.z);
 		if (V[7].w == 0x136032edU)
-			SETFOUND(found, nonce.w);
+			SETFOUND(nonce.w);
 	}
 #elif defined VECTORS2
 	if ((V[7].x == 0x136032edU) + (V[7].y == 0x136032edU)) {
-		uint found;
-
 		if (V[7].x == 0x136032edU)
-			SETFOUND(found, nonce.x);
+			SETFOUND(nonce.x);
 		if (V[7].y == 0x136032edU)
-			SETFOUND(found, nonce.y);
+			SETFOUND(nonce.y);
 	}
 #else
-	if (V[7] == 0x136032edU) {
-		uint found;
-
-		SETFOUND(found, nonce);
-	}
+	if (V[7] == 0x136032edU)
+		SETFOUND(nonce);
 #endif
 }

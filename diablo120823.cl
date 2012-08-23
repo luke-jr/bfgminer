@@ -1245,49 +1245,35 @@ void search(
 #define FOUND (0x0F)
 
 #if defined(OCL1)
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		(Xfound) = output[FOUND];	\
-		output[FOUND] += 1;		\
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 #else
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		Xfound = atomic_add(&output[FOUND], 1); \
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
 #endif
 
 #if defined(VECTORS4)
 	bool result = any(ZA[924] == 0x136032EDU);
 
 	if (result) {
-		uint found;
-
 		if (ZA[924].x == 0x136032EDU)
-			SETFOUND(found, Znonce.x);
+			SETFOUND(Znonce.x);
 		if (ZA[924].y == 0x136032EDU)
-			SETFOUND(found, Znonce.y);
+			SETFOUND(Znonce.y);
 		if (ZA[924].z == 0x136032EDU)
-			SETFOUND(found, Znonce.z);
+			SETFOUND(Znonce.z);
 		if (ZA[924].w == 0x136032EDU)
-			SETFOUND(found, Znonce.w);
+			SETFOUND(Znonce.w);
 	}
 #elif defined(VECTORS2)
 	bool result = any(ZA[924] == 0x136032EDU);
 
 	if (result) {
-		uint found;
-
 		if (ZA[924].x == 0x136032EDU)
-			SETFOUND(found, Znonce.x);
+			SETFOUND(Znonce.x);
 		if (ZA[924].y == 0x136032EDU)
-			SETFOUND(found, Znonce.y);
+			SETFOUND(Znonce.y);
 	}
 #else
-	if (ZA[924] == 0x136032EDU) {
-		uint found;
-
-		SETFOUND(found, Znonce);
-	}
+	if (ZA[924] == 0x136032EDU)
+		SETFOUND(Znonce);
 #endif
 }

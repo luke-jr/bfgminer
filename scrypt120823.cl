@@ -685,16 +685,9 @@ void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
 #define FOUND (0x0F)
 
 #if defined(OCL1)
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		(Xfound) = output[FOUND];	\
-		output[FOUND] += 1;		\
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 #else
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		Xfound = atomic_add(&output[FOUND], 1); \
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
 #endif
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
@@ -734,11 +727,8 @@ const uint4 midstate0, const uint4 midstate16, const uint target)
 	SHA256(&ostate0,&ostate1, tmp0, tmp1, (uint4)(0x80000000U, 0U, 0U, 0U), (uint4)(0U, 0U, 0U, 0x300U));
 
 	bool result = (EndianSwap(ostate1.w) <= target);
-	if (result) {
-		uint found;
-
-		SETFOUND(found, gid);
-	}
+	if (result)
+		SETFOUND(gid);
 }
 
 /*-
