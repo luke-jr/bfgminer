@@ -17,6 +17,11 @@ C source is included for a bitforce firmware flash utility on Linux only:
  bitforce-firmware-flash.c
 Using this, you can change the bitstream firmware on bitforce singles.
 It is untested with other devices. Use at your own risk!
+To compile:
+ make bitforce-firmware-flash
+To run, specify the BFL port and the flash file e.g.:
+ ./bitforce-firmware-flash /dev/ttyUSB0 alphaminer_832.bfl
+It takes a bit under 3 minutes to flash a BFL and shows a progress % counter
 
 
 Icarus

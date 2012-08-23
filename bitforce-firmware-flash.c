@@ -18,9 +18,9 @@
 #define BFL_FILE_MAGIC   "BFLDATA"
 #define BFL_UPLOAD_MAGIC "NGH-STREAM"
 
-#define myassert(expr, n, ...)  do {  \
-	if (!(expr))  \
-	{  \
+#define myassert(expr, n, ...) \
+do {  \
+	if (!(expr)) {  \
 		fprintf(stderr, __VA_ARGS__);  \
 		return n;  \
 	}  \
@@ -28,13 +28,14 @@
 
 #define ERRRESP(buf)  buf, (buf[strlen(buf)-1] == '\n' ? "" : "\n")
 
-#define WAITFOROK(n, msg)  do {  \
+#define WAITFOROK(n, msg) \
+do {  \
 	myassert(fgets(buf, sizeof(buf), BFL), n, "Error reading response from " msg "\n");  \
 	myassert(!strcmp(buf, "OK\n"), n, "Invalid response from " msg ": %s%s", ERRRESP(buf));  \
 } while(0)
 
-int
-main(int argc, char**argv) {
+int main(int argc, char**argv)
+{
 	myassert(argc == 3, 1, "Usage: %s <serialdev> <firmware.bfl>\n", argv[0]);
 	setbuf(stdout, NULL);
 	
@@ -79,15 +80,14 @@ main(int argc, char**argv) {
 	printf("OK, sending...\n");
 	
 	// Actual firmware upload
-	for (long i = 0, j = 0; i < FWlen; ++i)
-	{
+	long i, j;
+	for (i = 0, j = 0; i < FWlen; ++i) {
 		myassert(1 == fread(&n8, sizeof(n8), 1, FW), 0x30, "Error reading data from firmware file\n");
 		if (5 == i % 6)
 			continue;
 		n8 ^= 0x2f;
 		myassert(1 == fwrite(&n8, sizeof(n8), 1, BFL), 0x31, "Error sending data to device\n");
-		if (!(++j % 0x400))
-		{
+		if (!(++j % 0x400)) {
 			myassert(1 == fwrite(">>>>>>>>", 8, 1, BFL), 0x32, "Error sending block-finish to device\n");
 			printf("\r%5.2f%% complete", (double)i * 100. / (double)FWlen);
 			WAITFOROK(0x32, "block-finish");
@@ -95,12 +95,14 @@ main(int argc, char**argv) {
 	}
 	printf("\r100%% complete :)\n");
 	myassert(1 == fwrite(">>>>>>>>", 8, 1, BFL), 0x3f, "Error sending upload-finished to device\n");
-	myassert(fgets(buf, sizeof(buf), BFL), 0x3f, "Error reading response from upload-finished\n");  \
-	myassert(!strcmp(buf, "DONE\n"), 0x3f, "Invalid response from upload-finished: %s%s", ERRRESP(buf));  \
-	
+	myassert(fgets(buf, sizeof(buf), BFL), 0x3f, "Error reading response from upload-finished\n");
+	myassert(!strcmp(buf, "DONE\n"), 0x3f, "Invalid response from upload-finished: %s%s", ERRRESP(buf));
+
 	// ZBX: Finish programming
 	printf("Waiting for device... ");
 	myassert(1 == fwrite("ZBX", 3, 1, BFL), 0x40, "Failed to issue ZBX command\n");
 	WAITFOROK(0x40, "ZBX");
-	printf("ALL DONE!\n");
+	printf("All done! Try mining to test the flash succeeded.\n");
+
+	return 0;
 }
