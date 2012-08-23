@@ -1,5 +1,28 @@
 BFGMiner Version 2.6.6 - Future
 
+- Pick worksize 256 with Cypress if none is specified.
+- Give warning with sdk2.7 and phatk as well.
+- Whitelist sdk2.7 for diablo kernel as well.
+- BFL flash - more FPGA-README
+- Remove compile errors/warnings and document compile/usage in FPGA-README
+- Only keep the last 6 blocks in the uthash database to keep memory usage
+constant. Storing more is unhelpful anyway.
+- API-README fix groups P: example mistake
+- API-README add COIN and other edits
+- miner.php allow 'coin' is custom pages
+- Update windows build instructions courtesy of sharky.
+- miner.php allow page title to be defined in myminer.php
+- select_pool does not switch back to the primary once lagging is disabled.
+- Increment total work counter under mutex lock.
+- Do the dynamic timing in opencl code over a single pass through scanhash to
+make sure we're only getting opencl times contributing to the measured
+intervals.
+- fpga serial I/O extra debug (disabled by default)
+- Simplify all those total_secs usages by initialising it to 1 second.
+- Artificially set the pool lagging flag on pool switch in failover only mode as
+well.
+- Artificially set the pool lagging flag on work restart to avoid messages about
+slow pools after every longpoll.
 - Don't try to get bitforce temperature if we're polling for a result to
 minimise the chance of interleaved responses.
 - Fix harmless unused warnings in scrypt.h.
