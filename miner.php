@@ -84,8 +84,24 @@ $mobilesum = array(
  'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Accepted', 'DEVS.Rejected', 'DEVS.Utility'),
  'POOL' => array('Accepted', 'Rejected'));
 #
+$statspage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks',
+			'Accepted', 'Rejected=Rej', 'Utility',
+			'Hardware Errors=HW Errs', 'Network Blocks=Net Blks',
+			'Work Utility'),
+ 'COIN' => array('*'),
+ 'STATS' => array('*'));
+#
+$statssum = array(
+ 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
+			'Rejected', 'Utility', 'Hardware Errors',
+			'Work Utility'));
+#
 # customsummarypages is an array of these Custom Summary Pages
-$customsummarypages = array('Mobile' => array($mobilepage, $mobilesum));
+$customsummarypages = array('Mobile' => array($mobilepage, $mobilesum),
+ 'Stats' => array($statspage, $statssum));
 #
 $here = $_SERVER['PHP_SELF'];
 #
