@@ -404,10 +404,9 @@ struct cgpu_info {
 	int opt_tc, thread_concurrency;
 	int shaders;
 #endif
-	struct timeval tv_gpustart;
-	struct timeval tv_gpumid;
+	struct timeval tv_gpustart;;
+	struct timeval tv_gpuend;
 	double gpu_us_average;
-	int intervals, hit;
 #endif
 
 	float temp;
@@ -481,7 +480,6 @@ extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*s
 extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
-extern double us_tdiff(struct timeval *end, struct timeval *start);
 extern void rename_thr(const char* name);
 
 struct string_elist {
