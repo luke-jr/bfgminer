@@ -58,6 +58,9 @@ struct header_info {
 	char		*lp_path;
 	int		rolltime;
 	char		*reason;
+	bool		hadrolltime;
+	bool		canroll;
+	bool		hadexpire;
 };
 
 struct tq_ent {
@@ -157,14 +160,18 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		applog(LOG_DEBUG, "HTTP hdr(%s): %s", key, val);
 
 	if (!strcasecmp("X-Roll-Ntime", key)) {
+		hi->hadrolltime = true;
 		if (!strncasecmp("N", val, 1))
 			applog(LOG_DEBUG, "X-Roll-Ntime: N found");
 		else {
+			hi->canroll = true;
+
 			/* Check to see if expire= is supported and if not, set
 			 * the rolltime to the default scantime */
-			if (strlen(val) > 7 && !strncasecmp("expire=", val, 7))
+			if (strlen(val) > 7 && !strncasecmp("expire=", val, 7)) {
 				sscanf(val + 7, "%d", &hi->rolltime);
-			else
+				hi->hadexpire = true;
+			} else
 				hi->rolltime = opt_scantime;
 			applog(LOG_DEBUG, "X-Roll-Ntime expiry set to %d", hi->rolltime);
 		}
@@ -258,7 +265,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 {
 	long timeout = longpoll ? (60 * 60) : 60;
 	struct data_buffer all_data = {NULL, 0};
-	struct header_info hi = {NULL, 0, NULL};
+	struct header_info hi = {NULL, 0, NULL, false, false, false};
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	struct curl_slist *headers = NULL;
@@ -388,6 +395,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	}
 
 	*rolltime = hi.rolltime;
+	pool->cgminer_pool_stats.rolltime = hi.rolltime;
+	pool->cgminer_pool_stats.hadrolltime = hi.hadrolltime;
+	pool->cgminer_pool_stats.canroll = hi.canroll;
+	pool->cgminer_pool_stats.hadexpire = hi.hadexpire;
 
 	val = JSON_LOADS(all_data.buf, &err);
 	if (!val) {
