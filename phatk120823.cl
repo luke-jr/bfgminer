@@ -389,46 +389,48 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 
 #define FOUND (0x0F)
 
+#if defined(OCL1)
+	#define SETFOUND(Xfound, Xnonce) do {	\
+		(Xfound) = output[FOUND];	\
+		output[FOUND] += 1;		\
+		output[Xfound] = Xnonce;	\
+	} while (0)
+#else
+	#define SETFOUND(Xfound, Xnonce) do {	\
+		Xfound = atomic_add(&output[FOUND], 1); \
+		output[Xfound] = Xnonce;	\
+	} while (0)
+#endif
+
 #ifdef VECTORS4
 	bool result = W[117].x & W[117].y & W[117].z & W[117].w;
 	if (!result) {
 		uint found;
 
-		if (!W[117].x) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = W[3].x;
-		}
-		if (!W[117].y) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = W[3].y;
-		}
-		if (!W[117].z) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = W[3].z;
-		}
-		if (!W[117].w) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = W[3].w;
-		}
+		if (!W[117].x)
+			SETFOUND(found, W[3].x);
+		if (!W[117].y)
+			SETFOUND(found, W[3].y);
+		if (!W[117].z)
+			SETFOUND(found, W[3].z);
+		if (!W[117].w)
+			SETFOUND(found, W[3].w);
 	}
 #elif defined VECTORS2
 	bool result = W[117].x & W[117].y;
 	if (!result) {
 		uint found;
 
-		if (!W[117].x) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = W[3].x;
-		}
-		if (!W[117].y) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = W[3].y;
-		}
+		if (!W[117].x)
+			SETFOUND(found, W[3].x);
+		if (!W[117].y)
+			SETFOUND(found, W[3].y);
 	}
 #else
 	if (!W[117]) {
-		uint found = atomic_add(&output[FOUND], 1);
-		output[found] = W[3];
+		uint found;
+
+		SETFOUND(found, W[3]);
 	}
 #endif
 }
