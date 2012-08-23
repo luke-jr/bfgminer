@@ -71,6 +71,7 @@ struct workio_cmd {
 	struct thr_info		*thr;
 	struct work		*work;
 	struct pool		*pool;
+	bool			needed;
 };
 
 struct strategies strategies[] = {
@@ -2422,7 +2423,7 @@ static void *get_work_thread(void *userdata)
 			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
 			dec_queued(pool);
-			queue_request(ret_work->thr, true);
+			queue_request(ret_work->thr, wc->needed);
 			free_work(ret_work);
 			goto out;
 		}
@@ -3937,6 +3938,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
 	wc->pool = pool;
+	wc->needed = needed;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
