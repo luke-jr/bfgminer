@@ -2678,8 +2678,6 @@ void switch_pools(struct pool *selected)
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
-
-	queue_request(NULL, false);
 }
 
 static void discard_work(struct work *work)
@@ -3919,10 +3917,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	if ((!needed || opt_fail_only) && (cp->staged + cp->queued >= maxq))
 		return true;
 
-	if (needed && !ts)
-		pool = select_pool(true);
-	else
-		pool = cp;
+	pool = select_pool(needed && !ts);
 	if (pool->staged + pool->queued >= maxq)
 		return true;
 
