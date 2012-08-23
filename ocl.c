@@ -659,6 +659,9 @@ build:
 	if (clState->goffset)
 		strcat(CompilerOptions, " -D GOFFSET");
 
+	if (!clState->hasOpenCL11plus)
+		strcat(CompilerOptions, " -D OCL1");
+
 	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
 	status = clBuildProgram(clState->program, 1, &devices[gpu], CompilerOptions , NULL, NULL);
 	free(CompilerOptions);
