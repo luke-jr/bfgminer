@@ -4689,6 +4689,7 @@ void *miner_thread(void *userdata)
 				"mining thread %d", thr_id);
 			break;
 		}
+		cgpu->new_work = true;
 		requested = false;
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
