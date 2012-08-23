@@ -1,3 +1,17 @@
+BFGMiner Version 2.7.4 - August 23, 2012
+
+- Perform select_pool even when not lagging to allow it to switch back if needed
+to the primary.
+- Simplify macros in output kernels avoiding apparent loops and local variables.
+- Carry the needed bool over the work command queue.
+- Move the decision to queue further work upstream before threads are spawned
+based on fine grained per-pool stats and increment the queued count immediately.
+- Track queued and staged per pool once again for future use.
+- OpenCL 1.0 does not have native atomic_add and extremely slow support with
+atom_add so detect opencl1.0 and use a non-atomic workaround.
+- Pools: add RollTime info to API 'stats' and 'Stats' button in miner.php
+
+
 BFGMiner Version 2.7.3 - August 23, 2012
 
 - Minimise the number of getwork threads we generate.
