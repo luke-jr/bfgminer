@@ -2252,17 +2252,19 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 
 /* This is overkill, but at least we'll know accurately how much work is
  * queued to prevent ever being left without work */
-static void inc_queued(void)
+static void inc_queued(struct pool *pool)
 {
 	mutex_lock(&qd_lock);
 	total_queued++;
+	pool->queued++;
 	mutex_unlock(&qd_lock);
 }
 
-static void dec_queued(void)
+static void dec_queued(struct pool *pool)
 {
 	mutex_lock(&qd_lock);
 	total_queued--;
+	pool->queued--;
 	mutex_unlock(&qd_lock);
 }
 
@@ -2422,7 +2424,7 @@ retry:
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 
-		inc_queued();
+		inc_queued(pool);
 
 		if (!ce)
 			ce = pop_curl_entry(pool);
@@ -2430,7 +2432,7 @@ retry:
 		/* Check that we haven't staged work via other threads while
 		 * waiting for a curl entry */
 		if (total_staged() >= maxq) {
-			dec_queued();
+			dec_queued(pool);
 			free_work(ret_work);
 			goto out;
 		}
@@ -2440,7 +2442,7 @@ retry:
 			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
 			lagging = true;
-			dec_queued();
+			dec_queued(pool);
 			free_work(ret_work);
 			goto retry;
 		}
@@ -2725,6 +2727,7 @@ static void discard_stale(void)
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work, false)) {
 			HASH_DEL(staged_work, work);
+			work->pool->staged--;
 			discard_work(work);
 			stale++;
 		}
@@ -2931,9 +2934,11 @@ static bool hash_push(struct work *work)
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
 
+	work->pool->staged++;
+
 	if (work->queued) {
 		work->queued = false;
-		dec_queued();
+		dec_queued(work->pool);
 	}
 
 	return rc;
@@ -3926,17 +3931,7 @@ static void pool_resus(struct pool *pool)
 static bool queue_request(struct thr_info *thr, bool needed)
 {
 	struct workio_cmd *wc;
-	bool doq = true;
 
-	mutex_lock(&control_lock);
-	if (queued_getworks > (mining_threads + opt_queue) * 2)
-		doq = false;
-	else
-		queued_getworks++;
-	mutex_unlock(&control_lock);
-	if (!doq)
-		return true;
-	
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
@@ -3981,6 +3976,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 		} else
 			work = staged_work;
 		HASH_DEL(staged_work, work);
+		work->pool->staged--;
 		if (work_rollable(work))
 			staged_rollable--;
 	}
