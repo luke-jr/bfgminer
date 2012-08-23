@@ -1933,9 +1933,11 @@ static inline struct pool *select_pool(bool lagging)
 
 	cp = current_pool();
 
-	if (pool_strategy != POOL_LOADBALANCE && !lagging)
-		pool = cp;
-	else
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
+		if (cp->prio != 0)
+			switch_pools(NULL);
+		pool = current_pool();
+	} else
 		pool = NULL;
 
 	while (!pool) {
