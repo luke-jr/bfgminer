@@ -1,3 +1,10 @@
+bfgminer (2.6.6-0precise1) precise; urgency=low
+
+  * Various bugfixes and updates.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 23 Aug 2012 20:45:11 -0000
+
+
 bfgminer (2.6.5-0precise1) precise; urgency=low
 
   * New BitFORCE firmware flash utility. When compiled with BitFORCE support, run `bitforce-firmware-flash` to get usage.

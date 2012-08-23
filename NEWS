@@ -1,4 +1,4 @@
-BFGMiner Version 2.6.6 - Future
+BFGMiner Version 2.6.6 - August 23, 2012
 
 - Pick worksize 256 with Cypress if none is specified.
 - Give warning with sdk2.7 and phatk as well.
@@ -23,6 +23,8 @@ intervals.
 well.
 - Artificially set the pool lagging flag on work restart to avoid messages about
 slow pools after every longpoll.
+- If there are more devices than nDevs, don't iterate over them as they may
+overwrite devices mapped below that with the mapping option.
 - Don't try to get bitforce temperature if we're polling for a result to
 minimise the chance of interleaved responses.
 - Fix harmless unused warnings in scrypt.h.
