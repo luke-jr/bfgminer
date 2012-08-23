@@ -2786,6 +2786,20 @@ static void test_work_current(struct work *work)
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
 		wr_lock(&blk_lock);
+		/* Only keep the last 6 blocks in memory since work from blocks
+		 * before this is virtually impossible and we want to prevent
+		 * memory usage from continually rising */
+		if (HASH_COUNT(blocks) > 5) {
+			struct block *blocka, *blockb;
+			int count = 0;
+
+			HASH_ITER(hh, blocks, blocka, blockb) {
+				if (count++ < 6)
+					continue;
+				HASH_DEL(blocks, blocka);
+				free(blocka);
+			}
+		}
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
 		set_curblock(hexstr, work->data);
