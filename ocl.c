@@ -569,7 +569,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			 strstr(vbuff, "851.4") ||  // Windows 64 bit ""
 			 strstr(vbuff, "831.4") ||
 			 strstr(vbuff, "898.1") ||  // 12.2 driver SDK 
-			 strstr(vbuff, "923.1"))) { // 12.4 driver SDK
+			 strstr(vbuff, "923.1") ||  // 12.4
+			 strstr(vbuff, "938.1"))) { // SDK 2.7
 				applog(LOG_INFO, "Selecting diablo kernel");
 				clState->chosen_kernel = KL_DIABLO;
 		/* Detect all 7970s, older ATI and NVIDIA and use poclbm */
@@ -587,9 +588,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (clState->chosen_kernel == KL_PHATK &&
 		    (strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
 		     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
-		     strstr(vbuff, "923.1"))) {
+		     strstr(vbuff, "923.1") || strstr(vbuff, "938.1"))) {
 			applog(LOG_WARNING, "WARNING: You have selected the phatk kernel.");
-			applog(LOG_WARNING, "You are running SDK 2.6 which performs poorly with this kernel.");
+			applog(LOG_WARNING, "You are running SDK 2.6+ which performs poorly with this kernel.");
 			applog(LOG_WARNING, "Downgrade your SDK and delete any .bin files before starting again.");
 			applog(LOG_WARNING, "Or allow BFGMiner to automatically choose a more suitable kernel.");
 		}
@@ -644,8 +645,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		clState->wsize = cgpu->work_size;
 	else if (strstr(name, "Tahiti"))
 		clState->wsize = 64;
-	else
-		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
+	else {
+		if (strstr(name, "Cypress"))
+			clState->wsize = 256;
+		else
+			clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
+	}
 	cgpu->work_size = clState->wsize;
 
 #ifdef USE_SCRYPT
