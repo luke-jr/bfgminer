@@ -1,3 +1,10 @@
+bfgminer (2.7.3-0precise1) precise; urgency=low
+
+  * Bugfixes for networking, new kernels, and updated miner.php.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 23 Aug 2012 08:05:32 -0000
+
+
 bfgminer (2.7.1-0precise1) precise; urgency=low
 
   * The occasional strange behaviour where lots of work would end up on backup pools in failover mode should be fixed.
@@ -8,7 +15,7 @@ bfgminer (2.7.1-0precise1) precise; urgency=low
   * Hopefully the dynamic mode for GPUs is fixed on windows.
   * Hopefully the 7 day windows crash bug has been fixed
 
- -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 21 Aug 2012 16:43:09 -0000
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 21 Aug 2012 16:43:09 -0000
 
 
 bfgminer (2.7.0-0precise1) precise; urgency=low
@@ -18,7 +25,7 @@ bfgminer (2.7.0-0precise1) precise; urgency=low
   * With the change to queueing and more roll work being possible than ever before, the imbalance between pools that support rolltime and those that don't will now be extreme in load balance strategy. To offset that, and since the number of people using load balance has been increasing, the new strategy was added to try and give roughly the same number of shares to each pool.
   * Other minor bugfixes.
 
- -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 21 Aug 2012 01:50:33 -0000
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 21 Aug 2012 01:50:33 -0000
 
 
 bfgminer (2.6.5-0precise1) precise; urgency=low

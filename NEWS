@@ -1,4 +1,4 @@
-BFGMiner Version 2.7.3 - Future
+BFGMiner Version 2.7.3 - August 23, 2012
 
 - Minimise the number of getwork threads we generate.
 - Pick worksize 256 with Cypress if none is specified.
@@ -18,8 +18,6 @@ redundant and can lead to problems.
 - API-README update cgminer version number
 - API-README fix groups P: example mistake
 - API-README add COIN and other edits
-- gpu->hit should be reset on new work as well.
-- Do not add time to dynamic opencl calculations over a getwork.
 - miner.php allow 'coin' is custom pages
 
 
