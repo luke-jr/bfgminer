@@ -392,7 +392,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			 strstr(vbuff, "851.4") ||  // Windows 64 bit ""
 			 strstr(vbuff, "831.4") ||
 			 strstr(vbuff, "898.1") ||  // 12.2 driver SDK 
-			 strstr(vbuff, "923.1"))) { // 12.4 driver SDK
+			 strstr(vbuff, "923.1") ||  // 12.4
+			 strstr(vbuff, "938.1"))) { // SDK 2.7
 				applog(LOG_INFO, "Selecting diablo kernel");
 				clState->chosen_kernel = KL_DIABLO;
 		/* Detect all 7970s, older ATI and NVIDIA and use poclbm */
