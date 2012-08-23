@@ -1,3 +1,29 @@
+Version 2.7.2 - August 22, 2012
+
+- Pick worksize 256 with Cypress if none is specified.
+- Give warning with sdk2.7 and phatk as well.
+- Whitelist sdk2.7 for diablo kernel as well.
+- Only keep the last 6 blocks in the uthash database to keep memory usage
+constant. Storing more is unhelpful anyway.
+- BFL Flash - always distribute source
+- Increase kernel versions signifying changed APIs.
+- BFL flash - include source in builds and more FPGA-README
+- Check we haven't staged work while waiting for a curl entry before proceeding.
+- Use atomic ops to never miss a nonce on opencl kernels, including nonce==0,
+also allowing us to make the output buffer smaller.
+- Remove compile errors/warnings and document compile/usage in FPGA-README
+- bitforce-firmware-flash.c by Luke-jr
+- Ignore the submit_fail flag when deciding whether to recruit more curls or not
+since we have upper bounds on how many curls can be recruited, this test is
+redundant and can lead to problems.
+- API-README update cgminer version number
+- API-README fix groups P: example mistake
+- API-README add COIN and other edits
+- gpu->hit should be reset on new work as well.
+- Do not add time to dynamic opencl calculations over a getwork.
+- miner.php allow 'coin' is custom pages
+
+
 Version 2.7.1 - August 21, 2012
 
 - Update windows build instructions courtesy of sharky.
@@ -42,7 +68,6 @@ openCL patch by Nite69. Add virtual adl mapping for when none is specified o
 - miner.php show summary Diff1 Shares total
 - miner.php fix Work Utility totals
 - miner.php format new Work Utility and Diff1 Shares
-- Merge pull request #299 from kanoi/api
 - API V1.17 show Work Utility and Diff1 Shares
 
 
