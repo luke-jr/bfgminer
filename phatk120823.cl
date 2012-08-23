@@ -390,47 +390,33 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 #define FOUND (0x0F)
 
 #if defined(OCL1)
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		(Xfound) = output[FOUND];	\
-		output[FOUND] += 1;		\
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 #else
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		Xfound = atomic_add(&output[FOUND], 1); \
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
 #endif
 
 #ifdef VECTORS4
 	bool result = W[117].x & W[117].y & W[117].z & W[117].w;
 	if (!result) {
-		uint found;
-
 		if (!W[117].x)
-			SETFOUND(found, W[3].x);
+			SETFOUND(W[3].x);
 		if (!W[117].y)
-			SETFOUND(found, W[3].y);
+			SETFOUND(W[3].y);
 		if (!W[117].z)
-			SETFOUND(found, W[3].z);
+			SETFOUND(W[3].z);
 		if (!W[117].w)
-			SETFOUND(found, W[3].w);
+			SETFOUND(W[3].w);
 	}
 #elif defined VECTORS2
 	bool result = W[117].x & W[117].y;
 	if (!result) {
-		uint found;
-
 		if (!W[117].x)
-			SETFOUND(found, W[3].x);
+			SETFOUND(W[3].x);
 		if (!W[117].y)
-			SETFOUND(found, W[3].y);
+			SETFOUND(W[3].y);
 	}
 #else
-	if (!W[117]) {
-		uint found;
-
-		SETFOUND(found, W[3]);
-	}
+	if (!W[117])
+		SETFOUND(W[3]);
 #endif
 }

@@ -787,6 +787,9 @@ struct pool {
 	int solved;
 	int diff1;
 
+	int queued;
+	int staged;
+
 	bool submit_fail;
 	bool idle;
 	bool lagging;

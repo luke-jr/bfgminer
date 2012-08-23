@@ -1324,39 +1324,26 @@ Vals[2]+=ch(Vals[1],Vals[4],Vals[3]);
 #define FOUND (0x0F)
 
 #if defined(OCL1)
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		(Xfound) = output[FOUND];	\
-		output[FOUND] += 1;		\
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 #else
-	#define SETFOUND(Xfound, Xnonce) do {	\
-		Xfound = atomic_add(&output[FOUND], 1); \
-		output[Xfound] = Xnonce;	\
-	} while (0)
+	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
 #endif
 
 #if defined(VECTORS2) || defined(VECTORS4)
-
 	if (any(Vals[2] == 0x136032edU)) {
-		uint found;
-
 		if (Vals[2].x == 0x136032edU)
-			SETFOUND(found, nonce.x);
+			SETFOUND(nonce.x);
 		if (Vals[2].y == 0x136032edU)
-			SETFOUND(found, nonce.y);
+			SETFOUND(nonce.y);
 #if defined(VECTORS4)
 		if (Vals[2].z == 0x136032edU)
-			SETFOUND(found, nonce.z);
+			SETFOUND(nonce.z);
 		if (Vals[2].w == 0x136032edU)
-			SETFOUND(found, nonce.w);
+			SETFOUND(nonce.w);
 #endif
 	}
 #else
-	if (Vals[2] == 0x136032edU) {
-		uint found;
-
-		SETFOUND(found, nonce);
-	}
+	if (Vals[2] == 0x136032edU)
+		SETFOUND(nonce);
 #endif
 }
