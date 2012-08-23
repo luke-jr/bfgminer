@@ -1,3 +1,10 @@
+bfgminer (2.7.4-0precise1) precise; urgency=low
+
+  * More fixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 23 Aug 2012 21:48:02 -0000
+
+
 bfgminer (2.7.3-0precise1) precise; urgency=low
 
   * Bugfixes for networking, new kernels, and updated miner.php.
