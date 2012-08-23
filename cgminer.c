@@ -70,7 +70,7 @@ struct workio_cmd {
 	enum workio_commands	cmd;
 	struct thr_info		*thr;
 	struct work		*work;
-	bool			needed;
+	struct pool		*pool;
 };
 
 struct strategies strategies[] = {
@@ -187,7 +187,6 @@ int hw_errors;
 int total_accepted, total_rejected, total_diff1;
 int total_getworks, total_stale, total_discarded;
 static int total_queued, staged_rollable;
-static int queued_getworks;
 unsigned int new_blocks;
 static unsigned int work_block;
 unsigned int found_blocks;
@@ -2383,31 +2382,25 @@ out:
 	return cloned;
 }
 
+static bool queue_request(struct thr_info *thr, bool needed);
+
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool = current_pool();
 	struct work *ret_work= NULL;
 	struct curl_ent *ce = NULL;
-	bool lagging = false;
 
 	pthread_detach(pthread_self());
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
-retry:
-	tq = global_queued();
-	ts = total_staged();
+	pool = wc->pool;
 
-	if (ts >= maxq)
+	if (clone_available()) {
+		dec_queued(pool);
 		goto out;
-
-	if (ts >= opt_queue && tq >= maxq)
-		goto out;
-
-	if (clone_available())
-		goto out;
+	}
 
 	ret_work = make_work();
 	if (wc->thr)
@@ -2419,32 +2412,19 @@ retry:
 		get_benchmark_work(ret_work);
 		ret_work->queued = true;
 	} else {
-
-		if (!ts)
-			lagging = true;
-		pool = ret_work->pool = select_pool(lagging);
-
-		inc_queued(pool);
+		ret_work->pool = wc->pool;
 
 		if (!ce)
 			ce = pop_curl_entry(pool);
-
-		/* Check that we haven't staged work via other threads while
-		 * waiting for a curl entry */
-		if (total_staged() >= maxq) {
-			dec_queued(pool);
-			free_work(ret_work);
-			goto out;
-		}
 
 		/* obtain new work from bitcoin via JSON-RPC */
 		if (!get_upstream_work(ret_work, ce->curl)) {
 			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
-			lagging = true;
 			dec_queued(pool);
+			queue_request(ret_work->thr, true);
 			free_work(ret_work);
-			goto retry;
+			goto out;
 		}
 
 		ret_work->queued = true;
@@ -2463,9 +2443,6 @@ out:
 	workio_cmd_free(wc);
 	if (ce)
 		push_curl_entry(ce, pool);
-	mutex_lock(&control_lock);
-	queued_getworks--;
-	mutex_unlock(&control_lock);
 	return NULL;
 }
 
@@ -2625,8 +2602,6 @@ static struct pool *priority_pool(int choice)
 	}
 	return ret;
 }
-
-static bool queue_request(struct thr_info *thr, bool needed);
 
 void switch_pools(struct pool *selected)
 {
@@ -3930,7 +3905,27 @@ static void pool_resus(struct pool *pool)
 
 static bool queue_request(struct thr_info *thr, bool needed)
 {
+	int ts, tq, maxq = opt_queue + mining_threads;
+	struct pool *pool, *cp;
 	struct workio_cmd *wc;
+
+	ts = total_staged();
+	tq = global_queued();
+	if (ts && ts + tq >= maxq)
+		return true;
+
+	cp = current_pool();
+	if ((!needed || opt_fail_only) && (cp->staged + cp->queued >= maxq))
+		return true;
+
+	if (needed && !ts)
+		pool = select_pool(true);
+	else
+		pool = cp;
+	if (pool->staged + pool->queued >= maxq)
+		return true;
+
+	inc_queued(pool);
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
@@ -3941,7 +3936,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 
 	wc->cmd = WC_GET_WORK;
 	wc->thr = thr;
-	wc->needed = needed;
+	wc->pool = pool;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
