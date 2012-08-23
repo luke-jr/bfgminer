@@ -1,3 +1,27 @@
+BFGMiner Version 2.7.2 - Future
+
+- Pick worksize 256 with Cypress if none is specified.
+- Give warning with sdk2.7 and phatk as well.
+- Whitelist sdk2.7 for diablo kernel as well.
+- Only keep the last 6 blocks in the uthash database to keep memory usage
+constant. Storing more is unhelpful anyway.
+- Increase kernel versions signifying changed APIs.
+- BFL flash - more FPGA-README
+- Check we haven't staged work while waiting for a curl entry before proceeding.
+- Use atomic ops to never miss a nonce on opencl kernels, including nonce==0,
+also allowing us to make the output buffer smaller.
+- Remove compile errors/warnings and document compile/usage in FPGA-README
+- Ignore the submit_fail flag when deciding whether to recruit more curls or not
+since we have upper bounds on how many curls can be recruited, this test is
+redundant and can lead to problems.
+- API-README update cgminer version number
+- API-README fix groups P: example mistake
+- API-README add COIN and other edits
+- gpu->hit should be reset on new work as well.
+- Do not add time to dynamic opencl calculations over a getwork.
+- miner.php allow 'coin' is custom pages
+
+
 BFGMiner Version 2.7.1 - August 22, 2012
 
 - Update windows build instructions courtesy of sharky.
