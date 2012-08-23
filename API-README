@@ -42,7 +42,7 @@ To give an IP address/subnet access to a group you use the group letter
 in front of the IP address instead of W: e.g. P:192.168.0/32
 An IP address/subnet can only be a member of one group
 A sample API group would be:
- --api-groups P:switchpool:enablepool:addpool:disablepool:removepool.poolpriority:*
+ --api-groups P:switchpool:enablepool:addpool:disablepool:removepool:poolpriority:*
 This would create a group 'P' that can do all current pool commands and all
 non-priviliged commands - the '*' means all non-priviledged commands
 Without the '*' the group would only have access to the pool commands
@@ -759,6 +759,31 @@ Below is each variable that can be changed and an explanation of each
 ---------
 
 Default:
+ $dfmt = 'H:i:s j-M-Y \U\T\CP';
+
+Define the date format used to print full length dates
+If you get the string 'UTCP' on the end of your dates shown, that
+means you are using an older version of PHP and you can instead use:
+ $dfmt = 'H:i:s j-M-Y \U\T\CO';
+
+The PHP documentation on the date format is here:
+ http://us.php.net/manual/en/function.date.php
+
+---------
+
+Default:
+ $title = 'Mine';
+
+Web page title
+If you know PHP you can of course use code to define it e.g.
+ $title = 'My Rig at: '.date($dfmt);
+
+Which would set the web page title to something like:
+ My Rig at: 10:34:00 22-Aug-2012 UTC+10:00
+
+---------
+
+Default:
  $readonly = false;
 
 Set $readonly to true to force miner.php to be readonly
@@ -961,7 +986,7 @@ The section defines what data you want in the summary table and the Fields
 define what data you want shown from that section
 
 Standard sections are:
- SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS, STATS
+ SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS, STATS, COIN
 
 Fields are the names as shown on the headers on the normal pages
 
@@ -970,6 +995,7 @@ Fields can be 'name=new name' to display 'name' with a different heading
 
 There are also now joined sections:
  SUMMARY+POOL, SUMMARY+DEVS, SUMMARY+CONFIG, DEVS+NOTIFY, DEVS+DEVDETAILS
+ SUMMARY+COIN
 
 These sections are an SQL join of the two sections and the fields in them
 are named section.field where section. is the section the field comes from
@@ -980,11 +1006,11 @@ Also note:
 - empty columns (e.g. an unknown field) are not shown
 - missing field data shows as blank
 - the field name '*' matches all fields except in joined sections
-  (useful for STATS)
+  (useful for STATS and COIN)
 
 There are 2 hard coded sections:
- DATE - displays a date table like 'Summary'
- RIGS - displays a rig table like 'Summary'
+ DATE - displays a date table like at the start of 'Summary'
+ RIGS - displays a rig table like at the start of 'Summary'
 
 Each custom summary requires a second array, that can be empty, listing fields
 to be totaled for each section
@@ -1041,7 +1067,7 @@ Each table will have the chosen details for all the rigs specified in $rigs
 	section.fieldname, not just fieldname
 
 	The join code automatically adds 2 fields to each GPU device: 'Name' and 'ID'
-	They don't exist in the API 'devs' output but you can correctly calculate
+	They don't exist in the API 'devs' output but I can correctly calculate
 	them from the GPU device data
 	These two fields are used to join DEVS to NOTIFY i.e. find the NOTIFY
 	record that has the same Name and ID as the DEVS record and join them
