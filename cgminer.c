@@ -187,6 +187,7 @@ int hw_errors;
 int total_accepted, total_rejected, total_diff1;
 int total_getworks, total_stale, total_discarded;
 static int total_queued, staged_rollable;
+static int queued_getworks;
 unsigned int new_blocks;
 static unsigned int work_block;
 unsigned int found_blocks;
@@ -2460,6 +2461,9 @@ out:
 	workio_cmd_free(wc);
 	if (ce)
 		push_curl_entry(ce, pool);
+	mutex_lock(&control_lock);
+	queued_getworks--;
+	mutex_unlock(&control_lock);
 	return NULL;
 }
 
@@ -3922,7 +3926,17 @@ static void pool_resus(struct pool *pool)
 static bool queue_request(struct thr_info *thr, bool needed)
 {
 	struct workio_cmd *wc;
+	bool doq = true;
 
+	mutex_lock(&control_lock);
+	if (queued_getworks > (mining_threads + opt_queue) * total_pools)
+		doq = false;
+	else
+		queued_getworks++;
+	mutex_unlock(&control_lock);
+	if (!doq)
+		return true;
+	
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
