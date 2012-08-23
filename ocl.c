@@ -468,8 +468,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		clState->wsize = cgpu->work_size;
 	else if (strstr(name, "Tahiti"))
 		clState->wsize = 64;
-	else
-		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
+	else {
+		if (strstr(name, "Cypress"))
+			clState->wsize = 256;
+		else
+			clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
+	}
 	cgpu->work_size = clState->wsize;
 
 #ifdef USE_SCRYPT
