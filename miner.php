@@ -1,7 +1,7 @@
 <?php
 session_start();
 #
-global $miner, $port, $readonly, $notify, $rigs;
+global $title, $miner, $port, $readonly, $notify, $rigs;
 global $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
@@ -12,6 +12,9 @@ global $colouroverride, $placebuttons;
 #
 # See API-README for more details of these variables and how
 # to configure miner.php
+#
+# Web page title
+$title = 'Mine';
 #
 # Set $readonly to true to force miner.php to be readonly
 # Set $readonly to false then it will check BFGMiner 'privileged'
@@ -185,7 +188,7 @@ function getdom($domname)
 #
 function htmlhead($checkapi, $rig, $pg = null)
 {
- global $miner_font_family, $miner_font_size;
+ global $title, $miner_font_family, $miner_font_size;
  global $error, $readonly, $poolinputs, $here;
  global $ignorerefresh, $autorefresh;
 
@@ -216,7 +219,7 @@ function htmlhead($checkapi, $rig, $pg = null)
  $miner_font = "font-family:$miner_font_family; font-size:$miner_font_size;";
 
  echo "<html><head>$refreshmeta
-<title>Mine</title>
+<title>$title</title>
 <style type='text/css'>
 td { $miner_font ".getcss('td')."}
 td.two { $miner_font ".getcss('td.two')."}
