@@ -78,6 +78,7 @@ endif
 
 if HAS_BITFORCE
 cgminer_SOURCES += driver-bitforce.c
+EXTRA_DIST += bitforce-firmware-flash.c
 endif
 
 if HAS_ICARUS
