@@ -2211,7 +2211,9 @@ static struct work *make_work(void)
 
 	if (unlikely(!work))
 		quit(1, "Failed to calloc work in make_work");
+	mutex_lock(&control_lock);
 	work->id = total_work++;
+	mutex_unlock(&control_lock);
 	return work;
 }
 
