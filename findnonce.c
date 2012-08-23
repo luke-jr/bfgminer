@@ -173,6 +173,7 @@ struct pc_data {
 	struct work *work;
 	uint32_t res[MAXBUFFERS];
 	pthread_t pth;
+	int found;
 };
 
 static void send_sha_nonce(struct pc_data *pcd, cl_uint nonce)
@@ -238,32 +239,22 @@ static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
 static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
-	struct thr_info *thr = pcd->thr;
-	int entry = 0, nonces = 0;
+	unsigned int entry = 0;
 
 	pthread_detach(pthread_self());
 	rename_thr("bfg-postcalchsh");
 
-	for (entry = 0; entry < FOUND; entry++) {
+	for (entry = 0; entry < pcd->res[FOUND]; entry++) {
 		uint32_t nonce = pcd->res[entry];
 
-		if (nonce) {
-			applog(LOG_DEBUG, "OCL NONCE %u", nonce);
-			if (opt_scrypt)
-				send_scrypt_nonce(pcd, nonce);
-			else
-				send_sha_nonce(pcd, nonce);
-			nonces++;
-		}
+		applog(LOG_DEBUG, "OCL NONCE %u found in slot %d", nonce, entry);
+		if (opt_scrypt)
+			send_scrypt_nonce(pcd, nonce);
+		else
+			send_sha_nonce(pcd, nonce);
 	}
 
 	free(pcd);
-
-	if (unlikely(!nonces)) {
-		applog(LOG_DEBUG, "No nonces found! Error in OpenCL code?");
-		hw_errors++;
-		thr->cgpu->hw_errors++;
-	}
 
 	return NULL;
 }
