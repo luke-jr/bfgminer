@@ -164,7 +164,7 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 						const uint PreW18, const uint PreW19,
 						const uint PreW31, const uint PreW32,
 						
-						__global uint * output)
+						volatile __global uint * output)
 {
 
 
@@ -387,31 +387,48 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 	W[117] += W[108] + Vals[3] + Vals[7] + P2(124) + P1(124) + Ch((Vals[0] + Vals[4]) + (K[59] + W(59+64)) + s1(64+59)+ ch(59+64),Vals[1],Vals[2]) -
 		(-(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64)));
 
-#define FOUND (0x800)
-#define NFLAG (0x7FF)
+#define FOUND (0x0F)
 
 #ifdef VECTORS4
 	bool result = W[117].x & W[117].y & W[117].z & W[117].w;
 	if (!result) {
-		if (!W[117].x)
-			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
-		if (!W[117].y)
-			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
-		if (!W[117].z)
-			output[FOUND] = output[NFLAG & W[3].z] = W[3].z;
-		if (!W[117].w)
-			output[FOUND] = output[NFLAG & W[3].w] = W[3].w;
+		uint found;
+
+		if (!W[117].x) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = W[3].x;
+		}
+		if (!W[117].y) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = W[3].y;
+		}
+		if (!W[117].z) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = W[3].z;
+		}
+		if (!W[117].w) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = W[3].w;
+		}
 	}
 #elif defined VECTORS2
 	bool result = W[117].x & W[117].y;
 	if (!result) {
-		if (!W[117].x)
-			output[FOUND] = output[NFLAG & W[3].x] = W[3].x;
-		if (!W[117].y)
-			output[FOUND] = output[NFLAG & W[3].y] = W[3].y;
+		uint found;
+
+		if (!W[117].x) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = W[3].x;
+		}
+		if (!W[117].y) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = W[3].y;
+		}
 	}
 #else
-	if (!W[117])
-		output[FOUND] = output[NFLAG & W[3]] = W[3];
+	if (!W[117]) {
+		uint found = atomic_add(&output[FOUND], 1);
+		output[found] = W[3];
+	}
 #endif
 }

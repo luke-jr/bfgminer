@@ -1,7 +1,7 @@
 <?php
 session_start();
 #
-global $miner, $port, $readonly, $notify, $rigs;
+global $title, $miner, $port, $readonly, $notify, $rigs;
 global $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
@@ -12,6 +12,9 @@ global $colouroverride, $placebuttons;
 #
 # See API-README for more details of these variables and how
 # to configure miner.php
+#
+# Web page title
+$title = 'Mine';
 #
 # Set $readonly to true to force miner.php to be readonly
 # Set $readonly to false then it will check cgminer 'privileged'
@@ -185,7 +188,7 @@ function getdom($domname)
 #
 function htmlhead($checkapi, $rig, $pg = null)
 {
- global $miner_font_family, $miner_font_size;
+ global $title, $miner_font_family, $miner_font_size;
  global $error, $readonly, $poolinputs, $here;
  global $ignorerefresh, $autorefresh;
 
@@ -216,7 +219,7 @@ function htmlhead($checkapi, $rig, $pg = null)
  $miner_font = "font-family:$miner_font_family; font-size:$miner_font_size;";
 
  echo "<html><head>$refreshmeta
-<title>Mine</title>
+<title>$title</title>
 <style type='text/css'>
 td { $miner_font ".getcss('td')."}
 td.two { $miner_font ".getcss('td.two')."}
@@ -635,6 +638,10 @@ function fmt($section, $name, $value, $when, $alldata)
 						$class = $hiclass;
 			}
 		break;
+	case 'SUMMARY.Work Utility':
+	case 'total.Work Utility':
+		$ret = $value.'/m';
+		break;
 	case 'PGA.Temperature':
 	case 'GPU.Temperature':
 	case 'DEVS.Temperature':
@@ -732,6 +739,8 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'SUMMARY.Discarded':
 	case 'POOL.Discarded':
 	case 'total.Discarded':
+	case 'POOL.Diff1 Shares':
+	case 'total.Diff1 Shares':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -753,6 +762,7 @@ function fmt($section, $name, $value, $when, $alldata)
 			$class = $warnclass;
 		break;
 	case 'STATUS.When':
+	case 'COIN.Current Block Time':
 		$ret = date($dfmt, $value);
 		break;
 	case 'BUTTON.Rig':
@@ -818,7 +828,8 @@ $singlerigsum = array(
  'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
 			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
-			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1),
+			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1,
+			'Diff1 Shares' => 1),
  'notify' => array('*' => 1));
 #
 function showtotal($total, $when, $oldvalues)
@@ -1447,7 +1458,8 @@ $sectionmap = array(
 	'NOTIFY' => 'notify',
 	'DEVDETAILS' => 'devdetails',
 	'STATS' => 'stats',
-	'CONFIG' => 'config');
+	'CONFIG' => 'config',
+	'COIN' => 'coin');
 #
 function joinfields($section1, $section2, $join, $results)
 {
@@ -1582,6 +1594,7 @@ function joinsections($sections, $results, $errors)
 				case 'POOL':
 				case 'DEVS':
 				case 'CONFIG':
+				case 'COIN':
 					$sectionmap[$section] = $section;
 					$results[$section] = joinall($both[0], $both[1], $results);
 					break;
@@ -2023,7 +2036,7 @@ function display()
 
  newtable();
  doforeach('version', 'rig summary', array(), array(), true);
- $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH');
+ $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares');
  doforeach('summary', 'summary information', $sum, array(), false);
  endtable();
  otherrow('<td><br><br></td>');

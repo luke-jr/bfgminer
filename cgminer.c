@@ -85,16 +85,13 @@ static char packagename[255];
 
 bool opt_protocol;
 static bool opt_benchmark;
-static bool have_longpoll;
+bool have_longpoll;
 static bool want_per_device_stats;
 bool use_syslog;
 bool opt_quiet;
 static bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
-static int opt_retries = -1;
-static int opt_fail_pause = 5;
-static int fail_pause = 5;
 int opt_log_interval = 5;
 static int opt_queue = 1;
 int opt_scantime = 60;
@@ -170,7 +167,7 @@ static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
-static pthread_mutex_t ch_lock;
+pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
 
 pthread_rwlock_t netacc_lock;
@@ -213,8 +210,10 @@ bool curses_active;
 
 static char current_block[37];
 static char *current_hash;
+char *current_fullhash;
 static char datestamp[40];
 static char blocktime[30];
+struct timeval block_timeval;
 
 struct block {
 	char hash[37];
@@ -732,6 +731,11 @@ static char *set_icarus_timing(const char *arg)
 }
 #endif
 
+static char *set_null(const char __maybe_unused *arg)
+{
+	return NULL;
+}
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 #ifdef WANT_CPUMINE
@@ -954,12 +958,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--remove-disabled",
 		     opt_set_bool, &opt_removedisabled,
 	         "Remove disabled devices entirely, as if they didn't exist"),
-	OPT_WITH_ARG("--retries|-r",
-		     opt_set_intval, opt_show_intval, &opt_retries,
-		     "Number of times to retry before giving up, if JSON-RPC call fails (-1 means never)"),
-	OPT_WITH_ARG("--retry-pause|-R",
-		     set_int_0_to_9999, opt_show_intval, &opt_fail_pause,
-		     "Number of seconds to pause, between retries"),
+	OPT_WITH_ARG("--retries",
+		     set_null, NULL, NULL,
+		     opt_hidden),
+	OPT_WITH_ARG("--retry-pause",
+		     set_null, NULL, NULL,
+		     opt_hidden),
 	OPT_WITH_ARG("--rotate",
 		     set_rotate, opt_show_intval, &opt_rotate_period,
 		     "Change multipool strategy from failover to regularly rotate at N minutes"),
@@ -1739,7 +1743,7 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
-static bool submit_upstream_work(const struct work *work, CURL *curl)
+static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
 	json_t *val, *res;
@@ -1814,11 +1818,11 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d pool %d",
-				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no);
+				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s",
+				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "");
 			else
-				applog(LOG_NOTICE, "Accepted %s %s %d",
-				       hashshow, cgpu->api->name, cgpu->device_id);
+				applog(LOG_NOTICE, "Accepted %s %s %d %s",
+				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "");
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -1867,8 +1871,8 @@ static bool submit_upstream_work(const struct work *work, CURL *curl)
 			} else
 				strcpy(reason, "");
 
-			applog(LOG_NOTICE, "Rejected %s %s %d %s%s",
-			       hashshow, cgpu->api->name, cgpu->device_id, where, reason);
+			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s",
+			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "");
 			sharelog(disposition, work);
 		}
 
@@ -1951,9 +1955,11 @@ static inline struct pool *select_pool(bool lagging)
 	if (pool_strategy == POOL_BALANCE)
 		return select_balanced(cp);
 
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
-		pool = cp;
-	else
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
+		if (cp->prio != 0)
+			switch_pools(NULL);
+		pool = current_pool();
+	} else
 		pool = NULL;
 
 	while (!pool) {
@@ -1989,7 +1995,6 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	struct timeval tv_start, tv_end, tv_elapsed;
 	json_t *val = NULL;
 	bool rc = false;
-	int retries = 0;
 	char *url;
 
 	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
@@ -1997,23 +2002,17 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	url = pool->rpc_url;
 
 	gettimeofday(&tv_start, NULL);
-retry:
-	/* A single failure response here might be reported as a dead pool and
-	 * there may be temporary denied messages etc. falsely reporting
-	 * failure so retry a few times before giving up */
-	while (!val && retries++ < 3) {
-		pool_stats->getwork_attempts++;
-		val = json_rpc_call(curl, url, pool->rpc_userpass, rpc_req,
-			    false, false, &work->rolltime, pool, false);
-	}
-	if (unlikely(!val)) {
-		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
-		goto out;
-	}
 
-	rc = work_decode(json_object_get(val, "result"), work);
-	if (!rc && retries < 3)
-		goto retry;
+	val = json_rpc_call(curl, url, pool->rpc_userpass, rpc_req, false,
+			    false, &work->rolltime, pool, false);
+	pool_stats->getwork_attempts++;
+
+	if (likely(val)) {
+		rc = work_decode(json_object_get(val, "result"), work);
+		if (unlikely(!rc))
+			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
+	} else
+		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 
 	gettimeofday(&tv_end, NULL);
 	timersub(&tv_end, &tv_start, &tv_elapsed);
@@ -2036,8 +2035,8 @@ retry:
 	total_getworks++;
 	pool->getwork_requested++;
 
-	json_decref(val);
-out:
+	if (likely(val))
+		json_decref(val);
 
 	return rc;
 }
@@ -2048,7 +2047,9 @@ static struct work *make_work(void)
 
 	if (unlikely(!work))
 		quit(1, "Failed to calloc work in make_work");
+	mutex_lock(&control_lock);
 	work->id = total_work++;
+	mutex_unlock(&control_lock);
 	return work;
 }
 
@@ -2218,7 +2219,7 @@ static void recruit_curl(struct pool *pool)
  * network delays/outages. */
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
-	int curl_limit = opt_delaynet ? 5 : mining_threads * 4 / 3;
+	int curl_limit = opt_delaynet ? 5 : (mining_threads + opt_queue) * 2;
 	struct curl_ent *ce;
 
 	mutex_lock(&pool->pool_lock);
@@ -2226,7 +2227,7 @@ retry:
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if (pool->submit_fail || pool->curls >= curl_limit) {
+		if (pool->curls >= curl_limit) {
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
 			goto retry;
 		} else
@@ -2384,21 +2385,22 @@ static void *get_work_thread(void *userdata)
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool = current_pool();
+	struct work *ret_work= NULL;
 	struct curl_ent *ce = NULL;
-	struct work *ret_work;
-	int failures = 0;
+	bool lagging = false;
 
 	pthread_detach(pthread_self());
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
+retry:
 	tq = global_queued();
 	ts = total_staged();
 
 	if (ts >= maxq)
 		goto out;
 
-	if (ts >= opt_queue && tq >= maxq - 1)
+	if (ts >= opt_queue && tq >= maxq)
 		goto out;
 
 	if (clone_available())
@@ -2410,34 +2412,37 @@ static void *get_work_thread(void *userdata)
 	else
 		ret_work->thr = NULL;
 
-	if (opt_benchmark)
+	if (opt_benchmark) {
 		get_benchmark_work(ret_work);
-	else {
-		bool lagging = false;
+		ret_work->queued = true;
+	} else {
 
-		if (ts <= opt_queue)
+		if (!ts)
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
+
 		inc_queued();
-		
-		ce = pop_curl_entry(pool);
+
+		if (!ce)
+			ce = pop_curl_entry(pool);
+
+		/* Check that we haven't staged work via other threads while
+		 * waiting for a curl entry */
+		if (total_staged() >= maxq) {
+			dec_queued();
+			free_work(ret_work);
+			goto out;
+		}
 
 		/* obtain new work from bitcoin via JSON-RPC */
-		while (!get_upstream_work(ret_work, ce->curl)) {
-			if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-				applog(LOG_ERR, "json_rpc_call failed, terminating workio thread");
-				free_work(ret_work);
-				kill_work();
-				goto out;
-			}
-
+		if (!get_upstream_work(ret_work, ce->curl)) {
 			/* pause, then restart work-request loop */
-			applog(LOG_DEBUG, "json_rpc_call failed on get work, retry after %d seconds",
-				fail_pause);
-			sleep(fail_pause);
-			fail_pause += opt_fail_pause;
+			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
+			lagging = true;
+			dec_queued();
+			free_work(ret_work);
+			goto retry;
 		}
-		fail_pause = opt_fail_pause;
 
 		ret_work->queued = true;
 	}
@@ -2534,8 +2539,8 @@ static void *submit_work_thread(void *userdata)
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	struct work *work = wc->work;
 	struct pool *pool = work->pool;
+	bool resubmit = false;
 	struct curl_ent *ce;
-	int failures = 0;
 
 	pthread_detach(pthread_self());
 
@@ -2560,26 +2565,18 @@ static void *submit_work_thread(void *userdata)
 
 	ce = pop_curl_entry(pool);
 	/* submit solution to bitcoin via JSON-RPC */
-	while (!submit_upstream_work(work, ce->curl)) {
+	while (!submit_upstream_work(work, ce->curl, resubmit)) {
+		resubmit = true;
 		if (stale_work(work, true)) {
 			applog(LOG_NOTICE, "Share became stale while retrying submit, discarding");
 			total_stale++;
 			pool->stale_shares++;
 			break;
 		}
-		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-			applog(LOG_ERR, "Failed %d retries ...terminating workio thread", opt_retries);
-			kill_work();
-			break;
-		}
 
 		/* pause, then restart work-request loop */
-		applog(LOG_INFO, "json_rpc_call failed on submit_work, retry after %d seconds",
-			fail_pause);
-		sleep(fail_pause);
-		fail_pause += opt_fail_pause;
+		applog(LOG_INFO, "json_rpc_call failed on submit_work, retrying");
 	}
-	fail_pause = opt_fail_pause;
 	push_curl_entry(ce, pool);
 out:
 	workio_cmd_free(wc);
@@ -2785,21 +2782,26 @@ static void restart_threads(void)
 static void set_curblock(char *hexstr, unsigned char *hash)
 {
 	unsigned char hash_swap[32];
-	struct timeval tv_now;
+	unsigned char block_hash_swap[32];
 	char *old_hash;
 
 	strcpy(current_block, hexstr);
-	gettimeofday(&tv_now, NULL);
-	get_timestamp(blocktime, &tv_now);
 	swap256(hash_swap, hash);
+	swap256(block_hash_swap, hash+4);
 
 	/* Don't free current_hash directly to avoid dereferencing when read
-	 * elsewhere */
+	 * elsewhere - and update block_timeval inside the same lock */
 	mutex_lock(&ch_lock);
+	gettimeofday(&block_timeval, NULL);
 	old_hash = current_hash;
 	current_hash = bin2hex(hash_swap, 16);
 	free(old_hash);
+	old_hash = current_fullhash;
+	current_fullhash = bin2hex(block_hash_swap, 32);
+	free(old_hash);
 	mutex_unlock(&ch_lock);
+
+	get_timestamp(blocktime, &block_timeval);
 
 	if (unlikely(!current_hash))
 		quit (1, "set_curblock OOM");
@@ -2856,6 +2858,20 @@ static void test_work_current(struct work *work)
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
 		wr_lock(&blk_lock);
+		/* Only keep the last 6 blocks in memory since work from blocks
+		 * before this is virtually impossible and we want to prevent
+		 * memory usage from continually rising */
+		if (HASH_COUNT(blocks) > 5) {
+			struct block *blocka, *blockb;
+			int count = 0;
+
+			HASH_ITER(hh, blocks, blocka, blockb) {
+				if (count++ < 6)
+					continue;
+				HASH_DEL(blocks, blocka);
+				free(blocka);
+			}
+		}
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
 		set_curblock(hexstr, work->data);
@@ -2898,12 +2914,7 @@ static bool work_rollable(struct work *work)
 
 static bool hash_push(struct work *work)
 {
-	bool rc = true, dec = false;
-
-	if (work->queued) {
-		work->queued = false;
-		dec = true;
-	}
+	bool rc = true;
 
 	mutex_lock(stgd_lock);
 	if (work_rollable(work))
@@ -2916,8 +2927,10 @@ static bool hash_push(struct work *work)
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
 
-	if (dec)
+	if (work->queued) {
+		work->queued = false;
 		dec_queued();
+	}
 
 	return rc;
 }
@@ -3507,9 +3520,9 @@ static void set_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
-	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n[R]etries: %d\n"
-		  "[P]ause: %d\n[W]rite config file\n[C]gminer restart\n",
-		opt_queue, opt_scantime, opt_expiry, opt_retries, opt_fail_pause);
+	wlogprint("[Q]ueue: %d\n[S]cantime: %d\n[E]xpiry: %d\n"
+		  "[W]rite config file\n[C]gminer restart\n",
+		opt_queue, opt_scantime, opt_expiry);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
 
@@ -3536,22 +3549,6 @@ retry:
 			goto retry;
 		}
 		opt_expiry = selected;
-		goto retry;
-	} else if  (!strncasecmp(&input, "r", 1)) {
-		selected = curses_int("Retries before failing (-1 infinite)");
-		if (selected < -1 || selected > 9999) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		opt_retries = selected;
-		goto retry;
-	} else if  (!strncasecmp(&input, "p", 1)) {
-		selected = curses_int("Seconds to pause before network retries");
-		if (selected < 1 || selected > 9999) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		opt_fail_pause = selected;
 		goto retry;
 	} else if  (!strncasecmp(&input, "w", 1)) {
 		FILE *fcfg;
@@ -4027,14 +4024,12 @@ static struct work *clone_work(struct work *work)
 	return work;
 }
 
-static bool get_work(struct work *work, struct thr_info *thr, const int thr_id)
+static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 {
 	struct timespec abstime = {0, 0};
 	struct work *work_heap;
 	struct timeval now;
 	struct pool *pool;
-	int failures = 0;
-	bool ret = false;
 
 	/* Tell the watchdog thread this thread is waiting on getwork and
 	 * should not be restarted */
@@ -4042,17 +4037,14 @@ static bool get_work(struct work *work, struct thr_info *thr, const int thr_id)
 
 	if (opt_benchmark) {
 		get_benchmark_work(work);
-		thread_reportin(thr);
-		return true;
+		goto out;
 	}
 
 retry:
 	pool = current_pool();
 
-	if (reuse_work(work)) {
-		ret = true;
+	if (reuse_work(work))
 		goto out;
-	}
 
 	if (!pool->lagging && !total_staged() && global_queued() >= mining_threads + opt_queue) {
 		struct cgpu_info *cgpu = thr->cgpu;
@@ -4102,29 +4094,13 @@ retry:
 			pool_resus(pool);
 	}
 
-	work_heap = clone_work(work_heap);
 	memcpy(work, work_heap, sizeof(struct work));
 	free_work(work_heap);
 
-	ret = true;
 out:
-	if (unlikely(ret == false)) {
-		if ((opt_retries >= 0) && (++failures > opt_retries)) {
-			applog(LOG_ERR, "Failed %d times to get_work");
-			return ret;
-		}
-		applog(LOG_DEBUG, "Retrying after %d seconds", fail_pause);
-		sleep(fail_pause);
-		fail_pause += opt_fail_pause;
-		goto retry;
-	}
-	fail_pause = opt_fail_pause;
-
 	work->thr_id = thr_id;
 	thread_reportin(thr);
-	if (ret)
-		work->mined = true;
-	return ret;
+	work->mined = true;
 }
 
 bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
@@ -4281,11 +4257,9 @@ void *miner_thread(void *userdata)
 		mythr->work_restart = false;
 		if (api->free_work && likely(work->pool))
 			api->free_work(mythr, work);
-		if (unlikely(!get_work(work, mythr, thr_id))) {
-			applog(LOG_ERR, "work retrieval failed, exiting "
-				"mining thread %d", thr_id);
-			break;
-		}
+		get_work(work, mythr, thr_id);
+		cgpu->new_work = true;
+
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
 		cgpu->max_hashes = 0;
@@ -4570,16 +4544,9 @@ retry_pool:
 			gettimeofday(&end, NULL);
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
-			if (opt_retries == -1 || failures++ < opt_retries) {
-				if (failures == 1)
-					applog(LOG_WARNING,
-					       "longpoll failed for %s, retrying every 30s", pool->lp_url);
-				sleep(30);
-			} else {
-				applog(LOG_ERR,
-					"longpoll failed for %s, ending thread", pool->lp_url);
-				goto out;
-			}
+			if (failures == 1)
+				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", pool->lp_url);
+			sleep(30);
 		}
 		if (pool != cp) {
 			pool = select_longpoll_pool(cp);
@@ -4618,7 +4585,7 @@ static void reap_curl(struct pool *pool)
 	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
 		if (pool->curls < 2)
 			break;
-		if (now.tv_sec - ent->tv.tv_sec > 60) {
+		if (now.tv_sec - ent->tv.tv_sec > 300) {
 			reaped++;
 			pool->curls--;
 			list_del(&ent->node);
@@ -5753,6 +5720,9 @@ begin_bench:
 		quit(1, "input thread create failed");
 	pthread_detach(thr->pth);
 #endif
+
+	for (i = 0; i < mining_threads + opt_queue; i++)
+		queue_request(NULL, false);
 
 	/* main loop - simply wait for workio thread to exit. This is not the
 	 * normal exit path and only occurs should the workio_thread die
