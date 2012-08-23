@@ -3929,7 +3929,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	bool doq = true;
 
 	mutex_lock(&control_lock);
-	if (queued_getworks > (mining_threads + opt_queue) * total_pools)
+	if (queued_getworks > (mining_threads + opt_queue) * 2)
 		doq = false;
 	else
 		queued_getworks++;
