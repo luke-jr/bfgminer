@@ -411,6 +411,8 @@ struct cgpu_info {
 	double gpu_us_average;
 #endif
 
+	bool new_work;
+
 	float temp;
 	int cutofftemp;
 

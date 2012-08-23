@@ -4665,6 +4665,7 @@ void *miner_thread(void *userdata)
 		if (api->free_work && likely(work->pool))
 			api->free_work(mythr, work);
 		get_work(work, mythr, thr_id);
+		cgpu->new_work = true;
 
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
