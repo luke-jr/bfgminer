@@ -1,5 +1,6 @@
-BFGMiner Version 2.7.2 - Future
+BFGMiner Version 2.7.3 - Future
 
+- Minimise the number of getwork threads we generate.
 - Pick worksize 256 with Cypress if none is specified.
 - Give warning with sdk2.7 and phatk as well.
 - Whitelist sdk2.7 for diablo kernel as well.
