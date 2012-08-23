@@ -1511,7 +1511,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 
-	/* MAXBUFFERS entry is used as a flag to say nonces exist */
+	/* FOUND entry is used as a counter to say how many nonces exist */
 	if (thrdata->res[FOUND]) {
 		/* Clear the buffer again */
 		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,

@@ -62,7 +62,7 @@ void search(
     const uint c1_plus_k5, const uint b1_plus_k6,
     const uint state0, const uint state1, const uint state2, const uint state3,
     const uint state4, const uint state5, const uint state6, const uint state7,
-    __global uint * output)
+    volatile __global uint * output)
 {
 
   z ZA[930];
@@ -1242,33 +1242,50 @@ void search(
     
     ZA[924] = (ZCh(ZA[922], ZA[920], ZA[918]) + ZA[923]) + ZR26(ZA[922]);
     
-#define FOUND (0x800)
-#define NFLAG (0x7FF)
+#define FOUND (0x0F)
 
 #if defined(VECTORS4)
 	bool result = any(ZA[924] == 0x136032EDU);
 
 	if (result) {
-		if (ZA[924].x == 0x136032EDU)
-			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
-		if (ZA[924].y == 0x136032EDU)
-			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
-		if (ZA[924].z == 0x136032EDU)
-			output[FOUND] = output[NFLAG & Znonce.z] =  Znonce.z;
-		if (ZA[924].w == 0x136032EDU)
-			output[FOUND] = output[NFLAG & Znonce.w] =  Znonce.w;
+		uint found;
+
+		if (ZA[924].x == 0x136032EDU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = Znonce.x;
+		}
+		if (ZA[924].y == 0x136032EDU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = Znonce.y;
+		}
+		if (ZA[924].z == 0x136032EDU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = Znonce.z;
+		}
+		if (ZA[924].w == 0x136032EDU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = Znonce.w;
+		}
 	}
 #elif defined(VECTORS2)
 	bool result = any(ZA[924] == 0x136032EDU);
 
 	if (result) {
-		if (ZA[924].x == 0x136032EDU)
-			output[FOUND] = output[NFLAG & Znonce.x] =  Znonce.x;
-		if (ZA[924].y == 0x136032EDU)
-			output[FOUND] = output[NFLAG & Znonce.y] =  Znonce.y;
+		uint found;
+
+		if (ZA[924].x == 0x136032EDU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = Znonce.x;
+		}
+		if (ZA[924].y == 0x136032EDU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = Znonce.y;
+		}
 	}
 #else
-	if (ZA[924] == 0x136032EDU)
-		output[FOUND] = output[NFLAG & Znonce] =  Znonce;
+	if (ZA[924] == 0x136032EDU) {
+		uint found = atomic_add(&output[FOUND], 1);
+		output[found] = Znonce;
+	}
 #endif
 }
