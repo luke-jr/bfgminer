@@ -1511,7 +1511,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 
-	/* MAXBUFFERS entry is used as a flag to say nonces exist */
+	/* FOUND entry is used as a counter to say how many nonces exist */
 	if (thrdata->res[FOUND]) {
 		/* Clear the buffer again */
 		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
@@ -1532,10 +1532,16 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		clFinish(clState->commandQueue);
 	}
 
-	gettimeofday(&gpu->tv_gpumid, NULL);
-	if (!gpu->intervals) {
-		gpu->tv_gpustart.tv_sec = gpu->tv_gpumid.tv_sec;
-		gpu->tv_gpustart.tv_usec = gpu->tv_gpumid.tv_usec;
+	if (gpu->dynamic) {
+		gettimeofday(&gpu->tv_gpumid, NULL);
+		if (gpu->new_work) {
+			gpu->new_work = false;
+			gpu->intervals = gpu->hit = 0;
+		}
+		if (!gpu->intervals) {
+			gpu->tv_gpustart.tv_sec = gpu->tv_gpumid.tv_sec;
+			gpu->tv_gpustart.tv_usec = gpu->tv_gpumid.tv_usec;
+		}
 	}
 
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);

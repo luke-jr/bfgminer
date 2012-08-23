@@ -374,6 +374,8 @@ struct cgpu_info {
 	int intervals, hit;
 #endif
 
+	bool new_work;
+
 	float temp;
 	int cutofftemp;
 

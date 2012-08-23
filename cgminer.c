@@ -2227,7 +2227,7 @@ retry:
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if (pool->submit_fail || pool->curls >= curl_limit) {
+		if (pool->curls >= curl_limit) {
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
 			goto retry;
 		} else
@@ -2421,13 +2421,18 @@ retry:
 			lagging = true;
 		pool = ret_work->pool = select_pool(lagging);
 
+		inc_queued();
+
 		if (!ce)
 			ce = pop_curl_entry(pool);
 
-		/* Inc queued count after ce is popped in case there're none
-		 * left and we think we've queued work when we're just waiting
-		 * for curls */
-		inc_queued();
+		/* Check that we haven't staged work via other threads while
+		 * waiting for a curl entry */
+		if (total_staged() >= maxq) {
+			dec_queued();
+			free_work(ret_work);
+			goto out;
+		}
 
 		/* obtain new work from bitcoin via JSON-RPC */
 		if (!get_upstream_work(ret_work, ce->curl)) {
@@ -2853,6 +2858,20 @@ static void test_work_current(struct work *work)
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
 		wr_lock(&blk_lock);
+		/* Only keep the last 6 blocks in memory since work from blocks
+		 * before this is virtually impossible and we want to prevent
+		 * memory usage from continually rising */
+		if (HASH_COUNT(blocks) > 5) {
+			struct block *blocka, *blockb;
+			int count = 0;
+
+			HASH_ITER(hh, blocks, blocka, blockb) {
+				if (count++ < 6)
+					continue;
+				HASH_DEL(blocks, blocka);
+				free(blocka);
+			}
+		}
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
 		set_curblock(hexstr, work->data);
@@ -4239,6 +4258,7 @@ void *miner_thread(void *userdata)
 		if (api->free_work && likely(work->pool))
 			api->free_work(mythr, work);
 		get_work(work, mythr, thr_id);
+		cgpu->new_work = true;
 
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;

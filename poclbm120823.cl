@@ -80,7 +80,7 @@ void search(const uint state0, const uint state1, const uint state2, const uint 
 	const uint D1A, const uint C1addK5, const uint B1addK6,
 	const uint W16addK16, const uint W17addK17,
 	const uint PreVal4addT1, const uint Preval0,
-	__global uint * output)
+	volatile __global uint * output)
 {
 	u Vals[24];
 	u *W = &Vals[8];
@@ -1311,43 +1311,46 @@ Vals[1]+=(rotr(W[9],17)^rotr(W[9],19)^(W[9]>>10U));
 Vals[1]+=K[59];
 Vals[1]+=Vals[5];
 
-#define FOUND (0x800)
-#define NFLAG (0x7FF)
+Vals[2]+=Ma(Vals[6],Vals[5],Vals[7]);
+Vals[2]+=(rotr(Vals[5],2)^rotr(Vals[5],13)^rotr(Vals[5],22));
+Vals[2]+=W[12];
+Vals[2]+=(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U));
+Vals[2]+=W[5];
+Vals[2]+=(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U));
+Vals[2]+=Vals[0];
+Vals[2]+=(rotr(Vals[1],6)^rotr(Vals[1],11)^rotr(Vals[1],25));
+Vals[2]+=ch(Vals[1],Vals[4],Vals[3]);
+
+#define FOUND (0x0F)
 
 #if defined(VECTORS2) || defined(VECTORS4)
-	Vals[2]+=Ma(Vals[6],Vals[5],Vals[7]);
-	Vals[2]+=(rotr(Vals[5],2)^rotr(Vals[5],13)^rotr(Vals[5],22));
-	Vals[2]+=W[12];
-	Vals[2]+=(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U));
-	Vals[2]+=W[5];
-	Vals[2]+=(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U));
-	Vals[2]+=Vals[0];
-	Vals[2]+=(rotr(Vals[1],6)^rotr(Vals[1],11)^rotr(Vals[1],25));
-	Vals[2]+=ch(Vals[1],Vals[4],Vals[3]);
 
 	if (any(Vals[2] == 0x136032edU)) {
-		if (Vals[2].x == 0x136032edU)
-			output[FOUND] = output[NFLAG & nonce.x] = nonce.x;
-		if (Vals[2].y == 0x136032edU)
-			output[FOUND] = output[NFLAG & nonce.y] = nonce.y;
+		uint found;
+
+		if (Vals[2].x == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.x;
+		}
+		if (Vals[2].y == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.y;
+		}
 #if defined(VECTORS4)
-		if (Vals[2].z == 0x136032edU)
-			output[FOUND] = output[NFLAG & nonce.z] = nonce.z;
-		if (Vals[2].w == 0x136032edU)
-			output[FOUND] = output[NFLAG & nonce.w] = nonce.w;
+		if (Vals[2].z == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.z;
+		}
+		if (Vals[2].w == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.w;
+		}
 #endif
 	}
 #else
-	if ((Vals[2]+
-		Ma(Vals[6],Vals[5],Vals[7])+
-		(rotr(Vals[5],2)^rotr(Vals[5],13)^rotr(Vals[5],22))+
-		W[12]+
-		(rotr(W[13],7)^rotr(W[13],18)^(W[13]>>3U))+
-		W[5]+
-		(rotr(W[10],17)^rotr(W[10],19)^(W[10]>>10U))+
-		Vals[0]+
-		(rotr(Vals[1],6)^rotr(Vals[1],11)^rotr(Vals[1],25))+
-		ch(Vals[1],Vals[4],Vals[3])) == 0x136032edU)
-			output[FOUND] = output[NFLAG & nonce] =  nonce;
+	if (Vals[2] == 0x136032edU) {
+		uint found = atomic_add(&output[FOUND], 1);
+		output[found] = nonce;
+	}
 #endif
 }
