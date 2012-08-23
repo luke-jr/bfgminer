@@ -1,3 +1,11 @@
+BFGMiner Version 2.6.6 - Future
+
+- Don't try to get bitforce temperature if we're polling for a result to
+minimise the chance of interleaved responses.
+- Fix harmless unused warnings in scrypt.h.
+- Check we are not lagging as well as there is enough work in getwork.
+
+
 BFGMiner Version 2.6.5 - August 20, 2012
 
 - API new command 'coin' with mining information
