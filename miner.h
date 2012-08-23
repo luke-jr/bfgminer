@@ -365,6 +365,7 @@ struct cgpu_info {
 	unsigned int avg_wait_d;
 	uint32_t nonces;
 	bool nonce_range;
+	bool polling;
 #endif
 	pthread_mutex_t		device_mutex;
 
