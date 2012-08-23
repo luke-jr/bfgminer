@@ -166,7 +166,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.17";
+static const char *APIVERSION = "1.18";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -1277,6 +1277,7 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
 	root = api_add_const(root, "OS", OSINFO, false);
 	root = api_add_bool(root, "Failover-Only", &opt_fail_only, false);
+	root = api_add_int(root, "ScanTime", &opt_scantime, false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2602,6 +2603,10 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 		root = api_add_timeval(root, "Pool Max", &(pool_stats->getwork_wait_max), false);
 		root = api_add_timeval(root, "Pool Min", &(pool_stats->getwork_wait_min), false);
 		root = api_add_double(root, "Pool Av", &(pool_stats->getwork_wait_rolling), false);
+		root = api_add_bool(root, "Work Had Roll Time", &(pool_stats->hadrolltime), false);
+		root = api_add_bool(root, "Work Can Roll", &(pool_stats->canroll), false);
+		root = api_add_bool(root, "Work Had Expire", &(pool_stats->hadexpire), false);
+		root = api_add_uint32(root, "Work Roll Time", &(pool_stats->rolltime), false);
 	}
 
 	if (extra)
