@@ -1560,7 +1560,7 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 		tailsprintf(buf, "| ");
 	}
 	else
-		tailsprintf(buf, "        | ");
+		tailsprintf(buf, "               | ");
 }
 #endif
 
