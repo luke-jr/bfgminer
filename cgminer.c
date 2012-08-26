@@ -2383,7 +2383,7 @@ out:
 	return cloned;
 }
 
-static bool queue_request(struct thr_info *thr, bool needed);
+static bool queue_request(bool needed);
 
 static void *get_work_thread(void *userdata)
 {
@@ -2404,10 +2404,7 @@ static void *get_work_thread(void *userdata)
 	}
 
 	ret_work = make_work();
-	if (wc->thr)
-		ret_work->thr = wc->thr;
-	else
-		ret_work->thr = NULL;
+	ret_work->thr = NULL;
 
 	if (opt_benchmark) {
 		get_benchmark_work(ret_work);
@@ -2423,7 +2420,7 @@ static void *get_work_thread(void *userdata)
 			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
 			dec_queued(pool);
-			queue_request(ret_work->thr, wc->needed);
+			queue_request(wc->needed);
 			free_work(ret_work);
 			goto out;
 		}
@@ -2711,7 +2708,7 @@ static void discard_stale(void)
 	if (stale) {
 		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
 		while (stale-- > 0)
-			queue_request(NULL, false);
+			queue_request(false);
 	}
 }
 
@@ -3902,7 +3899,7 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-static bool queue_request(struct thr_info *thr, bool needed)
+static bool queue_request(bool needed)
 {
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
@@ -3931,7 +3928,6 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	}
 
 	wc->cmd = WC_GET_WORK;
-	wc->thr = thr;
 	wc->pool = pool;
 	wc->needed = needed;
 
@@ -3974,7 +3970,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 	}
 	mutex_unlock(stgd_lock);
 
-	queue_request(NULL, false);
+	queue_request(false);
 
 	return work;
 }
@@ -5724,7 +5720,7 @@ begin_bench:
 #endif
 
 	for (i = 0; i < mining_threads + opt_queue; i++)
-		queue_request(NULL, false);
+		queue_request(false);
 
 	/* main loop - simply wait for workio thread to exit. This is not the
 	 * normal exit path and only occurs should the workio_thread die
