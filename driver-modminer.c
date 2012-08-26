@@ -347,8 +347,9 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 {
 	struct modminer_fpga_state *state = thr->cgpu_data;
 
-	if (state->clock <= 100)
-		return false;
+	if (state->clock <= 178)
+		state->clock = state->max_clock;
+	else
 
 	state->clock -= 2;
 
