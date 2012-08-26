@@ -71,7 +71,6 @@ struct workio_cmd {
 	struct thr_info		*thr;
 	struct work		*work;
 	struct pool		*pool;
-	bool			needed;
 };
 
 struct strategies strategies[] = {
@@ -2383,7 +2382,7 @@ out:
 	return cloned;
 }
 
-static bool queue_request(bool needed);
+static bool queue_request(void);
 
 static void *get_work_thread(void *userdata)
 {
@@ -2420,7 +2419,7 @@ static void *get_work_thread(void *userdata)
 			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
 			dec_queued(pool);
-			queue_request(wc->needed);
+			queue_request();
 			free_work(ret_work);
 			goto out;
 		}
@@ -2708,7 +2707,7 @@ static void discard_stale(void)
 	if (stale) {
 		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
 		while (stale-- > 0)
-			queue_request(false);
+			queue_request();
 	}
 }
 
@@ -3899,7 +3898,7 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-static bool queue_request(bool needed)
+static bool queue_request(void)
 {
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
@@ -3911,10 +3910,10 @@ static bool queue_request(bool needed)
 		return true;
 
 	cp = current_pool();
-	if ((!needed || opt_fail_only) && (cp->staged + cp->queued >= maxq))
+	if (cp->staged + cp->queued >= maxq)
 		return true;
 
-	pool = select_pool(needed && !ts);
+	pool = select_pool(false);
 	if (pool->staged + pool->queued >= maxq)
 		return true;
 
@@ -3929,7 +3928,6 @@ static bool queue_request(bool needed)
 
 	wc->cmd = WC_GET_WORK;
 	wc->pool = pool;
-	wc->needed = needed;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
@@ -3970,7 +3968,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 	}
 	mutex_unlock(stgd_lock);
 
-	queue_request(false);
+	queue_request();
 
 	return work;
 }
@@ -5720,7 +5718,7 @@ begin_bench:
 #endif
 
 	for (i = 0; i < mining_threads + opt_queue; i++)
-		queue_request(false);
+		queue_request();
 
 	/* main loop - simply wait for workio thread to exit. This is not the
 	 * normal exit path and only occurs should the workio_thread die
