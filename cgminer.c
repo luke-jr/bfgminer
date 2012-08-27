@@ -3901,6 +3901,7 @@ static bool queue_request(void)
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
 	struct workio_cmd *wc;
+	bool lagging;
 
 	ts = total_staged();
 	tq = global_queued();
@@ -3908,10 +3909,11 @@ static bool queue_request(void)
 		return true;
 
 	cp = current_pool();
-	if (cp->staged + cp->queued >= maxq)
+	lagging = !opt_fail_only && cp->lagging && !ts && cp->queued >= maxq;
+	if (!lagging && cp->staged + cp->queued >= maxq)
 		return true;
 
-	pool = select_pool(false);
+	pool = select_pool(lagging);
 	if (pool->staged + pool->queued >= maxq)
 		return true;
 
