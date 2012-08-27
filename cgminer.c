@@ -4085,7 +4085,10 @@ retry:
 	pool = work_heap->pool;
 	/* If we make it here we have succeeded in getting fresh work */
 	if (!work_heap->mined) {
-		pool_tclear(pool, &pool->lagging);
+		/* Only clear the lagging flag if we are staging them at a
+		 * rate faster then we're using them */
+		if (pool->lagging && total_staged())
+			pool_tclear(pool, &pool->lagging);
 		if (pool_tclear(pool, &pool->idle))
 			pool_resus(pool);
 	}
