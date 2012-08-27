@@ -1,3 +1,23 @@
+BFGMiner Version 2.7.5 - August 27, 2012
+
+- Revert "Do a complete cgminer restart if the ATI Display Library fails, as
+it does on windows after running for some time, when fanspeed reporting
+fails."
+- Stop special-casing worksize default to 256 for Cypress, since it incurs a 5
+MH/s hit with stock config
+- New "--scan-serial all" feature to probe all enumerated serial ports
+- modminer: Revamp dynamic clocking algorithm per request from cablepair
+- Test for lagging once more in queue_request to enable work to leak to backup
+pools.
+- There is no need to try to switch pools in select_pool since the current pool
+is actually not affected by the choice of pool to get work from.
+- Only clear the pool lagging flag if we're staging work faster than we're
+using it.
+- needed flag is currently always false in queue_request. Remove it for now.
+- thr is always NULL going into queue_request now.
+- Fix for non-ADL OpenCL device formatting issue
+
+
 BFGMiner Version 2.7.4 - August 23, 2012
 
 - Perform select_pool even when not lagging to allow it to switch back if needed

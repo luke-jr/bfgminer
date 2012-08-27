@@ -1,3 +1,14 @@
+bfgminer (2.7.5-0precise1) precise; urgency=low
+
+  * ModMiner: Revamped the dynamic clocking algorithm to keep FPGAs at higher speeds with fewer hardware errors.
+  * OpenCL: Restored old default for Cypress (Radeon 58xx) worksize, to fix performance regression introduced in 2.7.2.
+  * Failover is now fixed, courtesy of Con.
+  * FPGAs: "-S all" option to try probing all enumerated serial ports on systems without non-miner serial devices.
+  * Reverted "restart on ADL failure" feature that never did anything useful (if I'm wrong, complain and I'll make a switch to add it back)
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 27 Aug 2012 17:12:09 -0000
+
+
 bfgminer (2.7.4-0precise1) precise; urgency=low
 
   * More fixes.
