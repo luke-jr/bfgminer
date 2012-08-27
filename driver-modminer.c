@@ -19,6 +19,9 @@
 
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.ncd"
 #define BISTREAM_USER_ID "\2\4$B"
+#define MODMINER_MINIMUM_CLOCK  178
+#define MODMINER_DEFAULT_CLOCK  192
+#define MODMINER_MAXIMUM_CLOCK  210
 
 struct device_api modminer_api;
 
@@ -154,9 +157,8 @@ modminer_reopen(struct cgpu_info*modminer)
 	modminer->device_fd = fd;
 	return true;
 }
-#define safebailout(...) do {  \
+#define safebailout() do {  \
 	bool _safebailoutrv;  \
-	applog(__VA_ARGS__);  \
 	state->work_running = false;  \
 	_safebailoutrv = modminer_reopen(modminer);  \
 	mutex_unlock(&modminer->device_mutex);  \
@@ -313,7 +315,7 @@ modminer_fpga_prepare(struct thr_info *thr)
 }
 
 static bool
-modminer_change_clock(struct thr_info*thr, bool needlock)
+modminer_change_clock(struct thr_info*thr, bool needlock, signed char delta)
 {
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
@@ -323,7 +325,7 @@ modminer_change_clock(struct thr_info*thr, bool needlock)
 
 	cmd[0] = '\x06';  // set clock speed
 	cmd[1] = fpgaid;
-	cmd[2] = state->clock;
+	cmd[2] = state->clock += delta;
 	cmd[3] = cmd[4] = cmd[5] = '\0';
 
 	if (needlock)
@@ -336,6 +338,11 @@ modminer_change_clock(struct thr_info*thr, bool needlock)
 	if (needlock)
 		mutex_unlock(&modminer->device_mutex);
 
+	if (!buf[0]) {
+		state->clock -= delta;
+		return false;
+	}
+
 	state->bad_nonce_counter = state->nonce_counter = 0;
 	state->good_nonce_counter = 0;
 
@@ -347,12 +354,10 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 {
 	struct modminer_fpga_state *state = thr->cgpu_data;
 
-	if (state->clock <= 100)
+	if (state->clock <= MODMINER_MINIMUM_CLOCK)
 		return false;
 
-	state->clock -= 2;
-
-	return modminer_change_clock(thr, needlock);
+	return modminer_change_clock(thr, needlock, -2);
 }
 
 static bool
@@ -363,9 +368,24 @@ modminer_increase_clock(struct thr_info*thr, bool needlock)
 	if (state->clock >= state->max_clock)
 		return false;
 
-	state->clock += 2;
+	return modminer_change_clock(thr, needlock, 2);
+}
 
-	return modminer_change_clock(thr, needlock);
+static bool _modminer_get_nonce(struct cgpu_info*modminer, char fpgaid, uint32_t*nonce)
+{
+	int fd = modminer->device_fd;
+	char cmd[2] = {'\x09', fpgaid};
+	
+	if (write(fd, cmd, 2) != 2) {
+		applog(LOG_ERR, "%s %u: Error writing (get nonce %u)", modminer->api->name, modminer->device_id, fpgaid);
+		return false;
+	}
+	if (4 != serial_read(fd, nonce, 4)) {
+		applog(LOG_ERR, "%s %u: Short read (get nonce %u)", modminer->api->name, modminer->device_id, fpgaid);
+		return false;
+	}
+	
+	return true;
 }
 
 static bool
@@ -375,6 +395,7 @@ modminer_fpga_init(struct thr_info *thr)
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	int fd;
 	char fpgaid = thr->device_thread;
+	uint32_t nonce;
 
 	unsigned char cmd[2], buf[4];
 
@@ -402,10 +423,27 @@ modminer_fpga_init(struct thr_info *thr)
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)", modminer->api->name, modminer->device_id, fpgaid);
 	state->pdone = 101;
 
-	state->max_clock = 210;
-	state->clock = 212;  // Will be reduced to 210 by modminer_reduce_clock
-	if (modminer_reduce_clock(thr, false))
-		applog(LOG_WARNING, "%s %u.%u: Setting clock speed to %u", modminer->api->name, modminer->device_id, fpgaid, state->clock);
+	state->clock = MODMINER_MAXIMUM_CLOCK + 2;  // Will be reduced by 2 immediately
+	while (1) {
+		if (state->clock <= MODMINER_MINIMUM_CLOCK)
+			bailout2(LOG_ERR, "%s %u.%u: Hit minimum trying to find acceptable clock speeds", modminer->api->name, modminer->device_id, fpgaid);
+		state->clock -= 2;
+		if (!modminer_change_clock(thr, false, 0))
+			// MCU rejected assignment
+			continue;
+		if (!_modminer_get_nonce(modminer, fpgaid, &nonce))
+			bailout2(LOG_ERR, "%s %u.%u: Error detecting acceptable clock speeds", modminer->api->name, modminer->device_id, fpgaid);
+		if (!memcmp(&nonce, "\x00\xff\xff\xff", 4))
+			// MCU took assignment, but disabled FPGA
+			continue;
+		break;
+	}
+	state->max_clock = state->clock;
+	if (MODMINER_DEFAULT_CLOCK < state->clock) {
+		if (!modminer_change_clock(thr, false, -(state->clock - MODMINER_DEFAULT_CLOCK)))
+			applog(LOG_WARNING, "%s %u.%u: Failed to set desired initial clock speed of %u", modminer->api->name, modminer->device_id, fpgaid, MODMINER_DEFAULT_CLOCK);
+	}
+	applog(LOG_WARNING, "%s %u.%u: Setting clock speed to %u (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->clock, MODMINER_MINIMUM_CLOCK, state->max_clock);
 
 	mutex_unlock(&modminer->device_mutex);
 
@@ -581,13 +619,10 @@ modminer_process_results(struct thr_info*thr)
 		}
 	}
 
-	cmd[0] = '\x09';
 	iter = 200;
 	while (1) {
-		if (write(fd, cmd, 2) != 2)
-			safebailout(LOG_ERR, "%s %u: Error writing (get nonce %u)", modminer->api->name, modminer->device_id, fpgaid);
-		if (4 != serial_read(fd, &nonce, 4))
-			safebailout(LOG_ERR, "%s %u: Short read (get nonce %u)", modminer->api->name, modminer->device_id, fpgaid);
+		if (!_modminer_get_nonce(modminer, fpgaid, &nonce))
+			safebailout();
 		mutex_unlock(&modminer->device_mutex);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
 			state->no_nonce_counter = 0;
@@ -611,18 +646,9 @@ modminer_process_results(struct thr_info*thr)
 				++state->good_share_counter;
 				submit_nonce(thr, work, nonce);
 				++state->good_nonce_counter;
-				if (state->good_nonce_counter >= 100 && ((!state->temp) || state->temp < modminer->cutofftemp - 2)) {
+				if (state->good_nonce_counter >= 0x10 && ((!state->temp) || state->temp < modminer->cutofftemp - 2)) {
 					if (modminer_increase_clock(thr, true))
 						applog(LOG_NOTICE, "%s %u.%u: Raise clock speed to %u", modminer->api->name, modminer->device_id, fpgaid, state->clock);
-				}
-			}
-			else
-			if (unlikely((!state->good_share_counter) && nonce == 0xffffff00))
-			{
-				// Firmware returns 0xffffff00 immediately if we set clockspeed too high; but it's not a hw error and shouldn't affect future downclocking
-				if (modminer_reduce_clock(thr, true)) {
-					applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (init)", modminer->api->name, modminer->device_id, fpgaid, state->clock);
-					state->max_clock = state->clock;
 				}
 			}
 			else {
