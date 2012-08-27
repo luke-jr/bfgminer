@@ -22,7 +22,7 @@ cp -v \
 git clone . "$TMPDIR" -b "$tag" --depth 1
 cd "$TMPDIR"
 for txt in AUTHORS COPYING NEWS README; do
-	cp -v "$txt" "$OUTDIR/${txt}.txt"
+	sed 's/$/\r/' <"$txt" >"$OUTDIR/${txt}.txt"
 done
 cp -av "bitstreams" "$OUTDIR/"
 cp -av "$IDIR/"ADL_SDK/adl_{defines,sdk,structures}.h "ADL_SDK/"
