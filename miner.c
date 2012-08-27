@@ -71,7 +71,6 @@ struct workio_cmd {
 	struct thr_info		*thr;
 	struct work		*work;
 	struct pool		*pool;
-	bool			needed;
 
 	struct list_head list;
 };
@@ -2138,11 +2137,9 @@ static inline struct pool *select_pool(bool lagging)
 	if (pool_strategy == POOL_BALANCE)
 		return select_balanced(cp);
 
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
-		if (cp->prio != 0)
-			switch_pools(NULL);
-		pool = current_pool();
-	} else
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
+		pool = cp;
+	else
 		pool = NULL;
 
 	while (!pool) {
@@ -2570,7 +2567,7 @@ out:
 	return cloned;
 }
 
-static bool queue_request(struct thr_info *thr, bool needed);
+static bool queue_request(void);
 
 static void *get_work_thread(void *userdata)
 {
@@ -2592,10 +2589,7 @@ static void *get_work_thread(void *userdata)
 	}
 
 	ret_work = make_work();
-	if (wc->thr)
-		ret_work->thr = wc->thr;
-	else
-		ret_work->thr = NULL;
+	ret_work->thr = NULL;
 
 	if (opt_benchmark) {
 		get_benchmark_work(ret_work);
@@ -2611,7 +2605,7 @@ static void *get_work_thread(void *userdata)
 			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
 			dec_queued(pool);
-			queue_request(ret_work->thr, wc->needed);
+			queue_request();
 			free_work(ret_work);
 			goto out;
 		}
@@ -2985,7 +2979,7 @@ static void discard_stale(void)
 	if (stale) {
 		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
 		while (stale-- > 0)
-			queue_request(NULL, false);
+			queue_request();
 	}
 }
 
@@ -4319,11 +4313,12 @@ static void pool_resus(struct pool *pool)
 		switch_pools(NULL);
 }
 
-static bool queue_request(struct thr_info *thr, bool needed)
+static bool queue_request(void)
 {
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
 	struct workio_cmd *wc;
+	bool lagging;
 
 	ts = total_staged();
 	tq = global_queued();
@@ -4331,10 +4326,11 @@ static bool queue_request(struct thr_info *thr, bool needed)
 		return true;
 
 	cp = current_pool();
-	if ((!needed || opt_fail_only) && (cp->staged + cp->queued >= maxq))
+	lagging = !opt_fail_only && cp->lagging && !ts && cp->queued >= maxq;
+	if (!lagging && cp->staged + cp->queued >= maxq)
 		return true;
 
-	pool = select_pool(needed && !ts);
+	pool = select_pool(lagging);
 	if (pool->staged + pool->queued >= maxq)
 		return true;
 
@@ -4348,9 +4344,7 @@ static bool queue_request(struct thr_info *thr, bool needed)
 	}
 
 	wc->cmd = WC_GET_WORK;
-	wc->thr = thr;
 	wc->pool = pool;
-	wc->needed = needed;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
@@ -4391,7 +4385,7 @@ static struct work *hash_pop(const struct timespec *abstime)
 	}
 	mutex_unlock(stgd_lock);
 
-	queue_request(NULL, false);
+	queue_request();
 
 	return work;
 }
@@ -4511,7 +4505,10 @@ keepwaiting:
 	pool = work_heap->pool;
 	/* If we make it here we have succeeded in getting fresh work */
 	if (!work_heap->mined) {
-		pool_tclear(pool, &pool->lagging);
+		/* Only clear the lagging flag if we are staging them at a
+		 * rate faster then we're using them */
+		if (pool->lagging && total_staged())
+			pool_tclear(pool, &pool->lagging);
 		if (pool_tclear(pool, &pool->idle))
 			pool_resus(pool);
 	}
@@ -6257,7 +6254,7 @@ begin_bench:
 #endif
 
 	for (i = 0; i < mining_threads + opt_queue; i++)
-		queue_request(NULL, false);
+		queue_request();
 
 	/* main loop - simply wait for workio thread to exit. This is not the
 	 * normal exit path and only occurs should the workio_thread die
