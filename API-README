@@ -339,6 +339,17 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
+API V1.18
+
+Modified API commands:
+ 'stats' - add 'Work Had Roll Time', 'Work Can Roll', 'Work Had Expire',
+		'Work Roll Time' to the pool stats
+
+Modified API commands:
+ 'config' - include 'ScanTime'
+
+----------
+
 API V1.17 (cgminer v2.7.1)
 
 Added API commands:

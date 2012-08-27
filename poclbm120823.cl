@@ -1323,34 +1323,27 @@ Vals[2]+=ch(Vals[1],Vals[4],Vals[3]);
 
 #define FOUND (0x0F)
 
+#if defined(OCL1)
+	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
+#else
+	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
+#endif
+
 #if defined(VECTORS2) || defined(VECTORS4)
-
 	if (any(Vals[2] == 0x136032edU)) {
-		uint found;
-
-		if (Vals[2].x == 0x136032edU) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = nonce.x;
-		}
-		if (Vals[2].y == 0x136032edU) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = nonce.y;
-		}
+		if (Vals[2].x == 0x136032edU)
+			SETFOUND(nonce.x);
+		if (Vals[2].y == 0x136032edU)
+			SETFOUND(nonce.y);
 #if defined(VECTORS4)
-		if (Vals[2].z == 0x136032edU) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = nonce.z;
-		}
-		if (Vals[2].w == 0x136032edU) {
-			found = atomic_add(&output[FOUND], 1);
-			output[found] = nonce.w;
-		}
+		if (Vals[2].z == 0x136032edU)
+			SETFOUND(nonce.z);
+		if (Vals[2].w == 0x136032edU)
+			SETFOUND(nonce.w);
 #endif
 	}
 #else
-	if (Vals[2] == 0x136032edU) {
-		uint found = atomic_add(&output[FOUND], 1);
-		output[found] = nonce;
-	}
+	if (Vals[2] == 0x136032edU)
+		SETFOUND(nonce);
 #endif
 }

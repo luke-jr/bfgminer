@@ -307,6 +307,10 @@ struct cgminer_pool_stats {
 	struct timeval getwork_wait_max;
 	struct timeval getwork_wait_min;
 	double getwork_wait_rolling;
+	bool hadrolltime;
+	bool canroll;
+	bool hadexpire;
+	uint32_t rolltime;
 };
 
 struct cgpu_info {
@@ -731,6 +735,9 @@ struct pool {
 	int seq_rejects;
 	int solved;
 	int diff1;
+
+	int queued;
+	int staged;
 
 	bool submit_fail;
 	bool idle;
