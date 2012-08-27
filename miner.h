@@ -901,7 +901,6 @@ extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
-extern void app_restart(void);
 
 enum api_data_type {
 	API_ESCAPE,
