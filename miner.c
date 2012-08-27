@@ -2137,11 +2137,9 @@ static inline struct pool *select_pool(bool lagging)
 	if (pool_strategy == POOL_BALANCE)
 		return select_balanced(cp);
 
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
-		if (cp->prio != 0)
-			switch_pools(NULL);
-		pool = current_pool();
-	} else
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
+		pool = cp;
+	else
 		pool = NULL;
 
 	while (!pool) {
@@ -4320,6 +4318,7 @@ static bool queue_request(void)
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
 	struct workio_cmd *wc;
+	bool lagging;
 
 	ts = total_staged();
 	tq = global_queued();
@@ -4327,10 +4326,11 @@ static bool queue_request(void)
 		return true;
 
 	cp = current_pool();
-	if (cp->staged + cp->queued >= maxq)
+	lagging = !opt_fail_only && cp->lagging && !ts && cp->queued >= maxq;
+	if (!lagging && cp->staged + cp->queued >= maxq)
 		return true;
 
-	pool = select_pool(false);
+	pool = select_pool(lagging);
 	if (pool->staged + pool->queued >= maxq)
 		return true;
 
@@ -4505,7 +4505,10 @@ keepwaiting:
 	pool = work_heap->pool;
 	/* If we make it here we have succeeded in getting fresh work */
 	if (!work_heap->mined) {
-		pool_tclear(pool, &pool->lagging);
+		/* Only clear the lagging flag if we are staging them at a
+		 * rate faster then we're using them */
+		if (pool->lagging && total_staged())
+			pool_tclear(pool, &pool->lagging);
 		if (pool_tclear(pool, &pool->idle))
 			pool_resus(pool);
 	}
