@@ -233,7 +233,9 @@ By default, BFGMiner will scan for autodetected FPGAs unless at least one
 to scan, you must also use "-S auto". If you want to prevent BFGMiner from
 scanning without specifying a device, you can use "-S noauto". Note that
 presently, autodetection only works on Linux, and might only detect one
-device depending on the version of udev being used.
+device depending on the version of udev being used. If you want to scan all
+serial ports, you can use "-S all"; note that this may write data to
+non-mining devices which may then behave in unexpected ways!
 
 On linux <arg> is usually of the format /dev/ttyUSBn
 On windows <arg> is usually of the format \\.\COMn

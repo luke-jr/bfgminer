@@ -491,9 +491,91 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
+#ifdef HAVE_LIBUDEV
+#include <libudev.h>
+#endif
+
+static
+char* add_serial_all(char*arg, char*p) {
+#ifdef HAVE_LIBUDEV
+
+	struct udev *udev = udev_new();
+	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
+	struct udev_list_entry *list_entry;
+
+	udev_enumerate_add_match_subsystem(enumerate, "tty");
+	udev_enumerate_add_match_property(enumerate, "ID_SERIAL", "*");
+	udev_enumerate_scan_devices(enumerate);
+	udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(enumerate)) {
+		struct udev_device *device = udev_device_new_from_syspath(
+			udev_enumerate_get_udev(enumerate),
+			udev_list_entry_get_name(list_entry)
+		);
+		if (!device)
+			continue;
+
+		const char *devpath = udev_device_get_devnode(device);
+		if (devpath) {
+			size_t pLen = p - arg;
+			size_t dLen = strlen(devpath) + 1;
+			char dev[dLen + pLen];
+			memcpy(dev, arg, pLen);
+			memcpy(&dev[pLen], devpath, dLen);
+			applog(LOG_DEBUG, "scan-serial: libudev all-adding %s", dev);
+			string_elist_add(dev, &scan_devices);
+		}
+
+		udev_device_unref(device);
+	}
+	udev_enumerate_unref(enumerate);
+	udev_unref(udev);
+	return NULL;
+
+#elif defined(WIN32)
+
+	size_t bufLen = 0x10;  // temp!
+tryagain: ;
+	char buf[bufLen];
+	if (!QueryDosDevice(NULL, buf, bufLen)) {
+		if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+			bufLen *= 2;
+			applog(LOG_DEBUG, "scan-serial: QueryDosDevice returned insufficent buffer error; enlarging to %llx", (unsigned long long)bufLen);
+			goto tryagain;
+		}
+		return "scan-serial: Error occurred trying to enumerate COM ports with QueryDosDevice";
+	}
+	size_t tLen = p - arg;
+	char dev[12 + tLen];
+	memcpy(dev, arg, tLen);
+	memcpy(&dev[tLen], "\\\\.\\", 4);
+	char *devp = &dev[tLen + 4];
+	for (char *t = buf; *t; t += tLen) {
+		tLen = strlen(t) + 1;
+		if (strncmp("COM", t, 3))
+			continue;
+		memcpy(devp, t, tLen);
+		applog(LOG_DEBUG, "scan-serial: QueryDosDevice all-adding %s", dev);
+		string_elist_add(dev, &scan_devices);
+	}
+	return NULL;
+
+#else
+	return "scan-serial 'all' is not supported on this platform";
+#endif
+}
+
 #ifdef USE_FPGA_SERIAL
 static char *add_serial(char *arg)
 {
+	char *p = strchr(arg, ':');
+	if (p)
+		++p;
+	else
+		p = arg;
+	if (!strcasecmp(p, "all")) {
+		return add_serial_all(arg, p);
+	}
+
 	string_elist_add(arg, &scan_devices);
 	return NULL;
 }
