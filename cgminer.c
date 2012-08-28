@@ -218,6 +218,7 @@ struct timeval block_timeval;
 struct block {
 	char hash[37];
 	UT_hash_handle hh;
+	int block_no;
 };
 
 static struct block *blocks = NULL;
@@ -2811,6 +2812,11 @@ static inline bool from_existing_block(struct work *work)
 	return ret;
 }
 
+static int block_sort(struct block *blocka, struct block *blockb)
+{
+	return blockb->block_no - blocka->block_no;
+}
+
 static void test_work_current(struct work *work)
 {
 	char *hexstr;
@@ -2832,6 +2838,7 @@ static void test_work_current(struct work *work)
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
+		s->block_no = new_blocks++;
 		wr_lock(&blk_lock);
 		/* Only keep the last 6 blocks in memory since work from blocks
 		 * before this is virtually impossible and we want to prevent
@@ -2840,6 +2847,7 @@ static void test_work_current(struct work *work)
 			struct block *blocka, *blockb;
 			int count = 0;
 
+			HASH_SORT(blocks, block_sort);
 			HASH_ITER(hh, blocks, blocka, blockb) {
 				if (count++ < 6)
 					continue;
@@ -2850,7 +2858,7 @@ static void test_work_current(struct work *work)
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
 		set_curblock(hexstr, work->data);
-		if (unlikely(++new_blocks == 1))
+		if (unlikely(new_blocks == 1))
 			goto out_free;
 
 		work_block++;
