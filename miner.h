@@ -396,6 +396,7 @@ struct cgpu_info {
 	int gpu_powertune;
 	float gpu_vddc;
 #endif
+	int diff1;
 	int last_share_pool;
 	time_t last_share_pool_time;
 
