@@ -166,7 +166,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.18";
+static const char *APIVERSION = "1.19";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -258,6 +258,7 @@ static const char *OSINFO =
 #define _MINESTATS	"STATS"
 #define _CHECK		"CHECK"
 #define _MINECOIN	"COIN"
+#define _DEBUGSET	"DEBUG"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -295,6 +296,7 @@ static const char ISJSON = '{';
 #define JSON_MINESTATS	JSON1 _MINESTATS JSON2
 #define JSON_CHECK	JSON1 _CHECK JSON2
 #define JSON_MINECOIN	JSON1 _MINECOIN JSON2
+#define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_END	JSON4 JSON5
 
 static const char *JSON_COMMAND = "command";
@@ -390,6 +392,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_INVBOOL 76
 #define MSG_FOO 77
 #define MSG_MINECOIN 78
+#define MSG_DEBUGSET 79
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -543,6 +546,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVBOOL,	PARAM_NONE,	"Invalid parameter should be true or false" },
  { SEVERITY_SUCC,  MSG_FOO,	PARAM_BOOL,	"Failover-Only set to %s" },
  { SEVERITY_SUCC,  MSG_MINECOIN,PARAM_NONE,	"CGMiner coin" },
+ { SEVERITY_SUCC,  MSG_DEBUGSET,PARAM_STR,	"Debug settings" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -2772,7 +2776,7 @@ static void minecoin(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 #endif
 		root = api_add_const(root, "Hash Method", SHA256STR, false);
 
-        mutex_lock(&ch_lock);
+	mutex_lock(&ch_lock);
 	if (current_fullhash && *current_fullhash) {
 		root = api_add_timeval(root, "Current Block Time", &block_timeval, true);
 		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
@@ -2781,9 +2785,76 @@ static void minecoin(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 		root = api_add_timeval(root, "Current Block Time", &t, true);
 		root = api_add_const(root, "Current Block Hash", BLANK, false);
 	}
-        mutex_unlock(&ch_lock);
+	mutex_unlock(&ch_lock);
 
 	root = api_add_bool(root, "LP", &have_longpoll, false);
+
+	root = print_data(root, buf, isjson);
+	if (isjson)
+		strcat(buf, JSON_CLOSE);
+	strcat(io_buffer, buf);
+}
+
+static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+
+	if (param == NULL)
+		param = (char *)BLANK;
+	else
+		*param = tolower(*param);
+
+	switch(*param) {
+	case 's':
+		opt_realquiet = true;
+		break;
+	case 'q':
+		opt_quiet ^= true;
+		break;
+	case 'v':
+		opt_log_output ^= true;
+		if (opt_log_output)
+			opt_quiet = false;
+		break;
+	case 'd':
+		opt_debug ^= true;
+		opt_log_output = opt_debug;
+		if (opt_debug)
+			opt_quiet = false;
+		break;
+	case 'r':
+		opt_protocol ^= true;
+		if (opt_protocol)
+			opt_quiet = false;
+		break;
+	case 'p':
+		want_per_device_stats ^= true;
+		opt_log_output = want_per_device_stats;
+		break;
+	case 'n':
+		opt_log_output = false;
+		opt_debug = false;
+		opt_quiet = false;
+		opt_protocol = false;
+		want_per_device_stats = false;
+		break;
+	default:
+		// anything else just reports the settings
+		break;
+	}
+
+	sprintf(io_buffer, isjson
+		? "%s," JSON_DEBUGSET
+		: "%s" _DEBUGSET ",",
+		message(MSG_DEBUGSET, 0, NULL, isjson));
+
+	root = api_add_bool(root, "Silent", &opt_realquiet, false);
+	root = api_add_bool(root, "Quiet", &opt_quiet, false);
+	root = api_add_bool(root, "Verbose", &opt_log_output, false);
+	root = api_add_bool(root, "Debug", &opt_debug, false);
+	root = api_add_bool(root, "RPCProto", &opt_protocol, false);
+	root = api_add_bool(root, "PerDevice", &want_per_device_stats, false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2843,6 +2914,7 @@ struct CMDS {
 	{ "check",		checkcommand,	false },
 	{ "failover-only",	failoveronly,	true },
 	{ "coin",		minecoin,	false },
+	{ "debug",		debugstate,	true },
 	{ NULL,			NULL,		false }
 };
 

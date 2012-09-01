@@ -287,6 +287,20 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Current Block Hash=XXXX..., <- blank if none
                               LP=true/false| <- LP is in use on at least 1 pool
 
+ debug|setting (*)
+               DEBUG          Debug settings
+                              The optional commands for 'setting' are the same as
+                              the screen curses debug settings.
+                              Only the first character is checked (case insensitive):
+                              Silent, Quiet, Verbose, Debug, RPCProto, PerDevice, Normal
+                              The output fields are (as above):
+                              Silent=true/false,
+                              Quiet=true/false,
+                              Verbose=true/false,
+                              Debug=true/false,
+                              RPCProto=true/false,
+                              PerDevice=true/false|
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
@@ -306,8 +320,9 @@ windows
 Obviously, the JSON format is simply just the names as given before the '='
 with the values after the '='
 
-If you enable cgminer debug (-D or --debug) you will also get messages showing
-details of the requests received and the replies
+If you enable cgminer debug (-D or --debug) or, when cgminer debug is off,
+turn on debug with the API command 'debug|debug' you will also get messages
+showing some details of the requests received and the replies
 
 There are included 4 program examples for accessing the API:
 
@@ -339,13 +354,18 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
+API V1.19
+
+Added API commands:
+ 'debug'
+
+----------
+
 API V1.18
 
 Modified API commands:
  'stats' - add 'Work Had Roll Time', 'Work Can Roll', 'Work Had Expire',
 		'Work Roll Time' to the pool stats
-
-Modified API commands:
  'config' - include 'ScanTime'
 
 ----------
