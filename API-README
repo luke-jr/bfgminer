@@ -290,7 +290,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
  debug|setting (*)
                DEBUG          Debug settings
                               The optional commands for 'setting' are the same as
-                              the screen curses debug settings.
+                              the screen curses debug settings
+                              You can only specify one setting
                               Only the first character is checked (case insensitive):
                               Silent, Quiet, Verbose, Debug, RPCProto, PerDevice, Normal
                               The output fields are (as above):
