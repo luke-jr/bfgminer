@@ -1106,20 +1106,23 @@ static cl_int queue_scrypt_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
 }
 #endif
 
-static void set_threads_hashes(unsigned int vectors, unsigned int *threads,
-			       int64_t *hashes, size_t *globalThreads,
-			       unsigned int minthreads, int intensity)
+static void set_threads_hashes(unsigned int vectors,int64_t *hashes, size_t *globalThreads,
+			       unsigned int minthreads, __maybe_unused int *intensity)
 {
-	if (opt_scrypt) {
-		if (intensity < 0)
-			intensity = 0;
-		*threads = 1 << intensity;
-	} else
-		*threads = 1 << (15 + intensity);
-	if (*threads < minthreads)
-		*threads = minthreads;
-	*globalThreads = *threads;
-	*hashes = *threads * vectors;
+	unsigned int threads = 0;
+
+	while (threads < minthreads) {
+		threads = 1 << ((opt_scrypt ? 0 : 15) + *intensity);
+		if (threads < minthreads) {
+			if (likely(*intensity < MAX_INTENSITY))
+				(*intensity)++;
+			else
+				threads = minthreads;
+		}
+	}
+
+	*globalThreads = threads;
+	*hashes = threads * vectors;
 }
 #endif /* HAVE_OPENCL */
 
@@ -1499,15 +1502,13 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	cl_int status;
 	size_t globalThreads[1];
 	size_t localThreads[1] = { clState->wsize };
-	unsigned int threads;
 	int64_t hashes;
 
 	/* This finish flushes the readbuffer set with CL_FALSE later */
 	if (!gpu->dynamic)
 		clFinish(clState->commandQueue);
 
-	set_threads_hashes(clState->vwidth, &threads, &hashes, globalThreads,
-			   localThreads[0], gpu->intensity);
+	set_threads_hashes(clState->vwidth, &hashes, globalThreads, localThreads[0], &gpu->intensity);
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 

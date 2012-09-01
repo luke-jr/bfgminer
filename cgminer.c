@@ -218,6 +218,7 @@ struct timeval block_timeval;
 struct block {
 	char hash[37];
 	UT_hash_handle hh;
+	int block_no;
 };
 
 static struct block *blocks = NULL;
@@ -2811,6 +2812,11 @@ static inline bool from_existing_block(struct work *work)
 	return ret;
 }
 
+static int block_sort(struct block *blocka, struct block *blockb)
+{
+	return blocka->block_no - blockb->block_no;
+}
+
 static void test_work_current(struct work *work)
 {
 	char *hexstr;
@@ -2828,29 +2834,31 @@ static void test_work_current(struct work *work)
 	 * new block and set the current block details to this one */
 	if (!block_exists(hexstr)) {
 		struct block *s = calloc(sizeof(struct block), 1);
+		int deleted_block = 0;
 
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
+		s->block_no = new_blocks++;
 		wr_lock(&blk_lock);
-		/* Only keep the last 6 blocks in memory since work from blocks
-		 * before this is virtually impossible and we want to prevent
-		 * memory usage from continually rising */
-		if (HASH_COUNT(blocks) > 5) {
-			struct block *blocka, *blockb;
-			int count = 0;
+		/* Only keep the last hour's worth of blocks in memory since
+		 * work from blocks before this is virtually impossible and we
+		 * want to prevent memory usage from continually rising */
+		if (HASH_COUNT(blocks) > 6) {
+			struct block *oldblock;
 
-			HASH_ITER(hh, blocks, blocka, blockb) {
-				if (count++ < 6)
-					continue;
-				HASH_DEL(blocks, blocka);
-				free(blocka);
-			}
+			HASH_SORT(blocks, block_sort);
+			oldblock = blocks;
+			deleted_block = oldblock->block_no;
+			HASH_DEL(blocks, oldblock);
+			free(oldblock);
 		}
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
+		if (deleted_block)
+			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
 		set_curblock(hexstr, work->data);
-		if (unlikely(++new_blocks == 1))
+		if (unlikely(new_blocks == 1))
 			goto out_free;
 
 		work_block++;
