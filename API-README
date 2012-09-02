@@ -360,9 +360,12 @@ API V1.19
 Added API commands:
  'debug'
 
+Modified API commands:
+ Change pool field name 'Diff1 Shares' to 'Diff1 Work'
+
 ----------
 
-API V1.18
+API V1.18 (cgminer v2.7.4)
 
 Modified API commands:
  'stats' - add 'Work Had Roll Time', 'Work Can Roll', 'Work Had Expire',
