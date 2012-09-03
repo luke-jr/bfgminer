@@ -1776,13 +1776,14 @@ static void curses_print_devstatus(int thr_id)
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
 	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
-	if (cgpu->api->get_statline_before) {
-		logline[0] = '\0';
-		cgpu->api->get_statline_before(logline, cgpu);
-		wprintw(statuswin, "%s", logline);
-	}
-	else
-		wprintw(statuswin, "               | ");
+
+	logline[0] = '\0';
+	if (cgpu->api->get_statline_before)
+	  cgpu->api->get_statline_before(logline, cgpu);
+	if (logline[0])
+	  wprintw(statuswin, "%s", logline);
+	else			/* no statline (cpu) or empty statline (nvidia) */
+	  wprintw(statuswin, "               | ");		
 
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SHORT]];
 	ti_hashrate_bufstr(
