@@ -9,6 +9,10 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
+
+#include <blkmaker.h>
+#include <blktemplate.h>
+
 #include "elist.h"
 #include "uthash.h"
 #include "logging.h"
@@ -791,6 +795,11 @@ enum pool_enable {
 	POOL_REJECTING,
 };
 
+enum pool_protocol {
+	PLP_GETWORK,
+	PLP_GETBLOCKTEMPLATE,
+};
+
 struct pool {
 	int pool_no;
 	int prio;
@@ -813,6 +822,7 @@ struct pool {
 	unsigned char	work_restart_id;
 	uint32_t	block_id;
 
+	enum pool_protocol proto;
 	char *hdr_path;
 	char *lp_url;
 
@@ -885,6 +895,9 @@ struct work {
 	float		difficulty;
 
 	time_t share_found_time;
+
+	blktemplate_t	*tmpl;
+	int		*tmpl_refcount;
 };
 
 extern void get_datestamp(char *, struct timeval *);

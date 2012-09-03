@@ -40,6 +40,10 @@
 #include <libgen.h>
 #include <sha2.h>
 
+#include <blkmaker.h>
+#include <blkmaker_jansson.h>
+#include <blktemplate.h>
+
 #include "compat.h"
 #include "miner.h"
 #include "findnonce.h"
@@ -1445,6 +1449,17 @@ static bool work_decode(const json_t *val, struct work *work)
 			detect_algo = 2;
 	}
 	
+	if (work->tmpl) {
+		const char *err = blktmpl_add_jansson(work->tmpl, val, time(NULL));
+		if (err) {
+			applog(LOG_ERR, "blktmpl error: %s", err);
+			goto err_out;
+		}
+		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL);
+		swap32yes(work->data, work->data, 80);
+		memcpy(&work->data[80], "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0", 48);
+	}
+	else
 	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data), true))) {
 		applog(LOG_ERR, "JSON inval data");
 		goto err_out;
@@ -2033,7 +2048,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 {
 	char *hexstr = NULL;
 	json_t *val, *res;
-	char s[345], sd[345];
+	char *s, *sd;
 	bool rc = false;
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
@@ -2041,6 +2056,16 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	int rolltime;
 	uint32_t *hash32;
 	char hashshow[64+1] = "";
+
+	if (work->tmpl) {
+		unsigned char data[76];
+		swap32yes(data, work->data, 76);
+		json_t *req = blkmk_submit_jansson(work->tmpl, data, *((uint32_t*)&work->data[76]));
+		s = json_dumps(req, 0);
+		sd = bin2hex(data, 80);
+	} else {
+		s  = malloc(345);
+		sd = malloc(345);
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
@@ -2057,10 +2082,16 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	      "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}",
 		hexstr);
 
+	}
+
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
 
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
+
+	free(s);
+	free(sd);
+
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
@@ -2087,7 +2118,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	/* Theoretically threads could race when modifying accepted and
 	 * rejected values but the chance of two submits completing at the
 	 * same time is zero so there is no point adding extra locking */
-	if (json_is_true(res)) {
+	if (json_is_null(res) || json_is_true(res)) {
 		cgpu->accepted++;
 		cgpu->accepted_weighed += work->difficulty;
 		total_accepted++;
@@ -2138,6 +2169,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 			else
 				strcpy(where, "");
 
+			if (!json_is_string(res))
 			res = json_object_get(val, "reject-reason");
 			if (res) {
 				const char *reasontmp = json_string_value(res);
@@ -2199,7 +2231,7 @@ out_nofree:
 	return rc;
 }
 
-static const char *rpc_req =
+static const char *getwork_rpc_req =
 	"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
 
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
@@ -2269,6 +2301,40 @@ static void get_benchmark_work(struct work *work)
 	work->pool = pools[0];
 }
 
+static char *prepare_rpc_req(struct work *work)
+{
+	// FIXME: error checking
+	struct pool *pool = work->pool;
+	char *rpc_req;
+
+	switch (pool->proto) {
+		case PLP_GETWORK:
+			work->tmpl = NULL;
+			return strdup(getwork_rpc_req);
+		case PLP_GETBLOCKTEMPLATE:
+			work->tmpl = blktmpl_create();
+			work->tmpl_refcount = malloc(sizeof(*work->tmpl_refcount));
+			*work->tmpl_refcount = 0;
+			json_t *req = blktmpl_request_jansson(blktmpl_addcaps(work->tmpl));
+			rpc_req = json_dumps(req, 0);
+			json_decref(req);
+			return rpc_req;
+	}
+	return false;
+}
+
+static bool pool_proto_fallback(struct pool *pool)
+{
+	switch (pool->proto) {
+		case PLP_GETBLOCKTEMPLATE:
+			applog(LOG_WARNING, "Pool %u failed getblocktemplate request; falling back to getwork protocol", pool->pool_no);
+			pool->proto = PLP_GETWORK;
+			return true;
+		default:
+			return false;
+	}
+}
+
 static bool get_upstream_work(struct work *work, CURL *curl)
 {
 	struct pool *pool = work->pool;
@@ -2277,6 +2343,11 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	json_t *val = NULL;
 	bool rc = false;
 	char *url;
+
+	char *rpc_req;
+
+tryagain:
+	rpc_req = prepare_rpc_req(work);
 
 	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
@@ -2288,10 +2359,14 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 			    false, &work->rolltime, pool, false);
 	pool_stats->getwork_attempts++;
 
+	free(rpc_req);
+
 	if (likely(val)) {
 		rc = work_decode(json_object_get(val, "result"), work);
 		if (unlikely(!rc))
 			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
+	} else if (pool_proto_fallback(pool)) {
+		goto tryagain;
 	} else
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 
@@ -2336,6 +2411,16 @@ static struct work *make_work(void)
 
 static void free_work(struct work *work)
 {
+	if (work->tmpl) {
+		struct pool *pool = work->pool;
+		mutex_lock(&pool->pool_lock);
+		bool free_tmpl = !--*work->tmpl_refcount;
+		mutex_unlock(&pool->pool_lock);
+		if (free_tmpl) {
+			blktmpl_free(work->tmpl);
+			free(work->tmpl_refcount);
+		}
+	}
 	free(work);
 }
 
@@ -2631,6 +2716,13 @@ static struct work *make_clone(struct work *work)
 	/* Make cloned work appear slightly older to bias towards keeping the
 	 * master work item which can be further rolled */
 	work_clone->tv_staged.tv_sec -= 1;
+
+	if (work->tmpl) {
+		struct pool *pool = work->pool;
+		mutex_lock(&pool->pool_lock);
+		++*work->tmpl_refcount;
+		mutex_unlock(&pool->pool_lock);
+	}
 
 	return work_clone;
 }
@@ -4327,6 +4419,8 @@ static bool pool_active(struct pool *pool, bool pinging)
 	json_t *val;
 	CURL *curl;
 	int rolltime;
+	char *rpc_req;
+	struct work *work;
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
@@ -4334,12 +4428,18 @@ static bool pool_active(struct pool *pool, bool pinging)
 		return false;
 	}
 
+	work = make_work();
+	work->pool = pool;
+	pool->proto = PLP_GETBLOCKTEMPLATE;
+
+tryagain:
+	rpc_req = prepare_rpc_req(work);
+
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			true, false, &rolltime, pool, false);
 
 	if (val) {
-		struct work *work = make_work();
 		bool rc;
 
 		rc = work_decode(json_object_get(val, "result"), work);
@@ -4396,7 +4496,10 @@ static bool pool_active(struct pool *pool, bool pinging)
 			if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
 				quit(1, "Failed to create pool longpoll thread");
 		}
+	} else if (pool_proto_fallback(pool)) {
+		goto tryagain;
 	} else {
+		free_work(work);
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
 		if (!pinging)
@@ -5063,6 +5166,8 @@ retry_pool:
 
 	while (42) {
 		json_t *val, *soval;
+
+		const char *rpc_req = getwork_rpc_req;
 
 		wait_lpcurrent(cp);
 
@@ -5828,6 +5933,12 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	return true;
 }
 
+static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t length)
+{
+	sha2(buffer, length, digest, false);
+	return true;
+}
+
 int main(int argc, char *argv[])
 {
 	struct block *block, *tmpblock;
@@ -5838,6 +5949,8 @@ int main(int argc, char *argv[])
 	char *s;
 	unsigned int k;
 	int i, j;
+
+	blkmk_sha256_impl = my_blkmaker_sha256_callback;
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */

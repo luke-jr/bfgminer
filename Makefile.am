@@ -35,6 +35,12 @@ bfgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   util.c uthash.h logging.h			\
 		   sha2.c sha2.h api.c
 
+if NEED_LIBBLKMAKER
+SUBDIRS           += libblkmaker
+bfgminer_CPPFLAGS += -Ilibblkmaker
+bfgminer_LDFLAGS  += -Llibblkmaker -Wl,-rpath,libblkmaker -lblkmaker -lblkmaker_jansson
+endif
+
 bfgminer_SOURCES	+= logging.c
 
 # GPU sources, TODO: make them selectable
