@@ -849,7 +849,7 @@ $singlerigsum = array(
 			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
 			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1,
-			'Diff1 Shares' => 1),
+			'Diff1 Work' => 1),
  'notify' => array('*' => 1));
 #
 function showtotal($total, $when, $oldvalues)
@@ -2056,7 +2056,7 @@ function display()
 
  newtable();
  doforeach('version', 'rig summary', array(), array(), true);
- $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares');
+ $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Work');
  doforeach('summary', 'summary information', $sum, array(), false);
  endtable();
  otherrow('<td><br><br></td>');
