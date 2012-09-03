@@ -365,6 +365,7 @@ Modified API commands:
  'devs' - add 'Diff1 Work' to all devices
  'gpu|N' - add 'Diff1 Work'
  'pga|N' - add 'Diff1 Work'
+ 'notify' - add '*Dev Throttle' (for BFL Singles)
 
 ----------
 

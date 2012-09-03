@@ -276,6 +276,7 @@ enum dev_reason {
 	REASON_DEV_OVER_HEAT,
 	REASON_DEV_THERMAL_CUTOFF,
 	REASON_DEV_COMMS_ERROR,
+	REASON_DEV_THROTTLE,
 };
 
 #define REASON_NONE			"None"
@@ -288,6 +289,7 @@ enum dev_reason {
 #define REASON_DEV_OVER_HEAT_STR	"Device over heated"
 #define REASON_DEV_THERMAL_CUTOFF_STR	"Device reached thermal cutoff"
 #define REASON_DEV_COMMS_ERROR_STR	"Device comms error"
+#define REASON_DEV_THROTTLE_STR		"Device throttle"
 #define REASON_UNKNOWN_STR		"Unknown reason - code bug"
 
 #define MIN_SEC_UNSET 99999999
@@ -412,6 +414,7 @@ struct cgpu_info {
 	int dev_over_heat_count;	// It's a warning but worth knowing
 	int dev_thermal_cutoff_count;
 	int dev_comms_error_count;
+	int dev_throttle_count;
 
 	struct cgminer_stats cgminer_stats;
 };

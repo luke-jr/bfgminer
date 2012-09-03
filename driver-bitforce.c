@@ -386,10 +386,13 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
 		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer", bitforce->device_id);
+		bitforce->device_last_not_well = time(NULL);
+		bitforce->device_not_well_reason = REASON_DEV_THROTTLE;
+		bitforce->dev_throttle_count++;
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
 		bitforce_clear_buffer(bitforce);
-		return false;;
+		return false;
 	}
 
 	return true;
