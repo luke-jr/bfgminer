@@ -755,8 +755,12 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'SUMMARY.Discarded':
 	case 'POOL.Discarded':
 	case 'total.Discarded':
-	case 'POOL.Diff1 Shares':
-	case 'total.Diff1 Shares':
+	case 'GPU.Diff1 Work':
+	case 'PGA.Diff1 Work':
+	case 'POOL.Diff1 Work':
+	case 'total.Diff1 Work':
+	case 'POOL.Diff1 Shares': // old name
+	case 'total.Diff1 Shares': // old name
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';

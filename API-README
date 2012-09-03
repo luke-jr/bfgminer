@@ -362,6 +362,9 @@ Added API commands:
 
 Modified API commands:
  Change pool field name 'Diff1 Shares' to 'Diff1 Work'
+ 'devs' - add 'Diff1 Work' to all devices
+ 'gpu|N' - add 'Diff1 Work'
+ 'pga|N' - add 'Diff1 Work'
 
 ----------
 

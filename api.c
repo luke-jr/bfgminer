@@ -1345,6 +1345,7 @@ static void gpustatus(int gpu, bool isjson)
 		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
 		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
 		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
+		root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
 
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
@@ -1428,6 +1429,7 @@ static void pgastatus(int pga, bool isjson)
 		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
 		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
 		root = api_add_freq(root, "Frequency", &frequency, false);
+		root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
 
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
@@ -1460,6 +1462,7 @@ static void cpustatus(int cpu, bool isjson)
 		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
 		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
 		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
+		root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
 
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
