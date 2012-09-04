@@ -393,6 +393,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_FOO 77
 #define MSG_MINECOIN 78
 #define MSG_DEBUGSET 79
+#define MSG_PGAIDENT 80
+#define MSG_PGANOID 81
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -547,6 +549,10 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_FOO,	PARAM_BOOL,	"Failover-Only set to %s" },
  { SEVERITY_SUCC,  MSG_MINECOIN,PARAM_NONE,	"CGMiner coin" },
  { SEVERITY_SUCC,  MSG_DEBUGSET,PARAM_STR,	"Debug settings" },
+#ifdef HAVE_AN_FPGA
+ { SEVERITY_SUCC,  MSG_PGAIDENT,PARAM_PGA,	"Identify command sent to PGA%d" },
+ { SEVERITY_ERR,   MSG_PGANOID,	PARAM_PGA,	"PGA%d does not support identify" },
+#endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1699,6 +1705,44 @@ static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	cgpu->deven = DEV_DISABLED;
 
 	strcpy(io_buffer, message(MSG_PGADIS, id, NULL, isjson));
+}
+
+static void pgaidentify(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	int numpga = numpgas();
+	int id;
+
+	if (numpga == 0) {
+		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	int dev = pgadevice(id);
+	if (dev < 0) { // Should never happen
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	struct cgpu_info *cgpu = devices[dev];
+	struct device_api *api = cgpu->api;
+
+	if (!api->identify_device)
+		strcpy(io_buffer, message(MSG_PGANOID, id, NULL, isjson));
+	else {
+		api->identify_device(cgpu);
+		strcpy(io_buffer, message(MSG_PGAIDENT, id, NULL, isjson));
+	}
 }
 #endif
 
@@ -2888,6 +2932,7 @@ struct CMDS {
 	{ "pga",		pgadev,		false },
 	{ "pgaenable",		pgaenable,	true },
 	{ "pgadisable",		pgadisable,	true },
+	{ "pgaidentify",	pgaidentify,	true },
 #endif
 #ifdef WANT_CPUMINE
 	{ "cpu",		cpudev,		false },

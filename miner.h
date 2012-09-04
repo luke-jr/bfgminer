@@ -239,6 +239,7 @@ struct device_api {
 	void (*get_statline)(char*, struct cgpu_info*);
 	struct api_data *(*get_api_stats)(struct cgpu_info*);
 	bool (*get_stats)(struct cgpu_info*);
+	void (*identify_device)(struct cgpu_info*); // e.g. to flash a led
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info*);
@@ -337,6 +338,7 @@ struct cgpu_info {
 	uint32_t nonces;
 	bool nonce_range;
 	bool polling;
+	bool flash_led;
 #endif
 	pthread_mutex_t		device_mutex;
 
