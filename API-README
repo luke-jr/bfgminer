@@ -266,7 +266,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               and currently only BFL singles support this command
                               On a BFL single it will flash the led on the front
                               of the device for appoximately 4s
-                              All other non BFL PGA devices will return an error
+                              All other non BFL PGA devices will return a warning
                               status message stating that they dont support it
                               This adds a 4s delay to the BFL share being processed
                               so you may get a message stating that procssing took

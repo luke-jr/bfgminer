@@ -551,7 +551,7 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_DEBUGSET,PARAM_STR,	"Debug settings" },
 #ifdef HAVE_AN_FPGA
  { SEVERITY_SUCC,  MSG_PGAIDENT,PARAM_PGA,	"Identify command sent to PGA%d" },
- { SEVERITY_ERR,   MSG_PGANOID,	PARAM_PGA,	"PGA%d does not support identify" },
+ { SEVERITY_WARN,  MSG_PGANOID,	PARAM_PGA,	"PGA%d does not support identify" },
 #endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
