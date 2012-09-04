@@ -131,6 +131,8 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
 	blk->sevenA = blk->ctx_h + SHA256_K[7];
 }
 
+#if 0 // not used any more
+
 #define P(t) (W[(t)&0xF] = W[(t-16)&0xF] + (rotate(W[(t-15)&0xF], 25) ^ rotate(W[(t-15)&0xF], 14) ^ (W[(t-15)&0xF] >> 3)) + W[(t-7)&0xF] + (rotate(W[(t-2)&0xF], 15) ^ rotate(W[(t-2)&0xF], 13) ^ (W[(t-2)&0xF] >> 10)))
 
 #define IR(u) \
@@ -167,6 +169,8 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
   R(E, F, G, H, A, B, C, D, P(u+4), SHA256_K[u+4]); \
   R(D, E, F, G, H, A, B, C, P(u+5), SHA256_K[u+5])
 
+#endif
+
 struct pc_data {
 	struct thr_info *thr;
 	struct work *work;
@@ -174,6 +178,8 @@ struct pc_data {
 	pthread_t pth;
 	int found;
 };
+
+#if 0 // not used any more
 
 static void send_sha_nonce(struct pc_data *pcd, cl_uint nonce)
 {
@@ -222,6 +228,8 @@ static void send_sha_nonce(struct pc_data *pcd, cl_uint nonce)
 	}
 }
 
+#endif
+
 static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
 {
 	struct thr_info *thr = pcd->thr;
@@ -238,6 +246,8 @@ static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
 static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
+	struct thr_info *thr = pcd->thr;
+	struct work *work = pcd->work;
 	unsigned int entry = 0;
 
 	pthread_detach(pthread_self());
@@ -248,8 +258,10 @@ static void *postcalc_hash(void *userdata)
 		applog(LOG_DEBUG, "OCL NONCE %u found in slot %d", nonce, entry);
 		if (opt_scrypt)
 			send_scrypt_nonce(pcd, nonce);
-		else
-			send_sha_nonce(pcd, nonce);
+		else {
+			if (unlikely(submit_nonce(thr, work, nonce) == false))
+				applog(LOG_ERR, "Failed to submit work, exiting");
+		}
 	}
 
 	free(pcd);

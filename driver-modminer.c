@@ -405,6 +405,7 @@ modminer_process_results(struct thr_info*thr)
 	uint32_t nonce;
 	long iter;
 	bool bad;
+	int curr_hw_errors;
 	cmd[0] = '\x0a';
 	cmd[1] = fpgaid;
 
@@ -441,12 +442,10 @@ modminer_process_results(struct thr_info*thr)
 		mutex_unlock(&modminer->device_mutex);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
 			state->no_nonce_counter = 0;
-			bad = !test_nonce(work, nonce);
-			if (!bad)
-				submit_nonce(thr, work, nonce);
-			else {
-				++hw_errors;
-				if (++modminer->hw_errors * 100 > 1000 + state->good_share_counter)
+			curr_hw_errors = modminer->hw_errors;
+			submit_nonce(thr, work, nonce);
+			if (modminer->hw_errors > curr_hw_errors) {
+				if (modminer->hw_errors * 100 > 1000 + state->good_share_counter)
 					// Only reduce clocks if hardware errors are more than ~1% of results
 					modminer_reduce_clock(thr, true);
 			}

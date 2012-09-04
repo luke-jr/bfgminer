@@ -4141,7 +4141,7 @@ err_out:
 	return false;
 }
 
-bool hashtest(const struct work *work)
+static bool hashtest(struct thr_info *thr, const struct work *work)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[128];
@@ -4162,11 +4162,22 @@ bool hashtest(const struct work *work)
 
 	memcpy((void*)work->hash, hash2, 32);
 
-	return fulltest(work->hash, work->target);
+	if (hash2_32[7] != 0) {
+		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
+				thr->cgpu->api->name, thr->cgpu->device_id);
+		hw_errors++;
+		thr->cgpu->hw_errors++;
+		return true;
+	}
 
+	bool test = fulltest(work->hash, work->target);
+	if (!test)
+		applog(LOG_INFO, "Share below target");
+
+	return test;
 }
 
-bool test_nonce(struct work *work, uint32_t nonce)
+static bool test_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	if (opt_scrypt) {
 		uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
@@ -4180,7 +4191,7 @@ bool test_nonce(struct work *work, uint32_t nonce)
 	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
 	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
 
-	return hashtest(work);
+	return hashtest(thr, work);
 }
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
@@ -4191,10 +4202,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
-	if (!test_nonce(work, nonce)) {
-		applog(LOG_INFO, "Share below target");
+	if (!test_nonce(thr, work, nonce))
 		return true;
-	}
+
 	return submit_work_sync(thr, work);
 }
 
