@@ -362,7 +362,7 @@ Added API commands:
 
 ----------
 
-API V1.18
+API V1.18 (BFGMiner v2.7.4)
 
 Modified API commands:
  'stats' - add 'Work Had Roll Time', 'Work Can Roll', 'Work Had Expire',
