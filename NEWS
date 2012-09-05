@@ -1,11 +1,15 @@
 BFGMiner Version 2.7.6 - Future
 
+- Sort the blocks database in reverse order, allowing us to remove the first
+block without iterating over them. Output the block number to debug.
 - Adjust opencl intensity when adjusting thread count to prevent it getting
 pegged at a value below the minimum threads possible.
 - miner.h max_hashes -> int64_t
 - Keep the local block number in the blocks structs stored and sort them by
 number to guarantee we delete the oldest when ageing the block struct entries.
 - Use correct sdk version detection for SDK 2.7
+- Bugfix: Align Ztex statline properly by removing redundant frequency
+- make-release: Convert text files to DOS format for Windows ZIP
 
 
 BFGMiner Version 2.7.5 - August 27, 2012
