@@ -322,8 +322,7 @@ windows
 Obviously, the JSON format is simply just the names as given before the '='
 with the values after the '='
 
-If you enable BFGMiner debug (-D or --debug) or, when BFGMiner debug is off,
-turn on debug with the API command 'debug|debug' you will also get messages
+If you enable BFGMiner debug (--debug or using RPC), you will also get messages
 showing some details of the requests received and the replies
 
 There are included 4 program examples for accessing the API:
