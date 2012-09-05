@@ -390,7 +390,7 @@ struct cgpu_info {
 	int threads;
 	struct thr_info **thr;
 
-	unsigned int max_hashes;
+	int64_t max_hashes;
 
 	const char *kname;
 #ifdef HAVE_OPENCL
