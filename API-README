@@ -366,7 +366,7 @@ API V1.18 (BFGMiner v2.7.4)
 
 Modified API commands:
  'stats' - add 'Work Had Roll Time', 'Work Can Roll', 'Work Had Expire',
-		'Work Roll Time' to the pool stats
+           and 'Work Roll Time' to the pool stats
  'config' - include 'ScanTime'
 
 ----------
