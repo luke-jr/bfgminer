@@ -1,3 +1,13 @@
+BFGMiner Version 2.7.6 - Future
+
+- Adjust opencl intensity when adjusting thread count to prevent it getting
+pegged at a value below the minimum threads possible.
+- miner.h max_hashes -> int64_t
+- Keep the local block number in the blocks structs stored and sort them by
+number to guarantee we delete the oldest when ageing the block struct entries.
+- Use correct sdk version detection for SDK 2.7
+
+
 BFGMiner Version 2.7.5 - August 27, 2012
 
 - Revert "Do a complete cgminer restart if the ATI Display Library fails, as
@@ -11,8 +21,8 @@ MH/s hit with stock config
 pools.
 - There is no need to try to switch pools in select_pool since the current pool
 is actually not affected by the choice of pool to get work from.
-- Only clear the pool lagging flag if we're staging work faster than we're
-using it.
+- Only clear the pool lagging flag if we're staging work faster than we're using
+it.
 - needed flag is currently always false in queue_request. Remove it for now.
 - thr is always NULL going into queue_request now.
 - Fix for non-ADL OpenCL device formatting issue
