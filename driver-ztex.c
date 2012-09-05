@@ -332,10 +332,15 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
+	char before[] = "               ";
 	if (cgpu->deven == DEV_ENABLED) {
-		tailsprintf(buf, "%s-%d | ", cgpu->device_ztex->snString, cgpu->device_ztex->fpgaNum+1);
-		tailsprintf(buf, "%0.2fMhz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
+		const char *snString = (char*)cgpu->device_ztex->snString;
+		size_t snStringLen = strlen(snString);
+		if (snStringLen > 14)
+			snStringLen = 14;
+		memcpy(before, snString, snStringLen);
 	}
+	tailsprintf(buf, "%s| ", &before[0]);
 }
 
 static struct api_data*
