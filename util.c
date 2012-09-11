@@ -527,7 +527,7 @@ char *get_proxy(char *url, struct pool *pool)
 			if (!(pool->rpc_proxy))
 				quit(1, "Failed to malloc rpc_proxy");
 
-			strcpy(pool->rpc_proxy, url);
+			strcpy(pool->rpc_proxy, url + plen);
 			pool->rpc_proxytype = proxynames[i].proxytype;
 			url = split + 1;
 			break;
