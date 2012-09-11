@@ -1456,7 +1456,7 @@ static bool work_decode(const json_t *val, struct work *work)
 			goto err_out;
 		}
 		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL);
-		swap32yes(work->data, work->data, 80);
+		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0", 48);
 	}
 	else
