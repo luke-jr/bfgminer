@@ -303,11 +303,11 @@ bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu 
 
 Single pool with a standard http proxy, regular desktop:
 
-cgminer -o http:proxy:port|http://pool:port -u username -p password
+cgminer -o "http:proxy:port|http://pool:port" -u username -p password
 
 Single pool with a socks5 proxy, regular desktop:
 
-cgminer -o socks5:proxy:port|http://pool:port -u username -p password
+cgminer -o "socks5:proxy:port|http://pool:port" -u username -p password
 
 The list of proxy types are:
  http:    standard http 1.1 proxy
