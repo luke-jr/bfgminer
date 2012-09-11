@@ -816,7 +816,7 @@ driver version and ATI stream version.
 
 Q: cgminer reports no devices or only one device on startup on Linux although
 I have multiple devices and drivers+SDK installed properly?
-A: Try 'export DISPLAY=:0" before running cgminer.
+A: Try "export DISPLAY=:0" before running cgminer.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
@@ -850,7 +850,7 @@ BFL: sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
 Icarus: sudo modprobe pl2303 vendor=0x067b product=0x230
 Lancelot: sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
 Cairnsmore: sudo modprobe ftdi_sio product=0x8350 vendor=0x0403
-On windows you must install the pl2303 or ftdi driver requird for the device
+On windows you must install the pl2303 or ftdi driver required for the device
 pl2303: http://prolificusa.com/pl-2303hx-drivers/
 ftdi: http://www.ftdichip.com/Drivers/VCP.htm
 
