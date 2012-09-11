@@ -419,6 +419,8 @@ static struct pool *add_pool(void)
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 
+	pool->rpc_proxy = NULL;
+
 	return pool;
 }
 
@@ -546,6 +548,8 @@ static char *set_url(char *arg)
 	if (total_urls > total_pools)
 		add_pool();
 	pool = pools[total_urls - 1];
+
+	arg = get_proxy(arg, pool);
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -4998,6 +5002,8 @@ void add_pool_details(bool live, char *url, char *user, char *pass)
 	struct pool *pool;
 
 	pool = add_pool();
+
+	url = get_proxy(url, pool);
 
 	pool->rpc_url = url;
 	pool->rpc_user = user;

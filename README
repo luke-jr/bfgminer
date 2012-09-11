@@ -168,7 +168,7 @@ Options for both config file and command line:
 --scrypt            Use the scrypt algorithm for mining (litecoin only)
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
---socks-proxy <arg> Set socks4 proxy (host:port)
+--socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
 --syslog            Use system log for output messages (default: standard error)
 --temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
 --text-only|-T      Disable ncurses formatted screen output
@@ -294,6 +294,28 @@ cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu -
 Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
 
 cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
+
+Single pool with a standard http proxy, regular desktop:
+
+cgminer -o http:proxy:port|http://pool:port -u username -p password
+
+Single pool with a socks5 proxy, regular desktop:
+
+cgminer -o socks5:proxy:port|http://pool:port -u username -p password
+
+The list of proxy types are:
+ http:    standard http 1.1 proxy
+ http0:   http 1.0 proxy
+ socks4:  socks4 proxy
+ socks5:  socks5 proxy
+ socks4a: socks4a proxy
+ socks5h: socks5 proxy using a hostname
+
+If you compile cgminer with a version of CURL before 7.19.4 then some of the above will
+not be available. All are available since CURL version 7.19.4
+
+If you specify the --socks-proxy option to cgminer, it will only be applied to all pools
+that don't specify their own proxy setting like above
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
