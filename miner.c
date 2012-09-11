@@ -1480,6 +1480,15 @@ static bool work_decode(const json_t *val, struct work *work)
 		applog(LOG_ERR, "JSON inval target");
 		goto err_out;
 	}
+	if (work->tmpl) {
+		for (size_t i = 0; i < sizeof(work->target) / 2; ++i)
+		{
+			int p = (sizeof(work->target) - 1) - i;
+			unsigned char c = work->target[i];
+			work->target[i] = work->target[p];
+			work->target[p] = c;
+		}
+	}
 	
 	for (i = 32; i--; )
 	{
