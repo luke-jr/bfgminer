@@ -1455,7 +1455,7 @@ static bool work_decode(const json_t *val, struct work *work)
 			applog(LOG_ERR, "blktmpl error: %s", err);
 			goto err_out;
 		}
-		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL);
+		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid);
 		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0", 48);
 	}
@@ -2069,7 +2069,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	if (work->tmpl) {
 		unsigned char data[76];
 		swap32yes(data, work->data, 76);
-		json_t *req = blkmk_submit_jansson(work->tmpl, data, *((uint32_t*)&work->data[76]));
+		json_t *req = blkmk_submit_jansson(work->tmpl, data, work->dataid, *((uint32_t*)&work->data[76]));
 		s = json_dumps(req, 0);
 		sd = bin2hex(data, 80);
 	} else {
@@ -2672,6 +2672,8 @@ static inline bool should_roll(struct work *work)
 	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE)
 		return false;
 
+	// FIXME: Base this on GBT expiration time, for GBT work
+
 	if (work->rolltime > opt_scantime)
 		expiry = work->rolltime;
 	else
@@ -2691,12 +2693,26 @@ static inline bool should_roll(struct work *work)
  * reject blocks as invalid. */
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && work->rolltime && !work->clone &&
+	if (!(work->pool && !work->clone))
+		return false;
+	if (work->tmpl) {
+		if (stale_work(work, false))
+			return false;
+		return blkmk_work_left(work->tmpl);
+	}
+	return (work->rolltime &&
 		work->rolls < 7000 && !stale_work(work, false));
 }
 
 static void roll_work(struct work *work)
 {
+	if (work->tmpl) {
+		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid);
+		swap32yes(work->data, work->data, 80 / 4);
+		calc_midstate(work);
+		applog(LOG_DEBUG, "Successfully rolled extranonce to dataid %u", work->dataid);
+	} else {
+
 	uint32_t *work_ntime;
 	uint32_t ntime;
 
@@ -2704,10 +2720,13 @@ static void roll_work(struct work *work)
 	ntime = be32toh(*work_ntime);
 	ntime++;
 	*work_ntime = htobe32(ntime);
+
+		applog(LOG_DEBUG, "Successfully rolled time header in work");
+	}
+
 	local_work++;
 	work->rolls++;
 	work->blk.nonce = 0;
-	applog(LOG_DEBUG, "Successfully rolled work");
 
 	/* This is now a different work item so it needs a different ID for the
 	 * hashtable */

@@ -898,6 +898,7 @@ struct work {
 
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;
+	unsigned int	dataid;
 };
 
 extern void get_datestamp(char *, struct timeval *);
