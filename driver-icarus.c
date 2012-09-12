@@ -746,7 +746,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	if (!state->firstrun) {
 		if (state->changework)
+		{
 			state->changework = false;
+			lret = 1;
+		}
 		else
 		{
 			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
