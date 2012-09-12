@@ -219,6 +219,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			}
 			if (!ztex_checkNonce(ztex, work, &hdata[i])) {
 				thr->cgpu->hw_errors++;
+				++hw_errors;
 				continue;
 			}
 			nonce = hdata[i].goldenNonce;
