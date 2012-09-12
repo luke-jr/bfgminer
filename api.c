@@ -561,8 +561,8 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_SETCONFIG,PARAM_SET,	"Set config '%s' to %d" },
  { SEVERITY_ERR,   MSG_UNKCON,	PARAM_STR,	"Unknown config '%s'" },
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
- { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name\\,N'" },
- { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s\\,N'" },
+ { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
+ { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1206,8 +1206,8 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 			root = api_add_string(root, _STATUS, severity, false);
 			root = api_add_time(root, "When", &when, false);
 			root = api_add_int(root, "Code", &messageid, false);
-			root = api_add_string(root, "Msg", buf, false);
-			root = api_add_string(root, "Description", opt_api_description, false);
+			root = api_add_escape(root, "Msg", buf, false);
+			root = api_add_escape(root, "Description", opt_api_description, false);
 
 			root = print_data(root, ptr, isjson);
 			if (isjson)
@@ -1221,8 +1221,8 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 	int id = -1;
 	root = api_add_int(root, "Code", &id, false);
 	sprintf(buf, "%d", messageid);
-	root = api_add_string(root, "Msg", buf, false);
-	root = api_add_string(root, "Description", opt_api_description, false);
+	root = api_add_escape(root, "Msg", buf, false);
+	root = api_add_escape(root, "Description", opt_api_description, false);
 
 	root = print_data(root, ptr, isjson);
 	if (isjson)
