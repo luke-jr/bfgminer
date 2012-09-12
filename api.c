@@ -259,6 +259,7 @@ static const char *OSINFO =
 #define _CHECK		"CHECK"
 #define _MINECOIN	"COIN"
 #define _DEBUGSET	"DEBUG"
+#define _SETCONFIG	"SETCONFIG"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -297,6 +298,7 @@ static const char ISJSON = '{';
 #define JSON_CHECK	JSON1 _CHECK JSON2
 #define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
+#define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
 #define JSON_END	JSON4 JSON5
 
 static const char *JSON_COMMAND = "command";
@@ -395,6 +397,11 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_DEBUGSET 79
 #define MSG_PGAIDENT 80
 #define MSG_PGANOID 81
+#define MSG_SETCONFIG 82
+#define MSG_UNKCON 83
+#define MSG_INVNUM 84
+#define MSG_CONPAR 85
+#define MSG_CONVAL 86
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -423,6 +430,7 @@ enum code_parameters {
 	PARAM_STR,
 	PARAM_BOTH,
 	PARAM_BOOL,
+	PARAM_SET,
 	PARAM_NONE
 };
 
@@ -553,6 +561,11 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_PGAIDENT,PARAM_PGA,	"Identify command sent to PGA%d" },
  { SEVERITY_WARN,  MSG_PGANOID,	PARAM_PGA,	"PGA%d does not support identify" },
 #endif
+ { SEVERITY_SUCC,  MSG_SETCONFIG,PARAM_SET,	"Set config '%s' to %d" },
+ { SEVERITY_ERR,   MSG_UNKCON,	PARAM_STR,	"Unknown config '%s'" },
+ { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
+ { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name\\,N'" },
+ { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s\\,N'" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1165,6 +1178,9 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 				case PARAM_BOOL:
 					sprintf(buf, codes[i].description, paramid ? TRUESTR : FALSESTR);
 					break;
+				case PARAM_SET:
+					sprintf(buf, codes[i].description, param2, paramid);
+					break;
 				case PARAM_NONE:
 				default:
 					strcpy(buf, codes[i].description);
@@ -1267,6 +1283,8 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	root = api_add_const(root, "OS", OSINFO, false);
 	root = api_add_bool(root, "Failover-Only", &opt_fail_only, false);
 	root = api_add_int(root, "ScanTime", &opt_scantime, false);
+	root = api_add_int(root, "Queue", &opt_queue, false);
+	root = api_add_int(root, "Expiry", &opt_expiry, false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2917,6 +2935,43 @@ static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	strcat(io_buffer, buf);
 }
 
+static void setconfig(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	char *comma;
+	int value;
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_CONPAR, 0, NULL, isjson));
+		return;
+	}
+
+	comma = strchr(param, ',');
+	if (!comma) {
+		strcpy(io_buffer, message(MSG_CONVAL, 0, param, isjson));
+		return;
+	}
+
+	*(comma++) = '\0';
+	value = atoi(comma);
+	if (value < 0 || value > 9999) {
+		strcpy(io_buffer, message(MSG_INVNUM, value, param, isjson));
+		return;
+	}
+
+	if (strcasecmp(param, "queue") == 0)
+		opt_queue = value;
+	else if (strcasecmp(param, "scantime") == 0)
+		opt_scantime = value;
+	else if (strcasecmp(param, "expiry") == 0)
+		opt_expiry = value;
+	else {
+		strcpy(io_buffer, message(MSG_UNKCON, 0, param, isjson));
+		return;
+	}
+
+	strcpy(io_buffer, message(MSG_SETCONFIG, value, param, isjson));
+}
+
 static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -2971,6 +3026,7 @@ struct CMDS {
 	{ "failover-only",	failoveronly,	true },
 	{ "coin",		minecoin,	false },
 	{ "debug",		debugstate,	true },
+	{ "setconfig",		setconfig,	true },
 	{ NULL,			NULL,		false }
 };
 
