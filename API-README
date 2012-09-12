@@ -383,6 +383,7 @@ Modified API commands:
  'gpu|N' - add 'Diff1 Work'
  'pga|N' - add 'Diff1 Work'
  'notify' - add '*Dev Throttle' (for BFL Singles)
+ 'pools' - add 'Proxy Type', 'Proxy'
 
 ----------
 
