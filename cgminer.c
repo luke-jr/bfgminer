@@ -3098,7 +3098,11 @@ void write_config(FILE *fcfg)
 	/* Write pool values */
 	fputs("{\n\"pools\" : [", fcfg);
 	for(i = 0; i < total_pools; i++) {
-		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", json_escape(pools[i]->rpc_url));
+		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s%s%s%s\",", i > 0 ? "," : "",
+			pools[i]->rpc_proxy ? json_escape((char *)proxytype(pools[i]->rpc_proxytype)) : "",
+			pools[i]->rpc_proxy ? json_escape(pools[i]->rpc_proxy) : "",
+			pools[i]->rpc_proxy ? "|" : "",
+			json_escape(pools[i]->rpc_url));
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pools[i]->rpc_user));
 		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", json_escape(pools[i]->rpc_pass));
 		}
