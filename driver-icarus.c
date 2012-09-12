@@ -275,13 +275,14 @@ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, st
 	bool first = true;
 
 #ifdef HAVE_EPOLL
-	struct epoll_event ev;
+	struct epoll_event ev = {
+		.events = EPOLLIN,
+		.data.fd = fd,
+	};
 	struct epoll_event evr[2];
 	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
 	epollfd = epoll_create(2);
 	if (epollfd != -1) {
-		ev.events = EPOLLIN;
-		ev.data.fd = fd;
 		if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
 			close(epollfd);
 			epollfd = -1;
