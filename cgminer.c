@@ -4185,7 +4185,7 @@ static bool hashtest(struct thr_info *thr, const struct work *work)
 				thr->cgpu->api->name, thr->cgpu->device_id);
 		hw_errors++;
 		thr->cgpu->hw_errors++;
-		return true;
+		return false;
 	}
 
 	bool test = fulltest(work->hash, work->target);
