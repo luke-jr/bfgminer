@@ -280,6 +280,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			nonce = htole32(nonce);
 			if (!ztex_checkNonce(ztex, work, &hdata[i])) {
 				thr->cgpu->hw_errors++;
+				++hw_errors;
 				continue;
 			}
 			for (j=0; j<=ztex->extraSolutions; j++) {
