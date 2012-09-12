@@ -1,5 +1,5 @@
 /**
- *   ztex.c - BFGMiner worker for Ztex 1.15x fpga board
+ *   ztex.c - BFGMiner worker for Ztex 1.15x/y fpga board
  *
  *   Copyright (c) 2012 nelisky.btc@gmail.com
  *
@@ -65,7 +65,7 @@ static void ztex_detect(void)
 
 	cnt = libztex_scanDevices(&ztex_devices);
 	if (cnt > 0)
-		applog(LOG_WARNING, "Found %d ztex board%s", cnt, cnt > 1 ? "s" : "");
+		applog(LOG_INFO, "Found %d ztex board%s", cnt, cnt > 1 ? "s" : "");
 
 	for (i = 0; i < cnt; i++) {
 		ztex = calloc(1, sizeof(struct cgpu_info));
@@ -75,6 +75,8 @@ static void ztex_detect(void)
 		ztex->device_ztex->fpgaNum = 0;
 		ztex->device_ztex->root = ztex->device_ztex;
 		add_cgpu(ztex);
+		sprintf(ztex->device_ztex->repr, "%s %u", ztex->api->name, ztex->device_id);
+		applog(LOG_INFO, "%s %u: Found Ztex (ZTEX %s-%u)", ztex->api->name, ztex->device_id, ztex->device_ztex->snString, 1);
 
 		fpgacount = libztex_numberOfFpgas(ztex->device_ztex);
 
@@ -90,11 +92,10 @@ static void ztex_detect(void)
 			ztex->threads = 1;
 			ztex_slave->fpgaNum = j;
 			ztex_slave->root = ztex_devices[i]->dev;
-			ztex_slave->repr[strlen(ztex_slave->repr) - 1] = ('1' + j);
 			add_cgpu(ztex);
+			sprintf(ztex->device_ztex->repr, "%s %u", ztex->api->name, ztex->device_id);
+			applog(LOG_INFO, "%s %u: Found Ztex (ZTEX %s-%u)", ztex->api->name, ztex->device_id, ztex->device_ztex->snString, j+1);
 		}
-
-		applog(LOG_WARNING,"%s: Found Ztex (fpga count = %d) , mark as %d", ztex->device_ztex->repr, fpgacount, ztex->device_id);
 	}
 
 	if (cnt > 0)
@@ -294,14 +295,13 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 						}
 					}
 					if (!found) {
-						applog(LOG_DEBUG, "%s: Share found N%dE%d", ztex->repr, i, j);
 						backlog[backlog_p++] = nonce;
 						if (backlog_p >= backlog_max)
 							backlog_p = 0;
 						nonce = le32toh(nonce);
 						work->blk.nonce = 0xffffffff;
 						rv = submit_nonce(thr, work, nonce);
-						applog(LOG_DEBUG, "%s: submitted %0.8x %d", ztex->repr, nonce, rv);
+						applog(LOG_DEBUG, "%s: submitted %0.8x (from N%dE%d) %d", ztex->repr, nonce, i, j, rv);
 					}
 				}
 			}
@@ -411,4 +411,3 @@ struct device_api ztex_api = {
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,
 };
-
