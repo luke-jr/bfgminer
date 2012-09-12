@@ -512,6 +512,7 @@ static inline void string_elist_del(struct string_elist *item)
 	if (item->free_me)
 		free(item->string);
 	list_del(&item->list);
+	free(item);
 }
 
 
