@@ -15,7 +15,7 @@
 
 
 # Specification in the form of a command-line invocation:
-#   gnulib-tool --import --dir=. --lib=libgnu --source-base=lib --m4-base=m4 --doc-base=doc --tests-base=tests --aux-dir=. --no-conditional-dependencies --no-libtool --macro-prefix=gl --no-vc-files memmem sigaction signal
+#   gnulib-tool --import --dir=. --lib=libgnu --source-base=lib --m4-base=m4 --doc-base=doc --tests-base=tests --aux-dir=. --no-conditional-dependencies --no-libtool --macro-prefix=gl --no-vc-files memmem sigaction signal strtok_r
 
 # Specification in the form of a few gnulib-tool.m4 macro invocations:
 gl_LOCAL_DIR([])
@@ -23,6 +23,7 @@ gl_MODULES([
   memmem
   sigaction
   signal
+  strtok_r
 ])
 gl_AVOID([])
 gl_SOURCE_BASE([lib])

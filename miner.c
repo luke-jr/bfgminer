@@ -1183,14 +1183,14 @@ static char *parse_config(json_t *config, bool fileconf)
 		fileconf_load = 1;
 
 	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
-		char *p, *name;
+		char *p, *name, *sp;
 
 		/* We don't handle subtables. */
 		assert(!(opt->type & OPT_SUBTABLE));
 
 		/* Pull apart the option name(s). */
 		name = strdup(opt->names);
-		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
+		for (p = strtok_r(name, "|", &sp); p; p = strtok_r(NULL, "|", &sp)) {
 			char *err = "Invalid value";
 
 			/* Ignore short options. */
