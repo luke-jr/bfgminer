@@ -226,6 +226,7 @@ static struct block *blocks = NULL;
 char *opt_socks_proxy = NULL;
 
 static const char def_conf[] = "cgminer.conf";
+static char *default_config;
 static bool config_loaded;
 static int include_count;
 #define JSON_INCLUDE_CONF "include"
@@ -1175,21 +1176,21 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	return parse_config(config, true);
 }
 
+static char *set_default_config(const char *arg)
+{
+	opt_set_charp(arg, &default_config);
+
+	return NULL;
+}
+
+void default_save_file(char *filename);
+
 static void load_default_config(void)
 {
 	cnfbuf = malloc(PATH_MAX);
 
-#if defined(unix)
-	if (getenv("HOME") && *getenv("HOME")) {
-	        strcpy(cnfbuf, getenv("HOME"));
-		strcat(cnfbuf, "/");
-	} else
-		strcpy(cnfbuf, "");
-	strcat(cnfbuf, ".cgminer/");
-#else
-	strcpy(cnfbuf, "");
-#endif
-	strcat(cnfbuf, def_conf);
+	default_save_file(cnfbuf);
+
 	if (!access(cnfbuf, R_OK))
 		load_config(cnfbuf, NULL);
 	else {
@@ -1237,6 +1238,10 @@ static struct opt_table opt_cmdline_table[] = {
 		     load_config, NULL, NULL,
 		     "Load a JSON-format configuration file\n"
 		     "See example.conf for an example configuration."),
+	OPT_WITH_ARG("--default-config",
+		     set_default_config, NULL, NULL,
+		     "Specify the filename of the default config file\n"
+		     "Loaded at start and used when saving without a name."),
 	OPT_WITHOUT_ARG("--help|-h",
 			opt_verusage_and_exit, NULL,
 			"Print this message"),
@@ -3484,6 +3489,11 @@ retry:
 
 void default_save_file(char *filename)
 {
+	if (default_config && *default_config) {
+		strcpy(filename, default_config);
+		return;
+	}
+
 #if defined(unix)
 	if (getenv("HOME") && *getenv("HOME")) {
 	        strcpy(filename, getenv("HOME"));
