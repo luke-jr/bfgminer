@@ -124,7 +124,10 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Log Interval=N, <- log interval (--log N)
                               Device Code=GPU ICA , <- spaced list of compiled devices
                               OS=Linux/Apple/..., <- operating System
-                              Failover-Only=true/false | <- failover-only setting
+                              Failover-Only=true/false, <- failover-only setting
+                              ScanTime=N, <- --scan-time setting
+                              Queue=N, <- --queue setting
+                              Expiry=N| <- --expiry setting
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -303,6 +306,13 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               RPCProto=true/false,
                               PerDevice=true/false|
 
+ setconfig|name,N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting 'name' to N
+                              The valid values for name are currently:
+                              queue, scantime, expiry
+                              N is an integer in the range 0 to 9999
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
 
@@ -359,12 +369,14 @@ API V1.19
 
 Added API commands:
  'debug'
+ 'setconfig|name,N'
 
 Modified API commands:
  Change pool field name 'Diff1 Shares' to 'Diff1 Work'
  'devs' - add 'Diff1 Work' to all devices
  'gpu|N' - add 'Diff1 Work'
  'pga|N' - add 'Diff1 Work'
+ 'config' - add 'Queue', 'Expiry'
 
 ----------
 
