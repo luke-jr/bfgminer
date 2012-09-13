@@ -303,11 +303,11 @@ bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu 
 
 Single pool with a standard http proxy, regular desktop:
 
-cgminer -o "http:proxy:port|http://pool:port" -u username -p password
+bfgminer -o "http:proxy:port|http://pool:port" -u username -p password
 
 Single pool with a socks5 proxy, regular desktop:
 
-cgminer -o "socks5:proxy:port|http://pool:port" -u username -p password
+bfgminer -o "socks5:proxy:port|http://pool:port" -u username -p password
 
 The list of proxy types are:
  http:    standard http 1.1 proxy
@@ -317,10 +317,10 @@ The list of proxy types are:
  socks4a: socks4a proxy
  socks5h: socks5 proxy using a hostname
 
-If you compile cgminer with a version of CURL before 7.19.4 then some of the above will
+If you compile BFGMiner with a version of CURL before 7.19.4 then some of the above will
 not be available. All are available since CURL version 7.19.4
 
-If you specify the --socks-proxy option to cgminer, it will only be applied to all pools
+If you specify the --socks-proxy option to BFGMiner, it will only be applied to all pools
 that don't specify their own proxy setting like above
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
@@ -784,7 +784,7 @@ A: BFGMiner is being packaged with other trojan scripts and some antivirus
 software is falsely accusing bfgminer.exe as being the actual virus, rather
 than whatever it is being packaged with. If you installed BFGMiner yourself,
 then you do not have a virus on your computer. Complain to your antivirus
-software company. They seem to be flagging even source code now from cgminer
+software company. They seem to be flagging even source code now from BFGMiner
 as viruses, even though text source files can't do anything by themself.
 
 Q: Can you modify the display to include more of one thing in the output and
