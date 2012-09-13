@@ -3173,7 +3173,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	unsigned char hash_swap[32];
 	char *old_hash;
 
-	current_block_id = ((uint32_t*)hash)[1];
+	current_block_id = ((uint32_t*)hash)[0];
 	strcpy(current_block, hexstr);
 	swap256(hash_swap, hash);
 	swap32tole(hash_swap, hash_swap, 32 / 4);
