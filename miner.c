@@ -420,6 +420,8 @@ static struct pool *add_pool(void)
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 
+	pool->rpc_proxy = NULL;
+
 	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
 
@@ -690,6 +692,22 @@ static char *set_userpass(const char *arg)
 
 	pool = pools[total_users - 1];
 	opt_set_charp(arg, &pool->rpc_userpass);
+
+	return NULL;
+}
+
+static char *set_pool_proxy(const char *arg)
+{
+	struct pool *pool;
+
+	if (!total_pools)
+		return "Usage of --pool-proxy before pools are defined does not make sense";
+
+	if (!our_curl_supports_proxy_uris())
+		return "Your installed cURL library does not support proxy URIs. At least version 7.21.7 is required.";
+
+	pool = pools[total_pools - 1];
+	opt_set_charp(arg, &pool->rpc_proxy);
 
 	return NULL;
 }
@@ -1039,6 +1057,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--per-device-stats",
 			opt_set_bool, &want_per_device_stats,
 			"Force verbose mode and output per-device statistics"),
+	OPT_WITH_ARG("--pool-proxy|-x",
+		     set_pool_proxy, NULL, NULL,
+		     "Proxy URI to use for connecting to just the previous-defined pool"),
 	OPT_WITHOUT_ARG("--protocol-dump|-P",
 			opt_set_bool, &opt_protocol,
 			"Verbose dump of protocol-level activities"),
@@ -3536,6 +3557,8 @@ void write_config(FILE *fcfg)
 	fputs("{\n\"pools\" : [", fcfg);
 	for(i = 0; i < total_pools; i++) {
 		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", json_escape(pools[i]->rpc_url));
+		if (pools[i]->rpc_proxy)
+			fprintf(fcfg, "\n\t\t\"pool-proxy\" : \"%s\",", json_escape(pools[i]->rpc_proxy));
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pools[i]->rpc_user));
 		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", json_escape(pools[i]->rpc_pass));
 		}
@@ -5556,7 +5579,7 @@ char *curses_input(const char *query)
 }
 #endif
 
-void add_pool_details(bool live, char *url, char *user, char *pass)
+void add_pool_details5(bool live, char *url, char *user, char *pass, char *proxy)
 {
 	struct pool *pool;
 
@@ -5569,12 +5592,18 @@ void add_pool_details(bool live, char *url, char *user, char *pass)
 	if (!pool->rpc_userpass)
 		quit(1, "Failed to malloc userpass");
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
+	pool->rpc_proxy = proxy;
 
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
 	enable_pool(pool);
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
+}
+
+void add_pool_details(bool live, char *url, char *user, char *pass)
+{
+	add_pool_details5(live, url, user, pass, NULL);
 }
 
 #ifdef HAVE_CURSES

@@ -314,7 +314,9 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
 	curl_easy_setopt(curl, CURLOPT_HEADERDATA, &hi);
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
-	if (opt_socks_proxy) {
+	if (pool->rpc_proxy) {
+		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
+	} else if (opt_socks_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, opt_socks_proxy);
 		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
 	}
@@ -472,6 +474,13 @@ err_out:
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	return NULL;
 }
+
+bool our_curl_supports_proxy_uris()
+{
+	curl_version_info_data *data = curl_version_info(CURLVERSION_NOW);
+	return data->age && data->version_num >= (( 7 <<16)|( 21 <<8)| 7);  // 7.21.7
+}
+
 
 char *bin2hex(const unsigned char *p, size_t len)
 {

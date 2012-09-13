@@ -148,6 +148,7 @@ Options for both config file and command line:
 --no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
+--pool-proxy|-x     Proxy URI to use for connecting to just the previous-defined pool
 --protocol-dump|-P  Verbose dump of protocol-level activities
 --queue|-Q <arg>    Minimum number of work items to have queued (0 - 10) (default: 1)
 --quiet|-q          Disable logging output, display status and errors
@@ -162,7 +163,7 @@ Options for both config file and command line:
 --scrypt            Use the scrypt algorithm for mining (non-bitcoin)
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
---socks-proxy <arg> Set socks4 proxy (host:port)
+--socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
 --submit-threads    Maximum number of share submission threads (default: 64)
 --syslog            Use system log for output messages (default: standard error)
 --temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
@@ -300,6 +301,26 @@ bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu 
 Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
 
 bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
+
+Single pool with a standard http proxy, regular desktop:
+
+bfgminer -o http://pool:port -x http://proxy:port -u username -p password
+
+Single pool with a socks5 proxy, regular desktop:
+
+bfgminer -o http://pool:port -x socks5://proxy:port -u username -p password
+
+The list of proxy types are:
+ http:    standard http 1.1 proxy
+ socks4:  socks4 proxy
+ socks5:  socks5 proxy
+ socks4a: socks4a proxy
+ socks5h: socks5 proxy using a hostname
+
+Proxy support requires cURL version 7.21.7 or newer.
+
+If you specify the --socks-proxy option to BFGMiner, it will only be applied to all pools
+that don't specify their own proxy setting like above
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
@@ -762,7 +783,7 @@ A: BFGMiner is being packaged with other trojan scripts and some antivirus
 software is falsely accusing bfgminer.exe as being the actual virus, rather
 than whatever it is being packaged with. If you installed BFGMiner yourself,
 then you do not have a virus on your computer. Complain to your antivirus
-software company. They seem to be flagging even source code now from cgminer
+software company. They seem to be flagging even source code now from BFGMiner
 as viruses, even though text source files can't do anything by themself.
 
 Q: Can you modify the display to include more of one thing in the output and
