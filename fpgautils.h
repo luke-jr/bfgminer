@@ -24,6 +24,8 @@ extern int _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, b
 	_serial_detect(dname, detectone, autoscan, false)
 #define serial_detect(dname, detectone)  \
 	_serial_detect(dname, detectone,     NULL, false)
+#define noserial_detect(dname, autoscan)  \
+	_serial_detect(dname, NULL     , autoscan, false)
 extern int serial_autodetect_devserial(detectone_func_t, const char*prodname);
 extern int serial_autodetect_udev     (detectone_func_t, const char*prodname);
 
