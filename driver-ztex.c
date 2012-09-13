@@ -420,7 +420,7 @@ struct device_api ztex_api = {
 	.api_detect = ztex_detect,
 	.get_statline_before = ztex_statline_before,
 	.get_api_extra_device_status = get_ztex_api_extra_device_status,
-	.thread_prepare = ztex_prepare,
+	.thread_init = ztex_prepare,
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,
 };
