@@ -2,7 +2,7 @@
 session_start();
 #
 global $title, $miner, $port, $readonly, $notify, $rigs;
-global $rigtotals, $forcerigtotals;
+global $rgisecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
@@ -39,6 +39,10 @@ $poolinputs = false;
 # Set $rigs to an array of your BFGMiner rigs that are running
 #  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
 $rigs = array('127.0.0.1:4028');
+#
+# Set $rigipsecurity to false to show the IP/Port of the rig
+# in the socket error messages and also show the full socket message
+$rigipsecurity = true;
 #
 # Set $rigtotals to true to display totals on the single rig page
 # 'false' means no totals (and ignores $forcerigtotals)
@@ -226,7 +230,7 @@ function htmlhead($checkapi, $rig, $pg = null)
  if ($readonly === false && $checkapi === true)
  {
 	$error = null;
-	$access = api('privileged');
+	$access = api($rig, 'privileged');
 	if ($error != null
 	||  !isset($access['STATUS']['STATUS'])
 	||  $access['STATUS']['STATUS'] != 'S')
@@ -275,8 +279,9 @@ global $haderror, $error;
 $haderror = false;
 $error = null;
 #
-function getsock($addr, $port)
+function getsock($rig, $addr, $port)
 {
+ global $rigipsecurity;
  global $haderror, $error, $socksndtimeoutsec, $sockrcvtimeoutsec;
 
  $error = null;
@@ -285,9 +290,15 @@ function getsock($addr, $port)
  if ($socket === false || $socket === null)
  {
 	$haderror = true;
-	$error = socket_strerror(socket_last_error());
-	$msg = "socket create(TCP) failed";
-	$error = "ERR: $msg '$error'\n";
+	if ($rigipsecurity === false)
+	{
+		$error = socket_strerror(socket_last_error());
+		$msg = "socket create(TCP) failed";
+		$error = "ERR: $msg '$error'\n";
+	}
+	else
+		$error = "ERR: socket create(TCP) failed\n";
+
 	return null;
  }
 
@@ -301,9 +312,15 @@ function getsock($addr, $port)
  if ($res === false)
  {
 	$haderror = true;
-	$error = socket_strerror(socket_last_error());
-	$msg = "socket connect($addr,$port) failed";
-	$error = "ERR: $msg '$error'\n";
+	if ($rigipsecurity === false)
+	{
+		$error = socket_strerror(socket_last_error());
+		$msg = "socket connect($addr,$port) failed";
+		$error = "ERR: $msg '$error'\n";
+	}
+	else
+		$error = "ERR: socket connect($rig) failed\n";
+
 	socket_close($socket);
 	return null;
  }
@@ -365,12 +382,12 @@ function revert($str)
  return str_replace(array("\1", "\2", "\3", "\4"), array("|", "\\", "=", ","), $str);
 }
 #
-function api($cmd)
+function api($rig, $cmd)
 {
  global $haderror, $error;
  global $miner, $port, $hidefields;
 
- $socket = getsock($miner, $port);
+ $socket = getsock($rig, $miner, $port);
  if ($socket != null)
  {
 	socket_write($socket, $cmd, strlen($cmd));
@@ -1060,7 +1077,7 @@ function processgpus($rig)
  global $error;
  global $warnfont, $warnoff;
 
- $gpus = api('gpucount');
+ $gpus = api($rig, 'gpucount');
 
  if ($error != null)
 	otherrow("<td>Error getting GPU count: $warnfont$error$warnoff</td>");
@@ -1129,7 +1146,7 @@ function process($cmds, $rig)
  $count = count($cmds);
  foreach ($cmds as $cmd => $des)
  {
-	$process = api($cmd);
+	$process = api($rig, $cmd);
 
 	if ($error != null)
 	{
@@ -1244,7 +1261,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 		else
 			$name = $num;
 
-		$ans = api($cmd);
+		$ans = api($name, $cmd);
 
 		if ($error != null)
 		{
@@ -1756,7 +1773,7 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 
 		foreach ($cmds as $cmd => $one)
 		{
-			$process = api($cmd);
+			$process = api($name, $cmd);
 
 			if ($error != null)
 			{
