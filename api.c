@@ -1383,6 +1383,7 @@ static void devstatus_an(struct cgpu_info *cgpu, bool isjson)
 	root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
 	root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
 	root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
+	root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
 
 	if (cgpu->api->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->api->get_api_extra_device_status(cgpu));

@@ -4695,6 +4695,7 @@ bool test_nonce(struct work *work, uint32_t nonce, bool checktarget)
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	total_diff1++;
+	thr->cgpu->diff1++;
 	work->pool->diff1++;
 
 	/* Do one last check before attempting to submit the work */
