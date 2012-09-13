@@ -917,6 +917,14 @@ e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 ---------
 
 Default:
+ $rigipsecurity = true;
+
+Set $rigipsecurity to false to show the IP/Port of the rig
+in the socket error messages and also show the full socket message
+
+---------
+
+Default:
  $rigtotals = true;
  $forcerigtotals = false;
 
