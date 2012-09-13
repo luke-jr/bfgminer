@@ -828,7 +828,7 @@ driver version and ATI stream version.
 
 Q: BFGMiner reports no devices or only one device on startup on Linux although
 I have multiple devices and drivers+SDK installed properly?
-A: Try 'export DISPLAY=:0" before running BFGMiner.
+A: Try "export DISPLAY=:0" before running BFGMiner.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
@@ -855,10 +855,27 @@ They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
 
-Q: How do I get my BFL device to auto-recognise?
-A: The only thing that needs to be done is to load the driver for them, which
-on linux would require:
-sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
+A: On linux, if the /dev/ttyUSB* devices don't automatically appear, the only
+thing that needs to be done is to load the driver for them:
+BFL: sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+Icarus: sudo modprobe pl2303 vendor=0x067b product=0x230
+Lancelot: sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
+Cairnsmore: sudo modprobe ftdi_sio product=0x8350 vendor=0x0403
+On windows you must install the pl2303 or ftdi driver required for the device
+pl2303: http://prolificusa.com/pl-2303hx-drivers/
+ftdi: http://www.ftdichip.com/Drivers/VCP.htm
+
+Q: On linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
+BFGMiner can't mine on them
+A: Make sure you have the required priviledges to access the /dev/ttyUSB* devices:
+ sudo ls -las /dev/ttyUSB*
+will give output like:
+ 0 crw-rw---- 1 root dialout 188, 0 2012-09-11 13:49 /dev/ttyUSB0
+This means your account must have the group 'dialout' or root priviledges
+To permanently give your account the 'dialout' group:
+ sudo usermod -G dialout `whoami`
+Then logout and back in again
 
 
 ---
