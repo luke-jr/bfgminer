@@ -56,6 +56,22 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 	}
 }
 
+static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j)
+{
+	struct cgpu_info *ztex;
+
+	ztex = calloc(1, sizeof(struct cgpu_info));
+	ztex->api = &ztex_api;
+	ztex->device_ztex = dev;
+	ztex->threads = 1;
+	dev->fpgaNum = j;
+	add_cgpu(ztex);
+	sprintf(ztex->device_ztex->repr, "%s %u", ztex->api->name, ztex->device_id);
+	applog(LOG_INFO, "%s %u: Found Ztex (ZTEX %s-%u)", ztex->api->name, ztex->device_id, ztex->device_ztex->snString, j+1);
+
+	return ztex;
+}
+
 static int ztex_autodetect(void)
 {
 	int cnt;
@@ -63,6 +79,7 @@ static int ztex_autodetect(void)
 	int fpgacount;
 	int totaldevs = 0;
 	struct libztex_dev_list **ztex_devices;
+	struct libztex_device *ztex_master;
 	struct libztex_device *ztex_slave;
 	struct cgpu_info *ztex;
 
@@ -71,15 +88,9 @@ static int ztex_autodetect(void)
 		applog(LOG_INFO, "Found %d ztex board%s", cnt, cnt > 1 ? "s" : "");
 
 	for (i = 0; i < cnt; i++) {
-		ztex = calloc(1, sizeof(struct cgpu_info));
-		ztex->api = &ztex_api;
-		ztex->device_ztex = ztex_devices[i]->dev;
-		ztex->threads = 1;
-		ztex->device_ztex->fpgaNum = 0;
-		ztex->device_ztex->root = ztex->device_ztex;
-		add_cgpu(ztex);
-		sprintf(ztex->device_ztex->repr, "%s %u", ztex->api->name, ztex->device_id);
-		applog(LOG_INFO, "%s %u: Found Ztex (ZTEX %s-%u)", ztex->api->name, ztex->device_id, ztex->device_ztex->snString, 1);
+		ztex_master = ztex_devices[i]->dev;
+		ztex_master->root = ztex_master;
+		ztex = ztex_setup(ztex_master, 0);
 
 		fpgacount = libztex_numberOfFpgas(ztex->device_ztex);
 		totaldevs += fpgacount;
@@ -88,17 +99,10 @@ static int ztex_autodetect(void)
 			pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
 
 		for (j = 1; j < fpgacount; j++) {
-			ztex = calloc(1, sizeof(struct cgpu_info));
-			ztex->api = &ztex_api;
 			ztex_slave = calloc(1, sizeof(struct libztex_device));
-			memcpy(ztex_slave, ztex_devices[i]->dev, sizeof(struct libztex_device));
-			ztex->device_ztex = ztex_slave;
-			ztex->threads = 1;
-			ztex_slave->fpgaNum = j;
-			ztex_slave->root = ztex_devices[i]->dev;
-			add_cgpu(ztex);
-			sprintf(ztex->device_ztex->repr, "%s %u", ztex->api->name, ztex->device_id);
-			applog(LOG_INFO, "%s %u: Found Ztex (ZTEX %s-%u)", ztex->api->name, ztex->device_id, ztex->device_ztex->snString, j+1);
+			memcpy(ztex_slave, ztex_master, sizeof(struct libztex_device));
+			ztex_slave->root = ztex_master;
+			ztex_setup(ztex_slave, j);
 		}
 	}
 
