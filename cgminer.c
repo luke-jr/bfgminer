@@ -2498,6 +2498,14 @@ static void restart_threads(void)
 		work_restart[i].restart = 1;
 }
 
+static char *blkhashstr(unsigned char *hash)
+{
+	unsigned char hash_swap[32];
+	swap256(hash_swap, hash);
+	swap32tole(hash_swap, hash_swap, 32 / 4);
+	return bin2hex(hash_swap, 32);
+}
+
 static void set_curblock(char *hexstr, unsigned char *hash)
 {
 	unsigned char hash_swap[32];
@@ -2606,15 +2614,18 @@ static void test_work_current(struct work *work)
 						applog(LOG_NOTICE, "%s %d caught up to new block",
 						       work->longpoll ? "LONGPOLL from pool" : "Pool",
 						       work->pool->pool_no);
-				} else
+				} else {
 					// Switched to a block we know, but not the latest... why?
 					// This might detect pools trying to double-spend or 51%,
 					// but let's not make any accusations until it's had time
 					// in the real world.
+					free(hexstr);
+					hexstr = blkhashstr(&work->data[4]);
 					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
 					       work->longpoll ? "LONGPOLL from pool" : "Pool",
 					       work->pool->pool_no,
 					       hexstr);
+				}
 			}
 		}
 	  if (work->longpoll) {
