@@ -59,6 +59,7 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j)
 {
 	struct cgpu_info *ztex;
+	char fpganame[LIBZTEX_SNSTRING_LEN+3+1];
 
 	ztex = calloc(1, sizeof(struct cgpu_info));
 	ztex->api = &ztex_api;
@@ -67,7 +68,9 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j)
 	dev->fpgaNum = j;
 	add_cgpu(ztex);
 	sprintf(ztex->device_ztex->repr, "%s %u", ztex->api->name, ztex->device_id);
-	applog(LOG_INFO, "%s %u: Found Ztex (ZTEX %s-%u)", ztex->api->name, ztex->device_id, ztex->device_ztex->snString, j+1);
+	sprintf(fpganame, "%s-%u", ztex->device_ztex->snString, j+1);
+	ztex->name = strdup(fpganame);
+	applog(LOG_INFO, "%s %u: Found Ztex (ZTEX %s)", ztex->api->name, ztex->device_id, fpganame);
 
 	return ztex;
 }
