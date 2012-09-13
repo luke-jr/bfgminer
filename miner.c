@@ -3232,7 +3232,7 @@ static void test_work_current(struct work *work)
 
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
 
-	hexstr = bin2hex(work->data, 18);
+	hexstr = bin2hex(&work->data[4], 18);
 	if (unlikely(!hexstr)) {
 		applog(LOG_ERR, "stage_thread OOM");
 		return;
