@@ -1718,7 +1718,7 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_uint(root, "Remote Failures", &(pool->remotefail_occasions), false);
 		root = api_add_escape(root, "User", pool->rpc_user, false);
 		root = api_add_time(root, "Last Share Time", &(pool->last_share_time), false);
-		root = api_add_int(root, "Diff1 Shares", &(pool->diff1), false);
+		root = api_add_int(root, "Diff1 Work", &(pool->diff1), false);
 
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);

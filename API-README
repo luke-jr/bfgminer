@@ -360,6 +360,9 @@ API V1.19
 Added API commands:
  'debug'
 
+Modified API commands:
+ Change pool field name 'Diff1 Shares' to 'Diff1 Work'
+
 ----------
 
 API V1.18 (BFGMiner v2.7.4)
