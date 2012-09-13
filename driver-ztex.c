@@ -25,6 +25,8 @@
 **/
 #include <unistd.h>
 #include <sha2.h>
+
+#include "fpgautils.h"
 #include "miner.h"
 #include "libztex.h"
 
@@ -53,11 +55,12 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 	}
 }
 
-static void ztex_detect(void)
+static int ztex_autodetect(void)
 {
 	int cnt;
 	int i,j;
 	int fpgacount;
+	int totaldevs = 0;
 	struct libztex_dev_list **ztex_devices;
 	struct libztex_device *ztex_slave;
 	struct cgpu_info *ztex;
@@ -76,6 +79,7 @@ static void ztex_detect(void)
 		add_cgpu(ztex);
 
 		fpgacount = libztex_numberOfFpgas(ztex->device_ztex);
+		totaldevs += fpgacount;
 
 		if (fpgacount > 1)
 			pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
@@ -98,6 +102,14 @@ static void ztex_detect(void)
 
 	if (cnt > 0)
 		libztex_freeDevList(ztex_devices);
+
+	return totaldevs;
+}
+
+static void ztex_detect()
+{
+	// This wrapper ensures users can specify -S ztex:noauto to disable it
+	noserial_detect(ztex_api.dname, ztex_autodetect);
 }
 
 static bool ztex_updateFreq(struct libztex_device* ztex)

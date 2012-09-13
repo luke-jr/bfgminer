@@ -130,6 +130,9 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 		if (!strcmp(s, "noauto"))
 			inhibitauto = true;
 		else
+		if (!detectone)
+		{}  // do nothing
+		else
 		if (detectone(s)) {
 			string_elist_del(iter);
 			inhibitauto = true;
