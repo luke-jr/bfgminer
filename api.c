@@ -1741,10 +1741,8 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_time(root, "Last Share Time", &(pool->last_share_time), false);
 		root = api_add_int(root, "Diff1 Work", &(pool->diff1), false);
 		if (pool->rpc_proxy) {
-			root = api_add_const(root, "Proxy Type", proxytype(pool->rpc_proxytype), false);
 			root = api_add_escape(root, "Proxy", pool->rpc_proxy, false);
 		} else {
-			root = api_add_const(root, "Proxy Type", BLANK, false);
 			root = api_add_const(root, "Proxy", BLANK, false);
 		}
 

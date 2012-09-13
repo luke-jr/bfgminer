@@ -641,8 +641,7 @@ extern const uint32_t sha256_init_state[];
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool, int *,
 			     struct pool *pool, bool);
-extern const char *proxytype(curl_proxytype proxytype);
-extern char *get_proxy(char *url, struct pool *pool);
+extern bool our_curl_supports_proxy_uris();
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
@@ -686,6 +685,7 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int enabled_pools;
+extern void add_pool_details5(bool live, char *url, char *user, char *pass, char *proxy);
 extern void add_pool_details(bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
@@ -827,7 +827,6 @@ struct pool {
 	char *rpc_url;
 	char *rpc_userpass;
 	char *rpc_user, *rpc_pass;
-	curl_proxytype rpc_proxytype;
 	char *rpc_proxy;
 
 	pthread_mutex_t pool_lock;

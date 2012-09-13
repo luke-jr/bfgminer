@@ -148,6 +148,7 @@ Options for both config file and command line:
 --no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
+--pool-proxy|-x     Proxy URI to use for connecting to just the previous-defined pool
 --protocol-dump|-P  Verbose dump of protocol-level activities
 --queue|-Q <arg>    Minimum number of work items to have queued (0 - 10) (default: 1)
 --quiet|-q          Disable logging output, display status and errors
@@ -303,22 +304,20 @@ bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu 
 
 Single pool with a standard http proxy, regular desktop:
 
-bfgminer -o "http:proxy:port|http://pool:port" -u username -p password
+bfgminer -o http://pool:port -x http://proxy:port -u username -p password
 
 Single pool with a socks5 proxy, regular desktop:
 
-bfgminer -o "socks5:proxy:port|http://pool:port" -u username -p password
+bfgminer -o http://pool:port -x socks5://proxy:port -u username -p password
 
 The list of proxy types are:
  http:    standard http 1.1 proxy
- http0:   http 1.0 proxy
  socks4:  socks4 proxy
  socks5:  socks5 proxy
  socks4a: socks4a proxy
  socks5h: socks5 proxy using a hostname
 
-If you compile BFGMiner with a version of CURL before 7.19.4 then some of the above will
-not be available. All are available since CURL version 7.19.4
+Proxy support requires cURL version 7.21.7 or newer.
 
 If you specify the --socks-proxy option to BFGMiner, it will only be applied to all pools
 that don't specify their own proxy setting like above
