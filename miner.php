@@ -2,7 +2,7 @@
 session_start();
 #
 global $title, $miner, $port, $readonly, $notify, $rigs;
-global $rgisecurity, $rigtotals, $forcerigtotals;
+global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
