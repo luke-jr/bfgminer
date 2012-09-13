@@ -2468,7 +2468,7 @@ static bool stale_work(struct work *work, bool share)
 	} else {
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
-		if (block_id != (opt_fail_only ? pool->block_id : current_block_id))
+		if (block_id != ((enabled_pools <= 1 || opt_fail_only) ? pool->block_id : current_block_id))
 		{
 			applog(LOG_DEBUG, "Work stale due to block mismatch");
 			return true;
