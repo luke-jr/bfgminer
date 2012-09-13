@@ -190,6 +190,7 @@ struct ICARUS_INFO {
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
+	bool quirk_reopen;
 };
 
 #define END_CONDITION 0x0000ffff
@@ -459,7 +460,7 @@ static uint32_t mask(int work_division)
 	return nonce_mask;
 }
 
-static void get_options(int this_option_offset, int *baud, int *work_division, int *fpga_count)
+static void get_options(int this_option_offset, int *baud, int *work_division, int *fpga_count, char **quirkstr)
 {
 	char err_buf[BUFSIZ+1];
 	char buf[BUFSIZ+1];
@@ -467,6 +468,7 @@ static void get_options(int this_option_offset, int *baud, int *work_division, i
 	size_t max;
 	int i, tmp;
 
+	*quirkstr = "";
 	if (opt_icarus_options == NULL)
 		buf[0] = '\0';
 	else {
@@ -531,6 +533,11 @@ static void get_options(int this_option_offset, int *baud, int *work_division, i
 			}
 
 			if (colon2 && *colon2) {
+			  colon = strchr(colon2, ':');
+			  if (colon)
+					*(colon++) = '\0';
+
+			  if (*colon2) {
 				tmp = atoi(colon2);
 				if (tmp > 0 && tmp <= *work_division)
 					*fpga_count = tmp;
@@ -538,6 +545,11 @@ static void get_options(int this_option_offset, int *baud, int *work_division, i
 					sprintf(err_buf, "Invalid icarus-options for fpga_count (%s) must be >0 and <=work_division (%d)", colon2, *work_division);
 					quit(1, err_buf);
 				}
+			  }
+
+			  if (colon && *colon) {
+					*quirkstr = colon;
+			  }
 			}
 		}
 	}
@@ -574,8 +586,9 @@ static bool icarus_detect_one(const char *devpath)
 	char *nonce_hex;
 
 	int baud, work_division, fpga_count;
+	char *quirkstr;
 
-	get_options(this_option_offset, &baud, &work_division, &fpga_count);
+	get_options(this_option_offset, &baud, &work_division, &fpga_count, &quirkstr);
 
 	applog(LOG_DEBUG, "Icarus Detect: Attempting to open %s", devpath);
 
@@ -645,6 +658,8 @@ static bool icarus_detect_one(const char *devpath)
 	info->work_division = work_division;
 	info->fpga_count = fpga_count;
 	info->nonce_mask = mask(work_division);
+	quirkstr = strchr(quirkstr, '-');
+	info->quirk_reopen = quirkstr ? !strchr(quirkstr, 'r') : true;
 
 	info->golden_hashes = (golden_nonce_val & info->nonce_mask) * fpga_count;
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
@@ -784,6 +799,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 	}
 
+	if (info->quirk_reopen) {
+
 	// Reopen the serial port to workaround a USB-host-chipset-specific issue with the Icarus's buggy USB-UART
 	icarus_close(fd);
 	fd = icarus_open(icarus->device_path, icarus_info[icarus->device_id]->baud);
@@ -793,6 +810,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		return 0;
 	}
 	icarus->device_fd = fd;
+
+	}
 
 	work->blk.nonce = 0xffffffff;
 
