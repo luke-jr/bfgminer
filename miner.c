@@ -214,7 +214,7 @@ static struct pool *currentpool = NULL;
 int total_pools, enabled_pools;
 enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
-static int total_urls, total_users, total_passes, total_userpasses;
+static int total_urls, total_users, total_passes;
 
 static
 #ifndef HAVE_CURSES
@@ -653,8 +653,6 @@ static char *set_user(const char *arg)
 {
 	struct pool *pool;
 
-	if (total_userpasses)
-		return "Use only user + pass or userpass, but not both";
 	total_users++;
 	if (total_users > total_pools)
 		add_pool();
@@ -669,8 +667,6 @@ static char *set_pass(const char *arg)
 {
 	struct pool *pool;
 
-	if (total_userpasses)
-		return "Use only user + pass or userpass, but not both";
 	total_passes++;
 	if (total_passes > total_pools)
 		add_pool();
@@ -685,13 +681,14 @@ static char *set_userpass(const char *arg)
 {
 	struct pool *pool;
 
-	if (total_users || total_passes)
-		return "Use only user + pass or userpass, but not both";
-	total_userpasses++;
-	if (total_userpasses > total_pools)
+	if (total_users != total_passes)
+		return "User + pass options must be balanced before userpass";
+	++total_users;
+	++total_passes;
+	if (total_users > total_pools)
 		add_pool();
 
-	pool = pools[total_userpasses - 1];
+	pool = pools[total_users - 1];
 	opt_set_charp(arg, &pool->rpc_userpass);
 
 	return NULL;
