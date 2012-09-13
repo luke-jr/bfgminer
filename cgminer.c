@@ -2758,22 +2758,21 @@ static void restart_threads(void)
 static void set_curblock(char *hexstr, unsigned char *hash)
 {
 	unsigned char hash_swap[32];
-	unsigned char block_hash_swap[32];
 	char *old_hash;
 
 	strcpy(current_block, hexstr);
 	swap256(hash_swap, hash);
-	swap256(block_hash_swap, hash+4);
+	swap32tole(hash_swap, hash_swap, 32 / 4);
 
 	/* Don't free current_hash directly to avoid dereferencing when read
 	 * elsewhere - and update block_timeval inside the same lock */
 	mutex_lock(&ch_lock);
 	gettimeofday(&block_timeval, NULL);
 	old_hash = current_hash;
-	current_hash = bin2hex(hash_swap, 16);
+	current_hash = bin2hex(hash_swap + 4, 16);
 	free(old_hash);
 	old_hash = current_fullhash;
-	current_fullhash = bin2hex(block_hash_swap, 32);
+	current_fullhash = bin2hex(hash_swap, 32);
 	free(old_hash);
 	mutex_unlock(&ch_lock);
 
@@ -2857,7 +2856,7 @@ static void test_work_current(struct work *work)
 		wr_unlock(&blk_lock);
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
-		set_curblock(hexstr, work->data);
+		set_curblock(hexstr, &work->data[4]);
 		if (unlikely(new_blocks == 1))
 			goto out_free;
 
