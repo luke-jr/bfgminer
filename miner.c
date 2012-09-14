@@ -2323,7 +2323,7 @@ static char *prepare_rpc_req(struct work *work)
 		case PLP_GETBLOCKTEMPLATE:
 			work->tmpl = blktmpl_create();
 			work->tmpl_refcount = malloc(sizeof(*work->tmpl_refcount));
-			*work->tmpl_refcount = 0;
+			*work->tmpl_refcount = 1;
 			json_t *req = blktmpl_request_jansson(blktmpl_addcaps(work->tmpl));
 			rpc_req = json_dumps(req, 0);
 			json_decref(req);
@@ -2733,17 +2733,9 @@ static void roll_work(struct work *work)
 	work->id = total_work++;
 }
 
-static struct work *make_clone(struct work *work)
+static void workcpy(struct work *dest, const struct work *work)
 {
-	struct work *work_clone = make_work();
-
-	memcpy(work_clone, work, sizeof(struct work));
-	work_clone->clone = true;
-	work_clone->longpoll = false;
-	work_clone->mandatory = false;
-	/* Make cloned work appear slightly older to bias towards keeping the
-	 * master work item which can be further rolled */
-	work_clone->tv_staged.tv_sec -= 1;
+	memcpy(dest, work, sizeof(*dest));
 
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -2751,6 +2743,19 @@ static struct work *make_clone(struct work *work)
 		++*work->tmpl_refcount;
 		mutex_unlock(&pool->pool_lock);
 	}
+}
+
+static struct work *make_clone(struct work *work)
+{
+	struct work *work_clone = make_work();
+
+	workcpy(work_clone, work);
+	work_clone->clone = true;
+	work_clone->longpoll = false;
+	work_clone->mandatory = false;
+	/* Make cloned work appear slightly older to bias towards keeping the
+	 * master work item which can be further rolled */
+	work_clone->tv_staged.tv_sec -= 1;
 
 	return work_clone;
 }
@@ -4765,7 +4770,7 @@ keepwaiting:
 	}
 
 	memcpy(work, work_heap, sizeof(struct work));
-	free_work(work_heap);
+	free(work_heap);
 
 out:
 	work->thr_id = thr_id;
@@ -4787,7 +4792,7 @@ bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
 	wc->work = make_work();
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
-	memcpy(wc->work, work_in, sizeof(*work_in));
+	workcpy(wc->work, work_in);
 	wc->work->share_found_time = time(NULL);
 
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
