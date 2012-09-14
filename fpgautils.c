@@ -11,6 +11,7 @@
 #include "config.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <string.h>
@@ -24,10 +25,26 @@
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
-#else
+#else  /* WIN32 */
 #include <windows.h>
 #include <io.h>
-#endif
+
+#define dlsym (void*)GetProcAddress
+#define dlclose FreeLibrary
+
+typedef unsigned long FT_STATUS;
+typedef PVOID FT_HANDLE;
+__stdcall FT_STATUS (*FT_ListDevices)(PVOID pArg1, PVOID pArg2, DWORD Flags);
+__stdcall FT_STATUS (*FT_Open)(int idx, FT_HANDLE*);
+__stdcall FT_STATUS (*FT_GetComPortNumber)(FT_HANDLE, LPLONG lplComPortNumber);
+__stdcall FT_STATUS (*FT_Close)(FT_HANDLE);
+const uint32_t FT_OPEN_BY_DESCRIPTION =       2;
+const uint32_t FT_LIST_ALL         = 0x20000000;
+const uint32_t FT_LIST_NUMBER_ONLY = 0x80000000;
+enum {
+	FT_OK,
+};
+#endif  /* WIN32 */
 
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
@@ -108,13 +125,98 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 #endif
 }
 
+#ifdef WIN32
+#define LOAD_SYM(sym)  do { \
+	if (!(sym = dlsym(dll, #sym))) {  \
+		applog(LOG_DEBUG, "Failed to load " #sym ", not using FTDI autodetect");  \
+		goto out;  \
+	}  \
+} while(0)
+
+int serial_autodetect_ftdi(detectone_func_t detectone, const char *needle, const char *needle2)
+{
+	char devpath[] = "\\\\.\\COMnnnnn";
+	char *devpathnum = &devpath[7];
+	char **bufptrs;
+	char *buf;
+	int found = 0;
+	int i;
+
+	FT_STATUS ftStatus;
+	DWORD numDevs;
+	HMODULE dll = LoadLibrary("FTD2XX.DLL");
+	if (!dll) {
+		applog(LOG_DEBUG, "FTD2XX.DLL failed to load, not using FTDI autodetect");
+		return 0;
+	}
+	LOAD_SYM(FT_ListDevices);
+	LOAD_SYM(FT_Open);
+	LOAD_SYM(FT_GetComPortNumber);
+	LOAD_SYM(FT_Close);
+	
+	ftStatus = FT_ListDevices(&numDevs, NULL, FT_LIST_NUMBER_ONLY);
+	if (ftStatus != FT_OK) {
+		applog(LOG_DEBUG, "FTDI device count failed, not using FTDI autodetect");
+		goto out;
+	}
+	applog(LOG_DEBUG, "FTDI reports %u devices", (unsigned)numDevs);
+
+	buf = alloca(65 * numDevs);
+	bufptrs = alloca(sizeof(*bufptrs) * (numDevs + 1));
+
+	for (i = 0; i < numDevs; ++i)
+		bufptrs[i] = &buf[i * 65];
+	bufptrs[numDevs] = NULL;
+	ftStatus = FT_ListDevices(bufptrs, &numDevs, FT_LIST_ALL | FT_OPEN_BY_DESCRIPTION);
+	if (ftStatus != FT_OK) {
+		applog(LOG_DEBUG, "FTDI device list failed, not using FTDI autodetect");
+		goto out;
+	}
+	
+	for (i = numDevs; i > 0; ) {
+		--i;
+		bufptrs[i][64] = '\0';
+		
+		if (!(strstr(bufptrs[i], needle) && (!needle2 || strstr(bufptrs[i], needle2))))
+			continue;
+		
+		FT_HANDLE ftHandle;
+		if (FT_OK != FT_Open(i, &ftHandle))
+			continue;
+		LONG lComPortNumber;
+		ftStatus = FT_GetComPortNumber(ftHandle, &lComPortNumber);
+		FT_Close(ftHandle);
+		if (FT_OK != ftStatus || lComPortNumber < 0)
+			continue;
+		
+		sprintf(devpathnum, "%d", (int)lComPortNumber);
+		
+		if (detectone(devpath))
+			++found;
+	}
+
+out:
+	dlclose(dll);
+	return found;
+}
+#else
+int serial_autodetect_ftdi(__maybe_unused detectone_func_t detectone, __maybe_unused const char *needle, __maybe_unused const char *needle2)
+{
+	return 0;
+}
+#endif
+
+struct device_api *serial_claim(const char *devpath, struct device_api *api);
+
 int
-_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
+_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;
 	const char*s, *p;
 	bool inhibitauto = false;
 	char found = 0;
+	bool forceauto = flags & 1;
+	bool hasname;
 	size_t dnamel = strlen(dname);
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
@@ -124,15 +226,27 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 			if (plen != dnamel || strncasecmp(s, dname, plen))
 				continue;
 			s = p + 1;
+			hasname = true;
 		}
+		else
+			hasname = false;
 		if (!strcmp(s, "auto"))
 			forceauto = true;
 		else
 		if (!strcmp(s, "noauto"))
 			inhibitauto = true;
 		else
+		if ((flags & 2) && !hasname)
+			continue;
+		else
 		if (!detectone)
 		{}  // do nothing
+		else
+		if (serial_claim(s, NULL))
+		{
+			applog(LOG_DEBUG, "%s is already claimed... skipping probes", s);
+			string_elist_del(iter);
+		}
 		else
 		if (detectone(s)) {
 			string_elist_del(iter);
@@ -145,6 +259,56 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 		found += autoscan();
 
 	return found;
+}
+
+#ifndef WIN32
+typedef dev_t my_dev_t;
+#else
+typedef int my_dev_t;
+#endif
+
+struct _device_claim {
+	struct device_api *api;
+	my_dev_t dev;
+	UT_hash_handle hh;
+};
+
+struct device_api *serial_claim(const char *devpath, struct device_api *api)
+{
+	static struct _device_claim *claims = NULL;
+	struct _device_claim *c;
+	my_dev_t dev;
+
+#ifndef WIN32
+	{
+		struct stat my_stat;
+		if (stat(devpath, &my_stat))
+			return NULL;
+		dev = my_stat.st_rdev;
+	}
+#else
+	{
+		char *p = strstr(devpath, "COM"), *p2;
+		if (!p)
+			return NULL;
+		dev = strtol(&p[3], &p2, 10);
+		if (p2 == p)
+			return NULL;
+	}
+#endif
+
+	HASH_FIND(hh, claims, &dev, sizeof(dev), c);
+	if (c)
+		return c->api;
+
+	if (!api)
+		return NULL;
+
+	c = malloc(sizeof(*c));
+	c->dev = dev;
+	c->api = api;
+	HASH_ADD(hh, claims, dev, sizeof(dev), c);
+	return NULL;
 }
 
 // This code is purely for debugging but is very useful for that

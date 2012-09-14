@@ -17,17 +17,22 @@
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
 
-extern int _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, bool force_autoscan);
+extern int _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, int flags);
 #define serial_detect_fauto(dname, detectone, autoscan)  \
-	_serial_detect(dname, detectone, autoscan, true)
+	_serial_detect(dname, detectone, autoscan, 1)
 #define serial_detect_auto(dname, detectone, autoscan)  \
-	_serial_detect(dname, detectone, autoscan, false)
+	_serial_detect(dname, detectone, autoscan, 0)
+#define serial_detect_auto_byname(dname, detectone, autoscan)  \
+	_serial_detect(dname, detectone, autoscan, 2)
 #define serial_detect(dname, detectone)  \
-	_serial_detect(dname, detectone,     NULL, false)
+	_serial_detect(dname, detectone,     NULL, 0)
 #define noserial_detect(dname, autoscan)  \
-	_serial_detect(dname, NULL     , autoscan, false)
+	_serial_detect(dname, NULL     , autoscan, 0)
 extern int serial_autodetect_devserial(detectone_func_t, const char*prodname);
 extern int serial_autodetect_udev     (detectone_func_t, const char*prodname);
+extern int serial_autodetect_ftdi     (detectone_func_t, const char*needle, const char *needle2);
+
+extern struct device_api *serial_claim(const char *devpath, struct device_api *);
 
 extern int serial_open(const char*devpath, unsigned long baud, uint8_t timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char*eol);

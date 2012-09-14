@@ -42,7 +42,7 @@ Icarus
 There are two hidden options in cgminer when Icarus support is compiled in:
 
 --icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
-           baud:work_division:fpga_count
+           baud:work_division:fpga_count:quirks
 
            baud           The Serial/USB baud rate - 115200 or 57600 only - default 115200
            work_division  The fraction of work divided up for each FPGA chip - 1, 2, 4 or 8
@@ -51,13 +51,17 @@ There are two hidden options in cgminer when Icarus support is compiled in:
                           as work_division - range is from 1 up to 'work_division'
                           It defaults to the value of work_division - or 2 if you don't specify
                           work_division
+           quirks         List of quirks to enable and disable (after a minus sign):
+                            r  Reopen device regularly to workaround buggy Icarus USB chipset
+                               (enabled by default)
 
 If you define fewer comma seperated values than Icarus devices, the last values will be used
 for all extra devices
 
-An example would be: --icarus-options 57600:2:1
+An example would be: --icarus-options 57600:2:1:-r
 This would mean: use 57600 baud, the FPGA board divides the work in half however
-only 1 FPGA actually runs on the board (e.g. like an early CM1 Icarus copy bitstream)
+only 1 FPGA actually runs on the board, and don't reopen the device (e.g. like
+an early CM1 Icarus copy bitstream)
 
 --icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
            default[=N]   Use the default Icarus hash time (2.6316ns)

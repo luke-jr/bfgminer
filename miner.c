@@ -5768,6 +5768,7 @@ extern struct device_api bitforce_api;
 #endif
 
 #ifdef USE_ICARUS
+extern struct device_api cairnsmore_api;
 extern struct device_api icarus_api;
 #endif
 
@@ -5803,7 +5804,7 @@ struct _cgpu_devid_counter {
 	UT_hash_handle hh;
 };
 
-bool add_cgpu(struct cgpu_info*cgpu)
+void renumber_cgpu(struct cgpu_info *cgpu)
 {
 	static struct _cgpu_devid_counter *devids = NULL;
 	struct _cgpu_devid_counter *d;
@@ -5817,6 +5818,11 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
+}
+
+bool add_cgpu(struct cgpu_info*cgpu)
+{
+	renumber_cgpu(cgpu);
 	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + 2));
 	devices[total_devices++] = cgpu;
 	return true;
@@ -6033,7 +6039,10 @@ int main(int argc, char *argv[])
 
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
+	{
+		cairnsmore_api.api_detect();
 		icarus_api.api_detect();
+	}
 #endif
 
 #ifdef USE_BITFORCE

@@ -88,7 +88,8 @@ endif
 endif
 
 if HAS_ICARUS
-bfgminer_SOURCES += driver-icarus.c
+bfgminer_SOURCES += driver-icarus.c icarus-common.h
+bfgminer_SOURCES += driver-cairnsmore.c
 endif
 
 if HAS_MODMINER

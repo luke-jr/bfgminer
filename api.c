@@ -606,6 +606,7 @@ extern struct device_api bitforce_api;
 #endif
 
 #ifdef USE_ICARUS
+extern struct device_api cairnsmore_api;
 extern struct device_api icarus_api;
 #endif
 
@@ -1037,6 +1038,8 @@ static int numpgas()
 			count++;
 #endif
 #ifdef USE_ICARUS
+		if (devices[i]->api == &cairnsmore_api)
+			count++;
 		if (devices[i]->api == &icarus_api)
 			count++;
 #endif
@@ -1063,6 +1066,8 @@ static int pgadevice(int pgaid)
 			count++;
 #endif
 #ifdef USE_ICARUS
+		if (devices[i]->api == &cairnsmore_api)
+			count++;
 		if (devices[i]->api == &icarus_api)
 			count++;
 #endif
