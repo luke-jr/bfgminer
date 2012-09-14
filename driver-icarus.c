@@ -357,17 +357,19 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		if ((eq = strchr(buf, '=')) != NULL)
 			info->read_count = atoi(eq+1);
 
-		if (icarus->api == &icarus_api) {
-			info->do_default_detection = 0x10;
-			if (info->read_count < 1)
-				info->read_count = ICARUS_READ_COUNT_TIMING;
-		} else {
-			if (info->read_count < 1)
-				info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
-		}
+		int def_read_count = ICARUS_READ_COUNT_TIMING;
 
-		info->timing_mode = MODE_DEFAULT;
-		info->do_icarus_timing = false;
+		if (info->timing_mode == MODE_DEFAULT) {
+			if (icarus->api == &icarus_api) {
+				info->do_default_detection = 0x10;
+			} else {
+				def_read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+			}
+
+			info->do_icarus_timing = false;
+		}
+		if (info->read_count < 1)
+			info->read_count = def_read_count;
 	}
 
 	info->min_data_count = MIN_DATA_COUNT;
@@ -620,6 +622,7 @@ static bool icarus_detect_one(const char *devpath)
 	info->fpga_count = 2;
 	info->quirk_reopen = 1;
 	info->Hs = ICARUS_REV3_HASH_TIME;
+	info->timing_mode = MODE_DEFAULT;
 
 	if (!icarus_detect_custom(devpath, &icarus_api, info)) {
 		free(info);

@@ -12,6 +12,8 @@
 #include "miner.h"
 
 #define CAIRNSMORE1_IO_SPEED 115200
+
+// This is a general ballpark
 #define CAIRNSMORE1_HASH_TIME 0.0000000024484
 
 struct device_api cairnsmore_api;
@@ -27,6 +29,8 @@ static bool cairnsmore_detect_one(const char *devpath)
 	info->fpga_count = 2;
 	info->quirk_reopen = false;
 	info->Hs = CAIRNSMORE1_HASH_TIME;
+	info->timing_mode = MODE_SHORT;
+	info->do_icarus_timing = true;
 
 	if (!icarus_detect_custom(devpath, &cairnsmore_api, info)) {
 		free(info);
@@ -55,7 +59,8 @@ void convert_icarus_to_cairnsmore(struct cgpu_info *cm1)
 	struct ICARUS_INFO *info = cm1->cgpu_data;
 	info->Hs = CAIRNSMORE1_HASH_TIME;
 	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-	info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+	info->timing_mode = MODE_SHORT;
+	info->do_icarus_timing = true;
 	cm1->api = &cairnsmore_api;
 	renumber_cgpu(cm1);
 }
