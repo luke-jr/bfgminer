@@ -206,6 +206,8 @@ int serial_autodetect_ftdi(__maybe_unused detectone_func_t detectone, __maybe_un
 }
 #endif
 
+struct device_api *serial_claim(const char *devpath, struct device_api *api);
+
 int
 _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
@@ -236,6 +238,12 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 		else
 		if ((flags & 2) && !hasname)
 			continue;
+		else
+		if (serial_claim(s, NULL))
+		{
+			applog(LOG_DEBUG, "%s is already claimed... skipping probes", s);
+			string_elist_del(iter);
+		}
 		else
 		if (detectone(s)) {
 			string_elist_del(iter);
