@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <unistd.h>
 
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
