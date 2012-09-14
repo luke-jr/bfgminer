@@ -26,6 +26,7 @@ static bool cairnsmore_detect_one(const char *devpath)
 	info->work_division = 2;
 	info->fpga_count = 2;
 	info->quirk_reopen = false;
+	info->Hs = CAIRNSMORE1_HASH_TIME;
 
 	if (!icarus_detect_custom(devpath, &cairnsmore_api, info)) {
 		free(info);
