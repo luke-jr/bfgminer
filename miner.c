@@ -2310,13 +2310,12 @@ static void get_benchmark_work(struct work *work)
 	work->pool = pools[0];
 }
 
-static char *prepare_rpc_req(struct work *work)
+static char *prepare_rpc_req(struct work *work, enum pool_protocol proto)
 {
 	// FIXME: error checking
-	struct pool *pool = work->pool;
 	char *rpc_req;
 
-	switch (pool->proto) {
+	switch (proto) {
 		case PLP_GETWORK:
 			work->tmpl = NULL;
 			return strdup(getwork_rpc_req);
@@ -2328,19 +2327,30 @@ static char *prepare_rpc_req(struct work *work)
 			rpc_req = json_dumps(req, 0);
 			json_decref(req);
 			return rpc_req;
-	}
-	return false;
-}
-
-static bool pool_proto_fallback(struct pool *pool)
-{
-	switch (pool->proto) {
-		case PLP_GETBLOCKTEMPLATE:
-			applog(LOG_WARNING, "Pool %u failed getblocktemplate request; falling back to getwork protocol", pool->pool_no);
-			pool->proto = PLP_GETWORK;
-			return true;
 		default:
 			return false;
+	}
+}
+
+static const char *pool_protocol_name(enum pool_protocol proto)
+{
+	switch (proto) {
+		case PLP_GETBLOCKTEMPLATE:
+			return "getblocktemplate";
+		case PLP_GETWORK:
+			return "getwork";
+		default:
+			return "UNKNOWN";
+	}
+}
+
+static enum pool_protocol pool_protocol_fallback(enum pool_protocol proto)
+{
+	switch (proto) {
+		case PLP_GETBLOCKTEMPLATE:
+			return PLP_GETWORK;
+		default:
+			return PLP_NONE;
 	}
 }
 
@@ -2352,11 +2362,12 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	json_t *val = NULL;
 	bool rc = false;
 	char *url;
+	enum pool_protocol proto;
 
 	char *rpc_req;
 
 tryagain:
-	rpc_req = prepare_rpc_req(work);
+	rpc_req = prepare_rpc_req(work, pool->proto);
 
 	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
@@ -2374,7 +2385,9 @@ tryagain:
 		rc = work_decode(json_object_get(val, "result"), work);
 		if (unlikely(!rc))
 			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
-	} else if (pool_proto_fallback(pool)) {
+	} else if (PLP_NONE != (proto = pool_protocol_fallback(pool->proto))) {
+		applog(LOG_WARNING, "Pool %u failed getblocktemplate request; falling back to getwork protocol", pool->pool_no);
+		pool->proto = proto;
 		goto tryagain;
 	} else
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
@@ -4454,6 +4467,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	int rolltime;
 	char *rpc_req;
 	struct work *work;
+	enum pool_protocol proto;
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
@@ -4463,10 +4477,10 @@ static bool pool_active(struct pool *pool, bool pinging)
 
 	work = make_work();
 	work->pool = pool;
-	pool->proto = PLP_GETBLOCKTEMPLATE;
+	proto = PLP_GETBLOCKTEMPLATE;
 
 tryagain:
-	rpc_req = prepare_rpc_req(work);
+	rpc_req = prepare_rpc_req(work, proto);
 
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
@@ -4474,8 +4488,13 @@ tryagain:
 
 	if (val) {
 		bool rc;
+		json_t *res;
 
-		rc = work_decode(json_object_get(val, "result"), work);
+		res = json_object_get(val, "result");
+		if ((!json_is_object(res)) || (proto == PLP_GETBLOCKTEMPLATE && !json_object_get(res, "bits")))
+			goto badwork;
+
+		rc = work_decode(res, work);
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -4489,9 +4508,13 @@ tryagain:
 			ret = true;
 			gettimeofday(&pool->tv_idle, NULL);
 		} else {
+badwork:
 			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
+			if (PLP_NONE != (proto = pool_protocol_fallback(proto)))
+				goto tryagain;
 			free_work(work);
+			goto out;
 		}
 		json_decref(val);
 
@@ -4529,7 +4552,12 @@ tryagain:
 			if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
 				quit(1, "Failed to create pool longpoll thread");
 		}
-	} else if (pool_proto_fallback(pool)) {
+
+		if (proto != pool->proto) {
+			pool->proto = proto;
+			applog(LOG_INFO, "Selected %s protocol for pool %u", pool_protocol_name(proto), pool->pool_no);
+		}
+	} else if (PLP_NONE != (proto = pool_protocol_fallback(proto))) {
 		goto tryagain;
 	} else {
 		free_work(work);

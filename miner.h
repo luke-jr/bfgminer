@@ -796,6 +796,7 @@ enum pool_enable {
 };
 
 enum pool_protocol {
+	PLP_NONE,
 	PLP_GETWORK,
 	PLP_GETBLOCKTEMPLATE,
 };
