@@ -30,6 +30,8 @@ extern int serial_autodetect_devserial(detectone_func_t, const char*prodname);
 extern int serial_autodetect_udev     (detectone_func_t, const char*prodname);
 extern int serial_autodetect_ftdi     (detectone_func_t, const char*needle, const char *needle2);
 
+extern struct device_api *serial_claim(const char *devpath, struct device_api *);
+
 extern int serial_open(const char*devpath, unsigned long baud, uint8_t timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char*eol);
 #define serial_read(fd, buf, count)  \

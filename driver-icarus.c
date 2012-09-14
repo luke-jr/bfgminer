@@ -576,6 +576,12 @@ bool icarus_detect_custom(const char *devpath, struct device_api *api, struct IC
 	} else
 		return false;
 
+	if (serial_claim(devpath, api)) {
+		const char *claimedby = serial_claim(devpath, api)->dname;
+		applog(LOG_DEBUG, "Icarus device %s already claimed by other driver: %s", devpath, claimedby);
+		return false;
+	}
+
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;
 	icarus = calloc(1, sizeof(struct cgpu_info));

@@ -11,6 +11,7 @@
 #include "config.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <string.h>
@@ -247,6 +248,56 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 		found += autoscan();
 
 	return found;
+}
+
+#ifndef WIN32
+typedef dev_t my_dev_t;
+#else
+typedef int my_dev_t;
+#endif
+
+struct _device_claim {
+	struct device_api *api;
+	my_dev_t dev;
+	UT_hash_handle hh;
+};
+
+struct device_api *serial_claim(const char *devpath, struct device_api *api)
+{
+	static struct _device_claim *claims = NULL;
+	struct _device_claim *c;
+	my_dev_t dev;
+
+#ifndef WIN32
+	{
+		struct stat my_stat;
+		if (stat(devpath, &my_stat))
+			return NULL;
+		dev = my_stat.st_rdev;
+	}
+#else
+	{
+		char *p = strstr(devpath, "COM"), *p2;
+		if (!p)
+			return NULL;
+		dev = strtol(&p[3], &p2, 10);
+		if (p2 == p)
+			return NULL;
+	}
+#endif
+
+	HASH_FIND(hh, claims, &dev, sizeof(dev), c);
+	if (c)
+		return c->api;
+
+	if (!api)
+		return NULL;
+
+	c = malloc(sizeof(*c));
+	c->dev = dev;
+	c->api = api;
+	HASH_ADD(hh, claims, dev, sizeof(dev), c);
+	return NULL;
 }
 
 // This code is purely for debugging but is very useful for that
