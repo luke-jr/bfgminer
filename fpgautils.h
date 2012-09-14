@@ -17,13 +17,15 @@
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
 
-extern int _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, bool force_autoscan);
+extern int _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, int flags);
 #define serial_detect_fauto(dname, detectone, autoscan)  \
-	_serial_detect(dname, detectone, autoscan, true)
+	_serial_detect(dname, detectone, autoscan, 1)
 #define serial_detect_auto(dname, detectone, autoscan)  \
-	_serial_detect(dname, detectone, autoscan, false)
+	_serial_detect(dname, detectone, autoscan, 0)
+#define serial_detect_auto_byname(dname, detectone, autoscan)  \
+	_serial_detect(dname, detectone, autoscan, 2)
 #define serial_detect(dname, detectone)  \
-	_serial_detect(dname, detectone,     NULL, false)
+	_serial_detect(dname, detectone,     NULL, 0)
 extern int serial_autodetect_devserial(detectone_func_t, const char*prodname);
 extern int serial_autodetect_udev     (detectone_func_t, const char*prodname);
 

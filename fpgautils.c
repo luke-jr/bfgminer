@@ -109,12 +109,14 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 }
 
 int
-_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
+_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;
 	const char*s, *p;
 	bool inhibitauto = false;
 	char found = 0;
+	bool forceauto = flags & 1;
+	bool hasname;
 	size_t dnamel = strlen(dname);
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
@@ -124,12 +126,18 @@ _serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t aut
 			if (plen != dnamel || strncasecmp(s, dname, plen))
 				continue;
 			s = p + 1;
+			hasname = true;
 		}
+		else
+			hasname = false;
 		if (!strcmp(s, "auto"))
 			forceauto = true;
 		else
 		if (!strcmp(s, "noauto"))
 			inhibitauto = true;
+		else
+		if ((flags & 2) && !hasname)
+			continue;
 		else
 		if (detectone(s)) {
 			string_elist_del(iter);

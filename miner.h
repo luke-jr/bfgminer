@@ -367,6 +367,7 @@ struct cgpu_info {
 	bool nonce_range;
 	bool polling;
 #endif
+	void *cgpu_data;
 	pthread_mutex_t		device_mutex;
 
 	enum dev_enable deven;
@@ -447,6 +448,7 @@ struct cgpu_info {
 	struct cgminer_stats cgminer_stats;
 };
 
+extern void renumber_cgpu(struct cgpu_info *);
 extern bool add_cgpu(struct cgpu_info*);
 
 struct thread_q {
