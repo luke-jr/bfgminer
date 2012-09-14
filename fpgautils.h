@@ -28,6 +28,7 @@ extern int _serial_detect(const char*dname, detectone_func_t, autoscan_func_t, i
 	_serial_detect(dname, detectone,     NULL, 0)
 extern int serial_autodetect_devserial(detectone_func_t, const char*prodname);
 extern int serial_autodetect_udev     (detectone_func_t, const char*prodname);
+extern int serial_autodetect_ftdi     (detectone_func_t, const char*needle, const char *needle2);
 
 extern int serial_open(const char*devpath, unsigned long baud, uint8_t timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char*eol);

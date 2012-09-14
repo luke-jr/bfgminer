@@ -39,6 +39,7 @@ static int cairnsmore_detect_auto(void)
 	return
 	serial_autodetect_udev     (cairnsmore_detect_one, "*Cairnsmore1*") ?:
 	serial_autodetect_devserial(cairnsmore_detect_one, "Cairnsmore1") ?:
+	serial_autodetect_ftdi     (cairnsmore_detect_one, "Cairnsmore1", NULL) ?:
 	0;
 }
 
