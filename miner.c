@@ -33,6 +33,9 @@
 
 #ifndef WIN32
 #include <sys/resource.h>
+#include <sys/socket.h>
+#else
+#include <winsock2.h>
 #endif
 #include <ccan/opt/opt.h>
 #include <jansson.h>
@@ -425,6 +428,8 @@ static struct pool *add_pool(void)
 	pool->tv_idle.tv_sec = ~0UL;
 
 	pool->rpc_proxy = NULL;
+
+	pool->lp_socket = CURL_SOCKET_BAD;
 
 	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
@@ -1464,7 +1469,18 @@ static bool work_decode(const json_t *val, struct work *work)
 		if ((lp = blktmpl_get_longpoll(work->tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
 			free(pool->lp_id);
 			pool->lp_id = strdup(lp->id);
-			// FIXME: restart LP request
+			
+			curl_socket_t sock = pool->lp_socket;
+			if (sock != CURL_SOCKET_BAD) {
+				applog(LOG_WARNING, "Pool %u long poll request hanging, reconnecting", pool->pool_no);
+				shutdown(sock,
+#ifndef WIN32
+				         SHUT_RDWR
+#else
+				         SD_BOTH
+#endif
+				);
+			}
 		}
 	}
 	else
@@ -5208,6 +5224,13 @@ static void wait_lpcurrent(struct pool *pool)
 	}
 }
 
+static curl_socket_t save_curl_socket(void *vpool, __maybe_unused curlsocktype purpose, struct curl_sockaddr *addr) {
+	struct pool *pool = vpool;
+	curl_socket_t sock = socket(addr->family, addr->socktype, addr->protocol);
+	pool->lp_socket = sock;
+	return sock;
+}
+
 static void *longpoll_thread(void *userdata)
 {
 	struct pool *cp = (struct pool *)userdata;
@@ -5264,8 +5287,11 @@ retry_pool:
 		 * so always establish a fresh connection instead of relying on
 		 * a persistent one. */
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
+		curl_easy_setopt(curl, CURLOPT_OPENSOCKETFUNCTION, save_curl_socket);
+		curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
 		val = json_rpc_call(curl, pool->lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool, false);
+		pool->lp_socket = CURL_SOCKET_BAD;
 		if (likely(val)) {
 			soval = json_object_get(json_object_get(val, "result"), "submitold");
 			if (soval)

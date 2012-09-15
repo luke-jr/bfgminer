@@ -829,6 +829,7 @@ struct pool {
 	char *lp_url;
 	char *lp_id;
 	enum pool_protocol lp_proto;
+	curl_socket_t lp_socket;
 
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
