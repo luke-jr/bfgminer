@@ -365,7 +365,7 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.19
+API V1.19 (BFGMiner v2.8.0)
 
 Added API commands:
  'debug'

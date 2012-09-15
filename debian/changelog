@@ -1,3 +1,16 @@
+bfgminer (2.8.0-0precise1) precise; urgency=low
+
+  * Basic getblocktemplate decentralized mining protocol support, including rolling extranonce (based on libblkmaker 0.1).
+  * New Cairnsmore driver, including autodetection (based in part on Kano's Icarus "timing" feature).
+  * Support for per-pool proxies, based in part on Kano's similar work (but cleaned up and not compatible).
+  * Numerous minor fixups to Ztex driver.
+  * Minor improvements to Icarus driver, including the ability to disable the reopen quirk and detection when the default hash speed is wrong.
+  * Updated RPC API from Kano to include debug and setconfig methods.
+  * Updated miner.php from Kano to hide IP addresses for security (configurable).
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 15 Sep 2012 20:57:28 -0000
+
+
 bfgminer (2.7.5-0precise1) precise; urgency=low
 
   * ModMiner: Revamped the dynamic clocking algorithm to keep FPGAs at higher speeds with fewer hardware errors.

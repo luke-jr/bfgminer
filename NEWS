@@ -1,5 +1,70 @@
-BFGMiner Version 2.7.6 - Future
+BFGMiner Version 2.8.0 - September 15, 2012
 
+- Be specific about jansson version requirement
+- Replace "Alive" in pool status with protocol in use (GBT or GWork)
+- Remove copy of old jansson from source repository
+- Honour block template expiry (BIP 23 Basic Pool Extensions "expires")
+- Add --no-gbt option so getblocktemplate can be disabled if it causes
+problems
+- BIP 22 long polling
+- Properly detect pool protocol
+- Bugfix: Sort out work template refcounting by properly using work_free and
+new workcpy
+- Support for rolling extranonce in templates
+- Initial libblkmaker integration, using a git submodule
+- cairnsmore: There's no set hashrate like Icarus, so always use short timing
+mode by default
+- Bugfix: Include unistd.h needed for ssize_t type
+- fpgautils: Don't try to scan serial at all anymore, if a device is claimed
+- fpgautils: serial_claim function to politely ask other drivers not to try to
+use device
+- RPC: Update to work with Cairnsmore
+- cairnsmore: Windows autodetect using FTDI library
+- cairnsmore: Beginnings of new driver, with automatic upgrade from Icarus
+detection
+- icarus: Support disabling reopen quirk via --icarus-options
+- proxy: Replace mess of encoding proxy into pool URI with a --pool-proxy
+option, and use cURL's builtin proxy URI support
+- save individual pool proxy settings to config
+- API-README update for pools proxy info
+- CURL support for individual proxy per pool and all proxy types
+- Bugfix: Update current_block_id for fixed set_curblock
+- miner.php by default don't display IP/Port numbers in error messages
+- api.c all STATUS messages automatically escaped
+- API add display of and setting queue,scantime,expiry
+- README - FPGA device FAQ
+- API add device diff1 work
+- count device diff1 shares
+- API-README update
+- api.c Correct diff1 field name
+- Bugfix: Sanitize block hash handling (including fixing on big endian)
+- Bugfix: Print the (full) correct block hash when warning about work issued
+against old blocks
+- Bugfix: When comparing current block, only pay attention to the prevblock
+header
+- Allow mixing user+pass and userpass, so long as user+pass are balanced
+before userpass options
+- ztex: Include device serial number and FPGA number in cgpu name field
+- ztex: Abstract common cgpu_info creation code
+- ztex: Do thread initialization in thread_init rather than thread_prepare
+- Bugfix: Tolerate working on old blocks when there is only one pool enabled
+- Bugfix: ztex: Detect through fpgautils so -S noauto correctly inhibits
+autodetection
+- ztex: Workaround duplicate share submissions by doubling "backlog" size
+- ztex: Use consistent device ids for logging
+- Bugfix: ztex: Increment global hw_errors too
+- Bugfix: free adhoc string elist element when removing it from list
+- Bugfix: icarus: Initialize lret variable after work restart reentry
+- Bugfix: ztex: Free lastnonce heap memory if backlog allocation fails
+- icarus: Initialize epoll event structure in a way Valgrind is happier with
+- Bugfix: Use strtok_r for parse_config since some options use strtok
+themselves
+- Import strtok_r from gnulib for Windows portability
+- Bugfix: ztex: Don't try to destroy a mutex that was never created (single
+FPGA Ztex devices)
+- ztex: Clean up redundant dereferencing in ztex_shutdown
+- API-README more debug parameter information
+- API allow full debug settings control
 - Sort the blocks database in reverse order, allowing us to remove the first
 block without iterating over them. Output the block number to debug.
 - Adjust opencl intensity when adjusting thread count to prevent it getting
