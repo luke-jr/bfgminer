@@ -142,6 +142,7 @@ bool opt_delaynet;
 bool opt_disable_pool = true;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
+bool opt_worktime;
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1063,6 +1064,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITHOUT_ARG("--worktime",
+			opt_set_bool, &opt_worktime,
+			"Display extra work time debug information"),
 	OPT_WITH_ARG("--pools",
 			opt_set_bool, NULL, NULL, opt_hidden),
 	OPT_ENDTABLE
@@ -1765,6 +1769,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	int rolltime;
 	uint32_t *hash32;
 	char hashshow[64+1] = "";
+	char worktime[200] = "";
 
 #ifdef __BIG_ENDIAN__
         int swapcounter = 0;
@@ -1789,8 +1794,10 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
 
+	gettimeofday((struct timeval *)&(work->tv_submit), NULL);
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
+	gettimeofday((struct timeval *)&(work->tv_submit_reply), NULL);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
@@ -1812,6 +1819,27 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 			sprintf(hashshow, "%08lx.%08lx%s", (unsigned long)(hash32[6]), (unsigned long)(hash32[5]),
 				work->block? " BLOCK!" : "");
 		}
+
+		if (opt_worktime) {
+			double getwork_time = tdiff((struct timeval *)&(work->tv_getwork_reply),
+							(struct timeval *)&(work->tv_getwork));
+			double getwork_to_work = tdiff((struct timeval *)&(work->tv_work_start),
+							(struct timeval *)&(work->tv_getwork_reply));
+			double work_time = tdiff((struct timeval *)&(work->tv_work_finish),
+							(struct timeval *)&(work->tv_work_start));
+			double work_to_submit = tdiff((struct timeval *)&(work->tv_submit),
+							(struct timeval *)&(work->tv_work_finish));
+			double submit_time = tdiff((struct timeval *)&(work->tv_submit_reply),
+							(struct timeval *)&(work->tv_submit));
+			struct tm *tm = localtime(&(work->tv_submit_reply.tv_sec));
+			sprintf(worktime, " <-%08lx.%08lx %c G:%1.3f (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
+				(unsigned long)swab32(*(uint32_t *)&(work->data[28])),
+				(unsigned long)swab32(*(uint32_t *)&(work->data[24])),
+				work->clone ? 'C' : 'O',
+				getwork_time, getwork_to_work, work_time,
+				work_to_submit, submit_time,
+				tm->tm_hour, tm->tm_min, tm->tm_sec);
+		}
 	}
 
 	/* Theoretically threads could race when modifying accepted and
@@ -1828,11 +1856,11 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s",
-				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "");
+				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s%s",
+				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
 			else
-				applog(LOG_NOTICE, "Accepted %s %s %d %s",
-				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "");
+				applog(LOG_NOTICE, "Accepted %s %s %d %s%s",
+				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -1881,8 +1909,8 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 			} else
 				strcpy(reason, "");
 
-			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s",
-			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "");
+			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s%s",
+			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "", worktime);
 			sharelog(disposition, work);
 		}
 
@@ -2000,7 +2028,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 {
 	struct pool *pool = work->pool;
 	struct cgminer_pool_stats *pool_stats = &(pool->cgminer_pool_stats);
-	struct timeval tv_start, tv_end, tv_elapsed;
+	struct timeval tv_elapsed;
 	json_t *val = NULL;
 	bool rc = false;
 	char *url;
@@ -2009,7 +2037,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 
 	url = pool->rpc_url;
 
-	gettimeofday(&tv_start, NULL);
+	gettimeofday(&(work->tv_getwork), NULL);
 
 	val = json_rpc_call(curl, url, pool->rpc_userpass, rpc_req, false,
 			    false, &work->rolltime, pool, false);
@@ -2022,8 +2050,8 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	} else
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 
-	gettimeofday(&tv_end, NULL);
-	timersub(&tv_end, &tv_start, &tv_elapsed);
+	gettimeofday(&(work->tv_getwork_reply), NULL);
+	timersub(&(work->tv_getwork_reply), &(work->tv_getwork), &tv_elapsed);
 	pool_stats->getwork_wait_rolling += ((double)tv_elapsed.tv_sec + ((double)tv_elapsed.tv_usec / 1000000)) * 0.63;
 	pool_stats->getwork_wait_rolling /= 1.63;
 
@@ -3425,12 +3453,13 @@ static void display_options(void)
 	clear_logwin();
 retry:
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
-	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n[R]PC debug:%s\n[L]og interval:%d\n",
+	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n[R]PC debug:%s\n[W]orkTime details:%s\n[L]og interval:%d\n",
 		opt_debug ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
 		opt_quiet ? "on" : "off",
 		opt_log_output ? "on" : "off",
 		opt_protocol ? "on" : "off",
+		opt_worktime ? "on" : "off",
 		opt_log_interval);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
@@ -3483,6 +3512,10 @@ retry:
 		goto retry;
 	} else if (!strncasecmp(&input, "s", 1)) {
 		opt_realquiet = true;
+	} else if (!strncasecmp(&input, "w", 1)) {
+		opt_worktime ^= true;
+		wlogprint("WorkTime details %s\n", opt_worktime ? "enabled" : "disabled");
+		goto retry;
 	} else
 		clear_logwin();
 
@@ -4214,6 +4247,8 @@ static bool test_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	gettimeofday(&(work->tv_work_finish), NULL);
+
 	total_diff1++;
 	thr->cgpu->diff1++;
 	work->pool->diff1++;
@@ -4337,6 +4372,8 @@ void *miner_thread(void *userdata)
 				pool_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
 			}
 			pool_stats->getwork_calls++;
+
+			gettimeofday(&(work->tv_work_start), NULL);
 
 			thread_reportin(mythr);
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);

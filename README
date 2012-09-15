@@ -473,6 +473,22 @@ it will log to a file called logfile.txt and otherwise work the same.
 There is also the -m option on linux which will spawn a command of your choice
 and pipe the output directly to that command.
 
+The WorkTime details 'debug' option adds details on the end of each line
+displayed for Accepted or Rejected work done. An example would be:
+
+  <-00000223.95214f4c O G:0.524 (97.672) W:4.910 (0.000) S:0.577 R:13:49:55
+
+The first 2 hex codes are the previous block hash, the rest are reported in
+seconds unless stated otherwise:
+The previous hash is followed by 'C' or 'O' if the work was cloned or original,
+G:n.nnn is how long the original getwork to the pool took, (m.mmm) is how long
+from the original getwork complete until work started, W:n.nnn is how long the
+work took to process until it was ready to submit, (m.mmm) is how long from
+ready to submit to actually doing the submit, this is usually 0.000 unless
+there was a problem with the first attempt at submitting the work, S:n.nnn
+is how long it took to submit the work and await the reply, R:hh:mm:ss is the
+actual time the work submit reply was received - so you can count back from
+that to work out each absolute time
 
 If you start cgminer with the --sharelog option, you can get detailed
 information for each share found. The argument to the option may be "-" for

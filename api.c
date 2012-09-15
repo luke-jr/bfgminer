@@ -2911,6 +2911,10 @@ static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 		opt_quiet = false;
 		opt_protocol = false;
 		want_per_device_stats = false;
+		opt_worktime = false;
+		break;
+	case 'w':
+		opt_worktime ^= true;
 		break;
 	default:
 		// anything else just reports the settings
@@ -2928,6 +2932,7 @@ static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	root = api_add_bool(root, "Debug", &opt_debug, false);
 	root = api_add_bool(root, "RPCProto", &opt_protocol, false);
 	root = api_add_bool(root, "PerDevice", &want_per_device_stats, false);
+	root = api_add_bool(root, "WorkTime", &opt_worktime, false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)

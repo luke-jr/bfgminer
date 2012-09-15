@@ -456,6 +456,7 @@ extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
 extern double us_tdiff(struct timeval *end, struct timeval *start);
+extern double tdiff(struct timeval *end, struct timeval *start);
 
 struct string_elist {
 	char *string;
@@ -582,6 +583,7 @@ extern bool opt_delaynet;
 extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
+extern bool opt_worktime;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
@@ -829,6 +831,13 @@ struct work {
 	UT_hash_handle hh;
 
 	time_t share_found_time;
+
+	struct timeval tv_getwork;
+	struct timeval tv_getwork_reply;
+	struct timeval tv_work_start;
+	struct timeval tv_work_finish;
+	struct timeval tv_submit;
+	struct timeval tv_submit_reply;
 };
 
 #ifdef USE_MODMINER 
