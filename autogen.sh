@@ -16,7 +16,7 @@ if test -z "$NOCONFIGURE" ; then
 	cd "${bs_dir}" &> /dev/null
 	test "$?" = "0" || e=1
 	test "$cwd" != "$bs_dir" && cd "$bs_dir" &> /dev/null
-	./configure $@
+	./configure "$@"
 	test "$e" = "1" && exit 1
 	cd "$cwd"
 fi
