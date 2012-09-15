@@ -3941,17 +3941,32 @@ updated:
 		wlogprint("%d: ", pool->pool_no);
 		switch (pool->enabled) {
 			case POOL_ENABLED:
-				wlogprint("Enabled ");
+				wlogprint("Enabled  ");
 				break;
 			case POOL_DISABLED:
 				wlogprint("Disabled ");
 				break;
 			case POOL_REJECTING:
-				wlogprint("Rejecting ");
+				wlogprint("Rejectin ");
 				break;
 		}
-		wlogprint("%s Priority %d: %s  User:%s\n",
-			pool->idle? "Dead" : "Alive",
+		if (pool->idle)
+			wlogprint("Dead ");
+		else
+		if (pool->lp_url && pool->proto != pool->lp_proto)
+			wlogprint("Mixed");
+		else
+			switch (pool->proto) {
+				case PLP_GETBLOCKTEMPLATE:
+					wlogprint(" GBT ");
+					break;
+				case PLP_GETWORK:
+					wlogprint("GWork");
+					break;
+				default:
+					wlogprint("Alive");
+			}
+		wlogprint(" Priority %d: %s  User:%s\n",
 			pool->prio,
 			pool->rpc_url, pool->rpc_user);
 		wattroff(logwin, A_BOLD | A_DIM);
