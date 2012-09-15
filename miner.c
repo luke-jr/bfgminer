@@ -1458,6 +1458,14 @@ static bool work_decode(const json_t *val, struct work *work)
 		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid);
 		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0", 48);
+
+		const struct blktmpl_longpoll_req *lp;
+		struct pool *pool = work->pool;
+		if ((lp = blktmpl_get_longpoll(work->tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
+			free(pool->lp_id);
+			pool->lp_id = strdup(lp->id);
+			// FIXME: restart LP request
+		}
 	}
 	else
 	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data), true))) {
@@ -2310,7 +2318,7 @@ static void get_benchmark_work(struct work *work)
 	work->pool = pools[0];
 }
 
-static char *prepare_rpc_req(struct work *work, enum pool_protocol proto)
+static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const char *lpid)
 {
 	// FIXME: error checking
 	char *rpc_req;
@@ -2323,7 +2331,7 @@ static char *prepare_rpc_req(struct work *work, enum pool_protocol proto)
 			work->tmpl = blktmpl_create();
 			work->tmpl_refcount = malloc(sizeof(*work->tmpl_refcount));
 			*work->tmpl_refcount = 1;
-			json_t *req = blktmpl_request_jansson(blktmpl_addcaps(work->tmpl));
+			json_t *req = blktmpl_request_jansson(blktmpl_addcaps(work->tmpl), lpid);
 			rpc_req = json_dumps(req, 0);
 			json_decref(req);
 			return rpc_req;
@@ -2367,7 +2375,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	char *rpc_req;
 
 tryagain:
-	rpc_req = prepare_rpc_req(work, pool->proto);
+	rpc_req = prepare_rpc_req(work, pool->proto, NULL);
 
 	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
@@ -3596,7 +3604,7 @@ static void display_pool_summary(struct pool *pool)
 		wlog("Pool: %s\n", pool->rpc_url);
 		if (pool->solved)
 			wlog("SOLVED %d BLOCK%s!\n", pool->solved, pool->solved > 1 ? "S" : "");
-		wlog("%s own long-poll support\n", pool->hdr_path ? "Has" : "Does not have");
+		wlog("%s own long-poll support\n", pool->lp_url ? "Has" : "Does not have");
 		wlog(" Queued work requests: %d\n", pool->getwork_requested);
 		wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
 		wlog(" Accepted shares: %d\n", pool->accepted);
@@ -4459,6 +4467,30 @@ out_unlock:
 
 static void *longpoll_thread(void *userdata);
 
+// NOTE: This assumes reference URI is a root
+static char *absolute_uri(char *uri, const char *ref)
+{
+	if (strstr(uri, "://"))
+		return strdup(uri);
+
+	char *copy_start, *abs;
+	bool need_slash = false;
+
+	copy_start = (uri[0] == '/') ? &uri[1] : uri;
+	if (ref[strlen(ref) - 1] != '/')
+		need_slash = true;
+
+	abs = malloc(strlen(ref) + strlen(copy_start) + 2);
+	if (!abs) {
+		applog(LOG_ERR, "Malloc failure in absolute_uri");
+		return NULL;
+	}
+
+	sprintf(abs, "%s%s%s", ref, need_slash ? "/" : "", copy_start);
+
+	return abs;
+}
+
 static bool pool_active(struct pool *pool, bool pinging)
 {
 	bool ret = false;
@@ -4480,7 +4512,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	proto = PLP_GETBLOCKTEMPLATE;
 
 tryagain:
-	rpc_req = prepare_rpc_req(work, proto);
+	rpc_req = prepare_rpc_req(work, proto, NULL);
 
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
@@ -4527,28 +4559,21 @@ badwork:
 			goto out;
 
 		/* Decipher the longpoll URL, if any, and store it in ->lp_url */
+
+		const struct blktmpl_longpoll_req *lp;
+		if (work->tmpl && (lp = blktmpl_get_longpoll(work->tmpl))) {
+			// NOTE: work_decode takes care of lp id
+			pool->lp_url = lp->uri ? absolute_uri(lp->uri, pool->rpc_url) : pool->rpc_url;
+			if (!pool->lp_url)
+				return false;
+			pool->lp_proto = PLP_GETBLOCKTEMPLATE;
+		}
+		else
 		if (pool->hdr_path) {
-			char *copy_start, *hdr_path;
-			bool need_slash = false;
-
-			hdr_path = pool->hdr_path;
-			if (strstr(hdr_path, "://")) {
-				pool->lp_url = hdr_path;
-				hdr_path = NULL;
-			} else {
-				/* absolute path, on current server */
-				copy_start = (*hdr_path == '/') ? (hdr_path + 1) : hdr_path;
-				if (pool->rpc_url[strlen(pool->rpc_url) - 1] != '/')
-					need_slash = true;
-
-				pool->lp_url = malloc(strlen(pool->rpc_url) + strlen(copy_start) + 2);
-				if (!pool->lp_url) {
-					applog(LOG_ERR, "Malloc failure in pool_active");
-					return false;
-				}
-
-				sprintf(pool->lp_url, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
-			}
+			pool->lp_url = absolute_uri(pool->hdr_path, pool->rpc_url);
+			if (!pool->lp_url)
+				return false;
+			pool->lp_proto = PLP_GETWORK;
 		} else
 			pool->lp_url = NULL;
 
@@ -5108,12 +5133,9 @@ enum {
 };
 
 /* Stage another work item from the work returned in a longpoll */
-static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
+static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct work *work)
 {
-	struct work *work;
 	bool rc;
-
-	work = make_work();
 
 	rc = work_decode(json_object_get(val, "result"), work);
 	if (unlikely(!rc)) {
@@ -5160,12 +5182,12 @@ static struct pool *select_longpoll_pool(struct pool *cp)
 {
 	int i;
 
-	if (cp->hdr_path)
+	if (cp->lp_url)
 		return cp;
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
-		if (pool->hdr_path)
+		if (pool->lp_url)
 			return pool;
 	}
 	return NULL;
@@ -5221,14 +5243,17 @@ retry_pool:
 	wait_lpcurrent(cp);
 
 	if (cp == pool)
-		applog(LOG_WARNING, "Long-polling activated for %s", pool->lp_url);
+		applog(LOG_WARNING, "Long-polling activated via %s (%s)", pool->lp_url, pool_protocol_name(pool->lp_proto));
 	else
-		applog(LOG_WARNING, "Long-polling activated for pool %s via %s", cp->rpc_url, pool->lp_url);
+		applog(LOG_WARNING, "Long-polling activated for pool %s via %s (%s)", cp->rpc_url, pool->lp_url, pool_protocol_name(pool->lp_proto));
 
 	while (42) {
 		json_t *val, *soval;
 
-		const char *rpc_req = getwork_rpc_req;
+		struct work *work = make_work();
+		work->pool = pool;
+		const char *rpc_req;
+		rpc_req = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
 
 		wait_lpcurrent(cp);
 
@@ -5247,7 +5272,7 @@ retry_pool:
 				pool->submit_old = json_is_true(soval);
 			else
 				pool->submit_old = false;
-			convert_to_work(val, rolltime, pool);
+			convert_to_work(val, rolltime, pool, work);
 			failures = 0;
 			json_decref(val);
 		} else {
@@ -5256,6 +5281,7 @@ retry_pool:
 			 * immediately and just restart it the rest of the
 			 * time. */
 			gettimeofday(&end, NULL);
+			free_work(work);
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
 			if (failures == 1)

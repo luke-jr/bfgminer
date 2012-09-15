@@ -824,8 +824,11 @@ struct pool {
 	uint32_t	block_id;
 
 	enum pool_protocol proto;
+
 	char *hdr_path;
 	char *lp_url;
+	char *lp_id;
+	enum pool_protocol lp_proto;
 
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
