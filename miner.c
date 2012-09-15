@@ -1465,7 +1465,8 @@ static bool work_decode(const json_t *val, struct work *work)
 			goto err_out;
 		}
 		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
-		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid);
+		if (blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid) < 76)
+			goto err_out;
 		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0", 48);
 
@@ -2342,7 +2343,6 @@ static void get_benchmark_work(struct work *work)
 
 static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const char *lpid)
 {
-	// FIXME: error checking
 	char *rpc_req;
 
 	switch (proto) {
@@ -2350,18 +2350,37 @@ static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const 
 			work->tmpl = NULL;
 			return strdup(getwork_rpc_req);
 		case PLP_GETBLOCKTEMPLATE:
-			work->tmpl = blktmpl_create();
 			work->tmpl_refcount = malloc(sizeof(*work->tmpl_refcount));
+			if (!work->tmpl_refcount)
+				return NULL;
+			work->tmpl = blktmpl_create();
+			if (!work->tmpl)
+				goto gbtfail2;
 			*work->tmpl_refcount = 1;
 			gbt_capabilities_t caps = blktmpl_addcaps(work->tmpl);
+			if (!caps)
+				goto gbtfail;
 			caps |= GBT_LONGPOLL;
 			json_t *req = blktmpl_request_jansson(caps, lpid);
+			if (!req)
+				goto gbtfail;
 			rpc_req = json_dumps(req, 0);
+			if (!rpc_req)
+				goto gbtfail;
 			json_decref(req);
 			return rpc_req;
 		default:
-			return false;
+			return NULL;
 	}
+	return NULL;
+
+gbtfail:
+	blktmpl_free(work->tmpl);
+	work->tmpl = NULL;
+gbtfail2:
+	free(work->tmpl_refcount);
+	work->tmpl_refcount = NULL;
+	return NULL;
 }
 
 static const char *pool_protocol_name(enum pool_protocol proto)
@@ -2400,6 +2419,8 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 
 tryagain:
 	rpc_req = prepare_rpc_req(work, pool->proto, NULL);
+	if (!rpc_req)
+		return false;
 
 	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
@@ -2750,7 +2771,8 @@ static inline bool can_roll(struct work *work)
 static void roll_work(struct work *work)
 {
 	if (work->tmpl) {
-		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid);
+		if (blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid) < 76)
+			applog(LOG_ERR, "Failed to get next data from template; spinning wheels!");
 		swap32yes(work->data, work->data, 80 / 4);
 		calc_midstate(work);
 		applog(LOG_DEBUG, "Successfully rolled extranonce to dataid %u", work->dataid);
@@ -4535,6 +4557,8 @@ static bool pool_active(struct pool *pool, bool pinging)
 
 tryagain:
 	rpc_req = prepare_rpc_req(work, proto, NULL);
+	if (!rpc_req)
+		return false;
 
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
@@ -5283,6 +5307,8 @@ retry_pool:
 		work->pool = pool;
 		const char *rpc_req;
 		rpc_req = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
+		if (!rpc_req)
+			goto lpfail;
 
 		wait_lpcurrent(cp);
 
@@ -5318,6 +5344,7 @@ retry_pool:
 				continue;
 			if (failures == 1)
 				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", pool->lp_url);
+lpfail:
 			sleep(30);
 		}
 		if (pool != cp) {
