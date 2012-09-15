@@ -1476,6 +1476,7 @@ static bool work_decode(const json_t *val, struct work *work)
 			
 			curl_socket_t sock = pool->lp_socket;
 			if (sock != CURL_SOCKET_BAD) {
+				pool->lp_socket = CURL_SOCKET_BAD;
 				applog(LOG_WARNING, "Pool %u long poll request hanging, reconnecting", pool->pool_no);
 				shutdown(sock,
 #ifndef WIN32
