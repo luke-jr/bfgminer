@@ -2347,7 +2347,9 @@ static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const 
 			work->tmpl = blktmpl_create();
 			work->tmpl_refcount = malloc(sizeof(*work->tmpl_refcount));
 			*work->tmpl_refcount = 1;
-			json_t *req = blktmpl_request_jansson(blktmpl_addcaps(work->tmpl), lpid);
+			gbt_capabilities_t caps = blktmpl_addcaps(work->tmpl);
+			caps |= GBT_LONGPOLL;
+			json_t *req = blktmpl_request_jansson(caps, lpid);
 			rpc_req = json_dumps(req, 0);
 			json_decref(req);
 			return rpc_req;
