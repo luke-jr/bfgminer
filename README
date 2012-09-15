@@ -39,7 +39,8 @@ Dependencies:
 
 	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
 	libtool			http://www.gnu.org/software/libtool/
-	jansson			http://www.digip.org/jansson/
+
+	jansson 2.0+    http://www.digip.org/jansson/
 
 	yasm 1.0.1+ http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
