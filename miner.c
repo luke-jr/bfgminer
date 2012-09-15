@@ -4518,6 +4518,11 @@ badwork:
 		}
 		json_decref(val);
 
+		if (proto != pool->proto) {
+			pool->proto = proto;
+			applog(LOG_INFO, "Selected %s protocol for pool %u", pool_protocol_name(proto), pool->pool_no);
+		}
+
 		if (pool->lp_url)
 			goto out;
 
@@ -4551,11 +4556,6 @@ badwork:
 			pool->lp_started = true;
 			if (unlikely(pthread_create(&pool->longpoll_thread, NULL, longpoll_thread, (void *)pool)))
 				quit(1, "Failed to create pool longpoll thread");
-		}
-
-		if (proto != pool->proto) {
-			pool->proto = proto;
-			applog(LOG_INFO, "Selected %s protocol for pool %u", pool_protocol_name(proto), pool->pool_no);
 		}
 	} else if (PLP_NONE != (proto = pool_protocol_fallback(proto))) {
 		goto tryagain;
