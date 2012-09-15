@@ -1475,7 +1475,8 @@ static bool work_decode(const json_t *val, struct work *work)
 		if ((lp = blktmpl_get_longpoll(work->tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
 			free(pool->lp_id);
 			pool->lp_id = strdup(lp->id);
-			
+
+#if 0  /* This just doesn't work :( */
 			curl_socket_t sock = pool->lp_socket;
 			if (sock != CURL_SOCKET_BAD) {
 				pool->lp_socket = CURL_SOCKET_BAD;
@@ -1488,6 +1489,7 @@ static bool work_decode(const json_t *val, struct work *work)
 #endif
 				);
 			}
+#endif
 		}
 	}
 	else
