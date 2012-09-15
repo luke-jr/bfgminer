@@ -359,7 +359,7 @@ static void sharelog(const char*disposition, const struct work*work)
 	thr_id = work->thr_id;
 	cgpu = thr_info[thr_id].cgpu;
 	pool = work->pool;
-	t = (unsigned long int)work->share_found_time;
+	t = (unsigned long int)(work->tv_work_found.tv_sec);
 	target = bin2hex(work->target, sizeof(work->target));
 	if (unlikely(!target)) {
 		applog(LOG_ERR, "sharelog target OOM");
@@ -1768,6 +1768,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	struct pool *pool = work->pool;
 	int rolltime;
 	uint32_t *hash32;
+	struct timeval tv_submit, tv_submit_reply;
 	char hashshow[64+1] = "";
 	char worktime[200] = "";
 
@@ -1794,10 +1795,10 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
 
-	gettimeofday((struct timeval *)&(work->tv_submit), NULL);
+	gettimeofday(&tv_submit, NULL);
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
-	gettimeofday((struct timeval *)&(work->tv_submit_reply), NULL);
+	gettimeofday(&tv_submit_reply, NULL);
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
@@ -1821,24 +1822,39 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		}
 
 		if (opt_worktime) {
+			char workclone[20];
+			struct tm *tm, tm_getwork, tm_submit_reply;
 			double getwork_time = tdiff((struct timeval *)&(work->tv_getwork_reply),
 							(struct timeval *)&(work->tv_getwork));
 			double getwork_to_work = tdiff((struct timeval *)&(work->tv_work_start),
 							(struct timeval *)&(work->tv_getwork_reply));
-			double work_time = tdiff((struct timeval *)&(work->tv_work_finish),
+			double work_time = tdiff((struct timeval *)&(work->tv_work_found),
 							(struct timeval *)&(work->tv_work_start));
-			double work_to_submit = tdiff((struct timeval *)&(work->tv_submit),
-							(struct timeval *)&(work->tv_work_finish));
-			double submit_time = tdiff((struct timeval *)&(work->tv_submit_reply),
-							(struct timeval *)&(work->tv_submit));
-			struct tm *tm = localtime(&(work->tv_submit_reply.tv_sec));
-			sprintf(worktime, " <-%08lx.%08lx %c G:%1.3f (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
+			double work_to_submit = tdiff(&tv_submit,
+							(struct timeval *)&(work->tv_work_found));
+			double submit_time = tdiff(&tv_submit_reply, &tv_submit);
+
+			tm = localtime(&(work->tv_getwork.tv_sec));
+			memcpy(&tm_getwork, tm, sizeof(struct tm));
+			tm = localtime(&(tv_submit_reply.tv_sec));
+			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
+
+			if (work->clone) {
+				sprintf(workclone, "C:%1.3f",
+					tdiff((struct timeval *)&(work->tv_cloned),
+						(struct timeval *)&(work->tv_getwork_reply)));
+			}
+			else
+				strcpy(workclone, "O");
+
+			sprintf(worktime, " <-%08lx.%08lx M:%c G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
 				(unsigned long)swab32(*(uint32_t *)&(work->data[28])),
 				(unsigned long)swab32(*(uint32_t *)&(work->data[24])),
-				work->clone ? 'C' : 'O',
-				getwork_time, getwork_to_work, work_time,
-				work_to_submit, submit_time,
-				tm->tm_hour, tm->tm_min, tm->tm_sec);
+				work->getwork_mode, tm_getwork.tm_hour, tm_getwork.tm_min,
+				tm_getwork.tm_sec, getwork_time, workclone,
+				getwork_to_work, work_time, work_to_submit, submit_time,
+				tm_submit_reply.tm_hour, tm_submit_reply.tm_min,
+				tm_submit_reply.tm_sec);
 		}
 	}
 
@@ -2022,6 +2038,9 @@ static void get_benchmark_work(struct work *work)
 	memcpy(work, &bench_block, min_size);
 	work->mandatory = true;
 	work->pool = pools[0];
+	gettimeofday(&(work->tv_getwork), NULL);
+	memcpy(&(work->tv_getwork_reply), &(work->tv_getwork), sizeof(struct timeval));
+	work->getwork_mode = GETWORK_MODE_BENCHMARK;
 }
 
 static bool get_upstream_work(struct work *work, CURL *curl)
@@ -2068,6 +2087,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 
 	work->pool = pool;
 	work->longpoll = false;
+	work->getwork_mode = GETWORK_MODE_POOL;
 	total_getworks++;
 	pool->getwork_requested++;
 
@@ -2376,6 +2396,7 @@ static struct work *make_clone(struct work *work)
 
 	memcpy(work_clone, work, sizeof(struct work));
 	work_clone->clone = true;
+	gettimeofday((struct timeval *)&(work_clone->tv_cloned), NULL);
 	work_clone->longpoll = false;
 	work_clone->mandatory = false;
 	/* Make cloned work appear slightly older to bias towards keeping the
@@ -3845,6 +3866,7 @@ static void *longpoll_thread(void *userdata);
 
 static bool pool_active(struct pool *pool, bool pinging)
 {
+	struct timeval tv_getwork, tv_getwork_reply;
 	bool ret = false;
 	json_t *val;
 	CURL *curl;
@@ -3857,8 +3879,10 @@ static bool pool_active(struct pool *pool, bool pinging)
 	}
 
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
+	gettimeofday(&tv_getwork, NULL);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			true, false, &rolltime, pool, false);
+	gettimeofday(&tv_getwork_reply, NULL);
 
 	if (val) {
 		struct work *work = make_work();
@@ -3870,6 +3894,9 @@ static bool pool_active(struct pool *pool, bool pinging)
 			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
 			work->rolltime = rolltime;
+			memcpy(&(work->tv_getwork), &tv_getwork, sizeof(struct timeval));
+			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
+			work->getwork_mode = GETWORK_MODE_TESTPOOL;
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
 			tq_push(thr_info[stage_thr_id].q, work);
@@ -4161,7 +4188,7 @@ out:
 	work->mined = true;
 }
 
-bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
+bool submit_work_sync(struct thr_info *thr, const struct work *work_in, struct timeval *tv_work_found)
 {
 	struct workio_cmd *wc;
 
@@ -4176,7 +4203,8 @@ bool submit_work_sync(struct thr_info *thr, const struct work *work_in)
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
 	memcpy(wc->work, work_in, sizeof(*work_in));
-	wc->work->share_found_time = time(NULL);
+	if (tv_work_found)
+		memcpy(&(wc->work->tv_work_found), tv_work_found, sizeof(struct timeval));
 
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
@@ -4247,7 +4275,8 @@ static bool test_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
-	gettimeofday(&(work->tv_work_finish), NULL);
+	struct timeval tv_work_found;
+	gettimeofday(&tv_work_found, NULL);
 
 	total_diff1++;
 	thr->cgpu->diff1++;
@@ -4258,7 +4287,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	if (!test_nonce(thr, work, nonce))
 		return true;
 
-	return submit_work_sync(thr, work);
+	return submit_work_sync(thr, work, &tv_work_found);
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
@@ -4471,7 +4500,7 @@ enum {
 };
 
 /* Stage another work item from the work returned in a longpoll */
-static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
+static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct timeval *tv_lp, struct timeval *tv_lp_reply)
 {
 	struct work *work;
 	bool rc;
@@ -4487,6 +4516,9 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool)
 	work->pool = pool;
 	work->rolltime = rolltime;
 	work->longpoll = true;
+	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
+	memcpy(&(work->tv_getwork_reply), tv_lp_reply, sizeof(struct timeval));
+	work->getwork_mode = GETWORK_MODE_LP;
 
 	if (pool->enabled == POOL_REJECTING)
 		work->mandatory = true;
@@ -4555,7 +4587,7 @@ static void *longpoll_thread(void *userdata)
 	/* This *pool is the source of the actual longpoll, not the pool we've
 	 * tied it to */
 	struct pool *pool = NULL;
-	struct timeval start, end;
+	struct timeval start, reply, end;
 	CURL *curl = NULL;
 	int failures = 0;
 	int rolltime;
@@ -4600,13 +4632,16 @@ retry_pool:
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 		val = json_rpc_call(curl, pool->lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool, false);
+
+		gettimeofday(&reply, NULL);
+
 		if (likely(val)) {
 			soval = json_object_get(json_object_get(val, "result"), "submitold");
 			if (soval)
 				pool->submit_old = json_is_true(soval);
 			else
 				pool->submit_old = false;
-			convert_to_work(val, rolltime, pool);
+			convert_to_work(val, rolltime, pool, &start, &reply);
 			failures = 0;
 			json_decref(val);
 		} else {
