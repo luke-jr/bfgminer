@@ -36,9 +36,12 @@ bfgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   sha2.c sha2.h api.c
 
 if NEED_LIBBLKMAKER
-SUBDIRS           += libblkmaker
+bfgminer_LDADD    += libblkmaker/libblkmaker.so libblkmaker/libblkmaker_jansson.so
 bfgminer_CPPFLAGS += -Ilibblkmaker
 bfgminer_LDFLAGS  += -Llibblkmaker -Wl,-rpath,libblkmaker -lblkmaker -lblkmaker_jansson
+
+libblkmaker/libblkmaker.so libblkmaker/libblkmaker_jansson.so:
+	cd libblkmaker && $(MAKE) $(AM_MAKEFLAGS) CFLAGS="$(CFLAGS)" CC="$(CC)" $(@:libblkmaker/%=%)
 endif
 
 bfgminer_SOURCES	+= logging.c
