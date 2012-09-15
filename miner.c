@@ -95,6 +95,7 @@ static char packagename[255];
 bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
+static bool want_gbt = true;
 bool have_longpoll;
 bool want_per_device_stats;
 bool use_syslog;
@@ -1043,6 +1044,9 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--no-gbt",
+			opt_set_invbool, &want_gbt,
+			"Disable getblocktemplate support"),
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -4527,7 +4531,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 
 	work = make_work();
 	work->pool = pool;
-	proto = PLP_GETBLOCKTEMPLATE;
+	proto = want_gbt ? PLP_GETBLOCKTEMPLATE : PLP_GETWORK;
 
 tryagain:
 	rpc_req = prepare_rpc_req(work, proto, NULL);
