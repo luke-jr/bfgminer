@@ -8,7 +8,7 @@
  */
 
 /* Compile:
- *   gcc api-example.c -I compat/jansson -o bfgminer-api
+ *   gcc api-example.c -o bfgminer-api
  */
 
 #include "config.h"

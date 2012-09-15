@@ -134,7 +134,8 @@ AC_CHECK_LIB(pthread, pthread_create, ,
         AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
 PTHREAD_LIBS=-lpthread
 
-AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
+AC_CHECK_LIB(jansson, json_loads, ,
+	AC_MSG_ERROR([Could not find jansson library]))
 
 if test "x$opencl" = xyes; then
 	adl="yes"
@@ -254,16 +255,10 @@ AM_CONDITIONAL([NEED_LIBBLKMAKER], [true])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
-AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
-if test x$request_jansson = xtrue
-then
-	JANSSON_LIBS="compat/jansson/libjansson.a"
-else
-	JANSSON_LIBS=-ljansson
-fi
+JANSSON_LIBS=-ljansson
 
 dnl Find YASM
 has_yasm=false
@@ -387,8 +382,6 @@ AC_SUBST(USB_FLAGS)
 
 AC_CONFIG_FILES([
 	Makefile
-	compat/Makefile
-	compat/jansson/Makefile
 	x86_64/Makefile
 	x86_32/Makefile
 	ccan/Makefile

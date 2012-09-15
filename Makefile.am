@@ -1,20 +1,14 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-if WANT_JANSSON
-JANSSON_INCLUDES= -I$(top_srcdir)/compat/jansson
-else
-JANSSON_INCLUDES=
-endif
-
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 		  api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
 		  bitstreams/* API-README FPGA-README SCRYPT-README
 
-SUBDIRS		= lib compat ccan
+SUBDIRS		= lib ccan
 
-INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES) $(USB_FLAGS)
+INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(USB_FLAGS)
 
 bin_PROGRAMS	= bfgminer
 
