@@ -1,0 +1,3 @@
+[submodule "libblkmaker"]
+	path = libblkmaker
+	url = git://gitorious.org/bitcoin/libblkmaker.git

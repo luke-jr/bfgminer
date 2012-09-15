@@ -4,6 +4,11 @@ bs_dir="$(dirname $(readlink -f $0))"
 rm -rf "${bs_dir}"/autom4te.cache
 rm -f "${bs_dir}"/aclocal.m4 "${bs_dir}"/ltmain.sh
 
+if test -z "$NOSUBMODULES" ; then
+	echo 'Getting submodules...'
+	git submodule update --init
+fi
+
 echo 'Running autoreconf -if...'
 autoreconf -if || exit 1
 if test -z "$NOCONFIGURE" ; then

@@ -40,8 +40,7 @@ Dependencies:
 	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
 	libtool			http://www.gnu.org/software/libtool/
 
-	jansson			http://www.digip.org/jansson/
-	(jansson is included in-tree and not necessary)
+	jansson 2.0+    http://www.digip.org/jansson/
 
 	yasm 1.0.1+ http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
@@ -143,6 +142,7 @@ Options for both config file and command line:
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
+--no-gbt            Disable getblocktemplate support
 --no-longpoll       Disable X-Long-Polling support
 --no-pool-disable   Do not automatically disable pools that continually reject shares
 --no-submit-stale   Don't submit shares if they are detected as stale

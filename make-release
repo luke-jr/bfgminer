@@ -18,6 +18,7 @@ cp -v \
 	pdcurses.dll \
 	libcurl-4.dll \
 	pthreadGC2.dll \
+	libjansson-4.dll \
 	libusb-1.0.dll \
 	zlib1.dll \
 	"$OUTDIR/"
@@ -25,8 +26,14 @@ git branch TMP "$tag"
 git clone . "$TMPDIR" -b TMP --depth 1
 git branch -D TMP
 cd "$TMPDIR"
+git submodule update --init
 git archive --prefix "$sw"/ --format tar "$tag" | tar xvp
+(
+	cd libblkmaker
+	git archive --prefix "libblkmaker/" --format tar HEAD | tar -C "../$sw" -xvp
+)
 cd "$sw"
+NOSUBMODULES=1 \
 NOCONFIGURE=1 \
 ./autogen.sh
 cd ..
@@ -55,6 +62,7 @@ NOCONFIGURE=1 \
 make -j4
 cp -v \
 	bfgminer.exe \
+	libblkmaker/.libs/*.dll \
 	*.cl \
 	example.conf \
 	windows-build.txt \

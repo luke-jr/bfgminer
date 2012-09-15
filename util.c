@@ -56,6 +56,7 @@ struct timeval nettime;
 struct data_buffer {
 	void		*buf;
 	size_t		len;
+	curl_socket_t	*idlemarker;
 };
 
 struct upload_buffer {
@@ -95,6 +96,16 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	size_t oldlen, newlen;
 	void *newmem;
 	static const unsigned char zero = 0;
+
+	if (db->idlemarker) {
+		const unsigned char *cptr = ptr;
+		for (size_t i = 0; i < len; ++i)
+			if (!(isspace(cptr[i]) || cptr[i] == '{')) {
+				*db->idlemarker = CURL_SOCKET_BAD;
+				db->idlemarker = NULL;
+				break;
+			}
+	}
 
 	oldlen = db->len;
 	newlen = oldlen + len;
@@ -273,7 +284,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		      struct pool *pool, bool share)
 {
 	long timeout = longpoll ? (60 * 60) : 60;
-	struct data_buffer all_data = {NULL, 0};
+	struct data_buffer all_data = {NULL, 0, NULL};
 	struct header_info hi = {NULL, 0, NULL, false, false, false};
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
@@ -285,6 +296,9 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	int rc;
 
 	memset(&err, 0, sizeof(err));
+
+	if (longpoll)
+		all_data.idlemarker = &pool->lp_socket;
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
@@ -438,7 +452,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	res_val = json_object_get(val, "result");
 	err_val = json_object_get(val, "error");
 
-	if (!res_val || json_is_null(res_val) ||
+	if (!res_val ||
 	    (err_val && !json_is_null(err_val))) {
 		char *s;
 

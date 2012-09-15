@@ -1,20 +1,14 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-if WANT_JANSSON
-JANSSON_INCLUDES= -I$(top_srcdir)/compat/jansson
-else
-JANSSON_INCLUDES=
-endif
-
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 		  api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
 		  bitstreams/* API-README FPGA-README SCRYPT-README
 
-SUBDIRS		= lib compat ccan
+SUBDIRS		= lib ccan
 
-INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES) $(USB_FLAGS)
+INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(USB_FLAGS)
 
 bin_PROGRAMS	= bfgminer
 
@@ -34,6 +28,13 @@ bfgminer_SOURCES := miner.c
 bfgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   util.c uthash.h logging.h			\
 		   sha2.c sha2.h api.c
+
+if NEED_LIBBLKMAKER
+SUBDIRS           += libblkmaker
+bfgminer_CPPFLAGS += -Ilibblkmaker
+bfgminer_LDFLAGS  += -Llibblkmaker/.libs -Wl,-rpath,libblkmaker/.libs
+bfgminer_LDADD    += -lblkmaker-0.1 -lblkmaker_jansson-0.1
+endif
 
 bfgminer_SOURCES	+= logging.c
 
