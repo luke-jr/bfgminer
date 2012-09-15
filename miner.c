@@ -1464,6 +1464,7 @@ static bool work_decode(const json_t *val, struct work *work)
 			applog(LOG_ERR, "blktmpl error: %s", err);
 			goto err_out;
 		}
+		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
 		blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid);
 		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0", 48);
@@ -2715,8 +2716,6 @@ static inline bool should_roll(struct work *work)
 
 	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE)
 		return false;
-
-	// FIXME: Base this on GBT expiration time, for GBT work
 
 	if (work->rolltime > opt_scantime)
 		expiry = work->rolltime;
