@@ -6,7 +6,7 @@ rm -f "${bs_dir}"/aclocal.m4 "${bs_dir}"/ltmain.sh
 
 if test -z "$NOSUBMODULES" ; then
 	echo 'Getting submodules...'
-	git submodule update --init --merge
+	git submodule update --init
 fi
 
 echo 'Running autoreconf -if...'
