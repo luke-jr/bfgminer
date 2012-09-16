@@ -45,8 +45,8 @@ enum {
 #endif /* WIN32 */
 
 #include "compat.h"
-#include "fpgautils.h"
 #include "miner.h"
+#include "fpgautils.h"
 
 #define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_S 7
@@ -230,7 +230,7 @@ static int bitforce_detect_auto(void)
 
 static void bitforce_detect(void)
 {
-	serial_detect_auto(bitforce_api.dname, bitforce_detect_one, bitforce_detect_auto);
+	serial_detect_auto(&bitforce_api, bitforce_detect_one, bitforce_detect_auto);
 }
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)

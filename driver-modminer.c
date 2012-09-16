@@ -13,9 +13,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "fpgautils.h"
 #include "logging.h"
 #include "miner.h"
+#include "fpgautils.h"
 
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.ncd"
 #define BISTREAM_USER_ID "\2\4$B"
@@ -103,7 +103,7 @@ modminer_detect_auto()
 static void
 modminer_detect()
 {
-	serial_detect_auto(modminer_api.dname, modminer_detect_one, modminer_detect_auto);
+	serial_detect_auto(&modminer_api, modminer_detect_one, modminer_detect_auto);
 }
 
 #define bailout(...)  return _bailout(-1, modminer, __VA_ARGS__);

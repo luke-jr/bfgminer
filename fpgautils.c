@@ -33,13 +33,12 @@
 #endif
 
 #include "elist.h"
-#include "fpgautils.h"
 #include "logging.h"
 #include "miner.h"
+#include "fpgautils.h"
 
 #ifdef HAVE_LIBUDEV
-int
-serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
+int serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 {
 	struct udev *udev = udev_new();
 	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
@@ -69,15 +68,13 @@ serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 	return found;
 }
 #else
-int
-serial_autodetect_udev(__maybe_unused detectone_func_t detectone, __maybe_unused const char*prodname)
+int serial_autodetect_udev(__maybe_unused detectone_func_t detectone, __maybe_unused const char*prodname)
 {
 	return 0;
 }
 #endif
 
-int
-serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
+int serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 {
 #ifndef WIN32
 	DIR *D;
@@ -107,30 +104,32 @@ serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
 #endif
 }
 
-int
-_serial_detect(const char*dname, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
+int _serial_detect(struct device_api *api, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
 {
 	struct string_elist *iter, *tmp;
-	const char*s, *p;
+	const char *dev, *colon;
 	bool inhibitauto = false;
 	char found = 0;
-	size_t dnamel = strlen(dname);
+	size_t namel = strlen(api->name);
+	size_t dnamel = strlen(api->dname);
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
-		s = iter->string;
-		if ((p = strchr(s, ':')) && p[1] != '\0') {
-			size_t plen = p - s;
-			if (plen != dnamel || strncasecmp(s, dname, plen))
+		dev = iter->string;
+		if ((colon = strchr(dev, ':')) && colon[1] != '\0') {
+			size_t idlen = colon - dev;
+
+			// allow either name:device or dname:device
+			if ((idlen != namel || strncasecmp(dev, api->name, idlen))
+			&&  (idlen != dnamel || strncasecmp(dev, api->dname, idlen)))
 				continue;
-			s = p + 1;
+
+			dev = colon + 1;
 		}
-		if (!strcmp(s, "auto"))
+		if (!strcmp(dev, "auto"))
 			forceauto = true;
-		else
-		if (!strcmp(s, "noauto"))
+		else if (!strcmp(dev, "noauto"))
 			inhibitauto = true;
-		else
-		if (detectone(s)) {
+		else if (detectone(dev)) {
 			string_elist_del(iter);
 			inhibitauto = true;
 			++found;
@@ -311,8 +310,7 @@ void termios_debug(const char *devpath, struct termios *my_termios, const char *
 #endif
 #endif
 
-int
-serial_open(const char*devpath, unsigned long baud, signed short timeout, bool purge)
+int serial_open(const char *devpath, unsigned long baud, signed short timeout, bool purge)
 {
 #ifdef WIN32
 	HANDLE hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
@@ -429,8 +427,7 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 #endif
 }
 
-ssize_t
-_serial_read(int fd, char *buf, size_t bufsiz, char *eol)
+ssize_t _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 {
 	ssize_t len, tlen = 0;
 	while (bufsiz) {
@@ -446,8 +443,7 @@ _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 	return tlen;
 }
 
-static FILE*
-_open_bitstream(const char*path, const char*subdir, const char*filename)
+static FILE *_open_bitstream(const char *path, const char *subdir, const char *filename)
 {
 	char fullpath[PATH_MAX];
 	strcpy(fullpath, path);
@@ -471,8 +467,7 @@ _open_bitstream(const char*path, const char*subdir, const char*filename)
 	_open_bitstream(path, NULL);  \
 } while(0)
 
-FILE*
-open_bitstream(const char*dname, const char*filename)
+FILE *open_bitstream(const char *dname, const char *filename)
 {
 	FILE *f;
 
