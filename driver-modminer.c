@@ -404,7 +404,6 @@ modminer_process_results(struct thr_info*thr)
 	char cmd[2], temperature;
 	uint32_t nonce;
 	long iter;
-	bool bad;
 	int curr_hw_errors;
 	cmd[0] = '\x0a';
 	cmd[1] = fpgaid;
