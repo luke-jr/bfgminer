@@ -401,6 +401,8 @@ struct cgpu_info {
 	float gpu_vddc;
 #endif
 	int diff1;
+	double diff_accepted;
+	double diff_rejected;
 	int last_share_pool;
 	time_t last_share_pool_time;
 
@@ -684,6 +686,7 @@ extern unsigned int new_blocks;
 extern unsigned int found_blocks;
 extern int total_accepted, total_rejected, total_diff1;;
 extern int total_getworks, total_stale, total_discarded;
+extern double total_diff_accepted, total_diff_rejected, total_diff_stale;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
 extern const int opt_cutofftemp;
@@ -747,6 +750,10 @@ struct pool {
 	int seq_rejects;
 	int solved;
 	int diff1;
+
+	double diff_accepted;
+	double diff_rejected;
+	double diff_stale;
 
 	int queued;
 	int staged;
@@ -906,7 +913,8 @@ enum api_data_type {
 	API_UTILITY,
 	API_FREQ,
 	API_VOLTS,
-	API_HS
+	API_HS,
+	API_DIFF
 };
 
 struct api_data {
@@ -937,5 +945,6 @@ extern struct api_data *api_add_utility(struct api_data *root, char *name, doubl
 extern struct api_data *api_add_freq(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_volts(struct api_data *root, char *name, float *data, bool copy_data);
 extern struct api_data *api_add_hs(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data);
 
 #endif /* __MINER_H__ */

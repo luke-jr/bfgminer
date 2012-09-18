@@ -387,16 +387,18 @@ API V1.19
 
 Added API commands:
  'debug'
- 'pgaidentify|N'
+ 'pgaidentify|N' (only works for BFL Singles so far)
  'setconfig|name,N'
 
 Modified API commands:
  Change pool field name 'Diff1 Shares' to 'Diff1 Work'
- 'devs' - add 'Diff1 Work' to all devices
- 'gpu|N' - add 'Diff1 Work'
- 'pga|N' - add 'Diff1 Work'
+ 'devs' - add 'Diff1 Work', 'Difficulty Accepted', 'Difficulty Rejected'
+          to all devices
+ 'gpu|N' - add 'Diff1 Work', 'Difficulty Accepted', 'Difficulty Rejected'
+ 'pga|N' - add 'Diff1 Work', 'Difficulty Accepted', 'Difficulty Rejected'
  'notify' - add '*Dev Throttle' (for BFL Singles)
- 'pools' - add 'Proxy Type', 'Proxy'
+ 'pools' - add 'Proxy Type', 'Proxy', 'Difficulty Accepted',
+               'Difficulty Rejected', 'Difficulty Stale'
  'config' - add 'Queue', 'Expiry'
 
 ----------
