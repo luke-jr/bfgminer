@@ -1387,6 +1387,7 @@ static void gpustatus(int gpu, bool isjson)
 		root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
+		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
@@ -1473,6 +1474,7 @@ static void pgastatus(int pga, bool isjson)
 		root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
+		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
@@ -1508,6 +1510,7 @@ static void cpustatus(int cpu, bool isjson)
 		root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
+		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 
 		root = print_data(root, buf, isjson);
 		strcat(io_buffer, buf);
@@ -1890,6 +1893,7 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_diff(root, "Difficulty Accepted", &(pool->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(pool->diff_rejected), false);
 		root = api_add_diff(root, "Difficulty Stale", &(pool->diff_stale), false);
+		root = api_add_diff(root, "Last Share Difficulty", &(pool->last_share_diff), false);
 
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);
