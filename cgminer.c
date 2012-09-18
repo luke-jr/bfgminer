@@ -1833,6 +1833,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 			double work_to_submit = tdiff(&tv_submit,
 							(struct timeval *)&(work->tv_work_found));
 			double submit_time = tdiff(&tv_submit_reply, &tv_submit);
+			int diffplaces = 3;
 
 			tm = localtime(&(work->tv_getwork.tv_sec));
 			memcpy(&tm_getwork, tm, sizeof(struct tm));
@@ -1847,10 +1848,14 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 			else
 				strcpy(workclone, "O");
 
-			sprintf(worktime, " <-%08lx.%08lx M:%c G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
+			if (work->work_difficulty < 1)
+				diffplaces = 6;
+
+			sprintf(worktime, " <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
 				(unsigned long)swab32(*(uint32_t *)&(work->data[28])),
 				(unsigned long)swab32(*(uint32_t *)&(work->data[24])),
-				work->getwork_mode, tm_getwork.tm_hour, tm_getwork.tm_min,
+				work->getwork_mode, diffplaces, work->work_difficulty,
+				tm_getwork.tm_hour, tm_getwork.tm_min,
 				tm_getwork.tm_sec, getwork_time, workclone,
 				getwork_to_work, work_time, work_to_submit, submit_time,
 				tm_submit_reply.tm_hour, tm_submit_reply.tm_min,
@@ -2026,6 +2031,25 @@ static inline struct pool *select_pool(bool lagging)
 	return pool;
 }
 
+static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249216.0;
+
+/*
+ * Calculate the work share difficulty
+ */
+static void calc_diff(struct work *work)
+{
+	double targ;
+	int i;
+
+	targ = 0;
+	for (i = 31; i >= 0; i--) {
+		targ *= 256;
+		targ += work->target[i];
+	}
+
+	work->work_difficulty = DIFFEXACTONE / (targ ? : DIFFEXACTONE);
+}
+
 static void get_benchmark_work(struct work *work)
 {
 	// Use a random work block pulled from a pool
@@ -2041,6 +2065,7 @@ static void get_benchmark_work(struct work *work)
 	gettimeofday(&(work->tv_getwork), NULL);
 	memcpy(&(work->tv_getwork_reply), &(work->tv_getwork), sizeof(struct timeval));
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
+	calc_diff(work);
 }
 
 static bool get_upstream_work(struct work *work, CURL *curl)
@@ -2088,6 +2113,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	work->pool = pool;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_POOL;
+	calc_diff(work);
 	total_getworks++;
 	pool->getwork_requested++;
 
@@ -3897,6 +3923,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 			memcpy(&(work->tv_getwork), &tv_getwork, sizeof(struct timeval));
 			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
 			work->getwork_mode = GETWORK_MODE_TESTPOOL;
+			calc_diff(work);
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
 			tq_push(thr_info[stage_thr_id].q, work);
@@ -4519,6 +4546,7 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
 	memcpy(&(work->tv_getwork_reply), tv_lp_reply, sizeof(struct timeval));
 	work->getwork_mode = GETWORK_MODE_LP;
+	calc_diff(work);
 
 	if (pool->enabled == POOL_REJECTING)
 		work->mandatory = true;

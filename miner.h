@@ -833,7 +833,9 @@ struct work {
 
 	unsigned int	work_block;
 	int		id;
-	UT_hash_handle hh;
+	UT_hash_handle	hh;
+
+	double		work_difficulty;
 
 	struct timeval	tv_getwork;
 	struct timeval	tv_getwork_reply;

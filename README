@@ -477,12 +477,13 @@ and pipe the output directly to that command.
 The WorkTime details 'debug' option adds details on the end of each line
 displayed for Accepted or Rejected work done. An example would be:
 
- <-00000059.ed4834a3 M:X G:17:02:38:0.405 C:1.855 (2.995) W:3.440 (0.000) S:0.461 R:17:02:47
+ <-00000059.ed4834a3 M:X D:1.0 G:17:02:38:0.405 C:1.855 (2.995) W:3.440 (0.000) S:0.461 R:17:02:47
 
 The first 2 hex codes are the previous block hash, the rest are reported in
 seconds unless stated otherwise:
 The previous hash is followed by the getwork mode used M:X where X is one of
 P:Pool, T:Test Pool, L:LP or B:Benchmark,
+then D:d.ddd is the difficulty required to get a share from the work,
 then G:hh:mm:ss:n.nnn, which is when the getwork or LP was sent to the pool and
 the n.nnn is how long it took to reply,
 followed by 'O' on it's own if it is an original getwork, or 'C:n.nnn' if it was
