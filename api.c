@@ -168,9 +168,11 @@ static const char GPUSEP = ',';
 
 static const char *APIVERSION = "1.19";
 static const char *DEAD = "Dead";
+#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
 static const char *INIT = "Initialising";
+#endif
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
@@ -571,7 +573,9 @@ struct CODES {
 
 static int my_thr_id = 0;
 static bool bye;
+#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static bool ping = true;
+#endif
 
 // Used to control quit restart access to shutdown variables
 static pthread_mutex_t quit_restart_lock;
@@ -1292,6 +1296,7 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	strcat(io_buffer, buf);
 }
 
+#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static const char *status2str(enum alive status)
 {
 	switch (status) {
@@ -1309,6 +1314,7 @@ static const char *status2str(enum alive status)
 			return UNKNOWN;
 	}
 }
+#endif
 
 #ifdef HAVE_OPENCL
 static void gpustatus(int gpu, bool isjson)
