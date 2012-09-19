@@ -2877,6 +2877,7 @@ static void *get_work_thread(void *userdata)
 	pool = wc->pool;
 
 	if (clone_available()) {
+		applog(LOG_DEBUG, "dec_queued from get_work_thread due to clone available\n");
 		dec_queued(pool);
 		goto out;
 	}
@@ -2913,6 +2914,7 @@ static void *get_work_thread(void *userdata)
 		applog(LOG_ERR, "Failed to tq_push work in workio_get_work");
 		kill_work();
 		free_work(ret_work);
+		dec_queued(pool);
 	}
 
 out:
@@ -3573,6 +3575,7 @@ static bool hash_push(struct work *work)
 
 	if (work->queued) {
 		work->queued = false;
+		applog(LOG_DEBUG, "dec_queued in hash_push\n");
 		dec_queued(work->pool);
 	}
 
@@ -3601,7 +3604,7 @@ static void *stage_thread(void *userdata)
 
 		test_work_current(work);
 
-		applog(LOG_DEBUG, "Pushing work to getwork queue");
+		applog(LOG_DEBUG, "Pushing work to getwork queue (queued=%c)", work->queued?'Y':'N');
 
 		if (unlikely(!hash_push(work))) {
 			applog(LOG_WARNING, "Failed to hash_push in stage_thread");
@@ -4706,8 +4709,6 @@ static bool queue_request(void)
 	if (pool->staged + pool->queued >= maxq)
 		return true;
 
-	inc_queued(pool);
-
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
@@ -4726,6 +4727,8 @@ static bool queue_request(void)
 		workio_cmd_free(wc);
 		return false;
 	}
+
+	inc_queued(pool);
 
 	return true;
 }
