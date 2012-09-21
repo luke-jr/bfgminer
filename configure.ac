@@ -104,14 +104,18 @@ case $target in
 	;;
 esac
 
+if test "x$have_x86_64" = xtrue; then
+	ARCH_DIR=x86_64
+else
+	ARCH_DIR=x86
+fi
+
 if test "x$ATISTREAMSDKROOT" != x; then
-	if test "x$have_x86_64" = xtrue; then
-		ATI_STREAM_ARCH_DIR=x86_64
-	else
-		ATI_STREAM_ARCH_DIR=x86
-	fi
 	OPENCL_FLAGS="-I$ATISTREAMSDKROOT/include $OPENCL_FLAGS"
-	OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ATI_STREAM_ARCH_DIR $OPENCL_LIBS"
+	OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ARCH_DIR $OPENCL_LIBS"
+elif test "x$AMDAPPSDKROOT" != x; then
+	OPENCL_FLAGS="-I$AMDAPPSDKROOT/include $OPENCL_FLAGS"
+	OPENCL_LIBS="-L$AMDAPPSDKROOT/lib/$ARCH_DIR $OPENCL_LIBS"
 fi
 
 cpumining="no"
