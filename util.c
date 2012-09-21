@@ -480,6 +480,7 @@ static struct {
 	{ "socks4a:",	CURLPROXY_SOCKS4A },
 	{ "socks5h:",	CURLPROXY_SOCKS5_HOSTNAME },
 #endif
+	{ NULL,	0 }
 };
 #endif
 
