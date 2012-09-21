@@ -391,7 +391,6 @@ Added API commands:
  'setconfig|name,N'
 
 Modified API commands:
- Change pool field name 'Diff1 Shares' to 'Diff1 Work'
  'devs' - add 'Diff1 Work', 'Difficulty Accepted', 'Difficulty Rejected',
               'Last Share Difficulty' to all devices
  'gpu|N' - add 'Diff1 Work', 'Difficulty Accepted',
