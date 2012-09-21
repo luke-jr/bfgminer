@@ -124,7 +124,10 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Log Interval=N, <- log interval (--log N)
                               Device Code=GPU ICA , <- spaced list of compiled devices
                               OS=Linux/Apple/..., <- operating System
-                              Failover-Only=true/false | <- failover-only setting
+                              Failover-Only=true/false, <- failover-only setting
+                              ScanTime=N, <- --scan-time setting
+                              Queue=N, <- --queue setting
+                              Expiry=N| <- --expiry setting
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -259,6 +262,22 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating the results of the disable request
                               This is only available if PGA mining is enabled
 
+ pgaidentify|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the identify request
+                              This is only available if PGA mining is enabled
+                              and currently only BFL singles support this command
+                              On a BFL single it will flash the led on the front
+                              of the device for appoximately 4s
+                              All other non BFL PGA devices will return a warning
+                              status message stating that they dont support it
+                              This adds a 4s delay to the BFL share being processed
+                              so you may get a message stating that procssing took
+                              longer than 7000ms if the request was sent towards
+                              the end of the timing of any work being worked on
+                              e.g.: BFL0: took 8438ms - longer than 7000ms
+                              You should ignore this
+
  devdetails    DEVDETAILS     Each device with a list of their static details
                               This lists all devices including those not supported
                               by the 'devs' command
@@ -287,6 +306,30 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Current Block Hash=XXXX..., <- blank if none
                               LP=true/false| <- LP is in use on at least 1 pool
 
+ debug|setting (*)
+               DEBUG          Debug settings
+                              The optional commands for 'setting' are the same as
+                              the screen curses debug settings
+                              You can only specify one setting
+                              Only the first character is checked (case insensitive):
+                              Silent, Quiet, Verbose, Debug, RPCProto, PerDevice,
+                              WorkTime, Normal
+                              The output fields are (as above):
+                              Silent=true/false,
+                              Quiet=true/false,
+                              Verbose=true/false,
+                              Debug=true/false,
+                              RPCProto=true/false,
+                              PerDevice=true/false,
+                              WorkTime=true/false|
+
+ setconfig|name,N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting 'name' to N
+                              The valid values for name are currently:
+                              queue, scantime, expiry
+                              N is an integer in the range 0 to 9999
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
@@ -306,8 +349,9 @@ windows
 Obviously, the JSON format is simply just the names as given before the '='
 with the values after the '='
 
-If you enable cgminer debug (-D or --debug) you will also get messages showing
-details of the requests received and the replies
+If you enable cgminer debug (-D or --debug) or, when cgminer debug is off,
+turn on debug with the API command 'debug|debug' you will also get messages
+showing some details of the requests received and the replies
 
 There are included 4 program examples for accessing the API:
 
@@ -339,13 +383,32 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.18
+API V1.19
+
+Added API commands:
+ 'debug'
+ 'pgaidentify|N' (only works for BFL Singles so far)
+ 'setconfig|name,N'
+
+Modified API commands:
+ 'devs' - add 'Diff1 Work', 'Difficulty Accepted', 'Difficulty Rejected',
+              'Last Share Difficulty' to all devices
+ 'gpu|N' - add 'Diff1 Work', 'Difficulty Accepted',
+              'Difficulty Rejected', 'Last Share Difficulty'
+ 'pga|N' - add 'Diff1 Work', 'Difficulty Accepted',
+              'Difficulty Rejected', 'Last Share Difficulty'
+ 'notify' - add '*Dev Throttle' (for BFL Singles)
+ 'pools' - add 'Proxy Type', 'Proxy', 'Difficulty Accepted', 'Difficulty Rejected',
+               'Difficulty Stale', 'Last Share Difficulty'
+ 'config' - add 'Queue', 'Expiry'
+
+----------
+
+API V1.18 (cgminer v2.7.4)
 
 Modified API commands:
  'stats' - add 'Work Had Roll Time', 'Work Can Roll', 'Work Had Expire',
 		'Work Roll Time' to the pool stats
-
-Modified API commands:
  'config' - include 'ScanTime'
 
 ----------
@@ -863,6 +926,14 @@ If you have more than one rig it will show a summary of all the rigs
  the button contents will be 'Name' rather than rig number, if you
  specify 'Name'
 e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
+
+---------
+
+Default:
+ $rigipsecurity = true;
+
+Set $rigipsecurity to false to show the IP/Port of the rig
+in the socket error messages and also show the full socket message
 
 ---------
 

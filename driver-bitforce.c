@@ -45,8 +45,8 @@ enum {
 #endif /* WIN32 */
 
 #include "compat.h"
-#include "fpgautils.h"
 #include "miner.h"
+#include "fpgautils.h"
 
 #define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_S 7
@@ -99,6 +99,7 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 
 	BFwrite(fdDev, "ZGX", 3);
+	pdevbuf[0] = '\0';
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL: Error reading/timeout (ZGX)");
@@ -229,7 +230,7 @@ static int bitforce_detect_auto(void)
 
 static void bitforce_detect(void)
 {
-	serial_detect_auto(bitforce_api.dname, bitforce_detect_one, bitforce_detect_auto);
+	serial_detect_auto(&bitforce_api, bitforce_detect_one, bitforce_detect_auto);
 }
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
@@ -309,6 +310,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	do {
 		BFwrite(fdDev, "ZGX", 3);
+		pdevbuf[0] = '\0';
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 
 		if (unlikely(!pdevbuf[0])) {
@@ -338,6 +340,37 @@ void bitforce_init(struct cgpu_info *bitforce)
 	mutex_unlock(&bitforce->device_mutex);
 }
 
+static void bitforce_flash_led(struct cgpu_info *bitforce)
+{
+	int fdDev = bitforce->device_fd;
+
+	if (!fdDev)
+		return;
+
+	/* Do not try to flash the led if we're polling for a result to
+	 * minimise the chance of interleaved results */
+	if (bitforce->polling)
+		return;
+
+	/* It is not critical flashing the led so don't get stuck if we
+	 * can't grab the mutex here */
+	if (mutex_trylock(&bitforce->device_mutex))
+		return;
+
+	BFwrite(fdDev, "ZMX", 3);
+
+	/* Once we've tried - don't do it until told to again */
+	bitforce->flash_led = false;
+
+	/* However, this stops anything else getting a reply
+	 * So best to delay any other access to the BFL */
+	sleep(4);
+
+	mutex_unlock(&bitforce->device_mutex);
+
+	return; // nothing is returned by the BFL
+}
+
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
 	int fdDev = bitforce->device_fd;
@@ -348,16 +381,23 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		return false;
 
 	/* Do not try to get the temperature if we're polling for a result to
-	 * minimise the change of interleaved results */
+	 * minimise the chance of interleaved results */
 	if (bitforce->polling)
 		return true;
 
-	/* It is not critical getting temperature so don't get stuck if  we
+	// Flash instead of Temp - doing both can be too slow
+	if (bitforce->flash_led) {
+		bitforce_flash_led(bitforce);
+ 		return true;
+	}
+
+	/* It is not critical getting temperature so don't get stuck if we
 	 * can't grab the mutex here */
 	if (mutex_trylock(&bitforce->device_mutex))
 		return false;
 
 	BFwrite(fdDev, "ZLX", 3);
+	pdevbuf[0] = '\0';
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
 	
@@ -385,11 +425,14 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
-		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer");
+		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer", bitforce->device_id);
+		bitforce->device_last_not_well = time(NULL);
+		bitforce->device_not_well_reason = REASON_DEV_THROTTLE;
+		bitforce->dev_throttle_count++;
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
 		bitforce_clear_buffer(bitforce);
-		return false;;
+		return false;
 	}
 
 	return true;
@@ -411,6 +454,7 @@ re_send:
 		BFwrite(fdDev, "ZPX", 3);
 	else
 		BFwrite(fdDev, "ZDX", 3);
+	pdevbuf[0] = '\0';
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
@@ -450,6 +494,7 @@ re_send:
 		BFwrite(fdDev, ob, 68);
 	}
 
+	pdevbuf[0] = '\0';
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mutex_unlock(&bitforce->device_mutex);
 
@@ -493,6 +538,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		mutex_lock(&bitforce->device_mutex);
 		BFwrite(fdDev, "ZFX", 3);
+		pdevbuf[0] = '\0';
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		mutex_unlock(&bitforce->device_mutex);
 
@@ -637,6 +683,11 @@ static bool bitforce_get_stats(struct cgpu_info *bitforce)
 	return bitforce_get_temp(bitforce);
 }
 
+static void bitforce_identify(struct cgpu_info *bitforce)
+{
+	bitforce->flash_led = true;
+}
+
 static bool bitforce_thread_init(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
@@ -673,6 +724,7 @@ struct device_api bitforce_api = {
 	.reinit_device = bitforce_init,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
+	.identify_device = bitforce_identify,
 	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
 	.scanhash = bitforce_scanhash,
