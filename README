@@ -895,7 +895,7 @@ will give output like:
  0 crw-rw---- 1 root dialout 188, 0 2012-09-11 13:49 /dev/ttyUSB0
 This means your account must have the group 'dialout' or root priviledges
 To permanently give your account the 'dialout' group:
- sudo usermod -G dialout `whoami`
+ sudo usermod `whoami` -a -G dialout
 Then logout and back in again
 
 
