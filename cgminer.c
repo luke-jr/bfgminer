@@ -2476,6 +2476,15 @@ out:
 
 static bool queue_request(void);
 
+static void pool_died(struct pool *pool)
+{
+	if (!pool_tset(pool, &pool->idle)) {
+		applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
+		gettimeofday(&pool->tv_idle, NULL);
+		switch_pools(NULL);
+	}
+}
+
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
@@ -2508,13 +2517,17 @@ static void *get_work_thread(void *userdata)
 
 		/* obtain new work from bitcoin via JSON-RPC */
 		if (!get_upstream_work(ret_work, ce->curl)) {
-			/* pause, then restart work-request loop */
 			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
 			dec_queued(pool);
+			/* Make sure the pool just hasn't stopped serving
+			 * requests but is up as we'll keep hammering it */
+			if (++pool->seq_getfails > mining_threads + opt_queue)
+				pool_died(pool);
 			queue_request();
 			free_work(ret_work);
 			goto out;
 		}
+		pool->seq_getfails = 0;
 
 		ret_work->queued = true;
 	}
@@ -3996,15 +4009,6 @@ static bool pool_active(struct pool *pool, bool pinging)
 out:
 	curl_easy_cleanup(curl);
 	return ret;
-}
-
-static void pool_died(struct pool *pool)
-{
-	if (!pool_tset(pool, &pool->idle)) {
-		applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
-		gettimeofday(&pool->tv_idle, NULL);
-		switch_pools(NULL);
-	}
 }
 
 static inline int cp_prio(void)

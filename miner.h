@@ -748,6 +748,7 @@ struct pool {
 	int prio;
 	int accepted, rejected;
 	int seq_rejects;
+	int seq_getfails;
 	int solved;
 	int diff1;
 
