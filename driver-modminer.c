@@ -319,7 +319,7 @@ modminer_change_clock(struct thr_info*thr, bool needlock, signed char delta)
 
 	clk = (state->dclk.freqM * 2) + delta;
 
-	cmd[0] = '\x06';  // set clock speed
+	cmd[0] = '\x06';  // set frequency
 	cmd[1] = fpgaid;
 	cmd[2] = clk;
 	cmd[3] = cmd[4] = cmd[5] = '\0';
@@ -328,9 +328,9 @@ modminer_change_clock(struct thr_info*thr, bool needlock, signed char delta)
 		mutex_lock(&modminer->device_mutex);
 	fd = modminer->device_fd;
 	if (6 != write(fd, cmd, 6))
-		bailout2(LOG_ERR, "%s %u.%u: Error writing (set clock speed)", modminer->api->name, modminer->device_id, fpgaid);
+		bailout2(LOG_ERR, "%s %u.%u: Error writing (set frequency)", modminer->api->name, modminer->device_id, fpgaid);
 	if (serial_read(fd, &buf, 1) != 1)
-		bailout2(LOG_ERR, "%s %u.%u: Error reading (set clock speed)", modminer->api->name, modminer->device_id, fpgaid);
+		bailout2(LOG_ERR, "%s %u.%u: Error reading (set frequency)", modminer->api->name, modminer->device_id, fpgaid);
 	if (needlock)
 		mutex_unlock(&modminer->device_mutex);
 
@@ -345,14 +345,14 @@ static bool modminer_dclk_change_clock(struct thr_info*thr, int multiplier)
 	struct cgpu_info *modminer = thr->cgpu;
 	char fpgaid = thr->device_thread;
 	struct modminer_fpga_state *state = thr->cgpu_data;
-	signed char delta = (multiplier - state->dclk.freqM) * 2;
+	uint8_t oldFreq = state->dclk.freqM;
+	signed char delta = (multiplier - oldFreq) * 2;
 	if (unlikely(!modminer_change_clock(thr, true, delta)))
 		return false;
 
-	if (delta > 0)
-		applog(LOG_NOTICE, "%s %u.%u: Raise clock speed to %u", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2);
-	else
-		applog(LOG_NOTICE, "%s %u.%u: Drop clock speed to %u (dynclock)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2);
+	char repr[0x10];
+	sprintf(repr, "%s %u.%u", modminer->api->name, modminer->device_id, fpgaid);
+	dclk_msg_freqchange(repr, oldFreq * 2, state->dclk.freqM * 2, NULL);
 	return true;
 }
 
@@ -422,13 +422,13 @@ modminer_fpga_init(struct thr_info *thr)
 	state->dclk.freqM = MODMINER_MAXIMUM_CLOCK / 2 + 1;  // Will be reduced immediately
 	while (1) {
 		if (state->dclk.freqM <= MODMINER_MINIMUM_CLOCK / 2)
-			bailout2(LOG_ERR, "%s %u.%u: Hit minimum trying to find acceptable clock speeds", modminer->api->name, modminer->device_id, fpgaid);
+			bailout2(LOG_ERR, "%s %u.%u: Hit minimum trying to find acceptable frequencies", modminer->api->name, modminer->device_id, fpgaid);
 		--state->dclk.freqM;
 		if (!modminer_change_clock(thr, false, 0))
 			// MCU rejected assignment
 			continue;
 		if (!_modminer_get_nonce(modminer, fpgaid, &nonce))
-			bailout2(LOG_ERR, "%s %u.%u: Error detecting acceptable clock speeds", modminer->api->name, modminer->device_id, fpgaid);
+			bailout2(LOG_ERR, "%s %u.%u: Error detecting acceptable frequencies", modminer->api->name, modminer->device_id, fpgaid);
 		if (!memcmp(&nonce, "\x00\xff\xff\xff", 4))
 			// MCU took assignment, but disabled FPGA
 			continue;
@@ -437,10 +437,10 @@ modminer_fpga_init(struct thr_info *thr)
 	state->dclk.freqMaxM = state->dclk.freqM;
 	if (MODMINER_DEFAULT_CLOCK / 2 < state->dclk.freqM) {
 		if (!modminer_change_clock(thr, false, -(state->dclk.freqM * 2 - MODMINER_DEFAULT_CLOCK)))
-			applog(LOG_WARNING, "%s %u.%u: Failed to set desired initial clock speed of %u", modminer->api->name, modminer->device_id, fpgaid, MODMINER_DEFAULT_CLOCK);
+			applog(LOG_WARNING, "%s %u.%u: Failed to set desired initial frequency of %u", modminer->api->name, modminer->device_id, fpgaid, MODMINER_DEFAULT_CLOCK);
 	}
 	state->dclk.freqMDefault = state->dclk.freqM;
-	applog(LOG_WARNING, "%s %u.%u: Setting clock speed to %u (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2, MODMINER_MINIMUM_CLOCK, state->dclk.freqMaxM * 2);
+	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u Mhz (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2, MODMINER_MINIMUM_CLOCK, state->dclk.freqMaxM * 2);
 
 	mutex_unlock(&modminer->device_mutex);
 
@@ -606,8 +606,14 @@ modminer_process_results(struct thr_info*thr)
 				time_t now = time(NULL);
 				if (state->last_cutoff_reduced != now) {
 					state->last_cutoff_reduced = now;
+					int oldFreq = state->dclk.freqM;
 					if (modminer_reduce_clock(thr, false))
-						applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (temp: %d)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2, temperature);
+						applog(LOG_NOTICE, "%s %u.%u: Frequency %s from %u to %u Mhz (temp: %d)",
+						       modminer->api->name, modminer->device_id, fpgaid,
+						       (oldFreq > state->dclk.freqM ? "dropped" : "raised "),
+						       oldFreq * 2, state->dclk.freqM * 2,
+						       temperature
+						);
 				}
 			}
 		}

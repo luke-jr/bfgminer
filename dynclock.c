@@ -16,6 +16,16 @@ void dclk_prepare(struct dclk_data *data)
 	memset(data, 0, sizeof(*data));
 }
 
+void dclk_msg_freqchange(const char *repr, int oldFreq, int newFreq, const char *tail)
+{
+	applog(LOG_NOTICE, "%s: Frequency %s from %u to %u Mhz%s",
+	       repr,
+	       (oldFreq > newFreq ? "dropped" : "raised "),
+	       oldFreq, newFreq,
+	       tail ?: ""
+	);
+}
+
 bool dclk_updateFreq(struct dclk_data *data, dclk_change_clock_func_t changeclock, struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;

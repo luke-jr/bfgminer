@@ -23,6 +23,8 @@ struct dclk_data {
 
 typedef bool (*dclk_change_clock_func_t)(struct thr_info *, int multiplier);
 
+extern void dclk_msg_freqchange(const char *, int oldFreq, int newFreq, const char *tail);
+
 extern void dclk_prepare(struct dclk_data *data);
 extern void dclk_gotNonces(struct dclk_data *);
 extern void dclk_errorCount(struct dclk_data *, double portion);
