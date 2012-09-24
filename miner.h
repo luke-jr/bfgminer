@@ -314,6 +314,11 @@ struct cgminer_pool_stats {
 	bool canroll;
 	bool hadexpire;
 	uint32_t rolltime;
+	double min_diff;
+	double max_diff;
+	double last_diff;
+	uint32_t min_diff_count;
+	uint32_t max_diff_count;
 };
 
 struct cgpu_info {

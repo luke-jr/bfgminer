@@ -401,6 +401,8 @@ Modified API commands:
  'pools' - add 'Proxy Type', 'Proxy', 'Difficulty Accepted', 'Difficulty Rejected',
                'Difficulty Stale', 'Last Share Difficulty'
  'config' - add 'Queue', 'Expiry'
+ 'stats' - add 'Work Diff', 'Min Diff', 'Max Diff', 'Min Diff Count',
+               'Max Diff Count' to the pool stats
 
 ----------
 

@@ -2789,6 +2789,11 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 		root = api_add_bool(root, "Work Can Roll", &(pool_stats->canroll), false);
 		root = api_add_bool(root, "Work Had Expire", &(pool_stats->hadexpire), false);
 		root = api_add_uint32(root, "Work Roll Time", &(pool_stats->rolltime), false);
+		root = api_add_diff(root, "Work Diff", &(pool_stats->last_diff), false);
+		root = api_add_diff(root, "Min Diff", &(pool_stats->min_diff), false);
+		root = api_add_diff(root, "Max Diff", &(pool_stats->max_diff), false);
+		root = api_add_uint32(root, "Min Diff Count", &(pool_stats->min_diff_count), false);
+		root = api_add_uint32(root, "Max Diff Count", &(pool_stats->max_diff_count), false);
 	}
 
 	if (extra)
