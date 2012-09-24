@@ -12,6 +12,7 @@
 #include "elist.h"
 #include "uthash.h"
 #include "logging.h"
+#include "util.h"
 
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
@@ -810,6 +811,9 @@ struct pool {
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
+
+	SOCKETTYPE sock;
+	struct sockaddr_in server, client;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
