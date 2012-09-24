@@ -554,6 +554,8 @@ static char *set_url(char *arg)
 
 	arg = get_proxy(arg, pool);
 
+	extract_sockaddr(pool, arg);
+
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
 	    strncmp(arg, "https://", 8)) {

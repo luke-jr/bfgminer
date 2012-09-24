@@ -108,5 +108,7 @@
 	#define in_addr_t uint32_t
 	#endif
 #endif
+struct pool;
+void extract_sockaddr(struct pool *pool, char *url);
 
 #endif /* __UTIL_H__ */
