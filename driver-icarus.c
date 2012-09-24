@@ -54,6 +54,7 @@
   #define HAVE_EPOLL
 #endif
 
+#include "dynclock.h"
 #include "elist.h"
 #include "fpgautils.h"
 #include "icarus-common.h"
@@ -773,6 +774,18 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	tcflush(fd, TCOFLUSH);
 #endif
 
+	memcpy(&nonce, nonce_bin, sizeof(nonce_bin));
+
+	// Handle dynamic clocking for "subclass" devices
+	// This runs before sending next job, in case it isn't supported
+	if (info->dclk.freqM && likely(!state->firstrun)) {
+		dclk_gotNonces(&info->dclk);
+		if (nonce && !test_nonce(&state->last_work, nonce, false))
+			dclk_errorCount(&info->dclk, 1.0);
+		dclk_preUpdate(&info->dclk);
+		dclk_updateFreq(&info->dclk, info->dclk_change_clock_func, thr);
+	}
+
 	gettimeofday(&state->tv_workstart, NULL);
 
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
@@ -802,7 +815,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	// OK, done starting Icarus's next job... now process the last run's result!
-	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
 
 	// aborted before becoming idle, get new work
 	if (nonce == 0 && lret) {

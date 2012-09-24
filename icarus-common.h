@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <sys/time.h>
 
+#include "dynclock.h"
 #include "miner.h"
 
 // Fraction of a second, USB timeout is measured in
@@ -69,6 +70,9 @@ struct ICARUS_INFO {
 	int fpga_count;
 	uint32_t nonce_mask;
 	bool quirk_reopen;
+
+	dclk_change_clock_func_t dclk_change_clock_func;
+	struct dclk_data dclk;
 };
 
 bool icarus_detect_custom(const char *devpath, struct device_api *, struct ICARUS_INFO *);
