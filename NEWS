@@ -1,10 +1,10 @@
 BFGMiner Version 2.8.1 - Future
 
+- Reorder libztex header include order to fix missing struct definition.
 - Display share difficulty on log with a shortened hash display on submission.
 - API stats add some pool getwork difficulty stats
 - Ignore any pings pushed to the worker threads if the thread is still paused to
 prevent it being enabled and disabled repeatedly.
-- README - FAQ - usermod group - shouldn't remove other groups
 - Test for sequential getwork failures on a pool that might actually be up but
 failing to deliver work as we may end up hammering it repeatedly by mistake.
 - reduce windows compile warnings
@@ -25,6 +25,13 @@ failing to deliver work as we may end up hammering it repeatedly by mistake.
 - API/BFL identify a device - currently only BFL to flash the led
 - BFL add throttle count to internal stats + API
 - BFL: missing device id in log message
+- Bugfix: ztex: Clear device_ztex before freeing it
+- Bugfix: ztex: statline existence depends on whether the libztex structure
+exists, not whether the cgpu is enabled
+- Bugfix: README: Make usermod commands consistent, including important -a
+option
+- Bugfix: Address a couple of rare TQ leaks, and improve logging a bit
+- Bugfix: Properly quote configure options
 
 
 BFGMiner Version 2.8.0 - September 15, 2012
