@@ -2376,6 +2376,7 @@ static double DIFFEXACTONE = 269599466671506397946670150870196306736371444225405
  */
 static void calc_diff(struct work *work)
 {
+	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
 	double targ;
 	int i;
 
@@ -2386,6 +2387,22 @@ static void calc_diff(struct work *work)
 	}
 
 	work->work_difficulty = DIFFEXACTONE / (targ ? : DIFFEXACTONE);
+
+	pool_stats->last_diff = work->work_difficulty;
+
+	if (work->work_difficulty == pool_stats->min_diff)
+		pool_stats->min_diff_count++;
+	else if (work->work_difficulty < pool_stats->min_diff || pool_stats->min_diff == 0) {
+		pool_stats->min_diff = work->work_difficulty;
+		pool_stats->min_diff_count = 1;
+	}
+
+	if (work->work_difficulty == pool_stats->max_diff)
+		pool_stats->max_diff_count++;
+	else if (work->work_difficulty > pool_stats->max_diff) {
+		pool_stats->max_diff = work->work_difficulty;
+		pool_stats->max_diff_count = 1;
+	}
 }
 
 static void get_benchmark_work(struct work *work)

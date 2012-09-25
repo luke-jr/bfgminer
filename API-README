@@ -399,6 +399,8 @@ Modified API commands:
  'notify' - add '*Dev Throttle' (for BFL Singles)
  'pools' - add 'Difficulty Accepted', 'Difficulty Rejected',
                'Difficulty Stale', 'Last Share Difficulty'
+ 'stats' - add 'Work Diff', 'Min Diff', 'Max Diff', 'Min Diff Count',
+               'Max Diff Count' to the pool stats
 
 ----------
 
