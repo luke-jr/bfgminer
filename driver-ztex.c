@@ -355,7 +355,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
 	char before[] = "               ";
-	if (cgpu->deven == DEV_ENABLED) {
+	if (cgpu->device_ztex) {
 		const char *snString = (char*)cgpu->device_ztex->snString;
 		size_t snStringLen = strlen(snString);
 		if (snStringLen > 14)
@@ -407,11 +407,11 @@ static void ztex_shutdown(struct thr_info *thr)
 	if (!ztex)
 		return;
 	
+	cgpu->device_ztex = NULL;
 	if (ztex->root->numberOfFpgas > 1 && ztex->fpgaNum == 0)
 		pthread_mutex_destroy(&ztex->mutex);
 	applog(LOG_DEBUG, "%s: shutdown", ztex->repr);
 	libztex_destroy_device(ztex);
-	cgpu->device_ztex = NULL;
 }
 
 static void ztex_disable(struct thr_info *thr)
