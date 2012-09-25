@@ -483,19 +483,22 @@ and pipe the output directly to that command.
 The WorkTime details 'debug' option adds details on the end of each line
 displayed for Accepted or Rejected work done. An example would be:
 
-  <-00000223.95214f4c O G:0.524 (97.672) W:4.910 (0.000) S:0.577 R:13:49:55
+ <-00000059.ed4834a3 M:X G:17:02:38:0.405 C:1.855 (2.995) W:3.440 (0.000) S:0.461 R:17:02:47
 
 The first 2 hex codes are the previous block hash, the rest are reported in
 seconds unless stated otherwise:
-The previous hash is followed by 'C' or 'O' if the work was cloned or original,
-G:n.nnn is how long the original getwork to the pool took, (m.mmm) is how long
-from the original getwork complete until work started, W:n.nnn is how long the
-work took to process until it was ready to submit, (m.mmm) is how long from
-ready to submit to actually doing the submit, this is usually 0.000 unless
-there was a problem with the first attempt at submitting the work, S:n.nnn
-is how long it took to submit the work and await the reply, R:hh:mm:ss is the
-actual time the work submit reply was received - so you can count back from
-that to work out each absolute time
+The previous hash is followed by the getwork mode used M:X where X is one of
+P:Pool, T:Test Pool, L:LP or B:Benchmark,
+then G:hh:mm:ss:n.nnn, which is when the getwork or LP was sent to the pool and
+the n.nnn is how long it took to reply,
+followed by 'O' on it's own if it is an original getwork, or 'C:n.nnn' if it was
+a clone with n.nnn stating how long after the work was recieved that it was cloned,
+(m.mmm) is how long from when the original work was received until work started,
+W:n.nnn is how long the work took to process until it was ready to submit,
+(m.mmm) is how long from ready to submit to actually doing the submit, this is
+usually 0.000 unless there was a problem with submitting the work,
+S:n.nnn is how long it took to submit the completed work and await the reply,
+R:hh:mm:ss is the actual time the work submit reply was received
 
 If you start BFGMiner with the --sharelog option, you can get detailed
 information for each share found. The argument to the option may be "-" for

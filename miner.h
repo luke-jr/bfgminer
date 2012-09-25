@@ -872,6 +872,11 @@ struct pool {
 	struct cgminer_pool_stats cgminer_pool_stats;
 };
 
+#define GETWORK_MODE_TESTPOOL 'T'
+#define GETWORK_MODE_POOL 'P'
+#define GETWORK_MODE_LP 'L'
+#define GETWORK_MODE_BENCHMARK 'B'
+
 struct work {
 	unsigned char	data[128];
 	unsigned char	hash1[64];
@@ -906,18 +911,16 @@ struct work {
 	
 	float		difficulty;
 
-	time_t share_found_time;
-
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;
 	unsigned int	dataid;
 
-	struct timeval tv_getwork;
-	struct timeval tv_getwork_reply;
-	struct timeval tv_work_start;
-	struct timeval tv_work_finish;
-	struct timeval tv_submit;
-	struct timeval tv_submit_reply;
+	struct timeval	tv_getwork;
+	struct timeval	tv_getwork_reply;
+	struct timeval	tv_cloned;
+	struct timeval	tv_work_start;
+	struct timeval	tv_work_found;
+	char		getwork_mode;
 };
 
 extern void get_datestamp(char *, struct timeval *);
