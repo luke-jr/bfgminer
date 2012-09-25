@@ -711,7 +711,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct timeval tv_start, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
-	int i;
+	int curr_hw_errors, i;
+	bool was_hw_error;
 
 	struct ICARUS_HISTORY *history0, *history;
 	int count;
@@ -828,7 +829,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	nonce = be32toh(nonce);
 
+	curr_hw_errors = icarus->hw_errors;
 	submit_nonce(thr, &state->last_work, nonce);
+	was_hw_error = (curr_hw_errors > icarus->hw_errors);
 	memcpy(&state->last_work, work, sizeof(state->last_work));
 
 	hash_count = (nonce & info->nonce_mask);
@@ -870,8 +873,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 	}
 
-	// ignore possible end condition values
+	// ignore possible end condition values ... and hw errors
 	if (info->do_icarus_timing
+	&&  !was_hw_error
 	&&  ((nonce & info->nonce_mask) > END_CONDITION)
 	&&  ((nonce & info->nonce_mask) < (info->nonce_mask & ~END_CONDITION))) {
 		gettimeofday(&tv_history_start, NULL);
