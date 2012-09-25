@@ -389,11 +389,15 @@ Added API commands:
  'pgaidentify|N' (only works for BFL Singles so far)
 
 Modified API commands:
- 'devs' - add 'Difficulty Accepted', 'Difficulty Rejected' to all devices
- 'gpu|N' - add 'Difficulty Accepted', 'Difficulty Rejected'
- 'pga|N' - add 'Difficulty Accepted', 'Difficulty Rejected'
+ 'devs' - add 'Difficulty Accepted', 'Difficulty Rejected',
+              'Last Share Difficulty' to all devices
+ 'gpu|N' - add 'Difficulty Accepted', 'Difficulty Rejected',
+              'Last Share Difficulty'
+ 'pga|N' - add 'Difficulty Accepted', 'Difficulty Rejected',
+              'Last Share Difficulty'
  'notify' - add '*Dev Throttle' (for BFL Singles)
- 'pools' - add 'Difficulty Accepted', 'Difficulty Rejected', 'Difficulty Stale'
+ 'pools' - add 'Difficulty Accepted', 'Difficulty Rejected',
+               'Difficulty Stale', 'Last Share Difficulty'
 
 ----------
 

@@ -447,6 +447,7 @@ struct cgpu_info {
 	double diff_rejected;
 	int last_share_pool;
 	time_t last_share_pool_time;
+	double last_share_diff;
 
 	time_t device_last_well;
 	time_t device_last_not_well;
@@ -874,6 +875,7 @@ struct pool {
 	struct list_head curlring;
 
 	time_t last_share_time;
+	double last_share_diff;
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
