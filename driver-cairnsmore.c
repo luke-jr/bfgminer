@@ -51,7 +51,7 @@ static int cairnsmore_detect_auto(void)
 static void cairnsmore_detect()
 {
 	// Actual serial detection is handled by Icarus driver
-	serial_detect_auto_byname(cairnsmore_api.dname, cairnsmore_detect_one, cairnsmore_detect_auto);
+	serial_detect_auto_byname(&cairnsmore_api, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
 
 void convert_icarus_to_cairnsmore(struct cgpu_info *cm1)

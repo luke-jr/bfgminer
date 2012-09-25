@@ -55,9 +55,9 @@
 #endif
 
 #include "elist.h"
-#include "fpgautils.h"
 #include "icarus-common.h"
 #include "miner.h"
+#include "fpgautils.h"
 
 // The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
 #define ICARUS_IO_SPEED 115200
@@ -633,7 +633,7 @@ static bool icarus_detect_one(const char *devpath)
 
 static void icarus_detect()
 {
-	serial_detect(icarus_api.dname, icarus_detect_one);
+	serial_detect(&icarus_api, icarus_detect_one);
 }
 
 struct icarus_state {

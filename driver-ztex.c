@@ -118,7 +118,7 @@ static int ztex_autodetect(void)
 static void ztex_detect()
 {
 	// This wrapper ensures users can specify -S ztex:noauto to disable it
-	noserial_detect(ztex_api.dname, ztex_autodetect);
+	noserial_detect(&ztex_api, ztex_autodetect);
 }
 
 static bool ztex_updateFreq(struct libztex_device* ztex)
