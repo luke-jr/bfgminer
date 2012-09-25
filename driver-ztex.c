@@ -379,13 +379,17 @@ static bool ztex_prepare(struct thr_info *thr)
 
 static void ztex_shutdown(struct thr_info *thr)
 {
-	if (thr->cgpu->device_ztex != NULL) {
-		if (thr->cgpu->device_ztex->fpgaNum == 0)
-			pthread_mutex_destroy(&thr->cgpu->device_ztex->mutex);  
-		applog(LOG_DEBUG, "%s: shutdown", thr->cgpu->device_ztex->repr);
-		libztex_destroy_device(thr->cgpu->device_ztex);
-		thr->cgpu->device_ztex = NULL;
-	}
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct libztex_device *ztex = cgpu->device_ztex;
+	
+	if (!ztex)
+		return;
+	
+	if (ztex->root->numberOfFpgas > 1 && ztex->fpgaNum == 0)
+		pthread_mutex_destroy(&ztex->mutex);
+	applog(LOG_DEBUG, "%s: shutdown", ztex->repr);
+	libztex_destroy_device(ztex);
+	cgpu->device_ztex = NULL;
 }
 
 static void ztex_disable(struct thr_info *thr)
