@@ -554,7 +554,8 @@ static char *set_url(char *arg)
 
 	arg = get_proxy(arg, pool);
 
-	extract_sockaddr(pool, arg);
+	if (!extract_sockaddr(pool, arg))
+		return "Failed to extract address from parsed url";
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
