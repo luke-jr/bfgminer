@@ -2,7 +2,7 @@
 session_start();
 #
 global $title, $miner, $port, $readonly, $notify, $rigs;
-global $rgisecurity, $rigtotals, $forcerigtotals;
+global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
@@ -523,7 +523,15 @@ function classlastshare($when, $alldata, $warnclass, $errorclass)
  if (!isset($alldata['Last Share Time']))
 	return '';
 
+ if (!isset($alldata['Last Share Difficulty']))
+	return '';
+
  $expected = pow(2, 32) / ($alldata['MHS av'] * pow(10, 6));
+
+ // If the share difficulty changes while waiting on a share,
+ // this calculation will of course be incorrect
+ $expected *= $alldata['Last Share Difficulty'];
+
  $howlong = $when - $alldata['Last Share Time'];
  if ($howlong < 1)
 	$howlong = 1;
@@ -658,11 +666,20 @@ function fmt($section, $name, $value, $when, $alldata)
 		if ($value == 0)
 			$class = $errorclass;
 		else
-			if (isset($alldata['MHS av']))
+			if (isset($alldata['Difficulty Accepted'])
+			&&  isset($alldata['Accepted'])
+			&&  isset($alldata['MHS av'])
+			&&  ($alldata['Difficulty Accepted'] > 0)
+			&&  ($alldata['Accepted'] > 0))
 			{
 				$expected = 60 * $alldata['MHS av'] * (pow(10, 6) / pow(2, 32));
 				if ($expected == 0)
 					$expected = 0.000001; // 1 H/s
+
+				$da = $alldata['Difficulty Accepted'];
+				$a = $alldata['Accepted'];
+				$expected /= ($da / $a);
+
 				$ratio = $value / $expected;
 				if ($ratio < 0.9)
 					$class = $loclass;
@@ -726,16 +743,26 @@ function fmt($section, $name, $value, $when, $alldata)
 			$dec = '';
 		else
 			$dec = '.'.$parts[1];
-		$ret = number_format($parts[0]).$dec;
+		$ret = number_format((float)$parts[0]).$dec;
 
 		if ($value == 0)
 			$class = $errorclass;
 		else
-			if (isset($alldata['Utility']))
+			if (isset($alldata['Difficulty Accepted'])
+			&&  isset($alldata['Accepted'])
+			&&  isset($alldata['Utility'])
+			&&  ($alldata['Difficulty Accepted'] > 0)
+			&&  ($alldata['Accepted'] > 0))
 			{
 				$expected = 60 * $value * (pow(10, 6) / pow(2, 32));
-				$utility = $alldata['Utility'];
-				$ratio = $utility / $expected;
+				if ($expected == 0)
+					$expected = 0.000001; // 1 H/s
+
+				$da = $alldata['Difficulty Accepted'];
+				$a = $alldata['Accepted'];
+				$expected /= ($da / $a);
+
+				$ratio = $alldata['Utility'] / $expected;
 				if ($ratio < 0.9)
 					$class = $hiclass;
 				else
@@ -773,7 +800,7 @@ function fmt($section, $name, $value, $when, $alldata)
 			$dec = '';
 		else
 			$dec = '.'.$parts[1];
-		$ret = number_format($parts[0]).$dec;
+		$ret = number_format((float)$parts[0]).$dec;
 		break;
 	case 'GPU.Status':
 	case 'PGA.Status':

@@ -396,6 +396,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_FOO 77
 #define MSG_MINECOIN 78
 #define MSG_DEBUGSET 79
+#define MSG_PGAIDENT 80
+#define MSG_PGANOID 81
 
 #define MSG_SETCONFIG 82
 #define MSG_UNKCON 83
@@ -557,7 +559,10 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_FOO,	PARAM_BOOL,	"Failover-Only set to %s" },
  { SEVERITY_SUCC,  MSG_MINECOIN,PARAM_NONE,	"BFGMiner coin" },
  { SEVERITY_SUCC,  MSG_DEBUGSET,PARAM_STR,	"Debug settings" },
-
+#ifdef HAVE_AN_FPGA
+ { SEVERITY_SUCC,  MSG_PGAIDENT,PARAM_PGA,	"Identify command sent to PGA%d" },
+ { SEVERITY_WARN,  MSG_PGANOID,	PARAM_PGA,	"PGA%d does not support identify" },
+#endif
  { SEVERITY_SUCC,  MSG_SETCONFIG,PARAM_SET,	"Set config '%s' to %d" },
  { SEVERITY_ERR,   MSG_UNKCON,	PARAM_STR,	"Unknown config '%s'" },
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
@@ -568,7 +573,9 @@ struct CODES {
 
 static int my_thr_id = 0;
 static bool bye;
+#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static bool ping = true;
+#endif
 
 // Used to control quit restart access to shutdown variables
 static pthread_mutex_t quit_restart_lock;
@@ -774,6 +781,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			case API_UTILITY:
 			case API_FREQ:
 			case API_HS:
+			case API_DIFF:
 				api_data->data = (void *)malloc(sizeof(double));
 				*((double *)(api_data->data)) = *((double *)data);
 				break;
@@ -904,6 +912,11 @@ struct api_data *api_add_hs(struct api_data *root, char *name, double *data, boo
 	return api_add_data_full(root, name, API_HS, (void *)data, copy_data);
 }
 
+struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data)
+{
+	return api_add_data_full(root, name, API_DIFF, (void *)data, copy_data);
+}
+
 struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, bool copy_data)
 {
 	return api_add_data_full(root, name, API_JSON, (void *)data, copy_data);
@@ -979,6 +992,9 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				break;
 			case API_HS:
 				sprintf(buf, "%.15f", *((double *)(root->data)));
+				break;
+			case API_DIFF:
+				sprintf(buf, "%.8f", *((double *)(root->data)));
 				break;
 			case API_BOOL:
 				sprintf(buf, "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
@@ -1409,6 +1425,9 @@ static void devstatus_an(struct cgpu_info *cgpu, bool isjson)
 	root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
 	root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
 	root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
+	root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
+	root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
+	root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 
 	if (cgpu->api->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->api->get_api_extra_device_status(cgpu));
@@ -1648,6 +1667,44 @@ static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 
 	strcpy(io_buffer, message(MSG_PGADIS, id, NULL, isjson));
 }
+
+static void pgaidentify(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	int numpga = numpgas();
+	int id;
+
+	if (numpga == 0) {
+		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	int dev = pgadevice(id);
+	if (dev < 0) { // Should never happen
+		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		return;
+	}
+
+	struct cgpu_info *cgpu = devices[dev];
+	struct device_api *api = cgpu->api;
+
+	if (!api->identify_device)
+		strcpy(io_buffer, message(MSG_PGANOID, id, NULL, isjson));
+	else {
+		api->identify_device(cgpu);
+		strcpy(io_buffer, message(MSG_PGAIDENT, id, NULL, isjson));
+	}
+}
 #endif
 
 #ifdef WANT_CPUMINE
@@ -1744,12 +1801,16 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_uint(root, "Remote Failures", &(pool->remotefail_occasions), false);
 		root = api_add_escape(root, "User", pool->rpc_user, false);
 		root = api_add_time(root, "Last Share Time", &(pool->last_share_time), false);
-		root = api_add_int(root, "Diff1 Work", &(pool->diff1), false);
+		root = api_add_int(root, "Diff1 Shares", &(pool->diff1), false);
 		if (pool->rpc_proxy) {
 			root = api_add_escape(root, "Proxy", pool->rpc_proxy, false);
 		} else {
 			root = api_add_const(root, "Proxy", BLANK, false);
 		}
+		root = api_add_diff(root, "Difficulty Accepted", &(pool->diff_accepted), false);
+		root = api_add_diff(root, "Difficulty Rejected", &(pool->diff_rejected), false);
+		root = api_add_diff(root, "Difficulty Stale", &(pool->diff_stale), false);
+		root = api_add_diff(root, "Last Share Difficulty", &(pool->last_share_diff), false);
 
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);
@@ -1803,6 +1864,9 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 	root = api_add_uint(root, "Network Blocks", &(new_blocks), false);
 	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), false);
 	root = api_add_utility(root, "Work Utility", &(work_utility), false);
+	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), false);
+	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), false);
+	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2515,6 +2579,7 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unuse
 	root = api_add_int(root, "*Dev Over Heat", &(cgpu->dev_over_heat_count), false);
 	root = api_add_int(root, "*Dev Thermal Cutoff", &(cgpu->dev_thermal_cutoff_count), false);
 	root = api_add_int(root, "*Dev Comms Error", &(cgpu->dev_comms_error_count), false);
+	root = api_add_int(root, "*Dev Throttle", &(cgpu->dev_throttle_count), false);
 
 	if (isjson && (device > 0))
 		strcat(io_buffer, COMMA);
@@ -2642,6 +2707,11 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 		root = api_add_bool(root, "Work Can Roll", &(pool_stats->canroll), false);
 		root = api_add_bool(root, "Work Had Expire", &(pool_stats->hadexpire), false);
 		root = api_add_uint32(root, "Work Roll Time", &(pool_stats->rolltime), false);
+		root = api_add_diff(root, "Work Diff", &(pool_stats->last_diff), false);
+		root = api_add_diff(root, "Min Diff", &(pool_stats->min_diff), false);
+		root = api_add_diff(root, "Max Diff", &(pool_stats->max_diff), false);
+		root = api_add_uint32(root, "Min Diff Count", &(pool_stats->min_diff_count), false);
+		root = api_add_uint32(root, "Max Diff Count", &(pool_stats->max_diff_count), false);
 	}
 
 	if (extra)
@@ -2795,6 +2865,10 @@ static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 		opt_quiet = false;
 		opt_protocol = false;
 		want_per_device_stats = false;
+		opt_worktime = false;
+		break;
+	case 'w':
+		opt_worktime ^= true;
 		break;
 	default:
 		// anything else just reports the settings
@@ -2812,6 +2886,7 @@ static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	root = api_add_bool(root, "Debug", &opt_debug, false);
 	root = api_add_bool(root, "RPCProto", &opt_protocol, false);
 	root = api_add_bool(root, "PerDevice", &want_per_device_stats, false);
+	root = api_add_bool(root, "WorkTime", &opt_worktime, false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2879,6 +2954,7 @@ struct CMDS {
 	{ "pga",		pgadev,		false },
 	{ "pgaenable",		pgaenable,	true },
 	{ "pgadisable",		pgadisable,	true },
+	{ "pgaidentify",	pgaidentify,	true },
 #endif
 #ifdef WANT_CPUMINE
 	{ "cpu",		cpudev,		false },

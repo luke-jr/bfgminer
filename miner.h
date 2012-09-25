@@ -278,6 +278,7 @@ struct device_api {
 	struct api_data* (*get_api_extra_device_status)(struct cgpu_info*);
 	struct api_data *(*get_api_stats)(struct cgpu_info*);
 	bool (*get_stats)(struct cgpu_info*);
+	void (*identify_device)(struct cgpu_info*); // e.g. to flash a led
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info*);
@@ -315,6 +316,7 @@ enum dev_reason {
 	REASON_DEV_OVER_HEAT,
 	REASON_DEV_THERMAL_CUTOFF,
 	REASON_DEV_COMMS_ERROR,
+	REASON_DEV_THROTTLE,
 };
 
 #define REASON_NONE			"None"
@@ -327,6 +329,7 @@ enum dev_reason {
 #define REASON_DEV_OVER_HEAT_STR	"Device over heated"
 #define REASON_DEV_THERMAL_CUTOFF_STR	"Device reached thermal cutoff"
 #define REASON_DEV_COMMS_ERROR_STR	"Device comms error"
+#define REASON_DEV_THROTTLE_STR		"Device throttle"
 #define REASON_UNKNOWN_STR		"Unknown reason - code bug"
 
 #define MIN_SEC_UNSET 99999999
@@ -350,6 +353,11 @@ struct cgminer_pool_stats {
 	bool canroll;
 	bool hadexpire;
 	uint32_t rolltime;
+	double min_diff;
+	double max_diff;
+	double last_diff;
+	uint32_t min_diff_count;
+	uint32_t max_diff_count;
 };
 
 struct cgpu_info {
@@ -375,6 +383,7 @@ struct cgpu_info {
 	uint32_t nonces;
 	bool nonce_range;
 	bool polling;
+	bool flash_led;
 #endif
 	void *cgpu_data;
 	pthread_mutex_t		device_mutex;
@@ -439,8 +448,11 @@ struct cgpu_info {
 	float gpu_vddc;
 #endif
 	int diff1;
+	double diff_accepted;
+	double diff_rejected;
 	int last_share_pool;
 	time_t last_share_pool_time;
+	double last_share_diff;
 
 	time_t device_last_well;
 	time_t device_last_not_well;
@@ -454,6 +466,7 @@ struct cgpu_info {
 	int dev_over_heat_count;	// It's a warning but worth knowing
 	int dev_thermal_cutoff_count;
 	int dev_comms_error_count;
+	int dev_throttle_count;
 
 	struct cgminer_stats cgminer_stats;
 };
@@ -496,6 +509,7 @@ extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
 extern void rename_thr(const char* name);
+extern double tdiff(struct timeval *end, struct timeval *start);
 
 struct string_elist {
 	char *string;
@@ -637,6 +651,7 @@ extern bool opt_delaynet;
 extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
+extern bool opt_worktime;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
@@ -738,6 +753,7 @@ extern unsigned int new_blocks;
 extern unsigned int found_blocks;
 extern int total_accepted, total_rejected, total_diff1;;
 extern int total_getworks, total_stale, total_discarded;
+extern double total_diff_accepted, total_diff_rejected, total_diff_stale;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
 extern const int opt_cutofftemp;
@@ -806,8 +822,13 @@ struct pool {
 	int prio;
 	int accepted, rejected;
 	int seq_rejects;
+	int seq_getfails;
 	int solved;
 	int diff1;
+
+	double diff_accepted;
+	double diff_rejected;
+	double diff_stale;
 
 	int queued;
 	int staged;
@@ -860,10 +881,16 @@ struct pool {
 	struct list_head curlring;
 
 	time_t last_share_time;
+	double last_share_diff;
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
 };
+
+#define GETWORK_MODE_TESTPOOL 'T'
+#define GETWORK_MODE_POOL 'P'
+#define GETWORK_MODE_LP 'L'
+#define GETWORK_MODE_BENCHMARK 'B'
 
 struct work {
 	unsigned char	data[128];
@@ -897,13 +924,18 @@ struct work {
 	int		id;
 	UT_hash_handle hh;
 	
-	float		difficulty;
-
-	time_t share_found_time;
+	double		work_difficulty;
 
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;
 	unsigned int	dataid;
+
+	struct timeval	tv_getwork;
+	struct timeval	tv_getwork_reply;
+	struct timeval	tv_cloned;
+	struct timeval	tv_work_start;
+	struct timeval	tv_work_found;
+	char		getwork_mode;
 };
 
 extern void get_datestamp(char *, struct timeval *);
@@ -950,6 +982,7 @@ enum api_data_type {
 	API_FREQ,
 	API_VOLTS,
 	API_HS,
+	API_DIFF,
 	API_JSON,
 };
 
@@ -981,6 +1014,7 @@ extern struct api_data *api_add_utility(struct api_data *root, char *name, doubl
 extern struct api_data *api_add_freq(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_volts(struct api_data *root, char *name, float *data, bool copy_data);
 extern struct api_data *api_add_hs(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, bool copy_data);
 
 #endif /* __MINER_H__ */
