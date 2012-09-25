@@ -5092,7 +5092,9 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 	mythr->rolling = mythr->cgpu->rolling = 0;
 	applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
 	thread_reportout(mythr);
-	tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+	do {
+		tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+	} while (mythr->pause);
 	thread_reportin(mythr);
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
 	if (api->thread_enable)
