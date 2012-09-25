@@ -2177,8 +2177,8 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 				diffplaces = 6;
 
 			sprintf(worktime, " <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
-				(unsigned long)swab32(*(uint32_t *)&(work->data[28])),
-				(unsigned long)swab32(*(uint32_t *)&(work->data[24])),
+				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
+				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
 				work->getwork_mode, diffplaces, work->work_difficulty,
 				tm_getwork.tm_hour, tm_getwork.tm_min,
 				tm_getwork.tm_sec, getwork_time, workclone,
