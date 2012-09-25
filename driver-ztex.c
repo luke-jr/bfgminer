@@ -347,7 +347,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
 	char before[] = "               ";
-	if (cgpu->deven == DEV_ENABLED) {
+	if (cgpu->device_ztex) {
 		const char *snString = (char*)cgpu->device_ztex->snString;
 		size_t snStringLen = strlen(snString);
 		if (snStringLen > 14)
