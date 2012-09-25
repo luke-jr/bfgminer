@@ -20,7 +20,7 @@
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.ncd"
 #define BISTREAM_USER_ID "\2\4$B"
 #define MODMINER_MINIMUM_CLOCK  178
-#define MODMINER_DEFAULT_CLOCK  192
+#define MODMINER_DEFAULT_CLOCK  200
 #define MODMINER_MAXIMUM_CLOCK  210
 
 struct device_api modminer_api;
