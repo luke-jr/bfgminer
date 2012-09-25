@@ -34,7 +34,7 @@ static bool cairnsmore_detect_one(const char *devpath)
 	info->fpga_count = 2;
 	info->quirk_reopen = false;
 	info->Hs = CAIRNSMORE1_HASH_TIME;
-	info->timing_mode = MODE_SHORT;
+	info->timing_mode = MODE_LONG;
 	info->do_icarus_timing = true;
 
 	if (!icarus_detect_custom(devpath, &cairnsmore_api, info)) {
@@ -59,9 +59,8 @@ static void cairnsmore_detect()
 	serial_detect_auto_byname(cairnsmore_api.dname, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
 
-static bool cairnsmore_send_cmd(struct cgpu_info *cm1, uint8_t cmd, uint8_t data)
+static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
 {
-	int fd = cm1->device_fd;
 	unsigned char pkt[64] =
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
 		"vdi\xb7"
@@ -73,12 +72,43 @@ static bool cairnsmore_send_cmd(struct cgpu_info *cm1, uint8_t cmd, uint8_t data
 	return write(fd, pkt, sizeof(pkt)) == sizeof(pkt);
 }
 
+bool cairnsmore_supports_dynclock(int fd)
+{
+	unsigned char pkts[64] =
+		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+		"\xe6\x3c\0\xb7"  // Set frequency multiplier to 60 (150 Mhz)
+		"\0\0\0\0\0\0\0\0\0\0\0\0" "BFG0"
+		"\x8b\xdb\x05\x1a" "\xff\xff\xff\xff" "\x00\x00\x1e\xfd";
+	if (write(fd, pkts, sizeof(pkts) != sizeof(pkts)))
+		return false;
+
+	uint32_t nonce = 0;
+	{
+		struct timeval tv_finish;
+		struct thr_info dummy = {
+			.work_restart = false,
+			.work_restart_fd = -1,
+		};
+		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
+	}
+	switch (nonce) {
+		case 0x000b1b5e:
+			// Hashed the command, so it's not supported
+			return false;
+		case 0:
+			return true;
+		default:
+			applog(LOG_DEBUG, "cairnsmore_supports_dynclock got unexpected nonce %08x", nonce);
+			return false;
+	}
+}
+
 static bool cairnsmore_change_clock_func(struct thr_info *thr, int bestM)
 {
 	struct cgpu_info *cm1 = thr->cgpu;
 	struct ICARUS_INFO *info = cm1->cgpu_data;
 
-	if (unlikely(!cairnsmore_send_cmd(cm1, 0, bestM)))
+	if (unlikely(!cairnsmore_send_cmd(cm1->device_fd, 0, bestM)))
 		return false;
 	char repr[0x10];
 	sprintf(repr, "%s %u", cm1->api->name, cm1->device_id);
@@ -93,17 +123,23 @@ static bool cairnsmore_init(struct thr_info *thr)
 	struct cgpu_info *cm1 = thr->cgpu;
 	struct ICARUS_INFO *info = cm1->cgpu_data;
 
-	info->dclk_change_clock_func = cairnsmore_change_clock_func;
+	if (cairnsmore_supports_dynclock(cm1->device_fd)) {
+		info->dclk_change_clock_func = cairnsmore_change_clock_func;
 
-	dclk_prepare(&info->dclk);
-	info->dclk.freqMaxM = CAIRNSMORE1_MAXIMUM_CLOCK / 2.5;
-	info->dclk.freqM =
-	info->dclk.freqMDefault = CAIRNSMORE1_DEFAULT_CLOCK / 2.5;
-	cairnsmore_send_cmd(cm1, 0, info->dclk.freqM);
-	applog(LOG_WARNING, "%s %u: Frequency set to %u Mhz (range: %u-%u)",
-	       cm1->api->name, cm1->device_id,
-	       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
-	);
+		dclk_prepare(&info->dclk);
+		info->dclk.freqMaxM = CAIRNSMORE1_MAXIMUM_CLOCK / 2.5;
+		info->dclk.freqM =
+		info->dclk.freqMDefault = CAIRNSMORE1_DEFAULT_CLOCK / 2.5;
+		cairnsmore_send_cmd(cm1->device_fd, 0, info->dclk.freqM);
+		applog(LOG_WARNING, "%s %u: Frequency set to %u Mhz (range: %u-%u)",
+		       cm1->api->name, cm1->device_id,
+		       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
+		);
+	} else {
+		// Test failures corrupt the hash state, so next scanhash is a firstrun
+		struct icarus_state *state = thr->cgpu_data;
+		state->firstrun = true;
+	}
 
 	return true;
 }
@@ -113,7 +149,7 @@ void convert_icarus_to_cairnsmore(struct cgpu_info *cm1)
 	struct ICARUS_INFO *info = cm1->cgpu_data;
 	info->Hs = CAIRNSMORE1_HASH_TIME;
 	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-	info->timing_mode = MODE_SHORT;
+	info->timing_mode = MODE_LONG;
 	info->do_icarus_timing = true;
 	cm1->api = &cairnsmore_api;
 	renumber_cgpu(cm1);
@@ -125,8 +161,10 @@ static struct api_data *cairnsmore_api_extra_device_status(struct cgpu_info *cm1
 	struct ICARUS_INFO *info = cm1->cgpu_data;
 	struct api_data*root = NULL;
 
-	double frequency = 2.5 * info->dclk.freqM;
-	root = api_add_freq(root, "Frequency", &frequency, true);
+	if (info->dclk.freqM) {
+		double frequency = 2.5 * info->dclk.freqM;
+		root = api_add_freq(root, "Frequency", &frequency, true);
+	}
 
 	return root;
 }

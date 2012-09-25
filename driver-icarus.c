@@ -173,7 +173,7 @@ static void rev(unsigned char *s, size_t l)
 #define icarus_open2(devpath, baud, purge)  serial_open(devpath, baud, ICARUS_READ_FAULT_DECISECONDS, purge)
 #define icarus_open(devpath, baud)  icarus_open2(devpath, baud, false)
 
-static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count)
+int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
@@ -636,14 +636,6 @@ static void icarus_detect()
 {
 	serial_detect(icarus_api.dname, icarus_detect_one);
 }
-
-struct icarus_state {
-	bool firstrun;
-	struct timeval tv_workstart;
-	struct timeval tv_workfinish;
-	struct work last_work;
-	bool changework;
-};
 
 static bool icarus_prepare(struct thr_info *thr)
 {
