@@ -2515,6 +2515,7 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unuse
 	root = api_add_int(root, "*Dev Over Heat", &(cgpu->dev_over_heat_count), false);
 	root = api_add_int(root, "*Dev Thermal Cutoff", &(cgpu->dev_thermal_cutoff_count), false);
 	root = api_add_int(root, "*Dev Comms Error", &(cgpu->dev_comms_error_count), false);
+	root = api_add_int(root, "*Dev Throttle", &(cgpu->dev_throttle_count), false);
 
 	if (isjson && (device > 0))
 		strcat(io_buffer, COMMA);
