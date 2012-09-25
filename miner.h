@@ -909,7 +909,7 @@ struct work {
 	int		id;
 	UT_hash_handle hh;
 	
-	float		difficulty;
+	double		work_difficulty;
 
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;
