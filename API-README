@@ -389,6 +389,7 @@ Added API commands:
  'pgaidentify|N' (only works for BFL Singles so far)
 
 Modified API commands:
+ Change pool field name back from 'Diff1 Work' to 'Diff1 Shares'
  'devs' - add 'Difficulty Accepted', 'Difficulty Rejected',
               'Last Share Difficulty' to all devices
  'gpu|N' - add 'Difficulty Accepted', 'Difficulty Rejected',
