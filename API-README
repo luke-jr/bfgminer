@@ -313,14 +313,16 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               the screen curses debug settings
                               You can only specify one setting
                               Only the first character is checked (case insensitive):
-                              Silent, Quiet, Verbose, Debug, RPCProto, PerDevice, Normal
+                              Silent, Quiet, Verbose, Debug, RPCProto, PerDevice,
+                              WorkTime, Normal
                               The output fields are (as above):
                               Silent=true/false,
                               Quiet=true/false,
                               Verbose=true/false,
                               Debug=true/false,
                               RPCProto=true/false,
-                              PerDevice=true/false|
+                              PerDevice=true/false,
+                              WorkTime=true/false|
 
  setconfig|name,N (*)
                none           There is no reply section just the STATUS section
