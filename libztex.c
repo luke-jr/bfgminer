@@ -23,8 +23,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "fpgautils.h"
 #include "miner.h"
+#include "fpgautils.h"
 #include "libztex.h"
 
 #define BUFSIZE 256
