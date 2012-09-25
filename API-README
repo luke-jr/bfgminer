@@ -386,10 +386,14 @@ Feature Changelog for external applications using the API:
 API V1.19b
 
 Added API commands:
- 'pgaidentify|N'
+ 'pgaidentify|N' (only works for BFL Singles so far)
 
 Modified API commands:
+ 'devs' - add 'Difficulty Accepted', 'Difficulty Rejected' to all devices
+ 'gpu|N' - add 'Difficulty Accepted', 'Difficulty Rejected'
+ 'pga|N' - add 'Difficulty Accepted', 'Difficulty Rejected'
  'notify' - add '*Dev Throttle' (for BFL Singles)
+ 'pools' - add 'Difficulty Accepted', 'Difficulty Rejected', 'Difficulty Stale'
 
 ----------
 

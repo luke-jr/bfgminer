@@ -210,6 +210,7 @@ int hw_errors;
 int total_accepted, total_rejected, total_diff1;
 float total_accepted_weighed;
 int total_getworks, total_stale, total_discarded;
+double total_diff_accepted, total_diff_rejected, total_diff_stale;
 static int total_queued, staged_rollable;
 unsigned int new_blocks;
 unsigned int found_blocks;
@@ -2197,6 +2198,9 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		total_accepted++;
 		total_accepted_weighed += work->work_difficulty;
 		pool->accepted++;
+		cgpu->diff_accepted += work->work_difficulty;
+		total_diff_accepted += work->work_difficulty;
+		pool->diff_accepted += work->work_difficulty;
 		pool->seq_rejects = 0;
 		cgpu->last_share_pool = pool->pool_no;
 		cgpu->last_share_pool_time = time(NULL);
@@ -2230,6 +2234,9 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		cgpu->rejected++;
 		total_rejected++;
 		pool->rejected++;
+		cgpu->diff_rejected += work->work_difficulty;
+		total_diff_rejected += work->work_difficulty;
+		pool->diff_rejected += work->work_difficulty;
 		pool->seq_rejects++;
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
@@ -3087,6 +3094,8 @@ static void submit_discard_share(struct work *work)
 	sharelog("discard", work);
 	++total_stale;
 	++(work->pool->stale_shares);
+	total_diff_stale += work->work_difficulty;
+	work->pool->diff_stale += work->work_difficulty;
 }
 
 static void *submit_work_thread(void *userdata)
@@ -3715,6 +3724,8 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
 		wlog(" Accepted shares: %d\n", pool->accepted);
 		wlog(" Rejected shares: %d\n", pool->rejected);
+		wlog(" Accepted difficulty shares: %1.f\n", pool->diff_accepted);
+		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
 		if (pool->accepted || pool->rejected)
 			wlog(" Reject ratio: %.1f%%\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 		efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
@@ -5808,6 +5819,8 @@ static void print_summary(void)
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
 	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
 	applog(LOG_WARNING, "Rejected shares: %d", total_rejected);
+	applog(LOG_WARNING, "Accepted difficulty shares: %1.f", total_diff_accepted);
+	applog(LOG_WARNING, "Rejected difficulty shares: %1.f", total_diff_rejected);
 	if (total_accepted || total_rejected)
 		applog(LOG_WARNING, "Reject ratio: %.1f%%", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
 	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
@@ -5832,6 +5845,8 @@ static void print_summary(void)
 			applog(LOG_WARNING, " Share submissions: %d", pool->accepted + pool->rejected);
 			applog(LOG_WARNING, " Accepted shares: %d", pool->accepted);
 			applog(LOG_WARNING, " Rejected shares: %d", pool->rejected);
+			applog(LOG_WARNING, " Accepted difficulty shares: %1.f", pool->diff_accepted);
+			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
 			if (pool->accepted || pool->rejected)
 				applog(LOG_WARNING, " Reject ratio: %.1f%%", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 			efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;

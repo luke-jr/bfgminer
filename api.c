@@ -781,6 +781,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			case API_UTILITY:
 			case API_FREQ:
 			case API_HS:
+			case API_DIFF:
 				api_data->data = (void *)malloc(sizeof(double));
 				*((double *)(api_data->data)) = *((double *)data);
 				break;
@@ -911,6 +912,11 @@ struct api_data *api_add_hs(struct api_data *root, char *name, double *data, boo
 	return api_add_data_full(root, name, API_HS, (void *)data, copy_data);
 }
 
+struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data)
+{
+	return api_add_data_full(root, name, API_DIFF, (void *)data, copy_data);
+}
+
 struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, bool copy_data)
 {
 	return api_add_data_full(root, name, API_JSON, (void *)data, copy_data);
@@ -986,6 +992,9 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				break;
 			case API_HS:
 				sprintf(buf, "%.15f", *((double *)(root->data)));
+				break;
+			case API_DIFF:
+				sprintf(buf, "%.8f", *((double *)(root->data)));
 				break;
 			case API_BOOL:
 				sprintf(buf, "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
@@ -1416,6 +1425,8 @@ static void devstatus_an(struct cgpu_info *cgpu, bool isjson)
 	root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
 	root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
 	root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
+	root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
+	root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 
 	if (cgpu->api->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->api->get_api_extra_device_status(cgpu));
@@ -1795,6 +1806,9 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		} else {
 			root = api_add_const(root, "Proxy", BLANK, false);
 		}
+		root = api_add_diff(root, "Difficulty Accepted", &(pool->diff_accepted), false);
+		root = api_add_diff(root, "Difficulty Rejected", &(pool->diff_rejected), false);
+		root = api_add_diff(root, "Difficulty Stale", &(pool->diff_stale), false);
 
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);
@@ -1848,6 +1862,9 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 	root = api_add_uint(root, "Network Blocks", &(new_blocks), false);
 	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), false);
 	root = api_add_utility(root, "Work Utility", &(work_utility), false);
+	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), false);
+	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), false);
+	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
