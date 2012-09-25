@@ -263,6 +263,22 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               stating the results of the disable request
                               This is only available if PGA mining is enabled
 
+ pgaidentify|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the identify request
+                              This is only available if PGA mining is enabled
+                              and currently only BFL singles support this command
+                              On a BFL single it will flash the led on the front
+                              of the device for appoximately 4s
+                              All other non BFL PGA devices will return a warning
+                              status message stating that they dont support it
+                              This adds a 4s delay to the BFL share being processed
+                              so you may get a message stating that procssing took
+                              longer than 7000ms if the request was sent towards
+                              the end of the timing of any work being worked on
+                              e.g.: BFL0: took 8438ms - longer than 7000ms
+                              You should ignore this
+
  devdetails    DEVDETAILS     Each device with a list of their static details
                               This lists all devices including those not supported
                               by the 'devs' command
@@ -366,6 +382,9 @@ Feature Changelog for external applications using the API:
 
 
 API V1.19b
+
+Added API commands:
+ 'pgaidentify|N'
 
 Modified API commands:
  'notify' - add '*Dev Throttle' (for BFL Singles)
