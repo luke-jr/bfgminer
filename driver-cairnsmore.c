@@ -110,6 +110,10 @@ static bool cairnsmore_change_clock_func(struct thr_info *thr, int bestM)
 
 	if (unlikely(!cairnsmore_send_cmd(cm1->device_fd, 0, bestM)))
 		return false;
+
+	// Adjust Hs expectations for frequency change
+	info->Hs = info->Hs * (double)bestM / (double)info->dclk.freqM;
+
 	char repr[0x10];
 	sprintf(repr, "%s %u", cm1->api->name, cm1->device_id);
 	dclk_msg_freqchange(repr, 2.5 * (double)info->dclk.freqM, 2.5 * (double)bestM, NULL);
