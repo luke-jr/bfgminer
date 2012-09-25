@@ -573,7 +573,9 @@ struct CODES {
 
 static int my_thr_id = 0;
 static bool bye;
+#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static bool ping = true;
+#endif
 
 // Used to control quit restart access to shutdown variables
 static pthread_mutex_t quit_restart_lock;
