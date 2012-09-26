@@ -865,9 +865,9 @@ static bool sock_send(int sock, char *s, ssize_t len)
 
 bool initiate_stratum(struct pool *pool)
 {
-	json_t *val, *res_val, *err_val;
+	json_t *val, *res_val, *err_val, *notify_val;
+	char *s, *buf, *sret = NULL;
 	struct timeval timeout;
-	char *s, *sret = NULL;
 	json_error_t err;
 	bool ret = false;
 	ssize_t len;
@@ -938,10 +938,43 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
+	notify_val = json_array_get(res_val, 0);
+	if (!notify_val || json_is_null(notify_val)) {
+		applog(LOG_WARNING, "Failed to parse notify_val in initiate_stratum");
+		goto out;
+	}
+
+	buf = (char *)json_string_value(json_array_get(notify_val, 0));
+	if (!buf || strcasecmp(buf, "mining.notify")) {
+		applog(LOG_WARNING, "Failed to get mining notify in initiate_stratum");
+		goto out;
+	}
+	pool->subscription = (char *)json_string_value(json_array_get(notify_val, 1));
+	if (!pool->subscription) {
+		applog(LOG_WARNING, "Failed to get a subscription in initiate_stratum");
+		goto out;
+	}
+
+	pool->nonce1 = (char *)json_string_value(json_array_get(res_val, 1));
+	if (!pool->nonce1) {
+		applog(LOG_WARNING, "Failed to get nonce1 in initiate_stratum");
+		goto out;
+	}
+	pool->nonce2 = json_integer_value(json_array_get(res_val, 2));
+	if (!pool->nonce2) {
+		applog(LOG_WARNING, "Failed to get nonce2 in initiate_stratum");
+		goto out;
+	}
+
 	ret = true;
 out:
-	if (!ret)
+	if (!ret) {
 		CLOSESOCKET(pool->sock);
+		if (val)
+			json_decref(val);
+	} else if (opt_protocol)
+		applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extranonce2 %d",
+		       pool->pool_no, pool->subscription, pool->nonce1, pool->nonce2);
 
 	return ret;
 }
