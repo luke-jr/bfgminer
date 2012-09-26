@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <sha2.h>
 
+#include "dynclock.h"
 #include "fpgautils.h"
 #include "miner.h"
 #include "libztex.h"
@@ -121,51 +122,28 @@ static void ztex_detect()
 	noserial_detect(&ztex_api, ztex_autodetect);
 }
 
-static bool ztex_updateFreq(struct libztex_device* ztex)
+static bool ztex_change_clock_func(struct thr_info *thr, int bestM)
 {
-	int i, maxM, bestM;
-	double bestR, r;
+	struct libztex_device *ztex = thr->cgpu->device_ztex;
 
-	for (i = 0; i < ztex->freqMaxM; i++)
-		if (ztex->maxErrorRate[i + 1] * i < ztex->maxErrorRate[i] * (i + 20))
-			ztex->maxErrorRate[i + 1] = ztex->maxErrorRate[i] * (1.0 + 20.0 / i);
+	ztex_selectFpga(ztex);
+	libztex_setFreq(ztex, bestM);
+	ztex_releaseFpga(ztex);
 
-	maxM = 0;
-	while (maxM < ztex->freqMDefault && ztex->maxErrorRate[maxM + 1] < LIBZTEX_MAXMAXERRORRATE)
-		maxM++;
-	while (maxM < ztex->freqMaxM && ztex->errorWeight[maxM] > 150 && ztex->maxErrorRate[maxM + 1] < LIBZTEX_MAXMAXERRORRATE)
-		maxM++;
-
-	bestM = 0;
-	bestR = 0;
-	for (i = 0; i <= maxM; i++) {
-		r = (i + 1 + (i == ztex->freqM? LIBZTEX_ERRORHYSTERESIS: 0)) * (1 - ztex->maxErrorRate[i]);
-		if (r > bestR) {
-			bestM = i;
-			bestR = r;
-		}
-	}
-
-	if (bestM != ztex->freqM) {
-		ztex_selectFpga(ztex);
-		libztex_setFreq(ztex, bestM);
-		ztex_releaseFpga(ztex);
-	}
-
-	maxM = ztex->freqMDefault;
-	while (maxM < ztex->freqMaxM && ztex->errorWeight[maxM + 1] > 100)
-		maxM++;
-	if ((bestM < (1.0 - LIBZTEX_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
-		ztex_selectFpga(ztex);
-		libztex_resetFpga(ztex);
-		ztex_releaseFpga(ztex);
-		applog(LOG_ERR, "%s: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
-		       ztex->repr, (1.0 - 1.0 * bestM / maxM) * 100);
-		return false;
-	}
 	return true;
 }
 
+static bool ztex_updateFreq(struct thr_info *thr)
+{
+	struct libztex_device *ztex = thr->cgpu->device_ztex;
+	bool rv = dclk_updateFreq(&ztex->dclk, ztex_change_clock_func, thr);
+	if (unlikely(!rv)) {
+		ztex_selectFpga(ztex);
+		libztex_resetFpga(ztex);
+		ztex_releaseFpga(ztex);
+	}
+	return rv;
+}
 
 static bool ztex_checkNonce(struct libztex_device *ztex,
                             struct work *work,
@@ -191,7 +169,7 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
 	if (htobe32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
-		ztex->errorCount[ztex->freqM] += 1.0 / ztex->numNonces;
+		dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
 		applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
 		return false;
 	}
@@ -285,8 +263,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			break;
 		}
 
-		ztex->errorCount[ztex->freqM] *= 0.995;
-		ztex->errorWeight[ztex->freqM] = ztex->errorWeight[ztex->freqM] * 0.995 + 1.0;
+		dclk_gotNonces(&ztex->dclk);
  
 		for (i = 0; i < ztex->numNonces; i++) {
 			nonce = hdata[i].nonce;
@@ -330,11 +307,9 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	}
 
-	ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /	ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM] < 100? ztex->errorWeight[ztex->freqM] * 0.01: 1.0);
-	if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM])
-		ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
+	dclk_preUpdate(&ztex->dclk);
 
-	if (!ztex_updateFreq(ztex)) {
+	if (!ztex_updateFreq(thr)) {
 		// Something really serious happened, so mark this thread as dead!
 		free(lastnonce);
 		free(backlog);
@@ -372,7 +347,7 @@ get_ztex_api_extra_device_status(struct cgpu_info *ztex)
 	struct libztex_device *ztexr = ztex->device_ztex;
 
 	if (ztexr) {
-		double frequency = ztexr->freqM1 * (ztexr->freqM + 1);
+		double frequency = ztexr->freqM1 * (ztexr->dclk.freqM + 1);
 		root = api_add_freq(root, "Frequency", &frequency, true);
 	}
 
@@ -392,9 +367,9 @@ static bool ztex_prepare(struct thr_info *thr)
 	if (libztex_configureFpga(ztex) != 0)
 		return false;
 	ztex_releaseFpga(ztex);
-	ztex->freqM = ztex->freqMaxM+1;;
-	//ztex_updateFreq(ztex);
-	libztex_setFreq(ztex, ztex->freqMDefault);
+	ztex->dclk.freqM = ztex->dclk.freqMaxM+1;;
+	//ztex_updateFreq(thr);
+	libztex_setFreq(ztex, ztex->dclk.freqMDefault);
 	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
 	return true;
 }

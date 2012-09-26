@@ -78,6 +78,10 @@ if NEED_FPGAUTILS
 bfgminer_SOURCES += fpgautils.c fpgautils.h
 endif
 
+if NEED_DYNCLOCK
+bfgminer_SOURCES += dynclock.c dynclock.h
+endif
+
 if HAS_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
 

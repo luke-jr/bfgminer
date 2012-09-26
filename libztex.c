@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "dynclock.h"
 #include "miner.h"
 #include "fpgautils.h"
 #include "libztex.h"
@@ -371,23 +372,29 @@ int libztex_selectFpga(struct libztex_device *ztex) {
 
 int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 	int cnt;
-	uint16_t oldfreq = ztex->freqM;
+	uint16_t oldfreq = ztex->dclk.freqM;
 
-	if (freq > ztex->freqMaxM)
-		freq = ztex->freqMaxM;
+	if (freq > ztex->dclk.freqMaxM)
+		freq = ztex->dclk.freqMaxM;
 
 	cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x83, freq, 0, NULL, 0, 500);
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to set frequency with err %d", cnt);
 		return cnt;
 	}
-	ztex->freqM = freq;
-	if (oldfreq > ztex->freqMaxM) 
-		applog(LOG_WARNING, "%s: Frequency set to %0.2f Mhz",
-		       ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
+	ztex->dclk.freqM = freq;
+	if (oldfreq > ztex->dclk.freqMaxM)
+		applog(LOG_WARNING, "%s: Frequency set to %u Mhz (range: %u-%u)",
+		       ztex->repr,
+		       (unsigned)(ztex->freqM1 * (ztex->dclk.freqM + 1)),
+		       (unsigned)ztex->freqM1,
+		       (unsigned)(ztex->freqM1 * (ztex->dclk.freqMaxM + 1))
+		);
 	else
-		applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
-		       ztex->repr, ztex->freqM1 * (oldfreq + 1), ztex->freqM1 * (ztex->freqM + 1));
+		dclk_msg_freqchange(ztex->repr,
+		                    ztex->freqM1 * (oldfreq + 1),
+		                    ztex->freqM1 * (ztex->dclk.freqM + 1),
+		                    NULL);
 
 	return 0;
 }
@@ -411,6 +418,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	unsigned char buf[64];
 
 	newdev = malloc(sizeof(struct libztex_device));
+	dclk_prepare(&newdev->dclk);
 	newdev->bitFileName = NULL;
 	newdev->numberOfFpgas = -1;
 	newdev->valid = false;
@@ -510,28 +518,21 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	newdev->numNonces = buf[1] + 1;
 	newdev->offsNonces = ((buf[2] & 255) | ((buf[3] & 255) << 8)) - 10000;
 	newdev->freqM1 = ((buf[4] & 255) | ((buf[5] & 255) << 8) ) * 0.01;
-	newdev->freqMaxM = (buf[7] & 255);
-	newdev->freqM = (buf[6] & 255);
-	newdev->freqMDefault = newdev->freqM;
+	newdev->dclk.freqMaxM = (buf[7] & 255);
+	newdev->dclk.freqM = (buf[6] & 255);
+	newdev->dclk.freqMDefault = newdev->dclk.freqM;
 	newdev->suspendSupported = (buf[0] == 5);
 	newdev->hashesPerClock = buf[0] > 2? (((buf[8] & 255) | ((buf[9] & 255) << 8)) + 1) / 128.0: 1.0;
 	newdev->extraSolutions = buf[0] > 4? buf[10]: 0;
 	
 	applog(LOG_DEBUG, "PID: %d numNonces: %d offsNonces: %d freqM1: %f freqMaxM: %d freqM: %d suspendSupported: %s hashesPerClock: %f extraSolutions: %d",
-	                 buf[0], newdev->numNonces, newdev->offsNonces, newdev->freqM1, newdev->freqMaxM, newdev->freqM, newdev->suspendSupported ? "T": "F", 
+	                 buf[0], newdev->numNonces, newdev->offsNonces, newdev->freqM1, newdev->dclk.freqMaxM, newdev->dclk.freqM, newdev->suspendSupported ? "T": "F",
 	                 newdev->hashesPerClock, newdev->extraSolutions);
 
 	if (buf[0] < 4) {
 		if (strncmp(newdev->bitFileName, "ztex_ufm1_15b", 13) != 0)
 			newdev->hashesPerClock = 0.5;
 		applog(LOG_WARNING, "HASHES_PER_CLOCK not defined, assuming %0.2f", newdev->hashesPerClock);
-	}
-
-	for (cnt=0; cnt < 255; cnt++) {
-		newdev->errorCount[cnt] = 0;
-		newdev->errorWeight[cnt] = 0;
-		newdev->errorRate[cnt] = 0;
-		newdev->maxErrorRate[cnt] = 0;
 	}
 
 	newdev->usbbus = libusb_get_bus_number(dev);

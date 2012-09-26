@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "dynclock.h"
 #include "logging.h"
 #include "miner.h"
 #include "fpgautils.h"
@@ -34,20 +35,11 @@ struct modminer_fpga_state {
 
 	char next_work_cmd[46];
 
-	unsigned char clock;
-	unsigned char max_clock;
-	// Number of iterations since we last got a nonce
-	int no_nonce_counter;
+	struct dclk_data dclk;
 	// Number of nonces didn't meet pdiff 1, ever
 	int bad_share_counter;
 	// Number of nonces did meet pdiff 1, ever
 	int good_share_counter;
-	// Number of nonces didn't meet pdiff 1, since last clock change
-	int bad_nonce_counter;
-	// Number of nonces total, since last clock change
-	int nonce_counter;
-	// Number of good nonces, since last clock change OR bad nonce
-	int good_nonce_counter;
 	// Time the clock was last reduced due to temperature
 	time_t last_cutoff_reduced;
 
@@ -308,6 +300,7 @@ modminer_fpga_prepare(struct thr_info *thr)
 
 	struct modminer_fpga_state *state;
 	state = thr->cgpu_data = calloc(1, sizeof(struct modminer_fpga_state));
+	dclk_prepare(&state->dclk);
 	state->next_work_cmd[0] = '\x08';  // Send Job
 	state->next_work_cmd[1] = thr->device_thread;  // FPGA id
 
@@ -322,30 +315,44 @@ modminer_change_clock(struct thr_info*thr, bool needlock, signed char delta)
 	char fpgaid = thr->device_thread;
 	int fd;
 	unsigned char cmd[6], buf[1];
+	unsigned char clk;
 
-	cmd[0] = '\x06';  // set clock speed
+	clk = (state->dclk.freqM * 2) + delta;
+
+	cmd[0] = '\x06';  // set frequency
 	cmd[1] = fpgaid;
-	cmd[2] = state->clock += delta;
+	cmd[2] = clk;
 	cmd[3] = cmd[4] = cmd[5] = '\0';
 
 	if (needlock)
 		mutex_lock(&modminer->device_mutex);
 	fd = modminer->device_fd;
 	if (6 != write(fd, cmd, 6))
-		bailout2(LOG_ERR, "%s %u.%u: Error writing (set clock speed)", modminer->api->name, modminer->device_id, fpgaid);
+		bailout2(LOG_ERR, "%s %u.%u: Error writing (set frequency)", modminer->api->name, modminer->device_id, fpgaid);
 	if (serial_read(fd, &buf, 1) != 1)
-		bailout2(LOG_ERR, "%s %u.%u: Error reading (set clock speed)", modminer->api->name, modminer->device_id, fpgaid);
+		bailout2(LOG_ERR, "%s %u.%u: Error reading (set frequency)", modminer->api->name, modminer->device_id, fpgaid);
 	if (needlock)
 		mutex_unlock(&modminer->device_mutex);
 
-	if (!buf[0]) {
-		state->clock -= delta;
+	if (buf[0])
+		state->dclk.freqM = clk / 2;
+
+	return true;
+}
+
+static bool modminer_dclk_change_clock(struct thr_info*thr, int multiplier)
+{
+	struct cgpu_info *modminer = thr->cgpu;
+	char fpgaid = thr->device_thread;
+	struct modminer_fpga_state *state = thr->cgpu_data;
+	uint8_t oldFreq = state->dclk.freqM;
+	signed char delta = (multiplier - oldFreq) * 2;
+	if (unlikely(!modminer_change_clock(thr, true, delta)))
 		return false;
-	}
 
-	state->bad_nonce_counter = state->nonce_counter = 0;
-	state->good_nonce_counter = 0;
-
+	char repr[0x10];
+	sprintf(repr, "%s %u.%u", modminer->api->name, modminer->device_id, fpgaid);
+	dclk_msg_freqchange(repr, oldFreq * 2, state->dclk.freqM * 2, NULL);
 	return true;
 }
 
@@ -354,21 +361,10 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 {
 	struct modminer_fpga_state *state = thr->cgpu_data;
 
-	if (state->clock <= MODMINER_MINIMUM_CLOCK)
+	if (state->dclk.freqM <= MODMINER_MINIMUM_CLOCK / 2)
 		return false;
 
 	return modminer_change_clock(thr, needlock, -2);
-}
-
-static bool
-modminer_increase_clock(struct thr_info*thr, bool needlock)
-{
-	struct modminer_fpga_state *state = thr->cgpu_data;
-
-	if (state->clock >= state->max_clock)
-		return false;
-
-	return modminer_change_clock(thr, needlock, 2);
 }
 
 static bool _modminer_get_nonce(struct cgpu_info*modminer, char fpgaid, uint32_t*nonce)
@@ -423,27 +419,28 @@ modminer_fpga_init(struct thr_info *thr)
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)", modminer->api->name, modminer->device_id, fpgaid);
 	state->pdone = 101;
 
-	state->clock = MODMINER_MAXIMUM_CLOCK + 2;  // Will be reduced by 2 immediately
+	state->dclk.freqM = MODMINER_MAXIMUM_CLOCK / 2 + 1;  // Will be reduced immediately
 	while (1) {
-		if (state->clock <= MODMINER_MINIMUM_CLOCK)
-			bailout2(LOG_ERR, "%s %u.%u: Hit minimum trying to find acceptable clock speeds", modminer->api->name, modminer->device_id, fpgaid);
-		state->clock -= 2;
+		if (state->dclk.freqM <= MODMINER_MINIMUM_CLOCK / 2)
+			bailout2(LOG_ERR, "%s %u.%u: Hit minimum trying to find acceptable frequencies", modminer->api->name, modminer->device_id, fpgaid);
+		--state->dclk.freqM;
 		if (!modminer_change_clock(thr, false, 0))
 			// MCU rejected assignment
 			continue;
 		if (!_modminer_get_nonce(modminer, fpgaid, &nonce))
-			bailout2(LOG_ERR, "%s %u.%u: Error detecting acceptable clock speeds", modminer->api->name, modminer->device_id, fpgaid);
+			bailout2(LOG_ERR, "%s %u.%u: Error detecting acceptable frequencies", modminer->api->name, modminer->device_id, fpgaid);
 		if (!memcmp(&nonce, "\x00\xff\xff\xff", 4))
 			// MCU took assignment, but disabled FPGA
 			continue;
 		break;
 	}
-	state->max_clock = state->clock;
-	if (MODMINER_DEFAULT_CLOCK < state->clock) {
-		if (!modminer_change_clock(thr, false, -(state->clock - MODMINER_DEFAULT_CLOCK)))
-			applog(LOG_WARNING, "%s %u.%u: Failed to set desired initial clock speed of %u", modminer->api->name, modminer->device_id, fpgaid, MODMINER_DEFAULT_CLOCK);
+	state->dclk.freqMaxM = state->dclk.freqM;
+	if (MODMINER_DEFAULT_CLOCK / 2 < state->dclk.freqM) {
+		if (!modminer_change_clock(thr, false, -(state->dclk.freqM * 2 - MODMINER_DEFAULT_CLOCK)))
+			applog(LOG_WARNING, "%s %u.%u: Failed to set desired initial frequency of %u", modminer->api->name, modminer->device_id, fpgaid, MODMINER_DEFAULT_CLOCK);
 	}
-	applog(LOG_WARNING, "%s %u.%u: Setting clock speed to %u (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->clock, MODMINER_MINIMUM_CLOCK, state->max_clock);
+	state->dclk.freqMDefault = state->dclk.freqM;
+	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u Mhz (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2, MODMINER_MINIMUM_CLOCK, state->dclk.freqMaxM * 2);
 
 	mutex_unlock(&modminer->device_mutex);
 
@@ -507,14 +504,10 @@ get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 
 		if (state->temp)
 			json_object_set(o, "Temperature", json_integer(state->temp));
-		json_object_set(o, "Frequency", json_real((double)state->clock * 1000000.));
-		json_object_set(o, "Max Frequency", json_real((double)state->max_clock * 1000000.));
-		json_object_set(o, "_No Nonce Counter", json_integer(state->no_nonce_counter));
+		json_object_set(o, "Frequency", json_real((double)state->dclk.freqM * 2 * 1000000.));
+		json_object_set(o, "Max Frequency", json_real((double)state->dclk.freqMaxM * 2 * 1000000.));
 		json_object_set(o, "Hardware Errors", json_integer(state->bad_share_counter));
 		json_object_set(o, "Valid Nonces", json_integer(state->good_share_counter));
-		json_object_set(o, "_Bad Nonce Counter", json_integer(state->bad_nonce_counter));
-		json_object_set(o, "_Nonce Counter", json_integer(state->nonce_counter));
-		json_object_set(o, "_Good Nonce Counter", json_integer(state->good_nonce_counter));
 
 		root = api_add_json(root, k[i], o, false);
 		json_decref(o);
@@ -584,6 +577,7 @@ modminer_process_results(struct thr_info*thr)
 	char cmd[2], temperature;
 	uint32_t nonce;
 	long iter;
+	int immediate_bad_nonces = 0, immediate_nonces = 0;
 	bool bad;
 	cmd[0] = '\x0a';
 	cmd[1] = fpgaid;
@@ -612,8 +606,14 @@ modminer_process_results(struct thr_info*thr)
 				time_t now = time(NULL);
 				if (state->last_cutoff_reduced != now) {
 					state->last_cutoff_reduced = now;
+					int oldFreq = state->dclk.freqM;
 					if (modminer_reduce_clock(thr, false))
-						applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (temp: %d)", modminer->api->name, modminer->device_id, fpgaid, state->clock, temperature);
+						applog(LOG_NOTICE, "%s %u.%u: Frequency %s from %u to %u Mhz (temp: %d)",
+						       modminer->api->name, modminer->device_id, fpgaid,
+						       (oldFreq > state->dclk.freqM ? "dropped" : "raised "),
+						       oldFreq * 2, state->dclk.freqM * 2,
+						       temperature
+						);
 				}
 			}
 		}
@@ -625,9 +625,8 @@ modminer_process_results(struct thr_info*thr)
 			safebailout();
 		mutex_unlock(&modminer->device_mutex);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
-			state->no_nonce_counter = 0;
-			++state->nonce_counter;
 			bad = !test_nonce(work, nonce, false);
+			++immediate_nonces;
 			if (!bad)
 				applog(LOG_DEBUG, "%s %u.%u: Nonce for current  work: %02x%02x%02x%02x",
 				       modminer->api->name, modminer->device_id, fpgaid,
@@ -645,11 +644,6 @@ modminer_process_results(struct thr_info*thr)
 			{
 				++state->good_share_counter;
 				submit_nonce(thr, work, nonce);
-				++state->good_nonce_counter;
-				if (state->good_nonce_counter >= 0x10 && ((!state->temp) || state->temp < modminer->cutofftemp - 2)) {
-					if (modminer_increase_clock(thr, true))
-						applog(LOG_NOTICE, "%s %u.%u: Raise clock speed to %u", modminer->api->name, modminer->device_id, fpgaid, state->clock);
-				}
 			}
 			else {
 				applog(LOG_DEBUG, "%s %u.%u: Nonce with H not zero  : %02x%02x%02x%02x",
@@ -658,22 +652,8 @@ modminer_process_results(struct thr_info*thr)
 				++hw_errors;
 				++modminer->hw_errors;
 				++state->bad_share_counter;
-				++state->bad_nonce_counter;
-				state->good_nonce_counter = 0;
-				if (state->bad_nonce_counter * 50 > 500 + state->nonce_counter)
-				{
-					// Only reduce clocks if hardware errors are more than ~2% of results
-					int pchwe = state->bad_nonce_counter * 100 / state->nonce_counter;
-					if (modminer_reduce_clock(thr, true))
-						applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (%d%% hw err)", modminer->api->name, modminer->device_id, fpgaid, state->clock, pchwe);
-				}
+				++immediate_bad_nonces;
 			}
-		}
-		else
-		if (++state->no_nonce_counter > 0x20000) {
-			state->no_nonce_counter = 0;
-			if (modminer_reduce_clock(thr, true))
-				applog(LOG_WARNING, "%s %u.%u: Drop clock speed to %u (no nonces)", modminer->api->name, modminer->device_id, fpgaid, state->clock);
 		}
 		if (work_restart(thr) || !--iter)
 			break;
@@ -688,7 +668,7 @@ modminer_process_results(struct thr_info*thr)
 	gettimeofday(&tv_workend, NULL);
 	timersub(&tv_workend, &state->tv_workstart, &elapsed);
 
-	uint64_t hashes = (uint64_t)state->clock * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
+	uint64_t hashes = (uint64_t)state->dclk.freqM * 2 * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
 	if (hashes > 0xffffffff)
 	{
 		applog(LOG_WARNING, "%s %u.%u: Finished work before new one sent", modminer->api->name, modminer->device_id, fpgaid);
@@ -699,6 +679,14 @@ modminer_process_results(struct thr_info*thr)
 	else
 		hashes -= state->hashes;
 	state->hashes += hashes;
+
+	dclk_gotNonces(&state->dclk);
+	if (immediate_bad_nonces)
+		dclk_errorCount(&state->dclk, ((double)immediate_bad_nonces) / (double)immediate_nonces);
+	dclk_preUpdate(&state->dclk);
+	if (!dclk_updateFreq(&state->dclk, modminer_dclk_change_clock, thr))
+		{}  // TODO: handle error
+
 	return hashes;
 }
 

@@ -24,15 +24,13 @@
 
 #include <libusb-1.0/libusb.h>
 
+#include "dynclock.h"
+
 #define LIBZTEX_MAX_DESCRIPTORS 512
 #define LIBZTEX_SNSTRING_LEN 10
 
 #define LIBZTEX_IDVENDOR 0x221A
 #define LIBZTEX_IDPRODUCT 0x0100
-
-#define LIBZTEX_MAXMAXERRORRATE 0.05
-#define LIBZTEX_ERRORHYSTERESIS 0.1
-#define LIBZTEX_OVERHEATTHRESHOLD 0.4
 
 struct libztex_fpgastate {
 	bool fpgaConfigured;
@@ -61,18 +59,12 @@ struct libztex_device {
 	uint8_t numNonces;
 	uint16_t offsNonces;
 	double freqM1;	
-	uint8_t freqM;
-	uint8_t freqMaxM;
-	uint8_t freqMDefault;
 	char* bitFileName;
 	bool suspendSupported;
 	double hashesPerClock;
 	uint8_t extraSolutions;
 
-	double errorCount[256];
-	double errorWeight[256];
-	double errorRate[256];
-	double maxErrorRate[256];
+	struct dclk_data dclk;
 
 	int numberOfFpgas;
 	int selectedFpga;

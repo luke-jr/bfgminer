@@ -252,6 +252,7 @@ fi
 AC_CONFIG_SUBDIRS([libblkmaker])
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [true])
+AM_CONDITIONAL([NEED_DYNCLOCK], [test x$modminer$ztex != xnono])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
