@@ -305,7 +305,10 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
 	curl_easy_setopt(curl, CURLOPT_HEADERDATA, &hi);
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
-	if (opt_socks_proxy) {
+	if (pool->rpc_proxy) {
+		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
+		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, pool->rpc_proxytype);
+	} else if (opt_socks_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, opt_socks_proxy);
 		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
 	}
@@ -459,6 +462,69 @@ err_out:
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	return NULL;
 }
+
+#if (LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR >= 10) || (LIBCURL_VERSION_MAJOR > 7)
+static struct {
+	const char *name;
+	curl_proxytype proxytype;
+} proxynames[] = {
+	{ "http:",	CURLPROXY_HTTP },
+#if (LIBCURL_VERSION_MAJOR > 7) || (LIBCURL_VERSION_MINOR > 19) || (LIBCURL_VERSION_MINOR == 19 && LIBCURL_VERSION_PATCH >= 4)
+	{ "http0:",	CURLPROXY_HTTP_1_0 },
+#endif
+#if (LIBCURL_VERSION_MAJOR > 7) || (LIBCURL_VERSION_MINOR > 15) || (LIBCURL_VERSION_MINOR == 15 && LIBCURL_VERSION_PATCH >= 2)
+	{ "socks4:",	CURLPROXY_SOCKS4 },
+#endif
+	{ "socks5:",	CURLPROXY_SOCKS5 },
+#if (LIBCURL_VERSION_MAJOR > 7) || (LIBCURL_VERSION_MINOR >= 18)
+	{ "socks4a:",	CURLPROXY_SOCKS4A },
+	{ "socks5h:",	CURLPROXY_SOCKS5_HOSTNAME },
+#endif
+	{ NULL,	0 }
+};
+#endif
+
+const char *proxytype(curl_proxytype proxytype)
+{
+	int i;
+
+	for (i = 0; proxynames[i].name; i++)
+		if (proxynames[i].proxytype == proxytype)
+			return proxynames[i].name;
+
+	return "invalid";
+}
+
+char *get_proxy(char *url, struct pool *pool)
+{
+	pool->rpc_proxy = NULL;
+
+#if (LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR >= 10) || (LIBCURL_VERSION_MAJOR > 7)
+	char *split;
+	int plen, len, i;
+
+	for (i = 0; proxynames[i].name; i++) {
+		plen = strlen(proxynames[i].name);
+		if (strncmp(url, proxynames[i].name, plen) == 0) {
+			if (!(split = strchr(url, '|')))
+				return url;
+
+			*split = '\0';
+			len = split - url;
+			pool->rpc_proxy = malloc(1 + len - plen);
+			if (!(pool->rpc_proxy))
+				quit(1, "Failed to malloc rpc_proxy");
+
+			strcpy(pool->rpc_proxy, url + plen);
+			pool->rpc_proxytype = proxynames[i].proxytype;
+			url = split + 1;
+			break;
+		}
+	}
+#endif
+	return url;
+}
+
 
 char *bin2hex(const unsigned char *p, size_t len)
 {
@@ -721,4 +787,10 @@ void nmsleep(unsigned int msecs)
 double us_tdiff(struct timeval *end, struct timeval *start)
 {
 	return end->tv_sec * 1000000 + end->tv_usec - start->tv_sec * 1000000 - start->tv_usec;
+}
+
+/* Returns the seconds difference between end and start times as a double */
+double tdiff(struct timeval *end, struct timeval *start)
+{
+	return end->tv_sec - start->tv_sec + (end->tv_usec - start->tv_usec) / 1000000.0;
 }

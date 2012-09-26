@@ -2,7 +2,7 @@
 session_start();
 #
 global $title, $miner, $port, $readonly, $notify, $rigs;
-global $rigtotals, $forcerigtotals;
+global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
@@ -39,6 +39,10 @@ $poolinputs = false;
 # Set $rigs to an array of your cgminer rigs that are running
 #  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
 $rigs = array('127.0.0.1:4028');
+#
+# Set $rigipsecurity to false to show the IP/Port of the rig
+# in the socket error messages and also show the full socket message
+$rigipsecurity = true;
 #
 # Set $rigtotals to true to display totals on the single rig page
 # 'false' means no totals (and ignores $forcerigtotals)
@@ -226,7 +230,7 @@ function htmlhead($checkapi, $rig, $pg = null)
  if ($readonly === false && $checkapi === true)
  {
 	$error = null;
-	$access = api('privileged');
+	$access = api($rig, 'privileged');
 	if ($error != null
 	||  !isset($access['STATUS']['STATUS'])
 	||  $access['STATUS']['STATUS'] != 'S')
@@ -275,8 +279,9 @@ global $haderror, $error;
 $haderror = false;
 $error = null;
 #
-function getsock($addr, $port)
+function getsock($rig, $addr, $port)
 {
+ global $rigipsecurity;
  global $haderror, $error, $socksndtimeoutsec, $sockrcvtimeoutsec;
 
  $error = null;
@@ -285,9 +290,15 @@ function getsock($addr, $port)
  if ($socket === false || $socket === null)
  {
 	$haderror = true;
-	$error = socket_strerror(socket_last_error());
-	$msg = "socket create(TCP) failed";
-	$error = "ERR: $msg '$error'\n";
+	if ($rigipsecurity === false)
+	{
+		$error = socket_strerror(socket_last_error());
+		$msg = "socket create(TCP) failed";
+		$error = "ERR: $msg '$error'\n";
+	}
+	else
+		$error = "ERR: socket create(TCP) failed\n";
+
 	return null;
  }
 
@@ -301,9 +312,15 @@ function getsock($addr, $port)
  if ($res === false)
  {
 	$haderror = true;
-	$error = socket_strerror(socket_last_error());
-	$msg = "socket connect($addr,$port) failed";
-	$error = "ERR: $msg '$error'\n";
+	if ($rigipsecurity === false)
+	{
+		$error = socket_strerror(socket_last_error());
+		$msg = "socket connect($addr,$port) failed";
+		$error = "ERR: $msg '$error'\n";
+	}
+	else
+		$error = "ERR: socket connect($rig) failed\n";
+
 	socket_close($socket);
 	return null;
  }
@@ -365,12 +382,12 @@ function revert($str)
  return str_replace(array("\1", "\2", "\3", "\4"), array("|", "\\", "=", ","), $str);
 }
 #
-function api($cmd)
+function api($rig, $cmd)
 {
  global $haderror, $error;
  global $miner, $port, $hidefields;
 
- $socket = getsock($miner, $port);
+ $socket = getsock($rig, $miner, $port);
  if ($socket != null)
  {
 	socket_write($socket, $cmd, strlen($cmd));
@@ -506,7 +523,15 @@ function classlastshare($when, $alldata, $warnclass, $errorclass)
  if (!isset($alldata['Last Share Time']))
 	return '';
 
+ if (!isset($alldata['Last Share Difficulty']))
+	return '';
+
  $expected = pow(2, 32) / ($alldata['MHS av'] * pow(10, 6));
+
+ // If the share difficulty changes while waiting on a share,
+ // this calculation will of course be incorrect
+ $expected *= $alldata['Last Share Difficulty'];
+
  $howlong = $when - $alldata['Last Share Time'];
  if ($howlong < 1)
 	$howlong = 1;
@@ -641,11 +666,20 @@ function fmt($section, $name, $value, $when, $alldata)
 		if ($value == 0)
 			$class = $errorclass;
 		else
-			if (isset($alldata['MHS av']))
+			if (isset($alldata['Difficulty Accepted'])
+			&&  isset($alldata['Accepted'])
+			&&  isset($alldata['MHS av'])
+			&&  ($alldata['Difficulty Accepted'] > 0)
+			&&  ($alldata['Accepted'] > 0))
 			{
 				$expected = 60 * $alldata['MHS av'] * (pow(10, 6) / pow(2, 32));
 				if ($expected == 0)
 					$expected = 0.000001; // 1 H/s
+
+				$da = $alldata['Difficulty Accepted'];
+				$a = $alldata['Accepted'];
+				$expected /= ($da / $a);
+
 				$ratio = $value / $expected;
 				if ($ratio < 0.9)
 					$class = $loclass;
@@ -713,16 +747,26 @@ function fmt($section, $name, $value, $when, $alldata)
 			$dec = '';
 		else
 			$dec = '.'.$parts[1];
-		$ret = number_format($parts[0]).$dec;
+		$ret = number_format((float)$parts[0]).$dec;
 
 		if ($value == 0)
 			$class = $errorclass;
 		else
-			if (isset($alldata['Utility']))
+			if (isset($alldata['Difficulty Accepted'])
+			&&  isset($alldata['Accepted'])
+			&&  isset($alldata['Utility'])
+			&&  ($alldata['Difficulty Accepted'] > 0)
+			&&  ($alldata['Accepted'] > 0))
 			{
 				$expected = 60 * $value * (pow(10, 6) / pow(2, 32));
-				$utility = $alldata['Utility'];
-				$ratio = $utility / $expected;
+				if ($expected == 0)
+					$expected = 0.000001; // 1 H/s
+
+				$da = $alldata['Difficulty Accepted'];
+				$a = $alldata['Accepted'];
+				$expected /= ($da / $a);
+
+				$ratio = $alldata['Utility'] / $expected;
 				if ($ratio < 0.9)
 					$class = $hiclass;
 				else
@@ -757,12 +801,15 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Discarded':
 	case 'POOL.Diff1 Shares':
 	case 'total.Diff1 Shares':
+	case 'GPU.Diff1 Work':
+	case 'PGA.Diff1 Work':
+	case 'total.Diff1 Work':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
 		else
 			$dec = '.'.$parts[1];
-		$ret = number_format($parts[0]).$dec;
+		$ret = number_format((float)$parts[0]).$dec;
 		break;
 	case 'GPU.Status':
 	case 'PGA.Status':
@@ -1067,7 +1114,7 @@ function processgpus($rig)
  global $error;
  global $warnfont, $warnoff;
 
- $gpus = api('gpucount');
+ $gpus = api($rig, 'gpucount');
 
  if ($error != null)
 	otherrow("<td>Error getting GPU count: $warnfont$error$warnoff</td>");
@@ -1136,7 +1183,7 @@ function process($cmds, $rig)
  $count = count($cmds);
  foreach ($cmds as $cmd => $des)
  {
-	$process = api($cmd);
+	$process = api($rig, $cmd);
 
 	if ($error != null)
 	{
@@ -1251,7 +1298,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 		else
 			$name = $num;
 
-		$ans = api($cmd);
+		$ans = api($name, $cmd);
 
 		if ($error != null)
 		{
@@ -1763,7 +1810,7 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 
 		foreach ($cmds as $cmd => $one)
 		{
-			$process = api($cmd);
+			$process = api($name, $cmd);
 
 			if ($error != null)
 			{
@@ -2052,7 +2099,7 @@ function display()
 
  newtable();
  doforeach('version', 'rig summary', array(), array(), true);
- $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares');
+ $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares', 'Diff1 Work');
  doforeach('summary', 'summary information', $sum, array(), false);
  endtable();
  otherrow('<td><br><br></td>');

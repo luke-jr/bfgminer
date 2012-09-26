@@ -1585,15 +1585,14 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpumid);
 		if (gpu_us > 0 && ++gpu->hit > 4) {
 			gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpustart) / gpu->intervals;
-			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
 
 			/* Try to not let the GPU be out for longer than
 			 * opt_dynamic_interval in ms, but increase
 			 * intensity when the system is idle in dynamic mode */
-			if (gpu->gpu_us_average > dynamic_us) {
+			if (gpu_us > dynamic_us) {
 				if (gpu->intensity > MIN_INTENSITY)
 					--gpu->intensity;
-			} else if (gpu->gpu_us_average < dynamic_us / 2) {
+			} else if (gpu_us < dynamic_us / 2) {
 				if (gpu->intensity < MAX_INTENSITY)
 					++gpu->intensity;
 			}

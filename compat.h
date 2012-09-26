@@ -57,7 +57,7 @@ enum {
 	PRIO_PROCESS		= 0,
 };
 
-static inline int setpriority(int which, int who, int prio)
+static inline int setpriority(__maybe_unused int which, __maybe_unused int who, __maybe_unused int prio)
 {
 	/* FIXME - actually do something */
 	return 0;

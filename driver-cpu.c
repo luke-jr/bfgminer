@@ -75,7 +75,7 @@ static inline void affine_to_cpu(int id, int cpu)
 
 
 /* TODO: resolve externals */
-extern bool submit_work_sync(struct thr_info *thr, const struct work *work_in);
+extern bool submit_work_sync(struct thr_info *thr, const struct work *work_in, struct timeval *tv);
 extern char *set_int_range(const char *arg, int *i, int min, int max);
 extern int dev_from_id(int thr_id);
 
@@ -827,7 +827,7 @@ CPUSearch:
 	/* if nonce found, submit work */
 	if (unlikely(rc)) {
 		applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
-		if (unlikely(!submit_work_sync(thr, work))) {
+		if (unlikely(!submit_work_sync(thr, work, NULL))) {
 			applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
 		}
 		work->blk.nonce = last_nonce + 1;

@@ -168,7 +168,7 @@ Options for both config file and command line:
 --scrypt            Use the scrypt algorithm for mining (litecoin only)
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
---socks-proxy <arg> Set socks4 proxy (host:port)
+--socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
 --syslog            Use system log for output messages (default: standard error)
 --temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
 --text-only|-T      Disable ncurses formatted screen output
@@ -239,6 +239,7 @@ The official supplied binaries are compiled with support for all FPGAs.
 To force the code to only attempt detection with a specific driver,
 prepend the argument with the driver name followed by a colon.
 For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
+or using the short name: "ica:/dev/ttyUSB0" or "bfl:\\.\COM5"
 
 For other FPGA details see the FPGA-README
 
@@ -294,6 +295,28 @@ cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu -
 Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
 
 cgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
+
+Single pool with a standard http proxy, regular desktop:
+
+cgminer -o "http:proxy:port|http://pool:port" -u username -p password
+
+Single pool with a socks5 proxy, regular desktop:
+
+cgminer -o "socks5:proxy:port|http://pool:port" -u username -p password
+
+The list of proxy types are:
+ http:    standard http 1.1 proxy
+ http0:   http 1.0 proxy
+ socks4:  socks4 proxy
+ socks5:  socks5 proxy
+ socks4a: socks4a proxy
+ socks5h: socks5 proxy using a hostname
+
+If you compile cgminer with a version of CURL before 7.19.4 then some of the above will
+not be available. All are available since CURL version 7.19.4
+
+If you specify the --socks-proxy option to cgminer, it will only be applied to all pools
+that don't specify their own proxy setting like above
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
@@ -451,6 +474,26 @@ it will log to a file called logfile.txt and otherwise work the same.
 There is also the -m option on linux which will spawn a command of your choice
 and pipe the output directly to that command.
 
+The WorkTime details 'debug' option adds details on the end of each line
+displayed for Accepted or Rejected work done. An example would be:
+
+ <-00000059.ed4834a3 M:X D:1.0 G:17:02:38:0.405 C:1.855 (2.995) W:3.440 (0.000) S:0.461 R:17:02:47
+
+The first 2 hex codes are the previous block hash, the rest are reported in
+seconds unless stated otherwise:
+The previous hash is followed by the getwork mode used M:X where X is one of
+P:Pool, T:Test Pool, L:LP or B:Benchmark,
+then D:d.ddd is the difficulty required to get a share from the work,
+then G:hh:mm:ss:n.nnn, which is when the getwork or LP was sent to the pool and
+the n.nnn is how long it took to reply,
+followed by 'O' on it's own if it is an original getwork, or 'C:n.nnn' if it was
+a clone with n.nnn stating how long after the work was recieved that it was cloned,
+(m.mmm) is how long from when the original work was received until work started,
+W:n.nnn is how long the work took to process until it was ready to submit,
+(m.mmm) is how long from ready to submit to actually doing the submit, this is
+usually 0.000 unless there was a problem with submitting the work,
+S:n.nnn is how long it took to submit the completed work and await the reply,
+R:hh:mm:ss is the actual time the work submit reply was received
 
 If you start cgminer with the --sharelog option, you can get detailed
 information for each share found. The argument to the option may be "-" for
@@ -816,7 +859,7 @@ driver version and ATI stream version.
 
 Q: cgminer reports no devices or only one device on startup on Linux although
 I have multiple devices and drivers+SDK installed properly?
-A: Try 'export DISPLAY=:0" before running cgminer.
+A: Try "export DISPLAY=:0" before running cgminer.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
@@ -843,10 +886,27 @@ They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
 
-Q: How do I get my BFL device to auto-recognise?
-A: The only thing that needs to be done is to load the driver for them, which
-on linux would require:
-sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
+A: On linux, if the /dev/ttyUSB* devices don't automatically appear, the only
+thing that needs to be done is to load the driver for them:
+BFL: sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+Icarus: sudo modprobe pl2303 vendor=0x067b product=0x230
+Lancelot: sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
+Cairnsmore: sudo modprobe ftdi_sio product=0x8350 vendor=0x0403
+On windows you must install the pl2303 or ftdi driver required for the device
+pl2303: http://prolificusa.com/pl-2303hx-drivers/
+ftdi: http://www.ftdichip.com/Drivers/VCP.htm
+
+Q: On linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
+cgminer can't mine on them
+A: Make sure you have the required priviledges to access the /dev/ttyUSB* devices:
+ sudo ls -las /dev/ttyUSB*
+will give output like:
+ 0 crw-rw---- 1 root dialout 188, 0 2012-09-11 13:49 /dev/ttyUSB0
+This means your account must have the group 'dialout' or root priviledges
+To permanently give your account the 'dialout' group:
+ sudo usermod -G dialout -a `whoami`
+Then logout and back in again
 
 
 ---
