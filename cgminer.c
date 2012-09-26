@@ -403,7 +403,7 @@ static void sharelog(const char*disposition, const struct work*work)
 }
 
 /* Return value is ignored if not called from add_pool_details */
-static struct pool *add_pool(void)
+struct pool *add_pool(void)
 {
 	struct pool *pool;
 
@@ -543,6 +543,25 @@ static char *set_rr(enum pool_strategy *strategy)
 	return NULL;
 }
 
+/* Detect that url is for a stratum protocol either via the presence of
+ * stratum+tcp or by detecting a stratum server response */
+bool detect_stratum(struct pool *pool, char *url)
+{
+	bool stratum;
+
+	if (!extract_sockaddr(pool, url))
+		return false;
+
+	stratum = initiate_stratum(pool);
+
+	if (!strncasecmp(url, "stratum+tcp://", 14) || stratum) {
+		pool->has_stratum = true;
+		return true;
+	}
+
+	return false;
+}
+
 static char *set_url(char *arg)
 {
 	struct pool *pool;
@@ -554,10 +573,8 @@ static char *set_url(char *arg)
 
 	arg = get_proxy(arg, pool);
 
-	if (!extract_sockaddr(pool, arg))
-		return "Failed to extract address from parsed url";
-
-	initiate_stratum(pool);
+	if (detect_stratum(pool, arg))
+		return NULL;
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -5160,12 +5177,8 @@ char *curses_input(const char *query)
 }
 #endif
 
-void add_pool_details(bool live, char *url, char *user, char *pass)
+void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass)
 {
-	struct pool *pool;
-
-	pool = add_pool();
-
 	url = get_proxy(url, pool);
 
 	pool->rpc_url = url;
@@ -5187,6 +5200,7 @@ void add_pool_details(bool live, char *url, char *user, char *pass)
 static bool input_pool(bool live)
 {
 	char *url = NULL, *user = NULL, *pass = NULL;
+	struct pool *pool;
 	bool ret = false;
 
 	immedok(logwin, true);
@@ -5196,7 +5210,18 @@ static bool input_pool(bool live)
 	if (!url)
 		goto out;
 
-	if (strncmp(url, "http://", 7) &&
+	user = curses_input("Username");
+	if (!user)
+		goto out;
+
+	pass = curses_input("Password");
+	if (!pass)
+		goto out;
+
+	pool = add_pool();
+
+	if (!detect_stratum(pool, url) &&
+	    strncmp(url, "http://", 7) &&
 	    strncmp(url, "https://", 8)) {
 		char *httpinput;
 
@@ -5209,15 +5234,7 @@ static bool input_pool(bool live)
 		url = httpinput;
 	}
 
-	user = curses_input("Username");
-	if (!user)
-		goto out;
-
-	pass = curses_input("Password");
-	if (!pass)
-		goto out;
-
-	add_pool_details(live, url, user, pass);
+	add_pool_details(pool, live, url, user, pass);
 	ret = true;
 out:
 	immedok(logwin, false);

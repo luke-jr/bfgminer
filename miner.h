@@ -646,7 +646,9 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int enabled_pools;
-extern void add_pool_details(bool live, char *url, char *user, char *pass);
+extern bool detect_stratum(struct pool *pool, char *url);
+extern struct pool *add_pool(void);
+extern void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
 
@@ -818,6 +820,8 @@ struct pool {
 	char *subscription;
 	char *nonce1;
 	int nonce2;
+	bool has_stratum;
+	bool stratum_active;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
