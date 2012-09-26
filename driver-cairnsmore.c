@@ -79,7 +79,7 @@ bool cairnsmore_supports_dynclock(int fd)
 		"\xe6\x3c\0\xb7"  // Set frequency multiplier to 60 (150 Mhz)
 		"\0\0\0\0\0\0\0\0\0\0\0\0" "BFG0"
 		"\x8b\xdb\x05\x1a" "\xff\xff\xff\xff" "\x00\x00\x1e\xfd";
-	if (write(fd, pkts, sizeof(pkts) != sizeof(pkts)))
+	if (write(fd, pkts, sizeof(pkts)) != sizeof(pkts))
 		return false;
 
 	uint32_t nonce = 0;
@@ -92,14 +92,14 @@ bool cairnsmore_supports_dynclock(int fd)
 		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
 	}
 	switch (nonce) {
-		case 0x000b1b5e:
+		case 0x000b1b5e:  // on big    endian
+		case 0x5e1b0b00:  // on little endian
 			// Hashed the command, so it's not supported
 			return false;
+		default:
+			// TODO: nonce from a real job... handle it
 		case 0:
 			return true;
-		default:
-			applog(LOG_DEBUG, "cairnsmore_supports_dynclock got unexpected nonce %08x", nonce);
-			return false;
 	}
 }
 
@@ -140,6 +140,9 @@ static bool cairnsmore_init(struct thr_info *thr)
 		       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
 		);
 	} else {
+		applog(LOG_WARNING, "%s %u: Frequency scaling not supported",
+			cm1->api->name, cm1->device_id
+		);
 		// Test failures corrupt the hash state, so next scanhash is a firstrun
 		struct icarus_state *state = thr->cgpu_data;
 		state->firstrun = true;
