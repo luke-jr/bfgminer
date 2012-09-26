@@ -845,3 +845,96 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	pool->server = (struct sockaddr_in *)res->ai_addr;
 	return true;
 }
+
+static bool sock_send(int sock, char *s, ssize_t len)
+{
+	size_t sent = 0;
+
+	while (len > 0 ) {
+		sent = send(sock, s + sent, len, 0);
+		if (sent < 1)
+			return false;
+		len -= sent;
+	}
+	fsync(sock);
+
+	return true;
+}
+
+#define RECVSIZE 8192
+
+bool initiate_stratum(struct pool *pool)
+{
+	json_t *val, *res_val, *err_val;
+	struct timeval timeout;
+	char *s, *ret = NULL;
+	json_error_t err;
+	ssize_t len;
+	fd_set rd;
+
+	s = alloca(RECVSIZE);
+	sprintf(s, "{\"id\": 0, \"method\": \"mining.subscribe\", \"params\": []}\n");
+
+	pool->sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (pool->sock == INVSOCK)
+		quit(1, "Failed to create pool socket in initiate_stratum");
+	if (SOCKETFAIL(connect(pool->sock, (struct sockaddr *)pool->server, sizeof(struct sockaddr)))) {
+		applog(LOG_DEBUG, "Failed to connect socket to pool");
+		return false;
+	}
+
+	if (!sock_send(pool->sock, s, strlen(s))) {
+		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
+		return false;
+	}
+
+	/* Use select to timeout instead of waiting forever for a response */
+	FD_ZERO(&rd);
+	FD_SET(pool->sock, &rd);
+	timeout.tv_sec = 60;
+	if (select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
+		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
+		return false;
+	}
+
+	if (recv(pool->sock, s, RECVSIZE, MSG_PEEK | MSG_DONTWAIT) < 1) {
+		applog(LOG_DEBUG, "Failed to recv sock in initiate_stratum");
+		return false;
+	}
+
+	ret = strtok(s, "\n");
+	if (!ret) {
+		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in initiate_stratum");
+		return false;
+	}
+
+	len = strlen(ret);
+	read(pool->sock, s, len);
+
+	val = JSON_LOADS(s, &err);
+	if (!val) {
+		applog(LOG_DEBUG, "JSON decode failed(%d): %s", err.line, err.text);
+		return false;
+	}
+
+	res_val = json_object_get(val, "result");
+	err_val = json_object_get(val, "error");
+
+	if (!res_val || json_is_null(res_val) ||
+	    (err_val && !json_is_null(err_val))) {
+		char *ss;
+
+		if (err_val)
+			ss = json_dumps(err_val, JSON_INDENT(3));
+		else
+			ss = strdup("(unknown reason)");
+
+		applog(LOG_INFO, "JSON-RPC call failed: %s", ss);
+
+		free(ss);
+
+		return false;
+	}
+
+	return true;
+}
