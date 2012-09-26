@@ -375,7 +375,8 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 
 	info->min_data_count = MIN_DATA_COUNT;
 
-	applog(LOG_DEBUG, "Icarus: Init: %d mode=%s read_count=%d Hs=%e",
+	applog(LOG_DEBUG, "%s %u: Init: mode=%s read_count=%d Hs=%e",
+		icarus->api->name,
 		icarus->device_id, timing_mode_str(info->timing_mode), info->read_count, info->Hs);
 }
 
@@ -594,10 +595,12 @@ bool icarus_detect_custom(const char *devpath, struct device_api *api, struct IC
 	icarus->threads = 1;
 	add_cgpu(icarus);
 
-	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
-		devpath, icarus->device_id);
+	applog(LOG_INFO, "Found %s %u at %s",
+		icarus->api->name, icarus->device_id,
+		devpath);
 
-	applog(LOG_DEBUG, "Icarus: Init: %d baud=%d work_division=%d fpga_count=%d",
+	applog(LOG_DEBUG, "%s %u: Init: baud=%d work_division=%d fpga_count=%d",
+		icarus->api->name,
 		icarus->device_id, baud, work_division, fpga_count);
 
 	icarus->cgpu_data = info;
@@ -789,7 +792,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 		if (ob_hex) {
-			applog(LOG_DEBUG, "Icarus %d sent: %s",
+			applog(LOG_DEBUG, "%s %u sent: %s",
+				icarus->api->name,
 				icarus->device_id, ob_hex);
 			free(ob_hex);
 		}
@@ -822,7 +826,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			estimate_hashes = 0xffffffff;
 
 		if (opt_debug) {
-			applog(LOG_DEBUG, "Icarus %d no nonce = 0x%08llx hashes (%ld.%06lds)",
+			applog(LOG_DEBUG, "%s %u no nonce = 0x%08llx hashes (%ld.%06lds)",
+					icarus->api->name,
 					icarus->device_id, estimate_hashes,
 					elapsed.tv_sec, elapsed.tv_usec);
 		}
@@ -840,7 +845,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	hash_count *= info->fpga_count;
 
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Icarus %d nonce = 0x%08x = 0x%08llx hashes (%ld.%06lds)",
+		applog(LOG_DEBUG, "%s %u nonce = 0x%08x = 0x%08llx hashes (%ld.%06lds)",
+				icarus->api->name,
 				icarus->device_id, nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
 	}
 
@@ -961,8 +967,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			else if (info->timing_mode == MODE_SHORT)
 				info->do_icarus_timing = false;
 
-//			applog(LOG_WARNING, "Icarus %d Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
-			applog(LOG_WARNING, "Icarus %d Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
+//			applog(LOG_WARNING, "%s %u Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->api->name, icarus->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
+			applog(LOG_WARNING, "%s %u Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
+					icarus->api->name,
 					icarus->device_id, Hs, W, read_count, fullnonce);
 		}
 		info->history_count++;
