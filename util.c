@@ -801,7 +801,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	char *url_begin, *url_end, *port_start;
 	char *url_address, *port;
 	struct addrinfo hints, *res;
-	size_t url_len, port_len = 0;
+	int url_len, port_len = 0;
 
 	url_begin = strstr(url, "//");
 	if (!url_begin)
@@ -848,7 +848,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 
 static bool sock_send(int sock, char *s, ssize_t len)
 {
-	size_t sent = 0;
+	ssize_t sent = 0;
 
 	while (len > 0 ) {
 		sent = send(sock, s + sent, len, 0);
