@@ -13,15 +13,21 @@ TMPDIR="${OUTDIR}-tmp"
 
 set -e
 mkdir -v "$OUTDIR"
+dlls='
+	pdcurses.dll
+	libcurl-4.dll
+	pthreadGC2.dll
+	libjansson-4.dll
+	libusb-1.0.dll
+	zlib1.dll
+'
 cp -v \
 	-L \
-	pdcurses.dll \
-	libcurl-4.dll \
-	pthreadGC2.dll \
-	libjansson-4.dll \
-	libusb-1.0.dll \
-	zlib1.dll \
+	$dlls \
 	"$OUTDIR/"
+for dll in $dlls; do
+	i686-pc-mingw32-strip "$OUTDIR/$dll"
+done
 git branch TMP "$tag"
 git clone . "$TMPDIR" -b TMP --depth 1
 git branch -D TMP
@@ -60,6 +66,9 @@ NOCONFIGURE=1 \
 	--build=i686-pc-linux-gnu \
 	--host=i686-pc-mingw32
 make -j4
+i686-pc-mingw32-strip \
+	libblkmaker/.libs/*.dll \
+	bfgminer.exe
 cp -v \
 	bfgminer.exe \
 	libblkmaker/.libs/*.dll \
