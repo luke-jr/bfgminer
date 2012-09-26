@@ -852,7 +852,7 @@ static bool sock_send(int sock, char *s, ssize_t len)
 
 	while (len > 0 ) {
 		sent = send(sock, s + sent, len, 0);
-		if (sent < 1)
+		if (SOCKETFAIL(sent))
 			return false;
 		len -= sent;
 	}
@@ -867,8 +867,9 @@ bool initiate_stratum(struct pool *pool)
 {
 	json_t *val, *res_val, *err_val;
 	struct timeval timeout;
-	char *s, *ret = NULL;
+	char *s, *sret = NULL;
 	json_error_t err;
+	bool ret = false;
 	ssize_t len;
 	fd_set rd;
 
@@ -880,12 +881,12 @@ bool initiate_stratum(struct pool *pool)
 		quit(1, "Failed to create pool socket in initiate_stratum");
 	if (SOCKETFAIL(connect(pool->sock, (struct sockaddr *)pool->server, sizeof(struct sockaddr)))) {
 		applog(LOG_DEBUG, "Failed to connect socket to pool");
-		return false;
+		goto out;
 	}
 
 	if (!sock_send(pool->sock, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
-		return false;
+		goto out;
 	}
 
 	/* Use select to timeout instead of waiting forever for a response */
@@ -894,27 +895,28 @@ bool initiate_stratum(struct pool *pool)
 	timeout.tv_sec = 60;
 	if (select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
-		return false;
+		goto out;
 	}
 
-	if (recv(pool->sock, s, RECVSIZE, MSG_PEEK | MSG_DONTWAIT) < 1) {
+	if (SOCKETFAIL(recv(pool->sock, s, RECVSIZE, MSG_PEEK | MSG_DONTWAIT))) {
 		applog(LOG_DEBUG, "Failed to recv sock in initiate_stratum");
-		return false;
+		goto out;
 	}
 
-	ret = strtok(s, "\n");
-	if (!ret) {
+	sret = strtok(s, "\n");
+	if (!sret) {
 		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in initiate_stratum");
-		return false;
+		goto out;
 	}
 
-	len = strlen(ret);
+	/* We know how much data is in the buffer so this read should not fail */
+	len = strlen(sret);
 	read(pool->sock, s, len);
 
 	val = JSON_LOADS(s, &err);
 	if (!val) {
 		applog(LOG_DEBUG, "JSON decode failed(%d): %s", err.line, err.text);
-		return false;
+		goto out;
 	}
 
 	res_val = json_object_get(val, "result");
@@ -933,8 +935,13 @@ bool initiate_stratum(struct pool *pool)
 
 		free(ss);
 
-		return false;
+		goto out;
 	}
 
-	return true;
+	ret = true;
+out:
+	if (!ret)
+		CLOSESOCKET(pool->sock);
+
+	return ret;
 }
