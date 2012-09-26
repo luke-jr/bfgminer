@@ -4689,6 +4689,7 @@ tryagain:
 		return false;
 
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
+	pool->probed = false;
 	gettimeofday(&tv_getwork, NULL);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			true, false, &rolltime, pool, false);
