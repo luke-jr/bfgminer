@@ -858,6 +858,8 @@ int set_memoryclock(int gpu, int iMemoryClock)
 		return ret;
 	}
 
+	gpus[gpu].gpu_memclock = iMemoryClock;
+
 	iMemoryClock *= 100;
 	ga = &gpus[gpu].adl;
 
