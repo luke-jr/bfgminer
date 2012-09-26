@@ -17,7 +17,7 @@
 #include "miner.h"
 #include "fpgautils.h"
 
-#define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.ncd"
+#define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
 #define BISTREAM_USER_ID "\2\4$B"
 #define MODMINER_MINIMUM_CLOCK  178
 #define MODMINER_DEFAULT_CLOCK  200
