@@ -992,10 +992,9 @@ static bool parse_stratum(struct pool *pool, char *s)
 	}
 
 out:
-	if (!ret) {
-		if (val)
-			json_decref(val);
-	}
+	if (val)
+		json_decref(val);
+
 	return ret;
 }
 
@@ -1020,11 +1019,8 @@ bool auth_stratum(struct pool *pool)
 		goto out;
 
 out:
-	if (!ret) {
-		if (val)
-			json_decref(val);
-	} else
-		pool->stratum_val = val;
+	if (val)
+		json_decref(val);
 
 	return ret;
 }
@@ -1098,13 +1094,13 @@ bool initiate_stratum(struct pool *pool)
 		applog(LOG_WARNING, "Failed to get mining notify in initiate_stratum");
 		goto out;
 	}
-	pool->subscription = (char *)json_string_value(json_array_get(notify_val, 1));
+	pool->subscription = strdup(json_string_value(json_array_get(notify_val, 1)));
 	if (!pool->subscription) {
 		applog(LOG_WARNING, "Failed to get a subscription in initiate_stratum");
 		goto out;
 	}
 
-	pool->nonce1 = (char *)json_string_value(json_array_get(res_val, 1));
+	pool->nonce1 = strdup(json_string_value(json_array_get(res_val, 1)));
 	if (!pool->nonce1) {
 		applog(LOG_WARNING, "Failed to get nonce1 in initiate_stratum");
 		goto out;
@@ -1117,18 +1113,18 @@ bool initiate_stratum(struct pool *pool)
 
 	ret = true;
 out:
-	if (!ret) {
-		CLOSESOCKET(pool->sock);
-		if (val)
-			json_decref(val);
-	} else {
+	if (val)
+		json_decref(val);
+
+	if (ret) {
 		pool->stratum_active = true;
 		pool->stratum_val = val;
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extranonce2 %d",
 			       pool->pool_no, pool->subscription, pool->nonce1, pool->nonce2);
 		}
-	}
+	} else
+		CLOSESOCKET(pool->sock);
 
 	return ret;
 }
