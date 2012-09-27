@@ -1493,14 +1493,27 @@ static bool work_decode(const json_t *val, struct work *work)
 		}
 		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
 #if BLKMAKER_VERSION > 0
-		if (opt_coinbase_sig) {
+		{
 			ssize_t ae = blkmk_append_coinbase_safe(work->tmpl, opt_coinbase_sig, 101);
 			static bool appenderr = false;
 			if (ae <= 0) {
-				applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%d)", ae, work->pool->pool_no);
-				appenderr = true;
-			} else {
-				size_t cbappendsz = strlen(opt_coinbase_sig);
+				if (opt_coinbase_sig) {
+					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%d)", ae, work->pool->pool_no);
+					appenderr = true;
+				}
+			} else if (ae >= 3 || opt_coinbase_sig) {
+				const char *cbappend = opt_coinbase_sig;
+				if (!cbappend) {
+					const char full[] = PACKAGE " " VERSION;
+					// NOTE: Intentially including a trailing \0 on long forms so extranonce doesn't confuse things
+					if ((size_t)ae >= sizeof(full))
+						cbappend = full;
+					else if ((size_t)ae >= sizeof(PACKAGE))
+						cbappend = PACKAGE;
+					else
+						cbappend = "BFG";
+				}
+				size_t cbappendsz = strlen(cbappend);
 				static bool truncatewarning = false;
 				if (cbappendsz <= (size_t)ae) {
 					ae = cbappendsz;
@@ -1513,7 +1526,7 @@ static bool work_decode(const json_t *val, struct work *work)
 					free(tmp);
 					truncatewarning = true;
 				}
-				ae = blkmk_append_coinbase_safe(work->tmpl, opt_coinbase_sig, ae);
+				ae = blkmk_append_coinbase_safe(work->tmpl, cbappend, ae);
 				if (ae <= 0) {
 					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Error appending coinbase signature (%d)", ae);
 					appenderr = true;
