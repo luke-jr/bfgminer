@@ -4340,7 +4340,7 @@ err_out:
 	return false;
 }
 
-bool hashtest(const struct work *work, bool checktarget)
+enum test_nonce2_result hashtest2(const struct work *work, bool checktarget)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[128];
@@ -4356,42 +4356,53 @@ bool hashtest(const struct work *work, bool checktarget)
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
 
+	if (hash2_32[7] != 0)
+		return TNR_BAD;
+
 	if (!checktarget)
-		return hash2_32[7] == 0;
+		return TNR_GOOD;
 
 	for (i = 0; i < 32 / 4; i++)
 		hash2_32[i] = swab32(hash2_32[i]);
 
 	memcpy((void*)work->hash, hash2, 32);
 
-	return fulltest(work->hash, work->target);
+	if (!fulltest(work->hash, work->target))
+		return TNR_HIGH;
 
+	return TNR_GOOD;
 }
 
-bool test_nonce(struct work *work, uint32_t nonce, bool checktarget)
+enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool checktarget)
 {
-	if (opt_scrypt) {
-		uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
+	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
+	*work_nonce = nonce;
 
-		*work_nonce = nonce;
-		return true;
-	}
+	if (opt_scrypt)
+		return TNR_GOOD;
 
-	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
-	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
-	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
-	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
-
-	return hashtest(work, checktarget);
+	return hashtest2(work, checktarget);
 }
 
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
-	if (!test_nonce(work, nonce, true)) {
-		applog(LOG_INFO, "Pool %d share below target", work->pool->pool_no);
-		return true;
+	switch (test_nonce2(work, nonce)) {
+		case TNR_BAD:
+		{
+			struct cgpu_info *cgpu = thr->cgpu;
+			applog(LOG_WARNING, "%s %u: invalid nonce - HW error",
+			       cgpu->api->name, cgpu->device_id);
+			++hw_errors;
+			++thr->cgpu->hw_errors;
+			return false;
+		}
+		case TNR_HIGH:
+			// Share above target, normal
+			return true;
+		case TNR_GOOD:
+			break;
 	}
 	return submit_work_sync(thr, work);
 }
