@@ -176,6 +176,19 @@ static struct api_data *cairnsmore_api_extra_device_status(struct cgpu_info *cm1
 	return root;
 }
 
+static bool cairnsmore_identify(struct cgpu_info *cm1)
+{
+	struct ICARUS_INFO *info = cm1->cgpu_data;
+	if (!info->dclk.freqM)
+		return false;
+	
+	cairnsmore_send_cmd(cm1->device_fd, 1, 1);
+	sleep(5);
+	cairnsmore_send_cmd(cm1->device_fd, 1, 0);
+	cm1->flash_led = true;
+	return true;
+}
+
 extern struct device_api icarus_api;
 
 __attribute__((constructor(1000)))
@@ -186,5 +199,6 @@ static void cairnsmore_api_init()
 	cairnsmore_api.name = "ECM";
 	cairnsmore_api.api_detect = cairnsmore_detect;
 	cairnsmore_api.thread_init = cairnsmore_init;
+	cairnsmore_api.identify_device = cairnsmore_identify;
 	cairnsmore_api.get_api_extra_device_status = cairnsmore_api_extra_device_status;
 }
