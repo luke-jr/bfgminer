@@ -3968,10 +3968,10 @@ static bool pool_active(struct pool *pool, bool pinging)
 	int rolltime;
 
 	if (pool->has_stratum) {
-		if (pool->stratum_active && !pinging)
-			return true;
-		if (initiate_stratum(pool))
-			return true;
+		if ((!pool->stratum_active || pinging) && !initiate_stratum(pool))
+			return false;
+		if (!pool->stratum_auth && !auth_stratum(pool))
+			return false;
 		return false;
 	}
 

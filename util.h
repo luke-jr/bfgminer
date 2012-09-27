@@ -110,6 +110,7 @@
 #endif
 struct pool;
 bool extract_sockaddr(struct pool *pool, char *url);
+bool auth_stratum(struct pool *pool);
 bool initiate_stratum(struct pool *pool);
 
 #endif /* __UTIL_H__ */

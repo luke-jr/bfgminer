@@ -842,6 +842,9 @@ struct pool {
 	int nonce2;
 	bool has_stratum;
 	bool stratum_active;
+	bool stratum_auth;
+	/* Store json reference to clear it if we close connection */
+	json_t *stratum_val;
 	struct stratum_work swork;
 };
 

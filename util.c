@@ -850,6 +850,9 @@ static bool sock_send(int sock, char *s, ssize_t len)
 {
 	ssize_t sent = 0;
 
+	if (opt_protocol)
+		applog(LOG_DEBUG, "SEND: %s", s);
+
 	while (len > 0 ) {
 		sent = send(sock, s + sent, len, 0);
 		if (SOCKETFAIL(sent))
@@ -870,6 +873,24 @@ static void clear_sock(SOCKETTYPE sock)
 	recv(sock, s, RECVSIZE, MSG_DONTWAIT);
 }
 
+/* Check to see if Santa's been good to you */
+static bool sock_full(SOCKETTYPE sock, bool wait)
+{
+	struct timeval timeout;
+	fd_set rd;
+
+	FD_ZERO(&rd);
+	FD_SET(sock, &rd);
+	timeout.tv_usec = 0;
+	if (wait)
+		timeout.tv_sec = 60;
+	else
+		timeout.tv_sec = 0;
+	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
+		return true;
+	return false;
+}
+
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
 static char *recv_line(SOCKETTYPE sock)
@@ -887,28 +908,58 @@ static char *recv_line(SOCKETTYPE sock)
 		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in recv_line");
 		goto out;
 	}
-	len = strlen(sret);
+	len = strlen(sret) + 1;
 	/* We know how much data is in the buffer so this read should not fail */
-	read(sock, s, len);
-	sret = strdup(s);
-
+	if (SOCKETFAIL(recv(sock, s, len, 0)))
+		goto out;
+	if (s)
+		sret = strdup(strtok(s, "\n"));
 out:
 	if (!sret)
 		clear_sock(sock);
+	else if (opt_protocol)
+		applog(LOG_DEBUG, "RECVD: %s", sret);
 	return sret;
+}
+
+bool auth_stratum(struct pool *pool)
+{
+	json_t *val = NULL, *res_val, *err_val, *notify_val;
+	char *s, *buf, *sret = NULL;
+	json_error_t err;
+	bool ret = false;
+
+	s = alloca(RECVSIZE);
+	sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}\n",
+		pool->swork.id++, pool->rpc_user, pool->rpc_pass);
+
+	while (sock_full(pool->sock, false)) {
+		sret = recv_line(pool->sock);
+		free(sret);
+	}
+
+	if (!sock_send(pool->sock, s, strlen(s)))
+		goto out;
+
+out:
+	if (!ret) {
+		if (val)
+			json_decref(val);
+	} else
+		pool->stratum_val = val;
+
+	return ret;
 }
 
 bool initiate_stratum(struct pool *pool)
 {
 	json_t *val, *res_val, *err_val, *notify_val;
 	char *s, *buf, *sret = NULL;
-	struct timeval timeout;
 	json_error_t err;
 	bool ret = false;
-	fd_set rd;
 
 	s = alloca(RECVSIZE);
-	sprintf(s, "{\"id\": 0, \"method\": \"mining.subscribe\", \"params\": []}\n");
+	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}\n", pool->swork.id++);
 
 	pool->sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (pool->sock == INVSOCK)
@@ -923,11 +974,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	/* Use select to timeout instead of waiting forever for a response */
-	FD_ZERO(&rd);
-	FD_SET(pool->sock, &rd);
-	timeout.tv_sec = 60;
-	if (select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
+	if (!sock_full(pool->sock, true)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
@@ -998,6 +1045,7 @@ out:
 			json_decref(val);
 	} else {
 		pool->stratum_active = true;
+		pool->stratum_val = val;
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extranonce2 %d",
 			       pool->pool_no, pool->subscription, pool->nonce1, pool->nonce2);
