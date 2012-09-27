@@ -863,6 +863,41 @@ static bool sock_send(int sock, char *s, ssize_t len)
 
 #define RECVSIZE 8192
 
+static void clear_sock(SOCKETTYPE sock)
+{
+	char *s = alloca(RECVSIZE);
+
+	recv(sock, s, RECVSIZE, MSG_DONTWAIT);
+}
+
+/* Peeks at a socket to find the first end of line and then reads just that
+ * from the socket and returns that as a malloced char */
+static char *recv_line(SOCKETTYPE sock)
+{
+	char *sret = NULL, *s;
+	ssize_t len;
+
+	s = alloca(RECVSIZE);
+	if (SOCKETFAIL(recv(sock, s, RECVSIZE, MSG_PEEK))) {
+		applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+		goto out;
+	}
+	sret = strtok(s, "\n");
+	if (!sret) {
+		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in recv_line");
+		goto out;
+	}
+	len = strlen(sret);
+	/* We know how much data is in the buffer so this read should not fail */
+	read(sock, s, len);
+	sret = strdup(s);
+
+out:
+	if (!sret)
+		clear_sock(sock);
+	return sret;
+}
+
 bool initiate_stratum(struct pool *pool)
 {
 	json_t *val, *res_val, *err_val, *notify_val;
@@ -870,7 +905,6 @@ bool initiate_stratum(struct pool *pool)
 	struct timeval timeout;
 	json_error_t err;
 	bool ret = false;
-	ssize_t len;
 	fd_set rd;
 
 	s = alloca(RECVSIZE);
@@ -898,22 +932,12 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (SOCKETFAIL(recv(pool->sock, s, RECVSIZE, MSG_PEEK | MSG_DONTWAIT))) {
-		applog(LOG_DEBUG, "Failed to recv sock in initiate_stratum");
+	sret = recv_line(pool->sock);
+	if (!sret)
 		goto out;
-	}
 
-	sret = strtok(s, "\n");
-	if (!sret) {
-		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in initiate_stratum");
-		goto out;
-	}
-
-	/* We know how much data is in the buffer so this read should not fail */
-	len = strlen(sret);
-	read(pool->sock, s, len);
-
-	val = JSON_LOADS(s, &err);
+	val = JSON_LOADS(sret, &err);
+	free(sret);
 	if (!val) {
 		applog(LOG_DEBUG, "JSON decode failed(%d): %s", err.line, err.text);
 		goto out;
