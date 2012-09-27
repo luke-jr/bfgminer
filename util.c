@@ -926,8 +926,41 @@ out:
 	return sret;
 }
 
+/* Extracts a string value from a json array with error checking. To be used
+ * when the value of the string returned is only examined and not to be stored.
+ * See json_array_string below */
+static char *__json_array_string(json_t *val, unsigned int entry)
+{
+	json_t *arr_entry;
+
+	if (json_is_null(val))
+		return NULL;
+	if (!json_is_array(val))
+		return NULL;
+	if (entry > json_array_size(val))
+		return NULL;
+	arr_entry = json_array_get(val, entry);
+	if (!json_is_string(arr_entry))
+		return NULL;
+
+	return (json_string_value(arr_entry));
+}
+
+/* Creates a freshly malloced dup of __json_array_string */
+static char *json_array_string(json_t *val, unsigned int entry)
+{
+	char *buf = __json_array_string(val, entry);
+
+	if (buf)
+		return strdup(buf);
+	return NULL;
+}
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
+	json_t *arr;
+
+	
 	return true;
 }
 
@@ -1093,18 +1126,18 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	buf = (char *)json_string_value(json_array_get(notify_val, 0));
+	buf = __json_array_string(notify_val, 0);
 	if (!buf || strcasecmp(buf, "mining.notify")) {
 		applog(LOG_WARNING, "Failed to get mining notify in initiate_stratum");
 		goto out;
 	}
-	pool->subscription = strdup(json_string_value(json_array_get(notify_val, 1)));
+	pool->subscription = json_array_string(notify_val, 1);
 	if (!pool->subscription) {
 		applog(LOG_WARNING, "Failed to get a subscription in initiate_stratum");
 		goto out;
 	}
 
-	pool->nonce1 = strdup(json_string_value(json_array_get(res_val, 1)));
+	pool->nonce1 = json_array_string(res_val, 1);
 	if (!pool->nonce1) {
 		applog(LOG_WARNING, "Failed to get nonce1 in initiate_stratum");
 		goto out;
@@ -1122,7 +1155,6 @@ out:
 
 	if (ret) {
 		pool->stratum_active = true;
-		pool->stratum_val = val;
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extranonce2 %d",
 			       pool->pool_no, pool->subscription, pool->nonce1, pool->nonce2);

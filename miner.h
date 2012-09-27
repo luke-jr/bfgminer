@@ -754,8 +754,6 @@ enum pool_enable {
 struct stratum_work {
 	/* id we sent to receive this work */
 	int id;
-	/* Reference to json structure all the following were extracted from */
-	json_t *json_val;
 
 	char *job_id;
 	char *prev_hash;
@@ -843,8 +841,6 @@ struct pool {
 	bool has_stratum;
 	bool stratum_active;
 	bool stratum_auth;
-	/* Store json reference to clear it if we close connection */
-	json_t *stratum_val;
 	struct stratum_work swork;
 };
 
