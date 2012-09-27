@@ -514,6 +514,12 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
+char *set_strdup(const char *arg, char **p)
+{
+	*p = strdup((char *)arg);
+	return NULL;
+}
+
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
 #endif
@@ -940,10 +946,10 @@ static struct opt_table opt_config_table[] = {
 #endif
 #if BLKMAKER_VERSION > 0
 	OPT_WITH_ARG("--coinbase-sig",
-		     opt_set_charp, NULL, &opt_coinbase_sig,
+		     set_strdup, NULL, &opt_coinbase_sig,
 		     "Set coinbase signature when possible"),
 	OPT_WITH_ARG("--coinbase|--cbsig|--cb-sig|--cb|--prayer",
-		     opt_set_charp, NULL, &opt_coinbase_sig,
+		     set_strdup, NULL, &opt_coinbase_sig,
 		     opt_hidden),
 #endif
 #ifdef WANT_CPUMINE
