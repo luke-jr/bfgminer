@@ -770,6 +770,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 #endif
 
 	memcpy(&nonce, nonce_bin, sizeof(nonce_bin));
+	nonce = be32toh(nonce);
 
 	// Handle dynamic clocking for "subclass" devices
 	// This runs before sending next job, in case it isn't supported
@@ -834,8 +835,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 		return estimate_hashes;
 	}
-
-	nonce = be32toh(nonce);
 
 	submit_nonce(thr, &state->last_work, nonce);
 	memcpy(&state->last_work, work, sizeof(state->last_work));
