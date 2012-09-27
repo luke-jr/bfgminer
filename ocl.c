@@ -295,7 +295,7 @@ int clDevicesNum(void) {
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
-			if (i < numPlatforms - 1)
+			if (i != opt_platform_id)
 				continue;
 			return -1;
 		}
@@ -653,11 +653,13 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		cl_ulong ma = cgpu->max_alloc, mt;
 		int pow2 = 0;
 
-		if (!cgpu->lookup_gap) {
+		if (!cgpu->opt_lg) {
 			applog(LOG_DEBUG, "GPU %d: selecting lookup gap of 2", gpu);
 			cgpu->lookup_gap = 2;
-		}
-		if (!cgpu->thread_concurrency) {
+		} else
+			cgpu->lookup_gap = cgpu->opt_lg;
+
+		if (!cgpu->opt_tc) {
 			cgpu->thread_concurrency = ma / 32768 / cgpu->lookup_gap;
 			if (cgpu->shaders && cgpu->thread_concurrency > cgpu->shaders) {
 				cgpu->thread_concurrency -= cgpu->thread_concurrency % cgpu->shaders;
@@ -666,7 +668,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			}
 				
 			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %u",gpu,  cgpu->thread_concurrency);
-		}
+		} else
+			cgpu->thread_concurrency = cgpu->opt_tc;
 
 		/* If we have memory to spare, try to find a power of 2 value
 		 * >= required amount to map nicely to an intensity */

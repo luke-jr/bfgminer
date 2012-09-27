@@ -81,7 +81,7 @@ void *alloca (size_t);
 
 
 #ifdef HAVE_ADL
- #include "ADL_SDK/adl_sdk.h"
+ #include "ADL/adl_sdk.h"
 #endif
 
 #ifdef HAVE_LIBUSB
@@ -121,17 +121,37 @@ void *alloca (size_t);
 #endif
 #endif /* !defined(__GLXBYTEORDER_H__) */
 
+#ifdef WIN32
+  #ifndef __LITTLE_ENDIAN
+    #define __LITTLE_ENDIAN 1234
+    #define __BIG_ENDIAN    4321
+  #endif
+  #ifndef __BYTE_ORDER
+    #define __BYTE_ORDER __LITTLE_ENDIAN
+  #endif
+#else
+  #include <endian.h>
+#endif
+
 /* This assumes htobe32 is a macro in endian.h */
 #ifndef htobe32
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  define be32toh(x) bswap_32(x)
 #  define htobe32(x) bswap_32(x)
+#  define le32toh(x) (x)
+#  define htole32(x) (x)
 # elif __BYTE_ORDER == __BIG_ENDIAN
 #  define be32toh(x) (x)
 #  define htobe32(x) (x)
+#  define le32toh(x) bswap_32(x)
+#  define htole32(x) bswap_32(x)
 #else
 #error UNKNOWN BYTE ORDER
 #endif
+#endif
+
+#ifndef max
+#  define max(a, b)  ((a) > (b) ? (a) : (b))
 #endif
 
 #undef unlikely
@@ -155,6 +175,22 @@ void *alloca (size_t);
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+#ifdef HAVE_CURSES
+	extern int my_cancellable_getch(void);
+#	ifdef getch
+		// getch() is a macro
+		static int __maybe_unused __real_getch(void) {
+			return getch();
+		}
+#		undef getch
+#		define getch()  my_cancellable_getch()
+#	else
+		// getch() is a real function
+#		define __real_getch  getch
+#		define getch()  my_cancellable_getch()
+#	endif
+#endif
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
@@ -170,9 +206,10 @@ enum pool_strategy {
 	POOL_ROUNDROBIN,
 	POOL_ROTATE,
 	POOL_LOADBALANCE,
+	POOL_BALANCE,
 };
 
-#define TOP_STRATEGY (POOL_LOADBALANCE)
+#define TOP_STRATEGY (POOL_BALANCE)
 
 struct strategies {
 	const char *s;
@@ -329,6 +366,7 @@ struct cgpu_info {
 	unsigned int avg_wait_d;
 	uint32_t nonces;
 	bool nonce_range;
+	bool polling;
 #endif
 	pthread_mutex_t		device_mutex;
 
@@ -337,7 +375,6 @@ struct cgpu_info {
 	double accepted_weighed;
 	int rejected;
 	int hw_errors;
-	unsigned int low_count;
 	double rolling;
 	double total_mhashes;
 	double utility;
@@ -365,14 +402,16 @@ struct cgpu_info {
 	cl_ulong max_alloc;
 
 #ifdef USE_SCRYPT
-	int lookup_gap;
-	int thread_concurrency;
+	int opt_lg, lookup_gap;
+	int opt_tc, thread_concurrency;
 	int shaders;
 #endif
 	struct timeval tv_gpustart;;
 	struct timeval tv_gpuend;
 	double gpu_us_average;
 #endif
+
+	bool new_work;
 
 	float temp;
 	int cutofftemp;
@@ -445,6 +484,7 @@ extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*s
 extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
+extern void rename_thr(const char* name);
 
 struct string_elist {
 	char *string;
@@ -491,6 +531,20 @@ static inline void swap256(void *dest_p, const void *src_p)
 	dest[7] = src[0];
 }
 
+static inline void swap32yes(void*out, const void*in, size_t sz) {
+	size_t swapcounter = 0;
+	for (swapcounter = 0; swapcounter < sz; ++swapcounter)
+		(((uint32_t*)out)[swapcounter]) = swab32(((uint32_t*)in)[swapcounter]);
+}
+
+#ifdef __BIG_ENDIAN__
+#  define swap32tobe(out, in, sz)  (void)0
+#  define swap32tole(out, in, sz)  swap32yes(out, in, sz)
+#else
+#  define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
+#  define swap32tole(out, in, sz)  (void)0
+#endif
+
 extern void quit(int status, const char *format, ...);
 
 static inline void mutex_lock(pthread_mutex_t *lock)
@@ -503,6 +557,11 @@ static inline void mutex_unlock(pthread_mutex_t *lock)
 {
 	if (unlikely(pthread_mutex_unlock(lock)))
 		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
+}
+
+static inline int mutex_trylock(pthread_mutex_t *lock)
+{
+	return pthread_mutex_trylock(lock);
 }
 
 static inline void wr_lock(pthread_rwlock_t *lock)
@@ -548,9 +607,11 @@ static inline void rwlock_init(pthread_rwlock_t *lock)
 struct pool;
 
 extern bool opt_protocol;
+extern bool have_longpoll;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
+extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
@@ -562,6 +623,7 @@ extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
 extern bool opt_restart;
+extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
@@ -589,12 +651,12 @@ extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 extern int opt_scantime;
 
 extern pthread_mutex_t console_lock;
+extern pthread_mutex_t ch_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
 extern void thread_reportin(struct thr_info *thr);
-extern bool queue_request(struct thr_info *thr, bool needed);
 extern int restart_wait(unsigned int mstime);
 extern int stale_wait(unsigned int mstime, struct work*, bool checkend);
 
@@ -658,13 +720,16 @@ extern int opt_rotate_period;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;
-extern int total_accepted, total_rejected;
+extern int total_accepted, total_rejected, total_diff1;;
 extern int total_getworks, total_stale, total_discarded;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
 extern const int opt_cutofftemp;
+extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
+extern char *current_fullhash;
+extern struct timeval block_timeval;
 
 #ifdef HAVE_OPENCL
 typedef struct {
@@ -706,9 +771,11 @@ struct curl_ent {
 	struct timeval tv;
 };
 
+/* Disabled needs to be the lowest enum as a freshly calloced value will then
+ * equal disabled */
 enum pool_enable {
-	POOL_ENABLED,
 	POOL_DISABLED,
+	POOL_ENABLED,
 	POOL_REJECTING,
 };
 
@@ -718,6 +785,7 @@ struct pool {
 	int accepted, rejected;
 	int seq_rejects;
 	int solved;
+	int diff1;
 
 	bool submit_fail;
 	bool idle;
@@ -739,6 +807,9 @@ struct pool {
 	unsigned int getfail_occasions;
 	unsigned int remotefail_occasions;
 	struct timeval tv_idle;
+
+	double utility;
+	int last_shares, shares;
 
 	char *rpc_url;
 	char *rpc_userpass;
@@ -789,6 +860,7 @@ struct work {
 	bool		stale;
 	bool		mandatory;
 	bool		block;
+	bool		queued;
 
 	unsigned char	work_restart_id;
 	int		id;

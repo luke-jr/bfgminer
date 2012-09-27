@@ -23,6 +23,7 @@
  *   You should have received a copy of the GNU General Public License
  *   along with this program; if not, see http://www.gnu.org/licenses/.
 **/
+
 #include <unistd.h>
 #include <sha2.h>
 #include "miner.h"
@@ -156,28 +157,20 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	int i;
 
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-	hdata->nonce = swab32(hdata->nonce);
-	hdata->hash7 = swab32(hdata->hash7);
-#endif
+	hdata->nonce = le32toh(hdata->nonce);
+	hdata->hash7 = le32toh(hdata->hash7);
 
 	work->data[64 + 12 + 0] = (hdata->nonce >> 0) & 0xff;
 	work->data[64 + 12 + 1] = (hdata->nonce >> 8) & 0xff;
 	work->data[64 + 12 + 2] = (hdata->nonce >> 16) & 0xff;
 	work->data[64 + 12 + 3] = (hdata->nonce >> 24) & 0xff;
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
+	swap32yes(swap32, data32, 80 / 4);
 	
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-	if (hash2_32[7] != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
-#else
-	if (swab32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
-#endif
+	if (htobe32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
 		ztex->errorCount[ztex->freqM] += 1.0 / ztex->numNonces;
 		applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
 		return false;
@@ -275,9 +268,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
  
 		for (i = 0; i < ztex->numNonces; i++) {
 			nonce = hdata[i].nonce;
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-			nonce = swab32(nonce);
-#endif
+			nonce = le32toh(nonce);
 			if (nonce > noncecnt)
 				noncecnt = nonce;
 			if (((nonce & 0x7fffffff) >> 4) < ((lastnonce[i] & 0x7fffffff) >> 4)) {
@@ -285,9 +276,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				overflow = true;
 			} else
 				lastnonce[i] = nonce;
-#if !(defined(__BIGENDIAN__) || defined(MIPSEB))
-			nonce = swab32(nonce);
-#endif
+			nonce = htole32(nonce);
 			if (!ztex_checkNonce(ztex, work, &hdata[i])) {
 				thr->cgpu->hw_errors++;
 				continue;
@@ -307,9 +296,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 						backlog[backlog_p++] = nonce;
 						if (backlog_p >= backlog_max)
 							backlog_p = 0;
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-						nonce = swab32(nonce);
-#endif
+						nonce = le32toh(nonce);
 						work->blk.nonce = 0xffffffff;
 						rv = submit_nonce(thr, work, nonce);
 						applog(LOG_DEBUG, "%s: submitted %0.8x %d", ztex->repr, nonce, rv);

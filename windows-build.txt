@@ -12,12 +12,13 @@ Most of what is described below (copying files, downloading files, etc.) can be 
 directly in the MinGW MSYS shell; these instructions do not do so because package
 versions and links change over time. The best way is to use your browser, go to the
 links directly, and see for yourself which versions you want to install.
+Winrar was used to do the extracting of archive files in the making of this guide.
 
-If you think that this documentation was helpful and you wish to donate, you can 
+If you think that this documentation was helpful and you wish to donate, you can
 do so at the following address. 12KaKtrK52iQjPdtsJq7fJ7smC32tXWbWr
 
 **************************************************************************************
-* A tip that might help you along the way                                            *
+* A tip that might help you along the way                                             *
 **************************************************************************************
 Enable "QuickEdit Mode" in your Command Prompt Window or MinGW Command Prompt
 Window (No need to go into the context menu to choose edit-mark/copy/paste):
@@ -36,7 +37,7 @@ what you copied.
 Go to this url ==> http://www.mingw.org/wiki/Getting_Started
 Click the link that says "Download and run the latest mingw-get-inst version."
 Download and run the latest file. Install MinGW in the default directory.
-(I downloaded the one labeled "mingw-get-inst-20111118" - note that this could 
+(I downloaded the one labeled "mingw-get-inst-20120426" - note that this could
 be a different version later.)
 Make sure to check the option for "Download latest repository catalogs".
 I just selected all the check boxes (excluding "Fortran Compiler") so that everything
@@ -67,7 +68,7 @@ struct tcp_keepalive
 
 **************************************************************************************
 * Run the MSYS shell for the first time to create your user directory                *
-************************************************************************************** 
+**************************************************************************************
 (Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
 This will create your user directory for you.
 
@@ -83,44 +84,19 @@ window.
 **************************************************************************************
 * Copy BFGMiner source to your MSYS working directory                                *
 **************************************************************************************
-Copy BFGMiner source code directory into: 
+Copy BFGMiner source code directory into:
 \MinGW\msys\1.0\home\(folder with your user name)
-
-**************************************************************************************
-* Install AMD APP SDK, latest version (only if you want GPU mining)                  *
-**************************************************************************************
-Note: You do not need to install the AMD APP SDK if you are only using Nvidia GPU's
-Go to this url for the latest AMD APP SDK: 
- http://developer.amd.com/sdks/AMDAPPSDK/downloads/Pages/default.aspx
-Go to this url for legacy AMD APP SDK's:
- http://developer.amd.com/sdks/AMDAPPSDK/downloads/pages/AMDAPPSDKDownloadArchive.aspx
-Download and install whichever version you like best.
-Copy the folders in \Program Files (x86)\AMD APP\include to \MinGW\include 
-Copy \Program Files (x86)\AMD APP\lib\x86\libOpenCL.a to \MinGW\lib
-Note: If you are on a 32 bit version of windows "Program Files (x86)" will be 
-"Program Files".
-Note2: If you update your APP SDK later you might want to recopy the above files 
-
-**************************************************************************************
-* Install AMD ADL SDK, latest version (only if you want GPU monitoring)              *
-**************************************************************************************
-Note: You do not need to install the AMD ADL SDK if you are only using Nvidia GPU's	
-Go to this url ==> http://developer.amd.com/sdks/ADLSDK/Pages/default.aspx
-Download and unzip the file you downloaded.
-Pull adl_defines.h, adl_sdk.h, and adl_structures.h out of the include folder 
-Put those files into the ADL_SDK folder in your source tree as shown below.
-\MinGW\msys\1.0\home\(folder with your user name)\bfgminer-x.x.x\ADL_SDK
 
 **************************************************************************************
 * Install GTK-WIN, required for Pkg-config in the next step                          *
 **************************************************************************************
-Go to this url ==> http://sourceforge.net/projects/gtk-win/ 
+Go to this url ==> http://sourceforge.net/projects/gtk-win/
 Download the file.
 After you have downloaded the file Double click/run it and this will install GTK+
 I chose all the selection boxes when I installed.
-Copy libglib-2.0-0.dll and intl.dll from \Program Files (x86)\gtk2-runtime\bin to 
+Copy libglib-2.0-0.dll and intl.dll from \Program Files (x86)\gtk2-runtime\bin to
 \MinGW\bin
-Note: If you are on a 32 bit version of windows "Program Files (x86)" will be 
+Note: If you are on a 32 bit version of windows "Program Files (x86)" will be
 "Program Files".
 
 **************************************************************************************
@@ -132,28 +108,28 @@ Download the file from the tool link. Extract "pkg-config.exe" from bin and plac
 your  \MinGW\bin directory.
 Download the file from the "Dev" link. Extract "pkg.m4" from share\aclocal and place
 in your \MingW\share\aclocal directory.
-		
+
 **************************************************************************************
 * Install libcurl                                                                    *
 **************************************************************************************
 Go to this url ==> http://curl.haxx.se/download.html#Win32
 At the section where it says "Win32 - Generic", Click on the link that indicates
-Win32 2000.XP 7.24.0 libcurl SSL and download it.
+Win32 2000.XP 7.27.0 libcurl SSL and download it.
 The one I downloaded may not be current for you. Choose the latest.
 Extract the files that are in the zip (bin, include, and lib) to their respective
 locations in MinGW (\MinGW\bin, \MinGW\include, and \MinGW\lib).
-Edit the file \MinGW\lib\pkgconfig\libcurl.pc and change "-lcurl" to 
+Edit the file \MinGW\lib\pkgconfig\libcurl.pc and change "-lcurl" to
 "-lcurl -lcurldll".
 Ref. http://old.nabble.com/gcc-working-with-libcurl-td20506927.html
 
 **************************************************************************************
 * Build bfgminer.exe                                                                 *
 **************************************************************************************
-Run the MinGW MSYS shell 
-(Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).	
+Run the MinGW MSYS shell
+(Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
 Change the working directory to your BFGMiner project folder.
-Example: cd bfgminer-2.1.2 [Enter Key] if you are unsure then type "ls -la"
-Another way is to type "cd cg" and then press the tab key; It will auto fill.		
+Example: cd bfgminer-2.7.1 [Enter Key] if you are unsure then type "ls -la"
+Another way is to type "cd bfg" and then press the tab key; It will auto fill.
 Type the lines below one at a time. Look for problems after each one before going on
 to the next.
 
@@ -173,12 +149,12 @@ may be different as well.
   *.cl            from \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x
   README          from \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x
   libcurl.dll     from \MinGW\bin
-  libeay32.dll    from \MinGW\bin
   libidn-11.dll   from \MinGW\bin
-  libssl32.dll    from \MinGW\bin
+  libeay32.dll    from \MinGW\bin
+  ssleay32.dll    from \MinGW\bin
   libpdcurses.dll from \MinGW\bin
   pthreadGC2.dll  from \MinGW\bin
-  
+
 **************************************************************************************
 * Optional - Install Git into MinGW/MSYS                                             *
 **************************************************************************************
@@ -187,43 +163,48 @@ Click on the Downloads tab.
 Download the latest "Portable" git archive.
 Extract the git*.exe files from the bin folder and put them into \MinGW\bin.
 Extract the share\git-core folder and place it into \MinGW\share.
+After the previous step you should have a folder called \MinGW\share\git-core.
 To test if it is working, open a MinGW shell and type the following:
   git config -–global core.autocrlf false (note: one time run only)
   git clone git://github.com/luke-jr/bfgminer.git
-  
+
 If you simply just want to update the source after you have already cloned, type:
-  git pull git://github.com/luke-jr/bfgminer.git
+  git pull
 
 Now you can get the latest source directly from github.
 
 **************************************************************************************
-* Optional - Make a .sh file to automate copying over ADL files                      *
+* Optional - Install libusb if you need auto USB device detection; required for Ztex *
 **************************************************************************************
-Make a folder/directory in your home folder and name it ADL_SDK.
- (ref:  \MinGW\msys\1.0\home\(folder with your user name)\ADL_SDK)
-Copy the ADL .h files into that folder/directory.
-Open your favorite text editor and type the following into it.
- cp -av ../ADL_SDK/*.h ADL_SDK
-Save the file as "adl.sh" and then place the file into "\MinGW\msys\1.0\bin".
-From now on when your current working directory is the bfgminer source directory
-You can simply type "adl.sh" and it will place the ADL header files into place
-For you. Make sure you never remove the ADL_SDK folder from your home folder.
+Go to this url ==> http://libusbx.org/
+Click on the "Downloads" tab.
+Click on "releases".
+Click on the latest version. I downloaded 1.0.12; yours may be newer.
+Do not download from the link that says "Looking for the latest version?".
+Click on "Windows"
+Click on the file and download it. I downloaded libusbx-1.0.12-win.7z.
+Extract the the following from the file and place in where directed.
+Copy libusb.h from include\libusbx-1.0 to \MinGW\include\libusb-1.0\libusb.h
+Copy contents of MinGW32\static \MinGW\lib
+Copy contents of MinGW32\dll to \MinGW\lib
+You will have to copy "libusb-1.0.dll" to your working BFGMiner binary directory.
 
 **************************************************************************************
 * Some ./configure options                                                           *
 **************************************************************************************
---disable-opencl        Override detection and disable building with opencl
---disable-adl           Override detection and disable building with adl
+--enable-cpumining      Build with cpu mining support(default disabled)
+--disable-opencl        Build without support for OpenCL (default enabled)
+--disable-adl           Build without ADL monitoring (default enabled)
 --enable-bitforce       Compile support for BitForce FPGAs(default disabled)
 --enable-icarus         Compile support for Icarus Board(default disabled)
+--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
+--enable-ztex           Compile support for Ztex Board(default disabled)
+--enable-scrypt         Compile support for scrypt litecoin mining (default disabled)
+--without-curses        Compile support for curses TUI (default enabled)
+--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
 ######################################################################################
 #                                                                                    #
 #       Native WIN32 setup and build instructions (on mingw32/Windows) complete      #
 #                                                                                    #
 ######################################################################################
-
-Addendum:
-Ztex support requires libusb support. The most comprehensive support is
-currently available from the libusbx project here:
-http://libusbx.org/

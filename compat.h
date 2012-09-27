@@ -9,10 +9,6 @@
 
 #include <windows.h>
 
-// NOTE: Windows strtok uses a thread-local static buffer, so this is safe
-#define SETUP_STRTOK_TS  /*nothing needed*/
-#define strtok_ts  strtok
-
 #include "miner.h"  // for timersub
 
 static inline int nanosleep(const struct timespec *req, struct timespec *rem)
@@ -75,13 +71,8 @@ typedef long suseconds_t;
 #endif
 
 #define PTH(thr) ((thr)->pth.p)
-#else /* ! WIN32 */
-
+#else
 #define PTH(thr) ((thr)->pth)
-
-#define SETUP_STRTOK_TS  char*_strtok_ts_saveptr
-#define strtok_ts(str, delim)  strtok_r(str, delim, &_strtok_ts_saveptr)
-
 #endif /* WIN32 */
 
 #endif /* __COMPAT_H__ */

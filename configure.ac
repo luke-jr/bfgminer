@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [2])
-m4_define([v_min], [6])
-m4_define([v_mic], [0])
+m4_define([v_min], [7])
+m4_define([v_mic], [1])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -58,6 +58,7 @@ dnl Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS(syslog.h)
 AC_CHECK_HEADERS([sys/epoll.h])
+AC_CHECK_HEADERS([sys/prctl.h])
 
 AC_FUNC_ALLOCA
 
@@ -67,6 +68,7 @@ USB_LIBS=""
 USB_FLAGS=""
 DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
+TIMER_LIBS=""
 MATH_LIBS="-lm"
 
 case $target in
@@ -85,6 +87,7 @@ case $target in
 	PTHREAD_FLAGS=""
 	DLOPEN_FLAGS=""
 	WS2_LIBS="-lws2_32"
+	TIMER_LIBS="-lwinmm"
 	;;
   *-*-mingw*)
     have_x86_64=false
@@ -92,6 +95,7 @@ case $target in
     PTHREAD_FLAGS=""
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
+	TIMER_LIBS="-lwinmm"
     ;;
   powerpc-*-darwin*)
     CFLAGS="$CFLAGS -faltivec"
@@ -121,6 +125,8 @@ AC_ARG_ENABLE([opencl],
 	)
 if test "x$opencl" = xyes; then
 	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL support is wanted])
+else
+	DLOPEN_FLAGS=""
 fi
 AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 
@@ -130,68 +136,76 @@ PTHREAD_LIBS=-lpthread
 
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 
+if test "x$opencl" = xyes; then
+	adl="yes"
+	
 AC_ARG_ENABLE([adl],
-	[AC_HELP_STRING([--disable-adl],[Override detection and disable building with adl])],
+	[AC_HELP_STRING([--disable-adl],[Build without ADL monitoring (default enabled)])],
 	[adl=$enableval]
 	)
 
-if test "x$opencl" = xyes; then
-	if test "x$adl" != xno; then
-		if test -f ADL_SDK/adl_sdk.h; then
-			have_adl=true
-		else
-			have_adl=false
-		fi
-		if test x$have_adl = xtrue
+	if test x$adl = xyes
 		then
 			AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
-		else
-			DLOPEN_FLAGS=""
 		fi
-	fi
 else
-	DLOPEN_FLAGS=""
+	adl="no"
 fi
 
-bitforce="no"
-
 AC_ARG_ENABLE([bitforce],
-	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs(default disabled)])],
-	[bitforce=$enableval]
+	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
+	[bitforce=$enableval],
+	[bitforce=yes]
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
-icarus="no"
-
 AC_ARG_ENABLE([icarus],
-	[AC_HELP_STRING([--enable-icarus],[Compile support for Icarus (default disabled)])],
-	[icarus=$enableval]
+	[AC_HELP_STRING([--disable-icarus],[Compile support for Icarus (default enabled)])],
+	[icarus=$enableval],
+	[icarus=yes]
 	)
 if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
-modminer="no"
-
 AC_ARG_ENABLE([modminer],
-	[AC_HELP_STRING([--enable-modminer],[Compile support for ModMiner FPGAs(default disabled)])],
-	[modminer=$enableval]
+	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
+	[modminer=$enableval],
+	[modminer=yes]
 	)
 if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
-ztex="no"
+AC_CHECK_LIB(usb-1.0, libusb_init,
+	[
+		libusb=yes
+		AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
+		USB_LIBS="-lusb-1.0"
+		USB_FLAGS=""
+	],
+	[libusb=no]
+)
 
 AC_ARG_ENABLE([ztex],
-	[AC_HELP_STRING([--enable-ztex],[Compile support for Ztex (default disabled)])],
-	[ztex=$enableval]
+	[AC_HELP_STRING([--disable-ztex],[Compile support for Ztex (default if libusb)])],
+	[ztex=$enableval],
+	[ztex=auto]
 	)
+if test "x$ztex$libusb" = xyesno; then
+	AC_MSG_ERROR([Could not find libusb, required for Ztex support])
+elif test "x$ztex" = xauto; then
+	ztex="$libusb"
+	if test "x$libusb" = xno; then
+		AC_MSG_WARN([Could not find libusb, required for Ztex support])
+		ztexwarn=yes
+	fi
+fi
 if test "x$ztex" = xyes; then
 	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if Ztex support is wanted])
 fi
@@ -304,14 +318,6 @@ if test "x$bitforce$modminer" != xnono; then
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
-if test "x$ztex" != xno; then
-  AC_CHECK_LIB(usb-1.0, libusb_init, ,
-          AC_MSG_ERROR([Could not find usb library - please install libusb]))
-  AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
-  USB_LIBS="-lusb-1.0"
-  USB_FLAGS=""
-fi
-
 PKG_PROG_PKG_CONFIG()
 
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.15.6], [AC_DEFINE([CURL_HAS_SOCKOPT], [1], [Defined if version of curl supports sockopts.])],
@@ -356,11 +362,11 @@ fi
 
 AC_DEFINE_UNQUOTED([CGMINER_PREFIX], ["$prefix/bin"], [Path to bfgminer install])
 
-AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120724"], [Filename for phatk kernel])
-AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120724"], [Filename for poclbm kernel])
-AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120724"], [Filename for diakgcn kernel])
-AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120724"], [Filename for diablo kernel])
-AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt120724"], [Filename for scrypt kernel])
+AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk120823"], [Filename for phatk kernel])
+AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm120823"], [Filename for poclbm kernel])
+AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn120823"], [Filename for diakgcn kernel])
+AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo120823"], [Filename for diablo kernel])
+AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt120823"], [Filename for scrypt kernel])
 
 
 AC_SUBST(JANSSON_LIBS)
@@ -370,6 +376,7 @@ AC_SUBST(PTHREAD_LIBS)
 AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
+AC_SUBST(TIMER_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
 AC_SUBST(USB_LIBS)
@@ -413,14 +420,12 @@ else
 	echo "  OpenCL...............: Disabled"
 fi
 
-if test "x$adl" != xno; then
-	if test x$have_adl = xtrue; then
-		echo "    ADL................: SDK found, GPU monitoring support enabled"
-	else
-		echo "    ADL................: SDK NOT found, GPU monitoring support DISABLED"
-	fi
+if test "x$adl" = xyes; then
+	echo "    ADL.monitoring.....: Enabled"
+elif test "x$opencl" = xyes; then
+	echo "    ADL.monitoring.....: Disabled"
 else
-	echo "    ADL................: Detection overrided. GPU monitoring support DISABLED"
+	echo "    ADL.monitoring.....: n/a"
 fi
 
 if test "x$bitforce" = xyes; then
@@ -443,6 +448,8 @@ fi
 
 if test "x$ztex" = xyes; then
 	echo "  Ztex.FPGAs...........: Enabled"
+elif test "x$ztexwarn" = xyes; then
+	echo "  Ztex.FPGAs...........: Disabled (libusb not found)"
 else
 	echo "  Ztex.FPGAs...........: Disabled"
 fi
@@ -464,7 +471,7 @@ echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $TIMER_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"

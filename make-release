@@ -19,6 +19,7 @@ cp -v \
 	libcurl-4.dll \
 	pthreadGC2.dll \
 	libusb-1.0.dll \
+	zlib1.dll \
 	"$OUTDIR/"
 git branch TMP "$tag"
 git clone . "$TMPDIR" -b TMP --depth 1
@@ -26,6 +27,7 @@ git branch -D TMP
 cd "$TMPDIR"
 git archive --prefix "$sw"/ --format tar "$tag" | tar xvp
 cd "$sw"
+NOCONFIGURE=1 \
 ./autogen.sh
 cd ..
 zip -r "$IDIR/${sw}.zip" "$sw"
@@ -35,7 +37,7 @@ for txt in AUTHORS COPYING NEWS README API-README FPGA-README SCRYPT-README; do
 	cp -v "$txt" "$OUTDIR/${txt}.txt"
 done
 cp -av "bitstreams" "$OUTDIR/"
-cp -av "$IDIR/"ADL_SDK/adl_{defines,sdk,structures}.h "ADL_SDK/"
+NOCONFIGURE=1 \
 ./autogen.sh
 ./configure \
 	--prefix='C:\\Program Files\\BFGMiner\' \
@@ -47,6 +49,7 @@ cp -av "$IDIR/"ADL_SDK/adl_{defines,sdk,structures}.h "ADL_SDK/"
 	--enable-icarus \
 	--enable-modminer \
 	--enable-ztex \
+	--enable-scrypt \
 	--build=i686-pc-linux-gnu \
 	--host=i686-pc-mingw32
 make -j4

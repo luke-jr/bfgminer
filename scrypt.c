@@ -407,19 +407,32 @@ static uint32_t scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad)
 	return PBKDF2_SHA256_80_128_32(input, X);
 }
 
-bool scanhash_scrypt(struct thr_info *thr, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t n)
+/* Used externally as confirmation of correct OCL code */
+bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t nonce)
+{
+	uint32_t tmp_hash7, Htarg = ((const uint32_t *)ptarget)[7];
+	char *scratchbuf;
+	uint32_t data[20];
+
+	be32enc_vect(data, (const uint32_t *)pdata, 19);
+	data[19] = byteswap(nonce);
+	scratchbuf = alloca(131584);
+	tmp_hash7 = scrypt_1024_1_1_256_sp(data, scratchbuf);
+
+	return (tmp_hash7 <= Htarg);
+}
+
+bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *pmidstate,
+		     unsigned char *pdata, unsigned char __maybe_unused *phash1,
+		     unsigned char __maybe_unused *phash, const unsigned char *ptarget,
+		     uint32_t max_nonce, uint32_t *last_nonce, uint32_t n)
 {
 	uint32_t *nonce = (uint32_t *)(pdata + 76);
-	unsigned char *scratchbuf;
+	char *scratchbuf;
 	uint32_t data[20];
 	uint32_t tmp_hash7;
 	uint32_t Htarg = ((const uint32_t *)ptarget)[7];
 	bool ret = false;
-	int i;
 
 	be32enc_vect(data, (const uint32_t *)pdata, 19);
 
@@ -446,7 +459,7 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char *pmidstate, unsig
 			break;
 		}
 	}
-out_ret:
+
 	free(scratchbuf);;
 	return ret;
 }

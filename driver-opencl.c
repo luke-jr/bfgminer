@@ -380,16 +380,16 @@ char *set_lookup_gap(char *arg)
 		return "Invalid parameters for set lookup gap";
 	val = atoi(nextptr);
 
-	gpus[device++].lookup_gap = val;
+	gpus[device++].opt_lg = val;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 
-		gpus[device++].lookup_gap = val;
+		gpus[device++].opt_lg = val;
 	}
 	if (device == 1) {
 		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].lookup_gap = gpus[0].lookup_gap;
+			gpus[i].opt_lg = gpus[0].opt_lg;
 	}
 
 	return NULL;
@@ -405,16 +405,16 @@ char *set_thread_concurrency(char *arg)
 		return "Invalid parameters for set thread concurrency";
 	val = atoi(nextptr);
 
-	gpus[device++].thread_concurrency = val;
+	gpus[device++].opt_tc = val;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
 		val = atoi(nextptr);
 
-		gpus[device++].thread_concurrency = val;
+		gpus[device++].opt_tc = val;
 	}
 	if (device == 1) {
 		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].thread_concurrency = gpus[0].thread_concurrency;
+			gpus[i].opt_tc = gpus[0].opt_tc;
 	}
 
 	return NULL;
@@ -832,6 +832,21 @@ struct cgpu_info *cpus;
 
 #ifdef HAVE_OPENCL
 
+#ifdef WIN32
+static UINT timeperiod_set;
+#endif
+
+void opencl_dynamic_cleanup() {
+#ifdef WIN32
+	if (timeperiod_set) {
+		timeEndPeriod(timeperiod_set);
+		timeperiod_set = 0;
+	}
+#endif
+}
+
+extern int opt_dynamic_interval;
+
 /* In dynamic mode, only the first thread of each device will be in use.
  * This potentially could start a thread that was stopped with the start-stop
  * options if one were to disable dynamic from the menu on a paused GPU */
@@ -839,9 +854,17 @@ void pause_dynamic_threads(int gpu)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
 	int i;
+#ifdef WIN32
+	bool any_dynamic = false;
+#endif
 
 	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr = &thr_info[i];
+
+#ifdef WIN32
+		if (cgpu->dynamic)
+			any_dynamic = true;
+#endif
 
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
@@ -852,6 +875,20 @@ void pause_dynamic_threads(int gpu)
 		if (!cgpu->dynamic && cgpu->deven != DEV_DISABLED)
 			tq_push(thr->q, &ping);
 	}
+
+#ifdef WIN32
+	if (any_dynamic) {
+		if (!timeperiod_set) {
+			timeperiod_set = opt_dynamic_interval > 3 ? (opt_dynamic_interval / 2) : 1;
+			if (TIMERR_NOERROR != timeBeginPeriod(timeperiod_set))
+				timeperiod_set = 0;
+		}
+	} else {
+		if (timeperiod_set) {
+			opencl_dynamic_cleanup();
+		}
+	}
+#endif
 }
 
 
@@ -877,9 +914,19 @@ retry:
 
 	for (gpu = 0; gpu < nDevs; gpu++) {
 		struct cgpu_info *cgpu = &gpus[gpu];
+		double displayed_rolling, displayed_total;
+		bool mhash_base = true;
 
-		wlog("GPU %d: %.1f / %.1f Mh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
-			gpu, cgpu->rolling, cgpu->total_mhashes / total_secs,
+		displayed_rolling = cgpu->rolling;
+		displayed_total = cgpu->total_mhashes / total_secs;
+		if (displayed_rolling < 1) {
+			displayed_rolling *= 1000;
+			displayed_total *= 1000;
+			mhash_base = false;
+		}
+
+		wlog("GPU %d: %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
+			gpu, displayed_rolling, displayed_total, mhash_base ? "M" : "K",
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, cgpu->intensity);
 #ifdef HAVE_ADL
@@ -927,7 +974,10 @@ retry:
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
-			wlog("Thread %d: %.1f Mh/s %s ", i, thr->rolling, cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
+			displayed_rolling = thr->rolling;
+			if (!mhash_base)
+				displayed_rolling *= 1000;
+			wlog("Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
 			switch (cgpu->status) {
 				default:
 				case LIFE_WELL:
@@ -1345,6 +1395,7 @@ void *reinit_gpu(void *userdata)
 	int gpu;
 
 	pthread_detach(pthread_self());
+	rename_thr("bfg-reinit_gpu");
 
 select_cgpu:
 	cgpu = tq_pop(mythr->q, NULL);
@@ -1508,6 +1559,8 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 			tailsprintf(buf, "        ");
 		tailsprintf(buf, "| ");
 	}
+	else
+		tailsprintf(buf, "        | ");
 }
 #endif
 
@@ -1695,6 +1748,10 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 	const int thr_id = thr->id;
 	struct opencl_thread_data *thrdata = thr->cgpu_data;
 	_clState *clState = clStates[thr_id];
+	struct cgpu_info *gpu = thr->cgpu;
+
+	if (gpu->dynamic)
+		return;
 
 	clFinish(clState->commandQueue);
 	if (thrdata->res[FOUND]) {
@@ -1725,7 +1782,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
 	const int dynamic_us = opt_dynamic_interval * 1000;
-	cl_bool blocking;
 
 	cl_int status;
 	size_t globalThreads[1];
@@ -1733,52 +1789,19 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	unsigned int threads;
 	int64_t hashes;
 
-	if (gpu->dynamic)
-		blocking = CL_TRUE;
-	else
-		blocking = CL_FALSE;
-
 	/* This finish flushes the readbuffer set with CL_FALSE later */
-	if (!blocking)
+	if (!gpu->dynamic)
 		clFinish(clState->commandQueue);
 
-	if (gpu->dynamic) {
-		struct timeval diff;
-		suseconds_t gpu_us;
-
-		gettimeofday(&gpu->tv_gpuend, NULL);
-		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
-		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
-		if (likely(gpu_us >= 0)) {
-			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
-
-			/* Try to not let the GPU be out for longer than 
-			 * opt_dynamic_interval in ms, but increase
-			 * intensity when the system is idle in dynamic mode */
-			if (gpu->gpu_us_average > dynamic_us) {
-				if (gpu->intensity > MIN_INTENSITY)
-					--gpu->intensity;
-			} else if (gpu->gpu_us_average < dynamic_us / 2) {
-				if (gpu->intensity < MAX_INTENSITY)
-					++gpu->intensity;
-			}
-		}
-	}
 	set_threads_hashes(clState->vwidth, &threads, &hashes, globalThreads,
 			   localThreads[0], gpu->intensity);
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 
-	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
-	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
-		return -1;
-	}
-
-	/* MAXBUFFERS entry is used as a flag to say nonces exist */
+	/* FOUND entry is used as a counter to say how many nonces exist */
 	if (thrdata->res[FOUND]) {
 		/* Clear the buffer again */
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, blocking, 0,
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 				BUFFERSIZE, blank_res, 0, NULL, NULL);
 		if (unlikely(status != CL_SUCCESS)) {
 			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
@@ -1793,11 +1816,16 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			postcalc_hash_async(thr, work, thrdata->res);
 		}
 		memset(thrdata->res, 0, BUFFERSIZE);
-		if (!blocking)
-			clFinish(clState->commandQueue);
+		clFinish(clState->commandQueue);
 	}
 
 	gettimeofday(&gpu->tv_gpustart, NULL);
+
+	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
+	if (unlikely(status != CL_SUCCESS)) {
+		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
+		return -1;
+	}
 
 	if (clState->goffset) {
 		size_t global_work_offset[1];
@@ -1813,11 +1841,35 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		return -1;
 	}
 
-	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, blocking, 0,
+	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
 			BUFFERSIZE, thrdata->res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);
 		return -1;
+	}
+
+	if (gpu->dynamic) {
+		struct timeval diff;
+		suseconds_t gpu_us;
+
+		clFinish(clState->commandQueue);
+		gettimeofday(&gpu->tv_gpuend, NULL);
+		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
+		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
+		if (likely(gpu_us >= 0)) {
+			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
+
+			/* Try to not let the GPU be out for longer than
+			 * opt_dynamic_interval in ms, but increase
+			 * intensity when the system is idle in dynamic mode */
+			if (gpu->gpu_us_average > dynamic_us) {
+				if (gpu->intensity > MIN_INTENSITY)
+					--gpu->intensity;
+			} else if (gpu->gpu_us_average < dynamic_us / 2) {
+				if (gpu->intensity < MAX_INTENSITY)
+					++gpu->intensity;
+			}
+		}
 	}
 
 	/* The amount of work scanned can fluctuate when intensity changes

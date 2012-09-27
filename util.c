@@ -1,6 +1,8 @@
 /*
  * Copyright 2011-2012 Con Kolivas
  * Copyright 2010 Jeff Garzik
+ * Copyright 2012 Giel van Schijndel
+ * Copyright 2012 Gavin Andresen
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -16,12 +18,19 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <string.h>
+#include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
+#ifdef HAVE_SYS_PRCTL_H
+# include <sys/prctl.h>
+#endif
+#if defined(__FreeBSD__) || defined(__OpenBSD__)
+# include <pthread_np.h>
+#endif
 #ifndef WIN32
 # include <sys/socket.h>
 # include <netinet/in.h>
@@ -708,4 +717,18 @@ void nmsleep(unsigned int msecs)
 		twait.tv_nsec = tleft.tv_nsec;
 		ret = nanosleep(&twait, &tleft);
 	} while (ret == -1 && errno == EINTR);
+}
+
+void rename_thr(const char* name) {
+#if defined(PR_SET_NAME)
+	// Only the first 15 characters are used (16 - NUL terminator)
+	prctl(PR_SET_NAME, name, 0, 0, 0);
+#elif defined(__APPLE__)
+	pthread_setname_np(name);
+#elif defined(__FreeBSD__) || defined(__OpenBSD__)
+	pthread_set_name_np(pthread_self(), name);
+#else
+	// Prevent warnings for unused parameters...
+	(void)name;
+#endif
 }

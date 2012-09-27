@@ -13,6 +13,7 @@
 #include "miner.h"
 
 bool opt_debug = false;
+bool opt_debug_console = false;  // Only used if opt_debug is also enabled
 bool opt_log_output = false;
 
 /* per default priorities higher than LOG_NOTICE are logged */
@@ -31,12 +32,17 @@ static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
 #endif
 	{
 		int len = strlen(f);
+		int cancelstate;
+		bool scs;
 
 		strcpy(f + len - 1, "                    \n");
 
+		scs = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancelstate);
 		mutex_lock(&console_lock);
 		vprintf(f, ap);
 		mutex_unlock(&console_lock);
+		if (scs)
+			pthread_setcancelstate(cancelstate, &cancelstate);
 	}
 }
 
@@ -46,8 +52,8 @@ void vapplog(int prio, const char *fmt, va_list ap)
 {
 	if (!opt_debug && prio == LOG_DEBUG)
 		return;
-	if (use_syslog || opt_log_output || prio <= LOG_NOTICE)
-		log_generic(prio, fmt, ap);
+
+	log_generic(prio, fmt, ap);
 }
 
 void applog(int prio, const char *fmt, ...)
@@ -76,6 +82,11 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 	if (0) {}
 #endif
 	else {
+		bool writetocon = opt_debug_console || (opt_log_output && prio != LOG_DEBUG) || prio <= LOG_NOTICE;
+		bool writetofile = !isatty(fileno((FILE *)stderr));
+		if (!(writetocon || writetofile))
+			return;
+
 		char *f;
 		int len;
 		struct timeval tv = {0, 0};
@@ -96,7 +107,7 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 			tm->tm_sec,
 			fmt);
 		/* Only output to stderr if it's not going to the screen as well */
-		if (!isatty(fileno((FILE *)stderr))) {
+		if (writetofile) {
 			va_list apc;
 
 			va_copy(apc, ap);
@@ -104,7 +115,8 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 			fflush(stderr);
 		}
 
-		my_log_curses(prio, f, ap);
+		if (writetocon)
+			my_log_curses(prio, f, ap);
 	}
 }
 /* we can not generalize variable argument list */

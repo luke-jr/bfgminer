@@ -48,7 +48,7 @@ __kernel
 			const uint state0A, const uint state0B,
 			const uint state1A, const uint state2A, const uint state3A, const uint state4A,
 			const uint state5A, const uint state6A, const uint state7A,
-			__global uint * output)
+			volatile __global uint * output)
 {
 	u V[8];
 	u W[16];
@@ -571,17 +571,46 @@ __kernel
 
 	V[7] += V[3] + W[12] + ch(V[0], V[1], V[2]) + rotr26(V[0]);
 
-#define FOUND (0x800)
-#define NFLAG (0x7FF)
+#define FOUND (0x0F)
 
 #ifdef VECTORS4
-	if ((V[7].x == 0x136032edU) ^ (V[7].y == 0x136032edU) ^ (V[7].z == 0x136032edU) ^ (V[7].w == 0x136032edU))
-		output[FOUND] = output[NFLAG & nonce.x] = (V[7].x == 0x136032edU) ? nonce.x : ((V[7].y == 0x136032edU) ? nonce.y : ((V[7].z == 0x136032edU) ? nonce.z : nonce.w));
+	if ((V[7].x == 0x136032edU) ^ (V[7].y == 0x136032edU) ^ (V[7].z == 0x136032edU) ^ (V[7].w == 0x136032edU)) {
+		uint found;
+
+		if (V[7].x == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.x;
+		}
+		if (V[7].y == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.y;
+		}
+		if (V[7].z == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.z;
+		}
+		if (V[7].w == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.w;
+		}
+	}
 #elif defined VECTORS2
-	if ((V[7].x == 0x136032edU) + (V[7].y == 0x136032edU))
-		output[FOUND] = output[NFLAG & nonce.x] = (V[7].x == 0x136032edU) ? nonce.x : nonce.y;
+	if ((V[7].x == 0x136032edU) + (V[7].y == 0x136032edU)) {
+		uint found;
+
+		if (V[7].x == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.x;
+		}
+		if (V[7].y == 0x136032edU) {
+			found = atomic_add(&output[FOUND], 1);
+			output[found] = nonce.y;
+		}
+	}
 #else
-	if (V[7] == 0x136032edU)
-		output[FOUND] = output[NFLAG & nonce] = nonce;
+	if (V[7] == 0x136032edU) {
+		uint found = atomic_add(&output[FOUND], 1);
+		output[found] = nonce;
+	}
 #endif
 }

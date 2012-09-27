@@ -1,5 +1,5 @@
 
-This is a multi-threaded multi-pool GPU, FPGA and CPU miner with ATI GPU
+This is a multi-threaded multi-pool FPGA, GPU and CPU miner with ATI GPU
 monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
 
@@ -33,30 +33,40 @@ READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
 Dependencies:
 	curl dev library 	http://curl.haxx.se/libcurl/
 	(libcurl4-openssl-dev)
+
 	curses dev library
 	(libncurses5-dev or libpdcurses on WIN32)
+
 	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
+	libtool			http://www.gnu.org/software/libtool/
+
 	jansson			http://www.digip.org/jansson/
 	(jansson is included in-tree and not necessary)
+
 	yasm 1.0.1+ http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
+
 	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
 	(This sdk is mandatory for GPU mining)
-	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
-	(This sdk is mandatory for ATI GPU monitoring & clocking)
+
 	libudev headers
-	(This is only required for FPGA auto-detection and is linux only)
+	(This is only required for multi-FPGA auto-detection on Linux)
+
 	libusb headers
 	(This is only required for ZTEX support)
 
+
 BFGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
-	--disable-opencl        Override detection and disable building with opencl
-	--disable-adl           Override detection and disable building with adl
-	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
-	--enable-icarus         Compile support for Icarus Board(default disabled)
-	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
-	--enable-ztex           Compile support for Ztex Board(default disabled)
+	--disable-opencl        Build without support for OpenCL (default enabled)
+	--disable-adl           Build without ADL monitoring (default enabled)
+	--disable-bitforce      Compile support for BitForce (default enabled)
+	--disable-icarus        Compile support for Icarus (default enabled)
+	--disable-modminer      Compile support for ModMiner (default enabled)
+	--disable-ztex          Compile support for Ztex (default if libusb)
+	--enable-scrypt         Compile support for scrypt mining (default disabled)
+	--without-curses        Compile support for curses TUI (default enabled)
+	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
 Basic *nix build instructions:
 	To build with GPU mining support:
@@ -64,10 +74,6 @@ Basic *nix build instructions:
 	install it so just keep track of where it is if you're not installing
 	the include files and library files into the system directory.
 	(Do NOT install the ati amd sdk if you are on nvidia.)
-	To build with GPU monitoring & clocking support:
-	Extract the AMD ADL SDK, latest version - there is also no official
-	place for these files. Copy all the *.h files in the "include"
-	directory into BFGMiner's ADL_SDK directory.
 
 The easiest way to install the ATI AMD SPP sdk on linux is to actually put it
 into a system location. Then building will be simpler. Download the correct
@@ -126,12 +132,14 @@ Options for both config file and command line:
                     See --api-allow to overcome this
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-port          Port number of miner API (default: 4028)
+--balance           Change multipool strategy from failover to even share balance
 --benchmark         Run BFGMiner in benchmark mode - produces no shares
 --debug|-D          Enable debug output
+--debuglog          Enable debug logging
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
---load-balance      Change multipool strategy from failover to even load balance
+--load-balance      Change multipool strategy from failover to efficiency based balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
@@ -145,8 +153,7 @@ Options for both config file and command line:
 --quiet|-q          Disable logging output, display status and errors
 --real-quiet        Disable all output
 --remove-disabled   Remove disabled devices entirely, as if they didn't exist
---retries|-r <arg>  Number of times to retry before giving up, if JSON-RPC call fails (-1 means never) (default: -1)
---retry-pause|-R <arg> Number of seconds to pause, between retries (default: 5)
+--retries <arg>     Number of times to retry failed submissions before giving up (-1 means never) (default: -1)
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
@@ -156,6 +163,7 @@ Options for both config file and command line:
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --socks-proxy <arg> Set socks4 proxy (host:port)
+--submit-threads    Maximum number of share submission threads (default: 64)
 --syslog            Use system log for output messages (default: standard error)
 --temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
 --text-only|-T      Disable ncurses formatted screen output
@@ -212,6 +220,13 @@ FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
 This option is only for BitForce, Icarus, and/or ModMiner FPGAs
+
+To use FPGAs, you will need to be sure the user BFGMiner is running as has
+appropriate permissions. This varies by operating system.
+On Gentoo: sudo usermod <username> -a -G uucp
+On Ubuntu: sudo usermod <username> -a -G dialout
+Note that on GNU/Linux systems, you will usually need to login again before
+group changes take effect.
 
 By default, BFGMiner will scan for autodetected FPGAs unless at least one
 -S is specified for that driver. If you specify -S and still want BFGMiner
@@ -416,8 +431,14 @@ This strategy moves at user-defined intervals from one active pool to the next,
 skipping pools that are idle.
 
 LOAD BALANCE:
-This strategy sends work in equal amounts to all the pools specified. If any
-pool falls idle, the rest will take up the slack keeping the miner busy.
+This strategy sends work to all the pools to maintain optimum load. The most
+efficient pools will tend to get a lot more shares. If any pool falls idle, the
+rest will tend to take up the slack keeping the miner busy.
+
+BALANCE:
+This strategy monitors the amount of difficulty 1 shares solved for each pool
+and uses it to try to end up doing the same amount of work for all pools.
+
 
 ---
 LOGGING
@@ -487,6 +508,10 @@ while:
 
 will try to set the engine clock of card 0 to 950, 1 to 945, 2 to 930, 3 to
 960 and all memory clocks to 300.
+
+You can substitute 0 to leave the engine clock of a card at its default.
+For example, to keep the 2nd GPU to its default clocks:
+--gpu-engine 950,0,930,960 --gpu-memclock 300,0,300,300
 
 AUTO MODES:
 There are two "auto" modes in BFGMiner, --auto-fan and --auto-gpu. These can
@@ -735,7 +760,8 @@ A: BFGMiner is being packaged with other trojan scripts and some antivirus
 software is falsely accusing bfgminer.exe as being the actual virus, rather
 than whatever it is being packaged with. If you installed BFGMiner yourself,
 then you do not have a virus on your computer. Complain to your antivirus
-software company.
+software company. They seem to be flagging even source code now from cgminer
+as viruses, even though text source files can't do anything by themself.
 
 Q: Can you modify the display to include more of one thing in the output and
 less of another, or can you change the quiet mode or can you add yet another
@@ -828,9 +854,8 @@ mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
 
 Q: How do I get my BFL device to auto-recognise?
-A: They are only automatically recognised on linux, and no option needs to be
-passed to them. The only thing that needs to be done is to load the driver for
-them, which on linux would require:
+A: The only thing that needs to be done is to load the driver for them, which
+on linux would require:
 sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
 
 

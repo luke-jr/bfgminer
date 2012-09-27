@@ -166,7 +166,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.14";
+static const char *APIVERSION = "1.17";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -177,11 +177,21 @@ static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
 static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
+#ifdef HAVE_OPENCL
 static const char *DYNAMIC = _DYNAMIC;
+#endif
 
 static const char *YES = "Y";
 static const char *NO = "N";
 static const char *NULLSTR = "(null)";
+
+static const char *TRUESTR = "true";
+static const char *FALSESTR = "false";
+
+#ifdef USE_SCRYPT
+static const char *SCRYPTSTR = "scrypt";
+#endif
+static const char *SHA256STR = "sha256";
 
 static const char *DEVICECODE = ""
 #ifdef HAVE_OPENCL
@@ -228,7 +238,7 @@ static const char *OSINFO =
 #define _SUMMARY	"SUMMARY"
 #define _STATUS		"STATUS"
 #define _VERSION	"VERSION"
-#define _MINECON	"CONFIG"
+#define _MINECONFIG	"CONFIG"
 #define _GPU		"GPU"
 
 #ifdef HAVE_AN_FPGA
@@ -248,6 +258,7 @@ static const char *OSINFO =
 #define _RESTART	"RESTART"
 #define _MINESTATS	"STATS"
 #define _CHECK		"CHECK"
+#define _MINECOIN	"COIN"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -263,7 +274,7 @@ static const char ISJSON = '{';
 #define JSON_SUMMARY	JSON1 _SUMMARY JSON2
 #define JSON_STATUS	JSON1 _STATUS JSON2
 #define JSON_VERSION	JSON1 _VERSION JSON2
-#define JSON_MINECON	JSON1 _MINECON JSON2
+#define JSON_MINECONFIG	JSON1 _MINECONFIG JSON2
 #define JSON_GPU	JSON1 _GPU JSON2
 
 #ifdef HAVE_AN_FPGA
@@ -284,6 +295,7 @@ static const char ISJSON = '{';
 #define JSON_CLOSE	JSON3
 #define JSON_MINESTATS	JSON1 _MINESTATS JSON2
 #define JSON_CHECK	JSON1 _CHECK JSON2
+#define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_END	JSON4 JSON5
 
 static const char *JSON_COMMAND = "command";
@@ -325,7 +337,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_NOGPUADL 30
 #define MSG_INVINT 31
 #define MSG_GPUINT 32
-#define MSG_MINECON 33
+#define MSG_MINECONFIG 33
 #define MSG_GPUMERR 34
 #define MSG_GPUMEM 35
 #define MSG_GPUEERR 36
@@ -340,7 +352,6 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ACCDENY 45
 #define MSG_ACCOK 46
 #define MSG_ENAPOOL 47
-#define MSG_POOLPRIO 73
 #define MSG_DISPOOL 48
 #define MSG_ALRENAP 49
 #define MSG_ALRDISP 50
@@ -374,6 +385,12 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MINESTATS 70
 #define MSG_MISCHK 71
 #define MSG_CHECK 72
+#define MSG_POOLPRIO 73
+#define MSG_DUPPID 74
+#define MSG_MISBOOL 75
+#define MSG_INVBOOL 76
+#define MSG_FOO 77
+#define MSG_MINECOIN 78
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -387,6 +404,7 @@ enum code_parameters {
 	PARAM_GPU,
 	PARAM_PGA,
 	PARAM_CPU,
+	PARAM_PID,
 	PARAM_GPUMAX,
 	PARAM_PGAMAX,
 	PARAM_CPUMAX,
@@ -400,6 +418,7 @@ enum code_parameters {
 	PARAM_POOL,
 	PARAM_STR,
 	PARAM_BOTH,
+	PARAM_BOOL,
 	PARAM_NONE
 };
 
@@ -486,7 +505,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
  { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " _MIN_INTENSITY_STR " - " _MAX_INTENSITY_STR },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
- { SEVERITY_SUCC,  MSG_MINECON, PARAM_NONE,	"BFGMiner config" },
+ { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"BFGMiner config" },
 #ifdef HAVE_OPENCL
  { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
  { SEVERITY_SUCC,  MSG_GPUMEM,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported success" },
@@ -504,6 +523,7 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_ACCOK,	PARAM_NONE,	"Privileged access OK" },
  { SEVERITY_SUCC,  MSG_ENAPOOL,	PARAM_POOL,	"Enabling pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_POOLPRIO,PARAM_NONE,	"Changed pool priorities" },
+ { SEVERITY_ERR,   MSG_DUPPID,	PARAM_PID,	"Duplicate pool specified %d" },
  { SEVERITY_SUCC,  MSG_DISPOOL,	PARAM_POOL,	"Disabling pool %d:'%s'" },
  { SEVERITY_INFO,  MSG_ALRENAP,	PARAM_POOL,	"Pool %d:'%s' already enabled" },
  { SEVERITY_INFO,  MSG_ALRDISP,	PARAM_POOL,	"Pool %d:'%s' already disabled" },
@@ -517,9 +537,13 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_REMPOOL, PARAM_BOTH,	"Removed pool %d:'%s'" },
  { SEVERITY_SUCC,  MSG_NOTIFY,	PARAM_NONE,	"Notify" },
  { SEVERITY_SUCC,  MSG_DEVDETAILS,PARAM_NONE,	"Device Details" },
- { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"CGMiner stats" },
+ { SEVERITY_SUCC,  MSG_MINESTATS,PARAM_NONE,	"BFGMiner stats" },
  { SEVERITY_ERR,   MSG_MISCHK,	PARAM_NONE,	"Missing check cmd" },
  { SEVERITY_SUCC,  MSG_CHECK,	PARAM_NONE,	"Check command" },
+ { SEVERITY_ERR,   MSG_MISBOOL,	PARAM_NONE,	"Missing parameter: true/false" },
+ { SEVERITY_ERR,   MSG_INVBOOL,	PARAM_NONE,	"Invalid parameter should be true or false" },
+ { SEVERITY_SUCC,  MSG_FOO,	PARAM_BOOL,	"Failover-Only set to %s" },
+ { SEVERITY_SUCC,  MSG_MINECOIN,PARAM_NONE,	"BFGMiner coin" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -937,7 +961,7 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				sprintf(buf, "%.15f", *((double *)(root->data)));
 				break;
 			case API_BOOL:
-				sprintf(buf, "%s", *((bool *)(root->data)) ? "true" : "false");
+				sprintf(buf, "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
 				break;
 			case API_TIMEVAL:
 				sprintf(buf, "%ld.%06ld",
@@ -1085,6 +1109,7 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 				case PARAM_GPU:
 				case PARAM_PGA:
 				case PARAM_CPU:
+				case PARAM_PID:
 					sprintf(buf, codes[i].description, paramid);
 					break;
 				case PARAM_POOL:
@@ -1147,6 +1172,9 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 					break;
 				case PARAM_BOTH:
 					sprintf(buf, codes[i].description, paramid, param2);
+					break;
+				case PARAM_BOOL:
+					sprintf(buf, codes[i].description, paramid ? TRUESTR : FALSESTR);
 					break;
 				case PARAM_NONE:
 				default:
@@ -1234,9 +1262,9 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 #endif
 
 	sprintf(io_buffer, isjson
-		? "%s," JSON_MINECON
-		: "%s" _MINECON ",",
-		message(MSG_MINECON, 0, NULL, isjson));
+		? "%s," JSON_MINECONFIG
+		: "%s" _MINECONFIG ",",
+		message(MSG_MINECONFIG, 0, NULL, isjson));
 
 	root = api_add_int(root, "GPU Count", &gpucount, false);
 	root = api_add_int(root, "PGA Count", &pgacount, false);
@@ -1248,6 +1276,7 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
 	root = api_add_const(root, "OS", OSINFO, false);
+	root = api_add_bool(root, "Failover-Only", &opt_fail_only, false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -1261,8 +1290,7 @@ bool2str(bool b)
 	return b ? YES : NO;
 }
 
-static const char*
-status2str(enum alive status)
+static const char *status2str(enum alive status)
 {
 	switch (status) {
 		case LIFE_WELL:
@@ -1685,6 +1713,7 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_uint(root, "Remote Failures", &(pool->remotefail_occasions), false);
 		root = api_add_escape(root, "User", pool->rpc_user, false);
 		root = api_add_time(root, "Last Share Time", &(pool->last_share_time), false);
+		root = api_add_int(root, "Diff1 Shares", &(pool->diff1), false);
 
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);
@@ -1701,7 +1730,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
-	double utility, mhs;
+	double utility, mhs, work_utility;
 
 #ifdef WANT_CPUMINE
 	char *algo = (char *)(algo_names[opt_algo]);
@@ -1711,6 +1740,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
+	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
 
 	sprintf(io_buffer, isjson
 		? "%s," JSON_SUMMARY
@@ -1736,6 +1766,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 	root = api_add_uint(root, "Remote Failures", &(total_ro), false);
 	root = api_add_uint(root, "Network Blocks", &(new_blocks), false);
 	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), false);
+	root = api_add_utility(root, "Work Utility", &(work_utility), false);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2058,45 +2089,68 @@ static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 
 static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	SETUP_STRTOK_TS;
-	int total_pools_ = total_pools;  // Keep a local copy, to be more threadsafe
-	char *a;
-	int i, prio = 0, e = -1;
+	char *ptr, *next;
+	int i, pr, prio = 0;
 
-	if (total_pools_ == 0) {
+	// TODO: all cgminer code needs a mutex added everywhere for change
+	//	access to total_pools and also parts of the pools[] array,
+	//	just copying total_pools here wont solve that
+
+	if (total_pools == 0) {
 		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
 		return;
 	}
 
-	bool pools_changed[total_pools_];
-	for (i = 0; i < total_pools_; ++i)
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		return;
+	}
+
+	bool pools_changed[total_pools];
+	int new_prio[total_pools];
+	for (i = 0; i < total_pools; ++i)
 		pools_changed[i] = false;
 
-	a = strtok_ts(param, ",");
-	do {
-		i = strtol(a, &a, 10);
-		if (unlikely(*a > 0x20 || i < 0 || i >= total_pools)) {
-			e = (*a > 0x20) ? -2 : i;
-			continue;
-		}
-		pools[i]->prio = prio++;
-		pools_changed[i] = true;
-	} while ( (a = strtok_ts(NULL, ",")) );
+	next = param;
+	while (next && *next) {
+		ptr = next;
+		next = strchr(ptr, ',');
+		if (next)
+			*(next++) = '\0';
 
-	for (i = 0; i < total_pools_; ++i)
-		if (!pools_changed[i])
-			pools[i]->prio = prio++;
+		i = atoi(ptr);
+		if (i < 0 || i >= total_pools) {
+			strcpy(io_buffer, message(MSG_INVPID, i, NULL, isjson));
+			return;
+		}
+
+		if (pools_changed[i]) {
+			strcpy(io_buffer, message(MSG_DUPPID, i, NULL, isjson));
+			return;
+		}
+
+		pools_changed[i] = true;
+		new_prio[i] = prio++;
+	}
+
+	// Only change them if no errors
+	for (i = 0; i < total_pools; i++) {
+		if (pools_changed[i])
+			pools[i]->prio = new_prio[i];
+	}
+
+	// In priority order, cycle through the unchanged pools and append them
+	for (pr = 0; pr < total_pools; pr++)
+		for (i = 0; i < total_pools; i++) {
+			if (!pools_changed[i] && pools[i]->prio == pr) {
+				pools[i]->prio = prio++;
+				pools_changed[i] = true;
+				break;
+			}
+		}
 
 	if (current_pool()->prio)
 		switch_pools(NULL);
-
-	if (e != -1) {
-		if (e == -2)
-			strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
-		else
-			strcpy(io_buffer, message(MSG_INVPID, e, NULL, isjson));
-		return;
-	}
 
 	strcpy(io_buffer, message(MSG_POOLPRIO, 0, NULL, isjson));
 }
@@ -2601,6 +2655,63 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		strcat(io_buffer, JSON_CLOSE);
 }
 
+static void failoveronly(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	if (param == NULL || *param == '\0') {
+		strcpy(io_buffer, message(MSG_MISBOOL, 0, NULL, isjson));
+		return;
+	}
+
+	*param = tolower(*param);
+
+	if (*param != 't' && *param != 'f') {
+		strcpy(io_buffer, message(MSG_INVBOOL, 0, NULL, isjson));
+		return;
+	}
+
+	bool tf = (*param == 't');
+
+	opt_fail_only = tf;
+
+	strcpy(io_buffer, message(MSG_FOO, tf, NULL, isjson));
+}
+
+static void minecoin(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+
+	sprintf(io_buffer, isjson
+		? "%s," JSON_MINECOIN
+		: "%s" _MINECOIN ",",
+		message(MSG_MINECOIN, 0, NULL, isjson));
+
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
+	else
+#endif
+		root = api_add_const(root, "Hash Method", SHA256STR, false);
+
+        mutex_lock(&ch_lock);
+	if (current_fullhash && *current_fullhash) {
+		root = api_add_timeval(root, "Current Block Time", &block_timeval, true);
+		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
+	} else {
+		struct timeval t = {0,0};
+		root = api_add_timeval(root, "Current Block Time", &t, true);
+		root = api_add_const(root, "Current Block Hash", BLANK, false);
+	}
+        mutex_unlock(&ch_lock);
+
+	root = api_add_bool(root, "LP", &have_longpoll, false);
+
+	root = print_data(root, buf, isjson);
+	if (isjson)
+		strcat(buf, JSON_CLOSE);
+	strcat(io_buffer, buf);
+}
+
 static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -2652,6 +2763,8 @@ struct CMDS {
 	{ "restart",		dorestart,	true },
 	{ "stats",		minerstats,	false },
 	{ "check",		checkcommand,	false },
+	{ "failover-only",	failoveronly,	true },
+	{ "coin",		minecoin,	false },
 	{ NULL,			NULL,		false }
 };
 
@@ -2999,12 +3112,14 @@ popipo:
 
 static void *quit_thread(__maybe_unused void *userdata)
 {
+	rename_thr("bfg-rpc-quit");
+
 	// allow thread creator to finish whatever it's doing
 	mutex_lock(&quit_restart_lock);
 	mutex_unlock(&quit_restart_lock);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "API: killing cgminer");
+		applog(LOG_DEBUG, "API: killing BFGMiner");
 
 	kill_work();
 
@@ -3013,12 +3128,14 @@ static void *quit_thread(__maybe_unused void *userdata)
 
 static void *restart_thread(__maybe_unused void *userdata)
 {
+	rename_thr("bfg-rpc-restart");
+
 	// allow thread creator to finish whatever it's doing
 	mutex_lock(&quit_restart_lock);
 	mutex_unlock(&quit_restart_lock);
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "API: restarting cgminer");
+		applog(LOG_DEBUG, "API: restarting BFGMiner");
 
 	app_restart();
 
@@ -3097,6 +3214,20 @@ void api(int api_thr_id)
 
 	serv.sin_port = htons(port);
 
+#ifndef WIN32
+	// On linux with SO_REUSEADDR, bind will get the port if the previous
+	// socket is closed (even if it is still in TIME_WAIT) but fail if
+	// another program has it open - which is what we want
+	int optval = 1;
+	// If it doesn't work, we don't really care - just show a debug message
+	if (SOCKETFAIL(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval))))
+		applog(LOG_DEBUG, "API setsockopt SO_REUSEADDR failed (ignored): %s", SOCKERRMSG);
+#else
+	// On windows a 2nd program can bind to a port>1024 already in use unless
+	// SO_EXCLUSIVEADDRUSE is used - however then the bind to a closed port
+	// in TIME_WAIT will fail until the timeout - so we leave the options alone
+#endif
+
 	// try for more than 1 minute ... in case the old one hasn't completely gone yet
 	bound = 0;
 	bindstart = time(NULL);
@@ -3125,12 +3256,12 @@ void api(int api_thr_id)
 	}
 
 	if (opt_api_allow)
-		applog(LOG_WARNING, "API running in IP access mode");
+		applog(LOG_WARNING, "API running in IP access mode on port %d", port);
 	else {
 		if (opt_api_network)
-			applog(LOG_WARNING, "API running in UNRESTRICTED access mode");
+			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d", port);
 		else
-			applog(LOG_WARNING, "API running in local access mode");
+			applog(LOG_WARNING, "API running in local read access mode on port %d", port);
 	}
 
 	io_buffer = malloc(MYBUFSIZ+1);

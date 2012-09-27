@@ -1,17 +1,20 @@
 <?php
 session_start();
 #
-global $miner, $port, $readonly, $notify, $rigs;
+global $title, $miner, $port, $readonly, $notify, $rigs;
+global $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
-global $checklastshare, $hidefields;
+global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
 global $allowcustompages, $customsummarypages;
 global $miner_font_family, $miner_font_size;
 global $colouroverride, $placebuttons;
 #
-# Don't touch these 2 - see $rigs below
-$miner = null;
-$port = null;
+# See API-README for more details of these variables and how
+# to configure miner.php
+#
+# Web page title
+$title = 'Mine';
 #
 # Set $readonly to true to force miner.php to be readonly
 # Set $readonly to false then it will check BFGMiner 'privileged'
@@ -19,43 +22,36 @@ $readonly = false;
 #
 # Set $notify to false to NOT attempt to display the notify command
 # Set $notify to true to attempt to display the notify command
-# If your older version of BFGMiner returns an 'Invalid command'
-#  coz it doesn't have notify - it just shows the error status table
 $notify = true;
 #
-# set $checklastshare to true to do the following checks:
+# Set $checklastshare to true to do the following checks:
 # If a device's last share is 12x expected ago then display as an error
 # If a device's last share is 8x expected ago then display as a warning
 # If either of the above is true, also display the whole line highlighted
 # This assumes shares are 1 difficulty shares
 $checklastshare = true;
 #
+# Set $poolinputs to true to show the input fields for adding a pool
+# and changing the pool priorities
+# N.B. also if $readonly is true, it will not display the fields
+$poolinputs = false;
+#
 # Set $rigs to an array of your BFGMiner rigs that are running
 #  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
-# If you only have one rig, it will just show the detail of that rig
-# If you have more than one rig it will show a summary of all the rigs
-#  with buttons to show the details of each rig -
-#  the button contents will be 'Name' if that was specified
-# e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 $rigs = array('127.0.0.1:4028');
 #
+# Set $rigtotals to true to display totals on the single rig page
+# 'false' means no totals (and ignores $forcerigtotals)
+# You can force it to always show rig totals when there is only
+# one line by setting $forcerigtotals = true;
+$rigtotals = true;
+$forcerigtotals = false;
+#
 # These should be OK for most cases
-# However, the longer SND is, the longer you have to wait while
-# php hangs if the target cgminer isn't runnning or listening
-# RCV should only ever be relevant if cgminer has hung but the
-# API thread is still running, RCV would normally be >= SND
-# Feel free to increase SND if your network is very slow
-# or decrease RCV if that happens often to you
-# Also, on some windows PHP, apparently the $usec is ignored
 $socksndtimeoutsec = 10;
 $sockrcvtimeoutsec = 40;
 #
 # List of fields NOT to be displayed
-# You can use this to hide data you don't want to see or don't want
-# shown on a public web page
-# The list of sections are: SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG
-# See the web page for the list of field names (the table headers)
-# It is an array of 'SECTION.Field Name' => 1
 # This example would hide the slightly more sensitive pool information
 #$hidefields = array('POOL.URL' => 1, 'POOL.User' => 1);
 $hidefields = array();
@@ -69,29 +65,23 @@ $changerefresh = true;
 $autorefresh = 0;
 #
 # Should we allow custom pages?
-# (or just completely ignore then and don't display the buttons)
+# (or just completely ignore them and don't display the buttons)
 $allowcustompages = true;
 #
 # OK this is a bit more complex item: Custom Summary Pages
-# A custom summary page in an array of 'section' => array('FieldA','FieldB'...)
-#  Field can be 'name=new name' to display 'name' with a different heading 'new name'
-# This makes up what is displayed with each 'section' separately as a table
-# - empty tables are not shown
-# - empty columns (an unknown field) are not shown
-# - and missing field data shows as blank
-# - section = 'DATE' displays a date table like 'Summary'
-# - section = 'RIGS' displays a rig table like 'Summary'
-# There is a second array, listing fields to be totaled for each section
+# As mentioned above, see API-README
 # see the example below (if there is no matching data, no total will show)
 $mobilepage = array(
  'DATE' => null,
  'RIGS' => null,
  'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej', 'Utility'),
- 'DEVS' => array('ID', 'Name', 'GPU', 'Status', 'MHS av', 'Accepted', 'Rejected=Rej', 'Utility'),
+ 'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.Status=Status', 'DEVS.Temperature=Temp',
+			'DEVS.MHS av=MHS av', 'DEVS.Accepted=Accept', 'DEVS.Rejected=Rej',
+			'DEVS.Utility=Utility', 'NOTIFY.Last Not Well=Not Well'),
  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej', 'Last Share Time'));
 $mobilesum = array(
  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
- 'DEVS' => array('MHS av', 'Accepted', 'Rejected', 'Utility'),
+ 'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Accepted', 'DEVS.Rejected', 'DEVS.Utility'),
  'POOL' => array('Accepted', 'Rejected'));
 #
 # customsummarypages is an array of these Custom Summary Pages
@@ -154,6 +144,10 @@ $colourtable = array(
 	'td.lo background'	=> '#deffff'
 );
 #
+# Don't touch these 2
+$miner = null;
+$port = null;
+#
 # Ensure it is only ever shown once
 global $showndate;
 $showndate = false;
@@ -194,8 +188,8 @@ function getdom($domname)
 #
 function htmlhead($checkapi, $rig, $pg = null)
 {
- global $miner_font_family, $miner_font_size;
- global $error, $readonly, $here;
+ global $title, $miner_font_family, $miner_font_size;
+ global $error, $readonly, $poolinputs, $here;
  global $ignorerefresh, $autorefresh;
 
  $extraparams = '';
@@ -225,7 +219,7 @@ function htmlhead($checkapi, $rig, $pg = null)
  $miner_font = "font-family:$miner_font_family; font-size:$miner_font_size;";
 
  echo "<html><head>$refreshmeta
-<title>Mine</title>
+<title>$title</title>
 <style type='text/css'>
 td { $miner_font ".getcss('td')."}
 td.two { $miner_font ".getcss('td.two')."}
@@ -250,6 +244,8 @@ if ($ignorerefresh == false)
 echo "function prc(a,m){pr('&arg='+a,m)}
 function prs(a,r){var c=a.substr(3);var z=c.split('|',2);var m=z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' GPU '+z[1];prc(a+'&rig='+r,m)}
 function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(3);var z=c.split('|',2);var m='Set GPU '+z[1]+' '+z[0].substr(0,1).toUpperCase()+z[0].substr(1)+' to '+v;prc(a+','+v+'&rig='+r,m)}\n";
+	if ($poolinputs === true)
+		echo "function cbs(s){var t=s.replace(/\\\\/g,'\\\\\\\\'); return t.replace(/,/g, '\\\\,')}\nfunction pla(r){var u=document.getElementById('purl').value;var w=document.getElementById('pwork').value;var p=document.getElementById('ppass').value;pr('&rig='+r+'&arg=addpool|'+cbs(u)+','+cbs(w)+','+cbs(p),'Add Pool '+u)}\nfunction psp(r){var p=document.getElementById('prio').value;pr('&rig='+r+'&arg=poolpriority|'+p,'Set Pool Priorities to '+p)}\n";
  }
 ?>
 </script>
@@ -313,6 +309,46 @@ function readsockline($socket)
  return $line;
 }
 #
+function api_convert_escape($str)
+{
+ $res = '';
+ $len = strlen($str);
+ for ($i = 0; $i < $len; $i++)
+ {
+	$ch = substr($str, $i, 1);
+	if ($ch != '\\' || $i == ($len-1))
+		$res .= $ch;
+	else
+	{
+		$i++;
+		$ch = substr($str, $i, 1);
+		switch ($ch)
+		{
+		case '|':
+			$res .= "\1";
+			break;
+		case '\\':
+			$res .= "\2";
+			break;
+		case '=':
+			$res .= "\3";
+			break;
+		case ',':
+			$res .= "\4";
+			break;
+		default:
+			$res .= $ch;
+		}
+	}
+ }
+ return $res;
+}
+#
+function revert($str)
+{
+ return str_replace(array("\1", "\2", "\3", "\4"), array("|", "\\", "=", ","), $str);
+}
+#
 function api($cmd)
 {
  global $haderror, $error;
@@ -333,6 +369,8 @@ function api($cmd)
 	}
 
 #	print "$cmd returned '$line'\n";
+
+	$line = api_convert_escape($line);
 
 	$data = array();
 
@@ -371,7 +409,7 @@ function api($cmd)
 					continue;
 
 				if (count($id) == 2)
-					$data[$name][$id[0]] = $id[1];
+					$data[$name][$id[0]] = revert($id[1]);
 				else
 					$data[$name][$counter] = $id[0];
 
@@ -446,6 +484,9 @@ function classlastshare($when, $alldata, $warnclass, $errorclass)
  if (!isset($alldata['MHS av']))
 	return '';
 
+ if ($alldata['MHS av'] == 0)
+	return '';
+
  if (!isset($alldata['Last Share Time']))
 	return '';
 
@@ -482,6 +523,10 @@ function fmt($section, $name, $value, $when, $alldata)
  $ret = $value;
  $class = '';
 
+ $nams = explode('.', $name);
+ if (count($nams) > 1)
+	$name = $nams[count($nams)-1];
+
  if ($value === null)
 	$ret = $b;
  else
@@ -489,6 +534,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	{
 	case 'GPU.Last Share Time':
 	case 'PGA.Last Share Time':
+	case 'DEVS.Last Share Time':
 		if ($value == 0
 		||  (isset($alldata['Last Share Pool']) && $alldata['Last Share Pool'] == -1))
 		{
@@ -509,6 +555,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Last Share Pool':
 	case 'PGA.Last Share Pool':
+	case 'DEVS.Last Share Pool':
 		if ($value == -1)
 		{
 			$ret = 'None';
@@ -571,6 +618,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Utility':
 	case 'PGA.Utility':
+	case 'DEVS.Utility':
 	case 'SUMMARY.Utility':
 	case 'total.Utility':
 		$ret = $value.'/m';
@@ -591,18 +639,24 @@ function fmt($section, $name, $value, $when, $alldata)
 			}
 		break;
 	case 'PGA.Temperature':
-		$ret = $value.'&deg;C';
-		break;
 	case 'GPU.Temperature':
+	case 'DEVS.Temperature':
 		$ret = $value.'&deg;C';
+		if (!isset($alldata['GPU']))
+			break;
 	case 'GPU.GPU Clock':
+	case 'DEVS.GPU Clock':
 	case 'GPU.Memory Clock':
+	case 'DEVS.Memory Clock':
 	case 'GPU.GPU Voltage':
+	case 'DEVS.GPU Voltage':
 	case 'GPU.GPU Activity':
+	case 'DEVS.GPU Activity':
 		if ($value == 0)
 			$class = $warnclass;
 		break;
 	case 'GPU.Fan Percent':
+	case 'DEVS.Fan Percent':
 		if ($value == 0)
 			$class = $warnclass;
 		else
@@ -615,6 +669,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		}
 		break;
 	case 'GPU.Fan Speed':
+	case 'DEVS.Fan Speed':
 		if ($value == 0)
 			$class = $warnclass;
 		else
@@ -630,6 +685,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.MHS av':
 	case 'PGA.MHS av':
+	case 'DEVS.MHS av':
 	case 'SUMMARY.MHS av':
 	case 'total.MHS av':
 		$parts = explode('.', $value, 2);
@@ -656,6 +712,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Total MH':
 	case 'PGA.Total MH':
+	case 'DEVS.Total MH':
 	case 'SUMMARY.Total MH':
 	case 'total.Total MH':
 	case 'SUMMARY.Getworks':
@@ -663,11 +720,13 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Getworks':
 	case 'GPU.Accepted':
 	case 'PGA.Accepted':
+	case 'DEVS.Accepted':
 	case 'SUMMARY.Accepted':
 	case 'POOL.Accepted':
 	case 'total.Accepted':
 	case 'GPU.Rejected':
 	case 'PGA.Rejected':
+	case 'DEVS.Rejected':
 	case 'SUMMARY.Rejected':
 	case 'POOL.Rejected':
 	case 'total.Rejected':
@@ -685,16 +744,19 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Status':
 	case 'PGA.Status':
+	case 'DEVS.Status':
 	case 'POOL.Status':
 		if ($value != 'Alive')
 			$class = $errorclass;
 		break;
 	case 'GPU.Enabled':
 	case 'PGA.Enabled':
+	case 'DEVS.Enabled':
 		if ($value != 'Y')
 			$class = $warnclass;
 		break;
 	case 'STATUS.When':
+	case 'COIN.Current Block Time':
 		$ret = date($dfmt, $value);
 		break;
 	case 'BUTTON.Rig':
@@ -716,13 +778,17 @@ function fmt($section, $name, $value, $when, $alldata)
  if ($class == '' && ($rownum % 2) == 0)
 	$class = $c2class;
 
+ if ($ret === '')
+	$ret = $b;
+
  return array($ret, $class);
 }
 #
 global $poolcmd;
 $poolcmd = array(	'Switch to'	=> 'switchpool',
 			'Enable'	=> 'enablepool',
-			'Disable'	=> 'disablepool' );
+			'Disable'	=> 'disablepool',
+			'Remove'	=> 'removepool' );
 #
 function showhead($cmd, $values, $justnames = false)
 {
@@ -751,9 +817,47 @@ function showdatetime()
  otherrow('<td class=sta>Date: '.date($dfmt).'</td>');
 }
 #
+global $singlerigsum;
+$singlerigsum = array(
+ 'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
+			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
+ 'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
+			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1),
+ 'notify' => array('*' => 1));
+#
+function showtotal($total, $when, $oldvalues)
+{
+ global $rigtotals;
+
+ list($showvalue, $class) = fmt('total', '', 'Total:', $when, null);
+ echo "<td$class align=right>$showvalue</td>";
+
+ $skipfirst = true;
+ foreach ($oldvalues as $name => $value)
+ {
+	if ($skipfirst === true)
+	{
+		$skipfirst = false;
+		continue;
+	}
+
+	if (isset($total[$name]))
+		$newvalue = $total[$name];
+	else
+		$newvalue = '';
+
+	list($showvalue, $class) = fmt('total', $name, $newvalue, $when, null);
+	echo "<td$class";
+	if ($rigtotals === true)
+		echo ' align=right';
+	echo ">$showvalue</td>";
+ }
+}
+#
 function details($cmd, $list, $rig)
 {
  global $dfmt, $poolcmd, $readonly, $showndate;
+ global $rownum, $rigtotals, $forcerigtotals, $singlerigsum;
 
  $when = 0;
 
@@ -786,8 +890,15 @@ function details($cmd, $list, $rig)
 	endrow();
  }
 
+ if ($rigtotals === true && isset($singlerigsum[$cmd]))
+	$dototal = $singlerigsum[$cmd];
+ else
+	$dototal = array();
+
+ $total = array();
 
  $section = '';
+ $oldvalues = null;
  foreach ($list as $item => $values)
  {
 	if ($item == 'STATUS')
@@ -795,8 +906,13 @@ function details($cmd, $list, $rig)
 
 	$sectionname = preg_replace('/\d/', '', $item);
 
+	// Handle 'devs' possibly containing >1 table
 	if ($sectionname != $section)
 	{
+		if ($oldvalues != null && count($total) > 0
+		&&  ($rownum > 2 || $forcerigtotals === true))
+			showtotal($total, $when, $oldvalues);
+
 		endtable();
 		newtable();
 		showhead($cmd, $values);
@@ -808,7 +924,19 @@ function details($cmd, $list, $rig)
 	foreach ($values as $name => $value)
 	{
 		list($showvalue, $class) = fmt($section, $name, $value, $when, $values);
-		echo "<td$class>$showvalue</td>";
+		echo "<td$class";
+		if ($rigtotals === true)
+			echo ' align=right';
+		echo ">$showvalue</td>";
+
+		if (isset($dototal[$name])
+		||  (isset($dototal['*']) and substr($name, 0, 1) == '*'))
+		{
+			if (isset($total[$name]))
+				$total[$name] += $value;
+			else
+				$total[$name] = $value;
+		}
 	}
 
 	if ($cmd == 'pools' && $readonly === false)
@@ -830,7 +958,14 @@ function details($cmd, $list, $rig)
 		}
 	}
 	endrow();
+
+	$oldvalues = $values;
  }
+
+ if ($oldvalues != null && count($total) > 0
+ &&  ($rownum > 2 || $forcerigtotals === true))
+	showtotal($total, $when, $oldvalues);
+
  endtable();
 }
 #
@@ -933,6 +1068,43 @@ function processgpus($rig)
  }
 }
 #
+function showpoolinputs($rig, $ans)
+{
+ global $readonly, $poolinputs;
+
+ if ($readonly === true || $poolinputs === false)
+	return;
+
+ newtable();
+ newrow();
+
+ $inps = array('Pool URL' => array('purl', 20),
+		'Worker Name' => array('pwork', 10),
+		'Worker Password' => array('ppass', 10));
+ $b = '&nbsp;';
+
+ echo "<td align=right class=h> Add a pool: </td><td>";
+
+ foreach ($inps as $text => $name)
+	echo "$text: <input name='".$name[0]."' id='".$name[0]."' value='' type=text size=".$name[1]."> ";
+
+ echo "</td><td align=middle><input type=button value='Add' onclick='pla($rig)'></td>";
+
+ endrow();
+
+ if (count($ans) > 1)
+ {
+	newrow();
+
+	echo '<td align=right class=h> Set pool priorities: </td>';
+	echo "<td> Comma list of pool numbers: <input type=text name=prio id=prio size=20>";
+	echo "</td><td align=middle><input type=button value='Set' onclick='psp($rig)'></td>";
+
+	endrow();
+ }
+ endtable();
+}
+#
 function process($cmds, $rig)
 {
  global $error, $devs;
@@ -952,12 +1124,15 @@ function process($cmds, $rig)
 	{
 		details($cmd, $process, $rig);
 
+		if ($cmd == 'devs')
+			$devs = $process;
+
+		if ($cmd == 'pools')
+			showpoolinputs($rig, $process);
+
 		# Not after the last one
 		if (--$count > 0)
 			otherrow('<td><br><br></td>');
-
-		if ($cmd == 'devs')
-			$devs = $process;
 	}
  }
 }
@@ -1274,7 +1449,178 @@ $sectionmap = array(
 	'GPU' => 'devs',	// You would normally use DEVS
 	'PGA' => 'devs',	// You would normally use DEVS
 	'NOTIFY' => 'notify',
-	'CONFIG' => 'config');
+	'DEVDETAILS' => 'devdetails',
+	'STATS' => 'stats',
+	'CONFIG' => 'config',
+	'COIN' => 'coin');
+#
+function joinfields($section1, $section2, $join, $results)
+{
+ global $sectionmap;
+
+ $name1 = $sectionmap[$section1];
+ $name2 = $sectionmap[$section2];
+ $newres = array();
+
+ // foreach rig in section1
+ foreach ($results[$name1] as $rig => $result)
+ {
+	$status = null;
+
+	// foreach answer section in the rig api call
+	foreach ($result as $name1b => $fields1b)
+	{
+		if ($name1b == 'STATUS')
+		{
+			// remember the STATUS from section1
+			$status = $result[$name1b];
+			continue;
+		}
+
+		// foreach answer section in the rig api call (for the other api command)
+		foreach ($results[$name2][$rig] as $name2b => $fields2b)
+		{
+			if ($name2b == 'STATUS')
+				continue;
+
+			// If match the same field values of fields in $join
+			$match = true;
+			foreach ($join as $field)
+				if ($fields1b[$field] != $fields2b[$field])
+				{
+					$match = false;
+					break;
+				}
+
+			if ($match === true)
+			{
+				if ($status != null)
+				{
+					$newres[$rig]['STATUS'] = $status;
+					$status = null;
+				}
+
+				$subsection = $section1.'+'.$section2;
+				$subsection .= preg_replace('/[^0-9]/', '', $name1b.$name2b);
+
+				foreach ($fields1b as $nam => $val)
+					$newres[$rig][$subsection]["$section1.$nam"] = $val;
+				foreach ($fields2b as $nam => $val)
+					$newres[$rig][$subsection]["$section2.$nam"] = $val;
+			}
+		}
+	}
+ }
+ return $newres;
+}
+#
+function joinall($section1, $section2, $results)
+{
+ global $sectionmap;
+
+ $name1 = $sectionmap[$section1];
+ $name2 = $sectionmap[$section2];
+ $newres = array();
+
+ // foreach rig in section1
+ foreach ($results[$name1] as $rig => $result)
+ {
+	// foreach answer section in the rig api call
+	foreach ($result as $name1b => $fields1b)
+	{
+		if ($name1b == 'STATUS')
+		{
+			// copy the STATUS from section1
+			$newres[$rig][$name1b] = $result[$name1b];
+			continue;
+		}
+
+		// foreach answer section in the rig api call (for the other api command)
+		foreach ($results[$name2][$rig] as $name2b => $fields2b)
+		{
+			if ($name2b == 'STATUS')
+				continue;
+
+			$subsection = $section1.'+'.$section2;
+			$subsection .= preg_replace('/[^0-9]/', '', $name1b.$name2b);
+
+			foreach ($fields1b as $nam => $val)
+				$newres[$rig][$subsection]["$section1.$nam"] = $val;
+			foreach ($fields2b as $nam => $val)
+				$newres[$rig][$subsection]["$section2.$nam"] = $val;
+		}
+	}
+ }
+ return $newres;
+}
+#
+function joinsections($sections, $results, $errors)
+{
+ global $sectionmap;
+
+#echo "results['pools']=".print_r($results['pools'],true)."<br>";
+
+ // GPU's don't have Name,ID fields - so create them
+ foreach ($results as $section => $res)
+	foreach ($res as $rig => $result)
+		foreach ($result as $name => $fields)
+		{
+			$subname = preg_replace('/[0-9]/', '', $name);
+			if ($subname == 'GPU' and isset($result[$name]['GPU']))
+			{
+				$results[$section][$rig][$name]['Name'] = 'GPU';
+				$results[$section][$rig][$name]['ID'] = $result[$name]['GPU'];
+			}
+		}
+
+ foreach ($sections as $section => $fields)
+	if ($section != 'DATE' && !isset($sectionmap[$section]))
+	{
+		$both = explode('+', $section, 2);
+		if (count($both) > 1)
+		{
+			switch($both[0])
+			{
+			case 'SUMMARY':
+				switch($both[1])
+				{
+				case 'POOL':
+				case 'DEVS':
+				case 'CONFIG':
+				case 'COIN':
+					$sectionmap[$section] = $section;
+					$results[$section] = joinall($both[0], $both[1], $results);
+					break;
+				default:
+					$errors[] = "Error: Invalid section '$section'";
+					break;
+				}
+				break;
+			case 'DEVS':
+				$join = array('Name', 'ID');
+				switch($both[1])
+				{
+				case 'NOTIFY':
+				case 'DEVDETAILS':
+					$sectionmap[$section] = $section;
+					$results[$section] = joinfields($both[0], $both[1], $join, $results);
+					break;
+				default:
+					$errors[] = "Error: Invalid section '$section'";
+					break;
+				}
+				break;
+			default:
+				$errors[] = "Error: Invalid section '$section'";
+				break;
+			}
+		}
+		else
+			$errors[] = "Error: Invalid section '$section'";
+	}
+
+ return array($results, $errors);
+}
 #
 function secmatch($section, $field)
 {
@@ -1335,7 +1681,14 @@ function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total
 				$value = null;
 		}
 
-		list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
+		if (strpos($secname, '+') === false)
+			list($showvalue, $class) = fmt($secname, $name, $value, $when, $row);
+		else
+		{
+			$parts = explode('.', $name, 2);
+			list($showvalue, $class) = fmt($parts[0], $parts[1], $value, $when, $row);
+		}
+
 		echo "<td$class align=right>$showvalue</td>";
 	}
 	endrow();
@@ -1356,15 +1709,19 @@ function processcustompage($pagename, $sections, $sum, $namemap)
  $errors = array();
  foreach ($sections as $section => $fields)
  {
-	if (isset($sectionmap[$section]))
+	$all = explode('+', $section);
+	foreach ($all as $section)
 	{
-		$cmd = $sectionmap[$section];
-		if (!isset($cmds[$cmd]))
-			$cmds[$cmd] = 1;
+		if (isset($sectionmap[$section]))
+		{
+			$cmd = $sectionmap[$section];
+			if (!isset($cmds[$cmd]))
+				$cmds[$cmd] = 1;
+		}
+		else
+			if ($section != 'DATE')
+				$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
 	}
-	else
-		if ($section != 'DATE')
-			$errors[] = "Error: unknown section '$section' in custom summary page '$pagename'";
  }
 
  $results = array();
@@ -1399,6 +1756,7 @@ function processcustompage($pagename, $sections, $sum, $namemap)
  $shownsomething = false;
  if (count($results) > 0)
  {
+	list($results, $errors) = joinsections($sections, $results, $errors);
 	$first = true;
 	foreach ($sections as $section => $fields)
 	{
@@ -1437,14 +1795,29 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 					foreach ($result as $sec => $row)
 					{
 						$secname = preg_replace('/\d/', '', $sec);
-						if (secmatch($section, $secname) && isset($row[$field]))
+						if (secmatch($section, $secname))
 						{
-							$showfields[$field] = 1;
-							$map = $section.'.'.$field;
-							if (isset($namemap[$map]))
-								$showhead[$namemap[$map]] = 1;
-							else
-								$showhead[$field] = 1;
+							if ($field === '*')
+							{
+								foreach ($row as $f => $v)
+								{
+									$showfields[$f] = 1;
+									$map = $section.'.'.$f;
+									if (isset($namemap[$map]))
+										$showhead[$namemap[$map]] = 1;
+									else
+										$showhead[$f] = 1;
+								}
+							}
+							elseif (isset($row[$field]))
+							{
+								$showfields[$field] = 1;
+								$map = $section.'.'.$field;
+								if (isset($namemap[$map]))
+									$showhead[$namemap[$map]] = 1;
+								else
+									$showhead[$field] = 1;
+							}
 						}
 					}
 
@@ -1592,7 +1965,8 @@ function display()
 			$miner = $parts[0];
 			$port = $parts[1];
 
-			$preprocess = $arg;
+			if ($readonly !== true)
+				$preprocess = $arg;
 		}
 	}
  }
