@@ -922,9 +922,86 @@ out:
 	return sret;
 }
 
+static bool parse_notify(struct pool *pool, json_t *val)
+{
+	return true;
+}
+
+static bool parse_diff(struct pool *pool, json_t *val)
+{
+	int diff;
+
+	diff = json_integer_value(json_array_get(val, 0));
+	if (diff < 1)
+		return false;
+
+	mutex_lock(&pool->pool_lock);
+	pool->swork.diff = diff;
+	mutex_unlock(&pool->pool_lock);
+
+	applog(LOG_DEBUG, "Pool %d difficulty set to %d", pool->pool_no, diff);
+
+	return true;
+}
+
+static bool parse_stratum(struct pool *pool, char *s)
+{
+	json_t *val = NULL, *method, *err_val, *params;
+	json_error_t err;
+	bool ret = false;
+	char *buf;
+
+	val = JSON_LOADS(s, &err);
+	if (!val) {
+		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
+		goto out;
+	}
+
+	method = json_object_get(val, "method");
+	err_val = json_object_get(val, "error");
+	params = json_object_get(val, "params");
+
+	if (!method || json_is_null(method) ||
+	    (err_val && !json_is_null(err_val))) {
+		char *ss;
+
+		if (err_val)
+			ss = json_dumps(err_val, JSON_INDENT(3));
+		else
+			ss = strdup("(unknown reason)");
+
+		applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
+
+		free(ss);
+
+		goto out;
+	}
+
+	buf = (char *)json_string_value(method);
+	if (!buf)
+		goto out;
+
+	if (!strncasecmp(buf, "mining.notify", 13) && parse_notify(pool, params)) {
+		ret = true;
+		goto out;
+	}
+
+	if (!strncasecmp(buf, "mining.set_difficulty", 21) && parse_diff(pool, params)) {
+		ret = true;
+		goto out;
+	}
+
+out:
+	if (!ret) {
+		if (val)
+			json_decref(val);
+	}
+	return ret;
+}
+
 bool auth_stratum(struct pool *pool)
 {
-	json_t *val = NULL, *res_val, *err_val, *notify_val;
+	json_t *val = NULL, *res_val, *err_val;
 	char *s, *buf, *sret = NULL;
 	json_error_t err;
 	bool ret = false;
@@ -935,6 +1012,7 @@ bool auth_stratum(struct pool *pool)
 
 	while (sock_full(pool->sock, false)) {
 		sret = recv_line(pool->sock);
+		parse_stratum(pool, sret);
 		free(sret);
 	}
 
@@ -986,7 +1064,7 @@ bool initiate_stratum(struct pool *pool)
 	val = JSON_LOADS(sret, &err);
 	free(sret);
 	if (!val) {
-		applog(LOG_DEBUG, "JSON decode failed(%d): %s", err.line, err.text);
+		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
 		goto out;
 	}
 
@@ -1002,7 +1080,7 @@ bool initiate_stratum(struct pool *pool)
 		else
 			ss = strdup("(unknown reason)");
 
-		applog(LOG_INFO, "JSON-RPC call failed: %s", ss);
+		applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
 
 		free(ss);
 
