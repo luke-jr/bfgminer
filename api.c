@@ -1699,12 +1699,10 @@ static void pgaidentify(__maybe_unused SOCKETTYPE c, char *param, bool isjson, _
 	struct cgpu_info *cgpu = devices[dev];
 	struct device_api *api = cgpu->api;
 
-	if (!api->identify_device)
-		strcpy(io_buffer, message(MSG_PGANOID, id, NULL, isjson));
-	else {
-		api->identify_device(cgpu);
+	if (api->identify_device && api->identify_device(cgpu))
 		strcpy(io_buffer, message(MSG_PGAIDENT, id, NULL, isjson));
-	}
+	else
+		strcpy(io_buffer, message(MSG_PGANOID, id, NULL, isjson));
 }
 #endif
 

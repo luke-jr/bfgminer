@@ -600,9 +600,10 @@ static bool bitforce_get_stats(struct cgpu_info *bitforce)
 	return bitforce_get_temp(bitforce);
 }
 
-static void bitforce_identify(struct cgpu_info *bitforce)
+static bool bitforce_identify(struct cgpu_info *bitforce)
 {
 	bitforce->flash_led = true;
+	return true;
 }
 
 static bool bitforce_thread_init(struct thr_info *thr)
