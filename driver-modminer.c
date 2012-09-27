@@ -427,6 +427,7 @@ modminer_process_results(struct thr_info*thr)
 		serial_read(fd, &nonce, 4);
 		mutex_unlock(&modminer->device_mutex);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
+			nonce = le32toh(nonce);
 			state->no_nonce_counter = 0;
 			bad = !test_nonce(work, nonce);
 			if (!bad)
