@@ -3967,6 +3967,14 @@ static bool pool_active(struct pool *pool, bool pinging)
 	CURL *curl;
 	int rolltime;
 
+	if (pool->has_stratum) {
+		if (pool->stratum_active && !pinging)
+			return true;
+		if (initiate_stratum(pool))
+			return true;
+		return false;
+	}
+
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
