@@ -846,12 +846,16 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	return true;
 }
 
+/* Send a single command across a socket, appending \n to it */
 static bool sock_send(int sock, char *s, ssize_t len)
 {
 	ssize_t sent = 0;
 
 	if (opt_protocol)
 		applog(LOG_DEBUG, "SEND: %s", s);
+
+	strcat(s, "\n");
+	len++;
 
 	while (len > 0 ) {
 		sent = send(sock, s + sent, len, 0);
@@ -1006,7 +1010,7 @@ bool auth_stratum(struct pool *pool)
 	bool ret = false;
 
 	s = alloca(RECVSIZE);
-	sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}\n",
+	sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
 		pool->swork.id++, pool->rpc_user, pool->rpc_pass);
 
 	while (sock_full(pool->sock, false)) {
@@ -1033,7 +1037,7 @@ bool initiate_stratum(struct pool *pool)
 	bool ret = false;
 
 	s = alloca(RECVSIZE);
-	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}\n", pool->swork.id++);
+	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", pool->swork.id++);
 
 	pool->sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (pool->sock == INVSOCK)
