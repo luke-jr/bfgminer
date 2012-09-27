@@ -751,6 +751,26 @@ enum pool_enable {
 	POOL_REJECTING,
 };
 
+struct stratum_work {
+	/* id we sent to receive this work */
+	int id;
+	/* Reference to json structure all the following were extracted from */
+	json_t *json_val;
+
+	char *job_id;
+	char *prev_hash;
+	char *coinbase1;
+	char *coinbase2;
+	char *merkle1;
+	char *merkle2;
+	char *bbversion;
+	char *nbit;
+	char *ntime;
+	bool clean;
+
+	int diff;
+};
+
 struct pool {
 	int pool_no;
 	int prio;
@@ -822,6 +842,7 @@ struct pool {
 	int nonce2;
 	bool has_stratum;
 	bool stratum_active;
+	struct stratum_work swork;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
