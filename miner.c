@@ -100,6 +100,10 @@ bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
+#if BLKMAKER_VERSION < 1
+const
+#endif
+char *opt_coinbase_sig;
 bool have_longpoll;
 bool want_per_device_stats;
 bool use_syslog;
@@ -508,6 +512,12 @@ static char *set_int_0_to_10(const char *arg, int *i)
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
+}
+
+char *set_strdup(const char *arg, char **p)
+{
+	*p = strdup((char *)arg);
+	return NULL;
 }
 
 #ifdef HAVE_LIBUDEV
@@ -933,6 +943,16 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
+#endif
+#if BLKMAKER_VERSION > 0
+	OPT_WITH_ARG("--coinbase-sig",
+		     set_strdup, NULL, &opt_coinbase_sig,
+		     "Set coinbase signature when possible"),
+	OPT_WITH_ARG("--coinbase|--cbsig|--cb-sig|--cb|--prayer",
+		     set_strdup, NULL, &opt_coinbase_sig,
+		     opt_hidden),
+#endif
+#ifdef WANT_CPUMINE
 	OPT_WITH_ARG("--cpu-threads|-t",
 		     force_nthreads_int, opt_show_intval, &opt_n_threads,
 		     "Number of miner CPU threads"),
@@ -1472,6 +1492,49 @@ static bool work_decode(const json_t *val, struct work *work)
 			goto err_out;
 		}
 		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
+#if BLKMAKER_VERSION > 0
+		{
+			ssize_t ae = blkmk_append_coinbase_safe(work->tmpl, opt_coinbase_sig, 101);
+			static bool appenderr = false;
+			if (ae <= 0) {
+				if (opt_coinbase_sig) {
+					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%d)", ae, work->pool->pool_no);
+					appenderr = true;
+				}
+			} else if (ae >= 3 || opt_coinbase_sig) {
+				const char *cbappend = opt_coinbase_sig;
+				if (!cbappend) {
+					const char full[] = PACKAGE " " VERSION;
+					// NOTE: Intentially including a trailing \0 on long forms so extranonce doesn't confuse things
+					if ((size_t)ae >= sizeof(full))
+						cbappend = full;
+					else if ((size_t)ae >= sizeof(PACKAGE))
+						cbappend = PACKAGE;
+					else
+						cbappend = "BFG";
+				}
+				size_t cbappendsz = strlen(cbappend);
+				static bool truncatewarning = false;
+				if (cbappendsz <= (size_t)ae) {
+					ae = cbappendsz;
+					truncatewarning = false;
+				} else {
+					char *tmp = strndup(opt_coinbase_sig, ae);
+					applog((truncatewarning ? LOG_DEBUG : LOG_WARNING),
+					       "Pool %u truncating appended coinbase signature at %d bytes: %s(%s)",
+					       work->pool->pool_no, ae, tmp, &opt_coinbase_sig[ae]);
+					free(tmp);
+					truncatewarning = true;
+				}
+				ae = blkmk_append_coinbase_safe(work->tmpl, cbappend, ae);
+				if (ae <= 0) {
+					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Error appending coinbase signature (%d)", ae);
+					appenderr = true;
+				} else
+					appenderr = false;
+			}
+		}
+#endif
 		if (blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid) < 76)
 			goto err_out;
 		swap32yes(work->data, work->data, 80 / 4);

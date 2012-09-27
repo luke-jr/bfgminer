@@ -324,12 +324,13 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               PerDevice=true/false,
                               WorkTime=true/false|
 
- setconfig|name,N (*)
+ setconfig|name,value (*)
                none           There is no reply section just the STATUS section
-                              stating the results of setting 'name' to N
+                              stating the results of setting 'name'
                               The valid values for name are currently:
-                              queue, scantime, expiry
-                              N is an integer in the range 0 to 9999
+                              queue, scantime, expiry (integer in the range
+                                                       0 to 9999)
+                              coinbase-sig (string)
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
@@ -401,6 +402,7 @@ Modified API commands:
                'Difficulty Stale', 'Last Share Difficulty'
  'stats' - add 'Work Diff', 'Min Diff', 'Max Diff', 'Min Diff Count',
                'Max Diff Count' to the pool stats
+ 'setconfig|name,value' - add 'Coinbase-Sig' string
 
 ----------
 

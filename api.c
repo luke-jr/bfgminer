@@ -1323,6 +1323,7 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	root = api_add_int(root, "ScanTime", &opt_scantime, false);
 	root = api_add_int(root, "Queue", &opt_queue, false);
 	root = api_add_int(root, "Expiry", &opt_expiry, false);
+	root = api_add_string(root, "Coinbase-Sig", opt_coinbase_sig, true);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2911,6 +2912,14 @@ static void setconfig(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 	}
 
 	*(comma++) = '\0';
+
+	if (strcasecmp(param, "coinbase-sig") == 0) {
+		free(opt_coinbase_sig);
+		opt_coinbase_sig = strdup(comma);
+		strcpy(io_buffer, message(MSG_SETCONFIG, 1, param, isjson));
+		return;
+	}
+
 	value = atoi(comma);
 	if (value < 0 || value > 9999) {
 		strcpy(io_buffer, message(MSG_INVNUM, value, param, isjson));
