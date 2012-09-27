@@ -7,6 +7,7 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "compat.h"
 #include "dynclock.h"
 #include "fpgautils.h"
 #include "icarus-common.h"
