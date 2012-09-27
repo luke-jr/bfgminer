@@ -61,6 +61,10 @@
 	#include <sys/wait.h>
 #endif
 
+#ifdef USE_SCRYPT
+#include "scrypt.h"
+#endif
+
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
 #	define USE_FPGA
 #	define USE_FPGA_SERIAL
@@ -5070,8 +5074,13 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	*work_nonce = nonce;
 
-	if (opt_scrypt)
+#ifdef USE_SCRYPT
+	if (opt_scrypt) {
+		if (!scrypt_test(work->data, work->target, nonce))
+			return TNR_BAD;
 		return TNR_GOOD;
+	}
+#endif
 
 	return hashtest2(work, checktarget);
 }
