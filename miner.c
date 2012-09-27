@@ -1519,7 +1519,9 @@ static bool work_decode(const json_t *val, struct work *work)
 					ae = cbappendsz;
 					truncatewarning = false;
 				} else {
-					char *tmp = strndup(opt_coinbase_sig, ae);
+					char *tmp = malloc(ae + 1);
+					memcpy(tmp, opt_coinbase_sig, ae);
+					tmp[ae] = '\0';
 					applog((truncatewarning ? LOG_DEBUG : LOG_WARNING),
 					       "Pool %u truncating appended coinbase signature at %d bytes: %s(%s)",
 					       work->pool->pool_no, ae, tmp, &opt_coinbase_sig[ae]);
