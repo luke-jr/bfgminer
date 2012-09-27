@@ -1,5 +1,35 @@
-BFGMiner Version 2.8.1 - Future
+BFGMiner Version 2.8.1 - September 27, 2012
 
+- cairnsmore: Implement "identify" for supported firmware
+- Adjust identify_device API to return a bool whether supported or not, for
+runtime capability detection
+- Bugfix: cairnsmore: Fix invalid share detection on LE
+- Bugfix: icarus: Fix logging message to not assume "Icarus" always, and use
+device driver name
+- Bugfix: cairnsmore: Correct frequency scaling detection logic
+- cairnsmore: When changing frequency, adjust Hs expectations accordingly
+- cairnsmore: Detect availability of frequency scaling, and only enable it
+when supported
+- cairnsmore: Implement dynamic clocking support for Glasswalker's bitstream
+- Update libblkmaker to 0.1.1
+- Advertise BFGMiner in blocks found by default (without --coinbase-sig)
+- RPC: Add "Coinbase-Sig" to config/setconfig
+- New --coinbase-sig option to add arbitrary data to blocks you generate (GBT
+only)
+- opencl: Defer nonce validity checking to submit_nonce
+- scrypt: Implement test_nonce2 and submit_nonce hw error check
+- Bugfix: modminer: Convert nonce to native endian
+- Interpret any attempts to submit a H-not-zero nonce as a hardware error
+- make-release: Strip DLLs and EXE in Windows binary
+- dynclock: Use consistent messages for frequency changes
+- modminer: Port to dynclock
+- dynclock: Split dynamic clocking algorithm out of Ztex driver
+- Bugfix: When changing GPU memclock, adjust internal variable so it is
+correctly saved to config file
+- Bugfix: Re-probe longpoll header for each pool alive check, including
+retries when a preferred protocol fails
+- Bugfix: modminer: Bitstream binary filenames are *.bit
+- modminer: Start frequency off at 200 Mhz
 - Reorder libztex header include order to fix missing struct definition.
 - Display share difficulty on log with a shortened hash display on submission.
 - API stats add some pool getwork difficulty stats

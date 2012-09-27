@@ -1,3 +1,15 @@
+bfgminer (2.8.1-0precise1) precise; urgency=low
+
+  * Many improvements for Enterpoint's Cairsmore, including (experimental) support for Glasswalker's dynamic frequency bitstream.
+  * New --coinbase-sig option that lets you embed a short tidbit in any blocks you personally find (only on GBT-enabled pools).
+  * Generic dynamic clocking framework based on the Ztex driver's (written by nelisky), now used by ModMiner and (Glasswalker) Cairnsmore.
+  * New RPC "identify" command to flash LEDs on some FPGAs (currently BitForce and GW Cairnsmore).
+  * Include share difficulty information in log and RPC.
+  * Lots of other various bugfixes and small improvements.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 27 Sep 2012 06:20:05 -0000
+
+
 bfgminer (2.8.0-0precise1) precise; urgency=low
 
   * Basic getblocktemplate decentralized mining protocol support, including rolling extranonce (based on libblkmaker 0.1).
