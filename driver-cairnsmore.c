@@ -7,6 +7,7 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "dynclock.h"
 #include "fpgautils.h"
 #include "icarus-common.h"
 #include "miner.h"
@@ -15,6 +16,10 @@
 
 // This is a general ballpark
 #define CAIRNSMORE1_HASH_TIME 0.0000000024484
+
+#define CAIRNSMORE1_MINIMUM_CLOCK  5
+#define CAIRNSMORE1_DEFAULT_CLOCK  200
+#define CAIRNSMORE1_MAXIMUM_CLOCK  200
 
 struct device_api cairnsmore_api;
 
@@ -29,7 +34,7 @@ static bool cairnsmore_detect_one(const char *devpath)
 	info->fpga_count = 2;
 	info->quirk_reopen = false;
 	info->Hs = CAIRNSMORE1_HASH_TIME;
-	info->timing_mode = MODE_SHORT;
+	info->timing_mode = MODE_LONG;
 	info->do_icarus_timing = true;
 
 	if (!icarus_detect_custom(devpath, &cairnsmore_api, info)) {
@@ -54,15 +59,121 @@ static void cairnsmore_detect()
 	serial_detect_auto_byname(&cairnsmore_api, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
 
+static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
+{
+	unsigned char pkt[64] =
+		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+		"vdi\xb7"
+		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+		"BFG0" "\xff\xff\xff\xff" "\0\0\0\0";
+	pkt[32] = 0xda ^ cmd ^ data;
+	pkt[33] = data;
+	pkt[34] = cmd;
+	return write(fd, pkt, sizeof(pkt)) == sizeof(pkt);
+}
+
+bool cairnsmore_supports_dynclock(int fd)
+{
+	unsigned char pkts[64] =
+		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+		"\xe6\x3c\0\xb7"  // Set frequency multiplier to 60 (150 Mhz)
+		"\0\0\0\0\0\0\0\0\0\0\0\0" "BFG0"
+		"\x8b\xdb\x05\x1a" "\xff\xff\xff\xff" "\x00\x00\x1e\xfd";
+	if (write(fd, pkts, sizeof(pkts)) != sizeof(pkts))
+		return false;
+
+	uint32_t nonce = 0;
+	{
+		struct timeval tv_finish;
+		struct thr_info dummy = {
+			.work_restart = false,
+			.work_restart_fd = -1,
+		};
+		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
+	}
+	switch (nonce) {
+		case 0x000b1b5e:  // on big    endian
+		case 0x5e1b0b00:  // on little endian
+			// Hashed the command, so it's not supported
+			return false;
+		default:
+			// TODO: nonce from a real job... handle it
+		case 0:
+			return true;
+	}
+}
+
+static bool cairnsmore_change_clock_func(struct thr_info *thr, int bestM)
+{
+	struct cgpu_info *cm1 = thr->cgpu;
+	struct ICARUS_INFO *info = cm1->cgpu_data;
+
+	if (unlikely(!cairnsmore_send_cmd(cm1->device_fd, 0, bestM)))
+		return false;
+
+	// Adjust Hs expectations for frequency change
+	info->Hs = info->Hs * (double)bestM / (double)info->dclk.freqM;
+
+	char repr[0x10];
+	sprintf(repr, "%s %u", cm1->api->name, cm1->device_id);
+	dclk_msg_freqchange(repr, 2.5 * (double)info->dclk.freqM, 2.5 * (double)bestM, NULL);
+	info->dclk.freqM = bestM;
+
+	return true;
+}
+
+static bool cairnsmore_init(struct thr_info *thr)
+{
+	struct cgpu_info *cm1 = thr->cgpu;
+	struct ICARUS_INFO *info = cm1->cgpu_data;
+
+	if (cairnsmore_supports_dynclock(cm1->device_fd)) {
+		info->dclk_change_clock_func = cairnsmore_change_clock_func;
+
+		dclk_prepare(&info->dclk);
+		info->dclk.freqMaxM = CAIRNSMORE1_MAXIMUM_CLOCK / 2.5;
+		info->dclk.freqM =
+		info->dclk.freqMDefault = CAIRNSMORE1_DEFAULT_CLOCK / 2.5;
+		cairnsmore_send_cmd(cm1->device_fd, 0, info->dclk.freqM);
+		applog(LOG_WARNING, "%s %u: Frequency set to %u Mhz (range: %u-%u)",
+		       cm1->api->name, cm1->device_id,
+		       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
+		);
+	} else {
+		applog(LOG_WARNING, "%s %u: Frequency scaling not supported",
+			cm1->api->name, cm1->device_id
+		);
+		// Test failures corrupt the hash state, so next scanhash is a firstrun
+		struct icarus_state *state = thr->cgpu_data;
+		state->firstrun = true;
+	}
+
+	return true;
+}
+
 void convert_icarus_to_cairnsmore(struct cgpu_info *cm1)
 {
 	struct ICARUS_INFO *info = cm1->cgpu_data;
 	info->Hs = CAIRNSMORE1_HASH_TIME;
 	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-	info->timing_mode = MODE_SHORT;
+	info->timing_mode = MODE_LONG;
 	info->do_icarus_timing = true;
 	cm1->api = &cairnsmore_api;
 	renumber_cgpu(cm1);
+	cairnsmore_init(cm1->thr[0]);
+}
+
+static struct api_data *cairnsmore_api_extra_device_status(struct cgpu_info *cm1)
+{
+	struct ICARUS_INFO *info = cm1->cgpu_data;
+	struct api_data*root = NULL;
+
+	if (info->dclk.freqM) {
+		double frequency = 2.5 * info->dclk.freqM;
+		root = api_add_freq(root, "Frequency", &frequency, true);
+	}
+
+	return root;
 }
 
 extern struct device_api icarus_api;
@@ -74,4 +185,6 @@ static void cairnsmore_api_init()
 	cairnsmore_api.dname = "cairnsmore";
 	cairnsmore_api.name = "ECM";
 	cairnsmore_api.api_detect = cairnsmore_detect;
+	cairnsmore_api.thread_init = cairnsmore_init;
+	cairnsmore_api.get_api_extra_device_status = cairnsmore_api_extra_device_status;
 }
