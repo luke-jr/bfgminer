@@ -825,6 +825,9 @@ static void load_temp_cutoffs()
 		for (i = device; i < total_devices; ++i)
 			devices[i]->cutofftemp = val;
 	}
+	for (i = 0; i < total_devices; ++i)
+		if (!devices[i]->targettemp)
+			devices[i]->targettemp = devices[i]->cutofftemp - 6;
 }
 
 static char *set_api_allow(const char *arg)
@@ -4008,7 +4011,7 @@ void write_config(FILE *fcfg)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
 		fputs("\",\n\"temp-target\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].targettemp);
 #endif
 		fputs("\"", fcfg);
 	}

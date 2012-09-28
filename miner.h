@@ -248,7 +248,6 @@ struct gpu_adl {
 	int lastengine;
 	int lasttemp;
 	int targetfan;
-	int targettemp;
 	int overtemp;
 	int minspeed;
 	int maxspeed;
@@ -433,6 +432,7 @@ struct cgpu_info {
 
 	float temp;
 	int cutofftemp;
+	int targettemp;
 
 #ifdef HAVE_ADL
 	bool has_adl;
