@@ -842,6 +842,7 @@ struct pool {
 	bool stratum_active;
 	bool stratum_auth;
 	struct stratum_work swork;
+	pthread_t stratum_thread;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'

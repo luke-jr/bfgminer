@@ -897,7 +897,7 @@ static bool sock_full(SOCKETTYPE sock, bool wait)
 
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
-static char *recv_line(SOCKETTYPE sock)
+char *recv_line(SOCKETTYPE sock)
 {
 	char *sret = NULL, *s;
 	ssize_t len;
@@ -1048,7 +1048,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	return true;
 }
 
-static bool parse_stratum(struct pool *pool, char *s)
+bool parse_stratum(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
 	json_error_t err;
