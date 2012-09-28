@@ -1105,7 +1105,7 @@ out:
 bool auth_stratum(struct pool *pool)
 {
 	json_t *val = NULL, *res_val, *err_val;
-	char *s, *buf, *sret = NULL;
+	char *s, *sret = NULL;
 	json_error_t err;
 	bool ret = false;
 
@@ -1113,6 +1113,7 @@ bool auth_stratum(struct pool *pool)
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
 		pool->swork.id++, pool->rpc_user, pool->rpc_pass);
 
+	/* Parse all data prior sending auth request */
 	while (sock_full(pool->sock, false)) {
 		sret = recv_line(pool->sock);
 		parse_stratum(pool, sret);
@@ -1122,9 +1123,33 @@ bool auth_stratum(struct pool *pool)
 	if (!sock_send(pool->sock, s, strlen(s)))
 		goto out;
 
+	sret = recv_line(pool->sock);
+	if (!sret)
+		goto out;
+	val = JSON_LOADS(sret, &err);
+	free(sret);
+	res_val = json_object_get(val, "result");
+	err_val = json_object_get(val, "error");
+
+	if (!res_val || json_is_false(res_val) || (err_val && !json_is_null(err_val)))  {
+		char *ss;
+
+		if (err_val)
+			ss = json_dumps(err_val, JSON_INDENT(3));
+		else
+			ss = strdup("(unknown reason)");
+		applog(LOG_WARNING, "JSON stratum auth failed: %s", ss);
+		free(ss);
+
+		goto out;
+	}
+	ret = true;
+	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 out:
 	if (val)
 		json_decref(val);
+
+	pool->stratum_auth = ret;
 
 	return ret;
 }
