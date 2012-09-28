@@ -825,6 +825,9 @@ static void load_temp_cutoffs()
 		for (i = device; i < total_devices; ++i)
 			devices[i]->cutofftemp = val;
 	}
+	for (i = 0; i < total_devices; ++i)
+		if (!devices[i]->targettemp)
+			devices[i]->targettemp = devices[i]->cutofftemp - 6;
 }
 
 static char *set_api_allow(const char *arg)
@@ -4008,7 +4011,7 @@ void write_config(FILE *fcfg)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
 		fputs("\",\n\"temp-target\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].targettemp);
 #endif
 		fputs("\"", fcfg);
 	}
@@ -5709,6 +5712,19 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
+void device_recovered(struct cgpu_info *cgpu)
+{
+	struct thr_info *thr;
+	int j;
+
+	cgpu->deven = DEV_ENABLED;
+	for (j = 0; j < cgpu->threads; ++j) {
+		thr = cgpu->thr[j];
+		applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+		tq_push(thr->q, &ping);
+	}
+}
+
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
@@ -5821,6 +5837,28 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			/* Thread is disabled */
 			if (*denable == DEV_DISABLED)
 				continue;
+			else
+			if (*denable == DEV_RECOVER) {
+				if (opt_restart && cgpu->temp < cgpu->targettemp) {
+					applog(LOG_NOTICE, "%s %u recovered to temperature below target, re-enabling",
+					       cgpu->api->name, cgpu->device_id);
+					device_recovered(cgpu);
+				}
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
+				continue;
+			}
+			else
+			if (cgpu->temp > cgpu->cutofftemp)
+			{
+				applog(LOG_WARNING, "%s %u hit thermal cutoff limit, disabling!",
+				       cgpu->api->name, cgpu->device_id);
+				*denable = DEV_RECOVER;
+
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
+				++cgpu->dev_thermal_cutoff_count;
+			}
 
 			if (thr->getwork) {
 				if (cgpu->status == LIFE_WELL && thr->getwork < now.tv_sec - opt_log_interval) {
@@ -6264,7 +6302,7 @@ extern struct device_api ztex_api;
 
 static int cgminer_id_count = 0;
 
-void enable_device(struct cgpu_info *cgpu)
+void register_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
@@ -6575,13 +6613,13 @@ int main(int argc, char *argv[])
 			if (devices_enabled & (1 << i)) {
 				if (i >= total_devices)
 					quit (1, "Command line options set a device that doesn't exist");
-				enable_device(devices[i]);
+				register_device(devices[i]);
 			} else if (i < total_devices) {
 				if (opt_removedisabled) {
 					if (devices[i]->api == &cpu_api)
 						--opt_n_threads;
 				} else {
-					enable_device(devices[i]);
+					register_device(devices[i]);
 				}
 				devices[i]->deven = DEV_DISABLED;
 			}
@@ -6589,7 +6627,7 @@ int main(int argc, char *argv[])
 		total_devices = cgminer_id_count;
 	} else {
 		for (i = 0; i < total_devices; ++i)
-			enable_device(devices[i]);
+			register_device(devices[i]);
 	}
 
 	if (!total_devices)

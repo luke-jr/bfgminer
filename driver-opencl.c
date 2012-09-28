@@ -742,7 +742,7 @@ char *set_temp_target(char *arg)
 	if (val < 0 || val > 200)
 		return "Invalid value passed to set temp target";
 
-	tt = &gpus[device++].adl.targettemp;
+	tt = &gpus[device++].targettemp;
 	*tt = val;
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
@@ -750,12 +750,12 @@ char *set_temp_target(char *arg)
 		if (val < 0 || val > 200)
 			return "Invalid value passed to set temp target";
 
-		tt = &gpus[device++].adl.targettemp;
+		tt = &gpus[device++].targettemp;
 		*tt = val;
 	}
 	if (device == 1) {
 		for (i = device; i < MAX_GPUDEVICES; i++) {
-			tt = &gpus[i].adl.targettemp;
+			tt = &gpus[i].targettemp;
 			*tt = val;
 		}
 	}
