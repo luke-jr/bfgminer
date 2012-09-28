@@ -308,14 +308,6 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 
 		if (temp > 0) {
 			bitforce->temp = temp;
-			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
-				applog(LOG_WARNING, "BFL%i: Hit thermal cutoff limit, disabling!", bitforce->device_id);
-				bitforce->deven = DEV_RECOVER;
-
-				bitforce->device_last_not_well = time(NULL);
-				bitforce->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-				bitforce->dev_thermal_cutoff_count++;
-			}
 		}
 	} else {
 		/* Use the temperature monitor as a kind of watchdog for when

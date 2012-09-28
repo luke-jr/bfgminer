@@ -505,6 +505,7 @@ void init_adl(int nDevs)
 			ga->autoengine = true;
 			ga->managed = true;
 		}
+		gpus[gpu].temp =
 		ga->lasttemp = __gpu_temp(ga);
 	}
 
@@ -744,6 +745,7 @@ bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vdd
 	ga = &gpus[gpu].adl;
 
 	lock_adl();
+	gpus[gpu].temp =
 	*temp = __gpu_temp(ga);
 	if (ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity) != ADL_OK) {
 		*engineclock = 0;
@@ -1120,6 +1122,7 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 
 	lock_adl();
 	ADL_Overdrive5_CurrentActivity_Get(ga->iAdapterIndex, &ga->lpActivity);
+	gpus[gpu].temp =
 	temp = __gpu_temp(ga);
 	if (ga->twin)
 		twintemp = __gpu_temp(ga->twin);
@@ -1154,13 +1157,8 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 
 	if (engine && ga->autoengine) {
 		if (temp > cgpu->cutofftemp) {
-			applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
-			*denable = DEV_RECOVER;
+			// Shutoff and recovery happens back in watchdog_thread
 			newengine = ga->minspeed;
-
-			cgpu->device_last_not_well = time(NULL);
-			cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-			cgpu->dev_thermal_cutoff_count++;
 		} else if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
 			newengine = ga->minspeed;
@@ -1178,9 +1176,6 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 				newengine = ga->maxspeed;
 			else
 				newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
-		} else if (temp < gpus[gpu].targettemp && *denable == DEV_RECOVER && opt_restart) {
-			applog(LOG_NOTICE, "Device recovered to temperature below target, re-enabling");
-			*denable = DEV_ENABLED;
 		}
 
 		if (newengine > ga->maxspeed)

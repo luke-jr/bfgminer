@@ -5712,6 +5712,19 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
+void device_recovered(struct cgpu_info *cgpu)
+{
+	struct thr_info *thr;
+	int j;
+
+	cgpu->deven = DEV_ENABLED;
+	for (j = 0; j < cgpu->threads; ++j) {
+		thr = cgpu->thr[j];
+		applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+		tq_push(thr->q, &ping);
+	}
+}
+
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
@@ -5824,6 +5837,26 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			/* Thread is disabled */
 			if (*denable == DEV_DISABLED)
 				continue;
+			else
+			if (*denable == DEV_RECOVER) {
+				if (opt_restart && cgpu->temp < cgpu->targettemp) {
+					applog(LOG_NOTICE, "%s %u recovered to temperature below target, re-enabling",
+					       cgpu->api->name, cgpu->device_id);
+					device_recovered(cgpu);
+				}
+				continue;
+			}
+			else
+			if (cgpu->temp > cgpu->cutofftemp)
+			{
+				applog(LOG_WARNING, "%s %u hit thermal cutoff limit, disabling!",
+				       cgpu->api->name, cgpu->device_id);
+				*denable = DEV_RECOVER;
+
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
+				++cgpu->dev_thermal_cutoff_count;
+			}
 
 			if (thr->getwork) {
 				if (cgpu->status == LIFE_WELL && thr->getwork < now.tv_sec - opt_log_interval) {

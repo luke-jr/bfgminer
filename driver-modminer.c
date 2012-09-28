@@ -595,14 +595,7 @@ modminer_process_results(struct thr_info*thr)
 		if (!fpgaid)
 			modminer->temp = (float)temperature;
 		if (temperature > modminer->cutofftemp - 2) {
-			if (temperature > modminer->cutofftemp) {
-				applog(LOG_WARNING, "%s %u.%u: Hit thermal cutoff limit, disabling device!", modminer->api->name, modminer->device_id, fpgaid);
-				modminer->deven = DEV_RECOVER;
-
-				modminer->device_last_not_well = time(NULL);
-				modminer->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-				++modminer->dev_thermal_cutoff_count;
-			} else {
+			{
 				time_t now = time(NULL);
 				if (state->last_cutoff_reduced != now) {
 					state->last_cutoff_reduced = now;
