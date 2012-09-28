@@ -837,7 +837,7 @@ struct pool {
 	struct sockaddr_in *server, client;
 	char *subscription;
 	char *nonce1;
-	int nonce2;
+	int n2size;
 	bool has_stratum;
 	bool stratum_active;
 	bool stratum_auth;

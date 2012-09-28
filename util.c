@@ -1239,9 +1239,9 @@ bool initiate_stratum(struct pool *pool)
 		applog(LOG_WARNING, "Failed to get nonce1 in initiate_stratum");
 		goto out;
 	}
-	pool->nonce2 = json_integer_value(json_array_get(res_val, 2));
-	if (!pool->nonce2) {
-		applog(LOG_WARNING, "Failed to get nonce2 in initiate_stratum");
+	pool->n2size = json_integer_value(json_array_get(res_val, 2));
+	if (!pool->n2size) {
+		applog(LOG_WARNING, "Failed to get n2size in initiate_stratum");
 		goto out;
 	}
 
@@ -1253,8 +1253,8 @@ out:
 	if (ret) {
 		pool->stratum_active = true;
 		if (opt_protocol) {
-			applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extranonce2 %d",
-			       pool->pool_no, pool->subscription, pool->nonce1, pool->nonce2);
+			applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extran2size %d",
+			       pool->pool_no, pool->subscription, pool->nonce1, pool->n2size);
 		}
 	} else
 		CLOSESOCKET(pool->sock);
