@@ -1154,13 +1154,16 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 
 	if (engine && ga->autoengine) {
 		if (temp > cgpu->cutofftemp) {
-			applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
-			*denable = DEV_RECOVER;
+			if (*denable == DEV_ENABLED) {
+				applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
+				*denable = DEV_RECOVER;
+				++cgpu->dev_thermal_cutoff_count;
+			}
+
 			newengine = ga->minspeed;
 
 			cgpu->device_last_not_well = time(NULL);
 			cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-			cgpu->dev_thermal_cutoff_count++;
 		} else if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
 			newengine = ga->minspeed;
