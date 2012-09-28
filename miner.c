@@ -4098,7 +4098,7 @@ void write_config(FILE *fcfg)
 static void display_pools(void)
 {
 	struct pool *pool;
-	int selected, i;
+	int selected, i, priority;
 	char input;
 
 	opt_loginput = true;
@@ -4151,7 +4151,7 @@ retry:
 	if (pool_strategy == POOL_ROTATE)
 		wlogprint("Set to rotate every %d minutes\n", opt_rotate_period);
 	wlogprint("[F]ailover only %s\n", opt_fail_only ? "enabled" : "disabled");
-	wlogprint("[A]dd pool [R]emove pool [D]isable pool [E]nable pool\n");
+	wlogprint("[A]dd pool [R]emove pool [D]isable pool [E]nable pool [P]rioritize pool\n");
 	wlogprint("[C]hange management strategy [S]witch pool [I]nformation\n");
 	wlogprint("Or press any other key to continue\n");
 	input = getch();
@@ -4246,6 +4246,39 @@ retry:
 		goto retry;
 	} else if (!strncasecmp(&input, "f", 1)) {
 		opt_fail_only ^= true;
+		goto updated;
+        } else if (!strncasecmp(&input, "p", 1)) {
+                if (total_pools <= 1) {
+                        wlogprint("Cannot alter priority if there is only one pool");
+                        goto retry;
+                }
+                selected = curses_int("Select pool number");
+                if (selected < 0 || selected >= total_pools) {
+                        wlogprint("Invalid selection\n");
+                        goto retry;
+                }
+                priority = curses_int("Select new priority");
+                if (priority < 0 || priority >= total_pools) {
+                        wlogprint("Invalid selection\n");
+                        goto retry;
+                }
+                if (selected == priority) {
+                        wlogprint("Selected pool already has desired priority");
+                        goto retry;
+                }
+
+                pool = pools[selected];
+                if (priority > selected) {
+                        for (i = selected; i < priority; i++)
+                                pools[i] = pools[i + 1];
+                } else {
+                        for (i = selected; i > priority; i--)
+                                pools[i] = pools[i - 1];
+                }
+                pools[priority] = pool;
+		for (i = 0; i < total_pools; i++)
+			pools[i]->pool_no = pools[i]->prio = i; 
+		
 		goto updated;
 	} else
 		clear_logwin();
