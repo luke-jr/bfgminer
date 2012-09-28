@@ -1932,7 +1932,7 @@ static void curses_print_devstatus(int thr_id)
 	else if (cgpu->deven == DEV_DISABLED)
 		wprintw(statuswin, "OFF  ");
 	else if (cgpu->deven == DEV_RECOVER)
-		wprintw(statuswin, "REST  ");
+		wprintw(statuswin, "REST ");
 	else
 		wprintw(statuswin, "%s", cHr);
 	adj_width(cgpu->accepted, &awidth);
