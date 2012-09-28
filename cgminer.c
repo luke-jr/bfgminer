@@ -4265,6 +4265,28 @@ static struct work *clone_work(struct work *work)
 	return work;
 }
 
+static void gen_stratum_work(struct pool *pool, struct work *work)
+{
+	char *coinbase, *nonce2;
+	int len;
+
+	mutex_lock(&pool->pool_lock);
+	len = strlen(pool->swork.coinbase1) +
+	      strlen(pool->nonce1) +
+	      pool->n2size +
+	      strlen(pool->swork.coinbase2);
+	coinbase = alloca(len + 1);
+	sprintf(coinbase, "%s", pool->swork.coinbase1);
+	strcat(coinbase, pool->nonce1);
+	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
+	pool->nonce2++;
+	strcat(coinbase, nonce2);
+	free(nonce2);
+	strcat(coinbase, pool->swork.coinbase2);
+	mutex_unlock(&pool->pool_lock);
+	applog(LOG_DEBUG, "Generated stratum coinbase %s", coinbase);
+}
+
 static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 {
 	struct timespec abstime = {0, 0};
@@ -4283,6 +4305,11 @@ static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 
 retry:
 	pool = current_pool();
+
+	if (pool->has_stratum) {
+		gen_stratum_work(pool, work);
+		goto out;
+	}
 
 	if (reuse_work(work))
 		goto out;

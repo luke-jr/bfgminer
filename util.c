@@ -1014,6 +1014,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			pool->swork.merkle[i] = json_array_string(arr, i);
 	}
 	pool->swork.merkles = merkles;
+	if (clean)
+		pool->nonce2 = 0;
 	mutex_unlock(&pool->pool_lock);
 
 	if (opt_protocol) {
