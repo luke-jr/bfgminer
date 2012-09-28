@@ -958,8 +958,8 @@ static char *json_array_string(json_t *val, unsigned int entry)
 
 static bool parse_notify(struct pool *pool, json_t *val)
 {
-	char *job_id, *prev_hash, *coinbase1, *coinbase2, *merkle1, *merkle2,
-	     *bbversion, *nbit, *ntime;
+	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
+	int merkles, i;
 	json_t *arr;
 	bool clean;
 
@@ -967,19 +967,18 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	if (!arr || !json_is_array(arr))
 		return false;
 
+	merkles = json_array_size(arr);
+
 	job_id = json_array_string(val, 0);
 	prev_hash = json_array_string(val, 1);
 	coinbase1 = json_array_string(val, 2);
 	coinbase2 = json_array_string(val, 3);
-	merkle1 = json_array_string(arr, 0);
-	merkle2 = json_array_string(arr, 1);
 	bbversion = json_array_string(val, 5);
 	nbit = json_array_string(val, 6);
 	ntime = json_array_string(val, 7);
 	clean = json_is_true(json_array_get(val, 8));
 
-	if (!job_id || !prev_hash || !coinbase1 || !coinbase2 || !merkle1 ||
-	    !merkle2 || !bbversion || !nbit || !ntime) {
+	if (!job_id || !prev_hash || !coinbase1 || !coinbase2 || !bbversion || !nbit || !ntime) {
 		/* Annoying but we must not leak memory */
 		if (job_id)
 			free(job_id);
@@ -989,10 +988,6 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			free(coinbase1);
 		if (coinbase2)
 			free(coinbase2);
-		if (merkle1)
-			free(merkle1);
-		if (merkle2)
-			free(merkle2);
 		if (bbversion)
 			free(bbversion);
 		if (nbit)
@@ -1007,12 +1002,18 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.prev_hash = prev_hash;
 	pool->swork.coinbase1 = coinbase1;
 	pool->swork.coinbase2 = coinbase2;
-	pool->swork.merkle1 = merkle1;
-	pool->swork.merkle2 = merkle2;
 	pool->swork.bbversion = bbversion;
 	pool->swork.nbit = nbit;
 	pool->swork.ntime = ntime;
 	pool->swork.clean = clean;
+	for (i = 0; i < pool->swork.merkles; i++)
+		free(pool->swork.merkle[i]);
+	if (merkles) {
+		pool->swork.merkle = realloc(pool->swork.merkle, sizeof(char *) * merkles + 1);
+		for (i = 0; i < merkles; i++)
+			pool->swork.merkle[i] = json_array_string(arr, i);
+	}
+	pool->swork.merkles = merkles;
 	mutex_unlock(&pool->pool_lock);
 
 	if (opt_protocol) {
@@ -1020,8 +1021,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		applog(LOG_DEBUG, "prev_hash: %s", prev_hash);
 		applog(LOG_DEBUG, "coinbase1: %s", coinbase1);
 		applog(LOG_DEBUG, "coinbase2: %s", coinbase2);
-		applog(LOG_DEBUG, "merkle1: %s", merkle1);
-		applog(LOG_DEBUG, "merkle2: %s", merkle2);
+		for (i = 0; i < merkles; i++)
+			applog(LOG_DEBUG, "merkle%d: %s", i, pool->swork.merkle[i]);
 		applog(LOG_DEBUG, "bbversion: %s", bbversion);
 		applog(LOG_DEBUG, "nbit: %s", nbit);
 		applog(LOG_DEBUG, "ntime: %s", ntime);

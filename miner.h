@@ -759,13 +759,13 @@ struct stratum_work {
 	char *prev_hash;
 	char *coinbase1;
 	char *coinbase2;
-	char *merkle1;
-	char *merkle2;
+	char **merkle;
 	char *bbversion;
 	char *nbit;
 	char *ntime;
 	bool clean;
 
+	int merkles;
 	int diff;
 };
 
