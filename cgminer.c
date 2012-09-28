@@ -3964,18 +3964,17 @@ out_unlock:
 static void *stratum_thread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
-	SOCKETTYPE sock = pool->sock;
-	fd_set rd;
 
 	pthread_detach(pthread_self());
 
-	FD_ZERO(&rd);
-	FD_SET(sock, &rd);
-
 	while (42) {
+		fd_set rd;
 		char *s;
 
-		if (select(sock + 1, &rd, NULL, NULL, NULL) < 0) {
+		FD_ZERO(&rd);
+		FD_SET(pool->sock, &rd);
+
+		if (select(pool->sock + 1, &rd, NULL, NULL, NULL) < 0) {
 			pool->stratum_active = pool->stratum_auth = false;
 			applog(LOG_WARNING, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
@@ -3984,7 +3983,7 @@ static void *stratum_thread(void *userdata)
 				break;
 			}
 		}
-		s = recv_line(sock);
+		s = recv_line(pool->sock);
 		if (unlikely(!s))
 			continue;
 		if (!parse_stratum(pool, s)) /* Create message queues here */
