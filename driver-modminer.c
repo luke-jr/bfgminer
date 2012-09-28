@@ -490,6 +490,64 @@ get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 		strcat(buf, "               | ");
 }
 
+static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info *thr)
+{
+	struct modminer_fpga_state *state = thr->cgpu_data;
+
+#ifdef WIN32
+	/* Workaround for bug in Windows driver */
+	if (!modminer_reopen(modminer))
+		return -1;
+#endif
+
+	int fd = modminer->device_fd;
+	int fpgaid = thr->device_thread;
+	char cmd[2] = {'\x0a', fpgaid};
+	char temperature;
+
+	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 1) == 1)
+	{
+		state->temp = temperature;
+		if (temperature > modminer->cutofftemp - 2) {
+			{
+				time_t now = time(NULL);
+				if (state->last_cutoff_reduced != now) {
+					state->last_cutoff_reduced = now;
+					int oldFreq = state->dclk.freqM;
+					if (modminer_reduce_clock(thr, false))
+						applog(LOG_NOTICE, "%s %u.%u: Frequency %s from %u to %u Mhz (temp: %d)",
+						       modminer->api->name, modminer->device_id, fpgaid,
+						       (oldFreq > state->dclk.freqM ? "dropped" : "raised "),
+						       oldFreq * 2, state->dclk.freqM * 2,
+						       temperature
+						);
+				}
+			}
+		}
+	}
+}
+
+static bool modminer_get_stats(struct cgpu_info *modminer)
+{
+	int hottest = 0;
+	bool get_temp = (modminer->deven != DEV_ENABLED);
+	// Getting temperature more efficiently while enabled
+	// NOTE: Don't need to mess with mutex here, since the device is disabled
+	for (int i = modminer->threads; i--; ) {
+		struct thr_info*thr = modminer->thr[i];
+		struct modminer_fpga_state *state = thr->cgpu_data;
+		if (get_temp)
+			modminer_get_temperature(modminer, thr);
+		int temp = state->temp;
+		if (temp > hottest)
+			hottest = temp;
+	}
+
+	modminer->temp = (float)hottest;
+
+	return true;
+}
+
 static struct api_data*
 get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 {
@@ -574,43 +632,14 @@ modminer_process_results(struct thr_info*thr)
 	int fd;
 	struct work *work = &state->running_work;
 
-	char cmd[2], temperature;
 	uint32_t nonce;
 	long iter;
 	int immediate_bad_nonces = 0, immediate_nonces = 0;
 	bool bad;
-	cmd[0] = '\x0a';
-	cmd[1] = fpgaid;
 
 	mutex_lock(&modminer->device_mutex);
-#ifdef WIN32
-	/* Workaround for bug in Windows driver */
-	if (!modminer_reopen(modminer))
-		return -1;
-#endif
+	modminer_get_temperature(modminer, thr);
 	fd = modminer->device_fd;
-	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 1) == 1)
-	{
-		state->temp = temperature;
-		if (!fpgaid)
-			modminer->temp = (float)temperature;
-		if (temperature > modminer->cutofftemp - 2) {
-			{
-				time_t now = time(NULL);
-				if (state->last_cutoff_reduced != now) {
-					state->last_cutoff_reduced = now;
-					int oldFreq = state->dclk.freqM;
-					if (modminer_reduce_clock(thr, false))
-						applog(LOG_NOTICE, "%s %u.%u: Frequency %s from %u to %u Mhz (temp: %d)",
-						       modminer->api->name, modminer->device_id, fpgaid,
-						       (oldFreq > state->dclk.freqM ? "dropped" : "raised "),
-						       oldFreq * 2, state->dclk.freqM * 2,
-						       temperature
-						);
-				}
-			}
-		}
-	}
 
 	iter = 200;
 	while (1) {
@@ -731,6 +760,7 @@ struct device_api modminer_api = {
 	.name = "MMQ",
 	.api_detect = modminer_detect,
 	.get_statline_before = get_modminer_statline_before,
+	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_api_extra_device_status,
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,
