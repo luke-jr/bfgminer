@@ -1116,7 +1116,12 @@ bool auth_stratum(struct pool *pool)
 	/* Parse all data prior sending auth request */
 	while (sock_full(pool->sock, false)) {
 		sret = recv_line(pool->sock);
-		parse_stratum(pool, sret);
+		if (!parse_stratum(pool, sret)) {
+			clear_sock(pool->sock);
+			applog(LOG_WARNING, "Failed to parse stratum buffer");
+			free(sret);
+			return ret;
+		}
 		free(sret);
 	}
 
