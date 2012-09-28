@@ -6267,7 +6267,7 @@ extern struct device_api ztex_api;
 
 static int cgminer_id_count = 0;
 
-void enable_device(struct cgpu_info *cgpu)
+void register_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
@@ -6578,13 +6578,13 @@ int main(int argc, char *argv[])
 			if (devices_enabled & (1 << i)) {
 				if (i >= total_devices)
 					quit (1, "Command line options set a device that doesn't exist");
-				enable_device(devices[i]);
+				register_device(devices[i]);
 			} else if (i < total_devices) {
 				if (opt_removedisabled) {
 					if (devices[i]->api == &cpu_api)
 						--opt_n_threads;
 				} else {
-					enable_device(devices[i]);
+					register_device(devices[i]);
 				}
 				devices[i]->deven = DEV_DISABLED;
 			}
@@ -6592,7 +6592,7 @@ int main(int argc, char *argv[])
 		total_devices = cgminer_id_count;
 	} else {
 		for (i = 0; i < total_devices; ++i)
-			enable_device(devices[i]);
+			register_device(devices[i]);
 	}
 
 	if (!total_devices)
