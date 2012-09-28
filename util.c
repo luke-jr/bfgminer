@@ -943,7 +943,7 @@ static char *__json_array_string(json_t *val, unsigned int entry)
 	if (!json_is_string(arr_entry))
 		return NULL;
 
-	return (json_string_value(arr_entry));
+	return (char *)json_string_value(arr_entry);
 }
 
 /* Creates a freshly malloced dup of __json_array_string */
@@ -958,9 +958,76 @@ static char *json_array_string(json_t *val, unsigned int entry)
 
 static bool parse_notify(struct pool *pool, json_t *val)
 {
+	char *job_id, *prev_hash, *coinbase1, *coinbase2, *merkle1, *merkle2,
+	     *bbversion, *nbit, *ntime;
 	json_t *arr;
+	bool clean;
 
-	
+	arr = json_array_get(val, 4);
+	if (!arr || !json_is_array(arr))
+		return false;
+
+	job_id = json_array_string(val, 0);
+	prev_hash = json_array_string(val, 1);
+	coinbase1 = json_array_string(val, 2);
+	coinbase2 = json_array_string(val, 3);
+	merkle1 = json_array_string(arr, 0);
+	merkle2 = json_array_string(arr, 1);
+	bbversion = json_array_string(val, 5);
+	nbit = json_array_string(val, 6);
+	ntime = json_array_string(val, 7);
+	clean = json_is_true(json_array_get(val, 8));
+
+	if (!job_id || !prev_hash || !coinbase1 || !coinbase2 || !merkle1 ||
+	    !merkle2 || !bbversion || !nbit || !ntime) {
+		/* Annoying but we must not leak memory */
+		if (job_id)
+			free(job_id);
+		if (prev_hash)
+			free(prev_hash);
+		if (coinbase1)
+			free(coinbase1);
+		if (coinbase2)
+			free(coinbase2);
+		if (merkle1)
+			free(merkle1);
+		if (merkle2)
+			free(merkle2);
+		if (bbversion)
+			free(bbversion);
+		if (nbit)
+			free(nbit);
+		if (ntime)
+			free(ntime);
+		return false;
+	}
+
+	mutex_lock(&pool->pool_lock);
+	pool->swork.job_id = job_id;
+	pool->swork.prev_hash = prev_hash;
+	pool->swork.coinbase1 = coinbase1;
+	pool->swork.coinbase2 = coinbase2;
+	pool->swork.merkle1 = merkle1;
+	pool->swork.merkle2 = merkle2;
+	pool->swork.bbversion = bbversion;
+	pool->swork.nbit = nbit;
+	pool->swork.ntime = ntime;
+	pool->swork.clean = clean;
+	mutex_unlock(&pool->pool_lock);
+
+	if (opt_protocol) {
+		applog(LOG_DEBUG, "job_id: %s", job_id);
+		applog(LOG_DEBUG, "prev_hash: %s", prev_hash);
+		applog(LOG_DEBUG, "coinbase1: %s", coinbase1);
+		applog(LOG_DEBUG, "coinbase2: %s", coinbase2);
+		applog(LOG_DEBUG, "merkle1: %s", merkle1);
+		applog(LOG_DEBUG, "merkle2: %s", merkle2);
+		applog(LOG_DEBUG, "bbversion: %s", bbversion);
+		applog(LOG_DEBUG, "nbit: %s", nbit);
+		applog(LOG_DEBUG, "ntime: %s", ntime);
+		applog(LOG_DEBUG, "clean: %s", clean ? "yes" : "no");
+	}
+
 	return true;
 }
 
