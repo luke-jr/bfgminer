@@ -3993,6 +3993,11 @@ static void *stratum_thread(void *userdata)
 		if (!parse_stratum(pool, s)) /* Create message queues here */
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
+		if (unlikely(pool->swork.clean)) {
+			pool->swork.clean = false;
+			applog(LOG_NOTICE, "Stratum requested work restart for block change");
+			restart_threads();
+		}
 
 		if (unlikely(pool->removed)) {
 			CLOSESOCKET(pool->sock);
