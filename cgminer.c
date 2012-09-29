@@ -4125,7 +4125,7 @@ void *miner_thread(void *userdata)
 				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
 				cgpu->thread_zero_hash_count++;
 
-				mt_disable(mythr, thr_id, api);
+				goto disabled;
 			}
 
 			hashes_done += hashes;
@@ -4184,6 +4184,7 @@ void *miner_thread(void *userdata)
 			}
 
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+disabled:
 				mt_disable(mythr, thr_id, api);
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
