@@ -2167,7 +2167,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 
 	if (work->tmpl) {
 		unsigned char data[76];
-		swap32yes(data, work->data, 76);
+		swap32yes(data, work->data, 76 / 4);
 		json_t *req = blkmk_submit_jansson(work->tmpl, data, work->dataid, *((uint32_t*)&work->data[76]));
 		s = json_dumps(req, 0);
 		sd = bin2hex(data, 80);
