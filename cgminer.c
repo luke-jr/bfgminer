@@ -2206,11 +2206,6 @@ static struct work *make_work(void)
 
 static void free_work(struct work *work)
 {
-	if (work->stratum) {
-		free(work->job_id);
-		free(work->nonce2);
-		free(work->ntime);
-	}
 	free(work);
 }
 
