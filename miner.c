@@ -1930,12 +1930,12 @@ static void curses_print_devstatus(int thr_id)
 		wprintw(statuswin, "DEAD ");
 	else if (cgpu->status == LIFE_SICK)
 		wprintw(statuswin, "SICK ");
-	else if (cgpu->status == LIFE_WAIT)
-		wprintw(statuswin, "WAIT ");
 	else if (cgpu->deven == DEV_DISABLED)
 		wprintw(statuswin, "OFF  ");
 	else if (cgpu->deven == DEV_RECOVER)
 		wprintw(statuswin, "REST ");
+	else if (cgpu->status == LIFE_WAIT)
+		wprintw(statuswin, "WAIT ");
 	else
 		wprintw(statuswin, "%s", cHr);
 	adj_width(cgpu->accepted, &awidth);
