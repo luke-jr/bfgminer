@@ -463,6 +463,8 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
+		++bitforce->hw_errors;
+		++hw_errors;
 
 		/* If the device truly throttled, it didn't process the job and there
 		 * are no results. But check first, just in case we're wrong about it
