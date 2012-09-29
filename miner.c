@@ -5323,10 +5323,11 @@ void *miner_thread(void *userdata)
 					applog(LOG_ERR, "%s %u failure, attempting to reinitialize", api->name, cgpu->device_id);
 					scanhash_working = false;
 					cgpu->reinit_backoff = 5.2734375;
+					hashes = 0;
 				} else {
 					applog(LOG_ERR, "%s %u failure, disabling!", api->name, cgpu->device_id);
 					cgpu->deven = DEV_RECOVER_ERR;
-					mt_disable(mythr, thr_id, api);
+					goto disabled;
 				}
 			}
 			else
@@ -5387,6 +5388,7 @@ void *miner_thread(void *userdata)
 			}
 
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+disabled:
 				mt_disable(mythr, thr_id, api);
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
