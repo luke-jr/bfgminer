@@ -29,16 +29,21 @@ void dclk_msg_freqchange(const char *repr, int oldFreq, int newFreq, const char 
 bool dclk_updateFreq(struct dclk_data *data, dclk_change_clock_func_t changeclock, struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
+	uint8_t freqMDefault = data->freqMDefault;
 	int i, maxM, bestM;
 	double bestR, r;
 	bool rv = true;
+
+	if (freqMDefault > data->freqMaxM)
+		// This occurs when the device in question adjusts its MaxM down due to temperature or similar reasons
+		freqMDefault = data->freqMaxM;
 
 	for (i = 0; i < data->freqMaxM; i++)
 		if (data->maxErrorRate[i + 1] * i < data->maxErrorRate[i] * (i + 20))
 			data->maxErrorRate[i + 1] = data->maxErrorRate[i] * (1.0 + 20.0 / i);
 
 	maxM = 0;
-	while (maxM < data->freqMDefault && data->maxErrorRate[maxM + 1] < DCLK_MAXMAXERRORRATE)
+	while (maxM < freqMDefault && data->maxErrorRate[maxM + 1] < DCLK_MAXMAXERRORRATE)
 		maxM++;
 	while (maxM < data->freqMaxM && data->errorWeight[maxM] > 150 && data->maxErrorRate[maxM + 1] < DCLK_MAXMAXERRORRATE)
 		maxM++;
@@ -57,7 +62,7 @@ bool dclk_updateFreq(struct dclk_data *data, dclk_change_clock_func_t changecloc
 		rv = changeclock(thr, bestM);
 	}
 
-	maxM = data->freqMDefault;
+	maxM = freqMDefault;
 	while (maxM < data->freqMaxM && data->errorWeight[maxM + 1] > 100)
 		maxM++;
 	if ((bestM < (1.0 - DCLK_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
