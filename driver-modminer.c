@@ -36,6 +36,7 @@ struct modminer_fpga_state {
 	char next_work_cmd[46];
 
 	struct dclk_data dclk;
+	uint8_t freqMaxMaxM;
 	// Number of nonces didn't meet pdiff 1, ever
 	int bad_share_counter;
 	// Number of nonces did meet pdiff 1, ever
@@ -434,6 +435,7 @@ modminer_fpga_init(struct thr_info *thr)
 			continue;
 		break;
 	}
+	state->freqMaxMaxM =
 	state->dclk.freqMaxM = state->dclk.freqM;
 	if (MODMINER_DEFAULT_CLOCK / 2 < state->dclk.freqM) {
 		if (!modminer_change_clock(thr, false, -(state->dclk.freqM * 2 - MODMINER_DEFAULT_CLOCK)))
@@ -521,9 +523,12 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 						       oldFreq * 2, state->dclk.freqM * 2,
 						       temperature
 						);
+					state->dclk.freqMaxM = state->dclk.freqM;
 				}
 			}
 		}
+		else
+			state->dclk.freqMaxM = state->freqMaxMaxM;
 	}
 }
 
@@ -563,7 +568,8 @@ get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 		if (state->temp)
 			json_object_set(o, "Temperature", json_integer(state->temp));
 		json_object_set(o, "Frequency", json_real((double)state->dclk.freqM * 2 * 1000000.));
-		json_object_set(o, "Max Frequency", json_real((double)state->dclk.freqMaxM * 2 * 1000000.));
+		json_object_set(o, "Cool Max Frequency", json_real((double)state->dclk.freqMaxM * 2 * 1000000.));
+		json_object_set(o, "Max Frequency", json_real((double)state->freqMaxMaxM * 2 * 1000000.));
 		json_object_set(o, "Hardware Errors", json_integer(state->bad_share_counter));
 		json_object_set(o, "Valid Nonces", json_integer(state->good_share_counter));
 
