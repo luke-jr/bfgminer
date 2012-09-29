@@ -2738,7 +2738,7 @@ static void *submit_work_thread(void *userdata)
 		mutex_unlock(&sshare_lock);
 
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%08lx\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, (unsigned long)work->blk.nonce, sshare->id);
+			pool->rpc_user, work->job_id, work->nonce2, work->ntime, (unsigned long)htobe32(work->blk.nonce), sshare->id);
 
 		sock_send(pool->sock, s, strlen(s));
 
