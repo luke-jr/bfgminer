@@ -510,7 +510,7 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 1) == 1)
 	{
 		state->temp = temperature;
-		if (temperature > modminer->cutofftemp - 2) {
+		if (temperature > modminer->targettemp + opt_hysteresis) {
 			{
 				time_t now = time(NULL);
 				if (state->last_cutoff_reduced != now) {
@@ -528,7 +528,13 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 			}
 		}
 		else
-			state->dclk.freqMaxM = state->freqMaxMaxM;
+		if (state->dclk.freqMaxM < state->freqMaxMaxM && temperature < modminer->targettemp) {
+			if (temperature < modminer->targettemp - opt_hysteresis) {
+				state->dclk.freqMaxM = state->freqMaxMaxM;
+			} else {
+				++state->dclk.freqMaxM;
+			}
+		}
 	}
 }
 

@@ -44,7 +44,6 @@
 bool adl_active;
 bool opt_reorder = false;
 
-int opt_hysteresis = 3;
 const int opt_targettemp = 75;
 const int opt_overheattemp = 85;
 static pthread_mutex_t adl_lock;
