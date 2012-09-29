@@ -880,7 +880,11 @@ struct work {
 	bool		mandatory;
 	bool		block;
 	bool		queued;
+
 	bool		stratum;
+	char 		*job_id;
+	char		*nonce2;
+	char		*ntime;
 
 	unsigned int	work_block;
 	int		id;

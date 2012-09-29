@@ -4320,7 +4320,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
 	strcat(coinbase, nonce2);
-	free(nonce2);
 	strcat(coinbase, pool->swork.coinbase2);
 
 	/* Generate merkle root */
@@ -4346,6 +4345,11 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
 
 	diff = pool->swork.diff;
+
+	/* Copy parameters required for share submission */
+	work->job_id = strdup(pool->swork.job_id);
+	work->nonce2 = nonce2;
+	work->ntime = pool->swork.ntime;
 
 	mutex_unlock(&pool->pool_lock);
 
