@@ -22,18 +22,29 @@ bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib
 
+bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
+
 # common sources
 bfgminer_SOURCES := miner.c
 
 bfgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   util.c uthash.h logging.h			\
 		   sha2.c sha2.h api.c
+bfgminer_DEPENDENCIES =
 
 if NEED_LIBBLKMAKER
 SUBDIRS           += libblkmaker
 bfgminer_CPPFLAGS += -Ilibblkmaker
 bfgminer_LDFLAGS  += -Llibblkmaker/.libs -Wl,-rpath,libblkmaker/.libs
 bfgminer_LDADD    += -lblkmaker-0.1 -lblkmaker_jansson-0.1
+
+if HAVE_CYGWIN
+bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
+
+cyg%.dll: libblkmaker/.libs/cyg%.dll
+	cp -p $< $@
+endif
+
 endif
 
 bfgminer_SOURCES	+= logging.c

@@ -62,6 +62,7 @@ AC_CHECK_HEADERS([sys/prctl.h])
 
 AC_FUNC_ALLOCA
 
+have_cygwin=false
 have_win32=false
 PTHREAD_FLAGS="-lpthread"
 USB_LIBS=""
@@ -97,6 +98,9 @@ case $target in
     WS2_LIBS="-lws2_32"
 	TIMER_LIBS="-lwinmm"
     ;;
+  *-*-cygwin*)
+	have_cygwin=true
+	;;
   powerpc-*-darwin*)
     CFLAGS="$CFLAGS -faltivec"
     PTHREAD_FLAGS=""
@@ -233,10 +237,22 @@ AC_ARG_WITH([curses],
 if test "x$curses" = "xno"; then
 	cursesmsg='User specified --without-curses. TUI support DISABLED'
 else
+	if test "x$cross_compiling" != "xyes"; then
+		for curses_lib in ncurses{w,}{,6,5}; do
+			if ${curses_lib}-config --cflags >/dev/null 2>/dev/null; then
+				curses=yes
+				cursesmsg="FOUND: ${curses_lib}"
+				NCURSES_LIBS=`${curses_lib}-config --libs`
+				NCURSES_CPPFLAGS=`${curses_lib}-config --cflags`
+				break
+			fi
+		done
+	fi
+	if test "x$curses" != "xyes"; then
+
 	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
 		curses=yes
 		cursesmsg="FOUND: ${ac_cv_search_addstr:2}"
-		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
 	], [
 		if test "x$curses" = "xyes"; then
 			AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
@@ -246,6 +262,11 @@ else
 			cursesmsg='NOT FOUND. TUI support DISABLED'
 		fi
 	])
+
+	fi
+	if test "x$curses" = "xyes"; then
+		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
+	fi
 fi
 
 
@@ -256,6 +277,7 @@ AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$ztex != xnonono])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
+AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
@@ -372,6 +394,7 @@ AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(DLOPEN_FLAGS)
 AC_SUBST(PTHREAD_LIBS)
+AC_SUBST(NCURSES_CPPFLAGS)
 AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
@@ -465,7 +488,7 @@ fi
 
 echo
 echo "Compilation............: make (or gmake)"
-echo "  CPPFLAGS.............: $CPPFLAGS"
+echo "  CPPFLAGS.............: $CPPFLAGS $NCURSES_CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_FLAGS"
 echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $TIMER_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
