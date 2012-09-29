@@ -24,6 +24,8 @@
 
 struct device_api cairnsmore_api;
 
+static void cairnsmore_api_init();
+
 static bool cairnsmore_detect_one(const char *devpath)
 {
 	struct ICARUS_INFO *info = calloc(1, sizeof(struct ICARUS_INFO));
@@ -56,6 +58,7 @@ static int cairnsmore_detect_auto(void)
 
 static void cairnsmore_detect()
 {
+	cairnsmore_api_init();
 	// Actual serial detection is handled by Icarus driver
 	serial_detect_auto_byname(&cairnsmore_api, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
@@ -192,7 +195,6 @@ static bool cairnsmore_identify(struct cgpu_info *cm1)
 
 extern struct device_api icarus_api;
 
-__attribute__((constructor(1000)))
 static void cairnsmore_api_init()
 {
 	cairnsmore_api = icarus_api;
@@ -203,3 +205,8 @@ static void cairnsmore_api_init()
 	cairnsmore_api.identify_device = cairnsmore_identify;
 	cairnsmore_api.get_api_extra_device_status = cairnsmore_api_extra_device_status;
 }
+
+struct device_api cairnsmore_api = {
+	// Needed to get to cairnsmore_api_init at all
+	.api_detect = cairnsmore_detect,
+};

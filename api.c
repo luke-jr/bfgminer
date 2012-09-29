@@ -221,7 +221,9 @@ static const char *OSINFO =
 #if defined(__APPLE__)
 			"Apple";
 #else
-#if defined (WIN32)
+#if defined (__CYGWIN__)
+			"Cygwin";
+#elif defined (WIN32)
 			"Windows";
 #else
 #if defined(unix)

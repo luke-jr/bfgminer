@@ -9,7 +9,7 @@
 
 #include "config.h"
 
-#if defined(HAVE_ADL) && (defined(__linux) || defined (WIN32))
+#ifdef HAVE_ADL
 
 #include <stdio.h>
 #include <string.h>
@@ -23,7 +23,7 @@
 #include "ADL/adl_sdk.h"
 #include "compat.h"
 
-#if defined (__linux)
+#ifndef WIN32
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -33,7 +33,7 @@
 #endif
 #include "adl_functions.h"
 
-#ifndef WIN32
+#ifndef __stdcall
 #define __stdcall
 #endif
 
@@ -72,7 +72,7 @@ static void __stdcall ADL_Main_Memory_Free (void **lpBuffer)
 	}
 }
 
-#if defined (LINUX)
+#ifndef WIN32
 // equivalent functions in linux
 static void *GetProcAddress(void *pLibrary, const char *name)
 {
@@ -98,9 +98,9 @@ static	ADL_OVERDRIVE5_POWERCONTROL_GET	ADL_Overdrive5_PowerControl_Get;
 static	ADL_OVERDRIVE5_POWERCONTROL_SET	ADL_Overdrive5_PowerControl_Set;
 static	ADL_OVERDRIVE5_FANSPEEDTODEFAULT_SET	ADL_Overdrive5_FanSpeedToDefault_Set;
 
-#if defined (LINUX)
+#ifndef WIN32
 	static void *hDLL;	// Handle to .so library
-#else
+#else /* WIN32 */
 	HINSTANCE hDLL;		// Handle to DLL
 #endif
 static int iNumberAdapters;
@@ -136,14 +136,17 @@ static bool prepare_adl(void)
 {
 	int result;
 
-#if defined (LINUX)
-	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
-#else
+#if defined(WIN32) || defined(__CYGWIN__)
+#	ifdef __CYGWIN__
+#		define LoadLibrary(x) dlopen(x, RTLD_LAZY|RTLD_GLOBAL);
+#	endif
 	hDLL = LoadLibrary("atiadlxx.dll");
 	if (hDLL == NULL)
 		// A 32 bit calling application on 64 bit OS will fail to LoadLIbrary.
 		// Try to load the 32 bit library (atiadlxy.dll) instead
 		hDLL = LoadLibrary("atiadlxy.dll");
+#else
+	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
 #endif
 	if (hDLL == NULL) {
 		applog(LOG_INFO, "Unable to load ati adl library");
@@ -1382,7 +1385,7 @@ static void free_adl(void)
 {
 	ADL_Main_Memory_Free ((void **)&lpInfo);
 	ADL_Main_Control_Destroy ();
-#if defined (LINUX)
+#ifndef WIN32
 	dlclose(hDLL);
 #else
 	FreeLibrary(hDLL);

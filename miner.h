@@ -195,6 +195,10 @@ void *alloca (size_t);
 #	endif
 #endif
 
+#ifndef roundl
+#define roundl(x)   (long double)((long long)((x==0)?0.0:((x)+((x)>0)?0.5:-0.5)))
+#endif
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
