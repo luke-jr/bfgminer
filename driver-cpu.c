@@ -233,7 +233,7 @@ double bench_algo_stage3(
 	memset(&work, 0, sizeof(work));
 	memcpy(&work, &bench_block, min_size);
 
-	struct thr_info dummy = {0};
+	static struct thr_info dummy;
 
 	struct timeval end;
 	struct timeval start;
