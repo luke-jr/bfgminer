@@ -843,6 +843,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	}
 
 	pool->server = (struct sockaddr_in *)res->ai_addr;
+	pool->stratum_url = strdup(url_address);
 	return true;
 }
 

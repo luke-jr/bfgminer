@@ -833,6 +833,7 @@ struct pool {
 	struct cgminer_pool_stats cgminer_pool_stats;
 
 	/* Stratum variables */
+	char *stratum_url;
 	SOCKETTYPE sock;
 	struct sockaddr_in *server, client;
 	char *subscription;
