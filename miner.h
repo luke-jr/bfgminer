@@ -692,6 +692,7 @@ extern int restart_wait(unsigned int mstime);
 extern int stale_wait(unsigned int mstime, struct work*, bool checkend);
 
 extern void kill_work(void);
+extern void app_restart(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);
 
