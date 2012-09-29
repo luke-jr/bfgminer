@@ -4304,6 +4304,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	char header[256], hash1[128], *coinbase, *nonce2, *buf;
 	uint32_t *data32, *swap32;
 	uint64_t diff, diff64;
+	char target[64];
 	int len, i;
 
 	mutex_lock(&pool->pool_lock);
@@ -4365,13 +4366,15 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Generate target as hex where 0x00000000FFFFFFFF is diff 1 */
 	diff64 = 0x00000000FFFFFFFFULL * diff;
 	diff64 = ~htobe64(diff64);
-	sprintf((char *)work->target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
+	sprintf(target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
 	buf = bin2hex((const unsigned char *)&diff64, 8);
 	if (!buf)
 		quit(1, "Failed to convert diff64 to buf in gen_stratum_work");
-	strcat((char *)work->target, buf);
+	strcat(target, buf);
 	free(buf);
-	applog(LOG_DEBUG, "Generated target %s", work->target);
+	applog(LOG_DEBUG, "Generated target %s", target);
+	if (!hex2bin(work->target, target, 32))
+		quit(1, "Failed to convert target to bin in gen_stratum_work");
 
 	work->pool = pool;
 	work->stratum = true;
