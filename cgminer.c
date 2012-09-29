@@ -170,6 +170,7 @@ static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
 pthread_mutex_t ch_lock;
 static pthread_rwlock_t blk_lock;
+static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
 
@@ -224,6 +225,21 @@ struct block {
 };
 
 static struct block *blocks = NULL;
+
+
+int swork_id;
+
+/* For creating a hash database of stratum shares submitted that have not had
+ * a response yet */
+struct stratum_share {
+	struct pool *pool;
+	char hash6[8];
+	UT_hash_handle hh;
+	bool block;
+	int id;
+};
+
+static struct stratum_share *stratum_shares = NULL;
 
 char *opt_socks_proxy = NULL;
 
@@ -2710,6 +2726,28 @@ static void *submit_work_thread(void *userdata)
 			goto out;
 		}
 		work->stale = true;
+	}
+
+	if (work->stratum) {
+		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
+		uint32_t *hash32 = (uint32_t *)work->hash;
+		char *s = alloca(1024);
+
+		sprintf(sshare->hash6, "%08lx", (unsigned long)hash32[6]);
+		sshare->block = work->block;
+		sshare->pool = pool;
+		/* Give the stratum share a unique id */
+		mutex_lock(&sshare_lock);
+		sshare->id = swork_id++;
+		HASH_ADD_INT(stratum_shares, id, sshare);
+		mutex_unlock(&sshare_lock);
+
+		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%08lx\"], \"id\": %d, \"method\": \"mining.submit\"}",
+			pool->rpc_user, work->job_id, work->nonce2, work->ntime, (unsigned long)work->blk.nonce, sshare->id);
+
+		sock_send(pool->sock, s, strlen(s));
+
+		goto out;
 	}
 
 	ce = pop_curl_entry(pool);
@@ -5650,6 +5688,7 @@ int main(int argc, char *argv[])
 	mutex_init(&control_lock);
 	mutex_init(&sharelog_lock);
 	mutex_init(&ch_lock);
+	mutex_init(&sshare_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
 

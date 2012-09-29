@@ -109,6 +109,7 @@
 	#endif
 #endif
 struct pool;
+bool sock_send(int sock, char *s, ssize_t len);
 char *recv_line(SOCKETTYPE sock);
 bool parse_stratum(struct pool *pool, char *s);
 bool extract_sockaddr(struct pool *pool, char *url);

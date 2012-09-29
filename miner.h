@@ -595,6 +595,7 @@ extern bool opt_worktime;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
+extern int swork_id;
 
 extern pthread_rwlock_t netacc_lock;
 
@@ -752,9 +753,6 @@ enum pool_enable {
 };
 
 struct stratum_work {
-	/* id we sent to receive this work */
-	int id;
-
 	char *job_id;
 	char *prev_hash;
 	char *coinbase1;
