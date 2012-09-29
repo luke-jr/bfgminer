@@ -1170,6 +1170,9 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
+	if (pool->stratum_active)
+		return true;
+
 	s = alloca(RECVSIZE);
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
