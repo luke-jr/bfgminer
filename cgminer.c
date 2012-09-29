@@ -4276,9 +4276,9 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64], *merkle_hash;
-	char header[256], *coinbase, *nonce2;
+	char header[256], hash1[128], *coinbase, *nonce2;
 	uint32_t *data32, *swap32;
-	int len, i;
+	int len, i, diff;
 
 	mutex_lock(&pool->pool_lock);
 
@@ -4318,6 +4318,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	strcat(header, "00000000"); /* nonce */
 	strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
 
+	diff = pool->swork.diff;
+
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Generated stratum coinbase %s", coinbase);
@@ -4325,6 +4327,13 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
 
 	free(merkle_hash);
+
+	if (!hex2bin(work->data, header, 128))
+		quit(1, "Failed to convert header to data in gen_stratum_work");
+	calc_midstate(work);
+	sprintf(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000");
+	if (!hex2bin(work->hash1, hash1, 64))
+		quit(1,  "Failed to convert hash1 in gen_stratum_work");
 }
 
 static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
