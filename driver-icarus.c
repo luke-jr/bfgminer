@@ -754,7 +754,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 				}
 				if (info->quirk_reopen == 1 && !icarus_reopen(icarus, state, &fd))
-					return 0;
+					return -1;
 			}
 			
 		}
@@ -764,7 +764,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 	else
 	if (fd == -1 && !icarus_reopen(icarus, state, &fd))
-		return 0;
+		return -1;
 
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
@@ -802,7 +802,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	if (info->quirk_reopen == 2 && !icarus_reopen(icarus, state, &fd))
-		return 0;
+		return -1;
 
 	work->blk.nonce = 0xffffffff;
 
