@@ -2069,19 +2069,22 @@ static double DIFFEXACTONE = 269599466671506397946670150870196306736371444225405
 /*
  * Calculate the work share difficulty
  */
-static void calc_diff(struct work *work)
+static void calc_diff(struct work *work, int known)
 {
 	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
 	double targ;
 	int i;
 
-	targ = 0;
-	for (i = 31; i >= 0; i--) {
-		targ *= 256;
-		targ += work->target[i];
-	}
+	if (!known) {
+		targ = 0;
+		for (i = 31; i >= 0; i--) {
+			targ *= 256;
+			targ += work->target[i];
+		}
 
-	work->work_difficulty = DIFFEXACTONE / (targ ? : DIFFEXACTONE);
+		work->work_difficulty = DIFFEXACTONE / (targ ? : DIFFEXACTONE);
+	} else
+		work->work_difficulty = known;
 
 	pool_stats->last_diff = work->work_difficulty;
 
@@ -2115,7 +2118,7 @@ static void get_benchmark_work(struct work *work)
 	gettimeofday(&(work->tv_getwork), NULL);
 	memcpy(&(work->tv_getwork_reply), &(work->tv_getwork), sizeof(struct timeval));
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
-	calc_diff(work);
+	calc_diff(work, 0);
 }
 
 static bool get_upstream_work(struct work *work, CURL *curl)
@@ -2163,7 +2166,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	work->pool = pool;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_POOL;
-	calc_diff(work);
+	calc_diff(work, 0);
 	total_getworks++;
 	pool->getwork_requested++;
 
@@ -2443,7 +2446,7 @@ static inline bool should_roll(struct work *work)
  * reject blocks as invalid. */
 static inline bool can_roll(struct work *work)
 {
-	return (work->pool && work->rolltime && !work->clone &&
+	return (!work->stratum && work->pool && work->rolltime && !work->clone &&
 		work->rolls < 7000 && !stale_work(work, false));
 }
 
@@ -2526,6 +2529,8 @@ static void pool_died(struct pool *pool)
 	}
 }
 
+static void gen_stratum_work(struct pool *pool, struct work *work);
+
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
@@ -2538,6 +2543,17 @@ static void *get_work_thread(void *userdata)
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
 	pool = wc->pool;
+
+	if (pool->has_stratum) {
+		ret_work = make_work();
+		gen_stratum_work(pool, ret_work);
+		if (unlikely(!stage_work(ret_work))) {
+			applog(LOG_ERR, "Failed to stage stratum work in get_work_thread");
+			kill_work();
+			free(ret_work);
+		}
+		goto out;
+	}
 
 	if (clone_available()) {
 		dec_queued(pool);
@@ -3014,15 +3030,17 @@ static void test_work_current(struct work *work)
 
 		work_block++;
 
-		if (work->longpoll) {
-			applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
-			       work->pool->pool_no);
-			work->longpoll = false;
-		} else if (have_longpoll)
-			applog(LOG_NOTICE, "New block detected on network before longpoll");
-		else
-			applog(LOG_NOTICE, "New block detected on network");
-		restart_threads();
+		if (!work->stratum) {
+			if (work->longpoll) {
+				applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
+				       work->pool->pool_no);
+				work->longpoll = false;
+			} else if (have_longpoll)
+				applog(LOG_NOTICE, "New block detected on network before longpoll");
+			else
+				applog(LOG_NOTICE, "New block detected on network");
+			restart_threads();
+		}
 	} else if (work->longpoll) {
 		work->longpoll = false;
 		if (work->pool == current_pool()) {
@@ -4064,7 +4082,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 			memcpy(&(work->tv_getwork), &tv_getwork, sizeof(struct timeval));
 			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
 			work->getwork_mode = GETWORK_MODE_TESTPOOL;
-			calc_diff(work);
+			calc_diff(work, 0);
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
 			tq_push(thr_info[stage_thr_id].q, work);
@@ -4220,6 +4238,12 @@ static struct work *hash_pop(const struct timespec *abstime)
 
 static bool reuse_work(struct work *work)
 {
+	if (work->stratum && !work->pool->idle) {
+		applog(LOG_DEBUG, "Reusing stratum work");
+		gen_stratum_work(work->pool, work);;
+		return true;
+	}
+
 	if (can_roll(work) && should_roll(work)) {
 		roll_work(work);
 		return true;
@@ -4347,6 +4371,16 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	strcat((char *)work->target, buf);
 	free(buf);
 	applog(LOG_DEBUG, "Generated target %s", work->target);
+
+	work->pool = pool;
+	work->stratum = true;
+	work->blk.nonce = 0;
+	work->id = total_work++;
+	work->longpoll = false;
+	work->getwork_mode = GETWORK_MODE_STRATUM;
+	calc_diff(work, diff);
+
+	gettimeofday(&work->tv_staged, NULL);
 }
 
 static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
@@ -4367,11 +4401,6 @@ static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 
 retry:
 	pool = current_pool();
-
-	if (pool->has_stratum) {
-		gen_stratum_work(pool, work);
-		goto out;
-	}
 
 	if (reuse_work(work))
 		goto out;
@@ -4769,7 +4798,7 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
 	memcpy(&(work->tv_getwork_reply), tv_lp_reply, sizeof(struct timeval));
 	work->getwork_mode = GETWORK_MODE_LP;
-	calc_diff(work);
+	calc_diff(work, 0);
 
 	if (pool->enabled == POOL_REJECTING)
 		work->mandatory = true;

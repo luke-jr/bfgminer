@@ -850,6 +850,7 @@ struct pool {
 #define GETWORK_MODE_POOL 'P'
 #define GETWORK_MODE_LP 'L'
 #define GETWORK_MODE_BENCHMARK 'B'
+#define GETWORK_MODE_STRATUM 'S'
 
 struct work {
 	unsigned char	data[128];
@@ -878,6 +879,7 @@ struct work {
 	bool		mandatory;
 	bool		block;
 	bool		queued;
+	bool		stratum;
 
 	unsigned int	work_block;
 	int		id;
