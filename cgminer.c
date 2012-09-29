@@ -4265,12 +4265,24 @@ static struct work *clone_work(struct work *work)
 	return work;
 }
 
+static void gen_hash(unsigned char *data, unsigned char *hash, int len)
+{
+	unsigned char hash1[32];
+
+	sha2(data, len, hash1, false);
+	sha2(hash1, 32, hash, false);
+}
+
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
+	unsigned char merkle_root[32], merkle_sha[64], *merkle_hash;
 	char *coinbase, *nonce2;
-	int len;
+	uint32_t *data32, *swap32;
+	int len, i;
 
 	mutex_lock(&pool->pool_lock);
+
+	/* Generate coinbase */
 	len = strlen(pool->swork.coinbase1) +
 	      strlen(pool->nonce1) +
 	      pool->n2size +
@@ -4283,8 +4295,27 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	strcat(coinbase, nonce2);
 	free(nonce2);
 	strcat(coinbase, pool->swork.coinbase2);
+
+	/* Generate merkle root */
+	gen_hash((unsigned char *)coinbase, merkle_root, len);
+	memcpy(merkle_sha, merkle_root, 32);
+	for (i = 0; i < pool->swork.merkles; i++) {
+		memcpy(merkle_sha + 32, pool->swork.merkle[i], 32);
+		gen_hash(merkle_sha, merkle_root, 64);
+		memcpy(merkle_sha, merkle_root, 32);
+	}
+	data32 = (uint32_t *)merkle_sha;
+	swap32 = (uint32_t *)merkle_root;
+	for (i = 0; i < 32 / 4; i++)
+		swap32[i] = swab32(data32[i]);
+	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
+
 	mutex_unlock(&pool->pool_lock);
+
 	applog(LOG_DEBUG, "Generated stratum coinbase %s", coinbase);
+	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
+
+	free(merkle_hash);
 }
 
 static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
