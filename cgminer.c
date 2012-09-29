@@ -4338,33 +4338,36 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char merkle_root[32], merkle_sha[64], *merkle_hash;
-	char header[256], hash1[128], *coinbase, *nonce2, *buf;
+	char header[256], hash1[128], *nonce2, *buf;
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
 	uint32_t *data32, *swap32;
 	uint64_t diff, diff64;
 	char target[64];
-	int len, i;
+	int len, cb1_len, n1_len, cb2_len, i;
 
 	mutex_lock(&pool->pool_lock);
 
 	/* Generate coinbase */
-	len = strlen(pool->swork.coinbase1) +
-	      strlen(pool->nonce1) +
-	      pool->n2size +
-	      strlen(pool->swork.coinbase2);
-	coinbase = alloca(len + 1);
-	sprintf(coinbase, "%s", pool->swork.coinbase1);
-	strcat(coinbase, pool->nonce1);
 	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
-	strcat(coinbase, nonce2);
-	strcat(coinbase, pool->swork.coinbase2);
+	cb1_len = strlen(pool->swork.coinbase1) / 2;
+	n1_len = strlen(pool->nonce1) / 2;
+	cb2_len = strlen(pool->swork.coinbase2) / 2;
+	len = cb1_len + n1_len + pool->n2size + cb2_len;
+	coinbase = alloca(len);
+	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
+	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
+	hex2bin(coinbase + cb1_len + n1_len, pool->swork.coinbase2, cb2_len);
+	hex2bin(coinbase + cb1_len + n1_len + cb2_len, nonce2, pool->n2size);
 
 	/* Generate merkle root */
-	gen_hash((unsigned char *)coinbase, merkle_root, len);
+	gen_hash(coinbase, merkle_root, len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
-		memcpy(merkle_sha + 32, pool->swork.merkle[i], 32);
+		unsigned char merkle_bin[32];
+
+		hex2bin(merkle_bin, pool->swork.merkle[i], 32);
+		memcpy(merkle_sha + 32, merkle_bin, 32);
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
 	}
@@ -4391,7 +4394,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	mutex_unlock(&pool->pool_lock);
 
-	applog(LOG_DEBUG, "Generated stratum coinbase %s", coinbase);
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
 
