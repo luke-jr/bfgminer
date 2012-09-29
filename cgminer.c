@@ -4276,9 +4276,10 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64], *merkle_hash;
-	char header[256], hash1[128], *coinbase, *nonce2;
+	char header[256], hash1[128], *coinbase, *nonce2, *buf;
 	uint32_t *data32, *swap32;
-	int len, i, diff;
+	uint64_t diff, diff64;
+	int len, i;
 
 	mutex_lock(&pool->pool_lock);
 
@@ -4328,12 +4329,24 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	free(merkle_hash);
 
+	/* Convert hex data to binary data for work */
 	if (!hex2bin(work->data, header, 128))
 		quit(1, "Failed to convert header to data in gen_stratum_work");
 	calc_midstate(work);
 	sprintf(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000");
 	if (!hex2bin(work->hash1, hash1, 64))
 		quit(1,  "Failed to convert hash1 in gen_stratum_work");
+
+	/* Generate target as hex where 0x00000000FFFFFFFF is diff 1 */
+	diff64 = 0x00000000FFFFFFFFULL * diff;
+	diff64 = ~htobe64(diff64);
+	sprintf((char *)work->target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
+	buf = bin2hex((const unsigned char *)&diff64, 8);
+	if (!buf)
+		quit(1, "Failed to convert diff64 to buf in gen_stratum_work");
+	strcat((char *)work->target, buf);
+	free(buf);
+	applog(LOG_DEBUG, "Generated target %s", work->target);
 }
 
 static void get_work(struct work *work, struct thr_info *thr, const int thr_id)

@@ -1255,6 +1255,7 @@ out:
 
 	if (ret) {
 		pool->stratum_active = true;
+		pool->swork.diff = 1;
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extran2size %d",
 			       pool->pool_no, pool->subscription, pool->nonce1, pool->n2size);
