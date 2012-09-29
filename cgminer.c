@@ -5383,9 +5383,13 @@ void add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 		quit(1, "Failed to malloc userpass");
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
+	enable_pool(pool);
+
+	/* Prevent noise on startup */
+	pool->lagging = true;
+
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
-	enable_pool(pool);
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
 }
