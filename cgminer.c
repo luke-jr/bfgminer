@@ -4276,7 +4276,7 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64], *merkle_hash;
-	char *coinbase, *nonce2;
+	char header[256], *coinbase, *nonce2;
 	uint32_t *data32, *swap32;
 	int len, i;
 
@@ -4310,10 +4310,19 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		swap32[i] = swab32(data32[i]);
 	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
 
+	sprintf(header, "%s", pool->swork.bbversion);
+	strcat(header, pool->swork.prev_hash);
+	strcat(header, (char *)merkle_hash);
+	strcat(header, pool->swork.ntime);
+	strcat(header, pool->swork.nbit);
+	strcat(header, "00000000"); /* nonce */
+	strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
+
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Generated stratum coinbase %s", coinbase);
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
+	applog(LOG_DEBUG, "Generated stratum header %s", header);
 
 	free(merkle_hash);
 }
