@@ -1936,6 +1936,8 @@ static void curses_print_devstatus(int thr_id)
 		wprintw(statuswin, "OFF  ");
 	else if (cgpu->deven == DEV_RECOVER)
 		wprintw(statuswin, "REST  ");
+	else if (cgpu->deven == DEV_RECOVER_ERR)
+		wprintw(statuswin, " ERR ");
 	else
 		wprintw(statuswin, "%s", cHr);
 	adj_width(cgpu->accepted, &awidth);
@@ -5232,6 +5234,7 @@ void *miner_thread(void *userdata)
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	int64_t hashes_done = 0;
 	int64_t hashes;
+	bool scanhash_working = true;
 	struct work *work = make_work();
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
@@ -5312,15 +5315,22 @@ void *miner_thread(void *userdata)
 			gettimeofday(&getwork_start, NULL);
 
 			if (unlikely(hashes == -1)) {
-				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
-				cgpu->deven = DEV_DISABLED;
-
 				cgpu->device_last_not_well = time(NULL);
 				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
 				cgpu->thread_zero_hash_count++;
 
-				mt_disable(mythr, thr_id, api);
+				if (scanhash_working && opt_restart) {
+					applog(LOG_ERR, "%s %u failure, attempting to reinitialize", api->name, cgpu->device_id);
+					scanhash_working = false;
+					cgpu->reinit_backoff = 5.2734375;
+				} else {
+					applog(LOG_ERR, "%s %u failure, disabling!", api->name, cgpu->device_id);
+					cgpu->deven = DEV_RECOVER_ERR;
+					mt_disable(mythr, thr_id, api);
+				}
 			}
+			else
+				scanhash_working = true;
 
 			hashes_done += hashes;
 			if (hashes > cgpu->max_hashes)
@@ -5837,6 +5847,17 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			/* Thread is disabled */
 			if (*denable == DEV_DISABLED)
 				continue;
+			else
+			if (*denable == DEV_RECOVER_ERR) {
+				if (opt_restart && difftime(time(NULL), cgpu->device_last_not_well) > cgpu->reinit_backoff) {
+					applog(LOG_NOTICE, "Attempting to reinitialize %s %u",
+					       cgpu->api->name, cgpu->device_id);
+					if (cgpu->reinit_backoff < 300)
+						cgpu->reinit_backoff *= 2;
+					device_recovered(cgpu);
+				}
+				continue;
+			}
 			else
 			if (*denable == DEV_RECOVER) {
 				if (opt_restart && cgpu->temp < cgpu->targettemp) {
