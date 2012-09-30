@@ -2759,7 +2759,7 @@ static void *submit_work_thread(void *userdata)
 
 		applog(LOG_INFO, "Submitting share %08lx to pool %d", (unsigned long)(hash32[6]), pool->pool_no);
 
-		sock_send(pool->sock, s, strlen(s));
+		stratum_send(pool, s, strlen(s));
 
 		goto out;
 	}

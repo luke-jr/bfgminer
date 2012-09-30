@@ -843,9 +843,11 @@ bool extract_sockaddr(struct pool *pool, char *url)
 }
 
 /* Send a single command across a socket, appending \n to it */
-bool sock_send(int sock, char *s, ssize_t len)
+bool stratum_send(struct pool *pool, char *s, ssize_t len)
 {
+	SOCKETTYPE sock = pool->sock;
 	ssize_t sent = 0;
+	bool ret = false;
 
 	if (opt_protocol)
 		applog(LOG_DEBUG, "SEND: %s", s);
@@ -853,15 +855,20 @@ bool sock_send(int sock, char *s, ssize_t len)
 	strcat(s, "\n");
 	len++;
 
+	mutex_lock(&pool->pool_lock);
 	while (len > 0 ) {
 		sent = send(sock, s + sent, len, 0);
-		if (SOCKETFAIL(sent))
-			return false;
+		if (SOCKETFAIL(sent)) {
+			ret = false;
+			goto out_unlock;
+		}
 		len -= sent;
 	}
+	ret = true;
 	fsync(sock);
-
-	return true;
+out_unlock:
+	mutex_unlock(&pool->pool_lock);
+	return ret;;
 }
 
 #define RECVSIZE 8192
@@ -1129,7 +1136,7 @@ bool auth_stratum(struct pool *pool)
 		free(sret);
 	}
 
-	if (!sock_send(pool->sock, s, strlen(s)))
+	if (!stratum_send(pool, s, strlen(s)))
 		goto out;
 
 	sret = recv_line(pool->sock);
@@ -1184,7 +1191,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (!sock_send(pool->sock, s, strlen(s))) {
+	if (!stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
