@@ -238,19 +238,37 @@ if test "x$curses" = "xno"; then
 	cursesmsg='User specified --without-curses. TUI support DISABLED'
 else
 	if test "x$cross_compiling" != "xyes"; then
+		AC_MSG_CHECKING([for best native curses library])
+		orig_libs="$LIBS"
+		orig_cflags="$CFLAGS"
 		for curses_lib in ncurses{w,}{,6,5}; do
-			if ${curses_lib}-config --cflags >/dev/null 2>/dev/null; then
+			if ! ${curses_lib}-config --cflags >/dev/null 2>/dev/null; then
+				continue
+			fi
+			CFLAGS="$orig_cflags $(${curses_lib}-config --cflags)"
+			LIBS="$orig_libs $(${curses_lib}-config --libs)"
+			AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+				#include <curses.h>
+			]], [[
+				WINDOW *w = NULL;
+				mvwprintw(w, 2, 2, "Testing %s", "o hai");
+			]])], [
 				curses=yes
 				cursesmsg="FOUND: ${curses_lib}"
+				AC_MSG_RESULT([$curses_lib])
 				NCURSES_LIBS=`${curses_lib}-config --libs`
 				NCURSES_CPPFLAGS=`${curses_lib}-config --cflags`
 				break
-			fi
+			], [
+				AC_MSG_WARN([${curses_lib} doesn't seem to be installed properly])
+			])
 		done
+		LIBS="$orig_libs"
+		CFLAGS="$orig_cflags"
 	fi
 	if test "x$curses" != "xyes"; then
 
-	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
+	AC_SEARCH_LIBS(addstr, ncursesw ncurses pdcurses, [
 		curses=yes
 		cursesmsg="FOUND: ${ac_cv_search_addstr:2}"
 	], [
