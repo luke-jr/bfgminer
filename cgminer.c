@@ -1919,7 +1919,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	int rolltime;
 	uint32_t *hash32;
 	struct timeval tv_submit, tv_submit_reply;
-	char hashshow[64+1] = "";
+	char hashshow[64 +1 ] = "";
 	char worktime[200] = "";
 
 #ifdef __BIG_ENDIAN__
@@ -2756,6 +2756,8 @@ static void *submit_work_thread(void *userdata)
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
+
+		applog(LOG_INFO, "Submitting share %08lx to pool %d", (unsigned long)(hash32[6]), pool->pool_no);
 
 		sock_send(pool->sock, s, strlen(s));
 
@@ -4030,6 +4032,21 @@ out_unlock:
 	}
 }
 
+static void stratum_share_result(json_t *val, json_t *res_val,
+				 struct stratum_share *sshare)
+{
+	struct work *work = &sshare->work;
+	char hashshow[65];
+	uint32_t *hash32;
+	int intdiff;
+
+	hash32 = (uint32_t *)(work->hash);
+	intdiff = round(work->work_difficulty);
+	sprintf(hashshow, "%08lx Diff %d%s", (unsigned long)(hash32[6]), intdiff,
+		work->block? " BLOCK!" : "");
+	share_result(val, res_val, work, hashshow, false, "");
+}
+
 /* Parses stratum json responses and tries to find the id that the request
  * matched to and treat it accordingly. */
 static bool parse_stratum_response(char *s)
@@ -4042,7 +4059,7 @@ static bool parse_stratum_response(char *s)
 
 	val = JSON_LOADS(s, &err);
 	if (!val) {
-		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);;
+		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
 		goto out;
 	}
 
@@ -4059,20 +4076,29 @@ static bool parse_stratum_response(char *s)
 		else
 			ss = strdup("(unknown reason)");
 
-		applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
+		applog(LOG_INFO, "JSON-RPC non method decode failed: %s", ss);
 
 		free(ss);
 
 		goto out;
 	}
 
+	id = json_integer_value(id_val);
 	mutex_lock(&sshare_lock);
 	HASH_FIND_INT(stratum_shares, &id, sshare);
 	if (sshare)
 		HASH_DEL(stratum_shares, sshare);
 	mutex_unlock(&sshare_lock);
-	if (!sshare)
+	if (!sshare) {
+		if (json_is_true(res_val))
+			applog(LOG_NOTICE, "Accepted untracked stratum share");
+		else
+			applog(LOG_NOTICE, "Rejected untracked stratum share");
 		goto out;
+	}
+	stratum_share_result(val, res_val, sshare);
+	free(sshare);
+
 	ret = true;
 out:
 	if (val)

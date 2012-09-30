@@ -1065,11 +1065,12 @@ bool parse_method(struct pool *pool, char *s)
 	}
 
 	method = json_object_get(val, "method");
+	if (!method)
+		goto out;
 	err_val = json_object_get(val, "error");
 	params = json_object_get(val, "params");
 
-	if (!method || json_is_null(method) ||
-	    (err_val && !json_is_null(err_val))) {
+	if (err_val && !json_is_null(err_val)) {
 		char *ss;
 
 		if (err_val)
@@ -1077,7 +1078,7 @@ bool parse_method(struct pool *pool, char *s)
 		else
 			ss = strdup("(unknown reason)");
 
-		applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
+		applog(LOG_INFO, "JSON-RPC method decode failed: %s", ss);
 
 		free(ss);
 
