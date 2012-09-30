@@ -1032,6 +1032,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		applog(LOG_DEBUG, "clean: %s", clean ? "yes" : "no");
 	}
 
+	/* A notify message is the closest stratum gets to a getwork */
+	pool->getwork_requested++;
+	total_getworks++;
 	return true;
 }
 
