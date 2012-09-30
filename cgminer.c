@@ -1522,12 +1522,16 @@ static void curses_print_status(void)
 		global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
 		local_work, total_go, total_ro, total_diff1 / total_secs * 60);
 	wclrtoeol(statuswin);
-	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1)
+	if (pool->has_stratum) {
+		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
+			pool->stratum_url, pool->rpc_user);
+	} else if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
-	else
+	} else {
 		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
 			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
+	}
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s", current_hash, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
