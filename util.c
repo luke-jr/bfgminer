@@ -1055,7 +1055,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	return true;
 }
 
-bool parse_stratum(struct pool *pool, char *s)
+bool parse_method(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
 	json_error_t err;
@@ -1123,7 +1123,7 @@ bool auth_stratum(struct pool *pool)
 	/* Parse all data prior sending auth request */
 	while (sock_full(pool->sock, false)) {
 		sret = recv_line(pool->sock);
-		if (!parse_stratum(pool, sret)) {
+		if (!parse_method(pool, sret)) {
 			clear_sock(pool->sock);
 			applog(LOG_WARNING, "Failed to parse stratum buffer");
 			free(sret);

@@ -4055,7 +4055,7 @@ static void *stratum_thread(void *userdata)
 		s = recv_line(pool->sock);
 		if (unlikely(!s))
 			continue;
-		if (!parse_stratum(pool, s)) /* Create message queues here */
+		if (!parse_method(pool, s)) /* Create message queues here */
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
 		if (unlikely(pool->swork.clean)) {
