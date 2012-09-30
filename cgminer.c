@@ -2725,8 +2725,9 @@ static void *submit_work_thread(void *userdata)
 
 	if (work->stratum) {
 		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
-		uint32_t *hash32 = (uint32_t *)work->hash;
+		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
 		char *s = alloca(1024);
+		char *noncehex;
 
 		sprintf(sshare->hash6, "%08lx", (unsigned long)hash32[6]);
 		sshare->block = work->block;
@@ -2737,8 +2738,12 @@ static void *submit_work_thread(void *userdata)
 		HASH_ADD_INT(stratum_shares, id, sshare);
 		mutex_unlock(&sshare_lock);
 
-		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%08lx\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, (unsigned long)htobe32(work->blk.nonce), sshare->id);
+		nonce = *((uint32_t *)(work->data + 76));
+		noncehex = bin2hex((const unsigned char *)&nonce, 4);
+
+		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
+			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
+		free(noncehex);
 
 		sock_send(pool->sock, s, strlen(s));
 
