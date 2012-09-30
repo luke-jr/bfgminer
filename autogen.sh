@@ -1,17 +1,15 @@
-#!/bin/sh
-cwd="$PWD"
-bs_dir="$(dirname $(readlink -f $0))"
-rm -rf "${bs_dir}"/autom4te.cache
-rm -f "${bs_dir}"/aclocal.m4 "${bs_dir}"/ltmain.sh
+#!/bin/sh -e
+bs_dir="$(dirname "$0")"
 
 echo 'Running autoreconf -if...'
-autoreconf -if || exit 1
+(
+	cd "${bs_dir}"
+	rm -rf autom4te.cache
+	rm -f aclocal.m4 ltmain.sh
+	autoreconf -if
+)
+
 if test -z "$NOCONFIGURE" ; then
 	echo 'Configuring...'
-	cd "${bs_dir}" &> /dev/null
-	test "$?" = "0" || e=1
-	test "$cwd" != "$bs_dir" && cd "$bs_dir" &> /dev/null
-	./configure $@
-	test "$e" = "1" && exit 1
-	cd "$cwd"
+	"${bs_dir}"/configure "$@"
 fi
