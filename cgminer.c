@@ -588,8 +588,10 @@ static char *set_url(char *arg)
 
 	arg = get_proxy(arg, pool);
 
-	if (detect_stratum(pool, arg))
+	if (detect_stratum(pool, arg)) {
+		pool->rpc_url = strdup(pool->stratum_url);
 		return NULL;
+	}
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -4286,8 +4288,7 @@ static inline int cp_prio(void)
 
 static void pool_resus(struct pool *pool)
 {
-	applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no,
-	       pool->has_stratum ? pool->stratum_url : pool->rpc_url);
+	applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER)
 		switch_pools(NULL);
 }
@@ -5568,7 +5569,8 @@ static bool input_pool(bool live)
 		strncat(httpinput, url, 248);
 		free(url);
 		url = httpinput;
-	}
+	} else
+		url = strdup(pool->stratum_url);
 
 	add_pool_details(pool, live, url, user, pass);
 	ret = true;
