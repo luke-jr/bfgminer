@@ -232,10 +232,9 @@ int swork_id;
 /* For creating a hash database of stratum shares submitted that have not had
  * a response yet */
 struct stratum_share {
-	struct pool *pool;
-	char hash6[8];
 	UT_hash_handle hh;
 	bool block;
+	struct work work;
 	int id;
 };
 
@@ -1800,6 +1799,114 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
+/* Theoretically threads could race when modifying accepted and
+ * rejected values but the chance of two submits completing at the
+ * same time is zero so there is no point adding extra locking */
+static void
+share_result(json_t *val, json_t *res, const struct work *work, char *hashshow,
+	     bool resubmit, char *worktime)
+{
+	struct pool *pool = work->pool;
+	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
+
+	if (json_is_true(res)) {
+		cgpu->accepted++;
+		total_accepted++;
+		pool->accepted++;
+		cgpu->diff_accepted += work->work_difficulty;
+		total_diff_accepted += work->work_difficulty;
+		pool->diff_accepted += work->work_difficulty;
+		pool->seq_rejects = 0;
+		cgpu->last_share_pool = pool->pool_no;
+		cgpu->last_share_pool_time = time(NULL);
+		cgpu->last_share_diff = work->work_difficulty;
+		pool->last_share_time = cgpu->last_share_pool_time;
+		pool->last_share_diff = work->work_difficulty;
+		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
+		if (!QUIET) {
+			if (total_pools > 1)
+				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s%s",
+				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
+			else
+				applog(LOG_NOTICE, "Accepted %s %s %d %s%s",
+				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
+		}
+		sharelog("accept", work);
+		if (opt_shares && total_accepted >= opt_shares) {
+			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
+			kill_work();
+			return;
+		}
+
+		/* Detect if a pool that has been temporarily disabled for
+		 * continually rejecting shares has started accepting shares.
+		 * This will only happen with the work returned from a
+		 * longpoll */
+		if (unlikely(pool->enabled == POOL_REJECTING)) {
+			applog(LOG_WARNING, "Rejecting pool %d now accepting shares, re-enabling!", pool->pool_no);
+			enable_pool(pool);
+			switch_pools(NULL);
+		}
+	} else {
+		cgpu->rejected++;
+		total_rejected++;
+		pool->rejected++;
+		cgpu->diff_rejected += work->work_difficulty;
+		total_diff_rejected += work->work_difficulty;
+		pool->diff_rejected += work->work_difficulty;
+		pool->seq_rejects++;
+		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
+		if (!QUIET) {
+			char where[17];
+			char disposition[36] = "reject";
+			char reason[32];
+
+			if (total_pools > 1)
+				sprintf(where, "pool %d", work->pool->pool_no);
+			else
+				strcpy(where, "");
+
+			res = json_object_get(val, "reject-reason");
+			if (res) {
+				const char *reasontmp = json_string_value(res);
+
+				size_t reasonLen = strlen(reasontmp);
+				if (reasonLen > 28)
+					reasonLen = 28;
+				reason[0] = ' '; reason[1] = '(';
+				memcpy(2 + reason, reasontmp, reasonLen);
+				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
+				memcpy(disposition + 7, reasontmp, reasonLen);
+				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
+			} else
+				strcpy(reason, "");
+
+			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s%s",
+			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "", worktime);
+			sharelog(disposition, work);
+		}
+
+		/* Once we have more than a nominal amount of sequential rejects,
+		 * at least 10 and more than 3 mins at the current utility,
+		 * disable the pool because some pool error is likely to have
+		 * ensued. Do not do this if we know the share just happened to
+		 * be stale due to networking delays.
+		 */
+		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && enabled_pools > 1) {
+			double utility = total_accepted / total_secs * 60;
+
+			if (pool->seq_rejects > utility * 3) {
+				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
+				       pool->pool_no, pool->seq_rejects);
+				reject_pool(pool);
+				if (pool == current_pool())
+					switch_pools(NULL);
+				pool->seq_rejects = 0;
+			}
+		}
+	}
+}
+
 static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
@@ -1908,105 +2015,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		}
 	}
 
-	/* Theoretically threads could race when modifying accepted and
-	 * rejected values but the chance of two submits completing at the
-	 * same time is zero so there is no point adding extra locking */
-	if (json_is_true(res)) {
-		cgpu->accepted++;
-		total_accepted++;
-		pool->accepted++;
-		cgpu->diff_accepted += work->work_difficulty;
-		total_diff_accepted += work->work_difficulty;
-		pool->diff_accepted += work->work_difficulty;
-		pool->seq_rejects = 0;
-		cgpu->last_share_pool = pool->pool_no;
-		cgpu->last_share_pool_time = time(NULL);
-		cgpu->last_share_diff = work->work_difficulty;
-		pool->last_share_time = cgpu->last_share_pool_time;
-		pool->last_share_diff = work->work_difficulty;
-		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
-		if (!QUIET) {
-			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s%s",
-				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
-			else
-				applog(LOG_NOTICE, "Accepted %s %s %d %s%s",
-				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
-		}
-		sharelog("accept", work);
-		if (opt_shares && total_accepted >= opt_shares) {
-			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
-			kill_work();
-			goto out;
-		}
-
-		/* Detect if a pool that has been temporarily disabled for
-		 * continually rejecting shares has started accepting shares.
-		 * This will only happen with the work returned from a
-		 * longpoll */
-		if (unlikely(pool->enabled == POOL_REJECTING)) {
-			applog(LOG_WARNING, "Rejecting pool %d now accepting shares, re-enabling!", pool->pool_no);
-			enable_pool(pool);
-			switch_pools(NULL);
-		}
-	} else {
-		cgpu->rejected++;
-		total_rejected++;
-		pool->rejected++;
-		cgpu->diff_rejected += work->work_difficulty;
-		total_diff_rejected += work->work_difficulty;
-		pool->diff_rejected += work->work_difficulty;
-		pool->seq_rejects++;
-		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
-		if (!QUIET) {
-			char where[17];
-			char disposition[36] = "reject";
-			char reason[32];
-
-			if (total_pools > 1)
-				sprintf(where, "pool %d", work->pool->pool_no);
-			else
-				strcpy(where, "");
-
-			res = json_object_get(val, "reject-reason");
-			if (res) {
-				const char *reasontmp = json_string_value(res);
-
-				size_t reasonLen = strlen(reasontmp);
-				if (reasonLen > 28)
-					reasonLen = 28;
-				reason[0] = ' '; reason[1] = '(';
-				memcpy(2 + reason, reasontmp, reasonLen);
-				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
-				memcpy(disposition + 7, reasontmp, reasonLen);
-				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
-			} else
-				strcpy(reason, "");
-
-			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s%s",
-			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "", worktime);
-			sharelog(disposition, work);
-		}
-
-		/* Once we have more than a nominal amount of sequential rejects,
-		 * at least 10 and more than 3 mins at the current utility,
-		 * disable the pool because some pool error is likely to have
-		 * ensued. Do not do this if we know the share just happened to
-		 * be stale due to networking delays.
-		 */
-		if (pool->seq_rejects > 10 && !work->stale && opt_disable_pool && enabled_pools > 1) {
-			double utility = total_accepted / total_secs * 60;
-
-			if (pool->seq_rejects > utility * 3) {
-				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
-				       pool->pool_no, pool->seq_rejects);
-				reject_pool(pool);
-				if (pool == current_pool())
-					switch_pools(NULL);
-				pool->seq_rejects = 0;
-			}
-		}
-	}
+	share_result(val, res, work, hashshow, resubmit, worktime);
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
 
@@ -2733,9 +2742,8 @@ static void *submit_work_thread(void *userdata)
 		char *s = alloca(1024);
 		char *noncehex;
 
-		sprintf(sshare->hash6, "%08lx", (unsigned long)hash32[6]);
-		sshare->block = work->block;
-		sshare->pool = pool;
+		memcpy(&sshare->work, work, sizeof(struct work));
+
 		/* Give the stratum share a unique id */
 		mutex_lock(&sshare_lock);
 		sshare->id = swork_id++;
@@ -4022,6 +4030,57 @@ out_unlock:
 	}
 }
 
+/* Parses stratum json responses and tries to find the id that the request
+ * matched to and treat it accordingly. */
+static bool parse_stratum_response(char *s)
+{
+	json_t *val = NULL, *err_val, *res_val, *id_val;
+	struct stratum_share *sshare;
+	json_error_t err;
+	bool ret = false;
+	int id;
+
+	val = JSON_LOADS(s, &err);
+	if (!val) {
+		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);;
+		goto out;
+	}
+
+	res_val = json_object_get(val, "result");
+	err_val = json_object_get(val, "error");
+	id_val = json_object_get(val, "id");
+
+	if ((!res_val || !id_val) || (json_is_null(res_val) || json_is_null(id_val)) ||
+	    (err_val && !json_is_null(err_val))) {
+		char *ss;
+
+		if (err_val)
+			ss = json_dumps(err_val, JSON_INDENT(3));
+		else
+			ss = strdup("(unknown reason)");
+
+		applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
+
+		free(ss);
+
+		goto out;
+	}
+
+	mutex_lock(&sshare_lock);
+	HASH_FIND_INT(stratum_shares, &id, sshare);
+	if (sshare)
+		HASH_DEL(stratum_shares, sshare);
+	mutex_unlock(&sshare_lock);
+	if (!sshare)
+		goto out;
+	ret = true;
+out:
+	if (val)
+		json_decref(val);
+
+	return ret;
+}
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -4055,7 +4114,7 @@ static void *stratum_thread(void *userdata)
 		s = recv_line(pool->sock);
 		if (unlikely(!s))
 			continue;
-		if (!parse_method(pool, s)) /* Create message queues here */
+		if (!parse_method(pool, s) && !parse_stratum_response(s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
 		if (unlikely(pool->swork.clean)) {
