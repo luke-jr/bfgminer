@@ -895,8 +895,8 @@ static bool sock_full(SOCKETTYPE sock, bool wait)
  * from the socket and returns that as a malloced char */
 char *recv_line(SOCKETTYPE sock)
 {
-	char *sret = NULL, *s;
-	ssize_t len;
+	char *sret = NULL, *s, c;
+	ssize_t offset = 0;
 
 	s = alloca(RECVSIZE);
 	if (SOCKETFAIL(recv(sock, s, RECVSIZE, MSG_PEEK))) {
@@ -908,12 +908,13 @@ char *recv_line(SOCKETTYPE sock)
 		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in recv_line");
 		goto out;
 	}
-	len = strlen(sret) + 1;
-	/* We know how much data is in the buffer so this read should not fail */
-	if (SOCKETFAIL(recv(sock, s, len, 0)))
-		goto out;
-	if (s)
-		sret = strdup(strtok(s, "\n"));
+
+	do {
+		read(sock, &c, 1);
+		memcpy(s + offset++, &c, 1);
+	} while (strncmp(&c, "\n", 1));
+	sret = strdup(s);
+	strcpy(sret + offset - 1, "\0");
 out:
 	if (!sret)
 		clear_sock(sock);
