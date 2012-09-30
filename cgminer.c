@@ -4370,11 +4370,11 @@ static struct work *hash_pop(const struct timespec *abstime)
 	return work;
 }
 
-static bool reuse_work(struct work *work)
+static bool reuse_work(struct work *work, struct pool *pool)
 {
-	if (work->stratum && !work->pool->idle) {
+	if (pool->has_stratum) {
 		applog(LOG_DEBUG, "Reusing stratum work");
-		gen_stratum_work(work->pool, work);;
+		gen_stratum_work(pool, work);;
 		return true;
 	}
 
@@ -4545,7 +4545,7 @@ static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 retry:
 	pool = current_pool();
 
-	if (reuse_work(work))
+	if (reuse_work(work, pool))
 		goto out;
 
 	if (!pool->lagging && !total_staged() && global_queued() >= mining_threads + opt_queue) {
