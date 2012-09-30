@@ -729,40 +729,8 @@ char *set_temp_overheat(char *arg)
 
 	return NULL;
 }
-
-char *set_temp_target(char *arg)
-{
-	int i, val = 0, device = 0, *tt;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set temp target";
-	val = atoi(nextptr);
-	if (val < 0 || val > 200)
-		return "Invalid value passed to set temp target";
-
-	tt = &gpus[device++].targettemp;
-	*tt = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val < 0 || val > 200)
-			return "Invalid value passed to set temp target";
-
-		tt = &gpus[device++].targettemp;
-		*tt = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++) {
-			tt = &gpus[i].targettemp;
-			*tt = val;
-		}
-	}
-
-	return NULL;
-}
 #endif
+
 #ifdef HAVE_OPENCL
 char *set_intensity(char *arg)
 {

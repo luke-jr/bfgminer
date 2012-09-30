@@ -784,7 +784,8 @@ static char* set_sharelog(char *arg)
 	return NULL;
 }
 
-static char *temp_cutoff_str = NULL;
+static char *temp_cutoff_str = "";
+static char *temp_target_str = "";
 
 char *set_temp_cutoff(char *arg)
 {
@@ -800,35 +801,80 @@ char *set_temp_cutoff(char *arg)
 	return NULL;
 }
 
-static void load_temp_cutoffs()
+char *set_temp_target(char *arg)
 {
-	int i, val = 0, device = 0;
-	char *nextptr;
+	int val;
 
-	if (temp_cutoff_str) {
-		for (device = 0, nextptr = strtok(temp_cutoff_str, ","); nextptr; ++device, nextptr = strtok(NULL, ",")) {
-			if (device >= total_devices)
-				quit(1, "Too many values passed to set temp cutoff");
-			val = atoi(nextptr);
-			if (val < 0 || val > 200)
-				quit(1, "Invalid value passed to set temp cutoff");
+	if (!(arg && arg[0]))
+		return "Invalid parameters for set temp target";
+	val = atoi(arg);
+	if (val < 0 || val > 200)
+		return "Invalid value passed to set temp target";
+	temp_target_str = arg;
 
-			devices[device]->cutofftemp = val;
-		}
-	} else {
-		for (i = device; i < total_devices; ++i) {
-			if (!devices[i]->cutofftemp)
-				devices[i]->cutofftemp = opt_cutofftemp;
-		}
-		return;
+	return NULL;
+}
+
+// For a single element string, this always returns the number (for all calls)
+// For multi-element strings, it returns each element as a number in order, and 0 when there are no more
+static int temp_strtok(char *base, char **n)
+{
+	char *i = *n;
+	char *p = strchr(i, ',');
+	if (p) {
+		p[0] = '\0';
+		*n = &p[1];
 	}
-	if (device <= 1) {
-		for (i = device; i < total_devices; ++i)
-			devices[i]->cutofftemp = val;
+	else
+	if (base != i)
+		*n = strchr(i, '\0');
+	return atoi(i);
+}
+
+static void load_temp_config()
+{
+	int i, val = 0, target_off;
+	char *cutoff_n, *target_n;
+	struct cgpu_info *cgpu;
+
+	cutoff_n = temp_cutoff_str;
+	target_n = temp_target_str;
+
+	for (i = 0; i < total_devices; ++i) {
+		cgpu = devices[i];
+		
+		// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
+		if (!cgpu->cutofftemp)
+			cgpu->cutofftemp = opt_cutofftemp;
+		
+		// target default may be specified by driver, and is moved with offset; otherwise, offset minus 6
+		if (cgpu->targettemp)
+			target_off = cgpu->targettemp - cgpu->cutofftemp;
+		else
+			target_off = -6;
+		
+		val = temp_strtok(temp_cutoff_str, &cutoff_n);
+		if (val < 0 || val > 200)
+			quit(1, "Invalid value passed to set temp cutoff");
+		if (val)
+			cgpu->cutofftemp = val;
+		
+		val = temp_strtok(temp_target_str, &target_n);
+		if (val < 0 || val > 200)
+			quit(1, "Invalid value passed to set temp target");
+		if (val)
+			cgpu->targettemp = val;
+		else
+			cgpu->targettemp = cgpu->cutofftemp + target_off;
+		
+		applog(LOG_DEBUG, "%s %u: Set temperature config: target=%d cutoff=%d",
+		       cgpu->api->name, cgpu->device_id,
+		       cgpu->targettemp, cgpu->cutofftemp);
 	}
-	for (i = 0; i < total_devices; ++i)
-		if (!devices[i]->targettemp)
-			devices[i]->targettemp = devices[i]->cutofftemp - 6;
+	if (cutoff_n != temp_cutoff_str && cutoff_n[0])
+		quit(1, "Too many values passed to set temp cutoff");
+	if (target_n != temp_target_str && target_n[0])
+		quit(1, "Too many values passed to set temp target");
 }
 
 static char *set_api_allow(const char *arg)
@@ -1183,14 +1229,14 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
-#endif
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--temp-overheat",
 		     set_temp_overheat, opt_show_intval, &opt_overheattemp,
 		     "Overheat temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
+#endif
 	OPT_WITH_ARG("--temp-target",
 		     set_temp_target, opt_show_intval, &opt_targettemp,
-		     "Target temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
+		     "Target temperature when automatically managing fan and clock speeds, one value or comma separated list"),
 #endif
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
@@ -6659,7 +6705,7 @@ int main(int argc, char *argv[])
 	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
 
-	load_temp_cutoffs();
+	load_temp_config();
 
 	for (i = 0; i < total_devices; ++i)
 		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
