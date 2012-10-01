@@ -644,6 +644,7 @@ static char *set_pass(const char *arg)
 static char *set_userpass(const char *arg)
 {
 	struct pool *pool;
+	char *updup;
 
 	if (total_users || total_passes)
 		return "Use only user + pass or userpass, but not both";
@@ -652,7 +653,14 @@ static char *set_userpass(const char *arg)
 		add_pool();
 
 	pool = pools[total_userpasses - 1];
+	updup = strdup(arg);
 	opt_set_charp(arg, &pool->rpc_userpass);
+	pool->rpc_user = strtok(updup, ":");
+	if (!pool->rpc_user)
+		return "Failed to find : delimited user info";
+	pool->rpc_pass = strtok(NULL, ":");
+	if (!pool->rpc_pass)
+		return "Failed to find : delimited pass info";
 
 	return NULL;
 }
@@ -6085,14 +6093,6 @@ int main(int argc, char *argv[])
 			if (!pool->rpc_userpass)
 				quit(1, "Failed to malloc userpass");
 			sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
-		} else {
-			pool->rpc_user = malloc(strlen(pool->rpc_userpass) + 1);
-			if (!pool->rpc_user)
-				quit(1, "Failed to malloc user");
-			strcpy(pool->rpc_user, pool->rpc_userpass);
-			pool->rpc_user = strtok(pool->rpc_user, ":");
-			if (!pool->rpc_user)
-				quit(1, "Failed to find colon delimiter in userpass");
 		}
 	}
 	/* Set the currentpool to pool 0 */
