@@ -5594,9 +5594,9 @@ static bool input_pool(bool live)
 
 	pool = add_pool();
 
-	if (!detect_stratum(pool, url) &&
-	    strncmp(url, "http://", 7) &&
-	    strncmp(url, "https://", 8)) {
+	if (detect_stratum(pool, url))
+		url = strdup(pool->stratum_url);
+	else if (strncmp(url, "http://", 7) && strncmp(url, "https://", 8)) {
 		char *httpinput;
 
 		httpinput = malloc(255);
@@ -5606,8 +5606,7 @@ static bool input_pool(bool live)
 		strncat(httpinput, url, 248);
 		free(url);
 		url = httpinput;
-	} else
-		url = strdup(pool->stratum_url);
+	}
 
 	add_pool_details(pool, live, url, user, pass);
 	ret = true;
