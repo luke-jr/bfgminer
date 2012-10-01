@@ -4156,9 +4156,11 @@ static void *stratum_thread(void *userdata)
 			pool->swork.clean = false;
 			gen_stratum_work(pool, &work);
 			if (test_work_current(&work)) {
+				/* Only accept a work restart if this stratum
+				 * connection is from the current pool */
 				if (pool == current_pool()) {
 					restart_threads();
-					applog(LOG_NOTICE, "Stratum requested work restart");
+					applog(LOG_NOTICE, "Stratum from pool %d requested work restart", pool->pool_no);
 				}
 			} else
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
