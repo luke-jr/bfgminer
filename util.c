@@ -887,7 +887,7 @@ out_unlock:
 	return ret;;
 }
 
-#define RECVSIZE 8192
+#define RECVSIZE 8191
 
 static void clear_sock(SOCKETTYPE sock)
 {
@@ -921,7 +921,7 @@ char *recv_line(SOCKETTYPE sock)
 	char *sret = NULL, *s, c;
 	ssize_t offset = 0;
 
-	s = alloca(RECVSIZE);
+	s = alloca(RECVSIZE + 1);
 	if (SOCKETFAIL(recv(sock, s, RECVSIZE, MSG_PEEK))) {
 		applog(LOG_DEBUG, "Failed to recv sock in recv_line");
 		goto out;
@@ -1136,7 +1136,7 @@ bool auth_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
-	s = alloca(RECVSIZE);
+	s = alloca(RECVSIZE + 1);
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
 		swork_id++, pool->rpc_user, pool->rpc_pass);
 
@@ -1196,7 +1196,7 @@ bool initiate_stratum(struct pool *pool)
 	if (pool->stratum_active)
 		return true;
 
-	s = alloca(RECVSIZE);
+	s = alloca(RECVSIZE + 1);
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
 	pool->sock = socket(AF_INET, SOCK_STREAM, 0);
