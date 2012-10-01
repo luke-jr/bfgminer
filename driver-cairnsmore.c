@@ -66,7 +66,7 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
 		"vdi\xb7"
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-		"BFG0" "\xff\xff\xff\xff" "\0\0\0\0";
+		"BFG0" "\xff\xff\xff\xff" "\x23\0\0\0";
 	pkt[32] = 0xda ^ cmd ^ data;
 	pkt[33] = data;
 	pkt[34] = cmd;
@@ -75,12 +75,7 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
 
 bool cairnsmore_supports_dynclock(int fd)
 {
-	unsigned char pkts[64] =
-		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-		"\xe6\x3c\0\xb7"  // Set frequency multiplier to 60 (150 Mhz)
-		"\0\0\0\0\0\0\0\0\0\0\0\0" "BFG0"
-		"\x8b\xdb\x05\x1a" "\xff\xff\xff\xff" "\x00\x00\x1e\xfd";
-	if (write(fd, pkts, sizeof(pkts)) != sizeof(pkts))
+	if (!cairnsmore_send_cmd(fd, 0, 1))
 		return false;
 
 	uint32_t nonce = 0;
@@ -93,8 +88,8 @@ bool cairnsmore_supports_dynclock(int fd)
 		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
 	}
 	switch (nonce) {
-		case 0x000b1b5e:  // on big    endian
-		case 0x5e1b0b00:  // on little endian
+		case 0x0023b2ee:  // big    endian
+		case 0xeeb22300:  // little endian
 			// Hashed the command, so it's not supported
 			return false;
 		default:
@@ -127,6 +122,7 @@ static bool cairnsmore_init(struct thr_info *thr)
 {
 	struct cgpu_info *cm1 = thr->cgpu;
 	struct ICARUS_INFO *info = cm1->cgpu_data;
+	struct icarus_state *state = thr->cgpu_data;
 
 	if (cairnsmore_supports_dynclock(cm1->device_fd)) {
 		info->dclk_change_clock_func = cairnsmore_change_clock_func;
@@ -144,10 +140,9 @@ static bool cairnsmore_init(struct thr_info *thr)
 		applog(LOG_WARNING, "%s %u: Frequency scaling not supported",
 			cm1->api->name, cm1->device_id
 		);
-		// Test failures corrupt the hash state, so next scanhash is a firstrun
-		struct icarus_state *state = thr->cgpu_data;
-		state->firstrun = true;
 	}
+	// Commands corrupt the hash state, so next scanhash is a firstrun
+	state->firstrun = true;
 
 	return true;
 }
