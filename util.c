@@ -54,6 +54,7 @@ struct header_info {
 	char		*lp_path;
 	int		rolltime;
 	char		*reason;
+	char		*stratum_url;
 	bool		hadrolltime;
 	bool		canroll;
 	bool		hadexpire;
@@ -183,6 +184,11 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 		val = NULL;
 	}
 
+	if (!strcasecmp("X-Stratum", key)) {
+		hi->stratum_url = val;
+		val = NULL;
+	}
+
 out:
 	free(key);
 	free(val);
@@ -261,7 +267,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 {
 	long timeout = longpoll ? (60 * 60) : 60;
 	struct data_buffer all_data = {NULL, 0};
-	struct header_info hi = {NULL, 0, NULL, false, false, false};
+	struct header_info hi = {NULL, 0, NULL, NULL, false, false, false};
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
 	struct curl_slist *headers = NULL;
@@ -388,9 +394,19 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 			pool->hdr_path = hi.lp_path;
 		} else
 			pool->hdr_path = NULL;
-	} else if (hi.lp_path) {
-		free(hi.lp_path);
-		hi.lp_path = NULL;
+		if (hi.stratum_url) {
+			pool->stratum_url = hi.stratum_url;
+			hi.stratum_url = NULL;
+		}
+	} else {
+		if (hi.lp_path) {
+			free(hi.lp_path);
+			hi.lp_path = NULL;
+		}
+		if (hi.stratum_url) {
+			free(hi.stratum_url);
+			hi.stratum_url = NULL;
+		}
 	}
 
 	*rolltime = hi.rolltime;
