@@ -4225,8 +4225,10 @@ retry_stratum:
 	if (unlikely(!pinging && pool->stratum_url)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		pool->has_stratum = true;
-		pool->rpc_url = strdup(pool->stratum_url);
-		extract_sockaddr(pool, pool->stratum_url);
+		pool->rpc_url = pool->stratum_url;
+		/* pool->stratum_url will be set again in extract_sockaddr */
+		pool->stratum_url = NULL;
+		extract_sockaddr(pool, pool->rpc_url);
 		initiate_stratum(pool);
 		auth_stratum(pool);
 		curl_easy_cleanup(curl);
