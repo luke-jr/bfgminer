@@ -4158,7 +4158,7 @@ static void *stratum_thread(void *userdata)
 			if (test_work_current(&work)) {
 				if (pool == current_pool()) {
 					restart_threads();
-					applog(LOG_NOTICE, "Stratum requested work restart for block change");
+					applog(LOG_NOTICE, "Stratum requested work restart");
 				}
 			} else
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
