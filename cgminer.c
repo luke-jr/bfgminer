@@ -2583,6 +2583,7 @@ static void *get_work_thread(void *userdata)
 			kill_work();
 			free(ret_work);
 		}
+		dec_queued(pool);
 		goto out;
 	}
 
