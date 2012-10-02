@@ -571,6 +571,8 @@ bool detect_stratum(struct pool *pool, char *url)
 
 	if (!strncasecmp(url, "stratum+tcp://", 14) || stratum) {
 		pool->has_stratum = true;
+		if (!pool->stratum_url)
+			pool->stratum_url = pool->sockaddr_url;
 		return true;
 	}
 
