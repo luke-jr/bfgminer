@@ -726,6 +726,13 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// Prepare the next work immediately
 	memcpy(ob_bin, work->midstate, 32);
 	memcpy(ob_bin + 52, work->data + 64, 12);
+	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
+	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
+		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
+		applog(LOG_WARNING, "%s %u: Received job attempting to send a command, corrupting it!",
+		       icarus->api->name, icarus->device_id);
+		ob_bin[56] = 0;
+	}
 	rev(ob_bin, 32);
 	rev(ob_bin + 52, 12);
 
