@@ -4477,12 +4477,13 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	char header[257], hash1[129], *nonce2, *buf;
 	unsigned char *coinbase, merkle_root[33], merkle_sha[65], *merkle_hash;
+	int len, cb1_len, n1_len, cb2_len, i, j;
+	unsigned char rtarget[33], target[33];
+	char header[257], hash1[129], *nonce2;
 	uint32_t *data32, *swap32;
-	uint64_t diff, diff64;
-	char target[65];
-	int len, cb1_len, n1_len, cb2_len, i;
+	uint8_t *data8;
+	int diff;
 
 	mutex_lock(&pool->pool_lock);
 
@@ -4551,18 +4552,25 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	if (unlikely(!hex2bin(work->hash1, hash1, 64)))
 		quit(1,  "Failed to convert hash1 in gen_stratum_work");
 
-	/* Generate target as hex where 0x00000000FFFFFFFF is diff 1 */
-	diff64 = (1Ull << (31 + diff)) - 1;
-	diff64 = ~htobe64(diff64);
-	sprintf(target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
-	buf = bin2hex((const unsigned char *)&diff64, 8);
-	if (unlikely(!buf))
-		quit(1, "Failed to convert diff64 to buf in gen_stratum_work");
-	strcat(target, buf);
-	free(buf);
-	applog(LOG_DEBUG, "Generated target %s", target);
-	if (unlikely(!hex2bin(work->target, target, 32)))
-		quit(1, "Failed to convert target to bin in gen_stratum_work");
+	/* Scale to any diff by setting number of bits according to diff */
+	hex2bin(rtarget, "00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32);
+	data8 = (uint8_t *)(rtarget + 4);
+	for (i = 1, j = 0; i < diff; i++, j++) {
+		int byte = j / 8;
+		int bit = j % 8;
+
+		data8[byte] &= ~(8 >> bit);
+	}
+	swab256(target, rtarget);
+	if (opt_debug) {
+		char *htarget = bin2hex(target, 32);
+
+		if (likely(htarget)) {
+			applog(LOG_DEBUG, "Generated target %s", htarget);
+			free(htarget);
+		}
+	}
+	memcpy(work->target, target, 256);
 
 	work->pool = pool;
 	work->stratum = true;
