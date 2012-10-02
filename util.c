@@ -906,7 +906,7 @@ static bool sock_full(SOCKETTYPE sock, bool wait)
 	FD_SET(sock, &rd);
 	timeout.tv_usec = 0;
 	if (wait)
-		timeout.tv_sec = 60;
+		timeout.tv_sec = 5;
 	else
 		timeout.tv_sec = 0;
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
