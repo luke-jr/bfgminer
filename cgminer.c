@@ -4590,6 +4590,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	work->work_block = work_block;
 	calc_diff(work, diff);
 
 	gettimeofday(&work->tv_staged, NULL);
