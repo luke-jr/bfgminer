@@ -3044,7 +3044,7 @@ static bool block_exists(char *hexstr)
 /* Tests if this work is from a block that has been seen before */
 static inline bool from_existing_block(struct work *work)
 {
-	char *hexstr = bin2hex(work->data, 18);
+	char *hexstr = bin2hex(work->data + 8, 18);
 	bool ret;
 
 	if (unlikely(!hexstr)) {
@@ -3069,7 +3069,7 @@ static bool test_work_current(struct work *work)
 	if (work->mandatory)
 		return ret;
 
-	hexstr = bin2hex(work->data, 18);
+	hexstr = bin2hex(work->data + 8, 18);
 	if (unlikely(!hexstr)) {
 		applog(LOG_ERR, "stage_thread OOM");
 		return ret;
