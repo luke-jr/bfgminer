@@ -60,13 +60,15 @@ static void cairnsmore_detect()
 	serial_detect_auto_byname(&cairnsmore_api, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
 
-static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
+static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data, bool probe)
 {
 	unsigned char pkt[64] =
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
 		"vdi\xb7"
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-		"BFG0" "\xff\xff\xff\xff" "\xa8\xf9\xff\xff";
+		"bfg0" "\xff\xff\xff\xff" "\xb5\0\0\0";
+	if (unlikely(probe))
+		pkt[61] = '\x01';
 	pkt[32] = 0xda ^ cmd ^ data;
 	pkt[33] = data;
 	pkt[34] = cmd;
@@ -75,7 +77,7 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
 
 bool cairnsmore_supports_dynclock(int fd)
 {
-	if (!cairnsmore_send_cmd(fd, 0, 20))
+	if (!cairnsmore_send_cmd(fd, 0, 20, true))
 		return false;
 
 	uint32_t nonce = 0;
@@ -88,16 +90,19 @@ bool cairnsmore_supports_dynclock(int fd)
 		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
 	}
 	switch (nonce) {
-		case 0x0050b242:  // big    endian
-		case 0x42b25000:  // little endian
+		case 0x00949a6f:  // big    endian
+		case 0x6f9a9400:  // little endian
 			// Hashed the command, so it's not supported
 			return false;
 		default:
-			// TODO: nonce from a real job... handle it
+			applog(LOG_WARNING, "Unexpected nonce from dynclock probe: %08x", be32toh(nonce));
+			return false;
 		case 0:
 			return true;
 	}
 }
+
+#define cairnsmore_send_cmd(fd, cmd, data) cairnsmore_send_cmd(fd, cmd, data, false)
 
 static bool cairnsmore_change_clock_func(struct thr_info *thr, int bestM)
 {
