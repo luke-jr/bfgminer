@@ -1885,6 +1885,18 @@ share_result(json_t *val, json_t *res, const struct work *work, char *hashshow,
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
 				memcpy(disposition + 7, reasontmp, reasonLen);
 				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
+			} else if (work->stratum) {
+				json_t *arr_val = json_object_get(val, "error");
+
+				if (likely(json_is_array(arr_val))) {
+					char *json_reason = (char *)json_string_value(json_array_get(arr_val, 1));
+
+					if (likely(json_reason)) {
+						snprintf(reason, 31, "%s", json_reason);
+						free(json_reason);
+					}
+				}
+
 			} else
 				strcpy(reason, "");
 
