@@ -18,7 +18,7 @@
 // This is a general ballpark
 #define CAIRNSMORE1_HASH_TIME 0.0000000024484
 
-#define CAIRNSMORE1_MINIMUM_CLOCK  5
+#define CAIRNSMORE1_MINIMUM_CLOCK  50
 #define CAIRNSMORE1_DEFAULT_CLOCK  200
 #define CAIRNSMORE1_MAXIMUM_CLOCK  200
 
@@ -66,7 +66,7 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
 		"vdi\xb7"
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-		"BFG0" "\xff\xff\xff\xff" "\x23\0\0\0";
+		"BFG0" "\xff\xff\xff\xff" "\xa8\xf9\xff\xff";
 	pkt[32] = 0xda ^ cmd ^ data;
 	pkt[33] = data;
 	pkt[34] = cmd;
@@ -75,7 +75,7 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
 
 bool cairnsmore_supports_dynclock(int fd)
 {
-	if (!cairnsmore_send_cmd(fd, 0, 1))
+	if (!cairnsmore_send_cmd(fd, 0, 20))
 		return false;
 
 	uint32_t nonce = 0;
@@ -88,8 +88,8 @@ bool cairnsmore_supports_dynclock(int fd)
 		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
 	}
 	switch (nonce) {
-		case 0x0023b2ee:  // big    endian
-		case 0xeeb22300:  // little endian
+		case 0x0050b242:  // big    endian
+		case 0x42b25000:  // little endian
 			// Hashed the command, so it's not supported
 			return false;
 		default:
