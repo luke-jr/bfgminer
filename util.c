@@ -897,14 +897,18 @@ static void clear_sock(SOCKETTYPE sock)
 }
 
 /* Check to see if Santa's been good to you */
-static bool sock_full(SOCKETTYPE sock)
+static bool sock_full(SOCKETTYPE sock, bool wait)
 {
 	struct timeval timeout;
 	fd_set rd;
 
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
-	timeout.tv_usec = timeout.tv_sec = 0;
+	timeout.tv_usec = 0;
+	if (wait)
+		timeout.tv_sec = 60;
+	else
+		timeout.tv_sec = 0;
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
@@ -1137,7 +1141,7 @@ bool auth_stratum(struct pool *pool)
 		swork_id++, pool->rpc_user, pool->rpc_pass);
 
 	/* Parse all data prior sending auth request */
-	while (sock_full(pool->sock)) {
+	while (sock_full(pool->sock, false)) {
 		sret = recv_line(pool->sock);
 		if (!parse_method(pool, sret)) {
 			clear_sock(pool->sock);
@@ -1205,6 +1209,11 @@ bool initiate_stratum(struct pool *pool)
 
 	if (!stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
+		goto out;
+	}
+
+	if (!sock_full(pool->sock, true)) {
+		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
 
