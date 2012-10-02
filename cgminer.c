@@ -4079,7 +4079,7 @@ static bool parse_stratum_response(char *s)
 	id_val = json_object_get(val, "id");
 
 	if ((!res_val || !id_val) || (json_is_null(res_val) || json_is_null(id_val)) ||
-	    (err_val && !json_is_null(err_val) && !id)) {
+	    (err_val && !json_is_null(err_val) && !id_val)) {
 		char *ss;
 
 		if (err_val)
