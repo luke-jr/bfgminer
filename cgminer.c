@@ -1868,6 +1868,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			char disposition[36] = "reject";
 			char reason[32];
 
+			strcpy(reason, "");
 			if (total_pools > 1)
 				sprintf(where, "pool %d", work->pool->pool_no);
 			else
@@ -1885,8 +1886,15 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
 				memcpy(disposition + 7, reasontmp, reasonLen);
 				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
-			} else
-				strcpy(reason, "");
+			} else if (work->stratum && err && json_is_array(err)) {
+				json_t *reason_val = json_array_get(err, 1);
+				char *reason_str;
+
+				if (reason_val && json_is_string(reason_val)) {
+					reason_str = (char *)json_string_value(reason_val);
+					snprintf(reason, 31, "(%s)", reason_str);
+				}
+			}
 
 			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s%s",
 			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "", worktime);
@@ -4084,8 +4092,7 @@ static bool parse_stratum_response(char *s)
 	err_val = json_object_get(val, "error");
 	id_val = json_object_get(val, "id");
 
-	if ((!res_val || !id_val) || (json_is_null(res_val) || json_is_null(id_val)) ||
-	    (err_val && !json_is_null(err_val) && !id_val)) {
+	if (json_is_null(id_val) || !id_val) {
 		char *ss;
 
 		if (err_val)
