@@ -1189,9 +1189,10 @@ out:
 bool initiate_stratum(struct pool *pool)
 {
 	json_t *val = NULL, *res_val, *err_val, *notify_val;
+	bool ret = false, notify = false;
 	char *s, *buf, *sret = NULL;
 	json_error_t err;
-	bool ret = false;
+	int i, arr_size;
 
 	if (pool->stratum_active)
 		return true;
@@ -1232,7 +1233,8 @@ bool initiate_stratum(struct pool *pool)
 	err_val = json_object_get(val, "error");
 
 	if (!res_val || json_is_null(res_val) ||
-	    (err_val && !json_is_null(err_val))) {
+	    (err_val && !json_is_null(err_val)) ||
+	    !json_is_array(res_val)) {
 		char *ss;
 
 		if (err_val)
@@ -1247,17 +1249,26 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	notify_val = json_array_get(res_val, 0);
-	if (!notify_val || json_is_null(notify_val)) {
-		applog(LOG_INFO, "Failed to parse notify_val in initiate_stratum");
-		goto out;
+	arr_size = json_array_size(res_val);
+	for (i = 0; i < arr_size; i++) {
+		notify_val = json_array_get(res_val, i);
+		if (!notify_val || json_is_null(notify_val)) {
+			applog(LOG_INFO, "Failed to parse notify_val in initiate_stratum");
+			goto out;
+		}
+
+		buf = __json_array_string(notify_val, 0);
+		if (buf && !strcasecmp(buf, "mining.notify")) {
+			notify = true;
+			break;
+		}
 	}
 
-	buf = __json_array_string(notify_val, 0);
-	if (!buf || strcasecmp(buf, "mining.notify")) {
+	if (!notify) {
 		applog(LOG_INFO, "Failed to get mining notify in initiate_stratum");
 		goto out;
 	}
+
 	pool->subscription = json_array_string(notify_val, 1);
 	if (!pool->subscription) {
 		applog(LOG_INFO, "Failed to get a subscription in initiate_stratum");

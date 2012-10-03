@@ -2767,7 +2767,12 @@ static void *submit_work_thread(void *userdata)
 
 		applog(LOG_INFO, "Submitting share %08lx to pool %d", (unsigned long)(hash32[6]), pool->pool_no);
 
-		stratum_send(pool, s, strlen(s));
+		if (unlikely(!stratum_send(pool, s, strlen(s)))) {
+			mutex_lock(&sshare_lock);
+			HASH_DEL(stratum_shares, sshare);
+			mutex_unlock(&sshare_lock);
+			free(sshare);
+		}
 
 		goto out;
 	}
