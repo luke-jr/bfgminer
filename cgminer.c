@@ -4559,7 +4559,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		int byte = j / 8;
 		int bit = j % 8;
 
-		data8[byte] &= ~(8 >> bit);
+		data8[byte] &= ~(128 >> bit);
 	}
 	swab256(target, rtarget);
 	if (opt_debug) {
