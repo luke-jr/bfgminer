@@ -1249,29 +1249,29 @@ bool initiate_stratum(struct pool *pool)
 
 	notify_val = json_array_get(res_val, 0);
 	if (!notify_val || json_is_null(notify_val)) {
-		applog(LOG_WARNING, "Failed to parse notify_val in initiate_stratum");
+		applog(LOG_INFO, "Failed to parse notify_val in initiate_stratum");
 		goto out;
 	}
 
 	buf = __json_array_string(notify_val, 0);
 	if (!buf || strcasecmp(buf, "mining.notify")) {
-		applog(LOG_WARNING, "Failed to get mining notify in initiate_stratum");
+		applog(LOG_INFO, "Failed to get mining notify in initiate_stratum");
 		goto out;
 	}
 	pool->subscription = json_array_string(notify_val, 1);
 	if (!pool->subscription) {
-		applog(LOG_WARNING, "Failed to get a subscription in initiate_stratum");
+		applog(LOG_INFO, "Failed to get a subscription in initiate_stratum");
 		goto out;
 	}
 
 	pool->nonce1 = json_array_string(res_val, 1);
 	if (!pool->nonce1) {
-		applog(LOG_WARNING, "Failed to get nonce1 in initiate_stratum");
+		applog(LOG_INFO, "Failed to get nonce1 in initiate_stratum");
 		goto out;
 	}
 	pool->n2size = json_integer_value(json_array_get(res_val, 2));
 	if (!pool->n2size) {
-		applog(LOG_WARNING, "Failed to get n2size in initiate_stratum");
+		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
 		goto out;
 	}
 
