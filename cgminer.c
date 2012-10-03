@@ -1892,7 +1892,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 
 				if (reason_val && json_is_string(reason_val)) {
 					reason_str = (char *)json_string_value(reason_val);
-					snprintf(reason, 31, "(%s)", reason_str);
+					snprintf(reason, 31, " (%s)", reason_str);
 				}
 			}
 
