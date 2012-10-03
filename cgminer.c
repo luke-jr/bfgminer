@@ -4475,15 +4475,39 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 	sha2(hash1, 32, hash, false);
 }
 
+static void set_work_target(struct work *work, int diff)
+{
+	unsigned char rtarget[33], target[33];
+	uint8_t *data8;
+	int i, j;
+
+	/* Scale to any diff by setting number of bits according to diff */
+	hex2bin(rtarget, "00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32);
+	data8 = (uint8_t *)(rtarget + 4);
+	for (i = 1, j = 0; i < diff; i++, j++) {
+		int byte = j / 8;
+		int bit = j % 8;
+
+		data8[byte] &= ~(128 >> bit);
+	}
+	swab256(target, rtarget);
+	if (opt_debug) {
+		char *htarget = bin2hex(target, 32);
+
+		if (likely(htarget)) {
+			applog(LOG_DEBUG, "Generated target %s", htarget);
+			free(htarget);
+		}
+	}
+	memcpy(work->target, target, 256);
+}
+
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char *coinbase, merkle_root[33], merkle_sha[65], *merkle_hash;
-	int len, cb1_len, n1_len, cb2_len, i, j;
-	unsigned char rtarget[33], target[33];
 	char header[257], hash1[129], *nonce2;
+	int len, cb1_len, n1_len, cb2_len, i;
 	uint32_t *data32, *swap32;
-	uint8_t *data8;
-	int diff;
 
 	mutex_lock(&pool->pool_lock);
 
@@ -4529,7 +4553,9 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	strcat(header, "00000000"); /* nonce */
 	strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
 
-	diff = pool->swork.diff;
+	/* Store the stratum work diff to check it still matches the pool's
+	 * stratum diff when submitting shares */
+	work->sdiff = pool->swork.diff;
 
 	/* Copy parameters required for share submission */
 	sprintf(work->job_id, "%s", pool->swork.job_id);
@@ -4552,25 +4578,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	if (unlikely(!hex2bin(work->hash1, hash1, 64)))
 		quit(1,  "Failed to convert hash1 in gen_stratum_work");
 
-	/* Scale to any diff by setting number of bits according to diff */
-	hex2bin(rtarget, "00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32);
-	data8 = (uint8_t *)(rtarget + 4);
-	for (i = 1, j = 0; i < diff; i++, j++) {
-		int byte = j / 8;
-		int bit = j % 8;
-
-		data8[byte] &= ~(128 >> bit);
-	}
-	swab256(target, rtarget);
-	if (opt_debug) {
-		char *htarget = bin2hex(target, 32);
-
-		if (likely(htarget)) {
-			applog(LOG_DEBUG, "Generated target %s", htarget);
-			free(htarget);
-		}
-	}
-	memcpy(work->target, target, 256);
+	set_work_target(work, work->sdiff);
 
 	work->pool = pool;
 	work->stratum = true;
@@ -4579,7 +4587,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
 	work->work_block = work_block;
-	calc_diff(work, diff);
+	calc_diff(work, work->sdiff);
 
 	gettimeofday(&work->tv_staged, NULL);
 }
@@ -4698,7 +4706,7 @@ err_out:
 	return false;
 }
 
-static bool hashtest(struct thr_info *thr, const struct work *work)
+static bool hashtest(struct thr_info *thr, struct work *work)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[128];
@@ -4706,7 +4714,8 @@ static bool hashtest(struct thr_info *thr, const struct work *work)
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	int i;
+	struct pool *pool = work->pool;
+	int i, diff;
 
 	for (i = 0; i < 80 / 4; i++)
 		swap32[i] = swab32(data32[i]);
@@ -4725,6 +4734,17 @@ static bool hashtest(struct thr_info *thr, const struct work *work)
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 		return false;
+	}
+
+	if (work->stratum) {
+		mutex_lock(&pool->pool_lock);
+		diff = pool->swork.diff;
+		mutex_unlock(&pool->pool_lock);
+
+		if (unlikely(work->sdiff != diff)) {
+			applog(LOG_DEBUG, "Share needs retargetting to match pool");
+			set_work_target(work, diff);
+		}
 	}
 
 	bool test = fulltest(work->hash, work->target);
