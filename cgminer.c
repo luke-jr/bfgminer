@@ -4241,8 +4241,9 @@ retry_stratum:
 	gettimeofday(&tv_getwork_reply, NULL);
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
-	 * and if so, switch to that in preference to getwork */
-	if (unlikely(pool->stratum_url)) {
+	 * and if so, switch to that in preference to getwork. Currently no
+	 * proxy support so don't try to switch if a proxy is in use. */
+	if (unlikely(pool->stratum_url && !pool->rpc_proxy)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		pool->has_stratum = true;
 		pool->rpc_url = pool->stratum_url;
