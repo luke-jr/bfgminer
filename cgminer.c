@@ -4161,7 +4161,7 @@ static void *stratum_thread(void *userdata)
 				sleep(5);
 			}
 		}
-		s = recv_line(pool->sock);
+		s = recv_line(pool);
 		if (unlikely(!s))
 			continue;
 		if (!parse_method(pool, s) && !parse_stratum_response(s))

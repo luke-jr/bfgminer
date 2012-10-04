@@ -888,18 +888,23 @@ out_unlock:
 #define RECVSIZE 8191
 #define RBUFSIZE (RECVSIZE + 1)
 
-static void clear_sock(SOCKETTYPE sock)
+static void clear_sock(struct pool *pool)
 {
-	char s[RBUFSIZE];
+	SOCKETTYPE sock = pool->sock;
 
-	recv(sock, s, RECVSIZE, MSG_DONTWAIT);
+	recv(sock, pool->sockbuf, RECVSIZE, MSG_DONTWAIT);
+	strcpy(pool->sockbuf, "");
 }
 
 /* Check to see if Santa's been good to you */
-static bool sock_full(SOCKETTYPE sock, bool wait)
+static bool sock_full(struct pool *pool, bool wait)
 {
+	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
 	fd_set rd;
+
+	if (strlen(pool->sockbuf))
+		return true;
 
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
@@ -915,30 +920,41 @@ static bool sock_full(SOCKETTYPE sock, bool wait)
 
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
-char *recv_line(SOCKETTYPE sock)
+char *recv_line(struct pool *pool)
 {
-	char *sret = NULL, s[RBUFSIZE], c;
-	ssize_t offset = 0;
+	SOCKETTYPE sock = pool->sock;
+	ssize_t len, buflen;
+	char *tok, *sret = NULL;
 
-	if (SOCKETFAIL(recv(sock, s, RECVSIZE, MSG_PEEK))) {
-		applog(LOG_DEBUG, "Failed to recv sock in recv_line");
-		goto out;
+	if (!strstr(pool->sockbuf, "\n")) {
+		char s[RBUFSIZE];
+
+		memset(s, 0, RBUFSIZE);
+		if (SOCKETFAIL(recv(sock, s, RECVSIZE, 0))) {
+			applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+			goto out;
+		}
+		strcat(pool->sockbuf, s);
 	}
-	sret = strtok(s, "\n");
-	if (!sret) {
+
+	buflen = strlen(pool->sockbuf);
+	tok = strtok(pool->sockbuf, "\n");
+	if (!tok) {
 		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in recv_line");
 		goto out;
 	}
+	sret = strdup(tok);
+	len = strlen(sret);
 
-	do {
-		read(sock, &c, 1);
-		memcpy(s + offset++, &c, 1);
-	} while (strncmp(&c, "\n", 1));
-	sret = strdup(s);
-	strcpy(sret + offset - 1, "\0");
+	/* Copy what's left in the buffer after the \n, including the
+	 * terminating \0 */
+	if (buflen > len + 1)
+		memmove(pool->sockbuf, pool->sockbuf + len + 1, buflen - len + 1);
+	else
+		strcpy(pool->sockbuf, "");
 out:
 	if (!sret)
-		clear_sock(sock);
+		clear_sock(pool);
 	else if (opt_protocol)
 		applog(LOG_DEBUG, "RECVD: %s", sret);
 	return sret;
@@ -1138,10 +1154,10 @@ bool auth_stratum(struct pool *pool)
 		swork_id++, pool->rpc_user, pool->rpc_pass);
 
 	/* Parse all data prior sending auth request */
-	while (sock_full(pool->sock, false)) {
-		sret = recv_line(pool->sock);
+	while (sock_full(pool, false)) {
+		sret = recv_line(pool);
 		if (!parse_method(pool, sret)) {
-			clear_sock(pool->sock);
+			clear_sock(pool);
 			applog(LOG_WARNING, "Failed to parse stratum buffer");
 			free(sret);
 			return ret;
@@ -1152,7 +1168,7 @@ bool auth_stratum(struct pool *pool)
 	if (!stratum_send(pool, s, strlen(s)))
 		goto out;
 
-	sret = recv_line(pool->sock);
+	sret = recv_line(pool);
 	if (!sret)
 		goto out;
 	val = JSON_LOADS(sret, &err);
@@ -1208,12 +1224,12 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (!sock_full(pool->sock, true)) {
+	if (!sock_full(pool, true)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
 
-	sret = recv_line(pool->sock);
+	sret = recv_line(pool);
 	if (!sret)
 		goto out;
 
