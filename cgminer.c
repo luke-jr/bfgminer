@@ -562,6 +562,12 @@ static char *set_rr(enum pool_strategy *strategy)
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
 {
+	if (pool->rpc_proxy) {
+		if (!strncasecmp(url, "stratum+tcp://", 14))
+			applog(LOG_WARNING, "Cannot use a stratum server with a proxy");
+		return false;
+	}
+
 	if (!extract_sockaddr(pool, url))
 		return false;
 
