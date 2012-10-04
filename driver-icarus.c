@@ -29,6 +29,8 @@
  *      nonce range is completely calculated.
  */
 
+#include "config.h"
+
 #include <limits.h>
 #include <pthread.h>
 #include <stdio.h>

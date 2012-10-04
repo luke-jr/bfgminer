@@ -26,11 +26,12 @@
 # include <sys/socket.h>
 # include <netinet/in.h>
 # include <netinet/tcp.h>
+# include <netdb.h>
 #else
 # include <winsock2.h>
 # include <mstcpip.h>
+# include <ws2tcpip.h>
 #endif
-#include <netdb.h>
 
 #include "miner.h"
 #include "elist.h"

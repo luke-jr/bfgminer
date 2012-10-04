@@ -92,6 +92,7 @@ case $target in
     PTHREAD_FLAGS=""
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
+    AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     ;;
   powerpc-*-darwin*)
     CFLAGS="$CFLAGS -faltivec"
