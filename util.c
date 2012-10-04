@@ -811,7 +811,7 @@ double tdiff(struct timeval *end, struct timeval *start)
 bool extract_sockaddr(struct pool *pool, char *url)
 {
 	char *url_begin, *url_end, *port_start = NULL;
-	char *url_address, *port;
+	char url_address[256], port[6];
 	struct addrinfo hints, *res;
 	int url_len, port_len = 0;
 
@@ -833,14 +833,11 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	if (url_len < 1)
 		return false;
 
-	url_address = alloca(url_len + 1);
 	sprintf(url_address, "%.*s", url_len, url_begin);
 
 	if (port_len) {
-		port = alloca(port_len + 1);
 		sprintf(port, "%.*s", port_len, port_start);
 	} else {
-		port = alloca(4);
 		strcpy(port, "80");
 	}
 
@@ -889,10 +886,11 @@ out_unlock:
 }
 
 #define RECVSIZE 8191
+#define RBUFSIZE (RECVSIZE + 1)
 
 static void clear_sock(SOCKETTYPE sock)
 {
-	char *s = alloca(RECVSIZE);
+	char s[RBUFSIZE];
 
 	recv(sock, s, RECVSIZE, MSG_DONTWAIT);
 }
@@ -919,10 +917,9 @@ static bool sock_full(SOCKETTYPE sock, bool wait)
  * from the socket and returns that as a malloced char */
 char *recv_line(SOCKETTYPE sock)
 {
-	char *sret = NULL, *s, c;
+	char *sret = NULL, s[RBUFSIZE], c;
 	ssize_t offset = 0;
 
-	s = alloca(RECVSIZE + 1);
 	if (SOCKETFAIL(recv(sock, s, RECVSIZE, MSG_PEEK))) {
 		applog(LOG_DEBUG, "Failed to recv sock in recv_line");
 		goto out;
@@ -1133,11 +1130,10 @@ out:
 bool auth_stratum(struct pool *pool)
 {
 	json_t *val = NULL, *res_val, *err_val;
-	char *s, *sret = NULL;
+	char s[RBUFSIZE], *sret = NULL;
 	json_error_t err;
 	bool ret = false;
 
-	s = alloca(RECVSIZE + 1);
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
 		swork_id++, pool->rpc_user, pool->rpc_pass);
 
@@ -1190,14 +1186,13 @@ out:
 bool initiate_stratum(struct pool *pool)
 {
 	json_t *val = NULL, *res_val, *err_val;
-	char *s, *sret = NULL;
+	char s[RBUFSIZE], *sret = NULL;
 	json_error_t err;
 	bool ret = false;
 
 	if (pool->stratum_active)
 		return true;
 
-	s = alloca(RECVSIZE + 1);
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
 	pool->sock = socket(AF_INET, SOCK_STREAM, 0);
