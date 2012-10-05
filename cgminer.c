@@ -2772,6 +2772,7 @@ static void *submit_work_thread(void *userdata)
 		nonce = *((uint32_t *)(work->data + 76));
 		noncehex = bin2hex((const unsigned char *)&nonce, 4);
 
+		memset(s, 0, 1024);
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
