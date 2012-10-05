@@ -2758,8 +2758,8 @@ static void *submit_work_thread(void *userdata)
 	if (work->stratum) {
 		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
 		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
-		char *s = alloca(1024);
 		char *noncehex;
+		char s[1024];
 
 		memcpy(&sshare->work, work, sizeof(struct work));
 
