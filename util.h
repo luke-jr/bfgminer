@@ -7,7 +7,7 @@
 	#include <netinet/in.h>
 	#include <arpa/inet.h>
 
-	#define SOCKETTYPE int
+	#define SOCKETTYPE long
 	#define SOCKETFAIL(a) ((a) < 0)
 	#define INVSOCK -1
 	#define INVINETADDR -1

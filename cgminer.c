@@ -432,6 +432,8 @@ struct pool *add_pool(void)
 		quit(1, "Failed to pthread_mutex_init in add_pool");
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
+	if (unlikely(pthread_mutex_init(&pool->stratum_lock, NULL)))
+		quit(1, "Failed to pthread_mutex_init in add_pool");
 	INIT_LIST_HEAD(&pool->curlring);
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -562,12 +564,6 @@ static char *set_rr(enum pool_strategy *strategy)
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
 {
-	if (pool->rpc_proxy) {
-		if (!strncasecmp(url, "stratum+tcp://", 14))
-			applog(LOG_WARNING, "Cannot use a stratum server with a proxy");
-		return false;
-	}
-
 	if (!extract_sockaddr(pool, url))
 		return false;
 
@@ -4249,7 +4245,7 @@ retry_stratum:
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
 	 * and if so, switch to that in preference to getwork. Currently no
 	 * proxy support so don't try to switch if a proxy is in use. */
-	if (unlikely(pool->stratum_url && !pool->rpc_proxy)) {
+	if (unlikely(pool->stratum_url)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		pool->has_stratum = true;
 		pool->rpc_url = pool->stratum_url;

@@ -196,7 +196,6 @@ out:
 	return ptrlen;
 }
 
-#ifdef CURL_HAS_SOCKOPT
 int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
 			     curlsocktype __maybe_unused purpose)
 {
@@ -244,7 +243,6 @@ int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
 
 	return 0;
 }
-#endif
 
 static void last_nettime(struct timeval *last)
 {
@@ -319,10 +317,8 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		curl_easy_setopt(curl, CURLOPT_USERPWD, userpass);
 		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 	}
-#ifdef CURL_HAS_SOCKOPT
 	if (longpoll)
 		curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, json_rpc_call_sockopt_cb);
-#endif
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 
 	if (opt_protocol)
@@ -835,11 +831,12 @@ bool extract_sockaddr(struct pool *pool, char *url)
 
 	sprintf(url_address, "%.*s", url_len, url_begin);
 
-	if (port_len) {
+	if (port_len)
 		sprintf(port, "%.*s", port_len, port_start);
-	} else {
+	else
 		strcpy(port, "80");
-	}
+
+	pool->stratum_port = strdup(port);
 
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;
@@ -859,8 +856,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 /* Send a single command across a socket, appending \n to it */
 bool stratum_send(struct pool *pool, char *s, ssize_t len)
 {
-	SOCKETTYPE sock = pool->sock;
-	ssize_t sent = 0;
+	ssize_t ssent = 0;
 	bool ret = false;
 
 	if (opt_protocol)
@@ -869,19 +865,21 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 	strcat(s, "\n");
 	len++;
 
-	mutex_lock(&pool->pool_lock);
+	mutex_lock(&pool->stratum_lock);
 	while (len > 0 ) {
-		sent = send(sock, s + sent, len, 0);
-		if (SOCKETFAIL(sent)) {
+		size_t sent = 0;
+
+		if (curl_easy_send(pool->stratum_curl, s + ssent, len, &sent) != CURLE_OK) {
+			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
 			ret = false;
 			goto out_unlock;
 		}
-		len -= sent;
+		ssent += sent;
+		len -= ssent;
 	}
 	ret = true;
-	fsync(sock);
 out_unlock:
-	mutex_unlock(&pool->pool_lock);
+	mutex_unlock(&pool->stratum_lock);
 	return ret;;
 }
 
@@ -922,15 +920,25 @@ static bool sock_full(struct pool *pool, bool wait)
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
-	SOCKETTYPE sock = pool->sock;
 	ssize_t len, buflen;
 	char *tok, *sret = NULL;
+	size_t n;
 
 	if (!strstr(pool->sockbuf, "\n")) {
 		char s[RBUFSIZE];
+		CURLcode rc;
 
+		if (!sock_full(pool, true)) {
+			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
+			goto out;
+		}
 		memset(s, 0, RBUFSIZE);
-		if (SOCKETFAIL(recv(sock, s, RECVSIZE, 0))) {
+
+		mutex_lock(&pool->stratum_lock);
+		rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
+		mutex_unlock(&pool->stratum_lock);
+
+		if (rc != CURLE_OK) {
 			applog(LOG_DEBUG, "Failed to recv sock in recv_line");
 			goto out;
 		}
@@ -1202,22 +1210,48 @@ out:
 bool initiate_stratum(struct pool *pool)
 {
 	json_t *val = NULL, *res_val, *err_val;
+	char curl_err_str[CURL_ERROR_SIZE];
 	char s[RBUFSIZE], *sret = NULL;
+	CURL *curl = NULL;
 	json_error_t err;
 	bool ret = false;
 
 	if (pool->stratum_active)
 		return true;
 
-	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
+	if (!pool->stratum_curl) {
+		pool->stratum_curl = curl_easy_init();
+		if (unlikely(!pool->stratum_curl))
+			quit(1, "Failed to curl_easy_init in initiate_stratum");
+	}
+	curl = pool->stratum_curl;
 
-	pool->sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (pool->sock == INVSOCK)
-		quit(1, "Failed to create pool socket in initiate_stratum");
-	if (SOCKETFAIL(connect(pool->sock, (struct sockaddr *)pool->server, sizeof(struct sockaddr)))) {
-		applog(LOG_DEBUG, "Failed to connect socket to pool");
+	/* Create a http url for use with curl */
+	memset(s, 0, RBUFSIZE);
+	sprintf(s, "http://%s:%s", pool->sockaddr_url, pool->stratum_port);
+
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 60);
+	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
+	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+	curl_easy_setopt(curl, CURLOPT_URL, s);
+	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
+	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1);
+	if (pool->rpc_proxy) {
+		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
+		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, pool->rpc_proxytype);
+	} else if (opt_socks_proxy) {
+		curl_easy_setopt(curl, CURLOPT_PROXY, opt_socks_proxy);
+		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
+	}
+	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
+	if (curl_easy_perform(curl)) {
+		applog(LOG_ERR, "Stratum connect failed: %s", curl_err_str);
 		goto out;
 	}
+	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
+
+	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
 	if (!stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
@@ -1283,8 +1317,12 @@ out:
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
-	} else
-		CLOSESOCKET(pool->sock);
+	} else {
+		if (curl) {
+			curl_easy_cleanup(curl);
+			pool->stratum_curl = NULL;
+		}
+	}
 
 	return ret;
 }

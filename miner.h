@@ -863,6 +863,8 @@ struct pool {
 
 	/* Stratum variables */
 	char *stratum_url;
+	char *stratum_port;
+	CURL *stratum_curl;
 	SOCKETTYPE sock;
 	char sockbuf[RBUFSIZE];
 	struct sockaddr_in *server, client;
@@ -875,6 +877,7 @@ struct pool {
 	bool stratum_auth;
 	struct stratum_work swork;
 	pthread_t stratum_thread;
+	pthread_mutex_t stratum_lock;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
