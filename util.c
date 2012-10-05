@@ -1236,7 +1236,6 @@ bool initiate_stratum(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_URL, s);
 	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
-	curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1);
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
 		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, pool->rpc_proxytype);
