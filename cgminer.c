@@ -4525,6 +4525,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	int len, cb1_len, n1_len, cb2_len, i;
 	uint32_t *data32, *swap32;
 
+	memset(work->job_id, 0, 64);
+	memset(work->nonce2, 0, 64);
+	memset(work->ntime, 0, 16);
+
 	mutex_lock(&pool->pool_lock);
 
 	/* Generate coinbase */
@@ -4583,6 +4587,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
+	applog(LOG_DEBUG, "Work job_id %s nonce2 %s ntime %s", work->job_id, work->nonce2, work->ntime);
 
 	free(merkle_hash);
 
