@@ -4516,7 +4516,7 @@ static void set_work_target(struct work *work, int diff)
 			free(htarget);
 		}
 	}
-	memcpy(work->target, target, 256);
+	memcpy(work->target, target, 32);
 }
 
 static void gen_stratum_work(struct pool *pool, struct work *work)
