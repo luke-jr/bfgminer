@@ -4152,7 +4152,7 @@ static void *stratum_thread(void *userdata)
 		FD_SET(pool->sock, &rd);
 
 		if (select(pool->sock + 1, &rd, NULL, NULL, NULL) < 0) {
-			pool->stratum_active = pool->stratum_auth = false;
+			pool->stratum_active = false;
 			applog(LOG_WARNING, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
 			total_go++;
@@ -4231,16 +4231,17 @@ static bool pool_active(struct pool *pool, bool pinging)
 	/* This is the central point we activate stratum when we can */
 retry_stratum:
 	if (pool->has_stratum) {
-		if ((!pool->stratum_active || pinging) && !initiate_stratum(pool))
+		/* We create the stratum thread for each pool just after
+		 * successful authorisation. Once the auth flag has been set
+		 * we never unset it and the stratum thread is responsible for
+		 * setting/unsetting the active flag */
+		if (pool->stratum_auth)
+			return pool->stratum_active;
+		if (!pool->stratum_active && !initiate_stratum(pool))
 			return false;
-		if (!pool->stratum_auth) {
-			if (!auth_stratum(pool))
-				return false;
-			/* We create the stratum thread for each pool just
-			 * after successful authorisation */
-			init_stratum_thread(pool);
-			return true;
-		}
+		if (!auth_stratum(pool))
+			return false;
+		init_stratum_thread(pool);
 		return true;
 	}
 
