@@ -4134,6 +4134,8 @@ out:
 	return ret;
 }
 
+static void pool_resus(struct pool *pool);
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -4145,24 +4147,36 @@ static void *stratum_thread(void *userdata)
 	pthread_detach(pthread_self());
 
 	while (42) {
+		struct timeval timeout;
 		fd_set rd;
 		char *s;
 
+		if (unlikely(pool->removed))
+			break;
+
 		FD_ZERO(&rd);
 		FD_SET(pool->sock, &rd);
+		timeout.tv_sec = 120;
+		timeout.tv_usec = 0;
 
-		if (select(pool->sock + 1, &rd, NULL, NULL, NULL) < 0) {
-			pool->stratum_active = false;
-			applog(LOG_WARNING, "Stratum connection to pool %d interrupted", pool->pool_no);
+		/* The protocol specifies that notify messages should be sent
+		 * every minute so if we fail to receive any for 2 minutes we
+		 * assume the connection has been dropped and treat this pool
+		 * as dead */
+		if (select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
+			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
 			total_go++;
+
+			pool_died(pool);
 			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
-				if (!pool->idle)
-					pool_died(pool);
 				if (pool->removed)
 					goto out;
 				sleep(5);
 			}
+			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
+			pool_resus(pool);
+			continue;
 		}
 		s = recv_line(pool);
 		if (unlikely(!s))
@@ -4188,10 +4202,6 @@ static void *stratum_thread(void *userdata)
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
 		}
 
-		if (unlikely(pool->removed)) {
-			CLOSESOCKET(pool->sock);
-			goto out;
-		}
 	}
 
 out:
@@ -4241,6 +4251,7 @@ retry_stratum:
 			return false;
 		if (!auth_stratum(pool))
 			return false;
+		pool->idle = false;
 		init_stratum_thread(pool);
 		return true;
 	}
@@ -4527,6 +4538,9 @@ static void set_work_target(struct work *work, int diff)
 	memcpy(work->target, target, 32);
 }
 
+/* Generates stratum based work based on the most recent notify information
+ * from the pool. This will keep generating work while a pool is down so we use
+ * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char *coinbase, merkle_root[33], merkle_sha[65], *merkle_hash;
@@ -5256,7 +5270,8 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			if (!opt_benchmark)
 				reap_curl(pool);
-			if (pool->enabled == POOL_DISABLED)
+
+			if (pool->enabled == POOL_DISABLED || pool->has_stratum)
 				continue;
 
 			/* Test pool is idle once every minute */
