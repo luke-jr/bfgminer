@@ -252,6 +252,9 @@ static void *postcalc_hash(void *userdata)
 
 	pthread_detach(pthread_self());
 
+	/* To prevent corrupt values in FOUND from trying to read beyond the
+	 * end of the res[] array */
+	pcd->res[FOUND] &= FOUND;
 	for (entry = 0; entry < pcd->res[FOUND]; entry++) {
 		uint32_t nonce = pcd->res[entry];
 
