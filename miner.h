@@ -378,7 +378,7 @@ struct cgpu_info {
 
 #ifdef USE_SCRYPT
 	int opt_lg, lookup_gap;
-	int opt_tc, thread_concurrency;
+	size_t opt_tc, thread_concurrency;
 	int shaders;
 #endif
 	struct timeval tv_gpustart;

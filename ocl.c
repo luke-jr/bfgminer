@@ -810,8 +810,8 @@ built:
 		/* Use the max alloc value which has been rounded to a power of
 		 * 2 greater >= required amount earlier */
 		if (bufsize > cgpu->max_alloc) {
-			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u, your scrypt settings come to %u",
-			       gpu, cgpu->max_alloc, bufsize);
+			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u", gpu, cgpu->max_alloc);
+			applog(LOG_WARNING, "Your scrypt settings come to %u", bufsize);
 		} else
 			bufsize = cgpu->max_alloc;
 		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
