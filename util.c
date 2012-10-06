@@ -1309,7 +1309,8 @@ out:
 		json_decref(val);
 
 	if (ret) {
-		pool->stratum_url = pool->sockaddr_url;
+		if (!pool->stratum_url)
+			pool->stratum_url = pool->sockaddr_url;
 		pool->stratum_active = true;
 		pool->swork.diff = 1;
 		if (opt_protocol) {

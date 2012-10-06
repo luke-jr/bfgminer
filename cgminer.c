@@ -4206,6 +4206,18 @@ static void init_stratum_thread(struct pool *pool)
 
 static void *longpoll_thread(void *userdata);
 
+static bool stratum_works(struct pool *pool)
+{
+	applog(LOG_INFO, "Testing pool %d stratum %s", pool->pool_no, pool->stratum_url);
+	if (!extract_sockaddr(pool, pool->stratum_url))
+		return false;
+
+	if (!initiate_stratum(pool))
+		return false;
+
+	return true;
+}
+
 static bool pool_active(struct pool *pool, bool pinging)
 {
 	struct timeval tv_getwork, tv_getwork_reply;
@@ -4244,18 +4256,13 @@ retry_stratum:
 	gettimeofday(&tv_getwork_reply, NULL);
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
-	 * and if so, switch to that in preference to getwork. Currently no
-	 * proxy support so don't try to switch if a proxy is in use. */
-	if (unlikely(pool->stratum_url)) {
+	 * and if so, switch to that in preference to getwork if it works */
+	if (pool->stratum_url && stratum_works(pool)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		pool->has_stratum = true;
-		pool->rpc_url = pool->stratum_url;
-		/* pool->stratum_url will be set again in extract_sockaddr */
-		pool->stratum_url = NULL;
-		extract_sockaddr(pool, pool->rpc_url);
 		curl_easy_cleanup(curl);
 
-		goto  retry_stratum;
+		goto retry_stratum;
 	}
 
 	if (val) {
