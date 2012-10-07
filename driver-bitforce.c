@@ -154,7 +154,7 @@ static int bitforce_autodetect_ftdi(void)
 	char **bufptrs;
 	char *buf;
 	int found = 0;
-	int i;
+	DWORD i;
 
 	FT_STATUS ftStatus;
 	DWORD numDevs;
