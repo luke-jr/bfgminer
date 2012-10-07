@@ -1,5 +1,23 @@
+Version 2.7.7 - October 7, 2012
+
+- Fix unused warnings on ming build.
+- Fix sign warning in ocl.c
+- fds need to be zeroed before set in modminer.
+- Put scrypt warning on separate line to avoid 0 being shown on windows as
+bufsize.
+- Display correct pool number when block is found.
+- Prevent corrupt values returned from the opencl code from trying to read
+beyond the end of the buffer by masking the value to a max of 15.
+- Icarus USB write failure is also a comms error
+- api.c DEBUG message has no paramter
+- Icarus catch more USB errors and close/reopen the port
+- API-README update cgminer verison number
+- hashmeter fix stats kh/s on 32bit windows
+
+
 Version 2.7.6 - September 24, 2012
 
+- Reorder libztex header include order to fix missing struct definition.
 - Display share difficulty on log with a shortened hash display on submission.
 - API stats add some pool getwork difficulty stats
 - Ignore any pings pushed to the worker threads if the thread is still paused to

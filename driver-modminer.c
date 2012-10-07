@@ -128,6 +128,7 @@ modminer_detect()
 } while(0)
 
 #define status_read(eng)  do {  \
+FD_ZERO(&fds); \
 FD_SET(fd, &fds);  \
 select(fd+1, &fds, NULL, NULL, NULL);  \
 	if (1 != read(fd, buf, 1))  \
@@ -139,7 +140,7 @@ select(fd+1, &fds, NULL, NULL, NULL);  \
 static bool
 modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 {
-fd_set fds;
+	fd_set fds;
 	char buf[0x100];
 	unsigned char *ubuf = (unsigned char*)buf;
 	unsigned long len;

@@ -2719,7 +2719,7 @@ static void check_solve(struct work *work)
 		work->pool->solved++;
 		found_blocks++;
 		work->mandatory = true;
-		applog(LOG_NOTICE, "Found block for pool %d!", work->pool);
+		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
 	}
 #endif
 }
@@ -3946,7 +3946,7 @@ static inline void thread_reportout(struct thr_info *thr)
 }
 
 static void hashmeter(int thr_id, struct timeval *diff,
-		      unsigned long long hashes_done)
+		      uint64_t hashes_done)
 {
 	struct timeval temp_tv_end, total_diff;
 	double secs;
@@ -3974,7 +3974,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		double thread_rolling = 0.0;
 		int i;
 
-		applog(LOG_DEBUG, "[thread %d: %llu hashes, %.1f khash/sec]",
+		applog(LOG_DEBUG, "[thread %d: %"PRIu64" hashes, %.1f khash/sec]",
 			thr_id, hashes_done, hashes_done / 1000 / secs);
 
 		/* Rolling average for each thread and each device */
