@@ -410,6 +410,11 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
 		float temp = strtof(s + 1, NULL);
 
+		/* Cope with older software  that breaks and reads nonsense
+		 * values */
+		if (temp > 100)
+			temp = strtol(s + 1, NULL, 10);
+
 		if (temp > 0) {
 			bitforce->temp = temp;
 			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
