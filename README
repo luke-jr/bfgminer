@@ -304,6 +304,10 @@ Single pool with a socks5 proxy, regular desktop:
 
 cgminer -o "socks5:proxy:port|http://pool:port" -u username -p password
 
+Single pool with stratum protocol support:
+
+cgminer -o stratum+tcp://pool:port -u username -p password
+
 The list of proxy types are:
  http:    standard http 1.1 proxy
  http0:   http 1.0 proxy
@@ -908,6 +912,18 @@ To permanently give your account the 'dialout' group:
  sudo usermod -G dialout -a `whoami`
 Then logout and back in again
 
+Q: What is stratum and how do I use it?
+A: Stratum is a protocol designed for pooled mining in such a way as to
+minimise the amount of network communications, yet scale to hardware of any
+speed. With versions of cgminer 2.8.0+, if a pool has stratum support, cgminer
+will automatically detect it and switch to the support as advertised if it can.
+Stratum uses direct TCP connections to the pool and thus it will NOT currently
+work through a http proxy but will work via a socks proxy if you need to use
+one. If you input the stratum port directly into your configuration, or use the
+special prefix "stratum+tcp://" instead of "http://", cgminer will ONLY try to
+use stratum protocol mining. The advantages of stratum to the miner are no
+delays in getting more work for the miner, less rejects across block changes,
+and far less network communications for the same amount of mining hashrate.
 
 ---
 
