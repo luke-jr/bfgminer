@@ -783,9 +783,11 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
 	if (info->dclk.freqM && likely(!state->firstrun)) {
-		dclk_gotNonces(&info->dclk);
+		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
+		for (int n = qsec; n; --n)
+			dclk_gotNonces(&info->dclk);
 		if (nonce && !test_nonce(&state->last_work, nonce, false))
-			dclk_errorCount(&info->dclk, 1.0);
+			dclk_errorCount(&info->dclk, qsec);
 		dclk_preUpdate(&info->dclk);
 		dclk_updateFreq(&info->dclk, info->dclk_change_clock_func, thr);
 	}
