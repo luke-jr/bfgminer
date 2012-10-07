@@ -77,7 +77,11 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data, bool probe)
 
 bool cairnsmore_supports_dynclock(int fd)
 {
-	if (!cairnsmore_send_cmd(fd, 0, 20, true))
+	if (!cairnsmore_send_cmd(fd, 0, 1, true))
+		return false;
+	struct timeval tv_start, tv_finish, elapsed;
+	gettimeofday(&tv_start, NULL);
+	if (!cairnsmore_send_cmd(fd, 0, 1, true))
 		return false;
 
 	uint32_t nonce = 0;
@@ -88,7 +92,9 @@ bool cairnsmore_supports_dynclock(int fd)
 			.work_restart_fd = -1,
 		};
 		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
+		timersub(&tv_finish, &tv_start, &elapsed);
 	}
+	applog(LOG_DEBUG, "Cairnsmore dynclock detection... Got %08x in %d.%06ds", nonce, elapsed.tv_sec, elapsed.tv_usec);
 	switch (nonce) {
 		case 0x00949a6f:  // big    endian
 		case 0x6f9a9400:  // little endian
