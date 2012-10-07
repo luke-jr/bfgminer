@@ -16,6 +16,7 @@
 #include "logging.h"
 #include "miner.h"
 #include "fpgautils.h"
+#include "util.h"
 
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.ncd"
 #define BISTREAM_USER_ID "\2\4$B"
@@ -48,7 +49,7 @@ modminer_detect_one(const char *devpath)
 		bailout(LOG_DEBUG, "ModMiner detect: failed to open %s", devpath);
 
 	char buf[0x100];
-	size_t len;
+	ssize_t len;
 
 	// Sending 45 noops, just in case the device was left in "start job" reading
 	(void)(write(fd, "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff", 45) ?:0);
@@ -186,7 +187,7 @@ modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
 	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
 
-	int fd = modminer->device_fd;
+	SOCKETTYPE fd = modminer->device_fd;
 
 	applog(LOG_WARNING, "%s %u: Programming %s... DO NOT EXIT CGMINER UNTIL COMPLETE", modminer->api->name, modminer->device_id, modminer->device_path);
 	buf[0] = '\x05';  // Program Bitstream
@@ -376,7 +377,7 @@ fd_set fds;
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	char fpgaid = thr->device_thread;
-	int fd = modminer->device_fd;
+	SOCKETTYPE fd = modminer->device_fd;
 
 	char buf[1];
 
