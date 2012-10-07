@@ -541,7 +541,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		strcat(binaryfilename, "g");
 	if (opt_scrypt) {
 #ifdef USE_SCRYPT
-		sprintf(numbuf, "lg%dtc%d", cgpu->lookup_gap, cgpu->thread_concurrency);
+		sprintf(numbuf, "lg%utc%u", cgpu->lookup_gap, (unsigned int)cgpu->thread_concurrency);
 		strcat(binaryfilename, numbuf);
 #endif
 	} else {
@@ -614,7 +614,7 @@ build:
 #ifdef USE_SCRYPT
 	if (opt_scrypt)
 		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
-			cgpu->lookup_gap, cgpu->thread_concurrency, (int)clState->wsize);
+			cgpu->lookup_gap, (unsigned int)cgpu->thread_concurrency, (int)clState->wsize);
 	else
 #endif
 	{
