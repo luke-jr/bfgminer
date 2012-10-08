@@ -950,9 +950,13 @@ out:
 		CLOSESOCKET(pool->sock);
 		if (val)
 			json_decref(val);
-	} else if (opt_protocol)
-		applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extranonce2 %d",
-		       pool->pool_no, pool->subscription, pool->nonce1, pool->nonce2);
+	} else {
+		pool->stratum_active = true;
+		if (opt_protocol) {
+			applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extranonce2 %d",
+			       pool->pool_no, pool->subscription, pool->nonce1, pool->nonce2);
+		}
+	}
 
 	return ret;
 }

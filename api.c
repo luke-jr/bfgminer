@@ -2020,6 +2020,7 @@ exitsama:
 static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char *url, *user, *pass;
+	struct pool *pool;
 	char *ptr;
 
 	if (param == NULL || *param == '\0') {
@@ -2036,7 +2037,9 @@ static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __may
 		return;
 	}
 
-	add_pool_details(true, url, user, pass);
+	pool = add_pool();
+	detect_stratum(pool, url);
+	add_pool_details(pool, true, url, user, pass);
 
 	ptr = escape_string(url, isjson);
 	strcpy(io_buffer, message(MSG_ADDPOOL, 0, ptr, isjson));
