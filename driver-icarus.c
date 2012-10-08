@@ -981,8 +981,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			else if (info->timing_mode == MODE_SHORT)
 				info->do_icarus_timing = false;
 
-//			applog(LOG_WARNING, "%s %u Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->api->name, icarus->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
-			applog(LOG_WARNING, "%s %u Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
+//			applog(LOG_DEBUG, "%s %u Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->api->name, icarus->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
+			applog(LOG_DEBUG, "%s %u Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
 					icarus->api->name,
 					icarus->device_id, Hs, W, read_count, fullnonce);
 		}
