@@ -79,7 +79,7 @@ bool cairnsmore_supports_dynclock(int fd)
 {
 	if (!cairnsmore_send_cmd(fd, 0, 1, true))
 		return false;
-	struct timeval tv_start, tv_finish, elapsed;
+	struct timeval tv_start, elapsed;
 	gettimeofday(&tv_start, NULL);
 	if (!cairnsmore_send_cmd(fd, 0, 1, true))
 		return false;
