@@ -169,7 +169,7 @@ Options for both config file and command line:
 --syslog            Use system log for output messages (default: standard error)
 --temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
---temp-target <arg> Target temperature when automatically managing fan and clock speeds (default: 75)
+--temp-target <arg> Target temperature when automatically managing fan and clock speeds
 --text-only|-T      Disable ncurses formatted screen output
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server

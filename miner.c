@@ -1235,7 +1235,7 @@ static struct opt_table opt_config_table[] = {
 		     "Overheat temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
 #endif
 	OPT_WITH_ARG("--temp-target",
-		     set_temp_target, opt_show_intval, &opt_targettemp,
+		     set_temp_target, NULL, NULL,
 		     "Target temperature when automatically managing fan and clock speeds, one value or comma separated list"),
 #endif
 	OPT_WITHOUT_ARG("--text-only|-T",
