@@ -4163,24 +4163,28 @@ static void *stratum_thread(void *userdata)
 		 * every minute so if we fail to receive any for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
+		select(pool->sock + 1, &rd, NULL, NULL, &timeout);
+		s = recv_line(pool);
+		if (!s) {
 			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
 			total_go++;
+
+			pool->stratum_active = false;
+			if (initiate_stratum(pool) && auth_stratum(pool))
+				continue;
 
 			pool_died(pool);
 			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
 				if (pool->removed)
 					goto out;
-				sleep(5);
+				sleep(30);
 			}
 			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
 			pool_resus(pool);
 			continue;
 		}
-		s = recv_line(pool);
-		if (unlikely(!s))
-			continue;
+
 		if (!parse_method(pool, s) && !parse_stratum_response(s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
