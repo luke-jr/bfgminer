@@ -92,7 +92,7 @@ int serial_autodetect_udev(__maybe_unused detectone_func_t detectone, __maybe_un
 }
 #endif
 
-int serial_autodetect_devserial(detectone_func_t detectone, const char*prodname)
+int serial_autodetect_devserial(__maybe_unused detectone_func_t detectone, __maybe_unused const char*prodname)
 {
 #ifndef WIN32
 	DIR *D;
