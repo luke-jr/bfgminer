@@ -32,16 +32,6 @@
 #define HAVE_AN_FPGA 1
 #endif
 
-#if defined(unix) || defined(__APPLE__)
-	#include <errno.h>
-	#include <sys/socket.h>
-	#include <netinet/in.h>
-	#include <arpa/inet.h>
-#elif defined WIN32
-	#include <ws2tcpip.h>
-	#include <winsock2.h>
-#endif
-
 // Big enough for largest API request
 //  though a PC with 100s of PGAs/CPUs may exceed the size ...
 // Current code assumes it can socket send this size also
