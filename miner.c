@@ -5364,9 +5364,12 @@ void *miner_thread(void *userdata)
 			gettimeofday(&getwork_start, NULL);
 
 			if (unlikely(hashes == -1)) {
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
-				cgpu->thread_zero_hash_count++;
+				time_t now = time(NULL);
+				if (difftime(now, cgpu->device_last_not_well) > 1.) {
+					cgpu->device_last_not_well = time(NULL);
+					cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
+					cgpu->thread_zero_hash_count++;
+				}
 
 				if (scanhash_working && opt_restart) {
 					applog(LOG_ERR, "%s %u failure, attempting to reinitialize", api->name, cgpu->device_id);

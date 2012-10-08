@@ -860,7 +860,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	if (!icarus_start_work(thr, ob_bin))
-		return 0;	/* This should never happen */
+		return -1;	/* This should never happen */
 
 	if (info->quirk_reopen == 2 && !icarus_reopen(icarus, state, &fd))
 		return -1;
@@ -910,7 +910,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				return -1;
 			// Some devices (Cairnsmore1, for example) abort hashing when reopened, so send the job again
 			if (!icarus_start_work(thr, ob_bin))
-				return 0;	/* This should never happen */
+				return -1;	/* This should never happen */
 		}
 
 	hash_count = (nonce & info->nonce_mask);
