@@ -20,7 +20,7 @@
 
 #define CAIRNSMORE1_MINIMUM_CLOCK  50
 #define CAIRNSMORE1_DEFAULT_CLOCK  200
-#define CAIRNSMORE1_MAXIMUM_CLOCK  200
+#define CAIRNSMORE1_MAXIMUM_CLOCK  210
 
 struct device_api cairnsmore_api;
 
