@@ -70,6 +70,7 @@ struct ICARUS_INFO {
 	int fpga_count;
 	uint32_t nonce_mask;
 	bool quirk_reopen;
+	uint8_t user_set;
 
 	dclk_change_clock_func_t dclk_change_clock_func;
 	struct dclk_data dclk;

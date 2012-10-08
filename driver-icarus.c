@@ -468,6 +468,7 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 				*(colon2++) = '\0';
 
 			if (*colon) {
+				info->user_set |= 1;
 				tmp = atoi(colon);
 				if (tmp == 1 || tmp == 2 || tmp == 4 || tmp == 8) {
 					*work_division = tmp;
@@ -484,6 +485,7 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 					*(colon++) = '\0';
 
 			  if (*colon2) {
+				info->user_set |= 2;
 				tmp = atoi(colon2);
 				if (tmp > 0 && tmp <= *work_division)
 					*fpga_count = tmp;
@@ -726,6 +728,13 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// Prepare the next work immediately
 	memcpy(ob_bin, work->midstate, 32);
 	memcpy(ob_bin + 52, work->data + 64, 12);
+	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
+	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
+		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
+		applog(LOG_WARNING, "%s %u: Received job attempting to send a command, corrupting it!",
+		       icarus->api->name, icarus->device_id);
+		ob_bin[56] = 0;
+	}
 	rev(ob_bin, 32);
 	rev(ob_bin + 52, 12);
 
@@ -774,11 +783,13 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	nonce = be32toh(nonce);
 
 	// Handle dynamic clocking for "subclass" devices
-	// This runs before sending next job, in case it isn't supported
+	// This needs to run before sending next job, since it hashes the command too
 	if (info->dclk.freqM && likely(!state->firstrun)) {
-		dclk_gotNonces(&info->dclk);
+		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
+		for (int n = qsec; n; --n)
+			dclk_gotNonces(&info->dclk);
 		if (nonce && !test_nonce(&state->last_work, nonce, false))
-			dclk_errorCount(&info->dclk, 1.0);
+			dclk_errorCount(&info->dclk, qsec);
 		dclk_preUpdate(&info->dclk);
 		dclk_updateFreq(&info->dclk, info->dclk_change_clock_func, thr);
 	}
@@ -970,8 +981,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			else if (info->timing_mode == MODE_SHORT)
 				info->do_icarus_timing = false;
 
-//			applog(LOG_WARNING, "%s %u Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->api->name, icarus->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
-			applog(LOG_WARNING, "%s %u Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
+//			applog(LOG_DEBUG, "%s %u Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->api->name, icarus->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
+			applog(LOG_DEBUG, "%s %u Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
 					icarus->api->name,
 					icarus->device_id, Hs, W, read_count, fullnonce);
 		}
