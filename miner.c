@@ -6178,7 +6178,7 @@ char *curses_input(const char *query)
 }
 #endif
 
-void add_pool_details5(bool live, char *url, char *user, char *pass, char *proxy)
+void add_pool_details(bool live, char *url, char *user, char *pass)
 {
 	struct pool *pool;
 
@@ -6191,18 +6191,12 @@ void add_pool_details5(bool live, char *url, char *user, char *pass, char *proxy
 	if (!pool->rpc_userpass)
 		quit(1, "Failed to malloc userpass");
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
-	pool->rpc_proxy = proxy;
 
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
 	enable_pool(pool);
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
-}
-
-void add_pool_details(bool live, char *url, char *user, char *pass)
-{
-	add_pool_details5(live, url, user, pass, NULL);
 }
 
 #ifdef HAVE_CURSES

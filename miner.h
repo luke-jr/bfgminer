@@ -715,7 +715,6 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int enabled_pools;
-extern void add_pool_details5(bool live, char *url, char *user, char *pass, char *proxy);
 extern void add_pool_details(bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
