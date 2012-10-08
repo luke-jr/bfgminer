@@ -1,5 +1,15 @@
-BFGMiner Version 2.8.2 - Future
+BFGMiner Version 2.8.2 - October 8, 2012
 
+- Update to libblkmaker 0.1.2
+- Bugfix: --temp-target no longer has a simple default (fixes build without
+OpenCL support)
+- Bugfix: icarus: Silence false epoll error
+- Bugfix: icarus: Set firstrun for errors starting next job, so the current
+one finishes properly
+- Bugfix: icarus: Restore generic failure management for write errors
+- Use strtod not strtol for bitforce temp backup.
+- Cope with broken drivers returning nonsense values for bitforce temperatures.
+- Minor warning fixes.
 - Fix unused warnings on ming build.
 - Fix sign warning in ocl.c
 - fds need to be zeroed before set in modminer.
