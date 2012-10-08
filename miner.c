@@ -4781,6 +4781,64 @@ out_unlock:
 	}
 }
 
+/* One stratum thread per pool that has stratum waits on the socket checking
+ * for new messages and for the integrity of the socket connection. We reset
+ * the connection based on the integrity of the receive side only as the send
+ * side will eventually expire data it fails to send. */
+static void *stratum_thread(void *userdata)
+{
+	struct pool *pool = (struct pool *)userdata;
+
+	pthread_detach(pthread_self());
+
+	while (42) {
+		fd_set rd;
+		char *s;
+
+		FD_ZERO(&rd);
+		FD_SET(pool->sock, &rd);
+
+		if (select(pool->sock + 1, &rd, NULL, NULL, NULL) < 0) {
+			pool->stratum_active = pool->stratum_auth = false;
+			applog(LOG_WARNING, "Stratum connection to pool %d interrupted", pool->pool_no);
+			pool->getfail_occasions++;
+			total_go++;
+			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
+				if (!pool->idle)
+					pool_died(pool);
+				if (pool->removed)
+					goto out;
+				sleep(5);
+			}
+		}
+		s = recv_line(pool->sock);
+		if (unlikely(!s))
+			continue;
+		if (!parse_stratum(pool, s)) /* Create message queues here */
+			applog(LOG_INFO, "Unknown stratum msg: %s", s);
+		free(s);
+		if (unlikely(pool->swork.clean)) {
+			pool->swork.clean = false;
+			applog(LOG_NOTICE, "Stratum requested work restart for block change");
+			restart_threads();
+		}
+
+		if (unlikely(pool->removed)) {
+			CLOSESOCKET(pool->sock);
+			goto out;
+		}
+	}
+
+out:
+	return NULL;
+}
+
+static void init_stratum_thread(struct pool *pool)
+{
+	if (unlikely(pthread_create(&pool->stratum_thread, NULL, stratum_thread, (void *)pool)))
+		quit(1, "Failed to create stratum thread");
+}
+
 static void *longpoll_thread(void *userdata);
 
 // NOTE: This assumes reference URI is a root
@@ -4819,11 +4877,17 @@ static bool pool_active(struct pool *pool, bool pinging)
 	enum pool_protocol proto;
 
 	if (pool->has_stratum) {
-		if (pool->stratum_active && !pinging)
+		if ((!pool->stratum_active || pinging) && !initiate_stratum(pool))
+			return false;
+		if (!pool->stratum_auth) {
+			if (!auth_stratum(pool))
+				return false;
+			/* We create the stratum thread for each pool just
+			 * after successful authorisation */
+			init_stratum_thread(pool);
 			return true;
-		if (initiate_stratum(pool))
-			return true;
-		return false;
+		}
+		return true;
 	}
 
 	curl = curl_easy_init();
@@ -5071,6 +5135,90 @@ static struct work *clone_work(struct work *work)
 	return work;
 }
 
+static void gen_hash(unsigned char *data, unsigned char *hash, int len)
+{
+	unsigned char hash1[32];
+
+	sha2(data, len, hash1, false);
+	sha2(hash1, 32, hash, false);
+}
+
+static void gen_stratum_work(struct pool *pool, struct work *work)
+{
+	unsigned char merkle_root[32], merkle_sha[64], *merkle_hash;
+	char header[256], hash1[128], *coinbase, *nonce2, *buf;
+	uint32_t *data32, *swap32;
+	uint64_t diff, diff64;
+	int len, i;
+
+	mutex_lock(&pool->pool_lock);
+
+	/* Generate coinbase */
+	len = strlen(pool->swork.coinbase1) +
+	      strlen(pool->nonce1) +
+	      pool->n2size +
+	      strlen(pool->swork.coinbase2);
+	coinbase = alloca(len + 1);
+	sprintf(coinbase, "%s", pool->swork.coinbase1);
+	strcat(coinbase, pool->nonce1);
+	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
+	pool->nonce2++;
+	strcat(coinbase, nonce2);
+	free(nonce2);
+	strcat(coinbase, pool->swork.coinbase2);
+
+	/* Generate merkle root */
+	gen_hash((unsigned char *)coinbase, merkle_root, len);
+	memcpy(merkle_sha, merkle_root, 32);
+	for (i = 0; i < pool->swork.merkles; i++) {
+		memcpy(merkle_sha + 32, pool->swork.merkle[i], 32);
+		gen_hash(merkle_sha, merkle_root, 64);
+		memcpy(merkle_sha, merkle_root, 32);
+	}
+	data32 = (uint32_t *)merkle_sha;
+	swap32 = (uint32_t *)merkle_root;
+	for (i = 0; i < 32 / 4; i++)
+		swap32[i] = swab32(data32[i]);
+	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
+
+	sprintf(header, "%s", pool->swork.bbversion);
+	strcat(header, pool->swork.prev_hash);
+	strcat(header, (char *)merkle_hash);
+	strcat(header, pool->swork.ntime);
+	strcat(header, pool->swork.nbit);
+	strcat(header, "00000000"); /* nonce */
+	strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
+
+	diff = pool->swork.diff;
+
+	mutex_unlock(&pool->pool_lock);
+
+	applog(LOG_DEBUG, "Generated stratum coinbase %s", coinbase);
+	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
+	applog(LOG_DEBUG, "Generated stratum header %s", header);
+
+	free(merkle_hash);
+
+	/* Convert hex data to binary data for work */
+	if (!hex2bin(work->data, header, 128))
+		quit(1, "Failed to convert header to data in gen_stratum_work");
+	calc_midstate(work);
+	sprintf(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000");
+	if (!hex2bin(work->hash1, hash1, 64))
+		quit(1,  "Failed to convert hash1 in gen_stratum_work");
+
+	/* Generate target as hex where 0x00000000FFFFFFFF is diff 1 */
+	diff64 = 0x00000000FFFFFFFFULL * diff;
+	diff64 = ~htobe64(diff64);
+	sprintf((char *)work->target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
+	buf = bin2hex((const unsigned char *)&diff64, 8);
+	if (!buf)
+		quit(1, "Failed to convert diff64 to buf in gen_stratum_work");
+	strcat((char *)work->target, buf);
+	free(buf);
+	applog(LOG_DEBUG, "Generated target %s", work->target);
+}
+
 static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 {
 	struct timespec abstime = {0, 0};
@@ -5089,6 +5237,11 @@ static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 
 retry:
 	pool = current_pool();
+
+	if (pool->has_stratum) {
+		gen_stratum_work(pool, work);
+		goto out;
+	}
 
 	if (reuse_work(work))
 		goto out;
@@ -6506,7 +6659,9 @@ int main(int argc, char *argv[])
 	sigemptyset(&handler.sa_mask);
 	sigaction(SIGTERM, &handler, &termhandler);
 	sigaction(SIGINT, &handler, &inthandler);
-
+#ifndef WIN32
+	signal(SIGPIPE, SIG_IGN);
+#endif
 	opt_kernel_path = alloca(PATH_MAX);
 	strcpy(opt_kernel_path, CGMINER_PREFIX);
 	cgminer_path = alloca(PATH_MAX);

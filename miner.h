@@ -831,20 +831,18 @@ enum pool_protocol {
 struct stratum_work {
 	/* id we sent to receive this work */
 	int id;
-	/* Reference to json structure all the following were extracted from */
-	json_t *json_val;
 
 	char *job_id;
 	char *prev_hash;
 	char *coinbase1;
 	char *coinbase2;
-	char *merkle1;
-	char *merkle2;
+	char **merkle;
 	char *bbversion;
 	char *nbit;
 	char *ntime;
 	bool clean;
 
+	int merkles;
 	int diff;
 };
 
@@ -922,10 +920,13 @@ struct pool {
 	struct sockaddr_in *server, client;
 	char *subscription;
 	char *nonce1;
-	int nonce2;
+	uint32_t nonce2;
+	int n2size;
 	bool has_stratum;
 	bool stratum_active;
+	bool stratum_auth;
 	struct stratum_work swork;
+	pthread_t stratum_thread;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
