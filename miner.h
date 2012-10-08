@@ -896,8 +896,12 @@ struct pool {
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
 
+	/* Stratum variables */
 	SOCKETTYPE sock;
 	struct sockaddr_in *server, client;
+	char *subscription;
+	char *nonce1;
+	int nonce2;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'

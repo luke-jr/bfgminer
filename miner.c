@@ -665,6 +665,8 @@ static char *set_url(char *arg)
 	if (!extract_sockaddr(pool, arg))
 		return "Failed to extract address from parsed url";
 
+	initiate_stratum(pool);
+
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
 	    strncmp(arg, "https://", 8)) {

@@ -779,7 +779,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	char *url_begin, *url_end, *port_start;
 	char *url_address, *port;
 	struct addrinfo hints, *res;
-	size_t url_len, port_len = 0;
+	int url_len, port_len = 0;
 
 	url_begin = strstr(url, "//");
 	if (!url_begin)
@@ -822,4 +822,137 @@ bool extract_sockaddr(struct pool *pool, char *url)
 
 	pool->server = (struct sockaddr_in *)res->ai_addr;
 	return true;
+}
+
+static bool sock_send(int sock, char *s, ssize_t len)
+{
+	ssize_t sent = 0;
+
+	while (len > 0 ) {
+		sent = send(sock, s + sent, len, 0);
+		if (SOCKETFAIL(sent))
+			return false;
+		len -= sent;
+	}
+	fsync(sock);
+
+	return true;
+}
+
+#define RECVSIZE 8192
+
+bool initiate_stratum(struct pool *pool)
+{
+	json_t *val, *res_val, *err_val, *notify_val;
+	char *s, *buf, *sret = NULL;
+	struct timeval timeout;
+	json_error_t err;
+	bool ret = false;
+	ssize_t len;
+	fd_set rd;
+
+	s = alloca(RECVSIZE);
+	sprintf(s, "{\"id\": 0, \"method\": \"mining.subscribe\", \"params\": []}\n");
+
+	pool->sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (pool->sock == INVSOCK)
+		quit(1, "Failed to create pool socket in initiate_stratum");
+	if (SOCKETFAIL(connect(pool->sock, (struct sockaddr *)pool->server, sizeof(struct sockaddr)))) {
+		applog(LOG_DEBUG, "Failed to connect socket to pool");
+		goto out;
+	}
+
+	if (!sock_send(pool->sock, s, strlen(s))) {
+		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
+		goto out;
+	}
+
+	/* Use select to timeout instead of waiting forever for a response */
+	FD_ZERO(&rd);
+	FD_SET(pool->sock, &rd);
+	timeout.tv_sec = 60;
+	if (select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
+		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
+		goto out;
+	}
+
+	if (SOCKETFAIL(recv(pool->sock, s, RECVSIZE, MSG_PEEK | MSG_DONTWAIT))) {
+		applog(LOG_DEBUG, "Failed to recv sock in initiate_stratum");
+		goto out;
+	}
+
+	sret = strtok(s, "\n");
+	if (!sret) {
+		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in initiate_stratum");
+		goto out;
+	}
+
+	/* We know how much data is in the buffer so this read should not fail */
+	len = strlen(sret);
+	read(pool->sock, s, len);
+
+	val = JSON_LOADS(s, &err);
+	if (!val) {
+		applog(LOG_DEBUG, "JSON decode failed(%d): %s", err.line, err.text);
+		goto out;
+	}
+
+	res_val = json_object_get(val, "result");
+	err_val = json_object_get(val, "error");
+
+	if (!res_val || json_is_null(res_val) ||
+	    (err_val && !json_is_null(err_val))) {
+		char *ss;
+
+		if (err_val)
+			ss = json_dumps(err_val, JSON_INDENT(3));
+		else
+			ss = strdup("(unknown reason)");
+
+		applog(LOG_INFO, "JSON-RPC call failed: %s", ss);
+
+		free(ss);
+
+		goto out;
+	}
+
+	notify_val = json_array_get(res_val, 0);
+	if (!notify_val || json_is_null(notify_val)) {
+		applog(LOG_WARNING, "Failed to parse notify_val in initiate_stratum");
+		goto out;
+	}
+
+	buf = (char *)json_string_value(json_array_get(notify_val, 0));
+	if (!buf || strcasecmp(buf, "mining.notify")) {
+		applog(LOG_WARNING, "Failed to get mining notify in initiate_stratum");
+		goto out;
+	}
+	pool->subscription = (char *)json_string_value(json_array_get(notify_val, 1));
+	if (!pool->subscription) {
+		applog(LOG_WARNING, "Failed to get a subscription in initiate_stratum");
+		goto out;
+	}
+
+	pool->nonce1 = (char *)json_string_value(json_array_get(res_val, 1));
+	if (!pool->nonce1) {
+		applog(LOG_WARNING, "Failed to get nonce1 in initiate_stratum");
+		goto out;
+	}
+	pool->nonce2 = json_integer_value(json_array_get(res_val, 2));
+	if (!pool->nonce2) {
+		applog(LOG_WARNING, "Failed to get nonce2 in initiate_stratum");
+		goto out;
+	}
+
+	ret = true;
+out:
+	if (!ret) {
+		CLOSESOCKET(pool->sock);
+		if (val)
+			json_decref(val);
+	} else if (opt_protocol)
+		applog(LOG_DEBUG, "Pool %d confirmed mining.notify with subscription %s extranonce1 %s extranonce2 %d",
+		       pool->pool_no, pool->subscription, pool->nonce1, pool->nonce2);
+
+	return ret;
 }
