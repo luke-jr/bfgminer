@@ -774,12 +774,12 @@ double tdiff(struct timeval *end, struct timeval *start)
 	return end->tv_sec - start->tv_sec + (end->tv_usec - start->tv_usec) / 1000000.0;
 }
 
-void extract_sockaddr(struct pool *pool, char *url)
+bool extract_sockaddr(struct pool *pool, char *url)
 {
-	char *url_begin, *url_end, *url_address;
-	char *port_start, port80[3] = "80";
+	char *url_begin, *url_end, *port_start;
+	char *url_address, *port;
 	struct addrinfo hints, *res;
-	size_t url_len, port_len;
+	size_t url_len, port_len = 0;
 
 	url_begin = strstr(url, "//");
 	if (!url_begin)
@@ -788,19 +788,38 @@ void extract_sockaddr(struct pool *pool, char *url)
 		url_begin += 2;
 	url_end = strstr(url_begin, ":");
 	if (url_end) {
-		url_len = url_end - 1 - url_begin;
+		url_len = url_end - url_begin;
 		port_len = strlen(url_begin) - url_len - 1;
-		if (port_len <= 1)
-			return;
+		if (port_len < 1)
+			return false;
 		port_start = url_end + 1;
-	} else {
+	} else
 		url_len = strlen(url_begin);
-		port_start = port80;
-	}
-	if (url_len <= 1)
-		return;
 
+	if (url_len < 1)
+		return false;
+
+	url_address = alloca(url_len + 1);
+	sprintf(url_address, "%.*s", url_len, url_begin);
+
+	if (port_len) {
+		port = alloca(port_len + 1);
+		sprintf(port, "%.*s", port_len, port_start);
+	} else {
+		port = alloca(4);
+		strcpy(port, "80");
+	}
+
+	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
+
+	if (getaddrinfo(url_address, port, &hints, &res)) {
+		applog(LOG_DEBUG, "Failed to extract sock addr");
+		return false;
+	}
+
+	pool->server = (struct sockaddr_in *)res->ai_addr;
+	return true;
 }

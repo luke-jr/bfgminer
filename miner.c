@@ -662,7 +662,8 @@ static char *set_url(char *arg)
 		add_pool();
 	pool = pools[total_urls - 1];
 
-	extract_sockaddr(pool, arg);
+	if (!extract_sockaddr(pool, arg))
+		return "Failed to extract address from parsed url";
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&

@@ -109,6 +109,6 @@
 	#endif
 #endif
 struct pool;
-void extract_sockaddr(struct pool *pool, char *url);
+bool extract_sockaddr(struct pool *pool, char *url);
 
 #endif /* __UTIL_H__ */
