@@ -193,7 +193,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 	};
 	struct epoll_event evr[2];
 	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
-	if (thr && thr->work_restart_fd != -1)
+	if (thr && thr->work_restart_fd != -1) {
 	epollfd = epoll_create(2);
 	if (epollfd != -1) {
 		if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
@@ -213,6 +213,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 	}
 	else
 		applog(LOG_ERR, "Icarus: Error creating epoll");
+	}
 #endif
 
 	// Read reply 1 byte at a time to get earliest tv_finish
