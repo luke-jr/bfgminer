@@ -1,5 +1,63 @@
+BFGMiner Version 2.8.2 - Future
+
+- cairnsmore: Increase maximum clock frequency to 210 Mhz
+- icarus: Hashrate estimates really don't need the attention of a warning,
+demote them to debug
+- cairnsmore: Automatically "downgrade" default FPGA-per-device to 1 for
+dynclock devices
+- Bugfix: cairnsmore: Get autodetection of dynclock to work consistently
+- cairnsmore: Adjust dynclock usage to react in proper time
+- dynclock: Document function usage
+- cairnsmore: Fix race on dynclock detection
+- icarus: Detect attempts to send commands via work and neuter them
+- cairnsmore: Glasswalker has a minimum multiplier of 20 :(
+- cairnsmore: Detect frequency changing support despite hashing of commands
+- modminer: Allow clocks down to 2 Mhz just in case
+- Allow device drivers and users to properly change target temperatures for
+non-GPUs
+- Check that ncurses*-config installs actually work before deciding to use
+them
+- Bugfix: Fix multiple bugs in autogen.sh
+- - Don't use readlink -f unneccesarily (it's not portable)
+- - Always run autoreconf within the real source directory
+- - Run configure from PWD, *not* the real source directory
+- Bugfix: Include nonce in data buffer for debugging
+- Bugfix: swap32* wants count of 32-bit blocks, not bytes
+- Initial Cygwin port
+- Revert "Remove needless roundl define.", since it is needed for Cygwin and
+OpenWRT
+- Bugfix: Deal with various compiler warnings
+- modminer: Implement --temp-hysteresis logic
+- Support for maximum frequency being below the default, eg when the maximum
+is temporarily reduced to deal with temperature
+- Bugfix: modminer: Reduce dynclock max frequency as needed to keep
+temperature below cutoff
+- Bugfix: Restore disabled label, needed to skip over hashrate calculations
+(which mess up otherwise)
+- Bugfix: bitforce: Count actual throttling as hardware errors
+- icarus: Allow failure in case of reopen failure, now that the miner core
+will retry on its own
+- If a device dies, attempt to reinitialize it occasionally
+- Bugfix: The REST flag is now preferred over WAIT, since the former might
+trigger the latter
+- Bugfix: modminer: Update temperature readings when disabled (fixes thermal
+cutoff recovery)
+- Bugfix: Move thermal cutoff to general watchdog code (fixes bitforce
+recovery)
+- Rename enable_device to register_device, since it only works for setting it
+up at startup
+- Move targettemp from ADL to cgpu_info, so all devices can readily use it
+- Bugfix: "REST" flag had too much padding
+- Bugfix: adl: Only warn and disable GPU due to thermal cutoff, if it's
+actually enabled
+- Bugfix: bitforce: Only warn and disable bitforce due to thermal cutoff, if
+it's actually enabled
+
+
 BFGMiner Version 2.8.1 - September 27, 2012
 
+- Avoid strndup for Windows compatibility
+- Bugfix: cairnsmore: Add missing compat.h include (for sleep)
 - cairnsmore: Implement "identify" for supported firmware
 - Adjust identify_device API to return a bool whether supported or not, for
 runtime capability detection
