@@ -147,6 +147,12 @@ static bool cairnsmore_init(struct thr_info *thr)
 		       cm1->api->name, cm1->device_id,
 		       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
 		);
+		// The dynamic-clocking firmware connects each FPGA as its own device
+		if (!(info->user_set & 1)) {
+			info->work_division = 1;
+			if (!(info->user_set & 2))
+				info->fpga_count = 1;
+		}
 	} else {
 		applog(LOG_WARNING, "%s %u: Frequency scaling not supported",
 			cm1->api->name, cm1->device_id
