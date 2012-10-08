@@ -197,6 +197,25 @@ AC_CHECK_LIB(usb-1.0, libusb_init,
 	[libusb=no]
 )
 
+AC_ARG_ENABLE([x6500],
+	[AC_HELP_STRING([--disable-x6500],[Compile support for X6500 (default if libusb)])],
+	[x6500=$enableval],
+	[x6500=auto]
+	)
+if test "x$x6500$libusb" = xyesno; then
+	AC_MSG_ERROR([Could not find libusb, required for X6500 support])
+elif test "x$x6500" = xauto; then
+	x6500="$libusb"
+	if test "x$libusb" = xno; then
+		AC_MSG_WARN([Could not find libusb, required for X6500 support])
+		x6500warn=yes
+	fi
+fi
+if test "x$x6500" = xyes; then
+	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
+fi
+AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
+
 AC_ARG_ENABLE([ztex],
 	[AC_HELP_STRING([--disable-ztex],[Compile support for Ztex (default if libusb)])],
 	[ztex=$enableval],
@@ -291,8 +310,8 @@ fi
 AC_CONFIG_SUBDIRS([libblkmaker])
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [true])
-AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$ztex != xnonono])
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
+AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$x6500$ztex != xnonono])
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$x6500$ztex != xnononono])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
@@ -482,6 +501,14 @@ if test "x$modminer" = xyes; then
 	echo "  ModMiner.FPGAs.......: Enabled"
 else
 	echo "  ModMiner.FPGAs.......: Disabled"
+fi
+
+if test "x$x6500" = xyes; then
+	echo "  X6500.FPGAs..........: Enabled"
+elif test "x$ztexwarn" = xyes; then
+	echo "  X6500.FPGAs..........: Disabled (libusb not found)"
+else
+	echo "  X6500.FPGAs..........: Disabled"
 fi
 
 if test "x$ztex" = xyes; then

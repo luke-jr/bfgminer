@@ -114,6 +114,12 @@ bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = bitstreams/*
 endif
 
+if HAS_X6500
+bfgminer_SOURCES += driver-x6500.c ft232r.c
+bitstreamsdir = $(bindir)/bitstreams
+dist_bitstreams_DATA = bitstreams/*
+endif
+
 if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 bitstreamsdir = $(bindir)/bitstreams
