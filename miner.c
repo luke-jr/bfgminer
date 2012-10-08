@@ -4818,6 +4818,14 @@ static bool pool_active(struct pool *pool, bool pinging)
 	struct work *work;
 	enum pool_protocol proto;
 
+	if (pool->has_stratum) {
+		if (pool->stratum_active && !pinging)
+			return true;
+		if (initiate_stratum(pool))
+			return true;
+		return false;
+	}
+
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
