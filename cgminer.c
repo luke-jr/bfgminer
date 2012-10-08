@@ -2581,17 +2581,27 @@ static void gen_stratum_work(struct pool *pool, struct work *work);
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct pool *pool = current_pool();
 	struct work *ret_work= NULL;
 	struct curl_ent *ce = NULL;
+	struct pool *pool;
 
 	pthread_detach(pthread_self());
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
+retry:
 	pool = wc->pool;
 
 	if (pool->has_stratum) {
+		while (!pool->stratum_active) {
+			struct pool *altpool = select_pool(true);
+
+			if (altpool != pool) {
+				wc->pool = altpool;
+				goto retry;
+			}
+			sleep(5);
+		}
 		ret_work = make_work();
 		gen_stratum_work(pool, ret_work);
 		if (unlikely(!stage_work(ret_work))) {
@@ -4457,6 +4467,8 @@ static struct work *hash_pop(const struct timespec *abstime)
 static bool reuse_work(struct work *work, struct pool *pool)
 {
 	if (pool->has_stratum) {
+		if (!pool->stratum_active)
+			return false;
 		applog(LOG_DEBUG, "Reusing stratum work");
 		gen_stratum_work(pool, work);;
 		return true;
@@ -4662,6 +4674,13 @@ retry:
 	if (reuse_work(work, pool))
 		goto out;
 
+	/* If we were unable to reuse work from a stratum pool, it implies the
+	 * pool is inactive and unless we have another pool to grab work from
+	 * we can only wait till it comes alive or another pool comes online */
+	if (pool->has_stratum) {
+		sleep(5);
+		goto retry;
+	}
 	if (!pool->lagging && !total_staged() && global_queued() >= mining_threads + opt_queue) {
 		struct cgpu_info *cgpu = thr->cgpu;
 		bool stalled = true;
