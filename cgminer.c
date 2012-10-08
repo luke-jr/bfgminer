@@ -4640,6 +4640,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	set_work_target(work, work->sdiff);
 
+	local_work++;
 	work->pool = pool;
 	work->stratum = true;
 	work->blk.nonce = 0;
