@@ -1,5 +1,17 @@
 BFGMiner Version 2.8.2 - Future
 
+- Fix unused warnings on ming build.
+- Fix sign warning in ocl.c
+- fds need to be zeroed before set in modminer.
+- Put scrypt warning on separate line to avoid 0 being shown on windows as
+bufsize.
+- Prevent corrupt values returned from the opencl code from trying to read
+beyond the end of the buffer by masking the value to a max of 15.
+- Icarus USB write failure is also a comms error
+- api.c DEBUG message has no paramter
+- Icarus catch more USB errors and close/reopen the port
+- API-README update cgminer verison number
+- hashmeter fix stats kh/s on 32bit windows
 - cairnsmore: Increase maximum clock frequency to 210 Mhz
 - icarus: Hashrate estimates really don't need the attention of a warning,
 demote them to debug
