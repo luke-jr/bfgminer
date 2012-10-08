@@ -731,6 +731,10 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 	ret = icarus_write(fd, ob_bin, 64);
 	if (ret) {
 		do_icarus_close(thr);
+		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+		icarus->device_last_not_well = time(NULL);
+		icarus->device_not_well_reason = REASON_DEV_COMMS_ERROR;
+		icarus->dev_comms_error_count++;
 		return false;	/* This should never happen */
 	}
 
