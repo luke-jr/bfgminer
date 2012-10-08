@@ -662,6 +662,8 @@ static char *set_url(char *arg)
 		add_pool();
 	pool = pools[total_urls - 1];
 
+	extract_sockaddr(pool, arg);
+
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
 	    strncmp(arg, "https://", 8)) {

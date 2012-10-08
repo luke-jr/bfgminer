@@ -39,6 +39,7 @@
 # include <winsock2.h>
 # include <mstcpip.h>
 #endif
+#include <netdb.h>
 
 #include "miner.h"
 #include "elist.h"
@@ -771,4 +772,35 @@ void rename_thr(const char* name) {
 double tdiff(struct timeval *end, struct timeval *start)
 {
 	return end->tv_sec - start->tv_sec + (end->tv_usec - start->tv_usec) / 1000000.0;
+}
+
+void extract_sockaddr(struct pool *pool, char *url)
+{
+	char *url_begin, *url_end, *url_address;
+	char *port_start, port80[3] = "80";
+	struct addrinfo hints, *res;
+	size_t url_len, port_len;
+
+	url_begin = strstr(url, "//");
+	if (!url_begin)
+		url_begin = url;
+	else
+		url_begin += 2;
+	url_end = strstr(url_begin, ":");
+	if (url_end) {
+		url_len = url_end - 1 - url_begin;
+		port_len = strlen(url_begin) - url_len - 1;
+		if (port_len <= 1)
+			return;
+		port_start = url_end + 1;
+	} else {
+		url_len = strlen(url_begin);
+		port_start = port80;
+	}
+	if (url_len <= 1)
+		return;
+
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
 }
