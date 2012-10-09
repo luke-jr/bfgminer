@@ -681,6 +681,8 @@ bool detect_stratum(struct pool *pool, char *url)
 
 	if (!strncasecmp(url, "stratum+tcp://", 14) || stratum) {
 		pool->has_stratum = true;
+		if (!pool->stratum_url)
+			pool->stratum_url = pool->sockaddr_url;
 		return true;
 	}
 
@@ -2370,7 +2372,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	int rolltime;
 	uint32_t *hash32;
 	struct timeval tv_submit, tv_submit_reply;
-	char hashshow[64 +1 ] = "";
+	char hashshow[64 + 1] = "";
 	char worktime[200] = "";
 
 	if (work->tmpl) {
@@ -5337,7 +5339,7 @@ static struct work *clone_work(struct work *work)
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
-	unsigned char hash1[32];
+	unsigned char hash1[33];
 
 	sha2(data, len, hash1, false);
 	sha2(hash1, 32, hash, false);
@@ -5345,11 +5347,11 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	char header[256], hash1[128], *nonce2, *buf;
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
+	char header[257], hash1[129], *nonce2, *buf;
+	unsigned char *coinbase, merkle_root[33], merkle_sha[65], *merkle_hash;
 	uint32_t *data32, *swap32;
 	uint64_t diff, diff64;
-	char target[64];
+	char target[65];
 	int len, cb1_len, n1_len, cb2_len, i;
 
 	mutex_lock(&pool->pool_lock);
@@ -5363,7 +5365,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	n1_len = strlen(pool->nonce1) / 2;
 	cb2_len = strlen(pool->swork.coinbase2) / 2;
 	len = cb1_len + n1_len + pool->n2size + cb2_len;
-	coinbase = alloca(len);
+	coinbase = alloca(len + 1);
 	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
 	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
 	hex2bin(coinbase + cb1_len + n1_len, nonce2, pool->n2size);
@@ -5373,7 +5375,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	gen_hash(coinbase, merkle_root, len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
-		unsigned char merkle_bin[32];
+		unsigned char merkle_bin[33];
 
 		hex2bin(merkle_bin, pool->swork.merkle[i], 32);
 		memcpy(merkle_sha + 32, merkle_bin, 32);
