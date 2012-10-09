@@ -111,6 +111,7 @@ bool opt_quiet;
 bool opt_realquiet;
 bool opt_loginput;
 const int opt_cutofftemp = 95;
+int opt_hysteresis = 3;
 static int opt_retries = -1;
 int opt_fail_pause = 5;
 int opt_log_interval = 5;
@@ -783,7 +784,8 @@ static char* set_sharelog(char *arg)
 	return NULL;
 }
 
-static char *temp_cutoff_str = NULL;
+static char *temp_cutoff_str = "";
+static char *temp_target_str = "";
 
 char *set_temp_cutoff(char *arg)
 {
@@ -799,32 +801,80 @@ char *set_temp_cutoff(char *arg)
 	return NULL;
 }
 
-static void load_temp_cutoffs()
+char *set_temp_target(char *arg)
 {
-	int i, val = 0, device = 0;
-	char *nextptr;
+	int val;
 
-	if (temp_cutoff_str) {
-		for (device = 0, nextptr = strtok(temp_cutoff_str, ","); nextptr; ++device, nextptr = strtok(NULL, ",")) {
-			if (device >= total_devices)
-				quit(1, "Too many values passed to set temp cutoff");
-			val = atoi(nextptr);
-			if (val < 0 || val > 200)
-				quit(1, "Invalid value passed to set temp cutoff");
+	if (!(arg && arg[0]))
+		return "Invalid parameters for set temp target";
+	val = atoi(arg);
+	if (val < 0 || val > 200)
+		return "Invalid value passed to set temp target";
+	temp_target_str = arg;
 
-			devices[device]->cutofftemp = val;
-		}
-	} else {
-		for (i = device; i < total_devices; ++i) {
-			if (!devices[i]->cutofftemp)
-				devices[i]->cutofftemp = opt_cutofftemp;
-		}
-		return;
+	return NULL;
+}
+
+// For a single element string, this always returns the number (for all calls)
+// For multi-element strings, it returns each element as a number in order, and 0 when there are no more
+static int temp_strtok(char *base, char **n)
+{
+	char *i = *n;
+	char *p = strchr(i, ',');
+	if (p) {
+		p[0] = '\0';
+		*n = &p[1];
 	}
-	if (device <= 1) {
-		for (i = device; i < total_devices; ++i)
-			devices[i]->cutofftemp = val;
+	else
+	if (base != i)
+		*n = strchr(i, '\0');
+	return atoi(i);
+}
+
+static void load_temp_config()
+{
+	int i, val = 0, target_off;
+	char *cutoff_n, *target_n;
+	struct cgpu_info *cgpu;
+
+	cutoff_n = temp_cutoff_str;
+	target_n = temp_target_str;
+
+	for (i = 0; i < total_devices; ++i) {
+		cgpu = devices[i];
+		
+		// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
+		if (!cgpu->cutofftemp)
+			cgpu->cutofftemp = opt_cutofftemp;
+		
+		// target default may be specified by driver, and is moved with offset; otherwise, offset minus 6
+		if (cgpu->targettemp)
+			target_off = cgpu->targettemp - cgpu->cutofftemp;
+		else
+			target_off = -6;
+		
+		val = temp_strtok(temp_cutoff_str, &cutoff_n);
+		if (val < 0 || val > 200)
+			quit(1, "Invalid value passed to set temp cutoff");
+		if (val)
+			cgpu->cutofftemp = val;
+		
+		val = temp_strtok(temp_target_str, &target_n);
+		if (val < 0 || val > 200)
+			quit(1, "Invalid value passed to set temp target");
+		if (val)
+			cgpu->targettemp = val;
+		else
+			cgpu->targettemp = cgpu->cutofftemp + target_off;
+		
+		applog(LOG_DEBUG, "%s %u: Set temperature config: target=%d cutoff=%d",
+		       cgpu->api->name, cgpu->device_id,
+		       cgpu->targettemp, cgpu->cutofftemp);
 	}
+	if (cutoff_n != temp_cutoff_str && cutoff_n[0])
+		quit(1, "Too many values passed to set temp cutoff");
+	if (target_n != temp_target_str && target_n[0])
+		quit(1, "Too many values passed to set temp target");
 }
 
 static char *set_api_allow(const char *arg)
@@ -1175,16 +1225,18 @@ static struct opt_table opt_config_table[] = {
 		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
 		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
 #endif
-#ifdef HAVE_ADL
+#if defined(HAVE_ADL) || defined(USE_MODMINER)
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
+#ifdef HAVE_ADL
 	OPT_WITH_ARG("--temp-overheat",
 		     set_temp_overheat, opt_show_intval, &opt_overheattemp,
 		     "Overheat temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
+#endif
 	OPT_WITH_ARG("--temp-target",
-		     set_temp_target, opt_show_intval, &opt_targettemp,
-		     "Target temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
+		     set_temp_target, NULL, NULL,
+		     "Target temperature when automatically managing fan and clock speeds, one value or comma separated list"),
 #endif
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
@@ -1927,12 +1979,14 @@ static void curses_print_devstatus(int thr_id)
 		wprintw(statuswin, "DEAD ");
 	else if (cgpu->status == LIFE_SICK)
 		wprintw(statuswin, "SICK ");
-	else if (cgpu->status == LIFE_WAIT)
-		wprintw(statuswin, "WAIT ");
 	else if (cgpu->deven == DEV_DISABLED)
 		wprintw(statuswin, "OFF  ");
 	else if (cgpu->deven == DEV_RECOVER)
-		wprintw(statuswin, "REST  ");
+		wprintw(statuswin, "REST ");
+	else if (cgpu->deven == DEV_RECOVER_ERR)
+		wprintw(statuswin, " ERR ");
+	else if (cgpu->status == LIFE_WAIT)
+		wprintw(statuswin, "WAIT ");
 	else
 		wprintw(statuswin, "%s", cHr);
 	adj_width(cgpu->accepted, &awidth);
@@ -2158,8 +2212,8 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	char worktime[200] = "";
 
 	if (work->tmpl) {
-		unsigned char data[76];
-		swap32yes(data, work->data, 76);
+		unsigned char data[80];
+		swap32yes(data, work->data, 80 / 4);
 		json_t *req = blkmk_submit_jansson(work->tmpl, data, work->dataid, *((uint32_t*)&work->data[76]));
 		s = json_dumps(req, 0);
 		sd = bin2hex(data, 80);
@@ -4008,7 +4062,7 @@ void write_config(FILE *fcfg)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
 		fputs("\",\n\"temp-target\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
+			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].targettemp);
 #endif
 		fputs("\"", fcfg);
 	}
@@ -4625,7 +4679,7 @@ static inline void thread_reportout(struct thr_info *thr)
 }
 
 static void hashmeter(int thr_id, struct timeval *diff,
-		      unsigned long long hashes_done)
+		      uint64_t hashes_done)
 {
 	struct timeval temp_tv_end, total_diff;
 	double secs;
@@ -4652,7 +4706,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		double thread_rolling = 0.0;
 		int i;
 
-		applog(LOG_DEBUG, "[thread %d: %llu hashes, %.1f khash/sec]",
+		applog(LOG_DEBUG, "[thread %d: %"PRIu64" hashes, %.1f khash/sec]",
 			thr_id, hashes_done, hashes_done / 1000 / secs);
 
 		/* Rolling average for each thread and each device */
@@ -5262,6 +5316,7 @@ void *miner_thread(void *userdata)
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	int64_t hashes_done = 0;
 	int64_t hashes;
+	bool scanhash_working = true;
 	struct work *work = make_work();
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
@@ -5342,15 +5397,26 @@ void *miner_thread(void *userdata)
 			gettimeofday(&getwork_start, NULL);
 
 			if (unlikely(hashes == -1)) {
-				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
-				cgpu->deven = DEV_DISABLED;
+				time_t now = time(NULL);
+				if (difftime(now, cgpu->device_last_not_well) > 1.) {
+					cgpu->device_last_not_well = time(NULL);
+					cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
+					cgpu->thread_zero_hash_count++;
+				}
 
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
-				cgpu->thread_zero_hash_count++;
-
-				mt_disable(mythr, thr_id, api);
+				if (scanhash_working && opt_restart) {
+					applog(LOG_ERR, "%s %u failure, attempting to reinitialize", api->name, cgpu->device_id);
+					scanhash_working = false;
+					cgpu->reinit_backoff = 5.2734375;
+					hashes = 0;
+				} else {
+					applog(LOG_ERR, "%s %u failure, disabling!", api->name, cgpu->device_id);
+					cgpu->deven = DEV_RECOVER_ERR;
+					goto disabled;
+				}
 			}
+			else
+				scanhash_working = true;
 
 			hashes_done += hashes;
 			if (hashes > cgpu->max_hashes)
@@ -5407,6 +5473,7 @@ void *miner_thread(void *userdata)
 			}
 
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+disabled:
 				mt_disable(mythr, thr_id, api);
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
@@ -5742,6 +5809,19 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
+void device_recovered(struct cgpu_info *cgpu)
+{
+	struct thr_info *thr;
+	int j;
+
+	cgpu->deven = DEV_ENABLED;
+	for (j = 0; j < cgpu->threads; ++j) {
+		thr = cgpu->thr[j];
+		applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+		tq_push(thr->q, &ping);
+	}
+}
+
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
@@ -5854,6 +5934,39 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			/* Thread is disabled */
 			if (*denable == DEV_DISABLED)
 				continue;
+			else
+			if (*denable == DEV_RECOVER_ERR) {
+				if (opt_restart && difftime(time(NULL), cgpu->device_last_not_well) > cgpu->reinit_backoff) {
+					applog(LOG_NOTICE, "Attempting to reinitialize %s %u",
+					       cgpu->api->name, cgpu->device_id);
+					if (cgpu->reinit_backoff < 300)
+						cgpu->reinit_backoff *= 2;
+					device_recovered(cgpu);
+				}
+				continue;
+			}
+			else
+			if (*denable == DEV_RECOVER) {
+				if (opt_restart && cgpu->temp < cgpu->targettemp) {
+					applog(LOG_NOTICE, "%s %u recovered to temperature below target, re-enabling",
+					       cgpu->api->name, cgpu->device_id);
+					device_recovered(cgpu);
+				}
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
+				continue;
+			}
+			else
+			if (cgpu->temp > cgpu->cutofftemp)
+			{
+				applog(LOG_WARNING, "%s %u hit thermal cutoff limit, disabling!",
+				       cgpu->api->name, cgpu->device_id);
+				*denable = DEV_RECOVER;
+
+				cgpu->device_last_not_well = time(NULL);
+				cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
+				++cgpu->dev_thermal_cutoff_count;
+			}
 
 			if (thr->getwork) {
 				if (cgpu->status == LIFE_WELL && thr->getwork < now.tv_sec - opt_log_interval) {
@@ -6297,7 +6410,7 @@ extern struct device_api ztex_api;
 
 static int cgminer_id_count = 0;
 
-void enable_device(struct cgpu_info *cgpu)
+void register_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
@@ -6608,13 +6721,13 @@ int main(int argc, char *argv[])
 			if (devices_enabled & (1 << i)) {
 				if (i >= total_devices)
 					quit (1, "Command line options set a device that doesn't exist");
-				enable_device(devices[i]);
+				register_device(devices[i]);
 			} else if (i < total_devices) {
 				if (opt_removedisabled) {
 					if (devices[i]->api == &cpu_api)
 						--opt_n_threads;
 				} else {
-					enable_device(devices[i]);
+					register_device(devices[i]);
 				}
 				devices[i]->deven = DEV_DISABLED;
 			}
@@ -6622,13 +6735,13 @@ int main(int argc, char *argv[])
 		total_devices = cgminer_id_count;
 	} else {
 		for (i = 0; i < total_devices; ++i)
-			enable_device(devices[i]);
+			register_device(devices[i]);
 	}
 
 	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
 
-	load_temp_cutoffs();
+	load_temp_config();
 
 	for (i = 0; i < total_devices; ++i)
 		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;

@@ -306,16 +306,13 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
 		float temp = strtof(s + 1, NULL);
 
+		/* Cope with older software  that breaks and reads nonsense
+		 * values */
+		if (temp > 100)
+			temp = strtod(s + 1, NULL);
+
 		if (temp > 0) {
 			bitforce->temp = temp;
-			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
-				applog(LOG_WARNING, "BFL%i: Hit thermal cutoff limit, disabling!", bitforce->device_id);
-				bitforce->deven = DEV_RECOVER;
-
-				bitforce->device_last_not_well = time(NULL);
-				bitforce->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-				bitforce->dev_thermal_cutoff_count++;
-			}
 		}
 	} else {
 		/* Use the temperature monitor as a kind of watchdog for when
@@ -471,6 +468,8 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
+		++bitforce->hw_errors;
+		++hw_errors;
 
 		/* If the device truly throttled, it didn't process the job and there
 		 * are no results. But check first, just in case we're wrong about it

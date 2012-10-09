@@ -221,7 +221,9 @@ static const char *OSINFO =
 #if defined(__APPLE__)
 			"Apple";
 #else
-#if defined (WIN32)
+#if defined (__CYGWIN__)
+			"Cygwin";
+#elif defined (WIN32)
 			"Windows";
 #else
 #if defined(unix)
@@ -558,7 +560,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVBOOL,	PARAM_NONE,	"Invalid parameter should be true or false" },
  { SEVERITY_SUCC,  MSG_FOO,	PARAM_BOOL,	"Failover-Only set to %s" },
  { SEVERITY_SUCC,  MSG_MINECOIN,PARAM_NONE,	"BFGMiner coin" },
- { SEVERITY_SUCC,  MSG_DEBUGSET,PARAM_STR,	"Debug settings" },
+ { SEVERITY_SUCC,  MSG_DEBUGSET,PARAM_NONE,	"Debug settings" },
 #ifdef HAVE_AN_FPGA
  { SEVERITY_SUCC,  MSG_PGAIDENT,PARAM_PGA,	"Identify command sent to PGA%d" },
  { SEVERITY_WARN,  MSG_PGANOID,	PARAM_PGA,	"PGA%d does not support identify" },
@@ -1697,7 +1699,7 @@ static void pgaidentify(__maybe_unused SOCKETTYPE c, char *param, bool isjson, _
 	}
 
 	struct cgpu_info *cgpu = devices[dev];
-	struct device_api *api = cgpu->api;
+	const struct device_api *api = cgpu->api;
 
 	if (api->identify_device && api->identify_device(cgpu))
 		strcpy(io_buffer, message(MSG_PGAIDENT, id, NULL, isjson));

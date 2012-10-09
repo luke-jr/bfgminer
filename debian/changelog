@@ -1,3 +1,14 @@
+bfgminer (2.8.2-0precise1) precise; urgency=low
+
+  * Numerous fixups for Enterpoint's Cairsmore dynamic clocking; it has actually been tested this time. :)
+  * Support for --temp-target and --temp-hysteresis controls on ModMiner FPGA devices.
+  * Generic failure management for all devices, including automatically attempting to restart dead devices.
+  * Improved portability to new platforms, partially including Cygwin.
+  * Various minor error handling improvements and bugfixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 08 Oct 2012 23:13:01 -0000
+
+
 bfgminer (2.8.1-0precise1) precise; urgency=low
 
   * Many improvements for Enterpoint's Cairsmore, including (experimental) support for Glasswalker's dynamic frequency bitstream.

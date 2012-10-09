@@ -168,6 +168,8 @@ Options for both config file and command line:
 --submit-threads    Maximum number of share submission threads (default: 64)
 --syslog            Use system log for output messages (default: standard error)
 --temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
+--temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
+--temp-target <arg> Target temperature when automatically managing fan and clock speeds
 --text-only|-T      Disable ncurses formatted screen output
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server
@@ -202,9 +204,7 @@ GPU only options:
 --ndevs|-n          Enumerate number of detected GPUs and exit
 --no-adl            Disable the ATI display library used for monitoring and setting GPU parameters
 --no-restart        Do not attempt to restart GPUs that hang
---temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
---temp-target <arg> Target temperature when automatically managing fan and GPU speeds (default: 75)
 --vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 

@@ -29,7 +29,7 @@
 // AMD ADL function types from Version 3.0
 // ------------------------------------------------------------------------------------------------------------
 
-#if defined (linux)
+#ifndef WIN32
  #include <dlfcn.h>	//dyopen, dlsym, dlclose
  #include <stdlib.h>
  #include <string.h>	//memeset

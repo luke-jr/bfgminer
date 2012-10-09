@@ -295,7 +295,7 @@ int clDevicesNum(void) {
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
-			if (i != opt_platform_id)
+			if ((int)i != opt_platform_id)
 				continue;
 			return -1;
 		}
@@ -718,7 +718,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		strcat(binaryfilename, "g");
 	if (opt_scrypt) {
 #ifdef USE_SCRYPT
-		sprintf(numbuf, "lg%dtc%d", cgpu->lookup_gap, cgpu->thread_concurrency);
+		sprintf(numbuf, "lg%utc%u", cgpu->lookup_gap, (unsigned int)cgpu->thread_concurrency);
 		strcat(binaryfilename, numbuf);
 #endif
 	} else {
@@ -791,7 +791,7 @@ build:
 #ifdef USE_SCRYPT
 	if (opt_scrypt)
 		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
-			cgpu->lookup_gap, cgpu->thread_concurrency, (int)clState->wsize);
+			cgpu->lookup_gap, (unsigned int)cgpu->thread_concurrency, (int)clState->wsize);
 	else
 #endif
 	{
@@ -987,8 +987,8 @@ built:
 		/* Use the max alloc value which has been rounded to a power of
 		 * 2 greater >= required amount earlier */
 		if (bufsize > cgpu->max_alloc) {
-			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u, your scrypt settings come to %u",
-			       gpu, cgpu->max_alloc, bufsize);
+			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u", gpu, cgpu->max_alloc);
+			applog(LOG_WARNING, "Your scrypt settings come to %u", bufsize);
 		} else
 			bufsize = cgpu->max_alloc;
 		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);

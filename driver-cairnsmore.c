@@ -18,11 +18,13 @@
 // This is a general ballpark
 #define CAIRNSMORE1_HASH_TIME 0.0000000024484
 
-#define CAIRNSMORE1_MINIMUM_CLOCK  5
+#define CAIRNSMORE1_MINIMUM_CLOCK  50
 #define CAIRNSMORE1_DEFAULT_CLOCK  200
-#define CAIRNSMORE1_MAXIMUM_CLOCK  200
+#define CAIRNSMORE1_MAXIMUM_CLOCK  210
 
 struct device_api cairnsmore_api;
+
+static void cairnsmore_api_init();
 
 static bool cairnsmore_detect_one(const char *devpath)
 {
@@ -56,17 +58,20 @@ static int cairnsmore_detect_auto(void)
 
 static void cairnsmore_detect()
 {
+	cairnsmore_api_init();
 	// Actual serial detection is handled by Icarus driver
 	serial_detect_auto_byname(&cairnsmore_api, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
 
-static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
+static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data, bool probe)
 {
 	unsigned char pkt[64] =
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
 		"vdi\xb7"
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-		"BFG0" "\xff\xff\xff\xff" "\0\0\0\0";
+		"bfg0" "\xff\xff\xff\xff" "\xb5\0\0\0";
+	if (unlikely(probe))
+		pkt[61] = '\x01';
 	pkt[32] = 0xda ^ cmd ^ data;
 	pkt[33] = data;
 	pkt[34] = cmd;
@@ -75,12 +80,11 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data)
 
 bool cairnsmore_supports_dynclock(int fd)
 {
-	unsigned char pkts[64] =
-		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-		"\xe6\x3c\0\xb7"  // Set frequency multiplier to 60 (150 Mhz)
-		"\0\0\0\0\0\0\0\0\0\0\0\0" "BFG0"
-		"\x8b\xdb\x05\x1a" "\xff\xff\xff\xff" "\x00\x00\x1e\xfd";
-	if (write(fd, pkts, sizeof(pkts)) != sizeof(pkts))
+	if (!cairnsmore_send_cmd(fd, 0, 1, true))
+		return false;
+	struct timeval tv_start, elapsed;
+	gettimeofday(&tv_start, NULL);
+	if (!cairnsmore_send_cmd(fd, 0, 1, true))
 		return false;
 
 	uint32_t nonce = 0;
@@ -91,18 +95,23 @@ bool cairnsmore_supports_dynclock(int fd)
 			.work_restart_fd = -1,
 		};
 		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
+		timersub(&tv_finish, &tv_start, &elapsed);
 	}
+	applog(LOG_DEBUG, "Cairnsmore dynclock detection... Got %08x in %d.%06ds", nonce, elapsed.tv_sec, elapsed.tv_usec);
 	switch (nonce) {
-		case 0x000b1b5e:  // on big    endian
-		case 0x5e1b0b00:  // on little endian
+		case 0x00949a6f:  // big    endian
+		case 0x6f9a9400:  // little endian
 			// Hashed the command, so it's not supported
 			return false;
 		default:
-			// TODO: nonce from a real job... handle it
+			applog(LOG_WARNING, "Unexpected nonce from dynclock probe: %08x", be32toh(nonce));
+			return false;
 		case 0:
 			return true;
 	}
 }
+
+#define cairnsmore_send_cmd(fd, cmd, data) cairnsmore_send_cmd(fd, cmd, data, false)
 
 static bool cairnsmore_change_clock_func(struct thr_info *thr, int bestM)
 {
@@ -127,6 +136,7 @@ static bool cairnsmore_init(struct thr_info *thr)
 {
 	struct cgpu_info *cm1 = thr->cgpu;
 	struct ICARUS_INFO *info = cm1->cgpu_data;
+	struct icarus_state *state = thr->cgpu_data;
 
 	if (cairnsmore_supports_dynclock(cm1->device_fd)) {
 		info->dclk_change_clock_func = cairnsmore_change_clock_func;
@@ -140,14 +150,19 @@ static bool cairnsmore_init(struct thr_info *thr)
 		       cm1->api->name, cm1->device_id,
 		       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
 		);
+		// The dynamic-clocking firmware connects each FPGA as its own device
+		if (!(info->user_set & 1)) {
+			info->work_division = 1;
+			if (!(info->user_set & 2))
+				info->fpga_count = 1;
+		}
 	} else {
 		applog(LOG_WARNING, "%s %u: Frequency scaling not supported",
 			cm1->api->name, cm1->device_id
 		);
-		// Test failures corrupt the hash state, so next scanhash is a firstrun
-		struct icarus_state *state = thr->cgpu_data;
-		state->firstrun = true;
 	}
+	// Commands corrupt the hash state, so next scanhash is a firstrun
+	state->firstrun = true;
 
 	return true;
 }
@@ -192,7 +207,6 @@ static bool cairnsmore_identify(struct cgpu_info *cm1)
 
 extern struct device_api icarus_api;
 
-__attribute__((constructor(1000)))
 static void cairnsmore_api_init()
 {
 	cairnsmore_api = icarus_api;
@@ -203,3 +217,8 @@ static void cairnsmore_api_init()
 	cairnsmore_api.identify_device = cairnsmore_identify;
 	cairnsmore_api.get_api_extra_device_status = cairnsmore_api_extra_device_status;
 }
+
+struct device_api cairnsmore_api = {
+	// Needed to get to cairnsmore_api_init at all
+	.api_detect = cairnsmore_detect,
+};

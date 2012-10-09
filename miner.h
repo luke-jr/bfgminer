@@ -195,6 +195,10 @@ void *alloca (size_t);
 #	endif
 #endif
 
+#ifndef roundl
+#define roundl(x)   (long double)((long long)((x==0)?0.0:((x)+((x)>0)?0.5:-0.5)))
+#endif
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
@@ -248,7 +252,6 @@ struct gpu_adl {
 	int lastengine;
 	int lasttemp;
 	int targetfan;
-	int targettemp;
 	int overtemp;
 	int minspeed;
 	int maxspeed;
@@ -295,6 +298,7 @@ enum dev_enable {
 	DEV_ENABLED,
 	DEV_DISABLED,
 	DEV_RECOVER,
+	DEV_RECOVER_ERR,
 };
 
 enum cl_kernels {
@@ -421,8 +425,8 @@ struct cgpu_info {
 
 #ifdef USE_SCRYPT
 	int opt_lg, lookup_gap;
-	int opt_tc, thread_concurrency;
-	int shaders;
+	size_t opt_tc, thread_concurrency;
+	size_t shaders;
 #endif
 	struct timeval tv_gpustart;;
 	struct timeval tv_gpuend;
@@ -433,6 +437,7 @@ struct cgpu_info {
 
 	float temp;
 	int cutofftemp;
+	int targettemp;
 
 #ifdef HAVE_ADL
 	bool has_adl;
@@ -457,6 +462,7 @@ struct cgpu_info {
 	time_t device_last_well;
 	time_t device_last_not_well;
 	enum dev_reason device_not_well_reason;
+	float reinit_backoff;
 	int thread_fail_init_count;
 	int thread_zero_hash_count;
 	int thread_fail_queue_count;
@@ -692,6 +698,7 @@ extern int restart_wait(unsigned int mstime);
 extern int stale_wait(unsigned int mstime, struct work*, bool checkend);
 
 extern void kill_work(void);
+extern void app_restart(void);
 
 extern void reinit_device(struct cgpu_info *cgpu);
 
@@ -758,6 +765,7 @@ extern double total_diff_accepted, total_diff_rejected, total_diff_stale;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
 extern const int opt_cutofftemp;
+extern int opt_hysteresis;
 extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;

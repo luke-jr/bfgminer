@@ -24,7 +24,7 @@
 #include "adl_structures.h"
 
 typedef void*(
-#ifdef WIN32
+#ifdef __stdcall
 	__stdcall
 #endif
 *ADL_MAIN_MALLOC_CALLBACK)(int);

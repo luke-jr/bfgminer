@@ -25,10 +25,15 @@ typedef bool (*dclk_change_clock_func_t)(struct thr_info *, int multiplier);
 
 extern void dclk_msg_freqchange(const char *, int oldFreq, int newFreq, const char *tail);
 
+// Called to initialize dclk_data at startup
 extern void dclk_prepare(struct dclk_data *data);
+// Called for every quarter of a second to age error rate info
 extern void dclk_gotNonces(struct dclk_data *);
+// Called for errors (1.0 "portion" is a quarter second)
 extern void dclk_errorCount(struct dclk_data *, double portion);
+// Called after a nonce range is completed to update actual error rate
 extern void dclk_preUpdate(struct dclk_data *data);
+// Called after a nonce range is completed, and error rate updated, to make actual clock adjustments
 extern bool dclk_updateFreq(struct dclk_data *, dclk_change_clock_func_t changeclock, struct thr_info *);
 
 #endif

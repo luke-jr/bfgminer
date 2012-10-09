@@ -3,7 +3,6 @@
 #ifdef HAVE_ADL
 bool adl_active;
 bool opt_reorder;
-int opt_hysteresis;
 const int opt_targettemp;
 const int opt_overheattemp;
 void init_adl(int nDevs);

@@ -20,7 +20,7 @@
 
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
 #define BISTREAM_USER_ID "\2\4$B"
-#define MODMINER_MINIMUM_CLOCK  178
+#define MODMINER_MINIMUM_CLOCK    2
 #define MODMINER_DEFAULT_CLOCK  200
 #define MODMINER_MAXIMUM_CLOCK  210
 
@@ -36,6 +36,7 @@ struct modminer_fpga_state {
 	char next_work_cmd[46];
 
 	struct dclk_data dclk;
+	uint8_t freqMaxMaxM;
 	// Number of nonces didn't meet pdiff 1, ever
 	int bad_share_counter;
 	// Number of nonces did meet pdiff 1, ever
@@ -176,6 +177,7 @@ modminer_reopen(struct cgpu_info*modminer)
 } while(0)
 
 #define status_read(eng)  do {  \
+FD_ZERO(&fds); \
 FD_SET(fd, &fds);  \
 select(fd+1, &fds, NULL, NULL, NULL);  \
 	if (1 != read(fd, buf, 1))  \
@@ -188,7 +190,7 @@ static bool
 modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 {
 	struct modminer_fpga_state *state = modminer->thr[0]->cgpu_data;
-fd_set fds;
+	fd_set fds;
 	char buf[0x100];
 	unsigned char *ubuf = (unsigned char*)buf;
 	unsigned long len, flen;
@@ -434,6 +436,7 @@ modminer_fpga_init(struct thr_info *thr)
 			continue;
 		break;
 	}
+	state->freqMaxMaxM =
 	state->dclk.freqMaxM = state->dclk.freqM;
 	if (MODMINER_DEFAULT_CLOCK / 2 < state->dclk.freqM) {
 		if (!modminer_change_clock(thr, false, -(state->dclk.freqM * 2 - MODMINER_DEFAULT_CLOCK)))
@@ -490,6 +493,73 @@ get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 		strcat(buf, "               | ");
 }
 
+static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info *thr)
+{
+	struct modminer_fpga_state *state = thr->cgpu_data;
+
+#ifdef WIN32
+	/* Workaround for bug in Windows driver */
+	if (!modminer_reopen(modminer))
+		return -1;
+#endif
+
+	int fd = modminer->device_fd;
+	int fpgaid = thr->device_thread;
+	char cmd[2] = {'\x0a', fpgaid};
+	char temperature;
+
+	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 1) == 1)
+	{
+		state->temp = temperature;
+		if (temperature > modminer->targettemp + opt_hysteresis) {
+			{
+				time_t now = time(NULL);
+				if (state->last_cutoff_reduced != now) {
+					state->last_cutoff_reduced = now;
+					int oldFreq = state->dclk.freqM;
+					if (modminer_reduce_clock(thr, false))
+						applog(LOG_NOTICE, "%s %u.%u: Frequency %s from %u to %u Mhz (temp: %d)",
+						       modminer->api->name, modminer->device_id, fpgaid,
+						       (oldFreq > state->dclk.freqM ? "dropped" : "raised "),
+						       oldFreq * 2, state->dclk.freqM * 2,
+						       temperature
+						);
+					state->dclk.freqMaxM = state->dclk.freqM;
+				}
+			}
+		}
+		else
+		if (state->dclk.freqMaxM < state->freqMaxMaxM && temperature < modminer->targettemp) {
+			if (temperature < modminer->targettemp - opt_hysteresis) {
+				state->dclk.freqMaxM = state->freqMaxMaxM;
+			} else {
+				++state->dclk.freqMaxM;
+			}
+		}
+	}
+}
+
+static bool modminer_get_stats(struct cgpu_info *modminer)
+{
+	int hottest = 0;
+	bool get_temp = (modminer->deven != DEV_ENABLED);
+	// Getting temperature more efficiently while enabled
+	// NOTE: Don't need to mess with mutex here, since the device is disabled
+	for (int i = modminer->threads; i--; ) {
+		struct thr_info*thr = modminer->thr[i];
+		struct modminer_fpga_state *state = thr->cgpu_data;
+		if (get_temp)
+			modminer_get_temperature(modminer, thr);
+		int temp = state->temp;
+		if (temp > hottest)
+			hottest = temp;
+	}
+
+	modminer->temp = (float)hottest;
+
+	return true;
+}
+
 static struct api_data*
 get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 {
@@ -505,7 +575,8 @@ get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 		if (state->temp)
 			json_object_set(o, "Temperature", json_integer(state->temp));
 		json_object_set(o, "Frequency", json_real((double)state->dclk.freqM * 2 * 1000000.));
-		json_object_set(o, "Max Frequency", json_real((double)state->dclk.freqMaxM * 2 * 1000000.));
+		json_object_set(o, "Cool Max Frequency", json_real((double)state->dclk.freqMaxM * 2 * 1000000.));
+		json_object_set(o, "Max Frequency", json_real((double)state->freqMaxMaxM * 2 * 1000000.));
 		json_object_set(o, "Hardware Errors", json_integer(state->bad_share_counter));
 		json_object_set(o, "Valid Nonces", json_integer(state->good_share_counter));
 
@@ -574,50 +645,14 @@ modminer_process_results(struct thr_info*thr)
 	int fd;
 	struct work *work = &state->running_work;
 
-	char cmd[2], temperature;
 	uint32_t nonce;
 	long iter;
 	int immediate_bad_nonces = 0, immediate_nonces = 0;
 	bool bad;
-	cmd[0] = '\x0a';
-	cmd[1] = fpgaid;
 
 	mutex_lock(&modminer->device_mutex);
-#ifdef WIN32
-	/* Workaround for bug in Windows driver */
-	if (!modminer_reopen(modminer))
-		return -1;
-#endif
+	modminer_get_temperature(modminer, thr);
 	fd = modminer->device_fd;
-	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 1) == 1)
-	{
-		state->temp = temperature;
-		if (!fpgaid)
-			modminer->temp = (float)temperature;
-		if (temperature > modminer->cutofftemp - 2) {
-			if (temperature > modminer->cutofftemp) {
-				applog(LOG_WARNING, "%s %u.%u: Hit thermal cutoff limit, disabling device!", modminer->api->name, modminer->device_id, fpgaid);
-				modminer->deven = DEV_RECOVER;
-
-				modminer->device_last_not_well = time(NULL);
-				modminer->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-				++modminer->dev_thermal_cutoff_count;
-			} else {
-				time_t now = time(NULL);
-				if (state->last_cutoff_reduced != now) {
-					state->last_cutoff_reduced = now;
-					int oldFreq = state->dclk.freqM;
-					if (modminer_reduce_clock(thr, false))
-						applog(LOG_NOTICE, "%s %u.%u: Frequency %s from %u to %u Mhz (temp: %d)",
-						       modminer->api->name, modminer->device_id, fpgaid,
-						       (oldFreq > state->dclk.freqM ? "dropped" : "raised "),
-						       oldFreq * 2, state->dclk.freqM * 2,
-						       temperature
-						);
-				}
-			}
-		}
-	}
 
 	iter = 200;
 	while (1) {
@@ -738,6 +773,7 @@ struct device_api modminer_api = {
 	.name = "MMQ",
 	.api_detect = modminer_detect,
 	.get_statline_before = get_modminer_statline_before,
+	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_api_extra_device_status,
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,
