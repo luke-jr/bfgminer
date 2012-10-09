@@ -4905,7 +4905,7 @@ static bool parse_stratum_response(char *s)
 	id_val = json_object_get(val, "id");
 
 	if ((!res_val || !id_val) || (json_is_null(res_val) || json_is_null(id_val)) ||
-	    (err_val && !json_is_null(err_val))) {
+	    (err_val && !json_is_null(err_val) && !id)) {
 		char *ss;
 
 		if (err_val)
@@ -5424,7 +5424,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		quit(1,  "Failed to convert hash1 in gen_stratum_work");
 
 	/* Generate target as hex where 0x00000000FFFFFFFF is diff 1 */
-	diff64 = 0x00000000FFFFFFFFULL * diff;
+	diff64 = (1Ull << (31 + diff)) - 1;
 	diff64 = ~htobe64(diff64);
 	sprintf(target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
 	buf = bin2hex((const unsigned char *)&diff64, 8);
