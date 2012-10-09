@@ -5545,6 +5545,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	work->work_restart_id = work->pool->work_restart_id;
 	calc_diff(work, work->sdiff);
 
 	gettimeofday(&work->tv_staged, NULL);
