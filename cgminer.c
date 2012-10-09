@@ -2391,11 +2391,13 @@ void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
-	pool->block_id = 0;
 	mutex_unlock(&control_lock);
 
 	if (pool != last_pool)
+	{
+		pool->block_id = 0;
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+	}
 
 	/* Reset the queued amount to allow more to be queued for the new pool */
 	mutex_lock(&qd_lock);
