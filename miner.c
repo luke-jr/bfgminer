@@ -672,17 +672,12 @@ static char *set_rr(enum pool_strategy *strategy)
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
 {
-	bool stratum;
-
 	if (!extract_sockaddr(pool, url))
 		return false;
 
-	stratum = initiate_stratum(pool);
-
-	if (!strncasecmp(url, "stratum+tcp://", 14) || stratum) {
+	if (!strncasecmp(url, "stratum+tcp://", 14)) {
 		pool->has_stratum = true;
-		if (!pool->stratum_url)
-			pool->stratum_url = pool->sockaddr_url;
+		pool->stratum_url = pool->sockaddr_url;
 		return true;
 	}
 
@@ -5058,6 +5053,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 
+	/* This is the central point we activate stratum when we can */
 retry_stratum:
 	if (pool->has_stratum) {
 		if ((!pool->stratum_active || pinging) && !initiate_stratum(pool))
@@ -5096,7 +5092,7 @@ tryagain:
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
 	 * and if so, switch to that in preference to getwork */
-	if (unlikely(!pinging && pool->stratum_url)) {
+	if (unlikely(pool->stratum_url)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		pool->has_stratum = true;
 		pool->rpc_url = pool->stratum_url;
@@ -5180,6 +5176,12 @@ badwork:
 		goto tryagain;
 	} else {
 		free_work(work);
+		/* If we failed to parse a getwork, this could be a stratum
+		 * url without the prefix stratum+tcp:// so let's check it */
+		if (initiate_stratum(pool)) {
+			pool->has_stratum = true;
+			goto retry_stratum;
+		}
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
 		if (!pinging)
