@@ -963,9 +963,11 @@ struct work {
 	bool		queued;
 
 	bool		stratum;
-	char 		*job_id;
-	char		*nonce2;
-	char		*ntime;
+	/* These are arbitrary lengths as it is too hard to keep track of
+	 * dynamically allocated ram in work structs */
+	char 		job_id[64];
+	char		nonce2[64];
+	char		ntime[16];
 
 	unsigned char	work_restart_id;
 	int		id;

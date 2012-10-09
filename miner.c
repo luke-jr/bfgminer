@@ -5242,11 +5242,11 @@ static struct work *hash_pop(const struct timespec *abstime)
 	return work;
 }
 
-static bool reuse_work(struct work *work)
+static bool reuse_work(struct work *work, struct pool *pool)
 {
-	if (work->stratum && !work->pool->idle) {
+	if (pool->has_stratum) {
 		applog(LOG_DEBUG, "Reusing stratum work");
-		gen_stratum_work(work->pool, work);;
+		gen_stratum_work(pool, work);;
 		return true;
 	}
 
@@ -5316,6 +5316,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Generate coinbase */
 	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
+	if (unlikely(!nonce2))
+		quit(1, "Failed to convert nonce2 in gen_stratum_work");
 	pool->nonce2++;
 	cb1_len = strlen(pool->swork.coinbase1) / 2;
 	n1_len = strlen(pool->nonce1) / 2;
@@ -5343,6 +5345,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	for (i = 0; i < 32 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
+	if (unlikely(!merkle_hash))
+		quit(1, "Failed to conver merkle_hash in gen_stratum_work");
 
 	sprintf(header, "%s", pool->swork.bbversion);
 	strcat(header, pool->swork.prev_hash);
@@ -5355,9 +5359,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	diff = pool->swork.diff;
 
 	/* Copy parameters required for share submission */
-	work->job_id = strdup(pool->swork.job_id);
-	work->nonce2 = nonce2;
-	work->ntime = pool->swork.ntime;
+	sprintf(work->job_id, "%s", pool->swork.job_id);
+	sprintf(work->nonce2, "%s", nonce2);
+	sprintf(work->ntime, "%s", pool->swork.ntime);
+	free(nonce2);
 
 	mutex_unlock(&pool->pool_lock);
 
@@ -5367,11 +5372,11 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	free(merkle_hash);
 
 	/* Convert hex data to binary data for work */
-	if (!hex2bin(work->data, header, 128))
+	if (unlikely(!hex2bin(work->data, header, 128)))
 		quit(1, "Failed to convert header to data in gen_stratum_work");
 	calc_midstate(work);
 	sprintf(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000");
-	if (!hex2bin(work->hash1, hash1, 64))
+	if (unlikely(!hex2bin(work->hash1, hash1, 64)))
 		quit(1,  "Failed to convert hash1 in gen_stratum_work");
 
 	/* Generate target as hex where 0x00000000FFFFFFFF is diff 1 */
@@ -5379,12 +5384,12 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	diff64 = ~htobe64(diff64);
 	sprintf(target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
 	buf = bin2hex((const unsigned char *)&diff64, 8);
-	if (!buf)
+	if (unlikely(!buf))
 		quit(1, "Failed to convert diff64 to buf in gen_stratum_work");
 	strcat(target, buf);
 	free(buf);
 	applog(LOG_DEBUG, "Generated target %s", target);
-	if (!hex2bin(work->target, target, 32))
+	if (unlikely(!hex2bin(work->target, target, 32)))
 		quit(1, "Failed to convert target to bin in gen_stratum_work");
 
 	work->pool = pool;
@@ -5417,7 +5422,7 @@ static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 retry:
 	pool = current_pool();
 
-	if (reuse_work(work))
+	if (reuse_work(work, pool))
 		goto out;
 
 	if (!pool->lagging && !total_staged() && global_queued() >= mining_threads + opt_queue) {
