@@ -1,12 +1,9 @@
 Version ??? - Future
 
-- Major upgrade - support for the stratum mining protocol.
+- Support for the stratum mining protocol.
 - Fix various modminer warnings on mingw.
 - Fix sign warning on windows build for bitforce.
 - Cast socketfail to integer since SOCKET is an unsigned int on windows.
-- Use strtod not strtol for bitforce temp backup.
-- Cope with broken drivers returning nonsense values for bitforce temperatures.
-- Minor warning fixes.
 - Use the stratum thread to detect when a stratum pool has died based on no
 message for 2 minutes.
 - Only set the stratum auth flag once and once the stratum thread is started,
@@ -41,8 +38,6 @@ is down.
 - Check the stratum pool difference has not changed compared to the work diff
 when testing whether a share meets the target or not and retarget if necessary.
 - Bit error in target calculation for stratum.
-- Set work_block in gen_stratum_work for when work is reused to avoid thinking
-it's all stale.
 - Offset the current block detection to the prev block hash.
 - We should be testing for id_val, not id in parse stratum response.
 - Make target on stratum scale to any size by clearing sequential bits according
@@ -137,6 +132,7 @@ socket.
 - Test specifically for stratum being active in pool_active.
 - Detect stratum in common place when adding urls, and use a bool to tell us
 when it's active.
+- Remove unused add_pool_details5
 - Fix warnings.
 - Extract and store various parameters on stratum init confirming successful
 mining notify.
