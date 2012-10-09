@@ -4054,6 +4054,7 @@ void remove_pool(struct pool *pool)
 	/* Give it an invalid number */
 	pool->pool_no = total_pools;
 	pool->removed = true;
+	pool->has_stratum = false;
 	total_pools--;
 }
 
@@ -4971,7 +4972,19 @@ out:
 	return ret;
 }
 
+static void shutdown_stratum(struct pool *pool)
+{
+	// Shut down Stratum as if we never had it
+	pool->has_stratum = false;
+	shutdown(pool->sock, SHUT_RDWR);
+	free(pool->stratum_url);
+	if (pool->sockaddr_url == pool->stratum_url)
+		pool->sockaddr_url = NULL;
+	pool->stratum_url = NULL;
+}
+
 static void pool_resus(struct pool *pool);
+static bool pool_active(struct pool *pool, bool pinging);
 
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
@@ -4988,7 +5001,7 @@ static void *stratum_thread(void *userdata)
 		fd_set rd;
 		char *s;
 
-		if (unlikely(pool->removed))
+		if (unlikely(!pool->has_stratum))
 			break;
 
 		FD_ZERO(&rd);
@@ -5003,6 +5016,9 @@ static void *stratum_thread(void *userdata)
 		select(pool->sock + 1, &rd, NULL, NULL, &timeout);
 		s = recv_line(pool);
 		if (!s) {
+			if (!pool->has_stratum)
+				break;
+
 			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
 			total_go++;
@@ -5010,6 +5026,12 @@ static void *stratum_thread(void *userdata)
 			pool->stratum_active = false;
 			if (initiate_stratum(pool) && auth_stratum(pool))
 				continue;
+
+			if (pool->rpc_url[0] != 's') {
+				shutdown_stratum(pool);
+				pool_active(pool, false);
+				break;
+			}
 
 			pool_died(pool);
 			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
@@ -5107,23 +5129,6 @@ static bool pool_active(struct pool *pool, bool pinging)
 	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 
 	/* This is the central point we activate stratum when we can */
-retry_stratum:
-	if (pool->has_stratum) {
-		/* We create the stratum thread for each pool just after
-		 * successful authorisation. Once the auth flag has been set
-		 * we never unset it and the stratum thread is responsible for
-		 * setting/unsetting the active flag */
-		if (pool->stratum_auth)
-			return pool->stratum_active;
-		if (!pool->stratum_active && !initiate_stratum(pool))
-			return false;
-		if (!auth_stratum(pool))
-			return false;
-		pool->idle = false;
-		init_stratum_thread(pool);
-		return true;
-	}
-
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
@@ -5147,14 +5152,33 @@ tryagain:
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
 	 * and if so, switch to that in preference to getwork if it works */
-	if (pool->stratum_url && want_stratum && stratum_works(pool)) {
-		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
-		pool->rpc_url = strdup(pool->stratum_url);
-		pool->has_stratum = true;
+	if (pool->stratum_url && want_stratum && (pool->has_stratum || stratum_works(pool))) {
 		curl_easy_cleanup(curl);
 
-		goto retry_stratum;
+		if (!pool->has_stratum) {
+
+		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
+		pool->has_stratum = true;
+
+		}
+
+retry_stratum:
+		/* We create the stratum thread for each pool just after
+		 * successful authorisation. Once the auth flag has been set
+		 * we never unset it and the stratum thread is responsible for
+		 * setting/unsetting the active flag */
+		if (pool->stratum_auth)
+			return pool->stratum_active;
+		if (!pool->stratum_active && !initiate_stratum(pool))
+			return false;
+		if (!auth_stratum(pool))
+			return false;
+		pool->idle = false;
+		init_stratum_thread(pool);
+		return true;
 	}
+	else if (pool->has_stratum)
+		shutdown_stratum(pool);
 
 	if (val) {
 		bool rc;
