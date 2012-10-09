@@ -137,7 +137,7 @@ int serial_autodetect_ftdi(detectone_func_t detectone, const char *needle, const
 	char **bufptrs;
 	char *buf;
 	int found = 0;
-	int i;
+	DWORD i;
 
 	FT_STATUS ftStatus;
 	DWORD numDevs;
