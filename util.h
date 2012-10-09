@@ -108,6 +108,13 @@
 	#define in_addr_t uint32_t
 	#endif
 #endif
+
+#if JANSSON_MAJOR_VERSION >= 2
+#define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
+#else
+#define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
+#endif
+
 struct pool;
 bool sock_send(int sock, char *s, ssize_t len);
 char *recv_line(SOCKETTYPE sock);

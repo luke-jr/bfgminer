@@ -44,12 +44,7 @@
 #include "miner.h"
 #include "elist.h"
 #include "compat.h"
-
-#if JANSSON_MAJOR_VERSION >= 2
-#define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
-#else
-#define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
-#endif
+#include "util.h"
 
 bool successful_connect = false;
 struct timeval nettime;
