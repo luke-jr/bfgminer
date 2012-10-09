@@ -2248,8 +2248,8 @@ static void reject_pool(struct pool *pool)
  * rejected values but the chance of two submits completing at the
  * same time is zero so there is no point adding extra locking */
 static void
-share_result(json_t *val, json_t *res, const struct work *work, char *hashshow,
-	     bool resubmit, char *worktime)
+share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
+	     char *hashshow, bool resubmit, char *worktime)
 {
 	struct pool *pool = work->pool;
 	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
@@ -2358,7 +2358,7 @@ share_result(json_t *val, json_t *res, const struct work *work, char *hashshow,
 static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
-	json_t *val, *res;
+	json_t *val, *res, *err;
 	char *s, *sd;
 	bool rc = false;
 	int thr_id = work->thr_id;
@@ -2419,6 +2419,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 
 	res = json_object_get(val, "result");
+	err = json_object_get(val, "error");
 
 	if (!QUIET) {
 		hash32 = (uint32_t *)(work->hash);
@@ -2473,7 +2474,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		}
 	}
 
-	share_result(val, res, work, hashshow, resubmit, worktime);
+	share_result(val, res, err, work, hashshow, resubmit, worktime);
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
 	cgpu->utility_diff1 = cgpu->accepted_weighed / total_secs * 60;
@@ -4874,7 +4875,7 @@ out_unlock:
 	}
 }
 
-static void stratum_share_result(json_t *val, json_t *res_val,
+static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 				 struct stratum_share *sshare)
 {
 	struct work *work = &sshare->work;
@@ -4886,7 +4887,7 @@ static void stratum_share_result(json_t *val, json_t *res_val,
 	intdiff = round(work->work_difficulty);
 	sprintf(hashshow, "%08lx Diff %d%s", (unsigned long)(hash32[6]), intdiff,
 		work->block? " BLOCK!" : "");
-	share_result(val, res_val, work, hashshow, false, "");
+	share_result(val, res_val, err_val, work, hashshow, false, "");
 }
 
 /* Parses stratum json responses and tries to find the id that the request
@@ -4938,7 +4939,7 @@ static bool parse_stratum_response(char *s)
 			applog(LOG_NOTICE, "Rejected untracked stratum share");
 		goto out;
 	}
-	stratum_share_result(val, res_val, sshare);
+	stratum_share_result(val, res_val, err_val, sshare);
 	free(sshare);
 
 	ret = true;
