@@ -52,6 +52,19 @@ void *alloca (size_t);
 # endif
 #endif
 
+#ifdef __MINGW32__
+#include <windows.h>
+#include <io.h>
+static inline int fsync (int fd)
+{
+	return (FlushFileBuffers ((HANDLE) _get_osfhandle (fd))) ? 0 : -1;
+}
+
+#ifndef MSG_DONTWAIT
+# define MSG_DONTWAIT 0x1000000
+#endif
+#endif /* __MINGW32__ */
+
 #if defined (__linux)
  #ifndef LINUX
   #define LINUX

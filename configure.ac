@@ -97,6 +97,7 @@ case $target in
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
 	TIMER_LIBS="-lwinmm"
+    AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     ;;
   *-*-cygwin*)
 	have_cygwin=true
