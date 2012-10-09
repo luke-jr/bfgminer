@@ -2172,7 +2172,7 @@ static bool stale_work(struct work *work, bool share)
 
 	if (share) {
 		/* If the share isn't on this pool's latest block, it's stale */
-		if (pool->block_id != block_id)
+		if (pool->block_id && pool->block_id != block_id)
 			return true;
 
 		/* If the pool doesn't want old shares, then any found in work before
@@ -2190,8 +2190,13 @@ static bool stale_work(struct work *work, bool share)
 	} else {
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
-		if (block_id != (opt_fail_only ? pool->block_id : current_block_id))
-			return true;
+		if (opt_fail_only) {
+			if (pool->block_id && block_id != pool->block_id)
+				return true;
+		} else {
+			if (block_id != current_block_id)
+				return true;
+		}
 
 		/* If the pool has asked us to restart since this work, it's stale */
 		if (work->work_restart_id != pool->work_restart_id)
