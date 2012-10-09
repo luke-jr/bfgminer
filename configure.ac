@@ -360,8 +360,7 @@ AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
 PKG_PROG_PKG_CONFIG()
 
-PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.15.6], [AC_DEFINE([CURL_HAS_SOCKOPT], [1], [Defined if version of curl supports sockopts.])],
-[PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.10.1], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.10.1])])])
+PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
 AC_SUBST(LIBCURL_LIBS)
 
 dnl CCAN wants to know a lot of vars.

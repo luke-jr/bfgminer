@@ -449,6 +449,8 @@ struct pool *add_pool(void)
 		quit(1, "Failed to pthread_mutex_init in add_pool");
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
+	if (unlikely(pthread_mutex_init(&pool->stratum_lock, NULL)))
+		quit(1, "Failed to pthread_mutex_init in add_pool");
 	INIT_LIST_HEAD(&pool->curlring);
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -3386,8 +3388,8 @@ next_submit:
 	if (work->stratum) {
 		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
 		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
-		char *s = alloca(1024);
 		char *noncehex;
+		char s[1024];
 
 		memcpy(&sshare->work, work, sizeof(struct work));
 
@@ -3400,6 +3402,7 @@ next_submit:
 		nonce = *((uint32_t *)(work->data + 76));
 		noncehex = bin2hex((const unsigned char *)&nonce, 4);
 
+		memset(s, 0, 1024);
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
@@ -4987,7 +4990,7 @@ static void *stratum_thread(void *userdata)
 				sleep(5);
 			}
 		}
-		s = recv_line(pool->sock);
+		s = recv_line(pool);
 		if (unlikely(!s))
 			continue;
 		if (!parse_method(pool, s) && !parse_stratum_response(s))
@@ -5104,7 +5107,8 @@ tryagain:
 	gettimeofday(&tv_getwork_reply, NULL);
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
-	 * and if so, switch to that in preference to getwork */
+	 * and if so, switch to that in preference to getwork. Currently no
+	 * proxy support so don't try to switch if a proxy is in use. */
 	if (unlikely(pool->stratum_url)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		pool->has_stratum = true;
@@ -5384,7 +5388,7 @@ static void set_work_target(struct work *work, int diff)
 			free(htarget);
 		}
 	}
-	memcpy(work->target, target, 256);
+	memcpy(work->target, target, 32);
 }
 
 static void gen_stratum_work(struct pool *pool, struct work *work)
@@ -5393,6 +5397,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	char header[257], hash1[129], *nonce2;
 	int len, cb1_len, n1_len, cb2_len, i;
 	uint32_t *data32, *swap32;
+
+	memset(work->job_id, 0, 64);
+	memset(work->nonce2, 0, 64);
+	memset(work->ntime, 0, 16);
 
 	mutex_lock(&pool->pool_lock);
 
@@ -5452,6 +5460,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
+	applog(LOG_DEBUG, "Work job_id %s nonce2 %s ntime %s", work->job_id, work->nonce2, work->ntime);
 
 	free(merkle_hash);
 

@@ -7,7 +7,7 @@
 	#include <netinet/in.h>
 	#include <arpa/inet.h>
 
-	#define SOCKETTYPE int
+	#define SOCKETTYPE long
 	#define SOCKETFAIL(a) ((a) < 0)
 	#define INVSOCK -1
 	#define INVINETADDR -1
@@ -44,7 +44,7 @@
 
 struct pool;
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
-char *recv_line(SOCKETTYPE sock);
+char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
 bool extract_sockaddr(struct pool *pool, char *url);
 bool auth_stratum(struct pool *pool);
