@@ -146,6 +146,7 @@ Options for both config file and command line:
 --no-gbt            Disable getblocktemplate support
 --no-longpoll       Disable X-Long-Polling support
 --no-pool-disable   Do not automatically disable pools that continually reject shares
+--no-stratum        Disable Stratum detection
 --no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics

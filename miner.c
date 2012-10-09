@@ -100,6 +100,7 @@ bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
+static bool want_stratum = true;
 #if BLKMAKER_VERSION < 1
 const
 #endif
@@ -1183,6 +1184,9 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--no-stratum",
+			opt_set_invbool, &want_stratum,
+			"Disable Stratum detection"),
 	OPT_WITHOUT_ARG("--no-submit-stale",
 			opt_set_invbool, &opt_submit_stale,
 		        "Don't submit shares if they are detected as stale"),
@@ -5149,7 +5153,7 @@ tryagain:
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
 	 * and if so, switch to that in preference to getwork if it works */
-	if (pool->stratum_url && stratum_works(pool)) {
+	if (pool->stratum_url && want_stratum && stratum_works(pool)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		pool->rpc_url = strdup(pool->stratum_url);
 		pool->has_stratum = true;
