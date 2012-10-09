@@ -5045,6 +5045,9 @@ static bool pool_active(struct pool *pool, bool pinging)
 	struct work *work;
 	enum pool_protocol proto;
 
+	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
+
+retry_stratum:
 	if (pool->has_stratum) {
 		if ((!pool->stratum_active || pinging) && !initiate_stratum(pool))
 			return false;
@@ -5074,12 +5077,25 @@ tryagain:
 	if (!rpc_req)
 		return false;
 
-	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 	pool->probed = false;
 	gettimeofday(&tv_getwork, NULL);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			true, false, &rolltime, pool, false);
 	gettimeofday(&tv_getwork_reply, NULL);
+
+	/* Detect if a http getwork pool has an X-Stratum header at startup,
+	 * and if so, switch to that in preference to getwork */
+	if (unlikely(!pinging && pool->stratum_url)) {
+		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
+		pool->has_stratum = true;
+		pool->rpc_url = strdup(pool->stratum_url);
+		extract_sockaddr(pool, pool->stratum_url);
+		initiate_stratum(pool);
+		auth_stratum(pool);
+		curl_easy_cleanup(curl);
+
+		goto  retry_stratum;
+	}
 
 	if (val) {
 		bool rc;
