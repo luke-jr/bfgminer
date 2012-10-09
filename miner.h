@@ -916,6 +916,7 @@ struct pool {
 	struct cgminer_pool_stats cgminer_pool_stats;
 
 	/* Stratum variables */
+	char *stratum_url;
 	SOCKETTYPE sock;
 	struct sockaddr_in *server, client;
 	char *subscription;
@@ -962,7 +963,11 @@ struct work {
 	bool		mandatory;
 	bool		block;
 	bool		queued;
+
 	bool		stratum;
+	char 		*job_id;
+	char		*nonce2;
+	char		*ntime;
 
 	unsigned char	work_restart_id;
 	int		id;

@@ -5026,7 +5026,8 @@ static inline int cp_prio(void)
 
 static void pool_resus(struct pool *pool)
 {
-	applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
+	applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no,
+	       pool->has_stratum ? pool->stratum_url : pool->rpc_url);
 	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER)
 		switch_pools(NULL);
 }
@@ -5175,6 +5176,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	char header[256], hash1[128], *coinbase, *nonce2, *buf;
 	uint32_t *data32, *swap32;
 	uint64_t diff, diff64;
+	char target[64];
 	int len, i;
 
 	mutex_lock(&pool->pool_lock);
@@ -5190,7 +5192,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
 	strcat(coinbase, nonce2);
-	free(nonce2);
 	strcat(coinbase, pool->swork.coinbase2);
 
 	/* Generate merkle root */
@@ -5217,6 +5218,11 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	diff = pool->swork.diff;
 
+	/* Copy parameters required for share submission */
+	work->job_id = strdup(pool->swork.job_id);
+	work->nonce2 = nonce2;
+	work->ntime = pool->swork.ntime;
+
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Generated stratum coinbase %s", coinbase);
@@ -5236,13 +5242,15 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Generate target as hex where 0x00000000FFFFFFFF is diff 1 */
 	diff64 = 0x00000000FFFFFFFFULL * diff;
 	diff64 = ~htobe64(diff64);
-	sprintf((char *)work->target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
+	sprintf(target, "ffffffffffffffffffffffffffffffffffffffffffffffff");
 	buf = bin2hex((const unsigned char *)&diff64, 8);
 	if (!buf)
 		quit(1, "Failed to convert diff64 to buf in gen_stratum_work");
-	strcat((char *)work->target, buf);
+	strcat(target, buf);
 	free(buf);
-	applog(LOG_DEBUG, "Generated target %s", work->target);
+	applog(LOG_DEBUG, "Generated target %s", target);
+	if (!hex2bin(work->target, target, 32))
+		quit(1, "Failed to convert target to bin in gen_stratum_work");
 
 	work->pool = pool;
 	work->stratum = true;
@@ -6397,9 +6405,13 @@ void add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 		quit(1, "Failed to malloc userpass");
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
+	enable_pool(pool);
+
+	/* Prevent noise on startup */
+	pool->lagging = true;
+
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
-	enable_pool(pool);
 	if (live && !pool_active(pool, false))
 		pool->idle = true;
 }
