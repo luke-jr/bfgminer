@@ -1954,12 +1954,16 @@ static void curses_print_status(void)
 		total_getworks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
-	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1)
+	if (pool->has_stratum) {
+		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
+			pool->stratum_url, pool->rpc_user);
+	} else if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
-	else
+	} else {
 		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
 			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
+	}
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s", current_hash, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
@@ -3355,8 +3359,9 @@ next_submit:
 
 	if (work->stratum) {
 		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
-		uint32_t *hash32 = (uint32_t *)work->hash;
+		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
 		char *s = alloca(1024);
+		char *noncehex;
 
 		sprintf(sshare->hash6, "%08lx", (unsigned long)hash32[6]);
 		sshare->block = work->block;
@@ -3367,8 +3372,12 @@ next_submit:
 		HASH_ADD_INT(stratum_shares, id, sshare);
 		mutex_unlock(&sshare_lock);
 
-		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%08lx\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, (unsigned long)work->blk.nonce, sshare->id);
+		nonce = *((uint32_t *)(work->data + 76));
+		noncehex = bin2hex((const unsigned char *)&nonce, 4);
+
+		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
+			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
+		free(noncehex);
 
 		sock_send(pool->sock, s, strlen(s));
 
@@ -4872,7 +4881,7 @@ static void *stratum_thread(void *userdata)
 		s = recv_line(pool->sock);
 		if (unlikely(!s))
 			continue;
-		if (!parse_stratum(pool, s)) /* Create message queues here */
+		if (!parse_method(pool, s)) /* Create message queues here */
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
 		if (unlikely(pool->swork.clean)) {
@@ -5210,33 +5219,36 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char merkle_root[32], merkle_sha[64], *merkle_hash;
-	char header[256], hash1[128], *coinbase, *nonce2, *buf;
+	char header[256], hash1[128], *nonce2, *buf;
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
 	uint32_t *data32, *swap32;
 	uint64_t diff, diff64;
 	char target[64];
-	int len, i;
+	int len, cb1_len, n1_len, cb2_len, i;
 
 	mutex_lock(&pool->pool_lock);
 
 	/* Generate coinbase */
-	len = strlen(pool->swork.coinbase1) +
-	      strlen(pool->nonce1) +
-	      pool->n2size +
-	      strlen(pool->swork.coinbase2);
-	coinbase = alloca(len + 1);
-	sprintf(coinbase, "%s", pool->swork.coinbase1);
-	strcat(coinbase, pool->nonce1);
 	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
-	strcat(coinbase, nonce2);
-	strcat(coinbase, pool->swork.coinbase2);
+	cb1_len = strlen(pool->swork.coinbase1) / 2;
+	n1_len = strlen(pool->nonce1) / 2;
+	cb2_len = strlen(pool->swork.coinbase2) / 2;
+	len = cb1_len + n1_len + pool->n2size + cb2_len;
+	coinbase = alloca(len);
+	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
+	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
+	hex2bin(coinbase + cb1_len + n1_len, nonce2, pool->n2size);
+	hex2bin(coinbase + cb1_len + n1_len + pool->n2size, pool->swork.coinbase2, cb2_len);
 
 	/* Generate merkle root */
-	gen_hash((unsigned char *)coinbase, merkle_root, len);
+	gen_hash(coinbase, merkle_root, len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
-		memcpy(merkle_sha + 32, pool->swork.merkle[i], 32);
+		unsigned char merkle_bin[32];
+
+		hex2bin(merkle_bin, pool->swork.merkle[i], 32);
+		memcpy(merkle_sha + 32, merkle_bin, 32);
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
 	}
@@ -5263,7 +5275,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	mutex_unlock(&pool->pool_lock);
 
-	applog(LOG_DEBUG, "Generated stratum coinbase %s", coinbase);
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
 

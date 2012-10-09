@@ -1010,6 +1010,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		applog(LOG_DEBUG, "clean: %s", clean ? "yes" : "no");
 	}
 
+	/* A notify message is the closest stratum gets to a getwork */
+	pool->getwork_requested++;
+	total_getworks++;
 	return true;
 }
 
@@ -1030,7 +1033,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	return true;
 }
 
-bool parse_stratum(struct pool *pool, char *s)
+bool parse_method(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
 	json_error_t err;
@@ -1098,7 +1101,7 @@ bool auth_stratum(struct pool *pool)
 	/* Parse all data prior sending auth request */
 	while (sock_full(pool->sock, false)) {
 		sret = recv_line(pool->sock);
-		if (!parse_stratum(pool, sret)) {
+		if (!parse_method(pool, sret)) {
 			clear_sock(pool->sock);
 			applog(LOG_WARNING, "Failed to parse stratum buffer");
 			free(sret);
@@ -1147,6 +1150,9 @@ bool initiate_stratum(struct pool *pool)
 	char *s, *buf, *sret = NULL;
 	json_error_t err;
 	bool ret = false;
+
+	if (pool->stratum_active)
+		return true;
 
 	s = alloca(RECVSIZE);
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
