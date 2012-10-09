@@ -787,7 +787,7 @@ double tdiff(struct timeval *end, struct timeval *start)
 
 bool extract_sockaddr(struct pool *pool, char *url)
 {
-	char *url_begin, *url_end, *port_start;
+	char *url_begin, *url_end, *port_start = NULL;
 	char *url_address, *port;
 	struct addrinfo hints, *res;
 	int url_len, port_len = 0;
@@ -832,7 +832,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	}
 
 	pool->server = (struct sockaddr_in *)res->ai_addr;
-	pool->stratum_url = strdup(url_address);
+	pool->sockaddr_url = strdup(url_address);
 	return true;
 }
 
@@ -1166,7 +1166,7 @@ out:
 
 bool initiate_stratum(struct pool *pool)
 {
-	json_t *val, *res_val, *err_val, *notify_val;
+	json_t *val = NULL, *res_val, *err_val, *notify_val;
 	char *s, *buf, *sret = NULL;
 	json_error_t err;
 	bool ret = false;
@@ -1259,6 +1259,7 @@ out:
 		json_decref(val);
 
 	if (ret) {
+		pool->stratum_url = pool->sockaddr_url;
 		pool->stratum_active = true;
 		pool->swork.diff = 1;
 		if (opt_protocol) {

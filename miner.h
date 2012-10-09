@@ -917,6 +917,7 @@ struct pool {
 	char *stratum_url;
 	SOCKETTYPE sock;
 	struct sockaddr_in *server, client;
+	char *sockaddr_url; /* stripped url used for sockaddr */
 	char *subscription;
 	char *nonce1;
 	uint32_t nonce2;

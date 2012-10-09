@@ -3161,6 +3161,7 @@ static void *get_work_thread(void *userdata)
 			kill_work();
 			free(ret_work);
 		}
+		dec_queued(pool);
 		goto out;
 	}
 
@@ -5088,10 +5089,10 @@ tryagain:
 	if (unlikely(!pinging && pool->stratum_url)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		pool->has_stratum = true;
-		pool->rpc_url = strdup(pool->stratum_url);
-		extract_sockaddr(pool, pool->stratum_url);
-		initiate_stratum(pool);
-		auth_stratum(pool);
+		pool->rpc_url = pool->stratum_url;
+		/* pool->stratum_url will be set again in extract_sockaddr */
+		pool->stratum_url = NULL;
+		extract_sockaddr(pool, pool->rpc_url);
 		curl_easy_cleanup(curl);
 
 		goto  retry_stratum;
@@ -6611,9 +6612,9 @@ static bool input_pool(bool live)
 
 	pool = add_pool();
 
-	if (!detect_stratum(pool, url) &&
-	    strncmp(url, "http://", 7) &&
-	    strncmp(url, "https://", 8)) {
+	if (detect_stratum(pool, url))
+		url = strdup(pool->stratum_url);
+	else if (strncmp(url, "http://", 7) && strncmp(url, "https://", 8)) {
 		char *httpinput;
 
 		httpinput = malloc(255);
@@ -6623,8 +6624,7 @@ static bool input_pool(bool live)
 		strncat(httpinput, url, 248);
 		free(url);
 		url = httpinput;
-	} else
-		url = strdup(pool->stratum_url);
+	}
 
 	add_pool_details(pool, live, url, user, pass);
 	ret = true;
