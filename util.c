@@ -821,9 +821,11 @@ bool extract_sockaddr(struct pool *pool, char *url)
 }
 
 /* Send a single command across a socket, appending \n to it */
-bool sock_send(int sock, char *s, ssize_t len)
+bool stratum_send(struct pool *pool, char *s, ssize_t len)
 {
+	SOCKETTYPE sock = pool->sock;
 	ssize_t sent = 0;
+	bool ret = false;
 
 	if (opt_protocol)
 		applog(LOG_DEBUG, "SEND: %s", s);
@@ -831,15 +833,20 @@ bool sock_send(int sock, char *s, ssize_t len)
 	strcat(s, "\n");
 	len++;
 
+	mutex_lock(&pool->pool_lock);
 	while (len > 0 ) {
 		sent = send(sock, s + sent, len, 0);
-		if (SOCKETFAIL(sent))
-			return false;
+		if (SOCKETFAIL(sent)) {
+			ret = false;
+			goto out_unlock;
+		}
 		len -= sent;
 	}
+	ret = true;
 	fsync(sock);
-
-	return true;
+out_unlock:
+	mutex_unlock(&pool->pool_lock);
+	return ret;;
 }
 
 #define RECVSIZE 8192
@@ -873,8 +880,8 @@ static bool sock_full(SOCKETTYPE sock, bool wait)
  * from the socket and returns that as a malloced char */
 char *recv_line(SOCKETTYPE sock)
 {
-	char *sret = NULL, *s;
-	ssize_t len;
+	char *sret = NULL, *s, c;
+	ssize_t offset = 0;
 
 	s = alloca(RECVSIZE);
 	if (SOCKETFAIL(recv(sock, s, RECVSIZE, MSG_PEEK))) {
@@ -886,12 +893,13 @@ char *recv_line(SOCKETTYPE sock)
 		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in recv_line");
 		goto out;
 	}
-	len = strlen(sret) + 1;
-	/* We know how much data is in the buffer so this read should not fail */
-	if (SOCKETFAIL(recv(sock, s, len, 0)))
-		goto out;
-	if (s)
-		sret = strdup(strtok(s, "\n"));
+
+	do {
+		read(sock, &c, 1);
+		memcpy(s + offset++, &c, 1);
+	} while (strncmp(&c, "\n", 1));
+	sret = strdup(s);
+	strcpy(sret + offset - 1, "\0");
 out:
 	if (!sret)
 		clear_sock(sock);
@@ -1042,11 +1050,12 @@ bool parse_method(struct pool *pool, char *s)
 	}
 
 	method = json_object_get(val, "method");
+	if (!method)
+		goto out;
 	err_val = json_object_get(val, "error");
 	params = json_object_get(val, "params");
 
-	if (!method || json_is_null(method) ||
-	    (err_val && !json_is_null(err_val))) {
+	if (err_val && !json_is_null(err_val)) {
 		char *ss;
 
 		if (err_val)
@@ -1054,7 +1063,7 @@ bool parse_method(struct pool *pool, char *s)
 		else
 			ss = strdup("(unknown reason)");
 
-		applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
+		applog(LOG_INFO, "JSON-RPC method decode failed: %s", ss);
 
 		free(ss);
 
@@ -1105,7 +1114,7 @@ bool auth_stratum(struct pool *pool)
 		free(sret);
 	}
 
-	if (!sock_send(pool->sock, s, strlen(s)))
+	if (!stratum_send(pool, s, strlen(s)))
 		goto out;
 
 	sret = recv_line(pool->sock);
@@ -1160,7 +1169,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (!sock_send(pool->sock, s, strlen(s))) {
+	if (!stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
