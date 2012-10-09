@@ -4318,6 +4318,9 @@ updated:
 		if (pool->idle)
 			wlogprint("Dead ");
 		else
+		if (pool->has_stratum)
+			wlogprint("Strtm");
+		else
 		if (pool->lp_url && pool->proto != pool->lp_proto)
 			wlogprint("Mixed");
 		else
