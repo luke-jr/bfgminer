@@ -3767,19 +3767,20 @@ static int block_sort(struct block *blocka, struct block *blockb)
 	return blocka->block_no - blockb->block_no;
 }
 
-static void test_work_current(struct work *work)
+static bool test_work_current(struct work *work)
 {
+	bool ret = true;
 	char *hexstr;
 
 	if (work->mandatory)
-		return;
+		return ret;
 
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
 
 	hexstr = bin2hex(&work->data[4], 18);
 	if (unlikely(!hexstr)) {
 		applog(LOG_ERR, "stage_thread OOM");
-		return;
+		return ret;
 	}
 
 	/* Search to see if this block exists yet and if not, consider it a
@@ -3787,6 +3788,7 @@ static void test_work_current(struct work *work)
 	if (!block_exists(hexstr)) {
 		struct block *s = calloc(sizeof(struct block), 1);
 		int deleted_block = 0;
+		ret = false;
 
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
@@ -3823,8 +3825,8 @@ static void test_work_current(struct work *work)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
 			else
 				applog(LOG_NOTICE, "New block detected on network");
-			restart_threads();
 		}
+		restart_threads();
 	} else {
 		bool restart = false;
 		struct pool *curpool = NULL;
@@ -3868,6 +3870,7 @@ static void test_work_current(struct work *work)
 	}
 out_free:
 	free(hexstr);
+	return ret;
 }
 
 static int tv_sort(struct work *worka, struct work *workb)
@@ -4971,10 +4974,20 @@ static void *stratum_thread(void *userdata)
 		if (!parse_method(pool, s) && !parse_stratum_response(s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
-		if (unlikely(pool->swork.clean)) {
+		if (pool->swork.clean) {
+			struct work work;
+
+			/* Generate a single work item to update the current
+			 * block database */
 			pool->swork.clean = false;
-			applog(LOG_NOTICE, "Stratum requested work restart for block change");
-			restart_threads();
+			gen_stratum_work(pool, &work);
+			if (test_work_current(&work)) {
+				if (pool == current_pool()) {
+					restart_threads();
+					applog(LOG_NOTICE, "Stratum requested work restart for block change");
+				}
+			} else
+				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
 		}
 
 		if (unlikely(pool->removed)) {
