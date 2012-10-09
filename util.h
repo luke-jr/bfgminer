@@ -19,7 +19,7 @@
 	#include <winsock2.h>
 
 	#define SOCKETTYPE SOCKET
-	#define SOCKETFAIL(a) ((a) == SOCKET_ERROR)
+	#define SOCKETFAIL(a) ((int)(a) == SOCKET_ERROR)
 	#define INVSOCK INVALID_SOCKET
 	#define INVINETADDR INADDR_NONE
 	#define CLOSESOCKET closesocket
