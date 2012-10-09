@@ -984,6 +984,7 @@ struct work {
 	char 		job_id[64];
 	char		nonce2[64];
 	char		ntime[16];
+	int		sdiff;
 
 	unsigned char	work_restart_id;
 	int		id;
