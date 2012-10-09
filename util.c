@@ -1081,6 +1081,9 @@ bool parse_method(struct pool *pool, char *s)
 	bool ret = false;
 	char *buf;
 
+	if (!s)
+		goto out;
+
 	val = JSON_LOADS(s, &err);
 	if (!val) {
 		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
@@ -1144,7 +1147,7 @@ bool auth_stratum(struct pool *pool)
 		sret = recv_line(pool);
 		if (!parse_method(pool, sret)) {
 			clear_sock(pool);
-			applog(LOG_WARNING, "Failed to parse stratum buffer");
+			applog(LOG_INFO, "Failed to parse stratum buffer");
 			free(sret);
 			return ret;
 		}

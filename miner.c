@@ -3158,18 +3158,28 @@ static void gen_stratum_work(struct pool *pool, struct work *work);
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct pool *pool = current_pool();
 	struct work *ret_work= NULL;
 	struct curl_ent *ce = NULL;
+	struct pool *pool;
 
 	pthread_detach(pthread_self());
 	rename_thr("bfg-get_work");
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
+retry:
 	pool = wc->pool;
 
 	if (pool->has_stratum) {
+		while (!pool->stratum_active) {
+			struct pool *altpool = select_pool(true);
+
+			if (altpool != pool) {
+				wc->pool = altpool;
+				goto retry;
+			}
+			sleep(5);
+		}
 		ret_work = make_work();
 		gen_stratum_work(pool, ret_work);
 		if (unlikely(!stage_work(ret_work))) {
@@ -4989,24 +4999,28 @@ static void *stratum_thread(void *userdata)
 		 * every minute so if we fail to receive any for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
+		select(pool->sock + 1, &rd, NULL, NULL, &timeout);
+		s = recv_line(pool);
+		if (!s) {
 			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
 			total_go++;
+
+			pool->stratum_active = false;
+			if (initiate_stratum(pool) && auth_stratum(pool))
+				continue;
 
 			pool_died(pool);
 			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
 				if (pool->removed)
 					goto out;
-				sleep(5);
+				sleep(30);
 			}
 			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
 			pool_resus(pool);
 			continue;
 		}
-		s = recv_line(pool);
-		if (unlikely(!s))
-			continue;
+
 		if (!parse_method(pool, s) && !parse_stratum_response(s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
@@ -5325,6 +5339,8 @@ static struct work *hash_pop(const struct timespec *abstime)
 static bool reuse_work(struct work *work, struct pool *pool)
 {
 	if (pool->has_stratum) {
+		if (!pool->stratum_active)
+			return false;
 		applog(LOG_DEBUG, "Reusing stratum work");
 		gen_stratum_work(pool, work);;
 		return true;
@@ -5496,6 +5512,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	set_work_target(work, work->sdiff);
 
+	local_work++;
 	work->pool = pool;
 	work->stratum = true;
 	work->blk.nonce = 0;
@@ -5529,6 +5546,13 @@ retry:
 	if (reuse_work(work, pool))
 		goto out;
 
+	/* If we were unable to reuse work from a stratum pool, it implies the
+	 * pool is inactive and unless we have another pool to grab work from
+	 * we can only wait till it comes alive or another pool comes online */
+	if (pool->has_stratum) {
+		sleep(5);
+		goto retry;
+	}
 	if (!pool->lagging && !total_staged() && global_queued() >= mining_threads + opt_queue) {
 		struct cgpu_info *cgpu = thr->cgpu;
 		bool stalled = true;
