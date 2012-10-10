@@ -588,7 +588,8 @@ static char *set_url(char *arg)
 	arg = get_proxy(arg, pool);
 
 	if (detect_stratum(pool, arg)) {
-		pool->rpc_url = strdup(pool->stratum_url);
+		if (!pool->rpc_url)
+			pool->rpc_url = strdup(pool->stratum_url);
 		return NULL;
 	}
 
@@ -4285,7 +4286,8 @@ retry_stratum:
 	 * and if so, switch to that in preference to getwork if it works */
 	if (pool->stratum_url && stratum_works(pool)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
-		pool->rpc_url = strdup(pool->stratum_url);
+		if (!pool->rpc_url)
+			pool->rpc_url = strdup(pool->stratum_url);
 		pool->has_stratum = true;
 		curl_easy_cleanup(curl);
 
