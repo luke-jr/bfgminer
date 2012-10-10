@@ -1217,9 +1217,6 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
-	if (pool->stratum_active)
-		return true;
-
 	if (!pool->stratum_curl) {
 		pool->stratum_curl = curl_easy_init();
 		if (unlikely(!pool->stratum_curl))
@@ -1319,6 +1316,7 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
+		pool->stratum_active = false;
 		if (curl) {
 			curl_easy_cleanup(curl);
 			pool->stratum_curl = NULL;
