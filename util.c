@@ -1169,7 +1169,7 @@ bool parse_method(struct pool *pool, char *s)
 		goto out;
 	}
 
-	if (!strncasecmp(buf, "mining.reconnect", 16) && parse_reconnect(pool, params)) {
+	if (!strncasecmp(buf, "client.reconnect", 16) && parse_reconnect(pool, params)) {
 		ret = true;
 		goto out;
 	}
