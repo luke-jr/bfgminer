@@ -4533,18 +4533,13 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 static void set_work_target(struct work *work, int diff)
 {
 	unsigned char rtarget[33], target[33];
-	uint8_t *data8;
-	int i, j;
+	uint64_t *data64, h64;
 
-	/* Scale to any diff by setting number of bits according to diff */
-	hex2bin(rtarget, "00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32);
-	data8 = (uint8_t *)(rtarget + 4);
-	for (i = 1, j = 0; i < diff; i++, j++) {
-		int byte = j / 8;
-		int bit = j % 8;
-
-		data8[byte] &= ~(128 >> bit);
-	}
+	hex2bin(rtarget, "00000000ffff0000000000000000000000000000000000000000000000000000", 32);
+	data64 = (uint64_t *)(rtarget + 4);
+	h64 = be64toh(*data64);
+	h64 /= (uint64_t)diff;
+	*data64 = htobe64(h64);
 	swab256(target, rtarget);
 	if (opt_debug) {
 		char *htarget = bin2hex(target, 32);
