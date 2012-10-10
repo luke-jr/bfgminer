@@ -3415,7 +3415,7 @@ next_submit:
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
 
-		applog(LOG_INFO, "Submitting share %08lx to pool %d", (unsigned long)(hash32[6]), pool->pool_no);
+		applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->stratum_url, s);
 
 		if (unlikely(!stratum_send(pool, s, strlen(s)))) {
 			mutex_lock(&sshare_lock);
