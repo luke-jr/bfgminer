@@ -1117,7 +1117,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 	pool->stratum_url = pool->sockaddr_url;
 
-	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, pool->stratum_url);
+	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, address);
 
 	if (!initiate_stratum(pool) || !auth_stratum(pool))
 		return false;
