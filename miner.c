@@ -697,7 +697,8 @@ static char *set_url(char *arg)
 	pool = pools[total_urls - 1];
 
 	if (detect_stratum(pool, arg)) {
-		pool->rpc_url = strdup(pool->stratum_url);
+		if (!pool->rpc_url)
+			pool->rpc_url = strdup(pool->stratum_url);
 		return NULL;
 	}
 
@@ -5157,6 +5158,8 @@ tryagain:
 		if (!pool->has_stratum) {
 
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
+		if (!pool->rpc_url)
+			pool->rpc_url = strdup(pool->stratum_url);
 		pool->has_stratum = true;
 
 		}
