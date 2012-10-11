@@ -4530,15 +4530,19 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 	sha2(hash1, 32, hash, false);
 }
 
+/* Diff 1 is a 256 bit unsigned integer of
+ * 0x00000000ffff0000000000000000000000000000000000000000000000000000
+ * so we use a big endian 64 bit unsigned integer centred on the 5th byte to
+ * cover a huge range of difficulty targets, though not all 256 bits' worth */
 static void set_work_target(struct work *work, int diff)
 {
 	unsigned char rtarget[33], target[33];
 	uint64_t *data64, h64;
 
-	hex2bin(rtarget, "00000000ffff0000000000000000000000000000000000000000000000000000", 32);
-	data64 = (uint64_t *)(rtarget + 4);
-	h64 = be64toh(*data64);
+	h64 = 0xFFFF000000000000ull;
 	h64 /= (uint64_t)diff;
+	memset(rtarget, 0, 32);
+	data64 = (uint64_t *)(rtarget + 4);
 	*data64 = htobe64(h64);
 	swab256(target, rtarget);
 	if (opt_debug) {
