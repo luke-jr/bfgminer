@@ -6111,7 +6111,6 @@ static void clean_up(void)
 {
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
-	opencl_dynamic_cleanup();
 #endif
 #ifdef HAVE_LIBUSB
         libusb_exit(NULL);
