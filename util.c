@@ -1103,6 +1103,21 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	return true;
 }
 
+static bool send_version(struct pool *pool, json_t *val)
+{
+	char s[RBUFSIZE];
+	int id = json_integer_value(json_object_get(val, "id"));
+	
+	if (!id)
+		return false;
+
+	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", id);
+	if (!stratum_send(pool, s, strlen(s)))
+		return false;
+
+	return true;
+}
+
 bool parse_method(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
@@ -1159,6 +1174,10 @@ bool parse_method(struct pool *pool, char *s)
 		goto out;
 	}
 
+	if (!strncasecmp(buf, "client.get_version", 18) && send_version(pool, val)) {
+		ret = true;
+		goto out;
+	}
 out:
 	if (val)
 		json_decref(val);
