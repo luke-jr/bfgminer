@@ -383,6 +383,8 @@ struct cgpu_info {
 	uint32_t nonces;
 	bool nonce_range;
 	bool polling;
+#endif
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
 	bool flash_led;
 #endif
 	void *cgpu_data;
