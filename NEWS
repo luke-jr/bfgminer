@@ -1,10 +1,13 @@
 Version ??? - Future
 
+- Supplement other 64-bit endian swap macros
+- Bugfix: Fix htobe64 on big endian platforms that don't define it
+- Fix lack of htobe64 on mingw32.
 - Reinstate the history on dynamic intensity mode to damp fluctuations in
 intensity but use an upper limit on how much the value can increase at any time
 to cope with rare overflows.
-- Create a fix-protocol option which prevents cgminer from switching to stratum
-if it's detected.
+- Update to cgminer's newer dynamic intensity algorithm
+- Support for the stratum mining protocol.
 - Simplify target generation code.
 - Add support for client.get_version for stratum.
 - Use a 64 bit unsigned integer on the diff target to generate the hex target.
@@ -20,6 +23,16 @@ function.
 - stratum auth can be unset if we fail to authorise on subsequent calls to
 auth_stratum which undoes the requirement of setting it in one place so set it
 in pool_active.
+- Format Stratum submission-start debug the same way as other submissions
+- Bugfix: Set work_restart_id in gen_stratum_work for when work is reused to
+avoid thinking it's all stale.
+- Only auto-switch to Stratum internally, but save HTTP URI in case pool stops
+using Stratum; also always shows original pool URI on RPC
+- SHUT_RDWR is now always defined for us, so no need to check ifdef on LP hang
+- Implement --no-stratum option to disable autodetection
+- Show Stratum pools as "Strtm" protocol in "Pool management" TUI
+- Bugfix: BFGMiner doesn't use rpc_proxytype
+- Remove free that could segfault.
 - Use the stratum url as the rpc url advertised if we switch to it.
 - Count an invalid nonce count as a hardware error on opencl.
 - Count each stratum work item as local work.
@@ -29,7 +42,6 @@ indefinitely.
 - Detect stratum outage based on either select timing out or receiving an empty
 buffer and properly re-establish connection by disabling the stratum_active
 flag, coping with empty buffers in parse_stratum.
-- Support for the stratum mining protocol.
 - Fix various modminer warnings on mingw.
 - Fix sign warning on windows build for bitforce.
 - Cast socketfail to integer since SOCKET is an unsigned int on windows.
