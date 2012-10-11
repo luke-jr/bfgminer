@@ -962,6 +962,8 @@ extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
+extern int prioritize_pools(char *param, int *pid);
+extern void validate_pool_priorities(void);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
