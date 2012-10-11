@@ -41,6 +41,7 @@ Dependencies:
 	libtool			http://www.gnu.org/software/libtool/
 
 	jansson 2.0+    http://www.digip.org/jansson/
+	(libjansson-dev)
 
 	yasm 1.0.1+ http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
