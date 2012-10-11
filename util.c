@@ -1183,8 +1183,6 @@ out:
 	if (val)
 		json_decref(val);
 
-	pool->stratum_auth = ret;
-
 	return ret;
 }
 

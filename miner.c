@@ -5174,6 +5174,7 @@ retry_stratum:
 		if (!auth_stratum(pool))
 			return false;
 		pool->idle = false;
+		pool->stratum_auth = true;
 		init_stratum_thread(pool);
 		return true;
 	}
