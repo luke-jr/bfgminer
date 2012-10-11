@@ -397,6 +397,7 @@ struct cgpu_info {
 #endif
 	struct timeval tv_gpustart;
 	struct timeval tv_gpumid;
+	double gpu_us_average;
 	int intervals, hit;
 #endif
 
