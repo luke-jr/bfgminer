@@ -151,16 +151,19 @@ static inline int fsync (int fd)
   #include <endian.h>
 #endif
 
-/* This assumes htobe32 is a macro in endian.h */
+/* This assumes htobe32 is a macro in endian.h, and if it doesn't exist, then
+ * the others also won't exist */
 #ifndef htobe32
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  define be32toh(x) bswap_32(x)
 #  define htobe32(x) bswap_32(x)
+#  define htobe64(x) bswap_32(x)
 #  define le32toh(x) (x)
 #  define htole32(x) (x)
 # elif __BYTE_ORDER == __BIG_ENDIAN
 #  define be32toh(x) (x)
 #  define htobe32(x) (x)
+#  define htobe64(x) (x)
 #  define le32toh(x) bswap_32(x)
 #  define htole32(x) bswap_32(x)
 #else
