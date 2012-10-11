@@ -3277,7 +3277,7 @@ static bool stale_work(struct work *work, bool share)
 
 	if (share) {
 		/* If the share isn't on this pool's latest block, it's stale */
-		if (pool->block_id != block_id)
+		if (pool->block_id && pool->block_id != block_id)
 		{
 			applog(LOG_DEBUG, "Share stale due to block mismatch (%08lx != %08lx)", (long)block_id, (long)pool->block_id);
 			return true;
@@ -3293,10 +3293,18 @@ static bool stale_work(struct work *work, bool share)
 	} else {
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
-		if (block_id != ((enabled_pools <= 1 || opt_fail_only) ? pool->block_id : current_block_id))
-		{
-			applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != %d ? %08lx : %08lx)", (long)block_id, (int)opt_fail_only, (long)pool->block_id, (long)current_block_id);
-			return true;
+		if (enabled_pools <= 1 || opt_fail_only) {
+			if (pool->block_id && block_id != pool->block_id)
+			{
+				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 1 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)current_block_id);
+				return true;
+			}
+		} else {
+			if (block_id != current_block_id)
+			{
+				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 0 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)current_block_id);
+				return true;
+			}
 		}
 
 		/* If the pool has asked us to restart since this work, it's stale */
@@ -3580,7 +3588,6 @@ void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
-	pool->block_id = 0;
 	mutex_unlock(&control_lock);
 
 	/* Set the lagging flag to avoid pool not providing work fast enough
@@ -3590,7 +3597,10 @@ void switch_pools(struct pool *selected)
 		pool_tset(pool, &pool->lagging);
 
 	if (pool != last_pool)
+	{
+		pool->block_id = 0;
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+	}
 
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
@@ -6634,7 +6644,6 @@ static void clean_up(void)
 {
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
-	opencl_dynamic_cleanup();
 #endif
 #ifdef HAVE_LIBUSB
         libusb_exit(NULL);

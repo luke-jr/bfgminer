@@ -401,6 +401,8 @@ struct cgpu_info {
 	uint32_t nonces;
 	bool nonce_range;
 	bool polling;
+#endif
+#if defined(USE_BITFORCE) || defined(USE_ICARUS)
 	bool flash_led;
 #endif
 	void *cgpu_data;
@@ -442,9 +444,9 @@ struct cgpu_info {
 	size_t opt_tc, thread_concurrency;
 	size_t shaders;
 #endif
-	struct timeval tv_gpustart;;
-	struct timeval tv_gpuend;
-	double gpu_us_average;
+	struct timeval tv_gpustart;
+	struct timeval tv_gpumid;
+	int intervals, hit;
 #endif
 
 	bool new_work;
@@ -528,6 +530,7 @@ extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*s
 extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
+extern double us_tdiff(struct timeval *end, struct timeval *start);
 extern void rename_thr(const char* name);
 extern double tdiff(struct timeval *end, struct timeval *start);
 
