@@ -1077,18 +1077,25 @@ static bool parse_diff(struct pool *pool, json_t *val)
 
 static bool parse_reconnect(struct pool *pool, json_t *val)
 {
-	char *url;
+	char *url, *port, address[256];
 
+	memset(address, 0, 255);
 	url = (char *)json_string_value(json_array_get(val, 0));
 	if (!url)
-		return false;
+		url = pool->sockaddr_url;
 
-	if (!extract_sockaddr(pool, url))
+	port = (char *)json_string_value(json_array_get(val, 1));
+	if (!port)
+		port = pool->stratum_port;
+
+	sprintf(address, "%s:%s", url, port);
+
+	if (!extract_sockaddr(pool, address))
 		return false;
 
 	pool->stratum_url = pool->sockaddr_url;
 
-	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, pool->stratum_url);
+	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, address);
 
 	if (!initiate_stratum(pool) || !auth_stratum(pool))
 		return false;
@@ -1147,7 +1154,7 @@ bool parse_method(struct pool *pool, char *s)
 		goto out;
 	}
 
-	if (!strncasecmp(buf, "mining.reconnect", 16) && parse_reconnect(pool, params)) {
+	if (!strncasecmp(buf, "client.reconnect", 16) && parse_reconnect(pool, params)) {
 		ret = true;
 		goto out;
 	}
