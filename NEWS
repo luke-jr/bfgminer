@@ -1,5 +1,25 @@
 Version ??? - Future
 
+- Reinstate the history on dynamic intensity mode to damp fluctuations in
+intensity but use an upper limit on how much the value can increase at any time
+to cope with rare overflows.
+- Create a fix-protocol option which prevents cgminer from switching to stratum
+if it's detected.
+- Simplify target generation code.
+- Add support for client.get_version for stratum.
+- Use a 64 bit unsigned integer on the diff target to generate the hex target.
+- Update reconnect message to show whole address including port.
+- Look for null values and parse correct separate array entries for url and port
+with client reconnect commands for stratum.
+- The command for stratum is client.reconnect, not mining.reconnect.
+- Only copy the stratum url to the rpc url if an rpc url does not exist.
+- Implement rudimentary mining.reconnect support for stratum.
+- Ignore the value of stratum_active on calling initiate_stratum and assume
+we're always trying to reinitiate it, and set the active flag to false in that
+function.
+- stratum auth can be unset if we fail to authorise on subsequent calls to
+auth_stratum which undoes the requirement of setting it in one place so set it
+in pool_active.
 - Use the stratum url as the rpc url advertised if we switch to it.
 - Count an invalid nonce count as a hardware error on opencl.
 - Count each stratum work item as local work.
