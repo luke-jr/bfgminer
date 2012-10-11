@@ -138,7 +138,6 @@ Options for both config file and command line:
 --debuglog          Enable debug logging
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
---fix-protocol      Do not redirect to a different getwork protocol (eg. stratum)
 --kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
 --load-balance      Change multipool strategy from failover to efficiency based balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
@@ -933,9 +932,7 @@ Stratum uses direct TCP connections to the pool and thus it will NOT currently
 work through a http proxy but will work via a socks proxy if you need to use
 one. If you input the stratum port directly into your configuration, or use the
 special prefix "stratum+tcp://" instead of "http://", BFGMiner will ONLY try to
-use stratum protocol mining. If you do NOT wish BFGMiner to automatically
-switch to stratum protocol even if it is detected, add one of the --no-stratum
-or --fix-protocol options.
+use stratum protocol mining.
 
 ---
 
