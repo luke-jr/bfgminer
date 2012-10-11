@@ -5023,7 +5023,6 @@ static void *stratum_thread(void *userdata)
 			pool->getfail_occasions++;
 			total_go++;
 
-			pool->stratum_active = false;
 			if (initiate_stratum(pool) && auth_stratum(pool))
 				continue;
 

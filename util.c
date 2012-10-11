@@ -828,6 +828,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 
 	pool->server = (struct sockaddr_in *)res->ai_addr;
 	pool->sockaddr_url = strdup(url_address);
+
 	return true;
 }
 
@@ -1074,6 +1075,27 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	return true;
 }
 
+static bool parse_reconnect(struct pool *pool, json_t *val)
+{
+	char *url;
+
+	url = (char *)json_string_value(json_array_get(val, 0));
+	if (!url)
+		return false;
+
+	if (!extract_sockaddr(pool, url))
+		return false;
+
+	pool->stratum_url = pool->sockaddr_url;
+
+	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, pool->stratum_url);
+
+	if (!initiate_stratum(pool) || !auth_stratum(pool))
+		return false;
+
+	return true;
+}
+
 bool parse_method(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
@@ -1121,6 +1143,11 @@ bool parse_method(struct pool *pool, char *s)
 	}
 
 	if (!strncasecmp(buf, "mining.set_difficulty", 21) && parse_diff(pool, params)) {
+		ret = true;
+		goto out;
+	}
+
+	if (!strncasecmp(buf, "mining.reconnect", 16) && parse_reconnect(pool, params)) {
 		ret = true;
 		goto out;
 	}
@@ -1194,9 +1221,6 @@ bool initiate_stratum(struct pool *pool)
 	CURL *curl = NULL;
 	json_error_t err;
 	bool ret = false;
-
-	if (pool->stratum_active)
-		return true;
 
 	if (!pool->stratum_curl) {
 		pool->stratum_curl = curl_easy_init();
@@ -1296,6 +1320,7 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
+		pool->stratum_active = false;
 		if (curl) {
 			curl_easy_cleanup(curl);
 			pool->stratum_curl = NULL;
