@@ -139,14 +139,17 @@ static inline int fsync (int fd)
 #endif
 #endif /* !defined(__GLXBYTEORDER_H__) */
 
-/* This assumes htobe32 is a macro in endian.h */
+/* This assumes htobe32 is a macro in endian.h, and if it doesn't exist, then
+ * htobe64 also won't exist */
 #ifndef htobe32
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  define be32toh(x) bswap_32(x)
 #  define htobe32(x) bswap_32(x)
+#  define htobe64(x) bswap_32(x)
 # elif __BYTE_ORDER == __BIG_ENDIAN
 #  define be32toh(x) (x)
 #  define htobe32(x) (x)
+#  define htobe64(x) (x)
 #else
 #error UNKNOWN BYTE ORDER
 #endif
