@@ -129,6 +129,7 @@ bool use_curses;
 static bool opt_submit_stale = true;
 static int opt_shares;
 bool opt_fail_only;
+static bool opt_fix_protocol;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
@@ -893,6 +894,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--failover-only",
 			opt_set_bool, &opt_fail_only,
 			"Don't leak work to backup pools when primary pool is lagging"),
+	OPT_WITHOUT_ARG("--fix-protocol",
+			opt_set_bool, &opt_fix_protocol,
+			"Do not redirect to a different getwork protocol (eg. stratum)"),
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--gpu-dyninterval",
 		     set_int_1_to_65535, opt_show_intval, &opt_dynamic_interval,
@@ -4284,7 +4288,7 @@ retry_stratum:
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
 	 * and if so, switch to that in preference to getwork if it works */
-	if (pool->stratum_url && stratum_works(pool)) {
+	if (pool->stratum_url && !opt_fix_protocol && stratum_works(pool)) {
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		if (!pool->rpc_url)
 			pool->rpc_url = strdup(pool->stratum_url);
