@@ -1518,7 +1518,7 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	if (!sigdigits)
 		sprintf(buf, "%d%s", (unsigned int)dval, suffix);
 	else
-		sprintf(buf, "%.*g%s", sigdigits, dval, suffix);
+		sprintf(buf, "%-*.*g%s", sigdigits + 1, sigdigits, dval, suffix);
 }
 
 static void get_statline(char *buf, struct cgpu_info *cgpu)
