@@ -1476,6 +1476,7 @@ void tailsprintf(char *f, const char *fmt, ...)
  * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
 static void suffix_string(uint64_t val, char *buf, int sigdigits)
 {
+	const double  dkilo = 1000.0;
 	const uint64_t kilo = 1000ull;
 	const uint64_t mega = 1000000ull;
 	const uint64_t giga = 1000000000ull;
@@ -1487,26 +1488,26 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 
 	if (val >= exa) {
 		val /= peta;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "E");
 	} else if (val >= peta) {
 		val /= tera;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "P");
 	} else if (val >= tera) {
 		val /= giga;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "T");
 	} else if (val >= giga) {
 		val /= mega;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "G");
 	} else if (val >= mega) {
 		val /= kilo;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "M");
 	} else if (val >= kilo) {
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "K");
 	} else
 		dval = val;
@@ -1519,26 +1520,25 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 
 static void get_statline(char *buf, struct cgpu_info *cgpu)
 {
-	double displayed_hashes, displayed_rolling = cgpu->rolling;
-	bool mhash_base = true;
+	char displayed_hashes[16], displayed_rolling[16];
+	uint64_t dh64, dr64;
 
-	displayed_hashes = cgpu->total_mhashes / total_secs;
-	if (displayed_hashes < 1) {
-		displayed_hashes *= 1000;
-		displayed_rolling *= 1000;
-		mhash_base = false;
-	}
+	dh64 = cgpu->total_mhashes / total_secs;
+	dh64 *= 1000000ull;
+	dr64 = cgpu->rolling;
+	dr64 *= 1000000ull;
+	suffix_string(dh64, displayed_hashes, 4);
+	suffix_string(dr64, displayed_rolling, 4);
 
 	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
 	if (cgpu->api->get_statline_before)
 		cgpu->api->get_statline_before(buf, cgpu);
 	else
 		tailsprintf(buf, "               | ");
-	tailsprintf(buf, "(%ds):%.1f (avg):%.1f %sh/s | A:%d R:%d HW:%d U:%.1f/m",
+	tailsprintf(buf, "(%ds):%s (avg):%sh/s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
 		displayed_rolling,
 		displayed_hashes,
-	        mhash_base ? "M" : "K",
 		cgpu->accepted,
 		cgpu->rejected,
 		cgpu->hw_errors,
@@ -4038,9 +4038,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double utility, efficiency = 0.0;
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
-	double local_mhashes, displayed_hashes, displayed_rolling;
-	bool mhash_base = true;
+	double local_mhashes;
 	bool showlog = false;
+	char displayed_hashes[16], displayed_rolling[16];
+	uint64_t dh64, dr64;
 
 	local_mhashes = (double)hashes_done / 1000000.0;
 	/* Update the last time this thread reported in */
@@ -4118,17 +4119,14 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	utility = total_accepted / total_secs * 60;
 	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
-	displayed_hashes = total_mhashes_done / total_secs;
-	displayed_rolling = rolling;
-	if (displayed_hashes < 1) {
-		displayed_hashes *= 1000;
-		displayed_rolling *= 1000;
-		mhash_base = false;
-	}
+	dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
+	dr64 = (double)rolling * 1000000ull;
+	suffix_string(dh64, displayed_hashes, 4);
+	suffix_string(dr64, displayed_rolling, 4);
 
-	sprintf(statusline, "%s(%ds):%.1f (avg):%.1f %sh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
+	sprintf(statusline, "%s(%ds):%s (avg):%sh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
-		opt_log_interval, displayed_rolling, displayed_hashes, mhash_base ? "M" : "K",
+		opt_log_interval, displayed_rolling, displayed_hashes,
 		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
 
 
