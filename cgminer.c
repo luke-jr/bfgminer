@@ -1523,10 +1523,8 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
 
-	dh64 = cgpu->total_mhashes / total_secs;
-	dh64 *= 1000000ull;
-	dr64 = cgpu->rolling;
-	dr64 *= 1000000ull;
+	dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
+	dr64 = (double)rolling * 1000000ull;
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
 
