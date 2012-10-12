@@ -1587,7 +1587,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpustart) / gpu->intervals;
 			/* Very rarely we may get an overflow so put an upper
 			 * limit on the detected time */
-			if (gpu_us > gpu->gpu_us_average * 4)
+			if (unlikely(gpu->gpu_us_average > 0 && gpu_us > gpu->gpu_us_average * 4))
 				gpu_us = gpu->gpu_us_average * 4;
 			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
 
