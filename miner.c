@@ -100,6 +100,13 @@ bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
+#if BLKMAKER_VERSION > 1 || 1 /* TEMPORARY */
+struct _cbscript_t {
+	char *data;
+	size_t sz;
+};
+static struct _cbscript_t opt_coinbase_script;
+#endif
 #if BLKMAKER_VERSION < 1
 const
 #endif
@@ -520,6 +527,23 @@ char *set_strdup(const char *arg, char **p)
 	*p = strdup((char *)arg);
 	return NULL;
 }
+
+#if BLKMAKER_VERSION > 1 || 1 /* TEMPORARY */
+static char *set_b58addr(const char *arg, struct _cbscript_t *p)
+{
+	size_t scriptsz = blkmk_address_to_script(NULL, 0, arg);
+	if (!scriptsz)
+		return "Invalid address";
+	char *script = malloc(scriptsz);
+	if (blkmk_address_to_script(script, scriptsz, arg) != scriptsz) {
+		free(script);
+		return "Failed to convert address to script";
+	}
+	p->data = script;
+	p->sz = scriptsz;
+	return NULL;
+}
+#endif
 
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
@@ -992,6 +1016,14 @@ static struct opt_table opt_config_table[] = {
 #ifdef WANT_CPUMINE
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
+		     opt_hidden),
+#endif
+#if BLKMAKER_VERSION > 1 || 1 /* TEMPORARY */
+	OPT_WITH_ARG("--coinbase-addr",
+		     set_b58addr, NULL, &opt_coinbase_script,
+		     "Set coinbase payout address for solo mining"),
+	OPT_WITH_ARG("--coinbase-payout|--cbaddr|--cb-addr|--payout",
+		     set_b58addr, NULL, &opt_coinbase_script,
 		     opt_hidden),
 #endif
 #if BLKMAKER_VERSION > 0
@@ -1544,6 +1576,10 @@ static bool work_decode(const json_t *val, struct work *work)
 			goto err_out;
 		}
 		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
+#if BLKMAKER_VERSION > 1 || 1 /* TEMPORARY */
+		if (opt_coinbase_script.sz)
+			blkmk_init_generation(work->tmpl, opt_coinbase_script.data, opt_coinbase_script.sz);
+#endif
 #if BLKMAKER_VERSION > 0
 		{
 			ssize_t ae = blkmk_append_coinbase_safe(work->tmpl, opt_coinbase_sig, 101);

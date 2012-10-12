@@ -134,6 +134,7 @@ Options for both config file and command line:
 --api-port          Port number of miner API (default: 4028)
 --balance           Change multipool strategy from failover to even share balance
 --benchmark         Run BFGMiner in benchmark mode - produces no shares
+--coinbase-addr <arg> Set coinbase payout address for solo mining
 --coinbase-sig <arg> Set coinbase signature when possible
 --debug|-D          Enable debug output
 --debuglog          Enable debug logging
