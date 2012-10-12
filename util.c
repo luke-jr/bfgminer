@@ -832,7 +832,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	sprintf(url_address, "%.*s", url_len, url_begin);
 
 	if (port_len)
-		sprintf(port, "%.*s", port_len, port_start);
+		snprintf(port, 5, "%.*s", port_len, port_start);
 	else
 		strcpy(port, "80");
 
