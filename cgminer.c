@@ -1608,9 +1608,9 @@ static void curses_print_devstatus(int thr_id)
 {
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
-	double displayed_hashes, displayed_rolling;
-	bool mhash_base = true;
 	char logline[255];
+	char displayed_hashes[16], displayed_rolling[16];
+	uint64_t dh64, dr64;
 
 	if (devcursor + cgpu->cgminer_id > LINES - 2)
 		return;
@@ -1627,13 +1627,10 @@ static void curses_print_devstatus(int thr_id)
 	else
 		wprintw(statuswin, "               | ");
 
-	displayed_hashes = cgpu->total_mhashes / total_secs;
-	displayed_rolling = cgpu->rolling;
-	if (displayed_hashes < 1) {
-		displayed_hashes *= 1000;
-		displayed_rolling *= 1000;
-		mhash_base = false;
-	}
+	dh64 = (double)cgpu->total_mhashes / total_secs * 1000000ull;
+	dr64 = (double)cgpu->rolling * 1000000ull;
+	suffix_string(dh64, displayed_hashes, 4);
+	suffix_string(dr64, displayed_rolling, 4);
 
 	if (cgpu->status == LIFE_DEAD)
 		wprintw(statuswin, "DEAD ");
@@ -1644,15 +1641,14 @@ static void curses_print_devstatus(int thr_id)
 	else if (cgpu->deven == DEV_RECOVER)
 		wprintw(statuswin, "REST  ");
 	else
-		wprintw(statuswin, "%5.1f", displayed_rolling);
+		wprintw(statuswin, "%6s", displayed_rolling);
 	adj_width(cgpu->accepted, &awidth);
 	adj_width(cgpu->rejected, &rwidth);
 	adj_width(cgpu->hw_errors, &hwwidth);
 	adj_width(cgpu->utility, &uwidth);
 
-	wprintw(statuswin, "/%5.1f%sh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
+	wprintw(statuswin, "/%6sh/s | A:%*d R:%*d HW:%*d U:%*.2f/m",
 			displayed_hashes,
-			mhash_base ? "M" : "K",
 			awidth, cgpu->accepted,
 			rwidth, cgpu->rejected,
 			hwwidth, cgpu->hw_errors,
