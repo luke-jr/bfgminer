@@ -1,3 +1,21 @@
+Version 2.8.3 - October 12, 2012
+
+- Left align values that are suffix_string generated.
+- Share_diff should not be converting the work data to hex.
+- Off by one error.
+- Prevent overflows of the port char array in extract_sockaddr.
+- Disable stratum detection with scrypt.
+- Use the suffix string function when displaying device hashrates.
+- Be consistent with the get_statline function.
+- Use the suffix string function for displaying hashrate with 4 significant
+digits.
+- Display the actual share diff next to the pool required diff, using a suffix
+creation function to prevent values of >1000 being shown in their entirety.
+- Fix 4 * 0 being 0 that would break dynamic intensity mode.
+- Fix wrong byteswap macro being used on mingw32 which was breaking target
+generation on stratum.
+
+
 Version 2.8.2 - October 11, 2012
 
 - Reinstate the history on dynamic intensity mode to damp fluctuations in
