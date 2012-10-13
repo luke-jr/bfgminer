@@ -4828,6 +4828,8 @@ tryagain:
 			true, false, &rolltime, pool, false);
 	gettimeofday(&tv_getwork_reply, NULL);
 
+	free(rpc_req);
+
 	if (val) {
 		bool rc;
 		json_t *res;
@@ -5609,6 +5611,8 @@ retry_pool:
 		rpc_req = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
 		if (!rpc_req)
 			goto lpfail;
+
+		free(rpc_req);
 
 		wait_lpcurrent(cp);
 
