@@ -534,13 +534,20 @@ char *get_proxy(char *url, struct pool *pool)
 	return url;
 }
 
-
+/* Returns a malloced array string of a binary value of arbitrary length. The
+ * array is rounded up to a 4 byte size to appease architectures that need
+ * aligned array  sizes */
 char *bin2hex(const unsigned char *p, size_t len)
 {
-	char *s = malloc((len * 2) + 1);
 	unsigned int i;
+	ssize_t slen;
+	char *s;
 
-	if (!s)
+	slen = len * 2 + 1;
+	if (slen % 4)
+		slen += 4 - (slen % 4);
+	s = calloc(slen, 1);
+	if (unlikely(!s))
 		return NULL;
 
 	for (i = 0; i < len; i++)
@@ -549,24 +556,27 @@ char *bin2hex(const unsigned char *p, size_t len)
 	return s;
 }
 
+/* Does the reverse of bin2hex but does not allocate any ram */
 bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 {
+	bool ret = false;
+
 	while (*hexstr && len) {
-		char hex_byte[3];
+		char hex_byte[4];
 		unsigned int v;
 
-		if (!hexstr[1]) {
+		if (unlikely(!hexstr[1])) {
 			applog(LOG_ERR, "hex2bin str truncated");
-			return false;
+			return ret;
 		}
 
+		memset(hex_byte, 0, 4);
 		hex_byte[0] = hexstr[0];
 		hex_byte[1] = hexstr[1];
-		hex_byte[2] = 0;
 
-		if (sscanf(hex_byte, "%x", &v) != 1) {
+		if (unlikely(sscanf(hex_byte, "%x", &v) != 1)) {
 			applog(LOG_ERR, "hex2bin sscanf '%s' failed", hex_byte);
-			return false;
+			return ret;
 		}
 
 		*p = (unsigned char) v;
@@ -576,7 +586,9 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 		len--;
 	}
 
-	return (len == 0 && *hexstr == 0) ? true : false;
+	if (likely(len == 0 && *hexstr == 0))
+		ret = true;
+	return ret;
 }
 
 bool fulltest(const unsigned char *hash, const unsigned char *target)
