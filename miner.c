@@ -675,6 +675,9 @@ static char *set_rr(enum pool_strategy *strategy)
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
 {
+	if (opt_scrypt)
+		return false;
+
 	if (!extract_sockaddr(pool, url))
 		return false;
 
