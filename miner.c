@@ -1808,6 +1808,7 @@ void tailsprintf(char *f, const char *fmt, ...)
  * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
 static void suffix_string(uint64_t val, char *buf, int sigdigits)
 {
+	const double  dkilo = 1000.0;
 	const uint64_t kilo = 1000ull;
 	const uint64_t mega = 1000000ull;
 	const uint64_t giga = 1000000000ull;
@@ -1819,26 +1820,26 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 
 	if (val >= exa) {
 		val /= peta;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "E");
 	} else if (val >= peta) {
 		val /= tera;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "P");
 	} else if (val >= tera) {
 		val /= giga;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "T");
 	} else if (val >= giga) {
 		val /= mega;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "G");
 	} else if (val >= mega) {
 		val /= kilo;
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "M");
 	} else if (val >= kilo) {
-		dval = (double)val / kilo;
+		dval = (double)val / dkilo;
 		sprintf(suffix, "K");
 	} else
 		dval = val;
@@ -1932,11 +1933,6 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 
 static void get_statline(char *buf, struct cgpu_info *cgpu)
 {
-	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
-	if (cgpu->api->get_statline_before)
-		cgpu->api->get_statline_before(buf, cgpu);
-	else
-		tailsprintf(buf, "               | ");
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
@@ -1944,6 +1940,12 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		1e6*cgpu->total_mhashes / total_secs,
 		utility_to_hashrate(cgpu->utility_diff1),
 		H2B_SPACED);
+
+	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
+	if (cgpu->api->get_statline_before)
+		cgpu->api->get_statline_before(buf, cgpu);
+	else
+		tailsprintf(buf, "               | ");
 	tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
 		cHr, aHr,
@@ -4958,6 +4960,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		1e6*total_mhashes_done / total_secs,
 		utility_to_hashrate(total_accepted_weighed / (total_secs ?: 1) * 60),
 		H2B_SPACED);
+
 	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
