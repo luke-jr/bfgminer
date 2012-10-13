@@ -1850,7 +1850,7 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	if (!sigdigits)
 		sprintf(buf, "%d%s", (unsigned int)dval, suffix);
 	else
-		sprintf(buf, "%.*g%s", sigdigits, dval, suffix);
+		sprintf(buf, "%-*.*g%s", sigdigits + 1, sigdigits, dval, suffix);
 }
 
 static float
@@ -2418,16 +2418,12 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 static uint64_t share_diff(const struct work *work)
 {
 	const uint64_t h64 = 0xFFFF000000000000ull;
-	char rtarget[33], *target;
 	uint64_t *data64, d64;
+	char rhash[33];
 	uint64_t ret;
 
-	target = bin2hex(work->hash, 32);
-	if (unlikely(!target))
-		quit(1, "Failed to bin2hex in share_diff");
-	swab256(rtarget, target);
-	free(target);
-	data64 = (uint64_t *)(rtarget + 4);
+	swab256(rhash, work->hash);
+	data64 = (uint64_t *)(rhash + 4);
 	d64 = be64toh(*data64);
 	if (unlikely(!d64))
 		d64 = 1;
