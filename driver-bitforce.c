@@ -154,7 +154,7 @@ static int bitforce_autodetect_ftdi(void)
 	char **bufptrs;
 	char *buf;
 	int found = 0;
-	int i;
+	DWORD i;
 
 	FT_STATUS ftStatus;
 	DWORD numDevs;
@@ -409,6 +409,11 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 
 	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
 		float temp = strtof(s + 1, NULL);
+
+		/* Cope with older software  that breaks and reads nonsense
+		 * values */
+		if (temp > 100)
+			temp = strtod(s + 1, NULL);
 
 		if (temp > 0) {
 			bitforce->temp = temp;

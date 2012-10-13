@@ -32,7 +32,7 @@ cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@
 cgminer_SOURCES := cgminer.c
 
 cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
-		   util.c uthash.h logging.h			\
+		   util.c util.h uthash.h logging.h		\
 		   sha2.c sha2.h api.c
 
 cgminer_SOURCES	+= logging.c

@@ -146,6 +146,7 @@ Options for both config file and command line:
 --debug|-D          Enable debug output
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
+--fix-protocol      Do not redirect to a different getwork protocol (eg. stratum)
 --kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
 --load-balance      Change multipool strategy from failover to efficiency based balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
@@ -304,6 +305,10 @@ Single pool with a socks5 proxy, regular desktop:
 
 cgminer -o "socks5:proxy:port|http://pool:port" -u username -p password
 
+Single pool with stratum protocol support:
+
+cgminer -o stratum+tcp://pool:port -u username -p password
+
 The list of proxy types are:
  http:    standard http 1.1 proxy
  http0:   http 1.0 proxy
@@ -376,6 +381,17 @@ Thread 1: 60.2 Mh/s Enabled ALIVE
 [E]nable [D]isable [R]estart GPU [C]hange settings
 Or press any other key to continue
 
+
+The running log shows output like this:
+
+ [2012-10-12 18:02:20] Accepted f0c05469 Diff 1/1 GPU 0 pool 1
+ [2012-10-12 18:02:22] Accepted 218ac982 Diff 7/1 GPU 1 pool 1
+ [2012-10-12 18:02:23] Accepted d8300795 Diff 1/1 GPU 3 pool 1
+ [2012-10-12 18:02:24] Accepted 122c1ff1 Diff 14/1 GPU 1 pool 1
+
+The 8 byte hex value are the 2nd 8 bytes of the share being submitted to the
+pool. The 2 diff values are the actual difficulty target that share reached
+followed by the difficulty target the pool is currently asking for.
 
 ---
 Also many issues and FAQs are covered in the forum thread
@@ -908,6 +924,20 @@ To permanently give your account the 'dialout' group:
  sudo usermod -G dialout -a `whoami`
 Then logout and back in again
 
+Q: What is stratum and how do I use it?
+A: Stratum is a protocol designed for pooled mining in such a way as to
+minimise the amount of network communications, yet scale to hardware of any
+speed. With versions of cgminer 2.8.0+, if a pool has stratum support, cgminer
+will automatically detect it and switch to the support as advertised if it can.
+Stratum uses direct TCP connections to the pool and thus it will NOT currently
+work through a http proxy but will work via a socks proxy if you need to use
+one. If you input the stratum port directly into your configuration, or use the
+special prefix "stratum+tcp://" instead of "http://", cgminer will ONLY try to
+use stratum protocol mining. The advantages of stratum to the miner are no
+delays in getting more work for the miner, less rejects across block changes,
+and far less network communications for the same amount of mining hashrate. If
+you do NOT wish cgminer to automatically switch to stratum protocol even if it
+is detected, add the --fix-protocol option.
 
 ---
 

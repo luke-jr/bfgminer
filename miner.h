@@ -12,6 +12,7 @@
 #include "elist.h"
 #include "uthash.h"
 #include "logging.h"
+#include "util.h"
 
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
@@ -50,6 +51,19 @@ extern "C"
 void *alloca (size_t);
 # endif
 #endif
+
+#ifdef __MINGW32__
+#include <windows.h>
+#include <io.h>
+static inline int fsync (int fd)
+{
+	return (FlushFileBuffers ((HANDLE) _get_osfhandle (fd))) ? 0 : -1;
+}
+
+#ifndef MSG_DONTWAIT
+# define MSG_DONTWAIT 0x1000000
+#endif
+#endif /* __MINGW32__ */
 
 #if defined (__linux)
  #ifndef LINUX
@@ -125,14 +139,19 @@ void *alloca (size_t);
 #endif
 #endif /* !defined(__GLXBYTEORDER_H__) */
 
-/* This assumes htobe32 is a macro in endian.h */
+/* This assumes htobe32 is a macro in endian.h, and if it doesn't exist, then
+ * htobe64 also won't exist */
 #ifndef htobe32
 # if __BYTE_ORDER == __LITTLE_ENDIAN
 #  define be32toh(x) bswap_32(x)
+#  define be64toh(x) bswap_64(x)
 #  define htobe32(x) bswap_32(x)
+#  define htobe64(x) bswap_64(x)
 # elif __BYTE_ORDER == __BIG_ENDIAN
 #  define be32toh(x) (x)
+#  define be64toh(x) (x)
 #  define htobe32(x) (x)
+#  define htobe64(x) (x)
 #else
 #error UNKNOWN BYTE ORDER
 #endif
@@ -378,11 +397,12 @@ struct cgpu_info {
 
 #ifdef USE_SCRYPT
 	int opt_lg, lookup_gap;
-	int opt_tc, thread_concurrency;
-	int shaders;
+	size_t opt_tc, thread_concurrency;
+	size_t shaders;
 #endif
 	struct timeval tv_gpustart;
 	struct timeval tv_gpumid;
+	double gpu_us_average;
 	int intervals, hit;
 #endif
 
@@ -510,6 +530,21 @@ static inline void swap256(void *dest_p, const void *src_p)
 	dest[7] = src[0];
 }
 
+static inline void swab256(void *dest_p, const void *src_p)
+{
+	uint32_t *dest = dest_p;
+	const uint32_t *src = src_p;
+
+	dest[0] = swab32(src[7]);
+	dest[1] = swab32(src[6]);
+	dest[2] = swab32(src[5]);
+	dest[3] = swab32(src[4]);
+	dest[4] = swab32(src[3]);
+	dest[5] = swab32(src[2]);
+	dest[6] = swab32(src[1]);
+	dest[7] = swab32(src[0]);
+}
+
 extern void quit(int status, const char *format, ...);
 
 static inline void mutex_lock(pthread_mutex_t *lock)
@@ -594,6 +629,7 @@ extern bool opt_worktime;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
+extern int swork_id;
 
 extern pthread_rwlock_t netacc_lock;
 
@@ -645,7 +681,9 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int enabled_pools;
-extern void add_pool_details(bool live, char *url, char *user, char *pass);
+extern bool detect_stratum(struct pool *pool, char *url);
+extern struct pool *add_pool(void);
+extern void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
 
@@ -748,6 +786,24 @@ enum pool_enable {
 	POOL_REJECTING,
 };
 
+struct stratum_work {
+	char *job_id;
+	char *prev_hash;
+	char *coinbase1;
+	char *coinbase2;
+	char **merkle;
+	char *bbversion;
+	char *nbit;
+	char *ntime;
+	bool clean;
+
+	int merkles;
+	int diff;
+};
+
+#define RECVSIZE 8191
+#define RBUFSIZE (RECVSIZE + 1)
+
 struct pool {
 	int pool_no;
 	int prio;
@@ -810,12 +866,31 @@ struct pool {
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
+
+	/* Stratum variables */
+	char *stratum_url;
+	char *stratum_port;
+	CURL *stratum_curl;
+	SOCKETTYPE sock;
+	char sockbuf[RBUFSIZE];
+	struct sockaddr_in *server, client;
+	char *sockaddr_url; /* stripped url used for sockaddr */
+	char *nonce1;
+	uint32_t nonce2;
+	int n2size;
+	bool has_stratum;
+	bool stratum_active;
+	bool stratum_auth;
+	struct stratum_work swork;
+	pthread_t stratum_thread;
+	pthread_mutex_t stratum_lock;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
 #define GETWORK_MODE_POOL 'P'
 #define GETWORK_MODE_LP 'L'
 #define GETWORK_MODE_BENCHMARK 'B'
+#define GETWORK_MODE_STRATUM 'S'
 
 struct work {
 	unsigned char	data[128];
@@ -844,6 +919,14 @@ struct work {
 	bool		mandatory;
 	bool		block;
 	bool		queued;
+
+	bool		stratum;
+	/* These are arbitrary lengths as it is too hard to keep track of
+	 * dynamically allocated ram in work structs */
+	char 		job_id[64];
+	char		nonce2[64];
+	char		ntime[16];
+	int		sdiff;
 
 	unsigned int	work_block;
 	int		id;

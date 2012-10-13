@@ -252,6 +252,16 @@ static void *postcalc_hash(void *userdata)
 
 	pthread_detach(pthread_self());
 
+	/* To prevent corrupt values in FOUND from trying to read beyond the
+	 * end of the res[] array */
+	if (unlikely(pcd->res[FOUND] & ~FOUND)) {
+		applog(LOG_WARNING, "%s%d: invalid nonce count - HW error",
+				thr->cgpu->api->name, thr->cgpu->device_id);
+		hw_errors++;
+		thr->cgpu->hw_errors++;
+		pcd->res[FOUND] &= FOUND;
+	}
+
 	for (entry = 0; entry < pcd->res[FOUND]; entry++) {
 		uint32_t nonce = pcd->res[entry];
 
