@@ -2039,6 +2039,7 @@ static void curses_print_devstatus(int thr_id)
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	char logline[255];
+	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SHORT]];
 	int ypos;
 
 	/* Check this isn't out of the window size */
@@ -2064,13 +2065,13 @@ static void curses_print_devstatus(int thr_id)
 	else
 		wprintw(statuswin, "               | ");
 
-	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SHORT]];
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
 		1e6*cgpu->rolling,
 		1e6*cgpu->total_mhashes / total_secs,
 		utility_to_hashrate(cgpu->utility_diff1),
 		H2B_SHORT);
+
 	if (cgpu->status == LIFE_DEAD)
 		wprintw(statuswin, "DEAD ");
 	else if (cgpu->status == LIFE_SICK)
