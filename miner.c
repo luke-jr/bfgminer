@@ -4518,6 +4518,8 @@ tryagain:
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			true, false, &rolltime, pool, false);
 
+	free(rpc_req);
+
 	if (val) {
 		bool rc;
 		json_t *res;
@@ -5254,6 +5256,8 @@ retry_pool:
 		work->pool = pool;
 		const char *rpc_req;
 		rpc_req = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
+
+		free(rpc_req);
 
 		wait_lpcurrent(cp);
 
