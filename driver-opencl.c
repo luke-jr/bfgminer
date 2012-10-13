@@ -1462,10 +1462,9 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 	_clState *clState = clStates[thr_id];
 	struct cgpu_info *gpu = thr->cgpu;
 
-	if (gpu->dynamic)
-		return;
+	if (!gpu->dynamic)
+		clFinish(clState->commandQueue);
 
-	clFinish(clState->commandQueue);
 	if (thrdata->res[FOUND]) {
 		thrdata->last_work = &thrdata->_last_work;
 		memcpy(thrdata->last_work, work, sizeof(*thrdata->last_work));
