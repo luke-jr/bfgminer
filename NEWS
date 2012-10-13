@@ -1,5 +1,13 @@
 Version ??? - Future
 
+- Left align values that are suffix_string generated.
+- Share_diff should not be converting the work data to hex.
+- Off by one error.
+- Prevent overflows of the port char array in extract_sockaddr.
+- Disable stratum detection with scrypt.
+- Display the actual share diff next to the pool required diff, using a suffix
+creation function to prevent values of >1000 being shown in their entirety.
+- Fix 4 * 0 being 0 that would break dynamic intensity mode.
 - Supplement other 64-bit endian swap macros
 - Bugfix: Fix htobe64 on big endian platforms that don't define it
 - Fix lack of htobe64 on mingw32.

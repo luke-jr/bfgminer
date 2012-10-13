@@ -387,11 +387,10 @@ Or press any other key to continue
 
 The running log shows output like this:
 
- [2012-10-12 15:38:17] Accepted 78bb4861 Diff 2/1 GPU 1 pool 6
- [2012-10-12 15:38:17] Accepted f99b2b7a Diff 4/1 GPU 2 pool 6
- [2012-10-12 15:38:23] Accepted af298bef Diff 4/1 GPU 0 pool 6
- [2012-10-12 15:38:24] Accepted d04421af Diff 5/1 GPU 0 pool 6
- [2012-10-12 15:38:25] Accepted c18e5b5b Diff 4/1 GPU 3 pool 6
+ [2012-10-12 18:02:20] Accepted f0c05469 Diff 1/1 GPU 0 pool 1
+ [2012-10-12 18:02:22] Accepted 218ac982 Diff 7/1 GPU 1 pool 1
+ [2012-10-12 18:02:23] Accepted d8300795 Diff 1/1 GPU 3 pool 1
+ [2012-10-12 18:02:24] Accepted 122c1ff1 Diff 14/1 GPU 1 pool 1
 
 The 8 byte hex value are the 2nd 8 bytes of the share being submitted to the
 pool. The 2 diff values are the actual difficulty target that share reached
