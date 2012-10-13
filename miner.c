@@ -1804,6 +1804,51 @@ void tailsprintf(char *f, const char *fmt, ...)
 	va_end(ap);
 }
 
+/* Convert a uint64_t value into a truncated string for displaying with its
+ * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
+static void suffix_string(uint64_t val, char *buf, int sigdigits)
+{
+	const uint64_t kilo = 1000ull;
+	const uint64_t mega = 1000000ull;
+	const uint64_t giga = 1000000000ull;
+	const uint64_t tera = 1000000000000ull;
+	const uint64_t peta = 1000000000000000ull;
+	const uint64_t exa  = 1000000000000000000ull;
+	char suffix[2] = "";
+	double dval;
+
+	if (val >= exa) {
+		val /= peta;
+		dval = (double)val / kilo;
+		sprintf(suffix, "E");
+	} else if (val >= peta) {
+		val /= tera;
+		dval = (double)val / kilo;
+		sprintf(suffix, "P");
+	} else if (val >= tera) {
+		val /= giga;
+		dval = (double)val / kilo;
+		sprintf(suffix, "T");
+	} else if (val >= giga) {
+		val /= mega;
+		dval = (double)val / kilo;
+		sprintf(suffix, "G");
+	} else if (val >= mega) {
+		val /= kilo;
+		dval = (double)val / kilo;
+		sprintf(suffix, "M");
+	} else if (val >= kilo) {
+		dval = (double)val / kilo;
+		sprintf(suffix, "K");
+	} else
+		dval = val;
+
+	if (!sigdigits)
+		sprintf(buf, "%d%s", (unsigned int)dval, suffix);
+	else
+		sprintf(buf, "%.*g%s", sigdigits, dval, suffix);
+}
+
 static float
 utility_to_hashrate(double utility)
 {
@@ -2364,6 +2409,26 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	}
 }
 
+static uint64_t share_diff(const struct work *work)
+{
+	const uint64_t h64 = 0xFFFF000000000000ull;
+	char rtarget[33], *target;
+	uint64_t *data64, d64;
+	uint64_t ret;
+
+	target = bin2hex(work->hash, 32);
+	if (unlikely(!target))
+		quit(1, "Failed to bin2hex in share_diff");
+	swab256(rtarget, target);
+	free(target);
+	data64 = (uint64_t *)(rtarget + 4);
+	d64 = be64toh(*data64);
+	if (unlikely(!d64))
+		d64 = 1;
+	ret = h64 / d64;
+	return ret;
+}
+
 static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
@@ -2436,8 +2501,12 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 			sprintf(hashshow, "%08lx.%08lx", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]));
 		else {
 			int intdiff = round(work->work_difficulty);
+			uint64_t sharediff = share_diff(work);
+			char diffdisp[16];
 
-			sprintf(hashshow, "%08lx Diff %d%s", (unsigned long)(hash32[6]), intdiff,
+			suffix_string(sharediff, diffdisp, 0);
+
+			sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
 				work->block? " BLOCK!" : "");
 		}
 
@@ -4913,13 +4982,16 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 				 struct stratum_share *sshare)
 {
 	struct work *work = &sshare->work;
+	uint64_t sharediff = share_diff(work);
 	char hashshow[65];
 	uint32_t *hash32;
+	char diffdisp[16];
 	int intdiff;
 
 	hash32 = (uint32_t *)(work->hash);
 	intdiff = round(work->work_difficulty);
-	sprintf(hashshow, "%08lx Diff %d%s", (unsigned long)(hash32[6]), intdiff,
+	suffix_string(sharediff, diffdisp, 0);
+	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
 		work->block? " BLOCK!" : "");
 	share_result(val, res_val, err_val, work, hashshow, false, "");
 }
