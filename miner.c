@@ -2266,7 +2266,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		if (opt_scrypt)
 			sprintf(hashshow, "%08lx.%08lx", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]));
 		else {
-			int intdiff = round(work->work_difficulty);
+			int intdiff = floor(work->work_difficulty);
 
 			sprintf(hashshow, "%08lx Diff %d%s", (unsigned long)(hash32[6]), intdiff,
 				work->block? " BLOCK!" : "");
