@@ -454,9 +454,7 @@ struct cgpu_info {
 	size_t shaders;
 #endif
 	struct timeval tv_gpustart;
-	struct timeval tv_gpumid;
-	double gpu_us_average;
-	int intervals, hit;
+	int intervals;
 #endif
 
 	bool new_work;
