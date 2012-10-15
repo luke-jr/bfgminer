@@ -557,7 +557,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	 */
 	char binaryfilename[255];
 	char filename[255];
-	char numbuf[10];
+	char numbuf[32];
 
 	if (cgpu->kernel == KL_NONE) {
 		if (opt_scrypt) {
