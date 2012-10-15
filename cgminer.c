@@ -2921,7 +2921,12 @@ static bool work_rollable(struct work *work)
 
 static bool hash_push(struct work *work)
 {
-	bool rc = true;
+	bool rc = true, dec = false;
+
+	if (work->queued) {
+		work->queued = false;
+		dec = true;
+	}
 
 	mutex_lock(stgd_lock);
 	if (work_rollable(work))
@@ -2936,10 +2941,8 @@ static bool hash_push(struct work *work)
 
 	work->pool->staged++;
 
-	if (work->queued) {
-		work->queued = false;
+	if (dec)
 		dec_queued(work->pool);
-	}
 
 	return rc;
 }
