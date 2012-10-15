@@ -2929,6 +2929,7 @@ static bool hash_push(struct work *work)
 	}
 
 	mutex_lock(stgd_lock);
+	work->pool->staged++;
 	if (work_rollable(work))
 		staged_rollable++;
 	if (likely(!getq->frozen)) {
@@ -2938,8 +2939,6 @@ static bool hash_push(struct work *work)
 		rc = false;
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
-
-	work->pool->staged++;
 
 	if (dec)
 		dec_queued(work->pool);
