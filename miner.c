@@ -5257,8 +5257,6 @@ retry_pool:
 		const char *rpc_req;
 		rpc_req = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
 
-		free(rpc_req);
-
 		wait_lpcurrent(cp);
 
 		gettimeofday(&start, NULL);
@@ -5270,6 +5268,7 @@ retry_pool:
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 		val = json_rpc_call(curl, pool->lp_url, pool->rpc_userpass, rpc_req,
 				    false, true, &rolltime, pool, false);
+		free(rpc_req);
 		if (likely(val)) {
 			soval = json_object_get(json_object_get(val, "result"), "submitold");
 			if (soval)
