@@ -2419,7 +2419,7 @@ static uint64_t share_diff(const struct work *work)
 {
 	const uint64_t h64 = 0xFFFF000000000000ull;
 	uint64_t *data64, d64;
-	char rhash[33];
+	char rhash[36];
 	uint64_t ret;
 
 	swab256(rhash, work->hash);
@@ -5507,7 +5507,7 @@ static struct work *clone_work(struct work *work)
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
-	unsigned char hash1[33];
+	unsigned char hash1[36];
 
 	sha2(data, len, hash1, false);
 	sha2(hash1, 32, hash, false);
@@ -5519,7 +5519,7 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
 static void set_work_target(struct work *work, int diff)
 {
-	unsigned char rtarget[33], target[33];
+	unsigned char rtarget[36], target[36];
 	uint64_t *data64, h64;
 
 	h64 = 0xFFFF000000000000ull;
@@ -5544,8 +5544,8 @@ static void set_work_target(struct work *work, int diff)
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[33], merkle_sha[65], *merkle_hash;
-	char header[257], hash1[129], *nonce2;
+	unsigned char *coinbase, merkle_root[36], merkle_sha[68], *merkle_hash;
+	char header[260], hash1[132], *nonce2;
 	int len, cb1_len, n1_len, cb2_len, i;
 	uint32_t *data32, *swap32;
 
@@ -5574,7 +5574,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	gen_hash(coinbase, merkle_root, len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
-		unsigned char merkle_bin[33];
+		unsigned char merkle_bin[36];
 
 		hex2bin(merkle_bin, pool->swork.merkle[i], 32);
 		memcpy(merkle_sha + 32, merkle_bin, 32);
