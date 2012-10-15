@@ -115,7 +115,7 @@ dist_bitstreams_DATA = bitstreams/*
 endif
 
 if HAS_X6500
-bfgminer_SOURCES += driver-x6500.c ft232r.c
+bfgminer_SOURCES += driver-x6500.c ft232r.c ft232r.h jtag.c jtag.h
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = bitstreams/*
 endif
