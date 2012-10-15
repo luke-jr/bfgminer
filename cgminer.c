@@ -1971,9 +1971,10 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	}
 }
 
+static const uint64_t diffone = 0xFFFF000000000000ull;
+
 static uint64_t share_diff(const struct work *work)
 {
-	const uint64_t h64 = 0xFFFF000000000000ull;
 	uint64_t *data64, d64;
 	char rhash[36];
 	uint64_t ret;
@@ -1983,7 +1984,7 @@ static uint64_t share_diff(const struct work *work)
 	d64 = be64toh(*data64);
 	if (unlikely(!d64))
 		d64 = 1;
-	ret = h64 / d64;
+	ret = diffone / d64;
 	return ret;
 }
 
@@ -2044,11 +2045,12 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	err = json_object_get(val, "error");
 
 	if (!QUIET) {
+		int intdiff = floor(work->work_difficulty);
+
 		hash32 = (uint32_t *)(work->hash);
 		if (opt_scrypt)
-			sprintf(hashshow, "%08lx.%08lx", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]));
+			sprintf(hashshow, "%08lx Diff %d", (unsigned long)(hash32[7]), intdiff);
 		else {
-			int intdiff = floor(work->work_difficulty);
 			uint64_t sharediff = share_diff(work);
 			char diffdisp[16];
 
@@ -2186,11 +2188,21 @@ static double DIFFEXACTONE = 269599466671506397946670150870196306736371444225405
 static void calc_diff(struct work *work, int known)
 {
 	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
-	double targ;
-	int i;
 
-	if (!known) {
-		targ = 0;
+	if (opt_scrypt) {
+		uint64_t *data64, d64;
+		char rtarget[36];
+
+		swab256(rtarget, work->target);
+		data64 = (uint64_t *)(rtarget + 2);
+		d64 = be64toh(*data64);
+		if (unlikely(!d64))
+			d64 = 1;
+		work->work_difficulty = diffone / d64;
+	} else if (!known) {
+		double targ = 0;
+		int i;
+
 		for (i = 31; i >= 0; i--) {
 			targ *= 256;
 			targ += work->target[i];
@@ -4606,7 +4618,7 @@ static void set_work_target(struct work *work, int diff)
 	unsigned char rtarget[36], target[36];
 	uint64_t *data64, h64;
 
-	h64 = 0xFFFF000000000000ull;
+	h64 = diffone;
 	h64 /= (uint64_t)diff;
 	memset(rtarget, 0, 32);
 	data64 = (uint64_t *)(rtarget + 4);
