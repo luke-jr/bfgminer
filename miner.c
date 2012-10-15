@@ -3094,8 +3094,8 @@ static void *get_work_thread(void *userdata)
 	pool = wc->pool;
 
 	if (clone_available()) {
-		applog(LOG_DEBUG, "dec_queued from get_work_thread due to clone available\n");
 		dec_queued(pool);
+		applog(LOG_DEBUG, "dec_queued from get_work_thread due to clone available");
 		goto out;
 	}
 
@@ -3808,8 +3808,8 @@ static bool hash_push(struct work *work)
 
 	if (work->queued) {
 		work->queued = false;
-		applog(LOG_DEBUG, "dec_queued in hash_push\n");
 		dec_queued(work->pool);
+		applog(LOG_DEBUG, "dec_queued from hash_push");
 	}
 
 	return rc;
