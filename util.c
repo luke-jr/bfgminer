@@ -939,6 +939,7 @@ char *recv_line(struct pool *pool)
 
 	if (!strstr(pool->sockbuf, "\n")) {
 		char s[RBUFSIZE];
+		size_t sspace;
 		CURLcode rc;
 
 		if (!sock_full(pool, true)) {
@@ -955,7 +956,11 @@ char *recv_line(struct pool *pool)
 			applog(LOG_DEBUG, "Failed to recv sock in recv_line");
 			goto out;
 		}
-		strcat(pool->sockbuf, s);
+		/* Prevent buffer overflows, but if 8k is still not enough,
+		 * likely we have had some comms issues and the data is all
+		 * useless anyway */
+		sspace = RECVSIZE - strlen(pool->sockbuf);
+		strncat(pool->sockbuf, s, sspace);
 	}
 
 	buflen = strlen(pool->sockbuf);
