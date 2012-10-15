@@ -993,8 +993,13 @@ built:
 			bufsize = cgpu->max_alloc;
 		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
 		clState->padbufsize = bufsize;
+
+		/* This buffer is weird and might work to some degree even if
+		 * the create buffer call has apparently failed, so check if we
+		 * get anything back before we call it a failure. */
+		clState->padbuffer8 = NULL;
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
-		if (status != CL_SUCCESS) {
+		if (status != CL_SUCCESS && !clState->padbuffer8) {
 			applog(LOG_ERR, "Error %d: clCreateBuffer (padbuffer8), decrease CT or increase LG", status);
 			return NULL;
 		}

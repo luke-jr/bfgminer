@@ -2502,7 +2502,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		if (opt_scrypt)
 			sprintf(hashshow, "%08lx.%08lx", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]));
 		else {
-			int intdiff = round(work->work_difficulty);
+			int intdiff = floor(work->work_difficulty);
 			uint64_t sharediff = share_diff(work);
 			char diffdisp[16];
 
@@ -4992,7 +4992,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 	int intdiff;
 
 	hash32 = (uint32_t *)(work->hash);
-	intdiff = round(work->work_difficulty);
+	intdiff = floor(work->work_difficulty);
 	suffix_string(sharediff, diffdisp, 0);
 	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
 		work->block? " BLOCK!" : "");
