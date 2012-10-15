@@ -148,6 +148,8 @@ struct ft232r_device_handle {
 	libusb_device_handle *h;
 	uint8_t i;
 	uint8_t o;
+	unsigned char ibuf[256];
+	uint8_t ibufLen;
 };
 
 struct ft232r_device_handle *ft232r_open(libusb_device *dev)
@@ -249,10 +251,23 @@ ssize_t ft232r_write_all(struct ft232r_device_handle *dev, void *data, size_t co
 	return total ?: writ;
 }
 
-// Caveat: Reads of less than 512 bytes may fail :(
-ssize_t ft232r_read(struct ft232r_device_handle *dev, void *buf, size_t count)
+ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
 {
-	return ft232r_readwrite(dev, dev->i, buf, count);
+	if (!dev->ibufLen) {
+		int transferred = ft232r_readwrite(dev, dev->i, dev->ibuf, sizeof(dev->ibuf));
+		if (transferred <= 0)
+			return transferred;
+		dev->ibufLen = transferred;
+	}
+	
+	if (count > dev->ibufLen)
+		count = dev->ibufLen;
+	memcpy(data, dev->ibuf, count);
+	if (count < dev->ibufLen) {
+		dev->ibufLen -= count;
+		memmove(dev->ibuf, &dev->ibuf[count], dev->ibufLen);
+	}
+	return count;
 }
 
 #if 0

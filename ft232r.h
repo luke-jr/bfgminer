@@ -33,7 +33,6 @@ extern bool ft232r_purge_buffers(struct ft232r_device_handle *, enum ft232r_rese
 extern bool ft232r_set_bitmode(struct ft232r_device_handle *, uint8_t mask, uint8_t mode);
 extern ssize_t ft232r_write(struct ft232r_device_handle *, void *data, size_t count);
 extern ssize_t ft232r_write_all(struct ft232r_device_handle *, void *data, size_t count);
-// ft232r_read caveat: Reads of less than 512 bytes may fail :(
 extern ssize_t ft232r_read(struct ft232r_device_handle *, void *buf, size_t count);
 
 #endif
