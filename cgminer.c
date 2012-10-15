@@ -47,6 +47,7 @@
 #include "driver-cpu.h"
 #include "driver-opencl.h"
 #include "bench_block.h"
+#include "scrypt.h"
 
 #if defined(unix)
 	#include <errno.h>
@@ -1988,7 +1989,17 @@ static uint64_t share_diff(const struct work *work)
 	return ret;
 }
 
-static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
+static uint32_t scrypt_diff(const struct work *work)
+{
+	const uint32_t scrypt_diffone = 0x0000fffful;
+	uint32_t d32 = work->outputhash;
+
+	if (unlikely(!d32))
+		d32 = 1;
+	return scrypt_diffone / d32;
+}
+
+static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
 	json_t *val, *res, *err;
@@ -2046,13 +2057,19 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 
 	if (!QUIET) {
 		int intdiff = floor(work->work_difficulty);
+		char diffdisp[16];
 
 		hash32 = (uint32_t *)(work->hash);
-		if (opt_scrypt)
-			sprintf(hashshow, "%08lx Diff %d", (unsigned long)(hash32[7]), intdiff);
-		else {
+		if (opt_scrypt) {
+			uint32_t sharediff;
+
+			scrypt_outputhash(work);
+			sharediff = scrypt_diff(work);
+			suffix_string(sharediff, diffdisp, 0);
+
+			sprintf(hashshow, "%08lx Diff %s/%d", (unsigned long)work->outputhash, diffdisp, intdiff);
+		} else {
 			uint64_t sharediff = share_diff(work);
-			char diffdisp[16];
 
 			suffix_string(sharediff, diffdisp, 0);
 
