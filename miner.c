@@ -3791,9 +3791,15 @@ static bool work_rollable(struct work *work)
 
 static bool hash_push(struct work *work)
 {
-	bool rc = true;
+	bool rc = true, dec = false;
+
+	if (work->queued) {
+		work->queued = false;
+		dec = true;
+	}
 
 	mutex_lock(stgd_lock);
+	work->pool->staged++;
 	if (work_rollable(work))
 		staged_rollable++;
 	if (likely(!getq->frozen)) {
@@ -3804,10 +3810,7 @@ static bool hash_push(struct work *work)
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
 
-	work->pool->staged++;
-
-	if (work->queued) {
-		work->queued = false;
+	if (dec) {
 		dec_queued(work->pool);
 		applog(LOG_DEBUG, "dec_queued from hash_push");
 	}
