@@ -5615,8 +5615,6 @@ retry_pool:
 		if (!rpc_req)
 			goto lpfail;
 
-		free(rpc_req);
-
 		wait_lpcurrent(cp);
 
 		gettimeofday(&start, NULL);
@@ -5633,6 +5631,8 @@ retry_pool:
 		pool->lp_socket = CURL_SOCKET_BAD;
 
 		gettimeofday(&reply, NULL);
+
+		free(rpc_req);
 
 		if (likely(val)) {
 			soval = json_object_get(json_object_get(val, "result"), "submitold");
