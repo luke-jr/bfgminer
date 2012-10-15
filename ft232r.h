@@ -34,5 +34,6 @@ extern bool ft232r_set_bitmode(struct ft232r_device_handle *, uint8_t mask, uint
 extern ssize_t ft232r_write(struct ft232r_device_handle *, void *data, size_t count);
 extern ssize_t ft232r_write_all(struct ft232r_device_handle *, void *data, size_t count);
 extern ssize_t ft232r_read(struct ft232r_device_handle *, void *buf, size_t count);
+extern ssize_t ft232r_read_all(struct ft232r_device_handle *, void *data, size_t count);
 
 #endif

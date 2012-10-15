@@ -238,17 +238,24 @@ ssize_t ft232r_write(struct ft232r_device_handle *dev, void *data, size_t count)
 	return ft232r_readwrite(dev, dev->o, data, count);
 }
 
-ssize_t ft232r_write_all(struct ft232r_device_handle *dev, void *data, size_t count)
+typedef ssize_t (*ft232r_rwfunc_t)(struct ft232r_device_handle *, void*, size_t);
+
+static ssize_t ft232r_rw_all(ft232r_rwfunc_t rwfunc, struct ft232r_device_handle *dev, void *data, size_t count)
 {
 	char *p = data;
 	ssize_t writ, total = 0;
 
-	while (count && (writ = ft232r_write(dev, p, count)) > 0) {
+	while (count && (writ = rwfunc(dev, p, count)) > 0) {
 		p += writ;
 		count -= writ;
 		total += writ;
 	}
 	return total ?: writ;
+}
+
+ssize_t ft232r_write_all(struct ft232r_device_handle *dev, void *data, size_t count)
+{
+	return ft232r_rw_all(ft232r_write, dev, data, count);
 }
 
 ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
@@ -268,6 +275,11 @@ ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
 		memmove(dev->ibuf, &dev->ibuf[count], dev->ibufLen);
 	}
 	return count;
+}
+
+ssize_t ft232r_read_all(struct ft232r_device_handle *dev, void *data, size_t count)
+{
+	return ft232r_rw_all(ft232r_read, dev, data, count);
 }
 
 #if 0
