@@ -1504,7 +1504,7 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 
 	if (!sigdigits) {
 		if (decimal)
-			sprintf(buf, "%.1f%s", dval, suffix);
+			sprintf(buf, "%.3g%s", dval, suffix);
 		else
 			sprintf(buf, "%d%s", (unsigned int)dval, suffix);
 	} else {
