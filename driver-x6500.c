@@ -10,6 +10,7 @@
 #include <libusb-1.0/libusb.h>
 
 #include "dynclock.h"
+#include "jtag.h"
 #include "logging.h"
 #include "miner.h"
 #include "fpgautils.h"
@@ -56,11 +57,67 @@ static void x6500_detect()
 	serial_detect_auto(&x6500_api, x6500_detect_one, x6500_detect_auto);
 }
 
+static bool x6500_prepare(struct thr_info *thr)
+{
+	if (thr->device_thread)
+		return true;
+	
+	struct cgpu_info *x6500 = thr->cgpu;
+	mutex_init(&x6500->device_mutex);
+	struct ft232r_device_handle *ftdi = ft232r_open(x6500->cgpu_data);
+	x6500->cgpu_data = NULL;
+	if (!ftdi)
+		return false;
+	if (!ft232r_set_bitmode(ftdi, 0xee, 4))
+		return false;
+	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
+		return false;
+	x6500->device_ft232r = ftdi;
+	x6500->cgpu_data = calloc(1, 1);
+	
+	return true;
+}
+
+struct x6500_fpga_data {
+	struct jtag_port jtag;
+};
+
+static bool x6500_fpga_init(struct thr_info *thr)
+{
+	struct cgpu_info *x6500 = thr->cgpu;
+	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
+	struct x6500_fpga_data *fpga;
+	uint8_t pinoffset = thr->device_thread ? 0x10 : 1;
+	
+	if (!ftdi)
+		return false;
+	
+	fpga = calloc(1, sizeof(*fpga));
+	fpga->jtag.ftdi = ftdi;
+	fpga->jtag.tck = pinoffset << 3;
+	fpga->jtag.tms = pinoffset << 2;
+	fpga->jtag.tdi = pinoffset << 1;
+	fpga->jtag.tdo = pinoffset << 0;
+	fpga->jtag.ignored = ~(fpga->jtag.tdo | fpga->jtag.tdi | fpga->jtag.tms | fpga->jtag.tck);
+	fpga->jtag.state = x6500->cgpu_data;
+	
+	applog(LOG_ERR, "jtag pins: tck=%02x tms=%02x tdi=%02x tdo=%02x", pinoffset << 3, pinoffset << 2, pinoffset << 1, pinoffset << 0);
+	
+	mutex_lock(&x6500->device_mutex);
+	if (!jtag_reset(&fpga->jtag)) {
+		applog(LOG_ERR, "jtag reset failed");
+		return false;
+	}
+	applog(LOG_ERR, "jtag detect returned %d", (int)jtag_detect(&fpga->jtag));
+	mutex_unlock(&x6500->device_mutex);
+}
+
 struct device_api x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
 	.api_detect = x6500_detect,
-// 	.thread_init = x6500_fpga_init,
+	.thread_prepare = x6500_prepare,
+	.thread_init = x6500_fpga_init,
 // 	.scanhash = x6500_fpga_scanhash,
 // 	.thread_shutdown = x6500_fpga_shutdown,
 };

@@ -20,16 +20,18 @@
 // NOTE: The order of tms and tdi here are inverted from LPC1343CodeBase
 bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 {
-	unsigned char buf[4];
-	memset(buf, (tms ? (1 << jp->tms) : 0)
-	          | (tdi ? (1 << jp->tdi) : 0), sizeof(buf));
-	buf[1] |= jp->tck;
+	unsigned char buf[3];
+	memset(buf, (*jp->state & jp->ignored)
+	          | (tms ? jp->tms : 0)
+	          | (tdi ? jp->tdi : 0), sizeof(buf));
+	buf[0] |= jp->tck;
 	if (ft232r_write_all(jp->ftdi, buf, sizeof(buf)) != sizeof(buf))
 		return false;
 	if (ft232r_read_all(jp->ftdi, buf, sizeof(buf)) != sizeof(buf))
 		return false;
 	if (tdo)
-		*tdo = buf[3] & jp->tdo;
+		*tdo = (buf[2] & jp->tdo);
+	*jp->state = buf[2];
 	return true;
 }
 

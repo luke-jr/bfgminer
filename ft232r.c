@@ -138,6 +138,7 @@ int ft232r_detect(const char *product_needle, const char *serial, foundusb_func_
 #define FTDI_REQUEST_RESET           0
 #define FTDI_REQUEST_SET_BAUDRATE    3
 #define FTDI_REQUEST_SET_BITMODE  0x0b
+#define FTDI_REQUEST_GET_PINS     0x0c
 
 #define FTDI_BAUDRATE_3M  0,0
 
@@ -162,6 +163,7 @@ struct ft232r_device_handle *ft232r_open(libusb_device *dev)
 		applog(LOG_ERR, "ft232r_open: Error opening device");
 		return NULL;
 	}
+	libusb_reset_device(devh);
 	libusb_detach_kernel_driver(devh, 0);
 	if (libusb_set_configuration(devh, 1)) {
 		applog(LOG_ERR, "ft232r_open: Error setting configuration");
@@ -169,10 +171,6 @@ struct ft232r_device_handle *ft232r_open(libusb_device *dev)
 	}
 	if (libusb_claim_interface(devh, 0)) {
 		applog(LOG_ERR, "ft232r_open: Error claiming interface");
-		return NULL;
-	}
-	if (libusb_set_interface_alt_setting(devh, 0, 0)) {
-		applog(LOG_ERR, "ft232r_open: Error setting interface alt");
 		return NULL;
 	}
 	if (libusb_control_transfer(devh, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_BAUDRATE, FTDI_BAUDRATE_3M, NULL, 0, FTDI_TIMEOUT) < 0) {
@@ -184,7 +182,7 @@ struct ft232r_device_handle *ft232r_open(libusb_device *dev)
 	ftdi->h = devh;
 
 	struct libusb_config_descriptor *cfg;
-	if (libusb_get_config_descriptor(dev, 1, &cfg)) {
+	if (libusb_get_config_descriptor(dev, 0, &cfg)) {
 		applog(LOG_ERR, "ft232r_open: Error getting config descriptor");
 		return NULL;
 	}
@@ -200,6 +198,13 @@ struct ft232r_device_handle *ft232r_open(libusb_device *dev)
 	return ftdi;
 }
 
+void ft232r_close(struct ft232r_device_handle *dev)
+{
+	libusb_release_interface(dev->h, 0);
+	libusb_reset_device(dev->h);
+	libusb_close(dev->h);
+}
+
 bool ft232r_purge_buffers(struct ft232r_device_handle *dev, enum ft232r_reset_purge purge)
 {
 	if (purge & FTDI_PURGE_RX)
@@ -213,6 +218,8 @@ bool ft232r_purge_buffers(struct ft232r_device_handle *dev, enum ft232r_reset_pu
 
 bool ft232r_set_bitmode(struct ft232r_device_handle *dev, uint8_t mask, uint8_t mode)
 {
+	if (libusb_control_transfer(dev->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_BITMODE, mask, FTDI_INDEX, NULL, 0, FTDI_TIMEOUT))
+		return false;
 	return !libusb_control_transfer(dev->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_BITMODE, (mode << 8) | mask, FTDI_INDEX, NULL, 0, FTDI_TIMEOUT);
 }
 
@@ -260,26 +267,35 @@ ssize_t ft232r_write_all(struct ft232r_device_handle *dev, void *data, size_t co
 
 ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
 {
-	if (!dev->ibufLen) {
+	// First 2 bytes are FTDI status or something
+	while (dev->ibufLen <= 2) {
+		// TODO: Implement a timeout for status byte repeating
 		int transferred = ft232r_readwrite(dev, dev->i, dev->ibuf, sizeof(dev->ibuf));
 		if (transferred <= 0)
 			return transferred;
 		dev->ibufLen = transferred;
 	}
+	unsigned char *ibufs = &dev->ibuf[2];
+	size_t ibufsLen = dev->ibufLen - 2;
 	
-	if (count > dev->ibufLen)
-		count = dev->ibufLen;
-	memcpy(data, dev->ibuf, count);
-	if (count < dev->ibufLen) {
-		dev->ibufLen -= count;
-		memmove(dev->ibuf, &dev->ibuf[count], dev->ibufLen);
-	}
+	if (count > ibufsLen)
+		count = ibufsLen;
+	memcpy(data, ibufs, count);
+	dev->ibufLen -= count;
+	ibufsLen -= count;
+	if (ibufsLen)
+		memmove(ibufs, &ibufs[count], ibufsLen);
 	return count;
 }
 
 ssize_t ft232r_read_all(struct ft232r_device_handle *dev, void *data, size_t count)
 {
 	return ft232r_rw_all(ft232r_read, dev, data, count);
+}
+
+bool ft232r_get_pins(struct ft232r_device_handle *dev, uint8_t *pins)
+{
+	return libusb_control_transfer(dev->h, FTDI_REQTYPE_IN, FTDI_REQUEST_GET_PINS, 0, FTDI_INDEX, pins, 1, FTDI_TIMEOUT) == 1;
 }
 
 #if 0

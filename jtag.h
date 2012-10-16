@@ -11,6 +11,8 @@ struct jtag_port {
 	uint8_t tms;
 	uint8_t tdi;
 	uint8_t tdo;
+	uint8_t ignored;
+	uint8_t *state;
 };
 
 enum jtagreg {

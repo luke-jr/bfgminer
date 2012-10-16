@@ -29,11 +29,13 @@ extern void ft232r_scan();
 extern void ft232r_scan_free();
 extern int ft232r_detect(const char *product_needle, const char *serial, foundusb_func_t);
 extern struct ft232r_device_handle *ft232r_open(libusb_device *);
+extern void ft232r_close(struct ft232r_device_handle *);
 extern bool ft232r_purge_buffers(struct ft232r_device_handle *, enum ft232r_reset_purge);
 extern bool ft232r_set_bitmode(struct ft232r_device_handle *, uint8_t mask, uint8_t mode);
 extern ssize_t ft232r_write(struct ft232r_device_handle *, void *data, size_t count);
 extern ssize_t ft232r_write_all(struct ft232r_device_handle *, void *data, size_t count);
 extern ssize_t ft232r_read(struct ft232r_device_handle *, void *buf, size_t count);
 extern ssize_t ft232r_read_all(struct ft232r_device_handle *, void *data, size_t count);
+extern bool ft232r_get_pins(struct ft232r_device_handle *, uint8_t *pins);
 
 #endif
