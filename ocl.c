@@ -557,7 +557,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	 */
 	char binaryfilename[255];
 	char filename[255];
-	char numbuf[10];
+	char numbuf[32];
 
 	if (cgpu->kernel == KL_NONE) {
 		if (opt_scrypt) {
@@ -652,7 +652,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
 		cl_ulong ma = cgpu->max_alloc, mt;
-		int pow2 = 0;
 
 		if (!cgpu->opt_lg) {
 			applog(LOG_DEBUG, "GPU %d: selecting lookup gap of 2", gpu);
@@ -676,12 +675,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		 * >= required amount to map nicely to an intensity */
 		mt = cgpu->thread_concurrency * 32768 * cgpu->lookup_gap;
 		if (ma > mt) {
-			while (ma >>= 1)
-				pow2++;
 			ma = 1;
-			while (--pow2 && ma < mt)
+			while (ma < mt)
 				ma <<= 1;
-			if (ma >= mt) {
+			if (ma < cgpu->max_alloc) {
 				cgpu->max_alloc = ma;
 				applog(LOG_DEBUG, "Max alloc decreased to %lu", cgpu->max_alloc);
 			}
