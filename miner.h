@@ -267,6 +267,7 @@ struct device_api {
 	void (*free_work)(struct thr_info*, struct work*);
 	bool (*prepare_work)(struct thr_info*, struct work*);
 	int64_t (*scanhash)(struct thr_info*, struct work*, int64_t);
+	void (*hw_error)(struct thr_info*);
 	void (*thread_shutdown)(struct thr_info*);
 	void (*thread_enable)(struct thr_info*);
 };
@@ -950,11 +951,14 @@ struct modminer_fpga_state {
 	char next_work_cmd[46];
 
 	unsigned char clock;
-	int no_nonce_counter;
-	int good_share_counter;
-	time_t last_cutoff_reduced;
+	float temp;
 
-	unsigned char temp;
+	uint32_t shares;
+	uint32_t shares_last_hw;
+	uint32_t hw_errors;
+	uint32_t shares_to_good;
+	struct timeval last_changed;
+	uint32_t no_nonce_counter;
 };
 #endif
 
