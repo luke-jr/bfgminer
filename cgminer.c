@@ -1501,8 +1501,13 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 
 	if (!sigdigits)
 		sprintf(buf, "%d%s", (unsigned int)dval, suffix);
-	else
-		sprintf(buf, "%-*.*g%s", sigdigits + 1, sigdigits, dval, suffix);
+	else {
+		/* Always show sigdigits + 1, padded on right with zeroes
+		 * followed by suffix */
+		int ndigits = (sigdigits - 1 - floor(log10 (dval)));
+
+		sprintf(buf, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
+	}
 }
 
 static void get_statline(char *buf, struct cgpu_info *cgpu)
