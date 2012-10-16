@@ -388,12 +388,7 @@ void search(	const uint state0, const uint state1, const uint state2, const uint
 		(-(K[60] + H[7]) - S1((Vals[0] + Vals[4]) + (K[59] + W(59+64))  + s1(64+59)+ ch(59+64)));
 
 #define FOUND (0x0F)
-
-#if defined(OCL1)
-	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
-#else
-	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
-#endif
+#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 
 #ifdef VECTORS4
 	bool result = W[117].x & W[117].y & W[117].z & W[117].w;
