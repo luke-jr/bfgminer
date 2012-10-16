@@ -16,7 +16,7 @@ static inline bool scrypt_test(__maybe_unused unsigned char *pdata,
 	return false;
 }
 
-static inline void scrypt_outputhash(struct work *work)
+static inline void scrypt_outputhash(__maybe_unused struct work *work)
 {
 }
 #endif /* USE_SCRYPT */
