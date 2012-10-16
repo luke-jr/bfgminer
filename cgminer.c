@@ -1471,6 +1471,7 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	const uint64_t peta = 1000000000000000ull;
 	const uint64_t exa  = 1000000000000000000ull;
 	char suffix[2] = "";
+	bool decimal = true;
 	double dval;
 
 	if (val >= exa) {
@@ -1496,15 +1497,20 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	} else if (val >= kilo) {
 		dval = (double)val / dkilo;
 		sprintf(suffix, "K");
-	} else
+	} else {
 		dval = val;
+		decimal = false;
+	}
 
-	if (!sigdigits)
-		sprintf(buf, "%d%s", (unsigned int)dval, suffix);
-	else {
+	if (!sigdigits) {
+		if (decimal)
+			sprintf(buf, "%.1f%s", dval, suffix);
+		else
+			sprintf(buf, "%d%s", (unsigned int)dval, suffix);
+	} else {
 		/* Always show sigdigits + 1, padded on right with zeroes
 		 * followed by suffix */
-		int ndigits = (sigdigits - 1 - floor(log10 (dval)));
+		int ndigits = sigdigits - 1 - (dval > 0.0 ? floor(log10(dval)) : 0);
 
 		sprintf(buf, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
 	}
