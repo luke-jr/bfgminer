@@ -4287,6 +4287,7 @@ static void *stratum_thread(void *userdata)
 				sleep(30);
 			}
 			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
+			pool_tclear(pool, &pool->idle);
 			pool_resus(pool);
 			continue;
 		}
