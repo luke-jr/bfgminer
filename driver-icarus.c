@@ -554,22 +554,19 @@ static bool icarus_detect_one(const char *devpath)
 	icarus_close(fd);
 
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
-	if (nonce_hex) {
-		if (strncmp(nonce_hex, golden_nonce, 8)) {
-			applog(LOG_ERR, 
-				"Icarus Detect: "
-				"Test failed at %s: get %s, should: %s",
-				devpath, nonce_hex, golden_nonce);
-			free(nonce_hex);
-			return false;
-		}
-		applog(LOG_DEBUG, 
+	if (strncmp(nonce_hex, golden_nonce, 8)) {
+		applog(LOG_ERR,
 			"Icarus Detect: "
-			"Test succeeded at %s: got %s",
-				devpath, nonce_hex);
+			"Test failed at %s: get %s, should: %s",
+			devpath, nonce_hex, golden_nonce);
 		free(nonce_hex);
-	} else
 		return false;
+	}
+	applog(LOG_DEBUG,
+		"Icarus Detect: "
+		"Test succeeded at %s: got %s",
+			devpath, nonce_hex);
+	free(nonce_hex);
 
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;
@@ -704,11 +701,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
-		if (ob_hex) {
-			applog(LOG_DEBUG, "Icarus %d sent: %s",
-				icarus->device_id, ob_hex);
-			free(ob_hex);
-		}
+		applog(LOG_DEBUG, "Icarus %d sent: %s",
+			icarus->device_id, ob_hex);
+		free(ob_hex);
 	}
 
 	/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
