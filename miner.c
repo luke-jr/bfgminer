@@ -723,6 +723,19 @@ static char *set_userpass(const char *arg)
 	return NULL;
 }
 
+static char *set_pool_priority(const char *arg)
+{
+	struct pool *pool;
+
+	if (!total_pools)
+		return "Usage of --pool-priority before pools are defined does not make sense";
+
+	pool = pools[total_pools - 1];
+	opt_set_intval(arg, &pool->prio);
+
+	return NULL;
+}
+
 static char *set_pool_proxy(const char *arg)
 {
 	struct pool *pool;
@@ -1146,6 +1159,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--per-device-stats",
 			opt_set_bool, &want_per_device_stats,
 			"Force verbose mode and output per-device statistics"),
+	OPT_WITH_ARG("--pool-priority",
+			 set_pool_priority, NULL, NULL,
+			 "Priority for just the previous-defined pool"),
 	OPT_WITH_ARG("--pool-proxy|-x",
 		     set_pool_proxy, NULL, NULL,
 		     "Proxy URI to use for connecting to just the previous-defined pool"),
@@ -3389,6 +3405,101 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
+int prioritize_pools(char *param, int *pid)
+{
+	char *ptr, *next;
+	int i, pr, prio = 0;
+
+	if (total_pools == 0) {
+		return 8; //MSG_NOPOOL
+	}
+
+	if (param == NULL || *param == '\0') {
+		return 25; //MSG_MISPID
+	}
+
+	bool pools_changed[total_pools];
+	int new_prio[total_pools];
+	for (i = 0; i < total_pools; ++i)
+		pools_changed[i] = false;
+
+	next = param;
+	while (next && *next) {
+		ptr = next;
+		next = strchr(ptr, ',');
+		if (next)
+			*(next++) = '\0';
+
+		i = atoi(ptr);
+		if (i < 0 || i >= total_pools) {
+			*pid = i;
+			return 26; //MSG_INVPID
+		}
+
+		if (pools_changed[i]) {
+			*pid = i;
+			return 74; //MSG_DUPPID
+		}
+
+		pools_changed[i] = true;
+		new_prio[i] = prio++;
+	}
+
+	// Only change them if no errors
+	for (i = 0; i < total_pools; i++) {
+		if (pools_changed[i])
+			pools[i]->prio = new_prio[i];
+	}
+
+	// In priority order, cycle through the unchanged pools and append them
+	for (pr = 0; pr < total_pools; pr++)
+		for (i = 0; i < total_pools; i++) {
+			if (!pools_changed[i] && pools[i]->prio == pr) {
+				pools[i]->prio = prio++;
+				pools_changed[i] = true;
+				break;
+			}
+		}
+
+	if (current_pool()->prio)
+		switch_pools(NULL);
+
+	return 73; //MSG_POOLPRIO
+}
+
+void validate_pool_priorities(void)
+{
+	// TODO: this should probably do some sort of logging
+	int i, j;
+	bool used[total_pools];
+	bool valid[total_pools];
+
+	for (i = 0; i < total_pools; i++)
+		used[i] = valid[i] = false;
+
+	for (i = 0; i < total_pools; i++) {
+		if (pools[i]->prio >=0 && pools[i]->prio < total_pools) {
+			if (!used[pools[i]->prio]) {
+				valid[i] = true;
+				used[pools[i]->prio] = true;
+			}
+		}
+	}
+
+	for (i = 0; i < total_pools; i++) {
+		if (!valid[i]) {
+			for (j = 0; j < total_pools; j++) {
+				if (!used[j]) {
+					applog(LOG_WARNING, "Pool %d priority changed from %d to %d", i, pools[i]->prio, j);
+					pools[i]->prio = j;
+					used[j] = true;
+					break;
+				}
+			}
+		}
+	}
+}
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -3980,8 +4091,9 @@ void write_config(FILE *fcfg)
 		if (pools[i]->rpc_proxy)
 			fprintf(fcfg, "\n\t\t\"pool-proxy\" : \"%s\",", json_escape(pools[i]->rpc_proxy));
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pools[i]->rpc_user));
-		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", json_escape(pools[i]->rpc_pass));
-		}
+		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\",", json_escape(pools[i]->rpc_pass));
+		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"\n\t}", pools[i]->prio);
+	}
 	fputs("\n]\n", fcfg);
 
 #ifdef HAVE_OPENCL
@@ -4152,52 +4264,59 @@ void write_config(FILE *fcfg)
 static void display_pools(void)
 {
 	struct pool *pool;
-	int selected, i, priority;
+	int selected, i, j;
 	char input;
 
 	opt_loginput = true;
 	immedok(logwin, true);
 	clear_logwin();
 updated:
-	for (i = 0; i < total_pools; i++) {
-		pool = pools[i];
+	for (j = 0; j < total_pools; j++) {
+		for (i = 0; i < total_pools; i++) {
+			pool = pools[i];
 
-		if (pool == current_pool())
-			wattron(logwin, A_BOLD);
-		if (pool->enabled != POOL_ENABLED)
-			wattron(logwin, A_DIM);
-		wlogprint("%d: ", pool->pool_no);
-		switch (pool->enabled) {
-			case POOL_ENABLED:
-				wlogprint("Enabled  ");
-				break;
-			case POOL_DISABLED:
-				wlogprint("Disabled ");
-				break;
-			case POOL_REJECTING:
-				wlogprint("Rejectin ");
-				break;
-		}
-		if (pool->idle)
-			wlogprint("Dead ");
-		else
-		if (pool->lp_url && pool->proto != pool->lp_proto)
-			wlogprint("Mixed");
-		else
-			switch (pool->proto) {
-				case PLP_GETBLOCKTEMPLATE:
-					wlogprint(" GBT ");
+			if (pool->prio != j)
+				continue;
+
+			if (pool == current_pool())
+				wattron(logwin, A_BOLD);
+			if (pool->enabled != POOL_ENABLED)
+				wattron(logwin, A_DIM);
+			wlogprint("%d: ", pool->prio);
+			switch (pool->enabled) {
+				case POOL_ENABLED:
+					wlogprint("Enabled  ");
 					break;
-				case PLP_GETWORK:
-					wlogprint("GWork");
+				case POOL_DISABLED:
+					wlogprint("Disabled ");
 					break;
-				default:
-					wlogprint("Alive");
+				case POOL_REJECTING:
+					wlogprint("Rejectin ");
+					break;
 			}
-		wlogprint(" Priority %d: %s  User:%s\n",
-			pool->prio,
-			pool->rpc_url, pool->rpc_user);
-		wattroff(logwin, A_BOLD | A_DIM);
+			if (pool->idle)
+				wlogprint("Dead ");
+			else
+			if (pool->lp_url && pool->proto != pool->lp_proto)
+				wlogprint("Mixed");
+			else
+				switch (pool->proto) {
+					case PLP_GETBLOCKTEMPLATE:
+						wlogprint(" GBT ");
+						break;
+					case PLP_GETWORK:
+						wlogprint("GWork");
+						break;
+					default:
+						wlogprint("Alive");
+				}
+			wlogprint(" Pool %d: %s  User:%s\n",
+				pool->pool_no,
+				pool->rpc_url, pool->rpc_user);
+			wattroff(logwin, A_BOLD | A_DIM);
+
+			break; //for (i = 0; i < total_pools; i++)
+		}
 	}
 retry:
 	wlogprint("\nCurrent pool management strategy: %s\n",
@@ -4302,38 +4421,23 @@ retry:
 		opt_fail_only ^= true;
 		goto updated;
         } else if (!strncasecmp(&input, "p", 1)) {
-                if (total_pools <= 1) {
-                        wlogprint("Cannot alter priority if there is only one pool");
-                        goto retry;
-                }
-                selected = curses_int("Select pool number");
-                if (selected < 0 || selected >= total_pools) {
-                        wlogprint("Invalid selection\n");
-                        goto retry;
-                }
-                priority = curses_int("Select new priority");
-                if (priority < 0 || priority >= total_pools) {
-                        wlogprint("Invalid selection\n");
-                        goto retry;
-                }
-                if (selected == priority) {
-                        wlogprint("Selected pool already has desired priority");
-                        goto retry;
-                }
-
-                pool = pools[selected];
-                if (priority > selected) {
-                        for (i = selected; i < priority; i++)
-                                pools[i] = pools[i + 1];
-                } else {
-                        for (i = selected; i > priority; i--)
-                                pools[i] = pools[i - 1];
-                }
-                pools[priority] = pool;
-		for (i = 0; i < total_pools; i++)
-			pools[i]->pool_no = pools[i]->prio = i; 
-		
-		goto updated;
+        	switch (prioritize_pools(curses_input("Enter new pool priority (comma separated list)"), &i)) {
+        		case 8: //MSG_NOPOOL:
+        			wlogprint("No pools\n");
+        			goto retry;
+        		case 25: //MSG_MISPID:
+        			wlogprint("Missing pool id parameter\n");
+        			goto retry;
+        		case 26: //MSG_INVPID:
+        			wlogprint("Invalid pool id %d - range is 0 - %d\n", i, total_pools - 1);
+        			goto retry;
+        		case 74: //MSG_DUPPID:
+        			wlogprint("Duplicate pool specified %d\n", i);
+        			goto retry;
+        		case 73: //MSG_POOLPRIO:
+        		default:
+        			goto updated;
+        	}
 	} else
 		clear_logwin();
 
@@ -6784,8 +6888,14 @@ int main(int argc, char *argv[])
 				quit(1, "Failed to find colon delimiter in userpass");
 		}
 	}
-	/* Set the currentpool to pool 0 */
-	currentpool = pools[0];
+	/* Set the currentpool to pool wiht priority 0 */
+	validate_pool_priorities();
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool  = pools[i];
+
+		if (!pool->prio)
+			currentpool = pool;
+	}
 
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
@@ -6844,18 +6954,24 @@ int main(int argc, char *argv[])
 	applog(LOG_NOTICE, "Probing for an alive pool");
 	do {
 		/* Look for at least one active pool before starting */
-		for (i = 0; i < total_pools; i++) {
-			struct pool *pool  = pools[i];
-			if (pool_active(pool, false)) {
-				if (!currentpool)
-					currentpool = pool;
-				applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
-				pools_active = true;
-				break;
-			} else {
-				if (pool == currentpool)
-					currentpool = NULL;
-				applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
+		for (j = 0; j < total_pools; j++) {
+			for (i = 0; i < total_pools; i++) {
+				struct pool *pool  = pools[i];
+
+				if (pool->prio != j)
+					continue;
+
+				if (pool_active(pool, false)) {
+					if (!currentpool)
+						currentpool = pool;
+					applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
+					pools_active = true;
+					break;
+				} else {
+					if (pool == currentpool)
+						currentpool = NULL;
+					applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
+				}
 			}
 		}
 
