@@ -4875,6 +4875,10 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 				thr->cgpu->api->name, thr->cgpu->device_id);
 		hw_errors++;
 		thr->cgpu->hw_errors++;
+
+		if (thr->cgpu->api->hw_error)
+			thr->cgpu->api->hw_error(thr);
+
 		return false;
 	}
 

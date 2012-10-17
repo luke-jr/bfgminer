@@ -36,4 +36,47 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 
 extern FILE *open_bitstream(const char *dname, const char *filename);
 
+#ifndef WIN32
+extern const struct timeval tv_timeout_default;
+extern const struct timeval tv_inter_char_default;
+
+extern size_t _select_read(int fd, char *buf, size_t bufsiz, struct timeval *timeout, struct timeval *char_timeout, int finished);
+extern size_t _select_write(int fd, char *buf, size_t siz, struct timeval *timeout);
+
+#define select_open(devpath) \
+	serial_open(devpath, 0, 0, false)
+
+#define select_open_purge(devpath, purge)\
+	serial_open(devpath, 0, 0, purge)
+
+#define select_write(fd, buf, siz) \
+	_select_write(fd, buf, siz, (struct timeval *)(&tv_timeout_default))
+
+#define select_write_full _select_write
+
+#define select_read(fd, buf, bufsiz) \
+	_select_read(fd, buf, bufsiz, (struct timeval *)(&tv_timeout_default), \
+			(struct timeval *)(&tv_inter_char_default), -1)
+
+#define select_read_til(fd, buf, bufsiz, eol) \
+	_select_read(fd, buf, bufsiz, (struct timeval *)(&tv_timeout_default), \
+			(struct timeval *)(&tv_inter_char_default), eol)
+
+#define select_read_wait(fd, buf, bufsiz, timeout) \
+	_select_read(fd, buf, bufsiz, timeout, \
+			(struct timeval *)(&tv_inter_char_default), -1)
+
+#define select_read_wait_til(fd, buf, bufsiz, timeout, eol) \
+	_select_read(fd, buf, bufsiz, timeout, \
+			(struct timeval *)(&tv_inter_char_default), eol)
+
+#define select_read_wait_both(fd, buf, bufsiz, timeout, char_timeout) \
+	_select_read(fd, buf, bufsiz, timeout, char_timeout, -1)
+
+#define select_read_full _select_read
+
+#define select_close(fd)  close(fd)
+
+#endif // ! WIN32
+
 #endif
