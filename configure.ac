@@ -79,13 +79,6 @@ case $target in
 esac
 
 case $target in
-	x86_64-w64-mingw32)
-	have_x86_64=true
-	have_win32=true
-	PTHREAD_FLAGS=""
-	DLOPEN_FLAGS=""
-	WS2_LIBS="-lws2_32"
-	;;
   *-*-mingw*)
     have_x86_64=false
     have_win32=true
