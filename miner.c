@@ -3411,11 +3411,19 @@ int prioritize_pools(char *param, int *pid)
 	int i, pr, prio = 0;
 
 	if (total_pools == 0) {
+<<<<<<< HEAD
 		return MSG_NOPOOL;
 	}
 
 	if (param == NULL || *param == '\0') {
 		return MSG_MISPID;
+=======
+		return 8; //MSG_NOPOOL
+	}
+
+	if (param == NULL || *param == '\0') {
+		return 25; //MSG_MISPID
+>>>>>>> 2ad08ed2b80fbb4810a569e5ea26ca311b6c894c
 	}
 
 	bool pools_changed[total_pools];
@@ -3433,12 +3441,20 @@ int prioritize_pools(char *param, int *pid)
 		i = atoi(ptr);
 		if (i < 0 || i >= total_pools) {
 			*pid = i;
+<<<<<<< HEAD
 			return MSG_INVPID;
+=======
+			return 26; //MSG_INVPID
+>>>>>>> 2ad08ed2b80fbb4810a569e5ea26ca311b6c894c
 		}
 
 		if (pools_changed[i]) {
 			*pid = i;
+<<<<<<< HEAD
 			return MSG_DUPPID;
+=======
+			return 74; //MSG_DUPPID
+>>>>>>> 2ad08ed2b80fbb4810a569e5ea26ca311b6c894c
 		}
 
 		pools_changed[i] = true;
@@ -3464,7 +3480,11 @@ int prioritize_pools(char *param, int *pid)
 	if (current_pool()->prio)
 		switch_pools(NULL);
 
+<<<<<<< HEAD
 	return MSG_POOLPRIO;
+=======
+	return 73; //MSG_POOLPRIO
+>>>>>>> 2ad08ed2b80fbb4810a569e5ea26ca311b6c894c
 }
 
 void validate_pool_priorities(void)
@@ -4422,6 +4442,7 @@ retry:
 		goto updated;
         } else if (!strncasecmp(&input, "p", 1)) {
         	switch (prioritize_pools(curses_input("Enter new pool priority (comma separated list)"), &i)) {
+<<<<<<< HEAD
         		case MSG_NOPOOL:
         			wlogprint("No pools\n");
         			goto retry;
@@ -4435,6 +4456,21 @@ retry:
         			wlogprint("Duplicate pool specified %d\n", i);
         			goto retry;
         		case MSG_POOLPRIO:
+=======
+        		case 8: //MSG_NOPOOL:
+        			wlogprint("No pools\n");
+        			goto retry;
+        		case 25: //MSG_MISPID:
+        			wlogprint("Missing pool id parameter\n");
+        			goto retry;
+        		case 26: //MSG_INVPID:
+        			wlogprint("Invalid pool id %d - range is 0 - %d\n", i, total_pools - 1);
+        			goto retry;
+        		case 74: //MSG_DUPPID:
+        			wlogprint("Duplicate pool specified %d\n", i);
+        			goto retry;
+        		case 73: //MSG_POOLPRIO:
+>>>>>>> 2ad08ed2b80fbb4810a569e5ea26ca311b6c894c
         		default:
         			goto updated;
         	}
