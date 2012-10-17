@@ -1,3 +1,43 @@
+Version 2.8.4 - October 18, 2012
+
+- Time for dynamic is in microseconds, not ms.
+- x86_64 builds of mingw32 are not supported directly and should just configure
+as generic mingw32 builds since they're NOT 64 bit.
+- Cope with both ATI stream and AMD APP SDK roots being set when building.
+- Use 3 significant digits when suffix string is used and values are >1000.
+- MMQ new initialisation (that works) and clocking control
+- Get rid of unused warning for !scrypt.
+- Use select on stratum send to make sure the socket is writeable.
+- Cope with dval being zero in suffix_string and display a single decimal place
+when significant digits is not specified but the value is greater than 1000.
+- Pad out the suffix string function with zeroes on the right.
+- Failure to calloc in bin2hex is a fatal failure always so just check for that
+failure within the function and abort, simplifying the rest of the code.
+- Provide locking around the change of the stratum curl structures to avoid
+possible races.
+- Bump opencl kernel version numbers.
+- Remove atomic ops from opencl kernels given rarity of more than once nonce on
+the same wavefront and the potential increased ramspeed requirements to use the
+atomics.
+- Clear the pool idle flag in stratum when it comes back to life.
+- Display correct share hash and share difficulty with scrypt mining.
+- Use explicit host to BE functions in scrypt code instead of hard coding
+byteswap everywhere.
+- Show work target diff for scrypt mining.
+- Ease the checking on allocation of padbuffer8 in the hope it works partially
+anyway on an apparently failed call.
+- Watch for buffer overflows on receiving data into the socket buffer.
+- Round target difficulties down to be in keeping with the rounding of detected
+share difficulties.
+- Dramatically simplify the dynamic intensity calculation by oversampling many
+runs through the opencl kernel till we're likely well within the timer
+resolution on windows.
+- String alignment to 4 byte boundaries and optimisations for bin<->hex
+conversions.
+- In opencl_free_work, make sure to still flush results in dynamic mode.
+- Align static arrays to 4 byte boundaries to appease ARM builds for stratum.
+
+
 Version 2.8.3 - October 12, 2012
 
 - Left align values that are suffix_string generated.
