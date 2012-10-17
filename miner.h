@@ -338,6 +338,14 @@ enum dev_reason {
 
 #define MIN_SEC_UNSET 99999999
 
+enum {
+	MSG_NOPOOL		= 8,
+	MSG_MISPID		= 25,
+	MSG_INVPID		= 26,
+	MSG_DUPPID		= 74,
+	MSG_POOLPRIO	= 73,
+};
+
 struct cgminer_stats {
 	uint32_t getwork_calls;
 	struct timeval getwork_wait;

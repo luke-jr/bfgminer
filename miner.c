@@ -3411,11 +3411,11 @@ int prioritize_pools(char *param, int *pid)
 	int i, pr, prio = 0;
 
 	if (total_pools == 0) {
-		return 8; //MSG_NOPOOL
+		return MSG_NOPOOL;
 	}
 
 	if (param == NULL || *param == '\0') {
-		return 25; //MSG_MISPID
+		return MSG_MISPID;
 	}
 
 	bool pools_changed[total_pools];
@@ -3433,12 +3433,12 @@ int prioritize_pools(char *param, int *pid)
 		i = atoi(ptr);
 		if (i < 0 || i >= total_pools) {
 			*pid = i;
-			return 26; //MSG_INVPID
+			return MSG_INVPID;
 		}
 
 		if (pools_changed[i]) {
 			*pid = i;
-			return 74; //MSG_DUPPID
+			return MSG_DUPPID;
 		}
 
 		pools_changed[i] = true;
@@ -3464,7 +3464,7 @@ int prioritize_pools(char *param, int *pid)
 	if (current_pool()->prio)
 		switch_pools(NULL);
 
-	return 73; //MSG_POOLPRIO
+	return MSG_POOLPRIO;
 }
 
 void validate_pool_priorities(void)
@@ -4422,19 +4422,19 @@ retry:
 		goto updated;
         } else if (!strncasecmp(&input, "p", 1)) {
         	switch (prioritize_pools(curses_input("Enter new pool priority (comma separated list)"), &i)) {
-        		case 8: //MSG_NOPOOL:
+        		case MSG_NOPOOL:
         			wlogprint("No pools\n");
         			goto retry;
-        		case 25: //MSG_MISPID:
+        		case MSG_MISPID:
         			wlogprint("Missing pool id parameter\n");
         			goto retry;
-        		case 26: //MSG_INVPID:
+        		case MSG_INVPID:
         			wlogprint("Invalid pool id %d - range is 0 - %d\n", i, total_pools - 1);
         			goto retry;
-        		case 74: //MSG_DUPPID:
+        		case MSG_DUPPID:
         			wlogprint("Duplicate pool specified %d\n", i);
         			goto retry;
-        		case 73: //MSG_POOLPRIO:
+        		case MSG_POOLPRIO:
         		default:
         			goto updated;
         	}
