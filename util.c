@@ -851,10 +851,9 @@ bool extract_sockaddr(struct pool *pool, char *url)
 }
 
 /* Send a single command across a socket, appending \n to it */
-bool stratum_send(struct pool *pool, char *s, ssize_t len)
+static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 {
 	ssize_t ssent = 0;
-	bool ret = false;
 
 	if (opt_protocol)
 		applog(LOG_DEBUG, "SEND: %s", s);
@@ -862,22 +861,32 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 	strcat(s, "\n");
 	len++;
 
-	mutex_lock(&pool->stratum_lock);
 	while (len > 0 ) {
 		size_t sent = 0;
 
 		if (curl_easy_send(pool->stratum_curl, s + ssent, len, &sent) != CURLE_OK) {
 			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
-			ret = false;
-			goto out_unlock;
+			return false;
 		}
 		ssent += sent;
 		len -= ssent;
 	}
-	ret = true;
-out_unlock:
+
+	return true;
+}
+
+bool stratum_send(struct pool *pool, char *s, ssize_t len)
+{
+	bool ret = false;
+
+	mutex_lock(&pool->stratum_lock);
+	if (pool->stratum_active)
+		ret = __stratum_send(pool, s, len);
+	else
+		applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
 	mutex_unlock(&pool->stratum_lock);
-	return ret;;
+
+	return ret;
 }
 
 #define RECVSIZE 8191
@@ -1271,11 +1280,15 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
+	mutex_lock(&pool->stratum_lock);
+	pool->stratum_active = false;
+
 	if (!pool->stratum_curl) {
 		pool->stratum_curl = curl_easy_init();
 		if (unlikely(!pool->stratum_curl))
 			quit(1, "Failed to curl_easy_init in initiate_stratum");
 	}
+	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
 
 	/* Create a http url for use with curl */
@@ -1303,7 +1316,7 @@ bool initiate_stratum(struct pool *pool)
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
-	if (!stratum_send(pool, s, strlen(s))) {
+	if (!__stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
@@ -1369,11 +1382,13 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
-		pool->stratum_active = false;
+		applog(LOG_DEBUG, "Initiate stratum failed, disabling stratum_active");
+		mutex_lock(&pool->stratum_lock);
 		if (curl) {
 			curl_easy_cleanup(curl);
 			pool->stratum_curl = NULL;
 		}
+		mutex_unlock(&pool->stratum_lock);
 	}
 
 	return ret;
