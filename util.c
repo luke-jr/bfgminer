@@ -853,6 +853,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 /* Send a single command across a socket, appending \n to it */
 static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 {
+	SOCKETTYPE sock = pool->sock;
 	ssize_t ssent = 0;
 
 	if (opt_protocol)
@@ -862,8 +863,16 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 	len++;
 
 	while (len > 0 ) {
+		struct timeval timeout = {0, 0};
 		size_t sent = 0;
+		fd_set wd;
 
+		FD_ZERO(&wd);
+		FD_SET(sock, &wd);
+		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1) {
+			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
+			return false;
+		}
 		if (curl_easy_send(pool->stratum_curl, s + ssent, len, &sent) != CURLE_OK) {
 			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
 			return false;
