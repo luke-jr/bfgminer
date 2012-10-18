@@ -1,3 +1,33 @@
+BFGMiner Version 2.8.3 - October 18, 2012
+
+- Update to libblkmaker 0.1.3
+- Use explicit host to BE functions in scrypt code instead of hard coding
+byteswap everywhere.
+- Ease the checking on allocation of padbuffer8 in the hope it works partially
+anyway on an apparently failed call.
+- Round target difficulties down to be in keeping with the rounding of detected
+share difficulties.
+- String alignment to 4 byte boundaries and optimisations for bin<->hex
+conversions.
+- Fix GPU memory allocation size for scrypt
+- Fix access violation with scrypt mining
+- Bugfix: Only free rpc_req after using it, not before
+- Bugfix: Increment work->pool->staged inside of mutex to avoid work being
+freed (and staged decremented) before we dereference it
+- Revert "No need for extra variable in hash_push.": The extra variable is
+needed to avoid a rare dereference-after-free error.
+- In opencl_free_work, make sure to still flush results in dynamic mode.
+- Workaround: Debug log only after dec_queued, to make a free/use race more
+rare
+- Bugfix: Remove redundant \n in debug messages
+- Bugfix: Free rpc_req in pool_active and longpolls
+- README: Explicitly provide Ubuntu package name for libjansson-dev
+- Bugfix: Include flash_led bool in cgpu_info for Icarus-but-not-BitForce
+builds, since Cairnsmore uses it
+- Only check work block id against pool's if the pool has a known block id
+- Avoid clearing pool->block_id unless we really are changing pools
+
+
 BFGMiner Version 2.8.2 - October 8, 2012
 
 - Update to libblkmaker 0.1.2

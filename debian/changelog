@@ -1,3 +1,10 @@
+bfgminer (2.8.3-0precise1) precise; urgency=low
+
+  * Various bugs fixed, no new features.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 18 Oct 2012 12:56:56 -0000
+
+
 bfgminer (2.8.2-0precise1) precise; urgency=low
 
   * Numerous fixups for Enterpoint's Cairsmore dynamic clocking; it has actually been tested this time. :)
