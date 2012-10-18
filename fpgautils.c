@@ -477,3 +477,96 @@ FILE *open_bitstream(const char *dname, const char *filename)
 
 	return NULL;
 }
+
+#ifndef WIN32
+
+static bool _select_wait_read(int fd, struct timeval *timeout)
+{
+	fd_set rfds;
+
+	FD_ZERO(&rfds);
+	FD_SET(fd, &rfds);
+
+	if (select(fd+1, &rfds, NULL, NULL, timeout) > 0)
+		return true;
+	else
+		return false;
+}
+
+// Default timeout 100ms - only for device initialisation
+const struct timeval tv_timeout_default = { 0, 100000 };
+// Default inter character timeout = 1ms - only for device initialisation
+const struct timeval tv_inter_char_default = { 0, 1000 };
+
+// Device initialisation function - NOT for work processing
+size_t _select_read(int fd, char *buf, size_t bufsiz, struct timeval *timeout, struct timeval *char_timeout, int finished)
+{
+	struct timeval tv_time, tv_char;
+	ssize_t siz, red = 0;
+	char got;
+
+	// timeout is the maximum time to wait for the first character
+	tv_time.tv_sec = timeout->tv_sec;
+	tv_time.tv_usec = timeout->tv_usec;
+
+	if (!_select_wait_read(fd, &tv_time))
+		return 0;
+
+	while (4242) {
+		if ((siz = read(fd, buf, 1)) < 0)
+			return red;
+
+		got = *buf;
+		buf += siz;
+		red += siz;
+		bufsiz -= siz;
+
+		if (bufsiz < 1 || (finished >= 0 && got == finished))
+			return red;
+
+		// char_timeout is the maximum time to wait for each subsequent character
+		// this is OK for initialisation, but bad for work processing
+		// work processing MUST have a fixed size so this doesn't come into play
+		tv_char.tv_sec = char_timeout->tv_sec;
+		tv_char.tv_usec = char_timeout->tv_usec;
+
+		if (!_select_wait_read(fd, &tv_char))
+			return red;
+	}
+
+	return red;
+}
+
+// Device initialisation function - NOT for work processing
+size_t _select_write(int fd, char *buf, size_t siz, struct timeval *timeout)
+{
+	struct timeval tv_time, tv_now, tv_finish;
+	fd_set rfds;
+	ssize_t wrote = 0, ret;
+
+	gettimeofday(&tv_now, NULL);
+	timeradd(&tv_now, timeout, &tv_finish);
+
+	// timeout is the maximum time to spend trying to write
+	tv_time.tv_sec = timeout->tv_sec;
+	tv_time.tv_usec = timeout->tv_usec;
+
+	FD_ZERO(&rfds);
+	FD_SET(fd, &rfds);
+
+	while (siz > 0 && (tv_now.tv_sec < tv_finish.tv_sec || (tv_now.tv_sec == tv_finish.tv_sec && tv_now.tv_usec < tv_finish.tv_usec)) && select(fd+1, NULL, &rfds, NULL, &tv_time) > 0) {
+		if ((ret = write(fd, buf, 1)) > 0) {
+			buf++;
+			wrote++;
+			siz--;
+		}
+		else if (ret < 0)
+			return wrote;
+
+		gettimeofday(&tv_now, NULL);
+	}
+
+	return wrote;
+}
+
+#endif // ! WIN32

@@ -47,6 +47,7 @@
 #include "driver-cpu.h"
 #include "driver-opencl.h"
 #include "bench_block.h"
+#include "scrypt.h"
 
 #if defined(unix)
 	#include <errno.h>
@@ -378,25 +379,8 @@ static void sharelog(const char*disposition, const struct work*work)
 	pool = work->pool;
 	t = (unsigned long int)(work->tv_work_found.tv_sec);
 	target = bin2hex(work->target, sizeof(work->target));
-	if (unlikely(!target)) {
-		applog(LOG_ERR, "sharelog target OOM");
-		return;
-	}
-
 	hash = bin2hex(work->hash, sizeof(work->hash));
-	if (unlikely(!hash)) {
-		free(target);
-		applog(LOG_ERR, "sharelog hash OOM");
-		return;
-	}
-
 	data = bin2hex(work->data, sizeof(work->data));
-	if (unlikely(!data)) {
-		free(target);
-		free(hash);
-		applog(LOG_ERR, "sharelog data OOM");
-		return;
-	}
 
 	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
 	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s%u,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->api->name, cgpu->device_id, thr_id, hash, data);
@@ -1487,6 +1471,7 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	const uint64_t peta = 1000000000000000ull;
 	const uint64_t exa  = 1000000000000000000ull;
 	char suffix[2] = "";
+	bool decimal = true;
 	double dval;
 
 	if (val >= exa) {
@@ -1512,13 +1497,23 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	} else if (val >= kilo) {
 		dval = (double)val / dkilo;
 		sprintf(suffix, "K");
-	} else
+	} else {
 		dval = val;
+		decimal = false;
+	}
 
-	if (!sigdigits)
-		sprintf(buf, "%d%s", (unsigned int)dval, suffix);
-	else
-		sprintf(buf, "%-*.*g%s", sigdigits + 1, sigdigits, dval, suffix);
+	if (!sigdigits) {
+		if (decimal)
+			sprintf(buf, "%.3g%s", dval, suffix);
+		else
+			sprintf(buf, "%d%s", (unsigned int)dval, suffix);
+	} else {
+		/* Always show sigdigits + 1, padded on right with zeroes
+		 * followed by suffix */
+		int ndigits = sigdigits - 1 - (dval > 0.0 ? floor(log10(dval)) : 0);
+
+		sprintf(buf, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
+	}
 }
 
 static void get_statline(char *buf, struct cgpu_info *cgpu)
@@ -1971,11 +1966,12 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	}
 }
 
+static const uint64_t diffone = 0xFFFF000000000000ull;
+
 static uint64_t share_diff(const struct work *work)
 {
-	const uint64_t h64 = 0xFFFF000000000000ull;
 	uint64_t *data64, d64;
-	char rhash[33];
+	char rhash[36];
 	uint64_t ret;
 
 	swab256(rhash, work->hash);
@@ -1983,11 +1979,21 @@ static uint64_t share_diff(const struct work *work)
 	d64 = be64toh(*data64);
 	if (unlikely(!d64))
 		d64 = 1;
-	ret = h64 / d64;
+	ret = diffone / d64;
 	return ret;
 }
 
-static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
+static uint32_t scrypt_diff(const struct work *work)
+{
+	const uint32_t scrypt_diffone = 0x0000fffful;
+	uint32_t d32 = work->outputhash;
+
+	if (unlikely(!d32))
+		d32 = 1;
+	return scrypt_diffone / d32;
+}
+
+static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
 	json_t *val, *res, *err;
@@ -2010,10 +2016,6 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "submit_upstream_work OOM");
-		goto out_nofree;
-	}
 
 	/* build JSON-RPC request */
 	sprintf(s,
@@ -2044,13 +2046,20 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	err = json_object_get(val, "error");
 
 	if (!QUIET) {
+		int intdiff = floor(work->work_difficulty);
+		char diffdisp[16];
+
 		hash32 = (uint32_t *)(work->hash);
-		if (opt_scrypt)
-			sprintf(hashshow, "%08lx.%08lx", (unsigned long)(hash32[7]), (unsigned long)(hash32[6]));
-		else {
-			int intdiff = round(work->work_difficulty);
+		if (opt_scrypt) {
+			uint32_t sharediff;
+
+			scrypt_outputhash(work);
+			sharediff = scrypt_diff(work);
+			suffix_string(sharediff, diffdisp, 0);
+
+			sprintf(hashshow, "%08lx Diff %s/%d", (unsigned long)work->outputhash, diffdisp, intdiff);
+		} else {
 			uint64_t sharediff = share_diff(work);
-			char diffdisp[16];
 
 			suffix_string(sharediff, diffdisp, 0);
 
@@ -2118,7 +2127,6 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	rc = true;
 out:
 	free(hexstr);
-out_nofree:
 	return rc;
 }
 
@@ -2186,11 +2194,21 @@ static double DIFFEXACTONE = 269599466671506397946670150870196306736371444225405
 static void calc_diff(struct work *work, int known)
 {
 	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
-	double targ;
-	int i;
 
-	if (!known) {
-		targ = 0;
+	if (opt_scrypt) {
+		uint64_t *data64, d64;
+		char rtarget[36];
+
+		swab256(rtarget, work->target);
+		data64 = (uint64_t *)(rtarget + 2);
+		d64 = be64toh(*data64);
+		if (unlikely(!d64))
+			d64 = 1;
+		work->work_difficulty = diffone / d64;
+	} else if (!known) {
+		double targ = 0;
+		int i;
+
 		for (i = 31; i >= 0; i--) {
 			targ *= 256;
 			targ += work->target[i];
@@ -3129,10 +3147,6 @@ static inline bool from_existing_block(struct work *work)
 	char *hexstr = bin2hex(work->data + 8, 18);
 	bool ret;
 
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "from_existing_block OOM");
-		return true;
-	}
 	ret = block_exists(hexstr);
 	free(hexstr);
 	return ret;
@@ -3152,10 +3166,6 @@ static bool test_work_current(struct work *work)
 		return ret;
 
 	hexstr = bin2hex(work->data + 8, 18);
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "stage_thread OOM");
-		return ret;
-	}
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
@@ -4146,7 +4156,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 	int intdiff;
 
 	hash32 = (uint32_t *)(work->hash);
-	intdiff = round(work->work_difficulty);
+	intdiff = floor(work->work_difficulty);
 	suffix_string(sharediff, diffdisp, 0);
 	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
 		work->block? " BLOCK!" : "");
@@ -4258,6 +4268,7 @@ static void *stratum_thread(void *userdata)
 				sleep(30);
 			}
 			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
+			pool_tclear(pool, &pool->idle);
 			pool_resus(pool);
 			continue;
 		}
@@ -4591,7 +4602,7 @@ static struct work *clone_work(struct work *work)
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
-	unsigned char hash1[33];
+	unsigned char hash1[36];
 
 	sha2(data, len, hash1, false);
 	sha2(hash1, 32, hash, false);
@@ -4603,10 +4614,10 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
 static void set_work_target(struct work *work, int diff)
 {
-	unsigned char rtarget[33], target[33];
+	unsigned char rtarget[36], target[36];
 	uint64_t *data64, h64;
 
-	h64 = 0xFFFF000000000000ull;
+	h64 = diffone;
 	h64 /= (uint64_t)diff;
 	memset(rtarget, 0, 32);
 	data64 = (uint64_t *)(rtarget + 4);
@@ -4615,10 +4626,8 @@ static void set_work_target(struct work *work, int diff)
 	if (opt_debug) {
 		char *htarget = bin2hex(target, 32);
 
-		if (likely(htarget)) {
-			applog(LOG_DEBUG, "Generated target %s", htarget);
-			free(htarget);
-		}
+		applog(LOG_DEBUG, "Generated target %s", htarget);
+		free(htarget);
 	}
 	memcpy(work->target, target, 32);
 }
@@ -4628,8 +4637,8 @@ static void set_work_target(struct work *work, int diff)
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[33], merkle_sha[65], *merkle_hash;
-	char header[257], hash1[129], *nonce2;
+	unsigned char *coinbase, merkle_root[36], merkle_sha[68], *merkle_hash;
+	char header[260], hash1[132], *nonce2;
 	int len, cb1_len, n1_len, cb2_len, i;
 	uint32_t *data32, *swap32;
 
@@ -4641,8 +4650,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Generate coinbase */
 	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
-	if (unlikely(!nonce2))
-		quit(1, "Failed to convert nonce2 in gen_stratum_work");
 	pool->nonce2++;
 	cb1_len = strlen(pool->swork.coinbase1) / 2;
 	n1_len = strlen(pool->nonce1) / 2;
@@ -4658,7 +4665,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	gen_hash(coinbase, merkle_root, len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
-		unsigned char merkle_bin[33];
+		unsigned char merkle_bin[36];
 
 		hex2bin(merkle_bin, pool->swork.merkle[i], 32);
 		memcpy(merkle_sha + 32, merkle_bin, 32);
@@ -4670,8 +4677,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	for (i = 0; i < 32 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
-	if (unlikely(!merkle_hash))
-		quit(1, "Failed to conver merkle_hash in gen_stratum_work");
 
 	sprintf(header, "%s", pool->swork.bbversion);
 	strcat(header, pool->swork.prev_hash);
@@ -4870,6 +4875,10 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 				thr->cgpu->api->name, thr->cgpu->device_id);
 		hw_errors++;
 		thr->cgpu->hw_errors++;
+
+		if (thr->cgpu->api->hw_error)
+			thr->cgpu->api->hw_error(thr);
+
 		return false;
 	}
 

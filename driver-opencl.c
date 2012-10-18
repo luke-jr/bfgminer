@@ -1463,12 +1463,9 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 	const int thr_id = thr->id;
 	struct opencl_thread_data *thrdata = thr->cgpu_data;
 	_clState *clState = clStates[thr_id];
-	struct cgpu_info *gpu = thr->cgpu;
-
-	if (gpu->dynamic)
-		return;
 
 	clFinish(clState->commandQueue);
+
 	if (thrdata->res[FOUND]) {
 		thrdata->last_work = &thrdata->_last_work;
 		memcpy(thrdata->last_work, work, sizeof(*thrdata->last_work));
@@ -1497,7 +1494,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	_clState *clState = clStates[thr_id];
 	const cl_kernel *kernel = &clState->kernel;
 	const int dynamic_us = opt_dynamic_interval * 1000;
-	struct timeval tv_gpuend;
 
 	cl_int status;
 	size_t globalThreads[1];
@@ -1505,8 +1501,25 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	int64_t hashes;
 
 	/* This finish flushes the readbuffer set with CL_FALSE later */
-	if (!gpu->dynamic)
-		clFinish(clState->commandQueue);
+	clFinish(clState->commandQueue);
+
+	/* Windows' timer resolution is only 15ms so oversample 5x */
+	if (gpu->dynamic && (++gpu->intervals * dynamic_us) > 70000) {
+		struct timeval tv_gpuend;
+		double gpu_us;
+
+		gettimeofday(&tv_gpuend, NULL);
+		gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpustart) / gpu->intervals;
+		if (gpu_us > dynamic_us) {
+			if (gpu->intensity > MIN_INTENSITY)
+				--gpu->intensity;
+		} else if (gpu_us < dynamic_us / 2) {
+			if (gpu->intensity < MAX_INTENSITY)
+				++gpu->intensity;
+		}
+		memcpy(&(gpu->tv_gpustart), &tv_gpuend, sizeof(struct timeval));
+		gpu->intervals = 0;
+	}
 
 	set_threads_hashes(clState->vwidth, &hashes, globalThreads, localThreads[0], &gpu->intensity);
 	if (hashes > gpu->max_hashes)
@@ -1531,18 +1544,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		}
 		memset(thrdata->res, 0, BUFFERSIZE);
 		clFinish(clState->commandQueue);
-	}
-
-	if (gpu->dynamic) {
-		gettimeofday(&gpu->tv_gpumid, NULL);
-		if (gpu->new_work) {
-			gpu->new_work = false;
-			gpu->intervals = gpu->hit = 0;
-		}
-		if (!gpu->intervals) {
-			gpu->tv_gpustart.tv_sec = gpu->tv_gpumid.tv_sec;
-			gpu->tv_gpustart.tv_usec = gpu->tv_gpumid.tv_usec;
-		}
 	}
 
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
@@ -1570,39 +1571,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);
 		return -1;
-	}
-
-	if (gpu->dynamic) {
-		double gpu_us;
-
-		clFinish(clState->commandQueue);
-		/* Windows returns the same time for gettimeofday due to its
-		 * 15ms timer resolution, so we must average the result over
-		 * at least 5 values that are actually different to get an
-		 * accurate result */
-		gpu->intervals++;
-		gettimeofday(&tv_gpuend, NULL);
-		gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpumid);
-		if (gpu_us > 0 && ++gpu->hit > 4) {
-			gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpustart) / gpu->intervals;
-			/* Very rarely we may get an overflow so put an upper
-			 * limit on the detected time */
-			if (unlikely(gpu->gpu_us_average > 0 && gpu_us > gpu->gpu_us_average * 4))
-				gpu_us = gpu->gpu_us_average * 4;
-			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
-
-			/* Try to not let the GPU be out for longer than
-			 * opt_dynamic_interval in ms, but increase
-			 * intensity when the system is idle in dynamic mode */
-			if (gpu->gpu_us_average > dynamic_us) {
-				if (gpu->intensity > MIN_INTENSITY)
-					--gpu->intensity;
-			} else if (gpu->gpu_us_average < dynamic_us / 2) {	
-				if (gpu->intensity < MAX_INTENSITY)
-					++gpu->intensity;
-			}
-			gpu->intervals = gpu->hit = 0;
-		}
 	}
 
 	/* The amount of work scanned can fluctuate when intensity changes

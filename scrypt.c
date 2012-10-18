@@ -34,8 +34,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#define byteswap(x) ((((x) << 24) & 0xff000000u) | (((x) << 8) & 0x00ff0000u) | (((x) >> 8) & 0x0000ff00u) | (((x) >> 24) & 0x000000ffu))
-
 typedef struct SHA256Context {
 	uint32_t state[8];
 	uint32_t buf[16];
@@ -51,7 +49,7 @@ be32enc_vect(uint32_t *dst, const uint32_t *src, uint32_t len)
 	uint32_t i;
 
 	for (i = 0; i < len; i++)
-		dst[i] = byteswap(src[i]);
+		dst[i] = htobe32(src[i]);
 }
 
 /* Elementary functions used by SHA256 */
@@ -94,7 +92,7 @@ SHA256_Transform(uint32_t * state, const uint32_t block[16], int swap)
 	/* 1. Prepare message schedule W. */
 	if(swap)
 		for (i = 0; i < 16; i++)
-			W[i] = byteswap(block[i]);
+			W[i] = htobe32(block[i]);
 	else
 		memcpy(W, block, 64);
 	for (i = 16; i < 64; i += 2) {
@@ -295,7 +293,7 @@ PBKDF2_SHA256_80_128_32(const uint32_t * passwd, const uint32_t * salt)
 	/* Feed the inner hash to the outer SHA256 operation. */
 	SHA256_Transform(ostate, pad, 0);
 	/* Finish the outer SHA256 operation. */
-	return byteswap(ostate[7]);
+	return be32toh(ostate[7]);
 }
 
 
@@ -407,6 +405,18 @@ static uint32_t scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad)
 	return PBKDF2_SHA256_80_128_32(input, X);
 }
 
+void scrypt_outputhash(struct work *work)
+{
+	uint32_t data[20];
+	char *scratchbuf;
+	uint32_t *nonce = (uint32_t *)(work->data + 76);
+
+	be32enc_vect(data, (const uint32_t *)work->data, 19);
+	data[19] = htobe32(*nonce);
+	scratchbuf = alloca(131584);
+	work->outputhash = scrypt_1024_1_1_256_sp(data, scratchbuf);
+}
+
 /* Used externally as confirmation of correct OCL code */
 bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t nonce)
 {
@@ -415,7 +425,7 @@ bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t no
 	uint32_t data[20];
 
 	be32enc_vect(data, (const uint32_t *)pdata, 19);
-	data[19] = byteswap(nonce);
+	data[19] = htobe32(nonce);
 	scratchbuf = alloca(131584);
 	tmp_hash7 = scrypt_1024_1_1_256_sp(data, scratchbuf);
 
@@ -448,7 +458,7 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 		tmp_hash7 = scrypt_1024_1_1_256_sp(data, scratchbuf);
 
 		if (unlikely(tmp_hash7 <= Htarg)) {
-			((uint32_t *)pdata)[19] = byteswap(n);
+			((uint32_t *)pdata)[19] = htobe32(n);
 			*last_nonce = n;
 			ret = true;
 			break;

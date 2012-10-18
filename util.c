@@ -534,14 +534,21 @@ char *get_proxy(char *url, struct pool *pool)
 	return url;
 }
 
-
+/* Returns a malloced array string of a binary value of arbitrary length. The
+ * array is rounded up to a 4 byte size to appease architectures that need
+ * aligned array  sizes */
 char *bin2hex(const unsigned char *p, size_t len)
 {
-	char *s = malloc((len * 2) + 1);
 	unsigned int i;
+	ssize_t slen;
+	char *s;
 
-	if (!s)
-		return NULL;
+	slen = len * 2 + 1;
+	if (slen % 4)
+		slen += 4 - (slen % 4);
+	s = calloc(slen, 1);
+	if (unlikely(!s))
+		quit(1, "Failed to calloc in bin2hex");
 
 	for (i = 0; i < len; i++)
 		sprintf(s + (i * 2), "%02x", (unsigned int) p[i]);
@@ -549,24 +556,27 @@ char *bin2hex(const unsigned char *p, size_t len)
 	return s;
 }
 
+/* Does the reverse of bin2hex but does not allocate any ram */
 bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 {
+	bool ret = false;
+
 	while (*hexstr && len) {
-		char hex_byte[3];
+		char hex_byte[4];
 		unsigned int v;
 
-		if (!hexstr[1]) {
+		if (unlikely(!hexstr[1])) {
 			applog(LOG_ERR, "hex2bin str truncated");
-			return false;
+			return ret;
 		}
 
+		memset(hex_byte, 0, 4);
 		hex_byte[0] = hexstr[0];
 		hex_byte[1] = hexstr[1];
-		hex_byte[2] = 0;
 
-		if (sscanf(hex_byte, "%x", &v) != 1) {
+		if (unlikely(sscanf(hex_byte, "%x", &v) != 1)) {
 			applog(LOG_ERR, "hex2bin sscanf '%s' failed", hex_byte);
-			return false;
+			return ret;
 		}
 
 		*p = (unsigned char) v;
@@ -576,7 +586,9 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 		len--;
 	}
 
-	return (len == 0 && *hexstr == 0) ? true : false;
+	if (likely(len == 0 && *hexstr == 0))
+		ret = true;
+	return ret;
 }
 
 bool fulltest(const unsigned char *hash, const unsigned char *target)
@@ -855,10 +867,10 @@ bool extract_sockaddr(struct pool *pool, char *url)
 }
 
 /* Send a single command across a socket, appending \n to it */
-bool stratum_send(struct pool *pool, char *s, ssize_t len)
+static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 {
+	SOCKETTYPE sock = pool->sock;
 	ssize_t ssent = 0;
-	bool ret = false;
 
 	if (opt_protocol)
 		applog(LOG_DEBUG, "SEND: %s", s);
@@ -866,22 +878,40 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 	strcat(s, "\n");
 	len++;
 
-	mutex_lock(&pool->stratum_lock);
 	while (len > 0 ) {
+		struct timeval timeout = {0, 0};
 		size_t sent = 0;
+		fd_set wd;
 
+		FD_ZERO(&wd);
+		FD_SET(sock, &wd);
+		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1) {
+			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
+			return false;
+		}
 		if (curl_easy_send(pool->stratum_curl, s + ssent, len, &sent) != CURLE_OK) {
 			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
-			ret = false;
-			goto out_unlock;
+			return false;
 		}
 		ssent += sent;
 		len -= ssent;
 	}
-	ret = true;
-out_unlock:
+
+	return true;
+}
+
+bool stratum_send(struct pool *pool, char *s, ssize_t len)
+{
+	bool ret = false;
+
+	mutex_lock(&pool->stratum_lock);
+	if (pool->stratum_active)
+		ret = __stratum_send(pool, s, len);
+	else
+		applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
 	mutex_unlock(&pool->stratum_lock);
-	return ret;;
+
+	return ret;
 }
 
 #define RECVSIZE 8191
@@ -927,6 +957,7 @@ char *recv_line(struct pool *pool)
 
 	if (!strstr(pool->sockbuf, "\n")) {
 		char s[RBUFSIZE];
+		size_t sspace;
 		CURLcode rc;
 
 		if (!sock_full(pool, true)) {
@@ -943,7 +974,11 @@ char *recv_line(struct pool *pool)
 			applog(LOG_DEBUG, "Failed to recv sock in recv_line");
 			goto out;
 		}
-		strcat(pool->sockbuf, s);
+		/* Prevent buffer overflows, but if 8k is still not enough,
+		 * likely we have had some comms issues and the data is all
+		 * useless anyway */
+		sspace = RECVSIZE - strlen(pool->sockbuf);
+		strncat(pool->sockbuf, s, sspace);
 	}
 
 	buflen = strlen(pool->sockbuf);
@@ -1270,11 +1305,15 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
+	mutex_lock(&pool->stratum_lock);
+	pool->stratum_active = false;
+
 	if (!pool->stratum_curl) {
 		pool->stratum_curl = curl_easy_init();
 		if (unlikely(!pool->stratum_curl))
 			quit(1, "Failed to curl_easy_init in initiate_stratum");
 	}
+	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
 
 	/* Create a http url for use with curl */
@@ -1303,7 +1342,7 @@ bool initiate_stratum(struct pool *pool)
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
-	if (!stratum_send(pool, s, strlen(s))) {
+	if (!__stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
@@ -1369,11 +1408,13 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
-		pool->stratum_active = false;
+		applog(LOG_DEBUG, "Initiate stratum failed, disabling stratum_active");
+		mutex_lock(&pool->stratum_lock);
 		if (curl) {
 			curl_easy_cleanup(curl);
 			pool->stratum_curl = NULL;
 		}
+		mutex_unlock(&pool->stratum_lock);
 	}
 
 	return ret;

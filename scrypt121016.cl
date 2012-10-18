@@ -683,12 +683,7 @@ void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
 }
 
 #define FOUND (0x0F)
-
-#if defined(OCL1)
-	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
-#else
-	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
-#endif
+#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 __kernel void search(__global const uint4 * restrict input,
