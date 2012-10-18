@@ -987,10 +987,10 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
+	uint32_t	outputhash;
+
 	int		rolls;
 
-	uint32_t	output[1];
-	uint32_t	valid;
 	dev_blk_ctx	blk;
 
 	struct thr_info	*thr;

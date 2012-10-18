@@ -405,6 +405,18 @@ static uint32_t scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad)
 	return PBKDF2_SHA256_80_128_32(input, X);
 }
 
+void scrypt_outputhash(struct work *work)
+{
+	uint32_t data[20];
+	char *scratchbuf;
+	uint32_t *nonce = (uint32_t *)(work->data + 76);
+
+	be32enc_vect(data, (const uint32_t *)work->data, 19);
+	data[19] = htobe32(*nonce);
+	scratchbuf = alloca(131584);
+	work->outputhash = scrypt_1024_1_1_256_sp(data, scratchbuf);
+}
+
 /* Used externally as confirmation of correct OCL code */
 bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t nonce)
 {
