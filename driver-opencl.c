@@ -1723,7 +1723,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	clFinish(clState->commandQueue);
 
 	/* Windows' timer resolution is only 15ms so oversample 5x */
-	if (gpu->dynamic && (++gpu->intervals * dynamic_us) > 75) {
+	if (gpu->dynamic && (++gpu->intervals * dynamic_us) > 70000) {
 		struct timeval tv_gpuend;
 		double gpu_us;
 
