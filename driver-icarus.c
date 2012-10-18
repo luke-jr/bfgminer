@@ -586,22 +586,19 @@ bool icarus_detect_custom(const char *devpath, struct device_api *api, struct IC
 	icarus_close(fd);
 
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
-	if (nonce_hex) {
-		if (strncmp(nonce_hex, golden_nonce, 8)) {
-			applog(LOG_DEBUG,
-				"Icarus Detect: "
-				"Test failed at %s: get %s, should: %s",
-				devpath, nonce_hex, golden_nonce);
-			free(nonce_hex);
-			return false;
-		}
-		applog(LOG_DEBUG, 
+	if (strncmp(nonce_hex, golden_nonce, 8)) {
+		applog(LOG_DEBUG,
 			"Icarus Detect: "
-			"Test succeeded at %s: got %s",
-				devpath, nonce_hex);
+			"Test failed at %s: get %s, should: %s",
+			devpath, nonce_hex, golden_nonce);
 		free(nonce_hex);
-	} else
 		return false;
+	}
+	applog(LOG_DEBUG,
+		"Icarus Detect: "
+		"Test succeeded at %s: got %s",
+			devpath, nonce_hex);
+	free(nonce_hex);
 
 	if (serial_claim(devpath, api)) {
 		const char *claimedby = serial_claim(devpath, api)->dname;
@@ -741,12 +738,10 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, 64);
-		if (ob_hex) {
-			applog(LOG_DEBUG, "%s %u sent: %s",
-				icarus->api->name,
-				icarus->device_id, ob_hex);
-			free(ob_hex);
-		}
+		applog(LOG_DEBUG, "%s %u sent: %s",
+			icarus->api->name,
+			icarus->device_id, ob_hex);
+		free(ob_hex);
 	}
 
 	return true;

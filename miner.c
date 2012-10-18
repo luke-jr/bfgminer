@@ -398,25 +398,8 @@ static void sharelog(const char*disposition, const struct work*work)
 	pool = work->pool;
 	t = (unsigned long int)(work->tv_work_found.tv_sec);
 	target = bin2hex(work->target, sizeof(work->target));
-	if (unlikely(!target)) {
-		applog(LOG_ERR, "sharelog target OOM");
-		return;
-	}
-
 	hash = bin2hex(work->hash, sizeof(work->hash));
-	if (unlikely(!hash)) {
-		free(target);
-		applog(LOG_ERR, "sharelog hash OOM");
-		return;
-	}
-
 	data = bin2hex(work->data, sizeof(work->data));
-	if (unlikely(!data)) {
-		free(target);
-		free(hash);
-		applog(LOG_ERR, "sharelog data OOM");
-		return;
-	}
 
 	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
 	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s%u,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->api->name, cgpu->device_id, thr_id, hash, data);
@@ -2470,10 +2453,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "submit_upstream_work OOM");
-		goto out_nofree;
-	}
 
 	/* build JSON-RPC request */
 	sprintf(s,
@@ -2592,7 +2571,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	rc = true;
 out:
 	free(hexstr);
-out_nofree:
 	return rc;
 }
 
@@ -3895,10 +3873,6 @@ static inline bool from_existing_block(struct work *work)
 	char *hexstr = bin2hex(work->data + 8, 18);
 	bool ret;
 
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "from_existing_block OOM");
-		return true;
-	}
 	ret = block_exists(hexstr);
 	free(hexstr);
 	return ret;
@@ -3920,10 +3894,6 @@ static bool test_work_current(struct work *work)
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
 
 	hexstr = bin2hex(work->data + 8, 18);
-	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "stage_thread OOM");
-		return ret;
-	}
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
@@ -5561,10 +5531,8 @@ static void set_work_target(struct work *work, int diff)
 	if (opt_debug) {
 		char *htarget = bin2hex(target, 32);
 
-		if (likely(htarget)) {
-			applog(LOG_DEBUG, "Generated target %s", htarget);
-			free(htarget);
-		}
+		applog(LOG_DEBUG, "Generated target %s", htarget);
+		free(htarget);
 	}
 	memcpy(work->target, target, 32);
 }
@@ -5587,8 +5555,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Generate coinbase */
 	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
-	if (unlikely(!nonce2))
-		quit(1, "Failed to convert nonce2 in gen_stratum_work");
 	pool->nonce2++;
 	cb1_len = strlen(pool->swork.coinbase1) / 2;
 	n1_len = strlen(pool->nonce1) / 2;
@@ -5616,8 +5582,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	for (i = 0; i < 32 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
-	if (unlikely(!merkle_hash))
-		quit(1, "Failed to conver merkle_hash in gen_stratum_work");
 
 	sprintf(header, "%s", pool->swork.bbversion);
 	strcat(header, pool->swork.prev_hash);
