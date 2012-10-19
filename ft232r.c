@@ -150,7 +150,7 @@ struct ft232r_device_handle {
 	uint8_t i;
 	uint8_t o;
 	unsigned char ibuf[256];
-	uint8_t ibufLen;
+	int ibufLen;
 };
 
 struct ft232r_device_handle *ft232r_open(libusb_device *dev)

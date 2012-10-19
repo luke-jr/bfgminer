@@ -16,6 +16,8 @@
 
 #include "ft232r.h"
 #include "jtag.h"
+#include "logging.h"
+#include "miner.h"
 
 // NOTE: The order of tms and tdi here are inverted from LPC1343CodeBase
 bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
@@ -24,14 +26,21 @@ bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 	memset(buf, (*jp->state & jp->ignored)
 	          | (tms ? jp->tms : 0)
 	          | (tdi ? jp->tdi : 0), sizeof(buf));
-	buf[0] |= jp->tck;
+	buf[2] =
+	buf[1] |= jp->tck;
 	if (ft232r_write_all(jp->ftdi, buf, sizeof(buf)) != sizeof(buf))
 		return false;
+	if (jp->async) {
+		if (unlikely(tdo))
+			applog(LOG_WARNING, "jtag_clock: request for tdo in async mode not possible");
+		return true;
+	}
 	if (ft232r_read_all(jp->ftdi, buf, sizeof(buf)) != sizeof(buf))
 		return false;
 	if (tdo)
 		*tdo = (buf[2] & jp->tdo);
 	*jp->state = buf[2];
+	//applog(LOG_ERR, "%p tms=%d tdi=%d tdo=%d", jp, (int)tms, (int)tdi, (int)(bool)(buf[3]&jp->tdo));
 	return true;
 }
 
@@ -108,12 +117,12 @@ ssize_t jtag_detect(struct jtag_port *jp)
 	 && jtag_clock(jp, false, false, NULL)  // Capture DR
 	 && jtag_clock(jp, false, false, NULL)  // Shift DR
 	))
-		return false;
+		return -1;
 	for (i = 0; i < 4; ++i)
 		if (!jtag_clock(jp, false, false, NULL))
-			return false;
+			return -1;
 	if (!jtag_clock(jp, false, false, &tdo))
-		return false;
+		return -1;
 	if (tdo)
 		return -1;
 	for (i = 0; i < 4; ++i)

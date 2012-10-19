@@ -18,7 +18,7 @@
 
 #define X6500_USB_PRODUCT "X6500 FPGA Miner"
 #define X6500_BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
-#define X6500_BISTREAM_USERID "\2\4$B"
+#define X6500_BITSTREAM_USERID "\2\4$B"
 #define X6500_MINIMUM_CLOCK    2
 #define X6500_DEFAULT_CLOCK  200
 #define X6500_MAXIMUM_CLOCK  210
@@ -32,7 +32,6 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	x6500->api = &x6500_api;
 	mutex_init(&x6500->device_mutex);
 	x6500->device_path = strdup(serial);
-	x6500->device_fd = -1;
 	x6500->deven = DEV_ENABLED;
 	x6500->threads = 2;
 	x6500->name = strdup(product);
@@ -82,34 +81,219 @@ struct x6500_fpga_data {
 	struct jtag_port jtag;
 };
 
+#define bailout(...) do{return false;}while(0)
+#define bailout2(...) do{return false;}while(0)
+#define check_magic(L)  do {  \
+	if (1 != fread(buf, 1, 1, f))  \
+		bailout(LOG_ERR, "Error reading ModMiner firmware ('%c')", L);  \
+	if (buf[0] != L)  \
+		bailout(LOG_ERR, "ModMiner firmware has wrong magic ('%c')", L);  \
+} while(0)
+#define read_str(eng)  do {  \
+	if (1 != fread(buf, 2, 1, f))  \
+		bailout(LOG_ERR, "Error reading ModMiner firmware (" eng " len)");  \
+	len = (ubuf[0] << 8) | ubuf[1];  \
+	if (len >= sizeof(buf))  \
+		bailout(LOG_ERR, "ModMiner firmware " eng " too long");  \
+	if (1 != fread(buf, len, 1, f))  \
+		bailout(LOG_ERR, "Error reading ModMiner firmware (" eng ")");  \
+	buf[len] = '\0';  \
+} while(0)
+
+static bool
+x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle *ftdi)
+{
+	struct x6500_fpga_data *state = x6500->thr[0]->cgpu_data;
+	char buf[0x100];
+	unsigned char *ubuf = (unsigned char*)buf;
+	unsigned long len, flen;
+	char *p;
+	const char *fwfile = X6500_BITSTREAM_FILENAME;
+	char *pdone = (char*)&x6500->cgpu_data;
+
+	FILE *f = open_bitstream("x6500", fwfile);
+	if (!f)
+		bailout(LOG_ERR, "Error opening X6500 firmware file %s", fwfile);
+	if (1 != fread(buf, 2, 1, f))
+		bailout(LOG_ERR, "Error reading X6500 firmware (magic)");
+	if (buf[0] || buf[1] != 9)
+		bailout(LOG_ERR, "X6500 firmware has wrong magic (9)");
+	if (-1 == fseek(f, 11, SEEK_CUR))
+		bailout(LOG_ERR, "X6500 firmware seek failed");
+	check_magic('a');
+	read_str("design name");
+	applog(LOG_DEBUG, "X6500 firmware file %s info:", fwfile);
+	applog(LOG_DEBUG, "  Design name: %s", buf);
+	p = strrchr(buf, ';') ?: buf;
+	p = strrchr(buf, '=') ?: p;
+	if (p[0] == '=')
+		++p;
+	unsigned long fwusercode = (unsigned long)strtoll(p, &p, 16);
+	if (p[0] != '\0')
+		bailout(LOG_ERR, "Bad usercode in X6500 firmware file");
+	if (fwusercode == 0xffffffff)
+		bailout(LOG_ERR, "X6500 firmware doesn't support user code");
+	applog(LOG_DEBUG, "  Version: %u, build %u", (fwusercode >> 8) & 0xff, fwusercode & 0xff);
+	check_magic('b');
+	read_str("part number");
+	applog(LOG_DEBUG, "  Part number: %s", buf);
+	check_magic('c');
+	read_str("build date");
+	applog(LOG_DEBUG, "  Build date: %s", buf);
+	check_magic('d');
+	read_str("build time");
+	applog(LOG_DEBUG, "  Build time: %s", buf);
+	check_magic('e');
+	if (1 != fread(buf, 4, 1, f))
+		bailout(LOG_ERR, "Error reading X6500 firmware (data len)");
+	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
+	flen = len;
+	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
+
+	applog(LOG_WARNING, "%s %u: Programming %s... DO NOT EXIT UNTIL COMPLETE", x6500->api->name, x6500->device_id, x6500->device_path);
+	
+	uint8_t dummyx;
+	struct jtag_port jpt = {
+		.ftdi = ftdi,
+		.tck = 0x88,
+		.tms = 0x44,
+		.tdi = 0x22,
+		.tdo = 0x11,
+		.ignored = 0,
+		.state = &dummyx,
+	};
+	struct jtag_port *jp = &jpt;
+	uint8_t i;
+	jtag_write(jp, JTAG_REG_IR, "\xd0", 6);  // JPROGRAM
+	do {
+		i = 0xff;  // BYPASS while reading status
+		jtag_read(jp, JTAG_REG_IR, &i, 6);
+		applog(LOG_ERR, "%08x", (unsigned)i);
+	} while (i & 8);
+	jtag_write(jp, JTAG_REG_IR, "\xa0", 6);  // CFG_IN
+	
+	sleep(1);
+	if (!ft232r_set_bitmode(ftdi, 0xee, 1))
+		return false;
+	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
+		return false;
+	jp->async = true;
+	
+	if (fread(buf, 32, 1, f) != 1)
+		bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+	jtag_swrite(jp, JTAG_REG_DR, buf, 256);
+	
+	ssize_t buflen;
+	char nextstatus = 10;
+	while (len) {
+		buflen = len < 32 ? len : 32;
+		if (fread(buf, buflen, 1, f) != 1)
+			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+		jtag_swrite_more(jp, buf, buflen * 8, len == buflen);
+		*pdone = 100 - ((len * 100) / flen);
+		if (*pdone >= nextstatus)
+		{
+			nextstatus += 10;
+			applog(LOG_WARNING, "%s %u: Programming %s... %d%% complete...", x6500->api->name, x6500->device_id, x6500->device_path, *pdone);
+		}
+		len -= buflen;
+	}
+	
+	if (!ft232r_set_bitmode(ftdi, 0xee, 4))
+		return false;
+	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
+		return false;
+
+	jtag_write(jp, JTAG_REG_IR, "\x30", 6);  // JSTART
+	for (i=0; i<16; ++i)
+		jtag_run(jp);
+	i = 0xff;  // BYPASS
+	jtag_read(jp, JTAG_REG_IR, &i, 6);
+	if (!(i & 4))
+		return false;
+	
+	applog(LOG_WARNING, "%s %u: Done programming %s", x6500->api->name, x6500->device_id, x6500->device_path);
+
+	return true;
+}
+
 static bool x6500_fpga_init(struct thr_info *thr)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
 	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
 	struct x6500_fpga_data *fpga;
+	struct jtag_port *jp;
 	uint8_t pinoffset = thr->device_thread ? 0x10 : 1;
+	unsigned char buf[4];
+	int i;
 	
 	if (!ftdi)
 		return false;
 	
 	fpga = calloc(1, sizeof(*fpga));
-	fpga->jtag.ftdi = ftdi;
-	fpga->jtag.tck = pinoffset << 3;
-	fpga->jtag.tms = pinoffset << 2;
-	fpga->jtag.tdi = pinoffset << 1;
-	fpga->jtag.tdo = pinoffset << 0;
-	fpga->jtag.ignored = ~(fpga->jtag.tdo | fpga->jtag.tdi | fpga->jtag.tms | fpga->jtag.tck);
-	fpga->jtag.state = x6500->cgpu_data;
+	jp = &fpga->jtag;
+	jp->ftdi = ftdi;
+	jp->tck = pinoffset << 3;
+	jp->tms = pinoffset << 2;
+	jp->tdi = pinoffset << 1;
+	jp->tdo = pinoffset << 0;
+	jp->ignored = ~(fpga->jtag.tdo | fpga->jtag.tdi | fpga->jtag.tms | fpga->jtag.tck);
+	jp->state = x6500->cgpu_data;
 	
 	applog(LOG_ERR, "jtag pins: tck=%02x tms=%02x tdi=%02x tdo=%02x", pinoffset << 3, pinoffset << 2, pinoffset << 1, pinoffset << 0);
 	
 	mutex_lock(&x6500->device_mutex);
-	if (!jtag_reset(&fpga->jtag)) {
+	if (!jtag_reset(jp)) {
+		mutex_unlock(&x6500->device_mutex);
 		applog(LOG_ERR, "jtag reset failed");
 		return false;
 	}
-	applog(LOG_ERR, "jtag detect returned %d", (int)jtag_detect(&fpga->jtag));
+	
+// 	while(gets(buf)) {
+// 		jtag_clock(jp, buf[0]=='/', buf[1]=='/', &buf[2]);
+// 		applog(LOG_ERR, "=> %d", (int)buf[2]);
+// 	}
+	
+	
+	i = jtag_detect(jp);
+	if (i != 1) {
+		mutex_unlock(&x6500->device_mutex);
+		applog(LOG_ERR, "jtag detect returned %d", i);
+		return false;
+	}
+	
+		x6500_fpga_upload_bitstream(x6500, ftdi);
+	if (!(1
+	 && jtag_write(jp, JTAG_REG_IR, "\x10", 6)
+	 && jtag_read (jp, JTAG_REG_DR, buf, 32)
+	 && jtag_reset(jp)
+	)) {
+		mutex_unlock(&x6500->device_mutex);
+		applog(LOG_ERR, "jtag error reading user code");
+		return false;
+	}
+	
+	if (memcmp(buf, X6500_BITSTREAM_USERID, 4)) {
+	}
+	applog(LOG_ERR, "userid: %s", bin2hex(buf, 4));
+	
 	mutex_unlock(&x6500->device_mutex);
+	return false;
+}
+
+static void
+get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
+{
+	char info[18] = "               | ";
+
+	char pdone = (char)(x6500->cgpu_data);
+	if (pdone != 101) {
+		sprintf(&info[1], "%3d%%", pdone);
+		info[5] = ' ';
+		strcat(buf, info);
+		return;
+	}
+	strcat(buf, "               | ");
 }
 
 struct device_api x6500_api = {
@@ -118,6 +302,7 @@ struct device_api x6500_api = {
 	.api_detect = x6500_detect,
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_fpga_init,
+	.get_statline_before = get_x6500_statline_before,
 // 	.scanhash = x6500_fpga_scanhash,
 // 	.thread_shutdown = x6500_fpga_shutdown,
 };
