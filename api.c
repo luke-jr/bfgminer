@@ -131,7 +131,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.19";
+static const char *APIVERSION = "1.20";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static const char *SICK = "Sick";
@@ -1810,6 +1810,9 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
+		if (pool->removed)
+			continue;
+
 		switch (pool->enabled) {
 			case POOL_DISABLED:
 				status = (char *)DISABLED;
@@ -1859,6 +1862,12 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_diff(root, "Difficulty Rejected", &(pool->diff_rejected), false);
 		root = api_add_diff(root, "Difficulty Stale", &(pool->diff_stale), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(pool->last_share_diff), false);
+		root = api_add_bool(root, "Has Stratum", &(pool->has_stratum), false);
+		root = api_add_bool(root, "Stratum Active", &(pool->stratum_active), false);
+		if (pool->stratum_active)
+			root = api_add_escape(root, "Stratum URL", pool->stratum_url, false);
+		else
+			root = api_add_const(root, "Stratum URL", BLANK, false);
 
 		if (isjson && (i > 0))
 			strcat(io_buffer, COMMA);
