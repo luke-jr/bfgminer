@@ -2684,6 +2684,8 @@ retry:
 			sleep(5);
 			if (altpool != pool) {
 				wc->pool = altpool;
+				inc_queued(altpool);
+				dec_queued(pool);
 				goto retry;
 			}
 		}
