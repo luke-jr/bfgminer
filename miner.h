@@ -800,8 +800,8 @@ struct stratum_work {
 	int diff;
 };
 
-#define RECVSIZE 8191
-#define RBUFSIZE (RECVSIZE + 1)
+#define RECVSIZE 8192
+#define RBUFSIZE (RECVSIZE + 4)
 
 struct pool {
 	int pool_no;

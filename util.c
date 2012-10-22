@@ -914,9 +914,6 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 	return ret;
 }
 
-#define RECVSIZE 8191
-#define RBUFSIZE (RECVSIZE + 1)
-
 static void clear_sock(struct pool *pool)
 {
 	SOCKETTYPE sock = pool->sock;
