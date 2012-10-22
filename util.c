@@ -866,7 +866,8 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	return true;
 }
 
-/* Send a single command across a socket, appending \n to it */
+/* Send a single command across a socket, appending \n to it. This should all
+ * be done under stratum lock except when first establishing the socket */
 static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 {
 	SOCKETTYPE sock = pool->sock;
@@ -880,6 +881,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	while (len > 0 ) {
 		struct timeval timeout = {0, 0};
+		CURLcode rc = CURLE_SEND_ERROR;
 		size_t sent = 0;
 		fd_set wd;
 
@@ -889,7 +891,9 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
 			return false;
 		}
-		if (curl_easy_send(pool->stratum_curl, s + ssent, len, &sent) != CURLE_OK) {
+		if (likely(pool->stratum_curl))
+			rc = curl_easy_send(pool->stratum_curl, s + ssent, len, &sent);
+		if (rc != CURLE_OK) {
 			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
 			return false;
 		}
@@ -916,9 +920,14 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 
 static void clear_sock(struct pool *pool)
 {
-	SOCKETTYPE sock = pool->sock;
+	size_t n = 0;
 
-	recv(sock, pool->sockbuf, RECVSIZE, MSG_DONTWAIT);
+	mutex_lock(&pool->stratum_lock);
+	/* Ignore return code of curl_easy_recv since we're just clearing
+	 * anything in the socket if it's still alive */
+	if (likely(pool->stratum_curl))
+		curl_easy_recv(pool->stratum_curl, pool->sockbuf, RECVSIZE, &n);
+	mutex_unlock(&pool->stratum_lock);
 	strcpy(pool->sockbuf, "");
 }
 
@@ -950,12 +959,12 @@ char *recv_line(struct pool *pool)
 {
 	ssize_t len, buflen;
 	char *tok, *sret = NULL;
-	size_t n;
+	size_t n = 0;
 
 	if (!strstr(pool->sockbuf, "\n")) {
+		CURLcode rc = CURLE_RECV_ERROR;
 		char s[RBUFSIZE];
 		size_t sspace;
-		CURLcode rc;
 
 		if (!sock_full(pool, true)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
@@ -964,7 +973,8 @@ char *recv_line(struct pool *pool)
 		memset(s, 0, RBUFSIZE);
 
 		mutex_lock(&pool->stratum_lock);
-		rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
+		if (likely(pool->stratum_curl))
+			rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
 		mutex_unlock(&pool->stratum_lock);
 
 		if (rc != CURLE_OK) {
