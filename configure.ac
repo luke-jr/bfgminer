@@ -98,20 +98,23 @@ case $target in
 	;;
 esac
 
-if test "x$have_x86_64" = xtrue; then
-	ARCH_DIR=x86_64
-else
-	ARCH_DIR=x86
-fi
 
-if test "x$ATISTREAMSDKROOT" != x; then
-	OPENCL_FLAGS="-I$ATISTREAMSDKROOT/include $OPENCL_FLAGS"
-	OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ARCH_DIR $OPENCL_LIBS"
-fi
+if test "x$have_win32" != xtrue; then
+	if test "x$have_x86_64" = xtrue; then
+		ARCH_DIR=x86_64
+	else
+		ARCH_DIR=x86
+	fi
 
-if test "x$AMDAPPSDKROOT" != x; then
-	OPENCL_FLAGS="-I$AMDAPPSDKROOT/include $OPENCL_FLAGS"
-	OPENCL_LIBS="-L$AMDAPPSDKROOT/lib/$ARCH_DIR $OPENCL_LIBS"
+	if test "x$ATISTREAMSDKROOT" != x; then
+		OPENCL_FLAGS="-I$ATISTREAMSDKROOT/include $OPENCL_FLAGS"
+		OPENCL_LIBS="-L$ATISTREAMSDKROOT/lib/$ARCH_DIR $OPENCL_LIBS"
+	fi
+
+	if test "x$AMDAPPSDKROOT" != x; then
+		OPENCL_FLAGS="-I$AMDAPPSDKROOT/include $OPENCL_FLAGS"
+		OPENCL_LIBS="-L$AMDAPPSDKROOT/lib/$ARCH_DIR $OPENCL_LIBS"
+	fi
 fi
 
 cpumining="no"
