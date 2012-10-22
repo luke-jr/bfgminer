@@ -2681,11 +2681,11 @@ retry:
 		while (!pool->stratum_active) {
 			struct pool *altpool = select_pool(true);
 
+			sleep(5);
 			if (altpool != pool) {
 				wc->pool = altpool;
 				goto retry;
 			}
-			sleep(5);
 		}
 		ret_work = make_work();
 		gen_stratum_work(pool, ret_work);
@@ -2717,7 +2717,8 @@ retry:
 
 		/* obtain new work from bitcoin via JSON-RPC */
 		if (!get_upstream_work(ret_work, ce->curl)) {
-			applog(LOG_DEBUG, "json_rpc_call failed on get work, retrying");
+			applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
+			sleep(5);
 			dec_queued(pool);
 			/* Make sure the pool just hasn't stopped serving
 			 * requests but is up as we'll keep hammering it */
