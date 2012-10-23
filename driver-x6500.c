@@ -18,7 +18,8 @@
 
 #define X6500_USB_PRODUCT "X6500 FPGA Miner"
 #define X6500_BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
-#define X6500_BITSTREAM_USERID "\2\4$B"
+// NOTE: X6500_BITSTREAM_USERID is bitflipped
+#define X6500_BITSTREAM_USERID "\x40\x20\x24\x42"
 #define X6500_MINIMUM_CLOCK    2
 #define X6500_DEFAULT_CLOCK  200
 #define X6500_MAXIMUM_CLOCK  210
@@ -161,7 +162,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
 			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
-		jtag_swrite_more(jp, buf, buflen * 8, len == buflen);
+		jtag_swrite_more(jp, buf, buflen * 8, len == (unsigned long)buflen);
 		*pdone = 100 - ((len * 100) / flen);
 		if (*pdone >= nextstatus)
 		{
@@ -197,7 +198,8 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
 	struct x6500_fpga_data *fpga;
 	struct jtag_port *jp;
-	uint8_t pinoffset = thr->device_thread ? 0x10 : 1;
+	int fpgaid = thr->device_thread;
+	uint8_t pinoffset = fpgaid ? 0x10 : 1;
 	unsigned char buf[4];
 	int i;
 	
@@ -214,42 +216,41 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	jp->ignored = ~(fpga->jtag.tdo | fpga->jtag.tdi | fpga->jtag.tms | fpga->jtag.tck);
 	jp->state = x6500->cgpu_data;
 	
-	applog(LOG_ERR, "jtag pins: tck=%02x tms=%02x tdi=%02x tdo=%02x", pinoffset << 3, pinoffset << 2, pinoffset << 1, pinoffset << 0);
-	
 	mutex_lock(&x6500->device_mutex);
 	if (!jtag_reset(jp)) {
 		mutex_unlock(&x6500->device_mutex);
-		applog(LOG_ERR, "jtag reset failed");
+		applog(LOG_ERR, "%s %u: JTAG reset failed",
+		       x6500->api->name, x6500->device_id);
 		return false;
 	}
-	
-// 	while(gets(buf)) {
-// 		jtag_clock(jp, buf[0]=='/', buf[1]=='/', &buf[2]);
-// 		applog(LOG_ERR, "=> %d", (int)buf[2]);
-// 	}
-	
 	
 	i = jtag_detect(jp);
 	if (i != 1) {
 		mutex_unlock(&x6500->device_mutex);
-		applog(LOG_ERR, "jtag detect returned %d", i);
+		applog(LOG_ERR, "%s %u: JTAG detect returned %d",
+		       x6500->api->name, x6500->device_id, i);
 		return false;
 	}
 	
-		x6500_fpga_upload_bitstream(x6500, ftdi);
 	if (!(1
 	 && jtag_write(jp, JTAG_REG_IR, "\x10", 6)
 	 && jtag_read (jp, JTAG_REG_DR, buf, 32)
 	 && jtag_reset(jp)
 	)) {
 		mutex_unlock(&x6500->device_mutex);
-		applog(LOG_ERR, "jtag error reading user code");
+		applog(LOG_ERR, "%s %u: JTAG error reading user code",
+		       x6500->api->name, x6500->device_id);
 		return false;
 	}
 	
 	if (memcmp(buf, X6500_BITSTREAM_USERID, 4)) {
-	}
-	applog(LOG_ERR, "userid: %s", bin2hex(buf, 4));
+		applog(LOG_ERR, "%s %u.%u: FPGA not programmed",
+		       x6500->api->name, x6500->device_id, fpgaid);
+		if (!x6500_fpga_upload_bitstream(x6500, ftdi))
+			return false;
+	} else
+		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)",
+		       x6500->api->name, x6500->device_id, fpgaid);
 	
 	mutex_unlock(&x6500->device_mutex);
 	return false;
