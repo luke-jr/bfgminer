@@ -82,23 +82,9 @@ struct x6500_fpga_data {
 	struct jtag_port jtag;
 };
 
-#define bailout(...) do{return false;}while(0)
-#define bailout2(...) do{return false;}while(0)
-#define check_magic(L)  do {  \
-	if (1 != fread(buf, 1, 1, f))  \
-		bailout(LOG_ERR, "Error reading ModMiner firmware ('%c')", L);  \
-	if (buf[0] != L)  \
-		bailout(LOG_ERR, "ModMiner firmware has wrong magic ('%c')", L);  \
-} while(0)
-#define read_str(eng)  do {  \
-	if (1 != fread(buf, 2, 1, f))  \
-		bailout(LOG_ERR, "Error reading ModMiner firmware (" eng " len)");  \
-	len = (ubuf[0] << 8) | ubuf[1];  \
-	if (len >= sizeof(buf))  \
-		bailout(LOG_ERR, "ModMiner firmware " eng " too long");  \
-	if (1 != fread(buf, len, 1, f))  \
-		bailout(LOG_ERR, "Error reading ModMiner firmware (" eng ")");  \
-	buf[len] = '\0';  \
+#define bailout2(...) do {  \
+	applog(__VA_ARGS__);  \
+	return false;  \
 } while(0)
 
 static bool
