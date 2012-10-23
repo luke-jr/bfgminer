@@ -189,53 +189,15 @@ static bool
 modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 {
 	struct modminer_fpga_state *state = modminer->thr[0]->cgpu_data;
-fd_set fds;
 	char buf[0x100];
-	unsigned char *ubuf = (unsigned char*)buf;
 	unsigned long len, flen;
-	char *p;
-	const char *fwfile = BITSTREAM_FILENAME;
 	char fpgaid = 4;  // "all FPGAs"
-
-	FILE *f = open_bitstream("modminer", fwfile);
+fd_set fds;
+	FILE *f = open_xilinx_bitstream(modminer, BITSTREAM_FILENAME, &len);
 	if (!f)
-		bailout(LOG_ERR, "Error opening ModMiner firmware file %s", fwfile);
-	if (1 != fread(buf, 2, 1, f))
-		bailout(LOG_ERR, "Error reading ModMiner firmware (magic)");
-	if (buf[0] || buf[1] != 9)
-		bailout(LOG_ERR, "ModMiner firmware has wrong magic (9)");
-	if (-1 == fseek(f, 11, SEEK_CUR))
-		bailout(LOG_ERR, "ModMiner firmware seek failed");
-	check_magic('a');
-	read_str("design name");
-	applog(LOG_DEBUG, "ModMiner firmware file %s info:", fwfile);
-	applog(LOG_DEBUG, "  Design name: %s", buf);
-	p = strrchr(buf, ';') ?: buf;
-	p = strrchr(buf, '=') ?: p;
-	if (p[0] == '=')
-		++p;
-	unsigned long fwusercode = (unsigned long)strtoll(p, &p, 16);
-	if (p[0] != '\0')
-		bailout(LOG_ERR, "Bad usercode in ModMiner firmware file");
-	if (fwusercode == 0xffffffff)
-		bailout(LOG_ERR, "ModMiner firmware doesn't support user code");
-	applog(LOG_DEBUG, "  Version: %u, build %u", (fwusercode >> 8) & 0xff, fwusercode & 0xff);
-	check_magic('b');
-	read_str("part number");
-	applog(LOG_DEBUG, "  Part number: %s", buf);
-	check_magic('c');
-	read_str("build date");
-	applog(LOG_DEBUG, "  Build date: %s", buf);
-	check_magic('d');
-	read_str("build time");
-	applog(LOG_DEBUG, "  Build time: %s", buf);
-	check_magic('e');
-	if (1 != fread(buf, 4, 1, f))
-		bailout(LOG_ERR, "Error reading ModMiner firmware (data len)");
-	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
-	flen = len;
-	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
+		return false;
 
+	flen = len;
 	int fd = modminer->device_fd;
 
 	applog(LOG_WARNING, "%s %u: Programming %s... DO NOT EXIT UNTIL COMPLETE", modminer->api->name, modminer->device_id, modminer->device_path);

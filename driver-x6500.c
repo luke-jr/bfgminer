@@ -103,54 +103,18 @@ struct x6500_fpga_data {
 static bool
 x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle *ftdi)
 {
-	struct x6500_fpga_data *state = x6500->thr[0]->cgpu_data;
 	char buf[0x100];
-	unsigned char *ubuf = (unsigned char*)buf;
 	unsigned long len, flen;
-	char *p;
-	const char *fwfile = X6500_BITSTREAM_FILENAME;
 	char *pdone = (char*)&x6500->cgpu_data;
 
-	FILE *f = open_bitstream("x6500", fwfile);
+	FILE *f = open_xilinx_bitstream(x6500, X6500_BITSTREAM_FILENAME, &len);
 	if (!f)
-		bailout(LOG_ERR, "Error opening X6500 firmware file %s", fwfile);
-	if (1 != fread(buf, 2, 1, f))
-		bailout(LOG_ERR, "Error reading X6500 firmware (magic)");
-	if (buf[0] || buf[1] != 9)
-		bailout(LOG_ERR, "X6500 firmware has wrong magic (9)");
-	if (-1 == fseek(f, 11, SEEK_CUR))
-		bailout(LOG_ERR, "X6500 firmware seek failed");
-	check_magic('a');
-	read_str("design name");
-	applog(LOG_DEBUG, "X6500 firmware file %s info:", fwfile);
-	applog(LOG_DEBUG, "  Design name: %s", buf);
-	p = strrchr(buf, ';') ?: buf;
-	p = strrchr(buf, '=') ?: p;
-	if (p[0] == '=')
-		++p;
-	unsigned long fwusercode = (unsigned long)strtoll(p, &p, 16);
-	if (p[0] != '\0')
-		bailout(LOG_ERR, "Bad usercode in X6500 firmware file");
-	if (fwusercode == 0xffffffff)
-		bailout(LOG_ERR, "X6500 firmware doesn't support user code");
-	applog(LOG_DEBUG, "  Version: %u, build %u", (fwusercode >> 8) & 0xff, fwusercode & 0xff);
-	check_magic('b');
-	read_str("part number");
-	applog(LOG_DEBUG, "  Part number: %s", buf);
-	check_magic('c');
-	read_str("build date");
-	applog(LOG_DEBUG, "  Build date: %s", buf);
-	check_magic('d');
-	read_str("build time");
-	applog(LOG_DEBUG, "  Build time: %s", buf);
-	check_magic('e');
-	if (1 != fread(buf, 4, 1, f))
-		bailout(LOG_ERR, "Error reading X6500 firmware (data len)");
-	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
-	flen = len;
-	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
+		return false;
 
-	applog(LOG_WARNING, "%s %u: Programming %s... DO NOT EXIT UNTIL COMPLETE", x6500->api->name, x6500->device_id, x6500->device_path);
+	flen = len;
+
+	applog(LOG_WARNING, "%s %u: Programming %s...",
+	       x6500->api->name, x6500->device_id, x6500->device_path);
 	
 	uint8_t dummyx;
 	struct jtag_port jpt = {
