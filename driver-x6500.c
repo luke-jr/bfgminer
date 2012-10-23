@@ -116,6 +116,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 	applog(LOG_WARNING, "%s %u: Programming %s...",
 	       x6500->api->name, x6500->device_id, x6500->device_path);
 	
+	// "Magic" jtag_port configured to access both FPGAs concurrently
 	uint8_t dummyx;
 	struct jtag_port jpt = {
 		.ftdi = ftdi,
@@ -146,6 +147,8 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 	jtag_swrite(jp, JTAG_REG_DR, buf, 256);
 	len -= 32;
 	
+	// Put ft232r chip in asynchronous bitbang mode so we don't need to read back tdo
+	// This takes upload time down from about an hour to about 3 minutes
 	if (!ft232r_set_bitmode(ftdi, 0xee, 1))
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
@@ -168,6 +171,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 		len -= buflen;
 	}
 	
+	// Switch back to synchronous bitbang mode
 	if (!ft232r_set_bitmode(ftdi, 0xee, 4))
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
