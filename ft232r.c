@@ -314,19 +314,24 @@ ssize_t ft232r_write_all(struct ft232r_device_handle *dev, void *data, size_t co
 ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
 {
 	ssize_t r;
+	int adj;
 	
 	// Flush any pending output before reading
 	r = ft232r_flush(dev);
 	if (r < 0)
 		return r;
 	
-	// First 2 bytes are FTDI status or something
+	// First 2 bytes of every 0x40 are FTDI status or something
 	while (dev->ibufLen <= 2) {
 		// TODO: Implement a timeout for status byte repeating
 		int transferred = ft232r_readwrite(dev, dev->i, dev->ibuf, sizeof(dev->ibuf));
 		if (transferred <= 0)
 			return transferred;
 		dev->ibufLen = transferred;
+		for (adj = 0x40; dev->ibufLen > adj; adj += 0x40 - 2) {
+			dev->ibufLen -= 2;
+			memmove(&dev->ibuf[adj], &dev->ibuf[adj+2], dev->ibufLen - adj);
+		}
 	}
 	unsigned char *ibufs = &dev->ibuf[2];
 	size_t ibufsLen = dev->ibufLen - 2;
