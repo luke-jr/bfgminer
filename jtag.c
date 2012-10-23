@@ -77,7 +77,7 @@ bool _jtag_llrw(struct jtag_port *jp, void *buf, size_t bitlength, bool do_read,
 
 	for (i = 0; i < d.quot; ++i) {
 		for (j = 0x80; j; j /= 2) {
-			if (!jtag_rw_bit(jp, &data[i], 0x80, false, do_read))
+			if (!jtag_rw_bit(jp, &data[i], j, false, do_read))
 				return false;
 		}
 	}
