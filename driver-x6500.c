@@ -164,25 +164,30 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 	};
 	struct jtag_port *jp = &jpt;
 	uint8_t i;
+	
+	// Need to reset here despite previous FPGA state, since we are programming all at once
+	jtag_reset(jp);
+	
 	jtag_write(jp, JTAG_REG_IR, "\xd0", 6);  // JPROGRAM
 	do {
-		i = 0xff;  // BYPASS while reading status
+		i = 0xd0;  // Re-set JPROGRAM while reading status
 		jtag_read(jp, JTAG_REG_IR, &i, 6);
-		applog(LOG_ERR, "%08x", (unsigned)i);
 	} while (i & 8);
 	jtag_write(jp, JTAG_REG_IR, "\xa0", 6);  // CFG_IN
 	
 	sleep(1);
+	
+	if (fread(buf, 32, 1, f) != 1)
+		bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+	jtag_swrite(jp, JTAG_REG_DR, buf, 256);
+	len -= 32;
+	
 	if (!ft232r_set_bitmode(ftdi, 0xee, 1))
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
 	jp->async = true;
-	
-	if (fread(buf, 32, 1, f) != 1)
-		bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
-	jtag_swrite(jp, JTAG_REG_DR, buf, 256);
-	
+
 	ssize_t buflen;
 	char nextstatus = 10;
 	while (len) {
@@ -203,6 +208,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
+	jp->async = false;
 
 	jtag_write(jp, JTAG_REG_IR, "\x30", 6);  // JSTART
 	for (i=0; i<16; ++i)
