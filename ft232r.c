@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <libusb-1.0/libusb.h>
 
@@ -151,6 +152,9 @@ struct ft232r_device_handle {
 	uint8_t o;
 	unsigned char ibuf[256];
 	int ibufLen;
+	uint16_t osz;
+	unsigned char *obuf;
+	uint16_t obufsz;
 };
 
 struct ft232r_device_handle *ft232r_open(libusb_device *dev)
@@ -193,6 +197,8 @@ struct ft232r_device_handle *ft232r_open(libusb_device *dev)
 	}
 	ftdi->i = altcfg->endpoint[0].bEndpointAddress;
 	ftdi->o = altcfg->endpoint[1].bEndpointAddress;
+	ftdi->osz = altcfg->endpoint[1].wMaxPacketSize;
+	ftdi->obuf = malloc(ftdi->osz);
 	libusb_free_config_descriptor(cfg);
 
 	return ftdi;
@@ -218,6 +224,8 @@ bool ft232r_purge_buffers(struct ft232r_device_handle *dev, enum ft232r_reset_pu
 
 bool ft232r_set_bitmode(struct ft232r_device_handle *dev, uint8_t mask, uint8_t mode)
 {
+	if (ft232r_flush(dev) < 0)
+		return false;
 	if (libusb_control_transfer(dev->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_BITMODE, mask, FTDI_INDEX, NULL, 0, FTDI_TIMEOUT))
 		return false;
 	return !libusb_control_transfer(dev->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_BITMODE, (mode << 8) | mask, FTDI_INDEX, NULL, 0, FTDI_TIMEOUT);
@@ -240,9 +248,47 @@ static ssize_t ft232r_readwrite(struct ft232r_device_handle *dev, unsigned char 
 	}
 }
 
+ssize_t ft232r_flush(struct ft232r_device_handle *dev)
+{
+	if (!dev->obufsz)
+		return 0;
+	ssize_t r = ft232r_readwrite(dev, dev->o, dev->obuf, dev->obufsz);
+	if (r == dev->obufsz) {
+		dev->obufsz = 0;
+	} else if (r > 0) {
+		dev->obufsz -= r;
+		memmove(dev->obuf, &dev->obuf[r], dev->obufsz);
+	}
+	return r;
+}
+
 ssize_t ft232r_write(struct ft232r_device_handle *dev, void *data, size_t count)
 {
-	return ft232r_readwrite(dev, dev->o, data, count);
+	uint16_t bufleft;
+	ssize_t r;
+	
+	bufleft = dev->osz - dev->obufsz;
+	
+	if (count < bufleft) {
+		// Just add to output buffer
+		memcpy(&dev->obuf[dev->obufsz], data, count);
+		dev->obufsz += count;
+		return count;
+	}
+	
+	// Fill up buffer and flush
+	memcpy(&dev->obuf[dev->obufsz], data, bufleft);
+	dev->obufsz += bufleft;
+	r = ft232r_flush(dev);
+	
+	if (unlikely(r <= 0)) {
+		// In this case, no bytes were written supposedly, so remove this data from buffer
+		dev->obufsz -= bufleft;
+		return r;
+	}
+	
+	// Even if not all <bufleft> bytes from this write got out, the remaining are still buffered
+	return bufleft;
 }
 
 typedef ssize_t (*ft232r_rwfunc_t)(struct ft232r_device_handle *, void*, size_t);
@@ -267,6 +313,13 @@ ssize_t ft232r_write_all(struct ft232r_device_handle *dev, void *data, size_t co
 
 ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
 {
+	ssize_t r;
+	
+	// Flush any pending output before reading
+	r = ft232r_flush(dev);
+	if (r < 0)
+		return r;
+	
 	// First 2 bytes are FTDI status or something
 	while (dev->ibufLen <= 2) {
 		// TODO: Implement a timeout for status byte repeating

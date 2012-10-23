@@ -32,6 +32,7 @@ extern struct ft232r_device_handle *ft232r_open(libusb_device *);
 extern void ft232r_close(struct ft232r_device_handle *);
 extern bool ft232r_purge_buffers(struct ft232r_device_handle *, enum ft232r_reset_purge);
 extern bool ft232r_set_bitmode(struct ft232r_device_handle *, uint8_t mask, uint8_t mode);
+extern ssize_t ft232r_flush(struct ft232r_device_handle *);
 extern ssize_t ft232r_write(struct ft232r_device_handle *, void *data, size_t count);
 extern ssize_t ft232r_write_all(struct ft232r_device_handle *, void *data, size_t count);
 extern ssize_t ft232r_read(struct ft232r_device_handle *, void *buf, size_t count);
