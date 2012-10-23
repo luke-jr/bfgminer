@@ -1,3 +1,20 @@
+Version 2.8.5 - October 23, 2012
+
+- Handle crash exceptions by trying to restart cgminer unless the --no-restart
+option is used.
+- Switch queued count when choosing a different pool from a failed stratum pool
+in getwork thread.
+- Put a mandatory 5s wait between reattempting a getwork on failure to avoid
+hammering requests.
+- The ATI stream / AMD APP SDK environment variables appear to only interfere
+with win32 builds so bypass them.
+- Make sure to check pool stratum curl exists under lock before attempting any
+recv to not risk dereferencing upon attempting to reinitiate stratum.
+- Avoid redefining macros and align to 4 byte boundaries.
+- API - add Stratum information to pools
+- update FPGA-README for MMQ
+
+
 Version 2.8.4 - October 18, 2012
 
 - Time for dynamic is in microseconds, not ms.
