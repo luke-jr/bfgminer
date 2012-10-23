@@ -14,6 +14,7 @@ struct jtag_port {
 	uint8_t ignored;
 	uint8_t *state;
 	bool async;
+	uint8_t bufread;
 };
 
 enum jtagreg {

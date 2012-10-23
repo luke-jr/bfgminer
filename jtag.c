@@ -30,17 +30,33 @@ bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 	buf[1] |= jp->tck;
 	if (ft232r_write_all(jp->ftdi, buf, sizeof(buf)) != sizeof(buf))
 		return false;
+	*jp->state = buf[2];
 	if (jp->async) {
 		if (unlikely(tdo))
 			applog(LOG_WARNING, "jtag_clock: request for tdo in async mode not possible");
 		return true;
 	}
-	if (ft232r_read_all(jp->ftdi, buf, sizeof(buf)) != sizeof(buf))
+	if (jp->bufread < 100 && !tdo) {
+		// By deferring unnecessary reads, we can avoid some USB latency
+		jp->bufread += sizeof(buf);
+		return true;
+	}
+#if 0 /* untested */
+	else if (!tdo) {
+		if (ft232r_purge_buffers(jp->ftdi, FTDI_PURGE_BOTH)) {
+			jp->bufread = 0;
+			return true;
+		}
+	}
+#endif
+	uint8_t rbufsz = jp->bufread + sizeof(buf);
+	jp->bufread = 0;
+	unsigned char rbuf[rbufsz];
+	if (ft232r_read_all(jp->ftdi, rbuf, rbufsz) != rbufsz)
 		return false;
 	if (tdo)
-		*tdo = (buf[2] & jp->tdo);
-	*jp->state = buf[2];
-	//applog(LOG_ERR, "%p tms=%d tdi=%d tdo=%d", jp, (int)tms, (int)tdi, (int)(bool)(buf[3]&jp->tdo));
+		*tdo = (rbuf[rbufsz-1] & jp->tdo);
+	//applog(LOG_ERR, "%p tms=%d tdi=%d tdo=%d", jp, (int)tms, (int)tdi, (int)(bool)(buf[2]&jp->tdo));
 	return true;
 }
 
