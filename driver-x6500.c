@@ -26,6 +26,88 @@
 
 struct device_api x6500_api;
 
+#define fromlebytes(ca, j)  (ca[j] | (((uint16_t)ca[j+1])<<8) | (((uint32_t)ca[j+2])<<16) | (((uint32_t)ca[j+3])<<24))
+
+static
+void int2bits(uint32_t n, uint8_t *b, uint8_t bits)
+{
+	uint8_t i;
+	for (i = (bits + 7) / 8; i > 0; )
+		b[--i] = 0;
+	for (i = 0; i < bits; ++i) {
+		if (n & 1)
+			b[i/8] |= 0x80 >> (i % 8);
+		n >>= 1;
+	}
+}
+
+static
+uint32_t bits2int(uint8_t *b, uint8_t bits)
+{
+	uint32_t n, i;
+	n = 0;
+	for (i = 0; i < bits; ++i)
+		if (b[i/8] & (0x80 >> (i % 8)))
+			n |= 1<<i;
+	return n;
+}
+
+static
+void bitendianflip(void *n, size_t bits)
+{
+	size_t i;
+	uint8_t *b = n;
+	// NOTE: this doesn't work with non-byte boundaries
+	bits /= 8;
+	for (i = 0; i < bits; ++i)
+		b[i] = ((b[i] &    1) ? 0x80 : 0)
+		     | ((b[i] &    2) ? 0x40 : 0)
+		     | ((b[i] &    4) ? 0x20 : 0)
+		     | ((b[i] &    8) ? 0x10 : 0)
+		     | ((b[i] & 0x10) ?    8 : 0)
+		     | ((b[i] & 0x20) ?    4 : 0)
+		     | ((b[i] & 0x40) ?    2 : 0)
+		     | ((b[i] & 0x80) ?    1 : 0);
+}
+
+static
+void checksum(uint8_t *b, uint8_t bits)
+{
+	uint8_t i;
+	uint8_t checksum = 1;
+	for(i = 0; i < bits; ++i)
+		checksum ^= (b[i/8] & (0x80 >> (i % 8))) ? 1 : 0;
+	if (checksum)
+		b[i/8] |= 0x80 >> (i % 8);
+}
+
+static
+void x6500_set_register(struct jtag_port *jp, uint8_t addr, uint32_t nv)
+{
+	uint8_t buf[38];
+	jtag_write(jp, JTAG_REG_IR, "\x40", 6);
+	int2bits(nv, &buf[0], 32);
+	int2bits(addr, &buf[4], 4);
+	buf[4] |= 8;
+	checksum(buf, 37);
+	jtag_write(jp, JTAG_REG_DR, buf, 38);
+	jtag_run(jp);
+}
+
+static
+uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
+{
+	uint8_t buf[4];
+	jtag_write(jp, JTAG_REG_IR, "\x40", 6);
+	int2bits(addr, &buf[0], 4);
+	checksum(buf, 5);
+	jtag_write(jp, JTAG_REG_DR, buf, 6);
+	jtag_read (jp, JTAG_REG_DR, buf, 32);
+	jtag_reset(jp);
+	bitendianflip(buf, 32);
+	return bits2int(buf, 32);
+}
+
 static bool x6500_foundusb(libusb_device *dev, const char *product, const char *serial)
 {
 	struct cgpu_info *x6500;
@@ -65,7 +147,7 @@ static bool x6500_prepare(struct thr_info *thr)
 	struct cgpu_info *x6500 = thr->cgpu;
 	mutex_init(&x6500->device_mutex);
 	struct ft232r_device_handle *ftdi = ft232r_open(x6500->cgpu_data);
-	x6500->cgpu_data = NULL;
+	x6500->device_ft232r = NULL;
 	if (!ftdi)
 		return false;
 	if (!ft232r_set_bitmode(ftdi, 0xee, 4))
@@ -238,8 +320,12 @@ static bool x6500_fpga_init(struct thr_info *thr)
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)",
 		       x6500->api->name, x6500->device_id, fpgaid);
 	
+	thr->cgpu_data = fpga;
+
+	x6500_set_register(jp, 0xD, 200);  // Set clock speed
+
 	mutex_unlock(&x6500->device_mutex);
-	return false;
+	return true;
 }
 
 static void
@@ -257,6 +343,88 @@ get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
 	strcat(buf, "               | ");
 }
 
+static
+bool x6500_start_work(struct thr_info *thr, struct work *work)
+{
+	struct cgpu_info *x6500 = thr->cgpu;
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	char fpgaid = thr->device_thread;
+
+	mutex_lock(&x6500->device_mutex);
+
+	for (int i = 1, j = 0; i < 9; ++i, j += 4)
+		x6500_set_register(&fpga->jtag, i, fromlebytes(work->midstate, j));
+
+	for (int i = 9, j = 64; i < 12; ++i, j += 4)
+		x6500_set_register(&fpga->jtag, i, fromlebytes(work->data, j));
+
+	//gettimeofday(&fpga->tv_workstart, NULL);
+	mutex_unlock(&x6500->device_mutex);
+
+	if (opt_debug) {
+		char *xdata = bin2hex(work->data, 80);
+		applog(LOG_DEBUG, "%s %u.%u: Started work: %s",
+		       x6500->api->name, x6500->device_id, fpgaid, xdata);
+		free(xdata);
+	}
+
+	return true;
+}
+
+static
+int64_t x6500_process_results(struct thr_info *thr, struct work *work)
+{
+	struct cgpu_info *x6500 = thr->cgpu;
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	struct jtag_port *jtag = &fpga->jtag;
+	char fpgaid = thr->device_thread;
+
+	uint32_t nonce;
+	long iter;
+	bool bad;
+
+	iter = 200;
+	while (1) {
+		mutex_lock(&x6500->device_mutex);
+		nonce = x6500_get_register(jtag, 0xE);
+		mutex_unlock(&x6500->device_mutex);
+		if (nonce != 0xffffffff) {
+			bad = !test_nonce(work, nonce, false);
+			if (!bad) {
+				submit_nonce(thr, work, nonce);
+				applog(LOG_DEBUG, "%s %u.%u: Nonce for current  work: %08lx",
+				       x6500->api->name, x6500->device_id, fpgaid,
+				       (unsigned long)nonce);
+			} else {
+				applog(LOG_DEBUG, "%s %u.%u: Nonce with H not zero  : %08lx",
+				       x6500->api->name, x6500->device_id, fpgaid,
+				       (unsigned long)nonce);
+				++hw_errors;
+				++x6500->hw_errors;
+			}
+		}
+		if (thr->work_restart || !--iter)
+			break;
+		usleep(1000);
+		if (thr->work_restart)
+			break;
+	}
+
+	return 10000000;
+}
+
+static int64_t
+x6500_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
+{
+	if (!x6500_start_work(thr, work))
+		return -1;
+
+	int64_t hashes = x6500_process_results(thr, work);
+	if (hashes > 0)
+		work->blk.nonce += hashes;
+	return hashes;
+}
+
 struct device_api x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
@@ -264,6 +432,6 @@ struct device_api x6500_api = {
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_fpga_init,
 	.get_statline_before = get_x6500_statline_before,
-// 	.scanhash = x6500_fpga_scanhash,
+	.scanhash = x6500_scanhash,
 // 	.thread_shutdown = x6500_fpga_shutdown,
 };
