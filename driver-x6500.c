@@ -53,24 +53,6 @@ uint32_t bits2int(uint8_t *b, uint8_t bits)
 }
 
 static
-void bitendianflip(void *n, size_t bits)
-{
-	size_t i;
-	uint8_t *b = n;
-	// NOTE: this doesn't work with non-byte boundaries
-	bits /= 8;
-	for (i = 0; i < bits; ++i)
-		b[i] = ((b[i] &    1) ? 0x80 : 0)
-		     | ((b[i] &    2) ? 0x40 : 0)
-		     | ((b[i] &    4) ? 0x20 : 0)
-		     | ((b[i] &    8) ? 0x10 : 0)
-		     | ((b[i] & 0x10) ?    8 : 0)
-		     | ((b[i] & 0x20) ?    4 : 0)
-		     | ((b[i] & 0x40) ?    2 : 0)
-		     | ((b[i] & 0x80) ?    1 : 0);
-}
-
-static
 void checksum(uint8_t *b, uint8_t bits)
 {
 	uint8_t i;
@@ -104,7 +86,6 @@ uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
 	jtag_write(jp, JTAG_REG_DR, buf, 6);
 	jtag_read (jp, JTAG_REG_DR, buf, 32);
 	jtag_reset(jp);
-	bitendianflip(buf, 32);
 	return bits2int(buf, 32);
 }
 
