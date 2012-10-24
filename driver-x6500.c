@@ -259,6 +259,8 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	if (!ftdi)
 		return false;
 	
+	thread_reportin(thr);  // HACK
+
 	fpga = calloc(1, sizeof(*fpga));
 	jp = &fpga->jtag;
 	jp->a = x6500->cgpu_data;
@@ -306,7 +308,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	
 	thr->cgpu_data = fpga;
 
-	x6500_set_register(jp, 0xD, 200);  // Set clock speed
+	x6500_set_register(jp, 0xD, 196);  // Set clock speed
 
 	mutex_unlock(&x6500->device_mutex);
 	return true;
@@ -332,15 +334,16 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	struct jtag_port *jp = &fpga->jtag;
 	char fpgaid = thr->device_thread;
 
 	mutex_lock(&x6500->device_mutex);
 
 	for (int i = 1, j = 0; i < 9; ++i, j += 4)
-		x6500_set_register(&fpga->jtag, i, fromlebytes(work->midstate, j));
+		x6500_set_register(jp, i, fromlebytes(work->midstate, j));
 
 	for (int i = 9, j = 64; i < 12; ++i, j += 4)
-		x6500_set_register(&fpga->jtag, i, fromlebytes(work->data, j));
+		x6500_set_register(jp, i, fromlebytes(work->data, j));
 
 	//gettimeofday(&fpga->tv_workstart, NULL);
 	mutex_unlock(&x6500->device_mutex);
@@ -367,7 +370,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	long iter;
 	bool bad;
 
-	iter = 200;
+	iter = 20;
 	while (1) {
 		mutex_lock(&x6500->device_mutex);
 		nonce = x6500_get_register(jtag, 0xE);
@@ -394,7 +397,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 			break;
 	}
 
-	return 10000000;
+	return 0xffffffff;
 }
 
 static int64_t
