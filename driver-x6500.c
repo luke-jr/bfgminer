@@ -155,7 +155,11 @@ static bool x6500_prepare(struct thr_info *thr)
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
 	x6500->device_ft232r = ftdi;
-	x6500->cgpu_data = calloc(1, 1);
+	
+	struct jtag_port_a *jtag_a;
+	jtag_a = calloc(1, sizeof(*jtag_a));
+	jtag_a->ftdi = ftdi;
+	x6500->cgpu_data = jtag_a;
 	
 	return true;
 }
@@ -170,11 +174,12 @@ struct x6500_fpga_data {
 } while(0)
 
 static bool
-x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle *ftdi)
+x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 {
 	char buf[0x100];
 	unsigned long len, flen;
 	char *pdone = (char*)&x6500->cgpu_data;
+	struct ft232r_device_handle *ftdi = jp1->a->ftdi;
 
 	FILE *f = open_xilinx_bitstream(x6500, X6500_BITSTREAM_FILENAME, &len);
 	if (!f)
@@ -186,15 +191,13 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 	       x6500->api->name, x6500->device_id, x6500->device_path);
 	
 	// "Magic" jtag_port configured to access both FPGAs concurrently
-	uint8_t dummyx;
 	struct jtag_port jpt = {
-		.ftdi = ftdi,
+		.a = jp1->a,
 		.tck = 0x88,
 		.tms = 0x44,
 		.tdi = 0x22,
 		.tdo = 0x11,
 		.ignored = 0,
-		.state = &dummyx,
 	};
 	struct jtag_port *jp = &jpt;
 	uint8_t i;
@@ -222,7 +225,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
-	jp->async = true;
+	jp->a->async = true;
 
 	ssize_t buflen;
 	char nextstatus = 10;
@@ -245,7 +248,8 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct ft232r_device_handle
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
-	jp->async = false;
+	jp->a->async = false;
+	jp->a->bufread = 0;
 
 	jtag_write(jp, JTAG_REG_IR, "\x30", 6);  // JSTART
 	for (i=0; i<16; ++i)
@@ -276,13 +280,12 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	
 	fpga = calloc(1, sizeof(*fpga));
 	jp = &fpga->jtag;
-	jp->ftdi = ftdi;
+	jp->a = x6500->cgpu_data;
 	jp->tck = pinoffset << 3;
 	jp->tms = pinoffset << 2;
 	jp->tdi = pinoffset << 1;
 	jp->tdo = pinoffset << 0;
 	jp->ignored = ~(fpga->jtag.tdo | fpga->jtag.tdi | fpga->jtag.tms | fpga->jtag.tck);
-	jp->state = x6500->cgpu_data;
 	
 	mutex_lock(&x6500->device_mutex);
 	if (!jtag_reset(jp)) {
@@ -314,7 +317,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	if (memcmp(buf, X6500_BITSTREAM_USERID, 4)) {
 		applog(LOG_ERR, "%s %u.%u: FPGA not programmed",
 		       x6500->api->name, x6500->device_id, fpgaid);
-		if (!x6500_fpga_upload_bitstream(x6500, ftdi))
+		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
 	} else
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)",

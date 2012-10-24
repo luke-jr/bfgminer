@@ -341,8 +341,10 @@ ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
 	memcpy(data, ibufs, count);
 	dev->ibufLen -= count;
 	ibufsLen -= count;
-	if (ibufsLen)
+	if (ibufsLen) {
 		memmove(ibufs, &ibufs[count], ibufsLen);
+		applog(LOG_DEBUG, "ft232r_read: %u bytes extra", ibufsLen);
+	}
 	return count;
 }
 

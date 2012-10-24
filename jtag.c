@@ -19,44 +19,59 @@
 #include "logging.h"
 #include "miner.h"
 
+//#define DEBUG_JTAG_CLOCK
+
 // NOTE: The order of tms and tdi here are inverted from LPC1343CodeBase
 bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 {
 	unsigned char buf[3];
-	memset(buf, (*jp->state & jp->ignored)
+	memset(buf, (jp->a->state & jp->ignored)
 	          | (tms ? jp->tms : 0)
 	          | (tdi ? jp->tdi : 0), sizeof(buf));
 	buf[2] =
 	buf[1] |= jp->tck;
-	if (ft232r_write_all(jp->ftdi, buf, sizeof(buf)) != sizeof(buf))
+	if (ft232r_write_all(jp->a->ftdi, buf, sizeof(buf)) != sizeof(buf))
 		return false;
-	*jp->state = buf[2];
-	if (jp->async) {
+	jp->a->state = buf[2];
+	if (jp->a->async) {
 		if (unlikely(tdo))
 			applog(LOG_WARNING, "jtag_clock: request for tdo in async mode not possible");
+#ifdef DEBUG_JTAG_CLOCK
+		applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=?async", jp, (unsigned)buf[2], (int)tms, (int)tdi);
+#endif
 		return true;
 	}
-	if (jp->bufread < 100 && !tdo) {
+	if (jp->a->bufread < 100 && !tdo) {
 		// By deferring unnecessary reads, we can avoid some USB latency
-		jp->bufread += sizeof(buf);
+		jp->a->bufread += sizeof(buf);
+#ifdef DEBUG_JTAG_CLOCK
+		applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=?defer", jp, (unsigned)buf[2], (int)tms, (int)tdi);
+#endif
 		return true;
 	}
 #if 0 /* untested */
 	else if (!tdo) {
-		if (ft232r_purge_buffers(jp->ftdi, FTDI_PURGE_BOTH)) {
+		if (ft232r_purge_buffers(jp->a->ftdi, FTDI_PURGE_BOTH)) {
 			jp->bufread = 0;
+#ifdef DEBUG_JTAG_CLOCK
+		applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=?purge", jp, (unsigned)buf[2], (int)tms, (int)tdi);
+#endif
 			return true;
 		}
 	}
 #endif
-	uint8_t rbufsz = jp->bufread + sizeof(buf);
-	jp->bufread = 0;
+	uint8_t rbufsz = jp->a->bufread + sizeof(buf);
+	jp->a->bufread = 0;
 	unsigned char rbuf[rbufsz];
-	if (ft232r_read_all(jp->ftdi, rbuf, rbufsz) != rbufsz)
+	if (ft232r_read_all(jp->a->ftdi, rbuf, rbufsz) != rbufsz)
 		return false;
 	if (tdo)
 		*tdo = (rbuf[rbufsz-1] & jp->tdo);
-	//applog(LOG_ERR, "%p tms=%d tdi=%d tdo=%d", jp, (int)tms, (int)tdi, (int)(bool)(buf[2]&jp->tdo));
+#ifdef DEBUG_JTAG_CLOCK
+	char *x = bin2hex(rbuf, rbufsz);
+	applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=%d (%u:%s)", jp, (unsigned)rbuf[rbufsz-1], (int)tms, (int)tdi, (int)(bool)(rbuf[rbufsz-1] & jp->tdo), (unsigned)rbufsz, x);
+	free(x);
+#endif
 	return true;
 }
 

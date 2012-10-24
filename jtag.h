@@ -5,16 +5,20 @@
 #include <stdint.h>
 #include <unistd.h>
 
-struct jtag_port {
+struct jtag_port_a {
 	struct ft232r_device_handle *ftdi;
+	uint8_t state;
+	bool async;
+	uint8_t bufread;
+};
+
+struct jtag_port {
+	struct jtag_port_a *a;
 	uint8_t tck;
 	uint8_t tms;
 	uint8_t tdi;
 	uint8_t tdo;
 	uint8_t ignored;
-	uint8_t *state;
-	bool async;
-	uint8_t bufread;
 };
 
 enum jtagreg {
