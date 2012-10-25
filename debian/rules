@@ -4,7 +4,7 @@
 
 
 override_dh_auto_configure:
-	./autogen.sh
+	NOSUBMODULES=1 ./autogen.sh
 	dh_auto_configure -- --enable-ztex --enable-bitforce --enable-icarus --enable-cpumining
 
 override_dh_auto_install:
