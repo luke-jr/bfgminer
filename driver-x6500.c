@@ -330,6 +330,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	thr->cgpu_data = fpga;
 
 	x6500_set_register(jp, 0xD, 180);  // Set clock speed
+	ft232r_flush(jp->a->ftdi);
 
 	mutex_unlock(&x6500->device_mutex);
 	return true;
@@ -366,6 +367,8 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 	for (int i = 9, j = 64; i < 12; ++i, j += 4)
 		x6500_set_register(jp, i, fromlebytes(work->data, j));
 
+	ft232r_flush(jp->a->ftdi);
+
 	//gettimeofday(&fpga->tv_workstart, NULL);
 	mutex_unlock(&x6500->device_mutex);
 
@@ -391,7 +394,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	long iter;
 	bool bad;
 
-	iter = 20;
+	iter = 10;
 	while (1) {
 		mutex_lock(&x6500->device_mutex);
 		nonce = x6500_get_register(jtag, 0xE);
