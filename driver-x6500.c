@@ -169,6 +169,7 @@ static bool x6500_prepare(struct thr_info *thr)
 
 struct x6500_fpga_data {
 	struct jtag_port jtag;
+	struct work prevwork;
 };
 
 #define bailout2(...) do {  \
@@ -406,6 +407,11 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				applog(LOG_DEBUG, "%s %u.%u: Nonce for current  work: %08lx",
 				       x6500->api->name, x6500->device_id, fpgaid,
 				       (unsigned long)nonce);
+			} else if (test_nonce(&fpga->prevwork, nonce, false)) {
+				submit_nonce(thr, &fpga->prevwork, nonce);
+				applog(LOG_DEBUG, "%s %u.%u: Nonce for PREVIOUS work: %08lx",
+				       x6500->api->name, x6500->device_id, fpgaid,
+				       (unsigned long)nonce);
 			} else {
 				applog(LOG_DEBUG, "%s %u.%u: Nonce with H not zero  : %08lx",
 				       x6500->api->name, x6500->device_id, fpgaid,
@@ -420,6 +426,8 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 		if (thr->work_restart)
 			break;
 	}
+
+	memcpy(&fpga->prevwork, work, sizeof(fpga->prevwork));
 
 	return 0xffffffff;
 }
