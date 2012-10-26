@@ -383,6 +383,13 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
+API V1.20
+
+Modified API commands:
+ 'pools' - add 'Has Stratum', 'Stratum Active', 'Stratum URL'
+
+----------
+
 API V1.19 (cgminer v2.7.6)
 
 Added API commands:

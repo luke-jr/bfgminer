@@ -153,6 +153,7 @@ Options for both config file and command line:
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
 --no-pool-disable   Do not automatically disable pools that continually reject shares
+--no-restart        Do not attempt to restart GPUs that hang or cgminer if it crashes
 --no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
@@ -203,7 +204,6 @@ GPU only options:
 --intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
 --kernel|-k <arg>   Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
 --ndevs|-n          Enumerate number of detected GPUs and exit
---no-restart        Do not attempt to restart GPUs that hang
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
 --temp-target <arg> Target temperature when automatically managing fan and GPU speeds (default: 75)

@@ -1322,12 +1322,7 @@ Vals[2]+=(rotr(Vals[1],6)^rotr(Vals[1],11)^rotr(Vals[1],25));
 Vals[2]+=ch(Vals[1],Vals[4],Vals[3]);
 
 #define FOUND (0x0F)
-
-#if defined(OCL1)
-	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
-#else
-	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
-#endif
+#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 
 #if defined(VECTORS2) || defined(VECTORS4)
 	if (any(Vals[2] == 0x136032edU)) {
