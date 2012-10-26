@@ -160,7 +160,9 @@ static bool x6500_prepare(struct thr_info *thr)
 	x6500->device_ft232r = ftdi;
 	
 	struct jtag_port_a *jtag_a;
-	jtag_a = calloc(1, sizeof(*jtag_a));
+	unsigned char *pdone = calloc(1, sizeof(*jtag_a) + 1);
+	*pdone = 101;
+	jtag_a = (void*)(pdone + 1);
 	jtag_a->ftdi = ftdi;
 	x6500->cgpu_data = jtag_a;
 	
@@ -185,7 +187,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 {
 	char buf[0x100];
 	unsigned long len, flen;
-	char *pdone = (char*)&x6500->cgpu_data;
+	unsigned char *pdone = (unsigned char*)x6500->cgpu_data - 1;
 	struct ft232r_device_handle *ftdi = jp1->a->ftdi;
 
 	FILE *f = open_xilinx_bitstream(x6500, X6500_BITSTREAM_FILENAME, &len);
@@ -270,6 +272,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 		return false;
 	
 	applog(LOG_WARNING, "%s %u: Done programming %s", x6500->api->name, x6500->device_id, x6500->device_path);
+	*pdone = 101;
 
 	return true;
 }
@@ -346,7 +349,7 @@ get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
 {
 	char info[18] = "               | ";
 
-	char pdone = (char)(x6500->cgpu_data);
+	unsigned char pdone = *((unsigned char*)x6500->cgpu_data - 1);
 	if (pdone != 101) {
 		sprintf(&info[1], "%3d%%", pdone);
 		info[5] = ' ';
