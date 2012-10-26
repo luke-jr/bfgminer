@@ -21,13 +21,21 @@
 
 //#define DEBUG_JTAG_CLOCK
 
+#define FTDI_READ_BUFFER_SIZE 100
+
+static
+unsigned char jtag_clock_byte(struct jtag_port *jp, bool tms, bool tdi)
+{
+	return (jp->a->state & jp->ignored)
+	          | (tms ? jp->tms : 0)
+	          | (tdi ? jp->tdi : 0);
+}
+
 // NOTE: The order of tms and tdi here are inverted from LPC1343CodeBase
 bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 {
 	unsigned char buf[3];
-	memset(buf, (jp->a->state & jp->ignored)
-	          | (tms ? jp->tms : 0)
-	          | (tdi ? jp->tdi : 0), sizeof(buf));
+	memset(buf, jtag_clock_byte(jp, tms, tdi), sizeof(buf));
 	buf[2] =
 	buf[1] |= jp->tck;
 	if (ft232r_write_all(jp->a->ftdi, buf, sizeof(buf)) != sizeof(buf))
@@ -41,9 +49,9 @@ bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 #endif
 		return true;
 	}
-	if (jp->a->bufread < 100 && !tdo) {
+	jp->a->bufread += sizeof(buf);
+	if (jp->a->bufread < FTDI_READ_BUFFER_SIZE - sizeof(buf) && !tdo) {
 		// By deferring unnecessary reads, we can avoid some USB latency
-		jp->a->bufread += sizeof(buf);
 #ifdef DEBUG_JTAG_CLOCK
 		applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=?defer", jp, (unsigned)buf[2], (int)tms, (int)tdi);
 #endif
@@ -60,7 +68,7 @@ bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 		}
 	}
 #endif
-	uint8_t rbufsz = jp->a->bufread + sizeof(buf);
+	uint8_t rbufsz = jp->a->bufread;
 	jp->a->bufread = 0;
 	unsigned char rbuf[rbufsz];
 	if (ft232r_read_all(jp->a->ftdi, rbuf, rbufsz) != rbufsz)
@@ -90,12 +98,32 @@ static bool jtag_rw_bit(struct jtag_port *jp, void *buf, uint8_t mask, bool tms,
 	return true;
 }
 
+static inline
+bool getbit(void *data, uint32_t bitnum)
+{
+	unsigned char *cdata = data;
+	div_t d = div(bitnum, 8);
+	unsigned char b = cdata[d.quot];
+	return b & (1<<(7 - d.rem));
+}
+
+static inline
+void setbit(void *data, uint32_t bitnum, bool nv)
+{
+	unsigned char *cdata = data;
+	div_t d = div(bitnum, 8);
+	unsigned char *p = &cdata[d.quot];
+	unsigned char o = (1<<(7 - d.rem));
+	if (nv)
+		*p |= o;
+	else
+		*p &= ~o;
+}
+
 // Expects to start at the Capture step, to handle 0-length gracefully
 bool _jtag_llrw(struct jtag_port *jp, void *buf, size_t bitlength, bool do_read, int stage)
 {
 	uint8_t *data = buf;
-	int i, j;
-	div_t d;
 	
 	if (!bitlength)
 		return jtag_clock(jp, true, false, NULL);
@@ -103,6 +131,58 @@ bool _jtag_llrw(struct jtag_port *jp, void *buf, size_t bitlength, bool do_read,
 	if (stage & 1)
 		if (!jtag_clock(jp, false, false, NULL))
 			return false;
+
+#ifndef DEBUG_JTAG_CLOCK
+	// This alternate implementation is designed to minimize ft232r reads (which are slow)
+	if (do_read) {
+		unsigned char rbuf[FTDI_READ_BUFFER_SIZE];
+		unsigned char wbuf[3];
+		ssize_t rbufsz, bitspending = 0;
+		size_t databitoff = 0, i;
+
+		--bitlength;
+		for (i = 0; i < bitlength; ++i) {
+			wbuf[0] = jtag_clock_byte(jp, false, getbit(data, i));
+			wbuf[1] = wbuf[0] | jp->tck;
+			if (ft232r_write_all(jp->a->ftdi, wbuf, 2) != 2)
+				return false;
+			jp->a->bufread += 2;
+			++bitspending;
+			if (jp->a->bufread > FTDI_READ_BUFFER_SIZE - 2) {
+				// The next bit would overflow, so read now
+				rbufsz = jp->a->bufread;
+				if (ft232r_read_all(jp->a->ftdi, rbuf, rbufsz) != rbufsz)
+					return false;
+				for (ssize_t j = rbufsz - ((bitspending - 1) * 2); j < rbufsz; j += 2)
+					setbit(data, databitoff++, (rbuf[j] & jp->tdo));
+				bitspending = 1;
+				jp->a->bufread = 0;
+			}
+		}
+		// Last bit needs special treatment
+		wbuf[0] = jtag_clock_byte(jp, (stage & 2), getbit(data, i));
+		wbuf[2] = wbuf[1] = wbuf[0] | jp->tck;
+		if (ft232r_write_all(jp->a->ftdi, wbuf, sizeof(wbuf)) != sizeof(wbuf))
+			return false;
+		rbufsz = jp->a->bufread + 3;
+		if (ft232r_read_all(jp->a->ftdi, rbuf, rbufsz) != rbufsz)
+			return false;
+		for (ssize_t j = rbufsz - 1 - (bitspending * 2); j < rbufsz; j += 2)
+			setbit(data, databitoff++, (rbuf[j] & jp->tdo));
+		setbit(data, databitoff++, (rbuf[rbufsz - 1] & jp->tdo));
+		jp->a->bufread = 0;
+		
+		if (stage & 2) {
+			if (!jtag_clock(jp, true, false, NULL))  // Update
+				return false;
+		}
+		
+		return true;
+	}
+#endif
+
+	int i, j;
+	div_t d;
 
 	d = div(bitlength - 1, 8);
 

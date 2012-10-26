@@ -395,7 +395,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	long iter;
 	bool bad;
 
-	iter = 10;
+	iter = 200;
 	while (1) {
 		mutex_lock(&x6500->device_mutex);
 		nonce = x6500_get_register(jtag, 0xE);
