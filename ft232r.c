@@ -49,7 +49,7 @@ void ft232r_scan_free()
 
 void ft232r_scan()
 {
-	ssize_t n, i, found = 0;
+	ssize_t count, n, i, found = 0;
 	libusb_device **list;
 	struct libusb_device_descriptor desc;
 	libusb_device_handle *handle;
@@ -59,16 +59,16 @@ void ft232r_scan()
 
 	ft232r_scan_free();
 
-	n = libusb_get_device_list(NULL, &list);
-	if (unlikely(n < 0)) {
-		applog(LOG_ERR, "ft232r_scan: Error getting USB device list: %s", libusb_error_name(n));
+	count = libusb_get_device_list(NULL, &list);
+	if (unlikely(count < 0)) {
+		applog(LOG_ERR, "ft232r_scan: Error getting USB device list: %s", libusb_error_name(count));
 		ft232r_devinfo_list = calloc(1, sizeof(struct ft232r_device_info *));
 		return;
 	}
 
-	ft232r_devinfo_list = malloc(sizeof(struct ft232r_device_info *) * (n + 1));
+	ft232r_devinfo_list = malloc(sizeof(struct ft232r_device_info *) * (count + 1));
 
-	for (i = 0; i < n; ++i) {
+	for (i = 0; i < count; ++i) {
 		err = libusb_get_device_descriptor(list[i], &desc);
 		if (unlikely(err)) {
 			applog(LOG_ERR, "ft232r_scan: Error getting device descriptor: %s", libusb_error_name(err));
