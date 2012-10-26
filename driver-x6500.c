@@ -73,10 +73,13 @@ void x6500_jtag_set(struct jtag_port *jp, uint8_t pinoffset)
 	jp->ignored = ~(jp->tdo | jp->tdi | jp->tms | jp->tck);
 }
 
+static uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr);
+
 static
 void x6500_set_register(struct jtag_port *jp, uint8_t addr, uint32_t nv)
 {
 	uint8_t buf[38];
+retry:
 	jtag_write(jp, JTAG_REG_IR, "\x40", 6);
 	int2bits(nv, &buf[0], 32);
 	int2bits(addr, &buf[4], 4);
@@ -84,6 +87,15 @@ void x6500_set_register(struct jtag_port *jp, uint8_t addr, uint32_t nv)
 	checksum(buf, 37);
 	jtag_write(jp, JTAG_REG_DR, buf, 38);
 	jtag_run(jp);
+#ifdef DEBUG_X6500_SET_REGISTER
+	if (x6500_get_register(jp, addr) != nv)
+#else
+	if (0)
+#endif
+	{
+		applog(LOG_WARNING, "x6500_set_register failed %x=%08x", addr, nv);
+		goto retry;
+	}
 }
 
 static
@@ -317,7 +329,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	
 	thr->cgpu_data = fpga;
 
-	x6500_set_register(jp, 0xD, 196);  // Set clock speed
+	x6500_set_register(jp, 0xD, 180);  // Set clock speed
 
 	mutex_unlock(&x6500->device_mutex);
 	return true;
