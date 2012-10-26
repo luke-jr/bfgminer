@@ -73,6 +73,9 @@ TIMER_LIBS=""
 MATH_LIBS="-lm"
 
 case $target in
+  amd64-*)
+    have_x86_64=true
+    ;;
   x86_64-*)
     have_x86_64=true
     ;;
@@ -270,7 +273,8 @@ else
 
 	AC_SEARCH_LIBS(addstr, ncursesw ncurses pdcurses, [
 		curses=yes
-		cursesmsg="FOUND: ${ac_cv_search_addstr:2}"
+		cursesmsg="FOUND: ${ac_cv_search_addstr}"
+		cursesmsg="${cursesmsg/-l/}"
 	], [
 		if test "x$curses" = "xyes"; then
 			AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
