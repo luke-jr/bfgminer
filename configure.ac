@@ -193,6 +193,7 @@ AC_CHECK_LIB(usb-1.0, libusb_init,
 		AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
 		USB_LIBS="-lusb-1.0"
 		USB_FLAGS=""
+		AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb-1.0/libusb.h>])
 	],
 	[libusb=no]
 )
