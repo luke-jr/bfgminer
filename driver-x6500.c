@@ -170,6 +170,9 @@ static bool x6500_prepare(struct thr_info *thr)
 struct x6500_fpga_data {
 	struct jtag_port jtag;
 	struct work prevwork;
+	struct timeval tv_workstart;
+
+	struct dclk_data dclk;
 };
 
 #define bailout2(...) do {  \
@@ -331,6 +334,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	thr->cgpu_data = fpga;
 
 	x6500_set_register(jp, 0xD, 180);  // Set clock speed
+	fpga->dclk.freqM = 90;
 	ft232r_flush(jp->a->ftdi);
 
 	mutex_unlock(&x6500->device_mutex);
@@ -370,7 +374,7 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 
 	ft232r_flush(jp->a->ftdi);
 
-	//gettimeofday(&fpga->tv_workstart, NULL);
+	gettimeofday(&fpga->tv_workstart, NULL);
 	mutex_unlock(&x6500->device_mutex);
 
 	if (opt_debug) {
@@ -384,6 +388,19 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 }
 
 static
+int64_t calc_hashes(struct x6500_fpga_data *fpga, struct timeval *tv_now)
+{
+	struct timeval tv_delta;
+	int64_t hashes;
+
+	timersub(tv_now, &fpga->tv_workstart, &tv_delta);
+	hashes = (((int64_t)tv_delta.tv_sec * 1000000) + tv_delta.tv_usec) * fpga->dclk.freqM * 2;
+	if (unlikely(hashes > 0x100000000))
+		hashes = 0x100000000;
+	return hashes;
+}
+
+static
 int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
@@ -391,13 +408,14 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	struct jtag_port *jtag = &fpga->jtag;
 	char fpgaid = thr->device_thread;
 
+	struct timeval tv_now;
+	int64_t hashes;
 	uint32_t nonce;
-	long iter;
 	bool bad;
 
-	iter = 200;
 	while (1) {
 		mutex_lock(&x6500->device_mutex);
+		gettimeofday(&tv_now, NULL);
 		nonce = x6500_get_register(jtag, 0xE);
 		mutex_unlock(&x6500->device_mutex);
 		if (nonce != 0xffffffff) {
@@ -420,16 +438,19 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				++x6500->hw_errors;
 			}
 		}
-		if (thr->work_restart || !--iter)
+
+		hashes = calc_hashes(fpga, &tv_now);
+		if (thr->work_restart || hashes >= 0xf0000000)
 			break;
 		usleep(1000);
-		if (thr->work_restart)
+		hashes = calc_hashes(fpga, &tv_now);
+		if (thr->work_restart || hashes >= 0xf0000000)
 			break;
 	}
 
 	memcpy(&fpga->prevwork, work, sizeof(fpga->prevwork));
 
-	return 0xffffffff;
+	return hashes;
 }
 
 static int64_t
