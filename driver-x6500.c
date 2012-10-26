@@ -64,6 +64,16 @@ void checksum(uint8_t *b, uint8_t bits)
 }
 
 static
+void x6500_jtag_set(struct jtag_port *jp, uint8_t pinoffset)
+{
+	jp->tck = pinoffset << 3;
+	jp->tms = pinoffset << 2;
+	jp->tdi = pinoffset << 1;
+	jp->tdo = pinoffset << 0;
+	jp->ignored = ~(jp->tdo | jp->tdi | jp->tms | jp->tck);
+}
+
+static
 void x6500_set_register(struct jtag_port *jp, uint8_t addr, uint32_t nv)
 {
 	uint8_t buf[38];
@@ -174,23 +184,26 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	// "Magic" jtag_port configured to access both FPGAs concurrently
 	struct jtag_port jpt = {
 		.a = jp1->a,
-		.tck = 0x88,
-		.tms = 0x44,
-		.tdi = 0x22,
-		.tdo = 0x11,
-		.ignored = 0,
 	};
 	struct jtag_port *jp = &jpt;
-	uint8_t i;
+	uint8_t i, j;
+	x6500_jtag_set(jp, 0x11);
 	
 	// Need to reset here despite previous FPGA state, since we are programming all at once
 	jtag_reset(jp);
 	
 	jtag_write(jp, JTAG_REG_IR, "\xd0", 6);  // JPROGRAM
-	do {
-		i = 0xd0;  // Re-set JPROGRAM while reading status
-		jtag_read(jp, JTAG_REG_IR, &i, 6);
-	} while (i & 8);
+	// Poll each FPGA status individually since they might not be ready at the same time
+	for (j = 0; j < 2; ++j) {
+		x6500_jtag_set(jp, j ? 0x10 : 1);
+		do {
+			i = 0xd0;  // Re-set JPROGRAM while reading status
+			jtag_read(jp, JTAG_REG_IR, &i, 6);
+		} while (i & 8);
+		applog(LOG_DEBUG, "%s %u.%u: JPROGRAM ready",
+		       x6500->api->name, x6500->device_id, j);
+	}
+	x6500_jtag_set(jp, 0x11);
 	jtag_write(jp, JTAG_REG_IR, "\xa0", 6);  // CFG_IN
 	
 	sleep(1);
@@ -264,11 +277,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	fpga = calloc(1, sizeof(*fpga));
 	jp = &fpga->jtag;
 	jp->a = x6500->cgpu_data;
-	jp->tck = pinoffset << 3;
-	jp->tms = pinoffset << 2;
-	jp->tdi = pinoffset << 1;
-	jp->tdo = pinoffset << 0;
-	jp->ignored = ~(fpga->jtag.tdo | fpga->jtag.tdi | fpga->jtag.tms | fpga->jtag.tck);
+	x6500_jtag_set(jp, pinoffset);
 	
 	mutex_lock(&x6500->device_mutex);
 	if (!jtag_reset(jp)) {
