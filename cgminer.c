@@ -1992,11 +1992,16 @@ static uint64_t share_diff(const struct work *work)
 static uint32_t scrypt_diff(const struct work *work)
 {
 	const uint32_t scrypt_diffone = 0x0000fffful;
-	uint32_t d32 = work->outputhash;
+	uint32_t d32 = work->outputhash, ret;
 
 	if (unlikely(!d32))
 		d32 = 1;
-	return scrypt_diffone / d32;
+	ret = scrypt_diffone / d32;
+	if (ret > best_diff) {
+		best_diff = ret;
+		suffix_string(best_diff, best_share, 0);
+	}
+	return ret;
 }
 
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
