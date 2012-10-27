@@ -7,6 +7,8 @@
  * any later version.  See COPYING for more details.
  */
 
+#include <sys/time.h>
+
 #include <libusb-1.0/libusb.h>
 
 #include "dynclock.h"
@@ -21,8 +23,8 @@
 // NOTE: X6500_BITSTREAM_USERID is bitflipped
 #define X6500_BITSTREAM_USERID "\x40\x20\x24\x42"
 #define X6500_MINIMUM_CLOCK    2
-#define X6500_DEFAULT_CLOCK  200
-#define X6500_MAXIMUM_CLOCK  210
+#define X6500_DEFAULT_CLOCK  180
+#define X6500_MAXIMUM_CLOCK  180
 
 struct device_api x6500_api;
 
@@ -277,6 +279,38 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	return true;
 }
 
+static bool x6500_change_clock(struct thr_info *thr, int multiplier)
+{
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	struct jtag_port *jp = &fpga->jtag;
+
+	x6500_set_register(jp, 0xD, multiplier * 2);
+	ft232r_flush(jp->a->ftdi);
+	fpga->dclk.freqM = multiplier;
+
+	return true;
+}
+
+static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
+{
+	struct cgpu_info *x6500 = thr->cgpu;
+	char fpgaid = thr->device_thread;
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	uint8_t oldFreq = fpga->dclk.freqM;
+
+	mutex_lock(&x6500->device_mutex);
+	if (!x6500_change_clock(thr, multiplier)) {
+		mutex_unlock(&x6500->device_mutex);
+		return false;
+	}
+	mutex_unlock(&x6500->device_mutex);
+
+	char repr[0x10];
+	sprintf(repr, "%s %u.%u", x6500->api->name, x6500->device_id, fpgaid);
+	dclk_msg_freqchange(repr, oldFreq * 2, fpga->dclk.freqM * 2, NULL);
+	return true;
+}
+
 static bool x6500_fpga_init(struct thr_info *thr)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
@@ -336,9 +370,15 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	
 	thr->cgpu_data = fpga;
 
-	x6500_set_register(jp, 0xD, 180);  // Set clock speed
-	fpga->dclk.freqM = 90;
-	ft232r_flush(jp->a->ftdi);
+	dclk_prepare(&fpga->dclk);
+	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
+	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
+	fpga->dclk.freqMDefault = fpga->dclk.freqM;
+	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u Mhz (range: %u-%u)",
+	       x6500->api->name, x6500->device_id, fpgaid,
+	       fpga->dclk.freqM * 2,
+	       X6500_MINIMUM_CLOCK,
+	       fpga->dclk.freqMaxM * 2);
 
 	mutex_unlock(&x6500->device_mutex);
 	return true;
@@ -411,10 +451,13 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	struct jtag_port *jtag = &fpga->jtag;
 	char fpgaid = thr->device_thread;
 
-	struct timeval tv_now;
+	struct timeval tv_now, tv_dclk, tv_delta;
 	int64_t hashes;
 	uint32_t nonce;
 	bool bad;
+	int imm_bad_nonces = 0, imm_nonces = 0;
+
+	gettimeofday(&tv_dclk, NULL);
 
 	while (1) {
 		mutex_lock(&x6500->device_mutex);
@@ -422,6 +465,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 		nonce = x6500_get_register(jtag, 0xE);
 		mutex_unlock(&x6500->device_mutex);
 		if (nonce != 0xffffffff) {
+			++imm_nonces;
 			bad = !test_nonce(work, nonce, false);
 			if (!bad) {
 				submit_nonce(thr, work, nonce);
@@ -439,7 +483,17 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				       (unsigned long)nonce);
 				++hw_errors;
 				++x6500->hw_errors;
+				++imm_bad_nonces;
 			}
+		}
+
+		timersub(&tv_now, &tv_dclk, &tv_delta);
+		if (tv_delta.tv_usec >= 250000) {
+			dclk_gotNonces(&fpga->dclk);
+			if (imm_bad_nonces)
+				dclk_errorCount(&fpga->dclk, ((double)imm_bad_nonces) / (double)imm_nonces);
+			imm_bad_nonces = imm_nonces = 0;
+			tv_dclk = tv_now;
 		}
 
 		hashes = calc_hashes(fpga, &tv_now);
@@ -450,6 +504,9 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 		if (thr->work_restart || hashes >= 0xf0000000)
 			break;
 	}
+
+	dclk_preUpdate(&fpga->dclk);
+	dclk_updateFreq(&fpga->dclk, x6500_dclk_change_clock, thr);
 
 	memcpy(&fpga->prevwork, work, sizeof(fpga->prevwork));
 
