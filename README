@@ -143,6 +143,7 @@ Options for both config file and command line:
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
 --balance           Change multipool strategy from failover to even share balance
 --benchmark         Run cgminer in benchmark mode - produces no shares
+--compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging

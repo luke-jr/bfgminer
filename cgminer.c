@@ -92,6 +92,7 @@ bool use_syslog;
 bool opt_quiet;
 bool opt_realquiet;
 bool opt_loginput;
+bool opt_compact;
 const int opt_cutofftemp = 95;
 int opt_log_interval = 5;
 int opt_queue = 1;
@@ -854,6 +855,13 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bench-algo|-b",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
+#endif
+#ifdef HAVE_CURSES
+	OPT_WITHOUT_ARG("--compact",
+			opt_set_bool, &opt_compact,
+			"Use compact display without per device statistics"),
+#endif
+#ifdef WANT_CPUMINE
 	OPT_WITH_ARG("--cpu-threads|-t",
 		     force_nthreads_int, opt_show_intval, &opt_n_threads,
 		     "Number of miner CPU threads"),
@@ -1612,7 +1620,7 @@ static void curses_print_devstatus(int thr_id)
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
 
-	if (devcursor + cgpu->cgminer_id > LINES - 2)
+	if (devcursor + cgpu->cgminer_id > LINES - 2 || opt_compact)
 		return;
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
@@ -1672,14 +1680,13 @@ static void print_status(int thr_id)
 
 #ifdef HAVE_CURSES
 /* Check for window resize. Called with curses mutex locked */
-static inline bool change_logwinsize(void)
+static inline void change_logwinsize(void)
 {
 	int x, y, logx, logy;
-	bool ret = false;
 
 	getmaxyx(mainwin, y, x);
 	if (x < 80 || y < 25)
-		return ret;
+		return;
 
 	if (y > statusy + 2 && statusy < logstart) {
 		if (y - 2 < logstart)
@@ -1689,17 +1696,13 @@ static inline bool change_logwinsize(void)
 		logcursor = statusy + 1;
 		mvwin(logwin, logcursor, 0);
 		wresize(statuswin, statusy, x);
-		ret = true;
 	}
 
 	y -= logcursor;
 	getmaxyx(logwin, logy, logx);
 	/* Detect screen size change */
-	if (x != logx || y != logy) {
+	if (x != logx || y != logy)
 		wresize(logwin, y, x);
-		ret = true;
-	}
-	return ret;
 }
 
 static void check_winsizes(void)
@@ -1709,6 +1712,7 @@ static void check_winsizes(void)
 	if (curses_active_locked()) {
 		int y, x;
 
+		erase();
 		x = getmaxx(statuswin);
 		if (logstart > LINES - 2)
 			statusy = LINES - 2;
@@ -1722,6 +1726,18 @@ static void check_winsizes(void)
 		mvwin(logwin, logcursor, 0);
 		unlock_curses();
 	}
+}
+
+static void switch_compact(void)
+{
+	if (opt_compact) {
+		logstart = devcursor + 1;
+		logcursor = logstart + 1;
+	} else {
+		logstart = devcursor + total_devices + 1;
+		logcursor = logstart + 1;
+	}
+	check_winsizes();
 }
 
 /* For mandatory printing when mutex is already locked */
@@ -1772,6 +1788,7 @@ bool log_curses_only(int prio, const char *f, va_list ap)
 void clear_logwin(void)
 {
 	if (curses_active_locked()) {
+		erase();
 		wclear(logwin);
 		unlock_curses();
 	}
@@ -3803,7 +3820,7 @@ static void display_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
-	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
+	wlogprint("[N]ormal co[M]pact mode [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n[R]PC debug:%s\n[W]orkTime details:%s\n[L]og interval:%d\n",
 		opt_debug ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
@@ -3829,8 +3846,10 @@ retry:
 		opt_debug = false;
 		opt_quiet = false;
 		opt_protocol = false;
+		opt_compact = false;
 		want_per_device_stats = false;
 		wlogprint("Output mode reset to normal\n");
+		switch_compact();
 		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_debug ^= true;
@@ -3838,6 +3857,11 @@ retry:
 		if (opt_debug)
 			opt_quiet = false;
 		wlogprint("Debug mode %s\n", opt_debug ? "enabled" : "disabled");
+		goto retry;
+	} else if (!strncasecmp(&input, "m", 1)) {
+		opt_compact ^= true;
+		wlogprint("Compact mode %s\n", opt_compact ? "enabled" : "disabled");
+		switch_compact();
 		goto retry;
 	} else if (!strncasecmp(&input, "p", 1)) {
 		want_per_device_stats ^= true;
