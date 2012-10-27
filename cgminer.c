@@ -3820,14 +3820,17 @@ static void display_options(void)
 	immedok(logwin, true);
 	clear_logwin();
 retry:
-	wlogprint("[N]ormal co[M]pact mode [C]lear [S]ilent mode (disable all output)\n");
-	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n[R]PC debug:%s\n[W]orkTime details:%s\n[L]og interval:%d\n",
+	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
+	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
+		  "[R]PC debug:%s\n[W]orkTime details:%s\nco[M]pact: %s\n"
+		  "[L]og interval:%d\n",
 		opt_debug ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
 		opt_quiet ? "on" : "off",
 		opt_log_output ? "on" : "off",
 		opt_protocol ? "on" : "off",
 		opt_worktime ? "on" : "off",
+		opt_compact ? "on" : "off",
 		opt_log_interval);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
@@ -6326,12 +6329,13 @@ int main(int argc, char *argv[])
 	for (i = 0; i < total_devices; ++i)
 		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
-	logstart += total_devices;
-	logcursor = logstart + 1;
-
+	if (!opt_compact) {
+		logstart += total_devices;
+		logcursor = logstart + 1;
 #ifdef HAVE_CURSES
-	check_winsizes();
+		check_winsizes();
 #endif
+	}
 
 	if (!total_pools) {
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
