@@ -1589,7 +1589,7 @@ static void curses_print_status(void)
 			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best share: %s", current_hash, blocktime, best_share);
+	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best share: %s   ", current_hash, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
