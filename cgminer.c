@@ -213,17 +213,17 @@ const
 #endif
 bool curses_active;
 
-static char current_block[37];
+static char current_block[40];
 static char *current_hash;
 char *current_fullhash;
 static char datestamp[40];
 static char blocktime[30];
 struct timeval block_timeval;
-static char best_share[6]="0";
+static char best_share[8] = "0";
 static uint64_t best_diff = 0;
 
 struct block {
-	char hash[37];
+	char hash[40];
 	UT_hash_handle hh;
 	int block_no;
 };
