@@ -441,6 +441,15 @@ diminish return performance even if the hash rate might appear better. A good
 starting baseline intensity to try on dedicated miners is 9. Higher values are
 there to cope with future improvements in hardware.
 
+
+The block display shows:
+Block: 0074c5e482e34a506d2a051a...  Started: [17:17:22]  Best share: 2.71K
+
+This shows a short stretch of the current block, when the new block started,
+and the all time best difficulty share you've submitted since starting cgminer
+this time.
+
+
 ---
 MULTIPOOL
 
