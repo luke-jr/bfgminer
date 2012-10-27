@@ -196,11 +196,10 @@ out:
 	return ptrlen;
 }
 
-int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
-			     curlsocktype __maybe_unused purpose)
+static int keep_sockalive(SOCKETTYPE fd)
 {
-	int tcp_keepidle = 120;
-	int tcp_keepintvl = 120;
+	int tcp_keepidle = 60;
+	int tcp_keepintvl = 60;
 
 #ifndef WIN32
 	int keepalive = 1;
@@ -242,6 +241,12 @@ int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
 #endif /* WIN32 */
 
 	return 0;
+}
+
+int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
+			     curlsocktype __maybe_unused purpose)
+{
+	return keep_sockalive(fd);
 }
 
 static void last_nettime(struct timeval *last)
@@ -1347,6 +1352,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
+	keep_sockalive(pool->sock);
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
