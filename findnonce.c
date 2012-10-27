@@ -173,70 +173,19 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
 
 struct pc_data {
 	struct thr_info *thr;
-	struct work *work;
+	struct work work;
 	uint32_t res[MAXBUFFERS];
 	pthread_t pth;
 	int found;
 };
 
-#if 0 // not used any more
-
-static void send_sha_nonce(struct pc_data *pcd, cl_uint nonce)
-{
-	dev_blk_ctx *blk = &pcd->work->blk;
-	struct thr_info *thr = pcd->thr;
-	cl_uint A, B, C, D, E, F, G, H;
-	struct work *work = pcd->work;
-	cl_uint W[16];
-
-	A = blk->cty_a; B = blk->cty_b;
-	C = blk->cty_c; D = blk->cty_d;
-	E = blk->cty_e; F = blk->cty_f;
-	G = blk->cty_g; H = blk->cty_h;
-	W[0] = blk->merkle; W[1] = blk->ntime;
-	W[2] = blk->nbits; W[3] = nonce;
-	W[4] = 0x80000000; W[5] = 0x00000000; W[6] = 0x00000000; W[7] = 0x00000000;
-	W[8] = 0x00000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
-	W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000280;
-	PIR(0); IR(8);
-	FR(16); FR(24);
-	FR(32); FR(40);
-	FR(48); FR(56);
-
-	W[0] = A + blk->ctx_a; W[1] = B + blk->ctx_b;
-	W[2] = C + blk->ctx_c; W[3] = D + blk->ctx_d;
-	W[4] = E + blk->ctx_e; W[5] = F + blk->ctx_f;
-	W[6] = G + blk->ctx_g; W[7] = H + blk->ctx_h;
-	W[8] = 0x80000000; W[9] = 0x00000000; W[10] = 0x00000000; W[11] = 0x00000000;
-	W[12] = 0x00000000; W[13] = 0x00000000; W[14] = 0x00000000; W[15] = 0x00000100;
-	A = 0x6a09e667; B = 0xbb67ae85;
-	C = 0x3c6ef372; D = 0xa54ff53a;
-	E = 0x510e527f; F = 0x9b05688c;
-	G = 0x1f83d9ab; H = 0x5be0cd19;
-	IR(0); IR(8);
-	FR(16); FR(24);
-	FR(32); FR(40);
-	FR(48); PFR(56);
-
-	if (likely(H == 0xa41f32e7)) {
-		if (unlikely(submit_nonce(thr, work, nonce) == false))
-			applog(LOG_ERR, "Failed to submit work, exiting");
-	} else {
-		applog(LOG_DEBUG, "No best_g found! Error in OpenCL code?");
-		hw_errors++;
-		thr->cgpu->hw_errors++;
-	}
-}
-
-#endif
-
 static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
 {
 	struct thr_info *thr = pcd->thr;
-	struct work *work = pcd->work;
+	struct work *work = &pcd->work;
 
 	if (scrypt_test(work->data, work->target, nonce))
-		submit_nonce(thr, pcd->work, nonce);
+		submit_nonce(thr, &pcd->work, nonce);
 	else {
 		applog(LOG_INFO, "Scrypt error, review settings");
 		thr->cgpu->hw_errors++;
@@ -247,7 +196,6 @@ static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
 	struct thr_info *thr = pcd->thr;
-	struct work *work = pcd->work;
 	unsigned int entry = 0;
 
 	pthread_detach(pthread_self());
@@ -269,7 +217,7 @@ static void *postcalc_hash(void *userdata)
 		if (opt_scrypt)
 			send_scrypt_nonce(pcd, nonce);
 		else {
-			if (unlikely(submit_nonce(thr, work, nonce) == false))
+			if (unlikely(submit_nonce(thr, &pcd->work, nonce) == false))
 				applog(LOG_ERR, "Failed to submit work, exiting");
 		}
 	}
@@ -286,14 +234,9 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		applog(LOG_ERR, "Failed to malloc pc_data in postcalc_hash_async");
 		return;
 	}
-	pcd->work = calloc(1, sizeof(struct work));
-	if (unlikely(!pcd->work)) {
-		applog(LOG_ERR, "Failed to malloc work in postcalc_hash_async");
-		return;
-	}
 
 	pcd->thr = thr;
-	memcpy(pcd->work, work, sizeof(struct work));
+	memcpy(&pcd->work, work, sizeof(struct work));
 	memcpy(&pcd->res, res, BUFFERSIZE);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
