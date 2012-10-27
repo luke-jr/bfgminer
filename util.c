@@ -823,6 +823,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	struct addrinfo hints, *res;
 	int url_len, port_len = 0;
 
+	pool->sockaddr_url = url;
 	url_begin = strstr(url, "//");
 	if (!url_begin)
 		url_begin = url;

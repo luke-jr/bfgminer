@@ -552,10 +552,10 @@ static char *set_rr(enum pool_strategy *strategy)
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
 {
-	if (opt_scrypt)
+	if (!extract_sockaddr(pool, url))
 		return false;
 
-	if (!extract_sockaddr(pool, url))
+	if (opt_scrypt)
 		return false;
 
 	if (!strncasecmp(url, "stratum+tcp://", 14)) {
@@ -1588,13 +1588,13 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	if (pool->has_stratum) {
 		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
-			pool->stratum_url, pool->rpc_user);
+			pool->sockaddr_url, pool->rpc_user);
 	} else if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else {
 		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
-			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
+			pool->sockaddr_url, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best share: %s   ", current_hash, blocktime, best_share);
