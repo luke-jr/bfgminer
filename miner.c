@@ -100,7 +100,7 @@ bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
-#if BLKMAKER_VERSION > 1 || 1 /* TEMPORARY */
+#if BLKMAKER_VERSION > 1
 struct _cbscript_t {
 	char *data;
 	size_t sz;
@@ -528,7 +528,7 @@ char *set_strdup(const char *arg, char **p)
 	return NULL;
 }
 
-#if BLKMAKER_VERSION > 1 || 1 /* TEMPORARY */
+#if BLKMAKER_VERSION > 1
 static char *set_b58addr(const char *arg, struct _cbscript_t *p)
 {
 	size_t scriptsz = blkmk_address_to_script(NULL, 0, arg);
@@ -1018,7 +1018,7 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
 #endif
-#if BLKMAKER_VERSION > 1 || 1 /* TEMPORARY */
+#if BLKMAKER_VERSION > 1
 	OPT_WITH_ARG("--coinbase-addr",
 		     set_b58addr, NULL, &opt_coinbase_script,
 		     "Set coinbase payout address for solo mining"),
@@ -1576,7 +1576,7 @@ static bool work_decode(const json_t *val, struct work *work)
 			goto err_out;
 		}
 		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
-#if BLKMAKER_VERSION > 1 || 1 /* TEMPORARY */
+#if BLKMAKER_VERSION > 1
 		if (opt_coinbase_script.sz)
 			blkmk_init_generation(work->tmpl, opt_coinbase_script.data, opt_coinbase_script.sz);
 #endif
