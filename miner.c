@@ -251,6 +251,8 @@ char *current_fullhash;
 static char datestamp[40];
 static char blocktime[30];
 struct timeval block_timeval;
+static char best_share[6]="0";
+static uint64_t best_diff = 0;
 
 struct block {
 	char hash[37];
@@ -2013,7 +2015,7 @@ static void curses_print_status(void)
 			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s", current_hash, blocktime);
+	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best diff: %s", current_hash, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -2420,6 +2422,10 @@ static uint64_t share_diff(const struct work *work)
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = diffone / d64;
+	if (ret > best_diff) {
+		best_diff = ret;
+		suffix_string(best_diff, best_share, 0);
+	}
 	return ret;
 }
 
@@ -3883,7 +3889,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	mutex_lock(&ch_lock);
 	gettimeofday(&block_timeval, NULL);
 	old_hash = current_hash;
-	current_hash = bin2hex(hash_swap + 4, 16);
+	current_hash = bin2hex(hash_swap + 4, 12);
 	free(old_hash);
 	old_hash = current_fullhash;
 	current_fullhash = bin2hex(hash_swap, 32);
