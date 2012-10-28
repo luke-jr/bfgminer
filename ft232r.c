@@ -7,6 +7,8 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
