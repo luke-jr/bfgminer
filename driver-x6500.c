@@ -242,7 +242,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	jp->a->async = true;
 
 	ssize_t buflen;
-	char nextstatus = 10;
+	char nextstatus = 25;
 	while (len) {
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
@@ -251,7 +251,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 		*pdone = 100 - ((len * 100) / flen);
 		if (*pdone >= nextstatus)
 		{
-			nextstatus += 10;
+			nextstatus += 25;
 			applog(LOG_WARNING, "%s %u: Programming %s... %d%% complete...", x6500->api->name, x6500->device_id, x6500->device_path, *pdone);
 		}
 		len -= buflen;
