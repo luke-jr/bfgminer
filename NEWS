@@ -1,3 +1,45 @@
+BFGMiner Version 2.9.0 - Future
+
+- Upgrade libblkmaker to 0.2.0
+- Bugfix: Build correct pay-to-scripthash script
+- Implement --coinbase-addr for solo mining
+- x6500: Since we program in about a minute now, only report status verbosely every 25%
+- x6500: Poll nonce less often since USB latency slows us down anyway
+- jtag: Avoid writing an extra readback byte when we are ignoring tdo anyway
+- ft232r: Set output buffer size to 4096 bytes
+- x6500: Adjust dynclock so it works more reasonably
+- x6500: Dynclock support
+- Provide a simple/dummy libusb_error_name when it is missing (libusb < 1.0.9)
+- x6500: Stop abusing pointer type to store bitstream upload progress
+- Bugfix: ft232r: Avoid reuse of USB device count variable
+- x6500: Implement basic hashrate prediction and efficient job completion
+- jtag: Optimized implementation of JTAG reads to workaround ft232r slowness
+- x6500: Try nonce with previous work if it is wrong for current
+- x6500: Ensure ft232r buffer is flushed to change registers
+- x6500: Start clock speed off at 180, and extra debugging for x6500_set_register
+- x6500: When programming, poll each FPGA status individually since they might not be ready at the same time
+- x6500: Various tweaks and hacks to get mining working
+- Bugfix: x6500: Remove erroneous bitendianflip
+- Bugfix: jtag: Handle ftdi-common environmental stuff properly
+- jtag: Defer ignored reads a bit to avoid USB latency
+- Bugfix: ft232r: First 2 bytes of every 0x40 are FTDI status or something
+- x6500: Implement mining protocols (doesn't work yet)
+- x6500: Cleanup dead code and implement bailout2
+- x6500: Clean up and finish FPGA initialization
+- x6500: Comment bitstream upload function better
+- fpgautils: Abstract open_xilinx_bitstream out from modminer and x6500 drivers
+- x6500: Get bitstream upload working
+- Bugfix: jtag: Use the correct bit for reading/writing data streams
+- ft232r: Buffer writes to improve performance
+- x6500: Get FPGA probe working
+- jtag: JTAG implementation for X6500 (over ft232r)
+- ft232r: ft232r_read_all function to simplify exact-length reads
+- ft232r: Implement read buffer so ft232r_read always works like read(2)
+- ft232r: Complete necessary interfaces for X6500
+- x6500: Bare minimum detection-only X6500 support via libusb
+- Minor debian packaging fixes.
+
+
 BFGMiner Version 2.8.3 - October 18, 2012
 
 - Update to libblkmaker 0.1.3
