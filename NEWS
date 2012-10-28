@@ -1,5 +1,19 @@
-BFGMiner Version 2.9.0 - Future
+BFGMiner Version 2.9.0 - October 28, 2012
 
+- Bugfix: Save pool pointer to avoid dereferencing work after it might
+potentially be freed
+- Bugfix: Cleanup some harmless warnings
+- Bugfix: TUI: Avoid clearing the whole screen when we just want to clear the
+log window
+- Wishlist #130 implemented by "blinkier":
+- - Add all-at-once pool priority reassignment to curses TUI interface
+- - Save/restore pool priorities in config file
+- - Allow setting initial pool priorities via command line
+- Bugfix: Replace reportin hack with a reset back to LIFE_INIT for bitstream
+upload
+- Bugfix: SI kilo prefix is a lowercase "k"
+- Bugfix: If userpass is missing a password, treat it as a null password
+(regression fix)
 - Upgrade libblkmaker to 0.2.0
 - Bugfix: Build correct pay-to-scripthash script
 - Implement --coinbase-addr for solo mining

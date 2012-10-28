@@ -1,3 +1,18 @@
+bfgminer (2.9.0-0precise1) precise; urgency=low
+
+  * X6500: New driver for mining on FPGA Mining LLC's X6500 coprocessor.
+  * Support for solo mining against bitcoind 0.7's GBT interface using new --coinbase-addr option (powered by libblkmaker 0.2.0).
+  * OpenCL: Rewritten dynamic intensity code should fix remaining issues with it.
+  * BFGMiner now displays the share's best difficulty as well as the current pool difficulty.
+  * Support for saving and restoring pool priorities in config file, as well as changing them all at once in the curses TUI (by "blinkier").
+  * OpenCL: Updated kernels which should allow ultra low memory speeds once again (idea courtesy of Vbs).
+  * Stratum support by Con.
+  * BFGMiner now tries to actually catch crashes and unless the --no-restart option is given, it will try to restart cleanly.
+  * OpenCL: Scrypt will now not fail when setting high thread concurrency values that still return some RAM even if OpenCL returns an error on that RAM allocation.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 28 Oct 2012 10:39:56 -0000
+
+
 bfgminer (2.8.3-0precise1) precise; urgency=low
 
   * Various bugs fixed, no new features.
