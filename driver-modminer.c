@@ -463,7 +463,7 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 #ifdef WIN32
 	/* Workaround for bug in Windows driver */
 	if (!modminer_reopen(modminer))
-		return -1;
+		return;
 #endif
 
 	int fd = modminer->device_fd;
@@ -605,7 +605,6 @@ modminer_process_results(struct thr_info*thr)
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	char fpgaid = thr->device_thread;
-	int fd;
 	struct work *work = &state->running_work;
 
 	uint32_t nonce;
@@ -615,7 +614,6 @@ modminer_process_results(struct thr_info*thr)
 
 	mutex_lock(&modminer->device_mutex);
 	modminer_get_temperature(modminer, thr);
-	fd = modminer->device_fd;
 
 	iter = 200;
 	while (1) {
@@ -660,7 +658,6 @@ modminer_process_results(struct thr_info*thr)
 		if (work_restart(thr))
 			break;
 		mutex_lock(&modminer->device_mutex);
-		fd = modminer->device_fd;
 	}
 
 	struct timeval tv_workend, elapsed;
