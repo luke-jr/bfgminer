@@ -134,6 +134,7 @@ Options for both config file and command line:
 --balance           Change multipool strategy from failover to even share balance
 --benchmark         Run BFGMiner in benchmark mode - produces no shares
 --coinbase-sig <arg> Set coinbase signature when possible
+--compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --debuglog          Enable debug logging
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
