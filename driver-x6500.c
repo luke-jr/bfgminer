@@ -200,6 +200,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 
 	applog(LOG_WARNING, "%s %u: Programming %s...",
 	       x6500->api->name, x6500->device_id, x6500->device_path);
+	x6500->status = LIFE_INIT;
 	
 	// "Magic" jtag_port configured to access both FPGAs concurrently
 	struct jtag_port jpt = {
@@ -325,8 +326,6 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	if (!ftdi)
 		return false;
 	
-	thread_reportin(thr);  // HACK
-
 	fpga = calloc(1, sizeof(*fpga));
 	jp = &fpga->jtag;
 	jp->a = x6500->cgpu_data;
