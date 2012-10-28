@@ -17,6 +17,7 @@
 #include "logging.h"
 #include "miner.h"
 #include "fpgautils.h"
+#include "util.h"
 
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
 #define BISTREAM_USER_ID "\2\4$B"
@@ -75,7 +76,7 @@ modminer_detect_one(const char *devpath)
 		bailout(LOG_DEBUG, "ModMiner detect: failed to open %s", devpath);
 
 	char buf[0x100];
-	size_t len;
+	ssize_t len;
 
 	// Sending a "ping" first, to workaround bug in new firmware betas (see issue #62)
 	// Sending 45 noops, just in case the device was left in "start job" reading

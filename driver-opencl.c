@@ -800,21 +800,6 @@ struct cgpu_info *cpus;
 
 #ifdef HAVE_OPENCL
 
-#ifdef WIN32
-static UINT timeperiod_set;
-#endif
-
-void opencl_dynamic_cleanup() {
-#ifdef WIN32
-	if (timeperiod_set) {
-		timeEndPeriod(timeperiod_set);
-		timeperiod_set = 0;
-	}
-#endif
-}
-
-extern int opt_dynamic_interval;
-
 /* In dynamic mode, only the first thread of each device will be in use.
  * This potentially could start a thread that was stopped with the start-stop
  * options if one were to disable dynamic from the menu on a paused GPU */
@@ -822,17 +807,9 @@ void pause_dynamic_threads(int gpu)
 {
 	struct cgpu_info *cgpu = &gpus[gpu];
 	int i;
-#ifdef WIN32
-	bool any_dynamic = false;
-#endif
 
 	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr = &thr_info[i];
-
-#ifdef WIN32
-		if (cgpu->dynamic)
-			any_dynamic = true;
-#endif
 
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
@@ -843,20 +820,6 @@ void pause_dynamic_threads(int gpu)
 		if (!cgpu->dynamic && cgpu->deven != DEV_DISABLED)
 			tq_push(thr->q, &ping);
 	}
-
-#ifdef WIN32
-	if (any_dynamic) {
-		if (!timeperiod_set) {
-			timeperiod_set = opt_dynamic_interval > 3 ? (opt_dynamic_interval / 2) : 1;
-			if (TIMERR_NOERROR != timeBeginPeriod(timeperiod_set))
-				timeperiod_set = 0;
-		}
-	} else {
-		if (timeperiod_set) {
-			opencl_dynamic_cleanup();
-		}
-	}
-#endif
 }
 
 
@@ -1719,10 +1682,8 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 	const int thr_id = thr->id;
 	struct opencl_thread_data *thrdata = thr->cgpu_data;
 	_clState *clState = clStates[thr_id];
-	struct cgpu_info *gpu = thr->cgpu;
 
-	if (!gpu->dynamic)
-		clFinish(clState->commandQueue);
+	clFinish(clState->commandQueue);
 
 	if (thrdata->res[FOUND]) {
 		thrdata->last_work = &thrdata->_last_work;
@@ -1759,8 +1720,25 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	int64_t hashes;
 
 	/* This finish flushes the readbuffer set with CL_FALSE later */
-	if (!gpu->dynamic)
-		clFinish(clState->commandQueue);
+	clFinish(clState->commandQueue);
+
+	/* Windows' timer resolution is only 15ms so oversample 5x */
+	if (gpu->dynamic && (++gpu->intervals * dynamic_us) > 70000) {
+		struct timeval tv_gpuend;
+		double gpu_us;
+
+		gettimeofday(&tv_gpuend, NULL);
+		gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpustart) / gpu->intervals;
+		if (gpu_us > dynamic_us) {
+			if (gpu->intensity > MIN_INTENSITY)
+				--gpu->intensity;
+		} else if (gpu_us < dynamic_us / 2) {
+			if (gpu->intensity < MAX_INTENSITY)
+				++gpu->intensity;
+		}
+		memcpy(&(gpu->tv_gpustart), &tv_gpuend, sizeof(struct timeval));
+		gpu->intervals = 0;
+	}
 
 	set_threads_hashes(clState->vwidth, &hashes, globalThreads, localThreads[0], &gpu->intensity);
 	if (hashes > gpu->max_hashes)
@@ -1787,8 +1765,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		clFinish(clState->commandQueue);
 	}
 
-	gettimeofday(&gpu->tv_gpustart, NULL);
-
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
@@ -1814,30 +1790,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);
 		return -1;
-	}
-
-	if (gpu->dynamic) {
-		struct timeval diff;
-		suseconds_t gpu_us;
-
-		clFinish(clState->commandQueue);
-		gettimeofday(&gpu->tv_gpuend, NULL);
-		timersub(&gpu->tv_gpuend, &gpu->tv_gpustart, &diff);
-		gpu_us = diff.tv_sec * 1000000 + diff.tv_usec;
-		if (likely(gpu_us >= 0)) {
-			gpu->gpu_us_average = (gpu->gpu_us_average + gpu_us * 0.63) / 1.63;
-
-			/* Try to not let the GPU be out for longer than
-			 * opt_dynamic_interval in ms, but increase
-			 * intensity when the system is idle in dynamic mode */
-			if (gpu->gpu_us_average > dynamic_us) {
-				if (gpu->intensity > MIN_INTENSITY)
-					--gpu->intensity;
-			} else if (gpu->gpu_us_average < dynamic_us / 2) {
-				if (gpu->intensity < MAX_INTENSITY)
-					++gpu->intensity;
-			}
-		}
 	}
 
 	/* The amount of work scanned can fluctuate when intensity changes

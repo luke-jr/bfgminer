@@ -2,7 +2,78 @@
 This README contains extended details about FPGA mining with cgminer
 
 
-Bitforce
+ModMinerQuad (MMQ)
+------------------
+
+The mining bitstream does not survive a power cycle, so cgminer will upload
+it, if it needs to, before it starts mining
+
+-
+
+You must make sure you have an approriate firmware in your MMQ
+Read here for official details of changing the firmware:
+ http://wiki.btcfpga.com/index.php?title=Firmware
+
+The basics of changing the firmware are:
+ You need two short pieces of conductive wire if your MMQ doesn't have
+ buttons on the "RESET" and "ISP" pads on the backplane board
+ Cutting a small (metal) paper-clip in half works well for this
+
+ Join the 2 left pads of the "RESET" pad with wire and the led will dim
+ Without disconnecting the "RESET", join the 2 left pads of the "ISP" pad
+ with a wire and it will stay dim
+ Release "RESET" then release "ISP" and is should still be dim
+ Unplug the USB and when you plug it back in it will show up as a mass
+ storage device
+  Linux: (as one single line):
+   mcopy -i /dev/disk/by-id/usb-NXP_LPC134X_IFLASH_ISP000000000-0:0
+      modminer091012.bin ::/firmware.bin
+  Windows: delete the MSD device file firmware.bin and copy in the new one
+   rename the new file and put it under the same name 'firmware.bin'
+ Disconnect the USB correctly (so writes are flushed first)
+ Join and then disconnect "RESET" and then plug the USB back in and it's done
+
+Best to update to one of the latest 2 listed below if you don't already
+have one of them in your MMQ
+
+The current latest different firmware are:
+
+ Latest for support of normal or TLM bitstream:
+  http://btcfpga.com/files/firmware/modminer092612-TLM.bin
+
+ Latest with only normal bitstream support (Temps/HW Fix):
+  http://btcfpga.com/files/firmware/modminer091012.bin
+
+The code is currently tested on the modminer091012.bin firmware.
+This comment will be updated when others have been tested
+
+-
+
+On many linux distributions there is an app called modem-manager that
+may cause problems when it is enabled, due to opening the MMQ device
+and writing to it
+
+The problem will typically present itself by the flashing led on the
+backplane going out (no longer flashing) and it takes a power cycle to
+re-enable the MMQ firmware - which then can lead to the problem happening
+again
+
+You can either disable/uninstall modem-manager if you don't need it or:
+a (hack) solution to this is to blacklist the MMQ USB device in
+/lib/udev/rules.d/77-mm-usb-device-blacklist.rules
+
+Adding 2 lines like this (just above APC) should help
+# MMQ
+ATTRS{idVendor}=="ifc9", ATTRS{idProduct}=="0003", ENV{ID_MM_DEVICE_IGNORE}="1"
+
+The change will be lost and need to be re-done, next time you update the
+modem-manager software
+
+TODO: check that all MMQ's have the same product ID
+
+
+Bitforce (BFL)
+--------------
 
 --bfl-range         Use nonce range on bitforce devices if supported
 
@@ -37,7 +108,8 @@ the MH/s value reported with the changed firmware - and the MH/s reported
 will be less than the firmware speed since you lose work on every block change.
 
 
-Icarus
+Icarus (ICA)
+------------
 
 There are two hidden options in cgminer when Icarus support is compiled in:
 

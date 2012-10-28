@@ -1243,12 +1243,7 @@ void search(
     ZA[924] = (ZCh(ZA[922], ZA[920], ZA[918]) + ZA[923]) + ZR26(ZA[922]);
     
 #define FOUND (0x0F)
-
-#if defined(OCL1)
-	#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
-#else
-	#define SETFOUND(Xnonce) output[atomic_add(&output[FOUND], 1)] = Xnonce
-#endif
+#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
 
 #if defined(VECTORS4)
 	bool result = any(ZA[924] == 0x136032EDU);
