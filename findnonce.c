@@ -134,7 +134,7 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
 
 struct pc_data {
 	struct thr_info *thr;
-	struct work *work;
+	struct work work;
 	uint32_t res[MAXBUFFERS];
 	pthread_t pth;
 	int found;
@@ -144,7 +144,6 @@ static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
 	struct thr_info *thr = pcd->thr;
-	struct work *work = pcd->work;
 	unsigned int entry = 0;
 
 	pthread_detach(pthread_self());
@@ -164,7 +163,7 @@ static void *postcalc_hash(void *userdata)
 		uint32_t nonce = pcd->res[entry];
 
 		applog(LOG_DEBUG, "OCL NONCE %u found in slot %d", nonce, entry);
-		submit_nonce(thr, work, nonce);
+		submit_nonce(thr, &pcd->work, nonce);
 	}
 
 	free(pcd);
@@ -179,14 +178,9 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		applog(LOG_ERR, "Failed to malloc pc_data in postcalc_hash_async");
 		return;
 	}
-	pcd->work = calloc(1, sizeof(struct work));
-	if (unlikely(!pcd->work)) {
-		applog(LOG_ERR, "Failed to malloc work in postcalc_hash_async");
-		return;
-	}
 
 	pcd->thr = thr;
-	memcpy(pcd->work, work, sizeof(struct work));
+	memcpy(&pcd->work, work, sizeof(struct work));
 	memcpy(&pcd->res, res, BUFFERSIZE);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
