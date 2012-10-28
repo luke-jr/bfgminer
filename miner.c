@@ -1166,11 +1166,7 @@ static struct opt_table opt_config_table[] = {
 			"Do not automatically disable pools that continually reject shares"),
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
-#ifdef HAVE_OPENCL
 			"Do not attempt to restart devices that hang or BFGMiner if it crashes"
-#else
-			opt_hidden
-#endif
 	),
 	OPT_WITHOUT_ARG("--no-stratum",
 			opt_set_invbool, &want_stratum,
