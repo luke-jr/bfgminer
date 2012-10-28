@@ -488,7 +488,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 		hashes = calc_hashes(fpga, &tv_now);
 		if (thr->work_restart || hashes >= 0xf0000000)
 			break;
-		usleep(1000);
+		usleep(10000);
 		hashes = calc_hashes(fpga, &tv_now);
 		if (thr->work_restart || hashes >= 0xf0000000)
 			break;
