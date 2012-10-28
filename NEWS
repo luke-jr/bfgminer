@@ -3,7 +3,8 @@ BFGMiner Version 2.9.0 - Future
 - Upgrade libblkmaker to 0.2.0
 - Bugfix: Build correct pay-to-scripthash script
 - Implement --coinbase-addr for solo mining
-- x6500: Since we program in about a minute now, only report status verbosely every 25%
+- x6500: Since we program in about a minute now, only report status verbosely
+every 25%
 - x6500: Poll nonce less often since USB latency slows us down anyway
 - jtag: Avoid writing an extra readback byte when we are ignoring tdo anyway
 - ft232r: Set output buffer size to 4096 bytes
@@ -16,8 +17,10 @@ BFGMiner Version 2.9.0 - Future
 - jtag: Optimized implementation of JTAG reads to workaround ft232r slowness
 - x6500: Try nonce with previous work if it is wrong for current
 - x6500: Ensure ft232r buffer is flushed to change registers
-- x6500: Start clock speed off at 180, and extra debugging for x6500_set_register
-- x6500: When programming, poll each FPGA status individually since they might not be ready at the same time
+- x6500: Start clock speed off at 180, and extra debugging for
+x6500_set_register
+- x6500: When programming, poll each FPGA status individually since they might
+not be ready at the same time
 - x6500: Various tweaks and hacks to get mining working
 - Bugfix: x6500: Remove erroneous bitendianflip
 - Bugfix: jtag: Handle ftdi-common environmental stuff properly
