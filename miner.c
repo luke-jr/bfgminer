@@ -5845,6 +5845,10 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			       cgpu->api->name, cgpu->device_id);
 			++hw_errors;
 			++thr->cgpu->hw_errors;
+
+			if (thr->cgpu->api->hw_error)
+				thr->cgpu->api->hw_error(thr);
+
 			return false;
 		}
 		case TNR_HIGH:
