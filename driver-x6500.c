@@ -7,10 +7,13 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
 #include <sys/time.h>
 
 #include <libusb-1.0/libusb.h>
 
+#include "compat.h"
 #include "dynclock.h"
 #include "jtag.h"
 #include "logging.h"

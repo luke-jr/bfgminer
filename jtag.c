@@ -9,6 +9,8 @@
 
 // NOTE: This code is based on code Luke-Jr wrote originally for LPC1343CodeBase
 
+#include "config.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
