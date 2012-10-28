@@ -4333,8 +4333,10 @@ static void *stratum_thread(void *userdata)
 		 * every minute so if we fail to receive any for 90 seconds we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		select(pool->sock + 1, &rd, NULL, NULL, &timeout);
-		s = recv_line(pool);
+		if (unlikely(select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1))
+			s = NULL;
+		else
+			s = recv_line(pool);
 		if (!s) {
 			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
