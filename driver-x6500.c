@@ -23,8 +23,8 @@
 // NOTE: X6500_BITSTREAM_USERID is bitflipped
 #define X6500_BITSTREAM_USERID "\x40\x20\x24\x42"
 #define X6500_MINIMUM_CLOCK    2
-#define X6500_DEFAULT_CLOCK  180
-#define X6500_MAXIMUM_CLOCK  180
+#define X6500_DEFAULT_CLOCK  190
+#define X6500_MAXIMUM_CLOCK  250
 
 struct device_api x6500_api;
 
@@ -451,13 +451,11 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	struct jtag_port *jtag = &fpga->jtag;
 	char fpgaid = thr->device_thread;
 
-	struct timeval tv_now, tv_dclk, tv_delta;
+	struct timeval tv_now;
 	int64_t hashes;
 	uint32_t nonce;
 	bool bad;
 	int imm_bad_nonces = 0, imm_nonces = 0;
-
-	gettimeofday(&tv_dclk, NULL);
 
 	while (1) {
 		mutex_lock(&x6500->device_mutex);
@@ -487,15 +485,6 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 			}
 		}
 
-		timersub(&tv_now, &tv_dclk, &tv_delta);
-		if (tv_delta.tv_usec >= 250000) {
-			dclk_gotNonces(&fpga->dclk);
-			if (imm_bad_nonces)
-				dclk_errorCount(&fpga->dclk, ((double)imm_bad_nonces) / (double)imm_nonces);
-			imm_bad_nonces = imm_nonces = 0;
-			tv_dclk = tv_now;
-		}
-
 		hashes = calc_hashes(fpga, &tv_now);
 		if (thr->work_restart || hashes >= 0xf0000000)
 			break;
@@ -505,6 +494,9 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 			break;
 	}
 
+	dclk_gotNonces(&fpga->dclk);
+	if (imm_bad_nonces)
+		dclk_errorCount(&fpga->dclk, ((double)imm_bad_nonces) / (double)imm_nonces);
 	dclk_preUpdate(&fpga->dclk);
 	dclk_updateFreq(&fpga->dclk, x6500_dclk_change_clock, thr);
 
