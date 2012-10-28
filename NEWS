@@ -1,11 +1,10 @@
 Version ??? - Future
 
+- ModMiner documentation
 - Time for dynamic is in microseconds, not ms.
 - x86_64 builds of mingw32 are not supported directly and should just configure
 as generic mingw32 builds since they're NOT 64 bit.
-- Cope with both ATI stream and AMD APP SDK roots being set when building.
 - Use 3 significant digits when suffix string is used and values are >1000.
-- MMQ new initialisation (that works) and clocking control
 - Get rid of unused warning for !scrypt.
 - Use select on stratum send to make sure the socket is writeable.
 - Cope with dval being zero in suffix_string and display a single decimal place
@@ -36,8 +35,10 @@ resolution on windows.
 conversions.
 - In opencl_free_work, make sure to still flush results in dynamic mode.
 - Align static arrays to 4 byte boundaries to appease ARM builds for stratum.
+- Update documentation.
 - Left align values that are suffix_string generated.
 - Share_diff should not be converting the work data to hex.
+- Update readme describing difficulty displayed on log lines.
 - Off by one error.
 - Prevent overflows of the port char array in extract_sockaddr.
 - Disable stratum detection with scrypt.
