@@ -2167,70 +2167,26 @@ static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 
 static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	char *ptr, *next;
-	int i, pr, prio = 0;
+	int i;
 
-	// TODO: all cgminer code needs a mutex added everywhere for change
-	//	access to total_pools and also parts of the pools[] array,
-	//	just copying total_pools here wont solve that
-
-	if (total_pools == 0) {
-		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
-		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
-		return;
-	}
-
-	bool pools_changed[total_pools];
-	int new_prio[total_pools];
-	for (i = 0; i < total_pools; ++i)
-		pools_changed[i] = false;
-
-	next = param;
-	while (next && *next) {
-		ptr = next;
-		next = strchr(ptr, ',');
-		if (next)
-			*(next++) = '\0';
-
-		i = atoi(ptr);
-		if (i < 0 || i >= total_pools) {
+	switch (prioritize_pools(param, &i)) {
+		case MSG_NOPOOL:
+			strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+			return;
+		case MSG_MISPID:
+			strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+			return;
+		case MSG_INVPID:
 			strcpy(io_buffer, message(MSG_INVPID, i, NULL, isjson));
 			return;
-		}
-
-		if (pools_changed[i]) {
+		case MSG_DUPPID:
 			strcpy(io_buffer, message(MSG_DUPPID, i, NULL, isjson));
 			return;
-		}
-
-		pools_changed[i] = true;
-		new_prio[i] = prio++;
+		case MSG_POOLPRIO:
+		default:
+			strcpy(io_buffer, message(MSG_POOLPRIO, 0, NULL, isjson));
+			return;
 	}
-
-	// Only change them if no errors
-	for (i = 0; i < total_pools; i++) {
-		if (pools_changed[i])
-			pools[i]->prio = new_prio[i];
-	}
-
-	// In priority order, cycle through the unchanged pools and append them
-	for (pr = 0; pr < total_pools; pr++)
-		for (i = 0; i < total_pools; i++) {
-			if (!pools_changed[i] && pools[i]->prio == pr) {
-				pools[i]->prio = prio++;
-				pools_changed[i] = true;
-				break;
-			}
-		}
-
-	if (current_pool()->prio)
-		switch_pools(NULL);
-
-	strcpy(io_buffer, message(MSG_POOLPRIO, 0, NULL, isjson));
 }
 
 static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
