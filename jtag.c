@@ -34,11 +34,12 @@ unsigned char jtag_clock_byte(struct jtag_port *jp, bool tms, bool tdi)
 // NOTE: The order of tms and tdi here are inverted from LPC1343CodeBase
 bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 {
+	unsigned char bufsz = tdo ? 3 : 2;
 	unsigned char buf[3];
 	memset(buf, jtag_clock_byte(jp, tms, tdi), sizeof(buf));
 	buf[2] =
 	buf[1] |= jp->tck;
-	if (ft232r_write_all(jp->a->ftdi, buf, sizeof(buf)) != sizeof(buf))
+	if (ft232r_write_all(jp->a->ftdi, buf, bufsz) != bufsz)
 		return false;
 	jp->a->state = buf[2];
 	if (jp->a->async) {
@@ -49,7 +50,7 @@ bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 #endif
 		return true;
 	}
-	jp->a->bufread += sizeof(buf);
+	jp->a->bufread += bufsz;
 	if (jp->a->bufread < FTDI_READ_BUFFER_SIZE - sizeof(buf) && !tdo) {
 		// By deferring unnecessary reads, we can avoid some USB latency
 #ifdef DEBUG_JTAG_CLOCK
@@ -73,13 +74,16 @@ bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 	unsigned char rbuf[rbufsz];
 	if (ft232r_read_all(jp->a->ftdi, rbuf, rbufsz) != rbufsz)
 		return false;
-	if (tdo)
+	if (tdo) {
 		*tdo = (rbuf[rbufsz-1] & jp->tdo);
 #ifdef DEBUG_JTAG_CLOCK
 	char *x = bin2hex(rbuf, rbufsz);
 	applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=%d (%u:%s)", jp, (unsigned)rbuf[rbufsz-1], (int)tms, (int)tdi, (int)(bool)(rbuf[rbufsz-1] & jp->tdo), (unsigned)rbufsz, x);
 	free(x);
+	} else {
+		applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=?ignore", jp, (unsigned)buf[2], (int)tms, (int)tdi);
 #endif
+	}
 	return true;
 }
 
