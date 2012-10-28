@@ -662,10 +662,10 @@ static char *set_rr(enum pool_strategy *strategy)
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
 {
-	if (opt_scrypt)
+	if (!extract_sockaddr(pool, url))
 		return false;
 
-	if (!extract_sockaddr(pool, url))
+	if (opt_scrypt)
 		return false;
 
 	if (!strncasecmp(url, "stratum+tcp://", 14)) {
@@ -2012,13 +2012,13 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	if (pool->has_stratum) {
 		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
-			pool->stratum_url, pool->rpc_user);
+			pool->sockaddr_url, pool->rpc_user);
 	} else if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else {
 		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
-			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
+			pool->sockaddr_url, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best share: %s   ", current_hash, blocktime, best_share);
@@ -3553,34 +3553,32 @@ next_submit:
 	}
 
 	if (work->stratum) {
-		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
 		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
 		char *noncehex;
 		char s[1024];
 
-		memcpy(&sshare->work, work, sizeof(struct work));
-
 		/* Give the stratum share a unique id */
-		mutex_lock(&sshare_lock);
-		sshare->id = swork_id++;
-		HASH_ADD_INT(stratum_shares, id, sshare);
-		mutex_unlock(&sshare_lock);
-
+		swork_id++;
 		nonce = *((uint32_t *)(work->data + 76));
 		noncehex = bin2hex((const unsigned char *)&nonce, 4);
 
 		memset(s, 0, 1024);
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
+			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, swork_id);
 		free(noncehex);
 
 		applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->stratum_url, s);
 
-		if (unlikely(!stratum_send(pool, s, strlen(s)))) {
+		if (likely(stratum_send(pool, s, strlen(s)))) {
+			struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
+
+			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
+			memcpy(&sshare->work, work, sizeof(struct work));
+
 			mutex_lock(&sshare_lock);
-			HASH_DEL(stratum_shares, sshare);
+			sshare->id = swork_id;
+			HASH_ADD_INT(stratum_shares, id, sshare);
 			mutex_unlock(&sshare_lock);
-			free(sshare);
 		}
 
 		goto out;
