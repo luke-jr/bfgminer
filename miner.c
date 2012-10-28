@@ -3608,7 +3608,7 @@ next_submit:
 	}
 
 	if (work->stratum) {
-		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
+		uint32_t nonce;
 		char *noncehex;
 		char s[1024];
 
@@ -4029,7 +4029,7 @@ static void restart_threads(void)
 		fd = thr->_work_restart_fd_w;
 		thr->work_restart = true;
 		if (fd != -1)
-			write(fd, "\0", 1);
+			(void)write(fd, "\0", 1);
 	}
 
 	mutex_lock(&restart_lock);
@@ -6469,7 +6469,7 @@ retry_pool:
 
 		struct work *work = make_work();
 		work->pool = pool;
-		const char *rpc_req;
+		char *rpc_req;
 		rpc_req = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
 		if (!rpc_req)
 			goto lpfail;
