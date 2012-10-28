@@ -55,6 +55,10 @@
 #include "driver-opencl.h"
 #include "bench_block.h"
 
+#ifdef USE_X6500
+#include "ft232r.h"
+#endif
+
 #if defined(unix)
 	#include <errno.h>
 	#include <fcntl.h>
@@ -68,7 +72,7 @@
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
 #	define USE_FPGA
 #	define USE_FPGA_SERIAL
-#elif defined(USE_ZTEX)
+#elif defined(USE_ZTEX) || defined(USE_X6500)
 #	define USE_FPGA
 #endif
 
@@ -6387,6 +6391,10 @@ extern struct device_api icarus_api;
 extern struct device_api modminer_api;
 #endif
 
+#ifdef USE_X6500
+extern struct device_api x6500_api;
+#endif
+
 #ifdef USE_ZTEX
 extern struct device_api ztex_api;
 #endif
@@ -6469,6 +6477,9 @@ int main(int argc, char *argv[])
 	initial_args[argc] = NULL;
 #ifdef HAVE_LIBUSB
         libusb_init(NULL);
+#endif
+#ifdef USE_X6500
+	ft232r_scan();
 #endif
 
 	mutex_init(&hash_lock);
@@ -6674,6 +6685,11 @@ int main(int argc, char *argv[])
 		modminer_api.api_detect();
 #endif
 
+#ifdef USE_X6500
+	if (!opt_scrypt)
+		x6500_api.api_detect();
+#endif
+
 #ifdef USE_ZTEX
 	if (!opt_scrypt)
 		ztex_api.api_detect();
@@ -6681,6 +6697,10 @@ int main(int argc, char *argv[])
 
 #ifdef WANT_CPUMINE
 	cpu_api.api_detect();
+#endif
+
+#ifdef USE_X6500
+	ft232r_scan_free();
 #endif
 
 	for (i = 0; i < total_devices; ++i)

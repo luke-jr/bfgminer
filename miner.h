@@ -377,6 +377,9 @@ struct cgpu_info {
 		struct libztex_device *device_ztex;
 #endif
 		int device_fd;
+#ifdef USE_X6500
+		struct ft232r_device_handle *device_ft232r;
+#endif
 	};
 #ifdef USE_BITFORCE
 	struct timeval work_start_tv;

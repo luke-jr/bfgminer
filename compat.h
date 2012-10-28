@@ -1,6 +1,16 @@
 #ifndef __COMPAT_H__
 #define __COMPAT_H__
 
+#include "config.h"
+
+// NOTE: Nested preprocessor checks since the latter isn't defined at all without the former
+#ifdef HAVE_LIBUSB
+#	if ! HAVE_DECL_LIBUSB_ERROR_NAME
+		static char my_libusb_error_name_buf[0x10];
+#		define libusb_error_name(x) (sprintf(my_libusb_error_name_buf, "%d", x), my_libusb_error_name_buf)
+#	endif
+#endif
+
 #ifdef WIN32
 #include <errno.h>
 #include <time.h>

@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 struct device_api;
+struct cgpu_info;
 
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
@@ -46,5 +47,6 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 #define serial_close(fd)  close(fd)
 
 extern FILE *open_bitstream(const char *dname, const char *filename);
+extern FILE *open_xilinx_bitstream(struct cgpu_info *cgpu, const char *fwfile, unsigned long *out_len);
 
 #endif
