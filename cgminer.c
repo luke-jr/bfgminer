@@ -1496,7 +1496,7 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 		sprintf(suffix, "M");
 	} else if (val >= kilo) {
 		dval = (double)val / dkilo;
-		sprintf(suffix, "K");
+		sprintf(suffix, "k");
 	} else {
 		dval = val;
 		decimal = false;
