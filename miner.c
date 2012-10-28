@@ -3892,8 +3892,6 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 
 	get_timestamp(blocktime, &block_timeval);
 
-	if (unlikely(!current_hash))
-		quit (1, "set_curblock OOM");
 	applog(LOG_INFO, "New block: %s...", current_hash);
 }
 
