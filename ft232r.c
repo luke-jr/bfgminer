@@ -198,7 +198,7 @@ struct ft232r_device_handle *ft232r_open(libusb_device *dev)
 	}
 	ftdi->i = altcfg->endpoint[0].bEndpointAddress;
 	ftdi->o = altcfg->endpoint[1].bEndpointAddress;
-	ftdi->osz = altcfg->endpoint[1].wMaxPacketSize;
+	ftdi->osz = 0x1000;
 	ftdi->obuf = malloc(ftdi->osz);
 	libusb_free_config_descriptor(cfg);
 
