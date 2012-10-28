@@ -244,18 +244,18 @@ const
 #endif
 bool curses_active;
 
-static char current_block[37];
+static char current_block[40];
 static char *current_hash;
 static uint32_t current_block_id;
 char *current_fullhash;
 static char datestamp[40];
 static char blocktime[30];
 struct timeval block_timeval;
-static char best_share[6]="0";
+static char best_share[8] = "0";
 static uint64_t best_diff = 0;
 
 struct block {
-	char hash[37];
+	char hash[40];
 	UT_hash_handle hh;
 	int block_no;
 };
@@ -2015,7 +2015,7 @@ static void curses_print_status(void)
 			pool->rpc_url, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best diff: %s", current_hash, blocktime, best_share);
+	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best share: %s   ", current_hash, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -2432,11 +2432,16 @@ static uint64_t share_diff(const struct work *work)
 static uint32_t scrypt_diff(const struct work *work)
 {
 	const uint32_t scrypt_diffone = 0x0000fffful;
-	uint32_t d32 = work->outputhash;
+	uint32_t d32 = work->outputhash, ret;
 
 	if (unlikely(!d32))
 		d32 = 1;
-	return scrypt_diffone / d32;
+	ret = scrypt_diffone / d32;
+	if (ret > best_diff) {
+		best_diff = ret;
+		suffix_string(best_diff, best_share, 0);
+	}
+	return ret;
 }
 
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
