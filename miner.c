@@ -2285,7 +2285,6 @@ bool log_curses_only(int prio, const char *f, va_list ap)
 void clear_logwin(void)
 {
 	if (curses_active_locked()) {
-		erase();
 		wclear(logwin);
 		unlock_curses();
 	}
