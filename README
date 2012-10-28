@@ -344,6 +344,7 @@ The following options are available while running with a single keypress:
 P gives you:
 
 Current pool management strategy: Failover
+[F]ailover only disabled
 [A]dd pool [R]emove pool [D]isable pool [E]nable pool
 [C]hange management strategy [S]witch pool [I]nformation
 
@@ -355,14 +356,21 @@ S gives you:
 [S]cantime: 60
 [E]xpiry: 120
 [R]etries: -1
-[P]ause: 5
 [W]rite config file
+[B]FGMiner restart
 
 
 D gives you:
 
-Toggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug
-[L]og interval [C]lear
+[N]ormal [C]lear [S]ilent mode (disable all output)
+[D]ebug:off
+[P]er-device:off
+[Q]uiet:off
+[V]erbose:off
+[R]PC debug:off
+[W]orkTime details:off
+co[M]pact: off
+[L]og interval:5
 
 
 Q quits the application.
