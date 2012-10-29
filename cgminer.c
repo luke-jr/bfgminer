@@ -2934,6 +2934,8 @@ static void *submit_work_thread(void *userdata)
 		if (likely(stratum_send(pool, s, strlen(s)))) {
 			struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
 
+			if (pool_tclear(pool, &pool->submit_fail))
+					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
 			memcpy(&sshare->work, work, sizeof(struct work));
 
@@ -2941,6 +2943,13 @@ static void *submit_work_thread(void *userdata)
 			sshare->id = swork_id;
 			HASH_ADD_INT(stratum_shares, id, sshare);
 			mutex_unlock(&sshare_lock);
+		} else {
+			applog(LOG_INFO, "Failed to submit stratum share");
+			if (!pool_tset(pool, &pool->submit_fail)) {
+				total_ro++;
+				pool->remotefail_occasions++;
+				applog(LOG_WARNING, "Pool %d share submission failure", pool->pool_no);
+			}
 		}
 
 		goto out;
