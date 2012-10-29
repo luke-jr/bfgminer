@@ -232,7 +232,6 @@ static struct list_head submit_waiting;
 
 int hw_errors;
 int total_accepted, total_rejected, total_diff1;
-float total_accepted_weighed;
 int total_getworks, total_stale, total_discarded;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
 static int total_queued, staged_rollable;
@@ -2113,7 +2112,7 @@ static void curses_print_devstatus(int thr_id)
 		return;
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
-	cgpu->utility_diff1 = cgpu->accepted_weighed / total_secs * 60;
+	cgpu->utility_diff1 = cgpu->diff_accepted / total_secs * 60;
 
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
@@ -2374,9 +2373,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 
 	if (json_is_null(res) || json_is_true(res)) {
 		cgpu->accepted++;
-		cgpu->accepted_weighed += work->work_difficulty;
 		total_accepted++;
-		total_accepted_weighed += work->work_difficulty;
 		pool->accepted++;
 		cgpu->diff_accepted += work->work_difficulty;
 		total_diff_accepted += work->work_difficulty;
@@ -2646,7 +2643,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	share_result(val, res, err, work, hashshow, resubmit, worktime);
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
-	cgpu->utility_diff1 = cgpu->accepted_weighed / total_secs * 60;
+	cgpu->utility_diff1 = cgpu->diff_accepted / total_secs * 60;
 
 	if (!opt_realquiet)
 		print_status(thr_id);
@@ -5227,7 +5224,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		(char*[]){cHr, aHr, uHr},
 		1e6*rolling,
 		1e6*total_mhashes_done / total_secs,
-		utility_to_hashrate(total_accepted_weighed / (total_secs ?: 1) * 60),
+		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
 	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
