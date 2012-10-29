@@ -1090,6 +1090,13 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	}
 
 	mutex_lock(&pool->pool_lock);
+	free(pool->swork.job_id);
+	free(pool->swork.prev_hash);
+	free(pool->swork.coinbase1);
+	free(pool->swork.coinbase2);
+	free(pool->swork.bbversion);
+	free(pool->swork.nbit);
+	free(pool->swork.ntime);
 	pool->swork.job_id = job_id;
 	pool->swork.prev_hash = prev_hash;
 	pool->swork.coinbase1 = coinbase1;
