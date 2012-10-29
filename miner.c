@@ -6928,6 +6928,7 @@ static void print_summary(void)
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
 	applog(LOG_WARNING, "Average hashrate: %.1f Megahash/s", total_mhashes_done / total_secs);
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
+	applog(LOG_WARNING, "Best share difficulty: %s", best_share);
 	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
 	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
