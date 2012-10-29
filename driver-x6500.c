@@ -106,7 +106,7 @@ retry:
 static
 uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
 {
-	uint8_t buf[4];
+	uint8_t buf[4] = {0};
 	jtag_write(jp, JTAG_REG_IR, "\x40", 6);
 	int2bits(addr, &buf[0], 4);
 	checksum(buf, 5);
@@ -323,7 +323,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	struct jtag_port *jp;
 	int fpgaid = thr->device_thread;
 	uint8_t pinoffset = fpgaid ? 0x10 : 1;
-	unsigned char buf[4];
+	unsigned char buf[4] = {0};
 	int i;
 	
 	if (!ftdi)
