@@ -2785,13 +2785,15 @@ static void get_benchmark_work(struct work *work)
 	calc_diff(work, 0);
 }
 
+static void clear_work(struct work *);
+
 static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const char *lpid)
 {
 	char *rpc_req;
 
+	clear_work(work);
 	switch (proto) {
 		case PLP_GETWORK:
-			work->tmpl = NULL;
 			return strdup(getwork_rpc_req);
 		case PLP_GETBLOCKTEMPLATE:
 			work->tmpl_refcount = malloc(sizeof(*work->tmpl_refcount));
@@ -2930,7 +2932,7 @@ static struct work *make_work(void)
 	return work;
 }
 
-static void free_work(struct work *work)
+static void clear_work(struct work *work)
 {
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -2940,8 +2942,15 @@ static void free_work(struct work *work)
 		if (free_tmpl) {
 			blktmpl_free(work->tmpl);
 			free(work->tmpl_refcount);
+			work->tmpl = NULL;
+			work->tmpl_refcount = NULL;
 		}
 	}
+}
+
+static void free_work(struct work *work)
+{
+	clear_work(work);
 	free(work);
 }
 
