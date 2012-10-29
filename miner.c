@@ -3608,15 +3608,21 @@ next_submit:
 	}
 
 	if (work->stratum) {
+		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
 		uint32_t nonce;
 		char *noncehex;
 		char s[1024];
 
 		/* Give the stratum share a unique id */
 		swork_id++;
+		memcpy(&sshare->work, work, sizeof(struct work));
+		mutex_lock(&sshare_lock);
+		sshare->id = swork_id;
+		HASH_ADD_INT(stratum_shares, id, sshare);
+		mutex_unlock(&sshare_lock);
+
 		nonce = *((uint32_t *)(work->data + 76));
 		noncehex = bin2hex((const unsigned char *)&nonce, 4);
-
 		memset(s, 0, 1024);
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, swork_id);
@@ -3625,19 +3631,16 @@ next_submit:
 		applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->stratum_url, s);
 
 		if (likely(stratum_send(pool, s, strlen(s)))) {
-			struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
-
 			if (pool_tclear(pool, &pool->submit_fail))
 					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
-			memcpy(&sshare->work, work, sizeof(struct work));
-
-			mutex_lock(&sshare_lock);
-			sshare->id = swork_id;
-			HASH_ADD_INT(stratum_shares, id, sshare);
-			mutex_unlock(&sshare_lock);
 		} else {
 			applog(LOG_INFO, "Failed to submit stratum share");
+			mutex_lock(&sshare_lock);
+			HASH_DEL(stratum_shares, sshare);
+			mutex_unlock(&sshare_lock);
+			free(sshare);
+
 			if (!pool_tset(pool, &pool->submit_fail)) {
 				total_ro++;
 				pool->remotefail_occasions++;
