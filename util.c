@@ -218,36 +218,39 @@ out:
 
 static int keep_sockalive(SOCKETTYPE fd)
 {
-	int tcp_keepidle = 60;
-	int tcp_keepintvl = 60;
+	const int tcp_keepidle = 60;
+	const int tcp_keepintvl = 60;
+	const int keepalive = 1;
+	int ret = 0;
+
 
 #ifndef WIN32
-	int keepalive = 1;
-	int tcp_keepcnt = 5;
+	const int tcp_keepcnt = 5;
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
-		return 1;
+		ret = 1;
 
 # ifdef __linux
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt))))
-		return 1;
+		ret = 1;
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle))))
-		return 1;
+		ret = 1;
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl))))
-		return 1;
+		ret = 1;
 # endif /* __linux */
 # ifdef __APPLE_CC__
 
 	if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl))))
-		return 1;
+		ret = 1;
 
 # endif /* __APPLE_CC__ */
 
 #else /* WIN32 */
 
+	const int zero = 0;
 	struct tcp_keepalive vals;
 	vals.onoff = 1;
 	vals.keepalivetime = tcp_keepidle * 1000;
@@ -255,12 +258,20 @@ static int keep_sockalive(SOCKETTYPE fd)
 
 	DWORD outputBytes;
 
-	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
-		return 1;
+	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&keepalive, sizeof(keepalive))))
+		ret = 1;
 
+	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
+		ret = 1;
+
+	/* Windows happily submits indefinitely to the send buffer blissfully
+	 * unaware nothing is getting there without gracefully failing unless
+	 * we disable the send buffer */
+	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char *)&zero, sizeof(zero))))
+		ret = 1;
 #endif /* WIN32 */
 
-	return 0;
+	return ret;
 }
 
 int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
@@ -871,8 +882,8 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	while (len > 0 ) {
 		struct timeval timeout = {0, 0};
-		CURLcode rc = CURLE_SEND_ERROR;
 		size_t sent = 0;
+		CURLcode rc;
 		fd_set wd;
 
 		FD_ZERO(&wd);
@@ -881,8 +892,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
 			return false;
 		}
-		if (likely(pool->stratum_curl))
-			rc = curl_easy_send(pool->stratum_curl, s + ssent, len, &sent);
+		rc = curl_easy_send(pool->stratum_curl, s + ssent, len, &sent);
 		if (rc != CURLE_OK) {
 			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
 			return false;
@@ -915,8 +925,7 @@ static void clear_sock(struct pool *pool)
 	mutex_lock(&pool->stratum_lock);
 	/* Ignore return code of curl_easy_recv since we're just clearing
 	 * anything in the socket if it's still alive */
-	if (likely(pool->stratum_curl))
-		curl_easy_recv(pool->stratum_curl, pool->sockbuf, RECVSIZE, &n);
+	curl_easy_recv(pool->stratum_curl, pool->sockbuf, RECVSIZE, &n);
 	mutex_unlock(&pool->stratum_lock);
 	strcpy(pool->sockbuf, "");
 }
@@ -952,9 +961,9 @@ char *recv_line(struct pool *pool)
 	size_t n = 0;
 
 	if (!strstr(pool->sockbuf, "\n")) {
-		CURLcode rc = CURLE_RECV_ERROR;
 		char s[RBUFSIZE];
 		size_t sspace;
+		CURLcode rc;
 
 		if (!sock_full(pool, true)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
@@ -963,8 +972,7 @@ char *recv_line(struct pool *pool)
 		memset(s, 0, RBUFSIZE);
 
 		mutex_lock(&pool->stratum_lock);
-		if (likely(pool->stratum_curl))
-			rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
+		rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
 		mutex_unlock(&pool->stratum_lock);
 
 		if (rc != CURLE_OK) {
@@ -1304,7 +1312,6 @@ bool initiate_stratum(struct pool *pool)
 
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
-
 	if (!pool->stratum_curl) {
 		pool->stratum_curl = curl_easy_init();
 		if (unlikely(!pool->stratum_curl))
@@ -1317,6 +1324,7 @@ bool initiate_stratum(struct pool *pool)
 	memset(s, 0, RBUFSIZE);
 	sprintf(s, "http://%s:%s", pool->sockaddr_url, pool->stratum_port);
 
+	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 60);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
@@ -1404,15 +1412,8 @@ out:
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
-	} else {
-		applog(LOG_DEBUG, "Initiate stratum failed, disabling stratum_active");
-		mutex_lock(&pool->stratum_lock);
-		if (curl) {
-			curl_easy_cleanup(curl);
-			pool->stratum_curl = NULL;
-		}
-		mutex_unlock(&pool->stratum_lock);
-	}
+	} else
+		applog(LOG_DEBUG, "Initiate stratum failed");
 
 	return ret;
 }
