@@ -1,3 +1,33 @@
+Version 2.8.6 - October 29, 2012
+
+- Shorten the initiate stratum connect timeout to 30 seconds.
+- Shorten the stratum timeout on read to 90 seconds to detect unresponsive pool.
+- Display best share difficulty on exit.
+- Make stratum socket fail more robust on windows by disabling the send buffer.
+- Reuse the same curl handle forcing a new connection instead of risking
+derefencing.
+- Add information about submission failure to stratum send.
+- Only add stratum share to database if we succeeded in submitting it, with a
+debug output saying it succeeded.
+- Use keepalive with stratum sockets to improve its ability to detect broken
+connections.
+- Show only the URL in the status bar to avoid long prefixes making for extra
+long lines.
+- Display compact status in menu and update README to reflect current menu
+entries.
+- Add a compact display mode that does not list per device statistics in the
+status window.
+- Add blank spaces after best share displayed.
+- Round a few static string arrays up to 4 byte boundaries for ARM.
+- Display best share diff for scrypt as well.
+- Show the best diff share as "best share" and add info to the README.
+- Display the best diff share submitted so far.
+- Redundant check.
+- The work struct pointer in struct pc_data in findnonce is never freed yet
+there is no need to allocate it separately so make struct work a static part of
+the struct pc_data. s
+
+
 Version 2.8.5 - October 23, 2012
 
 - Handle crash exceptions by trying to restart cgminer unless the --no-restart
