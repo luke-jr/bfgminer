@@ -1341,7 +1341,7 @@ bool initiate_stratum(struct pool *pool)
 	sprintf(s, "http://%s:%s", pool->sockaddr_url, pool->stratum_port);
 
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 60);
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, s);
