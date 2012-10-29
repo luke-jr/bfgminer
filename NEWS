@@ -1,5 +1,9 @@
 BFGMiner Version 2.9.1 - Future
 
+- Fail on select() failing in stratum thread without needing to attempt
+recv_line.
+- Add share to stratum database before sending it again in case we get a
+response from the pool before it's added.
 - Bugfix: modminer: Check that we have a valid fd before trying to start work
 - Shorten the initiate stratum connect timeout to 30 seconds.
 - Shorten the stratum timeout on read to 90 seconds to detect unresponsive pool.
