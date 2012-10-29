@@ -575,6 +575,15 @@ fd_set fds;
 
 	mutex_lock(&modminer->device_mutex);
 	fd = modminer->device_fd;
+
+	if (unlikely(fd == -1)) {
+		if (!modminer_reopen(modminer)) {
+			mutex_unlock(&modminer->device_mutex);
+			return false;
+		}
+		fd = modminer->device_fd;
+	}
+
 	if (46 != write(fd, state->next_work_cmd, 46))
 		bailout2(LOG_ERR, "%s %u.%u: Error writing (start work)", modminer->api->name, modminer->device_id, fpgaid);
 	gettimeofday(&state->tv_workstart, NULL);
