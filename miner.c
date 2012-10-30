@@ -5455,6 +5455,8 @@ static bool stratum_works(struct pool *pool)
 	if (!initiate_stratum(pool))
 		return false;
 
+	detect_algo = 2;
+
 	return true;
 }
 
