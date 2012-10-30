@@ -2789,8 +2789,6 @@ static void get_benchmark_work(struct work *work)
 	calc_diff(work, 0);
 }
 
-static void clear_work(struct work *);
-
 static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const char *lpid)
 {
 	char *rpc_req;
@@ -2936,7 +2934,7 @@ static struct work *make_work(void)
 	return work;
 }
 
-static void clear_work(struct work *work)
+void clear_work(struct work *work)
 {
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -3292,7 +3290,7 @@ static void roll_work(struct work *work)
 	work->id = total_work++;
 }
 
-static void workcpy(struct work *dest, const struct work *work)
+void workcpy(struct work *dest, const struct work *work)
 {
 	memcpy(dest, work, sizeof(*dest));
 
@@ -3623,7 +3621,7 @@ next_submit:
 		char *noncehex;
 		char s[1024];
 
-		memcpy(&sshare->work, work, sizeof(struct work));
+		workcpy(&sshare->work, work);
 		mutex_lock(&sshare_lock);
 		/* Give the stratum share a unique id */
 		sshare->id = swork_id++;
@@ -3648,6 +3646,7 @@ next_submit:
 			mutex_lock(&sshare_lock);
 			HASH_DEL(stratum_shares, sshare);
 			mutex_unlock(&sshare_lock);
+			clear_work(&sshare->work);
 			free(sshare);
 
 			if (!pool_tset(pool, &pool->submit_fail)) {
@@ -5326,6 +5325,7 @@ static bool parse_stratum_response(char *s)
 		goto out;
 	}
 	stratum_share_result(val, res_val, err_val, sshare);
+	clear_work(&sshare->work);
 	free(sshare);
 
 	ret = true;

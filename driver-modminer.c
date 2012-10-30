@@ -720,8 +720,9 @@ modminer_scanhash(struct thr_info*thr, struct work*work, int64_t __maybe_unused 
 		state->work_running = true;
 
 	if (startwork) {
+		clear_work(&state->last_work);
 		memcpy(&state->last_work, &state->running_work, sizeof(state->last_work));
-		memcpy(&state->running_work, work, sizeof(state->running_work));
+		workcpy(&state->running_work, work);
 		if (!modminer_start_work(thr))
 			return -1;
 	}
