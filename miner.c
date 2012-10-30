@@ -5163,6 +5163,8 @@ tryagain:
 		}
 
 		free_work(work);
+		if (val)
+			json_decref(val);
 
 retry_stratum:
 		/* We create the stratum thread for each pool just after
