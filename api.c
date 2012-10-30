@@ -1021,7 +1021,6 @@ void api(void)
 							}
 						}
 					}
-					json_decref(json_config);
 				}
 
 				if (!did)
@@ -1033,6 +1032,9 @@ void api(void)
 							break;
 						}
 					}
+
+				if (isjson)
+					json_decref(json_config);
 
 				if (!did) {
 					strcpy(io_buffer, message(MSG_INVCMD, 0, isjson));
