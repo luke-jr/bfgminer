@@ -5139,6 +5139,8 @@ keepwaiting:
 			pool_resus(pool);
 	}
 
+	clear_work(work);
+	// NOTE: Since we are moving the references (if any), use free instead of free_work here
 	memcpy(work, work_heap, sizeof(struct work));
 	free(work_heap);
 
