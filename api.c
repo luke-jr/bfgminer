@@ -1021,6 +1021,7 @@ void api(void)
 							}
 						}
 					}
+					json_decref(json_config);
 				}
 
 				if (!did)
