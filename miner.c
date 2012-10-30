@@ -4495,7 +4495,6 @@ tryagain:
 			goto badwork;
 
 		rc = work_decode(res, work);
-		json_decref(val);
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -4510,6 +4509,7 @@ tryagain:
 			gettimeofday(&pool->tv_idle, NULL);
 		} else {
 badwork:
+			json_decref(val);
 			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			if (PLP_NONE != (proto = pool_protocol_fallback(proto)))
@@ -4517,6 +4517,7 @@ badwork:
 			free_work(work);
 			goto out;
 		}
+		json_decref(val);
 
 		if (pool->lp_url)
 			goto out;
