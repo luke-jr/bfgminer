@@ -152,6 +152,8 @@ json_t *json_rpc_call(const char *url, const char *userpass, const char *rpc_req
 	    (err_val && !json_is_null(err_val))) {
 		char *s;
 
+		json_decref(val);
+
 		if (err_val)
 			s = json_dumps(err_val, JSON_INDENT(3));
 		else
