@@ -132,6 +132,7 @@ int opt_log_interval = 5;
 int opt_queue = 1;
 int opt_scantime = 60;
 int opt_expiry = 120;
+int opt_expiry_lp = 3600;
 int opt_bench_algo = -1;
 static const bool opt_time = true;
 unsigned long long global_hashrate;
@@ -1122,7 +1123,10 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--expiry|-E",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
-		     "Upper bound on how many seconds after getting work we consider a share from it stale"),
+		     "Upper bound on how many seconds after getting work we consider a share from it stale (w/o longpoll active)"),
+	OPT_WITH_ARG("--expiry-lp",
+		     set_int_0_to_9999, opt_show_intval, &opt_expiry_lp,
+		     "Upper bound on how many seconds after getting work we consider a share from it stale (with longpoll active)"),
 	OPT_WITHOUT_ARG("--failover-only",
 			opt_set_bool, &opt_fail_only,
 			"Don't leak work to backup pools when primary pool is lagging"),
@@ -2364,6 +2368,8 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
+static bool test_work_current(struct work *);
+
 /* Theoretically threads could race when modifying accepted and
  * rejected values but the chance of two submits completing at the
  * same time is zero so there is no point adding extra locking */
@@ -2411,6 +2417,22 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			applog(LOG_WARNING, "Rejecting pool %d now accepting shares, re-enabling!", pool->pool_no);
 			enable_pool(pool);
 			switch_pools(NULL);
+		}
+
+		if (unlikely(work->block)) {
+			// Force moving on to this new block :)
+			struct work fakework;
+			memset(&fakework, 0, sizeof(fakework));
+			fakework.pool = work->pool;
+
+			// Copy block version, bits, and time from share
+			memcpy(&fakework.data[ 0], &work->data[ 0], 4);
+			memcpy(&fakework.data[68], &work->data[68], 8);
+
+			// Set prevblock to winning hash (swap32'd)
+			swap32yes(&fakework.data[4], &work->hash[0], 32 / 4);
+
+			test_work_current(&fakework);
 		}
 	} else {
 		cgpu->rejected++;
@@ -3483,10 +3505,14 @@ static bool stale_work(struct work *work, bool share)
 	/* Technically the rolltime should be correct but some pools
 	 * advertise a broken expire= that is lower than a meaningful
 	 * scantime */
-	if (work->rolltime > opt_scantime)
+	if (work->rolltime >= opt_scantime)
 		work_expiry = work->rolltime;
 	else
 		work_expiry = opt_expiry;
+
+	int max_expiry = (have_longpoll ? opt_expiry_lp : opt_expiry);
+	if (work_expiry > max_expiry)
+		work_expiry = max_expiry;
 
 	if (share) {
 		/* If the share isn't on this pool's latest block, it's stale */
