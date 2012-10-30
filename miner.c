@@ -2546,8 +2546,6 @@ static void get_benchmark_work(struct work *work)
 	calc_diff(work);
 }
 
-static void clear_work(struct work *);
-
 static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const char *lpid)
 {
 	char *rpc_req;
@@ -2693,7 +2691,7 @@ static struct work *make_work(void)
 	return work;
 }
 
-static void clear_work(struct work *work)
+void clear_work(struct work *work)
 {
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -3014,7 +3012,7 @@ static void roll_work(struct work *work)
 	work->id = total_work++;
 }
 
-static void workcpy(struct work *dest, const struct work *work)
+void workcpy(struct work *dest, const struct work *work)
 {
 	memcpy(dest, work, sizeof(*dest));
 

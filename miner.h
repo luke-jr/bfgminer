@@ -949,6 +949,8 @@ struct work {
 };
 
 extern void get_datestamp(char *, struct timeval *);
+extern void workcpy(struct work *dest, const struct work *src);
+extern void clear_work(struct work *);
 enum test_nonce2_result {
 	TNR_GOOD,
 	TNR_HIGH,
