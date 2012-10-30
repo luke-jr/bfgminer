@@ -5162,6 +5162,8 @@ tryagain:
 
 		}
 
+		free_work(work);
+
 retry_stratum:
 		/* We create the stratum thread for each pool just after
 		 * successful authorisation. Once the auth flag has been set
