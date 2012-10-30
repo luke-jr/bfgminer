@@ -2236,6 +2236,8 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
+static void test_work_current(struct work *);
+
 static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
@@ -2396,6 +2398,22 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 			applog(LOG_WARNING, "Rejecting pool %d now accepting shares, re-enabling!", pool->pool_no);
 			enable_pool(pool);
 			switch_pools(NULL);
+		}
+
+		if (unlikely(work->block)) {
+			// Force moving on to this new block :)
+			struct work fakework;
+			memset(&fakework, 0, sizeof(fakework));
+			fakework.pool = work->pool;
+
+			// Copy block version, bits, and time from share
+			memcpy(&fakework.data[ 0], &work->data[ 0], 4);
+			memcpy(&fakework.data[68], &work->data[68], 8);
+
+			// Set prevblock to winning hash (swap32'd)
+			swap32yes(&fakework.data[4], &work->hash[0], 32 / 4);
+
+			test_work_current(&fakework);
 		}
 	} else {
 		cgpu->rejected++;
