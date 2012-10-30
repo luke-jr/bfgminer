@@ -3623,11 +3623,10 @@ next_submit:
 		char *noncehex;
 		char s[1024];
 
-		/* Give the stratum share a unique id */
-		swork_id++;
 		memcpy(&sshare->work, work, sizeof(struct work));
 		mutex_lock(&sshare_lock);
-		sshare->id = swork_id;
+		/* Give the stratum share a unique id */
+		sshare->id = swork_id++;
 		HASH_ADD_INT(stratum_shares, id, sshare);
 		mutex_unlock(&sshare_lock);
 
@@ -3635,7 +3634,7 @@ next_submit:
 		noncehex = bin2hex((const unsigned char *)&nonce, 4);
 		memset(s, 0, 1024);
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, swork_id);
+			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
 
 		applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->stratum_url, s);
