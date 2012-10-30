@@ -610,21 +610,12 @@ struct APIGROUPS {
 static struct IP4ACCESS *ipaccess = NULL;
 static int ips = 0;
 
-#ifdef USE_BITFORCE
-extern struct device_api bitforce_api;
+#ifdef HAVE_OPENCL
+extern struct device_api opencl_api;
 #endif
 
-#ifdef USE_ICARUS
-extern struct device_api cairnsmore_api;
-extern struct device_api icarus_api;
-#endif
-
-#ifdef USE_ZTEX
-extern struct device_api ztex_api;
-#endif
-
-#ifdef USE_MODMINER
-extern struct device_api modminer_api;
+#ifdef WANT_CPUMINE
+extern struct device_api cpu_api;
 #endif
 
 // This is only called when expected to be needed (rarely)
@@ -1051,24 +1042,15 @@ static int numpgas()
 	int i;
 
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_BITFORCE
-		if (devices[i]->api == &bitforce_api)
-			count++;
+#ifdef HAVE_OPENCL
+		if (devices[i]->api == &opencl_api)
+			continue;
 #endif
-#ifdef USE_ICARUS
-		if (devices[i]->api == &cairnsmore_api)
-			count++;
-		if (devices[i]->api == &icarus_api)
-			count++;
+#ifdef WANT_CPUMINE
+		if (devices[i]->api == &cpu_api)
+			continue;
 #endif
-#ifdef USE_ZTEX
-		if (devices[i]->api == &ztex_api)
-			count++;
-#endif
-#ifdef USE_MODMINER
-		if (devices[i]->api == &modminer_api)
-			count++;
-#endif
+		++count;
 	}
 	return count;
 }
@@ -1079,24 +1061,15 @@ static int pgadevice(int pgaid)
 	int i;
 
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_BITFORCE
-		if (devices[i]->api == &bitforce_api)
-			count++;
+#ifdef HAVE_OPENCL
+		if (devices[i]->api == &opencl_api)
+			continue;
 #endif
-#ifdef USE_ICARUS
-		if (devices[i]->api == &cairnsmore_api)
-			count++;
-		if (devices[i]->api == &icarus_api)
-			count++;
+#ifdef WANT_CPUMINE
+		if (devices[i]->api == &cpu_api)
+			continue;
 #endif
-#ifdef USE_ZTEX
-		if (devices[i]->api == &ztex_api)
-			count++;
-#endif
-#ifdef USE_MODMINER
-		if (devices[i]->api == &modminer_api)
-			count++;
-#endif
+		++count;
 		if (count == (pgaid + 1))
 			return i;
 	}
