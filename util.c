@@ -861,7 +861,15 @@ bool extract_sockaddr(struct pool *pool, char *url)
 		return false;
 	}
 
-	pool->server = (struct sockaddr_in *)res->ai_addr;
+	free(pool->server);
+	pool->server = malloc(res->ai_addrlen);
+	if (!pool->server) {
+		freeaddrinfo(res);
+		applog(LOG_ERR, "Malloc failure in extract_sockaddr");
+		return false;
+	}
+	memcpy(pool->server, res->ai_addr, res->ai_addrlen);
+
 	free(pool->sockaddr_url);
 	pool->sockaddr_url = strdup(url_address);
 
