@@ -876,8 +876,8 @@ bool extract_sockaddr(struct pool *pool, char *url)
 		applog(LOG_DEBUG, "Failed to extract sock addr");
 		return false;
 	}
+	freeaddrinfo(res);
 
-	pool->server = (struct sockaddr_in *)res->ai_addr;
 	pool->sockaddr_url = strdup(url_address);
 
 	return true;

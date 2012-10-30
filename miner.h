@@ -872,7 +872,6 @@ struct pool {
 	CURL *stratum_curl;
 	SOCKETTYPE sock;
 	char sockbuf[RBUFSIZE];
-	struct sockaddr_in *server, client;
 	char *sockaddr_url; /* stripped url used for sockaddr */
 	char *nonce1;
 	uint32_t nonce2;
