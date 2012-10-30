@@ -77,8 +77,10 @@ void ft232r_scan()
 			applog(LOG_ERR, "ft232r_scan: Error getting device descriptor: %s", libusb_error_name(err));
 			continue;
 		}
-		if (!(desc.idVendor == FT232R_IDVENDOR && desc.idProduct == FT232R_IDPRODUCT))
+		if (!(desc.idVendor == FT232R_IDVENDOR && desc.idProduct == FT232R_IDPRODUCT)) {
+			applog(LOG_DEBUG, "ft232r_scan: Found %04x:%04x - not a ft232r", desc.idVendor, desc.idProduct);
 			continue;
+		}
 
 		err = libusb_open(list[i], &handle);
 		if (unlikely(err)) {

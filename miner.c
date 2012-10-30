@@ -7364,9 +7364,6 @@ int main(int argc, char *argv[])
 #ifdef HAVE_LIBUSB
         libusb_init(NULL);
 #endif
-#ifdef USE_X6500
-	ft232r_scan();
-#endif
 
 	mutex_init(&hash_lock);
 	mutex_init(&qd_lock);
@@ -7483,6 +7480,10 @@ int main(int argc, char *argv[])
 		pool->idle = false;
 		successful_connect = true;
 	}
+
+#ifdef USE_X6500
+	ft232r_scan();
+#endif
 
 #ifdef HAVE_CURSES
 	if (opt_realquiet || devices_enabled == -1)
