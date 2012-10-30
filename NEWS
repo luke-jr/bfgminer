@@ -1,3 +1,27 @@
+BFGMiner Version 2.8.4 - October 30, 2012
+
+- Bugfix: regeneratehash needs to compare hash segments in Little Endian, not
+Big Endian
+- Bugfix: Wait to release JSON result in case of JSON-RPC error until we've
+logged the error
+- Bugfix: RPC: Defer release of JSON until after cmd is used
+- Bugfix: Release JSON result in case of JSON-RPC error
+- Bugfix: Release job JSON result as soon as we are done using it
+- Bugfix: Release JSON received from RPC socket after we're done using it
+- Bugfix: Use clear_work and workdup everywhere work is copied around
+- modminer: Remove dead code
+- Bugfix: Save pool pointer to avoid dereferencing work after it might
+potentially be freed
+- Bugfix: Cleanup some harmless warnings
+- Bugfix: Clear work before replacing it with new, to free any pointers
+- Bugfix: Release job JSON result as soon as we are done using it
+- Bugfix: Release GBT submission JSON objects after dumping them
+- Bugfix: Clear work template when preparing a new request
+- Replace now-redundant accepted_weighed with equivalent diff_accepted
+- Bugfix: modminer: Check that we have a valid fd before trying to start work
+- Minor debian packaging fixes.
+
+
 BFGMiner Version 2.8.3 - October 18, 2012
 
 - Update to libblkmaker 0.1.3
