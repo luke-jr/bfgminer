@@ -384,7 +384,7 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V?
+API V1.20b (BFGMiner v2.9.1)
 
 Support for the X6500 FPGA was added
 

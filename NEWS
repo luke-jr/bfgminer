@@ -1,5 +1,41 @@
-BFGMiner Version 2.9.1 - Future
+BFGMiner Version 2.9.1 - October 30, 2012
 
+- When we find a block, always progress to it for mining
+- Bugfix: Enforce --expiry, but split --expiry-lp for a longer expiry on
+longpoll setups
+- Bugfix: regeneratehash needs to compare hash segments in Little Endian, not
+Big Endian
+- Bugfix: Always fail scrypt detection if Stratum is working
+- Bugfix: Scan for ft232r devices later, after console lock and other mutexes
+are initialized properly
+- ft232r: Debuglog non-FTDI device IDs found
+- Bugfix: Wait to release JSON result in case of JSON-RPC error until we've
+logged the error
+- Bugfix: RPC: Defer release of JSON until after cmd is used
+- Bugfix: Release JSON result in case of JSON-RPC error
+- Bugfix: Release job JSON result as soon as we are done using it
+- Bugfix: Release JSON received from RPC socket after we're done using it
+- Bugfix: Use clear_work and workdup everywhere work is copied around
+- Bugfix: Clear work before replacing it with new, to free any pointers
+- server and client sockaddr_in are no longer used in struct pool.
+- Set sshare id and swork_id within the sshare mutex to avoid multiple share
+submits with the same id.
+- Bugfix: Really use freeaddrinfo to clean up in extract_sockaddr
+- Update documentation for X6500
+- Bugfix: Free unused JSON returned when switching to Stratum
+- Bugfix: Free unused work when switching to Stratum instead
+- Bugfix: Use freeaddrinfo to clean up in extract_sockaddr
+- RPC: Include PGA support for X6500-only builds
+- RPC: Abstract code to handle any new device drivers as PGAs without special
+support
+- Bugfix: Release GBT submission JSON objects after dumping them
+- Bugfix: Free old stratum_work data before replacing it
+- Bugfix: Release memory allocated by prior stratum sockaddr extractions
+- Bugfix: Clear work template when preparing a new request
+- Bugfix: Initialize temporary stratum work
+- Bugfix: x6500: jtag_read buffer needs to be initialized since reading JTAG
+implies writing too
+- Replace now-redundant accepted_weighed with equivalent diff_accepted
 - Fail on select() failing in stratum thread without needing to attempt
 recv_line.
 - Add share to stratum database before sending it again in case we get a

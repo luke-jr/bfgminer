@@ -1,3 +1,13 @@
+bfgminer (2.9.1-0precise1) precise; urgency=low
+
+  * RPC: Add support for X6500 FPGAs.
+  * Enforce --expiry option to make solo mining without longpoll move on eventually.
+  * Always detect non-scrypt if Stratum is in use.
+  * Various other bug fixes, including a number of memory leaks.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 30 Oct 2012 16:16:22 -0000
+
+
 bfgminer (2.9.0-0precise1) precise; urgency=low
 
   * X6500: New driver for mining on FPGA Mining LLC's X6500 coprocessor.
