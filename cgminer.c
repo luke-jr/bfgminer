@@ -4361,6 +4361,7 @@ static void *stratum_thread(void *userdata)
 		free(s);
 		if (pool->swork.clean) {
 			struct work work;
+			memset(&work, 0, sizeof(work));
 
 			/* Generate a single work item to update the current
 			 * block database */
