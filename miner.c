@@ -2160,7 +2160,7 @@ bool regeneratehash(const struct work *work)
 	diffcmp[diffbytes >> 2] = diffvalue << diffshift;
 
 	for (i = 7; i >= 0; i--) {
-		uint32_t hash32i = be32toh(hash32[i]);
+		uint32_t hash32i = le32toh(hash32[i]);
 		if (hash32i > diffcmp[i])
 			return false;
 		if (hash32i < diffcmp[i])
