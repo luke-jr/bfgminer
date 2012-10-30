@@ -174,7 +174,8 @@ If you simply just want to update the source after you have already cloned, type
 Now you can get the latest source directly from github.
 
 **************************************************************************************
-* Optional - Install libusb if you need auto USB device detection; required for Ztex *
+* Optional - Install libusb if you need auto USB device detection                    *
+* Required for Ztex and X6500                                                        *
 **************************************************************************************
 Go to this url ==> http://libusbx.org/
 Click on the "Downloads" tab.
@@ -195,10 +196,11 @@ You will have to copy "libusb-1.0.dll" to your working BFGMiner binary directory
 --enable-cpumining      Build with cpu mining support(default disabled)
 --disable-opencl        Build without support for OpenCL (default enabled)
 --disable-adl           Build without ADL monitoring (default enabled)
---enable-bitforce       Compile support for BitForce FPGAs(default disabled)
---enable-icarus         Compile support for Icarus Board(default disabled)
---enable-modminer       Compile support for ModMiner FPGAs(default disabled)
---enable-ztex           Compile support for Ztex Board(default disabled)
+--disable-bitforce      Compile support for BitForce (default enabled)
+--disable-icarus        Compile support for Icarus (default enabled)
+--disable-modminer      Compile support for ModMiner (default enabled)
+--disable-x6500         Compile support for X6500 (default enabled)
+--disable-ztex          Compile support for Ztex (default if libusb)
 --enable-scrypt         Compile support for scrypt litecoin mining (default disabled)
 --without-curses        Compile support for curses TUI (default enabled)
 --without-libudev       Autodetect FPGAs using libudev (default enabled)
