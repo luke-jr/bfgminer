@@ -138,7 +138,8 @@ Options for both config file and command line:
 --coinbase-sig <arg> Set coinbase signature when possible
 --debug|-D          Enable debug output
 --debuglog          Enable debug logging
---expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
+--expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (w/o longpoll active) (default: 120)
+--expiry-lp <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (with longpoll active) (default: 3600)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
 --load-balance      Change multipool strategy from failover to efficiency based balance
