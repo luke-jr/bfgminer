@@ -4849,6 +4849,7 @@ tryagain:
 			goto badwork;
 
 		rc = work_decode(res, work);
+		json_decref(val);
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -4874,7 +4875,6 @@ badwork:
 			free_work(work);
 			goto out;
 		}
-		json_decref(val);
 
 		if (proto != pool->proto) {
 			pool->proto = proto;
