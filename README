@@ -52,7 +52,7 @@ Dependencies:
 	(This is only required for multi-FPGA auto-detection on Linux)
 
 	libusb headers
-	(This is only required for ZTEX support)
+	(This is only required for Ztex and X6500 support)
 
 
 BFGMiner specific configuration options:
@@ -62,6 +62,7 @@ BFGMiner specific configuration options:
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
+	--disable-x6500         Compile support for X6500 (default enabled)
 	--disable-ztex          Compile support for Ztex (default if libusb)
 	--enable-scrypt         Compile support for scrypt mining (default disabled)
 	--without-curses        Compile support for curses TUI (default enabled)
@@ -217,7 +218,7 @@ SCRYPT only options:
 See SCRYPT-README for more information regarding (non-bitcoin) scrypt mining.
 
 
-FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:
+FPGA mining boards (BitForce, Icarus, ModMiner, X6500, Ztex) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
@@ -893,7 +894,8 @@ working in the logs?
 A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
-A: At the moment, BFGMiner supports 4 FPGAs: BitForce, Icarus, ModMiner, and Ztex.
+A: At the moment, BFGMiner supports 5 FPGAs: BitForce, Icarus, ModMiner, X6500,
+and Ztex.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
