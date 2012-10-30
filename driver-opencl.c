@@ -1687,7 +1687,8 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 
 	if (thrdata->res[FOUND]) {
 		thrdata->last_work = &thrdata->_last_work;
-		memcpy(thrdata->last_work, work, sizeof(*thrdata->last_work));
+		clear_work(thrdata->last_work);
+		workcpy(thrdata->last_work, work);
 	}
 }
 
