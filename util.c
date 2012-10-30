@@ -869,6 +869,7 @@ bool extract_sockaddr(struct pool *pool, char *url)
 		return false;
 	}
 	memcpy(pool->server, res->ai_addr, res->ai_addrlen);
+	freeaddrinfo(res);
 
 	free(pool->sockaddr_url);
 	pool->sockaddr_url = strdup(url_address);
