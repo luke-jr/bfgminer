@@ -886,6 +886,7 @@ struct pool {
 
 	/* GBT  variables */
 	bool has_gbt;
+	pthread_mutex_t gbt_lock;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'

@@ -420,12 +420,11 @@ struct pool *add_pool(void)
 	pool->pool_no = pool->prio = total_pools;
 	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
-	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init in add_pool");
+	mutex_init(&pool->pool_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
-	if (unlikely(pthread_mutex_init(&pool->stratum_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init in add_pool");
+	mutex_init(&pool->stratum_lock);
+	mutex_init(&pool->gbt_lock);
 	INIT_LIST_HEAD(&pool->curlring);
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
