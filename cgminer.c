@@ -1358,37 +1358,46 @@ static void calc_midstate(struct work *work)
 #endif
 }
 
-static bool work_decode(const json_t *val, struct work *work)
+static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
-	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data), true))) {
-		applog(LOG_ERR, "JSON inval data");
-		goto err_out;
+	bool ret = false;
+	json_t *res_val;
+
+	if (pool->has_gbt) {
+		work->gbt = true;
+		goto out;
 	}
 
-	if (!jobj_binary(val, "midstate", work->midstate, sizeof(work->midstate), false)) {
+	res_val = json_object_get(val, "result");
+	if (unlikely(!jobj_binary(res_val, "data", work->data, sizeof(work->data), true))) {
+		applog(LOG_ERR, "JSON inval data");
+		goto out;
+	}
+
+	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
 		// Calculate it ourselves
 		applog(LOG_DEBUG, "Calculating midstate locally");
 		calc_midstate(work);
 	}
 
-	if (!jobj_binary(val, "hash1", work->hash1, sizeof(work->hash1), false)) {
+	if (!jobj_binary(res_val, "hash1", work->hash1, sizeof(work->hash1), false)) {
 		// Always the same anyway
 		memcpy(work->hash1, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\1\0\0", 64);
 	}
 
-	if (unlikely(!jobj_binary(val, "target", work->target, sizeof(work->target), true))) {
+	if (unlikely(!jobj_binary(res_val, "target", work->target, sizeof(work->target), true))) {
 		applog(LOG_ERR, "JSON inval target");
-		goto err_out;
+		goto out;
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
 
 	gettimeofday(&work->tv_staged, NULL);
 
-	return true;
+	ret = true;
 
-err_out:
-	return false;
+out:
+	return ret;
 }
 
 int dev_from_id(int thr_id)
@@ -2303,7 +2312,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	pool_stats->getwork_attempts++;
 
 	if (likely(val)) {
-		rc = work_decode(json_object_get(val, "result"), work);
+		rc = work_decode(pool, work, val);
 		if (unlikely(!rc))
 			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
 	} else
@@ -4477,7 +4486,7 @@ retry_stratum:
 		struct work *work = make_work();
 		bool rc;
 
-		rc = work_decode(json_object_get(val, "result"), work);
+		rc = work_decode(pool, work, val);
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -5254,7 +5263,7 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 
 	work = make_work();
 
-	rc = work_decode(json_object_get(val, "result"), work);
+	rc = work_decode(pool, work, val);
 	if (unlikely(!rc)) {
 		applog(LOG_ERR, "Could not convert longpoll data to work");
 		free_work(work);

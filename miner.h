@@ -930,6 +930,8 @@ struct work {
 	char		ntime[16];
 	int		sdiff;
 
+	bool		gbt;
+
 	unsigned int	work_block;
 	int		id;
 	UT_hash_handle	hh;
