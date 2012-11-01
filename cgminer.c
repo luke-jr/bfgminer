@@ -1387,6 +1387,11 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	json_t *res_val = json_object_get(val, "result");
 	bool ret = false;
 
+	if (!res_val || json_is_null(res_val)) {
+		applog(LOG_ERR, "JSON Failed to decode result");
+		goto out;
+	}
+
 	if (pool->has_gbt) {
 		work->gbt = true;
 		goto out;
