@@ -243,6 +243,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
+	jp->a->bufread = 0;
 	jp->a->async = true;
 
 	ssize_t buflen;
@@ -266,6 +267,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
+	jp->a->bufread = 0;
 	jp->a->async = false;
 	jp->a->bufread = 0;
 
@@ -588,6 +590,12 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				++hw_errors;
 				++x6500->hw_errors;
 				++imm_bad_nonces;
+
+				// Purge buffers just in case of read/write desync
+				mutex_lock(&x6500->device_mutex);
+				ft232r_purge_buffers(jtag->a->ftdi, FTDI_PURGE_BOTH);
+				mutex_unlock(&x6500->device_mutex);
+				jtag->a->bufread = 0;
 			}
 		}
 
