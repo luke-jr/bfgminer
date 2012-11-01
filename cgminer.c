@@ -1357,6 +1357,27 @@ static void calc_midstate(struct work *work)
 #endif
 }
 
+/* Generate a GBT coinbase from the existing GBT variables stored. Must be
+ * entered under gbt_lock */
+static void __build_gbt_coinbase(struct pool *pool)
+{
+	unsigned char *coinbase;
+	uint8_t *extra_len;
+	int cbt_len;
+
+	cbt_len = strlen(pool->coinbasetxn) / 2;
+	/* We add 4 bytes of extra data corresponding to nonce2 of stratum */
+	coinbase = calloc(cbt_len + 4, 1);
+	hex2bin(coinbase, pool->coinbasetxn, 42);
+	extra_len = (uint8_t *)(coinbase + 41);
+	*extra_len += 4;
+	hex2bin(coinbase + 42, pool->coinbasetxn + 84, cbt_len - 42);
+	pool->nonce2++;
+	memcpy(coinbase + cbt_len, &pool->nonce2, 4);
+	free(pool->gbt_coinbase);
+	pool->gbt_coinbase = coinbase;
+}
+
 static bool gbt_decode(struct pool *pool, json_t *res_val)
 {
 	const char *previousblockhash;
@@ -1394,7 +1415,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	applog(LOG_DEBUG, "curtime: %d", curtime);
 	applog(LOG_DEBUG, "submitold: %s", submitold ? "true" : "false");
 	applog(LOG_DEBUG, "bits: %s", bits);
-	
+
 	mutex_lock(&pool->gbt_lock);
 	free(pool->previousblockhash);
 	free(pool->gbt_target);
@@ -1410,6 +1431,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	pool->curtime = htobe32(curtime);
 	pool->gbt_submitold = submitold;
 	pool->gbt_bits = strdup(bits);
+	__build_gbt_coinbase(pool);
 	mutex_unlock(&pool->gbt_lock);
 
 	return true;

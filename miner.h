@@ -896,6 +896,7 @@ struct pool {
 	uint32_t curtime;
 	bool gbt_submitold;
 	char *gbt_bits;
+	unsigned char *gbt_coinbase;
 
 };
 
