@@ -887,6 +887,16 @@ struct pool {
 	/* GBT  variables */
 	bool has_gbt;
 	pthread_mutex_t gbt_lock;
+	char *previousblockhash;
+	char *gbt_target;
+	char *coinbasetxn;
+	char *longpollid;
+	int gbt_expires;
+	uint32_t gbt_version;
+	uint32_t curtime;
+	bool gbt_submitold;
+	char *gbt_bits;
+
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'

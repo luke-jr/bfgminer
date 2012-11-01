@@ -1357,6 +1357,64 @@ static void calc_midstate(struct work *work)
 #endif
 }
 
+static bool gbt_decode(struct pool *pool, json_t *res_val)
+{
+	const char *previousblockhash;
+	const char *target;
+	const char *coinbasetxn;
+	const char *longpollid;
+	int expires;
+	int version;
+	int curtime;
+	bool submitold;
+	const char *bits;
+
+	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
+	target = json_string_value(json_object_get(res_val, "target"));
+	coinbasetxn = json_string_value(json_object_get(json_object_get(res_val, "coinbasetxn"), "data"));
+	longpollid = json_string_value(json_object_get(res_val, "longpollid"));
+	expires = json_integer_value(json_object_get(res_val, "expires"));
+	version = json_integer_value(json_object_get(res_val, "version"));
+	curtime = json_integer_value(json_object_get(res_val, "curtime"));
+	submitold = json_is_true(json_object_get(res_val, "submitold"));
+	bits = json_string_value(json_object_get(res_val, "bits"));
+
+	if (!previousblockhash || !target || !coinbasetxn || !longpollid ||
+	    !expires || !version || !curtime || !bits) {
+		applog(LOG_ERR, "JSON failed to decode GBT");
+		return false;
+	}
+
+	applog(LOG_DEBUG, "previousblockhash: %s", previousblockhash);
+	applog(LOG_DEBUG, "target: %s", target);
+	applog(LOG_DEBUG, "coinbasetxn: %s", coinbasetxn);
+	applog(LOG_DEBUG, "longpollid: %s", longpollid);
+	applog(LOG_DEBUG, "expires: %d", expires);
+	applog(LOG_DEBUG, "version: %d", version);
+	applog(LOG_DEBUG, "curtime: %d", curtime);
+	applog(LOG_DEBUG, "submitold: %s", submitold ? "true" : "false");
+	applog(LOG_DEBUG, "bits: %s", bits);
+	
+	mutex_lock(&pool->gbt_lock);
+	free(pool->previousblockhash);
+	free(pool->gbt_target);
+	free(pool->coinbasetxn);
+	free(pool->longpollid);
+	free(pool->gbt_bits);
+	pool->previousblockhash = strdup(previousblockhash);
+	pool->gbt_target = strdup(target);
+	pool->coinbasetxn = strdup(coinbasetxn);
+	pool->longpollid = strdup(longpollid);
+	pool->gbt_expires = expires;
+	pool->gbt_version = htobe32(version);
+	pool->curtime = htobe32(curtime);
+	pool->gbt_submitold = submitold;
+	pool->gbt_bits = strdup(bits);
+	mutex_unlock(&pool->gbt_lock);
+
+	return true;
+}
+
 static bool getwork_decode(json_t *res_val, struct work *work)
 {
 	if (unlikely(!jobj_binary(res_val, "data", work->data, sizeof(work->data), true))) {
@@ -1393,11 +1451,12 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	}
 
 	if (pool->has_gbt) {
+		if (unlikely(!gbt_decode(pool, res_val)))
+			goto out;
 		work->gbt = true;
+		ret = true;
 		goto out;
-	}
-
-	if (unlikely(!getwork_decode(res_val, work)))
+	} else if (unlikely(!getwork_decode(res_val, work)))
 		goto out;
 
 	memset(work->hash, 0, sizeof(work->hash));
