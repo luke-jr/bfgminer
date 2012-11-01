@@ -883,6 +883,9 @@ struct pool {
 	struct stratum_work swork;
 	pthread_t stratum_thread;
 	pthread_mutex_t stratum_lock;
+
+	/* GBT  variables */
+	bool has_gbt;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'

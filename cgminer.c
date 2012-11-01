@@ -407,7 +407,7 @@ static void sharelog(const char*disposition, const struct work*work)
 
 static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
 
-// static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]}\n";
+static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]}\n";
 
 /* Return value is ignored if not called from add_pool_details */
 struct pool *add_pool(void)
@@ -4439,6 +4439,21 @@ retry_stratum:
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
 		return false;
+	}
+
+	/* Probe for GBT support on first pass */
+	if (!pool->probed && !opt_fix_protocol) {
+		applog(LOG_DEBUG, "Probing for GBT support");
+		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
+				    gbt_req, true, false, &rolltime, pool, false);
+		if (val) {
+			pool->has_gbt = true;
+			pool->rpc_req = gbt_req;
+			applog(LOG_DEBUG, "GBT support found, switching to GBT protocol");
+			json_decref(val);
+		} else
+			applog(LOG_DEBUG, "No GBT support found, using getwork protocol");
+		pool->probed = false;
 	}
 
 	gettimeofday(&tv_getwork, NULL);
