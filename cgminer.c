@@ -1359,15 +1359,14 @@ static void calc_midstate(struct work *work)
 
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
+	json_t *res_val = json_object_get(val, "result");
 	bool ret = false;
-	json_t *res_val;
 
 	if (pool->has_gbt) {
 		work->gbt = true;
 		goto out;
 	}
 
-	res_val = json_object_get(val, "result");
 	if (unlikely(!jobj_binary(res_val, "data", work->data, sizeof(work->data), true))) {
 		applog(LOG_ERR, "JSON inval data");
 		goto out;
@@ -4455,13 +4454,36 @@ retry_stratum:
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 				    gbt_req, true, false, &rolltime, pool, false);
 		if (val) {
-			pool->has_gbt = true;
-			pool->rpc_req = gbt_req;
-			applog(LOG_DEBUG, "GBT support found, switching to GBT protocol");
+			json_t *res_val, *mutables;
+			int i, mutsize = 0;
+
+			res_val = json_object_get(val, "result");
+			if (res_val) {
+				mutables = json_object_get(res_val, "mutable");
+				mutsize = json_array_size(mutables);
+			}
+
+			for (i = 0; i < mutsize; i++) {
+				json_t *arrval = json_array_get(mutables, i);
+
+				if (json_is_string(arrval)) {
+					const char *mutable = json_string_value(arrval);
+
+					/* Only use GBT if it supports coinbase append */
+					if (!strncasecmp(mutable, "coinbase/append", 15)) {
+						pool->has_gbt = true;
+						pool->rpc_req = gbt_req;
+						break;
+					}
+				}
+			}
 			json_decref(val);
-		} else
-			applog(LOG_DEBUG, "No GBT support found, using getwork protocol");
+		}
 		pool->probed = false;
+		if (pool->has_gbt)
+			applog(LOG_DEBUG, "GBT coinbase append support found, switching to GBT protocol");
+		else
+			applog(LOG_DEBUG, "No GBT coinbase append support found, using getwork protocol");
 	}
 
 	gettimeofday(&tv_getwork, NULL);
