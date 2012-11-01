@@ -2915,36 +2915,38 @@ static void *submit_work_thread(void *userdata)
 	}
 
 	if (work->stratum) {
+		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
 		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
 		char *noncehex;
 		char s[1024];
 
+		memcpy(&sshare->work, work, sizeof(struct work));
+		mutex_lock(&sshare_lock);
 		/* Give the stratum share a unique id */
-		swork_id++;
+		sshare->id = swork_id++;
+		HASH_ADD_INT(stratum_shares, id, sshare);
+		mutex_unlock(&sshare_lock);
+
 		nonce = *((uint32_t *)(work->data + 76));
 		noncehex = bin2hex((const unsigned char *)&nonce, 4);
-
 		memset(s, 0, 1024);
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, swork_id);
+			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
 
 		applog(LOG_INFO, "Submitting share %08lx to pool %d", (unsigned long)(hash32[6]), pool->pool_no);
 
 		if (likely(stratum_send(pool, s, strlen(s)))) {
-			struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
-
 			if (pool_tclear(pool, &pool->submit_fail))
 					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
-			memcpy(&sshare->work, work, sizeof(struct work));
-
-			mutex_lock(&sshare_lock);
-			sshare->id = swork_id;
-			HASH_ADD_INT(stratum_shares, id, sshare);
-			mutex_unlock(&sshare_lock);
 		} else {
 			applog(LOG_INFO, "Failed to submit stratum share");
+			mutex_lock(&sshare_lock);
+			HASH_DEL(stratum_shares, sshare);
+			mutex_unlock(&sshare_lock);
+			free(sshare);
+
 			if (!pool_tset(pool, &pool->submit_fail)) {
 				total_ro++;
 				pool->remotefail_occasions++;
@@ -4330,8 +4332,10 @@ static void *stratum_thread(void *userdata)
 		 * every minute so if we fail to receive any for 90 seconds we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		select(pool->sock + 1, &rd, NULL, NULL, &timeout);
-		s = recv_line(pool);
+		if (unlikely(select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1))
+			s = NULL;
+		else
+			s = recv_line(pool);
 		if (!s) {
 			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
@@ -4357,6 +4361,7 @@ static void *stratum_thread(void *userdata)
 		free(s);
 		if (pool->swork.clean) {
 			struct work work;
+			memset(&work, 0, sizeof(work));
 
 			/* Generate a single work item to update the current
 			 * block database */
