@@ -218,9 +218,14 @@ void ft232r_close(struct ft232r_device_handle *dev)
 
 bool ft232r_purge_buffers(struct ft232r_device_handle *dev, enum ft232r_reset_purge purge)
 {
-	if (purge & FTDI_PURGE_RX)
+	if (ft232r_flush(dev) < 0)
+		return false;
+
+	if (purge & FTDI_PURGE_RX) {
 		if (libusb_control_transfer(dev->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_RESET, FTDI_PURGE_RX, FTDI_INDEX, NULL, 0, FTDI_TIMEOUT))
 			return false;
+		dev->ibufLen = 0;
+	}
 	if (purge & FTDI_PURGE_TX)
 		if (libusb_control_transfer(dev->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_RESET, FTDI_PURGE_TX, FTDI_INDEX, NULL, 0, FTDI_TIMEOUT))
 			return false;
