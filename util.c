@@ -821,7 +821,6 @@ bool extract_sockaddr(struct pool *pool, char *url)
 {
 	char *url_begin, *url_end, *port_start = NULL;
 	char url_address[256], port[6];
-	struct addrinfo hints, *res;
 	int url_len, port_len = 0;
 
 	url_begin = strstr(url, "//");
@@ -851,18 +850,6 @@ bool extract_sockaddr(struct pool *pool, char *url)
 
 	free(pool->stratum_port);
 	pool->stratum_port = strdup(port);
-
-	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
-
-	if (getaddrinfo(url_address, port, &hints, &res)) {
-		applog(LOG_DEBUG, "Failed to extract sock addr");
-		return false;
-	}
-	freeaddrinfo(res);
-
 	free(pool->sockaddr_url);
 	pool->sockaddr_url = strdup(url_address);
 
