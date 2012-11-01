@@ -22,7 +22,7 @@
 #include "ft232r.h"
 
 #define X6500_USB_PRODUCT "X6500 FPGA Miner"
-#define X6500_BITSTREAM_FILENAME "x6500-overclocker-0402.bit"
+#define X6500_BITSTREAM_FILENAME "fpgaminer_x6500-overclocker-0402.bit"
 // NOTE: X6500_BITSTREAM_USERID is bitflipped
 #define X6500_BITSTREAM_USERID "\x40\x20\x24\x42"
 #define X6500_MINIMUM_CLOCK    2
