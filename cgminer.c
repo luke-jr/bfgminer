@@ -1357,19 +1357,11 @@ static void calc_midstate(struct work *work)
 #endif
 }
 
-static bool work_decode(struct pool *pool, struct work *work, json_t *val)
+static bool getwork_decode(json_t *res_val, struct work *work)
 {
-	json_t *res_val = json_object_get(val, "result");
-	bool ret = false;
-
-	if (pool->has_gbt) {
-		work->gbt = true;
-		goto out;
-	}
-
 	if (unlikely(!jobj_binary(res_val, "data", work->data, sizeof(work->data), true))) {
 		applog(LOG_ERR, "JSON inval data");
-		goto out;
+		return false;
 	}
 
 	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
@@ -1385,8 +1377,23 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	if (unlikely(!jobj_binary(res_val, "target", work->target, sizeof(work->target), true))) {
 		applog(LOG_ERR, "JSON inval target");
+		return false;
+	}
+	return true;
+}
+
+static bool work_decode(struct pool *pool, struct work *work, json_t *val)
+{
+	json_t *res_val = json_object_get(val, "result");
+	bool ret = false;
+
+	if (pool->has_gbt) {
+		work->gbt = true;
 		goto out;
 	}
+
+	if (unlikely(!getwork_decode(res_val, work)))
+		goto out;
 
 	memset(work->hash, 0, sizeof(work->hash));
 
