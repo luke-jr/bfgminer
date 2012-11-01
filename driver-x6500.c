@@ -486,6 +486,12 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				++hw_errors;
 				++x6500->hw_errors;
 				++imm_bad_nonces;
+
+				// Purge buffers just in case of read/write desync
+				mutex_lock(&x6500->device_mutex);
+				ft232r_purge_buffers(jtag->a->ftdi, FTDI_PURGE_BOTH);
+				mutex_unlock(&x6500->device_mutex);
+				jtag->a->bufread = 0;
 			}
 		}
 
