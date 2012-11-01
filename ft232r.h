@@ -38,5 +38,7 @@ extern ssize_t ft232r_write_all(struct ft232r_device_handle *, void *data, size_
 extern ssize_t ft232r_read(struct ft232r_device_handle *, void *buf, size_t count);
 extern ssize_t ft232r_read_all(struct ft232r_device_handle *, void *data, size_t count);
 extern bool ft232r_get_pins(struct ft232r_device_handle *, uint8_t *pins);
+extern bool ft232r_set_cbus_bits(struct ft232r_device_handle *dev, bool sc, bool cs);
+extern bool ft232r_get_cbus_bits(struct ft232r_device_handle *dev, bool *out_sio0, bool *out_sio1);
 
 #endif

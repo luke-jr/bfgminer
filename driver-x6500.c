@@ -22,7 +22,7 @@
 #include "ft232r.h"
 
 #define X6500_USB_PRODUCT "X6500 FPGA Miner"
-#define X6500_BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
+#define X6500_BITSTREAM_FILENAME "fpgaminer_x6500-overclocker-0402.bit"
 // NOTE: X6500_BITSTREAM_USERID is bitflipped
 #define X6500_BITSTREAM_USERID "\x40\x20\x24\x42"
 #define X6500_MINIMUM_CLOCK    2
@@ -178,8 +178,8 @@ struct x6500_fpga_data {
 	struct jtag_port jtag;
 	struct work prevwork;
 	struct timeval tv_workstart;
-
 	struct dclk_data dclk;
+	float temp;
 };
 
 #define bailout2(...) do {  \
@@ -386,15 +386,118 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	return true;
 }
 
+static 
+void x6500_get_temperature(struct cgpu_info *x6500)
+{
+
+	struct x6500_fpga_data *fpga = x6500->thr[0]->cgpu_data;
+	struct jtag_port *jp = &fpga->jtag;
+	struct ft232r_device_handle *ftdi = jp->a->ftdi;
+	int i, code[2];
+	bool sio[2];
+
+	code[0] = 0;
+	code[1] = 0;
+
+	ft232r_flush(ftdi);
+
+
+	if (!(ft232r_set_cbus_bits(ftdi, false, true))) return;
+	if (!(ft232r_set_cbus_bits(ftdi, true, true))) return;
+	if (!(ft232r_set_cbus_bits(ftdi, false, true))) return;
+	if (!(ft232r_set_cbus_bits(ftdi, true, true))) return;
+	if (!(ft232r_set_cbus_bits(ftdi, false, false))) return;
+
+	for (i = 16; i--; ) {
+		if (ft232r_set_cbus_bits(ftdi, true, false)) {
+			if (!(ft232r_get_cbus_bits(ftdi, &sio[0], &sio[1]))) {
+				return;
+			}
+		} else {
+			return;
+		}
+
+		code[0] |= sio[0] << i;
+		code[1] |= sio[1] << i;
+		if (!ft232r_set_cbus_bits(ftdi, false, false)) {
+			return;
+		}
+	}
+
+	if (!(ft232r_set_cbus_bits(ftdi, false, true))) {
+		return;
+	}
+	if (!(ft232r_set_cbus_bits(ftdi, true, true))) {
+		return;
+	}
+	if (!(ft232r_set_cbus_bits(ftdi, false, true))) {
+		return;
+	}
+	if (!ft232r_set_bitmode(ftdi, 0xee, 4)) {
+		return;
+	}
+	ft232r_purge_buffers(jp->a->ftdi, FTDI_PURGE_BOTH);
+	jp->a->bufread = 0;
+
+	for (i = 0; i < 2; ++i) {
+		fpga = x6500->thr[i]->cgpu_data;
+		if (code[i] == 0xffff || !code[i]) {
+			fpga->temp = 0;
+			continue;
+		}
+		if ((code[i] >> 15) & 1)
+			code[i] -= 0x10000;
+		fpga->temp = (float)(code[i] >> 2) * 0.03125f;
+		applog(LOG_DEBUG,"x6500_get_temperature: fpga[%d]->temp=%.1fC",i,fpga->temp);
+	}
+
+}
+
+static bool x6500_get_stats(struct cgpu_info *x6500)
+{
+	float hottest = 0;
+	if (x6500->deven != DEV_ENABLED) {
+		// Getting temperature more efficiently while enabled
+		// NOTE: Don't need to mess with mutex here, since the device is disabled
+		x6500_get_temperature(x6500);
+	} else {
+		mutex_lock(&x6500->device_mutex);
+		x6500_get_temperature(x6500);
+		mutex_unlock(&x6500->device_mutex);
+	}
+
+	for (int i = x6500->threads; i--; ) {
+		struct thr_info *thr = x6500->thr[i];
+		struct x6500_fpga_data *fpga = thr->cgpu_data;
+		if (!fpga)
+			continue;
+		float temp = fpga->temp;
+		if (temp > hottest)
+			hottest = temp;
+	}
+
+	x6500->temp = hottest;
+
+	return true;
+}
+
 static void
 get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
 {
 	char info[18] = "               | ";
+	struct x6500_fpga_data *fpga0 = x6500->thr[0]->cgpu_data;
+	struct x6500_fpga_data *fpga1 = x6500->thr[1]->cgpu_data;
 
 	unsigned char pdone = *((unsigned char*)x6500->cgpu_data - 1);
 	if (pdone != 101) {
 		sprintf(&info[1], "%3d%%", pdone);
 		info[5] = ' ';
+		strcat(buf, info);
+		return;
+	}
+	if (x6500->temp) {
+		sprintf(&info[1], "%.1fC/%.1fC", fpga0->temp, fpga1->temp);
+		info[strlen(info)] = ' ';
 		strcat(buf, info);
 		return;
 	}
@@ -420,6 +523,7 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 	ft232r_flush(jp->a->ftdi);
 
 	gettimeofday(&fpga->tv_workstart, NULL);
+	//x6500_get_temperature(x6500);
 	mutex_unlock(&x6500->device_mutex);
 
 	if (opt_debug) {
@@ -526,6 +630,7 @@ struct device_api x6500_api = {
 	.api_detect = x6500_detect,
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_fpga_init,
+	.get_stats = x6500_get_stats,
 	.get_statline_before = get_x6500_statline_before,
 	.scanhash = x6500_scanhash,
 // 	.thread_shutdown = x6500_fpga_shutdown,

@@ -145,6 +145,7 @@ int ft232r_detect(const char *product_needle, const char *serial, foundusb_func_
 #define FTDI_REQUEST_SET_BAUDRATE    3
 #define FTDI_REQUEST_SET_BITMODE  0x0b
 #define FTDI_REQUEST_GET_PINS     0x0c
+#define FTDI_REQUEST_GET_BITMODE  0x0c
 
 #define FTDI_BAUDRATE_3M  0,0
 
@@ -361,6 +362,28 @@ ssize_t ft232r_read_all(struct ft232r_device_handle *dev, void *data, size_t cou
 bool ft232r_get_pins(struct ft232r_device_handle *dev, uint8_t *pins)
 {
 	return libusb_control_transfer(dev->h, FTDI_REQTYPE_IN, FTDI_REQUEST_GET_PINS, 0, FTDI_INDEX, pins, 1, FTDI_TIMEOUT) == 1;
+}
+
+bool ft232r_get_bitmode(struct ft232r_device_handle *dev, uint8_t *out_mode)
+{
+	return libusb_control_transfer(dev->h, FTDI_REQTYPE_IN, FTDI_REQUEST_GET_BITMODE, 0, FTDI_INDEX, out_mode, 1, FTDI_TIMEOUT) == 1;
+}
+
+bool ft232r_set_cbus_bits(struct ft232r_device_handle *dev, bool sc, bool cs)
+{
+	uint8_t pin_state = (cs ? (1<<2) : 0)
+	                  | (sc ? (1<<3) : 0);
+	return ft232r_set_bitmode(dev, 0xc0 | pin_state, 0x20);
+}
+
+bool ft232r_get_cbus_bits(struct ft232r_device_handle *dev, bool *out_sio0, bool *out_sio1)
+{
+	uint8_t data;
+	if (!ft232r_get_bitmode(dev, &data))
+		return false;
+	*out_sio0 = data & 1;
+	*out_sio1 = data & 2;
+	return true;
 }
 
 #if 0
