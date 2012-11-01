@@ -841,6 +841,7 @@ struct pool {
 	double utility;
 	int last_shares, shares;
 
+	char *rpc_req;
 	char *rpc_url;
 	char *rpc_userpass;
 	char *rpc_user, *rpc_pass;

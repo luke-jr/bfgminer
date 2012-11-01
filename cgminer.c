@@ -405,6 +405,10 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
+static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
+
+// static char *gbt_req = "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": [{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"]}]}\n";
+
 /* Return value is ignored if not called from add_pool_details */
 struct pool *add_pool(void)
 {
@@ -427,6 +431,7 @@ struct pool *add_pool(void)
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 
+	pool->rpc_req = getwork_req;
 	pool->rpc_proxy = NULL;
 
 	return pool;
@@ -2158,9 +2163,6 @@ out:
 	return rc;
 }
 
-static const char *rpc_req =
-	"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
-
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
  * rolling average per 10 minutes and if pools start getting more, it biases
  * away from them to distribute work evenly. The share count is reset to the
@@ -2290,13 +2292,13 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	bool rc = false;
 	char *url;
 
-	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
+	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, pool->rpc_req);
 
 	url = pool->rpc_url;
 
 	gettimeofday(&(work->tv_getwork), NULL);
 
-	val = json_rpc_call(curl, url, pool->rpc_userpass, rpc_req, false,
+	val = json_rpc_call(curl, url, pool->rpc_userpass, pool->rpc_req, false,
 			    false, &work->rolltime, pool, false);
 	pool_stats->getwork_attempts++;
 
@@ -4440,8 +4442,8 @@ retry_stratum:
 	}
 
 	gettimeofday(&tv_getwork, NULL);
-	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
-			true, false, &rolltime, pool, false);
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
+			    pool->rpc_req, true, false, &rolltime, pool, false);
 	gettimeofday(&tv_getwork_reply, NULL);
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
@@ -5361,8 +5363,9 @@ retry_pool:
 		 * so always establish a fresh connection instead of relying on
 		 * a persistent one. */
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
-		val = json_rpc_call(curl, pool->lp_url, pool->rpc_userpass, rpc_req,
-				    false, true, &rolltime, pool, false);
+		val = json_rpc_call(curl, pool->lp_url, pool->rpc_userpass,
+				    pool->rpc_req, false, true, &rolltime,
+				    pool, false);
 
 		gettimeofday(&reply, NULL);
 
