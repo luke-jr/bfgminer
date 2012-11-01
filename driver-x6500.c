@@ -243,6 +243,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
+	jp->a->bufread = 0;
 	jp->a->async = true;
 
 	ssize_t buflen;
@@ -266,6 +267,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 		return false;
 	if (!ft232r_purge_buffers(ftdi, FTDI_PURGE_BOTH))
 		return false;
+	jp->a->bufread = 0;
 	jp->a->async = false;
 	jp->a->bufread = 0;
 
