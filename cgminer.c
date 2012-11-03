@@ -2258,7 +2258,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
 	json_t *val, *res, *err;
-	char s[345], sd[345];
+	char s[1024];
 	bool rc = false;
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
@@ -2279,14 +2279,9 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	hexstr = bin2hex(work->data, sizeof(work->data));
 
 	/* build JSON-RPC request */
-	sprintf(s,
-	      "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}\r\n",
-		hexstr);
-	sprintf(sd,
-	      "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}",
-		hexstr);
-
-	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
+	sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
+	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
+	strcat(s, "\n");
 
 	gettimeofday(&tv_submit, NULL);
 	/* issue JSON-RPC request */
