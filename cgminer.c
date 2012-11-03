@@ -1391,12 +1391,9 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len);
 static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 {
 	json_t *txn_array;
-	const char *txn0;
 	bool ret = false;
 	int i, cal_len;
 
-	free(pool->txn0);
-	pool->txn0 = NULL;
 	free(pool->txn_hashes);
 	pool->txn_hashes = NULL;
 	pool->gbt_txns = 0;
@@ -1410,21 +1407,11 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 	if (!pool->gbt_txns)
 		goto out;
 
-	txn0 = json_string_value(json_object_get(json_array_get(txn_array, 0), "data"));
-	pool->txn0_len = strlen(txn0) / 2;
-	cal_len = pool->txn0_len;
-	if (cal_len % 4)
-		cal_len += 4 - (cal_len % 4);
-	pool->txn0 = calloc(cal_len , 1);
-	if (unlikely(!pool->txn0))
-		quit(1, "Failed to calloc pool->txn0");
-	if (!hex2bin(pool->txn0, txn0, pool->txn0_len))
-		quit(1, "Failed to hex2bin txn0");
-	pool->txn_hashes = calloc(32 * pool->gbt_txns, 1);
+	pool->txn_hashes = calloc(32 * (pool->gbt_txns + 1), 1);
 	if (unlikely(!pool->txn_hashes))
 		quit(1, "Failed to calloc txn_hashes in __build_gbt_txns");
 
-	for (i = 1; i < pool->gbt_txns; i++) {
+	for (i = 0; i < pool->gbt_txns; i++) {
 		json_t *txn_val = json_object_get(json_array_get(txn_array, i), "data");
 		const char *txn = json_string_value(txn_val);
 		int txn_len = strlen(txn);
@@ -1439,7 +1426,7 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 		if (unlikely(!hex2bin(txn_bin, txn, txn_len / 2)))
 			quit(1, "Failed to hex2bin txn_bin");
 
-		gen_hash(txn_bin, pool->txn_hashes + (32 * (i - 1)), txn_len);
+		gen_hash(txn_bin, pool->txn_hashes + (32 * i), txn_len);
 		free(txn_bin);
 	}
 out:
@@ -1448,44 +1435,22 @@ out:
 
 static unsigned char *__gbt_merkleroot(struct pool *pool)
 {
-	unsigned char *merkles, *txn0, *merkle_hash;
-	int i, txns, cal_len;
+	unsigned char *merkle_hash;
+	int i, txns;
 
-	if (!pool->gbt_txns) {
-		pool->txn0 = (unsigned char *)strdup((const char *)pool->gbt_coinbase);
-		pool->txn0_len = pool->coinbase_len;
-	}
-
-	cal_len = pool->coinbase_len + pool->txn0_len;
-	if (cal_len % 4)
-		cal_len += 4 - (cal_len % 4);
-	txn0 = calloc(cal_len, 1);
-	if (unlikely(!txn0))
-		quit(1, "Failed to calloc txn0hash");
-
-	memcpy(txn0, pool->gbt_coinbase, pool->coinbase_len);
-	memcpy(txn0 + pool->coinbase_len, pool->txn0, pool->txn0_len);
-
-	cal_len = 32 + (32 * pool->gbt_txns);
-	merkles = calloc(cal_len, 1);
-	if (unlikely(!merkles))
-		quit(1, "Failed to calloc merkles in __gbt_merkleroot");
-
-	gen_hash(txn0, merkles, pool->coinbase_len + pool->txn0_len);
-	free(txn0);
-
-	if (pool->gbt_txns > 1)
-		memcpy(merkles + 32, pool->txn_hashes, (pool->gbt_txns - 1) * 32);
-
-	cal_len = (pool->gbt_txns + 1) * 32;
-	merkle_hash = calloc(cal_len, 1);
+	merkle_hash = calloc(32 * (pool->gbt_txns + 2), 1);
 	if (unlikely(!merkle_hash))
 		quit(1, "Failed to calloc merkle_hash in __gbt_merkleroot");
+
+	gen_hash(pool->gbt_coinbase, merkle_hash, pool->coinbase_len);
+
+	if (pool->gbt_txns > 1)
+		memcpy(merkle_hash + 32, pool->txn_hashes, pool->gbt_txns * 32);
 
 	txns = pool->gbt_txns + 1;
 	while (txns > 1) {
 		if (txns % 2) {
-			memcpy(&merkles[txns * 32], &merkles[(txns - 1) * 32], 32);
+			memcpy(&merkle_hash[txns * 32], &merkle_hash[(txns - 1) * 32], 32);
 			txns++;
 		}
 		for (i = 0; i < txns; i += 2){
@@ -1517,6 +1482,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	mutex_unlock(&pool->gbt_lock);
 
 	memcpy(work->data + 4 + 32, merkleroot, 32);
+	free(merkleroot);
 	memset(work->data + 4 + 32 + 32 + 4 + 4, 0, 4); /* nonce */
 
 	hex2bin(work->data + 4 + 32 + 32 + 4 + 4 + 4, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000", 48);
@@ -1539,7 +1505,6 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	calc_diff(work, 0);
 	gettimeofday(&work->tv_staged, NULL);
 
-	free(merkleroot);
 }
 
 static bool gbt_decode(struct pool *pool, json_t *res_val)

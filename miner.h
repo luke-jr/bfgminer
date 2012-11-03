@@ -897,10 +897,8 @@ struct pool {
 	bool gbt_submitold;
 	char *gbt_bits;
 	unsigned char *gbt_coinbase;
-	unsigned char *txn0;
 	unsigned char *txn_hashes;
 	int gbt_txns;
-	int txn0_len;
 	int coinbase_len;
 };
 
