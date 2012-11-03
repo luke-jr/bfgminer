@@ -13,7 +13,7 @@
 
 void dclk_prepare(struct dclk_data *data)
 {
-	memset(data, 0, sizeof(*data));
+	*data = (struct dclk_data){.freqM=0};
 }
 
 bool dclk_updateFreq(struct dclk_data *data, dclk_change_clock_func_t changeclock, struct thr_info *thr)
