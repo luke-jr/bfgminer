@@ -1469,6 +1469,7 @@ static void calc_diff(struct work *work, int known);
 static void gen_gbt_work(struct pool *pool, struct work *work)
 {
 	unsigned char *merkleroot;
+	char *cbhex;
 
 	mutex_lock(&pool->gbt_lock);
 	__build_gbt_coinbase(pool);
@@ -1477,8 +1478,10 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	hex2bin(work->data + 4, pool->previousblockhash, 32);
 	memcpy(work->data + 4 + 32 + 32, &pool->curtime, 4);
 	hex2bin(work->data + 4 + 32 + 32 + 4, pool->gbt_bits, 4);
-
 	hex2bin(work->target, pool->gbt_target, 32);
+	cbhex = bin2hex(pool->gbt_coinbase, pool->coinbase_len);
+	sprintf(work->gbt_coinbase, "%s", cbhex);
+	free(cbhex);
 	mutex_unlock(&pool->gbt_lock);
 
 	memcpy(work->data + 4 + 32, merkleroot, 32);
@@ -2279,8 +2282,17 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	hexstr = bin2hex(work->data, sizeof(work->data));
 
 	/* build JSON-RPC request */
-	sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
-	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
+	if (work->gbt) {
+		char gbt_block[512], *header;
+
+		header = bin2hex(work->data, 80);
+		sprintf(gbt_block, "%s0%s", header, work->gbt_coinbase);
+		free(header);
+
+		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\"]}", gbt_block);
+	} else
+		sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
+	applog(LOG_WARNING, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
 	strcat(s, "\n");
 
 	gettimeofday(&tv_submit, NULL);

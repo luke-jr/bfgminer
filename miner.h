@@ -946,6 +946,7 @@ struct work {
 	int		sdiff;
 
 	bool		gbt;
+	char		gbt_coinbase[292];
 
 	unsigned int	work_block;
 	int		id;
