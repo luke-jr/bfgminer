@@ -798,6 +798,9 @@ struct stratum_work {
 
 	int merkles;
 	int diff;
+
+	time_t transparency_time;
+	bool opaque;
 };
 
 #define RECVSIZE 8192

@@ -423,6 +423,7 @@ struct pool *add_pool(void)
 	if (unlikely(pthread_mutex_init(&pool->stratum_lock, NULL)))
 		quit(1, "Failed to pthread_mutex_init in add_pool");
 	INIT_LIST_HEAD(&pool->curlring);
+	pool->swork.transparency_time = (time_t)-1;
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
@@ -4246,7 +4247,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 
 /* Parses stratum json responses and tries to find the id that the request
  * matched to and treat it accordingly. */
-static bool parse_stratum_response(char *s)
+static bool parse_stratum_response(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *err_val, *res_val, *id_val;
 	struct stratum_share *sshare;
@@ -4275,6 +4276,23 @@ static bool parse_stratum_response(char *s)
 		applog(LOG_INFO, "JSON-RPC non method decode failed: %s", ss);
 
 		free(ss);
+
+		goto out;
+	}
+
+	if (!json_is_integer(id_val)) {
+		if (json_is_string(id_val)
+		 && !strcmp(json_string_value(id_val), "txlist")
+		 && json_is_array(res_val)) {
+			if (pool->swork.opaque) {
+				pool->swork.opaque = false;
+				applog(LOG_NOTICE, "Pool %u now providing block contents to us",
+				       pool->pool_no);
+			}
+			pool->swork.transparency_time = (time_t)-1;
+
+			ret = true;
+		}
 
 		goto out;
 	}
@@ -4356,7 +4374,7 @@ static void *stratum_thread(void *userdata)
 			continue;
 		}
 
-		if (!parse_method(pool, s) && !parse_stratum_response(s))
+		if (!parse_method(pool, s) && !parse_stratum_response(pool, s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
 		if (pool->swork.clean) {
@@ -4378,6 +4396,13 @@ static void *stratum_thread(void *userdata)
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
 		}
 
+		if (pool->swork.transparency_time != (time_t)-1 && difftime(time(NULL), pool->swork.transparency_time) > 21.09375) {
+			// More than 4 timmills past since requested transactions
+			pool->swork.transparency_time = (time_t)-1;
+			pool->swork.opaque = true;
+			applog(LOG_WARNING, "Pool %u is hiding block contents from us",
+			       pool->pool_no);
+		}
 	}
 
 out:
