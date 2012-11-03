@@ -1498,7 +1498,9 @@ static unsigned char *__gbt_merkleroot(struct pool *pool)
 	}
 	return merkle_hash;
 }
-	
+
+static void calc_diff(struct work *work, int known);
+
 static void gen_gbt_work(struct pool *pool, struct work *work)
 {
 	unsigned char *merkleroot;
@@ -1508,18 +1510,34 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	merkleroot = __gbt_merkleroot(pool);
 	memcpy(work->data, &pool->gbt_version, 4);
 	hex2bin(work->data + 4, pool->previousblockhash, 32);
-	memcpy(work->data + 4 + 32, merkleroot, 32);
 	memcpy(work->data + 4 + 32 + 32, &pool->curtime, 4);
 	hex2bin(work->data + 4 + 32 + 32 + 4, pool->gbt_bits, 4);
-	memset(work->data + 4 + 32 + 32 + 4 + 4, 0, 4); /* nonce */
+
+	hex2bin(work->target, pool->gbt_target, 32);
 	mutex_unlock(&pool->gbt_lock);
 
+	memcpy(work->data + 4 + 32, merkleroot, 32);
+	memset(work->data + 4 + 32 + 32 + 4 + 4, 0, 4); /* nonce */
+
+	hex2bin(work->data + 4 + 32 + 32 + 4 + 4 + 4, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000", 48);
+	hex2bin(work->hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000", 64);
+
 	if (opt_debug) {
-		char *header = bin2hex(work->data, 4 + 32 + 32 + 4 + 4 + 4);
+		char *header = bin2hex(work->data, 128);
 
 		applog(LOG_DEBUG, "Generated GBT header %s", header);
 		free(header);
 	}
+
+	local_work++;
+	work->pool = pool;
+	work->gbt = true;
+	work->id = total_work++;
+	work->longpoll = false;
+	work->getwork_mode = GETWORK_MODE_GBT;
+	work->work_block = work_block;
+	calc_diff(work, 0);
+	gettimeofday(&work->tv_staged, NULL);
 
 	free(merkleroot);
 }
