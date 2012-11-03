@@ -6090,13 +6090,14 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		case TNR_BAD:
 		{
 			struct cgpu_info *cgpu = thr->cgpu;
-			applog(LOG_WARNING, "%s %u: invalid nonce - HW error",
-			       cgpu->api->name, cgpu->device_id);
+			struct device_api *dapi = cgpu->api;
+
 			++hw_errors;
 			++thr->cgpu->hw_errors;
 
-			if (thr->cgpu->api->hw_error)
-				thr->cgpu->api->hw_error(thr);
+			if (!(dapi->hw_error && dapi->hw_error(thr)))
+				applog(LOG_WARNING, "%s %u: invalid nonce - HW error",
+				       dapi->name, cgpu->device_id);
 
 			return false;
 		}

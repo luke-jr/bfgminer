@@ -389,6 +389,13 @@ static void ztex_shutdown(struct thr_info *thr)
 	libztex_destroy_device(ztex);
 }
 
+static bool ztex_silence_hwerr(__maybe_unused struct thr_info *thr)
+{
+	// Current code has a false hw error for every real nonce
+	// At least silence these by pretending we handle them internally
+	return true;
+}
+
 static void ztex_disable(struct thr_info *thr)
 {
 	applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device_ztex->repr);
@@ -404,5 +411,6 @@ struct device_api ztex_api = {
 	.get_api_extra_device_status = get_ztex_api_extra_device_status,
 	.thread_init = ztex_prepare,
 	.scanhash = ztex_scanhash,
+	.hw_error = ztex_silence_hwerr,
 	.thread_shutdown = ztex_shutdown,
 };
