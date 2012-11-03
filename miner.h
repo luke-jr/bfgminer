@@ -897,7 +897,9 @@ struct pool {
 	bool gbt_submitold;
 	char *gbt_bits;
 	unsigned char *gbt_coinbase;
-
+	unsigned char *txn0;
+	unsigned char *txn_hashes;
+	int gbt_txns;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'

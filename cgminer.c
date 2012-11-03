@@ -1378,6 +1378,61 @@ static void __build_gbt_coinbase(struct pool *pool)
 	pool->gbt_coinbase = coinbase;
 }
 
+static void gen_hash(unsigned char *data, unsigned char *hash, int len);
+
+/* Process transactions with GBT by storing the binary value of the first
+ * transaction, and the hashes of the remaining transactions since these
+ * remain constant with an altered coinbase when generating work. Must be
+ * entered under gbt_lock */
+static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
+{
+	json_t *txn_array;
+	const char *txn0;
+	bool ret = false;
+	int i;
+
+	free(pool->txn0);
+	pool->txn0 = NULL;
+	free(pool->txn_hashes);
+	pool->txn_hashes = NULL;
+	pool->gbt_txns = 0;
+
+	txn_array = json_object_get(res_val, "transactions");
+	if (!json_is_array(txn_array))
+		goto out;
+
+	ret = true;
+	pool->gbt_txns = json_array_size(txn_array);
+	if (!pool->gbt_txns)
+		goto out;
+
+	txn0 = json_string_value(json_object_get(json_array_get(txn_array, 0), "data"));
+	if (!hex2bin(pool->txn0, txn0, strlen(txn0) / 2))
+		quit(1, "Failed to hex2bin txn0");
+	pool->txn_hashes = calloc(32 * pool->gbt_txns, 1);
+	if (unlikely(!pool->txn_hashes))
+		quit(1, "Failed to calloc txn_hashes in __build_gbt_txns");
+
+	for (i = 1; i < pool->gbt_txns; i++) {
+		json_t *txn_val = json_object_get(json_array_get(txn_array, i), "data");
+		const char *txn = json_string_value(txn_val);
+		int txn_len = strlen(txn), binlen;
+		unsigned char *txn_bin;
+
+		binlen = txn_len % 4 ? txn_len + 4 - (txn_len % 4) : txn_len;
+		txn_bin = calloc(binlen, 1);
+		if (unlikely(!txn_bin))
+			quit(1, "Failed to calloc txn_bin in __build_gbt_txns");
+		if (unlikely(!hex2bin(txn_bin, txn, txn_len / 2)))
+			quit(1, "Failed to hex2bin txn_bin");
+
+		gen_hash(txn_bin, pool->txn_hashes + (32 * (i - 1)), txn_len);
+		free(txn_bin);
+	}
+out:
+	return ret;
+}
+
 static bool gbt_decode(struct pool *pool, json_t *res_val)
 {
 	const char *previousblockhash;
@@ -1432,6 +1487,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	pool->gbt_submitold = submitold;
 	pool->gbt_bits = strdup(bits);
 	__build_gbt_coinbase(pool);
+	__build_gbt_txns(pool, res_val);
 	mutex_unlock(&pool->gbt_lock);
 
 	return true;
