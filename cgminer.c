@@ -3028,6 +3028,19 @@ retry:
 	}
 
 	if (pool->has_gbt) {
+#if 0
+		while (pool->idle) {
+			struct pool *altpool = select_pool(true);
+
+			sleep(5);
+			if (altpool != pool) {
+				wc->pool = altpool;
+				inc_queued(altpool);
+				dec_queued(pool);
+				goto retry;
+			}
+		}
+#endif
 		ret_work = make_work();
 		gen_gbt_work(pool, ret_work);
 		if (unlikely(!stage_work(ret_work))) {
@@ -4951,7 +4964,17 @@ static bool reuse_work(struct work *work, struct pool *pool)
 		if (!pool->stratum_active)
 			return false;
 		applog(LOG_DEBUG, "Reusing stratum work");
-		gen_stratum_work(pool, work);;
+		gen_stratum_work(pool, work);
+		return true;
+	}
+
+	if (pool->has_gbt) {
+#if 0
+		if (pool->idle)
+			return false;
+#endif
+		applog(LOG_DEBUG, "Reusing GBT work");
+		gen_gbt_work(pool, work);
 		return true;
 	}
 
@@ -5602,7 +5625,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
 {
 	int i;
 
-	if (cp->hdr_path)
+	if (cp->hdr_path || cp->has_gbt)
 		return cp;
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
@@ -5637,6 +5660,8 @@ static void *longpoll_thread(void *userdata)
 	struct timeval start, reply, end;
 	CURL *curl = NULL;
 	int failures = 0;
+	char lpreq[1024];
+	char *lp_url;
 	int rolltime;
 
 	curl = curl_easy_init();
@@ -5660,10 +5685,21 @@ retry_pool:
 
 	wait_lpcurrent(cp);
 
-	if (cp == pool)
-		applog(LOG_WARNING, "Long-polling activated for %s", pool->lp_url);
-	else
-		applog(LOG_WARNING, "Long-polling activated for pool %s via %s", cp->rpc_url, pool->lp_url);
+	if (pool->has_gbt) {
+		sprintf(lpreq, "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": "
+			"[{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"], "
+			"\"longpollid\": \"%s\"}]}\n", pool->longpollid);
+		lp_url = pool->rpc_url;
+		applog(LOG_WARNING, "GBT longpoll ID activated for %s", lp_url);
+	} else {
+		strcpy(lpreq, getwork_req);
+
+		lp_url = pool->lp_url;
+		if (cp == pool)
+			applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
+		else
+			applog(LOG_WARNING, "Long-polling activated for pool %s via %s", cp->rpc_url, lp_url);
+	}
 
 	while (42) {
 		json_t *val, *soval;
@@ -5677,9 +5713,8 @@ retry_pool:
 		 * so always establish a fresh connection instead of relying on
 		 * a persistent one. */
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
-		val = json_rpc_call(curl, pool->lp_url, pool->rpc_userpass,
-				    pool->rpc_req, false, true, &rolltime,
-				    pool, false);
+		val = json_rpc_call(curl, lp_url, pool->rpc_userpass,
+				    lpreq, false, true, &rolltime, pool, false);
 
 		gettimeofday(&reply, NULL);
 
@@ -5701,7 +5736,7 @@ retry_pool:
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
 			if (failures == 1)
-				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", pool->lp_url);
+				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
 			sleep(30);
 		}
 		if (pool != cp) {
