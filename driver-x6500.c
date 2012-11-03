@@ -375,6 +375,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	thr->cgpu_data = fpga;
 
 	dclk_prepare(&fpga->dclk);
+	fpga->dclk.minGoodSamples = 3;
 	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
 	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
 	fpga->dclk.freqMDefault = fpga->dclk.freqM;
@@ -563,7 +564,6 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	int64_t hashes;
 	uint32_t nonce;
 	bool bad;
-	int imm_bad_nonces = 0, imm_nonces = 0;
 
 	while (1) {
 		mutex_lock(&x6500->device_mutex);
@@ -571,13 +571,14 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 		nonce = x6500_get_register(jtag, 0xE);
 		mutex_unlock(&x6500->device_mutex);
 		if (nonce != 0xffffffff) {
-			++imm_nonces;
 			bad = !test_nonce(work, nonce, false);
 			if (!bad) {
 				submit_nonce(thr, work, nonce);
 				applog(LOG_DEBUG, "%s %u.%u: Nonce for current  work: %08lx",
 				       x6500->api->name, x6500->device_id, fpgaid,
 				       (unsigned long)nonce);
+
+				dclk_gotNonces(&fpga->dclk);
 			} else if (test_nonce(&fpga->prevwork, nonce, false)) {
 				submit_nonce(thr, &fpga->prevwork, nonce);
 				applog(LOG_DEBUG, "%s %u.%u: Nonce for PREVIOUS work: %08lx",
@@ -589,7 +590,9 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				       (unsigned long)nonce);
 				++hw_errors;
 				++x6500->hw_errors;
-				++imm_bad_nonces;
+
+				dclk_gotNonces(&fpga->dclk);
+				dclk_errorCount(&fpga->dclk, 1.);
 
 				// Purge buffers just in case of read/write desync
 				mutex_lock(&x6500->device_mutex);
@@ -597,6 +600,9 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				mutex_unlock(&x6500->device_mutex);
 				jtag->a->bufread = 0;
 			}
+			// Keep reading nonce buffer until it's empty
+			// This is necessary to avoid getting hw errors from Freq B after we've moved on to Freq A
+			continue;
 		}
 
 		hashes = calc_hashes(fpga, &tv_now);
@@ -608,9 +614,6 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 			break;
 	}
 
-	dclk_gotNonces(&fpga->dclk);
-	if (imm_bad_nonces)
-		dclk_errorCount(&fpga->dclk, ((double)imm_bad_nonces) / (double)imm_nonces);
 	dclk_preUpdate(&fpga->dclk);
 	dclk_updateFreq(&fpga->dclk, x6500_dclk_change_clock, thr);
 

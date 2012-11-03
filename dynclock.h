@@ -15,6 +15,8 @@ struct dclk_data {
 	uint8_t freqMaxM;
 	uint8_t freqMDefault;
 
+	uint8_t minGoodSamples;
+
 	double errorCount[256];
 	double errorWeight[256];
 	double errorRate[256];
