@@ -1504,7 +1504,6 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	work->work_block = work_block;
 	calc_diff(work, 0);
 	gettimeofday(&work->tv_staged, NULL);
-
 }
 
 static bool gbt_decode(struct pool *pool, json_t *res_val)
@@ -4778,7 +4777,7 @@ retry_stratum:
 		}
 		json_decref(val);
 
-		if (pool->lp_url)
+		if (pool->lp_url || pool->has_gbt)
 			goto out;
 
 		/* Decipher the longpoll URL, if any, and store it in ->lp_url */
