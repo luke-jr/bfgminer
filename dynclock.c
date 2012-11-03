@@ -13,7 +13,7 @@
 
 void dclk_prepare(struct dclk_data *data)
 {
-	memset(data, 0, sizeof(*data));
+	*data = (struct dclk_data){.freqM=0};
 }
 
 void dclk_msg_freqchange(const char *repr, int oldFreq, int newFreq, const char *tail)
