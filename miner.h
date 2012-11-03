@@ -733,6 +733,7 @@ extern void add_pool_details(bool live, char *url, char *user, char *pass);
 #endif
 
 extern struct list_head scan_devices;
+extern bool opt_force_dev_init;
 extern int nDevs;
 extern int opt_n_threads;
 extern int num_processors;

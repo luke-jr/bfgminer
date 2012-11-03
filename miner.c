@@ -140,6 +140,7 @@ bool opt_restart = true;
 static bool opt_nogpu;
 
 struct list_head scan_devices;
+bool opt_force_dev_init;
 static signed int devices_enabled;
 static bool opt_removedisabled;
 int total_devices;
@@ -1037,6 +1038,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--failover-only",
 			opt_set_bool, &opt_fail_only,
 			"Don't leak work to backup pools when primary pool is lagging"),
+#ifdef USE_FPGA
+	OPT_WITHOUT_ARG("--force-dev-init",
+	        opt_set_bool, &opt_force_dev_init,
+	        "Always initialize devices when possible (such as bitstream uploads to some FPGAs)"),
+#endif
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--gpu-dyninterval",
 		     set_int_1_to_65535, opt_show_intval, &opt_dynamic_interval,

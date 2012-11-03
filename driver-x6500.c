@@ -368,6 +368,11 @@ static bool x6500_fpga_init(struct thr_info *thr)
 		       x6500->api->name, x6500->device_id, fpgaid);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
+	} else if (opt_force_dev_init && x6500->status == LIFE_INIT) {
+		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed, but --force-dev-init is set",
+		       x6500->api->name, x6500->device_id, fpgaid);
+		if (!x6500_fpga_upload_bitstream(x6500, jp))
+			return false;
 	} else
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)",
 		       x6500->api->name, x6500->device_id, fpgaid);
