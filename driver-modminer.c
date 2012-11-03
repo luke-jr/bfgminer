@@ -379,6 +379,11 @@ modminer_fpga_init(struct thr_info *thr)
 		applog(LOG_ERR, "%s %u.%u: FPGA not programmed", modminer->api->name, modminer->device_id, fpgaid);
 		if (!modminer_fpga_upload_bitstream(modminer))
 			return false;
+	} else if (opt_force_dev_init && modminer->status == LIFE_INIT) {
+		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed, but --force-dev-init is set",
+		       modminer->api->name, modminer->device_id, fpgaid);
+		if (!modminer_fpga_upload_bitstream(modminer))
+			return false;
 	}
 	else
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)", modminer->api->name, modminer->device_id, fpgaid);
