@@ -69,11 +69,9 @@
 #include "scrypt.h"
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_ZTEX)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
 #	define USE_FPGA_SERIAL
-#elif defined(USE_X6500)
-#	define USE_FPGA
 #endif
 
 enum workio_commands {
