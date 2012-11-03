@@ -114,3 +114,17 @@ The increase is, however, extremely small and the actual increase is reported wi
 RPC API 'stats' command (a very slow CPU will make it more noticeable)
 Using the 'short' mode will remove this delay after 'short' mode completes
 The delay doesn't affect the calculation of the correct hash time
+
+
+X6500
+
+Since X6500 FPGAs do not use serial ports for communication, the --scan-serial
+option instead works with product serial numbers. By default, any devices with
+the X6500 USB product id will be used, but some X6500s may have shipped without
+this product id being configured. If you have any of these, you will need to
+specify their serial numbers explicitly, and also add -S x6500:auto if you
+still want to use the autodetection for other properly-configured FPGAs.
+The serial number of X6500s is usually found on a label applied to the ATX
+power connector slot. If yours is missing, devices seen by the system can be
+displayed by starting bfgminer in debug mode. To get a simple list of devices,
+with the debug output shown, you can use: bfgminer -D -d? -T
