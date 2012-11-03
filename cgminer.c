@@ -1366,8 +1366,9 @@ static void __build_gbt_coinbase(struct pool *pool)
 	int cbt_len;
 
 	cbt_len = strlen(pool->coinbasetxn) / 2;
+	pool->coinbase_len = cbt_len + 4;
 	/* We add 4 bytes of extra data corresponding to nonce2 of stratum */
-	coinbase = calloc(cbt_len + 4, 1);
+	coinbase = calloc(pool->coinbase_len, 1);
 	hex2bin(coinbase, pool->coinbasetxn, 42);
 	extra_len = (uint8_t *)(coinbase + 41);
 	*extra_len += 4;
@@ -1407,7 +1408,11 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 		goto out;
 
 	txn0 = json_string_value(json_object_get(json_array_get(txn_array, 0), "data"));
-	if (!hex2bin(pool->txn0, txn0, strlen(txn0) / 2))
+	pool->txn0_len = strlen(txn0) / 2;
+	pool->txn0 = calloc(pool->txn0_len , 1);;
+	if (unlikely(!pool->txn0))
+		quit(1, "Failed to calloc pool->txn0");
+	if (!hex2bin(pool->txn0, txn0, pool->txn0_len))
 		quit(1, "Failed to hex2bin txn0");
 	pool->txn_hashes = calloc(32 * pool->gbt_txns, 1);
 	if (unlikely(!pool->txn_hashes))
@@ -1431,6 +1436,63 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 	}
 out:
 	return ret;
+}
+
+static unsigned char *__gbt_merkleroot(struct pool *pool)
+{
+	unsigned char *merkles, *txn0, *merkle_hash;
+	int i, txns;
+
+	if (!pool->gbt_txns) {
+		pool->txn0 = (unsigned char *)strdup((const char *)pool->gbt_coinbase);
+		pool->txn0_len = pool->coinbase_len;
+	}
+
+	txn0 = calloc(pool->coinbase_len + pool->txn0_len, 1);
+	if (unlikely(!txn0))
+		quit(1, "Failed to calloc txn0hash");
+
+	memcpy(txn0, pool->gbt_coinbase, pool->coinbase_len);
+	memcpy(txn0 + pool->coinbase_len, pool->txn0, pool->txn0_len);
+
+	merkles = calloc(32 + (32 * pool->gbt_txns), 1);
+	if (unlikely(!merkles))
+		quit(1, "Failed to calloc merkles in __gbt_merkleroot");
+
+	gen_hash(txn0, merkles, pool->coinbase_len + pool->txn0_len);
+	free(txn0);
+
+	if (pool->gbt_txns > 1)
+		memcpy(merkles + 32, pool->txn_hashes, (pool->gbt_txns - 1) * 32);
+
+	merkle_hash = calloc((pool->gbt_txns + 1) * 32, 1);
+	if (unlikely(!merkle_hash))
+		quit(1, "Failed to calloc merkle_hash in __gbt_merkleroot");
+
+	txns = pool->gbt_txns + 1;
+	for (i = 0; i < txns; i++){
+		unsigned char tohash[64];
+
+		memcpy(tohash, &merkles[i * 32], 32);
+		if (i + 1 < txns)
+			memcpy(tohash + 32, &merkles[(i + 1) * 32], 32);
+		else
+			memcpy(tohash + 32, &merkles[i * 32], 32);
+		gen_hash(tohash, merkle_hash + (i * 32), 64);
+	}
+	return merkle_hash;
+}
+	
+static void gen_gbt_work(struct pool *pool, struct work *work)
+{
+	unsigned char *merkleroot;
+
+	mutex_lock(&pool->gbt_lock);
+	__build_gbt_coinbase(pool);
+	merkleroot = __gbt_merkleroot(pool);
+	mutex_unlock(&pool->gbt_lock);
+
+	free(merkleroot);
 }
 
 static bool gbt_decode(struct pool *pool, json_t *res_val)
@@ -1486,7 +1548,6 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	pool->curtime = htobe32(curtime);
 	pool->gbt_submitold = submitold;
 	pool->gbt_bits = strdup(bits);
-	__build_gbt_coinbase(pool);
 	__build_gbt_txns(pool, res_val);
 	mutex_unlock(&pool->gbt_lock);
 
@@ -2912,6 +2973,18 @@ retry:
 		gen_stratum_work(pool, ret_work);
 		if (unlikely(!stage_work(ret_work))) {
 			applog(LOG_ERR, "Failed to stage stratum work in get_work_thread");
+			kill_work();
+			free(ret_work);
+		}
+		dec_queued(pool);
+		goto out;
+	}
+
+	if (pool->has_gbt) {
+		ret_work = make_work();
+		gen_gbt_work(pool, ret_work);
+		if (unlikely(!stage_work(ret_work))) {
+			applog(LOG_ERR, "Failed to stage gbt work in get_work_thread");
 			kill_work();
 			free(ret_work);
 		}

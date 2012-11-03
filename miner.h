@@ -900,6 +900,8 @@ struct pool {
 	unsigned char *txn0;
 	unsigned char *txn_hashes;
 	int gbt_txns;
+	int txn0_len;
+	int coinbase_len;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
