@@ -1,11 +1,11 @@
 
-This README contains extended details about FPGA mining with cgminer
+This README contains extended details about FPGA mining with BFGMiner
 
 
 ModMinerQuad (MMQ)
 ------------------
 
-The mining bitstream does not survive a power cycle, so cgminer will upload
+The mining bitstream does not survive a power cycle, so BFGMiner will upload
 it, if it needs to, before it starts mining
 
 -
@@ -103,7 +103,7 @@ If you get an error at the end of the BFL flash process stating:
 it may have worked successfully anyway.
 Test mining on it to be sure if it worked or not.
 
-You need to give cgminer about 10 minutes mining with the BFL to be sure of
+You need to give BFGMiner about 10 minutes mining with the BFL to be sure of
 the MH/s value reported with the changed firmware - and the MH/s reported
 will be less than the firmware speed since you lose work on every block change.
 
@@ -111,7 +111,7 @@ will be less than the firmware speed since you lose work on every block change.
 Icarus (ICA)
 ------------
 
-There are two hidden options in cgminer when Icarus support is compiled in:
+There are two hidden options in BFGMiner when Icarus support is compiled in:
 
 --icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
            baud:work_division:fpga_count:quirks
@@ -155,7 +155,7 @@ It is also used to determine the elapsed time when it should abort a nonce range
 letting the Icarus go idle, but also to safely maximise that time
 
 'short' or 'long' mode should only be used on a computer that has enough CPU available to run
-cgminer without any CPU delays (an active desktop or swapping computer would not be stable enough)
+BFGMiner without any CPU delays (an active desktop or swapping computer would not be stable enough)
 Any CPU delays while calculating the hash time will affect the result
 'short' mode only requires the computer to be stable until it has completed ~315 difficulty 1 shares
 'long' mode requires it to always be stable to ensure accuracy, however, over time it continually
