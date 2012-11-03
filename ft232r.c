@@ -122,9 +122,13 @@ int ft232r_detect(const char *product_needle, const char *serial, foundusb_func_
 	int found = 0;
 
 	for (struct ft232r_device_info **infop = ft232r_devinfo_list; (info = *infop); ++infop) {
+		if (serial) {
+			// If we are searching for a specific serial, pay no attention to the product id
+			if (strcmp(serial, info->serial))
+				continue;
+		}
+		else
 		if (!strstr(info->product, product_needle))
-			continue;
-		if (serial && strcmp(serial, info->serial))
 			continue;
 		if (!info->libusb_dev)
 			continue;
