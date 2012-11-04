@@ -26,7 +26,7 @@
 // NOTE: X6500_BITSTREAM_USERID is bitflipped
 #define X6500_BITSTREAM_USERID "\x40\x20\x24\x42"
 #define X6500_MINIMUM_CLOCK    2
-#define X6500_DEFAULT_CLOCK  190
+#define X6500_DEFAULT_CLOCK  200
 #define X6500_MAXIMUM_CLOCK  250
 
 struct device_api x6500_api;
