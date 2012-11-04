@@ -2295,26 +2295,43 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
-		char gbt_block[512], varint[10] = "", *header;
+		char gbt_block[512], *varint, *header;
+		unsigned char data[80];
+		int i;
 
+		for (i = 0; i < 80 / 4; i++) {
+			uint32_t *src32, *dst32;
+
+			src32 = (uint32_t *)&work->data[i * 4];
+			dst32 = (uint32_t *)&data[i * 4];
+			*dst32 = swab32(*src32);
+		}
+		header = bin2hex(data, 80);
+		sprintf(gbt_block, "%s", header);
+		free(header);
+
+		applog(LOG_WARNING, "%d transactions", work->gbt_txns);
 		if (work->gbt_txns < 0xfd) {
 			uint8_t val = work->gbt_txns;
 
-			sprintf(varint, "%02x", val);
+			varint = bin2hex((const unsigned char *)&val, 1);
 		} else if (work->gbt_txns <= 0xffff) {
 			uint16_t val = htole16(work->gbt_txns);
 
-			sprintf(varint, "fd%04x", val);
-		} else if ((unsigned int)work->gbt_txns <= 0xffffffff) {
+			strcat(gbt_block, "fd");
+			varint = bin2hex((const unsigned char *)&val, 2);
+		} else {
 			uint32_t val = htole32(work->gbt_txns);
 
-			sprintf(varint, "fe%08x", val);
+			strcat(gbt_block, "fe");
+			varint = bin2hex((const unsigned char *)&val, 4);
 		}
-		header = bin2hex(work->data, 80);
-		sprintf(gbt_block, "%s%s%s", header, varint, work->gbt_coinbase);
-		free(header);
+		applog(LOG_WARNING, "Varint %s", varint);
+		strcat(gbt_block, varint);
+		free(varint);
+		strcat(gbt_block, work->gbt_coinbase);
 
-		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\"]}", gbt_block);
+		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {}]}", gbt_block);
 	} else
 		sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
 	applog(LOG_WARNING, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
@@ -2331,6 +2348,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			pool->remotefail_occasions++;
 			applog(LOG_WARNING, "Pool %d communication failure, caching submissions", pool->pool_no);
 		}
+		sleep(5);
 		goto out;
 	} else if (pool_tclear(pool, &pool->submit_fail))
 		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
