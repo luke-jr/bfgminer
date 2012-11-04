@@ -1468,17 +1468,19 @@ static void calc_diff(struct work *work, int known);
 
 static void gen_gbt_work(struct pool *pool, struct work *work)
 {
-	unsigned char *merkleroot;
+	unsigned char *merkleroot, hash_swap[32];
 	char *cbhex;
 
 	mutex_lock(&pool->gbt_lock);
 	__build_gbt_coinbase(pool);
 	merkleroot = __gbt_merkleroot(pool);
 	memcpy(work->data, &pool->gbt_version, 4);
-	hex2bin(work->data + 4, pool->previousblockhash, 32);
+	hex2bin(hash_swap, pool->previousblockhash, 32);
+	swap256(work->data + 4, hash_swap);
 	memcpy(work->data + 4 + 32 + 32, &pool->curtime, 4);
 	hex2bin(work->data + 4 + 32 + 32 + 4, pool->gbt_bits, 4);
-	hex2bin(work->target, pool->gbt_target, 32);
+	hex2bin(hash_swap, pool->gbt_target, 32);
+	swap256(work->target, hash_swap);
 	cbhex = bin2hex(pool->gbt_coinbase, pool->coinbase_len);
 	sprintf(work->gbt_coinbase, "%s", cbhex);
 	free(cbhex);
