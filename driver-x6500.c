@@ -380,9 +380,11 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	thr->cgpu_data = fpga;
 
 	dclk_prepare(&fpga->dclk);
+	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
+	mutex_unlock(&x6500->device_mutex);
+
 	fpga->dclk.minGoodSamples = 3;
 	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
-	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
 	fpga->dclk.freqMDefault = fpga->dclk.freqM;
 	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u Mhz (range: %u-%u)",
 	       x6500->api->name, x6500->device_id, fpgaid,
@@ -390,7 +392,6 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	       X6500_MINIMUM_CLOCK,
 	       fpga->dclk.freqMaxM * 2);
 
-	mutex_unlock(&x6500->device_mutex);
 	return true;
 }
 
