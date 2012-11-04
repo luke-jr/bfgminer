@@ -468,10 +468,6 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 		// Getting temperature more efficiently while enabled
 		// NOTE: Don't need to mess with mutex here, since the device is disabled
 		x6500_get_temperature(x6500);
-	} else {
-		mutex_lock(&x6500->device_mutex);
-		x6500_get_temperature(x6500);
-		mutex_unlock(&x6500->device_mutex);
 	}
 
 	for (int i = x6500->threads; i--; ) {
@@ -531,7 +527,7 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 	ft232r_flush(jp->a->ftdi);
 
 	gettimeofday(&fpga->tv_workstart, NULL);
-	//x6500_get_temperature(x6500);
+	x6500_get_temperature(x6500);
 	mutex_unlock(&x6500->device_mutex);
 
 	if (opt_debug) {
