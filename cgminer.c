@@ -2326,7 +2326,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			strcat(gbt_block, "fe");
 			varint = bin2hex((const unsigned char *)&val, 4);
 		}
-		applog(LOG_WARNING, "Varint %s", varint);
 		strcat(gbt_block, varint);
 		free(varint);
 		strcat(gbt_block, work->gbt_coinbase);
