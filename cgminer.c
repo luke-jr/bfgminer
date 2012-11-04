@@ -1468,19 +1468,20 @@ static void calc_diff(struct work *work, int known);
 
 static void gen_gbt_work(struct pool *pool, struct work *work)
 {
-	unsigned char *merkleroot, hash_swap[32];
+	unsigned char *merkleroot;
 	char *cbhex;
 
 	mutex_lock(&pool->gbt_lock);
 	__build_gbt_coinbase(pool);
 	merkleroot = __gbt_merkleroot(pool);
+
 	memcpy(work->data, &pool->gbt_version, 4);
-	hex2bin(hash_swap, pool->previousblockhash, 32);
-	swap256(work->data + 4, hash_swap);
+	memcpy(work->data + 4, pool->previousblockhash, 32);
 	memcpy(work->data + 4 + 32 + 32, &pool->curtime, 4);
-	hex2bin(work->data + 4 + 32 + 32 + 4, pool->gbt_bits, 4);
-	hex2bin(hash_swap, pool->gbt_target, 32);
-	swap256(work->target, hash_swap);
+	memcpy(work->data + 4 + 32 + 32 + 4, &pool->gbt_bits, 4);
+
+	memcpy(work->target, pool->gbt_target, 32);
+
 	cbhex = bin2hex(pool->gbt_coinbase, pool->coinbase_len);
 	sprintf(work->gbt_coinbase, "%s", cbhex);
 	free(cbhex);
@@ -1517,6 +1518,8 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	const char *target;
 	const char *coinbasetxn;
 	const char *longpollid;
+	unsigned char hash_swap[32];
+	uint32_t h32swap;
 	int expires;
 	int version;
 	int curtime;
@@ -1550,20 +1553,25 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	applog(LOG_DEBUG, "bits: %s", bits);
 
 	mutex_lock(&pool->gbt_lock);
-	free(pool->previousblockhash);
-	free(pool->gbt_target);
 	free(pool->coinbasetxn);
 	free(pool->longpollid);
-	free(pool->gbt_bits);
-	pool->previousblockhash = strdup(previousblockhash);
-	pool->gbt_target = strdup(target);
 	pool->coinbasetxn = strdup(coinbasetxn);
 	pool->longpollid = strdup(longpollid);
+
+	hex2bin(hash_swap, previousblockhash, 32);
+	swab256(pool->previousblockhash, hash_swap);
+
+	hex2bin(hash_swap, target, 32);
+	swab256(pool->gbt_target, hash_swap);
+
 	pool->gbt_expires = expires;
 	pool->gbt_version = htole32(version);
 	pool->curtime = htole32(curtime);
 	pool->gbt_submitold = submitold;
-	pool->gbt_bits = strdup(bits);
+
+	hex2bin((unsigned char *)&h32swap, bits, 4);
+	pool->gbt_bits = swab32(h32swap);
+
 	__build_gbt_txns(pool, res_val);
 	mutex_unlock(&pool->gbt_lock);
 

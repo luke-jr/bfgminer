@@ -887,15 +887,15 @@ struct pool {
 	/* GBT  variables */
 	bool has_gbt;
 	pthread_mutex_t gbt_lock;
-	char *previousblockhash;
-	char *gbt_target;
+	unsigned char previousblockhash[32];
+	unsigned char gbt_target[32];
 	char *coinbasetxn;
 	char *longpollid;
 	int gbt_expires;
 	uint32_t gbt_version;
 	uint32_t curtime;
 	bool gbt_submitold;
-	char *gbt_bits;
+	uint32_t gbt_bits;
 	unsigned char *gbt_coinbase;
 	unsigned char *txn_hashes;
 	int gbt_txns;
