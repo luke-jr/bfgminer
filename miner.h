@@ -182,6 +182,12 @@ static inline int fsync (int fd)
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
+#ifdef MIPSEB
+#ifndef roundl
+#define roundl(x)   (long double)((long long)((x==0)?0.0:((x)+((x)>0)?0.5:-0.5)))
+#endif
+#endif
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
