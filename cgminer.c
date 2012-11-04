@@ -1485,6 +1485,9 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	cbhex = bin2hex(pool->gbt_coinbase, pool->coinbase_len);
 	sprintf(work->gbt_coinbase, "%s", cbhex);
 	free(cbhex);
+
+	/* For encoding the block data on submission */
+	work->gbt_txns = pool->gbt_txns + 1;
 	mutex_unlock(&pool->gbt_lock);
 
 	memcpy(work->data + 4 + 32, merkleroot, 32);
@@ -1498,6 +1501,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 		char *header = bin2hex(work->data, 128);
 
 		applog(LOG_DEBUG, "Generated GBT header %s", header);
+		applog(LOG_DEBUG, "Work coinbase %s", work->gbt_coinbase);
 		free(header);
 	}
 
@@ -1519,7 +1523,6 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	const char *coinbasetxn;
 	const char *longpollid;
 	unsigned char hash_swap[32];
-	uint32_t h32swap;
 	int expires;
 	int version;
 	int curtime;
@@ -1559,18 +1562,17 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	pool->longpollid = strdup(longpollid);
 
 	hex2bin(hash_swap, previousblockhash, 32);
-	swab256(pool->previousblockhash, hash_swap);
+	swap256(pool->previousblockhash, hash_swap);
 
 	hex2bin(hash_swap, target, 32);
-	swab256(pool->gbt_target, hash_swap);
+	swap256(pool->gbt_target, hash_swap);
 
 	pool->gbt_expires = expires;
-	pool->gbt_version = htole32(version);
-	pool->curtime = htole32(curtime);
+	pool->gbt_version = htobe32(version);
+	pool->curtime = htobe32(curtime);
 	pool->gbt_submitold = submitold;
 
-	hex2bin((unsigned char *)&h32swap, bits, 4);
-	pool->gbt_bits = swab32(h32swap);
+	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 
 	__build_gbt_txns(pool, res_val);
 	mutex_unlock(&pool->gbt_lock);
@@ -2293,10 +2295,23 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
-		char gbt_block[512], *header;
+		char gbt_block[512], varint[10] = "", *header;
 
+		if (work->gbt_txns < 0xfd) {
+			uint8_t val = work->gbt_txns;
+
+			sprintf(varint, "%02x", val);
+		} else if (work->gbt_txns <= 0xffff) {
+			uint16_t val = htole16(work->gbt_txns);
+
+			sprintf(varint, "fd%04x", val);
+		} else if ((unsigned int)work->gbt_txns <= 0xffffffff) {
+			uint32_t val = htole32(work->gbt_txns);
+
+			sprintf(varint, "fe%08x", val);
+		}
 		header = bin2hex(work->data, 80);
-		sprintf(gbt_block, "%s0%s", header, work->gbt_coinbase);
+		sprintf(gbt_block, "%s%s%s", header, varint, work->gbt_coinbase);
 		free(header);
 
 		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\"]}", gbt_block);
