@@ -2295,7 +2295,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
-		char gbt_block[512], *varint, *header;
+		char gbt_block[1024], *varint, *header;
 		unsigned char data[80];
 		int i;
 
@@ -2310,7 +2310,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		sprintf(gbt_block, "%s", header);
 		free(header);
 
-		applog(LOG_WARNING, "%d transactions", work->gbt_txns);
 		if (work->gbt_txns < 0xfd) {
 			uint8_t val = work->gbt_txns;
 
