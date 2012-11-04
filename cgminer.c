@@ -1560,8 +1560,8 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	pool->coinbasetxn = strdup(coinbasetxn);
 	pool->longpollid = strdup(longpollid);
 	pool->gbt_expires = expires;
-	pool->gbt_version = htobe32(version);
-	pool->curtime = htobe32(curtime);
+	pool->gbt_version = htole32(version);
+	pool->curtime = htole32(curtime);
 	pool->gbt_submitold = submitold;
 	pool->gbt_bits = strdup(bits);
 	__build_gbt_txns(pool, res_val);
