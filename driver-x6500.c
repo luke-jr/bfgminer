@@ -381,7 +381,13 @@ static bool x6500_fpga_init(struct thr_info *thr)
 
 	dclk_prepare(&fpga->dclk);
 	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
+	for (i = 0; 0xffffffff != x6500_get_register(jp, 0xE); ++i)
+	{}
 	mutex_unlock(&x6500->device_mutex);
+
+	if (i)
+		applog(LOG_WARNING, "%s %u.%u: Flushed %d nonces from buffer at init",
+		       x6500->api->name, x6500->device_id, fpgaid, i);
 
 	fpga->dclk.minGoodSamples = 3;
 	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
