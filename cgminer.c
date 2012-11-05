@@ -4305,6 +4305,25 @@ out:
 
 static void pool_resus(struct pool *pool);
 
+static void clear_stratum_shares(struct pool *pool)
+{
+	struct stratum_share *sshare, *tmpshare;
+	int cleared = 0;
+
+	mutex_lock(&sshare_lock);
+	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
+		if (sshare->work.pool == pool) {
+			HASH_DEL(stratum_shares, sshare);
+			free(sshare);
+			cleared++;
+		}
+	}
+	mutex_unlock(&sshare_lock);
+
+	if (cleared)
+		applog(LOG_WARNING, "Lost %d shares due to stratum disconnect on pool %d", cleared, pool->pool_no);
+}
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -4340,6 +4359,11 @@ static void *stratum_thread(void *userdata)
 			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
 			total_go++;
+
+			/* If the socket to our stratum pool disconnects, all
+			 * tracked submitted shares are lost and we will leak
+			 * the memory if we don't discard their records. */
+			clear_stratum_shares(pool);
 
 			if (initiate_stratum(pool) && auth_stratum(pool))
 				continue;
