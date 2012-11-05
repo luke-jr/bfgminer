@@ -4803,7 +4803,7 @@ retry_stratum:
 			}
 			json_decref(val);
 		}
-		pool->probed = false;
+
 		if (pool->has_gbt)
 			applog(LOG_DEBUG, "GBT coinbase append support found, switching to GBT protocol");
 		else
