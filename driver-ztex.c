@@ -297,6 +297,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 							backlog_p = 0;
 						nonce = le32toh(nonce);
 						work->blk.nonce = 0xffffffff;
+						if ( (rv = test_nonce(work, nonce, false)) )
 						rv = submit_nonce(thr, work, nonce);
 						applog(LOG_DEBUG, "%s: submitted %0.8x (from N%dE%d) %d", ztex->repr, nonce, i, j, rv);
 					}
