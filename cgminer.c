@@ -3040,7 +3040,6 @@ retry:
 	}
 
 	if (pool->has_gbt) {
-#if 0
 		while (pool->idle) {
 			struct pool *altpool = select_pool(true);
 
@@ -3052,7 +3051,6 @@ retry:
 				goto retry;
 			}
 		}
-#endif
 		ret_work = make_work();
 		gen_gbt_work(pool, ret_work);
 		if (unlikely(!stage_work(ret_work))) {
@@ -5011,10 +5009,8 @@ static bool reuse_work(struct work *work, struct pool *pool)
 	}
 
 	if (pool->has_gbt) {
-#if 0
 		if (pool->idle)
 			return false;
-#endif
 		applog(LOG_DEBUG, "Reusing GBT work");
 		gen_gbt_work(pool, work);
 		return true;
