@@ -9,6 +9,7 @@
 
 #include "config.h"
 
+#include <math.h>
 #include <sys/time.h>
 
 #include <libusb-1.0/libusb.h>
@@ -26,7 +27,7 @@
 // NOTE: X6500_BITSTREAM_USERID is bitflipped
 #define X6500_BITSTREAM_USERID "\x40\x20\x24\x42"
 #define X6500_MINIMUM_CLOCK    2
-#define X6500_DEFAULT_CLOCK  190
+#define X6500_DEFAULT_CLOCK  200
 #define X6500_MAXIMUM_CLOCK  250
 
 struct device_api x6500_api;
@@ -178,7 +179,13 @@ struct x6500_fpga_data {
 	struct jtag_port jtag;
 	struct work prevwork;
 	struct timeval tv_workstart;
+
 	struct dclk_data dclk;
+	uint8_t freqMaxMaxM;
+
+	// Time the clock was last reduced due to temperature
+	time_t last_cutoff_reduced;
+
 	float temp;
 };
 
@@ -380,9 +387,18 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	thr->cgpu_data = fpga;
 
 	dclk_prepare(&fpga->dclk);
-	fpga->dclk.minGoodSamples = 3;
-	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
 	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
+	for (i = 0; 0xffffffff != x6500_get_register(jp, 0xE); ++i)
+	{}
+	mutex_unlock(&x6500->device_mutex);
+
+	if (i)
+		applog(LOG_WARNING, "%s %u.%u: Flushed %d nonces from buffer at init",
+		       x6500->api->name, x6500->device_id, fpgaid, i);
+
+	fpga->dclk.minGoodSamples = 3;
+	fpga->freqMaxMaxM =
+	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
 	fpga->dclk.freqMDefault = fpga->dclk.freqM;
 	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u Mhz (range: %u-%u)",
 	       x6500->api->name, x6500->device_id, fpgaid,
@@ -390,7 +406,6 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	       X6500_MINIMUM_CLOCK,
 	       fpga->dclk.freqMaxM * 2);
 
-	mutex_unlock(&x6500->device_mutex);
 	return true;
 }
 
@@ -448,7 +463,9 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 	jp->a->bufread = 0;
 
 	for (i = 0; i < 2; ++i) {
-		fpga = x6500->thr[i]->cgpu_data;
+		struct thr_info *thr = x6500->thr[i];
+		fpga = thr->cgpu_data;
+
 		if (code[i] == 0xffff || !code[i]) {
 			fpga->temp = 0;
 			continue;
@@ -457,6 +474,30 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 			code[i] -= 0x10000;
 		fpga->temp = (float)(code[i] >> 2) * 0.03125f;
 		applog(LOG_DEBUG,"x6500_get_temperature: fpga[%d]->temp=%.1fC",i,fpga->temp);
+
+		int temperature = round(fpga->temp);
+		if (temperature > x6500->targettemp + opt_hysteresis) {
+			time_t now = time(NULL);
+			if (fpga->last_cutoff_reduced != now) {
+				fpga->last_cutoff_reduced = now;
+				int oldFreq = fpga->dclk.freqM;
+				if (x6500_change_clock(thr, oldFreq - 1))
+					applog(LOG_NOTICE, "%s %u.%u: Frequency dropped from %u to %u Mhz (temp: %.1fC)",
+					       x6500->api->name, x6500->device_id, i,
+					       oldFreq * 2, fpga->dclk.freqM * 2,
+					       fpga->temp
+					);
+				fpga->dclk.freqMaxM = fpga->dclk.freqM;
+			}
+		}
+		else
+		if (fpga->dclk.freqMaxM < fpga->freqMaxMaxM && temperature < x6500->targettemp) {
+			if (temperature < x6500->targettemp - opt_hysteresis) {
+				fpga->dclk.freqMaxM = fpga->freqMaxMaxM;
+			} else if (fpga->dclk.freqM == fpga->dclk.freqMaxM) {
+				++fpga->dclk.freqMaxM;
+			}
+		}
 	}
 
 }
@@ -468,10 +509,6 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 		// Getting temperature more efficiently while enabled
 		// NOTE: Don't need to mess with mutex here, since the device is disabled
 		x6500_get_temperature(x6500);
-	} else {
-		mutex_lock(&x6500->device_mutex);
-		x6500_get_temperature(x6500);
-		mutex_unlock(&x6500->device_mutex);
 	}
 
 	for (int i = x6500->threads; i--; ) {
@@ -512,6 +549,31 @@ get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
 	strcat(buf, "               | ");
 }
 
+static struct api_data*
+get_x6500_api_extra_device_status(struct cgpu_info *x6500)
+{
+	struct api_data *root = NULL;
+	static char *k[2] = {"FPGA0", "FPGA1"};
+	int i;
+
+	for (i = 0; i < 2; ++i) {
+		struct thr_info *thr = x6500->thr[i];
+		struct x6500_fpga_data *fpga = thr->cgpu_data;
+		json_t *o = json_object();
+
+		if (fpga->temp)
+			json_object_set(o, "Temperature", json_real(fpga->temp));
+		json_object_set(o, "Frequency", json_real((double)fpga->dclk.freqM * 2 * 1000000.));
+		json_object_set(o, "Cool Max Frequency", json_real((double)fpga->dclk.freqMaxM * 2 * 1000000.));
+		json_object_set(o, "Max Frequency", json_real((double)fpga->freqMaxMaxM * 2 * 1000000.));
+
+		root = api_add_json(root, k[i], o, false);
+		json_decref(o);
+	}
+
+	return root;
+}
+
 static
 bool x6500_start_work(struct thr_info *thr, struct work *work)
 {
@@ -531,7 +593,7 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 	ft232r_flush(jp->a->ftdi);
 
 	gettimeofday(&fpga->tv_workstart, NULL);
-	//x6500_get_temperature(x6500);
+	x6500_get_temperature(x6500);
 	mutex_unlock(&x6500->device_mutex);
 
 	if (opt_debug) {
@@ -648,6 +710,7 @@ struct device_api x6500_api = {
 	.thread_init = x6500_fpga_init,
 	.get_stats = x6500_get_stats,
 	.get_statline_before = get_x6500_statline_before,
+	.get_api_extra_device_status = get_x6500_api_extra_device_status,
 	.scanhash = x6500_scanhash,
 // 	.thread_shutdown = x6500_fpga_shutdown,
 };
