@@ -50,12 +50,6 @@
 bool successful_connect = false;
 struct timeval nettime;
 
-struct data_buffer {
-	void		*buf;
-	size_t		len;
-	curl_socket_t	*idlemarker;
-};
-
 struct upload_buffer {
 	const void	*buf;
 	size_t		len;
@@ -301,7 +295,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		      struct pool *pool, bool share)
 {
 	long timeout = longpoll ? (60 * 60) : 60;
-	struct data_buffer all_data = {NULL, 0, NULL};
+	struct data_buffer all_data = {.len = 0};
 	struct header_info hi = {NULL, 0, NULL, NULL, false, false, false};
 	char len_hdr[64], user_agent_hdr[128];
 	char curl_err_str[CURL_ERROR_SIZE];
@@ -910,13 +904,14 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 static void clear_sock(struct pool *pool)
 {
 	size_t n = 0;
+	char buf[RECVSIZE];
 
 	mutex_lock(&pool->stratum_lock);
 	/* Ignore return code of curl_easy_recv since we're just clearing
 	 * anything in the socket if it's still alive */
-	curl_easy_recv(pool->stratum_curl, pool->sockbuf, RECVSIZE, &n);
+	while (CURLE_AGAIN != curl_easy_recv(pool->stratum_curl, buf, RECVSIZE, &n))
+	{}
 	mutex_unlock(&pool->stratum_lock);
-	strcpy(pool->sockbuf, "");
 }
 
 /* Check to see if Santa's been good to you */
@@ -926,7 +921,7 @@ static bool sock_full(struct pool *pool, bool wait)
 	struct timeval timeout;
 	fd_set rd;
 
-	if (strlen(pool->sockbuf))
+	if (pool->readbuf.buf && strchr(pool->readbuf.buf, '\n'))
 		return true;
 
 	FD_ZERO(&rd);
@@ -945,13 +940,12 @@ static bool sock_full(struct pool *pool, bool wait)
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
-	ssize_t len, buflen;
+	ssize_t len;
 	char *tok, *sret = NULL;
 	size_t n = 0;
 
-	if (!strstr(pool->sockbuf, "\n")) {
+	while (!(pool->readbuf.buf && strchr(pool->readbuf.buf, '\n'))) {
 		char s[RBUFSIZE];
-		size_t sspace;
 		CURLcode rc;
 
 		if (!sock_full(pool, true)) {
@@ -965,31 +959,29 @@ char *recv_line(struct pool *pool)
 		mutex_unlock(&pool->stratum_lock);
 
 		if (rc != CURLE_OK) {
-			applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+			applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", rc);
 			goto out;
 		}
-		/* Prevent buffer overflows, but if 8k is still not enough,
-		 * likely we have had some comms issues and the data is all
-		 * useless anyway */
-		sspace = RECVSIZE - strlen(pool->sockbuf);
-		strncat(pool->sockbuf, s, sspace);
+
+		len = all_data_cb(s, n, 1, &pool->readbuf);
+		pool->readbuf.buf = realloc(pool->readbuf.buf, pool->readbuf.len + 1);
+		((char*)pool->readbuf.buf)[pool->readbuf.len] = '\0';
+
+		if (n != (size_t)len) {
+			applog(LOG_DEBUG, "Error appending readbuf in recv_line");
+			goto out;
+		}
 	}
 
-	buflen = strlen(pool->sockbuf);
-	tok = strtok(pool->sockbuf, "\n");
-	if (!tok) {
-		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in recv_line");
-		goto out;
-	}
-	sret = strdup(tok);
-	len = strlen(sret);
+	// Assuming the bulk of the data will be in the line, steal the buffer and return it
+	tok = strchr(pool->readbuf.buf, '\n');
+	*tok = '\0';
+	len = tok - (char*)pool->readbuf.buf;
+	pool->readbuf.len -= len + 1;
+	tok = memcpy(malloc(pool->readbuf.len), tok + 1, pool->readbuf.len);
+	sret = realloc(pool->readbuf.buf, len + 1);
+	pool->readbuf.buf = tok;
 
-	/* Copy what's left in the buffer after the \n, including the
-	 * terminating \0 */
-	if (buflen > len + 1)
-		memmove(pool->sockbuf, pool->sockbuf + len + 1, buflen - len + 1);
-	else
-		strcpy(pool->sockbuf, "");
 out:
 	if (!sret)
 		clear_sock(pool);
@@ -1113,6 +1105,18 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	/* A notify message is the closest stratum gets to a getwork */
 	pool->getwork_requested++;
 	total_getworks++;
+
+	{
+		// Request transaction data to discourage pools from doing anything shady
+		char s[1024];
+		int sLen;
+		sLen = sprintf(s, "{\"params\": [\"%s\"], \"id\": \"txlist\", \"method\": \"mining.get_transactions\"}",
+		        pool->swork.job_id);
+		stratum_send(pool, s, sLen);
+		if ((!pool->swork.opaque) && pool->swork.transparency_time == (time_t)-1)
+			pool->swork.transparency_time = time(NULL);
+	}
+
 	return true;
 }
 
@@ -1243,6 +1247,8 @@ out:
 	return ret;
 }
 
+extern bool parse_stratum_response(struct pool *, char *s);
+
 bool auth_stratum(struct pool *pool)
 {
 	json_t *val = NULL, *res_val, *err_val;
@@ -1250,13 +1256,28 @@ bool auth_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
-	sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
-		swork_id++, pool->rpc_user, pool->rpc_pass);
+	sprintf(s, "{\"id\": \"auth\", \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
+	        pool->rpc_user, pool->rpc_pass);
 
-	/* Parse all data prior sending auth request */
-	while (sock_full(pool, false)) {
+	if (!stratum_send(pool, s, strlen(s)))
+		goto out;
+
+	while (1) {
+		if (!sock_full(pool, true)) {
+			applog(LOG_ERR, "Stratum authentication timed out for pool %d", pool->pool_no);
+			goto out;
+		}
 		sret = recv_line(pool);
-		if (!parse_method(pool, sret)) {
+		if (!parse_method(pool, sret) && !parse_stratum_response(pool, sret)) {
+			// Check for auth response
+			val = JSON_LOADS(sret, &err);
+			if (val) {
+				json_t *id_val = json_object_get(val, "id");
+				if (json_is_string(id_val) && !strcmp(json_string_value(id_val), "auth"))
+					break;
+				json_decref(val);
+			}
+
 			clear_sock(pool);
 			applog(LOG_INFO, "Failed to parse stratum buffer");
 			free(sret);
@@ -1265,13 +1286,6 @@ bool auth_stratum(struct pool *pool)
 		free(sret);
 	}
 
-	if (!stratum_send(pool, s, strlen(s)))
-		goto out;
-
-	sret = recv_line(pool);
-	if (!sret)
-		goto out;
-	val = JSON_LOADS(sret, &err);
 	free(sret);
 	res_val = json_object_get(val, "result");
 	err_val = json_object_get(val, "error");
