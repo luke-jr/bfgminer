@@ -5610,7 +5610,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				gettimeofday(&thr->sick, NULL);
 
 				dev_error(cgpu, REASON_DEV_SICK_IDLE_60);
-				cgpu->dev_sick_idle_60_count++;
 #ifdef HAVE_ADL
 				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
 					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
