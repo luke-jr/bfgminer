@@ -4320,8 +4320,11 @@ static void clear_stratum_shares(struct pool *pool)
 	}
 	mutex_unlock(&sshare_lock);
 
-	if (cleared)
+	if (cleared) {
 		applog(LOG_WARNING, "Lost %d shares due to stratum disconnect on pool %d", cleared, pool->pool_no);
+		pool->stale_shares++;
+		total_stale++;
+	}
 }
 
 /* One stratum thread per pool that has stratum waits on the socket checking
