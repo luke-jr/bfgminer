@@ -920,6 +920,7 @@ struct pool {
 	unsigned char *txn_hashes;
 	int gbt_txns;
 	int coinbase_len;
+	struct timeval tv_template;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'

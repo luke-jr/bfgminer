@@ -1622,6 +1622,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	if (pool->has_gbt) {
 		if (unlikely(!gbt_decode(pool, res_val)))
 			goto out;
+		gettimeofday(&pool->tv_template, NULL);
 		work->gbt = true;
 		ret = true;
 		goto out;
@@ -4713,7 +4714,10 @@ static bool pool_active(struct pool *pool, bool pinging)
 	CURL *curl;
 	int rolltime;
 
-	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
+	if (pool->has_gbt)
+		applog(LOG_DEBUG, "Retrieving block template from pool %s", pool->rpc_url);
+	else
+		applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 
 	/* This is the central point we activate stratum when we can */
 retry_stratum:
@@ -5829,8 +5833,17 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			if (pool->enabled == POOL_DISABLED || pool->has_stratum)
 				continue;
 
+			/* Apart from longpollid comms, we retrieve a fresh
+			 * template if more than 30 seconds has elapsed since
+			 * the last one to keep the data current and as a test
+			 * for when the pool dies. */
+			if (!pool->idle && pool->has_gbt && now.tv_sec - pool->tv_template.tv_sec > 60) {
+				if (!pool_active(pool, true))
+					pool_died(pool);
+			}
+
 			/* Test pool is idle once every minute */
-			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 60) {
+			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
 				gettimeofday(&pool->tv_idle, NULL);
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
