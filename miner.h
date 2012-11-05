@@ -544,6 +544,16 @@ static inline void swab256(void *dest_p, const void *src_p)
 	dest[7] = swab32(src[0]);
 }
 
+static inline void flip32(void *dest_p, const void *src_p)
+{
+	uint32_t *dest = dest_p;
+	const uint32_t *src = src_p;
+	int i;
+
+	for (i = 0; i < 8; i++)
+		dest[i] = swab32(src[i]);
+}
+
 static inline void flip80(void *dest_p, const void *src_p)
 {
 	uint32_t *dest = dest_p;

@@ -1428,7 +1428,7 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 		if (unlikely(!hex2bin(txn_bin, txn, txn_len / 2)))
 			quit(1, "Failed to hex2bin txn_bin");
 
-		gen_hash(txn_bin, pool->txn_hashes + (32 * i), txn_len);
+		gen_hash(txn_bin, pool->txn_hashes + (32 * i), txn_len / 2);
 		free(txn_bin);
 	}
 out:
@@ -1446,7 +1446,7 @@ static unsigned char *__gbt_merkleroot(struct pool *pool)
 
 	gen_hash(pool->gbt_coinbase, merkle_hash, pool->coinbase_len);
 
-	if (pool->gbt_txns > 1)
+	if (pool->gbt_txns)
 		memcpy(merkle_hash + 32, pool->txn_hashes, pool->gbt_txns * 32);
 
 	txns = pool->gbt_txns + 1;
@@ -1493,6 +1493,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	mutex_unlock(&pool->gbt_lock);
 
 	memcpy(work->data + 4 + 32, merkleroot, 32);
+	flip32(work->data + 4 + 32, merkleroot);
 	free(merkleroot);
 	memset(work->data + 4 + 32 + 32 + 4 + 4, 0, 4); /* nonce */
 
