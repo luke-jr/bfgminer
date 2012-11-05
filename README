@@ -69,23 +69,19 @@ BFGMiner specific configuration options:
 	--without-curses        Compile support for curses TUI (default enabled)
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
-Basic *nix build instructions:
-	To build with GPU mining support:
-	Install AMD APP sdk, ideal version (see FAQ!) - no official place to
-	install it so just keep track of where it is if you're not installing
-	the include files and library files into the system directory.
-	(Do NOT install the ati amd sdk if you are on nvidia.)
+---
 
-The easiest way to install the ATI AMD SPP sdk on linux is to actually put it
-into a system location. Then building will be simpler. Download the correct
-version for either 32 bit or 64 bit from here:
+To build with GPU mining support:
+
+Install AMD APP sdk, ideal version (see FAQ!) - put it into a system location.
+Download the correct version for either 32 bit or 64 bit from here:
 	http://developer.amd.com/sdks/AMDAPPSDK/downloads/Pages/default.aspx
 
 This will give you a file with a name like AMD-APP-SDK-v2.4-lnx64.tgz
 
 Then:
 
-sudo su
+sudo -i
 cd /opt
 tar xf /path/to/AMD-APP-SDK-v2.4-lnx64.tgz
 cd /
@@ -96,25 +92,17 @@ ldconfig
 
 If you are on 32 bit, x86_64 in the 2nd last line should be x86
 
-	To actually build:
+Basic *nix build instructions:
 
-	./autogen.sh	# only needed if building from git repo
-	CFLAGS="-O2 -Wall -march=native" ./configure
-	or if you haven't installed the ati files in system locations:
-	CFLAGS="-O2 -Wall -march=native -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86_64> ./configure
-	make
-	
-	If it finds the opencl files it will inform you with
-	"OpenCL: FOUND. GPU mining support enabled."
+./autogen.sh    # only needed if building from git repo
+./configure     # NOT needed if autogen.sh used
+make
 
-Basic WIN32 build instructions (LIKELY OUTDATED INFO. requires mingw32):
-	./autogen.sh	# only needed if building from git repo
-	rm -f mingw32-config.cache
-	MINGW32_CFLAGS="-O2 -Wall -msse2" mingw32-configure
-	make
-	./mknsis.sh
-	
 Native WIN32 build instructions: see windows-build.txt
+
+If you build BFGMiner from source, it is recommended that you run it from the
+build directory. On *nix, you will usually need to prepend your command with a
+path like this (if you are in the bfgminer directory already): ./bfgminer
 
 ---
 
