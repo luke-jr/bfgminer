@@ -173,9 +173,10 @@ bool _jtag_llrw(struct jtag_port *jp, void *buf, size_t bitlength, bool do_read,
 		rbufsz = jp->a->bufread + 3;
 		if (ft232r_read_all(jp->a->ftdi, rbuf, rbufsz) != rbufsz)
 			return false;
-		for (ssize_t j = rbufsz - 1 - (bitspending * 2); j < rbufsz; j += 2)
+		--rbufsz;
+		for (ssize_t j = rbufsz - (bitspending * 2); j < rbufsz; j += 2)
 			setbit(data, databitoff++, (rbuf[j] & jp->tdo));
-		setbit(data, databitoff++, (rbuf[rbufsz - 1] & jp->tdo));
+		setbit(data, databitoff++, (rbuf[rbufsz] & jp->tdo));
 		jp->a->bufread = 0;
 		
 		if (stage & 2) {
