@@ -669,9 +669,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (icarus->device_fd == -1)
 		if (!icarus_prepare(thr)) {
 			applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
-			icarus->device_last_not_well = time(NULL);
-			icarus->device_not_well_reason = REASON_DEV_COMMS_ERROR;
-			icarus->dev_comms_error_count++;
+			dev_error(icarus, REASON_DEV_COMMS_ERROR);
 
 			// fail the device if the reopen attempt fails
 			return -1;
@@ -691,9 +689,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (ret) {
 		do_icarus_close(thr);
 		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
-		icarus->device_last_not_well = time(NULL);
-		icarus->device_not_well_reason = REASON_DEV_COMMS_ERROR;
-		icarus->dev_comms_error_count++;
+		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return 0;	/* This should never happen */
 	}
 
@@ -713,9 +709,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (ret == ICA_GETS_ERROR) {
 		do_icarus_close(thr);
 		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
-		icarus->device_last_not_well = time(NULL);
-		icarus->device_not_well_reason = REASON_DEV_COMMS_ERROR;
-		icarus->dev_comms_error_count++;
+		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return 0;
 	}
 

@@ -420,10 +420,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
 				applog(LOG_WARNING, "BFL%i: Hit thermal cutoff limit, disabling!", bitforce->device_id);
 				bitforce->deven = DEV_RECOVER;
-
-				bitforce->device_last_not_well = time(NULL);
-				bitforce->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-				bitforce->dev_thermal_cutoff_count++;
+				dev_error(bitforce, REASON_DEV_THERMAL_CUTOFF);
 			}
 		}
 	} else {
@@ -431,9 +428,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
 		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer", bitforce->device_id);
-		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_DEV_THROTTLE;
-		bitforce->dev_throttle_count++;
+		dev_error(bitforce, REASON_DEV_THROTTLE);
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
 		bitforce_clear_buffer(bitforce);
@@ -568,9 +563,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
 		applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
 			tv_to_ms(elapsed), BITFORCE_TIMEOUT_MS);
-		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
-		bitforce->dev_over_heat_count++;
+		dev_error(bitforce, REASON_DEV_OVER_HEAT);
 
 		if (!pdevbuf[0])	/* Only return if we got nothing after timeout - there still may be results */
 			return 0;
@@ -673,9 +666,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 	if (ret == -1) {
 		ret = 0;
 		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
-		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
-		bitforce->dev_comms_error_count++;
+		dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 		bitforce->hw_errors++;
 		/* empty read buffer */
 		bitforce_clear_buffer(bitforce);
