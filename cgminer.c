@@ -1562,8 +1562,8 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	mutex_lock(&pool->gbt_lock);
 	free(pool->coinbasetxn);
 	pool->coinbasetxn = strdup(coinbasetxn);
-	if (!pool->longpollid)
-		pool->longpollid = strdup(longpollid);
+	free(pool->longpollid);
+	pool->longpollid = strdup(longpollid);
 
 	hex2bin(hash_swap, previousblockhash, 32);
 	swap256(pool->previousblockhash, hash_swap);
@@ -3575,8 +3575,8 @@ static bool test_work_current(struct work *work)
 
 		if (!work->stratum) {
 			if (work->longpoll) {
-				applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
-				       work->pool->pool_no);
+				applog(LOG_NOTICE, "%sLONGPOLL from pool %d detected new block",
+				       work->gbt ? "GBT " : "", work->pool->pool_no);
 				work->longpoll = false;
 			} else if (have_longpoll)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
@@ -3587,8 +3587,8 @@ static bool test_work_current(struct work *work)
 	} else if (work->longpoll) {
 		work->longpoll = false;
 		if (work->pool == current_pool()) {
-			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
-				work->pool->pool_no);
+			applog(LOG_NOTICE, "%sLONGPOLL from pool %d requested work restart",
+			       work->gbt ? "GBT " : "", work->pool->pool_no);
 			work_block++;
 			restart_threads();
 		}
@@ -5696,9 +5696,6 @@ retry_pool:
 	wait_lpcurrent(cp);
 
 	if (pool->has_gbt) {
-		sprintf(lpreq, "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": "
-			"[{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"], "
-			"\"longpollid\": \"%s\"}]}\n", pool->longpollid);
 		lp_url = pool->rpc_url;
 		applog(LOG_WARNING, "GBT longpoll ID activated for %s", lp_url);
 	} else {
@@ -5717,6 +5714,16 @@ retry_pool:
 		wait_lpcurrent(cp);
 
 		gettimeofday(&start, NULL);
+
+		/* Update the longpollid every time, but do it under lock to
+		 * avoid races */
+		if (pool->has_gbt) {
+			mutex_lock(&pool->gbt_lock);
+			sprintf(lpreq, "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": "
+				"[{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"], "
+				"\"longpollid\": \"%s\"}]}\n", pool->longpollid);
+			mutex_unlock(&pool->gbt_lock);
+		}
 
 		/* Longpoll connections can be persistent for a very long time
 		 * and any number of issues could have come up in the meantime
