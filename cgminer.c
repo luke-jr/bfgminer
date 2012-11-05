@@ -5598,14 +5598,17 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 	}
 	work->pool = pool;
 	work->rolltime = rolltime;
-	work->longpoll = true;
 	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
 	memcpy(&(work->tv_getwork_reply), tv_lp_reply, sizeof(struct timeval));
-	work->getwork_mode = GETWORK_MODE_LP;
 	calc_diff(work, 0);
 
 	if (pool->enabled == POOL_REJECTING)
 		work->mandatory = true;
+
+	if (pool->has_gbt)
+		gen_gbt_work(pool, work);
+	work->longpoll = true;
+	work->getwork_mode = GETWORK_MODE_LP;
 
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
