@@ -1506,6 +1506,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 		free(header);
 	}
 
+	calc_midstate(work);
 	local_work++;
 	work->pool = pool;
 	work->gbt = true;
@@ -2298,7 +2299,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	if (work->gbt) {
 		char gbt_block[1024], *varint, *header;
 		unsigned char data[80];
-		int i;
 
 		flip256(data, work->data);
 		header = bin2hex(data, 80);
