@@ -4282,8 +4282,23 @@ bool parse_stratum_response(struct pool *pool, char *s)
 
 	if (!json_is_integer(id_val)) {
 		if (json_is_string(id_val)
-		 && !strcmp(json_string_value(id_val), "txlist")
+		 && !strncmp(json_string_value(id_val), "txlist", 6)
+		 && !strcmp(json_string_value(id_val) + 6, pool->swork.job_id)
 		 && json_is_array(res_val)) {
+			// Check that the transactions actually hash to the merkle links
+			{
+				size_t maxtx = 1 << pool->swork.merkles;
+				size_t mintx = maxtx >> 1;
+				--maxtx;
+				size_t acttx = json_array_size(res_val);
+				if (acttx < mintx || acttx > maxtx) {
+					applog(LOG_WARNING, "Pool %u is sending mismatched block contents to us (%u is not %u-%u)",
+					       pool->pool_no, acttx, mintx, maxtx);
+					goto fishy;
+				}
+				// TODO: Check hashes match actual merkle links
+			}
+
 			if (pool->swork.opaque) {
 				pool->swork.opaque = false;
 				applog(LOG_NOTICE, "Pool %u now providing block contents to us",
@@ -4291,6 +4306,7 @@ bool parse_stratum_response(struct pool *pool, char *s)
 			}
 			pool->swork.transparency_time = (time_t)-1;
 
+fishy:
 			ret = true;
 		}
 

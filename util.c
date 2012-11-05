@@ -1125,7 +1125,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		// Request transaction data to discourage pools from doing anything shady
 		char s[1024];
 		int sLen;
-		sLen = sprintf(s, "{\"params\": [\"%s\"], \"id\": \"txlist\", \"method\": \"mining.get_transactions\"}",
+		sLen = sprintf(s, "{\"params\": [\"%s\"], \"id\": \"txlist%s\", \"method\": \"mining.get_transactions\"}",
+		        pool->swork.job_id,
 		        pool->swork.job_id);
 		stratum_send(pool, s, sLen);
 		if ((!pool->swork.opaque) && pool->swork.transparency_time == (time_t)-1)
