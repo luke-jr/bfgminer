@@ -1846,8 +1846,9 @@ static void curses_print_status(void)
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else {
-		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
-			pool->sockaddr_url, have_longpoll ? "": "out", pool->rpc_user);
+		mvwprintw(statuswin, 4, 0, " Connected to %s with%s %s as user %s",
+			pool->sockaddr_url, have_longpoll ? "": "out",
+			pool->has_gbt ? "GBT" : "LP", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best share: %s   ", current_hash, blocktime, best_share);
