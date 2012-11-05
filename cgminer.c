@@ -2131,7 +2131,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	struct pool *pool = work->pool;
 	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
 
-	if (json_is_true(res)) {
+	if (json_is_true(res) || (work->gbt && json_is_null(res))) {
 		cgpu->accepted++;
 		total_accepted++;
 		pool->accepted++;
@@ -2189,7 +2189,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			else
 				strcpy(where, "");
 
-			res = json_object_get(val, "reject-reason");
+			if (!work->gbt)
+				res = json_object_get(val, "reject-reason");
 			if (res) {
 				const char *reasontmp = json_string_value(res);
 
@@ -2329,7 +2330,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {}]}", gbt_block);
 	} else
 		sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
-	applog(LOG_WARNING, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
+	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
 	strcat(s, "\n");
 
 	gettimeofday(&tv_submit, NULL);
