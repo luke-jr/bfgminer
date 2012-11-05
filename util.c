@@ -1464,6 +1464,7 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 		break;
 		case REASON_DEV_COMMS_ERROR:
 			dev->dev_comms_error_count++;
+		break;
 		case REASON_DEV_THROTTLE:
 			dev->dev_throttle_count++;
 		break;
