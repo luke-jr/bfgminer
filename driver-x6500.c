@@ -549,6 +549,31 @@ get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
 	strcat(buf, "               | ");
 }
 
+static struct api_data*
+get_x6500_api_extra_device_status(struct cgpu_info *x6500)
+{
+	struct api_data *root = NULL;
+	static char *k[2] = {"FPGA0", "FPGA1"};
+	int i;
+
+	for (i = 0; i < 2; ++i) {
+		struct thr_info *thr = x6500->thr[i];
+		struct x6500_fpga_data *fpga = thr->cgpu_data;
+		json_t *o = json_object();
+
+		if (fpga->temp)
+			json_object_set(o, "Temperature", json_real(fpga->temp));
+		json_object_set(o, "Frequency", json_real((double)fpga->dclk.freqM * 2 * 1000000.));
+		json_object_set(o, "Cool Max Frequency", json_real((double)fpga->dclk.freqMaxM * 2 * 1000000.));
+		json_object_set(o, "Max Frequency", json_real((double)fpga->freqMaxMaxM * 2 * 1000000.));
+
+		root = api_add_json(root, k[i], o, false);
+		json_decref(o);
+	}
+
+	return root;
+}
+
 static
 bool x6500_start_work(struct thr_info *thr, struct work *work)
 {
@@ -685,6 +710,7 @@ struct device_api x6500_api = {
 	.thread_init = x6500_fpga_init,
 	.get_stats = x6500_get_stats,
 	.get_statline_before = get_x6500_statline_before,
+	.get_api_extra_device_status = get_x6500_api_extra_device_status,
 	.scanhash = x6500_scanhash,
 // 	.thread_shutdown = x6500_fpga_shutdown,
 };
