@@ -990,6 +990,7 @@ struct pool {
 #define GETWORK_MODE_LP 'L'
 #define GETWORK_MODE_BENCHMARK 'B'
 #define GETWORK_MODE_STRATUM 'S'
+#define GETWORK_MODE_GBT 'G'
 
 struct work {
 	unsigned char	data[128];
