@@ -2300,7 +2300,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		char gbt_block[1024], *varint, *header;
 		unsigned char data[80];
 
-		flip256(data, work->data);
+		flip80(data, work->data);
 		header = bin2hex(data, 80);
 		sprintf(gbt_block, "%s", header);
 		free(header);
