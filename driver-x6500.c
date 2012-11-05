@@ -9,6 +9,7 @@
 
 #include "config.h"
 
+#include <math.h>
 #include <sys/time.h>
 
 #include <libusb-1.0/libusb.h>
@@ -178,7 +179,13 @@ struct x6500_fpga_data {
 	struct jtag_port jtag;
 	struct work prevwork;
 	struct timeval tv_workstart;
+
 	struct dclk_data dclk;
+	uint8_t freqMaxMaxM;
+
+	// Time the clock was last reduced due to temperature
+	time_t last_cutoff_reduced;
+
 	float temp;
 };
 
@@ -390,6 +397,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 		       x6500->api->name, x6500->device_id, fpgaid, i);
 
 	fpga->dclk.minGoodSamples = 3;
+	fpga->freqMaxMaxM =
 	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
 	fpga->dclk.freqMDefault = fpga->dclk.freqM;
 	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u Mhz (range: %u-%u)",
@@ -455,7 +463,9 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 	jp->a->bufread = 0;
 
 	for (i = 0; i < 2; ++i) {
-		fpga = x6500->thr[i]->cgpu_data;
+		struct thr_info *thr = x6500->thr[i];
+		fpga = thr->cgpu_data;
+
 		if (code[i] == 0xffff || !code[i]) {
 			fpga->temp = 0;
 			continue;
@@ -464,6 +474,30 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 			code[i] -= 0x10000;
 		fpga->temp = (float)(code[i] >> 2) * 0.03125f;
 		applog(LOG_DEBUG,"x6500_get_temperature: fpga[%d]->temp=%.1fC",i,fpga->temp);
+
+		int temperature = round(fpga->temp);
+		if (temperature > x6500->targettemp + opt_hysteresis) {
+			time_t now = time(NULL);
+			if (fpga->last_cutoff_reduced != now) {
+				fpga->last_cutoff_reduced = now;
+				int oldFreq = fpga->dclk.freqM;
+				if (x6500_change_clock(thr, oldFreq - 1))
+					applog(LOG_NOTICE, "%s %u.%u: Frequency dropped from %u to %u Mhz (temp: %.1fC)",
+					       x6500->api->name, x6500->device_id, i,
+					       oldFreq * 2, fpga->dclk.freqM * 2,
+					       fpga->temp
+					);
+				fpga->dclk.freqMaxM = fpga->dclk.freqM;
+			}
+		}
+		else
+		if (fpga->dclk.freqMaxM < fpga->freqMaxMaxM && temperature < x6500->targettemp) {
+			if (temperature < x6500->targettemp - opt_hysteresis) {
+				fpga->dclk.freqMaxM = fpga->freqMaxMaxM;
+			} else if (fpga->dclk.freqM == fpga->dclk.freqMaxM) {
+				++fpga->dclk.freqMaxM;
+			}
+		}
 	}
 
 }
