@@ -276,6 +276,7 @@ static uint64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 						nonce = swab32(nonce);
 #endif
 						work->blk.nonce = 0xffffffff;
+						if ( (rv = test_nonce(work, nonce, false)) )
 						rv = submit_nonce(thr, work, nonce);
 						applog(LOG_DEBUG, "%s: submitted %0.8x %d", ztex->repr, nonce, rv);
 					}
