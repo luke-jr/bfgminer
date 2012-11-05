@@ -1569,7 +1569,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	swap256(pool->previousblockhash, hash_swap);
 
 	hex2bin(hash_swap, target, 32);
-	swap256(pool->gbt_target, hash_swap);
+	swab256(pool->gbt_target, hash_swap);
 
 	pool->gbt_expires = expires;
 	pool->gbt_version = htobe32(version);
