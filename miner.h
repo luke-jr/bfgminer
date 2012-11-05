@@ -544,6 +544,16 @@ static inline void swab256(void *dest_p, const void *src_p)
 	dest[7] = swab32(src[0]);
 }
 
+static inline void flip256(void *dest_p, const void *src_p)
+{
+	uint32_t *dest = dest_p;
+	const uint32_t *src = src_p;
+	int i;
+
+	for (i = 0; i < 8; i++)
+		dest[i] = swab32(src[i]);
+}
+
 extern void quit(int status, const char *format, ...);
 
 static inline void mutex_lock(pthread_mutex_t *lock)

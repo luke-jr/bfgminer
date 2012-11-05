@@ -2300,13 +2300,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		unsigned char data[80];
 		int i;
 
-		for (i = 0; i < 80 / 4; i++) {
-			uint32_t *src32, *dst32;
-
-			src32 = (uint32_t *)&work->data[i * 4];
-			dst32 = (uint32_t *)&data[i * 4];
-			*dst32 = swab32(*src32);
-		}
+		flip256(data, work->data);
 		header = bin2hex(data, 80);
 		sprintf(gbt_block, "%s", header);
 		free(header);
