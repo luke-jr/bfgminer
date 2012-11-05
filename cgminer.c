@@ -4247,7 +4247,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 
 /* Parses stratum json responses and tries to find the id that the request
  * matched to and treat it accordingly. */
-static bool parse_stratum_response(struct pool *pool, char *s)
+bool parse_stratum_response(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *err_val, *res_val, *id_val;
 	struct stratum_share *sshare;
