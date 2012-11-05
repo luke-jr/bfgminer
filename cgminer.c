@@ -5864,7 +5864,8 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			 * template if more than 30 seconds has elapsed since
 			 * the last one to keep the data current and as a test
 			 * for when the pool dies. */
-			if (!pool->idle && pool->has_gbt && now.tv_sec - pool->tv_template.tv_sec > 60) {
+			if (!pool->idle && pool->has_gbt && pool == current_pool() &&
+			    now.tv_sec - pool->tv_template.tv_sec > 60) {
 				if (!pool_active(pool, true))
 					pool_died(pool);
 			}
