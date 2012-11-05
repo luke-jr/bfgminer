@@ -1374,10 +1374,11 @@ static void __build_gbt_coinbase(struct pool *pool)
 	coinbase = calloc(cal_len, 1);
 	hex2bin(coinbase, pool->coinbasetxn, 42);
 	extra_len = (uint8_t *)(coinbase + 41);
+	hex2bin(coinbase + 42, pool->coinbasetxn + 84, *extra_len);
+	memcpy(coinbase + 42 + *extra_len, &pool->nonce2, 4);
 	*extra_len += 4;
-	hex2bin(coinbase + 42, pool->coinbasetxn + 84, cbt_len - 42);
+	hex2bin(coinbase + 42 + *extra_len, pool->coinbasetxn + 84 + (*extra_len * 2), cbt_len - *extra_len - 42);
 	pool->nonce2++;
-	memcpy(coinbase + cbt_len, &pool->nonce2, 4);
 	free(pool->gbt_coinbase);
 	pool->gbt_coinbase = coinbase;
 }
