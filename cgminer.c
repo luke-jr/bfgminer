@@ -4547,7 +4547,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 
 /* Parses stratum json responses and tries to find the id that the request
  * matched to and treat it accordingly. */
-static bool parse_stratum_response(char *s)
+static bool parse_stratum_response(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *err_val, *res_val, *id_val;
 	struct stratum_share *sshare;
@@ -4588,9 +4588,9 @@ static bool parse_stratum_response(char *s)
 	mutex_unlock(&sshare_lock);
 	if (!sshare) {
 		if (json_is_true(res_val))
-			applog(LOG_NOTICE, "Accepted untracked stratum share");
+			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
 		else
-			applog(LOG_NOTICE, "Rejected untracked stratum share");
+			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
 		goto out;
 	}
 	stratum_share_result(val, res_val, err_val, sshare);
@@ -4684,7 +4684,7 @@ static void *stratum_thread(void *userdata)
 			continue;
 		}
 
-		if (!parse_method(pool, s) && !parse_stratum_response(s))
+		if (!parse_method(pool, s) && !parse_stratum_response(pool, s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
 		if (pool->swork.clean) {
