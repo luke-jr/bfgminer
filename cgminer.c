@@ -1574,7 +1574,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	pool->gbt_expires = expires;
 	pool->gbt_version = htobe32(version);
 	pool->curtime = htobe32(curtime);
-	pool->gbt_submitold = submitold;
+	pool->submit_old = submitold;
 
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 

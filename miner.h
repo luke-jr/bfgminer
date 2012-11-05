@@ -914,7 +914,6 @@ struct pool {
 	int gbt_expires;
 	uint32_t gbt_version;
 	uint32_t curtime;
-	bool gbt_submitold;
 	uint32_t gbt_bits;
 	unsigned char *gbt_coinbase;
 	unsigned char *txn_hashes;
