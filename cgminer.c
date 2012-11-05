@@ -1561,9 +1561,9 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 
 	mutex_lock(&pool->gbt_lock);
 	free(pool->coinbasetxn);
-	free(pool->longpollid);
 	pool->coinbasetxn = strdup(coinbasetxn);
-	pool->longpollid = strdup(longpollid);
+	if (!pool->longpollid)
+		pool->longpollid = strdup(longpollid);
 
 	hex2bin(hash_swap, previousblockhash, 32);
 	swap256(pool->previousblockhash, hash_swap);
@@ -4822,7 +4822,7 @@ retry_stratum:
 		}
 		json_decref(val);
 
-		if (pool->lp_url || pool->has_gbt)
+		if (pool->lp_url)
 			goto out;
 
 		/* Decipher the longpoll URL, if any, and store it in ->lp_url */
@@ -6797,6 +6797,7 @@ int main(int argc, char *argv[])
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool  = pools[i];
 			if (pool_active(pool, false)) {
+				pool_tclear(pool, &pool->idle);
 				if (!currentpool)
 					currentpool = pool;
 				applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
