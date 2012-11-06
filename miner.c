@@ -3674,12 +3674,14 @@ next_submit:
 					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
 		} else {
-			applog(LOG_INFO, "Failed to submit stratum share");
+			applog(LOG_WARNING, "Failed to submit stratum share to pool %d", pool->pool_no);
 			mutex_lock(&sshare_lock);
 			HASH_DEL(stratum_shares, sshare);
 			mutex_unlock(&sshare_lock);
 			clear_work(&sshare->work);
 			free(sshare);
+			pool->stale_shares++;
+			total_stale++;
 
 			if (!pool_tset(pool, &pool->submit_fail)) {
 				total_ro++;
