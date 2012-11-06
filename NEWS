@@ -1,3 +1,84 @@
+Version 2.9.1 - November 6, 2012
+
+- Reset work flags to prevent GBT shares from being submitted as stratum ones
+after switching.
+
+
+Version 2.9.0 - November 6, 2012
+
+- Add endian swap defines for where missing.
+- Only retarget stratum shares to new pool diff if diff has dropped.
+- Remove resetting of probed variable when detecting GBT.
+- Count lost stratum share submits and increase message priority to warning.
+- Only retrieve a new block template for GBT pools that are the current pool.
+- Show which pool untracked share messages have come from.
+- Add management for dead GBT pools.
+- Count lost shares with stratum as submit stale lost.
+- Discard record of stratum shares sent and report lost shares on disconnection
+since they will never be reported back.
+- Swab, don't just swap the bytes in the GBT target.
+- Change status window message for GBT connected pools versus LP.
+- Generate a gbt work item from longpoll when required to set new block and
+message appropriately.
+- Use existing pool submit_old bool from gbt data.
+- Retrieve a new block template if more than 30 seconds has elapsed since the
+last one to keep the data current and test the pool is still alive.
+- Update GBT longpollid every time we request a new longpoll.
+- Manage appropriate response codes for share submission with GBT.
+- Allow the longpoll thread to start with GBT and only set the longpollid once.
+- Correct last few components of GBT block generation courtesy of Luke-jr.
+- Use correct length for offsetting extra nonce and remaining data.
+- Flip all 80 bytes in the flip function which was wrongly named flip256 for its
+purpose.
+- Calculate midstate for gbt work and remove now unused variable.
+- Use a standard function for flipping bytes.
+- Insert the extra nonce and remaining data in the correct position in the
+coinbase.
+- Remove txn size debugging and enlarge gbt block string to prevent overflow.
+- Remove varint display debugging.
+- Build varint correctly for share submission and sleep 5 seconds before
+retrying submit.
+- Make gbt_coinbase large enough for submissions, swap bytes correctly to make a
+header from GBT and encode the number of transactions in share submission.
+- Store the fixed size entries as static variables in GBT in binary form,
+byteswapping as is required.
+- 32 bit hex encoded variables should be in LE with GBT.
+- Target and prevblockhash need to be reversed from GBT variables.
+- Construct block for submission when using GBT.
+- Use same string for debug as for submission and make string larger to cope
+with future GBT messages.
+- Skip trying to decipher LP url if we have GBT support.
+- Store all the transaction hashes in pool->txn_hashes instead of separating
+txn0 and correct generation of merkle root, fixing memory overwrites.
+- Hook into various places to generate GBT work where appropriate.
+- Create extra work fields when generating GBT work.
+- Generate header from correct hashing generation of the merkle root for GBT.
+- Generate the merkle root for gbt work generation.
+- Create a store of the transactions with GBT in the minimum size form required
+to generate work items with a varied coinbase.
+- Create a function that generates a GBT coinbase from the existing pool
+variables.
+- Extract and store the various variables GBT uses when decoding gbt work.
+- Check for invalid json result in work_decode.
+- Decode work in separate functions for getwork vs gbt.
+- Check for the coinbase/append mutable in GBT support to decide whether to use
+it or not.
+- Add a gbt mutex within the pool struct for protecting the gbt values.
+- Convert work decode function to prepare for decoding block templates.
+- Check for GBT support on first probing the pool and convert to using the GBT
+request as the rpc request for that pool.
+- Make the rpc request used with getwork a pool variable to allow it to be
+converted to/from gbt requests.
+- Changes to build prototypes to support building on FreeBSD 9.1-RC2 amd64
+- Free old stratum_work data before replacing it
+- There is no need for addrinfo any more.
+- server and client sockaddr_in are no longer used in struct pool.
+- Merge pull request #322 from luke-jr/bugfix_stratum_tmpwork
+- Set sshare id and swork_id within the sshare mutex to avoid multiple share
+submits with the same id.
+- Initialize temporary stratum work
+
+
 Version 2.8.7 - October 29, 2012
 
 - Fail on select() failing in stratum thread without needing to attempt
