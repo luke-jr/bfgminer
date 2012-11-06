@@ -541,12 +541,12 @@ get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 		json_t *o = json_object();
 
 		if (state->temp)
-			json_object_set(o, "Temperature", json_integer(state->temp));
-		json_object_set(o, "Frequency", json_real((double)state->dclk.freqM * 2 * 1000000.));
-		json_object_set(o, "Cool Max Frequency", json_real((double)state->dclk.freqMaxM * 2 * 1000000.));
-		json_object_set(o, "Max Frequency", json_real((double)state->freqMaxMaxM * 2 * 1000000.));
-		json_object_set(o, "Hardware Errors", json_integer(state->bad_share_counter));
-		json_object_set(o, "Valid Nonces", json_integer(state->good_share_counter));
+			json_object_set_new(o, "Temperature", json_integer(state->temp));
+		json_object_set_new(o, "Frequency", json_real((double)state->dclk.freqM * 2 * 1000000.));
+		json_object_set_new(o, "Cool Max Frequency", json_real((double)state->dclk.freqMaxM * 2 * 1000000.));
+		json_object_set_new(o, "Max Frequency", json_real((double)state->freqMaxMaxM * 2 * 1000000.));
+		json_object_set_new(o, "Hardware Errors", json_integer(state->bad_share_counter));
+		json_object_set_new(o, "Valid Nonces", json_integer(state->good_share_counter));
 
 		root = api_add_json(root, k[i], o, false);
 		json_decref(o);
