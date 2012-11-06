@@ -562,10 +562,10 @@ get_x6500_api_extra_device_status(struct cgpu_info *x6500)
 		json_t *o = json_object();
 
 		if (fpga->temp)
-			json_object_set(o, "Temperature", json_real(fpga->temp));
-		json_object_set(o, "Frequency", json_real((double)fpga->dclk.freqM * 2 * 1000000.));
-		json_object_set(o, "Cool Max Frequency", json_real((double)fpga->dclk.freqMaxM * 2 * 1000000.));
-		json_object_set(o, "Max Frequency", json_real((double)fpga->freqMaxMaxM * 2 * 1000000.));
+			json_object_set_new(o, "Temperature", json_real(fpga->temp));
+		json_object_set_new(o, "Frequency", json_real((double)fpga->dclk.freqM * 2 * 1000000.));
+		json_object_set_new(o, "Cool Max Frequency", json_real((double)fpga->dclk.freqMaxM * 2 * 1000000.));
+		json_object_set_new(o, "Max Frequency", json_real((double)fpga->freqMaxMaxM * 2 * 1000000.));
 
 		root = api_add_json(root, k[i], o, false);
 		json_decref(o);
