@@ -1,5 +1,12 @@
+Version 2.9.1 - November 6, 2012
+
+- Reset work flags to prevent GBT shares from being submitted as stratum ones
+after switching.
+
+
 Version 2.9.0 - November 6, 2012
 
+- Add endian swap defines for where missing.
 - Only retarget stratum shares to new pool diff if diff has dropped.
 - Remove resetting of probed variable when detecting GBT.
 - Count lost stratum share submits and increase message priority to warning.
