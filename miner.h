@@ -143,11 +143,15 @@ static inline int fsync (int fd)
  * htobe64 also won't exist */
 #ifndef htobe32
 # if __BYTE_ORDER == __LITTLE_ENDIAN
+#  define htole16(x) (x)
+#  define htole32(x) (x)
 #  define be32toh(x) bswap_32(x)
 #  define be64toh(x) bswap_64(x)
 #  define htobe32(x) bswap_32(x)
 #  define htobe64(x) bswap_64(x)
 # elif __BYTE_ORDER == __BIG_ENDIAN
+#  define htole16(x) bswap_16(x)
+#  define htole32(x) bswap_32(x)
 #  define be32toh(x) (x)
 #  define be64toh(x) (x)
 #  define htobe32(x) (x)
@@ -544,6 +548,26 @@ static inline void swab256(void *dest_p, const void *src_p)
 	dest[7] = swab32(src[0]);
 }
 
+static inline void flip32(void *dest_p, const void *src_p)
+{
+	uint32_t *dest = dest_p;
+	const uint32_t *src = src_p;
+	int i;
+
+	for (i = 0; i < 8; i++)
+		dest[i] = swab32(src[i]);
+}
+
+static inline void flip80(void *dest_p, const void *src_p)
+{
+	uint32_t *dest = dest_p;
+	const uint32_t *src = src_p;
+	int i;
+
+	for (i = 0; i < 20; i++)
+		dest[i] = swab32(src[i]);
+}
+
 extern void quit(int status, const char *format, ...);
 
 static inline void mutex_lock(pthread_mutex_t *lock)
@@ -841,6 +865,7 @@ struct pool {
 	double utility;
 	int last_shares, shares;
 
+	char *rpc_req;
 	char *rpc_url;
 	char *rpc_userpass;
 	char *rpc_user, *rpc_pass;
@@ -882,6 +907,23 @@ struct pool {
 	struct stratum_work swork;
 	pthread_t stratum_thread;
 	pthread_mutex_t stratum_lock;
+
+	/* GBT  variables */
+	bool has_gbt;
+	pthread_mutex_t gbt_lock;
+	unsigned char previousblockhash[32];
+	unsigned char gbt_target[32];
+	char *coinbasetxn;
+	char *longpollid;
+	int gbt_expires;
+	uint32_t gbt_version;
+	uint32_t curtime;
+	uint32_t gbt_bits;
+	unsigned char *gbt_coinbase;
+	unsigned char *txn_hashes;
+	int gbt_txns;
+	int coinbase_len;
+	struct timeval tv_template;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
@@ -889,6 +931,7 @@ struct pool {
 #define GETWORK_MODE_LP 'L'
 #define GETWORK_MODE_BENCHMARK 'B'
 #define GETWORK_MODE_STRATUM 'S'
+#define GETWORK_MODE_GBT 'G'
 
 struct work {
 	unsigned char	data[128];
@@ -925,6 +968,10 @@ struct work {
 	char		nonce2[64];
 	char		ntime[16];
 	int		sdiff;
+
+	bool		gbt;
+	char		gbt_coinbase[512];
+	int		gbt_txns;
 
 	unsigned int	work_block;
 	int		id;

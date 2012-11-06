@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [2])
-m4_define([v_min], [8])
-m4_define([v_mic], [7])
+m4_define([v_min], [9])
+m4_define([v_mic], [1])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -70,6 +70,9 @@ WS2_LIBS=""
 MATH_LIBS="-lm"
 
 case $target in
+  amd64-*)
+    have_x86_64=true
+    ;;
   x86_64-*)
     have_x86_64=true
     ;;
@@ -257,7 +260,7 @@ if test "x$curses" = "xno"; then
 else
 	AC_SEARCH_LIBS(addstr, ncurses pdcurses, [
 		curses=yes
-		cursesmsg="FOUND: ${ac_cv_search_addstr:2}"
+		cursesmsg="FOUND: ${ac_cv_search_addstr}"
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
 	], [
 		if test "x$curses" = "xyes"; then
