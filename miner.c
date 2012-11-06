@@ -2580,6 +2580,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	}
 
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
+	if (!work->tmpl)
 	strcat(s, "\n");
 
 	gettimeofday(&tv_submit, NULL);
