@@ -5320,7 +5320,7 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
 	struct pool *pool = work->pool;
-	int i, diff;
+	int i;
 
 	for (i = 0; i < 80 / 4; i++)
 		swap32[i] = swab32(data32[i]);
@@ -5346,11 +5346,15 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 	}
 
 	if (work->stratum) {
+		int diff;
+
 		mutex_lock(&pool->pool_lock);
 		diff = pool->swork.diff;
 		mutex_unlock(&pool->pool_lock);
 
-		if (unlikely(work->sdiff != diff)) {
+		/* Retarget share only if pool diff has dropped since we
+		 * generated this work */
+		if (unlikely(work->sdiff > diff)) {
 			applog(LOG_DEBUG, "Share needs retargetting to match pool");
 			set_work_target(work, diff);
 		}
