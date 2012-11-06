@@ -2820,7 +2820,7 @@ static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const 
 	clear_work(work);
 	switch (proto) {
 		case PLP_GETWORK:
-			
+			work->getwork_mode = GETWORK_MODE_POOL;
 			return strdup(getwork_req);
 		case PLP_GETBLOCKTEMPLATE:
 			work->getwork_mode = GETWORK_MODE_GBT;
@@ -2937,7 +2937,6 @@ tryagain:
 
 	work->pool = pool;
 	work->longpoll = false;
-	work->getwork_mode = GETWORK_MODE_POOL;
 	calc_diff(work, 0);
 	total_getworks++;
 	pool->getwork_requested++;
