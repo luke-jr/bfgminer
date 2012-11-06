@@ -3319,6 +3319,8 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
+static bool pool_active(struct pool *pool, bool pinging);
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -3387,8 +3389,13 @@ void switch_pools(struct pool *selected)
 	if (opt_fail_only)
 		pool_tset(pool, &pool->lagging);
 
-	if (pool != last_pool)
+	if (pool != last_pool) {
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		/* Get a fresh block template since we may not have an up to
+		 * date one */
+		if (pool->has_gbt)
+			pool_active(pool, true);
+	}
 
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
