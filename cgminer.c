@@ -5206,6 +5206,8 @@ static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 		goto out;
 	}
 
+	/* Reset these flags in case we switch pools with these work structs */
+	work->stratum = work->gbt = false;
 retry:
 	pool = current_pool();
 
