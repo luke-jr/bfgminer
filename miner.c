@@ -5384,9 +5384,9 @@ fishy:
 	mutex_unlock(&sshare_lock);
 	if (!sshare) {
 		if (json_is_true(res_val))
-			applog(LOG_NOTICE, "Accepted untracked stratum share");
+			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
 		else
-			applog(LOG_NOTICE, "Rejected untracked stratum share");
+			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
 		goto out;
 	}
 	stratum_share_result(val, res_val, err_val, sshare);
