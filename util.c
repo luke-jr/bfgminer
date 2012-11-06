@@ -936,7 +936,7 @@ static bool sock_full(struct pool *pool, bool wait)
 	struct timeval timeout;
 	fd_set rd;
 
-	if (pool->readbuf.buf && strchr(pool->readbuf.buf, '\n'))
+	if (pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))
 		return true;
 
 	FD_ZERO(&rd);
@@ -959,7 +959,7 @@ char *recv_line(struct pool *pool)
 	char *tok, *sret = NULL;
 	size_t n = 0;
 
-	while (!(pool->readbuf.buf && strchr(pool->readbuf.buf, '\n'))) {
+	while (!(pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))) {
 		char s[RBUFSIZE];
 		CURLcode rc;
 
@@ -979,9 +979,6 @@ char *recv_line(struct pool *pool)
 		}
 
 		len = all_data_cb(s, n, 1, &pool->readbuf);
-		pool->readbuf.buf = realloc(pool->readbuf.buf, pool->readbuf.len + 1);
-		((char*)pool->readbuf.buf)[pool->readbuf.len] = '\0';
-
 		if (n != (size_t)len) {
 			applog(LOG_DEBUG, "Error appending readbuf in recv_line");
 			goto out;
@@ -989,7 +986,7 @@ char *recv_line(struct pool *pool)
 	}
 
 	// Assuming the bulk of the data will be in the line, steal the buffer and return it
-	tok = strchr(pool->readbuf.buf, '\n');
+	tok = memchr(pool->readbuf.buf, '\n', pool->readbuf.len);
 	*tok = '\0';
 	len = tok - (char*)pool->readbuf.buf;
 	pool->readbuf.len -= len + 1;
