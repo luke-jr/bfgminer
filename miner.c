@@ -434,6 +434,8 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
+static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
+
 /* Return value is ignored if not called from add_pool_details */
 struct pool *add_pool(void)
 {
@@ -443,12 +445,10 @@ struct pool *add_pool(void)
 	if (!pool)
 		quit(1, "Failed to malloc pool in add_pool");
 	pool->pool_no = pool->prio = total_pools;
-	if (unlikely(pthread_mutex_init(&pool->pool_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init in add_pool");
+	mutex_init(&pool->pool_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
-	if (unlikely(pthread_mutex_init(&pool->stratum_lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init in add_pool");
+	mutex_init(&pool->stratum_lock);
 	INIT_LIST_HEAD(&pool->curlring);
 	pool->swork.transparency_time = (time_t)-1;
 
@@ -1633,20 +1633,23 @@ static void calc_midstate(struct work *work)
 	swap32tole(work->midstate, work->midstate, 8);
 }
 
-static bool work_decode(const json_t *val, struct work *work)
+static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
+	json_t *res_val = json_object_get(val, "result");
+	bool ret = false;
+
 	if (unlikely(detect_algo == 1)) {
-		json_t *tmp = json_object_get(val, "algorithm");
+		json_t *tmp = json_object_get(res_val, "algorithm");
 		const char *v = tmp ? json_string_value(tmp) : "";
 		if (strncasecmp(v, "scrypt", 6))
 			detect_algo = 2;
 	}
 	
 	if (work->tmpl) {
-		const char *err = blktmpl_add_jansson(work->tmpl, val, time(NULL));
+		const char *err = blktmpl_add_jansson(work->tmpl, res_val, time(NULL));
 		if (err) {
 			applog(LOG_ERR, "blktmpl error: %s", err);
-			goto err_out;
+			return false;
 		}
 		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
 #if BLKMAKER_VERSION > 1
@@ -1659,7 +1662,7 @@ static bool work_decode(const json_t *val, struct work *work)
 			static bool appenderr = false;
 			if (ae <= 0) {
 				if (opt_coinbase_sig) {
-					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%d)", ae, work->pool->pool_no);
+					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%d)", ae, pool->pool_no);
 					appenderr = true;
 				}
 			} else if (ae >= 3 || opt_coinbase_sig) {
@@ -1685,7 +1688,7 @@ static bool work_decode(const json_t *val, struct work *work)
 					tmp[ae] = '\0';
 					applog((truncatewarning ? LOG_DEBUG : LOG_WARNING),
 					       "Pool %u truncating appended coinbase signature at %d bytes: %s(%s)",
-					       work->pool->pool_no, ae, tmp, &opt_coinbase_sig[ae]);
+					       pool->pool_no, ae, tmp, &opt_coinbase_sig[ae]);
 					free(tmp);
 					truncatewarning = true;
 				}
@@ -1699,12 +1702,11 @@ static bool work_decode(const json_t *val, struct work *work)
 		}
 #endif
 		if (blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid) < 76)
-			goto err_out;
+			return false;
 		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0", 48);
 
 		const struct blktmpl_longpoll_req *lp;
-		struct pool *pool = work->pool;
 		if ((lp = blktmpl_get_longpoll(work->tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
 			free(pool->lp_id);
 			pool->lp_id = strdup(lp->id);
@@ -1720,25 +1722,25 @@ static bool work_decode(const json_t *val, struct work *work)
 		}
 	}
 	else
-	if (unlikely(!jobj_binary(val, "data", work->data, sizeof(work->data), true))) {
+	if (unlikely(!jobj_binary(res_val, "data", work->data, sizeof(work->data), true))) {
 		applog(LOG_ERR, "JSON inval data");
-		goto err_out;
+		return false;
 	}
 
-	if (!jobj_binary(val, "midstate", work->midstate, sizeof(work->midstate), false)) {
+	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
 		// Calculate it ourselves
 		applog(LOG_DEBUG, "Calculating midstate locally");
 		calc_midstate(work);
 	}
 
-	if (!jobj_binary(val, "hash1", work->hash1, sizeof(work->hash1), false)) {
+	if (!jobj_binary(res_val, "hash1", work->hash1, sizeof(work->hash1), false)) {
 		// Always the same anyway
 		memcpy(work->hash1, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\1\0\0", 64);
 	}
 
-	if (unlikely(!jobj_binary(val, "target", work->target, sizeof(work->target), true))) {
+	if (unlikely(!jobj_binary(res_val, "target", work->target, sizeof(work->target), true))) {
 		applog(LOG_ERR, "JSON inval target");
-		goto err_out;
+		return false;
 	}
 	if (work->tmpl) {
 		for (size_t i = 0; i < sizeof(work->target) / 2; ++i)
@@ -1754,10 +1756,10 @@ static bool work_decode(const json_t *val, struct work *work)
 
 	gettimeofday(&work->tv_staged, NULL);
 
-	return true;
+	ret = true;
 
-err_out:
-	return false;
+out:
+	return ret;
 }
 
 int dev_from_id(int thr_id)
@@ -2460,7 +2462,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				strcpy(where, "");
 
 			if (!json_is_string(res))
-			res = json_object_get(val, "reject-reason");
+				res = json_object_get(val, "reject-reason");
 			if (res) {
 				const char *reasontmp = json_string_value(res);
 
@@ -2568,28 +2570,25 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		sd = bin2hex(data, 80);
 	} else {
 		s  = malloc(345);
-		sd = malloc(345);
+		sd = s;
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
 
 	/* build JSON-RPC request */
-	sprintf(s,
-	      "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}\r\n",
-		hexstr);
-	sprintf(sd,
-	      "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}",
-		hexstr);
+		sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
 
 	}
 
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
+	strcat(s, "\n");
 
 	gettimeofday(&tv_submit, NULL);
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
 
 	free(s);
+	if (sd != s)
 	free(sd);
 
 	gettimeofday(&tv_submit_reply, NULL);
@@ -2600,6 +2599,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			pool->remotefail_occasions++;
 			applog(LOG_WARNING, "Pool %d communication failure, caching submissions", pool->pool_no);
 		}
+		sleep(5);
 		goto out;
 	} else if (pool_tclear(pool, &pool->submit_fail))
 		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
@@ -2692,9 +2692,6 @@ out:
 	free(hexstr);
 	return rc;
 }
-
-static const char *getwork_rpc_req =
-	"{\"method\": \"getwork\", \"params\": [], \"id\":0}\r\n";
 
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
  * rolling average per 10 minutes and if pools start getting more, it biases
@@ -2823,8 +2820,10 @@ static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const 
 	clear_work(work);
 	switch (proto) {
 		case PLP_GETWORK:
-			return strdup(getwork_rpc_req);
+			
+			return strdup(getwork_req);
 		case PLP_GETBLOCKTEMPLATE:
+			work->getwork_mode = GETWORK_MODE_GBT;
 			work->tmpl_refcount = malloc(sizeof(*work->tmpl_refcount));
 			if (!work->tmpl_refcount)
 				return NULL;
@@ -2910,7 +2909,7 @@ tryagain:
 	free(rpc_req);
 
 	if (likely(val)) {
-		rc = work_decode(json_object_get(val, "result"), work);
+		rc = work_decode(pool, work, val);
 		if (unlikely(!rc))
 			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
 	} else if (PLP_NONE != (proto = pool_protocol_fallback(pool->proto))) {
@@ -3428,6 +3427,8 @@ retry:
 		dec_queued(pool);
 		goto out;
 	}
+
+	// TODO: Stage work from latest GBT template, if any
 
 	if (clone_available()) {
 		dec_queued(pool);
@@ -5593,7 +5594,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	struct work *work;
 	enum pool_protocol proto;
 
-	applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
+		applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 
 	/* This is the central point we activate stratum when we can */
 	curl = curl_easy_init();
@@ -5604,6 +5605,8 @@ static bool pool_active(struct pool *pool, bool pinging)
 
 	work = make_work();
 	work->pool = pool;
+
+	/* Probe for GBT support on first pass */
 	proto = want_gbt ? PLP_GETBLOCKTEMPLATE : PLP_GETWORK;
 
 tryagain:
@@ -5664,7 +5667,7 @@ retry_stratum:
 		if ((!json_is_object(res)) || (proto == PLP_GETBLOCKTEMPLATE && !json_object_get(res, "bits")))
 			goto badwork;
 
-		rc = work_decode(res, work);
+		rc = work_decode(pool, work, val);
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -5845,9 +5848,11 @@ static bool reuse_work(struct work *work, struct pool *pool)
 		if (!pool->stratum_active)
 			return false;
 		applog(LOG_DEBUG, "Reusing stratum work");
-		gen_stratum_work(pool, work);;
+		gen_stratum_work(pool, work);
 		return true;
 	}
+
+	// TODO: Always use latest GBT template from pool
 
 	if (can_roll(work) && should_roll(work)) {
 		roll_work(work);
@@ -6475,7 +6480,7 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 {
 	bool rc;
 
-	rc = work_decode(json_object_get(val, "result"), work);
+	rc = work_decode(pool, work, val);
 	if (unlikely(!rc)) {
 		applog(LOG_ERR, "Could not convert longpoll data to work");
 		free_work(work);
@@ -6566,6 +6571,7 @@ static void *longpoll_thread(void *userdata)
 	struct timeval start, reply, end;
 	CURL *curl = NULL;
 	int failures = 0;
+	char *lp_url;
 	int rolltime;
 
 	rename_thr("bfg-longpoll");
@@ -6591,19 +6597,22 @@ retry_pool:
 
 	wait_lpcurrent(cp);
 
-	if (cp == pool)
-		applog(LOG_WARNING, "Long-polling activated via %s (%s)", pool->lp_url, pool_protocol_name(pool->lp_proto));
-	else
-		applog(LOG_WARNING, "Long-polling activated for pool %s via %s (%s)", cp->rpc_url, pool->lp_url, pool_protocol_name(pool->lp_proto));
+	{
+		lp_url = pool->lp_url;
+		if (cp == pool)
+			applog(LOG_WARNING, "Long-polling activated for %s (%s)", lp_url, pool_protocol_name(pool->lp_proto));
+		else
+			applog(LOG_WARNING, "Long-polling activated for pool %s via %s (%s)", cp->rpc_url, lp_url, pool_protocol_name(pool->lp_proto));
+	}
 
 	while (42) {
 		json_t *val, *soval;
 
 		struct work *work = make_work();
 		work->pool = pool;
-		char *rpc_req;
-		rpc_req = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
-		if (!rpc_req)
+		char *lpreq;
+		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
+		if (!lpreq)
 			goto lpfail;
 
 		wait_lpcurrent(cp);
@@ -6617,13 +6626,13 @@ retry_pool:
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 		curl_easy_setopt(curl, CURLOPT_OPENSOCKETFUNCTION, save_curl_socket);
 		curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
-		val = json_rpc_call(curl, pool->lp_url, pool->rpc_userpass, rpc_req,
-				    false, true, &rolltime, pool, false);
+		val = json_rpc_call(curl, lp_url, pool->rpc_userpass,
+				    lpreq, false, true, &rolltime, pool, false);
 		pool->lp_socket = CURL_SOCKET_BAD;
 
 		gettimeofday(&reply, NULL);
 
-		free(rpc_req);
+		free(lpreq);
 
 		if (likely(val)) {
 			soval = json_object_get(json_object_get(val, "result"), "submitold");
@@ -6644,7 +6653,7 @@ retry_pool:
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
 			if (failures == 1)
-				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", pool->lp_url);
+				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
 lpfail:
 			sleep(30);
 		}
@@ -6758,7 +6767,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				continue;
 
 			/* Test pool is idle once every minute */
-			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 60) {
+			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
 				gettimeofday(&pool->tv_idle, NULL);
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
@@ -7857,6 +7866,7 @@ int main(int argc, char *argv[])
 					continue;
 
 				if (pool_active(pool, false)) {
+					pool_tclear(pool, &pool->idle);
 					if (!currentpool)
 						currentpool = pool;
 					applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
