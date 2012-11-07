@@ -1,3 +1,15 @@
+BFGMiner Version 2.8.5 - November 7, 2012
+- Bugfix: modminer: Use json_object_set_new to correctly count references to
+per-FPGA RPC data
+- Changes to build prototypes to support building on FreeBSD 9.1-RC2 amd64
+- ztex: Silence false "unexpected" hardware errors, and don't count them as hw
+errors
+- README: Update build instructions to reflect current reality
+- Bugfix: ztex: Include --scan-serial option even for ztex-only builds, so it
+- Bugfix: dynclock: Use standard C struct initializer to handle initialization,
+instead of memsetting memory to nulls
+
+
 BFGMiner Version 2.8.4 - October 30, 2012
 
 - Bugfix: regeneratehash needs to compare hash segments in Little Endian, not
