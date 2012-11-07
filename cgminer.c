@@ -1614,6 +1614,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	json_t *res_val = json_object_get(val, "result");
 	bool ret = false;
 
+	gettimeofday(&pool->tv_lastwork, NULL);
 	if (!res_val || json_is_null(res_val)) {
 		applog(LOG_ERR, "JSON Failed to decode result");
 		goto out;
@@ -1622,7 +1623,6 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	if (pool->has_gbt) {
 		if (unlikely(!gbt_decode(pool, res_val)))
 			goto out;
-		gettimeofday(&pool->tv_template, NULL);
 		work->gbt = true;
 		ret = true;
 		goto out;
@@ -3319,8 +3319,6 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
-static bool pool_active(struct pool *pool, bool pinging);
-
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -3389,13 +3387,8 @@ void switch_pools(struct pool *selected)
 	if (opt_fail_only)
 		pool_tset(pool, &pool->lagging);
 
-	if (pool != last_pool) {
+	if (pool != last_pool)
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
-		/* Get a fresh block template since we may not have an up to
-		 * date one */
-		if (pool->has_gbt)
-			pool_active(pool, true);
-	}
 
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
@@ -5852,6 +5845,58 @@ static void reap_curl(struct pool *pool)
 		applog(LOG_DEBUG, "Reaped %d curl%s from pool %d", reaped, reaped > 1 ? "s" : "", pool->pool_no);
 }
 
+static bool pool_getswork(struct pool *pool)
+{
+	struct timeval tv_getwork, tv_getwork_reply;
+	bool ret = false;
+	int rolltime;
+	json_t *val;
+	CURL *curl;
+
+	curl = curl_easy_init();
+	if (unlikely(!curl))
+		quit (1, "CURL initialisation failed in pool_getswork");
+
+	gettimeofday(&tv_getwork, NULL);
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
+			    pool->rpc_req, true, false, &rolltime, pool, false);
+	gettimeofday(&tv_getwork_reply, NULL);
+
+	if (val) {
+		struct work *work = make_work();
+		bool rc = work_decode(pool, work, val);
+
+		if (rc) {
+			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
+			       pool->pool_no, pool->rpc_url);
+			work->pool = pool;
+			work->rolltime = rolltime;
+			memcpy(&(work->tv_getwork), &tv_getwork, sizeof(struct timeval));
+			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
+			work->getwork_mode = GETWORK_MODE_TESTPOOL;
+			calc_diff(work, 0);
+			applog(LOG_DEBUG, "Pushing pool_getswork work for pool %d", pool->pool_no);
+
+			tq_push(thr_info[stage_thr_id].q, work);
+			total_getworks++;
+			pool->getwork_requested++;
+			ret = true;
+			gettimeofday(&pool->tv_idle, NULL);
+			ret = true;
+		} else {
+			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
+			       pool->pool_no, pool->rpc_url);
+			free_work(work);
+		}
+		json_decref(val);
+	} else {
+		applog(LOG_DEBUG, "FAILED to retrieve pool_getswork work from pool %u %s",
+		       pool->pool_no, pool->rpc_url);
+	}
+	curl_easy_cleanup(curl);
+	return ret;
+}
+
 static void *watchpool_thread(void __maybe_unused *userdata)
 {
 	int intervals = 0;
@@ -5875,13 +5920,13 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			if (pool->enabled == POOL_DISABLED || pool->has_stratum)
 				continue;
 
-			/* Apart from longpollid comms, we retrieve a fresh
-			 * template if more than 30 seconds has elapsed since
-			 * the last one to keep the data current and as a test
-			 * for when the pool dies. */
-			if (!pool->idle && pool->has_gbt && pool == current_pool() &&
-			    now.tv_sec - pool->tv_template.tv_sec > 60) {
-				if (!pool_active(pool, true))
+			/* Stratum works off pushing work, but GBT and getwork
+			 * off requests so even for the non current pool, get
+			 * new work once per minute to ensure the pool is still
+			 * alive and to maintain the current block template for
+			 * GBT pools in case we switch to them. */
+			if (!pool->idle && now.tv_sec - pool->tv_lastwork.tv_sec > 60) {
+				if (!pool_getswork(pool))
 					pool_died(pool);
 			}
 
