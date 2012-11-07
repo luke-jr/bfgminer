@@ -1,3 +1,14 @@
+bfgminer (2.9.2-0precise1) precise; urgency=low
+
+  * modminer & x6500: New bitstream, improving functional performance by about 10 Mh/s on average. You'll need to power cycle your device, or use the new --force-dev-init option to upload the new bitstream.
+  * x6500: Support for temperature sensors, including --temp-target & co.
+  * x6500: Extended per-FPGA details in RPC API.
+  * x6500: Support for older X6500 devices by manually specifying their serial numbers as --scan-serial x6500:serialnumber.
+  * Some basic stratum transparency checks to help keep pools accountable using new mining.get_transactions method.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 07 Nov 2012 18:46:00 -0000
+
+
 bfgminer (2.9.1-0precise1) precise; urgency=low
 
   * RPC: Add support for X6500 FPGAs.
