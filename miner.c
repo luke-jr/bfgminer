@@ -5556,8 +5556,6 @@ static bool stratum_works(struct pool *pool)
 	if (!initiate_stratum(pool))
 		return false;
 
-	detect_algo = 2;
-
 	return true;
 }
 
@@ -5656,6 +5654,7 @@ retry_stratum:
 		pool->idle = false;
 		pool->stratum_auth = true;
 		init_stratum_thread(pool);
+		detect_algo = 2;
 		return true;
 	}
 	else if (pool->has_stratum)
