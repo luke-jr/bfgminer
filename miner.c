@@ -2317,7 +2317,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	struct pool *pool = work->pool;
 	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
 
-	if (json_is_null(res) || json_is_true(res)) {
+	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
 		cgpu->accepted++;
 		cgpu->accepted_weighed += work->work_difficulty;
 		total_accepted++;
