@@ -6163,7 +6163,6 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
 	struct pool *pool = work->pool;
-	int diff;
 
 	swap32yes(swap32, data32, 80 / 4);
 
@@ -6181,11 +6180,15 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 	memcpy((void*)work->hash, hash2, 32);
 
 	if (work->stratum) {
+		int diff;
+
 		mutex_lock(&pool->pool_lock);
 		diff = pool->swork.diff;
 		mutex_unlock(&pool->pool_lock);
 
-		if (unlikely(work->sdiff != diff)) {
+		/* Retarget share only if pool diff has dropped since we
+		 * generated this work */
+		if (unlikely(work->sdiff > diff)) {
 			applog(LOG_DEBUG, "Share needs retargetting to match pool");
 			set_work_target(work, diff);
 		}
