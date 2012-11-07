@@ -2196,7 +2196,7 @@ static void reject_pool(struct pool *pool)
 static bool submit_upstream_work(const struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
-	json_t *val, *res;
+	json_t *val, *res, *err;
 	char *s, *sd;
 	bool rc = false;
 	int thr_id = work->thr_id;
@@ -2258,6 +2258,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 
 	res = json_object_get(val, "result");
+	err = json_object_get(val, "error");
 
 	if (!QUIET) {
 		hash32 = (uint32_t *)(work->hash);
@@ -2315,7 +2316,7 @@ static bool submit_upstream_work(const struct work *work, CURL *curl, bool resub
 	/* Theoretically threads could race when modifying accepted and
 	 * rejected values but the chance of two submits completing at the
 	 * same time is zero so there is no point adding extra locking */
-	if (json_is_null(res) || json_is_true(res)) {
+	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
 		cgpu->accepted++;
 		total_accepted++;
 		pool->accepted++;
