@@ -226,6 +226,7 @@ double bench_algo_stage3(
 	// Use a random work block pulled from a pool
 	static uint8_t bench_block[] = { CGMINER_BENCHMARK_BLOCK };
 	struct work work __attribute__((aligned(128)));
+	unsigned char hash1[64];
 
 	size_t bench_size = sizeof(work);
 	size_t work_size = sizeof(bench_block);
@@ -240,6 +241,8 @@ double bench_algo_stage3(
 	uint32_t max_nonce = (1<<22);
 	uint32_t last_nonce = 0;
 
+	hex2bin(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000", 64);
+
 	gettimeofday(&start, 0);
 			{
 				sha256_func func = sha256_funcs[algo];
@@ -247,7 +250,7 @@ double bench_algo_stage3(
 					&dummy,
 					work.midstate,
 					work.data,
-					work.hash1,
+					hash1,
 					work.hash,
 					work.target,
 					max_nonce,
@@ -799,11 +802,12 @@ static bool cpu_thread_init(struct thr_info *thr)
 static int64_t cpu_scanhash(struct thr_info *thr, struct work *work, int64_t max_nonce)
 {
 	const int thr_id = thr->id;
-
+	unsigned char hash1[64];
 	uint32_t first_nonce = work->blk.nonce;
 	uint32_t last_nonce;
 	bool rc;
 
+	hex2bin(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000", 64);
 CPUSearch:
 	last_nonce = first_nonce;
 	rc = false;
@@ -815,7 +819,7 @@ CPUSearch:
 			thr,
 			work->midstate,
 			work->data,
-			work->hash1,
+			hash1,
 			work->hash,
 			work->target,
 			max_nonce,

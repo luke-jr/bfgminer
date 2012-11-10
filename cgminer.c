@@ -111,7 +111,7 @@ int gpu_threads;
 bool opt_scrypt;
 #endif
 #endif
-bool opt_restart = true;
+bool opt_restart;
 static bool opt_nogpu;
 
 struct list_head scan_devices;
@@ -1498,7 +1498,6 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	memset(work->data + 4 + 32 + 32 + 4 + 4, 0, 4); /* nonce */
 
 	hex2bin(work->data + 4 + 32 + 32 + 4 + 4 + 4, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000", 48);
-	hex2bin(work->hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000", 64);
 
 	if (opt_debug) {
 		char *header = bin2hex(work->data, 128);
@@ -1595,11 +1594,6 @@ static bool getwork_decode(json_t *res_val, struct work *work)
 		// Calculate it ourselves
 		applog(LOG_DEBUG, "Calculating midstate locally");
 		calc_midstate(work);
-	}
-
-	if (!jobj_binary(res_val, "hash1", work->hash1, sizeof(work->hash1), false)) {
-		// Always the same anyway
-		memcpy(work->hash1, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\1\0\0", 64);
 	}
 
 	if (unlikely(!jobj_binary(res_val, "target", work->target, sizeof(work->target), true))) {
@@ -5101,8 +5095,8 @@ static void set_work_target(struct work *work, int diff)
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char *coinbase, merkle_root[36], merkle_sha[68], *merkle_hash;
-	char header[260], hash1[132], *nonce2;
 	int len, cb1_len, n1_len, cb2_len, i;
+	char header[260], *nonce2;
 	uint32_t *data32, *swap32;
 
 	memset(work->job_id, 0, 64);
@@ -5171,9 +5165,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	if (unlikely(!hex2bin(work->data, header, 128)))
 		quit(1, "Failed to convert header to data in gen_stratum_work");
 	calc_midstate(work);
-	sprintf(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000");
-	if (unlikely(!hex2bin(work->hash1, hash1, 64)))
-		quit(1,  "Failed to convert hash1 in gen_stratum_work");
 
 	set_work_target(work, work->sdiff);
 
