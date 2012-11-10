@@ -5917,12 +5917,20 @@ static void set_work_target(struct work *work, int diff)
 	unsigned char rtarget[36], target[36];
 	uint64_t *data64, h64;
 
+	if (!diff) {
+		// Special support is needed for difficulties < 1
+		memset(target, 0xff, 28);
+		memset(&target[28], 0, 4);
+		goto havetarget;
+	}
+
 	h64 = diffone;
 	h64 /= (uint64_t)diff;
 	memset(rtarget, 0, 32);
 	data64 = (uint64_t *)(rtarget + 4);
 	*data64 = htobe64(h64);
 	swab256(target, rtarget);
+havetarget:
 	if (opt_debug) {
 		char *htarget = bin2hex(target, 32);
 
@@ -6022,7 +6030,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
 	work->work_restart_id = work->pool->work_restart_id;
-	calc_diff(work, work->sdiff);
+	calc_diff(work, 0);
 
 	gettimeofday(&work->tv_staged, NULL);
 }

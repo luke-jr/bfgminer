@@ -1119,11 +1119,13 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
 static bool parse_diff(struct pool *pool, json_t *val)
 {
+	double fpdiff;
 	int diff;
 
-	diff = json_integer_value(json_array_get(val, 0));
-	if (diff < 1)
+	fpdiff = json_number_value(json_array_get(val, 0));
+	if (fpdiff < 0.9999)
 		return false;
+	diff = floor(fpdiff);
 
 	mutex_lock(&pool->pool_lock);
 	pool->swork.diff = diff;
