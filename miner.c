@@ -5478,6 +5478,10 @@ static void *stratum_thread(void *userdata)
 			pool->getfail_occasions++;
 			total_go++;
 
+			// Make any pending work/shares stale
+			pool->submit_old = false;
+			++pool->work_restart_id;
+
 			/* If the socket to our stratum pool disconnects, all
 			 * tracked submitted shares are lost and we will leak
 			 * the memory if we don't discard their records. */

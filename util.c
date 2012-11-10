@@ -906,9 +906,7 @@ static void clear_sock(struct pool *pool)
 	char buf[RECVSIZE];
 
 	mutex_lock(&pool->stratum_lock);
-	/* Ignore return code of curl_easy_recv since we're just clearing
-	 * anything in the socket if it's still alive */
-	while (CURLE_AGAIN != curl_easy_recv(pool->stratum_curl, buf, RECVSIZE, &n))
+	while (CURLE_OK == curl_easy_recv(pool->stratum_curl, buf, RECVSIZE, &n))
 	{}
 	mutex_unlock(&pool->stratum_lock);
 }
