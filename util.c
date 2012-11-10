@@ -1083,6 +1083,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		pool->nonce2 = 0;
 	mutex_unlock(&pool->pool_lock);
 
+	applog(LOG_DEBUG, "Received stratum notify from pool %u with job_id=%s",
+	       pool->pool_no, job_id);
 	if (opt_protocol) {
 		applog(LOG_DEBUG, "job_id: %s", job_id);
 		applog(LOG_DEBUG, "prev_hash: %s", prev_hash);
