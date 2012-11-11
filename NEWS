@@ -1,3 +1,28 @@
+Version 2.9.2 - November 11, 2012
+
+- Use stratum block change from backup pools as an alternative to longpoll for
+pools that don't support LP.
+- Check share target diff for best_share to be calculated when solo mining.
+- Round some more static string arrays to 4 byte boundaries.
+- There is no need for the static arrays to be larger than required, so long as
+they're 4 byte aligned to appease ARM.
+- Store the full stratum url information in rpc_url for correct configuration
+file saving.
+- Put in a hack to prevent dud work from sneaking into test_work_current being
+seen as a new block.
+- Reset the work->longpoll flag where it will affect stratum work items as well.
+- Check for both coinbase/append and submit/coinbase support before using GBT
+protocol.
+- First pass through testing for GBT should not set probed to true since we are
+about to probe again.
+- Hash1 is only used by the deprecated cpu mining code and never changes so
+remove it from the work struct and bypass needing to process the value for all
+other mining.
+- Get a work item once per minute for all getwork and GBT pools to test they're
+still alive and to maintain a current GBT template.
+- Get a fresh block template with GBT pools on switching to them.
+
+
 Version 2.9.1 - November 6, 2012
 
 - Reset work flags to prevent GBT shares from being submitted as stratum ones
