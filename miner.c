@@ -4204,7 +4204,6 @@ static bool test_work_current(struct work *work)
 			if (work->longpoll) {
 				applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
 				       work->pool->pool_no);
-				work->longpoll = false;
 			} else if (have_longpoll)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
 			else
@@ -4241,7 +4240,6 @@ static bool test_work_current(struct work *work)
 			}
 		}
 	  if (work->longpoll) {
-		work->longpoll = false;
 		++work->pool->work_restart_id;
 		if ((!restart) && work->pool == current_pool()) {
 			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
@@ -4252,6 +4250,7 @@ static bool test_work_current(struct work *work)
 		if (restart)
 			restart_threads();
 	}
+	work->longpoll = false;
 out_free:
 	free(hexstr);
 	return ret;
