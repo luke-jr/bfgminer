@@ -111,7 +111,7 @@ int gpu_threads;
 bool opt_scrypt;
 #endif
 #endif
-bool opt_restart;
+bool opt_restart = true;
 static bool opt_nogpu;
 
 struct list_head scan_devices;
