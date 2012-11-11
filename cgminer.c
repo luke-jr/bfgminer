@@ -563,6 +563,7 @@ bool detect_stratum(struct pool *pool, char *url)
 		return false;
 
 	if (!strncasecmp(url, "stratum+tcp://", 14)) {
+		pool->rpc_url = strdup(url);
 		pool->has_stratum = true;
 		pool->stratum_url = pool->sockaddr_url;
 		return true;
@@ -582,11 +583,8 @@ static char *set_url(char *arg)
 
 	arg = get_proxy(arg, pool);
 
-	if (detect_stratum(pool, arg)) {
-		if (!pool->rpc_url)
-			pool->rpc_url = strdup(pool->stratum_url);
+	if (detect_stratum(pool, arg))
 		return NULL;
-	}
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -6339,12 +6337,11 @@ static bool input_pool(bool live)
 
 	pool = add_pool();
 
-	if (detect_stratum(pool, url))
-		url = strdup(pool->stratum_url);
-	else if (strncmp(url, "http://", 7) && strncmp(url, "https://", 8)) {
+	if (!detect_stratum(pool, url) && strncmp(url, "http://", 7) &&
+	    strncmp(url, "https://", 8)) {
 		char *httpinput;
 
-		httpinput = malloc(255);
+		httpinput = malloc(256);
 		if (!httpinput)
 			quit(1, "Failed to malloc httpinput");
 		strcpy(httpinput, "http://");
