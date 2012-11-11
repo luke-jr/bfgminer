@@ -94,7 +94,7 @@ bool opt_realquiet;
 bool opt_loginput;
 bool opt_compact;
 const int opt_cutofftemp = 95;
-int opt_log_interval = 3;
+int opt_log_interval = 5;
 int opt_queue = 1;
 int opt_scantime = 60;
 int opt_expiry = 120;
