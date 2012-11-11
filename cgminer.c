@@ -4772,6 +4772,7 @@ retry_stratum:
 		val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 				    gbt_req, true, false, &rolltime, pool, false);
 		if (val) {
+			bool append = false, submit = false;
 			json_t *res_val, *mutables;
 			int i, mutsize = 0;
 
@@ -4787,24 +4788,29 @@ retry_stratum:
 				if (json_is_string(arrval)) {
 					const char *mutable = json_string_value(arrval);
 
-					/* Only use GBT if it supports coinbase append */
-					if (!strncasecmp(mutable, "coinbase/append", 15)) {
-						pool->has_gbt = true;
-						pool->rpc_req = gbt_req;
-						break;
-					}
+					if (!strncasecmp(mutable, "coinbase/append", 15))
+						append = true;
+					else if (!strncasecmp(mutable, "submit/coinbase", 15))
+						submit = true;
 				}
 			}
 			json_decref(val);
+
+			/* Only use GBT if it supports coinbase append and
+			 * submit coinbase */
+			if (append && submit) {
+				pool->has_gbt = true;
+				pool->rpc_req = gbt_req;
+			}
 		}
 		/* Reset this so we can probe fully just after this. It will be
 		 * set to true that time.*/
 		pool->probed = false;
 
 		if (pool->has_gbt)
-			applog(LOG_DEBUG, "GBT coinbase append support found, switching to GBT protocol");
+			applog(LOG_DEBUG, "GBT coinbase + append support found, switching to GBT protocol");
 		else
-			applog(LOG_DEBUG, "No GBT coinbase append support found, using getwork protocol");
+			applog(LOG_DEBUG, "No GBT coinbase + append support found, using getwork protocol");
 	}
 
 	gettimeofday(&tv_getwork, NULL);
