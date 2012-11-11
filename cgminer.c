@@ -4797,6 +4797,9 @@ retry_stratum:
 			}
 			json_decref(val);
 		}
+		/* Reset this so we can probe fully just after this. It will be
+		 * set to true that time.*/
+		pool->probed = false;
 
 		if (pool->has_gbt)
 			applog(LOG_DEBUG, "GBT coinbase append support found, switching to GBT protocol");
