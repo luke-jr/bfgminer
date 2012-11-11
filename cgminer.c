@@ -3533,7 +3533,10 @@ static bool test_work_current(struct work *work)
 	if (work->mandatory)
 		return ret;
 
+	/* Hack to work around dud work sneaking into test */
 	hexstr = bin2hex(work->data + 8, 18);
+	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
+		goto out_free;
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
