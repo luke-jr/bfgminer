@@ -6253,6 +6253,12 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		}
 		case TNR_HIGH:
 			// Share above target, normal
+			/* Check the diff of the share, even if it didn't reach the
+			 * target, just to set the best share value if it's higher. */
+			if (opt_scrypt)
+				scrypt_diff(work);
+			else
+				share_diff(work);
 			return true;
 		case TNR_GOOD:
 			break;
