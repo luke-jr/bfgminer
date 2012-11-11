@@ -1,3 +1,8 @@
+Version 2.9.3 - November 11, 2012
+
+- Make header larger on gen stratum work to accomodate \0 at the end.
+
+
 Version 2.9.2 - November 11, 2012
 
 - Use stratum block change from backup pools as an alternative to longpoll for
