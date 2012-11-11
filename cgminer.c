@@ -5105,7 +5105,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
 	int len, cb1_len, n1_len, cb2_len, i;
-	char header[256], *nonce2;
+	char header[260], *nonce2;
 	uint32_t *data32, *swap32;
 
 	memset(work->job_id, 0, 64);
