@@ -5686,7 +5686,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
-		if (pool->hdr_path)
+		if (pool->has_stratum || pool->hdr_path)
 			return pool;
 	}
 	return NULL;
@@ -5723,17 +5723,23 @@ static void *longpoll_thread(void *userdata)
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
-		goto out;
+		return NULL;
 	}
 
 retry_pool:
 	pool = select_longpoll_pool(cp);
 	if (!pool) {
-		applog(LOG_WARNING, "No suitable long-poll found for pool %s", cp->rpc_url);
+		applog(LOG_WARNING, "No suitable long-poll found for %s", cp->rpc_url);
 		while (!pool) {
 			sleep(60);
 			pool = select_longpoll_pool(cp);
 		}
+	}
+
+	if (pool->has_stratum) {
+		applog(LOG_WARNING, "Block change for %s detection via %s stratum",
+		       cp->rpc_url, pool->rpc_url);
+		goto out;
 	}
 
 	/* Any longpoll from any pool is enough for this to be true */
@@ -5751,7 +5757,7 @@ retry_pool:
 		if (cp == pool)
 			applog(LOG_WARNING, "Long-polling activated for %s", lp_url);
 		else
-			applog(LOG_WARNING, "Long-polling activated for pool %s via %s", cp->rpc_url, lp_url);
+			applog(LOG_WARNING, "Long-polling activated for %s via %s", cp->rpc_url, lp_url);
 	}
 
 	while (42) {
@@ -5802,8 +5808,14 @@ retry_pool:
 				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
 			sleep(30);
 		}
+
 		if (pool != cp) {
 			pool = select_longpoll_pool(cp);
+			if (pool->has_stratum) {
+				applog(LOG_WARNING, "Block change for %s detection via %s stratum",
+				       cp->rpc_url, pool->rpc_url);
+				break;
+			}
 			if (unlikely(!pool))
 				goto retry_pool;
 		}
@@ -5813,8 +5825,7 @@ retry_pool:
 	}
 
 out:
-	if (curl)
-		curl_easy_cleanup(curl);
+	curl_easy_cleanup(curl);
 
 	return NULL;
 }
