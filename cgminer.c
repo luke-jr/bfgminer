@@ -4323,11 +4323,10 @@ static void *stratum_thread(void *userdata)
 
 		FD_ZERO(&rd);
 		FD_SET(pool->sock, &rd);
-		timeout.tv_sec = 90;
+		timeout.tv_sec = 120;
 		timeout.tv_usec = 0;
 
-		/* The protocol specifies that notify messages should be sent
-		 * every minute so if we fail to receive any for 90 seconds we
+		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
 		select(pool->sock + 1, &rd, NULL, NULL, &timeout);
