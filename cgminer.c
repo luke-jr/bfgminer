@@ -5078,17 +5078,27 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * 0x00000000ffff0000000000000000000000000000000000000000000000000000
  * so we use a big endian 64 bit unsigned integer centred on the 5th byte to
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
-static void set_work_target(struct work *work, int diff)
+static void set_work_target(struct work *work, double diff)
 {
 	unsigned char rtarget[32], target[32];
+	double d64;
 	uint64_t *data64, h64;
 
-	h64 = diffone;
-	h64 /= (uint64_t)diff;
-	memset(rtarget, 0, 32);
-	data64 = (uint64_t *)(rtarget + 4);
-	*data64 = htobe64(h64);
-	swab256(target, rtarget);
+	d64 = diffone;
+	d64 /= diff;
+	h64 = d64;
+
+	if (h64) {
+		memset(rtarget, 0, 32);
+		data64 = (uint64_t *)(rtarget + 4);
+		*data64 = htobe64(h64);
+		swab256(target, rtarget);
+	} else {
+		/* Support for the classic all FFs just-below-1 diff */
+		memset(target, 0xff, 28);
+		memset(&target[28], 0, 4);
+	}
+
 	if (opt_debug) {
 		char *htarget = bin2hex(target, 32);
 

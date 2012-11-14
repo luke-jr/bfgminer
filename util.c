@@ -1131,17 +1131,17 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
 static bool parse_diff(struct pool *pool, json_t *val)
 {
-	int diff;
+	double diff;
 
-	diff = json_integer_value(json_array_get(val, 0));
-	if (diff < 1)
+	diff = json_number_value(json_array_get(val, 0));
+	if (diff == 0)
 		return false;
 
 	mutex_lock(&pool->pool_lock);
 	pool->swork.diff = diff;
 	mutex_unlock(&pool->pool_lock);
 
-	applog(LOG_DEBUG, "Pool %d difficulty set to %d", pool->pool_no, diff);
+	applog(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no, diff);
 
 	return true;
 }
@@ -1266,24 +1266,20 @@ bool auth_stratum(struct pool *pool)
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
 		swork_id++, pool->rpc_user, pool->rpc_pass);
 
-	/* Parse all data prior sending auth request */
-	while (sock_full(pool, false)) {
-		sret = recv_line(pool);
-		if (!parse_method(pool, sret)) {
-			clear_sock(pool);
-			applog(LOG_INFO, "Failed to parse stratum buffer");
-			free(sret);
-			return ret;
-		}
-		free(sret);
-	}
-
 	if (!stratum_send(pool, s, strlen(s)))
 		goto out;
 
-	sret = recv_line(pool);
-	if (!sret)
-		goto out;
+	/* Parse all data in the queue and anything left should be auth */
+	while (42) {
+		sret = recv_line(pool);
+		if (!sret)
+			goto out;
+		if (parse_method(pool, sret))
+			free(sret);
+		else
+			break;
+	}
+
 	val = JSON_LOADS(sret, &err);
 	free(sret);
 	res_val = json_object_get(val, "result");

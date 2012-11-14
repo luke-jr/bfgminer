@@ -821,7 +821,7 @@ struct stratum_work {
 	bool clean;
 
 	int merkles;
-	int diff;
+	double diff;
 };
 
 #define RECVSIZE 8192
@@ -966,7 +966,7 @@ struct work {
 	char 		job_id[64];
 	char		nonce2[64];
 	char		ntime[16];
-	int		sdiff;
+	double		sdiff;
 
 	bool		gbt;
 	char		gbt_coinbase[512];
