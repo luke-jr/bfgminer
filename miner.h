@@ -894,7 +894,7 @@ struct stratum_work {
 	bool clean;
 
 	int merkles;
-	int diff;
+	double diff;
 
 	time_t transparency_time;
 	bool opaque;
@@ -1037,7 +1037,7 @@ struct work {
 	char 		job_id[64];
 	char		nonce2[64];
 	char		ntime[16];
-	int		sdiff;
+	double		sdiff;
 
 	unsigned char	work_restart_id;
 	int		id;
