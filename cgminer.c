@@ -5358,7 +5358,7 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 	}
 
 	if (work->stratum) {
-		int diff;
+		double diff;
 
 		mutex_lock(&pool->pool_lock);
 		diff = pool->swork.diff;
