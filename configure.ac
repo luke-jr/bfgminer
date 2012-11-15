@@ -353,6 +353,11 @@ if test "x$ztex" != xno; then
       LIBUSB_CFLAGS="-IC:/MinGW/include/libusb-1.0"
       AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
       ;;
+    *-*-freebsd*)
+      LIBUSB_LIBS="-lusb"
+      LIBUSB_CFLAGS=""
+      AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
+      ;;
     *)
       PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
       ;;
