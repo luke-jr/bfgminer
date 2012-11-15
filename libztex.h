@@ -22,7 +22,7 @@
 #ifndef __LIBZTEX_H__
 #define __LIBZTEX_H__
 
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 #define LIBZTEX_MAX_DESCRIPTORS 512
 #define LIBZTEX_SNSTRING_LEN 10
