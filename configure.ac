@@ -345,6 +345,11 @@ PKG_PROG_PKG_CONFIG()
 
 if test "x$ztex" != xno; then
   case $target in
+    *-*-freebsd*)
+      LIBUSB_LIBS="-lusb"
+      LIBUSB_CFLAGS=""
+      AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
+      ;;
     *)
       PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
       ;;
