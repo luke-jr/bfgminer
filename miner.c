@@ -6192,7 +6192,7 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 	memcpy((void*)work->hash, hash2, 32);
 
 	if (work->stratum) {
-		int diff;
+		double diff;
 
 		mutex_lock(&pool->pool_lock);
 		diff = pool->swork.diff;
