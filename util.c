@@ -1119,19 +1119,17 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
 static bool parse_diff(struct pool *pool, json_t *val)
 {
-	double fpdiff;
-	int diff;
+	double diff;
 
-	fpdiff = json_number_value(json_array_get(val, 0));
-	if (fpdiff < 0.9999)
+	diff = json_number_value(json_array_get(val, 0));
+	if (diff == 0)
 		return false;
-	diff = floor(fpdiff);
 
 	mutex_lock(&pool->pool_lock);
 	pool->swork.diff = diff;
 	mutex_unlock(&pool->pool_lock);
 
-	applog(LOG_DEBUG, "Pool %d difficulty set to %d", pool->pool_no, diff);
+	applog(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no, diff);
 
 	return true;
 }
@@ -1261,30 +1259,18 @@ bool auth_stratum(struct pool *pool)
 	if (!stratum_send(pool, s, strlen(s)))
 		goto out;
 
-	while (1) {
-		if (!sock_full(pool, true)) {
-			applog(LOG_ERR, "Stratum authentication timed out for pool %d", pool->pool_no);
-			goto out;
-		}
+	/* Parse all data in the queue and anything left should be auth */
+	while (42) {
 		sret = recv_line(pool);
-		if (!parse_method(pool, sret) && !parse_stratum_response(pool, sret)) {
-			// Check for auth response
-			val = JSON_LOADS(sret, &err);
-			if (val) {
-				json_t *id_val = json_object_get(val, "id");
-				if (json_is_string(id_val) && !strcmp(json_string_value(id_val), "auth"))
-					break;
-				json_decref(val);
-			}
-
-			clear_sock(pool);
-			applog(LOG_INFO, "Failed to parse stratum buffer");
+		if (!sret)
+			goto out;
+		if (parse_method(pool, sret))
 			free(sret);
-			return ret;
-		}
-		free(sret);
+		else
+			break;
 	}
 
+	val = JSON_LOADS(sret, &err);
 	free(sret);
 	res_val = json_object_get(val, "result");
 	err_val = json_object_get(val, "error");

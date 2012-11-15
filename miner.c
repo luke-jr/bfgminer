@@ -697,6 +697,7 @@ bool detect_stratum(struct pool *pool, char *url)
 		return false;
 
 	if (!strncasecmp(url, "stratum+tcp://", 14)) {
+		pool->rpc_url = strdup(url);
 		pool->has_stratum = true;
 		pool->stratum_url = pool->sockaddr_url;
 		return true;
@@ -714,11 +715,8 @@ static char *set_url(char *arg)
 		add_pool();
 	pool = pools[total_urls - 1];
 
-	if (detect_stratum(pool, arg)) {
-		if (!pool->rpc_url)
-			pool->rpc_url = strdup(pool->stratum_url);
+	if (detect_stratum(pool, arg))
 		return NULL;
-	}
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -4165,7 +4163,10 @@ static bool test_work_current(struct work *work)
 
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
 
+	/* Hack to work around dud work sneaking into test */
 	hexstr = bin2hex(work->data + 8, 18);
+	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
+		goto out_free;
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
@@ -4204,7 +4205,6 @@ static bool test_work_current(struct work *work)
 			if (work->longpoll) {
 				applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
 				       work->pool->pool_no);
-				work->longpoll = false;
 			} else if (have_longpoll)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
 			else
@@ -4241,7 +4241,6 @@ static bool test_work_current(struct work *work)
 			}
 		}
 	  if (work->longpoll) {
-		work->longpoll = false;
 		++work->pool->work_restart_id;
 		if ((!restart) && work->pool == current_pool()) {
 			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
@@ -4252,6 +4251,7 @@ static bool test_work_current(struct work *work)
 		if (restart)
 			restart_threads();
 	}
+	work->longpoll = false;
 out_free:
 	free(hexstr);
 	return ret;
@@ -5915,25 +5915,27 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * 0x00000000ffff0000000000000000000000000000000000000000000000000000
  * so we use a big endian 64 bit unsigned integer centred on the 5th byte to
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
-static void set_work_target(struct work *work, int diff)
+static void set_work_target(struct work *work, double diff)
 {
 	unsigned char rtarget[36], target[36];
+	double d64;
 	uint64_t *data64, h64;
 
-	if (!diff) {
-		// Special support is needed for difficulties < 1
+	d64 = diffone;
+	d64 /= diff;
+	h64 = d64;
+
+	if (h64) {
+		memset(rtarget, 0, 32);
+		data64 = (uint64_t *)(rtarget + 4);
+		*data64 = htobe64(h64);
+		swab256(target, rtarget);
+	} else {
+		/* Support for the classic all FFs just-below-1 diff */
 		memset(target, 0xff, 28);
 		memset(&target[28], 0, 4);
-		goto havetarget;
 	}
 
-	h64 = diffone;
-	h64 /= (uint64_t)diff;
-	memset(rtarget, 0, 32);
-	data64 = (uint64_t *)(rtarget + 4);
-	*data64 = htobe64(h64);
-	swab256(target, rtarget);
-havetarget:
 	if (opt_debug) {
 		char *htarget = bin2hex(target, 32);
 
@@ -6190,7 +6192,7 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 	memcpy((void*)work->hash, hash2, 32);
 
 	if (work->stratum) {
-		int diff;
+		double diff;
 
 		mutex_lock(&pool->pool_lock);
 		diff = pool->swork.diff;
@@ -6253,6 +6255,12 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		}
 		case TNR_HIGH:
 			// Share above target, normal
+			/* Check the diff of the share, even if it didn't reach the
+			 * target, just to set the best share value if it's higher. */
+			if (opt_scrypt)
+				scrypt_diff(work);
+			else
+				share_diff(work);
 			return true;
 		case TNR_GOOD:
 			break;
@@ -7252,12 +7260,11 @@ static bool input_pool(bool live)
 
 	pool = add_pool();
 
-	if (detect_stratum(pool, url))
-		url = strdup(pool->stratum_url);
-	else if (strncmp(url, "http://", 7) && strncmp(url, "https://", 8)) {
+	if (!detect_stratum(pool, url) && strncmp(url, "http://", 7) &&
+	    strncmp(url, "https://", 8)) {
 		char *httpinput;
 
-		httpinput = malloc(255);
+		httpinput = malloc(256);
 		if (!httpinput)
 			quit(1, "Failed to malloc httpinput");
 		strcpy(httpinput, "http://");
