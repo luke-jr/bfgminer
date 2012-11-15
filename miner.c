@@ -5923,9 +5923,10 @@ static void set_work_target(struct work *work, double diff)
 
 	d64 = diffone;
 	d64 /= diff;
-	h64 = d64;
+	d64 = ceil(d64);
 
-	if (h64) {
+	if (d64 < 18446744073709551616.0) {
+		h64 = d64;
 		memset(rtarget, 0, 32);
 		data64 = (uint64_t *)(rtarget + 4);
 		*data64 = htobe64(h64);
