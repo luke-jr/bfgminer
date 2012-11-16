@@ -1,3 +1,8 @@
+BFGMiner Version 2.8.6 - November 16, 2012
+- Bugfix: Never consider shares to be accepted if the submission response is an
+error
+- Bugfix: Always honour libblkmaker time limits
+
 BFGMiner Version 2.8.5 - November 7, 2012
 - Bugfix: modminer: Use json_object_set_new to correctly count references to
 per-FPGA RPC data
