@@ -1,3 +1,14 @@
+BFGMiner Version 2.10.0 - Future
+
+- Use stratum block change from backup pools as an alternative to longpoll for
+pools that don't support LP.
+- Round some more static string arrays to 4 byte boundaries.
+- There is no need for the static arrays to be larger than required, so long as
+they're 4 byte aligned to appease ARM.
+- Hash1 is only used by the CPU mining code and never changes so remove it from
+the work struct and bypass needing to process the value for all other mining.
+
+
 BFGMiner Version 2.9.3 - November 16, 2012
 
 - Bugfix: Properly process new stratum jobs through test_work_current, even if
