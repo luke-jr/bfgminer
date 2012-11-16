@@ -97,7 +97,7 @@ struct strategies strategies[] = {
 	{ "Balance" },
 };
 
-static char packagename[255];
+static char packagename[256];
 
 bool opt_protocol;
 static bool opt_benchmark;
@@ -260,7 +260,7 @@ static char *current_hash;
 static uint32_t current_block_id;
 char *current_fullhash;
 static char datestamp[40];
-static char blocktime[30];
+static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
 static uint64_t best_diff = 0;
@@ -2025,7 +2025,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 static void text_print_status(int thr_id)
 {
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
-	char logline[255];
+	char logline[256];
 
 	if (cgpu) {
 		get_statline(logline, cgpu);
@@ -2102,7 +2102,7 @@ static void curses_print_devstatus(int thr_id)
 {
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
-	char logline[255];
+	char logline[256];
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SHORT]];
 	int ypos;
 
@@ -2444,7 +2444,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		pool->seq_rejects++;
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
-			char where[17];
+			char where[20];
 			char disposition[36] = "reject";
 			char reason[32];
 
@@ -2508,7 +2508,7 @@ static const uint64_t diffone = 0xFFFF000000000000ull;
 static uint64_t share_diff(const struct work *work)
 {
 	uint64_t *data64, d64;
-	char rhash[36];
+	char rhash[32];
 	uint64_t ret;
 
 	swab256(rhash, work->hash);
@@ -2551,7 +2551,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	int rolltime;
 	uint32_t *hash32;
 	struct timeval tv_submit, tv_submit_reply;
-	char hashshow[64 + 1] = "";
+	char hashshow[64 + 4] = "";
 	char worktime[200] = "";
 
 	if (work->tmpl) {
@@ -2673,7 +2673,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	if (!opt_realquiet)
 		print_status(thr_id);
 	if (!want_per_device_stats) {
-		char logline[255];
+		char logline[256];
 
 		get_statline(logline, cgpu);
 		applog(LOG_INFO, "%s", logline);
@@ -2751,7 +2751,7 @@ static void calc_diff(struct work *work, int known)
 
 	if (opt_scrypt) {
 		uint64_t *data64, d64;
-		char rtarget[36];
+		char rtarget[32];
 
 		swab256(rtarget, work->target);
 		data64 = (uint64_t *)(rtarget + 2);
@@ -5901,7 +5901,7 @@ static struct work *clone_work(struct work *work)
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
-	unsigned char hash1[36];
+	unsigned char hash1[32];
 
 	sha2(data, len, hash1, false);
 	sha2(hash1, 32, hash, false);
@@ -5913,7 +5913,7 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
 static void set_work_target(struct work *work, double diff)
 {
-	unsigned char rtarget[36], target[36];
+	unsigned char rtarget[32], target[32];
 	double d64;
 	uint64_t *data64, h64;
 
@@ -5947,9 +5947,9 @@ static void set_work_target(struct work *work, double diff)
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[36], merkle_sha[68], *merkle_hash;
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
 	int len, cb1_len, n1_len, cb2_len, i;
-	char header[260], *nonce2;
+	char header[256], *nonce2;
 	uint32_t *data32, *swap32;
 
 	memset(work->job_id, 0, 64);
@@ -5975,7 +5975,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	gen_hash(coinbase, merkle_root, len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
-		unsigned char merkle_bin[36];
+		unsigned char merkle_bin[32];
 
 		hex2bin(merkle_bin, pool->swork.merkle[i], 32);
 		memcpy(merkle_sha + 32, merkle_bin, 32);
