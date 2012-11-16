@@ -5,17 +5,8 @@ pools that don't support LP.
 - Round some more static string arrays to 4 byte boundaries.
 - There is no need for the static arrays to be larger than required, so long as
 they're 4 byte aligned to appease ARM.
-- Reset the work->longpoll flag where it will affect stratum work items as well.
-- Check for both coinbase/append and submit/coinbase support before using GBT
-protocol.
-- First pass through testing for GBT should not set probed to true since we are
-about to probe again.
-- Hash1 is only used by the deprecated cpu mining code and never changes so
-remove it from the work struct and bypass needing to process the value for all
-other mining.
-- Get a work item once per minute for all getwork and GBT pools to test they're
-still alive and to maintain a current GBT template.
-- Get a fresh block template with GBT pools on switching to them.
+- Hash1 is only used by the CPU mining code and never changes so remove it from
+the work struct and bypass needing to process the value for all other mining.
 
 
 BFGMiner Version 2.9.3 - November 16, 2012
