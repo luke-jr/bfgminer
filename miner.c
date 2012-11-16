@@ -5217,6 +5217,7 @@ static void *stratum_thread(void *userdata)
 			 * block database */
 			pool->swork.clean = false;
 			gen_stratum_work(pool, &work);
+			++pool->work_restart_id;
 			if (test_work_current(&work)) {
 				/* Only accept a work restart if this stratum
 				 * connection is from the current pool */

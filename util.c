@@ -1080,7 +1080,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.bbversion = bbversion;
 	pool->swork.nbit = nbit;
 	pool->swork.ntime = ntime;
-	pool->swork.clean = clean;
+	pool->submit_old = !clean;
+	pool->swork.clean = true;
 	for (i = 0; i < pool->swork.merkles; i++)
 		free(pool->swork.merkle[i]);
 	if (merkles) {
