@@ -147,7 +147,7 @@ bool opt_scrypt;
 #else
 static char detect_algo;
 #endif
-bool opt_restart;
+bool opt_restart = true;
 static bool opt_nogpu;
 
 struct list_head scan_devices;
