@@ -1,3 +1,34 @@
+BFGMiner Version 2.9.3 - November 16, 2012
+
+- Bugfix: Properly process new stratum jobs through test_work_current, even if
+old shares are still accepted, and copy submit_old flag correctly
+- Ensure pdiff 1 is always caught regardless of bdiff precision, and ceil all
+other cases to ensure we never lose valid shares
+- Check against a double for current pool diff.
+- Support for fractional diffs and the classic just-below-1 share all FFs diff
+target.
+- Check share target diff for best_share to be calculated when solo mining.
+- Store the full stratum url information in rpc_url for correct configuration
+file saving.
+- Put in a hack to prevent dud work from sneaking into test_work_current being
+seen as a new block.
+- Reset the work->longpoll flag where it will affect stratum work items as
+well.
+- Bugfix: Stratum does not guarantee notify messages every minute, so extend
+timeout to 2 full minutes
+- Bugfix: Always honour libblkmaker time limits
+- Always (debug)log when stratum template is updated by the pool
+- Bugfix: When a stratum connection is interrupted, ensure all work/shares for
+it are considered stale
+- Bugfix: clear_sock should return on socket errors
+- Bugfix: Force calculation of work_difficulty since set_work_target fails to
+consider the pdiff<bdiff difference
+- Bugfix: Minimal support for handling real difficulties from stratum server
+- Bugfix: Never consider shares to be accepted if the submission response is an
+error
+- Bugfix: Always fail scrypt detection if Stratum is chosen
+
+
 BFGMiner Version 2.9.2 - November 7, 2012
 
 - Add endian swap defines for where missing.

@@ -1,3 +1,11 @@
+bfgminer (2.9.3-0precise1) precise; urgency=low
+
+  * Many stratum bugfixes, including support for fractional difficulties.
+  * Fix GBT to work properly with very short expiration times.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 16 Nov 2012 03:49:51 -0000
+
+
 bfgminer (2.9.2-0precise1) precise; urgency=low
 
   * modminer & x6500: New bitstream, improving functional performance by about 10 Mh/s on average. You'll need to power cycle your device, or use the new --force-dev-init option to upload the new bitstream.
