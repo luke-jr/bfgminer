@@ -3233,20 +3233,10 @@ static void *submit_work_thread(void *userdata)
 			if (pool_tclear(pool, &pool->submit_fail))
 					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
-		} else {
-			applog(LOG_WARNING, "Failed to submit stratum share to pool %d", pool->pool_no);
-			mutex_lock(&sshare_lock);
-			HASH_DEL(stratum_shares, sshare);
-			mutex_unlock(&sshare_lock);
-			free(sshare);
-			pool->stale_shares++;
-			total_stale++;
-
-			if (!pool_tset(pool, &pool->submit_fail)) {
-				total_ro++;
-				pool->remotefail_occasions++;
-				applog(LOG_WARNING, "Pool %d share submission failure", pool->pool_no);
-			}
+		} else if (!pool_tset(pool, &pool->submit_fail)) {
+			applog(LOG_WARNING, "Pool %d stratum share submission failure", pool->pool_no);
+			total_ro++;
+			pool->remotefail_occasions++;
 		}
 
 		goto out;
