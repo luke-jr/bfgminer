@@ -5487,10 +5487,7 @@ void *miner_thread(void *userdata)
 	gettimeofday(&getwork_start, NULL);
 
 	if (api->thread_init && !api->thread_init(mythr)) {
-		cgpu->device_last_not_well = time(NULL);
-		cgpu->device_not_well_reason = REASON_THREAD_FAIL_INIT;
-		cgpu->thread_fail_init_count++;
-
+		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
 		goto out;
 	}
 
@@ -5561,11 +5558,7 @@ void *miner_thread(void *userdata)
 			if (unlikely(hashes == -1)) {
 				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
 				cgpu->deven = DEV_DISABLED;
-
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
-				cgpu->thread_zero_hash_count++;
-
+				dev_error(cgpu, REASON_THREAD_ZERO_HASH);
 				mt_disable(mythr, thr_id, api);
 			}
 
@@ -6130,9 +6123,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
 				gettimeofday(&thr->sick, NULL);
 
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_DEV_SICK_IDLE_60;
-				cgpu->dev_sick_idle_60_count++;
+				dev_error(cgpu, REASON_DEV_SICK_IDLE_60);
 #ifdef HAVE_ADL
 				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
 					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
@@ -6148,9 +6139,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				gettimeofday(&thr->sick, NULL);
 
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_DEV_DEAD_IDLE_600;
-				cgpu->dev_dead_idle_600_count++;
+				dev_error(cgpu, REASON_DEV_DEAD_IDLE_600);
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
 				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */

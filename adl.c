@@ -1070,9 +1070,7 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *
 		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
 		newpercent = iMax;
 
-		cgpu->device_last_not_well = time(NULL);
-		cgpu->device_not_well_reason = REASON_DEV_OVER_HEAT;
-		cgpu->dev_over_heat_count++;
+		dev_error(cgpu, REASON_DEV_OVER_HEAT);
 	} else if (temp > ga->targettemp && fanpercent < top && tdiff >= 0) {
 		applog(LOG_DEBUG, "Temperature over target, increasing fanspeed");
 		if (temp > ga->targettemp + opt_hysteresis)
@@ -1176,17 +1174,12 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 			applog(LOG_WARNING, "Hit thermal cutoff limit on GPU %d, disabling!", gpu);
 			*denable = DEV_RECOVER;
 			newengine = ga->minspeed;
-
-			cgpu->device_last_not_well = time(NULL);
-			cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-			cgpu->dev_thermal_cutoff_count++;
+			dev_error(cgpu, REASON_DEV_THERMAL_CUTOFF);
 		} else if (temp > ga->overtemp && engine > ga->minspeed) {
 			applog(LOG_WARNING, "Overheat detected, decreasing GPU %d clock speed", gpu);
 			newengine = ga->minspeed;
 
-			cgpu->device_last_not_well = time(NULL);
-			cgpu->device_not_well_reason = REASON_DEV_OVER_HEAT;
-			cgpu->dev_over_heat_count++;
+			dev_error(cgpu, REASON_DEV_OVER_HEAT);
 		} else if (temp > ga->targettemp + opt_hysteresis && engine > ga->minspeed && fan_optimal) {
 			applog(LOG_DEBUG, "Temperature %d degrees over target, decreasing clock speed", opt_hysteresis);
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;

@@ -560,17 +560,13 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 				applog(LOG_WARNING, "%s%u.%u: Hit thermal cutoff limit (%f) at %f, disabling device!", modminer->api->name, modminer->device_id, fpgaid, MODMINER_CUTOFF_TEMP, state->temp);
 				modminer_delta_clock(thr, true, MODMINER_OVERHEAT_CLOCK, true);
 
+				dev_error(modminer, REASON_DEV_THERMAL_CUTOFF);
 				modminer->deven = DEV_RECOVER;
-				modminer->device_last_not_well = time(NULL);
-				modminer->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-				modminer->dev_thermal_cutoff_count++;
 			} else {
 				 applog(LOG_WARNING, "%s%u.%u Overheat limit (%f) reached %f", modminer->api->name, modminer->device_id, fpgaid, MODMINER_OVERHEAT_TEMP, state->temp);
 				modminer_delta_clock(thr, true, MODMINER_CLOCK_DOWN, true);
 
-				modminer->device_last_not_well = time(NULL);
-				modminer->device_not_well_reason = REASON_DEV_OVER_HEAT;
-				modminer->dev_over_heat_count++;
+				dev_error(modminer, REASON_DEV_OVER_HEAT);
 			}
 		}
 	}
