@@ -43,11 +43,14 @@
 #endif
 
 struct pool;
+enum dev_reason;
+struct cgpu_info;
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
 bool extract_sockaddr(struct pool *pool, char *url);
 bool auth_stratum(struct pool *pool);
 bool initiate_stratum(struct pool *pool);
+void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 
 #endif /* __UTIL_H__ */
