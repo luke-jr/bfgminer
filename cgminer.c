@@ -3412,6 +3412,27 @@ static void discard_stale(void)
 	}
 }
 
+static void discard_all(struct pool *pool)
+{
+	struct work *work, *tmp;
+	int discarded = 0;
+
+	mutex_lock(stgd_lock);
+	HASH_ITER(hh, staged_work, work, tmp) {
+		HASH_DEL(staged_work, work);
+		work->pool->staged--;
+		discard_work(work);
+		discarded++;
+	}
+	mutex_unlock(stgd_lock);
+
+	if (discarded) {
+		applog(LOG_DEBUG, "Discarded %d work items by pool %d request", discarded, pool->pool_no);
+		while (discarded-- > 0)
+			queue_request();
+	}
+}
+
 /* A generic wait function for threads that poll that will wait a specified
  * time tdiff waiting on the pthread conditional that is broadcast when a
  * work restart is required. Returns the value of pthread_cond_timedwait
@@ -3446,8 +3467,8 @@ static void restart_threads(void)
 	 * fast enough  messages after every long poll */
 	pool_tset(cp, &cp->lagging);
 
-	/* Discard staged work that is now stale */
-	discard_stale();
+	/* Force discard all work even if not stale */
+	discard_all(cp);
 
 	for (i = 0; i < mining_threads; i++)
 		thr_info[i].work_restart = true;
