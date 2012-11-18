@@ -1578,9 +1578,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		cgpu->deven = DEV_DISABLED;
 		cgpu->status = LIFE_NOSTART;
 
-		cgpu->device_last_not_well = time(NULL);
-		cgpu->device_not_well_reason = REASON_DEV_NOSTART;
-		cgpu->dev_nostart_count++;
+		dev_error(cgpu, REASON_DEV_NOSTART);
 
 		return false;
 	}
