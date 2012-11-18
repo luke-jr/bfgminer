@@ -2072,12 +2072,12 @@ static void curses_print_status(void)
 		total_getworks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
-	if (pool->has_stratum) {
-		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
-			pool->sockaddr_url, pool->rpc_user);
-	} else if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
+	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
+	} else if (pool->has_stratum) {
+		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
+			pool->sockaddr_url, pool->rpc_user);
 	} else {
 		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
 			pool->sockaddr_url, have_longpoll ? "": "out", pool->rpc_user);
@@ -3936,12 +3936,17 @@ void switch_pools(struct pool *selected)
 	if (pool != last_pool)
 	{
 		pool->block_id = 0;
-		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		if (pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
+			applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		}
 	}
 
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
+
+	if (!pool->queued)
+		queue_request();
 }
 
 static void discard_work(struct work *work)
@@ -6045,6 +6050,8 @@ static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 	}
 
 retry:
+	if (pool_strategy == POOL_BALANCE || pool_strategy == POOL_LOADBALANCE)
+		switch_pools(NULL);
 	pool = current_pool();
 
 	if (reuse_work(work, pool))
