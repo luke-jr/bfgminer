@@ -1471,6 +1471,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	unsigned char *merkleroot;
 	char *cbhex;
 
+	memset(work->job_id, 0, 64);
 	mutex_lock(&pool->gbt_lock);
 	__build_gbt_coinbase(pool);
 	merkleroot = __gbt_merkleroot(pool);
@@ -1488,6 +1489,9 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 
 	/* For encoding the block data on submission */
 	work->gbt_txns = pool->gbt_txns + 1;
+
+	if (pool->gbt_workid)
+		sprintf(work->job_id, "%s", pool->gbt_workid);
 	mutex_unlock(&pool->gbt_lock);
 
 	memcpy(work->data + 4 + 32, merkleroot, 32);
@@ -1529,6 +1533,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	int curtime;
 	bool submitold;
 	const char *bits;
+	const char *workid;
 
 	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
 	target = json_string_value(json_object_get(res_val, "target"));
@@ -1539,6 +1544,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	curtime = json_integer_value(json_object_get(res_val, "curtime"));
 	submitold = json_is_true(json_object_get(res_val, "submitold"));
 	bits = json_string_value(json_object_get(res_val, "bits"));
+	workid = json_string_value(json_object_get(res_val, "workid"));
 
 	if (!previousblockhash || !target || !coinbasetxn || !longpollid ||
 	    !expires || !version || !curtime || !bits) {
@@ -1555,12 +1561,19 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	applog(LOG_DEBUG, "curtime: %d", curtime);
 	applog(LOG_DEBUG, "submitold: %s", submitold ? "true" : "false");
 	applog(LOG_DEBUG, "bits: %s", bits);
+	if (workid)
+		applog(LOG_DEBUG, "workid: %s", workid);
 
 	mutex_lock(&pool->gbt_lock);
 	free(pool->coinbasetxn);
 	pool->coinbasetxn = strdup(coinbasetxn);
 	free(pool->longpollid);
 	pool->longpollid = strdup(longpollid);
+	free(pool->gbt_workid);
+	if (workid)
+		pool->gbt_workid = strdup(workid);
+	else
+		pool->gbt_workid = NULL;
 
 	hex2bin(hash_swap, previousblockhash, 32);
 	swap256(pool->previousblockhash, hash_swap);
@@ -2321,7 +2334,10 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		free(varint);
 		strcat(gbt_block, work->gbt_coinbase);
 
-		sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {}]}", gbt_block);
+		if (strlen(work->job_id))
+			sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {\"workid\": \"%s\"}]}", gbt_block, work->job_id);
+		else
+			sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {}]}", gbt_block);
 	} else
 		sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
@@ -5000,6 +5016,9 @@ static struct work *hash_pop(const struct timespec *abstime)
 
 static bool reuse_work(struct work *work, struct pool *pool)
 {
+	if (work->mined && (pool_strategy == POOL_BALANCE || pool_strategy == POOL_LOADBALANCE))
+		return false;
+
 	if (pool->has_stratum) {
 		if (!pool->stratum_active)
 			return false;

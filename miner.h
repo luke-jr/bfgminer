@@ -915,6 +915,7 @@ struct pool {
 	unsigned char gbt_target[32];
 	char *coinbasetxn;
 	char *longpollid;
+	char *gbt_workid;
 	int gbt_expires;
 	uint32_t gbt_version;
 	uint32_t curtime;
