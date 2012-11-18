@@ -3579,7 +3579,7 @@ static bool test_work_current(struct work *work)
 		if (unlikely(new_blocks == 1))
 			goto out_free;
 
-		work_block++;
+		work->work_block = ++work_block;
 
 		if (!work->stratum) {
 			if (work->longpoll) {
@@ -3592,10 +3592,10 @@ static bool test_work_current(struct work *work)
 		}
 		restart_threads();
 	} else if (work->longpoll) {
+		work->work_block = ++work_block;
 		if (work->pool == current_pool()) {
 			applog(LOG_NOTICE, "%sLONGPOLL from pool %d requested work restart",
 			       work->gbt ? "GBT " : "", work->pool->pool_no);
-			work_block++;
 			restart_threads();
 		}
 	}
