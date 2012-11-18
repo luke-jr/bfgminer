@@ -833,7 +833,7 @@ double tdiff(struct timeval *end, struct timeval *start)
 
 bool extract_sockaddr(struct pool *pool, char *url)
 {
-	char *url_begin, *url_end, *port_start = NULL;
+	char *url_begin, *url_end, *ipv6_begin, *ipv6_end, *port_start = NULL;
 	char url_address[256], port[6];
 	int url_len, port_len = 0;
 
@@ -843,7 +843,14 @@ bool extract_sockaddr(struct pool *pool, char *url)
 		url_begin = url;
 	else
 		url_begin += 2;
-	url_end = strstr(url_begin, ":");
+
+	/* Look for numeric ipv6 entries */
+	ipv6_begin = strstr(url_begin, "[");
+	ipv6_end = strstr(url_begin, "]");
+	if (ipv6_begin && ipv6_end && ipv6_end > ipv6_begin)
+		url_end = strstr(ipv6_end, ":");
+	else
+		url_end = strstr(url_begin, ":");
 	if (url_end) {
 		url_len = url_end - url_begin;
 		port_len = strlen(url_begin) - url_len - 1;
