@@ -5415,6 +5415,7 @@ static void clear_stratum_shares(struct pool *pool)
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
 		if (sshare->work.pool == pool) {
 			HASH_DEL(stratum_shares, sshare);
+			clear_work(&sshare->work);
 			free(sshare);
 			cleared++;
 		}
