@@ -29,7 +29,7 @@
 #define BITFORCE_LONG_TIMEOUT_MS (BITFORCE_LONG_TIMEOUT_S * 1000)
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
-#define MAX_START_DELAY_US 100000
+#define MAX_START_DELAY_MS 100
 #define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
 #define TIME_AVG_CONSTANT 8
 
@@ -319,9 +319,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
 		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer", bitforce->device_id);
-		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_DEV_THROTTLE;
-		bitforce->dev_throttle_count++;
+		dev_error(bitforce, REASON_DEV_THROTTLE);
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
 		bitforce_clear_buffer(bitforce);
@@ -465,9 +463,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
 		applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
 			tv_to_ms(elapsed), BITFORCE_TIMEOUT_MS);
-		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
-		bitforce->dev_over_heat_count++;
+		dev_error(bitforce, REASON_DEV_OVER_HEAT);
 		++bitforce->hw_errors;
 		++hw_errors;
 
@@ -578,9 +574,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 commerr:
 		ret = 0;
 		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
-		bitforce->device_last_not_well = time(NULL);
-		bitforce->device_not_well_reason = REASON_DEV_COMMS_ERROR;
-		bitforce->dev_comms_error_count++;
+		dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 		bitforce->hw_errors++;
 		BFclose(bitforce->device_fd);
 		int fd = bitforce->device_fd = BFopen(bitforce->device_path);
@@ -612,9 +606,9 @@ static bool bitforce_thread_init(struct thr_info *thr)
 
 	/* Pause each new thread at least 100ms between initialising
 	 * so the devices aren't making calls all at the same time. */
-	wait = thr->id * MAX_START_DELAY_US;
+	wait = thr->id * MAX_START_DELAY_MS;
 	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
-	usleep(wait);
+	nmsleep(wait);
 
 	return true;
 }

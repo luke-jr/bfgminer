@@ -2072,12 +2072,12 @@ static void curses_print_status(void)
 		total_getworks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
-	if (pool->has_stratum) {
-		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
-			pool->sockaddr_url, pool->rpc_user);
-	} else if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
+	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
+	} else if (pool->has_stratum) {
+		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
+			pool->sockaddr_url, pool->rpc_user);
 	} else {
 		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
 			pool->sockaddr_url, have_longpoll ? "": "out", pool->rpc_user);
@@ -3375,9 +3375,12 @@ static bool queue_request(void);
 static void pool_died(struct pool *pool)
 {
 	if (!pool_tset(pool, &pool->idle)) {
-		applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
 		gettimeofday(&pool->tv_idle, NULL);
-		switch_pools(NULL);
+		if (pool == current_pool()) {
+			applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
+			switch_pools(NULL);
+		} else
+			applog(LOG_INFO, "Pool %d %s failed to return work", pool->pool_no, pool->rpc_url);
 	}
 }
 
@@ -3666,21 +3669,10 @@ next_submit:
 			if (pool_tclear(pool, &pool->submit_fail))
 					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
-		} else {
-			applog(LOG_WARNING, "Failed to submit stratum share to pool %d", pool->pool_no);
-			mutex_lock(&sshare_lock);
-			HASH_DEL(stratum_shares, sshare);
-			mutex_unlock(&sshare_lock);
-			clear_work(&sshare->work);
-			free(sshare);
-			pool->stale_shares++;
-			total_stale++;
-
-			if (!pool_tset(pool, &pool->submit_fail)) {
-				total_ro++;
-				pool->remotefail_occasions++;
-				applog(LOG_WARNING, "Pool %d share submission failure", pool->pool_no);
-			}
+		} else if (!pool_tset(pool, &pool->submit_fail)) {
+			applog(LOG_WARNING, "Pool %d stratum share submission failure", pool->pool_no);
+			total_ro++;
+			pool->remotefail_occasions++;
 		}
 
 		goto out;
@@ -3944,12 +3936,17 @@ void switch_pools(struct pool *selected)
 	if (pool != last_pool)
 	{
 		pool->block_id = 0;
-		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		if (pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
+			applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		}
 	}
 
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
+
+	if (!pool->queued)
+		queue_request();
 }
 
 static void discard_work(struct work *work)
@@ -5760,9 +5757,11 @@ static inline int cp_prio(void)
 
 static void pool_resus(struct pool *pool)
 {
-	applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
-	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER)
+	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER) {
+		applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 		switch_pools(NULL);
+	} else
+		applog(LOG_INFO, "Pool %d %s resumed returning work", pool->pool_no, pool->rpc_url);
 }
 
 static bool queue_request(void)
@@ -6051,6 +6050,8 @@ static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
 	}
 
 retry:
+	if (pool_strategy == POOL_BALANCE || pool_strategy == POOL_LOADBALANCE)
+		switch_pools(NULL);
 	pool = current_pool();
 
 	if (reuse_work(work, pool))
@@ -6320,10 +6321,7 @@ void *miner_thread(void *userdata)
 	gettimeofday(&getwork_start, NULL);
 
 	if (api->thread_init && !api->thread_init(mythr)) {
-		cgpu->device_last_not_well = time(NULL);
-		cgpu->device_not_well_reason = REASON_THREAD_FAIL_INIT;
-		cgpu->thread_fail_init_count++;
-
+		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
 		goto out;
 	}
 
@@ -6394,9 +6392,7 @@ void *miner_thread(void *userdata)
 			if (unlikely(hashes == -1)) {
 				time_t now = time(NULL);
 				if (difftime(now, cgpu->device_last_not_well) > 1.) {
-					cgpu->device_last_not_well = time(NULL);
-					cgpu->device_not_well_reason = REASON_THREAD_ZERO_HASH;
-					cgpu->thread_zero_hash_count++;
+					dev_error(cgpu, REASON_THREAD_ZERO_HASH);
 				}
 
 				if (scanhash_working && opt_restart) {
@@ -6977,9 +6973,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				       cgpu->api->name, cgpu->device_id);
 				*denable = DEV_RECOVER;
 
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
-				++cgpu->dev_thermal_cutoff_count;
+				dev_error(cgpu, REASON_DEV_THERMAL_CUTOFF);
 			}
 
 			if (thr->getwork) {
@@ -7015,9 +7009,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
 				gettimeofday(&thr->sick, NULL);
 
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_DEV_SICK_IDLE_60;
-				cgpu->dev_sick_idle_60_count++;
+				dev_error(cgpu, REASON_DEV_SICK_IDLE_60);
 #ifdef HAVE_ADL
 				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
 					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
@@ -7033,9 +7025,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				gettimeofday(&thr->sick, NULL);
 
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_DEV_DEAD_IDLE_600;
-				cgpu->dev_dead_idle_600_count++;
+				dev_error(cgpu, REASON_DEV_DEAD_IDLE_600);
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
 				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */

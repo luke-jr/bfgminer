@@ -668,7 +668,7 @@ modminer_process_results(struct thr_info*thr)
 		}
 		if (work_restart(thr) || !--iter)
 			break;
-		usleep(1000);
+		nmsleep(1);
 		if (work_restart(thr))
 			break;
 		mutex_lock(&modminer->device_mutex);

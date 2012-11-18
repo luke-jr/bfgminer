@@ -707,9 +707,7 @@ static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, 
 	*fdp = icarus->device_fd = icarus_open(icarus->device_path, info->baud);
 	if (unlikely(-1 == *fdp)) {
 		applog(LOG_ERR, "%s %u: Failed to reopen on %s", icarus->api->name, icarus->device_id, icarus->device_path);
-		icarus->device_last_not_well = time(NULL);
-		icarus->device_not_well_reason = REASON_DEV_COMMS_ERROR;
-		icarus->dev_comms_error_count++;
+		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		state->firstrun = true;
 		return false;
 	}
@@ -730,9 +728,7 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 	if (ret) {
 		do_icarus_close(thr);
 		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
-		icarus->device_last_not_well = time(NULL);
-		icarus->device_not_well_reason = REASON_DEV_COMMS_ERROR;
-		icarus->dev_comms_error_count++;
+		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return false;	/* This should never happen */
 	}
 
@@ -815,9 +811,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				case ICA_GETS_ERROR:
 					do_icarus_close(thr);
 					applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
-					icarus->device_last_not_well = time(NULL);
-					icarus->device_not_well_reason = REASON_DEV_COMMS_ERROR;
-					icarus->dev_comms_error_count++;
+					dev_error(icarus, REASON_DEV_COMMS_ERROR);
 					if (!icarus_reopen(icarus, state, &fd))
 						return -1;
 					break;
