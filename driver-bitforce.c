@@ -55,7 +55,7 @@ enum {
 #define BITFORCE_LONG_TIMEOUT_MS (BITFORCE_LONG_TIMEOUT_S * 1000)
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
-#define MAX_START_DELAY_US 100000
+#define MAX_START_DELAY_MS 100
 #define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
 #define TIME_AVG_CONSTANT 8
 
@@ -691,9 +691,9 @@ static bool bitforce_thread_init(struct thr_info *thr)
 
 	/* Pause each new thread at least 100ms between initialising
 	 * so the devices aren't making calls all at the same time. */
-	wait = thr->id * MAX_START_DELAY_US;
+	wait = thr->id * MAX_START_DELAY_MS;
 	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
-	usleep(wait);
+	nmsleep(wait);
 
 	return true;
 }

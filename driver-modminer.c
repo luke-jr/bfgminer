@@ -604,7 +604,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 
 		if (work_restart(thr))
 			break;
-		usleep(10000);
+		nmsleep(10);
 		if (work_restart(thr) || !--iter)
 			break;
 		mutex_lock(&modminer->device_mutex);
