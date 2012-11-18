@@ -343,15 +343,21 @@ if test "x$bitforce$modminer" != xnono; then
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
-if test "x$ztex" != xno; then
-  AC_CHECK_LIB(usb-1.0, libusb_init, ,
-          AC_MSG_ERROR([Could not find usb library - please install libusb]))
-  AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
-  USB_LIBS="-lusb-1.0"
-  USB_FLAGS=""
-fi
-
 PKG_PROG_PKG_CONFIG()
+
+if test "x$ztex" != xno; then
+  case $target in
+    *-*-freebsd*)
+      LIBUSB_LIBS="-lusb"
+      LIBUSB_CFLAGS=""
+      ;;
+    *)
+      PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
+      ;;
+  esac
+  USB_LIBS="$LIBUSB_LIBS"
+  USB_FLAGS="$LIBUSB_CFLAGS"
+fi
 
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
 AC_SUBST(LIBCURL_LIBS)
