@@ -5016,9 +5016,6 @@ static struct work *hash_pop(const struct timespec *abstime)
 
 static bool reuse_work(struct work *work, struct pool *pool)
 {
-	if (work->mined && (pool_strategy == POOL_BALANCE || pool_strategy == POOL_LOADBALANCE))
-		return false;
-
 	if (pool->has_stratum) {
 		if (!pool->stratum_active)
 			return false;
