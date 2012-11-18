@@ -222,7 +222,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 
 	libusb_release_interface(ztex->hndl, settings[1]);
 
-	usleep(200000);
+	nmsleep(200);
 	applog(LOG_INFO, "%s: HS FPGA configuration done", ztex->repr);
 	return 0;
 
@@ -311,7 +311,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 		applog(LOG_ERR, "%s: FPGA configuration failed: DONE pin does not go high", ztex->repr);
 		return 3;
 	}
-	usleep(200000);
+	nmsleep(200);
 	applog(LOG_INFO, "%s: FPGA configuration done", ztex->repr);
 	return 0;
 }
