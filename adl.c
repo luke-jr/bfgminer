@@ -1174,11 +1174,12 @@ void gpu_autotune(int gpu, enum dev_enable *denable)
 			newengine = engine - ga->lpOdParameters.sEngineClock.iStep;
 			/* Only try to tune engine speed up if this GPU is not disabled */
 		} else if (temp < gpus[gpu].targettemp && engine < ga->maxspeed && fan_window && *denable == DEV_ENABLED) {
+			int iStep = ga->lpOdParameters.sEngineClock.iStep;
+
 			applog(LOG_DEBUG, "Temperature below target, increasing clock speed");
 			if (temp < gpus[gpu].targettemp - opt_hysteresis)
-				newengine = ga->maxspeed;
-			else
-				newengine = engine + ga->lpOdParameters.sEngineClock.iStep;
+				iStep *= 2;
+			newengine = engine + iStep;
 		}
 
 		if (newengine > ga->maxspeed)
