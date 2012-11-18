@@ -3375,9 +3375,12 @@ static bool queue_request(void);
 static void pool_died(struct pool *pool)
 {
 	if (!pool_tset(pool, &pool->idle)) {
-		applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
 		gettimeofday(&pool->tv_idle, NULL);
-		switch_pools(NULL);
+		if (pool == current_pool()) {
+			applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
+			switch_pools(NULL);
+		} else
+			applog(LOG_INFO, "Pool %d %s failed to return work", pool->pool_no, pool->rpc_url);
 	}
 }
 
@@ -5749,9 +5752,11 @@ static inline int cp_prio(void)
 
 static void pool_resus(struct pool *pool)
 {
-	applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
-	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER)
+	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER) {
+		applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 		switch_pools(NULL);
+	} else
+		applog(LOG_INFO, "Pool %d %s resumed returning work", pool->pool_no, pool->rpc_url);
 }
 
 static bool queue_request(void)
