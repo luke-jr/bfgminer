@@ -2289,6 +2289,9 @@ static inline bool should_roll(struct work *work)
 	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE)
 		return false;
 
+	if (stale_work(work, false))
+		return false;
+
 	if (work->rolltime > opt_scantime)
 		expiry = work->rolltime;
 	else
