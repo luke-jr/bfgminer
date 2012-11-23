@@ -5936,30 +5936,17 @@ static bool pool_getswork(struct pool *pool)
 	gettimeofday(&tv_getwork_reply, NULL);
 
 	if (val) {
-		struct work *work = make_work();
-		bool rc = work_decode(pool, work, val);
+		struct work work;
+		bool rc = work_decode(pool, &work, val);
 
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
-			work->pool = pool;
-			work->rolltime = rolltime;
-			memcpy(&(work->tv_getwork), &tv_getwork, sizeof(struct timeval));
-			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
-			work->getwork_mode = GETWORK_MODE_TESTPOOL;
-			calc_diff(work, 0);
-			applog(LOG_DEBUG, "Pushing pool_getswork work for pool %d", pool->pool_no);
-
-			tq_push(thr_info[stage_thr_id].q, work);
-			total_getworks++;
-			pool->getwork_requested++;
-			ret = true;
 			gettimeofday(&pool->tv_idle, NULL);
 			ret = true;
 		} else {
 			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
-			free_work(work);
 		}
 		json_decref(val);
 	} else {
