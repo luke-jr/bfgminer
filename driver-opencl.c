@@ -1464,10 +1464,8 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 
 	clFinish(clState->commandQueue);
 
-	if (thrdata->res[FOUND]) {
-		thrdata->last_work = &thrdata->_last_work;
-		memcpy(thrdata->last_work, work, sizeof(*thrdata->last_work));
-	}
+	if (thrdata->res[FOUND])
+		thrdata->last_work = copy_work(&thrdata->_last_work);
 }
 
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
@@ -1535,6 +1533,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		if (unlikely(thrdata->last_work)) {
 			applog(LOG_DEBUG, "GPU %d found something in last work?", gpu->device_id);
 			postcalc_hash_async(thr, thrdata->last_work, thrdata->res);
+			free_work(thrdata->last_work);
 			thrdata->last_work = NULL;
 		} else {
 			applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);

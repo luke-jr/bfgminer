@@ -962,15 +962,13 @@ struct work {
 	bool		queued;
 
 	bool		stratum;
-	/* These are arbitrary lengths as it is too hard to keep track of
-	 * dynamically allocated ram in work structs */
-	char 		job_id[64];
-	char		nonce2[64];
-	char		ntime[16];
+	char 		*job_id;
+	char		*nonce2;
+	char		*ntime;
 	double		sdiff;
 
 	bool		gbt;
-	char		gbt_coinbase[512];
+	char		*gbt_coinbase;
 	int		gbt_txns;
 
 	unsigned int	work_block;
@@ -1031,6 +1029,10 @@ extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
 extern void app_restart(void);
+extern void clean_work(struct work *work);
+extern void free_work(struct work *work);
+extern void __copy_work(struct work *work, struct work *base_work);
+extern struct work *copy_work(struct work *base_work);
 
 enum api_data_type {
 	API_ESCAPE,

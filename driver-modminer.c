@@ -645,7 +645,7 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 	if (startwork) {
 		if (!modminer_start_work(thr))
 			return -1;
-		memcpy(&state->running_work, work, sizeof(state->running_work));
+		__copy_work(&state->running_work, work);
 	}
 
 	// This is intentionally early
