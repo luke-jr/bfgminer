@@ -498,6 +498,29 @@ and uses it to try to end up doing the same amount of work for all pools.
 
 
 ---
+SOLO MINING
+
+BFGMiner supports solo mining with any GBT-compatible bitcoin node (such as
+bitcoind). To use this mode, you need to specify the URL of your bitcoind node
+using the usual pool options (--url, --userpass, etc), and the --coinbase-addr
+option to specify the Bitcoin address you wish to receive the block rewards
+mined. If you are solo mining with more than one instance of BFGMiner (or any
+other software) per payout address, you must also specify data using the
+--coinbase-sig option to ensure each miner is working on unique work. Note
+that this data will be publicly seen if your miner finds a block using any
+GBT-enabled pool, even when not solo mining (such as failover). If your
+bitcoin node does not support longpolling (for example, bitcoind 0.7.x), you
+should consider setting up a failover pool to provide you with block
+notifications.
+
+Example solo mining usage:
+
+bfgminer -o http://localhost:8332 -u username -p password \
+    --coinbase-addr 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    --coinbase-sig "rig1: This is Joe's block!"
+
+
+---
 LOGGING
 
 BFGMiner will log to stderr if it detects stderr is being redirected to a file.
