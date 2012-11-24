@@ -3250,11 +3250,11 @@ static void *submit_work_thread(void *userdata)
 
 	if (stale_work(work, true)) {
 		if (opt_submit_stale)
-			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
+			applog(LOG_NOTICE, "Pool %d stale share detected, submitting as user requested", pool->pool_no);
 		else if (pool->submit_old)
-			applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
+			applog(LOG_NOTICE, "Pool %d stale share detected, submitting as pool requested", pool->pool_no);
 		else {
-			applog(LOG_NOTICE, "Stale share detected, discarding");
+			applog(LOG_NOTICE, "Pool %d stale share detected, discarding", pool->pool_no);
 			sharelog("discard", work);
 			total_stale++;
 			pool->stale_shares++;
@@ -3305,7 +3305,7 @@ static void *submit_work_thread(void *userdata)
 	while (!submit_upstream_work(work, ce->curl, resubmit)) {
 		resubmit = true;
 		if (stale_work(work, true)) {
-			applog(LOG_NOTICE, "Pool %d share became stale while retrying submit, discarding", work->pool->pool_no);
+			applog(LOG_NOTICE, "Pool %d share became stale while retrying submit, discarding", pool->pool_no);
 			total_stale++;
 			pool->stale_shares++;
 			total_diff_stale += work->work_difficulty;
