@@ -6361,8 +6361,6 @@ void *miner_thread(void *userdata)
 
 	while (1) {
 		mythr->work_restart = false;
-		if (api->free_work && likely(work->pool))
-			api->free_work(mythr, work);
 		get_work(work, mythr, thr_id);
 		cgpu->new_work = true;
 

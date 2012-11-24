@@ -312,7 +312,6 @@ struct device_api {
 	bool (*thread_prepare)(struct thr_info*);
 	uint64_t (*can_limit_work)(struct thr_info*);
 	bool (*thread_init)(struct thr_info*);
-	void (*free_work)(struct thr_info*, struct work*);
 	bool (*prepare_work)(struct thr_info*, struct work*);
 	int64_t (*scanhash)(struct thr_info*, struct work*, int64_t);
 	void (*hw_error)(struct thr_info*);
