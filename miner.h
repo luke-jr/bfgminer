@@ -103,7 +103,7 @@ static inline int fsync (int fd)
 #endif
 
 #ifdef HAVE_LIBUSB
-  #include <libusb.h>
+  #include <libusb-1.0/libusb.h>
 #endif
 
 #ifdef USE_ZTEX
