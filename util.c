@@ -619,9 +619,13 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 	swap256(target_swap, target);
 
 	for (i = 0; i < 32/4; i++) {
+#ifdef MIPSEB
+		uint32_t h32tmp = hash32[i];
+		uint32_t t32tmp = swab32(target32[i]);
+#else
 		uint32_t h32tmp = swab32(hash32[i]);
 		uint32_t t32tmp = target32[i];
-
+#endif
 		target32[i] = swab32(target32[i]);	/* for printing */
 
 		if (h32tmp > t32tmp) {
