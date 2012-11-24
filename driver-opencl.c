@@ -1312,7 +1312,6 @@ struct opencl_thread_data {
 	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *, cl_uint);
 	uint32_t *res;
 	struct work *last_work;
-	struct work _last_work;
 };
 
 static uint32_t *blank_res;
@@ -1465,7 +1464,7 @@ static void opencl_free_work(struct thr_info *thr, struct work *work)
 	clFinish(clState->commandQueue);
 
 	if (thrdata->res[FOUND])
-		thrdata->last_work = copy_work(&thrdata->_last_work);
+		thrdata->last_work = copy_work(work);
 }
 
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
