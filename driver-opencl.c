@@ -1311,7 +1311,6 @@ static void get_opencl_statline(char *buf, struct cgpu_info *gpu)
 struct opencl_thread_data {
 	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *, cl_uint);
 	uint32_t *res;
-	struct work *last_work;
 };
 
 static uint32_t *blank_res;
@@ -1550,15 +1549,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
 			return -1;
 		}
-		if (unlikely(thrdata->last_work)) {
-			applog(LOG_DEBUG, "GPU %d found something in last work?", gpu->device_id);
-			postcalc_hash_async(thr, thrdata->last_work, thrdata->res);
-			free_work(thrdata->last_work);
-			thrdata->last_work = NULL;
-		} else {
-			applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
-			postcalc_hash_async(thr, work, thrdata->res);
-		}
+		applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
+		postcalc_hash_async(thr, work, thrdata->res);
 		memset(thrdata->res, 0, BUFFERSIZE);
 		/* This finish flushes the writebuffer set with CL_FALSE in clEnqueueWriteBuffer */
 		clFinish(clState->commandQueue);
