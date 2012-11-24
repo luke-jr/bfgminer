@@ -31,29 +31,30 @@ License: GPLv3.  See COPYING for details.
 READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
 
 Dependencies:
-	curl dev library 	http://curl.haxx.se/libcurl/
+	curl dev library    http://curl.haxx.se/libcurl/
 	(libcurl4-openssl-dev)
 
 	curses dev library
 	(libncurses5-dev or libpdcurses on WIN32)
 
-	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
-	libtool			http://www.gnu.org/software/libtool/
+	autoconf            http://www.gnu.org/software/autoconf/
+	pkg-config          http://www.freedesktop.org/wiki/Software/pkg-config
+	libtool             http://www.gnu.org/software/libtool/
 
-	jansson 2.0+    http://www.digip.org/jansson/
+	jansson 2.0+        http://www.digip.org/jansson/
 	(libjansson-dev)
 
-	yasm 1.0.1+ http://yasm.tortall.net/
+	yasm 1.0.1+         http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
 
-	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
+	AMD APP SDK         http://developer.amd.com/sdks/AMDAPPSDK
 	(This sdk is mandatory for GPU mining)
 
-	libudev headers
-	(This is only required for multi-FPGA auto-detection on Linux)
+	udev dev library    http://www.freedesktop.org/software/systemd/libudev/
+	(libudev-dev - only required for multi-FPGA auto-detection on Linux)
 
-	libusb headers
-	(This is only required for Ztex and X6500 support)
+	usb dev library     http://www.libusb.org/
+	(libusb-dev  - only required for Ztex and X6500 support)
 
 
 BFGMiner specific configuration options:
