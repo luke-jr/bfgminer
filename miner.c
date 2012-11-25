@@ -3660,16 +3660,16 @@ next_submit:
 	if (stale_work(work, true)) {
 		work->stale = true;
 		if (unlikely(!list_empty(&submit_waiting))) {
-			applog(LOG_WARNING, "Stale share detected while queued submissions are waiting, discarding");
+			applog(LOG_WARNING, "Pool %d stale share detected while queued submissions are waiting, discarding", pool->pool_no);
 			submit_discard_share(work);
 			goto out;
 		}
 		if (opt_submit_stale)
-			applog(LOG_NOTICE, "Stale share detected, submitting as user requested");
+			applog(LOG_NOTICE, "Pool %d stale share detected, submitting as user requested", pool->pool_no);
 		else if (pool->submit_old)
-			applog(LOG_NOTICE, "Stale share detected, submitting as pool requested");
+			applog(LOG_NOTICE, "Pool %d stale share detected, submitting as pool requested", pool->pool_no);
 		else {
-			applog(LOG_NOTICE, "Stale share detected, discarding");
+			applog(LOG_NOTICE, "Pool %d stale share detected, discarding", pool->pool_no);
 			submit_discard_share(work);
 			goto out;
 		}
@@ -3718,28 +3718,28 @@ next_submit:
 		if ((!work->stale) && stale_work(work, true)) {
 			work->stale = true;
 			if (opt_submit_stale)
-				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, will retry as user requested", work->pool->pool_no);
+				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, will retry as user requested", pool->pool_no);
 			else if (pool->submit_old)
-				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, will retry as pool requested", work->pool->pool_no);
+				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, will retry as pool requested", pool->pool_no);
 			else {
-				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, discarding", work->pool->pool_no);
+				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, discarding", pool->pool_no);
 				submit_discard_share(work);
 				break;
 			}
 			staleexpire = time(NULL) + 300;
 		}
 		if (unlikely((opt_retries >= 0) && (++failures > opt_retries))) {
-			applog(LOG_ERR, "Failed %d retries, discarding", opt_retries);
+			applog(LOG_ERR, "Pool %d failed %d submission retries, discarding", pool->pool_no, opt_retries);
 			submit_discard_share(work);
 			break;
 		}
 		else if (work->stale) {
 			if (unlikely(!list_empty(&submit_waiting))) {
-				applog(LOG_WARNING, "Stale share failed to submit while queued submissions are waiting, discarding");
+				applog(LOG_WARNING, "Pool %d stale share failed to submit while queued submissions are waiting, discarding", pool->pool_no);
 				submit_discard_share(work);
 				break;
 			} else if (unlikely(opt_retries < 0 && staleexpire <= time(NULL))) {
-				applog(LOG_NOTICE, "Stale share failed to submit for 5 minutes, discarding");
+				applog(LOG_NOTICE, "Pool %d stale share failed to submit for 5 minutes, discarding", pool->pool_no);
 				submit_discard_share(work);
 				break;
 			}
