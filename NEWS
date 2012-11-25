@@ -1,5 +1,28 @@
 BFGMiner Version 2.10.0 - Future
 
+- fixes target calc for mips openwrt
+- openwrt needs roundl
+- Get rid of unused last_work in opencl thread data.
+- Do away with the flaky free_work api in the driver code which would often lose
+the work data in opencl and simply flush it before exiting the opencl scanhash.
+- Use base_work for comparison just for cleanness in __copy_work
+- Remove all static work structs, using the make and free functions.
+- Add pool no. to stale share detected message.
+- Add info about which pool share became stale while resubmitting.
+-b Copy the work on opencl_free_work
+- Add an extra slot in the max backlog for ztex to minimise dupes.
+- Do not use or count the getworks submitted which are simply testing that pools
+are still up. This was increasing share leakage and making stats not reflect
+real work.
+- Track all dynamically allocated memory within the work struct by copying work
+structs in a common place, creating freshly allocated heap ram for all arrays
+within the copied struct. Clear all work structs from the same place to ensure
+memory does not leak from arrays within the struct. Convert the gbt coinbase and
+stratum strings within the work struct to heap ram. This will allow arbitrary
+lengths without an upper limit for the strings, preventing the overflows that
+happen with GBT.
+- libztex: Work around ZTEX USB firmware bug exposed by the FreeBSD libusb
+- opencl: Use new dev_error function for REASON_DEV_NOSTART
 - Provide rudimentary support for the balancing failover strategies with stratum
 and GBT by switching pools silently on getwork requests.
 - Convert remaining modminer and bfl uses of usleep to nmsleep.
