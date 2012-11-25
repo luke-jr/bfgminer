@@ -5537,15 +5537,14 @@ static void *stratum_thread(void *userdata)
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
 		if (pool->swork.clean) {
-			struct work work;
-			memset(&work, 0, sizeof(work));
+			struct work *work = make_work();
 
 			/* Generate a single work item to update the current
 			 * block database */
 			pool->swork.clean = false;
-			gen_stratum_work(pool, &work);
+			gen_stratum_work(pool, work);
 			++pool->work_restart_id;
-			if (test_work_current(&work)) {
+			if (test_work_current(work)) {
 				/* Only accept a work restart if this stratum
 				 * connection is from the current pool */
 				if (pool == current_pool()) {
@@ -5554,6 +5553,7 @@ static void *stratum_thread(void *userdata)
 				}
 			} else
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
+			free_work(work);
 		}
 
 		if (pool->swork.transparency_time != (time_t)-1 && difftime(time(NULL), pool->swork.transparency_time) > 21.09375) {
