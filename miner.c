@@ -281,7 +281,7 @@ int swork_id;
 struct stratum_share {
 	UT_hash_handle hh;
 	bool block;
-	struct work work;
+	struct work *work;
 	int id;
 };
 
@@ -2811,7 +2811,7 @@ static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const 
 {
 	char *rpc_req;
 
-	clear_work(work);
+	clean_work(work);
 	switch (proto) {
 		case PLP_GETWORK:
 			work->getwork_mode = GETWORK_MODE_POOL;
@@ -2953,8 +2953,17 @@ static struct work *make_work(void)
 	return work;
 }
 
-void clear_work(struct work *work)
+/* This is the central place all work that is about to be retired should be
+ * cleaned to remove any dynamically allocated arrays within the struct */
+void clean_work(struct work *work)
 {
+	free(work->job_id);
+	free(work->nonce2);
+	free(work->ntime);
+	work->job_id = NULL;
+	work->nonce2 = NULL;
+	work->ntime = NULL;
+
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
 		mutex_lock(&pool->pool_lock);
@@ -2969,9 +2978,11 @@ void clear_work(struct work *work)
 	}
 }
 
-static void free_work(struct work *work)
+/* All dynamically allocated work structs should be freed here to not leak any
+ * ram from arrays allocated within the work struct */
+void free_work(struct work *work)
 {
-	clear_work(work);
+	clean_work(work);
 	free(work);
 }
 
@@ -3312,9 +3323,18 @@ static void roll_work(struct work *work)
 	work->id = total_work++;
 }
 
-void workcpy(struct work *dest, const struct work *work)
+/* Duplicates any dynamically allocated arrays within the work struct to
+ * prevent a copied work struct from freeing ram belonging to another struct */
+void __copy_work(struct work *work, struct work *base_work)
 {
-	memcpy(dest, work, sizeof(*dest));
+	clean_work(work);
+	memcpy(work, base_work, sizeof(struct work));
+	if (work->job_id)
+		work->job_id = strdup(base_work->job_id);
+	if (work->nonce2)
+		work->nonce2 = strdup(base_work->nonce2);
+	if (work->ntime)
+		work->ntime = strdup(base_work->ntime);
 
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -3324,11 +3344,21 @@ void workcpy(struct work *dest, const struct work *work)
 	}
 }
 
+/* Generates a copy of an existing work struct, creating fresh heap allocations
+ * for all dynamically allocated arrays within the struct */
+struct work *copy_work(struct work *base_work)
+{
+	struct work *work = make_work();
+
+ 	__copy_work(work, base_work);
+
+	return work;
+}
+
 static struct work *make_clone(struct work *work)
 {
-	struct work *work_clone = make_work();
+	struct work *work_clone = copy_work(work);
 
-	workcpy(work_clone, work);
 	work_clone->clone = true;
 	gettimeofday((struct timeval *)&(work_clone->tv_cloned), NULL);
 	work_clone->longpoll = false;
@@ -3392,7 +3422,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work);
 static void *get_work_thread(void *userdata)
 {
 	struct workio_cmd *wc = (struct workio_cmd *)userdata;
-	struct work *ret_work= NULL;
+	struct work *ret_work = NULL;
 	struct curl_ent *ce = NULL;
 	struct pool *pool;
 
@@ -3652,7 +3682,7 @@ next_submit:
 		char *noncehex;
 		char s[1024];
 
-		workcpy(&sshare->work, work);
+		sshare->work = copy_work(work);
 		mutex_lock(&sshare_lock);
 		/* Give the stratum share a unique id */
 		sshare->id = swork_id++;
@@ -5290,7 +5320,7 @@ out_unlock:
 static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 				 struct stratum_share *sshare)
 {
-	struct work *work = &sshare->work;
+	struct work *work = sshare->work;
 	uint64_t sharediff = share_diff(work);
 	char hashshow[65];
 	uint32_t *hash32;
@@ -5387,7 +5417,7 @@ fishy:
 		goto out;
 	}
 	stratum_share_result(val, res_val, err_val, sshare);
-	clear_work(&sshare->work);
+	free_work(sshare->work);
 	free(sshare);
 
 	ret = true;
@@ -5419,9 +5449,9 @@ static void clear_stratum_shares(struct pool *pool)
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
-		if (sshare->work.pool == pool) {
+		if (sshare->work->pool == pool) {
 			HASH_DEL(stratum_shares, sshare);
-			clear_work(&sshare->work);
+			free_work(sshare->work);
 			free(sshare);
 			cleared++;
 		}
@@ -5952,17 +5982,13 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
 	int len, cb1_len, n1_len, cb2_len, i;
-	char header[260], *nonce2;
 	uint32_t *data32, *swap32;
-
-	memset(work->job_id, 0, 64);
-	memset(work->nonce2, 0, 64);
-	memset(work->ntime, 0, 16);
+	char header[260];
 
 	mutex_lock(&pool->pool_lock);
 
 	/* Generate coinbase */
-	nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
+	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
 	cb1_len = strlen(pool->swork.coinbase1) / 2;
 	n1_len = strlen(pool->nonce1) / 2;
@@ -5971,7 +5997,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	coinbase = alloca(len + 1);
 	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
 	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
-	hex2bin(coinbase + cb1_len + n1_len, nonce2, pool->n2size);
+	hex2bin(coinbase + cb1_len + n1_len, work->nonce2, pool->n2size);
 	hex2bin(coinbase + cb1_len + n1_len + pool->n2size, pool->swork.coinbase2, cb2_len);
 
 	/* Generate merkle root */
@@ -6004,10 +6030,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->sdiff = pool->swork.diff;
 
 	/* Copy parameters required for share submission */
-	sprintf(work->job_id, "%s", pool->swork.job_id);
-	sprintf(work->nonce2, "%s", nonce2);
-	sprintf(work->ntime, "%s", pool->swork.ntime);
-	free(nonce2);
+	work->job_id = strdup(pool->swork.job_id);
+	work->ntime = strdup(pool->swork.ntime);
 
 	mutex_unlock(&pool->pool_lock);
 
@@ -6122,7 +6146,7 @@ keepwaiting:
 			pool_resus(pool);
 	}
 
-	clear_work(work);
+	clean_work(work);
 	// NOTE: Since we are moving the references (if any), use free instead of free_work here
 	memcpy(work, work_heap, sizeof(struct work));
 	free(work_heap);
@@ -6133,7 +6157,7 @@ out:
 	work->mined = true;
 }
 
-bool submit_work_sync(struct thr_info *thr, const struct work *work_in, struct timeval *tv_work_found)
+bool submit_work_sync(struct thr_info *thr, struct work *work_in, struct timeval *tv_work_found)
 {
 	struct workio_cmd *wc;
 
@@ -6144,10 +6168,9 @@ bool submit_work_sync(struct thr_info *thr, const struct work *work_in, struct t
 		return false;
 	}
 
-	wc->work = make_work();
+	wc->work = copy_work(work_in);
 	wc->cmd = WC_SUBMIT_WORK;
 	wc->thr = thr;
-	workcpy(wc->work, work_in);
 	if (tv_work_found)
 		memcpy(&(wc->work->tv_work_found), tv_work_found, sizeof(struct timeval));
 

@@ -684,8 +684,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	dclk_preUpdate(&fpga->dclk);
 	dclk_updateFreq(&fpga->dclk, x6500_dclk_change_clock, thr);
 
-	clear_work(&fpga->prevwork);
-	workcpy(&fpga->prevwork, work);
+	__copy_work(&fpga->prevwork, work);
 
 	return hashes;
 }

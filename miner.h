@@ -1031,11 +1031,9 @@ struct work {
 	bool		queued;
 
 	bool		stratum;
-	/* These are arbitrary lengths as it is too hard to keep track of
-	 * dynamically allocated ram in work structs */
-	char 		job_id[64];
-	char		nonce2[64];
-	char		ntime[16];
+	char 		*job_id;
+	char		*nonce2;
+	char		*ntime;
 	double		sdiff;
 
 	unsigned char	work_restart_id;
@@ -1057,8 +1055,6 @@ struct work {
 };
 
 extern void get_datestamp(char *, struct timeval *);
-extern void workcpy(struct work *dest, const struct work *src);
-extern void clear_work(struct work *);
 enum test_nonce2_result {
 	TNR_GOOD,
 	TNR_HIGH,
@@ -1090,6 +1086,10 @@ extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
+extern void clean_work(struct work *work);
+extern void free_work(struct work *work);
+extern void __copy_work(struct work *work, struct work *base_work);
+extern struct work *copy_work(struct work *base_work);
 
 enum api_data_type {
 	API_ESCAPE,

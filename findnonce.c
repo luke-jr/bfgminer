@@ -180,7 +180,7 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 	}
 
 	pcd->thr = thr;
-	workcpy(&pcd->work, work);
+	__copy_work(&pcd->work, work);
 	memcpy(&pcd->res, res, BUFFERSIZE);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
