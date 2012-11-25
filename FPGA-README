@@ -64,7 +64,7 @@ a (hack) solution to this is to blacklist the MMQ USB device in
 
 Adding 2 lines like this (just above APC) should help
 # MMQ
-ATTRS{idVendor}=="ifc9", ATTRS{idProduct}=="0003", ENV{ID_MM_DEVICE_IGNORE}="1"
+ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", ENV{ID_MM_DEVICE_IGNORE}="1"
 
 The change will be lost and need to be re-done, next time you update the
 modem-manager software
