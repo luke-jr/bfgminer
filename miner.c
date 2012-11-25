@@ -3718,11 +3718,11 @@ next_submit:
 		if ((!work->stale) && stale_work(work, true)) {
 			work->stale = true;
 			if (opt_submit_stale)
-				applog(LOG_NOTICE, "Share become stale during submission failure, will retry as user requested");
+				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, will retry as user requested", work->pool->pool_no);
 			else if (pool->submit_old)
-				applog(LOG_NOTICE, "Share become stale during submission failure, will retry as pool requested");
+				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, will retry as pool requested", work->pool->pool_no);
 			else {
-				applog(LOG_NOTICE, "Share become stale during submission failure, discarding");
+				applog(LOG_NOTICE, "Pool %d share became stale during submission failure, discarding", work->pool->pool_no);
 				submit_discard_share(work);
 				break;
 			}
