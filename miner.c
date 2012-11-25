@@ -3329,14 +3329,14 @@ void __copy_work(struct work *work, struct work *base_work)
 {
 	clean_work(work);
 	memcpy(work, base_work, sizeof(struct work));
-	if (work->job_id)
+	if (base_work->job_id)
 		work->job_id = strdup(base_work->job_id);
-	if (work->nonce2)
+	if (base_work->nonce2)
 		work->nonce2 = strdup(base_work->nonce2);
-	if (work->ntime)
+	if (base_work->ntime)
 		work->ntime = strdup(base_work->ntime);
 
-	if (work->tmpl) {
+	if (base_work->tmpl) {
 		struct pool *pool = work->pool;
 		mutex_lock(&pool->pool_lock);
 		++*work->tmpl_refcount;
