@@ -2972,9 +2972,9 @@ void clean_work(struct work *work)
 		if (free_tmpl) {
 			blktmpl_free(work->tmpl);
 			free(work->tmpl_refcount);
-			work->tmpl = NULL;
-			work->tmpl_refcount = NULL;
 		}
+		work->tmpl = NULL;
+		work->tmpl_refcount = NULL;
 	}
 }
 
