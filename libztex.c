@@ -466,7 +466,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	}
 
 	/* num chars = (all bytes except bLength and bDescriptorType) / 2 */
-	for (i = 0; i <= (cnt - 2) / 2 && i < sizeof(newdev->snString)-1; i++)
+	for (i = 0; i <= (cnt - 2) / 2 && i < (int)sizeof(newdev->snString)-1; i++)
 		newdev->snString[i] = buf[2 + i*2];
 
 	newdev->snString[i] = 0;
