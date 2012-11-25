@@ -219,9 +219,9 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		return -1;
 	}
 	memset(lastnonce, 0, sizeof(uint32_t)*ztex->numNonces);
-	
-	backlog_max = ztex->numNonces * (1 + ztex->extraSolutions);
-	backlog_max *= 2;
+
+	/* Add an extra slot for detecting dupes that lie around */
+	backlog_max = ztex->numNonces * (2 + ztex->extraSolutions);
 	backlog = malloc(sizeof(uint32_t) * backlog_max);
 	if (backlog == NULL) {
 		applog(LOG_ERR, "%s: failed to allocate backlog[%d]", ztex->repr, backlog_max);

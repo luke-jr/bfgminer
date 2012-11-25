@@ -1530,8 +1530,6 @@ get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 struct opencl_thread_data {
 	cl_int (*queue_kernel_parameters)(_clState *, dev_blk_ctx *, cl_uint);
 	uint32_t *res;
-	struct work *last_work;
-	struct work _last_work;
 };
 
 static uint32_t *blank_res;
@@ -1675,20 +1673,6 @@ static bool opencl_thread_init(struct thr_info *thr)
 	return true;
 }
 
-static void opencl_free_work(struct thr_info *thr, struct work *work)
-{
-	const int thr_id = thr->id;
-	struct opencl_thread_data *thrdata = thr->cgpu_data;
-	_clState *clState = clStates[thr_id];
-
-	clFinish(clState->commandQueue);
-
-	if (thrdata->res[FOUND]) {
-		thrdata->last_work = &thrdata->_last_work;
-		clear_work(thrdata->last_work);
-		workcpy(thrdata->last_work, work);
-	}
-}
 
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
@@ -1718,9 +1702,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	size_t localThreads[1] = { clState->wsize };
 	int64_t hashes;
 
-	/* This finish flushes the readbuffer set with CL_FALSE later */
-	clFinish(clState->commandQueue);
-
 	/* Windows' timer resolution is only 15ms so oversample 5x */
 	if (gpu->dynamic && (++gpu->intervals * dynamic_us) > 70000) {
 		struct timeval tv_gpuend;
@@ -1742,27 +1723,6 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	set_threads_hashes(clState->vwidth, &hashes, globalThreads, localThreads[0], &gpu->intensity);
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
-
-	/* FOUND entry is used as a counter to say how many nonces exist */
-	if (thrdata->res[FOUND]) {
-		/* Clear the buffer again */
-		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
-				BUFFERSIZE, blank_res, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS)) {
-			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
-			return -1;
-		}
-		if (unlikely(thrdata->last_work)) {
-			applog(LOG_DEBUG, "GPU %d found something in last work?", gpu->device_id);
-			postcalc_hash_async(thr, thrdata->last_work, thrdata->res);
-			thrdata->last_work = NULL;
-		} else {
-			applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
-			postcalc_hash_async(thr, work, thrdata->res);
-		}
-		memset(thrdata->res, 0, BUFFERSIZE);
-		clFinish(clState->commandQueue);
-	}
 
 	status = thrdata->queue_kernel_parameters(clState, &work->blk, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
@@ -1796,6 +1756,25 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	 * than enough to prevent repeating work */
 	work->blk.nonce += gpu->max_hashes;
 
+	/* This finish flushes the readbuffer set with CL_FALSE in clEnqueueReadBuffer */
+	clFinish(clState->commandQueue);
+
+	/* FOUND entry is used as a counter to say how many nonces exist */
+	if (thrdata->res[FOUND]) {
+		/* Clear the buffer again */
+		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
+				BUFFERSIZE, blank_res, 0, NULL, NULL);
+		if (unlikely(status != CL_SUCCESS)) {
+			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
+			return -1;
+		}
+		applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
+		postcalc_hash_async(thr, work, thrdata->res);
+		memset(thrdata->res, 0, BUFFERSIZE);
+		/* This finish flushes the writebuffer set with CL_FALSE in clEnqueueWriteBuffer */
+		clFinish(clState->commandQueue);
+	}
+
 	return hashes;
 }
 
@@ -1821,7 +1800,6 @@ struct device_api opencl_api = {
 	.get_api_extra_device_status = get_opencl_api_extra_device_status,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
-	.free_work = opencl_free_work,
 	.prepare_work = opencl_prepare_work,
 	.scanhash = opencl_scanhash,
 	.thread_shutdown = opencl_thread_shutdown,

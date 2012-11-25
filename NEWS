@@ -1,5 +1,47 @@
 BFGMiner Version 2.10.0 - Future
 
+- fixes target calc for mips openwrt
+- openwrt needs roundl
+- Get rid of unused last_work in opencl thread data.
+- Do away with the flaky free_work api in the driver code which would often lose
+the work data in opencl and simply flush it before exiting the opencl scanhash.
+- Use base_work for comparison just for cleanness in __copy_work
+- Remove all static work structs, using the make and free functions.
+- Add pool no. to stale share detected message.
+- Add info about which pool share became stale while resubmitting.
+-b Copy the work on opencl_free_work
+- Add an extra slot in the max backlog for ztex to minimise dupes.
+- Do not use or count the getworks submitted which are simply testing that pools
+are still up. This was increasing share leakage and making stats not reflect
+real work.
+- Track all dynamically allocated memory within the work struct by copying work
+structs in a common place, creating freshly allocated heap ram for all arrays
+within the copied struct. Clear all work structs from the same place to ensure
+memory does not leak from arrays within the struct. Convert the gbt coinbase and
+stratum strings within the work struct to heap ram. This will allow arbitrary
+lengths without an upper limit for the strings, preventing the overflows that
+happen with GBT.
+- libztex: Work around ZTEX USB firmware bug exposed by the FreeBSD libusb
+- opencl: Use new dev_error function for REASON_DEV_NOSTART
+- Provide rudimentary support for the balancing failover strategies with stratum
+and GBT by switching pools silently on getwork requests.
+- Convert remaining modminer and bfl uses of usleep to nmsleep.
+- Convert libztex to nmsleep where possible.
+- Convert unreliable usleep calls to nmsleep calls in ztex driver.
+- Support workid for block submission on GBT pools that use it.
+- Provide rudimentary support for literal ipv6 addresses when parsing stratum
+URLs.
+- Work around libcurl cflags not working on hacked up mingw installations on
+windows.
+- Only increase gpu engine speed by a larger step if the temperature is below
+hysteresis instead of increasing it to max speed.
+- Convert pool not responding and pool alive message on backup pools to verbose
+level only since they mean a single failed getwork.
+- Update work block on the longpoll work item before calling restart threads to
+ensure all work but the longpoll work item gets discarded when we call
+discard_stale from restart_threads.
+- Do not attempt to remove the stratum share hash after unsuccessful submission
+since it may already be removed by clear_stratum_shares.
 - Use stratum block change from backup pools as an alternative to longpoll for
 pools that don't support LP.
 - Round some more static string arrays to 4 byte boundaries.
