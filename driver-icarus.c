@@ -860,8 +860,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	if (state->firstrun) {
 		state->firstrun = false;
-		clear_work(&state->last_work);
-		workcpy(&state->last_work, work);
+		__copy_work(&state->last_work, work);
 		return 0;
 	}
 
@@ -869,8 +868,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	// aborted before becoming idle, get new work
 	if (ret == ICA_GETS_TIMEOUT || ret == ICA_GETS_RESTART) {
-		clear_work(&state->last_work);
-		workcpy(&state->last_work, work);
+		__copy_work(&state->last_work, work);
 		// ONLY up to just when it aborted
 		// We didn't read a reply so we don't subtract ICARUS_READ_TIME
 		estimate_hashes = ((double)(elapsed.tv_sec)
@@ -894,8 +892,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	curr_hw_errors = icarus->hw_errors;
 	submit_nonce(thr, &state->last_work, nonce);
 	was_hw_error = (curr_hw_errors > icarus->hw_errors);
-	clear_work(&state->last_work);
-	workcpy(&state->last_work, work);
+	__copy_work(&state->last_work, work);
 
 	// Force a USB close/reopen on any hw error
 	if (was_hw_error)
