@@ -89,7 +89,7 @@ void *alloca (size_t);
 #endif
 
 #ifdef HAVE_LIBUSB
-  #include <libusb-1.0/libusb.h>
+  #include <libusb.h>
 #endif
 
 #ifdef USE_ZTEX
