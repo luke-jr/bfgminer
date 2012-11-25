@@ -1,5 +1,24 @@
 BFGMiner Version 2.10.0 - Future
 
+- Provide rudimentary support for the balancing failover strategies with stratum
+and GBT by switching pools silently on getwork requests.
+- Convert remaining modminer and bfl uses of usleep to nmsleep.
+- Convert libztex to nmsleep where possible.
+- Convert unreliable usleep calls to nmsleep calls in ztex driver.
+- Support workid for block submission on GBT pools that use it.
+- Provide rudimentary support for literal ipv6 addresses when parsing stratum
+URLs.
+- Work around libcurl cflags not working on hacked up mingw installations on
+windows.
+- Only increase gpu engine speed by a larger step if the temperature is below
+hysteresis instead of increasing it to max speed.
+- Convert pool not responding and pool alive message on backup pools to verbose
+level only since they mean a single failed getwork.
+- Update work block on the longpoll work item before calling restart threads to
+ensure all work but the longpoll work item gets discarded when we call
+discard_stale from restart_threads.
+- Do not attempt to remove the stratum share hash after unsuccessful submission
+since it may already be removed by clear_stratum_shares.
 - Use stratum block change from backup pools as an alternative to longpoll for
 pools that don't support LP.
 - Round some more static string arrays to 4 byte boundaries.
