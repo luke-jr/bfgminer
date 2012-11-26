@@ -383,10 +383,10 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 	}
 	ztex->freqM = freq;
 	if (oldfreq > ztex->freqMaxM) 
-		applog(LOG_WARNING, "%s: Frequency set to %0.2f Mhz",
+		applog(LOG_WARNING, "%s: Frequency set to %0.1f MHz",
 		       ztex->repr, ztex->freqM1 * (ztex->freqM + 1));
 	else
-		applog(LOG_WARNING, "%s: Frequency change from %0.2f to %0.2f Mhz",
+		applog(LOG_WARNING, "%s: Frequency change from %0.1f to %0.1f MHz",
 		       ztex->repr, ztex->freqM1 * (oldfreq + 1), ztex->freqM1 * (ztex->freqM + 1));
 
 	return 0;
