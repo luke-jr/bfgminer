@@ -362,8 +362,11 @@ static bool ztex_prepare(struct thr_info *thr)
 	get_datestamp(cgpu->init, &now);
 	
 	ztex_selectFpga(ztex);
-	if (libztex_configureFpga(ztex) != 0)
+	if (libztex_configureFpga(ztex) != 0) {
+		libztex_resetFpga(ztex);
+		ztex_releaseFpga(ztex);
 		return false;
+	}
 	ztex_releaseFpga(ztex);
 	ztex->freqM = ztex->freqMaxM+1;;
 	//ztex_updateFreq(ztex);
