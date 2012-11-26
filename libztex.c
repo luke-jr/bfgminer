@@ -307,10 +307,11 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 
 		fclose(fp);
 	}
+
 	libztex_getFpgaState(ztex, &state);
 	if (!state.fpgaConfigured) {
-		applog(LOG_ERR, "%s: FPGA configuration failed: DONE pin does not go high", ztex->repr);
-		return 3;
+		applog(LOG_ERR, "%s: LS FPGA configuration failed: DONE pin does not go high", ztex->repr);
+		return -3;
 	}
 	usleep(200000);
 	applog(LOG_INFO, "%s: FPGA configuration done", ztex->repr);
