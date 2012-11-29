@@ -264,7 +264,7 @@ static int include_count;
 
 bool ping = true;
 
-struct sigaction termhandler, inthandler, segvhandler, bushandler, illhandler;
+struct sigaction termhandler, inthandler;
 
 struct thread_q *getq;
 
@@ -987,7 +987,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
 #ifdef HAVE_OPENCL
-			"Do not attempt to restart GPUs that hang or cgminer if it crashes"
+			"Do not attempt to restart GPUs that hang"
 #else
 			opt_hidden
 #endif
@@ -2768,8 +2768,13 @@ char **initial_args;
 
 static void clean_up(void);
 
-static inline void __app_restart(void)
+void app_restart(void)
 {
+	applog(LOG_WARNING, "Attempting to restart %s", packagename);
+
+	__kill_work();
+	clean_up();
+
 #if defined(unix)
 	if (forkpid > 0) {
 		kill(forkpid, SIGTERM);
@@ -2778,53 +2783,15 @@ static inline void __app_restart(void)
 #endif
 
 	execv(initial_args[0], initial_args);
-}
-
-void app_restart(void)
-{
-	applog(LOG_WARNING, "Attempting to restart %s", packagename);
-
-	__kill_work();
-	clean_up();
-
-	__app_restart();
-
-	/* We shouldn't reach here */
 	applog(LOG_WARNING, "Failed to restart application");
-}
-
-/* Returns all signal handlers to their defaults */
-static inline void __sighandler(void)
-{
-	/* Restore signal handlers so we can still quit if kill_work fails */
-	sigaction(SIGTERM, &termhandler, NULL);
-	sigaction(SIGINT, &inthandler, NULL);
-	if (opt_restart) {
-		sigaction(SIGSEGV, &segvhandler, NULL);
-		sigaction(SIGILL, &illhandler, NULL);
-#ifndef WIN32
-		sigaction(SIGBUS, &bushandler, NULL);
-#endif
-	}
 }
 
 static void sighandler(int __maybe_unused sig)
 {
-	__sighandler();
+	/* Restore signal handlers so we can still quit if kill_work fails */
+	sigaction(SIGTERM, &termhandler, NULL);
+	sigaction(SIGINT, &inthandler, NULL);
 	kill_work();
-}
-
-/* Handles segfaults and other crashes by attempting to restart cgminer. Try to
- * do as little as possible since we are probably corrupted. */
-static void seghandler(int sig)
-{
-	__sighandler();
-	fprintf(stderr, "\nCrashed with signal %d! Will attempt to restart\n", sig);
-	__app_restart();
-	/* We shouldn't reach here */
-	fprintf(stderr, "Failed to restart, exiting now\n");
-
-	exit(1);
 }
 
 /* Called with pool_lock held. Recruit an extra curl if none are available for
@@ -6699,18 +6666,6 @@ int main(int argc, char *argv[])
 	if (!config_loaded)
 		load_default_config();
 
-	if (opt_restart) {
-		struct sigaction shandler;
-
-		shandler.sa_handler = &seghandler;
-		shandler.sa_flags = 0;
-		sigemptyset(&shandler.sa_mask);
-		sigaction(SIGSEGV, &shandler, &segvhandler);
-		sigaction(SIGILL, &shandler, &illhandler);
-#ifndef WIN32
-		sigaction(SIGBUS, &shandler, &bushandler);
-#endif
-	}
 	if (opt_benchmark) {
 		struct pool *pool;
 
