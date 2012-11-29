@@ -5502,6 +5502,8 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 		free_work(work);
 		return;
 	}
+	total_getworks++;
+	pool->getwork_requested++;
 	work->pool = pool;
 	work->longpoll = true;
 	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
