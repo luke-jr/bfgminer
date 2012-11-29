@@ -5690,6 +5690,8 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 		free_work(work);
 		return;
 	}
+	total_getworks++;
+	pool->getwork_requested++;
 	work->pool = pool;
 	work->rolltime = rolltime;
 	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
@@ -5939,6 +5941,10 @@ static bool pool_getswork(struct pool *pool)
 		struct work *work = make_work();
 		bool rc = work_decode(pool, work, val);
 
+		if (pool->has_gbt && pool == current_pool()) {
+			total_getworks++;
+			pool->getwork_requested++;
+		}
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -5955,6 +5961,7 @@ static bool pool_getswork(struct pool *pool)
 		       pool->pool_no, pool->rpc_url);
 	}
 	curl_easy_cleanup(curl);
+
 	return ret;
 }
 
