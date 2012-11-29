@@ -2303,11 +2303,12 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
-		char gbt_block[4096], *varint, *header;
+		char *gbt_block, *varint, *header;
 		unsigned char data[80];
 
 		flip80(data, work->data);
 		header = bin2hex(data, 80);
+		gbt_block = calloc_str(header);
 		sprintf(gbt_block, "%s", header);
 		free(header);
 
@@ -2318,22 +2319,24 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		} else if (work->gbt_txns <= 0xffff) {
 			uint16_t val = htole16(work->gbt_txns);
 
-			strcat(gbt_block, "fd");
+			gbt_block = realloc_strcat(gbt_block, "fd");
 			varint = bin2hex((const unsigned char *)&val, 2);
 		} else {
 			uint32_t val = htole32(work->gbt_txns);
 
-			strcat(gbt_block, "fe");
+			gbt_block = realloc_strcat(gbt_block, "fe");
 			varint = bin2hex((const unsigned char *)&val, 4);
 		}
-		strcat(gbt_block, varint);
+		gbt_block = realloc_strcat(gbt_block, varint);
 		free(varint);
-		strcat(gbt_block, work->gbt_coinbase);
+		gbt_block = realloc_strcat(gbt_block, work->gbt_coinbase);
 
 		if (work->job_id)
 			sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {\"workid\": \"%s\"}]}", gbt_block, work->job_id);
 		else
 			sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {}]}", gbt_block);
+
+		free(gbt_block);
 	} else
 		sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
