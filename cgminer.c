@@ -2308,8 +2308,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 		flip80(data, work->data);
 		header = bin2hex(data, 80);
-		gbt_block = calloc_str(header);
-		sprintf(gbt_block, "%s", header);
+		gbt_block = calloc_strcat(header);
 		free(header);
 
 		if (work->gbt_txns < 0xfd) {

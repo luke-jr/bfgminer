@@ -1479,7 +1479,7 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 }
 
 /* Calloc enough memory to fit string s, rounding up to 4 byte alignment */
-void *calloc_str(char *s)
+void *calloc_strcat(char *s)
 {
 	size_t len = strlen(s);
 	void *ptr = NULL;
@@ -1493,6 +1493,8 @@ void *calloc_str(char *s)
 	ptr = calloc(len, 1);
 	if (unlikely(!ptr))
 		quit(1, "Failed to calloc ptr in calloc_str");
+
+	sprintf(ptr, "%s", s);
 out:
 	return ptr;
 }
