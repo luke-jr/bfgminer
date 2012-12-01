@@ -124,15 +124,6 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 
 	applog(LOG_ERR, "Found dummy firmware, trying to send mining firmware: %s", firmware);
 
-	// reset 1
-	buf[0] = 1;
-	cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
-	if (cnt < 0)
-	{
-		applog(LOG_ERR, "Ztex reset 1 failed: %s", libusb_error_name(cnt));
-		goto done;
-	}
-
 	fp = open_bitstream("ztex", firmware);
 	if (!fp) {
 		applog(LOG_ERR, "failed to open firmware file '%s'", firmware);
@@ -158,6 +149,15 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 
 	if (got_bytes < length) {
 		applog(LOG_ERR, "%s: Incomplete firmware read: %d/%d", __func__, got_bytes, length);
+		goto done;
+	}
+
+	// reset 1
+	buf[0] = 1;
+	cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
+	if (cnt < 0)
+	{
+		applog(LOG_ERR, "Ztex reset 1 failed: %s", libusb_error_name(cnt));
 		goto done;
 	}
 
