@@ -161,6 +161,13 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 		goto done;
 	}
 
+	// check for dummy firmware
+	if (rv[8] == 0)
+	{
+		applog(LOG_ERR, "%s: found a ZTEX dummy firmware", __func__);
+		goto done;
+	}
+
 	// reset 1
 	buf[0] = 1;
 	cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
