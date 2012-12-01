@@ -152,6 +152,15 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 		goto done;
 	}
 
+	// in buf[] is still the identifier of the dummy firmware
+	// use it to compare it with the new firmware
+	char *rv = memmem(fw_buf, got_bytes, buf, 8);
+	if (rv == NULL)
+	{
+		applog(LOG_ERR, "%s: found firmware is not ZTEX", __func__);
+		goto done;
+	}
+
 	// reset 1
 	buf[0] = 1;
 	cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
