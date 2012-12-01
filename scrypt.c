@@ -404,7 +404,7 @@ static void scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad, uint
 
 void scrypt_outputhash(struct work *work)
 {
-	uint32_t data[20], ohash[8];
+	uint32_t data[20], ohash[8], rhash[8];
 	char *scratchbuf;
 	uint32_t *nonce = (uint32_t *)(work->data + 76);
 
@@ -412,7 +412,8 @@ void scrypt_outputhash(struct work *work)
 	data[19] = htobe32(*nonce);
 	scratchbuf = alloca(131584);
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
-	work->outputhash = be32toh(ohash[7]);
+	swap256(rhash, ohash);
+	work->outputhash = be64toh(*((uint64_t *)rhash));
 }
 
 /* Used externally as confirmation of correct OCL code */
