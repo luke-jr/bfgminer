@@ -250,11 +250,10 @@ PBKDF2_SHA256_80_128(const uint32_t * passwd, uint32_t * buf)
 }
 
 
-static inline uint32_t
-PBKDF2_SHA256_80_128_32(const uint32_t * passwd, const uint32_t * salt)
+static inline void
+PBKDF2_SHA256_80_128_32(const uint32_t * passwd, const uint32_t * salt, uint32_t *ostate)
 {
 	uint32_t tstate[8];
-	uint32_t ostate[8];
 	uint32_t ihash[8];
 	uint32_t i;
 
@@ -292,8 +291,6 @@ PBKDF2_SHA256_80_128_32(const uint32_t * passwd, const uint32_t * salt)
 
 	/* Feed the inner hash to the outer SHA256 operation. */
 	SHA256_Transform(ostate, pad, 0);
-	/* Finish the outer SHA256 operation. */
-	return be32toh(ostate[7]);
 }
 
 
@@ -359,7 +356,7 @@ salsa20_8(uint32_t B[16], const uint32_t Bx[16])
 /* cpu and memory intensive function to transform a 80 byte buffer into a 32 byte output
    scratchpad size needs to be at least 63 + (128 * r * p) + (256 * r + 64) + (128 * r * N) bytes
  */
-static uint32_t scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad)
+static void scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad, uint32_t *ostate)
 {
 	uint32_t * V;
 	uint32_t X[32];
@@ -402,32 +399,34 @@ static uint32_t scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad)
 		salsa20_8(&X[16], &X[0]);
 	}
 
-	return PBKDF2_SHA256_80_128_32(input, X);
+	PBKDF2_SHA256_80_128_32(input, X, ostate);
 }
 
 void scrypt_outputhash(struct work *work)
 {
-	uint32_t data[20];
+	uint32_t data[20], ohash[8];
 	char *scratchbuf;
 	uint32_t *nonce = (uint32_t *)(work->data + 76);
 
 	be32enc_vect(data, (const uint32_t *)work->data, 19);
 	data[19] = htobe32(*nonce);
 	scratchbuf = alloca(131584);
-	work->outputhash = scrypt_1024_1_1_256_sp(data, scratchbuf);
+	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
+	work->outputhash = be32toh(ohash[7]);
 }
 
 /* Used externally as confirmation of correct OCL code */
 bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t nonce)
 {
 	uint32_t tmp_hash7, Htarg = ((const uint32_t *)ptarget)[7];
+	uint32_t data[20], ohash[8];
 	char *scratchbuf;
-	uint32_t data[20];
 
 	be32enc_vect(data, (const uint32_t *)pdata, 19);
 	data[19] = htobe32(nonce);
 	scratchbuf = alloca(131584);
-	tmp_hash7 = scrypt_1024_1_1_256_sp(data, scratchbuf);
+	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
+	tmp_hash7 = be32toh(ohash[7]);
 
 	return (tmp_hash7 <= Htarg);
 }
@@ -453,9 +452,12 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 	}
 
 	while(1) {
+		uint32_t ostate[8];
+
 		*nonce = ++n;
 		data[19] = n;
-		tmp_hash7 = scrypt_1024_1_1_256_sp(data, scratchbuf);
+		scrypt_1024_1_1_256_sp(data, scratchbuf, ostate);
+		tmp_hash7 = be32toh(ostate[7]);
 
 		if (unlikely(tmp_hash7 <= Htarg)) {
 			((uint32_t *)pdata)[19] = htobe32(n);

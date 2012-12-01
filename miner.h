@@ -945,7 +945,7 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
-	uint32_t	outputhash;
+	uint64_t	outputhash;
 
 	int		rolls;
 
