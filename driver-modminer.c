@@ -715,7 +715,7 @@ static bool modminer_fpga_init(struct thr_info *thr)
 
 static void get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 {
-	char info[18];
+	char info[64];
 
 	sprintf(info, " %s%.1fC %3uMHz  | ",
 			(modminer->temp < 10) ? " " : "",
