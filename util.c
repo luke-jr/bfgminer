@@ -1435,6 +1435,14 @@ out:
 	return ret;
 }
 
+void suspend_stratum(struct pool *pool)
+{
+	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
+	mutex_lock(&pool->stratum_lock);
+	pool->stratum_active = false;
+	mutex_unlock(&pool->stratum_lock);
+	CLOSESOCKET(pool->sock);
+}
 
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 {

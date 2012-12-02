@@ -4676,6 +4676,28 @@ static void clear_stratum_shares(struct pool *pool)
 	}
 }
 
+/* We only need to maintain a secondary pool connection when we need the
+ * capacity to get work from the backup pools while still on the primary */
+static bool cnx_needed(struct pool *pool)
+{
+	struct pool *cp;
+
+	if (pool_strategy == POOL_BALANCE)
+		return true;
+	if (pool_strategy == POOL_LOADBALANCE)
+		return true;
+	if (opt_fail_only)
+		return true;
+	cp = current_pool();
+	if (cp == pool)
+		return true;
+	if (!cp->has_gbt && !cp->has_stratum)
+		return true;
+	return false;
+}
+
+static void wait_lpcurrent(struct pool *pool);
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -4695,6 +4717,22 @@ static void *stratum_thread(void *userdata)
 
 		if (unlikely(pool->removed))
 			break;
+
+		/* Check to see whether we need to maintain this connection
+		 * indefinitely or just bring it up when we switch to this
+		 * pool */
+		if (!cnx_needed(pool)) {
+			suspend_stratum(pool);
+			wait_lpcurrent(pool);
+			if (!initiate_stratum(pool) || !auth_stratum(pool)) {
+				pool_died(pool);
+				while (!initiate_stratum(pool) || !auth_stratum(pool)) {
+					if (pool->removed)
+						goto out;
+					sleep(30);
+				}
+			}
+		}
 
 		FD_ZERO(&rd);
 		FD_SET(pool->sock, &rd);
