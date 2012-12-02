@@ -3048,6 +3048,8 @@ static void *get_work_thread(void *userdata)
 
 	pthread_detach(pthread_self());
 
+	RenameThread("get_work");
+
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
 retry:
@@ -3230,6 +3232,8 @@ static void *submit_work_thread(void *userdata)
 	struct curl_ent *ce;
 
 	pthread_detach(pthread_self());
+
+	RenameThread("submit_work");
 
 	applog(LOG_DEBUG, "Creating extra submit work thread");
 
@@ -3673,6 +3677,8 @@ static void *stage_thread(void *userdata)
 	bool ok = true;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("stage");
 
 	while (ok) {
 		struct work *work = NULL;
@@ -4353,6 +4359,8 @@ static void *input_thread(void __maybe_unused *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
+	RenameThread("input");
+
 	if (!curses_active)
 		return NULL;
 
@@ -4388,6 +4396,8 @@ static void *workio_thread(void *userdata)
 	bool ok = true;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("work_io");
 
 	while (ok) {
 		struct workio_cmd *wc;
@@ -4427,6 +4437,8 @@ static void *api_thread(void *userdata)
 
 	pthread_detach(pthread_self());
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("api");
 
 	api(api_thr_id);
 
@@ -4673,6 +4685,8 @@ static void *stratum_thread(void *userdata)
 	struct pool *pool = (struct pool *)userdata;
 
 	pthread_detach(pthread_self());
+
+	RenameThread("stratum");
 
 	while (42) {
 		struct timeval timeout;
@@ -5507,6 +5521,10 @@ void *miner_thread(void *userdata)
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
+	char threadname[20];
+        snprintf(threadname,20,"miner %d",thr_id);
+	RenameThread(threadname);
+
 	gettimeofday(&getwork_start, NULL);
 
 	if (api->thread_init && !api->thread_init(mythr)) {
@@ -5762,6 +5780,8 @@ static void *longpoll_thread(void *userdata)
 	char *lp_url;
 	int rolltime;
 
+	RenameThread("longpoll");
+
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
@@ -5953,6 +5973,8 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
+	RenameThread("watchpool");
+
 	while (42) {
 		struct timeval now;
 		int i;
@@ -6023,6 +6045,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 	struct timeval zero_tv;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("watchdog");
 
 	memset(&zero_tv, 0, sizeof(struct timeval));
 	gettimeofday(&rotate_tv, NULL);
