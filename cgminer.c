@@ -2303,13 +2303,11 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	/* build JSON-RPC request */
 	if (work->gbt) {
-		char *gbt_block, *varint, *header;
+		char *gbt_block, *varint;
 		unsigned char data[80];
 
 		flip80(data, work->data);
-		header = bin2hex(data, 80);
-		gbt_block = calloc_strcat(header);
-		free(header);
+		gbt_block = bin2hex(data, 80);
 
 		if (work->gbt_txns < 0xfd) {
 			uint8_t val = work->gbt_txns;
