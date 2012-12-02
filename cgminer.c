@@ -1836,9 +1836,15 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  WU: %.1f",
-		global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
-		local_work, total_go, total_ro, total_diff1 / total_secs * 60);
+	if (opt_scrypt) {
+		mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+			global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
+			local_work, total_go, total_ro);
+	} else {
+		mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  WU: %.1f",
+			global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
+			local_work, total_go, total_ro, total_diff1 / total_secs * 60);
+	}
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
