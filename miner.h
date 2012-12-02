@@ -110,6 +110,10 @@ static inline int fsync (int fd)
   #include "libztex.h"
 #endif
 
+#ifdef USE_MODMINER
+  #include "usbutils.h"
+#endif
+
 #if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
 #define bswap_16 __builtin_bswap16
 #define bswap_32 __builtin_bswap32
@@ -361,8 +365,19 @@ struct cgpu_info {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
 #endif
+#ifdef USE_MODMINER
+		struct cg_usb_device *usbdev;
+#endif
 		int device_fd;
 	};
+#ifdef USE_MODMINER
+	int usbstat;
+	char fpgaid;
+	unsigned char clock;
+	pthread_mutex_t *modminer_mutex;
+	bool tried_two_byte_temp;
+	bool one_byte_temp;
+#endif
 #ifdef USE_BITFORCE
 	struct timeval work_start_tv;
 	unsigned int wait_ms;
@@ -373,9 +388,8 @@ struct cgpu_info {
 	bool nonce_range;
 	bool polling;
 	bool flash_led;
+	pthread_mutex_t device_mutex;
 #endif
-	pthread_mutex_t		device_mutex;
-
 	enum dev_enable deven;
 	int accepted;
 	int rejected;
@@ -654,6 +668,9 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+#ifdef HAVE_LIBUSB
+extern int opt_usbdump;
+#endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
@@ -683,6 +700,10 @@ extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 extern int opt_queue;
 extern int opt_scantime;
 extern int opt_expiry;
+
+#ifdef HAVE_LIBUSB
+extern pthread_mutex_t cgusb_lock;
+#endif
 
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
@@ -998,9 +1019,10 @@ struct modminer_fpga_state {
 	uint32_t hashes;
 
 	char next_work_cmd[46];
+	char fpgaid;
 
-	unsigned char clock;
-	float temp;
+	bool overheated;
+	bool new_work;
 
 	uint32_t shares;
 	uint32_t shares_last_hw;

@@ -6,7 +6,65 @@ ModMinerQuad (MMQ)
 ------------------
 
 The mining bitstream does not survive a power cycle, so cgminer will upload
-it, if it needs to, before it starts mining
+it, if it needs to, before it starts mining (approx 7min 40sec)
+
+The red LED also flashes while it is uploading the bitstream
+
+-
+
+When mining on windows, the driver being used will determine if mining will work.
+
+If the driver doesn't allow mining, you will get a "USB init," error message
+i.e. one of:
+ open device failed, err %d, you need to install a Windows USB driver for the device
+or
+ kernel detach failed :(
+or
+ claim interface %d failed, err %d
+
+The best solution for this is to use a tool called Zadig to set the driver:
+ http://sourceforge.net/projects/libwdi/files/zadig/
+
+This allows you set the driver for the device to be WinUSB which is usually
+required to make it work if your having problems
+
+You must also make sure you are using the latest libusb-1.0.dll supplied
+with cgminer (not the libusbx version)
+
+-
+
+There is a hidden option in cgminer to dump out a lot of information
+about USB that will help the developers to assist you if you are having
+problems:
+
+ --usb-dump 0
+
+It will only help if you have a working MMQ device attached to the computer
+
+-
+
+If the MMQ doesn't respond to cgminer at all, or the red LED isn't flashing
+then you will need to reset the MMQ
+
+The red LED should always be flashing when it is mining or ready to mine
+
+To reset the MMQ, you are best to press the left "RESET" button on the
+backplane, then unplug and replug the USB cable
+
+If your MMQ doesn't have a button on the "RESET" pad, you need to join
+the two left pads of the "RESET" pad with conductive wire to reset it.
+Cutting a small (metal) paper-clip in half works well for this
+
+Then unplug the USB cable, wait for 5 seconds, then plug it back in
+
+After you press reset, the red LED near the USB port should blink continuously
+
+If it still wont work, power off, wait for 5 seconds, then power on the MMQ
+This of course means it will upload the bitstream again when you start cgminer
+
+-
+
+Device 0 is on the power end of the board
 
 -
 
@@ -64,7 +122,7 @@ a (hack) solution to this is to blacklist the MMQ USB device in
 
 Adding 2 lines like this (just above APC) should help
 # MMQ
-ATTRS{idVendor}=="ifc9", ATTRS{idProduct}=="0003", ENV{ID_MM_DEVICE_IGNORE}="1"
+ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", ENV{ID_MM_DEVICE_IGNORE}="1"
 
 The change will be lost and need to be re-done, next time you update the
 modem-manager software

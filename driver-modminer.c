@@ -17,25 +17,56 @@
 
 #include "logging.h"
 #include "miner.h"
+#include "usbutils.h"
 #include "fpgautils.h"
 #include "util.h"
 
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.ncd"
 #define BISTREAM_USER_ID "\2\4$B"
 
+#define BITSTREAM_MAGIC_0 0
+#define BITSTREAM_MAGIC_1 9
+
 #define MODMINER_CUTOFF_TEMP 60.0
 #define MODMINER_OVERHEAT_TEMP 50.0
+#define MODMINER_TEMP_UP_LIMIT 48.0
 #define MODMINER_OVERHEAT_CLOCK -10
 
 #define MODMINER_HW_ERROR_PERCENT 0.75
 
-#define MODMINER_MAX_CLOCK 220
+// N.B. in the latest firmware the limit is 250
+// however the voltage/temperature risks preclude that
+#define MODMINER_MAX_CLOCK 230
 #define MODMINER_DEF_CLOCK 200
 #define MODMINER_MIN_CLOCK 160
 
 #define MODMINER_CLOCK_DOWN -2
 #define MODMINER_CLOCK_SET 0
 #define MODMINER_CLOCK_UP 2
+
+// Commands
+#define MODMINER_PING "\x00"
+#define MODMINER_GET_VERSION "\x01"
+#define MODMINER_FPGA_COUNT "\x02"
+// Commands + require FPGAid
+#define MODMINER_GET_IDCODE '\x03'
+#define MODMINER_GET_USERCODE '\x04'
+#define MODMINER_PROGRAM '\x05'
+#define MODMINER_SET_CLOCK '\x06'
+#define MODMINER_READ_CLOCK '\x07'
+#define MODMINER_SEND_WORK '\x08'
+#define MODMINER_CHECK_WORK '\x09'
+// One byte temperature reply
+#define MODMINER_TEMP1 '\x0a'
+// Two byte temperature reply
+#define MODMINER_TEMP2 '\x0d'
+
+// +6 bytes
+#define MODMINER_SET_REG '\x0b'
+// +2 bytes
+#define MODMINER_GET_REG '\x0c'
+
+#define FPGAID_ALL 4
 
 // Maximum how many good shares in a row means clock up
 // 96 is ~34m22s at 200MH/s
@@ -44,379 +75,589 @@
 // This is doubled each down clock until it reaches MODMINER_TRY_UP
 // 6 is ~2m9s at 200MH/s
 #define MODMINER_EARLY_UP 6
+// Limit when reducing shares_to_good
+#define MODMINER_MIN_BACK 12
 
 struct device_api modminer_api;
 
-static inline bool _bailout(int fd, struct cgpu_info *modminer, int prio, const char *fmt, ...)
-{
-	if (fd != -1)
-		serial_close(fd);
-	if (modminer) {
-		modminer->device_fd = -1;
-		mutex_unlock(&modminer->device_mutex);
-	}
+// 45 noops sent when detecting, in case the device was left in "start job" reading
+static const char NOOP[] = MODMINER_PING "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
 
-	va_list ap;
-	va_start(ap, fmt);
-	vapplog(prio, fmt, ap);
-	va_end(ap);
-	return false;
+static void do_ping(struct cgpu_info *modminer)
+{
+	char buf[0x100+1];
+	int err, amount;
+
+	// Don't care if it fails
+	err = usb_write(modminer, (char *)NOOP, sizeof(NOOP)-1, &amount, C_PING);
+	applog(LOG_DEBUG, "%s%u: flush noop got %d err %d",
+		modminer->api->name, modminer->fpgaid, amount, err);
+
+	// Clear any outstanding data
+	while ((err = usb_read(modminer, buf, sizeof(buf)-1, &amount, C_CLEAR)) == 0 && amount > 0)
+		applog(LOG_DEBUG, "%s%u: clear got %d",
+			modminer->api->name, modminer->fpgaid, amount);
+
+	applog(LOG_DEBUG, "%s%u: final clear got %d err %d",
+		modminer->api->name, modminer->fpgaid, amount, err);
 }
 
-// 45 noops sent when detecting, in case the device was left in "start job" reading
-static const char NOOP[] = "\0\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
-
-static bool modminer_detect_one(const char *devpath)
+static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
-	char buf[0x100];
-	char *devname;
-	ssize_t len;
-	int fd;
+	char buf[0x100+1];
+	char *devname = NULL;
+	char devpath[20];
+	int err, i, amount;
+	bool added = false;
 
-#ifdef WIN32
-	fd = serial_open(devpath, 0, 10, true);
-	if (fd < 0) {
-		applog(LOG_ERR, "ModMiner detect: failed to open %s", devpath);
-		return false;
-	}
+	struct cgpu_info *modminer = NULL;
+	modminer = calloc(1, sizeof(*modminer));
+	modminer->api = &modminer_api;
+	modminer->modminer_mutex = calloc(1, sizeof(*(modminer->modminer_mutex)));
+	mutex_init(modminer->modminer_mutex);
+	modminer->fpgaid = (char)0;
 
-	(void)(write(fd, NOOP, sizeof(NOOP)-1) ?:0);
-	while (serial_read(fd, buf, sizeof(buf)) > 0)
-		;
-
-	// Version
-	if (1 != write(fd, "\x01", 1)) {
-		applog(LOG_ERR, "ModMiner detect: version request failed on %s (%d)", devpath, errno);
+	if (!usb_init(modminer, dev, found))
 		goto shin;
+
+	do_ping(modminer);
+
+	if ((err = usb_write(modminer, MODMINER_GET_VERSION, 1, &amount, C_REQUESTVERSION)) < 0 || amount != 1) {
+		applog(LOG_ERR, "ModMiner detect: send version request failed (%d:%d)", amount, err);
+		goto unshin;
 	}
 
-	len = serial_read(fd, buf, sizeof(buf)-1);
-	if (len < 1) {
-		applog(LOG_ERR, "ModMiner detect: no version reply on %s (%d)", devpath, errno);
-		goto shin;
+	if ((err = usb_read(modminer, buf, sizeof(buf)-1, &amount, C_GETVERSION)) < 0 || amount < 1) {
+		if (err < 0)
+			applog(LOG_ERR, "ModMiner detect: no version reply (%d)", err);
+		else
+			applog(LOG_ERR, "ModMiner detect: empty version reply (%d)", amount);
+
+		applog(LOG_DEBUG, "ModMiner detect: check the firmware");
+
+		goto unshin;
 	}
-	buf[len] = '\0';
+	buf[amount] = '\0';
 	devname = strdup(buf);
 	applog(LOG_DEBUG, "ModMiner identified as: %s", devname);
 
-	// FPGA count
-	if (1 != write(fd, "\x02", 1)) {
-		applog(LOG_ERR, "ModMiner detect: FPGA count request failed on %s (%d)", devpath, errno);
-		goto shin;
-	}
-	len = read(fd, buf, 1);
-
-	if (len < 1) {
-		applog(LOG_ERR, "ModMiner detect: timeout waiting for FPGA count from %s (%d)", devpath, errno);
-		goto shin;
+	if ((err = usb_write(modminer, MODMINER_FPGA_COUNT, 1, &amount, C_REQUESTFPGACOUNT) < 0 || amount != 1)) {
+		applog(LOG_ERR, "ModMiner detect: FPGA count request failed (%d:%d)", amount, err);
+		goto unshin;
 	}
 
-	serial_close(fd);
-#else
-	fd = select_open(devpath);
-
-	if (fd < 0) {
-		applog(LOG_ERR, "ModMiner detect: failed to open %s", devpath);
-		return false;
+	if ((err = usb_read(modminer, buf, 1, &amount, C_GETFPGACOUNT)) < 0 || amount != 1) {
+		applog(LOG_ERR, "ModMiner detect: no FPGA count reply (%d:%d)", amount, err);
+		goto unshin;
 	}
 
-	// Don't care if they fail
-	select_write(fd, (char *)NOOP, sizeof(NOOP)-1);
-
-	// Will clear up to a max of sizeof(buf)-1 chars
-	select_read(fd, buf, sizeof(buf)-1);
-
-	// Version
-	if (select_write(fd, "\x01", 1) < 1) {
-		applog(LOG_ERR, "ModMiner detect: version request failed on %s (%d)", devpath, errno);
-		goto shin;
-	}
-
-	if ((len = select_read(fd, buf, sizeof(buf)-1)) < 1) {
-		applog(LOG_ERR, "ModMiner detect: no version reply on %s (%d)", devpath, errno);
-		goto shin;
-	}
-	buf[len] = '\0';
-	devname = strdup(buf);
-	applog(LOG_DEBUG, "ModMiner identified as: %s", devname);
-
-	// FPGA count
-	if (select_write(fd, "\x02", 1) < 1) {
-		applog(LOG_ERR, "ModMiner detect: FPGA count request failed on %s (%d)", devpath, errno);
-		goto shin;
-	}
-
-	if ((len = select_read(fd, buf, 1)) < 1) {
-		applog(LOG_ERR, "ModMiner detect: no FPGA count reply on %s (%d)", devpath, errno);
-		goto shin;
-	}
-
-	select_close(fd);
-#endif
-
-	// TODO: check if it supports 2 byte temperatures and if not
-	// add a flag and set it use 1 byte and code to use the flag
+	// TODO: flag it use 1 byte temp if it is an old firmware
+	// can detect with modminer->cgusb->serial ?
 
 	if (buf[0] == 0) {
-		applog(LOG_ERR, "ModMiner detect: zero FPGA count from %s", devpath);
-		goto shin;
+		applog(LOG_ERR, "ModMiner detect: zero FPGA count from %s", devname);
+		goto unshin;
 	}
 
 	if (buf[0] < 1 || buf[0] > 4) {
-		applog(LOG_ERR, "ModMiner detect: invalid FPGA count (%u) from %s", buf[0], devpath);
-		goto shin;
+		applog(LOG_ERR, "ModMiner detect: invalid FPGA count (%u) from %s", buf[0], devname);
+		goto unshin;
 	}
 
 	applog(LOG_DEBUG, "ModMiner %s has %u FPGAs", devname, buf[0]);
 
-	struct cgpu_info *modminer;
-	modminer = calloc(1, sizeof(*modminer));
-	modminer->api = &modminer_api;
-	mutex_init(&modminer->device_mutex);
-	modminer->device_path = strdup(devpath);
-	modminer->device_fd = -1;
-	modminer->deven = DEV_ENABLED;
-	modminer->threads = buf[0];
 	modminer->name = devname;
 
-	return add_cgpu(modminer);
+	// TODO: test with 1 board missing in the middle and each end
+	// to see how that affects the sequence numbers
+	for (i = 0; i < buf[0]; i++) {
+		struct cgpu_info *tmp = calloc(1, sizeof(*tmp));
+
+		tmp->api = modminer->api;
+		tmp->name = devname;
+
+		sprintf(devpath, "%d:%d:%d",
+			(int)(modminer->usbdev->bus_number),
+			(int)(modminer->usbdev->device_address),
+			i);
+
+		tmp->device_path = strdup(devpath);
+		tmp->usbdev = modminer->usbdev;
+		// Only the first copy gets the already used stats
+		if (!added)
+			tmp->usbstat = modminer->usbstat;
+		tmp->fpgaid = (char)i;
+		tmp->modminer_mutex = modminer->modminer_mutex;
+		tmp->deven = DEV_ENABLED;
+		tmp->threads = 1;
+
+		if (!add_cgpu(tmp)) {
+			free(tmp->device_path);
+			free(tmp);
+			goto unshin;
+		}
+
+		update_usb_stats(tmp);
+
+		added = true;
+	}
+
+	free(modminer);
+
+	return true;
+
+unshin:
+	if (!added)
+		usb_uninit(modminer);
 
 shin:
+	if (!added)
+		free(modminer->modminer_mutex);
 
-#ifdef WIN32
-	serial_close(fd);
-#else
-	select_close(fd);
-#endif
-	return false;
-}
+	free(modminer);
 
-static int modminer_detect_auto()
-{
-	return
-	serial_autodetect_udev     (modminer_detect_one, "*ModMiner*") ?:
-	serial_autodetect_devserial(modminer_detect_one, "BTCFPGA_ModMiner") ?:
-	0;
+	if (added)
+		return true;
+	else
+		return false;
 }
 
 static void modminer_detect()
 {
-	serial_detect_auto(&modminer_api, modminer_detect_one, modminer_detect_auto);
+	usb_detect(&modminer_api, modminer_detect_one);
 }
 
-#define bailout(...)  return _bailout(-1, modminer, __VA_ARGS__);
-#define bailout2(...)  return _bailout(fd, modminer, __VA_ARGS__);
+static bool get_expect(struct cgpu_info *modminer, FILE *f, char c)
+{
+	char buf;
 
-#define check_magic(L)  do {  \
-	if (1 != fread(buf, 1, 1, f))  \
-		bailout(LOG_ERR, "Error reading ModMiner firmware ('%c')", L);  \
-	if (buf[0] != L)  \
-		bailout(LOG_ERR, "ModMiner firmware has wrong magic ('%c')", L);  \
-} while(0)
+	if (fread(&buf, 1, 1, f) != 1) {
+		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream (%c)",
+				modminer->api->name, modminer->device_id, errno, c);
+		return false;
+	}
 
-#define read_str(eng)  do {  \
-	if (1 != fread(buf, 2, 1, f))  \
-		bailout(LOG_ERR, "Error reading ModMiner firmware (" eng " len)");  \
-	len = (ubuf[0] << 8) | ubuf[1];  \
-	if (len >= sizeof(buf))  \
-		bailout(LOG_ERR, "ModMiner firmware " eng " too long");  \
-	if (1 != fread(buf, len, 1, f))  \
-		bailout(LOG_ERR, "Error reading ModMiner firmware (" eng ")");  \
-	buf[len] = '\0';  \
-} while(0)
+	if (buf != c) {
+		applog(LOG_ERR, "%s%u: firmware code mismatch (%c)",
+				modminer->api->name, modminer->device_id, c);
+		return false;
+	}
 
-#define status_read(eng)  do {  \
-FD_ZERO(&fds); \
-FD_SET(fd, &fds);  \
-select(fd+1, &fds, NULL, NULL, NULL);  \
-	if (1 != read(fd, buf, 1))  \
-		bailout2(LOG_ERR, "%s %u: Error programming %s (" eng ")", modminer->api->name, modminer->device_id, modminer->device_path);  \
-	if (buf[0] != 1)  \
-		bailout2(LOG_ERR, "%s %u: Wrong " eng " programming %s", modminer->api->name, modminer->device_id, modminer->device_path);  \
-} while(0)
+	return true;
+}
+
+static bool get_info(struct cgpu_info *modminer, FILE *f, char *buf, int bufsiz, const char *name)
+{
+	unsigned char siz[2];
+	int len;
+
+	if (fread(siz, 2, 1, f) != 1) {
+		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream '%s' len",
+			modminer->api->name, modminer->device_id, errno, name);
+		return false;
+	}
+
+	len = siz[0] * 256 + siz[1];
+
+	if (len >= bufsiz) {
+		applog(LOG_ERR, "%s%u: Bitstream '%s' len too large (%d)",
+			modminer->api->name, modminer->device_id, name, len);
+		return false;
+	}
+
+	if (fread(buf, len, 1, f) != 1) {
+		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream '%s'", errno,
+			modminer->api->name, modminer->device_id, errno, name);
+		return false;
+	}
+
+	buf[len] = '\0';
+
+	return true;
+}
+
+#define USE_DEFAULT_TIMEOUT 0
+
+// mutex must always be locked before calling
+static bool get_status_timeout(struct cgpu_info *modminer, char *msg, unsigned int timeout, enum usb_cmds cmd)
+{
+	int err, amount;
+	char buf[1];
+
+	if (timeout == USE_DEFAULT_TIMEOUT)
+		err = usb_read(modminer, buf, 1, &amount, cmd);
+	else
+		err = usb_read_timeout(modminer, buf, 1, &amount, timeout, cmd);
+
+	if (err < 0 || amount != 1) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error (%d:%d) getting %s reply",
+			modminer->api->name, modminer->device_id, amount, err, msg);
+
+		return false;
+	}
+
+	if (buf[0] != 1) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error, invalid %s reply (was %d should be 1)",
+			modminer->api->name, modminer->device_id, msg, buf[0]);
+
+		return false;
+	}
+
+	return true;
+}
+
+// mutex must always be locked before calling
+static bool get_status(struct cgpu_info *modminer, char *msg, enum usb_cmds cmd)
+{
+	return get_status_timeout(modminer, msg, USE_DEFAULT_TIMEOUT, cmd);
+}
 
 static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 {
-	fd_set fds;
-	char buf[0x100];
+	const char *bsfile = BITSTREAM_FILENAME;
+	char buf[0x100], *p;
+	char devmsg[64];
 	unsigned char *ubuf = (unsigned char *)buf;
-	unsigned long len;
-	char *p;
-	const char *fwfile = BITSTREAM_FILENAME;
-	char fpgaid = 4;  // "all FPGAs"
+	unsigned long totlen, len;
+	size_t buflen, remaining;
+	float nextmsg, upto;
+	char fpgaid = FPGAID_ALL;
+	int err, amount, tries;
+	char *ptr;
 
-	FILE *f = open_bitstream("modminer", fwfile);
-	if (!f)
-		bailout(LOG_ERR, "Error opening ModMiner firmware file %s", fwfile);
-	if (1 != fread(buf, 2, 1, f))
-		bailout(LOG_ERR, "Error reading ModMiner firmware (magic)");
-	if (buf[0] || buf[1] != 9)
-		bailout(LOG_ERR, "ModMiner firmware has wrong magic (9)");
-	if (-1 == fseek(f, 11, SEEK_CUR))
-		bailout(LOG_ERR, "ModMiner firmware seek failed");
-	check_magic('a');
-	read_str("design name");
-	applog(LOG_DEBUG, "ModMiner firmware file %s info:", fwfile);
-	applog(LOG_DEBUG, "  Design name: %s", buf);
-	p = strrchr(buf, ';') ?: buf;
-	p = strrchr(buf, '=') ?: p;
+	FILE *f = open_bitstream("modminer", bsfile);
+	if (!f) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_DEBUG, "%s%u: Error (%d) opening bitstream file %s",
+			modminer->api->name, modminer->device_id, errno, bsfile);
+
+		return false;
+	}
+
+	if (fread(buf, 2, 1, f) != 1) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream magic",
+			modminer->api->name, modminer->device_id, errno);
+
+		goto dame;
+	}
+
+	if (buf[0] != BITSTREAM_MAGIC_0 || buf[1] != BITSTREAM_MAGIC_1) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: bitstream has incorrect magic (%u,%u) instead of (%u,%u)",
+			modminer->api->name, modminer->device_id,
+			buf[0], buf[1],
+			BITSTREAM_MAGIC_0, BITSTREAM_MAGIC_1);
+
+		goto dame;
+	}
+
+	if (fseek(f, 11L, SEEK_CUR)) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error (%d) bitstream seek failed",
+			modminer->api->name, modminer->device_id, errno);
+
+		goto dame;
+	}
+
+	if (!get_expect(modminer, f, 'a'))
+		goto undame;
+
+	if (!get_info(modminer, f, buf, sizeof(buf), "Design name"))
+		goto undame;
+
+	applog(LOG_DEBUG, "%s%u: bitstream file '%s' info:",
+		modminer->api->name, modminer->device_id, bsfile);
+
+	applog(LOG_DEBUG, " Design name: '%s'", buf);
+
+	p = strrchr(buf, ';') ? : buf;
+	p = strrchr(buf, '=') ? : p;
 	if (p[0] == '=')
-		++p;
+		p++;
+
 	unsigned long fwusercode = (unsigned long)strtoll(p, &p, 16);
-	if (p[0] != '\0')
-		bailout(LOG_ERR, "Bad usercode in ModMiner firmware file");
-	if (fwusercode == 0xffffffff)
-		bailout(LOG_ERR, "ModMiner firmware doesn't support user code");
-	applog(LOG_DEBUG, "  Version: %u, build %u", (fwusercode >> 8) & 0xff, fwusercode & 0xff);
-	check_magic('b');
-	read_str("part number");
-	applog(LOG_DEBUG, "  Part number: %s", buf);
-	check_magic('c');
-	read_str("build date");
-	applog(LOG_DEBUG, "  Build date: %s", buf);
-	check_magic('d');
-	read_str("build time");
-	applog(LOG_DEBUG, "  Build time: %s", buf);
-	check_magic('e');
-	if (1 != fread(buf, 4, 1, f))
-		bailout(LOG_ERR, "Error reading ModMiner firmware (data len)");
+
+	if (p[0] != '\0') {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Bad usercode in bitstream file",
+			modminer->api->name, modminer->device_id);
+
+		goto dame;
+	}
+
+	if (fwusercode == 0xffffffff) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: bitstream doesn't support user code",
+			modminer->api->name, modminer->device_id);
+
+		goto dame;
+	}
+
+	applog(LOG_DEBUG, " Version: %u, build %u", (fwusercode >> 8) & 0xff, fwusercode & 0xff);
+
+	if (!get_expect(modminer, f, 'b'))
+		goto undame;
+
+	if (!get_info(modminer, f, buf, sizeof(buf), "Part number"))
+		goto undame;
+
+	applog(LOG_DEBUG, " Part number: '%s'", buf);
+
+	if (!get_expect(modminer, f, 'c'))
+		goto undame;
+
+	if (!get_info(modminer, f, buf, sizeof(buf), "Build date"))
+		goto undame;
+
+	applog(LOG_DEBUG, " Build date: '%s'", buf);
+
+	if (!get_expect(modminer, f, 'd'))
+		goto undame;
+
+	if (!get_info(modminer, f, buf, sizeof(buf), "Build time"))
+		goto undame;
+
+	applog(LOG_DEBUG, " Build time: '%s'", buf);
+
+	if (!get_expect(modminer, f, 'e'))
+		goto undame;
+
+	if (fread(buf, 4, 1, f) != 1) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream data len",
+			modminer->api->name, modminer->device_id, errno);
+
+		goto dame;
+	}
+
 	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
-	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
+	applog(LOG_DEBUG, " Bitstream size: %lu", len);
 
-	SOCKETTYPE fd = modminer->device_fd;
+	strcpy(devmsg, modminer->device_path);
+	ptr = strrchr(devmsg, ':');
+	if (ptr)
+		*ptr = '\0';
 
-	applog(LOG_WARNING, "%s %u: Programming %s... DO NOT EXIT CGMINER UNTIL COMPLETE", modminer->api->name, modminer->device_id, modminer->device_path);
-	buf[0] = '\x05';  // Program Bitstream
+	applog(LOG_WARNING, "%s%u: Programming all FPGA on %s ... Mining will not start until complete",
+		modminer->api->name, modminer->device_id, devmsg);
+
+	buf[0] = MODMINER_PROGRAM;
 	buf[1] = fpgaid;
 	buf[2] = (len >>  0) & 0xff;
 	buf[3] = (len >>  8) & 0xff;
 	buf[4] = (len >> 16) & 0xff;
 	buf[5] = (len >> 24) & 0xff;
-	if (6 != write(fd, buf, 6))
-		bailout2(LOG_ERR, "%s %u: Error programming %s (cmd)", modminer->api->name, modminer->device_id, modminer->device_path);
-	status_read("cmd reply");
-	ssize_t buflen;
-	while (len) {
-		buflen = len < 32 ? len : 32;
-		if (fread(buf, buflen, 1, f) != 1)
-			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", modminer->api->name, modminer->device_id, modminer->device_path, len);
-		if (write(fd, buf, buflen) != buflen)
-			bailout2(LOG_ERR, "%s %u: Error programming %s (data)", modminer->api->name, modminer->device_id,  modminer->device_path);
-		status_read("status");
-		len -= buflen;
+
+	if ((err = usb_write(modminer, buf, 6, &amount, C_STARTPROGRAM)) < 0 || amount != 6) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Program init failed (%d:%d)",
+			modminer->api->name, modminer->device_id, amount, err);
+
+		goto dame;
 	}
-	status_read("final status");
-	applog(LOG_WARNING, "%s %u: Done programming %s", modminer->api->name, modminer->device_id, modminer->device_path);
+
+	if (!get_status(modminer, "initialise", C_STARTPROGRAMSTATUS))
+		goto undame;
+
+// It must be 32 bytes according to MCU legacy.c
+#define WRITE_SIZE 32
+
+	totlen = len;
+	nextmsg = 0.1;
+	while (len > 0) {
+		buflen = len < WRITE_SIZE ? len : WRITE_SIZE;
+		if (fread(buf, buflen, 1, f) != 1) {
+			mutex_unlock(modminer->modminer_mutex);
+
+			applog(LOG_ERR, "%s%u: bitstream file read error %d (%d bytes left)",
+				modminer->api->name, modminer->device_id, errno, len);
+
+			goto dame;
+		}
+
+		tries = 0;
+		ptr = buf;
+		remaining = buflen;
+		while ((err = usb_write(modminer, ptr, remaining, &amount, C_PROGRAM)) < 0 || amount != (int)remaining) {
+			if (err == LIBUSB_ERROR_TIMEOUT && amount > 0 && ++tries < 4) {
+				remaining -= amount;
+				ptr += amount;
+
+				if (opt_debug)
+					applog(LOG_DEBUG, "%s%u: Program timeout (%d:%d) sent %d tries %d",
+						modminer->api->name, modminer->device_id,
+						amount, err, remaining, tries);
+
+				if (!get_status(modminer, "write status", C_PROGRAMSTATUS2))
+					goto dame;
+
+			} else {
+				mutex_unlock(modminer->modminer_mutex);
+
+				applog(LOG_ERR, "%s%u: Program failed (%d:%d) sent %d",
+					modminer->api->name, modminer->device_id, amount, err, remaining);
+
+				goto dame;
+			}
+		}
+
+		if (!get_status(modminer, "write status", C_PROGRAMSTATUS))
+			goto dame;
+
+		len -= buflen;
+
+		upto = (float)(totlen - len) / (float)(totlen);
+		if (upto >= nextmsg) {
+			applog(LOG_WARNING,
+				"%s%u: Programming %.1f%% (%d out of %d)",
+				modminer->api->name, modminer->device_id, upto*100, (totlen - len), totlen);
+
+			nextmsg += 0.1;
+		}
+	}
+
+	if (!get_status(modminer, "final status", C_FINALPROGRAMSTATUS))
+		goto undame;
+
+	applog(LOG_WARNING, "%s%u: Programming completed for all FPGA on %s",
+		modminer->api->name, modminer->device_id, devmsg);
+
+	// Give it a 2/3s delay after programming
+	nmsleep(666);
 
 	return true;
+undame:
+	;
+	mutex_unlock(modminer->modminer_mutex);
+	;
+dame:
+	fclose(f);
+	return false;
 }
-
-static bool modminer_device_prepare(struct cgpu_info *modminer)
-{
-	int fd = serial_open(modminer->device_path, 0, 10, true);
-	if (unlikely(-1 == fd))
-		bailout(LOG_ERR, "%s %u: Failed to open %s", modminer->api->name, modminer->device_id, modminer->device_path);
-
-	modminer->device_fd = fd;
-	applog(LOG_INFO, "%s %u: Opened %s", modminer->api->name, modminer->device_id, modminer->device_path);
-
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	get_datestamp(modminer->init, &now);
-
-	return true;
-}
-
-#undef bailout
 
 static bool modminer_fpga_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *modminer = thr->cgpu;
+	struct timeval now;
 
-	// Don't need to lock the mutex here,
-	// since prepare runs from the main thread before the miner threads start
-	if (modminer->device_fd == -1 && !modminer_device_prepare(modminer))
-		return false;
+	gettimeofday(&now, NULL);
+	get_datestamp(modminer->init, &now);
 
 	struct modminer_fpga_state *state;
 	state = thr->cgpu_data = calloc(1, sizeof(struct modminer_fpga_state));
-	state->next_work_cmd[0] = '\x08';  // Send Job
-	state->next_work_cmd[1] = thr->device_thread;  // FPGA id
+	state->next_work_cmd[0] = MODMINER_SEND_WORK;
+	state->next_work_cmd[1] = modminer->fpgaid;
 	state->shares_to_good = MODMINER_EARLY_UP;
+	state->overheated = false;
 
 	return true;
 }
 
 /*
  * Clocking rules:
- *	If device exceeds cutoff temp - shut down - and decrease the clock by
- *		MODMINER_OVERHEAT_CLOCK for when it restarts
+ *	If device exceeds cutoff temp - TODO: ?stop sending work -
+ *		and decrease the clock by MODMINER_OVERHEAT_CLOCK
+ *		for when it restarts
  *
  * When to clock down:
  *	If device overheats
+ *		also halve shares_to_good
+ *		(so multiple temp drops can recover faster)
  *	 or
  *	If device gets MODMINER_HW_ERROR_PERCENT errors since last clock up or down
  *		if clock is <= default it requires 2 HW to do this test
  *		if clock is > default it only requires 1 HW to do this test
+ *			also double shares_to_good
  *
  * When to clock up:
  *	If device gets shares_to_good good shares in a row
+ *		and temp <= MODMINER_TEMP_UP_LIMIT
  *
  * N.B. clock must always be a multiple of 2
  */
-static bool modminer_delta_clock(struct thr_info *thr, bool needlock, int delta, bool temp)
+static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
 {
 	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
-	char fpgaid = thr->device_thread;
-	int fd = modminer->device_fd;
 	unsigned char cmd[6], buf[1];
-	struct timeval now;
-
-	gettimeofday(&now, NULL);
+	int err, amount;
 
 	// Only do once if multiple shares per work or multiple reasons
 	// Since the temperature down clock test is first in the code this is OK
-	if (tdiff(&now, &(state->last_changed)) < 0.5)
+	if (!state->new_work)
 		return false;
 
-	// Update before possibly aborting to avoid repeating unnecessarily
-	memcpy(&(state->last_changed), &now, sizeof(struct timeval));
+	state->new_work = false;
+
 	state->shares = 0;
 	state->shares_last_hw = 0;
 	state->hw_errors = 0;
 
 	// If drop requested due to temperature, clock drop is always allowed
-	if (!temp && delta < 0 && state->clock <= MODMINER_MIN_CLOCK)
+	if (!temp && delta < 0 && modminer->clock <= MODMINER_MIN_CLOCK)
 		return false;
 
-	if (delta > 0 && state->clock >= MODMINER_MAX_CLOCK)
+	if (delta > 0 && modminer->clock >= MODMINER_MAX_CLOCK)
 		return false;
 
 	if (delta < 0) {
-		if ((state->shares_to_good * 2) < MODMINER_TRY_UP)
-			state->shares_to_good *= 2;
-		else
-			state->shares_to_good = MODMINER_TRY_UP;
+		if (temp) {
+			if (state->shares_to_good > MODMINER_MIN_BACK)
+				state->shares_to_good /= 2;
+		} else {
+			if ((state->shares_to_good * 2) < MODMINER_TRY_UP)
+				state->shares_to_good *= 2;
+			else
+				state->shares_to_good = MODMINER_TRY_UP;
+		}
 	}
 
-	state->clock += delta;
+	modminer->clock += delta;
 
-	cmd[0] = '\x06';  // set clock speed
-	cmd[1] = fpgaid;
-	cmd[2] = state->clock;
+	cmd[0] = MODMINER_SET_CLOCK;
+	cmd[1] = modminer->fpgaid;
+	cmd[2] = modminer->clock;
 	cmd[3] = cmd[4] = cmd[5] = '\0';
 
-	if (needlock)
-		mutex_lock(&modminer->device_mutex);
-	if (6 != write(fd, cmd, 6))
-		bailout2(LOG_ERR, "%s%u.%u: Error writing (set clock speed)", modminer->api->name, modminer->device_id, fpgaid);
-	if (serial_read(fd, &buf, 1) != 1)
-		bailout2(LOG_ERR, "%s%u.%u: Error reading (set clock speed)", modminer->api->name, modminer->device_id, fpgaid);
-	if (needlock)
-		mutex_unlock(&modminer->device_mutex);
+	mutex_lock(modminer->modminer_mutex);
 
-	applog(LOG_WARNING, "%s%u.%u: Set clock speed %sto %u", modminer->api->name, modminer->device_id, fpgaid, (delta < 0) ? "down " : (delta > 0 ? "up " : ""), state->clock);
+	if ((err = usb_write(modminer, (char *)cmd, 6, &amount, C_SETCLOCK)) < 0 || amount != 6) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error writing set clock speed (%d:%d)",
+			modminer->api->name, modminer->device_id, amount, err);
+
+		return false;
+	}
+
+	if ((err = usb_read(modminer, (char *)(&buf), 1, &amount, C_REPLYSETCLOCK)) < 0 || amount != 1) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error reading set clock speed (%d:%d)",
+			modminer->api->name, modminer->device_id, amount, err);
+
+		return false;
+	}
+
+	mutex_unlock(modminer->modminer_mutex);
+
+	applog(LOG_WARNING, "%s%u: Set clock speed %sto %u",
+			modminer->api->name, modminer->device_id,
+			(delta < 0) ? "down " : (delta > 0 ? "up " : ""),
+			modminer->clock);
 
 	return true;
 }
@@ -424,39 +665,48 @@ static bool modminer_delta_clock(struct thr_info *thr, bool needlock, int delta,
 static bool modminer_fpga_init(struct thr_info *thr)
 {
 	struct cgpu_info *modminer = thr->cgpu;
-	struct modminer_fpga_state *state = thr->cgpu_data;
-	int fd;
-	char fpgaid = thr->device_thread;
-
 	unsigned char cmd[2], buf[4];
+	int err, amount;
 
-	mutex_lock(&modminer->device_mutex);
-	fd = modminer->device_fd;
-	if (fd == -1) {
-		// Died in another thread...
-		mutex_unlock(&modminer->device_mutex);
+	mutex_lock(modminer->modminer_mutex);
+
+	cmd[0] = MODMINER_GET_USERCODE;
+	cmd[1] = modminer->fpgaid;
+	if ((err = usb_write(modminer, (char *)cmd, 2, &amount, C_REQUESTUSERCODE)) < 0 || amount != 2) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error requesting USER code (%d:%d)",
+			modminer->api->name, modminer->device_id, amount, err);
+
 		return false;
 	}
 
-	cmd[0] = '\x04';  // Read USER code (bitstream id)
-	cmd[1] = fpgaid;
-	if (write(fd, cmd, 2) != 2)
-		bailout2(LOG_ERR, "%s%u.%u: Error writing (read USER code)", modminer->api->name, modminer->device_id, fpgaid);
-	if (serial_read(fd, buf, 4) != 4)
-		bailout2(LOG_ERR, "%s%u.%u: Error reading (read USER code)", modminer->api->name, modminer->device_id, fpgaid);
+	if ((err = usb_read(modminer, (char *)buf, 4, &amount, C_GETUSERCODE)) < 0 || amount != 4) {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Error reading USER code (%d:%d)",
+			modminer->api->name, modminer->device_id, amount, err);
+
+		return false;
+	}
 
 	if (memcmp(buf, BISTREAM_USER_ID, 4)) {
-		applog(LOG_ERR, "%s%u.%u: FPGA not programmed", modminer->api->name, modminer->device_id, fpgaid);
+		applog(LOG_ERR, "%s%u: FPGA not programmed",
+			modminer->api->name, modminer->device_id);
+
 		if (!modminer_fpga_upload_bitstream(modminer))
 			return false;
+
+		mutex_unlock(modminer->modminer_mutex);
+	} else {
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_DEBUG, "%s%u: FPGA is already programmed :)",
+			modminer->api->name, modminer->device_id);
 	}
-	else
-		applog(LOG_DEBUG, "%s%u.%u: FPGA is already programmed :)", modminer->api->name, modminer->device_id, fpgaid);
 
-	state->clock = MODMINER_DEF_CLOCK;
-	modminer_delta_clock(thr, false, MODMINER_CLOCK_SET, false);
-
-	mutex_unlock(&modminer->device_mutex);
+	modminer->clock = MODMINER_DEF_CLOCK;
+	modminer_delta_clock(thr, MODMINER_CLOCK_SET, false);
 
 	thr->primary_thread = true;
 
@@ -465,34 +715,14 @@ static bool modminer_fpga_init(struct thr_info *thr)
 
 static void get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 {
-	char info[18] = "               | ";
-	int tc = modminer->threads;
-	bool havetemp = false;
-	int i;
+	char info[18];
 
-	if (tc > 4)
-		tc = 4;
+	sprintf(info, " %s%.1fC %3uMHz  | ",
+			(modminer->temp < 10) ? " " : "",
+			modminer->temp,
+			(unsigned int)(modminer->clock));
 
-	for (i = tc - 1; i >= 0; --i) {
-		struct thr_info *thr = modminer->thr[i];
-		struct modminer_fpga_state *state = thr->cgpu_data;
-		float temp = state->temp;
-
-		info[i*3+2] = '/';
-		if (temp) {
-			havetemp = true;
-			if (temp > 9)
-				info[i*3+0] = 0x30 + (temp / 10);
-			info[i*3+1] = 0x30 + ((int)temp % 10);
-		}
-	}
-	if (havetemp) {
-		info[tc*3-1] = ' ';
-		info[tc*3] = 'C';
-		strcat(buf, info);
-	}
-	else
-		strcat(buf, "               | ");
+	strcat(buf, info);
 }
 
 static bool modminer_prepare_next_work(struct modminer_fpga_state *state, struct work *work)
@@ -508,23 +738,102 @@ static bool modminer_prepare_next_work(struct modminer_fpga_state *state, struct
 
 static bool modminer_start_work(struct thr_info *thr)
 {
-fd_set fds;
 	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
-	char fpgaid = thr->device_thread;
-	SOCKETTYPE fd = modminer->device_fd;
+	int err, amount;
+	bool sta;
 
-	char buf[1];
+	mutex_lock(modminer->modminer_mutex);
 
-	mutex_lock(&modminer->device_mutex);
-	if (46 != write(fd, state->next_work_cmd, 46))
-		bailout2(LOG_ERR, "%s%u.%u: Error writing (start work)", modminer->api->name, modminer->device_id, fpgaid);
+	if ((err = usb_write(modminer, (char *)(state->next_work_cmd), 46, &amount, C_SENDWORK)) < 0 || amount != 46) {
+// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
+// but check all (4) disappeared
+		mutex_unlock(modminer->modminer_mutex);
+
+		applog(LOG_ERR, "%s%u: Start work failed (%d:%d)",
+			modminer->api->name, modminer->device_id, amount, err);
+
+		return false;
+	}
+
 	gettimeofday(&state->tv_workstart, NULL);
 	state->hashes = 0;
-	status_read("start work");
-	mutex_unlock(&modminer->device_mutex);
 
-	return true;
+	sta = get_status(modminer, "start work", C_SENDWORKSTATUS);
+
+	if (sta) {
+		mutex_unlock(modminer->modminer_mutex);
+		state->new_work = true;
+	}
+
+	return sta;
+}
+
+static void check_temperature(struct thr_info *thr)
+{
+	struct cgpu_info *modminer = thr->cgpu;
+	struct modminer_fpga_state *state = thr->cgpu_data;
+	char cmd[2], temperature[2];
+	int tbytes, tamount;
+	int amount;
+
+	if (modminer->one_byte_temp) {
+		cmd[0] = MODMINER_TEMP1;
+		tbytes = 1;
+	} else {
+		cmd[0] = MODMINER_TEMP2;
+		tbytes = 2;
+	}
+
+	cmd[1] = modminer->fpgaid;
+
+	mutex_lock(modminer->modminer_mutex);
+	if (usb_write(modminer, (char *)cmd, 2, &amount, C_REQUESTTEMPERATURE) == 0 && amount == 2
+	&&  usb_read(modminer, (char *)(&temperature), tbytes, &tamount, C_GETTEMPERATURE) == 0 && tamount == tbytes)
+	{
+		mutex_unlock(modminer->modminer_mutex);
+		if (modminer->one_byte_temp)
+			modminer->temp = temperature[0];
+		else {
+			// Only accurate to 2 and a bit places
+			modminer->temp = roundf((temperature[1] * 256.0 + temperature[0]) / 0.128) / 1000.0;
+
+			modminer->tried_two_byte_temp = true;
+		}
+
+		if (state->overheated) {
+			if (modminer->temp < MODMINER_OVERHEAT_TEMP) {
+				state->overheated = false;
+				applog(LOG_WARNING, "%s%u: Recovered, temp less than (%f) now %f",
+					modminer->api->name, modminer->device_id,
+					MODMINER_OVERHEAT_TEMP, modminer->temp);
+			}
+		}
+		else if (modminer->temp >= MODMINER_OVERHEAT_TEMP) {
+			if (modminer->temp >= MODMINER_CUTOFF_TEMP) {
+				applog(LOG_WARNING, "%s%u: Hit thermal cutoff limit (%f) at %f, disabling!",
+					modminer->api->name, modminer->device_id,
+					MODMINER_CUTOFF_TEMP, modminer->temp);
+
+				modminer_delta_clock(thr, MODMINER_OVERHEAT_CLOCK, true);
+				state->overheated = true;
+				dev_error(modminer, REASON_DEV_THERMAL_CUTOFF);
+			} else {
+				 applog(LOG_WARNING, "%s%u: Overheat limit (%f) reached %f",
+					modminer->api->name, modminer->device_id,
+					MODMINER_OVERHEAT_TEMP, modminer->temp);
+				modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, true);
+				dev_error(modminer, REASON_DEV_OVER_HEAT);
+			}
+		}
+	} else {
+		mutex_unlock(modminer->modminer_mutex);
+
+		if (!modminer->tried_two_byte_temp) {
+			modminer->tried_two_byte_temp = true;
+			modminer->one_byte_temp = true;
+		}
+	}
 }
 
 #define work_restart(thr)  thr->work_restart
@@ -533,51 +842,61 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 {
 	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
-	char fpgaid = thr->device_thread;
-	int fd = modminer->device_fd;
 	struct work *work = &state->running_work;
-
-	char cmd[2], temperature[2];
+	char cmd[2];
 	uint32_t nonce;
 	long iter;
 	uint32_t curr_hw_errors;
+	int err, amount;
+	int timeoutloop;
 
-	// \x0a is 1 byte temperature
-	// \x0d is 2 byte temperature
-	cmd[0] = '\x0d';
-	cmd[1] = fpgaid;
+	check_temperature(thr);
 
-	mutex_lock(&modminer->device_mutex);
-	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 2) == 2)
-	{
-		// Only accurate to 2 and a bit places
-		state->temp = roundf((temperature[1] * 256.0 + temperature[0]) / 0.128) / 1000.0;
-		if (!fpgaid)
-			modminer->temp = state->temp;
+	if (state->overheated == true) {
+		if (state->work_running)
+			state->work_running = false;
 
-		if (state->temp >= MODMINER_OVERHEAT_TEMP) {
-			if (state->temp >= MODMINER_CUTOFF_TEMP) {
-				applog(LOG_WARNING, "%s%u.%u: Hit thermal cutoff limit (%f) at %f, disabling device!", modminer->api->name, modminer->device_id, fpgaid, MODMINER_CUTOFF_TEMP, state->temp);
-				modminer_delta_clock(thr, true, MODMINER_OVERHEAT_CLOCK, true);
-
-				dev_error(modminer, REASON_DEV_THERMAL_CUTOFF);
-				modminer->deven = DEV_RECOVER;
-			} else {
-				 applog(LOG_WARNING, "%s%u.%u Overheat limit (%f) reached %f", modminer->api->name, modminer->device_id, fpgaid, MODMINER_OVERHEAT_TEMP, state->temp);
-				modminer_delta_clock(thr, true, MODMINER_CLOCK_DOWN, true);
-
-				dev_error(modminer, REASON_DEV_OVER_HEAT);
-			}
-		}
+		// Give it 5 seconds rest and wait for the next work
+		nmsleep(5000);
+		return 0;
 	}
 
-	cmd[0] = '\x09';
+	cmd[0] = MODMINER_CHECK_WORK;
+	cmd[1] = modminer->fpgaid;
 	iter = 200;
+	timeoutloop = 0;
 	while (1) {
-		if (write(fd, cmd, 2) != 2)
-			bailout2(LOG_ERR, "%s%u.%u: Error reading (get nonce)", modminer->api->name, modminer->device_id, fpgaid);
-		serial_read(fd, &nonce, 4);
-		mutex_unlock(&modminer->device_mutex);
+		mutex_lock(modminer->modminer_mutex);
+		if ((err = usb_write(modminer, cmd, 2, &amount, C_REQUESTWORKSTATUS)) < 0 || amount != 2) {
+// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
+// but check all (4) disappeared
+			mutex_unlock(modminer->modminer_mutex);
+
+			// timeoutloop never resets so the timeouts can't
+			// accumulate much during a single item of work
+			if (err == -7 && ++timeoutloop < 10)
+				goto tryagain;
+
+			applog(LOG_ERR, "%s%u: Error sending (get nonce) (%d:%d)",
+				modminer->api->name, modminer->device_id, amount, err);
+
+			return -1;
+		}
+
+		err = usb_read(modminer, (char *)(&nonce), 4, &amount, C_GETWORKSTATUS);
+		mutex_unlock(modminer->modminer_mutex);
+
+		if (err < 0 || amount != 4) {
+
+			// timeoutloop never resets so the timeouts can't
+			// accumulate much during a single item of work
+			if (err == -7 && ++timeoutloop < 10)
+				goto tryagain;
+
+			applog(LOG_ERR, "%s%u: Error reading (get nonce) (%d:%d)",
+				modminer->api->name, modminer->device_id, amount, err);
+		}
+
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
 			state->shares++;
 			state->no_nonce_counter = 0;
@@ -585,36 +904,41 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 			submit_nonce(thr, work, nonce);
 			if (state->hw_errors > curr_hw_errors) {
 				state->shares_last_hw = state->shares;
-				if (state->clock > MODMINER_DEF_CLOCK || state->hw_errors > 1) {
+				if (modminer->clock > MODMINER_DEF_CLOCK || state->hw_errors > 1) {
 					float pct = (state->hw_errors * 100.0 / (state->shares ? : 1.0));
 					if (pct >= MODMINER_HW_ERROR_PERCENT)
-						modminer_delta_clock(thr, true, MODMINER_CLOCK_DOWN, false);
+						modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, false);
 				}
 			} else {
 				// If we've reached the required good shares in a row then clock up
-				if ((state->shares - state->shares_last_hw) >= state->shares_to_good)
-					modminer_delta_clock(thr, true, MODMINER_CLOCK_UP, false);
+				if (((state->shares - state->shares_last_hw) >= state->shares_to_good) &&
+					modminer->temp <= MODMINER_TEMP_UP_LIMIT)
+					modminer_delta_clock(thr, MODMINER_CLOCK_UP, false);
 			}
 		} else if (++state->no_nonce_counter > 18000) {
-			// TODO: NFI what this is - but will be gone
-			// when the threading rewrite is done
+			// TODO: NFI what this is
 			state->no_nonce_counter = 0;
-			modminer_delta_clock(thr, true, MODMINER_CLOCK_DOWN, false);
+			modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, false);
+
+			applog(LOG_ERR, "%s%u: 18000 clock down",
+				modminer->api->name, modminer->device_id);
+
 		}
+
+tryagain:
 
 		if (work_restart(thr))
 			break;
 		nmsleep(10);
 		if (work_restart(thr) || !--iter)
 			break;
-		mutex_lock(&modminer->device_mutex);
 	}
 
 	struct timeval tv_workend, elapsed;
 	gettimeofday(&tv_workend, NULL);
 	timersub(&tv_workend, &state->tv_workstart, &elapsed);
 
-	uint64_t hashes = (uint64_t)state->clock * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
+	uint64_t hashes = (uint64_t)modminer->clock * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
 	if (hashes > 0xffffffff)
 		hashes = 0xffffffff;
 	else
@@ -632,9 +956,25 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 	int64_t hashes = 0;
 	bool startwork;
 
+	if (state->overheated == true) {
+		if (state->work_running)
+			state->work_running = false;
+
+		check_temperature(thr);
+
+		if (state->overheated == true) {
+			// Give it 5 seconds rest and wait for the next work
+			nmsleep(5000);
+			return 0;
+		}
+	}
+
 	startwork = modminer_prepare_next_work(state, work);
 	if (state->work_running) {
 		hashes = modminer_process_results(thr);
+		if (hashes == -1)
+			return hashes;
+
 		if (work_restart(thr)) {
 			state->work_running = false;
 			return 0;

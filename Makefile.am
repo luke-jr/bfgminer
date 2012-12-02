@@ -38,7 +38,7 @@ cgminer_SOURCES := cgminer.c
 
 cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   util.c util.h uthash.h logging.h		\
-		   sha2.c sha2.h api.c
+		   sha2.c sha2.h api.c usbutils.h
 
 cgminer_SOURCES	+= logging.c
 
@@ -91,7 +91,7 @@ cgminer_SOURCES += driver-icarus.c
 endif
 
 if HAS_MODMINER
-cgminer_SOURCES += driver-modminer.c
+cgminer_SOURCES += driver-modminer.c usbutils.c
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = bitstreams/*
 endif

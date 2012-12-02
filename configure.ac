@@ -321,7 +321,7 @@ fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
-if test "x$bitforce$modminer" != xnono; then
+if test "x$bitforce" != xno; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
 		[libudev=auto]
@@ -343,7 +343,7 @@ AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
 PKG_PROG_PKG_CONFIG()
 
-if test "x$ztex" != xno; then
+if test "x$ztex$modminer" != xnono; then
   case $target in
     *-*-freebsd*)
       LIBUSB_LIBS="-lusb"
@@ -502,7 +502,7 @@ else
 	echo "  Ztex.FPGAs...........: Disabled"
 fi
 
-if test "x$bitforce$modminer" != xnono; then
+if test "x$bitforce" != xno; then
 	echo "  libudev.detection....: $libudev"
 fi
 

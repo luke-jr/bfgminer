@@ -131,7 +131,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.20";
+static const char *APIVERSION = "1.21";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static const char *SICK = "Sick";
@@ -227,6 +227,7 @@ static const char *OSINFO =
 #define _MINECOIN	"COIN"
 #define _DEBUGSET	"DEBUG"
 #define _SETCONFIG	"SETCONFIG"
+#define _USBSTATS	"USBSTATS"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -266,6 +267,7 @@ static const char ISJSON = '{';
 #define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
+#define JSON_USBSTATS	JSON1 _USBSTATS JSON2
 #define JSON_END	JSON4 JSON5
 
 static const char *JSON_COMMAND = "command";
@@ -369,6 +371,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_INVNUM 84
 #define MSG_CONPAR 85
 #define MSG_CONVAL 86
+#define MSG_USBSTA 87
+#define MSG_NOUSTA 88
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -533,6 +537,8 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
  { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
+ { SEVERITY_SUCC,  MSG_USBSTA,	PARAM_NONE,	"USB Statistics" },
+ { SEVERITY_INFO,  MSG_NOUSTA,	PARAM_NONE,	"No USB Statistics" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1383,27 +1389,8 @@ static void pgastatus(int pga, bool isjson)
 			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
 #endif
 #ifdef USE_MODMINER
-// TODO: a modminer has up to 4 devices but only 1 set of data for all ...
-// except 4 sets of data for temp/clock
-// So this should change in the future to just find the single temp/clock
-// if the modminer code splits the device into seperate devices later
-// For now, just display the highest temp and the average clock
-		if (cgpu->api == &modminer_api) {
-			int tc = cgpu->threads;
-			int i;
-
-			temp = 0;
-			if (tc > 4)
-				tc = 4;
-			for (i = 0; i < tc; i++) {
-				struct thr_info *thr = cgpu->thr[i];
-				struct modminer_fpga_state *state = thr->cgpu_data;
-				if (state->temp > temp)
-					temp = state->temp;
-				frequency += state->clock;
-			}
-			frequency /= (tc ? tc : 1);
-		}
+		if (cgpu->api == &modminer_api)
+			frequency = cgpu->clock;
 #endif
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
@@ -2990,6 +2977,49 @@ static void setconfig(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 	strcpy(io_buffer, message(MSG_SETCONFIG, value, param, isjson));
 }
 
+static void usbstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	struct api_data *root = NULL;
+
+#ifdef USE_MODMINER
+	char buf[TMPBUFSIZ];
+	int count = 0;
+
+	root = api_usb_stats(&count);
+#endif
+
+	if (!root) {
+		strcpy(io_buffer, message(MSG_NOUSTA, 0, NULL, isjson));
+		return;
+	}
+
+#ifdef USE_MODMINER
+
+	strcpy(io_buffer, message(MSG_USBSTA, 0, NULL, isjson));
+
+	if (isjson) {
+		strcat(io_buffer, COMMA);
+		strcat(io_buffer, JSON_USBSTATS);
+	}
+
+	root = print_data(root, buf, isjson);
+	strcat(io_buffer, buf);
+
+	while (42) {
+		root = api_usb_stats(&count);
+		if (!root)
+			break;
+
+		strcat(io_buffer, COMMA);
+		root = print_data(root, buf, isjson);
+		strcat(io_buffer, buf);
+	}
+
+	if (isjson)
+		strcat(io_buffer, JSON_CLOSE);
+#endif
+}
+
 static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -3045,6 +3075,7 @@ struct CMDS {
 	{ "coin",		minecoin,	false },
 	{ "debug",		debugstate,	true },
 	{ "setconfig",		setconfig,	true },
+	{ "usbstats",		usbstats,	false },
 	{ NULL,			NULL,		false }
 };
 
