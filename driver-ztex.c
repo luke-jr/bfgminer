@@ -348,7 +348,7 @@ static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 {
 	if (cgpu->deven == DEV_ENABLED) {
 		tailsprintf(buf, "%s-%d | ", cgpu->device_ztex->snString, cgpu->device_ztex->fpgaNum+1);
-		tailsprintf(buf, "%0.2fMhz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
+		tailsprintf(buf, "%0.1fMHz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
 	}
 }
 
@@ -362,8 +362,11 @@ static bool ztex_prepare(struct thr_info *thr)
 	get_datestamp(cgpu->init, &now);
 	
 	ztex_selectFpga(ztex);
-	if (libztex_configureFpga(ztex) != 0)
+	if (libztex_configureFpga(ztex) != 0) {
+		libztex_resetFpga(ztex);
+		ztex_releaseFpga(ztex);
 		return false;
+	}
 	ztex_releaseFpga(ztex);
 	ztex->freqM = ztex->freqMaxM+1;;
 	//ztex_updateFreq(ztex);
