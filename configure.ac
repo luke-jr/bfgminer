@@ -62,8 +62,6 @@ AC_FUNC_ALLOCA
 
 have_win32=false
 PTHREAD_FLAGS="-lpthread"
-USB_LIBS=""
-USB_FLAGS=""
 DLOPEN_FLAGS="-ldl"
 OPENCL_LIBS="-lOpenCL"
 WS2_LIBS=""
@@ -343,15 +341,22 @@ if test "x$bitforce$modminer" != xnono; then
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
-if test "x$ztex" != xno; then
-  AC_CHECK_LIB(usb-1.0, libusb_init, ,
-          AC_MSG_ERROR([Could not find usb library - please install libusb]))
-  AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
-  USB_LIBS="-lusb-1.0"
-  USB_FLAGS=""
-fi
-
 PKG_PROG_PKG_CONFIG()
+
+if test "x$ztex" != xno; then
+  case $target in
+    *-*-freebsd*)
+      LIBUSB_LIBS="-lusb"
+      LIBUSB_CFLAGS=""
+      AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
+      ;;
+    *)
+      PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
+      ;;
+  esac
+fi
+AC_SUBST(LIBUSB_LIBS)
+AC_SUBST(LIBUSB_CFLAGS)
 
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
 AC_SUBST(LIBCURL_LIBS)
@@ -412,8 +417,6 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
-AC_SUBST(USB_LIBS)
-AC_SUBST(USB_FLAGS)
 
 AC_CONFIG_FILES([
 	Makefile
@@ -512,9 +515,9 @@ fi
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
-echo "  CFLAGS...............: $CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
+echo "  CFLAGS...............: $CFLAGS $LIBUSB_CFLAGS"
+echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
