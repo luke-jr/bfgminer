@@ -5509,7 +5509,9 @@ void *miner_thread(void *userdata)
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-	RenameThread("miner");
+	char threadname[20];
+        snprintf(threadname,20,"miner %d",thr_id);
+	RenameThread(threadname);
 
 	gettimeofday(&getwork_start, NULL);
 
