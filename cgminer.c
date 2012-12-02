@@ -5889,7 +5889,6 @@ static void reap_curl(struct pool *pool)
 
 static bool pool_getswork(struct pool *pool)
 {
-	struct timeval tv_getwork, tv_getwork_reply;
 	bool ret = false;
 	int rolltime;
 	json_t *val;
@@ -5899,10 +5898,8 @@ static bool pool_getswork(struct pool *pool)
 	if (unlikely(!curl))
 		quit (1, "CURL initialisation failed in pool_getswork");
 
-	gettimeofday(&tv_getwork, NULL);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
 			    pool->rpc_req, true, false, &rolltime, pool, false);
-	gettimeofday(&tv_getwork_reply, NULL);
 
 	if (val) {
 		struct work *work = make_work();
