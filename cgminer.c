@@ -2262,7 +2262,7 @@ static uint64_t share_diff(const struct work *work)
 	return ret;
 }
 
-static uint32_t scrypt_diff(const struct work *work)
+static uint64_t scrypt_diff(const struct work *work)
 {
 	const uint64_t scrypt_diffone = 0x0000ffff00000000ul;
 	uint64_t d64 = work->outputhash, ret;
