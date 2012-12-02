@@ -5139,7 +5139,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
 	int len, cb1_len, n1_len, cb2_len, i;
 	uint32_t *data32, *swap32;
-	char header[260];
+	char *header;
 
 	mutex_lock(&pool->pool_lock);
 
@@ -5173,13 +5173,13 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		swap32[i] = swab32(data32[i]);
 	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
 
-	sprintf(header, "%s", pool->swork.bbversion);
-	strcat(header, pool->swork.prev_hash);
-	strcat(header, (char *)merkle_hash);
-	strcat(header, pool->swork.ntime);
-	strcat(header, pool->swork.nbit);
-	strcat(header, "00000000"); /* nonce */
-	strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
+	header = strdup(pool->swork.bbversion);
+	header = realloc_strcat(header, pool->swork.prev_hash);
+	header = realloc_strcat(header, (char *)merkle_hash);
+	header = realloc_strcat(header, pool->swork.ntime);
+	header = realloc_strcat(header, pool->swork.nbit);
+	header = realloc_strcat(header, "00000000"); /* nonce */
+	header = realloc_strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
@@ -5200,6 +5200,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Convert hex data to binary data for work */
 	if (unlikely(!hex2bin(work->data, header, 128)))
 		quit(1, "Failed to convert header to data in gen_stratum_work");
+	free(header);
 	calc_midstate(work);
 
 	set_work_target(work, work->sdiff);
