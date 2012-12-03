@@ -276,8 +276,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	struct libztex_fpgastate state;
 	const int transactionBytes = 65536;
 	unsigned char buf[transactionBytes], settings[2];
-	int tries, cnt, buf_p, i;
-	ssize_t pos = 0;
+	int tries, cnt, err, i;
 	FILE *fp;
 
 	if (!libztex_checkCapability(ztex, CAPABILITY_HS_FPGA))
@@ -302,52 +301,25 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 			return -2;
 		}
 
-		while (pos < transactionBytes && !feof(fp)) {
-			buf[pos++] = getc(fp);
-		}
-
-		if (feof(fp))
-			pos--;
-
-		if (bs != 0 && bs != 1)
-			bs = libztex_detectBitstreamBitOrder(buf, transactionBytes < pos? transactionBytes: pos);
-
-
-		if (bs == 1)
-			libztex_swapBits(buf, pos);
-	 
 		libusb_control_transfer(ztex->hndl, 0x40, 0x34, 0, 0, NULL, 0, 1000);
 		// 0x34 - initHSFPGAConfiguration
 
-		buf_p = pos;
-		while (1) {
-			i = 0;
-			while (i < buf_p) {
-				if (libusb_bulk_transfer(ztex->hndl,
-				                                  settings[0],
-				                                  &buf[i],
-				                                  buf_p - i,
-				                                  &cnt, 1000) != 0) {
-					applog(LOG_ERR, "%s: Failed send hs fpga data", ztex->repr);
-					break;
-				}
-				usleep(500);
-				i += cnt;
-			}
-			if (i < buf_p || buf_p < transactionBytes)
-				break;
-			buf_p = 0;
-			while (buf_p < transactionBytes && !feof(fp)) {
-				buf[buf_p++] = getc(fp);
-			}
-			if (feof(fp))
-				buf_p--;
-			pos += buf_p;
-			if (buf_p == 0)
-				break;
+		do
+		{
+			int length = fread(buf,1,transactionBytes,fp);
+
+			if (bs != 0 && bs != 1)
+				bs = libztex_detectBitstreamBitOrder(buf, length);
 			if (bs == 1)
-				libztex_swapBits(buf, buf_p);
+				libztex_swapBits(buf, length);
+
+			err = libusb_bulk_transfer(ztex->hndl, settings[0], buf, length, &cnt, 1000);
+			if (cnt != length)
+				applog(LOG_ERR, "%s: cnt != length", ztex->repr);
+			if (err != 0)
+				applog(LOG_ERR, "%s: Failed send hs fpga data", ztex->repr);
 		}
+		while (!feof(fp));
 
 		libusb_control_transfer(ztex->hndl, 0x40, 0x35, 0, 0, NULL, 0, 1000);
 		// 0x35 - finishHSFPGAConfiguration
