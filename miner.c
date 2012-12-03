@@ -5464,7 +5464,7 @@ static bool cnx_needed(struct pool *pool)
 	cp = current_pool();
 	if (cp == pool)
 		return true;
-	if (!cp->has_gbt && !cp->has_stratum && (!opt_fail_only || !cp->hdr_path))
+	if (!cp->has_stratum && (!opt_fail_only || !cp->hdr_path))
 		return true;
 	return false;
 }
