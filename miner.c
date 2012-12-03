@@ -1643,6 +1643,51 @@ static void calc_midstate(struct work *work)
 	swap32tole(work->midstate, work->midstate, 8);
 }
 
+static struct work *make_work(void)
+{
+	struct work *work = calloc(1, sizeof(struct work));
+
+	if (unlikely(!work))
+		quit(1, "Failed to calloc work in make_work");
+	mutex_lock(&control_lock);
+	work->id = total_work++;
+	mutex_unlock(&control_lock);
+	return work;
+}
+
+/* This is the central place all work that is about to be retired should be
+ * cleaned to remove any dynamically allocated arrays within the struct */
+void clean_work(struct work *work)
+{
+	free(work->job_id);
+	free(work->nonce2);
+	free(work->ntime);
+	work->job_id = NULL;
+	work->nonce2 = NULL;
+	work->ntime = NULL;
+
+	if (work->tmpl) {
+		struct pool *pool = work->pool;
+		mutex_lock(&pool->pool_lock);
+		bool free_tmpl = !--*work->tmpl_refcount;
+		mutex_unlock(&pool->pool_lock);
+		if (free_tmpl) {
+			blktmpl_free(work->tmpl);
+			free(work->tmpl_refcount);
+		}
+		work->tmpl = NULL;
+		work->tmpl_refcount = NULL;
+	}
+}
+
+/* All dynamically allocated work structs should be freed here to not leak any
+ * ram from arrays allocated within the work struct */
+void free_work(struct work *work)
+{
+	clean_work(work);
+	free(work);
+}
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
@@ -2955,51 +3000,6 @@ tryagain:
 		json_decref(val);
 
 	return rc;
-}
-
-static struct work *make_work(void)
-{
-	struct work *work = calloc(1, sizeof(struct work));
-
-	if (unlikely(!work))
-		quit(1, "Failed to calloc work in make_work");
-	mutex_lock(&control_lock);
-	work->id = total_work++;
-	mutex_unlock(&control_lock);
-	return work;
-}
-
-/* This is the central place all work that is about to be retired should be
- * cleaned to remove any dynamically allocated arrays within the struct */
-void clean_work(struct work *work)
-{
-	free(work->job_id);
-	free(work->nonce2);
-	free(work->ntime);
-	work->job_id = NULL;
-	work->nonce2 = NULL;
-	work->ntime = NULL;
-
-	if (work->tmpl) {
-		struct pool *pool = work->pool;
-		mutex_lock(&pool->pool_lock);
-		bool free_tmpl = !--*work->tmpl_refcount;
-		mutex_unlock(&pool->pool_lock);
-		if (free_tmpl) {
-			blktmpl_free(work->tmpl);
-			free(work->tmpl_refcount);
-		}
-		work->tmpl = NULL;
-		work->tmpl_refcount = NULL;
-	}
-}
-
-/* All dynamically allocated work structs should be freed here to not leak any
- * ram from arrays allocated within the work struct */
-void free_work(struct work *work)
-{
-	clean_work(work);
-	free(work);
 }
 
 static void workio_cmd_free(struct workio_cmd *wc)
@@ -6593,7 +6593,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE)
+	if (cnx_needed(pool))
 		return;
 
 	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
