@@ -6240,21 +6240,6 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 
 	memcpy((void*)work->hash, hash2, 32);
 
-	if (work->stratum) {
-		double diff;
-
-		mutex_lock(&pool->pool_lock);
-		diff = pool->swork.diff;
-		mutex_unlock(&pool->pool_lock);
-
-		/* Retarget share only if pool diff has dropped since we
-		 * generated this work */
-		if (unlikely(work->sdiff > diff)) {
-			applog(LOG_DEBUG, "Share needs retargetting to match pool");
-			set_work_target(work, diff);
-		}
-	}
-
 	if (!fulltest(work->hash, work->target))
 		return TNR_HIGH;
 
