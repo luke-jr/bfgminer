@@ -1,5 +1,22 @@
 BFGMiner Version 2.10.0 - Future
 
+- Make gen_stratum_work more robust by using a dynamically allocated array for
+the header in case bogus data is sent by the pool to avoid overflowing a static
+array.
+- scrypt_diff now returns a uint64_t
+- Support monitoring and reporting much higher diffs for scrypt mining,
+truncating irrelevant zeroes from displayed hash.
+- Pass ostate values around in scrypt to be able to extract full hashes if
+needed later on.
+- Since we will be using calloc_str to put a string into it, convert the
+function to calloc_strcat which does it automatically.
+- Revert "Handle crash exceptions by trying to restart cgminer unless the
+--no-restart option is used."
+- Count longpoll and GBT decodes as queued work since the count otherwise
+remains static.
+- Use the string helper functions to create gbt blocks of any length.
+- Provide helper functions calloc_str and realloc_strcat to create and extend
+arbitrary length arrays based on string length.
 - fixes target calc for mips openwrt
 - openwrt needs roundl
 - Get rid of unused last_work in opencl thread data.
