@@ -180,10 +180,10 @@ GPU only options:
 --disable-gpu|-G    Disable GPU mining even if suitable devices exist
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
 --gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
---gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
+--gpu-engine <arg>  GPU engine (over)clock range in MHz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
 --gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
 --gpu-map <arg>     Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)
---gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
+--gpu-memclock <arg> Set the GPU memory (over)clock in MHz - one value for all or separate by commas for per card.
 --gpu-memdiff <arg> Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode
 --gpu-platform <arg> Select OpenCL platform ID to use for GPU mining
 --gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
@@ -362,7 +362,7 @@ GPU 0: [124.2 / 191.3 Mh/s] [Q:212  A:77  R:33  HW:0  E:36%  U:1.73/m]
 Temp: 67.0 C
 Fan Speed: 35% (2500 RPM)
 Engine Clock: 960 MHz
-Memory Clock: 480 Mhz
+Memory Clock: 480 MHz
 Vddc: 1.200 V
 Activity: 93%
 Powertune: 0%
@@ -614,7 +614,7 @@ Sets card 0 cutoff temperature to 95 and card 1 to 105.
 --gpu-memdiff -125
 This setting will modify the memory speed whenever the GPU clock speed is
 modified by --auto-gpu. In this example, it will set the memory speed to
-be 125 Mhz lower than the GPU speed. This is useful for some cards like the
+be 125 MHz lower than the GPU speed. This is useful for some cards like the
 6970 which normally don't allow a bigger clock speed difference.
 
 

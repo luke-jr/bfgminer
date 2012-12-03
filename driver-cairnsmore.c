@@ -146,7 +146,7 @@ static bool cairnsmore_init(struct thr_info *thr)
 		info->dclk.freqM =
 		info->dclk.freqMDefault = CAIRNSMORE1_DEFAULT_CLOCK / 2.5;
 		cairnsmore_send_cmd(cm1->device_fd, 0, info->dclk.freqM);
-		applog(LOG_WARNING, "%s %u: Frequency set to %u Mhz (range: %u-%u)",
+		applog(LOG_WARNING, "%s %u: Frequency set to %u MHz (range: %u-%u)",
 		       cm1->api->name, cm1->device_id,
 		       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
 		);
