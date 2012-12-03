@@ -6223,7 +6223,6 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	struct pool *pool = work->pool;
 
 	swap32yes(swap32, data32, 80 / 4);
 
