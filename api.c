@@ -1879,6 +1879,9 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 		algo = (char *)NULLSTR;
 #endif
 
+	// stop hashmeter() changing some while copying
+	mutex_lock(&hash_lock);
+
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
 	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
@@ -1888,28 +1891,31 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 		: "%s" _SUMMARY ",",
 		message(MSG_SUMM, 0, NULL, isjson));
 
-	root = api_add_elapsed(root, "Elapsed", &(total_secs), false);
+	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
 #ifdef WANT_CPUMINE
 	root = api_add_string(root, "Algorithm", algo, false);
 #endif
 	root = api_add_mhs(root, "MHS av", &(mhs), false);
-	root = api_add_uint(root, "Found Blocks", &(found_blocks), false);
-	root = api_add_int(root, "Getworks", &(total_getworks), false);
-	root = api_add_int(root, "Accepted", &(total_accepted), false);
-	root = api_add_int(root, "Rejected", &(total_rejected), false);
-	root = api_add_int(root, "Hardware Errors", &(hw_errors), false);
+	root = api_add_uint(root, "Found Blocks", &(found_blocks), true);
+	root = api_add_int(root, "Getworks", &(total_getworks), true);
+	root = api_add_int(root, "Accepted", &(total_accepted), true);
+	root = api_add_int(root, "Rejected", &(total_rejected), true);
+	root = api_add_int(root, "Hardware Errors", &(hw_errors), true);
 	root = api_add_utility(root, "Utility", &(utility), false);
-	root = api_add_int(root, "Discarded", &(total_discarded), false);
-	root = api_add_int(root, "Stale", &(total_stale), false);
-	root = api_add_uint(root, "Get Failures", &(total_go), false);
-	root = api_add_uint(root, "Local Work", &(local_work), false);
-	root = api_add_uint(root, "Remote Failures", &(total_ro), false);
-	root = api_add_uint(root, "Network Blocks", &(new_blocks), false);
-	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), false);
+	root = api_add_int(root, "Discarded", &(total_discarded), true);
+	root = api_add_int(root, "Stale", &(total_stale), true);
+	root = api_add_uint(root, "Get Failures", &(total_go), true);
+	root = api_add_uint(root, "Local Work", &(local_work), true);
+	root = api_add_uint(root, "Remote Failures", &(total_ro), true);
+	root = api_add_uint(root, "Network Blocks", &(new_blocks), true);
+	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), true);
 	root = api_add_utility(root, "Work Utility", &(work_utility), false);
-	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), false);
-	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), false);
-	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), false);
+	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), true);
+	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
+	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), true);
+	root = api_add_uint64(root, "Best Share", &(best_diff), true);
+
+	mutex_unlock(&hash_lock);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
