@@ -66,7 +66,7 @@ have_cygwin=false
 have_win32=false
 PTHREAD_FLAGS="-lpthread"
 USB_LIBS=""
-USB_FLAGS=""
+USB_CFLAGS=""
 DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
 MATH_LIBS="-lm"
@@ -181,16 +181,42 @@ if test "x$modminer" = xyes; then
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
-AC_CHECK_LIB(usb-1.0, libusb_init,
-	[
-		libusb=yes
-		AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
-		USB_LIBS="-lusb-1.0"
-		USB_FLAGS=""
-		AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb-1.0/libusb.h>])
-	],
-	[libusb=no]
-)
+PKG_PROG_PKG_CONFIG()
+
+libusb=no
+libusb_include_path=""
+PKG_CHECK_MODULES([USB], [libusb-1.0],[
+	libusb=yes
+],[
+	for usb_lib in usb-1.0 usb; do
+		AC_CHECK_LIB($usb_lib, libusb_init, [
+			libusb=yes
+			break
+		], [])
+	done
+	if test "x$libusb" = xyes; then
+			AC_CHECK_DECL([libusb_init],[
+			],[
+				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
+				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | cpp -M 2>/dev/null | sed 's/^[^[:space:]]\+[[:space:]]\+\([^[:space:]]\+\)\/.*$/\1/;t;d'`
+				if test "x$libusb_include_path" != "x"; then
+					USB_LIBS="-l$usb_lib"
+					USB_CFLAGS="-I$libusb_include_path"
+					AC_MSG_RESULT([yes])
+				else
+					libusb=no
+					AC_MSG_RESULT([no])
+				fi
+			],[#include <libusb.h>])
+	fi
+])
+if test "x$libusb" = xyes; then
+	AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
+	save_CFLAGS="$CFLAGS"
+	CFLAGS="$USB_CFLAGS $CFLAGS"
+	AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb.h>])
+	CFLAGS="$save_CFLAGS"
+fi
 
 AC_ARG_ENABLE([x6500],
 	[AC_HELP_STRING([--disable-x6500],[Compile support for X6500 (default if libusb)])],
@@ -372,8 +398,6 @@ if test "x$bitforce$modminer" != xnono; then
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
-PKG_PROG_PKG_CONFIG()
-
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
 AC_SUBST(LIBCURL_LIBS)
 
@@ -433,7 +457,7 @@ AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
 AC_SUBST(USB_LIBS)
-AC_SUBST(USB_FLAGS)
+AC_SUBST(USB_CFLAGS)
 
 AC_CONFIG_FILES([
 	Makefile
@@ -529,7 +553,7 @@ echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS $NCURSES_CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_FLAGS"
+echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_CFLAGS"
 echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
