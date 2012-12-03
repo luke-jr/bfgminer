@@ -5665,12 +5665,12 @@ retry_stratum:
 		if ((!json_is_object(res)) || (proto == PLP_GETBLOCKTEMPLATE && !json_object_get(res, "bits")))
 			goto badwork;
 
+		work->rolltime = rolltime;
 		rc = work_decode(pool, work, val);
 		if (rc) {
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
-			work->rolltime = rolltime;
 			memcpy(&(work->tv_getwork), &tv_getwork, sizeof(struct timeval));
 			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
 			work->getwork_mode = GETWORK_MODE_TESTPOOL;
@@ -6498,6 +6498,7 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 {
 	bool rc;
 
+	work->rolltime = rolltime;
 	rc = work_decode(pool, work, val);
 	if (unlikely(!rc)) {
 		applog(LOG_ERR, "Could not convert longpoll data to work");
@@ -6505,7 +6506,6 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 		return;
 	}
 	work->pool = pool;
-	work->rolltime = rolltime;
 	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
 	memcpy(&(work->tv_getwork_reply), tv_lp_reply, sizeof(struct timeval));
 	calc_diff(work, 0);
