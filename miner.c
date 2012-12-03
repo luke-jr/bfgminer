@@ -3408,7 +3408,8 @@ static void *get_work_thread(void *userdata)
 	struct pool *pool;
 
 	pthread_detach(pthread_self());
-	rename_thr("bfg-get_work");
+
+	RenameThread("get_work");
 
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
@@ -3626,7 +3627,8 @@ static void *submit_work_thread(void *userdata)
 	time_t staleexpire;
 
 	pthread_detach(pthread_self());
-	rename_thr("bfg-submit_work");
+
+	RenameThread("submit_work");
 
 	applog(LOG_DEBUG, "Creating extra submit work thread");
 
@@ -4308,7 +4310,7 @@ static void *stage_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	bool ok = true;
 
-	rename_thr("bfg-stage");
+	RenameThread("stage");
 
 	while (ok) {
 		struct work *work = NULL;
@@ -5044,7 +5046,7 @@ retry:
 
 static void *input_thread(void __maybe_unused *userdata)
 {
-	rename_thr("bfg-input");
+	RenameThread("input");
 
 	if (!curses_active)
 		return NULL;
@@ -5106,7 +5108,7 @@ static void *workio_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	bool ok = true;
 
-	rename_thr("bfg-workio");
+	RenameThread("work_io");
 
 	while (ok) {
 		struct workio_cmd *wc;
@@ -5160,8 +5162,9 @@ static void *api_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 
 	pthread_detach(pthread_self());
-	rename_thr("bfg-rpc");
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("rpc");
 
 	api(api_thr_id);
 
@@ -5455,6 +5458,8 @@ static void *stratum_thread(void *userdata)
 	struct pool *pool = (struct pool *)userdata;
 
 	pthread_detach(pthread_self());
+
+	RenameThread("stratum");
 
 	while (42) {
 		struct timeval timeout;
@@ -6308,12 +6313,6 @@ void *miner_thread(void *userdata)
 	struct cgminer_stats *pool_stats;
 	struct timeval getwork_start;
 
-	{
-		char thrname[16];
-		sprintf(thrname, "bfg-miner-%s%d", api->name, cgpu->device_id);
-		rename_thr(thrname);
-	}
-
 	/* Try to cycle approximately 5 times before each log update */
 	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
@@ -6326,6 +6325,10 @@ void *miner_thread(void *userdata)
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	char threadname[20];
+	snprintf(threadname, 20, "miner_%s%d.%d", api->name, cgpu->device_id, mythr->device_thread);
+	RenameThread(threadname);
 
 	gettimeofday(&getwork_start, NULL);
 
@@ -6597,7 +6600,7 @@ static void *longpoll_thread(void *userdata)
 	char *lp_url;
 	int rolltime;
 
-	rename_thr("bfg-longpoll");
+	RenameThread("longpoll");
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
@@ -6781,7 +6784,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 {
 	int intervals = 0;
 
-	rename_thr("bfg-watchpool");
+	RenameThread("watchpool");
 
 	while (42) {
 		struct timeval now;
@@ -6855,7 +6858,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 	const unsigned int interval = WATCHDOG_INTERVAL;
 	struct timeval zero_tv;
 
-	rename_thr("bfg-watchdog");
+	RenameThread("watchdog");
 
 	memset(&zero_tv, 0, sizeof(struct timeval));
 	gettimeofday(&rotate_tv, NULL);

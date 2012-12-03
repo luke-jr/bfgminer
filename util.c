@@ -789,20 +789,6 @@ double us_tdiff(struct timeval *end, struct timeval *start)
 	return end->tv_sec * 1000000 + end->tv_usec - start->tv_sec * 1000000 - start->tv_usec;
 }
 
-void rename_thr(const char* name) {
-#if defined(PR_SET_NAME)
-	// Only the first 15 characters are used (16 - NUL terminator)
-	prctl(PR_SET_NAME, name, 0, 0, 0);
-#elif defined(__APPLE__)
-	pthread_setname_np(name);
-#elif defined(__FreeBSD__) || defined(__OpenBSD__)
-	pthread_set_name_np(pthread_self(), name);
-#else
-	// Prevent warnings for unused parameters...
-	(void)name;
-#endif
-}
-
 /* Returns the seconds difference between end and start times as a double */
 double tdiff(struct timeval *end, struct timeval *start)
 {
@@ -1480,4 +1466,19 @@ void *realloc_strcat(char *ptr, char *s)
 	sprintf(ret, "%s%s", ptr, s);
 	free(ptr);
 	return ret;
+}
+
+void RenameThread(const char* name)
+{
+#if defined(PR_SET_NAME)
+	// Only the first 15 characters are used (16 - NUL terminator)
+	prctl(PR_SET_NAME, name, 0, 0, 0);
+#elif defined(__APPLE__)
+	pthread_setname_np(name);
+#elif (defined(__FreeBSD__) || defined(__OpenBSD__))
+	pthread_set_name_np(pthread_self(), name);
+#else
+	// Prevent warnings for unused parameters...
+	(void)name;
+#endif
 }

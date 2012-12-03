@@ -147,7 +147,7 @@ static void *postcalc_hash(void *userdata)
 	unsigned int entry = 0;
 
 	pthread_detach(pthread_self());
-	rename_thr("bfg-postcalchsh");
+	RenameThread("postcalchsh");
 
 	/* To prevent corrupt values in FOUND from trying to read beyond the
 	 * end of the res[] array */

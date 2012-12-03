@@ -1329,7 +1329,7 @@ void *reinit_gpu(void *userdata)
 	int gpu;
 
 	pthread_detach(pthread_self());
-	rename_thr("bfg-reinit_gpu");
+	RenameThread("reinit_gpu");
 
 select_cgpu:
 	cgpu = tq_pop(mythr->q, NULL);
