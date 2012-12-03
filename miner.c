@@ -211,7 +211,7 @@ static int total_threads;
 pthread_mutex_t cgusb_lock;
 #endif
 
-static pthread_mutex_t hash_lock;
+pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
@@ -270,7 +270,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
-static uint64_t best_diff = 0;
+uint64_t best_diff = 0;
 
 struct block {
 	char hash[40];

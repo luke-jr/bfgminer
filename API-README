@@ -392,6 +392,9 @@ API V1.21
 Added API commands:
  'usbstats'
 
+Modified API commands:
+ 'summary' - add 'Best Share'
+
 ----------
 
 API V1.20b (BFGMiner v2.9.1)
