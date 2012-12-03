@@ -551,7 +551,6 @@ extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
 extern double us_tdiff(struct timeval *end, struct timeval *start);
-extern void RenameThread(const char* name);
 extern double tdiff(struct timeval *end, struct timeval *start);
 
 struct string_elist {
