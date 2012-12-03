@@ -1293,7 +1293,7 @@ updated:
 			wlogprint("(%d RPM)", fanspeed);
 		wlogprint("\n");
 	}
-	wlogprint("Engine Clock: %d MHz\nMemory Clock: %d Mhz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
+	wlogprint("Engine Clock: %d MHz\nMemory Clock: %d MHz\nVddc: %.3f V\nActivity: %d%%\nPowertune: %d%%\n",
 		engineclock, memclock, vddc, activity, powertune);
 	wlogprint("Fan autotune is %s (%d-%d)\n", ga->autofan ? "enabled" : "disabled",
 		  gpus[gpu].min_fan, gpus[gpu].gpu_fan);
@@ -1307,7 +1307,7 @@ updated:
 		change_autosettings(gpu);
 	} else if (!strncasecmp(&input, "e", 1)) {
 		get_enginerange(gpu, &imin, &imax);
-		wlogprint("Enter GPU engine clock speed (%d - %d Mhz)", imin, imax);
+		wlogprint("Enter GPU engine clock speed (%d - %d MHz)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
@@ -1335,7 +1335,7 @@ updated:
 			wlogprint("Failed to modify fan speed\n");
 	} else if (!strncasecmp(&input, "m", 1)) {
 		get_memoryrange(gpu, &imin, &imax);
-		wlogprint("Enter GPU memory clock speed (%d - %d Mhz)", imin, imax);
+		wlogprint("Enter GPU memory clock speed (%d - %d MHz)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
