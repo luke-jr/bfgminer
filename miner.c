@@ -2574,30 +2574,32 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		json_decref(req);
 		sd = bin2hex(data, 80);
 	} else {
-		s  = malloc(345);
 		sd = s;
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
 
 	/* build JSON-RPC request */
-		sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
+		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
+		s = realloc_strcat(s, hexstr);
+		s = realloc_strcat(s, "\" ], \"id\":1}");
 
 	}
 
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
 	if (!work->tmpl)
-	strcat(s, "\n");
+	s = realloc_strcat(s, "\n");
 
 	gettimeofday(&tv_submit, NULL);
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
 
-	free(s);
 	if (sd != s)
 	free(sd);
 
 	gettimeofday(&tv_submit_reply, NULL);
+	free(s);
+
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
