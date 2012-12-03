@@ -1048,7 +1048,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--gpu-engine",
 		     set_gpu_engine, NULL, NULL,
-		     "GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)"),
+		     "GPU engine (over)clock range in MHz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)"),
 	OPT_WITH_ARG("--gpu-fan",
 		     set_gpu_fan, NULL, NULL,
 		     "GPU fan percentage range - one value, range and/or comma separated list (e.g. 0-85,85,65)"),
@@ -1057,7 +1057,7 @@ static struct opt_table opt_config_table[] = {
 		     "Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)"),
 	OPT_WITH_ARG("--gpu-memclock",
 		     set_gpu_memclock, NULL, NULL,
-		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card"),
+		     "Set the GPU memory (over)clock in MHz - one value for all or separate by commas for per card"),
 	OPT_WITH_ARG("--gpu-memdiff",
 		     set_gpu_memdiff, NULL, NULL,
 		     "Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode"),
@@ -5910,7 +5910,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				float temp = 0, vddc = 0;
 
 				if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-					applog(LOG_DEBUG, "%.1f C  F: %d%%(%dRPM)  E: %dMHz  M: %dMhz  V: %.3fV  A: %d%%  P: %d%%",
+					applog(LOG_DEBUG, "%.1f C  F: %d%%(%dRPM)  E: %dMHz  M: %dMHz  V: %.3fV  A: %d%%  P: %d%%",
 					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
 			}
 #endif

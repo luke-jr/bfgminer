@@ -443,7 +443,7 @@ modminer_fpga_init(struct thr_info *thr)
 			applog(LOG_WARNING, "%s %u.%u: Failed to set desired initial frequency of %u", modminer->api->name, modminer->device_id, fpgaid, MODMINER_DEFAULT_CLOCK);
 	}
 	state->dclk.freqMDefault = state->dclk.freqM;
-	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u Mhz (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2, MODMINER_MINIMUM_CLOCK, state->dclk.freqMaxM * 2);
+	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u MHz (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2, MODMINER_MINIMUM_CLOCK, state->dclk.freqMaxM * 2);
 
 	mutex_unlock(&modminer->device_mutex);
 
@@ -518,7 +518,7 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 					state->last_cutoff_reduced = now;
 					int oldFreq = state->dclk.freqM;
 					if (modminer_reduce_clock(thr, false))
-						applog(LOG_NOTICE, "%s %u.%u: Frequency %s from %u to %u Mhz (temp: %d)",
+						applog(LOG_NOTICE, "%s %u.%u: Frequency %s from %u to %u MHz (temp: %d)",
 						       modminer->api->name, modminer->device_id, fpgaid,
 						       (oldFreq > state->dclk.freqM ? "dropped" : "raised "),
 						       oldFreq * 2, state->dclk.freqM * 2,
