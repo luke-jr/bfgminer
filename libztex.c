@@ -284,7 +284,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	libztex_getFpgaState(ztex, &state);
 	if (!force && state.fpgaConfigured) {
 		applog(LOG_INFO, "Bitstream already configured");
-		return 1;
+		return 0;
 	}
 	cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x33, 0, 0, settings, 2, 1000);
 	if (unlikely(cnt < 0)) {
@@ -359,7 +359,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 	libztex_getFpgaState(ztex, &state);
 	if (!force && state.fpgaConfigured) {
 		applog(LOG_DEBUG, "Bitstream already configured");
-		return 1;
+		return 0;
 	}
 
 	for (tries = 10; tries > 0; tries--) {
