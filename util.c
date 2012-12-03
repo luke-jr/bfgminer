@@ -1462,3 +1462,44 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 	}
 
 }
+
+/* Calloc enough memory to fit string s, rounding up to 4 byte alignment */
+void *calloc_str(char *s)
+{
+	size_t len = strlen(s);
+	void *ptr = NULL;
+
+	if (!len)
+		goto out;
+
+	len += 1;
+	if (len % 4)
+		len += 4 - (len % 4);
+	ptr = calloc(len, 1);
+	if (unlikely(!ptr))
+		quit(1, "Failed to calloc ptr in calloc_str");
+out:
+	return ptr;
+}
+
+/* Realloc an existing string to fit an extra string s, appending s to it. */
+void *realloc_strcat(char *ptr, char *s)
+{
+	size_t old = strlen(ptr), len = strlen(s);
+	char *ret;
+
+	if (!len)
+		return ptr;
+
+	len += old + 1;
+	if (len % 4)
+		len += 4 - (len % 4);
+
+	ret = malloc(len);
+	if (unlikely(!ret))
+		quit(1, "Failed to malloc in realloc_strcat");
+
+	sprintf(ret, "%s%s", ptr, s);
+	free(ptr);
+	return ret;
+}
