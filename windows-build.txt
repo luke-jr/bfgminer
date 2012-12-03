@@ -18,7 +18,7 @@ If you think that this documentation was helpful and you wish to donate, you can
 do so at the following address. 12KaKtrK52iQjPdtsJq7fJ7smC32tXWbWr
 
 **************************************************************************************
-* A tip that might help you along the way                                             *
+* A tip that might help you along the way                                            *
 **************************************************************************************
 Enable "QuickEdit Mode" in your Command Prompt Window or MinGW Command Prompt
 Window (No need to go into the context menu to choose edit-mark/copy/paste):
@@ -162,6 +162,7 @@ to the next.
       autoreconf -fvi
       CFLAGS="-O2 -msse2" ./configure (additional config options, see below)
       make
+      strip cgminer.exe  <== only do this if you are not compiling for debugging
 
 **************************************************************************************
 * Copy files to a build directory/folder                                             *
@@ -214,10 +215,41 @@ For you. Make sure you never remove the ADL_SDK folder from your home folder.
 **************************************************************************************
 * Optional - Install libusb if you need auto USB device detection; required for Ztex *
 **************************************************************************************
+Go to this url ==> http://git.libusb.org/?p=libusb.git;a=snapshot;h=master;sf=zip
+save the file to your local storage. Open the file and copy the libusb* folder to
+\MinGW\msys\1.0\home\(your user directory/folder).
+Or if you do not want to download the file directly and would like to use git then
+Type the following from the MSYS shell in your home folder.
+git clone git://git.libusb.org/libusb.git
+
+Run the MinGW MSYS shell
+(Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
+Change the working directory to your libusb project folder.
+Example: cd libusb-something [Enter Key] if you are unsure then type "ls -la"
+Another way is to type "cd libusb" and then press the tab key; It will auto fill.
+Type the lines below one at a time. Look for problems after each one before going on
+to the next.
+
+./autogen.sh --disable-debug-log
+./configure --prefix=/MinGW
+make
+make install
+
+You may now exit the MSYS shell.
+Ctrl-D or typing "logout" and pressing the enter key should get you out of the
+window.
+
+You will have to copy "libusb-1.0.dll" to your working cgminer binary directory.
+You will find "libusb-1.0.dll" in the \MinGW\bin directory/folder.
+
+Use this method if libusb does not work for you on Ztex. Once someone lets us know
+Libusb works instead of libusbx then we will remove the section below this line.
+Run the MSYS shell and change into the libusb folder as above.
+Type ==> make uninstall
 Go to this url ==> http://libusbx.org/
 Click on the "Downloads" tab.
 Click on "releases".
-Click on the latest version. I downloaded 1.0.12; yours may be newer.
+Click on the latest version. I downloaded 1.0.14; yours may be newer.
 Do not download from the link that says "Looking for the latest version?".
 Click on "Windows"
 Click on the file and download it. I downloaded libusbx-1.0.12-win.7z.
