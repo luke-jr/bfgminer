@@ -137,7 +137,7 @@ to the next.
       autoreconf -fvi
       CFLAGS="-O2 -msse2" ./configure (additional config options, see below)
       make
-      strip cgminer.exe  <== only do this if you are not compiling for debugging
+      strip bfgminer.exe  <== only do this if you are not compiling for debugging
 
 **************************************************************************************
 * Copy files to a build directory/folder                                             *
@@ -202,7 +202,7 @@ You may now exit the MSYS shell.
 Ctrl-D or typing "logout" and pressing the enter key should get you out of the
 window.
 
-You will have to copy "libusb-1.0.dll" to your working cgminer binary directory.
+You will have to copy "libusb-1.0.dll" to your working BFGMiner binary directory.
 You will find "libusb-1.0.dll" in the \MinGW\bin directory/folder.
 
 Use this method if libusb does not work for you on Ztex. Once someone lets us know
