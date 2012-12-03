@@ -141,7 +141,7 @@ Options for both config file and command line:
 --no-gbt            Disable getblocktemplate support
 --no-longpoll       Disable X-Long-Polling support
 --no-pool-disable   Do not automatically disable pools that continually reject shares
---no-restart        Do not attempt to restart devices that hang or BFGMiner if it crashes
+--no-restart        Do not attempt to restart devices that hang
 --no-stratum        Disable Stratum detection
 --no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server

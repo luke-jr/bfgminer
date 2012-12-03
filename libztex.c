@@ -307,11 +307,13 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 
 		fclose(fp);
 	}
+
 	libztex_getFpgaState(ztex, &state);
 	if (!state.fpgaConfigured) {
-		applog(LOG_ERR, "%s: FPGA configuration failed: DONE pin does not go high", ztex->repr);
-		return 3;
+		applog(LOG_ERR, "%s: LS FPGA configuration failed: DONE pin does not go high", ztex->repr);
+		return -3;
 	}
+
 	nmsleep(200);
 	applog(LOG_INFO, "%s: FPGA configuration done", ztex->repr);
 	return 0;
@@ -384,7 +386,7 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
 	}
 	ztex->dclk.freqM = freq;
 	if (oldfreq > ztex->dclk.freqMaxM)
-		applog(LOG_WARNING, "%s: Frequency set to %u Mhz (range: %u-%u)",
+		applog(LOG_WARNING, "%s: Frequency set to %u MHz (range: %u-%u)",
 		       ztex->repr,
 		       (unsigned)(ztex->freqM1 * (ztex->dclk.freqM + 1)),
 		       (unsigned)ztex->freqM1,
@@ -474,7 +476,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	}
 
 	/* num chars = (all bytes except bLength and bDescriptorType) / 2 */
-	for (i = 0; i <= (cnt - 2) / 2 && i < sizeof(newdev->snString)-1; i++)
+	for (i = 0; i <= (cnt - 2) / 2 && i < (int)sizeof(newdev->snString)-1; i++)
 		newdev->snString[i] = buf[2 + i*2];
 
 	newdev->snString[i] = 0;

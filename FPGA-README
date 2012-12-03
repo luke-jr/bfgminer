@@ -6,7 +6,34 @@ ModMinerQuad (MMQ)
 ------------------
 
 The mining bitstream does not survive a power cycle, so BFGMiner will upload
-it, if it needs to, before it starts mining
+it, if it needs to, before it starts mining (approx 3min)
+
+The red LED also flashes while it is uploading the bitstream
+
+-
+
+If the MMQ doesn't respond to cgminer at all, or the red LED isn't flashing
+then you will need to reset the MMQ
+
+The red LED should always be flashing when it is mining or ready to mine
+
+To reset the MMQ, you are best to press the left "RESET" button on the
+backplane, then unplug and replug the USB cable
+
+If your MMQ doesn't have a button on the "RESET" pad, you need to join
+the two left pads of the "RESET" pad with conductive wire to reset it.
+Cutting a small (metal) paper-clip in half works well for this
+
+Then unplug the USB cable, wait for 5 seconds, then plug it back in
+
+After you press reset, the red LED near the USB port should blink continuously
+
+If it still wont work, power off, wait for 5 seconds, then power on the MMQ
+This of course means it will upload the bitstream again when you start cgminer
+
+-
+
+Device 0 is on the power end of the board
 
 -
 

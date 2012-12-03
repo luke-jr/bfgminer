@@ -65,8 +65,6 @@ AC_FUNC_ALLOCA
 have_cygwin=false
 have_win32=false
 PTHREAD_FLAGS="-lpthread"
-USB_LIBS=""
-USB_CFLAGS=""
 DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
 MATH_LIBS="-lm"
@@ -185,7 +183,7 @@ PKG_PROG_PKG_CONFIG()
 
 libusb=no
 libusb_include_path=""
-PKG_CHECK_MODULES([USB], [libusb-1.0],[
+PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 	libusb=yes
 ],[
 	for usb_lib in usb-1.0 usb; do
@@ -211,9 +209,9 @@ PKG_CHECK_MODULES([USB], [libusb-1.0],[
 	fi
 ])
 if test "x$libusb" = xyes; then
-	AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
+	AC_DEFINE([HAVE_LIBUSB], [1], [Define if you have libusb-1.0])
 	save_CFLAGS="$CFLAGS"
-	CFLAGS="$USB_CFLAGS $CFLAGS"
+	CFLAGS="$LIBUSB_CFLAGS $CFLAGS"
 	AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb.h>])
 	CFLAGS="$save_CFLAGS"
 fi
@@ -398,6 +396,9 @@ if test "x$bitforce$modminer" != xnono; then
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
+AC_SUBST(LIBUSB_LIBS)
+AC_SUBST(LIBUSB_CFLAGS)
+
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
 AC_SUBST(LIBCURL_LIBS)
 
@@ -456,8 +457,6 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
-AC_SUBST(USB_LIBS)
-AC_SUBST(USB_CFLAGS)
 
 AC_CONFIG_FILES([
 	Makefile
@@ -552,9 +551,9 @@ fi
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS $NCURSES_CPPFLAGS"
-echo "  CFLAGS...............: $CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $USB_CFLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $USB_LIBS"
+echo "  CFLAGS...............: $CFLAGS $LIBUSB_CFLAGS"
+echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"

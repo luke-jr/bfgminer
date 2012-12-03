@@ -20,7 +20,7 @@ void dclk_prepare(struct dclk_data *data)
 
 void dclk_msg_freqchange(const char *repr, int oldFreq, int newFreq, const char *tail)
 {
-	applog(LOG_NOTICE, "%s: Frequency %s from %u to %u Mhz%s",
+	applog(LOG_NOTICE, "%s: Frequency %s from %u to %u MHz%s",
 	       repr,
 	       (oldFreq > newFreq ? "dropped" : "raised "),
 	       oldFreq, newFreq,

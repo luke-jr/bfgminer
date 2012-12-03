@@ -16,14 +16,33 @@
 #include "dynclock.h"
 #include "logging.h"
 #include "miner.h"
+#include "usbutils.h"
 #include "fpgautils.h"
 #include "util.h"
 
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
 #define BISTREAM_USER_ID "\2\4$B"
+
 #define MODMINER_MINIMUM_CLOCK    2
 #define MODMINER_DEFAULT_CLOCK  200
 #define MODMINER_MAXIMUM_CLOCK  210
+
+// Commands
+#define MODMINER_PING "\x00"
+#define MODMINER_GET_VERSION "\x01"
+#define MODMINER_FPGA_COUNT "\x02"
+// Commands + require FPGAid
+#define MODMINER_GET_IDCODE '\x03'
+#define MODMINER_GET_USERCODE '\x04'
+#define MODMINER_PROGRAM '\x05'
+#define MODMINER_SET_CLOCK '\x06'
+#define MODMINER_READ_CLOCK '\x07'
+#define MODMINER_SEND_WORK '\x08'
+#define MODMINER_CHECK_WORK '\x09'
+// One byte temperature reply
+#define MODMINER_TEMP1 '\x0a'
+
+#define FPGAID_ALL 4
 
 struct device_api modminer_api;
 
@@ -68,6 +87,9 @@ _bailout(int fd, struct cgpu_info*modminer, int prio, const char *fmt, ...)
 }
 #define bailout(...)  return _bailout(fd, NULL, __VA_ARGS__);
 
+// 45 noops sent when detecting, in case the device was left in "start job" reading
+static const char NOOP[] = MODMINER_PING "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
+
 static bool
 modminer_detect_one(const char *devpath)
 {
@@ -80,11 +102,11 @@ modminer_detect_one(const char *devpath)
 
 	// Sending a "ping" first, to workaround bug in new firmware betas (see issue #62)
 	// Sending 45 noops, just in case the device was left in "start job" reading
-	(void)(write(fd, "\0\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff", 46) ?:0);
+	(void)(write(fd, NOOP, sizeof(NOOP)) ?:0);
 	while (serial_read(fd, buf, sizeof(buf)) > 0)
 		;
 
-	if (1 != write(fd, "\x01", 1))  // Get version
+	if (1 != write(fd, MODMINER_GET_VERSION, 1))
 		bailout(LOG_DEBUG, "ModMiner detect: write failed on %s (get version)", devpath);
 	len = serial_read(fd, buf, sizeof(buf)-1);
 	if (len < 1)
@@ -93,7 +115,7 @@ modminer_detect_one(const char *devpath)
 	char*devname = strdup(buf);
 	applog(LOG_DEBUG, "ModMiner identified as: %s", devname);
 
-	if (1 != write(fd, "\x02", 1))  // Get FPGA count
+	if (1 != write(fd, MODMINER_FPGA_COUNT, 1))
 		bailout(LOG_DEBUG, "ModMiner detect: write failed on %s (get FPGA count)", devpath);
 	len = read(fd, buf, 1);
 	if (len < 1)
@@ -194,7 +216,7 @@ modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 	fd_set fds;
 	char buf[0x100];
 	unsigned long len, flen;
-	char fpgaid = 4;  // "all FPGAs"
+	char fpgaid = FPGAID_ALL;
 	FILE *f = open_xilinx_bitstream(modminer, BITSTREAM_FILENAME, &len);
 	if (!f)
 		return false;
@@ -203,7 +225,7 @@ modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 	int fd = modminer->device_fd;
 
 	applog(LOG_WARNING, "%s %u: Programming %s... DO NOT EXIT UNTIL COMPLETE", modminer->api->name, modminer->device_id, modminer->device_path);
-	buf[0] = '\x05';  // Program Bitstream
+	buf[0] = MODMINER_PROGRAM;
 	buf[1] = fpgaid;
 	buf[2] = (len >>  0) & 0xff;
 	buf[3] = (len >>  8) & 0xff;
@@ -266,7 +288,7 @@ modminer_fpga_prepare(struct thr_info *thr)
 	struct modminer_fpga_state *state;
 	state = thr->cgpu_data = calloc(1, sizeof(struct modminer_fpga_state));
 	dclk_prepare(&state->dclk);
-	state->next_work_cmd[0] = '\x08';  // Send Job
+	state->next_work_cmd[0] = MODMINER_SEND_WORK;
 	state->next_work_cmd[1] = thr->device_thread;  // FPGA id
 
 	return true;
@@ -284,7 +306,7 @@ modminer_change_clock(struct thr_info*thr, bool needlock, signed char delta)
 
 	clk = (state->dclk.freqM * 2) + delta;
 
-	cmd[0] = '\x06';  // set frequency
+	cmd[0] = MODMINER_SET_CLOCK;
 	cmd[1] = fpgaid;
 	cmd[2] = clk;
 	cmd[3] = cmd[4] = cmd[5] = '\0';
@@ -335,7 +357,7 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 static bool _modminer_get_nonce(struct cgpu_info*modminer, char fpgaid, uint32_t*nonce)
 {
 	int fd = modminer->device_fd;
-	char cmd[2] = {'\x09', fpgaid};
+	char cmd[2] = {MODMINER_CHECK_WORK, fpgaid};
 	
 	if (write(fd, cmd, 2) != 2) {
 		applog(LOG_ERR, "%s %u: Error writing (get nonce %u)", modminer->api->name, modminer->device_id, fpgaid);
@@ -368,7 +390,7 @@ modminer_fpga_init(struct thr_info *thr)
 		return false;
 	}
 
-	cmd[0] = '\x04';  // Read USER code (bitstream id)
+	cmd[0] = MODMINER_GET_USERCODE;
 	cmd[1] = fpgaid;
 	if (write(fd, cmd, 2) != 2)
 		bailout2(LOG_ERR, "%s %u.%u: Error writing (read USER code)", modminer->api->name, modminer->device_id, fpgaid);
@@ -473,7 +495,7 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 
 	int fd = modminer->device_fd;
 	int fpgaid = thr->device_thread;
-	char cmd[2] = {'\x0a', fpgaid};
+	char cmd[2] = {MODMINER_TEMP1, fpgaid};
 	char temperature;
 
 	if (2 == write(fd, cmd, 2) && read(fd, &temperature, 1) == 1)

@@ -131,7 +131,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.20";
+static const char *APIVERSION = "1.21";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -231,6 +231,7 @@ static const char *OSINFO =
 #define _MINECOIN	"COIN"
 #define _DEBUGSET	"DEBUG"
 #define _SETCONFIG	"SETCONFIG"
+#define _USBSTATS	"USBSTATS"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -270,6 +271,7 @@ static const char ISJSON = '{';
 #define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
+#define JSON_USBSTATS	JSON1 _USBSTATS JSON2
 #define JSON_END	JSON4 JSON5
 
 static const char *JSON_COMMAND = "command";
@@ -374,6 +376,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_INVNUM 84
 #define MSG_CONPAR 85
 #define MSG_CONVAL 86
+#define MSG_USBSTA 87
+#define MSG_NOUSTA 88
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -538,6 +542,8 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
  { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
+ { SEVERITY_SUCC,  MSG_USBSTA,	PARAM_NONE,	"USB Statistics" },
+ { SEVERITY_INFO,  MSG_NOUSTA,	PARAM_NONE,	"No USB Statistics" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1786,6 +1792,9 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 		algo = (char *)NULLSTR;
 #endif
 
+	// stop hashmeter() changing some while copying
+	mutex_lock(&hash_lock);
+
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
 	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
@@ -1795,29 +1804,32 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 		: "%s" _SUMMARY ",",
 		message(MSG_SUMM, 0, NULL, isjson));
 
-	root = api_add_elapsed(root, "Elapsed", &(total_secs), false);
+	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
 #ifdef WANT_CPUMINE
 	if (opt_n_threads)
 	root = api_add_string(root, "Algorithm", algo, false);
 #endif
 	root = api_add_mhs(root, "MHS av", &(mhs), false);
-	root = api_add_uint(root, "Found Blocks", &(found_blocks), false);
-	root = api_add_int(root, "Getworks", &(total_getworks), false);
-	root = api_add_int(root, "Accepted", &(total_accepted), false);
-	root = api_add_int(root, "Rejected", &(total_rejected), false);
-	root = api_add_int(root, "Hardware Errors", &(hw_errors), false);
+	root = api_add_uint(root, "Found Blocks", &(found_blocks), true);
+	root = api_add_int(root, "Getworks", &(total_getworks), true);
+	root = api_add_int(root, "Accepted", &(total_accepted), true);
+	root = api_add_int(root, "Rejected", &(total_rejected), true);
+	root = api_add_int(root, "Hardware Errors", &(hw_errors), true);
 	root = api_add_utility(root, "Utility", &(utility), false);
-	root = api_add_int(root, "Discarded", &(total_discarded), false);
-	root = api_add_int(root, "Stale", &(total_stale), false);
-	root = api_add_uint(root, "Get Failures", &(total_go), false);
-	root = api_add_uint(root, "Local Work", &(local_work), false);
-	root = api_add_uint(root, "Remote Failures", &(total_ro), false);
-	root = api_add_uint(root, "Network Blocks", &(new_blocks), false);
-	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), false);
+	root = api_add_int(root, "Discarded", &(total_discarded), true);
+	root = api_add_int(root, "Stale", &(total_stale), true);
+	root = api_add_uint(root, "Get Failures", &(total_go), true);
+	root = api_add_uint(root, "Local Work", &(local_work), true);
+	root = api_add_uint(root, "Remote Failures", &(total_ro), true);
+	root = api_add_uint(root, "Network Blocks", &(new_blocks), true);
+	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), true);
 	root = api_add_utility(root, "Work Utility", &(work_utility), false);
-	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), false);
-	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), false);
-	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), false);
+	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), true);
+	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
+	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), true);
+	root = api_add_uint64(root, "Best Share", &(best_diff), true);
+
+	mutex_unlock(&hash_lock);
 
 	root = print_data(root, buf, isjson);
 	if (isjson)
@@ -2849,6 +2861,49 @@ static void setconfig(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 	strcpy(io_buffer, message(MSG_SETCONFIG, value, param, isjson));
 }
 
+static void usbstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	struct api_data *root = NULL;
+
+#ifdef USE_USBUTILS
+	char buf[TMPBUFSIZ];
+	int count = 0;
+
+	root = api_usb_stats(&count);
+#endif
+
+	if (!root) {
+		strcpy(io_buffer, message(MSG_NOUSTA, 0, NULL, isjson));
+		return;
+	}
+
+#ifdef USE_USBUTILS
+
+	strcpy(io_buffer, message(MSG_USBSTA, 0, NULL, isjson));
+
+	if (isjson) {
+		strcat(io_buffer, COMMA);
+		strcat(io_buffer, JSON_USBSTATS);
+	}
+
+	root = print_data(root, buf, isjson);
+	strcat(io_buffer, buf);
+
+	while (42) {
+		root = api_usb_stats(&count);
+		if (!root)
+			break;
+
+		strcat(io_buffer, COMMA);
+		root = print_data(root, buf, isjson);
+		strcat(io_buffer, buf);
+	}
+
+	if (isjson)
+		strcat(io_buffer, JSON_CLOSE);
+#endif
+}
+
 static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -2905,6 +2960,7 @@ struct CMDS {
 	{ "coin",		minecoin,	false },
 	{ "debug",		debugstate,	true },
 	{ "setconfig",		setconfig,	true },
+	{ "usbstats",		usbstats,	false },
 	{ NULL,			NULL,		false }
 };
 
@@ -3252,7 +3308,7 @@ popipo:
 
 static void *quit_thread(__maybe_unused void *userdata)
 {
-	rename_thr("bfg-rpc-quit");
+	RenameThread("rpc_quit");
 
 	// allow thread creator to finish whatever it's doing
 	mutex_lock(&quit_restart_lock);
@@ -3268,7 +3324,7 @@ static void *quit_thread(__maybe_unused void *userdata)
 
 static void *restart_thread(__maybe_unused void *userdata)
 {
-	rename_thr("bfg-rpc-restart");
+	RenameThread("rpc_restart");
 
 	// allow thread creator to finish whatever it's doing
 	mutex_lock(&quit_restart_lock);

@@ -551,7 +551,6 @@ extern void thr_info_cancel(struct thr_info *thr);
 extern void thr_info_freeze(struct thr_info *thr);
 extern void nmsleep(unsigned int msecs);
 extern double us_tdiff(struct timeval *end, struct timeval *start);
-extern void rename_thr(const char* name);
 extern double tdiff(struct timeval *end, struct timeval *start);
 
 struct string_elist {
@@ -711,6 +710,9 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+#ifdef HAVE_LIBUSB
+extern int opt_usbdump;
+#endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
@@ -740,6 +742,11 @@ extern int opt_queue;
 extern int opt_scantime;
 extern int opt_expiry;
 
+#ifdef HAVE_LIBUSB
+extern pthread_mutex_t cgusb_lock;
+#endif
+
+extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
 
@@ -825,6 +832,7 @@ extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern char *current_fullhash;
+extern uint64_t best_diff;
 extern struct timeval block_timeval;
 
 #ifdef HAVE_OPENCL
@@ -1008,7 +1016,7 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
-	uint32_t	outputhash;
+	uint64_t	outputhash;
 
 	int		rolls;
 

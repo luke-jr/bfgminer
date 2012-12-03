@@ -789,20 +789,6 @@ double us_tdiff(struct timeval *end, struct timeval *start)
 	return end->tv_sec * 1000000 + end->tv_usec - start->tv_sec * 1000000 - start->tv_usec;
 }
 
-void rename_thr(const char* name) {
-#if defined(PR_SET_NAME)
-	// Only the first 15 characters are used (16 - NUL terminator)
-	prctl(PR_SET_NAME, name, 0, 0, 0);
-#elif defined(__APPLE__)
-	pthread_setname_np(name);
-#elif defined(__FreeBSD__) || defined(__OpenBSD__)
-	pthread_set_name_np(pthread_self(), name);
-#else
-	// Prevent warnings for unused parameters...
-	(void)name;
-#endif
-}
-
 /* Returns the seconds difference between end and start times as a double */
 double tdiff(struct timeval *end, struct timeval *start)
 {
@@ -1420,45 +1406,87 @@ out:
 	return ret;
 }
 
+void suspend_stratum(struct pool *pool)
+{
+	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
+	mutex_lock(&pool->stratum_lock);
+	pool->stratum_active = false;
+	mutex_unlock(&pool->stratum_lock);
+	CLOSESOCKET(pool->sock);
+}
 
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 {
 	dev->device_last_not_well = time(NULL);
 	dev->device_not_well_reason = reason;
 
-
-	switch (reason)
-	{
+	switch (reason) {
 		case REASON_THREAD_FAIL_INIT:
 			dev->thread_fail_init_count++;
-		break;
+			break;
 		case REASON_THREAD_ZERO_HASH:
 			dev->thread_zero_hash_count++;
-		break;
+			break;
 		case REASON_THREAD_FAIL_QUEUE:
 			dev->thread_fail_queue_count++;
-		break;
+			break;
 		case REASON_DEV_SICK_IDLE_60:
 			dev->dev_sick_idle_60_count++;
-		break;
+			break;
 		case REASON_DEV_DEAD_IDLE_600:
 			dev->dev_dead_idle_600_count++;
-		break;
+			break;
 		case REASON_DEV_NOSTART:
 			dev->dev_nostart_count++;
-		break;
+			break;
 		case REASON_DEV_OVER_HEAT:
 			dev->dev_over_heat_count++;
-		break;
+			break;
 		case REASON_DEV_THERMAL_CUTOFF:
 			dev->dev_thermal_cutoff_count++;
-		break;
+			break;
 		case REASON_DEV_COMMS_ERROR:
 			dev->dev_comms_error_count++;
-		break;
+			break;
 		case REASON_DEV_THROTTLE:
 			dev->dev_throttle_count++;
-		break;
+			break;
 	}
+}
 
+/* Realloc an existing string to fit an extra string s, appending s to it. */
+void *realloc_strcat(char *ptr, char *s)
+{
+	size_t old = strlen(ptr), len = strlen(s);
+	char *ret;
+
+	if (!len)
+		return ptr;
+
+	len += old + 1;
+	if (len % 4)
+		len += 4 - (len % 4);
+
+	ret = malloc(len);
+	if (unlikely(!ret))
+		quit(1, "Failed to malloc in realloc_strcat");
+
+	sprintf(ret, "%s%s", ptr, s);
+	free(ptr);
+	return ret;
+}
+
+void RenameThread(const char* name)
+{
+#if defined(PR_SET_NAME)
+	// Only the first 15 characters are used (16 - NUL terminator)
+	prctl(PR_SET_NAME, name, 0, 0, 0);
+#elif defined(__APPLE__)
+	pthread_setname_np(name);
+#elif (defined(__FreeBSD__) || defined(__OpenBSD__))
+	pthread_set_name_np(pthread_self(), name);
+#else
+	// Prevent warnings for unused parameters...
+	(void)name;
+#endif
 }
