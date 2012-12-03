@@ -1367,6 +1367,40 @@ static void calc_midstate(struct work *work)
 #endif
 }
 
+static struct work *make_work(void)
+{
+	struct work *work = calloc(1, sizeof(struct work));
+
+	if (unlikely(!work))
+		quit(1, "Failed to calloc work in make_work");
+	mutex_lock(&control_lock);
+	work->id = total_work++;
+	mutex_unlock(&control_lock);
+	return work;
+}
+
+/* This is the central place all work that is about to be retired should be
+ * cleaned to remove any dynamically allocated arrays within the struct */
+void clean_work(struct work *work)
+{
+	free(work->job_id);
+	free(work->nonce2);
+	free(work->ntime);
+	free(work->gbt_coinbase);
+	work->job_id = NULL;
+	work->nonce2 = NULL;
+	work->ntime = NULL;
+	work->gbt_coinbase = NULL;
+}
+
+/* All dynamically allocated work structs should be freed here to not leak any
+ * ram from arrays allocated within the work struct */
+void free_work(struct work *work)
+{
+	clean_work(work);
+	free(work);
+}
+
 /* Generate a GBT coinbase from the existing GBT variables stored. Must be
  * entered under gbt_lock */
 static void __build_gbt_coinbase(struct pool *pool)
@@ -1477,10 +1511,52 @@ static unsigned char *__gbt_merkleroot(struct pool *pool)
 }
 
 static void calc_diff(struct work *work, int known);
+static bool work_decode(struct pool *pool, struct work *work, json_t *val);
+
+static void update_gbt(struct pool *pool)
+{
+	int rolltime;
+	json_t *val;
+	CURL *curl;
+
+	curl = curl_easy_init();
+	if (unlikely(!curl))
+		quit (1, "CURL initialisation failed in update_gbt");
+
+	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
+			    pool->rpc_req, true, false, &rolltime, pool, false);
+
+	if (val) {
+		struct work *work = make_work();
+		bool rc = work_decode(pool, work, val);
+
+		total_getworks++;
+		pool->getwork_requested++;
+		if (rc) {
+			applog(LOG_DEBUG, "Successfully retrieved and updated GBT from pool %u %s",
+			       pool->pool_no, pool->rpc_url);
+			gettimeofday(&pool->tv_idle, NULL);
+		} else {
+			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher GBT from pool %u %s",
+			       pool->pool_no, pool->rpc_url);
+		}
+		json_decref(val);
+		free_work(work);
+	} else {
+		applog(LOG_DEBUG, "FAILED to update GBT from pool %u %s",
+		       pool->pool_no, pool->rpc_url);
+	}
+	curl_easy_cleanup(curl);
+}
 
 static void gen_gbt_work(struct pool *pool, struct work *work)
 {
 	unsigned char *merkleroot;
+	struct timeval now;
+
+	gettimeofday(&now, NULL);
+	if (now.tv_sec - pool->tv_lastwork.tv_sec > 60)
+		update_gbt(pool);
 
 	mutex_lock(&pool->gbt_lock);
 	__build_gbt_coinbase(pool);
@@ -2644,40 +2720,6 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 		json_decref(val);
 
 	return rc;
-}
-
-static struct work *make_work(void)
-{
-	struct work *work = calloc(1, sizeof(struct work));
-
-	if (unlikely(!work))
-		quit(1, "Failed to calloc work in make_work");
-	mutex_lock(&control_lock);
-	work->id = total_work++;
-	mutex_unlock(&control_lock);
-	return work;
-}
-
-/* This is the central place all work that is about to be retired should be
- * cleaned to remove any dynamically allocated arrays within the struct */
-void clean_work(struct work *work)
-{
-	free(work->job_id);
-	free(work->nonce2);
-	free(work->ntime);
-	free(work->gbt_coinbase);
-	work->job_id = NULL;
-	work->nonce2 = NULL;
-	work->ntime = NULL;
-	work->gbt_coinbase = NULL;
-}
-
-/* All dynamically allocated work structs should be freed here to not leak any
- * ram from arrays allocated within the work struct */
-void free_work(struct work *work)
-{
-	clean_work(work);
-	free(work);
 }
 
 static void workio_cmd_free(struct workio_cmd *wc)
@@ -5785,7 +5827,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	if (pool->enabled == POOL_REJECTING || pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE)
+	if (cnx_needed(pool))
 		return;
 
 	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
@@ -5953,48 +5995,6 @@ static void reap_curl(struct pool *pool)
 		applog(LOG_DEBUG, "Reaped %d curl%s from pool %d", reaped, reaped > 1 ? "s" : "", pool->pool_no);
 }
 
-static bool pool_getswork(struct pool *pool)
-{
-	bool ret = false;
-	int rolltime;
-	json_t *val;
-	CURL *curl;
-
-	curl = curl_easy_init();
-	if (unlikely(!curl))
-		quit (1, "CURL initialisation failed in pool_getswork");
-
-	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass,
-			    pool->rpc_req, true, false, &rolltime, pool, false);
-
-	if (val) {
-		struct work *work = make_work();
-		bool rc = work_decode(pool, work, val);
-
-		if (pool->has_gbt && pool == current_pool()) {
-			total_getworks++;
-			pool->getwork_requested++;
-		}
-		if (rc) {
-			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
-			       pool->pool_no, pool->rpc_url);
-			gettimeofday(&pool->tv_idle, NULL);
-			ret = true;
-		} else {
-			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
-			       pool->pool_no, pool->rpc_url);
-		}
-		json_decref(val);
-		free_work(work);
-	} else {
-		applog(LOG_DEBUG, "FAILED to retrieve pool_getswork work from pool %u %s",
-		       pool->pool_no, pool->rpc_url);
-	}
-	curl_easy_cleanup(curl);
-
-	return ret;
-}
-
 static void *watchpool_thread(void __maybe_unused *userdata)
 {
 	int intervals = 0;
@@ -6019,16 +6019,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			if (pool->enabled == POOL_DISABLED || pool->has_stratum)
 				continue;
-
-			/* Stratum works off pushing work, but GBT and getwork
-			 * off requests so even for the non current pool, get
-			 * new work once per minute to ensure the pool is still
-			 * alive and to maintain the current block template for
-			 * GBT pools in case we switch to them. */
-			if (!pool->idle && now.tv_sec - pool->tv_lastwork.tv_sec > 60) {
-				if (!pool_getswork(pool))
-					pool_died(pool);
-			}
 
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
