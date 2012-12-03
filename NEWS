@@ -8,15 +8,15 @@ array.
 truncating irrelevant zeroes from displayed hash.
 - Pass ostate values around in scrypt to be able to extract full hashes if
 needed later on.
-- Since we will be using calloc_str to put a string into it, convert the
-function to calloc_strcat which does it automatically.
 - Revert "Handle crash exceptions by trying to restart cgminer unless the
 --no-restart option is used."
-- Count longpoll and GBT decodes as queued work since the count otherwise
-remains static.
-- Use the string helper functions to create gbt blocks of any length.
-- Provide helper functions calloc_str and realloc_strcat to create and extend
-arbitrary length arrays based on string length.
+- Count longpoll decodes as queued work since the count otherwise remains
+static.
+- Provide helper function realloc_strcat to extend arbitrary length arrays
+based on string length.
+- Bugfix: Assign header-based rolltime before decoding work, so GBT expires
+overrides it properly
+- Bugfix: FPGA-README: Correct idVendor in example MMQ udev rule
 - fixes target calc for mips openwrt
 - openwrt needs roundl
 - Get rid of unused last_work in opencl thread data.
