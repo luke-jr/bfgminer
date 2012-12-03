@@ -4694,12 +4694,10 @@ static bool cnx_needed(struct pool *pool)
 		return true;
 	if (pool_strategy == POOL_LOADBALANCE)
 		return true;
-	if (opt_fail_only)
-		return true;
 	cp = current_pool();
 	if (cp == pool)
 		return true;
-	if (!cp->has_gbt && !cp->has_stratum)
+	if (!cp->has_gbt && !cp->has_stratum && !opt_fail_only)
 		return true;
 	return false;
 }
