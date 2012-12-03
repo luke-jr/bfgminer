@@ -2299,7 +2299,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
 	json_t *val, *res, *err;
-	char s[1024];
+	char *s;
 	bool rc = false;
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
@@ -2346,21 +2346,29 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		free(varint);
 		gbt_block = realloc_strcat(gbt_block, work->gbt_coinbase);
 
-		if (work->job_id)
-			sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {\"workid\": \"%s\"}]}", gbt_block, work->job_id);
-		else
-			sprintf(s, "{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"%s\", {}]}", gbt_block);
-
+		s = strdup("{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"");
+		s = realloc_strcat(s, gbt_block);
+		if (work->job_id) {
+			s = realloc_strcat(s, "\", {\"workid\": \"");
+			s = realloc_strcat(s, work->job_id);
+			s = realloc_strcat(s, "\"}]}");
+		} else
+			s = realloc_strcat(s, "\", {}]}");
 		free(gbt_block);
-	} else
-		sprintf(s, "{\"method\": \"getwork\", \"params\": [ \"%s\" ], \"id\":1}", hexstr);
+	} else {
+		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
+		s = realloc_strcat(s, hexstr);
+		s = realloc_strcat(s, "\" ], \"id\":1}");
+	}
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
-	strcat(s, "\n");
+	s = realloc_strcat(s, "\n");
 
 	gettimeofday(&tv_submit, NULL);
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
 	gettimeofday(&tv_submit_reply, NULL);
+	free(s);
+
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
 		if (!pool_tset(pool, &pool->submit_fail)) {
