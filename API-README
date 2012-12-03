@@ -392,7 +392,10 @@ Added API commands:
  'usbstats'
 
 Modified API commands:
- each MMQ shows up as 4 devices each with it's own stats
+ 'summary' - add 'Best Share'
+
+Modifed output:
+ each MMQ shows up as 4 devices, each with it's own stats
 
 ----------
 

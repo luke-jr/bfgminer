@@ -228,7 +228,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
-static uint64_t best_diff = 0;
+uint64_t best_diff = 0;
 
 struct block {
 	char hash[40];

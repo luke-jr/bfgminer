@@ -786,6 +786,7 @@ extern const int opt_cutofftemp;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern char *current_fullhash;
+extern uint64_t best_diff;
 extern struct timeval block_timeval;
 
 #ifdef HAVE_OPENCL

@@ -1913,6 +1913,7 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), true);
 	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
 	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), true);
+	root = api_add_uint64(root, "Best Share", &(best_diff), true);
 
 	mutex_unlock(&hash_lock);
 
