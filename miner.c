@@ -2524,14 +2524,14 @@ static uint64_t share_diff(const struct work *work)
 	return ret;
 }
 
-static uint32_t scrypt_diff(const struct work *work)
+static uint64_t scrypt_diff(const struct work *work)
 {
-	const uint32_t scrypt_diffone = 0x0000fffful;
-	uint32_t d32 = work->outputhash, ret;
+	const uint64_t scrypt_diffone = 0x0000ffff00000000ul;
+	uint64_t d64 = work->outputhash, ret;
 
-	if (unlikely(!d32))
-		d32 = 1;
-	ret = scrypt_diffone / d32;
+	if (unlikely(!d64))
+		d64 = 1;
+	ret = scrypt_diffone / d64;
 	if (ret > best_diff) {
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
@@ -2608,12 +2608,14 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		hash32 = (uint32_t *)(work->hash);
 		if (opt_scrypt) {
 			uint32_t sharediff;
+			uint64_t outhash;
 
 			scrypt_outputhash(work);
 			sharediff = scrypt_diff(work);
 			suffix_string(sharediff, diffdisp, 0);
 
-			sprintf(hashshow, "%08lx Diff %s/%d", (unsigned long)work->outputhash, diffdisp, intdiff);
+			outhash = work->outputhash >> 16;
+			sprintf(hashshow, "%08lx Diff %s/%d", (unsigned long)outhash, diffdisp, intdiff);
 		} else {
 			uint64_t sharediff = share_diff(work);
 
