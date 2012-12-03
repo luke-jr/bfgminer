@@ -174,7 +174,7 @@ static int total_threads;
 pthread_mutex_t cgusb_lock;
 #endif
 
-static pthread_mutex_t hash_lock;
+pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
