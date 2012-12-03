@@ -51,6 +51,7 @@ bool parse_method(struct pool *pool, char *s);
 bool extract_sockaddr(struct pool *pool, char *url);
 bool auth_stratum(struct pool *pool);
 bool initiate_stratum(struct pool *pool);
+void suspend_stratum(struct pool *pool);
 void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
 void RenameThread(const char* name);
