@@ -185,28 +185,30 @@ libusb_include_path=""
 PKG_CHECK_MODULES([USB], [libusb-1.0],[
 	libusb=yes
 ],[
-	AC_CHECK_LIB(usb-1.0, libusb_init,
-		[
+	for usb_lib in usb-1.0 usb; do
+		AC_CHECK_LIB($usb_lib, libusb_init, [
+			libusb=yes
+			break
+		], [])
+	done
+	if test "x$libusb" = xyes; then
 			AC_CHECK_DECL([libusb_init],[
-				libusb=yes
 			],[
 				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
 				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | cpp -M 2>/dev/null | sed 's/^[^[:space:]]\+[[:space:]]\+\([^[:space:]]\+\)\/.*$/\1/;t;d'`
 				if test "x$libusb_include_path" != "x"; then
-					libusb=yes
+					USB_LIBS="-l$usb_lib"
 					USB_CFLAGS="-I$libusb_include_path"
 					AC_MSG_RESULT([yes])
 				else
+					libusb=no
 					AC_MSG_RESULT([no])
 				fi
 			],[#include <libusb.h>])
-		],
-		[]
-	)
+	fi
 ])
 if test "x$libusb" = xyes; then
 	AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
-	USB_LIBS="-lusb-1.0"
 	save_CFLAGS="$CFLAGS"
 	CFLAGS="$USB_CFLAGS $CFLAGS"
 	AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb.h>])
