@@ -332,6 +332,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
                                                        0 to 9999)
                               coinbase-sig (string)
 
+ substats      USBSTATS       Stats of all LIBUSB mining devices except ztex
+                              e.g. Name=MMQ,ID=0,Stat=SendWork,Count=99,...|
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
 
@@ -383,6 +386,13 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.21
+
+Added API commands:
+ 'usbstats'
+
+----------
 
 API V1.20b (BFGMiner v2.9.1)
 

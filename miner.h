@@ -711,6 +711,9 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+#ifdef HAVE_LIBUSB
+extern int opt_usbdump;
+#endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
@@ -739,6 +742,10 @@ extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 extern int opt_queue;
 extern int opt_scantime;
 extern int opt_expiry;
+
+#ifdef HAVE_LIBUSB
+extern pthread_mutex_t cgusb_lock;
+#endif
 
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
