@@ -13,7 +13,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 enum ft232r_reset_purge {
 	FTDI_PURGE_RX   = 1,
