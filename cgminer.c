@@ -5430,7 +5430,6 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	struct pool *pool = work->pool;
 	int i;
 
 	for (i = 0; i < 80 / 4; i++)
