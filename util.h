@@ -52,7 +52,6 @@ bool extract_sockaddr(struct pool *pool, char *url);
 bool auth_stratum(struct pool *pool);
 bool initiate_stratum(struct pool *pool);
 void dev_error(struct cgpu_info *dev, enum dev_reason reason);
-void *calloc_strcat(char *s);
 void *realloc_strcat(char *ptr, char *s);
 
 #endif /* __UTIL_H__ */
