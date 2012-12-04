@@ -1550,6 +1550,8 @@ static void update_gbt(struct pool *pool)
 	curl_easy_cleanup(curl);
 }
 
+static char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
+
 static void gen_gbt_work(struct pool *pool, struct work *work)
 {
 	unsigned char *merkleroot;
@@ -1584,7 +1586,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	free(merkleroot);
 	memset(work->data + 4 + 32 + 32 + 4 + 4, 0, 4); /* nonce */
 
-	hex2bin(work->data + 4 + 32 + 32 + 4 + 4 + 4, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000", 48);
+	hex2bin(work->data + 4 + 32 + 32 + 4 + 4 + 4, workpadding, 48);
 
 	if (opt_debug) {
 		char *header = bin2hex(work->data, 128);
@@ -5318,7 +5320,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	header = realloc_strcat(header, pool->swork.ntime);
 	header = realloc_strcat(header, pool->swork.nbit);
 	header = realloc_strcat(header, "00000000"); /* nonce */
-	header = realloc_strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
+	header = realloc_strcat(header, workpadding);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
