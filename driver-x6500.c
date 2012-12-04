@@ -400,7 +400,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	fpga->freqMaxMaxM =
 	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
 	fpga->dclk.freqMDefault = fpga->dclk.freqM;
-	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u Mhz (range: %u-%u)",
+	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u MHz (range: %u-%u)",
 	       x6500->api->name, x6500->device_id, fpgaid,
 	       fpga->dclk.freqM * 2,
 	       X6500_MINIMUM_CLOCK,
@@ -482,7 +482,7 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 				fpga->last_cutoff_reduced = now;
 				int oldFreq = fpga->dclk.freqM;
 				if (x6500_change_clock(thr, oldFreq - 1))
-					applog(LOG_NOTICE, "%s %u.%u: Frequency dropped from %u to %u Mhz (temp: %.1fC)",
+					applog(LOG_NOTICE, "%s %u.%u: Frequency dropped from %u to %u MHz (temp: %.1fC)",
 					       x6500->api->name, x6500->device_id, i,
 					       oldFreq * 2, fpga->dclk.freqM * 2,
 					       fpga->temp
