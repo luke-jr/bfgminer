@@ -1,3 +1,26 @@
+BFGMiner Version 2.8.7 - December 3, 2012
+- Update libblkmaker to 0.2.1
+- Bugfix: bitforce: Always increment global hw error counter when incrementing
+device hwe
+- Bugfix: Capitalize "MHz" correctly
+- ztex: Correctly release mutex and reset FPGA if configuration fails
+- ztex: Harmonize low-speed FPGA configuration code with high-speed code
+- libztex: Silence warning: comparison between signed and unsigned
+- Count longpoll decodes as queued work since the count otherwise remains
+static.
+- Look for libusb_init in -lusb, since FreeBSD has it there
+- Bugfix: Use pkgconfig for libusb when available, and try to guess the include
+path if not
+- Bugfix: Assign header-based rolltime before decoding work, so GBT expires
+overrides it properly
+- fixes target calc for mips openwrt
+- Bugfix: clear_work: Whether the template is in fact being freed or not, the
+work reference to it needs to be
+- libztex: Work around ZTEX USB firmware bug exposed by the FreeBSD libusb
+- README: Update dependencies
+- Bugfix: We should never roll stale work
+- Removing erroneous libssl dep again. GITHUB#94
+
 BFGMiner Version 2.8.6 - November 16, 2012
 - Bugfix: Never consider shares to be accepted if the submission response is an
 error
