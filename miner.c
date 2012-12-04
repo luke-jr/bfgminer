@@ -2574,7 +2574,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		json_decref(req);
 		sd = bin2hex(data, 80);
 	} else {
-		sd = s;
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));
@@ -2583,6 +2582,8 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
 		s = realloc_strcat(s, hexstr);
 		s = realloc_strcat(s, "\" ], \"id\":1}");
+
+		sd = s;
 
 	}
 
