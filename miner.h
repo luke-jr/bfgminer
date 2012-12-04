@@ -692,6 +692,7 @@ struct pool;
 extern bool opt_protocol;
 extern char *opt_coinbase_sig;
 extern bool have_longpoll;
+extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
 extern char *cgminer_path;
@@ -903,6 +904,7 @@ struct stratum_work {
 	int merkles;
 	double diff;
 
+	bool transparency_probed;
 	time_t transparency_time;
 	bool opaque;
 };

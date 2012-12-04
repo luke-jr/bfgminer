@@ -117,6 +117,7 @@ const
 char *opt_coinbase_sig;
 static bool want_stratum = true;
 bool have_longpoll;
+int opt_skip_checks;
 bool want_per_device_stats;
 bool use_syslog;
 bool opt_quiet;
@@ -1314,6 +1315,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--shares",
 		     opt_set_intval, NULL, &opt_shares,
 		     "Quit after mining N shares (default: unlimited)"),
+	OPT_WITH_ARG("--skip-security-checks",
+			set_int_0_to_9999, NULL, &opt_skip_checks,
+			"Skip security checks sometimes to save bandwidth; only check 1/<arg>th of the time (default: never skip)"),
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
@@ -5499,6 +5503,8 @@ static void *stratum_thread(void *userdata)
 	pthread_detach(pthread_self());
 
 	RenameThread("stratum");
+
+	srand(time(NULL) + (intptr_t)userdata);
 
 	while (42) {
 		struct timeval timeout;
