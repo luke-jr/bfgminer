@@ -260,29 +260,29 @@ struct thr_info;
 struct work;
 
 struct device_api {
-	char*dname;
-	char*name;
+	char *dname;
+	char *name;
 
 	// API-global functions
 	void (*api_detect)();
 
 	// Device-specific functions
-	void (*reinit_device)(struct cgpu_info*);
-	void (*get_statline_before)(char*, struct cgpu_info*);
-	void (*get_statline)(char*, struct cgpu_info*);
-	struct api_data *(*get_api_stats)(struct cgpu_info*);
-	bool (*get_stats)(struct cgpu_info*);
-	void (*identify_device)(struct cgpu_info*); // e.g. to flash a led
+	void (*reinit_device)(struct cgpu_info *);
+	void (*get_statline_before)(char *, struct cgpu_info *);
+	void (*get_statline)(char *, struct cgpu_info *);
+	struct api_data *(*get_api_stats)(struct cgpu_info *);
+	bool (*get_stats)(struct cgpu_info *);
+	void (*identify_device)(struct cgpu_info *); // e.g. to flash a led
 
 	// Thread-specific functions
-	bool (*thread_prepare)(struct thr_info*);
-	uint64_t (*can_limit_work)(struct thr_info*);
-	bool (*thread_init)(struct thr_info*);
-	bool (*prepare_work)(struct thr_info*, struct work*);
-	int64_t (*scanhash)(struct thr_info*, struct work*, int64_t);
-	void (*hw_error)(struct thr_info*);
-	void (*thread_shutdown)(struct thr_info*);
-	void (*thread_enable)(struct thr_info*);
+	bool (*thread_prepare)(struct thr_info *);
+	uint64_t (*can_limit_work)(struct thr_info *);
+	bool (*thread_init)(struct thr_info *);
+	bool (*prepare_work)(struct thr_info *, struct work *);
+	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
+	void (*hw_error)(struct thr_info *);
+	void (*thread_shutdown)(struct thr_info *);
+	void (*thread_enable)(struct thr_info *);
 };
 
 enum dev_enable {
