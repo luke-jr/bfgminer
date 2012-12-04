@@ -109,6 +109,7 @@ struct _cbscript_t {
 	size_t sz;
 };
 static struct _cbscript_t opt_coinbase_script;
+static uint32_t template_nonce;
 #endif
 #if BLKMAKER_VERSION < 1
 const
@@ -1709,7 +1710,21 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
 #if BLKMAKER_VERSION > 1
 		if (opt_coinbase_script.sz)
+		{
+			bool newcb;
+#if BLKMAKER_VERSION > 2
+			blkmk_init_generation2(work->tmpl, opt_coinbase_script.data, opt_coinbase_script.sz, &newcb);
+#else
+			newcb = !work->tmpl->cbtxn;
 			blkmk_init_generation(work->tmpl, opt_coinbase_script.data, opt_coinbase_script.sz);
+#endif
+			if (newcb)
+			{
+				ssize_t ae = blkmk_append_coinbase_safe(work->tmpl, &template_nonce, sizeof(template_nonce));
+				if (ae < (ssize_t)sizeof(template_nonce))
+					applog(LOG_WARNING, "Cannot append template-nonce to coinbase on pool %u (%d) - you might be wasting hashing!", work->pool->pool_no, ae);
+			}
+		}
 #endif
 #if BLKMAKER_VERSION > 0
 		{
@@ -4207,6 +4222,7 @@ static bool test_work_current(struct work *work)
 		work->pool->block_id = block_id;
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
+		template_nonce = 0;
 		set_curblock(hexstr, &work->data[4]);
 		if (unlikely(new_blocks == 1))
 			goto out_free;
