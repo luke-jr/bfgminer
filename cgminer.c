@@ -4732,10 +4732,18 @@ static bool cnx_needed(struct pool *pool)
 {
 	struct pool *cp;
 
+	/* Balance strategies need all pools online */
 	if (pool_strategy == POOL_BALANCE)
 		return true;
 	if (pool_strategy == POOL_LOADBALANCE)
 		return true;
+
+	/* Idle pool needs something to kick it alive again */
+	if (pool->idle)
+		return true;
+
+	/* Getwork pools without opt_fail_only need backup pools up to be able
+	 * to leak shares */
 	cp = current_pool();
 	if (cp == pool)
 		return true;
