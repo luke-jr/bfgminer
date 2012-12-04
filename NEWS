@@ -1,4 +1,5 @@
-BFGMiner Version 2.8.7 - December 3, 2012
+BFGMiner Version 2.8.7 - December 4, 2012
+
 - Update libblkmaker to 0.2.1
 - Bugfix: bitforce: Always increment global hw error counter when incrementing
 device hwe
@@ -21,12 +22,16 @@ work reference to it needs to be
 - Bugfix: We should never roll stale work
 - Removing erroneous libssl dep again. GITHUB#94
 
+
 BFGMiner Version 2.8.6 - November 16, 2012
+
 - Bugfix: Never consider shares to be accepted if the submission response is an
 error
 - Bugfix: Always honour libblkmaker time limits
 
+
 BFGMiner Version 2.8.5 - November 7, 2012
+
 - Bugfix: modminer: Use json_object_set_new to correctly count references to
 per-FPGA RPC data
 - Changes to build prototypes to support building on FreeBSD 9.1-RC2 amd64
