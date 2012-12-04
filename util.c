@@ -1118,7 +1118,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->getwork_requested++;
 	total_getworks++;
 
-	if (merkles)
+	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || pool->swork.transparency_time != (time_t)-1)
 	{
 		// Request transaction data to discourage pools from doing anything shady
 		char s[1024];
@@ -1129,6 +1129,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		stratum_send(pool, s, sLen);
 		if ((!pool->swork.opaque) && pool->swork.transparency_time == (time_t)-1)
 			pool->swork.transparency_time = time(NULL);
+		pool->swork.transparency_probed = true;
 	}
 
 	return true;
@@ -1336,6 +1337,7 @@ bool initiate_stratum(struct pool *pool)
 
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
+	pool->swork.transparency_probed = false;
 	if (!pool->stratum_curl) {
 		pool->stratum_curl = curl_easy_init();
 		if (unlikely(!pool->stratum_curl))
