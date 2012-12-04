@@ -1118,6 +1118,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->getwork_requested++;
 	total_getworks++;
 
+	if (merkles)
 	{
 		// Request transaction data to discourage pools from doing anything shady
 		char s[1024];
