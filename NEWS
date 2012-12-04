@@ -1,5 +1,21 @@
 BFGMiner Version 2.10.0 - Future
 
+- New --skip-security-checks option to allow miners to skip checks when it
+saves bandwidth
+- Skip stratum transaction download when there are no transactions
+- API add Best Share to summary
+- API lock access to some summary statistics (and copy them)
+- Update windows build instructions.
+- Enable backup stratum connections for getwork when the primary pool doesn't
+have longpoll aka solo mining.
+- Check for correct absence of opt_fail_only in cnx_needed.
+- Remove unused variable.
+- The specification for stratum has been elaborated to say that a changed diff
+applies only to new work so do not retarget when submitting shares.
+- Suspend stratum connections to backup pools when there is no requirement to
+potentially grab work from them.
+- Rename rename_thr to RenameThread to match cgminer
+- modminer: Adopt symbolic command names from kanoi
 - Make gen_stratum_work more robust by using a dynamically allocated array for
 the header in case bogus data is sent by the pool to avoid overflowing a static
 array.
@@ -10,55 +26,29 @@ truncating irrelevant zeroes from displayed hash.
 needed later on.
 - Revert "Handle crash exceptions by trying to restart cgminer unless the
 --no-restart option is used."
-- Count longpoll decodes as queued work since the count otherwise remains
-static.
 - Provide helper function realloc_strcat to extend arbitrary length arrays
 based on string length.
-- Bugfix: Assign header-based rolltime before decoding work, so GBT expires
-overrides it properly
-- Bugfix: FPGA-README: Correct idVendor in example MMQ udev rule
-- fixes target calc for mips openwrt
-- openwrt needs roundl
-- Get rid of unused last_work in opencl thread data.
-- Do away with the flaky free_work api in the driver code which would often lose
-the work data in opencl and simply flush it before exiting the opencl scanhash.
 - Use base_work for comparison just for cleanness in __copy_work
 - Remove all static work structs, using the make and free functions.
 - Add pool no. to stale share detected message.
 - Add info about which pool share became stale while resubmitting.
--b Copy the work on opencl_free_work
-- Add an extra slot in the max backlog for ztex to minimise dupes.
-- Do not use or count the getworks submitted which are simply testing that pools
-are still up. This was increasing share leakage and making stats not reflect
-real work.
-- Track all dynamically allocated memory within the work struct by copying work
-structs in a common place, creating freshly allocated heap ram for all arrays
-within the copied struct. Clear all work structs from the same place to ensure
-memory does not leak from arrays within the struct. Convert the gbt coinbase and
-stratum strings within the work struct to heap ram. This will allow arbitrary
-lengths without an upper limit for the strings, preventing the overflows that
-happen with GBT.
-- libztex: Work around ZTEX USB firmware bug exposed by the FreeBSD libusb
+- Reduce extra slots in the max backlog for ztex to minimise memory waste.
+- Get rid of unused last_work in opencl thread data.
+- Do away with the flaky free_work api in the driver code which would often lose
+the work data in opencl and simply flush it before exiting the opencl scanhash.
+- Minor work handling restructure, including moving some stratum data from
+fixed-size buffers to their own heap allocations.
 - opencl: Use new dev_error function for REASON_DEV_NOSTART
 - Provide rudimentary support for the balancing failover strategies with stratum
 and GBT by switching pools silently on getwork requests.
 - Convert remaining modminer and bfl uses of usleep to nmsleep.
 - Convert libztex to nmsleep where possible.
 - Convert unreliable usleep calls to nmsleep calls in ztex driver.
-- Support workid for block submission on GBT pools that use it.
-- Provide rudimentary support for literal ipv6 addresses when parsing stratum
-URLs.
-- Work around libcurl cflags not working on hacked up mingw installations on
-windows.
+- Tidy up device error counts
 - Only increase gpu engine speed by a larger step if the temperature is below
 hysteresis instead of increasing it to max speed.
 - Convert pool not responding and pool alive message on backup pools to verbose
 level only since they mean a single failed getwork.
-- Update work block on the longpoll work item before calling restart threads to
-ensure all work but the longpoll work item gets discarded when we call
-discard_stale from restart_threads.
-- Do not attempt to remove the stratum share hash after unsuccessful submission
-since it may already be removed by clear_stratum_shares.
 - Use stratum block change from backup pools as an alternative to longpoll for
 pools that don't support LP.
 - Round some more static string arrays to 4 byte boundaries.
@@ -66,6 +56,41 @@ pools that don't support LP.
 they're 4 byte aligned to appease ARM.
 - Hash1 is only used by the CPU mining code and never changes so remove it from
 the work struct and bypass needing to process the value for all other mining.
+
+
+BFGMiner Version 2.9.4 - December 4, 2012
+
+- Update libblkmaker to 0.2.1
+- Count template number, and append it to the coinbase of templates without any
+cbtxn
+- Bugfix: bitforce: Always increment global hw error counter when incrementing
+device hwe
+- Bugfix: Correct order of printf-style arguments in cbappend fail
+- Bugfix: Capitalize "MHz" correctly
+- ztex: Correctly release mutex and reset FPGA if configuration fails
+- ztex: Harmonize low-speed FPGA configuration code with high-speed code
+- libztex: Silence warning: comparison between signed and unsigned
+- Count longpoll decodes as queued work since the count otherwise remains
+static.
+- Bugfix: Assign header-based rolltime before decoding work, so GBT expires
+overrides it properly
+- Look for libusb_init in -lusb, since FreeBSD has it there
+- Bugfix: Use pkgconfig for libusb when available, and try to guess the include
+path if not
+- Bugfix: FPGA-README: Correct idVendor in example MMQ udev rule
+- fixes target calc for mips openwrt
+- Bugfix: clear_work: Whether the template is in fact being freed or not, the
+work reference to it needs to be
+- libztex: Work around ZTEX USB firmware bug exposed by the FreeBSD libusb
+- README: Document solo mining usage
+- README: Update dependencies
+- Bugfix: We should never roll stale work
+- Ubuntu: Removing erroneous libssl dep again. GITHUB#94
+- Bugfix: Clear out stratum share work before freeing it
+- Provide rudimentary support for literal ipv6 addresses when parsing stratum
+URLs.
+- Do not attempt to remove the stratum share hash after unsuccessful submission
+since it may already be removed by clear_stratum_shares.
 
 
 BFGMiner Version 2.9.3 - November 16, 2012
