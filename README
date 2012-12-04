@@ -956,6 +956,15 @@ and far less network communications for the same amount of mining hashrate. If
 you do NOT wish cgminer to automatically switch to stratum protocol even if it
 is detected, add the --fix-protocol option.
 
+Q: Why don't the statistics add up: Accepted, Rejected, Stale, Hardware Errors,
+Diff1 Work, etc. when mining greater than 1 difficulty shares?
+A: As an example, if you look at 'Difficulty Accepted' in the RPC API, the number
+of difficulty shares accepted does not usually exactly equal the amount of work
+done to find them. If you are mining at 8 difficulty, then you would expect on
+average to find one 8 difficulty share, per 8 single difficulty shares found.
+However, the number is actually random and converges over time, it is an average,
+not an exact value, thus you may find more or less than the expected average.
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
