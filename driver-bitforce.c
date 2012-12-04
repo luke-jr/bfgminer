@@ -300,6 +300,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string/timed out", bitforce->device_id);
 		bitforce->hw_errors++;
+		++hw_errors;
 		return false;
 	}
 
@@ -322,6 +323,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		dev_error(bitforce, REASON_DEV_THROTTLE);
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
+		++hw_errors;
 		bitforce_clear_buffer(bitforce);
 		return false;
 	}
@@ -504,6 +506,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		return 0;	/* Device idle */
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		bitforce->hw_errors++;
+		++hw_errors;
 		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
 		bitforce_clear_buffer(bitforce);
 		return 0;
@@ -576,6 +579,7 @@ commerr:
 		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
 		dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 		bitforce->hw_errors++;
+		++hw_errors;
 		BFclose(bitforce->device_fd);
 		int fd = bitforce->device_fd = BFopen(bitforce->device_path);
 		if (fd == -1) {
