@@ -67,7 +67,7 @@ static inline void drop_policy(void)
 {
 }
 
-static inline void affine_to_cpu(int id, int cpu)
+static inline void affine_to_cpu(int __maybe_unused id, int __maybe_unused cpu)
 {
 }
 #endif
@@ -778,7 +778,7 @@ static bool cpu_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
-static uint64_t cpu_can_limit_work(struct thr_info *thr)
+static uint64_t cpu_can_limit_work(struct thr_info __maybe_unused *thr)
 {
 	return 0xffff;
 }
