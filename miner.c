@@ -1660,7 +1660,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			static bool appenderr = false;
 			if (ae <= 0) {
 				if (opt_coinbase_sig) {
-					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%d)", ae, pool->pool_no);
+					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%d)", pool->pool_no, ae);
 					appenderr = true;
 				}
 			} else if (ae >= 3 || opt_coinbase_sig) {
