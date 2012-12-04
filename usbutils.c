@@ -1133,6 +1133,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	}
 
 	tot = 0;
+	err = LIBUSB_SUCCESS;
 	while (bufsiz) {
 		got = 0;
 		STATS_TIMEVAL(&tv_start);
