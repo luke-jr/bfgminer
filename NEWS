@@ -1,3 +1,38 @@
+BFGMiner Version 2.9.4 - December 4, 2012
+
+- Update libblkmaker to 0.2.1
+- Count template number, and append it to the coinbase of templates without any
+cbtxn
+- Bugfix: bitforce: Always increment global hw error counter when incrementing
+device hwe
+- Bugfix: Correct order of printf-style arguments in cbappend fail
+- Bugfix: Capitalize "MHz" correctly
+- ztex: Correctly release mutex and reset FPGA if configuration fails
+- ztex: Harmonize low-speed FPGA configuration code with high-speed code
+- libztex: Silence warning: comparison between signed and unsigned
+- Count longpoll decodes as queued work since the count otherwise remains
+static.
+- Bugfix: Assign header-based rolltime before decoding work, so GBT expires
+overrides it properly
+- Look for libusb_init in -lusb, since FreeBSD has it there
+- Bugfix: Use pkgconfig for libusb when available, and try to guess the include
+path if not
+- Bugfix: FPGA-README: Correct idVendor in example MMQ udev rule
+- fixes target calc for mips openwrt
+- Bugfix: clear_work: Whether the template is in fact being freed or not, the
+work reference to it needs to be
+- libztex: Work around ZTEX USB firmware bug exposed by the FreeBSD libusb
+- README: Document solo mining usage
+- README: Update dependencies
+- Bugfix: We should never roll stale work
+- Ubuntu: Removing erroneous libssl dep again. GITHUB#94
+- Bugfix: Clear out stratum share work before freeing it
+- Provide rudimentary support for literal ipv6 addresses when parsing stratum
+URLs.
+- Do not attempt to remove the stratum share hash after unsuccessful submission
+since it may already be removed by clear_stratum_shares.
+
+
 BFGMiner Version 2.9.3 - November 16, 2012
 
 - Bugfix: Properly process new stratum jobs through test_work_current, even if
