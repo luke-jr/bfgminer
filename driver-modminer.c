@@ -16,7 +16,6 @@
 #include "dynclock.h"
 #include "logging.h"
 #include "miner.h"
-#include "usbutils.h"
 #include "fpgautils.h"
 #include "util.h"
 
