@@ -48,6 +48,47 @@
 //* Capability index for multi FPGA support.
 #define CAPABILITY_MULTI_FPGA 0,7
 
+static int libztex_get_string_descriptor_ascii(libusb_device_handle *dev, uint8_t desc_index,
+		unsigned char *data, int length) {
+	int i, cnt;
+	uint16_t langid;
+	unsigned char buf[260];
+
+	/* We open code string descriptor retrieval and ASCII decoding here
+	 * in order to work around that libusb_get_string_descriptor_ascii()
+	 * in the FreeBSD libusb implementation hits a bug in ZTEX firmware,
+	 * where the device returns more bytes than requested, causing babble,
+	 * which makes FreeBSD return an error to us.
+	 *
+	 * Avoid the mess by doing it manually the same way as libusb-1.0.
+	 */
+
+	cnt = libusb_control_transfer(dev, LIBUSB_ENDPOINT_IN,
+	    LIBUSB_REQUEST_GET_DESCRIPTOR, (LIBUSB_DT_STRING << 8) | 0,
+	    0x0000, buf, sizeof(buf), 1000);
+	if (cnt < 0) {
+		applog(LOG_ERR, "%s: Failed to read LANGIDs: %s", __func__, libusb_error_name(cnt));
+		return cnt;
+	}
+
+	langid = libusb_le16_to_cpu(((uint16_t *)buf)[1]);
+
+	cnt = libusb_control_transfer(dev, LIBUSB_ENDPOINT_IN,
+	    LIBUSB_REQUEST_GET_DESCRIPTOR, (LIBUSB_DT_STRING << 8) | desc_index,
+	    langid, buf, sizeof(buf), 1000);
+	if (cnt < 0) {
+		applog(LOG_ERR, "%s: Failed to read string descriptor: %s", __func__, libusb_error_name(cnt));
+		return cnt;
+	}
+
+	/* num chars = (all bytes except bLength and bDescriptorType) / 2 */
+	for (i = 0; i <= (cnt - 2) / 2 && i < length-1; i++)
+		data[i] = buf[2 + i*2];
+
+	data[i] = 0;
+
+	return LIBUSB_SUCCESS;
+}
 
 enum check_result {
 	CHECK_ERROR,
@@ -527,7 +568,6 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	struct libztex_device *newdev = *ztex;
 	int i, cnt, err;
 	unsigned char buf[64];
-	uint16_t langid;
 
 	err = libusb_open(dev, &newdev->hndl);
 	if (err != LIBUSB_SUCCESS) {
@@ -541,39 +581,11 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		return CHECK_ERROR;
 	}
 
-	/* We open code string descriptor retrieval and ASCII decoding here
-	 * in order to work around that libusb_get_string_descriptor_ascii()
-	 * in the FreeBSD libusb implementation hits a bug in ZTEX firmware,
-	 * where the device returns more bytes than requested, causing babble,
-	 * which makes FreeBSD return an error to us.
-	 *
-	 * Avoid the mess by doing it manually the same way as libusb-1.0.
-	 */
-
-	cnt = libusb_control_transfer(newdev->hndl, LIBUSB_ENDPOINT_IN,
-	    LIBUSB_REQUEST_GET_DESCRIPTOR, (LIBUSB_DT_STRING << 8) | 0,
-	    0x0000, buf, sizeof(buf), 1000);
-	if (unlikely(cnt < 0)) {
-		applog(LOG_ERR, "Ztex check device: Failed to read device LANGIDs with err %d", cnt);
-		return cnt;
-	}
-
-	langid = libusb_le16_to_cpu(((uint16_t *)buf)[1]);
-
-	cnt = libusb_control_transfer(newdev->hndl, LIBUSB_ENDPOINT_IN,
-	    LIBUSB_REQUEST_GET_DESCRIPTOR,
-	    (LIBUSB_DT_STRING << 8) | newdev->descriptor.iSerialNumber,
-	    langid, buf, sizeof(buf), 1000);
+	cnt = libztex_get_string_descriptor_ascii(newdev->hndl, newdev->descriptor.iSerialNumber, newdev->snString, sizeof(newdev->snString));
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to read device snString with err %d", cnt);
 		return cnt;
 	}
-
-	/* num chars = (all bytes except bLength and bDescriptorType) / 2 */
-	for (i = 0; i <= (cnt - 2) / 2 && i < (int)sizeof(newdev->snString)-1; i++)
-		newdev->snString[i] = buf[2 + i*2];
-
-	newdev->snString[i] = 0;
 
 	cnt = libusb_control_transfer(newdev->hndl, 0xc0, 0x22, 0, 0, buf, 40, 500);
 	if (unlikely(cnt < 0)) {
