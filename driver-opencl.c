@@ -1586,6 +1586,3 @@ struct device_api opencl_api = {
 	.thread_shutdown = opencl_thread_shutdown,
 };
 #endif
-
-
-
