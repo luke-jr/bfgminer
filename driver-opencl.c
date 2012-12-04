@@ -882,7 +882,7 @@ retry:
 				if (engineclock != -1)
 					tailsprintf(logline, "E: %d MHz  ", engineclock);
 				if (memclock != -1)
-					tailsprintf(logline, "M: %d Mhz  ", memclock);
+					tailsprintf(logline, "M: %d MHz  ", memclock);
 				if (vddc != -1)
 					tailsprintf(logline, "V: %.3fV  ", vddc);
 				if (activity != -1)
