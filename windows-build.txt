@@ -230,8 +230,7 @@ Another way is to type "cd libusb" and then press the tab key; It will auto fill
 Type the lines below one at a time. Look for problems after each one before going on
 to the next.
 
-./autogen.sh --disable-debug-log
-./configure --prefix=/MinGW
+./autogen.sh --disable-debug-log --prefix=/MinGW
 make
 make install
 
