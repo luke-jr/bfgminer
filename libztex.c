@@ -421,9 +421,8 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 {
 	struct libztex_fpgastate state;
 	const int transactionBytes = 2048;
-	unsigned char buf[transactionBytes], cs;
-	int tries, cnt, buf_p, i;
-	ssize_t pos = 0;
+	unsigned char buf[transactionBytes];
+	int tries, cnt, i;
 	FILE *fp;
 
 	if (!libztex_checkCapability(ztex, CAPABILITY_FPGA))
@@ -442,18 +441,6 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 			return -2;
 		}
 
-		cs = 0;
-		while (pos < transactionBytes && !feof(fp)) {
-			buf[pos] = getc(fp);
-			cs += buf[pos++];
-		}
-
-		if (feof(fp))
-			pos--;
-
-		if (bs != 0 && bs != 1)
-			bs = libztex_detectBitstreamBitOrder(buf, transactionBytes < pos? transactionBytes: pos);
-
 		//* Reset fpga
 		cnt = libztex_resetFpga(ztex);
 		if (unlikely(cnt < 0)) {
@@ -461,36 +448,24 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 			continue;
 		}
 
-		if (bs == 1)
-			libztex_swapBits(buf, pos);
-	 
-		buf_p = pos;
-		while (1) {
-			i = 0;
-			while (i < buf_p) {
-				cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x32, 0, 0, &buf[i], buf_p - i, 5000);
-				if (unlikely(cnt < 0)) {
-					applog(LOG_ERR, "%s: Failed send fpga data with err %d", ztex->repr, cnt);
-					break;
-				}
-				i += cnt;
-			}
-			if (i < buf_p || buf_p < transactionBytes)
-				break;
-			buf_p = 0;
-			while (buf_p < transactionBytes && !feof(fp)) {
-				buf[buf_p] = getc(fp);
-				cs += buf[buf_p++];
-			}
-			if (feof(fp))
-				buf_p--;
-			pos += buf_p;
-			if (buf_p == 0)
-				break;
+		do
+		{
+			int length = fread(buf, 1, transactionBytes, fp);
+
+			if (bs != 0 && bs != 1)
+				bs = libztex_detectBitstreamBitOrder(buf, length);
 			if (bs == 1)
-				libztex_swapBits(buf, buf_p);
+				libztex_swapBits(buf, length);
+			cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x32, 0, 0, buf, length, 5000);
+			if (cnt != length)
+			{
+				applog(LOG_ERR, "%s: Failed send hs fpga data", ztex->repr);
+				break;
+			}
 		}
-		if (cnt >= 0)
+		while (!feof(fp));
+
+		if (cnt > 0)
 			tries = 0;
 
 		fclose(fp);
