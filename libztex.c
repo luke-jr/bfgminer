@@ -1,7 +1,9 @@
 /**
- *   libztex.c - Ztex 1.15x fpga board support library
+ *   libztex.c - Ztex 1.15x/1.15y fpga board support library
  *
  *   Copyright (c) 2012 nelisky.btc@gmail.com
+ *   Copyright (c) 2012 Denis Ahrens <denis@h3q.com>
+ *   Copyright (c) 2012 Peter Stuge <peter@stuge.se>
  *
  *   This work is based upon the Java SDK provided by ztex which is
  *   Copyright (C) 2009-2011 ZTEX GmbH.
@@ -46,22 +48,237 @@
 //* Capability index for multi FPGA support.
 #define CAPABILITY_MULTI_FPGA 0,7
 
+static int libztex_get_string_descriptor_ascii(libusb_device_handle *dev, uint8_t desc_index,
+		unsigned char *data, int length) {
+	int i, cnt;
+	uint16_t langid;
+	unsigned char buf[260];
 
-static bool libztex_checkDevice(struct libusb_device *dev)
+	/* We open code string descriptor retrieval and ASCII decoding here
+	 * in order to work around that libusb_get_string_descriptor_ascii()
+	 * in the FreeBSD libusb implementation hits a bug in ZTEX firmware,
+	 * where the device returns more bytes than requested, causing babble,
+	 * which makes FreeBSD return an error to us.
+	 *
+	 * Avoid the mess by doing it manually the same way as libusb-1.0.
+	 */
+
+	cnt = libusb_control_transfer(dev, LIBUSB_ENDPOINT_IN,
+	    LIBUSB_REQUEST_GET_DESCRIPTOR, (LIBUSB_DT_STRING << 8) | 0,
+	    0x0000, buf, sizeof(buf), 1000);
+	if (cnt < 0) {
+		applog(LOG_ERR, "%s: Failed to read LANGIDs: %s", __func__, libusb_error_name(cnt));
+		return cnt;
+	}
+
+	langid = libusb_le16_to_cpu(((uint16_t *)buf)[1]);
+
+	cnt = libusb_control_transfer(dev, LIBUSB_ENDPOINT_IN,
+	    LIBUSB_REQUEST_GET_DESCRIPTOR, (LIBUSB_DT_STRING << 8) | desc_index,
+	    langid, buf, sizeof(buf), 1000);
+	if (cnt < 0) {
+		applog(LOG_ERR, "%s: Failed to read string descriptor: %s", __func__, libusb_error_name(cnt));
+		return cnt;
+	}
+
+	/* num chars = (all bytes except bLength and bDescriptorType) / 2 */
+	for (i = 0; i <= (cnt - 2) / 2 && i < length-1; i++)
+		data[i] = buf[2 + i*2];
+
+	data[i] = 0;
+
+	return LIBUSB_SUCCESS;
+}
+
+enum check_result {
+	CHECK_ERROR,
+	CHECK_IS_NOT_ZTEX,
+	CHECK_OK,
+	CHECK_RESCAN,
+};
+
+static enum check_result libztex_checkDevice(struct libusb_device *dev)
 {
+	FILE *fp = NULL;
+	libusb_device_handle *hndl = NULL;
 	struct libusb_device_descriptor desc;
-	int err;
+	int i, ret = CHECK_ERROR, err, cnt;
+	size_t got_bytes, length;
+	unsigned char buf[64], *fw_buf;
 
 	err = libusb_get_device_descriptor(dev, &desc);
 	if (unlikely(err != 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to open read descriptor with error %d", err);
-		return false;
+		return CHECK_ERROR;
 	}
-	if (!(desc.idVendor == LIBZTEX_IDVENDOR && desc.idProduct == LIBZTEX_IDPRODUCT)) {
+
+	if (desc.idVendor != LIBZTEX_IDVENDOR || desc.idProduct != LIBZTEX_IDPRODUCT) {
 		applog(LOG_DEBUG, "Not a ZTEX device %0.4x:%0.4x", desc.idVendor, desc.idProduct);
-		return false;
+		return CHECK_IS_NOT_ZTEX;
 	}
-	return true;
+
+	err = libusb_open(dev, &hndl);
+	if (err != LIBUSB_SUCCESS) {
+		applog(LOG_ERR, "%s: Can not open ZTEX device: %s", __func__, libusb_error_name(err));
+		goto done;
+	}
+
+	cnt = libusb_control_transfer(hndl, 0xc0, 0x22, 0, 0, buf, 40, 500);
+	if (unlikely(cnt < 0)) {
+		applog(LOG_ERR, "Ztex check device: Failed to read ztex descriptor with err %d", cnt);
+		goto done;
+	}
+
+	if (buf[0] != 40 || buf[1] != 1 || buf[2] != 'Z' || buf[3] != 'T' || buf[4] != 'E' || buf[5] != 'X') {
+		applog(LOG_ERR, "Ztex check device: Error reading ztex descriptor");
+		goto done;
+	}
+
+	if (buf[6] != 10)
+	{
+		ret = CHECK_IS_NOT_ZTEX;
+		goto done;
+	}
+
+	// 15 = 1.15y   13 = 1.15d or 1.15x
+	switch(buf[7])
+	{
+		case 13:
+			applog(LOG_ERR, "Found ztex board 1.15d or 1.15x");
+			break;
+		case 15:
+			applog(LOG_ERR, "Found ztex board 1.15y");
+			break;
+		default:
+			applog(LOG_ERR, "Found unknown ztex board");
+			ret = CHECK_IS_NOT_ZTEX;
+			goto done;
+	}
+
+	// testing for dummy firmware
+	if (buf[8] != 0) {
+		ret = CHECK_OK;
+		goto done;
+	}
+
+	applog(LOG_ERR, "Found dummy firmware, trying to send mining firmware");
+
+	char productString[32];
+
+	cnt = libztex_get_string_descriptor_ascii(hndl, desc.iProduct, productString, sizeof(productString));
+	if (unlikely(cnt < 0)) {
+		applog(LOG_ERR, "Ztex check device: Failed to read device productString with err %d", cnt);
+		return cnt;
+	}
+
+	applog(LOG_ERR, "productString: %s", productString);
+
+	unsigned char productID2 = buf[7];
+	char *firmware = NULL;
+
+	if (strcmp("USB-FPGA Module 1.15d (default)", productString) == 0 && productID2 == 13)
+	{
+		firmware = "ztex_ufm1_15d4.bin";
+	}
+	else if (strcmp("USB-FPGA Module 1.15x (default)", productString) == 0 && productID2 == 13)
+	{
+		firmware = "ztex_ufm1_15d4.bin";
+	}
+	else if (strcmp("USB-FPGA Module 1.15y (default)", productString) == 0 && productID2 == 15)
+	{
+		firmware = "ztex_ufm1_15y1.bin";
+	}
+
+	if (firmware == NULL)
+	{
+		applog(LOG_ERR, "could not figure out which firmware to use");
+		goto done;
+	}
+
+	applog(LOG_ERR, "Mining firmware filename: %s", firmware);
+
+	fp = open_bitstream("ztex", firmware);
+	if (!fp) {
+		applog(LOG_ERR, "failed to open firmware file '%s'", firmware);
+		goto done;
+	}
+
+	if (0 != fseek(fp, 0, SEEK_END)) {
+		applog(LOG_ERR, "Ztex firmware fseek: %s", strerror(errno));
+		goto done;
+	}
+
+	length = ftell(fp);
+	rewind(fp);
+	fw_buf = malloc(length);
+	if (!fw_buf) {
+		applog(LOG_ERR, "%s: Can not allocate memory: %s", __func__, strerror(errno));
+		goto done;
+	}
+
+	got_bytes = fread(fw_buf, 1, length, fp);
+	fclose(fp);
+	fp = NULL;
+
+	if (got_bytes < length) {
+		applog(LOG_ERR, "%s: Incomplete firmware read: %d/%d", __func__, got_bytes, length);
+		goto done;
+	}
+
+	// in buf[] is still the identifier of the dummy firmware
+	// use it to compare it with the new firmware
+	char *rv = memmem(fw_buf, got_bytes, buf, 8);
+	if (rv == NULL)
+	{
+		applog(LOG_ERR, "%s: found firmware is not ZTEX", __func__);
+		goto done;
+	}
+
+	// check for dummy firmware
+	if (rv[8] == 0)
+	{
+		applog(LOG_ERR, "%s: found a ZTEX dummy firmware", __func__);
+		goto done;
+	}
+
+	// reset 1
+	buf[0] = 1;
+	cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
+	if (cnt < 0)
+	{
+		applog(LOG_ERR, "Ztex reset 1 failed: %s", libusb_error_name(cnt));
+		goto done;
+	}
+
+	for (i = 0; i < length; i+= 256) {
+		// firmware wants data in small chunks like 256 bytes
+		int numbytes = (length - i) < 256 ? (length - i) : 256;
+		int k = libusb_control_transfer(hndl, 0x40, 0xA0, i, 0, fw_buf + i, numbytes, 1000);
+		if (k < numbytes)
+		{
+			applog(LOG_ERR, "Ztex device: Failed to write firmware at %d with: %s", i, libusb_error_name(k));
+			goto done;
+		}
+	}
+
+	// reset 0
+	buf[0] = 0;
+	err = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
+	if (err < 0)
+	{
+		applog(LOG_ERR, "Ztex reset 0 failed: %s", libusb_error_name(err));
+		goto done;
+	}
+
+	applog(LOG_ERR, "Ztex device: succesfully wrote firmware");
+	ret = CHECK_RESCAN;
+
+done:
+	if (fp)
+		fclose(fp);
+	if (hndl)
+		libusb_close(hndl);
+	return ret;
 }
 
 static bool libztex_checkCapability(struct libztex_device *ztex, int i, int j)
@@ -132,8 +349,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	struct libztex_fpgastate state;
 	const int transactionBytes = 65536;
 	unsigned char buf[transactionBytes], settings[2];
-	int tries, cnt, buf_p, i;
-	ssize_t pos = 0;
+	int tries, cnt, err, i;
 	FILE *fp;
 
 	if (!libztex_checkCapability(ztex, CAPABILITY_HS_FPGA))
@@ -141,7 +357,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	libztex_getFpgaState(ztex, &state);
 	if (!force && state.fpgaConfigured) {
 		applog(LOG_INFO, "Bitstream already configured");
-		return 1;
+		return 0;
 	}
 	cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x33, 0, 0, settings, 2, 1000);
 	if (unlikely(cnt < 0)) {
@@ -154,56 +370,29 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	for (tries = 3; tries > 0; tries--) {
 		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
-			applog(LOG_ERR, "%s: failed to read firmware '%s'", ztex->repr, firmware);
+			applog(LOG_ERR, "%s: failed to read bitstream '%s'", ztex->repr, firmware);
 			return -2;
 		}
 
-		while (pos < transactionBytes && !feof(fp)) {
-			buf[pos++] = getc(fp);
-		}
-
-		if (feof(fp))
-			pos--;
-
-		if (bs != 0 && bs != 1)
-			bs = libztex_detectBitstreamBitOrder(buf, transactionBytes < pos? transactionBytes: pos);
-
-
-		if (bs == 1)
-			libztex_swapBits(buf, pos);
-	 
 		libusb_control_transfer(ztex->hndl, 0x40, 0x34, 0, 0, NULL, 0, 1000);
 		// 0x34 - initHSFPGAConfiguration
 
-		buf_p = pos;
-		while (1) {
-			i = 0;
-			while (i < buf_p) {
-				if (libusb_bulk_transfer(ztex->hndl,
-				                                  settings[0],
-				                                  &buf[i],
-				                                  buf_p - i,
-				                                  &cnt, 1000) != 0) {
-					applog(LOG_ERR, "%s: Failed send hs fpga data", ztex->repr);
-					break;
-				}
-				usleep(500);
-				i += cnt;
-			}
-			if (i < buf_p || buf_p < transactionBytes)
-				break;
-			buf_p = 0;
-			while (buf_p < transactionBytes && !feof(fp)) {
-				buf[buf_p++] = getc(fp);
-			}
-			if (feof(fp))
-				buf_p--;
-			pos += buf_p;
-			if (buf_p == 0)
-				break;
+		do
+		{
+			int length = fread(buf,1,transactionBytes,fp);
+
+			if (bs != 0 && bs != 1)
+				bs = libztex_detectBitstreamBitOrder(buf, length);
 			if (bs == 1)
-				libztex_swapBits(buf, buf_p);
+				libztex_swapBits(buf, length);
+
+			err = libusb_bulk_transfer(ztex->hndl, settings[0], buf, length, &cnt, 1000);
+			if (cnt != length)
+				applog(LOG_ERR, "%s: cnt != length", ztex->repr);
+			if (err != 0)
+				applog(LOG_ERR, "%s: Failed send hs fpga data", ztex->repr);
 		}
+		while (!feof(fp));
 
 		libusb_control_transfer(ztex->hndl, 0x40, 0x35, 0, 0, NULL, 0, 1000);
 		// 0x35 - finishHSFPGAConfiguration
@@ -232,9 +421,8 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 {
 	struct libztex_fpgastate state;
 	const int transactionBytes = 2048;
-	unsigned char buf[transactionBytes], cs;
-	int tries, cnt, buf_p, i;
-	ssize_t pos = 0;
+	unsigned char buf[transactionBytes];
+	int tries, cnt, i;
 	FILE *fp;
 
 	if (!libztex_checkCapability(ztex, CAPABILITY_FPGA))
@@ -243,27 +431,15 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 	libztex_getFpgaState(ztex, &state);
 	if (!force && state.fpgaConfigured) {
 		applog(LOG_DEBUG, "Bitstream already configured");
-		return 1;
+		return 0;
 	}
 
 	for (tries = 10; tries > 0; tries--) {
 		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
-			applog(LOG_ERR, "%s: failed to read firmware '%s'", ztex->repr, firmware);
+			applog(LOG_ERR, "%s: failed to read bitstream '%s'", ztex->repr, firmware);
 			return -2;
 		}
-
-		cs = 0;
-		while (pos < transactionBytes && !feof(fp)) {
-			buf[pos] = getc(fp);
-			cs += buf[pos++];
-		}
-
-		if (feof(fp))
-			pos--;
-
-		if (bs != 0 && bs != 1)
-			bs = libztex_detectBitstreamBitOrder(buf, transactionBytes < pos? transactionBytes: pos);
 
 		//* Reset fpga
 		cnt = libztex_resetFpga(ztex);
@@ -272,36 +448,24 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 			continue;
 		}
 
-		if (bs == 1)
-			libztex_swapBits(buf, pos);
-	 
-		buf_p = pos;
-		while (1) {
-			i = 0;
-			while (i < buf_p) {
-				cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x32, 0, 0, &buf[i], buf_p - i, 5000);
-				if (unlikely(cnt < 0)) {
-					applog(LOG_ERR, "%s: Failed send fpga data with err %d", ztex->repr, cnt);
-					break;
-				}
-				i += cnt;
-			}
-			if (i < buf_p || buf_p < transactionBytes)
-				break;
-			buf_p = 0;
-			while (buf_p < transactionBytes && !feof(fp)) {
-				buf[buf_p] = getc(fp);
-				cs += buf[buf_p++];
-			}
-			if (feof(fp))
-				buf_p--;
-			pos += buf_p;
-			if (buf_p == 0)
-				break;
+		do
+		{
+			int length = fread(buf, 1, transactionBytes, fp);
+
+			if (bs != 0 && bs != 1)
+				bs = libztex_detectBitstreamBitOrder(buf, length);
 			if (bs == 1)
-				libztex_swapBits(buf, buf_p);
+				libztex_swapBits(buf, length);
+			cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x32, 0, 0, buf, length, 5000);
+			if (cnt != length)
+			{
+				applog(LOG_ERR, "%s: Failed send hs fpga data", ztex->repr);
+				break;
+			}
 		}
-		if (cnt >= 0)
+		while (!feof(fp));
+
+		if (cnt > 0)
 			tries = 0;
 
 		fclose(fp);
@@ -408,70 +572,27 @@ int libztex_suspend(struct libztex_device *ztex) {
 }
 
 int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** ztex) {
-	struct libztex_device *newdev;
+	struct libztex_device *newdev = *ztex;
 	int i, cnt, err;
 	unsigned char buf[64];
-	uint16_t langid;
 
-	newdev = malloc(sizeof(struct libztex_device));
-	newdev->bitFileName = NULL;
-	newdev->numberOfFpgas = -1;
-	newdev->valid = false;
-	newdev->hndl = NULL;
-	*ztex = newdev;
+	err = libusb_open(dev, &newdev->hndl);
+	if (err != LIBUSB_SUCCESS) {
+		applog(LOG_ERR, "%s: Can not open ZTEX device: %s", __func__, libusb_error_name(err));
+		return CHECK_ERROR;
+	}
 
 	err = libusb_get_device_descriptor(dev, &newdev->descriptor);
 	if (unlikely(err != 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to open read descriptor with error %d", err);
-		return err;
+		return CHECK_ERROR;
 	}
 
-	// Check vendorId and productId
-	if (!(newdev->descriptor.idVendor == LIBZTEX_IDVENDOR &&
-	    newdev->descriptor.idProduct == LIBZTEX_IDPRODUCT)) {
-		applog(LOG_ERR, "Not a ztex device? %0.4X, %0.4X", newdev->descriptor.idVendor, newdev->descriptor.idProduct);
-		return 1;
-	}
-
-	err = libusb_open(dev, &newdev->hndl);
-	if (unlikely(err != 0)) {
-		applog(LOG_ERR, "Ztex check device: Failed to open handle with error %d", err);
-		return err;
-	}
-
-	/* We open code string descriptor retrieval and ASCII decoding here
-	 * in order to work around that libusb_get_string_descriptor_ascii()
-	 * in the FreeBSD libusb implementation hits a bug in ZTEX firmware,
-	 * where the device returns more bytes than requested, causing babble,
-	 * which makes FreeBSD return an error to us.
-	 *
-	 * Avoid the mess by doing it manually the same way as libusb-1.0.
-	 */
-
-	cnt = libusb_control_transfer(newdev->hndl, LIBUSB_ENDPOINT_IN,
-	    LIBUSB_REQUEST_GET_DESCRIPTOR, (LIBUSB_DT_STRING << 8) | 0,
-	    0x0000, buf, sizeof(buf), 1000);
-	if (unlikely(cnt < 0)) {
-		applog(LOG_ERR, "Ztex check device: Failed to read device LANGIDs with err %d", cnt);
-		return cnt;
-	}
-
-	langid = libusb_le16_to_cpu(((uint16_t *)buf)[1]);
-
-	cnt = libusb_control_transfer(newdev->hndl, LIBUSB_ENDPOINT_IN,
-	    LIBUSB_REQUEST_GET_DESCRIPTOR,
-	    (LIBUSB_DT_STRING << 8) | newdev->descriptor.iSerialNumber,
-	    langid, buf, sizeof(buf), 1000);
+	cnt = libztex_get_string_descriptor_ascii(newdev->hndl, newdev->descriptor.iSerialNumber, newdev->snString, sizeof(newdev->snString));
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to read device snString with err %d", cnt);
 		return cnt;
 	}
-
-	/* num chars = (all bytes except bLength and bDescriptorType) / 2 */
-	for (i = 0; i <= (cnt - 2) / 2 && i < (int)sizeof(newdev->snString)-1; i++)
-		newdev->snString[i] = buf[2 + i*2];
-
-	newdev->snString[i] = 0;
 
 	cnt = libusb_control_transfer(newdev->hndl, 0xc0, 0x22, 0, 0, buf, 40, 500);
 	if (unlikely(cnt < 0)) {
@@ -587,52 +708,104 @@ void libztex_destroy_device(struct libztex_device* ztex)
 int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 {
 	int usbdevices[LIBZTEX_MAX_DESCRIPTORS];
-	struct libztex_dev_list **devs;
-	struct libztex_device *ztex;
-	int found = 0, pos = 0, err;
-	libusb_device **list;
-	ssize_t cnt, i = 0;
+	struct libztex_dev_list **devs = NULL;
+	struct libusb_device_descriptor dev_descr;
+	struct libztex_device *ztex = NULL;
+	int found, max_found = 0, pos = 0, err, rescan, ret = 0;
+	libusb_device **list = NULL;
+	ssize_t cnt, i;
 
-	cnt = libusb_get_device_list(NULL, &list);
-	if (unlikely(cnt < 0)) {
-		applog(LOG_ERR, "Ztex scan devices: Failed to list usb devices with err %d", cnt);
-		return 0;
-	}
-
-	for (i = 0; i < cnt; i++) {
-		if (libztex_checkDevice(list[i])) {
-			// Got one!
-			usbdevices[found] = i;
-			found++;
+	do {
+		cnt = libusb_get_device_list(NULL, &list);
+		if (unlikely(cnt < 0)) {
+			applog(LOG_ERR, "Ztex scan devices: Failed to list usb devices with err %d", cnt);
+			goto done;
 		}
-	}
+
+		for (found = rescan = i = 0; i < cnt; i++) {
+			err = libztex_checkDevice(list[i]);
+			switch (err) {
+			case CHECK_ERROR:
+				applog(LOG_ERR, "Ztex: Can not check device: %s", libusb_error_name(err));
+				continue;
+			case CHECK_IS_NOT_ZTEX:
+				continue;
+			case CHECK_OK:
+				// Got one!
+				usbdevices[found++] = i;
+				break;
+			case CHECK_RESCAN:
+				rescan = 1;
+				found++;
+				break;
+			}
+		}
+
+		if (found < max_found)
+			rescan = 1;
+		else if (found > max_found)
+			max_found = found;
+
+		if (rescan)
+			libusb_free_device_list(list, 1);
+	} while (rescan);
+
+	if (0 == found)
+		goto done;
 
 	devs = malloc(sizeof(struct libztex_dev_list *) * found);
 	if (devs == NULL) {
 		applog(LOG_ERR, "Ztex scan devices: Failed to allocate memory");
-		return 0;
+		goto done;
 	}
 
 	for (i = 0; i < found; i++) {
+		if (!ztex) {
+			ztex = malloc(sizeof(*ztex));
+			if (!ztex) {
+				applog(LOG_ERR, "%s: Can not allocate memory for device struct: %s", __func__, strerror(errno));
+				goto done;
+			}
+		}
+
+		ztex->bitFileName = NULL;
+		ztex->numberOfFpgas = -1;
+		ztex->valid = false;
+
 		err = libztex_prepare_device(list[usbdevices[i]], &ztex);
-		if (unlikely(err != 0))
+		if (unlikely(err != 0)) {
 			applog(LOG_ERR, "prepare device: %d", err);
-		// check if valid
-		if (!ztex->valid) {
 			libztex_destroy_device(ztex);
+			ztex = NULL;
 			continue;
 		}
+
 		devs[pos] = malloc(sizeof(struct libztex_dev_list));
+		if (NULL == devs[pos]) {
+			applog(LOG_ERR, "%s: Can not allocate memory for device: %s", __func__, strerror(errno));
+			libztex_destroy_device(ztex);
+			ztex = NULL;
+			continue;
+		}
+
 		devs[pos]->dev = ztex;
+		ztex = NULL;
 		devs[pos]->next = NULL;
 		if (pos > 0)
 			devs[pos - 1]->next = devs[pos];
 		pos++;
 	}
 
-	libusb_free_device_list(list, 1);
-	*devs_p = devs;
-	return pos;
+	ret = pos;
+
+done:
+	if (ret > 0)
+		*devs_p = devs;
+	else if (devs)
+		free(devs);
+	if (list)
+		libusb_free_device_list(list, 1);
+	return ret;
 }
 
 int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)
