@@ -2615,20 +2615,11 @@ static uint64_t scrypt_diff(const struct work *work)
 	return ret;
 }
 
-static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
+static char *submit_upstream_work_request(struct work *work)
 {
 	char *hexstr = NULL;
-	json_t *val, *res, *err;
 	char *s, *sd;
-	bool rc = false;
-	int thr_id = work->thr_id;
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	struct pool *pool = work->pool;
-	int rolltime;
-	uint32_t *hash32;
-	struct timeval tv_submit, tv_submit_reply;
-	char hashshow[64 + 4] = "";
-	char worktime[200] = "";
 
 	if (work->tmpl) {
 		unsigned char data[80];
@@ -2647,6 +2638,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		s = realloc_strcat(s, hexstr);
 		s = realloc_strcat(s, "\" ], \"id\":1}");
 
+		free(hexstr);
 		sd = s;
 
 	}
@@ -2657,12 +2649,21 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	else
 		s = realloc_strcat(s, "\n");
 
-	gettimeofday(&tv_submit, NULL);
-	/* issue JSON-RPC request */
-	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
+	return s;
+}
+
+static bool submit_upstream_work_completed(struct work *work, bool resubmit, struct timeval *ptv_submit, json_t *val) {
+	json_t *res, *err;
+	bool rc = false;
+	int thr_id = work->thr_id;
+	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	struct pool *pool = work->pool;
+	uint32_t *hash32;
+	struct timeval tv_submit_reply;
+	char hashshow[64 + 4] = "";
+	char worktime[200] = "";
 
 	gettimeofday(&tv_submit_reply, NULL);
-	free(s);
 
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
@@ -2671,7 +2672,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			pool->remotefail_occasions++;
 			applog(LOG_WARNING, "Pool %d communication failure, caching submissions", pool->pool_no);
 		}
-		sleep(5);
 		goto out;
 	} else if (pool_tclear(pool, &pool->submit_fail))
 		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
@@ -2712,9 +2712,9 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 							(struct timeval *)&(work->tv_getwork_reply));
 			double work_time = tdiff((struct timeval *)&(work->tv_work_found),
 							(struct timeval *)&(work->tv_work_start));
-			double work_to_submit = tdiff(&tv_submit,
+			double work_to_submit = tdiff(ptv_submit,
 							(struct timeval *)&(work->tv_work_found));
-			double submit_time = tdiff(&tv_submit_reply, &tv_submit);
+			double submit_time = tdiff(&tv_submit_reply, ptv_submit);
 			int diffplaces = 3;
 
 			tm = localtime(&(work->tv_getwork.tv_sec));
@@ -2763,7 +2763,6 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	rc = true;
 out:
-	free(hexstr);
 	return rc;
 }
 
@@ -3718,7 +3717,20 @@ next_submit:
 
 	ce = pop_curl_entry(pool);
 	/* submit solution to bitcoin via JSON-RPC */
-	while (!submit_upstream_work(work, ce->curl, resubmit)) {
+	while (1) {
+		{
+			char *s = submit_upstream_work_request(work);
+			struct timeval tv_submit;
+			json_t *val;
+
+			gettimeofday(&tv_submit, NULL);
+			val = json_rpc_call(ce->curl, pool->rpc_url, pool->rpc_userpass, s, false, false, NULL, pool, true);
+			free(s);
+			if (submit_upstream_work_completed(work, resubmit, &tv_submit, val))
+				break;
+		}
+
+		
 		resubmit = true;
 		if ((!work->stale) && stale_work(work, true)) {
 			work->stale = true;

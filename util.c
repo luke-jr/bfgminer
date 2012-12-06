@@ -442,6 +442,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		}
 	}
 
+	if (rolltime)
 	*rolltime = hi.rolltime;
 	pool->cgminer_pool_stats.rolltime = hi.rolltime;
 	pool->cgminer_pool_stats.hadrolltime = hi.hadrolltime;
