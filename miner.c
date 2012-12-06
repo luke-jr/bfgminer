@@ -5038,6 +5038,7 @@ retry:
 			struct stat statbuf;
 
 			strcpy(filename, str);
+			free(str);
 			if (!stat(filename, &statbuf)) {
 				wlogprint("File exists, overwrite?\n");
 				input = getch();
@@ -5045,6 +5046,8 @@ retry:
 					goto retry;
 			}
 		}
+		else
+			free(str);
 		fcfg = fopen(filename, "w");
 		if (!fcfg) {
 			wlogprint("Cannot open or create file\n");
