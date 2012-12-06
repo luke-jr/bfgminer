@@ -999,6 +999,7 @@ struct pool {
 	int n2size;
 	bool has_stratum;
 	bool stratum_active;
+	time_t last_work_time;  /* only set for Stratum right now */
 	bool stratum_auth;
 	struct stratum_work swork;
 	pthread_t stratum_thread;
