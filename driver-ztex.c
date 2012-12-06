@@ -365,10 +365,10 @@ static bool ztex_prepare(struct thr_info *thr)
 		ztex_releaseFpga(ztex);
 		return false;
 	}
-	ztex_releaseFpga(ztex);
 	ztex->freqM = ztex->freqMaxM+1;;
 	//ztex_updateFreq(ztex);
 	libztex_setFreq(ztex, ztex->freqMDefault);
+	ztex_releaseFpga(ztex);
 	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
 	return true;
 }
