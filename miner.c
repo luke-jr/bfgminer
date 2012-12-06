@@ -4781,7 +4781,10 @@ retry:
 		opt_fail_only ^= true;
 		goto updated;
         } else if (!strncasecmp(&input, "p", 1)) {
-        	switch (prioritize_pools(curses_input("Enter new pool priority (comma separated list)"), &i)) {
+			char *prilist = curses_input("Enter new pool priority (comma separated list)");
+			int res = prioritize_pools(prilist, &i);
+			free(prilist);
+			switch (res) {
         		case MSG_NOPOOL:
         			wlogprint("No pools\n");
         			goto retry;
