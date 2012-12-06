@@ -6040,6 +6040,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	uint32_t *data32, *swap32;
 	char *header;
 
+	clean_work(work);
+
 	mutex_lock(&pool->pool_lock);
 
 	/* Generate coinbase */
