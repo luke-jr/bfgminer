@@ -1389,6 +1389,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
+	free(pool->nonce1);
 	pool->nonce1 = json_array_string(res_val, 1);
 	if (!pool->nonce1) {
 		applog(LOG_INFO, "Failed to get nonce1 in initiate_stratum");
