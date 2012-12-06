@@ -3068,6 +3068,7 @@ retry:
 			}
 		}
 		ret_work = make_work();
+		pool->last_work_time = time(NULL);
 		gen_stratum_work(pool, ret_work);
 		if (unlikely(!stage_work(ret_work))) {
 			applog(LOG_ERR, "Failed to stage stratum work in get_work_thread");
@@ -4693,6 +4694,12 @@ static bool cnx_needed(struct pool *pool)
 		return true;
 	if (!cp->has_gbt && !cp->has_stratum)
 		return true;
+
+	/* Keep stratum pools alive until at least a minute after their last
+	 * generated work, to ensure we have a channel for any submissions */
+	if (pool->has_stratum && difftime(time(NULL), pool->last_work_time) < 60)
+		return true;
+
 	return false;
 }
 
@@ -5102,6 +5109,7 @@ static bool reuse_work(struct work *work, struct pool *pool)
 		if (!pool->stratum_active)
 			return false;
 		applog(LOG_DEBUG, "Reusing stratum work");
+		pool->last_work_time = time(NULL);
 		gen_stratum_work(pool, work);
 		return true;
 	}
