@@ -5069,6 +5069,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	memset(work->nonce2, 0, 64);
 	memset(work->ntime, 0, 16);
 
+	clean_work(work);
+
 	mutex_lock(&pool->pool_lock);
 
 	/* Generate coinbase */
