@@ -1074,7 +1074,7 @@ enum test_nonce2_result {
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
-bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);

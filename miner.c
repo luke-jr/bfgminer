@@ -81,7 +81,6 @@
 
 enum workio_commands {
 	WC_GET_WORK,
-	WC_SUBMIT_WORK,
 };
 
 struct workio_cmd {
@@ -3044,12 +3043,8 @@ static void workio_cmd_free(struct workio_cmd *wc)
 		return;
 
 	switch (wc->cmd) {
-	case WC_SUBMIT_WORK:
-		if (wc->work)
-		free_work(wc->work);
-		break;
-	default: /* do nothing */
-		break;
+		default: /* do nothing */
+			break;
 	}
 
 	memset(wc, 0, sizeof(*wc));	/* poison */
@@ -3817,9 +3812,9 @@ static void free_sws(struct submit_work_state *sws)
 	free(sws);
 }
 
-static void *submit_work_thread(void *userdata)
+static void *submit_work_thread(__maybe_unused void *userdata)
 {
-	struct workio_cmd *wc = (struct workio_cmd *)userdata;
+	struct workio_cmd *wc;
 	int wip = 0;
 	CURLM *curlm;
 	long curlm_timeout_ms = -1;
@@ -3835,16 +3830,6 @@ static void *submit_work_thread(void *userdata)
 	curlm = curl_multi_init();
 	curl_multi_setopt(curlm, CURLMOPT_TIMERFUNCTION, my_curl_timer_set);
 	curl_multi_setopt(curlm, CURLMOPT_TIMERDATA, &curlm_timeout_ms);
-
-	if ( (sws = begin_submission(wc)) ) {
-		if (sws->ce)
-			curl_multi_add_handle(curlm, sws->ce->curl);
-		else
-		if (sws->s)
-			write_sws = sws;
-		++wip;
-		++total_submitting;
-	}
 
 	fd_set rfds, wfds, efds;
 	int maxfd;
@@ -3962,21 +3947,6 @@ static void *submit_work_thread(void *userdata)
 	curl_multi_cleanup(curlm);
 
 	return NULL;
-}
-
-/* We try to reuse curl handles as much as possible, but if there is already
- * work queued to be submitted, we start generating extra handles to submit
- * the shares to avoid ever increasing backlogs. This allows us to scale to
- * any size hardware */
-static bool workio_submit_work(struct workio_cmd *wc)
-{
-	pthread_t submit_thread;
-
-	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, (void *)wc))) {
-		applog(LOG_ERR, "Failed to create submit_work_thread");
-		return false;
-	}
-	return true;
 }
 
 /* Find the pool that currently has the highest priority */
@@ -5350,21 +5320,6 @@ static void *workio_thread(void *userdata)
 		case WC_GET_WORK:
 			ok = workio_get_work(wc);
 			break;
-		case WC_SUBMIT_WORK:
-		{
-			mutex_lock(&submitting_lock);
-			if (submitting) {
-				list_add_tail(&wc->list, &submit_waiting);
-				(void)write(submit_waiting_notifier[1], "\0", 1);
-				mutex_unlock(&submitting_lock);
-				break;
-			}
-			++submitting;
-			mutex_unlock(&submitting_lock);
-
-			ok = workio_submit_work(wc);
-			break;
-		}
 		default:
 			ok = false;
 			break;
@@ -6422,35 +6377,40 @@ out:
 	work->mined = true;
 }
 
-bool submit_work_sync(struct thr_info *thr, struct work *work_in, struct timeval *tv_work_found)
+void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
 	struct workio_cmd *wc;
+	struct work *work = copy_work(work_in);
+	pthread_t submit_thread;
+	bool was_submitting;
+
+	if (tv_work_found)
+		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
+	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
 	/* fill out work request message */
 	wc = calloc(1, sizeof(*wc));
 	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to calloc wc in submit_work_sync");
-		return false;
+		applog(LOG_ERR, "Failed to calloc wc in submit_work_async");
+		return;
 	}
 
-	wc->work = copy_work(work_in);
-	wc->cmd = WC_SUBMIT_WORK;
-	wc->thr = thr;
-	if (tv_work_found)
-		memcpy(&(wc->work->tv_work_found), tv_work_found, sizeof(struct timeval));
+	wc->work = work;
 
-	applog(LOG_DEBUG, "Pushing submit work to work thread");
+	mutex_lock(&submitting_lock);
+	list_add_tail(&wc->list, &submit_waiting);
+	was_submitting = submitting;
+	if (!submitting)
+		++submitting;
+	mutex_unlock(&submitting_lock);
 
-	/* send solution to workio thread */
-	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
-		applog(LOG_ERR, "Failed to tq_push work in submit_work_sync");
-		goto err_out;
+	if (was_submitting) {
+		(void)write(submit_waiting_notifier[1], "\0", 1);
+		return;
 	}
 
-	return true;
-err_out:
-	workio_cmd_free(wc);
-	return false;
+	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
+		quit(1, "Failed to create submit_work_thread");
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
@@ -6499,7 +6459,7 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	return hashtest2(work, checktarget);
 }
 
-bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	struct timeval tv_work_found;
 	gettimeofday(&tv_work_found, NULL);
@@ -6525,8 +6485,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 			if (thr->cgpu->api->hw_error)
 				thr->cgpu->api->hw_error(thr);
-
-			return false;
+			return;
 		}
 		case TNR_HIGH:
 			// Share above target, normal
@@ -6536,11 +6495,11 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 				scrypt_diff(work);
 			else
 				share_diff(work);
-			return true;
+			return;
 		case TNR_GOOD:
 			break;
 	}
-	return submit_work_sync(thr, work, &tv_work_found);
+	submit_work_async(work, &tv_work_found);
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
