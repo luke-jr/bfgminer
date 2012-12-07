@@ -62,11 +62,6 @@
 #	define USE_FPGA
 #endif
 
-struct workio_cmd {
-	struct work		*work;
-	struct pool		*pool;
-};
-
 struct strategies strategies[] = {
 	{ "Failover" },
 	{ "Round Robin" },
@@ -3084,10 +3079,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work);
 
 static void *get_work_thread(void *userdata)
 {
-	struct workio_cmd *wc = (struct workio_cmd *)userdata;
+	struct pool *reqpool = (struct pool *)userdata;
+	struct pool *pool;
 	struct work *ret_work = NULL;
 	struct curl_ent *ce = NULL;
-	struct pool *pool;
 
 	pthread_detach(pthread_self());
 
@@ -3096,7 +3091,7 @@ static void *get_work_thread(void *userdata)
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
 retry:
-	pool = wc->pool;
+	pool = reqpool;
 
 	if (pool->has_stratum) {
 		while (!pool->stratum_active) {
@@ -3104,7 +3099,7 @@ retry:
 
 			sleep(5);
 			if (altpool != pool) {
-				wc->pool = altpool;
+				reqpool = altpool;
 				inc_queued(altpool);
 				dec_queued(pool);
 				goto retry;
@@ -3127,7 +3122,7 @@ retry:
 
 			sleep(5);
 			if (altpool != pool) {
-				wc->pool = altpool;
+				reqpool = altpool;
 				inc_queued(altpool);
 				dec_queued(pool);
 				goto retry;
@@ -3156,7 +3151,7 @@ retry:
 		get_benchmark_work(ret_work);
 		ret_work->queued = true;
 	} else {
-		ret_work->pool = wc->pool;
+		ret_work->pool = reqpool;
 
 		if (!ce)
 			ce = pop_curl_entry(pool);
@@ -3189,7 +3184,6 @@ retry:
 	}
 
 out:
-	free(wc);
 	if (ce)
 		push_curl_entry(ce, pool);
 	return NULL;
@@ -5005,7 +4999,6 @@ static bool queue_request(void)
 {
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
-	struct workio_cmd *wc;
 	pthread_t get_thread;
 	bool lagging;
 
@@ -5025,19 +5018,10 @@ static bool queue_request(void)
 
 	inc_queued(pool);
 
-	/* fill out work request message */
-	wc = calloc(1, sizeof(*wc));
-	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to calloc wc in queue_request");
-		return false;
-	}
-
-	wc->pool = pool;
-
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
 	/* send work request to get_work_thread */
-	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)wc)))
+	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)pool)))
 		quit(1, "Failed to create get_work_thread in queue_request");
 
 	return true;
