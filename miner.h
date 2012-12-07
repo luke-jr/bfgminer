@@ -980,6 +980,7 @@ struct pool {
 	int curls;
 	pthread_cond_t cr_cond;
 	struct list_head curlring;
+	struct submit_work_state *sws_waiting_on_curl;
 
 	time_t last_share_time;
 	double last_share_diff;

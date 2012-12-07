@@ -1327,7 +1327,7 @@ static struct opt_table opt_config_table[] = {
 	                opt_hidden),
 	OPT_WITHOUT_ARG("--submit-threads",
 	                opt_set_intval, &opt_submit_threads,
-	                "Maximum number of share submission threads (default: 64)"),
+	                "Minimum number of concurrent share submissions (default: 64)"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
@@ -3184,7 +3184,7 @@ static void recruit_curl(struct pool *pool)
  * and there are already 5 curls in circulation. Limit total number to the
  * number of mining threads per pool as well to prevent blasting a pool during
  * network delays/outages. */
-static struct curl_ent *pop_curl_entry(struct pool *pool)
+static struct curl_ent *pop_curl_entry2(struct pool *pool, bool blocking)
 {
 	int curl_limit = opt_delaynet ? 5 : (mining_threads + opt_queue) * 2;
 	struct curl_ent *ce;
@@ -3194,7 +3194,11 @@ retry:
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if (pool->curls >= curl_limit) {
+		if (pool->curls >= curl_limit && (blocking || pool->curls >= opt_submit_threads)) {
+			if (!blocking) {
+				mutex_unlock(&pool->pool_lock);
+				return NULL;
+			}
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
 			goto retry;
 		} else
@@ -3205,6 +3209,11 @@ retry:
 	mutex_unlock(&pool->pool_lock);
 
 	return ce;
+}
+
+static struct curl_ent *pop_curl_entry(struct pool *pool)
+{
+	return pop_curl_entry2(pool, true);
 }
 
 static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
@@ -3657,6 +3666,14 @@ static int my_curl_timer_set(__maybe_unused CURLM *curlm, long timeout_ms, void 
 	return 0;
 }
 
+static void sws_has_ce(struct submit_work_state *sws)
+{
+	struct pool *pool = sws->work->pool;
+	sws->s = submit_upstream_work_request(sws->work);
+	gettimeofday(&sws->tv_submit, NULL);
+	json_rpc_call_async(sws->ce->curl, pool->rpc_url, pool->rpc_userpass, sws->s, false, pool, true, sws);
+}
+
 static struct submit_work_state *begin_submission(struct workio_cmd *wc)
 {
 	struct work *work;
@@ -3709,11 +3726,17 @@ static struct submit_work_state *begin_submission(struct workio_cmd *wc)
 		sws->s = s;
 	} else {
 		/* submit solution to bitcoin via JSON-RPC */
-		sws->ce = pop_curl_entry(pool);
-		sws->s = submit_upstream_work_request(work);
-
-		gettimeofday(&sws->tv_submit, NULL);
-		json_rpc_call_async(sws->ce->curl, pool->rpc_url, pool->rpc_userpass, sws->s, false, pool, true, sws);
+		sws->ce = pop_curl_entry2(pool, false);
+		if (sws->ce) {
+			sws_has_ce(sws);
+		} else {
+			sws->next = pool->sws_waiting_on_curl;
+			pool->sws_waiting_on_curl = sws;
+			if (sws->next)
+				applog(LOG_DEBUG, "submit_thread queuing submission");
+			else
+				applog(LOG_WARNING, "submit_thread queuing submissions (see --submit-threads)");
+		}
 	}
 
 	wc->work = NULL;
@@ -3769,8 +3792,6 @@ static bool retry_submission(struct submit_work_state *sws)
 
 static void free_sws(struct submit_work_state *sws)
 {
-	if (sws->ce)
-		push_curl_entry(sws->ce, sws->work->pool);
 	free(sws->s);
 	free_work(sws->work);
 	free(sws);
@@ -3799,6 +3820,7 @@ static void *submit_work_thread(void *userdata)
 		if (sws->ce)
 			curl_multi_add_handle(curlm, sws->ce->curl);
 		else
+		if (sws->s)
 			write_sws = sws;
 		++wip;
 	}
@@ -3821,7 +3843,7 @@ static void *submit_work_thread(void *userdata)
 			if ( (sws = begin_submission(wc)) ) {
 				if (sws->ce)
 					curl_multi_add_handle(curlm, sws->ce->curl);
-				else {
+				else if (sws->s) {
 					sws->next = write_sws;
 					write_sws = sws;
 				}
@@ -3896,7 +3918,15 @@ static void *submit_work_thread(void *userdata)
 				json_t *val = json_rpc_call_completed(cm->easy_handle, cm->data.result, false, NULL, &sws);
 				if (submit_upstream_work_completed(sws->work, sws->resubmit, &sws->tv_submit, val) || !retry_submission(sws)) {
 					--wip;
-					curl_multi_remove_handle(curlm, cm->easy_handle);
+					struct pool *pool = sws->work->pool;
+					if (pool->sws_waiting_on_curl) {
+						pool->sws_waiting_on_curl->ce = sws->ce;
+						sws_has_ce(pool->sws_waiting_on_curl);
+						pool->sws_waiting_on_curl = pool->sws_waiting_on_curl->next;
+					} else {
+						curl_multi_remove_handle(curlm, cm->easy_handle);
+						push_curl_entry(sws->ce, sws->work->pool);
+					}
 					free_sws(sws);
 				}
 			}
