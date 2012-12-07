@@ -238,6 +238,7 @@ static struct timeval total_tv_start, total_tv_end;
 static struct timeval miner_started;
 
 pthread_mutex_t control_lock;
+pthread_mutex_t stats_lock;
 
 static pthread_mutex_t submitting_lock;
 static int submitting, total_submitting;
@@ -2466,12 +2467,15 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
 
 	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
+		mutex_lock(&stats_lock);
 		cgpu->accepted++;
 		total_accepted++;
 		pool->accepted++;
 		cgpu->diff_accepted += work->work_difficulty;
 		total_diff_accepted += work->work_difficulty;
 		pool->diff_accepted += work->work_difficulty;
+		mutex_unlock(&stats_lock);
+
 		pool->seq_rejects = 0;
 		cgpu->last_share_pool = pool->pool_no;
 		cgpu->last_share_pool_time = time(NULL);
@@ -2520,6 +2524,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			test_work_current(&fakework);
 		}
 	} else {
+		mutex_lock(&stats_lock);
 		cgpu->rejected++;
 		total_rejected++;
 		pool->rejected++;
@@ -2527,6 +2532,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		total_diff_rejected += work->work_difficulty;
 		pool->diff_rejected += work->work_difficulty;
 		pool->seq_rejects++;
+		mutex_unlock(&stats_lock);
+
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
 			char where[20];
@@ -3650,10 +3657,13 @@ static void check_solve(struct work *work)
 static void submit_discard_share(struct work *work)
 {
 	sharelog("discard", work);
+
+	mutex_lock(&stats_lock);
 	++total_stale;
 	++(work->pool->stale_shares);
 	total_diff_stale += work->work_difficulty;
 	work->pool->diff_stale += work->work_difficulty;
+	mutex_unlock(&stats_lock);
 }
 
 struct submit_work_state {
@@ -6492,9 +6502,11 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	struct timeval tv_work_found;
 	gettimeofday(&tv_work_found, NULL);
 
+	mutex_lock(&stats_lock);
 	total_diff1++;
 	thr->cgpu->diff1++;
 	work->pool->diff1++;
+	mutex_unlock(&stats_lock);
 
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
@@ -6504,8 +6516,10 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			struct cgpu_info *cgpu = thr->cgpu;
 			applog(LOG_WARNING, "%s %u: invalid nonce - HW error",
 			       cgpu->api->name, cgpu->device_id);
+			mutex_lock(&stats_lock);
 			++hw_errors;
 			++thr->cgpu->hw_errors;
+			mutex_unlock(&stats_lock);
 
 			if (thr->cgpu->api->hw_error)
 				thr->cgpu->api->hw_error(thr);
@@ -7765,6 +7779,7 @@ int main(int argc, char *argv[])
 	mutex_init(&qd_lock);
 	mutex_init(&console_lock);
 	mutex_init(&control_lock);
+	mutex_init(&stats_lock);
 	mutex_init(&sharelog_lock);
 	mutex_init(&ch_lock);
 	mutex_init(&sshare_lock);
