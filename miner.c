@@ -2652,15 +2652,14 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	}
 
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
-	if (!work->tmpl)
-	s = realloc_strcat(s, "\n");
+	if (work->tmpl)
+		free(sd);
+	else
+		s = realloc_strcat(s, "\n");
 
 	gettimeofday(&tv_submit, NULL);
 	/* issue JSON-RPC request */
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, s, false, false, &rolltime, pool, true);
-
-	if (sd != s)
-	free(sd);
 
 	gettimeofday(&tv_submit_reply, NULL);
 	free(s);
