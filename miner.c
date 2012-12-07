@@ -79,12 +79,7 @@
 #	define USE_FPGA_SERIAL
 #endif
 
-enum workio_commands {
-	WC_GET_WORK,
-};
-
 struct workio_cmd {
-	enum workio_commands	cmd;
 	struct thr_info		*thr;
 	struct work		*work;
 	struct pool		*pool;
@@ -3042,11 +3037,6 @@ static void workio_cmd_free(struct workio_cmd *wc)
 	if (!wc)
 		return;
 
-	switch (wc->cmd) {
-		default: /* do nothing */
-			break;
-	}
-
 	memset(wc, 0, sizeof(*wc));	/* poison */
 	free(wc);
 }
@@ -3536,20 +3526,6 @@ out:
 	if (ce)
 		push_curl_entry(ce, pool);
 	return NULL;
-}
-
-/* As per the submit work system, we try to reuse the existing curl handles,
- * but start recruiting extra connections if we start accumulating queued
- * requests */
-static bool workio_get_work(struct workio_cmd *wc)
-{
-	pthread_t get_thread;
-
-	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)wc))) {
-		applog(LOG_ERR, "Failed to create get_work_thread");
-		return false;
-	}
-	return true;
 }
 
 static bool stale_work(struct work *work, bool share)
@@ -5314,16 +5290,6 @@ static void *workio_thread(void *userdata)
 			ok = false;
 			break;
 		}
-
-		/* process workio_cmd */
-		switch (wc->cmd) {
-		case WC_GET_WORK:
-			ok = workio_get_work(wc);
-			break;
-		default:
-			ok = false;
-			break;
-		}
 	}
 
 	tq_freeze(mythr->q);
@@ -6019,6 +5985,7 @@ static bool queue_request(void)
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
 	struct workio_cmd *wc;
+	pthread_t get_thread;
 	bool lagging;
 
 	ts = total_staged();
@@ -6042,17 +6009,13 @@ static bool queue_request(void)
 		return false;
 	}
 
-	wc->cmd = WC_GET_WORK;
 	wc->pool = pool;
 
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
-	/* send work request to workio thread */
-	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
-		applog(LOG_ERR, "Failed to tq_push in queue_request");
-		workio_cmd_free(wc);
-		return false;
-	}
+	/* send work request to get_work_thread */
+	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)wc)))
+		quit(1, "Failed to create get_work_thread in queue_request");
 
 	inc_queued(pool);
 
