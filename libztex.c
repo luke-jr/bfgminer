@@ -22,6 +22,8 @@
  *   along with this program; if not, see http://www.gnu.org/licenses/.
 **/
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -518,7 +520,7 @@ int libztex_numberOfFpgas(struct libztex_device *ztex) {
 
 int libztex_selectFpga(struct libztex_device *ztex) {
 	int cnt, fpgacnt = libztex_numberOfFpgas(ztex->root);
-	uint16_t number = ztex->fpgaNum;
+	int number = ztex->fpgaNum;
 	if (number < 0 || number >= fpgacnt) {
 		applog(LOG_WARNING, "%s: Trying to select wrong fpga (%d in %d)", ztex->repr, number, fpgacnt);
 		return 1;
