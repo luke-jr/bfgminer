@@ -406,7 +406,7 @@ dedicated to this program,
 	http://forum.bitcoin.org/index.php?topic=28402.0
 
 The output line shows the following:
-5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729  R:8  HW:0  E:242%  U:22.53/m
+5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729 R:8 S:0 HW:0 E:242% U:22.53/m
 
 Each column is as follows:
 5s:  A 5 second exponentially decaying average hash rate
@@ -414,6 +414,7 @@ avg: An all time average hash rate
 u:   An all time average hash rate based on actual accepted shares
 A:   The number of Accepted shares
 R:   The number of Rejected shares
+S:   Stale shares discarded (not submitted so don't count as rejects)
 HW:  The number of HardWare errors
 E:   The Efficiency defined as number of shares returned / work item
 U:   The Utility defined as the number of shares / minute
@@ -432,16 +433,16 @@ The number of hardware erorrs
 The utility defines as the number of shares / minute
 
 The BFGMiner status line shows:
- TQ: 1  ST: 1  SS: 0  DW: 0  NB: 1  GW: 301  LW: 8  GF: 1  RF: 1
+ TQ: 1  ST: 1  DW: 0  GW: 301  LW: 8  GF: 1  NB: 1  AS: 0  RF: 1
 
 TQ is Total Queued work items.
 ST is STaged work items (ready to use).
-SS is Stale Shares discarded (detected and not submitted so don't count as rejects)
 DW is Discarded Work items (work from block no longer valid to work on)
-NB is New Blocks detected on the network
 GW is GetWork requested (work items from pools)
 LW is Locally generated Work items
 GF is Getwork Fail Occasions (server slow to provide work)
+NB is New Blocks detected on the network
+AS is Active Submissions (shares in the process of submitting)
 RF is Remote Fail occasions (server slow to accept work)
 
 NOTE: Running intensities above 9 with current hardware is likely to only

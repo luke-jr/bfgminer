@@ -240,7 +240,7 @@ static struct timeval miner_started;
 pthread_mutex_t control_lock;
 
 static pthread_mutex_t submitting_lock;
-static int submitting;
+static int submitting, total_submitting;
 static struct list_head submit_waiting;
 int submit_waiting_notifier[2];
 
@@ -2148,10 +2148,14 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  GW: %d  LW: %d  GF: %d  RF: %d",
-		global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
+	mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  DW: %d  GW: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d",
+		global_queued(), total_staged(), total_discarded,
 		total_getworks,
-		local_work, total_go, total_ro);
+		local_work,
+		total_go,
+		new_blocks,
+		total_submitting,
+		total_ro);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -3827,6 +3831,7 @@ static void *submit_work_thread(void *userdata)
 		if (sws->s)
 			write_sws = sws;
 		++wip;
+		++total_submitting;
 	}
 
 	fd_set rfds, wfds, efds;
@@ -3852,6 +3857,7 @@ static void *submit_work_thread(void *userdata)
 					write_sws = sws;
 				}
 				++wip;
+				++total_submitting;
 			}
 		}
 		if (!wip)
@@ -3922,6 +3928,7 @@ static void *submit_work_thread(void *userdata)
 				json_t *val = json_rpc_call_completed(cm->easy_handle, cm->data.result, false, NULL, &sws);
 				if (submit_upstream_work_completed(sws->work, sws->resubmit, &sws->tv_submit, val) || !retry_submission(sws)) {
 					--wip;
+					--total_submitting;
 					struct pool *pool = sws->work->pool;
 					if (pool->sws_waiting_on_curl) {
 						pool->sws_waiting_on_curl->ce = sws->ce;
@@ -5481,12 +5488,13 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d E:%.0f%% U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
-		total_accepted, total_rejected, hw_errors, efficiency, utility);
+		total_accepted, total_rejected, total_stale,
+		hw_errors, efficiency, utility);
 
 
 	local_mhashes_done = 0;
@@ -5600,6 +5608,8 @@ fishy:
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
 		goto out;
 	}
+	else
+		--total_submitting;
 	stratum_share_result(val, res_val, err_val, sshare);
 	free_work(sshare->work);
 	free(sshare);
@@ -5633,6 +5643,7 @@ static void clear_stratum_shares(struct pool *pool)
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
+		--total_submitting;
 		if (sshare->work->pool == pool) {
 			HASH_DEL(stratum_shares, sshare);
 			free_work(sshare->work);
