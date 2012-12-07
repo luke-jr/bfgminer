@@ -19,9 +19,9 @@ static void via_sha256(void *hash, void *buf, unsigned len)
 		     :"memory");
 }
 
-bool scanhash_via(struct thr_info*thr, __maybe_unused const unsigned char *pmidstate,
+bool scanhash_via(struct thr_info*thr, const unsigned char __maybe_unused *pmidstate,
 	unsigned char *data_inout,
-	__maybe_unused unsigned char *phash1, __maybe_unused unsigned char *phash,
+	unsigned char __maybe_unused *phash1, unsigned char __maybe_unused *phash,
 	const unsigned char *target,
 		  uint32_t max_nonce, uint32_t *last_nonce,
 		  uint32_t n)
