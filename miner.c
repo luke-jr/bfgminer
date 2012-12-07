@@ -1699,6 +1699,8 @@ void free_work(struct work *work)
 	free(work);
 }
 
+static char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
@@ -6285,7 +6287,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	header = realloc_strcat(header, pool->swork.ntime);
 	header = realloc_strcat(header, pool->swork.nbit);
 	header = realloc_strcat(header, "00000000"); /* nonce */
-	header = realloc_strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
+	header = realloc_strcat(header, workpadding);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
