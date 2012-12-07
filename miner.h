@@ -1063,6 +1063,9 @@ struct work {
 	struct timeval	tv_work_start;
 	struct timeval	tv_work_found;
 	char		getwork_mode;
+
+	/* Used to queue shares in submit_waiting */
+	struct list_head list;
 };
 
 extern void get_datestamp(char *, struct timeval *);

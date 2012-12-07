@@ -79,13 +79,6 @@
 #	define USE_FPGA_SERIAL
 #endif
 
-struct workio_cmd {
-	struct work		*work;
-	struct pool		*pool;
-
-	struct list_head list;
-};
-
 struct strategies strategies[] = {
 	{ "Failover" },
 	{ "Round Robin" },
@@ -3433,10 +3426,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work);
 
 static void *get_work_thread(void *userdata)
 {
-	struct workio_cmd *wc = (struct workio_cmd *)userdata;
+	struct pool *reqpool = (struct pool *)userdata;
+	struct pool *pool;
 	struct work *ret_work = NULL;
 	struct curl_ent *ce = NULL;
-	struct pool *pool;
 
 	pthread_detach(pthread_self());
 
@@ -3445,7 +3438,7 @@ static void *get_work_thread(void *userdata)
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
 retry:
-	pool = wc->pool;
+	pool = reqpool;
 
 	if (pool->has_stratum) {
 		while (!pool->stratum_active) {
@@ -3453,7 +3446,7 @@ retry:
 
 			sleep(5);
 			if (altpool != pool) {
-				wc->pool = altpool;
+				reqpool = altpool;
 				inc_queued(altpool);
 				dec_queued(pool);
 				goto retry;
@@ -3486,7 +3479,7 @@ retry:
 		get_benchmark_work(ret_work);
 		ret_work->queued = true;
 	} else {
-		ret_work->pool = wc->pool;
+		ret_work->pool = reqpool;
 
 		if (!ce)
 			ce = pop_curl_entry(pool);
@@ -3520,7 +3513,6 @@ retry:
 	}
 
 out:
-	free(wc);
 	if (ce)
 		push_curl_entry(ce, pool);
 	return NULL;
@@ -3663,13 +3655,11 @@ static void sws_has_ce(struct submit_work_state *sws)
 	json_rpc_call_async(sws->ce->curl, pool->rpc_url, pool->rpc_userpass, sws->s, false, pool, true, sws);
 }
 
-static struct submit_work_state *begin_submission(struct workio_cmd *wc)
+static struct submit_work_state *begin_submission(struct work *work)
 {
-	struct work *work;
 	struct pool *pool;
 	struct submit_work_state *sws = NULL;
 
-	work = wc->work;
 	pool = work->pool;
 	sws = malloc(sizeof(*sws));
 	*sws = (struct submit_work_state){
@@ -3728,13 +3718,10 @@ static struct submit_work_state *begin_submission(struct workio_cmd *wc)
 		}
 	}
 
-	wc->work = NULL;
-	free(wc);
 	return sws;
 
 out:
 	free(sws);
-	free(wc);
 	return NULL;
 }
 
@@ -3788,7 +3775,6 @@ static void free_sws(struct submit_work_state *sws)
 
 static void *submit_work_thread(__maybe_unused void *userdata)
 {
-	struct workio_cmd *wc;
 	int wip = 0;
 	CURLM *curlm;
 	long curlm_timeout_ms = -1;
@@ -3818,9 +3804,9 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 			(void)read(submit_waiting_notifier[0], buf, sizeof(buf));
 		}
 		while (!list_empty(&submit_waiting)) {
-			wc = list_entry(submit_waiting.next, struct workio_cmd, list);
-			list_del(&wc->list);
-			if ( (sws = begin_submission(wc)) ) {
+			struct work *work = list_entry(submit_waiting.next, struct work, list);
+			list_del(&work->list);
+			if ( (sws = begin_submission(work)) ) {
 				if (sws->ce)
 					curl_multi_add_handle(curlm, sws->ce->curl);
 				else if (sws->s) {
@@ -5955,7 +5941,6 @@ static bool queue_request(void)
 {
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
-	struct workio_cmd *wc;
 	pthread_t get_thread;
 	bool lagging;
 
@@ -5973,19 +5958,10 @@ static bool queue_request(void)
 	if (pool->staged + pool->queued >= maxq)
 		return true;
 
-	/* fill out work request message */
-	wc = calloc(1, sizeof(*wc));
-	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to calloc wc in queue_request");
-		return false;
-	}
-
-	wc->pool = pool;
-
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
 	/* send work request to get_work_thread */
-	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)wc)))
+	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)pool)))
 		quit(1, "Failed to create get_work_thread in queue_request");
 
 	inc_queued(pool);
@@ -6313,7 +6289,6 @@ out:
 
 void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
-	struct workio_cmd *wc;
 	struct work *work = copy_work(work_in);
 	pthread_t submit_thread;
 	bool was_submitting;
@@ -6322,17 +6297,8 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
-	/* fill out work request message */
-	wc = calloc(1, sizeof(*wc));
-	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to calloc wc in submit_work_async");
-		return;
-	}
-
-	wc->work = work;
-
 	mutex_lock(&submitting_lock);
-	list_add_tail(&wc->list, &submit_waiting);
+	list_add_tail(&work->list, &submit_waiting);
 	was_submitting = submitting;
 	if (!submitting)
 		++submitting;
