@@ -7066,7 +7066,16 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			if (!opt_benchmark)
 				reap_curl(pool);
 
-			if (pool->enabled == POOL_DISABLED || pool->has_stratum)
+			/* Get a rolling utility per pool over 10 mins */
+			if (intervals > 19) {
+				int shares = pool->diff1 - pool->last_shares;
+
+				pool->last_shares = pool->diff1;
+				pool->utility = (pool->utility + (double)shares * 0.63) / 1.63;
+				pool->shares = pool->utility;
+			}
+
+			if ((pool->enabled == POOL_DISABLED || pool->has_stratum) && pool->probed)
 				continue;
 
 			/* Test pool is idle once every minute */
@@ -7076,14 +7085,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 					pool_resus(pool);
 			}
 
-			/* Get a rolling utility per pool over 10 mins */
-			if (intervals > 19) {
-				int shares = pool->diff1 - pool->last_shares;
-
-				pool->last_shares = pool->diff1;
-				pool->utility = (pool->utility + (double)shares * 0.63) / 1.63;
-				pool->shares = pool->utility;
-			}
 		}
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
