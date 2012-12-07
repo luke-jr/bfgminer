@@ -216,10 +216,8 @@ static void *postcalc_hash(void *userdata)
 		applog(LOG_DEBUG, "OCL NONCE %u found in slot %d", nonce, entry);
 		if (opt_scrypt)
 			send_scrypt_nonce(pcd, nonce);
-		else {
-			if (unlikely(submit_nonce(thr, &pcd->work, nonce) == false))
-				applog(LOG_ERR, "Failed to submit work, exiting");
-		}
+		else
+			submit_nonce(thr, &pcd->work, nonce);
 	}
 
 	free(pcd);

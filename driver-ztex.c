@@ -195,7 +195,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	int backlog_p = 0, backlog_max;
 	uint32_t *lastnonce;
 	uint32_t nonce, noncecnt = 0;
-	bool overflow, found, rv;
+	bool overflow, found;
 	struct libztex_hash_data hdata[GOLDEN_BACKLOG];
 
 	ztex = thr->cgpu->device_ztex;
@@ -310,8 +310,8 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 						nonce = swab32(nonce);
 #endif
 						work->blk.nonce = 0xffffffff;
-						rv = submit_nonce(thr, work, nonce);
-						applog(LOG_DEBUG, "%s: submitted %0.8x %d", ztex->repr, nonce, rv);
+						submit_nonce(thr, work, nonce);
+						applog(LOG_DEBUG, "%s: submitted %0.8x", ztex->repr, nonce);
 					}
 				}
 			}
