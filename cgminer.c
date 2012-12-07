@@ -63,7 +63,6 @@
 #endif
 
 struct workio_cmd {
-	struct thr_info		*thr;
 	struct work		*work;
 	struct pool		*pool;
 };
@@ -183,6 +182,9 @@ static pthread_cond_t lp_cond;
 
 pthread_mutex_t restart_lock;
 pthread_cond_t restart_cond;
+
+pthread_mutex_t kill_lock;
+pthread_cond_t kill_cond;
 
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
@@ -2725,15 +2727,6 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 	return rc;
 }
 
-static void workio_cmd_free(struct workio_cmd *wc)
-{
-	if (!wc)
-		return;
-
-	memset(wc, 0, sizeof(*wc));	/* poison */
-	free(wc);
-}
-
 #ifdef HAVE_CURSES
 static void disable_curses(void)
 {
@@ -2812,6 +2805,11 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &thr_info[api_thr_id];
 	thr_info_cancel(thr);
+
+	applog(LOG_DEBUG, "Sending kill broadcast");
+	mutex_lock(&kill_lock);
+	pthread_cond_signal(&kill_cond);
+	mutex_unlock(&kill_lock);
 }
 
 /* This should be the common exit path */
@@ -3191,7 +3189,7 @@ retry:
 	}
 
 out:
-	workio_cmd_free(wc);
+	free(wc);
 	if (ce)
 		push_curl_entry(ce, pool);
 	return NULL;
@@ -4408,35 +4406,6 @@ static void *input_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 #endif
-
-/* This thread should not be shut down unless a problem occurs */
-static void *workio_thread(void *userdata)
-{
-	struct thr_info *mythr = userdata;
-	bool ok = true;
-
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-	RenameThread("work_io");
-
-	while (ok) {
-		struct workio_cmd *wc;
-
-		applog(LOG_DEBUG, "Popping work to work thread");
-
-		/* wait for workio_cmd sent to us, on our queue */
-		wc = tq_pop(mythr->q, NULL);
-		if (unlikely(!wc)) {
-			applog(LOG_ERR, "Failed to tq_pop in workio_thread");
-			ok = false;
-			break;
-		}
-	}
-
-	tq_freeze(mythr->q);
-
-	return NULL;
-}
 
 static void *api_thread(void *userdata)
 {
@@ -6616,6 +6585,10 @@ int main(int argc, char *argv[])
 	if (unlikely(pthread_cond_init(&restart_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init restart_cond");
 
+	mutex_init(&kill_lock);
+	if (unlikely(pthread_cond_init(&kill_cond, NULL)))
+		quit(1, "Failed to pthread_cond_init kill_cond");
+
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 
 #ifdef WANT_CPUMINE
@@ -6901,10 +6874,6 @@ int main(int argc, char *argv[])
 	if (!thr->q)
 		quit(1, "Failed to tq_new");
 
-	/* start work I/O thread */
-	if (thr_info_create(thr, NULL, workio_thread, thr))
-		quit(1, "workio thread create failed");
-
 	stage_thr_id = mining_threads + 1;
 	thr = &thr_info[stage_thr_id];
 	thr->q = tq_new();
@@ -7086,10 +7055,11 @@ begin_bench:
 	for (i = 0; i < mining_threads + opt_queue; i++)
 		queue_request();
 
-	/* main loop - simply wait for workio thread to exit. This is not the
-	 * normal exit path and only occurs should the workio_thread die
-	 * unexpectedly */
-	pthread_join(thr_info[work_thr_id].pth, NULL);
+	/* Wait till we receive the conditional telling us to die */
+	mutex_lock(&kill_lock);
+	pthread_cond_wait(&kill_cond, &kill_lock);
+	mutex_unlock(&kill_lock);
+
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	clean_up();
