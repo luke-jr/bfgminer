@@ -213,22 +213,20 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	
 	applog(LOG_DEBUG, "%s: sent hashdata", ztex->repr);
 
-	lastnonce = malloc(sizeof(uint32_t)*ztex->numNonces);
+	lastnonce = calloc(1, sizeof(uint32_t)*ztex->numNonces);
 	if (lastnonce == NULL) {
 		applog(LOG_ERR, "%s: failed to allocate lastnonce[%d]", ztex->repr, ztex->numNonces);
 		return -1;
 	}
-	memset(lastnonce, 0, sizeof(uint32_t)*ztex->numNonces);
 
 	/* Add an extra slot for detecting dupes that lie around */
 	backlog_max = ztex->numNonces * (2 + ztex->extraSolutions);
-	backlog = malloc(sizeof(uint32_t) * backlog_max);
+	backlog = calloc(1, sizeof(uint32_t) * backlog_max);
 	if (backlog == NULL) {
 		applog(LOG_ERR, "%s: failed to allocate backlog[%d]", ztex->repr, backlog_max);
 		free(lastnonce);
 		return -1;
 	}
-	memset(backlog, 0, sizeof(uint32_t) * backlog_max);
 	
 	overflow = false;
 
