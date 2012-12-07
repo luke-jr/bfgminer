@@ -24,6 +24,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "miner.h"
 #include "fpgautils.h"
@@ -165,7 +166,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 
 	char productString[32];
 
-	cnt = libztex_get_string_descriptor_ascii(hndl, desc.iProduct, productString, sizeof(productString));
+	cnt = libztex_get_string_descriptor_ascii(hndl, desc.iProduct, (unsigned char*)productString, sizeof(productString));
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to read device productString with err %d", cnt);
 		return cnt;
@@ -349,7 +350,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	struct libztex_fpgastate state;
 	const int transactionBytes = 65536;
 	unsigned char buf[transactionBytes], settings[2];
-	int tries, cnt, err, i;
+	int tries, cnt, err;
 	FILE *fp;
 
 	if (!libztex_checkCapability(ztex, CAPABILITY_HS_FPGA))
@@ -422,7 +423,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 	struct libztex_fpgastate state;
 	const int transactionBytes = 2048;
 	unsigned char buf[transactionBytes];
-	int tries, cnt, i;
+	int tries, cnt;
 	FILE *fp;
 
 	if (!libztex_checkCapability(ztex, CAPABILITY_FPGA))
@@ -709,7 +710,6 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 {
 	int usbdevices[LIBZTEX_MAX_DESCRIPTORS];
 	struct libztex_dev_list **devs = NULL;
-	struct libusb_device_descriptor dev_descr;
 	struct libztex_device *ztex = NULL;
 	int found, max_found = 0, pos = 0, err, rescan, ret = 0;
 	libusb_device **list = NULL;
