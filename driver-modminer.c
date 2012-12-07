@@ -9,6 +9,10 @@
 
 #include "config.h"
 
+#ifdef WIN32
+#define FD_SETSIZE 4096
+#endif
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <unistd.h>

@@ -11,6 +11,10 @@
 
 #include "config.h"
 
+#ifdef WIN32
+#define FD_SETSIZE 4096
+#endif
+
 #ifdef HAVE_CURSES
 #include <curses.h>
 #endif
