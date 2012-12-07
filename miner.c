@@ -79,20 +79,6 @@
 #	define USE_FPGA_SERIAL
 #endif
 
-enum workio_commands {
-	WC_GET_WORK,
-	WC_SUBMIT_WORK,
-};
-
-struct workio_cmd {
-	enum workio_commands	cmd;
-	struct thr_info		*thr;
-	struct work		*work;
-	struct pool		*pool;
-
-	struct list_head list;
-};
-
 struct strategies strategies[] = {
 	{ "Failover" },
 	{ "Round Robin" },
@@ -233,11 +219,15 @@ static pthread_cond_t lp_cond;
 pthread_mutex_t restart_lock;
 pthread_cond_t restart_cond;
 
+pthread_mutex_t kill_lock;
+pthread_cond_t kill_cond;
+
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static struct timeval miner_started;
 
 pthread_mutex_t control_lock;
+pthread_mutex_t stats_lock;
 
 static pthread_mutex_t submitting_lock;
 static int submitting, total_submitting;
@@ -1698,6 +1688,8 @@ void free_work(struct work *work)
 	free(work);
 }
 
+static char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
@@ -2466,12 +2458,15 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
 
 	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
+		mutex_lock(&stats_lock);
 		cgpu->accepted++;
 		total_accepted++;
 		pool->accepted++;
 		cgpu->diff_accepted += work->work_difficulty;
 		total_diff_accepted += work->work_difficulty;
 		pool->diff_accepted += work->work_difficulty;
+		mutex_unlock(&stats_lock);
+
 		pool->seq_rejects = 0;
 		cgpu->last_share_pool = pool->pool_no;
 		cgpu->last_share_pool_time = time(NULL);
@@ -2520,6 +2515,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			test_work_current(&fakework);
 		}
 	} else {
+		mutex_lock(&stats_lock);
 		cgpu->rejected++;
 		total_rejected++;
 		pool->rejected++;
@@ -2527,6 +2523,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		total_diff_rejected += work->work_difficulty;
 		pool->diff_rejected += work->work_difficulty;
 		pool->seq_rejects++;
+		mutex_unlock(&stats_lock);
+
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
 			char where[20];
@@ -3029,24 +3027,6 @@ tryagain:
 	return rc;
 }
 
-static void workio_cmd_free(struct workio_cmd *wc)
-{
-	if (!wc)
-		return;
-
-	switch (wc->cmd) {
-	case WC_SUBMIT_WORK:
-		if (wc->work)
-		free_work(wc->work);
-		break;
-	default: /* do nothing */
-		break;
-	}
-
-	memset(wc, 0, sizeof(*wc));	/* poison */
-	free(wc);
-}
-
 #ifdef HAVE_CURSES
 static void disable_curses(void)
 {
@@ -3125,6 +3105,11 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &thr_info[api_thr_id];
 	thr_info_cancel(thr);
+
+	applog(LOG_DEBUG, "Sending kill broadcast");
+	mutex_lock(&kill_lock);
+	pthread_cond_signal(&kill_cond);
+	mutex_unlock(&kill_lock);
 }
 
 /* This should be the common exit path */
@@ -3441,10 +3426,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work);
 
 static void *get_work_thread(void *userdata)
 {
-	struct workio_cmd *wc = (struct workio_cmd *)userdata;
+	struct pool *reqpool = (struct pool *)userdata;
+	struct pool *pool;
 	struct work *ret_work = NULL;
 	struct curl_ent *ce = NULL;
-	struct pool *pool;
 
 	pthread_detach(pthread_self());
 
@@ -3453,7 +3438,7 @@ static void *get_work_thread(void *userdata)
 	applog(LOG_DEBUG, "Creating extra get work thread");
 
 retry:
-	pool = wc->pool;
+	pool = reqpool;
 
 	if (pool->has_stratum) {
 		while (!pool->stratum_active) {
@@ -3461,7 +3446,7 @@ retry:
 
 			sleep(5);
 			if (altpool != pool) {
-				wc->pool = altpool;
+				reqpool = altpool;
 				inc_queued(altpool);
 				dec_queued(pool);
 				goto retry;
@@ -3494,7 +3479,7 @@ retry:
 		get_benchmark_work(ret_work);
 		ret_work->queued = true;
 	} else {
-		ret_work->pool = wc->pool;
+		ret_work->pool = reqpool;
 
 		if (!ce)
 			ce = pop_curl_entry(pool);
@@ -3528,24 +3513,9 @@ retry:
 	}
 
 out:
-	workio_cmd_free(wc);
 	if (ce)
 		push_curl_entry(ce, pool);
 	return NULL;
-}
-
-/* As per the submit work system, we try to reuse the existing curl handles,
- * but start recruiting extra connections if we start accumulating queued
- * requests */
-static bool workio_get_work(struct workio_cmd *wc)
-{
-	pthread_t get_thread;
-
-	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)wc))) {
-		applog(LOG_ERR, "Failed to create get_work_thread");
-		return false;
-	}
-	return true;
 }
 
 static bool stale_work(struct work *work, bool share)
@@ -3650,10 +3620,13 @@ static void check_solve(struct work *work)
 static void submit_discard_share(struct work *work)
 {
 	sharelog("discard", work);
+
+	mutex_lock(&stats_lock);
 	++total_stale;
 	++(work->pool->stale_shares);
 	total_diff_stale += work->work_difficulty;
 	work->pool->diff_stale += work->work_difficulty;
+	mutex_unlock(&stats_lock);
 }
 
 struct submit_work_state {
@@ -3682,13 +3655,11 @@ static void sws_has_ce(struct submit_work_state *sws)
 	json_rpc_call_async(sws->ce->curl, pool->rpc_url, pool->rpc_userpass, sws->s, false, pool, true, sws);
 }
 
-static struct submit_work_state *begin_submission(struct workio_cmd *wc)
+static struct submit_work_state *begin_submission(struct work *work)
 {
-	struct work *work;
 	struct pool *pool;
 	struct submit_work_state *sws = NULL;
 
-	work = wc->work;
 	pool = work->pool;
 	sws = malloc(sizeof(*sws));
 	*sws = (struct submit_work_state){
@@ -3747,13 +3718,10 @@ static struct submit_work_state *begin_submission(struct workio_cmd *wc)
 		}
 	}
 
-	wc->work = NULL;
-	workio_cmd_free(wc);
 	return sws;
 
 out:
 	free(sws);
-	workio_cmd_free(wc);
 	return NULL;
 }
 
@@ -3805,9 +3773,8 @@ static void free_sws(struct submit_work_state *sws)
 	free(sws);
 }
 
-static void *submit_work_thread(void *userdata)
+static void *submit_work_thread(__maybe_unused void *userdata)
 {
-	struct workio_cmd *wc = (struct workio_cmd *)userdata;
 	int wip = 0;
 	CURLM *curlm;
 	long curlm_timeout_ms = -1;
@@ -3824,16 +3791,6 @@ static void *submit_work_thread(void *userdata)
 	curl_multi_setopt(curlm, CURLMOPT_TIMERFUNCTION, my_curl_timer_set);
 	curl_multi_setopt(curlm, CURLMOPT_TIMERDATA, &curlm_timeout_ms);
 
-	if ( (sws = begin_submission(wc)) ) {
-		if (sws->ce)
-			curl_multi_add_handle(curlm, sws->ce->curl);
-		else
-		if (sws->s)
-			write_sws = sws;
-		++wip;
-		++total_submitting;
-	}
-
 	fd_set rfds, wfds, efds;
 	int maxfd;
 	struct timeval timeout, *timeoutp;
@@ -3847,9 +3804,9 @@ static void *submit_work_thread(void *userdata)
 			(void)read(submit_waiting_notifier[0], buf, sizeof(buf));
 		}
 		while (!list_empty(&submit_waiting)) {
-			wc = list_entry(submit_waiting.next, struct workio_cmd, list);
-			list_del(&wc->list);
-			if ( (sws = begin_submission(wc)) ) {
+			struct work *work = list_entry(submit_waiting.next, struct work, list);
+			list_del(&work->list);
+			if ( (sws = begin_submission(work)) ) {
 				if (sws->ce)
 					curl_multi_add_handle(curlm, sws->ce->curl);
 				else if (sws->s) {
@@ -3950,21 +3907,6 @@ static void *submit_work_thread(void *userdata)
 	curl_multi_cleanup(curlm);
 
 	return NULL;
-}
-
-/* We try to reuse curl handles as much as possible, but if there is already
- * work queued to be submitted, we start generating extra handles to submit
- * the shares to avoid ever increasing backlogs. This allows us to scale to
- * any size hardware */
-static bool workio_submit_work(struct workio_cmd *wc)
-{
-	pthread_t submit_thread;
-
-	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, (void *)wc))) {
-		applog(LOG_ERR, "Failed to create submit_work_thread");
-		return false;
-	}
-	return true;
 }
 
 /* Find the pool that currently has the highest priority */
@@ -5312,58 +5254,6 @@ static void *input_thread(void __maybe_unused *userdata)
 }
 #endif
 
-/* This thread should not be shut down unless a problem occurs */
-static void *workio_thread(void *userdata)
-{
-	struct thr_info *mythr = userdata;
-	bool ok = true;
-
-	RenameThread("work_io");
-
-	while (ok) {
-		struct workio_cmd *wc;
-
-		applog(LOG_DEBUG, "Popping work to work thread");
-
-		/* wait for workio_cmd sent to us, on our queue */
-		wc = tq_pop(mythr->q, NULL);
-		if (unlikely(!wc)) {
-			applog(LOG_ERR, "Failed to tq_pop in workio_thread");
-			ok = false;
-			break;
-		}
-
-		/* process workio_cmd */
-		switch (wc->cmd) {
-		case WC_GET_WORK:
-			ok = workio_get_work(wc);
-			break;
-		case WC_SUBMIT_WORK:
-		{
-			mutex_lock(&submitting_lock);
-			if (submitting) {
-				list_add_tail(&wc->list, &submit_waiting);
-				(void)write(submit_waiting_notifier[1], "\0", 1);
-				mutex_unlock(&submitting_lock);
-				break;
-			}
-			++submitting;
-			mutex_unlock(&submitting_lock);
-
-			ok = workio_submit_work(wc);
-			break;
-		}
-		default:
-			ok = false;
-			break;
-		}
-	}
-
-	tq_freeze(mythr->q);
-
-	return NULL;
-}
-
 static void *api_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -6051,7 +5941,7 @@ static bool queue_request(void)
 {
 	int ts, tq, maxq = opt_queue + mining_threads;
 	struct pool *pool, *cp;
-	struct workio_cmd *wc;
+	pthread_t get_thread;
 	bool lagging;
 
 	ts = total_staged();
@@ -6068,24 +5958,11 @@ static bool queue_request(void)
 	if (pool->staged + pool->queued >= maxq)
 		return true;
 
-	/* fill out work request message */
-	wc = calloc(1, sizeof(*wc));
-	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to calloc wc in queue_request");
-		return false;
-	}
-
-	wc->cmd = WC_GET_WORK;
-	wc->pool = pool;
-
 	applog(LOG_DEBUG, "Queueing getwork request to work thread");
 
-	/* send work request to workio thread */
-	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
-		applog(LOG_ERR, "Failed to tq_push in queue_request");
-		workio_cmd_free(wc);
-		return false;
-	}
+	/* send work request to get_work_thread */
+	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)pool)))
+		quit(1, "Failed to create get_work_thread in queue_request");
 
 	inc_queued(pool);
 
@@ -6275,7 +6152,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	header = realloc_strcat(header, pool->swork.ntime);
 	header = realloc_strcat(header, pool->swork.nbit);
 	header = realloc_strcat(header, "00000000"); /* nonce */
-	header = realloc_strcat(header, "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000");
+	header = realloc_strcat(header, workpadding);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
@@ -6410,35 +6287,30 @@ out:
 	work->mined = true;
 }
 
-bool submit_work_sync(struct thr_info *thr, struct work *work_in, struct timeval *tv_work_found)
+void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
-	struct workio_cmd *wc;
+	struct work *work = copy_work(work_in);
+	pthread_t submit_thread;
+	bool was_submitting;
 
-	/* fill out work request message */
-	wc = calloc(1, sizeof(*wc));
-	if (unlikely(!wc)) {
-		applog(LOG_ERR, "Failed to calloc wc in submit_work_sync");
-		return false;
-	}
-
-	wc->work = copy_work(work_in);
-	wc->cmd = WC_SUBMIT_WORK;
-	wc->thr = thr;
 	if (tv_work_found)
-		memcpy(&(wc->work->tv_work_found), tv_work_found, sizeof(struct timeval));
-
+		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
-	/* send solution to workio thread */
-	if (unlikely(!tq_push(thr_info[work_thr_id].q, wc))) {
-		applog(LOG_ERR, "Failed to tq_push work in submit_work_sync");
-		goto err_out;
+	mutex_lock(&submitting_lock);
+	list_add_tail(&work->list, &submit_waiting);
+	was_submitting = submitting;
+	if (!submitting)
+		++submitting;
+	mutex_unlock(&submitting_lock);
+
+	if (was_submitting) {
+		(void)write(submit_waiting_notifier[1], "\0", 1);
+		return;
 	}
 
-	return true;
-err_out:
-	workio_cmd_free(wc);
-	return false;
+	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
+		quit(1, "Failed to create submit_work_thread");
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
@@ -6487,14 +6359,16 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	return hashtest2(work, checktarget);
 }
 
-bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	struct timeval tv_work_found;
 	gettimeofday(&tv_work_found, NULL);
 
+	mutex_lock(&stats_lock);
 	total_diff1++;
 	thr->cgpu->diff1++;
 	work->pool->diff1++;
+	mutex_unlock(&stats_lock);
 
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
@@ -6504,13 +6378,14 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			struct cgpu_info *cgpu = thr->cgpu;
 			applog(LOG_WARNING, "%s %u: invalid nonce - HW error",
 			       cgpu->api->name, cgpu->device_id);
+			mutex_lock(&stats_lock);
 			++hw_errors;
 			++thr->cgpu->hw_errors;
+			mutex_unlock(&stats_lock);
 
 			if (thr->cgpu->api->hw_error)
 				thr->cgpu->api->hw_error(thr);
-
-			return false;
+			return;
 		}
 		case TNR_HIGH:
 			// Share above target, normal
@@ -6520,11 +6395,11 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 				scrypt_diff(work);
 			else
 				share_diff(work);
-			return true;
+			return;
 		case TNR_GOOD:
 			break;
 	}
-	return submit_work_sync(thr, work, &tv_work_found);
+	submit_work_async(work, &tv_work_found);
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
@@ -7050,7 +6925,16 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			if (!opt_benchmark)
 				reap_curl(pool);
 
-			if (pool->enabled == POOL_DISABLED || pool->has_stratum)
+			/* Get a rolling utility per pool over 10 mins */
+			if (intervals > 19) {
+				int shares = pool->diff1 - pool->last_shares;
+
+				pool->last_shares = pool->diff1;
+				pool->utility = (pool->utility + (double)shares * 0.63) / 1.63;
+				pool->shares = pool->utility;
+			}
+
+			if ((pool->enabled == POOL_DISABLED || pool->has_stratum) && pool->probed)
 				continue;
 
 			/* Test pool is idle once every minute */
@@ -7060,14 +6944,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 					pool_resus(pool);
 			}
 
-			/* Get a rolling utility per pool over 10 mins */
-			if (intervals > 19) {
-				int shares = pool->diff1 - pool->last_shares;
-
-				pool->last_shares = pool->diff1;
-				pool->utility = (pool->utility + (double)shares * 0.63) / 1.63;
-				pool->shares = pool->utility;
-			}
 		}
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
@@ -7765,6 +7641,7 @@ int main(int argc, char *argv[])
 	mutex_init(&qd_lock);
 	mutex_init(&console_lock);
 	mutex_init(&control_lock);
+	mutex_init(&stats_lock);
 	mutex_init(&sharelog_lock);
 	mutex_init(&ch_lock);
 	mutex_init(&sshare_lock);
@@ -7778,6 +7655,10 @@ int main(int argc, char *argv[])
 	mutex_init(&restart_lock);
 	if (unlikely(pthread_cond_init(&restart_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init restart_cond");
+
+	mutex_init(&kill_lock);
+	if (unlikely(pthread_cond_init(&kill_cond, NULL)))
+		quit(1, "Failed to pthread_cond_init kill_cond");
 
 	notifier_init(submit_waiting_notifier);
 
@@ -8101,10 +7982,6 @@ int main(int argc, char *argv[])
 	if (!thr->q)
 		quit(1, "Failed to tq_new");
 
-	/* start work I/O thread */
-	if (thr_info_create(thr, NULL, workio_thread, thr))
-		quit(1, "workio thread create failed");
-
 	stage_thr_id = mining_threads + 1;
 	thr = &thr_info[stage_thr_id];
 	thr->q = tq_new();
@@ -8325,10 +8202,11 @@ begin_bench:
 	for (i = 0; i < mining_threads + opt_queue; i++)
 		queue_request();
 
-	/* main loop - simply wait for workio thread to exit. This is not the
-	 * normal exit path and only occurs should the workio_thread die
-	 * unexpectedly */
-	pthread_join(thr_info[work_thr_id].pth, NULL);
+	/* Wait till we receive the conditional telling us to die */
+	mutex_lock(&kill_lock);
+	pthread_cond_wait(&kill_cond, &kill_lock);
+	mutex_unlock(&kill_lock);
+
 	applog(LOG_INFO, "workio thread dead, exiting.");
 
 	clean_up();

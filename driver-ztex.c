@@ -186,7 +186,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	int backlog_p = 0, backlog_max;
 	uint32_t *lastnonce;
 	uint32_t nonce, noncecnt = 0;
-	bool overflow, found, rv;
+	bool overflow, found;
 	struct libztex_hash_data hdata[GOLDEN_BACKLOG];
 
 	ztex = thr->cgpu->device_ztex;
@@ -213,22 +213,20 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	
 	applog(LOG_DEBUG, "%s: sent hashdata", ztex->repr);
 
-	lastnonce = malloc(sizeof(uint32_t)*ztex->numNonces);
+	lastnonce = calloc(1, sizeof(uint32_t)*ztex->numNonces);
 	if (lastnonce == NULL) {
 		applog(LOG_ERR, "%s: failed to allocate lastnonce[%d]", ztex->repr, ztex->numNonces);
 		return -1;
 	}
-	memset(lastnonce, 0, sizeof(uint32_t)*ztex->numNonces);
 
 	/* Add an extra slot for detecting dupes that lie around */
 	backlog_max = ztex->numNonces * (2 + ztex->extraSolutions);
-	backlog = malloc(sizeof(uint32_t) * backlog_max);
+	backlog = calloc(1, sizeof(uint32_t) * backlog_max);
 	if (backlog == NULL) {
 		applog(LOG_ERR, "%s: failed to allocate backlog[%d]", ztex->repr, backlog_max);
 		free(lastnonce);
 		return -1;
 	}
-	memset(backlog, 0, sizeof(uint32_t) * backlog_max);
 	
 	overflow = false;
 
@@ -297,9 +295,9 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 							backlog_p = 0;
 						nonce = le32toh(nonce);
 						work->blk.nonce = 0xffffffff;
-						if ( (rv = test_nonce(work, nonce, false)) )
-						rv = submit_nonce(thr, work, nonce);
-						applog(LOG_DEBUG, "%s: submitted %0.8x (from N%dE%d) %d", ztex->repr, nonce, i, j, rv);
+						if (test_nonce(work, nonce, false))
+							submit_nonce(thr, work, nonce);
+						applog(LOG_DEBUG, "%s: submitted %0.8x (from N%dE%d)", ztex->repr, nonce, i, j);
 					}
 				}
 			}
@@ -370,10 +368,10 @@ static bool ztex_prepare(struct thr_info *thr)
 		ztex_releaseFpga(ztex);
 		return false;
 	}
-	ztex_releaseFpga(ztex);
 	ztex->dclk.freqM = ztex->dclk.freqMaxM+1;;
 	//ztex_updateFreq(thr);
 	libztex_setFreq(ztex, ztex->dclk.freqMDefault);
+	ztex_releaseFpga(ztex);
 	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
 	return true;
 }
