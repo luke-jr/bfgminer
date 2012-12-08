@@ -22,10 +22,11 @@
  *   along with this program; if not, see http://www.gnu.org/licenses/.
 **/
 
+#include "config.h"
+
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <config.h>
 
 #include "miner.h"
 #include "fpgautils.h"
