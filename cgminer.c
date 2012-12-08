@@ -6857,9 +6857,7 @@ begin_bench:
 	pthread_cond_wait(&kill_cond, &kill_lock);
 	mutex_unlock(&kill_lock);
 
-	applog(LOG_INFO, "workio thread dead, exiting.");
-
-	clean_up();
+	applog(LOG_INFO, "Given kill message, exiting.");
 
 	/* Not really necessary, but let's clean this up too anyway */
 	HASH_ITER(hh, staged_work, work, tmpwork) {
