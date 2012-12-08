@@ -3588,6 +3588,19 @@ static bool stale_work(struct work *work, bool share)
 			return true;
 		}
 
+	if (pool->has_stratum) {
+		bool same_job = true;
+
+		mutex_lock(&pool->pool_lock);
+		if (strcmp(work->job_id, pool->swork.job_id))
+			same_job = false;
+		mutex_unlock(&pool->pool_lock);
+		if (!same_job) {
+			applog(LOG_DEBUG, "Work stale due to stratum job_id mismatch");
+			return true;
+		}
+	}
+
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
 	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
