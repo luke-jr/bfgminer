@@ -449,6 +449,7 @@ struct pool *add_pool(void)
 	if (!pool)
 		quit(1, "Failed to malloc pool in add_pool");
 	pool->pool_no = pool->prio = total_pools;
+	mutex_init(&pool->last_work_lock);
 	mutex_init(&pool->pool_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
@@ -2893,6 +2894,38 @@ static void get_benchmark_work(struct work *work)
 	calc_diff(work, 0);
 }
 
+static bool queue_request(void);
+
+static void finish_req_in_progress(struct pool *pool, bool succeeded) {
+	pool->req_in_progress = false;
+	if (pool->extra_work_needed) {
+		mutex_lock(&pool->last_work_lock);
+		while (pool->extra_work_needed) {
+			queue_request();
+			--pool->extra_work_needed;
+			if (!succeeded)
+				break;
+		}
+		mutex_unlock(&pool->last_work_lock);
+	}
+}
+
+static void update_last_work(struct work *work)
+{
+	if (!work->tmpl)
+		// Only save GBT jobs, since rollntime isn't coordinated well yet
+		return;
+
+	struct pool *pool = work->pool;
+	mutex_lock(&pool->last_work_lock);
+	if (pool->last_work_copy)
+		free_work(pool->last_work_copy);
+	pool->last_work_copy = copy_work(work);
+	pool->last_work_copy->work_restart_id = pool->work_restart_id;
+	mutex_unlock(&pool->last_work_lock);
+	finish_req_in_progress(pool, true);
+}
+
 static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const char *lpid)
 {
 	char *rpc_req;
@@ -2974,7 +3007,13 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 tryagain:
 	rpc_req = prepare_rpc_req(work, pool->proto, NULL);
 	if (!rpc_req)
+	{
+		finish_req_in_progress(pool, false);
 		return false;
+	}
+
+	if (pool->proto == PLP_GETBLOCKTEMPLATE)
+		pool->req_in_progress = true;
 
 	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, rpc_req);
 
@@ -2993,11 +3032,15 @@ tryagain:
 		if (unlikely(!rc))
 			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
 	} else if (PLP_NONE != (proto = pool_protocol_fallback(pool->proto))) {
+		finish_req_in_progress(pool, true);
 		applog(LOG_WARNING, "Pool %u failed getblocktemplate request; falling back to getwork protocol", pool->pool_no);
 		pool->proto = proto;
 		goto tryagain;
 	} else
+	{
+		finish_req_in_progress(pool, false);
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
+	}
 
 	gettimeofday(&(work->tv_getwork_reply), NULL);
 	timersub(&(work->tv_getwork_reply), &(work->tv_getwork), &tv_elapsed);
@@ -3020,6 +3063,11 @@ tryagain:
 	calc_diff(work, 0);
 	total_getworks++;
 	pool->getwork_requested++;
+
+	if (rc)
+		update_last_work(work);
+	else
+		finish_req_in_progress(pool, false);
 
 	if (likely(val))
 		json_decref(val);
@@ -3464,12 +3512,43 @@ retry:
 		goto out;
 	}
 
-	// TODO: Stage work from latest GBT template, if any
-
 	if (clone_available()) {
 		dec_queued(pool);
 		applog(LOG_DEBUG, "dec_queued from get_work_thread due to clone available");
 		goto out;
+	}
+
+	if (pool->last_work_copy) {
+	  mutex_lock(&pool->last_work_lock);
+	  struct work *last_work = pool->last_work_copy;
+	  if (!last_work)
+		{}
+	  if (can_roll(last_work) && should_roll(last_work)) {
+		ret_work = make_clone(pool->last_work_copy);
+		mutex_unlock(&pool->last_work_lock);
+		roll_work(ret_work);
+		applog(LOG_DEBUG, "Staging work from latest GBT job in get_work_thread with %d seconds left", (int)blkmk_time_left(ret_work->tmpl, time(NULL)));
+		if (unlikely(!stage_work(ret_work))) {
+			applog(LOG_ERR, "Failed to stage gbt work in get_work_thread");
+			kill_work();
+			free_work(ret_work);
+		}
+		dec_queued(pool);
+		goto out;
+	  } else if (last_work->tmpl && pool->proto == PLP_GETBLOCKTEMPLATE && blkmk_work_left(last_work->tmpl) > (unsigned long)mining_threads) {
+		if (pool->req_in_progress) {
+			++pool->extra_work_needed;
+			mutex_unlock(&pool->last_work_lock);
+			applog(LOG_DEBUG, "Need more work while GBT request already in progress (pool %u), letting it provide work", pool->pool_no);
+			dec_queued(pool);
+			goto out;
+		}
+		pool->req_in_progress = true;
+	  } else {
+		free_work(last_work);
+		pool->last_work_copy = NULL;
+	  }
+	  mutex_unlock(&pool->last_work_lock);
 	}
 
 	ret_work = make_work();
@@ -4348,6 +4427,7 @@ static bool test_work_current(struct work *work)
 		HASH_ADD_STR(blocks, hash, s);
 		wr_unlock(&blk_lock);
 		work->pool->block_id = block_id;
+		finish_req_in_progress(work->pool, false);
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
 		template_nonce = 0;
@@ -4371,6 +4451,8 @@ static bool test_work_current(struct work *work)
 		if (unlikely(work->pool->block_id != block_id)) {
 			bool was_active = work->pool->block_id != 0;
 			work->pool->block_id = block_id;
+			if (!work->longpoll)
+				update_last_work(work);
 			if (was_active) {  // Pool actively changed block
 				if (work->pool == (curpool = current_pool()))
 					restart = true;
@@ -4396,6 +4478,7 @@ static bool test_work_current(struct work *work)
 		}
 	  if (work->longpoll) {
 		++work->pool->work_restart_id;
+		update_last_work(work);
 		if ((!restart) && work->pool == current_pool()) {
 			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
 				work->pool->pool_no);
@@ -5783,6 +5866,9 @@ tryagain:
 	if (!rpc_req)
 		return false;
 
+	if (pool->proto == proto && proto == PLP_GETBLOCKTEMPLATE)
+		pool->req_in_progress = true;
+
 	pool->probed = false;
 	gettimeofday(&tv_getwork, NULL);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
@@ -5817,13 +5903,20 @@ retry_stratum:
 		if (pool->stratum_auth)
 			return pool->stratum_active;
 		if (!pool->stratum_active && !initiate_stratum(pool))
+		{
+			finish_req_in_progress(pool, false);
 			return false;
+		}
 		if (!auth_stratum(pool))
+		{
+			finish_req_in_progress(pool, false);
 			return false;
+		}
 		pool->idle = false;
 		pool->stratum_auth = true;
 		init_stratum_thread(pool);
 		detect_algo = 2;
+		finish_req_in_progress(pool, true);
 		return true;
 	}
 	else if (pool->has_stratum)
@@ -5854,12 +5947,16 @@ retry_stratum:
 			pool->getwork_requested++;
 			ret = true;
 			gettimeofday(&pool->tv_idle, NULL);
+
+			update_last_work(work);
 		} else {
 badwork:
 			json_decref(val);
 			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
-			if (PLP_NONE != (proto = pool_protocol_fallback(proto)))
+			pool->proto = proto = pool_protocol_fallback(proto);
+			finish_req_in_progress(pool, true);
+			if (PLP_NONE != proto)
 				goto tryagain;
 			free_work(work);
 			goto out;
@@ -5899,6 +5996,8 @@ badwork:
 				quit(1, "Failed to create pool longpoll thread");
 		}
 	} else if (PLP_NONE != (proto = pool_protocol_fallback(proto))) {
+		pool->proto = proto;
+		finish_req_in_progress(pool, true);
 		goto tryagain;
 	} else {
 		free_work(work);
@@ -5908,6 +6007,7 @@ badwork:
 			pool->has_stratum = true;
 			goto retry_stratum;
 		}
+		finish_req_in_progress(pool, false);
 		applog(LOG_DEBUG, "FAILED to retrieve work from pool %u %s",
 		       pool->pool_no, pool->rpc_url);
 		if (!pinging)
@@ -6647,6 +6747,8 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 
 	work->longpoll = true;
 	work->getwork_mode = GETWORK_MODE_LP;
+
+	update_last_work(work);
 
 	/* We'll be checking this work item twice, but we already know it's
 	 * from a new block so explicitly force the new block detection now
