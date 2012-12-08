@@ -25,12 +25,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <config.h>
 
 #include "miner.h"
 #include "fpgautils.h"
 #include "libztex.h"
-
-#define BUFSIZE 256
 
 //* Capability index for EEPROM support.
 #define CAPABILITY_EEPROM 0,0
@@ -103,9 +102,10 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	FILE *fp = NULL;
 	libusb_device_handle *hndl = NULL;
 	struct libusb_device_descriptor desc;
-	int i, ret = CHECK_ERROR, err, cnt;
+	int ret = CHECK_ERROR, err, cnt;
 	size_t got_bytes, length;
 	unsigned char buf[64], *fw_buf;
+	unsigned int i;
 
 	err = libusb_get_device_descriptor(dev, &desc);
 	if (unlikely(err != 0)) {
@@ -292,7 +292,7 @@ static bool libztex_checkCapability(struct libztex_device *ztex, int i, int j)
 	return true;
 }
 
-static int libztex_detectBitstreamBitOrder(const unsigned char *buf, int size)
+static char libztex_detectBitstreamBitOrder(const unsigned char *buf, int size)
 {
 	int i;
 
@@ -407,7 +407,6 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 			applog(LOG_ERR, "%s: HS FPGA configuration failed: DONE pin does not go high", ztex->repr);
 			return -3;
 		}
-
 	}
 
 	libusb_release_interface(ztex->hndl, settings[1]);
@@ -415,7 +414,6 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	nmsleep(200);
 	applog(LOG_INFO, "%s: HS FPGA configuration done", ztex->repr);
 	return 0;
-
 }
 
 static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firmware, bool force, char bs)
@@ -490,9 +488,9 @@ int libztex_configureFpga(struct libztex_device *ztex)
 
 	strcpy(buf, ztex->bitFileName);
 	strcat(buf, ".bit");
-	rv = libztex_configureFpgaHS(ztex, buf, true, 2); 
+	rv = libztex_configureFpgaHS(ztex, buf, true, 2);
 	if (rv != 0)
-		rv = libztex_configureFpgaLS(ztex, buf, true, 2); 
+		rv = libztex_configureFpgaLS(ztex, buf, true, 2);
 	return rv;
 }
 
@@ -520,7 +518,7 @@ int libztex_numberOfFpgas(struct libztex_device *ztex) {
 
 int libztex_selectFpga(struct libztex_device *ztex) {
 	int cnt, fpgacnt = libztex_numberOfFpgas(ztex->root);
-	int number = ztex->fpgaNum;
+	uint16_t number = ztex->fpgaNum;
 	if (number < 0 || number >= fpgacnt) {
 		applog(LOG_WARNING, "%s: Trying to select wrong fpga (%d in %d)", ztex->repr, number, fpgacnt);
 		return 1;
@@ -631,7 +629,6 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	newdev->moduleReserved[10] = buf[28];
 	newdev->moduleReserved[11] = buf[29];
 
-
 	cnt = libusb_control_transfer(newdev->hndl, 0xc0, 0x82, 0, 0, buf, 64, 500);
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to read ztex descriptor with err %d", cnt);
@@ -668,7 +665,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	newdev->suspendSupported = (buf[0] == 5);
 	newdev->hashesPerClock = buf[0] > 2? (((buf[8] & 255) | ((buf[9] & 255) << 8)) + 1) / 128.0: 1.0;
 	newdev->extraSolutions = buf[0] > 4? buf[10]: 0;
-	
+
 	applog(LOG_DEBUG, "PID: %d numNonces: %d offsNonces: %d freqM1: %f freqMaxM: %d freqM: %d suspendSupported: %s hashesPerClock: %f extraSolutions: %d",
 	                 buf[0], newdev->numNonces, newdev->offsNonces, newdev->freqM1, newdev->freqMaxM, newdev->freqM, newdev->suspendSupported ? "T": "F", 
 	                 newdev->hashesPerClock, newdev->extraSolutions);
@@ -810,7 +807,7 @@ done:
 
 int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)
 {
-	int cnt, ret, len;
+	int cnt = 0, ret, len;
 
 	if (ztex == NULL || ztex->hndl == NULL)
 		return 0;
@@ -836,7 +833,7 @@ int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data n
 
 	if (ztex->hndl == NULL)
 		return 0;
-	
+
 	rbuf = malloc(sizeof(unsigned char) * (ztex->numNonces * bufsize));
 	if (rbuf == NULL) {
 		applog(LOG_ERR, "%s: Failed to allocate memory for reading nonces", ztex->repr);
