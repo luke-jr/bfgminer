@@ -2355,52 +2355,13 @@ void clear_logwin(void)
 #endif
 
 /* regenerate the full work->hash value and also return true if it's a block */
-bool regeneratehash(const struct work *work)
+bool regeneratehash(struct work *work)
 {
-	uint32_t *data32 = (uint32_t *)(work->data);
-	unsigned char swap[128];
-	uint32_t *swap32 = (uint32_t *)swap;
-	unsigned char hash1[32];
-	uint32_t *hash32 = (uint32_t *)(work->hash);
-	uint32_t difficulty = 0;
-	uint32_t diffbytes = 0;
-	uint32_t diffvalue = 0;
-	uint32_t diffcmp[8];
-	int diffshift = 0;
-	int i;
+	unsigned char target[32];
 
-	swap32yes(swap32, data32, 80 / 4);
-
-	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, (unsigned char *)(work->hash), false);
-
-	difficulty = be32toh(*((uint32_t *)(work->data + 72)));
-
-	diffbytes = ((difficulty >> 24) & 0xff) - 3;
-	diffvalue = difficulty & 0x00ffffff;
-
-	diffshift = (diffbytes % 4) * 8;
-	if (diffshift == 0) {
-		diffshift = 32;
-		diffbytes--;
-	}
-
-	memset(diffcmp, 0, 32);
-	diffcmp[(diffbytes >> 2) + 1] = diffvalue >> (32 - diffshift);
-	diffcmp[diffbytes >> 2] = diffvalue << diffshift;
-
-	for (i = 7; i >= 0; i--) {
-		uint32_t hash32i = le32toh(hash32[i]);
-		if (hash32i > diffcmp[i])
-			return false;
-		if (hash32i < diffcmp[i])
-			return true;
-	}
-
-	// https://en.bitcoin.it/wiki/Block says: "numerically below"
-	// https://en.bitcoin.it/wiki/Target says: "lower than or equal to"
-	// code in bitcoind 0.3.24 main.cpp CheckWork() says: if (hash > hashTarget) return false;
-	return true;
+	hash_data(work->hash, work->data);
+	real_block_target(target, work->data);
+	return hash_target_check(work->hash, target);
 }
 
 static void enable_pool(struct pool *pool)
@@ -5956,7 +5917,7 @@ static struct work *clone_work(struct work *work)
 	return work;
 }
 
-static void gen_hash(unsigned char *data, unsigned char *hash, int len)
+void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
 	unsigned char hash1[32];
 
@@ -6215,17 +6176,9 @@ err_out:
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 {
-	uint32_t *data32 = (uint32_t *)(work->data);
-	unsigned char swap[128];
-	uint32_t *swap32 = (uint32_t *)swap;
-	unsigned char hash1[32];
-	unsigned char hash2[32];
-	uint32_t *hash2_32 = (uint32_t *)hash2;
+	uint32_t *hash2_32 = (uint32_t *)&work->hash[0];
 
-	swap32yes(swap32, data32, 80 / 4);
-
-	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, hash2, false);
+	hash_data(work->hash, work->data);
 
 	if (hash2_32[7] != 0)
 		return TNR_BAD;
@@ -6233,11 +6186,7 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 	if (!checktarget)
 		return TNR_GOOD;
 
-	swap32yes(hash2_32, hash2_32, 32 / 4);
-
-	memcpy((void*)work->hash, hash2, 32);
-
-	if (!fulltest(work->hash, work->target))
+	if (!hash_target_check_v(work->hash, work->target))
 		return TNR_HIGH;
 
 	return TNR_GOOD;

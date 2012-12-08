@@ -45,6 +45,13 @@
 struct pool;
 enum dev_reason;
 struct cgpu_info;
+
+extern void gen_hash(unsigned char *data, unsigned char *hash, int len);
+extern void hash_data(unsigned char *out_hash, const unsigned char *data);
+extern void real_block_target(unsigned char *target, const unsigned char *data);
+extern bool hash_target_check(const unsigned char *hash, const unsigned char *target);
+extern bool hash_target_check_v(const unsigned char *hash, const unsigned char *target);
+
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
