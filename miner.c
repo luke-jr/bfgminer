@@ -2381,6 +2381,7 @@ bool regeneratehash(const struct work *work)
 	unsigned char swap[128];
 	uint32_t *swap32 = (uint32_t *)swap;
 	unsigned char hash1[32];
+	unsigned char hash2[32];
 	uint32_t *hash32 = (uint32_t *)(work->hash);
 	uint32_t difficulty = 0;
 	uint32_t diffbytes = 0;
@@ -2392,7 +2393,9 @@ bool regeneratehash(const struct work *work)
 	swap32yes(swap32, data32, 80 / 4);
 
 	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, (unsigned char *)(work->hash), false);
+	sha2(hash1, 32, hash2, false);
+
+	swap32yes((unsigned char *)work->hash, hash2, 32 / 4);
 
 	difficulty = be32toh(*((uint32_t *)(work->data + 72)));
 
@@ -2590,13 +2593,14 @@ static const uint64_t diffone = 0xFFFF000000000000ull;
 
 static uint64_t share_diff(const struct work *work)
 {
-	uint64_t *data64, d64;
+	uint64_t d64;
 	char rhash[32];
 	uint64_t ret;
 
 	swab256(rhash, work->hash);
-	data64 = (uint64_t *)(rhash + 4);
-	d64 = be64toh(*data64);
+	d64 = le32toh(*(uint32_t *)(rhash + 4));
+	d64 <<= 32;
+	d64 += le32toh(*(uint32_t *)(rhash + 8));
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = diffone / d64;
