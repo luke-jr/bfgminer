@@ -24,10 +24,11 @@
 
 #define _GNU_SOURCE
 
+#include "config.h"
+
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <config.h>
 
 #include "dynclock.h"
 #include "miner.h"
