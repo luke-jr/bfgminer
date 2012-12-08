@@ -449,6 +449,7 @@ struct pool *add_pool(void)
 	if (!pool)
 		quit(1, "Failed to malloc pool in add_pool");
 	pool->pool_no = pool->prio = total_pools;
+	mutex_init(&pool->last_work_lock);
 	mutex_init(&pool->pool_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
@@ -1821,6 +1822,15 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	memset(work->hash, 0, sizeof(work->hash));
 
 	gettimeofday(&work->tv_staged, NULL);
+
+	if (work->tmpl) {
+		// Only save GBT jobs, since rollntime isn't coordinated well yet
+		mutex_lock(&pool->last_work_lock);
+		if (pool->last_work_copy)
+			free_work(pool->last_work_copy);
+		pool->last_work_copy = copy_work(work);
+		mutex_unlock(&pool->last_work_lock);
+	}
 
 	ret = true;
 
@@ -3464,7 +3474,27 @@ retry:
 		goto out;
 	}
 
-	// TODO: Stage work from latest GBT template, if any
+	if (pool->last_work_copy) {
+	  mutex_lock(&pool->last_work_lock);
+	  struct work *last_work = pool->last_work_copy;
+	  if (last_work && can_roll(last_work) && should_roll(last_work)) {
+		ret_work = copy_work(pool->last_work_copy);
+		mutex_unlock(&pool->last_work_lock);
+		roll_work(ret_work);
+		applog(LOG_DEBUG, "Staging work from latest GBT job in get_work_thread with %d seconds left", (int)blkmk_time_left(ret_work->tmpl, time(NULL)));
+		if (unlikely(!stage_work(ret_work))) {
+			applog(LOG_ERR, "Failed to stage gbt work in get_work_thread");
+			kill_work();
+			free_work(ret_work);
+		}
+		dec_queued(pool);
+		goto out;
+	  } else if (last_work) {
+		free_work(last_work);
+		pool->last_work_copy = NULL;
+	  }
+	  mutex_unlock(&pool->last_work_lock);
+	}
 
 	if (clone_available()) {
 		dec_queued(pool);
