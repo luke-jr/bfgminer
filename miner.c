@@ -219,9 +219,6 @@ static pthread_cond_t lp_cond;
 pthread_mutex_t restart_lock;
 pthread_cond_t restart_cond;
 
-pthread_mutex_t kill_lock;
-pthread_cond_t kill_cond;
-
 pthread_cond_t gws_cond;
 
 double total_mhashes_done;
@@ -3115,11 +3112,6 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &thr_info[api_thr_id];
 	thr_info_cancel(thr);
-
-	applog(LOG_DEBUG, "Sending kill broadcast");
-	mutex_lock(&kill_lock);
-	pthread_cond_signal(&kill_cond);
-	mutex_unlock(&kill_lock);
 }
 
 /* This should be the common exit path */
@@ -3392,138 +3384,6 @@ static void pool_died(struct pool *pool)
 		} else
 			applog(LOG_INFO, "Pool %d %s failed to return work", pool->pool_no, pool->rpc_url);
 	}
-}
-
-static void gen_stratum_work(struct pool *pool, struct work *work);
-
-static void pool_resus(struct pool *pool);
-
-static void *getwork_thread(void __maybe_unused *userdata)
-{
-	pthread_detach(pthread_self());
-
-	RenameThread("getwork_sched");
-
-	while (42) {
-		int ts, max_staged = opt_queue;
-		struct pool *pool, *cp;
-		bool lagging = false;
-		struct curl_ent *ce;
-		struct work *work;
-
-		cp = current_pool();
-
-		/* If the primary pool is a getwork pool and cannot roll work,
-		 * try to stage one extra work per mining thread */
-		if (!cp->has_stratum && cp->proto != PLP_GETBLOCKTEMPLATE && !staged_rollable)
-			max_staged += mining_threads;
-
-		mutex_lock(stgd_lock);
-		ts = __total_staged();
-
-		if (!cp->has_stratum && cp->proto != PLP_GETBLOCKTEMPLATE && !ts && !opt_fail_only)
-			lagging = true;
-
-		/* Wait until hash_pop tells us we need to create more work */
-		if (ts > max_staged) {
-			pthread_cond_wait(&gws_cond, stgd_lock);
-			ts = __total_staged();
-		}
-		mutex_unlock(stgd_lock);
-
-		if (ts > max_staged)
-			continue;
-
-		work = make_work();
-
-		if (lagging && !pool_tset(cp, &cp->lagging)) {
-			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
-			cp->getfail_occasions++;
-			total_go++;
-		}
-		pool = select_pool(lagging);
-retry:
-		if (pool->has_stratum) {
-			while (!pool->stratum_active) {
-				struct pool *altpool = select_pool(true);
-
-				sleep(5);
-				if (altpool != pool) {
-					pool = altpool;
-					goto retry;
-				}
-			}
-			pool->last_work_time = time(NULL);
-			gen_stratum_work(pool, work);
-			applog(LOG_DEBUG, "Generated stratum work");
-			stage_work(work);
-			continue;
-		}
-
-		if (pool->last_work_copy) {
-			mutex_lock(&pool->last_work_lock);
-			struct work *last_work = pool->last_work_copy;
-			if (!last_work)
-				{}
-			if (can_roll(last_work) && should_roll(last_work)) {
-				work = make_clone(pool->last_work_copy);
-				mutex_unlock(&pool->last_work_lock);
-				roll_work(work);
-				applog(LOG_DEBUG, "Generated work from latest GBT job in get_work_thread with %d seconds left", (int)blkmk_time_left(work->tmpl, time(NULL)));
-				stage_work(work);
-				continue;
-			} else if (last_work->tmpl && pool->proto == PLP_GETBLOCKTEMPLATE && blkmk_work_left(last_work->tmpl) > (unsigned long)mining_threads) {
-				if (pool->req_in_progress) {
-					++pool->extra_work_needed;
-					mutex_unlock(&pool->last_work_lock);
-					applog(LOG_DEBUG, "Need more work while GBT request already in progress (pool %u), letting it provide work", pool->pool_no);
-					continue;
-				}
-				pool->req_in_progress = true;
-			} else {
-				free_work(last_work);
-				pool->last_work_copy = NULL;
-			}
-			mutex_unlock(&pool->last_work_lock);
-		}
-
-		if (clone_available()) {
-			applog(LOG_DEBUG, "Cloned getwork work");
-			free_work(work);
-			continue;
-		}
-
-		if (opt_benchmark) {
-			get_benchmark_work(work);
-			applog(LOG_DEBUG, "Generated benchmark work");
-			stage_work(work);
-			continue;
-		}
-
-		work->pool = pool;
-		ce = pop_curl_entry(pool);
-		/* obtain new work from bitcoin via JSON-RPC */
-		if (!get_upstream_work(work, ce->curl)) {
-			applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
-			/* Make sure the pool just hasn't stopped serving
-			 * requests but is up as we'll keep hammering it */
-			if (++pool->seq_getfails > mining_threads + opt_queue)
-				pool_died(pool);
-			sleep(5);
-			push_curl_entry(ce, pool);
-			pool = select_pool(true);
-			goto retry;
-		}
-		pool_tclear(pool, &pool->lagging);
-		if (pool_tclear(pool, &pool->idle))
-			pool_resus(pool);
-
-		applog(LOG_DEBUG, "Generated getwork work");
-		stage_work(work);
-		push_curl_entry(ce, pool);
-	}
-
-	return NULL;
 }
 
 static bool stale_work(struct work *work, bool share)
@@ -5594,6 +5454,8 @@ static bool cnx_needed(struct pool *pool)
 }
 
 static void wait_lpcurrent(struct pool *pool);
+static void pool_resus(struct pool *pool);
+static void gen_stratum_work(struct pool *pool, struct work *work);
 
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
@@ -7497,14 +7359,13 @@ static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t
 
 int main(int argc, char *argv[])
 {
-	struct block *block, *tmpblock;
-	struct work *work, *tmpwork;
 	bool pools_active = false;
 	struct sigaction handler;
 	struct thr_info *thr;
-	char *s;
+	struct block *block;
 	unsigned int k;
 	int i, j;
+	char *s;
 
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
 
@@ -7546,10 +7407,6 @@ int main(int argc, char *argv[])
 	mutex_init(&restart_lock);
 	if (unlikely(pthread_cond_init(&restart_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init restart_cond");
-
-	mutex_init(&kill_lock);
-	if (unlikely(pthread_cond_init(&kill_cond, NULL)))
-		quit(1, "Failed to pthread_cond_init kill_cond");
 
 	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init gws_cond");
@@ -8086,36 +7943,125 @@ begin_bench:
 	pthread_detach(thr->pth);
 #endif
 
-	thr = &thr_info[gwsched_thr_id];
-	thr->id = gwsched_thr_id;
+	/* Once everything is set up, main() becomes the getwork scheduler */
+	while (42) {
+		int ts, max_staged = opt_queue;
+		struct pool *pool, *cp;
+		bool lagging = false;
+		struct curl_ent *ce;
+		struct work *work;
 
-	/* start getwork scheduler thread */
-	if (thr_info_create(thr, NULL, getwork_thread, thr))
-		quit(1, "getwork_thread create failed");
+		cp = current_pool();
 
-	/* Wait till we receive the conditional telling us to die */
-	mutex_lock(&kill_lock);
-	pthread_cond_wait(&kill_cond, &kill_lock);
-	mutex_unlock(&kill_lock);
+		/* If the primary pool is a getwork pool and cannot roll work,
+		 * try to stage one extra work per mining thread */
+		if (!cp->has_stratum && cp->proto != PLP_GETBLOCKTEMPLATE && !staged_rollable)
+			max_staged += mining_threads;
 
-	applog(LOG_INFO, "Given kill message, exiting.");
+		mutex_lock(stgd_lock);
+		ts = __total_staged();
 
-	/* Not really necessary, but let's clean this up too anyway */
-	HASH_ITER(hh, staged_work, work, tmpwork) {
-		HASH_DEL(staged_work, work);
-		free_work(work);
+		if (!cp->has_stratum && cp->proto != PLP_GETBLOCKTEMPLATE && !ts && !opt_fail_only)
+			lagging = true;
+
+		/* Wait until hash_pop tells us we need to create more work */
+		if (ts > max_staged) {
+			pthread_cond_wait(&gws_cond, stgd_lock);
+			ts = __total_staged();
+		}
+		mutex_unlock(stgd_lock);
+
+		if (ts > max_staged)
+			continue;
+
+		work = make_work();
+
+		if (lagging && !pool_tset(cp, &cp->lagging)) {
+			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
+			cp->getfail_occasions++;
+			total_go++;
+		}
+		pool = select_pool(lagging);
+retry:
+		if (pool->has_stratum) {
+			while (!pool->stratum_active) {
+				struct pool *altpool = select_pool(true);
+
+				sleep(5);
+				if (altpool != pool) {
+					pool = altpool;
+					goto retry;
+				}
+			}
+			pool->last_work_time = time(NULL);
+			gen_stratum_work(pool, work);
+			applog(LOG_DEBUG, "Generated stratum work");
+			stage_work(work);
+			continue;
+		}
+
+		if (pool->last_work_copy) {
+			mutex_lock(&pool->last_work_lock);
+			struct work *last_work = pool->last_work_copy;
+			if (!last_work)
+				{}
+			if (can_roll(last_work) && should_roll(last_work)) {
+				work = make_clone(pool->last_work_copy);
+				mutex_unlock(&pool->last_work_lock);
+				roll_work(work);
+				applog(LOG_DEBUG, "Generated work from latest GBT job in get_work_thread with %d seconds left", (int)blkmk_time_left(work->tmpl, time(NULL)));
+				stage_work(work);
+				continue;
+			} else if (last_work->tmpl && pool->proto == PLP_GETBLOCKTEMPLATE && blkmk_work_left(last_work->tmpl) > (unsigned long)mining_threads) {
+				if (pool->req_in_progress) {
+					++pool->extra_work_needed;
+					mutex_unlock(&pool->last_work_lock);
+					applog(LOG_DEBUG, "Need more work while GBT request already in progress (pool %u), letting it provide work", pool->pool_no);
+					continue;
+				}
+				pool->req_in_progress = true;
+			} else {
+				free_work(last_work);
+				pool->last_work_copy = NULL;
+			}
+			mutex_unlock(&pool->last_work_lock);
+		}
+
+		if (clone_available()) {
+			applog(LOG_DEBUG, "Cloned getwork work");
+			free_work(work);
+			continue;
+		}
+
+		if (opt_benchmark) {
+			get_benchmark_work(work);
+			applog(LOG_DEBUG, "Generated benchmark work");
+			stage_work(work);
+			continue;
+		}
+
+		work->pool = pool;
+		ce = pop_curl_entry(pool);
+		/* obtain new work from bitcoin via JSON-RPC */
+		if (!get_upstream_work(work, ce->curl)) {
+			applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
+			/* Make sure the pool just hasn't stopped serving
+			 * requests but is up as we'll keep hammering it */
+			if (++pool->seq_getfails > mining_threads + opt_queue)
+				pool_died(pool);
+			sleep(5);
+			push_curl_entry(ce, pool);
+			pool = select_pool(true);
+			goto retry;
+		}
+		pool_tclear(pool, &pool->lagging);
+		if (pool_tclear(pool, &pool->idle))
+			pool_resus(pool);
+
+		applog(LOG_DEBUG, "Generated getwork work");
+		stage_work(work);
+		push_curl_entry(ce, pool);
 	}
-	HASH_ITER(hh, blocks, block, tmpblock) {
-		HASH_DEL(blocks, block);
-		free(block);
-	}
-
-#if defined(unix)
-	if (forkpid > 0) {
-		kill(forkpid, SIGTERM);
-		forkpid = 0;
-	}
-#endif
 
 	return 0;
 }
