@@ -4994,7 +4994,12 @@ static struct work *hash_pop(void)
 	HASH_DEL(staged_work, work);
 	if (work_rollable(work))
 		staged_rollable--;
+
+	/* Signal the getwork scheduler to look for more work */
 	pthread_cond_signal(&gws_cond);
+
+	/* Signal hash_pop again in case there are mutliple hash_pop waiters */
+	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
 
 	return work;
