@@ -3045,6 +3045,8 @@ static void pool_died(struct pool *pool)
 
 static void gen_stratum_work(struct pool *pool, struct work *work);
 
+static void pool_resus(struct pool *pool);
+
 static void *getwork_thread(void __maybe_unused *userdata)
 {
 	pthread_detach(pthread_self());
@@ -3150,6 +3152,9 @@ retry:
 			goto retry;
 		}
 		pool_tclear(pool, &pool->lagging);
+		if (pool_tclear(pool, &pool->idle))
+			pool_resus(pool);
+
 		applog(LOG_DEBUG, "Generated getwork work");
 		stage_work(work);
 		push_curl_entry(ce, pool);
@@ -4581,8 +4586,6 @@ out:
 
 	return ret;
 }
-
-static void pool_resus(struct pool *pool);
 
 static void clear_stratum_shares(struct pool *pool)
 {
