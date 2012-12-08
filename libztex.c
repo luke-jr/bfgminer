@@ -53,7 +53,8 @@
 #define CAPABILITY_MULTI_FPGA 0,7
 
 static int libztex_get_string_descriptor_ascii(libusb_device_handle *dev, uint8_t desc_index,
-		unsigned char *data, int length) {
+		unsigned char *data, int length)
+{
 	int i, cnt;
 	uint16_t langid;
 	unsigned char buf[260];
@@ -94,7 +95,8 @@ static int libztex_get_string_descriptor_ascii(libusb_device_handle *dev, uint8_
 	return LIBUSB_SUCCESS;
 }
 
-enum check_result {
+enum check_result
+{
 	CHECK_ERROR,
 	CHECK_IS_NOT_ZTEX,
 	CHECK_OK,
@@ -498,9 +500,11 @@ int libztex_configureFpga(struct libztex_device *ztex)
 	return rv;
 }
 
-int libztex_numberOfFpgas(struct libztex_device *ztex) {
+int libztex_numberOfFpgas(struct libztex_device *ztex)
+{
 	int cnt;
 	unsigned char buf[3];
+
 	if (ztex->numberOfFpgas < 0) {
 		if (libztex_checkCapability(ztex, CAPABILITY_MULTI_FPGA)) {
 			cnt = libusb_control_transfer(ztex->hndl, 0xc0, 0x50, 0, 0, buf, 3, 1000);
@@ -520,15 +524,17 @@ int libztex_numberOfFpgas(struct libztex_device *ztex) {
 	return ztex->numberOfFpgas;
 }
 
-int libztex_selectFpga(struct libztex_device *ztex) {
+int libztex_selectFpga(struct libztex_device *ztex)
+{
 	int cnt, fpgacnt = libztex_numberOfFpgas(ztex->root);
-	int number = ztex->fpgaNum;
+	int16_t number = ztex->fpgaNum;
+
 	if (number < 0 || number >= fpgacnt) {
 		applog(LOG_WARNING, "%s: Trying to select wrong fpga (%d in %d)", ztex->repr, number, fpgacnt);
 		return 1;
 	}
 	if (ztex->root->selectedFpga != number && libztex_checkCapability(ztex->root, CAPABILITY_MULTI_FPGA)) {
-		cnt = libusb_control_transfer(ztex->root->hndl, 0x40, 0x51, number, 0, NULL, 0, 500);
+		cnt = libusb_control_transfer(ztex->root->hndl, 0x40, 0x51, (uint16_t)number, 0, NULL, 0, 500);
 		if (unlikely(cnt < 0)) {
 			applog(LOG_ERR, "Ztex check device: Failed to set fpga with err %d", cnt);
 			return cnt;
@@ -538,7 +544,8 @@ int libztex_selectFpga(struct libztex_device *ztex) {
 	return 0;
 }
 
-int libztex_setFreq(struct libztex_device *ztex, uint16_t freq) {
+int libztex_setFreq(struct libztex_device *ztex, uint16_t freq)
+{
 	int cnt;
 	uint16_t oldfreq = ztex->dclk.freqM;
 
@@ -572,7 +579,8 @@ int libztex_resetFpga(struct libztex_device *ztex)
 	return libusb_control_transfer(ztex->hndl, 0x40, 0x31, 0, 0, NULL, 0, 1000);
 }
 
-int libztex_suspend(struct libztex_device *ztex) {
+int libztex_suspend(struct libztex_device *ztex)
+{
 	if (ztex->suspendSupported) {
 		return libusb_control_transfer(ztex->hndl, 0x40, 0x84, 0, 0, NULL, 0, 1000);
 	} else {
@@ -580,7 +588,8 @@ int libztex_suspend(struct libztex_device *ztex) {
 	}
 }
 
-int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** ztex) {
+int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** ztex)
+{
 	struct libztex_device *newdev = *ztex;
 	int i, cnt, err;
 	unsigned char buf[64];
@@ -609,7 +618,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		applog(LOG_ERR, "Ztex check device: Failed to read ztex descriptor with err %d", cnt);
 		return cnt;
 	}
-	
+
 	if (buf[0] != 40 || buf[1] != 1 || buf[2] != 'Z' || buf[3] != 'T' || buf[4] != 'E' || buf[5] != 'X') {
 		applog(LOG_ERR, "Ztex check device: Error reading ztex descriptor");
 		return 2;
@@ -826,11 +835,12 @@ int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)
 	}
 	if (unlikely(cnt < 0))
 		applog(LOG_ERR, "%s: Failed sendHashData with err %d", ztex->repr, cnt);
-	
+
 	return cnt;
 }
 
-int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data nonces[]) {
+int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data nonces[])
+{
 	int bufsize = 12 + ztex->extraSolutions * 4;
 	int cnt = 0, i, j, ret, len;
 	unsigned char *rbuf;
@@ -863,7 +873,7 @@ int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data n
 		memcpy((char*)&nonces[i].goldenNonce[0], &rbuf[i*bufsize], 4);
 		nonces[i].goldenNonce[0] -= ztex->offsNonces;
 		//applog(LOG_DEBUG, "W %d:0 %0.8x", i, nonces[i].goldenNonce[0]);
-		
+
 		memcpy((char*)&nonces[i].nonce, &rbuf[(i*bufsize)+4], 4);
 		nonces[i].nonce -= ztex->offsNonces;
 		memcpy((char*)&nonces[i].hash7, &rbuf[(i*bufsize)+8], 4);
@@ -891,3 +901,4 @@ void libztex_freeDevList(struct libztex_dev_list **devs)
 	}
 	free(devs);
 }
+
