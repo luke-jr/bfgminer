@@ -868,9 +868,6 @@ struct pool {
 	double diff_rejected;
 	double diff_stale;
 
-	int queued;
-	int staged;
-
 	bool submit_fail;
 	bool idle;
 	bool lagging;

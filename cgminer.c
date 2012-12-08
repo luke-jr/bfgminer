@@ -147,7 +147,7 @@ bool opt_bfl_noncerange;
 #define QUIET	(opt_quiet || opt_realquiet)
 
 struct thr_info *thr_info;
-static int work_thr_id;
+static int gwsched_thr_id;
 static int stage_thr_id;
 static int watchpool_thr_id;
 static int watchdog_thr_id;
@@ -181,6 +181,8 @@ pthread_cond_t restart_cond;
 pthread_mutex_t kill_lock;
 pthread_cond_t kill_cond;
 
+pthread_cond_t gws_cond;
+
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
@@ -191,7 +193,7 @@ int hw_errors;
 int total_accepted, total_rejected, total_diff1;
 int total_getworks, total_stale, total_discarded;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
-static int total_queued, staged_rollable;
+static int staged_rollable;
 unsigned int new_blocks;
 static unsigned int work_block;
 unsigned int found_blocks;
@@ -1383,6 +1385,7 @@ void clean_work(struct work *work)
 	work->nonce2 = NULL;
 	work->ntime = NULL;
 	work->gbt_coinbase = NULL;
+	memset(work, 0, sizeof(struct work));
 }
 
 /* All dynamically allocated work structs should be freed here to not leak any
@@ -1747,12 +1750,17 @@ void decay_time(double *f, double fadd)
 		*f = (fadd + *f * 0.58) / 1.58;
 }
 
+static int __total_staged(void)
+{
+	return HASH_COUNT(staged_work);
+}
+
 static int total_staged(void)
 {
 	int ret;
 
 	mutex_lock(stgd_lock);
-	ret = HASH_COUNT(staged_work);
+	ret = __total_staged();
 	mutex_unlock(stgd_lock);
 	return ret;
 }
@@ -1900,8 +1908,6 @@ static void text_print_status(int thr_id)
 	}
 }
 
-static int global_queued(void);
-
 #ifdef HAVE_CURSES
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
@@ -1919,12 +1925,12 @@ static void curses_print_status(void)
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
 	if (opt_scrypt) {
-		mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
-			global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
+		mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+			total_staged(), total_stale, total_discarded, new_blocks,
 			local_work, total_go, total_ro);
 	} else {
-		mvwprintw(statuswin, 3, 0, " TQ: %d  ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  WU: %.1f",
-			global_queued(), total_staged(), total_stale, total_discarded, new_blocks,
+		mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  WU: %.1f",
+			total_staged(), total_stale, total_discarded, new_blocks,
 			local_work, total_go, total_ro, total_diff1 / total_secs * 60);
 	}
 	wclrtoeol(statuswin);
@@ -2897,41 +2903,8 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	mutex_lock(&pool->pool_lock);
 	list_add_tail(&ce->node, &pool->curlring);
 	gettimeofday(&ce->tv, NULL);
-	pthread_cond_signal(&pool->cr_cond);
+	pthread_cond_broadcast(&pool->cr_cond);
 	mutex_unlock(&pool->pool_lock);
-}
-
-/* This is overkill, but at least we'll know accurately how much work is
- * queued to prevent ever being left without work */
-static void inc_queued(struct pool *pool)
-{
-	mutex_lock(&qd_lock);
-	total_queued++;
-	pool->queued++;
-	mutex_unlock(&qd_lock);
-}
-
-static void dec_queued(struct pool *pool)
-{
-	mutex_lock(&qd_lock);
-	total_queued--;
-	pool->queued--;
-	mutex_unlock(&qd_lock);
-}
-
-static int __global_queued(void)
-{
-	return total_queued;
-}
-
-static int global_queued(void)
-{
-	int ret;
-
-	mutex_lock(&qd_lock);
-	ret = __global_queued();
-	mutex_unlock(&qd_lock);
-	return ret;
 }
 
 static bool stale_work(struct work *work, bool share);
@@ -3028,7 +3001,7 @@ static struct work *make_clone(struct work *work)
 	return work_clone;
 }
 
-static bool stage_work(struct work *work);
+static void stage_work(struct work *work);
 
 static bool clone_available(void)
 {
@@ -3047,10 +3020,7 @@ static bool clone_available(void)
 			work_clone = make_clone(work);
 			roll_work(work);
 			applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
-			if (unlikely(!stage_work(work_clone))) {
-				free(work_clone);
-				break;
-			}
+			stage_work(work_clone);
 			cloned = true;
 			break;
 		}
@@ -3060,8 +3030,6 @@ static bool clone_available(void)
 out:
 	return cloned;
 }
-
-static bool queue_request(void);
 
 static void pool_died(struct pool *pool)
 {
@@ -3077,115 +3045,103 @@ static void pool_died(struct pool *pool)
 
 static void gen_stratum_work(struct pool *pool, struct work *work);
 
-static void *get_work_thread(void *userdata)
+static void *getwork_thread(void __maybe_unused *userdata)
 {
-	struct pool *reqpool = (struct pool *)userdata;
-	struct pool *pool;
-	struct work *ret_work = NULL;
-	struct curl_ent *ce = NULL;
-
 	pthread_detach(pthread_self());
 
-	RenameThread("get_work");
+	RenameThread("getwork_sched");
 
-	applog(LOG_DEBUG, "Creating extra get work thread");
+	while (42) {
+		struct pool *pool, *cp;
+		bool lagging = false;
+		struct curl_ent *ce;
+		struct work *work;
+		int ts;
 
+		cp = current_pool();
+
+		mutex_lock(stgd_lock);
+		ts = __total_staged();
+
+		if (!cp->has_stratum && !cp->has_gbt && !ts && !opt_fail_only)
+			lagging = true;
+
+		/* Wait until hash_pop tells us we need to create more work */
+		if (ts > opt_queue)
+			pthread_cond_wait(&gws_cond, stgd_lock);
+		ts = __total_staged();
+		mutex_unlock(stgd_lock);
+		if (ts > opt_queue)
+			continue;
+
+		work = make_work();
+
+		pool = select_pool(lagging);
 retry:
-	pool = reqpool;
+		if (pool->has_stratum) {
+			while (!pool->stratum_active) {
+				struct pool *altpool = select_pool(true);
 
-	if (pool->has_stratum) {
-		while (!pool->stratum_active) {
-			struct pool *altpool = select_pool(true);
-
-			sleep(5);
-			if (altpool != pool) {
-				reqpool = altpool;
-				inc_queued(altpool);
-				dec_queued(pool);
-				goto retry;
+				sleep(5);
+				if (altpool != pool) {
+					pool = altpool;
+					goto retry;
+				}
 			}
+			gen_stratum_work(pool, work);
+			applog(LOG_DEBUG, "Generated stratum work");
+			stage_work(work);
+			continue;
 		}
-		ret_work = make_work();
-		gen_stratum_work(pool, ret_work);
-		if (unlikely(!stage_work(ret_work))) {
-			applog(LOG_ERR, "Failed to stage stratum work in get_work_thread");
-			kill_work();
-			free(ret_work);
-		}
-		dec_queued(pool);
-		goto out;
-	}
 
-	if (pool->has_gbt) {
-		while (pool->idle) {
-			struct pool *altpool = select_pool(true);
+		if (pool->has_gbt) {
+			while (pool->idle) {
+				struct pool *altpool = select_pool(true);
 
-			sleep(5);
-			if (altpool != pool) {
-				reqpool = altpool;
-				inc_queued(altpool);
-				dec_queued(pool);
-				goto retry;
+				sleep(5);
+				if (altpool != pool) {
+					pool = altpool;
+					goto retry;
+				}
 			}
+			gen_gbt_work(pool, work);
+			applog(LOG_DEBUG, "Generated GBT work");
+			stage_work(work);
+			continue;
 		}
-		ret_work = make_work();
-		gen_gbt_work(pool, ret_work);
-		if (unlikely(!stage_work(ret_work))) {
-			applog(LOG_ERR, "Failed to stage gbt work in get_work_thread");
-			kill_work();
-			free(ret_work);
+
+		if (clone_available()) {
+			applog(LOG_DEBUG, "Cloned getwork work");
+			free_work(work);
+			continue;
 		}
-		dec_queued(pool);
-		goto out;
-	}
 
-	if (clone_available()) {
-		dec_queued(pool);
-		goto out;
-	}
+		if (opt_benchmark) {
+			get_benchmark_work(work);
+			applog(LOG_DEBUG, "Generated benchmark work");
+			stage_work(work);
+			continue;
+		}
 
-	ret_work = make_work();
-	ret_work->thr = NULL;
-
-	if (opt_benchmark) {
-		get_benchmark_work(ret_work);
-		ret_work->queued = true;
-	} else {
-		ret_work->pool = reqpool;
-
-		if (!ce)
-			ce = pop_curl_entry(pool);
-
+		work->pool = pool;
+		ce = pop_curl_entry(pool);
 		/* obtain new work from bitcoin via JSON-RPC */
-		if (!get_upstream_work(ret_work, ce->curl)) {
+		if (!get_upstream_work(work, ce->curl)) {
 			applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
-			sleep(5);
-			dec_queued(pool);
 			/* Make sure the pool just hasn't stopped serving
 			 * requests but is up as we'll keep hammering it */
 			if (++pool->seq_getfails > mining_threads + opt_queue)
 				pool_died(pool);
-			queue_request();
-			free_work(ret_work);
-			goto out;
+			sleep(5);
+			push_curl_entry(ce, pool);
+			pool = select_pool(true);
+			goto retry;
 		}
-		pool->seq_getfails = 0;
-
-		ret_work->queued = true;
-	}
-
-	applog(LOG_DEBUG, "Pushing work to requesting thread");
-
-	/* send work to requesting thread */
-	if (unlikely(!tq_push(thr_info[stage_thr_id].q, ret_work))) {
-		applog(LOG_ERR, "Failed to tq_push work in workio_get_work");
-		kill_work();
-		free_work(ret_work);
-	}
-
-out:
-	if (ce)
+		applog(LOG_DEBUG, "Generated getwork work");
+		stage_work(work);
 		push_curl_entry(ce, pool);
+	}
+
 	return NULL;
 }
 
@@ -3437,8 +3393,6 @@ void switch_pools(struct pool *selected)
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
 
-	if (!pool->queued)
-		queue_request();
 }
 
 static void discard_work(struct work *work)
@@ -3453,6 +3407,13 @@ static void discard_work(struct work *work)
 	free_work(work);
 }
 
+static void wake_gws(void)
+{
+	mutex_lock(stgd_lock);
+	pthread_cond_signal(&gws_cond);
+	mutex_unlock(stgd_lock);
+}
+
 static void discard_stale(void)
 {
 	struct work *work, *tmp;
@@ -3462,18 +3423,15 @@ static void discard_stale(void)
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work, false)) {
 			HASH_DEL(staged_work, work);
-			work->pool->staged--;
 			discard_work(work);
 			stale++;
 		}
 	}
+	pthread_cond_signal(&gws_cond);
 	mutex_unlock(stgd_lock);
 
-	if (stale) {
+	if (stale)
 		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
-		while (stale-- > 0)
-			queue_request();
-	}
 }
 
 /* A generic wait function for threads that poll that will wait a specified
@@ -3670,15 +3628,8 @@ static bool hash_push(struct work *work)
 		HASH_SORT(staged_work, tv_sort);
 	} else
 		rc = false;
-	pthread_cond_signal(&getq->cond);
+	pthread_cond_broadcast(&getq->cond);
 	mutex_unlock(stgd_lock);
-
-	work->pool->staged++;
-
-	if (work->queued) {
-		work->queued = false;
-		dec_queued(work->pool);
-	}
 
 	return rc;
 }
@@ -3719,15 +3670,12 @@ static void *stage_thread(void *userdata)
 	return NULL;
 }
 
-static bool stage_work(struct work *work)
+static void stage_work(struct work *work)
 {
-	applog(LOG_DEBUG, "Pushing work to stage thread");
-
-	if (unlikely(!tq_push(thr_info[stage_thr_id].q, work))) {
-		applog(LOG_ERR, "Could not tq_push work in stage_work");
-		return false;
-	}
-	return true;
+	applog(LOG_DEBUG, "Pushing work from pool %d to hash queue", work->pool->pool_no);
+	work->work_block = work_block;
+	test_work_current(work);
+	hash_push(work);
 }
 
 #ifdef HAVE_CURSES
@@ -4995,93 +4943,31 @@ static void pool_resus(struct pool *pool)
 		applog(LOG_INFO, "Pool %d %s resumed returning work", pool->pool_no, pool->rpc_url);
 }
 
-static bool queue_request(void)
-{
-	int ts, tq, maxq = opt_queue + mining_threads;
-	struct pool *pool, *cp;
-	pthread_t get_thread;
-	bool lagging;
-
-	ts = total_staged();
-	tq = global_queued();
-	if (ts && ts + tq >= maxq)
-		return true;
-
-	cp = current_pool();
-	lagging = !opt_fail_only && cp->lagging && !ts && cp->queued >= maxq;
-	if (!lagging && cp->staged + cp->queued >= maxq)
-		return true;
-
-	pool = select_pool(lagging);
-	if (pool->staged + pool->queued >= maxq)
-		return true;
-
-	inc_queued(pool);
-
-	applog(LOG_DEBUG, "Queueing getwork request to work thread");
-
-	/* send work request to get_work_thread */
-	if (unlikely(pthread_create(&get_thread, NULL, get_work_thread, (void *)pool)))
-		quit(1, "Failed to create get_work_thread in queue_request");
-
-	return true;
-}
-
-static struct work *hash_pop(const struct timespec *abstime)
+static struct work *hash_pop(void)
 {
 	struct work *work = NULL, *tmp;
-	int rc = 0, hc;
+	int hc;
 
 	mutex_lock(stgd_lock);
-	while (!getq->frozen && !HASH_COUNT(staged_work) && !rc)
-		rc = pthread_cond_timedwait(&getq->cond, stgd_lock, abstime);
+	while (!getq->frozen && !HASH_COUNT(staged_work))
+		pthread_cond_wait(&getq->cond, stgd_lock);
 
 	hc = HASH_COUNT(staged_work);
-
-	if (likely(hc)) {
-		/* Find clone work if possible, to allow masters to be reused */
-		if (hc > staged_rollable) {
-			HASH_ITER(hh, staged_work, work, tmp) {
-				if (!work_rollable(work))
-					break;
-			}
-		} else
-			work = staged_work;
-		HASH_DEL(staged_work, work);
-		work->pool->staged--;
-		if (work_rollable(work))
-			staged_rollable--;
-	}
+	/* Find clone work if possible, to allow masters to be reused */
+	if (hc > staged_rollable) {
+		HASH_ITER(hh, staged_work, work, tmp) {
+			if (!work_rollable(work))
+				break;
+		}
+	} else
+		work = staged_work;
+	HASH_DEL(staged_work, work);
+	if (work_rollable(work))
+		staged_rollable--;
+	pthread_cond_signal(&gws_cond);
 	mutex_unlock(stgd_lock);
 
-	queue_request();
-
 	return work;
-}
-
-static bool reuse_work(struct work *work, struct pool *pool)
-{
-	if (pool->has_stratum) {
-		if (!pool->stratum_active)
-			return false;
-		applog(LOG_DEBUG, "Reusing stratum work");
-		gen_stratum_work(pool, work);
-		return true;
-	}
-
-	if (pool->has_gbt) {
-		if (pool->idle)
-			return false;
-		applog(LOG_DEBUG, "Reusing GBT work");
-		gen_gbt_work(pool, work);
-		return true;
-	}
-
-	if (can_roll(work) && should_roll(work)) {
-		roll_work(work);
-		return true;
-	}
-	return false;
 }
 
 /* Clones work by rolling it if possible, and returning a clone instead of the
@@ -5100,10 +4986,7 @@ static struct work *clone_work(struct work *work)
 	work_clone = make_clone(work);
 	while (mrs-- > 0 && can_roll(work) && should_roll(work)) {
 		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
-		if (unlikely(!stage_work(work_clone))) {
-			cloned = false;
-			break;
-		}
+		stage_work(work_clone);
 		roll_work(work);
 		work_clone = make_clone(work);
 		/* Roll it again to prevent duplicates should this be used
@@ -5251,99 +5134,29 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	gettimeofday(&work->tv_staged, NULL);
 }
 
-static void get_work(struct work *work, struct thr_info *thr, const int thr_id)
+static struct work *get_work(struct thr_info *thr, const int thr_id)
 {
-	struct timespec abstime = {0, 0};
-	struct work *work_heap;
-	struct timeval now;
-	struct pool *pool;
+	struct work *work = NULL;
 
 	/* Tell the watchdog thread this thread is waiting on getwork and
 	 * should not be restarted */
 	thread_reportout(thr);
 
-	clean_work(work);
-
-	if (opt_benchmark) {
-		get_benchmark_work(work);
-		goto out;
-	}
-
-	/* Reset these flags in case we switch pools with these work structs */
-	work->stratum = work->gbt = false;
-retry:
-	if (pool_strategy == POOL_BALANCE || pool_strategy == POOL_LOADBALANCE)
-		switch_pools(NULL);
-	pool = current_pool();
-
-	if (reuse_work(work, pool))
-		goto out;
-
-	/* If we were unable to reuse work from a stratum pool, it implies the
-	 * pool is inactive and unless we have another pool to grab work from
-	 * we can only wait till it comes alive or another pool comes online */
-	if (pool->has_stratum) {
-		sleep(5);
-		goto retry;
-	}
-	if (!pool->lagging && !total_staged() && global_queued() >= mining_threads + opt_queue) {
-		struct cgpu_info *cgpu = thr->cgpu;
-		bool stalled = true;
-		int i;
-
-		/* Check to see if all the threads on the device that called
-		 * get_work are waiting on work and only consider the pool
-		 * lagging if true */
-		for (i = 0; i < cgpu->threads; i++) {
-			if (!cgpu->thr[i]->getwork) {
-				stalled = false;
-				break;
-			}
-		}
-
-		if (stalled && !pool_tset(pool, &pool->lagging)) {
-			applog(LOG_WARNING, "Pool %d not providing work fast enough", pool->pool_no);
-			pool->getfail_occasions++;
-			total_go++;
-		}
-	}
-
-	gettimeofday(&now, NULL);
-	abstime.tv_sec = now.tv_sec + 60;
-
 	applog(LOG_DEBUG, "Popping work from get queue to get work");
-
-	/* wait for 1st response, or get cached response */
-	work_heap = hash_pop(&abstime);
-	if (unlikely(!work_heap)) {
-		/* Attempt to switch pools if this one times out */
-		pool_died(pool);
-		goto retry;
+	while (!work) {
+		work = hash_pop();
+		if (stale_work(work, false)) {
+			discard_work(work);
+			work = NULL;
+			wake_gws();
+		}
 	}
+	applog(LOG_DEBUG, "Got work from get queue to get work for thread %d", thr_id);
 
-	if (stale_work(work_heap, false)) {
-		discard_work(work_heap);
-		goto retry;
-	}
-
-	pool = work_heap->pool;
-	/* If we make it here we have succeeded in getting fresh work */
-	if (!work_heap->mined) {
-		/* Only clear the lagging flag if we are staging them at a
-		 * rate faster then we're using them */
-		if (pool->lagging && total_staged())
-			pool_tclear(pool, &pool->lagging);
-		if (pool_tclear(pool, &pool->idle))
-			pool_resus(pool);
-	}
-
-	__copy_work(work, work_heap);
-	free_work(work_heap);
-
-out:
 	work->thr_id = thr_id;
 	thread_reportin(thr);
 	work->mined = true;
+	return work;
 }
 
 void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
@@ -5487,7 +5300,7 @@ void *miner_thread(void *userdata)
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	int64_t hashes_done = 0;
 	int64_t hashes;
-	struct work *work = make_work();
+	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -5512,7 +5325,7 @@ void *miner_thread(void *userdata)
 
 	while (1) {
 		mythr->work_restart = false;
-		get_work(work, mythr, thr_id);
+		work = get_work(mythr, thr_id);
 		cgpu->new_work = true;
 
 		gettimeofday(&tv_workstart, NULL);
@@ -5631,6 +5444,7 @@ void *miner_thread(void *userdata)
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
 		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
+		free_work(work);
 	}
 
 out:
@@ -5699,10 +5513,8 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 
 	applog(LOG_DEBUG, "Pushing converted work to stage thread");
 
-	if (unlikely(!stage_work(work)))
-		free_work(work);
-	else
-		applog(LOG_DEBUG, "Converted longpoll data to work");
+	stage_work(work);
+	applog(LOG_DEBUG, "Converted longpoll data to work");
 }
 
 /* If we want longpoll, enable it for the chosen default pool, or, if
@@ -6573,6 +6385,9 @@ int main(int argc, char *argv[])
 	if (unlikely(pthread_cond_init(&kill_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init kill_cond");
 
+	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
+		quit(1, "Failed to pthread_cond_init gws_cond");
+
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 
 #ifdef WANT_CPUMINE
@@ -6850,14 +6665,7 @@ int main(int argc, char *argv[])
 	if (!thr_info)
 		quit(1, "Failed to calloc thr_info");
 
-	/* init workio thread info */
-	work_thr_id = mining_threads;
-	thr = &thr_info[work_thr_id];
-	thr->id = work_thr_id;
-	thr->q = tq_new();
-	if (!thr->q)
-		quit(1, "Failed to tq_new");
-
+	gwsched_thr_id = mining_threads;
 	stage_thr_id = mining_threads + 1;
 	thr = &thr_info[stage_thr_id];
 	thr->q = tq_new();
@@ -7036,8 +6844,12 @@ begin_bench:
 	pthread_detach(thr->pth);
 #endif
 
-	for (i = 0; i < mining_threads + opt_queue; i++)
-		queue_request();
+	thr = &thr_info[gwsched_thr_id];
+	thr->id = gwsched_thr_id;
+
+	/* start getwork scheduler thread */
+	if (thr_info_create(thr, NULL, getwork_thread, thr))
+		quit(1, "getwork_thread create failed");
 
 	/* Wait till we receive the conditional telling us to die */
 	mutex_lock(&kill_lock);
