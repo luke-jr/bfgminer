@@ -3083,6 +3083,11 @@ static void *getwork_thread(void __maybe_unused *userdata)
 
 		work = make_work();
 
+		if (lagging && !pool_tset(cp, &cp->lagging)) {
+			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
+			cp->getfail_occasions++;
+			total_go++;
+		}
 		pool = select_pool(lagging);
 retry:
 		if (pool->has_stratum) {
@@ -3144,6 +3149,7 @@ retry:
 			pool = select_pool(true);
 			goto retry;
 		}
+		pool_tclear(pool, &pool->lagging);
 		applog(LOG_DEBUG, "Generated getwork work");
 		stage_work(work);
 		push_curl_entry(ce, pool);
