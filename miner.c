@@ -3588,7 +3588,7 @@ static bool stale_work(struct work *work, bool share)
 			return true;
 		}
 
-	if (pool->has_stratum) {
+	if (!share && pool->has_stratum) {
 		bool same_job = true;
 
 		mutex_lock(&pool->pool_lock);
