@@ -170,7 +170,7 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 
 	for (i = 0; i < 80 / 4; i++)
 		swap32[i] = swab32(data32[i]);
-	
+
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
 #if defined(__BIGENDIAN__) || defined(MIPSEB)
@@ -202,7 +202,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	memcpy(sendbuf, work->data + 64, 12);
 	memcpy(sendbuf + 12, work->midstate, 32);
-	
+
 	ztex_selectFpga(ztex);
 	i = libztex_sendHashData(ztex, sendbuf);
 	if (i < 0) {
@@ -219,7 +219,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		}
 	}
 	ztex_releaseFpga(ztex);
-	
+
 	applog(LOG_DEBUG, "%s: sent hashdata", ztex->repr);
 
 	lastnonce = calloc(1, sizeof(uint32_t)*ztex->numNonces);
@@ -235,7 +235,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		applog(LOG_ERR, "%s: failed to allocate backlog[%d]", ztex->repr, backlog_max);
 		return -1;
 	}
-	
+
 	overflow = false;
 
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
@@ -315,9 +315,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 					}
 				}
 			}
-
 		}
-
 	}
 
 	ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /	ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM] < 100? ztex->errorWeight[ztex->freqM] * 0.01: 1.0);
@@ -338,7 +336,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	free(lastnonce);
 	free(backlog);
-	
+
 	return noncecnt;
 }
 
@@ -358,7 +356,7 @@ static bool ztex_prepare(struct thr_info *thr)
 
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
-	
+
 	ztex_selectFpga(ztex);
 	if (libztex_configureFpga(ztex) != 0) {
 		libztex_resetFpga(ztex);
