@@ -519,13 +519,13 @@ int libztex_numberOfFpgas(struct libztex_device *ztex) {
 
 int libztex_selectFpga(struct libztex_device *ztex) {
 	int cnt, fpgacnt = libztex_numberOfFpgas(ztex->root);
-	uint16_t number = ztex->fpgaNum;
+	int16_t number = ztex->fpgaNum;
 	if (number < 0 || number >= fpgacnt) {
 		applog(LOG_WARNING, "%s: Trying to select wrong fpga (%d in %d)", ztex->repr, number, fpgacnt);
 		return 1;
 	}
 	if (ztex->root->selectedFpga != number && libztex_checkCapability(ztex->root, CAPABILITY_MULTI_FPGA)) {
-		cnt = libusb_control_transfer(ztex->root->hndl, 0x40, 0x51, number, 0, NULL, 0, 500);
+		cnt = libusb_control_transfer(ztex->root->hndl, 0x40, 0x51, (uint16_t)number, 0, NULL, 0, 500);
 		if (unlikely(cnt < 0)) {
 			applog(LOG_ERR, "Ztex check device: Failed to set fpga with err %d", cnt);
 			return cnt;

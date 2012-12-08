@@ -46,7 +46,7 @@ struct libztex_fpgastate {
 struct libztex_device {
 	pthread_mutex_t	mutex;
 	struct libztex_device *root;
-	int fpgaNum;
+	int16_t fpgaNum;
 	bool valid;
 	struct libusb_device_descriptor descriptor;
 	libusb_device_handle *hndl; 
@@ -74,7 +74,7 @@ struct libztex_device {
 	double errorRate[256];
 	double maxErrorRate[256];
 
-	int numberOfFpgas;
+	int16_t numberOfFpgas;
 	int selectedFpga;
 	bool parallelConfigSupport;
 	
