@@ -611,34 +611,59 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 	return ret;
 }
 
-bool fulltest(const unsigned char *hash, const unsigned char *target)
+void hash_data(unsigned char *out_hash, const unsigned char *data)
 {
-	unsigned char hash_swap[32], target_swap[32];
-	uint32_t *hash32 = (uint32_t *) hash_swap;
-	uint32_t *target32 = (uint32_t *) target_swap;
-	char *hash_str, *target_str;
-	bool rc = true;
-	int i;
+	unsigned char blkheader[80];
+	
+	// data is past the first SHA256 step (padding and interpreting as big endian on a little endian platform), so we need to flip each 32-bit chunk around to get the original input block header
+	swap32yes(blkheader, data, 80 / 4);
+	
+	// double-SHA256 to get the block hash
+	gen_hash(blkheader, out_hash, 80);
+}
 
-	swap256(hash_swap, hash);
-	swap256(target_swap, target);
+void real_block_target(unsigned char *target, const unsigned char *data)
+{
+	uint8_t targetshift;
 
-	for (i = 0; i < 32/4; i++) {
-		uint32_t h32tmp = htobe32(hash32[i]);
-		uint32_t t32tmp = htole32(target32[i]);
-		target32[i] = swab32(target32[i]);	/* for printing */
+	targetshift = data[72] - 3;
+	memset(target, 0, targetshift);
+	target[targetshift++] = data[75];
+	target[targetshift++] = data[74];
+	target[targetshift++] = data[73];
+	memset(&target[targetshift], 0, 0x20 - targetshift);
+}
 
-		if (h32tmp > t32tmp) {
-			rc = false;
-			break;
-		}
-		if (h32tmp < t32tmp) {
-			rc = true;
-			break;
-		}
+bool hash_target_check(const unsigned char *hash, const unsigned char *target)
+{
+	const uint32_t *h32 = (uint32_t*)&hash[0];
+	const uint32_t *t32 = (uint32_t*)&target[0];
+	for (int i = 7; i >= 0; --i) {
+		uint32_t h32i = le32toh(h32[i]);
+		uint32_t t32i = le32toh(t32[i]);
+		if (h32i > t32i)
+			return false;
+		if (h32i < t32i)
+			return true;
 	}
+	return true;
+}
+
+bool hash_target_check_v(const unsigned char *hash, const unsigned char *target)
+{
+	bool rc;
+
+	rc = hash_target_check(hash, target);
 
 	if (opt_debug) {
+		unsigned char hash_swap[32], target_swap[32];
+		char *hash_str, *target_str;
+
+		for (int i = 0; i < 32; ++i) {
+			hash_swap[i] = hash[31-i];
+			target_swap[i] = target[31-i];
+		}
+
 		hash_str = bin2hex(hash_swap, 32);
 		target_str = bin2hex(target_swap, 32);
 
@@ -653,6 +678,14 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 	}
 
 	return rc;
+}
+
+// DEPRECATED: This uses an input hash that has every 4 bytes flipped
+bool fulltest(const unsigned char *hash, const unsigned char *target)
+{
+	unsigned char hash2[32];
+	swap32yes(hash2, hash, 32 / 4);
+	return hash_target_check_v(hash2, target);
 }
 
 struct thread_q *tq_new(void)
