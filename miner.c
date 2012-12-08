@@ -3418,9 +3418,10 @@ static void *getwork_thread(void __maybe_unused *userdata)
 			lagging = true;
 
 		/* Wait until hash_pop tells us we need to create more work */
-		if (ts > opt_queue)
+		if (ts > opt_queue) {
 			pthread_cond_wait(&gws_cond, stgd_lock);
-		ts = __total_staged();
+			ts = __total_staged();
+		}
 		mutex_unlock(stgd_lock);
 		if (ts > opt_queue)
 			continue;
@@ -8063,9 +8064,7 @@ begin_bench:
 	pthread_cond_wait(&kill_cond, &kill_lock);
 	mutex_unlock(&kill_lock);
 
-	applog(LOG_INFO, "workio thread dead, exiting.");
-
-	clean_up();
+	applog(LOG_INFO, "Given kill message, exiting.");
 
 	/* Not really necessary, but let's clean this up too anyway */
 	HASH_ITER(hh, staged_work, work, tmpwork) {
