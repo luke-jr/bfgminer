@@ -3403,13 +3403,18 @@ static void *getwork_thread(void __maybe_unused *userdata)
 	RenameThread("getwork_sched");
 
 	while (42) {
+		int ts, max_staged = opt_queue;
 		struct pool *pool, *cp;
 		bool lagging = false;
 		struct curl_ent *ce;
 		struct work *work;
-		int ts;
 
 		cp = current_pool();
+
+		/* If the primary pool is a getwork pool and cannot roll work,
+		 * try to stage one extra work per mining thread */
+		if (!cp->has_stratum && cp->proto != PLP_GETBLOCKTEMPLATE && !staged_rollable)
+			max_staged += mining_threads;
 
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
@@ -3418,12 +3423,13 @@ static void *getwork_thread(void __maybe_unused *userdata)
 			lagging = true;
 
 		/* Wait until hash_pop tells us we need to create more work */
-		if (ts > opt_queue) {
+		if (ts > max_staged) {
 			pthread_cond_wait(&gws_cond, stgd_lock);
 			ts = __total_staged();
 		}
 		mutex_unlock(stgd_lock);
-		if (ts > opt_queue)
+
+		if (ts > max_staged)
 			continue;
 
 		work = make_work();
