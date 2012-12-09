@@ -212,36 +212,22 @@ static void keep_alive(CURL *curl, __maybe_unused SOCKETTYPE fd)
 	keep_curlalive(curl);
 }
 #else
-static int keep_sockalive(SOCKETTYPE fd)
+static void keep_sockalive(SOCKETTYPE fd)
 {
 	const int tcp_keepidle = 60;
 	const int tcp_keepintvl = 60;
 	const int keepalive = 1;
 	const int tcp_keepcnt = 5;
-	int ret = 0;
 
-	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
-		ret = 1;
-
+	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
 # ifdef __linux
-
-	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt))))
-		ret = 1;
-
-	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle))))
-		ret = 1;
-
-	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl))))
-		ret = 1;
+	setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt));
+	setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle));
+	setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl));
 # endif /* __linux */
 # ifdef __APPLE_CC__
-
-	if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl))))
-		ret = 1;
-
+	setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl));
 # endif /* __APPLE_CC__ */
-
-	return ret;
 }
 
 static void keep_curlalive(CURL *curl)
