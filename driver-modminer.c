@@ -804,14 +804,14 @@ static void check_temperature(struct thr_info *thr)
 		if (state->overheated) {
 			if (modminer->temp < MODMINER_OVERHEAT_TEMP) {
 				state->overheated = false;
-				applog(LOG_WARNING, "%s%u: Recovered, temp less than (%f) now %f",
+				applog(LOG_WARNING, "%s%u: Recovered, temp less than (%.1f) now %.3f",
 					modminer->api->name, modminer->device_id,
 					MODMINER_OVERHEAT_TEMP, modminer->temp);
 			}
 		}
 		else if (modminer->temp >= MODMINER_OVERHEAT_TEMP) {
 			if (modminer->temp >= MODMINER_CUTOFF_TEMP) {
-				applog(LOG_WARNING, "%s%u: Hit thermal cutoff limit (%f) at %f, disabling!",
+				applog(LOG_WARNING, "%s%u: Hit thermal cutoff limit (%.1f) at %.3f, disabling!",
 					modminer->api->name, modminer->device_id,
 					MODMINER_CUTOFF_TEMP, modminer->temp);
 
@@ -819,7 +819,7 @@ static void check_temperature(struct thr_info *thr)
 				state->overheated = true;
 				dev_error(modminer, REASON_DEV_THERMAL_CUTOFF);
 			} else {
-				 applog(LOG_WARNING, "%s%u: Overheat limit (%f) reached %f",
+				 applog(LOG_WARNING, "%s%u: Overheat limit (%.1f) reached %.3f",
 					modminer->api->name, modminer->device_id,
 					MODMINER_OVERHEAT_TEMP, modminer->temp);
 				modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, true);
