@@ -100,6 +100,19 @@ enum check_result
 	CHECK_RESCAN,
 };
 
+static bool libztex_firmwareReset(struct libusb_device_handle *hndl, bool enable)
+{
+	uint8_t reset = enable;
+	int cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, &reset, 1, 1000);
+	if (cnt < 0)
+	{
+		applog(LOG_ERR, "Ztex reset %d failed: %s", libusb_error_name(cnt), enable);
+		return 1;
+	}
+
+	return 0;
+}
+
 static enum check_result libztex_checkDevice(struct libusb_device *dev)
 {
 	FILE *fp = NULL;
@@ -245,14 +258,8 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 		goto done;
 	}
 
-	// reset 1
-	buf[0] = 1;
-	cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
-	if (cnt < 0)
-	{
-		applog(LOG_ERR, "Ztex reset 1 failed: %s", libusb_error_name(cnt));
+	if (libztex_firmwareReset(hndl, true))
 		goto done;
-	}
 
 	for (i = 0; i < length; i+= 256) {
 		// firmware wants data in small chunks like 256 bytes
@@ -265,14 +272,8 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 		}
 	}
 
-	// reset 0
-	buf[0] = 0;
-	err = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
-	if (err < 0)
-	{
-		applog(LOG_ERR, "Ztex reset 0 failed: %s", libusb_error_name(err));
+	if (libztex_firmwareReset(hndl, false))
 		goto done;
-	}
 
 	applog(LOG_ERR, "Ztex device: succesfully wrote firmware");
 	ret = CHECK_RESCAN;
