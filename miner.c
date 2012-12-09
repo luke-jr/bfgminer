@@ -221,6 +221,8 @@ pthread_cond_t restart_cond;
 
 pthread_cond_t gws_cond;
 
+bool shutting_down;
+
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static struct timeval miner_started;
@@ -229,7 +231,7 @@ pthread_mutex_t control_lock;
 pthread_mutex_t stats_lock;
 
 static pthread_mutex_t submitting_lock;
-static int submitting, total_submitting;
+static int total_submitting;
 static struct list_head submit_waiting;
 int submit_waiting_notifier[2];
 
@@ -3078,6 +3080,11 @@ static void __kill_work(void)
 
 	applog(LOG_INFO, "Received kill message");
 
+	shutting_down = true;
+
+	applog(LOG_DEBUG, "Prompting submit_work thread to finish");
+	(void)write(submit_waiting_notifier[1], "\0", 1);
+
 	applog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
 	thr = &thr_info[watchpool_thr_id];
@@ -3701,7 +3708,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 				++total_submitting;
 			}
 		}
-		if (!wip)
+		if (unlikely(shutting_down && !wip))
 			break;
 		mutex_unlock(&submitting_lock);
 		
@@ -3785,10 +3792,11 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		}
 	}
 	assert(!write_sws);
-	--submitting;
 	mutex_unlock(&submitting_lock);
 
 	curl_multi_cleanup(curlm);
+
+	applog(LOG_DEBUG, "submit_work thread exiting");
 
 	return NULL;
 }
@@ -6057,8 +6065,6 @@ static struct work *get_work(struct thr_info *thr, const int thr_id)
 void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
 	struct work *work = copy_work(work_in);
-	pthread_t submit_thread;
-	bool was_submitting;
 
 	if (tv_work_found)
 		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
@@ -6066,18 +6072,9 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 
 	mutex_lock(&submitting_lock);
 	list_add_tail(&work->list, &submit_waiting);
-	was_submitting = submitting;
-	if (!submitting)
-		++submitting;
 	mutex_unlock(&submitting_lock);
 
-	if (was_submitting) {
-		(void)write(submit_waiting_notifier[1], "\0", 1);
-		return;
-	}
-
-	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
-		quit(1, "Failed to create submit_work_thread");
+	(void)write(submit_waiting_notifier[1], "\0", 1);
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
@@ -7903,6 +7900,12 @@ begin_bench:
 
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
+
+	{
+		pthread_t submit_thread;
+		if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
+			quit(1, "submit_work thread create failed");
+	}
 
 	watchpool_thr_id = mining_threads + 2;
 	thr = &thr_info[watchpool_thr_id];
