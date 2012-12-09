@@ -29,7 +29,6 @@
 # include <netdb.h>
 #else
 # include <winsock2.h>
-# include <mstcpip.h>
 # include <ws2tcpip.h>
 #endif
 
@@ -196,16 +195,30 @@ out:
 	return ptrlen;
 }
 
+#if CURL_HAS_KEEPALIVE
+static void keep_curlalive(CURL *curl)
+{
+	const int tcp_keepidle = 60;
+	const int tcp_keepintvl = 60;
+	const long int keepalive = 1;
+
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, keepalive);
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, tcp_keepidle);
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, tcp_keepintvl);
+}
+
+static void keep_alive(CURL *curl, __maybe_unused SOCKETTYPE fd)
+{
+	keep_curlalive(curl);
+}
+#else
 static int keep_sockalive(SOCKETTYPE fd)
 {
 	const int tcp_keepidle = 60;
 	const int tcp_keepintvl = 60;
 	const int keepalive = 1;
-	int ret = 0;
-
-
-#ifndef WIN32
 	const int tcp_keepcnt = 5;
+	int ret = 0;
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
 		ret = 1;
@@ -228,37 +241,22 @@ static int keep_sockalive(SOCKETTYPE fd)
 
 # endif /* __APPLE_CC__ */
 
-#else /* WIN32 */
-
-	const int zero = 0;
-	struct tcp_keepalive vals;
-	vals.onoff = 1;
-	vals.keepalivetime = tcp_keepidle * 1000;
-	vals.keepaliveinterval = tcp_keepintvl * 1000;
-
-	DWORD outputBytes;
-
-	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&keepalive, sizeof(keepalive))))
-		ret = 1;
-
-	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
-		ret = 1;
-
-	/* Windows happily submits indefinitely to the send buffer blissfully
-	 * unaware nothing is getting there without gracefully failing unless
-	 * we disable the send buffer */
-	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char *)&zero, sizeof(zero))))
-		ret = 1;
-#endif /* WIN32 */
-
 	return ret;
 }
 
-int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
-			     curlsocktype __maybe_unused purpose)
+static void keep_curlalive(CURL *curl)
 {
-	return keep_sockalive(fd);
+	SOCKETTYPE sock;
+
+	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&sock);
+	keep_sockalive(sock);
 }
+
+static void keep_alive(CURL __maybe_unused *curl, SOCKETTYPE fd)
+{
+	keep_sockalive(fd);
+}
+#endif
 
 static void last_nettime(struct timeval *last)
 {
@@ -334,7 +332,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 	}
 	if (longpoll)
-		curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, json_rpc_call_sockopt_cb);
+		keep_curlalive(curl);
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 
 	if (opt_protocol)
@@ -1362,7 +1360,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
-	keep_sockalive(pool->sock);
+	keep_alive(curl, pool->sock);
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 

@@ -44,29 +44,6 @@ I just selected all the check boxes (excluding "Fortran Compiler") so that every
 was installed.
 
 **************************************************************************************
-* Create mstcpip.h                                                                   *
-**************************************************************************************
-Open notepad and copy the following into it. Save it as "\MinGW\include\mstcpip.h".
-Make sure it does not have the ".txt" extension (If it does then rename it).
-
-struct tcp_keepalive
-{
-    u_long onoff;
-    u_long keepalivetime;
-    u_long keepaliveinterval;
-};
-
-#ifndef USE_WS_PREFIX
-
-#define SIO_KEEPALIVE_VALS    _WSAIOW(IOC_VENDOR, 4)
-
-#else
-
-#define WS_SIO_KEEPALIVE_VALS    _WSAIOW(WS_IOC_VENDOR, 4)
-
-#endif
-
-**************************************************************************************
 * Run the MSYS shell for the first time to create your user directory                *
 **************************************************************************************
 (Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
