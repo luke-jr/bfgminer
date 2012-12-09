@@ -198,6 +198,9 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	bool overflow, found;
 	struct libztex_hash_data hdata[GOLDEN_BACKLOG];
 
+	if (thr->cgpu->deven == DEV_DISABLED)
+		return -1;
+
 	ztex = thr->cgpu->device_ztex;
 
 	memcpy(sendbuf, work->data + 64, 12);
@@ -361,7 +364,9 @@ static bool ztex_prepare(struct thr_info *thr)
 	if (libztex_configureFpga(ztex) != 0) {
 		libztex_resetFpga(ztex);
 		ztex_releaseFpga(ztex);
-		return false;
+		applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device_ztex->repr);
+		thr->cgpu->deven = DEV_DISABLED;
+		return true;
 	}
 	ztex->freqM = ztex->freqMaxM+1;;
 	//ztex_updateFreq(ztex);
