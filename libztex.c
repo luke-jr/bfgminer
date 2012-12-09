@@ -696,7 +696,6 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	newdev->usbbus = libusb_get_bus_number(dev);
 	newdev->usbaddress = libusb_get_device_address(dev);
 	sprintf(newdev->repr, "ZTEX %s-1", newdev->snString);
-	newdev->valid = true;
 	return 0;
 }
 
@@ -777,7 +776,6 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 
 		ztex->bitFileName = NULL;
 		ztex->numberOfFpgas = -1;
-		ztex->valid = false;
 
 		err = libztex_prepare_device(list[usbdevices[i]], &ztex);
 		if (unlikely(err != 0)) {

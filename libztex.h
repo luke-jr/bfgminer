@@ -47,7 +47,6 @@ struct libztex_device {
 	pthread_mutex_t	mutex;
 	struct libztex_device *root;
 	int16_t fpgaNum;
-	bool valid;
 	struct libusb_device_descriptor descriptor;
 	libusb_device_handle *hndl; 
 	unsigned char usbbus;
