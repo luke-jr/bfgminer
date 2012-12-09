@@ -6845,7 +6845,7 @@ retry:
 				pool_died(pool);
 			sleep(5);
 			push_curl_entry(ce, pool);
-			pool = select_pool(true);
+			pool = select_pool(!opt_fail_only);
 			goto retry;
 		}
 		if (ts >= max_staged)
@@ -6860,4 +6860,3 @@ retry:
 
 	return 0;
 }
-
