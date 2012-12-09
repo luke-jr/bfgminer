@@ -2968,6 +2968,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 
 tryagain:
 	rpc_req = prepare_rpc_req(work, pool->proto, NULL);
+	work->pool = pool;
 	if (!rpc_req)
 	{
 		finish_req_in_progress(pool, false);
@@ -5754,13 +5755,13 @@ static bool pool_active(struct pool *pool, bool pinging)
 	}
 
 	work = make_work();
-	work->pool = pool;
 
 	/* Probe for GBT support on first pass */
 	proto = want_gbt ? PLP_GETBLOCKTEMPLATE : PLP_GETWORK;
 
 tryagain:
 	rpc_req = prepare_rpc_req(work, proto, NULL);
+	work->pool = pool;
 	if (!rpc_req)
 		return false;
 
@@ -6622,9 +6623,9 @@ retry_pool:
 		json_t *val, *soval;
 
 		struct work *work = make_work();
-		work->pool = pool;
 		char *lpreq;
 		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
+		work->pool = pool;
 		if (!lpreq)
 			goto lpfail;
 
