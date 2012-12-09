@@ -165,7 +165,7 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	work->data[64 + 12 + 3] = (hdata->nonce >> 24) & 0xff;
 
 	swap32yes(swap32, data32, 80 / 4);
-	
+
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
 	if (htobe32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
@@ -193,7 +193,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	memcpy(sendbuf, work->data + 64, 12);
 	memcpy(sendbuf + 12, work->midstate, 32);
-	
+
 	ztex_selectFpga(ztex);
 	i = libztex_sendHashData(ztex, sendbuf);
 	if (i < 0) {
@@ -210,7 +210,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		}
 	}
 	ztex_releaseFpga(ztex);
-	
+
 	applog(LOG_DEBUG, "%s: sent hashdata", ztex->repr);
 
 	lastnonce = calloc(1, sizeof(uint32_t)*ztex->numNonces);
@@ -227,7 +227,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		free(lastnonce);
 		return -1;
 	}
-	
+
 	overflow = false;
 
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
@@ -301,9 +301,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 					}
 				}
 			}
-
 		}
-
 	}
 
 	dclk_preUpdate(&ztex->dclk);
@@ -322,7 +320,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	free(lastnonce);
 	free(backlog);
-	
+
 	return noncecnt;
 }
 
@@ -361,7 +359,7 @@ static bool ztex_prepare(struct thr_info *thr)
 
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
-	
+
 	ztex_selectFpga(ztex);
 	if (libztex_configureFpga(ztex) != 0) {
 		libztex_resetFpga(ztex);
