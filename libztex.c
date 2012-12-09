@@ -535,6 +535,7 @@ int libztex_selectFpga(struct libztex_device *ztex)
 		cnt = libusb_control_transfer(ztex->root->hndl, 0x40, 0x51, (uint16_t)number, 0, NULL, 0, 500);
 		if (unlikely(cnt < 0)) {
 			applog(LOG_ERR, "Ztex check device: Failed to set fpga with err %d", cnt);
+			ztex->root->selectedFpga = -1;
 			return cnt;
 		}
 		ztex->root->selectedFpga = number;
