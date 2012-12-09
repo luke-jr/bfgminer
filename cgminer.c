@@ -6601,7 +6601,9 @@ int main(int argc, char *argv[])
 		/* Look for at least one active pool before starting */
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool  = pools[i];
+
 			if (pool_active(pool, false)) {
+				pool_tset(pool, &pool->lagging);
 				pool_tclear(pool, &pool->idle);
 				if (!currentpool)
 					currentpool = pool;
@@ -6846,7 +6848,8 @@ retry:
 			pool = select_pool(true);
 			goto retry;
 		}
-		pool_tclear(pool, &pool->lagging);
+		if (ts >= max_staged)
+			pool_tclear(pool, &pool->lagging);
 		if (pool_tclear(pool, &pool->idle))
 			pool_resus(pool);
 
