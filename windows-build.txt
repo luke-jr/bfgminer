@@ -173,6 +173,8 @@ To test if it is working, open a MinGW shell and type the following:
 
 If you simply just want to update the source after you have already cloned, type:
   git pull
+"git pull" did not work for me. Try the following which does the same thing:
+  git fetch && git merge FETCH_HEAD
 
 Now you can get the latest source directly from github.
 
