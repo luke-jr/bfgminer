@@ -3381,6 +3381,8 @@ static void restart_threads(void)
 	mutex_lock(&restart_lock);
 	pthread_cond_broadcast(&restart_cond);
 	mutex_unlock(&restart_lock);
+
+	wake_gws();
 }
 
 static void set_curblock(char *hexstr, unsigned char *hash)
