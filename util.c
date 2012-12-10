@@ -10,7 +10,6 @@
  * any later version.  See COPYING for more details.
  */
 
-#define _GNU_SOURCE
 #include "config.h"
 
 #ifdef WIN32
@@ -36,6 +35,9 @@
 # include <pthread_np.h>
 #endif
 #ifndef WIN32
+# ifdef __linux
+#  include <sys/prctl.h>
+# endif
 # include <sys/socket.h>
 # include <netinet/in.h>
 # include <netinet/tcp.h>
