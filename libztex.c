@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <string.h>
 
+#include "compat.h"
 #include "dynclock.h"
 #include "miner.h"
 #include "fpgautils.h"
