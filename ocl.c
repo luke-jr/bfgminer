@@ -640,8 +640,7 @@ build:
 		    strstr(name, "Antilles" ) ||
 		    strstr(name, "Wrestler" ) ||
 		    strstr(name, "Zacate" ) ||
-		    strstr(name, "WinterPark" ) ||
-		    strstr(name, "BeaverCreek" ))
+		    strstr(name, "WinterPark" ))
 			patchbfi = true;
 	} else
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
