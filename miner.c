@@ -3187,7 +3187,7 @@ static void recruit_curl(struct pool *pool)
  * and there are already 5 curls in circulation. Limit total number to the
  * number of mining threads per pool as well to prevent blasting a pool during
  * network delays/outages. */
-static struct curl_ent *pop_curl_entry2(struct pool *pool, bool blocking)
+static struct curl_ent *pop_curl_entry3(struct pool *pool, int blocking)
 {
 	int curl_limit = opt_delaynet ? 5 : (mining_threads + opt_queue) * 2;
 	struct curl_ent *ce;
@@ -3197,7 +3197,7 @@ retry:
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if (pool->curls >= curl_limit && (blocking || pool->curls >= opt_submit_threads)) {
+		if (blocking < 2 && pool->curls >= curl_limit && (blocking || pool->curls >= opt_submit_threads)) {
 			if (!blocking) {
 				mutex_unlock(&pool->pool_lock);
 				return NULL;
@@ -3214,9 +3214,15 @@ retry:
 	return ce;
 }
 
+static struct curl_ent *pop_curl_entry2(struct pool *pool, bool blocking)
+{
+	return pop_curl_entry3(pool, blocking ? 1 : 0);
+}
+
+__maybe_unused
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
-	return pop_curl_entry2(pool, true);
+	return pop_curl_entry3(pool, 1);
 }
 
 static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
@@ -8066,7 +8072,7 @@ retry:
 		}
 
 		work->pool = pool;
-		ce = pop_curl_entry(pool);
+		ce = pop_curl_entry3(pool, 2);
 		/* obtain new work from bitcoin via JSON-RPC */
 		if (!get_upstream_work(work, ce->curl)) {
 			struct pool *next_pool;
