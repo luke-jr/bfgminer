@@ -175,9 +175,6 @@ bool opt_disable_pool = true;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
-#ifdef HAVE_LIBUSB
-int opt_usbdump = -1;
-#endif
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -198,10 +195,6 @@ static int input_thr_id;
 int gpur_thr_id;
 static int api_thr_id;
 static int total_threads;
-
-#ifdef HAVE_LIBUSB
-pthread_mutex_t cgusb_lock;
-#endif
 
 pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
@@ -1366,11 +1359,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--user|-u",
 		     set_user, NULL, NULL,
 		     "Username for bitcoin JSON-RPC server"),
-#ifdef HAVE_LIBUSB
-	OPT_WITH_ARG("--usb-dump",
-		     set_int_0_to_10, opt_show_intval, &opt_usbdump,
-		     opt_hidden),
-#endif
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
 		     set_vector, NULL, NULL,
@@ -7416,7 +7404,6 @@ int main(int argc, char *argv[])
 		fflush(stderr);
 		quit(1, "libusb_init() failed");
 	}
-	mutex_init(&cgusb_lock);
 #endif
 
 	mutex_init(&hash_lock);
