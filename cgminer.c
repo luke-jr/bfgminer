@@ -3317,14 +3317,14 @@ static void wake_gws(void)
 	mutex_unlock(stgd_lock);
 }
 
-static void discard_stale(bool all)
+static void discard_stale(void)
 {
 	struct work *work, *tmp;
 	int stale = 0;
 
 	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
-		if (all || stale_work(work, false)) {
+		if (stale_work(work, false)) {
 			HASH_DEL(staged_work, work);
 			discard_work(work);
 			stale++;
@@ -3362,7 +3362,7 @@ int restart_wait(unsigned int mstime)
 	return rc;
 }
 	
-static void restart_threads(bool all)
+static void restart_threads(void)
 {
 	struct pool *cp = current_pool();
 	int i;
@@ -3372,7 +3372,7 @@ static void restart_threads(bool all)
 	pool_tset(cp, &cp->lagging);
 
 	/* Discard staged work that is now stale */
-	discard_stale(all);
+	discard_stale();
 
 	for (i = 0; i < mining_threads; i++)
 		thr_info[i].work_restart = true;
@@ -3494,13 +3494,13 @@ static bool test_work_current(struct work *work)
 			else
 				applog(LOG_NOTICE, "New block detected on network");
 		}
-		restart_threads(false);
+		restart_threads();
 	} else if (work->longpoll) {
 		work->work_block = ++work_block;
 		if (work->pool == current_pool()) {
 			applog(LOG_NOTICE, "%sLONGPOLL from pool %d requested work restart",
 			       work->gbt ? "GBT " : "", work->pool->pool_no);
-			restart_threads(true);
+			restart_threads();
 		}
 	}
 	work->longpoll = false;
@@ -4613,7 +4613,7 @@ static void *stratum_thread(void *userdata)
 				/* Only accept a work restart if this stratum
 				 * connection is from the current pool */
 				if (pool == current_pool()) {
-					restart_threads(true);
+					restart_threads();
 					applog(LOG_NOTICE, "Stratum from pool %d requested work restart", pool->pool_no);
 				}
 			} else
@@ -5697,7 +5697,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 		sleep(interval);
 
-		discard_stale(false);
+		discard_stale();
 
 		hashmeter(-1, &zero_tv, 0);
 
