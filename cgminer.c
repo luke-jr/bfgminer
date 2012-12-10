@@ -2853,8 +2853,11 @@ static void recruit_curl(struct pool *pool)
 {
 	struct curl_ent *ce = calloc(sizeof(struct curl_ent), 1);
 
+	if (unlikely(!ce))
+		quit(1, "Failed to calloc in recruit_curl");
+
 	ce->curl = curl_easy_init();
-	if (unlikely(!ce->curl || !ce))
+	if (unlikely(!ce->curl))
 		quit(1, "Failed to init in recruit_curl");
 
 	list_add(&ce->node, &pool->curlring);
