@@ -8083,7 +8083,7 @@ retry:
 			push_curl_entry(ce, pool);
 			++pool->seq_getfails;
 			pool_died(pool);
-			next_pool = select_pool(true);
+			next_pool = select_pool(!opt_fail_only);
 			if (pool == next_pool) {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
 				sleep(5);
@@ -8105,4 +8105,3 @@ retry:
 
 	return 0;
 }
-
