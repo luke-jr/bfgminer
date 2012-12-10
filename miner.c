@@ -3775,8 +3775,18 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		while( (cm = curl_multi_info_read(curlm, &n)) ) {
 			if (cm->msg == CURLMSG_DONE)
 			{
+				bool finished;
 				json_t *val = json_rpc_call_completed(cm->easy_handle, cm->data.result, false, NULL, &sws);
-				if (submit_upstream_work_completed(sws->work, sws->resubmit, &sws->tv_submit, val) || !retry_submission(sws)) {
+				curl_multi_remove_handle(curlm, cm->easy_handle);
+				finished = submit_upstream_work_completed(sws->work, sws->resubmit, &sws->tv_submit, val);
+				if (!finished) {
+					if (retry_submission(sws))
+						curl_multi_add_handle(curlm, sws->ce->curl);
+					else
+						finished = true;
+				}
+				
+				if (finished) {
 					--wip;
 					++tsreduce;
 					struct pool *pool = sws->work->pool;
@@ -3784,8 +3794,8 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 						pool->sws_waiting_on_curl->ce = sws->ce;
 						sws_has_ce(pool->sws_waiting_on_curl);
 						pool->sws_waiting_on_curl = pool->sws_waiting_on_curl->next;
+						curl_multi_add_handle(curlm, sws->ce->curl);
 					} else {
-						curl_multi_remove_handle(curlm, cm->easy_handle);
 						push_curl_entry(sws->ce, sws->work->pool);
 					}
 					free_sws(sws);
