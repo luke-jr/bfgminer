@@ -2,11 +2,9 @@ BFGMiner Version 2.10.0 - Future
 
 - Include prctl header for thread renaming to work.
 - Set tv_idle time if a pool is not active when input from the menu.
-- usb display message when device is in use/another cgminer
 - minor unlikely zero pointer test
 - BeaverCreek doesn't like BFI INT patching.
 - Only stratum pools that are idle need to be kicked via cnx_needed.
-- usbutils.c uninitialised usbstat for non-primary mmqs
 - Do not do any setup if opt_api_listen is disabled in api.c.
 - libztex: in case the selectFpga() failed set the selected fpga to unknown
 - Only set the lagging flag for select_pool() on failed getwork if we're not in
@@ -113,7 +111,6 @@ minute after the last time they are used to generate work
 - Bugfix: Clean work before trying to generate new stratum work on top of it
 - Bugfix: Free stratum nonce1 before replacing it with new value on reconnect
 - Bugfix: modminer: Get rid of useless usbutils include
-- usbutils.c remove compiler warning
 - Make need connection return true if a pool is idle.
 - New --skip-security-checks option to allow miners to skip checks when it
 saves bandwidth

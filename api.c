@@ -231,7 +231,6 @@ static const char *OSINFO =
 #define _MINECOIN	"COIN"
 #define _DEBUGSET	"DEBUG"
 #define _SETCONFIG	"SETCONFIG"
-#define _USBSTATS	"USBSTATS"
 
 static const char ISJSON = '{';
 #define JSON0		"{"
@@ -271,7 +270,6 @@ static const char ISJSON = '{';
 #define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
-#define JSON_USBSTATS	JSON1 _USBSTATS JSON2
 #define JSON_END	JSON4 JSON5
 
 static const char *JSON_COMMAND = "command";
@@ -376,8 +374,6 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_INVNUM 84
 #define MSG_CONPAR 85
 #define MSG_CONVAL 86
-#define MSG_USBSTA 87
-#define MSG_NOUSTA 88
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -542,8 +538,6 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
  { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
- { SEVERITY_SUCC,  MSG_USBSTA,	PARAM_NONE,	"USB Statistics" },
- { SEVERITY_INFO,  MSG_NOUSTA,	PARAM_NONE,	"No USB Statistics" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -2861,49 +2855,6 @@ static void setconfig(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 	strcpy(io_buffer, message(MSG_SETCONFIG, value, param, isjson));
 }
 
-static void usbstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
-{
-	struct api_data *root = NULL;
-
-#ifdef USE_USBUTILS
-	char buf[TMPBUFSIZ];
-	int count = 0;
-
-	root = api_usb_stats(&count);
-#endif
-
-	if (!root) {
-		strcpy(io_buffer, message(MSG_NOUSTA, 0, NULL, isjson));
-		return;
-	}
-
-#ifdef USE_USBUTILS
-
-	strcpy(io_buffer, message(MSG_USBSTA, 0, NULL, isjson));
-
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_USBSTATS);
-	}
-
-	root = print_data(root, buf, isjson);
-	strcat(io_buffer, buf);
-
-	while (42) {
-		root = api_usb_stats(&count);
-		if (!root)
-			break;
-
-		strcat(io_buffer, COMMA);
-		root = print_data(root, buf, isjson);
-		strcat(io_buffer, buf);
-	}
-
-	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
-#endif
-}
-
 static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -2960,7 +2911,6 @@ struct CMDS {
 	{ "coin",		minecoin,	false },
 	{ "debug",		debugstate,	true },
 	{ "setconfig",		setconfig,	true },
-	{ "usbstats",		usbstats,	false },
 	{ NULL,			NULL,		false }
 };
 
