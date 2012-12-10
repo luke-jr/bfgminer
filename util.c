@@ -1608,7 +1608,7 @@ void notifier_init(int pipefd[2])
 		char reuse = 1;
 		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 	}
-	if (bind(listener, (struct sockaddr*)&inaddr, sizeof(inaddr) == SOCKET_ERROR))
+	if (bind(listener, (struct sockaddr*)&inaddr, sizeof(inaddr)) == SOCKET_ERROR)
 		quit(1, "Failed to bind listener socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
 	socklen_t inaddr_sz = sizeof(inaddr);
 	if (getsockname(listener, (struct sockaddr*)&inaddr, &inaddr_sz) == SOCKET_ERROR)
