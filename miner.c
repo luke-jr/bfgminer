@@ -5468,8 +5468,8 @@ static bool cnx_needed(struct pool *pool)
 	if (pool_strategy == POOL_LOADBALANCE)
 		return true;
 
-	/* Idle pool needs something to kick it alive again */
-	if (pool->idle)
+	/* Idle stratum pool needs something to kick it alive again */
+	if (pool->has_stratum && pool->idle)
 		return true;
 
 	/* Getwork pools without opt_fail_only need backup pools up to be able
