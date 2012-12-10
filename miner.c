@@ -7789,6 +7789,7 @@ int main(int argc, char *argv[])
 					continue;
 
 				if (pool_active(pool, false)) {
+					pool_tset(pool, &pool->lagging);
 					pool_tclear(pool, &pool->idle);
 					if (!currentpool)
 						currentpool = pool;
@@ -8092,7 +8093,8 @@ retry:
 			}
 			goto retry;
 		}
-		pool_tclear(pool, &pool->lagging);
+		if (ts >= max_staged)
+			pool_tclear(pool, &pool->lagging);
 		if (pool_tclear(pool, &pool->idle))
 			pool_resus(pool);
 
