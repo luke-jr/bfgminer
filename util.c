@@ -1572,16 +1572,33 @@ void RenameThread(const char* name)
 #endif
 }
 
+#ifdef WIN32
+static const char *WindowsErrorStr(DWORD dwMessageId)
+{
+	static LPSTR msg = NULL;
+	if (msg)
+		LocalFree(msg);
+	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, dwMessageId, 0, (LPSTR)&msg, 0, 0))
+		return msg;
+	static const char fmt[] = "Error #%ld";
+	signed long ldMsgId = dwMessageId;
+	int sz = snprintf((char*)&sz, 0, fmt, ldMsgId) + 1;
+	msg = (LPTSTR)LocalAlloc(LMEM_FIXED, sz);
+	sprintf((char*)msg, fmt, ldMsgId);
+	return msg;
+}
+#endif
+
 void notifier_init(int pipefd[2])
 {
 #ifdef WIN32
 	SOCKET listener, connecter, acceptor;
 	listener = socket(AF_INET, SOCK_STREAM, 0);
 	if (listener == INVALID_SOCKET)
-		quit(1, "Failed to create listener socket in create_notifier");
+		quit(1, "Failed to create listener socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
 	connecter = socket(AF_INET, SOCK_STREAM, 0);
 	if (connecter == INVALID_SOCKET)
-		quit(1, "Failed to create connect socket in create_notifier");
+		quit(1, "Failed to create connect socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
 	struct sockaddr_in inaddr = {
 		.sin_family = AF_INET,
 		.sin_addr = {
@@ -1593,20 +1610,20 @@ void notifier_init(int pipefd[2])
 		char reuse = 1;
 		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 	}
-	if (bind(listener, (struct sockaddr*)&inaddr, sizeof(inaddr) == SOCKET_ERROR))
-		quit(1, "Failed to bind listener socket in create_notifier");
+	if (bind(listener, (struct sockaddr*)&inaddr, sizeof(inaddr)) == SOCKET_ERROR)
+		quit(1, "Failed to bind listener socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
 	socklen_t inaddr_sz = sizeof(inaddr);
 	if (getsockname(listener, (struct sockaddr*)&inaddr, &inaddr_sz) == SOCKET_ERROR)
-		quit(1, "Failed to getsockname in create_notifier");
+		quit(1, "Failed to getsockname in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
 	if (listen(listener, 1) == SOCKET_ERROR)
-		quit(1, "Failed to listen in create_notifier");
+		quit(1, "Failed to listen in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
 	inaddr.sin_family = AF_INET;
 	inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	if (connect(connecter, (struct sockaddr*)&inaddr, inaddr_sz) == SOCKET_ERROR)
-		quit(1, "Failed to connect in create_notifier");
+		quit(1, "Failed to connect in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
 	acceptor = accept(listener, NULL, NULL);
 	if (acceptor == INVALID_SOCKET)
-		quit(1, "Failed to accept in create_notifier");
+		quit(1, "Failed to accept in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
 	closesocket(listener);
 	pipefd[0] = connecter;
 	pipefd[1] = acceptor;
