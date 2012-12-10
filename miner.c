@@ -6175,8 +6175,6 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 	if (!checktarget)
 		return TNR_GOOD;
 
-	swap32yes(hash2_32, hash2_32, 32 / 4);
-
 	memcpy((void*)work->hash, hash2, 32);
 
 	if (work->stratum) {
@@ -6194,7 +6192,9 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 		}
 	}
 
-	if (!fulltest(work->hash, work->target))
+	swap32yes(hash2_32, hash2_32, 32 / 4);
+
+	if (!fulltest(hash2, work->target))
 		return TNR_HIGH;
 
 	return TNR_GOOD;
