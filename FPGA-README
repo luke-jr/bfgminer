@@ -12,7 +12,7 @@ The red LED also flashes while it is uploading the bitstream
 
 -
 
-If the MMQ doesn't respond to cgminer at all, or the red LED isn't flashing
+If the MMQ doesn't respond to BFGMiner at all, or the red LED isn't flashing
 then you will need to reset the MMQ
 
 The red LED should always be flashing when it is mining or ready to mine
@@ -29,7 +29,7 @@ Then unplug the USB cable, wait for 5 seconds, then plug it back in
 After you press reset, the red LED near the USB port should blink continuously
 
 If it still wont work, power off, wait for 5 seconds, then power on the MMQ
-This of course means it will upload the bitstream again when you start cgminer
+This of course means it will upload the bitstream again when you start BFGMiner
 
 -
 
