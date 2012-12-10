@@ -8069,14 +8069,21 @@ retry:
 		ce = pop_curl_entry(pool);
 		/* obtain new work from bitcoin via JSON-RPC */
 		if (!get_upstream_work(work, ce->curl)) {
-			applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
+			struct pool *next_pool;
+
 			/* Make sure the pool just hasn't stopped serving
 			 * requests but is up as we'll keep hammering it */
-			if (++pool->seq_getfails > mining_threads + opt_queue)
-				pool_died(pool);
-			sleep(5);
 			push_curl_entry(ce, pool);
-			pool = select_pool(true);
+			++pool->seq_getfails;
+			pool_died(pool);
+			next_pool = select_pool(true);
+			if (pool == next_pool) {
+				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
+				sleep(5);
+			} else {
+				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, failover activated", pool->pool_no);
+				pool = next_pool;
+			}
 			goto retry;
 		}
 		pool_tclear(pool, &pool->lagging);
