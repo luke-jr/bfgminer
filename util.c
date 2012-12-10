@@ -8,7 +8,6 @@
  * any later version.  See COPYING for more details.
  */
 
-#define _GNU_SOURCE
 #include "config.h"
 
 #include <stdio.h>
@@ -23,6 +22,9 @@
 #include <unistd.h>
 #include <sys/types.h>
 #ifndef WIN32
+# ifdef __linux
+#  include <sys/prctl.h>
+# endif
 # include <sys/socket.h>
 # include <netinet/in.h>
 # include <netinet/tcp.h>
