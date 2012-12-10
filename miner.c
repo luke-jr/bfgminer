@@ -2861,7 +2861,7 @@ static void get_benchmark_work(struct work *work)
 
 static void wake_gws(void);
 
-static void finish_req_in_progress(struct pool *pool, bool succeeded) {
+static void finish_req_in_progress(struct pool *pool, __maybe_unused bool succeeded) {
 	pool->req_in_progress = false;
 	if (pool->extra_work_needed) {
 		mutex_lock(&pool->last_work_lock);
