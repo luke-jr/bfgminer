@@ -221,6 +221,8 @@ pthread_cond_t restart_cond;
 
 pthread_cond_t gws_cond;
 
+bool shutting_down;
+
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static struct timeval miner_started;
@@ -229,7 +231,7 @@ pthread_mutex_t control_lock;
 pthread_mutex_t stats_lock;
 
 static pthread_mutex_t submitting_lock;
-static int submitting, total_submitting;
+static int total_submitting;
 static struct list_head submit_waiting;
 int submit_waiting_notifier[2];
 
@@ -2859,7 +2861,7 @@ static void get_benchmark_work(struct work *work)
 
 static void wake_gws(void);
 
-static void finish_req_in_progress(struct pool *pool, bool succeeded) {
+static void finish_req_in_progress(struct pool *pool, __maybe_unused bool succeeded) {
 	pool->req_in_progress = false;
 	if (pool->extra_work_needed) {
 		mutex_lock(&pool->last_work_lock);
@@ -3078,6 +3080,11 @@ static void __kill_work(void)
 
 	applog(LOG_INFO, "Received kill message");
 
+	shutting_down = true;
+
+	applog(LOG_DEBUG, "Prompting submit_work thread to finish");
+	(void)write(submit_waiting_notifier[1], "\0", 1);
+
 	applog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
 	thr = &thr_info[watchpool_thr_id];
@@ -3180,7 +3187,7 @@ static void recruit_curl(struct pool *pool)
  * and there are already 5 curls in circulation. Limit total number to the
  * number of mining threads per pool as well to prevent blasting a pool during
  * network delays/outages. */
-static struct curl_ent *pop_curl_entry2(struct pool *pool, bool blocking)
+static struct curl_ent *pop_curl_entry3(struct pool *pool, int blocking)
 {
 	int curl_limit = opt_delaynet ? 5 : (mining_threads + opt_queue) * 2;
 	struct curl_ent *ce;
@@ -3190,7 +3197,7 @@ retry:
 	if (!pool->curls)
 		recruit_curl(pool);
 	else if (list_empty(&pool->curlring)) {
-		if (pool->curls >= curl_limit && (blocking || pool->curls >= opt_submit_threads)) {
+		if (blocking < 2 && pool->curls >= curl_limit && (blocking || pool->curls >= opt_submit_threads)) {
 			if (!blocking) {
 				mutex_unlock(&pool->pool_lock);
 				return NULL;
@@ -3207,9 +3214,15 @@ retry:
 	return ce;
 }
 
+static struct curl_ent *pop_curl_entry2(struct pool *pool, bool blocking)
+{
+	return pop_curl_entry3(pool, blocking ? 1 : 0);
+}
+
+__maybe_unused
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
-	return pop_curl_entry2(pool, true);
+	return pop_curl_entry3(pool, 1);
 }
 
 static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
@@ -3664,6 +3677,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 	long curlm_timeout_ms = -1;
 	struct submit_work_state *sws, **swsp;
 	struct submit_work_state *write_sws = NULL;
+	unsigned tsreduce = 0;
 
 	pthread_detach(pthread_self());
 
@@ -3683,6 +3697,8 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 	FD_ZERO(&rfds);
 	while (1) {
 		mutex_lock(&submitting_lock);
+		total_submitting -= tsreduce;
+		tsreduce = 0;
 		if (FD_ISSET(submit_waiting_notifier[0], &rfds)) {
 			char buf[0x10];
 			(void)read(submit_waiting_notifier[0], buf, sizeof(buf));
@@ -3698,10 +3714,9 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 					write_sws = sws;
 				}
 				++wip;
-				++total_submitting;
 			}
 		}
-		if (!wip)
+		if (unlikely(shutting_down && !wip))
 			break;
 		mutex_unlock(&submitting_lock);
 		
@@ -3766,17 +3781,27 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		while( (cm = curl_multi_info_read(curlm, &n)) ) {
 			if (cm->msg == CURLMSG_DONE)
 			{
+				bool finished;
 				json_t *val = json_rpc_call_completed(cm->easy_handle, cm->data.result, false, NULL, &sws);
-				if (submit_upstream_work_completed(sws->work, sws->resubmit, &sws->tv_submit, val) || !retry_submission(sws)) {
+				curl_multi_remove_handle(curlm, cm->easy_handle);
+				finished = submit_upstream_work_completed(sws->work, sws->resubmit, &sws->tv_submit, val);
+				if (!finished) {
+					if (retry_submission(sws))
+						curl_multi_add_handle(curlm, sws->ce->curl);
+					else
+						finished = true;
+				}
+				
+				if (finished) {
 					--wip;
-					--total_submitting;
+					++tsreduce;
 					struct pool *pool = sws->work->pool;
 					if (pool->sws_waiting_on_curl) {
 						pool->sws_waiting_on_curl->ce = sws->ce;
 						sws_has_ce(pool->sws_waiting_on_curl);
 						pool->sws_waiting_on_curl = pool->sws_waiting_on_curl->next;
+						curl_multi_add_handle(curlm, sws->ce->curl);
 					} else {
-						curl_multi_remove_handle(curlm, cm->easy_handle);
 						push_curl_entry(sws->ce, sws->work->pool);
 					}
 					free_sws(sws);
@@ -3785,10 +3810,11 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		}
 	}
 	assert(!write_sws);
-	--submitting;
 	mutex_unlock(&submitting_lock);
 
 	curl_multi_cleanup(curlm);
+
+	applog(LOG_DEBUG, "submit_work thread exiting");
 
 	return NULL;
 }
@@ -5373,8 +5399,11 @@ fishy:
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
 		goto out;
 	}
-	else
+	else {
+		mutex_lock(&submitting_lock);
 		--total_submitting;
+		mutex_unlock(&submitting_lock);
+	}
 	stratum_share_result(val, res_val, err_val, sshare);
 	free_work(sshare->work);
 	free(sshare);
@@ -5407,7 +5436,6 @@ static void clear_stratum_shares(struct pool *pool)
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
-		--total_submitting;
 		if (sshare->work->pool == pool) {
 			HASH_DEL(stratum_shares, sshare);
 			free_work(sshare->work);
@@ -5421,6 +5449,10 @@ static void clear_stratum_shares(struct pool *pool)
 		applog(LOG_WARNING, "Lost %d shares due to stratum disconnect on pool %d", cleared, pool->pool_no);
 		pool->stale_shares++;
 		total_stale++;
+
+		mutex_lock(&submitting_lock);
+		total_submitting -= cleared;
+		mutex_unlock(&submitting_lock);
 	}
 }
 
@@ -6057,27 +6089,17 @@ static struct work *get_work(struct thr_info *thr, const int thr_id)
 void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
 	struct work *work = copy_work(work_in);
-	pthread_t submit_thread;
-	bool was_submitting;
 
 	if (tv_work_found)
 		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
 	mutex_lock(&submitting_lock);
+	++total_submitting;
 	list_add_tail(&work->list, &submit_waiting);
-	was_submitting = submitting;
-	if (!submitting)
-		++submitting;
 	mutex_unlock(&submitting_lock);
 
-	if (was_submitting) {
-		(void)write(submit_waiting_notifier[1], "\0", 1);
-		return;
-	}
-
-	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
-		quit(1, "Failed to create submit_work_thread");
+	(void)write(submit_waiting_notifier[1], "\0", 1);
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
@@ -7904,6 +7926,12 @@ begin_bench:
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
 
+	{
+		pthread_t submit_thread;
+		if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
+			quit(1, "submit_work thread create failed");
+	}
+
 	watchpool_thr_id = mining_threads + 2;
 	thr = &thr_info[watchpool_thr_id];
 	/* start watchpool thread */
@@ -8044,17 +8072,24 @@ retry:
 		}
 
 		work->pool = pool;
-		ce = pop_curl_entry(pool);
+		ce = pop_curl_entry3(pool, 2);
 		/* obtain new work from bitcoin via JSON-RPC */
 		if (!get_upstream_work(work, ce->curl)) {
-			applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
+			struct pool *next_pool;
+
 			/* Make sure the pool just hasn't stopped serving
 			 * requests but is up as we'll keep hammering it */
-			if (++pool->seq_getfails > mining_threads + opt_queue)
-				pool_died(pool);
-			sleep(5);
 			push_curl_entry(ce, pool);
-			pool = select_pool(true);
+			++pool->seq_getfails;
+			pool_died(pool);
+			next_pool = select_pool(true);
+			if (pool == next_pool) {
+				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
+				sleep(5);
+			} else {
+				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, failover activated", pool->pool_no);
+				pool = next_pool;
+			}
 			goto retry;
 		}
 		pool_tclear(pool, &pool->lagging);
