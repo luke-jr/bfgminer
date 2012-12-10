@@ -432,9 +432,8 @@ The number of hardware erorrs
 The utility defines as the number of shares / minute
 
 The cgminer status line shows:
- TQ: 1  ST: 1  SS: 0  DW: 0  NB: 1  LW: 8  GF: 1  RF: 1  WU:4.4/m
+ ST: 1  SS: 0  DW: 0  NB: 1  LW: 8  GF: 1  RF: 1  WU:4.4/m
 
-TQ is Total Queued work items.
 ST is STaged work items (ready to use).
 SS is Stale Shares discarded (detected and not submitted so don't count as rejects)
 DW is Discarded Work items (work from block no longer valid to work on)
