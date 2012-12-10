@@ -123,7 +123,6 @@ device hwe
 - Bugfix: Correct order of printf-style arguments in cbappend fail
 - API add Best Share to summary
 - API lock access to some summary statistics (and copy them)
-- Update windows build instructions.
 - Enable backup stratum connections for getwork when the primary pool doesn't
 have longpoll aka solo mining.
 - Check for correct absence of opt_fail_only in cnx_needed.
