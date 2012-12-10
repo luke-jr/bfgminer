@@ -714,6 +714,10 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 
 	cgusb = calloc(1, sizeof(*cgusb));
 	cgusb->found = found;
+
+	cgusb->bus_number = libusb_get_bus_number(dev);
+	cgusb->device_address = libusb_get_device_address(dev);
+
 	cgusb->descriptor = calloc(1, sizeof(*(cgusb->descriptor)));
 
 	err = libusb_get_device_descriptor(dev, cgusb->descriptor);
@@ -737,7 +741,6 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 			default:
 				applog(LOG_ERR, "USB init, open device failed, err %d", err);
 		}
-
 		goto dame;
 	}
 
@@ -751,8 +754,15 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 
 	err = libusb_set_configuration(cgusb->handle, found->config);
 	if (err) {
-		applog(LOG_DEBUG, "USB init, failed to set config to %d, err %d",
-			found->config, err);
+		switch(err) {
+			case LIBUSB_ERROR_BUSY:
+				applog(LOG_WARNING, "USB init, %s device %d:%d in use",
+						found->name, cgusb->bus_number, cgusb->device_address);
+				break;
+			default:
+				applog(LOG_DEBUG, "USB init, failed to set config to %d, err %d",
+						found->config, err);
+		}
 		goto cldame;
 	}
 
@@ -797,8 +807,6 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		goto cldame;
 	}
 
-	cgusb->bus_number = libusb_get_bus_number(dev);
-	cgusb->device_address = libusb_get_device_address(dev);
 	cgusb->usbver = cgusb->descriptor->bcdUSB;
 
 // TODO: allow this with the right version of the libusb include and running library
