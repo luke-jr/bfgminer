@@ -1,3 +1,14 @@
+BFGMiner Version 2.8.8 - December 10, 2012
+
+- Bugfix: Copy share hash to work->hash before doing 4-byte flip required by
+fulltest
+- driver-ztex: libztex_setFreq() must be called before ztex_releaseFpga()
+- libztex: Make log messages say bitstream when refering to bitstreams
+- Bugfix: Use AC_PROG_CPP in libusb include subdirectory detection for improved
+portability
+- Bugfix: Free filename entry for writing config file when done with it
+
+
 BFGMiner Version 2.8.7 - December 4, 2012
 
 - Update libblkmaker to 0.2.1
