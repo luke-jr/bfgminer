@@ -7146,8 +7146,10 @@ void add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
-	if (live && !pool_active(pool, false))
+	if (live && !pool_active(pool, false)) {
+		gettimeofday(&pool->tv_idle, NULL);
 		pool->idle = true;
+	}
 }
 
 #ifdef HAVE_CURSES
