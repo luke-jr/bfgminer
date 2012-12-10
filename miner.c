@@ -3173,8 +3173,11 @@ static void recruit_curl(struct pool *pool)
 {
 	struct curl_ent *ce = calloc(sizeof(struct curl_ent), 1);
 
+	if (unlikely(!ce))
+		quit(1, "Failed to calloc in recruit_curl");
+
 	ce->curl = curl_easy_init();
-	if (unlikely(!ce || !ce->curl))
+	if (unlikely(!ce->curl))
 		quit(1, "Failed to init in recruit_curl");
 
 	list_add(&ce->node, &pool->curlring);
@@ -5468,8 +5471,8 @@ static bool cnx_needed(struct pool *pool)
 	if (pool_strategy == POOL_LOADBALANCE)
 		return true;
 
-	/* Idle pool needs something to kick it alive again */
-	if (pool->idle)
+	/* Idle stratum pool needs something to kick it alive again */
+	if (pool->has_stratum && pool->idle)
 		return true;
 
 	/* Getwork pools without opt_fail_only need backup pools up to be able
@@ -7143,8 +7146,10 @@ void add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 
 	/* Test the pool is not idle if we're live running, otherwise
 	 * it will be tested separately */
-	if (live && !pool_active(pool, false))
+	if (live && !pool_active(pool, false)) {
+		gettimeofday(&pool->tv_idle, NULL);
 		pool->idle = true;
+	}
 }
 
 #ifdef HAVE_CURSES
@@ -7789,6 +7794,7 @@ int main(int argc, char *argv[])
 					continue;
 
 				if (pool_active(pool, false)) {
+					pool_tset(pool, &pool->lagging);
 					pool_tclear(pool, &pool->idle);
 					if (!currentpool)
 						currentpool = pool;
@@ -8082,7 +8088,7 @@ retry:
 			push_curl_entry(ce, pool);
 			++pool->seq_getfails;
 			pool_died(pool);
-			next_pool = select_pool(true);
+			next_pool = select_pool(!opt_fail_only);
 			if (pool == next_pool) {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
 				sleep(5);
@@ -8092,7 +8098,8 @@ retry:
 			}
 			goto retry;
 		}
-		pool_tclear(pool, &pool->lagging);
+		if (ts >= max_staged)
+			pool_tclear(pool, &pool->lagging);
 		if (pool_tclear(pool, &pool->idle))
 			pool_resus(pool);
 
@@ -8103,4 +8110,3 @@ retry:
 
 	return 0;
 }
-

@@ -104,6 +104,19 @@ enum check_result
 	CHECK_RESCAN,
 };
 
+static bool libztex_firmwareReset(struct libusb_device_handle *hndl, bool enable)
+{
+	uint8_t reset = enable;
+	int cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, &reset, 1, 1000);
+	if (cnt < 0)
+	{
+		applog(LOG_ERR, "Ztex reset %d failed: %s", libusb_error_name(cnt), enable);
+		return 1;
+	}
+
+	return 0;
+}
+
 static enum check_result libztex_checkDevice(struct libusb_device *dev)
 {
 	FILE *fp = NULL;
@@ -249,14 +262,8 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 		goto done;
 	}
 
-	// reset 1
-	buf[0] = 1;
-	cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
-	if (cnt < 0)
-	{
-		applog(LOG_ERR, "Ztex reset 1 failed: %s", libusb_error_name(cnt));
+	if (libztex_firmwareReset(hndl, true))
 		goto done;
-	}
 
 	for (i = 0; i < length; i+= 256) {
 		// firmware wants data in small chunks like 256 bytes
@@ -269,14 +276,8 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 		}
 	}
 
-	// reset 0
-	buf[0] = 0;
-	err = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, buf, 1,1000);
-	if (err < 0)
-	{
-		applog(LOG_ERR, "Ztex reset 0 failed: %s", libusb_error_name(err));
+	if (libztex_firmwareReset(hndl, false))
 		goto done;
-	}
 
 	applog(LOG_ERR, "Ztex device: succesfully wrote firmware");
 	ret = CHECK_RESCAN;
@@ -538,6 +539,7 @@ int libztex_selectFpga(struct libztex_device *ztex)
 		cnt = libusb_control_transfer(ztex->root->hndl, 0x40, 0x51, (uint16_t)number, 0, NULL, 0, 500);
 		if (unlikely(cnt < 0)) {
 			applog(LOG_ERR, "Ztex check device: Failed to set fpga with err %d", cnt);
+			ztex->root->selectedFpga = -1;
 			return cnt;
 		}
 		ztex->root->selectedFpga = number;
@@ -700,7 +702,6 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	newdev->usbbus = libusb_get_bus_number(dev);
 	newdev->usbaddress = libusb_get_device_address(dev);
 	sprintf(newdev->repr, "ZTEX %s-1", newdev->snString);
-	newdev->valid = true;
 	return 0;
 }
 
@@ -781,7 +782,6 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 
 		ztex->bitFileName = NULL;
 		ztex->numberOfFpgas = -1;
-		ztex->valid = false;
 
 		err = libztex_prepare_device(list[usbdevices[i]], &ztex);
 		if (unlikely(err != 0)) {

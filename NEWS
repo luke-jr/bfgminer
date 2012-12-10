@@ -1,5 +1,116 @@
 BFGMiner Version 2.10.0 - Future
 
+- Include prctl header for thread renaming to work.
+- Set tv_idle time if a pool is not active when input from the menu.
+- usb display message when device is in use/another cgminer
+- libztex: avoid the use of libusb_error_name()
+- minor unlikely zero pointer test
+- BeaverCreek doesn't like BFI INT patching.
+- Only stratum pools that are idle need to be kicked via cnx_needed.
+- mmq - abbreviate the temperature numbers
+- Do not do any setup if opt_api_listen is disabled in api.c.
+- usbutils.c uninitialised usbstat for non-primary mmqs
+- Only set the lagging flag for select_pool() on failed getwork if we're not in
+opt_fail_only mode.
+- libztex: in case the selectFpga() failed set the selected fpga to unknown
+- Modified windows-build.txt to update git instructions.
+- libztex: use a function for the twice called firmware reset code
+- libztex: removed an unused struct member (ztex->valid)
+- driver-ztex: support for broken fpga on a multifpga board
+- Set the pool lagging flag on startup to avoid it being shown initially, and
+only unset it once the maximum number of staged work items has been reached.
+- Avoid recursive locking of the stgd lock.
+- Return value of keep_sockalive is no longer used.
+- Remove dependency on mstcpip.h for windows build by making curl version >=
+7.25.0 mandatory on windows builds, and use curl functions for keepalive
+whenever possible instead.
+- Make main() the getwork scheduler once everything is set up, so that all app
+exits use the kill_work and quit paths.
+- ztex: more style and whitespace fixes
+- libztex: silenced another warning
+- Set successful connect to true on auth stratum to allow summary on exit from
+single stratum pool.
+- Only consider work stale for stratum of different job_id if it's not a share.
+- Increment version preempting changed version signifying different codebase to
+2.9
+- Hash_pop should signal further waiters on its own pthread conditional in case
+there are multiple waiters.
+- Check the job_id has not changed on stratum work when deciding if the work is
+stale as might occur across disconnections.
+- Perform pool_resus on getwork pool that generates work in getwork_thread.
+- Set pool lagging message for getwork pool that falls to zero staged in getwork
+thread.
+- Stage extra work when the primary pool is a getwork pool without rolltime.
+- Do not try to clean up twice if kill message is given.
+- Only recalculate total_staged in getwork thread if required.
+- Include the correct config header in libztex and include it before other
+includes.
+- Implement a completely new getwork scheduler. Stage all work from the one
+thread, making it possible to serialise all requests minimising the number of
+getworks requested or local work generated. Use a pthread conditional to wake up
+the thread whenever work is removed to generate enough work to stay above the
+watermark set by opt_queue. Remove all remnants of the old queueing mechanism,
+deleting the now defunct queued count.
+- libztex: fixed some warnings and removed some whitespaces
+- libztex: silenced some warnings
+- Remove all references to the now unused workio_cmd structure.
+- Remove the old workio command queue thread, replacing it with a kill
+conditional to exit the program.
+- Remove getwork command from workio_cmd queues and do them directly from
+queue_request.
+- Begin tearing down the old workio command queues by removing submit commands
+from there and submit them asynchronously via their own threads.
+- Update windows build instructions.
+- Set pool probed to true on successful authorisation with stratum to avoid it
+being pinged later with pool_getswork.
+- driver-ztex: libztex_setFreq() must be called before ztex_releaseFpga()
+- driver-ztex: changed two pairs of malloc()/memset() to calloc()
+- libztex: Read bitstream file in 2kb blocks with simpler and faster code
+- Added the binary versions of ztex_ufm1_15d4.ihx and ztex_ufm1_15y1.ihx
+- Trivial space removal.
+- libztex: Add firmware download support for ZTEX 1.15d and 1.15x
+- libztex: Factor out local version of libusb_get_string_descriptor_ascii()
+- Shut up some boring old cpu warnings.
+- Style changes.
+- Allow pool active to be called on stratum or disabled pools in the watchpool
+thread if the pool has not been probed.
+- libztex: Make log messages say bitstream when refering to bitstreams
+- libztex: Don't return error when a bitstream was already configured
+- libztex: Read bitstream file in 64kb blocks with simpler and faster code
+- libztex: Verify that the mining firmware is not a dummy firmware
+- libztex: Match mining firmware ZTEX descriptor against the dummy firmware
+- Combine shared padding into one char.
+- libztex: Start download sequence only after reading in the new firmware
+- libztex: Download mining firmware to all devices with dummy firmware
+- lock (most of) the threaded statistics updates
+- README stats don't add up
+- usbutils.c remove compiler warning
+- Make need connection return true if a pool is idle.
+- API add Best Share to summary
+- Check on creating new GBT work if the structures are up to date and update
+them as required rather than regularly.
+- Update windows build instructions.
+- Enable backup stratum connections for getwork when the primary pool doesn't
+have longpoll aka solo mining.
+- Check for correct absence of opt_fail_only in cnx_needed.
+- Remove unused variable.
+- The specification for stratum has been elaborated to say that a changed diff
+applies only to new work so do not retarget when submitting shares.
+- Use a variable length string array in submit_upstream_work to cope with
+massive GBT submissions.
+- API lock access to some summary statistics (and copy them)
+- Suspend stratum connections to backup pools when there is no requirement to
+potentially grab work from them.
+- Fix missing export for RenameThread.
+- enumerate the mining threadnames
+- MMQ avoid possible number overrun crashes
+- mmq usb v0.4 + api usb stats
+- setting the name of the threads for linux,freebsd,openbsd and osx code is
+borrowed from bitcoins util.c, so it is already tested
+- Don't show broken WU value with scrypt mining.
+- Style police.
+- Remove unused getwork times in getswork.
+- Fix readme wordwrap.
 - New --skip-security-checks option to allow miners to skip checks when it
 saves bandwidth
 - Skip stratum transaction download when there are no transactions

@@ -3365,15 +3365,15 @@ void api(int api_thr_id)
 	bool did;
 	int i;
 
-	mutex_init(&quit_restart_lock);
-
-	pthread_cleanup_push(tidyup, NULL);
-	my_thr_id = api_thr_id;
-
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
 		return;
 	}
+
+	mutex_init(&quit_restart_lock);
+
+	pthread_cleanup_push(tidyup, NULL);
+	my_thr_id = api_thr_id;
 
 	setup_groups();
 

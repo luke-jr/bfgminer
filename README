@@ -433,9 +433,8 @@ The number of hardware erorrs
 The utility defines as the number of shares / minute
 
 The BFGMiner status line shows:
- TQ: 1  ST: 1  DW: 0  GW: 301  LW: 8  GF: 1  NB: 1  AS: 0  RF: 1
+ ST: 1  DW: 0  GW: 301  LW: 8  GF: 1  NB: 1  AS: 0  RF: 1
 
-TQ is Total Queued work items.
 ST is STaged work items (ready to use).
 DW is Discarded Work items (work from block no longer valid to work on)
 GW is GetWork requested (work items from pools)
