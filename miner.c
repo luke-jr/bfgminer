@@ -3671,6 +3671,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 	long curlm_timeout_ms = -1;
 	struct submit_work_state *sws, **swsp;
 	struct submit_work_state *write_sws = NULL;
+	unsigned tsreduce = 0;
 
 	pthread_detach(pthread_self());
 
@@ -3690,6 +3691,8 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 	FD_ZERO(&rfds);
 	while (1) {
 		mutex_lock(&submitting_lock);
+		total_submitting -= tsreduce;
+		tsreduce = 0;
 		if (FD_ISSET(submit_waiting_notifier[0], &rfds)) {
 			char buf[0x10];
 			(void)read(submit_waiting_notifier[0], buf, sizeof(buf));
@@ -3705,7 +3708,6 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 					write_sws = sws;
 				}
 				++wip;
-				++total_submitting;
 			}
 		}
 		if (unlikely(shutting_down && !wip))
@@ -3776,7 +3778,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 				json_t *val = json_rpc_call_completed(cm->easy_handle, cm->data.result, false, NULL, &sws);
 				if (submit_upstream_work_completed(sws->work, sws->resubmit, &sws->tv_submit, val) || !retry_submission(sws)) {
 					--wip;
-					--total_submitting;
+					++tsreduce;
 					struct pool *pool = sws->work->pool;
 					if (pool->sws_waiting_on_curl) {
 						pool->sws_waiting_on_curl->ce = sws->ce;
@@ -5381,8 +5383,11 @@ fishy:
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
 		goto out;
 	}
-	else
+	else {
+		mutex_lock(&submitting_lock);
 		--total_submitting;
+		mutex_unlock(&submitting_lock);
+	}
 	stratum_share_result(val, res_val, err_val, sshare);
 	free_work(sshare->work);
 	free(sshare);
@@ -5415,7 +5420,6 @@ static void clear_stratum_shares(struct pool *pool)
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
-		--total_submitting;
 		if (sshare->work->pool == pool) {
 			HASH_DEL(stratum_shares, sshare);
 			free_work(sshare->work);
@@ -5429,6 +5433,10 @@ static void clear_stratum_shares(struct pool *pool)
 		applog(LOG_WARNING, "Lost %d shares due to stratum disconnect on pool %d", cleared, pool->pool_no);
 		pool->stale_shares++;
 		total_stale++;
+
+		mutex_lock(&submitting_lock);
+		total_submitting -= cleared;
+		mutex_unlock(&submitting_lock);
 	}
 }
 
@@ -6071,6 +6079,7 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
 	mutex_lock(&submitting_lock);
+	++total_submitting;
 	list_add_tail(&work->list, &submit_waiting);
 	mutex_unlock(&submitting_lock);
 
