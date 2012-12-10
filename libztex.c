@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "compat.h"
 #include "dynclock.h"
 #include "miner.h"
 #include "fpgautils.h"
