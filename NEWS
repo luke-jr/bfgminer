@@ -113,12 +113,6 @@ minute after the last time they are used to generate work
 - New --skip-security-checks option to allow miners to skip checks when it
 saves bandwidth
 - Skip stratum transaction download when there are no transactions
-- Count template number, and append it to the coinbase of templates without any
-cbtxn
-- Bugfix: bitforce: Always increment global hw error counter when incrementing
-device hwe
-- Bugfix: Capitalize "MHz" correctly
-- Bugfix: Correct order of printf-style arguments in cbappend fail
 - API add Best Share to summary
 - API lock access to some summary statistics (and copy them)
 - Enable backup stratum connections for getwork when the primary pool doesn't
@@ -131,9 +125,6 @@ applies only to new work so do not retarget when submitting shares.
 potentially grab work from them.
 - Rename rename_thr to RenameThread to match cgminer
 - modminer: Adopt symbolic command names from kanoi
-- ztex: Correctly release mutex and reset FPGA if configuration fails
-- ztex: Harmonize low-speed FPGA configuration code with high-speed code
-- libztex: Silence warning: comparison between signed and unsigned
 - Make gen_stratum_work more robust by using a dynamically allocated array for
 the header in case bogus data is sent by the pool to avoid overflowing a static
 array.
@@ -144,17 +135,8 @@ truncating irrelevant zeroes from displayed hash.
 needed later on.
 - Revert "Handle crash exceptions by trying to restart cgminer unless the
 --no-restart option is used."
-- Count longpoll decodes as queued work since the count otherwise remains
-static.
 - Provide helper function realloc_strcat to extend arbitrary length arrays
 based on string length.
-- Look for libusb_init in -lusb, since FreeBSD has it there
-- Bugfix: Use pkgconfig for libusb when available, and try to guess the include
-path if not
-- Bugfix: Assign header-based rolltime before decoding work, so GBT expires
-overrides it properly
-- Bugfix: FPGA-README: Correct idVendor in example MMQ udev rule
-- fixes target calc for mips openwrt
 - Use base_work for comparison just for cleanness in __copy_work
 - Remove all static work structs, using the make and free functions.
 - Add pool no. to stale share detected message.
@@ -163,31 +145,19 @@ overrides it properly
 - Get rid of unused last_work in opencl thread data.
 - Do away with the flaky free_work api in the driver code which would often lose
 the work data in opencl and simply flush it before exiting the opencl scanhash.
-- Bugfix: clear_work: Whether the template is in fact being freed or not, the
-work reference to it needs to be
 - Minor work handling restructure, including moving some stratum data from
 fixed-size buffers to their own heap allocations.
-- libztex: Work around ZTEX USB firmware bug exposed by the FreeBSD libusb
-- README: Document solo mining usage
-- README: Update dependencies
-- Bugfix: We should never roll stale work
-- Ubuntu: Removing erroneous libssl dep again. GITHUB#94
 - opencl: Use new dev_error function for REASON_DEV_NOSTART
-- Bugfix: Clear out stratum share work before freeing it
 - Provide rudimentary support for the balancing failover strategies with stratum
 and GBT by switching pools silently on getwork requests.
 - Convert remaining modminer and bfl uses of usleep to nmsleep.
 - Convert libztex to nmsleep where possible.
 - Convert unreliable usleep calls to nmsleep calls in ztex driver.
-- Provide rudimentary support for literal ipv6 addresses when parsing stratum
-URLs.
 - Tidy up device error counts
 - Only increase gpu engine speed by a larger step if the temperature is below
 hysteresis instead of increasing it to max speed.
 - Convert pool not responding and pool alive message on backup pools to verbose
 level only since they mean a single failed getwork.
-- Do not attempt to remove the stratum share hash after unsuccessful submission
-since it may already be removed by clear_stratum_shares.
 - Use stratum block change from backup pools as an alternative to longpoll for
 pools that don't support LP.
 - Round some more static string arrays to 4 byte boundaries.
@@ -501,20 +471,11 @@ the same wavefront and the potential increased ramspeed requirements to use the
 atomics.
 - Clear the pool idle flag in stratum when it comes back to life.
 - Display correct share hash and share difficulty with scrypt mining.
-- Use explicit host to BE functions in scrypt code instead of hard coding
-byteswap everywhere.
 - Show work target diff for scrypt mining.
-- Ease the checking on allocation of padbuffer8 in the hope it works partially
-anyway on an apparently failed call.
 - Watch for buffer overflows on receiving data into the socket buffer.
-- Round target difficulties down to be in keeping with the rounding of detected
-share difficulties.
 - Dramatically simplify the dynamic intensity calculation by oversampling many
 runs through the opencl kernel till we're likely well within the timer
 resolution on windows.
-- String alignment to 4 byte boundaries and optimisations for bin<->hex
-conversions.
-- In opencl_free_work, make sure to still flush results in dynamic mode.
 - Align static arrays to 4 byte boundaries to appease ARM builds for stratum.
 - Update documentation.
 - Left align values that are suffix_string generated.
@@ -1493,13 +1454,9 @@ found notice
 - miner.php add a socket RCV timeout for if cgminer is hung and the API thread
 is still running
 - BFL force all code to timeout to avoid hanging
-- Detach pthread from within the api thread in case it is terminated due to not
-being instantiated before pthread_cancel is called from main, leading to a
-segfault.
 - Initialise mdplatform.
 - Find the gpu platform with the most devices and use that if no platform option
 is passed.
-- Allow more platforms to be probed if first does not return GPUs.
 - Bugfix: It is not a hardware error if nonces returned from modminer don't
 meet the pool target
 - bitforce & icarus: Log detection failures at debug log level, so we don't
@@ -1519,7 +1476,6 @@ better
 - Simplify code to a single vprintf path for curses-less printing
 - Move opt_quiet check to my_log_curses, so it works for curses-less builds
 - Use log_generic for vapplog to cut down on code duplication
-- Add space to log output now that there is more screen real estate available.
 - Bugfix: Copy argv[0] given to dirname()
 - Find the gpu platform with the most devices and use that if no platform
 option is passed.
@@ -1572,8 +1528,6 @@ error API
 - Revert "Merge branch 'ave_time' of https://github.com/pshep/cgminer.git"
 - Add average return time to api stats
 - Missed one nonce-range disabling.
-- Remove bitforce_thread_init The delay thing does nothing useful... when long
-poll comes around, all threads restart at the same time anyway.
 - Change timeouts to time-vals for accuracy.
 - More BFL tweaks. Add delay between closing and reopening port. Remove buffer
 clear in re-init Add kernel type (mini-rig or single)
@@ -1785,7 +1739,6 @@ cards when ADL failed.
 - modminer: Don't delay 2nd+ FPGAs during work restart
 - Disable OpenCL code when not available.
 - Fix openwrt crashing on regeneratehash() by making check_solve a noop.
-- FPGA - allow device detect override without an open failure
 - Fix sign warning.
 - Bugfix: icarus: properly store/restore info and work end times across longpoll
 restarts
@@ -2174,7 +2127,6 @@ kernels.
 - Add vector type hint to diablo kernel.
 - Add worksize and vector attribute hints to the poclbm kernel.
 - Spaces for non-aligned variables in poclbm.
-- More tidying of poclbm.
 - Swap Vals and W variables where they can overlap in poclbm.
 - More tidying of poclbm.
 - Tidy up first half of poclbm.
