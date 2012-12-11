@@ -3083,7 +3083,7 @@ static void __kill_work(void)
 	shutting_down = true;
 
 	applog(LOG_DEBUG, "Prompting submit_work thread to finish");
-	(void)write(submit_waiting_notifier[1], "\0", 1);
+	notifier_wake(submit_waiting_notifier);
 
 	applog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
@@ -3701,7 +3701,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		tsreduce = 0;
 		if (FD_ISSET(submit_waiting_notifier[0], &rfds)) {
 			char buf[0x10];
-			(void)read(submit_waiting_notifier[0], buf, sizeof(buf));
+			(void)recv(submit_waiting_notifier[0], buf, sizeof(buf), 0);
 		}
 		while (!list_empty(&submit_waiting)) {
 			struct work *work = list_entry(submit_waiting.next, struct work, list);
@@ -6099,7 +6099,7 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 	list_add_tail(&work->list, &submit_waiting);
 	mutex_unlock(&submitting_lock);
 
-	(void)write(submit_waiting_notifier[1], "\0", 1);
+	notifier_wake(submit_waiting_notifier);
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)

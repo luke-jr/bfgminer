@@ -1630,3 +1630,8 @@ void notifier_init(int pipefd[2])
 		quit(1, "Failed to create pipe in create_notifier");
 #endif
 }
+
+void notifier_wake(int fd[2])
+{
+	(void)send(fd[1], "\0", 1, 0);
+}

@@ -68,6 +68,8 @@ void suspend_stratum(struct pool *pool);
 void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
 void RenameThread(const char* name);
+
 extern void notifier_init(int pipefd[2]);
+extern void notifier_wake(int fd[2]);
 
 #endif /* __UTIL_H__ */
