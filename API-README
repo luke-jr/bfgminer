@@ -386,7 +386,17 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.21
+API V1.22
+
+Enforced output limitation:
+ all extra records beyond the output limit of the API (~64k) are ignored
+  and chopped off at the record boundary before the limit is reached
+  however, JSON brackets will be correctly closed and the JSON id will be
+  set to 0 (instead of 1) if any data was truncated
+
+----------
+
+API V1.21 (cgminer v2.10.0)
 
 Added API commands:
  'usbstats'
