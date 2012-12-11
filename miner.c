@@ -3691,8 +3691,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		total_submitting -= tsreduce;
 		tsreduce = 0;
 		if (FD_ISSET(submit_waiting_notifier[0], &rfds)) {
-			char buf[0x10];
-			(void)recv(submit_waiting_notifier[0], buf, sizeof(buf), 0);
+			notifier_read(submit_waiting_notifier);
 		}
 		while (!list_empty(&submit_waiting)) {
 			struct work *work = list_entry(submit_waiting.next, struct work, list);
