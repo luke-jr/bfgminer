@@ -1,5 +1,10 @@
 BFGMiner Version 2.10.0 - Future
 
+- Bugfix: Winsock needs send/recv for sockets, not write/read
+- Bugfix: opencl: Initialize pc_data to avoid clean_work checking uninitialized
+pointers
+- Bugfix: Correct parenthesis in bind() call in Windows notifier_init
+- Include Windows error messages in notifier_init errors
 - Include prctl header for thread renaming to work.
 - Set tv_idle time if a pool is not active when input from the menu.
 - minor unlikely zero pointer test
@@ -68,13 +73,11 @@ conditional to exit the program.
 queue_request.
 - Begin tearing down the old workio command queues by removing submit commands
 from there and submit them asynchronously via their own threads.
-- driver-ztex: libztex_setFreq() must be called before ztex_releaseFpga()
 - driver-ztex: changed two pairs of malloc()/memset() to calloc()
 - libztex: Read bitstream file in 2kb blocks with simpler and faster code
 - Added the binary versions of ztex_ufm1_15d4.ihx and ztex_ufm1_15y1.ihx
 - libztex: Add firmware download support for ZTEX 1.15d and 1.15x
 - libztex: Factor out local version of libusb_get_string_descriptor_ascii()
-- libztex: Make log messages say bitstream when refering to bitstreams
 - libztex: Don't return error when a bitstream was already configured
 - libztex: Read bitstream file in 64kb blocks with simpler and faster code
 - libztex: Verify that the mining firmware is not a dummy firmware
@@ -90,7 +93,6 @@ thread if the pool has not been probed.
 - lock (most of) the threaded statistics updates
 - README stats don't add up
 - Rearrange summary lines and include count of active submissions in progress
-- Increase FD_SETSIZE to 4096 on Windows
 - Defer submissions instead of blocking in pop_curl_entry
 - Run a single share submission thread asynchronously submitting all shares in
 parallel
@@ -99,17 +101,10 @@ parallel
 - Split submit_upstream_work into _request and _completed stages, pulling out
 json_rpc_call
 - Bugfix: Adjust USB_* variables to new LIBUSB_* names
-- Bugfix: Use AC_PROG_CPP in libusb include subdirectory detection for improved
-portability
 - Bugfix: Avoid double-free due to realloc_strcat moving memory around
-- Bugfix: Free input memory after prioritising pools in TUI
-- Bugfix: Free filename entry for writing config file when done with it
-- Bugfix: Free input memory after prioritising pools in TUI
-- Bugfix: Free filename entry for writing config file when done with it
 - Bugfix: Stratum connections might be needed for share submissions up to a
 minute after the last time they are used to generate work
 - Bugfix: Clean work before trying to generate new stratum work on top of it
-- Bugfix: Free stratum nonce1 before replacing it with new value on reconnect
 - Bugfix: modminer: Get rid of useless usbutils include
 - Make need connection return true if a pool is idle.
 - New --skip-security-checks option to allow miners to skip checks when it
@@ -197,6 +192,20 @@ pools that don't support LP.
 they're 4 byte aligned to appease ARM.
 - Hash1 is only used by the CPU mining code and never changes so remove it from
 the work struct and bypass needing to process the value for all other mining.
+
+
+BFGMiner Version 2.9.5 - December 11, 2012
+
+- Bugfix: Copy share hash to work->hash before doing 4-byte flip required by
+fulltest
+- driver-ztex: libztex_setFreq() must be called before ztex_releaseFpga()
+- libztex: Make log messages say bitstream when refering to bitstreams
+- Increase FD_SETSIZE to 4096 on Windows
+- Bugfix: Use AC_PROG_CPP in libusb include subdirectory detection for improved
+portability
+- Bugfix: Free input memory after prioritising pools in TUI
+- Bugfix: Free filename entry for writing config file when done with it
+- Bugfix: Free stratum nonce1 before replacing it with new value on reconnect
 
 
 BFGMiner Version 2.9.4 - December 4, 2012
