@@ -71,5 +71,6 @@ void RenameThread(const char* name);
 
 extern void notifier_init(int pipefd[2]);
 extern void notifier_wake(int fd[2]);
+extern void notifier_read(int fd[2]);
 
 #endif /* __UTIL_H__ */

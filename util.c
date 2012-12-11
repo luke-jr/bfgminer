@@ -1633,5 +1633,19 @@ void notifier_init(int pipefd[2])
 
 void notifier_wake(int fd[2])
 {
+#ifdef WIN32
 	(void)send(fd[1], "\0", 1, 0);
+#else
+	(void)write(fd[1], "\0", 1);
+#endif
+}
+
+void notifier_read(int fd[2])
+{
+	char buf[0x10];
+#ifdef WIN32
+	(void)recv(fd[0], buf, sizeof(buf), 0);
+#else
+	(void)read(fd[0], buf, sizeof(buf));
+#endif
 }
