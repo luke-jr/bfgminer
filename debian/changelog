@@ -1,3 +1,32 @@
+bfgminer (2.10.0-0precise1) precise; urgency=low
+
+  * Avoid fetching more GBT jobs when we already have a usable one, or are already in the process of getting a new one that will suffice. This drastically improves efficiency on GBT pools and reduces unnecessary bandwidth waste.
+  * Share submissions are now processed asyncronously in parallel, in a single dedicated thread, instead of spawning a new thread for every submission. This makes BFGMiner scale better to bigger rigs with more shares, and enables it to react to network outages better. Additionally, a new "AS" (Active Submissions) number has been added to the status line to make it easy to see at a glance what's going on.
+  * New --skip-security-checks option to allow miners to skip checks when it saves bandwidth (stratum).
+  * Additional extranonce to count template requests for GBT solo mining, to ensure we never work on hashing the same data redundantly.
+  * Con's new work scheduler: The old work scheduler would spawn threads that all tried to grab work as best as they could, and this would lead to much more work than necessary being grabbed from getwork pools, and potentially hitting the pool at precisely the same time from multiple threads making a getwork failure more likely. It was also very difficult to track how much work was really available at any one time since all the threads were off doing their own thing. Centralising the work creation means it is strictly tracked now and as soon as one work item is taken, the scheduler will generate or download another one. The advantage here is to maximise the efficiency of work we get from any getwork source, be it with or without rolltime. It is also much less likely to have dips in providing work, should lead to less getwork failures, and scale to higher hashrates even with the old getwork protocols.
+  * When the primary pool is stratum, GBT, or getwork in failover mode, no backup connections will be maintained to backup pools. The total number of unused stratum connections now should be extremely small.
+  * Ztex driver improvements courtesy of Denis and Peter.
+  * Lots of work under the hood and other minor goodies. Check full changelog.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 11 Dec 2012 05:28:02 -0000
+
+
+bfgminer (2.9.5-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 11 Dec 2012 03:11:49 -0000
+
+
+bfgminer (2.9.4-0precise1) precise; urgency=low
+
+  * Documented solo mining in README.
+  * Lots of small bugfixes everywhere.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 04 Dec 2012 03:13:43 -0000
+
+
 bfgminer (2.9.3-0precise1) precise; urgency=low
 
   * Many stratum bugfixes, including support for fractional difficulties.

@@ -1,5 +1,8 @@
-BFGMiner Version 2.10.0 - Future
+BFGMiner Version 2.10.0 - December 11, 2012
 
+- Bugfix: Free work before replacing it with clone
+- Bugfix: Since we are using pipes for select notifier on *nix, we need to use
+read/write there
 - Bugfix: Winsock needs send/recv for sockets, not write/read
 - Bugfix: opencl: Initialize pc_data to avoid clean_work checking uninitialized
 pointers
