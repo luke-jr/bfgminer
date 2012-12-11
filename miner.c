@@ -8029,6 +8029,7 @@ retry:
 			if (!last_work)
 				{}
 			if (can_roll(last_work) && should_roll(last_work)) {
+				free_work(work);
 				work = make_clone(pool->last_work_copy);
 				mutex_unlock(&pool->last_work_lock);
 				roll_work(work);
