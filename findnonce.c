@@ -179,7 +179,9 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		return;
 	}
 
-	pcd->thr = thr;
+	*pcd = (struct pc_data){
+		.thr = thr,
+	};
 	__copy_work(&pcd->work, work);
 	memcpy(&pcd->res, res, BUFFERSIZE);
 
