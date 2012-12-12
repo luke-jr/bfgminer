@@ -375,8 +375,6 @@ struct cgpu_info {
 	char fpgaid;
 	unsigned char clock;
 	pthread_mutex_t *modminer_mutex;
-	bool tried_two_byte_temp;
-	bool one_byte_temp;
 #endif
 #ifdef USE_BITFORCE
 	struct timeval work_start_tv;
@@ -1028,7 +1026,11 @@ struct modminer_fpga_state {
 	uint32_t hw_errors;
 	uint32_t shares_to_good;
 	struct timeval last_changed;
-	uint32_t no_nonce_counter;
+	struct timeval last_nonce;
+	struct timeval first_work;
+	bool death_stage_one;
+	bool tried_two_byte_temp;
+	bool one_byte_temp;
 };
 #endif
 
