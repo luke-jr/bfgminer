@@ -2875,6 +2875,10 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 		root = api_add_diff(root, "Max Diff", &(pool_stats->max_diff), false);
 		root = api_add_uint32(root, "Min Diff Count", &(pool_stats->min_diff_count), false);
 		root = api_add_uint32(root, "Max Diff Count", &(pool_stats->max_diff_count), false);
+		root = api_add_uint64(root, "Times Sent", &(pool_stats->times_sent), false);
+		root = api_add_uint64(root, "Bytes Sent", &(pool_stats->bytes_sent), false);
+		root = api_add_uint64(root, "Times Recv", &(pool_stats->times_received), false);
+		root = api_add_uint64(root, "Bytes Recv", &(pool_stats->bytes_received), false);
 	}
 
 	if (extra)

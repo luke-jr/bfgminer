@@ -394,6 +394,9 @@ Enforced output limitation:
   however, JSON brackets will be correctly closed and the JSON id will be
   set to 0 (instead of 1) if any data was truncated
 
+Modified API commands:
+ 'stats' - add 'Times Sent', 'Bytes Sent', 'Times Recv', 'Bytes Recv'
+
 ----------
 
 API V1.21 (cgminer v2.10.0)
@@ -711,7 +714,8 @@ On Fedora 17:
  systemctl enable httpd.service --system
 
 On windows there are a few options.
-Try one of these (I've never used either one)
+Try one of these (apparently the first one is easiest - thanks jborkl)
+ http://www.easyphp.org/
  http://www.apachefriends.org/en/xampp.html
  http://www.wampserver.com/en/
 
