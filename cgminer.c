@@ -2657,10 +2657,10 @@ static void get_benchmark_work(struct work *work)
 	// Use a random work block pulled from a pool
 	static uint8_t bench_block[] = { CGMINER_BENCHMARK_BLOCK };
 
-	size_t bench_size = sizeof(work);
+	size_t bench_size = sizeof(*work);
 	size_t work_size = sizeof(bench_block);
 	size_t min_size = (work_size < bench_size ? work_size : bench_size);
-	memset(work, 0, sizeof(work));
+	memset(work, 0, sizeof(*work));
 	memcpy(work, &bench_block, min_size);
 	work->mandatory = true;
 	work->pool = pools[0];
