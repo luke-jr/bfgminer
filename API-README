@@ -394,6 +394,9 @@ Enforced output limitation:
   however, JSON brackets will be correctly closed and the JSON id will be
   set to 0 (instead of 1) if any data was truncated
 
+Modified API commands:
+ 'stats' - add 'Times Sent', 'Bytes Sent', 'Times Recv', 'Bytes Recv'
+
 ----------
 
 API V1.21 (cgminer v2.10.0)
