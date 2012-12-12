@@ -56,7 +56,7 @@ Dependencies:
 	(This is only required for FPGA auto-detection and is linux only)
 
 	libusb headers
-	(This is only required for ZTEX support)
+	(This is only required for ZTEX and ModMiner support)
 
 
 CGMiner specific configuration options:
