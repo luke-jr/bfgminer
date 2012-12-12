@@ -29,10 +29,15 @@
 
 #define MODMINER_CUTOFF_TEMP 60.0
 #define MODMINER_OVERHEAT_TEMP 50.0
-#define MODMINER_TEMP_UP_LIMIT 48.0
-#define MODMINER_OVERHEAT_CLOCK -10
+#define MODMINER_RECOVER_TEMP 46.5
+#define MODMINER_TEMP_UP_LIMIT 47.0
 
 #define MODMINER_HW_ERROR_PERCENT 0.75
+
+// How many seconds of no nonces means there's something wrong
+// First time - drop the clock and see if it revives
+// Second time - (and it didn't revive) disable it
+#define ITS_DEAD_JIM 300
 
 // N.B. in the latest firmware the limit is 250
 // however the voltage/temperature risks preclude that
@@ -43,6 +48,8 @@
 #define MODMINER_CLOCK_DOWN -2
 #define MODMINER_CLOCK_SET 0
 #define MODMINER_CLOCK_UP 2
+#define MODMINER_CLOCK_DEAD -6
+#define MODMINER_CLOCK_CUTOFF -10
 
 // Commands
 #define MODMINER_PING "\x00"
@@ -568,8 +575,8 @@ static bool modminer_fpga_prepare(struct thr_info *thr)
 
 /*
  * Clocking rules:
- *	If device exceeds cutoff temp - TODO: ?stop sending work -
- *		and decrease the clock by MODMINER_OVERHEAT_CLOCK
+ *	If device exceeds cutoff or overheat temp - stop sending work until it cools
+ *		decrease the clock by MODMINER_CLOCK_CUTOFF/MODMINER_CLOCK_OVERHEAT
  *		for when it restarts
  *
  * When to clock down:
@@ -584,7 +591,7 @@ static bool modminer_fpga_prepare(struct thr_info *thr)
  *
  * When to clock up:
  *	If device gets shares_to_good good shares in a row
- *		and temp <= MODMINER_TEMP_UP_LIMIT
+ *		and temp < MODMINER_TEMP_UP_LIMIT
  *
  * N.B. clock must always be a multiple of 2
  */
@@ -743,6 +750,12 @@ static bool modminer_start_work(struct thr_info *thr)
 	int err, amount;
 	bool sta;
 
+	if (state->first_work.tv_sec == 0)
+		gettimeofday(&state->first_work, NULL);
+
+	if (state->last_nonce.tv_sec == 0)
+		gettimeofday(&state->last_nonce, NULL);
+
 	mutex_lock(modminer->modminer_mutex);
 
 	if ((err = usb_write(modminer, (char *)(state->next_work_cmd), 46, &amount, C_SENDWORK)) < 0 || amount != 46) {
@@ -777,7 +790,7 @@ static void check_temperature(struct thr_info *thr)
 	int tbytes, tamount;
 	int amount;
 
-	if (modminer->one_byte_temp) {
+	if (state->one_byte_temp) {
 		cmd[0] = MODMINER_TEMP1;
 		tbytes = 1;
 	} else {
@@ -788,50 +801,53 @@ static void check_temperature(struct thr_info *thr)
 	cmd[1] = modminer->fpgaid;
 
 	mutex_lock(modminer->modminer_mutex);
-	if (usb_write(modminer, (char *)cmd, 2, &amount, C_REQUESTTEMPERATURE) == 0 && amount == 2
-	&&  usb_read(modminer, (char *)(&temperature), tbytes, &tamount, C_GETTEMPERATURE) == 0 && tamount == tbytes)
+	if (usb_write(modminer, (char *)cmd, 2, &amount, C_REQUESTTEMPERATURE) == 0 && amount == 2 &&
+	    usb_read(modminer, (char *)(&temperature), tbytes, &tamount, C_GETTEMPERATURE) == 0 && tamount == tbytes)
 	{
 		mutex_unlock(modminer->modminer_mutex);
-		if (modminer->one_byte_temp)
+		if (state->one_byte_temp)
 			modminer->temp = temperature[0];
 		else {
 			// Only accurate to 2 and a bit places
 			modminer->temp = roundf((temperature[1] * 256.0 + temperature[0]) / 0.128) / 1000.0;
 
-			modminer->tried_two_byte_temp = true;
+			state->tried_two_byte_temp = true;
 		}
 
 		if (state->overheated) {
-			if (modminer->temp < MODMINER_OVERHEAT_TEMP) {
+			// Limit recovery to lower than OVERHEAT so it doesn't just go straight over again
+			if (modminer->temp < MODMINER_RECOVER_TEMP) {
 				state->overheated = false;
 				applog(LOG_WARNING, "%s%u: Recovered, temp less than (%.1f) now %.3f",
 					modminer->api->name, modminer->device_id,
-					MODMINER_OVERHEAT_TEMP, modminer->temp);
+					MODMINER_RECOVER_TEMP, modminer->temp);
 			}
 		}
 		else if (modminer->temp >= MODMINER_OVERHEAT_TEMP) {
 			if (modminer->temp >= MODMINER_CUTOFF_TEMP) {
-				applog(LOG_WARNING, "%s%u: Hit thermal cutoff limit (%.1f) at %.3f, disabling!",
+				applog(LOG_WARNING, "%s%u: Hit thermal cutoff limit! (%.1f) at %.3f",
 					modminer->api->name, modminer->device_id,
 					MODMINER_CUTOFF_TEMP, modminer->temp);
 
-				modminer_delta_clock(thr, MODMINER_OVERHEAT_CLOCK, true);
+				modminer_delta_clock(thr, MODMINER_CLOCK_CUTOFF, true);
 				state->overheated = true;
 				dev_error(modminer, REASON_DEV_THERMAL_CUTOFF);
 			} else {
-				 applog(LOG_WARNING, "%s%u: Overheat limit (%.1f) reached %.3f",
+				applog(LOG_WARNING, "%s%u: Overheat limit (%.1f) reached %.3f",
 					modminer->api->name, modminer->device_id,
 					MODMINER_OVERHEAT_TEMP, modminer->temp);
+
 				modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, true);
+				state->overheated = true;
 				dev_error(modminer, REASON_DEV_OVER_HEAT);
 			}
 		}
 	} else {
 		mutex_unlock(modminer->modminer_mutex);
 
-		if (!modminer->tried_two_byte_temp) {
-			modminer->tried_two_byte_temp = true;
-			modminer->one_byte_temp = true;
+		if (!state->tried_two_byte_temp) {
+			state->tried_two_byte_temp = true;
+			state->one_byte_temp = true;
 		}
 	}
 }
@@ -843,28 +859,27 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	struct work *work = &state->running_work;
+	struct timeval now;
 	char cmd[2];
 	uint32_t nonce;
-	long iter;
 	uint32_t curr_hw_errors;
 	int err, amount;
 	int timeoutloop;
+	double processtime;
+	int temploop;
 
+	// If we are overheated it will just keep checking for results
+	// since we can't stop the work
+	// The next work will not start until the temp drops
 	check_temperature(thr);
-
-	if (state->overheated == true) {
-		if (state->work_running)
-			state->work_running = false;
-
-		// Give it 5 seconds rest and wait for the next work
-		nmsleep(5000);
-		return 0;
-	}
 
 	cmd[0] = MODMINER_CHECK_WORK;
 	cmd[1] = modminer->fpgaid;
-	iter = 200;
+
+	// 250Mhz is 17.17s
+	processtime = 17.0;
 	timeoutloop = 0;
+	temploop = 0;
 	while (1) {
 		mutex_lock(modminer->modminer_mutex);
 		if ((err = usb_write(modminer, cmd, 2, &amount, C_REQUESTWORKSTATUS)) < 0 || amount != 2) {
@@ -898,39 +913,75 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 		}
 
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
+			// found 'something' ...
 			state->shares++;
-			state->no_nonce_counter = 0;
 			curr_hw_errors = state->hw_errors;
 			submit_nonce(thr, work, nonce);
 			if (state->hw_errors > curr_hw_errors) {
-				state->shares_last_hw = state->shares;
-				if (modminer->clock > MODMINER_DEF_CLOCK || state->hw_errors > 1) {
-					float pct = (state->hw_errors * 100.0 / (state->shares ? : 1.0));
-					if (pct >= MODMINER_HW_ERROR_PERCENT)
-						modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, false);
+				gettimeofday(&now, NULL);
+				// Ignore initial errors that often happen
+				if (tdiff(&now, &state->first_work) < 2.0) {
+					state->shares = 0;
+					state->shares_last_hw = 0;
+					state->hw_errors = 0;
+				} else {
+					state->shares_last_hw = state->shares;
+					if (modminer->clock > MODMINER_DEF_CLOCK || state->hw_errors > 1) {
+						float pct = (state->hw_errors * 100.0 / (state->shares ? : 1.0));
+						if (pct >= MODMINER_HW_ERROR_PERCENT)
+							modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, false);
+					}
 				}
 			} else {
+				gettimeofday(&state->last_nonce, NULL);
+				state->death_stage_one = false;
 				// If we've reached the required good shares in a row then clock up
 				if (((state->shares - state->shares_last_hw) >= state->shares_to_good) &&
-					modminer->temp <= MODMINER_TEMP_UP_LIMIT)
+						modminer->temp < MODMINER_TEMP_UP_LIMIT)
 					modminer_delta_clock(thr, MODMINER_CLOCK_UP, false);
 			}
-		} else if (++state->no_nonce_counter > 18000) {
-			// TODO: NFI what this is
-			state->no_nonce_counter = 0;
-			modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, false);
+		} else {
+			// on rare occasions - the MMQ can just stop returning valid nonces
+			double death = ITS_DEAD_JIM * (state->death_stage_one ? 2.0 : 1.0);
+			gettimeofday(&now, NULL);
+			if (tdiff(&now, &state->last_nonce) >= death) {
+				if (state->death_stage_one) {
+					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false);
+					applog(LOG_ERR, "%s%u: DEATH clock down",
+						modminer->api->name, modminer->device_id);
 
-			applog(LOG_ERR, "%s%u: 18000 clock down",
-				modminer->api->name, modminer->device_id);
+					// reset the death info and DISABLE it
+					state->last_nonce.tv_sec = 0;
+					state->last_nonce.tv_usec = 0;
+					state->death_stage_one = false;
+					return -1;
+				} else {
+					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false);
+					applog(LOG_ERR, "%s%u: death clock down",
+						modminer->api->name, modminer->device_id);
 
+					state->death_stage_one = true;
+				}
+			}
 		}
 
 tryagain:
 
 		if (work_restart(thr))
 			break;
+
+		gettimeofday(&now, NULL);
+		if (tdiff(&now, &state->tv_workstart) > processtime)
+			break;
+
+		// don't check every time
+		if (state->overheated == true && ++temploop > 30) {
+			check_temperature(thr);
+			temploop = 0;
+		}
+
 		nmsleep(10);
-		if (work_restart(thr) || !--iter)
+		if (work_restart(thr))
 			break;
 	}
 
@@ -938,6 +989,7 @@ tryagain:
 	gettimeofday(&tv_workend, NULL);
 	timersub(&tv_workend, &state->tv_workstart, &elapsed);
 
+	// Not exact since the clock may have changed ... but close enough I guess
 	uint64_t hashes = (uint64_t)modminer->clock * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
 	if (hashes > 0xffffffff)
 		hashes = 0xffffffff;
@@ -955,17 +1007,27 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	int64_t hashes = 0;
 	bool startwork;
+	struct timeval tv1, tv2;
 
+	// Don't start new work if overheated
 	if (state->overheated == true) {
+		gettimeofday(&tv1, NULL);
 		if (state->work_running)
 			state->work_running = false;
 
-		check_temperature(thr);
+		while (state->overheated == true) {
+			check_temperature(thr);
 
-		if (state->overheated == true) {
-			// Give it 5 seconds rest and wait for the next work
-			nmsleep(5000);
-			return 0;
+			if (state->overheated == true) {
+				gettimeofday(&tv2, NULL);
+
+				// give up on this work item
+				if (work_restart(thr) || tdiff(&tv2, &tv1) > 30)
+					return 0;
+
+				// Give it 1s rest then check again
+				nmsleep(1000);
+			}
 		}
 	}
 
