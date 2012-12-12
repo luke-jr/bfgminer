@@ -151,7 +151,7 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
                             struct libztex_hash_data *hdata)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
-	unsigned char swap[128];
+	unsigned char swap[80];
 	uint32_t *swap32 = (uint32_t *)swap;
 	unsigned char hash1[32];
 	unsigned char hash2[32];
