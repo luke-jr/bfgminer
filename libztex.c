@@ -468,7 +468,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 			cnt = libusb_control_transfer(ztex->hndl, 0x40, 0x32, 0, 0, buf, length, 5000);
 			if (cnt != length)
 			{
-				applog(LOG_ERR, "%s: Failed send hs fpga data", ztex->repr);
+				applog(LOG_ERR, "%s: Failed send ls fpga data", ztex->repr);
 				break;
 			}
 		}
