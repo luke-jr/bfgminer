@@ -889,8 +889,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	while (len > 0 ) {
 		struct timeval timeout = {0, 0};
-		size_t sent = 0;
-		CURLcode rc;
+		ssize_t sent;
 		fd_set wd;
 
 		FD_ZERO(&wd);
@@ -899,10 +898,13 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
 			return false;
 		}
-		rc = curl_easy_send(pool->stratum_curl, s + ssent, len, &sent);
-		if (rc != CURLE_OK) {
-			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
-			return false;
+		sent = send(pool->sock, s + ssent, len, 0);
+		if (sent < 0) {
+			if (errno != EAGAIN) {
+				applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
+				return false;
+			}
+			sent = 0;
 		}
 		ssent += sent;
 		len -= ssent;
