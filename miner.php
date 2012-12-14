@@ -892,7 +892,7 @@ $singlerigsum = array(
 			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
 			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1,
-			'Diff1 Shares' => 1),
+			'Diff1 Shares' => 1, 'Difficulty Accepted' => 1),
  'notify' => array('*' => 1));
 #
 function showtotal($total, $when, $oldvalues)
@@ -1522,7 +1522,8 @@ $sectionmap = array(
 	'DEVDETAILS' => 'devdetails',
 	'STATS' => 'stats',
 	'CONFIG' => 'config',
-	'COIN' => 'coin');
+	'COIN' => 'coin',
+	'USBSTATS' => 'usbstats');
 #
 function joinfields($section1, $section2, $join, $results)
 {
@@ -1563,6 +1564,79 @@ function joinfields($section1, $section2, $join, $results)
 				}
 
 			if ($match === true)
+			{
+				if ($status != null)
+				{
+					$newres[$rig]['STATUS'] = $status;
+					$status = null;
+				}
+
+				$subsection = $section1.'+'.$section2;
+				$subsection .= preg_replace('/[^0-9]/', '', $name1b.$name2b);
+
+				foreach ($fields1b as $nam => $val)
+					$newres[$rig][$subsection]["$section1.$nam"] = $val;
+				foreach ($fields2b as $nam => $val)
+					$newres[$rig][$subsection]["$section2.$nam"] = $val;
+			}
+		}
+	}
+ }
+ return $newres;
+}
+#
+function joinlr($section1, $section2, $join, $results)
+{
+ global $sectionmap;
+
+ $name1 = $sectionmap[$section1];
+ $name2 = $sectionmap[$section2];
+ $newres = array();
+
+ // foreach rig in section1
+ foreach ($results[$name1] as $rig => $result)
+ {
+	$status = null;
+
+	// foreach answer section in the rig api call
+	foreach ($result as $name1b => $fields1b)
+	{
+		if ($name1b == 'STATUS')
+		{
+			// remember the STATUS from section1
+			$status = $result[$name1b];
+			continue;
+		}
+
+		// Build L string to be matched
+		// : means a string constant otherwise it's a field name
+		$Lval = '';
+		foreach ($join['L'] as $field)
+		{
+			if (substr($field, 0, 1) == ':')
+				$Lval .= substr($field, 1);
+			else
+				$Lval .= $fields1b[$field];
+		}
+
+		// foreach answer section in the rig api call (for the other api command)
+		foreach ($results[$name2][$rig] as $name2b => $fields2b)
+		{
+			if ($name2b == 'STATUS')
+				continue;
+
+			// Build R string and compare
+			// : means a string constant otherwise it's a field name
+			$Rval = '';
+			foreach ($join['R'] as $field)
+			{
+				if (substr($field, 0, 1) == ':')
+					$Rval .= substr($field, 1);
+				else
+					$Rval .= $fields2b[$field];
+			}
+
+			if ($Lval === $Rval)
 			{
 				if ($status != null)
 				{
@@ -1628,8 +1702,6 @@ function joinsections($sections, $results, $errors)
 {
  global $sectionmap;
 
-#echo "results['pools']=".print_r($results['pools'],true)."<br>";
-
  // GPU's don't have Name,ID fields - so create them
  foreach ($results as $section => $res)
 	foreach ($res as $rig => $result)
@@ -1667,13 +1739,32 @@ function joinsections($sections, $results, $errors)
 				}
 				break;
 			case 'DEVS':
-				$join = array('Name', 'ID');
 				switch($both[1])
 				{
 				case 'NOTIFY':
 				case 'DEVDETAILS':
+				case 'USBSTATS':
+					$join = array('Name', 'ID');
 					$sectionmap[$section] = $section;
 					$results[$section] = joinfields($both[0], $both[1], $join, $results);
+					break;
+				case 'STATS':
+					$join = array('L' => array('Name','ID'), 'R' => array('ID'));
+					$sectionmap[$section] = $section;
+					$results[$section] = joinlr($both[0], $both[1], $join, $results);
+					break;
+				default:
+					$errors[] = "Error: Invalid section '$section'";
+					break;
+				}
+				break;
+			case 'POOL':
+				switch($both[1])
+				{
+				case 'STATS':
+					$join = array('L' => array(':POOL','POOL'), 'R' => array('ID'));
+					$sectionmap[$section] = $section;
+					$results[$section] = joinlr($both[0], $both[1], $join, $results);
 					break;
 				default:
 					$errors[] = "Error: Invalid section '$section'";
@@ -2099,7 +2190,7 @@ function display()
 
  newtable();
  doforeach('version', 'rig summary', array(), array(), true);
- $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares', 'Diff1 Work');
+ $sum = array('MHS av', 'Getworks', 'Found Blocks', 'Accepted', 'Rejected', 'Discarded', 'Stale', 'Utility', 'Local Work', 'Total MH', 'Work Utility', 'Diff1 Shares', 'Diff1 Work', 'Difficulty Accepted', 'Difficulty Rejected', 'Difficulty Stale');
  doforeach('summary', 'summary information', $sum, array(), false);
  endtable();
  otherrow('<td><br><br></td>');
