@@ -1207,7 +1207,7 @@ function process($cmds, $rig)
  }
 }
 #
-function rigbutton($rig, $rigname, $when, $row)
+function rigname($rig, $rigname)
 {
  global $rigs;
 
@@ -1218,12 +1218,21 @@ function rigbutton($rig, $rigname, $when, $row)
 		$rigname = $parts[2];
  }
 
+ return $rigname;
+}
+#
+function riginput($rig, $rigname)
+{
+ $rigname = rigname($rig, $rigname);
+
+ return "<input type=button value='$rigname' onclick='pr(\"&rig=$rig\",null)'>";
+}
+#
+function rigbutton($rig, $rigname, $when, $row)
+{
  list($value, $class) = fmt('BUTTON', 'Rig', '', $when, $row);
 
- $button = "<td align=middle$class><input type=button value='$rigname'";
- $button .= " onclick='pr(\"&rig=$rig\",null)'></td>";
-
- return $button;
+ return "<td align=middle$class>".riginput($rig, $rigname).'</td>';
 }
 #
 function showrigs($anss, $headname, $rigname)
@@ -1445,16 +1454,43 @@ function pagebuttons($rig, $pg)
 
  if ($rig === null)
  {
+	$prev = null;
+	$next = null;
+
 	if ($pg === null)
 		$refresh = '';
 	else
 		$refresh = "&pg=$pg";
  }
  else
+ {
+	switch (count($rigs))
+	{
+	case 0:
+	case 1:
+		$prev = null;
+		$next = null;
+		break;
+	case 2:
+		$prev = null;
+		$next = ($rig + 1) % count($rigs);
+		break;
+	default:
+		$prev = ($rig - 1) % count($rigs);
+		$next = ($rig + 1) % count($rigs);
+		break;
+	}
+
 	$refresh = "&rig=$rig";
+ }
 
  echo '<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td nowrap>';
+ if ($prev !== null)
+	echo riginput($prev, 'Prev').'&nbsp;';
  echo "<input type=button value='Refresh' onclick='pr(\"$refresh\",null)'>&nbsp;";
+ if ($next !== null)
+	echo riginput($next, 'Next').'&nbsp;';
+ echo '&nbsp;';
  if (count($rigs) > 1)
 	echo "<input type=button value='Summary' onclick='pr(\"\",null)'>&nbsp;";
 
