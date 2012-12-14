@@ -103,9 +103,42 @@ $statssum = array(
 			'Rejected', 'Utility', 'Hardware Errors',
 			'Work Utility'));
 #
+$poolspage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej',
+			'Utility', 'Hardware Errors=HW Errs', 'Network Blocks=Net Blks',
+			'Work Utility'),
+ 'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL', 'POOL.Difficulty Accepted=Diff Acc',
+			'POOL.Difficulty Rejected=Diff Rej',
+			'POOL.Has Stratum=Stratum', 'POOL.Stratum Active=StrAct',
+			'POOL.Has GBT=GBT', 'STATS.Times Sent=TSent',
+			'STATS.Bytes Sent=BSent', 'STATS.Times Recv=TRecv',
+			'STATS.Bytes Recv=BRecv'));
+#
+$poolssum = array(
+ 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
+			'Rejected', 'Utility', 'Hardware Errors',
+			'Work Utility'),
+ 'POOL+STATS' => array('POOL.Difficulty Accepted', 'POOL.Difficulty Rejected',
+			'STATS.Times Sent', 'STATS.Bytes Sent',
+			'STATS.Times Recv', 'STATS.Bytes Recv'));
+#
+$poolsext = array(
+ 'POOL+STATS' => array(
+	'where' => null,
+	'group' => array('POOL.URL', 'POOL.Has Stratum', 'POOL.Stratum Active', 'POOL.Has GBT'),
+	'calc' => array('POOL.Difficulty Accepted' => 'sum', 'POOL.Difficulty Rejected' => 'sum',
+			'STATS.Times Sent' => 'sum', 'STATS.Bytes Sent' => 'sum',
+			'STATS.Times Recv' => 'sum', 'STATS.Bytes Recv' => 'sum'),
+	'having' => array(array('STATS.Bytes Recv', '>', 0)))
+);
+
+#
 # customsummarypages is an array of these Custom Summary Pages
 $customsummarypages = array('Mobile' => array($mobilepage, $mobilesum),
- 'Stats' => array($statspage, $statssum));
+ 'Stats' => array($statspage, $statssum),
+ 'Pools' => array($poolspage, $poolssum, $poolsext));
 #
 $here = $_SERVER['PHP_SELF'];
 #
@@ -604,6 +637,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		}
 		break;
 	case 'SUMMARY.Elapsed':
+	case 'STATS.Elapsed':
 		$s = $value % 60;
 		$value -= $s;
 		$value /= 60;
@@ -804,6 +838,14 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'GPU.Diff1 Work':
 	case 'PGA.Diff1 Work':
 	case 'total.Diff1 Work':
+	case 'STATS.Times Sent':
+	case 'STATS.Bytes Sent':
+	case 'STATS.Times Recv':
+	case 'STATS.Bytes Recv':
+	case 'total.Times Sent':
+	case 'total.Bytes Sent':
+	case 'total.Times Recv':
+	case 'total.Bytes Recv':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
