@@ -456,6 +456,7 @@ struct pool *add_pool(void)
 
 	pool->rpc_proxy = NULL;
 
+	pool->sock = INVSOCK;
 	pool->lp_socket = CURL_SOCKET_BAD;
 
 	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
@@ -3508,9 +3509,9 @@ static void check_solve(struct work *work)
 	}
 }
 
-static void submit_discard_share(struct work *work)
+static void submit_discard_share2(const char *reason, struct work *work)
 {
-	sharelog("discard", work);
+	sharelog(reason, work);
 
 	mutex_lock(&stats_lock);
 	++total_stale;
@@ -3518,6 +3519,11 @@ static void submit_discard_share(struct work *work)
 	total_diff_stale += work->work_difficulty;
 	work->pool->diff_stale += work->work_difficulty;
 	mutex_unlock(&stats_lock);
+}
+
+static void submit_discard_share(struct work *work)
+{
+	submit_discard_share2("discard", work);
 }
 
 struct submit_work_state {
@@ -3556,6 +3562,12 @@ static struct submit_work_state *begin_submission(struct work *work)
 	*sws = (struct submit_work_state){
 		.work = work,
 	};
+
+	if (work->stratum && pool->sock == INVSOCK) {
+		applog(LOG_WARNING, "Share found for dead stratum pool %u, discarding", pool->pool_no);
+		submit_discard_share2("disconnect", work);
+		goto out;
+	}
 
 	check_solve(work);
 
@@ -5557,6 +5569,7 @@ static void *stratum_thread(void *userdata)
 			total_go++;
 
 			// Make any pending work/shares stale
+			pool->sock = INVSOCK;
 			pool->submit_old = false;
 			++pool->work_restart_id;
 
