@@ -1,3 +1,29 @@
+BFGMiner Version 2.10.1 - Future
+
+- Check for EWOULDBLOCK when supported in send and recv as well.
+- Use the raw send() command instead of curl_easy_send since curl raw socket
+usage introduces random bugs on windows.
+- Use raw recv() command in place of curl_easy_recv since the curl
+implementation introduces random bugs on windows builds when the recv fails.
+- miner.php when displaying a single rig, add prev/next rig buttons if they
+exist, next to refresh
+- miner.php allow custom page joins for STATS
+- API show if pool has GBT (so people know not to use that pool)
+- miner.php - include windows easyphp link
+- driver-ztex: use the correct size for the swap array
+- API stats - display pool byte transfer stats
+- Pool store data transfer stats
+- README ModMiner dependency
+- Benchmark incorrect work size
+- ChangeLog refer to NEWS
+- MMQ handle over temp differently and hash longer
+- driver-ztex: search the complete noncerange based on the actual speed
+- README - update ModMiner details
+- API-README update
+- api use a dynamic io buffer, truncated before it reaches the current ~64k
+limit
+
+
 BFGMiner Version 2.10.0 - December 11, 2012
 
 - Bugfix: Free work before replacing it with clone
