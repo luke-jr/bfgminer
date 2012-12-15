@@ -1266,7 +1266,7 @@ The list of restrictions are:
 
 You can have multiple restrictions on a 'Field' - but all must be true to
 include the row containing the 'Field'
-e.g. a number range would between 0 and 10 would be:
+e.g. a number range between 0 and 10 would be:
 array('STATS.Bytes Recv', '>', 0), array('STATS.Bytes Recv', '<', 10)
 
 The difference between 'where' and 'having' is that 'where' is applied to the
