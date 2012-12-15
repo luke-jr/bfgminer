@@ -6792,11 +6792,9 @@ retry:
 			while (!pool->stratum_active) {
 				struct pool *altpool = select_pool(true);
 
-				sleep(5);
-				if (altpool != pool) {
-					pool = altpool;
-					goto retry;
-				}
+				if (altpool == pool && pool->has_stratum)
+					sleep(5);
+				goto retry;
 			}
 			gen_stratum_work(pool, work);
 			applog(LOG_DEBUG, "Generated stratum work");
