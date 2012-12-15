@@ -8024,11 +8024,9 @@ retry:
 			while (!pool->stratum_active) {
 				struct pool *altpool = select_pool(true);
 
-				sleep(5);
-				if (altpool != pool) {
-					pool = altpool;
-					goto retry;
-				}
+				if (altpool == pool && pool->has_stratum)
+					sleep(5);
+				goto retry;
 			}
 			pool->last_work_time = time(NULL);
 			gen_stratum_work(pool, work);
