@@ -5422,12 +5422,19 @@ static bool pool_active(struct pool *pool, bool pinging);
 static void clear_stratum_shares(struct pool *pool)
 {
 	struct stratum_share *sshare, *tmpshare;
+	struct work *work;
 	int cleared = 0;
+	double diff_stale = 0;
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
 		if (sshare->work->pool == pool) {
 			HASH_DEL(stratum_shares, sshare);
+			
+			work = sshare->work;
+			sharelog("disconnect", work);
+			diff_stale += work->work_difficulty;
+			
 			free_work(sshare->work);
 			free(sshare);
 			cleared++;
@@ -5437,8 +5444,12 @@ static void clear_stratum_shares(struct pool *pool)
 
 	if (cleared) {
 		applog(LOG_WARNING, "Lost %d shares due to stratum disconnect on pool %d", cleared, pool->pool_no);
-		pool->stale_shares++;
-		total_stale++;
+		mutex_lock(&stats_lock);
+		pool->stale_shares += cleared;
+		total_stale += cleared;
+		total_diff_stale += diff_stale;
+		pool->diff_stale += diff_stale;
+		mutex_unlock(&stats_lock);
 
 		mutex_lock(&submitting_lock);
 		total_submitting -= cleared;
