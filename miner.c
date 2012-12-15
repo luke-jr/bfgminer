@@ -2909,6 +2909,9 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 
 	char *rpc_req;
 
+	if (pool->proto == PLP_NONE)
+		pool->proto = PLP_GETBLOCKTEMPLATE;
+
 tryagain:
 	rpc_req = prepare_rpc_req(work, pool->proto, NULL);
 	if (!rpc_req)
