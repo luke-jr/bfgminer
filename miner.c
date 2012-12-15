@@ -3708,6 +3708,8 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 				}
 				++wip;
 			}
+			else
+				--total_submitting;
 		}
 		if (unlikely(shutting_down && !wip))
 			break;
