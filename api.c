@@ -11,6 +11,7 @@
  *	this simplifies handling multiple other device code being included
  *	depending on compile options
  */
+#define _MEMORY_DEBUG_MASTER 1
 
 #include "config.h"
 
@@ -34,8 +35,10 @@
 
 // Big enough for largest API request
 //  though a PC with 100s of PGAs/CPUs may exceed the size ...
-// Current code assumes it can socket send this size also
-#define MYBUFSIZ	65432	// TODO: intercept before it's exceeded
+//  data is truncated at the end of the last record that fits
+//	but still closed correctly for JSON
+// Current code assumes it can socket send this size + JSON_CLOSE + JSON_END
+#define SOCKBUFSIZ	65432
 
 // BUFSIZ varies on Windows and Linux
 #define TMPBUFSIZ	8192
@@ -118,8 +121,6 @@ char *WSAErrorMsg(void) {
 	return &(WSAbuf[0]);
 }
 #endif
-static char *io_buffer = NULL;
-static char *msg_buffer = NULL;
 static SOCKETTYPE sock = INVSOCK;
 
 static const char *UNAVAILABLE = " - API will not be available";
@@ -127,11 +128,12 @@ static const char *INVAPIGROUPS = "Invalid --api-groups parameter";
 
 static const char *BLANK = "";
 static const char *COMMA = ",";
+#define COMSTR ","
 static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.21";
+static const char *APIVERSION = "1.22";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -238,6 +240,8 @@ static const char ISJSON = '{';
 #define JSON2		"\":["
 #define JSON3		"]"
 #define JSON4		",\"id\":1"
+// If anyone cares, id=0 for truncated output
+#define JSON4_TRUNCATED	",\"id\":0"
 #define JSON5		"}"
 
 #define JSON_START	JSON0
@@ -271,6 +275,7 @@ static const char ISJSON = '{';
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
 #define JSON_END	JSON4 JSON5
+#define JSON_END_TRUNCATED	JSON4_TRUNCATED JSON5
 
 static const char *JSON_COMMAND = "command";
 static const char *JSON_PARAMETER = "parameter";
@@ -586,6 +591,132 @@ extern struct device_api opencl_api;
 extern struct device_api cpu_api;
 #endif
 
+struct io_data {
+	size_t siz;
+	char *ptr;
+	char *cur;
+	bool sock;
+	bool full;
+	bool close;
+};
+
+struct io_list {
+	struct io_data *io_data;
+	struct io_list *prev;
+	struct io_list *next;
+};
+
+static struct io_list *io_head = NULL;
+
+#define io_new(init) _io_new(init, false)
+#define sock_io_new() _io_new(SOCKBUFSIZ, true)
+
+static void io_reinit(struct io_data *io_data)
+{
+	io_data->cur = io_data->ptr;
+	*(io_data->ptr) = '\0';
+	io_data->full = false;
+	io_data->close = false;
+}
+
+static struct io_data *_io_new(size_t initial, bool socket_buf)
+{
+	struct io_data *io_data;
+	struct io_list *io_list;
+
+	io_data = malloc(sizeof(*io_data));
+	io_data->ptr = malloc(initial);
+	io_data->siz = initial;
+	io_data->sock = socket_buf;
+	io_reinit(io_data);
+
+	io_list = malloc(sizeof(*io_list));
+
+	io_list->io_data = io_data;
+
+	if (io_head) {
+		io_list->next = io_head;
+		io_list->prev = io_head->prev;
+		io_list->next->prev = io_list;
+		io_list->prev->next = io_list;
+	} else {
+		io_list->prev = io_list;
+		io_list->next = io_list;
+		io_head = io_list;
+	}
+
+	return io_data;
+}
+
+static bool io_add(struct io_data *io_data, char *buf)
+{
+	size_t len, dif, tot;
+
+	if (io_data->full)
+		return false;
+
+	len = strlen(buf);
+	dif = io_data->cur - io_data->ptr;
+	tot = len + 1 + dif;
+
+	if (tot > io_data->siz) {
+		size_t new = io_data->siz * 2;
+
+		if (new < tot)
+			new = tot * 2;
+
+		if (io_data->sock) {
+			if (new > SOCKBUFSIZ) {
+				if (tot > SOCKBUFSIZ) {
+					io_data->full = true;
+					return false;
+				}
+
+				new = SOCKBUFSIZ;
+			}
+		}
+
+		io_data->ptr = realloc(io_data->ptr, new);
+		io_data->cur = io_data->ptr + dif;
+		io_data->siz = new;
+	}
+
+	memcpy(io_data->cur, buf, len + 1);
+	io_data->cur += len;
+
+	return true;
+}
+
+static bool io_put(struct io_data *io_data, char *buf)
+{
+	io_reinit(io_data);
+	return io_add(io_data, buf);
+}
+
+static void io_close(struct io_data *io_data)
+{
+	io_data->close = true;
+}
+
+static void io_free()
+{
+	struct io_list *io_list, *io_next;
+
+	if (io_head) {
+		io_list = io_head;
+		do {
+			io_next = io_list->next;
+
+			free(io_list->io_data);
+			free(io_list);
+
+			io_list = io_next;
+		} while (io_list != io_head);
+
+		io_head = NULL;
+	}
+}
+
 // This is only called when expected to be needed (rarely)
 // i.e. strings outside of the codes control (input from the user)
 static char *escape_string(char *str, bool isjson)
@@ -883,12 +1014,19 @@ struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, b
 	return api_add_data_full(root, name, API_JSON, (void *)data, copy_data);
 }
 
-static struct api_data *print_data(struct api_data *root, char *buf, bool isjson)
+static struct api_data *print_data(struct api_data *root, char *buf, bool isjson, bool precom)
 {
 	struct api_data *tmp;
 	bool first = true;
 	char *original, *escape;
 	char *quote;
+
+	*buf = '\0';
+
+	if (precom) {
+		*(buf++) = *COMMA;
+		*buf = '\0';
+	}
 
 	if (isjson) {
 		strcpy(buf, JSON0);
@@ -1048,12 +1186,12 @@ static int pgadevice(int pgaid)
 // All replies (except BYE and RESTART) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
 //  and send_result() adds JSON_END at the end
-static char *message(int messageid, int paramid, char *param2, bool isjson)
+static void message(struct io_data *io_data, int messageid, int paramid, char *param2, bool isjson)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	char buf2[TMPBUFSIZ];
 	char severity[2];
-	char *ptr;
 #ifdef HAVE_AN_FPGA
 	int pga;
 #endif
@@ -1062,12 +1200,10 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 #endif
 	int i;
 
-	if (!isjson)
-		msg_buffer[0] = '\0';
-	else
-		strcpy(msg_buffer, JSON_START JSON_STATUS);
+	io_reinit(io_data);
 
-	ptr = strchr(msg_buffer, '\0');
+	if (isjson)
+		io_put(io_data, JSON_START JSON_STATUS);
 
 	for (i = 0; codes[i].severity != SEVERITY_FAIL; i++) {
 		if (codes[i].code == messageid) {
@@ -1173,10 +1309,11 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 			root = api_add_escape(root, "Msg", buf, false);
 			root = api_add_escape(root, "Description", opt_api_description, false);
 
-			root = print_data(root, ptr, isjson);
+			root = print_data(root, buf2, isjson, false);
+			io_add(io_data, buf2);
 			if (isjson)
-				strcat(ptr, JSON_CLOSE);
-			return msg_buffer;
+				io_add(io_data, JSON_CLOSE);
+			return;
 		}
 	}
 
@@ -1188,35 +1325,35 @@ static char *message(int messageid, int paramid, char *param2, bool isjson)
 	root = api_add_escape(root, "Msg", buf, false);
 	root = api_add_escape(root, "Description", opt_api_description, false);
 
-	root = print_data(root, ptr, isjson);
+	root = print_data(root, buf2, isjson, false);
+	io_add(io_data, buf2);
 	if (isjson)
-		strcat(ptr, JSON_CLOSE);
-	return msg_buffer;
+		io_add(io_data, JSON_CLOSE);
 }
 
-static void apiversion(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void apiversion(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 
-	sprintf(io_buffer, isjson
-		? "%s," JSON_VERSION
-		: "%s" _VERSION ",",
-		message(MSG_VERSION, 0, NULL, isjson));
+	message(io_data, MSG_VERSION, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_VERSION : _VERSION COMSTR);
 
 	root = api_add_string(root, "CGMiner", VERSION, false);
 	root = api_add_const(root, "API", APIVERSION, false);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 	int gpucount = 0;
 	int pgacount = 0;
 	int cpucount = 0;
@@ -1247,10 +1384,8 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	cpucount = opt_n_threads > 0 ? num_processors : 0;
 #endif
 
-	sprintf(io_buffer, isjson
-		? "%s," JSON_MINECONFIG
-		: "%s" _MINECONFIG ",",
-		message(MSG_MINECONFIG, 0, NULL, isjson));
+	message(io_data, MSG_MINECONFIG, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECONFIG : _MINECONFIG COMSTR);
 
 	root = api_add_int(root, "GPU Count", &gpucount, false);
 	root = api_add_int(root, "PGA Count", &pgacount, false);
@@ -1268,10 +1403,10 @@ static void minerconfig(__maybe_unused SOCKETTYPE c, __maybe_unused char *param,
 	root = api_add_int(root, "Expiry", &opt_expiry, false);
 	root = api_add_string(root, "Coinbase-Sig", opt_coinbase_sig, true);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
 static const char*
@@ -1300,8 +1435,7 @@ static const char *status2str(enum alive status)
 	}
 }
 
-static void
-devdetail_an(struct cgpu_info *cgpu, bool isjson)
+static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -1328,11 +1462,11 @@ devdetail_an(struct cgpu_info *cgpu, bool isjson)
 	if (cgpu->api->get_api_extra_device_detail)
 		root = api_add_extra(root, cgpu->api->get_api_extra_device_detail(cgpu));
 
-	root = print_data(root, buf, isjson);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, precom);
+	io_add(io_data, buf);
 }
 
-static void devstatus_an(struct cgpu_info *cgpu, bool isjson)
+static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -1376,148 +1510,141 @@ static void devstatus_an(struct cgpu_info *cgpu, bool isjson)
 	if (cgpu->api->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->api->get_api_extra_device_status(cgpu));
 
-	root = print_data(root, buf, isjson);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, precom);
+	io_add(io_data, buf);
 }
 
 #ifdef HAVE_OPENCL
-static void gpustatus(int gpu, bool isjson)
+static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom)
 {
         if (gpu < 0 || gpu >= nDevs)
                 return;
-        devstatus_an(&gpus[gpu], isjson);
+        devstatus_an(io_data, &gpus[gpu], isjson, precom);
 }
 #endif
 
 #ifdef HAVE_AN_FPGA
-static void pgastatus(int pga, bool isjson)
+static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom)
 {
         int dev = pgadevice(pga);
         if (dev < 0) // Should never happen
                 return;
-        devstatus_an(devices[dev], isjson);
+        devstatus_an(io_data, devices[dev], isjson, precom);
 }
 #endif
 
 #ifdef WANT_CPUMINE
-static void cpustatus(int cpu, bool isjson)
+static void cpustatus(struct io_data *io_data, int cpu, bool isjson, bool precom)
 {
         if (opt_n_threads <= 0 || cpu < 0 || cpu >= num_processors)
                 return;
-        devstatus_an(&cpus[cpu], isjson);
+        devstatus_an(io_data, &cpus[cpu], isjson, precom);
 }
 #endif
 
 static void
-devinfo_internal(void (*func)(struct cgpu_info*, bool), __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	bool io_open = false;
 	int i;
 
 	if (total_devices == 0) {
-		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
+		message(io_data, MSG_NODEVS, 0, NULL, isjson);
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_DEVS, 0, NULL, isjson));
 
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_DEVS);
-	}
+	message(io_data, MSG_DEVS, 0, NULL, isjson);
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_DEVS);
 
 	for (i = 0; i < total_devices; ++i) {
-		if (isjson && i > 0)
-			strcat(io_buffer, COMMA);
-
-		func(devices[i], isjson);
+		func(io_data, devices[i], isjson, isjson && i > 0);
 	}
 
-	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void
-devdetail(SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void devdetail(struct io_data *io_data, SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	return devinfo_internal(devdetail_an, c, param, isjson, group);
+	return devinfo_internal(devdetail_an, io_data, c, param, isjson, group);
 }
 
-static void
-devstatus(SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
-	return devinfo_internal(devstatus_an, c, param, isjson, group);
+	return devinfo_internal(devstatus_an, io_data, c, param, isjson, group);
 }
 
 #ifdef HAVE_OPENCL
-static void gpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void gpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	bool io_open = false;
 	int id;
 
 	if (nDevs == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
+		message(io_data, MSG_GPUNON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
+		message(io_data, MSG_INVGPU, id, NULL, isjson);
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_GPUDEV, id, NULL, isjson));
-
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_GPU);
-	}
-
-	gpustatus(id, isjson);
+	message(io_data, MSG_GPUDEV, id, NULL, isjson);
 
 	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
+		io_open = io_add(io_data, COMSTR JSON_GPU);
+
+	gpustatus(io_data, id, isjson, false);
+
+	if (isjson && io_open)
+		io_close(io_data);
 }
 #endif
+
 #ifdef HAVE_AN_FPGA
-static void pgadev(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	bool io_open = false;
 	int numpga = numpgas();
 	int id;
 
 	if (numpga == 0) {
-		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		message(io_data, MSG_PGANON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= numpga) {
-		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_PGADEV, id, NULL, isjson));
-
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_PGA);
-	}
-
-	pgastatus(id, isjson);
+	message(io_data, MSG_PGADEV, id, NULL, isjson);
 
 	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
+		io_open = io_add(io_data, COMSTR JSON_PGA);
+
+	pgastatus(io_data, id, isjson, false);
+
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int numpga = numpgas();
 	struct thr_info *thr;
@@ -1526,37 +1653,37 @@ static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 	int i;
 
 	if (numpga == 0) {
-		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		message(io_data, MSG_PGANON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= numpga) {
-		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
 		return;
 	}
 
 	int dev = pgadevice(id);
 	if (dev < 0) { // Should never happen
-		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
 		return;
 	}
 
 	struct cgpu_info *cgpu = devices[dev];
 
 	if (cgpu->deven != DEV_DISABLED) {
-		strcpy(io_buffer, message(MSG_PGALRENA, id, NULL, isjson));
+		message(io_data, MSG_PGALRENA, id, NULL, isjson);
 		return;
 	}
 
 #if 0 /* A DISABLED device wont change status FIXME: should disabling make it WELL? */
 	if (cgpu->status != LIFE_WELL) {
-		strcpy(io_buffer, message(MSG_PGAUNW, id, NULL, isjson));
+		message(io_data, MSG_PGAUNW, id, NULL, isjson);
 		return;
 	}
 #endif
@@ -1570,72 +1697,72 @@ static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 		}
 	}
 
-	strcpy(io_buffer, message(MSG_PGAENA, id, NULL, isjson));
+	message(io_data, MSG_PGAENA, id, NULL, isjson);
 }
 
-static void pgadisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int numpga = numpgas();
 	int id;
 
 	if (numpga == 0) {
-		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		message(io_data, MSG_PGANON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= numpga) {
-		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
 		return;
 	}
 
 	int dev = pgadevice(id);
 	if (dev < 0) { // Should never happen
-		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
 		return;
 	}
 
 	struct cgpu_info *cgpu = devices[dev];
 
 	if (cgpu->deven == DEV_DISABLED) {
-		strcpy(io_buffer, message(MSG_PGALRDIS, id, NULL, isjson));
+		message(io_data, MSG_PGALRDIS, id, NULL, isjson);
 		return;
 	}
 
 	cgpu->deven = DEV_DISABLED;
 
-	strcpy(io_buffer, message(MSG_PGADIS, id, NULL, isjson));
+	message(io_data, MSG_PGADIS, id, NULL, isjson);
 }
 
-static void pgaidentify(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int numpga = numpgas();
 	int id;
 
 	if (numpga == 0) {
-		strcpy(io_buffer, message(MSG_PGANON, 0, NULL, isjson));
+		message(io_data, MSG_PGANON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= numpga) {
-		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
 		return;
 	}
 
 	int dev = pgadevice(id);
 	if (dev < 0) { // Should never happen
-		strcpy(io_buffer, message(MSG_INVPGA, id, NULL, isjson));
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
 		return;
 	}
 
@@ -1643,65 +1770,63 @@ static void pgaidentify(__maybe_unused SOCKETTYPE c, char *param, bool isjson, _
 	const struct device_api *api = cgpu->api;
 
 	if (api->identify_device && api->identify_device(cgpu))
-		strcpy(io_buffer, message(MSG_PGAIDENT, id, NULL, isjson));
+		message(io_data, MSG_PGAIDENT, id, NULL, isjson);
 	else
-		strcpy(io_buffer, message(MSG_PGANOID, id, NULL, isjson));
+		message(io_data, MSG_PGANOID, id, NULL, isjson);
 }
 #endif
 
 #ifdef WANT_CPUMINE
-static void cpudev(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void cpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	bool io_open = false;
 	int id;
 
 	if (opt_n_threads == 0) {
-		strcpy(io_buffer, message(MSG_CPUNON, 0, NULL, isjson));
+		message(io_data, MSG_CPUNON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= num_processors) {
-		strcpy(io_buffer, message(MSG_INVCPU, id, NULL, isjson));
+		message(io_data, MSG_INVCPU, id, NULL, isjson);
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_CPUDEV, id, NULL, isjson));
-
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_CPU);
-	}
-
-	cpustatus(id, isjson);
+	message(io_data, MSG_CPUDEV, id, NULL, isjson);
 
 	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
+		io_open = io_add(io_data, COMSTR JSON_CPU);
+
+	cpustatus(io_data, id, isjson, false);
+
+	if (isjson && io_open)
+		io_close(io_data);
 }
 #endif
 
-static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open = false;
 	char *status, *lp;
 	int i;
 
 	if (total_pools == 0) {
-		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_POOL, 0, NULL, isjson));
+	message(io_data, MSG_POOL, 0, NULL, isjson);
 
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_POOLS);
-	}
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_POOLS);
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
@@ -1763,21 +1888,19 @@ static void poolstatus(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		else
 			root = api_add_const(root, "Stratum URL", BLANK, false);
 
-		if (isjson && (i > 0))
-			strcat(io_buffer, COMMA);
-
-		root = print_data(root, buf, isjson);
-		strcat(io_buffer, buf);
+		root = print_data(root, buf, isjson, isjson && (i > 0));
+		io_add(io_data, buf);
 	}
 
-	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 	double utility, mhs, work_utility;
 
 #ifdef WANT_CPUMINE
@@ -1786,17 +1909,15 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 		algo = (char *)NULLSTR;
 #endif
 
+	message(io_data, MSG_SUMM, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_SUMMARY : _SUMMARY COMSTR);
+
 	// stop hashmeter() changing some while copying
 	mutex_lock(&hash_lock);
 
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	mhs = total_mhashes_done / total_secs;
 	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
-
-	sprintf(io_buffer, isjson
-		? "%s," JSON_SUMMARY
-		: "%s" _SUMMARY ",",
-		message(MSG_SUMM, 0, NULL, isjson));
 
 	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
 #ifdef WANT_CPUMINE
@@ -1825,13 +1946,14 @@ static void summary(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, boo
 
 	mutex_unlock(&hash_lock);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
+
 #ifdef HAVE_OPENCL
-static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct thr_info *thr;
 	int gpu;
@@ -1839,23 +1961,23 @@ static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 	int i;
 
 	if (gpu_threads == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
+		message(io_data, MSG_GPUNON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
+		message(io_data, MSG_INVGPU, id, NULL, isjson);
 		return;
 	}
 
 	if (gpus[id].deven != DEV_DISABLED) {
-		strcpy(io_buffer, message(MSG_ALRENA, id, NULL, isjson));
+		message(io_data, MSG_ALRENA, id, NULL, isjson);
 		return;
 	}
 
@@ -1864,7 +1986,7 @@ static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 		if (gpu == id) {
 			thr = &thr_info[i];
 			if (thr->cgpu->status != LIFE_WELL) {
-				strcpy(io_buffer, message(MSG_GPUMRE, id, NULL, isjson));
+				message(io_data, MSG_GPUMRE, id, NULL, isjson);
 				return;
 			}
 
@@ -1874,151 +1996,149 @@ static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 		}
 	}
 
-	strcpy(io_buffer, message(MSG_GPUREN, id, NULL, isjson));
+	message(io_data, MSG_GPUREN, id, NULL, isjson);
 }
 
-static void gpudisable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void gpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
 
 	if (nDevs == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
+		message(io_data, MSG_GPUNON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
+		message(io_data, MSG_INVGPU, id, NULL, isjson);
 		return;
 	}
 
 	if (gpus[id].deven == DEV_DISABLED) {
-		strcpy(io_buffer, message(MSG_ALRDIS, id, NULL, isjson));
+		message(io_data, MSG_ALRDIS, id, NULL, isjson);
 		return;
 	}
 
 	gpus[id].deven = DEV_DISABLED;
 
-	strcpy(io_buffer, message(MSG_GPUDIS, id, NULL, isjson));
+	message(io_data, MSG_GPUDIS, id, NULL, isjson);
 }
 
-static void gpurestart(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void gpurestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
 
 	if (nDevs == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
+		message(io_data, MSG_GPUNON, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
+		message(io_data, MSG_INVGPU, id, NULL, isjson);
 		return;
 	}
 
 	reinit_device(&gpus[id]);
 
-	strcpy(io_buffer, message(MSG_GPUREI, id, NULL, isjson));
+	message(io_data, MSG_GPUREI, id, NULL, isjson);
 }
 #endif
-static void gpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+
+static void gpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 	int numgpu = 0;
 
 #ifdef HAVE_OPENCL
 	numgpu = nDevs;
 #endif
 
-	sprintf(io_buffer, isjson
-		? "%s," JSON_GPUS
-		: "%s" _GPUS ",",
-		message(MSG_NUMGPU, 0, NULL, isjson));
+	message(io_data, MSG_NUMGPU, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_GPUS : _GPUS COMSTR);
 
 	root = api_add_int(root, "Count", &numgpu, false);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void pgacount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void pgacount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 	int count = 0;
 
 #ifdef HAVE_AN_FPGA
 	count = numpgas();
 #endif
 
-	sprintf(io_buffer, isjson
-		? "%s," JSON_PGAS
-		: "%s" _PGAS ",",
-		message(MSG_NUMPGA, 0, NULL, isjson));
+	message(io_data, MSG_NUMPGA, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_PGAS : _PGAS COMSTR);
 
 	root = api_add_int(root, "Count", &count, false);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void cpucount(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void cpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 	int count = 0;
 
 #ifdef WANT_CPUMINE
 	count = opt_n_threads > 0 ? num_processors : 0;
 #endif
 
-	sprintf(io_buffer, isjson
-		? "%s," JSON_CPUS
-		: "%s" _CPUS ",",
-		message(MSG_NUMCPU, 0, NULL, isjson));
+	message(io_data, MSG_NUMCPU, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_CPUS : _CPUS COMSTR);
 
 	root = api_add_int(root, "Count", &count, false);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
 	int id;
 
 	if (total_pools == 0) {
-		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		message(io_data, MSG_MISPID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= total_pools) {
-		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		message(io_data, MSG_INVPID, id, NULL, isjson);
 		return;
 	}
 
@@ -2026,7 +2146,7 @@ static void switchpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	pool->enabled = POOL_ENABLED;
 	switch_pools(pool);
 
-	strcpy(io_buffer, message(MSG_SWITCHP, id, NULL, isjson));
+	message(io_data, MSG_SWITCHP, id, NULL, isjson);
 }
 
 static void copyadvanceafter(char ch, char **param, char **buf)
@@ -2082,20 +2202,20 @@ exitsama:
 	return false;
 }
 
-static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char *url, *user, *pass;
 	struct pool *pool;
 	char *ptr;
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISPDP, 0, NULL, isjson));
+		message(io_data, MSG_MISPDP, 0, NULL, isjson);
 		return;
 	}
 
 	if (!pooldetails(param, &url, &user, &pass)) {
 		ptr = escape_string(param, isjson);
-		strcpy(io_buffer, message(MSG_INVPDP, 0, ptr, isjson));
+		message(io_data, MSG_INVPDP, 0, ptr, isjson);
 		if (ptr != param)
 			free(ptr);
 		ptr = NULL;
@@ -2107,36 +2227,36 @@ static void addpool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __may
 	add_pool_details(pool, true, url, user, pass);
 
 	ptr = escape_string(url, isjson);
-	strcpy(io_buffer, message(MSG_ADDPOOL, 0, ptr, isjson));
+	message(io_data, MSG_ADDPOOL, 0, ptr, isjson);
 	if (ptr != url)
 		free(ptr);
 	ptr = NULL;
 }
 
-static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void enablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
 	int id;
 
 	if (total_pools == 0) {
-		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		message(io_data, MSG_MISPID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= total_pools) {
-		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		message(io_data, MSG_INVPID, id, NULL, isjson);
 		return;
 	}
 
 	pool = pools[id];
 	if (pool->enabled == POOL_ENABLED) {
-		strcpy(io_buffer, message(MSG_ALRENAP, id, NULL, isjson));
+		message(io_data, MSG_ALRENAP, id, NULL, isjson);
 		return;
 	}
 
@@ -2144,62 +2264,62 @@ static void enablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	if (pool->prio < current_pool()->prio)
 		switch_pools(pool);
 
-	strcpy(io_buffer, message(MSG_ENAPOOL, id, NULL, isjson));
+	message(io_data, MSG_ENAPOOL, id, NULL, isjson);
 }
 
-static void poolpriority(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void poolpriority(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int i;
 
 	switch (prioritize_pools(param, &i)) {
 		case MSG_NOPOOL:
-			strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+			message(io_data, MSG_NOPOOL, 0, NULL, isjson);
 			return;
 		case MSG_MISPID:
-			strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+			message(io_data, MSG_MISPID, 0, NULL, isjson);
 			return;
 		case MSG_INVPID:
-			strcpy(io_buffer, message(MSG_INVPID, i, NULL, isjson));
+			message(io_data, MSG_INVPID, i, NULL, isjson);
 			return;
 		case MSG_DUPPID:
-			strcpy(io_buffer, message(MSG_DUPPID, i, NULL, isjson));
+			message(io_data, MSG_DUPPID, i, NULL, isjson);
 			return;
 		case MSG_POOLPRIO:
 		default:
-			strcpy(io_buffer, message(MSG_POOLPRIO, 0, NULL, isjson));
+			message(io_data, MSG_POOLPRIO, 0, NULL, isjson);
 			return;
 	}
 }
 
-static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void disablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
 	int id;
 
 	if (total_pools == 0) {
-		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		message(io_data, MSG_MISPID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= total_pools) {
-		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		message(io_data, MSG_INVPID, id, NULL, isjson);
 		return;
 	}
 
 	pool = pools[id];
 	if (pool->enabled == POOL_DISABLED) {
-		strcpy(io_buffer, message(MSG_ALRDISP, id, NULL, isjson));
+		message(io_data, MSG_ALRDISP, id, NULL, isjson);
 		return;
 	}
 
 	if (enabled_pools <= 1) {
-		strcpy(io_buffer, message(MSG_DISLASTP, id, NULL, isjson));
+		message(io_data, MSG_DISLASTP, id, NULL, isjson);
 		return;
 	}
 
@@ -2207,10 +2327,10 @@ static void disablepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, _
 	if (pool == current_pool())
 		switch_pools(NULL);
 
-	strcpy(io_buffer, message(MSG_DISPOOL, id, NULL, isjson));
+	message(io_data, MSG_DISPOOL, id, NULL, isjson);
 }
 
-static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void removepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct pool *pool;
 	char *rpc_url;
@@ -2218,23 +2338,23 @@ static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	int id;
 
 	if (total_pools == 0) {
-		strcpy(io_buffer, message(MSG_NOPOOL, 0, NULL, isjson));
+		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
 		return;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISPID, 0, NULL, isjson));
+		message(io_data, MSG_MISPID, 0, NULL, isjson);
 		return;
 	}
 
 	id = atoi(param);
 	if (id < 0 || id >= total_pools) {
-		strcpy(io_buffer, message(MSG_INVPID, id, NULL, isjson));
+		message(io_data, MSG_INVPID, id, NULL, isjson);
 		return;
 	}
 
 	if (total_pools <= 1) {
-		strcpy(io_buffer, message(MSG_REMLASTP, id, NULL, isjson));
+		message(io_data, MSG_REMLASTP, id, NULL, isjson);
 		return;
 	}
 
@@ -2243,7 +2363,7 @@ static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 		switch_pools(NULL);
 
 	if (pool == current_pool()) {
-		strcpy(io_buffer, message(MSG_ACTPOOL, id, NULL, isjson));
+		message(io_data, MSG_ACTPOOL, id, NULL, isjson);
 		return;
 	}
 
@@ -2254,7 +2374,7 @@ static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 
 	remove_pool(pool);
 
-	strcpy(io_buffer, message(MSG_REMPOOL, id, rpc_url, isjson));
+	message(io_data, MSG_REMPOOL, id, rpc_url, isjson);
 
 	if (dofree)
 		free(rpc_url);
@@ -2262,24 +2382,24 @@ static void removepool(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 }
 
 #ifdef HAVE_OPENCL
-static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
+static bool splitgpuvalue(struct io_data *io_data, char *param, int *gpu, char **value, bool isjson)
 {
 	int id;
 	char *gpusep;
 
 	if (nDevs == 0) {
-		strcpy(io_buffer, message(MSG_GPUNON, 0, NULL, isjson));
+		message(io_data, MSG_GPUNON, 0, NULL, isjson);
 		return false;
 	}
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISID, 0, NULL, isjson));
+		message(io_data, MSG_MISID, 0, NULL, isjson);
 		return false;
 	}
 
 	gpusep = strchr(param, GPUSEP);
 	if (gpusep == NULL) {
-		strcpy(io_buffer, message(MSG_MISVAL, 0, NULL, isjson));
+		message(io_data, MSG_MISVAL, 0, NULL, isjson);
 		return false;
 	}
 
@@ -2287,7 +2407,7 @@ static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 
 	id = atoi(param);
 	if (id < 0 || id >= nDevs) {
-		strcpy(io_buffer, message(MSG_INVGPU, id, NULL, isjson));
+		message(io_data, MSG_INVGPU, id, NULL, isjson);
 		return false;
 	}
 
@@ -2296,14 +2416,15 @@ static bool splitgpuvalue(char *param, int *gpu, char **value, bool isjson)
 
 	return true;
 }
-static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+
+static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
 	char *value;
 	int intensity;
 	char intensitystr[7];
 
-	if (!splitgpuvalue(param, &id, &value, isjson))
+	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
 	if (!strncasecmp(value, DYNAMIC, 1)) {
@@ -2313,7 +2434,7 @@ static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 	else {
 		intensity = atoi(value);
 		if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
-			strcpy(io_buffer, message(MSG_INVINT, 0, value, isjson));
+			message(io_data, MSG_INVINT, 0, value, isjson);
 			return;
 		}
 
@@ -2322,121 +2443,122 @@ static void gpuintensity(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 		sprintf(intensitystr, "%d", intensity);
 	}
 
-	strcpy(io_buffer, message(MSG_GPUINT, id, intensitystr, isjson));
+	message(io_data, MSG_GPUINT, id, intensitystr, isjson);
 }
 
-static void gpumem(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void gpumem(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 #ifdef HAVE_ADL
 	int id;
 	char *value;
 	int clock;
 
-	if (!splitgpuvalue(param, &id, &value, isjson))
+	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
 	clock = atoi(value);
 
 	if (set_memoryclock(id, clock))
-		strcpy(io_buffer, message(MSG_GPUMERR, id, value, isjson));
+		message(io_data, MSG_GPUMERR, id, value, isjson);
 	else
-		strcpy(io_buffer, message(MSG_GPUMEM, id, value, isjson));
+		message(io_data, MSG_GPUMEM, id, value, isjson);
 #else
-	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
+	message(io_data, MSG_NOADL, 0, NULL, isjson);
 #endif
 }
 
-static void gpuengine(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void gpuengine(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 #ifdef HAVE_ADL
 	int id;
 	char *value;
 	int clock;
 
-	if (!splitgpuvalue(param, &id, &value, isjson))
+	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
 	clock = atoi(value);
 
 	if (set_engineclock(id, clock))
-		strcpy(io_buffer, message(MSG_GPUEERR, id, value, isjson));
+		message(io_data, MSG_GPUEERR, id, value, isjson);
 	else
-		strcpy(io_buffer, message(MSG_GPUENG, id, value, isjson));
+		message(io_data, MSG_GPUENG, id, value, isjson);
 #else
-	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
+	message(io_data, MSG_NOADL, 0, NULL, isjson);
 #endif
 }
 
-static void gpufan(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void gpufan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 #ifdef HAVE_ADL
 	int id;
 	char *value;
 	int fan;
 
-	if (!splitgpuvalue(param, &id, &value, isjson))
+	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
 	fan = atoi(value);
 
 	if (set_fanspeed(id, fan))
-		strcpy(io_buffer, message(MSG_GPUFERR, id, value, isjson));
+		message(io_data, MSG_GPUFERR, id, value, isjson);
 	else
-		strcpy(io_buffer, message(MSG_GPUFAN, id, value, isjson));
+		message(io_data, MSG_GPUFAN, id, value, isjson);
 #else
-	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
+	message(io_data, MSG_NOADL, 0, NULL, isjson);
 #endif
 }
 
-static void gpuvddc(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void gpuvddc(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 #ifdef HAVE_ADL
 	int id;
 	char *value;
 	float vddc;
 
-	if (!splitgpuvalue(param, &id, &value, isjson))
+	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
 	vddc = atof(value);
 
 	if (set_vddc(id, vddc))
-		strcpy(io_buffer, message(MSG_GPUVERR, id, value, isjson));
+		message(io_data, MSG_GPUVERR, id, value, isjson);
 	else
-		strcpy(io_buffer, message(MSG_GPUVDDC, id, value, isjson));
+		message(io_data, MSG_GPUVDDC, id, value, isjson);
 #else
-	strcpy(io_buffer, message(MSG_NOADL, 0, NULL, isjson));
+	message(io_data, MSG_NOADL, 0, NULL, isjson);
 #endif
 }
 #endif
-void doquit(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+
+void doquit(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	if (isjson)
-		strcpy(io_buffer, JSON_START JSON_BYE);
+		io_put(io_data, JSON_START JSON_BYE);
 	else
-		strcpy(io_buffer, _BYE);
+		io_put(io_data, _BYE);
 
 	bye = true;
 	do_a_quit = true;
 }
 
-void dorestart(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+void dorestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	if (isjson)
-		strcpy(io_buffer, JSON_START JSON_RESTART);
+		io_put(io_data, JSON_START JSON_RESTART);
 	else
-		strcpy(io_buffer, _RESTART);
+		io_put(io_data, _RESTART);
 
 	bye = true;
 	do_a_restart = true;
 }
 
-void privileged(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+void privileged(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
-	strcpy(io_buffer, message(MSG_ACCOK, 0, NULL, isjson));
+	message(io_data, MSG_ACCOK, 0, NULL, isjson);
 }
 
-void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unused char group)
+void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -2497,54 +2619,49 @@ void notifystatus(int device, struct cgpu_info *cgpu, bool isjson, __maybe_unuse
 	root = api_add_int(root, "*Dev Comms Error", &(cgpu->dev_comms_error_count), false);
 	root = api_add_int(root, "*Dev Throttle", &(cgpu->dev_throttle_count), false);
 
-	if (isjson && (device > 0))
-		strcat(io_buffer, COMMA);
-
-	root = print_data(root, buf, isjson);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, isjson && (device > 0));
+	io_add(io_data, buf);
 }
 
-static void notify(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
+static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
 {
+	bool io_open = false;
 	int i;
 
 	if (total_devices == 0) {
-		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
+		message(io_data, MSG_NODEVS, 0, NULL, isjson);
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_NOTIFY, 0, NULL, isjson));
-
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_NOTIFY);
-	}
-
-	for (i = 0; i < total_devices; i++)
-		notifystatus(i, devices[i], isjson, group);
+	message(io_data, MSG_NOTIFY, 0, NULL, isjson);
 
 	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
+		io_open = io_add(io_data, COMSTR JSON_NOTIFY);
+
+	for (i = 0; i < total_devices; i++)
+		notifystatus(io_data, i, devices[i], isjson, group);
+
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open = false;
 	struct cgpu_info *cgpu;
 	int i;
 
 	if (total_devices == 0) {
-		strcpy(io_buffer, message(MSG_NODEVS, 0, NULL, isjson));
+		message(io_data, MSG_NODEVS, 0, NULL, isjson);
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_DEVDETAILS, 0, NULL, isjson));
+	message(io_data, MSG_DEVDETAILS, 0, NULL, isjson);
 
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_DEVDETAILS);
-	}
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_DEVDETAILS);
 
 	for (i = 0; i < total_devices; i++) {
 		cgpu = devices[i];
@@ -2557,18 +2674,15 @@ static void devdetails(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		root = api_add_const(root, "Model", cgpu->name ? : BLANK, false);
 		root = api_add_const(root, "Device Path", cgpu->device_path ? : BLANK, false);
 
-		if (isjson && (i > 0))
-			strcat(io_buffer, COMMA);
-
-		root = print_data(root, buf, isjson);
-		strcat(io_buffer, buf);
+		root = print_data(root, buf, isjson, isjson && (i > 0));
+		io_add(io_data, buf);
 	}
 
-	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+void dosave(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char filename[PATH_MAX];
 	FILE *fcfg;
@@ -2582,7 +2696,7 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unuse
 	fcfg = fopen(param, "w");
 	if (!fcfg) {
 		ptr = escape_string(param, isjson);
-		strcpy(io_buffer, message(MSG_BADFN, 0, ptr, isjson));
+		message(io_data, MSG_BADFN, 0, ptr, isjson);
 		if (ptr != param)
 			free(ptr);
 		ptr = NULL;
@@ -2593,13 +2707,13 @@ void dosave(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unuse
 	fclose(fcfg);
 
 	ptr = escape_string(param, isjson);
-	strcpy(io_buffer, message(MSG_SAVED, 0, ptr, isjson));
+	message(io_data, MSG_SAVED, 0, ptr, isjson);
 	if (ptr != param)
 		free(ptr);
 	ptr = NULL;
 }
 
-static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgminer_pool_stats *pool_stats, struct api_data *extra, bool isjson)
+static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_stats *stats, struct cgminer_pool_stats *pool_stats, struct api_data *extra, bool isjson)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -2628,32 +2742,34 @@ static int itemstats(int i, char *id, struct cgminer_stats *stats, struct cgmine
 		root = api_add_diff(root, "Max Diff", &(pool_stats->max_diff), false);
 		root = api_add_uint32(root, "Min Diff Count", &(pool_stats->min_diff_count), false);
 		root = api_add_uint32(root, "Max Diff Count", &(pool_stats->max_diff_count), false);
+		root = api_add_uint64(root, "Times Sent", &(pool_stats->times_sent), false);
+		root = api_add_uint64(root, "Bytes Sent", &(pool_stats->bytes_sent), false);
+		root = api_add_uint64(root, "Times Recv", &(pool_stats->times_received), false);
+/* This is disabled for now, since it is incorrect:
+		root = api_add_uint64(root, "Bytes Recv", &(pool_stats->bytes_received), false);
+ */
 	}
 
 	if (extra)
 		root = api_add_extra(root, extra);
 
-	if (isjson && (i > 0))
-		strcat(io_buffer, COMMA);
-
-	root = print_data(root, buf, isjson);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, isjson && (i > 0));
+	io_add(io_data, buf);
 
 	return ++i;
 }
 
-static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	bool io_open = false;
 	struct api_data *extra;
 	char id[20];
 	int i, j;
 
-	strcpy(io_buffer, message(MSG_MINESTATS, 0, NULL, isjson));
+	message(io_data, MSG_MINESTATS, 0, NULL, isjson);
 
-	if (isjson) {
-		strcat(io_buffer, COMMA);
-		strcat(io_buffer, JSON_MINESTATS);
-	}
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_MINESTATS);
 
 	i = 0;
 	for (j = 0; j < total_devices; j++) {
@@ -2666,7 +2782,7 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 				extra = NULL;
 
 			sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
-			i = itemstats(i, id, &(cgpu->cgminer_stats), NULL, extra, isjson);
+			i = itemstats(io_data, i, id, &(cgpu->cgminer_stats), NULL, extra, isjson);
 		}
 	}
 
@@ -2674,24 +2790,24 @@ static void minerstats(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, 
 		struct pool *pool = pools[j];
 
 		sprintf(id, "POOL%d", j);
-		i = itemstats(i, id, &(pool->cgminer_stats), &(pool->cgminer_pool_stats), NULL, isjson);
+		i = itemstats(io_data, i, id, &(pool->cgminer_stats), &(pool->cgminer_pool_stats), NULL, isjson);
 	}
 
-	if (isjson)
-		strcat(io_buffer, JSON_CLOSE);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void failoveronly(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void failoveronly(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISBOOL, 0, NULL, isjson));
+		message(io_data, MSG_MISBOOL, 0, NULL, isjson);
 		return;
 	}
 
 	*param = tolower(*param);
 
 	if (*param != 't' && *param != 'f') {
-		strcpy(io_buffer, message(MSG_INVBOOL, 0, NULL, isjson));
+		message(io_data, MSG_INVBOOL, 0, NULL, isjson);
 		return;
 	}
 
@@ -2699,18 +2815,17 @@ static void failoveronly(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 
 	opt_fail_only = tf;
 
-	strcpy(io_buffer, message(MSG_FOO, tf, NULL, isjson));
+	message(io_data, MSG_FOO, tf, NULL, isjson);
 }
 
-static void minecoin(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 
-	sprintf(io_buffer, isjson
-		? "%s," JSON_MINECOIN
-		: "%s" _MINECOIN ",",
-		message(MSG_MINECOIN, 0, NULL, isjson));
+	message(io_data, MSG_MINECOIN, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECOIN : _MINECOIN COMSTR);
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt)
@@ -2732,16 +2847,17 @@ static void minecoin(__maybe_unused SOCKETTYPE c, __maybe_unused char *param, bo
 
 	root = api_add_bool(root, "LP", &have_longpoll, false);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 
 	if (param == NULL)
 		param = (char *)BLANK;
@@ -2786,15 +2902,21 @@ static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	case 'w':
 		opt_worktime ^= true;
 		break;
+#ifdef _MEMORY_DEBUG
+	case 'y':
+		cgmemspeedup();
+		break;
+	case 'z':
+		cgmemrpt();
+		break;
+#endif
 	default:
 		// anything else just reports the settings
 		break;
 	}
 
-	sprintf(io_buffer, isjson
-		? "%s," JSON_DEBUGSET
-		: "%s" _DEBUGSET ",",
-		message(MSG_DEBUGSET, 0, NULL, isjson));
+	message(io_data, MSG_DEBUGSET, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_DEBUGSET : _DEBUGSET COMSTR);
 
 	root = api_add_bool(root, "Silent", &opt_realquiet, false);
 	root = api_add_bool(root, "Quiet", &opt_quiet, false);
@@ -2804,25 +2926,25 @@ static void debugstate(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __
 	root = api_add_bool(root, "PerDevice", &want_per_device_stats, false);
 	root = api_add_bool(root, "WorkTime", &opt_worktime, false);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void setconfig(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char *comma;
 	int value;
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_CONPAR, 0, NULL, isjson));
+		message(io_data, MSG_CONPAR, 0, NULL, isjson);
 		return;
 	}
 
 	comma = strchr(param, ',');
 	if (!comma) {
-		strcpy(io_buffer, message(MSG_CONVAL, 0, param, isjson));
+		message(io_data, MSG_CONVAL, 0, param, isjson);
 		return;
 	}
 
@@ -2831,13 +2953,13 @@ static void setconfig(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 	if (strcasecmp(param, "coinbase-sig") == 0) {
 		free(opt_coinbase_sig);
 		opt_coinbase_sig = strdup(comma);
-		strcpy(io_buffer, message(MSG_SETCONFIG, 1, param, isjson));
+		message(io_data, MSG_SETCONFIG, 1, param, isjson);
 		return;
 	}
 
 	value = atoi(comma);
 	if (value < 0 || value > 9999) {
-		strcpy(io_buffer, message(MSG_INVNUM, value, param, isjson));
+		message(io_data, MSG_INVNUM, value, param, isjson);
 		return;
 	}
 
@@ -2848,18 +2970,18 @@ static void setconfig(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 	else if (strcasecmp(param, "expiry") == 0)
 		opt_expiry = value;
 	else {
-		strcpy(io_buffer, message(MSG_UNKCON, 0, param, isjson));
+		message(io_data, MSG_UNKCON, 0, param, isjson);
 		return;
 	}
 
-	strcpy(io_buffer, message(MSG_SETCONFIG, value, param, isjson));
+	message(io_data, MSG_SETCONFIG, value, param, isjson);
 }
 
-static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
+static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
 	char *name;
-	void (*func)(SOCKETTYPE, char *, bool, char);
+	void (*func)(struct io_data *, SOCKETTYPE, char *, bool, char);
 	bool iswritemode;
 } cmds[] = {
 	{ "version",		apiversion,	false },
@@ -2914,16 +3036,17 @@ struct CMDS {
 	{ NULL,			NULL,		false }
 };
 
-static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, char group)
+static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	bool io_open;
 	char cmdbuf[100];
 	bool found, access;
 	int i;
 
 	if (param == NULL || *param == '\0') {
-		strcpy(io_buffer, message(MSG_MISCHK, 0, NULL, isjson));
+		message(io_data, MSG_MISCHK, 0, NULL, isjson);
 		return;
 	}
 
@@ -2941,34 +3064,42 @@ static void checkcommand(__maybe_unused SOCKETTYPE c, char *param, bool isjson, 
 		}
 	}
 
-	sprintf(io_buffer, isjson
-		? "%s," JSON_CHECK
-		: "%s" _CHECK ",",
-		message(MSG_CHECK, 0, NULL, isjson));
+	message(io_data, MSG_CHECK, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_CHECK : _CHECK COMSTR);
 
 	root = api_add_const(root, "Exists", found ? YES : NO, false);
 	root = api_add_const(root, "Access", access ? YES : NO, false);
 
-	root = print_data(root, buf, isjson);
-	if (isjson)
-		strcat(buf, JSON_CLOSE);
-	strcat(io_buffer, buf);
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
 }
 
-static void send_result(SOCKETTYPE c, bool isjson)
+static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 {
-	int n;
+	char buf[SOCKBUFSIZ + sizeof(JSON_CLOSE) + sizeof(JSON_END)];
 	int len;
+	int n;
 
-	if (isjson)
-		strcat(io_buffer, JSON_END);
+	strcpy(buf, io_data->ptr);
 
-	len = strlen(io_buffer);
+	if (io_data->close)
+		strcat(buf, JSON_CLOSE);
 
-	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, io_buffer, len > 10 ? "..." : BLANK);
+	if (isjson) {
+		if (io_data->full)
+			strcat(buf, JSON_END_TRUNCATED);
+		else
+			strcat(buf, JSON_END);
+	}
+
+	len = strlen(buf);
+
+	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, buf, len > 10 ? "..." : BLANK);
 
 	// ignore failure - it's closed immediately anyway
-	n = send(c, io_buffer, len+1, 0);
+	n = send(c, buf, len+1, 0);
 
 	if (opt_debug) {
 		if (SOCKETFAIL(n))
@@ -2995,15 +3126,7 @@ static void tidyup(__maybe_unused void *arg)
 		ipaccess = NULL;
 	}
 
-	if (msg_buffer != NULL) {
-		free(msg_buffer);
-		msg_buffer = NULL;
-	}
-
-	if (io_buffer != NULL) {
-		free(io_buffer);
-		io_buffer = NULL;
-	}
+	io_free();
 
 	mutex_unlock(&quit_restart_lock);
 }
@@ -3290,6 +3413,7 @@ static void *restart_thread(__maybe_unused void *userdata)
 
 void api(int api_thr_id)
 {
+	struct io_data *io_data;
 	struct thr_info bye_thr;
 	char buf[TMPBUFSIZ];
 	char param_buf[TMPBUFSIZ];
@@ -3319,6 +3443,8 @@ void api(int api_thr_id)
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
 		return;
 	}
+
+	io_data = sock_io_new();
 
 	mutex_init(&quit_restart_lock);
 
@@ -3410,9 +3536,6 @@ void api(int api_thr_id)
 			applog(LOG_WARNING, "API running in local read access mode on port %d", port);
 	}
 
-	io_buffer = malloc(MYBUFSIZ+1);
-	msg_buffer = malloc(MYBUFSIZ+1);
-
 	while (!bye) {
 		clisiz = sizeof(cli);
 		if (SOCKETFAIL(c = accept(sock, (struct sockaddr *)(&cli), &clisiz))) {
@@ -3460,6 +3583,7 @@ void api(int api_thr_id)
 			if (!SOCKETFAIL(n)) {
 				// the time of the request in now
 				when = time(NULL);
+				io_reinit(io_data);
 
 				did = false;
 
@@ -3486,21 +3610,21 @@ void api(int api_thr_id)
 #endif
 
 					if (!json_is_object(json_config)) {
-						strcpy(io_buffer, message(MSG_INVJSON, 0, NULL, isjson));
-						send_result(c, isjson);
+						message(io_data, MSG_INVJSON, 0, NULL, isjson);
+						send_result(io_data, c, isjson);
 						did = true;
 					}
 					else {
 						json_val = json_object_get(json_config, JSON_COMMAND);
 						if (json_val == NULL) {
-							strcpy(io_buffer, message(MSG_MISCMD, 0, NULL, isjson));
-							send_result(c, isjson);
+							message(io_data, MSG_MISCMD, 0, NULL, isjson);
+							send_result(io_data, c, isjson);
 							did = true;
 						}
 						else {
 							if (!json_is_string(json_val)) {
-								strcpy(io_buffer, message(MSG_INVCMD, 0, NULL, isjson));
-								send_result(c, isjson);
+								message(io_data, MSG_INVCMD, 0, NULL, isjson);
+								send_result(io_data, c, isjson);
 								did = true;
 							}
 							else {
@@ -3525,13 +3649,13 @@ void api(int api_thr_id)
 						if (strcmp(cmd, cmds[i].name) == 0) {
 							sprintf(cmdbuf, "|%s|", cmd);
 							if (ISPRIVGROUP(group) || strstr(COMMANDS(group), cmdbuf))
-								(cmds[i].func)(c, param, isjson, group);
+								(cmds[i].func)(io_data, c, param, isjson, group);
 							else {
-								strcpy(io_buffer, message(MSG_ACCDENY, 0, cmds[i].name, isjson));
+								message(io_data, MSG_ACCDENY, 0, cmds[i].name, isjson);
 								applog(LOG_DEBUG, "API: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
 							}
 
-							send_result(c, isjson);
+							send_result(io_data, c, isjson);
 							did = true;
 							break;
 						}
@@ -3541,8 +3665,8 @@ void api(int api_thr_id)
 					json_decref(json_config);
 
 				if (!did) {
-					strcpy(io_buffer, message(MSG_INVCMD, 0, NULL, isjson));
-					send_result(c, isjson);
+					message(io_data, MSG_INVCMD, 0, NULL, isjson);
+					send_result(io_data, c, isjson);
 				}
 			}
 		}

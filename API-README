@@ -384,6 +384,19 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
+API V1.22
+
+Enforced output limitation:
+ all extra records beyond the output limit of the API (~64k) are ignored
+  and chopped off at the record boundary before the limit is reached
+  however, JSON brackets will be correctly closed and the JSON id will be
+  set to 0 (instead of 1) if any data was truncated
+
+Modified API commands:
+ 'stats' - add 'Times Sent', 'Bytes Sent', 'Times Recv'
+
+----------
+
 API V1.21 (BFGMiner v2.10.0)
 
 Modified API commands:
@@ -725,7 +738,8 @@ On Fedora 17:
  systemctl enable httpd.service --system
 
 On windows there are a few options.
-Try one of these (I've never used either one)
+Try one of these (apparently the first one is easiest - thanks jborkl)
+ http://www.easyphp.org/
  http://www.apachefriends.org/en/xampp.html
  http://www.wampserver.com/en/
 

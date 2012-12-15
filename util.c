@@ -433,6 +433,7 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 		*(void**)out_priv = state->priv;
 
 	json_t *val, *err_val, *res_val;
+	double byte_count;
 	json_error_t err;
 	struct pool *pool = state->pool;
 	bool probing = probe && !pool->probed;
@@ -446,6 +447,13 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 		applog(LOG_DEBUG, "Empty data received in json_rpc_call.");
 		goto err_out;
 	}
+
+	pool->cgminer_pool_stats.times_sent++;
+	if (curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD, &byte_count) == CURLE_OK)
+		pool->cgminer_pool_stats.bytes_sent += byte_count;
+	pool->cgminer_pool_stats.times_received++;
+	if (curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD, &byte_count) == CURLE_OK)
+		pool->cgminer_pool_stats.bytes_received += byte_count;
 
 	if (probing) {
 		pool->probed = true;
@@ -931,8 +939,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	while (len > 0 ) {
 		struct timeval timeout = {0, 0};
-		size_t sent = 0;
-		CURLcode rc;
+		ssize_t sent;
 		fd_set wd;
 
 		FD_ZERO(&wd);
@@ -941,15 +948,20 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
 			return false;
 		}
-		rc = curl_easy_send(pool->stratum_curl, s + ssent, len, &sent);
-		if (rc != CURLE_OK) {
-			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
-			return false;
+		sent = send(pool->sock, s + ssent, len, 0);
+		if (sent < 0) {
+			if (errno != EAGAIN && errno != EWOULDBLOCK) {
+				applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
+				return false;
+			}
+			sent = 0;
 		}
 		ssent += sent;
 		len -= ssent;
 	}
 
+	pool->cgminer_pool_stats.times_sent++;
+	pool->cgminer_pool_stats.bytes_sent += ssent;
 	return true;
 }
 
@@ -965,17 +977,6 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 	mutex_unlock(&pool->stratum_lock);
 
 	return ret;
-}
-
-static void clear_sock(struct pool *pool)
-{
-	size_t n = 0;
-	char buf[RECVSIZE];
-
-	mutex_lock(&pool->stratum_lock);
-	while (CURLE_OK == curl_easy_recv(pool->stratum_curl, buf, RECVSIZE, &n))
-	{}
-	mutex_unlock(&pool->stratum_lock);
 }
 
 /* Check to see if Santa's been good to you */
@@ -1000,17 +1001,29 @@ static bool sock_full(struct pool *pool, bool wait)
 	return false;
 }
 
+static void clear_sock(struct pool *pool)
+{
+	ssize_t n;
+	char buf[RECVSIZE];
+
+	mutex_lock(&pool->stratum_lock);
+	do
+		n = recv(pool->sock, buf, RECVSIZE, 0);
+	while (n > 0);
+	mutex_unlock(&pool->stratum_lock);
+	pool->readbuf.len = 0;
+}
+
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
 	ssize_t len;
 	char *tok, *sret = NULL;
-	size_t n = 0;
+	ssize_t n;
 
 	while (!(pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))) {
 		char s[RBUFSIZE];
-		CURLcode rc;
 
 		if (!sock_full(pool, true)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
@@ -1019,11 +1032,11 @@ char *recv_line(struct pool *pool)
 		memset(s, 0, RBUFSIZE);
 
 		mutex_lock(&pool->stratum_lock);
-		rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
+		n = recv(pool->sock, s, RECVSIZE, 0);
 		mutex_unlock(&pool->stratum_lock);
 
-		if (rc != CURLE_OK) {
-			applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", rc);
+		if (n < 1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+			applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", errno);
 			goto out;
 		}
 
@@ -1042,6 +1055,9 @@ char *recv_line(struct pool *pool)
 	tok = memcpy(malloc(pool->readbuf.len), tok + 1, pool->readbuf.len);
 	sret = realloc(pool->readbuf.buf, len + 1);
 	pool->readbuf.buf = tok;
+
+	pool->cgminer_pool_stats.times_received++;
+	pool->cgminer_pool_stats.bytes_received += len;
 
 out:
 	if (!sret)
@@ -1374,6 +1390,7 @@ bool initiate_stratum(struct pool *pool)
 	char curl_err_str[CURL_ERROR_SIZE];
 	char s[RBUFSIZE], *sret = NULL;
 	CURL *curl = NULL;
+	double byte_count;
 	json_error_t err;
 	bool ret = false;
 
@@ -1412,6 +1429,13 @@ bool initiate_stratum(struct pool *pool)
 	}
 	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
 	keep_sockalive(pool->sock);
+
+	pool->cgminer_pool_stats.times_sent++;
+	if (curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD, &byte_count) == CURLE_OK)
+		pool->cgminer_pool_stats.bytes_sent += byte_count;
+	pool->cgminer_pool_stats.times_received++;
+	if (curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD, &byte_count) == CURLE_OK)
+		pool->cgminer_pool_stats.bytes_received += byte_count;
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
