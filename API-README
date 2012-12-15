@@ -1220,3 +1220,70 @@ The example given:
 		Accepted and Rejected
 
 	Again remember to use the original field name 'Rejected'
+
+---------
+
+With cgminer 2.10.2 and later, miner.php includes an extension to
+the custom pages that allows you to apply SQL style commands to
+the data: where, group, and having
+
+As an example, miner.php includes a more complex custom page called 'Pools'
+this includes the extension:
+
+$poolsext = array(
+ 'POOL+STATS' => array(
+        'where' => null,
+        'group' => array('POOL.URL', 'POOL.Has Stratum',
+                         'POOL.Stratum Active', 'POOL.Has GBT'),
+        'calc' => array('POOL.Difficulty Accepted' => 'sum',
+                        'POOL.Difficulty Rejected' => 'sum',
+                        'STATS.Times Sent' => 'sum', 'STATS.Bytes Sent' => 'sum',
+                        'STATS.Times Recv' => 'sum', 'STATS.Bytes Recv' => 'sum'),
+        'having' => array(array('STATS.Bytes Recv', '>', 0)))
+);
+
+This allows you to group records together from one or more rigs
+In the example, you'll get each Pool (with the same URL+Stratum+GBT settings)
+listed once for all rigs and a sum of each of the fields listed in 'calc'
+
+
+'where' and 'having' are an array of fields and restrictions to apply
+
+In the above example, it will only display the rows where it contains the
+'STATS.Bytes Recv' field with a value greater than zero
+If the row doesn't have the field, it will always be included
+All restrictions must be true in order for the row to be included
+Any restiction that is invalid or unknown is true
+An empty array, or null, means there are no restrictions
+
+A restriction is formatted as: array('Field', 'restriction', 'value')
+Field is the simple field name as normally displayed, or SECTION.Field
+if it is a joined section (as in this case 'POOL+STATS')
+The list of restrictions are:
+'set' - true if the row contains the 'Field' ('value' is not required or used)
+'=', '<', '<=', '>', '>' - a numerical comparison
+'eq', 'lt', 'le', 'gt', 'ge' - a case insensitive string comparison
+
+You can have multiple restrictions on a 'Field' - but all must be true to
+include the row containing the 'Field'
+e.g. a number range between 0 and 10 would be:
+array('STATS.Bytes Recv', '>', 0), array('STATS.Bytes Recv', '<', 10)
+
+The difference between 'where' and 'having' is that 'where' is applied to the
+data before grouping it and 'having' is applied to the data after grouping it
+- otherwise they work the same
+
+
+'group' lists the fields to group over and 'calc' lists the function to apply
+to other fields that are not part of 'group'
+
+You can only see fields listed in 'group' and 'calc'
+
+A 'calc' is formatted as: 'Field' => 'function'
+The current list of operations available for 'calc' are:
+'sum', 'avg', 'min', 'max', 'lo', 'hi', 'any'
+The first 4 are as expected - the numerical sum, average, minimum or maximum
+'lo' is the first string of the list, sorted ignoring case
+'hi' is the last string of the list, sorted ignoring case
+'any' is effectively random: the field value in the first row of the grouped data
+An unrecognised 'function' uses 'any'
