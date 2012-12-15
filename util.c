@@ -977,17 +977,6 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 	return ret;
 }
 
-static void clear_sock(struct pool *pool)
-{
-	size_t n = 0;
-	char buf[RECVSIZE];
-
-	mutex_lock(&pool->stratum_lock);
-	while (CURLE_OK == curl_easy_recv(pool->stratum_curl, buf, RECVSIZE, &n))
-	{}
-	mutex_unlock(&pool->stratum_lock);
-}
-
 /* Check to see if Santa's been good to you */
 static bool sock_full(struct pool *pool, bool wait)
 {
@@ -1010,17 +999,29 @@ static bool sock_full(struct pool *pool, bool wait)
 	return false;
 }
 
+static void clear_sock(struct pool *pool)
+{
+	ssize_t n;
+	char buf[RECVSIZE];
+
+	mutex_lock(&pool->stratum_lock);
+	do
+		n = recv(pool->sock, buf, RECVSIZE, 0);
+	while (n > 0);
+	mutex_unlock(&pool->stratum_lock);
+	pool->readbuf.len = 0;
+}
+
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
 	ssize_t len;
 	char *tok, *sret = NULL;
-	size_t n = 0;
+	ssize_t n;
 
 	while (!(pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))) {
 		char s[RBUFSIZE];
-		CURLcode rc;
 
 		if (!sock_full(pool, true)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
@@ -1029,11 +1030,11 @@ char *recv_line(struct pool *pool)
 		memset(s, 0, RBUFSIZE);
 
 		mutex_lock(&pool->stratum_lock);
-		rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
+		n = recv(pool->sock, s, RECVSIZE, 0);
 		mutex_unlock(&pool->stratum_lock);
 
-		if (rc != CURLE_OK) {
-			applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", rc);
+		if (n < 1 && errno != EAGAIN) {
+			applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", errno);
 			goto out;
 		}
 
