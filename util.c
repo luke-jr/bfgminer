@@ -433,6 +433,7 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 		*(void**)out_priv = state->priv;
 
 	json_t *val, *err_val, *res_val;
+	double byte_count;
 	json_error_t err;
 	struct pool *pool = state->pool;
 	bool probing = probe && !pool->probed;
@@ -446,6 +447,13 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 		applog(LOG_DEBUG, "Empty data received in json_rpc_call.");
 		goto err_out;
 	}
+
+	pool->cgminer_pool_stats.times_sent++;
+	if (curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD, &byte_count) == CURLE_OK)
+		pool->cgminer_pool_stats.bytes_sent += byte_count;
+	pool->cgminer_pool_stats.times_received++;
+	if (curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD, &byte_count) == CURLE_OK)
+		pool->cgminer_pool_stats.bytes_received += byte_count;
 
 	if (probing) {
 		pool->probed = true;
@@ -950,6 +958,8 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 		len -= ssent;
 	}
 
+	pool->cgminer_pool_stats.times_sent++;
+	pool->cgminer_pool_stats.bytes_sent += ssent;
 	return true;
 }
 
@@ -1042,6 +1052,9 @@ char *recv_line(struct pool *pool)
 	tok = memcpy(malloc(pool->readbuf.len), tok + 1, pool->readbuf.len);
 	sret = realloc(pool->readbuf.buf, len + 1);
 	pool->readbuf.buf = tok;
+
+	pool->cgminer_pool_stats.times_received++;
+	pool->cgminer_pool_stats.bytes_received += len;
 
 out:
 	if (!sret)
@@ -1374,6 +1387,7 @@ bool initiate_stratum(struct pool *pool)
 	char curl_err_str[CURL_ERROR_SIZE];
 	char s[RBUFSIZE], *sret = NULL;
 	CURL *curl = NULL;
+	double byte_count;
 	json_error_t err;
 	bool ret = false;
 
@@ -1412,6 +1426,13 @@ bool initiate_stratum(struct pool *pool)
 	}
 	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
 	keep_sockalive(pool->sock);
+
+	pool->cgminer_pool_stats.times_sent++;
+	if (curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD, &byte_count) == CURLE_OK)
+		pool->cgminer_pool_stats.bytes_sent += byte_count;
+	pool->cgminer_pool_stats.times_received++;
+	if (curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD, &byte_count) == CURLE_OK)
+		pool->cgminer_pool_stats.bytes_received += byte_count;
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
