@@ -60,6 +60,10 @@ static inline int fsync (int fd)
 	return (FlushFileBuffers ((HANDLE) _get_osfhandle (fd))) ? 0 : -1;
 }
 
+#ifndef EWOULDBLOCK
+# define EWOULDBLOCK EAGAIN
+#endif
+
 #ifndef MSG_DONTWAIT
 # define MSG_DONTWAIT 0x1000000
 #endif

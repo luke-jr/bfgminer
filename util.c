@@ -950,7 +950,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 		}
 		sent = send(pool->sock, s + ssent, len, 0);
 		if (sent < 0) {
-			if (errno != EAGAIN) {
+			if (errno != EAGAIN && errno != EWOULDBLOCK) {
 				applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
 				return false;
 			}
@@ -1035,7 +1035,7 @@ char *recv_line(struct pool *pool)
 		n = recv(pool->sock, s, RECVSIZE, 0);
 		mutex_unlock(&pool->stratum_lock);
 
-		if (n < 1 && errno != EAGAIN) {
+		if (n < 1 && errno != EAGAIN && errno != EWOULDBLOCK) {
 			applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", errno);
 			goto out;
 		}
