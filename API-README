@@ -393,7 +393,7 @@ Enforced output limitation:
   set to 0 (instead of 1) if any data was truncated
 
 Modified API commands:
- 'stats' - add 'Times Sent', 'Bytes Sent', 'Times Recv', 'Bytes Recv'
+ 'stats' - add 'Times Sent', 'Bytes Sent', 'Times Recv'
 
 ----------
 
