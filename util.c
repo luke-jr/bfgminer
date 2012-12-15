@@ -1395,6 +1395,7 @@ bool initiate_stratum(struct pool *pool)
 	bool ret = false;
 
 	mutex_lock(&pool->stratum_lock);
+	pool->swork.transparency_time = (time_t)-1;
 	pool->stratum_active = false;
 	pool->swork.transparency_probed = false;
 	if (!pool->stratum_curl) {
