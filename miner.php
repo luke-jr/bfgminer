@@ -103,9 +103,38 @@ $statssum = array(
 			'Rejected', 'Utility', 'Hardware Errors',
 			'Work Utility'));
 #
+$poolspage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej',
+			'Utility', 'Hardware Errors=HW Errs', 'Network Blocks=Net Blks'),
+ 'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL',
+			'POOL.Has Stratum=Stratum', 'POOL.Stratum Active=StrAct',
+			'STATS.Bytes Sent=BSent',
+			'STATS.Bytes Recv=BRecv'));
+#
+$poolssum = array(
+ 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
+			'Rejected', 'Utility', 'Hardware Errors'),
+ 'POOL+STATS' => array(
+			'STATS.Bytes Sent',
+			'STATS.Bytes Recv'));
+#
+$poolsext = array(
+ 'POOL+STATS' => array(
+	'where' => null,
+	'group' => array('POOL.URL', 'POOL.Has Stratum', 'POOL.Stratum Active'),
+	'calc' => array(
+			'STATS.Bytes Sent' => 'sum',
+			'STATS.Bytes Recv' => 'sum'),
+	'having' => array(array('STATS.Bytes Recv', '>', 0)))
+);
+
+#
 # customsummarypages is an array of these Custom Summary Pages
 $customsummarypages = array('Mobile' => array($mobilepage, $mobilesum),
- 'Stats' => array($statspage, $statssum));
+ 'Stats' => array($statspage, $statssum),
+ 'Pools' => array($poolspage, $poolssum, $poolsext));
 #
 $here = $_SERVER['PHP_SELF'];
 #
@@ -604,6 +633,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		}
 		break;
 	case 'SUMMARY.Elapsed':
+	case 'STATS.Elapsed':
 		$s = $value % 60;
 		$value -= $s;
 		$value /= 60;
@@ -795,6 +825,19 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'SUMMARY.Discarded':
 	case 'POOL.Discarded':
 	case 'total.Discarded':
+	case 'POOL.Diff1 Shares':
+	case 'total.Diff1 Shares':
+	case 'GPU.Diff1 Work':
+	case 'PGA.Diff1 Work':
+	case 'total.Diff1 Work':
+	case 'STATS.Times Sent':
+	case 'STATS.Bytes Sent':
+	case 'STATS.Times Recv':
+	case 'STATS.Bytes Recv':
+	case 'total.Times Sent':
+	case 'total.Bytes Sent':
+	case 'total.Times Recv':
+	case 'total.Bytes Recv':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
