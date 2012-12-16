@@ -38,6 +38,7 @@ Dependencies:
 	(libncurses5-dev or libpdcurses on WIN32)
 
 	autoconf            http://www.gnu.org/software/autoconf/
+	automake            http://www.gnu.org/software/automake/
 	pkg-config          http://www.freedesktop.org/wiki/Software/pkg-config
 	libtool             http://www.gnu.org/software/libtool/
 
