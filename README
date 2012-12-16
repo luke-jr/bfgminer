@@ -47,7 +47,7 @@ Dependencies:
 	yasm 1.0.1+         http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
 
-	AMD APP SDK         http://developer.amd.com/sdks/AMDAPPSDK
+	AMD APP SDK         http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/
 	(This sdk is mandatory for GPU mining)
 
 	udev dev library    http://www.freedesktop.org/software/systemd/libudev/
@@ -79,7 +79,7 @@ Basic *nix build instructions:
 The easiest way to install the ATI AMD SPP sdk on linux is to actually put it
 into a system location. Then building will be simpler. Download the correct
 version for either 32 bit or 64 bit from here:
-	http://developer.amd.com/sdks/AMDAPPSDK/downloads/Pages/default.aspx
+	http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/
 
 This will give you a file with a name like AMD-APP-SDK-v2.4-lnx64.tgz
 
