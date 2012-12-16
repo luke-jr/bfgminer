@@ -5426,6 +5426,8 @@ out:
 static void shutdown_stratum(struct pool *pool)
 {
 	// Shut down Stratum as if we never had it
+	pool->stratum_active = false;
+	pool->stratum_auth = false;
 	pool->has_stratum = false;
 	shutdown(pool->sock, SHUT_RDWR);
 	free(pool->stratum_url);
@@ -5581,22 +5583,9 @@ static void *stratum_thread(void *userdata)
 			if (initiate_stratum(pool) && auth_stratum(pool))
 				continue;
 
-			if (pool->rpc_url[0] != 's') {
-				shutdown_stratum(pool);
-				pool_active(pool, false);
-				break;
-			}
-
+			shutdown_stratum(pool);
 			pool_died(pool);
-			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
-				if (pool->removed)
-					goto out;
-				sleep(30);
-			}
-			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
-			pool_tclear(pool, &pool->idle);
-			pool_resus(pool);
-			continue;
+			break;
 		}
 
 		if (!parse_method(pool, s) && !parse_stratum_response(pool, s))
@@ -5756,8 +5745,6 @@ retry_stratum:
 			finish_req_in_progress(pool, false);
 			return false;
 		}
-		pool->idle = false;
-		pool->stratum_auth = true;
 		init_stratum_thread(pool);
 		detect_algo = 2;
 		finish_req_in_progress(pool, true);
