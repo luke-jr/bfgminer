@@ -3720,8 +3720,10 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 				}
 				++wip;
 			}
-			else
+			else {
 				--total_submitting;
+				free_work(work);
+			}
 		}
 		if (unlikely(shutting_down && !wip))
 			break;
