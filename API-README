@@ -1247,7 +1247,7 @@ The example given:
 
 ---------
 
-With cgminer 2.10.2 and later, miner.php includes an extension to
+With BFGMiner 2.10.1 and later, miner.php includes an extension to
 the custom pages that allows you to apply SQL style commands to
 the data: where, group, and having
 
@@ -1258,16 +1258,14 @@ $poolsext = array(
  'POOL+STATS' => array(
         'where' => null,
         'group' => array('POOL.URL', 'POOL.Has Stratum',
-                         'POOL.Stratum Active', 'POOL.Has GBT'),
-        'calc' => array('POOL.Difficulty Accepted' => 'sum',
-                        'POOL.Difficulty Rejected' => 'sum',
-                        'STATS.Times Sent' => 'sum', 'STATS.Bytes Sent' => 'sum',
-                        'STATS.Times Recv' => 'sum', 'STATS.Bytes Recv' => 'sum'),
+                         'POOL.Stratum Active'),
+        'calc' => array('STATS.Bytes Sent' => 'sum',
+                        'STATS.Bytes Recv' => 'sum'),
         'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 
 This allows you to group records together from one or more rigs
-In the example, you'll get each Pool (with the same URL+Stratum+GBT settings)
+In the example, you'll get each Pool (with the same URL+Stratum info)
 listed once for all rigs and a sum of each of the fields listed in 'calc'
 
 
