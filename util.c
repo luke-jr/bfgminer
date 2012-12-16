@@ -1300,6 +1300,7 @@ bool auth_stratum(struct pool *pool)
 	}
 	ret = true;
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
+	pool->stratum_auth = true;
 out:
 	if (val)
 		json_decref(val);
@@ -1319,6 +1320,7 @@ bool initiate_stratum(struct pool *pool)
 	mutex_lock(&pool->stratum_lock);
 	pool->swork.transparency_time = (time_t)-1;
 	pool->stratum_active = false;
+	pool->stratum_auth = false;
 	if (!pool->stratum_curl) {
 		pool->stratum_curl = curl_easy_init();
 		if (unlikely(!pool->stratum_curl))
