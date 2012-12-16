@@ -38,6 +38,7 @@ Dependencies:
 	(libncurses5-dev or libpdcurses on WIN32)
 
 	autoconf            http://www.gnu.org/software/autoconf/
+	automake            http://www.gnu.org/software/automake/
 	pkg-config          http://www.freedesktop.org/wiki/Software/pkg-config
 	libtool             http://www.gnu.org/software/libtool/
 
@@ -47,7 +48,7 @@ Dependencies:
 	yasm 1.0.1+         http://yasm.tortall.net/
 	(yasm is optional, gives assembly routines for CPU mining)
 
-	AMD APP SDK         http://developer.amd.com/sdks/AMDAPPSDK
+	AMD APP SDK         http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/
 	(This sdk is mandatory for GPU mining)
 
 	udev dev library    http://www.freedesktop.org/software/systemd/libudev/
@@ -76,7 +77,7 @@ To build with GPU mining support:
 
 Install AMD APP sdk, ideal version (see FAQ!) - put it into a system location.
 Download the correct version for either 32 bit or 64 bit from here:
-	http://developer.amd.com/sdks/AMDAPPSDK/downloads/Pages/default.aspx
+	http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/
 
 This will give you a file with a name like AMD-APP-SDK-v2.4-lnx64.tgz
 
