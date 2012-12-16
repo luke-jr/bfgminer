@@ -295,6 +295,36 @@ static void set_nettime(void)
 	wr_unlock(&netacc_lock);
 }
 
+static int my_curl_debug(__maybe_unused CURL *curl, curl_infotype infotype, char *data, size_t datasz, void *userdata)
+{
+	struct pool *pool = userdata;
+
+	switch (infotype) {
+		case CURLINFO_TEXT:
+		{
+			if (!opt_protocol)
+				break;
+			// data is not null-terminated, so we need to copy and terminate it for applog
+			char datacp[datasz + 1];
+			memcpy(datacp, data, datasz);
+			datacp[datasz] = '\0';
+			applog(LOG_DEBUG, "Pool %u: %s", pool->pool_no, datacp);
+			break;
+		}
+		case CURLINFO_HEADER_IN:
+		case CURLINFO_DATA_IN:
+			pool->cgminer_pool_stats.bytes_received += datasz;
+			break;
+		case CURLINFO_HEADER_OUT:
+		case CURLINFO_DATA_OUT:
+			pool->cgminer_pool_stats.bytes_sent += datasz;
+			break;
+		default:
+			break;
+	}
+	return 0;
+}
+
 struct json_rpc_call_state {
 	struct data_buffer all_data;
 	struct header_info hi;
@@ -328,10 +358,6 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_PRIVATE, state);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
-#if 0 /* Disable curl debugging since it spews to stderr */
-	if (opt_protocol)
-		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
-#endif
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
@@ -349,6 +375,13 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
 	curl_easy_setopt(curl, CURLOPT_HEADERDATA, &state->hi);
+
+	/* We use DEBUGFUNCTION to count bytes sent/received, and verbose is needed
+	 * to enable it */
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, my_curl_debug);
+	curl_easy_setopt(curl, CURLOPT_DEBUGDATA, pool);
+
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
@@ -433,7 +466,6 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 		*(void**)out_priv = state->priv;
 
 	json_t *val, *err_val, *res_val;
-	double byte_count;
 	json_error_t err;
 	struct pool *pool = state->pool;
 	bool probing = probe && !pool->probed;
@@ -449,11 +481,7 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 	}
 
 	pool->cgminer_pool_stats.times_sent++;
-	if (curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD, &byte_count) == CURLE_OK)
-		pool->cgminer_pool_stats.bytes_sent += byte_count;
 	pool->cgminer_pool_stats.times_received++;
-	if (curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD, &byte_count) == CURLE_OK)
-		pool->cgminer_pool_stats.bytes_received += byte_count;
 
 	if (probing) {
 		pool->probed = true;
@@ -1390,7 +1418,6 @@ bool initiate_stratum(struct pool *pool)
 	char curl_err_str[CURL_ERROR_SIZE];
 	char s[RBUFSIZE], *sret = NULL;
 	CURL *curl = NULL;
-	double byte_count;
 	json_error_t err;
 	bool ret = false;
 
@@ -1416,6 +1443,13 @@ bool initiate_stratum(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, s);
 	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
+
+	/* We use DEBUGFUNCTION to count bytes sent/received, and verbose is needed
+	 * to enable it */
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, my_curl_debug);
+	curl_easy_setopt(curl, CURLOPT_DEBUGDATA, pool);
+
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
@@ -1432,11 +1466,7 @@ bool initiate_stratum(struct pool *pool)
 	keep_sockalive(pool->sock);
 
 	pool->cgminer_pool_stats.times_sent++;
-	if (curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD, &byte_count) == CURLE_OK)
-		pool->cgminer_pool_stats.bytes_sent += byte_count;
 	pool->cgminer_pool_stats.times_received++;
-	if (curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD, &byte_count) == CURLE_OK)
-		pool->cgminer_pool_stats.bytes_received += byte_count;
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
