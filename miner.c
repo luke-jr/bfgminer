@@ -5491,22 +5491,9 @@ static void *stratum_thread(void *userdata)
 			if (initiate_stratum(pool) && auth_stratum(pool))
 				continue;
 
-			if (pool->rpc_url[0] != 's') {
-				shutdown_stratum(pool);
-				pool_active(pool, false);
-				break;
-			}
-
+			shutdown_stratum(pool);
 			pool_died(pool);
-			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
-				if (pool->removed)
-					goto out;
-				sleep(30);
-			}
-			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
-			pool_tclear(pool, &pool->idle);
-			pool_resus(pool);
-			continue;
+			break;
 		}
 
 		if (!parse_method(pool, s) && !parse_stratum_response(pool, s))
