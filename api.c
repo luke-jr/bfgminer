@@ -2745,9 +2745,7 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 		root = api_add_uint64(root, "Times Sent", &(pool_stats->times_sent), false);
 		root = api_add_uint64(root, "Bytes Sent", &(pool_stats->bytes_sent), false);
 		root = api_add_uint64(root, "Times Recv", &(pool_stats->times_received), false);
-/* This is disabled for now, since it is incorrect:
 		root = api_add_uint64(root, "Bytes Recv", &(pool_stats->bytes_received), false);
- */
 	}
 
 	if (extra)
