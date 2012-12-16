@@ -5406,6 +5406,8 @@ out:
 static void shutdown_stratum(struct pool *pool)
 {
 	// Shut down Stratum as if we never had it
+	pool->stratum_active = false;
+	pool->stratum_auth = false;
 	pool->has_stratum = false;
 	shutdown(pool->sock, SHUT_RDWR);
 	free(pool->stratum_url);
@@ -5655,8 +5657,6 @@ retry_stratum:
 			return false;
 		if (!auth_stratum(pool))
 			return false;
-		pool->idle = false;
-		pool->stratum_auth = true;
 		init_stratum_thread(pool);
 		detect_algo = 2;
 		return true;
