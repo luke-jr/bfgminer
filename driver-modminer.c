@@ -898,8 +898,10 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 
 			// timeoutloop never resets so the timeouts can't
 			// accumulate much during a single item of work
-			if (err == LIBUSB_ERROR_TIMEOUT && ++timeoutloop < 10)
+			if (err == LIBUSB_ERROR_TIMEOUT && ++timeoutloop < 10) {
+				state->timeout_fail++;
 				goto tryagain;
+			}
 
 			applog(LOG_ERR, "%s%u: Error sending (get nonce) (%d:%d)",
 				modminer->api->name, modminer->device_id, amount, err);
@@ -923,8 +925,10 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 		if (err < 0 || amount < 4) {
 			// timeoutloop never resets so the timeouts can't
 			// accumulate much during a single item of work
-			if (err == LIBUSB_ERROR_TIMEOUT && ++timeoutloop < 10)
+			if (err == LIBUSB_ERROR_TIMEOUT && ++timeoutloop < 10) {
+				state->timeout_fail++;
 				goto tryagain;
+			}
 
 			applog(LOG_ERR, "%s%u: Error reading (get nonce) (%d:%d)",
 				modminer->api->name, modminer->device_id, amount+amount2, err);
