@@ -873,7 +873,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 	char cmd[2];
 	uint32_t nonce;
 	uint32_t curr_hw_errors;
-	int err, amount;
+	int err, amount, amount2;
 	int timeoutloop;
 	double timeout;
 	int temploop;
@@ -908,6 +908,16 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 		}
 
 		err = usb_read(modminer, (char *)(&nonce), 4, &amount, C_GETWORKSTATUS);
+		while (err == LIBUSB_SUCCESS && amount < 4) {
+			size_t remain = 4 - amount;
+			char *pos = ((char *)(&nonce)) + amount;
+
+			state->success_more++;
+
+			err = usb_read(modminer, pos, remain, &amount2, C_GETWORKSTATUS);
+
+			amount += amount2;
+		}
 		mutex_unlock(modminer->modminer_mutex);
 
 		if (err < 0 || amount < 4) {
@@ -917,7 +927,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 				goto tryagain;
 
 			applog(LOG_ERR, "%s%u: Error reading (get nonce) (%d:%d)",
-				modminer->api->name, modminer->device_id, amount, err);
+				modminer->api->name, modminer->device_id, amount+amount2, err);
 		}
 
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
