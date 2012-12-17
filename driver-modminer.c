@@ -805,8 +805,7 @@ static void check_temperature(struct thr_info *thr)
 
 	mutex_lock(modminer->modminer_mutex);
 	if (usb_write(modminer, (char *)cmd, 2, &amount, C_REQUESTTEMPERATURE) == 0 && amount == 2 &&
-	    usb_read(modminer, (char *)(&temperature), tbytes, &tamount, C_GETTEMPERATURE) == 0 && tamount == tbytes)
-	{
+	    usb_read(modminer, (char *)(&temperature), tbytes, &tamount, C_GETTEMPERATURE) == 0 && tamount == tbytes) {
 		mutex_unlock(modminer->modminer_mutex);
 		if (state->one_byte_temp)
 			modminer->temp = temperature[0];
@@ -992,8 +991,7 @@ tryagain:
 		if (work_restart(thr))
 			break;
 
-		if (state->overheated == true)
-		{
+		if (state->overheated == true) {
 			// don't check every time
 			if (++temploop > 30) {
 				check_temperature(thr);
