@@ -19,7 +19,11 @@
 #include "util.h"
 
 #ifdef HAVE_OPENCL
-#include "CL/cl.h"
+	#ifdef __APPLE__
+		#include <OpenCL/cl.h>
+	#else
+		#include "CL/cl.h"
+	#endif
 #endif /* HAVE_OPENCL */
 
 #ifdef STDC_HEADERS
