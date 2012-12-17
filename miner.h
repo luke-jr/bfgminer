@@ -1005,8 +1005,6 @@ struct pool {
 
 	pthread_mutex_t last_work_lock;
 	struct work *last_work_copy;
-	bool req_in_progress;
-	unsigned extra_work_needed;
 };
 
 #define GETWORK_MODE_TESTPOOL 'T'
