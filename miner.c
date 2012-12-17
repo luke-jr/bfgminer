@@ -8071,6 +8071,7 @@ retry:
 					++pool->extra_work_needed;
 					mutex_unlock(&pool->last_work_lock);
 					applog(LOG_DEBUG, "Need more work while GBT request already in progress (pool %u), letting it provide work", pool->pool_no);
+					free_work(work);
 					continue;
 				}
 				pool->req_in_progress = true;
