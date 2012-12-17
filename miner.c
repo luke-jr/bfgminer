@@ -231,6 +231,7 @@ int submit_waiting_notifier[2];
 int hw_errors;
 int total_accepted, total_rejected, total_diff1;
 int total_getworks, total_stale, total_discarded;
+uint64_t total_bytes_xfer;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
 static int staged_rollable;
 unsigned int new_blocks;
@@ -2108,6 +2109,9 @@ static void curses_print_status(void)
 {
 	struct pool *pool = current_pool();
 	struct timeval now, tv;
+	float efficiency;
+
+	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
 	wattron(statuswin, A_BOLD);
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
@@ -2134,14 +2138,15 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  DW: %d  GW: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d",
+	mvwprintw(statuswin, 3, 0, " ST: %d  DW: %d  GW: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
 		total_staged(), total_discarded,
 		total_getworks,
 		local_work,
 		total_go,
 		new_blocks,
 		total_submitting,
-		total_ro);
+		total_ro,
+		efficiency);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -4431,8 +4436,9 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
 		if (pool->accepted || pool->rejected)
 			wlog(" Reject ratio: %.1f%%\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-		efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-		wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
+		uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.bytes_received + pool->cgminer_pool_stats.bytes_sent;
+		efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
+		wlog(" Efficiency (accepted * difficulty / 2 KB): %.2f\n", efficiency);
 
 		wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
 		wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
@@ -5189,7 +5195,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	struct timeval temp_tv_end, total_diff;
 	double secs;
 	double local_secs;
-	double utility, efficiency = 0.0;
+	double utility;
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
@@ -5269,7 +5275,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		((double)total_diff.tv_usec / 1000000.0);
 
 	utility = total_accepted / total_secs * 60;
-	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
@@ -5278,13 +5283,14 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d E:%.0f%% U:%.1f/m",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
 		total_accepted, total_rejected, total_stale,
-		hw_errors, efficiency, utility);
+		hw_errors,
+		utility);
 
 
 	local_mhashes_done = 0;
@@ -6965,7 +6971,7 @@ static void print_summary(void)
 	secs = diff.tv_sec % 60;
 
 	utility = total_accepted / total_secs * 60;
-	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
+	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 	work_util = total_diff1 / total_secs * 60;
 
 	applog(LOG_WARNING, "\nSummary of runtime statistics:\n");
@@ -6989,7 +6995,7 @@ static void print_summary(void)
 	if (total_accepted || total_rejected)
 		applog(LOG_WARNING, "Reject ratio: %.1f%%", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
 	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
-	applog(LOG_WARNING, "Efficiency (accepted / queued): %.0f%%", efficiency);
+	applog(LOG_WARNING, "Efficiency (accepted shares * difficulty / 2 KB): %.2f", efficiency);
 	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min\n", utility);
 
 	applog(LOG_WARNING, "Discarded work due to new blocks: %d", total_discarded);
@@ -7014,8 +7020,9 @@ static void print_summary(void)
 			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
 			if (pool->accepted || pool->rejected)
 				applog(LOG_WARNING, " Reject ratio: %.1f%%", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-			efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-			applog(LOG_WARNING, " Efficiency (accepted / queued): %.0f%%", efficiency);
+			uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.bytes_received + pool->cgminer_pool_stats.bytes_sent;
+			efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
+			applog(LOG_WARNING, " Efficiency (accepted * difficulty / 2 KB): %.2f", efficiency);
 
 			applog(LOG_WARNING, " Discarded work due to new blocks: %d", pool->discarded_work);
 			applog(LOG_WARNING, " Stale submissions discarded due to new blocks: %d", pool->stale_shares);

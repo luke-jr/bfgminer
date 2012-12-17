@@ -314,10 +314,12 @@ static int my_curl_debug(__maybe_unused CURL *curl, curl_infotype infotype, char
 		case CURLINFO_HEADER_IN:
 		case CURLINFO_DATA_IN:
 			pool->cgminer_pool_stats.bytes_received += datasz;
+			total_bytes_xfer += datasz;
 			break;
 		case CURLINFO_HEADER_OUT:
 		case CURLINFO_DATA_OUT:
 			pool->cgminer_pool_stats.bytes_sent += datasz;
+			total_bytes_xfer += datasz;
 			break;
 		default:
 			break;
@@ -990,6 +992,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.bytes_sent += ssent;
+	total_bytes_xfer += ssent;
 	return true;
 }
 
@@ -1086,6 +1089,7 @@ char *recv_line(struct pool *pool)
 
 	pool->cgminer_pool_stats.times_received++;
 	pool->cgminer_pool_stats.bytes_received += len;
+	total_bytes_xfer += len;
 
 out:
 	if (!sret)
