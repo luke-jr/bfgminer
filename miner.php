@@ -103,9 +103,42 @@ $statssum = array(
 			'Rejected', 'Utility', 'Hardware Errors',
 			'Work Utility'));
 #
+$poolspage = array(
+ 'DATE' => null,
+ 'RIGS' => null,
+ 'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej',
+			'Utility', 'Hardware Errors=HW Errs', 'Network Blocks=Net Blks',
+			'Work Utility'),
+ 'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL', 'POOL.Difficulty Accepted=Diff Acc',
+			'POOL.Difficulty Rejected=Diff Rej',
+			'POOL.Has Stratum=Stratum', 'POOL.Stratum Active=StrAct',
+			'POOL.Has GBT=GBT', 'STATS.Times Sent=TSent',
+			'STATS.Bytes Sent=BSent', 'STATS.Times Recv=TRecv',
+			'STATS.Bytes Recv=BRecv'));
+#
+$poolssum = array(
+ 'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
+			'Rejected', 'Utility', 'Hardware Errors',
+			'Work Utility'),
+ 'POOL+STATS' => array('POOL.Difficulty Accepted', 'POOL.Difficulty Rejected',
+			'STATS.Times Sent', 'STATS.Bytes Sent',
+			'STATS.Times Recv', 'STATS.Bytes Recv'));
+#
+$poolsext = array(
+ 'POOL+STATS' => array(
+	'where' => null,
+	'group' => array('POOL.URL', 'POOL.Has Stratum', 'POOL.Stratum Active', 'POOL.Has GBT'),
+	'calc' => array('POOL.Difficulty Accepted' => 'sum', 'POOL.Difficulty Rejected' => 'sum',
+			'STATS.Times Sent' => 'sum', 'STATS.Bytes Sent' => 'sum',
+			'STATS.Times Recv' => 'sum', 'STATS.Bytes Recv' => 'sum'),
+	'having' => array(array('STATS.Bytes Recv', '>', 0)))
+);
+
+#
 # customsummarypages is an array of these Custom Summary Pages
 $customsummarypages = array('Mobile' => array($mobilepage, $mobilesum),
- 'Stats' => array($statspage, $statssum));
+ 'Stats' => array($statspage, $statssum),
+ 'Pools' => array($poolspage, $poolssum, $poolsext));
 #
 $here = $_SERVER['PHP_SELF'];
 #
@@ -604,6 +637,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		}
 		break;
 	case 'SUMMARY.Elapsed':
+	case 'STATS.Elapsed':
 		$s = $value % 60;
 		$value -= $s;
 		$value /= 60;
@@ -804,6 +838,14 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'GPU.Diff1 Work':
 	case 'PGA.Diff1 Work':
 	case 'total.Diff1 Work':
+	case 'STATS.Times Sent':
+	case 'STATS.Bytes Sent':
+	case 'STATS.Times Recv':
+	case 'STATS.Bytes Recv':
+	case 'total.Times Sent':
+	case 'total.Bytes Sent':
+	case 'total.Times Recv':
+	case 'total.Bytes Recv':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
@@ -832,6 +874,28 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'BUTTON.Pool':
 	case 'BUTTON.GPU':
 		$ret = $value;
+		break;
+	case 'SUMMARY.Difficulty Accepted':
+	case 'GPU.Difficulty Accepted':
+	case 'PGA.Difficulty Accepted':
+	case 'DEVS.Difficulty Accepted':
+	case 'POOL.Difficulty Accepted':
+	case 'total.Difficulty Accepted':
+	case 'SUMMARY.Difficulty Rejected':
+	case 'GPU.Difficulty Rejected':
+	case 'PGA.Difficulty Rejected':
+	case 'DEVS.Difficulty Rejected':
+	case 'POOL.Difficulty Rejected':
+	case 'total.Difficulty Rejected':
+	case 'SUMMARY.Difficulty Stale':
+	case 'POOL.Difficulty Stale':
+	case 'total.Difficulty Stale':
+	case 'GPU.Last Share Difficulty':
+	case 'PGA.Last Share Difficulty':
+	case 'DEVS.Last Share Difficulty':
+	case 'POOL.Last Share Difficulty':
+		if ($value != '')
+			$ret = number_format((float)$value, 2);
 		break;
 	}
 
@@ -889,10 +953,13 @@ function showdatetime()
 global $singlerigsum;
 $singlerigsum = array(
  'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
-			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
+			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1,
+			'Diff1 Shares' => 1, 'Diff1 Work' => 1, 'Difficulty Accepted' => 1,
+			'Difficulty Rejected' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
 			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1,
-			'Diff1 Shares' => 1, 'Difficulty Accepted' => 1),
+			'Diff1 Shares' => 1, 'Diff1 Work' => 1, 'Difficulty Accepted' => 1,
+			'Difficulty Rejected' => 1, 'Difficulty Stale' => 1),
  'notify' => array('*' => 1));
 #
 function showtotal($total, $when, $oldvalues)
@@ -1232,7 +1299,12 @@ function rigbutton($rig, $rigname, $when, $row)
 {
  list($value, $class) = fmt('BUTTON', 'Rig', '', $when, $row);
 
- return "<td align=middle$class>".riginput($rig, $rigname).'</td>';
+ if ($rig === '')
+	$ri = '&nbsp;';
+ else
+	$ri = riginput($rig, $rigname);
+
+ return "<td align=middle$class>$ri</td>";
 }
 #
 function showrigs($anss, $headname, $rigname)
@@ -1893,7 +1965,213 @@ function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total
  return $total;
 }
 #
-function processcustompage($pagename, $sections, $sum, $namemap)
+function docalc($func, $data)
+{
+ switch ($func)
+ {
+ case 'sum':
+	$tot = 0;
+	foreach ($data as $val)
+		$tot += $val;
+	return $tot;
+ case 'avg':
+	$tot = 0;
+	foreach ($data as $val)
+		$tot += $val;
+	return ($tot / count($data));
+ case 'min':
+	$ans = null;
+	foreach ($data as $val)
+		if ($ans === null)
+			$ans = $val;
+		else
+			if ($val < $ans)
+				$ans = $val;
+	return $ans;
+ case 'max':
+	$ans = null;
+	foreach ($data as $val)
+		if ($ans === null)
+			$ans = $val;
+		else
+			if ($val > $ans)
+				$ans = $val;
+	return $ans;
+ case 'lo':
+	$ans = null;
+	foreach ($data as $val)
+		if ($ans === null)
+			$ans = $val;
+		else
+			if (strcasecmp($val, $ans) < 0)
+				$ans = $val;
+	return $ans;
+ case 'hi':
+	$ans = null;
+	foreach ($data as $val)
+		if ($ans === null)
+			$ans = $val;
+		else
+			if (strcasecmp($val, $ans) > 0)
+				$ans = $val;
+	return $ans;
+ case 'any':
+ default:
+	return $data[0];
+ }
+}
+#
+function docompare($row, $test)
+{
+ // invalid $test data means true
+ if (count($test) < 2)
+	return true;
+
+ if (isset($row[$test[0]]))
+	$val = $row[$test[0]];
+ else
+	$val = null;
+
+ if ($test[1] == 'set')
+	return ($val !== null);
+
+ if ($val === null || count($test) < 3)
+	return true;
+
+ switch($test[1])
+ {
+ case '=':
+	return ($val == $test[2]);
+ case '<':
+	return ($val < $test[2]);
+ case '<=':
+	return ($val <= $test[2]);
+ case '>':
+	return ($val > $test[2]);
+ case '>=':
+	return ($val >= $test[2]);
+ case 'eq':
+	return (strcasecmp($val, $test[2]) == 0);
+ case 'lt':
+	return (strcasecmp($val, $test[2]) < 0);
+ case 'le':
+	return (strcasecmp($val, $test[2]) <= 0);
+ case 'gt':
+	return (strcasecmp($val, $test[2]) > 0);
+ case 'ge':
+	return (strcasecmp($val, $test[2]) >= 0);
+ default:
+	return true;
+ }
+}
+#
+function processcompare($which, $ext, $section, $res)
+{
+ if (isset($ext[$section][$which]))
+ {
+	$proc = $ext[$section][$which];
+	if ($proc !== null)
+	{
+		$res2 = array();
+		foreach ($res as $rig => $result)
+			foreach ($result as $sec => $row)
+			{
+				$secname = preg_replace('/\d/', '', $sec);
+				if (!secmatch($section, $secname))
+					$res2[$rig][$sec] = $row;
+				else
+				{
+					$keep = true;
+					foreach ($proc as $test)
+						if (!docompare($row, $test))
+						{
+							$keep = false;
+							break;
+						}
+					if ($keep)
+						$res2[$rig][$sec] = $row;
+				}
+			}
+
+		$res = $res2;
+	}
+ }
+ return $res;
+}
+#
+function processext($ext, $section, $res)
+{
+ $res = processcompare('where', $ext, $section, $res);
+
+ if (isset($ext[$section]['group']))
+ {
+	$grp = $ext[$section]['group'];
+	$calc = $ext[$section]['calc'];
+	if ($grp !== null)
+	{
+		$interim = array();
+		$res2 = array();
+		$cou = 0;
+		foreach ($res as $rig => $result)
+			foreach ($result as $sec => $row)
+			{
+				$secname = preg_replace('/\d/', '', $sec);
+				if (!secmatch($section, $secname))
+				{
+					// STATUS may be problematic ...
+					if (!isset($res2[$sec]))
+						$res2[$sec] = $row;
+				}
+				else
+				{
+					$grpkey = '';
+					$newrow = array();
+					foreach ($grp as $field)
+					{
+						if (isset($row[$field]))
+						{
+							$grpkey .= $row[$field].'.';
+							$newrow[$field] = $row[$field];
+						}
+						else
+							$grpkey .= '.';
+					}
+
+					if (!isset($interim[$grpkey]))
+					{
+						$interim[$grpkey]['grp'] = $newrow;
+						$interim[$grpkey]['sec'] = $secname.$cou;
+						$cou++;
+					}
+
+					if ($calc !== null)
+						foreach ($calc as $field => $func)
+						{
+							if (!isset($interim[$grpkey]['cal'][$field]))
+								$interim[$grpkey]['cal'][$field] = array();
+							$interim[$grpkey]['cal'][$field][] = $row[$field];
+						}
+				}
+			}
+
+		// Build the rest of $res2 from $interim
+		foreach ($interim as $rowkey => $row)
+		{
+			$key = $row['sec'];
+			foreach ($row['grp'] as $field => $value)
+				$res2[$key][$field] = $value;
+			foreach ($row['cal'] as $field => $data)
+				$res2[$key][$field] = docalc($calc[$field], $data);
+		}
+
+		$res = array('' => $res2);
+	}
+ }
+
+ return processcompare('having', $ext, $section, $res);
+}
+#
+function processcustompage($pagename, $sections, $sum, $ext, $namemap)
 {
  global $sectionmap;
  global $miner, $port;
@@ -1984,7 +2262,7 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 
 		if (isset($results[$sectionmap[$section]]))
 		{
-			$rigresults = $results[$sectionmap[$section]];
+			$rigresults = processext($ext, $section, $results[$sectionmap[$section]]);
 			$showfields = array();
 			$showhead = array();
 			foreach ($fields as $field)
@@ -2024,7 +2302,11 @@ function processcustompage($pagename, $sections, $sum, $namemap)
 					otherrow('<td>&nbsp;</td>');
 
 				newtable();
-				showhead('', array('Rig'=>1)+$showhead, true);
+				if (count($rigresults) == 1 && isset($rigresults['']))
+					$ri = array('' => 1) + $showhead;
+				else
+					$ri = array('Rig' => 1) + $showhead;
+				showhead('', $ri, true);
 
 				$total = array();
 				$add = array('total' => array());
@@ -2070,7 +2352,8 @@ function showcustompage($pagename)
 	return;
  }
 
- if (count($customsummarypages[$pagename]) != 2)
+ $c = count($customsummarypages[$pagename]);
+ if ($c < 2 || $c > 3)
  {
 	$rw = "<td colspan=100>Invalid custom summary page '$pagename' (";
 	$rw .= count($customsummarypages[$pagename]).')</td>';
@@ -2098,6 +2381,10 @@ function showcustompage($pagename)
 		}
  }
 
+ $ext = null;
+ if (isset($customsummarypages[$pagename][2]))
+	$ext = $customsummarypages[$pagename][2];
+
  $sum = $customsummarypages[$pagename][1];
  if ($sum === null)
 	$sum = array();
@@ -2117,7 +2404,7 @@ function showcustompage($pagename)
 	return;
  }
 
- processcustompage($pagename, $page, $sum, $namemap);
+ processcustompage($pagename, $page, $sum, $ext, $namemap);
 
  if ($placebuttons == 'bot' || $placebuttons == 'both')
 	pagebuttons(null, $pagename);
