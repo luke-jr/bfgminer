@@ -2109,6 +2109,9 @@ static void curses_print_status(void)
 {
 	struct pool *pool = current_pool();
 	struct timeval now, tv;
+	float efficiency;
+
+	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
 	wattron(statuswin, A_BOLD);
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
@@ -2135,14 +2138,15 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  DW: %d  GW: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d",
+	mvwprintw(statuswin, 3, 0, " ST: %d  DW: %d  GW: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
 		total_staged(), total_discarded,
 		total_getworks,
 		local_work,
 		total_go,
 		new_blocks,
 		total_submitting,
-		total_ro);
+		total_ro,
+		efficiency);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -5199,7 +5203,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	struct timeval temp_tv_end, total_diff;
 	double secs;
 	double local_secs;
-	double utility, efficiency = 0.0;
+	double utility;
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
@@ -5279,7 +5283,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		((double)total_diff.tv_usec / 1000000.0);
 
 	utility = total_accepted / total_secs * 60;
-	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
@@ -5288,13 +5291,14 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d E:%.2f U:%.1f/m",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d U:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
 		total_accepted, total_rejected, total_stale,
-		hw_errors, efficiency, utility);
+		hw_errors,
+		utility);
 
 
 	local_mhashes_done = 0;
