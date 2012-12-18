@@ -110,21 +110,19 @@ static inline int fsync (int fd)
   #include "libztex.h"
 #endif
 
-#if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
-#define bswap_16 __builtin_bswap16
-#define bswap_32 __builtin_bswap32
-#define bswap_64 __builtin_bswap64
-#else
-#if HAVE_BYTESWAP_H
+#ifdef HAVE_BYTESWAP_H
 #include <byteswap.h>
-#elif defined(USE_SYS_ENDIAN_H)
+#endif
+#ifdef HAVE_ENDIAN_H
+#include <endian.h>
+#endif
+#ifdef HAVE_SYS_ENDIAN_H
 #include <sys/endian.h>
-#elif defined(__APPLE__)
+#endif
+#ifdef HAVE_LIBKERN_OSBYTEORDER_H
 #include <libkern/OSByteOrder.h>
-#define bswap_16 OSSwapInt16
-#define bswap_32 OSSwapInt32
-#define bswap_64 OSSwapInt64
-#else
+#endif
+#ifndef bswap_16
 #define	bswap_16(value)  \
  	((((value) & 0xff) << 8) | ((value) >> 8))
 
@@ -137,24 +135,16 @@ static inline int fsync (int fd)
  	    << 32) | \
  	(uint64_t)bswap_32((uint32_t)((value) >> 32)))
 #endif
-#endif /* !defined(__GLXBYTEORDER_H__) */
 
-#ifdef WIN32
-  #ifndef __LITTLE_ENDIAN
-    #define __LITTLE_ENDIAN 1234
-    #define __BIG_ENDIAN    4321
-  #endif
-  #ifndef __BYTE_ORDER
-    #define __BYTE_ORDER __LITTLE_ENDIAN
-  #endif
-#else
-  #include <endian.h>
+#if defined(WORDS_BIGENDIAN) && !defined(__BIG_ENDIAN__)
+/* uthash.h depends on __BIG_ENDIAN__ on BE platforms */
+#define __BIG_ENDIAN__ 1
 #endif
 
-/* This assumes htobe32 is a macro in endian.h, and if it doesn't exist, then
- * the others also won't exist */
+/* This assumes htobe32 is a macro and that if it doesn't exist, then the
+ * also won't exist */
 #ifndef htobe32
-# if __BYTE_ORDER == __LITTLE_ENDIAN
+# ifndef WORDS_BIGENDIAN
 #  define le32toh(x) (x)
 #  define le64toh(x) (x)
 #  define htole16(x) (x)
@@ -164,7 +154,7 @@ static inline int fsync (int fd)
 #  define be64toh(x) bswap_64(x)
 #  define htobe32(x) bswap_32(x)
 #  define htobe64(x) bswap_64(x)
-# elif __BYTE_ORDER == __BIG_ENDIAN
+# else
 #  define le32toh(x) bswap_32(x)
 #  define le64toh(x) bswap_64(x)
 #  define htole16(x) bswap_16(x)
@@ -174,8 +164,6 @@ static inline int fsync (int fd)
 #  define be64toh(x) (x)
 #  define htobe32(x) (x)
 #  define htobe64(x) (x)
-#else
-#error UNKNOWN BYTE ORDER
 #endif
 #endif
 
@@ -607,7 +595,7 @@ static inline void swap32yes(void*out, const void*in, size_t sz) {
 		(((uint32_t*)out)[swapcounter]) = swab32(((uint32_t*)in)[swapcounter]);
 }
 
-#ifdef __BIG_ENDIAN__
+#ifdef WORDS_BIGENDIAN
 #  define swap32tobe(out, in, sz)  (void)0
 #  define swap32tole(out, in, sz)  swap32yes(out, in, sz)
 #else
