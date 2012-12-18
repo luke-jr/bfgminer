@@ -1033,6 +1033,8 @@ struct modminer_fpga_state {
 	uint32_t shares_last_hw;
 	uint32_t hw_errors;
 	uint32_t shares_to_good;
+	uint32_t timeout_fail;
+	uint32_t success_more;
 	struct timeval last_changed;
 	struct timeval last_nonce;
 	struct timeval first_work;

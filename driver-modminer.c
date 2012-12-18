@@ -45,9 +45,11 @@
 #define MODMINER_DEF_CLOCK 200
 #define MODMINER_MIN_CLOCK 160
 
-#define MODMINER_CLOCK_DOWN -2
-#define MODMINER_CLOCK_SET 0
 #define MODMINER_CLOCK_UP 2
+#define MODMINER_CLOCK_SET 0
+#define MODMINER_CLOCK_DOWN -2
+// = 0 means OVERHEAT doesn't affect the clock
+#define MODMINER_CLOCK_OVERHEAT 0
 #define MODMINER_CLOCK_DEAD -6
 #define MODMINER_CLOCK_CUTOFF -10
 
@@ -578,12 +580,14 @@ static bool modminer_fpga_prepare(struct thr_info *thr)
  *	If device exceeds cutoff or overheat temp - stop sending work until it cools
  *		decrease the clock by MODMINER_CLOCK_CUTOFF/MODMINER_CLOCK_OVERHEAT
  *		for when it restarts
+ *		with MODMINER_CLOCK_OVERHEAT=0 basically says that temp shouldn't
+ *		affect the clock unless we reach CUTOFF
+ *
+ *	If device overheats
+ *		set shares_to_good back to MODMINER_MIN_BACK
+ *		to speed up clock recovery if temp drop doesnt help
  *
  * When to clock down:
- *	If device overheats
- *		also halve shares_to_good
- *		(so multiple temp drops can recover faster)
- *	 or
  *	If device gets MODMINER_HW_ERROR_PERCENT errors since last clock up or down
  *		if clock is <= default it requires 2 HW to do this test
  *		if clock is > default it only requires 1 HW to do this test
@@ -603,7 +607,6 @@ static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
 	int err, amount;
 
 	// Only do once if multiple shares per work or multiple reasons
-	// Since the temperature down clock test is first in the code this is OK
 	if (!state->new_work)
 		return false;
 
@@ -613,18 +616,17 @@ static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
 	state->shares_last_hw = 0;
 	state->hw_errors = 0;
 
-	// If drop requested due to temperature, clock drop is always allowed
-	if (!temp && delta < 0 && modminer->clock <= MODMINER_MIN_CLOCK)
+	// FYI clock drop has little effect on temp
+	if (delta < 0 && modminer->clock <= MODMINER_MIN_CLOCK)
 		return false;
 
 	if (delta > 0 && modminer->clock >= MODMINER_MAX_CLOCK)
 		return false;
 
 	if (delta < 0) {
-		if (temp) {
-			if (state->shares_to_good > MODMINER_MIN_BACK)
-				state->shares_to_good /= 2;
-		} else {
+		if (temp)
+			state->shares_to_good = MODMINER_MIN_BACK;
+		else {
 			if ((state->shares_to_good * 2) < MODMINER_TRY_UP)
 				state->shares_to_good *= 2;
 			else
@@ -759,7 +761,8 @@ static bool modminer_start_work(struct thr_info *thr)
 	mutex_lock(modminer->modminer_mutex);
 
 	if ((err = usb_write(modminer, (char *)(state->next_work_cmd), 46, &amount, C_SENDWORK)) < 0 || amount != 46) {
-// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
+// TODO: err = LIBUSB_ERROR_NO_DEVICE means the MMQ disappeared
+// - need to delete it and rescan for it? (after a delay?)
 // but check all (4) disappeared
 		mutex_unlock(modminer->modminer_mutex);
 
@@ -802,8 +805,7 @@ static void check_temperature(struct thr_info *thr)
 
 	mutex_lock(modminer->modminer_mutex);
 	if (usb_write(modminer, (char *)cmd, 2, &amount, C_REQUESTTEMPERATURE) == 0 && amount == 2 &&
-	    usb_read(modminer, (char *)(&temperature), tbytes, &tamount, C_GETTEMPERATURE) == 0 && tamount == tbytes)
-	{
+	    usb_read(modminer, (char *)(&temperature), tbytes, &tamount, C_GETTEMPERATURE) == 0 && tamount == tbytes) {
 		mutex_unlock(modminer->modminer_mutex);
 		if (state->one_byte_temp)
 			modminer->temp = temperature[0];
@@ -837,7 +839,9 @@ static void check_temperature(struct thr_info *thr)
 					modminer->api->name, modminer->device_id,
 					MODMINER_OVERHEAT_TEMP, modminer->temp);
 
-				modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, true);
+				// If it's defined to be 0 then don't call modminer_delta_clock()
+				if (MODMINER_CLOCK_OVERHEAT != 0)
+					modminer_delta_clock(thr, MODMINER_CLOCK_OVERHEAT, true);
 				state->overheated = true;
 				dev_error(modminer, REASON_DEV_OVER_HEAT);
 			}
@@ -854,6 +858,11 @@ static void check_temperature(struct thr_info *thr)
 
 #define work_restart(thr)  thr->work_restart
 
+// 250Mhz is 17.17s - ensure we don't go idle
+static const double processtime = 17.0;
+// 160Mhz is 26.84 - when overheated ensure we don't throw away shares
+static const double overheattime = 26.9;
+
 static uint64_t modminer_process_results(struct thr_info *thr)
 {
 	struct cgpu_info *modminer = thr->cgpu;
@@ -863,9 +872,9 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 	char cmd[2];
 	uint32_t nonce;
 	uint32_t curr_hw_errors;
-	int err, amount;
+	int err, amount, amount2;
 	int timeoutloop;
-	double processtime;
+	double timeout;
 	int temploop;
 
 	// If we are overheated it will just keep checking for results
@@ -876,21 +885,22 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 	cmd[0] = MODMINER_CHECK_WORK;
 	cmd[1] = modminer->fpgaid;
 
-	// 250Mhz is 17.17s
-	processtime = 17.0;
 	timeoutloop = 0;
 	temploop = 0;
 	while (1) {
 		mutex_lock(modminer->modminer_mutex);
 		if ((err = usb_write(modminer, cmd, 2, &amount, C_REQUESTWORKSTATUS)) < 0 || amount != 2) {
-// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
+// TODO: err = LIBUSB_ERROR_NO_DEVICE means the MMQ disappeared
+// - need to delete it and rescan for it? (after a delay?)
 // but check all (4) disappeared
 			mutex_unlock(modminer->modminer_mutex);
 
 			// timeoutloop never resets so the timeouts can't
 			// accumulate much during a single item of work
-			if (err == -7 && ++timeoutloop < 10)
+			if (err == LIBUSB_ERROR_TIMEOUT && ++timeoutloop < 10) {
+				state->timeout_fail++;
 				goto tryagain;
+			}
 
 			applog(LOG_ERR, "%s%u: Error sending (get nonce) (%d:%d)",
 				modminer->api->name, modminer->device_id, amount, err);
@@ -899,17 +909,28 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 		}
 
 		err = usb_read(modminer, (char *)(&nonce), 4, &amount, C_GETWORKSTATUS);
+		while (err == LIBUSB_SUCCESS && amount < 4) {
+			size_t remain = 4 - amount;
+			char *pos = ((char *)(&nonce)) + amount;
+
+			state->success_more++;
+
+			err = usb_read(modminer, pos, remain, &amount2, C_GETWORKSTATUS);
+
+			amount += amount2;
+		}
 		mutex_unlock(modminer->modminer_mutex);
 
-		if (err < 0 || amount != 4) {
-
+		if (err < 0 || amount < 4) {
 			// timeoutloop never resets so the timeouts can't
 			// accumulate much during a single item of work
-			if (err == -7 && ++timeoutloop < 10)
+			if (err == LIBUSB_ERROR_TIMEOUT && ++timeoutloop < 10) {
+				state->timeout_fail++;
 				goto tryagain;
+			}
 
 			applog(LOG_ERR, "%s%u: Error reading (get nonce) (%d:%d)",
-				modminer->api->name, modminer->device_id, amount, err);
+				modminer->api->name, modminer->device_id, amount+amount2, err);
 		}
 
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
@@ -970,15 +991,23 @@ tryagain:
 		if (work_restart(thr))
 			break;
 
-		gettimeofday(&now, NULL);
-		if (tdiff(&now, &state->tv_workstart) > processtime)
-			break;
+		if (state->overheated == true) {
+			// don't check every time
+			if (++temploop > 30) {
+				check_temperature(thr);
+				temploop = 0;
+			}
 
-		// don't check every time
-		if (state->overheated == true && ++temploop > 30) {
-			check_temperature(thr);
-			temploop = 0;
 		}
+
+		if (state->overheated == true)
+			timeout = overheattime;
+		else
+			timeout = processtime;
+
+		gettimeofday(&now, NULL);
+		if (tdiff(&now, &state->tv_workstart) > timeout)
+			break;
 
 		nmsleep(10);
 		if (work_restart(thr))
@@ -991,6 +1020,7 @@ tryagain:
 
 	// Not exact since the clock may have changed ... but close enough I guess
 	uint64_t hashes = (uint64_t)modminer->clock * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
+	// Overheat will complete the nonce range
 	if (hashes > 0xffffffff)
 		hashes = 0xffffffff;
 	else
