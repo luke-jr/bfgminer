@@ -5586,6 +5586,13 @@ static void *stratum_thread(void *userdata)
 			break;
 		}
 
+		/* Check this pool hasn't died while being a backup pool and
+		 * has not had its idle flag cleared */
+		if (pool_tclear(pool, &pool->idle)) {
+			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
+			pool_resus(pool);
+		}
+
 		if (!parse_method(pool, s) && !parse_stratum_response(pool, s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
 		free(s);
