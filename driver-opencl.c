@@ -212,7 +212,9 @@ CL_API_ENTRY cl_int CL_API_CALL
 
 static bool
 load_opencl_symbols() {
-#ifndef WIN32
+#if defined(__APPLE__)
+	void *cl = dlopen("/System/Library/Frameworks/OpenCL.framework/Versions/Current/OpenCL", RTLD_LAZY);
+#elif !defined(WIN32)
 	void *cl = dlopen("libOpenCL.so", RTLD_LAZY);
 #else
 	HMODULE cl = LoadLibrary("OpenCL.dll");
