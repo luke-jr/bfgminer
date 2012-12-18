@@ -277,6 +277,7 @@ struct device_api {
 	struct api_data *(*get_api_stats)(struct cgpu_info *);
 	bool (*get_stats)(struct cgpu_info *);
 	void (*identify_device)(struct cgpu_info *); // e.g. to flash a led
+	char *(*set_device)(struct cgpu_info *, char *option, char *setting, char *replybuf);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);
