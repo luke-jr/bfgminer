@@ -464,8 +464,12 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([static int __attribute__((warn_unused_result)
 
 
 # byteswap functions
+AH_TEMPLATE([HAVE_BYTESWAP_H], [Define to use byteswap macros from byteswap.h])
+AH_TEMPLATE([HAVE_ENDIAN_H], [Define to use byteswap macros from endian.h])
+AH_TEMPLATE([HAVE_SYS_ENDIAN_H], [Define to use byteswap macros from sys/endian.h])
+AH_TEMPLATE([HAVE_LIBKERN_OSBYTEORDER_H], [Define to use byteswap macros from libkern/OSByteOrder.h])
 BSWAP=''
-for sym in __builtin_bswap __bswap_ bswap_ __swap swap OSSwapInt; do
+for sym in bswap_ __builtin_bswap __bswap_ __swap swap OSSwapInt; do
 	AC_MSG_CHECKING([for ${sym}* functions])
 	for headerfile in '' byteswap.h endian.h sys/endian.h libkern/OSByteOrder.h; do
 		BFG_INCLUDE([headerinclude], [${headerfile}])
@@ -483,7 +487,7 @@ for sym in __builtin_bswap __bswap_ bswap_ __swap swap OSSwapInt; do
 				AC_MSG_RESULT([yes])
 			else
 				AC_MSG_RESULT([found in ${headerfile}])
-				AC_DEFINE_UNQUOTED(AS_TR_CPP([HAVE_$headerfile]), 1, [Define to use byteswap macros from <${headerfile}>])
+				AC_DEFINE_UNQUOTED(AS_TR_CPP([HAVE_$headerfile]), 1)
 			fi
 			break 2
 		],[])
@@ -531,8 +535,9 @@ if test "x$found_endian" = "xno"; then
 	if $have_win32 || $have_cygwin; then
 		AC_MSG_RESULT([assuming little endian (Windows)])
 	else
-		# This is reported to have problems, so only use it if our own checks fail
-		AC_C_BIGENDIAN
+		# AC_C_BIGENDIAN is reported to have problems, and invasive even if buried in a conditional, so don't use it
+		AC_MSG_RESULT([unknown])
+		AC_MSG_ERROR([Unable to identify platform endian])
 	fi
 fi
 
