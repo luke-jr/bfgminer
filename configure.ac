@@ -505,8 +505,9 @@ if test "x$found_endian" = "xno"; then
 	if $have_win32 || $have_cygwin; then
 		AC_MSG_RESULT([assuming little endian (Windows)])
 	else
-		# This is reported to have problems, so only use it if our own checks fail
-		AC_C_BIGENDIAN
+		# AC_C_BIGENDIAN is reported to have problems, and invasive even if buried in a conditional, so don't use it
+		AC_MSG_RESULT([unknown])
+		AC_MSG_ERROR([Unable to identify platform endian])
 	fi
 fi
 
