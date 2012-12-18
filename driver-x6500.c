@@ -466,6 +466,8 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 		struct thr_info *thr = x6500->thr[i];
 		fpga = thr->cgpu_data;
 
+		if (!fpga) continue;
+
 		if (code[i] == 0xffff || !code[i]) {
 			fpga->temp = 0;
 			continue;
