@@ -102,6 +102,29 @@ case $target in
 	;;
 esac
 
+
+m4_define([BFG_INCLUDE],
+	if test "x$2" = "x"; then
+		$1=''
+	else
+		$1="[#]include <$2>"
+	fi
+)
+
+m4_define([BFG_PREPROC_IFELSE],
+	BFG_INCLUDE([headerinclude], $2)
+	AC_COMPILE_IFELSE([
+		AC_LANG_PROGRAM([
+			${headerinclude}
+		], [
+			#if !( $1 )
+			#error "$1 false in preprocessor"
+			#endif
+		])
+	],$3,$4)
+)
+
+
 cpumining="no"
 
 AC_ARG_ENABLE([cpumining],
@@ -434,6 +457,81 @@ AC_LINK_IFELSE([AC_LANG_SOURCE([int main(void) { return __builtin_types_compatib
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([static int __attribute__((warn_unused_result)) func(int x) { return x; }])],
 			  AC_DEFINE([HAVE_WARN_UNUSED_RESULT], [1],
                                     [Define if __attribute__((warn_unused_result))]))
+
+
+# byteswap functions
+BSWAP=''
+for sym in __builtin_bswap __bswap_ bswap_ __swap swap OSSwapInt; do
+	AC_MSG_CHECKING([for ${sym}* functions])
+	for headerfile in '' byteswap.h endian.h sys/endian.h libkern/OSByteOrder.h; do
+		BFG_INCLUDE([headerinclude], [${headerfile}])
+		AC_LINK_IFELSE([
+			AC_LANG_PROGRAM([
+				${headerinclude}
+			], [
+				(void) ${sym}16(0);
+				(void) ${sym}32(0);
+				(void) ${sym}64(0);
+			])
+		], [
+			BSWAP="${sym}"
+			if test "x${headerfile}" = "x"; then
+				AC_MSG_RESULT([yes])
+			else
+				AC_MSG_RESULT([found in ${headerfile}])
+				AC_DEFINE_UNQUOTED(AS_TR_CPP([HAVE_$headerfile]), 1, [Define to use byteswap macros from <${headerfile}>])
+			fi
+			break 2
+		],[])
+	done
+	AC_MSG_RESULT([no])
+done
+if test "x$BSWAP" = "x"; then
+	true  # Substitutes are provided in miner.h
+elif test "x$BSWAP" = "xbswap_"; then
+	AC_MSG_CHECKING([if bswap_16 is already a macro])
+	BFG_PREPROC_IFELSE([defined(bswap_16)], $headerfile, [
+		AC_MSG_RESULT([yes])
+		BSWAP=""
+	],[
+		AC_MSG_RESULT([no])
+	])
+fi
+if test "x$BSWAP" != "x"; then
+	AC_DEFINE_UNQUOTED([bswap_16], ${BSWAP}16, [Define to 16-bit byteswap macro])
+	AC_DEFINE_UNQUOTED([bswap_32], ${BSWAP}32, [Define to 16-bit byteswap macro])
+	AC_DEFINE_UNQUOTED([bswap_64], ${BSWAP}64, [Define to 16-bit byteswap macro])
+fi
+
+# endian definition macros
+AC_MSG_CHECKING([for platform endian])
+found_endian=no
+for headerfile in '' endian.h sys/endian.h sys/param.h; do
+	for pfx in '' '__'; do
+		BFG_PREPROC_IFELSE([defined(${pfx}BYTE_ORDER) && defined(${pfx}BIG_ENDIAN) && defined(${pfx}LITTLE_ENDIAN) && (${pfx}BYTE_ORDER == ${pfx}BIG_ENDIAN || ${pfx}BYTE_ORDER == ${pfx}LITTLE_ENDIAN)], ${headerfile}, [
+			if test "x$headerfile" != "x"; then
+				headerfile=" (${headerfile})"
+			fi
+			BFG_PREPROC_IFELSE([${pfx}BYTE_ORDER == ${pfx}BIG_ENDIAN], ${headerfile}, [
+				AC_MSG_RESULT([big endian$headerfile])
+				AC_DEFINE(WORDS_BIGENDIAN, 1, [Define if your platform is big endian])
+			], [
+				AC_MSG_RESULT([little endian$headerfile])
+			])
+			found_endian=yes
+			break 2
+		],[true])
+	done
+done
+if test "x$found_endian" = "xno"; then
+	if $have_win32 || $have_cygwin; then
+		AC_MSG_RESULT([assuming little endian (Windows)])
+	else
+		# This is reported to have problems, so only use it if our own checks fail
+		AC_C_BIGENDIAN
+	fi
+fi
+
 
 if test "x$prefix" = xNONE; then
 	prefix=/usr/local
