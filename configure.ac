@@ -423,6 +423,10 @@ fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
+if echo "$LIBCURL_CFLAGS" | grep '@CPPFLAG_CURL_STATICLIB@' >/dev/null 2>&1; then
+	AC_MSG_WARN([Your libcurl pkgconfig file is broken, applying workaround])
+	LIBCURL_CFLAGS=`echo "$LIBCURL_CFLAGS" | sed 's/@CPPFLAG_CURL_STATICLIB@//'`
+fi
 AC_SUBST(LIBCURL_LIBS)
 
 dnl CCAN wants to know a lot of vars.
