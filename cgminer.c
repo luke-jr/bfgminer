@@ -2352,10 +2352,12 @@ static uint64_t share_diff(const struct work *work)
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = diffone / d64;
+	mutex_lock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
+	mutex_unlock(&control_lock);
 	return ret;
 }
 
@@ -2367,10 +2369,12 @@ static uint64_t scrypt_diff(const struct work *work)
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = scrypt_diffone / d64;
+	mutex_lock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
+	mutex_unlock(&control_lock);
 	return ret;
 }
 
