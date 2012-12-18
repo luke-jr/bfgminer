@@ -439,7 +439,7 @@ AH_TEMPLATE([HAVE_ENDIAN_H], [Define to use byteswap macros from endian.h])
 AH_TEMPLATE([HAVE_SYS_ENDIAN_H], [Define to use byteswap macros from sys/endian.h])
 AH_TEMPLATE([HAVE_LIBKERN_OSBYTEORDER_H], [Define to use byteswap macros from libkern/OSByteOrder.h])
 BSWAP=''
-for sym in __builtin_bswap __bswap_ bswap_ __swap swap OSSwapInt; do
+for sym in bswap_ __builtin_bswap __bswap_ __swap swap OSSwapInt; do
 	AC_MSG_CHECKING([for ${sym}* functions])
 	for headerfile in '' byteswap.h endian.h sys/endian.h libkern/OSByteOrder.h; do
 		BFG_INCLUDE([headerinclude], [${headerfile}])
