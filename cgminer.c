@@ -4608,6 +4608,8 @@ static void *stratum_thread(void *userdata)
 			 * the memory if we don't discard their records. */
 			clear_stratum_shares(pool);
 			clear_pool_work(pool);
+			if (pool == current_pool())
+				restart_threads();
 
 			if (initiate_stratum(pool) && auth_stratum(pool))
 				continue;
