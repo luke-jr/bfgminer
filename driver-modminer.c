@@ -812,6 +812,7 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 			struct modminer_fpga_state *state = thr->cgpu_data;
 			uint8_t oldFreqM = state->dclk.freqM;
 			signed char delta = (multiplier - oldFreqM) * 2;
+			state->dclk.freqMDefault = multiplier;
 			if (unlikely(!modminer_change_clock(thr, true, delta))) {
 				sprintf(replybuf, "Set clock failed: %s %u.%u",
 				        modminer->api->name, modminer->device_id, fpgaid);
