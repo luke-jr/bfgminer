@@ -4499,6 +4499,23 @@ static void clear_stratum_shares(struct pool *pool)
 	}
 }
 
+static void clear_pool_work(struct pool *pool)
+{
+	struct work *work, *tmp;
+	int cleared = 0;
+
+	mutex_lock(stgd_lock);
+	HASH_ITER(hh, staged_work, work, tmp) {
+		if (work->pool == pool) {
+			HASH_DEL(staged_work, work);
+			free_work(work);
+			cleared++;
+		}
+	}
+	mutex_unlock(stgd_lock);
+	applog(LOG_ERR, "Discarded %d stratum works", cleared);
+}
+
 /* We only need to maintain a secondary pool connection when we need the
  * capacity to get work from the backup pools while still on the primary */
 static bool cnx_needed(struct pool *pool)
@@ -4554,6 +4571,9 @@ static void *stratum_thread(void *userdata)
 		 * pool */
 		if (!cnx_needed(pool)) {
 			suspend_stratum(pool);
+			clear_stratum_shares(pool);
+			clear_pool_work(pool);
+
 			wait_lpcurrent(pool);
 			if (!initiate_stratum(pool) || !auth_stratum(pool)) {
 				pool_died(pool);
@@ -4587,6 +4607,7 @@ static void *stratum_thread(void *userdata)
 			 * tracked submitted shares are lost and we will leak
 			 * the memory if we don't discard their records. */
 			clear_stratum_shares(pool);
+			clear_pool_work(pool);
 
 			if (initiate_stratum(pool) && auth_stratum(pool))
 				continue;
