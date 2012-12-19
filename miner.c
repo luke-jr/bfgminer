@@ -694,9 +694,6 @@ bool detect_stratum(struct pool *pool, char *url)
 	if (!extract_sockaddr(pool, url))
 		return false;
 
-	if (opt_scrypt)
-		return false;
-
 	if (!strncasecmp(url, "stratum+tcp://", 14)) {
 		pool->rpc_url = strdup(url);
 		pool->has_stratum = true;
@@ -2560,10 +2557,12 @@ static uint64_t share_diff(const struct work *work)
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = diffone / d64;
+	mutex_lock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
+	mutex_unlock(&control_lock);
 	return ret;
 }
 
@@ -2575,10 +2574,12 @@ static uint64_t scrypt_diff(const struct work *work)
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = scrypt_diffone / d64;
+	mutex_lock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
+	mutex_unlock(&control_lock);
 	return ret;
 }
 
@@ -8014,6 +8015,7 @@ begin_bench:
 			total_go++;
 		}
 		pool = select_pool(lagging);
+		lagging = false;
 retry:
 		if (pool->has_stratum) {
 			while (!pool->stratum_active) {

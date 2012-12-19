@@ -332,6 +332,20 @@ The list of requests - a (*) means it requires privileged access - and replies a
                                                        0 to 9999)
                               coinbase-sig (string)
 
+ pgaset|N,opt[,val] (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting PGA N with opt[,val]
+                              This is only available if PGA mining is enabled
+
+                              If the PGA does not support any set options, it will
+                              always return a WARN stating pgaset isn't supported
+
+                              If opt=help it will return an INFO status with a
+                              help message about the options available
+
+                              The current options are:
+                               MMQ opt=clock val=2 to 230 (and a multiple of 2)
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
 
@@ -383,6 +397,13 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.23
+
+Added API commands:
+ 'pgaset' - with: MMQ opt=clock val=2 to 230 (and a multiple of 2)
+
+----------
 
 API V1.22
 

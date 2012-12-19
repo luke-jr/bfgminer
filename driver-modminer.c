@@ -1,5 +1,6 @@
 /*
  * Copyright 2012 Luke Dashjr
+ * Copyright 2012 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -13,6 +14,7 @@
 #define FD_SETSIZE 4096
 #endif
 
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -26,9 +28,9 @@
 #define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
 #define BISTREAM_USER_ID "\2\4$B"
 
-#define MODMINER_MINIMUM_CLOCK    2
-#define MODMINER_DEFAULT_CLOCK  200
-#define MODMINER_MAXIMUM_CLOCK  210
+#define MODMINER_MAX_CLOCK 230
+#define MODMINER_DEF_CLOCK 200
+#define MODMINER_MIN_CLOCK   2
 
 // Commands
 #define MODMINER_PING "\x00"
@@ -353,7 +355,7 @@ modminer_reduce_clock(struct thr_info*thr, bool needlock)
 {
 	struct modminer_fpga_state *state = thr->cgpu_data;
 
-	if (state->dclk.freqM <= MODMINER_MINIMUM_CLOCK / 2)
+	if (state->dclk.freqM <= MODMINER_MIN_CLOCK / 2)
 		return false;
 
 	return modminer_change_clock(thr, needlock, -2);
@@ -416,9 +418,9 @@ modminer_fpga_init(struct thr_info *thr)
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)", modminer->api->name, modminer->device_id, fpgaid);
 	state->pdone = 101;
 
-	state->dclk.freqM = MODMINER_MAXIMUM_CLOCK / 2 + 1;  // Will be reduced immediately
+	state->dclk.freqM = MODMINER_MAX_CLOCK / 2 + 1;  // Will be reduced immediately
 	while (1) {
-		if (state->dclk.freqM <= MODMINER_MINIMUM_CLOCK / 2)
+		if (state->dclk.freqM <= MODMINER_MIN_CLOCK / 2)
 			bailout2(LOG_ERR, "%s %u.%u: Hit minimum trying to find acceptable frequencies", modminer->api->name, modminer->device_id, fpgaid);
 		--state->dclk.freqM;
 		if (!modminer_change_clock(thr, false, 0))
@@ -433,12 +435,12 @@ modminer_fpga_init(struct thr_info *thr)
 	}
 	state->freqMaxMaxM =
 	state->dclk.freqMaxM = state->dclk.freqM;
-	if (MODMINER_DEFAULT_CLOCK / 2 < state->dclk.freqM) {
-		if (!modminer_change_clock(thr, false, -(state->dclk.freqM * 2 - MODMINER_DEFAULT_CLOCK)))
-			applog(LOG_WARNING, "%s %u.%u: Failed to set desired initial frequency of %u", modminer->api->name, modminer->device_id, fpgaid, MODMINER_DEFAULT_CLOCK);
+	if (MODMINER_DEF_CLOCK / 2 < state->dclk.freqM) {
+		if (!modminer_change_clock(thr, false, -(state->dclk.freqM * 2 - MODMINER_DEF_CLOCK)))
+			applog(LOG_WARNING, "%s %u.%u: Failed to set desired initial frequency of %u", modminer->api->name, modminer->device_id, fpgaid, MODMINER_DEF_CLOCK);
 	}
 	state->dclk.freqMDefault = state->dclk.freqM;
-	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u MHz (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2, MODMINER_MINIMUM_CLOCK, state->dclk.freqMaxM * 2);
+	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u MHz (range: %u-%u)", modminer->api->name, modminer->device_id, fpgaid, state->dclk.freqM * 2, MODMINER_MIN_CLOCK, state->dclk.freqMaxM * 2);
 
 	mutex_unlock(&modminer->device_mutex);
 
@@ -769,6 +771,67 @@ modminer_fpga_shutdown(struct thr_info *thr)
 	free(thr->cgpu_data);
 }
 
+static char *modminer_set_device(struct cgpu_info *modminer, char *option, char *setting, char *replybuf)
+{
+	int val;
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "clock: range %d-%d and a multiple of 2",
+					MODMINER_MIN_CLOCK, MODMINER_MAX_CLOCK);
+		return replybuf;
+	}
+
+	if (!strncasecmp(option, "clock", 5)) {
+		char repr[0x10];
+		int fpgaid, fpgaid_end, multiplier;
+
+		if (option[5])
+			fpgaid = fpgaid_end = abs(atoi(&option[5]));
+		else {
+			fpgaid = 0;
+			fpgaid_end = modminer->threads - 1;
+		}
+		if (fpgaid >= modminer->threads) {
+			sprintf(replybuf, "invalid fpga: '%s' valid range 0-%d", &option[5], modminer->threads - 1);
+			return replybuf;
+		}
+
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing clock setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < MODMINER_MIN_CLOCK || val > MODMINER_MAX_CLOCK || (val & 1) != 0) {
+			sprintf(replybuf, "invalid clock: '%s' valid range %d-%d and a multiple of 2",
+						setting, MODMINER_MIN_CLOCK, MODMINER_MAX_CLOCK);
+			return replybuf;
+		}
+
+		multiplier = val / 2;
+		for ( ; fpgaid <= fpgaid_end; ++fpgaid) {
+			struct thr_info *thr = modminer->thr[fpgaid];
+			struct modminer_fpga_state *state = thr->cgpu_data;
+			uint8_t oldFreqM = state->dclk.freqM;
+			signed char delta = (multiplier - oldFreqM) * 2;
+			state->dclk.freqMDefault = multiplier;
+			if (unlikely(!modminer_change_clock(thr, true, delta))) {
+				sprintf(replybuf, "Set clock failed: %s %u.%u",
+				        modminer->api->name, modminer->device_id, fpgaid);
+				return replybuf;
+			}
+
+			sprintf(repr, "%s %u.%u", modminer->api->name, modminer->device_id, fpgaid);
+			dclk_msg_freqchange(repr, oldFreqM * 2, state->dclk.freqM * 2, " on user request");
+		}
+
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 struct device_api modminer_api = {
 	.dname = "modminer",
 	.name = "MMQ",
@@ -776,6 +839,7 @@ struct device_api modminer_api = {
 	.get_statline_before = get_modminer_statline_before,
 	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_api_extra_device_status,
+	.set_device = modminer_set_device,
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,
 	.scanhash = modminer_scanhash,
