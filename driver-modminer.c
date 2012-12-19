@@ -623,10 +623,10 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 	state->hw_errors = 0;
 
 	// FYI clock drop has little effect on temp
-	if (delta < 0 && modminer->clock <= MODMINER_MIN_CLOCK)
+	if (delta < 0 && (modminer->clock + delta) < MODMINER_MIN_CLOCK)
 		return clocktoolow;
 
-	if (delta > 0 && modminer->clock >= MODMINER_MAX_CLOCK)
+	if (delta > 0 && (modminer->clock + delta) > MODMINER_MAX_CLOCK)
 		return clocktoohi;
 
 	if (delta < 0) {
