@@ -330,8 +330,22 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               queue, scantime, expiry
                               N is an integer in the range 0 to 9999
 
- substats      USBSTATS       Stats of all LIBUSB mining devices except ztex
+ usbstats      USBSTATS       Stats of all LIBUSB mining devices except ztex
                               e.g. Name=MMQ,ID=0,Stat=SendWork,Count=99,...|
+
+ pgaset|N,opt[,val] (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting PGA N with opt[,val]
+                              This is only available if PGA mining is enabled
+
+                              If the PGA does not support any set options, it will
+                              always return a WARN stating pgaset isn't supported
+
+                              If opt=help it will return an INFO status with a
+                              help message about the options available
+
+                              The current options are:
+                               MMQ opt=clock val=160 to 230 (and a multiple of 2)
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
@@ -386,7 +400,14 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.22
+API V1.23
+
+Added API commands:
+ 'pgaset' - with: MMQ opt=clock val=160 to 230 (and a multiple of 2)
+
+----------
+
+API V1.22 (cgminer v2.10.1)
 
 Enforced output limitation:
  all extra records beyond the output limit of the API (~64k) are ignored

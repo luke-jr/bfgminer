@@ -133,7 +133,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.22";
+static const char *APIVERSION = "1.23";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static const char *SICK = "Sick";
@@ -379,6 +379,14 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_USBSTA 87
 #define MSG_NOUSTA 88
 
+#ifdef HAVE_AN_FPGA
+#define MSG_MISPGAOPT 89
+#define MSG_PGANOSET 90
+#define MSG_PGAHELP 91
+#define MSG_PGASETOK 92
+#define MSG_PGASETERR 93
+#endif
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -544,6 +552,13 @@ struct CODES {
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
  { SEVERITY_SUCC,  MSG_USBSTA,	PARAM_NONE,	"USB Statistics" },
  { SEVERITY_INFO,  MSG_NOUSTA,	PARAM_NONE,	"No USB Statistics" },
+#ifdef HAVE_AN_FPGA
+ { SEVERITY_ERR,   MSG_MISPGAOPT, PARAM_NONE,	"Missing option after PGA number" },
+ { SEVERITY_WARN,  MSG_PGANOSET, PARAM_PGA,	"PGA %d does not support pgaset" },
+ { SEVERITY_INFO,  MSG_PGAHELP, PARAM_BOTH,	"PGA %d set help: %s" },
+ { SEVERITY_SUCC,  MSG_PGASETOK, PARAM_BOTH,	"PGA %d set OK" },
+ { SEVERITY_ERR,   MSG_PGASETERR, PARAM_BOTH,	"PGA %d set failed: %s" },
+#endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -3142,6 +3157,64 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 #endif
 }
 
+#ifdef HAVE_AN_FPGA
+static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	char buf[TMPBUFSIZ];
+	int numpga = numpgas();
+
+	if (numpga == 0) {
+		message(io_data, MSG_PGANON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	char *opt = strchr(param, ',');
+	if (opt)
+		*(opt++) = '\0';
+	if (!opt || !*opt) {
+		message(io_data, MSG_MISPGAOPT, 0, NULL, isjson);
+		return;
+	}
+
+	int id = atoi(param);
+	if (id < 0 || id >= numpga) {
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
+		return;
+	}
+
+	int dev = pgadevice(id);
+	if (dev < 0) { // Should never happen
+		message(io_data, MSG_INVPGA, id, NULL, isjson);
+		return;
+	}
+
+	struct cgpu_info *cgpu = devices[dev];
+	struct device_api *api = cgpu->api;
+
+	char *set = strchr(opt, ',');
+	if (set)
+		*(set++) = '\0';
+
+	if (!api->set_device)
+		message(io_data, MSG_PGANOSET, id, NULL, isjson);
+	else {
+		char *ret = api->set_device(cgpu, opt, set, buf);
+		if (ret) {
+			if (strcasecmp(opt, "help") == 0)
+				message(io_data, MSG_PGAHELP, id, ret, isjson);
+			else
+				message(io_data, MSG_PGASETERR, id, ret, isjson);
+		} else
+			message(io_data, MSG_PGASETOK, id, NULL, isjson);
+	}
+}
+#endif
+
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -3198,6 +3271,9 @@ struct CMDS {
 	{ "debug",		debugstate,	true },
 	{ "setconfig",		setconfig,	true },
 	{ "usbstats",		usbstats,	false },
+#ifdef HAVE_AN_FPGA
+	{ "pgaset",		pgaset,		true },
+#endif
 	{ NULL,			NULL,		false }
 };
 

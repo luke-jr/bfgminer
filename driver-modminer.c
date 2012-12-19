@@ -599,7 +599,13 @@ static bool modminer_fpga_prepare(struct thr_info *thr)
  *
  * N.B. clock must always be a multiple of 2
  */
-static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
+static const char *clockoldwork = "clock already changed for this work";
+static const char *clocktoolow = "clock too low";
+static const char *clocktoohi = "clock too high";
+static const char *clocksetfail = "clock set command failed";
+static const char *clockreplyfail = "clock reply failed";
+
+static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool temp, bool force)
 {
 	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
@@ -607,8 +613,8 @@ static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
 	int err, amount;
 
 	// Only do once if multiple shares per work or multiple reasons
-	if (!state->new_work)
-		return false;
+	if (!state->new_work && !force)
+		return clockoldwork;
 
 	state->new_work = false;
 
@@ -617,11 +623,11 @@ static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
 	state->hw_errors = 0;
 
 	// FYI clock drop has little effect on temp
-	if (delta < 0 && modminer->clock <= MODMINER_MIN_CLOCK)
-		return false;
+	if (delta < 0 && (modminer->clock + delta) < MODMINER_MIN_CLOCK)
+		return clocktoolow;
 
-	if (delta > 0 && modminer->clock >= MODMINER_MAX_CLOCK)
-		return false;
+	if (delta > 0 && (modminer->clock + delta) > MODMINER_MAX_CLOCK)
+		return clocktoohi;
 
 	if (delta < 0) {
 		if (temp)
@@ -649,7 +655,7 @@ static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
 		applog(LOG_ERR, "%s%u: Error writing set clock speed (%d:%d)",
 			modminer->api->name, modminer->device_id, amount, err);
 
-		return false;
+		return clocksetfail;
 	}
 
 	if ((err = usb_read(modminer, (char *)(&buf), 1, &amount, C_REPLYSETCLOCK)) < 0 || amount != 1) {
@@ -658,7 +664,7 @@ static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
 		applog(LOG_ERR, "%s%u: Error reading set clock speed (%d:%d)",
 			modminer->api->name, modminer->device_id, amount, err);
 
-		return false;
+		return clockreplyfail;
 	}
 
 	mutex_unlock(modminer->modminer_mutex);
@@ -668,7 +674,7 @@ static bool modminer_delta_clock(struct thr_info *thr, int delta, bool temp)
 			(delta < 0) ? "down " : (delta > 0 ? "up " : ""),
 			modminer->clock);
 
-	return true;
+	return NULL;
 }
 
 static bool modminer_fpga_init(struct thr_info *thr)
@@ -715,7 +721,7 @@ static bool modminer_fpga_init(struct thr_info *thr)
 	}
 
 	modminer->clock = MODMINER_DEF_CLOCK;
-	modminer_delta_clock(thr, MODMINER_CLOCK_SET, false);
+	modminer_delta_clock(thr, MODMINER_CLOCK_SET, false, false);
 
 	thr->primary_thread = true;
 
@@ -831,7 +837,7 @@ static void check_temperature(struct thr_info *thr)
 					modminer->api->name, modminer->device_id,
 					MODMINER_CUTOFF_TEMP, modminer->temp);
 
-				modminer_delta_clock(thr, MODMINER_CLOCK_CUTOFF, true);
+				modminer_delta_clock(thr, MODMINER_CLOCK_CUTOFF, true, false);
 				state->overheated = true;
 				dev_error(modminer, REASON_DEV_THERMAL_CUTOFF);
 			} else {
@@ -841,7 +847,7 @@ static void check_temperature(struct thr_info *thr)
 
 				// If it's defined to be 0 then don't call modminer_delta_clock()
 				if (MODMINER_CLOCK_OVERHEAT != 0)
-					modminer_delta_clock(thr, MODMINER_CLOCK_OVERHEAT, true);
+					modminer_delta_clock(thr, MODMINER_CLOCK_OVERHEAT, true, false);
 				state->overheated = true;
 				dev_error(modminer, REASON_DEV_OVER_HEAT);
 			}
@@ -950,7 +956,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 					if (modminer->clock > MODMINER_DEF_CLOCK || state->hw_errors > 1) {
 						float pct = (state->hw_errors * 100.0 / (state->shares ? : 1.0));
 						if (pct >= MODMINER_HW_ERROR_PERCENT)
-							modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, false);
+							modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, false, false);
 					}
 				}
 			} else {
@@ -959,7 +965,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 				// If we've reached the required good shares in a row then clock up
 				if (((state->shares - state->shares_last_hw) >= state->shares_to_good) &&
 						modminer->temp < MODMINER_TEMP_UP_LIMIT)
-					modminer_delta_clock(thr, MODMINER_CLOCK_UP, false);
+					modminer_delta_clock(thr, MODMINER_CLOCK_UP, false, false);
 			}
 		} else {
 			// on rare occasions - the MMQ can just stop returning valid nonces
@@ -967,7 +973,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 			gettimeofday(&now, NULL);
 			if (tdiff(&now, &state->last_nonce) >= death) {
 				if (state->death_stage_one) {
-					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false);
+					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false, true);
 					applog(LOG_ERR, "%s%u: DEATH clock down",
 						modminer->api->name, modminer->device_id);
 
@@ -977,7 +983,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 					state->death_stage_one = false;
 					return -1;
 				} else {
-					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false);
+					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false, true);
 					applog(LOG_ERR, "%s%u: death clock down",
 						modminer->api->name, modminer->device_id);
 
@@ -1097,11 +1103,50 @@ static void modminer_fpga_shutdown(struct thr_info *thr)
 	free(thr->cgpu_data);
 }
 
+static char *modminer_set_device(struct cgpu_info *modminer, char *option, char *setting, char *replybuf)
+{
+	const char *ret;
+	int val;
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "clock: range %d-%d and a multiple of 2",
+					MODMINER_MIN_CLOCK, MODMINER_MAX_CLOCK);
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "clock") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing clock setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < MODMINER_MIN_CLOCK || val > MODMINER_MAX_CLOCK || (val & 1) != 0) {
+			sprintf(replybuf, "invalid clock: '%s' valid range %d-%d and a multiple of 2",
+						setting, MODMINER_MIN_CLOCK, MODMINER_MAX_CLOCK);
+			return replybuf;
+		}
+
+		val -= (int)(modminer->clock);
+
+		ret = modminer_delta_clock(modminer->thr[0], val, false, true);
+		if (ret) {
+			sprintf(replybuf, "Set clock failed: %s", ret);
+			return replybuf;
+		} else
+			return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 struct device_api modminer_api = {
 	.dname = "modminer",
 	.name = "MMQ",
 	.api_detect = modminer_detect,
 	.get_statline_before = get_modminer_statline_before,
+	.set_device = modminer_set_device,
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,
 	.scanhash = modminer_scanhash,
