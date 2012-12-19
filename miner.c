@@ -5465,7 +5465,6 @@ static void clear_pool_work(struct pool *pool)
 		}
 	}
 	mutex_unlock(stgd_lock);
-	applog(LOG_ERR, "Discarded %d stratum works", cleared);
 }
 
 /* One stratum thread per pool that has stratum waits on the socket checking
