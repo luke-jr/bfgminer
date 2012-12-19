@@ -343,6 +343,9 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               If opt=help it will return an INFO status with a
                               help message about the options available
 
+                              The current options are:
+                               MMQ opt=clock val=160 to 230 (and a multiple of 2)
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the BFGMiner status window
 
@@ -398,7 +401,7 @@ Feature Changelog for external applications using the API:
 API V1.23
 
 Added API commands:
- 'pgaset'
+ 'pgaset' - with: MMQ opt=clock val=160 to 230 (and a multiple of 2)
 
 ----------
 
