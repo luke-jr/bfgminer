@@ -342,7 +342,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 	if (!f) {
 		mutex_unlock(modminer->modminer_mutex);
 
-		applog(LOG_DEBUG, "%s%u: Error (%d) opening bitstream file %s",
+		applog(LOG_ERR, "%s%u: Error (%d) opening bitstream file %s",
 			modminer->api->name, modminer->device_id, errno, bsfile);
 
 		return false;
