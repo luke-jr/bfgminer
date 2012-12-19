@@ -5451,6 +5451,23 @@ static void clear_stratum_shares(struct pool *pool)
 	}
 }
 
+static void clear_pool_work(struct pool *pool)
+{
+	struct work *work, *tmp;
+	int cleared = 0;
+
+	mutex_lock(stgd_lock);
+	HASH_ITER(hh, staged_work, work, tmp) {
+		if (work->pool == pool) {
+			HASH_DEL(staged_work, work);
+			free_work(work);
+			cleared++;
+		}
+	}
+	mutex_unlock(stgd_lock);
+	applog(LOG_ERR, "Discarded %d stratum works", cleared);
+}
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -5498,6 +5515,7 @@ static void *stratum_thread(void *userdata)
 			 * tracked submitted shares are lost and we will leak
 			 * the memory if we don't discard their records. */
 			clear_stratum_shares(pool);
+			clear_pool_work(pool);
 
 			if (initiate_stratum(pool) && auth_stratum(pool))
 				continue;
@@ -5666,8 +5684,11 @@ retry_stratum:
 		detect_algo = 2;
 		return true;
 	}
-	else if (pool->has_stratum)
+	else if (pool->has_stratum) {
+		clear_stratum_shares(pool);
+		clear_pool_work(pool);
 		shutdown_stratum(pool);
+	}
 
 	if (val) {
 		bool rc;
