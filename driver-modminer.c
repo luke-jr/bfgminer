@@ -599,11 +599,11 @@ static bool modminer_fpga_prepare(struct thr_info *thr)
  *
  * N.B. clock must always be a multiple of 2
  */
-static const char *CLOCKOLDWORK = "clock already changed for this work";
-static const char *CLOCKTOOLOW = "clock too low";
-static const char *CLOCKTOOHI = "clock too high";
-static const char *CLOCKSETFAIL = "clock set command failed";
-static const char *CLOCKREPLYFAIL = "clock reply failed";
+static const char *clockoldwork = "clock already changed for this work";
+static const char *clocktoolow = "clock too low";
+static const char *clocktoohi = "clock too high";
+static const char *clocksetfail = "clock set command failed";
+static const char *clockreplyfail = "clock reply failed";
 
 static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool temp, bool force)
 {
@@ -614,7 +614,7 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 
 	// Only do once if multiple shares per work or multiple reasons
 	if (!state->new_work && !force)
-		return CLOCKOLDWORK;
+		return clockoldwork;
 
 	state->new_work = false;
 
@@ -624,10 +624,10 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 
 	// FYI clock drop has little effect on temp
 	if (delta < 0 && modminer->clock <= MODMINER_MIN_CLOCK)
-		return CLOCKTOOLOW;
+		return clocktoolow;
 
 	if (delta > 0 && modminer->clock >= MODMINER_MAX_CLOCK)
-		return CLOCKTOOHI;
+		return clocktoohi;
 
 	if (delta < 0) {
 		if (temp)
@@ -655,7 +655,7 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 		applog(LOG_ERR, "%s%u: Error writing set clock speed (%d:%d)",
 			modminer->api->name, modminer->device_id, amount, err);
 
-		return CLOCKSETFAIL;
+		return clocksetfail;
 	}
 
 	if ((err = usb_read(modminer, (char *)(&buf), 1, &amount, C_REPLYSETCLOCK)) < 0 || amount != 1) {
@@ -664,7 +664,7 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 		applog(LOG_ERR, "%s%u: Error reading set clock speed (%d:%d)",
 			modminer->api->name, modminer->device_id, amount, err);
 
-		return CLOCKREPLYFAIL;
+		return clockreplyfail;
 	}
 
 	mutex_unlock(modminer->modminer_mutex);
