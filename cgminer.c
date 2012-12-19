@@ -557,9 +557,6 @@ bool detect_stratum(struct pool *pool, char *url)
 	if (!extract_sockaddr(pool, url))
 		return false;
 
-	if (opt_scrypt)
-		return false;
-
 	if (!strncasecmp(url, "stratum+tcp://", 14)) {
 		pool->rpc_url = strdup(url);
 		pool->has_stratum = true;
