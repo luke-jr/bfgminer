@@ -1,5 +1,27 @@
 BFGMiner Version 2.10.1 - Future
 
+- Stop all work from the current pool if it's a stratum pool once it is
+disconnected since it will be invalid upon reconnecting.
+- Discard all staged work from stratum pools as well as the shares upon
+disconnection since all the work becomes invalid.
+- Use correct cbreak after 15 second delay when no pool is found alive.
+- MMQ missing firmware -> ERR not DEBUG
+- Allow stratum to work with scrypt.
+- MMQ ensure delta clock can never exceed limits
+- MMQ lowercase new string constants
+- MMQ add api pgaset for clock
+- API V1.23 - new pgaset command, to be used soon
+- Protect the best_share/best_diff values under control lock.
+- MMQ style police
+- MMQ count work check timeout failures
+- MMQ allow partial work replies and count them
+- Check a stratum pool hasn't gone dead while being a backup pool and missed
+having its idle flag cleared.
+- MMQ overheat: remove clockdown (doesn't help) + ensure no lost shares
+- API-README grammar
+- API-README explain custom page extensions in miner.php
+- miner.php add a sample group pool report
+- miner.php allow where,group,having on cumstom pages
 - Check for EWOULDBLOCK when supported in send and recv as well.
 - Use the raw send() command instead of curl_easy_send since curl raw socket
 usage introduces random bugs on windows.
