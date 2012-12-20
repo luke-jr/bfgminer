@@ -5489,7 +5489,6 @@ static void clear_pool_work(struct pool *pool)
 		}
 	}
 	mutex_unlock(stgd_lock);
-	applog(LOG_ERR, "Discarded %d stratum works", cleared);
 }
 
 /* We only need to maintain a secondary pool connection when we need the
