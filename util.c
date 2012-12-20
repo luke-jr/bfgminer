@@ -1436,6 +1436,7 @@ bool initiate_stratum(struct pool *pool)
 		if (unlikely(!pool->stratum_curl))
 			quit(1, "Failed to curl_easy_init in initiate_stratum");
 	}
+	pool->readbuf.len = 0;
 	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
 
