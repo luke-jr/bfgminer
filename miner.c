@@ -8015,7 +8015,6 @@ begin_bench:
 			total_go++;
 		}
 		pool = select_pool(lagging);
-		lagging = false;
 retry:
 		if (pool->has_stratum) {
 			while (!pool->stratum_active) {
