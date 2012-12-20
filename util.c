@@ -1465,6 +1465,7 @@ bool initiate_stratum(struct pool *pool)
 		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
 	}
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
+	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
 		goto out;
@@ -1544,7 +1545,13 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else
+	{
 		applog(LOG_DEBUG, "Initiate stratum failed");
+		if (pool->sock != INVSOCK) {
+			shutdown(pool->sock, SHUT_RDWR);
+			pool->sock = INVSOCK;
+		}
+	}
 
 	return ret;
 }
