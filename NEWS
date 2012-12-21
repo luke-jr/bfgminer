@@ -1,3 +1,17 @@
+BFGMiner Version 2.8.9 - December 21, 2012
+
+- libztex: check returnvalue of libusb_claim_interface() and release the
+interface in case of early exit
+- Use correct cbreak after 15 second delay when no pool is found alive.
+- Bugfix: modminer: Return failure to change frequency when device reports it
+- opencl: Look in the right place for OpenCL library on Mac OS X
+- Hot-patch broken libcurl pkgconfig CFLAGS found in libcurl's Windows binaries
+- README: Explicitly mention automake dependency
+- README: Update AMD APP SDK URIs
+- driver-ztex: use the correct size for the swap array
+- Benchmark incorrect work size
+
+
 BFGMiner Version 2.8.8 - December 10, 2012
 
 - Bugfix: Copy share hash to work->hash before doing 4-byte flip required by
