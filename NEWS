@@ -1,3 +1,45 @@
+BFGMiner Version 2.9.6 - December 21, 2012
+
+- libztex: check returnvalue of libusb_claim_interface() and release the
+interface in case of early exit
+- Use correct cbreak after 15 second delay when no pool is found alive.
+- Bugfix: modminer: Return failure to change frequency when device reports it
+- opencl: Look in the right place for OpenCL library on Mac OS X
+- Bugfix: Shutdown stratum socket when initiate fails, so it doesn't linger
+- Bugfix: Clear stratum receive buffer when initializing, in case there was
+extra unprocessed data in it from a previous connection
+- Stop all work from the current pool if it's a stratum pool once it is
+disconnected since it will be invalid upon reconnecting.
+- Discard all staged work from stratum pools as well as the shares upon
+disconnection since all the work becomes invalid.
+- Hot-patch broken libcurl pkgconfig CFLAGS found in libcurl's Windows binaries
+- README: Explicitly mention automake dependency
+- README: Update AMD APP SDK URIs
+- Bugfix: AC_C_BIGENDIAN is reported to have problems, and invasive even if
+buried in a conditional, so don't use it
+- Bugfix: Check for bswap_* first, to avoid redefinition based on other variants
+- Bugfix: autoheader isn't smart enough to figure out variable defines, so use
+AH_TEMPLATE for each possible header
+- Check a stratum pool hasn't gone dead while being a backup pool and missed
+having its idle flag cleared.
+- Fix null pointer issue when one chip on an X6500 is not initialized yet when
+reading temperature.
+- Reorganize detection of platform byteswap macros and endian to be more robust
+using autoconf
+- Bugfix: Always let watchpool thread handle dead pool recovery (including for
+stratum-only pools)
+- Bugfix: Avoid lingering stratum_auth when connection is lost
+- Bugfix: Reset pool transparency_time when connecting to stratum
+- Bugfix: Immediately discard shares found on disconnected stratum pools, since
+there is no way to submit them
+- driver-ztex: use the correct size for the swap array
+- Benchmark incorrect work size
+- Bugfix: Try GBT if no pool protocol is known (can occur in the process of
+stratum failover to GBT)
+- Bugfix: Correctly track discarded stratum shares, and log them as "disconnect"
+in sharelog
+
+
 BFGMiner Version 2.9.5 - December 11, 2012
 
 - Bugfix: Copy share hash to work->hash before doing 4-byte flip required by
