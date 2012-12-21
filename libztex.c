@@ -133,7 +133,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	struct libztex_fpgastate state;
 	const int transactionBytes = 65536;
 	unsigned char buf[transactionBytes], settings[2];
-	int tries, cnt, buf_p, i;
+	int tries, cnt, buf_p, i, err;
 	ssize_t pos = 0;
 	FILE *fp;
 
