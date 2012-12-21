@@ -3723,19 +3723,21 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		} else
 			timeoutp = NULL;
 		
-		for (sws = write_sws; sws; sws = sws->next) {
+		for (swsp = &write_sws; (sws = *swsp); ) {
 			int fd = sws->work->pool->sock;
 			if (fd == INVSOCK) {
 				applog(LOG_WARNING, "Stratum pool %u died while share waiting to submit, discarding", sws->work->pool->pool_no);
 				submit_discard_share2("disconnect", sws->work);
 				--wip;
 				++tsreduce;
+				*swsp = sws->next;
 				free_sws(sws);
 				continue;
 			}
 			FD_SET(fd, &wfds);
 			if (fd > maxfd)
 				maxfd = fd;
+			swsp = &sws->next;
 		}
 		if (tsreduce) {
 			mutex_lock(&submitting_lock);
