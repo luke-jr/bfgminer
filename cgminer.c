@@ -4960,23 +4960,31 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
 static void set_work_target(struct work *work, double diff)
 {
-	unsigned char rtarget[32], target[32];
-	double d64;
+	unsigned char target[32];
 	uint64_t *data64, h64;
+	double d64;
 
 	d64 = diffone;
 	d64 /= diff;
 	h64 = d64;
 
+	memset(target, 0, 32);
 	if (h64) {
+		unsigned char rtarget[32];
+
 		memset(rtarget, 0, 32);
-		data64 = (uint64_t *)(rtarget + 4);
+		if (opt_scrypt)
+			data64 = (uint64_t *)(rtarget + 2);
+		else
+			data64 = (uint64_t *)(rtarget + 4);
 		*data64 = htobe64(h64);
 		swab256(target, rtarget);
 	} else {
 		/* Support for the classic all FFs just-below-1 diff */
-		memset(target, 0xff, 28);
-		memset(&target[28], 0, 4);
+		if (opt_scrypt)
+			memset(target, 0xff, 30);
+		else
+			memset(target, 0xff, 28);
 	}
 
 	if (opt_debug) {
