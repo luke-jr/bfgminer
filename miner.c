@@ -3757,7 +3757,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		
 		for (swsp = &write_sws; (sws = *swsp); ) {
 			int fd = sws->work->pool->sock;
-			if (!FD_ISSET(fd, &wfds)) {
+			if (fd == -1 || !FD_ISSET(fd, &wfds)) {
 				swsp = &sws->next;
 				continue;
 			}
