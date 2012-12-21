@@ -7939,7 +7939,7 @@ int main(int argc, char *argv[])
 				applog(LOG_ERR, "Press any key to exit, or BFGMiner will try again in 15s.");
 				if (getch() != ERR)
 					quit(0, "No servers could be used! Exiting.");
-				nocbreak();
+				cbreak();
 			} else
 #endif
 				quit(0, "No servers could be used! Exiting.");

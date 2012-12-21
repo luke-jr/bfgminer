@@ -150,12 +150,17 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 		return cnt;
 	}
 
-	libusb_claim_interface(ztex->hndl, settings[1]);
+	err = libusb_claim_interface(ztex->hndl, settings[1]);
+	if (err != LIBUSB_SUCCESS) {
+		applog(LOG_ERR, "%s: failed to claim interface for hs transfer", ztex->repr);
+		return -4;
+	}
 
 	for (tries = 3; tries > 0; tries--) {
 		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
 			applog(LOG_ERR, "%s: failed to read bitstream '%s'", ztex->repr, firmware);
+			libusb_release_interface(ztex->hndl, settings[1]);
 			return -2;
 		}
 
@@ -216,6 +221,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 		libztex_getFpgaState(ztex, &state);
 		if (!state.fpgaConfigured) {
 			applog(LOG_ERR, "%s: HS FPGA configuration failed: DONE pin does not go high", ztex->repr);
+			libusb_release_interface(ztex->hndl, settings[1]);
 			return -3;
 		}
 

@@ -305,6 +305,8 @@ modminer_change_clock(struct thr_info*thr, bool needlock, signed char delta)
 
 	if (buf[0])
 		state->dclk.freqM = clk / 2;
+	else
+		return false;
 
 	return true;
 }
