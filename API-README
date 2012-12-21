@@ -398,14 +398,14 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.23
+API V1.23 (BFGMiner v2.10.1)
 
 Added API commands:
  'pgaset' - with: MMQ opt=clock val=2 to 230 (and a multiple of 2)
 
 ----------
 
-API V1.22
+API V1.22 (not released)
 
 Enforced output limitation:
  all extra records beyond the output limit of the API (~64k) are ignored
