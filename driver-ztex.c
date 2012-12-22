@@ -223,6 +223,8 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	overflow = false;
 	int count = 0;
+	int validNonces = 0;
+	double errorCount = 0;
 
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
 	while (!(overflow || thr->work_restart)) {
@@ -274,10 +276,13 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 				// do not count errors in the first 500ms after sendHashData (2x250 wait time)
 				if (count > 2) {
-					ztex->errorCount[ztex->freqM] += 1.0 / ztex->numNonces;
 					thr->cgpu->hw_errors++;
+					errorCount += (1.0 / ztex->numNonces);
 				}
 			}
+			else
+				validNonces++;
+
 
 			for (j=0; j<=ztex->extraSolutions; j++) {
 				nonce = hdata[i].goldenNonce[j];
@@ -312,6 +317,18 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			}
 		}
 	}
+
+	// only add the errorCount if we had at least some valid nonces or
+	// had no valid nonces in the last round
+	if (ztex->nonceCheckValid > 0 && validNonces == 0) {
+		applog(LOG_ERR, "%s: resetting %.1f errors", ztex->repr, errorCount);
+	}
+	else {
+		ztex->errorCount[ztex->freqM] += errorCount;
+	}
+
+	// remember the number of valid nonces for the check in the next round
+	ztex->nonceCheckValid = validNonces;
 
 	ztex->errorRate[ztex->freqM] = ztex->errorCount[ztex->freqM] /	ztex->errorWeight[ztex->freqM] * (ztex->errorWeight[ztex->freqM] < 100? ztex->errorWeight[ztex->freqM] * 0.01: 1.0);
 	if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM])

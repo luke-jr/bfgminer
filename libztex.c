@@ -701,6 +701,9 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		newdev->maxErrorRate[cnt] = 0;
 	}
 
+	// fake that the last round found something valid
+	newdev->nonceCheckValid = 1;
+
 	newdev->usbbus = libusb_get_bus_number(dev);
 	newdev->usbaddress = libusb_get_device_address(dev);
 	sprintf(newdev->repr, "ZTEX %s-1", newdev->snString);

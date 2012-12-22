@@ -73,6 +73,8 @@ struct libztex_device {
 	double errorRate[256];
 	double maxErrorRate[256];
 
+	int16_t nonceCheckValid;
+
 	int16_t numberOfFpgas;
 	int selectedFpga;
 	bool parallelConfigSupport;
