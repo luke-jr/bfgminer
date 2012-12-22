@@ -146,9 +146,7 @@ static bool ztex_updateFreq(struct libztex_device* ztex)
 }
 
 
-static bool ztex_checkNonce(struct libztex_device *ztex,
-                            struct work *work,
-                            struct libztex_hash_data *hdata)
+static uint32_t ztex_checkNonce(struct work *work, uint32_t nonce)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[80];
@@ -158,31 +156,15 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	uint32_t *hash2_32 = (uint32_t *)hash2;
 	int i;
 
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-	hdata->nonce = swab32(hdata->nonce);
-	hdata->hash7 = swab32(hdata->hash7);
-#endif
+	swap32[76/4] = htonl(nonce);
 
-	work->data[64 + 12 + 0] = (hdata->nonce >> 0) & 0xff;
-	work->data[64 + 12 + 1] = (hdata->nonce >> 8) & 0xff;
-	work->data[64 + 12 + 2] = (hdata->nonce >> 16) & 0xff;
-	work->data[64 + 12 + 3] = (hdata->nonce >> 24) & 0xff;
-
-	for (i = 0; i < 80 / 4; i++)
+	for (i = 0; i < 76 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 
 	sha2(swap, 80, hash1);
 	sha2(hash1, 32, hash2);
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-	if (hash2_32[7] != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
-#else
-	if (swab32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
-#endif
-		ztex->errorCount[ztex->freqM] += 1.0 / ztex->numNonces;
-		applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
-		return false;
-	}
-	return true;
+
+	return htonl(hash2_32[7]);
 }
 
 static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
@@ -240,9 +222,11 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	overflow = false;
+	int count = 0;
 
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
 	while (!(overflow || thr->work_restart)) {
+		count++;
 		nmsleep(250);
 		if (thr->work_restart) {
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
@@ -274,12 +258,9 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 		ztex->errorCount[ztex->freqM] *= 0.995;
 		ztex->errorWeight[ztex->freqM] = ztex->errorWeight[ztex->freqM] * 0.995 + 1.0;
- 
+
 		for (i = 0; i < ztex->numNonces; i++) {
 			nonce = hdata[i].nonce;
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-			nonce = swab32(nonce);
-#endif
 			if (nonce > noncecnt)
 				noncecnt = nonce;
 			if (((0xffffffff - nonce) < (nonce - lastnonce[i])) || nonce < lastnonce[i]) {
@@ -287,35 +268,46 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				overflow = true;
 			} else
 				lastnonce[i] = nonce;
-#if !(defined(__BIGENDIAN__) || defined(MIPSEB))
-			nonce = swab32(nonce);
-#endif
-			if (!ztex_checkNonce(ztex, work, &hdata[i])) {
-				thr->cgpu->hw_errors++;
-				continue;
+
+			if (ztex_checkNonce(work, nonce) != (hdata->hash7 + 0x5be0cd19)) {
+				applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, nonce);
+
+				// do not count errors in the first 500ms after sendHashData (2x250 wait time)
+				if (count > 2) {
+					ztex->errorCount[ztex->freqM] += 1.0 / ztex->numNonces;
+					thr->cgpu->hw_errors++;
+				}
 			}
+
 			for (j=0; j<=ztex->extraSolutions; j++) {
 				nonce = hdata[i].goldenNonce[j];
-				if (nonce > 0) {
-					found = false;
-					for (k = 0; k < backlog_max; k++) {
-						if (backlog[k] == nonce) {
-							found = true;
-							break;
-						}
+
+				if (nonce == ztex->offsNonces) {
+					continue;
+				}
+
+				// precheck the extraSolutions since they often fail
+				if (j > 0 && ztex_checkNonce(work, nonce) != 0) {
+					continue;
+				}
+
+				found = false;
+				for (k = 0; k < backlog_max; k++) {
+					if (backlog[k] == nonce) {
+						found = true;
+						break;
 					}
-					if (!found) {
-						applog(LOG_DEBUG, "%s: Share found N%dE%d", ztex->repr, i, j);
-						backlog[backlog_p++] = nonce;
-						if (backlog_p >= backlog_max)
-							backlog_p = 0;
-#if defined(__BIGENDIAN__) || defined(MIPSEB)
-						nonce = swab32(nonce);
-#endif
-						work->blk.nonce = 0xffffffff;
-						submit_nonce(thr, work, nonce);
-						applog(LOG_DEBUG, "%s: submitted %0.8x", ztex->repr, nonce);
-					}
+				}
+				if (!found) {
+					applog(LOG_DEBUG, "%s: Share found N%dE%d", ztex->repr, i, j);
+					backlog[backlog_p++] = nonce;
+
+					if (backlog_p >= backlog_max)
+						backlog_p = 0;
+
+					work->blk.nonce = 0xffffffff;
+					submit_nonce(thr, work, nonce);
+					applog(LOG_DEBUG, "%s: submitted %0.8x", ztex->repr, nonce);
 				}
 			}
 		}
