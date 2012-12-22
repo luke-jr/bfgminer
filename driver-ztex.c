@@ -229,11 +229,18 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
 	while (!(overflow || thr->work_restart)) {
 		count++;
-		nmsleep(250);
+
+		int sleepcount = 0;
+		while (thr->work_restart == 0 && sleepcount < 25) {
+			nmsleep(10);
+			sleepcount += 1;
+		}
+
 		if (thr->work_restart) {
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
 			break;
 		}
+
 		ztex_selectFpga(ztex);
 		i = libztex_readHashData(ztex, &hdata[0]);
 		if (i < 0) {
