@@ -327,11 +327,13 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 	// only add the errorCount if we had at least some valid nonces or
 	// had no valid nonces in the last round
-	if (ztex->nonceCheckValid > 0 && validNonces == 0) {
-		applog(LOG_ERR, "%s: resetting %.1f errors", ztex->repr, errorCount);
-	}
-	else {
-		ztex->errorCount[ztex->freqM] += errorCount;
+	if (errorCount > 0.0) {
+		if (ztex->nonceCheckValid > 0 && validNonces == 0) {
+			applog(LOG_ERR, "%s: resetting %.1f errors", ztex->repr, errorCount);
+		}
+		else {
+			ztex->errorCount[ztex->freqM] += errorCount;
+		}
 	}
 
 	// remember the number of valid nonces for the check in the next round
