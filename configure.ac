@@ -409,6 +409,25 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([static int __attribute__((warn_unused_result)
 			  AC_DEFINE([HAVE_WARN_UNUSED_RESULT], [1],
                                     [Define if __attribute__((warn_unused_result))]))
 
+
+AC_MSG_CHECKING([if GNU format attribute compiles])
+AC_TRY_COMPILE([
+	#define FORMAT_SYNTAX_CHECK(...) __attribute__(( format(__VA_ARGS__) ))
+	int myfunc(char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
+	int myfunc(char *fmt, ...) {
+		return 42;
+	}
+], [
+	myfunc("abc%d", 42);
+], [
+	AC_MSG_RESULT([yes])
+	AC_DEFINE_UNQUOTED([FORMAT_SYNTAX_CHECK(...)], [__attribute__(( format(__VA_ARGS__) ))], [Syntax of format-checking attribute])
+], [
+	AC_MSG_RESULT([no])
+	AC_DEFINE_UNQUOTED([FORMAT_SYNTAX_CHECK(...)], [])
+])
+
+
 if test "x$prefix" = xNONE; then
 	prefix=/usr/local
 fi
