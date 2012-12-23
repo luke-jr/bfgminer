@@ -2466,11 +2466,11 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	if (!QUIET) {
 		int intdiff = floor(work->work_difficulty);
+		uint64_t sharediff;
 		char diffdisp[16];
 
 		hash32 = (uint32_t *)(work->hash);
 		if (opt_scrypt) {
-			uint32_t sharediff;
 			uint64_t outhash;
 
 			scrypt_outputhash(work);
@@ -2480,8 +2480,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			outhash = work->outputhash >> 16;
 			sprintf(hashshow, "%08lx Diff %s/%d", (unsigned long)outhash, diffdisp, intdiff);
 		} else {
-			uint64_t sharediff = share_diff(work);
-
+			sharediff = share_diff(work);
 			suffix_string(sharediff, diffdisp, 0);
 
 			sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
