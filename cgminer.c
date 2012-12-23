@@ -5162,10 +5162,7 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 		applog(LOG_INFO, "Share below target");
 		/* Check the diff of the share, even if it didn't reach the
 		 * target, just to set the best share value if it's higher. */
-		if (opt_scrypt)
-			scrypt_diff(work);
-		else
-			share_diff(work);
+		share_diff(work);
 	}
 
 	return test;
