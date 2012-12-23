@@ -240,7 +240,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	sleep(1);
 	
 	if (fread(buf, 32, 1, f) != 1)
-		bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+		bailout2(LOG_ERR, "%s %u: File underrun programming %s (%lu bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
 	jtag_swrite(jp, JTAG_REG_DR, buf, 256);
 	len -= 32;
 	
@@ -258,7 +258,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	while (len) {
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
-			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%lu bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
 		jtag_swrite_more(jp, buf, buflen * 8, len == (unsigned long)buflen);
 		*pdone = 100 - ((len * 100) / flen);
 		if (*pdone >= nextstatus)
