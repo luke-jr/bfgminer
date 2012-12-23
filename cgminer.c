@@ -2999,14 +2999,14 @@ static struct work *make_clone(struct work *work)
 
 static void stage_work(struct work *work);
 
-/* Called with stgd_lock held */
-static bool __clone_available(void)
+static bool clone_available(void)
 {
 	struct work *work, *tmp;
 	bool cloned = false;
 
+	mutex_lock(stgd_lock);
 	if (!staged_rollable)
-		goto out;
+		goto out_unlock;
 
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (can_roll(work) && should_roll(work)) {
@@ -3022,7 +3022,9 @@ static bool __clone_available(void)
 		}
 	}
 
-out:
+out_unlock:
+	mutex_unlock(stgd_lock);
+
 	return cloned;
 }
 
@@ -6864,7 +6866,7 @@ retry:
 			continue;
 		}
 
-		if (__clone_available()) {
+		if (clone_available()) {
 			applog(LOG_DEBUG, "Cloned getwork work");
 			free_work(work);
 			continue;
