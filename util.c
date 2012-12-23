@@ -453,7 +453,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
 
 		if (opt_protocol)
-			applog(LOG_DEBUG, "JSON protocol response:\n%s", all_data.buf);
+			applog(LOG_DEBUG, "JSON protocol response:\n%s", (char*)all_data.buf);
 
 		goto err_out;
 	}
