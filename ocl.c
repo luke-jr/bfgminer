@@ -546,7 +546,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_MEM_ALLOC_SIZE", status);
 		return NULL;
 	}
-	applog(LOG_DEBUG, "Max mem alloc size is %u", cgpu->max_alloc);
+	applog(LOG_DEBUG, "Max mem alloc size is %lu", (unsigned long)cgpu->max_alloc);
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
@@ -680,7 +680,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 				ma <<= 1;
 			if (ma < cgpu->max_alloc) {
 				cgpu->max_alloc = ma;
-				applog(LOG_DEBUG, "Max alloc decreased to %lu", cgpu->max_alloc);
+				applog(LOG_DEBUG, "Max alloc decreased to %lu", (unsigned long)cgpu->max_alloc);
 			}
 		}
 	}
@@ -984,7 +984,7 @@ built:
 		/* Use the max alloc value which has been rounded to a power of
 		 * 2 greater >= required amount earlier */
 		if (bufsize > cgpu->max_alloc) {
-			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %u", gpu, cgpu->max_alloc);
+			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %lu", gpu, (unsigned long)cgpu->max_alloc);
 			applog(LOG_WARNING, "Your scrypt settings come to %u", bufsize);
 		} else
 			bufsize = cgpu->max_alloc;
