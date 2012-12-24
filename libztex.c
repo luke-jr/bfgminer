@@ -106,11 +106,11 @@ enum check_result
 
 static bool libztex_firmwareReset(struct libusb_device_handle *hndl, bool enable)
 {
-	uint8_t reset = enable;
+	uint8_t reset = enable ? 1 : 0;
 	int cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, &reset, 1, 1000);
 	if (cnt < 0)
 	{
-		applog(LOG_ERR, "Ztex reset %d failed: %s", libusb_error_name(cnt), enable);
+		applog(LOG_ERR, "Ztex reset %d failed: %s", enable, libusb_error_name(cnt));
 		return 1;
 	}
 
