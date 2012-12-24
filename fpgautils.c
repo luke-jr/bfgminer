@@ -713,7 +713,7 @@ FILE *open_xilinx_bitstream(struct cgpu_info *cgpu, const char *fwfile, unsigned
 	if (fwusercode == 0xffffffff)
 		bailout(LOG_ERR, "%s %u: Firmware doesn't support user code",
 		        cgpu->api->name, cgpu->device_id);
-	applog(LOG_DEBUG, "  Version: %u, build %u", (fwusercode >> 8) & 0xff, fwusercode & 0xff);
+	applog(LOG_DEBUG, "  Version: %u, build %u", (unsigned)((fwusercode >> 8) & 0xff), (unsigned)(fwusercode & 0xff));
 	check_magic('b');
 	read_str("part number");
 	applog(LOG_DEBUG, "  Part number: %s", buf);

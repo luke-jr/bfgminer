@@ -521,7 +521,7 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
 
 		if (opt_protocol)
-			applog(LOG_DEBUG, "JSON protocol response:\n%s", state->all_data.buf);
+			applog(LOG_DEBUG, "JSON protocol response:\n%s", (char*)state->all_data.buf);
 
 		goto err_out;
 	}

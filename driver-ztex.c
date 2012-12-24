@@ -170,7 +170,7 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	sha2(hash1, 32, hash2, false);
 	if (htobe32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
 		dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
-		applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, hdata->nonce);
+		applog(LOG_DEBUG, "%s: checkNonce failed for %08x", ztex->repr, hdata->nonce);
 		return false;
 	}
 	return true;
@@ -272,7 +272,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			if (nonce > noncecnt)
 				noncecnt = nonce;
 			if (((0xffffffff - nonce) < (nonce - lastnonce[i])) || nonce < lastnonce[i]) {
-				applog(LOG_DEBUG, "%s: overflow nonce=%0.8x lastnonce=%0.8x", ztex->repr, nonce, lastnonce[i]);
+				applog(LOG_DEBUG, "%s: overflow nonce=%08x lastnonce=%08x", ztex->repr, nonce, lastnonce[i]);
 				overflow = true;
 			} else
 				lastnonce[i] = nonce;
@@ -300,7 +300,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 						work->blk.nonce = 0xffffffff;
 						if (test_nonce(work, nonce, false))
 							submit_nonce(thr, work, nonce);
-						applog(LOG_DEBUG, "%s: submitted %0.8x (from N%dE%d)", ztex->repr, nonce, i, j);
+						applog(LOG_DEBUG, "%s: submitted %08x (from N%dE%d)", ztex->repr, nonce, i, j);
 					}
 				}
 			}

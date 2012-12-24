@@ -28,8 +28,8 @@ extern bool want_per_device_stats;
 extern int opt_log_level;
 
 /* low-level logging functions with priority parameter */
-extern void vapplog(int prio, const char *fmt, va_list ap);
-extern void applog(int prio, const char *fmt, ...);
+extern void vapplog(int prio, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
+extern void applog(int prio, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
 
 /* high-level logging functions with implicit priority */
 extern void log_error(const char *fmt, ...);

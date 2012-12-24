@@ -3382,11 +3382,10 @@ static void pool_died(struct pool *pool)
 
 static bool stale_work(struct work *work, bool share)
 {
-	struct timeval now;
-	time_t work_expiry;
+	unsigned work_expiry;
 	struct pool *pool;
 	uint32_t block_id;
-	int getwork_delay;
+	unsigned getwork_delay;
 
 	block_id = ((uint32_t*)work->data)[1];
 	pool = work->pool;
@@ -3399,7 +3398,7 @@ static bool stale_work(struct work *work, bool share)
 	else
 		work_expiry = opt_expiry;
 
-	int max_expiry = (have_longpoll ? opt_expiry_lp : opt_expiry);
+	unsigned max_expiry = (have_longpoll ? opt_expiry_lp : opt_expiry);
 	if (work_expiry > max_expiry)
 		work_expiry = max_expiry;
 
@@ -3458,15 +3457,16 @@ static bool stale_work(struct work *work, bool share)
 	/* Factor in the average getwork delay of this pool, rounding it up to
 	 * the nearest second */
 	getwork_delay = pool->cgminer_pool_stats.getwork_wait_rolling * 5 + 1;
-	work_expiry -= getwork_delay;
-	if (unlikely(work_expiry < 5))
+	if (unlikely(work_expiry <= getwork_delay + 5))
 		work_expiry = 5;
+	else
+		work_expiry -= getwork_delay;
 
 	}
 
-	gettimeofday(&now, NULL);
-	if ((now.tv_sec - work->tv_staged.tv_sec) >= work_expiry) {
-		applog(LOG_DEBUG, "%s stale due to expiry (%d - %d >= %d)", share?"Share":"Work", now.tv_sec, work->tv_staged.tv_sec, work_expiry);
+	double elapsed_since_staged = difftime(time(NULL), work->tv_staged.tv_sec);
+	if (elapsed_since_staged > work_expiry) {
+		applog(LOG_DEBUG, "%s stale due to expiry (%.0f >= %u)", share?"Share":"Work", elapsed_since_staged, work_expiry);
 		return true;
 	}
 
