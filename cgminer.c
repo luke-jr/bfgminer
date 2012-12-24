@@ -2142,7 +2142,7 @@ void clear_logwin(void)
 bool regeneratehash(const struct work *work)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
-	unsigned char swap[128];
+	unsigned char swap[80];
 	uint32_t *swap32 = (uint32_t *)swap;
 	unsigned char hash1[32];
 	uint32_t *hash32 = (uint32_t *)(work->hash);
@@ -2153,9 +2153,7 @@ bool regeneratehash(const struct work *work)
 	int diffshift = 0;
 	int i;
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
-
+	flip80(swap32, data32);
 	sha2(swap, 80, hash1);
 	sha2(hash1, 32, (unsigned char *)(work->hash));
 
