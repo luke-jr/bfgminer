@@ -888,9 +888,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			estimate_hashes = 0xffffffff;
 
 		if (opt_debug) {
-			applog(LOG_DEBUG, "%s %u no nonce = 0x%08llx hashes (%ld.%06lds)",
+			applog(LOG_DEBUG, "%s %u no nonce = 0x%08" PRIx64 " hashes (%ld.%06lds)",
 					icarus->api->name,
-					icarus->device_id, estimate_hashes,
+					icarus->device_id,
+					(uint64_t)estimate_hashes,
 					elapsed.tv_sec, elapsed.tv_usec);
 		}
 
@@ -918,9 +919,12 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	hash_count *= info->fpga_count;
 
 	if (opt_debug) {
-		applog(LOG_DEBUG, "%s %u nonce = 0x%08x = 0x%08llx hashes (%ld.%06lds)",
+		applog(LOG_DEBUG, "%s %u nonce = 0x%08x = 0x%08" PRIx64 " hashes (%ld.%06lds)",
 				icarus->api->name,
-				icarus->device_id, nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
+				icarus->device_id,
+				nonce,
+				(uint64_t)hash_count,
+				elapsed.tv_sec, elapsed.tv_usec);
 	}
 
 	if (info->do_default_detection && elapsed.tv_sec >= DEFAULT_DETECT_THRESHOLD) {
