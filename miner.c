@@ -603,7 +603,7 @@ tryagain: ;
 	if (!QueryDosDevice(NULL, buf, bufLen)) {
 		if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
 			bufLen *= 2;
-			applog(LOG_DEBUG, "scan-serial: QueryDosDevice returned insufficent buffer error; enlarging to %llx", (unsigned long long)bufLen);
+			applog(LOG_DEBUG, "scan-serial: QueryDosDevice returned insufficent buffer error; enlarging to %lx", (unsigned long)bufLen);
 			goto tryagain;
 		}
 		return "scan-serial: Error occurred trying to enumerate COM ports with QueryDosDevice";

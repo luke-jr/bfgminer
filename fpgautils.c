@@ -496,7 +496,7 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 			applog(LOG_ERR, "%s is already in use by another process", devpath);
 			break;
 		default:
-			applog(LOG_DEBUG, "Open %s failed, GetLastError:%u", devpath, e);
+			applog(LOG_DEBUG, "Open %s failed, GetLastError:%u", devpath, (unsigned)e);
 			break;
 		}
 		return -1;
