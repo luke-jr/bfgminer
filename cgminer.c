@@ -5124,24 +5124,19 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 static bool hashtest(struct thr_info *thr, struct work *work)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
-	unsigned char swap[128];
+	unsigned char swap[80];
 	uint32_t *swap32 = (uint32_t *)swap;
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	int i;
+	bool ret = false;
 
-	for (i = 0; i < 80 / 4; i++)
-		swap32[i] = swab32(data32[i]);
-
+	flip80(swap32, data32);
 	sha2(swap, 80, hash1, false);
 	sha2(hash1, 32, hash2, false);
+	flip32(work->hash, hash2_32);
 
-	for (i = 0; i < 32 / 4; i++)
-		hash2_32[i] = swab32(hash2_32[i]);
-
-	memcpy((void*)work->hash, hash2, 32);
-
+	/* Flipped or not, hash2_32[7] should be 0 */
 	if (hash2_32[7] != 0) {
 		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
 				thr->cgpu->api->name, thr->cgpu->device_id);
@@ -5154,18 +5149,18 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 		if (thr->cgpu->api->hw_error)
 			thr->cgpu->api->hw_error(thr);
 
-		return false;
+		goto out;
 	}
 
-	bool test = fulltest(work->hash, work->target);
-	if (!test) {
+	ret = fulltest(work->hash, work->target);
+	if (!ret) {
 		applog(LOG_INFO, "Share below target");
 		/* Check the diff of the share, even if it didn't reach the
 		 * target, just to set the best share value if it's higher. */
 		share_diff(work);
 	}
-
-	return test;
+out:
+	return ret;
 }
 
 void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
