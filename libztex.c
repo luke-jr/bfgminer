@@ -59,7 +59,7 @@ static bool libztex_checkDevice(struct libusb_device *dev)
 		return false;
 	}
 	if (!(desc.idVendor == LIBZTEX_IDVENDOR && desc.idProduct == LIBZTEX_IDPRODUCT)) {
-		applog(LOG_DEBUG, "Not a ZTEX device %0.4x:%0.4x", desc.idVendor, desc.idProduct);
+		applog(LOG_DEBUG, "Not a ZTEX device %04x:%04x", desc.idVendor, desc.idProduct);
 		return false;
 	}
 	return true;
@@ -442,7 +442,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	// Check vendorId and productId
 	if (!(newdev->descriptor.idVendor == LIBZTEX_IDVENDOR &&
 	    newdev->descriptor.idProduct == LIBZTEX_IDPRODUCT)) {
-		applog(LOG_ERR, "Not a ztex device? %0.4X, %0.4X", newdev->descriptor.idVendor, newdev->descriptor.idProduct);
+		applog(LOG_ERR, "Not a ztex device? %04x, %04x", newdev->descriptor.idVendor, newdev->descriptor.idProduct);
 		return 1;
 	}
 

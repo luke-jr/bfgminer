@@ -30,7 +30,7 @@
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
 #define MAX_START_DELAY_US 100000
-#define tv_to_ms(tval) (tval.tv_sec * 1000 + tval.tv_usec / 1000)
+#define tv_to_ms(tval) ((unsigned long)(tval.tv_sec * 1000 + tval.tv_usec / 1000))
 #define TIME_AVG_CONSTANT 8
 
 #define KNAME_WORK  "full work"
@@ -449,8 +449,8 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
-			applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
-				tv_to_ms(elapsed), BITFORCE_LONG_TIMEOUT_MS);
+			applog(LOG_ERR, "BFL%i: took %lums - longer than %lums", bitforce->device_id,
+				tv_to_ms(elapsed), (unsigned long)BITFORCE_LONG_TIMEOUT_MS);
 			return 0;
 		}
 
@@ -465,8 +465,8 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
-		applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
-			tv_to_ms(elapsed), BITFORCE_TIMEOUT_MS);
+		applog(LOG_ERR, "BFL%i: took %lums - longer than %lums", bitforce->device_id,
+			tv_to_ms(elapsed), (unsigned long)BITFORCE_TIMEOUT_MS);
 		bitforce->device_last_not_well = time(NULL);
 		bitforce->device_not_well_reason = REASON_DEV_OVER_HEAT;
 		bitforce->dev_over_heat_count++;
@@ -589,7 +589,7 @@ commerr:
 		BFclose(bitforce->device_fd);
 		int fd = bitforce->device_fd = BFopen(bitforce->device_path);
 		if (fd == -1) {
-			applog(LOG_ERR, "BFL%i: Error reopening");
+			applog(LOG_ERR, "BFL%i: Error reopening", bitforce->device_id);
 			return -1;
 		}
 		/* empty read buffer */
