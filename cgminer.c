@@ -1345,8 +1345,8 @@ static void calc_midstate(struct work *work)
 	for (swapcounter = 0; swapcounter < 16; swapcounter++)
 		data.i[swapcounter] = swab32(((uint32_t*) (work->data))[swapcounter]);
 	sha2_context ctx;
-	sha2_starts( &ctx, 0 );
-	sha2_update( &ctx, data.c, 64 );
+	sha2_starts(&ctx);
+	sha2_update(&ctx, data.c, 64);
 	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
 #if defined(__BIG_ENDIAN__) || defined(MIPSEB)
 	int i;
@@ -2156,8 +2156,8 @@ bool regeneratehash(const struct work *work)
 	for (i = 0; i < 80 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 
-	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, (unsigned char *)(work->hash), false);
+	sha2(swap, 80, hash1);
+	sha2(hash1, 32, (unsigned char *)(work->hash));
 
 	difficulty = swab32(*((uint32_t *)(work->data + 72)));
 
@@ -4951,8 +4951,8 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
 	unsigned char hash1[32];
 
-	sha2(data, len, hash1, false);
-	sha2(hash1, 32, hash, false);
+	sha2(data, len, hash1);
+	sha2(hash1, 32, hash);
 }
 
 /* Diff 1 is a 256 bit unsigned integer of
@@ -5132,8 +5132,8 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 	bool ret = false;
 
 	flip80(swap32, data32);
-	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, hash2, false);
+	sha2(swap, 80, hash1);
+	sha2(hash1, 32, hash2);
 	flip32(work->hash, hash2_32);
 
 	/* Flipped or not, hash2_32[7] should be 0 */

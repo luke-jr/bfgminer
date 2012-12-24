@@ -60,37 +60,19 @@
 /*
  * SHA-256 context setup
  */
-void sha2_starts( sha2_context *ctx, int is224 )
+void sha2_starts( sha2_context *ctx )
 {
     ctx->total[0] = 0;
     ctx->total[1] = 0;
 
-    if( is224 == 0 )
-    {
-        /* SHA-256 */
-        ctx->state[0] = 0x6A09E667;
-        ctx->state[1] = 0xBB67AE85;
-        ctx->state[2] = 0x3C6EF372;
-        ctx->state[3] = 0xA54FF53A;
-        ctx->state[4] = 0x510E527F;
-        ctx->state[5] = 0x9B05688C;
-        ctx->state[6] = 0x1F83D9AB;
-        ctx->state[7] = 0x5BE0CD19;
-    }
-    else
-    {
-        /* SHA-224 */
-        ctx->state[0] = 0xC1059ED8;
-        ctx->state[1] = 0x367CD507;
-        ctx->state[2] = 0x3070DD17;
-        ctx->state[3] = 0xF70E5939;
-        ctx->state[4] = 0xFFC00B31;
-        ctx->state[5] = 0x68581511;
-        ctx->state[6] = 0x64F98FA7;
-        ctx->state[7] = 0xBEFA4FA4;
-    }
-
-    ctx->is224 = is224;
+    ctx->state[0] = 0x6A09E667;
+    ctx->state[1] = 0xBB67AE85;
+    ctx->state[2] = 0x3C6EF372;
+    ctx->state[3] = 0xA54FF53A;
+    ctx->state[4] = 0x510E527F;
+    ctx->state[5] = 0x9B05688C;
+    ctx->state[6] = 0x1F83D9AB;
+    ctx->state[7] = 0x5BE0CD19;
 }
 
 static void sha2_process( sha2_context *ctx, const unsigned char data[64] )
@@ -306,19 +288,18 @@ void sha2_finish( sha2_context *ctx, unsigned char output[32] )
     PUT_ULONG_BE( ctx->state[5], output, 20 );
     PUT_ULONG_BE( ctx->state[6], output, 24 );
 
-    if( ctx->is224 == 0 )
-        PUT_ULONG_BE( ctx->state[7], output, 28 );
+    PUT_ULONG_BE( ctx->state[7], output, 28 );
 }
 
 /*
  * output = SHA-256( input buffer )
  */
 void sha2( const unsigned char *input, int ilen,
-           unsigned char output[32], int is224 )
+           unsigned char output[32] )
 {
     sha2_context ctx;
 
-    sha2_starts( &ctx, is224 );
+    sha2_starts( &ctx );
     sha2_update( &ctx, input, ilen );
     sha2_finish( &ctx, output );
 

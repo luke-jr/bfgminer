@@ -171,8 +171,8 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	for (i = 0; i < 80 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 
-	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, hash2, false);
+	sha2(swap, 80, hash1);
+	sha2(hash1, 32, hash2);
 #if defined(__BIGENDIAN__) || defined(MIPSEB)
 	if (hash2_32[7] != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
 #else
