@@ -5133,10 +5133,9 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 
 	flip80(swap32, data32);
 	sha2(swap, 80, hash1);
-	sha2(hash1, 32, hash2);
-	flip32(work->hash, hash2_32);
+	sha2(hash1, 32, work->hash);
+	flip32(hash2_32, work->hash);
 
-	/* Flipped or not, hash2_32[7] should be 0 */
 	if (hash2_32[7] != 0) {
 		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
 				thr->cgpu->api->name, thr->cgpu->device_id);
@@ -5152,7 +5151,7 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 		goto out;
 	}
 
-	ret = fulltest(work->hash, work->target);
+	ret = fulltest(hash2, work->target);
 	if (!ret) {
 		applog(LOG_INFO, "Share below target");
 		/* Check the diff of the share, even if it didn't reach the
