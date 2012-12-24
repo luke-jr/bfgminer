@@ -5168,27 +5168,13 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 	return test;
 }
 
-static bool test_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
-{
-	if (opt_scrypt) {
-		uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-
-		*work_nonce = nonce;
-		return true;
-	}
-
-	work->data[64 + 12 + 0] = (nonce >> 0) & 0xff;
-	work->data[64 + 12 + 1] = (nonce >> 8) & 0xff;
-	work->data[64 + 12 + 2] = (nonce >> 16) & 0xff;
-	work->data[64 + 12 + 3] = (nonce >> 24) & 0xff;
-
-	return hashtest(thr, work);
-}
-
 void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
+
 	gettimeofday(&tv_work_found, NULL);
+	*work_nonce = htole32(nonce);
 
 	mutex_lock(&stats_lock);
 	total_diff1++;
@@ -5197,8 +5183,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	mutex_unlock(&stats_lock);
 
 	/* Do one last check before attempting to submit the work */
-	/* Side effect: sets work->data for us */
-	if (!test_nonce(thr, work, nonce))
+	if (!opt_scrypt && !hashtest(thr, work))
 		return;
 
 	submit_work_async(work, &tv_work_found);
