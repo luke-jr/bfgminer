@@ -434,7 +434,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	// Check vendorId and productId
 	if (!(newdev->descriptor.idVendor == LIBZTEX_IDVENDOR &&
 	    newdev->descriptor.idProduct == LIBZTEX_IDPRODUCT)) {
-		applog(LOG_ERR, "Not a ztex device? %0.4X, %0.4X", newdev->descriptor.idVendor, newdev->descriptor.idProduct);
+		applog(LOG_ERR, "Not a ztex device? %04x, %04x", newdev->descriptor.idVendor, newdev->descriptor.idProduct);
 		return 1;
 	}
 
