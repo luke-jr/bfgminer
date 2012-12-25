@@ -3097,6 +3097,8 @@ static void check_solve(struct work *work)
 	}
 }
 
+static bool cnx_needed(struct pool *pool);
+
 static void *submit_work_thread(void *userdata)
 {
 	struct work *work = (struct work *)userdata;
@@ -3158,7 +3160,7 @@ static void *submit_work_thread(void *userdata)
 			if (pool_tclear(pool, &pool->submit_fail))
 					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
-		} else if (!pool_tset(pool, &pool->submit_fail)) {
+		} else if (!pool_tset(pool, &pool->submit_fail) && cnx_needed(pool)) {
 			applog(LOG_WARNING, "Pool %d stratum share submission failure", pool->pool_no);
 			total_ro++;
 			pool->remotefail_occasions++;
