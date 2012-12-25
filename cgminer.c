@@ -2138,13 +2138,9 @@ void clear_logwin(void)
 }
 #endif
 
-/* regenerate the full work->hash value and also return true if it's a block */
-bool regeneratehash(const struct work *work)
+/* Returns true if the regenerated work->hash solves a block */
+static bool solves_block(const struct work *work)
 {
-	uint32_t *data32 = (uint32_t *)(work->data);
-	unsigned char swap[80];
-	uint32_t *swap32 = (uint32_t *)swap;
-	unsigned char hash1[32];
 	uint32_t *hash32 = (uint32_t *)(work->hash);
 	uint32_t difficulty = 0;
 	uint32_t diffbytes = 0;
@@ -2152,10 +2148,6 @@ bool regeneratehash(const struct work *work)
 	uint32_t diffcmp[8];
 	int diffshift = 0;
 	int i;
-
-	flip80(swap32, data32);
-	sha2(swap, 80, hash1);
-	sha2(hash1, 32, (unsigned char *)(work->hash));
 
 	difficulty = swab32(*((uint32_t *)(work->data + 72)));
 
@@ -3072,16 +3064,26 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
+static void regen_hash(struct work *work)
+{
+	uint32_t *data32 = (uint32_t *)(work->data);
+	unsigned char swap[80];
+	uint32_t *swap32 = (uint32_t *)swap;
+	unsigned char hash1[32];
+
+	flip80(swap32, data32);
+	sha2(swap, 80, hash1);
+	sha2(hash1, 32, (unsigned char *)(work->hash));
+}
+
 static void check_solve(struct work *work)
 {
 	if (opt_scrypt)
 		scrypt_outputhash(work);
-	else {
-#ifndef MIPSEB
-		/* This segfaults on openwrt */
-		work->block = regeneratehash(work);
-#endif
-	}
+	else
+		regen_hash(work);
+
+	work->block = solves_block(work);
 	if (unlikely(work->block)) {
 		work->pool->solved++;
 		found_blocks++;
