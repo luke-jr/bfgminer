@@ -1,3 +1,36 @@
+Version 2.10.3 - December 26, 2012
+
+- Do not give the share submission failure message on planned stratum
+disconnects.
+- Parse anything in the stratum socket if it's full without waiting. Empty the
+socket even if a connection is not needed in case there are share returns.
+- Provide a mechanism to zero all the statistics from the menu.
+- Display the current pool diff in the status line.
+- Display block diff in status line.
+- Generalise the code for solving a block to enable block solve detection with
+scrypt mining.
+- Generate the output hash for scrypt as well and use the one function to set
+share_diff.
+- Use the flip80 function in regeneratehash and the correct sized hash array.
+- Use one size for scratchbuf as a macro in scrypt.c
+- Stage work outside of the stgd lock to prevent attempted recursive locking in
+clone_available.
+- share_diff needs to be performed on a BE version of the output hash to work,
+leading to false best_share values as spotted by luke-Jr.
+- Remove the unused sha224 functions.
+- Use the flip functions in hashtest.
+- Simplify the setting of the nonce data field in work on submitting nonces.
+- Scrypt code does not enter the hashtest function.
+- Go back to cloning available work under staged lock.
+- Updated links to AMD APP SDK
+- Updated link to ADL SDK
+- scrypt_diff uses a uint64_t as well.
+- Correct target for stratum support with scrypt mining.
+- libztex: fixed a typo
+- libztex: check returnvalue of libusb_claim_interface() and release the
+interface in case of early exit
+
+
 Version 2.10.2 - December 19, 2012
 
 - Stop all work from the current pool if it's a stratum pool once it is
