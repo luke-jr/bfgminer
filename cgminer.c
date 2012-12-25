@@ -4643,7 +4643,7 @@ static void *stratum_thread(void *userdata)
 		/* Check to see whether we need to maintain this connection
 		 * indefinitely or just bring it up when we switch to this
 		 * pool */
-		if (!cnx_needed(pool)) {
+		if (!sock_full(pool, false) && !cnx_needed(pool)) {
 			suspend_stratum(pool);
 			clear_stratum_shares(pool);
 			clear_pool_work(pool);
@@ -4668,7 +4668,7 @@ static void *stratum_thread(void *userdata)
 		 * every minute so if we fail to receive any for 90 seconds we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (unlikely(select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1))
+		if (!sock_full(pool, false) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1)
 			s = NULL;
 		else
 			s = recv_line(pool);
