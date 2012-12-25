@@ -219,6 +219,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
+static char block_diff[8];
 uint64_t best_diff = 0;
 
 struct block {
@@ -1940,7 +1941,8 @@ static void curses_print_status(void)
 			pool->has_gbt ? "GBT" : "LP", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best share: %s   ", current_hash, blocktime, best_share);
+	mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
+		  current_hash, block_diff, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -3384,7 +3386,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	mutex_lock(&ch_lock);
 	gettimeofday(&block_timeval, NULL);
 	old_hash = current_hash;
-	current_hash = bin2hex(hash_swap + 2, 12);
+	current_hash = bin2hex(hash_swap + 2, 8);
 	free(old_hash);
 	old_hash = current_fullhash;
 	current_fullhash = bin2hex(block_hash_swap, 32);
@@ -3393,7 +3395,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 
 	get_timestamp(blocktime, &block_timeval);
 
-	applog(LOG_INFO, "New block: %s...", current_hash);
+	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
 }
 
 /* Search to see if this string is from a block that has been seen before */
@@ -3423,6 +3425,45 @@ static inline bool from_existing_block(struct work *work)
 static int block_sort(struct block *blocka, struct block *blockb)
 {
 	return blocka->block_no - blockb->block_no;
+}
+
+static void set_blockdiff(const struct work *work)
+{
+	uint64_t *data64, d64, diff64;
+	uint32_t diffhash[8];
+	uint32_t difficulty;
+	uint32_t diffbytes;
+	uint32_t diffvalue;
+	char rhash[32];
+	int diffshift;
+
+	difficulty = swab32(*((uint32_t *)(work->data + 72)));
+
+	diffbytes = ((difficulty >> 24) & 0xff) - 3;
+	diffvalue = difficulty & 0x00ffffff;
+
+	diffshift = (diffbytes % 4) * 8;
+	if (diffshift == 0) {
+		diffshift = 32;
+		diffbytes--;
+	}
+
+	memset(diffhash, 0, 32);
+	diffhash[(diffbytes >> 2) + 1] = diffvalue >> (32 - diffshift);
+	diffhash[diffbytes >> 2] = diffvalue << diffshift;
+
+	swab256(rhash, diffhash);
+
+	if (opt_scrypt)
+		data64 = (uint64_t *)(rhash + 2);
+	else
+		data64 = (uint64_t *)(rhash + 4);
+	d64 = be64toh(*data64);
+	if (unlikely(!d64))
+		d64 = 1;
+
+	diff64 = diffone / d64;
+	suffix_string(diff64, block_diff, 0);
 }
 
 static bool test_work_current(struct work *work)
@@ -3463,6 +3504,7 @@ static bool test_work_current(struct work *work)
 			free(oldblock);
 		}
 		HASH_ADD_STR(blocks, hash, s);
+		set_blockdiff(work);
 		wr_unlock(&blk_lock);
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
