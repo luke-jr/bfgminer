@@ -1933,11 +1933,11 @@ static void curses_print_status(void)
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else if (pool->has_stratum) {
-		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
-			pool->sockaddr_url, pool->rpc_user);
+		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with stratum as user %s",
+			pool->sockaddr_url, pool->diff, pool->rpc_user);
 	} else {
-		mvwprintw(statuswin, 4, 0, " Connected to %s with%s %s as user %s",
-			pool->sockaddr_url, have_longpoll ? "": "out",
+		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with%s %s as user %s",
+			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out",
 			pool->has_gbt ? "GBT" : "LP", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
@@ -2582,6 +2582,7 @@ static double DIFFEXACTONE = 269599466671506397946670150870196306736371444225405
 static void calc_diff(struct work *work, int known)
 {
 	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
+	double difficulty;
 
 	if (opt_scrypt) {
 		uint64_t *data64, d64;
@@ -2605,20 +2606,22 @@ static void calc_diff(struct work *work, int known)
 		work->work_difficulty = DIFFEXACTONE / (targ ? : DIFFEXACTONE);
 	} else
 		work->work_difficulty = known;
+	difficulty = work->work_difficulty;
 
-	pool_stats->last_diff = work->work_difficulty;
+	pool_stats->last_diff = difficulty;
+	suffix_string((uint64_t)difficulty, work->pool->diff, 0);
 
-	if (work->work_difficulty == pool_stats->min_diff)
+	if (difficulty == pool_stats->min_diff)
 		pool_stats->min_diff_count++;
-	else if (work->work_difficulty < pool_stats->min_diff || pool_stats->min_diff == 0) {
-		pool_stats->min_diff = work->work_difficulty;
+	else if (difficulty < pool_stats->min_diff || pool_stats->min_diff == 0) {
+		pool_stats->min_diff = difficulty;
 		pool_stats->min_diff_count = 1;
 	}
 
-	if (work->work_difficulty == pool_stats->max_diff)
+	if (difficulty == pool_stats->max_diff)
 		pool_stats->max_diff_count++;
-	else if (work->work_difficulty > pool_stats->max_diff) {
-		pool_stats->max_diff = work->work_difficulty;
+	else if (difficulty > pool_stats->max_diff) {
+		pool_stats->max_diff = difficulty;
 		pool_stats->max_diff_count = 1;
 	}
 }

@@ -870,6 +870,7 @@ struct pool {
 	int seq_getfails;
 	int solved;
 	int diff1;
+	char diff[8];
 
 	double diff_accepted;
 	double diff_rejected;
