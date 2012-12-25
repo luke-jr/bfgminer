@@ -44,6 +44,7 @@
 
 struct pool;
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
+bool sock_full(struct pool *pool, bool wait);
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
 bool extract_sockaddr(struct pool *pool, char *url);

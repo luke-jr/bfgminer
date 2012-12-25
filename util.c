@@ -922,7 +922,7 @@ static void clear_sock(struct pool *pool)
 }
 
 /* Check to see if Santa's been good to you */
-static bool sock_full(struct pool *pool, bool wait)
+bool sock_full(struct pool *pool, bool wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
