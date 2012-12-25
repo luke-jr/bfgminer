@@ -972,8 +972,6 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
-	uint64_t	outputhash;
-
 	int		rolls;
 
 	dev_blk_ctx	blk;
