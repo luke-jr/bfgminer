@@ -2649,11 +2649,11 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 
 	if (!QUIET) {
 		int intdiff = floor(work->work_difficulty);
+		uint64_t sharediff;
 		char diffdisp[16];
 
 		hash32 = (uint32_t *)(work->hash);
 		if (opt_scrypt) {
-			uint32_t sharediff;
 			uint64_t outhash;
 
 			scrypt_outputhash(work);
@@ -2663,8 +2663,7 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			outhash = work->outputhash >> 16;
 			sprintf(hashshow, "%08lx Diff %s/%d", (unsigned long)outhash, diffdisp, intdiff);
 		} else {
-			uint64_t sharediff = share_diff(work);
-
+			sharediff = share_diff(work);
 			suffix_string(sharediff, diffdisp, 0);
 
 			sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
@@ -5967,24 +5966,32 @@ void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
 static void set_work_target(struct work *work, double diff)
 {
-	unsigned char rtarget[32], target[32];
-	double d64;
+	unsigned char target[32];
 	uint64_t *data64, h64;
+	double d64;
 
 	d64 = diffone;
 	d64 /= diff;
 	d64 = ceil(d64);
+	h64 = d64;
 
+	memset(target, 0, 32);
 	if (d64 < 18446744073709551616.0) {
-		h64 = d64;
+		unsigned char rtarget[32];
+
 		memset(rtarget, 0, 32);
-		data64 = (uint64_t *)(rtarget + 4);
+		if (opt_scrypt)
+			data64 = (uint64_t *)(rtarget + 2);
+		else
+			data64 = (uint64_t *)(rtarget + 4);
 		*data64 = htobe64(h64);
 		swab256(target, rtarget);
 	} else {
 		/* Support for the classic all FFs just-below-1 diff */
-		memset(target, 0xff, 28);
-		memset(&target[28], 0, 4);
+		if (opt_scrypt)
+			memset(target, 0xff, 30);
+		else
+			memset(target, 0xff, 28);
 	}
 
 	if (opt_debug) {
