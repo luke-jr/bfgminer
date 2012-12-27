@@ -262,6 +262,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
+static char block_diff[8];
 uint64_t best_diff = 0;
 
 struct block {
@@ -1626,8 +1627,8 @@ static void calc_midstate(struct work *work)
 
 	swap32yes(&data.i[0], work->data, 16);
 	sha2_context ctx;
-	sha2_starts( &ctx, 0 );
-	sha2_update( &ctx, data.c, 64 );
+	sha2_starts(&ctx);
+	sha2_update(&ctx, data.c, 64);
 	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
 	swap32tole(work->midstate, work->midstate, 8);
 }
@@ -2149,14 +2150,15 @@ static void curses_print_status(void)
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else if (pool->has_stratum) {
-		mvwprintw(statuswin, 4, 0, " Connected to %s with stratum as user %s",
-			pool->sockaddr_url, pool->rpc_user);
+		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with stratum as user %s",
+			pool->sockaddr_url, pool->diff, pool->rpc_user);
 	} else {
-		mvwprintw(statuswin, 4, 0, " Connected to %s with%s LP as user %s",
-			pool->sockaddr_url, have_longpoll ? "": "out", pool->rpc_user);
+		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with%s LP as user %s",
+			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s...  Started: %s  Best share: %s   ", current_hash, blocktime, best_share);
+	mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
+		  current_hash, block_diff, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -2370,12 +2372,11 @@ void clear_logwin(void)
 }
 #endif
 
-/* regenerate the full work->hash value and also return true if it's a block */
-bool regeneratehash(struct work *work)
+/* Returns true if the regenerated work->hash solves a block */
+static bool solves_block(const struct work *work)
 {
 	unsigned char target[32];
 
-	hash_data(work->hash, work->data);
 	real_block_target(target, work->data);
 	return hash_target_check(work->hash, target);
 }
@@ -2552,28 +2553,14 @@ static uint64_t share_diff(const struct work *work)
 	uint64_t ret;
 
 	swab256(rhash, work->hash);
-	data64 = (uint64_t *)(rhash + 4);
+	if (opt_scrypt)
+		data64 = (uint64_t *)(rhash + 2);
+	else
+		data64 = (uint64_t *)(rhash + 4);
 	d64 = be64toh(*data64);
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = diffone / d64;
-	mutex_lock(&control_lock);
-	if (ret > best_diff) {
-		best_diff = ret;
-		suffix_string(best_diff, best_share, 0);
-	}
-	mutex_unlock(&control_lock);
-	return ret;
-}
-
-static uint64_t scrypt_diff(const struct work *work)
-{
-	const uint64_t scrypt_diffone = 0x0000ffff00000000ul;
-	uint64_t d64 = work->outputhash, ret;
-
-	if (unlikely(!d64))
-		d64 = 1;
-	ret = scrypt_diffone / d64;
 	mutex_lock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
@@ -2626,7 +2613,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	struct pool *pool = work->pool;
-	uint32_t *hash32;
 	struct timeval tv_submit_reply;
 	char hashshow[64 + 4] = "";
 	char worktime[200] = "";
@@ -2649,27 +2635,20 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 
 	if (!QUIET) {
 		int intdiff = floor(work->work_difficulty);
-		char diffdisp[16];
+		char diffdisp[16], *outhash;
+		unsigned char rhash[32];
+		uint64_t sharediff;
 
-		hash32 = (uint32_t *)(work->hash);
-		if (opt_scrypt) {
-			uint32_t sharediff;
-			uint64_t outhash;
-
-			scrypt_outputhash(work);
-			sharediff = scrypt_diff(work);
-			suffix_string(sharediff, diffdisp, 0);
-
-			outhash = work->outputhash >> 16;
-			sprintf(hashshow, "%08lx Diff %s/%d", (unsigned long)outhash, diffdisp, intdiff);
-		} else {
-			uint64_t sharediff = share_diff(work);
-
-			suffix_string(sharediff, diffdisp, 0);
-
-			sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
-				work->block? " BLOCK!" : "");
-		}
+		swab256(rhash, work->hash);
+		if (opt_scrypt)
+			outhash = bin2hex(rhash + 2, 4);
+		else
+			outhash = bin2hex(rhash + 4, 4);
+		sharediff = share_diff(work);
+		suffix_string(sharediff, diffdisp, 0);
+		sprintf(hashshow, "%s Diff %s/%d%s", outhash, diffdisp, intdiff,
+			work->block? " BLOCK!" : "");
+		free(outhash);
 
 		if (opt_worktime) {
 			char workclone[20];
@@ -2795,6 +2774,7 @@ static double DIFFEXACTONE = 269599466671506397946670150870196306736371444225405
 static void calc_diff(struct work *work, int known)
 {
 	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
+	double difficulty;
 
 	if (opt_scrypt) {
 		uint64_t *data64, d64;
@@ -2818,20 +2798,22 @@ static void calc_diff(struct work *work, int known)
 		work->work_difficulty = DIFFEXACTONE / (targ ? : DIFFEXACTONE);
 	} else
 		work->work_difficulty = known;
+	difficulty = work->work_difficulty;
 
-	pool_stats->last_diff = work->work_difficulty;
+	pool_stats->last_diff = difficulty;
+	suffix_string((uint64_t)difficulty, work->pool->diff, 0);
 
-	if (work->work_difficulty == pool_stats->min_diff)
+	if (difficulty == pool_stats->min_diff)
 		pool_stats->min_diff_count++;
-	else if (work->work_difficulty < pool_stats->min_diff || pool_stats->min_diff == 0) {
-		pool_stats->min_diff = work->work_difficulty;
+	else if (difficulty < pool_stats->min_diff || pool_stats->min_diff == 0) {
+		pool_stats->min_diff = difficulty;
 		pool_stats->min_diff_count = 1;
 	}
 
-	if (work->work_difficulty == pool_stats->max_diff)
+	if (difficulty == pool_stats->max_diff)
 		pool_stats->max_diff_count++;
-	else if (work->work_difficulty > pool_stats->max_diff) {
-		pool_stats->max_diff = work->work_difficulty;
+	else if (difficulty > pool_stats->max_diff) {
+		pool_stats->max_diff = difficulty;
 		pool_stats->max_diff_count = 1;
 	}
 }
@@ -3340,31 +3322,29 @@ static void stage_work(struct work *work);
 
 static bool clone_available(void)
 {
-	struct work *work, *tmp;
-	struct work *work_clone;
+	struct work *work_clone = NULL, *work, *tmp;
 	bool cloned = false;
 
-	if (!staged_rollable)
-		goto out;
-
 	mutex_lock(stgd_lock);
+	if (!staged_rollable)
+		goto out_unlock;
+
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (can_roll(work) && should_roll(work)) {
 			roll_work(work);
 			work_clone = make_clone(work);
 			roll_work(work);
+			applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
 			cloned = true;
 			break;
 		}
 	}
+
+out_unlock:
 	mutex_unlock(stgd_lock);
 
-	if (cloned) {
-		applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
+	if (cloned)
 		stage_work(work_clone);
-	}
-
-out:
 	return cloned;
 }
 
@@ -3481,9 +3461,19 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
+static void regen_hash(struct work *work)
+{
+	hash_data(work->hash, work->data);
+}
+
 static void check_solve(struct work *work)
 {
-	work->block = regeneratehash(work);
+	if (opt_scrypt)
+		scrypt_outputhash(work);
+	else
+		regen_hash(work);
+
+	work->block = solves_block(work);
 	if (unlikely(work->block)) {
 		work->pool->solved++;
 		found_blocks++;
@@ -4185,7 +4175,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	mutex_lock(&ch_lock);
 	gettimeofday(&block_timeval, NULL);
 	old_hash = current_hash;
-	current_hash = bin2hex(hash_swap + 4, 12);
+	current_hash = bin2hex(hash_swap + 4, 8);
 	free(old_hash);
 	old_hash = current_fullhash;
 	current_fullhash = bin2hex(hash_swap, 32);
@@ -4194,7 +4184,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 
 	get_timestamp(blocktime, &block_timeval);
 
-	applog(LOG_INFO, "New block: %s...", current_hash);
+	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
 }
 
 /* Search to see if this string is from a block that has been seen before */
@@ -4224,6 +4214,45 @@ static inline bool from_existing_block(struct work *work)
 static int block_sort(struct block *blocka, struct block *blockb)
 {
 	return blocka->block_no - blockb->block_no;
+}
+
+static void set_blockdiff(const struct work *work)
+{
+	uint64_t *data64, d64, diff64;
+	uint32_t diffhash[8];
+	uint32_t difficulty;
+	uint32_t diffbytes;
+	uint32_t diffvalue;
+	char rhash[32];
+	int diffshift;
+
+	difficulty = swab32(*((uint32_t *)(work->data + 72)));
+
+	diffbytes = ((difficulty >> 24) & 0xff) - 3;
+	diffvalue = difficulty & 0x00ffffff;
+
+	diffshift = (diffbytes % 4) * 8;
+	if (diffshift == 0) {
+		diffshift = 32;
+		diffbytes--;
+	}
+
+	memset(diffhash, 0, 32);
+	diffhash[(diffbytes >> 2) + 1] = diffvalue >> (32 - diffshift);
+	diffhash[diffbytes >> 2] = diffvalue << diffshift;
+
+	swab256(rhash, diffhash);
+
+	if (opt_scrypt)
+		data64 = (uint64_t *)(rhash + 2);
+	else
+		data64 = (uint64_t *)(rhash + 4);
+	d64 = be64toh(*data64);
+	if (unlikely(!d64))
+		d64 = 1;
+
+	diff64 = diffone / d64;
+	suffix_string(diff64, block_diff, 0);
 }
 
 static bool test_work_current(struct work *work)
@@ -4266,6 +4295,7 @@ static bool test_work_current(struct work *work)
 			free(oldblock);
 		}
 		HASH_ADD_STR(blocks, hash, s);
+		set_blockdiff(work);
 		wr_unlock(&blk_lock);
 		work->pool->block_id = block_id;
 		if (deleted_block)
@@ -4705,6 +4735,51 @@ void write_config(FILE *fcfg)
 	json_escape_free();
 }
 
+void zero_stats(void)
+{
+	int i;
+
+	gettimeofday(&total_tv_start, NULL);
+	total_mhashes_done = 0;
+	total_getworks = 0;
+	total_accepted = 0;
+	total_rejected = 0;
+	hw_errors = 0;
+	total_stale = 0;
+	total_discarded = 0;
+	local_work = 0;
+	total_go = 0;
+	total_ro = 0;
+	total_secs = 1.0;
+	best_diff = 0;
+	total_diff1 = 0;
+	suffix_string(best_diff, best_share, 0);
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+
+		pool->getwork_requested = 0;
+		pool->accepted = 0;
+		pool->rejected = 0;
+		pool->stale_shares = 0;
+		pool->discarded_work = 0;
+		pool->getfail_occasions = 0;
+		pool->remotefail_occasions = 0;
+	}
+
+	mutex_lock(&hash_lock);
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = devices[i];
+
+		cgpu->total_mhashes = 0;
+		cgpu->accepted = 0;
+		cgpu->rejected = 0;
+		cgpu->hw_errors = 0;
+		cgpu->utility = 0.0;
+	}
+	mutex_unlock(&hash_lock);
+}
+
 #ifdef HAVE_CURSES
 static void display_pools(void)
 {
@@ -4908,7 +4983,7 @@ retry:
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
 		  "[R]PC debug:%s\n[W]orkTime details:%s\nco[M]pact: %s\n"
-		  "[L]og interval:%d\n",
+		  "[L]og interval:%d\n[Z]ero statistics\n",
 		opt_debug_console ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
 		opt_quiet ? "on" : "off",
@@ -4979,6 +5054,9 @@ retry:
 	} else if (!strncasecmp(&input, "w", 1)) {
 		opt_worktime ^= true;
 		wlogprint("WorkTime details %s\n", opt_worktime ? "enabled" : "disabled");
+		goto retry;
+	} else if (!strncasecmp(&input, "z", 1)) {
+		zero_stats();
 		goto retry;
 	} else
 		clear_logwin();
@@ -5554,7 +5632,7 @@ static void *stratum_thread(void *userdata)
 		/* Check to see whether we need to maintain this connection
 		 * indefinitely or just bring it up when we switch to this
 		 * pool */
-		if (!cnx_needed(pool)) {
+		if (!sock_full(pool, false) && !cnx_needed(pool)) {
 			suspend_stratum(pool);
 			clear_stratum_shares(pool);
 			clear_pool_work(pool);
@@ -5578,7 +5656,7 @@ static void *stratum_thread(void *userdata)
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (unlikely(select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1))
+		if (!sock_full(pool, false) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1)
 			s = NULL;
 		else
 			s = recv_line(pool);
@@ -5957,8 +6035,8 @@ void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
 	unsigned char hash1[32];
 
-	sha2(data, len, hash1, false);
-	sha2(hash1, 32, hash, false);
+	sha2(data, len, hash1);
+	sha2(hash1, 32, hash);
 }
 
 /* Diff 1 is a 256 bit unsigned integer of
@@ -5967,24 +6045,32 @@ void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
 static void set_work_target(struct work *work, double diff)
 {
-	unsigned char rtarget[32], target[32];
-	double d64;
+	unsigned char target[32];
 	uint64_t *data64, h64;
+	double d64;
 
 	d64 = diffone;
 	d64 /= diff;
 	d64 = ceil(d64);
+	h64 = d64;
 
+	memset(target, 0, 32);
 	if (d64 < 18446744073709551616.0) {
-		h64 = d64;
+		unsigned char rtarget[32];
+
 		memset(rtarget, 0, 32);
-		data64 = (uint64_t *)(rtarget + 4);
+		if (opt_scrypt)
+			data64 = (uint64_t *)(rtarget + 2);
+		else
+			data64 = (uint64_t *)(rtarget + 4);
 		*data64 = htobe64(h64);
 		swab256(target, rtarget);
 	} else {
 		/* Support for the classic all FFs just-below-1 diff */
-		memset(target, 0xff, 28);
-		memset(&target[28], 0, 4);
+		if (opt_scrypt)
+			memset(target, 0xff, 30);
+		else
+			memset(target, 0xff, 28);
 	}
 
 	if (opt_debug) {
@@ -6162,8 +6248,11 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 
 void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
+
 	gettimeofday(&tv_work_found, NULL);
+	*work_nonce = htole32(nonce);
 
 	mutex_lock(&stats_lock);
 	total_diff1++;
@@ -6192,10 +6281,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			// Share above target, normal
 			/* Check the diff of the share, even if it didn't reach the
 			 * target, just to set the best share value if it's higher. */
-			if (opt_scrypt)
-				scrypt_diff(work);
-			else
-				share_diff(work);
+			share_diff(work);
 			return;
 		case TNR_GOOD:
 			break;
@@ -7405,7 +7491,7 @@ bool add_cgpu(struct cgpu_info*cgpu)
 
 static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t length)
 {
-	sha2(buffer, length, digest, false);
+	sha2(buffer, length, digest);
 	return true;
 }
 
