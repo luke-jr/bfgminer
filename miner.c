@@ -2370,12 +2370,11 @@ void clear_logwin(void)
 }
 #endif
 
-/* regenerate the full work->hash value and also return true if it's a block */
-bool regeneratehash(struct work *work)
+/* Returns true if the regenerated work->hash solves a block */
+static bool solves_block(const struct work *work)
 {
 	unsigned char target[32];
 
-	hash_data(work->hash, work->data);
 	real_block_target(target, work->data);
 	return hash_target_check(work->hash, target);
 }
@@ -3457,13 +3456,19 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
+static void regen_hash(struct work *work)
+{
+	hash_data(work->hash, work->data);
+}
+
 static void check_solve(struct work *work)
 {
 	if (opt_scrypt)
 		scrypt_outputhash(work);
-	else {
-		work->block = regeneratehash(work);
-	}
+	else
+		regen_hash(work);
+
+	work->block = solves_block(work);
 	if (unlikely(work->block)) {
 		work->pool->solved++;
 		found_blocks++;
