@@ -402,6 +402,9 @@ static void scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad, uint
 	PBKDF2_SHA256_80_128_32(input, X, ostate);
 }
 
+/* 131583 rounded up to 4 byte alignment */
+#define SCRATCHBUF_SIZE	(131584)
+
 void scrypt_outputhash(struct work *work)
 {
 	uint32_t data[20], ohash[8], rhash[8];
@@ -410,7 +413,7 @@ void scrypt_outputhash(struct work *work)
 
 	be32enc_vect(data, (const uint32_t *)work->data, 19);
 	data[19] = htobe32(*nonce);
-	scratchbuf = alloca(131584);
+	scratchbuf = alloca(SCRATCHBUF_SIZE);
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
 	swap256(rhash, ohash);
 	work->outputhash = be64toh(*((uint64_t *)rhash));
@@ -425,7 +428,7 @@ bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t no
 
 	be32enc_vect(data, (const uint32_t *)pdata, 19);
 	data[19] = htobe32(nonce);
-	scratchbuf = alloca(131584);
+	scratchbuf = alloca(SCRATCHBUF_SIZE);
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
 	tmp_hash7 = be32toh(ohash[7]);
 
@@ -446,7 +449,7 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 
 	be32enc_vect(data, (const uint32_t *)pdata, 19);
 
-	scratchbuf = malloc(131583);
+	scratchbuf = malloc(SCRATCHBUF_SIZE);
 	if (unlikely(!scratchbuf)) {
 		applog(LOG_ERR, "Failed to malloc scratchbuf in scanhash_scrypt");
 		return ret;
@@ -476,4 +479,3 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 	free(scratchbuf);;
 	return ret;
 }
-
