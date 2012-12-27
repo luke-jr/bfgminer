@@ -2552,28 +2552,14 @@ static uint64_t share_diff(const struct work *work)
 	uint64_t ret;
 
 	swab256(rhash, work->hash);
-	data64 = (uint64_t *)(rhash + 4);
+	if (opt_scrypt)
+		data64 = (uint64_t *)(rhash + 2);
+	else
+		data64 = (uint64_t *)(rhash + 4);
 	d64 = be64toh(*data64);
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = diffone / d64;
-	mutex_lock(&control_lock);
-	if (ret > best_diff) {
-		best_diff = ret;
-		suffix_string(best_diff, best_share, 0);
-	}
-	mutex_unlock(&control_lock);
-	return ret;
-}
-
-static uint64_t scrypt_diff(const struct work *work)
-{
-	const uint64_t scrypt_diffone = 0x0000ffff00000000ul;
-	uint64_t d64 = work->outputhash, ret;
-
-	if (unlikely(!d64))
-		d64 = 1;
-	ret = scrypt_diffone / d64;
 	mutex_lock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
@@ -2626,7 +2612,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	int thr_id = work->thr_id;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	struct pool *pool = work->pool;
-	uint32_t *hash32;
 	struct timeval tv_submit_reply;
 	char hashshow[64 + 4] = "";
 	char worktime[200] = "";
@@ -2649,26 +2634,20 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 
 	if (!QUIET) {
 		int intdiff = floor(work->work_difficulty);
+		char diffdisp[16], *outhash;
+		unsigned char rhash[32];
 		uint64_t sharediff;
-		char diffdisp[16];
 
-		hash32 = (uint32_t *)(work->hash);
-		if (opt_scrypt) {
-			uint64_t outhash;
-
-			scrypt_outputhash(work);
-			sharediff = scrypt_diff(work);
-			suffix_string(sharediff, diffdisp, 0);
-
-			outhash = work->outputhash >> 16;
-			sprintf(hashshow, "%08lx Diff %s/%d", (unsigned long)outhash, diffdisp, intdiff);
-		} else {
-			sharediff = share_diff(work);
-			suffix_string(sharediff, diffdisp, 0);
-
-			sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
-				work->block? " BLOCK!" : "");
-		}
+		swab256(rhash, work->hash);
+		if (opt_scrypt)
+			outhash = bin2hex(rhash + 2, 4);
+		else
+			outhash = bin2hex(rhash + 4, 4);
+		sharediff = share_diff(work);
+		suffix_string(sharediff, diffdisp, 0);
+		sprintf(hashshow, "%s Diff %s/%d%s", outhash, diffdisp, intdiff,
+			work->block? " BLOCK!" : "");
+		free(outhash);
 
 		if (opt_worktime) {
 			char workclone[20];
@@ -3480,7 +3459,11 @@ static bool stale_work(struct work *work, bool share)
 
 static void check_solve(struct work *work)
 {
-	work->block = regeneratehash(work);
+	if (opt_scrypt)
+		scrypt_outputhash(work);
+	else {
+		work->block = regeneratehash(work);
+	}
 	if (unlikely(work->block)) {
 		work->pool->solved++;
 		found_blocks++;
@@ -6200,10 +6183,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			// Share above target, normal
 			/* Check the diff of the share, even if it didn't reach the
 			 * target, just to set the best share value if it's higher. */
-			if (opt_scrypt)
-				scrypt_diff(work);
-			else
-				share_diff(work);
+			share_diff(work);
 			return;
 		case TNR_GOOD:
 			break;

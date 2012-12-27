@@ -625,6 +625,8 @@ static inline void swab256(void *dest_p, const void *src_p)
 	dest[7] = swab32(src[0]);
 }
 
+#define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
+
 extern void quit(int status, const char *format, ...);
 
 static inline void mutex_lock(pthread_mutex_t *lock)
@@ -1010,8 +1012,6 @@ struct work {
 	unsigned char	midstate[32];
 	unsigned char	target[32];
 	unsigned char	hash[32];
-
-	uint64_t	outputhash;
 
 	int		rolls;
 
