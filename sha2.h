@@ -39,7 +39,6 @@ typedef struct
 
     unsigned char ipad[64];     /*!< HMAC: inner padding        */
     unsigned char opad[64];     /*!< HMAC: outer padding        */
-    int is224;                  /*!< 0 => SHA-256, else SHA-224 */
 }
 sha2_context;
 
@@ -51,9 +50,8 @@ extern "C" {
  * \brief          SHA-256 context setup
  *
  * \param ctx      context to be initialized
- * \param is224    0 = use SHA256, 1 = use SHA224
  */
-void sha2_starts( sha2_context *ctx, int is224 );
+void sha2_starts( sha2_context *ctx);
 
 /**
  * \brief          SHA-256 process buffer
@@ -68,7 +66,7 @@ void sha2_update( sha2_context *ctx, const unsigned char *input, int ilen );
  * \brief          SHA-256 final digest
  *
  * \param ctx      SHA-256 context
- * \param output   SHA-224/256 checksum result
+ * \param output   SHA-256 checksum result
  */
 void sha2_finish( sha2_context *ctx, unsigned char output[32] );
 
@@ -77,11 +75,10 @@ void sha2_finish( sha2_context *ctx, unsigned char output[32] );
  *
  * \param input    buffer holding the  data
  * \param ilen     length of the input data
- * \param output   SHA-224/256 checksum result
- * \param is224    0 = use SHA256, 1 = use SHA224
+ * \param output   SHA-256 checksum result
  */
 void sha2( const unsigned char *input, int ilen,
-           unsigned char output[32], int is224 );
+           unsigned char output[32]);
 
 #ifdef __cplusplus
 }

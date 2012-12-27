@@ -166,8 +166,8 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 
 	swap32yes(swap32, data32, 80 / 4);
 
-	sha2(swap, 80, hash1, false);
-	sha2(hash1, 32, hash2, false);
+	sha2(swap, 80, hash1);
+	sha2(hash1, 32, hash2);
 	if (htobe32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
 		dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
 		applog(LOG_DEBUG, "%s: checkNonce failed for %08x", ztex->repr, hdata->nonce);

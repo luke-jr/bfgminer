@@ -1626,8 +1626,8 @@ static void calc_midstate(struct work *work)
 
 	swap32yes(&data.i[0], work->data, 16);
 	sha2_context ctx;
-	sha2_starts( &ctx, 0 );
-	sha2_update( &ctx, data.c, 64 );
+	sha2_starts(&ctx);
+	sha2_update(&ctx, data.c, 64);
 	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
 	swap32tole(work->midstate, work->midstate, 8);
 }
@@ -5957,8 +5957,8 @@ void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
 	unsigned char hash1[32];
 
-	sha2(data, len, hash1, false);
-	sha2(hash1, 32, hash, false);
+	sha2(data, len, hash1);
+	sha2(hash1, 32, hash);
 }
 
 /* Diff 1 is a 256 bit unsigned integer of
@@ -7416,7 +7416,7 @@ bool add_cgpu(struct cgpu_info*cgpu)
 
 static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t length)
 {
-	sha2(buffer, length, digest, false);
+	sha2(buffer, length, digest);
 	return true;
 }
 
