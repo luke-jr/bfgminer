@@ -4306,7 +4306,7 @@ retry_stratum:
 	} else {
 		/* If we failed to parse a getwork, this could be a stratum
 		 * url without the prefix stratum+tcp:// so let's check it */
-		if (initiate_stratum(pool)) {
+		if (extract_sockaddr(pool, pool->rpc_url) && initiate_stratum(pool)) {
 			pool->has_stratum = true;
 			goto retry_stratum;
 		}
