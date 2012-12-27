@@ -3339,8 +3339,7 @@ static void stage_work(struct work *work);
 
 static bool clone_available(void)
 {
-	struct work *work, *tmp;
-	struct work *work_clone;
+	struct work *work_clone = NULL, *work, *tmp;
 	bool cloned = false;
 
 	mutex_lock(stgd_lock);
@@ -3352,6 +3351,7 @@ static bool clone_available(void)
 			roll_work(work);
 			work_clone = make_clone(work);
 			roll_work(work);
+			applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
 			cloned = true;
 			break;
 		}
@@ -3360,11 +3360,8 @@ static bool clone_available(void)
 out_unlock:
 	mutex_unlock(stgd_lock);
 
-	if (cloned) {
-		applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
+	if (cloned)
 		stage_work(work_clone);
-	}
-
 	return cloned;
 }
 
