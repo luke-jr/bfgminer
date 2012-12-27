@@ -6147,7 +6147,7 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool checktarget)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-	*work_nonce = nonce;
+	*work_nonce = htole32(nonce);
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
