@@ -3343,10 +3343,10 @@ static bool clone_available(void)
 	struct work *work_clone;
 	bool cloned = false;
 
-	if (!staged_rollable)
-		goto out;
-
 	mutex_lock(stgd_lock);
+	if (!staged_rollable)
+		goto out_unlock;
+
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (can_roll(work) && should_roll(work)) {
 			roll_work(work);
@@ -3356,6 +3356,8 @@ static bool clone_available(void)
 			break;
 		}
 	}
+
+out_unlock:
 	mutex_unlock(stgd_lock);
 
 	if (cloned) {
@@ -3363,7 +3365,6 @@ static bool clone_available(void)
 		stage_work(work_clone);
 	}
 
-out:
 	return cloned;
 }
 
