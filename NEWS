@@ -1,3 +1,21 @@
+BFGMiner Version 2.9.7 - December 27, 2012
+
+- Parse anything in the stratum socket if it's full without waiting.
+- Bugfix: Ensure nonces are put in data as little-endian in test_nonce*
+- Bugfix: Need to do extract_sockaddr before trying to initiate stratum
+(erroneous http URI usage, except at startup)
+- Bugfix: Address Windows-specific formatting issues (including lack of support
+for %ll*)
+- ztex: Fix formatting in a debug message
+- cairnsmore: Don't bother timing dynclock detection, since there's no standard
+way to log it accurately
+- Correct formatting in FPGA drivers
+- opencl/adl: Fix formatting to fit strict rules
+- Explicitly cast all_data.buf to char* for debug printing
+- Follow strict time_t handling rules
+- Use GNU format-checking attribute when available for applog
+
+
 BFGMiner Version 2.9.6 - December 21, 2012
 
 - libztex: check returnvalue of libusb_claim_interface() and release the
