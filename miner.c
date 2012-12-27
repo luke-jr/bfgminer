@@ -5940,6 +5940,9 @@ retry_stratum:
 			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
 			work->getwork_mode = GETWORK_MODE_TESTPOOL;
 			calc_diff(work, 0);
+
+			update_last_work(work);
+
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
 			tq_push(thr_info[stage_thr_id].q, work);
@@ -5947,8 +5950,6 @@ retry_stratum:
 			pool->getwork_requested++;
 			ret = true;
 			gettimeofday(&pool->tv_idle, NULL);
-
-			update_last_work(work);
 		} else {
 badwork:
 			json_decref(val);
