@@ -1024,7 +1024,7 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 }
 
 /* Check to see if Santa's been good to you */
-static bool sock_full(struct pool *pool, bool wait)
+bool sock_full(struct pool *pool, bool wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
