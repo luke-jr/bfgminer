@@ -67,10 +67,14 @@ static void databuf_free(struct data_buffer *db)
 		return;
 
 	free(db->buf);
+#ifdef DEBUG_DATABUF
+	applog(LOG_DEBUG, "databuf_free(%p)", db->buf);
+#endif
 
 	memset(db, 0, sizeof(*db));
 }
 
+// aka data_buffer_write
 static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 			  void *user_data)
 {
@@ -90,6 +94,9 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	newlen = oldlen + len;
 
 	newmem = realloc(db->buf, newlen + 1);
+#ifdef DEBUG_DATABUF
+	applog(LOG_DEBUG, "data_buffer_write realloc(%p, %lu) => %p", db->buf, (long unsigned)(newlen + 1), newmem);
+#endif
 	if (!newmem)
 		return 0;
 
@@ -989,7 +996,7 @@ char *recv_line(struct pool *pool)
 		((char*)pool->readbuf.buf)[pool->readbuf.len] = '\0';
 
 		if (1 != len) {
-			applog(LOG_DEBUG, "Error appending readbuf in recv_line");
+			applog(LOG_DEBUG, "Error appending readbuf in recv_line for pool %u", pool->pool_no);
 			goto out;
 		}
 	}
@@ -1001,6 +1008,9 @@ char *recv_line(struct pool *pool)
 	pool->readbuf.len -= len + 1;
 	tok = memcpy(malloc(pool->readbuf.len), tok + 1, pool->readbuf.len);
 	sret = realloc(pool->readbuf.buf, len + 1);
+#ifdef DEBUG_DATABUF
+	applog(LOG_DEBUG, "recv_line realloc(%p, %lu) => %p (new readbuf.buf=%p)", pool->readbuf.buf, (unsigned long)(len + 1), sret, tok);
+#endif
 	pool->readbuf.buf = tok;
 
 out:
@@ -1341,6 +1351,7 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
+	applog(LOG_DEBUG, "initiate_stratum with readbuf.buf=%p", pool->readbuf.buf);
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
 	if (!pool->stratum_curl) {
