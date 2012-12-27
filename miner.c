@@ -4740,6 +4740,7 @@ void zero_stats(void)
 	int i;
 
 	gettimeofday(&total_tv_start, NULL);
+	miner_started = total_tv_start;
 	total_mhashes_done = 0;
 	total_getworks = 0;
 	total_accepted = 0;
@@ -4747,6 +4748,10 @@ void zero_stats(void)
 	hw_errors = 0;
 	total_stale = 0;
 	total_discarded = 0;
+	total_bytes_xfer = 0;
+	total_diff_accepted = total_diff_rejected = total_diff_stale = 0;
+	new_blocks = 0;
+	found_blocks = 0;
 	local_work = 0;
 	total_go = 0;
 	total_ro = 0;
@@ -4761,10 +4766,31 @@ void zero_stats(void)
 		pool->getwork_requested = 0;
 		pool->accepted = 0;
 		pool->rejected = 0;
+		pool->solved = 0;
+		pool->diff1 = 0;
+		pool->diff_accepted = pool->diff_rejected = pool->diff_stale = 0;
+		pool->getwork_requested = 0;
 		pool->stale_shares = 0;
 		pool->discarded_work = 0;
 		pool->getfail_occasions = 0;
 		pool->remotefail_occasions = 0;
+		pool->cgminer_stats.getwork_calls = 0;
+		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+		pool->cgminer_stats.getwork_wait_max.tv_sec = 0;
+		pool->cgminer_stats.getwork_wait_max.tv_usec = 0;
+		pool->cgminer_pool_stats.getwork_calls = 0;
+		pool->cgminer_pool_stats.getwork_attempts = 0;
+		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+		pool->cgminer_pool_stats.getwork_wait_max.tv_sec = 0;
+		pool->cgminer_pool_stats.getwork_wait_max.tv_usec = 0;
+		pool->cgminer_pool_stats.min_diff = 0;
+		pool->cgminer_pool_stats.max_diff = 0;
+		pool->cgminer_pool_stats.min_diff_count = 0;
+		pool->cgminer_pool_stats.max_diff_count = 0;
+		pool->cgminer_pool_stats.times_sent = 0;
+		pool->cgminer_pool_stats.bytes_sent = 0;
+		pool->cgminer_pool_stats.times_received = 0;
+		pool->cgminer_pool_stats.times_received = 0;
 	}
 
 	mutex_lock(&hash_lock);
@@ -4776,6 +4802,23 @@ void zero_stats(void)
 		cgpu->rejected = 0;
 		cgpu->hw_errors = 0;
 		cgpu->utility = 0.0;
+		cgpu->utility_diff1 = 0;
+		cgpu->diff1 = 0;
+		cgpu->diff_accepted = cgpu->diff_rejected = 0;
+		cgpu->thread_fail_init_count = 0;
+		cgpu->thread_zero_hash_count = 0;
+		cgpu->thread_fail_queue_count = 0;
+		cgpu->dev_sick_idle_60_count = 0;
+		cgpu->dev_dead_idle_600_count = 0;
+		cgpu->dev_nostart_count = 0;
+		cgpu->dev_over_heat_count = 0;
+		cgpu->dev_thermal_cutoff_count = 0;
+		cgpu->dev_comms_error_count = 0;
+		cgpu->dev_throttle_count = 0;
+		cgpu->cgminer_stats.getwork_calls = 0;
+		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+		cgpu->cgminer_stats.getwork_wait_max.tv_sec = 0;
+		cgpu->cgminer_stats.getwork_wait_max.tv_usec = 0;
 	}
 	mutex_unlock(&hash_lock);
 }
