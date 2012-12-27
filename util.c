@@ -75,12 +75,18 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 			  void *user_data)
 {
 	struct data_buffer *db = user_data;
-	size_t len = size * nmemb;
 	size_t oldlen, newlen;
+
+	oldlen = db->len;
+	if (unlikely(nmemb == 0 || size == 0 || oldlen >= SIZE_MAX - size))
+		return 0;
+	if (unlikely(nmemb > (SIZE_MAX - oldlen) / size))
+		nmemb = (SIZE_MAX - oldlen) / size;
+
+	size_t len = size * nmemb;
 	void *newmem;
 	static const unsigned char zero = 0;
 
-	oldlen = db->len;
 	newlen = oldlen + len;
 
 	newmem = realloc(db->buf, newlen + 1);
@@ -92,7 +98,7 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	memcpy(db->buf + oldlen, ptr, len);
 	memcpy(db->buf + newlen, &zero, 1);	/* null terminate */
 
-	return len;
+	return nmemb;
 }
 
 static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
@@ -982,7 +988,7 @@ char *recv_line(struct pool *pool)
 		pool->readbuf.buf = realloc(pool->readbuf.buf, pool->readbuf.len + 1);
 		((char*)pool->readbuf.buf)[pool->readbuf.len] = '\0';
 
-		if (n != (size_t)len) {
+		if (1 != len) {
 			applog(LOG_DEBUG, "Error appending readbuf in recv_line");
 			goto out;
 		}
