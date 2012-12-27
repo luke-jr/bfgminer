@@ -1,3 +1,14 @@
+bfgminer (2.10.2-0precise1) precise; urgency=low
+
+  * There is now a [Z]ero stats option under the display menu which resets all the visible statistics.
+  * The current pool and block target difficulties are now shown in the status lines.
+  * Block solve detection is now supported with scrypt mining as well (BLOCK! written at end of share and solved blocks listed under pool stats).
+  * Stratum support for scrypt mining.
+  * Numerous subtle bugfixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 27 Dec 2012 11:20:53 -0000
+
+
 bfgminer (2.10.1-0precise1) precise; urgency=low
 
   * modminer: Enable frequency adjustments up to 230 MHz, and allow changing the frequency (non-sticky) via the new "pgaset" RPC command.

@@ -1,7 +1,10 @@
-BFGMiner Version 2.10.2 - Future
+BFGMiner Version 2.10.2 - December 27, 2012
 
-- Do not give the share submission failure message on planned stratum
-disconnects.
+- Update documentation to include block difficulty
+- Reset all stats when requested
+- Reset total diff1 shares when zeroing stats as well to show correct work
+utility.
+- Update documentation.
 - Parse anything in the stratum socket if it's full without waiting. Empty the
 socket even if a connection is not needed in case there are share returns.
 - Provide a mechanism to zero all the statistics from the menu.
@@ -11,27 +14,34 @@ socket even if a connection is not needed in case there are share returns.
 scrypt mining.
 - Generate the output hash for scrypt as well and use the one function to set
 share_diff.
-- Use the flip80 function in regeneratehash and the correct sized hash array.
 - Use one size for scratchbuf as a macro in scrypt.c
-- Stage work outside of the stgd lock to prevent attempted recursive locking in
-clone_available.
-- share_diff needs to be performed on a BE version of the output hash to work,
-leading to false best_share values as spotted by luke-Jr.
 - Remove the unused sha224 functions.
-- Use the flip functions in hashtest.
-- Simplify the setting of the nonce data field in work on submitting nonces.
-- Scrypt code does not enter the hashtest function.
-- Go back to cloning available work under staged lock.
-- Updated links to AMD APP SDK
-- Updated link to ADL SDK
+- Check staged_rollable under staged lock, when cloning available work.
 - scrypt_diff uses a uint64_t as well.
 - Correct target for stratum support with scrypt mining.
-- libztex: fixed a typo
-- libztex: check returnvalue of libusb_claim_interface() and release the
-interface in case of early exit
+- Bugfix: Ensure nonces are put in data as little-endian in test_nonce*
+- Add low-level debugging info for data_buffer (some only enabled with
+-DDEBUG_DATABUF)
+- Make all_data_cb fwrite-compliant by returning nmembs, and check for unlikely
+overflows
+- Bugfix: Need to do extract_sockaddr before trying to initiate stratum
+(erroneous http URI usage, except at startup)
+- Bugfix: Update last GBT work in pool_active before staging it, since otherwise
+it could possibly be consumed before we copy it
+- Bugfix: Address Windows-specific formatting issues (including lack of support
+for %ll*)
+- Bugfix: ztex: Correct formatting for reset failure error
+- ztex: Fix formatting in a debug message
+- cairnsmore: Don't bother timing dynclock detection, since there's no standard
+way to log it accurately
+- Correct formatting in FPGA drivers
+- opencl/adl: Fix formatting to fit strict rules
+- Explicitly cast all_data.buf to char* for debug printing
+- Follow strict time_t handling rules
+- Use GNU format-checking attribute when available for applog
 
 
-BFGMiner Version 2.10.1 - Future
+BFGMiner Version 2.10.1 - December 21, 2012
 
 - libztex: fixed a typo
 - libztex: check returnvalue of libusb_claim_interface() and release the
