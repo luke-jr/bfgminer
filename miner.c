@@ -4735,6 +4735,50 @@ void write_config(FILE *fcfg)
 	json_escape_free();
 }
 
+void zero_stats(void)
+{
+	int i;
+
+	gettimeofday(&total_tv_start, NULL);
+	total_mhashes_done = 0;
+	total_getworks = 0;
+	total_accepted = 0;
+	total_rejected = 0;
+	hw_errors = 0;
+	total_stale = 0;
+	total_discarded = 0;
+	local_work = 0;
+	total_go = 0;
+	total_ro = 0;
+	total_secs = 1.0;
+	best_diff = 0;
+	suffix_string(best_diff, best_share, 0);
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+
+		pool->getwork_requested = 0;
+		pool->accepted = 0;
+		pool->rejected = 0;
+		pool->stale_shares = 0;
+		pool->discarded_work = 0;
+		pool->getfail_occasions = 0;
+		pool->remotefail_occasions = 0;
+	}
+
+	mutex_lock(&hash_lock);
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = devices[i];
+
+		cgpu->total_mhashes = 0;
+		cgpu->accepted = 0;
+		cgpu->rejected = 0;
+		cgpu->hw_errors = 0;
+		cgpu->utility = 0.0;
+	}
+	mutex_unlock(&hash_lock);
+}
+
 #ifdef HAVE_CURSES
 static void display_pools(void)
 {
@@ -4938,7 +4982,7 @@ retry:
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
 		  "[R]PC debug:%s\n[W]orkTime details:%s\nco[M]pact: %s\n"
-		  "[L]og interval:%d\n",
+		  "[L]og interval:%d\n[Z]ero statistics\n",
 		opt_debug_console ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
 		opt_quiet ? "on" : "off",
@@ -5009,6 +5053,9 @@ retry:
 	} else if (!strncasecmp(&input, "w", 1)) {
 		opt_worktime ^= true;
 		wlogprint("WorkTime details %s\n", opt_worktime ? "enabled" : "disabled");
+		goto retry;
+	} else if (!strncasecmp(&input, "z", 1)) {
+		zero_stats();
 		goto retry;
 	} else
 		clear_logwin();
