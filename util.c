@@ -82,16 +82,27 @@ static void databuf_free(struct data_buffer *db)
 		return;
 
 	free(db->buf);
+#ifdef DEBUG_DATABUF
+	applog(LOG_DEBUG, "databuf_free(%p)", db->buf);
+#endif
 
 	memset(db, 0, sizeof(*db));
 }
 
+// aka data_buffer_write
 static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 			  void *user_data)
 {
 	struct data_buffer *db = user_data;
-	size_t len = size * nmemb;
 	size_t oldlen, newlen;
+
+	oldlen = db->len;
+	if (unlikely(nmemb == 0 || size == 0 || oldlen >= SIZE_MAX - size))
+		return 0;
+	if (unlikely(nmemb > (SIZE_MAX - oldlen) / size))
+		nmemb = (SIZE_MAX - oldlen) / size;
+
+	size_t len = size * nmemb;
 	void *newmem;
 	static const unsigned char zero = 0;
 
@@ -105,10 +116,12 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 			}
 	}
 
-	oldlen = db->len;
 	newlen = oldlen + len;
 
 	newmem = realloc(db->buf, newlen + 1);
+#ifdef DEBUG_DATABUF
+	applog(LOG_DEBUG, "data_buffer_write realloc(%p, %lu) => %p", db->buf, (long unsigned)(newlen + 1), newmem);
+#endif
 	if (!newmem)
 		return 0;
 
@@ -117,7 +130,7 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	memcpy(db->buf + oldlen, ptr, len);
 	memcpy(db->buf + newlen, &zero, 1);	/* null terminate */
 
-	return len;
+	return nmemb;
 }
 
 static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
@@ -1072,8 +1085,8 @@ char *recv_line(struct pool *pool)
 		}
 
 		len = all_data_cb(s, n, 1, &pool->readbuf);
-		if (n != (size_t)len) {
-			applog(LOG_DEBUG, "Error appending readbuf in recv_line");
+		if (1 != len) {
+			applog(LOG_DEBUG, "Error appending readbuf in recv_line for pool %u", pool->pool_no);
 			goto out;
 		}
 	}
@@ -1085,6 +1098,9 @@ char *recv_line(struct pool *pool)
 	pool->readbuf.len -= len + 1;
 	tok = memcpy(malloc(pool->readbuf.len), tok + 1, pool->readbuf.len);
 	sret = realloc(pool->readbuf.buf, len + 1);
+#ifdef DEBUG_DATABUF
+	applog(LOG_DEBUG, "recv_line realloc(%p, %lu) => %p (new readbuf.buf=%p)", pool->readbuf.buf, (unsigned long)(len + 1), sret, tok);
+#endif
 	pool->readbuf.buf = tok;
 
 	pool->cgminer_pool_stats.times_received++;
@@ -1426,6 +1442,7 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
+	applog(LOG_DEBUG, "initiate_stratum with readbuf.buf=%p", pool->readbuf.buf);
 	mutex_lock(&pool->stratum_lock);
 	pool->swork.transparency_time = (time_t)-1;
 	pool->stratum_active = false;
