@@ -6170,8 +6170,11 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 
 void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
+
 	gettimeofday(&tv_work_found, NULL);
+	*work_nonce = htole32(nonce);
 
 	mutex_lock(&stats_lock);
 	total_diff1++;
