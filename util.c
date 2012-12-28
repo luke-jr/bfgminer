@@ -1027,13 +1027,13 @@ static char *json_array_string(json_t *val, unsigned int entry)
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
+	bool clean, ret = false;
 	int merkles, i;
 	json_t *arr;
-	bool clean;
 
 	arr = json_array_get(val, 4);
 	if (!arr || !json_is_array(arr))
-		return false;
+		goto out;
 
 	merkles = json_array_size(arr);
 
@@ -1062,7 +1062,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			free(nbit);
 		if (ntime)
 			free(ntime);
-		return false;
+		goto out;
 	}
 
 	mutex_lock(&pool->pool_lock);
@@ -1125,7 +1125,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			pool->swork.transparency_time = time(NULL);
 	}
 
-	return true;
+	ret = true;
+out:
+	return ret;
 }
 
 static bool parse_diff(struct pool *pool, json_t *val)
@@ -1229,8 +1231,11 @@ bool parse_method(struct pool *pool, char *s)
 	if (!buf)
 		goto out;
 
-	if (!strncasecmp(buf, "mining.notify", 13) && parse_notify(pool, params)) {
-		ret = true;
+	if (!strncasecmp(buf, "mining.notify", 13)) {
+		if (parse_notify(pool, params))
+			pool->stratum_notify = ret = true;
+		else
+			pool->stratum_notify = ret = false;
 		goto out;
 	}
 
@@ -1298,6 +1303,10 @@ bool auth_stratum(struct pool *pool)
 
 		goto out;
 	}
+
+	if (!pool->stratum_notify)
+		goto out;
+
 	ret = true;
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->stratum_auth = true;
