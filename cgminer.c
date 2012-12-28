@@ -6891,7 +6891,7 @@ begin_bench:
 		pool = select_pool(lagging);
 retry:
 		if (pool->has_stratum) {
-			while (!pool->stratum_active) {
+			while (!pool->stratum_active || !pool->stratum_notify) {
 				struct pool *altpool = select_pool(true);
 
 				sleep(5);
