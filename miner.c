@@ -5502,7 +5502,7 @@ static void *stratum_thread(void *userdata)
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (!sock_full(pool, false) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1)
+		if (!sock_full(pool) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1)
 			s = NULL;
 		else
 			s = recv_line(pool);

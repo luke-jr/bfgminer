@@ -921,15 +921,11 @@ static void clear_sock(struct pool *pool)
 	mutex_unlock(&pool->stratum_lock);
 }
 
-/* Check to see if Santa's been good to you */
-bool sock_full(struct pool *pool, bool wait)
+static bool socket_full(struct pool *pool, bool wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
 	fd_set rd;
-
-	if (pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))
-		return true;
 
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
@@ -941,6 +937,15 @@ bool sock_full(struct pool *pool, bool wait)
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
+}
+
+/* Check to see if Santa's been good to you */
+bool sock_full(struct pool *pool)
+{
+	if (pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))
+		return true;
+
+	return (socket_full(pool, false));
 }
 
 /* Peeks at a socket to find the first end of line and then reads just that
@@ -955,8 +960,8 @@ char *recv_line(struct pool *pool)
 		char s[RBUFSIZE];
 		CURLcode rc;
 
-		if (!sock_full(pool, true)) {
-			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
+		if (!socket_full(pool, true)) {
+			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
 		}
 		memset(s, 0, RBUFSIZE);
@@ -1369,7 +1374,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (!sock_full(pool, true)) {
+	if (!socket_full(pool, true)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
