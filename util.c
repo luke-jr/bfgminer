@@ -929,15 +929,11 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 	return ret;
 }
 
-/* Check to see if Santa's been good to you */
-bool sock_full(struct pool *pool, bool wait)
+static bool socket_full(struct pool *pool, bool wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
 	fd_set rd;
-
-	if (strlen(pool->sockbuf))
-		return true;
 
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
@@ -949,6 +945,15 @@ bool sock_full(struct pool *pool, bool wait)
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
+}
+
+/* Check to see if Santa's been good to you */
+bool sock_full(struct pool *pool)
+{
+	if (strlen(pool->sockbuf))
+		return true;
+
+	return (socket_full(pool, false));
 }
 
 static void clear_sock(struct pool *pool)
@@ -975,8 +980,8 @@ char *recv_line(struct pool *pool)
 		char s[RBUFSIZE];
 		size_t sspace;
 
-		if (!sock_full(pool, true)) {
-			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
+		if (!socket_full(pool, true)) {
+			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
 		}
 		memset(s, 0, RBUFSIZE);
@@ -1385,7 +1390,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (!sock_full(pool, true)) {
+	if (!socket_full(pool, true)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
