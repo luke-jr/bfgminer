@@ -968,37 +968,59 @@ static void clear_sock(struct pool *pool)
 	strcpy(pool->sockbuf, "");
 }
 
+/* Make sure the pool sockbuf is large enough to cope with any coinbase size
+ * by reallocing it to a large enough size rounded up to a multiple of RBUFSIZE
+ * and zeroing the new memory */
+static void recalloc_sock(struct pool *pool, size_t len)
+{
+	size_t old, new;
+
+	old = strlen(pool->sockbuf);
+	new = old + len + 1;
+	if (new < pool->sockbuf_size)
+		return;
+	new = new + (RBUFSIZE - (new % RBUFSIZE));
+	applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
+	pool->sockbuf = realloc(pool->sockbuf, new);
+	if (!pool->sockbuf)
+		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
+	memset(pool->sockbuf + old, 0, new - old);
+	pool->sockbuf_size = new;
+}
+
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
 	ssize_t len, buflen;
 	char *tok, *sret = NULL;
-	ssize_t n;
 
 	if (!strstr(pool->sockbuf, "\n")) {
-		char s[RBUFSIZE];
-		size_t sspace;
+		struct timeval rstart, now;
 
+		gettimeofday(&rstart, NULL);
 		if (!socket_full(pool, true)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
 		}
-		memset(s, 0, RBUFSIZE);
 
 		mutex_lock(&pool->stratum_lock);
-		n = recv(pool->sock, s, RECVSIZE, 0);
-		mutex_unlock(&pool->stratum_lock);
+		do {
+			char s[RBUFSIZE];
+			size_t slen, n;
 
-		if (n < 1 && errno != EAGAIN && errno != EWOULDBLOCK) {
-			applog(LOG_DEBUG, "Failed to recv sock in recv_line");
-			goto out;
-		}
-		/* Prevent buffer overflows, but if 8k is still not enough,
-		 * likely we have had some comms issues and the data is all
-		 * useless anyway */
-		sspace = RECVSIZE - strlen(pool->sockbuf);
-		strncat(pool->sockbuf, s, sspace);
+			memset(s, 0, RBUFSIZE);
+			n = recv(pool->sock, s, RECVSIZE, 0);
+			if (n < 1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+				break;
+			}
+			slen = strlen(s);
+			recalloc_sock(pool, slen);
+			strcat(pool->sockbuf, s);
+			gettimeofday(&now, NULL);
+		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
+		mutex_unlock(&pool->stratum_lock);
 	}
 
 	buflen = strlen(pool->sockbuf);
@@ -1349,6 +1371,13 @@ bool initiate_stratum(struct pool *pool)
 	}
 	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
+
+	if (!pool->sockbuf) {
+		pool->sockbuf = calloc(RBUFSIZE, 1);
+		if (!pool->sockbuf)
+			quit(1, "Failed to calloc pool sockbuf in initiate_stratum");
+		pool->sockbuf_size = RBUFSIZE;
+	}
 
 	/* Create a http url for use with curl */
 	memset(s, 0, RBUFSIZE);
