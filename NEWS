@@ -1,3 +1,16 @@
+Version 2.10.4 - December 29, 2012
+
+- Change the pool stratum socket buffer to be dynamically allocated to
+accomodate any size coinbase and keep receiving data in recv line for up to 60s
+if no end of line has been received.
+- Differentiate socket full from sock full.
+- Allow stratum to startup without notify but check it is valid before creating
+stratum work.
+- Do not try to generate stratum work unless the notify command has succeeded.
+- Reset total diff1 shares when zeroing stats as well to show correct work
+utility.
+
+
 Version 2.10.3 - December 26, 2012
 
 - Do not give the share submission failure message on planned stratum
