@@ -273,6 +273,7 @@ fi
 
 
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
+AM_CONDITIONAL([NEED_USBUTILS_C], [test x$bitforce$modminer != xnono])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
@@ -321,7 +322,7 @@ fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
-if test "x$bitforce" != xno; then
+if test "x$icarus" != xno; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
 		[libudev=auto]
@@ -343,7 +344,7 @@ AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
 PKG_PROG_PKG_CONFIG()
 
-if test "x$ztex$modminer" != xnono; then
+if test "x$ztex$modminer$bitforce" != xnonono; then
   case $target in
     *-*-freebsd*)
       LIBUSB_LIBS="-lusb"
@@ -508,7 +509,7 @@ else
 	echo "  Ztex.FPGAs...........: Disabled"
 fi
 
-if test "x$bitforce" != xno; then
+if test "x$icarus" != xno; then
 	echo "  libudev.detection....: $libudev"
 fi
 
