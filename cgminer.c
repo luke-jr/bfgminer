@@ -3931,6 +3931,7 @@ void zero_stats(void)
 	total_secs = 1.0;
 	best_diff = 0;
 	total_diff1 = 0;
+	memset(best_share, 0, 8);
 	suffix_string(best_diff, best_share, 0);
 
 	for (i = 0; i < total_pools; i++) {
