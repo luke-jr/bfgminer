@@ -45,8 +45,13 @@
 
 #ifdef USE_BITFORCE
 static struct usb_endpoints bfl_eps[] = {
+#ifdef WIN32
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+#else
 	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPO(2), 0 }
+#endif
 };
 #endif
 

@@ -58,7 +58,9 @@
 
 // If initialisation fails the first time,
 // sleep this amount (ms) and try again
-#define REINIT_TIME_MS 6000
+#define REINIT_TIME_MS 1000
+// But try this many times
+#define REINIT_COUNT 6
 
 static const char *blank = "";
 
@@ -108,18 +110,18 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 			bitforce->api->name, bitforce->device_id, err);
 
 	// Clear any sent data
-//	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
-//				FTDI_VALUE_PURGE_TX, bitforce->usbdev->found->interface, C_PURGETX);
-//	if (opt_debug)
-//		applog(LOG_DEBUG, "%s%i: purgetx got err %d",
-//			bitforce->api->name, bitforce->device_id, err);
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
+				FTDI_VALUE_PURGE_TX, bitforce->usbdev->found->interface, C_PURGETX);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: purgetx got err %d",
+			bitforce->api->name, bitforce->device_id, err);
 
 	// Clear any received data
-//	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
-//				FTDI_VALUE_PURGE_RX, bitforce->usbdev->found->interface, C_PURGERX);
-//	if (opt_debug)
-//		applog(LOG_DEBUG, "%s%i: purgerx got err %d",
-//			bitforce->api->name, bitforce->device_id, err);
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
+				FTDI_VALUE_PURGE_RX, bitforce->usbdev->found->interface, C_PURGERX);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: purgerx got err %d",
+			bitforce->api->name, bitforce->device_id, err);
 
 	if (lock)
 		mutex_unlock(&bitforce->device_mutex);
@@ -139,36 +141,49 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 	bitforce->threads = 1;
 
 	if (!usb_init(bitforce, dev, found)) {
-		applog(LOG_ERR, "%s detect: failed to initialise (incorrect device?)", bitforce->api->dname);
+		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
+			bitforce->api->dname,
+			(int)libusb_get_bus_number(dev),
+			(int)libusb_get_device_address(dev));
 		goto shin;
 	}
 
-	int init_counter = 0;
+	sprintf(devpath, "%d:%d",
+			(int)(bitforce->usbdev->bus_number),
+			(int)(bitforce->usbdev->device_address));
+
+	int init_count = 0;
 reinit:
 
 	bitforce_initialise(bitforce, false);
 
 	if ((err = usb_write(bitforce, BITFORCE_IDENTIFY, BITFORCE_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY)) < 0 || amount != BITFORCE_IDENTIFY_LEN) {
-		applog(LOG_ERR, "%s detect: send identify request failed (%d:%d)",
-			bitforce->api->dname, amount, err);
+		applog(LOG_ERR, "%s detect (%s) send identify request failed (%d:%d)",
+			bitforce->api->dname, devpath, amount, err);
 		goto unshin;
 	}
 
 	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY)) < 0 || amount < 1) {
 		// Maybe it was still processing previous work?
-		if (init_counter++ < 1) {
-			applog(LOG_WARNING, "%s detect: 1st init failed - retrying in %dms (%d:%d)",
-				bitforce->api->dname, REINIT_TIME_MS, amount, err);
+		if (++init_count <= REINIT_COUNT) {
+			if (init_count < 2) {
+				applog(LOG_WARNING, "%s detect (%s) 1st init failed - retrying (%d:%d)",
+					bitforce->api->dname, devpath, amount, err);
+			}
 			nmsleep(REINIT_TIME_MS);
 			goto reinit;
 		}
 
+		if (init_count > 0)
+			applog(LOG_WARNING, "%s detect (%s) init failed %d times",
+				bitforce->api->dname, devpath, init_count);
+
 		if (err < 0) {
-			applog(LOG_ERR, "%s detect: error identify reply (%d:%d)",
-				bitforce->api->dname, amount, err);
+			applog(LOG_ERR, "%s detect (%s) error identify reply (%d:%d)",
+				bitforce->api->dname, devpath, amount, err);
 		} else {
-			applog(LOG_ERR, "%s detect: empty identify reply (%d)",
-				bitforce->api->dname, amount);
+			applog(LOG_ERR, "%s detect (%s) empty identify reply (%d)",
+				bitforce->api->dname, devpath, amount);
 		}
 
 		goto unshin;
@@ -176,8 +191,8 @@ reinit:
 	buf[amount] = '\0';
 
 	if (unlikely(!strstr(buf, "SHA256"))) {
-		applog(LOG_ERR, "%s detect: didn't recognise %s",
-			bitforce->api->dname, buf);
+		applog(LOG_ERR, "%s detect (%s) didn't recognise '%s'",
+			bitforce->api->dname, devpath, buf);
 		goto unshin;
 	}
 
@@ -189,7 +204,8 @@ reinit:
 	}
 
 	// We have a real BitForce!
-	applog(LOG_DEBUG, "%s identified as: '%s'", bitforce->api->dname, bitforce->name);
+	applog(LOG_DEBUG, "%s (%s) identified as: '%s'",
+		bitforce->api->dname, devpath, bitforce->name);
 
 	/* Initially enable support for nonce range and disable it later if it
 	 * fails */
@@ -201,10 +217,6 @@ reinit:
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS * 5;
 		bitforce->kname = KNAME_WORK;
 	}
-
-	sprintf(devpath, "%d:%d",
-			(int)(bitforce->usbdev->bus_number),
-			(int)(bitforce->usbdev->device_address));
 
 	bitforce->device_path = strdup(devpath);
 
