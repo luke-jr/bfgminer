@@ -114,7 +114,7 @@ static inline int fsync (int fd)
   #include "libztex.h"
 #endif
 
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
   #include "usbutils.h"
 #endif
 
@@ -374,13 +374,17 @@ struct cgpu_info {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
 #endif
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
 		struct cg_usb_device *usbdev;
 #endif
+#ifdef USE_ICARUS
 		int device_fd;
+#endif
 	};
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
 	int usbstat;
+#endif
+#ifdef USE_MODMINER
 	char fpgaid;
 	unsigned char clock;
 	pthread_mutex_t *modminer_mutex;
