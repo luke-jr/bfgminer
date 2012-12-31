@@ -3120,7 +3120,7 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 {
 	struct api_data *root = NULL;
 
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
 	char buf[TMPBUFSIZ];
 	bool io_open = false;
 	int count = 0;
@@ -3133,7 +3133,7 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		return;
 	}
 
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
 
 	message(io_data, MSG_USBSTA, 0, NULL, isjson);
 
