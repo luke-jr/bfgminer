@@ -35,22 +35,15 @@
 #define AVALON_IO_SPEED 115200
 
 // The size of a successful nonce read
-#define AVALON_READ_SIZE 4
+#define AVALON_READ_SIZE 4	/* Should be 48 */
 
 #define TIME_FACTOR 10
 
 // Ensure the sizes are correct for the Serial read
-#if (AVALON_READ_SIZE != 4)
-#error AVALON_READ_SIZE must be 4
-#endif
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
-#define AVALON_READ_TIME(baud) ((double)AVALON_READ_SIZE * (double)8.0 / (double)(baud))
-
 #define AVALON_READ_FAULT_DECISECONDS 1
-
-#define END_CONDITION 0x0000ffff
 
 // One for each possible device
 struct device_api avalon_api;
@@ -75,6 +68,11 @@ static void rev(unsigned char *s, size_t l)
 #define AVA_GETS_RESTART 1
 #define AVA_GETS_TIMEOUT 2
 
+/* TODO: this should be a avalon_read_thread
+ * 1. receive data from avalon
+ * 2. match the data to avalon_send_buffer
+ * 3. send AVALON_FOUND_NONCE signal to work-thread_id
+ */
 static int avalon_gets(unsigned char *buf, int fd, struct thr_info *thr)
 {
 	ssize_t ret = 0;
@@ -83,9 +81,13 @@ static int avalon_gets(unsigned char *buf, int fd, struct thr_info *thr)
 	// Read reply 1 byte at a time to get earliest tv_finish
 	while (true) {
 		ret = read(fd, buf, 1);
+
+		/* Not return should be continue */
 		if (ret < 0)
 			return AVA_GETS_ERROR;
 
+		/* Match the work in avalon_send_buffer
+		 * send signal to miner thread */
 		if (ret >= read_amount)
 			return AVA_GETS_OK;
 
@@ -95,6 +97,7 @@ static int avalon_gets(unsigned char *buf, int fd, struct thr_info *thr)
 			continue;
 		}
 			
+		/* There is no TIMEOUT in avalon read */
 		rc++;
 		if (rc >= 8) {
 			if (opt_debug) {
@@ -105,6 +108,7 @@ static int avalon_gets(unsigned char *buf, int fd, struct thr_info *thr)
 			return AVA_GETS_TIMEOUT;
 		}
 
+		/* TODO: not sure about this */
 		if (thr && thr->work_restart) {
 			if (opt_debug) {
 				applog(LOG_DEBUG,
@@ -116,6 +120,9 @@ static int avalon_gets(unsigned char *buf, int fd, struct thr_info *thr)
 	}
 }
 
+/* TODO: add mutex on write
+ * 1. add the last_write time
+ * 2. there are have to N ms befoew two task write */
 static int avalon_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
@@ -136,14 +143,11 @@ static void do_avalon_close(struct thr_info *thr)
 	avalon->device_fd = -1;
 }
 
+/* TODO: send AVALON_RESET to device. it will retrun avalon info */
 static bool avalon_detect_one(const char *devpath)
 {
 	int fd;
 
-	// Block 171874 nonce = (0xa2870100) = 0x000187a2
-	// N.B. golden_ob MUST take less time to calculate
-	//	than the timeout set in avalon_open()
-	//	This one takes ~0.53ms on Rev3 Avalon
 	const char golden_ob[] =
 		"4679ba4ec99876bf4bfe086082b40025"
 		"4df6c356451471139a3afa71e48f544a"
@@ -192,7 +196,7 @@ static bool avalon_detect_one(const char *devpath)
 	avalon->api = &avalon_api;
 	avalon->device_path = strdup(devpath);
 	avalon->device_fd = -1;
-	avalon->threads = 1;
+	avalon->threads = 1;	/* The miner_thread */
 	add_cgpu(avalon);
 
 	applog(LOG_INFO, "Found Avalon at %s, mark as %d",
@@ -206,6 +210,9 @@ static void avalon_detect()
 	serial_detect(&avalon_api, avalon_detect_one);
 }
 
+/* TODO:
+ * 1. check if the avalon_read_thread started
+ * 2. start the avalon_read_thread */
 static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
@@ -230,6 +237,14 @@ static bool avalon_prepare(struct thr_info *thr)
 	return true;
 }
 
+/* TODO:
+ * 1. write work to device (mutex on write)
+ *    add work to avalon_send_buffer (mutex on add)
+ * 2. wait signal from avalon_read_thread in N seconds
+ * 3. N seconds reach, retrun 0xffffffff
+ * 4. receive AVALON_FOUND_NONCE signal
+ * 5. remove work from avalon_send_buff
+ * 6. submit_nonce */
 static int64_t avalon_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused int64_t max_nonce)
 {
@@ -314,6 +329,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work *work,
 	return 0xffffffff;
 }
 
+/* TODO: close the avalon_read_thread */
 static void avalon_shutdown(struct thr_info *thr)
 {
 	do_avalon_close(thr);
