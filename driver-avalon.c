@@ -31,24 +31,14 @@
 #include "fpgautils.h"
 #include "avalon.h"
 
-// The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
-#define AVALON_IO_SPEED 115200
-
-// The size of a successful nonce read
-#define AVALON_READ_SIZE 4	/* Should be 48 */
-
-#define TIME_FACTOR 10
-
-// Ensure the sizes are correct for the Serial read
+/* Ensure the sizes are correct for the Serial read */
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
-#define AVALON_READ_FAULT_DECISECONDS 1
-
-// One for each possible device
+/* One for each possible device */
 struct device_api avalon_api;
 
-static void rev(unsigned char *s, size_t l)
+static inline void rev(unsigned char *s, size_t l)
 {
 	size_t i, j;
 	unsigned char t;
@@ -59,14 +49,6 @@ static void rev(unsigned char *s, size_t l)
 		s[j] = t;
 	}
 }
-
-#define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_READ_FAULT_DECISECONDS, purge)
-#define avalon_open(devpath, baud)  avalon_open2(devpath, baud, false)
-
-#define AVA_GETS_ERROR -1
-#define AVA_GETS_OK 0
-#define AVA_GETS_RESTART 1
-#define AVA_GETS_TIMEOUT 2
 
 /* TODO: this should be a avalon_read_thread
  * 1. receive data from avalon
@@ -133,8 +115,6 @@ static int avalon_write(int fd, const void *buf, size_t bufLen)
 
 	return 0;
 }
-
-#define avalon_close(fd) close(fd)
 
 static void do_avalon_close(struct thr_info *thr)
 {
