@@ -29,7 +29,7 @@
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX) || defined(USE_MODMINER)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_ZTEX) || defined(USE_MODMINER)
 #define HAVE_AN_FPGA 1
 #endif
 
@@ -170,6 +170,9 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_ICARUS
 			"ICA "
+#endif
+#ifdef USE_AVALON
+			"AVA "
 #endif
 #ifdef USE_ZTEX
 			"ZTX "
@@ -605,6 +608,10 @@ extern struct device_api bitforce_api;
 
 #ifdef USE_ICARUS
 extern struct device_api icarus_api;
+#endif
+
+#ifdef USE_AVALON
+extern struct device_api avalon_api;
 #endif
 
 #ifdef USE_ZTEX
@@ -1160,6 +1167,10 @@ static int numpgas()
 		if (devices[i]->api == &icarus_api)
 			count++;
 #endif
+#ifdef USE_AVALON
+		if (devices[i]->api == &avalon_api)
+			count++;
+#endif
 #ifdef USE_ZTEX
 		if (devices[i]->api == &ztex_api)
 			count++;
@@ -1184,6 +1195,10 @@ static int pgadevice(int pgaid)
 #endif
 #ifdef USE_ICARUS
 		if (devices[i]->api == &icarus_api)
+			count++;
+#endif
+#ifdef USE_AVALON
+		if (devices[i]->api == &avalon_api)
 			count++;
 #endif
 #ifdef USE_ZTEX

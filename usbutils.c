@@ -20,6 +20,10 @@
 #define DRV_ICARUS 1
 #endif
 
+#ifdef USE_AVALON
+#define DRV_AVALON 1
+#endif
+
 #ifdef USE_BITFORCE
 #define DRV_BITFORCE 2
 #endif
@@ -81,6 +85,10 @@ extern struct device_api bitforce_api;
 
 #ifdef USE_ICARUS
 extern struct device_api icarus_api;
+#endif
+
+#ifdef USE_AVALON
+extern struct device_api avalon_api;
 #endif
 
 #ifdef USE_MODMINER
@@ -910,6 +918,11 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_api *api,
 #ifdef USE_ICARUS
 	if (api == &icarus_api)
 		return usb_check_each(DRV_ICARUS, api, dev);
+#endif
+
+#ifdef USE_AVALON
+	if (api == &avalon_api)
+		return usb_check_each(DRV_AVALON, api, dev);
 #endif
 
 #ifdef USE_MODMINER

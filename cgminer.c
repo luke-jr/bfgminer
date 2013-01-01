@@ -55,7 +55,7 @@
 	#include <sys/wait.h>
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
 #	define USE_FPGA
 #	define USE_FPGA_SERIAL
 #elif defined(USE_ZTEX)
@@ -1274,6 +1274,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_ICARUS
 		"icarus "
+#endif
+#ifdef USE_AVALON
+		"avalon "
 #endif
 #ifdef USE_MODMINER
 		"modminer "
@@ -6308,6 +6311,10 @@ extern struct device_api bitforce_api;
 extern struct device_api icarus_api;
 #endif
 
+#ifdef USE_AVALON
+extern struct device_api avalon_api;
+#endif
+
 #ifdef USE_MODMINER
 extern struct device_api modminer_api;
 #endif
@@ -6575,6 +6582,11 @@ int main(int argc, char *argv[])
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
 		icarus_api.api_detect();
+#endif
+
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_api.api_detect();
 #endif
 
 #ifdef USE_BITFORCE
