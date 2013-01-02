@@ -36,10 +36,10 @@
 #define EPO(x) (LIBUSB_ENDPOINT_OUT | (unsigned char)(x))
 
 #ifdef WIN32
-#define BITFORCE_TIMEOUT_MS 200
+#define BITFORCE_TIMEOUT_MS 500
 #define MODMINER_TIMEOUT_MS 200
 #else
-#define BITFORCE_TIMEOUT_MS 100
+#define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
 #endif
 
