@@ -223,6 +223,8 @@ reinit:
 	if (!add_cgpu(bitforce))
 		goto unshin;
 
+	update_usb_stats(bitforce);
+
 	mutex_init(&bitforce->device_mutex);
 
 	return true;
