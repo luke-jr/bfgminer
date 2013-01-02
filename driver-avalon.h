@@ -36,18 +36,5 @@ struct avalon_result {
 } __attribute__((packed));
 
 #define AVALON_MINER_THREADS 1
-#define AVALON_IO_SPEED 115200
-#define AVALON_READ_SIZE 8
-#define AVALON_READ_FAULT_DECISECONDS 10
-#define TIME_FACTOR 10
-
-#define AVA_GETS_ERROR -1
-#define AVA_GETS_OK 0
-#define AVA_GETS_RESTART 1
-#define AVA_GETS_TIMEOUT 2
-
-#define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_READ_FAULT_DECISECONDS, purge)
-#define avalon_open(devpath, baud)  avalon_open2(devpath, baud, false)
-#define avalon_close(fd) close(fd)
 
 #endif	/* AVALON_H */
