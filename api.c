@@ -1993,6 +1993,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		else
 			root = api_add_const(root, "Stratum URL", BLANK, false);
 		root = api_add_bool(root, "Has GBT", &(pool->has_gbt), false);
+		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
 
 		root = print_data(root, buf, isjson, isjson && (i > 0));
 		io_add(io_data, buf);
