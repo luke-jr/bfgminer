@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <termios.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
 #ifndef O_CLOEXEC
@@ -398,7 +399,9 @@ int serial_open(const char *devpath, unsigned long baud, signed short timeout, b
 
 	my_termios.c_cflag |= CS8;
 	my_termios.c_cflag |= CREAD;
+#ifdef USE_AVALON
 	my_termios.c_cflag |= CRTSCTS;
+#endif
 	my_termios.c_cflag |= CLOCAL;
 	my_termios.c_cflag &= ~(CSIZE | PARENB);
 
@@ -568,6 +571,17 @@ size_t _select_write(int fd, char *buf, size_t siz, struct timeval *timeout)
 	}
 
 	return wrote;
+}
+
+int get_serial_cts(int fd)
+{
+	int status;
+
+	if (!fd)
+		return -1;
+
+	ioctl(fd, TIOCMSET, &status);
+	return status & TIOCM_CTS;
 }
 
 #endif // ! WIN32
