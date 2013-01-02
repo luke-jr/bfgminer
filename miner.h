@@ -395,8 +395,6 @@ struct cgpu_info {
 	bool nonce_range;
 	bool polling;
 	bool flash_led;
-#endif
-#if defined(USE_BITFORCE) || defined(USE_AVALON)
 	pthread_mutex_t device_mutex;
 #endif
 
