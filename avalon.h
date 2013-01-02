@@ -35,10 +35,10 @@ struct avalon_result {
 	uint32_t reserved;
 } __attribute__((packed));
 
-
+#define AVALON_MINER_THREADS 1
 #define AVALON_IO_SPEED 115200
-#define AVALON_READ_SIZE 48
-#define AVALON_READ_FAULT_DECISECONDS 1
+#define AVALON_READ_SIZE 8
+#define AVALON_READ_FAULT_DECISECONDS 10
 #define TIME_FACTOR 10
 
 #define AVA_GETS_ERROR -1
