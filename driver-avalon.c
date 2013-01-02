@@ -38,8 +38,6 @@ ASSERT1(sizeof(uint32_t) == 4);
 /* One for each possible device */
 struct device_api avalon_api;
 
-static struct work *avalon_task_buf[AVALON_MINER_THREADS];
-
 static inline void rev(uint8_t *s, size_t l)
 {
 	size_t i, j;
@@ -52,6 +50,7 @@ static inline void rev(uint8_t *s, size_t l)
 	}
 }
 
+/* TODO: modify from lancelot to avalon */
 static inline void avalon_create_task(uint8_t *t, struct work *work)
 {
 	memset(t, 0, 64);
@@ -61,25 +60,13 @@ static inline void avalon_create_task(uint8_t *t, struct work *work)
 	rev(t + 52, 12);
 }
 
-static void avalon_buf_add(struct work *work)
-{
-	int i = 0;
-	while (!avalon_task_buf[i++])
-		;
-	avalon_task_buf[i - 1] = work;
-}
-
-/* TODO: this should be a avalon_read_thread
- * 1. receive data from avalon
- * 2. match the data to avalon_send_buffer
- * 3. send AVALON_FOUND_NONCE signal to work-thread_id
- */
+/* TODO:receive data from avalon */
 static void *avalon_gets(void *userdata)
 {
 	ssize_t ret = 0;
 	int rc = 0;
 	int read_amount = AVALON_READ_SIZE;
-	void *buf;
+	uint8_t buf[AVALON_READ_SIZE];
 
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
@@ -88,13 +75,10 @@ static void *avalon_gets(void *userdata)
 
 	int fd = avalon->device_fd;
 
-	buf = malloc(8);
 	uint8_t *buf_p = buf;
 	// Read reply 1 byte at a time to get earliest tv_finish
 	while (true) {
-		mutex_lock(&avalon->device_mutex);
 		ret = read(fd, buf_p, 1);
-		mutex_unlock(&avalon->device_mutex);
 
 		/* Not return should be continue */
 		if (ret < 0)
@@ -156,9 +140,8 @@ int avalon_gets2(uint8_t *nonce_bin, int *fd, int n)
 {
 }
 
-/* TODO: add mutex on write
- * 1. add the last_write time
- * 2. there are have to N ms befoew two task write */
+/* TODO:
+ * 1. there are have to add N ms before two task write */
 static int avalon_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
@@ -243,9 +226,6 @@ static void avalon_detect()
 	serial_detect(&avalon_api, avalon_detect_one);
 }
 
-/* TODO:
- * 1. check if the avalon_read_thread started
- * 2. start the avalon_read_thread */
 static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
@@ -267,20 +247,14 @@ static bool avalon_prepare(struct thr_info *thr)
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
 
-	if (unlikely(thr_info_create(thr, NULL, avalon_gets, thr)))	
-		quit(1, "thread %d create failed", thr->id);
-
 	return true;
 }
 
 /* TODO:
- * 1. write work to device (mutex on write)
- *    add work to avalon_send_buffer (mutex on add)
- * 2. wait signal from avalon_read_thread in N seconds
- * 3. N seconds reach, retrun 0xffffffff
- * 4. receive AVALON_FOUND_NONCE signal
- * 5. remove work from avalon_send_buff
- * 6. submit_nonce */
+ * 1. write work to device
+ * 2. while CTS HIGH, read data
+ * 3. match to work
+ * 4. submit nonce */
 static int64_t avalon_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused int64_t max_nonce)
 {
@@ -288,8 +262,16 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work *work,
 	int fd;
 	int ret;
 
-	uint8_t ob_bin[64];
+	uint8_t ob_bin[64], nonce_bin[AVALON_READ_SIZE];
 	char *ob_hex;
+	uint32_t nonce;
+	int64_t hash_count;
+	int curr_hw_errors, i;
+	bool was_hw_error;
+
+	int count;
+	int read_count;
+	uint32_t values;
 
 	avalon = thr->cgpu;
 	if (avalon->device_fd == -1)
@@ -301,7 +283,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work *work,
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
 #endif
-	mutex_lock(&avalon->device_mutex);
+	/* TODO: write 20 task */
 	ret = avalon_write(fd, ob_bin, sizeof(ob_bin));
 	if (ret) {
 		do_avalon_close(thr);
@@ -309,8 +291,32 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work *work,
 		dev_error(avalon, REASON_DEV_COMMS_ERROR);
 		return 0;	/* This should never happen */
 	}
-	avalon_buf_add(work);
-	mutex_unlock(&avalon->device_mutex);
+
+	/* Avalon will return 4 bytes (AVALON_READ_SIZE) nonces or nothing */
+	memset(nonce_bin, 0, sizeof(nonce_bin));
+	ret = avalon_gets(thr);
+	if (ret == AVA_GETS_ERROR) {
+		do_avalon_close(thr);
+		applog(LOG_ERR, "ICA%i: Comms error", avalon->device_id);
+		dev_error(avalon, REASON_DEV_COMMS_ERROR);
+		return 0;
+	}
+
+	work->blk.nonce = 0xffffffff;
+
+	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
+
+#if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
+	nonce = swab32(nonce);
+#endif
+
+	curr_hw_errors = avalon->hw_errors;
+	submit_nonce(thr, work, nonce);
+	was_hw_error = (curr_hw_errors > avalon->hw_errors);
+
+	// Force a USB close/reopen on any hw error
+	if (was_hw_error)
+		do_avalon_close(thr);
 
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
@@ -319,7 +325,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work *work,
 		free(ob_hex);
 	}
 
-	return 0;
+	return hash_count;
 }
 
 /* TODO: close the avalon_read_thread */
