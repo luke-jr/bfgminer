@@ -284,7 +284,11 @@ struct device_api {
 	uint64_t (*can_limit_work)(struct thr_info *);
 	bool (*thread_init)(struct thr_info *);
 	bool (*prepare_work)(struct thr_info *, struct work *);
+#ifdef USE_AVALON
+	int64_t (*scanhash_queue)(struct thr_info *, struct work **, int64_t);
+#else
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
+#endif
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
