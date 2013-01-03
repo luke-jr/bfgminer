@@ -1,6 +1,6 @@
 /*
  * Copyright 2012 Luke Dashjr
- * Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
+ * Copyright 2012 2013 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -188,6 +188,7 @@ static int avalon_send_task(int fd, const void *buf, size_t bufLen)
 	if (unlikely(ret != bufLen))
 		return 1;
 
+	/* FIXME: there should be a nanosleep() according to the document */
 	return 0;
 }
 
@@ -591,27 +592,31 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	uint32_t values;
 	int64_t hash_count_range;
 
-	elapsed.tv_sec = elapsed.tv_usec = 0;
+	avalon = thr->cgpu;
 	info = avalon_info[avalon->device_id];
 
-	avalon = thr->cgpu;
 	if (avalon->device_fd == -1)
 		if (!avalon_prepare(thr)) {
 			applog(LOG_ERR, "AVA%i: Comms error",
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
-
 			// fail the device if the reopen attempt fails
 			return -1;
 		}
-
 	fd = avalon->device_fd;
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
 #endif
+
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
 		avalon_create_task(ob_bin, work[i]);
 		ret = avalon_send_task(fd, ob_bin, sizeof(ob_bin));
+		if (opt_debug) {
+			ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
+			applog(LOG_DEBUG, "Avalon %d sent: %s",
+			       avalon->device_id, ob_hex);
+			free(ob_hex);
+		}
 		if (ret) {
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error",
@@ -621,28 +626,23 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		}
 	}
 
-	if (opt_debug) {
-		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
-		applog(LOG_DEBUG, "Avalon %d sent: %s",
-		       avalon->device_id, ob_hex);
-		free(ob_hex);
-	}
-
+	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
-
 
 	/* FIXME: all read should be in another function
 	   Avalon return: reserved_nonce_midstate_data,
 	   count != AVALON_GET_WORK_COUNT */
-	ret = avalon_read_work(nonce_bin, fd, &tv_finish, thr);
-	if (ret == AVA_GETS_ERROR ) {
-		do_avalon_close(thr);
-		applog(LOG_ERR, "AVA%i: Comms error", avalon->device_id);
-		dev_error(avalon, REASON_DEV_COMMS_ERROR);
-		return 0;
+	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+		ret = avalon_read_work(nonce_bin, fd, &tv_finish, thr);
+		if (ret == AVA_GETS_ERROR ) {
+			do_avalon_close(thr);
+			applog(LOG_ERR, "AVA%i: Comms error", avalon->device_id);
+			dev_error(avalon, REASON_DEV_COMMS_ERROR);
+			return 0;
+		}
+		work[0]->blk.nonce = 0xffffffff;
 	}
 
-	work[0]->blk.nonce = 0xffffffff;
 
 	// aborted before becoming idle, get new work
 	if (ret == AVA_GETS_TIMEOUT || ret == AVA_GETS_RESTART) {
