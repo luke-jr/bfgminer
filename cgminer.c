@@ -5332,7 +5332,9 @@ void *miner_thread(void *userdata)
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	int64_t hashes_done = 0;
 	int64_t hashes;
+#ifndef USE_AVALON
 	struct work *work;
+#endif
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
