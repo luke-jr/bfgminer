@@ -1,4 +1,5 @@
 /*
+ * Copyright 2012 Andrew Smith
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Con Kolivas
  *
@@ -19,34 +20,25 @@
 #include "config.h"
 
 #ifdef WIN32
-
 #include <windows.h>
-
-#define dlsym (void*)GetProcAddress
-#define dlclose FreeLibrary
-
-typedef unsigned long FT_STATUS;
-typedef PVOID FT_HANDLE;
-__stdcall FT_STATUS (*FT_ListDevices)(PVOID pArg1, PVOID pArg2, DWORD Flags);
-__stdcall FT_STATUS (*FT_Open)(int idx, FT_HANDLE*);
-__stdcall FT_STATUS (*FT_GetComPortNumber)(FT_HANDLE, LPLONG lplComPortNumber);
-__stdcall FT_STATUS (*FT_Close)(FT_HANDLE);
-const uint32_t FT_OPEN_BY_DESCRIPTION =       2;
-const uint32_t FT_LIST_ALL         = 0x20000000;
-const uint32_t FT_LIST_NUMBER_ONLY = 0x80000000;
-enum {
-	FT_OK,
-};
-
-// Code must deal with a timeout. Make it 1 second on windows, 0.1 on linux.
-#define BFopen(devpath)  serial_open(devpath, 0, 10, true)
-#else /* WIN32 */
-#define BFopen(devpath)  serial_open(devpath, 0, 1, true)
 #endif /* WIN32 */
 
 #include "compat.h"
 #include "miner.h"
-#include "fpgautils.h"
+#include "usbutils.h"
+
+#define BITFORCE_IDENTIFY "ZGX"
+#define BITFORCE_IDENTIFY_LEN (sizeof(BITFORCE_IDENTIFY)-1)
+#define BITFORCE_FLASH "ZMX"
+#define BITFORCE_FLASH_LEN (sizeof(BITFORCE_FLASH)-1)
+#define BITFORCE_TEMPERATURE "ZLX"
+#define BITFORCE_TEMPERATURE_LEN (sizeof(BITFORCE_TEMPERATURE)-1)
+#define BITFORCE_SENDRANGE "ZPX"
+#define BITFORCE_SENDRANGE_LEN (sizeof(BITFORCE_SENDRANGE)-1)
+#define BITFORCE_SENDWORK "ZDX"
+#define BITFORCE_SENDWORK_LEN (sizeof(BITFORCE_SENDWORK)-1)
+#define BITFORCE_WORKSTATUS "ZFX"
+#define BITFORCE_WORKSTATUS_LEN (sizeof(BITFORCE_WORKSTATUS)-1)
 
 #define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_S 7
@@ -62,62 +54,159 @@ enum {
 #define KNAME_WORK  "full work"
 #define KNAME_RANGE "nonce range"
 
+#define BITFORCE_BUFSIZ (0x200)
+
+// If initialisation fails the first time,
+// sleep this amount (ms) and try again
+#define REINIT_TIME_MS 1000
+// But try this many times
+#define REINIT_COUNT 6
+
+static const char *blank = "";
+
 struct device_api bitforce_api;
 
-static void BFgets(char *buf, size_t bufLen, int fd)
+static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 {
-	do {
-		buf[0] = '\0';
-		--bufLen;
-	} while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
+	int err;
 
-	buf[0] = '\0';
+	if (lock)
+		mutex_lock(&bitforce->device_mutex);
+
+	// Reset
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
+				FTDI_VALUE_RESET, bitforce->usbdev->found->interface, C_RESET);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: reset got err %d",
+			bitforce->api->name, bitforce->device_id, err);
+
+	// Set data control
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
+				FTDI_VALUE_DATA, bitforce->usbdev->found->interface, C_SETDATA);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: setdata got err %d",
+			bitforce->api->name, bitforce->device_id, err);
+
+	// Set the baud
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD,
+				(FTDI_INDEX_BAUD & 0xff00) | bitforce->usbdev->found->interface,
+				C_SETBAUD);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: setbaud got err %d",
+			bitforce->api->name, bitforce->device_id, err);
+
+	// Set Flow Control
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
+				FTDI_VALUE_FLOW, bitforce->usbdev->found->interface, C_SETFLOW);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: setflowctrl got err %d",
+			bitforce->api->name, bitforce->device_id, err);
+
+	// Set Modem Control
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
+				FTDI_VALUE_MODEM, bitforce->usbdev->found->interface, C_SETMODEM);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: setmodemctrl got err %d",
+			bitforce->api->name, bitforce->device_id, err);
+
+	// Clear any sent data
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
+				FTDI_VALUE_PURGE_TX, bitforce->usbdev->found->interface, C_PURGETX);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: purgetx got err %d",
+			bitforce->api->name, bitforce->device_id, err);
+
+	// Clear any received data
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
+				FTDI_VALUE_PURGE_RX, bitforce->usbdev->found->interface, C_PURGERX);
+	if (opt_debug)
+		applog(LOG_DEBUG, "%s%i: purgerx got err %d",
+			bitforce->api->name, bitforce->device_id, err);
+
+	if (lock)
+		mutex_unlock(&bitforce->device_mutex);
 }
 
-static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
+static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
-	if ((bufLen) != write(fd, buf, bufLen))
-		return 0;
-	else
-		return bufLen;
-}
-
-#define BFclose(fd) close(fd)
-
-static bool bitforce_detect_one(const char *devpath)
-{
-	int fdDev = BFopen(devpath);
-	struct cgpu_info *bitforce;
-	char pdevbuf[0x100];
+	char buf[BITFORCE_BUFSIZ+1];
+	char devpath[20];
+	int err, amount;
 	char *s;
 
-	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
+	struct cgpu_info *bitforce = NULL;
+	bitforce = calloc(1, sizeof(*bitforce));
+	bitforce->api = &bitforce_api;
+	bitforce->deven = DEV_ENABLED;
+	bitforce->threads = 1;
 
-	if (unlikely(fdDev == -1)) {
-		applog(LOG_ERR, "BFL: Failed to open %s", devpath);
-		return false;
+	if (!usb_init(bitforce, dev, found)) {
+		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
+			bitforce->api->dname,
+			(int)libusb_get_bus_number(dev),
+			(int)libusb_get_device_address(dev));
+		goto shin;
 	}
 
-	BFwrite(fdDev, "ZGX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL: Error reading/timeout (ZGX)");
-		return 0;
+	sprintf(devpath, "%d:%d",
+			(int)(bitforce->usbdev->bus_number),
+			(int)(bitforce->usbdev->device_address));
+
+	int init_count = 0;
+reinit:
+
+	bitforce_initialise(bitforce, false);
+
+	if ((err = usb_write(bitforce, BITFORCE_IDENTIFY, BITFORCE_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY)) < 0 || amount != BITFORCE_IDENTIFY_LEN) {
+		applog(LOG_ERR, "%s detect (%s) send identify request failed (%d:%d)",
+			bitforce->api->dname, devpath, amount, err);
+		goto unshin;
 	}
 
-	BFclose(fdDev);
-	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
-		applog(LOG_ERR, "BFL: Didn't recognise BitForce on %s", devpath);
-		return false;
+	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY)) < 0 || amount < 1) {
+		// Maybe it was still processing previous work?
+		if (++init_count <= REINIT_COUNT) {
+			if (init_count < 2) {
+				applog(LOG_WARNING, "%s detect (%s) 1st init failed - retrying (%d:%d)",
+					bitforce->api->dname, devpath, amount, err);
+			}
+			nmsleep(REINIT_TIME_MS);
+			goto reinit;
+		}
+
+		if (init_count > 0)
+			applog(LOG_WARNING, "%s detect (%s) init failed %d times",
+				bitforce->api->dname, devpath, init_count);
+
+		if (err < 0) {
+			applog(LOG_ERR, "%s detect (%s) error identify reply (%d:%d)",
+				bitforce->api->dname, devpath, amount, err);
+		} else {
+			applog(LOG_ERR, "%s detect (%s) empty identify reply (%d)",
+				bitforce->api->dname, devpath, amount);
+		}
+
+		goto unshin;
+	}
+	buf[amount] = '\0';
+
+	if (unlikely(!strstr(buf, "SHA256"))) {
+		applog(LOG_ERR, "%s detect (%s) didn't recognise '%s'",
+			bitforce->api->dname, devpath, buf);
+		goto unshin;
+	}
+
+	if (likely((!memcmp(buf, ">>>ID: ", 7)) && (s = strstr(buf + 3, ">>>")))) {
+		s[0] = '\0';
+		bitforce->name = strdup(buf + 7);
+	} else {
+		bitforce->name = (char *)blank;
 	}
 
 	// We have a real BitForce!
-	bitforce = calloc(1, sizeof(*bitforce));
-	bitforce->api = &bitforce_api;
-	bitforce->device_path = strdup(devpath);
-	bitforce->deven = DEV_ENABLED;
-	bitforce->threads = 1;
+	applog(LOG_DEBUG, "%s (%s) identified as: '%s'",
+		bitforce->api->dname, devpath, bitforce->name);
+
 	/* Initially enable support for nonce range and disable it later if it
 	 * fails */
 	if (opt_bfl_noncerange) {
@@ -129,108 +218,36 @@ static bool bitforce_detect_one(const char *devpath)
 		bitforce->kname = KNAME_WORK;
 	}
 
-	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
-		s[0] = '\0';
-		bitforce->name = strdup(pdevbuf + 7);
-	}
+	bitforce->device_path = strdup(devpath);
+
+	if (!add_cgpu(bitforce))
+		goto unshin;
+
+	update_usb_stats(bitforce);
 
 	mutex_init(&bitforce->device_mutex);
 
-	return add_cgpu(bitforce);
-}
+	return true;
 
-#define LOAD_SYM(sym)  do { \
-	if (!(sym = dlsym(dll, #sym))) {  \
-		applog(LOG_DEBUG, "Failed to load " #sym ", not using FTDI bitforce autodetect");  \
-		goto out;  \
-	}  \
-} while(0)
+unshin:
 
-#ifdef WIN32
-static int bitforce_autodetect_ftdi(void)
-{
-	char devpath[] = "\\\\.\\COMnnnnn";
-	char *devpathnum = &devpath[7];
-	char **bufptrs;
-	char *buf;
-	int found = 0;
-	DWORD i;
+	usb_uninit(bitforce);
 
-	FT_STATUS ftStatus;
-	DWORD numDevs;
-	HMODULE dll = LoadLibrary("FTD2XX.DLL");
-	if (!dll) {
-		applog(LOG_DEBUG, "FTD2XX.DLL failed to load, not using FTDI bitforce autodetect");
-		return 0;
-	}
-	LOAD_SYM(FT_ListDevices);
-	LOAD_SYM(FT_Open);
-	LOAD_SYM(FT_GetComPortNumber);
-	LOAD_SYM(FT_Close);
-	
-	ftStatus = FT_ListDevices(&numDevs, NULL, FT_LIST_NUMBER_ONLY);
-	if (ftStatus != FT_OK) {
-		applog(LOG_DEBUG, "FTDI device count failed, not using FTDI bitforce autodetect");
-		goto out;
-	}
-	applog(LOG_DEBUG, "FTDI reports %u devices", (unsigned)numDevs);
+shin:
 
-	buf = alloca(65 * numDevs);
-	bufptrs = alloca(sizeof(*bufptrs) * (numDevs + 1));
+	free(bitforce->device_path);
 
-	for (i = 0; i < numDevs; ++i)
-		bufptrs[i] = &buf[i * 65];
-	bufptrs[numDevs] = NULL;
-	ftStatus = FT_ListDevices(bufptrs, &numDevs, FT_LIST_ALL | FT_OPEN_BY_DESCRIPTION);
-	if (ftStatus != FT_OK) {
-		applog(LOG_DEBUG, "FTDI device list failed, not using FTDI bitforce autodetect");
-		goto out;
-	}
-	
-	for (i = numDevs; i > 0; ) {
-		--i;
-		bufptrs[i][64] = '\0';
-		
-		if (!(strstr(bufptrs[i], "BitFORCE") && strstr(bufptrs[i], "SHA256")))
-			continue;
-		
-		FT_HANDLE ftHandle;
-		if (FT_OK != FT_Open(i, &ftHandle))
-			continue;
-		LONG lComPortNumber;
-		ftStatus = FT_GetComPortNumber(ftHandle, &lComPortNumber);
-		FT_Close(ftHandle);
-		if (FT_OK != ftStatus || lComPortNumber < 0)
-			continue;
-		
-		sprintf(devpathnum, "%d", (int)lComPortNumber);
-		
-		if (bitforce_detect_one(devpath))
-			++found;
-	}
+	if (bitforce->name != blank)
+		free(bitforce->name);
 
-out:
-	dlclose(dll);
-	return found;
-}
-#else
-static int bitforce_autodetect_ftdi(void)
-{
-	return 0;
-}
-#endif
+	free(bitforce);
 
-static int bitforce_detect_auto(void)
-{
-	return (serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
-		serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
-		bitforce_autodetect_ftdi() ?:
-		0);
+	return false;
 }
 
 static void bitforce_detect(void)
 {
-	serial_detect_auto(&bitforce_api, bitforce_detect_one, bitforce_detect_auto);
+	usb_detect(&bitforce_api, bitforce_detect_one);
 }
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
@@ -247,105 +264,17 @@ static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 static bool bitforce_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	int fdDev = BFopen(bitforce->device_path);
 	struct timeval now;
 
-	if (unlikely(fdDev == -1)) {
-		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, bitforce->device_path);
-		return false;
-	}
-
-	bitforce->device_fd = fdDev;
-
-	applog(LOG_INFO, "BFL%i: Opened %s", bitforce->device_id, bitforce->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(bitforce->init, &now);
 
 	return true;
 }
 
-static void bitforce_clear_buffer(struct cgpu_info *bitforce)
-{
-	int fdDev = bitforce->device_fd;
-	char pdevbuf[0x100];
-	int count = 0;
-
-	if (!fdDev)
-		return;
-
-	applog(LOG_DEBUG, "BFL%i: Clearing read buffer", bitforce->device_id);
-
-	mutex_lock(&bitforce->device_mutex);
-	do {
-		pdevbuf[0] = '\0';
-		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	} while (pdevbuf[0] && (++count < 10));
-	mutex_unlock(&bitforce->device_mutex);
-}
-
-void bitforce_init(struct cgpu_info *bitforce)
-{
-	char *devpath = bitforce->device_path;
-	int fdDev = bitforce->device_fd, retries = 0;
-	char pdevbuf[0x100];
-	char *s;
-
-	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
-
-	bitforce_clear_buffer(bitforce);
-
-	mutex_lock(&bitforce->device_mutex);
-	if (fdDev) {
-		BFclose(fdDev);
-		sleep(5);
-	}
-	bitforce->device_fd = 0;
-
-	fdDev = BFopen(devpath);
-	if (unlikely(fdDev == -1)) {
-		mutex_unlock(&bitforce->device_mutex);
-		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, devpath);
-		return;
-	}
-
-	do {
-		BFwrite(fdDev, "ZGX", 3);
-		pdevbuf[0] = '\0';
-		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-
-		if (unlikely(!pdevbuf[0])) {
-			mutex_unlock(&bitforce->device_mutex);
-			applog(LOG_ERR, "BFL%i: Error reading/timeout (ZGX)", bitforce->device_id);
-			return;
-		}
-
-		if (retries++)
-			nmsleep(10);
-	} while (!strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
-
-	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
-		mutex_unlock(&bitforce->device_mutex);
-		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s returned: %s", bitforce->device_id, devpath, pdevbuf);
-		return;
-	}
-	
-	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
-		s[0] = '\0';
-		bitforce->name = strdup(pdevbuf + 7);
-	}
-
-	bitforce->device_fd = fdDev;
-	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-
-	mutex_unlock(&bitforce->device_mutex);
-}
-
 static void bitforce_flash_led(struct cgpu_info *bitforce)
 {
-	int fdDev = bitforce->device_fd;
-
-	if (!fdDev)
-		return;
+	int err, amount;
 
 	/* Do not try to flash the led if we're polling for a result to
 	 * minimise the chance of interleaved results */
@@ -353,18 +282,21 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 		return;
 
 	/* It is not critical flashing the led so don't get stuck if we
-	 * can't grab the mutex here */
+	 * can't grab the mutex now */
 	if (mutex_trylock(&bitforce->device_mutex))
 		return;
 
-	BFwrite(fdDev, "ZMX", 3);
+	if ((err = usb_write(bitforce, BITFORCE_FLASH, BITFORCE_FLASH_LEN, &amount, C_REQUESTFLASH)) < 0 || amount != BITFORCE_FLASH_LEN) {
+		applog(LOG_ERR, "%s%i: flash request failed (%d:%d)",
+			bitforce->api->name, bitforce->device_id, amount, err);
+	} else {
+		/* However, this stops anything else getting a reply
+		 * So best to delay any other access to the BFL */
+		sleep(4);
+	}
 
 	/* Once we've tried - don't do it until told to again */
 	bitforce->flash_led = false;
-
-	/* However, this stops anything else getting a reply
-	 * So best to delay any other access to the BFL */
-	sleep(4);
 
 	mutex_unlock(&bitforce->device_mutex);
 
@@ -373,12 +305,9 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
-	int fdDev = bitforce->device_fd;
-	char pdevbuf[0x100];
+	char buf[BITFORCE_BUFSIZ+1];
+	int err, amount;
 	char *s;
-
-	if (!fdDev)
-		return false;
 
 	/* Do not try to get the temperature if we're polling for a result to
 	 * minimise the chance of interleaved results */
@@ -396,18 +325,30 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (mutex_trylock(&bitforce->device_mutex))
 		return false;
 
-	BFwrite(fdDev, "ZLX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	mutex_unlock(&bitforce->device_mutex);
-	
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string/timed out", bitforce->device_id);
+	if ((err = usb_write(bitforce, BITFORCE_TEMPERATURE, BITFORCE_TEMPERATURE_LEN, &amount, C_REQUESTTEMPERATURE)) < 0 || amount != BITFORCE_TEMPERATURE_LEN) {
+		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "%s%i: Error: Request temp invalid/timed out (%d:%d)",
+				bitforce->api->name, bitforce->device_id, amount, err);
 		bitforce->hw_errors++;
 		return false;
 	}
 
-	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
+	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETTEMPERATURE)) < 0 || amount < 1) {
+		mutex_unlock(&bitforce->device_mutex);
+		if (err < 0) {
+			applog(LOG_ERR, "%s%i: Error: Get temp return invalid/timed out (%d:%d)",
+					bitforce->api->name, bitforce->device_id, amount, err);
+		} else {
+			applog(LOG_ERR, "%s%i: Error: Get temp returned nothing (%d:%d)",
+					bitforce->api->name, bitforce->device_id, amount, err);
+		}
+		bitforce->hw_errors++;
+		return false;
+	}
+
+	mutex_unlock(&bitforce->device_mutex);
+	
+	if ((!strncasecmp(buf, "TEMP", 4)) && (s = strchr(buf + 4, ':'))) {
 		float temp = strtof(s + 1, NULL);
 
 		/* Cope with older software  that breaks and reads nonsense
@@ -418,7 +359,8 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		if (temp > 0) {
 			bitforce->temp = temp;
 			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
-				applog(LOG_WARNING, "BFL%i: Hit thermal cutoff limit, disabling!", bitforce->device_id);
+				applog(LOG_WARNING, "%s%i: Hit thermal cutoff limit, disabling!",
+							bitforce->api->name, bitforce->device_id);
 				bitforce->deven = DEV_RECOVER;
 				dev_error(bitforce, REASON_DEV_THERMAL_CUTOFF);
 			}
@@ -427,11 +369,12 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
-		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer", bitforce->device_id);
+		applog(LOG_WARNING, "%s%i: Garbled response probably throttling, clearing buffer",
+					bitforce->api->name, bitforce->device_id);
 		dev_error(bitforce, REASON_DEV_THROTTLE);
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
-		bitforce_clear_buffer(bitforce);
+		bitforce_initialise(bitforce, true);
 		return false;
 	}
 
@@ -441,35 +384,53 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 static bool bitforce_send_work(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	int fdDev = bitforce->device_fd;
 	unsigned char ob[70];
-	char pdevbuf[0x100];
+	char buf[BITFORCE_BUFSIZ+1];
+	int err, amount;
 	char *s;
+	char *cmd;
+	int len;
 
-	if (!fdDev)
-		return false;
 re_send:
+	if (bitforce->nonce_range) {
+		cmd = BITFORCE_SENDRANGE;
+		len = BITFORCE_SENDRANGE_LEN;
+	} else {
+		cmd = BITFORCE_SENDWORK;
+		len = BITFORCE_SENDWORK_LEN;
+	}
+
 	mutex_lock(&bitforce->device_mutex);
-	if (bitforce->nonce_range)
-		BFwrite(fdDev, "ZPX", 3);
-	else
-		BFwrite(fdDev, "ZDX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
+	if ((err = usb_write(bitforce, cmd, len, &amount, C_REQUESTSENDWORK)) < 0 || amount != len) {
+		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "%s%i: request send work failed (%d:%d)",
+				bitforce->api->name, bitforce->device_id, amount, err);
+		return false;
+	}
+
+	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_REQUESTSENDWORKSTATUS)) < 0) {
+		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "%s%d: read request send work status failed (%d:%d)",
+				bitforce->api->name, bitforce->device_id, amount, err);
+		return false;
+	}
+
+	if (amount == 0 || !buf[0] || !strncasecmp(buf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
 		nmsleep(WORK_CHECK_INTERVAL_MS);
 		goto re_send;
-	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
+	} else if (unlikely(strncasecmp(buf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
 		if (bitforce->nonce_range) {
-			applog(LOG_WARNING, "BFL%i: Does not support nonce range, disabling", bitforce->device_id);
+			applog(LOG_WARNING, "%s%i: Does not support nonce range, disabling",
+						bitforce->api->name, bitforce->device_id);
 			bitforce->nonce_range = false;
 			bitforce->sleep_ms *= 5;
 			bitforce->kname = KNAME_WORK;
 			goto re_send;
 		}
-		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_ERR, "%s%i: Error: Send work reports: %s",
+				bitforce->api->name, bitforce->device_id, buf);
 		return false;
 	}
 
@@ -479,7 +440,7 @@ re_send:
 	if (!bitforce->nonce_range) {
 		sprintf((char *)ob + 8 + 32 + 12, ">>>>>>>>");
 		work->blk.nonce = bitforce->nonces = 0xffffffff;
-		BFwrite(fdDev, ob, 60);
+		len = 60;
 	} else {
 		uint32_t *nonce;
 
@@ -491,26 +452,41 @@ re_send:
 		*nonce = htobe32(work->blk.nonce + bitforce->nonces);
 		work->blk.nonce += bitforce->nonces + 1;
 		sprintf((char *)ob + 8 + 32 + 12 + 8, ">>>>>>>>");
-		BFwrite(fdDev, ob, 68);
+		len = 68;
 	}
 
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	if ((err = usb_write(bitforce, (char *)ob, len, &amount, C_SENDWORK)) < 0 || amount != len) {
+		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "%s%i: send work failed (%d:%d)",
+				bitforce->api->name, bitforce->device_id, amount, err);
+		return false;
+	}
+
+	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_SENDWORKSTATUS)) < 0) {
+		mutex_unlock(&bitforce->device_mutex);
+		applog(LOG_ERR, "%s%d: read send work status failed (%d:%d)",
+				bitforce->api->name, bitforce->device_id, amount, err);
+		return false;
+	}
+
 	mutex_unlock(&bitforce->device_mutex);
 
 	if (opt_debug) {
 		s = bin2hex(ob + 8, 44);
-		applog(LOG_DEBUG, "BFL%i: block data: %s", bitforce->device_id, s);
+		applog(LOG_DEBUG, "%s%i: block data: %s",
+				bitforce->api->name, bitforce->device_id, s);
 		free(s);
 	}
 
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string/timed out", bitforce->device_id);
+	if (amount == 0 || !buf[0]) {
+		applog(LOG_ERR, "%s%i: Error: Send block data returned empty string/timed out",
+				bitforce->api->name, bitforce->device_id);
 		return false;
 	}
 
-	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
-		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
+	if (unlikely(strncasecmp(buf, "OK", 2))) {
+		applog(LOG_ERR, "%s%i: Error: Send block data reports: %s",
+				bitforce->api->name, bitforce->device_id, buf);
 		return false;
 	}
 
@@ -521,53 +497,52 @@ re_send:
 static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	int fdDev = bitforce->device_fd;
 	unsigned int delay_time_ms;
 	struct timeval elapsed;
 	struct timeval now;
-	char pdevbuf[0x100];
+	char buf[BITFORCE_BUFSIZ+1];
+	int amount;
 	char *pnoncebuf;
 	uint32_t nonce;
-
-	if (!fdDev)
-		return -1;
 
 	while (1) {
 		if (unlikely(thr->work_restart))
 			return 0;
 
 		mutex_lock(&bitforce->device_mutex);
-		BFwrite(fdDev, "ZFX", 3);
-		pdevbuf[0] = '\0';
-		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+		usb_write(bitforce, BITFORCE_WORKSTATUS, BITFORCE_WORKSTATUS_LEN, &amount, C_REQUESTWORKSTATUS);
+		usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETWORKSTATUS);
 		mutex_unlock(&bitforce->device_mutex);
 
 		gettimeofday(&now, NULL);
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
-			applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
+			applog(LOG_ERR, "%s%i: took %dms - longer than %dms",
+				bitforce->api->name, bitforce->device_id,
 				tv_to_ms(elapsed), BITFORCE_LONG_TIMEOUT_MS);
 			return 0;
 		}
 
-		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
+		if (amount > 0 && buf[0] && strncasecmp(buf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
 		/* if BFL is throttling, no point checking so quickly */
-		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
+		delay_time_ms = (buf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
 		nmsleep(delay_time_ms);
 		bitforce->wait_ms += delay_time_ms;
 	}
 
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
-		applog(LOG_ERR, "BFL%i: took %dms - longer than %dms", bitforce->device_id,
+		applog(LOG_ERR, "%s%i: took %dms - longer than %dms",
+			bitforce->api->name, bitforce->device_id,
 			tv_to_ms(elapsed), BITFORCE_TIMEOUT_MS);
 		dev_error(bitforce, REASON_DEV_OVER_HEAT);
 
-		if (!pdevbuf[0])	/* Only return if we got nothing after timeout - there still may be results */
+		/* Only return if we got nothing after timeout - there still may be results */
+		if (amount == 0)
 			return 0;
-	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
+	} else if (!strncasecmp(buf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		/* Simple timing adjustment. Allow a few polls to cope with
 		 * OS timer delays being variably reliable. wait_ms will
 		 * always equal sleep_ms when we've waited greater than or
@@ -584,26 +559,31 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		}
 
 		if (delay_time_ms != bitforce->sleep_ms)
-			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d, waited %u", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+			  applog(LOG_DEBUG, "%s%i: Wait time changed to: %d, waited %u",
+					bitforce->api->name, bitforce->device_id,
+					bitforce->sleep_ms, bitforce->wait_ms);
 
 		/* Work out the average time taken. Float for calculation, uint for display */
 		bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
 		bitforce->avg_wait_d = (unsigned int) (bitforce->avg_wait_f + 0.5);
 	}
 
-	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
-	if (!strncasecmp(&pdevbuf[2], "-", 1))
+	applog(LOG_DEBUG, "%s%i: waited %dms until %s",
+			bitforce->api->name, bitforce->device_id,
+			bitforce->wait_ms, buf);
+	if (!strncasecmp(&buf[2], "-", 1))
 		return bitforce->nonces;   /* No valid nonce found */
-	else if (!strncasecmp(pdevbuf, "I", 1))
+	else if (!strncasecmp(buf, "I", 1))
 		return 0;	/* Device idle */
-	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
+	else if (strncasecmp(buf, "NONCE-FOUND", 11)) {
 		bitforce->hw_errors++;
-		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
-		bitforce_clear_buffer(bitforce);
+		applog(LOG_WARNING, "%s%i: Error: Get result reports: %s",
+			bitforce->api->name, bitforce->device_id, buf);
+		bitforce_initialise(bitforce, true);
 		return 0;
 	}
 
-	pnoncebuf = &pdevbuf[12];
+	pnoncebuf = &buf[12];
 
 	while (1) {
 		hex2bin((void*)&nonce, pnoncebuf, 4);
@@ -612,7 +592,8 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 #endif
 		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
-				applog(LOG_WARNING, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
+				applog(LOG_WARNING, "%s%i: Disabling broken nonce range support",
+					bitforce->api->name, bitforce->device_id);
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 				bitforce->sleep_ms *= 5;
@@ -628,19 +609,16 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	return bitforce->nonces;
 }
 
-static void bitforce_shutdown(struct thr_info *thr)
+static void bitforce_shutdown(__maybe_unused struct thr_info *thr)
 {
-	struct cgpu_info *bitforce = thr->cgpu;
-
-	BFclose(bitforce->device_fd);
-	bitforce->device_fd = 0;
+//	struct cgpu_info *bitforce = thr->cgpu;
 }
 
 static void biforce_thread_enable(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 
-	bitforce_init(bitforce);
+	bitforce_initialise(bitforce, true);
 }
 
 static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
@@ -665,11 +643,11 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 
 	if (ret == -1) {
 		ret = 0;
-		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
+		applog(LOG_ERR, "%s%i: Comms error", bitforce->api->name, bitforce->device_id);
 		dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 		bitforce->hw_errors++;
 		/* empty read buffer */
-		bitforce_clear_buffer(bitforce);
+		bitforce_initialise(bitforce, true);
 	}
 	return ret;
 }
@@ -692,7 +670,8 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	/* Pause each new thread at least 100ms between initialising
 	 * so the devices aren't making calls all at the same time. */
 	wait = thr->id * MAX_START_DELAY_MS;
-	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
+	applog(LOG_DEBUG, "%s%d: Delaying start by %dms",
+			bitforce->api->name, bitforce->device_id, wait / 1000);
 	nmsleep(wait);
 
 	return true;
@@ -717,7 +696,6 @@ struct device_api bitforce_api = {
 	.name = "BFL",
 	.api_detect = bitforce_detect,
 	.get_api_stats = bitforce_api_stats,
-	.reinit_device = bitforce_init,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.identify_device = bitforce_identify,

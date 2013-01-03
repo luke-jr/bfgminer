@@ -36,9 +36,23 @@
 #define EPO(x) (LIBUSB_ENDPOINT_OUT | (unsigned char)(x))
 
 #ifdef WIN32
+#define BITFORCE_TIMEOUT_MS 500
 #define MODMINER_TIMEOUT_MS 200
 #else
+#define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
+#endif
+
+#ifdef USE_BITFORCE
+static struct usb_endpoints bfl_eps[] = {
+#ifdef WIN32
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+#else
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPO(2), 0 }
+#endif
+};
 #endif
 
 #ifdef USE_MODMINER
@@ -48,7 +62,7 @@ static struct usb_endpoints mmq_eps[] = {
 };
 #endif
 
-// TODO: Add support for (at least) Interrupt endpoints
+// TODO: Add support for (at least) Isochronous endpoints
 static struct usb_find_devices find_dev[] = {
 /*
 #ifdef USE_ICARUS
@@ -56,10 +70,19 @@ static struct usb_find_devices find_dev[] = {
 	{ DRV_ICARUS, 	"LOT",	0x0403,	0x6001,	false,	EPI(0),	EPO(0), 1 },
 	{ DRV_ICARUS, 	"CM1",	0x067b,	0x0230,	false,	EPI(0),	EPO(0), 1 },
 #endif
-#ifdef USE_BITFORCE
-	{ DRV_BITFORCE,	"BFL",	0x0403,	0x6014,	true,	EPI(1),	EPO(2), 1 },
-#endif
 */
+#ifdef USE_BITFORCE
+	{
+		.drv = DRV_BITFORCE,
+		.name = "BFL",
+		.idVendor = 0x0403,
+		.idProduct = 0x6014,
+		.config = 1,
+		.interface = 0,
+		.timeout = BITFORCE_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(bfl_eps),
+		.eps = bfl_eps },
+#endif
 #ifdef USE_MODMINER
 	{
 		.drv = DRV_MODMINER,
@@ -160,6 +183,18 @@ static const char *C_SENDWORK_S = "SendWork";
 static const char *C_SENDWORKSTATUS_S = "SendWorkStatus";
 static const char *C_REQUESTWORKSTATUS_S = "RequestWorkStatus";
 static const char *C_GETWORKSTATUS_S = "GetWorkStatus";
+static const char *C_REQUESTIDENTIFY_S = "RequestIdentify";
+static const char *C_GETIDENTIFY_S = "GetIdentify";
+static const char *C_REQUESTFLASH_S = "RequestFlash";
+static const char *C_REQUESTSENDWORK_S = "RequestSendWork";
+static const char *C_REQUESTSENDWORKSTATUS_S = "RequestSendWorkStatus";
+static const char *C_RESET_S = "Reset";
+static const char *C_SETBAUD_S = "SetBaud";
+static const char *C_SETDATA_S = "SetDataCtrl";
+static const char *C_SETFLOW_S = "SetFlowCtrl";
+static const char *C_SETMODEM_S = "SetModemCtrl";
+static const char *C_PURGERX_S = "PurgeRx";
+static const char *C_PURGETX_S = "PurgeTx";
 
 #ifdef EOL
 #undef EOL
@@ -505,6 +540,7 @@ static void cgusb_check_init()
 		list_lock = calloc(1, sizeof(*list_lock));
 		mutex_init(list_lock);
 
+		// N.B. environment LIBUSB_DEBUG also sets libusb_set_debug()
 		if (opt_usbdump >= 0) {
 			libusb_set_debug(NULL, opt_usbdump);
 			usb_all();
@@ -537,6 +573,18 @@ static void cgusb_check_init()
 		usb_commands[C_SENDWORKSTATUS] = C_SENDWORKSTATUS_S;
 		usb_commands[C_REQUESTWORKSTATUS] = C_REQUESTWORKSTATUS_S;
 		usb_commands[C_GETWORKSTATUS] = C_GETWORKSTATUS_S;
+		usb_commands[C_REQUESTIDENTIFY] = C_REQUESTIDENTIFY_S;
+		usb_commands[C_GETIDENTIFY] = C_GETIDENTIFY_S;
+		usb_commands[C_REQUESTFLASH] = C_REQUESTFLASH_S;
+		usb_commands[C_REQUESTSENDWORK] = C_REQUESTSENDWORK_S;
+		usb_commands[C_REQUESTSENDWORKSTATUS] = C_REQUESTSENDWORKSTATUS_S;
+		usb_commands[C_RESET] = C_RESET_S;
+		usb_commands[C_SETBAUD] = C_SETBAUD_S;
+		usb_commands[C_SETDATA] = C_SETDATA_S;
+		usb_commands[C_SETFLOW] = C_SETFLOW_S;
+		usb_commands[C_SETMODEM] = C_SETMODEM_S;
+		usb_commands[C_PURGERX] = C_PURGERX_S;
+		usb_commands[C_PURGETX] = C_PURGETX_S;
 	}
 
 	mutex_unlock(&cgusb_lock);
@@ -745,9 +793,9 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 	}
 
 	if (libusb_kernel_driver_active(cgusb->handle, 0) == 1) {
-		applog(LOG_WARNING, "USB init, kernel attached ...");
+		applog(LOG_DEBUG, "USB init, kernel attached ...");
 		if (libusb_detach_kernel_driver(cgusb->handle, 0) == 0)
-			applog(LOG_WARNING, "USB init, kernel detached successfully");
+			applog(LOG_DEBUG, "USB init, kernel detached successfully");
 		else
 			applog(LOG_WARNING, "USB init, kernel detach failed :(");
 	}
@@ -773,7 +821,7 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		goto cldame;
 	}
 
-	if ((int)(config->bNumInterfaces) < found->interface)
+	if ((int)(config->bNumInterfaces) <= found->interface)
 		goto cldame;
 
 	for (i = 0; i < found->epcount; i++)
@@ -1118,14 +1166,20 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 }
 #endif
 
-int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, int eol, enum usb_cmds cmd)
+int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, int eol, enum usb_cmds cmd, bool ftdi)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 #if DO_USB_STATS
-	struct timeval tv_start, tv_finish;
+	struct timeval tv_start;
 #endif
-	int err, got, tot;
+	struct timeval read_start, tv_finish;
+	unsigned int initial_timeout;
+	double max, done;
+	int err, got, tot, i;
 	bool first = true;
+
+	if (timeout == DEVTIMEOUT)
+		timeout = usbdev->found->timeout;
 
 	if (eol == -1) {
 		got = 0;
@@ -1133,10 +1187,20 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		err = libusb_bulk_transfer(usbdev->handle,
 				usbdev->found->eps[ep].ep,
 				(unsigned char *)buf,
-				bufsiz, &got,
-				timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
+				bufsiz, &got, timeout);
 		STATS_TIMEVAL(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
+
+		if (ftdi) {
+			// first 2 bytes returned are an FTDI status
+			if (got > 2) {
+				got -= 2;
+				memmove(buf, buf+2, got+1);
+			} else {
+				got = 0;
+				*buf = '\0';
+			}
+		}
 
 		*processed = got;
 
@@ -1145,30 +1209,54 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 
 	tot = 0;
 	err = LIBUSB_SUCCESS;
+	initial_timeout = timeout;
+	max = ((double)timeout) / 1000.0;
+	gettimeofday(&read_start, NULL);
 	while (bufsiz) {
 		got = 0;
 		STATS_TIMEVAL(&tv_start);
 		err = libusb_bulk_transfer(usbdev->handle,
 				usbdev->found->eps[ep].ep,
 				(unsigned char *)buf,
-				1, &got,
-				timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
-		STATS_TIMEVAL(&tv_finish);
+				bufsiz, &got, timeout);
+		gettimeofday(&tv_finish, NULL);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, first ? SEQ0 : SEQ1);
+
+		if (ftdi) {
+			// first 2 bytes returned are an FTDI status
+			if (got > 2) {
+				got -= 2;
+				memmove(buf, buf+2, got+1);
+			} else {
+				got = 0;
+				*buf = '\0';
+			}
+		}
 
 		tot += got;
 
 		if (err)
 			break;
 
-		if (eol == buf[0])
-			break;
+		// WARNING - this will return data past EOL ('if' there is extra data)
+		for (i = 0; i < got; i++)
+			if (buf[i] == eol)
+				goto goteol;
 
 		buf += got;
 		bufsiz -= got;
 
 		first = false;
+
+		done = tdiff(&tv_finish, &read_start);
+		// N.B. this is return LIBUSB_SUCCESS with whatever size has already been read
+		if (unlikely(done >= max))
+			break;
+
+		timeout = initial_timeout - (done * 1000);
 	}
+
+goteol:
 
 	*processed = tot;
 
@@ -1194,6 +1282,24 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
 
 	*processed = sent;
+
+	return err;
+}
+
+int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned int timeout, enum usb_cmds cmd)
+{
+	struct cg_usb_device *usbdev = cgpu->usbdev;
+#if DO_USB_STATS
+	struct timeval tv_start, tv_finish;
+#endif
+	int err;
+
+	STATS_TIMEVAL(&tv_start);
+	err = libusb_control_transfer(usbdev->handle, request_type,
+		bRequest, wValue, wIndex, NULL, 0,
+		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
+	STATS_TIMEVAL(&tv_finish);
+	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
 
 	return err;
 }
