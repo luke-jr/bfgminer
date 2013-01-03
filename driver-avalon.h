@@ -35,7 +35,7 @@ struct avalon_result {
 	uint32_t reserved;
 } __attribute__((packed));
 
-#define AVALON_GET_WORK_COUNT 20
+#define AVALON_GET_WORK_COUNT 1	/* FIXME: should be ~20 */
 
 #define AVALON_MINER_THREADS 1
 
@@ -43,12 +43,9 @@ struct avalon_result {
 #define AVALON_IO_SPEED 115200
 
 // The size of a successful nonce read
-#define AVALON_READ_SIZE 4
+#define AVALON_READ_SIZE 4	/* FIXME: should be 13*4 , the result length */
 
 // Ensure the sizes are correct for the Serial read
-#if (AVALON_READ_SIZE != 4)
-#error AVALON_READ_SIZE must be 4
-#endif
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
@@ -57,8 +54,9 @@ ASSERT1(sizeof(uint32_t) == 4);
 // Fraction of a second, USB timeout is measured in
 // i.e. 10 means 1/10 of a second
 #define TIME_FACTOR 10
-// It's 10 per second, thus value = 10/TIME_FACTOR =
-#define AVALON_READ_FAULT_DECISECONDS 1
+
+// It's 10 per second, thus value = 10/TIME_FACTOR = 
+#define AVALON_RESET_FAULT_DECISECONDS 1
 
 // In timing mode: Default starting value until an estimate can be obtained
 // 5 seconds allows for up to a ~840MH/s device
@@ -159,13 +157,13 @@ struct AVALON_INFO {
 	// avalon-options
 	int baud;
 	int work_division;
-	int fpga_count;
+	int asic_count;
 	uint32_t nonce_mask;
 };
 
 #define END_CONDITION 0x0000ffff
 
-#define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_READ_FAULT_DECISECONDS, purge)
+#define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
 #define avalon_open(devpath, baud)  avalon_open2(devpath, baud, false)
 
 #define AVA_GETS_ERROR -1
