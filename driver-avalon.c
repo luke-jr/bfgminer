@@ -85,7 +85,7 @@ static int option_offset = -1;
 
 struct device_api avalon_api;
 
-static void rev(uint8_t *s, size_t l)
+static inline void rev(uint8_t *s, size_t l)
 {
 	size_t i, j;
 	uint8_t t;
@@ -95,15 +95,6 @@ static void rev(uint8_t *s, size_t l)
 		s[i] = s[j];
 		s[j] = t;
 	}
-}
-
-static inline void avalon_create_task(uint8_t *ob_bin, struct work *work)
-{
-	memset(ob_bin, 0, sizeof(ob_bin));
-	memcpy(ob_bin, work->midstate, 32);
-	memcpy(ob_bin + 52, work->data + 64, 12);
-	rev(ob_bin, 32);
-	rev(ob_bin + 52, 12);
 }
 
 static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
@@ -117,19 +108,14 @@ static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 	/* FIXME: we should set RTS to 0 and CTS to be 1, before read? */
 	int done = avalon_task_done(fd);
 	if (opt_debug)
-		applog(LOG_DEBUG, "Avalon: finished all task?: %d", done);
+		applog(LOG_DEBUG, "Avalon: Finished all task? %s", done ? "Yes" : "no");
 	if (done) {
-		;/* TODO: return here. and tell avalon all task are done */
+		/* FIXME: return here. ask new task */
+		;
 	}
-	// Read reply 1 byte at a time to get earliest tv_finish
-	while (true) {
-		/* FIXME: should be remove!!! */
-		if (opt_debug) {
-			applog(LOG_DEBUG,
-			       "Avalon Read: times: %d, %.2f", rc,
-			       (float)rc/(float)TIME_FACTOR);
-		}
 
+	/* Read reply 1 byte at a time to get earliest tv_finish */
+	while (true) {
 		ret = read(fd, buf, 1);
 		if (ret < 0)
 			return AVA_GETS_ERROR;
@@ -150,8 +136,8 @@ static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 		rc++;
 		if (rc >= read_count) {
 			if (opt_debug) {
-				applog(LOG_DEBUG,
-				       "Avalon Read: No data in %.2f seconds",
+				applog(LOG_ERR,
+				       "Avalon: No data in %.2f seconds",
 				       (float)rc/(float)TIME_FACTOR);
 			}
 			return AVA_GETS_TIMEOUT;
@@ -159,8 +145,8 @@ static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 
 		if (thr && thr->work_restart) {
 			if (opt_debug) {
-				applog(LOG_DEBUG,
-				       "Avalon Read: Work restart at %.2f seconds",
+				applog(LOG_ERR,
+				       "Avalon: Work restart at %.2f seconds",
 				       (float)(rc)/(float)TIME_FACTOR);
 			}
 			return AVA_GETS_RESTART;
@@ -175,7 +161,7 @@ static int avalon_get_result(uint8_t *nonce_bin, int fd,
 	struct AVALON_INFO *info = avalon_info[avalon->device_id];
 	int ret;
 
-	memset(nonce_bin, 0, sizeof(nonce_bin));
+	memset(nonce_bin, 0, AVALON_READ_SIZE);
 	ret = avalon_gets(nonce_bin, fd, tv_finish, thr, info->read_count);
 
 	return ret;
@@ -184,10 +170,8 @@ static int avalon_get_result(uint8_t *nonce_bin, int fd,
 static int avalon_decode_nonce(struct work **work, uint32_t *nonce,
 			       uint8_t *nonce_bin)
 {
-	/* FIXME: Avalon return: reserved_nonce_midstate_data, */
-
 	/* FIXME: should be modify to avalon data format */
-	memcpy((uint8_t *)nonce, nonce_bin, sizeof(nonce_bin));
+	memcpy((uint8_t *)nonce, nonce_bin, AVALON_READ_SIZE);
 #if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
 	*nonce = swab32(*nonce);
 #endif
@@ -196,9 +180,19 @@ static int avalon_decode_nonce(struct work **work, uint32_t *nonce,
 	return 0;
 }
 
+static inline void avalon_create_task(uint8_t *ob_bin, struct work *work)
+{
+	memset(ob_bin, 0, AVALON_WRITE_SIZE);
+	memcpy(ob_bin, work->midstate, 32);
+	memcpy(ob_bin + 52, work->data + 64, 12);
+	rev(ob_bin, 32);
+	rev(ob_bin + 52, 12);
+}
+
 static int avalon_send_task(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
+	char *ob_hex = NULL;
 
 	/* FIXME: we should set RTS to 1 and wait CTS became 1, before write? */
 	int empty = avalon_buffer_empty(fd);
@@ -206,7 +200,14 @@ static int avalon_send_task(int fd, const void *buf, size_t bufLen)
 		return AVA_SEND_ERROR;
 
 	if (!empty) {
-		/* FIXME: the buffer was full; return AVA_SEND_FULL; */
+		 /* FIXME: the buffer was full; return AVA_SEND_FULL; */
+		;
+	}
+
+	if (opt_debug) {
+		ob_hex = bin2hex(buf, bufLen);
+		applog(LOG_DEBUG, "Avalon: Sent %s", ob_hex);
+		free(ob_hex);
 	}
 
 	ret = write(fd, buf, bufLen);
@@ -216,13 +217,12 @@ static int avalon_send_task(int fd, const void *buf, size_t bufLen)
 	/* From the document. avalon needs some time space between two write */
 	struct timespec p;
 	p.tv_sec = 0;
-	p.tv_nsec = 5 * 1000;
+	/* FIXME:  */
+	p.tv_nsec = 0;
 	nanosleep(&p, NULL);
 
 	return AVA_SEND_OK;
 }
-
-#define avalon_close(fd) close(fd)
 
 static void do_avalon_close(struct thr_info *thr)
 {
@@ -474,7 +474,7 @@ static bool avalon_detect_one(const char *devpath)
 	const char golden_nonce[] = "000187a2";
 	const uint32_t golden_nonce_val = 0x000187a2;
 
-	uint8_t ob_bin[64], nonce_bin[AVALON_READ_SIZE];
+	uint8_t ob_bin[AVALON_WRITE_SIZE], nonce_bin[AVALON_READ_SIZE];
 	char *nonce_hex;
 
 	struct AVALON_INFO *info;
@@ -575,13 +575,13 @@ static bool avalon_prepare(struct thr_info *thr)
 	fd = avalon_open(avalon->device_path,
 			     avalon_info[avalon->device_id]->baud);
 	if (unlikely(fd == -1)) {
-		applog(LOG_ERR, "Failed to open Avalon on %s",
+		applog(LOG_ERR, "Avalon: Failed to open on %s",
 		       avalon->device_path);
 		return false;
 	}
 	avalon->device_fd = fd;
 
-	applog(LOG_INFO, "Opened Avalon on %s", avalon->device_path);
+	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
 
@@ -597,8 +597,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	struct AVALON_INFO *info;
 
-	uint8_t ob_bin[64], nonce_bin[AVALON_READ_SIZE];
-	char *ob_hex;
+	uint8_t ob_bin[AVALON_WRITE_SIZE], nonce_bin[AVALON_READ_SIZE];
 	uint32_t nonce;
 	int64_t hash_count;
 	int i, work_i;
@@ -636,13 +635,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	/* Write task to device one by one */
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
 		avalon_create_task(ob_bin, work[i]);
-		ret = avalon_send_task(fd, ob_bin, sizeof(ob_bin));
-		if (opt_debug) {
-			ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
-			applog(LOG_DEBUG, "Avalon %d sent: %s",
-			       avalon->device_id, ob_hex);
-			free(ob_hex);
-		}
+		ret = avalon_send_task(fd, ob_bin, AVALON_WRITE_SIZE);
 		if (ret == AVA_SEND_ERROR) {
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error",
@@ -665,6 +658,10 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			return 0;
 		}
 
+		work_i = avalon_decode_nonce(work, &nonce, nonce_bin);
+		/* FIXME: Should be a check on return, no work_i maybe hardware error */
+		work[work_i]->blk.nonce = 0xffffffff;
+
 		// aborted before becoming idle, get new work
 		if (ret == AVA_GETS_TIMEOUT || ret == AVA_GETS_RESTART) {
 			timersub(&tv_finish, &tv_start, &elapsed);
@@ -682,18 +679,15 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 			if (opt_debug) {
 				applog(LOG_DEBUG,
-				       "Avalon %d no nonce = 0x%08llx hashes "
+				       "Avalon: no nonce = 0x%08llx hashes "
 				       "(%ld.%06lds)",
-				       avalon->device_id, estimate_hashes,
+				       estimate_hashes,
 				       elapsed.tv_sec, elapsed.tv_usec);
 			}
 
 			return estimate_hashes;
 		}
 
-		work_i = avalon_decode_nonce(work, &nonce, nonce_bin);
-		/* FIXME: Should be a check on return, no work_i maybe hardware error */
-		work[work_i]->blk.nonce = 0xffffffff;
 		curr_hw_errors = avalon->hw_errors;
 		submit_nonce(thr, work[work_i], nonce);
 		was_hw_error = (curr_hw_errors > avalon->hw_errors);
@@ -712,10 +706,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	if (opt_debug) {
 		applog(LOG_DEBUG,
-		       "Avalon %d nonce = 0x%08x = 0x%08llx hashes "
+		       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
 		       "(%ld.%06lds)",
-		       avalon->device_id, nonce, hash_count,
-		       elapsed.tv_sec, elapsed.tv_usec);
+		       nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
 	}
 
 	// ignore possible end condition values ... and hw errors

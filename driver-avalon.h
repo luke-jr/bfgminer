@@ -35,15 +35,13 @@ struct avalon_result {
 	uint32_t reserved;
 } __attribute__((packed));
 
+#define AVALON_MINER_THREADS 1
 #define AVALON_GET_WORK_COUNT 1	/* FIXME: should be ~20 */
 
-#define AVALON_MINER_THREADS 1
-
-// The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
 #define AVALON_IO_SPEED 115200
-
-// The size of a successful nonce read
-#define AVALON_READ_SIZE 4	/* FIXME: should be 13*4 , the result length */
+/* FIXME:  The size of a successful task-write and nonce-read */
+#define AVALON_WRITE_SIZE 64
+#define AVALON_READ_SIZE 4
 
 // Ensure the sizes are correct for the Serial read
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
@@ -163,9 +161,6 @@ struct AVALON_INFO {
 
 #define END_CONDITION 0x0000ffff
 
-#define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
-#define avalon_open(devpath, baud)  avalon_open2(devpath, baud, false)
-
 #define AVA_GETS_ERROR -1
 #define AVA_GETS_OK 0
 #define AVA_GETS_RESTART 1
@@ -175,6 +170,11 @@ struct AVALON_INFO {
 #define AVA_SEND_ERROR -1
 #define AVA_SEND_OK 0
 #define AVA_SEND_FULL 1
+
+#define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
+#define avalon_open(devpath, baud)  avalon_open2(devpath, baud, false)
+
+#define avalon_close(fd) close(fd)
 
 #define avalon_buffer_empty(fd)	get_serial_cts(fd)
 #define avalon_task_done(fd)	get_serial_cts(fd)
