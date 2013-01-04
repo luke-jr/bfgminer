@@ -9,26 +9,6 @@
  * any later version.  See COPYING for more details.
  */
 
-/*
- * Those code should be works fine with V2 and V3 bitstream of Avalon.
- * Operation:
- *   No detection implement.
- *   Input: 64B = 32B midstate + 20B fill bytes + last 12 bytes of block head.
- *   Return: send back 32bits immediately when Avalon found a valid nonce.
- *           no query protocol implemented here, if no data send back in ~11.3
- *           seconds (full cover time on 32bit nonce range by 380MH/s speed)
- *           just send another work.
- * Notice:
- *   1. Avalon will start calculate when you push a work to them, even they
- *      are busy.
- *   2. The 2 FPGAs on Avalon will distribute the job, one will calculate the
- *      0 ~ 7FFFFFFF, another one will cover the 80000000 ~ FFFFFFFF.
- *   3. It's possible for 2 FPGAs both find valid nonce in the meantime, the 2
- *      valid nonce will all be send back.
- *   4. Avalon will stop work when: a valid nonce has been found or 32 bits
- *      nonce range is completely calculated.
- */
-
 #include "config.h"
 
 #include <limits.h>
@@ -170,14 +150,23 @@ static int avalon_get_result(uint8_t *nonce_bin, int fd,
 static int avalon_decode_nonce(struct work **work, uint32_t *nonce,
 			       uint8_t *nonce_bin)
 {
+	int i;
 	/* FIXME: should be modify to avalon data format */
 	memcpy((uint8_t *)nonce, nonce_bin, AVALON_READ_SIZE);
 #if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
 	*nonce = swab32(*nonce);
 #endif
 
-	/* TODO: find the nonce work, return index */
-	return 0;
+	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+		/* TODO: find the nonce work, return index */
+		if (!memcmp((uint8_t *)nonce,
+			     work[i]->data + 64,
+			     4/* should be 12 */))
+			break;
+	}
+	i -= 1;
+
+	return i;
 }
 
 static inline void avalon_create_task(uint8_t *ob_bin, struct work *work)

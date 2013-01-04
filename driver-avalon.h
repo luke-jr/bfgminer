@@ -1,4 +1,6 @@
 /*
+ * Copyright 2013 Xiangfu <xiangfu@openmobilefree.com>
+ *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation; either version 3 of the License, or (at your option)
@@ -35,8 +37,61 @@ struct avalon_result {
 	uint32_t reserved;
 } __attribute__((packed));
 
+struct AVALON_HISTORY {
+	struct timeval finish;
+	double sumXiTi;
+	double sumXi;
+	double sumTi;
+	double sumXi2;
+	uint32_t values;
+	uint32_t hash_count_min;
+	uint32_t hash_count_max;
+};
+
+enum timing_mode { MODE_DEFAULT, MODE_SHORT, MODE_LONG, MODE_VALUE };
+
+// Store the last INFO_HISTORY data sets
+// [0] = current data, not yet ready to be included as an estimate
+// Each new data set throws the last old set off the end thus
+// keeping a ongoing average of recent data
+#define INFO_HISTORY 10
+
+struct AVALON_INFO {
+	// time to calculate the golden_ob
+	uint64_t golden_hashes;
+	struct timeval golden_tv;
+
+	struct AVALON_HISTORY history[INFO_HISTORY+1];
+	uint32_t min_data_count;
+
+	// seconds per Hash
+	double Hs;
+	int read_count;
+
+	enum timing_mode timing_mode;
+	bool do_avalon_timing;
+
+	double fullnonce;
+	int count;
+	double W;
+	uint32_t values;
+	uint64_t hash_count_range;
+
+	// Determine the cost of history processing
+	// (which will only affect W)
+	uint64_t history_count;
+	struct timeval history_time;
+
+	// avalon-options
+	int baud;
+	int work_division;
+	int asic_count;
+	uint32_t nonce_mask;
+};
+
 #define AVALON_MINER_THREADS 1
-#define AVALON_GET_WORK_COUNT 1	/* FIXME: should be ~20 */
+/* FIXME: should be ~20 */
+#define AVALON_GET_WORK_COUNT 1
 
 #define AVALON_IO_SPEED 115200
 /* FIXME:  The size of a successful task-write and nonce-read */
@@ -106,58 +161,6 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define MIN_DATA_COUNT 5
 // The value above used is doubled each history until it exceeds:
 #define MAX_MIN_DATA_COUNT 100
-
-// Store the last INFO_HISTORY data sets
-// [0] = current data, not yet ready to be included as an estimate
-// Each new data set throws the last old set off the end thus
-// keeping a ongoing average of recent data
-#define INFO_HISTORY 10
-
-struct AVALON_HISTORY {
-	struct timeval finish;
-	double sumXiTi;
-	double sumXi;
-	double sumTi;
-	double sumXi2;
-	uint32_t values;
-	uint32_t hash_count_min;
-	uint32_t hash_count_max;
-};
-
-enum timing_mode { MODE_DEFAULT, MODE_SHORT, MODE_LONG, MODE_VALUE };
-
-struct AVALON_INFO {
-	// time to calculate the golden_ob
-	uint64_t golden_hashes;
-	struct timeval golden_tv;
-
-	struct AVALON_HISTORY history[INFO_HISTORY+1];
-	uint32_t min_data_count;
-
-	// seconds per Hash
-	double Hs;
-	int read_count;
-
-	enum timing_mode timing_mode;
-	bool do_avalon_timing;
-
-	double fullnonce;
-	int count;
-	double W;
-	uint32_t values;
-	uint64_t hash_count_range;
-
-	// Determine the cost of history processing
-	// (which will only affect W)
-	uint64_t history_count;
-	struct timeval history_time;
-
-	// avalon-options
-	int baud;
-	int work_division;
-	int asic_count;
-	uint32_t nonce_mask;
-};
 
 #define END_CONDITION 0x0000ffff
 
