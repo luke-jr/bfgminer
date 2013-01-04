@@ -171,4 +171,6 @@ struct AVALON_INFO {
 #define AVA_GETS_RESTART 1
 #define AVA_GETS_TIMEOUT 2
 
+#define avalon_buffer_empty(fd)	get_serial_cts(fd)
+#define avalon_task_done(fd)	get_serial_cts(fd)
 #endif	/* AVALON_H */

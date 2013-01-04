@@ -114,11 +114,12 @@ static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 	int read_amount = AVALON_READ_SIZE;
 	bool first = true;
 
-	int cts = get_serial_cts(fd);
+	/* FIXME: we should set RTS to 0 and CTS to be 1, before read? */
+	int done = avalon_task_done(fd);
 	if (opt_debug)
-		applog(LOG_DEBUG, "Avalon bulk task statue: %d", cts);
-	if (cts) {
-		/* TODO return here. and tell avalon all task are done */
+		applog(LOG_DEBUG, "Avalon bulk task statue: %d", done);
+	if (done) {
+		/* TODO: return here. and tell avalon all task are done */
 	}
 	// Read reply 1 byte at a time to get earliest tv_finish
 	while (true) {
@@ -184,11 +185,25 @@ static int avalon_send_task(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
 
+	/* FIXME: we should set RTS to 1 and wait CTS became 1, before write? */
+	int empty = avalon_buffer_empty(fd);
+	if (empty < 0) {
+		/* FIXME: ERROR */
+	}
+	if (!empty) {
+		/* FIXME: the buffer was full */
+	}
+
 	ret = write(fd, buf, bufLen);
 	if (unlikely(ret != bufLen))
 		return 1;
 
-	/* FIXME: there should be a nanosleep() according to the document */
+	/* From the document. avalon needs some time space between two write */
+	struct timespec p;
+	p.tv_sec = 0;
+	p.tv_nsec = 5 * 1000;
+	nanosleep(&p, NULL);
+
 	return 0;
 }
 
