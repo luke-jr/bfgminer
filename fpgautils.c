@@ -576,13 +576,29 @@ size_t _select_write(int fd, char *buf, size_t siz, struct timeval *timeout)
 
 int get_serial_cts(int fd)
 {
-	int status;
+	int flags;
 
 	if (!fd)
 		return -1;
 
-	ioctl(fd, TIOCMSET, &status);
-	return status & TIOCM_CTS;
+	ioctl(fd, TIOCMGET, &flags);
+	return flags & TIOCM_CTS;
+}
+
+int set_serial_rts(int fd, int rts)
+{
+	int flags;
+
+	if (!fd)
+		return -1;
+
+	if (rts)
+		flags |= TIOCM_RTS;
+	else
+		flags &= ~TIOCM_RTS;
+
+	ioctl(fd, TIOCMSET, &flags);
+	return flags & TIOCM_CTS;
 }
 
 #endif // ! WIN32
