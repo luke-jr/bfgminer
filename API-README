@@ -938,6 +938,38 @@ true
 ---------
 
 Default:
+ $userlist = null;
+
+Define password checking and default access
+ null means there is no password checking
+
+$userlist is an array of 3 arrays e.g.
+$userlist = array('sys' => array('boss' => 'bpass'),
+                  'usr' => array('user' => 'upass', 'pleb' => 'ppass'),
+                  'def' => array('Pools'));
+
+'sys' is an array of system users and passwords (full access)
+'usr' is an array of user level users and passwords (readonly access)
+'def' is an array of custompages that anyone not logged in can view
+
+Any of the 3 can be null, meaning there are none of that item
+
+All validated 'usr' users are given $readonly = true; access
+All validated 'sys' users are given the $readonly access you defined
+
+If 'def' has one or more values, and allowcustompages is true, then
+anyone without a password can see the list of custompage buttons given
+in 'def' and will see the first one when they go to the web page, with
+a login button at the top right
+
+From the login page, if you login with no username or password, it will
+show the first 'def' custompage (if there are any)
+
+If you are logged in, it will show a logout button at the top right
+
+---------
+
+Default:
  $notify = true;
 
 Set $notify to false to NOT attempt to display the notify command

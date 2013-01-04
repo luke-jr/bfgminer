@@ -8,7 +8,7 @@ global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
 global $allowcustompages, $customsummarypages;
 global $miner_font_family, $miner_font_size;
-global $colouroverride, $placebuttons;
+global $colouroverride, $placebuttons, $userlist;
 #
 # See API-README for more details of these variables and how
 # to configure miner.php
@@ -19,6 +19,9 @@ $title = 'Mine';
 # Set $readonly to true to force miner.php to be readonly
 # Set $readonly to false then it will check cgminer 'privileged'
 $readonly = false;
+#
+# Set $userlist to null to allow anyone access or read API-README
+$userlist = null;
 #
 # Set $notify to false to NOT attempt to display the notify command
 # Set $notify to true to attempt to display the notify command
@@ -212,6 +215,10 @@ $rigerror = array();
 global $rownum;
 $rownum = 0;
 #
+// Login
+global $ses;
+$ses = 'rutroh';
+#
 function getcss($cssname, $dom = false)
 {
  global $colourtable, $colouroverride;
@@ -239,7 +246,7 @@ function getdom($domname)
  return getcss($domname, true);
 }
 #
-function htmlhead($checkapi, $rig, $pg = null)
+function htmlhead($checkapi, $rig, $pg = null, $noscript = false)
 {
  global $title, $miner_font_family, $miner_font_size;
  global $error, $readonly, $poolinputs, $here;
@@ -285,8 +292,10 @@ td.lst { $miner_font ".getcss('td.lst')."}
 td.hi { $miner_font ".getcss('td.hi')."}
 td.lo { $miner_font ".getcss('td.lo')."}
 </style>
-</head><body".getdom('body').">
-<script type='text/javascript'>
+</head><body".getdom('body').">\n";
+if ($noscript === false)
+{
+echo "<script type='text/javascript'>
 function pr(a,m){if(m!=null){if(!confirm(m+'?'))return}window.location='$here?ref=$autorefresh'+a}\n";
 
 if ($ignorerefresh == false)
@@ -300,8 +309,9 @@ function prs2(a,n,r){var v=document.getElementById('gi'+n).value;var c=a.substr(
 	if ($poolinputs === true)
 		echo "function cbs(s){var t=s.replace(/\\\\/g,'\\\\\\\\'); return t.replace(/,/g, '\\\\,')}\nfunction pla(r){var u=document.getElementById('purl').value;var w=document.getElementById('pwork').value;var p=document.getElementById('ppass').value;pr('&rig='+r+'&arg=addpool|'+cbs(u)+','+cbs(w)+','+cbs(p),'Add Pool '+u)}\nfunction psp(r){var p=document.getElementById('prio').value;pr('&rig='+r+'&arg=poolpriority|'+p,'Set Pool Priorities to '+p)}\n";
  }
+echo "</script>\n";
+}
 ?>
-</script>
 <table width=100% height=100% border=0 cellpadding=0 cellspacing=0 summary='Mine'>
 <tr><td align=center valign=top>
 <table border=0 cellpadding=4 cellspacing=0 summary='Mine'>
@@ -1507,7 +1517,6 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 #
 function refreshbuttons()
 {
- global $readonly;
  global $ignorerefresh, $changerefresh, $autorefresh;
 
  if ($ignorerefresh == false && $changerefresh == true)
@@ -1521,7 +1530,7 @@ function refreshbuttons()
 #
 function pagebuttons($rig, $pg)
 {
- global $readonly, $rigs;
+ global $readonly, $rigs, $userlist, $ses;
  global $allowcustompages, $customsummarypages;
 
  if ($rig === null)
@@ -1557,18 +1566,33 @@ function pagebuttons($rig, $pg)
  }
 
  echo '<tr><td><table cellpadding=0 cellspacing=0 border=0><tr><td nowrap>';
- if ($prev !== null)
-	echo riginput($prev, 'Prev').'&nbsp;';
- echo "<input type=button value='Refresh' onclick='pr(\"$refresh\",null)'>&nbsp;";
- if ($next !== null)
-	echo riginput($next, 'Next').'&nbsp;';
- echo '&nbsp;';
- if (count($rigs) > 1)
-	echo "<input type=button value='Summary' onclick='pr(\"\",null)'>&nbsp;";
+ if ($userlist === null || isset($_SESSION[$ses]))
+ {
+	if ($prev !== null)
+		echo riginput($prev, 'Prev').'&nbsp;';
+	echo "<input type=button value='Refresh' onclick='pr(\"$refresh\",null)'>&nbsp;";
+	if ($next !== null)
+		echo riginput($next, 'Next').'&nbsp;';
+	echo '&nbsp;';
+	if (count($rigs) > 1)
+		echo "<input type=button value='Summary' onclick='pr(\"\",null)'>&nbsp;";
+ }
 
  if ($allowcustompages === true)
-	foreach ($customsummarypages as $pagename => $data)
+ {
+	if ($userlist === null || isset($_SESSION[$ses]))
+		$list = $customsummarypages;
+	else
+	{
+		if ($userlist !== null && isset($userlist['def']))
+			$list = array_flip($userlist['def']);
+		else
+			$list = array();
+	}
+
+	foreach ($list as $pagename => $data)
 		echo "<input type=button value='$pagename' onclick='pr(\"&pg=$pagename\",null)'>&nbsp;";
+ }
 
  echo '</td><td width=100%>&nbsp;</td><td nowrap>';
  if ($rig !== null && $readonly === false)
@@ -1580,6 +1604,12 @@ function pagebuttons($rig, $pg)
 	echo "&nbsp;<input type=button value='Quit' onclick='prc(\"quit&rig=$rig\",\"Quit CGMiner$rg\")'>";
  }
  refreshbuttons();
+ if (isset($_SESSION[$ses]))
+	echo "&nbsp;<input type=button value='Logout' onclick='pr(\"&logout=1\",null)'>";
+ else
+	if ($userlist !== null)
+		echo "&nbsp;<input type=button value='Login' onclick='pr(\"&login=1\",null)'>";
+
  echo "</td></tr></table></td></tr>";
 }
 #
@@ -2410,13 +2440,126 @@ function showcustompage($pagename)
 	pagebuttons(null, $pagename);
 }
 #
+function onlylogin()
+{
+ global $here;
+
+ htmlhead(false, null, null, true);
+
+?>
+<tr height=15%><td>&nbsp;</td></tr>
+<tr><td>
+ <center>
+  <table width=384 height=368 cellpadding=0 cellspacing=0 border=0>
+   <tr><td>
+    <table width=100% height=100% border=0 align=center cellpadding=5 cellspacing=0>
+     <tr><td><form action='<?php echo $here; ?>' method=post>
+      <table width=200 border=0 align=center cellpadding=5 cellspacing=0>
+       <tr><td height=120 colspan=2>&nbsp;</td></tr>
+       <tr><td colspan=2 align=center valign=middle>
+        <h2>LOGIN</h2></td></tr>
+       <tr><td align=center valign=middle><div align=right>Username:</div></td>
+        <td height=33 align=center valign=middle>
+        <input type=text name=rut size=18></td></tr>
+       <tr><td align=center valign=middle><div align=right>Password:</div></td>
+        <td height=33 align=center valign=middle>
+        <input type=password name=roh size=18></td></tr>
+       <tr valign=top><td></td><td><input type=submit value=Login>
+        </td></tr>
+      </table></form></td></tr>
+    </table></td></tr>
+  </table></center>
+</td></tr>
+<?php
+}
+#
+function checklogin()
+{
+ global $allowcustompages, $customsummarypages;
+ global $userlist, $ses;
+
+ $out = trim(getparam('logout', true));
+ if ($out !== null && $out !== '' && isset($_SESSION[$ses]))
+	unset($_SESSION[$ses]);
+
+ $login = trim(getparam('login', true));
+ if ($login !== null && $login !== '')
+ {
+	if (isset($_SESSION[$ses]))
+		unset($_SESSION[$ses]);
+
+	onlylogin();
+	return 'login';
+ }
+
+ if ($userlist === null)
+	return false;
+
+ $rut = trim(getparam('rut', true));
+ $roh = trim(getparam('roh', true));
+
+ if (($rut !== null && $rut !== '') || ($roh !== null && $roh !== ''))
+ {
+	if (isset($_SESSION[$ses]))
+		unset($_SESSION[$ses]);
+
+	if ($rut !== null && $rut !== '' && $roh !== null && $roh !== '')
+	{
+		if (isset($userlist['sys']) && isset($userlist['sys'][$rut])
+		&&  ($userlist['sys'][$rut] === $roh))
+		{
+			$_SESSION[$ses] = true;
+			return false;
+		}
+
+		if (isset($userlist['usr']) && isset($userlist['usr'][$rut])
+		&&  ($userlist['usr'][$rut] === $roh))
+		{
+			$_SESSION[$ses] = false;
+			$readonly = true;
+			return false;
+		}
+	}
+ }
+
+ if (isset($_SESSION[$ses]))
+ {
+	if ($_SESSION[$ses] == false)
+		$readonly = true;
+	return false;
+ }
+
+ if (isset($userlist['def']) && $allowcustompages === true)
+ {
+	// Ensure at least one exists
+	foreach ($userlist['def'] as $pg)
+		if (isset($customsummarypages[$pg]))
+			return true;
+ }
+
+ onlylogin();
+ return 'login';
+}
+#
 function display()
 {
  global $miner, $port;
  global $readonly, $notify, $rigs;
  global $ignorerefresh, $autorefresh;
- global $allowcustompages;
+ global $allowcustompages, $customsummarypages;
  global $placebuttons;
+ global $userlist, $ses;
+
+ $pagesonly = checklogin();
+
+ if ($pagesonly === 'login')
+	return;
+
+ if ($rigs == null or count($rigs) == 0)
+ {
+	otherrow("<td>No rigs defined</td>");
+	return;
+ }
 
  if ($ignorerefresh == false)
  {
@@ -2425,50 +2568,63 @@ function display()
 		$autorefresh = intval($ref);
  }
 
- $rig = trim(getparam('rig', true));
-
- $arg = trim(getparam('arg', true));
- $preprocess = null;
- if ($arg != null and $arg != '')
+ if ($pagesonly !== true)
  {
-	$num = null;
-	if ($rig != null and $rig != '')
-	{
-		if ($rig >= 0 and $rig < count($rigs))
-			$num = $rig;
-	}
-	else
-		if (count($rigs) == 0)
-			$num = 0;
+	$rig = trim(getparam('rig', true));
 
-	if ($num != null)
+	$arg = trim(getparam('arg', true));
+	$preprocess = null;
+	if ($arg != null and $arg != '')
 	{
-		$parts = explode(':', $rigs[$num], 3);
-		if (count($parts) >= 2)
+		if ($rig != null and $rig != '' and $rig >= 0 and $rig < count($rigs))
 		{
-			$miner = $parts[0];
-			$port = $parts[1];
+			$parts = explode(':', $rigs[$rig], 3);
+			if (count($parts) >= 2)
+			{
+				$miner = $parts[0];
+				$port = $parts[1];
 
-			if ($readonly !== true)
-				$preprocess = $arg;
+				if ($readonly !== true)
+					$preprocess = $arg;
+			}
 		}
 	}
- }
-
- if ($rigs == null or count($rigs) == 0)
- {
-	otherrow("<td>No rigs defined</td>");
-	return;
  }
 
  if ($allowcustompages === true)
  {
 	$pg = trim(getparam('pg', true));
-	if ($pg != null && $pg != '')
+	if ($pagesonly === true)
+	{
+		if ($pg !== null && $pg !== '')
+		{
+			if ($userlist !== null && isset($userlist['def'])
+			&&  !in_array($pg, $userlist['def']))
+				$pg = null;
+		}
+		else
+		{
+			if ($userlist !== null && isset($userlist['def']))
+				foreach ($userlist['def'] as $pglook)
+					if (isset($customsummarypages[$pglook]))
+					{
+						$pg = $pglook;
+						break;
+					}
+		}
+	}
+
+	if ($pg !== null && $pg !== '')
 	{
 		showcustompage($pg);
 		return;
 	}
+ }
+
+ if ($pagesonly === true)
+ {
+	onlylogin();
+	return;
  }
 
  if (count($rigs) == 1)
