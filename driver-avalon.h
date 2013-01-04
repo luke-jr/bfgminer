@@ -170,6 +170,11 @@ struct AVALON_INFO {
 #define AVA_GETS_OK 0
 #define AVA_GETS_RESTART 1
 #define AVA_GETS_TIMEOUT 2
+#define AVA_GETS_DONE 3
+
+#define AVA_SEND_ERROR -1
+#define AVA_SEND_OK 0
+#define AVA_SEND_FULL 1
 
 #define avalon_buffer_empty(fd)	get_serial_cts(fd)
 #define avalon_task_done(fd)	get_serial_cts(fd)
