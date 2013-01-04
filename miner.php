@@ -2476,7 +2476,7 @@ function onlylogin()
 function checklogin()
 {
  global $allowcustompages, $customsummarypages;
- global $userlist, $ses;
+ global $readonly, $userlist, $ses;
 
  $out = trim(getparam('logout', true));
  if ($out !== null && $out !== '' && isset($_SESSION[$ses]))
