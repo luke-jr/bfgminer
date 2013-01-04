@@ -5400,33 +5400,34 @@ void *miner_thread(void *userdata)
 			dev_stats->getwork_calls++;
 
 #ifdef USE_AVALON
-			pool_stats = &(work[0]->pool->cgminer_stats);
+			for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+				pool_stats = &(work[i]->pool->cgminer_stats);
 #else
 			pool_stats = &(work->pool->cgminer_stats);
 #endif
 			/* FIXME: should be check all works */
-			timeradd(&getwork_start,
-				&(pool_stats->getwork_wait),
-				&(pool_stats->getwork_wait));
-			if (timercmp(&getwork_start, &(pool_stats->getwork_wait_max), >)) {
-				pool_stats->getwork_wait_max.tv_sec = getwork_start.tv_sec;
-				pool_stats->getwork_wait_max.tv_usec = getwork_start.tv_usec;
-			}
-			if (timercmp(&getwork_start, &(pool_stats->getwork_wait_min), <)) {
-				pool_stats->getwork_wait_min.tv_sec = getwork_start.tv_sec;
-				pool_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
-			}
-			pool_stats->getwork_calls++;
-
+				timeradd(&getwork_start,
+					 &(pool_stats->getwork_wait),
+					 &(pool_stats->getwork_wait));
+				if (timercmp(&getwork_start, &(pool_stats->getwork_wait_max), >)) {
+					pool_stats->getwork_wait_max.tv_sec = getwork_start.tv_sec;
+					pool_stats->getwork_wait_max.tv_usec = getwork_start.tv_usec;
+				}
+				if (timercmp(&getwork_start, &(pool_stats->getwork_wait_min), <)) {
+					pool_stats->getwork_wait_min.tv_sec = getwork_start.tv_sec;
+					pool_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
+				}
+				pool_stats->getwork_calls++;
 #ifdef USE_AVALON
-			gettimeofday(&(work[0]->tv_work_start), NULL);
+				gettimeofday(&(work[i]->tv_work_start), NULL);
+			}
 #else
 			gettimeofday(&(work->tv_work_start), NULL);
 #endif
 
 			thread_reportin(mythr);
 #ifdef USE_AVALON
-			hashes = api->scanhash_queue(mythr, work, work[0]->blk.nonce + max_nonce);
+			hashes = api->scanhash_queue(mythr, work, max_nonce);
 #else
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
 #endif
@@ -5500,7 +5501,7 @@ void *miner_thread(void *userdata)
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
 #ifdef USE_AVALON
-		} while (!abandon_work(work[0], &wdiff, cgpu->max_hashes));
+		} while (false);
 		for (i = 0; i < AVALON_GET_WORK_COUNT; i++)
 			free_work(work[i++]);
 #else
