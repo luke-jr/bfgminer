@@ -123,6 +123,38 @@ Edit the file \MinGW\lib\pkgconfig\libcurl.pc and change "-lcurl" to
 Ref. http://old.nabble.com/gcc-working-with-libcurl-td20506927.html
 
 **************************************************************************************
+* Install libjansson                                                                 *
+**************************************************************************************
+Go to this url ==> http://www.digip.org/jansson/releases/
+Download the latest tar with library sources.
+Copy the jansson-X.X folder into your \MinGW\msys\1.0\home\
+Run the MinGW MSYS shell
+(Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
+Enter jansson-X.X dir, and type
+      ./configure
+      make
+      make check
+      make install
+Copy src/.libs/*.dll into \MinGW\bin
+Copy src/.libs/*.a, src/.libs/*.la, src/.libs/*.lai into \MinGW\lib
+Copy src/jansson.def into \MinGW\lib
+Copy src/*.h into \MinGW\include
+Create jansson.pc into \MinGW\lib\pkgconfig with this content:
+
+prefix=.
+exec_prefix=${prefix}/bin
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+Name: jansson
+Description: Library for encoding, decoding and manipulating JSON data
+Version: 2.4
+Libs: -L${libdir} -ljansson
+Cflags: -I${includedir} @CPPFLAG_JANSSON_STATICLIB@
+
+(Source: http://www.digip.org/jansson/doc/dev/gettingstarted.html)
+(Source: https://groups.google.com/forum/#!msg/jansson-users/CTPFBeZ0ZWQ/W3uuOuWZegkJ)
+
+**************************************************************************************
 * Build bfgminer.exe                                                                 *
 **************************************************************************************
 Run the MinGW MSYS shell
@@ -146,15 +178,20 @@ Make a directory and copy the following files into it. This will be your BFGMine
 Folder that you use for mining. Remember the .cl filenames could change on later
 releases. If you installed a different version of libcurl then some of those dll's
 may be different as well.
-  bfgminer.exe    from \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x
-  *.cl            from \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x
-  README          from \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x
-  libcurl.dll     from \MinGW\bin
-  libidn-11.dll   from \MinGW\bin
-  libeay32.dll    from \MinGW\bin
-  ssleay32.dll    from \MinGW\bin
-  libpdcurses.dll from \MinGW\bin
-  pthreadGC2.dll  from \MinGW\bin
+  bfgminer.exe      from \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x
+  *.cl              from \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x
+  README            from \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x
+  libblkmaker_jansson-0.1-0.dll from 
+                    \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x\libblkmaker\.libs
+  libblkmaker-0.1-0.dll from 
+                    \MinGW\msys\1.0\home\(username)\bfgminer-x.x.x\libblkmaker\.libs
+  libcurl.dll       from \MinGW\bin
+  libidn-11.dll     from \MinGW\bin
+  libeay32.dll      from \MinGW\bin
+  ssleay32.dll      from \MinGW\bin
+  libpdcurses.dll   from \MinGW\bin
+  pthreadGC2.dll    from \MinGW\bin
+  libjansson-X.dll  from \MinGW\bin
 
 **************************************************************************************
 * Optional - Install Git into MinGW/MSYS                                             *
