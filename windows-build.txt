@@ -139,7 +139,17 @@ Copy src/.libs/*.dll into \MinGW\bin
 Copy src/.libs/*.a, src/.libs/*.la, src/.libs/*.lai into \MinGW\lib
 Copy src/jansson.def into \MinGW\lib
 Copy src/*.h into \MinGW\include
-Copy jansson.pc into \MinGW\lib\pkgconfig
+Create jansson.pc into \MinGW\lib\pkgconfig with this content:
+
+prefix=.
+exec_prefix=${prefix}/bin
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+Name: jansson
+Description: Library for encoding, decoding and manipulating JSON data
+Version: 2.4
+Libs: -L${libdir} -ljansson
+Cflags: -I${includedir} @CPPFLAG_JANSSON_STATICLIB@
 
 (Source: http://www.digip.org/jansson/doc/dev/gettingstarted.html)
 (Source: https://groups.google.com/forum/#!msg/jansson-users/CTPFBeZ0ZWQ/W3uuOuWZegkJ)
