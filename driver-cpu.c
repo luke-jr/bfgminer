@@ -844,6 +844,7 @@ CPUSearch:
 }
 
 struct device_drv cpu_drv = {
+	.drv = DRIVER_CPU,
 	.dname = "cpu",
 	.name = "CPU",
 	.drv_detect = cpu_detect,

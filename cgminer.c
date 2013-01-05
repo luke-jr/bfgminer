@@ -5904,7 +5904,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				continue;
 
 #ifdef WANT_CPUMINE
-			if (cgpu->drv->drv != DRIVER_CPU)
+			if (cgpu->drv->drv == DRIVER_CPU)
 				continue;
 #endif
 			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
