@@ -346,9 +346,9 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 	return rv;
 }
 
-struct device_api *serial_claim(const char *devpath, struct device_api *api);
+struct device_drv *serial_claim(const char *devpath, struct device_drv *api);
 
-int _serial_detect(struct device_api *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
+int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;
 	const char *dev, *colon;
@@ -410,12 +410,12 @@ typedef int my_dev_t;
 #endif
 
 struct _device_claim {
-	struct device_api *api;
+	struct device_drv *drv;
 	my_dev_t dev;
 	UT_hash_handle hh;
 };
 
-struct device_api *serial_claim(const char *devpath, struct device_api *api)
+struct device_drv *serial_claim(const char *devpath, struct device_drv *api)
 {
 	static struct _device_claim *claims = NULL;
 	struct _device_claim *c;
@@ -441,14 +441,14 @@ struct device_api *serial_claim(const char *devpath, struct device_api *api)
 
 	HASH_FIND(hh, claims, &dev, sizeof(dev), c);
 	if (c)
-		return c->api;
+		return c->drv;
 
 	if (!api)
 		return NULL;
 
 	c = malloc(sizeof(*c));
 	c->dev = dev;
-	c->api = api;
+	c->drv = api;
 	HASH_ADD(hh, claims, dev, sizeof(dev), c);
 	return NULL;
 }

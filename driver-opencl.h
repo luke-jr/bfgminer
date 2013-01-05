@@ -32,6 +32,6 @@ extern bool have_opencl;
 extern int opt_platform_id;
 extern bool opt_opencl_binaries;
 
-extern struct device_api opencl_api;
+extern struct device_drv opencl_api;
 
 #endif /* __DEVICE_GPU_H__ */

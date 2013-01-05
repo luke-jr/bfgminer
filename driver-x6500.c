@@ -35,7 +35,7 @@
 #define X6500_DEFAULT_CLOCK  200
 #define X6500_MAXIMUM_CLOCK  250
 
-struct device_api x6500_api;
+struct device_drv x6500_api;
 
 #define fromlebytes(ca, j)  (ca[j] | (((uint16_t)ca[j+1])<<8) | (((uint32_t)ca[j+2])<<16) | (((uint32_t)ca[j+3])<<24))
 
@@ -126,7 +126,7 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 {
 	struct cgpu_info *x6500;
 	x6500 = calloc(1, sizeof(*x6500));
-	x6500->api = &x6500_api;
+	x6500->drv = &x6500_api;
 	mutex_init(&x6500->device_mutex);
 	x6500->device_path = strdup(serial);
 	x6500->deven = DEV_ENABLED;
@@ -216,7 +216,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	unsigned char *pdone = (unsigned char*)x6500->cgpu_data - 1;
 	struct ft232r_device_handle *ftdi = jp1->a->ftdi;
 
-	FILE *f = open_xilinx_bitstream(x6500->api->dname, x6500->dev_repr, X6500_BITSTREAM_FILENAME, &len);
+	FILE *f = open_xilinx_bitstream(x6500->drv->dname, x6500->dev_repr, X6500_BITSTREAM_FILENAME, &len);
 	if (!f)
 		return false;
 
@@ -782,10 +782,10 @@ void x6500_fpga_poll(struct thr_info *thr)
 		timer_set_delay_from_now(&thr->tv_poll, 10000);
 }
 
-struct device_api x6500_api = {
+struct device_drv x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
-	.api_detect = x6500_detect,
+	.drv_detect = x6500_detect,
 	.get_dev_statline_before = get_x6500_dev_statline_before,
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_thread_init,

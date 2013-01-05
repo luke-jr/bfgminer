@@ -793,12 +793,12 @@ char *set_intensity(char *arg)
 
 
 #ifdef HAVE_OPENCL
-struct device_api opencl_api;
+struct device_drv opencl_api;
 
 char *print_ndevs_and_exit(int *ndevs)
 {
 	opt_log_output = true;
-	opencl_api.api_detect();
+	opencl_api.drv_detect();
 	clear_adl(*ndevs);
 	applog(LOG_INFO, "%i GPU devices max detected", *ndevs);
 	exit(*ndevs);
@@ -837,7 +837,7 @@ void pause_dynamic_threads(int gpu)
 }
 
 
-struct device_api opencl_api;
+struct device_drv opencl_api;
 
 #endif /* HAVE_OPENCL */
 
@@ -1413,7 +1413,7 @@ void *reinit_gpu(__maybe_unused void *userdata)
 
 
 #ifdef HAVE_OPENCL
-struct device_api opencl_api;
+struct device_drv opencl_api;
 
 static void opencl_detect()
 {
@@ -1461,7 +1461,7 @@ static void opencl_detect()
 		cgpu = &gpus[i];
 		cgpu->devtype = "GPU";
 		cgpu->deven = DEV_ENABLED;
-		cgpu->api = &opencl_api;
+		cgpu->drv = &opencl_api;
 		cgpu->device_id = i;
 		cgpu->threads = opt_g_threads;
 		cgpu->virtual_gpu = i;
@@ -1827,10 +1827,10 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 	clReleaseContext(clState->context);
 }
 
-struct device_api opencl_api = {
+struct device_drv opencl_api = {
 	.dname = "opencl",
 	.name = "OCL",
-	.api_detect = opencl_detect,
+	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 	.get_statline_before = get_opencl_statline_before,
 	.get_api_extra_device_status = get_opencl_api_extra_device_status,

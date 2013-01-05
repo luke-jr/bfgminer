@@ -84,7 +84,7 @@ struct icarus_state {
 	bool changework;
 };
 
-bool icarus_detect_custom(const char *devpath, struct device_api *, struct ICARUS_INFO *);
+bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
 extern int icarus_gets(unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count);
 
 #endif

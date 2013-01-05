@@ -22,21 +22,21 @@ for the Processor, and is maintained by the managing Thread in addition to its
 own `struct thr_info`. New drivers are encouraged to use an asynchronous model
 to manage as many Processors as possible within a single Thread.
 
-struct device_api basics
+struct device_drv basics
 ------------------------
 
-Every driver defines a `struct device_api`. The `dname` field contains a
+Every driver defines a `struct device_drv`. The `dname` field contains a
 short name of the driver. This should be the same name used in the source file:
 driver-foobar.c defines `dname` "foobar". The `name` field contains a three-
 letter abbreviation for the device, used in the representation of devices. For
 example, `dname` "FOO" would result in devices represented as "FOO 0", "FOO 1",
 etc and processors represented as "FOO 0a", "FOO 0b", etc.
 
-Drivers must define a function `api_detect`, which is run at startup to detect
+Drivers must define a function `drv_detect`, which is run at startup to detect
 devices. For each device (note: NOT each processor), it should allocate a
 `struct cgpu_info`, set some basic parameters on it, and call the `add_cgpu`
 function with it as an argument. Various values you can initialize are:
-	.api         This MUST be set to your driver's `struct driver_api`!
+	.drv         This MUST be set to your driver's `struct device_drv`!
 	.deven       Should be set to DEV_ENABLED
 	.procs       Number of Processors for this device
 	.threads     Number of threads your device needs - should be either a
@@ -44,7 +44,7 @@ function with it as an argument. Various values you can initialize are:
 	             Processor), or one (a single thread will be allocated only to
 	             the Device, to manage all Processors)
 	.name        Null-terminated name of the device itself
-`api_detect` should return the total number of devices created. It should leave
+`drv_detect` should return the total number of devices created. It should leave
 the device in an unused state, as the user may opt to delete it outright.
 
 Threads

@@ -53,7 +53,7 @@ enum sha256_algos {
 
 extern const char *algo_names[];
 extern bool opt_usecpu;
-extern struct device_api cpu_api;
+extern struct device_drv cpu_drv;
 
 extern char *set_algo(const char *arg, enum sha256_algos *algo);
 extern void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo);

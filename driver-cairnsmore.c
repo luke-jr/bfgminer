@@ -22,9 +22,9 @@
 #define CAIRNSMORE1_DEFAULT_CLOCK  200
 #define CAIRNSMORE1_MAXIMUM_CLOCK  210
 
-struct device_api cairnsmore_api;
+struct device_drv cairnsmore_drv;
 
-static void cairnsmore_api_init();
+static void cairnsmore_drv_init();
 
 static bool cairnsmore_detect_one(const char *devpath)
 {
@@ -40,7 +40,7 @@ static bool cairnsmore_detect_one(const char *devpath)
 	info->timing_mode = MODE_LONG;
 	info->do_icarus_timing = true;
 
-	if (!icarus_detect_custom(devpath, &cairnsmore_api, info)) {
+	if (!icarus_detect_custom(devpath, &cairnsmore_drv, info)) {
 		free(info);
 		return false;
 	}
@@ -54,9 +54,9 @@ static int cairnsmore_detect_auto(void)
 
 static void cairnsmore_detect()
 {
-	cairnsmore_api_init();
+	cairnsmore_drv_init();
 	// Actual serial detection is handled by Icarus driver
-	serial_detect_auto_byname(&cairnsmore_api, cairnsmore_detect_one, cairnsmore_detect_auto);
+	serial_detect_auto_byname(&cairnsmore_drv, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
 
 static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data, bool probe)
@@ -165,12 +165,12 @@ void convert_icarus_to_cairnsmore(struct cgpu_info *cm1)
 	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 	info->timing_mode = MODE_LONG;
 	info->do_icarus_timing = true;
-	cm1->api = &cairnsmore_api;
+	cm1->drv = &cairnsmore_drv;
 	renumber_cgpu(cm1);
 	cairnsmore_init(cm1->thr[0]);
 }
 
-static struct api_data *cairnsmore_api_extra_device_status(struct cgpu_info *cm1)
+static struct api_data *cairnsmore_drv_extra_device_status(struct cgpu_info *cm1)
 {
 	struct ICARUS_INFO *info = cm1->cgpu_data;
 	struct api_data*root = NULL;
@@ -196,20 +196,20 @@ static bool cairnsmore_identify(struct cgpu_info *cm1)
 	return true;
 }
 
-extern struct device_api icarus_api;
+extern struct device_drv icarus_drv;
 
-static void cairnsmore_api_init()
+static void cairnsmore_drv_init()
 {
-	cairnsmore_api = icarus_api;
-	cairnsmore_api.dname = "cairnsmore";
-	cairnsmore_api.name = "ECM";
-	cairnsmore_api.api_detect = cairnsmore_detect;
-	cairnsmore_api.thread_init = cairnsmore_init;
-	cairnsmore_api.identify_device = cairnsmore_identify;
-	cairnsmore_api.get_api_extra_device_status = cairnsmore_api_extra_device_status;
+	cairnsmore_drv = icarus_drv;
+	cairnsmore_drv.dname = "cairnsmore";
+	cairnsmore_drv.name = "ECM";
+	cairnsmore_drv.drv_detect = cairnsmore_detect;
+	cairnsmore_drv.thread_init = cairnsmore_init;
+	cairnsmore_drv.identify_device = cairnsmore_identify;
+	cairnsmore_drv.get_api_extra_device_status = cairnsmore_drv_extra_device_status;
 }
 
-struct device_api cairnsmore_api = {
-	// Needed to get to cairnsmore_api_init at all
-	.api_detect = cairnsmore_detect,
+struct device_drv cairnsmore_drv = {
+	// Needed to get to cairnsmore_drv_init at all
+	.drv_detect = cairnsmore_detect,
 };

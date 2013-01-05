@@ -6,13 +6,13 @@
 #include <stdio.h>
 #include <unistd.h>
 
-struct device_api;
+struct device_drv;
 struct cgpu_info;
 
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
 
-extern int _serial_detect(struct device_api *api, detectone_func_t, autoscan_func_t, int flags);
+extern int _serial_detect(struct device_drv *api, detectone_func_t, autoscan_func_t, int flags);
 #define serial_detect_fauto(api, detectone, autoscan)  \
 	_serial_detect(api, detectone, autoscan, 1)
 #define serial_detect_auto(api, detectone, autoscan)  \
@@ -26,7 +26,7 @@ extern int _serial_detect(struct device_api *api, detectone_func_t, autoscan_fun
 extern int _serial_autodetect(detectone_func_t, ...);
 #define serial_autodetect(...)  _serial_autodetect(__VA_ARGS__, NULL)
 
-extern struct device_api *serial_claim(const char *devpath, struct device_api *);
+extern struct device_drv *serial_claim(const char *devpath, struct device_drv *);
 
 extern int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);

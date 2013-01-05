@@ -53,8 +53,8 @@ static const char *protonames[] = {
 	"bulk queue",
 };
 
-struct device_api bitforce_api;
-struct device_api bitforce_queue_api;
+struct device_drv bitforce_drv;
+struct device_drv bitforce_queue_api;
 
 // Code must deal with a timeout
 #define BFopen(devpath)  serial_open(devpath, 0, 250, true)
@@ -183,9 +183,9 @@ static bool bitforce_detect_one(const char *devpath)
 	
 	// We have a real BitForce!
 	bitforce = calloc(1, sizeof(*bitforce));
-	bitforce->api = &bitforce_api;
+	bitforce->drv = &bitforce_drv;
 	if (initdata->sc)
-		bitforce->api = &bitforce_queue_api;
+		bitforce->drv = &bitforce_queue_api;
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
 	bitforce->procs = procs;
@@ -209,7 +209,7 @@ static int bitforce_detect_auto(void)
 
 static void bitforce_detect(void)
 {
-	serial_detect_auto(&bitforce_api, bitforce_detect_one, bitforce_detect_auto);
+	serial_detect_auto(&bitforce_drv, bitforce_detect_one, bitforce_detect_auto);
 }
 
 struct bitforce_data {
@@ -378,7 +378,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 
 	bitforce->sleep_ms = data->sleep_ms_default;
 	
-	if (bitforce->api == &bitforce_queue_api)
+	if (bitforce->drv == &bitforce_queue_api)
 	{
 		struct list_head *pos, *npos;
 		struct work *work;
@@ -1171,7 +1171,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			data->next_work_ob[8+32+12+8] = '\xAA';
 			data->next_work_obs = &data->next_work_ob[7];
 			
-			if (bitforce->api == &bitforce_queue_api)
+			if (bitforce->drv == &bitforce_queue_api)
 			{
 				INIT_LIST_HEAD(&thr->work_list);
 				bitforce_change_mode(bitforce, BFP_BQUEUE);
@@ -1210,7 +1210,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	return true;
 }
 
-static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
+static struct api_data *bitforce_drv_stats(struct cgpu_info *cgpu)
 {
 	struct bitforce_data *data = cgpu->cgpu_data;
 	struct api_data *root = NULL;
@@ -1290,11 +1290,11 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 	return replybuf;
 }
 
-struct device_api bitforce_api = {
+struct device_drv bitforce_drv = {
 	.dname = "bitforce",
 	.name = "BFL",
-	.api_detect = bitforce_detect,
-	.get_api_stats = bitforce_api_stats,
+	.drv_detect = bitforce_detect,
+	.get_api_stats = bitforce_drv_stats,
 	.minerloop = minerloop_async,
 	.reinit_device = bitforce_reinit,
 	.get_statline_before = get_bitforce_statline_before,
@@ -1585,13 +1585,13 @@ void bitforce_queue_poll(struct thr_info *thr)
 	timer_set_delay_from_now(&thr->tv_poll, bitforce->sleep_ms * 1000);
 }
 
-struct device_api bitforce_queue_api = {
+struct device_drv bitforce_queue_api = {
 	.dname = "bitforce_queue",
 	.name = "BFL",
 	.minerloop = minerloop_queue,
 	.reinit_device = bitforce_reinit,
 	.get_statline_before = get_bitforce_statline_before,
-	.get_api_stats = bitforce_api_stats,
+	.get_api_stats = bitforce_drv_stats,
 	.get_stats = bitforce_get_stats,
 	.set_device = bitforce_set_device,
 	.identify_device = bitforce_identify,

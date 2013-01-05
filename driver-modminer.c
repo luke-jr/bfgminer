@@ -46,7 +46,7 @@
 
 #define FPGAID_ALL 4
 
-struct device_api modminer_api;
+struct device_drv modminer_drv;
 
 struct modminer_fpga_state {
 	bool work_running;
@@ -133,7 +133,7 @@ modminer_detect_one(const char *devpath)
 
 	struct cgpu_info *modminer;
 	modminer = calloc(1, sizeof(*modminer));
-	modminer->api = &modminer_api;
+	modminer->drv = &modminer_drv;
 	mutex_init(&modminer->device_mutex);
 	modminer->device_path = strdup(devpath);
 	modminer->device_fd = -1;
@@ -157,7 +157,7 @@ modminer_detect_auto()
 static void
 modminer_detect()
 {
-	serial_detect_auto(&modminer_api, modminer_detect_one, modminer_detect_auto);
+	serial_detect_auto(&modminer_drv, modminer_detect_one, modminer_detect_auto);
 }
 
 #define bailout(...)  return _bailout(-1, modminer, __VA_ARGS__);
@@ -220,7 +220,7 @@ modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 	char buf[0x100];
 	unsigned long len, flen;
 	char fpgaid = FPGAID_ALL;
-	FILE *f = open_xilinx_bitstream(modminer->api->dname, modminer->dev_repr, BITSTREAM_FILENAME, &len);
+	FILE *f = open_xilinx_bitstream(modminer->drv->dname, modminer->dev_repr, BITSTREAM_FILENAME, &len);
 	if (!f)
 		return false;
 
@@ -587,7 +587,7 @@ static bool modminer_get_stats(struct cgpu_info *modminer)
 }
 
 static struct api_data*
-get_modminer_api_extra_device_status(struct cgpu_info*modminer)
+get_modminer_drv_extra_device_status(struct cgpu_info*modminer)
 {
 	struct api_data*root = NULL;
 	struct thr_info*thr = modminer->thr[0];
@@ -840,14 +840,14 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 	return replybuf;
 }
 
-struct device_api modminer_api = {
+struct device_drv modminer_drv = {
 	.dname = "modminer",
 	.name = "MMQ",
-	.api_detect = modminer_detect,
+	.drv_detect = modminer_detect,
 	.get_dev_statline_before = get_modminer_dev_statline_before,
 	.get_statline_before = get_modminer_statline_before,
 	.get_stats = modminer_get_stats,
-	.get_api_extra_device_status = get_modminer_api_extra_device_status,
+	.get_api_extra_device_status = get_modminer_drv_extra_device_status,
 	.set_device = modminer_set_device,
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,

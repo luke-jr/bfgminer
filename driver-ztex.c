@@ -36,7 +36,7 @@
 
 #define GOLDEN_BACKLOG 5
 
-struct device_api ztex_api;
+struct device_drv ztex_drv;
 
 // Forward declarations
 static void ztex_disable(struct thr_info* thr);
@@ -65,7 +65,7 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j, int fpgac
 	char *fpganame = (char*)dev->snString;
 
 	ztex = calloc(1, sizeof(struct cgpu_info));
-	ztex->api = &ztex_api;
+	ztex->drv = &ztex_drv;
 	ztex->device_ztex = dev;
 	ztex->procs = fpgacount;
 	ztex->threads = fpgacount;
@@ -113,7 +113,7 @@ static int ztex_autodetect(void)
 static void ztex_detect()
 {
 	// This wrapper ensures users can specify -S ztex:noauto to disable it
-	noserial_detect(&ztex_api, ztex_autodetect);
+	noserial_detect(&ztex_drv, ztex_autodetect);
 }
 
 static bool ztex_change_clock_func(struct thr_info *thr, int bestM)
@@ -338,7 +338,7 @@ static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
 }
 
 static struct api_data*
-get_ztex_api_extra_device_status(struct cgpu_info *ztex)
+get_ztex_drv_extra_device_status(struct cgpu_info *ztex)
 {
 	struct api_data*root = NULL;
 	struct libztex_device *ztexr = ztex->device_ztex;
@@ -416,12 +416,12 @@ static void ztex_disable(struct thr_info *thr)
 	ztex_shutdown(thr);
 }
 
-struct device_api ztex_api = {
+struct device_drv ztex_drv = {
 	.dname = "ztex",
 	.name = "ZTX",
-	.api_detect = ztex_detect,
+	.drv_detect = ztex_detect,
 	.get_statline_before = ztex_statline_before,
-	.get_api_extra_device_status = get_ztex_api_extra_device_status,
+	.get_api_extra_device_status = get_ztex_drv_extra_device_status,
 	.thread_init = ztex_prepare,
 	.scanhash = ztex_scanhash,
 	.thread_shutdown = ztex_shutdown,
