@@ -49,6 +49,77 @@ static int option_offset = -1;
 static struct AVALON_INFO **avalon_info;
 struct device_api avalon_api;
 
+static int avalon_init_task(struct avalon_task *at,
+			    uint8_t reset, uint8_t ff, uint8_t fan,
+			    uint8_t timeout, uint8_t chip_num,
+			    uint8_t miner_num)
+{
+	if (!at)
+		return -1;
+
+	memset(at, 0, sizeof(struct avalon_task));
+
+	at->reset = reset ? 1 : 0;
+	at->flush_fifo = ff ? 1: 0;
+
+	at->fan_eft = fan ? 1 : 0;	/* 1: fan_pwm_data */
+	at->fan_pwm_data = fan ? (0xFF & fan) : 0xFF;	/* by default: 0xFF */
+
+	/* 1: timeout_data miner_num, chip_num */
+	at->timer_eft = timeout ? 1 : 0;
+	at->timer_eft = chip_num ? 1 : 0;
+	at->timer_eft = miner_num ? 1 : 0;
+
+	at->timeout_data = timeout ? timeout : 0x27; 	/* by default: 0x27 */
+	at->chip_num = chip_num ? chip_num : 0xA;	/* by default: 0x0A */
+	at->miner_num = miner_num ? miner_num : 0x18;	/* by default: 0x18 */
+
+	/* FIXME: Not support nonce range yet */
+	at->nonce_elf = 0;	/* 1: nonce_range*/
+
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Task:");
+		hexdump((uint8_t *)at, sizeof(struct avalon_task));
+	}
+
+	return 0;
+}
+
+static inline void avalon_create_task(struct avalon_task *at, struct work *work)
+{
+	memcpy(at->midstate, work->midstate, 32);
+	rev((uint8_t *)at->midstate, 32);
+
+	memcpy(at->data, work->data + 64, 12);
+	rev((uint8_t *)at->data, 12);
+
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Task + work:");
+		hexdump((uint8_t *)at, sizeof(struct avalon_task));
+	}
+}
+
+static int avalon_send_task(int fd, const struct avalon_task *at)
+{
+	size_t ret;
+	struct timespec p;
+
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Sent:");
+		hexdump((uint8_t *)at, sizeof(struct avalon_task));
+	}
+
+	ret = write(fd, (uint8_t *)at, AVALON_WRITE_SIZE);
+	if (unlikely(ret != AVALON_WRITE_SIZE))
+		return AVA_SEND_ERROR;
+
+	p.tv_sec = 0;
+	p.tv_nsec = AVALON_SEND_WORK_PITCH;
+	nanosleep(&p, NULL);
+
+	return AVA_SEND_OK;
+}
+
 static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 		       struct thr_info *thr, int read_count)
 {
@@ -141,77 +212,6 @@ static int avalon_decode_nonce(struct work **work, uint32_t *nonce,
 	i -= 1;
 
 	return i;
-}
-
-static int avalon_init_task(struct avalon_task *at,
-			    uint8_t reset, uint8_t ff, uint8_t fan,
-			    uint8_t timeout, uint8_t chip_num,
-			    uint8_t miner_num)
-{
-	if (!at)
-		return -1;
-
-	memset(at, 0, sizeof(struct avalon_task));
-
-	at->reset = reset ? 1 : 0;
-	at->flush_fifo = ff ? 1: 0;
-
-	at->fan_eft = fan ? 1 : 0;	/* 1: fan_pwm_data */
-	at->fan_pwm_data = fan ? (0xFF & fan) : 0xFF;	/* by default: 0xFF */
-
-	/* 1: timeout_data miner_num, chip_num */
-	at->timer_eft = timeout ? 1 : 0;
-	at->timer_eft = chip_num ? 1 : 0;
-	at->timer_eft = miner_num ? 1 : 0;
-
-	at->timeout_data = timeout ? timeout : 0x27; 	/* by default: 0x27 */
-	at->chip_num = chip_num ? chip_num : 0xA;	/* by default: 0x0A */
-	at->miner_num = miner_num ? miner_num : 0x18;	/* by default: 0x18 */
-
-	/* FIXME: Not support nonce range yet */
-	at->nonce_elf = 0;	/* 1: nonce_range*/
-	
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: Task:");
-		hexdump((uint8_t *)at, sizeof(struct avalon_task));
-	}
-
-	return 0;
-}
-
-static inline void avalon_create_task(struct avalon_task *at, struct work *work)
-{
-	memcpy(at->midstate, work->midstate, 32);
-	rev((uint8_t *)at->midstate, 32);
-
-	memcpy(at->data, work->data + 64, 12);
-	rev((uint8_t *)at->data, 12);
-
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: Task + work:");
-		hexdump((uint8_t *)at, sizeof(struct avalon_task));
-	}
-}
-
-static int avalon_send_task(int fd, const struct avalon_task *at)
-{
-	size_t ret;
-	struct timespec p;
-
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: Sent:");
-		hexdump((uint8_t *)at, sizeof(struct avalon_task));
-	}
-
-	ret = write(fd, (uint8_t *)at, AVALON_WRITE_SIZE);
-	if (unlikely(ret != AVALON_WRITE_SIZE))
-		return AVA_SEND_ERROR;
-
-	p.tv_sec = 0;
-	p.tv_nsec = AVALON_SEND_WORK_PITCH;
-	nanosleep(&p, NULL);
-
-	return AVA_SEND_OK;
 }
 
 static int avalon_reset(int fd)
@@ -842,8 +842,8 @@ struct device_api avalon_api = {
 	.dname = "avalon",
 	.name = "AVA",
 	.api_detect = avalon_detect,
-	.get_api_stats = avalon_api_stats,
 	.thread_prepare = avalon_prepare,
 	.scanhash_queue = avalon_scanhash,
+	.get_api_stats = avalon_api_stats,
 	.thread_shutdown = avalon_shutdown,
 };

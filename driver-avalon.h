@@ -103,7 +103,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 // i.e. 10 means 1/10 of a second
 #define TIME_FACTOR 10
 
-// It's 10 per second, thus value = 10/TIME_FACTOR = 
+// It's 10 per second, thus value = 10/TIME_FACTOR =
 #define AVALON_RESET_FAULT_DECISECONDS 1
 
 // In timing mode: Default starting value until an estimate can be obtained
