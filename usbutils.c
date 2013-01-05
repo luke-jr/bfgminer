@@ -99,15 +99,15 @@ static struct usb_find_devices find_dev[] = {
 };
 
 #ifdef USE_BITFORCE
-extern struct device_api bitforce_api;
+extern struct device_drv bitforce_drv;
 #endif
 
 #ifdef USE_ICARUS
-extern struct device_api icarus_api;
+extern struct device_drv icarus_drv;
 #endif
 
 #ifdef USE_MODMINER
-extern struct device_api modminer_api;
+extern struct device_drv modminer_drv;
 #endif
 
 /*
@@ -907,7 +907,7 @@ dame:
 	return false;
 }
 
-static bool usb_check_device(struct device_api *api, struct libusb_device *dev, struct usb_find_devices *look)
+static bool usb_check_device(struct device_drv *drv, struct libusb_device *dev, struct usb_find_devices *look)
 {
 	struct libusb_device_descriptor desc;
 	int err;
@@ -920,25 +920,25 @@ static bool usb_check_device(struct device_api *api, struct libusb_device *dev, 
 
 	if (desc.idVendor != look->idVendor || desc.idProduct != look->idProduct) {
 		applog(LOG_DEBUG, "%s looking for %04x:%04x but found %04x:%04x instead",
-			api->name, look->idVendor, look->idProduct, desc.idVendor, desc.idProduct);
+			drv->name, look->idVendor, look->idProduct, desc.idVendor, desc.idProduct);
 
 		return false;
 	}
 
 	applog(LOG_DEBUG, "%s looking for and found %04x:%04x",
-		api->name, look->idVendor, look->idProduct);
+		drv->name, look->idVendor, look->idProduct);
 
 	return true;
 }
 
-static struct usb_find_devices *usb_check_each(int drv, struct device_api *api, struct libusb_device *dev)
+static struct usb_find_devices *usb_check_each(int drvnum, struct device_drv *drv, struct libusb_device *dev)
 {
 	struct usb_find_devices *found;
 	int i;
 
 	for (i = 0; find_dev[i].drv != DRV_LAST; i++)
-		if (find_dev[i].drv == drv) {
-			if (usb_check_device(api, dev, &(find_dev[i]))) {
+		if (find_dev[i].drv == drvnum) {
+			if (usb_check_device(drv, dev, &(find_dev[i]))) {
 				found = malloc(sizeof(*found));
 				memcpy(found, &(find_dev[i]), sizeof(*found));
 				return found;
@@ -948,27 +948,27 @@ static struct usb_find_devices *usb_check_each(int drv, struct device_api *api, 
 	return NULL;
 }
 
-static struct usb_find_devices *usb_check(__maybe_unused struct device_api *api, __maybe_unused struct libusb_device *dev)
+static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv, __maybe_unused struct libusb_device *dev)
 {
 #ifdef USE_BITFORCE
-	if (api == &bitforce_api)
-		return usb_check_each(DRV_BITFORCE, api, dev);
+	if (drv->drv == DRIVER_BITFORCE)
+		return usb_check_each(DRV_BITFORCE, drv, dev);
 #endif
 
 #ifdef USE_ICARUS
-	if (api == &icarus_api)
-		return usb_check_each(DRV_ICARUS, api, dev);
+	if (drv->drv == DRIVER_ICARUS)
+		return usb_check_each(DRV_ICARUS, drv, dev);
 #endif
 
 #ifdef USE_MODMINER
-	if (api == &modminer_api)
-		return usb_check_each(DRV_MODMINER, api, dev);
+	if (drv->drv == DRIVER_MODMINER)
+		return usb_check_each(DRV_MODMINER, drv, dev);
 #endif
 
 	return NULL;
 }
 
-void usb_detect(struct device_api *api, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *))
+void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *))
 {
 	libusb_device **list;
 	ssize_t count, i;
@@ -995,7 +995,7 @@ void usb_detect(struct device_api *api, bool (*device_detect)(struct libusb_devi
 
 			mutex_unlock(list_lock);
 
-			found = usb_check(api, list[i]);
+			found = usb_check(drv, list[i]);
 			if (!found)
 				release_dev(list[i], true);
 			else
@@ -1106,7 +1106,7 @@ static void newstats(struct cgpu_info *cgpu)
 	cgpu->usbstat = ++next_stat;
 
 	usb_stats = realloc(usb_stats, sizeof(*usb_stats) * next_stat);
-	usb_stats[next_stat-1].name = cgpu->api->name;
+	usb_stats[next_stat-1].name = cgpu->drv->name;
 	usb_stats[next_stat-1].device_id = -1;
 	usb_stats[next_stat-1].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2);
 	for (i = 1; i < C_MAX * 2; i += 2)

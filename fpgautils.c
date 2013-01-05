@@ -104,14 +104,14 @@ int serial_autodetect_devserial(__maybe_unused detectone_func_t detectone, __may
 #endif
 }
 
-int _serial_detect(struct device_api *api, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
+int _serial_detect(struct device_drv *drv, detectone_func_t detectone, autoscan_func_t autoscan, bool forceauto)
 {
 	struct string_elist *iter, *tmp;
 	const char *dev, *colon;
 	bool inhibitauto = false;
 	char found = 0;
-	size_t namel = strlen(api->name);
-	size_t dnamel = strlen(api->dname);
+	size_t namel = strlen(drv->name);
+	size_t dnamel = strlen(drv->dname);
 
 	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
 		dev = iter->string;
@@ -119,8 +119,8 @@ int _serial_detect(struct device_api *api, detectone_func_t detectone, autoscan_
 			size_t idlen = colon - dev;
 
 			// allow either name:device or dname:device
-			if ((idlen != namel || strncasecmp(dev, api->name, idlen))
-			&&  (idlen != dnamel || strncasecmp(dev, api->dname, idlen)))
+			if ((idlen != namel || strncasecmp(dev, drv->name, idlen))
+			&&  (idlen != dnamel || strncasecmp(dev, drv->dname, idlen)))
 				continue;
 
 			dev = colon + 1;

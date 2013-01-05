@@ -196,6 +196,15 @@ static inline int fsync (int fd)
 #endif
 #endif
 
+enum drv_driver {
+	DRIVER_OPENCL,
+	DRIVER_ICARUS,
+	DRIVER_BITFORCE,
+	DRIVER_MODMINER,
+	DRIVER_ZTEX,
+	DRIVER_CPU,
+};
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
@@ -263,12 +272,14 @@ struct api_data;
 struct thr_info;
 struct work;
 
-struct device_api {
+struct device_drv {
+	enum drv_driver drv;
+
 	char *dname;
 	char *name;
 
-	// API-global functions
-	void (*api_detect)();
+	// DRV-global functions
+	void (*drv_detect)();
 
 	// Device-specific functions
 	void (*reinit_device)(struct cgpu_info *);
@@ -365,7 +376,7 @@ struct cgminer_pool_stats {
 
 struct cgpu_info {
 	int cgminer_id;
-	struct device_api *api;
+	struct device_drv *drv;
 	int device_id;
 	char *name;
 	char *device_path;

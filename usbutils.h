@@ -116,12 +116,12 @@ enum usb_cmds {
 	C_MAX
 };
 
-struct device_api;
+struct device_drv;
 struct cgpu_info;
 
 void usb_uninit(struct cgpu_info *cgpu);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
-void usb_detect(struct device_api *api, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
+void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
 struct api_data *api_usb_stats(int *count);
 void update_usb_stats(struct cgpu_info *cgpu);
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, int eol, enum usb_cmds, bool ftdi);

@@ -87,7 +87,7 @@
 // Limit when reducing shares_to_good
 #define MODMINER_MIN_BACK 12
 
-struct device_api modminer_api;
+struct device_drv modminer_drv;
 
 // 45 noops sent when detecting, in case the device was left in "start job" reading
 static const char NOOP[] = MODMINER_PING "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
@@ -100,15 +100,15 @@ static void do_ping(struct cgpu_info *modminer)
 	// Don't care if it fails
 	err = usb_write(modminer, (char *)NOOP, sizeof(NOOP)-1, &amount, C_PING);
 	applog(LOG_DEBUG, "%s%u: flush noop got %d err %d",
-		modminer->api->name, modminer->fpgaid, amount, err);
+		modminer->drv->name, modminer->fpgaid, amount, err);
 
 	// Clear any outstanding data
 	while ((err = usb_read(modminer, buf, sizeof(buf)-1, &amount, C_CLEAR)) == 0 && amount > 0)
 		applog(LOG_DEBUG, "%s%u: clear got %d",
-			modminer->api->name, modminer->fpgaid, amount);
+			modminer->drv->name, modminer->fpgaid, amount);
 
 	applog(LOG_DEBUG, "%s%u: final clear got %d err %d",
-		modminer->api->name, modminer->fpgaid, amount, err);
+		modminer->drv->name, modminer->fpgaid, amount, err);
 }
 
 static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
@@ -121,7 +121,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 	struct cgpu_info *modminer = NULL;
 	modminer = calloc(1, sizeof(*modminer));
-	modminer->api = &modminer_api;
+	modminer->drv = &modminer_drv;
 	modminer->modminer_mutex = calloc(1, sizeof(*(modminer->modminer_mutex)));
 	mutex_init(modminer->modminer_mutex);
 	modminer->fpgaid = (char)0;
@@ -182,7 +182,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	for (i = 0; i < buf[0]; i++) {
 		struct cgpu_info *tmp = calloc(1, sizeof(*tmp));
 
-		tmp->api = modminer->api;
+		tmp->drv = modminer->drv;
 		tmp->name = devname;
 
 		sprintf(devpath, "%d:%d:%d",
@@ -233,7 +233,7 @@ shin:
 
 static void modminer_detect()
 {
-	usb_detect(&modminer_api, modminer_detect_one);
+	usb_detect(&modminer_drv, modminer_detect_one);
 }
 
 static bool get_expect(struct cgpu_info *modminer, FILE *f, char c)
@@ -242,13 +242,13 @@ static bool get_expect(struct cgpu_info *modminer, FILE *f, char c)
 
 	if (fread(&buf, 1, 1, f) != 1) {
 		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream (%c)",
-				modminer->api->name, modminer->device_id, errno, c);
+				modminer->drv->name, modminer->device_id, errno, c);
 		return false;
 	}
 
 	if (buf != c) {
 		applog(LOG_ERR, "%s%u: firmware code mismatch (%c)",
-				modminer->api->name, modminer->device_id, c);
+				modminer->drv->name, modminer->device_id, c);
 		return false;
 	}
 
@@ -262,7 +262,7 @@ static bool get_info(struct cgpu_info *modminer, FILE *f, char *buf, int bufsiz,
 
 	if (fread(siz, 2, 1, f) != 1) {
 		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream '%s' len",
-			modminer->api->name, modminer->device_id, errno, name);
+			modminer->drv->name, modminer->device_id, errno, name);
 		return false;
 	}
 
@@ -270,13 +270,13 @@ static bool get_info(struct cgpu_info *modminer, FILE *f, char *buf, int bufsiz,
 
 	if (len >= bufsiz) {
 		applog(LOG_ERR, "%s%u: Bitstream '%s' len too large (%d)",
-			modminer->api->name, modminer->device_id, name, len);
+			modminer->drv->name, modminer->device_id, name, len);
 		return false;
 	}
 
 	if (fread(buf, len, 1, f) != 1) {
 		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream '%s'", errno,
-			modminer->api->name, modminer->device_id, errno, name);
+			modminer->drv->name, modminer->device_id, errno, name);
 		return false;
 	}
 
@@ -302,7 +302,7 @@ static bool get_status_timeout(struct cgpu_info *modminer, char *msg, unsigned i
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error (%d:%d) getting %s reply",
-			modminer->api->name, modminer->device_id, amount, err, msg);
+			modminer->drv->name, modminer->device_id, amount, err, msg);
 
 		return false;
 	}
@@ -311,7 +311,7 @@ static bool get_status_timeout(struct cgpu_info *modminer, char *msg, unsigned i
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error, invalid %s reply (was %d should be 1)",
-			modminer->api->name, modminer->device_id, msg, buf[0]);
+			modminer->drv->name, modminer->device_id, msg, buf[0]);
 
 		return false;
 	}
@@ -343,7 +343,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error (%d) opening bitstream file %s",
-			modminer->api->name, modminer->device_id, errno, bsfile);
+			modminer->drv->name, modminer->device_id, errno, bsfile);
 
 		return false;
 	}
@@ -352,7 +352,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream magic",
-			modminer->api->name, modminer->device_id, errno);
+			modminer->drv->name, modminer->device_id, errno);
 
 		goto dame;
 	}
@@ -361,7 +361,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: bitstream has incorrect magic (%u,%u) instead of (%u,%u)",
-			modminer->api->name, modminer->device_id,
+			modminer->drv->name, modminer->device_id,
 			buf[0], buf[1],
 			BITSTREAM_MAGIC_0, BITSTREAM_MAGIC_1);
 
@@ -372,7 +372,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error (%d) bitstream seek failed",
-			modminer->api->name, modminer->device_id, errno);
+			modminer->drv->name, modminer->device_id, errno);
 
 		goto dame;
 	}
@@ -384,7 +384,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		goto undame;
 
 	applog(LOG_DEBUG, "%s%u: bitstream file '%s' info:",
-		modminer->api->name, modminer->device_id, bsfile);
+		modminer->drv->name, modminer->device_id, bsfile);
 
 	applog(LOG_DEBUG, " Design name: '%s'", buf);
 
@@ -399,7 +399,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Bad usercode in bitstream file",
-			modminer->api->name, modminer->device_id);
+			modminer->drv->name, modminer->device_id);
 
 		goto dame;
 	}
@@ -408,7 +408,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: bitstream doesn't support user code",
-			modminer->api->name, modminer->device_id);
+			modminer->drv->name, modminer->device_id);
 
 		goto dame;
 	}
@@ -446,7 +446,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream data len",
-			modminer->api->name, modminer->device_id, errno);
+			modminer->drv->name, modminer->device_id, errno);
 
 		goto dame;
 	}
@@ -460,7 +460,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		*ptr = '\0';
 
 	applog(LOG_WARNING, "%s%u: Programming all FPGA on %s ... Mining will not start until complete",
-		modminer->api->name, modminer->device_id, devmsg);
+		modminer->drv->name, modminer->device_id, devmsg);
 
 	buf[0] = MODMINER_PROGRAM;
 	buf[1] = fpgaid;
@@ -473,7 +473,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Program init failed (%d:%d)",
-			modminer->api->name, modminer->device_id, amount, err);
+			modminer->drv->name, modminer->device_id, amount, err);
 
 		goto dame;
 	}
@@ -492,7 +492,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 			mutex_unlock(modminer->modminer_mutex);
 
 			applog(LOG_ERR, "%s%u: bitstream file read error %d (%d bytes left)",
-				modminer->api->name, modminer->device_id, errno, len);
+				modminer->drv->name, modminer->device_id, errno, len);
 
 			goto dame;
 		}
@@ -507,7 +507,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 
 				if (opt_debug)
 					applog(LOG_DEBUG, "%s%u: Program timeout (%d:%d) sent %d tries %d",
-						modminer->api->name, modminer->device_id,
+						modminer->drv->name, modminer->device_id,
 						amount, err, remaining, tries);
 
 				if (!get_status(modminer, "write status", C_PROGRAMSTATUS2))
@@ -517,7 +517,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 				mutex_unlock(modminer->modminer_mutex);
 
 				applog(LOG_ERR, "%s%u: Program failed (%d:%d) sent %d",
-					modminer->api->name, modminer->device_id, amount, err, remaining);
+					modminer->drv->name, modminer->device_id, amount, err, remaining);
 
 				goto dame;
 			}
@@ -532,7 +532,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		if (upto >= nextmsg) {
 			applog(LOG_WARNING,
 				"%s%u: Programming %.1f%% (%d out of %d)",
-				modminer->api->name, modminer->device_id, upto*100, (totlen - len), totlen);
+				modminer->drv->name, modminer->device_id, upto*100, (totlen - len), totlen);
 
 			nextmsg += 0.1;
 		}
@@ -542,7 +542,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		goto undame;
 
 	applog(LOG_WARNING, "%s%u: Programming completed for all FPGA on %s",
-		modminer->api->name, modminer->device_id, devmsg);
+		modminer->drv->name, modminer->device_id, devmsg);
 
 	// Give it a 2/3s delay after programming
 	nmsleep(666);
@@ -653,7 +653,7 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error writing set clock speed (%d:%d)",
-			modminer->api->name, modminer->device_id, amount, err);
+			modminer->drv->name, modminer->device_id, amount, err);
 
 		return clocksetfail;
 	}
@@ -662,7 +662,7 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error reading set clock speed (%d:%d)",
-			modminer->api->name, modminer->device_id, amount, err);
+			modminer->drv->name, modminer->device_id, amount, err);
 
 		return clockreplyfail;
 	}
@@ -670,7 +670,7 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 	mutex_unlock(modminer->modminer_mutex);
 
 	applog(LOG_WARNING, "%s%u: Set clock speed %sto %u",
-			modminer->api->name, modminer->device_id,
+			modminer->drv->name, modminer->device_id,
 			(delta < 0) ? "down " : (delta > 0 ? "up " : ""),
 			modminer->clock);
 
@@ -691,7 +691,7 @@ static bool modminer_fpga_init(struct thr_info *thr)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error requesting USER code (%d:%d)",
-			modminer->api->name, modminer->device_id, amount, err);
+			modminer->drv->name, modminer->device_id, amount, err);
 
 		return false;
 	}
@@ -700,14 +700,14 @@ static bool modminer_fpga_init(struct thr_info *thr)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Error reading USER code (%d:%d)",
-			modminer->api->name, modminer->device_id, amount, err);
+			modminer->drv->name, modminer->device_id, amount, err);
 
 		return false;
 	}
 
 	if (memcmp(buf, BISTREAM_USER_ID, 4)) {
 		applog(LOG_ERR, "%s%u: FPGA not programmed",
-			modminer->api->name, modminer->device_id);
+			modminer->drv->name, modminer->device_id);
 
 		if (!modminer_fpga_upload_bitstream(modminer))
 			return false;
@@ -717,7 +717,7 @@ static bool modminer_fpga_init(struct thr_info *thr)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_DEBUG, "%s%u: FPGA is already programmed :)",
-			modminer->api->name, modminer->device_id);
+			modminer->drv->name, modminer->device_id);
 	}
 
 	modminer->clock = MODMINER_DEF_CLOCK;
@@ -773,7 +773,7 @@ static bool modminer_start_work(struct thr_info *thr)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Start work failed (%d:%d)",
-			modminer->api->name, modminer->device_id, amount, err);
+			modminer->drv->name, modminer->device_id, amount, err);
 
 		return false;
 	}
@@ -827,14 +827,14 @@ static void check_temperature(struct thr_info *thr)
 			if (modminer->temp < MODMINER_RECOVER_TEMP) {
 				state->overheated = false;
 				applog(LOG_WARNING, "%s%u: Recovered, temp less than (%.1f) now %.3f",
-					modminer->api->name, modminer->device_id,
+					modminer->drv->name, modminer->device_id,
 					MODMINER_RECOVER_TEMP, modminer->temp);
 			}
 		}
 		else if (modminer->temp >= MODMINER_OVERHEAT_TEMP) {
 			if (modminer->temp >= MODMINER_CUTOFF_TEMP) {
 				applog(LOG_WARNING, "%s%u: Hit thermal cutoff limit! (%.1f) at %.3f",
-					modminer->api->name, modminer->device_id,
+					modminer->drv->name, modminer->device_id,
 					MODMINER_CUTOFF_TEMP, modminer->temp);
 
 				modminer_delta_clock(thr, MODMINER_CLOCK_CUTOFF, true, false);
@@ -842,7 +842,7 @@ static void check_temperature(struct thr_info *thr)
 				dev_error(modminer, REASON_DEV_THERMAL_CUTOFF);
 			} else {
 				applog(LOG_WARNING, "%s%u: Overheat limit (%.1f) reached %.3f",
-					modminer->api->name, modminer->device_id,
+					modminer->drv->name, modminer->device_id,
 					MODMINER_OVERHEAT_TEMP, modminer->temp);
 
 				// If it's defined to be 0 then don't call modminer_delta_clock()
@@ -909,7 +909,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 			}
 
 			applog(LOG_ERR, "%s%u: Error sending (get nonce) (%d:%d)",
-				modminer->api->name, modminer->device_id, amount, err);
+				modminer->drv->name, modminer->device_id, amount, err);
 
 			return -1;
 		}
@@ -936,7 +936,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 			}
 
 			applog(LOG_ERR, "%s%u: Error reading (get nonce) (%d:%d)",
-				modminer->api->name, modminer->device_id, amount+amount2, err);
+				modminer->drv->name, modminer->device_id, amount+amount2, err);
 		}
 
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
@@ -975,7 +975,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 				if (state->death_stage_one) {
 					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false, true);
 					applog(LOG_ERR, "%s%u: DEATH clock down",
-						modminer->api->name, modminer->device_id);
+						modminer->drv->name, modminer->device_id);
 
 					// reset the death info and DISABLE it
 					state->last_nonce.tv_sec = 0;
@@ -985,7 +985,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 				} else {
 					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false, true);
 					applog(LOG_ERR, "%s%u: death clock down",
-						modminer->api->name, modminer->device_id);
+						modminer->drv->name, modminer->device_id);
 
 					state->death_stage_one = true;
 				}
@@ -1141,10 +1141,11 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 	return replybuf;
 }
 
-struct device_api modminer_api = {
+struct device_drv modminer_drv = {
+	.drv = DRIVER_MODMINER,
 	.dname = "modminer",
 	.name = "MMQ",
-	.api_detect = modminer_detect,
+	.drv_detect = modminer_detect,
 	.get_statline_before = get_modminer_statline_before,
 	.set_device = modminer_set_device,
 	.thread_prepare = modminer_fpga_prepare,

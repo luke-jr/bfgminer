@@ -64,7 +64,7 @@
 
 static const char *blank = "";
 
-struct device_api bitforce_api;
+struct device_drv bitforce_drv;
 
 static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 {
@@ -78,14 +78,14 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 				FTDI_VALUE_RESET, bitforce->usbdev->found->interface, C_RESET);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: reset got err %d",
-			bitforce->api->name, bitforce->device_id, err);
+			bitforce->drv->name, bitforce->device_id, err);
 
 	// Set data control
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
 				FTDI_VALUE_DATA, bitforce->usbdev->found->interface, C_SETDATA);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setdata got err %d",
-			bitforce->api->name, bitforce->device_id, err);
+			bitforce->drv->name, bitforce->device_id, err);
 
 	// Set the baud
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD,
@@ -93,35 +93,35 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 				C_SETBAUD);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setbaud got err %d",
-			bitforce->api->name, bitforce->device_id, err);
+			bitforce->drv->name, bitforce->device_id, err);
 
 	// Set Flow Control
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
 				FTDI_VALUE_FLOW, bitforce->usbdev->found->interface, C_SETFLOW);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setflowctrl got err %d",
-			bitforce->api->name, bitforce->device_id, err);
+			bitforce->drv->name, bitforce->device_id, err);
 
 	// Set Modem Control
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
 				FTDI_VALUE_MODEM, bitforce->usbdev->found->interface, C_SETMODEM);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setmodemctrl got err %d",
-			bitforce->api->name, bitforce->device_id, err);
+			bitforce->drv->name, bitforce->device_id, err);
 
 	// Clear any sent data
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
 				FTDI_VALUE_PURGE_TX, bitforce->usbdev->found->interface, C_PURGETX);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: purgetx got err %d",
-			bitforce->api->name, bitforce->device_id, err);
+			bitforce->drv->name, bitforce->device_id, err);
 
 	// Clear any received data
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
 				FTDI_VALUE_PURGE_RX, bitforce->usbdev->found->interface, C_PURGERX);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: purgerx got err %d",
-			bitforce->api->name, bitforce->device_id, err);
+			bitforce->drv->name, bitforce->device_id, err);
 
 	if (lock)
 		mutex_unlock(&bitforce->device_mutex);
@@ -136,13 +136,13 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 	struct cgpu_info *bitforce = NULL;
 	bitforce = calloc(1, sizeof(*bitforce));
-	bitforce->api = &bitforce_api;
+	bitforce->drv = &bitforce_drv;
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
 
 	if (!usb_init(bitforce, dev, found)) {
 		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
-			bitforce->api->dname,
+			bitforce->drv->dname,
 			(int)libusb_get_bus_number(dev),
 			(int)libusb_get_device_address(dev));
 		goto shin;
@@ -159,7 +159,7 @@ reinit:
 
 	if ((err = usb_write(bitforce, BITFORCE_IDENTIFY, BITFORCE_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY)) < 0 || amount != BITFORCE_IDENTIFY_LEN) {
 		applog(LOG_ERR, "%s detect (%s) send identify request failed (%d:%d)",
-			bitforce->api->dname, devpath, amount, err);
+			bitforce->drv->dname, devpath, amount, err);
 		goto unshin;
 	}
 
@@ -168,7 +168,7 @@ reinit:
 		if (++init_count <= REINIT_COUNT) {
 			if (init_count < 2) {
 				applog(LOG_WARNING, "%s detect (%s) 1st init failed - retrying (%d:%d)",
-					bitforce->api->dname, devpath, amount, err);
+					bitforce->drv->dname, devpath, amount, err);
 			}
 			nmsleep(REINIT_TIME_MS);
 			goto reinit;
@@ -176,14 +176,14 @@ reinit:
 
 		if (init_count > 0)
 			applog(LOG_WARNING, "%s detect (%s) init failed %d times",
-				bitforce->api->dname, devpath, init_count);
+				bitforce->drv->dname, devpath, init_count);
 
 		if (err < 0) {
 			applog(LOG_ERR, "%s detect (%s) error identify reply (%d:%d)",
-				bitforce->api->dname, devpath, amount, err);
+				bitforce->drv->dname, devpath, amount, err);
 		} else {
 			applog(LOG_ERR, "%s detect (%s) empty identify reply (%d)",
-				bitforce->api->dname, devpath, amount);
+				bitforce->drv->dname, devpath, amount);
 		}
 
 		goto unshin;
@@ -192,7 +192,7 @@ reinit:
 
 	if (unlikely(!strstr(buf, "SHA256"))) {
 		applog(LOG_ERR, "%s detect (%s) didn't recognise '%s'",
-			bitforce->api->dname, devpath, buf);
+			bitforce->drv->dname, devpath, buf);
 		goto unshin;
 	}
 
@@ -205,7 +205,7 @@ reinit:
 
 	// We have a real BitForce!
 	applog(LOG_DEBUG, "%s (%s) identified as: '%s'",
-		bitforce->api->dname, devpath, bitforce->name);
+		bitforce->drv->dname, devpath, bitforce->name);
 
 	/* Initially enable support for nonce range and disable it later if it
 	 * fails */
@@ -247,7 +247,7 @@ shin:
 
 static void bitforce_detect(void)
 {
-	usb_detect(&bitforce_api, bitforce_detect_one);
+	usb_detect(&bitforce_drv, bitforce_detect_one);
 }
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
@@ -288,7 +288,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 	if ((err = usb_write(bitforce, BITFORCE_FLASH, BITFORCE_FLASH_LEN, &amount, C_REQUESTFLASH)) < 0 || amount != BITFORCE_FLASH_LEN) {
 		applog(LOG_ERR, "%s%i: flash request failed (%d:%d)",
-			bitforce->api->name, bitforce->device_id, amount, err);
+			bitforce->drv->name, bitforce->device_id, amount, err);
 	} else {
 		/* However, this stops anything else getting a reply
 		 * So best to delay any other access to the BFL */
@@ -328,7 +328,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if ((err = usb_write(bitforce, BITFORCE_TEMPERATURE, BITFORCE_TEMPERATURE_LEN, &amount, C_REQUESTTEMPERATURE)) < 0 || amount != BITFORCE_TEMPERATURE_LEN) {
 		mutex_unlock(&bitforce->device_mutex);
 		applog(LOG_ERR, "%s%i: Error: Request temp invalid/timed out (%d:%d)",
-				bitforce->api->name, bitforce->device_id, amount, err);
+				bitforce->drv->name, bitforce->device_id, amount, err);
 		bitforce->hw_errors++;
 		return false;
 	}
@@ -337,10 +337,10 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		mutex_unlock(&bitforce->device_mutex);
 		if (err < 0) {
 			applog(LOG_ERR, "%s%i: Error: Get temp return invalid/timed out (%d:%d)",
-					bitforce->api->name, bitforce->device_id, amount, err);
+					bitforce->drv->name, bitforce->device_id, amount, err);
 		} else {
 			applog(LOG_ERR, "%s%i: Error: Get temp returned nothing (%d:%d)",
-					bitforce->api->name, bitforce->device_id, amount, err);
+					bitforce->drv->name, bitforce->device_id, amount, err);
 		}
 		bitforce->hw_errors++;
 		return false;
@@ -360,7 +360,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 			bitforce->temp = temp;
 			if (unlikely(bitforce->cutofftemp > 0 && temp > bitforce->cutofftemp)) {
 				applog(LOG_WARNING, "%s%i: Hit thermal cutoff limit, disabling!",
-							bitforce->api->name, bitforce->device_id);
+							bitforce->drv->name, bitforce->device_id);
 				bitforce->deven = DEV_RECOVER;
 				dev_error(bitforce, REASON_DEV_THERMAL_CUTOFF);
 			}
@@ -370,7 +370,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
 		applog(LOG_WARNING, "%s%i: Garbled response probably throttling, clearing buffer",
-					bitforce->api->name, bitforce->device_id);
+					bitforce->drv->name, bitforce->device_id);
 		dev_error(bitforce, REASON_DEV_THROTTLE);
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
@@ -404,14 +404,14 @@ re_send:
 	if ((err = usb_write(bitforce, cmd, len, &amount, C_REQUESTSENDWORK)) < 0 || amount != len) {
 		mutex_unlock(&bitforce->device_mutex);
 		applog(LOG_ERR, "%s%i: request send work failed (%d:%d)",
-				bitforce->api->name, bitforce->device_id, amount, err);
+				bitforce->drv->name, bitforce->device_id, amount, err);
 		return false;
 	}
 
 	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_REQUESTSENDWORKSTATUS)) < 0) {
 		mutex_unlock(&bitforce->device_mutex);
 		applog(LOG_ERR, "%s%d: read request send work status failed (%d:%d)",
-				bitforce->api->name, bitforce->device_id, amount, err);
+				bitforce->drv->name, bitforce->device_id, amount, err);
 		return false;
 	}
 
@@ -423,14 +423,14 @@ re_send:
 		mutex_unlock(&bitforce->device_mutex);
 		if (bitforce->nonce_range) {
 			applog(LOG_WARNING, "%s%i: Does not support nonce range, disabling",
-						bitforce->api->name, bitforce->device_id);
+						bitforce->drv->name, bitforce->device_id);
 			bitforce->nonce_range = false;
 			bitforce->sleep_ms *= 5;
 			bitforce->kname = KNAME_WORK;
 			goto re_send;
 		}
 		applog(LOG_ERR, "%s%i: Error: Send work reports: %s",
-				bitforce->api->name, bitforce->device_id, buf);
+				bitforce->drv->name, bitforce->device_id, buf);
 		return false;
 	}
 
@@ -458,14 +458,14 @@ re_send:
 	if ((err = usb_write(bitforce, (char *)ob, len, &amount, C_SENDWORK)) < 0 || amount != len) {
 		mutex_unlock(&bitforce->device_mutex);
 		applog(LOG_ERR, "%s%i: send work failed (%d:%d)",
-				bitforce->api->name, bitforce->device_id, amount, err);
+				bitforce->drv->name, bitforce->device_id, amount, err);
 		return false;
 	}
 
 	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_SENDWORKSTATUS)) < 0) {
 		mutex_unlock(&bitforce->device_mutex);
 		applog(LOG_ERR, "%s%d: read send work status failed (%d:%d)",
-				bitforce->api->name, bitforce->device_id, amount, err);
+				bitforce->drv->name, bitforce->device_id, amount, err);
 		return false;
 	}
 
@@ -474,19 +474,19 @@ re_send:
 	if (opt_debug) {
 		s = bin2hex(ob + 8, 44);
 		applog(LOG_DEBUG, "%s%i: block data: %s",
-				bitforce->api->name, bitforce->device_id, s);
+				bitforce->drv->name, bitforce->device_id, s);
 		free(s);
 	}
 
 	if (amount == 0 || !buf[0]) {
 		applog(LOG_ERR, "%s%i: Error: Send block data returned empty string/timed out",
-				bitforce->api->name, bitforce->device_id);
+				bitforce->drv->name, bitforce->device_id);
 		return false;
 	}
 
 	if (unlikely(strncasecmp(buf, "OK", 2))) {
 		applog(LOG_ERR, "%s%i: Error: Send block data reports: %s",
-				bitforce->api->name, bitforce->device_id, buf);
+				bitforce->drv->name, bitforce->device_id, buf);
 		return false;
 	}
 
@@ -519,7 +519,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
 			applog(LOG_ERR, "%s%i: took %dms - longer than %dms",
-				bitforce->api->name, bitforce->device_id,
+				bitforce->drv->name, bitforce->device_id,
 				tv_to_ms(elapsed), BITFORCE_LONG_TIMEOUT_MS);
 			return 0;
 		}
@@ -535,7 +535,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
 		applog(LOG_ERR, "%s%i: took %dms - longer than %dms",
-			bitforce->api->name, bitforce->device_id,
+			bitforce->drv->name, bitforce->device_id,
 			tv_to_ms(elapsed), BITFORCE_TIMEOUT_MS);
 		dev_error(bitforce, REASON_DEV_OVER_HEAT);
 
@@ -560,7 +560,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		if (delay_time_ms != bitforce->sleep_ms)
 			  applog(LOG_DEBUG, "%s%i: Wait time changed to: %d, waited %u",
-					bitforce->api->name, bitforce->device_id,
+					bitforce->drv->name, bitforce->device_id,
 					bitforce->sleep_ms, bitforce->wait_ms);
 
 		/* Work out the average time taken. Float for calculation, uint for display */
@@ -569,7 +569,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	applog(LOG_DEBUG, "%s%i: waited %dms until %s",
-			bitforce->api->name, bitforce->device_id,
+			bitforce->drv->name, bitforce->device_id,
 			bitforce->wait_ms, buf);
 	if (!strncasecmp(&buf[2], "-", 1))
 		return bitforce->nonces;   /* No valid nonce found */
@@ -578,7 +578,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	else if (strncasecmp(buf, "NONCE-FOUND", 11)) {
 		bitforce->hw_errors++;
 		applog(LOG_WARNING, "%s%i: Error: Get result reports: %s",
-			bitforce->api->name, bitforce->device_id, buf);
+			bitforce->drv->name, bitforce->device_id, buf);
 		bitforce_initialise(bitforce, true);
 		return 0;
 	}
@@ -593,7 +593,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
 				applog(LOG_WARNING, "%s%i: Disabling broken nonce range support",
-					bitforce->api->name, bitforce->device_id);
+					bitforce->drv->name, bitforce->device_id);
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 				bitforce->sleep_ms *= 5;
@@ -643,7 +643,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 
 	if (ret == -1) {
 		ret = 0;
-		applog(LOG_ERR, "%s%i: Comms error", bitforce->api->name, bitforce->device_id);
+		applog(LOG_ERR, "%s%i: Comms error", bitforce->drv->name, bitforce->device_id);
 		dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 		bitforce->hw_errors++;
 		/* empty read buffer */
@@ -671,7 +671,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	 * so the devices aren't making calls all at the same time. */
 	wait = thr->id * MAX_START_DELAY_MS;
 	applog(LOG_DEBUG, "%s%d: Delaying start by %dms",
-			bitforce->api->name, bitforce->device_id, wait / 1000);
+			bitforce->drv->name, bitforce->device_id, wait / 1000);
 	nmsleep(wait);
 
 	return true;
@@ -691,10 +691,11 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-struct device_api bitforce_api = {
+struct device_drv bitforce_drv = {
+	.drv = DRIVER_BITFORCE,
 	.dname = "bitforce",
 	.name = "BFL",
-	.api_detect = bitforce_detect,
+	.drv_detect = bitforce_detect,
 	.get_api_stats = bitforce_api_stats,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,

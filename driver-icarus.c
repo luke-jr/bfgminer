@@ -208,7 +208,7 @@ static struct ICARUS_INFO **icarus_info;
 //
 static int option_offset = -1;
 
-struct device_api icarus_api;
+struct device_drv icarus_drv;
 
 static void rev(unsigned char *s, size_t l)
 {
@@ -571,7 +571,7 @@ static bool icarus_detect_one(const char *devpath)
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;
 	icarus = calloc(1, sizeof(struct cgpu_info));
-	icarus->api = &icarus_api;
+	icarus->drv = &icarus_drv;
 	icarus->device_path = strdup(devpath);
 	icarus->device_fd = -1;
 	icarus->threads = 1;
@@ -609,7 +609,7 @@ static bool icarus_detect_one(const char *devpath)
 
 static void icarus_detect()
 {
-	serial_detect(&icarus_api, icarus_detect_one);
+	serial_detect(&icarus_drv, icarus_detect_one);
 }
 
 static bool icarus_prepare(struct thr_info *thr)
@@ -900,10 +900,11 @@ static void icarus_shutdown(struct thr_info *thr)
 	do_icarus_close(thr);
 }
 
-struct device_api icarus_api = {
+struct device_drv icarus_drv = {
+	.drv = DRIVER_ICARUS,
 	.dname = "icarus",
 	.name = "ICA",
-	.api_detect = icarus_detect,
+	.drv_detect = icarus_detect,
 	.get_api_stats = icarus_api_stats,
 	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,

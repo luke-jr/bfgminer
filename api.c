@@ -599,22 +599,6 @@ struct APIGROUPS {
 static struct IP4ACCESS *ipaccess = NULL;
 static int ips = 0;
 
-#ifdef USE_BITFORCE
-extern struct device_api bitforce_api;
-#endif
-
-#ifdef USE_ICARUS
-extern struct device_api icarus_api;
-#endif
-
-#ifdef USE_ZTEX
-extern struct device_api ztex_api;
-#endif
-
-#ifdef USE_MODMINER
-extern struct device_api modminer_api;
-#endif
-
 struct io_data {
 	size_t siz;
 	char *ptr;
@@ -1153,19 +1137,19 @@ static int numpgas()
 
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
-		if (devices[i]->api == &bitforce_api)
+		if (devices[i]->drv->drv == DRIVER_BITFORCE)
 			count++;
 #endif
 #ifdef USE_ICARUS
-		if (devices[i]->api == &icarus_api)
+		if (devices[i]->drv->drv == DRIVER_ICARUS)
 			count++;
 #endif
 #ifdef USE_ZTEX
-		if (devices[i]->api == &ztex_api)
+		if (devices[i]->drv->drv == DRIVER_ZTEX)
 			count++;
 #endif
 #ifdef USE_MODMINER
-		if (devices[i]->api == &modminer_api)
+		if (devices[i]->drv->drv == DRIVER_MODMINER)
 			count++;
 #endif
 	}
@@ -1179,19 +1163,19 @@ static int pgadevice(int pgaid)
 
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
-		if (devices[i]->api == &bitforce_api)
+		if (devices[i]->drv->drv == DRIVER_BITFORCE)
 			count++;
 #endif
 #ifdef USE_ICARUS
-		if (devices[i]->api == &icarus_api)
+		if (devices[i]->drv->drv == DRIVER_ICARUS)
 			count++;
 #endif
 #ifdef USE_ZTEX
-		if (devices[i]->api == &ztex_api)
+		if (devices[i]->drv->drv == DRIVER_ZTEX)
 			count++;
 #endif
 #ifdef USE_MODMINER
-		if (devices[i]->api == &modminer_api)
+		if (devices[i]->drv->drv == DRIVER_MODMINER)
 			count++;
 #endif
 		if (count == (pgaid + 1))
@@ -1535,11 +1519,11 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		float temp = cgpu->temp;
 
 #ifdef USE_ZTEX
-		if (cgpu->api == &ztex_api && cgpu->device_ztex)
+		if (cgpu->drv->drv == DRIVER_ZTEX && cgpu->device_ztex)
 			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
 #endif
 #ifdef USE_MODMINER
-		if (cgpu->api == &modminer_api)
+		if (cgpu->drv->drv == DRIVER_MODMINER)
 			frequency = cgpu->clock;
 #endif
 
@@ -1553,7 +1537,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		status = (char *)status2str(cgpu->status);
 
 		root = api_add_int(root, "PGA", &pga, false);
-		root = api_add_string(root, "Name", cgpu->api->name, false);
+		root = api_add_string(root, "Name", cgpu->drv->name, false);
 		root = api_add_int(root, "ID", &(cgpu->device_id), false);
 		root = api_add_string(root, "Enabled", enabled, false);
 		root = api_add_string(root, "Status", status, false);
@@ -1868,12 +1852,12 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 	}
 
 	struct cgpu_info *cgpu = devices[dev];
-	struct device_api *api = cgpu->api;
+	struct device_drv *drv = cgpu->drv;
 
-	if (!api->identify_device)
+	if (!drv->identify_device)
 		message(io_data, MSG_PGANOID, id, NULL, isjson);
 	else {
-		api->identify_device(cgpu);
+		drv->identify_device(cgpu);
 		message(io_data, MSG_PGAIDENT, id, NULL, isjson);
 	}
 }
@@ -2753,7 +2737,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	// ALL counters (and only counters) must start the name with a '*'
 	// Simplifies future external support for identifying new counters
 	root = api_add_int(root, "NOTIFY", &device, false);
-	root = api_add_string(root, "Name", cgpu->api->name, false);
+	root = api_add_string(root, "Name", cgpu->drv->name, false);
 	root = api_add_int(root, "ID", &(cgpu->device_id), false);
 	root = api_add_time(root, "Last Well", &(cgpu->device_last_well), false);
 	root = api_add_time(root, "Last Not Well", &(cgpu->device_last_not_well), false);
@@ -2817,9 +2801,9 @@ static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		cgpu = devices[i];
 
 		root = api_add_int(root, "DEVDETAILS", &i, false);
-		root = api_add_string(root, "Name", cgpu->api->name, false);
+		root = api_add_string(root, "Name", cgpu->drv->name, false);
 		root = api_add_int(root, "ID", &(cgpu->device_id), false);
-		root = api_add_string(root, "Driver", cgpu->api->dname, false);
+		root = api_add_string(root, "Driver", cgpu->drv->dname, false);
 		root = api_add_const(root, "Kernel", cgpu->kname ? : BLANK, false);
 		root = api_add_const(root, "Model", cgpu->name ? : BLANK, false);
 		root = api_add_const(root, "Device Path", cgpu->device_path ? : BLANK, false);
@@ -2923,13 +2907,13 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 	for (j = 0; j < total_devices; j++) {
 		struct cgpu_info *cgpu = devices[j];
 
-		if (cgpu && cgpu->api) {
-			if (cgpu->api->get_api_stats)
-				extra = cgpu->api->get_api_stats(cgpu);
+		if (cgpu && cgpu->drv) {
+			if (cgpu->drv->get_api_stats)
+				extra = cgpu->drv->get_api_stats(cgpu);
 			else
 				extra = NULL;
 
-			sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
+			sprintf(id, "%s%d", cgpu->drv->name, cgpu->device_id);
 			i = itemstats(io_data, i, id, &(cgpu->cgminer_stats), NULL, extra, isjson);
 		}
 	}
@@ -3195,16 +3179,16 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 	}
 
 	struct cgpu_info *cgpu = devices[dev];
-	struct device_api *api = cgpu->api;
+	struct device_drv *drv = cgpu->drv;
 
 	char *set = strchr(opt, ',');
 	if (set)
 		*(set++) = '\0';
 
-	if (!api->set_device)
+	if (!drv->set_device)
 		message(io_data, MSG_PGANOSET, id, NULL, isjson);
 	else {
-		char *ret = api->set_device(cgpu, opt, set, buf);
+		char *ret = drv->set_device(cgpu, opt, set, buf);
 		if (ret) {
 			if (strcasecmp(opt, "help") == 0)
 				message(io_data, MSG_PGAHELP, id, ret, isjson);

@@ -50,23 +50,23 @@ extern int gpur_thr_id;
 extern bool opt_noadl;
 extern bool have_opencl;
 
-
-
 extern void *miner_thread(void *userdata);
 extern int dev_from_id(int thr_id);
 extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlog(const char *f, ...);
 extern void decay_time(double *f, double fadd);
 
-
 /**********************************************/
+
+#ifdef HAVE_OPENCL
+struct device_drv opencl_drv;
+#endif
 
 #ifdef HAVE_ADL
 extern float gpu_temp(int gpu);
 extern int gpu_fanspeed(int gpu);
 extern int gpu_fanpercent(int gpu);
 #endif
-
 
 #ifdef HAVE_OPENCL
 char *set_vector(char *arg)
@@ -591,27 +591,19 @@ char *set_intensity(char *arg)
 
 	return NULL;
 }
-#endif
-
-
-#ifdef HAVE_OPENCL
-struct device_api opencl_api;
 
 char *print_ndevs_and_exit(int *ndevs)
 {
 	opt_log_output = true;
-	opencl_api.api_detect();
+	opencl_drv.drv_detect();
 	clear_adl(*ndevs);
 	applog(LOG_INFO, "%i GPU devices max detected", *ndevs);
 	exit(*ndevs);
 }
 #endif
 
-
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
-
-
 
 #ifdef HAVE_OPENCL
 
@@ -636,9 +628,6 @@ void pause_dynamic_threads(int gpu)
 			tq_push(thr->q, &ping);
 	}
 }
-
-
-struct device_api opencl_api;
 
 #endif /* HAVE_OPENCL */
 
@@ -773,7 +762,7 @@ retry:
 		for (i = 0; i < mining_threads; ++i) {
 			thr = &thr_info[i];
 			cgpu = thr->cgpu;
-			if (cgpu->api != &opencl_api)
+			if (cgpu->drv->drv != DRIVER_OPENCL)
 				continue;
 			if (dev_from_id(i) != selected)
 				continue;
@@ -1160,7 +1149,7 @@ select_cgpu:
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = &thr_info[thr_id];
 		cgpu = thr->cgpu;
-		if (cgpu->api != &opencl_api)
+		if (cgpu->drv->drv != DRIVER_OPENCL)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1185,7 +1174,7 @@ select_cgpu:
 
 		thr = &thr_info[thr_id];
 		cgpu = thr->cgpu;
-		if (cgpu->api != &opencl_api)
+		if (cgpu->drv->drv != DRIVER_OPENCL)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1222,7 +1211,7 @@ select_cgpu:
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = &thr_info[thr_id];
 		cgpu = thr->cgpu;
-		if (cgpu->api != &opencl_api)
+		if (cgpu->drv->drv != DRIVER_OPENCL)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1243,8 +1232,6 @@ void *reinit_gpu(__maybe_unused void *userdata)
 
 
 #ifdef HAVE_OPENCL
-struct device_api opencl_api;
-
 static void opencl_detect()
 {
 	int i;
@@ -1263,7 +1250,7 @@ static void opencl_detect()
 
 		cgpu = &gpus[i];
 		cgpu->deven = DEV_ENABLED;
-		cgpu->api = &opencl_api;
+		cgpu->drv = &opencl_drv;
 		cgpu->device_id = i;
 		cgpu->threads = opt_g_threads;
 		cgpu->virtual_gpu = i;
@@ -1570,10 +1557,11 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 	clReleaseContext(clState->context);
 }
 
-struct device_api opencl_api = {
+struct device_drv opencl_drv = {
+	.drv = DRIVER_OPENCL,
 	.dname = "opencl",
 	.name = "GPU",
-	.api_detect = opencl_detect,
+	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 #ifdef HAVE_ADL
 	.get_statline_before = get_opencl_statline_before,
