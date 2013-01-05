@@ -138,7 +138,7 @@ Enter jansson-X.X dir, and type
 Copy src/.libs/*.dll into \MinGW\bin
 Copy src/.libs/*.a, src/.libs/*.la, src/.libs/*.lai into \MinGW\lib
 Copy src/jansson.def into \MinGW\lib
-Copy src/*.h into \MinGW\include\jansson
+Copy src/*.h into \MinGW\include
 Copy jansson.pc into \MinGW\lib\pkgconfig
 
 (Source: http://www.digip.org/jansson/doc/dev/gettingstarted.html)
