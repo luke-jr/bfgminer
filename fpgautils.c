@@ -400,8 +400,7 @@ int serial_open(const char *devpath, unsigned long baud, signed short timeout, b
 	my_termios.c_cflag |= CS8;
 	my_termios.c_cflag |= CREAD;
 #ifdef USE_AVALON
-	/* FIXME: change to |= CRTSCTS */
-	my_termios.c_cflag &= ~CRTSCTS;
+	my_termios.c_cflag |= CRTSCTS;
 #endif
 	my_termios.c_cflag |= CLOCAL;
 	my_termios.c_cflag &= ~(CSIZE | PARENB);

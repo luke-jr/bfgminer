@@ -20,9 +20,9 @@ struct avalon_task {
 	uint8_t timeout_data;
 	uint8_t miner_num;	// Word[0]
 
-	uint8_t nonce_elf	:1;
-	uint32_t miner_ctrl	:31;
-	uint32_t pad0;		//Word[2:1]
+	uint8_t nonce_elf		:1;
+	uint32_t pad0_miner_ctrl	:31;
+	uint32_t pad1_miner_ctrl;	//Word[2:1]
 
 	uint32_t midstate[8];
 	uint32_t data[3];
@@ -50,10 +50,6 @@ struct AVALON_HISTORY {
 
 enum timing_mode { MODE_DEFAULT, MODE_SHORT, MODE_LONG, MODE_VALUE };
 
-// Store the last INFO_HISTORY data sets
-// [0] = current data, not yet ready to be included as an estimate
-// Each new data set throws the last old set off the end thus
-// keeping a ongoing average of recent data
 #define INFO_HISTORY 10
 
 struct AVALON_INFO {
@@ -90,13 +86,12 @@ struct AVALON_INFO {
 };
 
 #define AVALON_MINER_THREADS 1
-/* FIXME: should be ~20 */
-#define AVALON_GET_WORK_COUNT 1
+#define AVALON_GET_WORK_COUNT 20
 
 #define AVALON_IO_SPEED 115200
-/* FIXME:  The size of a successful task-write and nonce-read */
-#define AVALON_WRITE_SIZE 64
-#define AVALON_READ_SIZE 4
+#define AVALON_SEND_WORK_PITCH 8000
+#define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
+#define AVALON_READ_SIZE (sizeof(struct avalon_result))
 
 // Ensure the sizes are correct for the Serial read
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
@@ -122,40 +117,6 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define AVALON_REV3_HASH_TIME 0.0000000026316
 #define NANOSEC 1000000000.0
 
-// Avalon Rev3 doesn't send a completion message when it finishes
-// the full nonce range, so to avoid being idle we must abort the
-// work (by starting a new work) shortly before it finishes
-//
-// Thus we need to estimate 2 things:
-//	1) How many hashes were done if the work was aborted
-//	2) How high can the timeout be before the Avalon is idle,
-//		to minimise the number of work started
-//	We set 2) to 'the calculated estimate' - 1
-//	to ensure the estimate ends before idle
-//
-// The simple calculation used is:
-//	Tn = Total time in seconds to calculate n hashes
-//	Hs = seconds per hash
-//	Xn = number of hashes
-//	W  = code overhead per work
-//
-// Rough but reasonable estimate:
-//	Tn = Hs * Xn + W	(of the form y = mx + b)
-//
-// Thus:
-//	Line of best fit (using least squares)
-//
-//	Hs = (n*Sum(XiTi)-Sum(Xi)*Sum(Ti))/(n*Sum(Xi^2)-Sum(Xi)^2)
-//	W = Sum(Ti)/n - (Hs*Sum(Xi))/n
-//
-// N.B. W is less when aborting work since we aren't waiting for the reply
-//	to be transferred back (AVALON_READ_TIME)
-//	Calculating the hashes aborted at n seconds is thus just n/Hs
-//	(though this is still a slight overestimate due to code delays)
-//
-
-// Both below must be exceeded to complete a set of data
-// Minimum how long after the first, the last data point must be
 #define HISTORY_SEC 60
 // Minimum how many points a single AVALON_HISTORY should have
 #define MIN_DATA_COUNT 5
@@ -177,8 +138,23 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
 #define avalon_open(devpath, baud)  avalon_open2(devpath, baud, false)
 
+#define avalon_init_default_task(at) avalon_init_task(at, 1, 0, 0, 0, 0, 0)
 #define avalon_close(fd) close(fd)
 
-#define avalon_buffer_empty(fd)	get_serial_cts(fd)
-#define avalon_task_done(fd)	get_serial_cts(fd)
+#define AVA_BUFFER_FULL 0
+#define AVA_BUFFER_EMPTY 1
+#define avalon_buffer_full(fd)	get_serial_cts(fd)
+
+static inline void rev(uint8_t *s, size_t l)
+{
+	size_t i, j;
+	uint8_t t;
+
+	for (i = 0, j = l - 1; i < j; i++, j--) {
+		t = s[i];
+		s[i] = s[j];
+		s[j] = t;
+	}
+}
+
 #endif	/* AVALON_H */

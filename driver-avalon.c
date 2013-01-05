@@ -34,6 +34,7 @@
 #include "miner.h"
 #include "fpgautils.h"
 #include "driver-avalon.h"
+#include "hexdump.c"
 
 static struct timeval history_sec = { HISTORY_SEC, 0 };
 
@@ -43,39 +44,10 @@ static const char *MODE_LONG_STR = "long";
 static const char *MODE_VALUE_STR = "value";
 static const char *MODE_UNKNOWN_STR = "unknown";
 
-// One for each possible device
-static struct AVALON_INFO **avalon_info;
-
-// Looking for options in --avalon-timing and --avalon-options:
-//
-// Code increments this each time we start to look at a device
-// However, this means that if other devices are checked by
-// the Avalon code (e.g. BFL) they will count in the option offset
-//
-// This, however, is deterministic so that's OK
-//
-// If we were to increment after successfully finding an Avalon
-// that would be random since an Avalon may fail and thus we'd
-// not be able to predict the option order
-//
-// This also assumes that serial_detect() checks them sequentially
-// and in the order specified on the command line
-//
 static int option_offset = -1;
 
+static struct AVALON_INFO **avalon_info;
 struct device_api avalon_api;
-
-static inline void rev(uint8_t *s, size_t l)
-{
-	size_t i, j;
-	uint8_t t;
-
-	for (i = 0, j = l - 1; i < j; i++, j--) {
-		t = s[i];
-		s[i] = s[j];
-		s[j] = t;
-	}
-}
 
 static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 		       struct thr_info *thr, int read_count)
@@ -85,13 +57,14 @@ static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 	int read_amount = AVALON_READ_SIZE;
 	bool first = true;
 
-	/* FIXME: we should set RTS to 0 and CTS to be 1, before read? */
-	int done = avalon_task_done(fd);
+	int full = avalon_buffer_full(fd);
 	if (opt_debug)
-		applog(LOG_DEBUG, "Avalon: Finished all task? %s", done ? "Yes" : "no");
-	if (done) {
-		/* FIXME: return here. ask new task */
-		;
+		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
+		       full == AVA_BUFFER_FULL? "Yes" : "no");
+	if (full == AVA_BUFFER_EMPTY) {
+		if (opt_debug)
+			applog(LOG_DEBUG, "Avalon: Finished hash!");
+		return AVA_GETS_DONE;
 	}
 
 	/* Read reply 1 byte at a time to get earliest tv_finish */
@@ -100,7 +73,7 @@ static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 		if (ret < 0)
 			return AVA_GETS_ERROR;
 
-		if (first)
+		if (first && tv_finish != NULL)
 			gettimeofday(tv_finish, NULL);
 
 		if (ret >= read_amount)
@@ -154,6 +127,7 @@ static int avalon_decode_nonce(struct work **work, uint32_t *nonce,
 	/* FIXME: should be modify to avalon data format */
 	memcpy((uint8_t *)nonce, nonce_bin, AVALON_READ_SIZE);
 #if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
+	/* FIXME: there should be a rev() not just 32bit */
 	*nonce = swab32(*nonce);
 #endif
 
@@ -169,48 +143,103 @@ static int avalon_decode_nonce(struct work **work, uint32_t *nonce,
 	return i;
 }
 
-static inline void avalon_create_task(uint8_t *ob_bin, struct work *work)
+static int avalon_init_task(struct avalon_task *at,
+			    uint8_t reset, uint8_t ff, uint8_t fan,
+			    uint8_t timeout, uint8_t chip_num,
+			    uint8_t miner_num)
 {
-	memset(ob_bin, 0, AVALON_WRITE_SIZE);
-	memcpy(ob_bin, work->midstate, 32);
-	memcpy(ob_bin + 52, work->data + 64, 12);
-	rev(ob_bin, 32);
-	rev(ob_bin + 52, 12);
+	if (!at)
+		return -1;
+
+	memset(at, 0, sizeof(struct avalon_task));
+
+	at->reset = reset ? 1 : 0;
+	at->flush_fifo = ff ? 1: 0;
+
+	at->fan_eft = fan ? 1 : 0;	/* 1: fan_pwm_data */
+	at->fan_pwm_data = fan ? (0xFF & fan) : 0xFF;	/* by default: 0xFF */
+
+	/* 1: timeout_data miner_num, chip_num */
+	at->timer_eft = timeout ? 1 : 0;
+	at->timer_eft = chip_num ? 1 : 0;
+	at->timer_eft = miner_num ? 1 : 0;
+
+	at->timeout_data = timeout ? timeout : 0x27; 	/* by default: 0x27 */
+	at->chip_num = chip_num ? chip_num : 0xA;	/* by default: 0x0A */
+	at->miner_num = miner_num ? miner_num : 0x18;	/* by default: 0x18 */
+
+	/* FIXME: Not support nonce range yet */
+	at->nonce_elf = 0;	/* 1: nonce_range*/
+	
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Task:");
+		hexdump((uint8_t *)at, sizeof(struct avalon_task));
+	}
+
+	return 0;
 }
 
-static int avalon_send_task(int fd, const void *buf, size_t bufLen)
+static inline void avalon_create_task(struct avalon_task *at, struct work *work)
 {
-	size_t ret;
-	char *ob_hex = NULL;
+	memcpy(at->midstate, work->midstate, 32);
+	rev((uint8_t *)at->midstate, 32);
 
-	/* FIXME: we should set RTS to 1 and wait CTS became 1, before write? */
-	int empty = avalon_buffer_empty(fd);
-	if (empty < 0)
-		return AVA_SEND_ERROR;
-
-	if (!empty) {
-		 /* FIXME: the buffer was full; return AVA_SEND_FULL; */
-		;
-	}
+	memcpy(at->data, work->data + 64, 12);
+	rev((uint8_t *)at->data, 12);
 
 	if (opt_debug) {
-		ob_hex = bin2hex(buf, bufLen);
-		applog(LOG_DEBUG, "Avalon: Sent %s", ob_hex);
-		free(ob_hex);
+		applog(LOG_DEBUG, "Avalon: Task + work:");
+		hexdump((uint8_t *)at, sizeof(struct avalon_task));
+	}
+}
+
+static int avalon_send_task(int fd, const struct avalon_task *at)
+{
+	size_t ret;
+	struct timespec p;
+
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Sent:");
+		hexdump((uint8_t *)at, sizeof(struct avalon_task));
 	}
 
-	ret = write(fd, buf, bufLen);
-	if (unlikely(ret != bufLen))
+	ret = write(fd, (uint8_t *)at, AVALON_WRITE_SIZE);
+	if (unlikely(ret != AVALON_WRITE_SIZE))
 		return AVA_SEND_ERROR;
 
-	/* From the document. avalon needs some time space between two write */
-	struct timespec p;
 	p.tv_sec = 0;
-	/* FIXME:  */
-	p.tv_nsec = 0;
+	p.tv_nsec = AVALON_SEND_WORK_PITCH;
 	nanosleep(&p, NULL);
 
 	return AVA_SEND_OK;
+}
+
+static int avalon_reset(int fd)
+{
+	const char golden_nonce[] = "000187a2";
+	uint8_t nonce_bin[AVALON_READ_SIZE];
+	char *nonce_hex;
+
+
+	struct avalon_task at;
+	avalon_init_task(&at, 1, 0, 0, 0, 0, 0);
+	avalon_send_task(fd, &at);
+
+	memset(nonce_bin, 0, sizeof(nonce_bin));
+	avalon_gets(nonce_bin, fd, NULL, NULL, 10/* set to 1s now */);
+
+	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
+	if (strncmp(nonce_hex, golden_nonce, 8)) {
+		applog(LOG_ERR, "Avalon: Reset failed! not a Avalon?");
+		free(nonce_hex);
+		return 1;
+	}
+	free(nonce_hex);
+
+	/* FIXME: add more avalon info base on return */
+	applog(LOG_DEBUG, "Avalon: Reset succeeded");
+
+	return 0;
 }
 
 static void do_avalon_close(struct thr_info *thr)
@@ -450,27 +479,10 @@ static void get_options(int this_option_offset, int *baud, int *work_division,
 
 static bool avalon_detect_one(const char *devpath)
 {
-	// Block 171874 nonce = (0xa2870100) = 0x000187a2
-	// N.B. golden_ob MUST take less time to calculate
-	//	than the timeout set in avalon_open()
-	//	This one takes ~0.53ms on Rev3 Avalon
-	const char golden_ob[] =
-		"4679ba4ec99876bf4bfe086082b40025"
-		"4df6c356451471139a3afa71e48f544a"
-		"00000000000000000000000000000000"
-		"0000000087320b1a1426674f2fa722ce";
-
-	const char golden_nonce[] = "000187a2";
-	const uint32_t golden_nonce_val = 0x000187a2;
-
-	uint8_t ob_bin[AVALON_WRITE_SIZE], nonce_bin[AVALON_READ_SIZE];
-	char *nonce_hex;
-
 	struct AVALON_INFO *info;
-	struct timeval tv_start, tv_finish;
-	int fd;
-
+	int fd, ret;
 	int baud, work_division, asic_count;
+
 	int this_option_offset = ++option_offset;
 	get_options(this_option_offset, &baud, &work_division, &asic_count);
 
@@ -481,29 +493,11 @@ static bool avalon_detect_one(const char *devpath)
 		return false;
 	}
 
-	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
-	avalon_send_task(fd, ob_bin, sizeof(ob_bin));
-	gettimeofday(&tv_start, NULL);
-
-	memset(nonce_bin, 0, sizeof(nonce_bin));
-	/* FIXME: how much time on avalon finish reset */ 
-	avalon_gets(nonce_bin, fd, &tv_finish, NULL, 10/* set to 1s now */);
-
+	ret = avalon_reset(fd);
 	avalon_close(fd);
 
-	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
-	if (strncmp(nonce_hex, golden_nonce, 8)) {
-		applog(LOG_ERR,
-			"Avalon Detect: "
-			"Test failed at %s: get %s, should: %s",
-			devpath, nonce_hex, golden_nonce);
-		free(nonce_hex);
+	if (ret)
 		return false;
-	}
-	applog(LOG_DEBUG,
-	       "Avalon Detect: Test succeeded at %s: got %s",
-	       devpath, nonce_hex);
-	free(nonce_hex);
 
 	/* We have a real Avalon! */
 	struct cgpu_info *avalon;
@@ -517,15 +511,13 @@ static bool avalon_detect_one(const char *devpath)
 			      sizeof(struct AVALON_INFO *) *
 			      (total_devices + 1));
 
-	applog(LOG_INFO, "Found Avalon at %s, mark as %d",
+	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
 	       devpath, avalon->device_id);
 
 	applog(LOG_DEBUG,
 	       "Avalon: Init: %d baud=%d work_division=%d asic_count=%d",
 		avalon->device_id, baud, work_division, asic_count);
 
-	// Since we are adding a new device on the end it
-	// needs to always be allocated
 	avalon_info[avalon->device_id] = (struct AVALON_INFO *)
 		malloc(sizeof(struct AVALON_INFO));
 	if (unlikely(!(avalon_info[avalon->device_id])))
@@ -540,9 +532,6 @@ static bool avalon_detect_one(const char *devpath)
 	info->work_division = work_division;
 	info->asic_count = asic_count;
 	info->nonce_mask = mask(work_division);
-	info->golden_hashes =
-		(golden_nonce_val & info->nonce_mask) * asic_count;
-	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
 	set_timing_mode(this_option_offset, avalon);
 
@@ -585,8 +574,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	int ret;
 
 	struct AVALON_INFO *info;
+	struct avalon_task at;
 
-	uint8_t ob_bin[AVALON_WRITE_SIZE], nonce_bin[AVALON_READ_SIZE];
+	uint8_t nonce_bin[AVALON_READ_SIZE];
 	uint32_t nonce;
 	int64_t hash_count;
 	int i, work_i;
@@ -623,8 +613,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 #endif
 	/* Write task to device one by one */
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		avalon_create_task(ob_bin, work[i]);
-		ret = avalon_send_task(fd, ob_bin, AVALON_WRITE_SIZE);
+		avalon_init_default_task(&at);
+		avalon_create_task(&at, work[i]);
+		ret = avalon_send_task(fd, &at);
 		if (ret == AVA_SEND_ERROR) {
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error",
