@@ -182,7 +182,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	for (i = 0; i < buf[0]; i++) {
 		struct cgpu_info *tmp = calloc(1, sizeof(*tmp));
 
-		tmp->drv = modminer->drv;
+		tmp->drv = copy_drv(modminer->drv);
 		tmp->name = devname;
 
 		sprintf(devpath, "%d:%d:%d",
@@ -202,6 +202,8 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 		if (!add_cgpu(tmp)) {
 			free(tmp->device_path);
+			if (tmp->drv->copy)
+				free(tmp->drv);
 			free(tmp);
 			goto unshin;
 		}
@@ -210,6 +212,9 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 		added = true;
 	}
+
+	if (modminer->drv->copy)
+		free(modminer->drv);
 
 	free(modminer);
 
@@ -222,6 +227,9 @@ unshin:
 shin:
 	if (!added)
 		free(modminer->modminer_mutex);
+
+	if (modminer->drv->copy)
+		free(modminer->drv);
 
 	free(modminer);
 

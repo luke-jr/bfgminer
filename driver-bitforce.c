@@ -240,6 +240,9 @@ shin:
 	if (bitforce->name != blank)
 		free(bitforce->name);
 
+	if (bitforce->drv->copy)
+		free(bitforce->drv);
+
 	free(bitforce);
 
 	return false;

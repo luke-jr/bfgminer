@@ -6360,6 +6360,21 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	return true;
 }
 
+struct device_drv *copy_drv(struct device_drv *drv)
+{
+	struct device_drv *copy;
+	char buf[100];
+
+	if (unlikely(!(copy = malloc(sizeof(*copy))))) {
+		sprintf(buf, "Failed to allocate device_drv copy of %s (%s)",
+				drv->name, drv->copy ? "copy" : "original");
+		quit(1, buf);
+	}
+	memcpy(copy, drv, sizeof(*copy));
+	copy->copy = true;
+	return copy;
+}
+
 int main(int argc, char *argv[])
 {
 	bool pools_active = false;

@@ -299,7 +299,12 @@ struct device_drv {
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
+
+	// Does it need to be free()d?
+	bool copy;
 };
+
+extern struct device_drv *copy_drv(struct device_drv*);
 
 enum dev_enable {
 	DEV_ENABLED,

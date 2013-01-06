@@ -891,6 +891,14 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 
 	libusb_free_config_descriptor(config);
 
+	// Allow a name change based on the idVendor+idProduct
+	// N.B. must be done before calling add_cgpu()
+	if (strcmp(cgpu->drv->name, found->name)) {
+		if (!cgpu->drv->copy)
+			cgpu->drv = copy_drv(cgpu->drv);
+		cgpu->drv->name = (char *)(found->name);
+	}
+
 	return true;
 
 cldame:
@@ -919,14 +927,14 @@ static bool usb_check_device(struct device_drv *drv, struct libusb_device *dev, 
 	}
 
 	if (desc.idVendor != look->idVendor || desc.idProduct != look->idProduct) {
-		applog(LOG_DEBUG, "%s looking for %04x:%04x but found %04x:%04x instead",
-			drv->name, look->idVendor, look->idProduct, desc.idVendor, desc.idProduct);
+		applog(LOG_DEBUG, "%s looking for %s %04x:%04x but found %04x:%04x instead",
+			drv->name, look->name, look->idVendor, look->idProduct, desc.idVendor, desc.idProduct);
 
 		return false;
 	}
 
-	applog(LOG_DEBUG, "%s looking for and found %04x:%04x",
-		drv->name, look->idVendor, look->idProduct);
+	applog(LOG_DEBUG, "%s looking for and found %s %04x:%04x",
+		drv->name, look->name, look->idVendor, look->idProduct);
 
 	return true;
 }
