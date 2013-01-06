@@ -58,28 +58,23 @@ static int avalon_init_task(struct avalon_task *at,
 
 	memset(at, 0, sizeof(struct avalon_task));
 
-	at->reset = reset ? 1 : 0;
-	at->flush_fifo = ff ? 1: 0;
+	at->reset = (reset ? 1 : 0);
+	at->flush_fifo = (ff ? 1 : 0);
 
-	at->fan_eft = fan ? 1 : 0;	/* 1: fan_pwm_data */
-	at->fan_pwm_data = fan ? (0xFF & fan) : 0xFF;	/* by default: 0xFF */
+	at->fan_eft = (fan ? 1 : 0);	/* 1: fan_pwm_data */
+	at->fan_pwm_data = (fan ? (0xFF & fan) : 0xFF);	/* by default: 0xFF */
 
 	/* 1: timeout_data miner_num, chip_num */
-	at->timer_eft = timeout ? 1 : 0;
-	at->timer_eft = chip_num ? 1 : 0;
-	at->timer_eft = miner_num ? 1 : 0;
+	at->timer_eft = (timeout ? 1 : 0);
+	at->timer_eft = (chip_num ? 1 : 0);
+	at->timer_eft = (miner_num ? 1 : 0);
 
-	at->timeout_data = timeout ? timeout : 0x27; 	/* by default: 0x27 */
-	at->chip_num = chip_num ? chip_num : 0xA;	/* by default: 0x0A */
-	at->miner_num = miner_num ? miner_num : 0x18;	/* by default: 0x18 */
+	at->timeout_data = (timeout ? timeout : 0x27); 	/* by default: 0x27 */
+	at->chip_num = (chip_num ? chip_num : 0xA);	/* by default: 0x0A */
+	at->miner_num = (miner_num ? miner_num : 0x18);	/* by default: 0x18 */
 
 	/* FIXME: Not support nonce range yet */
 	at->nonce_elf = 0;	/* 1: nonce_range*/
-
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: Task:");
-		hexdump((uint8_t *)at, sizeof(struct avalon_task));
-	}
 
 	return 0;
 }
@@ -181,8 +176,8 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 {
 	struct cgpu_info *avalon;
 	struct AVALON_INFO *info;
-	uint8_t nonce_bin[AVALON_READ_SIZE];
-	int ret, read_count = 10;	/* FIXME: Set to 1s now */
+	uint8_t result[AVALON_READ_SIZE];
+	int ret, read_count = 10;	/* FIXME: Set to 1s now? */
 
 	if (thr) {
 		avalon = thr->cgpu;
@@ -190,35 +185,34 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 		read_count = info->read_count;
 	}
 
-	memset(nonce_bin, 0, AVALON_READ_SIZE);
-	ret = avalon_gets(fd, nonce_bin, read_count, thr, tv_finish);
+	memset(result, 0, AVALON_READ_SIZE);
+	ret = avalon_gets(fd, result, read_count, thr, tv_finish);
 
-	if (ret == AVA_GETS_OK)	/* FIXME: maybe some decode here? */
-		memcpy((uint8_t *)ar, nonce_bin, AVALON_READ_SIZE);
+	if (ret == AVA_GETS_OK)	/* FIXME: maybe some decode/swab here? */
+		memcpy((uint8_t *)ar, result, AVALON_READ_SIZE);
 
 	return ret;
 }
 
-static int avalon_decode_nonce(struct work **work, uint32_t *nonce,
-			       uint8_t *nonce_bin)
+static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
+			       uint32_t *nonce)
 {
 	int i;
-	/* FIXME: should be modify to avalon data format */
-	memcpy((uint8_t *)nonce, nonce_bin, AVALON_READ_SIZE);
+	*nonce = ar->nonce;
 #if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
-	/* FIXME: there should be a rev() not just 32bit */
 	*nonce = swab32(*nonce);
 #endif
 
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
 		/* TODO: find the nonce work, return index */
-		if (!memcmp((uint8_t *)nonce,
-			     work[i]->data + 64,
-			     4/* should be 12 */))
+		if (!memcmp((uint8_t *)(ar->data), work[i]->data + 64, 12))
 			break;
 	}
-	i -= 1;
 
+	if (i == AVALON_GET_WORK_COUNT)
+		return -1;
+
+	i -= 1;
 	return i;
 }
 
@@ -227,10 +221,13 @@ static int avalon_reset(int fd)
 	struct avalon_task at;
 	struct avalon_result ar;
 	uint8_t *buf;
-	int i;
+	int ret, i;
 
 	avalon_init_task(&at, 1, 0, 0, 0, 0, 0);
-	avalon_send_task(fd, &at);
+	ret = avalon_send_task(fd, &at);
+	if (ret != AVA_SEND_OK)
+		return 1;
+
 	avalon_get_result(fd, &ar, NULL, NULL);
 
 	buf = (uint8_t *)&ar;
@@ -581,6 +578,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	struct AVALON_INFO *info;
 	struct avalon_task at;
+	struct avalon_result ar;
 
 	uint8_t nonce_bin[AVALON_READ_SIZE];
 	uint32_t nonce;
@@ -636,7 +634,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	/* count may != AVALON_GET_WORK_COUNT */
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		// FIXME: ret = avalon_get_result(nonce_bin, fd, &tv_finish, thr);
+		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
 		if (ret == AVA_GETS_ERROR ) {
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error", avalon->device_id);
@@ -644,8 +642,10 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			return 0;
 		}
 
-		work_i = avalon_decode_nonce(work, &nonce, nonce_bin);
-		/* FIXME: Should be a check on return, no work_i maybe hardware error */
+		work_i = avalon_decode_nonce(work, &ar, &nonce);
+		if (work_i < 0) {
+			continue; /* FIXME: the result maybe less then AVALON_GET_WORK_COUNT!!!! */
+		}
 		work[work_i]->blk.nonce = 0xffffffff;
 
 		// aborted before becoming idle, get new work
