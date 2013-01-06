@@ -51,8 +51,7 @@ struct device_api avalon_api;
 
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
-			    uint8_t timeout, uint8_t chip_num,
-			    uint8_t miner_num)
+			    uint8_t timeout, uint8_t chip_num, uint8_t miner_num)
 {
 	if (!at)
 		return -1;
@@ -120,8 +119,8 @@ static int avalon_send_task(int fd, const struct avalon_task *at)
 	return AVA_SEND_OK;
 }
 
-static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
-		       struct thr_info *thr, int read_count)
+static int avalon_gets(int fd, uint8_t *buf, int read_count,
+		       struct thr_info *thr, struct timeval *tv_finish)
 {
 	ssize_t ret = 0;
 	int rc = 0;
@@ -129,12 +128,11 @@ static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 	bool first = true;
 
 	int full = avalon_buffer_full(fd);
-	if (opt_debug)
-		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
+
+	applog(LOG_DEBUG, "Avalon: Buffer full: %s",
 		       full == AVA_BUFFER_FULL? "Yes" : "no");
 	if (full == AVA_BUFFER_EMPTY) {
-		if (opt_debug)
-			applog(LOG_DEBUG, "Avalon: Finished hash!");
+		applog(LOG_DEBUG, "Avalon: Finished hash!");
 		return AVA_GETS_DONE;
 	}
 
@@ -178,15 +176,25 @@ static int avalon_gets(uint8_t *buf, int fd, struct timeval *tv_finish,
 	}
 }
 
-static int avalon_get_result(uint8_t *nonce_bin, int fd,
-			    struct timeval *tv_finish, struct thr_info *thr)
+static int avalon_get_result(int fd, struct avalon_result *ar,
+			     struct thr_info *thr, struct timeval *tv_finish)
 {
-	struct cgpu_info *avalon = thr->cgpu;
-	struct AVALON_INFO *info = avalon_info[avalon->device_id];
-	int ret;
+	struct cgpu_info *avalon;
+	struct AVALON_INFO *info;
+	uint8_t nonce_bin[AVALON_READ_SIZE];
+	int ret, read_count = 10;	/* FIXME: Set to 1s now */
+
+	if (thr) {
+		avalon = thr->cgpu;
+		info = avalon_info[avalon->device_id];
+		read_count = info->read_count;
+	}
 
 	memset(nonce_bin, 0, AVALON_READ_SIZE);
-	ret = avalon_gets(nonce_bin, fd, tv_finish, thr, info->read_count);
+	ret = avalon_gets(fd, nonce_bin, read_count, thr, tv_finish);
+
+	if (ret == AVA_GETS_OK)	/* FIXME: maybe some decode here? */
+		memcpy((uint8_t *)ar, nonce_bin, AVALON_READ_SIZE);
 
 	return ret;
 }
@@ -216,29 +224,27 @@ static int avalon_decode_nonce(struct work **work, uint32_t *nonce,
 
 static int avalon_reset(int fd)
 {
-	const char golden_nonce[] = "000187a2";
-	uint8_t nonce_bin[AVALON_READ_SIZE];
-	char *nonce_hex;
-
-
 	struct avalon_task at;
+	struct avalon_result ar;
+	uint8_t *buf;
+	int i;
+
 	avalon_init_task(&at, 1, 0, 0, 0, 0, 0);
 	avalon_send_task(fd, &at);
+	avalon_get_result(fd, &ar, NULL, NULL);
 
-	memset(nonce_bin, 0, sizeof(nonce_bin));
-	avalon_gets(nonce_bin, fd, NULL, NULL, 10/* set to 1s now */);
+	buf = (uint8_t *)&ar;
+	for (i = 0; i < 11; i++)
+		if (buf[i] != 0)
+			break;
+	/* FIXME: add more avalon info base on return */
 
-	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
-	if (strncmp(nonce_hex, golden_nonce, 8)) {
+	if (i != 11) {
 		applog(LOG_ERR, "Avalon: Reset failed! not a Avalon?");
-		free(nonce_hex);
 		return 1;
 	}
-	free(nonce_hex);
 
-	/* FIXME: add more avalon info base on return */
-	applog(LOG_DEBUG, "Avalon: Reset succeeded");
-
+	applog(LOG_ERR, "Avalon: Reset succeeded");
 	return 0;
 }
 
@@ -630,7 +636,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	/* count may != AVALON_GET_WORK_COUNT */
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		ret = avalon_get_result(nonce_bin, fd, &tv_finish, thr);
+		// FIXME: ret = avalon_get_result(nonce_bin, fd, &tv_finish, thr);
 		if (ret == AVA_GETS_ERROR ) {
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error", avalon->device_id);
@@ -657,13 +663,10 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			if (unlikely(estimate_hashes > 0xffffffff))
 				estimate_hashes = 0xffffffff;
 
-			if (opt_debug) {
-				applog(LOG_DEBUG,
-				       "Avalon: no nonce = 0x%08llx hashes "
+			applog(LOG_DEBUG,
+			       "Avalon: no nonce = 0x%08llx hashes "
 				       "(%ld.%06lds)",
-				       estimate_hashes,
-				       elapsed.tv_sec, elapsed.tv_usec);
-			}
+			       estimate_hashes, elapsed.tv_sec, elapsed.tv_usec);
 
 			return estimate_hashes;
 		}

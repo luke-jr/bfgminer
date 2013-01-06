@@ -31,10 +31,10 @@ struct avalon_task {
 } __attribute__((packed));
 
 struct avalon_result {
+	uint32_t nonce;
 	uint32_t data[3];
 	uint32_t midstate[8];
-	uint32_t nonce;
-	uint32_t reserved;
+	uint32_t reserved[2];
 } __attribute__((packed));
 
 struct AVALON_HISTORY {
@@ -138,7 +138,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
 #define avalon_open(devpath, baud)  avalon_open2(devpath, baud, false)
 
-#define avalon_init_default_task(at) avalon_init_task(at, 1, 0, 0, 0, 0, 0)
+#define avalon_init_default_task(at) avalon_init_task(at, 0, 0, 0, 0, 0, 0)
 #define avalon_close(fd) close(fd)
 
 #define AVA_BUFFER_FULL 0
