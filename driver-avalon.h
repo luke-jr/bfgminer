@@ -24,17 +24,17 @@ struct avalon_task {
 	uint32_t pad0_miner_ctrl	:31;
 	uint32_t pad1_miner_ctrl;	//Word[2:1]
 
-	uint32_t midstate[8];
-	uint32_t data[3];
+	uint8_t midstate[32];
+	uint8_t data[12];
 
 	// nonce_range: Word[??:14]
 } __attribute__((packed));
 
 struct avalon_result {
 	uint32_t nonce;
-	uint32_t data[3];
-	uint32_t midstate[8];
-	uint32_t reserved[2];
+	uint8_t data[12];
+	uint8_t midstate[32];
+	uint8_t reserved[8];
 } __attribute__((packed));
 
 struct AVALON_HISTORY {

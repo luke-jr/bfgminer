@@ -82,15 +82,10 @@ static int avalon_init_task(struct avalon_task *at,
 static inline void avalon_create_task(struct avalon_task *at, struct work *work)
 {
 	memcpy(at->midstate, work->midstate, 32);
-	rev((uint8_t *)at->midstate, 32);
+	rev(at->midstate, 32);
 
 	memcpy(at->data, work->data + 64, 12);
-	rev((uint8_t *)at->data, 12);
-
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: Task + work:");
-		hexdump((uint8_t *)at, sizeof(struct avalon_task));
-	}
+	rev(at->data, 12);
 }
 
 static int avalon_send_task(int fd, const struct avalon_task *at)
@@ -177,7 +172,7 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	struct cgpu_info *avalon;
 	struct AVALON_INFO *info;
 	uint8_t result[AVALON_READ_SIZE];
-	int ret, read_count = 10;	/* FIXME: Set to 1s now? */
+	int ret, read_count = 16;	/* FIXME: Set to 1.6s now? */
 
 	if (thr) {
 		avalon = thr->cgpu;
@@ -188,6 +183,11 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	memset(result, 0, AVALON_READ_SIZE);
 	ret = avalon_gets(fd, result, read_count, thr, tv_finish);
 
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: get:");
+		hexdump((uint8_t *)result, AVALON_READ_SIZE);
+	}
+
 	if (ret == AVA_GETS_OK)	/* FIXME: maybe some decode/swab here? */
 		memcpy((uint8_t *)ar, result, AVALON_READ_SIZE);
 
@@ -197,15 +197,17 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
 			       uint32_t *nonce)
 {
+	uint8_t data[12];
 	int i;
 	*nonce = ar->nonce;
 #if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
 	*nonce = swab32(*nonce);
 #endif
 
+	memcpy(data, ar->data, 12);
+	rev(data, 12);
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		/* TODO: find the nonce work, return index */
-		if (!memcmp((uint8_t *)(ar->data), work[i]->data + 64, 12))
+		if (!memcmp(data, work[i]->data + 64, 12))
 			break;
 	}
 
@@ -213,7 +215,8 @@ static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
 		return -1;
 
 	i -= 1;
-	return i;
+	/* FIXME:  */
+	return 3;
 }
 
 static int avalon_reset(int fd)
@@ -580,7 +583,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	struct avalon_task at;
 	struct avalon_result ar;
 
-	uint8_t nonce_bin[AVALON_READ_SIZE];
 	uint32_t nonce;
 	int64_t hash_count;
 	int i, work_i;
@@ -684,6 +686,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		hash_count *= info->asic_count;
 	}
 
+	/* FIXME: */
+	return -1;
 	if (opt_debug || info->do_avalon_timing)
 		timersub(&tv_finish, &tv_start, &elapsed);
 
