@@ -581,7 +581,7 @@ int get_serial_cts(int fd)
 		return -1;
 
 	ioctl(fd, TIOCMGET, &flags);
-	return flags & TIOCM_CTS;
+	return (flags & TIOCM_CTS) ? 1 : 0;
 }
 
 int set_serial_rts(int fd, int rts)
