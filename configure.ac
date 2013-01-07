@@ -126,11 +126,15 @@ else
 fi
 AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 
-AC_CHECK_LIB(pthread, pthread_create, ,
+AC_CHECK_LIB(pthread, pthread_create, [
+	true
+],
         AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
 PTHREAD_LIBS=-lpthread
 
-AC_CHECK_LIB(jansson, json_loads, ,
+AC_CHECK_LIB(jansson, json_loads, [
+	true
+],
 	AC_MSG_ERROR([Could not find jansson library]))
 
 if test "x$opencl" = xyes; then
@@ -550,10 +554,10 @@ fi
 
 echo
 echo "Compilation............: make (or gmake)"
-echo "  CPPFLAGS.............: $CPPFLAGS $NCURSES_CPPFLAGS"
-echo "  CFLAGS...............: $CFLAGS $LIBUSB_CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS"
+echo "  CPPFLAGS.............:" $CPPFLAGS $NCURSES_CPPFLAGS
+echo "  CFLAGS...............:" $CFLAGS $LIBUSB_CFLAGS
+echo "  LDFLAGS..............:" $LDFLAGS $PTHREAD_FLAGS
+echo "  LDADD................:" $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
