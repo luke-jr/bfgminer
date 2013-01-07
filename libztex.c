@@ -242,7 +242,8 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	fp = NULL;
 
 	if (got_bytes < length) {
-		applog(LOG_ERR, "%s: Incomplete firmware read: %d/%d", __func__, got_bytes, length);
+		applog(LOG_ERR, "%s: Incomplete firmware read: %"PRIu64"/%"PRIu64,
+		       __func__, (uint64_t)got_bytes, (uint64_t)length);
 		goto done;
 	}
 
