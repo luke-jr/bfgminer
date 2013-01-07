@@ -539,7 +539,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_WORK_GROUP_SIZE", status);
 		return NULL;
 	}
-	applog(LOG_DEBUG, "Max work group size reported %d", clState->max_work_size);
+	applog(LOG_DEBUG, "Max work group size reported %"PRId64, (int64_t)clState->max_work_size);
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&cgpu->max_alloc, NULL);
 	if (status != CL_SUCCESS) {
@@ -795,7 +795,7 @@ build:
 		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
 			(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
 	}
-	applog(LOG_DEBUG, "Setting worksize to %d", clState->wsize);
+	applog(LOG_DEBUG, "Setting worksize to %"PRId64, (int64_t)clState->wsize);
 	if (clState->vwidth > 1)
 		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
 
@@ -868,7 +868,8 @@ build:
 			break;
 
 	/* copy over all of the generated binaries. */
-	applog(LOG_DEBUG, "Binary size for gpu %d found in binary slot %d: %d", gpu, slot, binary_sizes[slot]);
+	applog(LOG_DEBUG, "Binary size for gpu %u found in binary slot %u: %"PRId64,
+	       gpu, (unsigned)slot, (int64_t)binary_sizes[slot]);
 	if (!binary_sizes[slot]) {
 		applog(LOG_ERR, "OpenCL compiler generated a zero sized binary, FAIL!");
 		return NULL;
@@ -950,8 +951,8 @@ built:
 	free(binaries);
 	free(binary_sizes);
 
-	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %d vectors and worksize %d",
-	       filename, clState->hasBitAlign ? "" : "out", clState->vwidth, clState->wsize);
+	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %"PRId64" vectors and worksize %"PRIu64,
+	       filename, clState->hasBitAlign ? "" : "out", (int64_t)clState->vwidth, (uint64_t)clState->wsize);
 
 	if (!prog_built) {
 		/* create a cl program executable for all the devices specified */

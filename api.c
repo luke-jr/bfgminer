@@ -1114,9 +1114,9 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				sprintf(buf, "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
 				break;
 			case API_TIMEVAL:
-				sprintf(buf, "%ld.%06ld",
-					((struct timeval *)(root->data))->tv_sec,
-					((struct timeval *)(root->data))->tv_usec);
+				sprintf(buf, "%"PRIu64".%06lu",
+					(uint64_t)((struct timeval *)(root->data))->tv_sec,
+					(unsigned long)((struct timeval *)(root->data))->tv_usec);
 				break;
 			case API_TEMP:
 				sprintf(buf, "%.2f", *((float *)(root->data)));

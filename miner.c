@@ -1723,7 +1723,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			static bool appenderr = false;
 			if (ae <= 0) {
 				if (opt_coinbase_sig) {
-					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%d)", pool->pool_no, ae);
+					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Cannot append coinbase signature at all on pool %u (%"PRId64")", pool->pool_no, (int64_t)ae);
 					appenderr = true;
 				}
 			} else if (ae >= 3 || opt_coinbase_sig) {
@@ -1748,14 +1748,14 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 					memcpy(tmp, opt_coinbase_sig, ae);
 					tmp[ae] = '\0';
 					applog((truncatewarning ? LOG_DEBUG : LOG_WARNING),
-					       "Pool %u truncating appended coinbase signature at %d bytes: %s(%s)",
-					       pool->pool_no, ae, tmp, &opt_coinbase_sig[ae]);
+					       "Pool %u truncating appended coinbase signature at %"PRId64" bytes: %s(%s)",
+					       pool->pool_no, (int64_t)ae, tmp, &opt_coinbase_sig[ae]);
 					free(tmp);
 					truncatewarning = true;
 				}
 				ae = blkmk_append_coinbase_safe(work->tmpl, cbappend, ae);
 				if (ae <= 0) {
-					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Error appending coinbase signature (%d)", ae);
+					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Error appending coinbase signature (%"PRId64")", (int64_t)ae);
 					appenderr = true;
 				} else
 					appenderr = false;
@@ -5489,10 +5489,10 @@ bool parse_stratum_response(struct pool *pool, char *s)
 		 && json_is_array(res_val)) {
 			// Check that the transactions actually hash to the merkle links
 			{
-				size_t maxtx = 1 << pool->swork.merkles;
-				size_t mintx = maxtx >> 1;
+				unsigned maxtx = 1 << pool->swork.merkles;
+				unsigned mintx = maxtx >> 1;
 				--maxtx;
-				size_t acttx = json_array_size(res_val);
+				unsigned acttx = (unsigned)json_array_size(res_val);
 				if (acttx < mintx || acttx > maxtx) {
 					applog(LOG_WARNING, "Pool %u is sending mismatched block contents to us (%u is not %u-%u)",
 					       pool->pool_no, acttx, mintx, maxtx);
