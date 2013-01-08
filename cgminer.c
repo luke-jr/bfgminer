@@ -1986,11 +1986,11 @@ static void curses_print_devstatus(int thr_id)
 	suffix_string(dr64, displayed_rolling, 4);
 
 	if (cgpu->status == LIFE_DEAD)
-		wprintw(statuswin, "DEAD ");
+		wprintw(statuswin, "DEAD  ");
 	else if (cgpu->status == LIFE_SICK)
-		wprintw(statuswin, "SICK ");
+		wprintw(statuswin, "SICK  ");
 	else if (cgpu->deven == DEV_DISABLED)
-		wprintw(statuswin, "OFF  ");
+		wprintw(statuswin, "OFF   ");
 	else if (cgpu->deven == DEV_RECOVER)
 		wprintw(statuswin, "REST  ");
 	else
