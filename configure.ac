@@ -329,6 +329,9 @@ else
 		done
 		LIBS="$orig_libs"
 		CFLAGS="$orig_cflags"
+		if test "x$curses" != "xyes"; then
+			AC_MSG_RESULT([none?])
+		fi
 	fi
 	if test "x$curses" != "xyes"; then
 
