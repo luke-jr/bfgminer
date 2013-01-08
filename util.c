@@ -921,15 +921,11 @@ static void clear_sock(struct pool *pool)
 	mutex_unlock(&pool->stratum_lock);
 }
 
-/* Check to see if Santa's been good to you */
-bool sock_full(struct pool *pool, bool wait)
+static bool socket_full(struct pool *pool, bool wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
 	fd_set rd;
-
-	if (pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))
-		return true;
 
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
@@ -941,6 +937,15 @@ bool sock_full(struct pool *pool, bool wait)
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
+}
+
+/* Check to see if Santa's been good to you */
+bool sock_full(struct pool *pool)
+{
+	if (pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))
+		return true;
+
+	return (socket_full(pool, false));
 }
 
 /* Peeks at a socket to find the first end of line and then reads just that
@@ -955,8 +960,8 @@ char *recv_line(struct pool *pool)
 		char s[RBUFSIZE];
 		CURLcode rc;
 
-		if (!sock_full(pool, true)) {
-			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
+		if (!socket_full(pool, true)) {
+			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
 		}
 		memset(s, 0, RBUFSIZE);
@@ -1027,13 +1032,13 @@ static char *json_array_string(json_t *val, unsigned int entry)
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
+	bool clean, ret = false;
 	int merkles, i;
 	json_t *arr;
-	bool clean;
 
 	arr = json_array_get(val, 4);
 	if (!arr || !json_is_array(arr))
-		return false;
+		goto out;
 
 	merkles = json_array_size(arr);
 
@@ -1062,7 +1067,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			free(nbit);
 		if (ntime)
 			free(ntime);
-		return false;
+		goto out;
 	}
 
 	mutex_lock(&pool->pool_lock);
@@ -1125,7 +1130,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			pool->swork.transparency_time = time(NULL);
 	}
 
-	return true;
+	ret = true;
+out:
+	return ret;
 }
 
 static bool parse_diff(struct pool *pool, json_t *val)
@@ -1229,8 +1236,11 @@ bool parse_method(struct pool *pool, char *s)
 	if (!buf)
 		goto out;
 
-	if (!strncasecmp(buf, "mining.notify", 13) && parse_notify(pool, params)) {
-		ret = true;
+	if (!strncasecmp(buf, "mining.notify", 13)) {
+		if (parse_notify(pool, params))
+			pool->stratum_notify = ret = true;
+		else
+			pool->stratum_notify = ret = false;
 		goto out;
 	}
 
@@ -1298,6 +1308,7 @@ bool auth_stratum(struct pool *pool)
 
 		goto out;
 	}
+
 	ret = true;
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->stratum_auth = true;
@@ -1363,7 +1374,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (!sock_full(pool, true)) {
+	if (!socket_full(pool, true)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}

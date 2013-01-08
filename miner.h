@@ -979,6 +979,7 @@ struct pool {
 	bool has_stratum;
 	bool stratum_active;
 	bool stratum_auth;
+	bool stratum_notify;
 	struct stratum_work swork;
 	pthread_t stratum_thread;
 	pthread_mutex_t stratum_lock;

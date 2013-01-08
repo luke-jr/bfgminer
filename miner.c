@@ -3397,7 +3397,7 @@ retry:
 	pool = wc->pool;
 
 	if (pool->has_stratum) {
-		while (!pool->stratum_active) {
+		while (!pool->stratum_active || !pool->stratum_notify) {
 			struct pool *altpool = select_pool(true);
 
 			sleep(5);
@@ -5467,6 +5467,16 @@ static void clear_pool_work(struct pool *pool)
 	mutex_unlock(stgd_lock);
 }
 
+static void stratum_resumed(struct pool *pool)
+{
+	if (!pool->stratum_notify)
+		return;
+	if (!pool_tclear(pool, &pool->idle))
+		return;
+	applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
+	pool_resus(pool);
+}
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -5493,7 +5503,7 @@ static void *stratum_thread(void *userdata)
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (!sock_full(pool, false) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1)
+		if (!sock_full(pool) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1)
 			s = NULL;
 		else
 			s = recv_line(pool);
@@ -5528,10 +5538,7 @@ static void *stratum_thread(void *userdata)
 
 		/* Check this pool hasn't died while being a backup pool and
 		 * has not had its idle flag cleared */
-		if (pool_tclear(pool, &pool->idle)) {
-			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
-			pool_resus(pool);
-		}
+		stratum_resumed(pool);
 
 		if (!parse_method(pool, s) && !parse_stratum_response(pool, s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
