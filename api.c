@@ -1562,7 +1562,7 @@ static void pgaenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 #endif
 
 	for (i = 0; i < mining_threads; i++) {
-		pga = thr_info[i].cgpu->device_id;
+		pga = thr_info[i].cgpu->cgminer_id;
 		if (pga == dev) {
 			thr = &thr_info[i];
 			cgpu->deven = DEV_ENABLED;
@@ -1861,10 +1861,8 @@ static void gpuenable(__maybe_unused SOCKETTYPE c, char *param, bool isjson, __m
 				strcpy(io_buffer, message(MSG_GPUMRE, id, NULL, isjson));
 				return;
 			}
-
 			gpus[id].deven = DEV_ENABLED;
 			tq_push(thr->q, &ping);
-
 		}
 	}
 
