@@ -56,6 +56,12 @@
 bool successful_connect = false;
 struct timeval nettime;
 
+struct data_buffer {
+	void		*buf;
+	size_t		len;
+	curl_socket_t	*idlemarker;
+};
+
 struct upload_buffer {
 	const void	*buf;
 	size_t		len;
@@ -1023,15 +1029,11 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 	return ret;
 }
 
-/* Check to see if Santa's been good to you */
-bool sock_full(struct pool *pool, bool wait)
+static bool socket_full(struct pool *pool, bool wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
 	fd_set rd;
-
-	if (pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))
-		return true;
 
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
@@ -1045,63 +1047,97 @@ bool sock_full(struct pool *pool, bool wait)
 	return false;
 }
 
+/* Check to see if Santa's been good to you */
+bool sock_full(struct pool *pool)
+{
+	if (strlen(pool->sockbuf))
+		return true;
+
+	return (socket_full(pool, false));
+}
+
 static void clear_sock(struct pool *pool)
 {
 	ssize_t n;
-	char buf[RECVSIZE];
 
 	mutex_lock(&pool->stratum_lock);
 	do
-		n = recv(pool->sock, buf, RECVSIZE, 0);
+		n = recv(pool->sock, pool->sockbuf, RECVSIZE, 0);
 	while (n > 0);
 	mutex_unlock(&pool->stratum_lock);
-	pool->readbuf.len = 0;
+	strcpy(pool->sockbuf, "");
+}
+
+/* Make sure the pool sockbuf is large enough to cope with any coinbase size
+ * by reallocing it to a large enough size rounded up to a multiple of RBUFSIZE
+ * and zeroing the new memory */
+static void recalloc_sock(struct pool *pool, size_t len)
+{
+	size_t old, new;
+
+	old = strlen(pool->sockbuf);
+	new = old + len + 1;
+	if (new < pool->sockbuf_size)
+		return;
+	new = new + (RBUFSIZE - (new % RBUFSIZE));
+	applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
+	pool->sockbuf = realloc(pool->sockbuf, new);
+	if (!pool->sockbuf)
+		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
+	memset(pool->sockbuf + old, 0, new - old);
+	pool->sockbuf_size = new;
 }
 
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
-	ssize_t len;
+	ssize_t len, buflen;
 	char *tok, *sret = NULL;
-	ssize_t n;
 
-	while (!(pool->readbuf.buf && memchr(pool->readbuf.buf, '\n', pool->readbuf.len))) {
-		char s[RBUFSIZE];
+	if (!strstr(pool->sockbuf, "\n")) {
+		struct timeval rstart, now;
 
-		if (!sock_full(pool, true)) {
-			applog(LOG_DEBUG, "Timed out waiting for data on sock_full");
+		gettimeofday(&rstart, NULL);
+		if (!socket_full(pool, true)) {
+			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
 		}
-		memset(s, 0, RBUFSIZE);
 
 		mutex_lock(&pool->stratum_lock);
-		n = recv(pool->sock, s, RECVSIZE, 0);
+		do {
+			char s[RBUFSIZE];
+			size_t slen, n;
+
+			memset(s, 0, RBUFSIZE);
+			n = recv(pool->sock, s, RECVSIZE, 0);
+			if (n < 1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+				break;
+			}
+			slen = strlen(s);
+			recalloc_sock(pool, slen);
+			strcat(pool->sockbuf, s);
+			gettimeofday(&now, NULL);
+		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
 		mutex_unlock(&pool->stratum_lock);
-
-		if (n < 1 && errno != EAGAIN && errno != EWOULDBLOCK) {
-			applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", errno);
-			goto out;
-		}
-
-		len = all_data_cb(s, n, 1, &pool->readbuf);
-		if (1 != len) {
-			applog(LOG_DEBUG, "Error appending readbuf in recv_line for pool %u", pool->pool_no);
-			goto out;
-		}
 	}
 
-	// Assuming the bulk of the data will be in the line, steal the buffer and return it
-	tok = memchr(pool->readbuf.buf, '\n', pool->readbuf.len);
-	*tok = '\0';
-	len = tok - (char*)pool->readbuf.buf;
-	pool->readbuf.len -= len + 1;
-	tok = memcpy(malloc(pool->readbuf.len), tok + 1, pool->readbuf.len);
-	sret = realloc(pool->readbuf.buf, len + 1);
-#ifdef DEBUG_DATABUF
-	applog(LOG_DEBUG, "recv_line realloc(%p, %lu) => %p (new readbuf.buf=%p)", pool->readbuf.buf, (unsigned long)(len + 1), sret, tok);
-#endif
-	pool->readbuf.buf = tok;
+	buflen = strlen(pool->sockbuf);
+	tok = strtok(pool->sockbuf, "\n");
+	if (!tok) {
+		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in recv_line");
+		goto out;
+	}
+	sret = strdup(tok);
+	len = strlen(sret);
+
+	/* Copy what's left in the buffer after the \n, including the
+	 * terminating \0 */
+	if (buflen > len + 1)
+		memmove(pool->sockbuf, pool->sockbuf + len + 1, buflen - len + 1);
+	else
+		strcpy(pool->sockbuf, "");
 
 	pool->cgminer_pool_stats.times_received++;
 	pool->cgminer_pool_stats.bytes_received += len;
@@ -1148,13 +1184,13 @@ static char *json_array_string(json_t *val, unsigned int entry)
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
+	bool clean, ret = false;
 	int merkles, i;
 	json_t *arr;
-	bool clean;
 
 	arr = json_array_get(val, 4);
 	if (!arr || !json_is_array(arr))
-		return false;
+		goto out;
 
 	merkles = json_array_size(arr);
 
@@ -1183,7 +1219,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 			free(nbit);
 		if (ntime)
 			free(ntime);
-		return false;
+		goto out;
 	}
 
 	mutex_lock(&pool->pool_lock);
@@ -1248,7 +1284,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		pool->swork.transparency_probed = true;
 	}
 
-	return true;
+	ret = true;
+out:
+	return ret;
 }
 
 static bool parse_diff(struct pool *pool, json_t *val)
@@ -1352,8 +1390,11 @@ bool parse_method(struct pool *pool, char *s)
 	if (!buf)
 		goto out;
 
-	if (!strncasecmp(buf, "mining.notify", 13) && parse_notify(pool, params)) {
-		ret = true;
+	if (!strncasecmp(buf, "mining.notify", 13)) {
+		if (parse_notify(pool, params))
+			pool->stratum_notify = ret = true;
+		else
+			pool->stratum_notify = ret = false;
 		goto out;
 	}
 
@@ -1421,6 +1462,7 @@ bool auth_stratum(struct pool *pool)
 
 		goto out;
 	}
+
 	ret = true;
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
@@ -1442,7 +1484,7 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	bool ret = false;
 
-	applog(LOG_DEBUG, "initiate_stratum with readbuf.buf=%p", pool->readbuf.buf);
+	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
 	pool->swork.transparency_time = (time_t)-1;
 	pool->stratum_active = false;
@@ -1453,9 +1495,17 @@ bool initiate_stratum(struct pool *pool)
 		if (unlikely(!pool->stratum_curl))
 			quit(1, "Failed to curl_easy_init in initiate_stratum");
 	}
-	pool->readbuf.len = 0;
+	if (pool->sockbuf)
+		pool->sockbuf[0] = '\0';
 	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
+
+	if (!pool->sockbuf) {
+		pool->sockbuf = calloc(RBUFSIZE, 1);
+		if (!pool->sockbuf)
+			quit(1, "Failed to calloc pool sockbuf in initiate_stratum");
+		pool->sockbuf_size = RBUFSIZE;
+	}
 
 	/* Create a http url for use with curl */
 	memset(s, 0, RBUFSIZE);
@@ -1500,7 +1550,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (!sock_full(pool, true)) {
+	if (!socket_full(pool, true)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
