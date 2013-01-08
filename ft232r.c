@@ -358,7 +358,7 @@ ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
 	ibufsLen -= count;
 	if (ibufsLen) {
 		memmove(ibufs, &ibufs[count], ibufsLen);
-		applog(LOG_DEBUG, "ft232r_read: %u bytes extra", ibufsLen);
+		applog(LOG_DEBUG, "ft232r_read: %"PRIu64" bytes extra", (uint64_t)ibufsLen);
 	}
 	return count;
 }

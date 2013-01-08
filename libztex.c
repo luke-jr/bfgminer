@@ -601,7 +601,7 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 
 	cnt = libusb_get_device_list(NULL, &list);
 	if (unlikely(cnt < 0)) {
-		applog(LOG_ERR, "Ztex scan devices: Failed to list usb devices with err %d", cnt);
+		applog(LOG_ERR, "Ztex scan devices: Failed to list usb devices with err %"PRId64, (int64_t)cnt);
 		return 0;
 	}
 
