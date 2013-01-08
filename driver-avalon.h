@@ -18,16 +18,14 @@ struct avalon_task {
 	uint8_t chip_num	:4;
 	uint8_t fan_pwm_data;
 	uint8_t timeout_data;
-	uint8_t miner_num;	// Word[0]
+	uint8_t miner_num;
 
 	uint8_t nonce_elf		:1;
 	uint32_t pad0_miner_ctrl	:31;
-	uint32_t pad1_miner_ctrl;	//Word[2:1]
+	uint32_t pad1_miner_ctrl;
 
 	uint8_t midstate[32];
 	uint8_t data[12];
-
-	// nonce_range: Word[??:14]
 } __attribute__((packed));
 
 struct avalon_result {
@@ -53,14 +51,10 @@ enum timing_mode { MODE_DEFAULT, MODE_SHORT, MODE_LONG, MODE_VALUE };
 #define INFO_HISTORY 10
 
 struct AVALON_INFO {
-	// time to calculate the golden_ob
-	uint64_t golden_hashes;
-	struct timeval golden_tv;
-
 	struct AVALON_HISTORY history[INFO_HISTORY+1];
 	uint32_t min_data_count;
 
-	// seconds per Hash
+	/* seconds per Hash */
 	double Hs;
 	int read_count;
 
@@ -73,12 +67,11 @@ struct AVALON_INFO {
 	uint32_t values;
 	uint64_t hash_count_range;
 
-	// Determine the cost of history processing
-	// (which will only affect W)
+	/* Determine the cost of history processing
+	 * (which will only affect W) */
 	uint64_t history_count;
 	struct timeval history_time;
 
-	// avalon-options
 	int baud;
 	int work_division;
 	int asic_count;
@@ -86,41 +79,38 @@ struct AVALON_INFO {
 };
 
 #define AVALON_MINER_THREADS 1
-#define AVALON_GET_WORK_COUNT 20
+#define AVALON_GET_WORK_COUNT 1 // 24
 
-#define AVALON_IO_SPEED 115200
-#define AVALON_SEND_WORK_PITCH 8000
+#define AVALON_IO_SPEED 19200 // 115200
+#define AVALON_SEND_WORK_PITCH 4000 /* 4ms */
+
+#define AVALON_DEFAULT_MINER_NUM 0x18
+#define AVALON_DEFAULT_CHIP_NUM 0xA
+#define AVALON_DEFAULT_FAN_PWM 0x98
+#define AVALON_DEFAULT_TIMEOUT 0x27
+
+
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
 #define AVALON_READ_SIZE (sizeof(struct avalon_result))
 
-// Ensure the sizes are correct for the Serial read
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
 #define AVALON_READ_TIME(baud) ((double)AVALON_READ_SIZE * (double)8.0 / (double)(baud))
 
-// Fraction of a second, USB timeout is measured in
-// i.e. 10 means 1/10 of a second
 #define TIME_FACTOR 10
 
-// It's 10 per second, thus value = 10/TIME_FACTOR =
 #define AVALON_RESET_FAULT_DECISECONDS 1
 
-// In timing mode: Default starting value until an estimate can be obtained
-// 5 seconds allows for up to a ~840MH/s device
 #define AVALON_READ_COUNT_TIMING	(5 * TIME_FACTOR)
 
-// For a standard Avalon REV3 (to 5 places)
-// Since this rounds up a the last digit - it is a slight overestimate
-// Thus the hash rate will be a VERY slight underestimate
-// (by a lot less than the displayed accuracy)
-#define AVALON_REV3_HASH_TIME 0.0000000026316
+//#define AVALON_HASH_TIME 0.0000000000155
+#define AVALON_HASH_TIME (0.0000000026316)
+
 #define NANOSEC 1000000000.0
 
 #define HISTORY_SEC 60
-// Minimum how many points a single AVALON_HISTORY should have
 #define MIN_DATA_COUNT 5
-// The value above used is doubled each history until it exceeds:
 #define MAX_MIN_DATA_COUNT 100
 
 #define END_CONDITION 0x0000ffff
@@ -129,26 +119,26 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define AVA_GETS_OK 0
 #define AVA_GETS_RESTART 1
 #define AVA_GETS_TIMEOUT 2
-#define AVA_GETS_DONE 3
 
 #define AVA_SEND_ERROR -1
 #define AVA_SEND_OK 0
-#define AVA_SEND_FULL 1
+#define AVA_SEND_BUFFER_EMPTY 1
+#define AVA_SEND_BUFFER_FULL 2
 
 #define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
-#define avalon_open(devpath, baud)  avalon_open2(devpath, baud, false)
+#define avalon_open(devpath, baud)  avalon_open2(devpath, baud, true)
 
 #define avalon_init_default_task(at) avalon_init_task(at, 0, 0, 0, 0, 0, 0)
 #define avalon_close(fd) close(fd)
 
-#define AVA_BUFFER_FULL 0
-#define AVA_BUFFER_EMPTY 1
+#define AVA_BUFFER_FULL 1
+#define AVA_BUFFER_EMPTY 0
 #define avalon_buffer_full(fd)	get_serial_cts(fd)
 
-static inline void rev(uint8_t *s, size_t l)
+static void rev(unsigned char *s, size_t l)
 {
 	size_t i, j;
-	uint8_t t;
+	unsigned char t;
 
 	for (i = 0, j = l - 1; i < j; i++, j--) {
 		t = s[i];
@@ -156,5 +146,6 @@ static inline void rev(uint8_t *s, size_t l)
 		s[j] = t;
 	}
 }
+
 
 #endif	/* AVALON_H */

@@ -5502,8 +5502,6 @@ void *miner_thread(void *userdata)
 			sdiff.tv_sec = sdiff.tv_usec = 0;
 #ifdef USE_AVALON
 		} while (false);
-		for (i = 0; i < AVALON_GET_WORK_COUNT; i++)
-			free_work(work[i++]);
 #else
 		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
 		free_work(work);
