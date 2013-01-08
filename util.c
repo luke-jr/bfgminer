@@ -1427,9 +1427,6 @@ bool auth_stratum(struct pool *pool)
 		goto out;
 	}
 
-	if (!pool->stratum_notify)
-		goto out;
-
 	ret = true;
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
