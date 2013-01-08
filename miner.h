@@ -902,14 +902,8 @@ struct stratum_work {
 	bool opaque;
 };
 
-#define RECVSIZE 8192
-#define RBUFSIZE (RECVSIZE + 4)
-
-struct data_buffer {
-	void		*buf;
-	size_t		len;
-	curl_socket_t	*idlemarker;
-};
+#define RBUFSIZE 8192
+#define RECVSIZE (RBUFSIZE - 4)
 
 struct pool {
 	int pool_no;
@@ -984,7 +978,8 @@ struct pool {
 	char *stratum_port;
 	CURL *stratum_curl;
 	SOCKETTYPE sock;
-	struct data_buffer readbuf;
+	char *sockbuf;
+	size_t sockbuf_size;
 	char *sockaddr_url; /* stripped url used for sockaddr */
 	char *nonce1;
 	uint32_t nonce2;
