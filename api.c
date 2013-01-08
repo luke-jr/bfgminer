@@ -1761,6 +1761,9 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 
 	struct cgpu_info *cgpu = devices[dev];
 
+	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s%u",
+			id, dev, cgpu->drv->name, cgpu->device_id);
+
 	if (cgpu->deven != DEV_DISABLED) {
 		message(io_data, MSG_PGALRENA, id, NULL, isjson);
 		return;
@@ -1774,10 +1777,11 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 #endif
 
 	for (i = 0; i < mining_threads; i++) {
-		pga = thr_info[i].cgpu->device_id;
+		pga = thr_info[i].cgpu->cgminer_id;
 		if (pga == dev) {
 			thr = &thr_info[i];
 			cgpu->deven = DEV_ENABLED;
+			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
 			tq_push(thr->q, &ping);
 		}
 	}
@@ -1813,6 +1817,9 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	struct cgpu_info *cgpu = devices[dev];
+
+	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s%u",
+			id, dev, cgpu->drv->name, cgpu->device_id);
 
 	if (cgpu->deven == DEV_DISABLED) {
 		message(io_data, MSG_PGALRDIS, id, NULL, isjson);
@@ -2066,6 +2073,9 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
+	applog(LOG_DEBUG, "API: request to gpuenable gpuid %d %s%u",
+			id, gpus[id].drv->name, gpus[id].device_id);
+
 	if (gpus[id].deven != DEV_DISABLED) {
 		message(io_data, MSG_ALRENA, id, NULL, isjson);
 		return;
@@ -2079,10 +2089,9 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 				message(io_data, MSG_GPUMRE, id, NULL, isjson);
 				return;
 			}
-
 			gpus[id].deven = DEV_ENABLED;
+			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
 			tq_push(thr->q, &ping);
-
 		}
 	}
 
@@ -2108,6 +2117,9 @@ static void gpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		message(io_data, MSG_INVGPU, id, NULL, isjson);
 		return;
 	}
+
+	applog(LOG_DEBUG, "API: request to gpudisable gpuid %d %s%u",
+			id, gpus[id].drv->name, gpus[id].device_id);
 
 	if (gpus[id].deven == DEV_DISABLED) {
 		message(io_data, MSG_ALRDIS, id, NULL, isjson);
