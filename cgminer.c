@@ -4627,8 +4627,9 @@ static void stratum_resumed(struct pool *pool)
 {
 	if (!pool->stratum_notify)
 		return;
+	if (!pool_tclear(pool, &pool->idle))
+		return;
 	applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
-	pool_tclear(pool, &pool->idle);
 	pool_resus(pool);
 }
 
