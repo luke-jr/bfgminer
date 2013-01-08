@@ -993,6 +993,7 @@ struct pool {
 	bool stratum_active;
 	time_t last_work_time;  /* only set for Stratum right now */
 	bool stratum_auth;
+	bool stratum_notify;
 	struct stratum_work swork;
 	pthread_t stratum_thread;
 	pthread_mutex_t stratum_lock;

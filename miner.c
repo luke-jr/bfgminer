@@ -5650,6 +5650,15 @@ static void wait_lpcurrent(struct pool *pool);
 static void pool_resus(struct pool *pool);
 static void gen_stratum_work(struct pool *pool, struct work *work);
 
+static void stratum_resumed(struct pool *pool)
+{
+	if (!pool->stratum_notify)
+		return;
+	applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
+	pool_tclear(pool, &pool->idle);
+	pool_resus(pool);
+}
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -5734,10 +5743,7 @@ static void *stratum_thread(void *userdata)
 
 		/* Check this pool hasn't died while being a backup pool and
 		 * has not had its idle flag cleared */
-		if (pool_tclear(pool, &pool->idle)) {
-			applog(LOG_INFO, "Stratum connection to pool %d resumed", pool->pool_no);
-			pool_resus(pool);
-		}
+		stratum_resumed(pool);
 
 		if (!parse_method(pool, s) && !parse_stratum_response(pool, s))
 			applog(LOG_INFO, "Unknown stratum msg: %s", s);
