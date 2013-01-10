@@ -2732,8 +2732,6 @@ static void disable_curses(void)
 }
 #endif
 
-static void print_summary(void);
-
 static void __kill_work(void)
 {
 	struct thr_info *thr;
@@ -3915,6 +3913,20 @@ void write_config(FILE *fcfg)
 	json_escape_free();
 }
 
+void zero_bestshare(void)
+{
+	int i;
+
+	best_diff = 0;
+	memset(best_share, 0, 8);
+	suffix_string(best_diff, best_share, 0);
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+		pool->best_diff = 0;
+	}
+}
+
 void zero_stats(void)
 {
 	int i;
@@ -3931,10 +3943,7 @@ void zero_stats(void)
 	total_go = 0;
 	total_ro = 0;
 	total_secs = 1.0;
-	best_diff = 0;
 	total_diff1 = 0;
-	memset(best_share, 0, 8);
-	suffix_string(best_diff, best_share, 0);
 	found_blocks = 0;
 	total_diff_accepted = 0;
 	total_diff_rejected = 0;
@@ -3956,8 +3965,9 @@ void zero_stats(void)
 		pool->diff_rejected = 0;
 		pool->diff_stale = 0;
 		pool->last_share_diff = 0;
-		pool->best_diff = 0;
 	}
+
+	zero_bestshare();
 
 	mutex_lock(&hash_lock);
 	for (i = 0; i < total_devices; ++i) {
@@ -5961,7 +5971,7 @@ static void log_print_status(struct cgpu_info *cgpu)
 	applog(LOG_WARNING, "%s", logline);
 }
 
-static void print_summary(void)
+void print_summary(void)
 {
 	struct timeval diff;
 	int hours, mins, secs, i;

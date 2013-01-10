@@ -387,6 +387,11 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_PGASETERR 93
 #endif
 
+#define MSG_ZERMIS 94
+#define MSG_ZERINV 95
+#define MSG_ZERSUM 96
+#define MSG_ZERNOSUM 97
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -559,6 +564,10 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_PGASETOK, PARAM_BOTH,	"PGA %d set OK" },
  { SEVERITY_ERR,   MSG_PGASETERR, PARAM_BOTH,	"PGA %d set failed: %s" },
 #endif
+ { SEVERITY_ERR,   MSG_ZERMIS,	PARAM_NONE,	"Missing zero parameters" },
+ { SEVERITY_ERR,   MSG_ZERINV,	PARAM_STR,	"Invalid zero parameter '%s'" },
+ { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
+ { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -3212,6 +3221,54 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 }
 #endif
 
+static void dozero(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_ZERMIS, 0, NULL, isjson);
+		return;
+	}
+
+	char *sum = strchr(param, ',');
+	if (sum)
+		*(sum++) = '\0';
+	if (!sum || !*sum) {
+		message(io_data, MSG_MISBOOL, 0, NULL, isjson);
+		return;
+	}
+
+	bool all = false;
+	bool bs = false;
+	if (strcasecmp(param, "all") == 0)
+		all = true;
+	else if (strcasecmp(param, "bestshare") == 0)
+		bs = true;
+
+	if (all == false && bs == false) {
+		message(io_data, MSG_ZERINV, 0, param, isjson);
+		return;
+	}
+
+	*sum = tolower(*sum);
+	if (*sum != 't' && *sum != 'f') {
+		message(io_data, MSG_INVBOOL, 0, NULL, isjson);
+		return;
+	}
+
+	bool dosum = (*sum == 't');
+	if (dosum)
+		print_summary();
+
+	if (all)
+		zero_stats();
+	if (bs)
+		zero_bestshare();
+
+	if (dosum)
+		message(io_data, MSG_ZERSUM, 0, all ? "All" : "BestShare", isjson);
+	else
+		message(io_data, MSG_ZERNOSUM, 0, all ? "All" : "BestShare", isjson);
+}
+
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -3271,6 +3328,7 @@ struct CMDS {
 #ifdef HAVE_AN_FPGA
 	{ "pgaset",		pgaset,		true },
 #endif
+	{ "zero",		dozero,		true },
 	{ NULL,			NULL,		false }
 };
 

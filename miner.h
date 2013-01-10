@@ -759,6 +759,7 @@ extern void api(int thr_id);
 extern struct pool *current_pool(void);
 extern int enabled_pools;
 extern bool detect_stratum(struct pool *pool, char *url);
+extern void print_summary(void);
 extern struct pool *add_pool(void);
 extern void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
@@ -1077,6 +1078,8 @@ extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
+extern void zero_bestshare(void);
+extern void zero_stats(void);
 extern void default_save_file(char *filename);
 extern bool log_curses_only(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);

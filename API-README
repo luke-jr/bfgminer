@@ -347,6 +347,18 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               The current options are:
                                MMQ opt=clock val=160 to 230 (and a multiple of 2)
 
+ zero|Which,true/false (*)
+               none           There is no reply section just the STATUS section
+                              stating that the zero, and optional summary, was done
+                              If Which='all', all normal cgminer and API statistics
+                              will be zeroed other than the numbers displayed by the
+                              usbstats and stats commands
+                              If Which='bestshare', only the 'Best Share' values
+                              are zeroed for each pool and the global 'Best Share'
+                              The true/false option determines if a full summary is
+                              shown on the cgminer display like is normally displayed
+                              on exit.
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
@@ -401,6 +413,9 @@ Feature Changelog for external applications using the API:
 
 
 API V1.24
+
+Added API commands:
+ 'zero'
 
 Modified API commands:
  'pools' - add 'Best Share'
