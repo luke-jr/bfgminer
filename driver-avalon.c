@@ -72,8 +72,7 @@ static int avalon_init_task(struct avalon_task *at,
 	at->chip_num = (chip_num ? chip_num : AVALON_DEFAULT_CHIP_NUM);
 	at->miner_num = (miner_num ? miner_num : AVALON_DEFAULT_MINER_NUM);
 
-	/* Only send nonce_elf after RESET checkout the avalon_reset() */
-	at->nonce_elf = (reset ? 1 : 0);	/* 1: nonce_range*/
+	at->nonce_elf = 1;
 
 	return 0;
 }
@@ -92,34 +91,35 @@ static int avalon_send_task(int fd, const struct avalon_task *at)
 	uint8_t *buff;
 	int nr_len;
 
-	if (unlikely(at->reset)) {
-		nr_len = AVALON_WRITE_SIZE + 4 * at->miner_num;
-		buff = calloc(1, AVALON_WRITE_SIZE + nr_len);
-		if (!buff)
-			return AVA_SEND_ERROR;
+	nr_len = AVALON_WRITE_SIZE + 4 * at->chip_num;
+	buff = calloc(1, AVALON_WRITE_SIZE + nr_len);
+	if (!buff)
+		return AVA_SEND_ERROR;
 
-		memcpy(buff, at, AVALON_WRITE_SIZE);
-		if (opt_debug) {
-			applog(LOG_DEBUG, "Avalon: Sent:");
-			hexdump((uint8_t *)buff, nr_len);
-		}
-		ret = write(fd, buff, nr_len);
-		free(buff);
-		if (unlikely(ret != nr_len))
-			return AVA_SEND_ERROR;
-
-	} else {
-		buff = (uint8_t *)at;
-		ret = write(fd, (uint8_t *)at, AVALON_WRITE_SIZE);
-
-		if (opt_debug) {
-			applog(LOG_DEBUG, "Avalon: Sent:");
-			hexdump((uint8_t *)at, AVALON_WRITE_SIZE);
-		}
-
-		if (unlikely(ret != AVALON_WRITE_SIZE))
-			return AVA_SEND_ERROR;
+	memcpy(buff, at, AVALON_WRITE_SIZE);
+	/* FIXME: */
+#if defined (__BIG_ENDIAN__) || defined(MIPSEB)
+	uint8_t t = 0;
+	t = (buff[0] & 0xf0) >> 4;
+	t |= ((buff[0] & (0x1 << 0)) >> 0);
+	t |= ((buff[0] & (0x1 << 1)) >> 1);
+	t |= ((buff[0] & (0x1 << 2)) >> 2);
+	t |= ((buff[0] & (0x1 << 3)) >> 3);
+	buff[0] = t;
+	buff[4] = rev8(buff[4]);
+#endif
+	if (at->reset)
+		buff[0] = 0x1d;
+	buff[2] = 0x3c;
+	buff[4] = 0x01;
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Sent(%d):", nr_len);
+		hexdump((uint8_t *)buff, nr_len);
 	}
+	ret = write(fd, buff, nr_len);
+	free(buff);
+	if (unlikely(ret != nr_len))
+		return AVA_SEND_ERROR;
 
 	p.tv_sec = 0;
 	p.tv_nsec = AVALON_SEND_WORK_PITCH;
@@ -663,6 +663,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	bulk0 = bulk1;
 	bulk1 = bulk2;
 	bulk2 = bulk_work;
+	i = 0;
 	while (true) {
 		avalon_init_default_task(&at);
 		avalon_create_task(&at, work[i++]);
@@ -677,7 +678,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			return 0;	/* This should never happen */
 		}
-		break;
 		if (ret == AVA_SEND_BUFFER_FULL) {
 			break;
 		}

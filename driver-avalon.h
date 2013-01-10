@@ -32,7 +32,7 @@ struct avalon_result {
 	uint32_t nonce;
 	uint8_t data[12];
 	uint8_t midstate[32];
-	uint8_t reserved[8];
+	uint8_t reserved[16];
 } __attribute__((packed));
 
 struct AVALON_HISTORY {
@@ -79,12 +79,12 @@ struct AVALON_INFO {
 };
 
 #define AVALON_MINER_THREADS 1
-#define AVALON_GET_WORK_COUNT 1 // 24
+#define AVALON_GET_WORK_COUNT 3 // 24
 
 #define AVALON_IO_SPEED 19200 // 115200
 #define AVALON_SEND_WORK_PITCH 4000 /* 4ms */
 
-#define AVALON_DEFAULT_MINER_NUM 0x18
+#define AVALON_DEFAULT_MINER_NUM AVALON_GET_WORK_COUNT
 #define AVALON_DEFAULT_CHIP_NUM 0xA
 #define AVALON_DEFAULT_FAN_PWM 0x98
 #define AVALON_DEFAULT_TIMEOUT 0x27
@@ -99,20 +99,16 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define AVALON_READ_TIME(baud) ((double)AVALON_READ_SIZE * (double)8.0 / (double)(baud))
 
 #define TIME_FACTOR 10
-
 #define AVALON_RESET_FAULT_DECISECONDS 1
-
 #define AVALON_READ_COUNT_TIMING	(5 * TIME_FACTOR)
 
 //#define AVALON_HASH_TIME 0.0000000000155
 #define AVALON_HASH_TIME (0.0000000026316)
-
 #define NANOSEC 1000000000.0
 
 #define HISTORY_SEC 60
 #define MIN_DATA_COUNT 5
 #define MAX_MIN_DATA_COUNT 100
-
 #define END_CONDITION 0x0000ffff
 
 #define AVA_GETS_ERROR -1
@@ -128,24 +124,24 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
 #define avalon_open(devpath, baud)  avalon_open2(devpath, baud, true)
 
-#define avalon_init_default_task(at) avalon_init_task(at, 0, 0, 0, 0, 0, 0)
+#define avalon_init_default_task(at) avalon_init_task(at, 0, 0, 0, 0x3c, 1, 3)
 #define avalon_close(fd) close(fd)
 
-#define AVA_BUFFER_FULL 1
-#define AVA_BUFFER_EMPTY 0
+#define AVA_BUFFER_FULL 0
+#define AVA_BUFFER_EMPTY 1
 #define avalon_buffer_full(fd)	get_serial_cts(fd)
 
-static void rev(unsigned char *s, size_t l)
+static inline uint8_t rev8(uint8_t d)
 {
-	size_t i, j;
-	unsigned char t;
+    int i;
+    uint8_t out = 0;
 
-	for (i = 0, j = l - 1; i < j; i++, j--) {
-		t = s[i];
-		s[i] = s[j];
-		s[j] = t;
-	}
+    /* (from left to right) */
+    for (i = 0; i < 8; i++)
+        if (d & (1 << i))
+            out |= (1 << (7 - i));
+
+    return out;
 }
-
 
 #endif	/* AVALON_H */
