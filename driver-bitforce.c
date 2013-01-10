@@ -58,9 +58,11 @@
 
 // If initialisation fails the first time,
 // sleep this amount (ms) and try again
-#define REINIT_TIME_MS 1000
-// But try this many times
-#define REINIT_COUNT 6
+#define REINIT_TIME_FIRST_MS 100
+// Max ms per sleep
+#define REINIT_TIME_MAX_MS 800
+// Keep trying up to this many us
+#define REINIT_TIME_MAX 3000000
 
 static const char *blank = "";
 
@@ -133,6 +135,8 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 	char devpath[20];
 	int err, amount;
 	char *s;
+	struct timeval init_start, init_now;
+	int init_sleep, init_count;
 
 	struct cgpu_info *bitforce = NULL;
 	bitforce = calloc(1, sizeof(*bitforce));
@@ -152,7 +156,10 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 			(int)(bitforce->usbdev->bus_number),
 			(int)(bitforce->usbdev->device_address));
 
-	int init_count = 0;
+
+	init_count = 0;
+	init_sleep = REINIT_TIME_FIRST_MS;
+	gettimeofday(&init_start, NULL);
 reinit:
 
 	bitforce_initialise(bitforce, false);
@@ -164,19 +171,22 @@ reinit:
 	}
 
 	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY)) < 0 || amount < 1) {
-		// Maybe it was still processing previous work?
-		if (++init_count <= REINIT_COUNT) {
-			if (init_count < 2) {
-				applog(LOG_WARNING, "%s detect (%s) 1st init failed - retrying (%d:%d)",
+		init_count++;
+		gettimeofday(&init_now, NULL);
+		if (us_tdiff(&init_now, &init_start) <= REINIT_TIME_MAX) {
+			if (init_count == 2) {
+				applog(LOG_WARNING, "%s detect (%s) 2nd init failed (%d:%d) - retrying",
 					bitforce->drv->dname, devpath, amount, err);
 			}
-			nmsleep(REINIT_TIME_MS);
+			nmsleep(init_sleep);
+			if ((init_sleep * 2) <= REINIT_TIME_MAX_MS)
+				init_sleep *= 2;
 			goto reinit;
 		}
 
 		if (init_count > 0)
-			applog(LOG_WARNING, "%s detect (%s) init failed %d times",
-				bitforce->drv->dname, devpath, init_count);
+			applog(LOG_WARNING, "%s detect (%s) init failed %d times %.2fs",
+				bitforce->drv->dname, devpath, init_count, tdiff(&init_now, &init_start));
 
 		if (err < 0) {
 			applog(LOG_ERR, "%s detect (%s) error identify reply (%d:%d)",
