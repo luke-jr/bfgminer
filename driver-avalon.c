@@ -88,36 +88,31 @@ static int avalon_send_task(int fd, const struct avalon_task *at)
 	size_t ret;
 	int full;
 	struct timespec p;
-	uint8_t *buff;
+	uint8_t *buf;
 	int nr_len;
 
 	nr_len = AVALON_WRITE_SIZE + 4 * at->chip_num;
-	buff = calloc(1, AVALON_WRITE_SIZE + nr_len);
-	if (!buff)
+	buf = calloc(1, AVALON_WRITE_SIZE + nr_len);
+	if (!buf)
 		return AVA_SEND_ERROR;
 
-	memcpy(buff, at, AVALON_WRITE_SIZE);
-	/* FIXME: */
-#if defined (__BIG_ENDIAN__) || defined(MIPSEB)
-	uint8_t t = 0;
-	t = (buff[0] & 0xf0) >> 4;
-	t |= ((buff[0] & (0x1 << 0)) >> 0);
-	t |= ((buff[0] & (0x1 << 1)) >> 1);
-	t |= ((buff[0] & (0x1 << 2)) >> 2);
-	t |= ((buff[0] & (0x1 << 3)) >> 3);
-	buff[0] = t;
-	buff[4] = rev8(buff[4]);
+	memcpy(buf, at, AVALON_WRITE_SIZE);
+#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
+	uint8_t tt = 0;
+	tt = (buf[0] & 0x0f) << 4;
+	tt |= ((buf[0] & 0x10) ? (1 << 3) : 0);
+	tt |= ((buf[0] & 0x20) ? (1 << 2) : 0);
+	tt |= ((buf[0] & 0x40) ? (1 << 1) : 0);
+	tt |= ((buf[0] & 0x80) ? (1 << 0) : 0);
+	buf[0] = tt;
+	buf[4] = rev8(buf[4]);
 #endif
-	if (at->reset)
-		buff[0] = 0x1d;
-	buff[2] = 0x3c;
-	buff[4] = 0x01;
 	if (opt_debug) {
 		applog(LOG_DEBUG, "Avalon: Sent(%d):", nr_len);
-		hexdump((uint8_t *)buff, nr_len);
+		hexdump((uint8_t *)buf, nr_len);
 	}
-	ret = write(fd, buff, nr_len);
-	free(buff);
+	ret = write(fd, buf, nr_len);
+	free(buf);
 	if (unlikely(ret != nr_len))
 		return AVA_SEND_ERROR;
 
