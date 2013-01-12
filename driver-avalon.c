@@ -195,13 +195,13 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	memset(result, 0, AVALON_READ_SIZE);
 	ret = avalon_gets(fd, result, read_count, thr, tv_finish);
 
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: get:");
-		hexdump((uint8_t *)result, AVALON_READ_SIZE);
-	}
-
-	if (ret == AVA_GETS_OK)
+	if (ret == AVA_GETS_OK) {
+		if (opt_debug) {
+			applog(LOG_DEBUG, "Avalon: get:");
+			hexdump((uint8_t *)result, AVALON_READ_SIZE);
+		}
 		memcpy((uint8_t *)ar, result, AVALON_READ_SIZE);
+	}
 
 	return ret;
 }
@@ -212,8 +212,10 @@ static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
 	uint8_t data[12];
 	int i;
 
-	if (!work)
-		return -1;
+	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+		if (!work || !work[i])
+			return -1;
+	}
 
 	*nonce = ar->nonce;
 #if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
@@ -601,7 +603,8 @@ static void avalon_free_work(struct work **work)
 
 	/* FIXME: how do we do the free_work() if we buffer the 3 bulk taskes */
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++)
-		free_work(work[i++]);
+		if (work[i])
+			free_work(work[i++]);
 }
 static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			       __maybe_unused int64_t max_nonce)
@@ -613,9 +616,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	struct AVALON_INFO *info;
 	struct avalon_task at;
 	struct avalon_result ar;
-	static struct work **bulk0 = NULL;
-	static struct work **bulk1 = NULL;
-	static struct work **bulk2 = NULL;
+	static struct work *bulk0[3] = {NULL, NULL, NULL};
+	static struct work *bulk1[3] = {NULL, NULL, NULL};
+	static struct work *bulk2[3] = {NULL, NULL, NULL};
 
 
 	struct work **work = NULL;
@@ -623,7 +626,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 
 	uint32_t nonce;
 	int64_t hash_count;
-	int i, work_i;
+	int i, work_i0, work_i1, work_i2;
 	int read_count;
 	int count;
 	struct timeval tv_start, tv_finish, elapsed;
@@ -655,9 +658,12 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	tcflush(fd, TCOFLUSH);
 #endif
 	work = bulk_work;
-	bulk0 = bulk1;
-	bulk1 = bulk2;
-	bulk2 = bulk_work;
+	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+		bulk0[i] = bulk1[i];
+		bulk1[i] = bulk2[i];
+		bulk2[i] = bulk_work[i];
+	}
+
 	i = 0;
 	while (true) {
 		avalon_init_default_task(&at);
@@ -686,6 +692,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 
 	/* count may != AVALON_GET_WORK_COUNT */
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+		work[i]->blk.nonce = 0xffffffff;
+
+		work_i0 = work_i1 = work_i2 = -1;
 		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
 		if (ret == AVA_GETS_ERROR) {
 			avalon_free_work(bulk0);
@@ -696,13 +705,15 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			return 0;
 		}
-		work_i = avalon_decode_nonce(work, &ar, &nonce);
-		//work_i = avalon_decode_nonce(bulk0, &ar, &nonce);
-		if (work_i < 0) {
-			applog(LOG_DEBUG, "Avalon: can not match nonce to work");
-			continue;
-		}
-		work[work_i]->blk.nonce = 0xffffffff;
+		work_i0 = avalon_decode_nonce(bulk0, &ar, &nonce);
+		if (work_i0 < 0)
+			applog(LOG_DEBUG, "Avalon: can not match nonce to bulk0");
+		work_i1 = avalon_decode_nonce(bulk1, &ar, &nonce);
+		if (work_i1 < 0)
+			applog(LOG_DEBUG, "Avalon: can not match nonce to bulk1");
+		work_i2 = avalon_decode_nonce(bulk2, &ar, &nonce);
+		if (work_i2 < 0)
+			applog(LOG_DEBUG, "Avalon: can not match nonce to bulk2");
 
 		/* aborted before becoming idle, get new work */
 		if (ret == AVA_GETS_TIMEOUT || ret == AVA_GETS_RESTART) {
@@ -725,11 +736,18 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			       estimate_hashes, elapsed.tv_sec, elapsed.tv_usec);
 
 			avalon_free_work(bulk0);
-			return estimate_hashes;
+			continue;
+			//return estimate_hashes;
 		}
 
 		curr_hw_errors = avalon->hw_errors;
-		submit_nonce(thr, work[work_i], nonce);
+		if (work_i0 >= 0)
+			submit_nonce(thr, bulk0[work_i0], nonce);
+		if (work_i1 >= 0)
+			submit_nonce(thr, bulk1[work_i1], nonce);
+		if (work_i2 >= 0)
+			submit_nonce(thr, bulk2[work_i2], nonce);
+
 		was_hw_error = (curr_hw_errors > avalon->hw_errors);
 
 		/* Force a USB close/reopen on any hw error */
@@ -749,6 +767,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			avalon_free_work(bulk0);
 		}
 	}
+	avalon_free_work(bulk0);
 
 	if (opt_debug || info->do_avalon_timing)
 		timersub(&tv_finish, &tv_start, &elapsed);
