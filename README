@@ -457,7 +457,7 @@ The block display shows:
 Block: 0074c5e482e34a506d2a051a...  Started: [17:17:22]  Best share: 2.71K
 
 This shows a short stretch of the current block, when the new block started,
-and the all time best difficulty share you've submitted since starting cgminer
+and the all time best difficulty share you've found since starting cgminer
 this time.
 
 
