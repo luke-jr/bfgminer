@@ -275,7 +275,7 @@ static int avalon_reset(int fd)
 	}
 
 	p.tv_sec = 1;
-	p.tv_nsec = AVALON_SEND_WORK_PITCH;
+	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
 
 	applog(LOG_ERR, "Avalon: Reset succeeded");
@@ -702,7 +702,15 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	gettimeofday(&tv_start, NULL);
 
 	/* count may != AVALON_GET_WORK_COUNT */
-	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+	while(true) {
+		full = avalon_buffer_full(fd);
+		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
+		       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
+		if (full == AVA_BUFFER_EMPTY) {
+			applog(LOG_DEBUG, "Avalon: Finished bulk task!");
+			break;
+		}
+
 		work_i0 = work_i1 = work_i2 = -1;
 		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
 		if (ret == AVA_GETS_ERROR) {
@@ -768,16 +776,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		hash_count = (nonce & info->nonce_mask);
 		hash_count++;
 		hash_count *= info->asic_count;
-
-		full = avalon_buffer_full(fd);
-		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
-		       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
-
-		if (full == AVA_BUFFER_EMPTY) {
-			applog(LOG_DEBUG, "Avalon: Finished bulk task!");
-			avalon_free_work(bulk0);
-			break;
-		}
 	}
 	avalon_free_work(bulk0);
 
