@@ -26,14 +26,14 @@ struct avalon_task {
 
 	uint8_t midstate[32];
 	uint8_t data[12];
-} __attribute__((packed));
+} __attribute__((packed, aligned(4)));
 
 struct avalon_result {
 	uint32_t nonce;
 	uint8_t data[12];
 	uint8_t midstate[32];
 	uint8_t reserved[16];
-} __attribute__((packed));
+} __attribute__((packed, aligned(4)));
 
 struct AVALON_HISTORY {
 	struct timeval finish;
