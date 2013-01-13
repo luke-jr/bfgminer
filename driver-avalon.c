@@ -226,7 +226,7 @@ static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
 	}
 
 	*nonce = ar->nonce;
-#if !defined (__BIG_ENDIAN__) && !defined(MIPSEB)
+#if defined (__BIG_ENDIAN__) || defined(MIPSEB)
 	*nonce = swab32(*nonce);
 #endif
 
