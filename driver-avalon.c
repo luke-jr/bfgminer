@@ -1,5 +1,4 @@
 /*
- * Copyright 2012 Luke Dashjr
  * Copyright 2012 2013 Xiangfu <xiangfu@openmobilefree.com>
  * Copyright 2012 Andrew Smith
  *
@@ -219,7 +218,6 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
 			       uint32_t *nonce)
 {
-	uint8_t data[12];
 	int i;
 
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
@@ -232,18 +230,15 @@ static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
 	*nonce = swab32(*nonce);
 #endif
 
-	memcpy(data, ar->data, 12);
-
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		if (!memcmp(data, work[i]->data + 64, 12))
+		if (!memcmp(ar->data, work[i]->data + 64, 12) && 
+		    !memcmp(ar->midstate, work[i]->midstate, 32))
 			break;
 	}
-	applog(LOG_DEBUG, "Avalon: match to work: %d", i);
-
 	if (i == AVALON_GET_WORK_COUNT)
 		return -1;
 
-	i -= 1;
+	applog(LOG_DEBUG, "Avalon: match to work: %d", i);
 	return i;
 }
 
@@ -678,7 +673,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	i = 0;
 	while (true) {
 		avalon_init_default_task(&at);
-		avalon_create_task(&at, work[i++]);
+		avalon_create_task(&at, work[i]);
 		ret = avalon_send_task(fd, &at);
 		if (ret == AVA_SEND_ERROR) {
 			avalon_free_work(bulk0);
@@ -690,9 +685,13 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			return 0;	/* This should never happen */
 		}
-		if (ret == AVA_SEND_BUFFER_FULL) {
+
+		work[i]->blk.nonce = 0xffffffff;
+
+		if (ret == AVA_SEND_BUFFER_FULL)
 			break;
-		}
+
+		i++;
 		if (i == AVALON_GET_WORK_COUNT &&
 		    ret != AVA_SEND_BUFFER_FULL) {
 			return 0xffffffff;
@@ -704,8 +703,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 
 	/* count may != AVALON_GET_WORK_COUNT */
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		work[i]->blk.nonce = 0xffffffff;
-
 		work_i0 = work_i1 = work_i2 = -1;
 		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
 		if (ret == AVA_GETS_ERROR) {
@@ -718,19 +715,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			return 0;
 		}
-		work_i0 = avalon_decode_nonce(bulk0, &ar, &nonce);
-		if (work_i0 < 0)
-			applog(LOG_DEBUG,
-			       "Avalon: can not match nonce to bulk0");
-		work_i1 = avalon_decode_nonce(bulk1, &ar, &nonce);
-		if (work_i1 < 0)
-			applog(LOG_DEBUG,
-			       "Avalon: can not match nonce to bulk1");
-		work_i2 = avalon_decode_nonce(bulk2, &ar, &nonce);
-		if (work_i2 < 0)
-			applog(LOG_DEBUG,
-			       "Avalon: can not match nonce to bulk2");
-
 		/* aborted before becoming idle, get new work */
 		if (ret == AVA_GETS_TIMEOUT || ret == AVA_GETS_RESTART) {
 			timersub(&tv_finish, &tv_start, &elapsed);
@@ -751,10 +735,21 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			       estimate_hashes, elapsed.tv_sec,
 			       elapsed.tv_usec);
 
-			avalon_free_work(bulk0);
 			continue;
 			//return estimate_hashes;
 		}
+		work_i0 = avalon_decode_nonce(bulk0, &ar, &nonce);
+		if (work_i0 < 0)
+			applog(LOG_DEBUG,
+			       "Avalon: can not match nonce to bulk0");
+		work_i1 = avalon_decode_nonce(bulk1, &ar, &nonce);
+		if (work_i1 < 0)
+			applog(LOG_DEBUG,
+			       "Avalon: can not match nonce to bulk1");
+		work_i2 = avalon_decode_nonce(bulk2, &ar, &nonce);
+		if (work_i2 < 0)
+			applog(LOG_DEBUG,
+			       "Avalon: can not match nonce to bulk2");
 
 		curr_hw_errors = avalon->hw_errors;
 		if (work_i0 >= 0)
@@ -781,6 +776,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		if (full == AVA_BUFFER_EMPTY) {
 			applog(LOG_DEBUG, "Avalon: Finished bulk task!");
 			avalon_free_work(bulk0);
+			break;
 		}
 	}
 	avalon_free_work(bulk0);
