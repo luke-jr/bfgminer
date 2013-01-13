@@ -52,21 +52,30 @@ static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
 			    uint8_t timeout, uint8_t chip_num, uint8_t miner_num)
 {
+	static bool first = true;
+
 	if (!at)
 		return -1;
 
 	memset(at, 0, sizeof(struct avalon_task));
 
-	at->reset = (reset ? 1 : 0);
-	at->flush_fifo = (ff ? 1 : 0);
+	if (reset) {
+		at->reset = 1;
+		first = true;
+	}
 
-	at->fan_eft = (fan ? 1 : 0);	/* 1: fan_pwm_data */
+	at->flush_fifo = (ff ? 1 : 0);
+	at->fan_eft = (fan ? 1 : 0);
 	at->fan_pwm_data = (fan ? fan : AVALON_DEFAULT_FAN_PWM);
 
-	/* 1: timeout_data miner_num, chip_num */
-	at->timer_eft = (timeout ? 1 : 0);
-	at->timer_eft = (chip_num ? 1 : 0);
-	at->timer_eft = (miner_num ? 1 : 0);
+	if (timeout || chip_num || miner_num) {
+		at->timer_eft = 1;
+	}
+	if (first && !at->reset) {
+		at->fan_eft = 1;
+		at->timer_eft = 1;
+		first = false;
+	}
 
 	at->timeout_data = (timeout ? timeout : AVALON_DEFAULT_TIMEOUT);
 	at->chip_num = (chip_num ? chip_num : AVALON_DEFAULT_CHIP_NUM);
@@ -245,9 +254,13 @@ static int avalon_reset(int fd)
 	int ret, i;
 	struct timespec p;
 
-	avalon_init_task(&at, 1, 0, 0x98, 0x27,
-			 1,	/* chip_num */
-			 3);	/* miner_num */
+	avalon_init_task(&at,
+			 1,
+			 0,
+			 AVALON_DEFAULT_FAN_PWM,
+			 AVALON_DEFAULT_TIMEOUT,
+			 AVALON_DEFAULT_CHIP_NUM,
+			 AVALON_DEFAULT_MINER_NUM);
 	ret = avalon_send_task(fd, &at);
 	if (ret == AVA_SEND_ERROR)
 		return 1;
@@ -266,7 +279,7 @@ static int avalon_reset(int fd)
 	}
 
 	p.tv_sec = 1;
-	p.tv_nsec = 4000;
+	p.tv_nsec = AVALON_SEND_WORK_PITCH;
 	nanosleep(&p, NULL);
 
 	applog(LOG_ERR, "Avalon: Reset succeeded");

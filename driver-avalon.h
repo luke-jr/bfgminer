@@ -79,16 +79,15 @@ struct AVALON_INFO {
 };
 
 #define AVALON_MINER_THREADS 1
-#define AVALON_GET_WORK_COUNT 3 // 24
 
 #define AVALON_IO_SPEED 19200 // 115200
 #define AVALON_SEND_WORK_PITCH 40000000 /* 4ms */
 
-#define AVALON_DEFAULT_MINER_NUM AVALON_GET_WORK_COUNT
-#define AVALON_DEFAULT_CHIP_NUM 0xA
+#define AVALON_GET_WORK_COUNT 3 // 24
 #define AVALON_DEFAULT_FAN_PWM 0x98
-#define AVALON_DEFAULT_TIMEOUT 0x27
-
+#define AVALON_DEFAULT_TIMEOUT 0x3c // 0x27
+#define AVALON_DEFAULT_MINER_NUM AVALON_GET_WORK_COUNT
+#define AVALON_DEFAULT_CHIP_NUM 0x1 // 0xA
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
 #define AVALON_READ_SIZE (sizeof(struct avalon_result))
@@ -124,7 +123,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
 #define avalon_open(devpath, baud)  avalon_open2(devpath, baud, true)
 
-#define avalon_init_default_task(at) avalon_init_task(at, 0, 0, 0, 0x3c, 1, 3)
+#define avalon_init_default_task(at) avalon_init_task(at, 0, 0, 0, 0, 0, 0)
 #define avalon_close(fd) close(fd)
 
 #define AVA_BUFFER_FULL 0
