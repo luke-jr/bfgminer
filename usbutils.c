@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Andrew Smith
+ * Copyright 2012-2013 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -15,6 +15,10 @@
 #include "logging.h"
 #include "miner.h"
 #include "usbutils.h"
+
+#define NODEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
+			(err) == LIBUSB_ERROR_PIPE || \
+			(err) == LIBUSB_ERROR_OTHER)
 
 #ifdef USE_ICARUS
 #define DRV_ICARUS 1
@@ -161,6 +165,7 @@ static int next_stat = 0;
 
 static const char **usb_commands;
 
+static const char *C_REJECTED_S = "RejectedNoDevice";
 static const char *C_PING_S = "Ping";
 static const char *C_CLEAR_S = "Clear";
 static const char *C_REQUESTVERSION_S = "RequestVersion";
@@ -551,6 +556,7 @@ static void cgusb_check_init()
 		// use constants so the stat generation is very quick
 		// and the association between number and name can't
 		// be missalined easily
+		usb_commands[C_REJECTED] = C_REJECTED_S;
 		usb_commands[C_PING] = C_PING_S;
 		usb_commands[C_CLEAR] = C_CLEAR_S;
 		usb_commands[C_REQUESTVERSION] = C_REQUESTVERSION_S;
@@ -673,8 +679,7 @@ static void release(uint8_t bus_number, uint8_t device_address, bool lock)
 	if (lock)
 		mutex_lock(list_lock);
 
-	usb_tmp = usb_head;
-	if (usb_tmp)
+	if ((usb_tmp = usb_head))
 		do {
 			if (bus_number == usb_tmp->bus_number
 			&&  device_address == usb_tmp->device_address) {
@@ -698,6 +703,8 @@ static void release(uint8_t bus_number, uint8_t device_address, bool lock)
 	if (usb_tmp->next == usb_tmp) {
 		usb_head = NULL;
 	} else {
+		if (usb_head == usb_tmp)
+			usb_head = usb_tmp->next;
 		usb_tmp->next->prev = usb_tmp->prev;
 		usb_tmp->prev->next = usb_tmp->next;
 	}
@@ -719,13 +726,6 @@ static void release_dev(libusb_device *dev, bool lock)
 	release(bus_number, device_address, lock);
 }
 
-#if 0
-static void release_cgusb(struct cg_usb_device *cgusb, bool lock)
-{
-	release(cgusb->bus_number, cgusb->device_address, lock);
-}
-#endif
-
 static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 {
 	if (cgusb->serial_string && cgusb->serial_string != BLANK)
@@ -739,6 +739,8 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 
 	free(cgusb->descriptor);
 
+	free(cgusb->found);
+
 	free(cgusb);
 
 	return NULL;
@@ -749,6 +751,31 @@ void usb_uninit(struct cgpu_info *cgpu)
 	libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
 	libusb_close(cgpu->usbdev->handle);
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
+}
+
+void release_cgpu(struct cgpu_info *cgpu)
+{
+	struct cg_usb_device *cgusb = cgpu->usbdev;
+	uint8_t bus_number;
+	uint8_t device_address;
+	int i;
+
+	cgpu->nodev = true;
+
+	// Any devices sharing the same USB device should be marked also
+	// Currently only MMQ shares a USB device
+	for (i = 0; i < total_devices; i++)
+		if (devices[i] != cgpu && devices[i]->usbdev == cgusb) {
+			devices[i]->nodev = true;
+			devices[i]->usbdev = NULL;
+		}
+
+	bus_number = cgusb->bus_number;
+	device_address = cgusb->device_address;
+
+	usb_uninit(cgpu);
+
+	release(bus_number, device_address, true);
 }
 
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
@@ -1172,6 +1199,19 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 	memcpy(&(details->item[item].last), tv_start, sizeof(tv_start));
 	details->item[item].count++;
 }
+
+static void rejected_inc(struct cgpu_info *cgpu)
+{
+	struct cg_usb_stats_details *details;
+	int item = CMD_ERROR;
+
+	if (cgpu->usbstat < 1)
+		newstats(cgpu);
+
+	details = &(usb_stats[cgpu->usbstat - 1].details[C_REJECTED * 2 + 0]);
+
+	details->item[item].count++;
+}
 #endif
 
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, int eol, enum usb_cmds cmd, bool ftdi)
@@ -1185,6 +1225,15 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	double max, done;
 	int err, got, tot, i;
 	bool first = true;
+
+	if (cgpu->nodev) {
+		*buf = '\0';
+		*processed = 0;
+#if DO_USB_STATS
+		rejected_inc(cgpu);
+#endif
+		return LIBUSB_ERROR_NO_DEVICE;
+	}
 
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
@@ -1211,6 +1260,11 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		}
 
 		*processed = got;
+
+		if (NODEV(err)) {
+			cgpu->nodev = true;
+			release_cgpu(cgpu);
+		}
 
 		return err;
 	}
@@ -1268,6 +1322,11 @@ goteol:
 
 	*processed = tot;
 
+	if (NODEV(err)) {
+		cgpu->nodev = true;
+		release_cgpu(cgpu);
+	}
+
 	return err;
 }
 
@@ -1278,6 +1337,14 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	struct timeval tv_start, tv_finish;
 #endif
 	int err, sent;
+
+	if (cgpu->nodev) {
+		*processed = 0;
+#if DO_USB_STATS
+		rejected_inc(cgpu);
+#endif
+		return LIBUSB_ERROR_NO_DEVICE;
+	}
 
 	sent = 0;
 	STATS_TIMEVAL(&tv_start);
@@ -1291,6 +1358,11 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 
 	*processed = sent;
 
+	if (NODEV(err)) {
+		cgpu->nodev = true;
+		release_cgpu(cgpu);
+	}
+
 	return err;
 }
 
@@ -1302,12 +1374,24 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 #endif
 	int err;
 
+	if (cgpu->nodev) {
+#if DO_USB_STATS
+		rejected_inc(cgpu);
+#endif
+		return LIBUSB_ERROR_NO_DEVICE;
+	}
+
 	STATS_TIMEVAL(&tv_start);
 	err = libusb_control_transfer(usbdev->handle, request_type,
 		bRequest, wValue, wIndex, NULL, 0,
 		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
+
+	if (NODEV(err)) {
+		cgpu->nodev = true;
+		release_cgpu(cgpu);
+	}
 
 	return err;
 }

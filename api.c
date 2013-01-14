@@ -391,6 +391,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ZERINV 95
 #define MSG_ZERSUM 96
 #define MSG_ZERNOSUM 97
+#define MSG_USBNODEV 98
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -568,6 +569,9 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ZERINV,	PARAM_STR,	"Invalid zero parameter '%s'" },
  { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
  { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+ { SEVERITY_ERR,   MSG_USBNODEV, PARAM_PGA,	"PGA%d has no device" },
+#endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1570,6 +1574,9 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+		root = api_add_bool(root, "No Device", &(cgpu->nodev), false);
+#endif
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
@@ -1781,6 +1788,13 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 #if 0 /* A DISABLED device wont change status FIXME: should disabling make it WELL? */
 	if (cgpu->status != LIFE_WELL) {
 		message(io_data, MSG_PGAUNW, id, NULL, isjson);
+		return;
+	}
+#endif
+
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	if (cgpu->nodev) {
+		message(io_data, MSG_USBNODEV, id, NULL, isjson);
 		return;
 	}
 #endif

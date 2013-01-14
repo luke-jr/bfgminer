@@ -399,6 +399,7 @@ struct cgpu_info {
 	};
 #if defined(USE_MODMINER) || defined(USE_BITFORCE)
 	int usbstat;
+	bool nodev;
 #endif
 #ifdef USE_MODMINER
 	char fpgaid;

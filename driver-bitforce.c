@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Andrew Smith
+ * Copyright 2012-2013 Andrew Smith
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Con Kolivas
  *
@@ -82,12 +82,18 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: reset got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
+	if (bitforce->nodev)
+		goto failed;
+
 	// Set data control
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
 				FTDI_VALUE_DATA, bitforce->usbdev->found->interface, C_SETDATA);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setdata got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
+
+	if (bitforce->nodev)
+		goto failed;
 
 	// Set the baud
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD,
@@ -97,12 +103,18 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: setbaud got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
+	if (bitforce->nodev)
+		goto failed;
+
 	// Set Flow Control
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
 				FTDI_VALUE_FLOW, bitforce->usbdev->found->interface, C_SETFLOW);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setflowctrl got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
+
+	if (bitforce->nodev)
+		goto failed;
 
 	// Set Modem Control
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
@@ -111,6 +123,9 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: setmodemctrl got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
+	if (bitforce->nodev)
+		goto failed;
+
 	// Clear any sent data
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
 				FTDI_VALUE_PURGE_TX, bitforce->usbdev->found->interface, C_PURGETX);
@@ -118,12 +133,17 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: purgetx got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
+	if (bitforce->nodev)
+		goto failed;
+
 	// Clear any received data
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
 				FTDI_VALUE_PURGE_RX, bitforce->usbdev->found->interface, C_PURGERX);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: purgerx got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
+
+failed:
 
 	if (lock)
 		mutex_unlock(&bitforce->device_mutex);
@@ -321,6 +341,10 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	char buf[BITFORCE_BUFSIZ+1];
 	int err, amount;
 	char *s;
+
+	// Device is gone
+	if (bitforce->nodev)
+		return false;
 
 	/* Do not try to get the temperature if we're polling for a result to
 	 * minimise the chance of interleaved results */
@@ -639,6 +663,10 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 	struct cgpu_info *bitforce = thr->cgpu;
 	bool send_ret;
 	int64_t ret;
+
+	// Device is gone
+	if (bitforce->nodev)
+		return -1;
 
 	send_ret = bitforce_send_work(thr, work);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Andrew Smith
+ * Copyright 2012-2013 Andrew Smith
  * Copyright 2012 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -607,6 +607,7 @@ static bool modminer_fpga_prepare(struct thr_info *thr)
  *
  * N.B. clock must always be a multiple of 2
  */
+static const char *clocknodev = "clock failed - no device";
 static const char *clockoldwork = "clock already changed for this work";
 static const char *clocktoolow = "clock too low";
 static const char *clocktoohi = "clock too high";
@@ -619,6 +620,10 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	unsigned char cmd[6], buf[1];
 	int err, amount;
+
+	// Device is gone
+	if (modminer->nodev)
+		return clocknodev;
 
 	// Only do once if multiple shares per work or multiple reasons
 	if (!state->new_work && !force)
@@ -775,9 +780,6 @@ static bool modminer_start_work(struct thr_info *thr)
 	mutex_lock(modminer->modminer_mutex);
 
 	if ((err = usb_write(modminer, (char *)(state->next_work_cmd), 46, &amount, C_SENDWORK)) < 0 || amount != 46) {
-// TODO: err = LIBUSB_ERROR_NO_DEVICE means the MMQ disappeared
-// - need to delete it and rescan for it? (after a delay?)
-// but check all (4) disappeared
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Start work failed (%d:%d)",
@@ -806,6 +808,10 @@ static void check_temperature(struct thr_info *thr)
 	char cmd[2], temperature[2];
 	int tbytes, tamount;
 	int amount;
+
+	// Device is gone
+	if (modminer->nodev)
+		return;
 
 	if (state->one_byte_temp) {
 		cmd[0] = MODMINER_TEMP1;
@@ -891,6 +897,10 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 	double timeout;
 	int temploop;
 
+	// Device is gone
+	if (modminer->nodev)
+		return -1;
+
 	// If we are overheated it will just keep checking for results
 	// since we can't stop the work
 	// The next work will not start until the temp drops
@@ -904,9 +914,6 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 	while (1) {
 		mutex_lock(modminer->modminer_mutex);
 		if ((err = usb_write(modminer, cmd, 2, &amount, C_REQUESTWORKSTATUS)) < 0 || amount != 2) {
-// TODO: err = LIBUSB_ERROR_NO_DEVICE means the MMQ disappeared
-// - need to delete it and rescan for it? (after a delay?)
-// but check all (4) disappeared
 			mutex_unlock(modminer->modminer_mutex);
 
 			// timeoutloop never resets so the timeouts can't
@@ -1053,6 +1060,10 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 	bool startwork;
 	struct timeval tv1, tv2;
 
+	// Device is gone
+	if (thr->cgpu->nodev)
+		return -1;
+
 	// Don't start new work if overheated
 	if (state->overheated == true) {
 		gettimeofday(&tv1, NULL);
@@ -1061,6 +1072,10 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 
 		while (state->overheated == true) {
 			check_temperature(thr);
+
+			// Device is gone
+			if (thr->cgpu->nodev)
+				return -1;
 
 			if (state->overheated == true) {
 				gettimeofday(&tv2, NULL);

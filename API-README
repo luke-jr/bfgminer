@@ -419,6 +419,7 @@ Added API commands:
 
 Modified API commands:
  'pools' - add 'Best Share'
+ 'devs' and 'pga' - add 'No Device' for PGAs if MMQ or BFL compiled
 
 ----------
 

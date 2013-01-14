@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Andrew Smith
+ * Copyright 2012-2013 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -79,7 +79,8 @@ struct cg_usb_device {
 };
 
 enum usb_cmds {
-	C_PING = 0,
+	C_REJECTED = 0,
+	C_PING,
 	C_CLEAR,
 	C_REQUESTVERSION,
 	C_GETVERSION,
@@ -120,6 +121,7 @@ struct device_drv;
 struct cgpu_info;
 
 void usb_uninit(struct cgpu_info *cgpu);
+void release_cgpu(struct cgpu_info *cgpu);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
 struct api_data *api_usb_stats(int *count);
