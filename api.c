@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2012 Andrew Smith
+ * Copyright 2011-2013 Andrew Smith
  * Copyright 2011-2012 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
