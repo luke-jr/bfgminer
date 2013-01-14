@@ -145,8 +145,9 @@ static bool ztex_updateFreq(struct thr_info *thr)
 	return rv;
 }
 
-
-static uint32_t ztex_checkNonce(struct work *work, uint32_t nonce)
+static bool ztex_checkNonce(struct libztex_device *ztex,
+                            struct work *work,
+                            struct libztex_hash_data *hdata)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[80];
@@ -155,14 +156,18 @@ static uint32_t ztex_checkNonce(struct work *work, uint32_t nonce)
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
 
-	swap32[76/4] = htonl(nonce);
+	swap32[76/4] = htobe32(hdata->nonce);
 
 	swap32yes(swap32, data32, 76 / 4);
 
 	sha2(swap, 80, hash1);
 	sha2(hash1, 32, hash2);
 
-	return htonl(hash2_32[7]);
+	if (be32toh(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
+		applog(LOG_DEBUG, "%s: checkNonce failed for %08x", ztex->repr, hdata->nonce);
+		return false;
+	}
+	return true;
 }
 
 static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
@@ -267,26 +272,19 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			} else
 				lastnonce[i] = nonce;
 
-			if (ztex_checkNonce(work, nonce) != (hdata->hash7 + 0x5be0cd19)) {
-				applog(LOG_DEBUG, "%s: checkNonce failed for %08X", ztex->repr, nonce);
-
+			if (!ztex_checkNonce(ztex, work, &hdata[i])) {
 				// do not count errors in the first 500ms after sendHashData (2x250 wait time)
-				if (count > 2) {
+				if (count > 2)
 					dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
-					thr->cgpu->hw_errors++;
-					++hw_errors;
-				}
+
+				thr->cgpu->hw_errors++;
+				++hw_errors;
 			}
 
 			for (j=0; j<=ztex->extraSolutions; j++) {
 				nonce = hdata[i].goldenNonce[j];
 
 				if (nonce == ztex->offsNonces) {
-					continue;
-				}
-
-				// precheck the extraSolutions since they often fail
-				if (j > 0 && ztex_checkNonce(work, nonce) != 0) {
 					continue;
 				}
 
@@ -304,7 +302,8 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 						backlog_p = 0;
 
 					work->blk.nonce = 0xffffffff;
-					submit_nonce(thr, work, nonce);
+					if (!j || test_nonce(work, nonce, false))
+						submit_nonce(thr, work, nonce);
 					applog(LOG_DEBUG, "%s: submitted %08x (from N%dE%d)", ztex->repr, nonce, i, j);
 				}
 			}
