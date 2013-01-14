@@ -126,37 +126,52 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	mutex_init(modminer->modminer_mutex);
 	modminer->fpgaid = (char)0;
 
-	if (!usb_init(modminer, dev, found))
+	if (!usb_init(modminer, dev, found)) {
+		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
+			modminer->drv->dname,
+			(int)libusb_get_bus_number(dev),
+			(int)libusb_get_device_address(dev));
 		goto shin;
+	}
+
+	sprintf(devpath, "%d:%d",
+			(int)(modminer->usbdev->bus_number),
+			(int)(modminer->usbdev->device_address));
 
 	do_ping(modminer);
 
 	if ((err = usb_write(modminer, MODMINER_GET_VERSION, 1, &amount, C_REQUESTVERSION)) < 0 || amount != 1) {
-		applog(LOG_ERR, "ModMiner detect: send version request failed (%d:%d)", amount, err);
+		applog(LOG_ERR, "%s detect (%s) send version request failed (%d:%d)",
+			modminer->drv->dname, devpath, amount, err);
 		goto unshin;
 	}
 
 	if ((err = usb_read(modminer, buf, sizeof(buf)-1, &amount, C_GETVERSION)) < 0 || amount < 1) {
 		if (err < 0)
-			applog(LOG_ERR, "ModMiner detect: no version reply (%d)", err);
+			applog(LOG_ERR, "%s detect (%s) no version reply (%d)",
+				modminer->drv->dname, devpath, err);
 		else
-			applog(LOG_ERR, "ModMiner detect: empty version reply (%d)", amount);
+			applog(LOG_ERR, "%s detect (%s) empty version reply (%d)",
+				modminer->drv->dname, devpath, amount);
 
-		applog(LOG_DEBUG, "ModMiner detect: check the firmware");
+		applog(LOG_DEBUG, "%s detect (%s) check the firmware",
+				modminer->drv->dname, devpath);
 
 		goto unshin;
 	}
 	buf[amount] = '\0';
 	devname = strdup(buf);
-	applog(LOG_DEBUG, "ModMiner identified as: %s", devname);
+	applog(LOG_DEBUG, "%s (%s) identified as: %s", modminer->drv->dname, devpath, devname);
 
 	if ((err = usb_write(modminer, MODMINER_FPGA_COUNT, 1, &amount, C_REQUESTFPGACOUNT) < 0 || amount != 1)) {
-		applog(LOG_ERR, "ModMiner detect: FPGA count request failed (%d:%d)", amount, err);
+		applog(LOG_ERR, "%s detect (%s) FPGA count request failed (%d:%d)",
+			modminer->drv->dname, devpath, amount, err);
 		goto unshin;
 	}
 
 	if ((err = usb_read(modminer, buf, 1, &amount, C_GETFPGACOUNT)) < 0 || amount != 1) {
-		applog(LOG_ERR, "ModMiner detect: no FPGA count reply (%d:%d)", amount, err);
+		applog(LOG_ERR, "%s detect (%s) no FPGA count reply (%d:%d)",
+			modminer->drv->dname, devpath, amount, err);
 		goto unshin;
 	}
 
@@ -164,16 +179,19 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	// can detect with modminer->cgusb->serial ?
 
 	if (buf[0] == 0) {
-		applog(LOG_ERR, "ModMiner detect: zero FPGA count from %s", devname);
+		applog(LOG_ERR, "%s detect (%s) zero FPGA count from %s",
+			modminer->drv->dname, devpath, devname);
 		goto unshin;
 	}
 
 	if (buf[0] < 1 || buf[0] > 4) {
-		applog(LOG_ERR, "ModMiner detect: invalid FPGA count (%u) from %s", buf[0], devname);
+		applog(LOG_ERR, "%s detect (%s) invalid FPGA count (%u) from %s",
+			modminer->drv->dname, devpath, buf[0], devname);
 		goto unshin;
 	}
 
-	applog(LOG_DEBUG, "ModMiner %s has %u FPGAs", devname, buf[0]);
+	applog(LOG_DEBUG, "%s (%s) %s has %u FPGAs",
+		modminer->drv->dname, devpath, devname, buf[0]);
 
 	modminer->name = devname;
 
