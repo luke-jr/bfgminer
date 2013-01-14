@@ -375,8 +375,10 @@ struct cgminer_pool_stats {
 	uint32_t max_diff_count;
 	uint64_t times_sent;
 	uint64_t bytes_sent;
+	uint64_t net_bytes_sent;
 	uint64_t times_received;
 	uint64_t bytes_received;
+	uint64_t net_bytes_received;
 };
 
 struct cgpu_info {

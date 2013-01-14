@@ -116,16 +116,17 @@ $poolspage = array(
 			'POOL.Difficulty Rejected=Diff Rej',
 			'POOL.Has Stratum=Stratum', 'POOL.Stratum Active=StrAct',
 			'POOL.Has GBT=GBT', 'STATS.Times Sent=TSent',
-			'STATS.Bytes Sent=BSent', 'STATS.Times Recv=TRecv',
-			'STATS.Bytes Recv=BRecv'));
+			'STATS.Bytes Sent=BSent', 'STATS.Net Bytes Sent=NSent',
+			'STATS.Times Recv=TRecv', 'STATS.Bytes Recv=BRecv',
+			'STATS.Net Bytes Recv=NRecv'));
 #
 $poolssum = array(
  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
 			'Rejected', 'Utility', 'Hardware Errors',
 			'Work Utility'),
  'POOL+STATS' => array('POOL.Difficulty Accepted', 'POOL.Difficulty Rejected',
-			'STATS.Times Sent', 'STATS.Bytes Sent',
-			'STATS.Times Recv', 'STATS.Bytes Recv'));
+			'STATS.Times Sent', 'STATS.Bytes Sent', 'STATS.Net Bytes Sent',
+			'STATS.Times Recv', 'STATS.Bytes Recv', 'STATS.Net Bytes Recv'));
 #
 $poolsext = array(
  'POOL+STATS' => array(
@@ -133,7 +134,8 @@ $poolsext = array(
 	'group' => array('POOL.URL', 'POOL.Has Stratum', 'POOL.Stratum Active', 'POOL.Has GBT'),
 	'calc' => array('POOL.Difficulty Accepted' => 'sum', 'POOL.Difficulty Rejected' => 'sum',
 			'STATS.Times Sent' => 'sum', 'STATS.Bytes Sent' => 'sum',
-			'STATS.Times Recv' => 'sum', 'STATS.Bytes Recv' => 'sum'),
+			'STATS.Net Bytes Sent' => 'sum', 'STATS.Times Recv' => 'sum',
+			'STATS.Bytes Recv' => 'sum', 'STATS.Net Bytes Recv' => 'sum'),
 	'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 
@@ -850,12 +852,16 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Diff1 Work':
 	case 'STATS.Times Sent':
 	case 'STATS.Bytes Sent':
+	case 'STATS.Net Bytes Sent':
 	case 'STATS.Times Recv':
 	case 'STATS.Bytes Recv':
+	case 'STATS.Net Bytes Recv':
 	case 'total.Times Sent':
 	case 'total.Bytes Sent':
+	case 'total.Net Bytes Sent':
 	case 'total.Times Recv':
 	case 'total.Bytes Recv':
+	case 'total.Net Bytes Recv':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
