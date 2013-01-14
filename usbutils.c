@@ -48,14 +48,10 @@
 #endif
 
 #ifdef USE_BITFORCE
+// N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_endpoints bfl_eps[] = {
-#ifdef WIN32
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
-#else
-	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPO(2), 0 }
-#endif
 };
 #endif
 
