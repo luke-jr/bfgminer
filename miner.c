@@ -4469,7 +4469,7 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
 		if (pool->accepted || pool->rejected)
 			wlog(" Reject ratio: %.1f%%\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-		uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.bytes_received + pool->cgminer_pool_stats.bytes_sent;
+		uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.net_bytes_received + pool->cgminer_pool_stats.net_bytes_sent;
 		efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 		wlog(" Efficiency (accepted * difficulty / 2 KB): %.2f\n", efficiency);
 
@@ -4807,8 +4807,9 @@ void zero_stats(void)
 		pool->cgminer_pool_stats.max_diff_count = 0;
 		pool->cgminer_pool_stats.times_sent = 0;
 		pool->cgminer_pool_stats.bytes_sent = 0;
+		pool->cgminer_pool_stats.net_bytes_sent = 0;
 		pool->cgminer_pool_stats.times_received = 0;
-		pool->cgminer_pool_stats.times_received = 0;
+		pool->cgminer_pool_stats.net_bytes_received = 0;
 	}
 
 	zero_bestshare();
@@ -7212,7 +7213,7 @@ void print_summary(void)
 			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
 			if (pool->accepted || pool->rejected)
 				applog(LOG_WARNING, " Reject ratio: %.1f%%", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-			uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.bytes_received + pool->cgminer_pool_stats.bytes_sent;
+			uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.net_bytes_received + pool->cgminer_pool_stats.net_bytes_sent;
 			efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 			applog(LOG_WARNING, " Efficiency (accepted * difficulty / 2 KB): %.2f", efficiency);
 

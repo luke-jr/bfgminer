@@ -113,23 +113,23 @@ $poolspage = array(
 			'Utility', 'Hardware Errors=HW Errs', 'Network Blocks=Net Blks'),
  'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL',
 			'POOL.Has Stratum=Stratum', 'POOL.Stratum Active=StrAct',
-			'STATS.Bytes Sent=BSent',
-			'STATS.Bytes Recv=BRecv'));
+			'STATS.Net Bytes Sent=NSent',
+			'STATS.Net Bytes Recv=NRecv'));
 #
 $poolssum = array(
  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
 			'Rejected', 'Utility', 'Hardware Errors'),
  'POOL+STATS' => array(
-			'STATS.Bytes Sent',
-			'STATS.Bytes Recv'));
+			'STATS.Net Bytes Sent',
+			'STATS.Net Bytes Recv'));
 #
 $poolsext = array(
  'POOL+STATS' => array(
 	'where' => null,
 	'group' => array('POOL.URL', 'POOL.Has Stratum', 'POOL.Stratum Active'),
 	'calc' => array(
-			'STATS.Bytes Sent' => 'sum',
-			'STATS.Bytes Recv' => 'sum'),
+			'STATS.Net Bytes Sent' => 'sum',
+			'STATS.Net Bytes Recv' => 'sum'),
 	'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 
@@ -842,12 +842,16 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Diff1 Work':
 	case 'STATS.Times Sent':
 	case 'STATS.Bytes Sent':
+	case 'STATS.Net Bytes Sent':
 	case 'STATS.Times Recv':
 	case 'STATS.Bytes Recv':
+	case 'STATS.Net Bytes Recv':
 	case 'total.Times Sent':
 	case 'total.Bytes Sent':
+	case 'total.Net Bytes Sent':
 	case 'total.Times Recv':
 	case 'total.Bytes Recv':
+	case 'total.Net Bytes Recv':
 		$parts = explode('.', $value, 2);
 		if (count($parts) == 1)
 			$dec = '';
