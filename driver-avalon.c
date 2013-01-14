@@ -35,14 +35,6 @@
 #include "driver-avalon.h"
 #include "hexdump.c"
 
-static struct timeval history_sec = { HISTORY_SEC, 0 };
-
-static const char *MODE_DEFAULT_STR = "default";
-static const char *MODE_SHORT_STR = "short";
-static const char *MODE_LONG_STR = "long";
-static const char *MODE_VALUE_STR = "value";
-static const char *MODE_UNKNOWN_STR = "unknown";
-
 static int option_offset = -1;
 
 static struct AVALON_INFO **avalon_info;
@@ -98,7 +90,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at)
 	int full;
 	struct timespec p;
 	uint8_t *buf;
-	int nr_len;
+	size_t nr_len;
 
 	nr_len = AVALON_WRITE_SIZE + 4 * at->chip_num;
 	buf = calloc(1, AVALON_WRITE_SIZE + nr_len);
@@ -289,137 +281,19 @@ static void do_avalon_close(struct thr_info *thr)
 	avalon->device_fd = -1;
 }
 
-static const char *timing_mode_str(enum timing_mode timing_mode)
-{
-	switch(timing_mode) {
-	case MODE_DEFAULT:
-		return MODE_DEFAULT_STR;
-	case MODE_SHORT:
-		return MODE_SHORT_STR;
-	case MODE_LONG:
-		return MODE_LONG_STR;
-	case MODE_VALUE:
-		return MODE_VALUE_STR;
-	default:
-		return MODE_UNKNOWN_STR;
-	}
-}
-
-static void set_timing_mode(int this_option_offset, struct cgpu_info *avalon)
+static void set_timing_mode(struct cgpu_info *avalon)
 {
 	struct AVALON_INFO *info = avalon_info[avalon->device_id];
-	double Hs;
-	char buf[BUFSIZ+1];
-	char *ptr, *comma, *eq;
-	size_t max;
-	int i;
 
-	if (opt_icarus_timing == NULL)
-		buf[0] = '\0';
-	else {
-		ptr = opt_icarus_timing;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
+	/* Anything else in buf just uses DEFAULT mode */
+	info->Hs = AVALON_HASH_TIME;
+	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 
-		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
-		if (max > BUFSIZ)
-			max = BUFSIZ;
-		strncpy(buf, ptr, max);
-		buf[max] = '\0';
-	}
-
-	info->Hs = 0;
-	info->read_count = 0;
-
-	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
-		info->Hs = AVALON_HASH_TIME;
-		info->read_count = AVALON_READ_COUNT_TIMING;
-
-		info->timing_mode = MODE_SHORT;
-		info->do_avalon_timing = true;
-	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
-		info->Hs = AVALON_HASH_TIME;
-		info->read_count = AVALON_READ_COUNT_TIMING;
-
-		info->timing_mode = MODE_LONG;
-		info->do_avalon_timing = true;
-	} else if ((Hs = atof(buf)) != 0) {
-		info->Hs = Hs / NANOSEC;
-		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-
-		if ((eq = strchr(buf, '=')) != NULL)
-			info->read_count = atoi(eq+1);
-
-		if (info->read_count < 1)
-			info->read_count =
-				(int)(info->fullnonce * TIME_FACTOR) - 1;
-
-		if (unlikely(info->read_count < 1))
-			info->read_count = 1;
-
-		info->timing_mode = MODE_VALUE;
-		info->do_avalon_timing = false;
-	} else {
-		/* Anything else in buf just uses DEFAULT mode */
-		info->Hs = AVALON_HASH_TIME;
-		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-
-		if ((eq = strchr(buf, '=')) != NULL)
-			info->read_count = atoi(eq+1);
-
-		if (info->read_count < 1)
-			info->read_count =
-				(int)(info->fullnonce * TIME_FACTOR) - 1;
-
-		info->timing_mode = MODE_DEFAULT;
-		info->do_avalon_timing = false;
-	}
-
-	info->min_data_count = MIN_DATA_COUNT;
-
-	applog(LOG_DEBUG, "Avalon: Init: %d mode=%s read_count=%d Hs=%e",
-	       avalon->device_id, timing_mode_str(info->timing_mode),
-	       info->read_count, info->Hs);
+	info->read_count =
+		(int)(info->fullnonce * TIME_FACTOR) - 1;
 }
 
-static uint32_t mask(int work_division)
-{
-	char err_buf[BUFSIZ+1];
-	uint32_t nonce_mask = 0x7fffffff;
-
-	switch (work_division) {
-	case 1:
-		nonce_mask = 0xffffffff;
-		break;
-	case 2:
-		nonce_mask = 0x7fffffff;
-		break;
-	case 4:
-		nonce_mask = 0x3fffffff;
-		break;
-	case 8:
-		nonce_mask = 0x1fffffff;
-		break;
-	default:
-		sprintf(err_buf,
-			"Invalid2 avalon-options for work_division (%d)"
-			" must be 1, 2, 4 or 8", work_division);
-		quit(1, err_buf);
-	}
-
-	return nonce_mask;
-}
-
-static void get_options(int this_option_offset, int *baud, int *work_division,
+static void get_options(int this_option_offset, int *baud, int *miner_count,
 			int *asic_count)
 {
 	char err_buf[BUFSIZ+1];
@@ -452,7 +326,7 @@ static void get_options(int this_option_offset, int *baud, int *work_division,
 	}
 
 	*baud = AVALON_IO_SPEED;
-	*work_division = 2;
+	*miner_count = 2;
 	*asic_count = 2;
 
 	if (*buf) {
@@ -486,12 +360,12 @@ static void get_options(int this_option_offset, int *baud, int *work_division,
 				tmp = atoi(colon);
 				if (tmp == 1 || tmp == 2 ||
 				    tmp == 4 || tmp == 8) {
-					*work_division = tmp;
+					*miner_count = tmp;
 					*asic_count = tmp;
 				} else {
 					sprintf(err_buf,
 						"Invalid avalon-options for "
-						"work_division (%s) must be 1,"
+						"miner_count (%s) must be 1,"
 						" 2, 4 or 8", colon);
 					quit(1, err_buf);
 				}
@@ -499,14 +373,14 @@ static void get_options(int this_option_offset, int *baud, int *work_division,
 
 			if (colon2 && *colon2) {
 				tmp = atoi(colon2);
-				if (tmp > 0 && tmp <= *work_division)
+				if (tmp > 0 && tmp <= *miner_count)
 					*asic_count = tmp;
 				else {
 					sprintf(err_buf,
 						"Invalid avalon-options for "
 						"asic_count (%s) must be >0 "
-						"and <=work_division (%d)",
-						colon2, *work_division);
+						"and <=miner_count (%d)",
+						colon2, *miner_count);
 					quit(1, err_buf);
 				}
 			}
@@ -518,10 +392,10 @@ static bool avalon_detect_one(const char *devpath)
 {
 	struct AVALON_INFO *info;
 	int fd, ret;
-	int baud, work_division, asic_count;
+	int baud, miner_count, asic_count;
 
 	int this_option_offset = ++option_offset;
-	get_options(this_option_offset, &baud, &work_division, &asic_count);
+	get_options(this_option_offset, &baud, &miner_count, &asic_count);
 
 	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s", devpath);
 	fd = avalon_open2(devpath, baud, true);
@@ -552,8 +426,8 @@ static bool avalon_detect_one(const char *devpath)
 	       devpath, avalon->device_id);
 
 	applog(LOG_DEBUG,
-	       "Avalon: Init: %d baud=%d work_division=%d asic_count=%d",
-		avalon->device_id, baud, work_division, asic_count);
+	       "Avalon: Init: %d baud=%d miner_count=%d asic_count=%d",
+		avalon->device_id, baud, miner_count, asic_count);
 
 	avalon_info[avalon->device_id] = (struct AVALON_INFO *)
 		malloc(sizeof(struct AVALON_INFO));
@@ -565,11 +439,10 @@ static bool avalon_detect_one(const char *devpath)
 	memset(info, 0, sizeof(struct AVALON_INFO));
 
 	info->baud = baud;
-	info->work_division = work_division;
+	info->miner_count = miner_count;
 	info->asic_count = asic_count;
-	info->nonce_mask = mask(work_division);
 
-	set_timing_mode(this_option_offset, avalon);
+	set_timing_mode(avalon);
 
 	return true;
 }
@@ -633,20 +506,12 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 
 	uint32_t nonce;
 	int64_t hash_count;
-	int read_count;
-	int count;
 	struct timeval tv_start, tv_finish, elapsed;
-	struct timeval tv_history_start, tv_history_finish;
-	double Ti, Xi;
 
 	int curr_hw_errors;
 	bool was_hw_error;
 
-	struct AVALON_HISTORY *history0, *history;
-	double Hs, W, fullnonce;
 	int64_t estimate_hashes;
-	uint32_t values;
-	int64_t hash_count_range;
 
 	avalon = thr->cgpu;
 	info = avalon_info[avalon->device_id];
@@ -773,13 +638,13 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		if (was_hw_error)
 			do_avalon_close(thr);
 
-		hash_count = (nonce & info->nonce_mask);
+		hash_count = nonce;
 		hash_count++;
 		hash_count *= info->asic_count;
 	}
 	avalon_free_work(bulk0);
 
-	if (opt_debug || info->do_avalon_timing)
+	if (opt_debug)
 		timersub(&tv_finish, &tv_start, &elapsed);
 
 	if (opt_debug) {
@@ -787,109 +652,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
 		       "(%ld.%06lds)",
 		       nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
-	}
-
-	/* ignore possible end condition values ... and hw errors */
-	if (info->do_avalon_timing
-	    && !was_hw_error
-	    && ((nonce & info->nonce_mask) > END_CONDITION)
-	    && ((nonce & info->nonce_mask) <
-		(info->nonce_mask & ~END_CONDITION))) {
-		gettimeofday(&tv_history_start, NULL);
-
-		history0 = &(info->history[0]);
-
-		if (history0->values == 0)
-			timeradd(&tv_start, &history_sec, &(history0->finish));
-
-		Ti = (double)(elapsed.tv_sec)
-			+ ((double)(elapsed.tv_usec))/((double)1000000)
-			- ((double)AVALON_READ_TIME(info->baud));
-		Xi = (double)hash_count;
-		history0->sumXiTi += Xi * Ti;
-		history0->sumXi += Xi;
-		history0->sumTi += Ti;
-		history0->sumXi2 += Xi * Xi;
-
-		history0->values++;
-
-		if (history0->hash_count_max < hash_count)
-			history0->hash_count_max = hash_count;
-		if (history0->hash_count_min > hash_count ||
-		    history0->hash_count_min == 0)
-			history0->hash_count_min = hash_count;
-
-		if (history0->values >= info->min_data_count
-		    &&  timercmp(&tv_start, &(history0->finish), >)) {
-			for (i = INFO_HISTORY; i > 0; i--)
-				memcpy(&(info->history[i]),
-				       &(info->history[i-1]),
-				       sizeof(struct AVALON_HISTORY));
-
-			/* Init history0 to zero for summary calculation */
-			memset(history0, 0, sizeof(struct AVALON_HISTORY));
-
-			/* We just completed a history data set
-			 * So now recalc read_count based on the
-			 * whole history thus we will
-			 * initially get more accurate until it
-			 * completes INFO_HISTORY
-			 * total data sets */
-			count = 0;
-			for (i = 1 ; i <= INFO_HISTORY; i++) {
-				history = &(info->history[i]);
-				if (history->values >= MIN_DATA_COUNT) {
-					count++;
-
-					history0->sumXiTi += history->sumXiTi;
-					history0->sumXi += history->sumXi;
-					history0->sumTi += history->sumTi;
-					history0->sumXi2 += history->sumXi2;
-					history0->values += history->values;
-
-					if (history0->hash_count_max < history->hash_count_max)
-						history0->hash_count_max = history->hash_count_max;
-					if (history0->hash_count_min > history->hash_count_min || history0->hash_count_min == 0)
-						history0->hash_count_min = history->hash_count_min;
-				}
-			}
-
-			/* All history data */
-			Hs = (history0->values*history0->sumXiTi - history0->sumXi*history0->sumTi)
-				/ (history0->values*history0->sumXi2 - history0->sumXi*history0->sumXi);
-			W = history0->sumTi/history0->values - Hs*history0->sumXi/history0->values;
-			hash_count_range = history0->hash_count_max - history0->hash_count_min;
-			values = history0->values;
-
-			/* Initialise history0 to zero for next data set */
-			memset(history0, 0, sizeof(struct AVALON_HISTORY));
-
-			fullnonce = W + Hs * (((double)0xffffffff) + 1);
-			read_count = (int)(fullnonce * TIME_FACTOR) - 1;
-
-			info->Hs = Hs;
-			info->read_count = read_count;
-
-			info->fullnonce = fullnonce;
-			info->count = count;
-			info->W = W;
-			info->values = values;
-			info->hash_count_range = hash_count_range;
-
-			if (info->min_data_count < MAX_MIN_DATA_COUNT)
-				info->min_data_count *= 2;
-			else if (info->timing_mode == MODE_SHORT)
-				info->do_avalon_timing = false;
-
-/*			applog(LOG_WARNING, "Avalon %d Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", avalon->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);*/
-			applog(LOG_WARNING, "Avalon %d Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
-			       avalon->device_id, Hs, W, read_count, fullnonce);
-		}
-		info->history_count++;
-		gettimeofday(&tv_history_finish, NULL);
-
-		timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
-		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
 	}
 
 	return hash_count;
@@ -906,25 +668,8 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	 * If locking becomes an issue for any of them, use copy_data=true also */
 	root = api_add_int(root, "read_count", &(info->read_count), false);
 	root = api_add_double(root, "fullnonce", &(info->fullnonce), false);
-	root = api_add_int(root, "count", &(info->count), false);
-	root = api_add_hs(root, "Hs", &(info->Hs), false);
-	root = api_add_double(root, "W", &(info->W), false);
-	root = api_add_uint(root, "total_values", &(info->values), false);
-	root = api_add_uint64(root, "range", &(info->hash_count_range), false);
-	root = api_add_uint64(root, "history_count", &(info->history_count),
-			      false);
-	root = api_add_timeval(root, "history_time", &(info->history_time),
-			       false);
-	root = api_add_uint(root, "min_data_count", &(info->min_data_count),
-			    false);
-	root = api_add_uint(root, "timing_values", &(info->history[0].values),
-			    false);
-	root = api_add_const(root, "timing_mode",
-			     timing_mode_str(info->timing_mode), false);
-	root = api_add_bool(root, "is_timing", &(info->do_avalon_timing),
-			    false);
 	root = api_add_int(root, "baud", &(info->baud), false);
-	root = api_add_int(root, "work_division", &(info->work_division),
+	root = api_add_int(root, "miner_count", &(info->miner_count),
 			   false);
 	root = api_add_int(root, "asic_count", &(info->asic_count), false);
 
