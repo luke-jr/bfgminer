@@ -255,7 +255,7 @@ static bool get_expect(struct cgpu_info *modminer, FILE *f, char c)
 	}
 
 	if (buf != c) {
-		applog(LOG_ERR, "%s%u: firmware code mismatch (%c)",
+		applog(LOG_ERR, "%s%u: bitstream code mismatch (%c)",
 				modminer->drv->name, modminer->device_id, c);
 		return false;
 	}
