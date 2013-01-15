@@ -365,8 +365,8 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 				} else {
 					sprintf(err_buf,
 						"Invalid avalon-options for "
-						"miner_count (%s) must be 1 ~ 32",
-						colon);
+						"miner_count (%s) must be 1 ~ %d",
+						colon, AVALON_DEFAULT_MINER_NUM);
 					quit(1, err_buf);
 				}
 			}
@@ -378,8 +378,8 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 				else {
 					sprintf(err_buf,
 						"Invalid avalon-options for "
-						"asic_count (%s) must be 1 ~ 10 ",
-						colon2);
+						"asic_count (%s) must be 1 ~ %d",
+						colon2, AVALON_DEFAULT_CHIP_NUM);
 					quit(1, err_buf);
 				}
 			}
@@ -396,7 +396,10 @@ static bool avalon_detect_one(const char *devpath)
 	int this_option_offset = ++option_offset;
 	get_options(this_option_offset, &baud, &miner_count, &asic_count);
 
-	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s", devpath);
+	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s "
+	       "(baud=%d miner_count=%d asic_count=%d)",
+		devpath, baud, miner_count, asic_count);
+
 	fd = avalon_open2(devpath, baud, true);
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Avalon Detect: Failed to open %s", devpath);
@@ -423,10 +426,6 @@ static bool avalon_detect_one(const char *devpath)
 
 	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
 	       devpath, avalon->device_id);
-
-	applog(LOG_DEBUG,
-	       "Avalon: Init: %d baud=%d miner_count=%d asic_count=%d",
-		avalon->device_id, baud, miner_count, asic_count);
 
 	avalon_info[avalon->device_id] = (struct avalon_info *)
 		malloc(sizeof(struct avalon_info));
