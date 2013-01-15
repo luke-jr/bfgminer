@@ -228,21 +228,27 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	return ret;
 }
 
-static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
-			       uint32_t *nonce)
+static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
+			       struct avalon_result *ar, uint32_t *nonce)
 {
-	int i;
+	struct cgpu_info *avalon;
+	struct avalon_info *info;
+	int avalon_get_work_count, i;
 
 	if (!work)
 		return -1;
 
-	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+	avalon = thr->cgpu;
+	info = avalon_info[avalon->device_id];
+	avalon_get_work_count = info->miner_count;
+
+	for (i = 0; i < avalon_get_work_count; i++) {
 		if (work[i] &&
-		    !memcmp(ar->data, work[i]->data + 64, 12) && 
+		    !memcmp(ar->data, work[i]->data + 64, 12) &&
 		    !memcmp(ar->midstate, work[i]->midstate, 32))
 			break;
 	}
-	if (i == AVALON_GET_WORK_COUNT)
+	if (i == avalon_get_work_count)
 		return -1;
 
 	*nonce = ar->nonce;
@@ -516,14 +522,20 @@ static bool avalon_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void avalon_free_work(struct work **work)
+static void avalon_free_work(struct thr_info *thr, struct work **work)
 {
-	int i;
+	struct cgpu_info *avalon;
+	struct avalon_info *info;
+	int avalon_get_work_count, i;
 
 	if (!work)
 		return;
 
-	for (i = 0; i < AVALON_GET_WORK_COUNT; i++)
+	avalon = thr->cgpu;
+	info = avalon_info[avalon->device_id];
+	avalon_get_work_count = info->miner_count;
+
+	for (i = 0; i < avalon_get_work_count; i++)
 		if (work[i]) {
 			free_work(work[i]);
 			work[i] = NULL;
@@ -540,11 +552,21 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	struct avalon_info *info;
 	struct avalon_task at;
 	struct avalon_result ar;
-	static struct work *bulk0[3] = {NULL, NULL, NULL};
-	static struct work *bulk1[3] = {NULL, NULL, NULL};
-	static struct work *bulk2[3] = {NULL, NULL, NULL};
+	static struct work *bulk0[AVALON_DEFAULT_MINER_NUM] = {
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+	static struct work *bulk1[AVALON_DEFAULT_MINER_NUM] = {
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+	static struct work *bulk2[AVALON_DEFAULT_MINER_NUM] = {
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 	struct work **work = NULL;
 	int i, work_i0, work_i1, work_i2;
+	int avalon_get_work_count;
 
 	uint32_t nonce;
 	int64_t hash_count;
@@ -557,6 +579,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 
 	avalon = thr->cgpu;
 	info = avalon_info[avalon->device_id];
+	avalon_get_work_count = info->miner_count;
 
 	if (avalon->device_fd == -1)
 		if (!avalon_prepare(thr)) {
@@ -571,7 +594,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	tcflush(fd, TCOFLUSH);
 #endif
 	work = bulk_work;
-	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+	for (i = 0; i < avalon_get_work_count; i++) {
 		bulk0[i] = bulk1[i];
 		bulk1[i] = bulk2[i];
 		bulk2[i] = work[i];
@@ -585,9 +608,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		avalon_create_task(&at, work[i]);
 		ret = avalon_send_task(fd, &at);
 		if (ret == AVA_SEND_ERROR) {
-			avalon_free_work(bulk0);
-			avalon_free_work(bulk1);
-			avalon_free_work(bulk2);
+			avalon_free_work(thr, bulk0);
+			avalon_free_work(thr, bulk1);
+			avalon_free_work(thr, bulk2);
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error",
 			       avalon->device_id);
@@ -602,7 +625,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			break;
 
 		i++;
-		if (i == AVALON_GET_WORK_COUNT &&
+		if (i == avalon_get_work_count &&
 		    ret != AVA_SEND_BUFFER_FULL) {
 			return 0xffffffff;
 		}
@@ -621,9 +644,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		work_i0 = work_i1 = work_i2 = -1;
 		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
 		if (ret == AVA_GETS_ERROR) {
-			avalon_free_work(bulk0);
-			avalon_free_work(bulk1);
-			avalon_free_work(bulk2);
+			avalon_free_work(thr, bulk0);
+			avalon_free_work(thr, bulk1);
+			avalon_free_work(thr, bulk2);
 			do_avalon_close(thr);
 			applog(LOG_ERR,
 			       "AVA%i: Comms error", avalon->device_id);
@@ -653,14 +676,14 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			continue;
 		}
 		if (ret == AVA_GETS_RESTART) {
-			avalon_free_work(bulk0);
-			avalon_free_work(bulk1);
-			avalon_free_work(bulk2);
+			avalon_free_work(thr, bulk0);
+			avalon_free_work(thr, bulk1);
+			avalon_free_work(thr, bulk2);
 			continue;
 		}
-		work_i0 = avalon_decode_nonce(bulk0, &ar, &nonce);
-		work_i1 = avalon_decode_nonce(bulk1, &ar, &nonce);
-		work_i2 = avalon_decode_nonce(bulk2, &ar, &nonce);
+		work_i0 = avalon_decode_nonce(thr, bulk0, &ar, &nonce);
+		work_i1 = avalon_decode_nonce(thr, bulk1, &ar, &nonce);
+		work_i2 = avalon_decode_nonce(thr, bulk2, &ar, &nonce);
 
 		curr_hw_errors = avalon->hw_errors;
 		if (work_i0 >= 0)
@@ -679,7 +702,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		hash_count++;
 		hash_count *= info->asic_count;
 	}
-	avalon_free_work(bulk0);
+	avalon_free_work(thr, bulk0);
 
 	if (opt_debug) {
 		timersub(&tv_finish, &tv_start, &elapsed);
