@@ -212,25 +212,24 @@ static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
 {
 	int i;
 
-	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		if (!work || !work[i])
-			return -1;
-	}
-
-	*nonce = ar->nonce;
-#if defined (__BIG_ENDIAN__) || defined(MIPSEB)
-	*nonce = swab32(*nonce);
-#endif
+	if (!work)
+		return -1;
 
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		if (!memcmp(ar->data, work[i]->data + 64, 12) && 
+		if (work[i] &&
+		    !memcmp(ar->data, work[i]->data + 64, 12) && 
 		    !memcmp(ar->midstate, work[i]->midstate, 32))
 			break;
 	}
 	if (i == AVALON_GET_WORK_COUNT)
 		return -1;
 
-	applog(LOG_DEBUG, "Avalon: match to work: %d", i);
+	*nonce = ar->nonce;
+#if defined (__BIG_ENDIAN__) || defined(MIPSEB)
+	*nonce = swab32(*nonce);
+#endif
+
+	applog(LOG_DEBUG, "Avalon: match to work[%d]: %p", i, work[i]);
 	return i;
 }
 
@@ -486,8 +485,10 @@ static void avalon_free_work(struct work **work)
 		return;
 
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++)
-		if (work[i])
+		if (work[i]) {
 			free_work(work[i]);
+			work[i] = NULL;
+		}
 }
 static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			       __maybe_unused int64_t max_nonce)
@@ -532,11 +533,11 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 #endif
 	work = bulk_work;
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
-		applog(LOG_DEBUG, "Avalon: bulk0/1/2 buffer [%d]: %p, %p, %p",
-		       i, bulk0[i], bulk1[i], bulk2[i]);
 		bulk0[i] = bulk1[i];
 		bulk1[i] = bulk2[i];
-		bulk2[i] = bulk_work[i];
+		bulk2[i] = work[i];
+		applog(LOG_DEBUG, "Avalon: bulk0/1/2 buffer [%d]: %p, %p, %p",
+		       i, bulk0[i], bulk1[i], bulk2[i]);
 	}
 
 	i = 0;
@@ -619,17 +620,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			continue;
 		}
 		work_i0 = avalon_decode_nonce(bulk0, &ar, &nonce);
-		if (work_i0 < 0)
-			applog(LOG_DEBUG,
-			       "Avalon: can not match nonce to bulk0");
 		work_i1 = avalon_decode_nonce(bulk1, &ar, &nonce);
-		if (work_i1 < 0)
-			applog(LOG_DEBUG,
-			       "Avalon: can not match nonce to bulk1");
 		work_i2 = avalon_decode_nonce(bulk2, &ar, &nonce);
-		if (work_i2 < 0)
-			applog(LOG_DEBUG,
-			       "Avalon: can not match nonce to bulk2");
 
 		curr_hw_errors = avalon->hw_errors;
 		if (work_i0 >= 0)
@@ -638,7 +630,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			submit_nonce(thr, bulk1[work_i1], nonce);
 		if (work_i2 >= 0)
 			submit_nonce(thr, bulk2[work_i2], nonce);
-
 		was_hw_error = (curr_hw_errors > avalon->hw_errors);
 
 		/* Force a USB close/reopen on any hw error */
