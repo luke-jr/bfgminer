@@ -15,7 +15,7 @@ struct avalon_task {
 	uint8_t flush_fifo	:1;
 	uint8_t fan_eft		:1;
 	uint8_t timer_eft	:1;
-	uint8_t chip_num	:4;
+	uint8_t asic_num	:4;
 	uint8_t fan_pwm_data;
 	uint8_t timeout_data;
 	uint8_t miner_num;
@@ -61,9 +61,9 @@ struct avalon_info {
 
 #define AVALON_GET_WORK_COUNT 3 // 24
 #define AVALON_DEFAULT_FAN_PWM 0x98
-#define AVALON_DEFAULT_TIMEOUT 0x32
-#define AVALON_DEFAULT_MINER_NUM AVALON_GET_WORK_COUNT
-#define AVALON_DEFAULT_CHIP_NUM 0x1 // 0xA
+#define AVALON_DEFAULT_TIMEOUT 0xff //0x32
+#define AVALON_DEFAULT_MINER_NUM 24
+#define AVALON_DEFAULT_ASIC_NUM 0xA
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
 #define AVALON_READ_SIZE (sizeof(struct avalon_result))
@@ -86,7 +86,6 @@ struct avalon_info {
 #define avalon_close(fd) close(fd)
 
 #define avalon_buffer_full(fd)	get_serial_cts(fd)
-#define avalon_init_default_task(at) avalon_init_task(at, 0, 0, 0, 0, 0, 0)
 
 #define AVALON_READ_TIME(baud) ((double)AVALON_READ_SIZE * (double)8.0 / (double)(baud))
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]

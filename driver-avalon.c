@@ -39,28 +39,49 @@ static int option_offset = -1;
 
 static struct avalon_info **avalon_info;
 struct device_api avalon_api;
-static int avalon_init_task(struct avalon_task *at, uint8_t reset, uint8_t ff,
-			    uint8_t fan, uint8_t timeout, uint8_t chip_num,
-			    uint8_t miner_num)
+static int avalon_init_task(struct thr_info *thr, struct avalon_task *at,
+			    uint8_t reset, uint8_t ff, uint8_t fan,
+			    uint8_t timeout_p, uint8_t asic_num_p, uint8_t miner_num_p)
 {
 	static bool first = true;
 
+	uint8_t timeout;
+	uint8_t asic_num;
+	uint8_t miner_num;
+
+	struct cgpu_info *avalon;
+	struct avalon_info *info;
+
 	if (!at)
 		return -1;
+
+	if (!thr && (timeout_p <= 0 || asic_num_p <= 0 || miner_num_p <= 0))
+		return -1;
+
+	timeout = timeout_p;
+	miner_num = miner_num_p;
+	asic_num = asic_num_p;
+
+	if (thr) {
+		avalon = thr->cgpu;
+		info = avalon_info[avalon->device_id];
+		timeout = info->timeout;
+		miner_num = info->miner_count;
+		asic_num = info->asic_count;
+	}
 
 	memset(at, 0, sizeof(struct avalon_task));
 
 	if (reset) {
 		at->reset = 1;
+		at->fan_eft = 1;
+		at->timer_eft = 1;
 		first = true;
 	}
 
 	at->flush_fifo = (ff ? 1 : 0);
 	at->fan_eft = (fan ? 1 : 0);
 
-	if (timeout || chip_num || miner_num) {
-		at->timer_eft = 1;
-	}
 	if (first && !at->reset) {
 		at->fan_eft = 1;
 		at->timer_eft = 1;
@@ -68,9 +89,9 @@ static int avalon_init_task(struct avalon_task *at, uint8_t reset, uint8_t ff,
 	}
 
 	at->fan_pwm_data = (fan ? fan : AVALON_DEFAULT_FAN_PWM);
-	at->timeout_data = (timeout ? timeout : AVALON_DEFAULT_TIMEOUT);
-	at->chip_num = (chip_num ? chip_num : AVALON_DEFAULT_CHIP_NUM);
-	at->miner_num = (miner_num ? miner_num : AVALON_DEFAULT_MINER_NUM);
+	at->timeout_data = timeout;
+	at->asic_num = asic_num;
+	at->miner_num = miner_num;
 
 	at->nonce_elf = 1;
 
@@ -92,7 +113,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at)
 	uint8_t *buf;
 	size_t nr_len;
 
-	nr_len = AVALON_WRITE_SIZE + 4 * at->chip_num;
+	nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
 	buf = calloc(1, AVALON_WRITE_SIZE + nr_len);
 	if (!buf)
 		return AVA_SEND_ERROR;
@@ -233,7 +254,7 @@ static int avalon_decode_nonce(struct work **work, struct avalon_result *ar,
 	return i;
 }
 
-static int avalon_reset(int fd)
+static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p, uint8_t miner_num_p)
 {
 	struct avalon_task at;
 	struct avalon_result ar;
@@ -241,13 +262,10 @@ static int avalon_reset(int fd)
 	int ret, i;
 	struct timespec p;
 
-	avalon_init_task(&at,
-			 1,
-			 0,
+	avalon_init_task(NULL,
+			 &at, 1, 0,
 			 AVALON_DEFAULT_FAN_PWM,
-			 AVALON_DEFAULT_TIMEOUT,
-			 AVALON_DEFAULT_CHIP_NUM,
-			 AVALON_DEFAULT_MINER_NUM);
+			 timeout_p, asic_num_p, miner_num_p);
 	ret = avalon_send_task(fd, &at);
 	if (ret == AVA_SEND_ERROR)
 		return 1;
@@ -326,7 +344,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 
 	*baud = AVALON_IO_SPEED;
 	*miner_count = AVALON_DEFAULT_MINER_NUM;
-	*asic_count = AVALON_DEFAULT_CHIP_NUM;
+	*asic_count = AVALON_DEFAULT_ASIC_NUM;
 	*timeout = AVALON_DEFAULT_TIMEOUT;
 
 	if (!(*buf))
@@ -378,13 +396,13 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 				*(colon3++) = '\0';
 
 			tmp = atoi(colon2);
-			if (tmp > 0 && tmp <= AVALON_DEFAULT_CHIP_NUM)
+			if (tmp > 0 && tmp <= AVALON_DEFAULT_ASIC_NUM)
 				*asic_count = tmp;
 			else {
 				sprintf(err_buf,
 					"Invalid avalon-options for "
 					"asic_count (%s) must be 1 ~ %d",
-					colon2, AVALON_DEFAULT_CHIP_NUM);
+					colon2, AVALON_DEFAULT_ASIC_NUM);
 				quit(1, err_buf);
 			}
 
@@ -424,7 +442,7 @@ static bool avalon_detect_one(const char *devpath)
 		return false;
 	}
 
-	ret = avalon_reset(fd);
+	ret = avalon_reset(fd, timeout, asic_count, miner_count);
 	avalon_close(fd);
 
 	if (ret)
@@ -457,6 +475,7 @@ static bool avalon_detect_one(const char *devpath)
 	info->baud = baud;
 	info->miner_count = miner_count;
 	info->asic_count = asic_count;
+	info->timeout = timeout;
 
 	set_timing_mode(avalon);
 
@@ -474,6 +493,8 @@ static bool avalon_prepare(struct thr_info *thr)
 	struct timeval now;
 	int fd, ret;
 
+	struct avalon_info *info = avalon_info[avalon->device_id];
+
 	avalon->device_fd = -1;
 	fd = avalon_open(avalon->device_path,
 			     avalon_info[avalon->device_id]->baud);
@@ -482,7 +503,7 @@ static bool avalon_prepare(struct thr_info *thr)
 		       avalon->device_path);
 		return false;
 	}
-	ret = avalon_reset(fd);
+	ret = avalon_reset(fd, info->timeout, info->asic_count, info->miner_count);
 	if (ret)
 		return false;
 	avalon->device_fd = fd;
@@ -559,7 +580,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 
 	i = 0;
 	while (true) {
-		avalon_init_default_task(&at);
+		avalon_init_task(thr, &at, 0, 0, 0, 0, 0, 0);
 		avalon_create_task(&at, work[i]);
 		ret = avalon_send_task(fd, &at);
 		if (ret == AVA_SEND_ERROR) {
