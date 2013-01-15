@@ -487,7 +487,7 @@ static void avalon_free_work(struct work **work)
 
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++)
 		if (work[i])
-			free_work(work[i++]);
+			free_work(work[i]);
 }
 static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			       __maybe_unused int64_t max_nonce)
@@ -532,6 +532,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 #endif
 	work = bulk_work;
 	for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+		applog(LOG_DEBUG, "Avalon: bulk0/1/2 buffer [%d]: %p, %p, %p",
+		       i, bulk0[i], bulk1[i], bulk2[i]);
 		bulk0[i] = bulk1[i];
 		bulk1[i] = bulk2[i];
 		bulk2[i] = bulk_work[i];
