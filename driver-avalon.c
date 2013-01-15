@@ -293,11 +293,11 @@ static void set_timing_mode(struct cgpu_info *avalon)
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
-			int *asic_count)
+			int *asic_count, int *timeout)
 {
 	char err_buf[BUFSIZ+1];
 	char buf[BUFSIZ+1];
-	char *ptr, *comma, *colon, *colon2;
+	char *ptr, *comma, *colon, *colon2, *colon3;
 	size_t max;
 	int i, tmp;
 
@@ -327,61 +327,79 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	*baud = AVALON_IO_SPEED;
 	*miner_count = AVALON_DEFAULT_MINER_NUM;
 	*asic_count = AVALON_DEFAULT_CHIP_NUM;
+	*timeout = AVALON_DEFAULT_TIMEOUT;
 
-	if (*buf) {
-		colon = strchr(buf, ':');
-		if (colon)
-			*(colon++) = '\0';
+	if (!(*buf))
+		return;
 
-		if (*buf) {
-			tmp = atoi(buf);
-			switch (tmp) {
-			case 115200:
-				*baud = 115200;
-				break;
-			case 57600:
-				*baud = 57600;
-				break;
-			case 19200:
-				*baud = 19200;
-				break;
-			default:
+	colon = strchr(buf, ':');
+	if (colon)
+		*(colon++) = '\0';
+
+	tmp = atoi(buf);
+	switch (tmp) {
+	case 115200:
+		*baud = 115200;
+		break;
+	case 57600:
+		*baud = 57600;
+		break;
+	case 19200:
+		*baud = 19200;
+		break;
+	default:
+		sprintf(err_buf,
+			"Invalid avalon-options for baud (%s) "
+			"must be 115200, 57600 or 19200", buf);
+		quit(1, err_buf);
+	}
+
+	if (colon && *colon) {
+		colon2 = strchr(colon, ':');
+		if (colon2)
+			*(colon2++) = '\0';
+
+		if (*colon) {
+			tmp = atoi(colon);
+			if (tmp > 0 && tmp <= AVALON_DEFAULT_MINER_NUM) {
+				*miner_count = tmp;
+			} else {
 				sprintf(err_buf,
-					"Invalid avalon-options for baud (%s) "
-					"must be 115200, 57600 or 19200", buf);
+					"Invalid avalon-options for "
+					"miner_count (%s) must be 1 ~ %d",
+					colon, AVALON_DEFAULT_MINER_NUM);
 				quit(1, err_buf);
 			}
 		}
 
-		if (colon && *colon) {
-			colon2 = strchr(colon, ':');
-			if (colon2)
-				*(colon2++) = '\0';
+		if (colon2 && *colon2) {
+			colon3 = strchr(colon2, ':');
+			if (colon3)
+				*(colon3++) = '\0';
 
-			if (*colon) {
-				tmp = atoi(colon);
-				if (tmp > 0 && tmp <= AVALON_DEFAULT_MINER_NUM) {
-					*miner_count = tmp;
-				} else {
-					sprintf(err_buf,
-						"Invalid avalon-options for "
-						"miner_count (%s) must be 1 ~ %d",
-						colon, AVALON_DEFAULT_MINER_NUM);
-					quit(1, err_buf);
-				}
+			tmp = atoi(colon2);
+			if (tmp > 0 && tmp <= AVALON_DEFAULT_CHIP_NUM)
+				*asic_count = tmp;
+			else {
+				sprintf(err_buf,
+					"Invalid avalon-options for "
+					"asic_count (%s) must be 1 ~ %d",
+					colon2, AVALON_DEFAULT_CHIP_NUM);
+				quit(1, err_buf);
 			}
 
-			if (colon2 && *colon2) {
-				tmp = atoi(colon2);
-				if (tmp > 0 && tmp <= AVALON_DEFAULT_CHIP_NUM)
-					*asic_count = tmp;
+			if (colon3 && *colon3) {
+				tmp = atoi(colon3);
+				if (tmp > 0 && tmp <= AVALON_DEFAULT_TIMEOUT)
+					*timeout = tmp;
 				else {
 					sprintf(err_buf,
 						"Invalid avalon-options for "
-						"asic_count (%s) must be 1 ~ %d",
-						colon2, AVALON_DEFAULT_CHIP_NUM);
+						"timeout (%s) must be 1 ~ %d",
+						colon3, AVALON_DEFAULT_TIMEOUT);
 					quit(1, err_buf);
 				}
+
 			}
 		}
 	}
@@ -391,14 +409,14 @@ static bool avalon_detect_one(const char *devpath)
 {
 	struct avalon_info *info;
 	int fd, ret;
-	int baud, miner_count, asic_count;
+	int baud, miner_count, asic_count, timeout;
 
 	int this_option_offset = ++option_offset;
-	get_options(this_option_offset, &baud, &miner_count, &asic_count);
+	get_options(this_option_offset, &baud, &miner_count, &asic_count, &timeout);
 
 	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s "
-	       "(baud=%d miner_count=%d asic_count=%d)",
-		devpath, baud, miner_count, asic_count);
+	       "(baud=%d miner_count=%d asic_count=%d timeout=%d)",
+	       devpath, baud, miner_count, asic_count, timeout);
 
 	fd = avalon_open2(devpath, baud, true);
 	if (unlikely(fd == -1)) {

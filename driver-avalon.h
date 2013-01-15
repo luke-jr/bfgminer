@@ -43,6 +43,7 @@ struct avalon_info {
 	int baud;
 	int miner_count;
 	int asic_count;
+	int timeout;
 };
 
 #define TIME_FACTOR 10
@@ -60,7 +61,7 @@ struct avalon_info {
 
 #define AVALON_GET_WORK_COUNT 3 // 24
 #define AVALON_DEFAULT_FAN_PWM 0x98
-#define AVALON_DEFAULT_TIMEOUT 0xff // 0x27
+#define AVALON_DEFAULT_TIMEOUT 0x32
 #define AVALON_DEFAULT_MINER_NUM AVALON_GET_WORK_COUNT
 #define AVALON_DEFAULT_CHIP_NUM 0x1 // 0xA
 
