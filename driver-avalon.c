@@ -607,7 +607,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		avalon_init_task(thr, &at, 0, 0, 0, 0, 0, 0);
 		avalon_create_task(&at, work[i]);
 		ret = avalon_send_task(fd, &at);
-		if (ret == AVA_SEND_ERROR) {
+		if (ret == AVA_SEND_ERROR ||
+		    (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == avalon_get_work_count))) {
 			avalon_free_work(thr, bulk0);
 			avalon_free_work(thr, bulk1);
 			avalon_free_work(thr, bulk2);
@@ -625,10 +626,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			break;
 
 		i++;
-		if (i == avalon_get_work_count &&
-		    ret != AVA_SEND_BUFFER_FULL) {
-			return 0xffffffff;
-		}
 	}
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
