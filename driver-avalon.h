@@ -61,7 +61,7 @@ struct avalon_info {
 
 #define AVALON_GET_WORK_COUNT 3 // 24
 #define AVALON_DEFAULT_FAN_PWM 0x98
-#define AVALON_DEFAULT_TIMEOUT 0xff //0x32
+#define AVALON_DEFAULT_TIMEOUT 0x32
 #define AVALON_DEFAULT_MINER_NUM 24
 #define AVALON_DEFAULT_ASIC_NUM 0xA
 
@@ -90,6 +90,8 @@ struct avalon_info {
 #define AVALON_READ_TIME(baud) ((double)AVALON_READ_SIZE * (double)8.0 / (double)(baud))
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
+
+extern  struct avalon_info **avalon_info;
 
 static inline uint8_t rev8(uint8_t d)
 {

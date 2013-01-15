@@ -5349,7 +5349,15 @@ void *miner_thread(void *userdata)
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	int64_t hashes_done = 0;
 	int64_t hashes;
-#ifndef USE_AVALON
+#ifdef USE_AVALON
+	struct avalon_info *info = avalon_info[cgpu->device_id];
+	int i;
+	int avalon_get_work_count = info->miner_count;
+	struct work **work = calloc(1,
+				    avalon_get_work_count * sizeof(struct work *));
+	if (!work)
+		quit(1, "Faile on Avalon calloc");
+#else
 	struct work *work;
 #endif
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
@@ -5377,10 +5385,7 @@ void *miner_thread(void *userdata)
 	while (1) {
 		mythr->work_restart = false;
 #ifdef USE_AVALON
-		int i;
-		struct work *work[AVALON_GET_WORK_COUNT];
-
-		for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+		for (i = 0; i < avalon_get_work_count; i++) {
 			work[i] = get_work(mythr, thr_id);
 			work[i]->blk.nonce = 0;
 		}
@@ -5391,7 +5396,7 @@ void *miner_thread(void *userdata)
 		cgpu->new_work = true;
 		cgpu->max_hashes = 0;
 		gettimeofday(&tv_workstart, NULL);
-		for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+		for (i = 0; i < avalon_get_work_count; i++) {
 			if (api->prepare_work && !api->prepare_work(mythr, work[i])) {
 				applog(LOG_ERR, "work prepare failed, exiting "
 				       "mining thread %d", thr_id);
@@ -5417,12 +5422,12 @@ void *miner_thread(void *userdata)
 			dev_stats->getwork_calls++;
 
 #ifdef USE_AVALON
-			for (i = 0; i < AVALON_GET_WORK_COUNT; i++) {
+			for (i = 0; i < avalon_get_work_count; i++) {
 				pool_stats = &(work[i]->pool->cgminer_stats);
 #else
 			pool_stats = &(work->pool->cgminer_stats);
 #endif
-			/* FIXME: should be check all works */
+				/* FIXME: should be check all works */
 				timeradd(&getwork_start,
 					 &(pool_stats->getwork_wait),
 					 &(pool_stats->getwork_wait));
@@ -5526,6 +5531,9 @@ void *miner_thread(void *userdata)
 	}
 
 out:
+#ifdef USE_AVALON
+	free(work);
+#endif
 	if (api->thread_shutdown)
 		api->thread_shutdown(mythr);
 

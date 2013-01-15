@@ -37,7 +37,7 @@
 
 static int option_offset = -1;
 
-static struct avalon_info **avalon_info;
+struct avalon_info **avalon_info;
 struct device_api avalon_api;
 static int avalon_init_task(struct thr_info *thr, struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
@@ -296,6 +296,7 @@ static void do_avalon_close(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	avalon_close(avalon->device_fd);
 	avalon->device_fd = -1;
+	/* FIXME: we should free the bulk0/1/2 */
 }
 
 static void set_timing_mode(struct cgpu_info *avalon)
@@ -408,13 +409,13 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 
 			if (colon3 && *colon3) {
 				tmp = atoi(colon3);
-				if (tmp > 0 && tmp <= AVALON_DEFAULT_TIMEOUT)
+				if (tmp > 0 && tmp <= 0xff)
 					*timeout = tmp;
 				else {
 					sprintf(err_buf,
 						"Invalid avalon-options for "
 						"timeout (%s) must be 1 ~ %d",
-						colon3, AVALON_DEFAULT_TIMEOUT);
+						colon3, 0xff);
 					quit(1, err_buf);
 				}
 
