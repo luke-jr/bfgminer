@@ -137,6 +137,9 @@ bool opt_disable_pool;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
+#ifdef USE_AVALON
+char *opt_avalon_options = NULL;
+#endif
 #ifdef HAVE_LIBUSB
 int opt_usbdump = -1;
 #endif
@@ -778,6 +781,15 @@ static char *set_icarus_timing(const char *arg)
 }
 #endif
 
+#ifdef USE_AVALON
+static char *set_avalon_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_avalon_options);
+
+	return NULL;
+}
+#endif
+
 static char *set_null(const char __maybe_unused *arg)
 {
 	return NULL;
@@ -959,6 +971,11 @@ static struct opt_table opt_config_table[] = {
 		     opt_hidden),
 	OPT_WITH_ARG("--icarus-timing",
 		     set_icarus_timing, NULL, NULL,
+		     opt_hidden),
+#endif
+#ifdef USE_AVALON
+	OPT_WITH_ARG("--avalon-options",
+		     set_avalon_options, NULL, NULL,
 		     opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",

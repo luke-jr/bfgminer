@@ -680,6 +680,7 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+extern char *opt_avalon_options;
 #ifdef HAVE_LIBUSB
 extern int opt_usbdump;
 #endif

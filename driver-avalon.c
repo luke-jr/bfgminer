@@ -37,7 +37,7 @@
 
 static int option_offset = -1;
 
-static struct AVALON_INFO **avalon_info;
+static struct avalon_info **avalon_info;
 struct device_api avalon_api;
 static int avalon_init_task(struct avalon_task *at, uint8_t reset, uint8_t ff,
 			    uint8_t fan, uint8_t timeout, uint8_t chip_num,
@@ -183,7 +183,7 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 			     struct thr_info *thr, struct timeval *tv_finish)
 {
 	struct cgpu_info *avalon;
-	struct AVALON_INFO *info;
+	struct avalon_info *info;
 	uint8_t result[AVALON_READ_SIZE];
 	int ret, read_count = 16;
 
@@ -283,7 +283,7 @@ static void do_avalon_close(struct thr_info *thr)
 
 static void set_timing_mode(struct cgpu_info *avalon)
 {
-	struct AVALON_INFO *info = avalon_info[avalon->device_id];
+	struct avalon_info *info = avalon_info[avalon->device_id];
 
 	/* Anything else in buf just uses DEFAULT mode */
 	info->Hs = AVALON_HASH_TIME;
@@ -302,10 +302,10 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	size_t max;
 	int i, tmp;
 
-	if (opt_icarus_options == NULL)
+	if (opt_avalon_options == NULL)
 		buf[0] = '\0';
 	else {
-		ptr = opt_icarus_options;
+		ptr = opt_avalon_options;
 		for (i = 0; i < this_option_offset; i++) {
 			comma = strchr(ptr, ',');
 			if (comma == NULL)
@@ -326,8 +326,8 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	}
 
 	*baud = AVALON_IO_SPEED;
-	*miner_count = 2;
-	*asic_count = 2;
+	*miner_count = AVALON_DEFAULT_MINER_NUM;
+	*asic_count = AVALON_DEFAULT_CHIP_NUM;
 
 	if (*buf) {
 		colon = strchr(buf, ':');
@@ -343,10 +343,13 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 			case 57600:
 				*baud = 57600;
 				break;
+			case 19200:
+				*baud = 19200;
+				break;
 			default:
 				sprintf(err_buf,
 					"Invalid avalon-options for baud (%s) "
-					"must be 115200 or 57600", buf);
+					"must be 115200, 57600 or 19200", buf);
 				quit(1, err_buf);
 			}
 		}
@@ -358,29 +361,26 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 
 			if (*colon) {
 				tmp = atoi(colon);
-				if (tmp == 1 || tmp == 2 ||
-				    tmp == 4 || tmp == 8) {
+				if (tmp > 0 && tmp <= AVALON_DEFAULT_MINER_NUM) {
 					*miner_count = tmp;
-					*asic_count = tmp;
 				} else {
 					sprintf(err_buf,
 						"Invalid avalon-options for "
-						"miner_count (%s) must be 1,"
-						" 2, 4 or 8", colon);
+						"miner_count (%s) must be 1 ~ 32",
+						colon);
 					quit(1, err_buf);
 				}
 			}
 
 			if (colon2 && *colon2) {
 				tmp = atoi(colon2);
-				if (tmp > 0 && tmp <= *miner_count)
+				if (tmp > 0 && tmp <= AVALON_DEFAULT_CHIP_NUM)
 					*asic_count = tmp;
 				else {
 					sprintf(err_buf,
 						"Invalid avalon-options for "
-						"asic_count (%s) must be >0 "
-						"and <=miner_count (%d)",
-						colon2, *miner_count);
+						"asic_count (%s) must be 1 ~ 10 ",
+						colon2);
 					quit(1, err_buf);
 				}
 			}
@@ -390,7 +390,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 
 static bool avalon_detect_one(const char *devpath)
 {
-	struct AVALON_INFO *info;
+	struct avalon_info *info;
 	int fd, ret;
 	int baud, miner_count, asic_count;
 
@@ -419,7 +419,7 @@ static bool avalon_detect_one(const char *devpath)
 	avalon->threads = AVALON_MINER_THREADS;
 	add_cgpu(avalon);
 	avalon_info = realloc(avalon_info,
-			      sizeof(struct AVALON_INFO *) *
+			      sizeof(struct avalon_info *) *
 			      (total_devices + 1));
 
 	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
@@ -429,14 +429,14 @@ static bool avalon_detect_one(const char *devpath)
 	       "Avalon: Init: %d baud=%d miner_count=%d asic_count=%d",
 		avalon->device_id, baud, miner_count, asic_count);
 
-	avalon_info[avalon->device_id] = (struct AVALON_INFO *)
-		malloc(sizeof(struct AVALON_INFO));
+	avalon_info[avalon->device_id] = (struct avalon_info *)
+		malloc(sizeof(struct avalon_info));
 	if (unlikely(!(avalon_info[avalon->device_id])))
-		quit(1, "Failed to malloc AVALON_INFO");
+		quit(1, "Failed to malloc avalon_info");
 
 	info = avalon_info[avalon->device_id];
 
-	memset(info, 0, sizeof(struct AVALON_INFO));
+	memset(info, 0, sizeof(struct avalon_info));
 
 	info->baud = baud;
 	info->miner_count = miner_count;
@@ -456,7 +456,7 @@ static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
 	struct timeval now;
-	int fd;
+	int fd, ret;
 
 	avalon->device_fd = -1;
 	fd = avalon_open(avalon->device_path,
@@ -466,7 +466,9 @@ static bool avalon_prepare(struct thr_info *thr)
 		       avalon->device_path);
 		return false;
 	}
-	avalon_reset(fd);
+	ret = avalon_reset(fd);
+	if (ret)
+		return false;
 	avalon->device_fd = fd;
 
 	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
@@ -495,7 +497,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	int ret;
 	int full;
 
-	struct AVALON_INFO *info;
+	struct avalon_info *info;
 	struct avalon_task at;
 	struct avalon_result ar;
 	static struct work *bulk0[3] = {NULL, NULL, NULL};
@@ -548,6 +550,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			applog(LOG_ERR, "AVA%i: Comms error",
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
+			sleep(1);
 			return 0;	/* This should never happen */
 		}
 
@@ -566,7 +569,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
 
-	/* count may != AVALON_GET_WORK_COUNT */
 	while(true) {
 		full = avalon_buffer_full(fd);
 		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
@@ -589,7 +591,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			return 0;
 		}
 		/* aborted before becoming idle, get new work */
-		if (ret == AVA_GETS_TIMEOUT || ret == AVA_GETS_RESTART) {
+		if (ret == AVA_GETS_TIMEOUT) {
 			timersub(&tv_finish, &tv_start, &elapsed);
 
 			estimate_hashes = ((double)(elapsed.tv_sec) +
@@ -609,7 +611,12 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			       elapsed.tv_usec);
 
 			continue;
-			//return estimate_hashes;
+		}
+		if (ret == AVA_GETS_RESTART) {
+			avalon_free_work(bulk0);
+			avalon_free_work(bulk1);
+			avalon_free_work(bulk2);
+			return estimate_hashes;
 		}
 		work_i0 = avalon_decode_nonce(bulk0, &ar, &nonce);
 		if (work_i0 < 0)
@@ -644,10 +651,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	}
 	avalon_free_work(bulk0);
 
-	if (opt_debug)
-		timersub(&tv_finish, &tv_start, &elapsed);
-
 	if (opt_debug) {
+		timersub(&tv_finish, &tv_start, &elapsed);
 		applog(LOG_DEBUG,
 		       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
 		       "(%ld.%06lds)",
@@ -660,7 +665,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct AVALON_INFO *info = avalon_info[cgpu->device_id];
+	struct avalon_info *info = avalon_info[cgpu->device_id];
 
 	/* Warning, access to these is not locked - but we don't really
 	 * care since hashing performance is way more important than

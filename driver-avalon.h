@@ -35,8 +35,7 @@ struct avalon_result {
 	uint8_t reserved[16];
 } __attribute__((packed, aligned(4)));
 
-struct AVALON_INFO {
-	/* seconds per Hash */
+struct avalon_info {
 	double Hs;
 	int read_count;
 	double fullnonce;
@@ -56,8 +55,8 @@ struct AVALON_INFO {
 #define AVALON_MINER_THREADS 1
 
 #define AVALON_IO_SPEED 19200 // 115200
-#define AVALON_SEND_WORK_PITCH 40000000 /* 4ms */
-#define AVALON_RESET_PITCH 800000000 /* 80ms */
+#define AVALON_SEND_WORK_PITCH (40*1000*1000) /*  4ms */
+#define AVALON_RESET_PITCH    (80*1000*1000) /* 80ms */
 
 #define AVALON_GET_WORK_COUNT 3 // 24
 #define AVALON_DEFAULT_FAN_PWM 0x98
