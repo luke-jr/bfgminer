@@ -573,10 +573,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		full = avalon_buffer_full(fd);
 		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
 		       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
-		if (full == AVA_BUFFER_EMPTY) {
-			applog(LOG_DEBUG, "Avalon: Finished bulk task!");
+		if (full == AVA_BUFFER_EMPTY)
 			break;
-		}
 
 		work_i0 = work_i1 = work_i2 = -1;
 		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
@@ -616,7 +614,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			avalon_free_work(bulk0);
 			avalon_free_work(bulk1);
 			avalon_free_work(bulk2);
-			return estimate_hashes;
+			continue;
 		}
 		work_i0 = avalon_decode_nonce(bulk0, &ar, &nonce);
 		if (work_i0 < 0)
