@@ -678,6 +678,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			avalon_free_work(thr, bulk2);
 			continue;
 		}
+		avalon->temp = ar.temp0;
 		work_i0 = avalon_decode_nonce(thr, bulk0, &ar, &nonce);
 		work_i1 = avalon_decode_nonce(thr, bulk1, &ar, &nonce);
 		work_i2 = avalon_decode_nonce(thr, bulk2, &ar, &nonce);

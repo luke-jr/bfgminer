@@ -32,7 +32,21 @@ struct avalon_result {
 	uint32_t nonce;
 	uint8_t data[12];
 	uint8_t midstate[32];
-	uint8_t reserved[16];
+
+	uint8_t fan0;
+	uint8_t fan1;
+	uint8_t fan2;
+	uint8_t temp0;
+	uint8_t temp1;
+	uint8_t temp2;
+	uint8_t pad0[2];
+
+	uint16_t fifo_wp;
+	uint16_t fifo_rp;
+	uint8_t chip_num;
+	uint8_t pwm_data;
+	uint8_t timeout;
+	uint8_t miner_num;
 } __attribute__((packed, aligned(4)));
 
 struct avalon_info {
