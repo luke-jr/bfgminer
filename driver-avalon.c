@@ -138,6 +138,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at)
 	if (unlikely(ret != nr_len))
 		return AVA_SEND_ERROR;
 
+
 	p.tv_sec = 0;
 	p.tv_nsec = AVALON_SEND_WORK_PITCH;
 	nanosleep(&p, NULL);
@@ -206,7 +207,7 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
 	uint8_t result[AVALON_READ_SIZE];
-	int ret, read_count = 16;
+	int ret, read_count = AVALON_RESET_FAULT_DECISECONDS * TIME_FACTOR;
 
 	if (thr) {
 		avalon = thr->cgpu;
@@ -292,6 +293,10 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p, uint8_t m
 	p.tv_sec = 1;
 	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
+
+	applog(LOG_ERR,
+	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d. Temp1: %d, Temp2: %d, Temp3: %d",
+	       ar.fan0, ar.fan1, ar.fan2, ar.temp0, ar.temp1, ar.temp2);
 
 	applog(LOG_ERR, "Avalon: Reset succeeded");
 	return 0;
@@ -709,6 +714,10 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		       "(%ld.%06lds)",
 		       nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
 	}
+
+	applog(LOG_ERR,
+	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d. Temp1: %d, Temp2: %d, Temp3: %d",
+	       ar.fan0, ar.fan1, ar.fan2, ar.temp0, ar.temp1, ar.temp2);
 
 	return hash_count;
 }
