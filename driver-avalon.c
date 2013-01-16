@@ -116,7 +116,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	size_t nr_len;
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
-	long delay = 32 * 1000 * 1000; /* default 32ms for B19200 */
+	uint64_t delay = 32000000; /* default 32ms for B19200 */
 
 	nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
 	buf = calloc(1, AVALON_WRITE_SIZE + nr_len);
@@ -147,14 +147,14 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	if (thr) {
 		avalon = thr->cgpu;
 		info = avalon_info[avalon->device_id];
-		delay = AVALON_WRITE_SIZE * 10 * 1000000000 / info->baud;
+		delay = AVALON_WRITE_SIZE * 10 * 1000000000ULL;
+		delay = delay / info->baud;
 	}
 
 	p.tv_sec = 0;
-	p.tv_nsec = delay;
+	p.tv_nsec = (long)delay + 4000000;
 	nanosleep(&p, NULL);
-	applog(LOG_DEBUG, "Avalon: Sent: Buffer delay: %ld",
-	       delay);
+	applog(LOG_DEBUG, "Avalon: Sent: Buffer delay: %ld", p.tv_nsec);
 
 	full = avalon_buffer_full(fd);
 	applog(LOG_DEBUG, "Avalon: Sent: Buffer full: %s",
@@ -328,7 +328,8 @@ static void set_timing_mode(struct cgpu_info *avalon)
 {
 	struct avalon_info *info = avalon_info[avalon->device_id];
 
-	info->Hs = AVALON_HASH_TIME;
+	info->Hs = ((info->timeout * AVALON_HASH_TIME_FACTOR) /
+		    (double)0xffffffff) / info->miner_count;
 	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 	info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
 }
