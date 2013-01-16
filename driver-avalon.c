@@ -41,7 +41,8 @@ struct avalon_info **avalon_info;
 struct device_api avalon_api;
 static int avalon_init_task(struct thr_info *thr, struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
-			    uint8_t timeout_p, uint8_t asic_num_p, uint8_t miner_num_p)
+			    uint8_t timeout_p, uint8_t asic_num_p,
+			    uint8_t miner_num_p)
 {
 	static bool first = true;
 
@@ -105,13 +106,17 @@ static inline void avalon_create_task(struct avalon_task *at,
 	memcpy(at->data, work->data + 64, 12);
 }
 
-static int avalon_send_task(int fd, const struct avalon_task *at)
+static int avalon_send_task(int fd, const struct avalon_task *at,
+			    struct thr_info *thr)
 {
 	size_t ret;
 	int full;
 	struct timespec p;
 	uint8_t *buf;
 	size_t nr_len;
+	struct cgpu_info *avalon;
+	struct avalon_info *info;
+	long delay = 32 * 1000 * 1000; /* default 32ms for B19200 */
 
 	nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
 	buf = calloc(1, AVALON_WRITE_SIZE + nr_len);
@@ -139,9 +144,17 @@ static int avalon_send_task(int fd, const struct avalon_task *at)
 		return AVA_SEND_ERROR;
 
 
+	if (thr) {
+		avalon = thr->cgpu;
+		info = avalon_info[avalon->device_id];
+		delay = AVALON_WRITE_SIZE * 10 * 1000000000 / info->baud;
+	}
+
 	p.tv_sec = 0;
-	p.tv_nsec = AVALON_SEND_WORK_PITCH;
+	p.tv_nsec = delay;
 	nanosleep(&p, NULL);
+	applog(LOG_DEBUG, "Avalon: Sent: Buffer delay: %ld",
+	       delay);
 
 	full = avalon_buffer_full(fd);
 	applog(LOG_DEBUG, "Avalon: Sent: Buffer full: %s",
@@ -261,7 +274,8 @@ static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
 	return i;
 }
 
-static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p, uint8_t miner_num_p)
+static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
+			uint8_t miner_num_p)
 {
 	struct avalon_task at;
 	struct avalon_result ar;
@@ -273,7 +287,7 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p, uint8_t m
 			 &at, 1, 0,
 			 AVALON_DEFAULT_FAN_PWM,
 			 timeout_p, asic_num_p, miner_num_p);
-	ret = avalon_send_task(fd, &at);
+	ret = avalon_send_task(fd, &at, NULL);
 	if (ret == AVA_SEND_ERROR)
 		return 1;
 
@@ -314,12 +328,9 @@ static void set_timing_mode(struct cgpu_info *avalon)
 {
 	struct avalon_info *info = avalon_info[avalon->device_id];
 
-	/* Anything else in buf just uses DEFAULT mode */
 	info->Hs = AVALON_HASH_TIME;
 	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-
-	info->read_count =
-		(int)(info->fullnonce * TIME_FACTOR) - 1;
+	info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
@@ -442,7 +453,8 @@ static bool avalon_detect_one(const char *devpath)
 	int baud, miner_count, asic_count, timeout;
 
 	int this_option_offset = ++option_offset;
-	get_options(this_option_offset, &baud, &miner_count, &asic_count, &timeout);
+	get_options(this_option_offset, &baud, &miner_count, &asic_count,
+		    &timeout);
 
 	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s "
 	       "(baud=%d miner_count=%d asic_count=%d timeout=%d)",
@@ -515,7 +527,8 @@ static bool avalon_prepare(struct thr_info *thr)
 		       avalon->device_path);
 		return false;
 	}
-	ret = avalon_reset(fd, info->timeout, info->asic_count, info->miner_count);
+	ret = avalon_reset(fd, info->timeout, info->asic_count,
+			   info->miner_count);
 	if (ret)
 		return false;
 	avalon->device_fd = fd;
@@ -611,9 +624,10 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	while (true) {
 		avalon_init_task(thr, &at, 0, 0, 0, 0, 0, 0);
 		avalon_create_task(&at, work[i]);
-		ret = avalon_send_task(fd, &at);
+		ret = avalon_send_task(fd, &at, thr);
 		if (ret == AVA_SEND_ERROR ||
-		    (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == avalon_get_work_count))) {
+		    (ret == AVA_SEND_BUFFER_EMPTY &&
+		     (i + 1 == avalon_get_work_count))) {
 			avalon_free_work(thr, bulk0);
 			avalon_free_work(thr, bulk1);
 			avalon_free_work(thr, bulk2);
@@ -727,15 +741,10 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	struct avalon_info *info = avalon_info[cgpu->device_id];
 
-	/* Warning, access to these is not locked - but we don't really
-	 * care since hashing performance is way more important than
-	 * locking access to displaying API debug 'stats'
-	 * If locking becomes an issue for any of them, use copy_data=true also */
 	root = api_add_int(root, "read_count", &(info->read_count), false);
 	root = api_add_double(root, "fullnonce", &(info->fullnonce), false);
 	root = api_add_int(root, "baud", &(info->baud), false);
-	root = api_add_int(root, "miner_count", &(info->miner_count),
-			   false);
+	root = api_add_int(root, "miner_count", &(info->miner_count),false);
 	root = api_add_int(root, "asic_count", &(info->asic_count), false);
 
 	return root;
