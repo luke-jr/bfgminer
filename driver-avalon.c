@@ -339,10 +339,9 @@ static void set_timing_mode(struct cgpu_info *avalon)
 {
 	struct avalon_info *info = avalon_info[avalon->device_id];
 
-	info->Hs = ((info->timeout * AVALON_HASH_TIME_FACTOR) /
-		    (double)0xffffffff) / info->miner_count;
-	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
-	info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+	info->Hs = ((info->timeout * AVALON_HASH_TIME_FACTOR) / (double)0xffffffff);
+	info->fullnonce = info->timeout * AVALON_HASH_TIME_FACTOR;
+	info->read_count = ((int)(info->fullnonce * TIME_FACTOR) - 1) / info->miner_count;
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
