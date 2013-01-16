@@ -117,6 +117,8 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
 	uint64_t delay = 32000000; /* default 32ms for B19200 */
+	uint32_t nonce_range;
+	int i;
 
 	nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
 	buf = calloc(1, AVALON_WRITE_SIZE + nr_len);
@@ -124,6 +126,15 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 		return AVA_SEND_ERROR;
 
 	memcpy(buf, at, AVALON_WRITE_SIZE);
+
+	nonce_range = (uint32_t)0xffffffff / at->asic_num;
+	/* FIXME: the nonce_range  */
+	for (i = 0; i < at->asic_num; i++) {
+		buf[AVALON_WRITE_SIZE + (i * 4) + 3] = (i * nonce_range & 0xff000000) >> 24;
+		buf[AVALON_WRITE_SIZE + (i * 4) + 2] = (i * nonce_range & 0x00ff0000) >> 16;
+		buf[AVALON_WRITE_SIZE + (i * 4) + 1] = (i * nonce_range & 0x0000ff00) >> 8;
+		buf[AVALON_WRITE_SIZE + (i * 4) + 0] = (i * nonce_range & 0x000000ff) >> 0;
+	}
 #if defined(__BIG_ENDIAN__) || defined(MIPSEB)
 	uint8_t tt = 0;
 	tt = (buf[0] & 0x0f) << 4;
@@ -147,7 +158,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	if (thr) {
 		avalon = thr->cgpu;
 		info = avalon_info[avalon->device_id];
-		delay = AVALON_WRITE_SIZE * 10 * 1000000000ULL;
+		delay = nr_len * 10 * 1000000000ULL;
 		delay = delay / info->baud;
 	}
 
