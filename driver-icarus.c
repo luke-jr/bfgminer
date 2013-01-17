@@ -668,7 +668,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	icarus = thr->cgpu;
 	if (icarus->device_fd == -1)
 		if (!icarus_prepare(thr)) {
-			applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+			applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
 			dev_error(icarus, REASON_DEV_COMMS_ERROR);
 
 			// fail the device if the reopen attempt fails
@@ -688,7 +688,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
 	if (ret) {
 		do_icarus_close(thr);
-		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+		applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return 0;	/* This should never happen */
 	}
@@ -708,7 +708,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	ret = icarus_gets(nonce_bin, fd, &tv_finish, thr, info->read_count);
 	if (ret == ICA_GETS_ERROR) {
 		do_icarus_close(thr);
-		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+		applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return 0;
 	}
