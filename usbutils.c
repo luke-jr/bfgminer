@@ -1257,10 +1257,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 
 		*processed = got;
 
-		if (NODEV(err)) {
-			cgpu->nodev = true;
+		if (NODEV(err))
 			release_cgpu(cgpu);
-		}
 
 		return err;
 	}
@@ -1318,10 +1316,8 @@ goteol:
 
 	*processed = tot;
 
-	if (NODEV(err)) {
-		cgpu->nodev = true;
+	if (NODEV(err))
 		release_cgpu(cgpu);
-	}
 
 	return err;
 }
@@ -1354,10 +1350,8 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 
 	*processed = sent;
 
-	if (NODEV(err)) {
-		cgpu->nodev = true;
+	if (NODEV(err))
 		release_cgpu(cgpu);
-	}
 
 	return err;
 }
@@ -1384,10 +1378,8 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
 
-	if (NODEV(err)) {
-		cgpu->nodev = true;
+	if (NODEV(err))
 		release_cgpu(cgpu);
-	}
 
 	return err;
 }
