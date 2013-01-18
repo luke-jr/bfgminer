@@ -590,6 +590,14 @@ function classlastshare($when, $alldata, $warnclass, $errorclass)
  return '';
 }
 #
+function endzero($num)
+{
+ $rep = preg_replace('/0*$/', '', $num);
+ if ($rep === '')
+	$rep = '0';
+ return $rep;
+}
+#
 function fmt($section, $name, $value, $when, $alldata)
 {
  global $dfmt, $rownum;
@@ -867,6 +875,23 @@ function fmt($section, $name, $value, $when, $alldata)
 			$dec = '';
 		else
 			$dec = '.'.$parts[1];
+		$ret = number_format((float)$parts[0]).$dec;
+		break;
+	case 'STATS.Hs':
+	case 'STATS.W':
+	case 'STATS.history_time':
+	case 'STATS.Pool Wait':
+	case 'STATS.Pool Max':
+	case 'STATS.Pool Min':
+	case 'STATS.Pool Av':
+	case 'STATS.Min Diff':
+	case 'STATS.Max Diff':
+	case 'STATS.Work Diff':
+		$parts = explode('.', $value, 2);
+		if (count($parts) == 1)
+			$dec = '';
+		else
+			$dec = '.'.endzero($parts[1]);
 		$ret = number_format((float)$parts[0]).$dec;
 		break;
 	case 'GPU.Status':
