@@ -40,6 +40,16 @@
 #define BITFORCE_WORKSTATUS "ZFX"
 #define BITFORCE_WORKSTATUS_LEN (sizeof(BITFORCE_WORKSTATUS)-1)
 
+// Either of Nonce or No-nonce start with:
+#define BITFORCE_EITHER "N"
+#define BITFORCE_EITHER_LEN 1
+#define BITFORCE_NONCE "NONCE-FOUND"
+#define BITFORCE_NONCE_LEN (sizeof(BITFORCE_NONCE)-1)
+#define BITFORCE_NO_NONCE "NO-NONCE"
+#define BITFORCE_NO_NONCE_MATCH 3
+#define BITFORCE_IDLE "IDLE"
+#define BITFORCE_IDLE_MATCH 1
+
 #define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_S 7
 #define BITFORCE_TIMEOUT_MS (BITFORCE_TIMEOUT_S * 1000)
@@ -579,7 +589,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		/* Only return if we got nothing after timeout - there still may be results */
 		if (amount == 0)
 			return 0;
-	} else if (!strncasecmp(buf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
+	} else if (!strncasecmp(buf, BITFORCE_EITHER, BITFORCE_EITHER_LEN)) {
 		/* Simple timing adjustment. Allow a few polls to cope with
 		 * OS timer delays being variably reliable. wait_ms will
 		 * always equal sleep_ms when we've waited greater than or
@@ -608,11 +618,11 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	applog(LOG_DEBUG, "%s%i: waited %dms until %s",
 			bitforce->drv->name, bitforce->device_id,
 			bitforce->wait_ms, buf);
-	if (!strncasecmp(&buf[2], "-", 1))
+	if (!strncasecmp(buf, BITFORCE_NO_NONCE, BITFORCE_NO_NONCE_MATCH))
 		return bitforce->nonces;   /* No valid nonce found */
-	else if (!strncasecmp(buf, "I", 1))
+	else if (!strncasecmp(buf, BITFORCE_IDLE, BITFORCE_IDLE_MATCH))
 		return 0;	/* Device idle */
-	else if (strncasecmp(buf, "NONCE-FOUND", 11)) {
+	else if (strncasecmp(buf, BITFORCE_NONCE, BITFORCE_NONCE_LEN)) {
 		bitforce->hw_errors++;
 		applog(LOG_WARNING, "%s%i: Error: Get result reports: %s",
 			bitforce->drv->name, bitforce->device_id, buf);
