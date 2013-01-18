@@ -128,7 +128,6 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	memcpy(buf, at, AVALON_WRITE_SIZE);
 
 	nonce_range = (uint32_t)0xffffffff / at->asic_num;
-	/* FIXME: the nonce_range  */
 	for (i = 0; i < at->asic_num; i++) {
 		buf[AVALON_WRITE_SIZE + (i * 4) + 0] = (i * nonce_range & 0xff000000) >> 24;
 		buf[AVALON_WRITE_SIZE + (i * 4) + 1] = (i * nonce_range & 0x00ff0000) >> 16;
@@ -286,10 +285,9 @@ static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
 }
 
 static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
-			uint8_t miner_num_p)
+			uint8_t miner_num_p, struct avalon_result *ar)
 {
 	struct avalon_task at;
-	struct avalon_result ar;
 	uint8_t *buf;
 	int ret, i;
 	struct timespec p;
@@ -302,9 +300,9 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 	if (ret == AVA_SEND_ERROR)
 		return 1;
 
-	avalon_get_result(fd, &ar, NULL, NULL);
+	avalon_get_result(fd, ar, NULL, NULL);
 
-	buf = (uint8_t *)&ar;
+	buf = (uint8_t *)ar;
 	for (i = 0; i < 11; i++)
 		if (buf[i] != 0)
 			break;
@@ -321,7 +319,7 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 
 	applog(LOG_ERR,
 	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d. Temp1: %d, Temp2: %d, Temp3: %d",
-	       ar.fan0, ar.fan1, ar.fan2, ar.temp0, ar.temp1, ar.temp2);
+	       ar->fan0, ar->fan1, ar->fan2, ar->temp0, ar->temp1, ar->temp2);
 
 	applog(LOG_ERR, "Avalon: Reset succeeded");
 	return 0;
@@ -335,13 +333,28 @@ static void do_avalon_close(struct thr_info *thr)
 	/* FIXME: we should free the bulk0/1/2 */
 }
 
-static void set_timing_mode(struct cgpu_info *avalon)
+static void set_timing_mode(struct cgpu_info *avalon, struct avalon_result *ar)
 {
 	struct avalon_info *info = avalon_info[avalon->device_id];
 
 	info->Hs = ((info->timeout * AVALON_HASH_TIME_FACTOR) / (double)0xffffffff);
-	info->fullnonce = info->timeout * AVALON_HASH_TIME_FACTOR;
-	info->read_count = ((int)(info->fullnonce * TIME_FACTOR) - 1) / info->miner_count;
+	info->read_count =
+		((int)(info->timeout * AVALON_HASH_TIME_FACTOR * TIME_FACTOR) - 1) / info->miner_count;
+	info->fan0 = ar->fan0;
+	info->fan1 = ar->fan1;
+	info->fan2 = ar->fan2;
+
+	info->temp0 = ar->temp0;
+	info->temp1 = ar->temp1;
+	info->temp2 = ar->temp2;
+
+	if (info->temp0 > info->temp_max)
+		info->temp_max = info->temp0;
+	if (info->temp1 > info->temp_max)
+		info->temp_max = info->temp1;
+	if (info->temp2 > info->temp_max)
+		info->temp_max = info->temp2;
+
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
@@ -460,6 +473,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 static bool avalon_detect_one(const char *devpath)
 {
 	struct avalon_info *info;
+	struct avalon_result ar;
 	int fd, ret;
 	int baud, miner_count, asic_count, timeout;
 
@@ -477,7 +491,7 @@ static bool avalon_detect_one(const char *devpath)
 		return false;
 	}
 
-	ret = avalon_reset(fd, timeout, asic_count, miner_count);
+	ret = avalon_reset(fd, timeout, asic_count, miner_count, &ar);
 	avalon_close(fd);
 
 	if (ret)
@@ -512,7 +526,7 @@ static bool avalon_detect_one(const char *devpath)
 	info->asic_count = asic_count;
 	info->timeout = timeout;
 
-	set_timing_mode(avalon);
+	set_timing_mode(avalon, &ar);
 
 	return true;
 }
@@ -524,6 +538,7 @@ static inline void avalon_detect()
 
 static bool avalon_prepare(struct thr_info *thr)
 {
+	struct avalon_result ar;
 	struct cgpu_info *avalon = thr->cgpu;
 	struct timeval now;
 	int fd, ret;
@@ -539,7 +554,7 @@ static bool avalon_prepare(struct thr_info *thr)
 		return false;
 	}
 	ret = avalon_reset(fd, info->timeout, info->asic_count,
-			   info->miner_count);
+			   info->miner_count, &ar);
 	if (ret)
 		return false;
 	avalon->device_fd = fd;
@@ -708,7 +723,22 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			avalon_free_work(thr, bulk2);
 			continue;
 		}
-		avalon->temp = ar.temp0;
+		avalon->temp = (ar.temp0 + ar.temp1 + ar.temp2) / 3;
+		info->fan0 = ar.fan0;
+		info->fan1 = ar.fan1;
+		info->fan2 = ar.fan2;
+
+		info->temp0 = ar.temp0;
+		info->temp1 = ar.temp1;
+		info->temp2 = ar.temp2;
+
+		if (info->temp0 > info->temp_max)
+			info->temp_max = info->temp0;
+		if (info->temp1 > info->temp_max)
+			info->temp_max = info->temp1;
+		if (info->temp2 > info->temp_max)
+			info->temp_max = info->temp2;
+
 		work_i0 = avalon_decode_nonce(thr, bulk0, &ar, &nonce);
 		work_i1 = avalon_decode_nonce(thr, bulk1, &ar, &nonce);
 		work_i2 = avalon_decode_nonce(thr, bulk2, &ar, &nonce);
@@ -753,10 +783,18 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	struct avalon_info *info = avalon_info[cgpu->device_id];
 
 	root = api_add_int(root, "read_count", &(info->read_count), false);
-	root = api_add_double(root, "fullnonce", &(info->fullnonce), false);
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "miner_count", &(info->miner_count),false);
 	root = api_add_int(root, "asic_count", &(info->asic_count), false);
+
+	root = api_add_int(root, "fan1", &(info->fan0), false);
+	root = api_add_int(root, "fan2", &(info->fan1), false);
+	root = api_add_int(root, "fan3", &(info->fan2), false);
+
+	root = api_add_int(root, "temp1", &(info->temp0), false);
+	root = api_add_int(root, "temp2", &(info->temp1), false);
+	root = api_add_int(root, "temp3", &(info->temp2), false);
+	root = api_add_int(root, "temp_max", &(info->temp_max), false);
 
 	return root;
 }

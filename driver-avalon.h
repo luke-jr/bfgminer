@@ -52,12 +52,21 @@ struct avalon_result {
 struct avalon_info {
 	double Hs;
 	int read_count;
-	double fullnonce;
 
 	int baud;
 	int miner_count;
 	int asic_count;
 	int timeout;
+
+	int fan0;
+	int fan1;
+	int fan2;
+
+	int temp0;
+	int temp1;
+	int temp2;
+
+	int temp_max;
 };
 
 #define TIME_FACTOR 10
