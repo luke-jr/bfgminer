@@ -589,9 +589,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			       __maybe_unused int64_t max_nonce)
 {
 	struct cgpu_info *avalon;
-	int fd;
-	int ret;
-	int full;
+	int fd, ret, full;
 
 	struct avalon_info *info;
 	struct avalon_task at;
@@ -637,6 +635,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
 #endif
+
 	work = bulk_work;
 	for (i = 0; i < avalon_get_work_count; i++) {
 		bulk0[i] = bulk1[i];
@@ -675,7 +674,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
-
+	hash_count = 0;
 	while(true) {
 		full = avalon_buffer_full(fd);
 		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
@@ -756,9 +755,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		if (was_hw_error)
 			do_avalon_close(thr);
 
-		hash_count = nonce;
-		hash_count++;
-		hash_count *= info->asic_count;
+		hash_count += nonce;
 	}
 	avalon_free_work(thr, bulk0);
 
@@ -771,10 +768,10 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	}
 
 	applog(LOG_ERR,
-	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d. Temp1: %d, Temp2: %d, Temp3: %d",
-	       ar.fan0, ar.fan1, ar.fan2, ar.temp0, ar.temp1, ar.temp2);
+	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d. Temp1: %d, Temp2: %d, Temp3: %d, TempMAX: %d",
+	       info->fan0, info->fan1, info->fan2, info->temp0, info->temp1, info->temp2, info->temp_max);
 
-	return hash_count;
+	return (hash_count ? hash_count : ((int64_t)4*1024*1024*1024)*info->miner_count*info->asic_count);
 }
 
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
