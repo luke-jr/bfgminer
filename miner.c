@@ -4751,9 +4751,7 @@ void zero_stats(void)
 	total_stale = 0;
 	total_discarded = 0;
 	total_bytes_xfer = 0;
-	total_diff_accepted = total_diff_rejected = total_diff_stale = 0;
 	new_blocks = 0;
-	found_blocks = 0;
 	local_work = 0;
 	total_go = 0;
 	total_ro = 0;
@@ -4762,6 +4760,10 @@ void zero_stats(void)
 	total_diff1 = 0;
 	memset(best_share, 0, 8);
 	suffix_string(best_diff, best_share, 0);
+	found_blocks = 0;
+	total_diff_accepted = 0;
+	total_diff_rejected = 0;
+	total_diff_stale = 0;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
@@ -4770,13 +4772,18 @@ void zero_stats(void)
 		pool->accepted = 0;
 		pool->rejected = 0;
 		pool->solved = 0;
-		pool->diff1 = 0;
-		pool->diff_accepted = pool->diff_rejected = pool->diff_stale = 0;
 		pool->getwork_requested = 0;
 		pool->stale_shares = 0;
 		pool->discarded_work = 0;
 		pool->getfail_occasions = 0;
 		pool->remotefail_occasions = 0;
+		pool->last_share_time = 0;
+		pool->diff1 = 0;
+		pool->diff_accepted = 0;
+		pool->diff_rejected = 0;
+		pool->diff_stale = 0;
+		pool->last_share_diff = 0;
+		pool->best_diff = 0;
 		pool->cgminer_stats.getwork_calls = 0;
 		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		pool->cgminer_stats.getwork_wait_max.tv_sec = 0;
@@ -4806,8 +4813,11 @@ void zero_stats(void)
 		cgpu->hw_errors = 0;
 		cgpu->utility = 0.0;
 		cgpu->utility_diff1 = 0;
+		cgpu->last_share_pool_time = 0;
 		cgpu->diff1 = 0;
-		cgpu->diff_accepted = cgpu->diff_rejected = 0;
+		cgpu->diff_accepted = 0;
+		cgpu->diff_rejected = 0;
+		cgpu->last_share_diff = 0;
 		cgpu->thread_fail_init_count = 0;
 		cgpu->thread_zero_hash_count = 0;
 		cgpu->thread_fail_queue_count = 0;
