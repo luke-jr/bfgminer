@@ -289,7 +289,7 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 {
 	struct avalon_task at;
 	uint8_t *buf;
-	int ret, i;
+	int ret, i = 0;
 	struct timespec p;
 
 	avalon_init_task(NULL,
@@ -303,13 +303,16 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 	avalon_get_result(fd, ar, NULL, NULL);
 
 	buf = (uint8_t *)ar;
-	for (i = 0; i < 11; i++)
-		if (buf[i] != 0)
-			break;
-	/* FIXME: add more avalon info base on return */
+	if (buf[0] == 0xAA && buf[1] == 0x55 &&
+	    buf[2] == 0xAA && buf[3] == 0x55) {
+		for (i = 4; i < 11; i++)
+			if (buf[i] != 0)
+				break;
+	}
 
 	if (i != 11) {
-		applog(LOG_ERR, "Avalon: Reset failed! not a Avalon?");
+		applog(LOG_ERR, "Avalon: Reset failed! not a Avalon? (%d: %02x %02x %02x %02x)",
+		       i, buf[0], buf[1], buf[2], buf[3]);
 		return 1;
 	}
 
@@ -409,13 +412,16 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	case 57600:
 		*baud = 57600;
 		break;
+	case 38400:
+		*baud = 38400;
+		break;
 	case 19200:
 		*baud = 19200;
 		break;
 	default:
 		sprintf(err_buf,
 			"Invalid avalon-options for baud (%s) "
-			"must be 115200, 57600 or 19200", buf);
+			"must be 115200, 57600, 38400 or 19200", buf);
 		quit(1, err_buf);
 	}
 
