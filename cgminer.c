@@ -2329,21 +2329,13 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 
 static const uint64_t diffone = 0xFFFF000000000000ull;
 
+static double target_diff(const unsigned char *target);
+
 static uint64_t share_diff(const struct work *work)
 {
-	uint64_t *data64, d64;
-	char rhash[32];
 	uint64_t ret;
 
-	swab256(rhash, work->hash);
-	if (opt_scrypt)
-		data64 = (uint64_t *)(rhash + 2);
-	else
-		data64 = (uint64_t *)(rhash + 4);
-	d64 = be64toh(*data64);
-	if (unlikely(!d64))
-		d64 = 1;
-	ret = diffone / d64;
+	ret = target_diff(work->hash);
 	mutex_lock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
@@ -2576,6 +2568,17 @@ static inline struct pool *select_pool(bool lagging)
 
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249216.0;
 
+static double target_diff(const unsigned char *target)
+{
+	double targ = 0;
+	signed int i;
+
+	for (i = 31; i >= 0; --i)
+		targ = (targ * 0x100) + target[i];
+
+	return DIFFEXACTONE / (targ ?: 1);
+}
+
 /*
  * Calculate the work share difficulty
  */
@@ -2583,26 +2586,8 @@ static void calc_diff(struct work *work, int known)
 {
 	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
 
-	if (opt_scrypt) {
-		uint64_t *data64, d64;
-		char rtarget[32];
-
-		swab256(rtarget, work->target);
-		data64 = (uint64_t *)(rtarget + 2);
-		d64 = be64toh(*data64);
-		if (unlikely(!d64))
-			d64 = 1;
-		work->work_difficulty = diffone / d64;
-	} else if (!known) {
-		double targ = 0;
-		int i;
-
-		for (i = 31; i >= 0; i--) {
-			targ *= 256;
-			targ += work->target[i];
-		}
-
-		work->work_difficulty = DIFFEXACTONE / (targ ? : DIFFEXACTONE);
+	if (!known) {
+		work->work_difficulty = target_diff(work->target);
 	} else
 		work->work_difficulty = known;
 
@@ -3429,40 +3414,12 @@ static int block_sort(struct block *blocka, struct block *blockb)
 
 static void set_blockdiff(const struct work *work)
 {
-	uint64_t *data64, d64, diff64;
-	uint32_t diffhash[8];
-	uint32_t difficulty;
-	uint32_t diffbytes;
-	uint32_t diffvalue;
-	char rhash[32];
-	int diffshift;
+	unsigned char target[32];
+	uint64_t diff64;
 
-	difficulty = swab32(*((uint32_t *)(work->data + 72)));
+	real_block_target(target, work->data);
+	diff64 = target_diff(target);
 
-	diffbytes = ((difficulty >> 24) & 0xff) - 3;
-	diffvalue = difficulty & 0x00ffffff;
-
-	diffshift = (diffbytes % 4) * 8;
-	if (diffshift == 0) {
-		diffshift = 32;
-		diffbytes--;
-	}
-
-	memset(diffhash, 0, 32);
-	diffhash[(diffbytes >> 2) + 1] = diffvalue >> (32 - diffshift);
-	diffhash[diffbytes >> 2] = diffvalue << diffshift;
-
-	swab256(rhash, diffhash);
-
-	if (opt_scrypt)
-		data64 = (uint64_t *)(rhash + 2);
-	else
-		data64 = (uint64_t *)(rhash + 4);
-	d64 = be64toh(*data64);
-	if (unlikely(!d64))
-		d64 = 1;
-
-	diff64 = diffone / d64;
 	suffix_string(diff64, block_diff, 0);
 }
 
