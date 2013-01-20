@@ -1902,6 +1902,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 			root = api_add_escape(root, "Stratum URL", pool->stratum_url, false);
 		else
 			root = api_add_const(root, "Stratum URL", BLANK, false);
+		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
 
 		root = print_data(root, buf, isjson, isjson && (i > 0));
 		io_add(io_data, buf);

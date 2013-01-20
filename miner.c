@@ -2566,6 +2566,8 @@ static uint64_t share_diff(const struct work *work)
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
+	if (ret > work->pool->best_diff)
+		work->pool->best_diff = ret;
 	mutex_unlock(&control_lock);
 	return ret;
 }
