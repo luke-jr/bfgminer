@@ -129,10 +129,10 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 
 	nonce_range = (uint32_t)0xffffffff / at->asic_num;
 	for (i = 0; i < at->asic_num; i++) {
-		buf[AVALON_WRITE_SIZE + (i * 4) + 0] = (i * nonce_range & 0xff000000) >> 24;
-		buf[AVALON_WRITE_SIZE + (i * 4) + 1] = (i * nonce_range & 0x00ff0000) >> 16;
-		buf[AVALON_WRITE_SIZE + (i * 4) + 2] = (i * nonce_range & 0x0000ff00) >> 8;
-		buf[AVALON_WRITE_SIZE + (i * 4) + 3] = (i * nonce_range & 0x000000ff) >> 0;
+		buf[AVALON_WRITE_SIZE + (i * 4) + 3] = (i * nonce_range & 0xff000000) >> 24;
+		buf[AVALON_WRITE_SIZE + (i * 4) + 2] = (i * nonce_range & 0x00ff0000) >> 16;
+		buf[AVALON_WRITE_SIZE + (i * 4) + 1] = (i * nonce_range & 0x0000ff00) >> 8;
+		buf[AVALON_WRITE_SIZE + (i * 4) + 0] = (i * nonce_range & 0x000000ff) >> 0;
 	}
 #if defined(__BIG_ENDIAN__) || defined(MIPSEB)
 	uint8_t tt = 0;
