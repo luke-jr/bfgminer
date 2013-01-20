@@ -133,7 +133,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.23";
+static const char *APIVERSION = "1.24";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -388,6 +388,11 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_PGASETERR 93
 #endif
 
+#define MSG_ZERMIS 94
+#define MSG_ZERINV 95
+#define MSG_ZERSUM 96
+#define MSG_ZERNOSUM 97
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -558,6 +563,10 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_PGASETOK, PARAM_BOTH,	"PGA %d set OK" },
  { SEVERITY_ERR,   MSG_PGASETERR, PARAM_BOTH,	"PGA %d set failed: %s" },
 #endif
+ { SEVERITY_ERR,   MSG_ZERMIS,	PARAM_NONE,	"Missing zero parameters" },
+ { SEVERITY_ERR,   MSG_ZERINV,	PARAM_STR,	"Invalid zero parameter '%s'" },
+ { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
+ { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1691,6 +1700,9 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 
 	struct cgpu_info *cgpu = devices[dev];
 
+	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s%u",
+			id, dev, cgpu->api->name, cgpu->device_id);
+
 	if (cgpu->deven != DEV_DISABLED) {
 		message(io_data, MSG_PGALRENA, id, NULL, isjson);
 		return;
@@ -1704,10 +1716,11 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 #endif
 
 	for (i = 0; i < mining_threads; i++) {
-		pga = thr_info[i].cgpu->device_id;
+		pga = thr_info[i].cgpu->cgminer_id;
 		if (pga == dev) {
 			thr = &thr_info[i];
 			cgpu->deven = DEV_ENABLED;
+			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
 			tq_push(thr->q, &ping);
 		}
 	}
@@ -1743,6 +1756,9 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	struct cgpu_info *cgpu = devices[dev];
+
+	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s%u",
+			id, dev, cgpu->api->name, cgpu->device_id);
 
 	if (cgpu->deven == DEV_DISABLED) {
 		message(io_data, MSG_PGALRDIS, id, NULL, isjson);
@@ -1902,6 +1918,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 			root = api_add_escape(root, "Stratum URL", pool->stratum_url, false);
 		else
 			root = api_add_const(root, "Stratum URL", BLANK, false);
+		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
 
 		root = print_data(root, buf, isjson, isjson && (i > 0));
 		io_add(io_data, buf);
@@ -1991,6 +2008,9 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
+	applog(LOG_DEBUG, "API: request to gpuenable gpuid %d %s%u",
+			id, gpus[id].api->name, gpus[id].device_id);
+
 	if (gpus[id].deven != DEV_DISABLED) {
 		message(io_data, MSG_ALRENA, id, NULL, isjson);
 		return;
@@ -2004,10 +2024,9 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 				message(io_data, MSG_GPUMRE, id, NULL, isjson);
 				return;
 			}
-
 			gpus[id].deven = DEV_ENABLED;
+			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
 			tq_push(thr->q, &ping);
-
 		}
 	}
 
@@ -2033,6 +2052,9 @@ static void gpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		message(io_data, MSG_INVGPU, id, NULL, isjson);
 		return;
 	}
+
+	applog(LOG_DEBUG, "API: request to gpudisable gpuid %d %s%u",
+			id, gpus[id].api->name, gpus[id].device_id);
 
 	if (gpus[id].deven == DEV_DISABLED) {
 		message(io_data, MSG_ALRDIS, id, NULL, isjson);
@@ -2761,6 +2783,8 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 		root = api_add_uint64(root, "Bytes Sent", &(pool_stats->bytes_sent), false);
 		root = api_add_uint64(root, "Times Recv", &(pool_stats->times_received), false);
 		root = api_add_uint64(root, "Bytes Recv", &(pool_stats->bytes_received), false);
+		root = api_add_uint64(root, "Net Bytes Sent", &(pool_stats->net_bytes_sent), false);
+		root = api_add_uint64(root, "Net Bytes Recv", &(pool_stats->net_bytes_received), false);
 	}
 
 	if (extra)
@@ -3048,6 +3072,54 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 }
 #endif
 
+static void dozero(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_ZERMIS, 0, NULL, isjson);
+		return;
+	}
+
+	char *sum = strchr(param, ',');
+	if (sum)
+		*(sum++) = '\0';
+	if (!sum || !*sum) {
+		message(io_data, MSG_MISBOOL, 0, NULL, isjson);
+		return;
+	}
+
+	bool all = false;
+	bool bs = false;
+	if (strcasecmp(param, "all") == 0)
+		all = true;
+	else if (strcasecmp(param, "bestshare") == 0)
+		bs = true;
+
+	if (all == false && bs == false) {
+		message(io_data, MSG_ZERINV, 0, param, isjson);
+		return;
+	}
+
+	*sum = tolower(*sum);
+	if (*sum != 't' && *sum != 'f') {
+		message(io_data, MSG_INVBOOL, 0, NULL, isjson);
+		return;
+	}
+
+	bool dosum = (*sum == 't');
+	if (dosum)
+		print_summary();
+
+	if (all)
+		zero_stats();
+	if (bs)
+		zero_bestshare();
+
+	if (dosum)
+		message(io_data, MSG_ZERSUM, 0, all ? "All" : "BestShare", isjson);
+	else
+		message(io_data, MSG_ZERNOSUM, 0, all ? "All" : "BestShare", isjson);
+}
+
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -3107,6 +3179,7 @@ struct CMDS {
 #ifdef HAVE_AN_FPGA
 	{ "pgaset",		pgaset,		true },
 #endif
+	{ "zero",		dozero,		true },
 	{ NULL,			NULL,		false }
 };
 

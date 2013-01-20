@@ -2566,6 +2566,8 @@ static uint64_t share_diff(const struct work *work)
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
+	if (ret > work->pool->best_diff)
+		work->pool->best_diff = ret;
 	mutex_unlock(&control_lock);
 	return ret;
 }
@@ -2766,7 +2768,7 @@ static inline struct pool *select_pool(bool lagging)
 	return pool;
 }
 
-static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249216.0;
+static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
 
 /*
  * Calculate the work share difficulty
@@ -3024,8 +3026,6 @@ static void disable_curses(void)
 	}
 }
 #endif
-
-static void print_summary(void);
 
 static void __kill_work(void)
 {
@@ -4469,7 +4469,7 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
 		if (pool->accepted || pool->rejected)
 			wlog(" Reject ratio: %.1f%%\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-		uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.bytes_received + pool->cgminer_pool_stats.bytes_sent;
+		uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.net_bytes_received + pool->cgminer_pool_stats.net_bytes_sent;
 		efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 		wlog(" Efficiency (accepted * difficulty / 2 KB): %.2f\n", efficiency);
 
@@ -4735,6 +4735,20 @@ void write_config(FILE *fcfg)
 	json_escape_free();
 }
 
+void zero_bestshare(void)
+{
+	int i;
+
+	best_diff = 0;
+	memset(best_share, 0, 8);
+	suffix_string(best_diff, best_share, 0);
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+		pool->best_diff = 0;
+	}
+}
+
 void zero_stats(void)
 {
 	int i;
@@ -4749,17 +4763,16 @@ void zero_stats(void)
 	total_stale = 0;
 	total_discarded = 0;
 	total_bytes_xfer = 0;
-	total_diff_accepted = total_diff_rejected = total_diff_stale = 0;
 	new_blocks = 0;
-	found_blocks = 0;
 	local_work = 0;
 	total_go = 0;
 	total_ro = 0;
 	total_secs = 1.0;
-	best_diff = 0;
 	total_diff1 = 0;
-	memset(best_share, 0, 8);
-	suffix_string(best_diff, best_share, 0);
+	found_blocks = 0;
+	total_diff_accepted = 0;
+	total_diff_rejected = 0;
+	total_diff_stale = 0;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
@@ -4768,13 +4781,17 @@ void zero_stats(void)
 		pool->accepted = 0;
 		pool->rejected = 0;
 		pool->solved = 0;
-		pool->diff1 = 0;
-		pool->diff_accepted = pool->diff_rejected = pool->diff_stale = 0;
 		pool->getwork_requested = 0;
 		pool->stale_shares = 0;
 		pool->discarded_work = 0;
 		pool->getfail_occasions = 0;
 		pool->remotefail_occasions = 0;
+		pool->last_share_time = 0;
+		pool->diff1 = 0;
+		pool->diff_accepted = 0;
+		pool->diff_rejected = 0;
+		pool->diff_stale = 0;
+		pool->last_share_diff = 0;
 		pool->cgminer_stats.getwork_calls = 0;
 		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		pool->cgminer_stats.getwork_wait_max.tv_sec = 0;
@@ -4790,9 +4807,12 @@ void zero_stats(void)
 		pool->cgminer_pool_stats.max_diff_count = 0;
 		pool->cgminer_pool_stats.times_sent = 0;
 		pool->cgminer_pool_stats.bytes_sent = 0;
+		pool->cgminer_pool_stats.net_bytes_sent = 0;
 		pool->cgminer_pool_stats.times_received = 0;
-		pool->cgminer_pool_stats.times_received = 0;
+		pool->cgminer_pool_stats.net_bytes_received = 0;
 	}
+
+	zero_bestshare();
 
 	mutex_lock(&hash_lock);
 	for (i = 0; i < total_devices; ++i) {
@@ -4804,8 +4824,11 @@ void zero_stats(void)
 		cgpu->hw_errors = 0;
 		cgpu->utility = 0.0;
 		cgpu->utility_diff1 = 0;
+		cgpu->last_share_pool_time = 0;
 		cgpu->diff1 = 0;
-		cgpu->diff_accepted = cgpu->diff_rejected = 0;
+		cgpu->diff_accepted = 0;
+		cgpu->diff_rejected = 0;
+		cgpu->last_share_diff = 0;
 		cgpu->thread_fail_init_count = 0;
 		cgpu->thread_zero_hash_count = 0;
 		cgpu->thread_fail_queue_count = 0;
@@ -7129,7 +7152,7 @@ static void log_print_status(struct cgpu_info *cgpu)
 	applog(LOG_WARNING, "%s", logline);
 }
 
-static void print_summary(void)
+void print_summary(void)
 {
 	struct timeval diff;
 	int hours, mins, secs, i;
@@ -7190,7 +7213,7 @@ static void print_summary(void)
 			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
 			if (pool->accepted || pool->rejected)
 				applog(LOG_WARNING, " Reject ratio: %.1f%%", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-			uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.bytes_received + pool->cgminer_pool_stats.bytes_sent;
+			uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.net_bytes_received + pool->cgminer_pool_stats.net_bytes_sent;
 			efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 			applog(LOG_WARNING, " Efficiency (accepted * difficulty / 2 KB): %.2f", efficiency);
 

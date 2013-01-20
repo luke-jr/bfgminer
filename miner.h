@@ -390,8 +390,10 @@ struct cgminer_pool_stats {
 	uint32_t max_diff_count;
 	uint64_t times_sent;
 	uint64_t bytes_sent;
+	uint64_t net_bytes_sent;
 	uint64_t times_received;
 	uint64_t bytes_received;
+	uint64_t net_bytes_received;
 };
 
 struct cgpu_info {
@@ -768,6 +770,7 @@ extern void api(int thr_id);
 extern struct pool *current_pool(void);
 extern int enabled_pools;
 extern bool detect_stratum(struct pool *pool, char *url);
+extern void print_summary(void);
 extern struct pool *add_pool(void);
 extern void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
@@ -969,6 +972,7 @@ struct pool {
 
 	time_t last_share_time;
 	double last_share_diff;
+	uint64_t best_diff;
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
@@ -1076,6 +1080,8 @@ extern void validate_pool_priorities(void);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
+extern void zero_bestshare(void);
+extern void zero_stats(void);
 extern void default_save_file(char *filename);
 extern bool log_curses_only(int prio, const char *f, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
 extern void clear_logwin(void);

@@ -314,32 +314,38 @@ static void set_nettime(void)
 	wr_unlock(&netacc_lock);
 }
 
-static int my_curl_debug(__maybe_unused CURL *curl, curl_infotype infotype, char *data, size_t datasz, void *userdata)
+static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
+			 char *data, size_t size,
+			 void *userdata)
 {
-	struct pool *pool = userdata;
+	struct pool *pool = (struct pool *)userdata;
 
-	switch (infotype) {
+	switch(type) {
+		case CURLINFO_HEADER_IN:
+		case CURLINFO_DATA_IN:
+		case CURLINFO_SSL_DATA_IN:
+			pool->cgminer_pool_stats.bytes_received += size;
+			total_bytes_xfer += size;
+			pool->cgminer_pool_stats.net_bytes_received += size;
+			break;
+		case CURLINFO_HEADER_OUT:
+		case CURLINFO_DATA_OUT:
+		case CURLINFO_SSL_DATA_OUT:
+			pool->cgminer_pool_stats.bytes_sent += size;
+			total_bytes_xfer += size;
+			pool->cgminer_pool_stats.net_bytes_sent += size;
+			break;
 		case CURLINFO_TEXT:
 		{
 			if (!opt_protocol)
 				break;
 			// data is not null-terminated, so we need to copy and terminate it for applog
-			char datacp[datasz + 1];
-			memcpy(datacp, data, datasz);
-			datacp[datasz] = '\0';
+			char datacp[size + 1];
+			memcpy(datacp, data, size);
+			datacp[size] = '\0';
 			applog(LOG_DEBUG, "Pool %u: %s", pool->pool_no, datacp);
 			break;
 		}
-		case CURLINFO_HEADER_IN:
-		case CURLINFO_DATA_IN:
-			pool->cgminer_pool_stats.bytes_received += datasz;
-			total_bytes_xfer += datasz;
-			break;
-		case CURLINFO_HEADER_OUT:
-		case CURLINFO_DATA_OUT:
-			pool->cgminer_pool_stats.bytes_sent += datasz;
-			total_bytes_xfer += datasz;
-			break;
 		default:
 			break;
 	}
@@ -379,6 +385,12 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_PRIVATE, state);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
+	/* We use DEBUGFUNCTION to count bytes sent/received, and verbose is needed
+	 * to enable it */
+	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, curl_debug_cb);
+	curl_easy_setopt(curl, CURLOPT_DEBUGDATA, (void *)pool);
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
@@ -396,12 +408,6 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
 	curl_easy_setopt(curl, CURLOPT_HEADERDATA, &state->hi);
-
-	/* We use DEBUGFUNCTION to count bytes sent/received, and verbose is needed
-	 * to enable it */
-	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
-	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, my_curl_debug);
-	curl_easy_setopt(curl, CURLOPT_DEBUGDATA, pool);
 
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
 	if (pool->rpc_proxy) {
@@ -1012,6 +1018,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.bytes_sent += ssent;
 	total_bytes_xfer += ssent;
+	pool->cgminer_pool_stats.net_bytes_sent += ssent;
 	return true;
 }
 
@@ -1142,6 +1149,7 @@ char *recv_line(struct pool *pool)
 	pool->cgminer_pool_stats.times_received++;
 	pool->cgminer_pool_stats.bytes_received += len;
 	total_bytes_xfer += len;
+	pool->cgminer_pool_stats.net_bytes_received += len;
 
 out:
 	if (!sret)
@@ -1520,9 +1528,9 @@ bool initiate_stratum(struct pool *pool)
 
 	/* We use DEBUGFUNCTION to count bytes sent/received, and verbose is needed
 	 * to enable it */
+	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, curl_debug_cb);
+	curl_easy_setopt(curl, CURLOPT_DEBUGDATA, (void *)pool);
 	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
-	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, my_curl_debug);
-	curl_easy_setopt(curl, CURLOPT_DEBUGDATA, pool);
 
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
 	if (pool->rpc_proxy) {
