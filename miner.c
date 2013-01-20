@@ -4809,6 +4809,7 @@ void zero_stats(void)
 		pool->cgminer_pool_stats.bytes_sent = 0;
 		pool->cgminer_pool_stats.net_bytes_sent = 0;
 		pool->cgminer_pool_stats.times_received = 0;
+		pool->cgminer_pool_stats.bytes_received = 0;
 		pool->cgminer_pool_stats.net_bytes_received = 0;
 	}
 
