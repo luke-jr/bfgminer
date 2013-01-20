@@ -1435,6 +1435,13 @@ struct device_api opencl_api;
 
 static void opencl_detect()
 {
+#ifndef WIN32
+	if (!getenv("DISPLAY")) {
+		applog(LOG_DEBUG, "DISPLAY not set, setting :0 just in case");
+		setenv("DISPLAY", ":0", 1);
+	}
+#endif
+
 	if (!load_opencl_symbols()) {
 		nDevs = 0;
 		return;
