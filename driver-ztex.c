@@ -156,20 +156,14 @@ static bool ztex_checkNonce(struct libztex_device *ztex,
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
 
-	hdata->nonce = le32toh(hdata->nonce);
-	hdata->hash7 = le32toh(hdata->hash7);
+	swap32[76/4] = htobe32(hdata->nonce);
 
-	work->data[64 + 12 + 0] = (hdata->nonce >> 0) & 0xff;
-	work->data[64 + 12 + 1] = (hdata->nonce >> 8) & 0xff;
-	work->data[64 + 12 + 2] = (hdata->nonce >> 16) & 0xff;
-	work->data[64 + 12 + 3] = (hdata->nonce >> 24) & 0xff;
-
-	swap32yes(swap32, data32, 80 / 4);
+	swap32yes(swap32, data32, 76 / 4);
 
 	sha2(swap, 80, hash1);
 	sha2(hash1, 32, hash2);
-	if (htobe32(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
-		dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
+
+	if (be32toh(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
 		applog(LOG_DEBUG, "%s: checkNonce failed for %08x", ztex->repr, hdata->nonce);
 		return false;
 	}
@@ -232,9 +226,11 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	overflow = false;
+	int count = 0;
 
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
 	while (!(overflow || thr->work_restart)) {
+		count++;
 		nmsleep(250);
 		if (thr->work_restart) {
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
@@ -265,10 +261,9 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		}
 
 		dclk_gotNonces(&ztex->dclk);
- 
+
 		for (i = 0; i < ztex->numNonces; i++) {
 			nonce = hdata[i].nonce;
-			nonce = le32toh(nonce);
 			if (nonce > noncecnt)
 				noncecnt = nonce;
 			if (((0xffffffff - nonce) < (nonce - lastnonce[i])) || nonce < lastnonce[i]) {
@@ -276,32 +271,40 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				overflow = true;
 			} else
 				lastnonce[i] = nonce;
-			nonce = htole32(nonce);
+
 			if (!ztex_checkNonce(ztex, work, &hdata[i])) {
+				// do not count errors in the first 500ms after sendHashData (2x250 wait time)
+				if (count > 2)
+					dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
+
 				thr->cgpu->hw_errors++;
 				++hw_errors;
-				continue;
 			}
+
 			for (j=0; j<=ztex->extraSolutions; j++) {
 				nonce = hdata[i].goldenNonce[j];
-				if (nonce > 0) {
-					found = false;
-					for (k = 0; k < backlog_max; k++) {
-						if (backlog[k] == nonce) {
-							found = true;
-							break;
-						}
+
+				if (nonce == ztex->offsNonces) {
+					continue;
+				}
+
+				found = false;
+				for (k = 0; k < backlog_max; k++) {
+					if (backlog[k] == nonce) {
+						found = true;
+						break;
 					}
-					if (!found) {
-						backlog[backlog_p++] = nonce;
-						if (backlog_p >= backlog_max)
-							backlog_p = 0;
-						nonce = le32toh(nonce);
-						work->blk.nonce = 0xffffffff;
-						if (test_nonce(work, nonce, false))
-							submit_nonce(thr, work, nonce);
-						applog(LOG_DEBUG, "%s: submitted %08x (from N%dE%d)", ztex->repr, nonce, i, j);
-					}
+				}
+				if (!found) {
+					backlog[backlog_p++] = nonce;
+
+					if (backlog_p >= backlog_max)
+						backlog_p = 0;
+
+					work->blk.nonce = 0xffffffff;
+					if (!j || test_nonce(work, nonce, false))
+						submit_nonce(thr, work, nonce);
+					applog(LOG_DEBUG, "%s: submitted %08x (from N%dE%d)", ztex->repr, nonce, i, j);
 				}
 			}
 		}
