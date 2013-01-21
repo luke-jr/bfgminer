@@ -2630,6 +2630,7 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	if (!QUIET) {
 		int intdiff = floor(work->work_difficulty);
 		char diffdisp[16], *outhash;
+		char tgtdiffdisp[16];
 		unsigned char rhash[32];
 		uint64_t sharediff;
 
@@ -2640,7 +2641,8 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			outhash = bin2hex(rhash + 4, 4);
 		sharediff = share_diff(work);
 		suffix_string(sharediff, diffdisp, 0);
-		sprintf(hashshow, "%s Diff %s/%d%s", outhash, diffdisp, intdiff,
+		suffix_string(intdiff, tgtdiffdisp, 0);
+		sprintf(hashshow, "%s Diff %s/%s%s", outhash, diffdisp, tgtdiffdisp,
 			work->block? " BLOCK!" : "");
 		free(outhash);
 
@@ -5419,12 +5421,14 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 	char hashshow[65];
 	uint32_t *hash32;
 	char diffdisp[16];
+	char tgtdiffdisp[16];
 	int intdiff;
 
 	hash32 = (uint32_t *)(work->hash);
 	intdiff = floor(work->work_difficulty);
 	suffix_string(sharediff, diffdisp, 0);
-	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
+	suffix_string(intdiff, tgtdiffdisp, 0);
+	sprintf(hashshow, "%08lx Diff %s/%s%s", (unsigned long)(hash32[6]), diffdisp, tgtdiffdisp,
 		work->block? " BLOCK!" : "");
 	share_result(val, res_val, err_val, work, hashshow, false, "");
 }
