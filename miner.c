@@ -1688,11 +1688,13 @@ static char *workpadding = "0000008000000000000000000000000000000000000000000000
 static
 void __update_block_title(const unsigned char *hash_swap)
 {
+	char *tmp;
 	if (hash_swap) {
 		// Only provided when the block has actually changed
 		free(current_hash);
-		current_hash = bin2hex(&hash_swap[4], 8);
-		current_hash = realloc_strcat(current_hash, "...");
+		current_hash = malloc(3 /* ... */ + 16 /* block hash segment */);
+		tmp = bin2hex(&hash_swap[24], 8);
+		sprintf(current_hash, "...%s", tmp);
 		known_blkheight_current = false;
 	} else if (likely(known_blkheight_current)) {
 		return;
@@ -1700,8 +1702,8 @@ void __update_block_title(const unsigned char *hash_swap)
 	if (current_block_id == known_blkheight_blkid) {
 		// FIXME: The block number will overflow this sometime around AD 2025-2027
 		if (known_blkheight < 1000000) {
-			memcpy(&current_hash[8], "... #", 5);
-			sprintf(&current_hash[13], "%6u", known_blkheight);
+			memmove(&current_hash[3], &current_hash[11], 8);
+			sprintf(&current_hash[11], " #%6u", known_blkheight);
 		}
 		known_blkheight_current = true;
 	}
