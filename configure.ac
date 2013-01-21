@@ -219,6 +219,7 @@ PKG_CHECK_MODULES([USB], [libusb-1.0],[
 	done
 	if test "x$libusb" = xyes; then
 			AC_CHECK_DECL([libusb_init],[
+				true
 			],[
 				AC_PROG_CPP
 				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
