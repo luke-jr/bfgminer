@@ -1,6 +1,5 @@
 /*
- * Copyright 2012 2013 Xiangfu <xiangfu@openmobilefree.com>
- * Copyright 2012 Andrew Smith
+ * Copyright 2013 Xiangfu
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -35,6 +34,7 @@
 #include "driver-avalon.h"
 #include "hexdump.c"
 
+static int no_matching_work = 0;
 static int option_offset = -1;
 
 struct avalon_info **avalon_info;
@@ -116,23 +116,32 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	size_t nr_len;
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
-	uint64_t delay = 32000000; /* default 32ms for B19200 */
+	uint64_t delay = 32000000; /* Default 32ms for B19200 */
 	uint32_t nonce_range;
 	int i;
 
-	nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
+	if (at->nonce_elf)
+		nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
+	else
+		nr_len = AVALON_WRITE_SIZE;
+
 	buf = calloc(1, AVALON_WRITE_SIZE + nr_len);
 	if (!buf)
 		return AVA_SEND_ERROR;
-
 	memcpy(buf, at, AVALON_WRITE_SIZE);
 
-	nonce_range = (uint32_t)0xffffffff / at->asic_num;
-	for (i = 0; i < at->asic_num; i++) {
-		buf[AVALON_WRITE_SIZE + (i * 4) + 3] = (i * nonce_range & 0xff000000) >> 24;
-		buf[AVALON_WRITE_SIZE + (i * 4) + 2] = (i * nonce_range & 0x00ff0000) >> 16;
-		buf[AVALON_WRITE_SIZE + (i * 4) + 1] = (i * nonce_range & 0x0000ff00) >> 8;
-		buf[AVALON_WRITE_SIZE + (i * 4) + 0] = (i * nonce_range & 0x000000ff) >> 0;
+	if (at->nonce_elf) {
+		nonce_range = (uint32_t)0xffffffff / at->asic_num;
+		for (i = 0; i < at->asic_num; i++) {
+			buf[AVALON_WRITE_SIZE + (i * 4) + 3] =
+				(i * nonce_range & 0xff000000) >> 24;
+			buf[AVALON_WRITE_SIZE + (i * 4) + 2] =
+				(i * nonce_range & 0x00ff0000) >> 16;
+			buf[AVALON_WRITE_SIZE + (i * 4) + 1] =
+				(i * nonce_range & 0x0000ff00) >> 8;
+			buf[AVALON_WRITE_SIZE + (i * 4) + 0] =
+				(i * nonce_range & 0x000000ff) >> 0;
+		}
 	}
 #if defined(__BIG_ENDIAN__) || defined(MIPSEB)
 	uint8_t tt = 0;
@@ -311,7 +320,8 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 	}
 
 	if (i != 11) {
-		applog(LOG_ERR, "Avalon: Reset failed! not a Avalon? (%d: %02x %02x %02x %02x)",
+		applog(LOG_ERR, "Avalon: Reset failed! not a Avalon?"
+		       " (%d: %02x %02x %02x %02x)",
 		       i, buf[0], buf[1], buf[2], buf[3]);
 		return 1;
 	}
@@ -321,7 +331,8 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 	nanosleep(&p, NULL);
 
 	applog(LOG_ERR,
-	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d. Temp1: %d, Temp2: %d, Temp3: %d",
+	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d\t"
+	       "Temp1: %d, Temp2: %d, Temp3: %d",
 	       ar->fan0, ar->fan1, ar->fan2, ar->temp0, ar->temp1, ar->temp2);
 
 	applog(LOG_ERR, "Avalon: Reset succeeded");
@@ -333,16 +344,18 @@ static void do_avalon_close(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	avalon_close(avalon->device_fd);
 	avalon->device_fd = -1;
-	/* FIXME: we should free the bulk0/1/2 */
+
+	no_matching_work = 0;
+	/* FIXME: should I free the bulk1 and bulk2? */
 }
 
 static void set_timing_mode(struct cgpu_info *avalon, struct avalon_result *ar)
 {
 	struct avalon_info *info = avalon_info[avalon->device_id];
 
-	info->Hs = ((info->timeout * AVALON_HASH_TIME_FACTOR) / (double)0xffffffff);
-	info->read_count =
-		((int)(info->timeout * AVALON_HASH_TIME_FACTOR * TIME_FACTOR) - 1) / info->miner_count;
+	info->read_count = ((float)info->timeout * AVALON_HASH_TIME_FACTOR *
+			    TIME_FACTOR) / (float)info->miner_count;
+
 	info->fan0 = ar->fan0;
 	info->fan1 = ar->fan1;
 	info->fan2 = ar->fan2;
@@ -616,14 +629,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 	int i, work_i0, work_i1, work_i2;
 	int avalon_get_work_count;
 
+	struct timeval tv_start, tv_finish, elapsed;
 	uint32_t nonce;
 	int64_t hash_count;
-	struct timeval tv_start, tv_finish, elapsed;
-
-	int curr_hw_errors;
-	bool was_hw_error;
-
-	int64_t estimate_hashes;
 
 	avalon = thr->cgpu;
 	info = avalon_info[avalon->device_id];
@@ -680,15 +688,17 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
+
 	hash_count = 0;
 	while(true) {
+		work_i0 = work_i1 = work_i2 = -1;
+
 		full = avalon_buffer_full(fd);
 		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
 		       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
 		if (full == AVA_BUFFER_EMPTY)
 			break;
 
-		work_i0 = work_i1 = work_i2 = -1;
 		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
 		if (ret == AVA_GETS_ERROR) {
 			avalon_free_work(thr, bulk0);
@@ -700,26 +710,10 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			return 0;
 		}
-		/* aborted before becoming idle, get new work */
 		if (ret == AVA_GETS_TIMEOUT) {
 			timersub(&tv_finish, &tv_start, &elapsed);
-
-			estimate_hashes = ((double)(elapsed.tv_sec) +
-					   ((double)(elapsed.tv_usec)) /
-					   ((double)1000000)) / info->Hs;
-
-			/* If Serial-USB delay allowed the full nonce range to
-			 * complete it can't have done more than a full nonce
-			 */
-			if (unlikely(estimate_hashes > 0xffffffff))
-				estimate_hashes = 0xffffffff;
-
-			applog(LOG_DEBUG,
-			       "Avalon: no nonce = 0x%08llx hashes "
-			       "(%ld.%06lds)",
-			       estimate_hashes, elapsed.tv_sec,
-			       elapsed.tv_usec);
-
+			applog(LOG_DEBUG, "Avalon: no nonce in (%ld.%06lds)",
+			       elapsed.tv_sec, elapsed.tv_usec);
 			continue;
 		}
 		if (ret == AVA_GETS_RESTART) {
@@ -747,37 +741,44 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **bulk_work,
 		work_i0 = avalon_decode_nonce(thr, bulk0, &ar, &nonce);
 		work_i1 = avalon_decode_nonce(thr, bulk1, &ar, &nonce);
 		work_i2 = avalon_decode_nonce(thr, bulk2, &ar, &nonce);
+		if ((work_i0 < 0) && (work_i1 < 0) && (work_i2 < 0)) {
+			if (opt_debug) {
+				timersub(&tv_finish, &tv_start, &elapsed);
+				applog(LOG_DEBUG,"Avalon: no matching work: %d"
+				       " (%ld.%06lds)", ++no_matching_work,
+				       elapsed.tv_sec, elapsed.tv_usec);
+			}
+			continue;
+		}
 
-		curr_hw_errors = avalon->hw_errors;
 		if (work_i0 >= 0)
 			submit_nonce(thr, bulk0[work_i0], nonce);
 		if (work_i1 >= 0)
 			submit_nonce(thr, bulk1[work_i1], nonce);
 		if (work_i2 >= 0)
 			submit_nonce(thr, bulk2[work_i2], nonce);
-		was_hw_error = (curr_hw_errors > avalon->hw_errors);
-
-		/* Force a USB close/reopen on any hw error */
-		if (was_hw_error)
-			do_avalon_close(thr);
+		/* TODO: should I take care about HW, no_matching_work? */
 
 		hash_count += nonce;
+
+		if (opt_debug) {
+			timersub(&tv_finish, &tv_start, &elapsed);
+			applog(LOG_DEBUG,
+			       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
+			       "(%ld.%06lds)", nonce, hash_count,
+			       elapsed.tv_sec, elapsed.tv_usec);
+		}
 	}
 	avalon_free_work(thr, bulk0);
 
-	if (opt_debug) {
-		timersub(&tv_finish, &tv_start, &elapsed);
-		applog(LOG_DEBUG,
-		       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
-		       "(%ld.%06lds)",
-		       nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
-	}
-
 	applog(LOG_ERR,
-	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d. Temp1: %d, Temp2: %d, Temp3: %d, TempMAX: %d",
-	       info->fan0, info->fan1, info->fan2, info->temp0, info->temp1, info->temp2, info->temp_max);
+	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d\t"
+	       "Temp1: %d, Temp2: %d, Temp3: %d, TempMAX: %d",
+	       info->fan0, info->fan1, info->fan2,
+	       info->temp0, info->temp1, info->temp2, info->temp_max);
 
-	return (hash_count ? hash_count : ((int64_t)4*1024*1024*1024)*info->miner_count*info->asic_count);
+	return (hash_count ? hash_count :
+		((int64_t)256*1024*1024)*info->miner_count*info->asic_count);
 }
 
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
