@@ -265,6 +265,10 @@ static char best_share[8] = "0";
 static char block_diff[8];
 uint64_t best_diff = 0;
 
+static bool known_blkheight_current;
+static uint32_t known_blkheight;
+static uint32_t known_blkheight_blkid;
+
 struct block {
 	char hash[40];
 	UT_hash_handle hh;
@@ -1680,9 +1684,47 @@ void free_work(struct work *work)
 
 static char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
 
+// Must only be called with ch_lock held!
+static
+void __update_block_title(const unsigned char *hash_swap)
+{
+	if (hash_swap) {
+		// Only provided when the block has actually changed
+		free(current_hash);
+		current_hash = bin2hex(&hash_swap[4], 8);
+		current_hash = realloc_strcat(current_hash, "...");
+		known_blkheight_current = false;
+	} else if (likely(known_blkheight_current)) {
+		return;
+	}
+	if (current_block_id == known_blkheight_blkid) {
+		// FIXME: The block number will overflow this sometime around AD 2025-2027
+		if (known_blkheight < 1000000) {
+			memcpy(&current_hash[8], "... #", 5);
+			sprintf(&current_hash[13], "%6u", known_blkheight);
+		}
+		known_blkheight_current = true;
+	}
+}
+
+static
+void have_block_height(uint32_t block_id, uint32_t blkheight)
+{
+	if (known_blkheight == blkheight)
+		return;
+	applog(LOG_DEBUG, "Learned that block id %08" PRIx32 " is height %" PRIu32, be32toh(block_id), blkheight);
+	mutex_lock(&ch_lock);
+	known_blkheight = blkheight;
+	known_blkheight_blkid = block_id;
+	if (block_id == current_block_id)
+		__update_block_title(NULL);
+	mutex_unlock(&ch_lock);
+}
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
+	json_t *tmp_val;
 	bool ret = false;
 
 	if (unlikely(detect_algo == 1)) {
@@ -1806,6 +1848,12 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			work->target[i] = work->target[p];
 			work->target[p] = c;
 		}
+	}
+
+	if ( (tmp_val = json_object_get(res_val, "height")) ) {
+		uint32_t blkheight = json_number_value(tmp_val);
+		uint32_t block_id = ((uint32_t*)work->data)[1];
+		have_block_height(block_id, blkheight);
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
@@ -2157,7 +2205,7 @@ static void curses_print_status(void)
 			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
+	mvwprintw(statuswin, 5, 0, " Block: %s  Diff:%s  Started: %s  Best share: %s   ",
 		  current_hash, block_diff, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
@@ -4159,9 +4207,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	 * elsewhere - and update block_timeval inside the same lock */
 	mutex_lock(&ch_lock);
 	gettimeofday(&block_timeval, NULL);
-	old_hash = current_hash;
-	current_hash = bin2hex(hash_swap + 4, 8);
-	free(old_hash);
+	__update_block_title(hash_swap);
 	old_hash = current_fullhash;
 	current_fullhash = bin2hex(hash_swap, 32);
 	free(old_hash);
@@ -4169,7 +4215,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 
 	get_timestamp(blocktime, &block_timeval);
 
-	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
+	applog(LOG_INFO, "New block: %s diff %s", current_hash, block_diff);
 }
 
 /* Search to see if this string is from a block that has been seen before */
