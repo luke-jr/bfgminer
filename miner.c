@@ -1692,7 +1692,7 @@ void __update_block_title(const unsigned char *hash_swap)
 	if (hash_swap) {
 		// Only provided when the block has actually changed
 		free(current_hash);
-		current_hash = malloc(3 /* ... */ + 16 /* block hash segment */);
+		current_hash = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
 		tmp = bin2hex(&hash_swap[24], 8);
 		sprintf(current_hash, "...%s", tmp);
 		known_blkheight_current = false;
