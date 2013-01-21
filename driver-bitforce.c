@@ -167,6 +167,7 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 	char *s;
 	struct timeval init_start, init_now;
 	int init_sleep, init_count;
+	bool ident_first;
 
 	struct cgpu_info *bitforce = NULL;
 	bitforce = calloc(1, sizeof(*bitforce));
@@ -187,13 +188,14 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 			(int)(bitforce->usbdev->device_address));
 
 
+	// Allow 2 complete attempts if the 1st time returns an unrecognised reply
+	ident_first = true;
+retry:
 	init_count = 0;
 	init_sleep = REINIT_TIME_FIRST_MS;
 	gettimeofday(&init_start, NULL);
 reinit:
-
 	bitforce_initialise(bitforce, false);
-
 	if ((err = usb_write(bitforce, BITFORCE_IDENTIFY, BITFORCE_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY)) < 0 || amount != BITFORCE_IDENTIFY_LEN) {
 		applog(LOG_ERR, "%s detect (%s) send identify request failed (%d:%d)",
 			bitforce->drv->dname, devpath, amount, err);
@@ -231,7 +233,13 @@ reinit:
 	buf[amount] = '\0';
 
 	if (unlikely(!strstr(buf, "SHA256"))) {
-		applog(LOG_ERR, "%s detect (%s) didn't recognise '%s'",
+		if (ident_first) {
+			applog(LOG_WARNING, "%s detect (%s) didn't recognise '%s' trying again ...",
+				bitforce->drv->dname, devpath, buf);
+			ident_first = false;
+			goto retry;
+		}
+		applog(LOG_ERR, "%s detect (%s) didn't recognise '%s' on 2nd attempt",
 			bitforce->drv->dname, devpath, buf);
 		goto unshin;
 	}
