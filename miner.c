@@ -5784,6 +5784,20 @@ static void *stratum_thread(void *userdata)
 			 * block database */
 			pool->swork.clean = false;
 			gen_stratum_work(pool, work);
+
+			/* Try to extract block height from coinbase scriptSig */
+			char *hex_height = &pool->swork.coinbase1[8 /*version*/ + 2 /*txin count*/ + 72 /*prevout*/ + 2 /*scriptSig len*/ + 2 /*push opcode*/];
+			unsigned char cb_height_sz;
+			hex2bin(&cb_height_sz, &hex_height[-2], 1);
+			if (cb_height_sz == 3) {
+				// FIXME: The block number will overflow this by AD 2173
+				uint32_t block_id = ((uint32_t*)work->data)[1];
+				uint32_t height = 0;
+				hex2bin((unsigned char*)&height, hex_height, 3);
+				height = le32toh(height);
+				have_block_height(block_id, height);
+			}
+
 			++pool->work_restart_id;
 			if (test_work_current(work)) {
 				/* Only accept a work restart if this stratum
