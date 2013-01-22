@@ -763,7 +763,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	       info->fan0, info->fan1, info->fan2,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
 
-	return (hash_count ? hash_count :
+	return (hash_count ? (hash_count * 2) :
 		((int64_t)256*1024*1024)*info->miner_count*info->asic_count);
 }
 
