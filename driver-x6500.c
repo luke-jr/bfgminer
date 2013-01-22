@@ -660,12 +660,6 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 
 				dclk_gotNonces(&fpga->dclk);
 				dclk_errorCount(&fpga->dclk, 1.);
-
-				// Purge buffers just in case of read/write desync
-				mutex_lock(&x6500->device_mutex);
-				ft232r_purge_buffers(jtag->a->ftdi, FTDI_PURGE_BOTH);
-				mutex_unlock(&x6500->device_mutex);
-				jtag->a->bufread = 0;
 			}
 			// Keep reading nonce buffer until it's empty
 			// This is necessary to avoid getting hw errors from Freq B after we've moved on to Freq A
