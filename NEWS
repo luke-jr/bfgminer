@@ -1,5 +1,7 @@
 BFGMiner Version 2.9.8 - January 22, 2013
 
+- Revert "x6500: Whenever we get a hardware error, purge buffers just in case
+of read/write desync"
 - Bugfix: libblkmaker: Check that zero-padding on base58check input matches
 output (needed to properly reject addresses with too many or too few prefix/pad
 '1's)
