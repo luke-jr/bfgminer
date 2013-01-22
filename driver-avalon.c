@@ -322,7 +322,7 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 		applog(LOG_ERR, "Avalon: Reset failed! not a Avalon?"
 		       " (%d: %02x %02x %02x %02x)",
 		       i, buf[0], buf[1], buf[2], buf[3]);
-		return 1;
+		/* FIXME: return 1; */
 	}
 
 	p.tv_sec = 1;
@@ -502,8 +502,9 @@ static bool avalon_detect_one(const char *devpath)
 	ret = avalon_reset(fd, timeout, asic_count, miner_count, &ar);
 	avalon_close(fd);
 
-	if (ret)
-		return false;
+	if (ret) {
+		; /* FIXME: I think IT IS avalon and wait on reset; return false; */
+	}
 
 	/* We have a real Avalon! */
 	struct cgpu_info *avalon;
