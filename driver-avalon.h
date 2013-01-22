@@ -10,6 +10,19 @@
 #ifndef AVALON_H
 #define AVALON_H
 
+#define TIME_FACTOR 10
+#define AVALON_RESET_FAULT_DECISECONDS 1
+#define AVALON_MINER_THREADS 1
+
+#define AVALON_IO_SPEED		115200
+#define AVALON_HASH_TIME_FACTOR	((float)1.67/0x32)
+#define AVALON_RESET_PITCH	(80*1000*1000)
+
+#define AVALON_DEFAULT_FAN_PWM 0xc0
+#define AVALON_DEFAULT_TIMEOUT 0x32
+#define AVALON_DEFAULT_MINER_NUM 24
+#define AVALON_DEFAULT_ASIC_NUM 0xA
+
 struct avalon_task {
 	uint8_t reset		:1;
 	uint8_t flush_fifo	:1;
@@ -66,20 +79,12 @@ struct avalon_info {
 	int temp2;
 
 	int temp_max;
+
+	int no_matching_work;
+	struct work *bulk0[AVALON_DEFAULT_MINER_NUM];
+	struct work *bulk1[AVALON_DEFAULT_MINER_NUM];
+	struct work *bulk2[AVALON_DEFAULT_MINER_NUM];
 };
-
-#define TIME_FACTOR 10
-#define AVALON_RESET_FAULT_DECISECONDS 1
-#define AVALON_MINER_THREADS 1
-
-#define AVALON_IO_SPEED		115200
-#define AVALON_HASH_TIME_FACTOR	((float)1.67/0x32)
-#define AVALON_RESET_PITCH	(80*1000*1000)
-
-#define AVALON_DEFAULT_FAN_PWM 0x98
-#define AVALON_DEFAULT_TIMEOUT 0x32
-#define AVALON_DEFAULT_MINER_NUM 24
-#define AVALON_DEFAULT_ASIC_NUM 0xA
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
 #define AVALON_READ_SIZE (sizeof(struct avalon_result))
