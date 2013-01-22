@@ -410,13 +410,15 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.24
+API V1.24 (BFGMiner v2.10.3)
 
 Added API commands:
  'zero'
 
 Modified API commands:
  'pools' - add 'Best Share'
+ 'stats' - rename 'Bytes Sent' and 'Bytes Recv' to 'Net Bytes Sent' and
+                  'Net Bytes Recv'
 
 ----------
 

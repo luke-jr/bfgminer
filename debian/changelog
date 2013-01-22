@@ -1,3 +1,12 @@
+bfgminer (2.10.3-0precise1) precise; urgency=low
+
+  * Current block display shows end of the previous block hash and (when GBT or Stratum servers are active) the next block's (that you're looking for) height.
+  * miner.php and RPC API updates from Kano, including multiuser support for miner.php
+  * Finally fix long-standing scrypt difficulty and u-hashrate calculation bugs.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 22 Jan 2013 00:20:02 -0000
+
+
 bfgminer (2.10.2-0precise1) precise; urgency=low
 
   * There is now a [Z]ero stats option under the display menu which resets all the visible statistics.

@@ -1,14 +1,49 @@
-BFGMiner Version 2.10.3 - Future
+BFGMiner Version 2.10.3 - January 22, 2013
 
-- Change the pool stratum socket buffer to be dynamically allocated to
-accomodate any size coinbase and keep receiving data in recv line for up to 60s
-if no end of line has been received.
+- Bugfix: libblkmaker: Check that zero-padding on base58check input matches
+output (needed to properly reject addresses with too many or too few prefix/pad
+'1's)
+- Bugfix: Free bin2hex output in __update_block_title
+- Bugfix: Allocate space for the terminating null byte on new current_hash
+- Display tail end of prevblock hash rather than start+32bits
+- Try to extract block height from coinbase scriptSig, when mining stratum
+- Display next block height when using GBT
+- Use suffixes for target-difficulty also, in share accept/reject loglines
+- Bugfix: Implement common target_diff function, fixing scrypt-specific bugs in
+and simplifying common code shared by set_blockdiff, calc_diff, and share_diff
+- Set DISPLAY to :0 by default (on non-Windows)
+- Bugfix: Reset pool bytes received when zeroing stats
+- miner.php trim trailing zeros on some of the STATS numbers
+- Semi-Cherrypick: API stats - include pool network bytes + in miner.php
+- Best Share readme
+- API zero - zero statistics - all or bestshare - with optional on screen
+summary
+- api.c pgaenable not re-enabling the device - plus related debug
+- diffexactone pool diff1 used for share value calculation is ffffffff... not
+100000000... :P
+- miner.php user/pass fix 'usr' is readonly
+- miner.php optional user/pass login restrictions
+- zero (most) API stats
+- Remember best share per pool and return in API pools
+- ztex: precheck the secondary solutions to avoid hw errors the ztex bitstreams
+gives back the latest checked nonce and its hash7 value and two possible
+solutions.
+- Bugfix: configure: if blocks require at least one command, so fill with true
+- Bugfix: Only log stratum resume if it was actually "idle" before
+- Zero the best share string memory when zeroing stats.
+- Change the pool stratum socket buffer to new cgminer implementation, to
+allocate it in a grow-only fashon and reduce virtual memory fragmentation at
+the expense of CPU time.
 - Differentiate socket full from sock full.
 - Allow stratum to startup without notify but check it is valid before creating
 stratum work.
 - Do not try to generate stratum work unless the notify command has succeeded.
-- Reset total diff1 shares when zeroing stats as well to show correct work
-utility.
+- Document Mac OS X configure usage with Homebrew pkg-config path
+- Clean up post-configure display of compile environment
+- Bugfix: If native ncurses detection fails, print "none?" result before moving
+on to try AC_SEARCH_LIBS scan
+- Fix more printf-format non-compatibilities
+- Update windows-build.txt
 
 
 BFGMiner Version 2.10.2 - December 27, 2012
