@@ -1,3 +1,23 @@
+BFGMiner Version 2.9.8 - January 22, 2013
+
+- Bugfix: libblkmaker: Check that zero-padding on base58check input matches
+output (needed to properly reject addresses with too many or too few prefix/pad
+'1's)
+- api.c pgaenable not re-enabling the device
+- diffexactone pool diff1 used for share value calculation is ffffffff... not
+100000000... :P
+- Bugfix: configure: if blocks require at least one command, so fill with true
+- Bugfix: Only log stratum resume if it was actually "idle" before
+- Differentiate socket full from sock full.
+- Allow stratum to startup without notify but check it is valid before creating
+stratum work.
+- Do not try to generate stratum work unless the notify command has succeeded.
+- Bugfix: If native ncurses detection fails, print "none?" result before moving
+on to try AC_SEARCH_LIBS scan
+- Fix more printf-format non-compatibilities
+- Update windows-build.txt
+
+
 BFGMiner Version 2.9.7 - December 27, 2012
 
 - Parse anything in the stratum socket if it's full without waiting.
