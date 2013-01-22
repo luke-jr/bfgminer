@@ -67,8 +67,6 @@ struct cg_usb_device {
 	libusb_device_handle *handle;
 	pthread_mutex_t *mutex;
 	struct libusb_device_descriptor *descriptor;
-	uint8_t bus_number;
-	uint8_t device_address;
 	uint16_t usbver;
 	int speed;
 	char *prod_string;
@@ -76,6 +74,15 @@ struct cg_usb_device {
 	char *serial_string;
 	unsigned char fwVersion;	// ??
 	unsigned char interfaceVersion;	// ??
+};
+
+struct cg_usb_info {
+	uint8_t bus_number;
+	uint8_t device_address;
+	int usbstat;
+	bool nodev;
+	int nodev_count;
+	struct timeval last_nodev;
 };
 
 enum usb_cmds {

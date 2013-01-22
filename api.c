@@ -1575,7 +1575,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 #if defined(USE_MODMINER) || defined(USE_BITFORCE)
-		root = api_add_bool(root, "No Device", &(cgpu->nodev), false);
+		root = api_add_bool(root, "No Device", &(cgpu->usbinfo.nodev), false);
 #endif
 
 		root = print_data(root, buf, isjson, precom);
@@ -1793,7 +1793,7 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 #endif
 
 #if defined(USE_MODMINER) || defined(USE_BITFORCE)
-	if (cgpu->nodev) {
+	if (cgpu->usbinfo.nodev) {
 		message(io_data, MSG_USBNODEV, id, NULL, isjson);
 		return;
 	}

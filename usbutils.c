@@ -641,7 +641,7 @@ static void add_used(libusb_device *dev, bool lock)
 			mutex_unlock(list_lock);
 
 		sprintf(buf, "add_used() duplicate bus_number %d device_address %d",
-				bus_number, device_address);
+				(int)bus_number, (int)device_address);
 		quit(1, buf);
 	}
 
@@ -692,7 +692,7 @@ static void release(uint8_t bus_number, uint8_t device_address, bool lock)
 			mutex_unlock(list_lock);
 
 		sprintf(buf, "release() unknown: bus_number %d device_address %d",
-				bus_number, device_address);
+				(int)bus_number, (int)device_address);
 		quit(1, buf);
 	}
 
@@ -752,26 +752,26 @@ void usb_uninit(struct cgpu_info *cgpu)
 void release_cgpu(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
-	uint8_t bus_number;
-	uint8_t device_address;
 	int i;
 
-	cgpu->nodev = true;
+	cgpu->usbinfo.nodev = true;
+	cgpu->usbinfo.nodev_count++;
+	gettimeofday(&(cgpu->usbinfo.last_nodev), NULL);
 
 	// Any devices sharing the same USB device should be marked also
 	// Currently only MMQ shares a USB device
 	for (i = 0; i < total_devices; i++)
 		if (devices[i] != cgpu && devices[i]->usbdev == cgusb) {
-			devices[i]->nodev = true;
+			devices[i]->usbinfo.nodev = true;
+			devices[i]->usbinfo.nodev_count++;
+			memcpy(&(devices[i]->usbinfo.last_nodev),
+				&(cgpu->usbinfo.last_nodev), sizeof(struct timeval));
 			devices[i]->usbdev = NULL;
 		}
 
-	bus_number = cgusb->bus_number;
-	device_address = cgusb->device_address;
-
 	usb_uninit(cgpu);
 
-	release(bus_number, device_address, true);
+	release(cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address, true);
 }
 
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
@@ -783,11 +783,11 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 	unsigned char strbuf[STRBUFLEN+1];
 	int err, i, j, k;
 
+	cgpu->usbinfo.bus_number = libusb_get_bus_number(dev);
+	cgpu->usbinfo.device_address = libusb_get_device_address(dev);
+
 	cgusb = calloc(1, sizeof(*cgusb));
 	cgusb->found = found;
-
-	cgusb->bus_number = libusb_get_bus_number(dev);
-	cgusb->device_address = libusb_get_device_address(dev);
 
 	cgusb->descriptor = calloc(1, sizeof(*(cgusb->descriptor)));
 
@@ -828,7 +828,8 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		switch(err) {
 			case LIBUSB_ERROR_BUSY:
 				applog(LOG_WARNING, "USB init, %s device %d:%d in use",
-						found->name, cgusb->bus_number, cgusb->device_address);
+						found->name, (int)(cgpu->usbinfo.bus_number),
+						(int)(cgpu->usbinfo.device_address));
 				break;
 			default:
 				applog(LOG_DEBUG, "USB init, failed to set config to %d, err %d",
@@ -908,7 +909,7 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 //	cgusb->fwVersion <- for temp1/temp2 decision? or serial? (driver-modminer.c)
 //	cgusb->interfaceVersion
 
-	applog(LOG_DEBUG, "USB init device bus_number=%d device_address=%d usbver=%04x prod='%s' manuf='%s' serial='%s'", (int)(cgusb->bus_number), (int)(cgusb->device_address), cgusb->usbver, cgusb->prod_string, cgusb->manuf_string, cgusb->serial_string);
+	applog(LOG_DEBUG, "USB init device bus_number=%d device_address=%d usbver=%04x prod='%s' manuf='%s' serial='%s'", (int)(cgpu->usbinfo.bus_number), (int)(cgpu->usbinfo.device_address), cgusb->usbver, cgusb->prod_string, cgusb->manuf_string, cgusb->serial_string);
 
 	cgpu->usbdev = cgusb;
 
@@ -1134,7 +1135,7 @@ static void newstats(struct cgpu_info *cgpu)
 {
 	int i;
 
-	cgpu->usbstat = ++next_stat;
+	cgpu->usbinfo.usbstat = ++next_stat;
 
 	usb_stats = realloc(usb_stats, sizeof(*usb_stats) * next_stat);
 	usb_stats[next_stat-1].name = cgpu->drv->name;
@@ -1148,11 +1149,11 @@ static void newstats(struct cgpu_info *cgpu)
 void update_usb_stats(__maybe_unused struct cgpu_info *cgpu)
 {
 #if DO_USB_STATS
-	if (cgpu->usbstat < 1)
+	if (cgpu->usbinfo.usbstat < 1)
 		newstats(cgpu);
 
 	// we don't know the device_id until after add_cgpu()
-	usb_stats[cgpu->usbstat - 1].device_id = cgpu->device_id;
+	usb_stats[cgpu->usbinfo.usbstat - 1].device_id = cgpu->device_id;
 #endif
 }
 
@@ -1163,10 +1164,10 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 	double diff;
 	int item;
 
-	if (cgpu->usbstat < 1)
+	if (cgpu->usbinfo.usbstat < 1)
 		newstats(cgpu);
 
-	details = &(usb_stats[cgpu->usbstat - 1].details[cmd * 2 + seq]);
+	details = &(usb_stats[cgpu->usbinfo.usbstat - 1].details[cmd * 2 + seq]);
 
 	diff = tdiff(tv_finish, tv_start);
 
@@ -1201,10 +1202,10 @@ static void rejected_inc(struct cgpu_info *cgpu)
 	struct cg_usb_stats_details *details;
 	int item = CMD_ERROR;
 
-	if (cgpu->usbstat < 1)
+	if (cgpu->usbinfo.usbstat < 1)
 		newstats(cgpu);
 
-	details = &(usb_stats[cgpu->usbstat - 1].details[C_REJECTED * 2 + 0]);
+	details = &(usb_stats[cgpu->usbinfo.usbstat - 1].details[C_REJECTED * 2 + 0]);
 
 	details->item[item].count++;
 }
@@ -1222,7 +1223,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	int err, got, tot, i;
 	bool first = true;
 
-	if (cgpu->nodev) {
+	if (cgpu->usbinfo.nodev) {
 		*buf = '\0';
 		*processed = 0;
 #if DO_USB_STATS
@@ -1330,7 +1331,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 #endif
 	int err, sent;
 
-	if (cgpu->nodev) {
+	if (cgpu->usbinfo.nodev) {
 		*processed = 0;
 #if DO_USB_STATS
 		rejected_inc(cgpu);
@@ -1364,7 +1365,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 #endif
 	int err;
 
-	if (cgpu->nodev) {
+	if (cgpu->usbinfo.nodev) {
 #if DO_USB_STATS
 		rejected_inc(cgpu);
 #endif

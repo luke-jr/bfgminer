@@ -92,7 +92,7 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: reset got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
-	if (bitforce->nodev)
+	if (bitforce->usbinfo.nodev)
 		goto failed;
 
 	// Set data control
@@ -102,7 +102,7 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: setdata got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
-	if (bitforce->nodev)
+	if (bitforce->usbinfo.nodev)
 		goto failed;
 
 	// Set the baud
@@ -113,7 +113,7 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: setbaud got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
-	if (bitforce->nodev)
+	if (bitforce->usbinfo.nodev)
 		goto failed;
 
 	// Set Flow Control
@@ -123,7 +123,7 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: setflowctrl got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
-	if (bitforce->nodev)
+	if (bitforce->usbinfo.nodev)
 		goto failed;
 
 	// Set Modem Control
@@ -133,7 +133,7 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: setmodemctrl got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
-	if (bitforce->nodev)
+	if (bitforce->usbinfo.nodev)
 		goto failed;
 
 	// Clear any sent data
@@ -143,7 +143,7 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		applog(LOG_DEBUG, "%s%i: purgetx got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
 
-	if (bitforce->nodev)
+	if (bitforce->usbinfo.nodev)
 		goto failed;
 
 	// Clear any received data
@@ -178,14 +178,14 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 	if (!usb_init(bitforce, dev, found)) {
 		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
 			bitforce->drv->dname,
-			(int)libusb_get_bus_number(dev),
-			(int)libusb_get_device_address(dev));
+			(int)(bitforce->usbinfo.bus_number),
+			(int)(bitforce->usbinfo.device_address));
 		goto shin;
 	}
 
 	sprintf(devpath, "%d:%d",
-			(int)(bitforce->usbdev->bus_number),
-			(int)(bitforce->usbdev->device_address));
+			(int)(bitforce->usbinfo.bus_number),
+			(int)(bitforce->usbinfo.device_address));
 
 
 	// Allow 2 complete attempts if the 1st time returns an unrecognised reply
@@ -361,7 +361,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	char *s;
 
 	// Device is gone
-	if (bitforce->nodev)
+	if (bitforce->usbinfo.nodev)
 		return false;
 
 	/* Do not try to get the temperature if we're polling for a result to
@@ -683,7 +683,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 	int64_t ret;
 
 	// Device is gone
-	if (bitforce->nodev)
+	if (bitforce->usbinfo.nodev)
 		return -1;
 
 	send_ret = bitforce_send_work(thr, work);

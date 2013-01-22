@@ -129,14 +129,14 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	if (!usb_init(modminer, dev, found)) {
 		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
 			modminer->drv->dname,
-			(int)libusb_get_bus_number(dev),
-			(int)libusb_get_device_address(dev));
+			(int)(modminer->usbinfo.bus_number),
+			(int)(modminer->usbinfo.device_address));
 		goto shin;
 	}
 
 	sprintf(devpath, "%d:%d",
-			(int)(modminer->usbdev->bus_number),
-			(int)(modminer->usbdev->device_address));
+			(int)(modminer->usbinfo.bus_number),
+			(int)(modminer->usbinfo.device_address));
 
 	do_ping(modminer);
 
@@ -204,15 +204,15 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 		tmp->name = devname;
 
 		sprintf(devpath, "%d:%d:%d",
-			(int)(modminer->usbdev->bus_number),
-			(int)(modminer->usbdev->device_address),
+			(int)(modminer->usbinfo.bus_number),
+			(int)(modminer->usbinfo.device_address),
 			i);
 
 		tmp->device_path = strdup(devpath);
 		tmp->usbdev = modminer->usbdev;
 		// Only the first copy gets the already used stats
 		if (!added)
-			tmp->usbstat = modminer->usbstat;
+			tmp->usbinfo.usbstat = modminer->usbinfo.usbstat;
 		tmp->fpgaid = (char)i;
 		tmp->modminer_mutex = modminer->modminer_mutex;
 		tmp->deven = DEV_ENABLED;
@@ -640,7 +640,7 @@ static const char *modminer_delta_clock(struct thr_info *thr, int delta, bool te
 	int err, amount;
 
 	// Device is gone
-	if (modminer->nodev)
+	if (modminer->usbinfo.nodev)
 		return clocknodev;
 
 	// Only do once if multiple shares per work or multiple reasons
@@ -828,7 +828,7 @@ static void check_temperature(struct thr_info *thr)
 	int amount;
 
 	// Device is gone
-	if (modminer->nodev)
+	if (modminer->usbinfo.nodev)
 		return;
 
 	if (state->one_byte_temp) {
@@ -916,7 +916,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 	int temploop;
 
 	// Device is gone
-	if (modminer->nodev)
+	if (modminer->usbinfo.nodev)
 		return -1;
 
 	// If we are overheated it will just keep checking for results
@@ -1079,7 +1079,7 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 	struct timeval tv1, tv2;
 
 	// Device is gone
-	if (thr->cgpu->nodev)
+	if (thr->cgpu->usbinfo.nodev)
 		return -1;
 
 	// Don't start new work if overheated
@@ -1092,7 +1092,7 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 			check_temperature(thr);
 
 			// Device is gone
-			if (thr->cgpu->nodev)
+			if (thr->cgpu->usbinfo.nodev)
 				return -1;
 
 			if (state->overheated == true) {
