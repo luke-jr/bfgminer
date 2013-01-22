@@ -41,7 +41,7 @@ struct device_api avalon_api;
 static int avalon_init_task(struct thr_info *thr, struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
 			    uint8_t timeout_p, uint8_t asic_num_p,
-			    uint8_t miner_num_p)
+			    uint8_t miner_num_p, uint8_t nonce_elf_p)
 {
 	static bool first = true;
 
@@ -93,7 +93,7 @@ static int avalon_init_task(struct thr_info *thr, struct avalon_task *at,
 	at->asic_num = asic_num;
 	at->miner_num = miner_num;
 
-	at->nonce_elf = 1;
+	at->nonce_elf = nonce_elf_p;
 
 	return 0;
 }
@@ -111,7 +111,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	size_t ret;
 	int full;
 	struct timespec p;
-	uint8_t *buf;
+	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
 	size_t nr_len;
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
@@ -124,9 +124,6 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	else
 		nr_len = AVALON_WRITE_SIZE;
 
-	buf = calloc(1, AVALON_WRITE_SIZE + nr_len);
-	if (unlikely(!buf))
-		return AVA_SEND_ERROR;
 	memcpy(buf, at, AVALON_WRITE_SIZE);
 
 	if (at->nonce_elf) {
@@ -157,7 +154,6 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 		hexdump((uint8_t *)buf, nr_len);
 	}
 	ret = write(fd, buf, nr_len);
-	free(buf);
 	if (unlikely(ret != nr_len))
 		return AVA_SEND_ERROR;
 
@@ -283,12 +279,14 @@ static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
 	if (i == avalon_get_work_count)
 		return -1;
 
+	++info->matching_work[i];
 	*nonce = ar->nonce;
 #if defined (__BIG_ENDIAN__) || defined(MIPSEB)
 	*nonce = swab32(*nonce);
 #endif
 
-	applog(LOG_DEBUG, "Avalon: match to work[%d]: %p", i, work[i]);
+	applog(LOG_DEBUG, "Avalon: match to work[%d](%p): %d",i, work[i],
+	       info->matching_work[i]);
 	return i;
 }
 
@@ -303,7 +301,7 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 	avalon_init_task(NULL,
 			 &at, 1, 0,
 			 AVALON_DEFAULT_FAN_PWM,
-			 timeout_p, asic_num_p, miner_num_p);
+			 timeout_p, asic_num_p, miner_num_p, 1);
 	ret = avalon_send_task(fd, &at, NULL);
 	if (ret == AVA_SEND_ERROR)
 		return 1;
@@ -650,7 +648,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	i = 0;
 	while (true) {
-		avalon_init_task(thr, &at, 0, 0, 0, 0, 0, 0);
+		avalon_init_task(thr, &at, 0, 0, 0, 0, 0, 0, 1);
 		avalon_create_task(&at, work[i]);
 		ret = avalon_send_task(fd, &at, thr);
 		if (unlikely(ret == AVA_SEND_ERROR ||
