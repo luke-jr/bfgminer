@@ -763,6 +763,15 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	       info->fan0, info->fan1, info->fan2,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
 
+	/*
+	 * FIXME: Each work split to 10 pieces, each piece send to a
+	 * asic(256MHs). one work can be mulit-nonce back. it is not
+	 * easy calculate correct hash on such situation. so I simplely
+	 * add each nonce to hash_count. base on Utility/m hash_count*2
+	 * give a very good result.
+	 *
+	 * Any patch will be great.
+	 */
 	return (hash_count ? (hash_count * 2) :
 		((int64_t)256*1024*1024)*info->miner_count*info->asic_count);
 }
