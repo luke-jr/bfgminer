@@ -752,7 +752,7 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 
 struct device_drv bitforce_drv = {
 	.drv = DRIVER_BITFORCE,
-	.dname = "bitforce",
+	.dname = "BitForce",
 	.name = "BFL",
 	.drv_detect = bitforce_detect,
 	.get_api_stats = bitforce_api_stats,
