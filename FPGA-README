@@ -245,10 +245,10 @@ board.  The command should look something like (for a single FPGA board):
 java -cp ZtexBTCMiner-120417.jar BTCMiner -m p -f ztex_ufm1_15d.ihx -s 01-02-01
 
 At this point, you're ready to mine with ZTEX's miner.  However, if you'd like to use BFGMiner, you'll have
-to swap the USB drivers.  The BFGMiner compatible USB drivers for the board can be generated with this
+to swap the USB drivers.  The BFGMiner compatible WinUSB drivers for the board can be generated with this
 tool: http://sourceforge.net/projects/libwdi/files/zadig/.  Basic usage instructions for Zadig can be found
-here: https://github.com/pbatard/libwdi/wiki/Zadig.  Once Zadig generates and installs a driver, ensure
-everything is working by running:
+here: https://github.com/pbatard/libwdi/wiki/Zadig.  Once Zadig generates and installs a WinUSB driver,
+ensure everything is working by running:
 
 bfgminer -D -d? -T
 
@@ -256,9 +256,5 @@ You should see something like this in the output:
 [2013-01-22 20:19:11] Found 1 ztex board
 [2013-01-22 20:19:11] ZTX 0: Found Ztex (ZTEX 0001-02-01-1)
 
-Now you're ready to mine.  It's usually useful to mine with the -D -d? -T options and watch for ZTEX related
+Now you're ready to mine.  It's usually useful to mine with the -D -T options and watch for ZTEX related
 messages.
-
-
---- Linux ---
-TODO
