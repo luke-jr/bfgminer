@@ -149,6 +149,8 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	buf[0] = tt;
 	buf[4] = rev8(buf[4]);
 #endif
+	if (at->reset)
+		nr_len = 1;
 	if (opt_debug) {
 		applog(LOG_DEBUG, "Avalon: Sent(%d):", nr_len);
 		hexdump((uint8_t *)buf, nr_len);
@@ -602,6 +604,7 @@ static void do_avalon_close(struct thr_info *thr)
 	avalon_free_work(thr, info->bulk0);
 	avalon_free_work(thr, info->bulk1);
 	avalon_free_work(thr, info->bulk2);
+	avalon_free_work(thr, info->bulk3);
 }
 
 static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
@@ -613,12 +616,13 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	struct avalon_info *info;
 	struct avalon_task at;
 	struct avalon_result ar;
-	int i, work_i0, work_i1, work_i2;
+	int i, work_i0, work_i1, work_i2, work_i3;
 	int avalon_get_work_count;
 
 	struct timeval tv_start, tv_finish, elapsed;
 	uint32_t nonce;
 	int64_t hash_count;
+	static int first_try = 0;
 
 	avalon = thr->cgpu;
 	info = avalon_info[avalon->device_id];
@@ -640,9 +644,10 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	for (i = 0; i < avalon_get_work_count; i++) {
 		info->bulk0[i] = info->bulk1[i];
 		info->bulk1[i] = info->bulk2[i];
-		info->bulk2[i] = work[i];
+		info->bulk2[i] = info->bulk3[i];
+		info->bulk3[i] = work[i];
 		applog(LOG_DEBUG, "Avalon: bulk0/1/2 buffer [%d]: %p, %p, %p",
-		       i, info->bulk0[i], info->bulk1[i], info->bulk2[i]);
+		       i, info->bulk0[i], info->bulk1[i], info->bulk2[i], info->bulk3[i]);
 	}
 
 	i = 0;
@@ -651,17 +656,24 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		avalon_create_task(&at, work[i]);
 		ret = avalon_send_task(fd, &at, thr);
 		if (unlikely(ret == AVA_SEND_ERROR ||
-		    (ret == AVA_SEND_BUFFER_EMPTY &&
-		     (i + 1 == avalon_get_work_count)))) {
+			     (ret == AVA_SEND_BUFFER_EMPTY &&
+			      (i + 1 == avalon_get_work_count) &&
+			      first_try))) {
 			avalon_free_work(thr, info->bulk0);
 			avalon_free_work(thr, info->bulk1);
 			avalon_free_work(thr, info->bulk2);
+			avalon_free_work(thr, info->bulk3);
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error(buffer)",
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
+			first_try = 0;
 			sleep(1);
 			return 0;	/* This should never happen */
+		}
+		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == avalon_get_work_count)) {
+			first_try = 1;
+			return 0xffffffff;
 		}
 
 		work[i]->blk.nonce = 0xffffffff;
@@ -671,6 +683,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 		i++;
 	}
+	if (unlikely(first_try))
+		first_try = 0;
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
@@ -690,6 +704,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk0);
 			avalon_free_work(thr, info->bulk1);
 			avalon_free_work(thr, info->bulk2);
+			avalon_free_work(thr, info->bulk3);
 			do_avalon_close(thr);
 			applog(LOG_ERR,
 			       "AVA%i: Comms error(read)", avalon->device_id);
@@ -706,6 +721,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk0);
 			avalon_free_work(thr, info->bulk1);
 			avalon_free_work(thr, info->bulk2);
+			avalon_free_work(thr, info->bulk3);
 			continue;
 		}
 		avalon->temp = (ar.temp0 + ar.temp1 + ar.temp2) / 3;
@@ -727,7 +743,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		work_i0 = avalon_decode_nonce(thr, info->bulk0, &ar, &nonce);
 		work_i1 = avalon_decode_nonce(thr, info->bulk1, &ar, &nonce);
 		work_i2 = avalon_decode_nonce(thr, info->bulk2, &ar, &nonce);
-		if ((work_i0 < 0) && (work_i1 < 0) && (work_i2 < 0)) {
+		work_i3 = avalon_decode_nonce(thr, info->bulk3, &ar, &nonce);
+		if ((work_i0 < 0) && (work_i1 < 0) && (work_i2 < 0) && (work_i3 < 0)) {
 			if (opt_debug) {
 				timersub(&tv_finish, &tv_start, &elapsed);
 				applog(LOG_DEBUG,"Avalon: no matching work: %d"
@@ -743,6 +760,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			submit_nonce(thr, info->bulk1[work_i1], nonce);
 		if (work_i2 >= 0)
 			submit_nonce(thr, info->bulk2[work_i2], nonce);
+		if (work_i3 >= 0)
+			submit_nonce(thr, info->bulk3[work_i3], nonce);
 
 		hash_count += nonce;
 

@@ -85,6 +85,7 @@ struct avalon_info {
 	struct work *bulk0[AVALON_DEFAULT_MINER_NUM];
 	struct work *bulk1[AVALON_DEFAULT_MINER_NUM];
 	struct work *bulk2[AVALON_DEFAULT_MINER_NUM];
+	struct work *bulk3[AVALON_DEFAULT_MINER_NUM];
 };
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
