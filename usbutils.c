@@ -815,19 +815,26 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		goto dame;
 	}
 
-	if (libusb_kernel_driver_active(cgusb->handle, 0) == 1) {
+	if (libusb_kernel_driver_active(cgusb->handle, found->config) == 1) {
 		applog(LOG_DEBUG, "USB init, kernel attached ...");
-		if (libusb_detach_kernel_driver(cgusb->handle, 0) == 0)
+		err = libusb_detach_kernel_driver(cgusb->handle, found->config);
+		if (err == 0)
 			applog(LOG_DEBUG, "USB init, kernel detached successfully");
-		else
-			applog(LOG_WARNING, "USB init, kernel detach failed :(");
+		else {
+			applog(LOG_WARNING,
+				"USB init, kernel detach failed, err %s - %s device %d:%d in use?",
+				err, found->name,
+				(int)(cgpu->usbinfo.bus_number),
+				(int)(cgpu->usbinfo.device_address));
+			goto cldame;
+		}
 	}
 
 	err = libusb_set_configuration(cgusb->handle, found->config);
 	if (err) {
 		switch(err) {
 			case LIBUSB_ERROR_BUSY:
-				applog(LOG_WARNING, "USB init, %s device %d:%d in use",
+				applog(LOG_WARNING, "USB init, set config - %s device %d:%d in use",
 						found->name, (int)(cgpu->usbinfo.bus_number),
 						(int)(cgpu->usbinfo.device_address));
 				break;
