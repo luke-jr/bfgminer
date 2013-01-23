@@ -600,10 +600,67 @@ union semun {
 static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
 #ifdef WIN32
-	// NOOP for now
-	drv = 0;
-	bus_number = device_address = 0;
+	struct cgpu_info *cgpu;
+	HANDLE usbMutex;
+	char name[64];
+	DWORD res;
+	int i;
+
+	sprintf(name, "cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+
+	usbMutex = CreateMutex(NULL, FALSE, name);
+	if (usbMutex == NULL) {
+		applog(LOG_ERR,
+			"MTX: %s USB failed to get '%s' err (%d)",
+			drv->dname, name, GetLastError());
+		return false;
+	}
+
+	res = WaitForSingleObject(usbMutex, 0);
+	switch(res) {
+		case WAIT_OBJECT_0:
+		case WAIT_ABANDONED:
+			// Am I using it already?
+			for (i = 0; i < total_devices; i++) {
+				cgpu = devices[i];
+				if (cgpu->usbinfo.bus_number == bus_number &&
+				    cgpu->usbinfo.device_address == device_address &&
+				    cgpu->usbinfo.nodev == false) {
+					if (ReleaseMutex(usbMutex)) {
+						applog(LOG_WARNING,
+							"MTX: %s USB can't get '%s' - device in use",
+							drv->dname, name);
+						goto fail;
+					}
+					applog(LOG_ERR,
+						"MTX: %s USB can't get '%s' - device in use - failure (%d)",
+						drv->dname, name, GetLastError());
+					goto fail;
+				}
+			}
+			return true;
+		case WAIT_TIMEOUT:
+			applog(LOG_WARNING,
+				"MTX: %s USB failed to get '%s' - device in use",
+				drv->dname, name);
+			goto fail;
+		case WAIT_FAILED:
+			applog(LOG_ERR,
+				"MTX: %s USB failed to get '%s' err (%d)",
+				drv->dname, name, GetLastError());
+			goto fail;
+		default:
+			applog(LOG_ERR,
+				"MTX: %s USB failed to get '%s' unknown reply (%d)",
+				drv->dname, name, res);
+			goto fail;
+	}
+
+	CloseHandle(usbMutex);
 	return true;
+fail:
+	CloseHandle(usbMutex);
+	return false;
 #else
 	struct semid_ds seminfo;
 	union semun opt;
@@ -672,7 +729,7 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 				drv->dname, sem, name);
 		} else {
 			applog(LOG_DEBUG,
-				"SEM: %s USB failed to get (%d) '%s' err(%d) %s",
+				"SEM: %s USB failed to get (%d) '%s' err (%d) %s",
 				drv->dname, sem, name, errno, strerror(errno));
 		}
 		return false;
@@ -692,9 +749,26 @@ static bool cgminer_usb_lock(struct device_drv *drv, libusb_device *dev)
 static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
 #ifdef WIN32
-	// NOOP for now
-	drv = 0;
-	bus_number = device_address = 0;
+	HANDLE usbMutex;
+	char name[64];
+
+	sprintf(name, "cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+
+	usbMutex = CreateMutex(NULL, FALSE, name);
+	if (usbMutex == NULL) {
+		applog(LOG_ERR,
+			"MTX: %s USB failed to get '%s' for release err (%d)",
+			drv->dname, name, GetLastError());
+		return;
+	}
+
+	if (!ReleaseMutex(usbMutex))
+		applog(LOG_ERR,
+			"MTX: %s USB failed to release '%s' err (%d)",
+			drv->dname, name, GetLastError());
+
+	CloseHandle(usbMutex);
+	return;
 #else
 	char name[64];
 	key_t key;
