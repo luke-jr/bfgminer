@@ -570,6 +570,8 @@ static void cgusb_check_init()
 		usb_commands[C_SETMODEM] = C_SETMODEM_S;
 		usb_commands[C_PURGERX] = C_PURGERX_S;
 		usb_commands[C_PURGETX] = C_PURGETX_S;
+
+		stats_initialised = true;
 	}
 
 	mutex_unlock(&cgusb_lock);
