@@ -1073,10 +1073,13 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 
 	for (i = 0; i < count; i++) {
 		found = usb_check(drv, list[i]);
-		if (found) {
-			if (cgminer_usb_lock(drv, list[i]) == true)
+		if (found != NULL) {
+			if (cgminer_usb_lock(drv, list[i]) == false)
+				free(found);
+			else {
 				if (!device_detect(list[i], found))
 					cgminer_usb_unlock(drv, list[i]);
+			}
 		}
 	}
 
