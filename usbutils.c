@@ -781,10 +781,14 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 	const struct libusb_interface_descriptor *idesc;
 	const struct libusb_endpoint_descriptor *epdesc;
 	unsigned char strbuf[STRBUFLEN+1];
+	char devstr[STRBUFLEN+1];
 	int err, i, j, k;
 
 	cgpu->usbinfo.bus_number = libusb_get_bus_number(dev);
 	cgpu->usbinfo.device_address = libusb_get_device_address(dev);
+
+	sprintf(devstr, "- %s device %d:%d", found->name,
+		cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 
 	cgusb = calloc(1, sizeof(*cgusb));
 	cgusb->found = found;
@@ -793,7 +797,9 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 
 	err = libusb_get_device_descriptor(dev, cgusb->descriptor);
 	if (err) {
-		applog(LOG_ERR, "USB init failed to get descriptor, err %d", err);
+		applog(LOG_DEBUG,
+			"USB init failed to get descriptor, err %d %s",
+			err, devstr);
 		goto dame;
 	}
 
@@ -801,31 +807,39 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 	if (err) {
 		switch (err) {
 			case LIBUSB_ERROR_ACCESS:
-				applog(LOG_ERR, "USB init open device failed, err %d, you dont have priviledge to access the device", err);
+				applog(LOG_ERR,
+					"USB init open device failed, err %d, "
+					"you dont have priviledge to access %s",
+					err, devstr);
 				break;
 #ifdef WIN32
 			// Windows specific message
 			case LIBUSB_ERROR_NOT_SUPPORTED:
-				applog(LOG_ERR, "USB init, open device failed, err %d, you need to install a Windows USB driver for the device", err);
+				applog(LOG_ERR,
+					"USB init, open device failed, err %d, "
+					"you need to install a Windows USB driver for %s",
+					err, devstr);
 				break;
 #endif
 			default:
-				applog(LOG_ERR, "USB init, open device failed, err %d", err);
+				applog(LOG_DEBUG,
+					"USB init, open failed, err %d %s",
+					err, devstr);
 		}
 		goto dame;
 	}
 
 	if (libusb_kernel_driver_active(cgusb->handle, found->config) == 1) {
-		applog(LOG_DEBUG, "USB init, kernel attached ...");
+		applog(LOG_DEBUG, "USB init, kernel attached ... %s", devstr);
 		err = libusb_detach_kernel_driver(cgusb->handle, found->config);
-		if (err == 0)
-			applog(LOG_DEBUG, "USB init, kernel detached successfully");
-		else {
+		if (err == 0) {
+			applog(LOG_DEBUG,
+				"USB init, kernel detached successfully %s",
+				devstr);
+		} else {
 			applog(LOG_WARNING,
-				"USB init, kernel detach failed, err %s - %s device %d:%d in use?",
-				err, found->name,
-				(int)(cgpu->usbinfo.bus_number),
-				(int)(cgpu->usbinfo.device_address));
+				"USB init, kernel detach failed, err %d in use? %s",
+				err, devstr);
 			goto cldame;
 		}
 	}
@@ -834,21 +848,23 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 	if (err) {
 		switch(err) {
 			case LIBUSB_ERROR_BUSY:
-				applog(LOG_WARNING, "USB init, set config - %s device %d:%d in use",
-						found->name, (int)(cgpu->usbinfo.bus_number),
-						(int)(cgpu->usbinfo.device_address));
+				applog(LOG_WARNING,
+					"USB init, set config %d in use %s",
+					found->config, devstr);
 				break;
 			default:
-				applog(LOG_DEBUG, "USB init, failed to set config to %d, err %d",
-						found->config, err);
+				applog(LOG_DEBUG,
+					"USB init, failed to set config to %d, err %d %s",
+					found->config, err, devstr);
 		}
 		goto cldame;
 	}
 
 	err = libusb_get_active_config_descriptor(dev, &config);
 	if (err) {
-		applog(LOG_DEBUG, "USB init, failed to get config descriptor %d, err %d",
-			found->config, err);
+		applog(LOG_DEBUG,
+			"USB init, failed to get config descriptor %d, err %d %s",
+			found->config, err, devstr);
 		goto cldame;
 	}
 
@@ -881,8 +897,17 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 
 	err = libusb_claim_interface(cgusb->handle, found->interface);
 	if (err) {
-		applog(LOG_DEBUG, "USB init, claim interface %d failed, err %d",
-			found->interface, err);
+		switch(err) {
+			case LIBUSB_ERROR_BUSY:
+				applog(LOG_WARNING,
+					"USB init, claim interface %d in use %s",
+					found->interface, devstr);
+				break;
+			default:
+				applog(LOG_DEBUG,
+					"USB init, claim interface %d failed, err %d %s",
+					found->interface, err, devstr);
+		}
 		goto cldame;
 	}
 
@@ -916,7 +941,10 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 //	cgusb->fwVersion <- for temp1/temp2 decision? or serial? (driver-modminer.c)
 //	cgusb->interfaceVersion
 
-	applog(LOG_DEBUG, "USB init device bus_number=%d device_address=%d usbver=%04x prod='%s' manuf='%s' serial='%s'", (int)(cgpu->usbinfo.bus_number), (int)(cgpu->usbinfo.device_address), cgusb->usbver, cgusb->prod_string, cgusb->manuf_string, cgusb->serial_string);
+	applog(LOG_DEBUG,
+		"USB init %s usbver=%04x prod='%s' manuf='%s' serial='%s'",
+		devstr, cgusb->usbver, cgusb->prod_string,
+		cgusb->manuf_string, cgusb->serial_string);
 
 	cgpu->usbdev = cgusb;
 
