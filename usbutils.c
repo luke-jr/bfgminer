@@ -110,24 +110,10 @@ extern struct device_drv icarus_drv;
 extern struct device_drv modminer_drv;
 #endif
 
-/*
- * Our own internal list of used USB devices
- * So two drivers or a single driver searching
- * can't touch the same device during detection
- */
-struct usb_list {
-	uint8_t bus_number;
-	uint8_t device_address;
-	uint8_t filler[2];
-	struct usb_list *prev;
-	struct usb_list *next;
-};
-
 #define STRBUFLEN 256
 static const char *BLANK = "";
 
-static pthread_mutex_t *list_lock = NULL;
-static struct usb_list *usb_head = NULL;
+static bool stats_initialised = false;
 
 struct cg_usb_stats_item {
 	uint64_t count;
@@ -537,10 +523,7 @@ static void cgusb_check_init()
 {
 	mutex_lock(&cgusb_lock);
 
-	if (list_lock == NULL) {
-		list_lock = calloc(1, sizeof(*list_lock));
-		mutex_init(list_lock);
-
+	if (stats_initialised == false) {
 		// N.B. environment LIBUSB_DEBUG also sets libusb_set_debug()
 		if (opt_usbdump >= 0) {
 			libusb_set_debug(NULL, opt_usbdump);
@@ -592,134 +575,163 @@ static void cgusb_check_init()
 	mutex_unlock(&cgusb_lock);
 }
 
-static bool in_use(libusb_device *dev, bool lock)
+#ifdef WIN32
+#else
+#include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+union semun {
+	int sem;
+	struct semid_ds *seminfo;
+	ushort *all;
+};
+#endif
+
+// Any errors should always be printed since they will rarely if ever occur
+// and thus it is best to always display them
+static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
-	struct usb_list *usb_tmp;
-	bool used = false;
-	uint8_t bus_number;
-	uint8_t device_address;
+#ifdef WIN32
+#else
+	struct semid_ds seminfo;
+	union semun opt;
+	char name[64];
+	key_t key;
+	int fd, sem, count;
 
-	bus_number = libusb_get_bus_number(dev);
-	device_address = libusb_get_device_address(dev);
+	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	if (fd == -1) {
+		applog(LOG_ERR,
+			"SEM: %s USB open failed '%s' err (%d) %s",
+			drv->dname, name, errno, strerror(errno));
+		return false;
+	}
+	close(fd);
+	key = ftok(name, 'K');
+	sem = semget(key, 1, IPC_CREAT | IPC_EXCL | 438);
+	if (sem < 0) {
+		if (errno != EEXIST) {
+			applog(LOG_ERR,
+				"SEM: %s USB failed to get '%s' err (%d) %s",
+				drv->dname, name, errno, strerror(errno));
+			return false;
+		}
 
-	if (lock)
-		mutex_lock(list_lock);
+		sem = semget(key, 1, 0);
+		if (sem < 0) {
+			applog(LOG_ERR,
+				"SEM: %s USB failed to access '%s' err (%d) %s",
+				drv->dname, name, errno, strerror(errno));
+			return false;
+		}
 
-	if ((usb_tmp = usb_head))
-		do {
-			if (bus_number == usb_tmp->bus_number
-			&&  device_address == usb_tmp->device_address) {
-				used = true;
-				break;
+		opt.seminfo = &seminfo;
+		count = 0;
+		while (++count) {
+			// Should NEVER take 100ms
+			if (count > 99) {
+				applog(LOG_ERR,
+					"SEM: %s USB timeout waiting for (%d) '%s'",
+					drv->dname, sem, name);
+				return false;
 			}
-
-			usb_tmp = usb_tmp->next;
-
-		} while (usb_tmp != usb_head);
-
-	if (lock)
-		mutex_unlock(list_lock);
-
-	return used;
-}
-
-static void add_used(libusb_device *dev, bool lock)
-{
-	struct usb_list *usb_tmp;
-	char buf[128];
-	uint8_t bus_number;
-	uint8_t device_address;
-
-	bus_number = libusb_get_bus_number(dev);
-	device_address = libusb_get_device_address(dev);
-
-	if (lock)
-		mutex_lock(list_lock);
-
-	if (in_use(dev, false)) {
-		if (lock)
-			mutex_unlock(list_lock);
-
-		sprintf(buf, "add_used() duplicate bus_number %d device_address %d",
-				(int)bus_number, (int)device_address);
-		quit(1, buf);
-	}
-
-	usb_tmp = malloc(sizeof(*usb_tmp));
-
-	usb_tmp->bus_number = bus_number;
-	usb_tmp->device_address = device_address;
-
-	if (usb_head) {
-		// add to end
-		usb_tmp->prev = usb_head->prev;
-		usb_tmp->next = usb_head;
-		usb_head->prev = usb_tmp;
-		usb_tmp->prev->next = usb_tmp;
-	} else {
-		usb_tmp->prev = usb_tmp;
-		usb_tmp->next = usb_tmp;
-		usb_head = usb_tmp;
-	}
-
-	if (lock)
-		mutex_unlock(list_lock);
-}
-
-static void release(uint8_t bus_number, uint8_t device_address, bool lock)
-{
-	struct usb_list *usb_tmp;
-	bool found = false;
-	char buf[128];
-
-	if (lock)
-		mutex_lock(list_lock);
-
-	if ((usb_tmp = usb_head))
-		do {
-			if (bus_number == usb_tmp->bus_number
-			&&  device_address == usb_tmp->device_address) {
-				found = true;
-				break;
+			if (semctl(sem, 0, IPC_STAT, opt) == -1) {
+				applog(LOG_ERR,
+					"SEM: %s USB failed to wait for (%d) '%s' count %d err (%d) %s",
+					drv->dname, sem, name, count, errno, strerror(errno));
+				return false;
 			}
-
-			usb_tmp = usb_tmp->next;
-
-		} while (usb_tmp != usb_head);
-
-	if (!found) {
-		if (lock)
-			mutex_unlock(list_lock);
-
-		sprintf(buf, "release() unknown: bus_number %d device_address %d",
-				(int)bus_number, (int)device_address);
-		quit(1, buf);
+			if (opt.seminfo->sem_otime != 0)
+				break;
+			nmsleep(1);
+		}
 	}
 
-	if (usb_tmp->next == usb_tmp) {
-		usb_head = NULL;
-	} else {
-		if (usb_head == usb_tmp)
-			usb_head = usb_tmp->next;
-		usb_tmp->next->prev = usb_tmp->prev;
-		usb_tmp->prev->next = usb_tmp->next;
+	struct sembuf sops[] = {
+		{ 0, 0, IPC_NOWAIT | SEM_UNDO },
+		{ 0, 1, IPC_NOWAIT | SEM_UNDO }
+	};
+
+	if (semop(sem, sops, 2)) {
+		if (errno == EAGAIN) {
+			applog(LOG_WARNING,
+				"SEM: %s USB failed to get (%d) '%s' - device in use",
+				drv->dname, sem, name);
+		} else {
+			applog(LOG_DEBUG,
+				"SEM: %s USB failed to get (%d) '%s' err(%d) %s",
+				drv->dname, sem, name, errno, strerror(errno));
+		}
+		return false;
 	}
 
-	if (lock)
-		mutex_unlock(list_lock);
-
-	free(usb_tmp);
+	return true;
+#endif
 }
 
-static void release_dev(libusb_device *dev, bool lock)
+static bool cgminer_usb_lock(struct device_drv *drv, libusb_device *dev)
 {
-	uint8_t bus_number;
-	uint8_t device_address;
+	return cgminer_usb_lock_bd(drv, libusb_get_bus_number(dev), libusb_get_device_address(dev));
+}
 
-	bus_number = libusb_get_bus_number(dev);
-	device_address = libusb_get_device_address(dev);
+// Any errors should always be printed since they will rarely if ever occur
+// and thus it is best to always display them
+static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
+{
+#ifdef WIN32
+#else
+	char name[64];
+	key_t key;
+	int fd, sem;
 
-	release(bus_number, device_address, lock);
+	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	if (fd == -1) {
+		applog(LOG_ERR,
+			"SEM: %s USB open failed '%s' for release err (%d) %s",
+			drv->dname, name, errno, strerror(errno));
+		return;
+	}
+	close(fd);
+	key = ftok(name, 'K');
+
+	sem = semget(key, 1, 0);
+	if (sem < 0) {
+		applog(LOG_ERR,
+			"SEM: %s USB failed to get '%s' for release err (%d) %s",
+			drv->dname, name, errno, strerror(errno));
+		return;
+	}
+
+	struct sembuf sops[] = {
+		{ 0, -1, SEM_UNDO }
+	};
+
+	// Allow a 10ms timeout
+	// exceeding this timeout means it would probably never succeed anyway
+	struct timespec timeout = { 0, 10000000 };
+
+	// Wait forever since we shoud be the one who has it
+	if (semtimedop(sem, sops, 1, &timeout)) {
+		applog(LOG_ERR,
+			"SEM: %d USB failed to release '%s' err (%d) %s",
+			drv->dname, name, errno, strerror(errno));
+	}
+
+	return;
+#endif
+}
+
+static void cgminer_usb_unlock(struct device_drv *drv, libusb_device *dev)
+{
+	cgminer_usb_unlock_bd(drv, libusb_get_bus_number(dev), libusb_get_device_address(dev));
 }
 
 static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
@@ -771,7 +783,7 @@ void release_cgpu(struct cgpu_info *cgpu)
 
 	usb_uninit(cgpu);
 
-	release(cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address, true);
+	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 }
 
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
@@ -1053,21 +1065,11 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 		applog(LOG_DEBUG, "USB scan devices: found no devices");
 
 	for (i = 0; i < count; i++) {
-		mutex_lock(list_lock);
-
-		if (in_use(list[i], false))
-			mutex_unlock(list_lock);
-		else {
-			add_used(list[i], false);
-
-			mutex_unlock(list_lock);
-
-			found = usb_check(drv, list[i]);
-			if (!found)
-				release_dev(list[i], true);
-			else
+		found = usb_check(drv, list[i]);
+		if (found) {
+			if (cgminer_usb_lock(drv, list[i]) == true)
 				if (!device_detect(list[i], found))
-					release_dev(list[i], true);
+					cgminer_usb_unlock(drv, list[i]);
 		}
 	}
 
