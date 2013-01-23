@@ -771,8 +771,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	 *
 	 * Any patch will be great.
 	 */
-	return (hash_count ? (hash_count * 2) :
-		((int64_t)256*1024*1024)*info->miner_count*info->asic_count);
+	return (hash_count * 2);
 }
 
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
