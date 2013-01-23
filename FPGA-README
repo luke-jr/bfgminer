@@ -227,3 +227,40 @@ The serial number of X6500s is usually found on a label applied to the ATX
 power connector slot. If yours is missing, devices seen by the system can be
 displayed by starting bfgminer in debug mode. To get a simple list of devices,
 with the debug output shown, you can use: bfgminer -D -d? -T
+
+
+ZTEX FPGA Boards
+---------------- 
+http://www.ztex.de sells two boards suitable for mining: the 1.15x with 1 FPGA and the 1.15y with 4 FPGAs.
+ZTEX distributes their own mining software and drivers.  BFGMiner has full support for these boards.  To get
+started, you'll need to install the Java JDK version 6 or later.
+
+--- Windows ---
+Upon first powering up and connecting the board via USB, windows will attempt and fail to find the
+appropriate drivers.  To load the initial firmware on the board, you'll need the EZ-USB FX2 SDK from here:
+http://www.ztex.de/downloads/#firmware_kit.  Extract the firmware kit and use the driver within libusb-
+win32/ztex.inf.  Windows should now recognize the board and you're ready to program it.  Grab the latest
+miner jar from http://www.ztex.de/btcminer/#download and program the appropriate dummy firmware for your
+board.  The command should look something like (for a single FPGA board):
+
+java -cp ZtexBTCMiner-120417.jar BTCMiner -m p -f ztex_ufm1_15d.ihx -s 01-02-01
+
+At this point, you're ready to mine with ZTEX's miner.  However, if you'd like to use BFGMiner, you'll have
+to swap the USB drivers.  The BFGMiner compatible USB drivers for the board can be generated with this
+tool: http://sourceforge.net/projects/libwdi/files/zadig/.  Basic usage instructions for Zadig can be found
+here: https://github.com/pbatard/libwdi/wiki/Zadig.  Once Zadig generates and installs a driver, ensure
+everything is working by running:
+
+bfgminer -D -d? -T
+
+You should see something like this in the output:
+[2013-01-22 20:19:11] Found 1 ztex board
+[2013-01-22 20:19:11] ZTX 0: Found Ztex (ZTEX 0001-02-01-1)
+
+Now you're ready to mine.  It's usually useful to mine with the -D -d? -T options and watch for ZTEX related
+messages.
+
+
+--- Linux ---
+TODO
+
