@@ -157,7 +157,6 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	if (unlikely(ret != nr_len))
 		return AVA_SEND_ERROR;
 
-
 	if (likely(thr)) {
 		avalon = thr->cgpu;
 		info = avalon_info[avalon->device_id];
@@ -210,7 +209,7 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 		rc++;
 		if (rc >= read_count) {
 			if (opt_debug) {
-				applog(LOG_ERR,
+				applog(LOG_WARNING,
 				       "Avalon: No data in %.2f seconds",
 				       (float)rc/(float)TIME_FACTOR);
 			}
@@ -219,7 +218,7 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 
 		if (thr && thr->work_restart) {
 			if (opt_debug) {
-				applog(LOG_ERR,
+				applog(LOG_WARNING,
 				       "Avalon: Work restart at %.2f seconds",
 				       (float)(rc)/(float)TIME_FACTOR);
 			}
@@ -327,12 +326,12 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
 
-	applog(LOG_ERR,
+	applog(LOG_WARNING,
 	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d\t"
 	       "Temp1: %d, Temp2: %d, Temp3: %d",
 	       ar->fan0, ar->fan1, ar->fan2, ar->temp0, ar->temp1, ar->temp2);
 
-	applog(LOG_ERR, "Avalon: Reset succeeded");
+	applog(LOG_WARNING, "Avalon: Reset succeeded");
 	return 0;
 }
 
@@ -627,7 +626,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	if (unlikely(avalon->device_fd == -1))
 		if (!avalon_prepare(thr)) {
-			applog(LOG_ERR, "AVA%i: Comms error",
+			applog(LOG_ERR, "AVA%i: Comms error(open)",
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			/* fail the device if the reopen attempt fails */
@@ -658,7 +657,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk1);
 			avalon_free_work(thr, info->bulk2);
 			do_avalon_close(thr);
-			applog(LOG_ERR, "AVA%i: Comms error",
+			applog(LOG_ERR, "AVA%i: Comms error(buffer)",
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			sleep(1);
@@ -677,7 +676,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	gettimeofday(&tv_start, NULL);
 
 	hash_count = 0;
-	while(true) {
+	while (true) {
 		work_i0 = work_i1 = work_i2 = -1;
 
 		full = avalon_buffer_full(fd);
@@ -693,7 +692,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk2);
 			do_avalon_close(thr);
 			applog(LOG_ERR,
-			       "AVA%i: Comms error", avalon->device_id);
+			       "AVA%i: Comms error(read)", avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			return 0;
 		}
@@ -757,7 +756,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	}
 	avalon_free_work(thr, info->bulk0);
 
-	applog(LOG_ERR,
+	applog(LOG_WARNING,
 	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d\t"
 	       "Temp1: %d, Temp2: %d, Temp3: %d, TempMAX: %d",
 	       info->fan0, info->fan1, info->fan2,
