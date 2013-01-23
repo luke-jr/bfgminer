@@ -598,6 +598,10 @@ union semun {
 static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
 #ifdef WIN32
+	// NOOP for now
+	drv = 0;
+	bus_number = device_address = 0;
+	return true;
 #else
 	struct semid_ds seminfo;
 	union semun opt;
@@ -686,6 +690,9 @@ static bool cgminer_usb_lock(struct device_drv *drv, libusb_device *dev)
 static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
 #ifdef WIN32
+	// NOOP for now
+	drv = 0;
+	bus_number = device_address = 0;
 #else
 	char name[64];
 	key_t key;
