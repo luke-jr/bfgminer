@@ -34,7 +34,10 @@ struct avalon_task {
 	uint8_t miner_num;
 
 	uint8_t nonce_elf		:1;
-	uint32_t pad0_miner_ctrl	:31;
+	uint8_t gate_miner_elf		:1;
+	uint8_t pad0			:1;
+	uint8_t gate_miner		:1;
+	uint32_t pad0_miner_ctrl	:28;
 	uint32_t pad1_miner_ctrl;
 
 	uint8_t midstate[32];
