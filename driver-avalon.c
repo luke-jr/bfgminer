@@ -329,36 +329,12 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 	nanosleep(&p, NULL);
 
 	applog(LOG_WARNING,
-	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d\t"
+	       "Avalon reset: Fan1: %d, Fan2: %d, Fan3: %d\t"
 	       "Temp1: %d, Temp2: %d, Temp3: %d",
 	       ar->fan0, ar->fan1, ar->fan2, ar->temp0, ar->temp1, ar->temp2);
 
 	applog(LOG_WARNING, "Avalon: Reset succeeded");
 	return 0;
-}
-
-static void set_timing_mode(struct cgpu_info *avalon, struct avalon_result *ar)
-{
-	struct avalon_info *info = avalon_info[avalon->device_id];
-
-	info->read_count = ((float)info->timeout * AVALON_HASH_TIME_FACTOR *
-			    TIME_FACTOR) / (float)info->miner_count;
-
-	info->fan0 = ar->fan0;
-	info->fan1 = ar->fan1;
-	info->fan2 = ar->fan2;
-
-	info->temp0 = ar->temp0;
-	info->temp1 = ar->temp1;
-	info->temp2 = ar->temp2;
-
-	if (info->temp0 > info->temp_max)
-		info->temp_max = info->temp0;
-	if (info->temp1 > info->temp_max)
-		info->temp_max = info->temp1;
-	if (info->temp2 > info->temp_max)
-		info->temp_max = info->temp2;
-
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
@@ -534,7 +510,8 @@ static bool avalon_detect_one(const char *devpath)
 	info->asic_count = asic_count;
 	info->timeout = timeout;
 
-	set_timing_mode(avalon, &ar);
+	info->read_count = ((float)info->timeout * AVALON_HASH_TIME_FACTOR *
+			    TIME_FACTOR) / (float)info->miner_count;
 
 	return true;
 }
@@ -780,6 +757,14 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	       "Temp1: %d, Temp2: %d, Temp3: %d, TempMAX: %d",
 	       info->fan0, info->fan1, info->fan2,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
+	/*
+	 * TODO: add fan/temp control
+	 * 1. add task_num to init_task
+	 * 2. record the gate_status at info-> [code here].
+	 *   when TEMP reach a HIGH gate miner
+	 *   when TEMP reach a LOW trigger miner
+	 * 3. enable/disable gate on init_task
+	 */
 
 	/*
 	 * FIXME: Each work split to 10 pieces, each piece send to a
