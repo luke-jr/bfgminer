@@ -213,7 +213,7 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 			if (opt_debug) {
 				applog(LOG_WARNING,
 				       "Avalon: No data in %.2f seconds",
-				       (float)rc/(float)TIME_FACTOR);
+				       (float)rc/(float)AVALON_TIME_FACTOR);
 			}
 			return AVA_GETS_TIMEOUT;
 		}
@@ -222,7 +222,7 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 			if (opt_debug) {
 				applog(LOG_WARNING,
 				       "Avalon: Work restart at %.2f seconds",
-				       (float)(rc)/(float)TIME_FACTOR);
+				       (float)(rc)/(float)AVALON_TIME_FACTOR);
 			}
 			return AVA_GETS_RESTART;
 		}
@@ -235,7 +235,7 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
 	uint8_t result[AVALON_READ_SIZE];
-	int ret, read_count = AVALON_RESET_FAULT_DECISECONDS * TIME_FACTOR;
+	int ret, read_count = AVALON_RESET_FAULT_DECISECONDS * AVALON_TIME_FACTOR;
 
 	if (likely(thr)) {
 		avalon = thr->cgpu;
@@ -327,11 +327,6 @@ static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
 	p.tv_sec = 1;
 	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
-
-	applog(LOG_WARNING,
-	       "Avalon reset: Fan1: %d, Fan2: %d, Fan3: %d\t"
-	       "Temp1: %d, Temp2: %d, Temp3: %d",
-	       ar->fan0, ar->fan1, ar->fan2, ar->temp0, ar->temp1, ar->temp2);
 
 	applog(LOG_WARNING, "Avalon: Reset succeeded");
 	return 0;
@@ -511,7 +506,7 @@ static bool avalon_detect_one(const char *devpath)
 	info->timeout = timeout;
 
 	info->read_count = ((float)info->timeout * AVALON_HASH_TIME_FACTOR *
-			    TIME_FACTOR) / (float)info->miner_count;
+			    AVALON_TIME_FACTOR) / (float)info->miner_count;
 
 	return true;
 }
@@ -702,9 +697,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			continue;
 		}
 		avalon->temp = (ar.temp0 + ar.temp1 + ar.temp2) / 3;
-		info->fan0 = ar.fan0;
-		info->fan1 = ar.fan1;
-		info->fan2 = ar.fan2;
+		info->fan0 = ar.fan0 * AVALON_FAN_FACTOR;
+		info->fan1 = ar.fan1 * AVALON_FAN_FACTOR;
+		info->fan2 = ar.fan2 * AVALON_FAN_FACTOR;
 
 		info->temp0 = ar.temp0;
 		info->temp1 = ar.temp1;
@@ -753,8 +748,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	avalon_free_work(thr, info->bulk0);
 
 	applog(LOG_WARNING,
-	       "Avalon: Fan1: %d, Fan2: %d, Fan3: %d\t"
-	       "Temp1: %d, Temp2: %d, Temp3: %d, TempMAX: %d",
+	       "Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
+	       "Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
 	       info->fan0, info->fan1, info->fan2,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
 	/*
