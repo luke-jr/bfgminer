@@ -578,15 +578,15 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 	info->temp2 = ar->temp2;
 	if (ar->temp0 & 0x80) {
 		ar->temp0 &= 0x7f;
-		info->temp0 = ~ar->temp0 + 1;
+		info->temp0 = 0 - ((~ar->temp0 & 0x7f) + 1);
 	}
 	if (ar->temp1 & 0x80) {
 		ar->temp1 &= 0x7f;
-		info->temp1 = ~ar->temp1 + 1;
+		info->temp1 = 0 - ((~ar->temp1 & 0x7f) + 1);
 	}
 	if (ar->temp2 & 0x80) {
 		ar->temp2 &= 0x7f;
-		info->temp2 = ~ar->temp2 + 1;
+		info->temp2 = 0 - ((~ar->temp2 & 0x7f) + 1);
 	}
 
 	*temp_avg = (info->temp0 + info->temp1 + info->temp2) / 3;
