@@ -589,14 +589,14 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 		info->temp2 = 0 - ((~ar->temp2 & 0x7f) + 1);
 	}
 
-	*temp_avg = (info->temp0 + info->temp1 + info->temp2) / 3;
-
 	if (info->temp0 > info->temp_max)
 		info->temp_max = info->temp0;
 	if (info->temp1 > info->temp_max)
 		info->temp_max = info->temp1;
 	if (info->temp2 > info->temp_max)
 		info->temp_max = info->temp2;
+
+	*temp_avg = info->temp2;
 }
 
 static void adjust_temp(struct avalon_info *info)
