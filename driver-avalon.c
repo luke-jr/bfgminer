@@ -38,37 +38,18 @@ static int option_offset = -1;
 
 struct avalon_info **avalon_info;
 struct device_api avalon_api;
-static int avalon_init_task(struct thr_info *thr, struct avalon_task *at,
+static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
-			    uint8_t timeout_p, uint8_t asic_num_p,
-			    uint8_t miner_num_p, uint8_t nonce_elf_p)
+			    uint8_t timeout, uint8_t asic_num,
+			    uint8_t miner_num, uint8_t nonce_elf)
 {
 	static bool first = true;
-
-	uint8_t timeout;
-	uint8_t asic_num;
-	uint8_t miner_num;
-
-	struct cgpu_info *avalon;
-	struct avalon_info *info;
 
 	if (unlikely(!at))
 		return -1;
 
-	if (unlikely(!thr && (timeout_p <= 0 || asic_num_p <= 0 || miner_num_p <= 0)))
+	if (unlikely(timeout <= 0 || asic_num <= 0 || miner_num <= 0))
 		return -1;
-
-	timeout = timeout_p;
-	miner_num = miner_num_p;
-	asic_num = asic_num_p;
-
-	if (likely(thr)) {
-		avalon = thr->cgpu;
-		info = avalon_info[avalon->device_id];
-		timeout = info->timeout;
-		miner_num = info->miner_count;
-		asic_num = info->asic_count;
-	}
 
 	memset(at, 0, sizeof(struct avalon_task));
 
@@ -93,7 +74,7 @@ static int avalon_init_task(struct thr_info *thr, struct avalon_task *at,
 	at->asic_num = asic_num;
 	at->miner_num = miner_num;
 
-	at->nonce_elf = nonce_elf_p;
+	at->nonce_elf = nonce_elf;
 
 	return 0;
 }
@@ -291,18 +272,19 @@ static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
 	return i;
 }
 
-static int avalon_reset(int fd, uint8_t timeout_p, uint8_t asic_num_p,
-			uint8_t miner_num_p, struct avalon_result *ar)
+static int avalon_reset(int fd, struct avalon_result *ar)
 {
 	struct avalon_task at;
 	uint8_t *buf;
 	int ret, i = 0;
 	struct timespec p;
 
-	avalon_init_task(NULL,
-			 &at, 1, 0,
+	avalon_init_task(&at, 1, 0,
 			 AVALON_DEFAULT_FAN_PWM,
-			 timeout_p, asic_num_p, miner_num_p, 1);
+			 AVALON_DEFAULT_TIMEOUT,
+			 AVALON_DEFAULT_ASIC_NUM,
+			 AVALON_DEFAULT_MINER_NUM,
+			 0);
 	ret = avalon_send_task(fd, &at, NULL);
 	if (ret == AVA_SEND_ERROR)
 		return 1;
@@ -469,7 +451,7 @@ static bool avalon_detect_one(const char *devpath)
 		return false;
 	}
 
-	ret = avalon_reset(fd, timeout, asic_count, miner_count, &ar);
+	ret = avalon_reset(fd, &ar);
 	avalon_close(fd);
 
 	if (ret) {
@@ -504,9 +486,18 @@ static bool avalon_detect_one(const char *devpath)
 	info->miner_count = miner_count;
 	info->asic_count = asic_count;
 	info->timeout = timeout;
-
 	info->read_count = ((float)info->timeout * AVALON_HASH_TIME_FACTOR *
 			    AVALON_TIME_FACTOR) / (float)info->miner_count;
+
+	info->fan_pwm = AVALON_DEFAULT_FAN_PWM;
+	info->temp_max = 0;
+	info->temp_history_count = 4 / (int)(info->timeout * AVALON_HASH_TIME_FACTOR) + 1;
+	if (info->temp_history_count <= 0)
+		info->temp_history_count = 1;
+
+	info->temp_history_index = 0;
+	info->temp_sum = 0;
+	info->temp_old = 0;
 
 	return true;
 }
@@ -523,8 +514,6 @@ static bool avalon_prepare(struct thr_info *thr)
 	struct timeval now;
 	int fd, ret;
 
-	struct avalon_info *info = avalon_info[avalon->device_id];
-
 	avalon->device_fd = -1;
 	fd = avalon_open(avalon->device_path,
 			     avalon_info[avalon->device_id]->baud);
@@ -533,8 +522,7 @@ static bool avalon_prepare(struct thr_info *thr)
 		       avalon->device_path);
 		return false;
 	}
-	ret = avalon_reset(fd, info->timeout, info->asic_count,
-			   info->miner_count, &ar);
+	ret = avalon_reset(fd, &ar);
 	if (ret)
 		return false;
 	avalon->device_fd = fd;
@@ -577,6 +565,55 @@ static void do_avalon_close(struct thr_info *thr)
 	avalon_free_work(thr, info->bulk1);
 	avalon_free_work(thr, info->bulk2);
 	avalon_free_work(thr, info->bulk3);
+}
+
+static inline void record_temp_fan(struct avalon_info *info, struct avalon_result *ar, float *temp_avg)
+{
+	info->fan0 = ar->fan0 * AVALON_FAN_FACTOR;
+	info->fan1 = ar->fan1 * AVALON_FAN_FACTOR;
+	info->fan2 = ar->fan2 * AVALON_FAN_FACTOR;
+
+	info->temp0 = ar->temp0;
+	info->temp1 = ar->temp1;
+	info->temp2 = ar->temp2;
+	if (ar->temp0 & 0x80) {
+		ar->temp0 &= 0x7f;
+		info->temp0 = ~ar->temp0 + 1;
+	}
+	if (ar->temp1 & 0x80) {
+		ar->temp1 &= 0x7f;
+		info->temp1 = ~ar->temp1 + 1;
+	}
+	if (ar->temp2 & 0x80) {
+		ar->temp2 &= 0x7f;
+		info->temp2 = ~ar->temp2 + 1;
+	}
+
+	*temp_avg = (info->temp0 + info->temp1 + info->temp2) / 3;
+
+	if (info->temp0 > info->temp_max)
+		info->temp_max = info->temp0;
+	if (info->temp1 > info->temp_max)
+		info->temp_max = info->temp1;
+	if (info->temp2 > info->temp_max)
+		info->temp_max = info->temp2;
+}
+
+static void adjust_temp(struct avalon_info *info)
+{
+	int temp_new;
+
+	temp_new = info->temp_sum / info->temp_history_count;
+
+	if (temp_new < 40)
+		info->fan_pwm = 0xA;
+	else if (temp_new > 60)
+		info->fan_pwm = AVALON_DEFAULT_FAN_PWM;
+	else if (temp_new - info->temp_old > 2)
+		info->fan_pwm = (temp_new - 40) * 9 + 10;
+
+	info->temp_old = temp_new;
+	info->temp_sum = 0;
 }
 
 static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
@@ -624,7 +661,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	i = 0;
 	while (true) {
-		avalon_init_task(thr, &at, 0, 0, 0, 0, 0, 0, 1);
+		avalon_init_task(&at, 0, 0, info->fan_pwm,
+				 info->timeout, info->asic_count,
+				 info->miner_count, 1);
 		avalon_create_task(&at, work[i]);
 		ret = avalon_send_task(fd, &at, thr);
 		if (unlikely(ret == AVA_SEND_ERROR ||
@@ -696,21 +735,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk3);
 			continue;
 		}
-		avalon->temp = (ar.temp0 + ar.temp1 + ar.temp2) / 3;
-		info->fan0 = ar.fan0 * AVALON_FAN_FACTOR;
-		info->fan1 = ar.fan1 * AVALON_FAN_FACTOR;
-		info->fan2 = ar.fan2 * AVALON_FAN_FACTOR;
-
-		info->temp0 = ar.temp0;
-		info->temp1 = ar.temp1;
-		info->temp2 = ar.temp2;
-
-		if (info->temp0 > info->temp_max)
-			info->temp_max = info->temp0;
-		if (info->temp1 > info->temp_max)
-			info->temp_max = info->temp1;
-		if (info->temp2 > info->temp_max)
-			info->temp_max = info->temp2;
+		record_temp_fan(info, &ar, &(avalon->temp));
 
 		work_i0 = avalon_decode_nonce(thr, info->bulk0, &ar, &nonce);
 		work_i1 = avalon_decode_nonce(thr, info->bulk1, &ar, &nonce);
@@ -752,14 +777,12 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	       "Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
 	       info->fan0, info->fan1, info->fan2,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
-	/*
-	 * TODO: add fan/temp control
-	 * 1. add task_num to init_task
-	 * 2. record the gate_status at info-> [code here].
-	 *   when TEMP reach a HIGH gate miner
-	 *   when TEMP reach a LOW trigger miner
-	 * 3. enable/disable gate on init_task
-	 */
+	info->temp_history_index++;
+	info->temp_sum += info->temp2;
+	if (info->temp_history_index == info->temp_history_count) {
+		adjust_temp(info);
+		info->temp_history_index = 0;
+	}
 
 	/*
 	 * FIXME: Each work split to 10 pieces, each piece send to a

@@ -81,8 +81,12 @@ struct avalon_info {
 	int temp0;
 	int temp1;
 	int temp2;
-
 	int temp_max;
+	int temp_history_count;
+	int temp_history_index;
+	int temp_sum;
+	int temp_old;
+	int fan_pwm;
 
 	int no_matching_work;
 	int matching_work[AVALON_DEFAULT_MINER_NUM];
