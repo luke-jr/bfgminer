@@ -77,6 +77,7 @@ static struct usb_find_devices find_dev[] = {
 		.name = "BFL",
 		.idVendor = 0x0403,
 		.idProduct = 0x6014,
+		.kernel = 0,
 		.config = 1,
 		.interface = 0,
 		.timeout = BITFORCE_TIMEOUT_MS,
@@ -89,13 +90,14 @@ static struct usb_find_devices find_dev[] = {
 		.name = "MMQ",
 		.idVendor = 0x1fc9,
 		.idProduct = 0x0003,
+		.kernel = 0,
 		.config = 1,
 		.interface = 1,
 		.timeout = MODMINER_TIMEOUT_MS,
 		.epcount = ARRAY_SIZE(mmq_eps),
 		.eps = mmq_eps },
 #endif
-	{ DRV_LAST, NULL, 0, 0, 0, 0, 0, 0, NULL }
+	{ DRV_LAST, NULL, 0, 0, 0, 0, 0, 0, 0, NULL }
 };
 
 #ifdef USE_BITFORCE
@@ -924,9 +926,10 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		goto dame;
 	}
 
-	if (libusb_kernel_driver_active(cgusb->handle, found->config) == 1) {
+#ifndef WIN32
+	if (libusb_kernel_driver_active(cgusb->handle, found->kernel) == 1) {
 		applog(LOG_DEBUG, "USB init, kernel attached ... %s", devstr);
-		err = libusb_detach_kernel_driver(cgusb->handle, found->config);
+		err = libusb_detach_kernel_driver(cgusb->handle, found->kernel);
 		if (err == 0) {
 			applog(LOG_DEBUG,
 				"USB init, kernel detached successfully %s",
@@ -938,6 +941,7 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 			goto cldame;
 		}
 	}
+#endif
 
 	err = libusb_set_configuration(cgusb->handle, found->config);
 	if (err) {
@@ -958,8 +962,8 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 	err = libusb_get_active_config_descriptor(dev, &config);
 	if (err) {
 		applog(LOG_DEBUG,
-			"USB init, failed to get config descriptor %d, err %d %s",
-			found->config, err, devstr);
+			"USB init, failed to get config descriptor, err %d %s",
+			err, devstr);
 		goto cldame;
 	}
 

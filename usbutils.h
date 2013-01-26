@@ -55,6 +55,7 @@ struct usb_find_devices {
 	const char *name;
 	uint16_t idVendor;
 	uint16_t idProduct;
+	int kernel;
 	int config;
 	int interface;
 	unsigned int timeout;
