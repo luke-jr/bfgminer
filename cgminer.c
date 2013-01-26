@@ -4318,7 +4318,12 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 #ifdef HAVE_OPENCL
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
-			struct thr_info *thr = cgpu->thr[0];
+			struct thr_info *thr;
+			for (int thrid = 0; thrid < cgpu->threads; ++thrid) {
+				thr = cgpu->thr[thrid];
+				if (!thr->q->frozen)
+					break;
+			}
 			enum dev_enable *denable;
 			int gpu;
 
