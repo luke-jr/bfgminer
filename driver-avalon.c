@@ -143,6 +143,57 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	buf[0] = tt;
 	buf[4] = rev8(buf[4]);
 #endif
+	if (likely(thr)) {
+		avalon = thr->cgpu;
+		info = avalon_info[avalon->device_id];
+		delay = nr_len * 10 * 1000000000ULL;
+		delay = delay / info->baud;
+
+		if (info->frequency == 256) {
+			buf[4] = 0x07;
+			buf[5] = 0x00;
+			buf[6] = 0x03;
+			buf[7] = 0x08;
+			buf[8] = 0x74;
+			buf[9] = 0x01;
+			buf[10] = 0x00;
+			buf[11] = 0x00;
+		}
+
+		if (info->frequency == 270) {
+			buf[4] = 0x07;
+			buf[5] = 0x00;
+			buf[6] = 0x73;
+			buf[7] = 0x08;
+			buf[8] = 0x74;
+			buf[9] = 0x01;
+			buf[10] = 0x00;
+			buf[11] = 0x00;
+		}
+
+		if (info->frequency == 282) {
+			buf[4] = 0x07;
+			buf[5] = 0x00;
+			buf[6] = 0xd3;
+			buf[7] = 0x08;
+			buf[8] = 0x74;
+			buf[9] = 0x01;
+			buf[10] = 0x00;
+			buf[11] = 0x00;
+		}
+
+		if (info->frequency == 300) {
+			buf[4] = 0x07;
+			buf[5] = 0x00;
+			buf[6] = 0x63;
+			buf[7] = 0x09;
+			buf[8] = 0x74;
+			buf[9] = 0x01;
+			buf[10] = 0x00;
+			buf[11] = 0x00;
+		}
+	}
+
 	if (at->reset)
 		nr_len = 1;
 	if (opt_debug) {
@@ -152,13 +203,6 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	ret = write(fd, buf, nr_len);
 	if (unlikely(ret != nr_len))
 		return AVA_SEND_ERROR;
-
-	if (likely(thr)) {
-		avalon = thr->cgpu;
-		info = avalon_info[avalon->device_id];
-		delay = nr_len * 10 * 1000000000ULL;
-		delay = delay / info->baud;
-	}
 
 	p.tv_sec = 0;
 	p.tv_nsec = (long)delay + 4000000;
@@ -328,11 +372,11 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
-			int *asic_count, int *timeout)
+			int *asic_count, int *timeout, int *frequency)
 {
 	char err_buf[BUFSIZ+1];
 	char buf[BUFSIZ+1];
-	char *ptr, *comma, *colon, *colon2, *colon3;
+	char *ptr, *comma, *colon, *colon2, *colon3, *colon4;
 	size_t max;
 	int i, tmp;
 
@@ -427,6 +471,10 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 			}
 
 			if (colon3 && *colon3) {
+				colon4 = strchr(colon3, ':');
+				if (colon4)
+					*(colon4++) = '\0';
+
 				tmp = atoi(colon3);
 				if (tmp > 0 && tmp <= 0xff)
 					*timeout = tmp;
@@ -437,7 +485,22 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 						colon3, 0xff);
 					quit(1, err_buf);
 				}
-
+				if (colon4 && *colon4) {
+					tmp = atoi(colon4);
+					switch (tmp) {
+					case 256:
+					case 270:
+					case 282:
+					case 300:
+						*frequency = tmp;
+						break;
+					default:
+						sprintf(err_buf,
+							"Invalid avalon-options for "
+							"frequency must be 256/270/282/300");
+							quit(1, err_buf);
+					}
+				}
 			}
 		}
 	}
@@ -448,15 +511,15 @@ static bool avalon_detect_one(const char *devpath)
 	struct avalon_info *info;
 	struct avalon_result ar;
 	int fd, ret;
-	int baud, miner_count, asic_count, timeout;
+	int baud, miner_count, asic_count, timeout, frequency = 0;
 
 	int this_option_offset = ++option_offset;
 	get_options(this_option_offset, &baud, &miner_count, &asic_count,
-		    &timeout);
+		    &timeout, &frequency);
 
 	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s "
-	       "(baud=%d miner_count=%d asic_count=%d timeout=%d)",
-	       devpath, baud, miner_count, asic_count, timeout);
+	       "(baud=%d miner_count=%d asic_count=%d timeout=%d frequency=%d)",
+	       devpath, baud, miner_count, asic_count, timeout, frequency);
 
 	fd = avalon_open2(devpath, baud, true);
 	if (unlikely(fd == -1)) {
@@ -511,6 +574,7 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
+	info->frequency = frequency;
 
 	return true;
 }
