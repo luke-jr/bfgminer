@@ -491,7 +491,7 @@ static bool avalon_detect_one(const char *devpath)
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_PWM;
 	info->temp_max = 0;
-	info->temp_history_count = 4 / (int)(info->timeout * AVALON_HASH_TIME_FACTOR) + 1;
+	info->temp_history_count = (4 / (float)(0x3c * ((float)1.67/0x32))) + 1;
 	if (info->temp_history_count <= 0)
 		info->temp_history_count = 1;
 
@@ -609,11 +609,10 @@ static void adjust_temp(struct avalon_info *info)
 		info->fan_pwm = 0xA;
 	else if (temp_new > 60)
 		info->fan_pwm = AVALON_DEFAULT_FAN_PWM;
-	else if (temp_new - info->temp_old > 2)
+	else if (abs(temp_new - info->temp_old) >= 2) {
 		info->fan_pwm = (temp_new - 40) * 9 + 10;
-
-	info->temp_old = temp_new;
-	info->temp_sum = 0;
+		info->temp_old = temp_new;
+	}
 }
 
 static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
@@ -779,9 +778,12 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
 	info->temp_history_index++;
 	info->temp_sum += info->temp2;
+	applog(LOG_DEBUG, "Avalon: temp_hist: %d, temp_count: %d, temp_old: %d",
+	       info->temp_history_index, info->temp_history_count, info->temp_old);
 	if (info->temp_history_index == info->temp_history_count) {
 		adjust_temp(info);
 		info->temp_history_index = 0;
+		info->temp_sum = 0;
 	}
 
 	/*
