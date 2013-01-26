@@ -599,7 +599,7 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 	*temp_avg = info->temp2;
 }
 
-static void adjust_temp(struct avalon_info *info)
+static inline void adjust_temp(struct avalon_info *info)
 {
 	int temp_new;
 
@@ -778,7 +778,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
 	info->temp_history_index++;
 	info->temp_sum += info->temp2;
-	applog(LOG_DEBUG, "Avalon: temp_hist: %d, temp_count: %d, temp_old: %d",
+	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
 	       info->temp_history_index, info->temp_history_count, info->temp_old);
 	if (info->temp_history_index == info->temp_history_count) {
 		adjust_temp(info);
