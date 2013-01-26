@@ -35,9 +35,22 @@
 #include "hexdump.c"
 
 static int option_offset = -1;
-
 struct avalon_info **avalon_info;
 struct device_api avalon_api;
+
+static inline uint8_t rev8(uint8_t d)
+{
+    int i;
+    uint8_t out = 0;
+
+    /* (from left to right) */
+    for (i = 0; i < 8; i++)
+        if (d & (1 << i))
+            out |= (1 << (7 - i));
+
+    return out;
+}
+
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
 			    uint8_t timeout, uint8_t asic_num,
@@ -654,7 +667,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		info->bulk1[i] = info->bulk2[i];
 		info->bulk2[i] = info->bulk3[i];
 		info->bulk3[i] = work[i];
-		applog(LOG_DEBUG, "Avalon: bulk0/1/2 buffer [%d]: %p, %p, %p",
+		applog(LOG_DEBUG, "Avalon: bulk0/1/2 buffer [%d]: %p, %p, %p, %p",
 		       i, info->bulk0[i], info->bulk1[i], info->bulk2[i], info->bulk3[i]);
 	}
 

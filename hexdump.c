@@ -62,7 +62,7 @@ void hexdump(const uint8_t *p, unsigned int len)
 
 			if (addr + i >= len)
 				break;
-		
+
 			v = p[addr + i];
 			line[pos + (i * 3) + 0] = nibble[v >> 4];
 			line[pos + (i * 3) + 1] = nibble[v & 0xf];
@@ -75,4 +75,3 @@ void hexdump(const uint8_t *p, unsigned int len)
 		hex_print(line);
 	}
 }
-

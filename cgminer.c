@@ -5427,7 +5427,6 @@ void *miner_thread(void *userdata)
 #else
 			pool_stats = &(work->pool->cgminer_stats);
 #endif
-				/* FIXME: should be check all works */
 				timeradd(&getwork_start,
 					 &(pool_stats->getwork_wait),
 					 &(pool_stats->getwork_wait));

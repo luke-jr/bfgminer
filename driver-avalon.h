@@ -122,19 +122,6 @@ struct avalon_info {
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
-extern  struct avalon_info **avalon_info;
-
-static inline uint8_t rev8(uint8_t d)
-{
-    int i;
-    uint8_t out = 0;
-
-    /* (from left to right) */
-    for (i = 0; i < 8; i++)
-        if (d & (1 << i))
-            out |= (1 << (7 - i));
-
-    return out;
-}
+extern struct avalon_info **avalon_info;
 
 #endif	/* AVALON_H */
