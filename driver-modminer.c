@@ -210,6 +210,8 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 		tmp->device_path = strdup(devpath);
 		tmp->usbdev = modminer->usbdev;
+		tmp->usbinfo.bus_number = modminer->usbinfo.bus_number;
+		tmp->usbinfo.device_address = modminer->usbinfo.device_address;
 		// Only the first copy gets the already used stats
 		if (!added)
 			tmp->usbinfo.usbstat = modminer->usbinfo.usbstat;
