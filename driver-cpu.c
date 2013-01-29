@@ -768,7 +768,7 @@ static void cpu_detect()
 
 static void reinit_cpu_device(struct cgpu_info *cpu)
 {
-	tq_push(thr_info[cpur_thr_id].q, cpu);
+	tq_push(control_thr[cpur_thr_id].q, cpu);
 }
 
 static bool cpu_thread_prepare(struct thr_info *thr)

@@ -1800,9 +1800,9 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 #endif
 
 	for (i = 0; i < mining_threads; i++) {
-		pga = thr_info[i].cgpu->cgminer_id;
+		thr = mining_thr[i];
+		pga = thr->cgpu->cgminer_id;
 		if (pga == dev) {
-			thr = &thr_info[i];
 			cgpu->deven = DEV_ENABLED;
 			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
 			tq_push(thr->q, &ping);
@@ -2105,9 +2105,9 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 	}
 
 	for (i = 0; i < gpu_threads; i++) {
-		gpu = thr_info[i].cgpu->device_id;
+		thr = mining_thr[i];
+		gpu = thr->cgpu->device_id;
 		if (gpu == id) {
-			thr = &thr_info[i];
 			if (thr->cgpu->status != LIFE_WELL) {
 				message(io_data, MSG_GPUMRE, id, NULL, isjson);
 				return;
