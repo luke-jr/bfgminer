@@ -158,9 +158,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 			buf[9] = 0x01;
 			buf[10] = 0x00;
 			buf[11] = 0x00;
-		}
-
-		if (info->frequency == 270) {
+		} else if (info->frequency == 270) {
 			buf[4] = 0x07;
 			buf[5] = 0x00;
 			buf[6] = 0x73;
@@ -169,9 +167,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 			buf[9] = 0x01;
 			buf[10] = 0x00;
 			buf[11] = 0x00;
-		}
-
-		if (info->frequency == 282) {
+		} else if (info->frequency == 282) {
 			buf[4] = 0x07;
 			buf[5] = 0x00;
 			buf[6] = 0xd3;
@@ -180,9 +176,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 			buf[9] = 0x01;
 			buf[10] = 0x00;
 			buf[11] = 0x00;
-		}
-
-		if (info->frequency == 300) {
+		} else if (info->frequency == 300) {
 			buf[4] = 0x07;
 			buf[5] = 0x00;
 			buf[6] = 0x63;
