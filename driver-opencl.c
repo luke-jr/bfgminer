@@ -815,7 +815,7 @@ void pause_dynamic_threads(int gpu)
 	int i;
 
 	for (i = 1; i < cgpu->threads; i++) {
-		struct thr_info *thr = &thr_info[i];
+		struct thr_info *thr = mining_thr[i];
 
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
@@ -908,7 +908,7 @@ retry:
 		else
 			wlog("%d\n", gpus[gpu].intensity);
 		for (i = 0; i < mining_threads; i++) {
-			thr = &thr_info[i];
+			thr = mining_thr[i];
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
@@ -1455,7 +1455,7 @@ static void opencl_detect()
 
 static void reinit_opencl_device(struct cgpu_info *gpu)
 {
-	tq_push(thr_info[gpur_thr_id].q, gpu);
+	tq_push(control_thr[gpur_thr_id].q, gpu);
 }
 
 #ifdef HAVE_ADL
