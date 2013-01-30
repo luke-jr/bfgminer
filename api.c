@@ -1800,7 +1800,9 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 #endif
 
 	for (i = 0; i < mining_threads; i++) {
+		mutex_lock(&mining_thr_lock);
 		thr = mining_thr[i];
+		mutex_unlock(&mining_thr_lock);
 		pga = thr->cgpu->cgminer_id;
 		if (pga == dev) {
 			cgpu->deven = DEV_ENABLED;
@@ -2105,7 +2107,9 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 	}
 
 	for (i = 0; i < gpu_threads; i++) {
+		mutex_lock(&mining_thr_lock);
 		thr = mining_thr[i];
+		mutex_unlock(&mining_thr_lock);
 		gpu = thr->cgpu->device_id;
 		if (gpu == id) {
 			if (thr->cgpu->status != LIFE_WELL) {

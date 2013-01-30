@@ -737,6 +737,7 @@ extern pthread_mutex_t cgusb_lock;
 extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
+extern pthread_mutex_t mining_thr_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
