@@ -2012,6 +2012,11 @@ static void curses_print_devstatus(int thr_id)
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
 
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	if (cgpu->usbinfo.nodev)
+		wprintw(statuswin, "ZOMBIE");
+	else
+#endif
 	if (cgpu->status == LIFE_DEAD)
 		wprintw(statuswin, "DEAD  ");
 	else if (cgpu->status == LIFE_SICK)
