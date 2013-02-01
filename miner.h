@@ -738,6 +738,7 @@ extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
 extern pthread_mutex_t mining_thr_lock;
+extern pthread_mutex_t devices_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
@@ -778,6 +779,7 @@ extern void add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define _MAX_INTENSITY_STR "14"
 #endif
 
+extern bool hotplug_mode;
 extern struct list_head scan_devices;
 extern int nDevs;
 extern int opt_n_threads;

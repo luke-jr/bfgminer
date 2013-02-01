@@ -1148,6 +1148,7 @@ static int numpgas()
 	int count = 0;
 	int i;
 
+	mutex_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
 		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
@@ -1166,6 +1167,7 @@ static int numpgas()
 			count++;
 #endif
 	}
+	mutex_unlock(&devices_lock);
 	return count;
 }
 
@@ -1174,6 +1176,7 @@ static int pgadevice(int pgaid)
 	int count = 0;
 	int i;
 
+	mutex_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
 		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
@@ -1191,9 +1194,12 @@ static int pgadevice(int pgaid)
 		if (devices[i]->drv->drv_id == DRIVER_MODMINER)
 			count++;
 #endif
-		if (count == (pgaid + 1))
+		if (count == (pgaid + 1)) {
+			mutex_unlock(&devices_lock);
 			return i;
+		}
 	}
+	mutex_unlock(&devices_lock);
 	return -1;
 }
 #endif
@@ -1527,9 +1533,14 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		if (dev < 0) // Should never happen
 			return;
 
-		struct cgpu_info *cgpu = devices[dev];
+		struct cgpu_info *cgpu;
 		double frequency = 0;
-		float temp = cgpu->temp;
+		float temp;
+
+		mutex_lock(&devices_lock);
+		cgpu = devices[dev];
+		mutex_unlock(&devices_lock);
+		temp = cgpu->temp;
 
 #ifdef USE_ZTEX
 		if (cgpu->drv->drv_id == DRIVER_ZTEX && cgpu->device_ztex)
@@ -1747,6 +1758,7 @@ static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 
 static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
 	int numpga = numpgas();
 	struct thr_info *thr;
 	int pga;
@@ -1775,7 +1787,9 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
-	struct cgpu_info *cgpu = devices[dev];
+	mutex_lock(&devices_lock);
+	cgpu = devices[dev];
+	mutex_unlock(&devices_lock);
 
 	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s%u",
 			id, dev, cgpu->drv->name, cgpu->device_id);
@@ -1814,6 +1828,7 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 
 static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
 	int numpga = numpgas();
 	int id;
 
@@ -1839,7 +1854,9 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	struct cgpu_info *cgpu = devices[dev];
+	mutex_lock(&devices_lock);
+	cgpu = devices[dev];
+	mutex_unlock(&devices_lock);
 
 	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s%u",
 			id, dev, cgpu->drv->name, cgpu->device_id);
@@ -1856,6 +1873,8 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 
 static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
+	struct device_drv *drv;
 	int numpga = numpgas();
 	int id;
 
@@ -1881,8 +1900,10 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 		return;
 	}
 
-	struct cgpu_info *cgpu = devices[dev];
-	struct device_drv *drv = cgpu->drv;
+	mutex_lock(&devices_lock);
+	cgpu = devices[dev];
+	mutex_unlock(&devices_lock);
+	drv = cgpu->drv;
 
 	if (!drv->identify_device)
 		message(io_data, MSG_PGANOID, id, NULL, isjson);
@@ -2794,6 +2815,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 
 static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
 {
+	struct cgpu_info *cgpu;
 	bool io_open = false;
 	int i;
 
@@ -2807,8 +2829,12 @@ static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 	if (isjson)
 		io_open = io_add(io_data, COMSTR JSON_NOTIFY);
 
-	for (i = 0; i < total_devices; i++)
-		notifystatus(io_data, i, devices[i], isjson, group);
+	for (i = 0; i < total_devices; i++) {
+		mutex_lock(&devices_lock);
+		cgpu = devices[i];
+		mutex_unlock(&devices_lock);
+		notifystatus(io_data, i, cgpu, isjson, group);
+	}
 
 	if (isjson && io_open)
 		io_close(io_data);
@@ -2833,7 +2859,9 @@ static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		io_open = io_add(io_data, COMSTR JSON_DEVDETAILS);
 
 	for (i = 0; i < total_devices; i++) {
+		mutex_lock(&devices_lock);
 		cgpu = devices[i];
+		mutex_unlock(&devices_lock);
 
 		root = api_add_int(root, "DEVDETAILS", &i, false);
 		root = api_add_string(root, "Name", cgpu->drv->name, false);
@@ -2930,6 +2958,7 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 
 static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
 	bool io_open = false;
 	struct api_data *extra;
 	char id[20];
@@ -2942,7 +2971,9 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 
 	i = 0;
 	for (j = 0; j < total_devices; j++) {
-		struct cgpu_info *cgpu = devices[j];
+		mutex_lock(&devices_lock);
+		cgpu = devices[j];
+		mutex_unlock(&devices_lock);
 
 		if (cgpu && cgpu->drv) {
 			if (cgpu->drv->get_api_stats)
@@ -3182,6 +3213,8 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 #ifdef HAVE_AN_FPGA
 static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
+	struct device_drv *drv;
 	char buf[TMPBUFSIZ];
 	int numpga = numpgas();
 
@@ -3215,8 +3248,10 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 		return;
 	}
 
-	struct cgpu_info *cgpu = devices[dev];
-	struct device_drv *drv = cgpu->drv;
+	mutex_lock(&devices_lock);
+	cgpu = devices[dev];
+	mutex_unlock(&devices_lock);
+	drv = cgpu->drv;
 
 	char *set = strchr(opt, ',');
 	if (set)
