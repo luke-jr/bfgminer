@@ -342,6 +342,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	jp = &fpga->jtag;
 	jp->a = x6500->cgpu_data;
 	x6500_jtag_set(jp, pinoffset);
+	thr->cgpu_data = fpga;
 	
 	mutex_lock(&x6500->device_mutex);
 	if (!jtag_reset(jp)) {
@@ -384,8 +385,6 @@ static bool x6500_fpga_init(struct thr_info *thr)
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)",
 		       x6500->api->name, x6500->device_id, fpgaid);
 	
-	thr->cgpu_data = fpga;
-
 	dclk_prepare(&fpga->dclk);
 	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
 	for (i = 0; 0xffffffff != x6500_get_register(jp, 0xE); ++i)
