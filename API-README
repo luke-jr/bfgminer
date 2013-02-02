@@ -11,7 +11,7 @@ running BFGMiner and reply with a string and then close the socket each time
 If you add the "--api-network" option, it will accept API requests from any
 network attached computer.
 
-You can only access the comands that reply with data in this mode.
+You can only access the commands that reply with data in this mode.
 By default, you cannot access any privileged command that affects the miner -
 you will receive an access denied status message see --api-allow below.
 
@@ -28,7 +28,7 @@ See --api-groups below to define other groups like W:
 Privileged access is checked in the order the IP addresses were supplied to
 "--api-allow"
 The first match determines the privilege level.
-Using the "--api-allow" option overides the "--api-network" option if they
+Using the "--api-allow" option overrides the "--api-network" option if they
 are both specified
 With "--api-allow", 127.0.0.1 is not by default given access unless specified
 
@@ -44,12 +44,12 @@ An IP address/subnet can only be a member of one group
 A sample API group would be:
  --api-groups P:switchpool:enablepool:addpool:disablepool:removepool:poolpriority:*
 This would create a group 'P' that can do all current pool commands and all
-non-priviliged commands - the '*' means all non-priviledged commands
+non-privileged commands - the '*' means all non-privileged commands
 Without the '*' the group would only have access to the pool commands
 Defining multiple groups example:
  --api-groups Q:quit:restart:*,S:save
 This would define 2 groups:
- Q: that can 'quit' and 'restart' as well as all non-priviledged commands
+ Q: that can 'quit' and 'restart' as well as all non-privileged commands
  S: that can only 'save' and no other commands
 
 The RPC API request can be either simple text or JSON.
@@ -95,7 +95,7 @@ The STATUS section is:
    Standard long time of request in seconds
 
   Code=N
-   Each unique reply has a unigue Code (See api.c - #define MSG_NNNNNN)
+   Each unique reply has a unique Code (See api.c - #define MSG_NNNNNN)
 
   Msg=string
    Message matching the Code value N
@@ -137,7 +137,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  devs          DEVS           Each available GPU, PGA and CPU with their status
                               e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
-                              Last Share Time=NNN, <- standand long time in seconds
+                              Last Share Time=NNN, <- standard long time in seconds
                                (or 0 if none) of last accepted share
                               Last Share Pool=N, <- pool number (or -1 if none)
                               Will not report PGAs if PGA mining is disabled
@@ -255,7 +255,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
  pgaenable|N (*)
                none           There is no reply section just the STATUS section
                               stating the results of the enable request
-                              You cannot enable a PGA if it's status is not WELL
+                              You cannot enable a PGA if its status is not WELL
                               This is only available if PGA mining is enabled
 
  pgadisable|N (*)
@@ -267,13 +267,13 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating the results of the identify request
                               This is only available if PGA mining is enabled
-                              and currently only BFL singles support this command
-                              On a BFL single it will flash the led on the front
-                              of the device for appoximately 4s
-                              All other non BFL PGA devices will return a warning
-                              status message stating that they dont support it
+                              and currently only BitForce Singles support this command
+                              On a BitForce Single it will flash the led on the front
+                              of the device for approximately 4s
+                              All other non-BFL PGA devices will return a warning
+                              status message stating that they don't support it
                               This adds a 4s delay to the BFL share being processed
-                              so you may get a message stating that procssing took
+                              so you may get a message stating that processing took
                               longer than 7000ms if the request was sent towards
                               the end of the timing of any work being worked on
                               e.g.: BFL0: took 8438ms - longer than 7000ms
@@ -358,17 +358,15 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               shown on the cgminer display like is normally displayed
                               on exit.
 
-When you enable, disable or restart a GPU or PGA, you will also get Thread messages
-in the BFGMiner status window
+When you enable, disable or restart a GPU or PGA, you will also get Thread
+messages in the BFGMiner status window.
 
 The 'poolpriority' command can be used to reset the priority order of multiple
-pools with a single command - 'switchpool' only sets a single pool to first priority
-Each pool should be listed by id number in order of preference (first = most
-preferred)
-Any pools not listed will be prioritised after the ones that are listed, in the
-priority order they were originally
-If the priority change affects the miner's preference for mining, it may switch
-immediately
+pools with a single command - 'switchpool' only sets a single pool to first
+priority. Each pool should be listed by id number in order of preference (first
+= most preferred). Any pools not listed will be prioritised after the ones that
+are listed, in the priority order they were originally If the priority change
+affects the miner's preference for mining, it may switch immediately.
 
 When you switch to a different pool to the current one (including by priority
 change), you will get a 'Switching to URL' message in the BFGMiner status
@@ -382,8 +380,8 @@ showing some details of the requests received and the replies
 
 There are included 4 program examples for accessing the API:
 
-api-example.php - a php script to access the API
-  usAge: php api-example.php command
+api-example.php - a PHP script to access the API
+  usage: php api-example.php command
  by default it sends a 'summary' request to the miner at 127.0.0.1:4028
  If you specify a command it will send that request instead
  You must modify the line "$socket = getsock('127.0.0.1', 4028);" at the
@@ -391,12 +389,12 @@ api-example.php - a php script to access the API
 
 API.java/API.class
  a java program to access the API (with source code)
-  usAge is: java API command address port
+  usage is: java API command address port
  Any missing or blank parameters are replaced as if you entered:
   java API summary 127.0.0.1 4028
 
 api-example.c - a 'C' program to access the API (with source code)
-  usAge: api-example [command [ip/host [port]]]
+  usage: api-example [command [ip/host [port]]]
  again, as above, missing or blank parameters are replaced as if you entered:
   api-example summary 127.0.0.1 4028
 
@@ -465,7 +463,7 @@ Modified API commands:
 API V1.19b (BFGMiner v2.8.1)
 
 Added API commands:
- 'pgaidentify|N' (only works for BFL Singles so far)
+ 'pgaidentify|N' (only works for BitForce Singles so far)
 
 Modified API commands:
  Change pool field name back from 'Diff1 Work' to 'Diff1 Shares'
@@ -475,7 +473,7 @@ Modified API commands:
               'Last Share Difficulty'
  'pga|N' - add 'Difficulty Accepted', 'Difficulty Rejected',
               'Last Share Difficulty'
- 'notify' - add '*Dev Throttle' (for BFL Singles)
+ 'notify' - add '*Dev Throttle' (for BitForce Singles)
  'pools' - add 'Difficulty Accepted', 'Difficulty Rejected',
                'Difficulty Stale', 'Last Share Difficulty'
  'stats' - add 'Work Diff', 'Min Diff', 'Max Diff', 'Min Diff Count',
@@ -544,7 +542,7 @@ Added API commands:
 API V1.14 (BFGMiner v2.5.0)
 
 Modified API commands:
- 'stats' - more icarus timing stats added
+ 'stats' - more Icarus timing stats added
  'notify' - include new device comms error counter
 
 The internal code for handling data was rewritten (~25% of the code)
@@ -567,7 +565,7 @@ API V1.12 (BFGMiner v2.4.3)
 Modified API commands:
  'stats' - more pool stats added
 
-Support for the ModMinerQuad FPGA was added
+Support for the ModMiner FPGA was added
 
 ----------
 
@@ -611,7 +609,7 @@ API V1.8 (BFGMiner v2.3.5)
 Added API commands:
  'devdetails'
 
-Support for the ZTex FPGA was added
+Support for the ZTEX FPGA was added
 
 ----------
 
@@ -646,11 +644,11 @@ Added API commands:
  'pgacount'
 
 Modified API commands:
- 'devs' now includes Icarus and Bitforce FPGA devices
+ 'devs' now includes Icarus and BitForce FPGA devices
  'notify' added "*" to the front of the name of all numeric error fields
  'config' correct "Log Interval" to use numeric (not text) type for JSON
 
-Support for Icarus and Bitforce FPGAs was added
+Support for Icarus and BitForce FPGAs was added
 
 ----------
 
@@ -772,7 +770,7 @@ It has two levels to the security:
 
 To use miner.php requires a web server with PHP
 
-Basics: On xubuntu 11.04, to install apache2 and php, the commands are:
+Basics: On Xubuntu 11.04, to install Apache and PHP, the commands are:
  sudo apt-get install apache2
  sudo apt-get install php5
  sudo /etc/init.d/apache2 reload
@@ -860,7 +858,7 @@ Done :)
 ---------
 
 The rest of this documentation deals with the more complex
-functions of miner.php, using myminer.php, creaing custom
+functions of miner.php, using myminer.php, creating custom
 summaries and displaying multiple BFGMiner rigs
 
 ---------
@@ -883,7 +881,7 @@ $rigs = array('192.168.0.100:4028:A', '192.168.0.102:4028:B');
 #
 ?>
 
-Changes in myminer.php superscede what is in miner.php
+Changes in myminer.php supersede what is in miner.php
 However, this is only valid for variables in miner.php before the
 2 lines where myminer.php is included by miner.php:
 
@@ -900,22 +898,22 @@ So although miner.php originally contains the line
 if you created the example myminer.php given above, it would actually
 change the value of $rigs that is used when miner.php is running
 i.e. you don't have to remove or comment out the $rigs line in miner.php
-It will be superceded by myminer.php
+It will be superseded by myminer.php
 
 ---------
 
 The example.php above also shows how to define more that one rig to
 be shown my miner.php
 
-Each rig string is 2 or 3 values seperated by colons ':'
+Each rig string is 2 or 3 values separated by colons ':'
 They are simply an IP address or host name, followed by the
 port number (usually 4028) and an optional Name string
 
-miner.php displays rig buttons that will show the defails of a single
+miner.php displays rig buttons that will show the details of a single
 rig when you click on it - the button shows either the rig number,
 or the 'Name' string if you provide it
 
-PHP arrays contain each string seperated by a comma, but no comma after
+PHP arrays contain each string separated by a comma, but no comma after
 the last one
 
 So an example for 3 rigs would be:
@@ -929,7 +927,7 @@ explained before
 ---------
 
 So basically, any variable explained below can be put in myminer.php
-if you wanted to set it to something different to it's default value
+if you wanted to set it to something different from its default value
 and did not want to change miner.php itself every time you updated it
 
 Below is each variable that can be changed and an explanation of each
@@ -1019,7 +1017,7 @@ table of data
 Set $notify to true to attempt to display the notify command on
 the single rig page
 If your older version of BFGMiner returns an 'Invalid command'
-coz it doesn't have notify - it just shows the error status table
+because it doesn't have notify - it just shows the error status table
 
 ---------
 
@@ -1034,8 +1032,8 @@ This assumes shares are 1 difficulty shares
 
 Set $checklastshare to false to not do the above checks
 
-'expected' is calculated from the device MH/s value
-So for example, a device that hashes at 380MH/s should (on average)
+'expected' is calculated from the device Mh/s value
+So for example, a device that hashes at 380Mh/s should (on average)
 find a share every 11.3s
 If the last share was found more than 11.3 x 12 seconds (135.6s) ago,
 it is considered an error and highlighted
@@ -1105,7 +1103,7 @@ The numbers are integer seconds
 
 The defaults should be OK for most cases
 However, the longer SND is, the longer you have to wait while
-php hangs if the target BFGMiner isn't runnning or listening
+PHP hangs if the target BFGMiner isn't running or listening
 
 RCV should only ever be relevant if BFGMiner has hung but the
 API thread is still running, RCV would normally be >= SND
@@ -1147,7 +1145,7 @@ Auto-refresh of the page (in seconds) - integers only
 
 $ignorerefresh = true/false always ignore refresh parameters
 $changerefresh = true/false show buttons to change the value
-$autorefresh = default value, 0 means dont auto-refresh
+$autorefresh = default value, 0 means don't auto-refresh
 
 ---------
 
@@ -1231,7 +1229,7 @@ There are 2 hard coded sections:
  RIGS - displays a rig table like at the start of 'Summary'
 
 Each custom summary requires a second array, that can be empty, listing fields
-to be totaled for each section
+to be totalled for each section
 If there is no matching total data, no total will show
 
 ---------

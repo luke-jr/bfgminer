@@ -265,21 +265,21 @@ fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
 
 AC_ARG_ENABLE([ztex],
-	[AC_HELP_STRING([--disable-ztex],[Compile support for Ztex (default if libusb)])],
+	[AC_HELP_STRING([--disable-ztex],[Compile support for ZTEX (default if libusb)])],
 	[ztex=$enableval],
 	[ztex=auto]
 	)
 if test "x$ztex$libusb" = xyesno; then
-	AC_MSG_ERROR([Could not find libusb, required for Ztex support])
+	AC_MSG_ERROR([Could not find libusb, required for ZTEX support])
 elif test "x$ztex" = xauto; then
 	ztex="$libusb"
 	if test "x$libusb" = xno; then
-		AC_MSG_WARN([Could not find libusb, required for Ztex support])
+		AC_MSG_WARN([Could not find libusb, required for ZTEX support])
 		ztexwarn=yes
 	fi
 fi
 if test "x$ztex" = xyes; then
-	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if Ztex support is wanted])
+	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if ZTEX support is wanted])
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
@@ -663,11 +663,11 @@ else
 fi
 
 if test "x$ztex" = xyes; then
-	echo "  Ztex.FPGAs...........: Enabled"
+	echo "  ZTEX.FPGAs...........: Enabled"
 elif test "x$ztexwarn" = xyes; then
-	echo "  Ztex.FPGAs...........: Disabled (libusb not found)"
+	echo "  ZTEX.FPGAs...........: Disabled (libusb not found)"
 else
-	echo "  Ztex.FPGAs...........: Disabled"
+	echo "  ZTEX.FPGAs...........: Disabled"
 fi
 
 if test "x$bitforce$modminer" != xnono; then
