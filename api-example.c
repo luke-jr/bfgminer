@@ -23,7 +23,6 @@
 #include <sys/types.h>
 
 #include "compat.h"
-#include "miner.h"
 
 #if defined(unix)
 	#include <errno.h>
