@@ -53,7 +53,7 @@ Dependencies:
 	(This is only required for multi-FPGA auto-detection on Linux)
 
 	libusb headers
-	(This is only required for Ztex and X6500 support)
+	(This is only required for ZTEX and X6500 support)
 
 
 BFGMiner specific configuration options:
@@ -64,7 +64,7 @@ BFGMiner specific configuration options:
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
 	--disable-x6500         Compile support for X6500 (default enabled)
-	--disable-ztex          Compile support for Ztex (default if libusb)
+	--disable-ztex          Compile support for ZTEX (default if libusb)
 	--enable-scrypt         Compile support for scrypt mining (default disabled)
 	--without-curses        Compile support for curses TUI (default enabled)
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
@@ -212,7 +212,7 @@ SCRYPT only options:
 See SCRYPT-README for more information regarding (non-bitcoin) scrypt mining.
 
 
-FPGA mining boards (BitForce, Icarus, ModMiner, X6500, Ztex) only options:
+FPGA mining boards (BitForce, Icarus, ModMiner, X6500, ZTEX) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
@@ -517,7 +517,7 @@ P:Pool, T:Test Pool, L:LP or B:Benchmark,
 then D:d.ddd is the difficulty required to get a share from the work,
 then G:hh:mm:ss:n.nnn, which is when the getwork or LP was sent to the pool and
 the n.nnn is how long it took to reply,
-followed by 'O' on it's own if it is an original getwork, or 'C:n.nnn' if it was
+followed by 'O' on its own if it is an original getwork, or 'C:n.nnn' if it was
 a clone with n.nnn stating how long after the work was recieved that it was cloned,
 (m.mmm) is how long from when the original work was received until work started,
 W:n.nnn is how long the work took to process until it was ready to submit,
@@ -899,11 +899,11 @@ A: Try "export DISPLAY=:0" before running BFGMiner.
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
 
-Q: How do I tune for p2pool?
-A: p2pool has very rapid expiration of work and new blocks, it is suggested you
+Q: How do I tune for P2Pool?
+A: P2Pool has very rapid expiration of work and new blocks, it is suggested you
 decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
 with -g 1. It is also recommended to use --failover-only since the work is
-effectively like a different block chain. If mining with a minirig, it is worth
+effectively like a different block chain. If mining with a Mini Rig, it is worth
 adding the --bfl-range option.
 
 Q: Are kernels from other mining software useable in BFGMiner?
@@ -917,7 +917,7 @@ A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
 A: At the moment, BFGMiner supports 5 FPGAs: BitForce, Icarus, ModMiner, X6500,
-and Ztex.
+and ZTEX.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
