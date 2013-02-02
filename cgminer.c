@@ -3140,7 +3140,8 @@ static void *submit_work_thread(void *userdata)
 		char *noncehex;
 		char s[1024];
 
-		sshare->work = copy_work(work);
+		/* This work item is freed in parse_stratum_response */
+		sshare->work = work;
 		mutex_lock(&sshare_lock);
 		/* Give the stratum share a unique id */
 		sshare->id = swork_id++;
