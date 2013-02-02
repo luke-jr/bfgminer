@@ -430,10 +430,10 @@ Added API commands:
 API V1.22 (not released)
 
 Enforced output limitation:
- all extra records beyond the output limit of the API (~64k) are ignored
-  and chopped off at the record boundary before the limit is reached
-  however, JSON brackets will be correctly closed and the JSON id will be
-  set to 0 (instead of 1) if any data was truncated
+ all extra records beyond the output limit of the API (~64k) are ignored and
+  chopped off at the record boundary before the limit is reached however, JSON
+  brackets will be correctly closed and the JSON id will be set to 0 (instead
+  of 1) if any data was truncated
 
 Modified API commands:
  'stats' - add 'Times Sent', 'Bytes Sent', 'Times Recv', 'Bytes Recv'
@@ -979,8 +979,8 @@ true
 Default:
  $userlist = null;
 
-Define password checking and default access
- null means there is no password checking
+Define password checking and default access null means there is no password
+checking
 
 $userlist is an array of 3 arrays e.g.
 $userlist = array('sys' => array('boss' => 'bpass'),
@@ -996,13 +996,13 @@ Any of the 3 can be null, meaning there are none of that item
 All validated 'usr' users are given $readonly = true; access
 All validated 'sys' users are given the $readonly access you defined
 
-If 'def' has one or more values, and allowcustompages is true, then
-anyone without a password can see the list of custompage buttons given
-in 'def' and will see the first one when they go to the web page, with
-a login button at the top right
+If 'def' has one or more values, and allowcustompages is true, then anyone
+without a password can see the list of custompage buttons given in 'def' and
+will see the first one when they go to the web page, with a login button at the
+top right
 
-From the login page, if you login with no username or password, it will
-show the first 'def' custompage (if there are any)
+From the login page, if you login with no username or password, it will show
+the first 'def' custompage (if there are any)
 
 If you are logged in, it will show a logout button at the top right
 
@@ -1011,13 +1011,12 @@ If you are logged in, it will show a logout button at the top right
 Default:
  $notify = true;
 
-Set $notify to false to NOT attempt to display the notify command
-table of data
+Set $notify to false to NOT attempt to display the notify command table of data
 
-Set $notify to true to attempt to display the notify command on
-the single rig page
-If your older version of BFGMiner returns an 'Invalid command'
-because it doesn't have notify - it just shows the error status table
+Set $notify to true to attempt to display the notify command on the single rig
+page
+If your older version of BFGMiner returns an 'Invalid command' because it
+doesn't have notify - it just shows the error status table
 
 ---------
 
@@ -1033,12 +1032,12 @@ This assumes shares are 1 difficulty shares
 Set $checklastshare to false to not do the above checks
 
 'expected' is calculated from the device Mh/s value
-So for example, a device that hashes at 380Mh/s should (on average)
-find a share every 11.3s
-If the last share was found more than 11.3 x 12 seconds (135.6s) ago,
-it is considered an error and highlighted
-If the last share was found more than 11.3 x 8 seconds (90.4s) ago,
-it is considered a warning and highlighted
+So for example, a device that hashes at 380Mh/s should (on average) find a
+share every 11.3s
+If the last share was found more than 11.3 x 12 seconds (135.6s) ago, it is
+considered an error and highlighted
+If the last share was found more than 11.3 x 8 seconds (90.4s) ago, it is
+considered a warning and highlighted
 
 The default highlighting is very subtle
 
@@ -1047,8 +1046,8 @@ The default highlighting is very subtle
 Default:
  $poolinputs = false;
 
-Set $poolinputs to true to show the input fields for adding a pool
-and changing the pool priorities on a single rig page
+Set $poolinputs to true to show the input fields for adding a pool and changing
+the pool priorities on a single rig page
 However, if $readonly is true, it will not display them
 
 ---------
@@ -1056,13 +1055,12 @@ However, if $readonly is true, it will not display them
 Default:
  $rigs = array('127.0.0.1:4028');
 
-Set $rigs to an array of your BFGMiner rigs that are running
- format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
+Set $rigs to an array of your BFGMiner rigs that are running format: 'IP:Port'
+ or 'Host:Port' or 'Host:Port:Name'
 If you only have one rig, it will just show the detail of that rig
-If you have more than one rig it will show a summary of all the rigs
- with buttons to show the details of each rig -
- the button contents will be 'Name' rather than rig number, if you
- specify 'Name'
+If you have more than one rig it will show a summary of all the rigs with
+ buttons to show the details of each rig - the button contents will be 'Name'
+ rather than rig number, if you specify 'Name'
 e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 
 ---------
@@ -1070,8 +1068,8 @@ e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 Default:
  $rigipsecurity = true;
 
-Set $rigipsecurity to false to show the IP/Port of the rig
-in the socket error messages and also show the full socket message
+Set $rigipsecurity to false to show the IP/Port of the rig in the socket error
+ messages and also show the full socket message
 
 ---------
 
@@ -1079,19 +1077,19 @@ Default:
  $rigtotals = true;
  $forcerigtotals = false;
 
-Set $rigtotals to true to display totals on the single rig page
-'false' means no totals (and ignores $forcerigtotals)
+Set $rigtotals to true to display totals on the single rig page 'false' means
+ no totals (and ignores $forcerigtotals)
 
 If $rigtotals is true, all data is also right aligned
 With false, it's as before, left aligned
 
-This option is just here to allow people to set it to false
-if they prefer the old non-total display when viewing a single rig
+This option is just here to allow people to set it to false if they prefer the
+ old non-total display when viewing a single rig
 
-Also, if there is only one line shown in any section, then no
-total will be shown (to save screen space)
-You can force it to always show rig totals on the single rig page,
-even if there is only one line, by setting $forcerigtotals = true;
+Also, if there is only one line shown in any section, then no total will be
+ shown (to save screen space)
+You can force it to always show rig totals on the single rig page, even if
+ there is only one line, by setting $forcerigtotals = true;
 
 ---------
 
@@ -1102,17 +1100,17 @@ Default:
 The numbers are integer seconds
 
 The defaults should be OK for most cases
-However, the longer SND is, the longer you have to wait while
-PHP hangs if the target BFGMiner isn't running or listening
+However, the longer SND is, the longer you have to wait while PHP hangs if the
+target BFGMiner isn't running or listening
 
-RCV should only ever be relevant if BFGMiner has hung but the
-API thread is still running, RCV would normally be >= SND
+RCV should only ever be relevant if BFGMiner has hung but the API thread is
+still running, RCV would normally be >= SND
 
-Feel free to increase SND if your network is very slow
-or decrease RCV if that happens often to you
+Feel free to increase SND if your network is very slow or decrease RCV if that
+happens often to you
 
-Also, on some windows PHP, apparently the $usec is ignored
-(so usec can't be specified)
+Also, on some windows PHP, apparently the $usec is ignored (so usec can't be
+specified)
 
 ---------
 
@@ -1120,8 +1118,8 @@ Default:
  $hidefields = array();
 
 List of fields NOT to be displayed
-You can use this to hide data you don't want to see or don't want
-shown on a public web page
+You can use this to hide data you don't want to see or don't want shown on a
+public web page
 The list of sections are:
  SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS
 See the web page for the list of field names (the table headers)
@@ -1322,9 +1320,9 @@ The example given:
 
 ---------
 
-With BFGMiner 2.10.1 and later, miner.php includes an extension to
-the custom pages that allows you to apply SQL style commands to
-the data: where, group, and having
+With BFGMiner 2.10.1 and later, miner.php includes an extension to the custom
+pages that allows you to apply SQL style commands to the data: where, group,
+and having
 
 As an example, miner.php includes a more complex custom page called 'Pools'
 this includes the extension:
@@ -1340,8 +1338,8 @@ $poolsext = array(
 );
 
 This allows you to group records together from one or more rigs
-In the example, you'll get each Pool (with the same URL+Stratum info)
-listed once for all rigs and a sum of each of the fields listed in 'calc'
+In the example, you'll get each Pool (with the same URL+Stratum info) listed
+once for all rigs and a sum of each of the fields listed in 'calc'
 
 
 'where' and 'having' are an array of fields and restrictions to apply
@@ -1354,8 +1352,8 @@ Any restiction that is invalid or unknown is true
 An empty array, or null, means there are no restrictions
 
 A restriction is formatted as: array('Field', 'restriction', 'value')
-Field is the simple field name as normally displayed, or SECTION.Field
-if it is a joined section (as in this case 'POOL+STATS')
+Field is the simple field name as normally displayed, or SECTION.Field if it is
+a joined section (as in this case 'POOL+STATS')
 The list of restrictions are:
 'set' - true if the row contains the 'Field' ('value' is not required or used)
 '=', '<', '<=', '>', '>' - a numerical comparison
