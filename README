@@ -55,7 +55,7 @@ Dependencies:
 	(libudev-dev - only required for multi-FPGA auto-detection on Linux)
 
 	usb dev library     http://www.libusb.org/
-	(libusb-dev  - only required for Ztex and X6500 support)
+	(libusb-dev  - only required for ZTEX and X6500 support)
 
 
 BFGMiner specific configuration options:
@@ -66,7 +66,7 @@ BFGMiner specific configuration options:
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
 	--disable-x6500         Compile support for X6500 (default enabled)
-	--disable-ztex          Compile support for Ztex (default if libusb)
+	--disable-ztex          Compile support for ZTEX (default if libusb)
 	--enable-scrypt         Compile support for scrypt mining (default disabled)
 	--without-curses        Compile support for curses TUI (default enabled)
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
@@ -214,7 +214,7 @@ SCRYPT only options:
 See SCRYPT-README for more information regarding (non-bitcoin) scrypt mining.
 
 
-FPGA mining boards (BitForce, Icarus, ModMiner, X6500, Ztex) only options:
+FPGA mining boards (BitForce, Icarus, ModMiner, X6500, ZTEX) only options:
 
 --scan-serial|-S <arg> Serial port to probe for FPGA mining device
 
@@ -227,17 +227,17 @@ On Ubuntu: sudo usermod <username> -a -G dialout
 Note that on GNU/Linux systems, you will usually need to login again before
 group changes take effect.
 
-By default, BFGMiner will scan for autodetected FPGAs unless at least one
--S is specified for that driver. If you specify -S and still want BFGMiner
-to scan, you must also use "-S auto". If you want to prevent BFGMiner from
-scanning without specifying a device, you can use "-S noauto". Note that
-presently, autodetection only works on Linux, and might only detect one
-device depending on the version of udev being used. If you want to scan all
-serial ports, you can use "-S all"; note that this may write data to
-non-mining devices which may then behave in unexpected ways!
+By default, BFGMiner will scan for autodetected FPGAs unless at least one -S is
+specified for that driver. If you specify -S and still want BFGMiner to scan,
+you must also use "-S auto". If you want to prevent BFGMiner from scanning
+without specifying a device, you can use "-S noauto". Note that presently,
+autodetection only works on Linux, and might only detect one device depending
+on the version of udev being used. If you want to scan all serial ports, you
+can use "-S all"; note that this may write data to non-mining devices which may
+then behave in unexpected ways!
 
-On linux <arg> is usually of the format /dev/ttyUSBn
-On windows <arg> is usually of the format \\.\COMn
+On Linux, <arg> is usually of the format /dev/ttyUSBn
+On Windows, <arg> is usually of the format \\.\COMn
 (where n = the correct device number for the FPGA device)
 
 The official supplied binaries are compiled with support for all FPGAs.
@@ -318,8 +318,8 @@ The list of proxy types are:
 
 Proxy support requires cURL version 7.21.7 or newer.
 
-If you specify the --socks-proxy option to BFGMiner, it will only be applied to all pools
-that don't specify their own proxy setting like above
+If you specify the --socks-proxy option to BFGMiner, it will only be applied to
+all pools that don't specify their own proxy setting like above
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
@@ -436,7 +436,8 @@ The BFGMiner status line shows:
 
 TQ is Total Queued work items.
 ST is STaged work items (ready to use).
-SS is Stale Shares discarded (detected and not submitted so don't count as rejects)
+SS is Stale Shares discarded (detected and not submitted so don't count as
+rejects)
 DW is Discarded Work items (work from block no longer valid to work on)
 NB is New Blocks detected on the network
 GW is GetWork requested (work items from pools)
@@ -542,9 +543,10 @@ P:Pool, T:Test Pool, L:LP or B:Benchmark,
 then D:d.ddd is the difficulty required to get a share from the work,
 then G:hh:mm:ss:n.nnn, which is when the getwork or LP was sent to the pool and
 the n.nnn is how long it took to reply,
-followed by 'O' on it's own if it is an original getwork, or 'C:n.nnn' if it was
-a clone with n.nnn stating how long after the work was recieved that it was cloned,
-(m.mmm) is how long from when the original work was received until work started,
+followed by 'O' on its own if it is an original getwork, or 'C:n.nnn' if it was
+a clone with n.nnn stating how long after the work was recieved that it was
+cloned, (m.mmm) is how long from when the original work was received until work
+started,
 W:n.nnn is how long the work took to process until it was ready to submit,
 (m.mmm) is how long from ready to submit to actually doing the submit, this is
 usually 0.000 unless there was a problem with submitting the work,
@@ -607,9 +609,9 @@ For example, to keep the 2nd GPU to its default clocks:
 --gpu-engine 950,0,930,960 --gpu-memclock 300,0,300,300
 
 AUTO MODES:
-There are two "auto" modes in BFGMiner, --auto-fan and --auto-gpu. These can
-be used independently of each other and are complementary. Both auto modes
-are designed to safely change settings while trying to maintain a target
+There are two "auto" modes in BFGMiner, --auto-fan and --auto-gpu. These can be
+used independently of each other and are complementary. Both auto modes are
+designed to safely change settings while trying to maintain a target
 temperature. By default this is set to 75 degrees C but can be changed with:
 
 --temp-target
@@ -628,11 +630,11 @@ e.g.
 Fan control in auto fan works off the theory that the minimum possible fan
 required to maintain an optimal temperature will use less power, make less
 noise, and prolong the life of the fan. In auto-fan mode, the fan speed is
-limited to 85% if the temperature is below "overheat" intentionally, as
-higher fanspeeds on GPUs do not produce signficantly more cooling, yet
-significanly shorten the lifespan of the fans. If temperature reaches the
-overheat value, fanspeed will still be increased to 100%. The overheat value
-is set to 85 degrees by default and can be changed with:
+limited to 85% if the temperature is below "overheat" intentionally, as higher
+fanspeeds on GPUs do not produce signficantly more cooling, yet significantly
+shorten the lifespan of the fans. If temperature reaches the overheat value,
+fanspeed will still be increased to 100%. The overheat value is set to 85
+degrees by default and can be changed with:
 
 --temp-overheat
 e.g.
@@ -645,15 +647,15 @@ e.g.
 --auto-gpu --gpu-engine 750-950,945,700-930,960
 
 GPU control in auto gpu tries to maintain as high a clock speed as possible
-while not reaching overheat temperatures. As a lower clock speed limit,
-the auto-gpu mode checks the GPU card's "normal" clock speed and will not go
-below this unless you have manually set a lower speed in the range. Also,
-unless a higher clock speed was specified at startup, it will not raise the
-clockspeed. If the temperature climbs, fanspeed is adjusted and optimised
-before GPU engine clockspeed is adjusted. If fan speed control is not available
-or already optimal, then GPU clock speed is only decreased if it goes over
-the target temperature by the hysteresis amount, which is set to 3 by default
-and can be changed with:
+while not reaching overheat temperatures. As a lower clock speed limit, the
+auto-gpu mode checks the GPU card's "normal" clock speed and will not go below
+this unless you have manually set a lower speed in the range. Also, unless a
+higher clock speed was specified at startup, it will not raise the clockspeed.
+If the temperature climbs, fanspeed is adjusted and optimised before GPU engin
+e clockspeed is adjusted. If fan speed control is not available or already
+optimal, then GPU clock speed is only decreased if it goes over the target
+temperature by the hysteresis amount, which is set to 3 by default and can be
+changed with:
 --temp-hysteresis
 If the temperature drops below the target temperature, and engine clock speed
 is not at the highest level set at startup, BFGMiner will raise the clock speed.
@@ -671,9 +673,9 @@ Sets card 0 cutoff temperature to 95 and card 1 to 105.
 
 --gpu-memdiff -125
 This setting will modify the memory speed whenever the GPU clock speed is
-modified by --auto-gpu. In this example, it will set the memory speed to
-be 125 MHz lower than the GPU speed. This is useful for some cards like the
-6970 which normally don't allow a bigger clock speed difference.
+modified by --auto-gpu. In this example, it will set the memory speed to be 125
+MHz lower than the GPU speed. This is useful for some cards like the 6970 which
+normally don't allow a bigger clock speed difference.
 
 
 CHANGING SETTINGS:
@@ -758,7 +760,7 @@ Note the number of devices here match, and the order is the same. If devices 1
 and 2 were different between Tahiti and Cayman, you could run BFGMiner with:
 --gpu-map 2:1,1:2
 And it would swap the monitoring it received from ADL device 1 and put it to
-opencl device 2 and vice versa.
+OpenCL device 2 and vice versa.
 
 If you have 2 monitors connected to the first device it would look like this:
 
@@ -812,7 +814,7 @@ the command line or via the menu after startup and choose settings->write
 config file and the file will be loaded one each startup.
 
 Q: The build fails with gcc is unable to build a binary.
-A: Remove the "-march=native" component of your CFLAGS as your version of gcc
+A: Remove the "-march=native" component of your CFLAGS as your version of GCC
 does not support it.
 
 Q: The CPU usage is high.
@@ -864,9 +866,8 @@ The defaults are very sane and I have very little interest in changing this
 any further.
 
 Q: Can you change the autofan/autogpu to change speeds in a different manner?
-A: The defaults are sane and safe. I'm not interested in changing them
-further. The starting fan speed is set to 50% in auto-fan mode as a safety
-precaution.
+A: The defaults are sane and safe. I'm not interested in changing them further.
+The starting fan speed is set to 50% in auto-fan mode as a safety precaution.
 
 Q: Why is my efficiency above/below 100%?
 A: Efficiency simply means how many shares you return for the amount of work
@@ -924,11 +925,11 @@ A: Try "export DISPLAY=:0" before running BFGMiner.
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
 
-Q: How do I tune for p2pool?
-A: p2pool has very rapid expiration of work and new blocks, it is suggested you
+Q: How do I tune for P2Pool?
+A: P2Pool has very rapid expiration of work and new blocks, it is suggested you
 decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
 with -g 1. It is also recommended to use --failover-only since the work is
-effectively like a different block chain. If mining with a minirig, it is worth
+effectively like a different block chain. If mining with a Mini Rig, it is worth
 adding the --bfl-range option.
 
 Q: Are kernels from other mining software useable in BFGMiner?
@@ -942,13 +943,13 @@ A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
 A: At the moment, BFGMiner supports 5 FPGAs: BitForce, Icarus, ModMiner, X6500,
-and Ztex.
+and ZTEX.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
 
 Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
-A: On linux, if the /dev/ttyUSB* devices don't automatically appear, the only
+A: On Linux, if the /dev/ttyUSB* devices don't automatically appear, the only
 thing that needs to be done is to load the driver for them:
 BFL: sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
 Icarus: sudo modprobe pl2303 vendor=0x067b product=0x230
@@ -958,9 +959,10 @@ On windows you must install the pl2303 or ftdi driver required for the device
 pl2303: http://prolificusa.com/pl-2303hx-drivers/
 ftdi: http://www.ftdichip.com/Drivers/VCP.htm
 
-Q: On linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
+Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
 BFGMiner can't mine on them
-A: Make sure you have the required priviledges to access the /dev/ttyUSB* devices:
+A: Make sure you have the required priviledges to access the /dev/ttyUSB*
+devices:
  sudo ls -las /dev/ttyUSB*
 will give output like:
  0 crw-rw---- 1 root dialout 188, 0 2012-09-11 13:49 /dev/ttyUSB0
@@ -974,8 +976,8 @@ A: Stratum is a protocol designed to reduce resources for mining pools at the
 cost of keeping the miner in the dark and blindly transferring his mining
 authority to the pool. It is a return to the problems of the old centralized
 "getwork" protocol, but capable of scaling to hardware of any speed like the
-standard GBT protocol. If a pool uses stratum instead of GBT, BFGMiner
-will automatically detect it and switch to the support as advertised if it can.
+standard GBT protocol. If a pool uses stratum instead of GBT, BFGMiner will
+automatically detect it and switch to the support as advertised if it can.
 Stratum uses direct TCP connections to the pool and thus it will NOT currently
 work through a http proxy but will work via a socks proxy if you need to use
 one. If you input the stratum port directly into your configuration, or use the

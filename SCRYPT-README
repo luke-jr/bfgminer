@@ -24,7 +24,7 @@ NOTE that if it does not fail at startup, the presence of hardware errors (HW)
 are a sure sign that you have set the parameters too high.
 
 
-Step 1 on linux:
+Step 1 on Linux:
 export GPU_MAX_ALLOC_PERCENT=100
 If you do not do this, you may find it impossible to scrypt mine. You may find
 a value of 40 is enough and increasing this further has little effect.
@@ -37,7 +37,7 @@ may help CPU usage a little as well.
 is a new option where you tell BFGMiner how many shaders your GPU has. This
 helps BFGMiner try to choose some meaningful baseline parameters. Use this table
 below to determine how many shaders your GPU has, and note that there are some
-variants of these cards, and nvidia shaders are much much lower and virtually
+variants of these cards, and Nvidia shaders are much much lower and virtually
 pointless trying to mine on.
 
 GPU  Shaders
@@ -74,7 +74,7 @@ all you will need to set.
 
 --intensity XX
 
-Just like in bitcoin mining, scrypt mining takes an intensity, however the
+Just like in Bitcoin mining, scrypt mining takes an intensity, however the
 scale goes from 0 to 20 to mimic the "Aggression" used in mtrlt's reaper. The
 reason this is crucial is that too high an intensity can actually be
 disastrous with scrypt because it CAN run out of ram. Intensities over 13
