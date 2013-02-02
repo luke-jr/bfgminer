@@ -124,3 +124,6 @@ bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = bitstreams/*
 endif
+
+bin_PROGRAMS += bfgminer-rpc
+bfgminer_rpc_SOURCES = api-example.c

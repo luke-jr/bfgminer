@@ -7,10 +7,6 @@
  * any later version.  See COPYING for more details.
  */
 
-/* Compile:
- *   gcc api-example.c -o bfgminer-api
- */
-
 #include "config.h"
 
 #include <stdio.h>
