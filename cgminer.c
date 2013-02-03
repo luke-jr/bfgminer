@@ -5102,7 +5102,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	len = cb1_len + n1_len + pool->n2size + cb2_len;
 	alloc_len = len;
 	align_len(&alloc_len);
-	coinbase = alloca(alloc_len);
+	coinbase = calloc(alloc_len, 1);
 	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
 	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
 	hex2bin(coinbase + cb1_len + n1_len, work->nonce2, pool->n2size);
@@ -5110,6 +5110,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Generate merkle root */
 	gen_hash(coinbase, merkle_root, len);
+	free(coinbase);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
 		unsigned char merkle_bin[32];
