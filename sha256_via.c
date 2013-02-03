@@ -32,6 +32,7 @@ bool scanhash_via(struct thr_info*thr, const unsigned char *pmidstate,
 	uint32_t *data32 = (uint32_t *) data;
 	uint32_t *hash32 = (uint32_t *) tmp_hash;
 	uint32_t *nonce = (uint32_t *)(data + 64 + 12);
+	uint32_t *nonce_inout = (uint32_t *)(data_inout + 64 + 12);
 	unsigned long stat_ctr = 0;
 
 	/* bitcoin gives us big endian input, but via wants LE,
@@ -59,10 +60,8 @@ bool scanhash_via(struct thr_info*thr, const unsigned char *pmidstate,
 
 		if (unlikely((hash32[7] == 0) && fulltest(tmp_hash, target))) {
 			/* swap nonce'd data back into original storage area;
-			 * TODO: only swap back the nonce, rather than all data
 			 */
-			swap32yes(data_inout, data32, 128/4);
-
+			*nonce_inout = bswap_32(n);
 			*last_nonce = n;
 			return true;
 		}
