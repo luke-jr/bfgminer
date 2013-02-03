@@ -1185,7 +1185,7 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 }
 
 struct device_drv modminer_drv = {
-	.drv = DRIVER_MODMINER,
+	.drv_id = DRIVER_MODMINER,
 	.dname = "ModMiner",
 	.name = "MMQ",
 	.drv_detect = modminer_detect,

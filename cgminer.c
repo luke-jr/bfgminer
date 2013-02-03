@@ -5951,7 +5951,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				continue;
 
 #ifdef WANT_CPUMINE
-			if (cgpu->drv->drv == DRIVER_CPU)
+			if (cgpu->drv->drv_id == DRIVER_CPU)
 				continue;
 #endif
 			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
@@ -6343,7 +6343,7 @@ void enable_curses(void) {
 #ifndef WANT_CPUMINE
 struct device_drv cpu_drv;
 struct device_drv cpu_drv = {
-	.drv = DRIVER_CPU,
+	.drv_id = DRIVER_CPU,
 	.name = "CPU",
 };
 #endif
@@ -6376,7 +6376,7 @@ void enable_device(struct cgpu_info *cgpu)
 	adj_width(mining_threads, &dev_width);
 #endif
 #ifdef HAVE_OPENCL
-	if (cgpu->drv->drv == DRIVER_OPENCL) {
+	if (cgpu->drv->drv_id == DRIVER_OPENCL) {
 		gpu_threads += cgpu->threads;
 	}
 #endif
@@ -6681,7 +6681,7 @@ int main(int argc, char *argv[])
 				enable_device(devices[i]);
 			} else if (i < total_devices) {
 				if (opt_removedisabled) {
-					if (devices[i]->drv->drv == DRIVER_CPU)
+					if (devices[i]->drv->drv_id == DRIVER_CPU)
 						--opt_n_threads;
 				} else {
 					enable_device(devices[i]);

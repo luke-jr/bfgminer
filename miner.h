@@ -273,7 +273,7 @@ struct thr_info;
 struct work;
 
 struct device_drv {
-	enum drv_driver drv;
+	enum drv_driver drv_id;
 
 	char *dname;
 	char *name;
