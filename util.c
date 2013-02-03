@@ -261,6 +261,30 @@ static void set_nettime(void)
 	wr_unlock(&netacc_lock);
 }
 
+static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
+			 __maybe_unused unsigned char *data, size_t size,
+			 void *userdata)
+{
+	struct pool *pool = (struct pool *)userdata;
+
+	switch(type) {
+		case CURLINFO_HEADER_IN:
+		case CURLINFO_DATA_IN:
+		case CURLINFO_SSL_DATA_IN:
+			pool->cgminer_pool_stats.net_bytes_received += size;
+			break;
+		case CURLINFO_HEADER_OUT:
+		case CURLINFO_DATA_OUT:
+		case CURLINFO_SSL_DATA_OUT:
+			pool->cgminer_pool_stats.net_bytes_sent += size;
+			break;
+		case CURLINFO_TEXT:
+		default:
+			break;
+	}
+	return 0;
+}
+
 json_t *json_rpc_call(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool probe, bool longpoll, int *rolltime,
@@ -287,10 +311,11 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		probing = !pool->probed;
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
-#if 0 /* Disable curl debugging since it spews to stderr */
-	if (opt_protocol)
-		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
-#endif
+	// CURLOPT_VERBOSE won't write to stderr if we use CURLOPT_DEBUGFUNCTION
+	curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, curl_debug_cb);
+	curl_easy_setopt(curl, CURLOPT_DEBUGDATA, (void *)pool);
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
@@ -912,6 +937,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.bytes_sent += ssent;
+	pool->cgminer_pool_stats.net_bytes_sent += ssent;
 	return true;
 }
 
@@ -1041,6 +1067,7 @@ char *recv_line(struct pool *pool)
 
 	pool->cgminer_pool_stats.times_received++;
 	pool->cgminer_pool_stats.bytes_received += len;
+	pool->cgminer_pool_stats.net_bytes_received += len;
 out:
 	if (!sret)
 		clear_sock(pool);

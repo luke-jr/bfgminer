@@ -2,15 +2,8 @@
 This README contains extended details about FPGA mining with cgminer
 
 
-ModMinerQuad (MMQ)
-------------------
-
-The mining bitstream does not survive a power cycle, so cgminer will upload
-it, if it needs to, before it starts mining (approx 7min 40sec)
-
-The red LED also flashes while it is uploading the bitstream
-
--
+For ModMinerQuad (MMQ) and BitForce (BFL)
+-----------------------------------------
 
 When mining on windows, the driver being used will determine if mining will work.
 
@@ -39,7 +32,17 @@ problems:
 
  --usb-dump 0
 
-It will only help if you have a working MMQ device attached to the computer
+It will only help if you have a working MMQ or BFL device attached to the
+computer
+
+
+ModMinerQuad (MMQ)
+------------------
+
+The mining bitstream does not survive a power cycle, so cgminer will upload
+it, if it needs to, before it starts mining (approx 7min 40sec)
+
+The red LED also flashes while it is uploading the bitstream
 
 -
 
@@ -130,7 +133,7 @@ modem-manager software
 TODO: check that all MMQ's have the same product ID
 
 
-Bitforce (BFL)
+BitForce (BFL)
 --------------
 
 --bfl-range         Use nonce range on bitforce devices if supported
