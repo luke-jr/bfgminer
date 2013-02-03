@@ -618,10 +618,7 @@ void pause_dynamic_threads(int gpu)
 	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr;
 
-		mutex_lock(&mining_thr_lock);
-		thr = mining_thr[i];
-		mutex_unlock(&mining_thr_lock);
-
+		thr = get_thread(i);
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
 			applog(LOG_WARNING, "Tune dynamic intensity with --gpu-dyninterval");
@@ -709,9 +706,7 @@ retry:
 		else
 			wlog("%d\n", gpus[gpu].intensity);
 		for (i = 0; i < mining_threads; i++) {
-			mutex_lock(&mining_thr_lock);
-			thr = mining_thr[i];
-			mutex_unlock(&mining_thr_lock);
+			thr = get_thread(i);
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
@@ -766,9 +761,7 @@ retry:
 		}
 		gpus[selected].deven = DEV_ENABLED;
 		for (i = 0; i < mining_threads; ++i) {
-			mutex_lock(&mining_thr_lock);
-			thr = mining_thr[i];
-			mutex_unlock(&mining_thr_lock);
+			thr = get_thread(i);
 			cgpu = thr->cgpu;
 			if (cgpu->drv->drv_id != DRIVER_OPENCL)
 				continue;
@@ -1155,18 +1148,14 @@ select_cgpu:
 	gpu = cgpu->device_id;
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
-		mutex_lock(&mining_thr_lock);
-		thr = mining_thr[thr_id];
-		mutex_unlock(&mining_thr_lock);
+		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
 		if (cgpu->drv->drv_id != DRIVER_OPENCL)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
 
-		mutex_lock(&mining_thr_lock);
-		thr = mining_thr[thr_id];
-		mutex_unlock(&mining_thr_lock);
+		thr = get_thread(thr_id);
 		if (!thr) {
 			applog(LOG_WARNING, "No reference to thread %d exists", thr_id);
 			continue;
@@ -1184,9 +1173,7 @@ select_cgpu:
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		int virtual_gpu;
 
-		mutex_lock(&mining_thr_lock);
-		thr = mining_thr[thr_id];
-		mutex_unlock(&mining_thr_lock);
+		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
 		if (cgpu->drv->drv_id != DRIVER_OPENCL)
 			continue;
@@ -1223,9 +1210,7 @@ select_cgpu:
 	get_datestamp(cgpu->init, &now);
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
-		mutex_lock(&mining_thr_lock);
-		thr = mining_thr[thr_id];
-		mutex_unlock(&mining_thr_lock);
+		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
 		if (cgpu->drv->drv_id != DRIVER_OPENCL)
 			continue;
