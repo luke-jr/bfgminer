@@ -1395,16 +1395,16 @@ void free_work(struct work *work)
  * entered under gbt_lock */
 static void __build_gbt_coinbase(struct pool *pool)
 {
-	int cbt_len, cal_len, orig_len;
 	unsigned char *coinbase;
+	int cbt_len, orig_len;
 	uint8_t *extra_len;
+	size_t cal_len;
 
 	cbt_len = strlen(pool->coinbasetxn) / 2;
 	pool->coinbase_len = cbt_len + 4;
 	/* We add 4 bytes of extra data corresponding to nonce2 of stratum */
 	cal_len = pool->coinbase_len + 1;
-	if (cal_len % 4)
-		cal_len += 4 - (cal_len % 4);
+	align_len(&cal_len);
 	coinbase = calloc(cal_len, 1);
 	hex2bin(coinbase, pool->coinbasetxn, 42);
 	extra_len = (uint8_t *)(coinbase + 41);
@@ -1428,7 +1428,8 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 {
 	json_t *txn_array;
 	bool ret = false;
-	int i, cal_len;
+	size_t cal_len;
+	int i;
 
 	free(pool->txn_hashes);
 	pool->txn_hashes = NULL;
@@ -1454,8 +1455,7 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 		unsigned char *txn_bin;
 
 		cal_len = txn_len;
-		if (cal_len % 4)
-			cal_len += 4 - (cal_len % 4);
+		align_len(&cal_len);
 		txn_bin = calloc(cal_len, 1);
 		if (unlikely(!txn_bin))
 			quit(1, "Failed to calloc txn_bin in __build_gbt_txns");
@@ -5088,6 +5088,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
 	int len, cb1_len, n1_len, cb2_len, i;
 	uint32_t *data32, *swap32;
+	size_t alloc_len;
 	char *header;
 
 	mutex_lock(&pool->pool_lock);
@@ -5099,7 +5100,9 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	n1_len = strlen(pool->nonce1) / 2;
 	cb2_len = strlen(pool->swork.coinbase2) / 2;
 	len = cb1_len + n1_len + pool->n2size + cb2_len;
-	coinbase = alloca(len + 1);
+	alloc_len = len;
+	align_len(&alloc_len);
+	coinbase = alloca(alloc_len);
 	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
 	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
 	hex2bin(coinbase + cb1_len + n1_len, work->nonce2, pool->n2size);

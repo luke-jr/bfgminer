@@ -57,4 +57,11 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
 void RenameThread(const char* name);
 
+/* Align a size_t to 4 byte boundaries for fussy arches */
+static inline void align_len(size_t *len)
+{
+	if (*len % 4)
+		*len += 4 - (*len % 4);
+}
+
 #endif /* __UTIL_H__ */

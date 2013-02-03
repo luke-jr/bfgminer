@@ -1543,8 +1543,7 @@ void *realloc_strcat(char *ptr, char *s)
 		return ptr;
 
 	len += old + 1;
-	if (len % 4)
-		len += 4 - (len % 4);
+	align_len(&len);
 
 	ret = malloc(len);
 	if (unlikely(!ret))
