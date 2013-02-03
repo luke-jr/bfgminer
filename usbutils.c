@@ -845,12 +845,16 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 
 void usb_uninit(struct cgpu_info *cgpu)
 {
+	// May have happened already during a failed initialisation
+	//  if release_cgpu() was called due to a USB NODEV(err)
+	if (!cgpu->usbdev)
+		return;
 	libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
 	libusb_close(cgpu->usbdev->handle);
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
 }
 
-void release_cgpu(struct cgpu_info *cgpu)
+static void release_cgpu(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
 	struct cgpu_info *lookcgpu;
