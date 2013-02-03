@@ -56,6 +56,7 @@ bool scanhash_sse4_64(int thr_id, const unsigned char *pmidstate,
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
+	uint32_t *hash32 = (uint32_t *)phash;
     uint32_t *nNonce_p = (uint32_t *)(pdata + 76);
     uint32_t m_midstate[8], m_w[16], m_w1[16];
     __m128i m_4w[64], m_4hash[64], m_4hash1[64];
@@ -114,7 +115,7 @@ bool scanhash_sse4_64(int thr_id, const unsigned char *pmidstate,
 		    *(uint32_t *)&(phash)[i*4] = mi.i[j];
 		}
 
-		if (fulltest(phash, ptarget)) {
+		if (unlikely(hash32[7] == 0 && fulltest(phash, ptarget))) {
 			nonce += j;
 			*last_nonce = nonce;
 			*nNonce_p = nonce;
