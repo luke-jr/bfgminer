@@ -901,7 +901,7 @@ static void icarus_shutdown(struct thr_info *thr)
 }
 
 struct device_drv icarus_drv = {
-	.drv = DRIVER_ICARUS,
+	.drv_id = DRIVER_ICARUS,
 	.dname = "Icarus",
 	.name = "ICA",
 	.drv_detect = icarus_detect,

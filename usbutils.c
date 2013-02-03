@@ -1117,17 +1117,17 @@ static struct usb_find_devices *usb_check_each(int drvnum, struct device_drv *dr
 static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv, __maybe_unused struct libusb_device *dev)
 {
 #ifdef USE_BITFORCE
-	if (drv->drv == DRIVER_BITFORCE)
+	if (drv->drv_id == DRIVER_BITFORCE)
 		return usb_check_each(DRV_BITFORCE, drv, dev);
 #endif
 
 #ifdef USE_ICARUS
-	if (drv->drv == DRIVER_ICARUS)
+	if (drv->drv_id == DRIVER_ICARUS)
 		return usb_check_each(DRV_ICARUS, drv, dev);
 #endif
 
 #ifdef USE_MODMINER
-	if (drv->drv == DRIVER_MODMINER)
+	if (drv->drv_id == DRIVER_MODMINER)
 		return usb_check_each(DRV_MODMINER, drv, dev);
 #endif
 
