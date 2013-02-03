@@ -46,7 +46,6 @@ bool scanhash_via(int thr_id, const unsigned char *pmidstate,
 		data32[i] = swab32(((uint32_t *)data_inout)[i]);
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		/* first SHA256 transform */
@@ -80,6 +79,8 @@ bool scanhash_via(int thr_id, const unsigned char *pmidstate,
 			*last_nonce = n;
 			return false;
 		}
+
+		n++;
 	}
 }
 

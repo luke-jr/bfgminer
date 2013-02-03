@@ -108,7 +108,6 @@ bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
 	work_restart[thr_id].restart = 0;
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash(hash1, data, midstate);
@@ -123,6 +122,8 @@ bool scanhash_cryptopp(int thr_id, const unsigned char *midstate,
 			*last_nonce = n;
 			return false;
 		}
+
+		n++;
 	}
 }
 
