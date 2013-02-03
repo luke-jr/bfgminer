@@ -116,7 +116,6 @@ bool ScanHash_4WaySSE2(struct thr_info*thr, const unsigned char *pmidstate,
         unsigned int thash[9][NPAR] __attribute__((aligned(128)));
 	int j;
 
-	nonce += NPAR;
 	*nNonce_p = nonce;
 
         DoubleBlockSHA256(pdata, phash1, pmidstate, thash, pSHA256InitState);
@@ -144,6 +143,8 @@ bool ScanHash_4WaySSE2(struct thr_info*thr, const unsigned char *pmidstate,
             *last_nonce = nonce;
             return false;
         }
+
+		nonce += NPAR;
     }
 }
 

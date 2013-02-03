@@ -106,7 +106,6 @@ bool scanhash_cryptopp(struct thr_info*thr, const unsigned char *midstate,
 	data += 64;
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash(hash1, data, midstate);
@@ -121,6 +120,8 @@ bool scanhash_cryptopp(struct thr_info*thr, const unsigned char *midstate,
 			*last_nonce = n;
 			return false;
 		}
+
+		n++;
 	}
 }
 

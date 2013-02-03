@@ -252,7 +252,6 @@ bool scanhash_c(struct thr_info*thr, const unsigned char *midstate, unsigned cha
 	data += 64;
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash(hash1, data, midstate);
@@ -269,6 +268,8 @@ bool scanhash_c(struct thr_info*thr, const unsigned char *midstate, unsigned cha
 			*last_nonce = n;
 			return false;
 		}
+
+		n++;
 	}
 }
 

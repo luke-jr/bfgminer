@@ -42,7 +42,6 @@ bool scanhash_via(struct thr_info*thr, const unsigned char __maybe_unused *pmids
 	swap32yes(data32, data_inout, 128/4);
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		/* first SHA256 transform */
@@ -71,6 +70,8 @@ bool scanhash_via(struct thr_info*thr, const unsigned char __maybe_unused *pmids
 			*last_nonce = n;
 			return false;
 		}
+
+		n++;
 	}
 }
 
