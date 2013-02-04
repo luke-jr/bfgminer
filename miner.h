@@ -604,12 +604,22 @@ static inline void swap32yes(void*out, const void*in, size_t sz) {
 		(((uint32_t*)out)[swapcounter]) = swab32(((uint32_t*)in)[swapcounter]);
 }
 
+#define LOCAL_swap32(type, var, sz)  \
+	type __swapped_ ## var[sz * 4 / sizeof(type)];  \
+	swap32yes(__swapped_ ## var, var, sz);  \
+	var = __swapped_ ## var;  \
+// end
+
 #ifdef WORDS_BIGENDIAN
-#  define swap32tobe(out, in, sz)  (void)0
+#  define swap32tobe(out, in, sz)  ((out == in) ? (void)0 : memmove(out, in, sz))
+#  define LOCAL_swap32be(type, var, sz)  ;
 #  define swap32tole(out, in, sz)  swap32yes(out, in, sz)
+#  define LOCAL_swap32le(type, var, sz)  LOCAL_swap32(type, var, sz)
 #else
 #  define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
-#  define swap32tole(out, in, sz)  (void)0
+#  define LOCAL_swap32be(type, var, sz)  LOCAL_swap32(type, var, sz)
+#  define swap32tole(out, in, sz)  ((out == in) ? (void)0 : memmove(out, in, sz))
+#  define LOCAL_swap32le(type, var, sz)  ;
 #endif
 
 static inline void swab256(void *dest_p, const void *src_p)

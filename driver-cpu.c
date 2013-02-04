@@ -214,6 +214,13 @@ static int cpur_thr_id;
 static bool forced_n_threads;
 #endif
 
+static const uint32_t hash1_init[] = {
+	0,0,0,0,0,0,0,0,
+	0x80000000,
+	  0,0,0,0,0,0,
+	          0x100,
+};
+
 
 
 
@@ -241,7 +248,7 @@ double bench_algo_stage3(
 	uint32_t max_nonce = (1<<22);
 	uint32_t last_nonce = 0;
 
-	hex2bin(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000", 64);
+	memcpy(&hash1[0], &hash1_init[0], sizeof(hash1));
 
 	gettimeofday(&start, 0);
 			{
@@ -814,7 +821,7 @@ static int64_t cpu_scanhash(struct thr_info *thr, struct work *work, int64_t max
 	uint32_t last_nonce;
 	bool rc;
 
-	hex2bin(hash1, "00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000", 64);
+	memcpy(&hash1[0], &hash1_init[0], sizeof(hash1));
 CPUSearch:
 	last_nonce = first_nonce;
 	rc = false;

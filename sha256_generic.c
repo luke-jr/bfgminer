@@ -51,8 +51,7 @@ static inline u32 Maj(u32 x, u32 y, u32 z)
 
 static inline void LOAD_OP(int I, u32 *W, const u8 *input)
 {
-	/* byteswap is commented out, because bitcoin input
-	 * is already big-endian
+	/* byteswap is handled once in scanhash_c
 	 */
 	W[I] = /* ntohl */ ( ((u32*)(input))[I] );
 }
@@ -251,20 +250,28 @@ bool scanhash_c(struct thr_info*thr, const unsigned char *midstate, unsigned cha
 
 	data += 64;
 
-	while (1) {
-		*nonce = n;
+	// Midstate and data are stored in little endian
+	LOCAL_swap32le(unsigned char, midstate, 32/4)
+	LOCAL_swap32le(unsigned char, data, 64/4)
+	uint32_t *nonce_w = (uint32_t *)(data + 12);
 
+	while (1) {
+		*nonce_w = n;
+
+		// runhash expects int32 data preprocessed into native endian
 		runhash(hash1, data, midstate);
 		runhash(hash, hash1, sha256_init_state);
 
 		stat_ctr++;
 
 		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
+			*nonce = htole32(n);
 			*last_nonce = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || thr->work_restart) {
+			*nonce = htole32(n);
 			*last_nonce = n;
 			return false;
 		}

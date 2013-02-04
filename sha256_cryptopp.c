@@ -105,18 +105,25 @@ bool scanhash_cryptopp(struct thr_info*thr, const unsigned char *midstate,
 
 	data += 64;
 
+	// Midstate and data are stored in little endian
+	LOCAL_swap32le(unsigned char, midstate, 32/4)
+	LOCAL_swap32le(unsigned char, data, 64/4)
+	uint32_t *nonce_w = (uint32_t *)(data + 12);
+
 	while (1) {
-		*nonce = n;
+		*nonce_w = n;
 
 		runhash(hash1, data, midstate);
 		runhash(hash, hash1, sha256_init_state);
 
 		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
+			*nonce = htole32(n);
 			*last_nonce = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || thr->work_restart) {
+			*nonce = htole32(n);
 			*last_nonce = n;
 			return false;
 		}

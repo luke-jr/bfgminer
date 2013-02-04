@@ -752,11 +752,12 @@ bool hash_target_check_v(const unsigned char *hash, const unsigned char *target)
 	return rc;
 }
 
-// DEPRECATED: This uses an input hash that has every 4 bytes flipped
+// This operates on a native-endian SHA256 state
+// In other words, on little endian platforms, every 4 bytes are in reverse order
 bool fulltest(const unsigned char *hash, const unsigned char *target)
 {
 	unsigned char hash2[32];
-	swap32yes(hash2, hash, 32 / 4);
+	swap32tobe(hash2, hash, 32 / 4);
 	return hash_target_check_v(hash2, target);
 }
 
