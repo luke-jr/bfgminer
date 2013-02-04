@@ -1146,6 +1146,15 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.merkles = merkles;
 	if (clean)
 		pool->nonce2 = 0;
+	pool->swork.header_len = strlen(pool->swork.bbversion) +
+				 strlen(pool->swork.prev_hash) +
+				 strlen(pool->swork.ntime) +
+				 strlen(pool->swork.nbit) +
+	/* merkle_hash */	 32 +
+	/* nonce */		 8 +
+	/* workpadding */	 96;
+	pool->swork.header_len = pool->swork.header_len * 2 + 1;
+	align_len(&pool->swork.header_len);
 	mutex_unlock(&pool->pool_lock);
 
 	if (opt_protocol) {

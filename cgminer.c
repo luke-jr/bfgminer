@@ -5085,11 +5085,11 @@ static void set_work_target(struct work *work, double diff)
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
 	int len, cb1_len, n1_len, cb2_len, i;
+	char *header, *merkle_hash;
 	uint32_t *data32, *swap32;
 	size_t alloc_len;
-	char *header;
 
 	mutex_lock(&pool->pool_lock);
 
@@ -5124,15 +5124,17 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	swap32 = (uint32_t *)merkle_root;
 	for (i = 0; i < 32 / 4; i++)
 		swap32[i] = swab32(data32[i]);
-	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
+	merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 
-	header = strdup(pool->swork.bbversion);
-	header = realloc_strcat(header, pool->swork.prev_hash);
-	header = realloc_strcat(header, (char *)merkle_hash);
-	header = realloc_strcat(header, pool->swork.ntime);
-	header = realloc_strcat(header, pool->swork.nbit);
-	header = realloc_strcat(header, "00000000"); /* nonce */
-	header = realloc_strcat(header, workpadding);
+	header = calloc(pool->swork.header_len, 1);
+	sprintf(header, "%s%s%s%s%s%s%s",
+		pool->swork.bbversion,
+		pool->swork.prev_hash,
+		merkle_hash,
+		pool->swork.ntime,
+		pool->swork.nbit,
+		"00000000", /* nonce */
+		workpadding);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
