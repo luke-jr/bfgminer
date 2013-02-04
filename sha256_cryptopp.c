@@ -593,7 +593,6 @@ bool scanhash_asm32(int thr_id, const unsigned char *midstate,
 	work_restart[thr_id].restart = 0;
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash32(hash1, data, midstate);
@@ -608,6 +607,8 @@ bool scanhash_asm32(int thr_id, const unsigned char *midstate,
 			*last_nonce = n;
 			return false;
 		}
+
+		++n;
 	}
 }
 
