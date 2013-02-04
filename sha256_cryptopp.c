@@ -587,7 +587,6 @@ bool scanhash_asm32(struct thr_info*thr, const unsigned char *midstate,
 	data += 64;
 
 	while (1) {
-		n++;
 		*nonce = n;
 
 		runhash32(hash1, data, midstate);
@@ -602,6 +601,8 @@ bool scanhash_asm32(struct thr_info*thr, const unsigned char *midstate,
 			*last_nonce = n;
 			return false;
 		}
+
+		++n;
 	}
 }
 
