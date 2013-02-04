@@ -124,7 +124,7 @@ m4_define([BFG_PREPROC_IFELSE],
 			#error "$1 false in preprocessor"
 			#endif
 		])
-	],$3,$4)
+	],[$3],[$4])
 )
 
 
@@ -530,14 +530,16 @@ found_endian=no
 for headerfile in '' endian.h sys/endian.h sys/param.h; do
 	for pfx in '' '__'; do
 		BFG_PREPROC_IFELSE([defined(${pfx}BYTE_ORDER) && defined(${pfx}BIG_ENDIAN) && defined(${pfx}LITTLE_ENDIAN) && (${pfx}BYTE_ORDER == ${pfx}BIG_ENDIAN || ${pfx}BYTE_ORDER == ${pfx}LITTLE_ENDIAN)], ${headerfile}, [
-			if test "x$headerfile" != "x"; then
-				headerfile=" (${headerfile})"
+			if test "x$headerfile" = "x"; then
+				headerfilec=''
+			else
+				headerfilec=" (${headerfile})"
 			fi
 			BFG_PREPROC_IFELSE([${pfx}BYTE_ORDER == ${pfx}BIG_ENDIAN], ${headerfile}, [
-				AC_MSG_RESULT([big endian$headerfile])
+				AC_MSG_RESULT([big endian${headerfilec}])
 				AC_DEFINE(WORDS_BIGENDIAN, 1, [Define if your platform is big endian])
 			], [
-				AC_MSG_RESULT([little endian$headerfile])
+				AC_MSG_RESULT([little endian${headerfilec}])
 			])
 			found_endian=yes
 			break 2
