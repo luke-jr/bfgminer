@@ -5099,6 +5099,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	alloc_len = pool->swork.cb_len;
 	align_len(&alloc_len);
 	coinbase = calloc(alloc_len, 1);
+	if (unlikely(!coinbase))
+		quit(1, "Failed to calloc coinbase in gen_stratum_work");
 	hex2bin(coinbase, pool->swork.coinbase1, pool->swork.cb1_len);
 	hex2bin(coinbase + pool->swork.cb1_len, pool->nonce1, pool->n1_len);
 	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len, work->nonce2, pool->n2size);
@@ -5123,6 +5125,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 
 	header = calloc(pool->swork.header_len, 1);
+	if (unlikely(!header))
+		quit(1, "Failed to calloc header in gen_stratum_work");
 	sprintf(header, "%s%s%s%s%s%s%s",
 		pool->swork.bbversion,
 		pool->swork.prev_hash,
