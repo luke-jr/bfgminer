@@ -1131,11 +1131,15 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.job_id = job_id;
 	pool->swork.prev_hash = prev_hash;
 	pool->swork.coinbase1 = coinbase1;
+	pool->swork.cb1_len = strlen(coinbase1) / 2;
 	pool->swork.coinbase2 = coinbase2;
+	pool->swork.cb2_len = strlen(coinbase2) / 2;
 	pool->swork.bbversion = bbversion;
 	pool->swork.nbit = nbit;
 	pool->swork.ntime = ntime;
 	pool->swork.clean = clean;
+	pool->swork.cb_len = pool->swork.cb1_len + pool->n1_len + pool->n2size + pool->swork.cb2_len;
+
 	for (i = 0; i < pool->swork.merkles; i++)
 		free(pool->swork.merkle[i]);
 	if (merkles) {
@@ -1468,6 +1472,7 @@ bool initiate_stratum(struct pool *pool)
 		applog(LOG_INFO, "Failed to get nonce1 in initiate_stratum");
 		goto out;
 	}
+	pool->n1_len = strlen(pool->nonce1) / 2;
 	pool->n2size = json_integer_value(json_array_get(res_val, 2));
 	if (!pool->n2size) {
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
