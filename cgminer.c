@@ -1414,16 +1414,16 @@ void free_work(struct work *work)
  * entered under gbt_lock */
 static void __build_gbt_coinbase(struct pool *pool)
 {
-	int cbt_len, cal_len, orig_len;
 	unsigned char *coinbase;
+	int cbt_len, orig_len;
 	uint8_t *extra_len;
+	size_t cal_len;
 
 	cbt_len = strlen(pool->coinbasetxn) / 2;
 	pool->coinbase_len = cbt_len + 4;
 	/* We add 4 bytes of extra data corresponding to nonce2 of stratum */
 	cal_len = pool->coinbase_len + 1;
-	if (cal_len % 4)
-		cal_len += 4 - (cal_len % 4);
+	align_len(&cal_len);
 	coinbase = calloc(cal_len, 1);
 	hex2bin(coinbase, pool->coinbasetxn, 42);
 	extra_len = (uint8_t *)(coinbase + 41);
@@ -1447,7 +1447,8 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 {
 	json_t *txn_array;
 	bool ret = false;
-	int i, cal_len;
+	size_t cal_len;
+	int i;
 
 	free(pool->txn_hashes);
 	pool->txn_hashes = NULL;
@@ -1473,8 +1474,7 @@ static bool __build_gbt_txns(struct pool *pool, json_t *res_val)
 		unsigned char *txn_bin;
 
 		cal_len = txn_len;
-		if (cal_len % 4)
-			cal_len += 4 - (cal_len % 4);
+		align_len(&cal_len);
 		txn_bin = calloc(cal_len, 1);
 		if (unlikely(!txn_bin))
 			quit(1, "Failed to calloc txn_bin in __build_gbt_txns");
@@ -5144,28 +5144,30 @@ static void set_work_target(struct work *work, double diff)
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
-	int len, cb1_len, n1_len, cb2_len, i;
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	char *header, *merkle_hash;
 	uint32_t *data32, *swap32;
-	char *header;
+	size_t alloc_len;
+	int i;
 
 	mutex_lock(&pool->pool_lock);
 
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
-	cb1_len = strlen(pool->swork.coinbase1) / 2;
-	n1_len = strlen(pool->nonce1) / 2;
-	cb2_len = strlen(pool->swork.coinbase2) / 2;
-	len = cb1_len + n1_len + pool->n2size + cb2_len;
-	coinbase = alloca(len + 1);
-	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
-	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
-	hex2bin(coinbase + cb1_len + n1_len, work->nonce2, pool->n2size);
-	hex2bin(coinbase + cb1_len + n1_len + pool->n2size, pool->swork.coinbase2, cb2_len);
+	alloc_len = pool->swork.cb_len;
+	align_len(&alloc_len);
+	coinbase = calloc(alloc_len, 1);
+	if (unlikely(!coinbase))
+		quit(1, "Failed to calloc coinbase in gen_stratum_work");
+	hex2bin(coinbase, pool->swork.coinbase1, pool->swork.cb1_len);
+	hex2bin(coinbase + pool->swork.cb1_len, pool->nonce1, pool->n1_len);
+	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len, work->nonce2, pool->n2size);
+	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.coinbase2, pool->swork.cb2_len);
 
 	/* Generate merkle root */
-	gen_hash(coinbase, merkle_root, len);
+	gen_hash(coinbase, merkle_root, pool->swork.cb_len);
+	free(coinbase);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
 		unsigned char merkle_bin[32];
@@ -5179,15 +5181,19 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	swap32 = (uint32_t *)merkle_root;
 	for (i = 0; i < 32 / 4; i++)
 		swap32[i] = swab32(data32[i]);
-	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
+	merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 
-	header = strdup(pool->swork.bbversion);
-	header = realloc_strcat(header, pool->swork.prev_hash);
-	header = realloc_strcat(header, (char *)merkle_hash);
-	header = realloc_strcat(header, pool->swork.ntime);
-	header = realloc_strcat(header, pool->swork.nbit);
-	header = realloc_strcat(header, "00000000"); /* nonce */
-	header = realloc_strcat(header, workpadding);
+	header = calloc(pool->swork.header_len, 1);
+	if (unlikely(!header))
+		quit(1, "Failed to calloc header in gen_stratum_work");
+	sprintf(header, "%s%s%s%s%s%s%s",
+		pool->swork.bbversion,
+		pool->swork.prev_hash,
+		merkle_hash,
+		pool->swork.ntime,
+		pool->swork.nbit,
+		"00000000", /* nonce */
+		workpadding);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */

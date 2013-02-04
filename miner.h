@@ -880,6 +880,11 @@ struct stratum_work {
 	char *ntime;
 	bool clean;
 
+	size_t cb1_len;
+	size_t cb2_len;
+	size_t cb_len;
+
+	size_t header_len;
 	int merkles;
 	double diff;
 };
@@ -959,6 +964,7 @@ struct pool {
 	size_t sockbuf_size;
 	char *sockaddr_url; /* stripped url used for sockaddr */
 	char *nonce1;
+	size_t n1_len;
 	uint32_t nonce2;
 	int n2size;
 	bool has_stratum;
