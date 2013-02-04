@@ -72,13 +72,16 @@ WS2_LIBS=""
 MATH_LIBS="-lm"
 
 case $target in
-  amd64-*)
+  amd64-* | x86_64-*)
+    have_x86_32=false
     have_x86_64=true
     ;;
-  x86_64-*)
-    have_x86_64=true
+  i386-* | i486-* | i586-* | i686-* | x86-*)
+    have_x86_32=true
+    have_x86_64=false
     ;;
   *)
+    have_x86_32=false
     have_x86_64=false
     ;;
 esac
@@ -372,6 +375,7 @@ JANSSON_LIBS=-ljansson
 
 dnl Find YASM
 has_yasm=false
+if test "x$have_x86_32$have_x86_64" != "xfalsefalse"; then
 AC_PATH_PROG([YASM],[yasm],[false])
 if test "x$YASM" != "xfalse" ; then
   AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
@@ -402,6 +406,7 @@ if test "x$YASM" != "xfalse" ; then
 fi
 if test "x$has_yasm" = "xfalse" ; then
   AC_MSG_NOTICE([yasm is required for the assembly algorithms. They will be skipped.])
+fi
 fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
