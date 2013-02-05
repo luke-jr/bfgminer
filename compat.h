@@ -53,6 +53,26 @@
    } while (0)
  #endif
 
+// localtime is thread-safe on Windows
+// We also use this with timeval.tv_sec, which is incorrectly smaller than time_t on Windows
+// Need to cast to time_t* to suppress warning - actual problem shouldn't be possible in practice
+#define localtime_r(timep, result)  (  \
+	memcpy(result,  \
+		(  \
+			(sizeof(*timep) == sizeof(time_t))  \
+			? localtime((time_t*)timep)  \
+			: localtime_convert(*timep)  \
+		),  \
+		sizeof(*result)  \
+	)  \
+)
+
+static inline
+struct tm *localtime_convert(time_t t)
+{
+	return localtime(&t);
+}
+
 static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 {
 	struct timeval tstart;
