@@ -238,13 +238,6 @@ PKG_CHECK_MODULES([USB], [libusb-1.0],[
 			],[#include <libusb.h>])
 	fi
 ])
-if test "x$libusb" = xyes; then
-	AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
-	save_CFLAGS="$CFLAGS"
-	CFLAGS="$USB_CFLAGS $CFLAGS"
-	AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb.h>])
-	CFLAGS="$save_CFLAGS"
-fi
 
 AC_ARG_ENABLE([x6500],
 	[AC_HELP_STRING([--disable-x6500],[Compile support for X6500 (default if libusb)])],
@@ -283,6 +276,20 @@ if test "x$ztex" = xyes; then
 	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if ZTEX support is wanted])
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
+
+
+if test "x$x6500$ztex" = "xnono"; then
+	libusb=no
+	LIBUSB_LIBS=''
+	LIBUSB_CFLAGS=''
+fi
+if test "x$libusb" = xyes; then
+	AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
+	save_CFLAGS="$CFLAGS"
+	CFLAGS="$USB_CFLAGS $CFLAGS"
+	AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb.h>])
+	CFLAGS="$save_CFLAGS"
+fi
 
 
 scrypt="no"
