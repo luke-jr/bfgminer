@@ -127,3 +127,4 @@ endif
 
 bin_PROGRAMS += bfgminer-rpc
 bfgminer_rpc_SOURCES = api-example.c
+bfgminer_rpc_LDADD = @WS2_LIBS@
