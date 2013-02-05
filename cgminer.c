@@ -2163,8 +2163,12 @@ static bool solves_block(const struct work *work)
 	}
 
 	memset(diffcmp, 0, 32);
-	diffcmp[(diffbytes >> 2) + 1] = diffvalue >> (32 - diffshift);
-	diffcmp[diffbytes >> 2] = diffvalue << diffshift;
+	diffbytes >>= 2;
+	/* Sanity check looking for overflow */
+	if (unlikely(diffbytes > 6))
+		return false;
+	diffcmp[diffbytes + 1] = diffvalue >> (32 - diffshift);
+	diffcmp[diffbytes] = diffvalue << diffshift;
 
 	for (i = 7; i >= 0; i--) {
 		if (hash32[i] > diffcmp[i])
@@ -3455,8 +3459,11 @@ static void set_blockdiff(const struct work *work)
 	}
 
 	memset(diffhash, 0, 32);
-	diffhash[(diffbytes >> 2) + 1] = diffvalue >> (32 - diffshift);
-	diffhash[diffbytes >> 2] = diffvalue << diffshift;
+	diffbytes >>= 2;
+	if (unlikely(diffbytes > 6))
+		return;
+	diffhash[diffbytes + 1] = diffvalue >> (32 - diffshift);
+	diffhash[diffbytes] = diffvalue << diffshift;
 
 	swab256(rhash, diffhash);
 
