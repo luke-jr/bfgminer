@@ -378,7 +378,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	if (likely(global_hashrate)) {
 		char ghashrate[255];
 
-		sprintf(ghashrate, "X-Mining-Hashrate: %llu", global_hashrate);
+		sprintf(ghashrate, "X-Mining-Hashrate: %"PRIu64, (uint64_t)global_hashrate);
 		headers = curl_slist_append(headers, ghashrate);
 	}
 
