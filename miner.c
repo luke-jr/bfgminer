@@ -2357,8 +2357,12 @@ bool regeneratehash(const struct work *work)
 	}
 
 	memset(diffcmp, 0, 32);
-	diffcmp[(diffbytes >> 2) + 1] = diffvalue >> (32 - diffshift);
-	diffcmp[diffbytes >> 2] = diffvalue << diffshift;
+	diffbytes >>= 2;
+	/* Sanity check looking for overflow */
+	if (unlikely(diffbytes > 6))
+		return false;
+	diffcmp[diffbytes + 1] = diffvalue >> (32 - diffshift);
+	diffcmp[diffbytes] = diffvalue << diffshift;
 
 	for (i = 7; i >= 0; i--) {
 		uint32_t hash32i = le32toh(hash32[i]);
