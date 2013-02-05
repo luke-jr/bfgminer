@@ -307,9 +307,9 @@ AC_ARG_WITH([curses],
 if test "x$curses" = "xno"; then
 	cursesmsg='User specified --without-curses. TUI support DISABLED'
 else
+	orig_libs="$LIBS"
 	if test "x$cross_compiling" != "xyes"; then
 		AC_MSG_CHECKING([for best native curses library])
-		orig_libs="$LIBS"
 		orig_cflags="$CFLAGS"
 		for curses_lib in ncurses{w,}{,6,5}; do
 			if ! ${curses_lib}-config --cflags >/dev/null 2>/dev/null; then
@@ -333,7 +333,6 @@ else
 				AC_MSG_WARN([${curses_lib} doesn't seem to be installed properly])
 			])
 		done
-		LIBS="$orig_libs"
 		CFLAGS="$orig_cflags"
 		if test "x$curses" != "xyes"; then
 			AC_MSG_RESULT([none?])
@@ -345,6 +344,9 @@ else
 		curses=yes
 		cursesmsg="FOUND: ${ac_cv_search_addstr}"
 		cursesmsg="${cursesmsg/-l/}"
+		if test "x${ac_cv_search_addstr}" != "xnone required"; then
+			NCURSES_LIBS="${ac_cv_search_addstr}"
+		fi
 	], [
 		if test "x$curses" = "xyes"; then
 			AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
@@ -359,6 +361,7 @@ else
 	if test "x$curses" = "xyes"; then
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
 	fi
+	LIBS="$orig_libs"
 fi
 
 
