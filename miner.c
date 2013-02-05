@@ -30,6 +30,7 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>
 
 #ifndef WIN32
 #include <sys/resource.h>
@@ -623,7 +624,31 @@ tryagain: ;
 	return NULL;
 
 #else
-	return "scan-serial 'all' is not supported on this platform";
+
+	DIR *D;
+	struct dirent *de;
+	const char devdir[] = "/dev";
+	const size_t devdirlen = sizeof(devdir) - 1;
+	char devpath[sizeof(devdir) + NAME_MAX];
+	char *devfile = devpath + devdirlen + 1;
+	
+	D = opendir(devdir);
+	if (!D)
+		return "scan-serial 'all' is not supported on this platform";
+	memcpy(devpath, devdir, devdirlen);
+	devpath[devdirlen] = '/';
+	while ( (de = readdir(D)) ) {
+		if (strncmp(de->d_name, "tty", 3))
+			continue;
+		if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
+			continue;
+		
+		strcpy(devfile, de->d_name);
+		applog(LOG_DEBUG, "scan-serial: /dev glob all-adding %s", devpath);
+		string_elist_add(devpath, &scan_devices);
+	}
+	closedir(D);
+
 #endif
 }
 
