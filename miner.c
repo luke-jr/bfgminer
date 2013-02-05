@@ -3155,7 +3155,9 @@ void kill_work(void)
 
 static
 #ifdef WIN32
+#ifndef _WIN64
 const
+#endif
 #endif
 char **initial_args;
 
