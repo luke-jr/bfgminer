@@ -25,11 +25,11 @@
 #include "fpgautils.h"
 #include "util.h"
 
-#define BITSTREAM_FILENAME "fpgaminer_top_fixed7_197MHz.bit"
+#define BITSTREAM_FILENAME "fpgaminer_x6500-overclocker-0402.bit"
 #define BISTREAM_USER_ID "\2\4$B"
 
-#define MODMINER_MAX_CLOCK 230
-#define MODMINER_DEF_CLOCK 200
+#define MODMINER_MAX_CLOCK 250
+#define MODMINER_DEF_CLOCK 210
 #define MODMINER_MIN_CLOCK   2
 
 // Commands
