@@ -32,9 +32,8 @@ extern int _serial_detect(struct device_api *api, detectone_func_t, autoscan_fun
 	_serial_detect(api, detectone,     NULL, 0)
 #define noserial_detect(api, autoscan)  \
 	_serial_detect(api, NULL     , autoscan, 0)
-extern int serial_autodetect_devserial(detectone_func_t, const char*prodname);
-extern int serial_autodetect_udev     (detectone_func_t, const char*prodname);
-extern int serial_autodetect_ftdi     (detectone_func_t, const char*needle, const char *needle2);
+extern int _serial_autodetect(detectone_func_t, ...);
+#define serial_autodetect(...)  _serial_autodetect(__VA_ARGS__, NULL)
 
 extern struct device_api *serial_claim(const char *devpath, struct device_api *);
 
