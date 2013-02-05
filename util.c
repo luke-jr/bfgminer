@@ -445,7 +445,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	if (likely(global_hashrate)) {
 		char ghashrate[255];
 
-		sprintf(ghashrate, "X-Mining-Hashrate: %llu", global_hashrate);
+		sprintf(ghashrate, "X-Mining-Hashrate: %"PRIu64, (uint64_t)global_hashrate);
 		headers = curl_slist_append(headers, ghashrate);
 	}
 
@@ -1095,7 +1095,7 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	if (new < pool->sockbuf_size)
 		return;
 	new = new + (RBUFSIZE - (new % RBUFSIZE));
-	applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
+	applog(LOG_DEBUG, "Recallocing pool sockbuf to %lu", (unsigned long)new);
 	pool->sockbuf = realloc(pool->sockbuf, new);
 	if (!pool->sockbuf)
 		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");

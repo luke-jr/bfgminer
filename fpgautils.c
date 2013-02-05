@@ -665,7 +665,7 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 		PurgeComm(hSerial, PURGE_TXCLEAR);
 	}
 
-	return _open_osfhandle((LONG)hSerial, 0);
+	return _open_osfhandle((intptr_t)hSerial, 0);
 #else
 	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
 

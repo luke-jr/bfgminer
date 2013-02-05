@@ -8,6 +8,8 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
 #include "dynclock.h"
 #include "miner.h"
 
