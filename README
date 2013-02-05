@@ -145,6 +145,7 @@ Options for both config file and command line:
 --benchmark         Run cgminer in benchmark mode - produces no shares
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
+--disable-rejecting Automatically disable pools that continually reject shares
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --fix-protocol      Do not redirect to a different getwork protocol (eg. stratum)
@@ -153,7 +154,6 @@ Options for both config file and command line:
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
---no-pool-disable   Do not automatically disable pools that continually reject shares
 --no-submit-stale   Don't submit shares if they are detected as stale
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics

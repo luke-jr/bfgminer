@@ -130,7 +130,7 @@ int opt_api_port = 4028;
 bool opt_api_listen;
 bool opt_api_network;
 bool opt_delaynet;
-bool opt_disable_pool = true;
+bool opt_disable_pool;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
@@ -897,6 +897,9 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--disable-rejecting",
+			opt_set_bool, &opt_disable_pool,
+			"Automatically disable pools that continually reject shares"),
 #if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_FPGA))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
@@ -995,10 +998,10 @@ static struct opt_table opt_config_table[] = {
 #else
 			opt_hidden
 #endif
-	),
+			),
 	OPT_WITHOUT_ARG("--no-pool-disable",
 			opt_set_invbool, &opt_disable_pool,
-			"Do not automatically disable pools that continually reject shares"),
+			opt_hidden),
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
 #ifdef HAVE_OPENCL
