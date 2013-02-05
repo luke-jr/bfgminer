@@ -159,6 +159,89 @@ int _serial_autodetect_devserial(detectone_func_t detectone, va_list needles)
 #	define _serial_autodetect_devserial(...)  (0)
 #endif
 
+#ifndef WIN32
+static
+int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
+{
+	DIR *D, *DS, *DT;
+	FILE *F;
+	struct dirent *de;
+	const char devroot[] = "/sys/bus/usb/devices";
+	const size_t devrootlen = sizeof(devroot) - 1;
+	char devpath[sizeof(devroot) + (NAME_MAX * 3)];
+	char buf[0x100];
+	char *devfile, *upfile;
+	char found = 0;
+	size_t len, len2;
+	
+	D = opendir(devroot);
+	if (!D)
+		return 0;
+	memcpy(devpath, devroot, devrootlen);
+	devpath[devrootlen] = '/';
+	while ( (de = readdir(D)) )
+	{
+		len = strlen(de->d_name);
+		upfile = &devpath[devrootlen + 1];
+		memcpy(upfile, de->d_name, len);
+		devfile = upfile + len;
+		strcpy(devfile, "/product");
+		F = fopen(devpath, "r");
+		if (!(F && fgets(buf, sizeof(buf), F)))
+			continue;
+		
+		if (!SEARCH_NEEDLES(buf))
+			continue;
+		
+		devfile[0] = '\0';
+		DS = opendir(devpath);
+		if (!DS)
+			continue;
+		devfile[0] = '/';
+		++devfile;
+		
+		memcpy(buf, "/dev/", 5);
+		
+		while ( (de = readdir(DS)) )
+		{
+			if (strncmp(de->d_name, upfile, len))
+				continue;
+			
+			len2 = strlen(de->d_name);
+			memcpy(devfile, de->d_name, len2 + 1);
+			
+			DT = opendir(devpath);
+			if (!DT)
+				continue;
+			
+			while ( (de = readdir(DT)) )
+			{
+				if (strncmp(de->d_name, "tty", 3))
+					continue;
+				if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
+					continue;
+				
+				strcpy(&buf[5], de->d_name);
+				if (detectone(buf))
+				{
+					++found;
+					closedir(DT);
+					goto nextdev;
+				}
+			}
+			closedir(DT);
+		}
+nextdev:
+		closedir(DS);
+	}
+	closedir(D);
+	
+	return found;
+}
+#else
+#	define _serial_autodetect_sysfs(...)  (0)
+#endif
+
 #ifdef WIN32
 #define LOAD_SYM(sym)  do { \
 	if (!(sym = dlsym(dll, #sym))) {  \
@@ -246,6 +329,7 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 	va_start(needles, detectone);
 	rv = (
 		_serial_autodetect_udev     (detectone, needles) ?:
+		_serial_autodetect_sysfs    (detectone, needles) ?:
 		_serial_autodetect_devserial(detectone, needles) ?:
 		_serial_autodetect_ftdi     (detectone, needles) ?:
 		0);
