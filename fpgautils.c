@@ -614,7 +614,7 @@ ssize_t _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 	return tlen;
 }
 
-static FILE *_open_bitstream(const char *path, const char *subdir, const char *filename)
+static FILE *_open_bitstream(const char *path, const char *subdir, const char *sub2, const char *filename)
 {
 	char fullpath[PATH_MAX];
 	strcpy(fullpath, path);
@@ -623,19 +623,28 @@ static FILE *_open_bitstream(const char *path, const char *subdir, const char *f
 		strcat(fullpath, subdir);
 		strcat(fullpath, "/");
 	}
+	if (sub2) {
+		strcat(fullpath, sub2);
+		strcat(fullpath, "/");
+	}
 	strcat(fullpath, filename);
 	return fopen(fullpath, "rb");
 }
-#define _open_bitstream(path, subdir)  do {  \
-	f = _open_bitstream(path, subdir, filename);  \
+#define _open_bitstream(path, subdir, sub2)  do {  \
+	f = _open_bitstream(path, subdir, sub2, filename);  \
 	if (f)  \
 		return f;  \
 } while(0)
 
+#define _open_bitstream2(path, path3)  do {  \
+	_open_bitstream(path, NULL, path3);  \
+	_open_bitstream(path, "../share/" PACKAGE, path3);  \
+} while(0)
+
 #define _open_bitstream3(path)  do {  \
-	_open_bitstream(path, dname);  \
-	_open_bitstream(path, "bitstreams");  \
-	_open_bitstream(path, NULL);  \
+	_open_bitstream2(path, dname);  \
+	_open_bitstream2(path, "bitstreams");  \
+	_open_bitstream2(path, NULL);  \
 } while(0)
 
 FILE *open_bitstream(const char *dname, const char *filename)
