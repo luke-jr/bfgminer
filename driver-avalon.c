@@ -82,7 +82,7 @@ static int avalon_init_task(struct avalon_task *at,
 		first = false;
 	}
 
-	at->fan_pwm_data = (fan ? fan : AVALON_DEFAULT_FAN_PWM);
+	at->fan_pwm_data = (fan ? fan : AVALON_DEFAULT_FAN_MAX_PWM);
 	at->timeout_data = timeout;
 	at->asic_num = asic_num;
 	at->miner_num = miner_num;
@@ -331,7 +331,7 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 	struct timespec p;
 
 	avalon_init_task(&at, 1, 0,
-			 AVALON_DEFAULT_FAN_PWM,
+			 AVALON_DEFAULT_FAN_MAX_PWM,
 			 AVALON_DEFAULT_TIMEOUT,
 			 AVALON_DEFAULT_ASIC_NUM,
 			 AVALON_DEFAULT_MINER_NUM,
@@ -357,7 +357,7 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 		/* FIXME: return 1; */
 	}
 
-	p.tv_sec = 1;
+	p.tv_sec = 0;
 	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
 
@@ -559,7 +559,7 @@ static bool avalon_detect_one(const char *devpath)
 	info->read_count = ((float)info->timeout * AVALON_HASH_TIME_FACTOR *
 			    AVALON_TIME_FACTOR) / (float)info->miner_count;
 
-	info->fan_pwm = AVALON_DEFAULT_FAN_PWM;
+	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
 	info->temp_history_count = (4 / (float)(0x3c * ((float)1.67/0x32))) + 1;
 	if (info->temp_history_count <= 0)
@@ -677,9 +677,9 @@ static inline void adjust_temp(struct avalon_info *info)
 	temp_new = info->temp_sum / info->temp_history_count;
 
 	if (temp_new < 40)
-		info->fan_pwm = 0xA;
+		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
 	else if (temp_new > 60)
-		info->fan_pwm = AVALON_DEFAULT_FAN_PWM;
+		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
 	else if (abs(temp_new - info->temp_old) >= 2) {
 		info->fan_pwm = (temp_new - 40) * 9 + 10;
 		info->temp_old = temp_new;
