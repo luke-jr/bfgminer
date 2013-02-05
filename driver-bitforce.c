@@ -8,6 +8,8 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
 #include <limits.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -15,8 +17,6 @@
 #include <strings.h>
 #include <sys/time.h>
 #include <unistd.h>
-
-#include "config.h"
 
 #include "compat.h"
 #include "miner.h"

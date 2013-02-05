@@ -10,6 +10,10 @@
 
 #include "config.h"
 
+#ifdef WIN32
+#include <winsock2.h>
+#endif
+
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>

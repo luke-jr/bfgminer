@@ -3,6 +3,10 @@
 
 #include "config.h"
 
+#ifdef WIN32
+#include <winsock2.h>
+#endif
+
 #include <stdbool.h>
 
 // NOTE: Nested preprocessor checks since the latter isn't defined at all without the former
