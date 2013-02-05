@@ -54,6 +54,7 @@
   #define HAVE_EPOLL
 #endif
 
+#include "compat.h"
 #include "dynclock.h"
 #include "elist.h"
 #include "icarus-common.h"
