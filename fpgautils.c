@@ -10,6 +10,7 @@
 
 #include "config.h"
 
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -55,8 +56,42 @@ enum {
 #include "miner.h"
 #include "fpgautils.h"
 
+#define SEARCH_NEEDLES_BEGIN()  {  \
+	const char *needle;  \
+	bool __cont = false;  \
+	va_list ap;  \
+	va_copy(ap, needles);  \
+	while ( (needle = va_arg(ap, const char *)) )  \
+	{
+
+#define SEARCH_NEEDLES_END(...)  \
+	}  \
+	va_end(ap);  \
+	if (__cont)  \
+	{  \
+		__VA_ARGS__;  \
+	}  \
+}
+
+static inline
+bool search_needles(const char *haystack, va_list needles)
+{
+	bool rv = true;
+	SEARCH_NEEDLES_BEGIN()
+		if (!strstr(haystack, needle))
+		{
+			rv = false;
+			break;
+		}
+	SEARCH_NEEDLES_END()
+	return rv;
+}
+
+#define SEARCH_NEEDLES(haystack)  search_needles(haystack, needles)
+
 #ifdef HAVE_LIBUDEV
-int serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
+static
+int _serial_autodetect_udev(detectone_func_t detectone, va_list needles)
 {
 	struct udev *udev = udev_new();
 	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
@@ -64,7 +99,6 @@ int serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 	char found = 0;
 
 	udev_enumerate_add_match_subsystem(enumerate, "tty");
-	udev_enumerate_add_match_property(enumerate, "ID_MODEL", prodname);
 	udev_enumerate_scan_devices(enumerate);
 	udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(enumerate)) {
 		struct udev_device *device = udev_device_new_from_syspath(
@@ -72,6 +106,10 @@ int serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 			udev_list_entry_get_name(list_entry)
 		);
 		if (!device)
+			continue;
+
+		const char *model = udev_device_get_property_value(device, "ID_MODEL");
+		if (!(model && SEARCH_NEEDLES(model)))
 			continue;
 
 		const char *devpath = udev_device_get_devnode(device);
@@ -86,15 +124,13 @@ int serial_autodetect_udev(detectone_func_t detectone, const char*prodname)
 	return found;
 }
 #else
-int serial_autodetect_udev(__maybe_unused detectone_func_t detectone, __maybe_unused const char*prodname)
-{
-	return 0;
-}
+#	define _serial_autodetect_udev(...)  (0)
 #endif
 
-int serial_autodetect_devserial(__maybe_unused detectone_func_t detectone, __maybe_unused const char*prodname)
-{
 #ifndef WIN32
+static
+int _serial_autodetect_devserial(detectone_func_t detectone, va_list needles)
+{
 	DIR *D;
 	struct dirent *de;
 	const char udevdir[] = "/dev/serial/by-id";
@@ -108,8 +144,9 @@ int serial_autodetect_devserial(__maybe_unused detectone_func_t detectone, __may
 	memcpy(devpath, udevdir, sizeof(udevdir) - 1);
 	devpath[sizeof(udevdir) - 1] = '/';
 	while ( (de = readdir(D)) ) {
-		if (!strstr(de->d_name, prodname))
+		if (!SEARCH_NEEDLES(de->d_name))
 			continue;
+		
 		strcpy(devfile, de->d_name);
 		if (detectone(devpath))
 			++found;
@@ -117,10 +154,10 @@ int serial_autodetect_devserial(__maybe_unused detectone_func_t detectone, __may
 	closedir(D);
 
 	return found;
-#else
-	return 0;
-#endif
 }
+#else
+#	define _serial_autodetect_devserial(...)  (0)
+#endif
 
 #ifdef WIN32
 #define LOAD_SYM(sym)  do { \
@@ -130,7 +167,8 @@ int serial_autodetect_devserial(__maybe_unused detectone_func_t detectone, __may
 	}  \
 } while(0)
 
-int serial_autodetect_ftdi(detectone_func_t detectone, const char *needle, const char *needle2)
+static
+int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 {
 	char devpath[] = "\\\\.\\COMnnnnn";
 	char *devpathnum = &devpath[7];
@@ -174,7 +212,7 @@ int serial_autodetect_ftdi(detectone_func_t detectone, const char *needle, const
 		--i;
 		bufptrs[i][64] = '\0';
 		
-		if (!(strstr(bufptrs[i], needle) && (!needle2 || strstr(bufptrs[i], needle2))))
+		if (!SEARCH_NEEDLES(bufptrs[i]))
 			continue;
 		
 		FT_HANDLE ftHandle;
@@ -197,11 +235,23 @@ out:
 	return found;
 }
 #else
-int serial_autodetect_ftdi(__maybe_unused detectone_func_t detectone, __maybe_unused const char *needle, __maybe_unused const char *needle2)
-{
-	return 0;
-}
+#	define _serial_autodetect_ftdi(...)  (0)
 #endif
+
+int _serial_autodetect(detectone_func_t detectone, ...)
+{
+	int rv;
+	va_list needles;
+	
+	va_start(needles, detectone);
+	rv = (
+		_serial_autodetect_udev     (detectone, needles) ?:
+		_serial_autodetect_devserial(detectone, needles) ?:
+		_serial_autodetect_ftdi     (detectone, needles) ?:
+		0);
+	va_end(needles);
+	return rv;
+}
 
 struct device_api *serial_claim(const char *devpath, struct device_api *api);
 

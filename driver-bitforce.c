@@ -118,10 +118,7 @@ static bool bitforce_detect_one(const char *devpath)
 
 static int bitforce_detect_auto(void)
 {
-	return (serial_autodetect_udev     (bitforce_detect_one, "BitFORCE*SHA256") ?:
-		serial_autodetect_devserial(bitforce_detect_one, "BitFORCE_SHA256") ?:
-		serial_autodetect_ftdi(bitforce_detect_one, "BitFORCE", "SHA256") ?:
-		0);
+	return serial_autodetect(bitforce_detect_one, "BitFORCE", "SHA256");
 }
 
 static void bitforce_detect(void)
