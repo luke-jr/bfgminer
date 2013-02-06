@@ -6221,10 +6221,10 @@ static void set_work_target(struct work *work, double diff)
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	int len, cb1_len, n1_len, cb2_len, i;
 	char *header, *merkle_hash;
 	uint32_t *data32, *swap32;
 	size_t alloc_len;
+	int i;
 
 	clean_work(work);
 
@@ -6233,20 +6233,16 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
-	cb1_len = strlen(pool->swork.coinbase1) / 2;
-	n1_len = strlen(pool->nonce1) / 2;
-	cb2_len = strlen(pool->swork.coinbase2) / 2;
-	len = cb1_len + n1_len + pool->n2size + cb2_len;
-	alloc_len = len;
+	alloc_len = pool->swork.cb_len;
 	align_len(&alloc_len);
 	coinbase = calloc(alloc_len, 1);
-	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
-	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
-	hex2bin(coinbase + cb1_len + n1_len, work->nonce2, pool->n2size);
-	hex2bin(coinbase + cb1_len + n1_len + pool->n2size, pool->swork.coinbase2, cb2_len);
+	hex2bin(coinbase, pool->swork.coinbase1, pool->swork.cb1_len);
+	hex2bin(coinbase + pool->swork.cb1_len, pool->nonce1, pool->n1_len);
+	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len, work->nonce2, pool->n2size);
+	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.coinbase2, pool->swork.cb2_len);
 
 	/* Generate merkle root */
-	gen_hash(coinbase, merkle_root, len);
+	gen_hash(coinbase, merkle_root, pool->swork.cb_len);
 	free(coinbase);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
