@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "compat.h"
 #include "dynclock.h"
 #include "logging.h"
 #include "miner.h"
