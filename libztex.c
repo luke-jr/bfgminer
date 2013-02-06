@@ -394,6 +394,11 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 		}
 		while (!feof(fp));
 
+		// While 1.15y can finish immediately, at least 1.15x needs some delay
+		// (200ms might be enough, but 500ms is safer)
+		if (ztex->productId[1] != 15)
+			usleep(500);
+
 		libusb_control_transfer(ztex->hndl, 0x40, 0x35, 0, 0, NULL, 0, 1000);
 		// 0x35 - finishHSFPGAConfiguration
 		if (cnt >= 0)
