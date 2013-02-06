@@ -31,6 +31,10 @@
 
 #include "config.h"
 
+#ifdef WIN32
+#include <winsock2.h>
+#endif
+
 #include <limits.h>
 #include <pthread.h>
 #include <stdio.h>

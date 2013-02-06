@@ -667,7 +667,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 					cgpu->thread_concurrency = cgpu->shaders * 5;
 			}
 				
-			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %u",gpu,  cgpu->thread_concurrency);
+			applog(LOG_DEBUG, "GPU %u: selecting thread concurrency of %lu", gpu,  (unsigned long)cgpu->thread_concurrency);
 		} else
 			cgpu->thread_concurrency = cgpu->opt_tc;
 
@@ -985,10 +985,10 @@ built:
 		 * 2 greater >= required amount earlier */
 		if (bufsize > cgpu->max_alloc) {
 			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %lu", gpu, (unsigned long)cgpu->max_alloc);
-			applog(LOG_WARNING, "Your scrypt settings come to %u", bufsize);
+			applog(LOG_WARNING, "Your scrypt settings come to %lu", (unsigned long)bufsize);
 		} else
 			bufsize = cgpu->max_alloc;
-		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
+		applog(LOG_DEBUG, "Creating scrypt buffer sized %ld", (unsigned long)bufsize);
 		clState->padbufsize = bufsize;
 
 		/* This buffer is weird and might work to some degree even if

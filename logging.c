@@ -11,6 +11,7 @@
 
 #include <unistd.h>
 
+#include "compat.h"
 #include "logging.h"
 #include "miner.h"
 
@@ -92,11 +93,12 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 		char *f;
 		int len;
 		struct timeval tv = {0, 0};
-		struct tm *tm;
+		struct tm _tm;
+		struct tm *tm = &_tm;
 
 		gettimeofday(&tv, NULL);
 
-		tm = localtime(&tv.tv_sec);
+		localtime_r(&tv.tv_sec, tm);
 
 		len = 40 + strlen(fmt) + 22;
 		f = alloca(len);

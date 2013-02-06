@@ -345,7 +345,7 @@ static bool should_run(void)
 		return true;
 
 	gettimeofday(&tv, NULL);
-	tm = *localtime(&tv.tv_sec);
+	localtime_r(&tv.tv_sec, &tm);
 
 	// NOTE: This is delicately balanced so that should_run is always false if schedstart==schedstop
 	if (time_before(&schedstop.tm, &schedstart.tm))
@@ -362,9 +362,10 @@ static bool should_run(void)
 
 void get_datestamp(char *f, struct timeval *tv)
 {
-	struct tm *tm;
+	struct tm _tm;
+	struct tm *tm = &_tm;
 
-	tm = localtime(&tv->tv_sec);
+	localtime_r(&tv->tv_sec, tm);
 	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
 		tm->tm_year + 1900,
 		tm->tm_mon + 1,
@@ -376,9 +377,10 @@ void get_datestamp(char *f, struct timeval *tv)
 
 void get_timestamp(char *f, struct timeval *tv)
 {
-	struct tm *tm;
+	struct tm _tm;
+	struct tm *tm = &_tm;
 
-	tm = localtime(&tv->tv_sec);
+	localtime_r(&tv->tv_sec, tm);
 	sprintf(f, "[%02d:%02d:%02d]",
 		tm->tm_hour,
 		tm->tm_min,
@@ -2727,7 +2729,9 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 
 		if (opt_worktime) {
 			char workclone[20];
+			struct tm _tm;
 			struct tm *tm, tm_getwork, tm_submit_reply;
+			tm = &_tm;
 			double getwork_time = tdiff((struct timeval *)&(work->tv_getwork_reply),
 							(struct timeval *)&(work->tv_getwork));
 			double getwork_to_work = tdiff((struct timeval *)&(work->tv_work_start),
@@ -2739,9 +2743,9 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			double submit_time = tdiff(&tv_submit_reply, ptv_submit);
 			int diffplaces = 3;
 
-			tm = localtime(&(work->tv_getwork.tv_sec));
+			localtime_r(&(work->tv_getwork.tv_sec), tm);
 			memcpy(&tm_getwork, tm, sizeof(struct tm));
-			tm = localtime(&(tv_submit_reply.tv_sec));
+			localtime_r(&(tv_submit_reply.tv_sec), tm);
 			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
 
 			if (work->clone) {
@@ -3155,7 +3159,9 @@ void kill_work(void)
 
 static
 #ifdef WIN32
+#ifndef _WIN64
 const
+#endif
 #endif
 char **initial_args;
 
@@ -8092,9 +8098,9 @@ begin_bench:
 	gettimeofday(&total_tv_end, NULL);
 	miner_started = total_tv_start;
 	if (schedstart.tm.tm_sec)
-		schedstart.tm = *localtime(&miner_started.tv_sec);
+		localtime_r(&miner_started.tv_sec, &schedstart.tm);
 	if (schedstop.tm.tm_sec)
-		schedstop .tm = *localtime(&miner_started.tv_sec);
+		localtime_r(&miner_started.tv_sec, &schedstop .tm);
 	get_datestamp(datestamp, &total_tv_start);
 
 	// Start threads
