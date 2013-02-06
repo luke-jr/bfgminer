@@ -6,28 +6,22 @@ tag="$1"; shift
 sw="$1"; shift || true
 [ -n "$sw" ] || sw="$tag"
 
-IDIR="$PWD"
-ZIPNAME="${sw}-win32"
-OUTDIR="$PWD/w32zip/$ZIPNAME"
-TMPDIR="${OUTDIR}-tmp"
+builds=(win32 win64)
 
-set -e
-mkdir -v "$OUTDIR"
-dlls='
-	pdcurses.dll
-	libcurl-4.dll
-	pthreadGC2.dll
-	libjansson-4.dll
-	libusb-1.0.dll
-	zlib1.dll
-'
-cp -v \
-	-L \
-	$dlls \
-	"$OUTDIR/"
-for dll in $dlls; do
-	i686-pc-mingw32-strip "$OUTDIR/$dll"
-done
+win32_machine='i686-pc-mingw32'
+win32_CFLAGS='-march=i686'
+
+win64_machine='x86_64-w64-mingw32'
+win64_CFLAGS=''
+
+IDIR="$PWD"
+OUTDIR="$PWD"
+TMPROOT="$PWD/make-release-tmp"
+TMPDIR="${TMPROOT}/${sw}-tmp"
+
+mkdir -vp "$TMPDIR"
+
+# Source release
 git branch TMP "$tag"
 git clone . "$TMPDIR" -b TMP --depth 1
 git branch -D TMP
@@ -43,42 +37,77 @@ NOSUBMODULES=1 \
 NOCONFIGURE=1 \
 ./autogen.sh
 cd ..
-zip -r "$IDIR/${sw}.zip" "$sw"
-tar cjvpf "$IDIR/${sw}.tbz2" "$sw"
+zip -r "$OUTDIR/${sw}.zip" "$sw"
+tar cjvpf "$OUTDIR/${sw}.tbz2" "$sw"
 SRCDIR="$TMPDIR/$sw"
-for txt in AUTHORS COPYING NEWS README API-README FPGA-README SCRYPT-README; do
-	sed 's/$/\r/' <"$txt" >"$OUTDIR/${txt}.txt"
+
+dlls='
+	pdcurses.dll
+	libcurl-4.dll
+	pthreadGC2.dll
+	libjansson-4.dll
+	libusb-1.0.dll
+	zlib1.dll
+'
+docs='
+	AUTHORS
+	COPYING
+	NEWS
+	README
+	API-README
+	FPGA-README
+	SCRYPT-README
+'
+for build in "${builds[@]}"; do
+	PKGNAME="${sw}-${build}"
+	PKGDIR="$TMPDIR/$PKGNAME"
+	cd "$TMPDIR"
+	mkdir -vp "$PKGDIR"
+	for v in machine CFLAGS; do
+		eval "${v}"="$(eval echo "\${${build}_${v}}")"
+	done
+	libdir="/usr/$machine/usr/bin/$dll"
+	for dll in $dlls; do
+		libdir="/usr/$machine/usr/lib"
+		[ -e "$libdir/$dll" ] ||
+			libdir="/usr/$machine/usr/bin"
+		cp -v -L "$libdir/$dll" "$PKGDIR"
+		"$machine"-strip "$PKGDIR/$dll"
+	done
+	for doc in $docs; do
+		sed 's/$/\r/' <"$doc" >"$PKGDIR/${doc}.txt"
+	done
+	cp -av "bitstreams" "$PKGDIR/"
+	
+	NOCONFIGURE=1 \
+	./autogen.sh
+	./configure \
+		--prefix='C:\\Program Files\\BFGMiner\\' \
+		CFLAGS="${CFLAGS} -Wall" \
+		--disable-cpumining \
+		--enable-opencl \
+		--enable-adl \
+		--enable-bitforce \
+		--enable-icarus \
+		--enable-modminer \
+		--enable-ztex \
+		--enable-scrypt \
+		--host="$machine"
+	make $MAKEOPTS
+	"$machine"-strip \
+		libblkmaker/.libs/*.dll \
+		*.exe
+	cp -v \
+		*.exe \
+		libblkmaker/.libs/*.dll \
+		*.cl \
+		example.conf \
+		windows-build.txt \
+		API.class \
+		miner.php \
+		"$PKGDIR/"
+	make clean
+	cd "$PKGDIR/.."
+	zip -r "$OUTDIR/$PKGNAME.zip" "$PKGNAME"
 done
-cp -av "bitstreams" "$OUTDIR/"
-NOCONFIGURE=1 \
-./autogen.sh
-./configure \
-	--prefix='C:\\Program Files\\BFGMiner\' \
-	CFLAGS='-march=i686 -Wall' \
-	--disable-cpumining \
-	--enable-opencl \
-	--enable-adl \
-	--enable-bitforce \
-	--enable-icarus \
-	--enable-modminer \
-	--enable-ztex \
-	--enable-scrypt \
-	--build=i686-pc-linux-gnu \
-	--host=i686-pc-mingw32
-make -j4
-i686-pc-mingw32-strip \
-	libblkmaker/.libs/*.dll \
-	bfgminer.exe
-cp -v \
-	bfgminer.exe \
-	libblkmaker/.libs/*.dll \
-	*.cl \
-	example.conf \
-	windows-build.txt \
-	API.class \
-	miner.php \
-	"$OUTDIR/" -v
-cd "$OUTDIR"
-cd ..
-zip -r "$IDIR/${ZIPNAME}.zip" "${ZIPNAME}"
 cd "$IDIR"
