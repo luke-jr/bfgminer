@@ -6223,6 +6223,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
 	int len, cb1_len, n1_len, cb2_len, i;
 	uint32_t *data32, *swap32;
+	size_t alloc_len;
 	char *header;
 
 	clean_work(work);
@@ -6236,7 +6237,9 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	n1_len = strlen(pool->nonce1) / 2;
 	cb2_len = strlen(pool->swork.coinbase2) / 2;
 	len = cb1_len + n1_len + pool->n2size + cb2_len;
-	coinbase = alloca(len + 1);
+	alloc_len = len;
+	align_len(&alloc_len);
+	coinbase = alloca(alloc_len);
 	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
 	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
 	hex2bin(coinbase + cb1_len + n1_len, work->nonce2, pool->n2size);
