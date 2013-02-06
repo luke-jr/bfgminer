@@ -1491,6 +1491,14 @@ out:
 	return ret;
 }
 
+curl_socket_t grab_socket_opensocket_cb(void *clientp, curlsocktype purpose, struct curl_sockaddr *addr)
+{
+	struct pool *pool = clientp;
+	curl_socket_t sck = socket(addr->family, addr->socktype, addr->protocol);
+	pool->sock = sck;
+	return sck;
+}
+
 bool initiate_stratum(struct pool *pool)
 {
 	json_t *val = NULL, *res_val, *err_val;
@@ -1540,6 +1548,10 @@ bool initiate_stratum(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_DEBUGDATA, (void *)pool);
 	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 
+	// CURLINFO_LASTSOCKET is broken on Win64 (which has a wider SOCKET type than curl_easy_getinfo returns), so we use this hack for now
+	curl_easy_setopt(curl, CURLOPT_OPENSOCKETFUNCTION, grab_socket_opensocket_cb);
+	curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
+	
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
@@ -1553,7 +1565,12 @@ bool initiate_stratum(struct pool *pool)
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
 		goto out;
 	}
-	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
+	if (pool->sock == INVSOCK)
+	{
+		curl_easy_cleanup(curl);
+		applog(LOG_ERR, "Stratum connect succeeded, but technical problem extracting socket (pool %u)", pool->pool_no);
+		goto out;
+	}
 	keep_sockalive(pool->sock);
 
 	pool->cgminer_pool_stats.times_sent++;
