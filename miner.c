@@ -172,7 +172,7 @@ int opt_api_port = 4028;
 bool opt_api_listen;
 bool opt_api_network;
 bool opt_delaynet;
-bool opt_disable_pool = true;
+bool opt_disable_pool;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
@@ -1144,6 +1144,9 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--disable-rejecting",
+			opt_set_bool, &opt_disable_pool,
+			"Automatically disable pools that continually reject shares"),
 #if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_FPGA))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
@@ -1247,7 +1250,7 @@ static struct opt_table opt_config_table[] = {
 #else
 			opt_hidden
 #endif
-	),
+			),
 	OPT_WITHOUT_ARG("--no-gbt",
 			opt_set_invbool, &want_gbt,
 			"Disable getblocktemplate support"),
@@ -1256,7 +1259,7 @@ static struct opt_table opt_config_table[] = {
 			"Disable X-Long-Polling support"),
 	OPT_WITHOUT_ARG("--no-pool-disable",
 			opt_set_invbool, &opt_disable_pool,
-			"Do not automatically disable pools that continually reject shares"),
+			opt_hidden),
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
 			"Do not attempt to restart devices that hang"
@@ -6220,10 +6223,11 @@ static void set_work_target(struct work *work, double diff)
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64], *merkle_hash;
-	int len, cb1_len, n1_len, cb2_len, i;
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	char *header, *merkle_hash;
 	uint32_t *data32, *swap32;
-	char *header;
+	size_t alloc_len;
+	int i;
 
 	clean_work(work);
 
@@ -6232,18 +6236,19 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
-	cb1_len = strlen(pool->swork.coinbase1) / 2;
-	n1_len = strlen(pool->nonce1) / 2;
-	cb2_len = strlen(pool->swork.coinbase2) / 2;
-	len = cb1_len + n1_len + pool->n2size + cb2_len;
-	coinbase = alloca(len + 1);
-	hex2bin(coinbase, pool->swork.coinbase1, cb1_len);
-	hex2bin(coinbase + cb1_len, pool->nonce1, n1_len);
-	hex2bin(coinbase + cb1_len + n1_len, work->nonce2, pool->n2size);
-	hex2bin(coinbase + cb1_len + n1_len + pool->n2size, pool->swork.coinbase2, cb2_len);
+	alloc_len = pool->swork.cb_len;
+	align_len(&alloc_len);
+	coinbase = calloc(alloc_len, 1);
+	if (unlikely(!coinbase))
+		quit(1, "Failed to calloc coinbase in gen_stratum_work");
+	hex2bin(coinbase, pool->swork.coinbase1, pool->swork.cb1_len);
+	hex2bin(coinbase + pool->swork.cb1_len, pool->nonce1, pool->n1_len);
+	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len, work->nonce2, pool->n2size);
+	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.coinbase2, pool->swork.cb2_len);
 
 	/* Generate merkle root */
-	gen_hash(coinbase, merkle_root, len);
+	gen_hash(coinbase, merkle_root, pool->swork.cb_len);
+	free(coinbase);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
 		unsigned char merkle_bin[32];
@@ -6257,15 +6262,19 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	swap32 = (uint32_t *)merkle_root;
 	for (i = 0; i < 32 / 4; i++)
 		swap32[i] = swab32(data32[i]);
-	merkle_hash = (unsigned char *)bin2hex((const unsigned char *)merkle_root, 32);
+	merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 
-	header = strdup(pool->swork.bbversion);
-	header = realloc_strcat(header, pool->swork.prev_hash);
-	header = realloc_strcat(header, (char *)merkle_hash);
-	header = realloc_strcat(header, pool->swork.ntime);
-	header = realloc_strcat(header, pool->swork.nbit);
-	header = realloc_strcat(header, "00000000"); /* nonce */
-	header = realloc_strcat(header, workpadding);
+	header = calloc(pool->swork.header_len, 1);
+	if (unlikely(!header))
+		quit(1, "Failed to calloc header in gen_stratum_work");
+	sprintf(header, "%s%s%s%s%s%s%s",
+		pool->swork.bbversion,
+		pool->swork.prev_hash,
+		merkle_hash,
+		pool->swork.ntime,
+		pool->swork.nbit,
+		"00000000", /* nonce */
+		workpadding);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */

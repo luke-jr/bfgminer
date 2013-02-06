@@ -1249,12 +1249,16 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.job_id = job_id;
 	pool->swork.prev_hash = prev_hash;
 	pool->swork.coinbase1 = coinbase1;
+	pool->swork.cb1_len = strlen(coinbase1) / 2;
 	pool->swork.coinbase2 = coinbase2;
+	pool->swork.cb2_len = strlen(coinbase2) / 2;
 	pool->swork.bbversion = bbversion;
 	pool->swork.nbit = nbit;
 	pool->swork.ntime = ntime;
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
+	pool->swork.cb_len = pool->swork.cb1_len + pool->n1_len + pool->n2size + pool->swork.cb2_len;
+
 	for (i = 0; i < pool->swork.merkles; i++)
 		free(pool->swork.merkle[i]);
 	if (merkles) {
@@ -1265,6 +1269,15 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.merkles = merkles;
 	if (clean)
 		pool->nonce2 = 0;
+	pool->swork.header_len = strlen(pool->swork.bbversion) +
+				 strlen(pool->swork.prev_hash) +
+				 strlen(pool->swork.ntime) +
+				 strlen(pool->swork.nbit) +
+	/* merkle_hash */	 32 +
+	/* nonce */		 8 +
+	/* workpadding */	 96;
+	pool->swork.header_len = pool->swork.header_len * 2 + 1;
+	align_len(&pool->swork.header_len);
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Received stratum notify from pool %u with job_id=%s",
@@ -1624,6 +1637,7 @@ bool initiate_stratum(struct pool *pool)
 		applog(LOG_INFO, "Failed to get nonce1 in initiate_stratum");
 		goto out;
 	}
+	pool->n1_len = strlen(pool->nonce1) / 2;
 	pool->n2size = json_integer_value(json_array_get(res_val, 2));
 	if (!pool->n2size) {
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
@@ -1715,8 +1729,7 @@ void *realloc_strcat(char *ptr, char *s)
 		return ptr;
 
 	len += old + 1;
-	if (len % 4)
-		len += 4 - (len % 4);
+	align_len(&len);
 
 	ret = malloc(len);
 	if (unlikely(!ret))
