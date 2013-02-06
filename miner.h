@@ -887,6 +887,7 @@ struct stratum_work {
 	char *ntime;
 	bool clean;
 
+	size_t header_len;
 	int merkles;
 	double diff;
 
