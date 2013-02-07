@@ -1,3 +1,9 @@
+BFGMiner Version 2.10.5 - Future
+
+- Fix logic fail on partial writes with stratum send that was leading to corrupt
+message submissions.
+
+
 BFGMiner Version 2.10.4 - February 7, 2013
 
 - New platform ports: OpenWrt and Win64
