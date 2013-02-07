@@ -1,3 +1,25 @@
+Version 2.10.5 - February 7, 2013
+
+- Fix logic fail on partial writes with stratum send that was leading to corrupt
+message submissions.
+- Do not consider every call to stratum_resumed a pool recovery unless it was
+actually idle.
+- Do not enable the pool disable on reject feature unless explicitly enabled
+with --disable-rejecting.
+- Stratum disconnect shares - count total against stale
+- Use sanity checking to prevent a possible overflow with invalid data being
+given by the pool for difficulty as reported by luke-Jr.
+- Check for calloc failure for completeness in gen_stratum_work.
+- Cache the coinbase length to speed up stratum work generation.
+- Cache the header length when generating stratum work to avoid calculating it
+on every work generation, and to only need one alloc+sprintf, speeding up work
+generation.
+- Use heap ram for coinbase in gen_stratum_work, zeroing it before use.
+- Provide a wrapper for aligning lengths of size_t to 4 byte boundaries.
+- Fix memory leak on stratum share submission.
+- Zero the best share string memory when zeroing stats.
+
+
 Version 2.10.4 - December 29, 2012
 
 - Change the pool stratum socket buffer to be dynamically allocated to
