@@ -2076,6 +2076,8 @@ function docalc($func, $data)
 			if (strcasecmp($val, $ans) > 0)
 				$ans = $val;
 	return $ans;
+ case 'count':
+	return count($data);
  case 'any':
  default:
 	return $data[0];
