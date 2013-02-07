@@ -110,7 +110,10 @@ int _serial_autodetect_udev(detectone_func_t detectone, va_list needles)
 
 		const char *model = udev_device_get_property_value(device, "ID_MODEL");
 		if (!(model && SEARCH_NEEDLES(model)))
+		{
+			udev_device_unref(device);
 			continue;
+		}
 
 		const char *devpath = udev_device_get_devnode(device);
 		if (devpath && detectone(devpath))
