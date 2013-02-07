@@ -1020,7 +1020,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 			sent = 0;
 		}
 		ssent += sent;
-		len -= ssent;
+		len -= sent;
 	}
 
 	pool->cgminer_pool_stats.times_sent++;
