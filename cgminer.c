@@ -2502,7 +2502,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			pool->remotefail_occasions++;
 			applog(LOG_WARNING, "Pool %d communication failure, caching submissions", pool->pool_no);
 		}
-		sleep(5);
+		nmsleep(5000);
 		goto out;
 	} else if (pool_tclear(pool, &pool->submit_fail))
 		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
@@ -2837,7 +2837,7 @@ static void __kill_work(void)
 		thr->pause = true;
 	}
 
-	sleep(1);
+	nmsleep(1000);
 
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
@@ -4780,7 +4780,7 @@ static void *stratum_thread(void *userdata)
 				while (!initiate_stratum(pool) || !auth_stratum(pool)) {
 					if (pool->removed)
 						goto out;
-					sleep(30);
+					nmsleep(30000);
 				}
 			}
 		}
@@ -4818,7 +4818,7 @@ static void *stratum_thread(void *userdata)
 			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
 				if (pool->removed)
 					goto out;
-				sleep(30);
+				nmsleep(30000);
 			}
 			stratum_resumed(pool);
 			continue;
@@ -5703,7 +5703,7 @@ retry_pool:
 	if (!pool) {
 		applog(LOG_WARNING, "No suitable long-poll found for %s", cp->rpc_url);
 		while (!pool) {
-			sleep(60);
+			nmsleep(60000);
 			pool = select_longpoll_pool(cp);
 		}
 	}
@@ -5778,7 +5778,7 @@ retry_pool:
 				continue;
 			if (failures == 1)
 				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
-			sleep(30);
+			nmsleep(30000);
 		}
 
 		if (pool != cp) {
@@ -5883,7 +5883,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			switch_pools(NULL);
 		}
 
-		sleep(30);
+		nmsleep(30000);
 			
 	}
 	return NULL;
@@ -6566,7 +6566,7 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 	hotplug_mode = true;
 
 	while (0x2a) {
-		sleep(5);
+		nmsleep(5000);
 
 // Version 0.1 just add the devices on - worry about using nodev later
 
@@ -7170,7 +7170,7 @@ retry:
 			while (!pool->stratum_active || !pool->stratum_notify) {
 				struct pool *altpool = select_pool(true);
 
-				sleep(5);
+				nmsleep(5000);
 				if (altpool != pool) {
 					pool = altpool;
 					goto retry;
@@ -7186,7 +7186,7 @@ retry:
 			while (pool->idle) {
 				struct pool *altpool = select_pool(true);
 
-				sleep(5);
+				nmsleep(5000);
 				if (altpool != pool) {
 					pool = altpool;
 					goto retry;
@@ -7220,7 +7220,7 @@ retry:
 			 * requests but is up as we'll keep hammering it */
 			if (++pool->seq_getfails > mining_threads + opt_queue)
 				pool_died(pool);
-			sleep(5);
+			nmsleep(5000);
 			push_curl_entry(ce, pool);
 			pool = select_pool(!opt_fail_only);
 			goto retry;

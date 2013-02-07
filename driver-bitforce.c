@@ -343,7 +343,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 	} else {
 		/* However, this stops anything else getting a reply
 		 * So best to delay any other access to the BFL */
-		sleep(4);
+		nmsleep(4000);
 	}
 
 	/* Once we've tried - don't do it until told to again */
