@@ -1,3 +1,71 @@
+BFGMiner Version 2.10.4 - February 7, 2013
+
+- New platform ports: OpenWrt and Win64
+- Update official Windows build compiler and libraries:
+- - Upgrade GCC from 4.6.3 to 4.7.2
+- - Upgrade libusbx from 1.0.10 to 1.0.14
+- - Upgrade jansson from 2.3.1 to 2.4
+- - Upgrade libcurl from 7.26.0 to 7.28.1
+- - Upgrade pthreads-win32 from 2.8.0 to 2.9.1
+- Bugfix: Release libudev handle when ID_MODEL doesn't match what we're looking
+for
+- openwrt: Script to build for multiple platforms easily
+- openwrt: Bitstreams should be "all" arch
+- Working OpenWrt Buildroot Makefile
+- Do not enable the pool disable on reject feature unless explicitly enabled
+with --disable-rejecting.
+- Check for calloc failure for completeness in gen_stratum_work.
+- Cache the coinbase length to speed up stratum work generation.
+- Cache the header length when generating stratum work to avoid calculating it
+on every work generation, and to only need one alloc+sprintf, speeding up work
+generation.
+- Use heap ram for coinbase in gen_stratum_work, zeroing it before use.
+- Provide a wrapper for aligning lengths of size_t to 4 byte boundaries.
+- Bugfix: ztex: While 1.15y can finish highspeed FPGA config immediately, at
+least 1.15x needs some delay
+- Use CURLOPT_OPENSOCKETFUNCTION to intercept the socket being created for
+stratum, in order to workaround CURLINFO_LASTSOCKET breakage on Win64
+- make-release: Update for Win64 and bfgminer-rpc.exe
+- Use localtime_r instead of localtime, including a Windows implementation that
+handles Win64's broken struct timeval.tv_sec
+- Use standard execv arg type on Win64
+- Bugfix: Correct various size mismatches
+- Ensure winsock2.h is always included before windows.h
+- Bugfix: Add necessary Winsock library to bfgminer-rpc linking
+- Bugfix: Remove dependencies of compat.h on miner.h for Windows (moves
+timersub/timeradd to compat.h where it belongs)
+- modminer: Raise default/maximum clocks to 210 and 250 respectively
+- modminer: Use better-performing X6500 overclocker bitstream
+- Disable libusb linkage/usage when neither X6500 nor ZTEX support is desired
+- Add support for "--scan-serial all" via simply globbing /dev
+- fpgautils: serial_autodetect implementation using sysfs
+- fpgautils: Unified serial_autodetect function to find a serial device
+regardless of the underlying method
+- fpgautils: Look for bitstreams in ../share/bfgminer/ too
+- Bugfix: Ensure curses library is always linked in NCURSES_LIBS, to avoid
+unnecessary dependencies for (non-curses) tools
+- Bugfix: GBT: work->data is always little-endian, but libblkmaker wants the
+nonce in native-endian
+- Bugfix: cpu: Corrections necessary to get 'c' and 'cryptopp' algorithms
+working on big endian
+- Bugfix: Sanity check for bits exponent in real_block_target
+- Bugfix: cpu: Increment nonce after checking (rather than before), to avoid
+skipping the first nonce of each scanhash call
+- cpu: via: Only swap back the nonce, rather than all data
+- cpu: Minor optimization by checking H==0 before calling fulltest
+- Bugfix: Skip yasm check when building for non-x86 platforms
+- Allow --scantime alias to --scan-time
+- Build bfgminer-rpc program from api-example.c
+- Bugfix: Remove miner.h include from api-example.c since it isn't needed and
+pulls in libblkmaker
+- Make wrapping consistent at 79-80 characters per line
+- Bugfix: Correct numerous misspellings, typos, etc
+- Bugfix: Prefer using a non-frozen mining thread for watchdog
+- Bugfix: x6500: Expose x6500_fpga_data even if JTAG reset/detect fail, since
+it is still used to store temperature info if the other FPGA initializes
+- Adding ZTEX Windows guide from Jason Snell
+
+
 BFGMiner Version 2.10.3 - January 22, 2013
 
 - Revert "x6500: Whenever we get a hardware error, purge buffers just in case

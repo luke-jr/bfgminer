@@ -1,3 +1,13 @@
+bfgminer (2.10.4-0precise1) precise; urgency=low
+
+  * Better big-endian compatibility.
+  * Kano's RPC example is now included as the bfgminer-rpc program.
+  * Improved bitstream for ModMiners, with gains of about 10 Mh/s on average. This was originally supposed to be part of BFGMiner 2.9.2, but somehow slipped through the cracks! You'll need to power cycle your board, or use the --force-dev-init option to upload the new bitstream.
+  * Many bugfixes and some small improvements all over.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 07 Feb 2013 04:49:38 -0000
+
+
 bfgminer (2.10.3-0precise1) precise; urgency=low
 
   * Current block display shows end of the previous block hash and (when GBT or Stratum servers are active) the next block's (that you're looking for) height.
