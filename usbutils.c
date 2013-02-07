@@ -579,8 +579,7 @@ static void cgusb_check_init()
 	mutex_unlock(&cgusb_lock);
 }
 
-#ifdef WIN32
-#else
+#ifndef WIN32
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
