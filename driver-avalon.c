@@ -678,7 +678,7 @@ static void do_avalon_close(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon_info[avalon->device_id];
 
-	sleep(1);
+	nmsleep(1000);
 	avalon_reset(avalon->device_fd, &ar);
 	avalon_idle(avalon);
 	avalon_close(avalon->device_fd);
@@ -817,7 +817,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			first_try = 0;
-			sleep(1);
+			nmsleep(1000);
 			return 0;	/* This should never happen */
 		}
 		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == avalon_get_work_count)) {

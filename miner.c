@@ -3412,7 +3412,7 @@ static void __kill_work(void)
 		thr->pause = true;
 	}
 
-	sleep(1);
+	nmsleep(1000);
 
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
@@ -6113,7 +6113,7 @@ static void *stratum_thread(void *userdata)
 				while (!restart_stratum(pool)) {
 					if (pool->removed)
 						goto out;
-					sleep(30);
+					nmsleep(30000);
 				}
 			}
 		}
@@ -7025,7 +7025,7 @@ retry_pool:
 	if (!pool) {
 		applog(LOG_WARNING, "No suitable long-poll found for %s", cp->rpc_url);
 		while (!pool) {
-			sleep(60);
+			nmsleep(60000);
 			pool = select_longpoll_pool(cp);
 		}
 	}
@@ -7102,7 +7102,7 @@ retry_pool:
 			if (failures == 1)
 				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
 lpfail:
-			sleep(30);
+			nmsleep(30000);
 		}
 
 		if (pool != cp) {
@@ -7245,7 +7245,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			switch_pools(NULL);
 		}
 
-		sleep(30);
+		nmsleep(30000);
 			
 	}
 	return NULL;
@@ -8582,7 +8582,7 @@ retry:
 				struct pool *altpool = select_pool(true);
 
 				if (altpool == pool && pool->has_stratum)
-					sleep(5);
+					nmsleep(5000);
 				pool = altpool;
 				goto retry;
 			}
@@ -8641,7 +8641,7 @@ retry:
 			next_pool = select_pool(!opt_fail_only);
 			if (pool == next_pool) {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
-				sleep(5);
+				nmsleep(5000);
 			} else {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, failover activated", pool->pool_no);
 				pool = next_pool;

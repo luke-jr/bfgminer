@@ -335,7 +335,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 
 	if (fdDev) {
 		BFclose(fdDev);
-		sleep(5);
+		nmsleep(5000);
 		*p_fdDev = 0;
 	}
 
@@ -432,7 +432,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 	/* However, this stops anything else getting a reply
 	 * So best to delay any other access to the BFL */
-	sleep(4);
+	nmsleep(4000);
 
 	mutex_unlock(mutexp);
 

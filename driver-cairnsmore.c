@@ -190,7 +190,7 @@ static bool cairnsmore_identify(struct cgpu_info *cm1)
 		return false;
 	
 	cairnsmore_send_cmd(cm1->device_fd, 1, 1);
-	sleep(5);
+	nmsleep(5000);
 	cairnsmore_send_cmd(cm1->device_fd, 1, 0);
 	cm1->flash_led = true;
 	return true;
