@@ -890,7 +890,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 			return false;
 		}
 		ssent += sent;
-		len -= ssent;
+		len -= sent;
 	}
 
 	return true;
