@@ -6522,9 +6522,7 @@ static void hotplug_process()
 		cgpu->status = LIFE_INIT;
 
 		for (j = 0; j < cgpu->threads; ++j) {
-			mutex_lock(&mining_thr_lock);
-			thr = mining_thr[mining_threads];
-			mutex_unlock(&mining_thr_lock);
+			thr = get_thread(mining_threads);
 			thr->id = mining_threads;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
