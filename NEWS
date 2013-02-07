@@ -1,3 +1,27 @@
+BFGMiner Version 2.9.9 - February 7, 2013
+
+- Bugfix: Sanity check for bits exponent in regeneratehash
+- Bugfix: Correct various size mismatches
+- Bugfix: Remove dependencies of compat.h on miner.h for Windows (moves
+timersub/timeradd to compat.h where it belongs)
+- Disable libusb linkage/usage when neither X6500 nor ZTEX support is desired
+- fpgautils: Look for bitstreams in ../share/bfgminer/ too
+- Bugfix: Ensure curses library is always linked in NCURSES_LIBS, to avoid
+unnecessary dependencies for (non-curses) tools
+- Bugfix: GBT: work->data is always little-endian, but libblkmaker wants the
+nonce in native-endian
+- Bugfix: Fix configure big endian detection
+- Bugfix: Skip yasm check when building for non-x86 platforms
+- Allow --scantime alias to --scan-time
+- Bugfix: Remove miner.h include from api-example.c since it isn't needed and
+pulls in libblkmaker
+- Make wrapping consistent at 79-80 characters per line
+- Bugfix: Correct numerous misspellings, typos, etc
+- Bugfix: Prefer using a non-frozen mining thread for watchdog
+- Bugfix: x6500: Expose x6500_fpga_data even if JTAG reset/detect fail, since
+it is still used to store temperature info if the other FPGA initializes
+
+
 BFGMiner Version 2.9.8 - January 22, 2013
 
 - Revert "x6500: Whenever we get a hardware error, purge buffers just in case
