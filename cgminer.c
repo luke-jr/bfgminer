@@ -390,6 +390,16 @@ static struct cgpu_info *get_thr_cgpu(int thr_id)
 	return thr->cgpu;
 }
 
+struct cgpu_info *get_devices(int id)
+{
+	struct cgpu_info *cgpu;
+
+	mutex_lock(&devices_lock);
+	cgpu = devices[id];
+	mutex_unlock(&devices_lock);
+	return cgpu;
+}
+
 static void sharelog(const char*disposition, const struct work*work)
 {
 	char *target, *hash, *data;
@@ -4043,11 +4053,7 @@ void zero_stats(void)
 	zero_bestshare();
 
 	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu;
-
-		mutex_lock(&devices_lock);
-		cgpu = devices[i];
-		mutex_unlock(&devices_lock);
+		struct cgpu_info *cgpu = get_devices(i);
 
 		mutex_lock(&hash_lock);
 		cgpu->total_mhashes = 0;
@@ -5967,16 +5973,11 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		}
 
 		for (i = 0; i < total_devices; ++i) {
-			struct cgpu_info *cgpu;
-			struct thr_info *thr;
+			struct cgpu_info *cgpu = get_devices(i);
+			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char dev_str[8];
 			int gpu;
-
-			mutex_lock(&devices_lock);
-			cgpu = devices[i];
-			mutex_unlock(&devices_lock);
-			thr = cgpu->thr[0];
 
 			if (cgpu->drv->get_stats)
 			  cgpu->drv->get_stats(cgpu);
@@ -6141,10 +6142,8 @@ void print_summary(void)
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
 	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu;
-		mutex_lock(&devices_lock);
-		cgpu = devices[i];
-		mutex_unlock(&devices_lock);
+		struct cgpu_info *cgpu = get_devices(i);
+
 		log_print_status(cgpu);
 	}
 

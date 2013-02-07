@@ -1194,13 +1194,17 @@ static int pgadevice(int pgaid)
 		if (devices[i]->drv->drv_id == DRIVER_MODMINER)
 			count++;
 #endif
-		if (count == (pgaid + 1)) {
-			mutex_unlock(&devices_lock);
-			return i;
-		}
+		if (count == (pgaid + 1))
+			goto foundit;
 	}
+
 	mutex_unlock(&devices_lock);
 	return -1;
+
+foundit:
+
+	mutex_unlock(&devices_lock);
+	return i;
 }
 #endif
 
@@ -1533,14 +1537,9 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		if (dev < 0) // Should never happen
 			return;
 
-		struct cgpu_info *cgpu;
+		struct cgpu_info *cgpu = get_devices(dev);
 		double frequency = 0;
-		float temp;
-
-		mutex_lock(&devices_lock);
-		cgpu = devices[dev];
-		mutex_unlock(&devices_lock);
-		temp = cgpu->temp;
+		float temp = cgpu->temp;
 
 #ifdef USE_ZTEX
 		if (cgpu->drv->drv_id == DRIVER_ZTEX && cgpu->device_ztex)
@@ -1787,9 +1786,7 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
-	mutex_lock(&devices_lock);
-	cgpu = devices[dev];
-	mutex_unlock(&devices_lock);
+	cgpu = get_devices(dev);
 
 	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s%u",
 			id, dev, cgpu->drv->name, cgpu->device_id);
@@ -1854,9 +1851,7 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	mutex_lock(&devices_lock);
-	cgpu = devices[dev];
-	mutex_unlock(&devices_lock);
+	cgpu = get_devices(dev);
 
 	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s%u",
 			id, dev, cgpu->drv->name, cgpu->device_id);
@@ -1900,9 +1895,7 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 		return;
 	}
 
-	mutex_lock(&devices_lock);
-	cgpu = devices[dev];
-	mutex_unlock(&devices_lock);
+	cgpu = get_devices(dev);
 	drv = cgpu->drv;
 
 	if (!drv->identify_device)
@@ -2830,9 +2823,7 @@ static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 		io_open = io_add(io_data, COMSTR JSON_NOTIFY);
 
 	for (i = 0; i < total_devices; i++) {
-		mutex_lock(&devices_lock);
-		cgpu = devices[i];
-		mutex_unlock(&devices_lock);
+		cgpu = get_devices(i);
 		notifystatus(io_data, i, cgpu, isjson, group);
 	}
 
@@ -2859,9 +2850,7 @@ static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		io_open = io_add(io_data, COMSTR JSON_DEVDETAILS);
 
 	for (i = 0; i < total_devices; i++) {
-		mutex_lock(&devices_lock);
-		cgpu = devices[i];
-		mutex_unlock(&devices_lock);
+		cgpu = get_devices(i);
 
 		root = api_add_int(root, "DEVDETAILS", &i, false);
 		root = api_add_string(root, "Name", cgpu->drv->name, false);
@@ -2971,9 +2960,7 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 
 	i = 0;
 	for (j = 0; j < total_devices; j++) {
-		mutex_lock(&devices_lock);
-		cgpu = devices[j];
-		mutex_unlock(&devices_lock);
+		cgpu = get_devices(j);
 
 		if (cgpu && cgpu->drv) {
 			if (cgpu->drv->get_api_stats)
@@ -3248,9 +3235,7 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 		return;
 	}
 
-	mutex_lock(&devices_lock);
-	cgpu = devices[dev];
-	mutex_unlock(&devices_lock);
+	cgpu = get_devices(dev);
 	drv = cgpu->drv;
 
 	char *set = strchr(opt, ',');

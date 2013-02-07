@@ -624,9 +624,7 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 		case WAIT_ABANDONED:
 			// Am I using it already?
 			for (i = 0; i < total_devices; i++) {
-				mutex_lock(&devices_lock);
-				cgpu = devices[i];
-				mutex_unlock(&devices_lock);
+				cgpu = get_devices(i);
 				if (cgpu->usbinfo.bus_number == bus_number &&
 				    cgpu->usbinfo.device_address == device_address &&
 				    cgpu->usbinfo.nodev == false) {
@@ -867,9 +865,7 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	// Any devices sharing the same USB device should be marked also
 	// Currently only MMQ shares a USB device
 	for (i = 0; i < total_devices; i++) {
-		mutex_lock(&devices_lock);
-		lookcgpu = devices[i];
-		mutex_unlock(&devices_lock);
+		lookcgpu = get_devices(i);
 		if (lookcgpu != cgpu && lookcgpu->usbdev == cgusb) {
 			lookcgpu->usbinfo.nodev = true;
 			lookcgpu->usbinfo.nodev_count++;

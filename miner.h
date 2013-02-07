@@ -1110,6 +1110,7 @@ extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, struct work *base_work);
 extern struct work *copy_work(struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
+extern struct cgpu_info *get_devices(int id);
 
 enum api_data_type {
 	API_ESCAPE,
