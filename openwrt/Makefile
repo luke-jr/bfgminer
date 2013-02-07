@@ -100,6 +100,7 @@ define Package/$(PKG_NAME)/BitstreamTemplate
 define Package/$(PKG_NAME)-bitstream-$(1)
 $(call Package/$(PKG_NAME)/Default)
 	TITLE:=$(2)
+	PKGARCH:=all
 endef
 
 define Package/$(PKG_NAME)-bitstream-$(1)/description
