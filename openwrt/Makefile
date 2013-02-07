@@ -1,0 +1,132 @@
+#
+# Copyright 2013 Luke Dashjr
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 3 of the License, or (at your option)
+# any later version.  See COPYING for more details.
+#
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=bfgminer
+PKG_TITLE:=BFGMiner
+PKG_VERSION:=2.10.4
+PKG_RELEASE:=1
+
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tbz2
+PKG_SOURCE_URL:=http://luke.dashjr.org/programs/bitcoin/files/$(PKG_NAME)/$(PKG_VERSION)/
+
+PKG_INSTALL:=1
+
+include $(INCLUDE_DIR)/package.mk
+
+define Package/$(PKG_NAME)/Default
+	MAINTAINER:="Luke Dashjr" <luke_openwrt@dashjr.org>
+	SECTION:=utils
+	CATEGORY:=Utilities
+	URL:=http://luke.dashjr.org/programs/$(PKG_NAME)
+	DEPENDS:=+$(PKG_NAME)
+endef
+
+define Package/$(PKG_NAME)
+$(call Package/$(PKG_NAME)/Default)
+	TITLE:=$(PKG_TITLE) (Bitcoin miner)
+	DEPENDS:=+libc +libcurl +libpthread +jansson +PACKAGE_$(PKG_NAME)_curses:libncursesw +PACKAGE_$(PKG_NAME)_libusb:libusb-1.0
+endef
+
+define Package/$(PKG_NAME)/description
+Modular Bitcoin CPU/GPU/FPGA miner in C
+endef
+
+define Package/$(PKG_NAME)/config
+config PACKAGE_$(PKG_NAME)_curses
+	bool "Build with curses TUI support"
+	depends on PACKAGE_$(PKG_NAME)
+	default y
+config PACKAGE_$(PKG_NAME)_libusb
+	bool "Build with libusb support (X6500 & ZTEX)"
+	depends on PACKAGE_$(PKG_NAME)
+	default y
+endef
+
+ifndef CONFIG_PACKAGE_$(PKG_NAME)_curses
+CONFIGURE_ARGS += --without-curses
+endif
+
+ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
+CONFIGURE_ARGS += --disable-x6500 --disable-ztex
+endif
+
+TARGET_CFLAGS += -std=gnu99
+
+CONFIGURE_ARGS += --without-libudev
+
+# Need to remake configure etc to pick up on cross-compiler libtool
+CONFIGURE_VARS += NOSUBMODULES=1
+CONFIGURE_CMD = ./autogen.sh
+
+define Package/$(PKG_NAME)/install
+	$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/lib
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(PKG_NAME) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(PKG_NAME)-rpc $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/libblkmaker*.so* $(1)/usr/lib
+endef
+
+ALL_$(PKG_NAME)_PACKAGES += $(PKG_NAME)
+
+#### BitForce firmware flash ####
+
+define Package/bitforce-firmware-flash
+$(call Package/$(PKG_NAME)/Default)
+	TITLE:=BitForce firmware flash tool
+endef
+
+define Package/bitforce-firmware-flash/description
+BitForce firmware flash tool
+endef
+
+define Package/bitforce-firmware-flash/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bitforce-firmware-flash $(1)/usr/bin
+endef
+
+ALL_$(PKG_NAME)_PACKAGES += bitforce-firmware-flash
+
+#### Bitstreams ####
+
+define Package/$(PKG_NAME)/BitstreamTemplate
+
+define Package/$(PKG_NAME)-bitstream-$(1)
+$(call Package/$(PKG_NAME)/Default)
+	TITLE:=$(2)
+	PKGARCH:=all
+endef
+
+define Package/$(PKG_NAME)-bitstream-$(1)/description
+$(2)
+endef
+
+define Package/$(PKG_NAME)-bitstream-$(1)/install
+	$(INSTALL_DIR) $$(1)/usr/share/$(PKG_NAME)/bitstreams
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bitstreams/$(subst -,_,$(1))* $$(1)/usr/share/$(PKG_NAME)/bitstreams
+endef
+
+ALL_$(PKG_NAME)_PACKAGES += $(PKG_NAME)-bitstream-$(1)
+
+endef
+
+define Package/$(PKG_NAME)/ZtexBitstreamTemplate
+$(call Package/$(PKG_NAME)/BitstreamTemplate,ztex-$(1),Ztex $(2) FPGA bitstream (for $(PKG_TITLE) w/ libusb support))
+endef
+
+$(eval $(call Package/$(PKG_NAME)/BitstreamTemplate,fpgaminer,ModMiner/X6500 FPGA bitstream (for $(PKG_TITLE))))
+$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15b1,1.15b))
+$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15d1,1.15d))
+$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15d3,1.15d))
+$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15d4,1.15d & 1.15x))
+$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15y1,1.15y))
+
+
+
+$(foreach bitstream,$(ALL_$(PKG_NAME)_PACKAGES),$(eval $(call BuildPackage,$(bitstream))))
