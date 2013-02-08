@@ -1674,6 +1674,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 				ssize_t ae = blkmk_append_coinbase_safe(work->tmpl, &template_nonce, sizeof(template_nonce));
 				if (ae < (ssize_t)sizeof(template_nonce))
 					applog(LOG_WARNING, "Cannot append template-nonce to coinbase on pool %u (%"PRId64") - you might be wasting hashing!", work->pool->pool_no, (int64_t)ae);
+				++template_nonce;
 			}
 		}
 #endif
