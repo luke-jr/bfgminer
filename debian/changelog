@@ -1,3 +1,10 @@
+bfgminer (2.10.5-0precise1) precise; urgency=low
+
+  * Fix critical solo mining bug.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 08 Feb 2013 06:43:27 -0000
+
+
 bfgminer (2.10.4-0precise1) precise; urgency=low
 
   * Better big-endian compatibility.

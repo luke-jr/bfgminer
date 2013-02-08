@@ -1,5 +1,7 @@
-BFGMiner Version 2.10.5 - Future
+BFGMiner Version 2.10.5 - February 8, 2013
 
+- Bugfix: Actually increment template_nonce when we use it
+- Change file modes.
 - Fix logic fail on partial writes with stratum send that was leading to corrupt
 message submissions.
 
