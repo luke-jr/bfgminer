@@ -1,7 +1,8 @@
 /**
  *   libztex.h - headers for Ztex 1.15x fpga board support library
  *
- *   Copyright (c) 2012 nelisky.btc@gmail.com
+ *   Copyright 2012 nelisky.btc@gmail.com
+ *   Copyright 2012 Luke Dashjr
  *
  *   This work is based upon the Java SDK provided by ztex which is
  *   Copyright (C) 2009-2011 ZTEX GmbH.

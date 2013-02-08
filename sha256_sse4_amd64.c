@@ -1,6 +1,7 @@
 /*
  * SHA-256 driver for ASM routine for x86_64 on Linux
  * Copyright (c) Mark Crichton <crichton@gimp.org>
+ * Copyright 2012-2013 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
