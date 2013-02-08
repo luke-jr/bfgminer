@@ -1,15 +1,13 @@
 /**
  *   ztex.c - BFGMiner worker for Ztex 1.15x/y fpga board
  *
- *   Copyright (c) 2012 nelisky.btc@gmail.com
+ *   Copyright 2012 nelisky.btc@gmail.com
+ *   Copyright 2012 Luke Dashjr
+ *   Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
  *
  *   This work is based upon the Java SDK provided by ztex which is
  *   Copyright (C) 2009-2011 ZTEX GmbH.
  *   http://www.ztex.de
- *
- *   This work is based upon the icarus.c worker which is
- *   Copyright 2012 Luke Dashjr
- *   Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License version 2 as

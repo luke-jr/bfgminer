@@ -1,5 +1,6 @@
 /*
- * Copyright 2011-2012 Con Kolivas
+ * Copyright 2011-2013 Con Kolivas
+ * Copyright 2011-2013 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  * Copyright 2012 Giel van Schijndel
  * Copyright 2012 Gavin Andresen
