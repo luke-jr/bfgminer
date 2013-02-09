@@ -5926,8 +5926,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			char dev_str[8];
 			int gpu;
 
-			if (cgpu->drv->get_stats)
-			  cgpu->drv->get_stats(cgpu);
+			cgpu->drv->get_stats(cgpu);
 
 			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
@@ -6380,6 +6379,11 @@ static void noop_get_statline(char __maybe_unused *buf, struct cgpu_info __maybe
 {
 }
 
+static bool noop_get_stats(struct cgpu_info __maybe_unused *cgpu)
+{
+	return true;
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6391,6 +6395,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->get_statline_before = &blank_get_statline_before;
 	if (!drv->get_statline)
 		drv->get_statline = &noop_get_statline;
+	if (!drv->get_stats)
+		drv->get_stats = &noop_get_stats;
 }
 
 void enable_device(struct cgpu_info *cgpu)
