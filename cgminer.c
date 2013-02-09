@@ -6384,6 +6384,11 @@ static bool noop_get_stats(struct cgpu_info __maybe_unused *cgpu)
 	return true;
 }
 
+static bool noop_thread_prepare(struct thr_info __maybe_unused *thr)
+{
+	return true;
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6397,6 +6402,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->get_statline = &noop_get_statline;
 	if (!drv->get_stats)
 		drv->get_stats = &noop_get_stats;
+	if (!drv->thread_prepare)
+		drv->thread_prepare = &noop_thread_prepare;
 }
 
 void enable_device(struct cgpu_info *cgpu)
@@ -6905,7 +6912,7 @@ begin_bench:
 				tq_push(thr->q, &ping);
 			}
 
-			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
+			if (!cgpu->drv->thread_prepare(thr))
 				continue;
 
 			thread_reportout(thr);
