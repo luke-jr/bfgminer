@@ -31,31 +31,34 @@ License: GPLv3.  See COPYING for details.
 READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
 
 Dependencies:
-	curl dev library    http://curl.haxx.se/libcurl/
-	(libcurl4-openssl-dev)
+	autoconf             http://www.gnu.org/software/autoconf/
+	automake             http://www.gnu.org/software/automake/
+	libtool              http://www.gnu.org/software/libtool/
+	pkg-config           http://www.freedesktop.org/wiki/Software/pkg-config
+	...or pkgconf        https://github.com/pkgconf/pkgconf
 
-	curses dev library
-	(libncurses5-dev or libpdcurses on WIN32)
+	libcurl4-gnutls-dev  http://curl.haxx.se/libcurl/
 
-	autoconf            http://www.gnu.org/software/autoconf/
-	automake            http://www.gnu.org/software/automake/
-	pkg-config          http://www.freedesktop.org/wiki/Software/pkg-config
-	libtool             http://www.gnu.org/software/libtool/
+	libjansson-dev 2.0+  http://www.digip.org/jansson/
 
-	jansson 2.0+        http://www.digip.org/jansson/
-	(libjansson-dev)
+Optional Dependencies:
+	Text-User-Interface (TUI): curses dev library; any one of:
+	  libncurses5-dev    http://www.gnu.org/software/ncurses/ (Linux and Mac)
+	  libncursesw5-dev       ^ same
+	  libpdcurses        http://pdcurses.sourceforge.net/ (Linux/Mac/Windows)
 
-	yasm 1.0.1+         http://yasm.tortall.net/
-	(yasm is optional, gives assembly routines for CPU mining)
+	Multiple FPGA autodetection: any one of:
+	  sysfs              (builtin to most Linux kernels, just mount on /sys)
+	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
 
-	AMD APP SDK         http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/
-	(This sdk is mandatory for GPU mining)
+	X6500 and ZTEX FPGA boards:
+	  libusb-1.0-0-dev   http://www.libusb.org/
 
-	udev dev library    http://www.freedesktop.org/software/systemd/libudev/
-	(libudev-dev - only required for multi-FPGA auto-detection on Linux)
+	ATi/AMD video card GPU mining:
+	  AMD APP SDK        http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/
 
-	usb dev library     http://www.libusb.org/
-	(libusb-dev  - only required for ZTEX and X6500 support)
+	CPU mining optimized assembly algorithms:
+	  yasm 1.0.1+        http://yasm.tortall.net/
 
 
 BFGMiner specific configuration options:
