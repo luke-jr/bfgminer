@@ -5762,8 +5762,7 @@ out:
 
 void reinit_device(struct cgpu_info *cgpu)
 {
-	if (cgpu->drv->reinit_device)
-		cgpu->drv->reinit_device(cgpu);
+	cgpu->drv->reinit_device(cgpu);
 }
 
 static struct timeval rotate_tv;
@@ -6377,6 +6376,19 @@ extern struct device_drv ztex_drv;
 
 
 static int cgminer_id_count = 0;
+
+void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
+{
+}
+
+/* Fill missing driver api functions with noops */
+void fill_device_api(struct cgpu_info *cgpu)
+{
+	struct device_drv *drv = cgpu->drv;
+
+	if (!drv->reinit_device)
+		drv->reinit_device = &noop_reinit_device;
+}
 
 void enable_device(struct cgpu_info *cgpu)
 {
