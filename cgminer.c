@@ -5353,8 +5353,7 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 	} while (mythr->pause);
 	thread_reportin(mythr);
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
-	if (drv->thread_enable)
-		drv->thread_enable(mythr);
+	drv->thread_enable(mythr);
 }
 
 void *miner_thread(void *userdata)
@@ -6361,9 +6360,10 @@ extern struct device_drv modminer_drv;
 extern struct device_drv ztex_drv;
 #endif
 
-
 static int cgminer_id_count = 0;
 
+/* Various noop functions for drivers that don't support or need their
+ * variants. */
 static void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
 {
 }
@@ -6410,6 +6410,10 @@ static void noop_thread_shutdown(struct thr_info __maybe_unused *thr)
 {
 }
 
+static void noop_thread_enable(struct thr_info __maybe_unused *thr)
+{
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6435,6 +6439,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->hw_error = &noop_hw_error;
 	if (!drv->thread_shutdown)
 		drv->thread_shutdown = &noop_thread_shutdown;
+	if (!drv->thread_enable)
+		drv->thread_enable = &noop_thread_enable;
 }
 
 void enable_device(struct cgpu_info *cgpu)
