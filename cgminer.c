@@ -5406,7 +5406,7 @@ void *miner_thread(void *userdata)
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
 		cgpu->max_hashes = 0;
-		if (drv->prepare_work && !drv->prepare_work(mythr, work)) {
+		if (!drv->prepare_work(mythr, work)) {
 			applog(LOG_ERR, "work prepare failed, exiting "
 				"mining thread %d", thr_id);
 			break;
@@ -6399,6 +6399,11 @@ static bool noop_thread_init(struct thr_info __maybe_unused *thr)
 	return true;
 }
 
+static bool noop_prepare_work(struct thr_info __maybe_unused *thr, struct work __maybe_unused *work)
+{
+	return true;
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6418,6 +6423,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->can_limit_work = &noop_can_limit_work;
 	if (!drv->thread_init)
 		drv->thread_init = &noop_thread_init;
+	if (!drv->prepare_work)
+		drv->prepare_work = &noop_prepare_work;
 }
 
 void enable_device(struct cgpu_info *cgpu)
