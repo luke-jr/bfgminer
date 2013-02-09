@@ -5386,7 +5386,7 @@ void *miner_thread(void *userdata)
 
 	gettimeofday(&getwork_start, NULL);
 
-	if (drv->thread_init && !drv->thread_init(mythr)) {
+	if (!drv->thread_init(mythr)) {
 		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
 		goto out;
 	}
@@ -6394,6 +6394,11 @@ static uint64_t noop_can_limit_work(struct thr_info __maybe_unused *thr)
 	return 0xffffffff;
 }
 
+static bool noop_thread_init(struct thr_info __maybe_unused *thr)
+{
+	return true;
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6411,6 +6416,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->thread_prepare = &noop_thread_prepare;
 	if (!drv->can_limit_work)
 		drv->can_limit_work = &noop_can_limit_work;
+	if (!drv->thread_init)
+		drv->thread_init = &noop_thread_init;
 }
 
 void enable_device(struct cgpu_info *cgpu)
