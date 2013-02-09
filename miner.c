@@ -95,6 +95,7 @@ bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
+static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
 struct _cbscript_t {
 	char *data;
@@ -1255,6 +1256,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-gbt",
 			opt_set_invbool, &want_gbt,
 			"Disable getblocktemplate support"),
+	OPT_WITHOUT_ARG("--no-getwork",
+			opt_set_invbool, &want_getwork,
+			"Disable getwork support"),
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -2990,6 +2994,7 @@ static enum pool_protocol pool_protocol_fallback(enum pool_protocol proto)
 {
 	switch (proto) {
 		case PLP_GETBLOCKTEMPLATE:
+			if (want_getwork)
 			return PLP_GETWORK;
 		default:
 			return PLP_NONE;
@@ -5934,6 +5939,9 @@ static bool pool_active(struct pool *pool, bool pinging)
 		return false;
 	}
 
+	if (!(want_gbt || want_getwork))
+		goto nohttp;
+
 	work = make_work();
 
 	/* Probe for GBT support on first pass */
@@ -6049,7 +6057,7 @@ badwork:
 			pool->lp_proto = PLP_GETBLOCKTEMPLATE;
 		}
 		else
-		if (pool->hdr_path) {
+		if (pool->hdr_path && want_getwork) {
 			pool->lp_url = absolute_uri(pool->hdr_path, pool->rpc_url);
 			if (!pool->lp_url)
 				return false;
@@ -6067,6 +6075,7 @@ badwork:
 		goto tryagain;
 	} else {
 		free_work(work);
+nohttp:
 		/* If we failed to parse a getwork, this could be a stratum
 		 * url without the prefix stratum+tcp:// so let's check it */
 		if (extract_sockaddr(pool, pool->rpc_url) && initiate_stratum(pool)) {
