@@ -5356,49 +5356,33 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 	drv->thread_enable(mythr);
 }
 
-void *miner_thread(void *userdata)
+/* The main hashing loop for devices that are slow enough to work on one work
+ * item at a time, without a queue, aborting work before the entire nonce
+ * range has been hashed if needed. */
+void hash_sole_work(struct thr_info *mythr)
 {
-	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_drv *drv = cgpu->drv;
+	struct timeval getwork_start, tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct cgminer_stats *dev_stats = &(cgpu->cgminer_stats);
 	struct cgminer_stats *pool_stats;
-	struct timeval getwork_start;
-
 	/* Try to cycle approximately 5 times before each log update */
 	const long cycle = opt_log_interval / 5 ? : 1;
-	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
+	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 	struct timeval diff, sdiff, wdiff = {0, 0};
 	uint32_t max_nonce = drv->can_limit_work(mythr);
 	int64_t hashes_done = 0;
-	int64_t hashes;
-	struct work *work;
-	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
-
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-	char threadname[20];
-        snprintf(threadname,20,"miner %d",thr_id);
-	RenameThread(threadname);
 
 	gettimeofday(&getwork_start, NULL);
-
-	if (!drv->thread_init(mythr)) {
-		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
-		goto out;
-	}
-
-	thread_reportout(mythr);
-	applog(LOG_DEBUG, "Popping ping in miner thread");
-	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
-
 	sdiff.tv_sec = sdiff.tv_usec = 0;
 	gettimeofday(&tv_lastupdate, NULL);
 
-	while (1) {
+	while (42) {
+		struct work *work = get_work(mythr, thr_id);
+		int64_t hashes;
+
 		mythr->work_restart = false;
-		work = get_work(mythr, thr_id);
 		cgpu->new_work = true;
 
 		gettimeofday(&tv_workstart, NULL);
@@ -5519,7 +5503,31 @@ void *miner_thread(void *userdata)
 		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
 		free_work(work);
 	}
+}
 
+void *miner_thread(void *userdata)
+{
+	struct thr_info *mythr = userdata;
+	const int thr_id = mythr->id;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	char threadname[20];
+
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+        snprintf(threadname,20,"miner %d",thr_id);
+	RenameThread(threadname);
+
+	if (!drv->thread_init(mythr)) {
+		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
+		goto out;
+	}
+
+	thread_reportout(mythr);
+	applog(LOG_DEBUG, "Popping ping in miner thread");
+	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
+
+	hash_sole_work(mythr);
 out:
 	drv->thread_shutdown(mythr);
 
