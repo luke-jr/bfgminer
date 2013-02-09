@@ -5522,8 +5522,7 @@ void *miner_thread(void *userdata)
 	}
 
 out:
-	if (drv->thread_shutdown)
-		drv->thread_shutdown(mythr);
+	drv->thread_shutdown(mythr);
 
 	thread_reportin(mythr);
 	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
@@ -6407,6 +6406,10 @@ static void noop_hw_error(struct thr_info __maybe_unused *thr)
 {
 }
 
+static void noop_thread_shutdown(struct thr_info __maybe_unused *thr)
+{
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6430,6 +6433,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->prepare_work = &noop_prepare_work;
 	if (!drv->hw_error)
 		drv->hw_error = &noop_hw_error;
+	if (!drv->thread_shutdown)
+		drv->thread_shutdown = &noop_thread_shutdown;
 }
 
 void enable_device(struct cgpu_info *cgpu)
