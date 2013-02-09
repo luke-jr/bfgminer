@@ -1357,9 +1357,12 @@ You can only see fields listed in 'group' and 'calc'
 
 A 'calc' is formatted as: 'Field' => 'function'
 The current list of operations available for 'calc' are:
-'sum', 'avg', 'min', 'max', 'lo', 'hi', 'any'
+'sum', 'avg', 'min', 'max', 'lo', 'hi', 'coount', 'any'
 The first 4 are as expected - the numerical sum, average, minimum or maximum
 'lo' is the first string of the list, sorted ignoring case
 'hi' is the last string of the list, sorted ignoring case
+'count' is the number of rows in the section specified in the calc e.g.
+ ('DEVS.Name' => 'count') would be the number of DEVS selected in the 'where'
+ of course any valid 'DEVS.Xyz' would give the same 'count' value
 'any' is effectively random: the field value in the first row of the grouped data
 An unrecognised 'function' uses 'any'

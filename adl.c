@@ -1392,7 +1392,7 @@ updated:
 		clear_logwin();
 		return;
 	}
-	sleep(1);
+	nmsleep(1000);
 	goto updated;
 }
 #endif

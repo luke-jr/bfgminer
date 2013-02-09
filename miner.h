@@ -740,6 +740,7 @@ extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
 extern pthread_mutex_t mining_thr_lock;
+extern pthread_mutex_t devices_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
@@ -780,6 +781,7 @@ extern void add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define _MAX_INTENSITY_STR "14"
 #endif
 
+extern bool hotplug_mode;
 extern struct list_head scan_devices;
 extern int nDevs;
 extern int opt_n_threads;
@@ -1110,6 +1112,7 @@ extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, struct work *base_work);
 extern struct work *copy_work(struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
+extern struct cgpu_info *get_devices(int id);
 
 enum api_data_type {
 	API_ESCAPE,

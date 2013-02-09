@@ -157,7 +157,14 @@ static int input_thr_id;
 #endif
 int gpur_thr_id;
 static int api_thr_id;
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+static int hotplug_thr_id;
+#endif
 static int total_control_threads;
+bool hotplug_mode;
+static int new_devices;
+static int new_threads;
+static int start_devices;
 
 #ifdef HAVE_LIBUSB
 pthread_mutex_t cgusb_lock;
@@ -173,6 +180,7 @@ static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
 pthread_mutex_t mining_thr_lock;
+pthread_mutex_t devices_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -380,6 +388,16 @@ static struct cgpu_info *get_thr_cgpu(int thr_id)
 	struct thr_info *thr = get_thread(thr_id);
 
 	return thr->cgpu;
+}
+
+struct cgpu_info *get_devices(int id)
+{
+	struct cgpu_info *cgpu;
+
+	mutex_lock(&devices_lock);
+	cgpu = devices[id];
+	mutex_unlock(&devices_lock);
+	return cgpu;
 }
 
 static void sharelog(const char*disposition, const struct work*work)
@@ -742,18 +760,24 @@ static void load_temp_cutoffs()
 			if (val < 0 || val > 200)
 				quit(1, "Invalid value passed to set temp cutoff");
 
+			mutex_lock(&devices_lock);
 			devices[device]->cutofftemp = val;
+			mutex_unlock(&devices_lock);
 		}
 	} else {
+		mutex_lock(&devices_lock);
 		for (i = device; i < total_devices; ++i) {
 			if (!devices[i]->cutofftemp)
 				devices[i]->cutofftemp = opt_cutofftemp;
 		}
+		mutex_unlock(&devices_lock);
 		return;
 	}
 	if (device <= 1) {
+		mutex_lock(&devices_lock);
 		for (i = device; i < total_devices; ++i)
 			devices[i]->cutofftemp = val;
+		mutex_unlock(&devices_lock);
 	}
 }
 
@@ -1986,9 +2010,12 @@ static void curses_print_devstatus(int thr_id)
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
 
+	if (opt_compact)
+		return;
+
 	cgpu = get_thr_cgpu(thr_id);
 
-	if (devcursor + cgpu->cgminer_id > LINES - 2 || opt_compact)
+	if (cgpu->cgminer_id >= start_devices || devcursor + cgpu->cgminer_id > LINES - 2)
 		return;
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
@@ -2004,6 +2031,11 @@ static void curses_print_devstatus(int thr_id)
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
 
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	if (cgpu->usbinfo.nodev)
+		wprintw(statuswin, "ZOMBIE");
+	else
+#endif
 	if (cgpu->status == LIFE_DEAD)
 		wprintw(statuswin, "DEAD  ");
 	else if (cgpu->status == LIFE_SICK)
@@ -2460,7 +2492,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			pool->remotefail_occasions++;
 			applog(LOG_WARNING, "Pool %d communication failure, caching submissions", pool->pool_no);
 		}
-		sleep(5);
+		nmsleep(5000);
 		goto out;
 	} else if (pool_tclear(pool, &pool->submit_fail))
 		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
@@ -2767,6 +2799,16 @@ static void __kill_work(void)
 
 	applog(LOG_INFO, "Received kill message");
 
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	/* Best to get rid of it first so it doesn't
+	 * try to create any new devices */
+	if (!opt_scrypt) {
+		applog(LOG_DEBUG, "Killing off HotPlug thread");
+		thr = &control_thr[hotplug_thr_id];
+		thr_info_cancel(thr);
+	}
+#endif
+
 	applog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
 	thr = &control_thr[watchpool_thr_id];
@@ -2785,7 +2827,7 @@ static void __kill_work(void)
 		thr->pause = true;
 	}
 
-	sleep(1);
+	nmsleep(1000);
 
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
@@ -4000,10 +4042,10 @@ void zero_stats(void)
 
 	zero_bestshare();
 
-	mutex_lock(&hash_lock);
 	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = devices[i];
+		struct cgpu_info *cgpu = get_devices(i);
 
+		mutex_lock(&hash_lock);
 		cgpu->total_mhashes = 0;
 		cgpu->accepted = 0;
 		cgpu->rejected = 0;
@@ -4014,8 +4056,8 @@ void zero_stats(void)
 		cgpu->diff_accepted = 0;
 		cgpu->diff_rejected = 0;
 		cgpu->last_share_diff = 0;
+		mutex_unlock(&hash_lock);
 	}
-	mutex_unlock(&hash_lock);
 }
 
 #ifdef HAVE_CURSES
@@ -4728,7 +4770,7 @@ static void *stratum_thread(void *userdata)
 				while (!initiate_stratum(pool) || !auth_stratum(pool)) {
 					if (pool->removed)
 						goto out;
-					sleep(30);
+					nmsleep(30000);
 				}
 			}
 		}
@@ -4766,7 +4808,7 @@ static void *stratum_thread(void *userdata)
 			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
 				if (pool->removed)
 					goto out;
-				sleep(30);
+				nmsleep(30000);
 			}
 			stratum_resumed(pool);
 			continue;
@@ -5656,7 +5698,7 @@ retry_pool:
 	if (!pool) {
 		applog(LOG_WARNING, "No suitable long-poll found for %s", cp->rpc_url);
 		while (!pool) {
-			sleep(60);
+			nmsleep(60000);
 			pool = select_longpoll_pool(cp);
 		}
 	}
@@ -5731,7 +5773,7 @@ retry_pool:
 				continue;
 			if (failures == 1)
 				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
-			sleep(30);
+			nmsleep(30000);
 		}
 
 		if (pool != cp) {
@@ -5835,7 +5877,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			switch_pools(NULL);
 		}
 
-		sleep(30);
+		nmsleep(30000);
 			
 	}
 	return NULL;
@@ -5925,7 +5967,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		}
 
 		for (i = 0; i < total_devices; ++i) {
-			struct cgpu_info *cgpu = devices[i];
+			struct cgpu_info *cgpu = get_devices(i);
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char dev_str[8];
@@ -6092,8 +6134,11 @@ void print_summary(void)
 	}
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
-	for (i = 0; i < total_devices; ++i)
-		log_print_status(devices[i]);
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = get_devices(i);
+
+		log_print_status(cgpu);
+	}
 
 	if (opt_shares)
 		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
@@ -6343,7 +6388,7 @@ void enable_curses(void) {
 }
 #endif
 
-/* TODO: fix need a dummy CPU device_api even if no support for CPU mining */
+/* TODO: fix need a dummy CPU device_drv even if no support for CPU mining */
 #ifndef WANT_CPUMINE
 struct device_drv cpu_drv;
 struct device_drv cpu_drv = {
@@ -6454,11 +6499,18 @@ void fill_device_api(struct cgpu_info *cgpu)
 void enable_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
+	mutex_lock(&devices_lock);
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
-	mining_threads += cgpu->threads;
+	mutex_unlock(&devices_lock);
+	if (hotplug_mode) {
+		new_threads += cgpu->threads;
+		adj_width(mining_threads + new_threads, &dev_width);
+	} else {
+		mining_threads += cgpu->threads;
 #ifdef HAVE_CURSES
-	adj_width(mining_threads, &dev_width);
+		adj_width(mining_threads, &dev_width);
 #endif
+	}
 #ifdef HAVE_OPENCL
 	if (cgpu->drv->drv_id == DRIVER_OPENCL) {
 		gpu_threads += cgpu->threads;
@@ -6487,8 +6539,13 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
-	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + 2));
-	devices[total_devices++] = cgpu;
+	mutex_lock(&devices_lock);
+	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
+	mutex_unlock(&devices_lock);
+	if (hotplug_mode)
+		devices[total_devices + new_devices++] = cgpu;
+	else
+		devices[total_devices++] = cgpu;
 	return true;
 }
 
@@ -6506,6 +6563,103 @@ struct device_drv *copy_drv(struct device_drv *drv)
 	copy->copy = true;
 	return copy;
 }
+
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+static void hotplug_process()
+{
+	struct thr_info *thr;
+	int i, j;
+
+	for (i = 0; i < new_devices; i++) {
+		struct cgpu_info *cgpu = devices[total_devices + i];
+		enable_device(cgpu);
+		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+		cgpu->rolling = cgpu->total_mhashes = 0;
+	}
+
+	mutex_lock(&mining_thr_lock);
+	mining_thr = realloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
+	mutex_unlock(&mining_thr_lock);
+	if (!mining_thr)
+		quit(1, "Failed to hotplug realloc mining_thr");
+	for (i = 0; i < new_threads; i++) {
+		mining_thr[mining_threads + i] = calloc(1, sizeof(*thr));
+		if (!mining_thr[mining_threads + i])
+			quit(1, "Failed to hotplug calloc mining_thr[%d]", i);
+	}
+
+	// Start threads
+	for (i = 0; i < new_devices; ++i) {
+		struct cgpu_info *cgpu = devices[total_devices];
+		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr[cgpu->threads] = NULL;
+		cgpu->status = LIFE_INIT;
+
+		for (j = 0; j < cgpu->threads; ++j) {
+			thr = get_thread(mining_threads);
+			thr->id = mining_threads;
+			thr->cgpu = cgpu;
+			thr->device_thread = j;
+
+			thr->q = tq_new();
+			if (!thr->q)
+				quit(1, "tq_new hotplug failed in starting %s%d mining thread (#%d)", cgpu->drv->name, cgpu->device_id, total_devices);
+
+			/* Enable threads for devices set not to mine but disable
+			 * their queue in case we wish to enable them later */
+			if (cgpu->deven != DEV_DISABLED) {
+				applog(LOG_DEBUG, "Pushing hotplug ping to thread %d", thr->id);
+				tq_push(thr->q, &ping);
+			}
+
+			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
+				continue;
+
+			thread_reportout(thr);
+
+			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+				quit(1, "hotplug thread %d create failed", thr->id);
+
+			cgpu->thr[j] = thr;
+
+			mining_threads++;
+		}
+		total_devices++;
+		applog(LOG_WARNING, "Hotplug: %s added %s %i", cgpu->drv->dname, cgpu->drv->name, cgpu->device_id);
+	}
+}
+
+static void *hotplug_thread(void __maybe_unused *userdata)
+{
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("hotplug");
+
+	hotplug_mode = true;
+
+	while (0x2a) {
+		nmsleep(5000);
+
+// Version 0.1 just add the devices on - worry about using nodev later
+
+		new_devices = 0;
+		new_threads = 0;
+
+#ifdef USE_BITFORCE
+		bitforce_drv.drv_detect();
+#endif
+
+#ifdef USE_MODMINER
+		modminer_drv.drv_detect();
+#endif
+
+		if (new_devices)
+			hotplug_process();
+	}
+
+	return NULL;
+}
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -6548,6 +6702,7 @@ int main(int argc, char *argv[])
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
 	mutex_init(&mining_thr_lock);
+	mutex_init(&devices_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
@@ -6783,6 +6938,8 @@ int main(int argc, char *argv[])
 	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
 
+	start_devices = total_devices;
+
 	load_temp_cutoffs();
 
 	for (i = 0; i < total_devices; ++i)
@@ -6841,7 +6998,7 @@ int main(int argc, char *argv[])
 			quit(1, "Failed to calloc mining_thr[%d]", i);
 	}
 
-	total_control_threads = 7;
+	total_control_threads = 8;
 	control_thr = calloc(total_control_threads, sizeof(*thr));
 	if (!control_thr)
 		quit(1, "Failed to calloc control_thr");
@@ -7016,11 +7173,21 @@ begin_bench:
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
 
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	if (!opt_scrypt) {
+		hotplug_thr_id = 6;
+		thr = &control_thr[hotplug_thr_id];
+		if (thr_info_create(thr, NULL, hotplug_thread, thr))
+			quit(1, "hotplug thread create failed");
+		pthread_detach(thr->pth);
+	}
+#endif
+
 #ifdef HAVE_CURSES
 	/* Create curses input thread for keyboard input. Create this last so
 	 * that we know all threads are created since this can call kill_work
-	 * to try and shut down ll previous threads. */
-	input_thr_id = 6;
+	 * to try and shut down all previous threads. */
+	input_thr_id = 7;
 	thr = &control_thr[input_thr_id];
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
@@ -7028,8 +7195,8 @@ begin_bench:
 #endif
 
 	/* Just to be sure */
-	if (total_control_threads != 7)
-		quit(1, "incorrect total_control_threads (%d) should be 7", total_control_threads);
+	if (total_control_threads != 8)
+		quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {
@@ -7075,7 +7242,7 @@ retry:
 			while (!pool->stratum_active || !pool->stratum_notify) {
 				struct pool *altpool = select_pool(true);
 
-				sleep(5);
+				nmsleep(5000);
 				if (altpool != pool) {
 					pool = altpool;
 					goto retry;
@@ -7091,7 +7258,7 @@ retry:
 			while (pool->idle) {
 				struct pool *altpool = select_pool(true);
 
-				sleep(5);
+				nmsleep(5000);
 				if (altpool != pool) {
 					pool = altpool;
 					goto retry;
@@ -7125,7 +7292,7 @@ retry:
 			 * requests but is up as we'll keep hammering it */
 			if (++pool->seq_getfails > mining_threads + opt_queue)
 				pool_died(pool);
-			sleep(5);
+			nmsleep(5000);
 			push_curl_entry(ce, pool);
 			pool = select_pool(!opt_fail_only);
 			goto retry;

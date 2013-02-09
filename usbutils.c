@@ -579,8 +579,7 @@ static void cgusb_check_init()
 	mutex_unlock(&cgusb_lock);
 }
 
-#ifdef WIN32
-#else
+#ifndef WIN32
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -624,7 +623,7 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 		case WAIT_ABANDONED:
 			// Am I using it already?
 			for (i = 0; i < total_devices; i++) {
-				cgpu = devices[i];
+				cgpu = get_devices(i);
 				if (cgpu->usbinfo.bus_number == bus_number &&
 				    cgpu->usbinfo.device_address == device_address &&
 				    cgpu->usbinfo.nodev == false) {
@@ -642,9 +641,10 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 			}
 			return true;
 		case WAIT_TIMEOUT:
-			applog(LOG_WARNING,
-				"MTX: %s USB failed to get '%s' - device in use",
-				drv->dname, name);
+			if (!hotplug_mode)
+				applog(LOG_WARNING,
+					"MTX: %s USB failed to get '%s' - device in use",
+					drv->dname, name);
 			goto fail;
 		case WAIT_FAILED:
 			applog(LOG_ERR,
@@ -726,9 +726,10 @@ fail:
 
 	if (semop(sem, sops, 2)) {
 		if (errno == EAGAIN) {
-			applog(LOG_WARNING,
-				"SEM: %s USB failed to get (%d) '%s' - device in use",
-				drv->dname, sem, name);
+			if (!hotplug_mode)
+				applog(LOG_WARNING,
+					"SEM: %s USB failed to get (%d) '%s' - device in use",
+					drv->dname, sem, name);
 		} else {
 			applog(LOG_DEBUG,
 				"SEM: %s USB failed to get (%d) '%s' err (%d) %s",
@@ -841,14 +842,19 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 
 void usb_uninit(struct cgpu_info *cgpu)
 {
+	// May have happened already during a failed initialisation
+	//  if release_cgpu() was called due to a USB NODEV(err)
+	if (!cgpu->usbdev)
+		return;
 	libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
 	libusb_close(cgpu->usbdev->handle);
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
 }
 
-void release_cgpu(struct cgpu_info *cgpu)
+static void release_cgpu(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
+	struct cgpu_info *lookcgpu;
 	int i;
 
 	cgpu->usbinfo.nodev = true;
@@ -857,14 +863,16 @@ void release_cgpu(struct cgpu_info *cgpu)
 
 	// Any devices sharing the same USB device should be marked also
 	// Currently only MMQ shares a USB device
-	for (i = 0; i < total_devices; i++)
-		if (devices[i] != cgpu && devices[i]->usbdev == cgusb) {
-			devices[i]->usbinfo.nodev = true;
-			devices[i]->usbinfo.nodev_count++;
-			memcpy(&(devices[i]->usbinfo.last_nodev),
+	for (i = 0; i < total_devices; i++) {
+		lookcgpu = get_devices(i);
+		if (lookcgpu != cgpu && lookcgpu->usbdev == cgusb) {
+			lookcgpu->usbinfo.nodev = true;
+			lookcgpu->usbinfo.nodev_count++;
+			memcpy(&(lookcgpu->usbinfo.last_nodev),
 				&(cgpu->usbinfo.last_nodev), sizeof(struct timeval));
-			devices[i]->usbdev = NULL;
+			lookcgpu->usbdev = NULL;
 		}
+	}
 
 	usb_uninit(cgpu);
 
