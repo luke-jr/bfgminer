@@ -5372,7 +5372,7 @@ void *miner_thread(void *userdata)
 	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct timeval diff, sdiff, wdiff = {0, 0};
-	uint32_t max_nonce = drv->can_limit_work ? drv->can_limit_work(mythr) : 0xffffffff;
+	uint32_t max_nonce = drv->can_limit_work(mythr);
 	int64_t hashes_done = 0;
 	int64_t hashes;
 	struct work *work;
@@ -5478,7 +5478,7 @@ void *miner_thread(void *userdata)
 			if (unlikely((long)sdiff.tv_sec < cycle)) {
 				int mult;
 
-				if (likely(!drv->can_limit_work || max_nonce == 0xffffffff))
+				if (likely(max_nonce == 0xffffffff))
 					continue;
 
 				mult = 1000000 / ((sdiff.tv_usec + 0x400) / 0x400) + 0x10;
@@ -5487,9 +5487,9 @@ void *miner_thread(void *userdata)
 					max_nonce = 0xffffffff;
 				else
 					max_nonce = (max_nonce * mult) / 0x400;
-			} else if (unlikely(sdiff.tv_sec > cycle) && drv->can_limit_work)
+			} else if (unlikely(sdiff.tv_sec > cycle))
 				max_nonce = max_nonce * cycle / sdiff.tv_sec;
-			else if (unlikely(sdiff.tv_usec > 100000) && drv->can_limit_work)
+			else if (unlikely(sdiff.tv_usec > 100000))
 				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
 
 			timersub(&tv_end, &tv_lastupdate, &diff);
@@ -6389,6 +6389,11 @@ static bool noop_thread_prepare(struct thr_info __maybe_unused *thr)
 	return true;
 }
 
+static uint64_t noop_can_limit_work(struct thr_info __maybe_unused *thr)
+{
+	return 0xffffffff;
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6404,6 +6409,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->get_stats = &noop_get_stats;
 	if (!drv->thread_prepare)
 		drv->thread_prepare = &noop_thread_prepare;
+	if (!drv->can_limit_work)
+		drv->can_limit_work = &noop_can_limit_work;
 }
 
 void enable_device(struct cgpu_info *cgpu)
