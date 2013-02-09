@@ -1909,8 +1909,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->rejected,
 		cgpu->hw_errors,
 		cgpu->utility);
-	if (cgpu->drv->get_statline)
-		cgpu->drv->get_statline(buf, cgpu);
+	cgpu->drv->get_statline(buf, cgpu);
 }
 
 static void text_print_status(int thr_id)
@@ -2027,11 +2026,9 @@ static void curses_print_devstatus(int thr_id)
 			hwwidth, cgpu->hw_errors,
 		uwidth + 3, cgpu->utility);
 
-	if (cgpu->drv->get_statline) {
-		logline[0] = '\0';
-		cgpu->drv->get_statline(logline, cgpu);
-		wprintw(statuswin, "%s", logline);
-	}
+	logline[0] = '\0';
+	cgpu->drv->get_statline(logline, cgpu);
+	wprintw(statuswin, "%s", logline);
 
 	wclrtoeol(statuswin);
 }
@@ -6370,13 +6367,17 @@ extern struct device_drv ztex_drv;
 
 static int cgminer_id_count = 0;
 
-void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
+static void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
 {
 }
 
-void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu)
+static void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu)
 {
 	tailsprintf(buf, "               | ");
+}
+
+static void noop_get_statline(char __maybe_unused *buf, struct cgpu_info __maybe_unused *cgpu)
+{
 }
 
 /* Fill missing driver api functions with noops */
@@ -6388,6 +6389,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->reinit_device = &noop_reinit_device;
 	if (!drv->get_statline_before)
 		drv->get_statline_before = &blank_get_statline_before;
+	if (!drv->get_statline)
+		drv->get_statline = &noop_get_statline;
 }
 
 void enable_device(struct cgpu_info *cgpu)
