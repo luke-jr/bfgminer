@@ -1287,7 +1287,8 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 		else
 			tailsprintf(buf, "        ");
 		tailsprintf(buf, "| ");
-	}
+	} else
+		gpu->drv->get_statline_before = &blank_get_statline_before;
 }
 #endif
 

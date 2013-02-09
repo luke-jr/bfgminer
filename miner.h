@@ -268,6 +268,8 @@ struct gpu_adl {
 };
 #endif
 
+extern void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu);
+
 struct api_data;
 struct thr_info;
 struct work;

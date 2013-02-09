@@ -6370,7 +6370,7 @@ static void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
 {
 }
 
-static void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu)
+void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu)
 {
 	tailsprintf(buf, "               | ");
 }
