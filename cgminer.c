@@ -1900,10 +1900,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 	suffix_string(dr64, displayed_rolling, 4);
 
 	sprintf(buf, "%s%d ", cgpu->drv->name, cgpu->device_id);
-	if (cgpu->drv->get_statline_before)
-		cgpu->drv->get_statline_before(buf, cgpu);
-	else
-		tailsprintf(buf, "               | ");
+	cgpu->drv->get_statline_before(buf, cgpu);
 	tailsprintf(buf, "(%ds):%s (avg):%sh/s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
 		displayed_rolling,
@@ -1999,13 +1996,9 @@ static void curses_print_devstatus(int thr_id)
 
 	wmove(statuswin,devcursor + cgpu->cgminer_id, 0);
 	wprintw(statuswin, " %s %*d: ", cgpu->drv->name, dev_width, cgpu->device_id);
-	if (cgpu->drv->get_statline_before) {
-		logline[0] = '\0';
-		cgpu->drv->get_statline_before(logline, cgpu);
-		wprintw(statuswin, "%s", logline);
-	}
-	else
-		wprintw(statuswin, "               | ");
+	logline[0] = '\0';
+	cgpu->drv->get_statline_before(logline, cgpu);
+	wprintw(statuswin, "%s", logline);
 
 	dh64 = (double)cgpu->total_mhashes / total_secs * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull;
@@ -6381,6 +6374,11 @@ void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
 {
 }
 
+void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu)
+{
+	tailsprintf(buf, "               | ");
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6388,6 +6386,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 
 	if (!drv->reinit_device)
 		drv->reinit_device = &noop_reinit_device;
+	if (!drv->get_statline_before)
+		drv->get_statline_before = &blank_get_statline_before;
 }
 
 void enable_device(struct cgpu_info *cgpu)
@@ -6403,6 +6403,7 @@ void enable_device(struct cgpu_info *cgpu)
 		gpu_threads += cgpu->threads;
 	}
 #endif
+	fill_device_api(cgpu);
 }
 
 struct _cgpu_devid_counter {
