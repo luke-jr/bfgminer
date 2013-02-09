@@ -5294,8 +5294,7 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 		thr->cgpu->hw_errors++;
 		mutex_unlock(&stats_lock);
 
-		if (thr->cgpu->drv->hw_error)
-			thr->cgpu->drv->hw_error(thr);
+		thr->cgpu->drv->hw_error(thr);
 
 		goto out;
 	}
@@ -6404,6 +6403,10 @@ static bool noop_prepare_work(struct thr_info __maybe_unused *thr, struct work _
 	return true;
 }
 
+static void noop_hw_error(struct thr_info __maybe_unused *thr)
+{
+}
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6425,6 +6428,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->thread_init = &noop_thread_init;
 	if (!drv->prepare_work)
 		drv->prepare_work = &noop_prepare_work;
+	if (!drv->hw_error)
+		drv->hw_error = &noop_hw_error;
 }
 
 void enable_device(struct cgpu_info *cgpu)
