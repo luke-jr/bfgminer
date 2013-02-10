@@ -382,6 +382,10 @@ struct cgpu_info {
 	const char *devtype;
 	int device_id;
 	const char *name;
+	int procs;
+	int proc_id;
+	struct cgpu_info *device;
+	struct cgpu_info *next_proc;
 	const char *device_path;
 	FILE *device_file;
 	union {

@@ -7641,9 +7641,35 @@ void renumber_cgpu(struct cgpu_info *cgpu)
 
 bool add_cgpu(struct cgpu_info*cgpu)
 {
+	int lpcount;
+	
 	renumber_cgpu(cgpu);
-	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + 2));
+	if (!cgpu->procs)
+		cgpu->procs = 1;
+	lpcount = cgpu->procs;
+	cgpu->device = cgpu;
+	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + lpcount + 1));
 	devices[total_devices++] = cgpu;
+	
+	if (lpcount > 1)
+	{
+		int tpp = cgpu->threads / lpcount;
+		struct cgpu_info **nlp_p, *slave;
+		
+		nlp_p = &cgpu->next_proc;
+		for (int i = 1; i < lpcount; ++i)
+		{
+			slave = malloc(sizeof(*slave));
+			*slave = *cgpu;
+			slave->proc_id = i;
+			slave->threads = tpp;
+			devices[total_devices++] = slave;
+			*nlp_p = slave;
+			nlp_p = &cgpu->next_proc;
+		}
+		cgpu->proc_id = 0;
+		cgpu->threads -= (tpp * (lpcount - 1));
+	}
 	return true;
 }
 
