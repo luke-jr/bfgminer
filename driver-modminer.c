@@ -81,8 +81,9 @@ _bailout(int fd, struct cgpu_info*modminer, int prio, const char *fmt, ...)
 	if (fd != -1)
 		serial_close(fd);
 	if (modminer) {
+		pthread_mutex_t *mutexp = &modminer->device_mutex;
 		modminer->device_fd = -1;
-		mutex_unlock(&modminer->device_mutex);
+		mutex_unlock(mutexp);
 	}
 
 	va_list ap;
@@ -180,7 +181,7 @@ modminer_reopen(struct cgpu_info*modminer)
 	bool _safebailoutrv;  \
 	state->work_running = false;  \
 	_safebailoutrv = modminer_reopen(modminer);  \
-	mutex_unlock(&modminer->device_mutex);  \
+	mutex_unlock(mutexp);  \
 	return _safebailoutrv ? 0 : -1;  \
 } while(0)
 
@@ -303,6 +304,7 @@ modminer_change_clock(struct thr_info*thr, bool needlock, signed char delta)
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	char fpgaid = thr->device_thread;
+	pthread_mutex_t *mutexp = &modminer->device_mutex;
 	int fd;
 	unsigned char cmd[6], buf[1];
 	unsigned char clk;
@@ -315,14 +317,14 @@ modminer_change_clock(struct thr_info*thr, bool needlock, signed char delta)
 	cmd[3] = cmd[4] = cmd[5] = '\0';
 
 	if (needlock)
-		mutex_lock(&modminer->device_mutex);
+		mutex_lock(mutexp);
 	fd = modminer->device_fd;
 	if (6 != write(fd, cmd, 6))
 		bailout2(LOG_ERR, "%s.%u: Error writing (set frequency)", modminer->dev_repr, fpgaid);
 	if (serial_read(fd, &buf, 1) != 1)
 		bailout2(LOG_ERR, "%s.%u: Error reading (set frequency)", modminer->dev_repr, fpgaid);
 	if (needlock)
-		mutex_unlock(&modminer->device_mutex);
+		mutex_unlock(mutexp);
 
 	if (buf[0])
 		state->dclk.freqM = clk / 2;
@@ -383,15 +385,16 @@ modminer_fpga_init(struct thr_info *thr)
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	int fd;
 	char fpgaid = thr->device_thread;
+	pthread_mutex_t *mutexp = &modminer->device_mutex;
 	uint32_t nonce;
 
 	unsigned char cmd[2], buf[4];
 
-	mutex_lock(&modminer->device_mutex);
+	mutex_lock(mutexp);
 	fd = modminer->device_fd;
 	if (fd == -1) {
 		// Died in another thread...
-		mutex_unlock(&modminer->device_mutex);
+		mutex_unlock(mutexp);
 		return false;
 	}
 
@@ -440,7 +443,7 @@ modminer_fpga_init(struct thr_info *thr)
 	state->dclk.freqMDefault = state->dclk.freqM;
 	applog(LOG_WARNING, "%s.%u: Frequency set to %u MHz (range: %u-%u)", modminer->dev_repr, fpgaid, state->dclk.freqM * 2, MODMINER_MIN_CLOCK, state->dclk.freqMaxM * 2);
 
-	mutex_unlock(&modminer->device_mutex);
+	mutex_unlock(mutexp);
 
 	thr->primary_thread = true;
 
@@ -601,16 +604,17 @@ fd_set fds;
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	char fpgaid = thr->device_thread;
+	pthread_mutex_t *mutexp = &modminer->device_mutex;
 	int fd;
 
 	char buf[1];
 
-	mutex_lock(&modminer->device_mutex);
+	mutex_lock(mutexp);
 	fd = modminer->device_fd;
 
 	if (unlikely(fd == -1)) {
 		if (!modminer_reopen(modminer)) {
-			mutex_unlock(&modminer->device_mutex);
+			mutex_unlock(mutexp);
 			return false;
 		}
 		fd = modminer->device_fd;
@@ -621,7 +625,7 @@ fd_set fds;
 	gettimeofday(&state->tv_workstart, NULL);
 	state->hashes = 0;
 	status_read("start work");
-	mutex_unlock(&modminer->device_mutex);
+	mutex_unlock(mutexp);
 	if (opt_debug) {
 		char *xdata = bin2hex(state->running_work.data, 80);
 		applog(LOG_DEBUG, "%s.%u: Started work: %s",
@@ -646,6 +650,7 @@ modminer_process_results(struct thr_info*thr)
 	struct cgpu_info*modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	char fpgaid = thr->device_thread;
+	pthread_mutex_t *mutexp = &modminer->device_mutex;
 	struct work *work = &state->running_work;
 
 	uint32_t nonce;
@@ -653,14 +658,14 @@ modminer_process_results(struct thr_info*thr)
 	int immediate_bad_nonces = 0, immediate_nonces = 0;
 	bool bad;
 
-	mutex_lock(&modminer->device_mutex);
+	mutex_lock(mutexp);
 	modminer_get_temperature(modminer, thr);
 
 	iter = 200;
 	while (1) {
 		if (!_modminer_get_nonce(modminer, fpgaid, &nonce))
 			safebailout();
-		mutex_unlock(&modminer->device_mutex);
+		mutex_unlock(mutexp);
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
 			nonce = le32toh(nonce);
 			bad = !test_nonce(work, nonce, false);
@@ -698,7 +703,7 @@ modminer_process_results(struct thr_info*thr)
 		nmsleep(1);
 		if (work_restart(thr))
 			break;
-		mutex_lock(&modminer->device_mutex);
+		mutex_lock(mutexp);
 	}
 
 	struct timeval tv_workend, elapsed;
