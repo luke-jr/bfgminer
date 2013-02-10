@@ -130,6 +130,7 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	x6500->device_path = strdup(serial);
 	x6500->deven = DEV_ENABLED;
 	x6500->threads = 2;
+	x6500->procs = 2;
 	x6500->name = strdup(product);
 	x6500->cutofftemp = 85;
 	x6500->cgpu_data = dev;
@@ -154,10 +155,11 @@ static void x6500_detect()
 
 static bool x6500_prepare(struct thr_info *thr)
 {
-	if (thr->device_thread)
+	struct cgpu_info *x6500 = thr->cgpu;
+	
+	if (x6500->proc_id)
 		return true;
 	
-	struct cgpu_info *x6500 = thr->cgpu;
 	struct ft232r_device_handle *ftdi = ft232r_open(x6500->cgpu_data);
 	x6500->device_ft232r = NULL;
 	if (!ftdi)
@@ -174,6 +176,12 @@ static bool x6500_prepare(struct thr_info *thr)
 	jtag_a = (void*)(pdone + 1);
 	jtag_a->ftdi = ftdi;
 	x6500->cgpu_data = jtag_a;
+	
+	for (struct cgpu_info *slave = x6500->next_proc; slave; slave = slave->next_proc)
+	{
+		slave->device_ft232r = x6500->device_ft232r;
+		slave->cgpu_data = x6500->cgpu_data;
+	}
 	
 	return true;
 }
@@ -310,8 +318,8 @@ static bool x6500_change_clock(struct thr_info *thr, int multiplier)
 static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device_mutex;
-	char fpgaid = thr->device_thread;
+	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
+	char fpgaid = x6500->proc_id;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	uint8_t oldFreq = fpga->dclk.freqM;
 
@@ -331,11 +339,11 @@ static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 static bool x6500_fpga_init(struct thr_info *thr)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device_mutex;
+	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
 	struct x6500_fpga_data *fpga;
 	struct jtag_port *jp;
-	int fpgaid = thr->device_thread;
+	int fpgaid = x6500->proc_id;
 	uint8_t pinoffset = fpgaid ? 0x10 : 1;
 	unsigned char buf[4] = {0};
 	int i;
@@ -416,7 +424,6 @@ static bool x6500_fpga_init(struct thr_info *thr)
 static 
 void x6500_get_temperature(struct cgpu_info *x6500)
 {
-
 	struct x6500_fpga_data *fpga = x6500->thr[0]->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
 	struct ft232r_device_handle *ftdi = jp->a->ftdi;
@@ -466,8 +473,9 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 	ft232r_purge_buffers(jp->a->ftdi, FTDI_PURGE_BOTH);
 	jp->a->bufread = 0;
 
-	for (i = 0; i < 2; ++i) {
-		struct thr_info *thr = x6500->thr[i];
+	x6500 = x6500->device;
+	for (i = 0; i < 2; ++i, x6500 = x6500->next_proc) {
+		struct thr_info *thr = x6500->thr[0];
 		fpga = thr->cgpu_data;
 
 		if (!fpga) continue;
@@ -537,7 +545,6 @@ get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
 {
 	char info[18] = "               | ";
 	struct x6500_fpga_data *fpga0 = x6500->thr[0]->cgpu_data;
-	struct x6500_fpga_data *fpga1 = x6500->thr[1]->cgpu_data;
 
 	unsigned char pdone = *((unsigned char*)x6500->cgpu_data - 1);
 	if (pdone != 101) {
@@ -547,7 +554,7 @@ get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
 		return;
 	}
 	if (x6500->temp) {
-		sprintf(&info[1], "%.1fC/%.1fC", fpga0->temp, fpga1->temp);
+		sprintf(&info[1], "%.1fC", fpga0->temp);
 		info[strlen(info)] = ' ';
 		strcat(buf, info);
 		return;
@@ -559,23 +566,18 @@ static struct api_data*
 get_x6500_api_extra_device_status(struct cgpu_info *x6500)
 {
 	struct api_data *root = NULL;
-	static char *k[2] = {"FPGA0", "FPGA1"};
-	int i;
+	struct thr_info *thr = x6500->thr[0];
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	double d;
 
-	for (i = 0; i < 2; ++i) {
-		struct thr_info *thr = x6500->thr[i];
-		struct x6500_fpga_data *fpga = thr->cgpu_data;
-		json_t *o = json_object();
-
-		if (fpga->temp)
-			json_object_set_new(o, "Temperature", json_real(fpga->temp));
-		json_object_set_new(o, "Frequency", json_real((double)fpga->dclk.freqM * 2 * 1000000.));
-		json_object_set_new(o, "Cool Max Frequency", json_real((double)fpga->dclk.freqMaxM * 2 * 1000000.));
-		json_object_set_new(o, "Max Frequency", json_real((double)fpga->freqMaxMaxM * 2 * 1000000.));
-
-		root = api_add_json(root, k[i], o, false);
-		json_decref(o);
-	}
+	if (fpga->temp)
+		root = api_add_temp(root, "Temperature", &fpga->temp, true);
+	d = (double)fpga->dclk.freqM * 2 * 1000000.;
+	root = api_add_freq(root, "Frequency", &d, true);
+	d = (double)fpga->dclk.freqMaxM * 2 * 1000000.;
+	root = api_add_freq(root, "Cool Max Frequency", &d, true);
+	d = (double)fpga->freqMaxMaxM * 2 * 1000000.;
+	root = api_add_freq(root, "Max Frequency", &d, true);
 
 	return root;
 }
@@ -584,10 +586,10 @@ static
 bool x6500_start_work(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device_mutex;
+	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
-	char fpgaid = thr->device_thread;
+	char fpgaid = x6500->proc_id;
 
 	mutex_lock(mutexp);
 
@@ -630,10 +632,10 @@ static
 int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device_mutex;
+	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jtag = &fpga->jtag;
-	char fpgaid = thr->device_thread;
+	char fpgaid = x6500->proc_id;
 
 	struct timeval tv_now;
 	int64_t hashes;
