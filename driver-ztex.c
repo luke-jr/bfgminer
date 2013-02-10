@@ -58,21 +58,21 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 	}
 }
 
-static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j)
+static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j, int fpgacount)
 {
 	struct cgpu_info *ztex;
-	char fpganame[LIBZTEX_SNSTRING_LEN+3+1];
+	char *fpganame = (char*)dev->snString;
 
 	ztex = calloc(1, sizeof(struct cgpu_info));
 	ztex->api = &ztex_api;
 	ztex->device_ztex = dev;
-	ztex->threads = 1;
+	ztex->procs = fpgacount;
+	ztex->threads = fpgacount;
 	dev->fpgaNum = j;
 	add_cgpu(ztex);
 	strcpy(ztex->device_ztex->repr, ztex->proc_repr);
-	sprintf(fpganame, "%s-%u", ztex->device_ztex->snString, j+1);
-	ztex->name = strdup(fpganame);
-	applog(LOG_INFO, "%"PRIpreprv": Found Ztex (ZTEX %s)", ztex->proc_repr, fpganame);
+	ztex->name = fpganame;
+	applog(LOG_INFO, "%"PRIpreprv": Found Ztex (ZTEX %s)", ztex->dev_repr, fpganame);
 
 	return ztex;
 }
@@ -80,12 +80,11 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j)
 static int ztex_autodetect(void)
 {
 	int cnt;
-	int i,j;
+	int i;
 	int fpgacount;
 	int totaldevs = 0;
 	struct libztex_dev_list **ztex_devices;
 	struct libztex_device *ztex_master;
-	struct libztex_device *ztex_slave;
 	struct cgpu_info *ztex;
 
 	cnt = libztex_scanDevices(&ztex_devices);
@@ -95,20 +94,13 @@ static int ztex_autodetect(void)
 	for (i = 0; i < cnt; i++) {
 		ztex_master = ztex_devices[i]->dev;
 		ztex_master->root = ztex_master;
-		ztex = ztex_setup(ztex_master, 0);
+		fpgacount = libztex_numberOfFpgas(ztex_master);
+		ztex = ztex_setup(ztex_master, 0, fpgacount);
 
-		fpgacount = libztex_numberOfFpgas(ztex->device_ztex);
 		totaldevs += fpgacount;
 
 		if (fpgacount > 1)
 			pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
-
-		for (j = 1; j < fpgacount; j++) {
-			ztex_slave = calloc(1, sizeof(struct libztex_device));
-			memcpy(ztex_slave, ztex_master, sizeof(struct libztex_device));
-			ztex_slave->root = ztex_master;
-			ztex_setup(ztex_slave, j);
-		}
 	}
 
 	if (cnt > 0)
@@ -366,6 +358,23 @@ static bool ztex_prepare(struct thr_info *thr)
 
 	gettimeofday(&now, NULL);
 	get_datestamp(cgpu->init, &now);
+
+	if (cgpu->proc_id)
+	{
+		struct libztex_device *ztex_master = cgpu->device->device_ztex;
+		ztex = malloc(sizeof(struct libztex_device));
+		memcpy(ztex, ztex_master, sizeof(*ztex));
+		cgpu->device_ztex = ztex;
+		ztex->root = ztex_master;
+		ztex->fpgaNum = cgpu->proc_id;
+		strcpy(ztex->repr, cgpu->proc_repr);
+	}
+	
+	{
+		char fpganame[LIBZTEX_SNSTRING_LEN+3+1];
+		sprintf(fpganame, "%s-%u", ztex->snString, cgpu->proc_id+1);
+		cgpu->name = fpganame;
+	}
 
 	ztex_selectFpga(ztex);
 	if (libztex_configureFpga(ztex) != 0) {
