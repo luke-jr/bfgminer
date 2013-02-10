@@ -158,7 +158,6 @@ static bool x6500_prepare(struct thr_info *thr)
 		return true;
 	
 	struct cgpu_info *x6500 = thr->cgpu;
-	mutex_init(&x6500->device_mutex);
 	struct ft232r_device_handle *ftdi = ft232r_open(x6500->cgpu_data);
 	x6500->device_ft232r = NULL;
 	if (!ftdi)
@@ -311,16 +310,17 @@ static bool x6500_change_clock(struct thr_info *thr, int multiplier)
 static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
+	pthread_mutex_t *mutexp = &x6500->device_mutex;
 	char fpgaid = thr->device_thread;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	uint8_t oldFreq = fpga->dclk.freqM;
 
-	mutex_lock(&x6500->device_mutex);
+	mutex_lock(mutexp);
 	if (!x6500_change_clock(thr, multiplier)) {
-		mutex_unlock(&x6500->device_mutex);
+		mutex_unlock(mutexp);
 		return false;
 	}
-	mutex_unlock(&x6500->device_mutex);
+	mutex_unlock(mutexp);
 
 	char repr[0x10];
 	sprintf(repr, "%s %u.%u", x6500->api->name, x6500->device_id, fpgaid);
@@ -331,6 +331,7 @@ static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 static bool x6500_fpga_init(struct thr_info *thr)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
+	pthread_mutex_t *mutexp = &x6500->device_mutex;
 	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
 	struct x6500_fpga_data *fpga;
 	struct jtag_port *jp;
@@ -348,9 +349,9 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	x6500_jtag_set(jp, pinoffset);
 	thr->cgpu_data = fpga;
 	
-	mutex_lock(&x6500->device_mutex);
+	mutex_lock(mutexp);
 	if (!jtag_reset(jp)) {
-		mutex_unlock(&x6500->device_mutex);
+		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%s %u: JTAG reset failed",
 		       x6500->api->name, x6500->device_id);
 		return false;
@@ -358,7 +359,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	
 	i = jtag_detect(jp);
 	if (i != 1) {
-		mutex_unlock(&x6500->device_mutex);
+		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%s %u: JTAG detect returned %d",
 		       x6500->api->name, x6500->device_id, i);
 		return false;
@@ -369,7 +370,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	 && jtag_read (jp, JTAG_REG_DR, buf, 32)
 	 && jtag_reset(jp)
 	)) {
-		mutex_unlock(&x6500->device_mutex);
+		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%s %u: JTAG error reading user code",
 		       x6500->api->name, x6500->device_id);
 		return false;
@@ -393,7 +394,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
 	for (i = 0; 0xffffffff != x6500_get_register(jp, 0xE); ++i)
 	{}
-	mutex_unlock(&x6500->device_mutex);
+	mutex_unlock(mutexp);
 
 	if (i)
 		applog(LOG_WARNING, "%s %u.%u: Flushed %d nonces from buffer at init",
@@ -583,11 +584,12 @@ static
 bool x6500_start_work(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
+	pthread_mutex_t *mutexp = &x6500->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
 	char fpgaid = thr->device_thread;
 
-	mutex_lock(&x6500->device_mutex);
+	mutex_lock(mutexp);
 
 	for (int i = 1, j = 0; i < 9; ++i, j += 4)
 		x6500_set_register(jp, i, fromlebytes(work->midstate, j));
@@ -599,7 +601,7 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 
 	gettimeofday(&fpga->tv_workstart, NULL);
 	x6500_get_temperature(x6500);
-	mutex_unlock(&x6500->device_mutex);
+	mutex_unlock(mutexp);
 
 	if (opt_debug) {
 		char *xdata = bin2hex(work->data, 80);
@@ -628,6 +630,7 @@ static
 int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
+	pthread_mutex_t *mutexp = &x6500->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jtag = &fpga->jtag;
 	char fpgaid = thr->device_thread;
@@ -638,10 +641,10 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	bool bad;
 
 	while (1) {
-		mutex_lock(&x6500->device_mutex);
+		mutex_lock(mutexp);
 		gettimeofday(&tv_now, NULL);
 		nonce = x6500_get_register(jtag, 0xE);
-		mutex_unlock(&x6500->device_mutex);
+		mutex_unlock(mutexp);
 		if (nonce != 0xffffffff) {
 			bad = !test_nonce(work, nonce, false);
 			if (!bad) {
