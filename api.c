@@ -1701,8 +1701,8 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 
 	struct cgpu_info *cgpu = devices[dev];
 
-	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s%u",
-			id, dev, cgpu->api->name, cgpu->device_id);
+	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s",
+			id, dev, cgpu->proc_repr_ns);
 
 	if (cgpu->deven != DEV_DISABLED) {
 		message(io_data, MSG_PGALRENA, id, NULL, isjson);
@@ -1758,8 +1758,8 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 
 	struct cgpu_info *cgpu = devices[dev];
 
-	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s%u",
-			id, dev, cgpu->api->name, cgpu->device_id);
+	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s",
+			id, dev, cgpu->proc_repr_ns);
 
 	if (cgpu->deven == DEV_DISABLED) {
 		message(io_data, MSG_PGALRDIS, id, NULL, isjson);
@@ -2009,8 +2009,8 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
-	applog(LOG_DEBUG, "API: request to gpuenable gpuid %d %s%u",
-			id, gpus[id].api->name, gpus[id].device_id);
+	applog(LOG_DEBUG, "API: request to gpuenable gpuid %d %s",
+			id, gpus[id].proc_repr_ns);
 
 	if (gpus[id].deven != DEV_DISABLED) {
 		message(io_data, MSG_ALRENA, id, NULL, isjson);
@@ -2054,8 +2054,8 @@ static void gpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	applog(LOG_DEBUG, "API: request to gpudisable gpuid %d %s%u",
-			id, gpus[id].api->name, gpus[id].device_id);
+	applog(LOG_DEBUG, "API: request to gpudisable gpuid %d %s",
+			id, gpus[id].proc_repr_ns);
 
 	if (gpus[id].deven == DEV_DISABLED) {
 		message(io_data, MSG_ALRDIS, id, NULL, isjson);
@@ -2819,8 +2819,7 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 			else
 				extra = NULL;
 
-			sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
-			i = itemstats(io_data, i, id, &(cgpu->cgminer_stats), NULL, extra, isjson);
+			i = itemstats(io_data, i, cgpu->proc_repr_ns, &(cgpu->cgminer_stats), NULL, extra, isjson);
 		}
 	}
 

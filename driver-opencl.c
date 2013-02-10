@@ -862,8 +862,9 @@ retry:
 			mhash_base = false;
 		}
 
-		wlog("GPU %d: %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
-			gpu, displayed_rolling, displayed_total, mhash_base ? "M" : "K",
+		wlog("%"PRIpreprv": %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
+			cgpu->proc_repr,
+			displayed_rolling, displayed_total, mhash_base ? "M" : "K",
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, cgpu->intensity);
 #ifdef HAVE_ADL

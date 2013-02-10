@@ -424,7 +424,7 @@ static void sharelog(const char*disposition, const struct work*work)
 	data = bin2hex(work->data, sizeof(work->data));
 
 	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
-	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s%u,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->api->name, cgpu->device_id, thr_id, hash, data);
+	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->proc_repr_ns, thr_id, hash, data);
 	free(target);
 	free(hash);
 	free(data);
@@ -976,8 +976,8 @@ static void load_temp_config()
 		else
 			cgpu->targettemp = cgpu->cutofftemp + target_off;
 		
-		applog(LOG_DEBUG, "%s %u: Set temperature config: target=%d cutoff=%d",
-		       cgpu->api->name, cgpu->device_id,
+		applog(LOG_DEBUG, "%"PRIprepr": Set temperature config: target=%d cutoff=%d",
+		       cgpu->proc_repr,
 		       cgpu->targettemp, cgpu->cutofftemp);
 	}
 	if (cutoff_n != temp_cutoff_str && cutoff_n[0])
@@ -2163,7 +2163,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		utility_to_hashrate(cgpu->utility_diff1),
 		H2B_SPACED);
 
-	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
+	sprintf(buf, "%s ", cgpu->proc_repr_ns);
 	if (cgpu->api->get_statline_before)
 		cgpu->api->get_statline_before(buf, cgpu);
 	else
@@ -2288,7 +2288,7 @@ static void curses_print_devstatus(int thr_id)
 
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
-	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
+	wprintw(statuswin, " %"PRIprepr": ", cgpu->proc_repr);
 	if (cgpu->api->get_statline_before) {
 		logline[0] = '\0';
 		cgpu->api->get_statline_before(logline, cgpu);
@@ -2524,11 +2524,11 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s%s",
-				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
+				applog(LOG_NOTICE, "Accepted %s %"PRIpreprv" pool %d %s%s",
+				       hashshow, cgpu->proc_repr, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
 			else
-				applog(LOG_NOTICE, "Accepted %s %s %d %s%s",
-				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
+				applog(LOG_NOTICE, "Accepted %s %"PRIpreprv" %s%s",
+				       hashshow, cgpu->proc_repr, resubmit ? "(resubmit)" : "", worktime);
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -2608,8 +2608,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				}
 			}
 
-			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s%s",
-			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "", worktime);
+			applog(LOG_NOTICE, "Rejected %s %"PRIpreprv" %s%s %s%s",
+			       hashshow, cgpu->proc_repr, where, reason, resubmit ? "(resubmit)" : "", worktime);
 			sharelog(disposition, work);
 		}
 
@@ -6419,8 +6419,8 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		case TNR_BAD:
 		{
 			struct cgpu_info *cgpu = thr->cgpu;
-			applog(LOG_WARNING, "%s %u: invalid nonce - HW error",
-			       cgpu->api->name, cgpu->device_id);
+			applog(LOG_WARNING, "%"PRIpreprv": invalid nonce - HW error",
+			       cgpu->proc_repr);
 			mutex_lock(&stats_lock);
 			++hw_errors;
 			++thr->cgpu->hw_errors;
@@ -6492,7 +6492,7 @@ void *miner_thread(void *userdata)
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
 	char threadname[20];
-	snprintf(threadname, 20, "miner_%s%d.%d", api->name, cgpu->device_id, mythr->device_thread);
+	snprintf(threadname, 20, "miner_%s", cgpu->proc_repr_ns);
 	RenameThread(threadname);
 
 	gettimeofday(&getwork_start, NULL);
@@ -6571,12 +6571,12 @@ void *miner_thread(void *userdata)
 				}
 
 				if (scanhash_working && opt_restart) {
-					applog(LOG_ERR, "%s %u failure, attempting to reinitialize", api->name, cgpu->device_id);
+					applog(LOG_ERR, "%"PRIpreprv" failure, attempting to reinitialize", cgpu->proc_repr);
 					scanhash_working = false;
 					cgpu->reinit_backoff = 5.2734375;
 					hashes = 0;
 				} else {
-					applog(LOG_ERR, "%s %u failure, disabling!", api->name, cgpu->device_id);
+					applog(LOG_ERR, "%"PRIpreprv" failure, disabling!", cgpu->proc_repr);
 					cgpu->deven = DEV_RECOVER_ERR;
 					goto disabled;
 				}
@@ -7102,7 +7102,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					break;
 			}
 			enum dev_enable *denable;
-			char dev_str[8];
+			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
 			if (cgpu->api->get_stats)
@@ -7110,7 +7110,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
-			sprintf(dev_str, "%s%d", cgpu->api->name, gpu);
 
 #ifdef HAVE_ADL
 			if (adl_active && cgpu->has_adl)
@@ -7131,8 +7130,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			else
 			if (*denable == DEV_RECOVER_ERR) {
 				if (opt_restart && difftime(time(NULL), cgpu->device_last_not_well) > cgpu->reinit_backoff) {
-					applog(LOG_NOTICE, "Attempting to reinitialize %s %u",
-					       cgpu->api->name, cgpu->device_id);
+					applog(LOG_NOTICE, "Attempting to reinitialize %s",
+					       dev_str);
 					if (cgpu->reinit_backoff < 300)
 						cgpu->reinit_backoff *= 2;
 					device_recovered(cgpu);
@@ -7142,8 +7141,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			else
 			if (*denable == DEV_RECOVER) {
 				if (opt_restart && cgpu->temp < cgpu->targettemp) {
-					applog(LOG_NOTICE, "%s %u recovered to temperature below target, re-enabling",
-					       cgpu->api->name, cgpu->device_id);
+					applog(LOG_NOTICE, "%s recovered to temperature below target, re-enabling",
+					       dev_str);
 					device_recovered(cgpu);
 				}
 				cgpu->device_last_not_well = time(NULL);
@@ -7153,8 +7152,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			else
 			if (cgpu->temp > cgpu->cutofftemp)
 			{
-				applog(LOG_WARNING, "%s %u hit thermal cutoff limit, disabling!",
-				       cgpu->api->name, cgpu->device_id);
+				applog(LOG_WARNING, "%s hit thermal cutoff limit, disabling!",
+				       dev_str);
 				*denable = DEV_RECOVER;
 
 				dev_error(cgpu, REASON_DEV_THERMAL_CUTOFF);
@@ -7648,13 +7647,23 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->procs = 1;
 	lpcount = cgpu->procs;
 	cgpu->device = cgpu;
+	cgpu->dev_repr = malloc(6);
+	sprintf(cgpu->dev_repr, "%s%2u", cgpu->api->name, cgpu->device_id % 100);
+	strcpy(cgpu->proc_repr, cgpu->dev_repr);
+	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->api->name, cgpu->device_id);
 	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + lpcount + 1));
 	devices[total_devices++] = cgpu;
 	
 	if (lpcount > 1)
 	{
+		int ns;
 		int tpp = cgpu->threads / lpcount;
 		struct cgpu_info **nlp_p, *slave;
+		
+		// Note, strcpy instead of assigning a byte to get the \0 too
+		strcpy(&cgpu->proc_repr[5], "a");
+		ns = strlen(cgpu->proc_repr_ns);
+		strcpy(&cgpu->proc_repr_ns[ns], "a");
 		
 		nlp_p = &cgpu->next_proc;
 		for (int i = 1; i < lpcount; ++i)
@@ -7662,6 +7671,8 @@ bool add_cgpu(struct cgpu_info*cgpu)
 			slave = malloc(sizeof(*slave));
 			*slave = *cgpu;
 			slave->proc_id = i;
+			slave->proc_repr[5] += i;
+			slave->proc_repr_ns[ns] += i;
 			slave->threads = tpp;
 			devices[total_devices++] = slave;
 			*nlp_p = slave;
@@ -7953,9 +7964,9 @@ int main(int argc, char *argv[])
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
 			if (cgpu->name)
-				applog(LOG_ERR, " %2d. %s %d: %s (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->name, cgpu->api->dname);
+				applog(LOG_ERR, " %2d. %"PRIprepr": %s (driver: %s)", i, cgpu->proc_repr, cgpu->name, cgpu->api->dname);
 			else
-				applog(LOG_ERR, " %2d. %s %d (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->api->dname);
+				applog(LOG_ERR, " %2d. %"PRIprepr" (driver: %s)", i, cgpu->proc_repr, cgpu->api->dname);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}
@@ -8167,7 +8178,7 @@ begin_bench:
 
 			thr->q = tq_new();
 			if (!thr->q)
-				quit(1, "tq_new failed in starting %s%d mining thread (#%d)", cgpu->api->name, cgpu->device_id, i);
+				quit(1, "tq_new failed in starting %"PRIpreprv" mining thread (#%d)", cgpu->proc_repr, i);
 
 			/* Enable threads for devices set not to mine but disable
 			 * their queue in case we wish to enable them later */

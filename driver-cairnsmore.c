@@ -117,9 +117,7 @@ static bool cairnsmore_change_clock_func(struct thr_info *thr, int bestM)
 	// Adjust Hs expectations for frequency change
 	info->Hs = info->Hs * (double)bestM / (double)info->dclk.freqM;
 
-	char repr[0x10];
-	sprintf(repr, "%s %u", cm1->api->name, cm1->device_id);
-	dclk_msg_freqchange(repr, 2.5 * (double)info->dclk.freqM, 2.5 * (double)bestM, NULL);
+	dclk_msg_freqchange(cm1->proc_repr, 2.5 * (double)info->dclk.freqM, 2.5 * (double)bestM, NULL);
 	info->dclk.freqM = bestM;
 
 	return true;
@@ -139,8 +137,8 @@ static bool cairnsmore_init(struct thr_info *thr)
 		info->dclk.freqM =
 		info->dclk.freqMDefault = CAIRNSMORE1_DEFAULT_CLOCK / 2.5;
 		cairnsmore_send_cmd(cm1->device_fd, 0, info->dclk.freqM);
-		applog(LOG_WARNING, "%s %u: Frequency set to %u MHz (range: %u-%u)",
-		       cm1->api->name, cm1->device_id,
+		applog(LOG_WARNING, "%"PRIpreprv": Frequency set to %u MHz (range: %u-%u)",
+		       cm1->proc_repr,
 		       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
 		);
 		// The dynamic-clocking firmware connects each FPGA as its own device
@@ -150,8 +148,8 @@ static bool cairnsmore_init(struct thr_info *thr)
 				info->fpga_count = 1;
 		}
 	} else {
-		applog(LOG_WARNING, "%s %u: Frequency scaling not supported",
-			cm1->api->name, cm1->device_id
+		applog(LOG_WARNING, "%"PRIpreprv": Frequency scaling not supported",
+			cm1->proc_repr
 		);
 	}
 	// Commands corrupt the hash state, so next scanhash is a firstrun

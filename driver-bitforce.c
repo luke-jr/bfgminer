@@ -144,13 +144,13 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	struct timeval now;
 
 	if (unlikely(fdDev == -1)) {
-		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, bitforce->device_path);
+		applog(LOG_ERR, "%"PRIpreprv": Failed to open %s", bitforce->proc_repr, bitforce->device_path);
 		return false;
 	}
 
 	bitforce->device_fd = fdDev;
 
-	applog(LOG_INFO, "BFL%i: Opened %s", bitforce->device_id, bitforce->device_path);
+	applog(LOG_INFO, "%"PRIpreprv": Opened %s", bitforce->proc_repr, bitforce->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(bitforce->init, &now);
 
@@ -166,7 +166,7 @@ static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 	if (!fdDev)
 		return;
 
-	applog(LOG_DEBUG, "BFL%i: Clearing read buffer", bitforce->device_id);
+	applog(LOG_DEBUG, "%"PRIpreprv": Clearing read buffer", bitforce->proc_repr);
 
 	mutex_lock(&bitforce->device_mutex);
 	do {
@@ -183,7 +183,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	char pdevbuf[0x100];
 	char *s;
 
-	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
+	applog(LOG_WARNING, "%"PRIpreprv": Re-initialising", bitforce->proc_repr);
 
 	bitforce_clear_buffer(bitforce);
 
@@ -197,7 +197,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
 		mutex_unlock(&bitforce->device_mutex);
-		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, devpath);
+		applog(LOG_ERR, "%"PRIpreprv": Failed to open %s", bitforce->proc_repr, devpath);
 		return;
 	}
 
@@ -208,7 +208,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(&bitforce->device_mutex);
-			applog(LOG_ERR, "BFL%i: Error reading/timeout (ZGX)", bitforce->device_id);
+			applog(LOG_ERR, "%"PRIpreprv": Error reading/timeout (ZGX)", bitforce->proc_repr);
 			return;
 		}
 
@@ -218,7 +218,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		mutex_unlock(&bitforce->device_mutex);
-		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s returned: %s", bitforce->device_id, devpath, pdevbuf);
+		applog(LOG_ERR, "%"PRIpreprv": Didn't recognise BitForce on %s returned: %s", bitforce->proc_repr, devpath, pdevbuf);
 		return;
 	}
 	
@@ -295,7 +295,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	mutex_unlock(&bitforce->device_mutex);
 	
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string/timed out", bitforce->device_id);
+		applog(LOG_ERR, "%"PRIpreprv": Error: Get temp returned empty string/timed out", bitforce->proc_repr);
 		bitforce->hw_errors++;
 		++hw_errors;
 		return false;
@@ -316,7 +316,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
-		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer", bitforce->device_id);
+		applog(LOG_WARNING, "%"PRIpreprv": Garbled response probably throttling, clearing buffer", bitforce->proc_repr);
 		dev_error(bitforce, REASON_DEV_THROTTLE);
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
@@ -354,13 +354,13 @@ re_send:
 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
 		if (bitforce->nonce_range) {
-			applog(LOG_WARNING, "BFL%i: Does not support nonce range, disabling", bitforce->device_id);
+			applog(LOG_WARNING, "%"PRIpreprv": Does not support nonce range, disabling", bitforce->proc_repr);
 			bitforce->nonce_range = false;
 			bitforce->sleep_ms *= 5;
 			bitforce->kname = KNAME_WORK;
 			goto re_send;
 		}
-		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_ERR, "%"PRIpreprv": Error: Send work reports: %s", bitforce->proc_repr, pdevbuf);
 		return false;
 	}
 
@@ -391,17 +391,17 @@ re_send:
 
 	if (opt_debug) {
 		s = bin2hex(ob + 8, 44);
-		applog(LOG_DEBUG, "BFL%i: block data: %s", bitforce->device_id, s);
+		applog(LOG_DEBUG, "%"PRIpreprv": block data: %s", bitforce->proc_repr, s);
 		free(s);
 	}
 
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string/timed out", bitforce->device_id);
+		applog(LOG_ERR, "%"PRIpreprv": Error: Send block data returned empty string/timed out", bitforce->proc_repr);
 		return false;
 	}
 
 	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
-		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_ERR, "%"PRIpreprv": Error: Send block data reports: %s", bitforce->proc_repr, pdevbuf);
 		return false;
 	}
 
@@ -413,8 +413,8 @@ static inline int noisy_stale_wait(unsigned int mstime, struct work*work, bool c
 {
 	int rv = stale_wait(mstime, work, checkend);
 	if (rv)
-		applog(LOG_NOTICE, "BFL%i: Abandoning stale search to restart",
-		       bitforce->device_id);
+		applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
+		       bitforce->proc_repr);
 	return rv;
 }
 #define noisy_stale_wait(mstime, work, checkend)  noisy_stale_wait(mstime, work, checkend, bitforce)
@@ -444,7 +444,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
-			applog(LOG_ERR, "BFL%i: took %lums - longer than %lums", bitforce->device_id,
+			applog(LOG_ERR, "%"PRIpreprv": took %lums - longer than %lums", bitforce->proc_repr,
 				tv_to_ms(elapsed), (unsigned long)BITFORCE_LONG_TIMEOUT_MS);
 			return 0;
 		}
@@ -460,7 +460,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
-		applog(LOG_ERR, "BFL%i: took %lums - longer than %lums", bitforce->device_id,
+		applog(LOG_ERR, "%"PRIpreprv": took %lums - longer than %lums", bitforce->proc_repr,
 			tv_to_ms(elapsed), (unsigned long)BITFORCE_TIMEOUT_MS);
 		dev_error(bitforce, REASON_DEV_OVER_HEAT);
 		++bitforce->hw_errors;
@@ -489,14 +489,14 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		}
 
 		if (delay_time_ms != bitforce->sleep_ms)
-			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d, waited %u", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+			  applog(LOG_DEBUG, "%"PRIpreprv": Wait time changed to: %d, waited %u", bitforce->proc_repr, bitforce->sleep_ms, bitforce->wait_ms);
 
 		/* Work out the average time taken. Float for calculation, uint for display */
 		bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
 		bitforce->avg_wait_d = (unsigned int) (bitforce->avg_wait_f + 0.5);
 	}
 
-	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
+	applog(LOG_DEBUG, "%"PRIpreprv": waited %dms until %s", bitforce->proc_repr, bitforce->wait_ms, pdevbuf);
 	if (!strncasecmp(&pdevbuf[2], "-", 1))
 		return bitforce->nonces;   /* No valid nonce found */
 	else if (!strncasecmp(pdevbuf, "I", 1))
@@ -504,7 +504,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
 		bitforce->hw_errors++;
 		++hw_errors;
-		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_WARNING, "%"PRIpreprv": Error: Get result reports: %s", bitforce->proc_repr, pdevbuf);
 		bitforce_clear_buffer(bitforce);
 		return 0;
 	}
@@ -516,7 +516,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		nonce = be32toh(nonce);
 		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
-				applog(LOG_WARNING, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
+				applog(LOG_WARNING, "%"PRIpreprv": Disabling broken nonce range support", bitforce->proc_repr);
 				bitforce->nonce_range = false;
 				work->blk.nonce = 0xffffffff;
 				bitforce->sleep_ms *= 5;
@@ -573,14 +573,14 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 	if (ret == -1) {
 commerr:
 		ret = 0;
-		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
+		applog(LOG_ERR, "%"PRIpreprv": Comms error", bitforce->proc_repr);
 		dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 		bitforce->hw_errors++;
 		++hw_errors;
 		BFclose(bitforce->device_fd);
 		int fd = bitforce->device_fd = BFopen(bitforce->device_path);
 		if (fd == -1) {
-			applog(LOG_ERR, "BFL%i: Error reopening", bitforce->device_id);
+			applog(LOG_ERR, "%"PRIpreprv": Error reopening", bitforce->proc_repr);
 			return -1;
 		}
 		/* empty read buffer */
@@ -608,7 +608,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	/* Pause each new thread at least 100ms between initialising
 	 * so the devices aren't making calls all at the same time. */
 	wait = thr->id * MAX_START_DELAY_MS;
-	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
+	applog(LOG_DEBUG, "%"PRIpreprv": Delaying start by %dms", bitforce->proc_repr, wait / 1000);
 	nmsleep(wait);
 
 	return true;

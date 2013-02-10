@@ -22,7 +22,7 @@ void dclk_prepare(struct dclk_data *data)
 
 void dclk_msg_freqchange(const char *repr, int oldFreq, int newFreq, const char *tail)
 {
-	applog(LOG_NOTICE, "%s: Frequency %s from %u to %u MHz%s",
+	applog(LOG_NOTICE, "%"PRIpreprv": Frequency %s from %u to %u MHz%s",
 	       repr,
 	       (oldFreq > newFreq ? "dropped" : "raised "),
 	       oldFreq, newFreq,
@@ -70,8 +70,8 @@ bool dclk_updateFreq(struct dclk_data *data, dclk_change_clock_func_t changecloc
 	while (maxM < data->freqMaxM && data->errorWeight[maxM + 1] > 100)
 		maxM++;
 	if ((bestM < (1.0 - DCLK_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
-		applog(LOG_ERR, "%s %u: frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
-		       cgpu->api->name, cgpu->device_id,
+		applog(LOG_ERR, "%"PRIpreprv": frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
+		       cgpu->proc_repr,
 		       (1.0 - 1.0 * bestM / maxM) * 100);
 		return false;
 	}

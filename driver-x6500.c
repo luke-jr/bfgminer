@@ -213,14 +213,14 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	unsigned char *pdone = (unsigned char*)x6500->cgpu_data - 1;
 	struct ft232r_device_handle *ftdi = jp1->a->ftdi;
 
-	FILE *f = open_xilinx_bitstream(x6500, X6500_BITSTREAM_FILENAME, &len);
+	FILE *f = open_xilinx_bitstream(x6500->api->dname, x6500->dev_repr, X6500_BITSTREAM_FILENAME, &len);
 	if (!f)
 		return false;
 
 	flen = len;
 
-	applog(LOG_WARNING, "%s %u: Programming %s...",
-	       x6500->api->name, x6500->device_id, x6500->device_path);
+	applog(LOG_WARNING, "%s: Programming %s...",
+	       x6500->dev_repr, x6500->device_path);
 	x6500->status = LIFE_INIT;
 	
 	// "Magic" jtag_port configured to access both FPGAs concurrently
@@ -242,8 +242,8 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 			i = 0xd0;  // Re-set JPROGRAM while reading status
 			jtag_read(jp, JTAG_REG_IR, &i, 6);
 		} while (i & 8);
-		applog(LOG_DEBUG, "%s %u.%u: JPROGRAM ready",
-		       x6500->api->name, x6500->device_id, j);
+		applog(LOG_DEBUG, "%s%c: JPROGRAM ready",
+		       x6500->dev_repr, 'a' + j);
 	}
 	x6500_jtag_set(jp, 0x11);
 	jtag_write(jp, JTAG_REG_IR, "\xa0", 6);  // CFG_IN
@@ -251,7 +251,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	sleep(1);
 	
 	if (fread(buf, 32, 1, f) != 1)
-		bailout2(LOG_ERR, "%s %u: File underrun programming %s (%lu bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+		bailout2(LOG_ERR, "%s: File underrun programming %s (%lu bytes left)", x6500->dev_repr, x6500->device_path, len);
 	jtag_swrite(jp, JTAG_REG_DR, buf, 256);
 	len -= 32;
 	
@@ -269,13 +269,13 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	while (len) {
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
-			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%lu bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+			bailout2(LOG_ERR, "%s: File underrun programming %s (%lu bytes left)", x6500->dev_repr, x6500->device_path, len);
 		jtag_swrite_more(jp, buf, buflen * 8, len == (unsigned long)buflen);
 		*pdone = 100 - ((len * 100) / flen);
 		if (*pdone >= nextstatus)
 		{
 			nextstatus += 25;
-			applog(LOG_WARNING, "%s %u: Programming %s... %d%% complete...", x6500->api->name, x6500->device_id, x6500->device_path, *pdone);
+			applog(LOG_WARNING, "%s: Programming %s... %d%% complete...", x6500->dev_repr, x6500->device_path, *pdone);
 		}
 		len -= buflen;
 	}
@@ -297,7 +297,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	if (!(i & 4))
 		return false;
 	
-	applog(LOG_WARNING, "%s %u: Done programming %s", x6500->api->name, x6500->device_id, x6500->device_path);
+	applog(LOG_WARNING, "%s: Done programming %s", x6500->dev_repr, x6500->device_path);
 	*pdone = 101;
 
 	return true;
@@ -319,7 +319,6 @@ static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
 	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
-	char fpgaid = x6500->proc_id;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	uint8_t oldFreq = fpga->dclk.freqM;
 
@@ -330,9 +329,7 @@ static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 	}
 	mutex_unlock(mutexp);
 
-	char repr[0x10];
-	sprintf(repr, "%s %u.%u", x6500->api->name, x6500->device_id, fpgaid);
-	dclk_msg_freqchange(repr, oldFreq * 2, fpga->dclk.freqM * 2, NULL);
+	dclk_msg_freqchange(x6500->proc_repr, oldFreq * 2, fpga->dclk.freqM * 2, NULL);
 	return true;
 }
 
@@ -360,16 +357,16 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	mutex_lock(mutexp);
 	if (!jtag_reset(jp)) {
 		mutex_unlock(mutexp);
-		applog(LOG_ERR, "%s %u: JTAG reset failed",
-		       x6500->api->name, x6500->device_id);
+		applog(LOG_ERR, "%s: JTAG reset failed",
+		       x6500->dev_repr);
 		return false;
 	}
 	
 	i = jtag_detect(jp);
 	if (i != 1) {
 		mutex_unlock(mutexp);
-		applog(LOG_ERR, "%s %u: JTAG detect returned %d",
-		       x6500->api->name, x6500->device_id, i);
+		applog(LOG_ERR, "%s: JTAG detect returned %d",
+		       x6500->dev_repr, i);
 		return false;
 	}
 	
@@ -379,24 +376,24 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	 && jtag_reset(jp)
 	)) {
 		mutex_unlock(mutexp);
-		applog(LOG_ERR, "%s %u: JTAG error reading user code",
-		       x6500->api->name, x6500->device_id);
+		applog(LOG_ERR, "%s: JTAG error reading user code",
+		       x6500->dev_repr);
 		return false;
 	}
 	
 	if (memcmp(buf, X6500_BITSTREAM_USERID, 4)) {
-		applog(LOG_ERR, "%s %u.%u: FPGA not programmed",
-		       x6500->api->name, x6500->device_id, fpgaid);
+		applog(LOG_ERR, "%"PRIprepr": FPGA not programmed",
+		       x6500->proc_repr);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
 	} else if (opt_force_dev_init && x6500->status == LIFE_INIT) {
-		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed, but --force-dev-init is set",
-		       x6500->api->name, x6500->device_id, fpgaid);
+		applog(LOG_DEBUG, "%"PRIprepr": FPGA is already programmed, but --force-dev-init is set",
+		       x6500->proc_repr);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
 	} else
-		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)",
-		       x6500->api->name, x6500->device_id, fpgaid);
+		applog(LOG_DEBUG, "%s"PRIprepr": FPGA is already programmed :)",
+		       x6500->proc_repr);
 	
 	dclk_prepare(&fpga->dclk);
 	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
@@ -405,15 +402,15 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	mutex_unlock(mutexp);
 
 	if (i)
-		applog(LOG_WARNING, "%s %u.%u: Flushed %d nonces from buffer at init",
-		       x6500->api->name, x6500->device_id, fpgaid, i);
+		applog(LOG_WARNING, "%"PRIprepr": Flushed %d nonces from buffer at init",
+		       x6500->proc_repr, i);
 
 	fpga->dclk.minGoodSamples = 3;
 	fpga->freqMaxMaxM =
 	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
 	fpga->dclk.freqMDefault = fpga->dclk.freqM;
-	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u MHz (range: %u-%u)",
-	       x6500->api->name, x6500->device_id, fpgaid,
+	applog(LOG_WARNING, "%"PRIprepr": Frequency set to %u MHz (range: %u-%u)",
+	       x6500->proc_repr,
 	       fpga->dclk.freqM * 2,
 	       X6500_MINIMUM_CLOCK,
 	       fpga->dclk.freqMaxM * 2);
@@ -496,8 +493,8 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 				fpga->last_cutoff_reduced = now;
 				int oldFreq = fpga->dclk.freqM;
 				if (x6500_change_clock(thr, oldFreq - 1))
-					applog(LOG_NOTICE, "%s %u.%u: Frequency dropped from %u to %u MHz (temp: %.1fC)",
-					       x6500->api->name, x6500->device_id, i,
+					applog(LOG_NOTICE, "%"PRIprepr": Frequency dropped from %u to %u MHz (temp: %.1fC)",
+					       x6500->proc_repr,
 					       oldFreq * 2, fpga->dclk.freqM * 2,
 					       fpga->temp
 					);
@@ -589,7 +586,6 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
-	char fpgaid = x6500->proc_id;
 
 	mutex_lock(mutexp);
 
@@ -607,8 +603,8 @@ bool x6500_start_work(struct thr_info *thr, struct work *work)
 
 	if (opt_debug) {
 		char *xdata = bin2hex(work->data, 80);
-		applog(LOG_DEBUG, "%s %u.%u: Started work: %s",
-		       x6500->api->name, x6500->device_id, fpgaid, xdata);
+		applog(LOG_DEBUG, "%"PRIprepr": Started work: %s",
+		       x6500->proc_repr, xdata);
 		free(xdata);
 	}
 
@@ -635,7 +631,6 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jtag = &fpga->jtag;
-	char fpgaid = x6500->proc_id;
 
 	struct timeval tv_now;
 	int64_t hashes;
@@ -651,19 +646,19 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 			bad = !test_nonce(work, nonce, false);
 			if (!bad) {
 				submit_nonce(thr, work, nonce);
-				applog(LOG_DEBUG, "%s %u.%u: Nonce for current  work: %08lx",
-				       x6500->api->name, x6500->device_id, fpgaid,
+				applog(LOG_DEBUG, "%"PRIprepr": Nonce for current  work: %08lx",
+				       x6500->proc_repr,
 				       (unsigned long)nonce);
 
 				dclk_gotNonces(&fpga->dclk);
 			} else if (test_nonce(&fpga->prevwork, nonce, false)) {
 				submit_nonce(thr, &fpga->prevwork, nonce);
-				applog(LOG_DEBUG, "%s %u.%u: Nonce for PREVIOUS work: %08lx",
-				       x6500->api->name, x6500->device_id, fpgaid,
+				applog(LOG_DEBUG, "%"PRIprepr": Nonce for PREVIOUS work: %08lx",
+				       x6500->proc_repr,
 				       (unsigned long)nonce);
 			} else {
-				applog(LOG_DEBUG, "%s %u.%u: Nonce with H not zero  : %08lx",
-				       x6500->api->name, x6500->device_id, fpgaid,
+				applog(LOG_DEBUG, "%"PRIprepr": Nonce with H not zero  : %08lx",
+				       x6500->proc_repr,
 				       (unsigned long)nonce);
 				++hw_errors;
 				++x6500->hw_errors;

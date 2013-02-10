@@ -376,14 +376,20 @@ struct cgminer_pool_stats {
 	uint64_t net_bytes_received;
 };
 
+#define PRIprepr "-6s"
+#define PRIpreprv "s"
+
 struct cgpu_info {
 	int cgminer_id;
 	const struct device_api *api;
 	const char *devtype;
 	int device_id;
+	char *dev_repr;
 	const char *name;
 	int procs;
 	int proc_id;
+	char proc_repr[8];
+	char proc_repr_ns[8];
 	struct cgpu_info *device;
 	struct cgpu_info *next_proc;
 	const char *device_path;

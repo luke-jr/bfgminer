@@ -153,8 +153,8 @@ static void *postcalc_hash(void *userdata)
 	/* To prevent corrupt values in FOUND from trying to read beyond the
 	 * end of the res[] array */
 	if (unlikely(pcd->res[FOUND] & ~FOUND)) {
-		applog(LOG_WARNING, "%s%d: invalid nonce count - HW error",
-				thr->cgpu->api->name, thr->cgpu->device_id);
+		applog(LOG_WARNING, "%"PRIpreprv": invalid nonce count - HW error",
+				thr->cgpu->proc_repr);
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 		pcd->res[FOUND] &= FOUND;
