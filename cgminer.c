@@ -2999,8 +2999,13 @@ static void roll_work(struct work *work)
  * prevent a copied work struct from freeing ram belonging to another struct */
 void __copy_work(struct work *work, struct work *base_work)
 {
+	int id = work->id;
+
 	clean_work(work);
 	memcpy(work, base_work, sizeof(struct work));
+	/* Keep the unique new id assigned during make_work to prevent copied
+	 * work from having the same id. */
+	work->id = id;
 	if (base_work->job_id)
 		work->job_id = strdup(base_work->job_id);
 	if (base_work->nonce2)
@@ -3017,7 +3022,7 @@ struct work *copy_work(struct work *base_work)
 {
 	struct work *work = make_work();
 
- 	__copy_work(work, base_work);
+	__copy_work(work, base_work);
 
 	return work;
 }
