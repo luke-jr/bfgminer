@@ -465,6 +465,18 @@ get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 		return;
 	}
 
+	struct thr_info*thr = modminer->thr[0];
+	struct modminer_fpga_state *state = thr->cgpu_data;
+	float gt = state->temp;
+	
+	if (gt > 0)
+		tailsprintf(buf, "%5.1fC ", gt);
+	else
+		tailsprintf(buf, "       ", gt);
+	tailsprintf(buf, "        | ");
+	
+	return;
+
 	if (tc > 4)
 		tc = 4;
 
