@@ -5406,7 +5406,7 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 /* The main hashing loop for devices that are slow enough to work on one work
  * item at a time, without a queue, aborting work before the entire nonce
  * range has been hashed if needed. */
-void hash_sole_work(struct thr_info *mythr)
+static void hash_sole_work(struct thr_info *mythr)
 {
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
