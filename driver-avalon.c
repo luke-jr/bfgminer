@@ -676,14 +676,14 @@ static inline void adjust_temp(struct avalon_info *info)
 
 	temp_new = info->temp_sum / info->temp_history_count;
 
-	if (temp_new < 40)
+	if (temp_new < 35)
 		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
-	else if (temp_new > 60)
+	else if (temp_new > 55)
 		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
-	else if (abs(temp_new - info->temp_old) >= 2) {
-		info->fan_pwm = (temp_new - 40) * 9 + 10;
-		info->temp_old = temp_new;
-	}
+	else if (abs(temp_new - info->temp_old) >= 2)
+		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM + (temp_new - 35) * 6.4;
+
+	info->temp_old = temp_new;
 }
 
 static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
