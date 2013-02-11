@@ -1198,6 +1198,20 @@ static char *json_array_string(json_t *val, unsigned int entry)
 	return NULL;
 }
 
+void stratum_probe_transparency(struct pool *pool)
+{
+	// Request transaction data to discourage pools from doing anything shady
+	char s[1024];
+	int sLen;
+	sLen = sprintf(s, "{\"params\": [\"%s\"], \"id\": \"txlist%s\", \"method\": \"mining.get_transactions\"}",
+	        pool->swork.job_id,
+	        pool->swork.job_id);
+	stratum_send(pool, s, sLen);
+	if ((!pool->swork.opaque) && pool->swork.transparency_time == (time_t)-1)
+		pool->swork.transparency_time = time(NULL);
+	pool->swork.transparency_probed = true;
+}
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
@@ -1301,18 +1315,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	total_getworks++;
 
 	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || pool->swork.transparency_time != (time_t)-1)
-	{
-		// Request transaction data to discourage pools from doing anything shady
-		char s[1024];
-		int sLen;
-		sLen = sprintf(s, "{\"params\": [\"%s\"], \"id\": \"txlist%s\", \"method\": \"mining.get_transactions\"}",
-		        pool->swork.job_id,
-		        pool->swork.job_id);
-		stratum_send(pool, s, sLen);
-		if ((!pool->swork.opaque) && pool->swork.transparency_time == (time_t)-1)
-			pool->swork.transparency_time = time(NULL);
-		pool->swork.transparency_probed = true;
-	}
+		if (pool->stratum_auth)
+			stratum_probe_transparency(pool);
 
 	ret = true;
 out:
@@ -1502,6 +1506,9 @@ out:
 	if (val)
 		json_decref(val);
 
+	if (pool->stratum_notify)
+		stratum_probe_transparency(pool);
+
 	return ret;
 }
 
@@ -1527,6 +1534,7 @@ bool initiate_stratum(struct pool *pool)
 	pool->swork.transparency_time = (time_t)-1;
 	pool->stratum_active = false;
 	pool->stratum_auth = false;
+	pool->stratum_notify = false;
 	pool->swork.transparency_probed = false;
 	if (!pool->stratum_curl) {
 		pool->stratum_curl = curl_easy_init();
