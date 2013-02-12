@@ -1460,6 +1460,15 @@ static const char *status2str(enum alive status)
 	}
 }
 
+static
+struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_info *cgpu)
+{
+	root = api_add_string(root, "Name", cgpu->api->name, false);
+	root = api_add_int(root, "ID", &(cgpu->device_id), false);
+	root = api_add_int(root, "ProcID", &(cgpu->proc_id), false);
+	return root;
+}
+
 static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
 {
 	struct api_data *root = NULL;
@@ -1476,6 +1485,7 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	}
 
 	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
+	root = api_add_device_identifier(root, cgpu);
 	root = api_add_string(root, "Driver", cgpu->api->dname, false);
 	if (cgpu->kname)
 		root = api_add_string(root, "Kernel", cgpu->kname, false);
@@ -1489,14 +1499,6 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 
 	root = print_data(root, buf, isjson, precom);
 	io_add(io_data, buf);
-}
-
-static
-struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_info *cgpu)
-{
-	root = api_add_string(root, "Name", cgpu->api->name, false);
-	root = api_add_int(root, "ID", &(cgpu->device_id), false);
-	return root;
 }
 
 static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
