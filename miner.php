@@ -967,8 +967,13 @@ function details($cmd, $list, $rig)
  {
 	if ($item == 'STATUS')
 		continue;
-	$ikey = array_keys($values)[0];
-	$list[$item] = $values = array('Dev' => $values[$ikey]) + array_slice($values, 1);
+	if (isset($values['ID']))
+	{
+		$repr = $values['Name'].$values['ID'];
+		$list[$item] = $values = array('Device' => $repr) + array_slice($values, 1);
+		unset($values['Name']);
+		unset($values['ID']);
+	}
 	$namesByIndex = array_keys($values);
 	$nameCount = count($namesByIndex);
 	for ($i = 0; $i < $nameCount; ++$i)
