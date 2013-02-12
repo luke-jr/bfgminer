@@ -1491,6 +1491,14 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	io_add(io_data, buf);
 }
 
+static
+struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_info *cgpu)
+{
+	root = api_add_string(root, "Name", cgpu->api->name, false);
+	root = api_add_int(root, "ID", &(cgpu->device_id), false);
+	return root;
+}
+
 static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
 {
 	struct api_data *root = NULL;
@@ -1507,8 +1515,7 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	}
 
 	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
-	root = api_add_string(root, "Name", cgpu->api->name, false);
-	root = api_add_int(root, "ID", &(cgpu->device_id), false);
+	root = api_add_device_identifier(root, cgpu);
 	root = api_add_string(root, "Enabled", bool2str(cgpu->deven != DEV_DISABLED), false);
 	root = api_add_string(root, "Status", status2str(cgpu->status), false);
 	if (cgpu->temp)
@@ -2641,8 +2648,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	// ALL counters (and only counters) must start the name with a '*'
 	// Simplifies future external support for identifying new counters
 	root = api_add_int(root, "NOTIFY", &device, false);
-	root = api_add_string(root, "Name", cgpu->api->name, false);
-	root = api_add_int(root, "ID", &(cgpu->device_id), false);
+	root = api_add_device_identifier(root, cgpu);
 	root = api_add_time(root, "Last Well", &(cgpu->device_last_well), false);
 	root = api_add_time(root, "Last Not Well", &(cgpu->device_last_not_well), false);
 	root = api_add_string(root, "Reason Not Well", reason, false);
@@ -2705,8 +2711,7 @@ static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		cgpu = devices[i];
 
 		root = api_add_int(root, "DEVDETAILS", &i, false);
-		root = api_add_string(root, "Name", cgpu->api->name, false);
-		root = api_add_int(root, "ID", &(cgpu->device_id), false);
+		root = api_add_device_identifier(root, cgpu);
 		root = api_add_string(root, "Driver", cgpu->api->dname, false);
 		root = api_add_const(root, "Kernel", cgpu->kname ? : BLANK, false);
 		root = api_add_const(root, "Model", cgpu->name ? : BLANK, false);
