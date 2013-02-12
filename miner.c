@@ -7693,8 +7693,9 @@ bool add_cgpu(struct cgpu_info*cgpu)
 			slave->threads = tpp;
 			devices[total_devices++] = slave;
 			*nlp_p = slave;
-			nlp_p = &cgpu->next_proc;
+			nlp_p = &slave->next_proc;
 		}
+		*nlp_p = NULL;
 		cgpu->proc_id = 0;
 		cgpu->threads -= (tpp * (lpcount - 1));
 	}
