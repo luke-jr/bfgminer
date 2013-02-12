@@ -1075,9 +1075,12 @@ function details($cmd, $list, $rig)
 	if (isset($values['ID']))
 	{
 		$repr = $values['Name'].$values['ID'];
+		if (isset($values['ProcID']))
+			$repr .= join_get_field('ProcID', $values);
 		$list[$item] = $values = array('Device' => $repr) + array_slice($values, 1);
 		unset($values['Name']);
 		unset($values['ID']);
+		unset($values['ProcID']);
 	}
 	$namesByIndex = array_keys($values);
 	$nameCount = count($namesByIndex);
