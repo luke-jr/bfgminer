@@ -1,5 +1,6 @@
 <?php
 session_start();
+date_default_timezone_set(@date_default_timezone_get());
 #
 global $title, $miner, $port, $readonly, $notify, $rigs;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
