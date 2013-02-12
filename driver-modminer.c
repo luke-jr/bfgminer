@@ -449,21 +449,26 @@ modminer_fpga_init(struct thr_info *thr)
 	return true;
 }
 
-static void
-get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
+static
+bool get_modminer_upload_percent(char *buf, struct cgpu_info *modminer)
 {
 	char info[18] = "               | ";
-	int tc = modminer->threads;
-	bool havetemp = false;
-	int i;
 
 	char pdone = ((struct modminer_fpga_state*)(modminer->device->thr[0]->cgpu_data))->pdone;
 	if (pdone != 101) {
 		sprintf(&info[1], "%3d%%", pdone);
 		info[5] = ' ';
 		strcat(buf, info);
-		return;
+		return true;
 	}
+	return false;
+}
+
+static
+void get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
+{
+	if (get_modminer_upload_percent(buf, modminer))
+		return;
 
 	struct thr_info*thr = modminer->thr[0];
 	struct modminer_fpga_state *state = thr->cgpu_data;
@@ -474,14 +479,24 @@ get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 	else
 		tailsprintf(buf, "       ", gt);
 	tailsprintf(buf, "        | ");
-	
-	return;
+}
+
+static
+void get_modminer_dev_statline_before(char *buf, struct cgpu_info *modminer)
+{
+	if (get_modminer_upload_percent(buf, modminer))
+		return;
+
+	char info[18] = "               | ";
+	int tc = modminer->procs;
+	bool havetemp = false;
+	int i;
 
 	if (tc > 4)
 		tc = 4;
 
-	for (i = tc - 1; i >= 0; --i) {
-		struct thr_info*thr = modminer->thr[i];
+	for (i = 0; i < tc; ++i, modminer = modminer->next_proc) {
+		struct thr_info*thr = modminer->thr[0];
 		struct modminer_fpga_state *state = thr->cgpu_data;
 		unsigned char temp = state->temp;
 
@@ -837,6 +852,7 @@ struct device_api modminer_api = {
 	.dname = "modminer",
 	.name = "MMQ",
 	.api_detect = modminer_detect,
+	.get_dev_statline_before = get_modminer_dev_statline_before,
 	.get_statline_before = get_modminer_statline_before,
 	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_api_extra_device_status,

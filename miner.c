@@ -117,6 +117,7 @@ bool opt_quiet;
 bool opt_realquiet;
 bool opt_loginput;
 bool opt_compact;
+bool opt_show_procs;
 const int opt_cutofftemp = 95;
 int opt_hysteresis = 3;
 static int opt_retries = -1;
@@ -1269,6 +1270,12 @@ static struct opt_table opt_config_table[] = {
 			opt_set_invbool, &opt_restart,
 			"Do not attempt to restart devices that hang"
 	),
+	OPT_WITHOUT_ARG("--no-show-processors",
+			opt_set_invbool, &opt_show_procs,
+			opt_hidden),
+	OPT_WITHOUT_ARG("--no-show-procs",
+			opt_set_invbool, &opt_show_procs,
+			opt_hidden),
 	OPT_WITHOUT_ARG("--no-stratum",
 			opt_set_invbool, &want_stratum,
 			"Disable Stratum detection"),
@@ -1347,6 +1354,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--shares",
 		     opt_set_intval, NULL, &opt_shares,
 		     "Quit after mining N shares (default: unlimited)"),
+	OPT_WITHOUT_ARG("--show-processors",
+			opt_set_bool, &opt_show_procs,
+			"Show per processor statistics in summary"),
+	OPT_WITHOUT_ARG("--show-procs",
+			opt_set_bool, &opt_show_procs,
+			opt_hidden),
 	OPT_WITH_ARG("--skip-security-checks",
 			set_int_0_to_9999, NULL, &opt_skip_checks,
 			"Skip security checks sometimes to save bandwidth; only check 1/<arg>th of the time (default: never skip)"),
@@ -1959,6 +1972,7 @@ static int devcursor, logstart, logcursor;
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
 static int statusy;
 static int devsummaryYOffset;
+static int total_lines;
 #endif
 #ifdef HAVE_OPENCL
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
@@ -2164,8 +2178,13 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 #else
 	assert(for_curses == false);
 #endif
+	struct device_api *api = cgpu->api;
+	void (*statline_func)(char *, struct cgpu_info *);
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
+	
+	if (!opt_show_procs)
+		cgpu = cgpu->device;
 	
 	double rolling = cgpu->rolling;
 	double mhashes = cgpu->total_mhashes;
@@ -2174,6 +2193,18 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	int rejected = cgpu->rejected;
 	int hwerrs = cgpu->hw_errors;
 	double util = cgpu->utility;
+	
+	if (!opt_show_procs)
+		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
+		{
+			rolling += slave->rolling;
+			mhashes += slave->total_mhashes;
+			wutil += slave->utility_diff1;
+			accepted += slave->accepted;
+			rejected += slave->rejected;
+			hwerrs += slave->hw_errors;
+			util += slave->utility;
+		}
 	
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
@@ -2185,32 +2216,57 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	// Processor representation
 #ifdef HAVE_CURSES
 	if (for_curses)
-		sprintf(buf, " %"PRIprepr": ", cgpu->proc_repr);
+	{
+		if (opt_show_procs)
+			sprintf(buf, " %"PRIprepr": ", cgpu->proc_repr);
+		else
+			sprintf(buf, " %s: ", cgpu->dev_repr);
+	}
 	else
 #endif
-		sprintf(buf, "%s ", cgpu->proc_repr_ns);
+		sprintf(buf, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
 	
-	if (cgpu->api->get_statline_before)
-		cgpu->api->get_statline_before(buf, cgpu);
+	if (api->get_dev_statline_before || api->get_statline_before)
+	{
+		if (api->get_dev_statline_before && api->get_statline_before)
+			statline_func = opt_show_procs ? api->get_statline_before : api->get_dev_statline_before;
+		else
+			statline_func = api->get_statline_before ?: api->get_dev_statline_before;
+		statline_func(buf, cgpu);
+	}
 	else
 		tailsprintf(buf, "               | ");
 	
 #ifdef HAVE_CURSES
 	if (for_curses)
 	{
-		char *cHrStats = cHr;
-		if (cgpu->status == LIFE_DEAD)
-			cHrStats = "DEAD ";
-		else if (cgpu->status == LIFE_SICK)
-			cHrStats = "SICK ";
-		else if (cgpu->deven == DEV_DISABLED)
-			cHrStats = "OFF  ";
-		else if (cgpu->deven == DEV_RECOVER)
-			cHrStats = "REST ";
-		else if (cgpu->deven == DEV_RECOVER_ERR)
-			cHrStats = " ERR ";
-		else if (cgpu->status == LIFE_WAIT)
-			cHrStats = "WAIT ";
+		const char *cHrStatsOpt[] = {"DEAD ", "SICK ", "OFF  ", "REST ", " ERR ", "WAIT ", cHr};
+		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
+		for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
+		{
+			switch (cHrStatsI) {
+				default:
+					if (cgpu->status == LIFE_WAIT)
+						cHrStatsI = 5;
+				case 5:
+					if (cgpu->deven == DEV_RECOVER_ERR)
+						cHrStatsI = 4;
+				case 4:
+					if (cgpu->deven == DEV_RECOVER)
+						cHrStatsI = 3;
+				case 3:
+					if (cgpu->deven == DEV_DISABLED)
+						cHrStatsI = 2;
+				case 2:
+					if (cgpu->status == LIFE_SICK)
+						cHrStatsI = 1;
+				case 1:
+					if (cgpu->status == LIFE_DEAD)
+						cHrStatsI = 0;
+			}
+			if (unlikely(!cHrStatsI))
+				break;
+		}
 		
 		adj_width(accepted, &awidth);
 		adj_width(rejected, &rwidth);
@@ -2218,7 +2274,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		adj_width(util, &uwidth);
 		
 		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d HW:%*d U:%*.2f/m",
-		            cHrStats, aHr, uHr,
+		            cHrStatsOpt[cHrStatsI],
+		            aHr, uHr,
 		            awidth, accepted,
 		            rwidth, rejected,
 		            hwwidth, hwerrs,
@@ -2237,8 +2294,14 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			util);
 	}
 	
-	if (cgpu->api->get_statline)
-		cgpu->api->get_statline(buf, cgpu);
+	if (api->get_dev_statline_after || api->get_statline)
+	{
+		if (api->get_dev_statline_after && api->get_statline)
+			statline_func = opt_show_procs ? api->get_statline : api->get_dev_statline_after;
+		else
+			statline_func = api->get_statline ?: api->get_dev_statline_after;
+		statline_func(buf, cgpu);
+	}
 }
 
 #define get_statline(buf, cgpu)  get_statline2(buf, cgpu, false)
@@ -2336,7 +2399,14 @@ static void curses_print_devstatus(int thr_id)
 		return;
 
 	/* Check this isn't out of the window size */
+	if (opt_show_procs)
 	ypos = cgpu->cgminer_id;
+	else
+	{
+		if (cgpu->proc_id)
+			return;
+		ypos = cgpu->device_line_id;
+	}
 	ypos += devsummaryYOffset;
 	if (ypos < 0)
 		return;
@@ -2413,17 +2483,22 @@ static void check_winsizes(void)
 	}
 }
 
+static int device_line_id_count;
+
 static void switch_compact(void)
 {
 	if (opt_compact) {
 		logstart = devcursor + 1;
 		logcursor = logstart + 1;
 	} else {
-		logstart = devcursor + total_devices + 1;
+		total_lines = (opt_show_procs ? total_devices : device_line_id_count);
+		logstart = devcursor + total_lines + 1;
 		logcursor = logstart + 1;
 	}
 	check_winsizes();
 }
+
+#define change_summarywinsize  switch_compact
 
 /* For mandatory printing when mutex is already locked */
 void wlog(const char *f, ...)
@@ -5108,6 +5183,15 @@ retry:
 	opt_loginput = false;
 }
 
+static const char *summary_detail_level_str(void)
+{
+	if (opt_compact)
+		return "compact";
+	if (opt_show_procs)
+		return "processors";
+	return "devices";
+}
+
 static void display_options(void)
 {
 	int selected;
@@ -5119,7 +5203,7 @@ static void display_options(void)
 retry:
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
-		  "[R]PC debug:%s\n[W]orkTime details:%s\nco[M]pact: %s\n"
+		  "[R]PC debug:%s\n[W]orkTime details:%s\nsu[M]mary detail level:%s\n"
 		  "[L]og interval:%d\n[Z]ero statistics\n",
 		opt_debug_console ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
@@ -5127,7 +5211,7 @@ retry:
 		opt_log_output ? "on" : "off",
 		opt_protocol ? "on" : "off",
 		opt_worktime ? "on" : "off",
-		opt_compact ? "on" : "off",
+		summary_detail_level_str(),
 		opt_log_interval);
 	wlogprint("Select an option or any other key to return\n");
 	input = getch();
@@ -5147,6 +5231,8 @@ retry:
 		opt_quiet = false;
 		opt_protocol = false;
 		opt_compact = false;
+		opt_show_procs = false;
+		devsummaryYOffset = 0;
 		want_per_device_stats = false;
 		wlogprint("Output mode reset to normal\n");
 		switch_compact();
@@ -5160,8 +5246,18 @@ retry:
 		wlogprint("Debug mode %s\n", opt_debug_console ? "enabled" : "disabled");
 		goto retry;
 	} else if (!strncasecmp(&input, "m", 1)) {
-		opt_compact ^= true;
-		wlogprint("Compact mode %s\n", opt_compact ? "enabled" : "disabled");
+		if (opt_compact)
+			opt_compact = false;
+		else
+		if (!opt_show_procs)
+			opt_show_procs = true;
+		else
+		{
+			opt_compact = true;
+			opt_show_procs = false;
+			devsummaryYOffset = 0;
+		}
+		wlogprint("su[M]mary detail level changed to: %s\n", summary_detail_level_str());
 		switch_compact();
 		goto retry;
 	} else if (!strncasecmp(&input, "p", 1)) {
@@ -5350,7 +5446,7 @@ static void *input_thread(void __maybe_unused *userdata)
 			break;
 #ifdef HAVE_CURSES
 		case KEY_DOWN:
-			if (devsummaryYOffset < -(total_devices + devcursor - statusy))
+			if (devsummaryYOffset < -(total_lines + devcursor - statusy))
 				break;
 			devsummaryYOffset -= 2;
 		case KEY_UP:
@@ -5452,14 +5548,15 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		if (want_per_device_stats) {
 			struct timeval now;
 			struct timeval elapsed;
+			struct timeval *last_msg_tv = opt_show_procs ? &thr->cgpu->last_message_tv : &thr->cgpu->device->last_message_tv;
 
 			gettimeofday(&now, NULL);
-			timersub(&now, &thr->cgpu->last_message_tv, &elapsed);
+			timersub(&now, last_msg_tv, &elapsed);
 			if (opt_log_interval <= elapsed.tv_sec) {
 				struct cgpu_info *cgpu = thr->cgpu;
 				char logline[255];
 
-				cgpu->last_message_tv = now;
+				*last_msg_tv = now;
 
 				get_statline(logline, cgpu);
 				if (!curses_active) {
@@ -7326,7 +7423,17 @@ void print_summary(void)
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
 	for (i = 0; i < total_devices; ++i)
+	{
+		struct cgpu_info *cgpu = devices[i];
+		if ((!cgpu->proc_id) && cgpu->next_proc)
+		{
+			// Device summary line
+			opt_show_procs = false;
+			log_print_status(cgpu);
+			opt_show_procs = true;
+		}
 		log_print_status(devices[i]);
+	}
 
 	if (opt_shares)
 		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
@@ -7617,11 +7724,14 @@ extern struct device_api ztex_api;
 
 
 static int cgminer_id_count = 0;
+static int device_line_id_count;
 
 void register_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
+	if (!cgpu->proc_id)
+		cgpu->device_line_id = device_line_id_count++;
 	mining_threads += cgpu->threads;
 #ifdef HAVE_CURSES
 	adj_width(mining_threads, &dev_width);
@@ -7664,10 +7774,14 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->procs = 1;
 	lpcount = cgpu->procs;
 	cgpu->device = cgpu;
+	
 	cgpu->dev_repr = malloc(6);
 	sprintf(cgpu->dev_repr, "%s%2u", cgpu->api->name, cgpu->device_id % 100);
+	cgpu->dev_repr_ns = malloc(6);
+	sprintf(cgpu->dev_repr_ns, "%s%u", cgpu->api->name, cgpu->device_id % 100);
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->api->name, cgpu->device_id);
+	
 	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + lpcount + 1));
 	devices[total_devices++] = cgpu;
 	
@@ -8020,13 +8134,9 @@ int main(int argc, char *argv[])
 	for (i = 0; i < total_devices; ++i)
 		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
-	if (!opt_compact) {
-		logstart += total_devices;
-		logcursor = logstart + 1;
 #ifdef HAVE_CURSES
-		check_winsizes();
+	change_summarywinsize();
 #endif
-	}
 
 	if (!total_pools) {
 		applog(LOG_WARNING, "Need to specify at least one pool server.");

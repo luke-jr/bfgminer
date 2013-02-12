@@ -537,21 +537,51 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 	return true;
 }
 
-static void
-get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
+static
+bool get_x6500_upload_percent(char *buf, struct cgpu_info *x6500)
 {
 	char info[18] = "               | ";
-	struct x6500_fpga_data *fpga0 = x6500->thr[0]->cgpu_data;
 
 	unsigned char pdone = *((unsigned char*)x6500->cgpu_data - 1);
 	if (pdone != 101) {
 		sprintf(&info[1], "%3d%%", pdone);
 		info[5] = ' ';
 		strcat(buf, info);
+		return true;
+	}
+	return false;
+}
+
+static
+void get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
+{
+	if (get_x6500_upload_percent(buf, x6500))
+		return;
+
+	char info[18] = "               | ";
+	struct x6500_fpga_data *fpga = x6500->thr[0]->cgpu_data;
+
+	if (x6500->temp) {
+		sprintf(&info[1], "%.1fC", fpga->temp);
+		info[strlen(info)] = ' ';
+		strcat(buf, info);
 		return;
 	}
+	strcat(buf, "               | ");
+}
+
+static
+void get_x6500_dev_statline_before(char *buf, struct cgpu_info *x6500)
+{
+	if (get_x6500_upload_percent(buf, x6500))
+		return;
+
+	char info[18] = "               | ";
+	struct x6500_fpga_data *fpga0 = x6500->thr[0]->cgpu_data;
+	struct x6500_fpga_data *fpga1 = x6500->next_proc->thr[0]->cgpu_data;
+
 	if (x6500->temp) {
-		sprintf(&info[1], "%.1fC", fpga0->temp);
+		sprintf(&info[1], "%.1fC/%.1fC", fpga0->temp, fpga1->temp);
 		info[strlen(info)] = ' ';
 		strcat(buf, info);
 		return;
@@ -704,6 +734,7 @@ struct device_api x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
 	.api_detect = x6500_detect,
+	.get_dev_statline_before = get_x6500_dev_statline_before,
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_fpga_init,
 	.get_stats = x6500_get_stats,

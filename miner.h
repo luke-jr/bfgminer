@@ -271,6 +271,10 @@ struct device_api {
 	void (*api_detect)();
 
 	// Device-specific functions
+	void (*get_dev_statline_before)(char *, struct cgpu_info *);
+	void (*get_dev_statline_after)(char *, struct cgpu_info *);
+
+	// Processor-specific functions
 	void (*reinit_device)(struct cgpu_info *);
 	void (*get_statline_before)(char *, struct cgpu_info *);
 	void (*get_statline)(char *, struct cgpu_info *);
@@ -381,10 +385,12 @@ struct cgminer_pool_stats {
 
 struct cgpu_info {
 	int cgminer_id;
+	int device_line_id;
 	const struct device_api *api;
 	const char *devtype;
 	int device_id;
 	char *dev_repr;
+	char *dev_repr_ns;
 	const char *name;
 	int procs;
 	int proc_id;
