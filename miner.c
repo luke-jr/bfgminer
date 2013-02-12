@@ -2153,32 +2153,95 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 	hashrate_to_bufstr(out[2], sharebased, unit, longfmt);
 }
 
-static void get_statline(char *buf, struct cgpu_info *cgpu)
+#ifdef HAVE_CURSES
+static void adj_width(int var, int *length);
+#endif
+
+static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 {
-	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
+#ifdef HAVE_CURSES
+	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
+#else
+	assert(for_curses == false);
+#endif
+	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
+	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
+	
+	double rolling = cgpu->rolling;
+	double mhashes = cgpu->total_mhashes;
+	double wutil = cgpu->utility_diff1;
+	int accepted = cgpu->accepted;
+	int rejected = cgpu->rejected;
+	int hwerrs = cgpu->hw_errors;
+	double util = cgpu->utility;
+	
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
-		1e6*cgpu->rolling,
-		1e6*cgpu->total_mhashes / total_secs,
-		utility_to_hashrate(cgpu->utility_diff1),
-		H2B_SPACED);
+		1e6*rolling,
+		1e6*mhashes / total_secs,
+		utility_to_hashrate(wutil),
+		hashrate_style);
 
-	sprintf(buf, "%s ", cgpu->proc_repr_ns);
+	// Processor representation
+#ifdef HAVE_CURSES
+	if (for_curses)
+		sprintf(buf, " %"PRIprepr": ", cgpu->proc_repr);
+	else
+#endif
+		sprintf(buf, "%s ", cgpu->proc_repr_ns);
+	
 	if (cgpu->api->get_statline_before)
 		cgpu->api->get_statline_before(buf, cgpu);
 	else
 		tailsprintf(buf, "               | ");
-	tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d U:%.1f/m",
-		opt_log_interval,
-		cHr, aHr,
-		uHr,
-		cgpu->accepted,
-		cgpu->rejected,
-		cgpu->hw_errors,
-		cgpu->utility);
+	
+#ifdef HAVE_CURSES
+	if (for_curses)
+	{
+		char *cHrStats = cHr;
+		if (cgpu->status == LIFE_DEAD)
+			cHrStats = "DEAD ";
+		else if (cgpu->status == LIFE_SICK)
+			cHrStats = "SICK ";
+		else if (cgpu->deven == DEV_DISABLED)
+			cHrStats = "OFF  ";
+		else if (cgpu->deven == DEV_RECOVER)
+			cHrStats = "REST ";
+		else if (cgpu->deven == DEV_RECOVER_ERR)
+			cHrStats = " ERR ";
+		else if (cgpu->status == LIFE_WAIT)
+			cHrStats = "WAIT ";
+		
+		adj_width(accepted, &awidth);
+		adj_width(rejected, &rwidth);
+		adj_width(hwerrs, &hwwidth);
+		adj_width(util, &uwidth);
+		
+		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d HW:%*d U:%*.2f/m",
+		            cHrStats, aHr, uHr,
+		            awidth, accepted,
+		            rwidth, rejected,
+		            hwwidth, hwerrs,
+		            uwidth + 3, util
+		);
+	}
+	else
+#endif
+	{
+		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d U:%.1f/m",
+			opt_log_interval,
+			cHr, aHr, uHr,
+			accepted,
+			rejected,
+			hwerrs,
+			util);
+	}
+	
 	if (cgpu->api->get_statline)
 		cgpu->api->get_statline(buf, cgpu);
 }
+
+#define get_statline(buf, cgpu)  get_statline2(buf, cgpu, false)
 
 static void text_print_status(int thr_id)
 {
@@ -2265,10 +2328,8 @@ static int dev_width;
 
 static void curses_print_devstatus(int thr_id)
 {
-	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	char logline[256];
-	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SHORT]];
 	int ypos;
 
 	if (opt_compact)
@@ -2288,53 +2349,9 @@ static void curses_print_devstatus(int thr_id)
 
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
-	wprintw(statuswin, " %"PRIprepr": ", cgpu->proc_repr);
-	if (cgpu->api->get_statline_before) {
-		logline[0] = '\0';
-		cgpu->api->get_statline_before(logline, cgpu);
-		wprintw(statuswin, "%s", logline);
-	}
-	else
-		wprintw(statuswin, "               | ");
-
-	ti_hashrate_bufstr(
-		(char*[]){cHr, aHr, uHr},
-		1e6*cgpu->rolling,
-		1e6*cgpu->total_mhashes / total_secs,
-		utility_to_hashrate(cgpu->utility_diff1),
-		H2B_SHORT);
-
-	if (cgpu->status == LIFE_DEAD)
-		wprintw(statuswin, "DEAD ");
-	else if (cgpu->status == LIFE_SICK)
-		wprintw(statuswin, "SICK ");
-	else if (cgpu->deven == DEV_DISABLED)
-		wprintw(statuswin, "OFF  ");
-	else if (cgpu->deven == DEV_RECOVER)
-		wprintw(statuswin, "REST ");
-	else if (cgpu->deven == DEV_RECOVER_ERR)
-		wprintw(statuswin, " ERR ");
-	else if (cgpu->status == LIFE_WAIT)
-		wprintw(statuswin, "WAIT ");
-	else
-		wprintw(statuswin, "%s", cHr);
-	adj_width(cgpu->accepted, &awidth);
-	adj_width(cgpu->rejected, &rwidth);
-	adj_width(cgpu->hw_errors, &hwwidth);
-	adj_width(cgpu->utility, &uwidth);
-	wprintw(statuswin, "/%s/%s | A:%*d R:%*d HW:%*d U:%*.2f/m",
-			aHr,
-			uHr,
-			awidth, cgpu->accepted,
-			rwidth, cgpu->rejected,
-			hwwidth, cgpu->hw_errors,
-		uwidth + 3, cgpu->utility);
-
-	if (cgpu->api->get_statline) {
-		logline[0] = '\0';
-		cgpu->api->get_statline(logline, cgpu);
-		wprintw(statuswin, "%s", logline);
-	}
+	
+	get_statline2(logline, cgpu, true);
+	wprintw(statuswin, logline);
 
 	wclrtoeol(statuswin);
 }
