@@ -2605,12 +2605,12 @@ void share_result_msg(const struct work *work, const char *disp, const char *rea
 	else
 		where[0] = '\0';
 	
-	applog(LOG_NOTICE, "%s %02x%02x%02x%02x Diff %s/%s %"PRIpreprv"%s%s %s%s",
+	applog(LOG_NOTICE, "%s %02x%02x%02x%02x %"PRIprepr"%s Diff %s/%s%s %s%s",
 	       disp,
 	       (unsigned)hashpart[3], (unsigned)hashpart[2], (unsigned)hashpart[1], (unsigned)hashpart[0],
-	       shrdiffdisp, tgtdiffdisp,
 	       cgpu->proc_repr,
 	       where,
+	       shrdiffdisp, tgtdiffdisp,
 	       reason,
 	       resubmit ? "(resubmit)" : "",
 	       worktime
