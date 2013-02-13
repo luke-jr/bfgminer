@@ -24,7 +24,7 @@
 
 #include "compat.h"
 
-#if defined(unix)
+#ifndef WIN32
 	#include <errno.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
@@ -39,9 +39,7 @@
 	#define SOCKETINIT {}
 
 	#define SOCKERRMSG strerror(errno)
-#endif
-
-#ifdef WIN32
+#else
 	#include <winsock2.h>
 
 	#define SOCKETTYPE SOCKET
