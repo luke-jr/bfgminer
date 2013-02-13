@@ -2585,6 +2585,38 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
+static uint64_t share_diff(const struct work *);
+
+static
+void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
+	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
+	const unsigned char *hashpart = &work->hash[opt_scrypt ? 26 : 24];
+	uint64_t shrdiff = share_diff(work);
+	char shrdiffdisp[16];
+	int tgtdiff = floor(work->work_difficulty);
+	char tgtdiffdisp[16];
+	char where[20];
+	
+	suffix_string(shrdiff, shrdiffdisp, 0);
+	suffix_string(tgtdiff, tgtdiffdisp, 0);
+	
+	if (total_pools > 1)
+		sprintf(where, " pool %d", work->pool->pool_no);
+	else
+		where[0] = '\0';
+	
+	applog(LOG_NOTICE, "%s %02x%02x%02x%02x Diff %s/%s %"PRIpreprv"%s%s %s%s",
+	       disp,
+	       (unsigned)hashpart[3], (unsigned)hashpart[2], (unsigned)hashpart[1], (unsigned)hashpart[0],
+	       shrdiffdisp, tgtdiffdisp,
+	       cgpu->proc_repr,
+	       where,
+	       reason,
+	       resubmit ? "(resubmit)" : "",
+	       worktime
+	);
+}
+
 static bool test_work_current(struct work *);
 
 /* Theoretically threads could race when modifying accepted and
@@ -2592,7 +2624,7 @@ static bool test_work_current(struct work *);
  * same time is zero so there is no point adding extra locking */
 static void
 share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
-	     char *hashshow, bool resubmit, char *worktime)
+	     /*char *hashshow,*/ bool resubmit, char *worktime)
 {
 	struct pool *pool = work->pool;
 	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
@@ -2615,12 +2647,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		pool->last_share_diff = work->work_difficulty;
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
-			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %"PRIpreprv" pool %d %s%s",
-				       hashshow, cgpu->proc_repr, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
-			else
-				applog(LOG_NOTICE, "Accepted %s %"PRIpreprv" %s%s",
-				       hashshow, cgpu->proc_repr, resubmit ? "(resubmit)" : "", worktime);
+			share_result_msg(work, "Accepted", "", resubmit, worktime);
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -2700,8 +2727,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				}
 			}
 
-			applog(LOG_NOTICE, "Rejected %s %"PRIpreprv" %s%s %s%s",
-			       hashshow, cgpu->proc_repr, where, reason, resubmit ? "(resubmit)" : "", worktime);
+			share_result_msg(work, "Rejected", reason, resubmit, worktime);
 			sharelog(disposition, work);
 		}
 
@@ -2790,7 +2816,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	struct pool *pool = work->pool;
 	struct timeval tv_submit_reply;
-	char hashshow[64 + 4] = "";
 	char worktime[200] = "";
 
 	gettimeofday(&tv_submit_reply, NULL);
@@ -2810,24 +2835,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	err = json_object_get(val, "error");
 
 	if (!QUIET) {
-		int intdiff = floor(work->work_difficulty);
-		char diffdisp[16], *outhash;
-		char tgtdiffdisp[16];
-		unsigned char rhash[32];
-		uint64_t sharediff;
-
-		swab256(rhash, work->hash);
-		if (opt_scrypt)
-			outhash = bin2hex(rhash + 2, 4);
-		else
-			outhash = bin2hex(rhash + 4, 4);
-		sharediff = share_diff(work);
-		suffix_string(sharediff, diffdisp, 0);
-		suffix_string(intdiff, tgtdiffdisp, 0);
-		sprintf(hashshow, "%s Diff %s/%s%s", outhash, diffdisp, tgtdiffdisp,
-			work->block? " BLOCK!" : "");
-		free(outhash);
-
 		if (opt_worktime) {
 			char workclone[20];
 			struct tm _tm;
@@ -2872,7 +2879,7 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 		}
 	}
 
-	share_result(val, res, err, work, hashshow, resubmit, worktime);
+	share_result(val, res, err, work, resubmit, worktime);
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
 	cgpu->utility_diff1 = cgpu->diff_accepted / total_secs * 60;
@@ -5624,20 +5631,8 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 				 struct stratum_share *sshare)
 {
 	struct work *work = sshare->work;
-	uint64_t sharediff = share_diff(work);
-	char hashshow[65];
-	uint32_t *hash32;
-	char diffdisp[16];
-	char tgtdiffdisp[16];
-	int intdiff;
 
-	hash32 = (uint32_t *)(work->hash);
-	intdiff = floor(work->work_difficulty);
-	suffix_string(sharediff, diffdisp, 0);
-	suffix_string(intdiff, tgtdiffdisp, 0);
-	sprintf(hashshow, "%08lx Diff %s/%s%s", (unsigned long)(hash32[6]), diffdisp, tgtdiffdisp,
-		work->block? " BLOCK!" : "");
-	share_result(val, res_val, err_val, work, hashshow, false, "");
+	share_result(val, res_val, err_val, work, false, "");
 }
 
 /* Parses stratum json responses and tries to find the id that the request
