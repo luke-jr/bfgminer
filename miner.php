@@ -1,5 +1,6 @@
 <?php
 session_start();
+date_default_timezone_set(@date_default_timezone_get());
 #
 global $title, $miner, $port, $readonly, $notify, $rigs;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
@@ -954,35 +955,76 @@ function details($cmd, $list, $rig)
 	$dototal = $singlerigsum[$cmd];
  else
 	$dototal = array();
-
  $total = array();
 
  $section = '';
  $oldvalues = null;
+
+ // Build a common row column for all entries
+ $columns = array();
+ $columnsByIndex = array();
+ foreach ($list as $item => $values)
+ {
+	if ($item == 'STATUS')
+		continue;
+	if (isset($values['ID']))
+	{
+		$repr = $values['Name'].$values['ID'];
+		$list[$item] = $values = array('Device' => $repr) + array_slice($values, 1);
+		unset($values['Name']);
+		unset($values['ID']);
+	}
+	$namesByIndex = array_keys($values);
+	$nameCount = count($namesByIndex);
+	for ($i = 0; $i < $nameCount; ++$i)
+	{
+		$name = $namesByIndex[$i];
+		if (isset($columns[$name]))
+			continue;
+		$value = $values[$name];
+		$before = null;
+		for ($j = $i + 1; $j < $nameCount; ++$j)
+		{
+			$maybebefore = $namesByIndex[$j];
+			if (isset($columns[$maybebefore]))
+			{
+				$before = $columns[$maybebefore];
+				break;
+			}
+		}
+		if (!$before)
+		{
+			$columns[$name] = array_push($columnsByIndex, $name) - 1;
+			continue;
+		}
+		array_splice($columnsByIndex, $before, 0, $name);
+		$columns[$name] = $before;
+		$columnCount = count($columnsByIndex);
+		for ($j = $before + 1; $j < $columnCount; ++$j)
+			$columns[$columnsByIndex[$j]] = $j;
+	}
+ }
+ asort($columns);
+ endtable();
+ newtable();
+ showhead($cmd, $columns);
+
  foreach ($list as $item => $values)
  {
 	if ($item == 'STATUS')
 		continue;
 
-	$sectionname = preg_replace('/\d/', '', $item);
-
-	// Handle 'devs' possibly containing >1 table
-	if ($sectionname != $section)
-	{
-		if ($oldvalues != null && count($total) > 0
-		&&  ($rownum > 2 || $forcerigtotals === true))
-			showtotal($total, $when, $oldvalues);
-
-		endtable();
-		newtable();
-		showhead($cmd, $values);
-		$section = $sectionname;
-	}
-
 	newrow();
 
-	foreach ($values as $name => $value)
+	foreach ($columns as $name => $columnidx)
 	{
+		if (!isset($values[$name]))
+		{
+			echo '<td></td>';
+			continue;
+		}
+		$value = $values[$name];
+
 		list($showvalue, $class) = fmt($section, $name, $value, $when, $values);
 		echo "<td$class";
 		if ($rigtotals === true)
@@ -1024,7 +1066,7 @@ function details($cmd, $list, $rig)
 
  if ($oldvalues != null && count($total) > 0
  &&  ($rownum > 2 || $forcerigtotals === true))
-	showtotal($total, $when, $oldvalues);
+	showtotal($total, $when, $columns);
 
  endtable();
 }
