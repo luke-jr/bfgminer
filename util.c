@@ -262,8 +262,7 @@ static void set_nettime(void)
 }
 
 static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
-			 __maybe_unused unsigned char *data, size_t size,
-			 void *userdata)
+			 __maybe_unused char *data, size_t size, void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
 
