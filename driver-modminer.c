@@ -595,8 +595,6 @@ static bool modminer_fpga_prepare(struct thr_info *thr)
 
 	struct modminer_fpga_state *state;
 	state = thr->cgpu_data = calloc(1, sizeof(struct modminer_fpga_state));
-	state->next_work_cmd[0] = MODMINER_SEND_WORK;
-	state->next_work_cmd[1] = modminer->fpgaid;
 	state->shares_to_good = MODMINER_EARLY_UP;
 	state->overheated = false;
 
@@ -773,23 +771,18 @@ static void get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 	strcat(buf, info);
 }
 
-static bool modminer_prepare_next_work(struct modminer_fpga_state *state, struct work *work)
-{
-	char *midstate = state->next_work_cmd + 2;
-	char *taildata = midstate + 32;
-	if (!(memcmp(midstate, work->midstate, 32) || memcmp(taildata, work->data + 64, 12)))
-		return false;
-	memcpy(midstate, work->midstate, 32);
-	memcpy(taildata, work->data + 64, 12);
-	return true;
-}
-
-static bool modminer_start_work(struct thr_info *thr)
+static bool modminer_start_work(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
 	int err, amount;
+	char cmd[48];
 	bool sta;
+
+	cmd[0] = MODMINER_SEND_WORK;
+	cmd[1] = modminer->fpgaid;
+	memcpy(&cmd[2], work->midstate, 32);
+	memcpy(&cmd[34], work->data + 64, 12);
 
 	if (state->first_work.tv_sec == 0)
 		gettimeofday(&state->first_work, NULL);
@@ -799,7 +792,7 @@ static bool modminer_start_work(struct thr_info *thr)
 
 	mutex_lock(modminer->modminer_mutex);
 
-	if ((err = usb_write(modminer, (char *)(state->next_work_cmd), 46, &amount, C_SENDWORK)) < 0 || amount != 46) {
+	if ((err = usb_write(modminer, cmd, 46, &amount, C_SENDWORK)) < 0 || amount != 46) {
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Start work failed (%d:%d)",
@@ -809,7 +802,6 @@ static bool modminer_start_work(struct thr_info *thr)
 	}
 
 	gettimeofday(&state->tv_workstart, NULL);
-	state->hashes = 0;
 
 	sta = get_status(modminer, "start work", C_SENDWORKSTATUS);
 
@@ -903,11 +895,10 @@ static const double processtime = 17.0;
 // 160Mhz is 26.84 - when overheated ensure we don't throw away shares
 static const double overheattime = 26.9;
 
-static uint64_t modminer_process_results(struct thr_info *thr)
+static uint64_t modminer_process_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
-	struct work *work = &state->running_work;
 	struct timeval now;
 	char cmd[2];
 	uint32_t nonce;
@@ -931,14 +922,14 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 
 	timeoutloop = 0;
 	temploop = 0;
-	while (1) {
+	while (0x80085) {
 		mutex_lock(modminer->modminer_mutex);
 		if ((err = usb_write(modminer, cmd, 2, &amount, C_REQUESTWORKSTATUS)) < 0 || amount != 2) {
 			mutex_unlock(modminer->modminer_mutex);
 
 			// timeoutloop never resets so the timeouts can't
 			// accumulate much during a single item of work
-			if (err == LIBUSB_ERROR_TIMEOUT && ++timeoutloop < 10) {
+			if (err == LIBUSB_ERROR_TIMEOUT && ++timeoutloop < 5) {
 				state->timeout_fail++;
 				goto tryagain;
 			}
@@ -1033,8 +1024,8 @@ tryagain:
 			break;
 
 		if (state->overheated == true) {
-			// don't check every time
-			if (++temploop > 30) {
+			// don't check every time (every ~1/2 sec)
+			if (++temploop > 4) {
 				check_temperature(thr);
 				temploop = 0;
 			}
@@ -1050,7 +1041,8 @@ tryagain:
 		if (tdiff(&now, &state->tv_workstart) > timeout)
 			break;
 
-		nmsleep(10);
+		// 1/10th sec to lower CPU usage
+		nmsleep(100);
 		if (work_restart(thr))
 			break;
 	}
@@ -1064,21 +1056,17 @@ tryagain:
 	// Overheat will complete the nonce range
 	if (hashes > 0xffffffff)
 		hashes = 0xffffffff;
-	else
-	if (hashes <= state->hashes)
-		hashes = 1;
-	else
-		hashes -= state->hashes;
-	state->hashes += hashes;
+
+	work->blk.nonce = 0xffffffff;
+
 	return hashes;
 }
 
 static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct modminer_fpga_state *state = thr->cgpu_data;
-	int64_t hashes = 0;
-	bool startwork;
 	struct timeval tv1, tv2;
+	int64_t hashes;
 
 	// Device is gone
 	if (thr->cgpu->usbinfo.nodev)
@@ -1087,8 +1075,6 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 	// Don't start new work if overheated
 	if (state->overheated == true) {
 		gettimeofday(&tv1, NULL);
-		if (state->work_running)
-			state->work_running = false;
 
 		while (state->overheated == true) {
 			check_temperature(thr);
@@ -1100,7 +1086,7 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 			if (state->overheated == true) {
 				gettimeofday(&tv2, NULL);
 
-				// give up on this work item
+				// give up on this work item after 30s
 				if (work_restart(thr) || tdiff(&tv2, &tv1) > 30)
 					return 0;
 
@@ -1110,27 +1096,13 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 		}
 	}
 
-	startwork = modminer_prepare_next_work(state, work);
-	if (state->work_running) {
-		hashes = modminer_process_results(thr);
-		if (hashes == -1)
-			return hashes;
+	if (!modminer_start_work(thr, work))
+		return -1;
 
-		if (work_restart(thr)) {
-			state->work_running = false;
-			return 0;
-		}
-	} else
-		state->work_running = true;
+	hashes = modminer_process_results(thr, work);
+	if (hashes == -1)
+		return hashes;
 
-	if (startwork) {
-		if (!modminer_start_work(thr))
-			return -1;
-		__copy_work(&state->running_work, work);
-	}
-
-	// This is intentionally early
-	work->blk.nonce += hashes;
 	return hashes;
 }
 
