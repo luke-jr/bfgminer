@@ -112,9 +112,8 @@ shutting down the PC to ensure all data is written to the USB
 13) BFGMiner:
  sudo apt-get install curl
 
- get the binary Linux BFGMiner
- (see the bitcoin forum bfgminer thread for where to get it)
- https://bitcointalk.org/index.php?topic=28402.0
+ get the binary Ubuntu BFGMiner from PPA
+ https://launchpad.net/~unit3/+archive/bfgminer
 
  ./bfgminer -n
    this shows you the GPU's it found on your PC
