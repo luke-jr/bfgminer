@@ -6747,13 +6747,6 @@ void *miner_thread(void *userdata)
 	snprintf(threadname, 20, "miner_%s", cgpu->proc_repr_ns);
 	RenameThread(threadname);
 
-	// FIXME: initialize all cgpus and virtual threads
-	cgpu->max_hashes = 0;
-	mythr->scanhash_working = true;
-	mythr->hashes_done = 0;
-	timerclear(&mythr->tv_hashes_done);
-	gettimeofday(&mythr->tv_lastupdate, NULL);
-
 	if (api->thread_init && !api->thread_init(mythr)) {
 		// FIXME: Should affect all processors managed
 		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
@@ -8294,13 +8287,15 @@ begin_bench:
 		localtime_r(&miner_started.tv_sec, &schedstop .tm);
 	get_datestamp(datestamp, &total_tv_start);
 
-	// Start threads
+	// Initialise processors and threads
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
 		cgpu->thr = calloc(cgpu->threads+1, sizeof(*cgpu->thr));
 		cgpu->thr[cgpu->threads] = NULL;
 		cgpu->status = LIFE_INIT;
+
+		cgpu->max_hashes = 0;
 
 		// Setup thread structs before starting any of the threads, in case they try to interact
 		for (j = 0; j < cgpu->threads; ++j, ++k) {
@@ -8309,6 +8304,11 @@ begin_bench:
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 			thr->work_restart_fd = thr->_work_restart_fd_w = -1;
+
+			thr->scanhash_working = true;
+			thr->hashes_done = 0;
+			timerclear(&thr->tv_hashes_done);
+			gettimeofday(&thr->tv_lastupdate, NULL);
 
 			thr->q = tq_new();
 			if (!thr->q)
@@ -8324,7 +8324,11 @@ begin_bench:
 
 			cgpu->thr[j] = thr;
 		}
+	}
 
+	// Start threads
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = devices[i];
 		for (j = 0; j < cgpu->threads; ++j) {
 			thr = cgpu->thr[j];
 
