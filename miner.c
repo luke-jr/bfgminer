@@ -7996,7 +7996,7 @@ int main(int argc, char *argv[])
 			sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 		}
 	}
-	/* Set the currentpool to pool wiht priority 0 */
+	/* Set the currentpool to pool with priority 0 */
 	validate_pool_priorities();
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool  = pools[i];
@@ -8065,7 +8065,7 @@ int main(int argc, char *argv[])
 						currentpool = pool;
 					applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
 					pools_active = true;
-					break;
+					goto found_active_pool;
 				} else {
 					if (pool == currentpool)
 						currentpool = NULL;
@@ -8097,6 +8097,7 @@ int main(int argc, char *argv[])
 				quit(0, "No servers could be used! Exiting.");
 		}
 	} while (!pools_active);
+found_active_pool: ;
 
 #ifdef USE_SCRYPT
 	if (detect_algo == 1 && !opt_scrypt) {
