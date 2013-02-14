@@ -353,6 +353,8 @@ struct cgminer_stats {
 	struct timeval getwork_wait;
 	struct timeval getwork_wait_max;
 	struct timeval getwork_wait_min;
+
+	struct timeval _get_start;
 };
 
 // Just the actual network getworks to the pool
@@ -464,8 +466,6 @@ struct cgpu_info {
 	int intervals;
 #endif
 
-	bool new_work;
-
 	float temp;
 	int cutofftemp;
 	int targettemp;
@@ -531,6 +531,11 @@ struct thr_info {
 	void *cgpu_data;
 	struct timeval last;
 	struct timeval sick;
+
+	bool	scanhash_working;
+	uint64_t hashes_done;
+	struct timeval tv_hashes_done;
+	struct timeval tv_lastupdate;
 
 	bool	pause;
 	time_t	getwork;

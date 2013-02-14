@@ -6433,13 +6433,27 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	gettimeofday(&work->tv_staged, NULL);
 }
 
-static struct work *get_work(struct thr_info *thr, const int thr_id)
+void request_work(struct thr_info *thr)
 {
-	struct work *work = NULL;
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct cgminer_stats *dev_stats = &(cgpu->cgminer_stats);
 
 	/* Tell the watchdog thread this thread is waiting on getwork and
 	 * should not be restarted */
 	thread_reportout(thr);
+
+	gettimeofday(&dev_stats->_get_start, NULL);
+}
+
+// FIXME: Make this non-blocking
+static struct work *get_work(struct thr_info *thr)
+{
+	const int thr_id = thr->id;
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct cgminer_stats *dev_stats = &(cgpu->cgminer_stats);
+	struct cgminer_stats *pool_stats;
+	struct timeval tv_get;
+	struct work *work = NULL;
 
 	applog(LOG_DEBUG, "Popping work from get queue to get work");
 	while (!work) {
@@ -6455,6 +6469,26 @@ static struct work *get_work(struct thr_info *thr, const int thr_id)
 	work->thr_id = thr_id;
 	thread_reportin(thr);
 	work->mined = true;
+	work->blk.nonce = 0;
+
+	gettimeofday(&tv_get, NULL);
+	timersub(&tv_get, &dev_stats->_get_start, &tv_get);
+
+	timeradd(&tv_get, &dev_stats->getwork_wait, &dev_stats->getwork_wait);
+	if (timercmp(&tv_get, &dev_stats->getwork_wait_max, >))
+		dev_stats->getwork_wait_max = tv_get;
+	if (timercmp(&tv_get, &dev_stats->getwork_wait_min, <))
+		dev_stats->getwork_wait_min = tv_get;
+	++dev_stats->getwork_calls;
+
+	pool_stats = &(work->pool->cgminer_stats);
+	timeradd(&tv_get, &pool_stats->getwork_wait, &pool_stats->getwork_wait);
+	if (timercmp(&tv_get, &pool_stats->getwork_wait_max, >))
+		pool_stats->getwork_wait_max = tv_get;
+	if (timercmp(&tv_get, &pool_stats->getwork_wait_min, <))
+		pool_stats->getwork_wait_min = tv_get;
+	++pool_stats->getwork_calls;
+
 	return work;
 }
 
@@ -6577,161 +6611,104 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 		api->thread_enable(mythr);
 }
 
-void *miner_thread(void *userdata)
+bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce)
 {
-	struct thr_info *mythr = userdata;
+	struct cgpu_info *cgpu = thr->cgpu;
+	const long cycle = opt_log_interval / 5 ? : 1;
+	struct timeval tv_now, tv_elapsed;
+	
+	if (unlikely(hashes == -1)) {
+		time_t now = time(NULL);
+		if (difftime(now, cgpu->device_last_not_well) > 1.)
+			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
+		
+		if (thr->scanhash_working && opt_restart) {
+			applog(LOG_ERR, "%"PRIpreprv" failure, attempting to reinitialize", cgpu->proc_repr);
+			thr->scanhash_working = false;
+			cgpu->reinit_backoff = 5.2734375;
+			hashes = 0;
+		} else {
+			applog(LOG_ERR, "%"PRIpreprv" failure, disabling!", cgpu->proc_repr);
+			cgpu->deven = DEV_RECOVER_ERR;
+			return false;
+		}
+	}
+	else
+		thr->scanhash_working = true;
+	
+	thr->hashes_done += hashes;
+	if (hashes > cgpu->max_hashes)
+		cgpu->max_hashes = hashes;
+	
+	timeradd(&thr->tv_hashes_done, tvp_hashes, &thr->tv_hashes_done);
+	
+	// max_nonce management (optional)
+	if (unlikely((long)thr->tv_hashes_done.tv_sec < cycle)) {
+		int mult;
+		
+		if (likely(!max_nonce || *max_nonce == 0xffffffff))
+			// FIXME: a processor being disabled still needs to call hashmeter
+			return true;
+		
+		mult = 1000000 / ((thr->tv_hashes_done.tv_usec + 0x400) / 0x400) + 0x10;
+		mult *= cycle;
+		if (*max_nonce > (0xffffffff * 0x400) / mult)
+			*max_nonce = 0xffffffff;
+		else
+			*max_nonce = (*max_nonce * mult) / 0x400;
+	} else if (unlikely(thr->tv_hashes_done.tv_sec > cycle) && max_nonce)
+		*max_nonce = *max_nonce * cycle / thr->tv_hashes_done.tv_sec;
+	else if (unlikely(thr->tv_hashes_done.tv_usec > 100000) && max_nonce)
+		*max_nonce = *max_nonce * 0x400 / (((cycle * 1000000) + thr->tv_hashes_done.tv_usec) / (cycle * 1000000 / 0x400));
+	
+	timerclear(&thr->tv_hashes_done);
+	
+	gettimeofday(&tv_now, NULL);
+	timersub(&tv_now, &thr->tv_lastupdate, &tv_elapsed);
+	if (tv_elapsed.tv_sec >= opt_log_interval) {
+		hashmeter(thr->id, &tv_elapsed, thr->hashes_done);
+		thr->hashes_done = 0;
+		thr->tv_lastupdate = tv_now;
+	}
+	
+	return true;
+}
+
+// Miner loop to manage a single processor (with possibly multiple threads per processor)
+void minerloop(struct thr_info *mythr)
+{
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	const struct device_api *api = cgpu->api;
-	struct cgminer_stats *dev_stats = &(cgpu->cgminer_stats);
-	struct cgminer_stats *pool_stats;
-	struct timeval getwork_start;
-
-	/* Try to cycle approximately 5 times before each log update */
-	const long cycle = opt_log_interval / 5 ? : 1;
-	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
-	struct timeval diff, sdiff, wdiff = {0, 0};
+	struct timeval tv_start, tv_end;
+	struct timeval tv_hashes, tv_worktime;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
-	int64_t hashes_done = 0;
 	int64_t hashes;
-	bool scanhash_working = true;
 	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
-
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-	char threadname[20];
-	snprintf(threadname, 20, "miner_%s", cgpu->proc_repr_ns);
-	RenameThread(threadname);
-
-	gettimeofday(&getwork_start, NULL);
-
-	if (api->thread_init && !api->thread_init(mythr)) {
-		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
-		goto out;
-	}
-
-	thread_reportout(mythr);
-	applog(LOG_DEBUG, "Popping ping in miner thread");
-	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
-
-	sdiff.tv_sec = sdiff.tv_usec = 0;
-	gettimeofday(&tv_lastupdate, NULL);
-
+	
 	while (1) {
 		mythr->work_restart = false;
-		work = get_work(mythr, thr_id);
-		cgpu->new_work = true;
-
-		gettimeofday(&tv_workstart, NULL);
-		work->blk.nonce = 0;
-		cgpu->max_hashes = 0;
+		request_work(mythr);
+		work = get_work(mythr);
 		if (api->prepare_work && !api->prepare_work(mythr, work)) {
 			applog(LOG_ERR, "work prepare failed, exiting "
 				"mining thread %d", thr_id);
 			break;
 		}
-
+		gettimeofday(&(work->tv_work_start), NULL);
+		
 		do {
+			thread_reportin(mythr);
 			gettimeofday(&tv_start, NULL);
-
-			timersub(&tv_start, &getwork_start, &getwork_start);
-
-			timeradd(&getwork_start,
-				&(dev_stats->getwork_wait),
-				&(dev_stats->getwork_wait));
-			if (timercmp(&getwork_start, &(dev_stats->getwork_wait_max), >)) {
-				dev_stats->getwork_wait_max.tv_sec = getwork_start.tv_sec;
-				dev_stats->getwork_wait_max.tv_usec = getwork_start.tv_usec;
-			}
-			if (timercmp(&getwork_start, &(dev_stats->getwork_wait_min), <)) {
-				dev_stats->getwork_wait_min.tv_sec = getwork_start.tv_sec;
-				dev_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
-			}
-			dev_stats->getwork_calls++;
-
-			pool_stats = &(work->pool->cgminer_stats);
-
-			timeradd(&getwork_start,
-				&(pool_stats->getwork_wait),
-				&(pool_stats->getwork_wait));
-			if (timercmp(&getwork_start, &(pool_stats->getwork_wait_max), >)) {
-				pool_stats->getwork_wait_max.tv_sec = getwork_start.tv_sec;
-				pool_stats->getwork_wait_max.tv_usec = getwork_start.tv_usec;
-			}
-			if (timercmp(&getwork_start, &(pool_stats->getwork_wait_min), <)) {
-				pool_stats->getwork_wait_min.tv_sec = getwork_start.tv_sec;
-				pool_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
-			}
-			pool_stats->getwork_calls++;
-
-			gettimeofday(&(work->tv_work_start), NULL);
-
-			thread_reportin(mythr);
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
-			thread_reportin(mythr);
-
-			gettimeofday(&getwork_start, NULL);
-
-			if (unlikely(hashes == -1)) {
-				time_t now = time(NULL);
-				if (difftime(now, cgpu->device_last_not_well) > 1.) {
-					dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-				}
-
-				if (scanhash_working && opt_restart) {
-					applog(LOG_ERR, "%"PRIpreprv" failure, attempting to reinitialize", cgpu->proc_repr);
-					scanhash_working = false;
-					cgpu->reinit_backoff = 5.2734375;
-					hashes = 0;
-				} else {
-					applog(LOG_ERR, "%"PRIpreprv" failure, disabling!", cgpu->proc_repr);
-					cgpu->deven = DEV_RECOVER_ERR;
-					goto disabled;
-				}
-			}
-			else
-				scanhash_working = true;
-
-			hashes_done += hashes;
-			if (hashes > cgpu->max_hashes)
-				cgpu->max_hashes = hashes;
-
 			gettimeofday(&tv_end, NULL);
-			timersub(&tv_end, &tv_start, &diff);
-			sdiff.tv_sec += diff.tv_sec;
-			sdiff.tv_usec += diff.tv_usec;
-			if (sdiff.tv_usec > 1000000) {
-				++sdiff.tv_sec;
-				sdiff.tv_usec -= 1000000;
-			}
-
-			timersub(&tv_end, &tv_workstart, &wdiff);
-
-			if (unlikely((long)sdiff.tv_sec < cycle)) {
-				int mult;
-
-				if (likely(!api->can_limit_work || max_nonce == 0xffffffff))
-					continue;
-
-				mult = 1000000 / ((sdiff.tv_usec + 0x400) / 0x400) + 0x10;
-				mult *= cycle;
-				if (max_nonce > (0xffffffff * 0x400) / mult)
-					max_nonce = 0xffffffff;
-				else
-					max_nonce = (max_nonce * mult) / 0x400;
-			} else if (unlikely(sdiff.tv_sec > cycle) && api->can_limit_work)
-				max_nonce = max_nonce * cycle / sdiff.tv_sec;
-			else if (unlikely(sdiff.tv_usec > 100000) && api->can_limit_work)
-				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
-
-			timersub(&tv_end, &tv_lastupdate, &diff);
-			if (diff.tv_sec >= opt_log_interval) {
-				hashmeter(thr_id, &diff, hashes_done);
-				hashes_done = 0;
-				tv_lastupdate = tv_end;
-			}
-
+			thread_reportin(mythr);
+			
+			timersub(&tv_end, &tv_start, &tv_hashes);
+			if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &max_nonce : NULL))
+				goto disabled;
+			
 			if (unlikely(mythr->work_restart)) {
 				/* Apart from device_thread 0, we stagger the
 				 * starting of every next thread to try and get
@@ -6746,15 +6723,49 @@ void *miner_thread(void *userdata)
 				}
 				break;
 			}
-
+			
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
 disabled:
 				mt_disable(mythr, thr_id, api);
-
-			sdiff.tv_sec = sdiff.tv_usec = 0;
-		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
+			
+			timersub(&tv_end, &work->tv_work_start, &tv_worktime);
+		} while (!abandon_work(work, &tv_worktime, cgpu->max_hashes));
 		free_work(work);
 	}
+}
+
+void *miner_thread(void *userdata)
+{
+	struct thr_info *mythr = userdata;
+	const int thr_id = mythr->id;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	const struct device_api *api = cgpu->api;
+
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	char threadname[20];
+	snprintf(threadname, 20, "miner_%s", cgpu->proc_repr_ns);
+	RenameThread(threadname);
+
+	// FIXME: initialize all cgpus and virtual threads
+	cgpu->max_hashes = 0;
+	mythr->scanhash_working = true;
+	mythr->hashes_done = 0;
+	timerclear(&mythr->tv_hashes_done);
+	gettimeofday(&mythr->tv_lastupdate, NULL);
+
+	if (api->thread_init && !api->thread_init(mythr)) {
+		// FIXME: Should affect all processors managed
+		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
+		goto out;
+	}
+
+	thread_reportout(mythr);
+	applog(LOG_DEBUG, "Popping ping in miner thread");
+	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
+
+	// FIXME: allow device drivers to override this
+	minerloop(mythr);
 
 out:
 	if (api->thread_shutdown)
