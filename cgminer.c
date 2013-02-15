@@ -4720,9 +4720,9 @@ static void *stratum_thread(void *userdata)
 			clear_pool_work(pool);
 
 			wait_lpcurrent(pool);
-			if (!initiate_stratum(pool) || !auth_stratum(pool)) {
+			if (!restart_stratum(pool)) {
 				pool_died(pool);
-				while (!initiate_stratum(pool) || !auth_stratum(pool)) {
+				while (!restart_stratum(pool)) {
 					if (pool->removed)
 						goto out;
 					sleep(30);
@@ -4757,11 +4757,11 @@ static void *stratum_thread(void *userdata)
 			if (pool == current_pool())
 				restart_threads();
 
-			if (initiate_stratum(pool) && auth_stratum(pool))
+			if (restart_stratum(pool))
 				continue;
 
 			pool_died(pool);
-			while (!initiate_stratum(pool) || !auth_stratum(pool)) {
+			while (!restart_stratum(pool)) {
 				if (pool->removed)
 					goto out;
 				sleep(30);

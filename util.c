@@ -1513,6 +1513,34 @@ out:
 	return ret;
 }
 
+/* Placeholder for real resume function in the future */
+static bool resume_stratum(struct pool *pool)
+{
+	mutex_lock(&pool->pool_lock);
+	free(pool->sessionid);
+	pool->sessionid = NULL;
+	mutex_unlock(&pool->pool_lock);
+
+	return false;
+}
+
+bool restart_stratum(struct pool *pool)
+{
+	bool resume;
+
+	mutex_lock(&pool->pool_lock);
+	resume = pool->sessionid != NULL;
+	mutex_unlock(&pool->pool_lock);
+
+	if (resume && !resume_stratum(pool))
+		return false;
+	else if (!initiate_stratum(pool))
+		return false;
+	if (!auth_stratum(pool))
+		return false;
+	return true;
+}
+
 void suspend_stratum(struct pool *pool)
 {
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
