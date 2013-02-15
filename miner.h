@@ -746,6 +746,7 @@ extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
 extern void thread_reportin(struct thr_info *thr);
+extern void clear_stratum_shares(struct pool *pool);
 extern int restart_wait(unsigned int mstime);
 
 extern void kill_work(void);
@@ -971,6 +972,7 @@ struct pool {
 	size_t n1_len;
 	uint32_t nonce2;
 	int n2size;
+	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;
 	bool stratum_auth;
@@ -1035,6 +1037,7 @@ struct work {
 	char		*nonce2;
 	char		*ntime;
 	double		sdiff;
+	char		*sessionid;
 
 	bool		gbt;
 	char		*gbt_coinbase;
