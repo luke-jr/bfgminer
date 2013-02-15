@@ -1365,15 +1365,12 @@ out:
 	return ret;
 }
 
-bool initiate_stratum(struct pool *pool)
+static bool setup_stratum_curl(struct pool *pool)
 {
-	json_t *val = NULL, *res_val, *err_val;
 	char curl_err_str[CURL_ERROR_SIZE];
-	char s[RBUFSIZE], *sret = NULL;
 	CURL *curl = NULL;
 	double byte_count;
-	json_error_t err;
-	bool ret = false;
+	char s[RBUFSIZE];
 
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
@@ -1393,7 +1390,6 @@ bool initiate_stratum(struct pool *pool)
 	}
 
 	/* Create a http url for use with curl */
-	memset(s, 0, RBUFSIZE);
 	sprintf(s, "http://%s:%s", pool->sockaddr_url, pool->stratum_port);
 
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
@@ -1413,7 +1409,7 @@ bool initiate_stratum(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
-		goto out;
+		return false;
 	}
 	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
 	keep_alive(curl, pool->sock);
@@ -1424,6 +1420,19 @@ bool initiate_stratum(struct pool *pool)
 	pool->cgminer_pool_stats.times_received++;
 	if (curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD, &byte_count) == CURLE_OK)
 		pool->cgminer_pool_stats.bytes_received += byte_count;
+
+	return true;
+}
+
+bool initiate_stratum(struct pool *pool)
+{
+	json_t *val = NULL, *res_val, *err_val;
+	char s[RBUFSIZE], *sret = NULL;
+	json_error_t err;
+	bool ret = false;
+
+	if (!setup_stratum_curl(pool))
+		goto out;
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
