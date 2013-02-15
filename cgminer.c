@@ -3149,7 +3149,8 @@ static void *submit_work_thread(void *userdata)
 
 	if (work->stratum) {
 		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
-		uint32_t *hash32 = (uint32_t *)work->hash, h32, nonce;
+		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
+		bool submitted = false;
 		char *noncehex;
 		char s[1024];
 
@@ -3159,30 +3160,59 @@ static void *submit_work_thread(void *userdata)
 		nonce = *((uint32_t *)(work->data + 76));
 		noncehex = bin2hex((const unsigned char *)&nonce, 4);
 		memset(s, 0, 1024);
-		h32 = hash32[6];
 
 		mutex_lock(&sshare_lock);
 		/* Give the stratum share a unique id */
 		sshare->id = swork_id++;
-		HASH_ADD_INT(stratum_shares, id, sshare);
-		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		mutex_unlock(&sshare_lock);
 
+		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
+			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
 
-		applog(LOG_INFO, "Submitting share %08lx to pool %d", h32, pool->pool_no);
+		applog(LOG_INFO, "Submitting share %08lx to pool %d", hash32[6], pool->pool_no);
 
-		if (likely(stratum_send(pool, s, strlen(s)))) {
-			if (pool_tclear(pool, &pool->submit_fail))
-					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
-			applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
-		} else if (!pool_tset(pool, &pool->submit_fail) && cnx_needed(pool)) {
-			applog(LOG_WARNING, "Pool %d stratum share submission failure", pool->pool_no);
-			total_ro++;
-			pool->remotefail_occasions++;
+		/* Try resubmitting for up to 2 minutes if we fail to submit
+		 * once and the stratum pool supports sessionid for mining
+		 * resume. */
+		while (time(NULL) < sshare->sshare_time + 120) {
+			bool session_match;
+
+			if (likely(stratum_send(pool, s, strlen(s)))) {
+				if (pool_tclear(pool, &pool->submit_fail))
+						applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
+				mutex_lock(&sshare_lock);
+				HASH_ADD_INT(stratum_shares, id, sshare);
+				mutex_unlock(&sshare_lock);
+				applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
+				submitted = true;
+				break;
+			}
+			if (!pool_tset(pool, &pool->submit_fail) && cnx_needed(pool)) {
+				applog(LOG_WARNING, "Pool %d stratum share submission failure", pool->pool_no);
+				total_ro++;
+				pool->remotefail_occasions++;
+			}
+
+			mutex_lock(&pool->pool_lock);
+			session_match = pool->sessionid && work->sessionid && !strcmp(pool->sessionid, work->sessionid);
+			mutex_unlock(&pool->pool_lock);
+
+			if (!session_match) {
+				applog(LOG_DEBUG, "Failed to session match stratum share");
+				break;
+			}
+			/* Retry every 5 seconds */
+			sleep(5);
 		}
 
+		if (unlikely(!submitted)) {
+			applog(LOG_DEBUG, "Failed to submit stratum share, discarding");
+			free_work(work);
+			free(sshare);
+			pool->stale_shares++;
+			total_stale++;
+		}
 		goto out;
 	}
 
