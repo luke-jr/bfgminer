@@ -240,6 +240,7 @@ struct stratum_share {
 	bool block;
 	struct work *work;
 	int id;
+	time_t sshare_time;
 };
 
 static struct stratum_share *stratum_shares = NULL;
@@ -3152,6 +3153,7 @@ static void *submit_work_thread(void *userdata)
 		char *noncehex;
 		char s[1024];
 
+		sshare->sshare_time = time(NULL);
 		/* This work item is freed in parse_stratum_response */
 		sshare->work = work;
 		mutex_lock(&sshare_lock);
@@ -5159,7 +5161,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Copy parameters required for share submission */
 	work->job_id = strdup(pool->swork.job_id);
 	work->ntime = strdup(pool->swork.ntime);
-
+	if (pool->sessionid)
+		work->sessionid = strdup(pool->sessionid);
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);

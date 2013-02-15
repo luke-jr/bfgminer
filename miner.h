@@ -1006,6 +1006,7 @@ struct work {
 	char		*nonce2;
 	char		*ntime;
 	double		sdiff;
+	char		*sessionid;
 
 	bool		gbt;
 	char		*gbt_coinbase;
