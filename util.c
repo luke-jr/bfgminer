@@ -1478,6 +1478,11 @@ bool initiate_stratum(struct pool *pool)
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
 		goto out;
 	}
+	pool->sessionid = json_array_string(res_val, 3);
+	if (pool->sessionid)
+		applog(LOG_DEBUG, "Pool %d stratum session id: %s", pool->pool_no, pool->sessionid);
+	else
+		applog(LOG_DEBUG, "Pool %d stratum session id does not exist");
 
 	ret = true;
 out:

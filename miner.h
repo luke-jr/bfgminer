@@ -941,6 +941,7 @@ struct pool {
 	size_t n1_len;
 	uint32_t nonce2;
 	int n2size;
+	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;
 	bool stratum_auth;
