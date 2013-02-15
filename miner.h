@@ -720,6 +720,7 @@ extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
 extern void thread_reportin(struct thr_info *thr);
+extern void clear_stratum_shares(struct pool *pool);
 extern int restart_wait(unsigned int mstime);
 
 extern void kill_work(void);
