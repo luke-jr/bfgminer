@@ -3149,7 +3149,7 @@ static void *submit_work_thread(void *userdata)
 
 	if (work->stratum) {
 		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
-		uint32_t *hash32 = (uint32_t *)work->hash, nonce;
+		uint32_t *hash32 = (uint32_t *)work->hash, h32, nonce;
 		char *noncehex;
 		char s[1024];
 
@@ -3165,10 +3165,11 @@ static void *submit_work_thread(void *userdata)
 		memset(s, 0, 1024);
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
+		h32 = hash32[6];
 		mutex_unlock(&sshare_lock);
 		free(noncehex);
 
-		applog(LOG_INFO, "Submitting share %08lx to pool %d", (unsigned long)(hash32[6]), pool->pool_no);
+		applog(LOG_INFO, "Submitting share %08lx to pool %d", h32, pool->pool_no);
 
 		if (likely(stratum_send(pool, s, strlen(s)))) {
 			if (pool_tclear(pool, &pool->submit_fail))
