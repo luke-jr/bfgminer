@@ -1380,10 +1380,7 @@ void clean_work(struct work *work)
 	free(work->nonce2);
 	free(work->ntime);
 	free(work->gbt_coinbase);
-	work->job_id = NULL;
-	work->nonce2 = NULL;
-	work->ntime = NULL;
-	work->gbt_coinbase = NULL;
+	free(work->sessionid);
 	memset(work, 0, sizeof(struct work));
 }
 
