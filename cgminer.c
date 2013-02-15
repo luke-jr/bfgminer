@@ -5492,10 +5492,10 @@ void *miner_thread(void *userdata)
 				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
 
 			timersub(&tv_end, &tv_lastupdate, &diff);
-			if (diff.tv_sec >= opt_log_interval) {
+			if (diff.tv_sec >= cycle) {
 				hashmeter(thr_id, &diff, hashes_done);
 				hashes_done = 0;
-				tv_lastupdate = tv_end;
+				memcpy(&tv_lastupdate, &tv_end, sizeof(struct timeval));
 			}
 
 			if (unlikely(mythr->work_restart)) {
