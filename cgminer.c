@@ -4684,6 +4684,16 @@ static void stratum_resumed(struct pool *pool)
 	}
 }
 
+static bool supports_resume(struct pool *pool)
+{
+	bool ret;
+
+	mutex_lock(&pool->pool_lock);
+	ret = (pool->sessionid != NULL);
+	mutex_unlock(&pool->pool_lock);
+	return ret;
+}
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -4744,7 +4754,8 @@ static void *stratum_thread(void *userdata)
 			/* If the socket to our stratum pool disconnects, all
 			 * tracked submitted shares are lost and we will leak
 			 * the memory if we don't discard their records. */
-			clear_stratum_shares(pool);
+			if (!supports_resume(pool))
+				clear_stratum_shares(pool);
 			clear_pool_work(pool);
 			if (pool == current_pool())
 				restart_threads();
