@@ -3173,7 +3173,7 @@ static void *submit_work_thread(void *userdata)
 		 * once and the stratum pool supports sessionid for mining
 		 * resume. */
 		while (time(NULL) < sshare->sshare_time + 120) {
-			bool has_sessionid;
+			bool sessionid_match;
 
 			if (likely(stratum_send(pool, s, strlen(s)))) {
 				if (pool_tclear(pool, &pool->submit_fail))
@@ -3192,11 +3192,11 @@ static void *submit_work_thread(void *userdata)
 			}
 
 			mutex_lock(&pool->pool_lock);
-			has_sessionid = pool->sessionid != NULL;
+			sessionid_match = pool->sessionid && work->sessionid && !strcmp(pool->sessionid, work->sessionid);
 			mutex_unlock(&pool->pool_lock);
 
-			if (!has_sessionid) {
-				applog(LOG_DEBUG, "No session id for resubmitting stratum share");
+			if (!sessionid_match) {
+				applog(LOG_DEBUG, "No matching session id for resubmitting stratum share");
 				break;
 			}
 			/* Retry every 5 seconds */
