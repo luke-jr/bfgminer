@@ -3235,7 +3235,8 @@ static void __kill_work(void)
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = &thr_info[i];
-		thr_info_freeze(thr);
+		if (thr->cgpu->threads)
+			thr_info_freeze(thr);
 		thr->pause = true;
 	}
 
@@ -3245,7 +3246,8 @@ static void __kill_work(void)
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = &thr_info[i];
-		thr_info_cancel(thr);
+		if (thr->cgpu->threads)
+			thr_info_cancel(thr);
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
@@ -7339,7 +7341,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				if (thr->cgpu->deven == DEV_DISABLED)
 					continue;
 				thr->pause = false;
-				tq_push(thr->q, &ping);
+				if (thr->cgpu->threads)
+					tq_push(thr->q, &ping);
 			}
 		}
 
@@ -7868,7 +7871,7 @@ void register_device(struct cgpu_info *cgpu)
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
 	if (!cgpu->proc_id)
 		cgpu->device_line_id = device_line_id_count++;
-	mining_threads += cgpu->threads;
+	mining_threads += cgpu->threads ?: 1;
 #ifdef HAVE_CURSES
 	adj_width(mining_threads, &dev_width);
 #endif
