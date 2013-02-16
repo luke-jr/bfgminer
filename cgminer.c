@@ -5624,6 +5624,27 @@ void work_completed(struct cgpu_info *cgpu, struct work *work)
 	free_work(work);
 }
 
+static void flush_queue(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp;
+	int discarded = 0;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		/* Can only discard the work items if they're not physically
+		 * queued on the device. */
+		if (!work->queued) {
+			HASH_DEL(cgpu->queued_work, work);
+			discard_work(work);
+			discarded++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	if (discarded)
+		applog(LOG_DEBUG, "Discarded %d queued work items", discarded);
+}
+
 /* This version of hash work is for devices that are fast enough to always
  * perform a full nonce range and need a queue to maintain the device busy.
  * Work creation and destruction is not done from within this function
@@ -5663,8 +5684,8 @@ static void hash_queued_work(struct thr_info *mythr)
 			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
 		}
 
-		//if (unlikely(mythr->work_restart))
-		//	flush_queue(mythr, cgpu);
+		if (unlikely(mythr->work_restart))
+			flush_queue(cgpu);
 
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(mythr, thr_id, drv);
