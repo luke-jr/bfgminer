@@ -5684,8 +5684,10 @@ static void hash_queued_work(struct thr_info *mythr)
 			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
 		}
 
-		if (unlikely(mythr->work_restart))
+		if (unlikely(mythr->work_restart)) {
 			flush_queue(cgpu);
+			drv->flush_work(cgpu);
+		}
 
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(mythr, thr_id, drv);
@@ -6612,6 +6614,9 @@ static void noop_thread_enable(struct thr_info __maybe_unused *thr)
 {
 }
 
+#define noop_flush_work noop_reinit_device
+#define noop_queue_full noop_get_stats
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6639,8 +6644,10 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->thread_shutdown = &noop_thread_shutdown;
 	if (!drv->thread_enable)
 		drv->thread_enable = &noop_thread_enable;
+	if (!drv->flush_work)
+		drv->flush_work = &noop_flush_work;
 	if (!drv->queue_full)
-		drv->queue_full = &noop_get_stats;
+		drv->queue_full = &noop_queue_full;
 }
 
 void enable_device(struct cgpu_info *cgpu)
