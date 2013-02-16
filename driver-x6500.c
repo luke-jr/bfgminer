@@ -126,7 +126,6 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	struct cgpu_info *x6500;
 	x6500 = calloc(1, sizeof(*x6500));
 	x6500->api = &x6500_api;
-	mutex_init(&x6500->device_mutex);
 	x6500->device_path = strdup(serial);
 	x6500->deven = DEV_ENABLED;
 	x6500->threads = 1;
@@ -319,16 +318,12 @@ static bool x6500_change_clock(struct thr_info *thr, int multiplier)
 static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	uint8_t oldFreq = fpga->dclk.freqM;
 
-	mutex_lock(mutexp);
 	if (!x6500_change_clock(thr, multiplier)) {
-		mutex_unlock(mutexp);
 		return false;
 	}
-	mutex_unlock(mutexp);
 
 	dclk_msg_freqchange(x6500->proc_repr, oldFreq * 2, fpga->dclk.freqM * 2, NULL);
 	return true;
@@ -337,7 +332,6 @@ static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 static bool x6500_thread_init(struct thr_info *thr)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
 
 	for ( ; x6500; x6500 = x6500->next_proc)
@@ -360,9 +354,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 	x6500_jtag_set(jp, pinoffset);
 	thr->cgpu_data = fpga;
 	
-	mutex_lock(mutexp);
 	if (!jtag_reset(jp)) {
-		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%s: JTAG reset failed",
 		       x6500->dev_repr);
 		return false;
@@ -370,7 +362,6 @@ static bool x6500_thread_init(struct thr_info *thr)
 	
 	i = jtag_detect(jp);
 	if (i != 1) {
-		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%s: JTAG detect returned %d",
 		       x6500->dev_repr, i);
 		return false;
@@ -381,7 +372,6 @@ static bool x6500_thread_init(struct thr_info *thr)
 	 && jtag_read (jp, JTAG_REG_DR, buf, 32)
 	 && jtag_reset(jp)
 	)) {
-		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%s: JTAG error reading user code",
 		       x6500->dev_repr);
 		return false;
@@ -405,7 +395,6 @@ static bool x6500_thread_init(struct thr_info *thr)
 	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
 	for (i = 0; 0xffffffff != x6500_get_register(jp, 0xE); ++i)
 	{}
-	mutex_unlock(mutexp);
 
 	if (i)
 		applog(LOG_WARNING, "%"PRIprepr": Flushed %d nonces from buffer at init",
@@ -526,7 +515,7 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 	float hottest = 0;
 	if (x6500->deven != DEV_ENABLED) {
 		// Getting temperature more efficiently while enabled
-		// NOTE: Don't need to mess with mutex here, since the device is disabled
+		// FIXME: Move this to minerloop
 		x6500_get_temperature(x6500);
 	}
 
@@ -621,11 +610,8 @@ static
 bool x6500_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
-
-	mutex_lock(mutexp);
 
 	for (int i = 1, j = 0; i < 9; ++i, j += 4)
 		x6500_set_register(jp, i, fromlebytes(work->midstate, j));
@@ -634,8 +620,6 @@ bool x6500_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused u
 		x6500_set_register(jp, i, fromlebytes(work->data, j));
 
 	x6500_get_temperature(x6500);
-	
-	mutex_unlock(mutexp);
 	
 	ft232r_flush(jp->a->ftdi);
 	
@@ -650,7 +634,6 @@ static
 void x6500_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
 	struct timeval tv_now;
@@ -661,8 +644,6 @@ void x6500_job_start(struct thr_info *thr)
 		dclk_updateFreq(&fpga->dclk, x6500_dclk_change_clock, thr);
 	}
 
-	mutex_lock(mutexp);
-
 	x6500_set_register(jp, 11, fpga->prepwork_last_register);
 
 	ft232r_flush(jp->a->ftdi);
@@ -670,7 +651,6 @@ void x6500_job_start(struct thr_info *thr)
 	gettimeofday(&tv_now, NULL);
 	if (!thr->prev_work)
 		fpga->tv_hashstart = tv_now;
-	mutex_unlock(mutexp);
 
 	if (opt_debug) {
 		char *xdata = bin2hex(thr->next_work->data, 80);
@@ -706,7 +686,6 @@ static
 int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	pthread_mutex_t *mutexp = &x6500->device->device_mutex;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jtag = &fpga->jtag;
 
@@ -716,10 +695,8 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	bool bad;
 
 	while (1) {
-		mutex_lock(mutexp);
 		gettimeofday(&tv_now, NULL);
 		nonce = x6500_get_register(jtag, 0xE);
-		mutex_unlock(mutexp);
 		if (nonce != 0xffffffff) {
 			bad = !test_nonce(work, nonce, false);
 			if (!bad) {
