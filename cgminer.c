@@ -5595,6 +5595,25 @@ static void hash_sole_work(struct thr_info *mythr)
 	}
 }
 
+/* Create a hashtable of work items for devices with a queue. The device
+ * driver must have a custom queue_full function or it will default to true
+ * and put only one work item in the queue. Work items should not be removed
+ * from this hashtable until they are no longer in use anywhere. Once a work
+ * item is physically queued on the device itself, the work->queued flag
+ * should be set under cgpu->qlock write lock to prevent it being dereferenced
+ * while still in use. */
+static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
+{
+	thread_reportout(mythr);
+	do {
+		struct work *work = get_work(mythr, thr_id);
+
+		wr_lock(&cgpu->qlock);
+		HASH_ADD_INT(cgpu->queued_work, id, work);
+		wr_unlock(&cgpu->qlock);
+	} while (!drv->queue_full(cgpu));
+}
+
 /* This version of hash work is for devices that are fast enough to always
  * perform a full nonce range and need a queue to maintain the device busy.
  * Work creation and destruction is not done from within this function
@@ -5614,7 +5633,7 @@ static void hash_queued_work(struct thr_info *mythr)
 
 		mythr->work_restart = false;
 
-		//fill_queue(mythr, cgpu, drv, thr_id);
+		fill_queue(mythr, cgpu, drv, thr_id);
 
 		thread_reportin(mythr);
 		hashes = drv->scanwork(mythr);
@@ -6589,6 +6608,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->thread_shutdown = &noop_thread_shutdown;
 	if (!drv->thread_enable)
 		drv->thread_enable = &noop_thread_enable;
+	if (!drv->queue_full)
+		drv->queue_full = &noop_get_stats;
 }
 
 void enable_device(struct cgpu_info *cgpu)
@@ -6612,6 +6633,9 @@ void enable_device(struct cgpu_info *cgpu)
 	}
 #endif
 	fill_device_api(cgpu);
+
+	rwlock_init(&cgpu->qlock);
+	cgpu->queued_work = NULL;
 }
 
 struct _cgpu_devid_counter {
