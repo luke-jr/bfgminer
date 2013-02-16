@@ -298,6 +298,7 @@ struct device_drv {
 	bool (*thread_init)(struct thr_info *);
 	bool (*prepare_work)(struct thr_info *, struct work *);
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
+	int64_t (*scanwork)(struct thr_info *);
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
