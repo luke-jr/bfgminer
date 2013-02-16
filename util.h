@@ -81,4 +81,27 @@ static inline void align_len(size_t *len)
 		*len += 4 - (*len % 4);
 }
 
+
+#define timer_set_delay(tvp_timer, tvp_now, usecs)  do {  \
+	struct timeval tv_add = {  \
+		.tv_sec = usecs / 1000000,  \
+		.tv_usec = usecs % 1000000,  \
+	};  \
+	timeradd(&tv_add, tvp_now, tvp_timer);  \
+} while(0)
+
+#define timer_set_delay_from_now(tvp_timer, usecs)  do {  \
+	struct timeval tv_now;  \
+	gettimeofday(&tv_now, NULL);  \
+	timer_set_delay(tvp_timer, &tv_now, usecs);  \
+} while(0)
+
+static inline
+void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)
+{
+	if (tvp_timeout->tv_sec == -1 /* no timeout */ || timercmp(tvp_time, tvp_timeout, <))
+		*tvp_timeout = *tvp_time;
+}
+
+
 #endif /* __UTIL_H__ */

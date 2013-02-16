@@ -295,6 +295,17 @@ struct device_api {
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
+
+	// === Implemented by minerloop_async ===
+
+	// Can be used per-thread or per-processor
+	void (*poll)(struct thr_info *);
+
+	// Job-specific functions (only with minerloop_async!)
+	bool (*job_prepare)(struct thr_info*, struct work*, uint64_t);
+	void (*job_start)(struct thr_info*);
+	int64_t (*job_get_results)(struct thr_info*, struct work*);
+	int64_t (*job_process_results)(struct thr_info*, struct work*);  // return value ignored if job_get_results is used
 };
 
 enum dev_enable {
@@ -541,6 +552,14 @@ struct thr_info {
 	bool	pause;
 	time_t	getwork;
 	double	rolling;
+
+	// Used by minerloop_async
+	struct work *prev_work;
+	struct work *work;
+	struct work *next_work;
+	struct timeval tv_morework;
+	struct timeval tv_jobstart;
+	struct timeval tv_poll;
 
 	bool	work_restart;
 	int		work_restart_fd;
@@ -1084,6 +1103,8 @@ enum test_nonce2_result {
 	TNR_HIGH,
 	TNR_BAD,
 };
+extern void minerloop_scanhash(struct thr_info *);
+extern void minerloop_async(struct thr_info *);
 extern void request_work(struct thr_info *);
 extern struct work *get_work(struct thr_info *);
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);

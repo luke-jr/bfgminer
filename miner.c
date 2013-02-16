@@ -6676,7 +6676,7 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 }
 
 // Miner loop to manage a single processor (with possibly multiple threads per processor)
-void minerloop(struct thr_info *mythr)
+void minerloop_scanhash(struct thr_info *mythr)
 {
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
@@ -6735,6 +6735,139 @@ disabled:
 	}
 }
 
+void minerloop_async(struct thr_info *mythr)
+{
+	const int thr_id = mythr->id;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	const struct device_api *api = cgpu->api;
+	struct timeval tv_start, tv_end;
+	struct timeval tv_hashes, tv_worktime;
+	struct timeval tv_now;
+	struct timeval tv_timeout, *tvp_timeout;
+	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
+	int64_t hashes;
+	struct work *work;
+	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
+	struct cgpu_info *proc;
+	bool starting_new_work;
+	// NOTE: prev_job_work/new_job_work are distinct from mythr->prev_work/next_work (job v work boundary)
+	struct work *prev_job_work, *new_job_work;
+	int proc_thr_no;
+	
+	while (1) {
+		if (unlikely(cgpu->thr[0]->work_restart)) {
+			for (proc = cgpu; proc; proc = proc->next_proc)
+			{
+				for (proc_thr_no = proc->threads ?: 1; proc_thr_no--; )
+				{
+					mythr = proc->thr[proc_thr_no];
+					mythr->work_restart = true;
+					if ((!proc_thr_no) || mythr->primary_thread)
+						timerclear(&mythr->tv_morework);
+					else
+						/* Apart from device_thread 0, we stagger the
+						 * starting of every next thread to try and get
+						 * all devices busy before worrying about
+						 * getting work for their extra threads */
+						timer_set_delay_from_now(&mythr->tv_morework, 250000 * proc_thr_no);
+				}
+			}
+		}
+		tv_timeout.tv_sec = -1;
+		gettimeofday(&tv_now, NULL);
+		for (proc = cgpu; proc; proc = proc->next_proc)
+		{
+			mythr = proc->thr[0];
+			
+			if (timercmp(&mythr->tv_morework, &tv_now, <))
+			{
+				thread_reportin(mythr);
+				prev_job_work = mythr->work;
+				tv_start = mythr->tv_jobstart;
+				if (prev_job_work)
+					timersub(&tv_now, &mythr->work->tv_work_start, &tv_worktime);
+				if ((!prev_job_work) || abandon_work(mythr->work, &tv_worktime, cgpu->max_hashes))
+				{
+					mythr->work_restart = false;
+					request_work(mythr);
+					// FIXME: Allow get_work to return NULL to retry on notification
+					mythr->next_work = get_work(mythr);
+					if (api->prepare_work && !api->prepare_work(mythr, mythr->next_work)) {
+						applog(LOG_ERR, "work prepare failed, exiting "
+							"mining thread %d", thr_id);
+						break;  // FIXME
+					}
+					starting_new_work = true;
+					new_job_work = mythr->next_work;
+				}
+				else
+				{
+					starting_new_work = false;
+					new_job_work = mythr->work;
+				}
+				api->job_prepare(mythr, new_job_work, max_nonce);
+				if (likely(prev_job_work))
+				{
+					hashes = -101;
+					if (api->job_get_results)
+						hashes = api->job_get_results(mythr, prev_job_work);
+				}
+				gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
+				if (starting_new_work)
+					mythr->next_work->tv_work_start = tv_now;
+				mythr->tv_jobstart = tv_now;
+				api->job_start(mythr);
+				if (starting_new_work)
+				{
+					if (mythr->prev_work)
+						free_work(mythr->prev_work);
+					mythr->prev_work = mythr->work;
+					mythr->work = mythr->next_work;
+					mythr->next_work = NULL;
+				}
+				if (likely(prev_job_work))
+				{
+					if (api->job_process_results)
+						hashes = api->job_process_results(mythr, prev_job_work);
+					thread_reportin(mythr);
+					
+					if (hashes != -101)
+					{
+						timersub(&tv_now, &tv_start, &tv_hashes);
+						if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &max_nonce : NULL))
+							break;  // FIXME: Disable the processor
+					}
+				}
+			}
+			
+			if (timercmp(&mythr->tv_poll, &tv_now, <))
+				api->poll(mythr);
+			
+			reduce_timeout_to(&tv_timeout, &mythr->tv_morework);
+			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
+		}
+		
+		gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
+		if (tv_timeout.tv_sec == -1)
+			tvp_timeout = NULL;
+		else
+		{
+			tvp_timeout = &tv_timeout;
+			if (timercmp(&tv_timeout, &tv_now, <))
+				timerclear(&tv_timeout);
+			else
+				timersub(&tv_timeout, &tv_now, &tv_timeout);
+		}
+		// FIXME: break select on work restart
+		select(0, NULL, NULL, NULL, tvp_timeout);
+#if 0
+			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+disabled:
+				mt_disable(mythr, thr_id, api);
+#endif
+	}
+}
+
 void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -6762,7 +6895,7 @@ void *miner_thread(void *userdata)
 	if (api->minerloop)
 		api->minerloop(mythr);
 	else
-		minerloop(mythr);
+		minerloop_scanhash(mythr);
 
 out:
 	if (api->thread_shutdown)
