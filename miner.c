@@ -5535,6 +5535,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (thr_id >= 0) {
 		struct thr_info *thr = &thr_info[thr_id];
 		struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+		int threadobj = cgpu->threads ?: 1;
 		double thread_rolling = 0.0;
 		int i;
 
@@ -5543,7 +5544,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 		/* Rolling average for each thread and each device */
 		decay_time(&thr->rolling, local_mhashes / secs);
-		for (i = 0; i < cgpu->threads; i++)
+		for (i = 0; i < threadobj; i++)
 			thread_rolling += cgpu->thr[i]->rolling;
 
 		mutex_lock(&hash_lock);
@@ -6748,8 +6749,9 @@ void *miner_thread(void *userdata)
 	RenameThread(threadname);
 
 	if (api->thread_init && !api->thread_init(mythr)) {
-		// FIXME: Should affect all processors managed
 		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
+		for (struct cgpu_info *slave = cgpu->next_proc; slave && !slave->threads; slave = slave->next_proc)
+			dev_error(slave, REASON_THREAD_FAIL_INIT);
 		goto out;
 	}
 
@@ -8293,24 +8295,39 @@ begin_bench:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		cgpu->thr = calloc(cgpu->threads+1, sizeof(*cgpu->thr));
-		cgpu->thr[cgpu->threads] = NULL;
+		int threadobj = cgpu->threads;
+		if (!threadobj)
+			// Create a fake thread object to handle hashmeter etc
+			threadobj = 1;
+		cgpu->thr = calloc(threadobj + 1, sizeof(*cgpu->thr));
+		cgpu->thr[threadobj] = NULL;
 		cgpu->status = LIFE_INIT;
 
 		cgpu->max_hashes = 0;
 
 		// Setup thread structs before starting any of the threads, in case they try to interact
-		for (j = 0; j < cgpu->threads; ++j, ++k) {
+		for (j = 0; j < threadobj; ++j, ++k) {
 			thr = &thr_info[k];
 			thr->id = k;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 			thr->work_restart_fd = thr->_work_restart_fd_w = -1;
+			timerclear(&thr->tv_morework);
 
 			thr->scanhash_working = true;
 			thr->hashes_done = 0;
 			timerclear(&thr->tv_hashes_done);
 			gettimeofday(&thr->tv_lastupdate, NULL);
+
+			cgpu->thr[j] = thr;
+		}
+	}
+
+	// Start threads
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = devices[i];
+		for (j = 0; j < cgpu->threads; ++j) {
+			thr = cgpu->thr[j];
 
 			thr->q = tq_new();
 			if (!thr->q)
@@ -8323,16 +8340,6 @@ begin_bench:
 
 				tq_push(thr->q, &ping);
 			}
-
-			cgpu->thr[j] = thr;
-		}
-	}
-
-	// Start threads
-	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = devices[i];
-		for (j = 0; j < cgpu->threads; ++j) {
-			thr = cgpu->thr[j];
 
 			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
 				continue;
