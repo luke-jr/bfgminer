@@ -30,6 +30,6 @@ extern void pause_dynamic_threads(int gpu);
 extern bool have_opencl;
 extern int opt_platform_id;
 
-extern struct device_api opencl_api;
+extern struct device_drv opencl_drv;
 
 #endif /* __DEVICE_GPU_H__ */

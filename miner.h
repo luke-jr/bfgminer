@@ -114,7 +114,7 @@ static inline int fsync (int fd)
   #include "libztex.h"
 #endif
 
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
   #include "usbutils.h"
 #endif
 
@@ -196,6 +196,15 @@ static inline int fsync (int fd)
 #endif
 #endif
 
+enum drv_driver {
+	DRIVER_OPENCL,
+	DRIVER_ICARUS,
+	DRIVER_BITFORCE,
+	DRIVER_MODMINER,
+	DRIVER_ZTEX,
+	DRIVER_CPU,
+};
+
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
@@ -259,16 +268,20 @@ struct gpu_adl {
 };
 #endif
 
+extern void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu);
+
 struct api_data;
 struct thr_info;
 struct work;
 
-struct device_api {
+struct device_drv {
+	enum drv_driver drv_id;
+
 	char *dname;
 	char *name;
 
-	// API-global functions
-	void (*api_detect)();
+	// DRV-global functions
+	void (*drv_detect)();
 
 	// Device-specific functions
 	void (*reinit_device)(struct cgpu_info *);
@@ -288,7 +301,12 @@ struct device_api {
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
+
+	// Does it need to be free()d?
+	bool copy;
 };
+
+extern struct device_drv *copy_drv(struct device_drv*);
 
 enum dev_enable {
 	DEV_ENABLED,
@@ -359,13 +377,15 @@ struct cgminer_pool_stats {
 	uint32_t max_diff_count;
 	uint64_t times_sent;
 	uint64_t bytes_sent;
+	uint64_t net_bytes_sent;
 	uint64_t times_received;
 	uint64_t bytes_received;
+	uint64_t net_bytes_received;
 };
 
 struct cgpu_info {
 	int cgminer_id;
-	struct device_api *api;
+	struct device_drv *drv;
 	int device_id;
 	char *name;
 	char *device_path;
@@ -374,13 +394,17 @@ struct cgpu_info {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
 #endif
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
 		struct cg_usb_device *usbdev;
 #endif
+#ifdef USE_ICARUS
 		int device_fd;
+#endif
 	};
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	struct cg_usb_info usbinfo;
+#endif
 #ifdef USE_MODMINER
-	int usbstat;
 	char fpgaid;
 	unsigned char clock;
 	pthread_mutex_t *modminer_mutex;
@@ -715,6 +739,8 @@ extern pthread_mutex_t cgusb_lock;
 extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
+extern pthread_mutex_t mining_thr_lock;
+extern pthread_mutex_t devices_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
@@ -740,6 +766,7 @@ extern void api(int thr_id);
 extern struct pool *current_pool(void);
 extern int enabled_pools;
 extern bool detect_stratum(struct pool *pool, char *url);
+extern void print_summary(void);
 extern struct pool *add_pool(void);
 extern void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
@@ -755,6 +782,7 @@ extern void add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define _MAX_INTENSITY_STR "14"
 #endif
 
+extern bool hotplug_mode;
 extern struct list_head scan_devices;
 extern int nDevs;
 extern int opt_n_threads;
@@ -762,7 +790,8 @@ extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
 extern bool opt_quiet;
-extern struct thr_info *thr_info;
+extern struct thr_info *control_thr;
+extern struct thr_info **mining_thr;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
 #ifdef USE_SCRYPT
@@ -926,6 +955,7 @@ struct pool {
 
 	time_t last_share_time;
 	double last_share_diff;
+	uint64_t best_diff;
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
@@ -1065,6 +1095,8 @@ extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
+extern void zero_bestshare(void);
+extern void zero_stats(void);
 extern void default_save_file(char *filename);
 extern bool log_curses_only(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
@@ -1082,6 +1114,8 @@ extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, struct work *base_work);
 extern struct work *copy_work(struct work *base_work);
+extern struct thr_info *get_thread(int thr_id);
+extern struct cgpu_info *get_devices(int id);
 
 enum api_data_type {
 	API_ESCAPE,

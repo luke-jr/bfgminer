@@ -208,7 +208,7 @@ static struct ICARUS_INFO **icarus_info;
 //
 static int option_offset = -1;
 
-struct device_api icarus_api;
+struct device_drv icarus_drv;
 
 static void rev(unsigned char *s, size_t l)
 {
@@ -571,7 +571,7 @@ static bool icarus_detect_one(const char *devpath)
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;
 	icarus = calloc(1, sizeof(struct cgpu_info));
-	icarus->api = &icarus_api;
+	icarus->drv = &icarus_drv;
 	icarus->device_path = strdup(devpath);
 	icarus->device_fd = -1;
 	icarus->threads = 1;
@@ -609,7 +609,7 @@ static bool icarus_detect_one(const char *devpath)
 
 static void icarus_detect()
 {
-	serial_detect(&icarus_api, icarus_detect_one);
+	serial_detect(&icarus_drv, icarus_detect_one);
 }
 
 static bool icarus_prepare(struct thr_info *thr)
@@ -668,7 +668,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	icarus = thr->cgpu;
 	if (icarus->device_fd == -1)
 		if (!icarus_prepare(thr)) {
-			applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+			applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
 			dev_error(icarus, REASON_DEV_COMMS_ERROR);
 
 			// fail the device if the reopen attempt fails
@@ -688,7 +688,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	ret = icarus_write(fd, ob_bin, sizeof(ob_bin));
 	if (ret) {
 		do_icarus_close(thr);
-		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+		applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return 0;	/* This should never happen */
 	}
@@ -708,7 +708,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	ret = icarus_gets(nonce_bin, fd, &tv_finish, thr, info->read_count);
 	if (ret == ICA_GETS_ERROR) {
 		do_icarus_close(thr);
-		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+		applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return 0;
 	}
@@ -900,10 +900,11 @@ static void icarus_shutdown(struct thr_info *thr)
 	do_icarus_close(thr);
 }
 
-struct device_api icarus_api = {
-	.dname = "icarus",
+struct device_drv icarus_drv = {
+	.drv_id = DRIVER_ICARUS,
+	.dname = "Icarus",
 	.name = "ICA",
-	.api_detect = icarus_detect,
+	.drv_detect = icarus_detect,
 	.get_api_stats = icarus_api_stats,
 	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,
