@@ -1491,7 +1491,7 @@ bool initiate_stratum(struct pool *pool)
 	if (pool->sessionid)
 		applog(LOG_DEBUG, "Pool %d stratum session id: %s", pool->pool_no, pool->sessionid);
 	else
-		applog(LOG_DEBUG, "Pool %d stratum session id does not exist");
+		applog(LOG_DEBUG, "Pool %d stratum session id does not exist", pool->pool_no);
 
 	ret = true;
 out:
