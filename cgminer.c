@@ -5611,6 +5611,9 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 		wr_lock(&cgpu->qlock);
 		HASH_ADD_INT(cgpu->queued_work, id, work);
 		wr_unlock(&cgpu->qlock);
+		/* The queue_full function should be used by the driver to
+		 * actually place work items on the physical device if it
+		 * does have a queue. */
 	} while (!drv->queue_full(cgpu));
 }
 
