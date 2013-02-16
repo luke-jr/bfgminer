@@ -297,8 +297,18 @@ struct device_drv {
 	uint64_t (*can_limit_work)(struct thr_info *);
 	bool (*thread_init)(struct thr_info *);
 	bool (*prepare_work)(struct thr_info *, struct work *);
+
+	/* Which hash work loop this driver uses. */
+	void (*hash_work)(struct thr_info *);
+	/* Two variants depending on whether the device divides work up into
+	 * small pieces or works with whole work items and may or may not have
+	 * a queue of its own. */
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
 	int64_t (*scanwork)(struct thr_info *);
+
+	/* Used to extract work from the hash table of queued work and tell
+	 * the main loop that it should not add any further work to the table.
+	 */
 	bool (*queue_full)(struct cgpu_info *);
 	void (*flush_work)(struct cgpu_info *);
 
@@ -1095,6 +1105,7 @@ struct modminer_fpga_state {
 extern void get_datestamp(char *, struct timeval *);
 extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
+extern void hash_queued_work(struct thr_info *mythr);
 extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);

@@ -5652,7 +5652,7 @@ static void flush_queue(struct cgpu_info *cgpu)
  * perform a full nonce range and need a queue to maintain the device busy.
  * Work creation and destruction is not done from within this function
  * directly. */
-static void hash_queued_work(struct thr_info *mythr)
+void hash_queued_work(struct thr_info *mythr)
 {
 	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start = {0, 0}, tv_end;
@@ -5719,7 +5719,7 @@ void *miner_thread(void *userdata)
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
 
-	hash_sole_work(mythr);
+	drv->hash_work(mythr);
 out:
 	drv->thread_shutdown(mythr);
 
@@ -6647,6 +6647,8 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->thread_shutdown = &noop_thread_shutdown;
 	if (!drv->thread_enable)
 		drv->thread_enable = &noop_thread_enable;
+	if (!drv->hash_work)
+		drv->hash_work = &hash_sole_work;
 	if (!drv->flush_work)
 		drv->flush_work = &noop_flush_work;
 	if (!drv->queue_full)
