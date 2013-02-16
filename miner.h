@@ -287,6 +287,7 @@ struct device_api {
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);
+	void (*minerloop)(struct thr_info *);
 	uint64_t (*can_limit_work)(struct thr_info *);
 	bool (*thread_init)(struct thr_info *);
 	bool (*prepare_work)(struct thr_info *, struct work *);
@@ -1083,10 +1084,14 @@ enum test_nonce2_result {
 	TNR_HIGH,
 	TNR_BAD,
 };
+extern void request_work(struct thr_info *);
+extern struct work *get_work(struct thr_info *);
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
 extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
+extern bool hashes_done(struct thr_info *, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce);
 extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);

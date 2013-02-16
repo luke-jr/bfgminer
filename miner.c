@@ -6446,7 +6446,7 @@ void request_work(struct thr_info *thr)
 }
 
 // FIXME: Make this non-blocking
-static struct work *get_work(struct thr_info *thr)
+struct work *get_work(struct thr_info *thr)
 {
 	const int thr_id = thr->id;
 	struct cgpu_info *cgpu = thr->cgpu;
@@ -6585,7 +6585,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	submit_work_async(work, &tv_work_found);
 }
 
-static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
+bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 {
 	if (wdiff->tv_sec > opt_scantime ||
 	    work->blk.nonce >= MAXTHREADS - hashes ||
@@ -6757,8 +6757,10 @@ void *miner_thread(void *userdata)
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
 
-	// FIXME: allow device drivers to override this
-	minerloop(mythr);
+	if (api->minerloop)
+		api->minerloop(mythr);
+	else
+		minerloop(mythr);
 
 out:
 	if (api->thread_shutdown)
