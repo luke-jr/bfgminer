@@ -768,6 +768,16 @@ To work around this you would use:
 
 FAQ
 
+Q: Why can't BFGMiner find lib<something> even after I installed it from source
+code?
+A: On UNIX-like operating systems, you often need to run some command to reload
+its library caches such as "ldconfig" or similar. A couple of systems (such as
+Fedora) ship with /usr/local/lib missing from their library search path. In
+this case, you can usually add it like this:
+    echo /usr/local/lib >/etc/ld.so.conf.d/local.conf
+Please note that if your libraries installed into lib64 instead of lib, you
+should use that in the ld.so config file above instead.
+
 Q: BFGMiner segfaults when I change my shell window size.
 A: Older versions of libncurses have a bug to do with refreshing a window
 after a size change. Upgrading to a new version of curses will fix it.
