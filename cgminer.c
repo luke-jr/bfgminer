@@ -2950,6 +2950,8 @@ void __copy_work(struct work *work, struct work *base_work)
 		work->nonce2 = strdup(base_work->nonce2);
 	if (base_work->ntime)
 		work->ntime = strdup(base_work->ntime);
+	if (base_work->sessionid)
+		work->sessionid = strdup(base_work->sessionid);
 	if (base_work->gbt_coinbase)
 		work->gbt_coinbase = strdup(base_work->gbt_coinbase);
 }
