@@ -2186,6 +2186,9 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	if (!opt_show_procs)
 		cgpu = cgpu->device;
 	
+	cgpu->utility = cgpu->accepted / total_secs * 60;
+	cgpu->utility_diff1 = cgpu->diff_accepted / total_secs * 60;
+	
 	double rolling = cgpu->rolling;
 	double mhashes = cgpu->total_mhashes;
 	double wutil = cgpu->utility_diff1;
@@ -2197,6 +2200,9 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
 		{
+			slave->utility = slave->accepted / total_secs * 60;
+			slave->utility_diff1 = slave->diff_accepted / total_secs * 60;
+			
 			rolling += slave->rolling;
 			mhashes += slave->total_mhashes;
 			wutil += slave->utility_diff1;
@@ -2413,9 +2419,6 @@ static void curses_print_devstatus(int thr_id)
 	ypos += devcursor;
 	if (ypos >= statusy - 1)
 		return;
-
-	cgpu->utility = cgpu->accepted / total_secs * 60;
-	cgpu->utility_diff1 = cgpu->diff_accepted / total_secs * 60;
 
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
@@ -2880,9 +2883,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	}
 
 	share_result(val, res, err, work, resubmit, worktime);
-
-	cgpu->utility = cgpu->accepted / total_secs * 60;
-	cgpu->utility_diff1 = cgpu->diff_accepted / total_secs * 60;
 
 	if (!opt_realquiet)
 		print_status(thr_id);
