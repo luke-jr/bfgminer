@@ -147,7 +147,6 @@ enum sha256_algos opt_algo = ALGO_SSE2_32;
 enum sha256_algos opt_algo = ALGO_C;
 #endif
 bool opt_usecpu = false;
-static int cpur_thr_id;
 static bool forced_n_threads;
 #endif
 
@@ -694,11 +693,6 @@ static void cpu_detect()
 	total_devices += opt_n_threads;
 }
 
-static void reinit_cpu_device(struct cgpu_info *cpu)
-{
-	tq_push(thr_info[cpur_thr_id].q, cpu);
-}
-
 static bool cpu_thread_prepare(struct thr_info *thr)
 {
 	thread_reportin(thr);
@@ -776,7 +770,6 @@ CPUSearch:
 struct device_api cpu_api = {
 	.name = "CPU",
 	.api_detect = cpu_detect,
-	.reinit_device = reinit_cpu_device,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,
 	.thread_init = cpu_thread_init,
