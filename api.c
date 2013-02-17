@@ -573,9 +573,6 @@ struct CODES {
 
 static int my_thr_id = 0;
 static bool bye;
-#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
-static bool ping = true;
-#endif
 
 // Used to control quit restart access to shutdown variables
 static pthread_mutex_t quit_restart_lock;
@@ -1681,10 +1678,7 @@ static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int numpga = numpgas();
-	struct thr_info *thr;
-	int pga;
 	int id;
-	int i;
 
 	if (numpga == 0) {
 		message(io_data, MSG_PGANON, 0, NULL, isjson);
@@ -1725,15 +1719,7 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 	}
 #endif
 
-	for (i = 0; i < mining_threads; i++) {
-		pga = thr_info[i].cgpu->cgminer_id;
-		if (pga == dev) {
-			thr = &thr_info[i];
-			cgpu->deven = DEV_ENABLED;
-			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
-			tq_push(thr->q, &ping);
-		}
-	}
+	proc_enable(cgpu);
 
 	message(io_data, MSG_PGAENA, id, NULL, isjson);
 }
@@ -1997,10 +1983,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 #ifdef HAVE_OPENCL
 static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	struct thr_info *thr;
-	int gpu;
 	int id;
-	int i;
 
 	if (gpu_threads == 0) {
 		message(io_data, MSG_GPUNON, 0, NULL, isjson);
@@ -2026,19 +2009,12 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
-	for (i = 0; i < gpu_threads; i++) {
-		gpu = thr_info[i].cgpu->device_id;
-		if (gpu == id) {
-			thr = &thr_info[i];
-			if (thr->cgpu->status != LIFE_WELL) {
-				message(io_data, MSG_GPUMRE, id, NULL, isjson);
-				return;
-			}
-			gpus[id].deven = DEV_ENABLED;
-			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
-			tq_push(thr->q, &ping);
-		}
+	if (gpus[id].status != LIFE_WELL)
+	{
+		message(io_data, MSG_GPUMRE, id, NULL, isjson);
+		return;
 	}
+	proc_enable(&gpus[id]);
 
 	message(io_data, MSG_GPUREN, id, NULL, isjson);
 }

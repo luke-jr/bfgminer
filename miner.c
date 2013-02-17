@@ -311,8 +311,6 @@ static int include_count;
 	static int forkpid;
 #endif // defined(unix)
 
-bool ping = true;
-
 struct sigaction termhandler, inthandler;
 
 struct thread_q *getq;
@@ -7277,18 +7275,23 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
-void device_recovered(struct cgpu_info *cgpu)
+void mt_enable(struct thr_info *thr)
 {
-	struct thr_info *thr;
+	static const bool ping = true;
+	applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+	tq_push(thr->q, (void*)&ping);
+}
+
+void proc_enable(struct cgpu_info *cgpu)
+{
 	int j;
 
 	cgpu->deven = DEV_ENABLED;
-	for (j = 0; j < cgpu->threads; ++j) {
-		thr = cgpu->thr[j];
-		applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
-		tq_push(thr->q, &ping);
-	}
+	for (j = cgpu->threads ?: 1; j--; )
+		mt_enable(cgpu->thr[j]);
 }
+
+#define device_recovered(cgpu)  proc_enable(cgpu)
 
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
@@ -7363,13 +7366,17 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			for (i = 0; i < mining_threads; i++) {
 				struct thr_info *thr;
 				thr = &thr_info[i];
-
-				/* Don't touch disabled devices */
-				if (thr->cgpu->deven == DEV_DISABLED)
-					continue;
 				thr->pause = false;
-				if (thr->cgpu->threads)
-					tq_push(thr->q, &ping);
+			}
+			
+			for (i = 0; i < total_devices; ++i)
+			{
+				struct cgpu_info *cgpu = devices[i];
+				
+				/* Don't touch disabled devices */
+				if (cgpu->deven == DEV_DISABLED)
+					continue;
+				proc_enable(cgpu);
 			}
 		}
 
@@ -8501,12 +8508,6 @@ begin_bench:
 
 			/* Enable threads for devices set not to mine but disable
 			 * their queue in case we wish to enable them later */
-			if (cgpu->deven != DEV_DISABLED) {
-				applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
-
-				tq_push(thr->q, &ping);
-			}
-
 			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
 				continue;
 
@@ -8529,6 +8530,8 @@ begin_bench:
 			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 				quit(1, "thread %d create failed", thr->id);
 		}
+		if (cgpu->deven == DEV_ENABLED)
+			proc_enable(cgpu);
 	}
 
 #ifdef HAVE_OPENCL
