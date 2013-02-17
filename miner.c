@@ -2270,7 +2270,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 					if (cgpu->status == LIFE_DEAD)
 						cHrStatsI = 0;
 			}
-			if (unlikely(!cHrStatsI))
+			if (unlikely(!cHrStatsI) || opt_show_procs)
 				break;
 		}
 		
