@@ -2178,7 +2178,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 #else
 	assert(for_curses == false);
 #endif
-	struct device_api *api = cgpu->api;
+	const struct device_api *api = cgpu->api;
 	void (*statline_func)(char *, struct cgpu_info *);
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
@@ -2248,31 +2248,41 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	{
 		const char *cHrStatsOpt[] = {"DEAD ", "SICK ", "OFF  ", "REST ", " ERR ", "WAIT ", cHr};
 		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
+		bool all_dead = true, all_off = true;
 		for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
 		{
 			switch (cHrStatsI) {
 				default:
-					if (cgpu->status == LIFE_WAIT)
+					if (proc->status == LIFE_WAIT)
 						cHrStatsI = 5;
 				case 5:
-					if (cgpu->deven == DEV_RECOVER_ERR)
+					if (proc->deven == DEV_RECOVER_ERR)
 						cHrStatsI = 4;
 				case 4:
-					if (cgpu->deven == DEV_RECOVER)
+					if (proc->deven == DEV_RECOVER)
 						cHrStatsI = 3;
 				case 3:
-					if (cgpu->deven == DEV_DISABLED)
-						cHrStatsI = 2;
-				case 2:
-					if (cgpu->status == LIFE_SICK)
+					if (proc->status == LIFE_SICK || proc->status == LIFE_DEAD)
+					{
 						cHrStatsI = 1;
+						all_off = false;
+					}
+					else
+					if (likely(proc->deven != DEV_DISABLED))
+						all_off = false;
 				case 1:
-					if (cgpu->status == LIFE_DEAD)
-						cHrStatsI = 0;
+					break;
 			}
-			if (unlikely(!cHrStatsI) || opt_show_procs)
+			if (likely(proc->status != LIFE_DEAD))
+				all_dead = false;
+			if (opt_show_procs)
 				break;
 		}
+		if (unlikely(all_dead))
+			cHrStatsI = 0;
+		else
+		if (unlikely(all_off))
+			cHrStatsI = 2;
 		
 		adj_width(accepted, &awidth);
 		adj_width(rejected, &rwidth);
