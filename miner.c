@@ -7331,7 +7331,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
 			struct thr_info *thr;
-			for (int thrid = 0; thrid < cgpu->threads; ++thrid) {
+			int threadobjs = cgpu->threads ?: 1;
+			for (int thrid = 0; thrid < threadobjs; ++thrid) {
 				thr = cgpu->thr[thrid];
 				if (!thr->q->frozen)
 					break;
