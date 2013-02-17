@@ -406,12 +406,14 @@ struct cgpu_info {
 	char *dev_repr;
 	char *dev_repr_ns;
 	const char *name;
+	
 	int procs;
 	int proc_id;
 	char proc_repr[8];
 	char proc_repr_ns[8];
 	struct cgpu_info *device;
 	struct cgpu_info *next_proc;
+	
 	const char *device_path;
 	FILE *device_file;
 	union {
@@ -1113,6 +1115,8 @@ extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool 
 extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern bool hashes_done(struct thr_info *, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce);
+extern void mt_disable_start(struct thr_info *);
+extern void mt_disable_finish(struct thr_info *);
 extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);

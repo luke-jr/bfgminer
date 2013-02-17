@@ -6598,13 +6598,21 @@ bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 	return false;
 }
 
-static void mt_disable(struct thr_info *mythr, const int thr_id,
-		       const struct device_api *api)
+void mt_disable_start(struct thr_info *mythr)
 {
+	int thr_id = mythr->id;
+	
 	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 	mythr->rolling = mythr->cgpu->rolling = 0;
-	applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
 	thread_reportout(mythr);
+}
+
+void mt_disable_finish(struct thr_info *mythr)
+{
+	int thr_id = mythr->id;
+	const struct device_api *api = mythr->cgpu->api;
+	
+	applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
 	do {
 		tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
 	} while (mythr->pause);
@@ -6612,6 +6620,14 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
 	if (api->thread_enable)
 		api->thread_enable(mythr);
+}
+
+static
+void mt_disable(struct thr_info *mythr, __maybe_unused const int thr_id,
+		       __maybe_unused const struct device_api *api)
+{
+	mt_disable_start(mythr);
+	mt_disable_finish(mythr);
 }
 
 bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce)
@@ -6763,33 +6779,48 @@ void minerloop_async(struct thr_info *mythr)
 		{
 			mythr = proc->thr[0];
 			
-			if (unlikely(mythr->work_restart) || timercmp(&mythr->tv_morework, &tv_now, <))
+			bool was_disabled = (mythr->tv_morework.tv_sec == -1);
+			
+			if (was_disabled
+			     ? (proc->deven == DEV_ENABLED && !mythr->pause)
+			     : (
+			           unlikely(mythr->work_restart)
+			        || timercmp(&mythr->tv_morework, &tv_now, <)
+			       )
+			   )
 			{
+				if (was_disabled)
+					mt_disable_finish(mythr);
+disabled: ;
+				bool keepgoing = (proc->deven == DEV_ENABLED && !mythr->pause);
 				thread_reportin(mythr);
 				prev_job_work = mythr->work;
 				tv_start = mythr->tv_jobstart;
-				if (prev_job_work)
-					timersub(&tv_now, &mythr->work->tv_work_start, &tv_worktime);
-				if ((!prev_job_work) || abandon_work(mythr->work, &tv_worktime, cgpu->max_hashes))
+				if (likely(keepgoing))
 				{
-					mythr->work_restart = false;
-					request_work(mythr);
-					// FIXME: Allow get_work to return NULL to retry on notification
-					mythr->next_work = get_work(mythr);
-					if (api->prepare_work && !api->prepare_work(mythr, mythr->next_work)) {
-						applog(LOG_ERR, "work prepare failed, exiting "
-							"mining thread %d", thr_id);
-						break;  // FIXME
+					if (prev_job_work)
+						timersub(&tv_now, &mythr->work->tv_work_start, &tv_worktime);
+					if ((!prev_job_work) || abandon_work(mythr->work, &tv_worktime, cgpu->max_hashes))
+					{
+						mythr->work_restart = false;
+						request_work(mythr);
+						// FIXME: Allow get_work to return NULL to retry on notification
+						mythr->next_work = get_work(mythr);
+						if (api->prepare_work && !api->prepare_work(mythr, mythr->next_work)) {
+							applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!");
+							proc->deven = DEV_RECOVER_ERR;
+							goto disabled;
+						}
+						starting_new_work = true;
+						new_job_work = mythr->next_work;
 					}
-					starting_new_work = true;
-					new_job_work = mythr->next_work;
+					else
+					{
+						starting_new_work = false;
+						new_job_work = mythr->work;
+					}
+					api->job_prepare(mythr, new_job_work, max_nonce);
 				}
-				else
-				{
-					starting_new_work = false;
-					new_job_work = mythr->work;
-				}
-				api->job_prepare(mythr, new_job_work, max_nonce);
 				if (likely(prev_job_work))
 				{
 					hashes = -101;
@@ -6797,17 +6828,26 @@ void minerloop_async(struct thr_info *mythr)
 						hashes = api->job_get_results(mythr, prev_job_work);
 				}
 				gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
-				if (starting_new_work)
-					mythr->next_work->tv_work_start = tv_now;
-				mythr->tv_jobstart = tv_now;
-				api->job_start(mythr);
-				if (starting_new_work)
+				if (likely(keepgoing))
 				{
-					if (mythr->prev_work)
-						free_work(mythr->prev_work);
+					if (starting_new_work)
+						mythr->next_work->tv_work_start = tv_now;
+					mythr->tv_jobstart = tv_now;
+					api->job_start(mythr);
+					if (starting_new_work)
+					{
+						if (mythr->prev_work)
+							free_work(mythr->prev_work);
+						mythr->prev_work = prev_job_work;
+						mythr->work = mythr->next_work;
+						mythr->next_work = NULL;
+					}
+				}
+				else
+				{
 					mythr->prev_work = mythr->work;
-					mythr->work = mythr->next_work;
-					mythr->next_work = NULL;
+					mythr->work = NULL;
+					mythr->tv_morework.tv_sec = -1;
 				}
 				if (likely(prev_job_work))
 				{
@@ -6819,12 +6859,12 @@ void minerloop_async(struct thr_info *mythr)
 					{
 						timersub(&tv_now, &tv_start, &tv_hashes);
 						if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &max_nonce : NULL))
-							break;  // FIXME: Disable the processor
+							goto disabled;
 					}
 				}
 			}
 			
-			if (timercmp(&mythr->tv_poll, &tv_now, <))
+			if (mythr->tv_poll.tv_sec != -1 && timercmp(&mythr->tv_poll, &tv_now, <))
 				api->poll(mythr);
 			
 			reduce_timeout_to(&tv_timeout, &mythr->tv_morework);
@@ -6844,11 +6884,6 @@ void minerloop_async(struct thr_info *mythr)
 		}
 		// FIXME: break select on work restart
 		select(0, NULL, NULL, NULL, tvp_timeout);
-#if 0
-			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
-disabled:
-				mt_disable(mythr, thr_id, api);
-#endif
 	}
 }
 
@@ -8445,6 +8480,8 @@ begin_bench:
 	// Start threads
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
+		if (!cgpu->threads)
+			cgpu->thr[0]->q = cgpu->device->thr[0]->q;
 		for (j = 0; j < cgpu->threads; ++j) {
 			thr = cgpu->thr[j];
 

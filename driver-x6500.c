@@ -126,6 +126,7 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	struct cgpu_info *x6500;
 	x6500 = calloc(1, sizeof(*x6500));
 	x6500->api = &x6500_api;
+	mutex_init(&x6500->device_mutex);
 	x6500->device_path = strdup(serial);
 	x6500->deven = DEV_ENABLED;
 	x6500->threads = 1;
@@ -188,6 +189,7 @@ static bool x6500_prepare(struct thr_info *thr)
 struct x6500_fpga_data {
 	struct jtag_port jtag;
 	struct timeval tv_hashstart;
+	int64_t hashes_left;
 
 	struct dclk_data dclk;
 	uint8_t freqMaxMaxM;
@@ -510,13 +512,25 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 
 }
 
+static
+bool x6500_all_idle(struct cgpu_info *any_proc)
+{
+	for (struct cgpu_info *proc = any_proc->device; proc; proc = proc->next_proc)
+		if (proc->thr[0]->tv_poll.tv_sec != -1)
+			return false;
+	return true;
+}
+
 static bool x6500_get_stats(struct cgpu_info *x6500)
 {
 	float hottest = 0;
-	if (x6500->deven != DEV_ENABLED) {
-		// Getting temperature more efficiently while enabled
-		// FIXME: Move this to minerloop
-		x6500_get_temperature(x6500);
+	if (x6500_all_idle(x6500)) {
+		// Getting temperature more efficiently while running
+		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
+		mutex_lock(mutexp);
+		if (x6500_all_idle(x6500))
+			x6500_get_temperature(x6500);
+		mutex_unlock(mutexp);
 	}
 
 	for (int i = x6500->threads; i--; ) {
@@ -613,6 +627,13 @@ bool x6500_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused u
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
 
+	if (x6500_all_idle(x6500))
+	{
+		// Neither FPGA is running, so make sure we're not doing a temperature check
+		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
+		mutex_lock(mutexp);
+	}
+	
 	for (int i = 1, j = 0; i < 9; ++i, j += 4)
 		x6500_set_register(jp, i, fromlebytes(work->midstate, j));
 
@@ -629,6 +650,8 @@ bool x6500_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused u
 	
 	return true;
 }
+
+static int64_t calc_hashes(struct thr_info *, struct timeval *);
 
 static
 void x6500_job_start(struct thr_info *thr)
@@ -649,9 +672,20 @@ void x6500_job_start(struct thr_info *thr)
 	ft232r_flush(jp->a->ftdi);
 
 	gettimeofday(&tv_now, NULL);
-	if (!thr->prev_work)
+	if (!thr->work)
 		fpga->tv_hashstart = tv_now;
+	else
+	if (thr->work != thr->next_work)
+		calc_hashes(thr, &tv_now);
+	fpga->hashes_left = 0x100000000;
 
+	if (x6500_all_idle(x6500))
+	{
+		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
+		thr->work = (void*)1;  // HACK: Should be replaced immediately upon return
+		mutex_unlock(mutexp);
+	}
+	
 	if (opt_debug) {
 		char *xdata = bin2hex(thr->next_work->data, 80);
 		applog(LOG_DEBUG, "%"PRIprepr": Started work: %s",
@@ -671,12 +705,14 @@ int64_t calc_hashes(struct thr_info *thr, struct timeval *tv_now)
 {
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct timeval tv_delta;
-	int64_t hashes;
+	int64_t hashes, hashes_left;
 
 	timersub(tv_now, &fpga->tv_hashstart, &tv_delta);
 	hashes = (((int64_t)tv_delta.tv_sec * 1000000) + tv_delta.tv_usec) * fpga->dclk.freqM * 2;
-	if (unlikely(hashes > 0x100000000))
-		hashes = 0x100000000;
+	hashes_left = fpga->hashes_left;
+	if (unlikely(hashes > hashes_left))
+		hashes = hashes_left;
+	fpga->hashes_left -= hashes;
 	hashes_done(thr, hashes, &tv_delta, NULL);
 	fpga->tv_hashstart = *tv_now;
 	return hashes;
@@ -698,7 +734,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 		gettimeofday(&tv_now, NULL);
 		nonce = x6500_get_register(jtag, 0xE);
 		if (nonce != 0xffffffff) {
-			bad = !test_nonce(work, nonce, false);
+			bad = !(work && test_nonce(work, nonce, false));
 			if (!bad) {
 				submit_nonce(thr, work, nonce);
 				applog(LOG_DEBUG, "%"PRIprepr": Nonce for current  work: %08lx",
@@ -737,8 +773,16 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 static
 void x6500_fpga_poll(struct thr_info *thr)
 {
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	
 	x6500_process_results(thr, thr->work);
-	timer_set_delay_from_now(&thr->tv_poll, 10000);
+	if (unlikely(!fpga->hashes_left))
+	{
+		mt_disable_start(thr);
+		thr->tv_poll.tv_sec = -1;
+	}
+	else
+		timer_set_delay_from_now(&thr->tv_poll, 10000);
 }
 
 struct device_api x6500_api = {

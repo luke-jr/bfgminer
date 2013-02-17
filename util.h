@@ -99,6 +99,8 @@ static inline void align_len(size_t *len)
 static inline
 void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)
 {
+	if (tvp_time->tv_sec == -1)
+		return;
 	if (tvp_timeout->tv_sec == -1 /* no timeout */ || timercmp(tvp_time, tvp_timeout, <))
 		*tvp_timeout = *tvp_time;
 }
