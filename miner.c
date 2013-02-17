@@ -6757,31 +6757,13 @@ void minerloop_async(struct thr_info *mythr)
 	int proc_thr_no;
 	
 	while (1) {
-		if (unlikely(cgpu->thr[0]->work_restart)) {
-			for (proc = cgpu; proc; proc = proc->next_proc)
-			{
-				for (proc_thr_no = proc->threads ?: 1; proc_thr_no--; )
-				{
-					mythr = proc->thr[proc_thr_no];
-					mythr->work_restart = true;
-					if ((!proc_thr_no) || mythr->primary_thread)
-						timerclear(&mythr->tv_morework);
-					else
-						/* Apart from device_thread 0, we stagger the
-						 * starting of every next thread to try and get
-						 * all devices busy before worrying about
-						 * getting work for their extra threads */
-						timer_set_delay_from_now(&mythr->tv_morework, 250000 * proc_thr_no);
-				}
-			}
-		}
 		tv_timeout.tv_sec = -1;
 		gettimeofday(&tv_now, NULL);
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
 			mythr = proc->thr[0];
 			
-			if (timercmp(&mythr->tv_morework, &tv_now, <))
+			if (unlikely(mythr->work_restart) || timercmp(&mythr->tv_morework, &tv_now, <))
 			{
 				thread_reportin(mythr);
 				prev_job_work = mythr->work;

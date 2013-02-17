@@ -39,10 +39,10 @@ function with it as an argument. Various values you can initialize are:
 	.api         This MUST be set to your driver's `struct driver_api`!
 	.deven       Should be set to DEV_ENABLED
 	.procs       Number of Processors for this device
-	.threads     Number of threads your device needs - should be either an even
+	.threads     Number of threads your device needs - should be either a
 	             multiple of .procs (threads will be allocated to each
-	             Processor), or a number less than .procs (threads will be
-	             allocated only to the Device, to manage all Processors)
+	             Processor), or one (a single thread will be allocated only to
+	             the Device, to manage all Processors)
 	.name        Null-terminated name of the device itself
 `api_detect` should return the total number of devices created. It should leave
 the device in an unused state, as the user may opt to delete it outright.
