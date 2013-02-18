@@ -6620,9 +6620,9 @@ void mt_disable_finish(struct thr_info *mythr)
 	int thr_id = mythr->id;
 	const struct device_api *api = mythr->cgpu->api;
 	
-	applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
+	applog(LOG_DEBUG, "Waiting for wakeup notification in miner thread");
 	do {
-		tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
+		notifier_read(mythr->notifier);
 	} while (mythr->pause);
 	thread_reportin(mythr);
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
@@ -6917,7 +6917,7 @@ void *miner_thread(void *userdata)
 
 	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
-	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
+	notifier_read(mythr->notifier);  // Wait for a notification to start
 
 	if (api->minerloop)
 		api->minerloop(mythr);
@@ -6930,7 +6930,7 @@ out:
 
 	thread_reportin(mythr);
 	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
-	tq_freeze(mythr->q);
+	notifier_destroy(mythr->notifier);
 
 	return NULL;
 }
@@ -7277,9 +7277,8 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 void mt_enable(struct thr_info *thr)
 {
-	static const bool ping = true;
-	applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
-	tq_push(thr->q, (void*)&ping);
+	applog(LOG_DEBUG, "Waking up thread %d", thr->id);
+	notifier_wake(thr->notifier);
 }
 
 void proc_enable(struct cgpu_info *cgpu)
@@ -7383,12 +7382,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
 			struct thr_info *thr;
-			int threadobjs = cgpu->threads ?: 1;
-			for (int thrid = 0; thrid < threadobjs; ++thrid) {
-				thr = cgpu->thr[thrid];
-				if (!thr->q->frozen)
-					break;
-			}
+			thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
@@ -8498,13 +8492,11 @@ begin_bench:
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
 		if (!cgpu->threads)
-			cgpu->thr[0]->q = cgpu->device->thr[0]->q;
+			memcpy(&cgpu->thr[0]->notifier, &cgpu->device->thr[0]->notifier, sizeof(cgpu->thr[0]->notifier));
 		for (j = 0; j < cgpu->threads; ++j) {
 			thr = cgpu->thr[j];
 
-			thr->q = tq_new();
-			if (!thr->q)
-				quit(1, "tq_new failed in starting %"PRIpreprv" mining thread (#%d)", cgpu->proc_repr, i);
+			notifier_init(thr->notifier);
 
 			/* Enable threads for devices set not to mine but disable
 			 * their queue in case we wish to enable them later */

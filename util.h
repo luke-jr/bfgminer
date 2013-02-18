@@ -73,6 +73,7 @@ void RenameThread(const char* name);
 extern void notifier_init(int pipefd[2]);
 extern void notifier_wake(int fd[2]);
 extern void notifier_read(int fd[2]);
+extern void notifier_destroy(int fd[2]);
 
 /* Align a size_t to 4 byte boundaries for fussy arches */
 static inline void align_len(size_t *len)

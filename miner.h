@@ -562,6 +562,7 @@ struct thr_info {
 	struct timeval tv_morework;
 	struct timeval tv_jobstart;
 	struct timeval tv_poll;
+	int notifier[2];
 
 	bool	work_restart;
 	int		work_restart_fd;

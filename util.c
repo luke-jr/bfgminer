@@ -1835,3 +1835,15 @@ void notifier_read(int fd[2])
 	(void)read(fd[0], buf, sizeof(buf));
 #endif
 }
+
+void notifier_destroy(int fd[2])
+{
+#ifdef WIN32
+	closesocket(fd[0]);
+	closesocket(fd[1]);
+#else
+	close(fd[0]);
+	close(fd[1]);
+#endif
+	fd[0] = fd[1] = INVSOCK;
+}
