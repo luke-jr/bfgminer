@@ -8498,6 +8498,7 @@ begin_bench:
 			thr->hashes_done = 0;
 			timerclear(&thr->tv_hashes_done);
 			gettimeofday(&thr->tv_lastupdate, NULL);
+			thr->tv_poll.tv_sec = -1;
 
 			cgpu->thr[j] = thr;
 		}
