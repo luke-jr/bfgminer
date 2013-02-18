@@ -672,20 +672,22 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 	*temp_avg = info->temp2;
 }
 
-static inline void adjust_temp(struct avalon_info *info)
+static inline void adjust_fan(struct avalon_info *info)
 {
 	int temp_new;
 
 	temp_new = info->temp_sum / info->temp_history_count;
 
-	if (temp_new < 35)
+	if (temp_new < 35) {
 		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
-	else if (temp_new > 55)
+		info->temp_old = temp_new;
+	} else if (temp_new > 55) {
 		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
-	else if (abs(temp_new - info->temp_old) >= 2)
+		info->temp_old = temp_new;
+	} else if (abs(temp_new - info->temp_old) >= 2) {
 		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM + (temp_new - 35) * 6.4;
-
-	info->temp_old = temp_new;
+		info->temp_old = temp_new;
+	}
 }
 
 static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
@@ -854,7 +856,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
 	       info->temp_history_index, info->temp_history_count, info->temp_old);
 	if (info->temp_history_index == info->temp_history_count) {
-		adjust_temp(info);
+		adjust_fan(info);
 		info->temp_history_index = 0;
 		info->temp_sum = 0;
 	}
