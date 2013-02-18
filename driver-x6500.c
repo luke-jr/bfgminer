@@ -672,22 +672,21 @@ void x6500_job_start(struct thr_info *thr)
 	ft232r_flush(jp->a->ftdi);
 
 	gettimeofday(&tv_now, NULL);
-	if (!thr->work)
+	if (!thr->prev_work)
 		fpga->tv_hashstart = tv_now;
 	else
-	if (thr->work != thr->next_work)
+	if (thr->prev_work != thr->work)
 		calc_hashes(thr, &tv_now);
 	fpga->hashes_left = 0x100000000;
 
 	if (x6500_all_idle(x6500))
 	{
 		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
-		thr->work = (void*)1;  // HACK: Should be replaced immediately upon return
 		mutex_unlock(mutexp);
 	}
 	
 	if (opt_debug) {
-		char *xdata = bin2hex(thr->next_work->data, 80);
+		char *xdata = bin2hex(thr->work->data, 80);
 		applog(LOG_DEBUG, "%"PRIprepr": Started work: %s",
 		       x6500->proc_repr, xdata);
 		free(xdata);

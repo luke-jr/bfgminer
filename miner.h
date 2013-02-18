@@ -563,6 +563,8 @@ struct thr_info {
 	struct timeval tv_jobstart;
 	struct timeval tv_poll;
 	int notifier[2];
+	bool starting_next_work;
+	uint32_t _max_nonce;
 
 	bool	work_restart;
 	int		work_restart_fd;

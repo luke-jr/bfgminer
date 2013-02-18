@@ -6767,23 +6767,69 @@ disabled:
 	}
 }
 
+bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
+{
+	struct cgpu_info *proc = mythr->cgpu;
+	const struct device_api *api = proc->api;
+	struct timeval tv_worktime;
+	
+	if (mythr->work)
+		timersub(tvp_now, &mythr->work->tv_work_start, &tv_worktime);
+	if ((!mythr->work) || abandon_work(mythr->work, &tv_worktime, proc->max_hashes))
+	{
+		mythr->work_restart = false;
+		request_work(mythr);
+		// FIXME: Allow get_work to return NULL to retry on notification
+		mythr->next_work = get_work(mythr);
+		if (api->prepare_work && !api->prepare_work(mythr, mythr->next_work)) {
+			applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!", proc->proc_repr);
+			proc->deven = DEV_RECOVER_ERR;
+			return false;
+		}
+		mythr->starting_next_work = true;
+		api->job_prepare(mythr, mythr->next_work, mythr->_max_nonce);
+	}
+	else
+	{
+		mythr->starting_next_work = false;
+		api->job_prepare(mythr, mythr->work, mythr->_max_nonce);
+	}
+	return true;
+}
+
+void do_job_start(struct thr_info *mythr, struct timeval *tvp_now)
+{
+	struct cgpu_info *proc = mythr->cgpu;
+	const struct device_api *api = proc->api;
+	
+	if (mythr->starting_next_work)
+	{
+		mythr->next_work->tv_work_start = *tvp_now;
+		if (mythr->prev_work)
+			free_work(mythr->prev_work);
+		mythr->prev_work = mythr->work;
+		mythr->work = mythr->next_work;
+		mythr->next_work = NULL;
+	}
+	mythr->tv_jobstart = *tvp_now;
+	api->job_start(mythr);
+}
+
 void minerloop_async(struct thr_info *mythr)
 {
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	const struct device_api *api = cgpu->api;
 	struct timeval tv_start, tv_end;
-	struct timeval tv_hashes, tv_worktime;
+	struct timeval tv_hashes;
 	struct timeval tv_now;
 	struct timeval tv_timeout, *tvp_timeout;
-	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
 	int64_t hashes;
 	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 	struct cgpu_info *proc;
-	bool starting_new_work;
 	// NOTE: prev_job_work/new_job_work are distinct from mythr->prev_work/next_work (job v work boundary)
-	struct work *prev_job_work, *new_job_work;
+	struct work *prev_job_work;
 	int proc_thr_no;
 	int maxfd;
 	fd_set rfds;
@@ -6813,30 +6859,8 @@ disabled: ;
 				prev_job_work = mythr->work;
 				tv_start = mythr->tv_jobstart;
 				if (likely(keepgoing))
-				{
-					if (prev_job_work)
-						timersub(&tv_now, &mythr->work->tv_work_start, &tv_worktime);
-					if ((!prev_job_work) || abandon_work(mythr->work, &tv_worktime, cgpu->max_hashes))
-					{
-						mythr->work_restart = false;
-						request_work(mythr);
-						// FIXME: Allow get_work to return NULL to retry on notification
-						mythr->next_work = get_work(mythr);
-						if (api->prepare_work && !api->prepare_work(mythr, mythr->next_work)) {
-							applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!");
-							proc->deven = DEV_RECOVER_ERR;
-							goto disabled;
-						}
-						starting_new_work = true;
-						new_job_work = mythr->next_work;
-					}
-					else
-					{
-						starting_new_work = false;
-						new_job_work = mythr->work;
-					}
-					api->job_prepare(mythr, new_job_work, max_nonce);
-				}
+					if (!do_job_prepare(mythr, &tv_now))
+						goto disabled;
 				if (likely(prev_job_work))
 				{
 					hashes = -101;
@@ -6845,20 +6869,7 @@ disabled: ;
 				}
 				gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
 				if (likely(keepgoing))
-				{
-					if (starting_new_work)
-						mythr->next_work->tv_work_start = tv_now;
-					mythr->tv_jobstart = tv_now;
-					api->job_start(mythr);
-					if (starting_new_work)
-					{
-						if (mythr->prev_work)
-							free_work(mythr->prev_work);
-						mythr->prev_work = prev_job_work;
-						mythr->work = mythr->next_work;
-						mythr->next_work = NULL;
-					}
-				}
+					do_job_start(mythr, &tv_now);
 				else
 				{
 					mythr->prev_work = mythr->work;
@@ -6874,7 +6885,7 @@ disabled: ;
 					if (hashes != -101)
 					{
 						timersub(&tv_now, &tv_start, &tv_hashes);
-						if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &max_nonce : NULL))
+						if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &mythr->_max_nonce : NULL))
 							goto disabled;
 					}
 				}
@@ -8475,6 +8486,7 @@ begin_bench:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
+		const struct device_api *api = cgpu->api;
 		int threadobj = cgpu->threads;
 		if (!threadobj)
 			// Create a fake thread object to handle hashmeter etc
@@ -8499,6 +8511,7 @@ begin_bench:
 			timerclear(&thr->tv_hashes_done);
 			gettimeofday(&thr->tv_lastupdate, NULL);
 			thr->tv_poll.tv_sec = -1;
+			thr->_max_nonce = api->can_limit_work ? api->can_limit_work(thr) : 0xffffffff;
 
 			cgpu->thr[j] = thr;
 		}
