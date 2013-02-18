@@ -5638,6 +5638,21 @@ out_unlock:
 	}
 }
 
+static void hashmeter2(struct thr_info *thr)
+{
+	struct timeval tv_now, tv_elapsed;
+	
+	timerclear(&thr->tv_hashes_done);
+	
+	gettimeofday(&tv_now, NULL);
+	timersub(&tv_now, &thr->tv_lastupdate, &tv_elapsed);
+	if (tv_elapsed.tv_sec >= opt_log_interval) {
+		hashmeter(thr->id, &tv_elapsed, thr->hashes_done);
+		thr->hashes_done = 0;
+		thr->tv_lastupdate = tv_now;
+	}
+}
+
 static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 				 struct stratum_share *sshare)
 {
@@ -6610,6 +6625,7 @@ void mt_disable_start(struct thr_info *mythr)
 {
 	int thr_id = mythr->id;
 	
+	hashmeter2(mythr);
 	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 	mythr->rolling = mythr->cgpu->rolling = 0;
 	thread_reportout(mythr);
@@ -6642,7 +6658,6 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	const long cycle = opt_log_interval / 5 ? : 1;
-	struct timeval tv_now, tv_elapsed;
 	
 	if (unlikely(hashes == -1)) {
 		time_t now = time(NULL);
@@ -6674,7 +6689,6 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 		int mult;
 		
 		if (likely(!max_nonce || *max_nonce == 0xffffffff))
-			// FIXME: a processor being disabled still needs to call hashmeter
 			return true;
 		
 		mult = 1000000 / ((thr->tv_hashes_done.tv_usec + 0x400) / 0x400) + 0x10;
@@ -6688,15 +6702,7 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 	else if (unlikely(thr->tv_hashes_done.tv_usec > 100000) && max_nonce)
 		*max_nonce = *max_nonce * 0x400 / (((cycle * 1000000) + thr->tv_hashes_done.tv_usec) / (cycle * 1000000 / 0x400));
 	
-	timerclear(&thr->tv_hashes_done);
-	
-	gettimeofday(&tv_now, NULL);
-	timersub(&tv_now, &thr->tv_lastupdate, &tv_elapsed);
-	if (tv_elapsed.tv_sec >= opt_log_interval) {
-		hashmeter(thr->id, &tv_elapsed, thr->hashes_done);
-		thr->hashes_done = 0;
-		thr->tv_lastupdate = tv_now;
-	}
+	hashmeter2(thr);
 	
 	return true;
 }
