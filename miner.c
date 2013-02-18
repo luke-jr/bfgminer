@@ -6620,10 +6620,6 @@ void mt_disable_finish(struct thr_info *mythr)
 	int thr_id = mythr->id;
 	const struct device_api *api = mythr->cgpu->api;
 	
-	applog(LOG_DEBUG, "Waiting for wakeup notification in miner thread");
-	do {
-		notifier_read(mythr->notifier);
-	} while (mythr->pause);
 	thread_reportin(mythr);
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
 	if (api->thread_enable)
@@ -6635,6 +6631,10 @@ void mt_disable(struct thr_info *mythr, __maybe_unused const int thr_id,
 		       __maybe_unused const struct device_api *api)
 {
 	mt_disable_start(mythr);
+	applog(LOG_DEBUG, "Waiting for wakeup notification in miner thread");
+	do {
+		notifier_read(mythr->notifier);
+	} while (mythr->pause);
 	mt_disable_finish(mythr);
 }
 
@@ -6779,6 +6779,8 @@ void minerloop_async(struct thr_info *mythr)
 	// NOTE: prev_job_work/new_job_work are distinct from mythr->prev_work/next_work (job v work boundary)
 	struct work *prev_job_work, *new_job_work;
 	int proc_thr_no;
+	int maxfd;
+	fd_set rfds;
 	
 	while (1) {
 		tv_timeout.tv_sec = -1;
@@ -6891,7 +6893,14 @@ disabled: ;
 				timersub(&tv_timeout, &tv_now, &tv_timeout);
 		}
 		// FIXME: break select on work restart
-		select(0, NULL, NULL, NULL, tvp_timeout);
+		FD_ZERO(&rfds);
+		FD_SET(mythr->notifier[0], &rfds);
+		maxfd = mythr->notifier[0];
+		if (select(maxfd + 1, &rfds, NULL, NULL, tvp_timeout) < 0)
+			continue;
+		if (FD_ISSET(mythr->notifier[0], &rfds)) {
+			notifier_read(mythr->notifier);
+		}
 	}
 }
 
