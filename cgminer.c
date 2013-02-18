@@ -5619,6 +5619,27 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 	} while (!drv->queue_full(cgpu));
 }
 
+/* This function is for retrieving one work item from the queued hashtable of
+ * available work items that are not yet physically on a device (which is
+ * flagged with the work->queued bool). Code using this function must be able
+ * to handle NULL as a return which implies there is no work available. */
+struct work *get_queued(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (!work->queued) {
+			work->queued = true;
+			ret = work;
+			break;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
