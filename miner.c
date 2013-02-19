@@ -6812,7 +6812,18 @@ void do_job_start(struct thr_info *mythr, struct timeval *tvp_now)
 		mythr->next_work = NULL;
 	}
 	mythr->tv_jobstart = *tvp_now;
+	thread_reportin(mythr);
 	api->job_start(mythr);
+}
+
+void do_get_results(struct thr_info *mythr, __maybe_unused struct timeval *tvp_now, struct work *work)
+{
+	struct cgpu_info *proc = mythr->cgpu;
+	const struct device_api *api = proc->api;
+	
+	if (api->job_get_results)
+		api->job_get_results(mythr, work);
+	mythr->tv_results_jobstart = mythr->tv_jobstart;
 }
 
 bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct work *work)
@@ -6828,7 +6839,7 @@ bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct 
 	
 	if (hashes)
 	{
-		timersub(tvp_now, &mythr->tv_prev_job_start, &tv_hashes);
+		timersub(tvp_now, &mythr->tv_results_jobstart, &tv_hashes);
 		if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &mythr->_max_nonce : NULL))
 			return false;
 	}
@@ -6873,14 +6884,12 @@ void minerloop_async(struct thr_info *mythr)
 					mt_disable_finish(mythr);
 disabled: ;
 				bool keepgoing = (proc->deven == DEV_ENABLED && !mythr->pause);
-				thread_reportin(mythr);
 				prev_job_work = mythr->work;
-				mythr->tv_prev_job_start = mythr->tv_jobstart;
 				if (likely(keepgoing))
 					if (!do_job_prepare(mythr, &tv_now))
 						goto disabled;
-				if (likely(prev_job_work) && api->job_get_results)
-					api->job_get_results(mythr, prev_job_work);
+				if (likely(prev_job_work))
+					do_get_results(mythr, &tv_now, prev_job_work);
 				gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
 				if (likely(keepgoing))
 					do_job_start(mythr, &tv_now);
