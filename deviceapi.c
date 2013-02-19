@@ -277,17 +277,11 @@ bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct 
 
 void minerloop_async(struct thr_info *mythr)
 {
-	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	const struct device_api *api = cgpu->api;
 	struct timeval tv_now;
 	struct timeval tv_timeout;
-	struct work *work;
-	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 	struct cgpu_info *proc;
-	// NOTE: prev_job_work/new_job_work are distinct from mythr->prev_work/next_work (job v work boundary)
-	struct work *prev_job_work;
-	int proc_thr_no;
 	int maxfd;
 	fd_set rfds;
 	bool is_running, should_be_running;
