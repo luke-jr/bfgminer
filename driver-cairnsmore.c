@@ -86,7 +86,7 @@ bool cairnsmore_supports_dynclock(int fd)
 		struct timeval tv_finish;
 		struct thr_info dummy = {
 			.work_restart = false,
-			.work_restart_fd = -1,
+			.work_restart_notifier = {-1, -1},
 		};
 		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
 	}

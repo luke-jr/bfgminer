@@ -198,7 +198,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 	};
 	struct epoll_event evr[2];
 	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
-	if (thr && thr->work_restart_fd != -1) {
+	if (thr && thr->work_restart_notifier[1] != -1) {
 	epollfd = epoll_create(2);
 	if (epollfd != -1) {
 		if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
@@ -206,8 +206,8 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 			epollfd = -1;
 		}
 		{
-			ev.data.fd = thr->work_restart_fd;
-			if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, thr->work_restart_fd, &ev))
+			ev.data.fd = thr->work_restart_notifier[0];
+			if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, thr->work_restart_notifier[0], &ev))
 				applog(LOG_ERR, "Icarus: Error adding work restart fd to epoll");
 			else
 			{
@@ -231,8 +231,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 			else
 			{
 				if (ret)
-					// work restart trigger
-					(void)read(thr->work_restart_fd, buf, read_amount);
+					notifier_read(thr->work_restart_notifier);
 				ret = 0;
 			}
 		}
@@ -696,7 +695,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	if (epollfd != -1)
 	{
 		close(epollfd);
-		thr->work_restart_fd = 0;
+		notifier_init(thr->work_restart_notifier);
 	}
 #endif
 

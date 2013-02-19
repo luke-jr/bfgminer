@@ -1819,6 +1819,8 @@ void notifier_init(int pipefd[2])
 
 void notifier_wake(int fd[2])
 {
+	if (fd[1] == -1)
+		return;
 #ifdef WIN32
 	(void)send(fd[1], "\0", 1, 0);
 #else

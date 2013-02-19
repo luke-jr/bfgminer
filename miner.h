@@ -571,8 +571,7 @@ struct thr_info {
 	uint32_t _max_nonce;
 
 	bool	work_restart;
-	int		work_restart_fd;
-	int		_work_restart_fd_w;
+	int work_restart_notifier[2];
 };
 
 extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);

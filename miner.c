@@ -4333,10 +4333,8 @@ static void restart_threads(void)
 	for (i = 0; i < mining_threads; i++)
 	{
 		thr = &thr_info[i];
-		fd = thr->_work_restart_fd_w;
 		thr->work_restart = true;
-		if (fd != -1)
-			(void)write(fd, "\0", 1);
+		notifier_wake(thr->work_restart_notifier);
 	}
 
 	mutex_lock(&restart_lock);
@@ -8148,7 +8146,7 @@ begin_bench:
 			thr->id = k;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
-			thr->work_restart_fd = thr->_work_restart_fd_w = -1;
+			thr->work_restart_notifier[1] = -1;
 			thr->_job_transition_in_progress = true;
 			timerclear(&thr->tv_morework);
 
@@ -8177,20 +8175,6 @@ begin_bench:
 			 * their queue in case we wish to enable them later */
 			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
 				continue;
-
-			if (!thr->work_restart_fd)
-			{
-#if defined(unix)
-				int pipefd[2];
-				if (!pipe(pipefd))
-				{
-					thr->work_restart_fd = pipefd[0];
-					thr->_work_restart_fd_w = pipefd[1];
-				}
-				else
-#endif
-					thr->work_restart_fd = -1;
-			}
 
 			thread_reportout(thr);
 
