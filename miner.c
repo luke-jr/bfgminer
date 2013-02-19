@@ -6815,16 +6815,34 @@ void do_job_start(struct thr_info *mythr, struct timeval *tvp_now)
 	api->job_start(mythr);
 }
 
+bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct work *work)
+{
+	struct cgpu_info *proc = mythr->cgpu;
+	const struct device_api *api = proc->api;
+	struct timeval tv_hashes;
+	int64_t hashes = 0;
+	
+	if (api->job_process_results)
+		hashes = api->job_process_results(mythr, work);
+	thread_reportin(mythr);
+	
+	if (hashes)
+	{
+		timersub(tvp_now, &mythr->tv_prev_job_start, &tv_hashes);
+		if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &mythr->_max_nonce : NULL))
+			return false;
+	}
+	
+	return true;
+}
+
 void minerloop_async(struct thr_info *mythr)
 {
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	const struct device_api *api = cgpu->api;
-	struct timeval tv_start, tv_end;
-	struct timeval tv_hashes;
 	struct timeval tv_now;
 	struct timeval tv_timeout, *tvp_timeout;
-	int64_t hashes;
 	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 	struct cgpu_info *proc;
@@ -6857,16 +6875,12 @@ disabled: ;
 				bool keepgoing = (proc->deven == DEV_ENABLED && !mythr->pause);
 				thread_reportin(mythr);
 				prev_job_work = mythr->work;
-				tv_start = mythr->tv_jobstart;
+				mythr->tv_prev_job_start = mythr->tv_jobstart;
 				if (likely(keepgoing))
 					if (!do_job_prepare(mythr, &tv_now))
 						goto disabled;
-				if (likely(prev_job_work))
-				{
-					hashes = -101;
-					if (api->job_get_results)
-						hashes = api->job_get_results(mythr, prev_job_work);
-				}
+				if (likely(prev_job_work) && api->job_get_results)
+					api->job_get_results(mythr, prev_job_work);
 				gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
 				if (likely(keepgoing))
 					do_job_start(mythr, &tv_now);
@@ -6877,18 +6891,8 @@ disabled: ;
 					mythr->tv_morework.tv_sec = -1;
 				}
 				if (likely(prev_job_work))
-				{
-					if (api->job_process_results)
-						hashes = api->job_process_results(mythr, prev_job_work);
-					thread_reportin(mythr);
-					
-					if (hashes != -101)
-					{
-						timersub(&tv_now, &tv_start, &tv_hashes);
-						if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &mythr->_max_nonce : NULL))
-							goto disabled;
-					}
-				}
+					if (!do_process_results(mythr, &tv_now, prev_job_work))
+						goto disabled;
 			}
 			
 			if (mythr->tv_poll.tv_sec != -1 && timercmp(&mythr->tv_poll, &tv_now, <))

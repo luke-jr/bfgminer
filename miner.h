@@ -304,7 +304,7 @@ struct device_api {
 	// Job-specific functions (only with minerloop_async!)
 	bool (*job_prepare)(struct thr_info*, struct work*, uint64_t);
 	void (*job_start)(struct thr_info*);
-	int64_t (*job_get_results)(struct thr_info*, struct work*);
+	void (*job_get_results)(struct thr_info*, struct work*);
 	int64_t (*job_process_results)(struct thr_info*, struct work*);  // return value ignored if job_get_results is used
 };
 
@@ -560,6 +560,7 @@ struct thr_info {
 	struct work *work;
 	struct work *next_work;
 	struct timeval tv_morework;
+	struct timeval tv_prev_job_start;
 	struct timeval tv_jobstart;
 	struct timeval tv_poll;
 	int notifier[2];
