@@ -305,7 +305,7 @@ struct device_api {
 	bool (*job_prepare)(struct thr_info*, struct work*, uint64_t);
 	void (*job_start)(struct thr_info*);
 	void (*job_get_results)(struct thr_info*, struct work*);
-	int64_t (*job_process_results)(struct thr_info*, struct work*);  // return value ignored if job_get_results is used
+	int64_t (*job_process_results)(struct thr_info*, struct work*, bool stopping);
 };
 
 enum dev_enable {
@@ -560,6 +560,9 @@ struct thr_info {
 	struct work *work;
 	struct work *next_work;
 	struct timeval tv_morework;
+	struct work *results_work;
+	bool _job_transition_in_progress;
+	bool _proceed_with_new_job;
 	struct timeval tv_results_jobstart;
 	struct timeval tv_jobstart;
 	struct timeval tv_poll;
@@ -1112,7 +1115,17 @@ enum test_nonce2_result {
 	TNR_BAD,
 };
 extern void minerloop_scanhash(struct thr_info *);
+
+extern bool do_job_prepare(struct thr_info *, struct timeval *tvp_now);
+extern void job_prepare_complete(struct thr_info *);
+extern void do_get_results(struct thr_info *, bool proceed_with_new_job);
+extern void job_results_fetched(struct thr_info *);
+extern void do_job_start(struct thr_info *);
+extern void mt_job_transition(struct thr_info *);
+extern void job_start_complete(struct thr_info *);
+extern bool do_process_results(struct thr_info *, struct timeval *tvp_now, struct work *, bool stopping);
 extern void minerloop_async(struct thr_info *);
+
 extern void request_work(struct thr_info *);
 extern struct work *get_work(struct thr_info *);
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);

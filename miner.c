@@ -6626,6 +6626,9 @@ void mt_disable_start(struct thr_info *mythr)
 	int thr_id = mythr->id;
 	
 	hashmeter2(mythr);
+	mythr->prev_work = mythr->work;
+	mythr->work = NULL;
+	mythr->_job_transition_in_progress = false;
 	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 	mythr->rolling = mythr->cgpu->rolling = 0;
 	thread_reportout(mythr);
@@ -6773,6 +6776,8 @@ bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
 	const struct device_api *api = proc->api;
 	struct timeval tv_worktime;
 	
+	mythr->tv_morework.tv_sec = -1;
+	mythr->_job_transition_in_progress = true;
 	if (mythr->work)
 		timersub(tvp_now, &mythr->work->tv_work_start, &tv_worktime);
 	if ((!mythr->work) || abandon_work(mythr->work, &tv_worktime, proc->max_hashes))
@@ -6794,39 +6799,96 @@ bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
 		mythr->starting_next_work = false;
 		api->job_prepare(mythr, mythr->work, mythr->_max_nonce);
 	}
+	job_prepare_complete(mythr);
 	return true;
 }
 
-void do_job_start(struct thr_info *mythr, struct timeval *tvp_now)
+void job_prepare_complete(struct thr_info *mythr)
+{
+	if (mythr->work)
+	{
+		if (true /* TODO: job is near complete */ || unlikely(mythr->work_restart))
+			do_get_results(mythr, true);
+		else
+		{}  // TODO: Set a timer to call do_get_results when job is near complete
+	}
+	else  // no job currently running
+		do_job_start(mythr);
+}
+
+void do_get_results(struct thr_info *mythr, bool proceed_with_new_job)
+{
+	struct cgpu_info *proc = mythr->cgpu;
+	const struct device_api *api = proc->api;
+	struct work *work = mythr->work;
+	
+	mythr->_job_transition_in_progress = true;
+	mythr->tv_results_jobstart = mythr->tv_jobstart;
+	mythr->_proceed_with_new_job = proceed_with_new_job;
+	if (api->job_get_results)
+		api->job_get_results(mythr, work);
+	else
+		job_results_fetched(mythr);
+}
+
+void job_results_fetched(struct thr_info *mythr)
+{
+	if (mythr->_proceed_with_new_job)
+		do_job_start(mythr);
+	else
+	{
+		struct timeval tv_now;
+		
+		gettimeofday(&tv_now, NULL);
+		
+		do_process_results(mythr, &tv_now, mythr->prev_work, true);
+	}
+}
+
+void do_job_start(struct thr_info *mythr)
 {
 	struct cgpu_info *proc = mythr->cgpu;
 	const struct device_api *api = proc->api;
 	
+	thread_reportin(mythr);
+	api->job_start(mythr);
+}
+
+void mt_job_transition(struct thr_info *mythr)
+{
+	struct timeval tv_now;
+	
+	gettimeofday(&tv_now, NULL);
+	
 	if (mythr->starting_next_work)
 	{
-		mythr->next_work->tv_work_start = *tvp_now;
+		mythr->next_work->tv_work_start = tv_now;
 		if (mythr->prev_work)
 			free_work(mythr->prev_work);
 		mythr->prev_work = mythr->work;
 		mythr->work = mythr->next_work;
 		mythr->next_work = NULL;
 	}
-	mythr->tv_jobstart = *tvp_now;
-	thread_reportin(mythr);
-	api->job_start(mythr);
+	mythr->tv_jobstart = tv_now;
+	mythr->_job_transition_in_progress = false;
 }
 
-void do_get_results(struct thr_info *mythr, __maybe_unused struct timeval *tvp_now, struct work *work)
+void job_start_complete(struct thr_info *mythr)
 {
-	struct cgpu_info *proc = mythr->cgpu;
-	const struct device_api *api = proc->api;
+	struct timeval tv_now;
 	
-	if (api->job_get_results)
-		api->job_get_results(mythr, work);
-	mythr->tv_results_jobstart = mythr->tv_jobstart;
+	gettimeofday(&tv_now, NULL);
+	
+	if (!do_process_results(mythr, &tv_now, mythr->prev_work, false))
+	{
+		struct cgpu_info *proc = mythr->cgpu;
+		
+		proc->deven = DEV_RECOVER_ERR;
+		mythr->_job_transition_in_progress = false;
+	}
 }
 
-bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct work *work)
+bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct work *work, bool stopping)
 {
 	struct cgpu_info *proc = mythr->cgpu;
 	const struct device_api *api = proc->api;
@@ -6834,7 +6896,7 @@ bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct 
 	int64_t hashes = 0;
 	
 	if (api->job_process_results)
-		hashes = api->job_process_results(mythr, work);
+		hashes = api->job_process_results(mythr, work, stopping);
 	thread_reportin(mythr);
 	
 	if (hashes)
@@ -6862,6 +6924,7 @@ void minerloop_async(struct thr_info *mythr)
 	int proc_thr_no;
 	int maxfd;
 	fd_set rfds;
+	bool is_running, should_be_running;
 	
 	while (1) {
 		tv_timeout.tv_sec = -1;
@@ -6869,49 +6932,44 @@ void minerloop_async(struct thr_info *mythr)
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
 			mythr = proc->thr[0];
+			is_running = mythr->work;
+			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
 			
-			bool was_disabled = (mythr->tv_morework.tv_sec == -1);
-			
-			if (was_disabled
-			     ? (proc->deven == DEV_ENABLED && !mythr->pause)
-			     : (
-			           unlikely(mythr->work_restart)
-			        || timercmp(&mythr->tv_morework, &tv_now, <)
-			       )
-			   )
+			if (should_be_running)
 			{
-				if (was_disabled)
-					mt_disable_finish(mythr);
-disabled: ;
-				bool keepgoing = (proc->deven == DEV_ENABLED && !mythr->pause);
-				prev_job_work = mythr->work;
-				if (likely(keepgoing))
-					if (!do_job_prepare(mythr, &tv_now))
-						goto disabled;
-				if (likely(prev_job_work))
-					do_get_results(mythr, &tv_now, prev_job_work);
-				gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
-				if (likely(keepgoing))
-					do_job_start(mythr, &tv_now);
-				else
+				if (unlikely(!(is_running || mythr->_job_transition_in_progress)))
 				{
-					mythr->prev_work = mythr->work;
-					mythr->work = NULL;
-					mythr->tv_morework.tv_sec = -1;
+					mt_disable_finish(mythr);
+					goto djp;
 				}
-				if (likely(prev_job_work))
-					if (!do_process_results(mythr, &tv_now, prev_job_work))
-						goto disabled;
+				if (unlikely(mythr->work_restart))
+					goto djp;
+			}
+			else  // ! should_be_running
+			{
+				if (unlikely(is_running && !mythr->_job_transition_in_progress))
+				{
+disabled: ;
+					mythr->tv_morework.tv_sec = -1;
+					do_get_results(mythr, false);
+				}
 			}
 			
-			if (mythr->tv_poll.tv_sec != -1 && timercmp(&mythr->tv_poll, &tv_now, <))
+			if (timer_passed(&mythr->tv_morework, &tv_now))
+			{
+djp: ;
+				if (!do_job_prepare(mythr, &tv_now))
+					goto disabled;
+			}
+			
+			if (timer_passed(&mythr->tv_poll, &tv_now))
 				api->poll(mythr);
 			
 			reduce_timeout_to(&tv_timeout, &mythr->tv_morework);
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
 		}
 		
-		gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
+		gettimeofday(&tv_now, NULL);
 		// FIXME: break select on work restart
 		FD_ZERO(&rfds);
 		FD_SET(mythr->notifier[0], &rfds);
@@ -8507,6 +8565,7 @@ begin_bench:
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 			thr->work_restart_fd = thr->_work_restart_fd_w = -1;
+			thr->_job_transition_in_progress = true;
 			timerclear(&thr->tv_morework);
 
 			thr->scanhash_working = true;

@@ -98,6 +98,12 @@ static inline void align_len(size_t *len)
 } while(0)
 
 static inline
+bool timer_passed(struct timeval *tvp_timer, struct timeval *tvp_now)
+{
+	return (tvp_timer->tv_sec != -1 && timercmp(tvp_timer, tvp_now, <));
+}
+
+static inline
 void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)
 {
 	if (tvp_time->tv_sec == -1)

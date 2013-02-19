@@ -87,6 +87,8 @@ called. This is given the Processor `struct thr_info *` as its only argument,
 and should start the job most recently prepared with `job_prepare`. Note that
 it is possible for `job_prepare` to be called for a job that never starts
 (another `job_prepare` may be executed to override the previous one instead).
+`job_start` must call `mt_job_transition` as soon as the actual switchover to
+the new job takes place, and must call `job_start_complete` when finished.
 `job_start` must set `thr->tv_morework` to the time the device expects to need
 its next work item. It is generally advisable to set this a bit early to ensure
 any delays do not make it late. `job_start` is expected to always succeed and
@@ -96,9 +98,13 @@ Immediately before `job_start` is called to change from one job to the next,
 `job_get_results` will be called to fetch any volatile results from the
 previous job. It is provided the Processor's `struct thr_info *` and the
 currently executing job's `struct work *`. It should ONLY fetch the raw data
-for the results, and not spend any time processing or submitting it. After the
-new job has been started, your driver's `job_process_results` function will be
-called with the same arguments to complete the submission of these results.
+for the results, and not spend any time processing or submitting it. If
+`job_get_results` is defined for your driver, it must (directly or indirectly)
+ensure `job_results_fetched` is called when complete. After the new job has
+been started, your driver's `job_process_results` function will be called to
+complete the submission of these results with the same arguments, plus a bool
+to tell you whether the processor is being stopped. If it is, your driver must
+call `mt_disable_start` when it has successfully stopped hashing.
 
 Drivers may define a `poll` function. If this is defined, `thr->tv_poll` must
 always be set to a valid time to next execute it, for each Processor.

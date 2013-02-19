@@ -678,6 +678,7 @@ void x6500_job_start(struct thr_info *thr)
 	if (thr->prev_work != thr->work)
 		calc_hashes(thr, &tv_now);
 	fpga->hashes_left = 0x100000000;
+	mt_job_transition(thr);
 
 	if (x6500_all_idle(x6500))
 	{
@@ -697,6 +698,8 @@ void x6500_job_start(struct thr_info *thr)
 	timer_set_delay(&thr->tv_morework, &tv_now, usecs);
 
 	timer_set_delay(&thr->tv_poll, &tv_now, 10000);
+	
+	job_start_complete(thr);
 }
 
 static
