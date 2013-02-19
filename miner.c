@@ -4334,6 +4334,11 @@ static void restart_threads(void)
 	{
 		thr = &thr_info[i];
 		thr->work_restart = true;
+	}
+	
+	for (i = 0; i < mining_threads; i++)
+	{
+		thr = &thr_info[i];
 		notifier_wake(thr->work_restart_notifier);
 	}
 

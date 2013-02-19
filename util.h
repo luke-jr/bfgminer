@@ -83,6 +83,14 @@ static inline void align_len(size_t *len)
 }
 
 
+static inline
+void set_maxfd(int *p_maxfd, int fd)
+{
+	if (fd > *p_maxfd)
+		*p_maxfd = fd;
+}
+
+
 #define timer_set_delay(tvp_timer, tvp_now, usecs)  do {  \
 	struct timeval tv_add = {  \
 		.tv_sec = usecs / 1000000,  \

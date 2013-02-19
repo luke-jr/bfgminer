@@ -12,10 +12,13 @@
 
 #include "config.h"
 
+#include <sys/select.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "compat.h"
 #include "deviceapi.h"
@@ -286,6 +289,9 @@ void minerloop_async(struct thr_info *mythr)
 	fd_set rfds;
 	bool is_running, should_be_running;
 	
+	if (mythr->work_restart_notifier[1] == -1)
+		notifier_init(mythr->work_restart_notifier);
+	
 	while (1) {
 		tv_timeout.tv_sec = -1;
 		gettimeofday(&tv_now, NULL);
@@ -330,15 +336,18 @@ djp: ;
 		}
 		
 		gettimeofday(&tv_now, NULL);
-		// FIXME: break select on work restart
 		FD_ZERO(&rfds);
 		FD_SET(mythr->notifier[0], &rfds);
 		maxfd = mythr->notifier[0];
+		FD_SET(mythr->work_restart_notifier[0], &rfds);
+		set_maxfd(&maxfd, mythr->work_restart_notifier[0]);
 		if (select(maxfd + 1, &rfds, NULL, NULL, select_timeout(&tv_timeout, &tv_now)) < 0)
 			continue;
 		if (FD_ISSET(mythr->notifier[0], &rfds)) {
 			notifier_read(mythr->notifier);
 		}
+		if (FD_ISSET(mythr->work_restart_notifier[0], &rfds))
+			notifier_read(mythr->work_restart_notifier);
 	}
 }
 
