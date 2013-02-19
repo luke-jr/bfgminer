@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2012 Con Kolivas
+ * Copyright 2011-2013 Con Kolivas
  * Copyright 2011-2012 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *
@@ -3010,6 +3010,8 @@ void __copy_work(struct work *work, struct work *base_work)
 		work->nonce2 = strdup(base_work->nonce2);
 	if (base_work->ntime)
 		work->ntime = strdup(base_work->ntime);
+	if (base_work->sessionid)
+		work->sessionid = strdup(base_work->sessionid);
 	if (base_work->gbt_coinbase)
 		work->gbt_coinbase = strdup(base_work->gbt_coinbase);
 }
@@ -5449,7 +5451,7 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 /* The main hashing loop for devices that are slow enough to work on one work
  * item at a time, without a queue, aborting work before the entire nonce
  * range has been hashed if needed. */
-void hash_sole_work(struct thr_info *mythr)
+static void hash_sole_work(struct thr_info *mythr)
 {
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
@@ -5595,6 +5597,129 @@ void hash_sole_work(struct thr_info *mythr)
 	}
 }
 
+/* Create a hashtable of work items for devices with a queue. The device
+ * driver must have a custom queue_full function or it will default to true
+ * and put only one work item in the queue. Work items should not be removed
+ * from this hashtable until they are no longer in use anywhere. Once a work
+ * item is physically queued on the device itself, the work->queued flag
+ * should be set under cgpu->qlock write lock to prevent it being dereferenced
+ * while still in use. */
+static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
+{
+	thread_reportout(mythr);
+	do {
+		struct work *work = get_work(mythr, thr_id);
+
+		wr_lock(&cgpu->qlock);
+		HASH_ADD_INT(cgpu->queued_work, id, work);
+		wr_unlock(&cgpu->qlock);
+		/* The queue_full function should be used by the driver to
+		 * actually place work items on the physical device if it
+		 * does have a queue. */
+	} while (!drv->queue_full(cgpu));
+}
+
+/* This function is for retrieving one work item from the queued hashtable of
+ * available work items that are not yet physically on a device (which is
+ * flagged with the work->queued bool). Code using this function must be able
+ * to handle NULL as a return which implies there is no work available. */
+struct work *get_queued(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (!work->queued) {
+			work->queued = true;
+			ret = work;
+			break;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
+/* This function should be used by queued device drivers when they're sure
+ * the work struct is no longer in use. */
+void work_completed(struct cgpu_info *cgpu, struct work *work)
+{
+	wr_lock(&cgpu->qlock);
+	HASH_DEL(cgpu->queued_work, work);
+	wr_unlock(&cgpu->qlock);
+	free_work(work);
+}
+
+static void flush_queue(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp;
+	int discarded = 0;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		/* Can only discard the work items if they're not physically
+		 * queued on the device. */
+		if (!work->queued) {
+			HASH_DEL(cgpu->queued_work, work);
+			discard_work(work);
+			discarded++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	if (discarded)
+		applog(LOG_DEBUG, "Discarded %d queued work items", discarded);
+}
+
+/* This version of hash work is for devices that are fast enough to always
+ * perform a full nonce range and need a queue to maintain the device busy.
+ * Work creation and destruction is not done from within this function
+ * directly. */
+void hash_queued_work(struct thr_info *mythr)
+{
+	const long cycle = opt_log_interval / 5 ? : 1;
+	struct timeval tv_start = {0, 0}, tv_end;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	const int thr_id = mythr->id;
+	int64_t hashes_done = 0;
+
+	while (42) {
+		struct timeval diff;
+		int64_t hashes;
+
+		mythr->work_restart = false;
+
+		fill_queue(mythr, cgpu, drv, thr_id);
+
+		thread_reportin(mythr);
+		hashes = drv->scanwork(mythr);
+		if (unlikely(hashes == -1 )) {
+			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
+			cgpu->deven = DEV_DISABLED;
+			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
+			mt_disable(mythr, thr_id, drv);
+		}
+
+		hashes_done += hashes;
+		gettimeofday(&tv_end, NULL);
+		timersub(&tv_end, &tv_start, &diff);
+		if (diff.tv_sec >= cycle) {
+			hashmeter(thr_id, &diff, hashes_done);
+			hashes_done = 0;
+			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
+		}
+
+		if (unlikely(mythr->work_restart)) {
+			flush_queue(cgpu);
+			drv->flush_work(cgpu);
+		}
+
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr, thr_id, drv);
+	}
+}
+
 void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
@@ -5617,7 +5742,7 @@ void *miner_thread(void *userdata)
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
 
-	hash_sole_work(mythr);
+	drv->hash_work(mythr);
 out:
 	drv->thread_shutdown(mythr);
 
@@ -6515,6 +6640,9 @@ static void noop_thread_enable(struct thr_info __maybe_unused *thr)
 {
 }
 
+#define noop_flush_work noop_reinit_device
+#define noop_queue_full noop_get_stats
+
 /* Fill missing driver api functions with noops */
 void fill_device_api(struct cgpu_info *cgpu)
 {
@@ -6542,6 +6670,12 @@ void fill_device_api(struct cgpu_info *cgpu)
 		drv->thread_shutdown = &noop_thread_shutdown;
 	if (!drv->thread_enable)
 		drv->thread_enable = &noop_thread_enable;
+	if (!drv->hash_work)
+		drv->hash_work = &hash_sole_work;
+	if (!drv->flush_work)
+		drv->flush_work = &noop_flush_work;
+	if (!drv->queue_full)
+		drv->queue_full = &noop_queue_full;
 }
 
 void enable_device(struct cgpu_info *cgpu)
@@ -6565,6 +6699,9 @@ void enable_device(struct cgpu_info *cgpu)
 	}
 #endif
 	fill_device_api(cgpu);
+
+	rwlock_init(&cgpu->qlock);
+	cgpu->queued_work = NULL;
 }
 
 struct _cgpu_devid_counter {
