@@ -27,6 +27,7 @@ bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
 bfgminer_SOURCES := miner.c
 
 bfgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
+	deviceapi.c deviceapi.h \
 		   util.c util.h uthash.h logging.h		\
 		   sha2.c sha2.h api.c
 bfgminer_DEPENDENCIES =

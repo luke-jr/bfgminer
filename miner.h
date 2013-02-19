@@ -789,6 +789,8 @@ extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
 extern void thread_reportin(struct thr_info *thr);
+extern void thread_reportout(struct thr_info *);
+extern void hashmeter2(struct thr_info *);
 extern int restart_wait(unsigned int mstime);
 extern int stale_wait(unsigned int mstime, struct work*, bool checkend);
 
@@ -1114,28 +1116,11 @@ enum test_nonce2_result {
 	TNR_HIGH,
 	TNR_BAD,
 };
-extern void minerloop_scanhash(struct thr_info *);
-
-extern bool do_job_prepare(struct thr_info *, struct timeval *tvp_now);
-extern void job_prepare_complete(struct thr_info *);
-extern void do_get_results(struct thr_info *, bool proceed_with_new_job);
-extern void job_results_fetched(struct thr_info *);
-extern void do_job_start(struct thr_info *);
-extern void mt_job_transition(struct thr_info *);
-extern void job_start_complete(struct thr_info *);
-extern bool do_process_results(struct thr_info *, struct timeval *tvp_now, struct work *, bool stopping);
-extern void minerloop_async(struct thr_info *);
-
-extern void request_work(struct thr_info *);
-extern struct work *get_work(struct thr_info *);
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
 extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
-extern bool hashes_done(struct thr_info *, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce);
-extern void mt_disable_start(struct thr_info *);
-extern void mt_disable_finish(struct thr_info *);
 extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);

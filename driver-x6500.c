@@ -19,6 +19,7 @@
 #include <libusb.h>
 
 #include "compat.h"
+#include "deviceapi.h"
 #include "dynclock.h"
 #include "jtag.h"
 #include "logging.h"
