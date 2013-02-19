@@ -106,5 +106,19 @@ void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)
 		*tvp_timeout = *tvp_time;
 }
 
+static inline
+struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_now)
+{
+	if (tvp_timeout->tv_sec == -1)
+		return NULL;
+	
+	if (timercmp(tvp_timeout, tvp_now, <))
+		timerclear(tvp_timeout);
+	else
+		timersub(tvp_timeout, tvp_now, tvp_timeout);
+	
+	return tvp_timeout;
+}
+
 
 #endif /* __UTIL_H__ */

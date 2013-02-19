@@ -6842,7 +6842,7 @@ void minerloop_async(struct thr_info *mythr)
 	struct cgpu_info *cgpu = mythr->cgpu;
 	const struct device_api *api = cgpu->api;
 	struct timeval tv_now;
-	struct timeval tv_timeout, *tvp_timeout;
+	struct timeval tv_timeout;
 	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 	struct cgpu_info *proc;
@@ -6903,21 +6903,11 @@ disabled: ;
 		}
 		
 		gettimeofday(&tv_now, NULL);  // NOTE: Can go away when fully async
-		if (tv_timeout.tv_sec == -1)
-			tvp_timeout = NULL;
-		else
-		{
-			tvp_timeout = &tv_timeout;
-			if (timercmp(&tv_timeout, &tv_now, <))
-				timerclear(&tv_timeout);
-			else
-				timersub(&tv_timeout, &tv_now, &tv_timeout);
-		}
 		// FIXME: break select on work restart
 		FD_ZERO(&rfds);
 		FD_SET(mythr->notifier[0], &rfds);
 		maxfd = mythr->notifier[0];
-		if (select(maxfd + 1, &rfds, NULL, NULL, tvp_timeout) < 0)
+		if (select(maxfd + 1, &rfds, NULL, NULL, select_timeout(&tv_timeout, &tv_now)) < 0)
 			continue;
 		if (FD_ISSET(mythr->notifier[0], &rfds)) {
 			notifier_read(mythr->notifier);
