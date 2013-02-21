@@ -2433,7 +2433,7 @@ static void curses_print_devstatus(int thr_id)
 		return;
 	
 	get_statline2(logline, cgpu, true);
-	wprintw(statuswin, logline);
+	waddstr(statuswin, logline);
 
 	wclrtoeol(statuswin);
 }
