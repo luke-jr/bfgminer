@@ -9,10 +9,13 @@
 #define Wr2(x)		(rotl(x, 25U) ^ rotl(x, 14U) ^ (x>>3U))
 #define Wr1(x)		(rotl(x, 15U) ^ rotl(x, 13U) ^ (x>>10U))
 
-#define RND(a, b, c, d, e, f, g, h, k)			\
-	h += Tr1(e) + Ch(e, f, g) + k;		\
-	d += h;					\
-	h += Tr2(a) + Maj(a, b, c);
+#define RND(a, b, c, d, e, f, g, h, k)	\
+	h += Tr1(e); 			\
+	h += Ch(e, f, g); 		\
+	h += k;				\
+	d += h;				\
+	h += Tr2(a); 			\
+	h += Maj(a, b, c);
 
 void SHA256(uint4*restrict state0,uint4*restrict state1, const uint4 block0, const uint4 block1, const uint4 block2, const uint4 block3)
 {
