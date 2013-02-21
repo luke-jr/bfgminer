@@ -356,6 +356,9 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 	unsigned char *ob_ms = &data->next_work_ob[8];
 	unsigned char *ob_dt = &ob_ms[32];
 	
+	// If polling job_start, cancel it
+	thr->tv_poll.tv_sec = -1;
+	
 	memcpy(ob_ms, work->midstate, 32);
 	memcpy(ob_dt, work->data + 64, 12);
 	if (bitforce->nonce_range)
@@ -419,12 +422,9 @@ re_send:
 	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
-		if (!restart_wait(WORK_CHECK_INTERVAL_MS))
-		{
-			job_start_abort(thr, false);
-			return;
-		}
-		goto re_send;
+		gettimeofday(&tv_now, NULL);
+		timer_set_delay(&thr->tv_poll, &tv_now, WORK_CHECK_INTERVAL_MS * 1000);
+		return;
 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
 		if (bitforce->nonce_range) {
@@ -687,6 +687,12 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+void bitforce_poll(struct thr_info *thr)
+{
+	thr->tv_poll.tv_sec = -1;
+	bitforce_job_start(thr);
+}
+
 struct device_api bitforce_api = {
 	.dname = "bitforce",
 	.name = "BFL",
@@ -702,6 +708,7 @@ struct device_api bitforce_api = {
 	.job_prepare = bitforce_job_prepare,
 	.job_start = bitforce_job_start,
 	.job_get_results = bitforce_job_get_results,
+	.poll = bitforce_poll,
 	.job_process_results = bitforce_job_process_results,
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
