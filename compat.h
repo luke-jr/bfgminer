@@ -53,6 +53,10 @@
    } while (0)
  #endif
 
+// Some versions of MingW define this, but don't handle the timeval.tv_sec case that we use
+#ifdef localtime_r
+#undef localtime_r
+#endif
 // localtime is thread-safe on Windows
 // We also use this with timeval.tv_sec, which is incorrectly smaller than time_t on Windows
 // Need to cast to time_t* to suppress warning - actual problem shouldn't be possible in practice
