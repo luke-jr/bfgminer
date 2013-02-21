@@ -3388,7 +3388,7 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	mutex_unlock(&pool->pool_lock);
 }
 
-static bool stale_work(struct work *work, bool share);
+bool stale_work(struct work *work, bool share);
 
 static inline bool should_roll(struct work *work)
 {
@@ -3552,7 +3552,7 @@ static void pool_died(struct pool *pool)
 	}
 }
 
-static bool stale_work(struct work *work, bool share)
+bool stale_work(struct work *work, bool share)
 {
 	unsigned work_expiry;
 	struct pool *pool;

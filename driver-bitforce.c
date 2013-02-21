@@ -120,6 +120,7 @@ static void bitforce_detect(void)
 struct bitforce_data {
 	unsigned char next_work_ob[70];
 	char noncebuf[0x100];
+	int poll_func;
 };
 
 static void bitforce_clear_buffer(struct cgpu_info *);
@@ -357,7 +358,11 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 	unsigned char *ob_dt = &ob_ms[32];
 	
 	// If polling job_start, cancel it
-	thr->tv_poll.tv_sec = -1;
+	if (data->poll_func == 1)
+	{
+		thr->tv_poll.tv_sec = -1;
+		data->poll_func = 0;
+	}
 	
 	memcpy(ob_ms, work->midstate, 32);
 	memcpy(ob_dt, work->data + 64, 12);
@@ -424,6 +429,7 @@ re_send:
 		mutex_unlock(&bitforce->device_mutex);
 		gettimeofday(&tv_now, NULL);
 		timer_set_delay(&thr->tv_poll, &tv_now, WORK_CHECK_INTERVAL_MS * 1000);
+		data->poll_func = 1;
 		return;
 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
@@ -524,11 +530,18 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
+		if (stale_work(work, true))
+		{
+			applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
+			       bitforce->proc_repr);
+			goto out;
+		}
+
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
-		if (noisy_stale_wait(delay_time_ms, work, true))
-			goto out;
-		bitforce->wait_ms += delay_time_ms;
+		timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
+		data->poll_func = 2;
+		return;
 	}
 
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
@@ -689,8 +702,22 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 
 void bitforce_poll(struct thr_info *thr)
 {
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	int poll = data->poll_func;
 	thr->tv_poll.tv_sec = -1;
-	bitforce_job_start(thr);
+	data->poll_func = 0;
+	switch (poll)
+	{
+		case 1:
+			bitforce_job_start(thr);
+			break;
+		case 2:
+			bitforce_job_get_results(thr, thr->work);
+			break;
+		default:
+			applog(LOG_ERR, "%"PRIpreprv": Unexpected poll from device API!", thr->cgpu->proc_repr);
+	}
 }
 
 struct device_api bitforce_api = {
