@@ -1327,7 +1327,7 @@ static void set_threads_hashes(unsigned int vectors,int64_t *hashes, size_t *glo
 void *reinit_gpu(void *userdata)
 {
 	struct thr_info *mythr = userdata;
-	struct cgpu_info *cgpu;
+	struct cgpu_info *cgpu, *sel_cgpu;
 	struct thr_info *thr;
 	struct timeval now;
 	char name[256];
@@ -1338,6 +1338,7 @@ void *reinit_gpu(void *userdata)
 	RenameThread("reinit_gpu");
 
 select_cgpu:
+	sel_cgpu =
 	cgpu = tq_pop(mythr->q, NULL);
 	if (!cgpu)
 		goto out;
@@ -1409,7 +1410,7 @@ select_cgpu:
 	}
 
 	gettimeofday(&now, NULL);
-	get_datestamp(cgpu->init, &now);
+	get_datestamp(sel_cgpu->init, &now);
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = &thr_info[thr_id];
