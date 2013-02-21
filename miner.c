@@ -229,7 +229,7 @@ pthread_mutex_t stats_lock;
 static pthread_mutex_t submitting_lock;
 static int total_submitting;
 static struct list_head submit_waiting;
-int submit_waiting_notifier[2];
+notifier_t submit_waiting_notifier;
 
 int hw_errors;
 int total_accepted, total_rejected, total_diff1;
