@@ -12,7 +12,11 @@
 
 #include "config.h"
 
+#ifdef WIN32
+#include <winsock2.h>
+#else
 #include <sys/select.h>
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/time.h>

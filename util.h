@@ -4,6 +4,8 @@
 #include <curl/curl.h>
 #include <jansson.h>
 
+#include "compat.h"
+
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <sys/socket.h>
