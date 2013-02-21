@@ -85,6 +85,9 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 	if (lock)
 		mutex_lock(&bitforce->device_mutex);
 
+	if (bitforce->usbinfo.nodev)
+		goto failed;
+
 	// Reset
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
 				FTDI_VALUE_RESET, bitforce->usbdev->found->interface, C_RESET);
