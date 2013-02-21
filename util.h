@@ -12,7 +12,7 @@
 	#include <netinet/in.h>
 	#include <arpa/inet.h>
 
-	#define SOCKETTYPE long
+	#define SOCKETTYPE int
 	#define SOCKETFAIL(a) ((a) < 0)
 	#define INVSOCK -1
 	#define INVINETADDR -1
@@ -72,10 +72,11 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
 void RenameThread(const char* name);
 
-extern void notifier_init(int pipefd[2]);
-extern void notifier_wake(int fd[2]);
-extern void notifier_read(int fd[2]);
-extern void notifier_destroy(int fd[2]);
+typedef SOCKETTYPE notifier_t[2];
+extern void notifier_init(notifier_t);
+extern void notifier_wake(notifier_t);
+extern void notifier_read(notifier_t);
+extern void notifier_destroy(notifier_t);
 
 /* Align a size_t to 4 byte boundaries for fussy arches */
 static inline void align_len(size_t *len)

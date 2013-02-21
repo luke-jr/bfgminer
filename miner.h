@@ -566,12 +566,12 @@ struct thr_info {
 	struct timeval tv_results_jobstart;
 	struct timeval tv_jobstart;
 	struct timeval tv_poll;
-	int notifier[2];
+	notifier_t notifier;
 	bool starting_next_work;
 	uint32_t _max_nonce;
 
 	bool	work_restart;
-	int work_restart_notifier[2];
+	notifier_t work_restart_notifier;
 };
 
 extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);

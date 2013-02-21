@@ -1773,7 +1773,7 @@ static const char *WindowsErrorStr(DWORD dwMessageId)
 }
 #endif
 
-void notifier_init(int pipefd[2])
+void notifier_init(notifier_t pipefd)
 {
 #ifdef WIN32
 	SOCKET listener, connecter, acceptor;
@@ -1817,9 +1817,9 @@ void notifier_init(int pipefd[2])
 #endif
 }
 
-void notifier_wake(int fd[2])
+void notifier_wake(notifier_t fd)
 {
-	if (fd[1] == -1)
+	if (fd[1] == INVSOCK)
 		return;
 #ifdef WIN32
 	(void)send(fd[1], "\0", 1, 0);
@@ -1828,7 +1828,7 @@ void notifier_wake(int fd[2])
 #endif
 }
 
-void notifier_read(int fd[2])
+void notifier_read(notifier_t fd)
 {
 	char buf[0x10];
 #ifdef WIN32
@@ -1838,7 +1838,7 @@ void notifier_read(int fd[2])
 #endif
 }
 
-void notifier_destroy(int fd[2])
+void notifier_destroy(notifier_t fd)
 {
 #ifdef WIN32
 	closesocket(fd[0]);
