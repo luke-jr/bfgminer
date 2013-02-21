@@ -23,6 +23,7 @@ extern void job_results_fetched(struct thr_info *);
 extern void do_job_start(struct thr_info *);
 extern void mt_job_transition(struct thr_info *);
 extern void job_start_complete(struct thr_info *);
+extern void job_start_abort(struct thr_info *, bool failure);
 extern bool do_process_results(struct thr_info *, struct timeval *tvp_now, struct work *, bool stopping);
 extern void minerloop_async(struct thr_info *);
 

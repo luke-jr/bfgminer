@@ -248,13 +248,17 @@ void job_start_complete(struct thr_info *mythr)
 	
 	gettimeofday(&tv_now, NULL);
 	
-	if (!do_process_results(mythr, &tv_now, mythr->prev_work, false))
-	{
-		struct cgpu_info *proc = mythr->cgpu;
-		
+	do_process_results(mythr, &tv_now, mythr->prev_work, false);
+}
+
+void job_start_abort(struct thr_info *mythr, bool failure)
+{
+	struct cgpu_info *proc = mythr->cgpu;
+	
+	if (failure)
 		proc->deven = DEV_RECOVER_ERR;
-		mythr->_job_transition_in_progress = false;
-	}
+	mythr->work = NULL;
+	mythr->_job_transition_in_progress = false;
 }
 
 bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct work *work, bool stopping)
