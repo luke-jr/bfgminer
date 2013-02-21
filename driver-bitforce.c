@@ -502,6 +502,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	struct timeval elapsed;
 	struct timeval now;
 	char *pdevbuf = &data->noncebuf[0];
+	bool stale;
 
 	gettimeofday(&now, NULL);
 	timersub(&now, &bitforce->work_start_tv, &elapsed);
@@ -510,6 +511,21 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	
 	if (!fdDev)
 		goto commerr;
+
+	stale = stale_work(work, true);
+	
+	if (unlikely(bitforce->wait_ms < bitforce->sleep_ms))
+	{
+		// We're likely here because of a work restart
+		// Since Bitforce cannot stop a work without losing results, only do it if the current job is finding stale shares
+		if (!stale)
+		{
+			delay_time_ms = bitforce->sleep_ms - bitforce->wait_ms;
+			timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
+			data->poll_func = 2;
+			return;
+		}
+	}
 
 	while (1) {
 		mutex_lock(&bitforce->device_mutex);
@@ -530,7 +546,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
-		if (stale_work(work, true))
+		if (stale)
 		{
 			applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
 			       bitforce->proc_repr);
