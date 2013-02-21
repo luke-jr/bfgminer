@@ -67,6 +67,7 @@ static bool bitforce_detect_one(const char *devpath)
 	int fdDev = serial_open(devpath, 0, 10, true);
 	struct cgpu_info *bitforce;
 	char pdevbuf[0x100];
+	size_t pdevbuf_len;
 	char *s;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
@@ -84,12 +85,27 @@ static bool bitforce_detect_one(const char *devpath)
 		return 0;
 	}
 
-	BFclose(fdDev);
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		applog(LOG_DEBUG, "BFL: Didn't recognise BitForce on %s", devpath);
+		BFclose(fdDev);
 		return false;
 	}
 
+	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
+	BFwrite(fdDev, "ZCX", 3);
+	while (true)
+	{
+		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+		if (!strncasecmp(pdevbuf, "OK", 2))
+			break;
+		pdevbuf_len = strlen(pdevbuf);
+		if (unlikely(!pdevbuf_len))
+			continue;
+		pdevbuf[pdevbuf_len-1] = '\0';  // trim newline
+		applog(LOG_DEBUG, "  %s", pdevbuf);
+	}
+	BFclose(fdDev);
+	
 	// We have a real BitForce!
 	bitforce = calloc(1, sizeof(*bitforce));
 	bitforce->api = &bitforce_api;
