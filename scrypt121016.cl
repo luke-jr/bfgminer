@@ -28,11 +28,13 @@
  * online backup system.
  */
 
+__constant uint ES[2] = { 0x00FF00FF, 0xFF00FF00 };
+
 #define rotl(x,y) rotate(x,y)
 #define Ch(x,y,z) bitselect(z,y,x)
 #define Maj(x,y,z) Ch((x^z),y,z)
 
-#define EndianSwap(n) (rotl(n&0x00FF00FF,24U)|rotl(n&0xFF00FF00,8U))
+#define EndianSwap(n) (rotl(n & ES[0], 24U)|rotl(n & ES[1], 8U))
 
 #define Tr2(x)		(rotl(x, 30U) ^ rotl(x, 19U) ^ rotl(x, 10U))
 #define Tr1(x)		(rotl(x, 26U) ^ rotl(x, 21U) ^ rotl(x, 7U))
