@@ -791,6 +791,7 @@ extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
 extern void hashmeter2(struct thr_info *);
 extern int restart_wait(unsigned int mstime);
+extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
 extern int stale_wait(unsigned int mstime, struct work*, bool checkend);
 
 extern void kill_work(void);

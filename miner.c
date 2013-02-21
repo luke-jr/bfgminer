@@ -4277,6 +4277,25 @@ int restart_wait(unsigned int mstime)
 	return rc;
 }
 
+bool stale_work_future(struct work *work, bool share, unsigned long ustime)
+{
+	bool rv;
+	struct timeval tv, orig;
+	ldiv_t d;
+	
+	d = ldiv(ustime, 1000000);
+	tv = (struct timeval){
+		.tv_sec = d.quot,
+		.tv_usec = d.rem,
+	};
+	orig = work->tv_staged;
+	timersub(&orig, &tv, &work->tv_staged);
+	rv = stale_work(work, share);
+	work->tv_staged = orig;
+	
+	return rv;
+}
+
 /* A generic wait function for threads that poll that will wait a specified
  * time waiting on a share to become stale. Returns positive if the share
  * became stale or zero if the timer expired first. If checkend is true, will
@@ -4289,16 +4308,7 @@ int stale_wait(unsigned int mstime, struct work*work, bool checkend)
 	int rc;
 
 	if (checkend) {
-		struct timeval tv, orig;
-		ldiv_t d;
-		d = ldiv(mstime, 1000);
-		tv.tv_sec = d.quot;
-		tv.tv_usec = d.rem * 1000;
-		orig = work->tv_staged;
-		timersub(&orig, &tv, &work->tv_staged);
-		rc = stale_work(work, true);
-		work->tv_staged = orig;
-		if (rc)
+		if (stale_work_future(work, true, mstime * 1000))
 			return -1;
 	}
 
