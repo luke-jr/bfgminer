@@ -5080,7 +5080,7 @@ static void *reinit_cpu(void *userdata)
 static void *reinit_gpu(void *userdata)
 {
 	struct thr_info *mythr = userdata;
-	struct cgpu_info *cgpu;
+	struct cgpu_info *cgpu, *sel_cgpu;
 	struct thr_info *thr;
 	struct timeval now;
 	char name[256];
@@ -5090,6 +5090,7 @@ static void *reinit_gpu(void *userdata)
 	pthread_detach(pthread_self());
 
 select_cgpu:
+	sel_cgpu =
 	cgpu = tq_pop(mythr->q, NULL);
 	if (!cgpu)
 		goto out;
@@ -5125,7 +5126,7 @@ select_cgpu:
 			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);
 	}
 
-	cgpu->enabled = true;
+	sel_cgpu->enabled = true;
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = &thr_info[thr_id];
@@ -5161,7 +5162,7 @@ select_cgpu:
 	}
 
 	gettimeofday(&now, NULL);
-	get_datestamp(cgpu->init, &now);
+	get_datestamp(sel_cgpu->init, &now);
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = &thr_info[thr_id];
