@@ -1742,7 +1742,7 @@ void clean_work(struct work *work)
 	free(work->job_id);
 	free(work->nonce2);
 	free(work->ntime);
-	free(work->sessionid);
+	free(work->nonce1);
 
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -3576,12 +3576,12 @@ void __copy_work(struct work *work, struct work *base_work)
 	work->id = id;
 	if (base_work->job_id)
 		work->job_id = strdup(base_work->job_id);
+	if (base_work->nonce1)
+		work->nonce1 = strdup(base_work->nonce1);
 	if (base_work->nonce2)
 		work->nonce2 = strdup(base_work->nonce2);
 	if (base_work->ntime)
 		work->ntime = strdup(base_work->ntime);
-	if (base_work->sessionid)
-		work->sessionid = strdup(base_work->sessionid);
 
 	if (base_work->tmpl) {
 		struct pool *pool = work->pool;
@@ -4026,8 +4026,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 			bool sessionid_match;
 			
 			mutex_lock(&pool->pool_lock);
-			sessionid_match = true;  // FIXME: pool->sessionid && work->sessionid && !strcmp(pool->sessionid, work->sessionid);
-			// FIXME: Above check won't work without sessionid support
+			sessionid_match = !strcmp(work->nonce1, pool->nonce1);
 			mutex_unlock(&pool->pool_lock);
 			if (!sessionid_match)
 			{
@@ -6527,9 +6526,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Copy parameters required for share submission */
 	work->job_id = strdup(pool->swork.job_id);
+	work->nonce1 = strdup(pool->nonce1);
 	work->ntime = strdup(pool->swork.ntime);
-	if (pool->sessionid)
-		work->sessionid = strdup(pool->sessionid);
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
