@@ -3401,6 +3401,9 @@ static bool stale_work(struct work *work, bool share)
 	uint32_t block_id;
 	int getwork_delay;
 
+	if (opt_benchmark)
+		return false;
+
 	block_id = ((uint32_t*)work->data)[1];
 	pool = work->pool;
 
