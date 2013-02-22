@@ -4026,7 +4026,9 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 			bool sessionid_match;
 			
 			mutex_lock(&pool->pool_lock);
-			sessionid_match = !strcmp(work->nonce1, pool->nonce1);
+			// NOTE: cgminer only does this check on retries, but BFGMiner does it for even the first/normal submit; therefore, it needs to be such that it always is true on the same connection regardless of session management
+			// NOTE: Worst case scenario for a false positive: the pool rejects it as H-not-zero
+			sessionid_match = (!pool->nonce1) || !strcmp(work->nonce1, pool->nonce1);
 			mutex_unlock(&pool->pool_lock);
 			if (!sessionid_match)
 			{
