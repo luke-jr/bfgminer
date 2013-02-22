@@ -37,11 +37,13 @@
 enum bitforce_proto {
 	BFP_WORK,
 	BFP_RANGE,
+	BFP_QUEUE,
 };
 
 static const char *protonames[] = {
 	"full work",
 	"nonce range",
+	"work queue",
 };
 
 struct device_api bitforce_api;
@@ -193,10 +195,11 @@ struct bitforce_data {
 	unsigned char *next_work_obs;    // Start of data to send
 	unsigned char next_work_obsz;
 	const char *next_work_cmd;
-	char noncebuf[0x100];
+	char noncebuf[0x200];  // Large enough for 3 works of queue results
 	int poll_func;
 	enum bitforce_proto proto;
 	bool sc;
+	bool queued;
 };
 
 static void bitforce_clear_buffer(struct cgpu_info *);
@@ -427,11 +430,27 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	return true;
 }
 
+static inline
+void dbg_block_data(struct cgpu_info *bitforce)
+{
+	if (!opt_debug)
+		return;
+	
+	struct bitforce_data *data = bitforce->cgpu_data;
+	char *s;
+	s = bin2hex(&data->next_work_ob[8], 44);
+	applog(LOG_DEBUG, "%"PRIpreprv": block data: %s", bitforce->proc_repr, s);
+	free(s);
+}
+
+static void bitforce_change_mode(struct cgpu_info *, enum bitforce_proto);
+
 static
 bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
+	int fdDev = bitforce->device->device_fd;
 	unsigned char *ob_ms = &data->next_work_ob[8];
 	unsigned char *ob_dt = &ob_ms[32];
 	
@@ -455,6 +474,31 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 			work->blk.nonce += bitforce->nonces + 1;
 			break;
 		}
+		case BFP_QUEUE:
+			if (thr->work)
+			{
+				pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+				char pdevbuf[0x100];
+				
+				if (unlikely(!fdDev))
+					return false;
+				
+				mutex_lock(mutexp);
+				if (data->queued)
+					bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZQX");
+				bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, data->next_work_obs, data->next_work_obsz);
+				mutex_unlock(mutexp);
+				if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
+					applog(LOG_WARNING, "%"PRIpreprv": Does not support work queue, disabling", bitforce->proc_repr);
+					bitforce_change_mode(bitforce, BFP_WORK);
+				}
+				else
+				{
+					dbg_block_data(bitforce);
+					data->queued = true;
+				}
+			}
+			// fallthru...
 		case BFP_WORK:
 			work->blk.nonce = 0xffffffff;
 	}
@@ -469,40 +513,51 @@ void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 	
 	if (data->proto == proto)
 		return;
+	if (data->proto == BFP_RANGE)
+	{
+		bitforce->nonces = 0xffffffff;
+		bitforce->sleep_ms *= 5;
+		switch (proto)
+		{
+			case BFP_WORK:
+				data->next_work_cmd = "ZDX";
+				break;
+			case BFP_QUEUE:
+				data->next_work_cmd = "ZNX";
+			default:
+				;
+		}
+		if (data->sc)
+		{
+			// "S|---------- MidState ----------||-DataTail-|E"
+			data->next_work_ob[7] = 45;
+			data->next_work_ob[8+32+12] = '\xAA';
+			data->next_work_obsz = 46;
+		}
+		else
+		{
+			// ">>>>>>>>|---------- MidState ----------||-DataTail-|>>>>>>>>"
+			memset(&data->next_work_ob[8+32+12], '>', 8);
+			data->next_work_obsz = 60;
+		}
+	}
+	else
+	if (proto == BFP_RANGE)
+	{
+		/* Split work up into 1/5th nonce ranges */
+		bitforce->nonces = 0x33333332;
+		bitforce->sleep_ms /= 5;
+		data->next_work_cmd = "ZPX";
+		if (data->sc)
+		{
+			data->next_work_ob[7] = 53;
+			data->next_work_obsz = 54;
+		}
+		else
+			data->next_work_obsz = 68;
+	}
 	data->proto = proto;
 	bitforce->kname = protonames[proto];
-	switch (proto) {
-		case BFP_RANGE:
-			/* Split work up into 1/5th nonce ranges */
-			bitforce->nonces = 0x33333332;
-			bitforce->sleep_ms /= 5;
-			data->next_work_cmd = "ZPX";
-			if (data->sc)
-			{
-				data->next_work_ob[7] = 53;
-				data->next_work_obsz = 54;
-			}
-			else
-				data->next_work_obsz = 68;
-			break;
-		case BFP_WORK:
-			bitforce->nonces = 0xffffffff;
-			bitforce->sleep_ms *= 5;
-			data->next_work_cmd = "ZDX";
-			if (data->sc)
-			{
-				// "S|---------- MidState ----------||-DataTail-|E"
-				data->next_work_ob[7] = 45;
-				data->next_work_ob[8+32+12] = '\xAA';
-				data->next_work_obsz = 46;
-			}
-			else
-			{
-				// ">>>>>>>>|---------- MidState ----------||-DataTail-|>>>>>>>>"
-				memset(&data->next_work_ob[8+32+12], '>', 8);
-				data->next_work_obsz = 60;
-			}
-	}
 }
 
 static
@@ -514,8 +569,17 @@ void bitforce_job_start(struct thr_info *thr)
 	int fdDev = bitforce->device->device_fd;
 	unsigned char *ob = data->next_work_obs;
 	char pdevbuf[0x100];
-	char *s;
 	struct timeval tv_now;
+
+	if (data->queued)
+	{
+		// get_results collected more accurate job start time
+		mt_job_transition(thr);
+		job_start_complete(thr);
+		data->queued = false;
+		timer_set_delay(&thr->tv_morework, &bitforce->work_start_tv, bitforce->sleep_ms * 1000);
+		return;
+	}
 
 	if (!fdDev)
 		goto commerr;
@@ -534,7 +598,11 @@ re_send:
 		{
 			case BFP_RANGE:
 				applog(LOG_WARNING, "%"PRIpreprv": Does not support nonce range, disabling", bitforce->proc_repr);
-				bitforce_change_mode(bitforce, false);
+				bitforce_change_mode(bitforce, BFP_WORK);
+				goto re_send;
+			case BFP_QUEUE:
+				applog(LOG_WARNING, "%"PRIpreprv": Does not support work queue, disabling", bitforce->proc_repr);
+				bitforce_change_mode(bitforce, BFP_WORK);
 				goto re_send;
 			default:
 				;
@@ -546,11 +614,7 @@ re_send:
 	mt_job_transition(thr);
 	mutex_unlock(mutexp);
 
-	if (opt_debug) {
-		s = bin2hex(ob + 8, 44);
-		applog(LOG_DEBUG, "%"PRIpreprv": block data: %s", bitforce->proc_repr, s);
-		free(s);
-	}
+	dbg_block_data(bitforce);
 
 	gettimeofday(&tv_now, NULL);
 	bitforce->work_start_tv = tv_now;
@@ -574,6 +638,8 @@ static inline int noisy_stale_wait(unsigned int mstime, struct work*work, bool c
 	return rv;
 }
 #define noisy_stale_wait(mstime, work, checkend)  noisy_stale_wait(mstime, work, checkend, bitforce)
+
+static char _discardedbuf[0x10];
 
 static
 void bitforce_job_get_results(struct thr_info *thr, struct work *work)
@@ -602,7 +668,8 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	{
 		// We're likely here because of a work restart
 		// Since Bitforce cannot stop a work without losing results, only do it if the current job is finding stale shares
-		if (!stale)
+		// BFP_QUEUE does not support stopping work at all
+		if (data->proto == BFP_QUEUE || !stale)
 		{
 			delay_time_ms = bitforce->sleep_ms - bitforce->wait_ms;
 			timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
@@ -612,11 +679,47 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	}
 
 	while (1) {
+		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
+		int count;
 		mutex_lock(mutexp);
-		bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(data->noncebuf), "ZFX");
+		bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(data->noncebuf), cmd);
+		if (!strncasecmp(pdevbuf, "COUNT:", 6))
+		{
+			count = atoi(&pdevbuf[6]);
+			size_t cls = strlen(pdevbuf);
+			char *pmorebuf = &pdevbuf[cls];
+			size_t szleft = sizeof(data->noncebuf) - cls, sz;
+			
+			if (count && data->queued)
+			{
+				gettimeofday(&now, NULL);
+				bitforce->work_start_tv = now;
+			}
+			
+			while (true)
+			{
+				BFgets(pmorebuf, szleft, fdDev);
+				if (!strncasecmp(pmorebuf, "OK", 2))
+					break;
+				sz = strlen(pmorebuf);
+				szleft -= sz;
+				pmorebuf += sz;
+				if (unlikely(!szleft))
+				{
+					// Out of buffer space somehow :(
+					applog(LOG_DEBUG, "%"PRIpreprv": Ran out of buffer space for results, discarding extra data", bitforce->proc_repr);
+					pmorebuf = _discardedbuf;
+					szleft = sizeof(_discardedbuf);
+				}
+			}
+		}
+		else
+			count = -1;
 		mutex_unlock(mutexp);
 
 		gettimeofday(&now, NULL);
+		if (!count)
+			goto noqr;
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
@@ -625,16 +728,23 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			goto out;
 		}
 
+		if (count > 0)
+		{
+			applog(LOG_DEBUG, "%"PRIpreprv": waited %dms until %s", bitforce->proc_repr, bitforce->wait_ms, pdevbuf);
+			goto out;
+		}
+
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
-		if (stale)
+		if (stale && data->proto != BFP_QUEUE)
 		{
 			applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
 			       bitforce->proc_repr);
 			goto out;
 		}
 
+noqr:
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
 		timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
@@ -697,19 +807,11 @@ commerr:
 }
 
 static
-int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __maybe_unused bool stopping)
+void bitforce_process_result_nonces(struct thr_info *thr, struct work *work, char *pnoncebuf)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
-	char *pnoncebuf = &data->noncebuf[0];
 	uint32_t nonce;
-	
-	if (!strncasecmp(pnoncebuf, "NO-", 3))
-		return bitforce->nonces;   /* No valid nonce found */
-	if (strncasecmp(pnoncebuf, "NONCE-FOUND", 11))
-		return 0;
-
-	pnoncebuf += 12;
 	
 	while (1) {
 		hex2bin((void*)&nonce, pnoncebuf, 4);
@@ -718,7 +820,7 @@ int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __
 			/* FIXME: blk.nonce is probably moved on quite a bit now! */
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
 				applog(LOG_WARNING, "%"PRIpreprv": Disabling broken nonce range support", bitforce->proc_repr);
-				bitforce_change_mode(bitforce, false);
+				bitforce_change_mode(bitforce, BFP_WORK);
 		}
 			
 		submit_nonce(thr, work, nonce);
@@ -726,9 +828,85 @@ int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __
 			break;
 		pnoncebuf += 9;
 	}
+}
+
+static
+bool bitforce_process_qresult_line_i(struct thr_info *thr, char *midstate, char *datatail, char *buf, struct work *work)
+{
+	if (!work)
+		return false;
+	if (memcmp(work->midstate, midstate, 32))
+		return false;
+	if (memcmp(&work->data[64], datatail, 12))
+		return false;
+	
+	if (!atoi(&buf[90]))
+		return true;
+	
+	bitforce_process_result_nonces(thr, work, &buf[92]);
+	
+	return true;
+}
+
+static
+void bitforce_process_qresult_line(struct thr_info *thr, char *buf, struct work *work)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	char midstate[32], datatail[12];
+	
+	hex2bin((void*)midstate, buf, 32);
+	hex2bin((void*)datatail, &buf[65], 12);
+	
+	if (!( bitforce_process_qresult_line_i(thr, midstate, datatail, buf, work)
+	    || bitforce_process_qresult_line_i(thr, midstate, datatail, buf, thr->work)
+	    || bitforce_process_qresult_line_i(thr, midstate, datatail, buf, thr->prev_work)
+	    || bitforce_process_qresult_line_i(thr, midstate, datatail, buf, thr->next_work) ))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Failed to find work for queued results", bitforce->proc_repr);
+		++bitforce->hw_errors;
+		++hw_errors;
+	}
+}
+
+static inline
+char *next_line(char *in)
+{
+	while (in[0] && in[0] != '\n')
+		++in;
+	return in;
+}
+
+static
+int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __maybe_unused bool stopping)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	char *pnoncebuf = &data->noncebuf[0];
+	int count;
+	
+	if (!strncasecmp(pnoncebuf, "NO-", 3))
+		return bitforce->nonces;   /* No valid nonce found */
+	
+	if (!strncasecmp(pnoncebuf, "NONCE-FOUND", 11))
+	{
+		bitforce_process_result_nonces(thr, work, &pnoncebuf[12]);
+		count = 1;
+	}
+	else
+	if (!strncasecmp(pnoncebuf, "COUNT:", 6))
+	{
+		count = 0;
+		pnoncebuf = next_line(pnoncebuf);
+		while (pnoncebuf[0])
+		{
+			bitforce_process_qresult_line(thr, pnoncebuf, work);
+			++count;
+			pnoncebuf = next_line(pnoncebuf);
+		}
+	}
 
 	// FIXME: This might have changed in the meantime (new job start, or broken)
-	return bitforce->nonces;
+	return bitforce->nonces * count;
 }
 
 static void bitforce_shutdown(struct thr_info *thr)
