@@ -1434,7 +1434,10 @@ bool initiate_stratum(struct pool *pool)
 	if (!setup_stratum_curl(pool))
 		goto out;
 
-	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
+	if (pool->sessionid)
+		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"%s\"]}", swork_id++, pool->sessionid);
+	else
+		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
 	if (!__stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
@@ -1487,7 +1490,7 @@ bool initiate_stratum(struct pool *pool)
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
 		goto out;
 	}
-	pool->sessionid = json_array_string(res_val, 3);
+	//pool->sessionid = json_array_string(res_val, 3);
 	if (pool->sessionid)
 		applog(LOG_DEBUG, "Pool %d stratum session id: %s", pool->pool_no, pool->sessionid);
 	else
@@ -1513,105 +1516,10 @@ out:
 	return ret;
 }
 
-static void reset_sessionid(struct pool *pool)
-{
-	mutex_lock(&pool->pool_lock);
-	free(pool->sessionid);
-	pool->sessionid = NULL;
-	mutex_unlock(&pool->pool_lock);
-}
-
-/* Placeholder for real resume function in the future */
-static bool resume_stratum(struct pool *pool)
-{
-	json_t *val = NULL, *err_val, *res_val;
-	char s[RBUFSIZE], *sret = NULL;
-	json_error_t err;
-	bool ret = false;
-
-	if (!setup_stratum_curl(pool))
-		goto out;
-
-	mutex_lock(&pool->pool_lock);
-	sprintf(s, "{\"id\": %d, \"method\": \"mining.resume\", \"params\": [\"%s\"]}", swork_id++, pool->sessionid);
-	mutex_unlock(&pool->pool_lock);
-
-	if (!__stratum_send(pool, s, strlen(s))) {
-		applog(LOG_DEBUG, "Failed to send s in resume_stratum");
-		goto out;
-	}
-
-	if (!socket_full(pool, true)) {
-		applog(LOG_DEBUG, "Timed out waiting for response in resume_stratum");
-		goto out;
-	}
-
-	sret = recv_line(pool);
-	if (!sret)
-		goto out;
-
-	val = JSON_LOADS(sret, &err);
-	free(sret);
-	if (!val) {
-		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
-		goto out;
-	}
-
-	res_val = json_object_get(val, "result");
-	err_val = json_object_get(val, "error");
-
-	/* If there is an error, assume resume support is not there or broken */
-	if (!res_val || json_is_null(res_val) ||
-	    (err_val && !json_is_null(err_val))) {
-		char *ss;
-
-		if (err_val)
-			ss = json_dumps(err_val, JSON_INDENT(3));
-		else
-			ss = strdup("(unknown reason)");
-
-		applog(LOG_INFO, "JSON-RPC decode failed: %s", ss);
-
-		free(ss);
-
-		reset_sessionid(pool);
-		goto out;
-	}
-
-	if (json_is_true(res_val)) {
-		applog(LOG_NOTICE, "Resumed stratum connection to pool %d", pool->pool_no);
-		pool->stratum_active = true;
-		ret = true;
-	} else {
-		applog(LOG_NOTICE, "Unable to resume old stratum connection to pool %d", pool->pool_no);
-		reset_sessionid(pool);
-		clear_stratum_shares(pool);
-		json_decref(val);
-
-		return initiate_stratum(pool);
-	}
-out:
-	if (val)
-		json_decref(val);
-
-	return ret;
-}
-
 bool restart_stratum(struct pool *pool)
 {
-	bool resume;
-
-	mutex_lock(&pool->pool_lock);
-	resume = pool->sessionid != NULL;
-	mutex_unlock(&pool->pool_lock);
-
-	if (resume) {
-		if (!resume_stratum(pool))
-			return false;
-	} else {
-		if (!initiate_stratum(pool))
-			return false;
-	}
+	if (!initiate_stratum(pool))
+		return false;
 	if (!auth_stratum(pool))
 		return false;
 	return true;
