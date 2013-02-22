@@ -120,6 +120,7 @@ static bool bitforce_detect_one(const char *devpath)
 	size_t pdevbuf_len;
 	char *s;
 	int procs = 1;
+	bool sc = false;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
 
@@ -152,6 +153,9 @@ static bool bitforce_detect_one(const char *devpath)
 		applog(LOG_DEBUG, "  %s", pdevbuf);
 		if (!strncasecmp(pdevbuf, "DEVICES IN CHAIN:", 17))
 			procs = atoi(&pdevbuf[17]);
+		else
+		if (!strncasecmp(pdevbuf, "DEVICE:", 7) && strstr(pdevbuf, "SC"))
+			sc = true;
 	}
 	BFclose(fdDev);
 	
@@ -167,6 +171,7 @@ static bool bitforce_detect_one(const char *devpath)
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
+	bitforce->cgpu_data = (void*)sc;
 
 	mutex_init(&bitforce->device_mutex);
 
@@ -184,10 +189,14 @@ static void bitforce_detect(void)
 }
 
 struct bitforce_data {
-	unsigned char next_work_ob[70];
+	unsigned char next_work_ob[70];  // Data aligned for 32-bit access
+	unsigned char *next_work_obs;    // Start of data to send
+	unsigned char next_work_obsz;
+	const char *next_work_cmd;
 	char noncebuf[0x100];
 	int poll_func;
 	enum bitforce_proto proto;
+	bool sc;
 };
 
 static void bitforce_clear_buffer(struct cgpu_info *);
@@ -467,11 +476,32 @@ void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 			/* Split work up into 1/5th nonce ranges */
 			bitforce->nonces = 0x33333332;
 			bitforce->sleep_ms /= 5;
+			data->next_work_cmd = "ZPX";
+			if (data->sc)
+			{
+				data->next_work_ob[7] = 53;
+				data->next_work_obsz = 54;
+			}
+			else
+				data->next_work_obsz = 68;
 			break;
 		case BFP_WORK:
 			bitforce->nonces = 0xffffffff;
 			bitforce->sleep_ms *= 5;
-			memset(&data->next_work_ob[8+32+12], '>', 8);
+			data->next_work_cmd = "ZDX";
+			if (data->sc)
+			{
+				// "S|---------- MidState ----------||-DataTail-|E"
+				data->next_work_ob[7] = 45;
+				data->next_work_ob[8+32+12] = '\xAA';
+				data->next_work_obsz = 46;
+			}
+			else
+			{
+				// ">>>>>>>>|---------- MidState ----------||-DataTail-|>>>>>>>>"
+				memset(&data->next_work_ob[8+32+12], '>', 8);
+				data->next_work_obsz = 60;
+			}
 	}
 }
 
@@ -482,7 +512,7 @@ void bitforce_job_start(struct thr_info *thr)
 	struct bitforce_data *data = bitforce->cgpu_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
-	unsigned char *ob = data->next_work_ob;
+	unsigned char *ob = data->next_work_obs;
 	char pdevbuf[0x100];
 	char *s;
 	struct timeval tv_now;
@@ -491,14 +521,7 @@ void bitforce_job_start(struct thr_info *thr)
 		goto commerr;
 re_send:
 	mutex_lock(mutexp);
-	switch (data->proto)
-	{
-		case BFP_RANGE:
-			bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZPX", ob, 68);
-			break;
-		case BFP_WORK:
-			bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZDX", ob, 60);
-	}
+	bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, ob, data->next_work_obsz);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(mutexp);
 		gettimeofday(&tv_now, NULL);
@@ -740,14 +763,24 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int wait;
 	struct bitforce_data *data;
+	bool sc = (bool)bitforce->cgpu_data;
 	
 	for ( ; bitforce; bitforce = bitforce->next_proc)
 	{
 		bitforce->cgpu_data = data = malloc(sizeof(*data));
 		*data = (struct bitforce_data){
-			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-|>>>>>>>>>>>>>>>>",
+			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-||Nonces|>>>>>>>>",
 			.proto = BFP_RANGE,
+			.sc = sc,
 		};
+		if (sc)
+		{
+			// ".......S|---------- MidState ----------||-DataTail-||Nonces|E"
+			data->next_work_ob[8+32+12+8] = '\xAA';
+			data->next_work_obs = &data->next_work_ob[7];
+		}
+		else
+			data->next_work_obs = &data->next_work_ob[0];
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 		bitforce_change_mode(bitforce, BFP_WORK);
 		/* Initially enable support for nonce range and disable it later if it
