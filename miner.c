@@ -7085,10 +7085,11 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				struct thr_info *thr;
 				thr = &thr_info[i];
 
+				thr->pause = false;
+				
 				/* Don't touch disabled devices */
 				if (thr->cgpu->deven == DEV_DISABLED)
 					continue;
-				thr->pause = false;
 				tq_push(thr->q, &ping);
 			}
 		}
