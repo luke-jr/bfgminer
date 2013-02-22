@@ -6393,6 +6393,7 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
+	uint32_t bak_nonce = *work_nonce;
 	struct timeval tv_work_found;
 
 	gettimeofday(&tv_work_found, NULL);
@@ -6419,18 +6420,20 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 			if (thr->cgpu->api->hw_error)
 				thr->cgpu->api->hw_error(thr);
-			return;
+			goto out;
 		}
 		case TNR_HIGH:
 			// Share above target, normal
 			/* Check the diff of the share, even if it didn't reach the
 			 * target, just to set the best share value if it's higher. */
 			share_diff(work);
-			return;
+			goto out;
 		case TNR_GOOD:
 			break;
 	}
 	submit_work_async(work, &tv_work_found);
+out:
+	*work_nonce = bak_nonce;
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
