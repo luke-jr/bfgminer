@@ -60,6 +60,23 @@ static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 		return bufLen;
 }
 
+static
+void bitforce_cmd1(int fd, void *buf, size_t bufsz, const char *cmd)
+{
+	BFwrite(fd, cmd, 3);
+	BFgets(buf, bufsz, fd);
+}
+
+static
+void bitforce_cmd2(int fd, void *buf, size_t bufsz, const char *cmd, void *data, size_t datasz)
+{
+	bitforce_cmd1(fd, buf, bufsz, cmd);
+	if (strncasecmp(buf, "OK", 2))
+		return;
+	BFwrite(fd, data, datasz);
+	BFgets(buf, bufsz, fd);
+}
+
 #define BFclose(fd) close(fd)
 
 static bool bitforce_detect_one(const char *devpath)
@@ -77,9 +94,7 @@ static bool bitforce_detect_one(const char *devpath)
 		return false;
 	}
 
-	BFwrite(fdDev, "ZGX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZGX");
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_DEBUG, "BFL: Error reading/timeout (ZGX)");
 		return 0;
@@ -92,12 +107,10 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
-	BFwrite(fdDev, "ZCX", 3);
-	while (true)
+	for ( bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZCX");
+	      strncasecmp(pdevbuf, "OK", 2);
+	      BFgets(pdevbuf, sizeof(pdevbuf), fdDev) )
 	{
-		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-		if (!strncasecmp(pdevbuf, "OK", 2))
-			break;
 		pdevbuf_len = strlen(pdevbuf);
 		if (unlikely(!pdevbuf_len))
 			continue;
@@ -239,10 +252,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	}
 
 	do {
-		BFwrite(fdDev, "ZGX", 3);
-		pdevbuf[0] = '\0';
-		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-
+		bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZGX");
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(&bitforce->device_mutex);
 			applog(LOG_ERR, "%"PRIpreprv": Error reading/timeout (ZGX)", bitforce->proc_repr);
@@ -287,7 +297,8 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 	if (mutex_trylock(&bitforce->device_mutex))
 		return;
 
-	BFwrite(fdDev, "ZMX", 3);
+	char pdevbuf[0x100];
+	bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZMX");
 
 	/* Once we've tried - don't do it until told to again */
 	bitforce->flash_led = false;
@@ -326,9 +337,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (mutex_trylock(&bitforce->device_mutex))
 		return false;
 
-	BFwrite(fdDev, "ZLX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZLX");
 	mutex_unlock(&bitforce->device_mutex);
 	
 	if (unlikely(!pdevbuf[0])) {
@@ -436,11 +445,9 @@ void bitforce_job_start(struct thr_info *thr)
 re_send:
 	mutex_lock(&bitforce->device_mutex);
 	if (bitforce->nonce_range)
-		BFwrite(fdDev, "ZPX", 3);
+		bitforce_cmd2(fdDev, pdevbuf, sizeof(pdevbuf), "ZPX", ob, 68);
 	else
-		BFwrite(fdDev, "ZDX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+		bitforce_cmd2(fdDev, pdevbuf, sizeof(pdevbuf), "ZDX", ob, 60);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
 		gettimeofday(&tv_now, NULL);
@@ -458,14 +465,6 @@ re_send:
 		goto commerr;
 	}
 
-	if (!bitforce->nonce_range) {
-		BFwrite(fdDev, ob, 60);
-	} else {
-		BFwrite(fdDev, ob, 68);
-	}
-
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	mt_job_transition(thr);
 	mutex_unlock(&bitforce->device_mutex);
 
@@ -473,16 +472,6 @@ re_send:
 		s = bin2hex(ob + 8, 44);
 		applog(LOG_DEBUG, "%"PRIpreprv": block data: %s", bitforce->proc_repr, s);
 		free(s);
-	}
-
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "%"PRIpreprv": Error: Send block data returned empty string/timed out", bitforce->proc_repr);
-		goto commerr;
-	}
-
-	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
-		applog(LOG_ERR, "%"PRIpreprv": Error: Send block data reports: %s", bitforce->proc_repr, pdevbuf);
-		goto commerr;
 	}
 
 	gettimeofday(&tv_now, NULL);
@@ -545,9 +534,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 
 	while (1) {
 		mutex_lock(&bitforce->device_mutex);
-		BFwrite(fdDev, "ZFX", 3);
-		pdevbuf[0] = '\0';
-		BFgets(pdevbuf, sizeof(data->noncebuf), fdDev);
+		bitforce_cmd1(fdDev, pdevbuf, sizeof(data->noncebuf), "ZFX");
 		mutex_unlock(&bitforce->device_mutex);
 
 		gettimeofday(&now, NULL);
