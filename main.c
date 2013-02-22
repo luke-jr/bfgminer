@@ -4293,10 +4293,11 @@ static void *watchdog_thread(void *userdata)
 				struct thr_info *thr;
 				thr = &thr_info[i];
 
+				thr->pause = false;
+				
 				/* Don't touch disabled GPUs */
 				if (thr->cgpu->is_gpu && !gpu_devices[thr->cgpu->cpu_gpu])
 					continue;
-				thr->pause = false;
 				tq_push(thr->q, &ping);
 			}
 		}
