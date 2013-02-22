@@ -3031,6 +3031,9 @@ static bool stale_work(struct work *work, bool share)
 	struct pool *pool;
 	int getwork_delay;
 
+	if (opt_benchmark)
+		return false;
+
 	if (work->work_block != work_block) {
 		applog(LOG_DEBUG, "Work stale due to block mismatch");
 		return true;
