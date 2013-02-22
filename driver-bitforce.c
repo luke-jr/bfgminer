@@ -60,20 +60,46 @@ static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 		return bufLen;
 }
 
-static
-void bitforce_cmd1(int fd, void *buf, size_t bufsz, const char *cmd)
+static ssize_t bitforce_send(int fd, int procid, const void *buf, ssize_t bufLen)
 {
-	BFwrite(fd, cmd, 3);
+	if (!procid)
+		return BFwrite(fd, buf, bufLen);
+	
+	if (bufLen > 255)
+		return -1;
+	
+	size_t bufLeft = bufLen + 3;
+	char realbuf[bufLeft], *bufp;
+	ssize_t rv;
+	memcpy(&realbuf[3], buf, bufLen);
+	realbuf[0] = '@';
+	realbuf[1] = procid;
+	realbuf[2] = bufLen;
+	bufp = realbuf;
+	while (true)
+	{
+		rv = BFwrite(fd, bufp, bufLeft);
+		if (rv <= 0)
+			return rv;
+		bufLeft -= rv;
+	}
+	return bufLen;
+}
+
+static
+void bitforce_cmd1(int fd, int procid, void *buf, size_t bufsz, const char *cmd)
+{
+	bitforce_send(fd, procid, cmd, 3);
 	BFgets(buf, bufsz, fd);
 }
 
 static
-void bitforce_cmd2(int fd, void *buf, size_t bufsz, const char *cmd, void *data, size_t datasz)
+void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd, void *data, size_t datasz)
 {
-	bitforce_cmd1(fd, buf, bufsz, cmd);
+	bitforce_cmd1(fd, procid, buf, bufsz, cmd);
 	if (strncasecmp(buf, "OK", 2))
 		return;
-	BFwrite(fd, data, datasz);
+	bitforce_send(fd, procid, data, datasz);
 	BFgets(buf, bufsz, fd);
 }
 
@@ -86,6 +112,7 @@ static bool bitforce_detect_one(const char *devpath)
 	char pdevbuf[0x100];
 	size_t pdevbuf_len;
 	char *s;
+	int procs = 1;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
 
@@ -94,7 +121,7 @@ static bool bitforce_detect_one(const char *devpath)
 		return false;
 	}
 
-	bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZGX");
+	bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZGX");
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_DEBUG, "BFL: Error reading/timeout (ZGX)");
 		return 0;
@@ -107,7 +134,7 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
-	for ( bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZCX");
+	for ( bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZCX");
 	      strncasecmp(pdevbuf, "OK", 2);
 	      BFgets(pdevbuf, sizeof(pdevbuf), fdDev) )
 	{
@@ -116,6 +143,8 @@ static bool bitforce_detect_one(const char *devpath)
 			continue;
 		pdevbuf[pdevbuf_len-1] = '\0';  // trim newline
 		applog(LOG_DEBUG, "  %s", pdevbuf);
+		if (!strncasecmp(pdevbuf, "DEVICES IN CHAIN:", 17))
+			procs = atoi(&pdevbuf[17]);
 	}
 	BFclose(fdDev);
 	
@@ -124,6 +153,7 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->api = &bitforce_api;
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
+	bitforce->procs = procs;
 	bitforce->threads = 1;
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
@@ -256,7 +286,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	}
 
 	do {
-		bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZGX");
+		bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZGX");
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(mutexp);
 			applog(LOG_ERR, "%s: Error reading/timeout (ZGX)", bitforce->dev_repr);
@@ -303,7 +333,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 		return;
 
 	char pdevbuf[0x100];
-	bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZMX");
+	bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZMX");
 
 	/* Once we've tried - don't do it until told to again */
 	bitforce->flash_led = false;
@@ -343,7 +373,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (mutex_trylock(mutexp))
 		return false;
 
-	bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZLX");
+	bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZLX");
 	mutex_unlock(mutexp);
 	
 	if (unlikely(!pdevbuf[0])) {
@@ -452,9 +482,9 @@ void bitforce_job_start(struct thr_info *thr)
 re_send:
 	mutex_lock(mutexp);
 	if (bitforce->nonce_range)
-		bitforce_cmd2(fdDev, pdevbuf, sizeof(pdevbuf), "ZPX", ob, 68);
+		bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZPX", ob, 68);
 	else
-		bitforce_cmd2(fdDev, pdevbuf, sizeof(pdevbuf), "ZDX", ob, 60);
+		bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZDX", ob, 60);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(mutexp);
 		gettimeofday(&tv_now, NULL);
@@ -542,7 +572,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 
 	while (1) {
 		mutex_lock(mutexp);
-		bitforce_cmd1(fdDev, pdevbuf, sizeof(data->noncebuf), "ZFX");
+		bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(data->noncebuf), "ZFX");
 		mutex_unlock(mutexp);
 
 		gettimeofday(&now, NULL);
@@ -693,17 +723,22 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	unsigned int wait;
 	struct bitforce_data *data;
 	
-	bitforce->cgpu_data = data = malloc(sizeof(*data));
-	*data = (struct bitforce_data){
-		.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-|>>>>>>>>>>>>>>>>",
-	};
-	bitforce->nonce_range = true;
-	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-	bitforce_change_mode(bitforce, false);
-	/* Initially enable support for nonce range and disable it later if it
-	 * fails */
-	if (opt_bfl_noncerange)
-		bitforce_change_mode(bitforce, true);
+	for ( ; bitforce; bitforce = bitforce->next_proc)
+	{
+		bitforce->cgpu_data = data = malloc(sizeof(*data));
+		*data = (struct bitforce_data){
+			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-|>>>>>>>>>>>>>>>>",
+		};
+		bitforce->nonce_range = true;
+		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
+		bitforce_change_mode(bitforce, false);
+		/* Initially enable support for nonce range and disable it later if it
+		 * fails */
+		if (opt_bfl_noncerange)
+			bitforce_change_mode(bitforce, true);
+	}
+	
+	bitforce = thr->cgpu;
 
 	/* Pause each new thread at least 100ms between initialising
 	 * so the devices aren't making calls all at the same time. */
