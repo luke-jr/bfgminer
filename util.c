@@ -273,6 +273,8 @@ static int my_curl_debug(__maybe_unused CURL *curl, curl_infotype infotype, char
 			// data is not null-terminated, so we need to copy and terminate it for applog
 			char datacp[datasz + 1];
 			memcpy(datacp, data, datasz);
+			while (isspace(datacp[datasz-1]))
+				--datasz;
 			datacp[datasz] = '\0';
 			applog(LOG_DEBUG, "Pool %u: %s", pool->pool_no, datacp);
 			break;
