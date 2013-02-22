@@ -34,8 +34,15 @@
 #define tv_to_ms(tval) ((unsigned long)(tval.tv_sec * 1000 + tval.tv_usec / 1000))
 #define TIME_AVG_CONSTANT 8
 
-#define KNAME_WORK  "full work"
-#define KNAME_RANGE "nonce range"
+enum bitforce_proto {
+	BFP_WORK,
+	BFP_RANGE,
+};
+
+static const char *protonames[] = {
+	"full work",
+	"nonce range",
+};
 
 struct device_api bitforce_api;
 
@@ -180,6 +187,7 @@ struct bitforce_data {
 	unsigned char next_work_ob[70];
 	char noncebuf[0x100];
 	int poll_func;
+	enum bitforce_proto proto;
 };
 
 static void bitforce_clear_buffer(struct cgpu_info *);
@@ -427,41 +435,43 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 	
 	memcpy(ob_ms, work->midstate, 32);
 	memcpy(ob_dt, work->data + 64, 12);
-	if (bitforce->nonce_range)
+	switch (data->proto)
 	{
-		uint32_t *ob_nonce = (uint32_t*)&(ob_dt[32]);
-		ob_nonce[0] = htobe32(work->blk.nonce);
-		ob_nonce[1] = htobe32(work->blk.nonce + bitforce->nonces);
-		// FIXME: if nonce range fails... we didn't increment enough
-		work->blk.nonce += bitforce->nonces + 1;
+		case BFP_RANGE:
+		{
+			uint32_t *ob_nonce = (uint32_t*)&(ob_dt[32]);
+			ob_nonce[0] = htobe32(work->blk.nonce);
+			ob_nonce[1] = htobe32(work->blk.nonce + bitforce->nonces);
+			// FIXME: if nonce range fails... we didn't increment enough
+			work->blk.nonce += bitforce->nonces + 1;
+			break;
+		}
+		case BFP_WORK:
+			work->blk.nonce = 0xffffffff;
 	}
-	else
-		work->blk.nonce = 0xffffffff;
 	
 	return true;
 }
 
 static
-void bitforce_change_mode(struct cgpu_info *bitforce, bool noncerange)
+void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 {
 	struct bitforce_data *data = bitforce->cgpu_data;
 	
-	if (bitforce->nonce_range == noncerange)
+	if (data->proto == proto)
 		return;
-	bitforce->nonce_range = noncerange;
-	if (noncerange)
-	{
-		/* Split work up into 1/5th nonce ranges */
-		bitforce->nonces = 0x33333332;
-		bitforce->sleep_ms /= 5;
-		bitforce->kname = KNAME_RANGE;
-	}
-	else
-	{
-		bitforce->nonces = 0xffffffff;
-		bitforce->sleep_ms *= 5;
-		bitforce->kname = KNAME_WORK;
-		memset(&data->next_work_ob[8+32+12], '>', 8);
+	data->proto = proto;
+	bitforce->kname = protonames[proto];
+	switch (proto) {
+		case BFP_RANGE:
+			/* Split work up into 1/5th nonce ranges */
+			bitforce->nonces = 0x33333332;
+			bitforce->sleep_ms /= 5;
+			break;
+		case BFP_WORK:
+			bitforce->nonces = 0xffffffff;
+			bitforce->sleep_ms *= 5;
+			memset(&data->next_work_ob[8+32+12], '>', 8);
 	}
 }
 
@@ -481,10 +491,14 @@ void bitforce_job_start(struct thr_info *thr)
 		goto commerr;
 re_send:
 	mutex_lock(mutexp);
-	if (bitforce->nonce_range)
-		bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZPX", ob, 68);
-	else
-		bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZDX", ob, 60);
+	switch (data->proto)
+	{
+		case BFP_RANGE:
+			bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZPX", ob, 68);
+			break;
+		case BFP_WORK:
+			bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZDX", ob, 60);
+	}
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(mutexp);
 		gettimeofday(&tv_now, NULL);
@@ -493,10 +507,14 @@ re_send:
 		return;
 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 		mutex_unlock(mutexp);
-		if (bitforce->nonce_range) {
-			applog(LOG_WARNING, "%"PRIpreprv": Does not support nonce range, disabling", bitforce->proc_repr);
-			bitforce_change_mode(bitforce, false);
-			goto re_send;
+		switch (data->proto)
+		{
+			case BFP_RANGE:
+				applog(LOG_WARNING, "%"PRIpreprv": Does not support nonce range, disabling", bitforce->proc_repr);
+				bitforce_change_mode(bitforce, false);
+				goto re_send;
+			default:
+				;
 		}
 		applog(LOG_ERR, "%"PRIpreprv": Error: Send work reports: %s", bitforce->proc_repr, pdevbuf);
 		goto commerr;
@@ -673,7 +691,7 @@ int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __
 	while (1) {
 		hex2bin((void*)&nonce, pnoncebuf, 4);
 		nonce = be32toh(nonce);
-		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
+		if (unlikely(data->proto == BFP_RANGE && (nonce >= work->blk.nonce ||
 			/* FIXME: blk.nonce is probably moved on quite a bit now! */
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
 				applog(LOG_WARNING, "%"PRIpreprv": Disabling broken nonce range support", bitforce->proc_repr);
@@ -728,14 +746,14 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		bitforce->cgpu_data = data = malloc(sizeof(*data));
 		*data = (struct bitforce_data){
 			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-|>>>>>>>>>>>>>>>>",
+			.proto = BFP_RANGE,
 		};
-		bitforce->nonce_range = true;
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-		bitforce_change_mode(bitforce, false);
+		bitforce_change_mode(bitforce, BFP_WORK);
 		/* Initially enable support for nonce range and disable it later if it
 		 * fails */
 		if (opt_bfl_noncerange)
-			bitforce_change_mode(bitforce, true);
+			bitforce_change_mode(bitforce, BFP_RANGE);
 	}
 	
 	bitforce = thr->cgpu;

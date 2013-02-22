@@ -432,7 +432,6 @@ struct cgpu_info {
 	double avg_wait_f;
 	unsigned int avg_wait_d;
 	uint32_t nonces;
-	bool nonce_range;
 	bool polling;
 #endif
 #if defined(USE_BITFORCE) || defined(USE_ICARUS)
