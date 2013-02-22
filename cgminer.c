@@ -3194,7 +3194,7 @@ static void *submit_work_thread(void *userdata)
 			}
 
 			mutex_lock(&pool->pool_lock);
-			sessionid_match = !strcmp(work->nonce1, pool->nonce1);
+			sessionid_match = (pool->nonce1 && !strcmp(work->nonce1, pool->nonce1));
 			mutex_unlock(&pool->pool_lock);
 
 			if (!sessionid_match) {
