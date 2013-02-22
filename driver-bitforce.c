@@ -159,14 +159,15 @@ void bitforce_comm_error(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
+	int *p_fdDev = &bitforce->device_fd;
 	
 	data->noncebuf[0] = '\0';
 	applog(LOG_ERR, "%"PRIpreprv": Comms error", bitforce->proc_repr);
 	dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 	++bitforce->hw_errors;
 	++hw_errors;
-	BFclose(bitforce->device_fd);
-	int fd = bitforce->device_fd = BFopen(bitforce->device_path);
+	BFclose(*p_fdDev);
+	int fd = *p_fdDev = BFopen(bitforce->device_path);
 	if (fd == -1)
 	{
 		applog(LOG_ERR, "%"PRIpreprv": Error reopening", bitforce->proc_repr);
@@ -209,6 +210,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 
 static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 {
+	pthread_mutex_t *mutexp = &bitforce->device_mutex;
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
 	int count = 0;
@@ -218,18 +220,20 @@ static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 
 	applog(LOG_DEBUG, "%"PRIpreprv": Clearing read buffer", bitforce->proc_repr);
 
-	mutex_lock(&bitforce->device_mutex);
+	mutex_lock(mutexp);
 	do {
 		pdevbuf[0] = '\0';
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	} while (pdevbuf[0] && (++count < 10));
-	mutex_unlock(&bitforce->device_mutex);
+	mutex_unlock(mutexp);
 }
 
 void bitforce_init(struct cgpu_info *bitforce)
 {
 	const char *devpath = bitforce->device_path;
-	int fdDev = bitforce->device_fd, retries = 0;
+	pthread_mutex_t *mutexp = &bitforce->device_mutex;
+	int *p_fdDev = &bitforce->device_fd;
+	int fdDev = *p_fdDev, retries = 0;
 	char pdevbuf[0x100];
 	char *s;
 
@@ -237,16 +241,16 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	bitforce_clear_buffer(bitforce);
 
-	mutex_lock(&bitforce->device_mutex);
+	mutex_lock(mutexp);
 	if (fdDev) {
 		BFclose(fdDev);
 		sleep(5);
 	}
-	bitforce->device_fd = 0;
+	*p_fdDev = 0;
 
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
-		mutex_unlock(&bitforce->device_mutex);
+		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%"PRIpreprv": Failed to open %s", bitforce->proc_repr, devpath);
 		return;
 	}
@@ -254,7 +258,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	do {
 		bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZGX");
 		if (unlikely(!pdevbuf[0])) {
-			mutex_unlock(&bitforce->device_mutex);
+			mutex_unlock(mutexp);
 			applog(LOG_ERR, "%"PRIpreprv": Error reading/timeout (ZGX)", bitforce->proc_repr);
 			return;
 		}
@@ -264,7 +268,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	} while (!strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
-		mutex_unlock(&bitforce->device_mutex);
+		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%"PRIpreprv": Didn't recognise BitForce on %s returned: %s", bitforce->proc_repr, devpath, pdevbuf);
 		return;
 	}
@@ -274,14 +278,15 @@ void bitforce_init(struct cgpu_info *bitforce)
 		bitforce->name = strdup(pdevbuf + 7);
 	}
 
-	bitforce->device_fd = fdDev;
+	*p_fdDev = fdDev;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 
-	mutex_unlock(&bitforce->device_mutex);
+	mutex_unlock(mutexp);
 }
 
 static void bitforce_flash_led(struct cgpu_info *bitforce)
 {
+	pthread_mutex_t *mutexp = &bitforce->device_mutex;
 	int fdDev = bitforce->device_fd;
 
 	if (!fdDev)
@@ -294,7 +299,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 	/* It is not critical flashing the led so don't get stuck if we
 	 * can't grab the mutex here */
-	if (mutex_trylock(&bitforce->device_mutex))
+	if (mutex_trylock(mutexp))
 		return;
 
 	char pdevbuf[0x100];
@@ -307,13 +312,14 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 	 * So best to delay any other access to the BFL */
 	sleep(4);
 
-	mutex_unlock(&bitforce->device_mutex);
+	mutex_unlock(mutexp);
 
 	return; // nothing is returned by the BFL
 }
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
+	pthread_mutex_t *mutexp = &bitforce->device_mutex;
 	int fdDev = bitforce->device_fd;
 	char pdevbuf[0x100];
 	char *s;
@@ -334,11 +340,11 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 
 	/* It is not critical getting temperature so don't get stuck if we
 	 * can't grab the mutex here */
-	if (mutex_trylock(&bitforce->device_mutex))
+	if (mutex_trylock(mutexp))
 		return false;
 
 	bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZLX");
-	mutex_unlock(&bitforce->device_mutex);
+	mutex_unlock(mutexp);
 	
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_ERR, "%"PRIpreprv": Error: Get temp returned empty string/timed out", bitforce->proc_repr);
@@ -434,6 +440,7 @@ void bitforce_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
+	pthread_mutex_t *mutexp = &bitforce->device_mutex;
 	int fdDev = bitforce->device_fd;
 	unsigned char *ob = data->next_work_ob;
 	char pdevbuf[0x100];
@@ -443,19 +450,19 @@ void bitforce_job_start(struct thr_info *thr)
 	if (!fdDev)
 		goto commerr;
 re_send:
-	mutex_lock(&bitforce->device_mutex);
+	mutex_lock(mutexp);
 	if (bitforce->nonce_range)
 		bitforce_cmd2(fdDev, pdevbuf, sizeof(pdevbuf), "ZPX", ob, 68);
 	else
 		bitforce_cmd2(fdDev, pdevbuf, sizeof(pdevbuf), "ZDX", ob, 60);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
-		mutex_unlock(&bitforce->device_mutex);
+		mutex_unlock(mutexp);
 		gettimeofday(&tv_now, NULL);
 		timer_set_delay(&thr->tv_poll, &tv_now, WORK_CHECK_INTERVAL_MS * 1000);
 		data->poll_func = 1;
 		return;
 	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
-		mutex_unlock(&bitforce->device_mutex);
+		mutex_unlock(mutexp);
 		if (bitforce->nonce_range) {
 			applog(LOG_WARNING, "%"PRIpreprv": Does not support nonce range, disabling", bitforce->proc_repr);
 			bitforce_change_mode(bitforce, false);
@@ -466,7 +473,7 @@ re_send:
 	}
 
 	mt_job_transition(thr);
-	mutex_unlock(&bitforce->device_mutex);
+	mutex_unlock(mutexp);
 
 	if (opt_debug) {
 		s = bin2hex(ob + 8, 44);
@@ -502,6 +509,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
+	pthread_mutex_t *mutexp = &bitforce->device_mutex;
 	int fdDev = bitforce->device_fd;
 	unsigned int delay_time_ms;
 	struct timeval elapsed;
@@ -533,9 +541,9 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	}
 
 	while (1) {
-		mutex_lock(&bitforce->device_mutex);
+		mutex_lock(mutexp);
 		bitforce_cmd1(fdDev, pdevbuf, sizeof(data->noncebuf), "ZFX");
-		mutex_unlock(&bitforce->device_mutex);
+		mutex_unlock(mutexp);
 
 		gettimeofday(&now, NULL);
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
@@ -655,9 +663,10 @@ int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __
 static void bitforce_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
+	int *p_fdDev = &bitforce->device_fd;
 
-	BFclose(bitforce->device_fd);
-	bitforce->device_fd = 0;
+	BFclose(*p_fdDev);
+	*p_fdDev = 0;
 }
 
 static void biforce_thread_enable(struct thr_info *thr)
