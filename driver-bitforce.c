@@ -170,7 +170,7 @@ void bitforce_comm_error(struct thr_info *thr)
 	int fd = *p_fdDev = BFopen(bitforce->device_path);
 	if (fd == -1)
 	{
-		applog(LOG_ERR, "%"PRIpreprv": Error reopening", bitforce->proc_repr);
+		applog(LOG_ERR, "%s: Error reopening %s", bitforce->dev_repr, bitforce->device_path);
 		return;
 	}
 	/* empty read buffer */
@@ -195,13 +195,13 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	struct timeval now;
 
 	if (unlikely(fdDev == -1)) {
-		applog(LOG_ERR, "%"PRIpreprv": Failed to open %s", bitforce->proc_repr, bitforce->device_path);
+		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, bitforce->device_path);
 		return false;
 	}
 
 	bitforce->device_fd = fdDev;
 
-	applog(LOG_INFO, "%"PRIpreprv": Opened %s", bitforce->proc_repr, bitforce->device_path);
+	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(bitforce->init, &now);
 
@@ -251,7 +251,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
 		mutex_unlock(mutexp);
-		applog(LOG_ERR, "%"PRIpreprv": Failed to open %s", bitforce->proc_repr, devpath);
+		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, devpath);
 		return;
 	}
 
@@ -259,7 +259,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 		bitforce_cmd1(fdDev, pdevbuf, sizeof(pdevbuf), "ZGX");
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(mutexp);
-			applog(LOG_ERR, "%"PRIpreprv": Error reading/timeout (ZGX)", bitforce->proc_repr);
+			applog(LOG_ERR, "%s: Error reading/timeout (ZGX)", bitforce->dev_repr);
 			return;
 		}
 
@@ -269,7 +269,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		mutex_unlock(mutexp);
-		applog(LOG_ERR, "%"PRIpreprv": Didn't recognise BitForce on %s returned: %s", bitforce->proc_repr, devpath, pdevbuf);
+		applog(LOG_ERR, "%s: Didn't recognise BitForce on %s returned: %s", bitforce->dev_repr, devpath, pdevbuf);
 		return;
 	}
 	
@@ -708,7 +708,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	/* Pause each new thread at least 100ms between initialising
 	 * so the devices aren't making calls all at the same time. */
 	wait = thr->id * MAX_START_DELAY_MS;
-	applog(LOG_DEBUG, "%"PRIpreprv": Delaying start by %dms", bitforce->proc_repr, wait / 1000);
+	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
 	nmsleep(wait);
 
 	return true;
