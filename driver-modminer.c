@@ -602,11 +602,11 @@ get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 		f = state->temp;
 		root = api_add_temp(root, "Temperature", &f, true);
 	}
-	d = (double)state->dclk.freqM * 2 * 1000000.;
+	d = (double)state->dclk.freqM * 2;
 	root = api_add_freq(root, "Frequency", &d, true);
-	d = (double)state->dclk.freqMaxM * 2 * 1000000.;
+	d = (double)state->dclk.freqMaxM * 2;
 	root = api_add_freq(root, "Cool Max Frequency", &d, true);
-	d = (double)state->freqMaxMaxM * 2 * 1000000.;
+	d = (double)state->freqMaxMaxM * 2;
 	root = api_add_freq(root, "Max Frequency", &d, true);
 	root = api_add_int(root, "Hardware Errors", &state->bad_share_counter, true);
 	root = api_add_int(root, "Valid Nonces", &state->good_share_counter, true);

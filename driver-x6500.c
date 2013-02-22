@@ -611,11 +611,11 @@ get_x6500_api_extra_device_status(struct cgpu_info *x6500)
 
 	if (fpga->temp)
 		root = api_add_temp(root, "Temperature", &fpga->temp, true);
-	d = (double)fpga->dclk.freqM * 2 * 1000000.;
+	d = (double)fpga->dclk.freqM * 2;
 	root = api_add_freq(root, "Frequency", &d, true);
-	d = (double)fpga->dclk.freqMaxM * 2 * 1000000.;
+	d = (double)fpga->dclk.freqMaxM * 2;
 	root = api_add_freq(root, "Cool Max Frequency", &d, true);
-	d = (double)fpga->freqMaxMaxM * 2 * 1000000.;
+	d = (double)fpga->freqMaxMaxM * 2;
 	root = api_add_freq(root, "Max Frequency", &d, true);
 
 	return root;
