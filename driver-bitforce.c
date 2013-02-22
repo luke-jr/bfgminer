@@ -159,7 +159,7 @@ void bitforce_comm_error(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
-	int *p_fdDev = &bitforce->device_fd;
+	int *p_fdDev = &bitforce->device->device_fd;
 	
 	data->noncebuf[0] = '\0';
 	applog(LOG_ERR, "%"PRIpreprv": Comms error", bitforce->proc_repr);
@@ -210,8 +210,8 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 
 static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 {
-	pthread_mutex_t *mutexp = &bitforce->device_mutex;
-	int fdDev = bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
 	int count = 0;
 
@@ -231,8 +231,8 @@ static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 void bitforce_init(struct cgpu_info *bitforce)
 {
 	const char *devpath = bitforce->device_path;
-	pthread_mutex_t *mutexp = &bitforce->device_mutex;
-	int *p_fdDev = &bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int *p_fdDev = &bitforce->device->device_fd;
 	int fdDev = *p_fdDev, retries = 0;
 	char pdevbuf[0x100];
 	char *s;
@@ -286,8 +286,8 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 static void bitforce_flash_led(struct cgpu_info *bitforce)
 {
-	pthread_mutex_t *mutexp = &bitforce->device_mutex;
-	int fdDev = bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 
 	if (!fdDev)
 		return;
@@ -319,8 +319,8 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
-	pthread_mutex_t *mutexp = &bitforce->device_mutex;
-	int fdDev = bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
 	char *s;
 
@@ -440,8 +440,8 @@ void bitforce_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
-	pthread_mutex_t *mutexp = &bitforce->device_mutex;
-	int fdDev = bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 	unsigned char *ob = data->next_work_ob;
 	char pdevbuf[0x100];
 	char *s;
@@ -509,8 +509,8 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
-	pthread_mutex_t *mutexp = &bitforce->device_mutex;
-	int fdDev = bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 	unsigned int delay_time_ms;
 	struct timeval elapsed;
 	struct timeval now;
@@ -663,7 +663,7 @@ int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __
 static void bitforce_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	int *p_fdDev = &bitforce->device_fd;
+	int *p_fdDev = &bitforce->device->device_fd;
 
 	BFclose(*p_fdDev);
 	*p_fdDev = 0;
