@@ -1423,7 +1423,7 @@ void clean_work(struct work *work)
 	free(work->nonce2);
 	free(work->ntime);
 	free(work->gbt_coinbase);
-	free(work->sessionid);
+	free(work->nonce1);
 	memset(work, 0, sizeof(struct work));
 }
 
@@ -3006,12 +3006,12 @@ void __copy_work(struct work *work, struct work *base_work)
 	work->id = id;
 	if (base_work->job_id)
 		work->job_id = strdup(base_work->job_id);
+	if (base_work->nonce1)
+		work->nonce1 = strdup(base_work->nonce1);
 	if (base_work->nonce2)
 		work->nonce2 = strdup(base_work->nonce2);
 	if (base_work->ntime)
 		work->ntime = strdup(base_work->ntime);
-	if (base_work->sessionid)
-		work->sessionid = strdup(base_work->sessionid);
 	if (base_work->gbt_coinbase)
 		work->gbt_coinbase = strdup(base_work->gbt_coinbase);
 }
@@ -3090,6 +3090,9 @@ static bool stale_work(struct work *work, bool share)
 	time_t work_expiry;
 	struct pool *pool;
 	int getwork_delay;
+
+	if (opt_benchmark)
+		return false;
 
 	if (work->work_block != work_block) {
 		applog(LOG_DEBUG, "Work stale due to block mismatch");
@@ -3232,8 +3235,8 @@ static void *submit_work_thread(void *userdata)
 		applog(LOG_INFO, "Submitting share %08lx to pool %d", hash32[6], pool->pool_no);
 
 		/* Try resubmitting for up to 2 minutes if we fail to submit
-		 * once and the stratum pool supports sessionid for mining
-		 * resume. */
+		 * once and the stratum pool nonce1 still matches suggesting
+		 * we may be able to resume. */
 		while (time(NULL) < sshare->sshare_time + 120) {
 			bool sessionid_match;
 
@@ -3254,7 +3257,7 @@ static void *submit_work_thread(void *userdata)
 			}
 
 			mutex_lock(&pool->pool_lock);
-			sessionid_match = pool->sessionid && work->sessionid && !strcmp(pool->sessionid, work->sessionid);
+			sessionid_match = (pool->nonce1 && !strcmp(work->nonce1, pool->nonce1));
 			mutex_unlock(&pool->pool_lock);
 
 			if (!sessionid_match) {
@@ -5293,9 +5296,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Copy parameters required for share submission */
 	work->job_id = strdup(pool->swork.job_id);
+	work->nonce1 = strdup(pool->nonce1);
 	work->ntime = strdup(pool->swork.ntime);
-	if (pool->sessionid)
-		work->sessionid = strdup(pool->sessionid);
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
