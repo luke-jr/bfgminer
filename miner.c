@@ -2717,6 +2717,9 @@ static struct pool *select_balanced(struct pool *cp)
 	return ret;
 }
 
+static bool pool_active(struct pool *, bool pinging);
+static void pool_died(struct pool *);
+
 /* Select any active pool in a rotating fashion when loadbalance is chosen */
 static inline struct pool *select_pool(bool lagging)
 {
@@ -2725,8 +2728,12 @@ static inline struct pool *select_pool(bool lagging)
 
 	cp = current_pool();
 
+retry:
 	if (pool_strategy == POOL_BALANCE)
-		return select_balanced(cp);
+	{
+		pool = select_balanced(cp);
+		goto have_pool;
+	}
 
 	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
 		pool = cp;
@@ -2742,6 +2749,16 @@ static inline struct pool *select_pool(bool lagging)
 		pool = NULL;
 	}
 
+have_pool:
+	if (cp != pool)
+	{
+		if (!pool_active(pool, false))
+		{
+			pool_died(pool);
+			goto retry;
+		}
+		pool_tclear(pool, &pool->idle);
+	}
 	return pool;
 }
 
@@ -5415,7 +5432,6 @@ static void shutdown_stratum(struct pool *pool)
 }
 
 static void pool_resus(struct pool *pool);
-static bool pool_active(struct pool *pool, bool pinging);
 
 static void clear_stratum_shares(struct pool *pool)
 {
