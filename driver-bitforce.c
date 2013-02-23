@@ -904,6 +904,8 @@ int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __
 			pnoncebuf = next_line(pnoncebuf);
 		}
 	}
+	else
+		return 0;
 
 	// FIXME: This might have changed in the meantime (new job start, or broken)
 	return bitforce->nonces * count;
