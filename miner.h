@@ -271,6 +271,10 @@ struct device_api {
 	void (*api_detect)();
 
 	// Device-specific functions
+	void (*get_dev_statline_before)(char *, struct cgpu_info *);
+	void (*get_dev_statline_after)(char *, struct cgpu_info *);
+
+	// Processor-specific functions
 	void (*reinit_device)(struct cgpu_info *);
 	void (*get_statline_before)(char *, struct cgpu_info *);
 	void (*get_statline)(char *, struct cgpu_info *);
@@ -283,6 +287,7 @@ struct device_api {
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);
+	void (*minerloop)(struct thr_info *);
 	uint64_t (*can_limit_work)(struct thr_info *);
 	bool (*thread_init)(struct thr_info *);
 	bool (*prepare_work)(struct thr_info *, struct work *);
@@ -290,6 +295,17 @@ struct device_api {
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
+
+	// === Implemented by minerloop_async ===
+
+	// Can be used per-thread or per-processor
+	void (*poll)(struct thr_info *);
+
+	// Job-specific functions (only with minerloop_async!)
+	bool (*job_prepare)(struct thr_info*, struct work*, uint64_t);
+	void (*job_start)(struct thr_info*);
+	void (*job_get_results)(struct thr_info*, struct work*);
+	int64_t (*job_process_results)(struct thr_info*, struct work*, bool stopping);
 };
 
 enum dev_enable {
@@ -349,6 +365,8 @@ struct cgminer_stats {
 	struct timeval getwork_wait;
 	struct timeval getwork_wait_max;
 	struct timeval getwork_wait_min;
+
+	struct timeval _get_start;
 };
 
 // Just the actual network getworks to the pool
@@ -376,12 +394,26 @@ struct cgminer_pool_stats {
 	uint64_t net_bytes_received;
 };
 
+#define PRIprepr "-6s"
+#define PRIpreprv "s"
+
 struct cgpu_info {
 	int cgminer_id;
+	int device_line_id;
 	const struct device_api *api;
 	const char *devtype;
 	int device_id;
+	char *dev_repr;
+	char *dev_repr_ns;
 	const char *name;
+	
+	int procs;
+	int proc_id;
+	char proc_repr[8];
+	char proc_repr_ns[8];
+	struct cgpu_info *device;
+	struct cgpu_info *next_proc;
+	
 	const char *device_path;
 	FILE *device_file;
 	union {
@@ -400,7 +432,6 @@ struct cgpu_info {
 	double avg_wait_f;
 	unsigned int avg_wait_d;
 	uint32_t nonces;
-	bool nonce_range;
 	bool polling;
 #endif
 #if defined(USE_BITFORCE) || defined(USE_ICARUS)
@@ -447,8 +478,6 @@ struct cgpu_info {
 	struct timeval tv_gpustart;
 	int intervals;
 #endif
-
-	bool new_work;
 
 	float temp;
 	int cutofftemp;
@@ -516,13 +545,32 @@ struct thr_info {
 	struct timeval last;
 	struct timeval sick;
 
+	bool	scanhash_working;
+	uint64_t hashes_done;
+	struct timeval tv_hashes_done;
+	struct timeval tv_lastupdate;
+
 	bool	pause;
 	time_t	getwork;
 	double	rolling;
 
+	// Used by minerloop_async
+	struct work *prev_work;
+	struct work *work;
+	struct work *next_work;
+	struct timeval tv_morework;
+	struct work *results_work;
+	bool _job_transition_in_progress;
+	bool _proceed_with_new_job;
+	struct timeval tv_results_jobstart;
+	struct timeval tv_jobstart;
+	struct timeval tv_poll;
+	notifier_t notifier;
+	bool starting_next_work;
+	uint32_t _max_nonce;
+
 	bool	work_restart;
-	int		work_restart_fd;
-	int		_work_restart_fd_w;
+	notifier_t work_restart_notifier;
 };
 
 extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
@@ -739,12 +787,18 @@ extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
 
 extern void thread_reportin(struct thr_info *thr);
+extern void thread_reportout(struct thr_info *);
+extern void hashmeter2(struct thr_info *);
 extern int restart_wait(unsigned int mstime);
+extern bool stale_work(struct work *, bool share);
+extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
 extern int stale_wait(unsigned int mstime, struct work*, bool checkend);
 
 extern void kill_work(void);
 extern void app_restart(void);
 
+extern void mt_enable(struct thr_info *thr);
+extern void proc_enable(struct cgpu_info *);
 extern void reinit_device(struct cgpu_info *cgpu);
 
 #ifdef HAVE_ADL
@@ -1066,6 +1120,7 @@ extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool 
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
 extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void tailsprintf(char *f, const char *fmt, ...);
 extern void wlogprint(const char *f, ...);
 extern int curses_int(const char *query);

@@ -83,7 +83,8 @@ $mobilepage = array(
  'DATE' => null,
  'RIGS' => null,
  'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 'Accepted', 'Rejected=Rej', 'Utility'),
- 'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.Status=Status', 'DEVS.Temperature=Temp',
+ 'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.ProcID=Proc',
+			'DEVS.Status=Status', 'DEVS.Temperature=Temp',
 			'DEVS.MHS av=MHS av', 'DEVS.Accepted=Accept', 'DEVS.Rejected=Rej',
 			'DEVS.Utility=Utility', 'NOTIFY.Last Not Well=Not Well'),
  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej', 'Last Share Time'));
@@ -1074,9 +1075,12 @@ function details($cmd, $list, $rig)
 	if (isset($values['ID']))
 	{
 		$repr = $values['Name'].$values['ID'];
+		if (isset($values['ProcID']))
+			$repr .= join_get_field('ProcID', $values);
 		$list[$item] = $values = array('Device' => $repr) + array_slice($values, 1);
 		unset($values['Name']);
 		unset($values['ID']);
+		unset($values['ProcID']);
 	}
 	$namesByIndex = array_keys($values);
 	$nameCount = count($namesByIndex);
@@ -1781,6 +1785,19 @@ function joinfields($section1, $section2, $join, $results)
  return $newres;
 }
 #
+function join_get_field($field, $fields)
+{
+	// : means a string constant otherwise it's a field name
+	// ProcID field name is converted to a lowercase letter
+	if (substr($field, 0, 1) == ':')
+		return substr($field, 1);
+	else
+	if ($field == 'ProcID')
+		return chr(97 + $fields[$field]);
+	else
+		return $fields[$field];
+}
+#
 function joinlr($section1, $section2, $join, $results)
 {
  global $sectionmap;
@@ -1805,15 +1822,9 @@ function joinlr($section1, $section2, $join, $results)
 		}
 
 		// Build L string to be matched
-		// : means a string constant otherwise it's a field name
 		$Lval = '';
 		foreach ($join['L'] as $field)
-		{
-			if (substr($field, 0, 1) == ':')
-				$Lval .= substr($field, 1);
-			else
-				$Lval .= $fields1b[$field];
-		}
+			$Lval .= join_get_field($field, $fields1b);
 
 		// foreach answer section in the rig api call (for the other api command)
 		foreach ($results[$name2][$rig] as $name2b => $fields2b)
@@ -1822,15 +1833,9 @@ function joinlr($section1, $section2, $join, $results)
 				continue;
 
 			// Build R string and compare
-			// : means a string constant otherwise it's a field name
 			$Rval = '';
 			foreach ($join['R'] as $field)
-			{
-				if (substr($field, 0, 1) == ':')
-					$Rval .= substr($field, 1);
-				else
-					$Rval .= $fields2b[$field];
-			}
+				$Rval .= join_get_field($field, $fields2b);
 
 			if ($Lval === $Rval)
 			{
@@ -1898,7 +1903,7 @@ function joinsections($sections, $results, $errors)
 {
  global $sectionmap;
 
- // GPU's don't have Name,ID fields - so create them
+ // GPU's don't have Name,ID,ProcID fields - so create them
  foreach ($results as $section => $res)
 	foreach ($res as $rig => $result)
 		foreach ($result as $name => $fields)
@@ -1908,6 +1913,7 @@ function joinsections($sections, $results, $errors)
 			{
 				$results[$section][$rig][$name]['Name'] = 'GPU';
 				$results[$section][$rig][$name]['ID'] = $result[$name]['GPU'];
+				$results[$section][$rig][$name]['ProcID'] = 0;
 			}
 		}
 
@@ -1940,12 +1946,12 @@ function joinsections($sections, $results, $errors)
 				case 'NOTIFY':
 				case 'DEVDETAILS':
 				case 'USBSTATS':
-					$join = array('Name', 'ID');
+					$join = array('Name', 'ID', 'ProcID');
 					$sectionmap[$section] = $section;
 					$results[$section] = joinfields($both[0], $both[1], $join, $results);
 					break;
 				case 'STATS':
-					$join = array('L' => array('Name','ID'), 'R' => array('ID'));
+					$join = array('L' => array('Name','ID','ProcID'), 'R' => array('ID'));
 					$sectionmap[$section] = $section;
 					$results[$section] = joinlr($both[0], $both[1], $join, $results);
 					break;
@@ -2732,7 +2738,7 @@ function display()
  endtable();
  otherrow('<td><br><br></td>');
  newtable();
- doforeach('devs', 'device list', $sum, array(''=>'','ID'=>'','Name'=>''), false);
+ doforeach('devs', 'device list', $sum, array(''=>'','ProcID'=>'','ID'=>'','Name'=>''), false);
  endtable();
  otherrow('<td><br><br></td>');
  newtable();

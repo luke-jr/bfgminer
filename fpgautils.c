@@ -806,51 +806,51 @@ FILE *open_bitstream(const char *dname, const char *filename)
 
 #define check_magic(L)  do {  \
 	if (1 != fread(buf, 1, 1, f))  \
-		bailout(LOG_ERR, "%s %u: Error reading firmware ('%c')",  \
-		        cgpu->api->name, cgpu->device_id, L);  \
+		bailout(LOG_ERR, "%s: Error reading firmware ('%c')",  \
+		        repr, L);  \
 	if (buf[0] != L)  \
-		bailout(LOG_ERR, "%s %u: Firmware has wrong magic ('%c')",  \
-		        cgpu->api->name, cgpu->device_id, L);  \
+		bailout(LOG_ERR, "%s: Firmware has wrong magic ('%c')",  \
+		        repr, L);  \
 } while(0)
 
 #define read_str(eng)  do {  \
 	if (1 != fread(buf, 2, 1, f))  \
-		bailout(LOG_ERR, "%s %u: Error reading firmware (" eng " len)",  \
-		        cgpu->api->name, cgpu->device_id);  \
+		bailout(LOG_ERR, "%s: Error reading firmware (" eng " len)",  \
+		        repr);  \
 	len = (ubuf[0] << 8) | ubuf[1];  \
 	if (len >= sizeof(buf))  \
-		bailout(LOG_ERR, "%s %u: Firmware " eng " too long",  \
-		        cgpu->api->name, cgpu->device_id);  \
+		bailout(LOG_ERR, "%s: Firmware " eng " too long",  \
+		        repr);  \
 	if (1 != fread(buf, len, 1, f))  \
-		bailout(LOG_ERR, "%s %u: Error reading firmware (" eng ")",  \
-		        cgpu->api->name, cgpu->device_id);  \
+		bailout(LOG_ERR, "%s: Error reading firmware (" eng ")",  \
+		        repr);  \
 	buf[len] = '\0';  \
 } while(0)
 
-FILE *open_xilinx_bitstream(struct cgpu_info *cgpu, const char *fwfile, unsigned long *out_len)
+FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwfile, unsigned long *out_len)
 {
 	char buf[0x100];
 	unsigned char *ubuf = (unsigned char*)buf;
 	unsigned long len;
 	char *p;
 
-	FILE *f = open_bitstream(cgpu->api->dname, fwfile);
+	FILE *f = open_bitstream(dname, fwfile);
 	if (!f)
-		bailout(LOG_ERR, "%s %u: Error opening firmware file %s",
-		        cgpu->api->name, cgpu->device_id, fwfile);
+		bailout(LOG_ERR, "%s: Error opening firmware file %s",
+		        repr, fwfile);
 	if (1 != fread(buf, 2, 1, f))
-		bailout(LOG_ERR, "%s %u: Error reading firmware (magic)",
-		        cgpu->api->name, cgpu->device_id);
+		bailout(LOG_ERR, "%s: Error reading firmware (magic)",
+		        repr);
 	if (buf[0] || buf[1] != 9)
-		bailout(LOG_ERR, "%s %u: Firmware has wrong magic (9)",
-		        cgpu->api->name, cgpu->device_id);
+		bailout(LOG_ERR, "%s: Firmware has wrong magic (9)",
+		        repr);
 	if (-1 == fseek(f, 11, SEEK_CUR))
-		bailout(LOG_ERR, "%s %u: Firmware seek failed",
-		        cgpu->api->name, cgpu->device_id);
+		bailout(LOG_ERR, "%s: Firmware seek failed",
+		        repr);
 	check_magic('a');
 	read_str("design name");
-	applog(LOG_DEBUG, "%s %u: Firmware file %s info:",
-	       cgpu->api->name, cgpu->device_id, fwfile);
+	applog(LOG_DEBUG, "%s: Firmware file %s info:",
+	       repr, fwfile);
 	applog(LOG_DEBUG, "  Design name: %s", buf);
 	p = strrchr(buf, ';') ?: buf;
 	p = strrchr(buf, '=') ?: p;
@@ -858,11 +858,11 @@ FILE *open_xilinx_bitstream(struct cgpu_info *cgpu, const char *fwfile, unsigned
 		++p;
 	unsigned long fwusercode = (unsigned long)strtoll(p, &p, 16);
 	if (p[0] != '\0')
-		bailout(LOG_ERR, "%s %u: Bad usercode in firmware file",
-		        cgpu->api->name, cgpu->device_id);
+		bailout(LOG_ERR, "%s: Bad usercode in firmware file",
+		        repr);
 	if (fwusercode == 0xffffffff)
-		bailout(LOG_ERR, "%s %u: Firmware doesn't support user code",
-		        cgpu->api->name, cgpu->device_id);
+		bailout(LOG_ERR, "%s: Firmware doesn't support user code",
+		        repr);
 	applog(LOG_DEBUG, "  Version: %u, build %u", (unsigned)((fwusercode >> 8) & 0xff), (unsigned)(fwusercode & 0xff));
 	check_magic('b');
 	read_str("part number");
@@ -875,8 +875,8 @@ FILE *open_xilinx_bitstream(struct cgpu_info *cgpu, const char *fwfile, unsigned
 	applog(LOG_DEBUG, "  Build time: %s", buf);
 	check_magic('e');
 	if (1 != fread(buf, 4, 1, f))
-		bailout(LOG_ERR, "%s %u: Error reading firmware (data len)",
-		        cgpu->api->name, cgpu->device_id);
+		bailout(LOG_ERR, "%s: Error reading firmware (data len)",
+		        repr);
 	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
 	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
 

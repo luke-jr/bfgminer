@@ -4,6 +4,8 @@
 #include <curl/curl.h>
 #include <jansson.h>
 
+#include "compat.h"
+
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <sys/socket.h>
@@ -74,6 +76,7 @@ typedef SOCKETTYPE notifier_t[2];
 extern void notifier_init(notifier_t);
 extern void notifier_wake(notifier_t);
 extern void notifier_read(notifier_t);
+extern void notifier_destroy(notifier_t);
 
 /* Align a size_t to 4 byte boundaries for fussy arches */
 static inline void align_len(size_t *len)
@@ -81,5 +84,58 @@ static inline void align_len(size_t *len)
 	if (*len % 4)
 		*len += 4 - (*len % 4);
 }
+
+
+static inline
+void set_maxfd(int *p_maxfd, int fd)
+{
+	if (fd > *p_maxfd)
+		*p_maxfd = fd;
+}
+
+
+#define timer_set_delay(tvp_timer, tvp_now, usecs)  do {  \
+	struct timeval tv_add = {  \
+		.tv_sec = usecs / 1000000,  \
+		.tv_usec = usecs % 1000000,  \
+	};  \
+	timeradd(&tv_add, tvp_now, tvp_timer);  \
+} while(0)
+
+#define timer_set_delay_from_now(tvp_timer, usecs)  do {  \
+	struct timeval tv_now;  \
+	gettimeofday(&tv_now, NULL);  \
+	timer_set_delay(tvp_timer, &tv_now, usecs);  \
+} while(0)
+
+static inline
+bool timer_passed(struct timeval *tvp_timer, struct timeval *tvp_now)
+{
+	return (tvp_timer->tv_sec != -1 && timercmp(tvp_timer, tvp_now, <));
+}
+
+static inline
+void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)
+{
+	if (tvp_time->tv_sec == -1)
+		return;
+	if (tvp_timeout->tv_sec == -1 /* no timeout */ || timercmp(tvp_time, tvp_timeout, <))
+		*tvp_timeout = *tvp_time;
+}
+
+static inline
+struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_now)
+{
+	if (tvp_timeout->tv_sec == -1)
+		return NULL;
+	
+	if (timercmp(tvp_timeout, tvp_now, <))
+		timerclear(tvp_timeout);
+	else
+		timersub(tvp_timeout, tvp_now, tvp_timeout);
+	
+	return tvp_timeout;
+}
+
 
 #endif /* __UTIL_H__ */

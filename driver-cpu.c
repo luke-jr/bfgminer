@@ -809,7 +809,6 @@ static bool cpu_thread_init(struct thr_info *thr)
 
 static int64_t cpu_scanhash(struct thr_info *thr, struct work *work, int64_t max_nonce)
 {
-	const int thr_id = thr->id;
 	unsigned char hash1[64];
 	uint32_t first_nonce = work->blk.nonce;
 	uint32_t last_nonce;
@@ -838,7 +837,7 @@ CPUSearch:
 
 	/* if nonce found, submit work */
 	if (unlikely(rc)) {
-		applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
+		applog(LOG_DEBUG, "%"PRIpreprv" found something?", thr->cgpu->proc_repr);
 		submit_work_async(work, NULL);
 		work->blk.nonce = last_nonce + 1;
 		goto CPUSearch;

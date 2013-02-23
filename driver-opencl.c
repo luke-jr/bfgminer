@@ -824,7 +824,7 @@ void pause_dynamic_threads(int gpu)
 
 		thr->pause = cgpu->dynamic;
 		if (!cgpu->dynamic && cgpu->deven != DEV_DISABLED)
-			tq_push(thr->q, &ping);
+			mt_enable(thr);
 	}
 }
 
@@ -862,8 +862,9 @@ retry:
 			mhash_base = false;
 		}
 
-		wlog("GPU %d: %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
-			gpu, displayed_rolling, displayed_total, mhash_base ? "M" : "K",
+		wlog("%"PRIpreprv": %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
+			cgpu->proc_repr,
+			displayed_rolling, displayed_total, mhash_base ? "M" : "K",
 			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
 			cgpu->utility, cgpu->intensity);
 #ifdef HAVE_ADL
@@ -956,26 +957,17 @@ retry:
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
+		cgpu = &gpus[selected];
 		if (gpus[selected].deven != DEV_DISABLED) {
 			wlogprint("Device already enabled\n");
 			goto retry;
 		}
 		gpus[selected].deven = DEV_ENABLED;
-		for (i = 0; i < mining_threads; ++i) {
-			thr = &thr_info[i];
-			cgpu = thr->cgpu;
-			if (cgpu->api != &opencl_api)
-				continue;
-			if (dev_from_id(i) != selected)
-				continue;
-			if (cgpu->status != LIFE_WELL) {
-				wlogprint("Must restart device before enabling it");
-				goto retry;
-			}
-			applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
-
-			tq_push(thr->q, &ping);
+		if (cgpu->status != LIFE_WELL) {
+			wlogprint("Must restart device before enabling it");
+			goto retry;
 		}
+		proc_enable(cgpu);
 		goto retry;
 	} if (!strncasecmp(&input, "d", 1)) {
 		if (selected)
@@ -1332,7 +1324,7 @@ void *reinit_gpu(void *userdata)
 	struct timeval now;
 	char name[256];
 	int thr_id;
-	int gpu;
+	int i;
 
 	pthread_detach(pthread_self());
 	RenameThread("reinit_gpu");
@@ -1348,21 +1340,10 @@ select_cgpu:
 		goto out;
 	}
 
-	gpu = cgpu->device_id;
-
-	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
-		thr = &thr_info[thr_id];
-		cgpu = thr->cgpu;
-		if (cgpu->api != &opencl_api)
-			continue;
-		if (dev_from_id(thr_id) != gpu)
-			continue;
-
-		thr = &thr_info[thr_id];
-		if (!thr) {
-			applog(LOG_WARNING, "No reference to thread %d exists", thr_id);
-			continue;
-		}
+	for (i = 0; i < cgpu->threads; ++i)
+	{
+		thr = cgpu->thr[i];
+		thr_id = thr->id;
 
 		thr->rolling = thr->cgpu->rolling = 0;
 		/* Reports the last time we tried to revive a sick GPU */
@@ -1373,15 +1354,12 @@ select_cgpu:
 			applog(LOG_WARNING, "Thread %d no longer exists", thr_id);
 	}
 
-	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
+	for (i = 0; i < cgpu->threads; ++i)
+	{
 		int virtual_gpu;
 
-		thr = &thr_info[thr_id];
-		cgpu = thr->cgpu;
-		if (cgpu->api != &opencl_api)
-			continue;
-		if (dev_from_id(thr_id) != gpu)
-			continue;
+		thr = cgpu->thr[i];
+		thr_id = thr->id;
 
 		virtual_gpu = cgpu->virtual_gpu;
 		/* Lose this ram cause we may get stuck here! */
@@ -1412,16 +1390,7 @@ select_cgpu:
 	gettimeofday(&now, NULL);
 	get_datestamp(sel_cgpu->init, &now);
 
-	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
-		thr = &thr_info[thr_id];
-		cgpu = thr->cgpu;
-		if (cgpu->api != &opencl_api)
-			continue;
-		if (dev_from_id(thr_id) != gpu)
-			continue;
-
-		tq_push(thr->q, &ping);
-	}
+	proc_enable(cgpu);
 
 	goto select_cgpu;
 out:

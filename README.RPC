@@ -244,7 +244,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               reply before BFGMiner quits
 
  notify        NOTIFY         The last status and history count of each devices problem
-                              e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
+                              e.g. NOTIFY=0,Name=PGA,ID=0,ProcID=0,Last Well=1332432290,...|
 
  privileged (*)
                none           There is no reply section just the STATUS section
@@ -282,7 +282,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
  devdetails    DEVDETAILS     Each device with a list of their static details
                               This lists all devices including those not supported
                               by the 'devs' command
-                              e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
+                              e.g. DEVDETAILS=0,Name=PGA,ID=0,ProcID=0,Driver=bitforce,...|
 
  restart (*)   none           There is no status section but just a single "RESTART"
                               reply before BFGMiner restarts
@@ -407,6 +407,22 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.24b
+
+Modified API commands:
+ 'cpustatus' - Added 'ProcID'
+ 'gpustatus' - Added 'ProcID'
+ 'pgastatus' - Added 'ProcID'
+ 'devstatus' - Added 'ProcID'
+ 'notify' - Added 'ProcID'
+ 'devdetails' - Added 'ProcID'
+ 'devdetail' - Added 'Name', 'ID', and 'ProcID'
+
+Pretty much updated every method returning 'Name' and 'ID' to also return
+'ProcID'. This is a number starting with 0 for 'a', 1 for 'b', etc.
+
+----------
 
 API V1.24 (BFGMiner v2.10.3)
 
@@ -1239,7 +1255,8 @@ Looking at the Mobile example:
   'RIGS' => null,
   'SUMMARY' => array('Elapsed', 'MHS av', 'Found Blocks=Blks', 
 			Accepted', 'Rejected=Rej', 'Utility'),
-  'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.Status=Status',
+  'DEVS+NOTIFY' => array('DEVS.Name=Name', 'DEVS.ID=ID', 'DEVS.ProcID=Proc',
+			'DEVS.Status=Status',
 			'DEVS.Temperature=Temp', 'DEVS.MHS av=MHS av',
 			'DEVS.Accepted=Accept', 'DEVS.Rejected=Rej',
 			'DEVS.Utility=Utility', 'NOTIFY.Last Not Well=Not Well'),
@@ -1280,11 +1297,11 @@ Each table will have the chosen details for all the rigs specified in $rigs
 	since each field name in the join between DEVS and NOTIFY is actually
 	section.fieldname, not just fieldname
 
-	The join code automatically adds 2 fields to each GPU device: 'Name' and 'ID'
-	They don't exist in the API 'devs' output but I can correctly calculate
-	them from the GPU device data
-	These two fields are used to join DEVS to NOTIFY i.e. find the NOTIFY
-	record that has the same Name and ID as the DEVS record and join them
+	The join code automatically adds 2 fields to each GPU device: 'Name', 'ID',
+	and 'ProcID'. They don't exist in the API 'devs' output but we can correctly
+	calculate them from the GPU device data. These two fields are used to join
+	DEVS to NOTIFY: i.e. find the NOTIFY record that has the same Name/ID/ProcID
+	as the DEVS record and join them.
 
  POOL
 

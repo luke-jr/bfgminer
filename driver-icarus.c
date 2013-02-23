@@ -198,7 +198,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 	};
 	struct epoll_event evr[2];
 	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
-	if (thr && thr->work_restart_fd != -1) {
+	if (thr && thr->work_restart_notifier[1] != -1) {
 	epollfd = epoll_create(2);
 	if (epollfd != -1) {
 		if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
@@ -206,8 +206,8 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 			epollfd = -1;
 		}
 		{
-			ev.data.fd = thr->work_restart_fd;
-			if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, thr->work_restart_fd, &ev))
+			ev.data.fd = thr->work_restart_notifier[0];
+			if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, thr->work_restart_notifier[0], &ev))
 				applog(LOG_ERR, "Icarus: Error adding work restart fd to epoll");
 			else
 			{
@@ -231,8 +231,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 			else
 			{
 				if (ret)
-					// work restart trigger
-					(void)read(thr->work_restart_fd, buf, read_amount);
+					notifier_read(thr->work_restart_notifier);
 				ret = 0;
 			}
 		}
@@ -404,9 +403,9 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 
 	info->min_data_count = MIN_DATA_COUNT;
 
-	applog(LOG_DEBUG, "%s %u: Init: mode=%s read_count=%d Hs=%e",
-		icarus->api->name,
-		icarus->device_id, timing_mode_str(info->timing_mode), info->read_count, info->Hs);
+	applog(LOG_DEBUG, "%"PRIpreprv": Init: mode=%s read_count=%d Hs=%e",
+		icarus->proc_repr,
+		timing_mode_str(info->timing_mode), info->read_count, info->Hs);
 }
 
 static uint32_t mask(int work_division)
@@ -620,13 +619,13 @@ bool icarus_detect_custom(const char *devpath, struct device_api *api, struct IC
 	icarus->threads = 1;
 	add_cgpu(icarus);
 
-	applog(LOG_INFO, "Found %s %u at %s",
-		icarus->api->name, icarus->device_id,
+	applog(LOG_INFO, "Found %"PRIpreprv" at %s",
+		icarus->proc_repr,
 		devpath);
 
-	applog(LOG_DEBUG, "%s %u: Init: baud=%d work_division=%d fpga_count=%d",
-		icarus->api->name,
-		icarus->device_id, baud, work_division, fpga_count);
+	applog(LOG_DEBUG, "%"PRIpreprv": Init: baud=%d work_division=%d fpga_count=%d",
+		icarus->proc_repr,
+		baud, work_division, fpga_count);
 
 	icarus->cgpu_data = info;
 
@@ -696,7 +695,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	if (epollfd != -1)
 	{
 		close(epollfd);
-		thr->work_restart_fd = 0;
+		notifier_init(thr->work_restart_notifier);
 	}
 #endif
 
@@ -711,7 +710,7 @@ static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, 
 	icarus_close(icarus->device_fd);
 	*fdp = icarus->device_fd = icarus_open(icarus->device_path, info->baud);
 	if (unlikely(-1 == *fdp)) {
-		applog(LOG_ERR, "%s %u: Failed to reopen on %s", icarus->api->name, icarus->device_id, icarus->device_path);
+		applog(LOG_ERR, "%"PRIpreprv": Failed to reopen on %s", icarus->proc_repr, icarus->device_path);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		state->firstrun = true;
 		return false;
@@ -739,9 +738,9 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, 64);
-		applog(LOG_DEBUG, "%s %u sent: %s",
-			icarus->api->name,
-			icarus->device_id, ob_hex);
+		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
+			icarus->proc_repr,
+			ob_hex);
 		free(ob_hex);
 	}
 
@@ -785,8 +784,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
 	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
 		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
-		applog(LOG_WARNING, "%s %u: Received job attempting to send a command, corrupting it!",
-		       icarus->api->name, icarus->device_id);
+		applog(LOG_WARNING, "%"PRIpreprv": Received job attempting to send a command, corrupting it!",
+		       icarus->proc_repr);
 		ob_bin[56] = 0;
 	}
 	rev(ob_bin, 32);
@@ -885,9 +884,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			estimate_hashes = 0xffffffff;
 
 		if (opt_debug) {
-			applog(LOG_DEBUG, "%s %u no nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
-					icarus->api->name,
-					icarus->device_id,
+			applog(LOG_DEBUG, "%"PRIpreprv" no nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
+					icarus->proc_repr,
 					(uint64_t)estimate_hashes,
 					(int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
 		}
@@ -915,9 +913,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	hash_count *= info->fpga_count;
 
 	if (opt_debug) {
-		applog(LOG_DEBUG, "%s %u nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
-				icarus->api->name,
-				icarus->device_id,
+		applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
+				icarus->proc_repr,
 				nonce,
 				(uint64_t)hash_count,
 				(int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
@@ -926,10 +923,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (info->do_default_detection && elapsed.tv_sec >= DEFAULT_DETECT_THRESHOLD) {
 		int MHs = (double)hash_count / ((double)elapsed.tv_sec * 1e6 + (double)elapsed.tv_usec);
 		--info->do_default_detection;
-		applog(LOG_DEBUG, "%s %u: Autodetect device speed: %d MH/s", icarus->api->name, icarus->device_id, MHs);
+		applog(LOG_DEBUG, "%"PRIpreprv": Autodetect device speed: %d MH/s", icarus->proc_repr, MHs);
 		if (MHs <= 370 || MHs > 420) {
 			// Not a real Icarus: enable short timing
-			applog(LOG_WARNING, "%s %u: Seems too %s to be an Icarus; calibrating with short timing", icarus->api->name, icarus->device_id, MHs>380?"fast":"slow");
+			applog(LOG_WARNING, "%"PRIpreprv": Seems too %s to be an Icarus; calibrating with short timing", icarus->proc_repr, MHs>380?"fast":"slow");
 			info->timing_mode = MODE_SHORT;
 			info->do_icarus_timing = true;
 			info->do_default_detection = 0;
@@ -938,18 +935,19 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		if (MHs <= 380) {
 			// Real Icarus?
 			if (!info->do_default_detection) {
-				applog(LOG_DEBUG, "%s %u: Seems to be a real Icarus", icarus->api->name, icarus->device_id);
+				applog(LOG_DEBUG, "%"PRIpreprv": Seems to be a real Icarus", icarus->proc_repr);
 				info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
 			}
 		}
 		else
 		if (MHs <= 420) {
 			// Enterpoint Cairnsmore1
-			const char *old_name = icarus->api->name;
-			int old_devid = icarus->device_id;
+			size_t old_repr_len = strlen(icarus->proc_repr);
+			char old_repr[old_repr_len + 1];
+			strcpy(old_repr, icarus->proc_repr);
 			convert_icarus_to_cairnsmore(icarus);
 			info->do_default_detection = 0;
-			applog(LOG_WARNING, "%s %u: Detected Cairnsmore1 device, upgrading driver to %s %u", old_name, old_devid, icarus->api->name, icarus->device_id);
+			applog(LOG_WARNING, "%"PRIpreprv": Detected Cairnsmore1 device, upgrading driver to %"PRIpreprv, old_repr, icarus->proc_repr);
 		}
 	}
 
@@ -1041,10 +1039,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			else if (info->timing_mode == MODE_SHORT)
 				info->do_icarus_timing = false;
 
-//			applog(LOG_DEBUG, "%s %u Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->api->name, icarus->device_id, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
-			applog(LOG_DEBUG, "%s %u Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
-					icarus->api->name,
-					icarus->device_id, Hs, W, read_count, fullnonce);
+//			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->proc_repr, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
+			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
+					icarus->proc_repr,
+					Hs, W, read_count, fullnonce);
 		}
 		info->history_count++;
 		gettimeofday(&tv_history_finish, NULL);

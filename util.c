@@ -1829,6 +1829,8 @@ void notifier_init(notifier_t pipefd)
 
 void notifier_wake(notifier_t fd)
 {
+	if (fd[1] == INVSOCK)
+		return;
 #ifdef WIN32
 	(void)send(fd[1], "\0", 1, 0);
 #else
@@ -1844,4 +1846,16 @@ void notifier_read(notifier_t fd)
 #else
 	(void)read(fd[0], buf, sizeof(buf));
 #endif
+}
+
+void notifier_destroy(notifier_t fd)
+{
+#ifdef WIN32
+	closesocket(fd[0]);
+	closesocket(fd[1]);
+#else
+	close(fd[0]);
+	close(fd[1]);
+#endif
+	fd[0] = fd[1] = INVSOCK;
 }

@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include "compat.h"
+#include "deviceapi.h"
 #include "miner.h"
 #include "fpgautils.h"
 
@@ -33,8 +34,17 @@
 #define tv_to_ms(tval) ((unsigned long)(tval.tv_sec * 1000 + tval.tv_usec / 1000))
 #define TIME_AVG_CONSTANT 8
 
-#define KNAME_WORK  "full work"
-#define KNAME_RANGE "nonce range"
+enum bitforce_proto {
+	BFP_WORK,
+	BFP_RANGE,
+	BFP_QUEUE,
+};
+
+static const char *protonames[] = {
+	"full work",
+	"nonce range",
+	"work queue",
+};
 
 struct device_api bitforce_api;
 
@@ -59,6 +69,49 @@ static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
 		return bufLen;
 }
 
+static ssize_t bitforce_send(int fd, int procid, const void *buf, ssize_t bufLen)
+{
+	if (!procid)
+		return BFwrite(fd, buf, bufLen);
+	
+	if (bufLen > 255)
+		return -1;
+	
+	size_t bufLeft = bufLen + 3;
+	char realbuf[bufLeft], *bufp;
+	ssize_t rv;
+	memcpy(&realbuf[3], buf, bufLen);
+	realbuf[0] = '@';
+	realbuf[1] = procid;
+	realbuf[2] = bufLen;
+	bufp = realbuf;
+	while (true)
+	{
+		rv = BFwrite(fd, bufp, bufLeft);
+		if (rv <= 0)
+			return rv;
+		bufLeft -= rv;
+	}
+	return bufLen;
+}
+
+static
+void bitforce_cmd1(int fd, int procid, void *buf, size_t bufsz, const char *cmd)
+{
+	bitforce_send(fd, procid, cmd, 3);
+	BFgets(buf, bufsz, fd);
+}
+
+static
+void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd, void *data, size_t datasz)
+{
+	bitforce_cmd1(fd, procid, buf, bufsz, cmd);
+	if (strncasecmp(buf, "OK", 2))
+		return;
+	bitforce_send(fd, procid, data, datasz);
+	BFgets(buf, bufsz, fd);
+}
+
 #define BFclose(fd) close(fd)
 
 static bool bitforce_detect_one(const char *devpath)
@@ -66,7 +119,10 @@ static bool bitforce_detect_one(const char *devpath)
 	int fdDev = serial_open(devpath, 0, 10, true);
 	struct cgpu_info *bitforce;
 	char pdevbuf[0x100];
+	size_t pdevbuf_len;
 	char *s;
+	int procs = 1;
+	bool sc = false;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
 
@@ -75,41 +131,49 @@ static bool bitforce_detect_one(const char *devpath)
 		return false;
 	}
 
-	BFwrite(fdDev, "ZGX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZGX");
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_DEBUG, "BFL: Error reading/timeout (ZGX)");
 		return 0;
 	}
 
-	BFclose(fdDev);
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		applog(LOG_DEBUG, "BFL: Didn't recognise BitForce on %s", devpath);
+		BFclose(fdDev);
 		return false;
 	}
 
+	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
+	for ( bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZCX");
+	      strncasecmp(pdevbuf, "OK", 2);
+	      BFgets(pdevbuf, sizeof(pdevbuf), fdDev) )
+	{
+		pdevbuf_len = strlen(pdevbuf);
+		if (unlikely(!pdevbuf_len))
+			continue;
+		pdevbuf[pdevbuf_len-1] = '\0';  // trim newline
+		applog(LOG_DEBUG, "  %s", pdevbuf);
+		if (!strncasecmp(pdevbuf, "DEVICES IN CHAIN:", 17))
+			procs = atoi(&pdevbuf[17]);
+		else
+		if (!strncasecmp(pdevbuf, "DEVICE:", 7) && strstr(pdevbuf, "SC"))
+			sc = true;
+	}
+	BFclose(fdDev);
+	
 	// We have a real BitForce!
 	bitforce = calloc(1, sizeof(*bitforce));
 	bitforce->api = &bitforce_api;
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
+	bitforce->procs = procs;
 	bitforce->threads = 1;
-	/* Initially enable support for nonce range and disable it later if it
-	 * fails */
-	if (opt_bfl_noncerange) {
-		bitforce->nonce_range = true;
-		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-		bitforce->kname = KNAME_RANGE;
-	} else {
-		bitforce->sleep_ms = BITFORCE_SLEEP_MS * 5;
-		bitforce->kname = KNAME_WORK;
-	}
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
+	bitforce->cgpu_data = (void*)sc;
 
 	mutex_init(&bitforce->device_mutex);
 
@@ -124,6 +188,43 @@ static int bitforce_detect_auto(void)
 static void bitforce_detect(void)
 {
 	serial_detect_auto(&bitforce_api, bitforce_detect_one, bitforce_detect_auto);
+}
+
+struct bitforce_data {
+	unsigned char next_work_ob[70];  // Data aligned for 32-bit access
+	unsigned char *next_work_obs;    // Start of data to send
+	unsigned char next_work_obsz;
+	const char *next_work_cmd;
+	char noncebuf[0x200];  // Large enough for 3 works of queue results
+	int poll_func;
+	enum bitforce_proto proto;
+	bool sc;
+	bool queued;
+};
+
+static void bitforce_clear_buffer(struct cgpu_info *);
+
+static
+void bitforce_comm_error(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	int *p_fdDev = &bitforce->device->device_fd;
+	
+	data->noncebuf[0] = '\0';
+	applog(LOG_ERR, "%"PRIpreprv": Comms error", bitforce->proc_repr);
+	dev_error(bitforce, REASON_DEV_COMMS_ERROR);
+	++bitforce->hw_errors;
+	++hw_errors;
+	BFclose(*p_fdDev);
+	int fd = *p_fdDev = BFopen(bitforce->device_path);
+	if (fd == -1)
+	{
+		applog(LOG_ERR, "%s: Error reopening %s", bitforce->dev_repr, bitforce->device_path);
+		return;
+	}
+	/* empty read buffer */
+	bitforce_clear_buffer(bitforce);
 }
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
@@ -144,13 +245,13 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	struct timeval now;
 
 	if (unlikely(fdDev == -1)) {
-		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, bitforce->device_path);
+		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, bitforce->device_path);
 		return false;
 	}
 
 	bitforce->device_fd = fdDev;
 
-	applog(LOG_INFO, "BFL%i: Opened %s", bitforce->device_id, bitforce->device_path);
+	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
 	gettimeofday(&now, NULL);
 	get_datestamp(bitforce->init, &now);
 
@@ -159,56 +260,56 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 
 static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 {
-	int fdDev = bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
 	int count = 0;
 
 	if (!fdDev)
 		return;
 
-	applog(LOG_DEBUG, "BFL%i: Clearing read buffer", bitforce->device_id);
+	applog(LOG_DEBUG, "%"PRIpreprv": Clearing read buffer", bitforce->proc_repr);
 
-	mutex_lock(&bitforce->device_mutex);
+	mutex_lock(mutexp);
 	do {
 		pdevbuf[0] = '\0';
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	} while (pdevbuf[0] && (++count < 10));
-	mutex_unlock(&bitforce->device_mutex);
+	mutex_unlock(mutexp);
 }
 
 void bitforce_init(struct cgpu_info *bitforce)
 {
 	const char *devpath = bitforce->device_path;
-	int fdDev = bitforce->device_fd, retries = 0;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int *p_fdDev = &bitforce->device->device_fd;
+	int fdDev = *p_fdDev, retries = 0;
 	char pdevbuf[0x100];
 	char *s;
 
-	applog(LOG_WARNING, "BFL%i: Re-initialising", bitforce->device_id);
+	applog(LOG_WARNING, "%"PRIpreprv": Re-initialising", bitforce->proc_repr);
 
 	bitforce_clear_buffer(bitforce);
 
-	mutex_lock(&bitforce->device_mutex);
+	mutex_lock(mutexp);
 	if (fdDev) {
 		BFclose(fdDev);
 		sleep(5);
 	}
-	bitforce->device_fd = 0;
+	*p_fdDev = 0;
 
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
-		mutex_unlock(&bitforce->device_mutex);
-		applog(LOG_ERR, "BFL%i: Failed to open %s", bitforce->device_id, devpath);
+		mutex_unlock(mutexp);
+		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, devpath);
 		return;
 	}
 
 	do {
-		BFwrite(fdDev, "ZGX", 3);
-		pdevbuf[0] = '\0';
-		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-
+		bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZGX");
 		if (unlikely(!pdevbuf[0])) {
-			mutex_unlock(&bitforce->device_mutex);
-			applog(LOG_ERR, "BFL%i: Error reading/timeout (ZGX)", bitforce->device_id);
+			mutex_unlock(mutexp);
+			applog(LOG_ERR, "%s: Error reading/timeout (ZGX)", bitforce->dev_repr);
 			return;
 		}
 
@@ -217,8 +318,8 @@ void bitforce_init(struct cgpu_info *bitforce)
 	} while (!strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
-		mutex_unlock(&bitforce->device_mutex);
-		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s returned: %s", bitforce->device_id, devpath, pdevbuf);
+		mutex_unlock(mutexp);
+		applog(LOG_ERR, "%s: Didn't recognise BitForce on %s returned: %s", bitforce->dev_repr, devpath, pdevbuf);
 		return;
 	}
 	
@@ -227,15 +328,16 @@ void bitforce_init(struct cgpu_info *bitforce)
 		bitforce->name = strdup(pdevbuf + 7);
 	}
 
-	bitforce->device_fd = fdDev;
+	*p_fdDev = fdDev;
 	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 
-	mutex_unlock(&bitforce->device_mutex);
+	mutex_unlock(mutexp);
 }
 
 static void bitforce_flash_led(struct cgpu_info *bitforce)
 {
-	int fdDev = bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 
 	if (!fdDev)
 		return;
@@ -247,10 +349,11 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 	/* It is not critical flashing the led so don't get stuck if we
 	 * can't grab the mutex here */
-	if (mutex_trylock(&bitforce->device_mutex))
+	if (mutex_trylock(mutexp))
 		return;
 
-	BFwrite(fdDev, "ZMX", 3);
+	char pdevbuf[0x100];
+	bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZMX");
 
 	/* Once we've tried - don't do it until told to again */
 	bitforce->flash_led = false;
@@ -259,14 +362,15 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 	 * So best to delay any other access to the BFL */
 	sleep(4);
 
-	mutex_unlock(&bitforce->device_mutex);
+	mutex_unlock(mutexp);
 
 	return; // nothing is returned by the BFL
 }
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
-	int fdDev = bitforce->device_fd;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
 	char *s;
 
@@ -286,16 +390,14 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 
 	/* It is not critical getting temperature so don't get stuck if we
 	 * can't grab the mutex here */
-	if (mutex_trylock(&bitforce->device_mutex))
+	if (mutex_trylock(mutexp))
 		return false;
 
-	BFwrite(fdDev, "ZLX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	mutex_unlock(&bitforce->device_mutex);
+	bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZLX");
+	mutex_unlock(mutexp);
 	
 	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Get temp returned empty string/timed out", bitforce->device_id);
+		applog(LOG_ERR, "%"PRIpreprv": Error: Get temp returned empty string/timed out", bitforce->proc_repr);
 		bitforce->hw_errors++;
 		++hw_errors;
 		return false;
@@ -316,7 +418,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
-		applog(LOG_WARNING, "BFL%i: Garbled response probably throttling, clearing buffer", bitforce->device_id);
+		applog(LOG_WARNING, "%"PRIpreprv": Garbled response probably throttling, clearing buffer", bitforce->proc_repr);
 		dev_error(bitforce, REASON_DEV_THROTTLE);
 		/* Count throttling episodes as hardware errors */
 		bitforce->hw_errors++;
@@ -328,139 +430,330 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	return true;
 }
 
-static bool bitforce_send_work(struct thr_info *thr, struct work *work)
+static inline
+void dbg_block_data(struct cgpu_info *bitforce)
+{
+	if (!opt_debug)
+		return;
+	
+	struct bitforce_data *data = bitforce->cgpu_data;
+	char *s;
+	s = bin2hex(&data->next_work_ob[8], 44);
+	applog(LOG_DEBUG, "%"PRIpreprv": block data: %s", bitforce->proc_repr, s);
+	free(s);
+}
+
+static void bitforce_change_mode(struct cgpu_info *, enum bitforce_proto);
+
+static
+bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	int fdDev = bitforce->device_fd;
-	unsigned char ob[70];
-	char pdevbuf[0x100];
-	char *s;
-
-	if (!fdDev)
-		return false;
-re_send:
-	mutex_lock(&bitforce->device_mutex);
-	if (bitforce->nonce_range)
-		BFwrite(fdDev, "ZPX", 3);
-	else
-		BFwrite(fdDev, "ZDX", 3);
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
-		mutex_unlock(&bitforce->device_mutex);
-		if (!restart_wait(WORK_CHECK_INTERVAL_MS))
-			return false;
-		goto re_send;
-	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
-		mutex_unlock(&bitforce->device_mutex);
-		if (bitforce->nonce_range) {
-			applog(LOG_WARNING, "BFL%i: Does not support nonce range, disabling", bitforce->device_id);
-			bitforce->nonce_range = false;
-			bitforce->sleep_ms *= 5;
-			bitforce->kname = KNAME_WORK;
-			goto re_send;
-		}
-		applog(LOG_ERR, "BFL%i: Error: Send work reports: %s", bitforce->device_id, pdevbuf);
-		return false;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	int fdDev = bitforce->device->device_fd;
+	unsigned char *ob_ms = &data->next_work_ob[8];
+	unsigned char *ob_dt = &ob_ms[32];
+	
+	// If polling job_start, cancel it
+	if (data->poll_func == 1)
+	{
+		thr->tv_poll.tv_sec = -1;
+		data->poll_func = 0;
 	}
+	
+	memcpy(ob_ms, work->midstate, 32);
+	memcpy(ob_dt, work->data + 64, 12);
+	switch (data->proto)
+	{
+		case BFP_RANGE:
+		{
+			uint32_t *ob_nonce = (uint32_t*)&(ob_dt[32]);
+			ob_nonce[0] = htobe32(work->blk.nonce);
+			ob_nonce[1] = htobe32(work->blk.nonce + bitforce->nonces);
+			// FIXME: if nonce range fails... we didn't increment enough
+			work->blk.nonce += bitforce->nonces + 1;
+			break;
+		}
+		case BFP_QUEUE:
+			if (thr->work)
+			{
+				pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+				char pdevbuf[0x100];
+				
+				if (unlikely(!fdDev))
+					return false;
+				
+				mutex_lock(mutexp);
+				if (data->queued)
+					bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZQX");
+				bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, data->next_work_obs, data->next_work_obsz);
+				mutex_unlock(mutexp);
+				if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
+					applog(LOG_WARNING, "%"PRIpreprv": Does not support work queue, disabling", bitforce->proc_repr);
+					bitforce_change_mode(bitforce, BFP_WORK);
+				}
+				else
+				{
+					dbg_block_data(bitforce);
+					data->queued = true;
+				}
+			}
+			// fallthru...
+		case BFP_WORK:
+			work->blk.nonce = 0xffffffff;
+	}
+	
+	return true;
+}
 
-	sprintf((char *)ob, ">>>>>>>>");
-	memcpy(ob + 8, work->midstate, 32);
-	memcpy(ob + 8 + 32, work->data + 64, 12);
-	if (!bitforce->nonce_range) {
-		sprintf((char *)ob + 8 + 32 + 12, ">>>>>>>>");
-		work->blk.nonce = bitforce->nonces = 0xffffffff;
-		BFwrite(fdDev, ob, 60);
-	} else {
-		uint32_t *nonce;
-
-		nonce = (uint32_t *)(ob + 8 + 32 + 12);
-		*nonce = htobe32(work->blk.nonce);
-		nonce = (uint32_t *)(ob + 8 + 32 + 12 + 4);
+static
+void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
+{
+	struct bitforce_data *data = bitforce->cgpu_data;
+	
+	if (data->proto == proto)
+		return;
+	if (data->proto == BFP_RANGE)
+	{
+		bitforce->nonces = 0xffffffff;
+		bitforce->sleep_ms *= 5;
+		switch (proto)
+		{
+			case BFP_WORK:
+				data->next_work_cmd = "ZDX";
+				break;
+			case BFP_QUEUE:
+				data->next_work_cmd = "ZNX";
+			default:
+				;
+		}
+		if (data->sc)
+		{
+			// "S|---------- MidState ----------||-DataTail-|E"
+			data->next_work_ob[7] = 45;
+			data->next_work_ob[8+32+12] = '\xAA';
+			data->next_work_obsz = 46;
+		}
+		else
+		{
+			// ">>>>>>>>|---------- MidState ----------||-DataTail-|>>>>>>>>"
+			memset(&data->next_work_ob[8+32+12], '>', 8);
+			data->next_work_obsz = 60;
+		}
+	}
+	else
+	if (proto == BFP_RANGE)
+	{
 		/* Split work up into 1/5th nonce ranges */
 		bitforce->nonces = 0x33333332;
-		*nonce = htobe32(work->blk.nonce + bitforce->nonces);
-		work->blk.nonce += bitforce->nonces + 1;
-		sprintf((char *)ob + 8 + 32 + 12 + 8, ">>>>>>>>");
-		BFwrite(fdDev, ob, 68);
+		bitforce->sleep_ms /= 5;
+		data->next_work_cmd = "ZPX";
+		if (data->sc)
+		{
+			data->next_work_ob[7] = 53;
+			data->next_work_obsz = 54;
+		}
+		else
+			data->next_work_obsz = 68;
+	}
+	data->proto = proto;
+	bitforce->kname = protonames[proto];
+}
+
+static
+void bitforce_job_start(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
+	unsigned char *ob = data->next_work_obs;
+	char pdevbuf[0x100];
+	struct timeval tv_now;
+
+	if (data->queued)
+	{
+		// get_results collected more accurate job start time
+		mt_job_transition(thr);
+		job_start_complete(thr);
+		data->queued = false;
+		timer_set_delay(&thr->tv_morework, &bitforce->work_start_tv, bitforce->sleep_ms * 1000);
+		return;
 	}
 
-	pdevbuf[0] = '\0';
-	BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-	mutex_unlock(&bitforce->device_mutex);
-
-	if (opt_debug) {
-		s = bin2hex(ob + 8, 44);
-		applog(LOG_DEBUG, "BFL%i: block data: %s", bitforce->device_id, s);
-		free(s);
+	if (!fdDev)
+		goto commerr;
+re_send:
+	mutex_lock(mutexp);
+	bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, ob, data->next_work_obsz);
+	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
+		mutex_unlock(mutexp);
+		gettimeofday(&tv_now, NULL);
+		timer_set_delay(&thr->tv_poll, &tv_now, WORK_CHECK_INTERVAL_MS * 1000);
+		data->poll_func = 1;
+		return;
+	} else if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
+		mutex_unlock(mutexp);
+		switch (data->proto)
+		{
+			case BFP_RANGE:
+				applog(LOG_WARNING, "%"PRIpreprv": Does not support nonce range, disabling", bitforce->proc_repr);
+				bitforce_change_mode(bitforce, BFP_WORK);
+				goto re_send;
+			case BFP_QUEUE:
+				applog(LOG_WARNING, "%"PRIpreprv": Does not support work queue, disabling", bitforce->proc_repr);
+				bitforce_change_mode(bitforce, BFP_WORK);
+				goto re_send;
+			default:
+				;
+		}
+		applog(LOG_ERR, "%"PRIpreprv": Error: Send work reports: %s", bitforce->proc_repr, pdevbuf);
+		goto commerr;
 	}
 
-	if (unlikely(!pdevbuf[0])) {
-		applog(LOG_ERR, "BFL%i: Error: Send block data returned empty string/timed out", bitforce->device_id);
-		return false;
-	}
+	mt_job_transition(thr);
+	mutex_unlock(mutexp);
 
-	if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
-		applog(LOG_ERR, "BFL%i: Error: Send block data reports: %s", bitforce->device_id, pdevbuf);
-		return false;
-	}
+	dbg_block_data(bitforce);
 
-	gettimeofday(&bitforce->work_start_tv, NULL);
-	return true;
+	gettimeofday(&tv_now, NULL);
+	bitforce->work_start_tv = tv_now;
+	
+	timer_set_delay(&thr->tv_morework, &tv_now, bitforce->sleep_ms * 1000);
+	
+	job_start_complete(thr);
+	return;
+
+commerr:
+	bitforce_comm_error(thr);
+	job_start_abort(thr, true);
 }
 
 static inline int noisy_stale_wait(unsigned int mstime, struct work*work, bool checkend, struct cgpu_info*bitforce)
 {
 	int rv = stale_wait(mstime, work, checkend);
 	if (rv)
-		applog(LOG_NOTICE, "BFL%i: Abandoning stale search to restart",
-		       bitforce->device_id);
+		applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
+		       bitforce->proc_repr);
 	return rv;
 }
 #define noisy_stale_wait(mstime, work, checkend)  noisy_stale_wait(mstime, work, checkend, bitforce)
 
-static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
+static char _discardedbuf[0x10];
+
+static
+void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	int fdDev = bitforce->device_fd;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev = bitforce->device->device_fd;
 	unsigned int delay_time_ms;
 	struct timeval elapsed;
 	struct timeval now;
-	char pdevbuf[0x100];
-	char *pnoncebuf;
-	uint32_t nonce;
+	char *pdevbuf = &data->noncebuf[0];
+	bool stale;
 
+	gettimeofday(&now, NULL);
+	timersub(&now, &bitforce->work_start_tv, &elapsed);
+	bitforce->wait_ms = tv_to_ms(elapsed);
+	bitforce->polling = true;
+	
 	if (!fdDev)
-		return -1;
+		goto commerr;
+
+	stale = stale_work(work, true);
+	
+	if (unlikely(bitforce->wait_ms < bitforce->sleep_ms))
+	{
+		// We're likely here because of a work restart
+		// Since Bitforce cannot stop a work without losing results, only do it if the current job is finding stale shares
+		// BFP_QUEUE does not support stopping work at all
+		if (data->proto == BFP_QUEUE || !stale)
+		{
+			delay_time_ms = bitforce->sleep_ms - bitforce->wait_ms;
+			timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
+			data->poll_func = 2;
+			return;
+		}
+	}
 
 	while (1) {
-		mutex_lock(&bitforce->device_mutex);
-		BFwrite(fdDev, "ZFX", 3);
-		pdevbuf[0] = '\0';
-		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
-		mutex_unlock(&bitforce->device_mutex);
+		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
+		int count;
+		mutex_lock(mutexp);
+		bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(data->noncebuf), cmd);
+		if (!strncasecmp(pdevbuf, "COUNT:", 6))
+		{
+			count = atoi(&pdevbuf[6]);
+			size_t cls = strlen(pdevbuf);
+			char *pmorebuf = &pdevbuf[cls];
+			size_t szleft = sizeof(data->noncebuf) - cls, sz;
+			
+			if (count && data->queued)
+			{
+				gettimeofday(&now, NULL);
+				bitforce->work_start_tv = now;
+			}
+			
+			while (true)
+			{
+				BFgets(pmorebuf, szleft, fdDev);
+				if (!strncasecmp(pmorebuf, "OK", 2))
+					break;
+				sz = strlen(pmorebuf);
+				szleft -= sz;
+				pmorebuf += sz;
+				if (unlikely(!szleft))
+				{
+					// Out of buffer space somehow :(
+					applog(LOG_DEBUG, "%"PRIpreprv": Ran out of buffer space for results, discarding extra data", bitforce->proc_repr);
+					pmorebuf = _discardedbuf;
+					szleft = sizeof(_discardedbuf);
+				}
+			}
+		}
+		else
+			count = -1;
+		mutex_unlock(mutexp);
 
 		gettimeofday(&now, NULL);
+		if (!count)
+			goto noqr;
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
-			applog(LOG_ERR, "BFL%i: took %lums - longer than %lums", bitforce->device_id,
+			applog(LOG_ERR, "%"PRIpreprv": took %lums - longer than %lums", bitforce->proc_repr,
 				tv_to_ms(elapsed), (unsigned long)BITFORCE_LONG_TIMEOUT_MS);
-			return 0;
+			goto out;
+		}
+
+		if (count > 0)
+		{
+			applog(LOG_DEBUG, "%"PRIpreprv": waited %dms until %s", bitforce->proc_repr, bitforce->wait_ms, pdevbuf);
+			goto out;
 		}
 
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
+		if (stale && data->proto != BFP_QUEUE)
+		{
+			applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
+			       bitforce->proc_repr);
+			goto out;
+		}
+
+noqr:
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
-		if (noisy_stale_wait(delay_time_ms, work, true))
-			return 0;
-		bitforce->wait_ms += delay_time_ms;
+		timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
+		data->poll_func = 2;
+		return;
 	}
 
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
-		applog(LOG_ERR, "BFL%i: took %lums - longer than %lums", bitforce->device_id,
+		applog(LOG_ERR, "%"PRIpreprv": took %lums - longer than %lums", bitforce->proc_repr,
 			tv_to_ms(elapsed), (unsigned long)BITFORCE_TIMEOUT_MS);
 		dev_error(bitforce, REASON_DEV_OVER_HEAT);
 		++bitforce->hw_errors;
@@ -471,7 +764,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		 * throttling.
 		 */
 		if (strncasecmp(pdevbuf, "NONCE-FOUND", 11))
-			return 0;
+			goto out;
 	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		/* Simple timing adjustment. Allow a few polls to cope with
 		 * OS timer delays being variably reliable. wait_ms will
@@ -489,38 +782,45 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		}
 
 		if (delay_time_ms != bitforce->sleep_ms)
-			  applog(LOG_DEBUG, "BFL%i: Wait time changed to: %d, waited %u", bitforce->device_id, bitforce->sleep_ms, bitforce->wait_ms);
+			  applog(LOG_DEBUG, "%"PRIpreprv": Wait time changed to: %d, waited %u", bitforce->proc_repr, bitforce->sleep_ms, bitforce->wait_ms);
 
 		/* Work out the average time taken. Float for calculation, uint for display */
 		bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
 		bitforce->avg_wait_d = (unsigned int) (bitforce->avg_wait_f + 0.5);
 	}
 
-	applog(LOG_DEBUG, "BFL%i: waited %dms until %s", bitforce->device_id, bitforce->wait_ms, pdevbuf);
-	if (!strncasecmp(&pdevbuf[2], "-", 1))
-		return bitforce->nonces;   /* No valid nonce found */
-	else if (!strncasecmp(pdevbuf, "I", 1))
-		return 0;	/* Device idle */
-	else if (strncasecmp(pdevbuf, "NONCE-FOUND", 11)) {
+	applog(LOG_DEBUG, "%"PRIpreprv": waited %dms until %s", bitforce->proc_repr, bitforce->wait_ms, pdevbuf);
+	if (strncasecmp(pdevbuf, "NONCE-FOUND", 11) && (pdevbuf[2] != '-') && strncasecmp(pdevbuf, "I", 1)) {
 		bitforce->hw_errors++;
 		++hw_errors;
-		applog(LOG_WARNING, "BFL%i: Error: Get result reports: %s", bitforce->device_id, pdevbuf);
+		applog(LOG_WARNING, "%"PRIpreprv": Error: Get result reports: %s", bitforce->proc_repr, pdevbuf);
 		bitforce_clear_buffer(bitforce);
-		return 0;
 	}
+out:
+	bitforce->polling = false;
+	job_results_fetched(thr);
+	return;
 
-	pnoncebuf = &pdevbuf[12];
+commerr:
+	bitforce_comm_error(thr);
+	goto out;
+}
 
+static
+void bitforce_process_result_nonces(struct thr_info *thr, struct work *work, char *pnoncebuf)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	uint32_t nonce;
+	
 	while (1) {
 		hex2bin((void*)&nonce, pnoncebuf, 4);
 		nonce = be32toh(nonce);
-		if (unlikely(bitforce->nonce_range && (nonce >= work->blk.nonce ||
+		if (unlikely(data->proto == BFP_RANGE && (nonce >= work->blk.nonce ||
+			/* FIXME: blk.nonce is probably moved on quite a bit now! */
 			(work->blk.nonce > 0 && nonce < work->blk.nonce - bitforce->nonces - 1)))) {
-				applog(LOG_WARNING, "BFL%i: Disabling broken nonce range support", bitforce->device_id);
-				bitforce->nonce_range = false;
-				work->blk.nonce = 0xffffffff;
-				bitforce->sleep_ms *= 5;
-				bitforce->kname = KNAME_WORK;
+				applog(LOG_WARNING, "%"PRIpreprv": Disabling broken nonce range support", bitforce->proc_repr);
+				bitforce_change_mode(bitforce, BFP_WORK);
 		}
 			
 		submit_nonce(thr, work, nonce);
@@ -528,16 +828,94 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 			break;
 		pnoncebuf += 9;
 	}
+}
 
-	return bitforce->nonces;
+static
+bool bitforce_process_qresult_line_i(struct thr_info *thr, char *midstate, char *datatail, char *buf, struct work *work)
+{
+	if (!work)
+		return false;
+	if (memcmp(work->midstate, midstate, 32))
+		return false;
+	if (memcmp(&work->data[64], datatail, 12))
+		return false;
+	
+	if (!atoi(&buf[90]))
+		return true;
+	
+	bitforce_process_result_nonces(thr, work, &buf[92]);
+	
+	return true;
+}
+
+static
+void bitforce_process_qresult_line(struct thr_info *thr, char *buf, struct work *work)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	char midstate[32], datatail[12];
+	
+	hex2bin((void*)midstate, buf, 32);
+	hex2bin((void*)datatail, &buf[65], 12);
+	
+	if (!( bitforce_process_qresult_line_i(thr, midstate, datatail, buf, work)
+	    || bitforce_process_qresult_line_i(thr, midstate, datatail, buf, thr->work)
+	    || bitforce_process_qresult_line_i(thr, midstate, datatail, buf, thr->prev_work)
+	    || bitforce_process_qresult_line_i(thr, midstate, datatail, buf, thr->next_work) ))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Failed to find work for queued results", bitforce->proc_repr);
+		++bitforce->hw_errors;
+		++hw_errors;
+	}
+}
+
+static inline
+char *next_line(char *in)
+{
+	while (in[0] && in[0] != '\n')
+		++in;
+	return in;
+}
+
+static
+int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __maybe_unused bool stopping)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	char *pnoncebuf = &data->noncebuf[0];
+	int count;
+	
+	if (!strncasecmp(pnoncebuf, "NO-", 3))
+		return bitforce->nonces;   /* No valid nonce found */
+	
+	if (!strncasecmp(pnoncebuf, "NONCE-FOUND", 11))
+	{
+		bitforce_process_result_nonces(thr, work, &pnoncebuf[12]);
+		count = 1;
+	}
+	else
+	if (!strncasecmp(pnoncebuf, "COUNT:", 6))
+	{
+		count = 0;
+		pnoncebuf = next_line(pnoncebuf);
+		while (pnoncebuf[0])
+		{
+			bitforce_process_qresult_line(thr, pnoncebuf, work);
+			++count;
+			pnoncebuf = next_line(pnoncebuf);
+		}
+	}
+
+	// FIXME: This might have changed in the meantime (new job start, or broken)
+	return bitforce->nonces * count;
 }
 
 static void bitforce_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
+	int *p_fdDev = &bitforce->device->device_fd;
 
-	BFclose(bitforce->device_fd);
-	bitforce->device_fd = 0;
+	BFclose(*p_fdDev);
+	*p_fdDev = 0;
 }
 
 static void biforce_thread_enable(struct thr_info *thr)
@@ -545,48 +923,6 @@ static void biforce_thread_enable(struct thr_info *thr)
 	struct cgpu_info *bitforce = thr->cgpu;
 
 	bitforce_init(bitforce);
-}
-
-static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
-{
-	struct cgpu_info *bitforce = thr->cgpu;
-	int64_t ret;
-
-	if (!bitforce_send_work(thr, work)) {
-		if (thr->work_restart)
-			return 0;
-		sleep(opt_fail_pause);
-		goto commerr;
-	}
-
-	if (noisy_stale_wait(bitforce->sleep_ms, work, true))
-		return 0;
-
-	bitforce->wait_ms = bitforce->sleep_ms;
-
-	{
-		bitforce->polling = true;
-		ret = bitforce_get_result(thr, work);
-		bitforce->polling = false;
-	}
-
-	if (ret == -1) {
-commerr:
-		ret = 0;
-		applog(LOG_ERR, "BFL%i: Comms error", bitforce->device_id);
-		dev_error(bitforce, REASON_DEV_COMMS_ERROR);
-		bitforce->hw_errors++;
-		++hw_errors;
-		BFclose(bitforce->device_fd);
-		int fd = bitforce->device_fd = BFopen(bitforce->device_path);
-		if (fd == -1) {
-			applog(LOG_ERR, "BFL%i: Error reopening", bitforce->device_id);
-			return -1;
-		}
-		/* empty read buffer */
-		bitforce_clear_buffer(bitforce);
-	}
-	return ret;
 }
 
 static bool bitforce_get_stats(struct cgpu_info *bitforce)
@@ -604,11 +940,39 @@ static bool bitforce_thread_init(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int wait;
+	struct bitforce_data *data;
+	bool sc = (bool)bitforce->cgpu_data;
+	
+	for ( ; bitforce; bitforce = bitforce->next_proc)
+	{
+		bitforce->cgpu_data = data = malloc(sizeof(*data));
+		*data = (struct bitforce_data){
+			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-||Nonces|>>>>>>>>",
+			.proto = BFP_RANGE,
+			.sc = sc,
+		};
+		if (sc)
+		{
+			// ".......S|---------- MidState ----------||-DataTail-||Nonces|E"
+			data->next_work_ob[8+32+12+8] = '\xAA';
+			data->next_work_obs = &data->next_work_ob[7];
+		}
+		else
+			data->next_work_obs = &data->next_work_ob[0];
+		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
+		bitforce_change_mode(bitforce, BFP_WORK);
+		/* Initially enable support for nonce range and disable it later if it
+		 * fails */
+		if (opt_bfl_noncerange)
+			bitforce_change_mode(bitforce, BFP_RANGE);
+	}
+	
+	bitforce = thr->cgpu;
 
 	/* Pause each new thread at least 100ms between initialising
 	 * so the devices aren't making calls all at the same time. */
 	wait = thr->id * MAX_START_DELAY_MS;
-	applog(LOG_DEBUG, "BFL%i: Delaying start by %dms", bitforce->device_id, wait / 1000);
+	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
 	nmsleep(wait);
 
 	return true;
@@ -628,18 +992,43 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+void bitforce_poll(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	int poll = data->poll_func;
+	thr->tv_poll.tv_sec = -1;
+	data->poll_func = 0;
+	switch (poll)
+	{
+		case 1:
+			bitforce_job_start(thr);
+			break;
+		case 2:
+			bitforce_job_get_results(thr, thr->work);
+			break;
+		default:
+			applog(LOG_ERR, "%"PRIpreprv": Unexpected poll from device API!", thr->cgpu->proc_repr);
+	}
+}
+
 struct device_api bitforce_api = {
 	.dname = "bitforce",
 	.name = "BFL",
 	.api_detect = bitforce_detect,
 	.get_api_stats = bitforce_api_stats,
+	.minerloop = minerloop_async,
 	.reinit_device = bitforce_init,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.identify_device = bitforce_identify,
 	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
-	.scanhash = bitforce_scanhash,
+	.job_prepare = bitforce_job_prepare,
+	.job_start = bitforce_job_start,
+	.job_get_results = bitforce_job_get_results,
+	.poll = bitforce_poll,
+	.job_process_results = bitforce_job_process_results,
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
 };

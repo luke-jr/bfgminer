@@ -171,6 +171,7 @@ Options for both config file and command line:
 --scrypt            Use the scrypt algorithm for mining (non-bitcoin)
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
+--show-processors   Show per processor statistics in summary
 --skip-security-checks <arg> Skip security checks sometimes to save bandwidth; only check 1/<arg>th of the time (default: never skip)
 --socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
 --submit-threads    Minimum number of concurrent share submissions (default: 64)
@@ -401,12 +402,12 @@ Or press any other key to continue
 
 The running log shows output like this:
 
- [2012-10-12 18:02:20] Accepted f0c05469 Diff 1/1 GPU 0 pool 1
- [2012-10-12 18:02:22] Accepted 218ac982 Diff 7/1 GPU 1 pool 1
- [2012-10-12 18:02:23] Accepted d8300795 Diff 1/1 GPU 3 pool 1
- [2012-10-12 18:02:24] Accepted 122c1ff1 Diff 14/1 GPU 1 pool 1
+ [2013-02-13 00:26:30] Accepted 1758e8df BFL 0  pool 0 Diff 10/1
+ [2013-02-13 00:26:32] Accepted 1d9a2199 MMQ 0a pool 0 Diff 8/1
+ [2013-02-13 00:26:33] Accepted b1304924 ZTX 0  pool 0 Diff 1/1
+ [2013-02-13 00:26:33] Accepted c3ad22f4 XBS 0b pool 0 Diff 1/1
 
-The 8 byte hex value are the 2nd 8 bytes of the share being submitted to the
+The 8 byte hex value are the 2nd set of 32 bits from the share submitted to the
 pool. The 2 diff values are the actual difficulty target that share reached
 followed by the difficulty target the pool is currently asking for.
 

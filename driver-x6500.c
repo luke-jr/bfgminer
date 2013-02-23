@@ -19,6 +19,7 @@
 #include <libusb.h>
 
 #include "compat.h"
+#include "deviceapi.h"
 #include "dynclock.h"
 #include "jtag.h"
 #include "logging.h"
@@ -129,7 +130,8 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	mutex_init(&x6500->device_mutex);
 	x6500->device_path = strdup(serial);
 	x6500->deven = DEV_ENABLED;
-	x6500->threads = 2;
+	x6500->threads = 1;
+	x6500->procs = 2;
 	x6500->name = strdup(product);
 	x6500->cutofftemp = 85;
 	x6500->cgpu_data = dev;
@@ -154,11 +156,11 @@ static void x6500_detect()
 
 static bool x6500_prepare(struct thr_info *thr)
 {
-	if (thr->device_thread)
+	struct cgpu_info *x6500 = thr->cgpu;
+	
+	if (x6500->proc_id)
 		return true;
 	
-	struct cgpu_info *x6500 = thr->cgpu;
-	mutex_init(&x6500->device_mutex);
 	struct ft232r_device_handle *ftdi = ft232r_open(x6500->cgpu_data);
 	x6500->device_ft232r = NULL;
 	if (!ftdi)
@@ -176,13 +178,19 @@ static bool x6500_prepare(struct thr_info *thr)
 	jtag_a->ftdi = ftdi;
 	x6500->cgpu_data = jtag_a;
 	
+	for (struct cgpu_info *slave = x6500->next_proc; slave; slave = slave->next_proc)
+	{
+		slave->device_ft232r = x6500->device_ft232r;
+		slave->cgpu_data = x6500->cgpu_data;
+	}
+	
 	return true;
 }
 
 struct x6500_fpga_data {
 	struct jtag_port jtag;
-	struct work prevwork;
-	struct timeval tv_workstart;
+	struct timeval tv_hashstart;
+	int64_t hashes_left;
 
 	struct dclk_data dclk;
 	uint8_t freqMaxMaxM;
@@ -191,6 +199,8 @@ struct x6500_fpga_data {
 	time_t last_cutoff_reduced;
 
 	float temp;
+	
+	uint32_t prepwork_last_register;
 };
 
 #define bailout2(...) do {  \
@@ -206,14 +216,14 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	unsigned char *pdone = (unsigned char*)x6500->cgpu_data - 1;
 	struct ft232r_device_handle *ftdi = jp1->a->ftdi;
 
-	FILE *f = open_xilinx_bitstream(x6500, X6500_BITSTREAM_FILENAME, &len);
+	FILE *f = open_xilinx_bitstream(x6500->api->dname, x6500->dev_repr, X6500_BITSTREAM_FILENAME, &len);
 	if (!f)
 		return false;
 
 	flen = len;
 
-	applog(LOG_WARNING, "%s %u: Programming %s...",
-	       x6500->api->name, x6500->device_id, x6500->device_path);
+	applog(LOG_WARNING, "%s: Programming %s...",
+	       x6500->dev_repr, x6500->device_path);
 	x6500->status = LIFE_INIT;
 	
 	// "Magic" jtag_port configured to access both FPGAs concurrently
@@ -235,8 +245,8 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 			i = 0xd0;  // Re-set JPROGRAM while reading status
 			jtag_read(jp, JTAG_REG_IR, &i, 6);
 		} while (i & 8);
-		applog(LOG_DEBUG, "%s %u.%u: JPROGRAM ready",
-		       x6500->api->name, x6500->device_id, j);
+		applog(LOG_DEBUG, "%s%c: JPROGRAM ready",
+		       x6500->dev_repr, 'a' + j);
 	}
 	x6500_jtag_set(jp, 0x11);
 	jtag_write(jp, JTAG_REG_IR, "\xa0", 6);  // CFG_IN
@@ -244,7 +254,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	sleep(1);
 	
 	if (fread(buf, 32, 1, f) != 1)
-		bailout2(LOG_ERR, "%s %u: File underrun programming %s (%lu bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+		bailout2(LOG_ERR, "%s: File underrun programming %s (%lu bytes left)", x6500->dev_repr, x6500->device_path, len);
 	jtag_swrite(jp, JTAG_REG_DR, buf, 256);
 	len -= 32;
 	
@@ -262,13 +272,13 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	while (len) {
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
-			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%lu bytes left)", x6500->api->name, x6500->device_id, x6500->device_path, len);
+			bailout2(LOG_ERR, "%s: File underrun programming %s (%lu bytes left)", x6500->dev_repr, x6500->device_path, len);
 		jtag_swrite_more(jp, buf, buflen * 8, len == (unsigned long)buflen);
 		*pdone = 100 - ((len * 100) / flen);
 		if (*pdone >= nextstatus)
 		{
 			nextstatus += 25;
-			applog(LOG_WARNING, "%s %u: Programming %s... %d%% complete...", x6500->api->name, x6500->device_id, x6500->device_path, *pdone);
+			applog(LOG_WARNING, "%s: Programming %s... %d%% complete...", x6500->dev_repr, x6500->device_path, *pdone);
 		}
 		len -= buflen;
 	}
@@ -290,7 +300,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	if (!(i & 4))
 		return false;
 	
-	applog(LOG_WARNING, "%s %u: Done programming %s", x6500->api->name, x6500->device_id, x6500->device_path);
+	applog(LOG_WARNING, "%s: Done programming %s", x6500->dev_repr, x6500->device_path);
 	*pdone = 101;
 
 	return true;
@@ -311,30 +321,29 @@ static bool x6500_change_clock(struct thr_info *thr, int multiplier)
 static bool x6500_dclk_change_clock(struct thr_info *thr, int multiplier)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
-	char fpgaid = thr->device_thread;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	uint8_t oldFreq = fpga->dclk.freqM;
 
-	mutex_lock(&x6500->device_mutex);
 	if (!x6500_change_clock(thr, multiplier)) {
-		mutex_unlock(&x6500->device_mutex);
 		return false;
 	}
-	mutex_unlock(&x6500->device_mutex);
 
-	char repr[0x10];
-	sprintf(repr, "%s %u.%u", x6500->api->name, x6500->device_id, fpgaid);
-	dclk_msg_freqchange(repr, oldFreq * 2, fpga->dclk.freqM * 2, NULL);
+	dclk_msg_freqchange(x6500->proc_repr, oldFreq * 2, fpga->dclk.freqM * 2, NULL);
 	return true;
 }
 
-static bool x6500_fpga_init(struct thr_info *thr)
+static bool x6500_thread_init(struct thr_info *thr)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
 	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
+
+	for ( ; x6500; x6500 = x6500->next_proc)
+	{
+		thr = x6500->thr[0];
+
 	struct x6500_fpga_data *fpga;
 	struct jtag_port *jp;
-	int fpgaid = thr->device_thread;
+	int fpgaid = x6500->proc_id;
 	uint8_t pinoffset = fpgaid ? 0x10 : 1;
 	unsigned char buf[4] = {0};
 	int i;
@@ -348,19 +357,16 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	x6500_jtag_set(jp, pinoffset);
 	thr->cgpu_data = fpga;
 	
-	mutex_lock(&x6500->device_mutex);
 	if (!jtag_reset(jp)) {
-		mutex_unlock(&x6500->device_mutex);
-		applog(LOG_ERR, "%s %u: JTAG reset failed",
-		       x6500->api->name, x6500->device_id);
+		applog(LOG_ERR, "%s: JTAG reset failed",
+		       x6500->dev_repr);
 		return false;
 	}
 	
 	i = jtag_detect(jp);
 	if (i != 1) {
-		mutex_unlock(&x6500->device_mutex);
-		applog(LOG_ERR, "%s %u: JTAG detect returned %d",
-		       x6500->api->name, x6500->device_id, i);
+		applog(LOG_ERR, "%s: JTAG detect returned %d",
+		       x6500->dev_repr, i);
 		return false;
 	}
 	
@@ -369,45 +375,45 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	 && jtag_read (jp, JTAG_REG_DR, buf, 32)
 	 && jtag_reset(jp)
 	)) {
-		mutex_unlock(&x6500->device_mutex);
-		applog(LOG_ERR, "%s %u: JTAG error reading user code",
-		       x6500->api->name, x6500->device_id);
+		applog(LOG_ERR, "%s: JTAG error reading user code",
+		       x6500->dev_repr);
 		return false;
 	}
 	
 	if (memcmp(buf, X6500_BITSTREAM_USERID, 4)) {
-		applog(LOG_ERR, "%s %u.%u: FPGA not programmed",
-		       x6500->api->name, x6500->device_id, fpgaid);
+		applog(LOG_ERR, "%"PRIprepr": FPGA not programmed",
+		       x6500->proc_repr);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
 	} else if (opt_force_dev_init && x6500->status == LIFE_INIT) {
-		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed, but --force-dev-init is set",
-		       x6500->api->name, x6500->device_id, fpgaid);
+		applog(LOG_DEBUG, "%"PRIprepr": FPGA is already programmed, but --force-dev-init is set",
+		       x6500->proc_repr);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
 	} else
-		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed :)",
-		       x6500->api->name, x6500->device_id, fpgaid);
+		applog(LOG_DEBUG, "%s"PRIprepr": FPGA is already programmed :)",
+		       x6500->proc_repr);
 	
 	dclk_prepare(&fpga->dclk);
 	x6500_change_clock(thr, X6500_DEFAULT_CLOCK / 2);
 	for (i = 0; 0xffffffff != x6500_get_register(jp, 0xE); ++i)
 	{}
-	mutex_unlock(&x6500->device_mutex);
 
 	if (i)
-		applog(LOG_WARNING, "%s %u.%u: Flushed %d nonces from buffer at init",
-		       x6500->api->name, x6500->device_id, fpgaid, i);
+		applog(LOG_WARNING, "%"PRIprepr": Flushed %d nonces from buffer at init",
+		       x6500->proc_repr, i);
 
 	fpga->dclk.minGoodSamples = 3;
 	fpga->freqMaxMaxM =
 	fpga->dclk.freqMaxM = X6500_MAXIMUM_CLOCK / 2;
 	fpga->dclk.freqMDefault = fpga->dclk.freqM;
-	applog(LOG_WARNING, "%s %u.%u: Frequency set to %u MHz (range: %u-%u)",
-	       x6500->api->name, x6500->device_id, fpgaid,
+	applog(LOG_WARNING, "%"PRIprepr": Frequency set to %u MHz (range: %u-%u)",
+	       x6500->proc_repr,
 	       fpga->dclk.freqM * 2,
 	       X6500_MINIMUM_CLOCK,
 	       fpga->dclk.freqMaxM * 2);
+
+	}
 
 	return true;
 }
@@ -415,7 +421,6 @@ static bool x6500_fpga_init(struct thr_info *thr)
 static 
 void x6500_get_temperature(struct cgpu_info *x6500)
 {
-
 	struct x6500_fpga_data *fpga = x6500->thr[0]->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
 	struct ft232r_device_handle *ftdi = jp->a->ftdi;
@@ -465,8 +470,9 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 	ft232r_purge_buffers(jp->a->ftdi, FTDI_PURGE_BOTH);
 	jp->a->bufread = 0;
 
-	for (i = 0; i < 2; ++i) {
-		struct thr_info *thr = x6500->thr[i];
+	x6500 = x6500->device;
+	for (i = 0; i < 2; ++i, x6500 = x6500->next_proc) {
+		struct thr_info *thr = x6500->thr[0];
 		fpga = thr->cgpu_data;
 
 		if (!fpga) continue;
@@ -487,8 +493,8 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 				fpga->last_cutoff_reduced = now;
 				int oldFreq = fpga->dclk.freqM;
 				if (x6500_change_clock(thr, oldFreq - 1))
-					applog(LOG_NOTICE, "%s %u.%u: Frequency dropped from %u to %u MHz (temp: %.1fC)",
-					       x6500->api->name, x6500->device_id, i,
+					applog(LOG_NOTICE, "%"PRIprepr": Frequency dropped from %u to %u MHz (temp: %.1fC)",
+					       x6500->proc_repr,
 					       oldFreq * 2, fpga->dclk.freqM * 2,
 					       fpga->temp
 					);
@@ -507,13 +513,25 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 
 }
 
+static
+bool x6500_all_idle(struct cgpu_info *any_proc)
+{
+	for (struct cgpu_info *proc = any_proc->device; proc; proc = proc->next_proc)
+		if (proc->thr[0]->tv_poll.tv_sec != -1)
+			return false;
+	return true;
+}
+
 static bool x6500_get_stats(struct cgpu_info *x6500)
 {
 	float hottest = 0;
-	if (x6500->deven != DEV_ENABLED) {
-		// Getting temperature more efficiently while enabled
-		// NOTE: Don't need to mess with mutex here, since the device is disabled
-		x6500_get_temperature(x6500);
+	if (x6500_all_idle(x6500)) {
+		// Getting temperature more efficiently while running
+		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
+		mutex_lock(mutexp);
+		if (x6500_all_idle(x6500))
+			x6500_get_temperature(x6500);
+		mutex_unlock(mutexp);
 	}
 
 	for (int i = x6500->threads; i--; ) {
@@ -531,20 +549,49 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 	return true;
 }
 
-static void
-get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
+static
+bool get_x6500_upload_percent(char *buf, struct cgpu_info *x6500)
 {
 	char info[18] = "               | ";
-	struct x6500_fpga_data *fpga0 = x6500->thr[0]->cgpu_data;
-	struct x6500_fpga_data *fpga1 = x6500->thr[1]->cgpu_data;
 
 	unsigned char pdone = *((unsigned char*)x6500->cgpu_data - 1);
 	if (pdone != 101) {
 		sprintf(&info[1], "%3d%%", pdone);
 		info[5] = ' ';
 		strcat(buf, info);
+		return true;
+	}
+	return false;
+}
+
+static
+void get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
+{
+	if (get_x6500_upload_percent(buf, x6500))
+		return;
+
+	char info[18] = "               | ";
+	struct x6500_fpga_data *fpga = x6500->thr[0]->cgpu_data;
+
+	if (fpga->temp) {
+		sprintf(&info[1], "%.1fC", fpga->temp);
+		info[strlen(info)] = ' ';
+		strcat(buf, info);
 		return;
 	}
+	strcat(buf, "               | ");
+}
+
+static
+void get_x6500_dev_statline_before(char *buf, struct cgpu_info *x6500)
+{
+	if (get_x6500_upload_percent(buf, x6500))
+		return;
+
+	char info[18] = "               | ";
+	struct x6500_fpga_data *fpga0 = x6500->thr[0]->cgpu_data;
+	struct x6500_fpga_data *fpga1 = x6500->next_proc->thr[0]->cgpu_data;
+
 	if (x6500->temp) {
 		sprintf(&info[1], "%.1fC/%.1fC", fpga0->temp, fpga1->temp);
 		info[strlen(info)] = ' ';
@@ -558,69 +605,119 @@ static struct api_data*
 get_x6500_api_extra_device_status(struct cgpu_info *x6500)
 {
 	struct api_data *root = NULL;
-	static char *k[2] = {"FPGA0", "FPGA1"};
-	int i;
+	struct thr_info *thr = x6500->thr[0];
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	double d;
 
-	for (i = 0; i < 2; ++i) {
-		struct thr_info *thr = x6500->thr[i];
-		struct x6500_fpga_data *fpga = thr->cgpu_data;
-		json_t *o = json_object();
-
-		if (fpga->temp)
-			json_object_set_new(o, "Temperature", json_real(fpga->temp));
-		json_object_set_new(o, "Frequency", json_real((double)fpga->dclk.freqM * 2 * 1000000.));
-		json_object_set_new(o, "Cool Max Frequency", json_real((double)fpga->dclk.freqMaxM * 2 * 1000000.));
-		json_object_set_new(o, "Max Frequency", json_real((double)fpga->freqMaxMaxM * 2 * 1000000.));
-
-		root = api_add_json(root, k[i], o, false);
-		json_decref(o);
-	}
+	if (fpga->temp)
+		root = api_add_temp(root, "Temperature", &fpga->temp, true);
+	d = (double)fpga->dclk.freqM * 2;
+	root = api_add_freq(root, "Frequency", &d, true);
+	d = (double)fpga->dclk.freqMaxM * 2;
+	root = api_add_freq(root, "Cool Max Frequency", &d, true);
+	d = (double)fpga->freqMaxMaxM * 2;
+	root = api_add_freq(root, "Max Frequency", &d, true);
 
 	return root;
 }
 
 static
-bool x6500_start_work(struct thr_info *thr, struct work *work)
+bool x6500_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
 {
 	struct cgpu_info *x6500 = thr->cgpu;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
-	char fpgaid = thr->device_thread;
 
-	mutex_lock(&x6500->device_mutex);
-
+	if (x6500_all_idle(x6500))
+	{
+		// Neither FPGA is running, so make sure we're not doing a temperature check
+		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
+		mutex_lock(mutexp);
+	}
+	
 	for (int i = 1, j = 0; i < 9; ++i, j += 4)
 		x6500_set_register(jp, i, fromlebytes(work->midstate, j));
 
-	for (int i = 9, j = 64; i < 12; ++i, j += 4)
+	for (int i = 9, j = 64; i < 11; ++i, j += 4)
 		x6500_set_register(jp, i, fromlebytes(work->data, j));
 
-	ft232r_flush(jp->a->ftdi);
-
-	gettimeofday(&fpga->tv_workstart, NULL);
 	x6500_get_temperature(x6500);
-	mutex_unlock(&x6500->device_mutex);
-
-	if (opt_debug) {
-		char *xdata = bin2hex(work->data, 80);
-		applog(LOG_DEBUG, "%s %u.%u: Started work: %s",
-		       x6500->api->name, x6500->device_id, fpgaid, xdata);
-		free(xdata);
-	}
-
+	
+	ft232r_flush(jp->a->ftdi);
+	
+	fpga->prepwork_last_register = fromlebytes(work->data, 72);
+	
+	work->blk.nonce = 0xffffffff;
+	
 	return true;
 }
 
-static
-int64_t calc_hashes(struct x6500_fpga_data *fpga, struct timeval *tv_now)
-{
-	struct timeval tv_delta;
-	int64_t hashes;
+static int64_t calc_hashes(struct thr_info *, struct timeval *);
 
-	timersub(tv_now, &fpga->tv_workstart, &tv_delta);
+static
+void x6500_job_start(struct thr_info *thr)
+{
+	struct cgpu_info *x6500 = thr->cgpu;
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	struct jtag_port *jp = &fpga->jtag;
+	struct timeval tv_now;
+
+	if (thr->prev_work)
+	{
+		dclk_preUpdate(&fpga->dclk);
+		dclk_updateFreq(&fpga->dclk, x6500_dclk_change_clock, thr);
+	}
+
+	x6500_set_register(jp, 11, fpga->prepwork_last_register);
+
+	ft232r_flush(jp->a->ftdi);
+
+	gettimeofday(&tv_now, NULL);
+	if (!thr->prev_work)
+		fpga->tv_hashstart = tv_now;
+	else
+	if (thr->prev_work != thr->work)
+		calc_hashes(thr, &tv_now);
+	fpga->hashes_left = 0x100000000;
+	mt_job_transition(thr);
+
+	if (x6500_all_idle(x6500))
+	{
+		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
+		mutex_unlock(mutexp);
+	}
+	
+	if (opt_debug) {
+		char *xdata = bin2hex(thr->work->data, 80);
+		applog(LOG_DEBUG, "%"PRIprepr": Started work: %s",
+		       x6500->proc_repr, xdata);
+		free(xdata);
+	}
+
+	uint32_t usecs = 0x80000000 / fpga->dclk.freqM;
+	usecs -= 1000000;
+	timer_set_delay(&thr->tv_morework, &tv_now, usecs);
+
+	timer_set_delay(&thr->tv_poll, &tv_now, 10000);
+	
+	job_start_complete(thr);
+}
+
+static
+int64_t calc_hashes(struct thr_info *thr, struct timeval *tv_now)
+{
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	struct timeval tv_delta;
+	int64_t hashes, hashes_left;
+
+	timersub(tv_now, &fpga->tv_hashstart, &tv_delta);
 	hashes = (((int64_t)tv_delta.tv_sec * 1000000) + tv_delta.tv_usec) * fpga->dclk.freqM * 2;
-	if (unlikely(hashes > 0x100000000))
-		hashes = 0x100000000;
+	hashes_left = fpga->hashes_left;
+	if (unlikely(hashes > hashes_left))
+		hashes = hashes_left;
+	fpga->hashes_left -= hashes;
+	hashes_done(thr, hashes, &tv_delta, NULL);
+	fpga->tv_hashstart = *tv_now;
 	return hashes;
 }
 
@@ -630,7 +727,6 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	struct cgpu_info *x6500 = thr->cgpu;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jtag = &fpga->jtag;
-	char fpgaid = thr->device_thread;
 
 	struct timeval tv_now;
 	int64_t hashes;
@@ -638,27 +734,25 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	bool bad;
 
 	while (1) {
-		mutex_lock(&x6500->device_mutex);
 		gettimeofday(&tv_now, NULL);
 		nonce = x6500_get_register(jtag, 0xE);
-		mutex_unlock(&x6500->device_mutex);
 		if (nonce != 0xffffffff) {
-			bad = !test_nonce(work, nonce, false);
+			bad = !(work && test_nonce(work, nonce, false));
 			if (!bad) {
 				submit_nonce(thr, work, nonce);
-				applog(LOG_DEBUG, "%s %u.%u: Nonce for current  work: %08lx",
-				       x6500->api->name, x6500->device_id, fpgaid,
+				applog(LOG_DEBUG, "%"PRIprepr": Nonce for current  work: %08lx",
+				       x6500->proc_repr,
 				       (unsigned long)nonce);
 
 				dclk_gotNonces(&fpga->dclk);
-			} else if (test_nonce(&fpga->prevwork, nonce, false)) {
-				submit_nonce(thr, &fpga->prevwork, nonce);
-				applog(LOG_DEBUG, "%s %u.%u: Nonce for PREVIOUS work: %08lx",
-				       x6500->api->name, x6500->device_id, fpgaid,
+			} else if (likely(thr->prev_work) && test_nonce(thr->prev_work, nonce, false)) {
+				submit_nonce(thr, thr->prev_work, nonce);
+				applog(LOG_DEBUG, "%"PRIprepr": Nonce for PREVIOUS work: %08lx",
+				       x6500->proc_repr,
 				       (unsigned long)nonce);
 			} else {
-				applog(LOG_DEBUG, "%s %u.%u: Nonce with H not zero  : %08lx",
-				       x6500->api->name, x6500->device_id, fpgaid,
+				applog(LOG_DEBUG, "%"PRIprepr": Nonce with H not zero  : %08lx",
+				       x6500->proc_repr,
 				       (unsigned long)nonce);
 				++hw_errors;
 				++x6500->hw_errors;
@@ -671,44 +765,42 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 			continue;
 		}
 
-		hashes = calc_hashes(fpga, &tv_now);
-		if (thr->work_restart || hashes >= 0xf0000000)
-			break;
-		usleep(10000);
-		hashes = calc_hashes(fpga, &tv_now);
-		if (thr->work_restart || hashes >= 0xf0000000)
-			break;
+		hashes = calc_hashes(thr, &tv_now);
+		
+		break;
 	}
-
-	dclk_preUpdate(&fpga->dclk);
-	dclk_updateFreq(&fpga->dclk, x6500_dclk_change_clock, thr);
-
-	__copy_work(&fpga->prevwork, work);
 
 	return hashes;
 }
 
-static int64_t
-x6500_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
+static
+void x6500_fpga_poll(struct thr_info *thr)
 {
-	if (!x6500_start_work(thr, work))
-		return -1;
-
-	int64_t hashes = x6500_process_results(thr, work);
-	if (hashes > 0)
-		work->blk.nonce += hashes;
-	return hashes;
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	
+	x6500_process_results(thr, thr->work);
+	if (unlikely(!fpga->hashes_left))
+	{
+		mt_disable_start(thr);
+		thr->tv_poll.tv_sec = -1;
+	}
+	else
+		timer_set_delay_from_now(&thr->tv_poll, 10000);
 }
 
 struct device_api x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
 	.api_detect = x6500_detect,
+	.get_dev_statline_before = get_x6500_dev_statline_before,
 	.thread_prepare = x6500_prepare,
-	.thread_init = x6500_fpga_init,
+	.thread_init = x6500_thread_init,
 	.get_stats = x6500_get_stats,
 	.get_statline_before = get_x6500_statline_before,
 	.get_api_extra_device_status = get_x6500_api_extra_device_status,
-	.scanhash = x6500_scanhash,
+	.poll = x6500_fpga_poll,
+	.minerloop = minerloop_async,
+	.job_prepare = x6500_job_prepare,
+	.job_start = x6500_job_start,
 // 	.thread_shutdown = x6500_fpga_shutdown,
 };
