@@ -54,9 +54,10 @@ docs='
 	COPYING
 	NEWS
 	README
-	API-README
-	FPGA-README
-	SCRYPT-README
+	README.Debian
+	README.FPGA
+	README.RPC
+	README.scrypt
 '
 for build in "${builds[@]}"; do
 	PKGNAME="${sw}-${build}"

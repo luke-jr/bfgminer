@@ -11,7 +11,7 @@ global $allowcustompages, $customsummarypages;
 global $miner_font_family, $miner_font_size;
 global $colouroverride, $placebuttons, $userlist;
 #
-# See API-README for more details of these variables and how
+# See README.RPC for more details of these variables and how
 # to configure miner.php
 #
 # Web page title
@@ -21,7 +21,7 @@ $title = 'Mine';
 # Set $readonly to false then it will check BFGMiner 'privileged'
 $readonly = false;
 #
-# Set $userlist to null to allow anyone access or read API-README
+# Set $userlist to null to allow anyone access or read README.RPC
 $userlist = null;
 #
 # Set $notify to false to NOT attempt to display the notify command
@@ -77,7 +77,7 @@ $autorefresh = 0;
 $allowcustompages = true;
 #
 # OK this is a bit more complex item: Custom Summary Pages
-# As mentioned above, see API-README
+# As mentioned above, see README.RPC
 # see the example below (if there is no matching data, no total will show)
 $mobilepage = array(
  'DATE' => null,

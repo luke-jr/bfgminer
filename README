@@ -125,7 +125,7 @@ Options for both config file and command line:
                     W: in front of the IP address gives that address privileged access to all api commands
 --api-description   Description placed in the API status header (default: BFGMiner version)
 --api-groups        API one letter groups G:cmd:cmd[,P:cmd:*...]
-                    See API-README for usage
+                    See README.RPC for usage
 --api-listen        Listen for API requests (default: disabled)
                     By default any command that does not just display data returns access denied
                     See --api-allow to overcome this
@@ -216,12 +216,12 @@ GPU only options:
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 
 
-SCRYPT only options:
+scrypt only options:
 
 --lookup-gap <arg>  Set GPU lookup gap for scrypt mining, comma separated
 --thread-concurrency <arg> Set GPU thread concurrency for scrypt mining, comma separated
 
-See SCRYPT-README for more information regarding (non-bitcoin) scrypt mining.
+See README.scrypt for more information regarding (non-bitcoin) scrypt mining.
 
 
 FPGA mining boards (BitForce, Icarus, ModMiner, X6500, ZTEX) only options:
@@ -256,7 +256,7 @@ prepend the argument with the driver name followed by a colon.
 For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
 or using the short name: "ica:/dev/ttyUSB0" or "bfl:\\.\COM5"
 
-For other FPGA details see the FPGA-README
+For other FPGA details see the README.FPGA
 
 
 CPU only options (not included in binaries):
@@ -724,7 +724,7 @@ BFGMiner shuts down because of this.
 
 RPC API
 
-For RPC API details see the API-README file
+For RPC API details see the README.RPC file
 
 ---
 
