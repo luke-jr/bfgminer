@@ -1904,7 +1904,6 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	ret = true;
 
-out:
 	return ret;
 }
 
@@ -4227,7 +4226,7 @@ int stale_wait(unsigned int mstime, struct work*work, bool checkend)
 static void restart_threads(void)
 {
 	struct pool *cp = current_pool();
-	int i, fd;
+	int i;
 	struct thr_info *thr;
 
 	/* Artificially set the lagging flag to avoid pool not providing work
@@ -7259,7 +7258,7 @@ void print_summary(void)
 {
 	struct timeval diff;
 	int hours, mins, secs, i;
-	double utility, efficiency = 0.0, work_util;
+	double utility, efficiency = 0.0;
 
 	timersub(&total_tv_end, &total_tv_start, &diff);
 	hours = diff.tv_sec / 3600;
@@ -7268,7 +7267,6 @@ void print_summary(void)
 
 	utility = total_accepted / total_secs * 60;
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
-	work_util = total_diff1 / total_secs * 60;
 
 	applog(LOG_WARNING, "\nSummary of runtime statistics:\n");
 	applog(LOG_WARNING, "Started at %s", datestamp);
@@ -7562,7 +7560,8 @@ static void fork_monitor()
 
 #ifdef HAVE_CURSES
 void enable_curses(void) {
-	int x,y;
+	int x;
+	__maybe_unused int y;
 
 	lock_curses();
 	if (curses_active) {
