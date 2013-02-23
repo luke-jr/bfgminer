@@ -10,10 +10,6 @@
 
 #include "config.h"
 
-#ifdef WIN32
-#define FD_SETSIZE 4096
-#endif
-
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>

@@ -92,6 +92,7 @@ case $target in
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
     AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
+    AC_DEFINE([FD_SETSIZE], [4096], [Maximum sockets before fd_set overflows])
     ;;
   *-*-cygwin*)
 	have_cygwin=true
