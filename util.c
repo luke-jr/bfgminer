@@ -1484,10 +1484,8 @@ resend:
 	}
 
 	sessionid = json_array_string(json_array_get(res_val, 0), 1);
-	if (!sessionid) {
-		applog(LOG_INFO, "Failed to get sessionid in initiate_stratum");
-		goto out;
-	}
+	if (!sessionid)
+		applog(LOG_DEBUG, "Failed to get sessionid in initiate_stratum");
 	nonce1 = json_array_string(res_val, 1);
 	if (!nonce1) {
 		applog(LOG_INFO, "Failed to get nonce1 in initiate_stratum");
@@ -1509,7 +1507,8 @@ resend:
 	pool->n2size = n2size;
 	mutex_unlock(&pool->pool_lock);
 
-	applog(LOG_DEBUG, "Pool %d stratum session id: %s", pool->pool_no, pool->sessionid);
+	if (sessionid)
+		applog(LOG_DEBUG, "Pool %d stratum session id: %s", pool->pool_no, pool->sessionid);
 
 	ret = true;
 out:
