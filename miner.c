@@ -6481,11 +6481,19 @@ void request_work(struct thr_info *thr)
 	/* Tell the watchdog thread this thread is waiting on getwork and
 	 * should not be restarted */
 	thread_reportout(thr);
+	
+	// HACK: Since get_work still blocks, reportout all processors dependent on this thread
+	for (struct cgpu_info *proc = thr->cgpu->next_proc; proc; proc = proc->next_proc)
+	{
+		if (proc->threads)
+			break;
+		thread_reportout(proc->thr[0]);
+	}
 
 	gettimeofday(&dev_stats->_get_start, NULL);
 }
 
-// FIXME: Make this non-blocking
+// FIXME: Make this non-blocking (and remove HACK above)
 struct work *get_work(struct thr_info *thr)
 {
 	const int thr_id = thr->id;
