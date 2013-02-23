@@ -629,16 +629,6 @@ commerr:
 	job_start_abort(thr, true);
 }
 
-static inline int noisy_stale_wait(unsigned int mstime, struct work*work, bool checkend, struct cgpu_info*bitforce)
-{
-	int rv = stale_wait(mstime, work, checkend);
-	if (rv)
-		applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
-		       bitforce->proc_repr);
-	return rv;
-}
-#define noisy_stale_wait(mstime, work, checkend)  noisy_stale_wait(mstime, work, checkend, bitforce)
-
 static char _discardedbuf[0x10];
 
 static

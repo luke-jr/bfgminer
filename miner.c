@@ -214,9 +214,6 @@ pthread_rwlock_t netacc_lock;
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
 
-pthread_mutex_t restart_lock;
-pthread_cond_t restart_cond;
-
 pthread_cond_t gws_cond;
 
 bool shutting_down;
@@ -4264,36 +4261,6 @@ static void discard_stale(void)
 		applog(LOG_DEBUG, "Discarded %d stales that didn't match current hash", stale);
 }
 
-void ms_to_abstime(unsigned int mstime, struct timespec *abstime)
-{
-	struct timeval now, then, tdiff;
-
-	tdiff.tv_sec = mstime / 1000;
-	tdiff.tv_usec = mstime * 1000 - (tdiff.tv_sec * 1000000);
-	gettimeofday(&now, NULL);
-	timeradd(&now, &tdiff, &then);
-	abstime->tv_sec = then.tv_sec;
-	abstime->tv_nsec = then.tv_usec * 1000;
-}
-
-/* A generic wait function for threads that poll that will wait a specified
- * time tdiff waiting on the pthread conditional that is broadcast when a
- * work restart is required. Returns the value of pthread_cond_timedwait
- * which is zero if the condition was met or ETIMEDOUT if not.
- */
-int restart_wait(unsigned int mstime)
-{
-	struct timespec abstime;
-	int rc;
-
-	ms_to_abstime(mstime, &abstime);
-	mutex_lock(&restart_lock);
-	rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
-	mutex_unlock(&restart_lock);
-
-	return rc;
-}
-
 bool stale_work_future(struct work *work, bool share, unsigned long ustime)
 {
 	bool rv;
@@ -4313,37 +4280,6 @@ bool stale_work_future(struct work *work, bool share, unsigned long ustime)
 	return rv;
 }
 
-/* A generic wait function for threads that poll that will wait a specified
- * time waiting on a share to become stale. Returns positive if the share
- * became stale or zero if the timer expired first. If checkend is true, will
- * immediatley return negative if the share is guaranteed to become stale
- * before the timer expires.
- */
-int stale_wait(unsigned int mstime, struct work*work, bool checkend)
-{
-	struct timespec abstime;
-	int rc;
-
-	if (checkend) {
-		if (stale_work_future(work, true, mstime * 1000))
-			return -1;
-	}
-
-	ms_to_abstime(mstime, &abstime);
-	rc = -1;
-	while (1) {
-		mutex_lock(&restart_lock);
-		if (stale_work(work, true)) {
-			rc = 1;
-		} else if (pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime)) {
-			rc = 0;
-		}
-		mutex_unlock(&restart_lock);
-		if (rc != -1)
-			return rc;
-	}
-}
-	
 static void restart_threads(void)
 {
 	struct pool *cp = current_pool();
@@ -4368,10 +4304,6 @@ static void restart_threads(void)
 		thr = &thr_info[i];
 		notifier_wake(thr->work_restart_notifier);
 	}
-
-	mutex_lock(&restart_lock);
-	pthread_cond_broadcast(&restart_cond);
-	mutex_unlock(&restart_lock);
 }
 
 static char *blkhashstr(unsigned char *hash)
@@ -7745,10 +7677,6 @@ int main(int argc, char *argv[])
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init lp_cond");
-
-	mutex_init(&restart_lock);
-	if (unlikely(pthread_cond_init(&restart_cond, NULL)))
-		quit(1, "Failed to pthread_cond_init restart_cond");
 
 	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init gws_cond");
