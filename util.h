@@ -54,6 +54,8 @@ struct cgpu_info;
 extern void json_rpc_call_async(CURL *, const char *url, const char *userpass, const char *rpc_req, bool longpoll, struct pool *pool, bool share, void *priv);
 extern json_t *json_rpc_call_completed(CURL *, int rc, bool probe, int *rolltime, void *out_priv);
 
+extern char *absolute_uri(char *uri, const char *ref);  // ref must be a root URI
+
 extern void gen_hash(unsigned char *data, unsigned char *hash, int len);
 extern void hash_data(unsigned char *out_hash, const unsigned char *data);
 extern void real_block_target(unsigned char *target, const unsigned char *data);
