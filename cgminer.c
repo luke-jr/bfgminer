@@ -5843,7 +5843,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
-#define WATCHDOG_INTERVAL		3
+#define WATCHDOG_INTERVAL		2
 #define WATCHDOG_SICK_TIME		60
 #define WATCHDOG_DEAD_TIME		600
 #define WATCHDOG_SICK_COUNT		(WATCHDOG_SICK_TIME/WATCHDOG_INTERVAL)
