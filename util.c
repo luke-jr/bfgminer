@@ -934,6 +934,101 @@ void thr_info_cancel(struct thr_info *thr)
 	}
 }
 
+#ifndef HAVE_PTHREAD_CANCEL
+
+// Bionic (Android) is intentionally missing pthread_cancel, so it is implemented using pthread_kill
+
+enum pthread_cancel_workaround_mode {
+	PCWM_DEFAULT   = 0,
+	PCWM_TERMINATE = 1,
+	PCWM_ASYNC     = 2,
+	PCWM_DISABLED  = 4,
+	PCWM_CANCELLED = 8,
+};
+
+static pthread_key_t key_pcwm;
+struct sigaction pcwm_orig_term_handler;
+
+static
+void do_pthread_cancel_exit(int flags)
+{
+	if (!(flags & PCWM_ASYNC))
+		// NOTE: Logging disables cancel while mutex held, so this is safe
+		applog(LOG_WARNING, "pthread_cancel workaround: Cannot defer cancellation, terminating thread NOW");
+	pthread_exit(PTHREAD_CANCELED);
+}
+
+static
+void sighandler_pthread_cancel(int sig)
+{
+	int flags = (int)pthread_getspecific(key_pcwm);
+	if (flags & PCWM_TERMINATE)  // Main thread
+	{
+		// Restore original handler and call it
+		if (sigaction(sig, &pcwm_orig_term_handler, NULL))
+			quit(1, "pthread_cancel workaround: Failed to restore original handler");
+		raise(SIGTERM);
+		quit(1, "pthread_cancel workaround: Original handler returned");
+	}
+	if (flags & PCWM_CANCELLED)  // Already pending cancel
+		return;
+	if (flags & PCWM_DISABLED)
+	{
+		flags |= PCWM_CANCELLED;
+		if (pthread_setspecific(key_pcwm, (void*)flags))
+			quit(1, "pthread_cancel workaround: pthread_setspecific failed (setting PCWM_CANCELLED)");
+		return;
+	}
+	do_pthread_cancel_exit(flags);
+}
+
+int pthread_setcancelstate(int state, int *oldstate)
+{
+	int flags = (int)pthread_getspecific(key_pcwm);
+	if (oldstate)
+		*oldstate = (flags & PCWM_DISABLED) ? PTHREAD_CANCEL_DISABLE : PTHREAD_CANCEL_ENABLE;
+	if (state == PTHREAD_CANCEL_DISABLE)
+		flags |= PCWM_DISABLED;
+	else
+	{
+		if (flags & PCWM_CANCELLED)
+			do_pthread_cancel_exit(flags);
+		flags &= ~PCWM_DISABLED;
+	}
+	if (pthread_setspecific(key_pcwm, (void*)flags))
+		return -1;
+	return 0;
+}
+
+int pthread_setcanceltype(int type, int *oldtype)
+{
+	int flags = (int)pthread_getspecific(key_pcwm);
+	if (oldtype)
+		*oldtype = (flags & PCWM_ASYNC) ? PTHREAD_CANCEL_ASYNCHRONOUS : PTHREAD_CANCEL_DEFERRED;
+	if (type == PTHREAD_CANCEL_ASYNCHRONOUS)
+		flags |= PCWM_ASYNC;
+	else
+		flags &= ~PCWM_ASYNC;
+	if (pthread_setspecific(key_pcwm, (void*)flags))
+		return -1;
+	return 0;
+}
+
+void setup_pthread_cancel_workaround()
+{
+	if (pthread_key_create(&key_pcwm, NULL))
+		quit(1, "pthread_cancel workaround: pthread_key_create failed");
+	if (pthread_setspecific(key_pcwm, (void*)PCWM_TERMINATE))
+		quit(1, "pthread_cancel workaround: pthread_setspecific failed");
+	struct sigaction new_sigact = {
+		.sa_handler = sighandler_pthread_cancel,
+	};
+	if (sigaction(SIGTERM, &new_sigact, &pcwm_orig_term_handler))
+		quit(1, "pthread_cancel workaround: Failed to install SIGTERM handler");
+}
+
+#endif
+
 /* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
  * on SMP machines */
 void nmsleep(unsigned int msecs)
