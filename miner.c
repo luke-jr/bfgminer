@@ -6516,6 +6516,15 @@ struct work *get_work(struct thr_info *thr)
 
 	work->thr_id = thr_id;
 	thread_reportin(thr);
+	
+	// HACK: Since get_work still blocks, reportin all processors dependent on this thread
+	for (struct cgpu_info *proc = thr->cgpu->next_proc; proc; proc = proc->next_proc)
+	{
+		if (proc->threads)
+			break;
+		thread_reportin(proc->thr[0]);
+	}
+	
 	work->mined = true;
 	work->blk.nonce = 0;
 
