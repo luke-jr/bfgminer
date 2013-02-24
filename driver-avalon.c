@@ -563,7 +563,8 @@ static bool avalon_detect_one(const char *devpath)
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
-	info->temp_history_count = (4 / (float)(0x3c * ((float)1.67/0x32))) + 1;
+	/* This is for check the temp/fan every 3~4s */
+	info->temp_history_count = (4 / (float)((float)info->timeout * ((float)1.67/0x32))) + 1;
 	if (info->temp_history_count <= 0)
 		info->temp_history_count = 1;
 
