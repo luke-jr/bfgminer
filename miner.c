@@ -4516,6 +4516,10 @@ static void *stage_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	bool ok = true;
 
+#ifndef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+#endif
+
 	RenameThread("stage");
 
 	while (ok) {
@@ -6707,6 +6711,10 @@ static void *longpoll_thread(void *userdata)
 	char *lp_url;
 	int rolltime;
 
+#ifndef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+#endif
+
 	RenameThread("longpoll");
 
 	curl = curl_easy_init();
@@ -6891,6 +6899,10 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 {
 	int intervals = 0;
 
+#ifndef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+#endif
+
 	RenameThread("watchpool");
 
 	while (42) {
@@ -6969,6 +6981,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 {
 	const unsigned int interval = WATCHDOG_INTERVAL;
 	struct timeval zero_tv;
+
+#ifndef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+#endif
 
 	RenameThread("watchdog");
 
