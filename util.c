@@ -1424,6 +1424,34 @@ static bool setup_stratum_curl(struct pool *pool)
 	return true;
 }
 
+static char *get_sessionid(json_t *val)
+{
+	char *ret = NULL;
+	json_t *arr_val;
+	int arrsize, i;
+
+	arr_val = json_array_get(val, 0);
+	if (!arr_val || !json_is_array(arr_val))
+		goto out;
+	arrsize = json_array_size(arr_val);
+	for (i = 0; i < arrsize; i++) {
+		json_t *arr = json_array_get(arr_val, i);
+		char *notify;
+
+		if (!arr | !json_is_array(arr))
+			break;
+		notify = __json_array_string(arr, 0);
+		if (!notify)
+			continue;
+		if (!strncasecmp(notify, "mining.notify", 13)) {
+			ret = json_array_string(arr, 1);
+			break;
+		}
+	}
+out:
+	return ret;
+}
+
 bool initiate_stratum(struct pool *pool)
 {
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
@@ -1436,9 +1464,12 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 
 resend:
-	if (pool->sessionid)
-		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"%s\"]}", swork_id++, pool->sessionid);
-	else
+	if (!recvd) {
+		if (pool->sessionid)
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
+		else
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
+	} else
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
 	if (!__stratum_send(pool, s, strlen(s))) {
@@ -1483,7 +1514,7 @@ resend:
 		goto out;
 	}
 
-	sessionid = json_array_string(json_array_get(res_val, 0), 1);
+	sessionid = get_sessionid(res_val);
 	if (!sessionid)
 		applog(LOG_DEBUG, "Failed to get sessionid in initiate_stratum");
 	nonce1 = json_array_string(res_val, 1);
@@ -1525,7 +1556,7 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
-		if (recvd && pool->sessionid) {
+		if (recvd) {
 			/* Reset the sessionid used for stratum resuming in case the pool
 			* does not support it, or does not know how to respond to the
 			* presence of the sessionid parameter. */
