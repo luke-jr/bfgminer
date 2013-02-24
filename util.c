@@ -1709,6 +1709,7 @@ void suspend_stratum(struct pool *pool)
 	pool->stratum_auth = false;
 	mutex_unlock(&pool->stratum_lock);
 	CLOSESOCKET(pool->sock);
+	pool->sock = INVSOCK;
 }
 
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
