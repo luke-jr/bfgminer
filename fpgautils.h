@@ -48,4 +48,6 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 extern FILE *open_bitstream(const char *dname, const char *filename);
 extern FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwfile, unsigned long *out_len);
 
+extern int get_serial_cts(int fd);
+
 #endif

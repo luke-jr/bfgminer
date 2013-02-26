@@ -108,6 +108,10 @@ bfgminer_SOURCES += driver-icarus.c icarus-common.h
 bfgminer_SOURCES += driver-cairnsmore.c
 endif
 
+if HAS_AVALON
+bfgminer_SOURCES += driver-avalon.c
+endif
+
 if HAS_MODMINER
 bfgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
