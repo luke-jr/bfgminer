@@ -45,7 +45,7 @@ static inline uint8_t rev8(uint8_t d)
     int i;
     uint8_t out = 0;
 
-    /* (from left to right) */
+    /* from left to right */
     for (i = 0; i < 8; i++)
         if (d & (1 << i))
             out |= (1 << (7 - i));
@@ -581,11 +581,9 @@ static inline void avalon_detect()
 	serial_detect(&avalon_api, avalon_detect_one);
 }
 
-static bool avalon_prepare(struct thr_info *thr)
+static void avalon_init(struct cgpu_info *avalon)
 {
 	struct avalon_result ar;
-	struct cgpu_info *avalon = thr->cgpu;
-	struct timeval now;
 	int fd, ret;
 
 	avalon->device_fd = -1;
@@ -594,17 +592,32 @@ static bool avalon_prepare(struct thr_info *thr)
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Avalon: Failed to open on %s",
 		       avalon->device_path);
-		return false;
+		return;
 	}
-	ret = avalon_reset(fd, &ar);
-	if (ret)
-		return false;
-	avalon->device_fd = fd;
 
+	ret = avalon_reset(fd, &ar);
+	if (ret) {
+		avalon_close(fd);
+		return;
+	}
+
+	avalon->device_fd = fd;
 	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
+
+	return;
+}
+
+static bool avalon_prepare(struct thr_info *thr)
+{
+	struct cgpu_info *avalon = thr->cgpu;
+	struct timeval now;
+
+	avalon_init(avalon);
+	if (avalon->device_fd == -1)
+		return false;
+
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
-
 	return true;
 }
 
@@ -934,5 +947,6 @@ struct device_api avalon_api = {
 	.thread_prepare = avalon_prepare,
 	.scanhash_queue = avalon_scanhash,
 	.get_api_stats = avalon_api_stats,
+	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };
