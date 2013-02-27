@@ -110,6 +110,7 @@ bool have_longpoll;
 int opt_skip_checks;
 bool want_per_device_stats;
 bool use_syslog;
+bool opt_quiet_work_updates;
 bool opt_quiet;
 bool opt_realquiet;
 bool opt_loginput;
@@ -1295,6 +1296,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--quiet|-q",
 			opt_set_bool, &opt_quiet,
 			"Disable logging output, display status and errors"),
+	OPT_WITHOUT_ARG("--quiet-work-updates|--quiet-work-update",
+			opt_set_bool, &opt_quiet_work_updates,
+			opt_hidden),
 	OPT_WITHOUT_ARG("--real-quiet",
 			opt_set_bool, &opt_realquiet,
 			"Disable all output"),
@@ -4469,7 +4473,9 @@ static bool test_work_current(struct work *work)
 		++work->pool->work_restart_id;
 		update_last_work(work);
 		if ((!restart) && work->pool == current_pool()) {
-			applog(LOG_NOTICE, "Longpoll from pool %d requested work update",
+			applog(
+			       (opt_quiet_work_updates ? LOG_DEBUG : LOG_NOTICE),
+			       "Longpoll from pool %d requested work update",
 				work->pool->pool_no);
 			restart = true;
 		}
@@ -5946,7 +5952,9 @@ static void *stratum_thread(void *userdata)
 				 * connection is from the current pool */
 				if (pool == current_pool()) {
 					restart_threads();
-					applog(LOG_NOTICE, "Stratum from pool %d requested work update", pool->pool_no);
+					applog(
+					       (opt_quiet_work_updates ? LOG_DEBUG : LOG_NOTICE),
+					       "Stratum from pool %d requested work update", pool->pool_no);
 				}
 			} else
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
