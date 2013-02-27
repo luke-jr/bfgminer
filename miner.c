@@ -3595,7 +3595,7 @@ bool stale_work(struct work *work, bool share)
 		 * the most recent longpoll is stale */
 		if ((!pool->submit_old) && work->work_restart_id != pool->work_restart_id)
 		{
-			applog(LOG_DEBUG, "Share stale due to work restart (%02x != %02x)", work->work_restart_id, pool->work_restart_id);
+			applog(LOG_DEBUG, "Share stale due to mandatory work update (%02x != %02x)", work->work_restart_id, pool->work_restart_id);
 			return true;
 		}
 	} else {
@@ -3618,7 +3618,7 @@ bool stale_work(struct work *work, bool share)
 		/* If the pool has asked us to restart since this work, it's stale */
 		if (work->work_restart_id != pool->work_restart_id)
 		{
-			applog(LOG_DEBUG, "Work stale due to work restart (%02x != %02x)", work->work_restart_id, pool->work_restart_id);
+			applog(LOG_DEBUG, "Work stale due to work update (%02x != %02x)", work->work_restart_id, pool->work_restart_id);
 			return true;
 		}
 
@@ -4426,7 +4426,7 @@ static bool test_work_current(struct work *work)
 
 		if (!work->stratum) {
 			if (work->longpoll) {
-				applog(LOG_NOTICE, "LONGPOLL from pool %d detected new block",
+				applog(LOG_NOTICE, "Longpoll from pool %d detected new block",
 				       work->pool->pool_no);
 			} else if (have_longpoll)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
@@ -4449,7 +4449,7 @@ static bool test_work_current(struct work *work)
 					// Caught up, only announce if this pool is the one in use
 					if (restart)
 						applog(LOG_NOTICE, "%s %d caught up to new block",
-						       work->longpoll ? "LONGPOLL from pool" : "Pool",
+						       work->longpoll ? "Longpoll from pool" : "Pool",
 						       work->pool->pool_no);
 				} else {
 					// Switched to a block we know, but not the latest... why?
@@ -4459,7 +4459,7 @@ static bool test_work_current(struct work *work)
 					free(hexstr);
 					hexstr = blkhashstr(&work->data[4]);
 					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
-					       work->longpoll ? "LONGPOLL from pool" : "Pool",
+					       work->longpoll ? "Longpoll from pool" : "Pool",
 					       work->pool->pool_no,
 					       hexstr);
 				}
@@ -4469,7 +4469,7 @@ static bool test_work_current(struct work *work)
 		++work->pool->work_restart_id;
 		update_last_work(work);
 		if ((!restart) && work->pool == current_pool()) {
-			applog(LOG_NOTICE, "LONGPOLL from pool %d requested work restart",
+			applog(LOG_NOTICE, "Longpoll from pool %d requested work update",
 				work->pool->pool_no);
 			restart = true;
 		}
@@ -5942,11 +5942,11 @@ static void *stratum_thread(void *userdata)
 
 			++pool->work_restart_id;
 			if (test_work_current(work)) {
-				/* Only accept a work restart if this stratum
+				/* Only accept a work update if this stratum
 				 * connection is from the current pool */
 				if (pool == current_pool()) {
 					restart_threads();
-					applog(LOG_NOTICE, "Stratum from pool %d requested work restart", pool->pool_no);
+					applog(LOG_NOTICE, "Stratum from pool %d requested work update", pool->pool_no);
 				}
 			} else
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
