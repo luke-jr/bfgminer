@@ -1031,6 +1031,7 @@ struct pool {
 	struct list_head curlring;
 	struct submit_work_state *sws_waiting_on_curl;
 
+	time_t last_work_time;
 	time_t last_share_time;
 	double last_share_diff;
 	uint64_t best_diff;
@@ -1053,7 +1054,6 @@ struct pool {
 	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;
-	time_t last_work_time;  /* only set for Stratum right now */
 	bool stratum_auth;
 	bool stratum_notify;
 	struct stratum_work swork;
