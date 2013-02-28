@@ -3663,6 +3663,7 @@ static void stage_work(struct work *work)
 {
 	applog(LOG_DEBUG, "Pushing work from pool %d to hash queue", work->pool->pool_no);
 	work->work_block = work_block;
+	work->pool->last_work_time = time(NULL);
 	test_work_current(work);
 	hash_push(work);
 }
@@ -4668,6 +4669,10 @@ static bool cnx_needed(struct pool *pool)
 	if (cp == pool)
 		return true;
 	if (!cp->has_gbt && !cp->has_stratum && (!opt_fail_only || !cp->hdr_path))
+		return true;
+	/* Keep the connection open to allow any stray shares to be submitted
+	 * on switching pools for 2 minutes. */
+	if (time(NULL) < pool->last_work_time + 120)
 		return true;
 	return false;
 }
