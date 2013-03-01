@@ -5940,8 +5940,8 @@ void clear_stratum_shares(struct pool *pool)
 {
 	struct stratum_share *sshare, *tmpshare;
 	struct work *work;
+	double diff_cleared = 0;
 	int cleared = 0;
-	double diff_stale = 0;
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
@@ -5950,8 +5950,8 @@ void clear_stratum_shares(struct pool *pool)
 			
 			work = sshare->work;
 			sharelog("disconnect", work);
-			diff_stale += work->work_difficulty;
 			
+			diff_cleared += sshare->work->work_difficulty;
 			free_work(sshare->work);
 			free(sshare);
 			cleared++;
@@ -5964,8 +5964,8 @@ void clear_stratum_shares(struct pool *pool)
 		mutex_lock(&stats_lock);
 		pool->stale_shares += cleared;
 		total_stale += cleared;
-		total_diff_stale += diff_stale;
-		pool->diff_stale += diff_stale;
+		pool->diff_stale += diff_cleared;
+		total_diff_stale += diff_cleared;
 		mutex_unlock(&stats_lock);
 
 		mutex_lock(&submitting_lock);
