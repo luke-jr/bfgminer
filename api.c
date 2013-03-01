@@ -3433,12 +3433,10 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 	// ignore failure - it's closed immediately anyway
 	n = send(c, buf, len+1, 0);
 
-	if (opt_debug) {
-		if (SOCKETFAIL(n))
-			applog(LOG_DEBUG, "API: send failed: %s", SOCKERRMSG);
-		else
-			applog(LOG_DEBUG, "API: sent %d", n);
-	}
+	if (SOCKETFAIL(n))
+		applog(LOG_WARNING, "API: send failed: %s", SOCKERRMSG);
+	else
+		applog(LOG_DEBUG, "API: sent %d", n);
 }
 
 static void tidyup(__maybe_unused void *arg)
