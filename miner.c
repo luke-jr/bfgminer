@@ -105,6 +105,9 @@ static uint32_t template_nonce;
 const
 #endif
 char *opt_coinbase_sig;
+char *request_target_str;
+float request_pdiff = 1.0;
+double request_bdiff;
 static bool want_stratum = true;
 bool have_longpoll;
 int opt_skip_checks;
@@ -558,6 +561,22 @@ static char *set_b58addr(const char *arg, struct _cbscript_t *p)
 	return NULL;
 }
 #endif
+
+static void bdiff_target_leadzero(unsigned char *target, double diff);
+
+char *set_request_diff(const char *arg, float *p)
+{
+	unsigned char target[32];
+	char *e = opt_set_floatval(arg, p);
+	if (e)
+		return e;
+	
+	request_bdiff = (double)*p * 0.9999847412109375;
+	bdiff_target_leadzero(target, request_bdiff);
+	request_target_str = bin2hex(target, 32);
+	
+	return NULL;
+}
 
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
@@ -1305,6 +1324,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--remove-disabled",
 		     opt_set_bool, &opt_removedisabled,
 	         "Remove disabled devices entirely, as if they didn't exist"),
+	OPT_WITH_ARG("--request-diff",
+	             set_request_diff, opt_show_floatval, &request_pdiff,
+	             "Request a specific difficulty from pools"),
 	OPT_WITH_ARG("--retries",
 		     opt_set_intval, opt_show_intval, &opt_retries,
 		     "Number of times to retry failed submissions before giving up (-1 means never)"),
@@ -3055,7 +3077,50 @@ static void update_last_work(struct work *work)
 	mutex_unlock(&pool->last_work_lock);
 }
 
-static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const char *lpid)
+static
+void gbt_req_target(json_t *req)
+{
+	json_t *j;
+	json_t *n;
+	
+	if (!request_target_str)
+		return;
+	
+	j = json_object_get(req, "params");
+	if (!j)
+	{
+		n = json_array();
+		if (!n)
+			return;
+		if (json_object_set_new(req, "params", n))
+			goto erradd;
+		j = n;
+	}
+	
+	n = json_array_get(j, 0);
+	if (!n)
+	{
+		n = json_object();
+		if (!n)
+			return;
+		if (json_array_append_new(j, n))
+			goto erradd;
+	}
+	j = n;
+	
+	n = json_string(request_target_str);
+	if (!n)
+		return;
+	if (json_object_set_new(j, "target", n))
+		goto erradd;
+	
+	return;
+
+erradd:
+	json_decref(n);
+}
+
+static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const char *lpid, bool probe)
 {
 	char *rpc_req;
 
@@ -3080,6 +3145,10 @@ static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const 
 			json_t *req = blktmpl_request_jansson(caps, lpid);
 			if (!req)
 				goto gbtfail;
+			
+			if (probe)
+				gbt_req_target(req);
+			
 			rpc_req = json_dumps(req, 0);
 			if (!rpc_req)
 				goto gbtfail;
@@ -3098,6 +3167,9 @@ gbtfail2:
 	work->tmpl_refcount = NULL;
 	return NULL;
 }
+
+#define prepare_rpc_req(work, proto, lpid)  prepare_rpc_req2(work, proto, lpid, false)
+#define prepare_rpc_req_probe(work, proto, lpid)  prepare_rpc_req2(work, proto, lpid, true)
 
 static const char *pool_protocol_name(enum pool_protocol proto)
 {
@@ -6023,7 +6095,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	proto = want_gbt ? PLP_GETBLOCKTEMPLATE : PLP_GETWORK;
 
 tryagain:
-	rpc_req = prepare_rpc_req(work, proto, NULL);
+	rpc_req = prepare_rpc_req_probe(work, proto, NULL);
 	work->pool = pool;
 	if (!rpc_req)
 		return false;
@@ -6265,9 +6337,8 @@ void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * 0x00000000ffff0000000000000000000000000000000000000000000000000000
  * so we use a big endian 64 bit unsigned integer centred on the 5th byte to
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
-static void set_work_target(struct work *work, double diff)
+static void bdiff_target_leadzero(unsigned char *target, double diff)
 {
-	unsigned char target[32];
 	uint64_t *data64, h64;
 	double d64;
 
@@ -6278,30 +6349,35 @@ static void set_work_target(struct work *work, double diff)
 
 	memset(target, 0, 32);
 	if (d64 < 18446744073709551616.0) {
-		unsigned char rtarget[32];
-
+		unsigned char *rtarget = target;
 		memset(rtarget, 0, 32);
 		if (opt_scrypt)
 			data64 = (uint64_t *)(rtarget + 2);
 		else
 			data64 = (uint64_t *)(rtarget + 4);
 		*data64 = htobe64(h64);
-		swab256(target, rtarget);
 	} else {
 		/* Support for the classic all FFs just-below-1 diff */
 		if (opt_scrypt)
-			memset(target, 0xff, 30);
+			memset(&target[2], 0xff, 30);
 		else
-			memset(target, 0xff, 28);
+			memset(&target[4], 0xff, 28);
 	}
+}
 
+static inline
+void set_work_target(struct work *work, double diff)
+{
+	unsigned char rtarget[32];
+	bdiff_target_leadzero(rtarget, diff);
+	swab256(work->target, rtarget);
+	
 	if (opt_debug) {
-		char *htarget = bin2hex(target, 32);
+		char *htarget = bin2hex(rtarget, 32);
 
 		applog(LOG_DEBUG, "Generated target %s", htarget);
 		free(htarget);
 	}
-	memcpy(work->target, target, 32);
 }
 
 /* Generates stratum based work based on the most recent notify information

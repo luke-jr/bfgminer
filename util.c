@@ -710,6 +710,7 @@ void hash_data(unsigned char *out_hash, const unsigned char *data)
 	gen_hash(blkheader, out_hash, 80);
 }
 
+// Example output: 0000000000000000000000000000000000000000000000000000ffff00000000 (bdiff 1)
 void real_block_target(unsigned char *target, const unsigned char *data)
 {
 	uint8_t targetshift;
