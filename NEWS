@@ -1,3 +1,113 @@
+Version 2.11.0 - March 2, 2013
+
+- Update kernel file names signifying changes.
+- Update a pool's last work time when the work is popped as well as staged.
+- API always report failed send() replies
+- Update diff stale: total and pools when stratum throws away shares
+- Keep stratum connections open for 2 minutes after the last work item was
+staged to allow stray shares to be submitted on pool switching.
+- Try to extract the sessionid associated with mining.notify on 3rd level array
+and submit it along with the userid to support mining resume, failing gracefully
+and restarting if the pool rejects it.
+- Speed up watchdog interval and therefore display updates to 2 seconds.
+- Update copyright dates.
+- Cope with misread sessionid on stratum for now.
+- Use constants from the array of __constants throughout the diablo kernel.
+- Create a __constant array for use within diablo kernel.
+- Fix --benchmark generating valid work for cgminer.
+- Use the sessionid as passed on stratum connect to attempt to resume a
+connection once and then clear it if it fails, to use a new connection.
+- Move to storing the nonce1 in the work struct instead of the sessionid for the
+now defunct first draft mining.resume protocol.
+- Use global constant arrays for all other constants used in scrypt kernel.
+- Use global __constants for sha functions in scrypt kernel.
+- Use constants for endian swap macros.
+- Revise scrypt kernel copyright notice.
+- Separate out additions in scrypt kernel.
+- Reuse some Vals[] variables that can be assigned to constants earlier in the
+poclbm kernel, making for fewer ops.
+- Put all constants used in poclbm kernel into __const memory array to speed up
+concurrent reads on the wavefront.
+- BFL stop 1st init command if no device
+- Add a get_queued function for devices to use to retrieve work items from the
+queued hashtable.
+- Bugfix: Duplicate stratum sessionid when copying work, to avoid double-free
+- Bugfix: Missing pool_no parameter to applog for no-stratum-sessionid debug
+message
+- Add the choice of hash loop to the device driver, defaulting to hash_sole_work
+if none is specified.
+- Add comments.
+- Add a driver specific flush_work for queued devices that may have work items
+already queued to abort working on them on the device and discard them.
+- Flush queued work on a restart from the hash database and discard the work
+structs.
+- Create a central point for removal of work items completed by queued device
+drivers.
+- Create a fill_queue function that creates hashtables of as many work items as
+is required by the device driver till it flags the queue full.
+- Create the hash queued work variant for use with devices that are fast enough
+to require a queue.
+- Update copyright year.
+- Fix tv_lastupdate being made into tv_end and update the hashmeter on cycle,
+not opt_log_interval.
+- Fix tv_lastupdate being made into tv_end and update the hashmeter on cycle,
+not opt_log_interval.
+- Only continue submitting shares with mining.resume support on stratum when the
+session id matches.
+- Provide support for mining.resume with stratum, currently re-authorising after
+successful resumption pending finalising of the protocol process.
+- Provide basic framework for restarting stratum depending on whether resume
+support exists or not.
+- Abstract out the setting up of the stratum curl socket.
+- Free sessionid in clean_work and remove redundant setting of strings to NULL
+since the whole work struct is zeroed.
+- Only clear stratum shares mandatorily on stratum dropouts when the pool does
+not support resume.
+- Try resubmitting stratum shares every 5 seconds for up to 2 minutes if the
+pool session id exists and matches on failure to submit.
+- Do as much outside of mutex locking of sshare_lock as possible.
+- Remove last reference to struct work used outside the sshare_lock in
+submit_work_thread
+- Unlock the sshare_lock in submit_work_thread when all references to work and
+sshare are complete.
+- Add timestamps to stratum_share structs as they're generated and copy the
+stratum sessionid if it exists to stratum work generated.
+- Store session id for stratum if the pool supports it for future mining.resume
+support.
+- API.java allow partial reads
+- debug_cb buffer type warning
+- MMQ rewrite the last of the old scanhash loop and drastically reduce CPU
+- hash_sole_work can be static
+- Make the numbuf larger to accept larger scrypt parameters.
+- Keep the unique id of each work item across copy_work to prevent multiple work
+items having the same id.
+- Abstract out the main hashing loop to allow us to use a separate loop for
+devices that are fast enough to require queued work.
+- Provide a noop thread_enable function for drivers that don't support it.
+- Provide a noop thread_shutdown function for drivers that don't support it.
+- Provide a noop hw_error function for drivers that don't support it.
+- Provide a noop prepare_work for drivers that don't support it.
+- Provide a noop thread_init for drivers that don't support it.
+- Provide a noop can_limit_work for devices that don't support it.
+- Provide a noop thread_prepare function for drivers that don't use
+thread_prepare.
+- Use blank_get_statline_before for GPU devices that don't support adl
+monitoring.
+- Provide a noop get_stats function for drivers that don't support it.
+- Provide a blank get_statline for drivers that don't support it.
+- Provide a blank get_statline_before function for drivers that don't have one.
+- Fill drivers missing reinit_device with a noop version.
+- add 'count' to cumstomsummarypage 'calc'
+- hotplug use get_thread() where appropriate
+- convert sleep(const) to nmsleep()
+- remove empty #ifdef
+- call a separate get_devices() with locking, as required
+- usbutils - avoid free cgusb twice
+- usbutils hotplug v0.1
+- Report USB nodev as ZOMBIE on the screen
+- Change file modes.
+
+
 Version 2.10.5 - February 7, 2013
 
 - Fix logic fail on partial writes with stratum send that was leading to corrupt
