@@ -970,6 +970,7 @@ struct pool {
 	bool idle;
 	bool lagging;
 	bool probed;
+	int force_rollntime;
 	enum pool_enable enabled;
 	bool submit_old;
 	bool removed;

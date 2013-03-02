@@ -861,6 +861,19 @@ static char *set_pool_proxy(const char *arg)
 	return NULL;
 }
 
+static char *set_pool_force_rollntime(const char *arg)
+{
+	struct pool *pool;
+	
+	if (!total_pools)
+		return "Usage of --force-rollntime before pools are defined does not make sense";
+	
+	pool = pools[total_pools - 1];
+	opt_set_intval(arg, &pool->force_rollntime);
+	
+	return NULL;
+}
+
 static char *enable_debug(bool *flag)
 {
 	*flag = true;
@@ -1306,6 +1319,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--pool-proxy|-x",
 		     set_pool_proxy, NULL, NULL,
 		     "Proxy URI to use for connecting to just the previous-defined pool"),
+	OPT_WITH_ARG("--force-rollntime",  // NOTE: must be after --pass for config file ordering
+			 set_pool_force_rollntime, NULL, NULL,
+			 opt_hidden),
 	OPT_WITHOUT_ARG("--protocol-dump|-P",
 			opt_set_bool, &opt_protocol,
 			"Verbose dump of protocol-level activities"),
@@ -4764,7 +4780,10 @@ void write_config(FILE *fcfg)
 			fprintf(fcfg, "\n\t\t\"pool-proxy\" : \"%s\",", json_escape(pools[i]->rpc_proxy));
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pools[i]->rpc_user));
 		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\",", json_escape(pools[i]->rpc_pass));
-		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"\n\t}", pools[i]->prio);
+		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"", pools[i]->prio);
+		if (pools[i]->force_rollntime)
+			fprintf(fcfg, ",\n\t\t\"force-rollntime\" : %d", pools[i]->force_rollntime);
+		fprintf(fcfg, "\n\t}");
 	}
 	fputs("\n]\n", fcfg);
 

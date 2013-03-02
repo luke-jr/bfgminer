@@ -533,6 +533,13 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 		}
 	}
 
+	if (pool->force_rollntime)
+	{
+		state->hi.canroll = true;
+		state->hi.hadexpire = true;
+		state->hi.rolltime = pool->force_rollntime;
+	}
+	
 	if (rolltime)
 		*rolltime = state->hi.rolltime;
 	pool->cgminer_pool_stats.rolltime = state->hi.rolltime;
