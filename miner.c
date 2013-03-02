@@ -6505,7 +6505,7 @@ struct work *get_work(struct thr_info *thr)
 	struct timeval tv_get;
 	struct work *work = NULL;
 
-	applog(LOG_DEBUG, "Popping work from get queue to get work");
+	applog(LOG_DEBUG, "%"PRIpreprv": Popping work from get queue to get work", cgpu->proc_repr);
 	while (!work) {
 		work = hash_pop();
 		if (stale_work(work, false)) {
@@ -6514,7 +6514,7 @@ struct work *get_work(struct thr_info *thr)
 			wake_gws();
 		}
 	}
-	applog(LOG_DEBUG, "Got work from get queue to get work for thread %d", thr_id);
+	applog(LOG_DEBUG, "%"PRIpreprv": Got work from get queue to get work for thread %d", cgpu->proc_repr, thr_id);
 
 	work->thr_id = thr_id;
 	thread_reportin(thr);
