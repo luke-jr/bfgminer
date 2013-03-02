@@ -6469,6 +6469,7 @@ retry:
 	/* Signal hash_pop again in case there are mutliple hash_pop waiters */
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
+	work->pool->last_work_time = time(NULL);
 
 	return work;
 }
