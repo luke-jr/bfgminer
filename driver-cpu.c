@@ -758,7 +758,7 @@ static void cpu_detect()
 		struct cgpu_info *cgpu;
 
 		cgpu = &cpus[i];
-		cgpu->api = &cpu_api;
+		cgpu->drv = &cpu_drv;
 		cgpu->deven = DEV_ENABLED;
 		cgpu->threads = 1;
 		cgpu->kname = algo_names[opt_algo];
@@ -768,7 +768,7 @@ static void cpu_detect()
 
 static void reinit_cpu_device(struct cgpu_info *cpu)
 {
-	tq_push(thr_info[cpur_thr_id].q, cpu);
+	tq_push(control_thr[cpur_thr_id].q, cpu);
 }
 
 static bool cpu_thread_prepare(struct thr_info *thr)
@@ -843,10 +843,11 @@ CPUSearch:
 	return last_nonce - first_nonce + 1;
 }
 
-struct device_api cpu_api = {
+struct device_drv cpu_drv = {
+	.drv_id = DRIVER_CPU,
 	.dname = "cpu",
 	.name = "CPU",
-	.api_detect = cpu_detect,
+	.drv_detect = cpu_detect,
 	.reinit_device = reinit_cpu_device,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,

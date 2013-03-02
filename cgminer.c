@@ -146,7 +146,8 @@ bool opt_bfl_noncerange;
 #endif
 #define QUIET	(opt_quiet || opt_realquiet)
 
-struct thr_info *thr_info;
+struct thr_info *control_thr;
+struct thr_info **mining_thr;
 static int gwsched_thr_id;
 static int stage_thr_id;
 static int watchpool_thr_id;
@@ -156,7 +157,14 @@ static int input_thr_id;
 #endif
 int gpur_thr_id;
 static int api_thr_id;
-static int total_threads;
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+static int hotplug_thr_id;
+#endif
+static int total_control_threads;
+bool hotplug_mode;
+static int new_devices;
+static int new_threads;
+static int start_devices;
 
 #ifdef HAVE_LIBUSB
 pthread_mutex_t cgusb_lock;
@@ -171,6 +179,8 @@ static pthread_rwlock_t blk_lock;
 static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
+pthread_mutex_t mining_thr_lock;
+pthread_mutex_t devices_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -364,6 +374,33 @@ static void applog_and_exit(const char *fmt, ...)
 static pthread_mutex_t sharelog_lock;
 static FILE *sharelog_file = NULL;
 
+struct thr_info *get_thread(int thr_id)
+{
+	struct thr_info *thr;
+
+	mutex_lock(&mining_thr_lock);
+	thr = mining_thr[thr_id];
+	mutex_unlock(&mining_thr_lock);
+	return thr;
+}
+
+static struct cgpu_info *get_thr_cgpu(int thr_id)
+{
+	struct thr_info *thr = get_thread(thr_id);
+
+	return thr->cgpu;
+}
+
+struct cgpu_info *get_devices(int id)
+{
+	struct cgpu_info *cgpu;
+
+	mutex_lock(&devices_lock);
+	cgpu = devices[id];
+	mutex_unlock(&devices_lock);
+	return cgpu;
+}
+
 static void sharelog(const char*disposition, const struct work*work)
 {
 	char *target, *hash, *data;
@@ -378,7 +415,7 @@ static void sharelog(const char*disposition, const struct work*work)
 		return;
 
 	thr_id = work->thr_id;
-	cgpu = thr_info[thr_id].cgpu;
+	cgpu = get_thr_cgpu(thr_id);
 	pool = work->pool;
 	t = (unsigned long int)(work->tv_work_found.tv_sec);
 	target = bin2hex(work->target, sizeof(work->target));
@@ -386,7 +423,7 @@ static void sharelog(const char*disposition, const struct work*work)
 	data = bin2hex(work->data, sizeof(work->data));
 
 	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
-	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s%u,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->api->name, cgpu->device_id, thr_id, hash, data);
+	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s%u,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->drv->name, cgpu->device_id, thr_id, hash, data);
 	free(target);
 	free(hash);
 	free(data);
@@ -724,18 +761,24 @@ static void load_temp_cutoffs()
 			if (val < 0 || val > 200)
 				quit(1, "Invalid value passed to set temp cutoff");
 
+			mutex_lock(&devices_lock);
 			devices[device]->cutofftemp = val;
+			mutex_unlock(&devices_lock);
 		}
 	} else {
+		mutex_lock(&devices_lock);
 		for (i = device; i < total_devices; ++i) {
 			if (!devices[i]->cutofftemp)
 				devices[i]->cutofftemp = opt_cutofftemp;
 		}
+		mutex_unlock(&devices_lock);
 		return;
 	}
 	if (device <= 1) {
+		mutex_lock(&devices_lock);
 		for (i = device; i < total_devices; ++i)
 			devices[i]->cutofftemp = val;
+		mutex_unlock(&devices_lock);
 	}
 }
 
@@ -1723,7 +1766,9 @@ out:
 
 int dev_from_id(int thr_id)
 {
-	return thr_info[thr_id].cgpu->device_id;
+	struct cgpu_info *cgpu = get_thr_cgpu(thr_id);
+
+	return cgpu->device_id;
 }
 
 /* Make the change in the recent value adjust dynamically when the difference
@@ -1876,11 +1921,8 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
 
-	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
-	if (cgpu->api->get_statline_before)
-		cgpu->api->get_statline_before(buf, cgpu);
-	else
-		tailsprintf(buf, "               | ");
+	sprintf(buf, "%s%d ", cgpu->drv->name, cgpu->device_id);
+	cgpu->drv->get_statline_before(buf, cgpu);
 	tailsprintf(buf, "(%ds):%s (avg):%sh/s | A:%d R:%d HW:%d U:%.1f/m",
 		opt_log_interval,
 		displayed_rolling,
@@ -1889,15 +1931,15 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->rejected,
 		cgpu->hw_errors,
 		cgpu->utility);
-	if (cgpu->api->get_statline)
-		cgpu->api->get_statline(buf, cgpu);
+	cgpu->drv->get_statline(buf, cgpu);
 }
 
 static void text_print_status(int thr_id)
 {
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	struct cgpu_info *cgpu;
 	char logline[256];
 
+	cgpu = get_thr_cgpu(thr_id);
 	if (cgpu) {
 		get_statline(logline, cgpu);
 		printf("%s\n", logline);
@@ -1961,37 +2003,43 @@ static int dev_width;
 static void curses_print_devstatus(int thr_id)
 {
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	struct cgpu_info *cgpu;
 	char logline[256];
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
 
-	if (devcursor + cgpu->cgminer_id > LINES - 2 || opt_compact)
+	if (opt_compact)
+		return;
+
+	cgpu = get_thr_cgpu(thr_id);
+
+	if (cgpu->cgminer_id >= start_devices || devcursor + cgpu->cgminer_id > LINES - 2)
 		return;
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
 
 	wmove(statuswin,devcursor + cgpu->cgminer_id, 0);
-	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
-	if (cgpu->api->get_statline_before) {
-		logline[0] = '\0';
-		cgpu->api->get_statline_before(logline, cgpu);
-		wprintw(statuswin, "%s", logline);
-	}
-	else
-		wprintw(statuswin, "               | ");
+	wprintw(statuswin, " %s %*d: ", cgpu->drv->name, dev_width, cgpu->device_id);
+	logline[0] = '\0';
+	cgpu->drv->get_statline_before(logline, cgpu);
+	wprintw(statuswin, "%s", logline);
 
 	dh64 = (double)cgpu->total_mhashes / total_secs * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull;
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
 
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	if (cgpu->usbinfo.nodev)
+		wprintw(statuswin, "ZOMBIE");
+	else
+#endif
 	if (cgpu->status == LIFE_DEAD)
-		wprintw(statuswin, "DEAD ");
+		wprintw(statuswin, "DEAD  ");
 	else if (cgpu->status == LIFE_SICK)
-		wprintw(statuswin, "SICK ");
+		wprintw(statuswin, "SICK  ");
 	else if (cgpu->deven == DEV_DISABLED)
-		wprintw(statuswin, "OFF  ");
+		wprintw(statuswin, "OFF   ");
 	else if (cgpu->deven == DEV_RECOVER)
 		wprintw(statuswin, "REST  ");
 	else
@@ -2008,11 +2056,9 @@ static void curses_print_devstatus(int thr_id)
 			hwwidth, cgpu->hw_errors,
 		uwidth + 3, cgpu->utility);
 
-	if (cgpu->api->get_statline) {
-		logline[0] = '\0';
-		cgpu->api->get_statline(logline, cgpu);
-		wprintw(statuswin, "%s", logline);
-	}
+	logline[0] = '\0';
+	cgpu->drv->get_statline(logline, cgpu);
+	wprintw(statuswin, "%s", logline);
 
 	wclrtoeol(statuswin);
 }
@@ -2217,7 +2263,9 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	     char *hashshow, bool resubmit, char *worktime)
 {
 	struct pool *pool = work->pool;
-	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
+	struct cgpu_info *cgpu;
+
+	cgpu = get_thr_cgpu(work->thr_id);
 
 	if (json_is_true(res) || (work->gbt && json_is_null(res))) {
 		mutex_lock(&stats_lock);
@@ -2239,10 +2287,10 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		if (!QUIET) {
 			if (total_pools > 1)
 				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s%s",
-				       hashshow, cgpu->api->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
+				       hashshow, cgpu->drv->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
 			else
 				applog(LOG_NOTICE, "Accepted %s %s %d %s%s",
-				       hashshow, cgpu->api->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
+				       hashshow, cgpu->drv->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_accepted >= opt_shares) {
@@ -2307,7 +2355,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			}
 
 			applog(LOG_NOTICE, "Rejected %s %s %d %s%s %s%s",
-			       hashshow, cgpu->api->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "", worktime);
+			       hashshow, cgpu->drv->name, cgpu->device_id, where, reason, resubmit ? "(resubmit)" : "", worktime);
 			sharelog(disposition, work);
 		}
 
@@ -2354,6 +2402,8 @@ static uint64_t share_diff(const struct work *work)
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
+	if (ret > work->pool->best_diff)
+		work->pool->best_diff = ret;
 	mutex_unlock(&control_lock);
 	return ret;
 }
@@ -2365,12 +2415,14 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	char *s;
 	bool rc = false;
 	int thr_id = work->thr_id;
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	struct cgpu_info *cgpu;
 	struct pool *pool = work->pool;
 	int rolltime;
 	struct timeval tv_submit, tv_submit_reply;
 	char hashshow[64 + 4] = "";
 	char worktime[200] = "";
+
+	cgpu = get_thr_cgpu(thr_id);
 
 #ifdef __BIG_ENDIAN__
         int swapcounter = 0;
@@ -2438,7 +2490,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			pool->remotefail_occasions++;
 			applog(LOG_WARNING, "Pool %d communication failure, caching submissions", pool->pool_no);
 		}
-		sleep(5);
+		nmsleep(5000);
 		goto out;
 	} else if (pool_tclear(pool, &pool->submit_fail))
 		applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
@@ -2579,7 +2631,7 @@ static inline struct pool *select_pool(bool lagging)
 	return pool;
 }
 
-static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249216.0;
+static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
 
 /*
  * Calculate the work share difficulty
@@ -2735,8 +2787,6 @@ static void disable_curses(void)
 }
 #endif
 
-static void print_summary(void);
-
 static void __kill_work(void)
 {
 	struct thr_info *thr;
@@ -2747,40 +2797,50 @@ static void __kill_work(void)
 
 	applog(LOG_INFO, "Received kill message");
 
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	/* Best to get rid of it first so it doesn't
+	 * try to create any new devices */
+	if (!opt_scrypt) {
+		applog(LOG_DEBUG, "Killing off HotPlug thread");
+		thr = &control_thr[hotplug_thr_id];
+		thr_info_cancel(thr);
+	}
+#endif
+
 	applog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
-	thr = &thr_info[watchpool_thr_id];
+	thr = &control_thr[watchpool_thr_id];
 	thr_info_cancel(thr);
 
 	applog(LOG_DEBUG, "Killing off watchdog thread");
 	/* Kill the watchdog thread */
-	thr = &thr_info[watchdog_thr_id];
+	thr = &control_thr[watchdog_thr_id];
 	thr_info_cancel(thr);
 
 	applog(LOG_DEBUG, "Stopping mining threads");
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
-		thr = &thr_info[i];
+		thr = get_thread(i);
 		thr_info_freeze(thr);
 		thr->pause = true;
 	}
 
-	sleep(1);
+	nmsleep(1000);
 
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
-		thr = &thr_info[i];
+		thr = get_thread(i);
 		thr_info_cancel(thr);
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
 	/* Stop the others */
-	thr = &thr_info[stage_thr_id];
+	thr = &control_thr[stage_thr_id];
 	thr_info_cancel(thr);
 
 	applog(LOG_DEBUG, "Killing off API thread");
-	thr = &thr_info[api_thr_id];
+	thr = &control_thr[api_thr_id];
 	thr_info_cancel(thr);
 }
 
@@ -3417,8 +3477,10 @@ static void restart_threads(void)
 	/* Discard staged work that is now stale */
 	discard_stale();
 
+	mutex_lock(&mining_thr_lock);
 	for (i = 0; i < mining_threads; i++)
-		thr_info[i].work_restart = true;
+		mining_thr[i]->work_restart = true;
+	mutex_unlock(&mining_thr_lock);
 
 	mutex_lock(&restart_lock);
 	pthread_cond_broadcast(&restart_cond);
@@ -3966,6 +4028,20 @@ void write_config(FILE *fcfg)
 	json_escape_free();
 }
 
+void zero_bestshare(void)
+{
+	int i;
+
+	best_diff = 0;
+	memset(best_share, 0, 8);
+	suffix_string(best_diff, best_share, 0);
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+		pool->best_diff = 0;
+	}
+}
+
 void zero_stats(void)
 {
 	int i;
@@ -3982,10 +4058,11 @@ void zero_stats(void)
 	total_go = 0;
 	total_ro = 0;
 	total_secs = 1.0;
-	best_diff = 0;
 	total_diff1 = 0;
-	memset(best_share, 0, 8);
-	suffix_string(best_diff, best_share, 0);
+	found_blocks = 0;
+	total_diff_accepted = 0;
+	total_diff_rejected = 0;
+	total_diff_stale = 0;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
@@ -3997,19 +4074,32 @@ void zero_stats(void)
 		pool->discarded_work = 0;
 		pool->getfail_occasions = 0;
 		pool->remotefail_occasions = 0;
+		pool->last_share_time = 0;
+		pool->diff1 = 0;
+		pool->diff_accepted = 0;
+		pool->diff_rejected = 0;
+		pool->diff_stale = 0;
+		pool->last_share_diff = 0;
 	}
 
-	mutex_lock(&hash_lock);
-	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = devices[i];
+	zero_bestshare();
 
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = get_devices(i);
+
+		mutex_lock(&hash_lock);
 		cgpu->total_mhashes = 0;
 		cgpu->accepted = 0;
 		cgpu->rejected = 0;
 		cgpu->hw_errors = 0;
 		cgpu->utility = 0.0;
+		cgpu->last_share_pool_time = 0;
+		cgpu->diff1 = 0;
+		cgpu->diff_accepted = 0;
+		cgpu->diff_rejected = 0;
+		cgpu->last_share_diff = 0;
+		mutex_unlock(&hash_lock);
 	}
-	mutex_unlock(&hash_lock);
 }
 
 #ifdef HAVE_CURSES
@@ -4433,20 +4523,21 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	bool showlog = false;
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
+	struct thr_info *thr;
 
 	local_mhashes = (double)hashes_done / 1000000.0;
 	/* Update the last time this thread reported in */
 	if (thr_id >= 0) {
-		gettimeofday(&thr_info[thr_id].last, NULL);
-		thr_info[thr_id].cgpu->device_last_well = time(NULL);
+		thr = get_thread(thr_id);
+		gettimeofday(&(thr->last), NULL);
+		thr->cgpu->device_last_well = time(NULL);
 	}
 
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
 
 	/* So we can call hashmeter from a non worker thread */
 	if (thr_id >= 0) {
-		struct thr_info *thr = &thr_info[thr_id];
-		struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+		struct cgpu_info *cgpu = thr->cgpu;
 		double thread_rolling = 0.0;
 		int i;
 
@@ -4614,12 +4705,14 @@ out:
 void clear_stratum_shares(struct pool *pool)
 {
 	struct stratum_share *sshare, *tmpshare;
+	double diff_cleared = 0;
 	int cleared = 0;
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
 		if (sshare->work->pool == pool) {
 			HASH_DEL(stratum_shares, sshare);
+			diff_cleared += sshare->work->work_difficulty;
 			free_work(sshare->work);
 			free(sshare);
 			cleared++;
@@ -4631,6 +4724,8 @@ void clear_stratum_shares(struct pool *pool)
 		applog(LOG_WARNING, "Lost %d shares due to stratum disconnect on pool %d", cleared, pool->pool_no);
 		pool->stale_shares += cleared;
 		total_stale += cleared;
+		pool->diff_stale += diff_cleared;
+		total_diff_stale += diff_cleared;
 	}
 }
 
@@ -4738,7 +4833,7 @@ static void *stratum_thread(void *userdata)
 				while (!restart_stratum(pool)) {
 					if (pool->removed)
 						goto out;
-					sleep(30);
+					nmsleep(30000);
 				}
 			}
 		}
@@ -4777,7 +4872,7 @@ static void *stratum_thread(void *userdata)
 			while (!restart_stratum(pool)) {
 				if (pool->removed)
 					goto out;
-				sleep(30);
+				nmsleep(30000);
 			}
 			stratum_resumed(pool);
 			continue;
@@ -4952,7 +5047,7 @@ retry_stratum:
 			calc_diff(work, 0);
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
-			tq_push(thr_info[stage_thr_id].q, work);
+			tq_push(control_thr[stage_thr_id].q, work);
 			total_getworks++;
 			pool->getwork_requested++;
 			ret = true;
@@ -5299,15 +5394,14 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 
 	if (hash2_32[7] != 0) {
 		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
-				thr->cgpu->api->name, thr->cgpu->device_id);
+				thr->cgpu->drv->name, thr->cgpu->device_id);
 
 		mutex_lock(&stats_lock);
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 		mutex_unlock(&stats_lock);
 
-		if (thr->cgpu->api->hw_error)
-			thr->cgpu->api->hw_error(thr);
+		thr->cgpu->drv->hw_error(thr);
 
 		goto out;
 	}
@@ -5355,7 +5449,7 @@ static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64
 }
 
 static void mt_disable(struct thr_info *mythr, const int thr_id,
-		       struct device_api *api)
+		       struct device_drv *drv)
 {
 	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 	mythr->rolling = mythr->cgpu->rolling = 0;
@@ -5366,59 +5460,42 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 	} while (mythr->pause);
 	thread_reportin(mythr);
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
-	if (api->thread_enable)
-		api->thread_enable(mythr);
+	drv->thread_enable(mythr);
 }
 
-void *miner_thread(void *userdata)
+/* The main hashing loop for devices that are slow enough to work on one work
+ * item at a time, without a queue, aborting work before the entire nonce
+ * range has been hashed if needed. */
+static void hash_sole_work(struct thr_info *mythr)
 {
-	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
-	struct device_api *api = cgpu->api;
+	struct device_drv *drv = cgpu->drv;
+	struct timeval getwork_start, tv_start, tv_end, tv_workstart, tv_lastupdate;
 	struct cgminer_stats *dev_stats = &(cgpu->cgminer_stats);
 	struct cgminer_stats *pool_stats;
-	struct timeval getwork_start;
-
 	/* Try to cycle approximately 5 times before each log update */
 	const long cycle = opt_log_interval / 5 ? : 1;
-	struct timeval tv_start, tv_end, tv_workstart, tv_lastupdate;
-	struct timeval diff, sdiff, wdiff = {0, 0};
-	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
-	int64_t hashes_done = 0;
-	int64_t hashes;
-	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
-
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-	char threadname[20];
-        snprintf(threadname,20,"miner %d",thr_id);
-	RenameThread(threadname);
+	struct timeval diff, sdiff, wdiff = {0, 0};
+	uint32_t max_nonce = drv->can_limit_work(mythr);
+	int64_t hashes_done = 0;
 
 	gettimeofday(&getwork_start, NULL);
-
-	if (api->thread_init && !api->thread_init(mythr)) {
-		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
-		goto out;
-	}
-
-	thread_reportout(mythr);
-	applog(LOG_DEBUG, "Popping ping in miner thread");
-	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
-
 	sdiff.tv_sec = sdiff.tv_usec = 0;
 	gettimeofday(&tv_lastupdate, NULL);
 
-	while (1) {
+	while (42) {
+		struct work *work = get_work(mythr, thr_id);
+		int64_t hashes;
+
 		mythr->work_restart = false;
-		work = get_work(mythr, thr_id);
 		cgpu->new_work = true;
 
 		gettimeofday(&tv_workstart, NULL);
 		work->blk.nonce = 0;
 		cgpu->max_hashes = 0;
-		if (api->prepare_work && !api->prepare_work(mythr, work)) {
+		if (!drv->prepare_work(mythr, work)) {
 			applog(LOG_ERR, "work prepare failed, exiting "
 				"mining thread %d", thr_id);
 			break;
@@ -5460,16 +5537,16 @@ void *miner_thread(void *userdata)
 			gettimeofday(&(work->tv_work_start), NULL);
 
 			thread_reportin(mythr);
-			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
+			hashes = drv->scanhash(mythr, work, work->blk.nonce + max_nonce);
 			thread_reportin(mythr);
 
 			gettimeofday(&getwork_start, NULL);
 
 			if (unlikely(hashes == -1)) {
-				applog(LOG_ERR, "%s %d failure, disabling!", api->name, cgpu->device_id);
+				applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 				cgpu->deven = DEV_DISABLED;
 				dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-				mt_disable(mythr, thr_id, api);
+				mt_disable(mythr, thr_id, drv);
 			}
 
 			hashes_done += hashes;
@@ -5490,7 +5567,7 @@ void *miner_thread(void *userdata)
 			if (unlikely((long)sdiff.tv_sec < cycle)) {
 				int mult;
 
-				if (likely(!api->can_limit_work || max_nonce == 0xffffffff))
+				if (likely(max_nonce == 0xffffffff))
 					continue;
 
 				mult = 1000000 / ((sdiff.tv_usec + 0x400) / 0x400) + 0x10;
@@ -5499,9 +5576,9 @@ void *miner_thread(void *userdata)
 					max_nonce = 0xffffffff;
 				else
 					max_nonce = (max_nonce * mult) / 0x400;
-			} else if (unlikely(sdiff.tv_sec > cycle) && api->can_limit_work)
+			} else if (unlikely(sdiff.tv_sec > cycle))
 				max_nonce = max_nonce * cycle / sdiff.tv_sec;
-			else if (unlikely(sdiff.tv_usec > 100000) && api->can_limit_work)
+			else if (unlikely(sdiff.tv_usec > 100000))
 				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
 
 			timersub(&tv_end, &tv_lastupdate, &diff);
@@ -5527,16 +5604,162 @@ void *miner_thread(void *userdata)
 			}
 
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
-				mt_disable(mythr, thr_id, api);
+				mt_disable(mythr, thr_id, drv);
 
 			sdiff.tv_sec = sdiff.tv_usec = 0;
 		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
 		free_work(work);
 	}
+}
 
+/* Create a hashtable of work items for devices with a queue. The device
+ * driver must have a custom queue_full function or it will default to true
+ * and put only one work item in the queue. Work items should not be removed
+ * from this hashtable until they are no longer in use anywhere. Once a work
+ * item is physically queued on the device itself, the work->queued flag
+ * should be set under cgpu->qlock write lock to prevent it being dereferenced
+ * while still in use. */
+static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
+{
+	thread_reportout(mythr);
+	do {
+		struct work *work = get_work(mythr, thr_id);
+
+		wr_lock(&cgpu->qlock);
+		HASH_ADD_INT(cgpu->queued_work, id, work);
+		wr_unlock(&cgpu->qlock);
+		/* The queue_full function should be used by the driver to
+		 * actually place work items on the physical device if it
+		 * does have a queue. */
+	} while (!drv->queue_full(cgpu));
+}
+
+/* This function is for retrieving one work item from the queued hashtable of
+ * available work items that are not yet physically on a device (which is
+ * flagged with the work->queued bool). Code using this function must be able
+ * to handle NULL as a return which implies there is no work available. */
+struct work *get_queued(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (!work->queued) {
+			work->queued = true;
+			ret = work;
+			break;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
+/* This function should be used by queued device drivers when they're sure
+ * the work struct is no longer in use. */
+void work_completed(struct cgpu_info *cgpu, struct work *work)
+{
+	wr_lock(&cgpu->qlock);
+	HASH_DEL(cgpu->queued_work, work);
+	wr_unlock(&cgpu->qlock);
+	free_work(work);
+}
+
+static void flush_queue(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp;
+	int discarded = 0;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		/* Can only discard the work items if they're not physically
+		 * queued on the device. */
+		if (!work->queued) {
+			HASH_DEL(cgpu->queued_work, work);
+			discard_work(work);
+			discarded++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	if (discarded)
+		applog(LOG_DEBUG, "Discarded %d queued work items", discarded);
+}
+
+/* This version of hash work is for devices that are fast enough to always
+ * perform a full nonce range and need a queue to maintain the device busy.
+ * Work creation and destruction is not done from within this function
+ * directly. */
+void hash_queued_work(struct thr_info *mythr)
+{
+	const long cycle = opt_log_interval / 5 ? : 1;
+	struct timeval tv_start = {0, 0}, tv_end;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	const int thr_id = mythr->id;
+	int64_t hashes_done = 0;
+
+	while (42) {
+		struct timeval diff;
+		int64_t hashes;
+
+		mythr->work_restart = false;
+
+		fill_queue(mythr, cgpu, drv, thr_id);
+
+		thread_reportin(mythr);
+		hashes = drv->scanwork(mythr);
+		if (unlikely(hashes == -1 )) {
+			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
+			cgpu->deven = DEV_DISABLED;
+			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
+			mt_disable(mythr, thr_id, drv);
+		}
+
+		hashes_done += hashes;
+		gettimeofday(&tv_end, NULL);
+		timersub(&tv_end, &tv_start, &diff);
+		if (diff.tv_sec >= cycle) {
+			hashmeter(thr_id, &diff, hashes_done);
+			hashes_done = 0;
+			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
+		}
+
+		if (unlikely(mythr->work_restart)) {
+			flush_queue(cgpu);
+			drv->flush_work(cgpu);
+		}
+
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr, thr_id, drv);
+	}
+}
+
+void *miner_thread(void *userdata)
+{
+	struct thr_info *mythr = userdata;
+	const int thr_id = mythr->id;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	char threadname[20];
+
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+        snprintf(threadname,20,"miner %d",thr_id);
+	RenameThread(threadname);
+
+	if (!drv->thread_init(mythr)) {
+		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
+		goto out;
+	}
+
+	thread_reportout(mythr);
+	applog(LOG_DEBUG, "Popping ping in miner thread");
+	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
+
+	drv->hash_work(mythr);
 out:
-	if (api->thread_shutdown)
-		api->thread_shutdown(mythr);
+	drv->thread_shutdown(mythr);
 
 	thread_reportin(mythr);
 	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
@@ -5663,7 +5886,7 @@ retry_pool:
 	if (!pool) {
 		applog(LOG_WARNING, "No suitable long-poll found for %s", cp->rpc_url);
 		while (!pool) {
-			sleep(60);
+			nmsleep(60000);
 			pool = select_longpoll_pool(cp);
 		}
 	}
@@ -5738,7 +5961,7 @@ retry_pool:
 				continue;
 			if (failures == 1)
 				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
-			sleep(30);
+			nmsleep(30000);
 		}
 
 		if (pool != cp) {
@@ -5764,8 +5987,7 @@ out:
 
 void reinit_device(struct cgpu_info *cgpu)
 {
-	if (cgpu->api->reinit_device)
-		cgpu->api->reinit_device(cgpu);
+	cgpu->drv->reinit_device(cgpu);
 }
 
 static struct timeval rotate_tv;
@@ -5843,7 +6065,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			switch_pools(NULL);
 		}
 
-		sleep(30);
+		nmsleep(30000);
 			
 	}
 	return NULL;
@@ -5907,12 +6129,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
 			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
 			sched_paused = true;
-			for (i = 0; i < mining_threads; i++) {
-				struct thr_info *thr;
-				thr = &thr_info[i];
-
-				thr->pause = true;
-			}
+			mutex_lock(&mining_thr_lock);
+			for (i = 0; i < mining_threads; i++)
+				mining_thr[i]->pause = true;
+			mutex_unlock(&mining_thr_lock);
 		} else if (sched_paused && should_run()) {
 			applog(LOG_WARNING, "Restarting execution as per start time %02d:%02d scheduled",
 				schedstart.tm.tm_hour, schedstart.tm.tm_min);
@@ -5923,7 +6143,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 			for (i = 0; i < mining_threads; i++) {
 				struct thr_info *thr;
-				thr = &thr_info[i];
+
+				thr = get_thread(i);
 
 				/* Don't touch disabled devices */
 				if (thr->cgpu->deven == DEV_DISABLED)
@@ -5934,18 +6155,17 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		}
 
 		for (i = 0; i < total_devices; ++i) {
-			struct cgpu_info *cgpu = devices[i];
+			struct cgpu_info *cgpu = get_devices(i);
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char dev_str[8];
 			int gpu;
 
-			if (cgpu->api->get_stats)
-			  cgpu->api->get_stats(cgpu);
+			cgpu->drv->get_stats(cgpu);
 
 			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
-			sprintf(dev_str, "%s%d", cgpu->api->name, gpu);
+			sprintf(dev_str, "%s%d", cgpu->drv->name, gpu);
 
 #ifdef HAVE_ADL
 			if (adl_active && cgpu->has_adl)
@@ -5965,7 +6185,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				continue;
 
 #ifdef WANT_CPUMINE
-			if (!strcmp(cgpu->api->dname, "cpu"))
+			if (cgpu->drv->drv_id == DRIVER_CPU)
 				continue;
 #endif
 			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
@@ -6022,7 +6242,7 @@ static void log_print_status(struct cgpu_info *cgpu)
 	applog(LOG_WARNING, "%s", logline);
 }
 
-static void print_summary(void)
+void print_summary(void)
 {
 	struct timeval diff;
 	int hours, mins, secs, i;
@@ -6102,8 +6322,11 @@ static void print_summary(void)
 	}
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
-	for (i = 0; i < total_devices; ++i)
-		log_print_status(devices[i]);
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = get_devices(i);
+
+		log_print_status(cgpu);
+	}
 
 	if (opt_shares)
 		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
@@ -6353,46 +6576,147 @@ void enable_curses(void) {
 }
 #endif
 
-/* TODO: fix need a dummy CPU device_api even if no support for CPU mining */
+/* TODO: fix need a dummy CPU device_drv even if no support for CPU mining */
 #ifndef WANT_CPUMINE
-struct device_api cpu_api;
-struct device_api cpu_api = {
+struct device_drv cpu_drv;
+struct device_drv cpu_drv = {
+	.drv_id = DRIVER_CPU,
 	.name = "CPU",
 };
 #endif
 
 #ifdef USE_BITFORCE
-extern struct device_api bitforce_api;
+extern struct device_drv bitforce_drv;
 #endif
 
 #ifdef USE_ICARUS
-extern struct device_api icarus_api;
+extern struct device_drv icarus_drv;
 #endif
 
 #ifdef USE_MODMINER
-extern struct device_api modminer_api;
+extern struct device_drv modminer_drv;
 #endif
 
 #ifdef USE_ZTEX
-extern struct device_api ztex_api;
+extern struct device_drv ztex_drv;
 #endif
 
-
 static int cgminer_id_count = 0;
+
+/* Various noop functions for drivers that don't support or need their
+ * variants. */
+static void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
+{
+}
+
+void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu)
+{
+	tailsprintf(buf, "               | ");
+}
+
+static void noop_get_statline(char __maybe_unused *buf, struct cgpu_info __maybe_unused *cgpu)
+{
+}
+
+static bool noop_get_stats(struct cgpu_info __maybe_unused *cgpu)
+{
+	return true;
+}
+
+static bool noop_thread_prepare(struct thr_info __maybe_unused *thr)
+{
+	return true;
+}
+
+static uint64_t noop_can_limit_work(struct thr_info __maybe_unused *thr)
+{
+	return 0xffffffff;
+}
+
+static bool noop_thread_init(struct thr_info __maybe_unused *thr)
+{
+	return true;
+}
+
+static bool noop_prepare_work(struct thr_info __maybe_unused *thr, struct work __maybe_unused *work)
+{
+	return true;
+}
+
+static void noop_hw_error(struct thr_info __maybe_unused *thr)
+{
+}
+
+static void noop_thread_shutdown(struct thr_info __maybe_unused *thr)
+{
+}
+
+static void noop_thread_enable(struct thr_info __maybe_unused *thr)
+{
+}
+
+#define noop_flush_work noop_reinit_device
+#define noop_queue_full noop_get_stats
+
+/* Fill missing driver api functions with noops */
+void fill_device_api(struct cgpu_info *cgpu)
+{
+	struct device_drv *drv = cgpu->drv;
+
+	if (!drv->reinit_device)
+		drv->reinit_device = &noop_reinit_device;
+	if (!drv->get_statline_before)
+		drv->get_statline_before = &blank_get_statline_before;
+	if (!drv->get_statline)
+		drv->get_statline = &noop_get_statline;
+	if (!drv->get_stats)
+		drv->get_stats = &noop_get_stats;
+	if (!drv->thread_prepare)
+		drv->thread_prepare = &noop_thread_prepare;
+	if (!drv->can_limit_work)
+		drv->can_limit_work = &noop_can_limit_work;
+	if (!drv->thread_init)
+		drv->thread_init = &noop_thread_init;
+	if (!drv->prepare_work)
+		drv->prepare_work = &noop_prepare_work;
+	if (!drv->hw_error)
+		drv->hw_error = &noop_hw_error;
+	if (!drv->thread_shutdown)
+		drv->thread_shutdown = &noop_thread_shutdown;
+	if (!drv->thread_enable)
+		drv->thread_enable = &noop_thread_enable;
+	if (!drv->hash_work)
+		drv->hash_work = &hash_sole_work;
+	if (!drv->flush_work)
+		drv->flush_work = &noop_flush_work;
+	if (!drv->queue_full)
+		drv->queue_full = &noop_queue_full;
+}
 
 void enable_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
+	mutex_lock(&devices_lock);
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
-	mining_threads += cgpu->threads;
+	mutex_unlock(&devices_lock);
+	if (hotplug_mode) {
+		new_threads += cgpu->threads;
+		adj_width(mining_threads + new_threads, &dev_width);
+	} else {
+		mining_threads += cgpu->threads;
 #ifdef HAVE_CURSES
-	adj_width(mining_threads, &dev_width);
+		adj_width(mining_threads, &dev_width);
 #endif
+	}
 #ifdef HAVE_OPENCL
-	if (cgpu->api == &opencl_api) {
+	if (cgpu->drv->drv_id == DRIVER_OPENCL) {
 		gpu_threads += cgpu->threads;
 	}
 #endif
+	fill_device_api(cgpu);
+
+	rwlock_init(&cgpu->qlock);
+	cgpu->queued_work = NULL;
 }
 
 struct _cgpu_devid_counter {
@@ -6406,19 +6730,136 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	static struct _cgpu_devid_counter *devids = NULL;
 	struct _cgpu_devid_counter *d;
 	
-	HASH_FIND_STR(devids, cgpu->api->name, d);
+	HASH_FIND_STR(devids, cgpu->drv->name, d);
 	if (d)
 		cgpu->device_id = ++d->lastid;
 	else {
 		d = malloc(sizeof(*d));
-		memcpy(d->name, cgpu->api->name, sizeof(d->name));
+		memcpy(d->name, cgpu->drv->name, sizeof(d->name));
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
-	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + 2));
-	devices[total_devices++] = cgpu;
+	mutex_lock(&devices_lock);
+	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
+	mutex_unlock(&devices_lock);
+	if (hotplug_mode)
+		devices[total_devices + new_devices++] = cgpu;
+	else
+		devices[total_devices++] = cgpu;
 	return true;
 }
+
+struct device_drv *copy_drv(struct device_drv *drv)
+{
+	struct device_drv *copy;
+	char buf[100];
+
+	if (unlikely(!(copy = malloc(sizeof(*copy))))) {
+		sprintf(buf, "Failed to allocate device_drv copy of %s (%s)",
+				drv->name, drv->copy ? "copy" : "original");
+		quit(1, buf);
+	}
+	memcpy(copy, drv, sizeof(*copy));
+	copy->copy = true;
+	return copy;
+}
+
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+static void hotplug_process()
+{
+	struct thr_info *thr;
+	int i, j;
+
+	for (i = 0; i < new_devices; i++) {
+		struct cgpu_info *cgpu = devices[total_devices + i];
+		enable_device(cgpu);
+		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+		cgpu->rolling = cgpu->total_mhashes = 0;
+	}
+
+	mutex_lock(&mining_thr_lock);
+	mining_thr = realloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
+	mutex_unlock(&mining_thr_lock);
+	if (!mining_thr)
+		quit(1, "Failed to hotplug realloc mining_thr");
+	for (i = 0; i < new_threads; i++) {
+		mining_thr[mining_threads + i] = calloc(1, sizeof(*thr));
+		if (!mining_thr[mining_threads + i])
+			quit(1, "Failed to hotplug calloc mining_thr[%d]", i);
+	}
+
+	// Start threads
+	for (i = 0; i < new_devices; ++i) {
+		struct cgpu_info *cgpu = devices[total_devices];
+		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
+		cgpu->thr[cgpu->threads] = NULL;
+		cgpu->status = LIFE_INIT;
+
+		for (j = 0; j < cgpu->threads; ++j) {
+			thr = get_thread(mining_threads);
+			thr->id = mining_threads;
+			thr->cgpu = cgpu;
+			thr->device_thread = j;
+
+			thr->q = tq_new();
+			if (!thr->q)
+				quit(1, "tq_new hotplug failed in starting %s%d mining thread (#%d)", cgpu->drv->name, cgpu->device_id, total_devices);
+
+			/* Enable threads for devices set not to mine but disable
+			 * their queue in case we wish to enable them later */
+			if (cgpu->deven != DEV_DISABLED) {
+				applog(LOG_DEBUG, "Pushing hotplug ping to thread %d", thr->id);
+				tq_push(thr->q, &ping);
+			}
+
+			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
+				continue;
+
+			thread_reportout(thr);
+
+			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+				quit(1, "hotplug thread %d create failed", thr->id);
+
+			cgpu->thr[j] = thr;
+
+			mining_threads++;
+		}
+		total_devices++;
+		applog(LOG_WARNING, "Hotplug: %s added %s %i", cgpu->drv->dname, cgpu->drv->name, cgpu->device_id);
+	}
+}
+
+static void *hotplug_thread(void __maybe_unused *userdata)
+{
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("hotplug");
+
+	hotplug_mode = true;
+
+	while (0x2a) {
+		nmsleep(5000);
+
+// Version 0.1 just add the devices on - worry about using nodev later
+
+		new_devices = 0;
+		new_threads = 0;
+
+#ifdef USE_BITFORCE
+		bitforce_drv.drv_detect();
+#endif
+
+#ifdef USE_MODMINER
+		modminer_drv.drv_detect();
+#endif
+
+		if (new_devices)
+			hotplug_process();
+	}
+
+	return NULL;
+}
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -6460,6 +6901,8 @@ int main(int argc, char *argv[])
 	mutex_init(&sshare_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
+	mutex_init(&mining_thr_lock);
+	mutex_init(&devices_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
@@ -6629,32 +7072,32 @@ int main(int argc, char *argv[])
 
 #ifdef HAVE_OPENCL
 	if (!opt_nogpu)
-		opencl_api.api_detect();
+		opencl_drv.drv_detect();
 	gpu_threads = 0;
 #endif
 
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
-		icarus_api.api_detect();
+		icarus_drv.drv_detect();
 #endif
 
 #ifdef USE_BITFORCE
 	if (!opt_scrypt)
-		bitforce_api.api_detect();
+		bitforce_drv.drv_detect();
 #endif
 
 #ifdef USE_MODMINER
 	if (!opt_scrypt)
-		modminer_api.api_detect();
+		modminer_drv.drv_detect();
 #endif
 
 #ifdef USE_ZTEX
 	if (!opt_scrypt)
-		ztex_api.api_detect();
+		ztex_drv.drv_detect();
 #endif
 
 #ifdef WANT_CPUMINE
-	cpu_api.api_detect();
+	cpu_drv.drv_detect();
 #endif
 
 	if (devices_enabled == -1) {
@@ -6662,9 +7105,9 @@ int main(int argc, char *argv[])
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
 			if (cgpu->name)
-				applog(LOG_ERR, " %2d. %s %d: %s (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->name, cgpu->api->dname);
+				applog(LOG_ERR, " %2d. %s %d: %s (driver: %s)", i, cgpu->drv->name, cgpu->device_id, cgpu->name, cgpu->drv->dname);
 			else
-				applog(LOG_ERR, " %2d. %s %d (driver: %s)", i, cgpu->api->name, cgpu->device_id, cgpu->api->dname);
+				applog(LOG_ERR, " %2d. %s %d (driver: %s)", i, cgpu->drv->name, cgpu->device_id, cgpu->drv->dname);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}
@@ -6678,7 +7121,7 @@ int main(int argc, char *argv[])
 				enable_device(devices[i]);
 			} else if (i < total_devices) {
 				if (opt_removedisabled) {
-					if (devices[i]->api == &cpu_api)
+					if (devices[i]->drv->drv_id == DRIVER_CPU)
 						--opt_n_threads;
 				} else {
 					enable_device(devices[i]);
@@ -6694,6 +7137,8 @@ int main(int argc, char *argv[])
 
 	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
+
+	start_devices = total_devices;
 
 	load_temp_cutoffs();
 
@@ -6744,14 +7189,23 @@ int main(int argc, char *argv[])
 			fork_monitor();
 	#endif // defined(unix)
 
-	total_threads = mining_threads + 7;
-	thr_info = calloc(total_threads, sizeof(*thr));
-	if (!thr_info)
-		quit(1, "Failed to calloc thr_info");
+	mining_thr = calloc(mining_threads, sizeof(thr));
+	if (!mining_thr)
+		quit(1, "Failed to calloc mining_thr");
+	for (i = 0; i < mining_threads; i++) {
+		mining_thr[i] = calloc(1, sizeof(*thr));
+		if (!mining_thr[i])
+			quit(1, "Failed to calloc mining_thr[%d]", i);
+	}
 
-	gwsched_thr_id = mining_threads;
-	stage_thr_id = mining_threads + 1;
-	thr = &thr_info[stage_thr_id];
+	total_control_threads = 8;
+	control_thr = calloc(total_control_threads, sizeof(*thr));
+	if (!control_thr)
+		quit(1, "Failed to calloc control_thr");
+
+	gwsched_thr_id = 0;
+	stage_thr_id = 1;
+	thr = &control_thr[stage_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
 		quit(1, "Failed to tq_new");
@@ -6843,14 +7297,14 @@ begin_bench:
 		cgpu->status = LIFE_INIT;
 
 		for (j = 0; j < cgpu->threads; ++j, ++k) {
-			thr = &thr_info[k];
+			thr = get_thread(k);
 			thr->id = k;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 
 			thr->q = tq_new();
 			if (!thr->q)
-				quit(1, "tq_new failed in starting %s%d mining thread (#%d)", cgpu->api->name, cgpu->device_id, i);
+				quit(1, "tq_new failed in starting %s%d mining thread (#%d)", cgpu->drv->name, cgpu->device_id, i);
 
 			/* Enable threads for devices set not to mine but disable
 			 * their queue in case we wish to enable them later */
@@ -6860,7 +7314,7 @@ begin_bench:
 				tq_push(thr->q, &ping);
 			}
 
-			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
+			if (!cgpu->drv->thread_prepare(thr))
 				continue;
 
 			thread_reportout(thr);
@@ -6888,15 +7342,15 @@ begin_bench:
 	gettimeofday(&total_tv_start, NULL);
 	gettimeofday(&total_tv_end, NULL);
 
-	watchpool_thr_id = mining_threads + 2;
-	thr = &thr_info[watchpool_thr_id];
+	watchpool_thr_id = 2;
+	thr = &control_thr[watchpool_thr_id];
 	/* start watchpool thread */
 	if (thr_info_create(thr, NULL, watchpool_thread, NULL))
 		quit(1, "watchpool thread create failed");
 	pthread_detach(thr->pth);
 
-	watchdog_thr_id = mining_threads + 3;
-	thr = &thr_info[watchdog_thr_id];
+	watchdog_thr_id = 3;
+	thr = &control_thr[watchdog_thr_id];
 	/* start watchdog thread */
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
 		quit(1, "watchdog thread create failed");
@@ -6904,8 +7358,8 @@ begin_bench:
 
 #ifdef HAVE_OPENCL
 	/* Create reinit gpu thread */
-	gpur_thr_id = mining_threads + 4;
-	thr = &thr_info[gpur_thr_id];
+	gpur_thr_id = 4;
+	thr = &control_thr[gpur_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
 		quit(1, "tq_new failed for gpur_thr_id");
@@ -6914,21 +7368,35 @@ begin_bench:
 #endif	
 
 	/* Create API socket thread */
-	api_thr_id = mining_threads + 5;
-	thr = &thr_info[api_thr_id];
+	api_thr_id = 5;
+	thr = &control_thr[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
+
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	if (!opt_scrypt) {
+		hotplug_thr_id = 6;
+		thr = &control_thr[hotplug_thr_id];
+		if (thr_info_create(thr, NULL, hotplug_thread, thr))
+			quit(1, "hotplug thread create failed");
+		pthread_detach(thr->pth);
+	}
+#endif
 
 #ifdef HAVE_CURSES
 	/* Create curses input thread for keyboard input. Create this last so
 	 * that we know all threads are created since this can call kill_work
-	 * to try and shut down ll previous threads. */
-	input_thr_id = mining_threads + 6;
-	thr = &thr_info[input_thr_id];
+	 * to try and shut down all previous threads. */
+	input_thr_id = 7;
+	thr = &control_thr[input_thr_id];
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
 	pthread_detach(thr->pth);
 #endif
+
+	/* Just to be sure */
+	if (total_control_threads != 8)
+		quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {
@@ -6974,7 +7442,7 @@ retry:
 			while (!pool->stratum_active || !pool->stratum_notify) {
 				struct pool *altpool = select_pool(true);
 
-				sleep(5);
+				nmsleep(5000);
 				if (altpool != pool) {
 					pool = altpool;
 					goto retry;
@@ -6990,7 +7458,7 @@ retry:
 			while (pool->idle) {
 				struct pool *altpool = select_pool(true);
 
-				sleep(5);
+				nmsleep(5000);
 				if (altpool != pool) {
 					pool = altpool;
 					goto retry;
@@ -7024,7 +7492,7 @@ retry:
 			 * requests but is up as we'll keep hammering it */
 			if (++pool->seq_getfails > mining_threads + opt_queue)
 				pool_died(pool);
-			sleep(5);
+			nmsleep(5000);
 			push_curl_entry(ce, pool);
 			pool = select_pool(!opt_fail_only);
 			goto retry;

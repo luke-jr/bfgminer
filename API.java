@@ -76,6 +76,7 @@ class API
 
 	public void process(String cmd, InetAddress ip, int port) throws Exception
 	{
+		StringBuffer sb = new StringBuffer();
 		char buf[] = new char[MAXRECEIVESIZE];
 		int len = 0;
 
@@ -89,7 +90,15 @@ System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+po
 			ps.flush();
 
 			InputStreamReader isr = new InputStreamReader(socket.getInputStream());
-			len = isr.read(buf, 0, MAXRECEIVESIZE);
+			while (0x80085 > 0)
+			{
+				len = isr.read(buf, 0, MAXRECEIVESIZE);
+				if (len < 1)
+					break;
+				sb.append(buf, 0, len);
+				if (buf[len-1] == '\0')
+					break;
+			}
 
 			closeAll();
 		}
@@ -100,7 +109,7 @@ System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+po
 			return;
 		}
 
-		String result = new String(buf, 0, len);
+		String result = sb.toString();
 
 		System.out.println("Answer='"+result+"'");
 

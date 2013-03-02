@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2012 Andrew Smith
+ * Copyright 2011-2013 Andrew Smith
  * Copyright 2011-2012 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -133,7 +133,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.23";
+static const char *APIVERSION = "1.24";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static const char *SICK = "Sick";
@@ -387,6 +387,12 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_PGASETERR 93
 #endif
 
+#define MSG_ZERMIS 94
+#define MSG_ZERINV 95
+#define MSG_ZERSUM 96
+#define MSG_ZERNOSUM 97
+#define MSG_USBNODEV 98
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -559,6 +565,13 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_PGASETOK, PARAM_BOTH,	"PGA %d set OK" },
  { SEVERITY_ERR,   MSG_PGASETERR, PARAM_BOTH,	"PGA %d set failed: %s" },
 #endif
+ { SEVERITY_ERR,   MSG_ZERMIS,	PARAM_NONE,	"Missing zero parameters" },
+ { SEVERITY_ERR,   MSG_ZERINV,	PARAM_STR,	"Invalid zero parameter '%s'" },
+ { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
+ { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+ { SEVERITY_ERR,   MSG_USBNODEV, PARAM_PGA,	"PGA%d has no device" },
+#endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -598,22 +611,6 @@ struct APIGROUPS {
 
 static struct IP4ACCESS *ipaccess = NULL;
 static int ips = 0;
-
-#ifdef USE_BITFORCE
-extern struct device_api bitforce_api;
-#endif
-
-#ifdef USE_ICARUS
-extern struct device_api icarus_api;
-#endif
-
-#ifdef USE_ZTEX
-extern struct device_api ztex_api;
-#endif
-
-#ifdef USE_MODMINER
-extern struct device_api modminer_api;
-#endif
 
 struct io_data {
 	size_t siz;
@@ -1151,24 +1148,26 @@ static int numpgas()
 	int count = 0;
 	int i;
 
+	mutex_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
-		if (devices[i]->api == &bitforce_api)
+		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
 			count++;
 #endif
 #ifdef USE_ICARUS
-		if (devices[i]->api == &icarus_api)
+		if (devices[i]->drv->drv_id == DRIVER_ICARUS)
 			count++;
 #endif
 #ifdef USE_ZTEX
-		if (devices[i]->api == &ztex_api)
+		if (devices[i]->drv->drv_id == DRIVER_ZTEX)
 			count++;
 #endif
 #ifdef USE_MODMINER
-		if (devices[i]->api == &modminer_api)
+		if (devices[i]->drv->drv_id == DRIVER_MODMINER)
 			count++;
 #endif
 	}
+	mutex_unlock(&devices_lock);
 	return count;
 }
 
@@ -1177,27 +1176,35 @@ static int pgadevice(int pgaid)
 	int count = 0;
 	int i;
 
+	mutex_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
-		if (devices[i]->api == &bitforce_api)
+		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
 			count++;
 #endif
 #ifdef USE_ICARUS
-		if (devices[i]->api == &icarus_api)
+		if (devices[i]->drv->drv_id == DRIVER_ICARUS)
 			count++;
 #endif
 #ifdef USE_ZTEX
-		if (devices[i]->api == &ztex_api)
+		if (devices[i]->drv->drv_id == DRIVER_ZTEX)
 			count++;
 #endif
 #ifdef USE_MODMINER
-		if (devices[i]->api == &modminer_api)
+		if (devices[i]->drv->drv_id == DRIVER_MODMINER)
 			count++;
 #endif
 		if (count == (pgaid + 1))
-			return i;
+			goto foundit;
 	}
+
+	mutex_unlock(&devices_lock);
 	return -1;
+
+foundit:
+
+	mutex_unlock(&devices_lock);
+	return i;
 }
 #endif
 
@@ -1530,16 +1537,16 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		if (dev < 0) // Should never happen
 			return;
 
-		struct cgpu_info *cgpu = devices[dev];
+		struct cgpu_info *cgpu = get_devices(dev);
 		double frequency = 0;
 		float temp = cgpu->temp;
 
 #ifdef USE_ZTEX
-		if (cgpu->api == &ztex_api && cgpu->device_ztex)
+		if (cgpu->drv->drv_id == DRIVER_ZTEX && cgpu->device_ztex)
 			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
 #endif
 #ifdef USE_MODMINER
-		if (cgpu->api == &modminer_api)
+		if (cgpu->drv->drv_id == DRIVER_MODMINER)
 			frequency = cgpu->clock;
 #endif
 
@@ -1553,7 +1560,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		status = (char *)status2str(cgpu->status);
 
 		root = api_add_int(root, "PGA", &pga, false);
-		root = api_add_string(root, "Name", cgpu->api->name, false);
+		root = api_add_string(root, "Name", cgpu->drv->name, false);
 		root = api_add_int(root, "ID", &(cgpu->device_id), false);
 		root = api_add_string(root, "Enabled", enabled, false);
 		root = api_add_string(root, "Status", status, false);
@@ -1577,6 +1584,9 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+		root = api_add_bool(root, "No Device", &(cgpu->usbinfo.nodev), false);
+#endif
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
@@ -1747,6 +1757,7 @@ static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 
 static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
 	int numpga = numpgas();
 	struct thr_info *thr;
 	int pga;
@@ -1775,7 +1786,10 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
-	struct cgpu_info *cgpu = devices[dev];
+	cgpu = get_devices(dev);
+
+	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s%u",
+			id, dev, cgpu->drv->name, cgpu->device_id);
 
 	if (cgpu->deven != DEV_DISABLED) {
 		message(io_data, MSG_PGALRENA, id, NULL, isjson);
@@ -1789,11 +1803,19 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 	}
 #endif
 
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	if (cgpu->usbinfo.nodev) {
+		message(io_data, MSG_USBNODEV, id, NULL, isjson);
+		return;
+	}
+#endif
+
 	for (i = 0; i < mining_threads; i++) {
-		pga = thr_info[i].cgpu->device_id;
+		thr = get_thread(i);
+		pga = thr->cgpu->cgminer_id;
 		if (pga == dev) {
-			thr = &thr_info[i];
 			cgpu->deven = DEV_ENABLED;
+			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
 			tq_push(thr->q, &ping);
 		}
 	}
@@ -1803,6 +1825,7 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 
 static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
 	int numpga = numpgas();
 	int id;
 
@@ -1828,7 +1851,10 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	struct cgpu_info *cgpu = devices[dev];
+	cgpu = get_devices(dev);
+
+	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s%u",
+			id, dev, cgpu->drv->name, cgpu->device_id);
 
 	if (cgpu->deven == DEV_DISABLED) {
 		message(io_data, MSG_PGALRDIS, id, NULL, isjson);
@@ -1842,6 +1868,8 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 
 static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
+	struct device_drv *drv;
 	int numpga = numpgas();
 	int id;
 
@@ -1867,13 +1895,13 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 		return;
 	}
 
-	struct cgpu_info *cgpu = devices[dev];
-	struct device_api *api = cgpu->api;
+	cgpu = get_devices(dev);
+	drv = cgpu->drv;
 
-	if (!api->identify_device)
+	if (!drv->identify_device)
 		message(io_data, MSG_PGANOID, id, NULL, isjson);
 	else {
-		api->identify_device(cgpu);
+		drv->identify_device(cgpu);
 		message(io_data, MSG_PGAIDENT, id, NULL, isjson);
 	}
 }
@@ -1993,6 +2021,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		else
 			root = api_add_const(root, "Stratum URL", BLANK, false);
 		root = api_add_bool(root, "Has GBT", &(pool->has_gbt), false);
+		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
 
 		root = print_data(root, buf, isjson, isjson && (i > 0));
 		io_add(io_data, buf);
@@ -2081,23 +2110,25 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
+	applog(LOG_DEBUG, "API: request to gpuenable gpuid %d %s%u",
+			id, gpus[id].drv->name, gpus[id].device_id);
+
 	if (gpus[id].deven != DEV_DISABLED) {
 		message(io_data, MSG_ALRENA, id, NULL, isjson);
 		return;
 	}
 
 	for (i = 0; i < gpu_threads; i++) {
-		gpu = thr_info[i].cgpu->device_id;
+		thr = get_thread(i);
+		gpu = thr->cgpu->device_id;
 		if (gpu == id) {
-			thr = &thr_info[i];
 			if (thr->cgpu->status != LIFE_WELL) {
 				message(io_data, MSG_GPUMRE, id, NULL, isjson);
 				return;
 			}
-
 			gpus[id].deven = DEV_ENABLED;
+			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
 			tq_push(thr->q, &ping);
-
 		}
 	}
 
@@ -2123,6 +2154,9 @@ static void gpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		message(io_data, MSG_INVGPU, id, NULL, isjson);
 		return;
 	}
+
+	applog(LOG_DEBUG, "API: request to gpudisable gpuid %d %s%u",
+			id, gpus[id].drv->name, gpus[id].device_id);
 
 	if (gpus[id].deven == DEV_DISABLED) {
 		message(io_data, MSG_ALRDIS, id, NULL, isjson);
@@ -2752,7 +2786,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	// ALL counters (and only counters) must start the name with a '*'
 	// Simplifies future external support for identifying new counters
 	root = api_add_int(root, "NOTIFY", &device, false);
-	root = api_add_string(root, "Name", cgpu->api->name, false);
+	root = api_add_string(root, "Name", cgpu->drv->name, false);
 	root = api_add_int(root, "ID", &(cgpu->device_id), false);
 	root = api_add_time(root, "Last Well", &(cgpu->device_last_well), false);
 	root = api_add_time(root, "Last Not Well", &(cgpu->device_last_not_well), false);
@@ -2774,6 +2808,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 
 static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
 {
+	struct cgpu_info *cgpu;
 	bool io_open = false;
 	int i;
 
@@ -2787,8 +2822,10 @@ static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 	if (isjson)
 		io_open = io_add(io_data, COMSTR JSON_NOTIFY);
 
-	for (i = 0; i < total_devices; i++)
-		notifystatus(io_data, i, devices[i], isjson, group);
+	for (i = 0; i < total_devices; i++) {
+		cgpu = get_devices(i);
+		notifystatus(io_data, i, cgpu, isjson, group);
+	}
 
 	if (isjson && io_open)
 		io_close(io_data);
@@ -2813,12 +2850,12 @@ static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		io_open = io_add(io_data, COMSTR JSON_DEVDETAILS);
 
 	for (i = 0; i < total_devices; i++) {
-		cgpu = devices[i];
+		cgpu = get_devices(i);
 
 		root = api_add_int(root, "DEVDETAILS", &i, false);
-		root = api_add_string(root, "Name", cgpu->api->name, false);
+		root = api_add_string(root, "Name", cgpu->drv->name, false);
 		root = api_add_int(root, "ID", &(cgpu->device_id), false);
-		root = api_add_string(root, "Driver", cgpu->api->dname, false);
+		root = api_add_string(root, "Driver", cgpu->drv->dname, false);
 		root = api_add_const(root, "Kernel", cgpu->kname ? : BLANK, false);
 		root = api_add_const(root, "Model", cgpu->name ? : BLANK, false);
 		root = api_add_const(root, "Device Path", cgpu->device_path ? : BLANK, false);
@@ -2895,6 +2932,8 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 		root = api_add_uint64(root, "Bytes Sent", &(pool_stats->bytes_sent), false);
 		root = api_add_uint64(root, "Times Recv", &(pool_stats->times_received), false);
 		root = api_add_uint64(root, "Bytes Recv", &(pool_stats->bytes_received), false);
+		root = api_add_uint64(root, "Net Bytes Sent", &(pool_stats->net_bytes_sent), false);
+		root = api_add_uint64(root, "Net Bytes Recv", &(pool_stats->net_bytes_received), false);
 	}
 
 	if (extra)
@@ -2908,6 +2947,7 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 
 static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
 	bool io_open = false;
 	struct api_data *extra;
 	char id[20];
@@ -2920,15 +2960,15 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 
 	i = 0;
 	for (j = 0; j < total_devices; j++) {
-		struct cgpu_info *cgpu = devices[j];
+		cgpu = get_devices(j);
 
-		if (cgpu && cgpu->api) {
-			if (cgpu->api->get_api_stats)
-				extra = cgpu->api->get_api_stats(cgpu);
+		if (cgpu && cgpu->drv) {
+			if (cgpu->drv->get_api_stats)
+				extra = cgpu->drv->get_api_stats(cgpu);
 			else
 				extra = NULL;
 
-			sprintf(id, "%s%d", cgpu->api->name, cgpu->device_id);
+			sprintf(id, "%s%d", cgpu->drv->name, cgpu->device_id);
 			i = itemstats(io_data, i, id, &(cgpu->cgminer_stats), NULL, extra, isjson);
 		}
 	}
@@ -3120,7 +3160,7 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 {
 	struct api_data *root = NULL;
 
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
 	char buf[TMPBUFSIZ];
 	bool io_open = false;
 	int count = 0;
@@ -3133,7 +3173,7 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		return;
 	}
 
-#ifdef USE_MODMINER
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
 
 	message(io_data, MSG_USBSTA, 0, NULL, isjson);
 
@@ -3160,6 +3200,8 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 #ifdef HAVE_AN_FPGA
 static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
+	struct device_drv *drv;
 	char buf[TMPBUFSIZ];
 	int numpga = numpgas();
 
@@ -3193,17 +3235,17 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 		return;
 	}
 
-	struct cgpu_info *cgpu = devices[dev];
-	struct device_api *api = cgpu->api;
+	cgpu = get_devices(dev);
+	drv = cgpu->drv;
 
 	char *set = strchr(opt, ',');
 	if (set)
 		*(set++) = '\0';
 
-	if (!api->set_device)
+	if (!drv->set_device)
 		message(io_data, MSG_PGANOSET, id, NULL, isjson);
 	else {
-		char *ret = api->set_device(cgpu, opt, set, buf);
+		char *ret = drv->set_device(cgpu, opt, set, buf);
 		if (ret) {
 			if (strcasecmp(opt, "help") == 0)
 				message(io_data, MSG_PGAHELP, id, ret, isjson);
@@ -3214,6 +3256,54 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 	}
 }
 #endif
+
+static void dozero(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_ZERMIS, 0, NULL, isjson);
+		return;
+	}
+
+	char *sum = strchr(param, ',');
+	if (sum)
+		*(sum++) = '\0';
+	if (!sum || !*sum) {
+		message(io_data, MSG_MISBOOL, 0, NULL, isjson);
+		return;
+	}
+
+	bool all = false;
+	bool bs = false;
+	if (strcasecmp(param, "all") == 0)
+		all = true;
+	else if (strcasecmp(param, "bestshare") == 0)
+		bs = true;
+
+	if (all == false && bs == false) {
+		message(io_data, MSG_ZERINV, 0, param, isjson);
+		return;
+	}
+
+	*sum = tolower(*sum);
+	if (*sum != 't' && *sum != 'f') {
+		message(io_data, MSG_INVBOOL, 0, NULL, isjson);
+		return;
+	}
+
+	bool dosum = (*sum == 't');
+	if (dosum)
+		print_summary();
+
+	if (all)
+		zero_stats();
+	if (bs)
+		zero_bestshare();
+
+	if (dosum)
+		message(io_data, MSG_ZERSUM, 0, all ? "All" : "BestShare", isjson);
+	else
+		message(io_data, MSG_ZERNOSUM, 0, all ? "All" : "BestShare", isjson);
+}
 
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
@@ -3274,6 +3364,7 @@ struct CMDS {
 #ifdef HAVE_AN_FPGA
 	{ "pgaset",		pgaset,		true },
 #endif
+	{ "zero",		dozero,		true },
 	{ NULL,			NULL,		false }
 };
 
@@ -3342,12 +3433,10 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 	// ignore failure - it's closed immediately anyway
 	n = send(c, buf, len+1, 0);
 
-	if (opt_debug) {
-		if (SOCKETFAIL(n))
-			applog(LOG_DEBUG, "API: send failed: %s", SOCKERRMSG);
-		else
-			applog(LOG_DEBUG, "API: sent %d", n);
-	}
+	if (SOCKETFAIL(n))
+		applog(LOG_WARNING, "API: send failed: %s", SOCKERRMSG);
+	else
+		applog(LOG_DEBUG, "API: sent %d", n);
 }
 
 static void tidyup(__maybe_unused void *arg)
@@ -3701,7 +3790,7 @@ void api(int api_thr_id)
 
 	/* This should be done before curl in needed
 	 * to ensure curl has already called WSAStartup() in windows */
-	sleep(opt_log_interval);
+	nmsleep(opt_log_interval*1000);
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
@@ -3747,7 +3836,7 @@ void api(int api_thr_id)
 				break;
 			else {
 				applog(LOG_WARNING, "API bind to port %d failed - trying again in 30sec", port);
-				sleep(30);
+				nmsleep(30000);
 			}
 		} else
 			bound = 1;

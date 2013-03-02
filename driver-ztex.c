@@ -30,7 +30,7 @@
 
 #define GOLDEN_BACKLOG 5
 
-struct device_api ztex_api;
+struct device_drv ztex_drv;
 
 // Forward declarations
 static void ztex_disable(struct thr_info* thr);
@@ -68,7 +68,7 @@ static void ztex_detect(void)
 
 	for (i = 0; i < cnt; i++) {
 		ztex = calloc(1, sizeof(struct cgpu_info));
-		ztex->api = &ztex_api;
+		ztex->drv = &ztex_drv;
 		ztex->device_ztex = ztex_devices[i]->dev;
 		ztex->threads = 1;
 		ztex->device_ztex->fpgaNum = 0;
@@ -82,7 +82,7 @@ static void ztex_detect(void)
 
 		for (j = 1; j < fpgacount; j++) {
 			ztex = calloc(1, sizeof(struct cgpu_info));
-			ztex->api = &ztex_api;
+			ztex->drv = &ztex_drv;
 			ztex_slave = calloc(1, sizeof(struct libztex_device));
 			memcpy(ztex_slave, ztex_devices[i]->dev, sizeof(struct libztex_device));
 			ztex->device_ztex = ztex_slave;
@@ -389,15 +389,18 @@ static void ztex_shutdown(struct thr_info *thr)
 
 static void ztex_disable(struct thr_info *thr)
 {
+	struct cgpu_info *cgpu;
+
 	applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device_ztex->repr);
-	devices[thr->cgpu->device_id]->deven = DEV_DISABLED;
+	cgpu = get_devices(thr->cgpu->device_id);
+	cgpu->deven = DEV_DISABLED;
 	ztex_shutdown(thr);
 }
 
-struct device_api ztex_api = {
+struct device_drv ztex_drv = {
 	.dname = "ztex",
 	.name = "ZTX",
-	.api_detect = ztex_detect,
+	.drv_detect = ztex_detect,
 	.get_statline_before = ztex_statline_before,
 	.thread_prepare = ztex_prepare,
 	.scanhash = ztex_scanhash,

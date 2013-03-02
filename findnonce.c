@@ -204,7 +204,7 @@ static void *postcalc_hash(void *userdata)
 	 * end of the res[] array */
 	if (unlikely(pcd->res[FOUND] & ~FOUND)) {
 		applog(LOG_WARNING, "%s%d: invalid nonce count - HW error",
-				thr->cgpu->api->name, thr->cgpu->device_id);
+				thr->cgpu->drv->name, thr->cgpu->device_id);
 		hw_errors++;
 		thr->cgpu->hw_errors++;
 		pcd->res[FOUND] &= FOUND;
