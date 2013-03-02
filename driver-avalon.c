@@ -790,7 +790,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 
 	hash_count = 0;
 	while (true) {
-		work_i0 = work_i1 = work_i2 = -1;
+		work_i0 = work_i1 = work_i2 = work_i3 = -1;
 
 		full = avalon_buffer_full(fd);
 		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
