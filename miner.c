@@ -6797,6 +6797,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	uint32_t bak_nonce = *work_nonce;
 	struct timeval tv_work_found;
+	enum test_nonce2_result res;
 
 	gettimeofday(&tv_work_found, NULL);
 	*work_nonce = htole32(nonce);
@@ -6809,8 +6810,9 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
-	switch (test_nonce2(work, nonce)) {
-		case TNR_BAD:
+	res = test_nonce2(work, nonce);
+	
+	if (unlikely(res == TNR_BAD))
 		{
 			struct cgpu_info *cgpu = thr->cgpu;
 			applog(LOG_WARNING, "%"PRIpreprv": invalid nonce - HW error",
@@ -6824,15 +6826,20 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 				thr->cgpu->api->hw_error(thr);
 			goto out;
 		}
-		case TNR_HIGH:
+	
+	mutex_lock(&stats_lock);
+	thr->cgpu->last_device_valid_work = time(NULL);
+	mutex_unlock(&stats_lock);
+	
+	if (res == TNR_HIGH)
+	{
 			// Share above target, normal
 			/* Check the diff of the share, even if it didn't reach the
 			 * target, just to set the best share value if it's higher. */
 			share_diff(work);
 			goto out;
-		case TNR_GOOD:
-			break;
 	}
+	
 	submit_work_async(work, &tv_work_found);
 out:
 	*work_nonce = bak_nonce;
