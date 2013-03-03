@@ -5406,6 +5406,10 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 		goto out;
 	}
 
+	mutex_lock(&stats_lock);
+	thr->cgpu->last_device_valid_work = time(NULL);
+	mutex_unlock(&stats_lock);
+
 	ret = fulltest(hash2, work->target);
 	if (!ret) {
 		applog(LOG_INFO, "Share below target");

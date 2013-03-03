@@ -133,7 +133,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.24";
+static const char *APIVERSION = "1.25";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static const char *SICK = "Sick";
@@ -1623,6 +1623,7 @@ static void cpustatus(struct io_data *io_data, int cpu, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);

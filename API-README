@@ -140,6 +140,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Last Share Time=NNN, <- standand long time in seconds
                                (or 0 if none) of last accepted share
                               Last Share Pool=N, <- pool number (or -1 if none)
+                              Last Valid Work=NNN, <- standand long time in seconds
+                               of last work returned that wasn't an HW:
                               Will not report PGAs if PGA mining is disabled
                               Will not report CPUs if CPU mining is disabled
 
@@ -412,7 +414,14 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.24
+API V1.25
+
+Modified API commands:
+ 'devs' 'gpu' and 'pga' - add 'Last Valid Work'
+
+----------
+
+API V1.24 (cgminer v2.11.0)
 
 Added API commands:
  'zero'
@@ -420,6 +429,7 @@ Added API commands:
 Modified API commands:
  'pools' - add 'Best Share'
  'devs' and 'pga' - add 'No Device' for PGAs if MMQ or BFL compiled
+ 'stats' - add pool: 'Net Bytes Sent', 'Net Bytes Recv'
 
 ----------
 
