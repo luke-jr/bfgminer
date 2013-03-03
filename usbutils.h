@@ -122,6 +122,7 @@ enum usb_cmds {
 	C_SETMODEM,
 	C_PURGERX,
 	C_PURGETX,
+	C_FLASHREPLY,
 	C_MAX
 };
 

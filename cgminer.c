@@ -2842,6 +2842,16 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &control_thr[api_thr_id];
 	thr_info_cancel(thr);
+
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	/* Release USB resources in case it's a restart
+	 * and not a QUIT */
+	if (!opt_scrypt) {
+		applog(LOG_DEBUG, "Releasing all USB devices");
+		usb_cleanup();
+	}
+#endif
+
 }
 
 /* This should be the common exit path */
