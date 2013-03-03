@@ -6658,8 +6658,8 @@ static void noop_thread_enable(struct thr_info __maybe_unused *thr)
 #define noop_flush_work noop_reinit_device
 #define noop_queue_full noop_get_stats
 
-/* Fill missing driver api functions with noops */
-void fill_device_api(struct cgpu_info *cgpu)
+/* Fill missing driver drv functions with noops */
+void fill_device_drv(struct cgpu_info *cgpu)
 {
 	struct device_drv *drv = cgpu->drv;
 
@@ -6713,7 +6713,7 @@ void enable_device(struct cgpu_info *cgpu)
 		gpu_threads += cgpu->threads;
 	}
 #endif
-	fill_device_api(cgpu);
+	fill_device_drv(cgpu);
 
 	rwlock_init(&cgpu->qlock);
 	cgpu->queued_work = NULL;
