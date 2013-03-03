@@ -200,6 +200,8 @@ struct bitforce_data {
 	enum bitforce_proto proto;
 	bool sc;
 	bool queued;
+	unsigned result_busy_polled;
+	unsigned sleep_ms_default;
 };
 
 static void bitforce_clear_buffer(struct cgpu_info *);
@@ -517,6 +519,7 @@ void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 	{
 		bitforce->nonces = 0xffffffff;
 		bitforce->sleep_ms *= 5;
+		data->sleep_ms_default *= 5;
 		switch (proto)
 		{
 			case BFP_WORK:
@@ -547,6 +550,7 @@ void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 		/* Split work up into 1/5th nonce ranges */
 		bitforce->nonces = 0x33333332;
 		bitforce->sleep_ms /= 5;
+		data->sleep_ms_default /= 5;
 		data->next_work_cmd = "ZPX";
 		if (data->sc)
 		{
@@ -571,6 +575,8 @@ void bitforce_job_start(struct thr_info *thr)
 	char pdevbuf[0x100];
 	struct timeval tv_now;
 
+	data->result_busy_polled = 0;
+	
 	if (data->queued)
 	{
 		// get_results collected more accurate job start time
@@ -727,6 +733,8 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
+		data->result_busy_polled = bitforce->wait_ms;
+		
 		if (stale && data->proto != BFP_QUEUE)
 		{
 			applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
@@ -762,17 +770,39 @@ noqr:
 		 * equal to the result return time.*/
 		delay_time_ms = bitforce->sleep_ms;
 
-		if (bitforce->wait_ms > bitforce->sleep_ms + (WORK_CHECK_INTERVAL_MS * 2))
-			bitforce->sleep_ms += (bitforce->wait_ms - bitforce->sleep_ms) / 2;
-		else if (bitforce->wait_ms == bitforce->sleep_ms) {
-			if (bitforce->sleep_ms > WORK_CHECK_INTERVAL_MS)
-				bitforce->sleep_ms -= WORK_CHECK_INTERVAL_MS;
-			else if (bitforce->sleep_ms > BITFORCE_CHECK_INTERVAL_MS)
-				bitforce->sleep_ms -= BITFORCE_CHECK_INTERVAL_MS;
+		if (!data->result_busy_polled)
+		{
+			// No busy polls before results received
+			if (bitforce->wait_ms > delay_time_ms + (WORK_CHECK_INTERVAL_MS * 8))
+				// ... due to poll being rather late; ignore it as an anomaly
+				applog(LOG_DEBUG, "%"PRIpreprv": Got results on first poll after %ums, later than scheduled %ums (ignoring)",
+				       bitforce->proc_repr, bitforce->wait_ms, delay_time_ms);
+			else
+			if (bitforce->sleep_ms > data->sleep_ms_default + (BITFORCE_CHECK_INTERVAL_MS * 0x20))
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": Got results on first poll after %ums, on delayed schedule %ums; Wait time changed to: %ums (default sch)",
+				       bitforce->proc_repr, bitforce->wait_ms, delay_time_ms, data->sleep_ms_default);
+				bitforce->sleep_ms = data->sleep_ms_default;
+			}
+			else
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": Got results on first poll after %ums, on default schedule %ums; Wait time changed to: %ums (check interval)",
+				       bitforce->proc_repr, bitforce->wait_ms, delay_time_ms, BITFORCE_CHECK_INTERVAL_MS);
+				bitforce->sleep_ms = BITFORCE_CHECK_INTERVAL_MS;
+			}
 		}
-
-		if (delay_time_ms != bitforce->sleep_ms)
-			  applog(LOG_DEBUG, "%"PRIpreprv": Wait time changed to: %d, waited %u", bitforce->proc_repr, bitforce->sleep_ms, bitforce->wait_ms);
+		else
+		{
+			if (data->result_busy_polled - bitforce->sleep_ms > WORK_CHECK_INTERVAL_MS)
+			{
+				bitforce->sleep_ms = data->result_busy_polled - (WORK_CHECK_INTERVAL_MS / 2);
+				applog(LOG_DEBUG, "%"PRIpreprv": Got results on Nth poll after %ums (busy poll at %ums, sch'd %ums); Wait time changed to: %ums",
+				       bitforce->proc_repr, bitforce->wait_ms, data->result_busy_polled, delay_time_ms, bitforce->sleep_ms);
+			}
+			else
+				applog(LOG_DEBUG, "%"PRIpreprv": Got results on Nth poll after %ums (busy poll at %ums, sch'd %ums); Wait time unchanged",
+				       bitforce->proc_repr, bitforce->wait_ms, data->result_busy_polled, delay_time_ms);
+		}
 
 		/* Work out the average time taken. Float for calculation, uint for display */
 		bitforce->avg_wait_f += (tv_to_ms(elapsed) - bitforce->avg_wait_f) / TIME_AVG_CONSTANT;
@@ -942,6 +972,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-||Nonces|>>>>>>>>",
 			.proto = BFP_RANGE,
 			.sc = sc,
+			.sleep_ms_default = BITFORCE_SLEEP_MS,
 		};
 		if (sc)
 		{
