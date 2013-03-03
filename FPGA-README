@@ -19,7 +19,7 @@ The best solution for this is to use a tool called Zadig to set the driver:
  http://sourceforge.net/projects/libwdi/files/zadig/
 
 This allows you set the driver for the device to be WinUSB which is usually
-required to make it work if your having problems
+required to make it work if you're having problems
 
 You must also make sure you are using the latest libusb-1.0.dll supplied
 with cgminer (not the libusbx version)
