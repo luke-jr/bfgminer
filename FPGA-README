@@ -26,6 +26,24 @@ with cgminer (not the libusbx version)
 
 -
 
+When mining on linux, but not using 'sudo' and not logged into 'root' you
+may get a USB priviledge error (-3), so you may also need to do the following:
+
+Create /etc/udev/rules.d/01-cgminer.rules
+With:
+ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+ ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+And also:
+ sudo usermod -G plugdev -a `whoami`
+
+Then reboot ...
+
+If your linux distro doesn't have the 'plugdev' group, you can create it like:
+ sudo groupadd plugdev
+
+-
+
 There is a hidden option in cgminer to dump out a lot of information
 about USB that will help the developers to assist you if you are having
 problems:
