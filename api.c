@@ -1516,6 +1516,7 @@ static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
@@ -1587,6 +1588,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 #if defined(USE_MODMINER) || defined(USE_BITFORCE)
 		root = api_add_bool(root, "No Device", &(cgpu->usbinfo.nodev), false);
 #endif
+		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
