@@ -4948,6 +4948,7 @@ static struct work *hash_pop(void)
 	struct work *work = NULL, *tmp;
 	int hc;
 
+retry:
 	mutex_lock(stgd_lock);
 	while (!getq->frozen && !HASH_COUNT(staged_work))
 		pthread_cond_wait(&getq->cond, stgd_lock);
@@ -4961,6 +4962,15 @@ static struct work *hash_pop(void)
 		}
 	} else
 		work = staged_work;
+	
+	if (can_roll(work) && should_roll(work))
+	{
+		// Instead of consuming it, force it to be cloned and grab the clone
+		mutex_unlock(stgd_lock);
+		clone_available();
+		goto retry;
+	}
+	
 	HASH_DEL(staged_work, work);
 	if (work_rollable(work))
 		staged_rollable--;
