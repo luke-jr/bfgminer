@@ -1524,17 +1524,18 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 void usb_cleanup()
 {
+	struct cgpu_info *cgpu;
 	int i;
 
-	mutex_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-		switch (devices[i]->drv->drv_id) {
+		cgpu = get_devices(i);
+		switch (cgpu->drv->drv_id) {
 			case DRIVER_BITFORCE:
 			case DRIVER_MODMINER:
-				release_cgpu(devices[i]);
+				release_cgpu(cgpu);
+				break;
 			default:
 				break;
 		}
 	}
-	mutex_unlock(&devices_lock);
 }
