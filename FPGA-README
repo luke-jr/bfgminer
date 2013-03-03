@@ -21,8 +21,29 @@ The best solution for this is to use a tool called Zadig to set the driver:
 This allows you set the driver for the device to be WinUSB which is usually
 required to make it work if you're having problems
 
+With Zaidg, you may need to run it as administrator and if your device is
+plugged in but you cannot see it, use the Menu: Options -> List All Devices
+
 You must also make sure you are using the latest libusb-1.0.dll supplied
 with cgminer (not the libusbx version)
+
+-
+
+When mining on linux, but not using 'sudo' and not logged into 'root' you
+may get a USB priviledge error (-3), so you may also need to do the following:
+
+Create /etc/udev/rules.d/01-cgminer.rules
+With:
+ ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+ ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+And also:
+ sudo usermod -G plugdev -a `whoami`
+
+Then reboot ...
+
+If your linux distro doesn't have the 'plugdev' group, you can create it like:
+ sudo groupadd plugdev
 
 -
 
