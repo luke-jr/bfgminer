@@ -6715,7 +6715,9 @@ void enable_device(struct cgpu_info *cgpu)
 	mutex_unlock(&devices_lock);
 	if (hotplug_mode) {
 		new_threads += cgpu->threads;
+#ifdef HAVE_CURSES
 		adj_width(mining_threads + new_threads, &dev_width);
+#endif
 	} else {
 		mining_threads += cgpu->threads;
 #ifdef HAVE_CURSES
