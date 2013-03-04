@@ -21,6 +21,7 @@ bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
 
+bfgminer_CPPFLAGS += @JANSSON_CFLAGS@
 bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
 
 # common sources
