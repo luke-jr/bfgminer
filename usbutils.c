@@ -859,6 +859,10 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	struct cgpu_info *lookcgpu;
 	int i;
 
+	// It has already been done
+	if (cgpu->usbinfo.nodev)
+		return;
+
 	cgpu->usbinfo.nodev = true;
 	cgpu->usbinfo.nodev_count++;
 	gettimeofday(&(cgpu->usbinfo.last_nodev), NULL);
