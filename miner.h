@@ -801,6 +801,7 @@ extern void add_pool_details(struct pool *pool, bool live, char *url, char *user
 #endif
 
 extern bool hotplug_mode;
+extern int hotplug_time;
 extern struct list_head scan_devices;
 extern int nDevs;
 extern int opt_n_threads;

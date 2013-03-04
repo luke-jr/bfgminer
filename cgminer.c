@@ -165,6 +165,7 @@ bool hotplug_mode;
 static int new_devices;
 static int new_threads;
 static int start_devices;
+int hotplug_time = 5;
 
 #ifdef HAVE_LIBUSB
 pthread_mutex_t cgusb_lock;
@@ -984,6 +985,14 @@ static struct opt_table opt_config_table[] = {
 		     set_intensity, NULL, NULL,
 		     "Intensity of GPU scanning (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ", default: d to maintain desktop interactivity)"),
 #endif
+	OPT_WITH_ARG("--hotplug",
+		     set_int_0_to_9999, NULL, &hotplug_time,
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+		     "Seconds between hotplug checks (0 means never check)"
+#else
+		     opt_hidden
+#endif
+		    ),
 #if defined(HAVE_OPENCL) || defined(HAVE_MODMINER)
 	OPT_WITH_ARG("--kernel-path|-K",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
@@ -6853,24 +6862,31 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 
 	hotplug_mode = true;
 
-	while (0x2a) {
-		nmsleep(5000);
+	nmsleep(5000);
 
+	while (0x2a) {
 // Version 0.1 just add the devices on - worry about using nodev later
 
-		new_devices = 0;
-		new_threads = 0;
+		if (hotplug_time == 0)
+			nmsleep(5000);
+		else {
+			new_devices = 0;
+			new_threads = 0;
 
 #ifdef USE_BITFORCE
-		bitforce_drv.drv_detect();
+			bitforce_drv.drv_detect();
 #endif
 
 #ifdef USE_MODMINER
-		modminer_drv.drv_detect();
+			modminer_drv.drv_detect();
 #endif
 
-		if (new_devices)
-			hotplug_process();
+			if (new_devices)
+				hotplug_process();
+
+			// hotplug_time >0 && <=9999
+			nmsleep(hotplug_time * 1000);
+		}
 	}
 
 	return NULL;
