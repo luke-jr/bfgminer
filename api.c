@@ -1161,7 +1161,7 @@ static int numpgas()
 	int count = 0;
 	int i;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
 		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
@@ -1180,7 +1180,7 @@ static int numpgas()
 			count++;
 #endif
 	}
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return count;
 }
 
@@ -1189,7 +1189,7 @@ static int pgadevice(int pgaid)
 	int count = 0;
 	int i;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
 		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
@@ -1211,12 +1211,12 @@ static int pgadevice(int pgaid)
 			goto foundit;
 	}
 
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return -1;
 
 foundit:
 
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return i;
 }
 #endif

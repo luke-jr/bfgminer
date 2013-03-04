@@ -180,8 +180,8 @@ static pthread_rwlock_t blk_lock;
 static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
-pthread_mutex_t mining_thr_lock;
-pthread_mutex_t devices_lock;
+pthread_rwlock_t mining_thr_lock;
+pthread_rwlock_t devices_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -379,9 +379,9 @@ struct thr_info *get_thread(int thr_id)
 {
 	struct thr_info *thr;
 
-	mutex_lock(&mining_thr_lock);
+	rd_lock(&mining_thr_lock);
 	thr = mining_thr[thr_id];
-	mutex_unlock(&mining_thr_lock);
+	rd_unlock(&mining_thr_lock);
 	return thr;
 }
 
@@ -396,9 +396,9 @@ struct cgpu_info *get_devices(int id)
 {
 	struct cgpu_info *cgpu;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	cgpu = devices[id];
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return cgpu;
 }
 
@@ -762,24 +762,24 @@ static void load_temp_cutoffs()
 			if (val < 0 || val > 200)
 				quit(1, "Invalid value passed to set temp cutoff");
 
-			mutex_lock(&devices_lock);
+			rd_lock(&devices_lock);
 			devices[device]->cutofftemp = val;
-			mutex_unlock(&devices_lock);
+			rd_unlock(&devices_lock);
 		}
 	} else {
-		mutex_lock(&devices_lock);
+		rd_lock(&devices_lock);
 		for (i = device; i < total_devices; ++i) {
 			if (!devices[i]->cutofftemp)
 				devices[i]->cutofftemp = opt_cutofftemp;
 		}
-		mutex_unlock(&devices_lock);
+		rd_unlock(&devices_lock);
 		return;
 	}
 	if (device <= 1) {
-		mutex_lock(&devices_lock);
+		rd_lock(&devices_lock);
 		for (i = device; i < total_devices; ++i)
 			devices[i]->cutofftemp = val;
-		mutex_unlock(&devices_lock);
+		rd_unlock(&devices_lock);
 	}
 }
 
@@ -3496,10 +3496,10 @@ static void restart_threads(void)
 	/* Discard staged work that is now stale */
 	discard_stale();
 
-	mutex_lock(&mining_thr_lock);
+	rd_lock(&mining_thr_lock);
 	for (i = 0; i < mining_threads; i++)
 		mining_thr[i]->work_restart = true;
-	mutex_unlock(&mining_thr_lock);
+	rd_unlock(&mining_thr_lock);
 
 	mutex_lock(&restart_lock);
 	pthread_cond_broadcast(&restart_cond);
@@ -6152,10 +6152,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
 			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
 			sched_paused = true;
-			mutex_lock(&mining_thr_lock);
+			rd_lock(&mining_thr_lock);
 			for (i = 0; i < mining_threads; i++)
 				mining_thr[i]->pause = true;
-			mutex_unlock(&mining_thr_lock);
+			rd_unlock(&mining_thr_lock);
 		} else if (sched_paused && should_run()) {
 			applog(LOG_WARNING, "Restarting execution as per start time %02d:%02d scheduled",
 				schedstart.tm.tm_hour, schedstart.tm.tm_min);
@@ -6719,9 +6719,9 @@ void fill_device_drv(struct cgpu_info *cgpu)
 void enable_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
-	mutex_lock(&devices_lock);
+	wr_lock(&devices_lock);
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
-	mutex_unlock(&devices_lock);
+	wr_unlock(&devices_lock);
 	if (hotplug_mode) {
 		new_threads += cgpu->threads;
 #ifdef HAVE_CURSES
@@ -6764,9 +6764,9 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
-	mutex_lock(&devices_lock);
+	wr_lock(&devices_lock);
 	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
-	mutex_unlock(&devices_lock);
+	wr_unlock(&devices_lock);
 	if (hotplug_mode)
 		devices[total_devices + new_devices++] = cgpu;
 	else
@@ -6802,9 +6802,9 @@ static void hotplug_process()
 		cgpu->rolling = cgpu->total_mhashes = 0;
 	}
 
-	mutex_lock(&mining_thr_lock);
+	wr_lock(&mining_thr_lock);
 	mining_thr = realloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
-	mutex_unlock(&mining_thr_lock);
+	wr_unlock(&mining_thr_lock);
 	if (!mining_thr)
 		quit(1, "Failed to hotplug realloc mining_thr");
 	for (i = 0; i < new_threads; i++) {
@@ -6933,8 +6933,8 @@ int main(int argc, char *argv[])
 	mutex_init(&sshare_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
-	mutex_init(&mining_thr_lock);
-	mutex_init(&devices_lock);
+	rwlock_init(&mining_thr_lock);
+	rwlock_init(&devices_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
