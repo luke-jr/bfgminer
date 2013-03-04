@@ -497,6 +497,7 @@ struct cgpu_info {
 	int last_share_pool;
 	time_t last_share_pool_time;
 	double last_share_diff;
+	time_t last_device_valid_work;
 
 	time_t device_last_well;
 	time_t device_last_not_well;
@@ -756,8 +757,8 @@ extern pthread_mutex_t cgusb_lock;
 extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
-extern pthread_mutex_t mining_thr_lock;
-extern pthread_mutex_t devices_lock;
+extern pthread_rwlock_t mining_thr_lock;
+extern pthread_rwlock_t devices_lock;
 
 extern pthread_mutex_t restart_lock;
 extern pthread_cond_t restart_cond;
@@ -800,6 +801,7 @@ extern void add_pool_details(struct pool *pool, bool live, char *url, char *user
 #endif
 
 extern bool hotplug_mode;
+extern int hotplug_time;
 extern struct list_head scan_devices;
 extern int nDevs;
 extern int opt_n_threads;

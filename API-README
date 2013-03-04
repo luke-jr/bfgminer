@@ -140,6 +140,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Last Share Time=NNN, <- standand long time in seconds
                                (or 0 if none) of last accepted share
                               Last Share Pool=N, <- pool number (or -1 if none)
+                              Last Valid Work=NNN, <- standand long time in seconds
+                               of last work returned that wasn't an HW:
                               Will not report PGAs if PGA mining is disabled
                               Will not report CPUs if CPU mining is disabled
 
@@ -359,6 +361,14 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               shown on the cgminer display like is normally displayed
                               on exit.
 
+ hotplug|N (*) none           There is no reply section just the STATUS section
+                              stating that the hotplug setting succeeded
+                              If the code is not compiled with hotplug in it, the
+                              the warning reply will be 'Hotplug is not available'
+                              If N=0 then hotplug will be disabled
+                              If N>0 && <=9999, then hotplug will check for new
+                              devices every N seconds
+
 When you enable, disable or restart a GPU or PGA, you will also get Thread messages
 in the cgminer status window
 
@@ -412,7 +422,18 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.24
+API V1.25
+
+Added API commands:
+ 'hotplug'
+
+Modified API commands:
+ 'devs' 'gpu' and 'pga' - add 'Last Valid Work'
+ 'config' - add 'Hotplug'
+
+----------
+
+API V1.24 (cgminer v2.11.0)
 
 Added API commands:
  'zero'
@@ -420,6 +441,7 @@ Added API commands:
 Modified API commands:
  'pools' - add 'Best Share'
  'devs' and 'pga' - add 'No Device' for PGAs if MMQ or BFL compiled
+ 'stats' - add pool: 'Net Bytes Sent', 'Net Bytes Recv'
 
 ----------
 

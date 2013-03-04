@@ -133,7 +133,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.24";
+static const char *APIVERSION = "1.25";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
 static const char *SICK = "Sick";
@@ -148,6 +148,8 @@ static const char *UNKNOWN = "Unknown";
 #ifdef HAVE_OPENCL
 static const char *DYNAMIC = _DYNAMIC;
 #endif
+
+static __maybe_unused const char *NONE = "None";
 
 static const char *YES = "Y";
 static const char *NO = "N";
@@ -392,6 +394,11 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ZERSUM 96
 #define MSG_ZERNOSUM 97
 #define MSG_USBNODEV 98
+#define MSG_INVHPLG 99
+#define MSG_HOTPLUG 100
+#define MSG_DISHPLG 101
+#define MSG_NOHPLG 102
+#define MSG_MISHPLG 103
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -421,6 +428,7 @@ enum code_parameters {
 	PARAM_BOTH,
 	PARAM_BOOL,
 	PARAM_SET,
+	PARAM_INT,
 	PARAM_NONE
 };
 
@@ -572,6 +580,11 @@ struct CODES {
 #if defined(USE_MODMINER) || defined(USE_BITFORCE)
  { SEVERITY_ERR,   MSG_USBNODEV, PARAM_PGA,	"PGA%d has no device" },
 #endif
+ { SEVERITY_ERR,   MSG_INVHPLG,	PARAM_STR,	"Invalid value for hotplug (%s) must be 0..9999" },
+ { SEVERITY_SUCC,  MSG_HOTPLUG,	PARAM_INT,	"Hotplug check set to %ds" },
+ { SEVERITY_SUCC,  MSG_DISHPLG,	PARAM_NONE,	"Hotplug disabled" },
+ { SEVERITY_WARN,  MSG_NOHPLG,	PARAM_NONE,	"Hotplug is not available" },
+ { SEVERITY_ERR,   MSG_MISHPLG,	PARAM_NONE,	"Missing hotplug parameter" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1148,7 +1161,7 @@ static int numpgas()
 	int count = 0;
 	int i;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
 		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
@@ -1167,7 +1180,7 @@ static int numpgas()
 			count++;
 #endif
 	}
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return count;
 }
 
@@ -1176,7 +1189,7 @@ static int pgadevice(int pgaid)
 	int count = 0;
 	int i;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
 		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
@@ -1198,12 +1211,12 @@ static int pgadevice(int pgaid)
 			goto foundit;
 	}
 
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return -1;
 
 foundit:
 
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return i;
 }
 #endif
@@ -1254,6 +1267,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 				case PARAM_PGA:
 				case PARAM_CPU:
 				case PARAM_PID:
+				case PARAM_INT:
 					sprintf(buf, codes[i].description, paramid);
 					break;
 				case PARAM_POOL:
@@ -1426,6 +1440,14 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_int(root, "ScanTime", &opt_scantime, false);
 	root = api_add_int(root, "Queue", &opt_queue, false);
 	root = api_add_int(root, "Expiry", &opt_expiry, false);
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	if (hotplug_time == 0)
+		root = api_add_const(root, "Hotplug", DISABLED, false);
+	else
+		root = api_add_int(root, "Hotplug", &hotplug_time, false);
+#else
+	root = api_add_const(root, "Hotplug", NONE, false);
+#endif
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);
@@ -1516,6 +1538,7 @@ static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
@@ -1587,6 +1610,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 #if defined(USE_MODMINER) || defined(USE_BITFORCE)
 		root = api_add_bool(root, "No Device", &(cgpu->usbinfo.nodev), false);
 #endif
+		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
@@ -1623,6 +1647,7 @@ static void cpustatus(struct io_data *io_data, int cpu, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
@@ -3305,6 +3330,34 @@ static void dozero(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 		message(io_data, MSG_ZERNOSUM, 0, all ? "All" : "BestShare", isjson);
 }
 
+static void dohotplug(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+	int value;
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISHPLG, 0, NULL, isjson);
+		return;
+	}
+
+	value = atoi(param);
+	if (value < 0 || value > 9999) {
+		message(io_data, MSG_INVHPLG, 0, param, isjson);
+		return;
+	}
+
+	hotplug_time = value;
+
+	if (value)
+		message(io_data, MSG_HOTPLUG, value, NULL, isjson);
+	else
+		message(io_data, MSG_DISHPLG, 0, NULL, isjson);
+#else
+	message(io_data, MSG_NOHPLG, 0, NULL, isjson);
+	return;
+#endif
+}
+
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -3365,6 +3418,7 @@ struct CMDS {
 	{ "pgaset",		pgaset,		true },
 #endif
 	{ "zero",		dozero,		true },
+	{ "hotplug",		dohotplug,	true },
 	{ NULL,			NULL,		false }
 };
 

@@ -184,6 +184,7 @@ static const char *C_SETFLOW_S = "SetFlowCtrl";
 static const char *C_SETMODEM_S = "SetModemCtrl";
 static const char *C_PURGERX_S = "PurgeRx";
 static const char *C_PURGETX_S = "PurgeTx";
+static const char *C_FLASHREPLY_S = "FlashReply";
 
 #ifdef EOL
 #undef EOL
@@ -572,6 +573,7 @@ static void cgusb_check_init()
 		usb_commands[C_SETMODEM] = C_SETMODEM_S;
 		usb_commands[C_PURGERX] = C_PURGERX_S;
 		usb_commands[C_PURGETX] = C_PURGETX_S;
+		usb_commands[C_FLASHREPLY] = C_FLASHREPLY_S;
 
 		stats_initialised = true;
 	}
@@ -856,6 +858,10 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	struct cg_usb_device *cgusb = cgpu->usbdev;
 	struct cgpu_info *lookcgpu;
 	int i;
+
+	// It has already been done
+	if (cgpu->usbinfo.nodev)
+		return;
 
 	cgpu->usbinfo.nodev = true;
 	cgpu->usbinfo.nodev_count++;
@@ -1522,5 +1528,18 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 void usb_cleanup()
 {
-	// TODO:
+	struct cgpu_info *cgpu;
+	int i;
+
+	for (i = 0; i < total_devices; i++) {
+		cgpu = get_devices(i);
+		switch (cgpu->drv->drv_id) {
+			case DRIVER_BITFORCE:
+			case DRIVER_MODMINER:
+				release_cgpu(cgpu);
+				break;
+			default:
+				break;
+		}
+	}
 }

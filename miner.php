@@ -641,6 +641,14 @@ function fmt($section, $name, $value, $when, $alldata)
 			$class = classlastshare($when, $alldata, $warnclass, $errorclass);
 		}
 		break;
+	case 'GPU.Last Valid Work':
+	case 'PGA.Last Valid Work':
+	case 'DEVS.Last Valid Work':
+		if ($value == 0)
+			$ret = 'Never';
+		else
+			$ret = ($value - $when) . 's';
+		break;
 	case 'POOL.Last Share Time':
 		if ($value == 0)
 			$ret = 'Never';
