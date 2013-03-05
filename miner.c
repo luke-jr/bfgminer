@@ -5763,7 +5763,9 @@ static void *stratum_thread(void *userdata)
 
 	pthread_detach(pthread_self());
 
-	RenameThread("stratum");
+	char threadname[20];
+	snprintf(threadname, 20, "stratum%u", pool->pool_no);
+	RenameThread(threadname);
 
 	srand(time(NULL) + (intptr_t)userdata);
 
