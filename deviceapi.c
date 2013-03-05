@@ -327,6 +327,7 @@ bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct 
 
 void minerloop_async(struct thr_info *mythr)
 {
+	struct thr_info *thr = mythr;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	const struct device_api *api = cgpu->api;
 	struct timeval tv_now;
@@ -382,6 +383,7 @@ djp: ;
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
 		}
 		
+		mythr = thr;
 		gettimeofday(&tv_now, NULL);
 		FD_ZERO(&rfds);
 		FD_SET(mythr->notifier[0], &rfds);
