@@ -785,6 +785,7 @@ extern pthread_mutex_t ch_lock;
 
 extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
+extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
