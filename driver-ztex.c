@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <sha2.h>
 
+#include "deviceapi.h"
 #include "dynclock.h"
 #include "fpgautils.h"
 #include "miner.h"
@@ -224,8 +225,8 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	applog(LOG_DEBUG, "%s: entering poll loop", ztex->repr);
 	while (!(overflow || thr->work_restart)) {
 		count++;
-		nmsleep(250);
-		if (thr->work_restart) {
+		if (!restart_wait(thr, 250))
+		{
 			applog(LOG_DEBUG, "%s: New work detected", ztex->repr);
 			break;
 		}
@@ -388,6 +389,7 @@ static bool ztex_prepare(struct thr_info *thr)
 	//ztex_updateFreq(thr);
 	libztex_setFreq(ztex, ztex->dclk.freqMDefault);
 	ztex_releaseFpga(ztex);
+	notifier_init(thr->work_restart_notifier);
 	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
 	return true;
 }
