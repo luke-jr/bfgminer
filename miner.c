@@ -289,6 +289,7 @@ struct stratum_share {
 	bool block;
 	struct work *work;
 	int id;
+	time_t sshare_time;
 };
 
 static struct stratum_share *stratum_shares = NULL;
@@ -1738,6 +1739,7 @@ static struct work *make_work(void)
  * cleaned to remove any dynamically allocated arrays within the struct */
 void clean_work(struct work *work)
 {
+	free(work->sessionid);
 	free(work->job_id);
 	free(work->nonce2);
 	free(work->ntime);
@@ -3575,6 +3577,8 @@ void __copy_work(struct work *work, struct work *base_work)
 	/* Keep the unique new id assigned during make_work to prevent copied
 	 * work from having the same id. */
 	work->id = id;
+	if (base_work->sessionid)
+		work->sessionid = strdup(base_work->sessionid);
 	if (base_work->job_id)
 		work->job_id = strdup(base_work->job_id);
 	if (base_work->nonce2)
@@ -3862,6 +3866,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 		char *noncehex;
 		char *s;
 
+		sshare->sshare_time = time(NULL);
 		sshare->work = copy_work(work);
 		mutex_lock(&sshare_lock);
 		/* Give the stratum share a unique id */
@@ -6479,7 +6484,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Copy parameters required for share submission */
 	work->job_id = strdup(pool->swork.job_id);
 	work->ntime = strdup(pool->swork.ntime);
-
+	if (pool->sessionid)
+		work->sessionid = strdup(pool->sessionid);
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);

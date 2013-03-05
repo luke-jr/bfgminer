@@ -1085,6 +1085,7 @@ struct work {
 	char		*nonce2;
 	char		*ntime;
 	double		sdiff;
+	char		*sessionid;
 
 	unsigned char	work_restart_id;
 	int		id;
