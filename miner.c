@@ -3868,17 +3868,18 @@ static struct submit_work_state *begin_submission(struct work *work)
 
 		sshare->sshare_time = time(NULL);
 		sshare->work = copy_work(work);
+		nonce = *((uint32_t *)(work->data + 76));
+		noncehex = bin2hex((const unsigned char *)&nonce, 4);
+		s = malloc(1024);
+
 		mutex_lock(&sshare_lock);
 		/* Give the stratum share a unique id */
 		sshare->id = swork_id++;
 		HASH_ADD_INT(stratum_shares, id, sshare);
-		mutex_unlock(&sshare_lock);
-
-		nonce = *((uint32_t *)(work->data + 76));
-		noncehex = bin2hex((const unsigned char *)&nonce, 4);
-		s = malloc(1024);
 		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
+		mutex_unlock(&sshare_lock);
+
 		free(noncehex);
 
 		sws->s = s;
