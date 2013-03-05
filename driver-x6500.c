@@ -337,6 +337,10 @@ static bool x6500_thread_init(struct thr_info *thr)
 	struct cgpu_info *x6500 = thr->cgpu;
 	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
 
+	// Setup mutex request based on notifier and pthread cond
+	notifier_init(thr->mutex_request);
+	pthread_cond_init(&x6500->device_cond, NULL);
+	
 	for ( ; x6500; x6500 = x6500->next_proc)
 	{
 		thr = x6500->thr[0];
@@ -526,11 +530,14 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 {
 	float hottest = 0;
 	if (x6500_all_idle(x6500)) {
+		struct cgpu_info *cgpu = x6500->device;
 		// Getting temperature more efficiently while running
-		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
+		pthread_mutex_t *mutexp = &cgpu->device_mutex;
 		mutex_lock(mutexp);
-		if (x6500_all_idle(x6500))
-			x6500_get_temperature(x6500);
+		notifier_wake(cgpu->thr[0]->mutex_request);
+		pthread_cond_wait(&cgpu->device_cond, mutexp);
+		x6500_get_temperature(x6500);
+		pthread_cond_signal(&cgpu->device_cond);
 		mutex_unlock(mutexp);
 	}
 
@@ -627,13 +634,6 @@ bool x6500_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused u
 	struct cgpu_info *x6500 = thr->cgpu;
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	struct jtag_port *jp = &fpga->jtag;
-
-	if (x6500_all_idle(x6500))
-	{
-		// Neither FPGA is running, so make sure we're not doing a temperature check
-		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
-		mutex_lock(mutexp);
-	}
 	
 	for (int i = 1, j = 0; i < 9; ++i, j += 4)
 		x6500_set_register(jp, i, fromlebytes(work->midstate, j));
@@ -680,12 +680,6 @@ void x6500_job_start(struct thr_info *thr)
 		calc_hashes(thr, &tv_now);
 	fpga->hashes_left = 0x100000000;
 	mt_job_transition(thr);
-
-	if (x6500_all_idle(x6500))
-	{
-		pthread_mutex_t *mutexp = &x6500->device->device_mutex;
-		mutex_unlock(mutexp);
-	}
 	
 	if (opt_debug) {
 		char *xdata = bin2hex(thr->work->data, 80);

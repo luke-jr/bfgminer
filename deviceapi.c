@@ -390,8 +390,23 @@ djp: ;
 		maxfd = mythr->notifier[0];
 		FD_SET(mythr->work_restart_notifier[0], &rfds);
 		set_maxfd(&maxfd, mythr->work_restart_notifier[0]);
+		if (thr->mutex_request[1] != INVSOCK)
+		{
+			FD_SET(thr->mutex_request[0], &rfds);
+			set_maxfd(&maxfd, thr->mutex_request[0]);
+		}
 		if (select(maxfd + 1, &rfds, NULL, NULL, select_timeout(&tv_timeout, &tv_now)) < 0)
 			continue;
+		if (thr->mutex_request[1] != INVSOCK && FD_ISSET(thr->mutex_request[0], &rfds))
+		{
+			// FIXME: This can only handle one request at a time!
+			pthread_mutex_t *mutexp = &cgpu->device_mutex;
+			notifier_read(thr->mutex_request);
+			mutex_lock(mutexp);
+			pthread_cond_signal(&cgpu->device_cond);
+			pthread_cond_wait(&cgpu->device_cond, mutexp);
+			mutex_unlock(mutexp);
+		}
 		if (FD_ISSET(mythr->notifier[0], &rfds)) {
 			notifier_read(mythr->notifier);
 		}

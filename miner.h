@@ -439,6 +439,7 @@ struct cgpu_info {
 #endif
 	void *cgpu_data;
 	pthread_mutex_t		device_mutex;
+	pthread_cond_t	device_cond;
 
 	enum dev_enable deven;
 	int accepted;
@@ -568,6 +569,7 @@ struct thr_info {
 	notifier_t notifier;
 	bool starting_next_work;
 	uint32_t _max_nonce;
+	notifier_t mutex_request;
 
 	bool	work_restart;
 	notifier_t work_restart_notifier;
