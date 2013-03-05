@@ -1735,6 +1735,7 @@ resend:
 	}
 
 	mutex_lock(&pool->pool_lock);
+	free(pool->sessionid);
 	pool->sessionid = sessionid;
 	free(pool->nonce1);
 	pool->nonce1 = nonce1;
