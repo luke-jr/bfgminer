@@ -289,6 +289,7 @@ struct stratum_share {
 	bool block;
 	struct work *work;
 	int id;
+	time_t sshare_time;
 };
 
 static struct stratum_share *stratum_shares = NULL;
@@ -1741,9 +1742,7 @@ void clean_work(struct work *work)
 	free(work->job_id);
 	free(work->nonce2);
 	free(work->ntime);
-	work->job_id = NULL;
-	work->nonce2 = NULL;
-	work->ntime = NULL;
+	free(work->nonce1);
 
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -3568,10 +3567,17 @@ static void roll_work(struct work *work)
  * prevent a copied work struct from freeing ram belonging to another struct */
 void __copy_work(struct work *work, struct work *base_work)
 {
+	int id = work->id;
+
 	clean_work(work);
 	memcpy(work, base_work, sizeof(struct work));
+	/* Keep the unique new id assigned during make_work to prevent copied
+	 * work from having the same id. */
+	work->id = id;
 	if (base_work->job_id)
 		work->job_id = strdup(base_work->job_id);
+	if (base_work->nonce1)
+		work->nonce1 = strdup(base_work->nonce1);
 	if (base_work->nonce2)
 		work->nonce2 = strdup(base_work->nonce2);
 	if (base_work->ntime)
@@ -3591,7 +3597,7 @@ struct work *copy_work(struct work *base_work)
 {
 	struct work *work = make_work();
 
- 	__copy_work(work, base_work);
+	__copy_work(work, base_work);
 
 	return work;
 }
@@ -3805,8 +3811,11 @@ struct submit_work_state {
 
 static int my_curl_timer_set(__maybe_unused CURLM *curlm, long timeout_ms, void *userp)
 {
-	long *timeout = userp;
-	*timeout = timeout_ms;
+	struct timeval *tvp_timer = userp;
+	if (timeout_ms == -1)
+		tvp_timer->tv_sec = -1;
+	else
+		timer_set_delay_from_now(tvp_timer, timeout_ms * 1000);
 	return 0;
 }
 
@@ -3829,12 +3838,6 @@ static struct submit_work_state *begin_submission(struct work *work)
 		.work = work,
 	};
 
-	if (work->stratum && pool->sock == INVSOCK) {
-		applog(LOG_WARNING, "Share found for dead stratum pool %u, discarding", pool->pool_no);
-		submit_discard_share2("disconnect", work);
-		goto out;
-	}
-
 	check_solve(work);
 
 	if (stale_work(work, true)) {
@@ -3852,24 +3855,9 @@ static struct submit_work_state *begin_submission(struct work *work)
 	}
 
 	if (work->stratum) {
-		struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
-		uint32_t nonce;
-		char *noncehex;
 		char *s;
 
-		sshare->work = copy_work(work);
-		mutex_lock(&sshare_lock);
-		/* Give the stratum share a unique id */
-		sshare->id = swork_id++;
-		HASH_ADD_INT(stratum_shares, id, sshare);
-		mutex_unlock(&sshare_lock);
-
-		nonce = *((uint32_t *)(work->data + 76));
-		noncehex = bin2hex((const unsigned char *)&nonce, 4);
 		s = malloc(1024);
-		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
-		free(noncehex);
 
 		sws->s = s;
 	} else {
@@ -3946,7 +3934,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 {
 	int wip = 0;
 	CURLM *curlm;
-	long curlm_timeout_ms = -1;
+	struct timeval curlm_timer;
 	struct submit_work_state *sws, **swsp;
 	struct submit_work_state *write_sws = NULL;
 	unsigned tsreduce = 0;
@@ -3958,12 +3946,13 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 	applog(LOG_DEBUG, "Creating extra submit work thread");
 
 	curlm = curl_multi_init();
+	curlm_timer.tv_sec = -1;
+	curl_multi_setopt(curlm, CURLMOPT_TIMERDATA, &curlm_timer);
 	curl_multi_setopt(curlm, CURLMOPT_TIMERFUNCTION, my_curl_timer_set);
-	curl_multi_setopt(curlm, CURLMOPT_TIMERDATA, &curlm_timeout_ms);
 
 	fd_set rfds, wfds, efds;
 	int maxfd;
-	struct timeval timeout, *timeoutp;
+	struct timeval tv_timeout, tv_now;
 	int n;
 	CURLMsg *cm;
 	FD_ZERO(&rfds);
@@ -3974,6 +3963,8 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		if (FD_ISSET(submit_waiting_notifier[0], &rfds)) {
 			notifier_read(submit_waiting_notifier);
 		}
+		
+		// Receive any new submissions
 		while (!list_empty(&submit_waiting)) {
 			struct work *work = list_entry(submit_waiting.next, struct work, list);
 			list_del(&work->list);
@@ -3991,6 +3982,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 				free_work(work);
 			}
 		}
+		
 		if (unlikely(shutting_down && !wip))
 			break;
 		mutex_unlock(&submitting_lock);
@@ -3998,76 +3990,111 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		FD_ZERO(&rfds);
 		FD_ZERO(&wfds);
 		FD_ZERO(&efds);
+		tv_timeout.tv_sec = -1;
+		
+		// Setup cURL with select
 		curl_multi_fdset(curlm, &rfds, &wfds, &efds, &maxfd);
-		if (curlm_timeout_ms >= 0) {
-			timeout.tv_sec = curlm_timeout_ms / 1000;
-			timeout.tv_usec = (curlm_timeout_ms % 1000) * 1000;
-			timeoutp = &timeout;
-		} else
-			timeoutp = NULL;
+		reduce_timeout_to(&tv_timeout, &curlm_timer);
 		
-		for (swsp = &write_sws; (sws = *swsp); ) {
-			int fd = sws->work->pool->sock;
-			if (fd == INVSOCK) {
-				applog(LOG_WARNING, "Stratum pool %u died while share waiting to submit, discarding", sws->work->pool->pool_no);
-				submit_discard_share2("disconnect", sws->work);
-				--wip;
-				++tsreduce;
-				*swsp = sws->next;
-				free_sws(sws);
+		// Setup waiting stratum submissions with select
+		for (sws = write_sws; sws; sws = sws->next)
+		{
+			struct pool *pool = sws->work->pool;
+			int fd = pool->sock;
+			if (fd == INVSOCK || (!pool->stratum_auth) || !pool->stratum_notify)
 				continue;
-			}
 			FD_SET(fd, &wfds);
-			if (fd > maxfd)
-				maxfd = fd;
-			swsp = &sws->next;
-		}
-		if (tsreduce) {
-			mutex_lock(&submitting_lock);
-			total_submitting -= tsreduce;
-			mutex_unlock(&submitting_lock);
-			tsreduce = 0;
+			set_maxfd(&maxfd, fd);
 		}
 		
+		// Setup "submit waiting" notifier with select
 		FD_SET(submit_waiting_notifier[0], &rfds);
-		if (submit_waiting_notifier[0] > maxfd)
-			maxfd = submit_waiting_notifier[0];
+		set_maxfd(&maxfd, submit_waiting_notifier[0]);
 		
-		if (select(maxfd+1, &rfds, &wfds, &efds, timeoutp) < 0) {
+		// Wait for something interesting to happen :)
+		gettimeofday(&tv_now, NULL);
+		if (select(maxfd+1, &rfds, &wfds, &efds, select_timeout(&tv_timeout, &tv_now)) < 0) {
 			FD_ZERO(&rfds);
 			continue;
 		}
 		
+		// Handle any stratum ready-to-write results
 		for (swsp = &write_sws; (sws = *swsp); ) {
-			int fd = sws->work->pool->sock;
-			if (fd == -1 || !FD_ISSET(fd, &wfds)) {
+			struct work *work = sws->work;
+			struct pool *pool = work->pool;
+			int fd = pool->sock;
+			bool sessionid_match;
+			
+			mutex_lock(&pool->pool_lock);
+			// NOTE: cgminer only does this check on retries, but BFGMiner does it for even the first/normal submit; therefore, it needs to be such that it always is true on the same connection regardless of session management
+			// NOTE: Worst case scenario for a false positive: the pool rejects it as H-not-zero
+			sessionid_match = (!pool->nonce1) || !strcmp(work->nonce1, pool->nonce1);
+			mutex_unlock(&pool->pool_lock);
+			if (!sessionid_match)
+			{
+				applog(LOG_DEBUG, "No matching session id for resubmitting stratum share");
+				submit_discard_share2("disconnect", work);
+				++tsreduce;
+next_write_sws_del:
+				// Clear the fd from wfds, to avoid potentially blocking on other submissions to the same socket
+				FD_CLR(fd, &wfds);
+				// Delete sws for this submission, since we're done with it
+				*swsp = sws->next;
+				free_sws(sws);
+				--wip;
+				continue;
+			}
+			
+			if (fd == INVSOCK || (!pool->stratum_auth) || (!pool->stratum_notify) || !FD_ISSET(fd, &wfds)) {
+next_write_sws:
+				// TODO: Check if stale, possibly discard etc
 				swsp = &sws->next;
 				continue;
 			}
 			
-			struct pool *pool = sws->work->pool;
 			char *s = sws->s;
-
+			struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
+			uint32_t nonce;
+			char *noncehex;
+			
+			sshare->sshare_time = time(NULL);
+			sshare->work = copy_work(work);
+			nonce = *((uint32_t *)(work->data + 76));
+			noncehex = bin2hex((const unsigned char *)&nonce, 4);
+			
+			mutex_lock(&sshare_lock);
+			/* Give the stratum share a unique id */
+			sshare->id = swork_id++;
+			HASH_ADD_INT(stratum_shares, id, sshare);
+			sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
+				pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
+			mutex_unlock(&sshare_lock);
+			
+			free(noncehex);
+			
 			applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->stratum_url, s);
 
 			if (likely(stratum_send(pool, s, strlen(s)))) {
 				if (pool_tclear(pool, &pool->submit_fail))
-						applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
+					applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 				applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
+				goto next_write_sws_del;
 			} else if (!pool_tset(pool, &pool->submit_fail)) {
+				// Undo stuff
+				mutex_lock(&sshare_lock);
+				HASH_DEL(stratum_shares, sshare);
+				mutex_unlock(&sshare_lock);
+				free_work(sshare->work);
+				free(sshare);
+				
 				applog(LOG_WARNING, "Pool %d stratum share submission failure", pool->pool_no);
 				total_ro++;
 				pool->remotefail_occasions++;
+				goto next_write_sws;
 			}
-			
-			// Clear the fd from wfds, to avoid potentially blocking on other submissions to the same socket
-			FD_CLR(fd, &wfds);
-			// Delete sws for this submission, since we're done with it
-			*swsp = sws->next;
-			free_sws(sws);
-			--wip;
 		}
 		
+		// Handle any cURL activities
 		curl_multi_perform(curlm, &n);
 		while( (cm = curl_multi_info_read(curlm, &n)) ) {
 			if (cm->msg == CURLMSG_DONE)
@@ -5827,7 +5854,7 @@ static void shutdown_stratum(struct pool *pool)
 	pool->stratum_url = NULL;
 }
 
-static void clear_stratum_shares(struct pool *pool)
+void clear_stratum_shares(struct pool *pool)
 {
 	struct stratum_share *sshare, *tmpshare;
 	struct work *work;
@@ -5862,6 +5889,35 @@ static void clear_stratum_shares(struct pool *pool)
 		mutex_lock(&submitting_lock);
 		total_submitting -= cleared;
 		mutex_unlock(&submitting_lock);
+	}
+}
+
+static void resubmit_stratum_shares(struct pool *pool)
+{
+	struct stratum_share *sshare, *tmpshare;
+	struct work *work;
+	unsigned resubmitted = 0;
+
+	mutex_lock(&sshare_lock);
+	mutex_lock(&submitting_lock);
+	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
+		if (sshare->work->pool != pool)
+			continue;
+		
+		HASH_DEL(stratum_shares, sshare);
+		
+		work = sshare->work;
+		list_add_tail(&work->list, &submit_waiting);
+		
+		free(sshare);
+		++resubmitted;
+	}
+	mutex_unlock(&submitting_lock);
+	mutex_unlock(&sshare_lock);
+
+	if (resubmitted) {
+		notifier_wake(submit_waiting_notifier);
+		applog(LOG_DEBUG, "Resubmitting %u shares due to stratum disconnect on pool %u", resubmitted, pool->pool_no);
 	}
 }
 
@@ -5927,6 +5983,16 @@ static void stratum_resumed(struct pool *pool)
 	}
 }
 
+static bool supports_resume(struct pool *pool)
+{
+	bool ret;
+
+	mutex_lock(&pool->pool_lock);
+	ret = (pool->sessionid != NULL);
+	mutex_unlock(&pool->pool_lock);
+	return ret;
+}
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -5937,7 +6003,9 @@ static void *stratum_thread(void *userdata)
 
 	pthread_detach(pthread_self());
 
-	RenameThread("stratum");
+	char threadname[20];
+	snprintf(threadname, 20, "stratum%u", pool->pool_no);
+	RenameThread(threadname);
 
 	srand(time(NULL) + (intptr_t)userdata);
 
@@ -5958,9 +6026,9 @@ static void *stratum_thread(void *userdata)
 			clear_pool_work(pool);
 
 			wait_lpcurrent(pool);
-			if (!initiate_stratum(pool) || !auth_stratum(pool)) {
+			if (!restart_stratum(pool)) {
 				pool_died(pool);
-				while (!initiate_stratum(pool) || !auth_stratum(pool)) {
+				while (!restart_stratum(pool)) {
 					if (pool->removed)
 						goto out;
 					sleep(30);
@@ -5988,20 +6056,19 @@ static void *stratum_thread(void *userdata)
 			pool->getfail_occasions++;
 			total_go++;
 
-			// Make any pending work/shares stale
 			pool->sock = INVSOCK;
-			pool->submit_old = false;
-			++pool->work_restart_id;
 
 			/* If the socket to our stratum pool disconnects, all
-			 * tracked submitted shares are lost and we will leak
-			 * the memory if we don't discard their records. */
-			clear_stratum_shares(pool);
+			 * submissions need to be discarded or resent. */
+			if (!supports_resume(pool))
+				clear_stratum_shares(pool);
+			else
+				resubmit_stratum_shares(pool);
 			clear_pool_work(pool);
 			if (pool == current_pool())
 				restart_threads();
 
-			if (initiate_stratum(pool) && auth_stratum(pool))
+			if (restart_stratum(pool))
 				continue;
 
 			shutdown_stratum(pool);
@@ -6152,9 +6219,7 @@ retry_stratum:
 		 * setting/unsetting the active flag */
 		if (pool->stratum_auth)
 			return pool->stratum_active;
-		if (!pool->stratum_active && !initiate_stratum(pool))
-			return false;
-		if (!auth_stratum(pool))
+		if (!(pool->stratum_active ? auth_stratum(pool) : restart_stratum(pool)))
 			return false;
 		init_stratum_thread(pool);
 		detect_algo = 2;
@@ -6473,8 +6538,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Copy parameters required for share submission */
 	work->job_id = strdup(pool->swork.job_id);
+	work->nonce1 = strdup(pool->nonce1);
 	work->ntime = strdup(pool->swork.ntime);
-
 	mutex_unlock(&pool->pool_lock);
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);

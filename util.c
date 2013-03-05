@@ -1026,7 +1026,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 	ssize_t ssent = 0;
 
 	if (opt_protocol)
-		applog(LOG_DEBUG, "SEND: %s", s);
+		applog(LOG_DEBUG, "Pool %u: SEND: %s", pool->pool_no, s);
 
 	strcat(s, "\n");
 	len++;
@@ -1194,7 +1194,7 @@ out:
 	if (!sret)
 		clear_sock(pool);
 	else if (opt_protocol)
-		applog(LOG_DEBUG, "RECVD: %s", sret);
+		applog(LOG_DEBUG, "Pool %u: RECV: %s", pool->pool_no, sret);
 	return sret;
 }
 
@@ -1392,7 +1392,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 	applog(LOG_NOTICE, "Reconnect requested from pool %d to %s", pool->pool_no, address);
 
-	if (!initiate_stratum(pool) || !auth_stratum(pool))
+	if (!restart_stratum(pool))
 		return false;
 
 	return true;
@@ -1550,14 +1550,11 @@ curl_socket_t grab_socket_opensocket_cb(void *clientp, __maybe_unused curlsockty
 	return sck;
 }
 
-bool initiate_stratum(struct pool *pool)
+static bool setup_stratum_curl(struct pool *pool)
 {
-	json_t *val = NULL, *res_val, *err_val;
 	char curl_err_str[CURL_ERROR_SIZE];
-	char s[RBUFSIZE], *sret = NULL;
 	CURL *curl = NULL;
-	json_error_t err;
-	bool ret = false;
+	char s[RBUFSIZE];
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
@@ -1584,7 +1581,6 @@ bool initiate_stratum(struct pool *pool)
 	}
 
 	/* Create a http url for use with curl */
-	memset(s, 0, RBUFSIZE);
 	sprintf(s, "http://%s:%s", pool->sockaddr_url, pool->stratum_port);
 
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
@@ -1615,20 +1611,69 @@ bool initiate_stratum(struct pool *pool)
 	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
-		goto out;
+		return false;
 	}
 	if (pool->sock == INVSOCK)
 	{
 		curl_easy_cleanup(curl);
 		applog(LOG_ERR, "Stratum connect succeeded, but technical problem extracting socket (pool %u)", pool->pool_no);
-		goto out;
+		return false;
 	}
 	keep_sockalive(pool->sock);
 
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.times_received++;
 
-	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
+	return true;
+}
+
+static char *get_sessionid(json_t *val)
+{
+	char *ret = NULL;
+	json_t *arr_val;
+	int arrsize, i;
+
+	arr_val = json_array_get(val, 0);
+	if (!arr_val || !json_is_array(arr_val))
+		goto out;
+	arrsize = json_array_size(arr_val);
+	for (i = 0; i < arrsize; i++) {
+		json_t *arr = json_array_get(arr_val, i);
+		char *notify;
+
+		if (!arr | !json_is_array(arr))
+			break;
+		notify = __json_array_string(arr, 0);
+		if (!notify)
+			continue;
+		if (!strncasecmp(notify, "mining.notify", 13)) {
+			ret = json_array_string(arr, 1);
+			break;
+		}
+	}
+out:
+	return ret;
+}
+
+bool initiate_stratum(struct pool *pool)
+{
+	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
+	json_t *val = NULL, *res_val, *err_val;
+	bool ret = false, recvd = false, oldproto = false;
+	json_error_t err;
+	int n2size;
+
+	if (!setup_stratum_curl(pool))
+		goto out;
+
+resend:
+	if (!oldproto) {
+		if (pool->sessionid)
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
+		else
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
+	} else
+		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
 	if (!__stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
@@ -1643,6 +1688,8 @@ bool initiate_stratum(struct pool *pool)
 	sret = recv_line(pool);
 	if (!sret)
 		goto out;
+
+	recvd = true;
 
 	val = JSON_LOADS(sret, &err);
 	free(sret);
@@ -1670,18 +1717,33 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 	}
 
-	free(pool->nonce1);
-	pool->nonce1 = json_array_string(res_val, 1);
-	if (!pool->nonce1) {
+	sessionid = get_sessionid(res_val);
+	if (!sessionid)
+		applog(LOG_DEBUG, "Failed to get sessionid in initiate_stratum");
+	nonce1 = json_array_string(res_val, 1);
+	if (!nonce1) {
 		applog(LOG_INFO, "Failed to get nonce1 in initiate_stratum");
+		free(sessionid);
 		goto out;
 	}
-	pool->n1_len = strlen(pool->nonce1) / 2;
-	pool->n2size = json_integer_value(json_array_get(res_val, 2));
-	if (!pool->n2size) {
+	n2size = json_integer_value(json_array_get(res_val, 2));
+	if (!n2size) {
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
+		free(sessionid);
+		free(nonce1);
 		goto out;
 	}
+
+	mutex_lock(&pool->pool_lock);
+	pool->sessionid = sessionid;
+	free(pool->nonce1);
+	pool->nonce1 = nonce1;
+	pool->n1_len = strlen(nonce1) / 2;
+	pool->n2size = n2size;
+	mutex_unlock(&pool->pool_lock);
+
+	if (sessionid)
+		applog(LOG_DEBUG, "Pool %d stratum session id: %s", pool->pool_no, pool->sessionid);
 
 	ret = true;
 out:
@@ -1697,8 +1759,12 @@ out:
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
-	} else
-	{
+	} else {
+		if (!oldproto) {
+			applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
+			oldproto = true;
+			goto resend;
+		}
 		applog(LOG_DEBUG, "Initiate stratum failed");
 		if (pool->sock != INVSOCK) {
 			shutdown(pool->sock, SHUT_RDWR);
@@ -1707,6 +1773,15 @@ out:
 	}
 
 	return ret;
+}
+
+bool restart_stratum(struct pool *pool)
+{
+	if (!initiate_stratum(pool))
+		return false;
+	if (!auth_stratum(pool))
+		return false;
+	return true;
 }
 
 void suspend_stratum(struct pool *pool)

@@ -787,6 +787,7 @@ extern pthread_mutex_t ch_lock;
 
 extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
+extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
@@ -1036,6 +1037,7 @@ struct pool {
 	size_t n1_len;
 	uint32_t nonce2;
 	int n2size;
+	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;
 	time_t last_work_time;  /* only set for Stratum right now */
@@ -1086,6 +1088,7 @@ struct work {
 	char		*nonce2;
 	char		*ntime;
 	double		sdiff;
+	char		*nonce1;
 
 	unsigned char	work_restart_id;
 	int		id;
