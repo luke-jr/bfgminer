@@ -1026,7 +1026,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 	ssize_t ssent = 0;
 
 	if (opt_protocol)
-		applog(LOG_DEBUG, "SEND: %s", s);
+		applog(LOG_DEBUG, "Pool %u: SEND: %s", pool->pool_no, s);
 
 	strcat(s, "\n");
 	len++;
@@ -1194,7 +1194,7 @@ out:
 	if (!sret)
 		clear_sock(pool);
 	else if (opt_protocol)
-		applog(LOG_DEBUG, "RECVD: %s", sret);
+		applog(LOG_DEBUG, "Pool %u: RECV: %s", pool->pool_no, sret);
 	return sret;
 }
 
