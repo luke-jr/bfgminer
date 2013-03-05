@@ -1739,13 +1739,10 @@ static struct work *make_work(void)
  * cleaned to remove any dynamically allocated arrays within the struct */
 void clean_work(struct work *work)
 {
-	free(work->sessionid);
 	free(work->job_id);
 	free(work->nonce2);
 	free(work->ntime);
-	work->job_id = NULL;
-	work->nonce2 = NULL;
-	work->ntime = NULL;
+	free(work->sessionid);
 
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
