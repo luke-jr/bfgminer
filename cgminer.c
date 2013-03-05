@@ -3343,6 +3343,8 @@ static struct pool *priority_pool(int choice)
 	return ret;
 }
 
+static void clear_pool_work(struct pool *pool);
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -3411,8 +3413,11 @@ void switch_pools(struct pool *selected)
 	if (opt_fail_only)
 		pool_tset(pool, &pool->lagging);
 
-	if (pool != last_pool && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE)
+	if (pool != last_pool && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		if (pool->has_gbt || pool->has_stratum || opt_fail_only)
+			clear_pool_work(last_pool);
+	}
 
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
