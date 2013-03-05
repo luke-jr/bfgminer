@@ -6015,9 +6015,9 @@ static void *stratum_thread(void *userdata)
 			clear_pool_work(pool);
 
 			wait_lpcurrent(pool);
-			if (!initiate_stratum(pool) || !auth_stratum(pool)) {
+			if (!restart_stratum(pool)) {
 				pool_died(pool);
-				while (!initiate_stratum(pool) || !auth_stratum(pool)) {
+				while (!restart_stratum(pool)) {
 					if (pool->removed)
 						goto out;
 					sleep(30);
@@ -6057,7 +6057,7 @@ static void *stratum_thread(void *userdata)
 			if (pool == current_pool())
 				restart_threads();
 
-			if (initiate_stratum(pool) && auth_stratum(pool))
+			if (restart_stratum(pool))
 				continue;
 
 			shutdown_stratum(pool);
@@ -6208,9 +6208,7 @@ retry_stratum:
 		 * setting/unsetting the active flag */
 		if (pool->stratum_auth)
 			return pool->stratum_active;
-		if (!pool->stratum_active && !initiate_stratum(pool))
-			return false;
-		if (!auth_stratum(pool))
+		if (!(pool->stratum_active ? auth_stratum(pool) : restart_stratum(pool)))
 			return false;
 		init_stratum_thread(pool);
 		detect_algo = 2;
