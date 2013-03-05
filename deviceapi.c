@@ -277,6 +277,7 @@ bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct 
 
 void minerloop_async(struct thr_info *mythr)
 {
+	struct thr_info *thr = mythr;
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	const struct device_api *api = cgpu->api;
@@ -335,6 +336,7 @@ djp: ;
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
 		}
 		
+		mythr = thr;
 		gettimeofday(&tv_now, NULL);
 		// FIXME: break select on work restart
 		FD_ZERO(&rfds);
