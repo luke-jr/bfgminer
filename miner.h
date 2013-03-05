@@ -1034,6 +1034,7 @@ struct pool {
 	size_t n1_len;
 	uint32_t nonce2;
 	int n2size;
+	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;
 	time_t last_work_time;  /* only set for Stratum right now */
