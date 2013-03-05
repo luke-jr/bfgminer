@@ -157,7 +157,7 @@ static int input_thr_id;
 #endif
 int gpur_thr_id;
 static int api_thr_id;
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 static int hotplug_thr_id;
 #endif
 static int total_control_threads;
@@ -987,7 +987,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--hotplug",
 		     set_int_0_to_9999, NULL, &hotplug_time,
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 		     "Seconds between hotplug checks (0 means never check)"
 #else
 		     opt_hidden
@@ -2038,7 +2038,7 @@ static void curses_print_devstatus(int thr_id)
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
 
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 	if (cgpu->usbinfo.nodev)
 		wprintw(statuswin, "ZOMBIE");
 	else
@@ -2806,7 +2806,7 @@ static void __kill_work(void)
 
 	applog(LOG_INFO, "Received kill message");
 
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 	/* Best to get rid of it first so it doesn't
 	 * try to create any new devices */
 	if (!opt_scrypt) {
@@ -2852,7 +2852,7 @@ static void __kill_work(void)
 	thr = &control_thr[api_thr_id];
 	thr_info_cancel(thr);
 
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 	/* Release USB resources in case it's a restart
 	 * and not a QUIT */
 	if (!opt_scrypt) {
@@ -6794,7 +6794,7 @@ struct device_drv *copy_drv(struct device_drv *drv)
 	return copy;
 }
 
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 static void hotplug_process()
 {
 	struct thr_info *thr;
@@ -7410,7 +7410,7 @@ begin_bench:
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
 
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 	if (!opt_scrypt) {
 		hotplug_thr_id = 6;
 		thr = &control_thr[hotplug_thr_id];
