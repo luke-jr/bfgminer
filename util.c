@@ -1761,14 +1761,6 @@ out:
 		}
 	} else {
 		if (!oldproto) {
-			/* Reset the sessionid used for stratum resuming in case the pool
-			* does not support it, or does not know how to respond to the
-			* presence of the sessionid parameter. */
-			mutex_lock(&pool->pool_lock);
-			free(pool->sessionid);
-			free(pool->nonce1);
-			pool->sessionid = pool->nonce1 = NULL;
-			mutex_unlock(&pool->pool_lock);
 			applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
 			oldproto = true;
 			goto resend;
