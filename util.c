@@ -1659,7 +1659,7 @@ bool initiate_stratum(struct pool *pool)
 {
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
 	json_t *val = NULL, *res_val, *err_val;
-	bool ret = false, recvd = false;
+	bool ret = false, recvd = false, oldproto = false;
 	json_error_t err;
 	int n2size;
 
@@ -1667,7 +1667,7 @@ bool initiate_stratum(struct pool *pool)
 		goto out;
 
 resend:
-	if (!recvd) {
+	if (!oldproto) {
 		if (pool->sessionid)
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
@@ -1760,7 +1760,7 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
-		if (recvd) {
+		if (!oldproto) {
 			/* Reset the sessionid used for stratum resuming in case the pool
 			* does not support it, or does not know how to respond to the
 			* presence of the sessionid parameter. */
@@ -1770,6 +1770,7 @@ out:
 			pool->sessionid = pool->nonce1 = NULL;
 			mutex_unlock(&pool->pool_lock);
 			applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
+			oldproto = true;
 			goto resend;
 		}
 		applog(LOG_DEBUG, "Initiate stratum failed");
