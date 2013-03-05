@@ -271,13 +271,16 @@ else
 	])
 fi
 
-
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
 AM_CONDITIONAL([NEED_USBUTILS_C], [test x$bitforce$modminer != xnono])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
+
+if test "x$bitforce$modminer" != xnono; then
+	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
+fi
 
 if test x$request_jansson = xtrue
 then

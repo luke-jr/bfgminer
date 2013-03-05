@@ -577,7 +577,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ZERINV,	PARAM_STR,	"Invalid zero parameter '%s'" },
  { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
  { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
  { SEVERITY_ERR,   MSG_USBNODEV, PARAM_PGA,	"PGA%d has no device" },
 #endif
  { SEVERITY_ERR,   MSG_INVHPLG,	PARAM_STR,	"Invalid value for hotplug (%s) must be 0..9999" },
@@ -1440,7 +1440,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_int(root, "ScanTime", &opt_scantime, false);
 	root = api_add_int(root, "Queue", &opt_queue, false);
 	root = api_add_int(root, "Expiry", &opt_expiry, false);
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 	if (hotplug_time == 0)
 		root = api_add_const(root, "Hotplug", DISABLED, false);
 	else
@@ -1607,7 +1607,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 		root = api_add_bool(root, "No Device", &(cgpu->usbinfo.nodev), false);
 #endif
 		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
@@ -1828,7 +1828,7 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 	}
 #endif
 
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 	if (cgpu->usbinfo.nodev) {
 		message(io_data, MSG_USBNODEV, id, NULL, isjson);
 		return;
@@ -3185,7 +3185,7 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 {
 	struct api_data *root = NULL;
 
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 	char buf[TMPBUFSIZ];
 	bool io_open = false;
 	int count = 0;
@@ -3198,8 +3198,7 @@ static void usbstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		return;
 	}
 
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
-
+#ifdef USE_USBUTILS
 	message(io_data, MSG_USBSTA, 0, NULL, isjson);
 
 	if (isjson)
@@ -3332,7 +3331,7 @@ static void dozero(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 
 static void dohotplug(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
-#if defined(USE_MODMINER) || defined(USE_BITFORCE)
+#ifdef USE_USBUTILS
 	int value;
 
 	if (param == NULL || *param == '\0') {
