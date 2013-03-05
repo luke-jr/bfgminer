@@ -4023,15 +4023,15 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 			struct work *work = sws->work;
 			struct pool *pool = work->pool;
 			int fd = pool->sock;
-			bool has_sessionid;
+			bool sessionid_match;
 			
 			mutex_lock(&pool->pool_lock);
-			has_sessionid = true;  // FIXME: pool->sessionid != NULL;
+			sessionid_match = true;  // FIXME: pool->sessionid && work->sessionid && !strcmp(pool->sessionid, work->sessionid);
 			// FIXME: Above check won't work without sessionid support
 			mutex_unlock(&pool->pool_lock);
-			if (!has_sessionid)
+			if (!sessionid_match)
 			{
-				applog(LOG_DEBUG, "No session id for resubmitting stratum share");
+				applog(LOG_DEBUG, "No matching session id for resubmitting stratum share");
 				submit_discard_share2("disconnect", work);
 				++tsreduce;
 next_write_sws_del:
