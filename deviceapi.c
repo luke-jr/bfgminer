@@ -83,6 +83,45 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 	return true;
 }
 
+/* A generic wait function for threads that poll that will wait a specified
+ * time tdiff waiting on a work restart request. Returns zero if the condition
+ * was met (work restart requested) or ETIMEDOUT if not.
+ */
+int restart_wait(struct thr_info *thr, unsigned int mstime)
+{
+	struct timeval tv_timer, tv_now, tv_timeout;
+	fd_set rfds;
+	SOCKETTYPE wrn = thr->work_restart_notifier[0];
+	int rv;
+	
+	if (unlikely(thr->work_restart_notifier[1] == INVSOCK))
+	{
+		// This is a bug!
+		applog(LOG_ERR, "%"PRIpreprv": restart_wait called without a work_restart_notifier", thr->cgpu->proc_repr);
+		nmsleep(mstime);
+		return (thr->work_restart ? 0 : ETIMEDOUT);
+	}
+	
+	gettimeofday(&tv_now, NULL);
+	timer_set_delay(&tv_timer, &tv_now, mstime * 1000);
+	while (true)
+	{
+		FD_ZERO(&rfds);
+		FD_SET(wrn, &rfds);
+		tv_timeout = tv_timer;
+		rv = select(wrn + 1, &rfds, NULL, NULL, select_timeout(&tv_timeout, &tv_now));
+		if (rv == 0)
+			return ETIMEDOUT;
+		if (rv > 0)
+		{
+			if (thr->work_restart)
+				return 0;
+			notifier_read(thr->work_restart_notifier);
+		}
+		gettimeofday(&tv_now, NULL);
+	}
+}
+
 // Miner loop to manage a single processor (with possibly multiple threads per processor)
 void minerloop_scanhash(struct thr_info *mythr)
 {
