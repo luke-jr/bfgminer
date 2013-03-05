@@ -521,7 +521,7 @@ static
 bool x6500_all_idle(struct cgpu_info *any_proc)
 {
 	for (struct cgpu_info *proc = any_proc->device; proc; proc = proc->next_proc)
-		if (proc->thr[0]->tv_poll.tv_sec != -1)
+		if (proc->thr[0]->tv_poll.tv_sec != -1 || proc->deven == DEV_ENABLED)
 			return false;
 	return true;
 }
