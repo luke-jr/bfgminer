@@ -4042,6 +4042,7 @@ next_write_sws_del:
 				*swsp = sws->next;
 				free_sws(sws);
 				--wip;
+				continue;
 			}
 			
 			if (fd == INVSOCK || (!pool->stratum_auth) || (!pool->stratum_notify) || !FD_ISSET(fd, &wfds)) {
@@ -4079,6 +4080,13 @@ next_write_sws:
 				applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
 				goto next_write_sws_del;
 			} else if (!pool_tset(pool, &pool->submit_fail)) {
+				// Undo stuff
+				mutex_lock(&sshare_lock);
+				HASH_DEL(stratum_shares, sshare);
+				mutex_unlock(&sshare_lock);
+				free_work(sshare->work);
+				free(sshare);
+				
 				applog(LOG_WARNING, "Pool %d stratum share submission failure", pool->pool_no);
 				total_ro++;
 				pool->remotefail_occasions++;
