@@ -96,11 +96,15 @@ void set_maxfd(int *p_maxfd, int fd)
 }
 
 
+#define TIMEVAL_USECS(usecs)  (  \
+	(struct timeval){  \
+		.tv_sec = (usecs) / 1000000,  \
+		.tv_usec = (usecs) % 1000000,  \
+	}  \
+)
+
 #define timer_set_delay(tvp_timer, tvp_now, usecs)  do {  \
-	struct timeval tv_add = {  \
-		.tv_sec = usecs / 1000000,  \
-		.tv_usec = usecs % 1000000,  \
-	};  \
+	struct timeval tv_add = TIMEVAL_USECS(usecs);  \
 	timeradd(&tv_add, tvp_now, tvp_timer);  \
 } while(0)
 
