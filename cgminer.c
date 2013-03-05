@@ -1376,6 +1376,7 @@ static struct work *make_work(void)
  * cleaned to remove any dynamically allocated arrays within the struct */
 void clean_work(struct work *work)
 {
+	free(work->sessionid);
 	free(work->job_id);
 	free(work->nonce2);
 	free(work->ntime);
@@ -2947,6 +2948,8 @@ void __copy_work(struct work *work, struct work *base_work)
 	/* Keep the unique new id assigned during make_work to prevent copied
 	 * work from having the same id. */
 	work->id = id;
+	if (base_work->sessionid)
+		work->sessionid = strdup(base_work->sessionid);
 	if (base_work->job_id)
 		work->job_id = strdup(base_work->job_id);
 	if (base_work->nonce2)
