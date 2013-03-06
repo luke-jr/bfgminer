@@ -20,8 +20,8 @@
 			(err) == LIBUSB_ERROR_PIPE || \
 			(err) == LIBUSB_ERROR_OTHER)
 
-#ifdef USE_ICARUS
-#define DRV_ICARUS 1
+#ifdef USE_BFLSC
+#define DRV_BFLSC 1
 #endif
 
 #ifdef USE_BITFORCE
@@ -32,6 +32,10 @@
 #define DRV_MODMINER 3
 #endif
 
+#ifdef USE_ICARUS
+#define DRV_ICARUS 4
+#endif
+
 #define DRV_LAST -1
 
 #define USB_CONFIG 1
@@ -40,11 +44,21 @@
 #define EPO(x) (LIBUSB_ENDPOINT_OUT | (unsigned char)(x))
 
 #ifdef WIN32
+#define BFLSC_TIMEOUT_MS 500
 #define BITFORCE_TIMEOUT_MS 500
 #define MODMINER_TIMEOUT_MS 200
 #else
+#define BFLSC_TIMEOUT_MS 200
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
+#endif
+
+#ifdef USE_BFLSC
+// N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
+static struct usb_endpoints bas_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
 #endif
 
 #ifdef USE_BITFORCE
@@ -71,6 +85,19 @@ static struct usb_find_devices find_dev[] = {
 	{ DRV_ICARUS, 	"CM1",	0x067b,	0x0230,	false,	EPI(0),	EPO(0), 1 },
 #endif
 */
+#ifdef USE_BFLSC
+	{
+		.drv = DRV_BFLSC,
+		.name = "BAS",
+		.idVendor = 0x0403,
+		.idProduct = 0x6014,
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = BFLSC_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(bas_eps),
+		.eps = bas_eps },
+#endif
 #ifdef USE_BITFORCE
 	{
 		.drv = DRV_BITFORCE,
@@ -100,16 +127,20 @@ static struct usb_find_devices find_dev[] = {
 	{ DRV_LAST, NULL, 0, 0, 0, 0, 0, 0, 0, NULL }
 };
 
+#ifdef USE_BFLSC
+extern struct device_drv bflsc_drv;
+#endif
+
 #ifdef USE_BITFORCE
 extern struct device_drv bitforce_drv;
 #endif
 
-#ifdef USE_ICARUS
-extern struct device_drv icarus_drv;
-#endif
-
 #ifdef USE_MODMINER
 extern struct device_drv modminer_drv;
+#endif
+
+#ifdef USE_ICARUS
+extern struct device_drv icarus_drv;
 #endif
 
 #define STRBUFLEN 256
@@ -1130,6 +1161,11 @@ static struct usb_find_devices *usb_check_each(int drvnum, struct device_drv *dr
 
 static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv, __maybe_unused struct libusb_device *dev)
 {
+#ifdef USE_BFLSC
+	if (drv->drv_id == DRIVER_BFLSC)
+		return usb_check_each(DRV_BFLSC, drv, dev);
+#endif
+
 #ifdef USE_BITFORCE
 	if (drv->drv_id == DRIVER_BITFORCE)
 		return usb_check_each(DRV_BITFORCE, drv, dev);
@@ -1534,6 +1570,7 @@ void usb_cleanup()
 	for (i = 0; i < total_devices; i++) {
 		cgpu = get_devices(i);
 		switch (cgpu->drv->drv_id) {
+			case DRIVER_BFLSC:
 			case DRIVER_BITFORCE:
 			case DRIVER_MODMINER:
 				release_cgpu(cgpu);

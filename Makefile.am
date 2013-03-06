@@ -86,6 +86,10 @@ if NEED_USBUTILS_C
 cgminer_SOURCES += usbutils.c
 endif
 
+if HAS_BFLSC
+cgminer_SOURCES += driver-bflsc.c
+endif
+
 if HAS_BITFORCE
 cgminer_SOURCES += driver-bitforce.c
 endif

@@ -203,6 +203,7 @@ enum drv_driver {
 	DRIVER_MODMINER,
 	DRIVER_ZTEX,
 	DRIVER_CPU,
+	DRIVER_BFLSC,
 };
 
 enum alive {

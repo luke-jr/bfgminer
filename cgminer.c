@@ -57,7 +57,9 @@
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
 #	define USE_FPGA
+#if defined(USE_ICARUS)
 #	define USE_FPGA_SERIAL
+#endif
 #elif defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
@@ -1116,7 +1118,7 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
-#if defined(HAVE_ADL) || defined(USE_BITFORCE) || defined(USE_MODMINER)
+#if defined(HAVE_ADL) || defined(USE_BITFORCE) || defined(USE_MODMINER) || defined(USE_BFLSC)
 	OPT_WITH_ARG("--temp-cutoff",
 		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
 		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
@@ -1316,6 +1318,9 @@ extern const char *opt_argv0;
 static char *opt_verusage_and_exit(const char *extra)
 {
 	printf("%s\nBuilt with "
+#ifdef USE_BFLSC
+		"bflsc "
+#endif
 #ifdef HAVE_OPENCL
 		"GPU "
 #endif
@@ -6608,6 +6613,10 @@ struct device_drv cpu_drv = {
 };
 #endif
 
+#ifdef USE_BFLSC
+extern struct device_drv bflsc_drv;
+#endif
+
 #ifdef USE_BITFORCE
 extern struct device_drv bitforce_drv;
 #endif
@@ -6873,6 +6882,10 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			new_devices = 0;
 			new_threads = 0;
 
+#ifdef USE_BFLSC
+			bflsc_drv.drv_detect();
+#endif
+
 #ifdef USE_BITFORCE
 			bitforce_drv.drv_detect();
 #endif
@@ -7111,6 +7124,11 @@ int main(int argc, char *argv[])
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
 		icarus_drv.drv_detect();
+#endif
+
+#ifdef USE_BFLSC
+	if (!opt_scrypt)
+		bflsc_drv.drv_detect();
 #endif
 
 #ifdef USE_BITFORCE

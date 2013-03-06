@@ -203,10 +203,21 @@ fi
 
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 
+bflsc="no"
+
+AC_ARG_ENABLE([bflsc],
+	[AC_HELP_STRING([--enable-bflsc],[Compile support for BFL ASICs (default disabled)])],
+	[bflsc=$enableval]
+	)
+if test "x$bflsc" = xyes; then
+	AC_DEFINE([USE_BFLSC], [1], [Defined to 1 if BFL ASIC support is wanted])
+fi
+AM_CONDITIONAL([HAS_BFLSC], [test x$bflsc = xyes])
+
 bitforce="no"
 
 AC_ARG_ENABLE([bitforce],
-	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs(default disabled)])],
+	[AC_HELP_STRING([--enable-bitforce],[Compile support for BitForce FPGAs (default disabled)])],
 	[bitforce=$enableval]
 	)
 if test "x$bitforce" = xyes; then
@@ -272,13 +283,13 @@ else
 fi
 
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$ztex != xnononono])
-AM_CONDITIONAL([NEED_USBUTILS_C], [test x$bitforce$modminer != xnono])
+AM_CONDITIONAL([NEED_USBUTILS_C], [test x$bitforce$modminer$bflsc != xnonono])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
-if test "x$bitforce$modminer" != xnono; then
+if test "x$bitforce$modminer$bflsc" != xnonono; then
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
 fi
 
@@ -347,7 +358,7 @@ AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
 PKG_PROG_PKG_CONFIG()
 
-if test "x$ztex$modminer$bitforce" != xnonono; then
+if test "x$ztex$modminer$bitforce$bflsc" != xnononono; then
   case $target in
     *-*-freebsd*)
       LIBUSB_LIBS="-lusb"
@@ -464,14 +475,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$cpumining$bitforce$icarus$ztex$modminer" = xnonononono; then
+		if test "x$cpumining$bitforce$icarus$ztex$modminer$bflsc" = xnononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$cpumining$bitforce$icarus$ztex$modminer" = xnonononono; then
+	if test "x$cpumining$bitforce$icarus$ztex$modminer$bflsc" = xnononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -488,6 +499,12 @@ else
 fi
 
 echo
+if test "x$bflsc" = xyes; then
+	echo "  BFL.ASICs............: Enabled"
+else
+	echo "  BFL.ASICs............: Disabled"
+fi
+
 if test "x$bitforce" = xyes; then
 	echo "  BitForce.FPGAs.......: Enabled"
 else
