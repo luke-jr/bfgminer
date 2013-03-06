@@ -299,6 +299,7 @@ static bool bitforce_init(struct cgpu_info *bitforce)
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
 	{
 		s[0] = '\0';
+		free(bitforce->name);
 		bitforce->name = strdup(pdevbuf + 7);
 	}
 	
