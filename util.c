@@ -1459,6 +1459,30 @@ static bool send_version(struct pool *pool, json_t *val)
 	return true;
 }
 
+static bool stratum_show_message(struct pool *pool, json_t *val, json_t *params)
+{
+	char s[RBUFSIZE], *idstr;
+	json_t *id = json_object_get(val, "id");
+	const char *msg = __json_array_string(params, 0);
+	
+	if (likely(msg))
+		applog(LOG_NOTICE, "Message from pool %u: %s", pool->pool_no, msg);
+	
+	if (!(id && !json_is_null(id)))
+		return true;
+	
+	idstr = json_dumps_ANY(id, 0);
+	if (likely(msg))
+		sprintf(s, "{\"id\": %s, \"result\": true, \"error\": null}", idstr);
+	else
+		sprintf(s, "{\"id\": %s, \"result\": null, \"error\": [-1, \"Failed to parse message\", null]}", idstr);
+	free(idstr);
+	if (!stratum_send(pool, s, strlen(s)))
+		return false;
+	
+	return true;
+}
+
 bool parse_method(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
@@ -1519,6 +1543,11 @@ bool parse_method(struct pool *pool, char *s)
 	}
 
 	if (!strncasecmp(buf, "client.get_version", 18) && send_version(pool, val)) {
+		ret = true;
+		goto out;
+	}
+
+	if (!strncasecmp(buf, "client.show_message", 19) && stratum_show_message(pool, val, params)) {
 		ret = true;
 		goto out;
 	}
