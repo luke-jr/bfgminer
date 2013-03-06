@@ -270,6 +270,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
+double current_diff;
 static char block_diff[8];
 uint64_t best_diff = 0;
 
@@ -4508,12 +4509,15 @@ static int block_sort(struct block *blocka, struct block *blockb)
 static void set_blockdiff(const struct work *work)
 {
 	unsigned char target[32];
+	double diff;
 	uint64_t diff64;
 
 	real_block_target(target, work->data);
-	diff64 = target_diff(target);
+	diff = target_diff(target);
+	diff64 = diff;
 
 	suffix_string(diff64, block_diff, 0);
+	current_diff = diff;
 }
 
 static bool test_work_current(struct work *work)

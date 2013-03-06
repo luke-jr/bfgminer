@@ -880,6 +880,7 @@ extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern char *current_fullhash;
+extern double current_diff;
 extern uint64_t best_diff;
 extern struct timeval block_timeval;
 
