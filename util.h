@@ -44,6 +44,7 @@
 #else
 #define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
 #endif
+extern char *json_dumps_ANY(json_t *, size_t flags);
 
 struct pool;
 enum dev_reason;
