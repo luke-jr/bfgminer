@@ -29,6 +29,10 @@
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 
+#if defined(USE_BFLSC)
+#define HAVE_AN_ASIC 1
+#endif
+
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX) || defined(USE_MODMINER)
 #define HAVE_AN_FPGA 1
 #endif
@@ -135,7 +139,7 @@ static const char GPUSEP = ',';
 
 static const char *APIVERSION = "1.25";
 static const char *DEAD = "Dead";
-#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
+#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
 static const char *INIT = "Initialising";
@@ -166,6 +170,9 @@ static const char *SHA256STR = "sha256";
 static const char *DEVICECODE = ""
 #ifdef HAVE_OPENCL
 			"GPU "
+#endif
+#ifdef USE_BFLSC
+			"BAS "
 #endif
 #ifdef USE_BITFORCE
 			"BFL "
@@ -453,13 +460,19 @@ struct CODES {
 #ifdef HAVE_OPENCL
 		 	 	 	 	"%d GPU(s)"
 #endif
-#if defined(HAVE_AN_FPGA) && defined(HAVE_OPENCL)
+#if defined(HAVE_AN_ASIC) && defined(HAVE_OPENCL)
+						" - "
+#endif
+#ifdef HAVE_AN_ASIC
+						"%d ASC(s)"
+#endif
+#if defined(HAVE_AN_FPGA) && (defined(HAVE_OPENCL) || defined(HAVE_AN_ASIC))
 						" - "
 #endif
 #ifdef HAVE_AN_FPGA
 						"%d PGA(s)"
 #endif
-#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA))
+#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(HAVE_AN_ASIC) || defined(HAVE_AN_FPGA))
 						" - "
 #endif
 #ifdef WANT_CPUMINE
@@ -468,6 +481,9 @@ struct CODES {
  },
 
  { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs"
+#ifdef HAVE_AN_ASIC
+						"/ASCs"
+#endif
 #ifdef HAVE_AN_FPGA
 						"/PGAs"
 #endif
@@ -590,7 +606,7 @@ struct CODES {
 
 static int my_thr_id = 0;
 static bool bye;
-#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
+#if defined(HAVE_OPENCL) || defined (HAVE_AN_ASIC) || defined(HAVE_AN_FPGA)
 static bool ping = true;
 #endif
 
@@ -1155,6 +1171,48 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 	return root;
 }
 
+#ifdef HAVE_AN_ASIC
+static int numascs()
+{
+	int count = 0;
+	int i;
+
+	rd_lock(&devices_lock);
+	for (i = 0; i < total_devices; i++) {
+#ifdef USE_BFLSC
+		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
+			count++;
+#endif
+	}
+	rd_unlock(&devices_lock);
+	return count;
+}
+
+static int ascdevice(int ascid)
+{
+	int count = 0;
+	int i;
+
+	rd_lock(&devices_lock);
+	for (i = 0; i < total_devices; i++) {
+#ifdef USE_BFLSC
+		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
+			count++;
+#endif
+		if (count == (ascid + 1))
+			goto foundit;
+	}
+
+	rd_unlock(&devices_lock);
+	return -1;
+
+foundit:
+
+	rd_unlock(&devices_lock);
+	return i;
+}
+#endif
+
 #ifdef HAVE_AN_FPGA
 static int numpgas()
 {
@@ -1230,6 +1288,9 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 	char buf[TMPBUFSIZ];
 	char buf2[TMPBUFSIZ];
 	char severity[2];
+#ifdef HAVE_AN_ASIC
+	int asc;
+#endif
 #ifdef HAVE_AN_FPGA
 	int pga;
 #endif
@@ -1300,6 +1361,9 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 					sprintf(buf, codes[i].description, paramid, total_pools - 1);
 					break;
 				case PARAM_DMAX:
+#ifdef HAVE_AN_ASIC
+					asc = numascs();
+#endif
 #ifdef HAVE_AN_FPGA
 					pga = numpgas();
 #endif
@@ -1313,6 +1377,9 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 					sprintf(buf, codes[i].description
 #ifdef HAVE_OPENCL
 						, nDevs
+#endif
+#ifdef HAVE_AN_ASIC
+						, asc
 #endif
 #ifdef HAVE_AN_FPGA
 						, pga
@@ -1394,6 +1461,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	char buf[TMPBUFSIZ];
 	bool io_open;
 	int gpucount = 0;
+	int asccount = 0;
 	int pgacount = 0;
 	int cpucount = 0;
 	char *adlinuse = (char *)NO;
@@ -1415,6 +1483,10 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	gpucount = nDevs;
 #endif
 
+#ifdef HAVE_AN_ASIC
+	asccount = numascs();
+#endif
+
 #ifdef HAVE_AN_FPGA
 	pgacount = numpgas();
 #endif
@@ -1427,6 +1499,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECONFIG : _MINECONFIG COMSTR);
 
 	root = api_add_int(root, "GPU Count", &gpucount, false);
+	root = api_add_int(root, "ASC Count", &asccount, false);
 	root = api_add_int(root, "PGA Count", &pgacount, false);
 	root = api_add_int(root, "CPU Count", &cpucount, false);
 	root = api_add_int(root, "Pool Count", &total_pools, false);
@@ -1455,7 +1528,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 		io_close(io_data);
 }
 
-#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA)
+#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *status2str(enum alive status)
 {
 	switch (status) {
@@ -1538,6 +1611,67 @@ static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom
 		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
+
+		root = print_data(root, buf, isjson, precom);
+		io_add(io_data, buf);
+	}
+}
+#endif
+
+#ifdef HAVE_AN_ASIC
+static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom)
+{
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+	char *enabled;
+	char *status;
+	int numasc = numascs();
+
+	if (numasc > 0 && asc >= 0 && asc < numasc) {
+		int dev = ascdevice(asc);
+		if (dev < 0) // Should never happen
+			return;
+
+		struct cgpu_info *cgpu = get_devices(dev);
+		float temp = cgpu->temp;
+
+		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+
+		if (cgpu->deven != DEV_DISABLED)
+			enabled = (char *)YES;
+		else
+			enabled = (char *)NO;
+
+		status = (char *)status2str(cgpu->status);
+
+		root = api_add_int(root, "ASC", &asc, false);
+		root = api_add_string(root, "Name", cgpu->drv->name, false);
+		root = api_add_int(root, "ID", &(cgpu->device_id), false);
+		root = api_add_string(root, "Enabled", enabled, false);
+		root = api_add_string(root, "Status", status, false);
+		root = api_add_temp(root, "Temperature", &temp, false);
+		double mhs = cgpu->total_mhashes / total_secs;
+		root = api_add_mhs(root, "MHS av", &mhs, false);
+		char mhsname[27];
+		sprintf(mhsname, "MHS %ds", opt_log_interval);
+		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
+		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
+		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
+		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
+		root = api_add_utility(root, "Utility", &(cgpu->utility), false);
+		int last_share_pool = cgpu->last_share_pool_time > 0 ?
+					cgpu->last_share_pool : -1;
+		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
+		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
+		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
+		root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
+		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
+		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
+		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+#ifdef USE_USBUTILS
+		root = api_add_bool(root, "No Device", &(cgpu->usbinfo.nodev), false);
+#endif
 		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
 		root = print_data(root, buf, isjson, precom);
@@ -1660,6 +1794,7 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	bool io_open = false;
 	int devcount = 0;
 	int numgpu = 0;
+	int numasc = 0;
 	int numpga = 0;
 	int i;
 
@@ -1667,11 +1802,15 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	numgpu = nDevs;
 #endif
 
+#ifdef HAVE_AN_ASIC
+	numasc = numascs();
+#endif
+
 #ifdef HAVE_AN_FPGA
 	numpga = numpgas();
 #endif
 
-	if (numgpu == 0 && opt_n_threads == 0 && numpga == 0) {
+	if (numgpu == 0 && opt_n_threads == 0 && numpga == 0 && numasc == 0) {
 		message(io_data, MSG_NODEVS, 0, NULL, isjson);
 		return;
 	}
@@ -1688,6 +1827,16 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 		devcount++;
 	}
 #endif
+#ifdef HAVE_AN_ASIC
+	if (numasc > 0) {
+		for (i = 0; i < numasc; i++) {
+			ascstatus(io_data, i, isjson, isjson && devcount > 0);
+
+			devcount++;
+		}
+	}
+#endif
+
 #ifdef HAVE_AN_FPGA
 	if (numpga > 0) {
 		for (i = 0; i < numpga; i++) {
@@ -2301,13 +2450,16 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	id = atoi(param);
+	mutex_lock(&control_lock);
 	if (id < 0 || id >= total_pools) {
+		mutex_unlock(&control_lock);
 		message(io_data, MSG_INVPID, id, NULL, isjson);
 		return;
 	}
 
 	pool = pools[id];
 	pool->enabled = POOL_ENABLED;
+	mutex_unlock(&control_lock);
 	switch_pools(pool);
 
 	message(io_data, MSG_SWITCHP, id, NULL, isjson);
@@ -3058,6 +3210,7 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	mutex_unlock(&ch_lock);
 
 	root = api_add_bool(root, "LP", &have_longpoll, false);
+	root = api_add_diff(root, "Network Difficulty", &current_diff, true);
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);

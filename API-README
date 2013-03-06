@@ -306,7 +306,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Hash Method=sha256/scrypt,
                               Current Block Time=N.N, <- 0 means none
                               Current Block Hash=XXXX..., <- blank if none
-                              LP=true/false| <- LP is in use on at least 1 pool
+                              LP=true/false, <- LP is in use on at least 1 pool
+                              Network Difficulty=NN.NN|
 
  debug|setting (*)
                DEBUG          Debug settings
@@ -429,7 +430,9 @@ Added API commands:
 
 Modified API commands:
  'devs' 'gpu' and 'pga' - add 'Last Valid Work'
- 'config' - add 'Hotplug'
+ 'devs' - list ASIC devices
+ 'config' - add 'Hotplug', 'ASC Count'
+ 'coin' - add 'Network Difficulty'
 
 ----------
 
