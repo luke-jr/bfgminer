@@ -3264,6 +3264,7 @@ static void *submit_work_thread(void *userdata)
 						applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
 				mutex_lock(&sshare_lock);
 				HASH_ADD_INT(stratum_shares, id, sshare);
+				pool->sshares++;
 				mutex_unlock(&sshare_lock);
 				applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
 				submitted = true;
@@ -3749,7 +3750,6 @@ static void stage_work(struct work *work)
 {
 	applog(LOG_DEBUG, "Pushing work from pool %d to hash queue", work->pool->pool_no);
 	work->work_block = work_block;
-	work->pool->last_work_time = time(NULL);
 	test_work_current(work);
 	hash_push(work);
 }
@@ -4704,8 +4704,10 @@ static bool parse_stratum_response(struct pool *pool, char *s)
 	id = json_integer_value(id_val);
 	mutex_lock(&sshare_lock);
 	HASH_FIND_INT(stratum_shares, &id, sshare);
-	if (sshare)
+	if (sshare) {
 		HASH_DEL(stratum_shares, sshare);
+		pool->sshares--;
+	}
 	mutex_unlock(&sshare_lock);
 	if (!sshare) {
 		if (json_is_true(res_val))
@@ -4738,6 +4740,7 @@ void clear_stratum_shares(struct pool *pool)
 			HASH_DEL(stratum_shares, sshare);
 			diff_cleared += sshare->work->work_difficulty;
 			free_work(sshare->work);
+			pool->sshares--;
 			free(sshare);
 			cleared++;
 		}
@@ -4792,9 +4795,9 @@ static bool cnx_needed(struct pool *pool)
 		return true;
 	if (!cp->has_gbt && !cp->has_stratum && (!opt_fail_only || !cp->hdr_path))
 		return true;
-	/* Keep the connection open to allow any stray shares to be submitted
-	 * on switching pools for 2 minutes. */
-	if (time(NULL) < pool->last_work_time + 120)
+	/* If we're waiting for a response from shares submitted, keep the
+	 * connection open. */
+	if (pool->sshares)
 		return true;
 	return false;
 }
@@ -5181,7 +5184,6 @@ static struct work *hash_pop(void)
 	/* Signal hash_pop again in case there are mutliple hash_pop waiters */
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
-	work->pool->last_work_time = time(NULL);
 
 	return work;
 }
