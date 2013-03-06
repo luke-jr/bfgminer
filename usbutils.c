@@ -1334,7 +1334,7 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 		details->item[item].max_delay = diff;
 
 	details->item[item].total_delay += diff;
-	memcpy(&(details->item[item].last), tv_start, sizeof(tv_start));
+	memcpy(&(details->item[item].last), tv_start, sizeof(*tv_start));
 	details->item[item].count++;
 }
 
