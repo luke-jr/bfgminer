@@ -1171,13 +1171,15 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 static bool send_version(struct pool *pool, json_t *val)
 {
-	char s[RBUFSIZE];
-	int id = json_integer_value(json_object_get(val, "id"));
+	char s[RBUFSIZE], *idstr;
+	json_t *id = json_object_get(val, "id");
 	
-	if (!id)
+	if (!(id && !json_is_null(id)))
 		return false;
 
-	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", id);
+	idstr = json_dumps_ANY(id, 0);
+	sprintf(s, "{\"id\": %s, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", idstr);
+	free(idstr);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
 
