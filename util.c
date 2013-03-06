@@ -1198,6 +1198,50 @@ out:
 	return sret;
 }
 
+/* Dumps any JSON value as a string. Just like jansson 2.1's JSON_ENCODE_ANY
+ * flag, but this is compatible with 2.0. */
+char *json_dumps_ANY(json_t *json, size_t flags)
+{
+	switch (json_typeof(json))
+	{
+		case JSON_ARRAY:
+		case JSON_OBJECT:
+			return json_dumps(json, flags);
+		default:
+			break;
+	}
+	char *rv;
+#ifdef JSON_ENCODE_ANY
+	rv = json_dumps(json, JSON_ENCODE_ANY | flags);
+	if (rv)
+		return rv;
+#endif
+	json_t *tmp = json_array();
+	char *s;
+	int i;
+	size_t len;
+	
+	if (!tmp)
+		quit(1, "json_dumps_ANY failed to allocate json array");
+	if (json_array_append(tmp, json))
+		quit(1, "json_dumps_ANY failed to append temporary array");
+	s = json_dumps(tmp, flags);
+	if (!s)
+		return NULL;
+	for (i = 0; s[i] != '['; ++i)
+		if (unlikely(!(s[i] && isspace(s[i]))))
+			quit(1, "json_dumps_ANY failed to find opening bracket in array dump");
+	len = strlen(&s[++i]) - 1;
+	if (unlikely(s[i+len] != ']'))
+		quit(1, "json_dumps_ANY failed to find closing bracket in array dump");
+	rv = malloc(len + 1);
+	memcpy(rv, &s[i], len);
+	rv[len] = '\0';
+	free(s);
+	json_decref(tmp);
+	return rv;
+}
+
 /* Extracts a string value from a json array with error checking. To be used
  * when the value of the string returned is only examined and not to be stored.
  * See json_array_string below */
@@ -1400,13 +1444,15 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 static bool send_version(struct pool *pool, json_t *val)
 {
-	char s[RBUFSIZE];
-	int id = json_integer_value(json_object_get(val, "id"));
+	char s[RBUFSIZE], *idstr;
+	json_t *id = json_object_get(val, "id");
 	
-	if (!id)
+	if (!(id && !json_is_null(id)))
 		return false;
 
-	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", id);
+	idstr = json_dumps_ANY(id, 0);
+	sprintf(s, "{\"id\": %s, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", idstr);
+	free(idstr);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
 
