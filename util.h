@@ -41,6 +41,7 @@
 #else
 #define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
 #endif
+extern char *json_dumps_ANY(json_t *, size_t flags);
 
 struct pool;
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
