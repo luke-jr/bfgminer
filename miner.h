@@ -1053,6 +1053,7 @@ struct pool {
 	struct stratum_work swork;
 	pthread_t stratum_thread;
 	pthread_mutex_t stratum_lock;
+	char *admin_msg;
 
 	pthread_mutex_t last_work_lock;
 	struct work *last_work_copy;

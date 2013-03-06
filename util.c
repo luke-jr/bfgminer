@@ -1463,10 +1463,14 @@ static bool stratum_show_message(struct pool *pool, json_t *val, json_t *params)
 {
 	char s[RBUFSIZE], *idstr;
 	json_t *id = json_object_get(val, "id");
-	const char *msg = __json_array_string(params, 0);
+	char *msg = json_array_string(params, 0);
 	
 	if (likely(msg))
+	{
+		free(pool->admin_msg);
+		pool->admin_msg = msg;
 		applog(LOG_NOTICE, "Message from pool %u: %s", pool->pool_no, msg);
+	}
 	
 	if (!(id && !json_is_null(id)))
 		return true;
