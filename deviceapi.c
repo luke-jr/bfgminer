@@ -197,6 +197,8 @@ bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
 		mythr->work_restart = false;
 		request_work(mythr);
 		// FIXME: Allow get_work to return NULL to retry on notification
+		if (mythr->next_work)
+			free_work(mythr->next_work);
 		mythr->next_work = get_work(mythr);
 		if (api->prepare_work && !api->prepare_work(mythr, mythr->next_work)) {
 			applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!", proc->proc_repr);
