@@ -1481,8 +1481,8 @@ out:
 bool initiate_stratum(struct pool *pool)
 {
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
+	bool ret = false, recvd = false, noresume = false;
 	json_t *val = NULL, *res_val, *err_val;
-	bool ret = false, recvd = false;
 	json_error_t err;
 	int n2size;
 
@@ -1582,7 +1582,7 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
-		if (recvd) {
+		if (recvd && !noresume) {
 			/* Reset the sessionid used for stratum resuming in case the pool
 			* does not support it, or does not know how to respond to the
 			* presence of the sessionid parameter. */
@@ -1592,6 +1592,7 @@ out:
 			pool->sessionid = pool->nonce1 = NULL;
 			mutex_unlock(&pool->pool_lock);
 			applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
+			noresume = true;
 			goto resend;
 		}
 		applog(LOG_DEBUG, "Initiate stratum failed");
