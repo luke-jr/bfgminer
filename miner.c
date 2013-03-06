@@ -8210,6 +8210,7 @@ begin_bench:
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 			thr->work_restart_notifier[1] = INVSOCK;
+			thr->mutex_request[1] = INVSOCK;
 			thr->_job_transition_in_progress = true;
 			timerclear(&thr->tv_morework);
 
