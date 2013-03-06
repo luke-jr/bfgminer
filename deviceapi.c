@@ -171,6 +171,8 @@ bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
 
 void job_prepare_complete(struct thr_info *mythr)
 {
+	if (unlikely(mythr->busy_state == TBS_GETTING_RESULTS))
+		return;
 	if (mythr->work)
 	{
 		if (true /* TODO: job is near complete */ || unlikely(mythr->work_restart))
@@ -298,6 +300,11 @@ void minerloop_async(struct thr_info *mythr)
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
 			mythr = proc->thr[0];
+			
+			// Nothing should happen while we're starting a job
+			if (unlikely(mythr->busy_state == TBS_STARTING_JOB))
+				goto defer_events;
+			
 			is_running = mythr->work;
 			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
 			
@@ -317,7 +324,11 @@ void minerloop_async(struct thr_info *mythr)
 				{
 disabled: ;
 					mythr->tv_morework.tv_sec = -1;
-					do_get_results(mythr, false);
+					if (mythr->busy_state != TBS_GETTING_RESULTS)
+						do_get_results(mythr, false);
+					else
+						// Avoid starting job when pending result fetch completes
+						mythr->_proceed_with_new_job = false;
 				}
 			}
 			
@@ -328,6 +339,7 @@ djp: ;
 					goto disabled;
 			}
 			
+defer_events:
 			if (timer_passed(&mythr->tv_poll, &tv_now))
 				api->poll(mythr);
 			
