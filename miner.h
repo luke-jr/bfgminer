@@ -534,6 +534,12 @@ struct thread_q {
 	pthread_cond_t		cond;
 };
 
+enum thr_busy_state {
+	TBS_IDLE,
+	TBS_GETTING_RESULTS,
+	TBS_STARTING_JOB,
+};
+
 struct thr_info {
 	int		id;
 	int		device_thread;
@@ -559,6 +565,7 @@ struct thr_info {
 	struct work *prev_work;
 	struct work *work;
 	struct work *next_work;
+	enum thr_busy_state busy_state;
 	struct timeval tv_morework;
 	struct work *results_work;
 	bool _job_transition_in_progress;
