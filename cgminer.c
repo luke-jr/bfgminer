@@ -232,6 +232,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
+double current_diff;
 static char block_diff[8];
 uint64_t best_diff = 0;
 
@@ -3607,6 +3608,7 @@ static void set_blockdiff(const struct work *work)
 
 	diff64 = diffone / d64;
 	suffix_string(diff64, block_diff, 0);
+	current_diff = (double)diffone / (double)d64;
 }
 
 static bool test_work_current(struct work *work)

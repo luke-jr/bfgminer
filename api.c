@@ -3210,6 +3210,7 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	mutex_unlock(&ch_lock);
 
 	root = api_add_bool(root, "LP", &have_longpoll, false);
+	root = api_add_diff(root, "Network Difficulty", &current_diff, true);
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);
