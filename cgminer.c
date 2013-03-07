@@ -3135,8 +3135,14 @@ static bool stale_work(struct work *work, bool share)
 	pool = work->pool;
 
 	if (!share && pool->has_stratum) {
-		bool same_job = true;
+		bool same_job;
 
+		if (!pool->stratum_active || !pool->stratum_notify) {
+			applog(LOG_DEBUG, "Work stale due to stratum inactive");
+			return true;
+		}
+
+		same_job = true;
 		mutex_lock(&pool->pool_lock);
 		if (strcmp(work->job_id, pool->swork.job_id))
 			same_job = false;
