@@ -3403,7 +3403,7 @@ void switch_pools(struct pool *selected)
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
 				pool = priority_pool(i);
-				if (pool_unusable(pool))
+				if (pool_unusable(pool) && pool != selected)
 					continue;
 				pool_no = pool->pool_no;
 				break;
@@ -3423,7 +3423,7 @@ void switch_pools(struct pool *selected)
 				if (next_pool >= total_pools)
 					next_pool = 0;
 				pool = pools[next_pool];
-				if (pool_unusable(pool))
+				if (pool_unusable(pool) && pool != selected)
 					continue;
 				pool_no = next_pool;
 				break;
