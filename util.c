@@ -1525,13 +1525,16 @@ bool initiate_stratum(struct pool *pool)
 
 	sockd = true;
 resend:
-	if (!recvd) {
+	if (recvd) {
+		/* Get rid of any crap lying around if we're resending */
+		clear_sock(pool);
+		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
+	} else {
 		if (pool->sessionid)
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
-	} else
-		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
+	}
 
 	if (!__stratum_send(pool, s, strlen(s))) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
