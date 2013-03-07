@@ -6083,7 +6083,7 @@ static void *stratum_thread(void *userdata)
 			if (!pool->has_stratum)
 				break;
 
-			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
+			applog(LOG_NOTICE, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
 			total_go++;
 
