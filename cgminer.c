@@ -5167,7 +5167,7 @@ static void pool_resus(struct pool *pool)
 		applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 		switch_pools(NULL);
 	} else
-		applog(LOG_INFO, "Pool %d %s resumed returning work", pool->pool_no, pool->rpc_url);
+		applog(LOG_INFO, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 }
 
 static struct work *hash_pop(void)
@@ -6929,17 +6929,22 @@ static void *test_pool_thread(void *arg)
 	struct pool *pool = (struct pool *)arg;
 
 	if (pool_active(pool, false)) {
+		bool resus = false;
+
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
-		applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
+
 		mutex_lock(&control_lock);
 		if (!pools_active) {
 			currentpool = pool;
 			if (pool->pool_no != 0)
 				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
-		}
-		pools_active = true;
+			pools_active = true;
+		} else
+			resus = true;
 		mutex_unlock(&control_lock);
+		if (resus)
+			pool_resus(pool);
 	}
 
 	return NULL;
