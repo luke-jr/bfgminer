@@ -6092,7 +6092,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				pool->shares = pool->utility;
 			}
 
-			if ((pool->enabled == POOL_DISABLED || pool->has_stratum) && pool->probed)
+			if (pool->enabled == POOL_DISABLED)
 				continue;
 
 			/* Test pool is idle once every minute */
