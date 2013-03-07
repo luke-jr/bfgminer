@@ -1694,6 +1694,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	}
 	if (pool->sock == INVSOCK)
 	{
+		pool->stratum_curl = NULL;
 		curl_easy_cleanup(curl);
 		applog(LOG_ERR, "Stratum connect succeeded, but technical problem extracting socket (pool %u)", pool->pool_no);
 		return false;
