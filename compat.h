@@ -141,4 +141,24 @@ typedef long suseconds_t;
 #define PTH(thr) ((thr)->pth)
 #endif /* WIN32 */
 
+#ifndef HAVE_PTHREAD_CANCEL
+
+// Bionic (Android) is intentionally missing pthread_cancel, so it is implemented using pthread_kill (handled in util.c)
+#include <pthread.h>
+#include <signal.h>
+#define pthread_cancel(pth)  pthread_kill(pth, SIGTERM)
+#ifndef PTHREAD_CANCEL_ENABLE
+#define PTHREAD_CANCEL_ENABLE  0
+#define PTHREAD_CANCEL_DISABLE 1
+#endif
+#ifndef PTHREAD_CANCEL_DEFERRED
+#define PTHREAD_CANCEL_DEFERRED     0
+#define PTHREAD_CANCEL_ASYNCHRONOUS 1
+#endif
+#ifndef PTHREAD_CANCELED
+#define PTHREAD_CANCELED ((void*)-1)
+#endif
+
+#endif
+
 #endif /* __COMPAT_H__ */

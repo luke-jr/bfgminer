@@ -8,7 +8,7 @@ EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 
 SUBDIRS		= lib ccan
 
-INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing
+INCLUDES	= -fno-strict-aliasing
 
 bin_PROGRAMS	= bfgminer
 
@@ -22,6 +22,7 @@ bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
 
 bfgminer_CPPFLAGS += @JANSSON_CFLAGS@
+bfgminer_CPPFLAGS += $(PTHREAD_FLAGS)
 bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
 
 # common sources

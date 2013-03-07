@@ -4637,6 +4637,10 @@ static void *stage_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	bool ok = true;
 
+#ifndef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+#endif
+
 	RenameThread("stage");
 
 	while (ok) {
@@ -6894,6 +6898,10 @@ static void *longpoll_thread(void *userdata)
 	char *lp_url;
 	int rolltime;
 
+#ifndef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+#endif
+
 	RenameThread("longpoll");
 
 	curl = curl_easy_init();
@@ -7078,6 +7086,10 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 {
 	int intervals = 0;
 
+#ifndef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+#endif
+
 	RenameThread("watchpool");
 
 	while (42) {
@@ -7156,6 +7168,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 {
 	const unsigned int interval = WATCHDOG_INTERVAL;
 	struct timeval zero_tv;
+
+#ifndef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+#endif
 
 	RenameThread("watchdog");
 
@@ -7790,6 +7806,11 @@ static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t
 	return true;
 }
 
+#ifndef HAVE_PTHREAD_CANCEL
+extern void setup_pthread_cancel_workaround();
+extern struct sigaction pcwm_orig_term_handler;
+#endif
+
 int main(int argc, char *argv[])
 {
 	bool pools_active = false;
@@ -7801,6 +7822,10 @@ int main(int argc, char *argv[])
 	char *s;
 
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
+
+#ifndef HAVE_PTHREAD_CANCEL
+	setup_pthread_cancel_workaround();
+#endif
 
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
@@ -7850,7 +7875,13 @@ int main(int argc, char *argv[])
 	handler.sa_handler = &sighandler;
 	handler.sa_flags = 0;
 	sigemptyset(&handler.sa_mask);
+#ifdef HAVE_PTHREAD_CANCEL
 	sigaction(SIGTERM, &handler, &termhandler);
+#else
+	// Need to let pthread_cancel emulation handle SIGTERM first
+	termhandler = pcwm_orig_term_handler;
+	pcwm_orig_term_handler = handler;
+#endif
 	sigaction(SIGINT, &handler, &inthandler);
 #ifndef WIN32
 	signal(SIGPIPE, SIG_IGN);
@@ -7912,6 +7943,11 @@ int main(int argc, char *argv[])
 
 	if (!config_loaded)
 		load_default_config();
+
+#ifndef HAVE_PTHREAD_CANCEL
+	// Can't do this any earlier, or config isn't loaded
+	applog(LOG_DEBUG, "pthread_cancel workaround in use");
+#endif
 
 	if (opt_benchmark) {
 		struct pool *pool;

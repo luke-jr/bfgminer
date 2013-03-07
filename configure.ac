@@ -64,7 +64,6 @@ AC_FUNC_ALLOCA
 
 have_cygwin=false
 have_win32=false
-PTHREAD_FLAGS="-lpthread"
 DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
 MATH_LIBS="-lm"
@@ -88,7 +87,6 @@ case $target in
   *-*-mingw*)
     have_x86_64=false
     have_win32=true
-    PTHREAD_FLAGS=""
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
     AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
@@ -99,11 +97,7 @@ case $target in
 	;;
   powerpc-*-darwin*)
     CFLAGS="$CFLAGS -faltivec"
-    PTHREAD_FLAGS=""
     ;;
-  *-*-darwin*)
-    PTHREAD_FLAGS=""
-	;;
 esac
 
 
@@ -153,11 +147,50 @@ else
 fi
 AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 
-AC_CHECK_LIB(pthread, pthread_create, [
-	true
-],
-        AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
-PTHREAD_LIBS=-lpthread
+m4_define([BFG_PTHREAD_FLAG_CHECK],
+	AC_MSG_CHECKING([for $1])
+	for cflag in ' -pthread' ''; do
+		for lib in ' -lpthread' ''; do
+			CFLAGS="${save_CFLAGS}${cflag}"
+			LIBS="${save_LIBS}${lib}"
+			AC_LINK_IFELSE([
+				AC_LANG_PROGRAM([
+					#include <pthread.h>
+				], [
+					void *f = $1;
+				])
+			], [
+				found_pthread=true
+				PTHREAD_FLAGS="${cflag}"
+				PTHREAD_LIBS="${lib}"
+				if test "x${cflag}${lib}" = "x"; then
+					AC_MSG_RESULT([yes])
+				else
+					AC_MSG_RESULT([with${cflag}${lib}])
+				fi
+				$2
+				break 2
+			],[])
+		done
+	done
+)
+
+save_CFLAGS="${CFLAGS}"
+save_LIBS="${LIBS}"
+found_pthread=false
+BFG_PTHREAD_FLAG_CHECK([pthread_cancel],[
+	AC_DEFINE([HAVE_PTHREAD_CANCEL], [1], [Define if you have a native pthread_cancel])
+])
+if test "x${found_pthread}" = "xfalse"; then
+	AC_MSG_RESULT([no])
+	BFG_PTHREAD_FLAG_CHECK([pthread_create])
+	if test "x${found_pthread}" = "xfalse"; then
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([Could not find pthread library - please install libpthread])
+	fi
+fi
+CFLAGS="${save_CFLAGS}"
+LIBS="${save_LIBS}"
 
 AC_CHECK_LIB(jansson, json_loads, [
 	JANSSON_LIBS=-ljansson
@@ -713,10 +746,10 @@ fi
 
 echo
 echo "Compilation............: make (or gmake)"
-echo "  CPPFLAGS.............:" $CPPFLAGS $NCURSES_CPPFLAGS
-echo "  CFLAGS...............:" $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS
-echo "  LDFLAGS..............:" $LDFLAGS $PTHREAD_FLAGS
-echo "  LDADD................:" $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS
+echo "  CPPFLAGS.............:" $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS
+echo "  CFLAGS...............:" $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS
+echo "  LDFLAGS..............:" $LDFLAGS $PTHREAD_FLAGS $PTHREAD_LIBS
+echo "  LDADD................:" $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
