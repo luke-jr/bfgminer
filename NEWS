@@ -1,3 +1,53 @@
+Version 2.11.1 - March 7, 2013
+
+- Shorten the time before keepalive probes are sent out and how frequently
+they're sent with stratum curls.
+- Only set stratum auth once to prevent multiple threads being started.
+- Display select return value on select fail in stratum thread.
+- Clear the socket of anything in the receive buffer if we're going to retry
+connecting.
+- Allow pools to be resuscitated on first startup by the watchpool thread.
+- Check all pools simultaneously at startup switching to the first alive one to
+speed up startup.
+- Clear just the socket buffer when we don't care what is left in a stratum
+socket.
+- Clear the stratum socket whenever we are closing it since the buffer is going
+to be reused.
+- Do not continue work from a stratum pool where the connection has been
+interrupted.
+- Reset stratum_notify flag on suspend_stratum as well.
+- Close any sockets opened if we fail to initiate stratum but have opened the
+socket.
+- Close any existing stratum socket if we are attempting to restart stratum so
+the pool knows the connection has gone.
+- Show mechanism of stratum interruption if select times out.
+- Make stratum connection interrupted message higher priority to be visible at
+normal logging levels.
+- Implement client.show_message support for stratum.
+- API add 'Network Difficulty' to 'coin'
+- Setup BFLSC support
+- API use control_lock when switching pools
+- Make sure to retry only once with noresume support for stratum.
+- Instead of keeping track of when the last work item was generated to keep
+stratum connections open, keep them open if any shares have been submitted
+awaiting a response.
+- usbutils.c copy full size to 'Last Command'
+- configure - set USE_USBUTILS when usbutils is required and use it in the code
+- Clear last pool work on switching pools if the current pool supports local
+work generation or we are in failover only mode.
+- make rw locks: mining_thr_lock and devices_lock
+- Release MMQ device only once (not 4 times)
+- api.c fix MSG overlap
+- Hotplug - allow setting interval via --hotplug or API
+- curses - fix - put a dev_width inside #ifdef
+- usb_cleanup() use correct locking mechanism
+- Implement and use usb_cleanup() on shutdown or restart
+- miner.php report 'Last Valid Work' as time before request
+- API - return Last Valid Work
+- api -> drv
+- ZTX bug set missing drv_id
+
+
 Version 2.11.0 - March 2, 2013
 
 - Update kernel file names signifying changes.
