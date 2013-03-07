@@ -3358,6 +3358,17 @@ static struct pool *priority_pool(int choice)
 
 static void clear_pool_work(struct pool *pool);
 
+static bool pool_unusable(struct pool *pool)
+{
+	if (pool->idle)
+		return true;
+	if (pool->enabled != POOL_ENABLED)
+		return true;
+	if (pool->has_stratum && !pool->stratum_active)
+		return true;
+	return false;
+}
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -3386,10 +3397,10 @@ void switch_pools(struct pool *selected)
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
 				pool = priority_pool(i);
-				if (!pool->idle && pool->enabled == POOL_ENABLED) {
-					pool_no = pool->pool_no;
-					break;
-				}
+				if (pool_unusable(pool))
+					continue;
+				pool_no = pool->pool_no;
+				break;
 			}
 			break;
 		/* Both of these simply increment and cycle */
@@ -3406,10 +3417,10 @@ void switch_pools(struct pool *selected)
 				if (next_pool >= total_pools)
 					next_pool = 0;
 				pool = pools[next_pool];
-				if (!pool->idle && pool->enabled == POOL_ENABLED) {
-					pool_no = next_pool;
-					break;
-				}
+				if (pool_unusable(pool))
+					continue;
+				pool_no = next_pool;
+				break;
 			}
 			break;
 		default:
