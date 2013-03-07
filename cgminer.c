@@ -6930,10 +6930,10 @@ static void *test_pool_thread(void *arg)
 
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
+		pool_tclear(pool, &pool->idle);
 		applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
 		mutex_lock(&control_lock);
 		if (!pools_active) {
-			pool_tclear(pool, &pool->idle);
 			currentpool = pool;
 			if (pool->pool_no != 0)
 				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
