@@ -1506,6 +1506,7 @@ out:
 
 void suspend_stratum(struct pool *pool)
 {
+	clear_sock(pool);
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = pool->stratum_notify = false;
