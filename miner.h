@@ -13,6 +13,11 @@
 #include <blkmaker.h>
 #include <blktemplate.h>
 
+#if defined(WORDS_BIGENDIAN) && !defined(__BIG_ENDIAN__)
+/* uthash.h depends on __BIG_ENDIAN__ on BE platforms */
+#define __BIG_ENDIAN__ 1
+#endif
+
 #include "elist.h"
 #include "uthash.h"
 #include "logging.h"
@@ -134,11 +139,6 @@ static inline int fsync (int fd)
  	(((uint64_t)bswap_32((uint32_t)((value) & 0xffffffff)) \
  	    << 32) | \
  	(uint64_t)bswap_32((uint32_t)((value) >> 32)))
-#endif
-
-#if defined(WORDS_BIGENDIAN) && !defined(__BIG_ENDIAN__)
-/* uthash.h depends on __BIG_ENDIAN__ on BE platforms */
-#define __BIG_ENDIAN__ 1
 #endif
 
 /* This assumes htobe32 is a macro and that if it doesn't exist, then the
