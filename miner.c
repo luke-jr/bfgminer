@@ -6075,9 +6075,10 @@ static void *stratum_thread(void *userdata)
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (!sock_full(pool) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1)
+		if (!sock_full(pool) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
+			applog(LOG_DEBUG, "Stratum select timeout on pool %d", pool->pool_no);
 			s = NULL;
-		else
+		} else
 			s = recv_line(pool);
 		if (!s) {
 			if (!pool->has_stratum)
