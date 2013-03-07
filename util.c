@@ -1627,15 +1627,6 @@ out:
 	return ret;
 }
 
-bool restart_stratum(struct pool *pool)
-{
-	if (!initiate_stratum(pool))
-		return false;
-	if (!auth_stratum(pool))
-		return false;
-	return true;
-}
-
 void suspend_stratum(struct pool *pool)
 {
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
@@ -1643,6 +1634,17 @@ void suspend_stratum(struct pool *pool)
 	pool->stratum_active = false;
 	mutex_unlock(&pool->stratum_lock);
 	CLOSESOCKET(pool->sock);
+}
+
+bool restart_stratum(struct pool *pool)
+{
+	if (pool->stratum_active)
+		suspend_stratum(pool);
+	if (!initiate_stratum(pool))
+		return false;
+	if (!auth_stratum(pool))
+		return false;
+	return true;
 }
 
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
