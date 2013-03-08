@@ -6980,7 +6980,8 @@ static void *test_pool_thread(void *arg)
 		}
 		mutex_unlock(&control_lock);
 		pool_resus(pool);
-	}
+	} else
+		pool_died(pool);
 
 	return NULL;
 }
