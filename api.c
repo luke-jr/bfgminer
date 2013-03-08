@@ -125,7 +125,6 @@ char *WSAErrorMsg(void) {
 	return &(WSAbuf[0]);
 }
 #endif
-static SOCKETTYPE sock = INVSOCK;
 
 static const char *UNAVAILABLE = " - API will not be available";
 static const char *INVAPIGROUPS = "Invalid --api-groups parameter";
@@ -3617,8 +3616,7 @@ static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 {
 	char buf[SOCKBUFSIZ + sizeof(JSON_CLOSE) + sizeof(JSON_END)];
-	int len;
-	int n;
+	int count, res, tosend, len, n;
 
 	strcpy(buf, io_data->ptr);
 
@@ -3633,28 +3631,62 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 	}
 
 	len = strlen(buf);
+	tosend = len+1;
 
-	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, buf, len > 10 ? "..." : BLANK);
+	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", tosend, buf, len > 10 ? "..." : BLANK);
 
-	// ignore failure - it's closed immediately anyway
-	n = send(c, buf, len+1, 0);
+	count = 0;
+	while (count++ < 5 && tosend > 0) {
+		// allow 50ms per attempt
+		struct timeval timeout = {0, 50000};
+		fd_set wd;
 
-	if (SOCKETFAIL(n))
-		applog(LOG_WARNING, "API: send failed: %s", SOCKERRMSG);
-	else
-		applog(LOG_DEBUG, "API: sent %d", n);
+		FD_ZERO(&wd);
+		FD_SET(c, &wd);
+		if ((res = select(c + 1, NULL, &wd, NULL, &timeout)) < 1) {
+			applog(LOG_WARNING, "API: send select failed (%d)", res);
+			return;
+		}
+
+		n = send(c, buf, tosend, 0);
+
+		if (SOCKETFAIL(n)) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				continue;
+
+			applog(LOG_WARNING, "API: send (%d) failed: %s", tosend, SOCKERRMSG);
+
+			return;
+		} else {
+			if (count <= 1) {
+				if (n == tosend)
+					applog(LOG_DEBUG, "API: sent all of %d first go", tosend);
+				else
+					applog(LOG_DEBUG, "API: sent %d of %d first go", n, tosend);
+			} else {
+				if (n == tosend)
+					applog(LOG_DEBUG, "API: sent all of remaining %d (count=%d)", tosend, count);
+				else
+					applog(LOG_DEBUG, "API: sent %d of remaining %d (count=%d)", n, tosend, count);
+			}
+
+			tosend -= n;
+		}
+	}
 }
 
 static void tidyup(__maybe_unused void *arg)
 {
 	mutex_lock(&quit_restart_lock);
 
+	SOCKETTYPE *apisock = (SOCKETTYPE *)arg;
+
 	bye = true;
 
-	if (sock != INVSOCK) {
-		shutdown(sock, SHUT_RDWR);
-		CLOSESOCKET(sock);
-		sock = INVSOCK;
+	if (*apisock != INVSOCK) {
+		shutdown(*apisock, SHUT_RDWR);
+		CLOSESOCKET(*apisock);
+		*apisock = INVSOCK;
 	}
 
 	if (ipaccess != NULL) {
@@ -3971,6 +4003,11 @@ void api(int api_thr_id)
 	bool did;
 	int i;
 
+	SOCKETTYPE *apisock;
+
+	apisock = malloc(sizeof(*apisock));
+	*apisock = INVSOCK;
+
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
 		return;
@@ -3980,7 +4017,7 @@ void api(int api_thr_id)
 
 	mutex_init(&quit_restart_lock);
 
-	pthread_cleanup_push(tidyup, NULL);
+	pthread_cleanup_push(tidyup, (void *)apisock);
 	my_thr_id = api_thr_id;
 
 	setup_groups();
@@ -3998,8 +4035,8 @@ void api(int api_thr_id)
 	 * to ensure curl has already called WSAStartup() in windows */
 	nmsleep(opt_log_interval*1000);
 
-	sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (sock == INVSOCK) {
+	*apisock = socket(AF_INET, SOCK_STREAM, 0);
+	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 		return;
 	}
@@ -4024,7 +4061,7 @@ void api(int api_thr_id)
 	// another program has it open - which is what we want
 	int optval = 1;
 	// If it doesn't work, we don't really care - just show a debug message
-	if (SOCKETFAIL(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval))))
+	if (SOCKETFAIL(setsockopt(*apisock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval))))
 		applog(LOG_DEBUG, "API setsockopt SO_REUSEADDR failed (ignored): %s", SOCKERRMSG);
 #else
 	// On windows a 2nd program can bind to a port>1024 already in use unless
@@ -4036,7 +4073,7 @@ void api(int api_thr_id)
 	bound = 0;
 	bindstart = time(NULL);
 	while (bound == 0) {
-		if (SOCKETFAIL(bind(sock, (struct sockaddr *)(&serv), sizeof(serv)))) {
+		if (SOCKETFAIL(bind(*apisock, (struct sockaddr *)(&serv), sizeof(serv)))) {
 			binderror = SOCKERRMSG;
 			if ((time(NULL) - bindstart) > 61)
 				break;
@@ -4053,25 +4090,25 @@ void api(int api_thr_id)
 		return;
 	}
 
-	if (SOCKETFAIL(listen(sock, QUEUE))) {
+	if (SOCKETFAIL(listen(*apisock, QUEUE))) {
 		applog(LOG_ERR, "API3 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-		CLOSESOCKET(sock);
+		CLOSESOCKET(*apisock);
 		return;
 	}
 
 	if (opt_api_allow)
-		applog(LOG_WARNING, "API running in IP access mode on port %d", port);
+		applog(LOG_WARNING, "API running in IP access mode on port %d (%d)", port, *apisock);
 	else {
 		if (opt_api_network)
-			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d", port);
+			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d (%d)", port, *apisock);
 		else
-			applog(LOG_WARNING, "API running in local read access mode on port %d", port);
+			applog(LOG_WARNING, "API running in local read access mode on port %d (%d)", port, *apisock);
 	}
 
 	while (!bye) {
 		clisiz = sizeof(cli);
-		if (SOCKETFAIL(c = accept(sock, (struct sockaddr *)(&cli), &clisiz))) {
-			applog(LOG_ERR, "API failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+		if (SOCKETFAIL(c = accept(*apisock, (struct sockaddr *)(&cli), &clisiz))) {
+			applog(LOG_ERR, "API failed (%s)%s (%d)", SOCKERRMSG, UNAVAILABLE, *apisock);
 			goto die;
 		}
 
