@@ -6968,8 +6968,6 @@ static void *test_pool_thread(void *arg)
 	struct pool *pool = (struct pool *)arg;
 
 	if (pool_active(pool, false)) {
-		bool resus = false;
-
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
 
@@ -6979,11 +6977,9 @@ static void *test_pool_thread(void *arg)
 			if (pool->pool_no != 0)
 				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
 			pools_active = true;
-		} else
-			resus = true;
+		}
 		mutex_unlock(&control_lock);
-		if (resus)
-			pool_resus(pool);
+		pool_resus(pool);
 	}
 
 	return NULL;
