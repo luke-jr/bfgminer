@@ -4988,22 +4988,19 @@ static bool pool_active(struct pool *pool, bool pinging)
 retry_stratum:
 	if (pool->has_stratum) {
 		/* We create the stratum thread for each pool just after
-		 * successful authorisation. Once the auth flag has been set
+		 * successful authorisation. Once the init flag has been set
 		 * we never unset it and the stratum thread is responsible for
 		 * setting/unsetting the active flag */
-		if (pool->stratum_auth)
-			return pool->stratum_active;
-		if (!pool->stratum_active && !initiate_stratum(pool))
-			return false;
-		if (!auth_stratum(pool))
-			return false;
-		/* Only set stratum_auth once to prevent multiple threads
-		 * being started */
-		if (pool_tset(pool, &pool->stratum_auth))
-			return true;
-		pool->idle = false;
-		init_stratum_thread(pool);
-		return true;
+		bool init = pool_tset(pool, &pool->stratum_init);
+
+		if (!init) {
+			bool ret = initiate_stratum(pool) && auth_stratum(pool);
+
+			pool->idle = ret;
+			init_stratum_thread(pool);
+			return ret;
+		}
+		return pool->stratum_active;
 	}
 
 	curl = curl_easy_init();
