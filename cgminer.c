@@ -4997,7 +4997,10 @@ retry_stratum:
 			bool ret = initiate_stratum(pool) && auth_stratum(pool);
 
 			pool->idle = ret;
-			init_stratum_thread(pool);
+			if (ret)
+				init_stratum_thread(pool);
+			else
+				pool_tclear(pool, &pool->stratum_init);
 			return ret;
 		}
 		return pool->stratum_active;
