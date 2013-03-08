@@ -1428,7 +1428,8 @@ static bool setup_stratum_curl(struct pool *pool)
 		pool->stratum_curl = curl_easy_init();
 		if (unlikely(!pool->stratum_curl))
 			quit(1, "Failed to curl_easy_init in initiate_stratum");
-	}
+	} else
+		CLOSESOCKET(pool->sock);
 	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
 
@@ -1520,11 +1521,12 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	int n2size;
 
+resend:
 	if (!setup_stratum_curl(pool))
 		goto out;
 
 	sockd = true;
-resend:
+
 	if (recvd) {
 		/* Get rid of any crap lying around if we're resending */
 		clear_sock(pool);
