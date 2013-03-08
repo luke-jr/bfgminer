@@ -2593,6 +2593,18 @@ out:
 	return rc;
 }
 
+/* Specifies whether we can use this pool for work or not. */
+static bool pool_unworkable(struct pool *pool)
+{
+	if (pool->idle)
+		return true;
+	if (pool->enabled != POOL_ENABLED)
+		return true;
+	if (pool->has_stratum && !pool->stratum_active)
+		return true;
+	return false;
+}
+
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
  * rolling average per 10 minutes and if pools start getting more, it biases
  * away from them to distribute work evenly. The share count is reset to the
@@ -2606,7 +2618,7 @@ static struct pool *select_balanced(struct pool *cp)
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
-		if (pool->idle || pool->enabled != POOL_ENABLED)
+		if (pool_unworkable(pool))
 			continue;
 		if (pool->shares < lowest) {
 			lowest = pool->shares;
@@ -2616,18 +2628,6 @@ static struct pool *select_balanced(struct pool *cp)
 
 	ret->shares++;
 	return ret;
-}
-
-/* Specifies whether we can use this pool for work or not. */
-static bool pool_unworkable(struct pool *pool)
-{
-	if (pool->idle)
-		return true;
-	if (pool->enabled != POOL_ENABLED)
-		return true;
-	if (pool->has_stratum && !pool->stratum_active)
-		return true;
-	return false;
 }
 
 /* Select any active pool in a rotating fashion when loadbalance is chosen */
