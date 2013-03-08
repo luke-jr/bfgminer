@@ -6999,8 +6999,9 @@ static void *longpoll_thread(void *userdata)
 	struct pool *cp = (struct pool *)userdata;
 	/* This *pool is the source of the actual longpoll, not the pool we've
 	 * tied it to */
-	struct pool *pool = NULL;
 	struct timeval start, reply, end;
+	struct pool *pool = NULL;
+	char threadname[20];
 	CURL *curl = NULL;
 	int failures = 0;
 	char *lp_url;
@@ -7010,7 +7011,8 @@ static void *longpoll_thread(void *userdata)
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 #endif
 
-	RenameThread("longpoll");
+	snprintf(threadname, 20, "longpoll%u", cp->pool_no);
+	RenameThread(threadname);
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
