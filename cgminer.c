@@ -5013,7 +5013,6 @@ retry_stratum:
 		if (!init) {
 			bool ret = initiate_stratum(pool) && auth_stratum(pool);
 
-			pool->idle = ret;
 			if (ret)
 				init_stratum_thread(pool);
 			else
