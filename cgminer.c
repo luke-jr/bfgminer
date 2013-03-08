@@ -2618,7 +2618,8 @@ static struct pool *select_balanced(struct pool *cp)
 	return ret;
 }
 
-static bool pool_unusable(struct pool *pool)
+/* Specifies whether we can use this pool for work or not. */
+static bool pool_unworkable(struct pool *pool)
 {
 	if (pool->idle)
 		return true;
@@ -2652,7 +2653,7 @@ static inline struct pool *select_pool(bool lagging)
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 		pool = pools[rotating_pool];
-		if (!pool_unusable(pool))
+		if (!pool_unworkable(pool))
 			break;
 		pool = NULL;
 	}
@@ -3375,6 +3376,16 @@ static struct pool *priority_pool(int choice)
 
 static void clear_pool_work(struct pool *pool);
 
+/* Specifies whether we can switch to this pool or not. */
+static bool pool_unusable(struct pool *pool)
+{
+	if (pool->idle)
+		return true;
+	if (pool->enabled != POOL_ENABLED)
+		return true;
+	return false;
+}
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -3403,7 +3414,7 @@ void switch_pools(struct pool *selected)
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
 				pool = priority_pool(i);
-				if (pool_unusable(pool) && pool != selected)
+				if (pool_unusable(pool))
 					continue;
 				pool_no = pool->pool_no;
 				break;
@@ -3423,7 +3434,7 @@ void switch_pools(struct pool *selected)
 				if (next_pool >= total_pools)
 					next_pool = 0;
 				pool = pools[next_pool];
-				if (pool_unusable(pool) && pool != selected)
+				if (pool_unusable(pool))
 					continue;
 				pool_no = next_pool;
 				break;
@@ -6130,7 +6141,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
-
 		}
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
