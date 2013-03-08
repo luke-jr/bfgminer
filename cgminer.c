@@ -4863,10 +4863,12 @@ static bool supports_resume(struct pool *pool)
 static void *stratum_thread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
+	char threadname[16];
 
 	pthread_detach(pthread_self());
 
-	RenameThread("stratum");
+	snprintf(threadname, 16, "stratum/%d", pool->pool_no);
+	RenameThread(threadname);
 
 	while (42) {
 		struct timeval timeout;
@@ -5805,11 +5807,11 @@ void *miner_thread(void *userdata)
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_drv *drv = cgpu->drv;
-	char threadname[20];
+	char threadname[24];
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-        snprintf(threadname,20,"miner %d",thr_id);
+        snprintf(threadname, 24, "miner/%d", thr_id);
 	RenameThread(threadname);
 
 	if (!drv->thread_init(mythr)) {
@@ -5929,15 +5931,17 @@ static void *longpoll_thread(void *userdata)
 	struct pool *cp = (struct pool *)userdata;
 	/* This *pool is the source of the actual longpoll, not the pool we've
 	 * tied it to */
-	struct pool *pool = NULL;
 	struct timeval start, reply, end;
+	struct pool *pool = NULL;
+	char threadname[16];
 	CURL *curl = NULL;
 	int failures = 0;
 	char lpreq[1024];
 	char *lp_url;
 	int rolltime;
 
-	RenameThread("longpoll");
+	snprintf(threadname, 16, "longpoll/%d", cp->pool_no);
+	RenameThread(threadname);
 
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
