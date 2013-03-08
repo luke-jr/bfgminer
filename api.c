@@ -3616,8 +3616,7 @@ static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 {
 	char buf[SOCKBUFSIZ + sizeof(JSON_CLOSE) + sizeof(JSON_END)];
-	int len;
-	int n;
+	int count, res, tosend, len, n;
 
 	strcpy(buf, io_data->ptr);
 
@@ -3632,16 +3631,48 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 	}
 
 	len = strlen(buf);
+	tosend = len+1;
 
-	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", len+1, buf, len > 10 ? "..." : BLANK);
+	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", tosend, buf, len > 10 ? "..." : BLANK);
 
-	// ignore failure - it's closed immediately anyway
-	n = send(c, buf, len+1, 0);
+	count = 0;
+	while (count++ < 5 && tosend > 0) {
+		// allow 50ms per attempt
+		struct timeval timeout = {0, 50000};
+		fd_set wd;
 
-	if (SOCKETFAIL(n))
-		applog(LOG_WARNING, "API: send failed: %s", SOCKERRMSG);
-	else
-		applog(LOG_DEBUG, "API: sent %d", n);
+		FD_ZERO(&wd);
+		FD_SET(c, &wd);
+		if ((res = select(c + 1, NULL, &wd, NULL, &timeout)) < 1) {
+			applog(LOG_WARNING, "API: send select failed (%d)", res);
+			return;
+		}
+
+		n = send(c, buf, tosend, 0);
+
+		if (SOCKETFAIL(n)) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				continue;
+
+			applog(LOG_WARNING, "API: send (%d) failed: %s", tosend, SOCKERRMSG);
+
+			return;
+		} else {
+			if (count <= 1) {
+				if (n == tosend)
+					applog(LOG_DEBUG, "API: sent all of %d first go", tosend);
+				else
+					applog(LOG_DEBUG, "API: sent %d of %d first go", n, tosend);
+			} else {
+				if (n == tosend)
+					applog(LOG_DEBUG, "API: sent all of remaining %d (count=%d)", tosend, count);
+				else
+					applog(LOG_DEBUG, "API: sent %d of remaining %d (count=%d)", n, tosend, count);
+			}
+
+			tosend -= n;
+		}
+	}
 }
 
 static void tidyup(__maybe_unused void *arg)
@@ -4066,18 +4097,18 @@ void api(int api_thr_id)
 	}
 
 	if (opt_api_allow)
-		applog(LOG_WARNING, "API running in IP access mode on port %d", port);
+		applog(LOG_WARNING, "API running in IP access mode on port %d (%d)", port, *apisock);
 	else {
 		if (opt_api_network)
-			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d", port);
+			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d (%d)", port, *apisock);
 		else
-			applog(LOG_WARNING, "API running in local read access mode on port %d", port);
+			applog(LOG_WARNING, "API running in local read access mode on port %d (%d)", port, *apisock);
 	}
 
 	while (!bye) {
 		clisiz = sizeof(cli);
 		if (SOCKETFAIL(c = accept(*apisock, (struct sockaddr *)(&cli), &clisiz))) {
-			applog(LOG_ERR, "API failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
+			applog(LOG_ERR, "API failed (%s)%s (%d)", SOCKERRMSG, UNAVAILABLE, *apisock);
 			goto die;
 		}
 
