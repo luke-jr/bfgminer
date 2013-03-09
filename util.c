@@ -1745,11 +1745,11 @@ static bool setup_stratum_curl(struct pool *pool)
 	pool->stratum_auth = false;
 	pool->stratum_notify = false;
 	pool->swork.transparency_probed = false;
-	if (!pool->stratum_curl) {
-		pool->stratum_curl = curl_easy_init();
-		if (unlikely(!pool->stratum_curl))
-			quit(1, "Failed to curl_easy_init in initiate_stratum");
-	}
+	if (pool->stratum_curl)
+		curl_easy_cleanup(pool->stratum_curl);
+	pool->stratum_curl = curl_easy_init();
+	if (unlikely(!pool->stratum_curl))
+		quit(1, "Failed to curl_easy_init in initiate_stratum");
 	if (pool->sockbuf)
 		pool->sockbuf[0] = '\0';
 	mutex_unlock(&pool->stratum_lock);
@@ -1964,7 +1964,7 @@ void suspend_stratum(struct pool *pool)
 	clear_sockbuf(pool);
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
 	mutex_lock(&pool->stratum_lock);
-	pool->stratum_active = false;
+	pool->stratum_active = pool->stratum_notify = false;
 	pool->stratum_auth = false;
 	curl_easy_cleanup(pool->stratum_curl);
 	pool->stratum_curl = NULL;
