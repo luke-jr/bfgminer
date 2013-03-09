@@ -259,9 +259,10 @@ int clDevicesNum(void) {
 	char pbuff[256];
 	cl_uint numDevices;
 	cl_uint numPlatforms;
+	int most_devices = -1;
 	cl_platform_id *platforms;
 	cl_platform_id platform = NULL;
-	unsigned int most_devices = 0, i, mdplatform = 0;
+	unsigned int i, mdplatform = 0;
 	bool mdmesa = false;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
@@ -303,12 +304,10 @@ int clDevicesNum(void) {
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
-			if ((int)i != opt_platform_id)
-				continue;
-			return -1;
+			continue;
 		}
 		applog(LOG_INFO, "Platform %d devices: %d", i, numDevices);
-		if (numDevices > most_devices) {
+		if ((int)numDevices > most_devices) {
 			most_devices = numDevices;
 			mdplatform = i;
 			mdmesa = strstr(pbuff, "MESA");
