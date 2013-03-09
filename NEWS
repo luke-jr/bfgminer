@@ -1,3 +1,27 @@
+- Use curl_easy_cleanup to close any open stratum sockets.
+- Show pool number in switch message
+- Don't start testing any pools with the watchpool thread if any of the test
+threads are still active.
+- Set sockd to false should curl setup fail on stratum.
+- Close any open sockets when reusing a curl handle and reopen the socket
+whenever we're retrying stratum.
+- Set pool died on failed testing to allow idle flag and time to be set.
+- Remove unused pthread_t typedefs from struct pool.
+- Perform pool_resus on all pools that are found alive with the test pool
+threads.
+- Use pool_unworkable in select_balanced as well.
+- Differentiate pool_unusable from pool_unworkable.
+- Keep a connection open on higher priority stratum pools to fail back to them.
+- Rename threads according to what pool they're associated with as well.
+- Set the wrong bool in pool_active
+- Start the stratum thread only if we successfully init and authorise it,
+otherwise unset the init flag.
+- Make the initialisation of the stratum thread more robust allowing the
+watchpool thread safe access to it after the stratum thread is started.
+- API no longer ignore send() status
+- API make the main socket non-static
+
+
 Version 2.11.1 - March 7, 2013
 
 - Shorten the time before keepalive probes are sent out and how frequently
