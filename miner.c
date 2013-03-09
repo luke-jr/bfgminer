@@ -4356,7 +4356,7 @@ void switch_pools(struct pool *selected)
 	{
 		pool->block_id = 0;
 		if (pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
-			applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+			applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
 		}
 	}
 
