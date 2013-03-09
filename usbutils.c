@@ -1567,8 +1567,12 @@ void usb_cleanup()
 	struct cgpu_info *cgpu;
 	int i;
 
+	hotplug_time = 0;
+
+	nmsleep(10);
+
 	for (i = 0; i < total_devices; i++) {
-		cgpu = get_devices(i);
+		cgpu = devices[i];
 		switch (cgpu->drv->drv_id) {
 			case DRIVER_BFLSC:
 			case DRIVER_BITFORCE:
