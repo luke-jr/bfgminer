@@ -1424,12 +1424,11 @@ static bool setup_stratum_curl(struct pool *pool)
 
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
-	if (!pool->stratum_curl) {
-		pool->stratum_curl = curl_easy_init();
-		if (unlikely(!pool->stratum_curl))
-			quit(1, "Failed to curl_easy_init in initiate_stratum");
-	} else
-		CLOSESOCKET(pool->sock);
+	if (pool->stratum_curl)
+		curl_easy_cleanup(pool->stratum_curl);
+	pool->stratum_curl = curl_easy_init();
+	if (unlikely(!pool->stratum_curl))
+		quit(1, "Failed to curl_easy_init in initiate_stratum");
 	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
 
@@ -1509,8 +1508,9 @@ void suspend_stratum(struct pool *pool)
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = pool->stratum_notify = false;
+	curl_easy_cleanup(pool->stratum_curl);
+	pool->stratum_curl = NULL;
 	mutex_unlock(&pool->stratum_lock);
-	CLOSESOCKET(pool->sock);
 }
 
 bool initiate_stratum(struct pool *pool)
