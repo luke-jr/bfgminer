@@ -392,7 +392,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			 strstr(vbuff, "831.4") ||
 			 strstr(vbuff, "898.1") ||  // 12.2 driver SDK 
 			 strstr(vbuff, "923.1") ||  // 12.4
-			 strstr(vbuff, "938.2"))) { // SDK 2.7
+			 strstr(vbuff, "938.2") ||  // SDK 2.7
+			 strstr(vbuff, "1113.2"))) {// SDK 2.8
 				applog(LOG_INFO, "Selecting diablo kernel");
 				clState->chosen_kernel = KL_DIABLO;
 		/* Detect all 7970s, older ATI and NVIDIA and use poclbm */
@@ -410,7 +411,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (clState->chosen_kernel == KL_PHATK &&
 		    (strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
 		     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
-		     strstr(vbuff, "923.1") || strstr(vbuff, "938.2"))) {
+		     strstr(vbuff, "923.1") || strstr(vbuff, "938.2") ||
+		     strstr(vbuff, "1113.2"))) {
 			applog(LOG_WARNING, "WARNING: You have selected the phatk kernel.");
 			applog(LOG_WARNING, "You are running SDK 2.6+ which performs poorly with this kernel.");
 			applog(LOG_WARNING, "Downgrade your SDK and delete any .bin files before starting again.");
