@@ -3455,7 +3455,7 @@ void switch_pools(struct pool *selected)
 		pool_tset(pool, &pool->lagging);
 
 	if (pool != last_pool && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
-		applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+		applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
 		if (pool->has_gbt || pool->has_stratum || opt_fail_only)
 			clear_pool_work(last_pool);
 	}
