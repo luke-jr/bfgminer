@@ -3466,7 +3466,7 @@ void switch_pools(struct pool *selected)
 
 }
 
-static void discard_work(struct work *work)
+void discard_work(struct work *work)
 {
 	if (!work->clone && !work->rolls && !work->mined) {
 		if (work->pool)

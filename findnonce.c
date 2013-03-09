@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2012 Con Kolivas
+ * Copyright 2011-2013 Con Kolivas
  * Copyright 2011 Nils Schneider
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -173,7 +173,7 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
 
 struct pc_data {
 	struct thr_info *thr;
-	struct work work;
+	struct work *work;
 	uint32_t res[MAXBUFFERS];
 	pthread_t pth;
 	int found;
@@ -182,10 +182,10 @@ struct pc_data {
 static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
 {
 	struct thr_info *thr = pcd->thr;
-	struct work *work = &pcd->work;
+	struct work *work = pcd->work;
 
 	if (scrypt_test(work->data, work->target, nonce))
-		submit_nonce(thr, &pcd->work, nonce);
+		submit_nonce(thr, work, nonce);
 	else {
 		applog(LOG_INFO, "Scrypt error, review settings");
 		thr->cgpu->hw_errors++;
@@ -217,9 +217,10 @@ static void *postcalc_hash(void *userdata)
 		if (opt_scrypt)
 			send_scrypt_nonce(pcd, nonce);
 		else
-			submit_nonce(thr, &pcd->work, nonce);
+			submit_nonce(thr, pcd->work, nonce);
 	}
 
+	discard_work(pcd->work);
 	free(pcd);
 
 	return NULL;
@@ -234,7 +235,7 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 	}
 
 	pcd->thr = thr;
-	memcpy(&pcd->work, work, sizeof(struct work));
+	pcd->work = copy_work(work);
 	memcpy(&pcd->res, res, BUFFERSIZE);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
