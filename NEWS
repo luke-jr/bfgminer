@@ -1,3 +1,10 @@
+Version 2.11.2 - March 9, 2013
+
+- Whitelist AMD APP SDK 2.8 for diablo kernel.
+- Cope with the highest opencl platform not having usable devices.
+- Fix memory leak with share submission on GPU work structures as discovered by
+twobitcoins.
+- usb_cleanup() without locking.
 - Use curl_easy_cleanup to close any open stratum sockets.
 - Show pool number in switch message
 - Don't start testing any pools with the watchpool thread if any of the test
