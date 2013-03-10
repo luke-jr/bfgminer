@@ -1,4 +1,3 @@
-
 This is a multi-threaded multi-pool FPGA, GPU and CPU miner with ATI GPU
 monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
@@ -82,19 +81,23 @@ Install AMD APP sdk, ideal version (see FAQ!) - put it into a system location.
 Download the correct version for either 32 bit or 64 bit from here:
 	http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/
 
-This will give you a file with a name like AMD-APP-SDK-v2.4-lnx64.tgz
+This will give you a file with a name like:
+ AMD-APP-SDK-v2.4-lnx64.tgz (64-bit)
+or
+ AMD-APP-SDK-v2.4-lnx32.tgz (32-bit)
 
 Then:
 
 sudo -i
 cd /opt
-tar xf /path/to/AMD-APP-SDK-v2.4-lnx64.tgz
+tar xf /path/to/AMD-APP-SDK-v2.4-lnx##.tgz
 cd /
-tar xf /opt/AMD-APP-SDK-v2.4-lnx64/icd-registration.tgz
-ln -s /opt/AMD-APP-SDK-v2.4-lnx64/include/CL /usr/include
-ln -s /opt/AMD-APP-SDK-v2.4-lnx64/lib/x86_64/* /usr/lib/
+tar xf /opt/AMD-APP-SDK-v2.4-lnx##/icd-registration.tgz
+ln -s /opt/AMD-APP-SDK-v2.4-lnx##/include/CL /usr/include
+ln -s /opt/AMD-APP-SDK-v2.4-lnx##/lib/x86_64/* /usr/lib/
 ldconfig
 
+Where ## is 32 or 64, depending on the bitness of the SDK you downloaded.
 If you are on 32 bit, x86_64 in the 2nd last line should be x86
 
 Basic *nix build instructions:
