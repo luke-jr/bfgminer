@@ -657,6 +657,8 @@ static void do_avalon_close(struct thr_info *thr)
 
 static inline void record_temp_fan(struct avalon_info *info, struct avalon_result *ar, float *temp_avg)
 {
+	int max;
+
 	info->fan0 = ar->fan0 * AVALON_FAN_FACTOR;
 	info->fan1 = ar->fan1 * AVALON_FAN_FACTOR;
 	info->fan2 = ar->fan2 * AVALON_FAN_FACTOR;
@@ -677,14 +679,24 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 		info->temp2 = 0 - ((~ar->temp2 & 0x7f) + 1);
 	}
 
-	if (info->temp0 > info->temp_max)
-		info->temp_max = info->temp0;
-	if (info->temp1 > info->temp_max)
-		info->temp_max = info->temp1;
-	if (info->temp2 > info->temp_max)
-		info->temp_max = info->temp2;
-
 	*temp_avg = info->temp2;
+
+	max = info->temp_max;
+	if (info->temp0 > max)
+		max = info->temp0;
+	if (info->temp1 > max)
+		max = info->temp1;
+	if (info->temp2 > max)
+		max = info->temp2;
+	if (max >= 100) {	/* FIXME: fix the root cause on fpga controller firmware */
+		if (opt_debug) {
+			applog(LOG_DEBUG, "Avalon: temp_max: %d", max);
+			hexdump((uint8_t *)ar, AVALON_READ_SIZE);
+		}
+		return;
+	}
+
+	info->temp_max = max;
 }
 
 static inline void adjust_fan(struct avalon_info *info)
