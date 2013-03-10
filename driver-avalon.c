@@ -893,10 +893,12 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	struct avalon_info *info = avalon_info[cgpu->device_id];
 
-	root = api_add_int(root, "read_count", &(info->read_count), false);
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "miner_count", &(info->miner_count),false);
 	root = api_add_int(root, "asic_count", &(info->asic_count), false);
+	root = api_add_int(root, "read_count", &(info->read_count), false);
+	root = api_add_int(root, "timeout", &(info->timeout), false);
+	root = api_add_int(root, "frequency", &(info->frequency), false);
 
 	root = api_add_int(root, "fan1", &(info->fan0), false);
 	root = api_add_int(root, "fan2", &(info->fan1), false);
