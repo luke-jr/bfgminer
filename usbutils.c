@@ -9,6 +9,7 @@
 
 #include "config.h"
 
+#include <ctype.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -145,6 +146,24 @@ extern struct device_drv icarus_drv;
 
 #define STRBUFLEN 256
 static const char *BLANK = "";
+
+// For device limits by driver
+static struct driver_count {
+	uint32_t count;
+	uint32_t limit;
+} drv_count[DRIVER_MAX];
+
+// For device limits by list of bus/dev
+static struct usb_busdev {
+	int bus_number;
+	int device_address;
+} *busdev;
+
+static int busdev_count = 0;
+
+// Total device limit
+static int total_count = 0;
+static int total_limit = 999999;
 
 static bool stats_initialised = false;
 
@@ -894,6 +913,9 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	if (cgpu->usbinfo.nodev)
 		return;
 
+	total_count--;
+	drv_count[cgpu->drv->drv_id].count--;
+
 	cgpu->usbinfo.nodev = true;
 	cgpu->usbinfo.nodev_count++;
 	gettimeofday(&(cgpu->usbinfo.last_nodev), NULL);
@@ -903,6 +925,9 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	for (i = 0; i < total_devices; i++) {
 		lookcgpu = get_devices(i);
 		if (lookcgpu != cgpu && lookcgpu->usbdev == cgusb) {
+			total_count--;
+			drv_count[lookcgpu->drv->drv_id].count--;
+
 			lookcgpu->usbinfo.nodev = true;
 			lookcgpu->usbinfo.nodev_count++;
 			memcpy(&(lookcgpu->usbinfo.last_nodev),
@@ -1121,7 +1146,9 @@ dame:
 static bool usb_check_device(struct device_drv *drv, struct libusb_device *dev, struct usb_find_devices *look)
 {
 	struct libusb_device_descriptor desc;
-	int err;
+	int bus_number, device_address;
+	int err, i;
+	bool ok;
 
 	err = libusb_get_device_descriptor(dev, &desc);
 	if (err) {
@@ -1134,6 +1161,27 @@ static bool usb_check_device(struct device_drv *drv, struct libusb_device *dev, 
 			drv->name, look->name, look->idVendor, look->idProduct, desc.idVendor, desc.idProduct);
 
 		return false;
+	}
+
+	if (busdev_count > 0) {
+		bus_number = (int)libusb_get_bus_number(dev);
+		device_address = (int)libusb_get_device_address(dev);
+		ok = false;
+		for (i = 0; i < busdev_count; i++) {
+			if (bus_number == busdev[i].bus_number) {
+				if (busdev[i].device_address == -1 ||
+				    device_address == busdev[i].device_address) {
+					ok = true;
+					break;
+				}
+			}
+		}
+		if (!ok) {
+			applog(LOG_DEBUG, "%s rejected %s %04x:%04x with bus:dev (%d:%d)",
+				drv->name, look->name, look->idVendor, look->idProduct,
+				bus_number, device_address);
+			return false;
+		}
 	}
 
 	applog(LOG_DEBUG, "%s looking for and found %s %04x:%04x",
@@ -1161,6 +1209,13 @@ static struct usb_find_devices *usb_check_each(int drvnum, struct device_drv *dr
 
 static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv, __maybe_unused struct libusb_device *dev)
 {
+	if (drv_count[drv->drv_id].count >= drv_count[drv->drv_id].limit) {
+		applog(LOG_DEBUG,
+			"USB scan devices3: %s limit %d reached",
+			drv->dname, drv_count[drv->drv_id].limit);
+		return NULL;
+	}
+
 #ifdef USE_BFLSC
 	if (drv->drv_id == DRIVER_BFLSC)
 		return usb_check_each(DRV_BFLSC, drv, dev);
@@ -1190,7 +1245,19 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 	ssize_t count, i;
 	struct usb_find_devices *found;
 
-	cgusb_check_init();
+	applog(LOG_DEBUG, "USB scan devices: checking for %s devices", drv->name);
+
+	if (total_count >= total_limit) {
+		applog(LOG_DEBUG, "USB scan devices: total limit %d reached", total_limit);
+		return;
+	}
+
+	if (drv_count[drv->drv_id].count >= drv_count[drv->drv_id].limit) {
+		applog(LOG_DEBUG,
+			"USB scan devices: %s limit %d reached",
+			drv->dname, drv_count[drv->drv_id].limit);
+		return;
+	}
 
 	count = libusb_get_device_list(NULL, &list);
 	if (count < 0) {
@@ -1202,6 +1269,18 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 		applog(LOG_DEBUG, "USB scan devices: found no devices");
 
 	for (i = 0; i < count; i++) {
+		if (total_count >= total_limit) {
+			applog(LOG_DEBUG, "USB scan devices2: total limit %d reached", total_limit);
+			break;
+		}
+
+		if (drv_count[drv->drv_id].count >= drv_count[drv->drv_id].limit) {
+			applog(LOG_DEBUG,
+				"USB scan devices2: %s limit %d reached",
+				drv->dname, drv_count[drv->drv_id].limit);
+			break;
+		}
+
 		found = usb_check(drv, list[i]);
 		if (found != NULL) {
 			if (cgminer_usb_lock(drv, list[i]) == false)
@@ -1209,6 +1288,10 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 			else {
 				if (!device_detect(list[i], found))
 					cgminer_usb_unlock(drv, list[i]);
+				else {
+					total_count++;
+					drv_count[drv->drv_id].count++;
+				}
 			}
 		}
 	}
@@ -1239,8 +1322,6 @@ struct api_data *api_usb_stats(__maybe_unused int *count)
 	struct api_data *root = NULL;
 	int device;
 	int cmdseq;
-
-	cgusb_check_init();
 
 	if (next_stat == 0)
 		return NULL;
@@ -1312,9 +1393,12 @@ static void newstats(struct cgpu_info *cgpu)
 {
 	int i;
 
+	mutex_lock(&cgusb_lock);
 	cgpu->usbinfo.usbstat = ++next_stat;
+	mutex_unlock(&cgusb_lock);
 
 	usb_stats = realloc(usb_stats, sizeof(*usb_stats) * next_stat);
+
 	usb_stats[next_stat-1].name = cgpu->drv->name;
 	usb_stats[next_stat-1].device_id = -1;
 	usb_stats[next_stat-1].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2);
@@ -1581,6 +1665,115 @@ void usb_cleanup()
 				break;
 			default:
 				break;
+		}
+	}
+}
+
+void usb_initialise()
+{
+	char *fre, *ptr, *comma, *colon;
+	int bus, dev, lim, i;
+	bool found;
+
+	for (i = 0; i < DRIVER_MAX; i++) {
+		drv_count[i].count = 0;
+		drv_count[i].limit = 999999;
+	}
+
+	cgusb_check_init();
+
+	if (opt_usb_select && *opt_usb_select) {
+		// Absolute device limit
+		if (*opt_usb_select == ':') {
+			total_limit = atoi(opt_usb_select+1);
+			if (total_limit < 0)
+				quit(1, "Invalid --usb total limit");
+		// Comma list of bus:dev devices to match
+		} else if (isdigit(*opt_usb_select)) {
+			fre = ptr = strdup(opt_usb_select);
+			do {
+				comma = strchr(ptr, ',');
+				if (comma)
+					*(comma++) = '\0';
+
+				colon = strchr(ptr, ':');
+				if (!colon)
+					quit(1, "Invalid --usb bus:dev missing ':'");
+
+				*(colon++) = '\0';
+
+				if (!isdigit(*ptr))
+					quit(1, "Invalid --usb bus:dev - bus must be a number");
+
+				if (!isdigit(*colon) && *colon != '*')
+					quit(1, "Invalid --usb bus:dev - dev must be a number or '*'");
+
+				bus = atoi(ptr);
+				if (bus <= 0)
+					quit(1, "Invalid --usb bus:dev - bus must be > 0");
+
+				if (!colon == '*')
+					dev = -1;
+				else {
+					dev = atoi(colon);
+					if (dev <= 0)
+						quit(1, "Invalid --usb bus:dev - dev must be > 0 or '*'");
+				}
+
+				busdev = realloc(busdev, sizeof(*busdev) * (++busdev_count));
+
+				busdev[busdev_count-1].bus_number = bus;
+				busdev[busdev_count-1].device_address = dev;
+
+				ptr = comma;
+			} while (ptr);
+			free(fre);
+		// Comma list of DRV:limit
+		} else {
+			fre = ptr = strdup(opt_usb_select);
+			do {
+				comma = strchr(ptr, ',');
+				if (comma)
+					*(comma++) = '\0';
+
+				colon = strchr(ptr, ':');
+				if (!colon)
+					quit(1, "Invalid --usb DRV:limit missing ':'");
+
+				*(colon++) = '\0';
+
+				if (!isdigit(*colon))
+					quit(1, "Invalid --usb DRV:limit - limit must be a number");
+
+				lim = atoi(colon);
+				if (lim < 0)
+					quit(1, "Invalid --usb DRV:limit - limit must be >= 0");
+
+				found = false;
+#ifdef USE_BFLSC
+				if (strcasecmp(ptr, bflsc_drv.name) == 0) {
+					drv_count[bflsrc_drv.drv_id].limit = lim;
+					found = true;
+				}
+#endif
+#ifdef USE_BITFORCE
+				if (!found && strcasecmp(ptr, bitforce_drv.name) == 0) {
+					drv_count[bitforce_drv.drv_id].limit = lim;
+					found = true;
+				}
+#endif
+#ifdef USE_MODMINER
+				if (!found && strcasecmp(ptr, modminer_drv.name) == 0) {
+					drv_count[modminer_drv.drv_id].limit = lim;
+					found = true;
+				}
+#endif
+				if (!found)
+					quit(1, "Invalid --usb DRV:limit - unknown DRV='%s'", ptr);
+
+				ptr = comma;
+			} while (ptr);
+			free(fre);
 		}
 	}
 }

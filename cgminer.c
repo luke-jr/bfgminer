@@ -136,7 +136,8 @@ bool opt_disable_pool;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
-#ifdef HAVE_LIBUSB
+#ifdef USE_USBUTILS
+char *opt_usb_select = NULL;
 int opt_usbdump = -1;
 #endif
 
@@ -169,7 +170,7 @@ static int new_threads;
 static int start_devices;
 int hotplug_time = 5;
 
-#ifdef HAVE_LIBUSB
+#ifdef USE_USBUTILS
 pthread_mutex_t cgusb_lock;
 #endif
 
@@ -823,6 +824,15 @@ static char *set_icarus_timing(const char *arg)
 }
 #endif
 
+#ifdef USE_USBUTILS
+static char *set_usb_select(const char *arg)
+{
+	opt_set_charp(arg, &opt_usb_select);
+
+	return NULL;
+}
+#endif
+
 static char *set_null(const char __maybe_unused *arg)
 {
 	return NULL;
@@ -1154,7 +1164,10 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--user|-u",
 		     set_user, NULL, NULL,
 		     "Username for bitcoin JSON-RPC server"),
-#ifdef HAVE_LIBUSB
+#ifdef USE_USBUTILS
+	OPT_WITH_ARG("--usb",
+		     set_usb_select, NULL, NULL,
+		     "USB device selection"),
 	OPT_WITH_ARG("--usb-dump",
 		     set_int_0_to_10, opt_show_intval, &opt_usbdump,
 		     opt_hidden),
@@ -4088,6 +4101,10 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
 	if (opt_icarus_timing)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
+#ifdef USE_USBUTILS
+	if (opt_usb_select)
+		fprintf(fcfg, ",\n\"usb\" : \"%s\"", json_escape(opt_usb_select));
+#endif
 	fputs("\n}\n", fcfg);
 
 	json_escape_free();
@@ -7031,7 +7048,6 @@ int main(int argc, char *argv[])
 		fflush(stderr);
 		quit(1, "libusb_init() failed");
 	}
-	mutex_init(&cgusb_lock);
 #endif
 
 	mutex_init(&hash_lock);
@@ -7118,6 +7134,11 @@ int main(int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
+
+#ifdef USE_USBUTILS
+	mutex_init(&cgusb_lock);
+	usb_initialise();
+#endif
 
 	if (!config_loaded)
 		load_default_config();
