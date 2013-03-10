@@ -400,9 +400,10 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	}
 
 	*baud = AVALON_IO_SPEED;
-	*miner_count = AVALON_DEFAULT_MINER_NUM;
+	*miner_count = AVALON_DEFAULT_MINER_NUM - 8;
 	*asic_count = AVALON_DEFAULT_ASIC_NUM;
 	*timeout = AVALON_DEFAULT_TIMEOUT;
+	*frequency = AVALON_DEFAULT_FREQUENCY;
 
 	if (!(*buf))
 		return;
