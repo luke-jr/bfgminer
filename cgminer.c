@@ -7048,6 +7048,9 @@ int main(int argc, char *argv[])
 		fflush(stderr);
 		quit(1, "libusb_init() failed");
 	}
+#ifdef USE_USBUTILS
+	mutex_init(&cgusb_lock);
+#endif
 #endif
 
 	mutex_init(&hash_lock);
@@ -7135,11 +7138,6 @@ int main(int argc, char *argv[])
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
 
-#ifdef USE_USBUTILS
-	mutex_init(&cgusb_lock);
-	usb_initialise();
-#endif
-
 	if (!config_loaded)
 		load_default_config();
 
@@ -7188,6 +7186,10 @@ int main(int argc, char *argv[])
 
 	if (want_per_device_stats)
 		opt_log_output = true;
+
+#ifdef USE_USBUTILS
+	usb_initialise();
+#endif
 
 #ifdef WANT_CPUMINE
 #ifdef USE_SCRYPT
