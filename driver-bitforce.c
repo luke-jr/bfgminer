@@ -993,6 +993,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			continue;
 		}
 		
+		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 		bitforce->cgpu_data = data = malloc(sizeof(*data));
 		*data = (struct bitforce_data){
 			.xlink_id = xlink_id,
@@ -1006,15 +1007,20 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			// ".......S|---------- MidState ----------||-DataTail-||Nonces|E"
 			data->next_work_ob[8+32+12+8] = '\xAA';
 			data->next_work_obs = &data->next_work_ob[7];
+			
+			bitforce_change_mode(bitforce, BFP_QUEUE);
 		}
 		else
+		{
 			data->next_work_obs = &data->next_work_ob[0];
-		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-		bitforce_change_mode(bitforce, BFP_WORK);
-		/* Initially enable support for nonce range and disable it later if it
-		 * fails */
-		if (opt_bfl_noncerange)
-			bitforce_change_mode(bitforce, BFP_RANGE);
+			
+			// Unconditionally change away from cold-initialized BFP_RANGE, to allow for setting up other variables
+			bitforce_change_mode(bitforce, BFP_WORK);
+			/* Initially enable support for nonce range and disable it later if it
+			 * fails */
+			if (opt_bfl_noncerange)
+				bitforce_change_mode(bitforce, BFP_RANGE);
+		}
 		
 		while (xlink_id < 31 && !(initdata->devmask & (1 << ++xlink_id)))
 		{}
