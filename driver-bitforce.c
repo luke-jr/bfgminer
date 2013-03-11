@@ -114,6 +114,11 @@ void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd,
 
 #define BFclose(fd) close(fd)
 
+struct bitforce_init_data {
+	bool sc;
+	long devmask;
+};
+
 static bool bitforce_detect_one(const char *devpath)
 {
 	int fdDev = serial_open(devpath, 0, 10, true);
@@ -122,7 +127,7 @@ static bool bitforce_detect_one(const char *devpath)
 	size_t pdevbuf_len;
 	char *s;
 	int procs = 1;
-	bool sc = false;
+	struct bitforce_init_data *initdata;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
 
@@ -144,6 +149,10 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
+	initdata = malloc(sizeof(*initdata));
+	*initdata = (struct bitforce_init_data){
+		.sc = false,
+	};
 	for ( bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZCX");
 	      strncasecmp(pdevbuf, "OK", 2);
 	      BFgets(pdevbuf, sizeof(pdevbuf), fdDev) )
@@ -156,8 +165,11 @@ static bool bitforce_detect_one(const char *devpath)
 		if (!strncasecmp(pdevbuf, "DEVICES IN CHAIN:", 17))
 			procs = atoi(&pdevbuf[17]);
 		else
+		if (!strncasecmp(pdevbuf, "CHAIN PRESENCE MASK:", 20))
+			initdata->devmask = strtol(&pdevbuf[20], NULL, 16);
+		else
 		if (!strncasecmp(pdevbuf, "DEVICE:", 7) && strstr(pdevbuf, "SC"))
-			sc = true;
+			initdata->sc = true;
 	}
 	BFclose(fdDev);
 	
@@ -173,7 +185,7 @@ static bool bitforce_detect_one(const char *devpath)
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
-	bitforce->cgpu_data = (void*)sc;
+	bitforce->cgpu_data = initdata;
 
 	mutex_init(&bitforce->device_mutex);
 
@@ -191,6 +203,7 @@ static void bitforce_detect(void)
 }
 
 struct bitforce_data {
+	int xlink_id;
 	unsigned char next_work_ob[70];  // Data aligned for 32-bit access
 	unsigned char *next_work_obs;    // Start of data to send
 	unsigned char next_work_obsz;
@@ -339,6 +352,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 static void bitforce_flash_led(struct cgpu_info *bitforce)
 {
+	struct bitforce_data *data = bitforce->cgpu_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
 
@@ -356,7 +370,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 		return;
 
 	char pdevbuf[0x100];
-	bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZMX");
+	bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZMX");
 
 	/* Once we've tried - don't do it until told to again */
 	bitforce->flash_led = false;
@@ -372,6 +386,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
+	struct bitforce_data *data = bitforce->cgpu_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
@@ -396,7 +411,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (mutex_trylock(mutexp))
 		return false;
 
-	bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZLX");
+	bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZLX");
 	mutex_unlock(mutexp);
 	
 	if (unlikely(!pdevbuf[0])) {
@@ -488,8 +503,8 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 				
 				mutex_lock(mutexp);
 				if (data->queued)
-					bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), "ZQX");
-				bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, data->next_work_obs, data->next_work_obsz);
+					bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZQX");
+				bitforce_cmd2(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, data->next_work_obs, data->next_work_obsz);
 				mutex_unlock(mutexp);
 				if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
 					applog(LOG_WARNING, "%"PRIpreprv": Does not support work queue, disabling", bitforce->proc_repr);
@@ -592,7 +607,7 @@ void bitforce_job_start(struct thr_info *thr)
 		goto commerr;
 re_send:
 	mutex_lock(mutexp);
-	bitforce_cmd2(fdDev, bitforce->proc_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, ob, data->next_work_obsz);
+	bitforce_cmd2(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, ob, data->next_work_obsz);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(mutexp);
 		gettimeofday(&tv_now, NULL);
@@ -679,7 +694,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
 		int count;
 		mutex_lock(mutexp);
-		bitforce_cmd1(fdDev, bitforce->proc_id, pdevbuf, sizeof(data->noncebuf), cmd);
+		bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(data->noncebuf), cmd);
 		if (!strncasecmp(pdevbuf, "COUNT:", 6))
 		{
 			count = atoi(&pdevbuf[6]);
@@ -964,12 +979,23 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int wait;
 	struct bitforce_data *data;
-	bool sc = (bool)bitforce->cgpu_data;
+	struct bitforce_init_data *initdata = bitforce->cgpu_data;
+	bool sc = initdata->sc;
+	int xlink_id = 0;
 	
 	for ( ; bitforce; bitforce = bitforce->next_proc)
 	{
+		if (unlikely(xlink_id > 30))
+		{
+			applog(LOG_ERR, "%"PRIpreprv": Failed to find XLINK address", bitforce->proc_repr);
+			dev_error(bitforce, REASON_THREAD_FAIL_INIT);
+			bitforce->reinit_backoff = 1e10;
+			continue;
+		}
+		
 		bitforce->cgpu_data = data = malloc(sizeof(*data));
 		*data = (struct bitforce_data){
+			.xlink_id = xlink_id,
 			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-||Nonces|>>>>>>>>",
 			.proto = BFP_RANGE,
 			.sc = sc,
@@ -989,6 +1015,9 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		 * fails */
 		if (opt_bfl_noncerange)
 			bitforce_change_mode(bitforce, BFP_RANGE);
+		
+		while (xlink_id < 31 && !(initdata->devmask & (1 << ++xlink_id)))
+		{}
 	}
 	
 	bitforce = thr->cgpu;
