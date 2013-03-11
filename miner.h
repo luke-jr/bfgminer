@@ -696,6 +696,44 @@ static inline void rwlock_init(pthread_rwlock_t *lock)
 		quit(1, "Failed to pthread_rwlock_init");
 }
 
+/* cgminer locks, a write biased variant of rwlocks */
+struct cglock {
+	pthread_mutex_t mutex;
+	pthread_rwlock_t rwlock;
+};
+
+typedef struct cglock cglock_t;
+
+static inline void cglock_init(cglock_t *lock)
+{
+	mutex_init(&lock->mutex);
+	rwlock_init(&lock->rwlock);
+}
+
+static inline void cg_rlock(cglock_t *lock)
+{
+	mutex_lock(&lock->mutex);
+	rd_lock(&lock->rwlock);
+	mutex_unlock(&lock->mutex);
+}
+
+static inline void cg_wlock(cglock_t *lock)
+{
+	mutex_lock(&lock->mutex);
+	wr_lock(&lock->rwlock);
+	mutex_unlock(&lock->mutex);
+}
+
+static inline void cg_runlock(cglock_t *lock)
+{
+	rd_unlock(&lock->rwlock);
+}
+
+static inline void cg_wunlock(cglock_t *lock)
+{
+	wr_unlock(&lock->rwlock);
+}
+
 struct pool;
 
 extern bool opt_protocol;
