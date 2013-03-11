@@ -250,8 +250,8 @@ This is useful if you unplug a device then plug it back in the same port,
 it usually reappears with the same bus_number but a different device_address
 
 You can see the list of USB devices on linux with 'sudo lsusb'
-Cgminer will list the USB devices with the '--usb-dump 1' option
-The '--usb-dump N' option with a value of N greater than 1 will dump a lot
+Cgminer will list the USB devices with the '--usb-dump 0' option
+The '--usb-dump N' option with a value of N greater than 0 will dump a lot
 of details about each USB device
 
 The second version

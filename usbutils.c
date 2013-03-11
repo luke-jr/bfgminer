@@ -414,6 +414,8 @@ static bool setgetdes(ssize_t count, libusb_device *dev, struct libusb_device_ha
 static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off, size_t *len)
 {
 	struct libusb_device_descriptor desc;
+	uint8_t bus_number;
+	uint8_t device_address;
 	struct libusb_device_handle *handle;
 	struct libusb_config_descriptor *config;
 	const struct libusb_interface_descriptor *idesc;
@@ -432,21 +434,46 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 		return;
 	}
 
-	sprintf(tmp, EOL ".USB dev %d: Device Descriptor:" EOL "\tLength: %d" EOL
+	bus_number = libusb_get_bus_number(dev);
+	device_address = libusb_get_device_address(dev);
+
+	if (opt_usbdump == 0) {
+		sprintf(tmp, EOL ".USB dev %d: Bus %d Device %d ID: %04x:%04x",
+				(int)count, (int)bus_number, (int)device_address,
+				desc.idVendor, desc.idProduct);
+	} else {
+		sprintf(tmp, EOL ".USB dev %d: Bus %d Device %d Device Descriptor:" EOL "\tLength: %d" EOL
 			"\tDescriptor Type: %s" EOL "\tUSB: %04x" EOL "\tDeviceClass: %d" EOL
 			"\tDeviceSubClass: %d" EOL "\tDeviceProtocol: %d" EOL "\tMaxPacketSize0: %d" EOL
 			"\tidVendor: %04x" EOL "\tidProduct: %04x" EOL "\tDeviceRelease: %x" EOL
 			"\tNumConfigurations: %d",
-				(int)count, (int)(desc.bLength), destype(desc.bDescriptorType),
+				(int)count, (int)bus_number, (int)device_address,
+				(int)(desc.bLength), destype(desc.bDescriptorType),
 				desc.bcdUSB, (int)(desc.bDeviceClass), (int)(desc.bDeviceSubClass),
 				(int)(desc.bDeviceProtocol), (int)(desc.bMaxPacketSize0),
 				desc.idVendor, desc.idProduct, desc.bcdDevice,
 				(int)(desc.bNumConfigurations));
+	}
 	append(buf, tmp, off, len);
 
 	err = libusb_open(dev, &handle);
 	if (err) {
 		sprintf(tmp, EOL "  ** dev %d: Failed to open, err %d", (int)count, err);
+		append(buf, tmp, off, len);
+		return;
+	}
+
+	err = libusb_get_string_descriptor_ascii(handle, desc.iManufacturer, man, STRBUFLEN);
+	if (err < 0)
+		sprintf((char *)man, "** err(%d)", err);
+
+	err = libusb_get_string_descriptor_ascii(handle, desc.iProduct, prod, STRBUFLEN);
+	if (err < 0)
+		sprintf((char *)prod, "** err(%d)", err);
+
+	if (opt_usbdump == 0) {
+		libusb_close(handle);
+		sprintf(tmp, EOL "  Manufacturer: '%s'" EOL "  Product: '%s'", man, prod);
 		append(buf, tmp, off, len);
 		return;
 	}
@@ -515,14 +542,6 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 
 	libusb_free_config_descriptor(config);
 	config = NULL;
-
-	err = libusb_get_string_descriptor_ascii(handle, desc.iManufacturer, man, STRBUFLEN);
-	if (err < 0)
-		sprintf((char *)man, "** err(%d)", err);
-
-	err = libusb_get_string_descriptor_ascii(handle, desc.iProduct, prod, STRBUFLEN);
-	if (err < 0)
-		sprintf((char *)prod, "** err(%d)", err);
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, ser, STRBUFLEN);
 	if (err < 0)
