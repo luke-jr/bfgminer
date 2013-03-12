@@ -466,6 +466,7 @@ struct pool *add_pool(void)
 	mutex_init(&pool->pool_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
+	cglock_init(&pool->data_lock);
 	mutex_init(&pool->stratum_lock);
 	mutex_init(&pool->gbt_lock);
 	INIT_LIST_HEAD(&pool->curlring);
@@ -3165,10 +3166,10 @@ static bool stale_work(struct work *work, bool share)
 		}
 
 		same_job = true;
-		mutex_lock(&pool->pool_lock);
+		cg_rlock(&pool->data_lock);
 		if (strcmp(work->job_id, pool->swork.job_id))
 			same_job = false;
-		mutex_unlock(&pool->pool_lock);
+		cg_runlock(&pool->data_lock);
 		if (!same_job) {
 			applog(LOG_DEBUG, "Work stale due to stratum job_id mismatch");
 			return true;
@@ -3310,9 +3311,9 @@ static void *submit_work_thread(void *userdata)
 				pool->remotefail_occasions++;
 			}
 
-			mutex_lock(&pool->pool_lock);
+			cg_rlock(&pool->data_lock);
 			sessionid_match = (pool->nonce1 && !strcmp(work->nonce1, pool->nonce1));
-			mutex_unlock(&pool->pool_lock);
+			cg_runlock(&pool->data_lock);
 
 			if (!sessionid_match) {
 				applog(LOG_DEBUG, "No matching session id for resubmitting stratum share");
@@ -4873,9 +4874,9 @@ static bool supports_resume(struct pool *pool)
 {
 	bool ret;
 
-	mutex_lock(&pool->pool_lock);
+	cg_rlock(&pool->data_lock);
 	ret = (pool->sessionid != NULL);
-	mutex_unlock(&pool->pool_lock);
+	cg_runlock(&pool->data_lock);
 	return ret;
 }
 
@@ -5333,7 +5334,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	size_t alloc_len;
 	int i;
 
-	mutex_lock(&pool->pool_lock);
+	cg_wlock(&pool->data_lock);
 
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
@@ -5386,7 +5387,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->job_id = strdup(pool->swork.job_id);
 	work->nonce1 = strdup(pool->nonce1);
 	work->ntime = strdup(pool->swork.ntime);
-	mutex_unlock(&pool->pool_lock);
+	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
