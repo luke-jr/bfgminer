@@ -195,7 +195,7 @@ pthread_cond_t gws_cond;
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
-pthread_mutex_t control_lock;
+cglock_t control_lock;
 pthread_mutex_t stats_lock;
 
 int hw_errors;
@@ -503,9 +503,9 @@ struct pool *current_pool(void)
 {
 	struct pool *pool;
 
-	mutex_lock(&control_lock);
+	cg_rlock(&control_lock);
 	pool = currentpool;
-	mutex_unlock(&control_lock);
+	cg_runlock(&control_lock);
 	return pool;
 }
 
@@ -1423,9 +1423,9 @@ static struct work *make_work(void)
 
 	if (unlikely(!work))
 		quit(1, "Failed to calloc work in make_work");
-	mutex_lock(&control_lock);
+	cg_wlock(&control_lock);
 	work->id = total_work++;
-	mutex_unlock(&control_lock);
+	cg_wunlock(&control_lock);
 	return work;
 }
 
@@ -2411,14 +2411,14 @@ static uint64_t share_diff(const struct work *work)
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = diffone / d64;
-	mutex_lock(&control_lock);
+	cg_wlock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
 	if (ret > work->pool->best_diff)
 		work->pool->best_diff = ret;
-	mutex_unlock(&control_lock);
+	cg_wunlock(&control_lock);
 	return ret;
 }
 
@@ -3390,7 +3390,7 @@ void switch_pools(struct pool *selected)
 	struct pool *pool, *last_pool;
 	int i, pool_no, next_pool;
 
-	mutex_lock(&control_lock);
+	cg_wlock(&control_lock);
 	last_pool = currentpool;
 	pool_no = currentpool->pool_no;
 
@@ -3445,7 +3445,7 @@ void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
-	mutex_unlock(&control_lock);
+	cg_wunlock(&control_lock);
 
 	/* Set the lagging flag to avoid pool not providing work fast enough
 	 * messages in failover only mode since  we have to get all fresh work
@@ -4816,9 +4816,9 @@ static int cp_prio(void)
 {
 	int prio;
 
-	mutex_lock(&control_lock);
+	cg_rlock(&control_lock);
 	prio = currentpool->prio;
-	mutex_unlock(&control_lock);
+	cg_runlock(&control_lock);
 	return prio;
 }
 
@@ -6977,14 +6977,14 @@ static void *test_pool_thread(void *arg)
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
 
-		mutex_lock(&control_lock);
+		cg_wlock(&control_lock);
 		if (!pools_active) {
 			currentpool = pool;
 			if (pool->pool_no != 0)
 				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
 			pools_active = true;
 		}
-		mutex_unlock(&control_lock);
+		cg_wunlock(&control_lock);
 		pool_resus(pool);
 	} else
 		pool_died(pool);
@@ -7035,7 +7035,7 @@ int main(int argc, char *argv[])
 
 	mutex_init(&hash_lock);
 	mutex_init(&console_lock);
-	mutex_init(&control_lock);
+	cglock_init(&control_lock);
 	mutex_init(&stats_lock);
 	mutex_init(&sharelog_lock);
 	mutex_init(&ch_lock);
