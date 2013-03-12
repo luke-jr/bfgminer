@@ -468,7 +468,7 @@ struct pool *add_pool(void)
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
 	mutex_init(&pool->stratum_lock);
-	mutex_init(&pool->gbt_lock);
+	cglock_init(&pool->gbt_lock);
 	INIT_LIST_HEAD(&pool->curlring);
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -1612,8 +1612,9 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	if (now.tv_sec - pool->tv_lastwork.tv_sec > 60)
 		update_gbt(pool);
 
-	mutex_lock(&pool->gbt_lock);
+	cg_ilock(&pool->gbt_lock);
 	__build_gbt_coinbase(pool);
+	cg_dlock(&pool->gbt_lock);
 	merkleroot = __gbt_merkleroot(pool);
 
 	memcpy(work->data, &pool->gbt_version, 4);
@@ -1630,7 +1631,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 
 	if (pool->gbt_workid)
 		work->job_id = strdup(pool->gbt_workid);
-	mutex_unlock(&pool->gbt_lock);
+	cg_runlock(&pool->gbt_lock);
 
 	memcpy(work->data + 4 + 32, merkleroot, 32);
 	flip32(work->data + 4 + 32, merkleroot);
@@ -1702,7 +1703,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	if (workid)
 		applog(LOG_DEBUG, "workid: %s", workid);
 
-	mutex_lock(&pool->gbt_lock);
+	cg_wlock(&pool->gbt_lock);
 	free(pool->coinbasetxn);
 	pool->coinbasetxn = strdup(coinbasetxn);
 	free(pool->longpollid);
@@ -1727,7 +1728,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	hex2bin((unsigned char *)&pool->gbt_bits, bits, 4);
 
 	__build_gbt_txns(pool, res_val);
-	mutex_unlock(&pool->gbt_lock);
+	cg_wunlock(&pool->gbt_lock);
 
 	return true;
 }
@@ -6011,11 +6012,11 @@ retry_pool:
 		/* Update the longpollid every time, but do it under lock to
 		 * avoid races */
 		if (pool->has_gbt) {
-			mutex_lock(&pool->gbt_lock);
+			cg_rlock(&pool->gbt_lock);
 			sprintf(lpreq, "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": "
 				"[{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"], "
 				"\"longpollid\": \"%s\"}]}\n", pool->longpollid);
-			mutex_unlock(&pool->gbt_lock);
+			cg_runlock(&pool->gbt_lock);
 		}
 
 		/* Longpoll connections can be persistent for a very long time

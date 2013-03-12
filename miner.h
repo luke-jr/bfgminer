@@ -1066,7 +1066,7 @@ struct pool {
 
 	/* GBT  variables */
 	bool has_gbt;
-	pthread_mutex_t gbt_lock;
+	cglock_t gbt_lock;
 	unsigned char previousblockhash[32];
 	unsigned char gbt_target[32];
 	char *coinbasetxn;
