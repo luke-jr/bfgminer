@@ -174,7 +174,6 @@ pthread_mutex_t cgusb_lock;
 #endif
 
 pthread_mutex_t hash_lock;
-static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
 pthread_mutex_t ch_lock;
@@ -7035,7 +7034,6 @@ int main(int argc, char *argv[])
 #endif
 
 	mutex_init(&hash_lock);
-	mutex_init(&qd_lock);
 	mutex_init(&console_lock);
 	mutex_init(&control_lock);
 	mutex_init(&stats_lock);
