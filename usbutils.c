@@ -411,7 +411,7 @@ static bool setgetdes(ssize_t count, libusb_device *dev, struct libusb_device_ha
 	return true;
 }
 
-static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off, size_t *len)
+static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off, size_t *len, int level)
 {
 	struct libusb_device_descriptor desc;
 	uint8_t bus_number;
@@ -437,7 +437,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 	bus_number = libusb_get_bus_number(dev);
 	device_address = libusb_get_device_address(dev);
 
-	if (opt_usbdump == 0) {
+	if (level == 0) {
 		sprintf(tmp, EOL ".USB dev %d: Bus %d Device %d ID: %04x:%04x",
 				(int)count, (int)bus_number, (int)device_address,
 				desc.idVendor, desc.idProduct);
@@ -471,7 +471,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 	if (err < 0)
 		sprintf((char *)prod, "** err(%d)", err);
 
-	if (opt_usbdump == 0) {
+	if (level == 0) {
 		libusb_close(handle);
 		sprintf(tmp, EOL "  Manufacturer: '%s'" EOL "  Product: '%s'", man, prod);
 		append(buf, tmp, off, len);
@@ -556,7 +556,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 }
 
 // Function to dump all USB devices
-static void usb_all()
+void usb_all(int level)
 {
 	libusb_device **list;
 	ssize_t count, i;
@@ -581,7 +581,7 @@ static void usb_all()
 		off = strlen(buf);
 
 		for (i = 0; i < count; i++)
-			usb_full(i, list[i], &buf, &off, &len);
+			usb_full(i, list[i], &buf, &off, &len, level);
 
 		applog(LOG_WARNING, "%s", buf);
 
@@ -599,7 +599,7 @@ static void cgusb_check_init()
 		// N.B. environment LIBUSB_DEBUG also sets libusb_set_debug()
 		if (opt_usbdump >= 0) {
 			libusb_set_debug(NULL, opt_usbdump);
-			usb_all();
+			usb_all(opt_usbdump);
 		}
 
 		usb_commands = malloc(sizeof(*usb_commands) * C_MAX);
