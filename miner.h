@@ -197,13 +197,14 @@ static inline int fsync (int fd)
 #endif
 
 enum drv_driver {
-	DRIVER_OPENCL,
+	DRIVER_OPENCL = 0,
 	DRIVER_ICARUS,
 	DRIVER_BITFORCE,
 	DRIVER_MODMINER,
 	DRIVER_ZTEX,
 	DRIVER_CPU,
 	DRIVER_BFLSC,
+	DRIVER_MAX
 };
 
 enum alive {
@@ -777,7 +778,8 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
-#ifdef HAVE_LIBUSB
+#ifdef USE_USBUTILS
+extern char *opt_usb_select;
 extern int opt_usbdump;
 #endif
 #ifdef USE_BITFORCE
@@ -810,7 +812,7 @@ extern int opt_queue;
 extern int opt_scantime;
 extern int opt_expiry;
 
-#ifdef HAVE_LIBUSB
+#ifdef USE_USBUTILS
 extern pthread_mutex_t cgusb_lock;
 #endif
 

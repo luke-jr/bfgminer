@@ -138,6 +138,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds);
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned int timeout, enum usb_cmds cmd);
 void usb_cleanup();
+void usb_initialise();
 
 #define usb_read(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, -1, cmd, false)
