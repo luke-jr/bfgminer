@@ -411,7 +411,7 @@ static bool setgetdes(ssize_t count, libusb_device *dev, struct libusb_device_ha
 	return true;
 }
 
-static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off, size_t *len, int level)
+static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off, size_t *len, int level)
 {
 	struct libusb_device_descriptor desc;
 	uint8_t bus_number;
@@ -427,9 +427,9 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 	int err, i, j, k;
 
 	err = libusb_get_device_descriptor(dev, &desc);
-	if (err) {
+	if (opt_usb_list_all && err) {
 		sprintf(tmp, EOL ".USB dev %d: Failed to get descriptor, err %d",
-					(int)count, err);
+					(int)(++(*count)), err);
 		append(buf, tmp, off, len);
 		return;
 	}
@@ -437,9 +437,25 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 	bus_number = libusb_get_bus_number(dev);
 	device_address = libusb_get_device_address(dev);
 
+	if (!opt_usb_list_all) {
+		bool known = false;
+
+		for (i = 0; find_dev[i].drv != DRV_LAST; i++)
+			if ((find_dev[i].idVendor == desc.idVendor) &&
+			    (find_dev[i].idProduct == desc.idProduct)) {
+				known = true;
+				break;
+			}
+
+		if (!known)
+			return;
+	}
+
+	(*count)++;
+
 	if (level == 0) {
 		sprintf(tmp, EOL ".USB dev %d: Bus %d Device %d ID: %04x:%04x",
-				(int)count, (int)bus_number, (int)device_address,
+				(int)(*count), (int)bus_number, (int)device_address,
 				desc.idVendor, desc.idProduct);
 	} else {
 		sprintf(tmp, EOL ".USB dev %d: Bus %d Device %d Device Descriptor:" EOL "\tLength: %d" EOL
@@ -447,7 +463,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 			"\tDeviceSubClass: %d" EOL "\tDeviceProtocol: %d" EOL "\tMaxPacketSize0: %d" EOL
 			"\tidVendor: %04x" EOL "\tidProduct: %04x" EOL "\tDeviceRelease: %x" EOL
 			"\tNumConfigurations: %d",
-				(int)count, (int)bus_number, (int)device_address,
+				(int)(*count), (int)bus_number, (int)device_address,
 				(int)(desc.bLength), destype(desc.bDescriptorType),
 				desc.bcdUSB, (int)(desc.bDeviceClass), (int)(desc.bDeviceSubClass),
 				(int)(desc.bDeviceProtocol), (int)(desc.bMaxPacketSize0),
@@ -458,7 +474,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 
 	err = libusb_open(dev, &handle);
 	if (err) {
-		sprintf(tmp, EOL "  ** dev %d: Failed to open, err %d", (int)count, err);
+		sprintf(tmp, EOL "  ** dev %d: Failed to open, err %d", (int)(*count), err);
 		append(buf, tmp, off, len);
 		return;
 	}
@@ -479,17 +495,17 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 	}
 
 	if (libusb_kernel_driver_active(handle, 0) == 1) {
-		sprintf(tmp, EOL "   * dev %d: kernel attached", (int)count);
+		sprintf(tmp, EOL "   * dev %d: kernel attached", (int)(*count));
 		append(buf, tmp, off, len);
 	}
 
 	err = libusb_get_active_config_descriptor(dev, &config);
 	if (err) {
-		if (!setgetdes(count, dev, handle, &config, 1, buf, off, len)
-		&&  !setgetdes(count, dev, handle, &config, 0, buf, off, len)) {
+		if (!setgetdes(*count, dev, handle, &config, 1, buf, off, len)
+		&&  !setgetdes(*count, dev, handle, &config, 0, buf, off, len)) {
 			libusb_close(handle);
 			sprintf(tmp, EOL "  ** dev %d: Failed to set config descriptor to %d or %d",
-					(int)count, 1, 0);
+					(int)(*count), 1, 0);
 			append(buf, tmp, off, len);
 			return;
 		}
@@ -498,7 +514,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 	sprintf(tmp, EOL "     dev %d: Active Config:" EOL "\tDescriptorType: %s" EOL
 			"\tNumInterfaces: %d" EOL "\tConfigurationValue: %d" EOL
 			"\tAttributes: %d" EOL "\tMaxPower: %d",
-				(int)count, destype(config->bDescriptorType),
+				(int)(*count), destype(config->bDescriptorType),
 				(int)(config->bNumInterfaces), (int)(config->iConfiguration),
 				(int)(config->bmAttributes), (int)(config->MaxPower));
 	append(buf, tmp, off, len);
@@ -511,7 +527,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 					"\tDescriptorType: %s" EOL "\tInterfaceNumber: %d" EOL
 					"\tNumEndpoints: %d" EOL "\tInterfaceClass: %d" EOL
 					"\tInterfaceSubClass: %d" EOL "\tInterfaceProtocol: %d",
-						(int)count, j, destype(idesc->bDescriptorType),
+						(int)(*count), j, destype(idesc->bDescriptorType),
 						(int)(idesc->bInterfaceNumber),
 						(int)(idesc->bNumEndpoints),
 						(int)(idesc->bInterfaceClass),
@@ -527,7 +543,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 						"\tEndpointAddress: %s0x%x" EOL
 						"\tAttributes: %s" EOL "\tMaxPacketSize: %d" EOL
 						"\tInterval: %d" EOL "\tRefresh: %d",
-							(int)count, (int)(idesc->bInterfaceNumber), k,
+							(int)(*count), (int)(idesc->bInterfaceNumber), k,
 							destype(epdesc->bDescriptorType),
 							epdir(epdesc->bEndpointAddress),
 							(int)(epdesc->bEndpointAddress),
@@ -549,7 +565,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 
 	sprintf(tmp, EOL "     dev %d: More Info:" EOL "\tManufacturer: '%s'" EOL
 			"\tProduct: '%s'" EOL "\tSerial '%s'",
-				(int)count, man, prod, ser);
+				(int)(*count), man, prod, ser);
 	append(buf, tmp, off, len);
 
 	libusb_close(handle);
@@ -559,7 +575,7 @@ static void usb_full(ssize_t count, libusb_device *dev, char **buf, size_t *off,
 void usb_all(int level)
 {
 	libusb_device **list;
-	ssize_t count, i;
+	ssize_t count, i, j;
 	char *buf;
 	size_t len, off;
 
@@ -577,15 +593,25 @@ void usb_all(int level)
 		buf = malloc(len+1);
 
 		sprintf(buf, "USB all: found %d devices", (int)count);
-
 		off = strlen(buf);
 
+		if (!opt_usb_list_all)
+			append(&buf, " - listing known devices", &off, &len);
+
+		j = -1;
 		for (i = 0; i < count; i++)
-			usb_full(i, list[i], &buf, &off, &len, level);
+			usb_full(&j, list[i], &buf, &off, &len, level);
 
 		applog(LOG_WARNING, "%s", buf);
 
 		free(buf);
+
+		if (j == -1)
+			applog(LOG_WARNING, "No known USB devices");
+		else
+			applog(LOG_WARNING, "%d %sUSB devices",
+				(int)(++j), opt_usb_list_all ? BLANK : "known ");
+
 	}
 
 	libusb_free_device_list(list, 1);
