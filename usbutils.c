@@ -609,7 +609,8 @@ void usb_all(int level)
 		if (j == -1)
 			applog(LOG_WARNING, "No known USB devices");
 		else
-			applog(LOG_WARNING, "%d known USB devices", (int)(++j));
+			applog(LOG_WARNING, "%d %sUSB devices",
+				(int)(++j), opt_usb_list_all ? BLANK : "known ");
 
 	}
 
