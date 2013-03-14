@@ -781,6 +781,7 @@ extern bool opt_worktime;
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;
 extern int opt_usbdump;
+extern bool opt_usb_list_all;
 #endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
