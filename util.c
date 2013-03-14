@@ -1508,7 +1508,15 @@ void suspend_stratum(struct pool *pool)
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = pool->stratum_notify = false;
+#if CURL_HAS_KEEPALIVE
 	curl_easy_cleanup(pool->stratum_curl);
+#else
+	/* Old versions of libcurl seem to crash occasionally on this since
+	 * the socket is modified in keep_sockalive in ways curl does not
+	 * know about so sacrifice the ram knowing we leak one curl handle
+	 * every time we disconnect stratum. */
+	CLOSESOCKET(pool->sock);
+#endif
 	pool->stratum_curl = NULL;
 	mutex_unlock(&pool->stratum_lock);
 }
