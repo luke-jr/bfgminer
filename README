@@ -224,10 +224,57 @@ SCRYPT only options:
 See SCRYPT-README for more information regarding litecoin mining.
 
 
-FPGA mining boards (BitForce, Icarus, ModMiner, Ztex) only options:
+ASIC and FPGA mining boards (BFL ASIC, BitForce, Icarus, ModMiner, Ztex)
+only options:
 
-cgminer will automatically find your ModMiner, BitForce or Ztex FPGAs
-independent of the --scan-serial options specified below
+Cgminer will automatically find all of your BFL ASIC, BitForce FPGAs,
+ModMiner FPGAs or Ztex FPGAs
+The --usb option can restrict how many BFL ASIC, BitForce FPGAs or
+ModMiner FPGAs it finds:
+
+  --usb 1:2,1:3,1:4,1:*
+or
+  --usb BAS:1,BFL:1,MMQ:0
+or
+  --usb :10
+
+You can only use one of the above 3
+
+The first version
+  --usb 1:2,1:3,1:4,1:*
+allows you to select which devices to mine on with a list of USB
+ bus_number:device_address
+All other USB devices will be ignored
+Hotplug will also only look at the devices matching the list specified and
+find nothing new if they are all in use
+You can specify just the USB bus_number to find all devices like 1:*
+which means any devices on USB bus_number 1
+This is useful if you unplug a device then plug it back in the same port,
+it usually reappears with the same bus_number but a different device_address
+
+You can see the list of USB devices on linux with 'sudo lsusb'
+Cgminer will list the USB devices with the '--usb-dump 0' option
+The '--usb-dump N' option with a value of N greater than 0 will dump a lot
+of details about each USB device
+
+The second version
+  --usb BAS:1,BFL:1,MMQ:0
+allows you to specify how many devices to choose based on each device
+driver cgminer has - there are currently 3 USB drivers: BAS, BFL & MMQ
+N.B. you can only specify which device driver to limit, not the type of
+each device, e.g. with BAS:n you can limit how many BFL ASIC devices will
+be checked, but you cannot limit the number of each type of BFL ASIC
+Also note that the MMQ count is the number of MMQ backplanes you have
+not the number of MMQ FPGAs
+
+The third version
+  --usb :10
+means only use a maximum of 10 devices of any supported USB devices
+Once cgminer has 10 devices it will not configure any more and hotplug will
+not scan for any more
+If one of the 10 devices stops working, hotplug - if enabled, as is default
+- will scan normally again until it has 10 devices
+
 
 --scan-serial|-S <arg> Serial port to probe for Icarus mining device
 
