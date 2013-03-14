@@ -129,6 +129,7 @@ enum usb_cmds {
 struct device_drv;
 struct cgpu_info;
 
+void usb_all(int level);
 void usb_uninit(struct cgpu_info *cgpu);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));

@@ -592,13 +592,12 @@ char *set_intensity(char *arg)
 	return NULL;
 }
 
-char *print_ndevs_and_exit(int *ndevs)
+void print_ndevs(int *ndevs)
 {
 	opt_log_output = true;
 	opencl_drv.drv_detect();
 	clear_adl(*ndevs);
 	applog(LOG_INFO, "%i GPU devices max detected", *ndevs);
-	exit(*ndevs);
 }
 #endif
 

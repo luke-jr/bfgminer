@@ -1366,6 +1366,20 @@ static char *opt_verusage_and_exit(const char *extra)
 	exit(0);
 }
 
+#if defined(HAVE_OPENCL) || defined(USE_USBUTILS)
+char *display_devs(int *ndevs)
+{
+	*ndevs = 0;
+#ifdef HAVE_OPENCL
+	print_ndevs(ndevs);
+#endif
+#ifdef USE_USBUTILS
+	usb_all(0);
+#endif
+	exit(*ndevs);
+}
+#endif
+
 /* These options are available from commandline only */
 static struct opt_table opt_cmdline_table[] = {
 	OPT_WITH_ARG("--config|-c",
@@ -1379,10 +1393,17 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_WITHOUT_ARG("--help|-h",
 			opt_verusage_and_exit, NULL,
 			"Print this message"),
-#ifdef HAVE_OPENCL
+#if defined(HAVE_OPENCL) || defined(USE_USBUTILS)
 	OPT_WITHOUT_ARG("--ndevs|-n",
-			print_ndevs_and_exit, &nDevs,
-			"Display number of detected GPUs, OpenCL platform information, and exit"),
+			display_devs, &nDevs,
+			"Display "
+#ifdef HAVE_OPENCL
+			"number of detected GPUs, OpenCL platform information, "
+#endif
+#ifdef USE_USBUTILS
+			"all USB devices, "
+#endif
+			"and exit"),
 #endif
 	OPT_WITHOUT_ARG("--version|-V",
 			opt_version_and_exit, packagename,
