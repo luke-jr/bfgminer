@@ -92,9 +92,11 @@ int opt_bench_algo = -1;
 static const bool opt_time = true;
 unsigned long long global_hashrate;
 
+#if defined(HAVE_OPENCL) || defined(USE_USBUTILS)
+int nDevs;
+#endif
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
-int nDevs;
 int opt_g_threads = 2;
 int gpu_threads;
 #ifdef USE_SCRYPT
