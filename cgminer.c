@@ -6512,7 +6512,35 @@ char *curses_input(const char *query)
 }
 #endif
 
-void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass)
+static bool pools_active = false;
+
+static void *test_pool_thread(void *arg)
+{
+	struct pool *pool = (struct pool *)arg;
+
+	if (pool_active(pool, false)) {
+		pool_tset(pool, &pool->lagging);
+		pool_tclear(pool, &pool->idle);
+
+		cg_wlock(&control_lock);
+		if (!pools_active) {
+			currentpool = pool;
+			if (pool->pool_no != 0)
+				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
+			pools_active = true;
+		}
+		cg_wunlock(&control_lock);
+		pool_resus(pool);
+	} else
+		pool_died(pool);
+
+	return NULL;
+}
+
+/* Always returns true that the pool details were added unless we are not
+ * live, implying this is the only pool being added, so if no pools are
+ * active it returns false. */
+bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass)
 {
 	url = get_proxy(url, pool);
 
@@ -6524,17 +6552,17 @@ void add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 		quit(1, "Failed to malloc userpass");
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
+	pool->testing = true;
+	pool->idle = true;
 	enable_pool(pool);
 
-	/* Prevent noise on startup */
-	pool->lagging = true;
-
-	/* Test the pool is not idle if we're live running, otherwise
-	 * it will be tested separately */
-	if (live && !pool_active(pool, false)) {
-		gettimeofday(&pool->tv_idle, NULL);
-		pool->idle = true;
+	pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
+	if (!live) {
+		pthread_join(pool->test_thread, NULL);
+		pool->testing = false;
+		return pools_active;
 	}
+	return true;
 }
 
 #ifdef HAVE_CURSES
@@ -6574,8 +6602,7 @@ static bool input_pool(bool live)
 		url = httpinput;
 	}
 
-	add_pool_details(pool, live, url, user, pass);
-	ret = true;
+	ret = add_pool_details(pool, live, url, user, pass);
 out:
 	immedok(logwin, false);
 
@@ -6987,31 +7014,6 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 #endif
-
-static bool pools_active = false;
-
-static void *test_pool_thread(void *arg)
-{
-	struct pool *pool = (struct pool *)arg;
-
-	if (pool_active(pool, false)) {
-		pool_tset(pool, &pool->lagging);
-		pool_tclear(pool, &pool->idle);
-
-		cg_wlock(&control_lock);
-		if (!pools_active) {
-			currentpool = pool;
-			if (pool->pool_no != 0)
-				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
-			pools_active = true;
-		}
-		cg_wunlock(&control_lock);
-		pool_resus(pool);
-	} else
-		pool_died(pool);
-
-	return NULL;
-}
 
 static void probe_pools(void)
 {
