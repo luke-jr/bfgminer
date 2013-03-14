@@ -277,6 +277,29 @@ static const char *BULK = "Bulk";
 static const char *INTERRUPT = "Interrupt";
 static const char *UNKNOWN = "Unknown";
 
+static const char *err_io_str = " IO Error";
+static const char *err_access_str = " Access Denied-a";
+static const char *err_timeout_str = " Reply Timeout";
+static const char *err_pipe_str = " Access denied-p";
+static const char *err_other_str = " Access denied-o";
+
+static const char *usberrstr(int err)
+{
+	switch (err) {
+		case LIBUSB_ERROR_IO:
+			return err_io_str;
+		case LIBUSB_ERROR_ACCESS:
+			return err_access_str;
+		case LIBUSB_ERROR_TIMEOUT:
+			return err_timeout_str;
+		case LIBUSB_ERROR_PIPE:
+			return err_pipe_str;
+		case LIBUSB_ERROR_OTHER:
+			return err_other_str;
+	}
+	return BLANK;
+}
+
 static const char *destype(uint8_t bDescriptorType)
 {
 	switch (bDescriptorType) {
@@ -481,11 +504,11 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iManufacturer, man, STRBUFLEN);
 	if (err < 0)
-		sprintf((char *)man, "** err(%d)", err);
+		sprintf((char *)man, "** err(%d)%s", err, usberrstr(err));
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iProduct, prod, STRBUFLEN);
 	if (err < 0)
-		sprintf((char *)prod, "** err(%d)", err);
+		sprintf((char *)prod, "** err(%d)%s", err, usberrstr(err));
 
 	if (level == 0) {
 		libusb_close(handle);
@@ -561,7 +584,7 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, ser, STRBUFLEN);
 	if (err < 0)
-		sprintf((char *)ser, "** err(%d)", err);
+		sprintf((char *)ser, "** err(%d)%s", err, usberrstr(err));
 
 	sprintf(tmp, EOL "     dev %d: More Info:" EOL "\tManufacturer: '%s'" EOL
 			"\tProduct: '%s'" EOL "\tSerial '%s'",
@@ -581,7 +604,7 @@ void usb_all(int level)
 
 	count = libusb_get_device_list(NULL, &list);
 	if (count < 0) {
-		applog(LOG_ERR, "USB all: failed, err %d", (int)count);
+		applog(LOG_ERR, "USB all: failed, err %d%s", (int)count, usberrstr((int)count));
 		return;
 	}
 
