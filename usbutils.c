@@ -33,8 +33,12 @@
 #define DRV_MODMINER 3
 #endif
 
+#ifdef USE_ZTEX
+#define DRV_ZTEX 4
+#endif
+
 #ifdef USE_ICARUS
-#define DRV_ICARUS 4
+#define DRV_ICARUS 5
 #endif
 
 #define DRV_LAST -1
@@ -124,6 +128,21 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = MODMINER_TIMEOUT_MS,
 		.epcount = ARRAY_SIZE(mmq_eps),
 		.eps = mmq_eps },
+#endif
+#ifdef USE_ZTEX
+// This is here so cgminer -n shows them
+// the ztex driver (as at 201303) doesn't use usbutils
+	{
+		.drv = DRV_ZTEX,
+		.name = "ZTX",
+		.idVendor = 0x221a,
+		.idProduct = 0x0100,
+		.kernel = 0,
+		.config = 1,
+		.interface = 1,
+		.timeout = 100,
+		.epcount = 0,
+		.eps = NULL },
 #endif
 	{ DRV_LAST, NULL, 0, 0, 0, 0, 0, 0, 0, NULL }
 };
