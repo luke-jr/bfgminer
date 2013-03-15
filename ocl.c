@@ -475,9 +475,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
-		cl_ulong ma = cgpu->max_alloc, mt;
-		int pow2 = 0;
-
 		if (!cgpu->opt_lg) {
 			applog(LOG_DEBUG, "GPU %d: selecting lookup gap of 2", gpu);
 			cgpu->lookup_gap = 2;
@@ -485,31 +482,15 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			cgpu->lookup_gap = cgpu->opt_lg;
 
 		if (!cgpu->opt_tc) {
-			cgpu->thread_concurrency = ma / 32768 / cgpu->lookup_gap;
+			cgpu->thread_concurrency = cgpu->max_alloc / 32768 / cgpu->lookup_gap;
 			if (cgpu->shaders && cgpu->thread_concurrency > cgpu->shaders) {
 				cgpu->thread_concurrency -= cgpu->thread_concurrency % cgpu->shaders;
 				if (cgpu->thread_concurrency > cgpu->shaders * 5)
 					cgpu->thread_concurrency = cgpu->shaders * 5;
 			}
-				
 			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %u",gpu,  cgpu->thread_concurrency);
 		} else
 			cgpu->thread_concurrency = cgpu->opt_tc;
-
-		/* If we have memory to spare, try to find a power of 2 value
-		 * >= required amount to map nicely to an intensity */
-		mt = cgpu->thread_concurrency * 32768 * cgpu->lookup_gap;
-		if (ma > mt) {
-			while (ma >>= 1)
-				pow2++;
-			ma = 1;
-			while (--pow2 && ma < mt)
-				ma <<= 1;
-			if (ma >= mt) {
-				cgpu->max_alloc = ma;
-				applog(LOG_DEBUG, "Max alloc decreased to %lu", cgpu->max_alloc);
-			}
-		}
 	}
 #endif
 
