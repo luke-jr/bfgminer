@@ -4686,10 +4686,11 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	total_mhashes_done += local_mhashes;
 	local_mhashes_done += local_mhashes;
-	if (total_diff.tv_sec < opt_log_interval)
-		/* Only update the total every opt_log_interval seconds */
+	/* Only update the total every second */
+	if (!total_diff.tv_sec)
 		goto out_unlock;
-	showlog = true;
+	if (total_diff.tv_sec >= opt_log_interval)
+		showlog = true;
 	gettimeofday(&total_tv_end, NULL);
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
