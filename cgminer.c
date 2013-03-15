@@ -97,7 +97,7 @@ int nDevs;
 #endif
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
-int opt_g_threads = 2;
+int opt_g_threads = -1;
 int gpu_threads;
 #ifdef USE_SCRYPT
 bool opt_scrypt;

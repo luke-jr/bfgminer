@@ -1245,6 +1245,15 @@ static void opencl_detect()
 	if (!nDevs)
 		return;
 
+	/* If opt_g_threads is not set, use default 1 thread on scrypt and
+	 * 2 for regular mining */
+	if (opt_g_threads == -1) {
+		if (opt_scrypt)
+			opt_g_threads = 1;
+		else
+			opt_g_threads = 2;
+	}
+
 	for (i = 0; i < nDevs; ++i) {
 		struct cgpu_info *cgpu;
 
