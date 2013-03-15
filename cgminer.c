@@ -4899,6 +4899,8 @@ static bool cnx_needed(struct pool *pool)
 	 * it. */
 	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
 		return true;
+	if (pool_unworkable(cp))
+		return true;
 	return false;
 }
 
