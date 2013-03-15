@@ -252,10 +252,11 @@ which means any devices on USB bus_number 1
 This is useful if you unplug a device then plug it back in the same port,
 it usually reappears with the same bus_number but a different device_address
 
-You can see the list of USB devices on linux with 'sudo lsusb'
-Cgminer will list the USB devices with the '--usb-dump 0' option
+You can see the list of all USB devices on linux with 'sudo lsusb'
+Cgminer will list the recognised USB devices with the '--usb-dump 0' option
 The '--usb-dump N' option with a value of N greater than 0 will dump a lot
-of details about each USB device
+of details about each recognised USB device
+If you wish to see all USB devices, include the --usb-list-all option
 
 The second version
   --usb BAS:1,BFL:1,MMQ:0

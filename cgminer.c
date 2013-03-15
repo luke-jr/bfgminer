@@ -139,6 +139,7 @@ bool opt_worktime;
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
+bool opt_usb_list_all;
 #endif
 
 char *opt_kernel_path;
@@ -1174,6 +1175,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--usb-dump",
 		     set_int_0_to_10, opt_show_intval, &opt_usbdump,
 		     opt_hidden),
+	OPT_WITHOUT_ARG("--usb-list-all",
+			opt_set_bool, &opt_usb_list_all,
+			opt_hidden),
 #endif
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
