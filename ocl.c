@@ -814,7 +814,7 @@ built:
 			applog(LOG_WARNING, "Your scrypt settings come to %u", bufsize);
 		} else
 			bufsize = cgpu->max_alloc;
-		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", bufsize);
+		applog(LOG_DEBUG, "Creating scrypt buffer sized %u", bufsize);
 		clState->padbufsize = bufsize;
 
 		/* This buffer is weird and might work to some degree even if
