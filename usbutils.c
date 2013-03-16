@@ -1839,7 +1839,7 @@ void usb_initialise()
 				found = false;
 #ifdef USE_BFLSC
 				if (strcasecmp(ptr, bflsc_drv.name) == 0) {
-					drv_count[bflsrc_drv.drv_id].limit = lim;
+					drv_count[bflsc_drv.drv_id].limit = lim;
 					found = true;
 				}
 #endif
