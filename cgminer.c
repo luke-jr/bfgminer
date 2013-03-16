@@ -2021,15 +2021,9 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	if (opt_scrypt) {
-		mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
-			total_staged(), total_stale, total_discarded, new_blocks,
-			local_work, total_go, total_ro);
-	} else {
-		mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  WU: %.1f",
-			total_staged(), total_stale, total_discarded, new_blocks,
-			local_work, total_go, total_ro, total_diff1 / total_secs * 60);
-	}
+	mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  WU: %.1f",
+		total_staged(), total_stale, total_discarded, new_blocks,
+		local_work, total_go, total_ro, total_diff1 / total_secs * 60);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -5558,9 +5552,9 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	*work_nonce = htole32(nonce);
 
 	mutex_lock(&stats_lock);
-	total_diff1++;
-	thr->cgpu->diff1++;
-	work->pool->diff1++;
+	total_diff1 += work->device_diff;
+	thr->cgpu->diff1 += work->device_diff;
+	work->pool->diff1 += work->device_diff;
 	mutex_unlock(&stats_lock);
 
 	/* Do one last check before attempting to submit the work */
@@ -5632,6 +5626,7 @@ static void hash_sole_work(struct thr_info *mythr)
 				"mining thread %d", thr_id);
 			break;
 		}
+		work->device_diff = MIN(drv->max_diff, work->work_difficulty);
 
 		do {
 			gettimeofday(&tv_start, NULL);
@@ -5757,6 +5752,7 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 	do {
 		struct work *work = get_work(mythr, thr_id);
 
+		work->device_diff = MIN(drv->max_diff, work->work_difficulty);
 		wr_lock(&cgpu->qlock);
 		HASH_ADD_INT(cgpu->queued_work, id, work);
 		wr_unlock(&cgpu->qlock);
@@ -6862,6 +6858,8 @@ void fill_device_drv(struct cgpu_info *cgpu)
 		drv->flush_work = &noop_flush_work;
 	if (!drv->queue_full)
 		drv->queue_full = &noop_queue_full;
+	if (!drv->max_diff)
+		drv->max_diff = 1;
 }
 
 void enable_device(struct cgpu_info *cgpu)

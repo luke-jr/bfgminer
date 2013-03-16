@@ -1254,6 +1254,9 @@ static void opencl_detect()
 			opt_g_threads = 2;
 	}
 
+	if (opt_scrypt)
+		opencl_drv.max_diff = 65536;
+
 	for (i = 0; i < nDevs; ++i) {
 		struct cgpu_info *cgpu;
 

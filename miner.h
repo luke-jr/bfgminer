@@ -196,6 +196,9 @@ static inline int fsync (int fd)
 #endif
 #endif
 
+#define MIN(x, y)	((x) > (y) ? (y) : (x))
+#define MAX(x, y)	((x) > (y) ? (x) : (y))
+
 enum drv_driver {
 	DRIVER_OPENCL = 0,
 	DRIVER_ICARUS,
@@ -320,6 +323,9 @@ struct device_drv {
 
 	// Does it need to be free()d?
 	bool copy;
+
+	/* Highest target diff the device supports */
+	double max_diff;
 };
 
 extern struct device_drv *copy_drv(struct device_drv*);
@@ -1098,6 +1104,8 @@ struct work {
 	unsigned char	midstate[32];
 	unsigned char	target[32];
 	unsigned char	hash[32];
+
+	double	device_diff;
 
 	int		rolls;
 
