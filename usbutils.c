@@ -1559,7 +1559,7 @@ static void rejected_inc(struct cgpu_info *cgpu)
 }
 #endif
 
-int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, int eol, enum usb_cmds cmd, bool ftdi)
+int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool ftdi)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 #if DO_USB_STATS
@@ -1568,8 +1568,10 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	struct timeval read_start, tv_finish;
 	unsigned int initial_timeout;
 	double max, done;
-	int err, got, tot, i;
+	int err, got, tot;
 	bool first = true;
+	char *search;
+	int endlen;
 
 	if (cgpu->usbinfo.nodev) {
 		*buf = '\0';
@@ -1583,7 +1585,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
 
-	if (eol == -1) {
+	if (end == NULL) {
 		got = 0;
 		STATS_TIMEVAL(&tv_start);
 		err = libusb_bulk_transfer(usbdev->handle,
@@ -1613,6 +1615,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	}
 
 	tot = 0;
+	endlen = strlen(end);
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
 	max = ((double)timeout) / 1000.0;
@@ -1643,10 +1646,23 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		if (err)
 			break;
 
-		// WARNING - this will return data past EOL ('if' there is extra data)
-		for (i = 0; i < got; i++)
-			if (buf[i] == eol)
-				goto goteol;
+		// WARNING - this will return data past END ('if' there is extra data)
+		if (endlen <= tot) {
+			// If END is only 1 char - do a faster search
+			if (endlen == 1) {
+				if (strchr(buf, *end))
+					break;
+			} else {
+				// must allow END to have been chopped in 2 transfers
+				if ((tot - got) >= (endlen - 1))
+					search = buf - (endlen - 1);
+				else
+					search = buf - (tot - got);
+
+				if (strstr(search, end))
+					break;
+			}
+		}
 
 		buf += got;
 		bufsiz -= got;
@@ -1660,8 +1676,6 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 
 		timeout = initial_timeout - (done * 1000);
 	}
-
-goteol:
 
 	*processed = tot;
 
@@ -1839,7 +1853,7 @@ void usb_initialise()
 				found = false;
 #ifdef USE_BFLSC
 				if (strcasecmp(ptr, bflsc_drv.name) == 0) {
-					drv_count[bflsrc_drv.drv_id].limit = lim;
+					drv_count[bflsc_drv.drv_id].limit = lim;
 					found = true;
 				}
 #endif
