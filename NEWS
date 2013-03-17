@@ -1,3 +1,47 @@
+Version 2.11.3 - March 17, 2013
+
+- Update the hashmeter at most 5 times per second.
+- Usbutils use its own internal read buffer
+- Calculate work utility for devices that support target diffs of greater than
+1, and update scrypt code to use it.
+- usbutils allow read termination match to be a string
+- Set default GPU threads to 1 for scrypt.
+- Connect backup stratum pools if the primary pool cannot deliver work.
+- Use a new algorithm for choosing a thread concurrency when none or no shader
+value is specified for scrypt.
+- Do not round up the bufsize to the maximum allocable with scrypt.
+- Remove the rounding-up of the scrypt padbuffer which was not effectual and
+counter-productive on devices with lots of ram, limiting thread concurrencies
+and intensities.
+- bufsize is an unsigned integer, make it so for debug.
+- Update the hashmeter once per second but only display the extra logs every
+opt_log_inteval.
+- add a dummy ztex to usbutils so cgminer -n lists ztex also
+- nDevs required for -n with usb
+- USB device list - convert some common error numbers to messages
+- USB -n 'known' text only without ---usb-list-all
+- USB modify -n and --usb-dump to only show known devices or use new
+--usb-list-all option to see all
+- Make pool adding while running asynchronous, using the pool test thread
+functionality.
+- Only curl easy cleanup a stratum curl if it exists.
+- Sacrifice the ram of curl handles in stratum disconnects when we have built
+with old libcurl to avoid crashes.
+- cgminer -n to include a USB device list
+- usbutils allow call of usb_all() from other code
+- Convert gbt_lock to a cg_lock.
+- Add intermediate variants of cglocks that can be up or downgraded to read or
+write locks and use them for stratum work generation.
+- Move the stratum and GBT data to be protected under a new cg_lock data_lock.
+- Convert the ch_lock to cg_lock.
+- Convert the control_lock to a cg_lock.
+- Remove unused qd_lock.
+- Implement cg_lock write biased rwlocks.
+- do usb_initialise() after the started message so we see it
+- --usb-dump display brief dump if value = 0
+- USB add --usb options to limit USB device selection v0.1
+
+
 Version 2.11.2 - March 9, 2013
 
 - Whitelist AMD APP SDK 2.8 for diablo kernel.
