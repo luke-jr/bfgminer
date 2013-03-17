@@ -31,7 +31,77 @@ irc://irc.freenode.net/eligius
 
 License: GPLv3.  See COPYING for details.
 
-READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
+---
+
+EXECUTIVE SUMMARY ON USAGE:
+
+After saving configuration from the menu, you do not need to give BFGMiner any
+arguments and it will load your configuration.
+
+Any configuration file may also contain a single
+	"include" : "filename"
+to recursively include another configuration file.
+Writing the configuration will save all settings from all files in the output.
+
+
+Single pool, regular desktop:
+
+bfgminer -o http://pool:port -u username -p password
+
+Single pool, dedicated miner:
+
+bfgminer -o http://pool:port -u username -p password -I 9
+
+Single pool, first card regular desktop, 3 other dedicated cards:
+
+bfgminer -o http://pool:port -u username -p password -I d,9,9,9
+
+Multiple pool, dedicated miner:
+
+bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
+
+Add overclocking settings, GPU and fan control for all cards:
+
+bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
+
+Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
+
+bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
+
+Single pool with a standard http proxy, regular desktop:
+
+bfgminer -o http://pool:port -x http://proxy:port -u username -p password
+
+Single pool with a socks5 proxy, regular desktop:
+
+bfgminer -o http://pool:port -x socks5://proxy:port -u username -p password
+
+The list of proxy types are:
+ http:    standard http 1.1 proxy
+ socks4:  socks4 proxy
+ socks5:  socks5 proxy
+ socks4a: socks4a proxy
+ socks5h: socks5 proxy using a hostname
+
+Proxy support requires cURL version 7.21.7 or newer.
+
+If you specify the --socks-proxy option to BFGMiner, it will only be applied to
+all pools that don't specify their own proxy setting like above
+
+READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
+
+To configure multiple displays on linux you need to configure your Xorg cleanly
+to use them all:
+
+sudo aticonfig --adapter=all -f --initial
+
+On Linux you virtually always need to export your display settings before
+starting to get all the cards recognised and/or temperature+clocking working:
+
+export DISPLAY=:0
+
+---
+BUILDING BFGMINER
 
 Dependencies:
 	autoconf             http://www.gnu.org/software/autoconf/
@@ -286,71 +356,6 @@ CPU only options (not included in binaries):
 --cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
 --enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if other devices exist)
 
-
-
----
-
-EXECUTIVE SUMMARY ON USAGE:
-
-After saving configuration from the menu, you do not need to give BFGMiner any
-arguments and it will load your configuration.
-
-Any configuration file may also contain a single
-	"include" : "filename"
-to recursively include another configuration file.
-Writing the configuration will save all settings from all files in the output.
-
-
-Single pool, regular desktop:
-
-bfgminer -o http://pool:port -u username -p password
-
-Single pool, dedicated miner:
-
-bfgminer -o http://pool:port -u username -p password -I 9
-
-Single pool, first card regular desktop, 3 other dedicated cards:
-
-bfgminer -o http://pool:port -u username -p password -I d,9,9,9
-
-Multiple pool, dedicated miner:
-
-bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
-
-Add overclocking settings, GPU and fan control for all cards:
-
-bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
-
-Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
-
-bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
-
-Single pool with a standard http proxy, regular desktop:
-
-bfgminer -o http://pool:port -x http://proxy:port -u username -p password
-
-Single pool with a socks5 proxy, regular desktop:
-
-bfgminer -o http://pool:port -x socks5://proxy:port -u username -p password
-
-The list of proxy types are:
- http:    standard http 1.1 proxy
- socks4:  socks4 proxy
- socks5:  socks5 proxy
- socks4a: socks4a proxy
- socks5h: socks5 proxy using a hostname
-
-Proxy support requires cURL version 7.21.7 or newer.
-
-If you specify the --socks-proxy option to BFGMiner, it will only be applied to
-all pools that don't specify their own proxy setting like above
-
-READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
-
-On Linux you virtually always need to export your display settings before
-starting to get all the cards recognised and/or temperature+clocking working:
-
-export DISPLAY=:0
 
 ---
 
