@@ -254,6 +254,8 @@ static const char *C_SETMODEM_S = "SetModemCtrl";
 static const char *C_PURGERX_S = "PurgeRx";
 static const char *C_PURGETX_S = "PurgeTx";
 static const char *C_FLASHREPLY_S = "FlashReply";
+static const char *C_REQUESTDETAILS_S = "RequestDetails";
+static const char *C_GETDETAILS_S = "GetDetails";
 
 #ifdef EOL
 #undef EOL
@@ -711,6 +713,8 @@ static void cgusb_check_init()
 		usb_commands[C_PURGERX] = C_PURGERX_S;
 		usb_commands[C_PURGETX] = C_PURGETX_S;
 		usb_commands[C_FLASHREPLY] = C_FLASHREPLY_S;
+		usb_commands[C_REQUESTDETAILS] = C_REQUESTDETAILS_S;
+		usb_commands[C_GETDETAILS] = C_GETDETAILS_S;
 
 		stats_initialised = true;
 	}
@@ -1559,6 +1563,8 @@ static void rejected_inc(struct cgpu_info *cgpu)
 }
 #endif
 
+#define USB_MAX_READ 8192
+
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool ftdi)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
@@ -1570,8 +1576,15 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	double max, done;
 	int err, got, tot;
 	bool first = true;
-	char *search;
+	unsigned char *search;
 	int endlen;
+
+	// We add 4: 1 for null, 2 for FTDI status and 1 to round to 4 bytes
+	unsigned char usbbuf[USB_MAX_READ+4], *ptr;
+	size_t usbbufread;
+
+	if (bufsiz > USB_MAX_READ)
+		quit(1, "%s USB read request %d too large (max=%d)", cgpu->drv->name, bufsiz, USB_MAX_READ);
 
 	if (cgpu->usbinfo.nodev) {
 		*buf = '\0';
@@ -1586,27 +1599,32 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		timeout = usbdev->found->timeout;
 
 	if (end == NULL) {
+		if (ftdi)
+			usbbufread = bufsiz + 2;
+		else
+			usbbufread = bufsiz;
 		got = 0;
 		STATS_TIMEVAL(&tv_start);
 		err = libusb_bulk_transfer(usbdev->handle,
 				usbdev->found->eps[ep].ep,
-				(unsigned char *)buf,
-				bufsiz, &got, timeout);
+				usbbuf, usbbufread, &got, timeout);
 		STATS_TIMEVAL(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
+		usbbuf[got] = '\0';
 
 		if (ftdi) {
 			// first 2 bytes returned are an FTDI status
 			if (got > 2) {
 				got -= 2;
-				memmove(buf, buf+2, got+1);
+				memmove(usbbuf, usbbuf+2, got+1);
 			} else {
 				got = 0;
-				*buf = '\0';
+				usbbuf[0] = '\0';
 			}
 		}
 
 		*processed = got;
+		memcpy((char *)buf, (const char *)usbbuf, (got < (int)bufsiz) ? got + 1 : (int)bufsiz);
 
 		if (NODEV(err))
 			release_cgpu(cgpu);
@@ -1615,29 +1633,34 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	}
 
 	tot = 0;
+	ptr = usbbuf;
 	endlen = strlen(end);
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
 	max = ((double)timeout) / 1000.0;
 	gettimeofday(&read_start, NULL);
 	while (bufsiz) {
+		if (ftdi)
+			usbbufread = bufsiz + 2;
+		else
+			usbbufread = bufsiz;
 		got = 0;
 		STATS_TIMEVAL(&tv_start);
 		err = libusb_bulk_transfer(usbdev->handle,
 				usbdev->found->eps[ep].ep,
-				(unsigned char *)buf,
-				bufsiz, &got, timeout);
+				ptr, usbbufread, &got, timeout);
 		gettimeofday(&tv_finish, NULL);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, first ? SEQ0 : SEQ1);
+		ptr[got] = '\0';
 
 		if (ftdi) {
 			// first 2 bytes returned are an FTDI status
 			if (got > 2) {
 				got -= 2;
-				memmove(buf, buf+2, got+1);
+				memmove(ptr, ptr+2, got+1);
 			} else {
 				got = 0;
-				*buf = '\0';
+				*ptr = '\0';
 			}
 		}
 
@@ -1650,21 +1673,21 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		if (endlen <= tot) {
 			// If END is only 1 char - do a faster search
 			if (endlen == 1) {
-				if (strchr(buf, *end))
+				if (strchr((char *)ptr, *end))
 					break;
 			} else {
 				// must allow END to have been chopped in 2 transfers
 				if ((tot - got) >= (endlen - 1))
-					search = buf - (endlen - 1);
+					search = ptr - (endlen - 1);
 				else
-					search = buf - (tot - got);
+					search = ptr - (tot - got);
 
-				if (strstr(search, end))
+				if (strstr((char *)search, end))
 					break;
 			}
 		}
 
-		buf += got;
+		ptr += got;
 		bufsiz -= got;
 
 		first = false;
@@ -1678,6 +1701,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	}
 
 	*processed = tot;
+	memcpy((char *)buf, (const char *)usbbuf, (tot < (int)bufsiz) ? tot + 1 : (int)bufsiz);
 
 	if (NODEV(err))
 		release_cgpu(cgpu);
