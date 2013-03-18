@@ -4689,7 +4689,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	/* Only update the total every second */
 	if (!total_diff.tv_sec)
 		goto out_unlock;
-	if (total_diff.tv_sec >= opt_log_interval)
+	if (total_diff.tv_sec < opt_log_interval) {
+		if (thr_id < 0)
+			goto out_unlock;
+	} else
 		showlog = true;
 	gettimeofday(&total_tv_end, NULL);
 
