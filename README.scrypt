@@ -32,6 +32,11 @@ a value of 40 is enough and increasing this further has little effect.
 export GPU_USE_SYNC_OBJECTS=1
 may help CPU usage a little as well.
 
+On windows the same commands can be passed via a batch file if the following
+lines are in the .bat before starting cgminer:
+setx GPU_MAX_ALLOC_PERCENT 100
+setx GPU_USE_SYNC_OBJECTS 1
+
 --shaders XXX
 
 is a new option where you tell BFGMiner how many shaders your GPU has. This
