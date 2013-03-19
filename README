@@ -849,7 +849,9 @@ CPU core unnecessarily so downgrade to 11.6. Binding BFGMiner to one CPU core on
 windows can minimise it to 100% (instead of more than one core). Driver version
 11.11 on linux and 11.12 on windows appear to have fixed this issue. Note that
 later drivers may have an apparent return of high CPU usage. Try
-'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting BFGMiner.
+'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting BFGMiner. You can also
+set this variable in windows via a batch file or on the command line before
+starting BFGMiner with 'setx GPU_USE_SYNC_OBJECTS 1'
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
