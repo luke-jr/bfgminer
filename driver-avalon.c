@@ -42,22 +42,24 @@ struct device_api avalon_api;
 
 static inline uint8_t rev8(uint8_t d)
 {
-    int i;
-    uint8_t out = 0;
+	int i;
+	uint8_t out = 0;
 
-    /* from left to right */
-    for (i = 0; i < 8; i++)
-        if (d & (1 << i))
-            out |= (1 << (7 - i));
+	/* from left to right */
+	for (i = 0; i < 8; i++)
+		if (d & (1 << i))
+			out |= (1 << (7 - i));
 
-    return out;
+	return out;
 }
 
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
 			    uint8_t timeout, uint8_t asic_num,
-			    uint8_t miner_num, uint8_t nonce_elf)
+			    uint8_t miner_num, uint8_t nonce_elf,
+			    uint8_t gate_miner, int frequency)
 {
+	uint8_t *buf;
 	static bool first = true;
 
 	if (unlikely(!at))
@@ -88,8 +90,35 @@ static int avalon_init_task(struct avalon_task *at,
 	at->timeout_data = timeout;
 	at->asic_num = asic_num;
 	at->miner_num = miner_num;
-
 	at->nonce_elf = nonce_elf;
+
+	at->gate_miner_elf = 1;
+	at->asic_pll = 1;
+
+	if (unlikely(gate_miner)) {
+		at-> gate_miner = 1;
+		at->asic_pll = 0;
+	}
+
+	buf = (uint8_t *)at;
+	buf[5] = 0x00;
+	buf[8] = 0x74;
+	buf[9] = 0x01;
+	buf[10] = 0x00;
+	buf[11] = 0x00;
+	if (frequency == 256) {
+		buf[6] = 0x03;
+		buf[7] = 0x08;
+	} else if (frequency == 270) {
+		buf[6] = 0x73;
+		buf[7] = 0x08;
+	} else if (frequency == 282) {
+		buf[6] = 0xd3;
+		buf[7] = 0x08;
+	} else if (frequency == 300) {
+		buf[6] = 0x63;
+		buf[7] = 0x09;
+	}
 
 	return 0;
 }
@@ -102,14 +131,14 @@ static inline void avalon_create_task(struct avalon_task *at,
 }
 
 static int avalon_send_task(int fd, const struct avalon_task *at,
-			    struct thr_info *thr)
+			    struct cgpu_info *avalon)
+
 {
 	size_t ret;
 	int full;
 	struct timespec p;
 	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
 	size_t nr_len;
-	struct cgpu_info *avalon;
 	struct avalon_info *info;
 	uint64_t delay = 32000000; /* Default 32ms for B19200 */
 	uint32_t nonce_range;
@@ -137,57 +166,25 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	}
 #if defined(__BIG_ENDIAN__) || defined(MIPSEB)
 	uint8_t tt = 0;
+
 	tt = (buf[0] & 0x0f) << 4;
 	tt |= ((buf[0] & 0x10) ? (1 << 3) : 0);
 	tt |= ((buf[0] & 0x20) ? (1 << 2) : 0);
 	tt |= ((buf[0] & 0x40) ? (1 << 1) : 0);
 	tt |= ((buf[0] & 0x80) ? (1 << 0) : 0);
 	buf[0] = tt;
-	buf[4] = rev8(buf[4]);
+
+	tt = (buf[4] & 0x0f) << 4;
+	tt |= ((buf[4] & 0x10) ? (1 << 3) : 0);
+	tt |= ((buf[4] & 0x20) ? (1 << 2) : 0);
+	tt |= ((buf[4] & 0x40) ? (1 << 1) : 0);
+	tt |= ((buf[4] & 0x80) ? (1 << 0) : 0);
+	buf[4] = tt;
 #endif
-	if (likely(thr)) {
-		avalon = thr->cgpu;
+	if (likely(avalon)) {
 		info = avalon_info[avalon->device_id];
 		delay = nr_len * 10 * 1000000000ULL;
 		delay = delay / info->baud;
-
-		if (info->frequency == 256) {
-			buf[4] = 0x07;
-			buf[5] = 0x00;
-			buf[6] = 0x03;
-			buf[7] = 0x08;
-			buf[8] = 0x74;
-			buf[9] = 0x01;
-			buf[10] = 0x00;
-			buf[11] = 0x00;
-		} else if (info->frequency == 270) {
-			buf[4] = 0x07;
-			buf[5] = 0x00;
-			buf[6] = 0x73;
-			buf[7] = 0x08;
-			buf[8] = 0x74;
-			buf[9] = 0x01;
-			buf[10] = 0x00;
-			buf[11] = 0x00;
-		} else if (info->frequency == 282) {
-			buf[4] = 0x07;
-			buf[5] = 0x00;
-			buf[6] = 0xd3;
-			buf[7] = 0x08;
-			buf[8] = 0x74;
-			buf[9] = 0x01;
-			buf[10] = 0x00;
-			buf[11] = 0x00;
-		} else if (info->frequency == 300) {
-			buf[4] = 0x07;
-			buf[5] = 0x00;
-			buf[6] = 0x63;
-			buf[7] = 0x09;
-			buf[8] = 0x74;
-			buf[9] = 0x01;
-			buf[10] = 0x00;
-			buf[11] = 0x00;
-		}
 	}
 
 	if (at->reset)
@@ -337,7 +334,8 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 			 AVALON_DEFAULT_TIMEOUT,
 			 AVALON_DEFAULT_ASIC_NUM,
 			 AVALON_DEFAULT_MINER_NUM,
-			 0);
+			 0, 0,
+			 AVALON_DEFAULT_FREQUENCY);
 	ret = avalon_send_task(fd, &at, NULL);
 	if (ret == AVA_SEND_ERROR)
 		return 1;
@@ -365,6 +363,38 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 
 	applog(LOG_WARNING, "Avalon: Reset succeeded");
 	return 0;
+}
+
+static void avalon_idle(struct cgpu_info *avalon)
+{
+	int i, ret;
+	struct avalon_task at;
+
+	int fd = avalon->device_fd;
+	struct avalon_info *info = avalon_info[avalon->device_id];
+	int avalon_get_work_count = info->miner_count;
+
+	i = 0;
+	while (true) {
+		avalon_init_task(&at, 0, 0, info->fan_pwm,
+				 info->timeout, info->asic_count,
+				 info->miner_count, 1, 1, info->frequency);
+		ret = avalon_send_task(fd, &at, avalon);
+		if (unlikely(ret == AVA_SEND_ERROR ||
+			     (ret == AVA_SEND_BUFFER_EMPTY &&
+			      (i + 1 == avalon_get_work_count * 2)))) {
+			applog(LOG_ERR, "AVA%i: Comms error", avalon->device_id);
+			return;
+		}
+		if (i + 1 == avalon_get_work_count * 2)
+			break;
+
+		if (ret == AVA_SEND_BUFFER_FULL)
+			break;
+
+		i++;
+	}
+	applog(LOG_INFO, "Avalon: Goto idle mode");
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
@@ -525,10 +555,11 @@ static bool avalon_detect_one(const char *devpath)
 	}
 
 	ret = avalon_reset(fd, &ar);
-	avalon_close(fd);
 
 	if (ret) {
-		; /* FIXME: I think IT IS avalon and wait on reset; return false; */
+		; /* FIXME: I think IT IS avalon and wait on reset;
+		   * avalon_close(fd);
+		   * return false; */
 	}
 
 	/* We have a real Avalon! */
@@ -536,7 +567,7 @@ static bool avalon_detect_one(const char *devpath)
 	avalon = calloc(1, sizeof(struct cgpu_info));
 	avalon->api = &avalon_api;
 	avalon->device_path = strdup(devpath);
-	avalon->device_fd = -1;
+	avalon->device_fd = fd;
 	avalon->threads = AVALON_MINER_THREADS;
 	add_cgpu(avalon);
 	avalon_info = realloc(avalon_info,
@@ -574,6 +605,11 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_old = 0;
 	info->frequency = frequency;
 
+	/* Set asic to idle mode after detect */
+	avalon_idle(avalon);
+	avalon->device_fd = -1;
+
+	avalon_close(fd);
 	return true;
 }
 
@@ -645,6 +681,8 @@ static void do_avalon_close(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon_info[avalon->device_id];
+
+	avalon_idle(avalon);
 	avalon_close(avalon->device_fd);
 	avalon->device_fd = -1;
 
@@ -764,9 +802,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	while (true) {
 		avalon_init_task(&at, 0, 0, info->fan_pwm,
 				 info->timeout, info->asic_count,
-				 info->miner_count, 1);
+				 info->miner_count, 1, 0, info->frequency);
 		avalon_create_task(&at, work[i]);
-		ret = avalon_send_task(fd, &at, thr);
+		ret = avalon_send_task(fd, &at, avalon);
 		if (unlikely(ret == AVA_SEND_ERROR ||
 			     (ret == AVA_SEND_BUFFER_EMPTY &&
 			      (i + 1 == avalon_get_work_count) &&
