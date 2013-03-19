@@ -394,7 +394,7 @@ static void avalon_idle(struct cgpu_info *avalon)
 
 		i++;
 	}
-	applog(LOG_INFO, "Avalon: Goto idle mode");
+	applog(LOG_ERR, "Avalon: Goto idle mode");
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
