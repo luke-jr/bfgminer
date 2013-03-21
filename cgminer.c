@@ -2021,8 +2021,8 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
-		total_staged(), total_stale, total_discarded, new_blocks,
+	mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+		total_staged(), total_stale, new_blocks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
