@@ -280,6 +280,9 @@ int clDevicesNum(void) {
 	}
 
 	for (i = 0; i < numPlatforms; i++) {
+		if (opt_platform_id >= 0 && (int)i != opt_platform_id)
+			continue;
+
 		status = clGetPlatformInfo( platforms[i], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Platform Info. (clGetPlatformInfo)", status);
