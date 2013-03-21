@@ -41,6 +41,10 @@
 #define DRV_ICARUS 5
 #endif
 
+#ifdef USE_AVALON
+#define DRV_AVALON 6
+#endif
+
 #define DRV_LAST -1
 
 #define USB_CONFIG 1
@@ -52,10 +56,12 @@
 #define BFLSC_TIMEOUT_MS 500
 #define BITFORCE_TIMEOUT_MS 500
 #define MODMINER_TIMEOUT_MS 200
+#define AVALON_TIMEOUT_MS 500
 #else
 #define BFLSC_TIMEOUT_MS 200
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
+#define AVALON_TIMEOUT_MS 200
 #endif
 
 #ifdef USE_BFLSC
@@ -78,6 +84,13 @@ static struct usb_endpoints bfl_eps[] = {
 static struct usb_endpoints mmq_eps[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(3), 0 }
+};
+#endif
+
+#ifdef USE_AVALON
+static struct usb_endpoints ava_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
 };
 #endif
 
@@ -129,6 +142,19 @@ static struct usb_find_devices find_dev[] = {
 		.epcount = ARRAY_SIZE(mmq_eps),
 		.eps = mmq_eps },
 #endif
+#ifdef USE_AVALON
+	{
+		.drv = DRV_AVALON,
+		.name = "AVA",
+		.idVendor = 0x0403,
+		.idProduct = 0x6001,
+		.kernel = 0,
+		.config = 1,
+		.interface = 1,
+		.timeout = AVALON_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(ava_eps),
+		.eps = ava_eps },
+#endif
 #ifdef USE_ZTEX
 // This is here so cgminer -n shows them
 // the ztex driver (as at 201303) doesn't use usbutils
@@ -161,6 +187,10 @@ extern struct device_drv modminer_drv;
 
 #ifdef USE_ICARUS
 extern struct device_drv icarus_drv;
+#endif
+
+#ifdef USE_AVALON
+extern struct device_drv avalon_drv;
 #endif
 
 #define STRBUFLEN 256
@@ -1327,6 +1357,11 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 		return usb_check_each(DRV_MODMINER, drv, dev);
 #endif
 
+#ifdef USE_AVALON
+	if (drv->drv_id == DRIVER_AVALON)
+		return usb_check_each(DRV_AVALON, drv, dev);
+#endif
+
 	return NULL;
 }
 
@@ -1786,6 +1821,7 @@ void usb_cleanup()
 			case DRIVER_BFLSC:
 			case DRIVER_BITFORCE:
 			case DRIVER_MODMINER:
+			case DRIVER_AVALON:
 				release_cgpu(cgpu);
 				break;
 			default:
@@ -1890,6 +1926,12 @@ void usb_initialise()
 #ifdef USE_MODMINER
 				if (!found && strcasecmp(ptr, modminer_drv.name) == 0) {
 					drv_count[modminer_drv.drv_id].limit = lim;
+					found = true;
+				}
+#endif
+#ifdef USE_AVALON
+				if (!found && strcasecmp(ptr, avalon_drv.name) == 0) {
+					drv_count[avalon_drv.drv_id].limit = lim;
 					found = true;
 				}
 #endif

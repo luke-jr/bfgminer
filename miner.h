@@ -207,6 +207,7 @@ enum drv_driver {
 	DRIVER_ZTEX,
 	DRIVER_CPU,
 	DRIVER_BFLSC,
+	DRIVER_AVALON,
 	DRIVER_MAX
 };
 
