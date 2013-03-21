@@ -2021,9 +2021,9 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d  WU: %.1f",
+	mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  DW: %d  NB: %d  LW: %d  GF: %d  RF: %d",
 		total_staged(), total_stale, total_discarded, new_blocks,
-		local_work, total_go, total_ro, total_diff1 / total_secs * 60);
+		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -4618,7 +4618,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	struct timeval temp_tv_end, total_diff;
 	double secs;
 	double local_secs;
-	double utility, efficiency = 0.0;
+	double utility;
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
 	double local_mhashes;
@@ -4705,18 +4705,17 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		((double)total_diff.tv_usec / 1000000.0);
 
 	utility = total_accepted / total_secs * 60;
-	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 
 	dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
 	dr64 = (double)rolling * 1000000ull;
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
 
-	sprintf(statusline, "%s(%ds):%s (avg):%sh/s | Q:%d  A:%d  R:%d  HW:%d  E:%.0f%%  U:%.1f/m",
+	sprintf(statusline, "%s(%ds):%s (avg):%sh/s | A:%d  R:%d  HW:%d  U:%.1f/m  WU:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval, displayed_rolling, displayed_hashes,
-		total_getworks, total_accepted, total_rejected, hw_errors, efficiency, utility);
-
+		total_accepted, total_rejected, hw_errors, utility,
+		total_diff1 / total_secs * 60);
 
 	local_mhashes_done = 0;
 out_unlock:
@@ -6386,7 +6385,7 @@ void print_summary(void)
 {
 	struct timeval diff;
 	int hours, mins, secs, i;
-	double utility, efficiency = 0.0, displayed_hashes, work_util;
+	double utility, displayed_hashes, work_util;
 	bool mhash_base = true;
 
 	timersub(&total_tv_end, &total_tv_start, &diff);
@@ -6395,7 +6394,6 @@ void print_summary(void)
 	secs = diff.tv_sec % 60;
 
 	utility = total_accepted / total_secs * 60;
-	efficiency = total_getworks ? total_accepted * 100.0 / total_getworks : 0.0;
 	work_util = total_diff1 / total_secs * 60;
 
 	applog(LOG_WARNING, "\nSummary of runtime statistics:\n");
@@ -6416,7 +6414,6 @@ void print_summary(void)
 	applog(LOG_WARNING, "Average hashrate: %.1f %shash/s", displayed_hashes, mhash_base? "Mega" : "Kilo");
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Best share difficulty: %s", best_share);
-	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
 	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
 	applog(LOG_WARNING, "Rejected shares: %d", total_rejected);
@@ -6425,11 +6422,9 @@ void print_summary(void)
 	if (total_accepted || total_rejected)
 		applog(LOG_WARNING, "Reject ratio: %.1f%%", (double)(total_rejected * 100) / (double)(total_accepted + total_rejected));
 	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
-	applog(LOG_WARNING, "Efficiency (accepted / queued): %.0f%%", efficiency);
 	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min", utility);
 	applog(LOG_WARNING, "Work Utility (diff1 shares solved / min): %.2f/min\n", work_util);
 
-	applog(LOG_WARNING, "Discarded work due to new blocks: %d", total_discarded);
 	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %d", total_stale);
 	applog(LOG_WARNING, "Unable to get work from server occasions: %d", total_go);
 	applog(LOG_WARNING, "Work items generated locally: %d", local_work);
@@ -6443,7 +6438,6 @@ void print_summary(void)
 			applog(LOG_WARNING, "Pool: %s", pool->rpc_url);
 			if (pool->solved)
 				applog(LOG_WARNING, "SOLVED %d BLOCK%s!", pool->solved, pool->solved > 1 ? "S" : "");
-			applog(LOG_WARNING, " Queued work requests: %d", pool->getwork_requested);
 			applog(LOG_WARNING, " Share submissions: %d", pool->accepted + pool->rejected);
 			applog(LOG_WARNING, " Accepted shares: %d", pool->accepted);
 			applog(LOG_WARNING, " Rejected shares: %d", pool->rejected);
@@ -6451,10 +6445,7 @@ void print_summary(void)
 			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
 			if (pool->accepted || pool->rejected)
 				applog(LOG_WARNING, " Reject ratio: %.1f%%", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
-			efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-			applog(LOG_WARNING, " Efficiency (accepted / queued): %.0f%%", efficiency);
 
-			applog(LOG_WARNING, " Discarded work due to new blocks: %d", pool->discarded_work);
 			applog(LOG_WARNING, " Stale submissions discarded due to new blocks: %d", pool->stale_shares);
 			applog(LOG_WARNING, " Unable to get work from server occasions: %d", pool->getfail_occasions);
 			applog(LOG_WARNING, " Submitting work remotely delay occasions: %d\n", pool->remotefail_occasions);
