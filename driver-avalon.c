@@ -679,9 +679,12 @@ static void avalon_free_work(struct thr_info *thr, struct work **work)
 
 static void do_avalon_close(struct thr_info *thr)
 {
+	struct avalon_result ar;
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon_info[avalon->device_id];
 
+	sleep(1);
+	avalon_reset(avalon->device_fd, &ar);
 	avalon_idle(avalon);
 	avalon_close(avalon->device_fd);
 	avalon->device_fd = -1;
@@ -874,7 +877,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk3);
 			continue;
 		}
-		record_temp_fan(info, &ar, &(avalon->temp));
 
 		work_i0 = avalon_decode_nonce(thr, info->bulk0, &ar, &nonce);
 		work_i1 = avalon_decode_nonce(thr, info->bulk1, &ar, &nonce);
@@ -890,7 +892,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			}
 			continue;
 		}
-
 		if (work_i0 >= 0)
 			submit_nonce(thr, info->bulk0[work_i0], nonce);
 		if (work_i1 >= 0)
@@ -900,8 +901,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		if (work_i3 >= 0)
 			submit_nonce(thr, info->bulk3[work_i3], nonce);
 
-		hash_count += nonce;
+		record_temp_fan(info, &ar, &(avalon->temp));
 
+		hash_count += nonce;
 		if (opt_debug) {
 			timersub(&tv_finish, &tv_start, &elapsed);
 			applog(LOG_DEBUG,
