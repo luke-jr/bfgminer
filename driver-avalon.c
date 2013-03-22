@@ -311,7 +311,7 @@ static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
 	if (i == avalon_get_work_count)
 		return -1;
 
-	++info->matching_work[i];
+	info->matching_work[i]++;
 	*nonce = ar->nonce;
 #if defined (__BIG_ENDIAN__) || defined(MIPSEB)
 	*nonce = swab32(*nonce);
@@ -881,10 +881,11 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		work_i2 = avalon_decode_nonce(thr, info->bulk2, &ar, &nonce);
 		work_i3 = avalon_decode_nonce(thr, info->bulk3, &ar, &nonce);
 		if ((work_i0 < 0) && (work_i1 < 0) && (work_i2 < 0) && (work_i3 < 0)) {
+			info->no_matching_work++;
 			if (opt_debug) {
 				timersub(&tv_finish, &tv_start, &elapsed);
 				applog(LOG_DEBUG,"Avalon: no matching work: %d"
-				       " (%ld.%06lds)", ++info->no_matching_work,
+				       " (%ld.%06lds)", info->no_matching_work,
 				       elapsed.tv_sec, elapsed.tv_usec);
 			}
 			continue;
