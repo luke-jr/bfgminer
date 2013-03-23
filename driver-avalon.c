@@ -901,8 +901,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		if (work_i3 >= 0)
 			submit_nonce(thr, info->bulk3[work_i3], nonce);
 
-		record_temp_fan(info, &ar, &(avalon->temp));
-
 		hash_count += nonce;
 		if (opt_debug) {
 			timersub(&tv_finish, &tv_start, &elapsed);
@@ -914,6 +912,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	}
 	avalon_free_work(thr, info->bulk0);
 
+	record_temp_fan(info, &ar, &(avalon->temp));
 	applog(LOG_WARNING,
 	       "Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
 	       "Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
