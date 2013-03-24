@@ -699,7 +699,8 @@ Sets card 0 cutoff temperature to 95 and card 1 to 105.
 This setting will modify the memory speed whenever the GPU clock speed is
 modified by --auto-gpu. In this example, it will set the memory speed to
 be 125 Mhz lower than the GPU speed. This is useful for some cards like the
-6970 which normally don't allow a bigger clock speed difference.
+6970 which normally don't allow a bigger clock speed difference. The 6970 is
+known to only allow -125, while the 7970 only allows -150.
 
 
 CHANGING SETTINGS:
