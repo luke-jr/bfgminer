@@ -167,6 +167,7 @@ static void *postcalc_hash(void *userdata)
 		submit_nonce(thr, &pcd->work, nonce);
 	}
 
+	clean_work(&pcd->work);
 	free(pcd);
 
 	return NULL;
