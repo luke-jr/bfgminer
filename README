@@ -1,4 +1,4 @@
-This is a multi-threaded multi-pool FPGA, GPU and CPU miner with ATI GPU
+This is a multi-threaded multi-pool ASIC, FPGA, GPU and CPU miner with ATI GPU
 monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
 
@@ -61,6 +61,7 @@ Optional Dependencies:
 
 
 BFGMiner specific configuration options:
+	--enable-avalon         Compile support for Avalon (default disabled)
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-opencl        Build without support for OpenCL (default enabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
