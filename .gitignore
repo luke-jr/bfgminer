@@ -46,3 +46,5 @@ mkinstalldirs
 
 .pc
 bfgminer-bitforce.conf
+
+bfgminer-rpc
