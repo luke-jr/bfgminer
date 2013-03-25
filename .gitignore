@@ -1,5 +1,8 @@
 bfgminer
 bfgminer.exe
+bfgminer-rpc
+bfgminer-rpc.exe
+bitforce-firmware-flash
 cgminer
 cgminer.exe
 minerd
@@ -29,6 +32,9 @@ config.sub
 mingw32-config.cache
 
 *~
+*.orig
+*.rej
+*.kate-swp
 
 ext_deps
 config.h.in
@@ -47,4 +53,11 @@ mkinstalldirs
 .pc
 bfgminer-bitforce.conf
 
-bfgminer-rpc
+vgcore.*
+core*
+*.log
+*.json
+*.patch
+*.zip
+*.tbz2
+*.bz2
