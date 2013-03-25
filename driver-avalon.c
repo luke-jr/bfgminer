@@ -43,22 +43,24 @@ struct device_api avalon_api;
 
 static inline uint8_t rev8(uint8_t d)
 {
-    int i;
-    uint8_t out = 0;
+	int i;
+	uint8_t out = 0;
 
-    /* (from left to right) */
-    for (i = 0; i < 8; i++)
-        if (d & (1 << i))
-            out |= (1 << (7 - i));
+	/* from left to right */
+	for (i = 0; i < 8; i++)
+		if (d & (1 << i))
+			out |= (1 << (7 - i));
 
-    return out;
+	return out;
 }
 
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
 			    uint8_t timeout, uint8_t asic_num,
-			    uint8_t miner_num, uint8_t nonce_elf)
+			    uint8_t miner_num, uint8_t nonce_elf,
+			    uint8_t gate_miner, int frequency)
 {
+	uint8_t *buf;
 	static bool first = true;
 
 	if (unlikely(!at))
@@ -89,8 +91,35 @@ static int avalon_init_task(struct avalon_task *at,
 	at->timeout_data = timeout;
 	at->asic_num = asic_num;
 	at->miner_num = miner_num;
-
 	at->nonce_elf = nonce_elf;
+
+	at->gate_miner_elf = 1;
+	at->asic_pll = 1;
+
+	if (unlikely(gate_miner)) {
+		at-> gate_miner = 1;
+		at->asic_pll = 0;
+	}
+
+	buf = (uint8_t *)at;
+	buf[5] = 0x00;
+	buf[8] = 0x74;
+	buf[9] = 0x01;
+	buf[10] = 0x00;
+	buf[11] = 0x00;
+	if (frequency == 256) {
+		buf[6] = 0x03;
+		buf[7] = 0x08;
+	} else if (frequency == 270) {
+		buf[6] = 0x73;
+		buf[7] = 0x08;
+	} else if (frequency == 282) {
+		buf[6] = 0xd3;
+		buf[7] = 0x08;
+	} else if (frequency == 300) {
+		buf[6] = 0x63;
+		buf[7] = 0x09;
+	}
 
 	return 0;
 }
@@ -103,14 +132,14 @@ static inline void avalon_create_task(struct avalon_task *at,
 }
 
 static int avalon_send_task(int fd, const struct avalon_task *at,
-			    struct thr_info *thr)
+			    struct cgpu_info *avalon)
+
 {
 	size_t ret;
 	int full;
 	struct timespec p;
 	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
 	size_t nr_len;
-	struct cgpu_info *avalon;
 	struct avalon_info *info;
 	uint64_t delay = 32000000; /* Default 32ms for B19200 */
 	uint32_t nonce_range;
@@ -138,57 +167,25 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	}
 #if defined(__BIG_ENDIAN__) || defined(MIPSEB)
 	uint8_t tt = 0;
+
 	tt = (buf[0] & 0x0f) << 4;
 	tt |= ((buf[0] & 0x10) ? (1 << 3) : 0);
 	tt |= ((buf[0] & 0x20) ? (1 << 2) : 0);
 	tt |= ((buf[0] & 0x40) ? (1 << 1) : 0);
 	tt |= ((buf[0] & 0x80) ? (1 << 0) : 0);
 	buf[0] = tt;
-	buf[4] = rev8(buf[4]);
+
+	tt = (buf[4] & 0x0f) << 4;
+	tt |= ((buf[4] & 0x10) ? (1 << 3) : 0);
+	tt |= ((buf[4] & 0x20) ? (1 << 2) : 0);
+	tt |= ((buf[4] & 0x40) ? (1 << 1) : 0);
+	tt |= ((buf[4] & 0x80) ? (1 << 0) : 0);
+	buf[4] = tt;
 #endif
-	if (likely(thr)) {
-		avalon = thr->cgpu;
+	if (likely(avalon)) {
 		info = avalon_info[avalon->device_id];
 		delay = nr_len * 10 * 1000000000ULL;
 		delay = delay / info->baud;
-
-		if (info->frequency == 256) {
-			buf[4] = 0x07;
-			buf[5] = 0x00;
-			buf[6] = 0x03;
-			buf[7] = 0x08;
-			buf[8] = 0x74;
-			buf[9] = 0x01;
-			buf[10] = 0x00;
-			buf[11] = 0x00;
-		} else if (info->frequency == 270) {
-			buf[4] = 0x07;
-			buf[5] = 0x00;
-			buf[6] = 0x73;
-			buf[7] = 0x08;
-			buf[8] = 0x74;
-			buf[9] = 0x01;
-			buf[10] = 0x00;
-			buf[11] = 0x00;
-		} else if (info->frequency == 282) {
-			buf[4] = 0x07;
-			buf[5] = 0x00;
-			buf[6] = 0xd3;
-			buf[7] = 0x08;
-			buf[8] = 0x74;
-			buf[9] = 0x01;
-			buf[10] = 0x00;
-			buf[11] = 0x00;
-		} else if (info->frequency == 300) {
-			buf[4] = 0x07;
-			buf[5] = 0x00;
-			buf[6] = 0x63;
-			buf[7] = 0x09;
-			buf[8] = 0x74;
-			buf[9] = 0x01;
-			buf[10] = 0x00;
-			buf[11] = 0x00;
-		}
 	}
 
 	if (at->reset)
@@ -315,7 +312,7 @@ static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
 	if (i == avalon_get_work_count)
 		return -1;
 
-	++info->matching_work[i];
+	info->matching_work[i]++;
 	*nonce = ar->nonce;
 #if defined (__BIG_ENDIAN__) || defined(MIPSEB)
 	*nonce = swab32(*nonce);
@@ -338,7 +335,8 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 			 AVALON_DEFAULT_TIMEOUT,
 			 AVALON_DEFAULT_ASIC_NUM,
 			 AVALON_DEFAULT_MINER_NUM,
-			 0);
+			 0, 0,
+			 AVALON_DEFAULT_FREQUENCY);
 	ret = avalon_send_task(fd, &at, NULL);
 	if (ret == AVA_SEND_ERROR)
 		return 1;
@@ -366,6 +364,38 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 
 	applog(LOG_WARNING, "Avalon: Reset succeeded");
 	return 0;
+}
+
+static void avalon_idle(struct cgpu_info *avalon)
+{
+	int i, ret;
+	struct avalon_task at;
+
+	int fd = avalon->device_fd;
+	struct avalon_info *info = avalon_info[avalon->device_id];
+	int avalon_get_work_count = info->miner_count;
+
+	i = 0;
+	while (true) {
+		avalon_init_task(&at, 0, 0, info->fan_pwm,
+				 info->timeout, info->asic_count,
+				 info->miner_count, 1, 1, info->frequency);
+		ret = avalon_send_task(fd, &at, avalon);
+		if (unlikely(ret == AVA_SEND_ERROR ||
+			     (ret == AVA_SEND_BUFFER_EMPTY &&
+			      (i + 1 == avalon_get_work_count * 2)))) {
+			applog(LOG_ERR, "AVA%i: Comms error", avalon->device_id);
+			return;
+		}
+		if (i + 1 == avalon_get_work_count * 2)
+			break;
+
+		if (ret == AVA_SEND_BUFFER_FULL)
+			break;
+
+		i++;
+	}
+	applog(LOG_ERR, "Avalon: Goto idle mode");
 }
 
 static void get_options(int this_option_offset, int *baud, int *miner_count,
@@ -401,9 +431,10 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	}
 
 	*baud = AVALON_IO_SPEED;
-	*miner_count = AVALON_DEFAULT_MINER_NUM;
+	*miner_count = AVALON_DEFAULT_MINER_NUM - 8;
 	*asic_count = AVALON_DEFAULT_ASIC_NUM;
 	*timeout = AVALON_DEFAULT_TIMEOUT;
+	*frequency = AVALON_DEFAULT_FREQUENCY;
 
 	if (!(*buf))
 		return;
@@ -525,10 +556,11 @@ static bool avalon_detect_one(const char *devpath)
 	}
 
 	ret = avalon_reset(fd, &ar);
-	avalon_close(fd);
 
 	if (ret) {
-		; /* FIXME: I think IT IS avalon and wait on reset; return false; */
+		; /* FIXME: I think IT IS avalon and wait on reset;
+		   * avalon_close(fd);
+		   * return false; */
 	}
 
 	/* We have a real Avalon! */
@@ -536,7 +568,7 @@ static bool avalon_detect_one(const char *devpath)
 	avalon = calloc(1, sizeof(struct cgpu_info));
 	avalon->api = &avalon_api;
 	avalon->device_path = strdup(devpath);
-	avalon->device_fd = -1;
+	avalon->device_fd = fd;
 	avalon->threads = AVALON_MINER_THREADS;
 	add_cgpu(avalon);
 	avalon_info = realloc(avalon_info,
@@ -574,6 +606,11 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_old = 0;
 	info->frequency = frequency;
 
+	/* Set asic to idle mode after detect */
+	avalon_idle(avalon);
+	avalon->device_fd = -1;
+
+	avalon_close(fd);
 	return true;
 }
 
@@ -582,11 +619,9 @@ static inline void avalon_detect()
 	serial_detect(&avalon_api, avalon_detect_one);
 }
 
-static bool avalon_prepare(struct thr_info *thr)
+static void avalon_init(struct cgpu_info *avalon)
 {
 	struct avalon_result ar;
-	struct cgpu_info *avalon = thr->cgpu;
-	struct timeval now;
 	int fd, ret;
 
 	avalon->device_fd = -1;
@@ -595,17 +630,32 @@ static bool avalon_prepare(struct thr_info *thr)
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Avalon: Failed to open on %s",
 		       avalon->device_path);
-		return false;
+		return;
 	}
-	ret = avalon_reset(fd, &ar);
-	if (ret)
-		return false;
-	avalon->device_fd = fd;
 
+	ret = avalon_reset(fd, &ar);
+	if (ret) {
+		avalon_close(fd);
+		return;
+	}
+
+	avalon->device_fd = fd;
 	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
+
+	return;
+}
+
+static bool avalon_prepare(struct thr_info *thr)
+{
+	struct cgpu_info *avalon = thr->cgpu;
+	struct timeval now;
+
+	avalon_init(avalon);
+	if (avalon->device_fd == -1)
+		return false;
+
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
-
 	return true;
 }
 
@@ -630,8 +680,13 @@ static void avalon_free_work(struct thr_info *thr, struct work **work)
 
 static void do_avalon_close(struct thr_info *thr)
 {
+	struct avalon_result ar;
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon_info[avalon->device_id];
+
+	sleep(1);
+	avalon_reset(avalon->device_fd, &ar);
+	avalon_idle(avalon);
 	avalon_close(avalon->device_fd);
 	avalon->device_fd = -1;
 
@@ -644,6 +699,8 @@ static void do_avalon_close(struct thr_info *thr)
 
 static inline void record_temp_fan(struct avalon_info *info, struct avalon_result *ar, float *temp_avg)
 {
+	int max;
+
 	info->fan0 = ar->fan0 * AVALON_FAN_FACTOR;
 	info->fan1 = ar->fan1 * AVALON_FAN_FACTOR;
 	info->fan2 = ar->fan2 * AVALON_FAN_FACTOR;
@@ -664,14 +721,24 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 		info->temp2 = 0 - ((~ar->temp2 & 0x7f) + 1);
 	}
 
-	if (info->temp0 > info->temp_max)
-		info->temp_max = info->temp0;
-	if (info->temp1 > info->temp_max)
-		info->temp_max = info->temp1;
-	if (info->temp2 > info->temp_max)
-		info->temp_max = info->temp2;
-
 	*temp_avg = info->temp2;
+
+	max = info->temp_max;
+	if (info->temp0 > max)
+		max = info->temp0;
+	if (info->temp1 > max)
+		max = info->temp1;
+	if (info->temp2 > max)
+		max = info->temp2;
+	if (max >= 100) {	/* FIXME: fix the root cause on fpga controller firmware */
+		if (opt_debug) {
+			applog(LOG_DEBUG, "Avalon: temp_max: %d", max);
+			hexdump((uint8_t *)ar, AVALON_READ_SIZE);
+		}
+		return;
+	}
+
+	info->temp_max = max;
 }
 
 static inline void adjust_fan(struct avalon_info *info)
@@ -708,6 +775,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	uint32_t nonce;
 	int64_t hash_count;
 	static int first_try = 0;
+	int result_count, result_wrong;
 
 	avalon = thr->cgpu;
 	info = avalon_info[avalon->device_id];
@@ -739,9 +807,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	while (true) {
 		avalon_init_task(&at, 0, 0, info->fan_pwm,
 				 info->timeout, info->asic_count,
-				 info->miner_count, 1);
+				 info->miner_count, 1, 0, info->frequency);
 		avalon_create_task(&at, work[i]);
-		ret = avalon_send_task(fd, &at, thr);
+		ret = avalon_send_task(fd, &at, avalon);
 		if (unlikely(ret == AVA_SEND_ERROR ||
 			     (ret == AVA_SEND_BUFFER_EMPTY &&
 			      (i + 1 == avalon_get_work_count) &&
@@ -776,9 +844,11 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
 
+	result_count = 0;
+	result_wrong = 0;
 	hash_count = 0;
 	while (true) {
-		work_i0 = work_i1 = work_i2 = -1;
+		work_i0 = work_i1 = work_i2 = work_i3 = -1;
 
 		full = avalon_buffer_full(fd);
 		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
@@ -811,22 +881,24 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk3);
 			continue;
 		}
-		record_temp_fan(info, &ar, &(avalon->temp));
+		result_count++;
 
 		work_i0 = avalon_decode_nonce(thr, info->bulk0, &ar, &nonce);
 		work_i1 = avalon_decode_nonce(thr, info->bulk1, &ar, &nonce);
 		work_i2 = avalon_decode_nonce(thr, info->bulk2, &ar, &nonce);
 		work_i3 = avalon_decode_nonce(thr, info->bulk3, &ar, &nonce);
 		if ((work_i0 < 0) && (work_i1 < 0) && (work_i2 < 0) && (work_i3 < 0)) {
+			info->no_matching_work++;
+			result_wrong++;
+
 			if (opt_debug) {
 				timersub(&tv_finish, &tv_start, &elapsed);
 				applog(LOG_DEBUG,"Avalon: no matching work: %d"
-				       " (%ld.%06lds)", ++info->no_matching_work,
+				       " (%ld.%06lds)", info->no_matching_work,
 				       elapsed.tv_sec, elapsed.tv_usec);
 			}
 			continue;
 		}
-
 		if (work_i0 >= 0)
 			submit_nonce(thr, info->bulk0[work_i0], nonce);
 		if (work_i1 >= 0)
@@ -837,7 +909,6 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			submit_nonce(thr, info->bulk3[work_i3], nonce);
 
 		hash_count += nonce;
-
 		if (opt_debug) {
 			timersub(&tv_finish, &tv_start, &elapsed);
 			applog(LOG_DEBUG,
@@ -846,8 +917,23 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
+	if (result_count == result_wrong) {
+		/* This mean FPGA controller give all wrong result
+		 * try to reset the Avalon */
+		avalon_free_work(thr, info->bulk0);
+		avalon_free_work(thr, info->bulk1);
+		avalon_free_work(thr, info->bulk2);
+		avalon_free_work(thr, info->bulk3);
+		do_avalon_close(thr);
+		applog(LOG_ERR,
+		       "AVA%i: FPGA controller mess up", avalon->device_id);
+		dev_error(avalon, REASON_DEV_COMMS_ERROR);
+		return 0;
+	}
+
 	avalon_free_work(thr, info->bulk0);
 
+	record_temp_fan(info, &ar, &(avalon->temp));
 	applog(LOG_WARNING,
 	       "Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
 	       "Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
@@ -951,10 +1037,12 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	struct avalon_info *info = avalon_info[cgpu->device_id];
 
-	root = api_add_int(root, "read_count", &(info->read_count), false);
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "miner_count", &(info->miner_count),false);
 	root = api_add_int(root, "asic_count", &(info->asic_count), false);
+	root = api_add_int(root, "read_count", &(info->read_count), false);
+	root = api_add_int(root, "timeout", &(info->timeout), false);
+	root = api_add_int(root, "frequency", &(info->frequency), false);
 
 	root = api_add_int(root, "fan1", &(info->fan0), false);
 	root = api_add_int(root, "fan2", &(info->fan1), false);
@@ -1007,5 +1095,6 @@ struct device_api avalon_api = {
 	.minerloop = minerloop_avalon,
 	.scanhash_queue = avalon_scanhash,
 	.get_api_stats = avalon_api_stats,
+	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };

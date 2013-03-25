@@ -21,7 +21,9 @@
 #define AVALON_FAN_FACTOR 120
 #define AVALON_DEFAULT_FAN_MAX_PWM 0xA0 /* 100% */
 #define AVALON_DEFAULT_FAN_MIN_PWM 0x20 /*  20% */
+
 #define AVALON_DEFAULT_TIMEOUT 0x32
+#define AVALON_DEFAULT_FREQUENCY 256
 #define AVALON_DEFAULT_MINER_NUM 0x20
 #define AVALON_DEFAULT_ASIC_NUM 0xA
 
@@ -37,10 +39,11 @@ struct avalon_task {
 
 	uint8_t nonce_elf		:1;
 	uint8_t gate_miner_elf		:1;
-	uint8_t pad0			:1;
+	uint8_t asic_pll		:1;
 	uint8_t gate_miner		:1;
-	uint32_t pad0_miner_ctrl	:28;
-	uint32_t pad1_miner_ctrl;
+	uint8_t _pad0			:4;
+	uint8_t _pad1[3];
+	uint32_t _pad2;
 
 	uint8_t midstate[32];
 	uint8_t data[12];
@@ -57,7 +60,7 @@ struct avalon_result {
 	uint8_t temp0;
 	uint8_t temp1;
 	uint8_t temp2;
-	uint8_t pad0[2];
+	uint8_t _pad0[2];
 
 	uint16_t fifo_wp;
 	uint16_t fifo_rp;
