@@ -716,9 +716,9 @@ else
 fi
 
 if test "x$bitforce" = xyes; then
-	echo "  BitForce.FPGAs.......: Enabled"
+	echo "  BitForce.devices.....: Enabled"
 else
-	echo "  BitForce.FPGAs.......: Disabled"
+	echo "  BitForce.devices.....: Disabled"
 fi
 
 if test "x$icarus" = xyes; then
