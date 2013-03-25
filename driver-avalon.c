@@ -774,6 +774,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	uint32_t nonce;
 	int64_t hash_count;
 	static int first_try = 0;
+	int result_count, result_wrong;
 
 	avalon = thr->cgpu;
 	info = avalon_info[avalon->device_id];
@@ -842,6 +843,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
 
+	result_count = 0;
+	result_wrong = 0;
 	hash_count = 0;
 	while (true) {
 		work_i0 = work_i1 = work_i2 = work_i3 = -1;
@@ -877,6 +880,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk3);
 			continue;
 		}
+		result_count++;
 
 		work_i0 = avalon_decode_nonce(thr, info->bulk0, &ar, &nonce);
 		work_i1 = avalon_decode_nonce(thr, info->bulk1, &ar, &nonce);
@@ -884,6 +888,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		work_i3 = avalon_decode_nonce(thr, info->bulk3, &ar, &nonce);
 		if ((work_i0 < 0) && (work_i1 < 0) && (work_i2 < 0) && (work_i3 < 0)) {
 			info->no_matching_work++;
+			result_wrong++;
+
 			if (opt_debug) {
 				timersub(&tv_finish, &tv_start, &elapsed);
 				applog(LOG_DEBUG,"Avalon: no matching work: %d"
@@ -910,6 +916,20 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
+	if (result_count == result_wrong) {
+		/* This mean FPGA controller give all wrong result
+		 * try to reset the Avalon */
+		avalon_free_work(thr, info->bulk0);
+		avalon_free_work(thr, info->bulk1);
+		avalon_free_work(thr, info->bulk2);
+		avalon_free_work(thr, info->bulk3);
+		do_avalon_close(thr);
+		applog(LOG_ERR,
+		       "AVA%i: FPGA controller mess up", avalon->device_id);
+		dev_error(avalon, REASON_DEV_COMMS_ERROR);
+		return 0;
+	}
+
 	avalon_free_work(thr, info->bulk0);
 
 	record_temp_fan(info, &ar, &(avalon->temp));
