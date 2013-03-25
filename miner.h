@@ -289,6 +289,9 @@ struct device_api {
 	uint64_t (*can_limit_work)(struct thr_info *);
 	bool (*thread_init)(struct thr_info *);
 	bool (*prepare_work)(struct thr_info *, struct work *);
+#ifdef USE_AVALON
+	int64_t (*scanhash_queue)(struct thr_info *, struct work **, int64_t);
+#endif
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
@@ -757,6 +760,7 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+extern char *opt_avalon_options;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif

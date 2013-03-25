@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <termios.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
 #ifndef O_CLOEXEC
@@ -693,6 +694,14 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	switch (baud) {
 	case 0:
 		break;
+	case 19200:
+		cfsetispeed(&my_termios, B19200);
+		cfsetospeed(&my_termios, B19200);
+		break;
+	case 38400:
+		cfsetispeed(&my_termios, B38400);
+		cfsetospeed(&my_termios, B38400);
+		break;
 	case 57600:
 		cfsetispeed(&my_termios, B57600);
 		cfsetospeed(&my_termios, B57600);
@@ -710,6 +719,9 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 
 	my_termios.c_cflag |= CS8;
 	my_termios.c_cflag |= CREAD;
+#ifdef USE_AVALON
+//	my_termios.c_cflag |= CRTSCTS;
+#endif
 	my_termios.c_cflag |= CLOCAL;
 	my_termios.c_cflag &= ~(CSIZE | PARENB);
 
@@ -883,3 +895,34 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 	*out_len = len;
 	return f;
 }
+
+#ifndef WIN32
+
+int get_serial_cts(int fd)
+{
+	int flags;
+
+	if (!fd)
+		return -1;
+
+	ioctl(fd, TIOCMGET, &flags);
+	return (flags & TIOCM_CTS) ? 1 : 0;
+}
+
+int set_serial_rts(int fd, int rts)
+{
+	int flags;
+
+	if (!fd)
+		return -1;
+
+	if (rts)
+		flags |= TIOCM_RTS;
+	else
+		flags &= ~TIOCM_RTS;
+
+	ioctl(fd, TIOCMSET, &flags);
+	return flags & TIOCM_CTS;
+}
+
+#endif // ! WIN32

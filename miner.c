@@ -58,6 +58,9 @@
 #include "driver-opencl.h"
 #include "bench_block.h"
 #include "scrypt.h"
+#ifdef USE_AVALON
+  #include "driver-avalon.h"
+#endif
 
 #ifdef USE_X6500
 #include "ft232r.h"
@@ -73,7 +76,7 @@
 #include "scrypt.h"
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
+#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
 #	define USE_FPGA_SERIAL
 #endif
@@ -180,6 +183,9 @@ bool opt_disable_pool;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
+#ifdef USE_AVALON
+char *opt_avalon_options = NULL;
+#endif
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1050,6 +1056,15 @@ static char *set_icarus_timing(const char *arg)
 }
 #endif
 
+#ifdef USE_AVALON
+static char *set_avalon_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_avalon_options);
+
+	return NULL;
+}
+#endif
+
 __maybe_unused
 static char *set_null(const char __maybe_unused *arg)
 {
@@ -1256,6 +1271,11 @@ static struct opt_table opt_config_table[] = {
 		     opt_hidden),
 	OPT_WITH_ARG("--icarus-timing",
 		     set_icarus_timing, NULL, NULL,
+		     opt_hidden),
+#endif
+#ifdef USE_AVALON
+	OPT_WITH_ARG("--avalon-options",
+		     set_avalon_options, NULL, NULL,
 		     opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
@@ -1645,6 +1665,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_ICARUS
 		"icarus "
+#endif
+#ifdef USE_AVALON
+		"avalon "
 #endif
 #ifdef USE_MODMINER
 		"modminer "
@@ -7745,6 +7768,10 @@ extern struct device_api cairnsmore_api;
 extern struct device_api icarus_api;
 #endif
 
+#ifdef USE_AVALON
+extern struct device_api avalon_api;
+#endif
+
 #ifdef USE_MODMINER
 extern struct device_api modminer_api;
 #endif
@@ -8057,6 +8084,11 @@ int main(int argc, char *argv[])
 		cairnsmore_api.api_detect();
 		icarus_api.api_detect();
 	}
+#endif
+
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_api.api_detect();
 #endif
 
 #ifdef USE_BITFORCE

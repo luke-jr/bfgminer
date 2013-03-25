@@ -240,6 +240,17 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
+avalon="no"
+
+AC_ARG_ENABLE([avalon],
+	[AC_HELP_STRING([--enable-avalon],[Compile support for Avalon (default disabled)])],
+	[avalon=$enableval]
+	)
+if test "x$avalon" = xyes; then
+	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
+fi
+AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
+
 AC_ARG_ENABLE([modminer],
 	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
 	[modminer=$enableval],
@@ -424,7 +435,7 @@ AC_CONFIG_SUBDIRS([libblkmaker])
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [true])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$x6500$ztex != xnonono])
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$icarus$bitforce$modminer$x6500$ztex != xnononono])
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononono])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
@@ -696,6 +707,12 @@ elif test "x$opencl" = xyes; then
 	echo "    ADL.monitoring.....: Disabled"
 else
 	echo "    ADL.monitoring.....: n/a"
+fi
+
+if test "x$avalon" = xyes; then
+	echo "  Avalon.ASICs.........: Enabled"
+else
+	echo "  Avalon.ASICs.........: Disabled"
 fi
 
 if test "x$bitforce" = xyes; then
