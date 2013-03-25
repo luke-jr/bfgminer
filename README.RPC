@@ -305,7 +305,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Hash Method=sha256/scrypt,
                               Current Block Time=N.N, <- 0 means none
                               Current Block Hash=XXXX..., <- blank if none
-                              LP=true/false| <- LP is in use on at least 1 pool
+                              LP=true/false, <- LP is in use on at least 1 pool
+                              Network Difficulty=NN.NN|
 
  debug|setting (*)
                DEBUG          Debug settings
@@ -408,7 +409,7 @@ miner.php - an example web page to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.24b
+API V1.24.1
 
 Modified API commands:
  'cpustatus' - add 'ProcID'
@@ -419,6 +420,7 @@ Modified API commands:
  'devdetails' - add 'ProcID'
  'devdetail' - add 'Name', 'ID', and 'ProcID'
  'pools' - add 'Message'
+ 'coin' - add 'Network Difficulty'
 
 Pretty much updated every method returning 'Name' and 'ID' to also return
 'ProcID'. This is a number starting with 0 for 'a', 1 for 'b', etc.

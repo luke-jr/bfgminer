@@ -1,5 +1,4 @@
-
-This is a multi-threaded multi-pool FPGA, GPU and CPU miner with ATI GPU
+This is a multi-threaded multi-pool ASIC, FPGA, GPU and CPU miner with ATI GPU
 monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
 
@@ -62,6 +61,7 @@ Optional Dependencies:
 
 
 BFGMiner specific configuration options:
+	--enable-avalon         Compile support for Avalon (default disabled)
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-opencl        Build without support for OpenCL (default enabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
@@ -82,19 +82,23 @@ Install AMD APP sdk, ideal version (see FAQ!) - put it into a system location.
 Download the correct version for either 32 bit or 64 bit from here:
 	http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/
 
-This will give you a file with a name like AMD-APP-SDK-v2.4-lnx64.tgz
+This will give you a file with a name like:
+ AMD-APP-SDK-v2.4-lnx64.tgz (64-bit)
+or
+ AMD-APP-SDK-v2.4-lnx32.tgz (32-bit)
 
 Then:
 
 sudo -i
 cd /opt
-tar xf /path/to/AMD-APP-SDK-v2.4-lnx64.tgz
+tar xf /path/to/AMD-APP-SDK-v2.4-lnx##.tgz
 cd /
-tar xf /opt/AMD-APP-SDK-v2.4-lnx64/icd-registration.tgz
-ln -s /opt/AMD-APP-SDK-v2.4-lnx64/include/CL /usr/include
-ln -s /opt/AMD-APP-SDK-v2.4-lnx64/lib/x86_64/* /usr/lib/
+tar xf /opt/AMD-APP-SDK-v2.4-lnx##/icd-registration.tgz
+ln -s /opt/AMD-APP-SDK-v2.4-lnx##/include/CL /usr/include
+ln -s /opt/AMD-APP-SDK-v2.4-lnx##/lib/x86_64/* /usr/lib/
 ldconfig
 
+Where ## is 32 or 64, depending on the bitness of the SDK you downloaded.
 If you are on 32 bit, x86_64 in the 2nd last line should be x86
 
 Basic *nix build instructions:
@@ -687,7 +691,8 @@ Sets card 0 cutoff temperature to 95 and card 1 to 105.
 This setting will modify the memory speed whenever the GPU clock speed is
 modified by --auto-gpu. In this example, it will set the memory speed to be 125
 MHz lower than the GPU speed. This is useful for some cards like the 6970 which
-normally don't allow a bigger clock speed difference.
+normally don't allow a bigger clock speed difference. The 6970 is known to only
+allow -125, while the 7970 only allows -150.
 
 
 CHANGING SETTINGS:
@@ -845,7 +850,9 @@ CPU core unnecessarily so downgrade to 11.6. Binding BFGMiner to one CPU core on
 windows can minimise it to 100% (instead of more than one core). Driver version
 11.11 on linux and 11.12 on windows appear to have fixed this issue. Note that
 later drivers may have an apparent return of high CPU usage. Try
-'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting BFGMiner.
+'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting BFGMiner. You can also
+set this variable in windows via a batch file or on the command line before
+starting BFGMiner with 'setx GPU_USE_SYNC_OBJECTS 1'
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get

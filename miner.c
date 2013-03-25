@@ -270,6 +270,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
+double current_diff;
 static char block_diff[8];
 uint64_t best_diff = 0;
 
@@ -3744,8 +3745,14 @@ bool stale_work(struct work *work, bool share)
 		}
 
 	if (pool->has_stratum && work->job_id) {
-		bool same_job = true;
+		bool same_job;
 
+		if (!pool->stratum_active || !pool->stratum_notify) {
+			applog(LOG_DEBUG, "Work stale due to stratum inactive");
+			return true;
+		}
+
+		same_job = true;
 		mutex_lock(&pool->pool_lock);
 		if (strcmp(work->job_id, pool->swork.job_id))
 			same_job = false;
@@ -4349,7 +4356,7 @@ void switch_pools(struct pool *selected)
 	{
 		pool->block_id = 0;
 		if (pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
-			applog(LOG_WARNING, "Switching to %s", pool->rpc_url);
+			applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
 		}
 	}
 
@@ -4508,12 +4515,15 @@ static int block_sort(struct block *blocka, struct block *blockb)
 static void set_blockdiff(const struct work *work)
 {
 	unsigned char target[32];
+	double diff;
 	uint64_t diff64;
 
 	real_block_target(target, work->data);
-	diff64 = target_diff(target);
+	diff = target_diff(target);
+	diff64 = diff;
 
 	suffix_string(diff64, block_diff, 0);
+	current_diff = diff;
 }
 
 static bool test_work_current(struct work *work)
@@ -6071,15 +6081,16 @@ static void *stratum_thread(void *userdata)
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (!sock_full(pool) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1)
+		if (!sock_full(pool) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
+			applog(LOG_DEBUG, "Stratum select timeout on pool %d", pool->pool_no);
 			s = NULL;
-		else
+		} else
 			s = recv_line(pool);
 		if (!s) {
 			if (!pool->has_stratum)
 				break;
 
-			applog(LOG_INFO, "Stratum connection to pool %d interrupted", pool->pool_no);
+			applog(LOG_NOTICE, "Stratum connection to pool %d interrupted", pool->pool_no);
 			pool->getfail_occasions++;
 			total_go++;
 

@@ -1197,16 +1197,22 @@ bool sock_full(struct pool *pool)
 	return (socket_full(pool, false));
 }
 
+static void clear_sockbuf(struct pool *pool)
+{
+	strcpy(pool->sockbuf, "");
+}
+
 static void clear_sock(struct pool *pool)
 {
 	ssize_t n;
 
 	mutex_lock(&pool->stratum_lock);
-	do
+	do {
 		n = recv(pool->sock, pool->sockbuf, RECVSIZE, 0);
-	while (n > 0);
+	} while (n > 0);
 	mutex_unlock(&pool->stratum_lock);
-	strcpy(pool->sockbuf, "");
+
+	clear_sockbuf(pool);
 }
 
 /* Make sure the pool sockbuf is large enough to cope with any coinbase size
@@ -1951,17 +1957,9 @@ out:
 	return ret;
 }
 
-bool restart_stratum(struct pool *pool)
-{
-	if (!initiate_stratum(pool))
-		return false;
-	if (!auth_stratum(pool))
-		return false;
-	return true;
-}
-
 void suspend_stratum(struct pool *pool)
 {
+	clear_sockbuf(pool);
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
@@ -1970,6 +1968,17 @@ void suspend_stratum(struct pool *pool)
 	pool->stratum_curl = NULL;
 	pool->sock = INVSOCK;
 	mutex_unlock(&pool->stratum_lock);
+}
+
+bool restart_stratum(struct pool *pool)
+{
+	if (pool->stratum_active)
+		suspend_stratum(pool);
+	if (!initiate_stratum(pool))
+		return false;
+	if (!auth_stratum(pool))
+		return false;
+	return true;
 }
 
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
