@@ -722,7 +722,7 @@ modminer_process_results(struct thr_info*thr)
 		dclk_errorCount(&state->dclk, ((double)immediate_bad_nonces) / (double)immediate_nonces);
 	dclk_preUpdate(&state->dclk);
 	if (!dclk_updateFreq(&state->dclk, modminer_dclk_change_clock, thr))
-		{}  // TODO: handle error
+		return -1;
 
 	return hashes;
 }
