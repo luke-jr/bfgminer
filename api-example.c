@@ -145,6 +145,7 @@
 static const char SEPARATOR = '|';
 static const char COMMA = ',';
 static const char EQ = '=';
+static int ONLY = 0;
 
 void display(char *buf)
 {
@@ -242,9 +243,12 @@ int callapi(char *command, char *host, short int port)
 			buf[p] = '\0';
 		}
 
-		printf("Reply was '%s'\n", buf);
-
-		display(buf);
+		if (ONLY)
+			printf("%s\n", buf);
+		else {
+			printf("Reply was '%s'\n", buf);
+			display(buf);
+		}
 	}
 
 	CLOSESOCKET(sock);
@@ -274,6 +278,7 @@ int main(int argc, char *argv[])
 	char *host = "127.0.0.1";
 	short int port = 4028;
 	char *ptr;
+	int i = 1;
 
 	if (argc > 1)
 		if (strcmp(argv[1], "-?") == 0
@@ -283,20 +288,26 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 
-	if (argc > 1) {
-		ptr = trim(argv[1]);
+	if (argc > 1)
+		if (strcmp(argv[1], "-o") == 0) {
+			ONLY = 1;
+			i = 2;
+		}
+
+	if (argc > i) {
+		ptr = trim(argv[i++]);
 		if (strlen(ptr) > 0)
 			command = ptr;
 	}
 
-	if (argc > 2) {
-		ptr = trim(argv[2]);
+	if (argc > i) {
+		ptr = trim(argv[i++]);
 		if (strlen(ptr) > 0)
 			host = ptr;
 	}
 
-	if (argc > 3) {
-		ptr = trim(argv[3]);
+	if (argc > i) {
+		ptr = trim(argv[i]);
 		if (strlen(ptr) > 0)
 			port = atoi(ptr);
 	}
