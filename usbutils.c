@@ -54,7 +54,7 @@
 
 #ifdef WIN32
 #define BFLSC_TIMEOUT_MS 500
-#define BITFORCE_TIMEOUT_MS 500
+#define BITFORCE_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 200
 #define AVALON_TIMEOUT_MS 500
 #else
@@ -750,6 +750,13 @@ static void cgusb_check_init()
 	}
 
 	mutex_unlock(&cgusb_lock);
+}
+
+const char *usb_cmdname(enum usb_cmds cmd)
+{
+	cgusb_check_init();
+
+	return usb_commands[cmd];
 }
 
 #ifndef WIN32
