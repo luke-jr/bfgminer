@@ -26,6 +26,13 @@ NOTE that if it does not fail at startup, the presence of hardware errors (HW)
 are a sure sign that you have set the parameters too high.
 
 
+DRIVERS AND OPENCL SDK
+
+The choice of driver version for your GPU is critical, as some are known to
+break scrypt mining entirely while others give poor hashrates. As for the
+OpenCL SDK installed, for AMD it must be version 2.6 or later.
+
+
 Step 1 on linux:
 export GPU_MAX_ALLOC_PERCENT=100
 If you do not do this, you may find it impossible to scrypt mine. You may find
