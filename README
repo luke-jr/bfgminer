@@ -160,8 +160,12 @@ Basic *nix build instructions:
 The easiest way to install the ATI AMD SPP sdk on linux is to actually put it
 into a system location. Then building will be simpler. Download the correct
 version for either 32 bit or 64 bit from here:
-	http://developer.amd.com/sdks/AMDAPPSDK/downloads/Pages/default.aspx
+	http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/
 
+The best version for Radeon 5xxx and 6xxx is v2.5, while 7xxx cards need
+v2.6 or later, 2.7 seems the best.
+
+For versions 2.4 or earlier you will need to manually install them:
 This will give you a file with a name like:
  AMD-APP-SDK-v2.4-lnx64.tgz (64-bit)
 or
