@@ -752,6 +752,13 @@ static void cgusb_check_init()
 	mutex_unlock(&cgusb_lock);
 }
 
+const char *usb_cmdname(enum usb_cmds cmd)
+{
+	cgusb_check_init();
+
+	return usb_commands[cmd];
+}
+
 #ifndef WIN32
 #include <errno.h>
 #include <unistd.h>
