@@ -8503,6 +8503,7 @@ retry:
 
 				if (altpool == pool && pool->has_stratum)
 					sleep(5);
+				pool = altpool;
 				goto retry;
 			}
 			pool->last_work_time = time(NULL);
