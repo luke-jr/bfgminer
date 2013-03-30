@@ -6794,6 +6794,7 @@ retry:
 
 				if (altpool == pool && pool->has_stratum)
 					sleep(5);
+				pool = altpool;
 				goto retry;
 			}
 			gen_stratum_work(pool, work);
