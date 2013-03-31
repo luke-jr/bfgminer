@@ -329,6 +329,44 @@ bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct 
 	return true;
 }
 
+static
+void do_notifier_select(struct thr_info *thr, struct timeval *tvp_timeout)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct timeval tv_now;
+	int maxfd;
+	fd_set rfds;
+	
+	gettimeofday(&tv_now, NULL);
+	FD_ZERO(&rfds);
+	FD_SET(thr->notifier[0], &rfds);
+	maxfd = thr->notifier[0];
+	FD_SET(thr->work_restart_notifier[0], &rfds);
+	set_maxfd(&maxfd, thr->work_restart_notifier[0]);
+	if (thr->mutex_request[1] != INVSOCK)
+	{
+		FD_SET(thr->mutex_request[0], &rfds);
+		set_maxfd(&maxfd, thr->mutex_request[0]);
+	}
+	if (select(maxfd + 1, &rfds, NULL, NULL, select_timeout(tvp_timeout, &tv_now)) < 0)
+		return;
+	if (thr->mutex_request[1] != INVSOCK && FD_ISSET(thr->mutex_request[0], &rfds))
+	{
+		// FIXME: This can only handle one request at a time!
+		pthread_mutex_t *mutexp = &cgpu->device_mutex;
+		notifier_read(thr->mutex_request);
+		mutex_lock(mutexp);
+		pthread_cond_signal(&cgpu->device_cond);
+		pthread_cond_wait(&cgpu->device_cond, mutexp);
+		mutex_unlock(mutexp);
+	}
+	if (FD_ISSET(thr->notifier[0], &rfds)) {
+		notifier_read(thr->notifier);
+	}
+	if (FD_ISSET(thr->work_restart_notifier[0], &rfds))
+		notifier_read(thr->work_restart_notifier);
+}
+
 void minerloop_async(struct thr_info *mythr)
 {
 	struct thr_info *thr = mythr;
@@ -337,8 +375,6 @@ void minerloop_async(struct thr_info *mythr)
 	struct timeval tv_now;
 	struct timeval tv_timeout;
 	struct cgpu_info *proc;
-	int maxfd;
-	fd_set rfds;
 	bool is_running, should_be_running;
 	
 	if (mythr->work_restart_notifier[1] == -1)
@@ -397,35 +433,7 @@ defer_events:
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
 		}
 		
-		mythr = thr;
-		gettimeofday(&tv_now, NULL);
-		FD_ZERO(&rfds);
-		FD_SET(mythr->notifier[0], &rfds);
-		maxfd = mythr->notifier[0];
-		FD_SET(mythr->work_restart_notifier[0], &rfds);
-		set_maxfd(&maxfd, mythr->work_restart_notifier[0]);
-		if (thr->mutex_request[1] != INVSOCK)
-		{
-			FD_SET(thr->mutex_request[0], &rfds);
-			set_maxfd(&maxfd, thr->mutex_request[0]);
-		}
-		if (select(maxfd + 1, &rfds, NULL, NULL, select_timeout(&tv_timeout, &tv_now)) < 0)
-			continue;
-		if (thr->mutex_request[1] != INVSOCK && FD_ISSET(thr->mutex_request[0], &rfds))
-		{
-			// FIXME: This can only handle one request at a time!
-			pthread_mutex_t *mutexp = &cgpu->device_mutex;
-			notifier_read(thr->mutex_request);
-			mutex_lock(mutexp);
-			pthread_cond_signal(&cgpu->device_cond);
-			pthread_cond_wait(&cgpu->device_cond, mutexp);
-			mutex_unlock(mutexp);
-		}
-		if (FD_ISSET(mythr->notifier[0], &rfds)) {
-			notifier_read(mythr->notifier);
-		}
-		if (FD_ISSET(mythr->work_restart_notifier[0], &rfds))
-			notifier_read(mythr->work_restart_notifier);
+		do_notifier_select(thr, &tv_timeout);
 	}
 }
 
