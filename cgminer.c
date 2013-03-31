@@ -5786,6 +5786,58 @@ struct work *get_queued(struct cgpu_info *cgpu)
 	return ret;
 }
 
+/* This function is for including work in the given que hashtable.
+ * The calling function must lock access to the que if it is required. */
+struct work *add_to_work_que(struct work *que, struct work *work)
+{
+	HASH_ADD_INT(que, id, work);
+	return que;
+}
+
+/* This function is for removing work from the given que hashtable.
+ * The calling function must lock access to the que if it is required. */
+struct work *del_from_work_que(struct work *que, struct work *work)
+{
+	HASH_DEL(que, work);
+	return que;
+}
+
+/* This function is for finding an already queued work item in the
+ * given que hashtable. Code using this function must be able
+ * to handle NULL as a return which implies there is no matching work.
+ * The calling function must lock access to the que if it is required.
+ * The common values for midstatelen, offset, datalen are 32, 64, 12 */
+struct work *find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	HASH_ITER(hh, que, work, tmp) {
+		if (work->queued &&
+		    memcmp(work->midstate, midstate, midstatelen) == 0 &&
+		    memcmp(work->data + offset, data, datalen) == 0) {
+			ret = work;
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/* This function is for finding an already queued work item in the
+ * device's queued_work hashtable. Code using this function must be able
+ * to handle NULL as a return which implies there is no matching work.
+ * The common values for midstatelen, offset, datalen are 32, 64, 12 */
+struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *ret;
+
+	rd_lock(&cgpu->qlock);
+	ret = find_work_bymidstate(cgpu->queued_work, midstate, midstatelen, data, offset, datalen);
+	rd_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)

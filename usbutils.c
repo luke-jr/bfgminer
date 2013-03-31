@@ -195,6 +195,8 @@ extern struct device_drv avalon_drv;
 
 #define STRBUFLEN 256
 static const char *BLANK = "";
+static const char *space = " ";
+static const char *nodatareturned = "no data returned ";
 
 // For device limits by driver
 static struct driver_count {
@@ -286,6 +288,12 @@ static const char *C_PURGETX_S = "PurgeTx";
 static const char *C_FLASHREPLY_S = "FlashReply";
 static const char *C_REQUESTDETAILS_S = "RequestDetails";
 static const char *C_GETDETAILS_S = "GetDetails";
+static const char *C_REQUESTRESULTS_S = "RequestResults";
+static const char *C_GETRESULTS_S = "GetResults";
+static const char *C_REQUESTQUEJOB_S = "RequestQueJob";
+static const char *C_REQUESTQUEJOBSTATUS_S = "RequestQueJobStatus";
+static const char *C_QUEJOB_S = "QueJob";
+static const char *C_QUEJOBSTATUS_S = "QueJobStatus";
 
 #ifdef EOL
 #undef EOL
@@ -745,6 +753,12 @@ static void cgusb_check_init()
 		usb_commands[C_FLASHREPLY] = C_FLASHREPLY_S;
 		usb_commands[C_REQUESTDETAILS] = C_REQUESTDETAILS_S;
 		usb_commands[C_GETDETAILS] = C_GETDETAILS_S;
+		usb_commands[C_REQUESTRESULTS] = C_REQUESTRESULTS_S;
+		usb_commands[C_GETRESULTS] = C_GETRESULTS_S;
+		usb_commands[C_REQUESTQUEJOB] = C_REQUESTQUEJOB_S;
+		usb_commands[C_REQUESTQUEJOBSTATUS] = C_REQUESTQUEJOBSTATUS_S;
+		usb_commands[C_QUEJOB] = C_QUEJOB_S;
+		usb_commands[C_QUEJOBSTATUS] = C_QUEJOBSTATUS_S;
 
 		stats_initialised = true;
 	}
@@ -757,6 +771,21 @@ const char *usb_cmdname(enum usb_cmds cmd)
 	cgusb_check_init();
 
 	return usb_commands[cmd];
+}
+
+void usb_applog(struct cgpu_info *cgpu, enum usb_cmds cmd, char *msg, int amount, int err)
+{
+	if (msg && !*msg)
+		msg = NULL;
+
+	if (!msg && amount == 0 && err == LIBUSB_SUCCESS)
+		msg = (char *)nodatareturned;
+
+        applog(LOG_ERR, "%s%i: %s failed%s%s (err=%d amt%d)",
+                        cgpu->drv->name, cgpu->device_id,
+                        usb_cmdname(cmd),
+                        msg ? space : BLANK, msg ? msg : BLANK,
+                        err, amount);
 }
 
 #ifndef WIN32

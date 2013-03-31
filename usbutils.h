@@ -125,6 +125,12 @@ enum usb_cmds {
 	C_FLASHREPLY,
 	C_REQUESTDETAILS,
 	C_GETDETAILS,
+	C_REQUESTRESULTS,
+	C_GETRESULTS,
+	C_REQUESTQUEJOB,
+	C_REQUESTQUEJOBSTATUS,
+	C_QUEJOB,
+	C_QUEJOBSTATUS,
 	C_MAX
 };
 
@@ -133,6 +139,7 @@ struct cgpu_info;
 
 void usb_all(int level);
 const char *usb_cmdname(enum usb_cmds cmd);
+void usb_applog(struct cgpu_info *bflsc, enum usb_cmds cmd, char *msg, int amount, int err);
 void usb_uninit(struct cgpu_info *cgpu);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
