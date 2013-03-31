@@ -122,10 +122,25 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 	}
 }
 
+static
+struct work *get_and_prepare_work(struct thr_info *thr)
+{
+	struct cgpu_info *proc = thr->cgpu;
+	const struct device_api *api = proc->api;
+	struct work *work;
+	
+	work = get_work(thr);
+	if (api->prepare_work && !api->prepare_work(thr, work)) {
+		applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!", proc->proc_repr);
+		proc->deven = DEV_RECOVER_ERR;
+		return NULL;
+	}
+	return work;
+}
+
 // Miner loop to manage a single processor (with possibly multiple threads per processor)
 void minerloop_scanhash(struct thr_info *mythr)
 {
-	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	const struct device_api *api = cgpu->api;
 	struct timeval tv_start, tv_end;
@@ -138,12 +153,9 @@ void minerloop_scanhash(struct thr_info *mythr)
 	while (1) {
 		mythr->work_restart = false;
 		request_work(mythr);
-		work = get_work(mythr);
-		if (api->prepare_work && !api->prepare_work(mythr, work)) {
-			applog(LOG_ERR, "work prepare failed, exiting "
-				"mining thread %d", thr_id);
+		work = get_and_prepare_work(mythr);
+		if (!work)
 			break;
-		}
 		gettimeofday(&(work->tv_work_start), NULL);
 		
 		do {
@@ -199,12 +211,9 @@ bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
 		// FIXME: Allow get_work to return NULL to retry on notification
 		if (mythr->next_work)
 			free_work(mythr->next_work);
-		mythr->next_work = get_work(mythr);
-		if (api->prepare_work && !api->prepare_work(mythr, mythr->next_work)) {
-			applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!", proc->proc_repr);
-			proc->deven = DEV_RECOVER_ERR;
+		mythr->next_work = get_and_prepare_work(mythr);
+		if (!mythr->next_work)
 			return false;
-		}
 		mythr->starting_next_work = true;
 		api->job_prepare(mythr, mythr->next_work, mythr->_max_nonce);
 	}
