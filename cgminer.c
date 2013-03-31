@@ -5823,7 +5823,6 @@ static void flush_queue(struct cgpu_info *cgpu)
  * directly. */
 void hash_queued_work(struct thr_info *mythr)
 {
-	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start = {0, 0}, tv_end;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_drv *drv = cgpu->drv;
@@ -5850,7 +5849,8 @@ void hash_queued_work(struct thr_info *mythr)
 		hashes_done += hashes;
 		gettimeofday(&tv_end, NULL);
 		timersub(&tv_end, &tv_start, &diff);
-		if (diff.tv_sec >= cycle) {
+		/* Update the hashmeter at most 5 times per second */
+		if (diff.tv_sec > 0 || diff.tv_usec > 200) {
 			hashmeter(thr_id, &diff, hashes_done);
 			hashes_done = 0;
 			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
