@@ -6991,6 +6991,24 @@ struct work *get_queued(struct cgpu_info *cgpu)
 	return ret;
 }
 
+struct work *find_work(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	rd_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (work->queued &&
+		    memcmp(work->midstate, midstate, midstatelen) == 0 &&
+		    memcmp(work->data + offset, data, datalen) == 0) {
+			ret = work;
+			break;
+		}
+	}
+	rd_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
