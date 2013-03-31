@@ -130,7 +130,10 @@ struct work *get_and_prepare_work(struct thr_info *thr)
 	struct work *work;
 	
 	work = get_work(thr);
+	if (!work)
+		return NULL;
 	if (api->prepare_work && !api->prepare_work(thr, work)) {
+		free_work(work);
 		applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!", proc->proc_repr);
 		proc->deven = DEV_RECOVER_ERR;
 		return NULL;
