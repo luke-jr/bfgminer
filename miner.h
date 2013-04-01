@@ -1196,6 +1196,10 @@ struct work {
 	
 	double		work_difficulty;
 
+	// Allow devices to identify work if multiple sub-devices
+	// DEPRECATED: New code should be using multiple processors instead
+	char		subid;
+
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;
 	unsigned int	dataid;
