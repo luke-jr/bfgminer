@@ -907,8 +907,8 @@ void bitforce_process_qresult_line(struct thr_info *thr, char *buf, struct work 
 static inline
 char *next_line(char *in)
 {
-	while (in[0] && in[0] != '\n')
-		++in;
+	while (in[0] && (in++)[0] != '\n')
+	{}
 	return in;
 }
 
