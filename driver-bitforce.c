@@ -712,7 +712,10 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			{
 				BFgets(pmorebuf, szleft, fdDev);
 				if (!strncasecmp(pmorebuf, "OK", 2))
+				{
+					pmorebuf[0] = '\0';  // process expects only results
 					break;
+				}
 				sz = strlen(pmorebuf);
 				szleft -= sz;
 				pmorebuf += sz;
