@@ -1144,6 +1144,11 @@ struct work {
 
 	double		work_difficulty;
 
+	// Allow devices to identify work if multiple sub-devices
+	int		subid;
+	// Allow devices to flag work for their own purposes
+	bool		devflag;
+
 	struct timeval	tv_getwork;
 	struct timeval	tv_getwork_reply;
 	struct timeval	tv_cloned;
