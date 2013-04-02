@@ -3321,7 +3321,7 @@ static void *submit_work_thread(void *userdata)
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
 
-		applog(LOG_INFO, "Submitting share %08lx to pool %d", hash32[6], pool->pool_no);
+		applog(LOG_INFO, "Submitting share %08lx to pool %d", htole32(hash32[6]), pool->pool_no);
 
 		/* Try resubmitting for up to 2 minutes if we fail to submit
 		 * once and the stratum pool nonce1 still matches suggesting
@@ -4742,7 +4742,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 	hash32 = (uint32_t *)(work->hash);
 	intdiff = floor(work->work_difficulty);
 	suffix_string(sharediff, diffdisp, 0);
-	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
+	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)htole32(hash32[6]), diffdisp, intdiff,
 		work->block? " BLOCK!" : "");
 	share_result(val, res_val, err_val, work, hashshow, false, "");
 }
