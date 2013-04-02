@@ -172,7 +172,7 @@ pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
-pthread_mutex_t ch_lock;
+cglock_t ch_lock;
 static pthread_rwlock_t blk_lock;
 static pthread_mutex_t sshare_lock;
 
@@ -219,8 +219,11 @@ const
 bool curses_active;
 
 static char current_block[40];
+
+/* Protected by ch_lock */
 static char *current_hash;
 char *current_fullhash;
+
 static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
@@ -1967,8 +1970,10 @@ static void curses_print_status(void)
 			pool->has_gbt ? "GBT" : "LP", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
+	cg_rlock(&ch_lock);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
 		  current_hash, block_diff, blocktime, best_share);
+	cg_runlock(&ch_lock);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -3416,27 +3421,20 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 {
 	unsigned char hash_swap[32];
 	unsigned char block_hash_swap[32];
-	char *old_hash;
 
 	strcpy(current_block, hexstr);
 	swap256(hash_swap, hash);
 	swap256(block_hash_swap, hash + 4);
 
-	/* Don't free current_hash directly to avoid dereferencing when read
-	 * elsewhere - and update block_timeval inside the same lock */
-	mutex_lock(&ch_lock);
+	cg_wlock(&ch_lock);
 	gettimeofday(&block_timeval, NULL);
-	old_hash = current_hash;
+	free(current_hash);
 	current_hash = bin2hex(hash_swap + 2, 8);
-	free(old_hash);
-	old_hash = current_fullhash;
+	free(current_fullhash);
 	current_fullhash = bin2hex(block_hash_swap, 32);
-	free(old_hash);
-	mutex_unlock(&ch_lock);
-
 	get_timestamp(blocktime, &block_timeval);
-
 	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
+	cg_wunlock(&ch_lock);
 }
 
 /* Search to see if this string is from a block that has been seen before */
@@ -6463,7 +6461,7 @@ int main(int argc, char *argv[])
 	cglock_init(&control_lock);
 	mutex_init(&stats_lock);
 	mutex_init(&sharelog_lock);
-	mutex_init(&ch_lock);
+	cglock_init(&ch_lock);
 	mutex_init(&sshare_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
