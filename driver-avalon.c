@@ -933,7 +933,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	avalon_free_work(thr, info->bulk0);
 
 	record_temp_fan(info, &ar, &(avalon->temp));
-	applog(LOG_WARNING,
+	applog(LOG_INFO,
 	       "Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
 	       "Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
 	       info->fan0, info->fan1, info->fan2,
