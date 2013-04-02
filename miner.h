@@ -119,9 +119,11 @@ static inline int fsync (int fd)
 #endif
 
 #if !defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
-#define bswap_16 __builtin_bswap16
-#define bswap_32 __builtin_bswap32
-#define bswap_64 __builtin_bswap64
+#ifndef bswap_16
+ #define bswap_16 __builtin_bswap16
+ #define bswap_32 __builtin_bswap32
+ #define bswap_64 __builtin_bswap64
+#endif
 #else
 #if HAVE_BYTESWAP_H
 #include <byteswap.h>
