@@ -200,8 +200,8 @@ out:
 #if CURL_HAS_KEEPALIVE
 static void keep_curlalive(CURL *curl)
 {
-	const int tcp_keepidle = 60;
-	const int tcp_keepintvl = 60;
+	const int tcp_keepidle = 45;
+	const int tcp_keepintvl = 30;
 	const long int keepalive = 1;
 
 	curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, keepalive);
@@ -216,10 +216,10 @@ static void keep_alive(CURL *curl, __maybe_unused SOCKETTYPE fd)
 #else
 static void keep_sockalive(SOCKETTYPE fd)
 {
-	const int tcp_keepidle = 60;
-	const int tcp_keepintvl = 60;
+	const int tcp_keepidle = 45;
+	const int tcp_keepintvl = 30;
 	const int keepalive = 1;
-	const int tcp_keepcnt = 5;
+	const int tcp_keepcnt = 1;
 
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
 # ifdef __linux
