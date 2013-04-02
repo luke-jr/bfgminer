@@ -4827,7 +4827,10 @@ retry_stratum:
 			return false;
 		if (!auth_stratum(pool))
 			return false;
-		pool->stratum_auth = true;
+		/* Only set stratum_auth once to prevent multiple threads
+		 * being started */
+		if (pool_tset(pool, &pool->stratum_auth))
+			return true;
 		pool->idle = false;
 		init_stratum_thread(pool);
 		return true;
