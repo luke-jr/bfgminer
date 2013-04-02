@@ -809,7 +809,7 @@ built:
 		clState->padbuffer8 = NULL;
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
 		if (status != CL_SUCCESS && !clState->padbuffer8) {
-			applog(LOG_ERR, "Error %d: clCreateBuffer (padbuffer8), decrease CT or increase LG", status);
+			applog(LOG_ERR, "Error %d: clCreateBuffer (padbuffer8), decrease TC or increase LG", status);
 			return NULL;
 		}
 
