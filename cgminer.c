@@ -4529,7 +4529,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 	hash32 = (uint32_t *)(work->hash);
 	intdiff = floor(work->work_difficulty);
 	suffix_string(sharediff, diffdisp, 0);
-	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)(hash32[6]), diffdisp, intdiff,
+	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)htole32(hash32[6]), diffdisp, intdiff,
 		work->block? " BLOCK!" : "");
 	share_result(val, res_val, err_val, work, hashshow, false, "");
 }
