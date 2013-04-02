@@ -733,8 +733,6 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		mutex_unlock(mutexp);
 
 		gettimeofday(&now, NULL);
-		if (!count)
-			goto noqr;
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
@@ -743,6 +741,8 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			goto out;
 		}
 
+		if (!count)
+			goto noqr;
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
@@ -756,6 +756,8 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		}
 
 noqr:
+		data->result_busy_polled = bitforce->wait_ms;
+		
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
 		timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
