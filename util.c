@@ -1383,11 +1383,11 @@ bool initiate_stratum(struct pool *pool)
 
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
-	if (!pool->stratum_curl) {
-		pool->stratum_curl = curl_easy_init();
-		if (unlikely(!pool->stratum_curl))
-			quit(1, "Failed to curl_easy_init in initiate_stratum");
-	}
+	/* Sacrifice any existing curl handles to avoid crashing on trying to
+	 * clean them up, losing the memory. */
+	pool->stratum_curl = curl_easy_init();
+	if (unlikely(!pool->stratum_curl))
+		quit(1, "Failed to curl_easy_init in initiate_stratum");
 	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
 
