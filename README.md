@@ -1032,13 +1032,17 @@ A: On Linux, if the `/dev/ttyUSB*` devices don't automatically appear, the only
 thing that needs to be done is to load the driver for them:
 
 BFL: `sudo modprobe ftdi_sio vendor=0x0403 product=0x6014`
+
 Icarus: `sudo modprobe pl2303 vendor=0x067b product=0x230`
+
 Lancelot: `sudo modprobe ftdi_sio vendor=0x0403 product=0x6001`
+
 Cairnsmore: `sudo modprobe ftdi_sio product=0x8350 vendor=0x0403`
 
 On windows you must install the pl2303 or ftdi driver required for the device:
 
 [pl2303](http://prolificusa.com/pl-2303hx-drivers/)
+
 [ftdi](http://www.ftdichip.com/Drivers/VCP.htm)
 
 **Q: On Linux I can see the `/dev/ttyUSB*` devices for my ICA/BFL/MMQ FPGA, but BFGMiner can't mine on them**
