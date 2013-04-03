@@ -449,6 +449,97 @@ defer_events:
 	}
 }
 
+static
+void do_queue_flush(struct thr_info *mythr)
+{
+	struct cgpu_info *proc = mythr->cgpu;
+	const struct device_api *api = proc->api;
+	
+	api->queue_flush(mythr);
+	if (mythr->next_work)
+	{
+		free_work(mythr->next_work);
+		mythr->next_work = NULL;
+	}
+}
+
+void minerloop_queue(struct thr_info *thr)
+{
+	struct thr_info *mythr;
+	struct cgpu_info *cgpu = thr->cgpu;
+	const struct device_api *api = cgpu->api;
+	struct timeval tv_now;
+	struct timeval tv_timeout;
+	struct cgpu_info *proc;
+	bool should_be_running;
+	struct work *work;
+	
+	if (thr->work_restart_notifier[1] == -1)
+		notifier_init(thr->work_restart_notifier);
+	
+	while (1) {
+		tv_timeout.tv_sec = -1;
+		gettimeofday(&tv_now, NULL);
+		for (proc = cgpu; proc; proc = proc->next_proc)
+		{
+			mythr = proc->thr[0];
+			
+			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
+redo:
+			if (should_be_running)
+			{
+				if (unlikely(!mythr->_last_sbr_state))
+				{
+					mt_disable_finish(mythr);
+					mythr->_last_sbr_state = should_be_running;
+				}
+				
+				if (unlikely(mythr->work_restart))
+				{
+					mythr->work_restart = false;
+					do_queue_flush(mythr);
+				}
+				
+				while (!mythr->queue_full)
+				{
+					if (mythr->next_work)
+					{
+						work = mythr->next_work;
+						mythr->next_work = NULL;
+					}
+					else
+					{
+						request_work(mythr);
+						// FIXME: Allow get_work to return NULL to retry on notification
+						work = get_and_prepare_work(mythr);
+					}
+					if (!work)
+						break;
+					if (!api->queue_append(mythr, work))
+						mythr->next_work = work;
+				}
+			}
+			else
+			if (unlikely(mythr->_last_sbr_state))
+			{
+				mythr->_last_sbr_state = should_be_running;
+				do_queue_flush(mythr);
+			}
+			
+			if (timer_passed(&mythr->tv_poll, &tv_now))
+				api->poll(mythr);
+			
+			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
+			if (should_be_running && !mythr->queue_full)
+				goto redo;
+			
+			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
+		}
+		
+		do_notifier_select(thr, &tv_timeout);
+	}
+}
+
 void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;

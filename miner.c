@@ -8357,6 +8357,7 @@ begin_bench:
 			thr->mutex_request[1] = INVSOCK;
 			thr->_job_transition_in_progress = true;
 			timerclear(&thr->tv_morework);
+			thr->_last_sbr_state = true;
 
 			thr->scanhash_working = true;
 			thr->hashes_done = 0;
