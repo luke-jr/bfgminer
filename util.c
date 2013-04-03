@@ -1274,6 +1274,19 @@ static bool send_version(struct pool *pool, json_t *val)
 	return true;
 }
 
+static bool show_message(struct pool *pool, json_t *val)
+{
+	char *msg;
+
+	if (!json_is_array(val))
+		return false;
+	msg = (char *)json_string_value(json_array_get(val, 0));
+	if (!msg)
+		return false;
+	applog(LOG_NOTICE, "Pool %d message: %s", pool->pool_no, msg);
+	return true;
+}
+
 bool parse_method(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
@@ -1334,6 +1347,11 @@ bool parse_method(struct pool *pool, char *s)
 	}
 
 	if (!strncasecmp(buf, "client.get_version", 18) && send_version(pool, val)) {
+		ret = true;
+		goto out;
+	}
+
+	if (!strncasecmp(buf, "client.show_message", 19) && show_message(pool, params)) {
 		ret = true;
 		goto out;
 	}
