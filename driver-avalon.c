@@ -335,7 +335,7 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 	}
 
 	if (i != 11) {
-		applog(LOG_ERR, "Avalon: Reset failed! not a Avalon?"
+		applog(LOG_ERR, "Avalon: Reset failed! not an Avalon?"
 		       " (%d: %02x %02x %02x %02x)",
 		       i, buf[0], buf[1], buf[2], buf[3]);
 		/* FIXME: return 1; */
