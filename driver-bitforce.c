@@ -679,7 +679,10 @@ int bitforce_zox(struct thr_info *thr, const char *cmd)
 		{
 			BFgets(pmorebuf, szleft, fd);
 			if (!strncasecmp(pmorebuf, "OK", 2))
+			{
+				pmorebuf[0] = '\0';  // process expects only results
 				break;
+			}
 			sz = strlen(pmorebuf);
 			szleft -= sz;
 			pmorebuf += sz;
@@ -710,6 +713,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	struct timeval now;
 	char *pdevbuf = &data->noncebuf[0];
 	bool stale;
+	int count;
 
 	gettimeofday(&now, NULL);
 	timersub(&now, &bitforce->work_start_tv, &elapsed);
@@ -737,12 +741,9 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 
 	while (1) {
 		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
-		int count;
 		count = bitforce_zox(thr, cmd);
 
 		gettimeofday(&now, NULL);
-		if (!count)
-			goto noqr;
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
@@ -751,12 +752,8 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			goto out;
 		}
 
-		if (count > 0)
-		{
-			applog(LOG_DEBUG, "%"PRIpreprv": waited %dms until %s", bitforce->proc_repr, bitforce->wait_ms, pdevbuf);
-			goto out;
-		}
-
+		if (!count)
+			goto noqr;
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
 			break;
 
@@ -770,12 +767,21 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		}
 
 noqr:
+		data->result_busy_polled = bitforce->wait_ms;
+		
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (pdevbuf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
 		timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
 		data->poll_func = 2;
 		return;
 	}
+
+	if (count < 0 && pdevbuf[0] == 'N')
+		count = strncasecmp(pdevbuf, "NONCE-FOUND", 11) ? 1 : 0;
+	// At this point, 'count' is:
+	//   negative, in case of some kind of error
+	//   zero, if NO-NONCE (FPGA either completed with no results, or rebooted)
+	//   positive, if at least one job completed successfully
 
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
 		applog(LOG_ERR, "%"PRIpreprv": took %lums - longer than %lums", bitforce->proc_repr,
@@ -788,9 +794,9 @@ noqr:
 		 * are no results. But check first, just in case we're wrong about it
 		 * throttling.
 		 */
-		if (strncasecmp(pdevbuf, "NONCE-FOUND", 11))
+		if (count > 0)
 			goto out;
-	} else if (!strncasecmp(pdevbuf, "N", 1)) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
+	} else if (count >= 0) {/* Hashing complete (NONCE-FOUND or NO-NONCE) */
 		/* Simple timing adjustment. Allow a few polls to cope with
 		 * OS timer delays being variably reliable. wait_ms will
 		 * always equal sleep_ms when we've waited greater than or
@@ -837,7 +843,7 @@ noqr:
 	}
 
 	applog(LOG_DEBUG, "%"PRIpreprv": waited %dms until %s", bitforce->proc_repr, bitforce->wait_ms, pdevbuf);
-	if (strncasecmp(pdevbuf, "NONCE-FOUND", 11) && (pdevbuf[2] != '-') && strncasecmp(pdevbuf, "I", 1)) {
+	if (count < 0 && strncasecmp(pdevbuf, "I", 1)) {
 		bitforce->hw_errors++;
 		++hw_errors;
 		applog(LOG_WARNING, "%"PRIpreprv": Error: Get result reports: %s", bitforce->proc_repr, pdevbuf);
@@ -918,8 +924,8 @@ void bitforce_process_qresult_line(struct thr_info *thr, char *buf, struct work 
 static inline
 char *next_line(char *in)
 {
-	while (in[0] && in[0] != '\n')
-		++in;
+	while (in[0] && (in++)[0] != '\n')
+	{}
 	return in;
 }
 
