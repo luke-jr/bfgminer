@@ -327,6 +327,8 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 	avalon_get_result(fd, ar, NULL, NULL);
 
 	buf = (uint8_t *)ar;
+	if (buf[0] == 0)
+		buf = (uint8_t  *)(ar + 1);
 	if (buf[0] == 0xAA && buf[1] == 0x55 &&
 	    buf[2] == 0xAA && buf[3] == 0x55) {
 		for (i = 4; i < 11; i++)
@@ -334,18 +336,17 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 				break;
 	}
 
+	p.tv_sec = 0;
+	p.tv_nsec = AVALON_RESET_PITCH;
+	nanosleep(&p, NULL);
+
 	if (i != 11) {
 		applog(LOG_ERR, "Avalon: Reset failed! not an Avalon?"
 		       " (%d: %02x %02x %02x %02x)",
 		       i, buf[0], buf[1], buf[2], buf[3]);
 		/* FIXME: return 1; */
-	}
-
-	p.tv_sec = 0;
-	p.tv_nsec = AVALON_RESET_PITCH;
-	nanosleep(&p, NULL);
-
-	applog(LOG_WARNING, "Avalon: Reset succeeded");
+	} else
+		applog(LOG_WARNING, "Avalon: Reset succeeded");
 	return 0;
 }
 
@@ -523,6 +524,7 @@ static bool avalon_detect_one(const char *devpath)
 	struct avalon_result ar;
 	int fd, ret;
 	int baud, miner_count, asic_count, timeout, frequency = 0;
+	struct cgpu_info *avalon;
 
 	int this_option_offset = ++option_offset;
 	get_options(this_option_offset, &baud, &miner_count, &asic_count,
@@ -538,22 +540,21 @@ static bool avalon_detect_one(const char *devpath)
 		return false;
 	}
 
-	ret = avalon_reset(fd, &ar);
-
-	if (ret) {
-		; /* FIXME: I think IT IS avalon and wait on reset;
-		   * avalon_close(fd);
-		   * return false; */
-	}
-
 	/* We have a real Avalon! */
-	struct cgpu_info *avalon;
 	avalon = calloc(1, sizeof(struct cgpu_info));
 	avalon->api = &avalon_api;
 	avalon->device_path = strdup(devpath);
 	avalon->device_fd = fd;
 	avalon->threads = AVALON_MINER_THREADS;
 	add_cgpu(avalon);
+
+	ret = avalon_reset(fd, &ar);
+	if (ret) {
+		; /* FIXME: I think IT IS avalon and wait on reset;
+		   * avalon_close(fd);
+		   * return false; */
+	}
+	
 	avalon_info = realloc(avalon_info,
 			      sizeof(struct avalon_info *) *
 			      (total_devices + 1));
@@ -589,17 +590,25 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_old = 0;
 	info->frequency = frequency;
 
-	/* Set asic to idle mode after detect */
-	avalon_idle(avalon);
-	avalon->device_fd = -1;
+	/* Do something for failed reset ? */
+	if (0) {
+		/* Set asic to idle mode after detect */
+		avalon_idle(avalon);
+		avalon->device_fd = -1;
 
-	avalon_close(fd);
+		avalon_close(fd);
+	}
 	return true;
 }
 
 static inline void avalon_detect()
 {
 	serial_detect(&avalon_api, avalon_detect_one);
+}
+
+static void __avalon_init(struct cgpu_info *avalon)
+{
+	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
 }
 
 static void avalon_init(struct cgpu_info *avalon)
@@ -622,10 +631,9 @@ static void avalon_init(struct cgpu_info *avalon)
 		return;
 	}
 
+	avalon->status = LIFE_INIT;
 	avalon->device_fd = fd;
-	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
-
-	return;
+	__avalon_init(avalon);
 }
 
 static bool avalon_prepare(struct thr_info *thr)
@@ -633,9 +641,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	struct timeval now;
 
-	avalon_init(avalon);
-	if (avalon->device_fd == -1)
-		return false;
+	__avalon_init(avalon);
 
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
