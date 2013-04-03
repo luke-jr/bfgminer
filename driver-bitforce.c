@@ -654,11 +654,56 @@ commerr:
 static char _discardedbuf[0x10];
 
 static
-void bitforce_job_get_results(struct thr_info *thr, struct work *work)
+int bitforce_zox(struct thr_info *thr, const char *cmd)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fd = bitforce->device->device_fd;
+	char *pdevbuf = &data->noncebuf[0];
+	int count;
+	
+	mutex_lock(mutexp);
+	bitforce_cmd1(fd, data->xlink_id, pdevbuf, sizeof(data->noncebuf), cmd);
+	if (!strncasecmp(pdevbuf, "COUNT:", 6))
+	{
+		count = atoi(&pdevbuf[6]);
+		size_t cls = strlen(pdevbuf);
+		char *pmorebuf = &pdevbuf[cls];
+		size_t szleft = sizeof(data->noncebuf) - cls, sz;
+		
+		if (count && data->queued)
+			gettimeofday(&bitforce->work_start_tv, NULL);
+		
+		while (true)
+		{
+			BFgets(pmorebuf, szleft, fd);
+			if (!strncasecmp(pmorebuf, "OK", 2))
+				break;
+			sz = strlen(pmorebuf);
+			szleft -= sz;
+			pmorebuf += sz;
+			if (unlikely(!szleft))
+			{
+				// Out of buffer space somehow :(
+				applog(LOG_DEBUG, "%"PRIpreprv": Ran out of buffer space for results, discarding extra data", bitforce->proc_repr);
+				pmorebuf = _discardedbuf;
+				szleft = sizeof(_discardedbuf);
+			}
+		}
+	}
+	else
+		count = -1;
+	mutex_unlock(mutexp);
+	
+	return count;
+}
+
+static
+void bitforce_job_get_results(struct thr_info *thr, struct work *work)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
 	int fdDev = bitforce->device->device_fd;
 	unsigned int delay_time_ms;
 	struct timeval elapsed;
@@ -693,41 +738,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	while (1) {
 		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
 		int count;
-		mutex_lock(mutexp);
-		bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(data->noncebuf), cmd);
-		if (!strncasecmp(pdevbuf, "COUNT:", 6))
-		{
-			count = atoi(&pdevbuf[6]);
-			size_t cls = strlen(pdevbuf);
-			char *pmorebuf = &pdevbuf[cls];
-			size_t szleft = sizeof(data->noncebuf) - cls, sz;
-			
-			if (count && data->queued)
-			{
-				gettimeofday(&now, NULL);
-				bitforce->work_start_tv = now;
-			}
-			
-			while (true)
-			{
-				BFgets(pmorebuf, szleft, fdDev);
-				if (!strncasecmp(pmorebuf, "OK", 2))
-					break;
-				sz = strlen(pmorebuf);
-				szleft -= sz;
-				pmorebuf += sz;
-				if (unlikely(!szleft))
-				{
-					// Out of buffer space somehow :(
-					applog(LOG_DEBUG, "%"PRIpreprv": Ran out of buffer space for results, discarding extra data", bitforce->proc_repr);
-					pmorebuf = _discardedbuf;
-					szleft = sizeof(_discardedbuf);
-				}
-			}
-		}
-		else
-			count = -1;
-		mutex_unlock(mutexp);
+		count = bitforce_zox(thr, cmd);
 
 		gettimeofday(&now, NULL);
 		if (!count)
