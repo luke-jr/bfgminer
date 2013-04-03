@@ -5363,7 +5363,7 @@ void *miner_thread(void *userdata)
 	struct work **work = calloc(1,
 				    avalon_get_work_count * sizeof(struct work *));
 	if (!work)
-		quit(1, "Faile on Avalon calloc");
+		quit(1, "Failed on Avalon calloc");
 #else
 	struct work *work;
 #endif
