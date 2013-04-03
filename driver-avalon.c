@@ -867,29 +867,31 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		result_count++;
 
 		work_i0 = avalon_decode_nonce(thr, info->bulk0, &ar, &nonce);
-		work_i1 = avalon_decode_nonce(thr, info->bulk1, &ar, &nonce);
-		work_i2 = avalon_decode_nonce(thr, info->bulk2, &ar, &nonce);
-		work_i3 = avalon_decode_nonce(thr, info->bulk3, &ar, &nonce);
-		if ((work_i0 < 0) && (work_i1 < 0) && (work_i2 < 0) && (work_i3 < 0)) {
-			info->no_matching_work++;
-			result_wrong++;
+		if (work_i0 < 0) {
+			work_i1 = avalon_decode_nonce(thr, info->bulk1, &ar, &nonce);
+			if (work_i1 < 0) {
+				work_i2 = avalon_decode_nonce(thr, info->bulk2, &ar, &nonce);
+				if (work_i2 < 0) {
+					work_i3 = avalon_decode_nonce(thr, info->bulk3, &ar, &nonce);
+					if (work_i3 < 0) {
+						info->no_matching_work++;
+						result_wrong++;
 
-			if (opt_debug) {
-				timersub(&tv_finish, &tv_start, &elapsed);
-				applog(LOG_DEBUG,"Avalon: no matching work: %d"
-				       " (%ld.%06lds)", info->no_matching_work,
-				       elapsed.tv_sec, elapsed.tv_usec);
-			}
-			continue;
-		}
-		if (work_i0 >= 0)
+						if (opt_debug) {
+							timersub(&tv_finish, &tv_start, &elapsed);
+							applog(LOG_DEBUG,"Avalon: no matching work: %d"
+							" (%ld.%06lds)", info->no_matching_work,
+							elapsed.tv_sec, elapsed.tv_usec);
+						}
+						continue;
+					} else
+						submit_nonce(thr, info->bulk3[work_i3], nonce);
+				} else
+					submit_nonce(thr, info->bulk2[work_i2], nonce);
+			} else
+				submit_nonce(thr, info->bulk1[work_i1], nonce);
+		} else
 			submit_nonce(thr, info->bulk0[work_i0], nonce);
-		if (work_i1 >= 0)
-			submit_nonce(thr, info->bulk1[work_i1], nonce);
-		if (work_i2 >= 0)
-			submit_nonce(thr, info->bulk2[work_i2], nonce);
-		if (work_i3 >= 0)
-			submit_nonce(thr, info->bulk3[work_i3], nonce);
 
 		hash_count += nonce;
 		if (opt_debug) {
