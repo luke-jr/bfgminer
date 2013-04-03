@@ -192,14 +192,23 @@ fi
 CFLAGS="${save_CFLAGS}"
 LIBS="${save_LIBS}"
 
-AC_CHECK_LIB(jansson, json_loads, [
-	JANSSON_LIBS=-ljansson
+PKG_CHECK_MODULES([JANSSON],[jansson],[
+	true
 ],[
-	PKG_CHECK_MODULES([JANSSON],[jansson],[
-		true
+	AC_MSG_CHECKING([for jansson in system-default locations])
+	LIBS="$LIBS -ljansson"
+	AC_TRY_LINK([
+		#include <jansson.h>
 	],[
+		json_object();
+	],[
+		AC_MSG_RESULT([found])
+		JANSSON_LIBS=-ljansson
+	],[
+		AC_MSG_RESULT([not found])
 		AC_MSG_ERROR([Could not find jansson library])
 	])
+	LIBS="${save_LIBS}"
 ])
 AC_SUBST(JANSSON_CFLAGS)
 AC_SUBST(JANSSON_LIBS)
