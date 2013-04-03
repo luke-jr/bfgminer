@@ -1,4 +1,4 @@
-This is a multi-threaded multi-pool GPU, FPGA and CPU miner with ATI GPU
+This is a multi-threaded multi-pool GPU, FPGA and ASIC miner with ATI GPU
 monitoring, (over)clocking and fanspeed support for bitcoin and derivative
 coins. Do not use on multiple block chains at the same time!
 
@@ -118,9 +118,6 @@ Dependencies:
 	jansson			http://www.digip.org/jansson/
 	(jansson is included in-tree and not necessary)
 
-	yasm 1.0.1+ http://yasm.tortall.net/
-	(yasm is optional, gives assembly routines for CPU mining)
-
 	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
 	(This sdk is mandatory for GPU mining)
 
@@ -135,7 +132,6 @@ Dependencies:
 
 
 CGMiner specific configuration options:
-	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-opencl        Override detection and disable building with opencl
 	--disable-adl           Override detection and disable building with adl
 	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
@@ -373,20 +369,6 @@ This option not longer matters since Icarus is the only serial-USB
 device that uses it
 
 For other FPGA details see the FPGA-README
-
-
-CPU only options (deprecated, not included in binaries!):
-
---algo|-a <arg>     Specify sha256 implementation for CPU mining:
-        auto            Benchmark at startup and pick fastest algorithm
-        c               Linux kernel sha256, implemented in C
-        4way            tcatm's 4-way SSE2 implementation
-        via             VIA padlock implementation
-        cryptopp        Crypto++ C/C++ implementation
-        sse2_64         SSE2 64 bit implementation for x86_64 machines
-        sse4_64         SSE4.1 64 bit implementation for x86_64 machines (default: sse2_64)
---cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
---enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if other devices exist)
 
 
 ---
