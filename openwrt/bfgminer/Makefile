@@ -64,9 +64,12 @@ TARGET_CFLAGS += -std=gnu99
 
 CONFIGURE_ARGS += --without-libudev
 
-# Need to remake configure etc to pick up on cross-compiler libtool
-CONFIGURE_VARS += NOSUBMODULES=1
-CONFIGURE_CMD = ./autogen.sh
+define Build/Configure
+	# Need to remake configure etc to pick up on cross-compiler libtool
+	( cd $(PKG_BUILD_DIR); NOSUBMODULES=1 ./autogen.sh; )
+	
+	$(call Build/Configure/Default)
+endef
 
 define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/bin $(1)/usr/lib

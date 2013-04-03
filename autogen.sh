@@ -16,8 +16,3 @@ echo 'Running autoreconf -if...'
 	rm -f aclocal.m4 ltmain.sh
 	autoreconf -if
 )
-
-if test -z "$NOCONFIGURE" ; then
-	echo 'Configuring...'
-	"${bs_dir}"/configure "$@"
-fi
