@@ -631,7 +631,6 @@ static void avalon_init(struct cgpu_info *avalon)
 		return;
 	}
 
-	avalon->status = LIFE_INIT;
 	avalon->device_fd = fd;
 	__avalon_init(avalon);
 }
