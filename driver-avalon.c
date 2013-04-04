@@ -221,13 +221,13 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 			ret = read(fd, buf, read_amount);
 			if (unlikely(ret < 0))
 				return AVA_GETS_ERROR;
-			if (ret >= read_amount)
-				return AVA_GETS_OK;
 			if (first) {
 				if (tv_finish)
 					gettimeofday(tv_finish, NULL);
 				first = false;
 			}
+			if (ret >= read_amount)
+				return AVA_GETS_OK;
 			buf += ret;
 			read_amount -= ret;
 			continue;
