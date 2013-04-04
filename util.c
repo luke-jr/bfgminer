@@ -1510,7 +1510,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	pool->swork.diff = diff;
 	mutex_unlock(&pool->pool_lock);
 
-	applog(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no, diff);
+	applog(LOG_DEBUG, "Pool %d stratum bdifficulty set to %f", pool->pool_no, diff);
 
 	return true;
 }
