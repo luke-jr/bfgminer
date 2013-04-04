@@ -23,9 +23,9 @@
  *   You should have received a copy of the GNU General Public License
  *   along with this program; if not, see http://www.gnu.org/licenses/.
 **/
+#include "miner.h"
 #include <unistd.h>
 #include <sha2.h>
-#include "miner.h"
 #include "libztex.h"
 
 #define GOLDEN_BACKLOG 5

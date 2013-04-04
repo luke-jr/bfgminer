@@ -19,7 +19,7 @@ INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES)
 
 bin_PROGRAMS	= cgminer
 
-bin_SCRIPTS	= *.cl
+bin_SCRIPTS	= $(top_srcdir)/*.cl
 
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
@@ -27,11 +27,7 @@ cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @UDEV_LIBS@ @LIBUSB_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 
-if HAVE_WINDOWS
-cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@ @LIBUSB_CFLAGS@
-else
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@ @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
-endif
 
 # common sources
 cgminer_SOURCES := cgminer.c
@@ -101,11 +97,11 @@ endif
 if HAS_MODMINER
 cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif
 
 if HAS_ZTEX
 cgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif

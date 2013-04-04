@@ -19,11 +19,11 @@ BITS 32
 
 %define LAB_LOOP_UNROLL 64
 
-extern sha256_consts_m128i
+extern _sha256_consts_m128i
 
-global CalcSha256_x86
+global $@CalcSha256_x86@12
 ;	CalcSha256	hash(ecx), data(edx), init([esp+4])
-CalcSha256_x86:
+@CalcSha256_x86@12:
 	push	esi
 	push	edi
 	mov	init, [esp+12]
@@ -134,7 +134,7 @@ LAB_LOOP:
 
 %macro	lab_loop_blk 1
 	movdqa	xmm6, [data+%1]
-	paddd	xmm6, sha256_consts_m128i[%1]
+	paddd	xmm6, _sha256_consts_m128i[%1]
 
 	paddd	xmm6, [hash+2*16]		; +h
 

@@ -5,4 +5,4 @@ SUFFIXES = .asm
 libx8664_a_SOURCES	= sha256_xmm_amd64.asm sha256_sse4_amd64.asm
 
 .asm.o:
-	$(YASM) -f elf64 $<
+	$(YASM) -f $(YASM_FMT) -o $@ $<

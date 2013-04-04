@@ -30,6 +30,7 @@
  */
 
 #include "config.h"
+#include "miner.h"
 
 #include <limits.h>
 #include <pthread.h>
@@ -51,7 +52,6 @@
 #endif
 
 #include "elist.h"
-#include "miner.h"
 #include "fpgautils.h"
 
 // The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h

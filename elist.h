@@ -180,8 +180,13 @@ static inline void list_splice_init(struct list_head *list,
  * @type:	the type of the struct this is embedded in.
  * @member:	the name of the list_struct within the struct.
  */
+#ifndef _WIN64
 #define list_entry(ptr, type, member) \
 	((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
+#else
+#define list_entry(ptr, type, member) \
+	((type *)((char *)(ptr)-(unsigned long long)(&((type *)0)->member)))
+#endif
 
 /**
  * list_for_each	-	iterate over a list

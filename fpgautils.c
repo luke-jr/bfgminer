@@ -14,6 +14,8 @@
 #include <dirent.h>
 #include <string.h>
 
+#include "miner.h"
+
 #ifndef WIN32
 #include <errno.h>
 #include <termios.h>
@@ -34,7 +36,6 @@
 
 #include "elist.h"
 #include "logging.h"
-#include "miner.h"
 #include "fpgautils.h"
 
 #ifdef HAVE_LIBUDEV
@@ -356,7 +357,7 @@ int serial_open(const char *devpath, unsigned long baud, signed short timeout, b
 		PurgeComm(hSerial, PURGE_TXCLEAR);
 	}
 
-	return _open_osfhandle((LONG)hSerial, 0);
+	return _open_osfhandle((intptr_t)hSerial, 0);
 #else
 	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
 

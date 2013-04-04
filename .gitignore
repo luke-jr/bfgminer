@@ -41,3 +41,5 @@ lib/string.h
 lib/warn-on-use.h
 
 mkinstalldirs
+
+*.swp

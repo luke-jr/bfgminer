@@ -202,7 +202,9 @@ static const sha256_func sha256_funcs[] = {
 
 
 #ifdef WANT_CPUMINE
-#if defined(WANT_X8664_SSE2) && defined(__SSE2__)
+#if defined(WANT_X8664_SSE4) && defined(__SSE4_1__)
+enum sha256_algos opt_algo = ALGO_SSE4_64;
+#elif defined(WANT_X8664_SSE2) && defined(__SSE2__)
 enum sha256_algos opt_algo = ALGO_SSE2_64;
 #elif defined(WANT_X8632_SSE2) && defined(__SSE2__)
 enum sha256_algos opt_algo = ALGO_SSE2_32;
@@ -720,8 +722,8 @@ static void cpu_detect()
 	// Reckon number of cores in the box
 	#if defined(WIN32)
 	{
-		DWORD system_am;
-		DWORD process_am;
+		DWORD_PTR system_am;
+		DWORD_PTR process_am;
 		BOOL ok = GetProcessAffinityMask(
 			GetCurrentProcess(),
 			&system_am,
