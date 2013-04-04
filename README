@@ -908,12 +908,18 @@ binaries will be built. It is known that the 2.6 ATI SDK has a huge hashrate
 penalty on generating new binaries. It is recommended to not use this SDK at
 this time unless you are using an ATI 7xxx card that needs it.
 
-Q: Which ATI SDK is the best for cgminer?
+Q: Which AMD SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best for R5xxx and R6xxx GPUS.
 SDK 2.6 or 2.7 works best for R7xxx. SDK 2.8 is known to have many problems.
 If you are need to use the 2.6+ SDK or R7xxx or later, the phatk kernel will
 perform poorly, while the diablo or my custom modified poclbm kernel are
 optimised for it.
+
+Q: Which AMD driver is the best?
+A: Unfortunately AMD has a history of having quite a few releases with issues
+when it comes to mining, either in terms of breaking mining, increasing CPU
+usage or very low hashrates. Only experimentation can tell you for sure, but
+some good releases were 11.6, 11.12, 12.4 and 12.8
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
 A: Run cgminer with the -n option and it will list all the platforms currently
