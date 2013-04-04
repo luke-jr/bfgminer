@@ -1522,8 +1522,11 @@ bool initiate_stratum(struct pool *pool)
 		applog(LOG_INFO, "Failed to get nonce1 in initiate_stratum");
 		goto out;
 	}
+
+	cg_wlock(&pool->data_lock);
 	pool->n1_len = strlen(pool->nonce1) / 2;
 	pool->n2size = json_integer_value(json_array_get(res_val, 2));
+	cg_wunlock(&pool->data_lock);
 	if (!pool->n2size) {
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
 		goto out;
