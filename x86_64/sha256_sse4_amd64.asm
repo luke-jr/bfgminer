@@ -13,9 +13,17 @@
 ALIGN 32
 BITS 64
 
+%ifidn __OUTPUT_FORMAT__,win64
+%define hash rcx
+%define data rdx
+%define init r8
+%define temp r9
+%else
 %define hash rdi
 %define data rsi
 %define init rdx
+%define temp rcx
+%endif
 
 ; 0 = (1024 - 256) (mod (LAB_CALC_UNROLL*LAB_CALC_PARA*16))
 %define LAB_CALC_PARA	2
@@ -27,18 +35,28 @@ extern g_4sha256_k
 
 global CalcSha256_x64_sse4
 ;	CalcSha256	hash(rdi), data(rsi), init(rdx)
+;	CalcSha256	hash(rcx), data(rdx), init(r8)
 CalcSha256_x64_sse4:
 
 	push	rbx
+%ifidn __OUTPUT_FORMAT__,win64
+	sub	rsp, 16 * 6
+	movdqa	[rsp + 16*0], xmm6
+	movdqa	[rsp + 16*1], xmm7
+	movdqa	[rsp + 16*2], xmm8
+	movdqa	[rsp + 16*3], xmm9
+	movdqa	[rsp + 16*4], xmm10
+	movdqa	[rsp + 16*5], xmm11
+%endif
 
 LAB_NEXT_NONCE:
 
-	mov	rcx, 64*4					; 256 - rcx is # of SHA-2 rounds
+	mov	temp, 64*4					; 256 - temp is # of SHA-2 rounds
 	mov	rax, 16*4					; 64 - rax is where we expand to
 
 LAB_SHA:
-	push	rcx
-	lea	rcx, qword [data+rcx*4]				; + 1024
+	push	temp
+	lea	temp, qword [data+temp*4]			; + 1024
 	lea	r11, qword [data+rax*4]				; + 256
 
 LAB_CALC:
@@ -122,10 +140,10 @@ LAB_CALC:
 %endrep
 
 	add	r11, LAB_CALC_UNROLL*LAB_CALC_PARA*16
-	cmp	r11, rcx
+	cmp	r11, temp
 	jb	LAB_CALC
 
-	pop	rcx
+	pop	temp
 	mov	rax, 0
 
 ; Load the init values of the message into the hash.
@@ -219,12 +237,12 @@ LAB_LOOP:
 %assign i i+1
 %endrep
 
-	cmp	rax, rcx
+	cmp	rax, temp
 	jb	LAB_LOOP
 
 ; Finished the 64 rounds, calculate hash and save
 
-	movntdqa	xmm1, [rdx]
+	movntdqa	xmm1, [init]
 	pshufd	xmm2, xmm1, 0x55
 	paddd	xmm5, xmm2
 	pshufd	xmm6, xmm1, 0xAA
@@ -234,7 +252,7 @@ LAB_LOOP:
 	pshufd	xmm1, xmm1, 0
 	paddd	xmm7, xmm1
 
-	movntdqa	xmm1, [rdx+4*4]
+	movntdqa	xmm1, [init+4*4]
 	pshufd	xmm2, xmm1, 0x55
 	paddd	xmm8, xmm2
 	pshufd	xmm6, xmm1, 0xAA
@@ -254,6 +272,15 @@ LAB_LOOP:
 	movdqa	[hash+7*16], xmm10
 
 LAB_RET:
+%ifidn __OUTPUT_FORMAT__,win64
+	movdqa	xmm6, [rsp + 16*0]
+	movdqa	xmm7, [rsp + 16*1]
+	movdqa	xmm8, [rsp + 16*2]
+	movdqa	xmm9, [rsp + 16*3]
+	movdqa	xmm10, [rsp + 16*4]
+	movdqa	xmm11, [rsp + 16*5]
+	add	rsp, 16 * 6
+%endif
 	pop	rbx
 	ret
 

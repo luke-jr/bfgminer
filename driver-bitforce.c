@@ -9,6 +9,8 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
 #include <limits.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -17,15 +19,13 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "config.h"
+#include "compat.h"
+#include "miner.h"
+#include "usbutils.h"
 
 #ifdef WIN32
 #include <windows.h>
 #endif /* WIN32 */
-
-#include "compat.h"
-#include "miner.h"
-#include "usbutils.h"
 
 #define BITFORCE_IDENTIFY "ZGX"
 #define BITFORCE_IDENTIFY_LEN (sizeof(BITFORCE_IDENTIFY)-1)

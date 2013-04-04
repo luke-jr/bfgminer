@@ -81,7 +81,6 @@ esac
 
 case $target in
   *-*-mingw*)
-    have_x86_64=false
     have_win32=true
     PTHREAD_FLAGS=""
     DLOPEN_FLAGS=""
@@ -166,9 +165,18 @@ else
 	OPENCL_LIBS=""
 fi
 
-AC_CHECK_LIB(pthread, pthread_create, ,
-        AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
-PTHREAD_LIBS=-lpthread
+has_winpthread=false
+if test "x$have_win32" = xtrue; then
+        has_winpthread=true
+        AC_CHECK_LIB(winpthread, nanosleep, , has_winpthread=false)
+        PTHREAD_LIBS=-lwinpthread
+fi
+
+if test "x$has_winpthread" != xtrue; then
+        AC_CHECK_LIB(pthread, pthread_create, ,
+                AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
+        PTHREAD_LIBS=-lpthread
+fi
 
 AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
 
@@ -181,7 +189,7 @@ scrypt="no"
 
 if test "$found_opencl" = 1; then
 	if test "x$adl" != xno; then
-		AC_CHECK_FILE([ADL_SDK/adl_sdk.h], have_adl=true, have_adl=false,)
+		AC_CHECK_FILE([${ADL_SDK:-ADL_SDK}/adl_sdk.h], have_adl=true, have_adl=false,)
 		if test x$have_adl = xtrue
 		then
 			AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
@@ -305,7 +313,7 @@ has_yasm=false
 AC_PATH_PROG([YASM],[yasm],[false])
 if test "x$YASM" != "xfalse" ; then
   AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
-  yasmver=`yasm --version | head -1 | cut -d\  -f2`
+  yasmver=`"$YASM" --version | head -1 | cut -d\  -f2`
   yamajor=`echo $yasmver | cut -d. -f1`
   yaminor=`echo $yasmver | cut -d. -f2`
   yamini=`echo $yasmver | cut -d. -f3`
@@ -332,6 +340,18 @@ if test "x$YASM" != "xfalse" ; then
 fi
 if test "x$has_yasm" = "xfalse" ; then
   AC_MSG_NOTICE([yasm is required for the assembly algorithms. They will be skipped.])
+else
+  if test "x$have_x86_64" = xtrue; then
+    if test "x$have_win32" = xtrue; then
+      YASM_FMT="win64"
+    else
+      YASM_FMT="elf64"
+    fi
+  elif test "x$have_win32" = xtrue; then
+    YASM_FMT="coff"
+  else
+    YASM_FMT="elf32"
+  fi
 fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
@@ -381,6 +401,14 @@ else
 	AC_DEFINE([CURL_HAS_KEEPALIVE], [1])
 fi
 AC_SUBST(LIBCURL_LIBS)
+
+#check execv signature
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+		   #include <process.h>
+		   int execv(const char*, const char*const*);
+		   ])],
+		   AC_DEFINE([EXECV_2ND_ARG_TYPE], [const char* const*], [int execv(const char*, const char*const*);]),
+		   AC_DEFINE([EXECV_2ND_ARG_TYPE], [char* const*], [int execv(const char*, char*const*);]))
 
 dnl CCAN wants to know a lot of vars.
 # All the configuration checks.  Regrettably, the __attribute__ checks will
@@ -438,6 +466,7 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
+AC_SUBST(YASM_FMT)
 
 AC_CONFIG_FILES([
 	Makefile

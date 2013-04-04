@@ -2,15 +2,17 @@
 #define __COMPAT_H__
 
 #ifdef WIN32
+#include "config.h"
 #include <errno.h>
 #include <time.h>
 #include <pthread.h>
 #include <sys/time.h>
 
-#include <windows.h>
-
 #include "miner.h"  // for timersub
 
+#include <windows.h>
+
+#ifndef HAVE_LIBWINPTHREAD
 static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 {
 	struct timeval tstart;
@@ -42,6 +44,7 @@ static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 	}
 	return 0;
 }
+#endif
 
 static inline int sleep(unsigned int secs)
 {
@@ -71,7 +74,12 @@ typedef unsigned int uint;
 typedef long suseconds_t;
 #endif
 
+#ifdef HAVE_LIBWINPTHREAD
+#define PTH(thr) ((thr)->pth)
+#else
 #define PTH(thr) ((thr)->pth.p)
+#endif
+
 #else
 #define PTH(thr) ((thr)->pth)
 #endif /* WIN32 */

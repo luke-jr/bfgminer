@@ -318,7 +318,8 @@ static bool should_run(void)
 		return true;
 
 	gettimeofday(&tv, NULL);
-	tm = localtime(&tv.tv_sec);
+	const time_t tmp_time = tv.tv_sec;
+	tm = localtime(&tmp_time);
 	if (schedstart.enable) {
 		if (!schedstop.enable) {
 			if (time_before(tm, &schedstart.tm))
@@ -350,7 +351,8 @@ void get_datestamp(char *f, struct timeval *tv)
 {
 	struct tm *tm;
 
-	tm = localtime(&tv->tv_sec);
+	const time_t tmp_time = tv->tv_sec;
+	tm = localtime(&tmp_time);
 	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
 		tm->tm_year + 1900,
 		tm->tm_mon + 1,
@@ -364,7 +366,8 @@ void get_timestamp(char *f, struct timeval *tv)
 {
 	struct tm *tm;
 
-	tm = localtime(&tv->tv_sec);
+	const time_t tmp_time = tv->tv_sec;
+	tm = localtime(&tmp_time);
 	sprintf(f, "[%02d:%02d:%02d]",
 		tm->tm_hour,
 		tm->tm_min,
@@ -2584,9 +2587,11 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			double submit_time = tdiff(&tv_submit_reply, &tv_submit);
 			int diffplaces = 3;
 
-			tm = localtime(&(work->tv_getwork.tv_sec));
+			time_t tmp_time = work->tv_getwork.tv_sec;
+			tm = localtime(&tmp_time);
 			memcpy(&tm_getwork, tm, sizeof(struct tm));
-			tm = localtime(&(tv_submit_reply.tv_sec));
+			tmp_time = tv_submit_reply.tv_sec;
+			tm = localtime(&tmp_time);
 			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
 
 			if (work->clone) {
@@ -2957,7 +2962,7 @@ void app_restart(void)
 	}
 #endif
 
-	execv(initial_args[0], initial_args);
+	execv(initial_args[0], (EXECV_2ND_ARG_TYPE)initial_args);
 	applog(LOG_WARNING, "Failed to restart application");
 }
 
