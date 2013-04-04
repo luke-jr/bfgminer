@@ -22,10 +22,17 @@
 ALIGN 32
 BITS 64
 
+%ifidn __OUTPUT_FORMAT__,win64
+%define hash  rcx
+%define hash1 rdx
+%define data  r8
+%define init  r9
+%else
 %define hash  rdi
 %define hash1 rsi
 %define data  rdx
 %define init  rcx
+%endif
 
 ; 0 = (1024 - 256) (mod (LAB_CALC_UNROLL*LAB_CALC_PARA*16))
 %define SHA_CALC_W_PARA         2
@@ -227,6 +234,15 @@ sha256_sse2_64_new:
 %endif
 
     push        rbx
+%ifidn __OUTPUT_FORMAT__,win64
+    sub         rsp, 16 * 6
+    movdqa      [rsp + 16*0], xmm6
+    movdqa      [rsp + 16*1], xmm7
+    movdqa      [rsp + 16*2], xmm8
+    movdqa      [rsp + 16*3], xmm9
+    movdqa      [rsp + 16*4], xmm10
+    movdqa      [rsp + 16*5], xmm13
+%endif
 
 %macro  SHA_256  0
     mov         rbx, 64*4   ; rbx is # of SHA-2 rounds
@@ -318,6 +334,15 @@ sha256_sse2_64_new:
     movdqa    [hash+7*16], rH
 
 LAB_RET:
+%ifidn __OUTPUT_FORMAT__,win64
+    movdqa    xmm6, [rsp + 16*0]
+    movdqa    xmm7, [rsp + 16*1]
+    movdqa    xmm8, [rsp + 16*2]
+    movdqa    xmm9, [rsp + 16*3]
+    movdqa    xmm10, [rsp + 16*4]
+    movdqa    xmm13, [rsp + 16*5]
+    add       rsp, 16 * 6
+%endif
     pop       rbx
     ret
 

@@ -85,7 +85,6 @@ esac
 
 case $target in
   *-*-mingw*)
-    have_x86_64=false
     have_win32=true
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
@@ -504,7 +503,7 @@ if test "x$have_x86_32$have_x86_64" != "xfalsefalse"; then
 AC_PATH_PROG([YASM],[yasm],[false])
 if test "x$YASM" != "xfalse" ; then
   AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
-  yasmver=`yasm --version | head -1 | cut -d\  -f2`
+  yasmver=`"$YASM" --version | head -1 | cut -d\  -f2`
   yamajor=`echo $yasmver | cut -d. -f1`
   yaminor=`echo $yasmver | cut -d. -f2`
   yamini=`echo $yasmver | cut -d. -f3`
@@ -531,6 +530,18 @@ if test "x$YASM" != "xfalse" ; then
 fi
 if test "x$has_yasm" = "xfalse" ; then
   AC_MSG_NOTICE([yasm is required for the assembly algorithms. They will be skipped.])
+else
+  if test "x$have_x86_64" = xtrue; then
+    if test "x$have_win32" = xtrue; then
+      YASM_FMT="win64"
+    else
+      YASM_FMT="elf64"
+    fi
+  elif test "x$have_win32" = xtrue; then
+    YASM_FMT="coff"
+  else
+    YASM_FMT="elf32"
+  fi
 fi
 fi
 
@@ -743,6 +754,7 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
+AC_SUBST(YASM_FMT)
 
 AC_CONFIG_FILES([
 	Makefile

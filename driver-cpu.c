@@ -726,8 +726,8 @@ static void cpu_detect()
 	// Reckon number of cores in the box
 	#if defined(WIN32)
 	{
-		DWORD system_am;
-		DWORD process_am;
+		DWORD_PTR system_am;
+		DWORD_PTR process_am;
 		BOOL ok = GetProcessAffinityMask(
 			GetCurrentProcess(),
 			&system_am,
