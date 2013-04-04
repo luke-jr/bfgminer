@@ -868,7 +868,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			avalon_free_work(thr, info->bulk1);
 			avalon_free_work(thr, info->bulk2);
 			avalon_free_work(thr, info->bulk3);
-			continue;
+			break;
 		}
 		result_count++;
 
@@ -908,7 +908,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (result_count == result_wrong) {
+	if (result_wrong && result_count == result_wrong) {
 		/* This mean FPGA controller give all wrong result
 		 * try to reset the Avalon */
 		avalon_free_work(thr, info->bulk0);
