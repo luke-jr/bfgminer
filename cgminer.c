@@ -5132,11 +5132,15 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	size_t alloc_len;
 	int i;
 
-	cg_wlock(&pool->data_lock);
+	/* Use intermediate lock to update the one pool variable */
+	cg_ilock(&pool->data_lock);
 
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
+
+	/* Downgrade to a read lock to read off the pool variables */
+	cg_dlock(&pool->data_lock);
 	alloc_len = pool->swork.cb_len;
 	align_len(&alloc_len);
 	coinbase = calloc(alloc_len, 1);
@@ -5185,7 +5189,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->job_id = strdup(pool->swork.job_id);
 	work->ntime = strdup(pool->swork.ntime);
 
-	cg_wunlock(&pool->data_lock);
+	cg_runlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
