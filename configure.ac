@@ -119,10 +119,7 @@ fi
 
 cpumining="no"
 
-AC_ARG_ENABLE([cpumining],
-	[AC_HELP_STRING([--enable-cpumining],[Build with cpu mining support(default disabled)])],
-	[cpumining=$enableval]
-	)
+AC_ARG_ENABLE([cpumining],,[cpumining=$enableval]	)
 if test "x$cpumining" = xyes; then
 	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
 fi
