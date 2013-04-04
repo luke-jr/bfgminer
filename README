@@ -288,6 +288,7 @@ GPU only options:
 SCRYPT only options:
 
 --lookup-gap <arg>  Set GPU lookup gap for scrypt mining, comma separated
+--shaders <arg>     GPU shaders per card for tuning scrypt, comma separated
 --thread-concurrency <arg> Set GPU thread concurrency for scrypt mining, comma separated
 
 See SCRYPT-README for more information regarding litecoin mining.
@@ -972,7 +973,8 @@ and use the appropriate parameter with --gpu-platform.
 
 Q: I'm getting much lower hashrates than I should be for my GPU?
 A: Look at your driver/SDK combination and disable power saving options for
-your GPU. Specifically look to disable ULPS.
+your GPU. Specifically look to disable ULPS. Make sure not to set intensity
+above 11 for BTC mining.
 
 Q: Can I mine with AMD while running Nvidia or Intel GPUs at the same time?
 A: If you can install both drivers successfully (easier on windows) then
@@ -1000,6 +1002,11 @@ Work Utility (WU) value will confirm you are not generating garbage. You
 should be getting about .9WU per kHash. If not, then try decreasing your
 intensity, do not increase the number of gpu-threads, and consider adding
 system RAM to match your GPU ram.
+
+Q: Scrypt fails to initialise the kernel every time?
+A: Your parameters are too high. Don't add GPU threads, don't set intensity
+too high, decrease thread concurrency. See the SCRYPT-README for a lot more
+help.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.

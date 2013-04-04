@@ -223,7 +223,7 @@ for a hashrate of 725kH.
 
 Note I did not bother setting a thread concurrency. Once you have the magic
 endpoint, look at what tc was chosen by the bin file generated and then hard
-code that in next time (eg --thread-concurrency 22336) as slight changes in
+code that in next time (eg --thread-concurrency 22392) as slight changes in
 thread concurrency will happen every time if you don't specify one, and the tc
 to clock ratios are critical!
 
