@@ -890,9 +890,9 @@ need to set is the Intensity.
 
 Q: What happened to CPU mining?
 A: Being increasingly irrelevant for most users, and a maintenance issue, it is
-no longer under active development and will not be supported unless someone
-steps up to help maintain it. No binary builds supporting CPU mining will be
-released but CPU mining can be built into cgminer when it is compiled.
+no longer under active development and will not be supported. No binary builds
+supporting CPU mining will be released. Virtually all remaining users of CPU
+mining are as back ends for illegal botnets.
 
 Q: I upgraded cgminer version and my hashrate suddenly dropped!
 A: No, you upgraded your SDK version unwittingly between upgrades of cgminer
@@ -910,7 +910,8 @@ this time unless you are using an ATI 7xxx card that needs it.
 
 Q: Which ATI SDK is the best for cgminer?
 A: At the moment, versions 2.4 and 2.5 work the best for R5xxx and R6xxx GPUS.
-If you are need to use the 2.6+ SDK ofr R7xxx or later, the phatk kernel will
+SDK 2.6 or 2.7 works best for R7xxx. SDK 2.8 is known to have many problems.
+If you are need to use the 2.6+ SDK or R7xxx or later, the phatk kernel will
 perform poorly, while the diablo or my custom modified poclbm kernel are
 optimised for it.
 
@@ -930,6 +931,69 @@ driver version and ATI stream version.
 Q: cgminer reports no devices or only one device on startup on Linux although
 I have multiple devices and drivers+SDK installed properly?
 A: Try "export DISPLAY=:0" before running cgminer.
+
+Q: cgminer crashes immediately on startup.
+A: One of the common reasons for this is that you have mixed files on your
+machine for the driver or SDK. Windows has a nasty history of not cleanly
+uninstalling files so you may have to use third party tools like driversweeper
+to remove old versions. The other common reason for this is windows
+antivirus software is disabling one of the DLLs from working. If cgminer
+starts with the -T option but never starts without it, this is a sure fire
+sign you have this problem and will have to disable your antivirus or make
+exceptions.
+
+Q: Why don't you provide win64 builds?
+A: Win32 builds work everywhere and there is precisely zero advantage to a
+64 bit build on windows.
+
+Q: Is it faster to mine on windows or linux?
+A: It makes no difference. It comes down to choice of operating system for
+their various features. Linux offers much better long term stability and
+remote monitoring and security, while windows offers you overclocking tools
+that can achieve much more than cgminer can do on linux.
+
+Q: Cgminer cannot see any of my GPUs even though I have configured them all
+to be enabled and installed OpenCL (+/- Xorg is running and the DISPLAY
+variable is exported on linux)?
+A: Check the output of 'cgminer -n', it will list what OpenCL devices your
+installed SDK recognises. If it lists none, you have a problem with your
+version or installation of the SDK.
+
+Q: Cgminer is mining on the wrong GPU, I want it on the AMD but it's mining
+on my on board GPU?
+A: Make sure the AMD OpenCL SDK is installed, check the output of 'cgminer -n'
+and use the appropriate parameter with --gpu-platform.
+
+Q: I'm getting much lower hashrates than I should be for my GPU?
+A: Look at your driver/SDK combination and disable power saving options for
+your GPU. Specifically look to disable ULPS.
+
+Q: Can I mine with AMD while running Nvidia or Intel GPUs at the same time?
+A: If you can install both drivers successfully (easier on windows) then
+yes, using the --gpu-platform option.
+
+Q: Can I mine with Nvidia or Intel GPUs?
+A: Yes but their hashrate is very poor and likely you'll be using much more
+energy than you'll be earning in coins.
+
+Q: Can I mine on Linux without running Xorg?
+A: With Nvidia you can, but with AMD you cannot.
+
+Q: I'm trying to mine litecoin but cgminer shows MH values instead of kH and
+submits no shares?
+A: Add the --scrypt parameter.
+
+Q: I can't get anywhere near enough hashrate for scrypt compared to other
+people?
+A: You may not have enough system RAM as this is also required.
+
+Q: My scrypt hashrate is high but the pool reports only a tiny proportion of
+my hashrate?
+A: You are generating garbage hashes due to your choice of settings. Your
+Work Utility (WU) value will confirm you are not generating garbage. You
+should be getting about .9WU per kHash. If not, then try decreasing your
+intensity, do not increase the number of gpu-threads, and consider adding
+system RAM to match your GPU ram.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
@@ -977,6 +1041,9 @@ This means your account must have the group 'dialout' or root priviledges
 To permanently give your account the 'dialout' group:
  sudo usermod -G dialout -a `whoami`
 Then logout and back in again
+
+Q: Can I mine scrypt with FPGAs or ASICs?
+A: No.
 
 Q: What is stratum and how do I use it?
 A: Stratum is a protocol designed for pooled mining in such a way as to
