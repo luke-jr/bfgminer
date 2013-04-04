@@ -221,6 +221,7 @@ struct bitforce_data {
 	enum bitforce_proto proto;
 	bool sc;
 	int queued;
+	bool just_flushed;
 	int ready_to_queue;
 	unsigned result_busy_polled;
 	unsigned sleep_ms_default;
@@ -1205,6 +1206,7 @@ bool bitforce_send_queue(struct thr_info *thr)
 	       queued_ok, data->ready_to_queue, data->queued);
 	data->ready_to_queue -= queued_ok;
 	thr->queue_full = data->ready_to_queue;
+	data->just_flushed = false;
 	
 	return true;
 }
@@ -1344,6 +1346,7 @@ bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 	if ((ndq)              // Device is idle
 	 || (data->ready_to_queue >= 5)  // ...or 5 items ready to go
 	 || (thr->queue_full)            // ...or done filling queue
+	 || (data->just_flushed)         // ...or queue was just flushed (only remaining job is partly done already)
 	)
 	{
 		bitforce_send_queue(thr);
@@ -1384,6 +1387,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 	while (flushed--)
 		work_list_del(thr->work_list.prev);
 	thr->queue_full = false;
+	data->just_flushed = true;
 	
 	bitforce_queue_do_results(thr);
 }
