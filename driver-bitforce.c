@@ -665,6 +665,8 @@ int bitforce_zox(struct thr_info *thr, const char *cmd)
 	
 	mutex_lock(mutexp);
 	bitforce_cmd1(fd, data->xlink_id, pdevbuf, sizeof(data->noncebuf), cmd);
+	if (!strncasecmp(pdevbuf, "INPROCESS:", 10))
+		BFgets(pdevbuf, sizeof(data->noncebuf), fd);
 	if (!strncasecmp(pdevbuf, "COUNT:", 6))
 	{
 		count = atoi(&pdevbuf[6]);
