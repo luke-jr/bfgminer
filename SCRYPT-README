@@ -166,7 +166,74 @@ For example, a 7970 running with the following settings:
 was using 305W!
 
 ---
+TUNING AN AMD RADEON 7970
+Example tuning a 7970 for Scrypt mining:
 
+On linux run this command:
+export GPU_MAX_ALLOC_PERCENT=100
+or on windows this:
+setx GPU_MAX_ALLOC_PERCENT 100
+in the same console/bash/dos prompt/bat file/whatever you want to call it,
+before running cgminer.
+
+First, find the highest thread concurrency that you can start it at. They should
+all start at 8192 but some will go up to 3 times that. Don't go too high on the
+intensity while testing and don't change gpu threads. If you cannot go above
+8192, don't fret as you can still get a high hashrate.
+
+Delete any .bin files so you're starting from scratch and see what bins get
+generated.
+
+First try without any thread concurrency or even shaders, as cgminer will try to
+find an optimal value
+cgminer -I 13
+
+If that starts mining, see what bin was generated, it is likely the largest
+meaningful TC you can set.
+Starting it on mine I get:
+scrypt130302Tahitiglg2tc22392w64l8.bin
+
+See tc22392 that's telling you what thread concurrency it was. It should start
+without TC parameters, but you never know. So if it doesn't, start with
+--thread-concurrency 8192 and add 2048 to it at a time till you find the highest
+value it will start successfully at.
+
+Then start overclocking the eyeballs off your memory, as 7970s are exquisitely
+sensitive to memory speed and amazingly overclockable but please make sure it
+keeps adequately cooled with --auto-fan! Do it while it's running from the GPU
+menu. Go up by 25 at a time every 30 seconds or so until your GPU crashes. Then
+reboot and start it 25 lower as a rough start. Mine runs stable at 1900 memory
+without overvolting. Overvolting is the only thing that can actually damage your
+GPU so I wouldn't recommend it at all.
+
+Then once you find the maximum memory clock speed, you need to find the sweet
+spot engine clock speed that matches it. It's a fine line where one more MHz
+will make the hashrate drop by 20%. It's somewhere in the .57 - 0.6 ratio range.
+Start your engine clock speed at half your memory clock speed and then increase
+it by 5 at a time. The hashrate should climb a little each rise in engine speed
+and then suddenly drop above a certain value. Decrease it by 1 then until you
+find it climbs dramatically. If your engine clock speed cannot get that high
+without crashing the GPU, you will have to use a lower memclock.
+
+Then, and only then, bother trying to increase intensity further.
+
+My final settings were:
+--gpu-engine 1157  --gpu-memclock 1900 -I 20
+for a hashrate of 725kH.
+
+Note I did not bother setting a thread concurrency. Once you have the magic
+endpoint, look at what tc was chosen by the bin file generated and then hard
+code that in next time (eg --thread-concurrency 22336) as slight changes in
+thread concurrency will happen every time if you don't specify one, and the tc
+to clock ratios are critical!
+
+Good luck, and if this doesn't work for you, well same old magic discussion
+applies, I cannot debug every hardware combo out there.
+
+Your numbers will be your numbers depending on your hardware combination and OS,
+so don't expect to get exactly the same results!
+
+---
 While BTC donations are preferred, if you wish to donate to the author, Con
 Kolivas, in LTC, please submit your donations to:
 
