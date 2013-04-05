@@ -4226,7 +4226,7 @@ int stale_wait(unsigned int mstime, struct work*work, bool checkend)
 static void restart_threads(void)
 {
 	struct pool *cp = current_pool();
-	int i;
+	int i, fd;
 	struct thr_info *thr;
 
 	/* Artificially set the lagging flag to avoid pool not providing work
