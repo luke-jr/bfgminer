@@ -227,6 +227,7 @@ struct bitforce_data {
 	unsigned result_busy_polled;
 	unsigned sleep_ms_default;
 	struct timeval tv_hashmeter_start;
+	float temp[2];
 };
 
 static void bitforce_clear_buffer(struct cgpu_info *);
@@ -256,13 +257,15 @@ void bitforce_comm_error(struct thr_info *thr)
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 {
-	float gt = bitforce->temp;
+	struct bitforce_data *data = bitforce->cgpu_data;
 
-	if (gt > 0)
-		tailsprintf(buf, "%5.1fC ", gt);
+	if (data->temp[0] > 0 && data->temp[1] > 0)
+		tailsprintf(buf, "%5.1fC/%4.1fC   | ", data->temp[0], data->temp[1]);
 	else
-		tailsprintf(buf, "       ", gt);
-	tailsprintf(buf, "        | ");
+	if (bitforce->temp > 0)
+		tailsprintf(buf, "%5.1fC         | ", bitforce->temp);
+	else
+		tailsprintf(buf, "               | ");
 }
 
 static bool bitforce_thread_prepare(struct thr_info *thr)
@@ -396,6 +399,26 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 	return; // nothing is returned by the BFL
 }
 
+static
+float my_strtof(const char *nptr, char **endptr)
+{
+	float f = strtof(nptr, endptr);
+	
+	/* Cope with older software  that breaks and reads nonsense
+	 * values */
+	if (f > 100)
+		f = strtod(nptr, endptr);
+	
+	return f;
+}
+
+static
+void set_float_if_gt_zero(float *var, float value)
+{
+	if (value > 0)
+		*var = value;
+}
+
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
 	struct bitforce_data *data = bitforce->cgpu_data;
@@ -434,16 +457,21 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	}
 
 	if ((!strncasecmp(pdevbuf, "TEMP", 4)) && (s = strchr(pdevbuf + 4, ':'))) {
-		float temp = strtof(s + 1, NULL);
-
-		/* Cope with older software  that breaks and reads nonsense
-		 * values */
-		if (temp > 100)
-			temp = strtod(s + 1, NULL);
-
-		if (temp > 0) {
-			bitforce->temp = temp;
+		float temp = my_strtof(s + 1, &s);
+		
+		set_float_if_gt_zero(&data->temp[0], temp);
+		for ( ; s[0]; ++s)
+		{
+			if (!strncasecmp(s, "TEMP", 4) && (s = strchr(&s[4], ':')))
+			{
+				float temp2 = my_strtof(s + 1, &s);
+				set_float_if_gt_zero(&data->temp[1], temp2);
+				if (temp2 > temp)
+					temp = temp;
+			}
 		}
+
+		set_float_if_gt_zero(&bitforce->temp, temp);
 	} else {
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
