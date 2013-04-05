@@ -6222,7 +6222,7 @@ tryagain:
 	rpc_req = prepare_rpc_req_probe(work, proto, NULL);
 	work->pool = pool;
 	if (!rpc_req)
-		return false;
+		goto out;
 
 	pool->probed = false;
 	gettimeofday(&tv_getwork, NULL);
@@ -6235,8 +6235,6 @@ tryagain:
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
 	 * and if so, switch to that in preference to getwork if it works */
 	if (pool->stratum_url && want_stratum && (pool->has_stratum || stratum_works(pool))) {
-		curl_easy_cleanup(curl);
-
 		if (!pool->has_stratum) {
 
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
@@ -6251,6 +6249,8 @@ tryagain:
 			json_decref(val);
 
 retry_stratum:
+		curl_easy_cleanup(curl);
+		
 		/* We create the stratum thread for each pool just after
 		 * successful authorisation. Once the auth flag has been set
 		 * we never unset it and the stratum thread is responsible for
@@ -6322,14 +6322,20 @@ badwork:
 			// NOTE: work_decode takes care of lp id
 			pool->lp_url = lp->uri ? absolute_uri(lp->uri, pool->rpc_url) : pool->rpc_url;
 			if (!pool->lp_url)
-				return false;
+			{
+				ret = false;
+				goto out;
+			}
 			pool->lp_proto = PLP_GETBLOCKTEMPLATE;
 		}
 		else
 		if (pool->hdr_path && want_getwork) {
 			pool->lp_url = absolute_uri(pool->hdr_path, pool->rpc_url);
 			if (!pool->lp_url)
-				return false;
+			{
+				ret = false;
+				goto out;
+			}
 			pool->lp_proto = PLP_GETWORK;
 		} else
 			pool->lp_url = NULL;
