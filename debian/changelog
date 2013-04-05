@@ -1,3 +1,10 @@
+bfgminer (2.10.6-0precise1) precise; urgency=low
+
+  * Bugfixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 05 Apr 2013 18:12:39 -0000
+
+
 bfgminer (2.10.5-0precise1) precise; urgency=low
 
   * Fix critical solo mining bug.

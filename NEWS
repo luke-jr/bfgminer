@@ -1,3 +1,73 @@
+BFGMiner Version 2.10.6 - April 5, 2013
+
+- Bugfix: openwrt: Never include _ in platform name
+- Bugfix: Fixed typo in bfgminer-rpc usage
+- pool_active: Ensure temporary curl is always cleaned up
+- Try to find jansson via pkg-config first, and fall back to checking system
+defaults if that fails
+- Attempt to find libjansson via pkg-config if AC_CHECK_LIB fails
+- Update scrypt readme re drivers and sdk.
+- Bugfix: README: Move --device out of GPU only options
+- Update .gitignore
+- Added bfgminer-rpc binary to .gitignore
+- Bugfix: Actually change to the newly selected pool when statum is inactive and
+it decides to change
+- Bugfix: modminer: Properly fail on dynclock error
+- Bugfix: opencl: Clean pc_data->work before freeing pc_data
+- Bugfix: Correct order of libblkmaker libraries so static builds work
+- Bugfix: Need to ensure __BIG_ENDIAN__ is defined before including uthash.h
+- Bugfix: Stratum: When destroying cURL easy handle, be sure to clear pool
+stratum_curl pointer
+- Bugfix: bitforce: Fix warning
+- Bugfix: Stratum: Properly handle non-integer "id" for client.get_version
+requests
+- json_dumps_ANY utility function to portably implement json_dumps(..., ... |
+JSON_ENCODE_ANY)
+- Bugfix: bitforce: Free old name when updating it on reinitialization
+- Stratum: Include pool number in send/recv protocol logging
+- Include pool number in stratum thread name
+- API always report failed send() replies
+- API.java allow partial reads
+- Bugfix: Stratum: Use curl_easy_cleanup to close connection, so cURL
+understands what is going on
+- Bugfix: hash_pop: If a work should be rolled, use a clone of it rather than
+consume a rollable work
+- openwrt: Move Makefile into a bfgminer subdirectory to avoid symlinking issues
+- openwrt: Use --with-curses=ncurses to avoid ncursesw dependency
+- configure: Support --with-curses=FOO to look for curses implementation in
+libFOO
+- Set pool socket to INVSOCK after closing connection, just in case
+- Clean up compiler warnings
+- Bugfix: Check that pool is active one last time before selecting it
+- Bugfix: Trim whitespace (like newlines) off the end of debug info from
+libcurl
+- Bugfix: submit_nonce: Backup the original work->blk.nonce since the miner
+code uses it to track work consumption
+- Bugfix: Scheduler needs to unpause disabled devices, even if it isn't waking
+them up
+- Bugfix: Use SOCKETTYPE for notifiers, to avoid potential overflow on Win64
+- Bugfix: Some versions of MingW define localtime_r, but don't handle the
+timeval.tv_sec case that we use; so undef any preexisting one and use our own
+- Bugfix: reinit_gpu: Remember the selected device to correctly change
+properties of
+- Bugfix: cpu: reinit_device hasn't worked since 93b284d, so just remove it
+entirely instead of letting it screw with thread 0
+- Document necessity to run ldconfig and possibly configure ld.so
+- Bugfix: Complete startup after just one pool is found active, no need to wait
+for the rest
+- Bugfix: Update links
+- miner.php: Replace PGA dev number with concatenated device ID
+- Bugfix: miner.php: Display devices with aligned columns instead of assuming
+they come out of the RPC aligned
+- Bugfix: miner.php: Silence PHP "local timezone" warning
+- Bugfix: api-example: Try to use BSD sockets on any non-Windows platform
+- Bugfix: stratum: Delay mining.get_transactions request until after auth has
+succeeded, so its failure doesn't abort the connection (also avoids any delay
+from a large result)
+- --no-getwork option to disable getwork protocol support
+- Clarify dependencies with Debian/Ubuntu package names
+
+
 BFGMiner Version 2.10.5 - February 8, 2013
 
 - Bugfix: Actually increment template_nonce when we use it
