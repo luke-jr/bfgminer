@@ -379,7 +379,7 @@ with the values after the '='
 If you enable BFGMiner debug (--debug or using RPC), you will also get messages
 showing some details of the requests received and the replies
 
-There are included 4 program examples for accessing the API:
+There are included 5 program examples for accessing the API:
 
 api-example.php - a PHP script to access the API
   usage: php api-example.php command
@@ -403,6 +403,11 @@ miner.php - an example web page to access the API
  This includes buttons and inputs to attempt access to the privileged commands
  See the end of this README.RPC for details of how to tune the display
  and also to use the option to display a multi-rig summary
+
+api-example.py - a Python script to access the API
+  usage: python api-example.py [--host HOST] [--port PORT] [command] [parameter]
+ by default it sends a 'summary' request to the miner at 127.0.0.1:4028
+ If you specify a command it will send that request instead
 
 ----------
 
