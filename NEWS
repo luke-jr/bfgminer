@@ -1,3 +1,414 @@
+BFGMiner Version 3.0.0 - April 5, 2013
+
+- Update libblkmaker to 0.3.0
+- debian: Include new api-example.py in docs
+- added example for Python using the RPC API
+- added SPEC file for SUSE distributions
+- Bugfix: bitforce: Free initialization data to avoid trivial one-time memory
+leak
+- Support for local submission of found blocks (GBT only)
+- bitforce: RPC pgaset fanmode 0-5 for manual fan control
+- bitforce: More debugging information
+- Bugfix: modminer: Since RPC always includes the temperature, we don't need to
+add it specially
+- bitforce: Expose dual temperature sensors to RPC
+- bitforce: Support for up to 2 temperature sensors per processor
+- Bugfix: bitforce: BFP_QUEUE: Attempt to recover from extra queue results, or
+the next job finishing early
+- bitforce: Always send a new job ASAP after flushing the queue
+- bitforce: Implement "Queue Job Pack" (ZWX) and use it for XLINK devices to
+avoid USB latency issues
+- bitforce: Ignore INPROCESS added to ZOX response
+- Implement minerloop_queue for devices that process work items too fast to keep
+track of which one they're currently working on
+- bitforce: Split ZOX command into its own function
+- Bugfix: DevAPI: Free work when preparing it fails
+- DevAPI: Abstract get_and_prepare_work for minerloops
+- DevAPI: Move select() logic from minerloop_async to do_notifier_select
+- Clarify stratum mining.set_difficulty debug log message
+- No longer call configure from autogen.sh
+- Bugfix: bitforce: Ensure result_busy_polled gets set for queue mode to avoid
+unnecessary 10ms wait times
+- Bugfix: bitforce: Use common code for end of job_get_results, so queue results
+don't short-circuit timing code
+- Bugfix: bitforce: Ensure "OK" doesn't remain in queued results buffer
+- Bugfix: bitforce: next_line needs to increment beyond the newline character
+- Update README for x970 memdiff values.
+- Do not scan other gpu platforms if one is specified.
+- Update README for sync objects on windows.
+- Add information for setting gpu max alloc and sync parameters for windows with
+scrypt.
+- Whitelist AMD APP SDK 2.8 for diablo kernel.
+- Show pool number in switch message
+- Clear just the socket buffer when we don't care what is left in a stratum
+socket.
+- Clear the stratum socket whenever we are closing it since the buffer is going
+to be reused.
+- Do not continue work from a stratum pool where the connection has been
+interrupted.
+- Close any existing stratum socket if we are attempting to restart stratum so
+the pool knows the connection has gone.
+- Show mechanism of stratum interruption if select times out.
+- Make stratum connection interrupted message higher priority to be visible at
+normal logging levels.
+- API add 'Network Difficulty' to 'coin'
+- avalon: if all result are wrong in one batch read. reinit the avalon
+- avalon: record the last result temperature info
+- delay when close avalon; only record matched result
+- avalon: fix no_matching_work only count when debug
+- avalon: minor change
+- avalon: add idle code
+- avalon: fliter the temp_max >= 100, print the result for debug.
+- avalon: export more data to API stats
+- avalon: add default chip frequency
+- avalon: fix the work_i3 init
+- avalon: add reinit_device
+- avalon: the temp_history_count base on timeout
+- avalon: fix mistake on adjest_fan
+- avalon.c: fix the copyright
+- bfgminer-rpc: add -o option: no format, only the result
+- avalon: update fan pwm
+- avalon: update the FAN_PWM MAX/MIN
+- avalon: minor change
+- avalon: overclock code
+- avalon: fix the display
+- avalon: minor change
+- avalon: fix the fan/temp control
+- avalon: fix the temp_avg
+- avalon: fix temp
+- avalon: add fan/temp control
+- avalon: add FAN speed factor
+- avalon: add TODO on fan/temp control. cleanup detect
+- avalon: add the gate_miner bits
+- avalon: only send one byte on reset
+- avalon: add support on send 2 bulk taskes at begin
+- avalon: fix the hash_count return
+- avalon: fix the LOG_WARNING
+- avalon: add comment on hash_count
+- avalon: WORKAROUND on hashrate
+- avalon: update max miner_num
+- avalon: add more info on api
+- avalon: add nonce_elf and more info on match miner_num
+- avalon: change reset to 300ms
+- avalon: move bulk buffer to it's info structrue
+- avalon: more work on hashrate and read_count
+- avalon: add baud 38400 support
+- avalon: fix nonce_range EB
+- avalon: fix the hashrate wrong
+- more info on avalon API
+- avalon: fix the nonce_range EL
+- avalon: fix the read count
+- avalon: more work on nonce_range
+- avalon: read() times and send delay fixed
+- avalon: add the send delay option
+- avalon: print out fan/temp info
+- avalon: add the result info (fan/temp etc)
+- avalon: more check on hardware error
+- avalon: more work on get_work_count
+- avalon: now we have dynamic get_work_count
+- avalon: more work on parameters
+- avalon: add timeout parameter
+- avalon: baud as parameter now
+- avalon: send work pitch should be : (15*(8+2)*4/19200)s
+- avalon: more work on match work
+- avalon: fix free_work
+- avalon: continue on reset work. wait for buffer empty
+- avalon: add options, if write() error. sleep(1) before reset()
+- avalon: more cleanup
+- avalon: finish read when Buffer empty
+- avalon: fix the nonce EB issue
+- avalon: MORE work
+- avalon: fix the EB/LB issue
+- avalon: some cleanup
+- avalon: fix the first configure task
+- more work on the avalon buffer
+- avalon: fix the BIG_ENDIAN issue
+- avalon: Fix the buffer statu
+- change defines to avalon parameters
+- fix the cts return
+- avalon: change the data to uint8_t, add some test temp code
+- avalon: fix task init
+- avalon: more data format work
+- change to avalon data format
+- debug: add a debug hexdump.c
+- avalon: add some code on match work
+- avalon: try to correct the pool_status and dev_status
+- avalon: more work on multi-works
+- avalon: more work on read
+- avalon: more work on get results
+- more RTS code on avalon.c/h
+- more RTS code
+- avalon: some cleanup
+- avalon: more work on new work queue structrue
+- fpgautils.c: use lancelot as target
+- avalon: since we submit task as bulk data. modify again
+- add scanhash_queue
+- renmae avalon.h to driver-avalon.h
+- fpgautils.c: add get_serial_cts
+- understand the avalon protocol more
+- avalon: new software structrue but target as lancelot
+- add avalon.h
+- avalon: fix warning
+- avalon: add TODO comments
+- more AVALON defines
+- avalon: more work
+- add driver-avalon.c
+- add avalon support to automake
+- Default to work queue mode on BitForce SC devices
+- bitforce: Implement support for non-contiguous XLINK slave addressing
+- gnulib: stdint: fix build with Android's Bionic fox x86
+- gnulib: stdint: Improve support for Android.
+- gnulib: stdint: Add support for Android.
+- Check for ?e##toh macros independently from hto?e##
+- If pthread_cancel is missing/emulated, set asynchronous thread cancel type on
+stage, watchdog, watchpool, and longpoll threads since the emulation cannot
+support deferred cancellation
+- If pthread_cancel is missing (Bionic/Android), emulate it using pthread_kill
+and pthread_exit
+- configure: Intelligently detect what flags/libs get us working pthread, and
+define HAVE_PTHREAD_CANCEL if pthread_cancel is available
+- Bugfix: Initialize mutex_request to invalid so devices that don't use it
+(bitforce) don't try to
+- RPC: pools: Add "Message" to show last client.show_message received over
+stratum
+- Stratum: Support client.show_message method
+- Don't retry without resume support, if the first attempt just timed out
+- Bugfix: minerloop_async: Intelligently handle work updates and device disables
+during transitions
+- Bugfix: minerloop_async: Free old (unused) prepared work when replacing it
+with an upgraded one
+- Bugfix: Free pool sessionid before replacing it
+- Bugfix: Stratum: Address dereference-after-free and memory leak introduced in
+resume support
+- Stratum: If old protocol fails as well, try to resume again next time around
+- Bugfix: Stratum: Only failover to old mining.subscribe protocol if the
+previous attempt was the new one (fixes a flood of retries)
+- Try to extract the sessionid associated with mining.notify on 3rd level array
+and submit it along with the userid to support mining resume, failing gracefully
+and restarting if the pool rejects it.
+- Cope with misread sessionid on stratum for now.
+- Use the sessionid as passed on stratum connect to attempt to resume a
+connection once and then clear it if it fails, to use a new connection.
+- Move to storing the nonce1 in the work struct instead of the sessionid for the
+now defunct first draft mining.resume protocol.
+- Only continue submitting shares with mining.resume support on stratum when the
+session id matches.
+- Provide support for mining.resume with stratum, currently re-authorising after
+successful resumption pending finalising of the protocol process.
+- Provide basic framework for restarting stratum depending on whether resume
+support exists or not.
+- Abstract out the setting up of the stratum curl socket.
+- Remove redundant setting of strings to NULL since the whole work struct is
+zeroed.
+- Only clear stratum shares mandatorily on stratum dropouts when the pool does
+not support resume.
+- Stratum: Keep trying to submit shares, even across reconnects
+- Use new select loop primitives in submission thread
+- Bugfix: Missing pool_no parameter to applog for no-stratum-sessionid debug
+message
+- Do as much outside of mutex locking of sshare_lock as possible.
+- Remove last reference to struct work used outside the sshare_lock in
+submit_work_thread
+- Unlock the sshare_lock in submit_work_thread when all references to work and
+sshare are complete.
+- Bugfix: Copy and free sessionid on work objects
+- Add timestamps to stratum_share structs as they're generated and copy the
+stratum sessionid if it exists to stratum work generated.
+- Store session id for stratum if the pool supports it for future mining.resume
+support.
+- Keep the unique id of each work item across copy_work to prevent multiple work
+items having the same id.
+- x6500: Never consider processors idle if they're enabled
+- x6500: Make mutex management cleaner by blocking device select loop during
+idle get_stats
+- Bugfix: minerloop_async: Always refer to real thread for select loop
+- Bugfix: Initialize work_restart_notifier[1] to INVSOCK instead of -1 to be
+portable
+- ztex: Use restart_wait to react quicker to work updates
+- Handy TIMEVAL_USECS macro
+- Restore blocking restart_wait function with nearly identical semantics as old
+one
+- Bugfix: bitforce: Rework sleep delay adjustment logic to properly deal with
+more accurate timing readings (added in device API update)
+- Hidden --force-rollntime option for getwork pools (use like --pool-priority,
+after each pool definition)
+- Include processor id in get_work logging
+- Support for BIP23 BPE request target extension via new --request-diff option
+- Hidden option to reduce "work update" messages to debug level:
+--quiet-work-updates
+- Change "work restart" to "work update" in messages to reflect reality more
+accurately (no work is lost), and normalize case of "longpoll"
+- HACK: Since get_work still blocks, reportin all processors dependent on this
+thread
+- Move FD_SETSIZE definition to configure so it affects everywhere it needs to
+- Move absolute_uri function to util.c
+- Remove now-unused blocking-wait code (restart_cond, restart_wait, and
+stale_wait)
+- Bugfix: bitforce: Zero hashes complete if we get an invalid response
+- HACK: Since get_work still blocks, reportout all processors dependent on this
+thread
+- bitforce: Support for work queue protocol on BitForce SC devices
+- Use new double-stage format for SC devices
+- modminer+x6500: Expose frequencies to API in terms of MHz to be consistent
+with ztex driver and cgminer
+- bitforce: Replace (bool)cgpu->nonce_range with (enum)bitforce_data->proto
+- bitforce: XLINK support for multiple processors
+- bitforce: Prepare log messages for XLINK by separating into proc and dev
+messages
+- bitforce: Always use fd/mutex pointers on actual device, to prepare for XLINK
+support
+- bitforce: Get fd/mutex pointers only once per function
+- bitforce: Abstract commands to bitforce_cmd1 (single-stage) and bitforce_cmd2
+(double-stage) functions
+- bitforce: Debuglog device information during detection
+- Bugfix: Missing includes needed on Windows
+- Bugfix: Use waddstr instead of wprintw to display completed device summary
+line, so literal %s don't get interpreted as formatting options
+- Bugfix: bitforce: Avoid polling continuously between work restart and job
+completion
+- bitforce: Use poll device API when job_get_results needs to wait
+- bitforce: Use poll device API when job_start needs to wait
+- stale_work_future function to determine in advance if a work/share will be
+stale at some future time
+- bitforce: Minimally refactor to adapt to new minerloop_async
+- minerloop_async: Break out of select on work_restart_notifier
+- Replace UNIX-only work_restart_fd pipe with portable work_restart_notifier
+- Bugfix: Clean out unused variables from minerloop_async
+- Move new device API code to new deviceapi.c source file
+- Make minerloop_async more async, using some callbacks to handle event
+completions
+- Split part of minerloop_async into do_get_results, and a bit other
+reorganization
+- Abstract select_timeout function to convert a realtime timeval to a timeout
+pointer for select()
+- Split part of minerloop_async into do_process_results, and don't allow
+api->job_get_results to return hashes
+- Split part of minerloop_async into do_job_prepare and do_job_start
+- Initialize thr->tv_poll to -1 (disabled)
+- Update the hashmeter one last time before disabling a device
+- minerloop_async: Break out of select for wakeup notifications
+- Replace mining thread queues (which were only used for wakeup pings) with
+notifiers (which can be used with select and co)
+- Unify all mining thread wakeup to mt_enable (simplifying code)
+- Bugfix: get_statline: Correct device summary status, only showing DEAD or OFF
+if it affects all processors
+- Working processor disable/enable with new async minerloop (currently gets
+stuck if all processors disabled)
+- Bugfix: get_statline: Only care about the processor status if
+--show-processors is set
+- Bugfix: watchdog: Use processor thr_info even if it isn't a real thread
+- Only support thread-per-device or N-threads-per-processor; simplify
+work_restart check
+- x6500: Remove mutex, since driver is single-threaded now
+- Bugfix: Update utility every get_statline call, and include every processor
+involved
+- HACKING: New text file to document the internal workings of (currently) the
+device API
+- Bugfix: mining_threads is now a total of thr_info objects, not necessarily
+actual running threads
+- x6500: Working (but incomplete) asynchronous/single-threaded driver
+- Incomplete (but workable) asynchronous minerloop
+- Core support for managing multiple processors from a single thread
+- Allow device drivers to implement their own minerloop
+- Move cgpu_info and thr_info initialization to main, and ensure all get
+initialized before starting any threads
+- Refactor and simplify miner_thread (no major behavioural changes)
+- Move difficulties to end of share result message, so they can be made to line
+up nicely
+- Bugfix: Consolidate share result message code (including fixing displayed
+hash portion for stratum)
+- miner.php: Include ProcID in Device column as a letter
+- Show summaries per-device unless --show-processors is used (also available on
+Display TUI menu)
+- Order next_proc linked list in processor id order
+- Consolidate processor summary line generation for TUI and text-only modes
+- RPC: Update to include ProcID so multiprocessor devices can be understood
+correctly
+- RPC: Common function for adding device-identifying fields
+- modminer: Make single-processor statline look like other temperature-only
+statlines
+- modminer: Split each FPGA into its own logical processor (in the same device
+still)
+- modminer: Get mutex pointer only once per function
+- ztex: Combine master+slave devices into a single multiprocessor device
+- Preformat dev_repr (device representation) and proc_repr (processor
+representation) once for use everywhere
+- x6500: Split each FPGA into its own logical processor (in the same device
+still)
+- x6500: Get mutex pointer only once per function
+- Minimal support for defining devices with multiple logical processors
+- Rename all README files to standard README.* style
+
+
+BFGMiner Version 2.10.6 - April 5, 2013
+
+- Bugfix: Fixed typo in bfgminer-rpc usage
+- pool_active: Ensure temporary curl is always cleaned up
+- Try to find jansson via pkg-config first, and fall back to checking system
+defaults if that fails
+- Attempt to find libjansson via pkg-config if AC_CHECK_LIB fails
+- Update scrypt readme re drivers and sdk.
+- Bugfix: README: Move --device out of GPU only options
+- Update .gitignore
+- Added bfgminer-rpc binary to .gitignore
+- Bugfix: Actually change to the newly selected pool when statum is inactive and
+it decides to change
+- Bugfix: modminer: Properly fail on dynclock error
+- Bugfix: opencl: Clean pc_data->work before freeing pc_data
+- Bugfix: Correct order of libblkmaker libraries so static builds work
+- Bugfix: Need to ensure __BIG_ENDIAN__ is defined before including uthash.h
+- Bugfix: Stratum: When destroying cURL easy handle, be sure to clear pool
+stratum_curl pointer
+- Bugfix: bitforce: Fix warning
+- Bugfix: Stratum: Properly handle non-integer "id" for client.get_version
+requests
+- json_dumps_ANY utility function to portably implement json_dumps(..., ... |
+JSON_ENCODE_ANY)
+- Bugfix: bitforce: Free old name when updating it on reinitialization
+- Stratum: Include pool number in send/recv protocol logging
+- Include pool number in stratum thread name
+- API always report failed send() replies
+- API.java allow partial reads
+- Bugfix: Stratum: Use curl_easy_cleanup to close connection, so cURL
+understands what is going on
+- Bugfix: hash_pop: If a work should be rolled, use a clone of it rather than
+consume a rollable work
+- openwrt: Move Makefile into a bfgminer subdirectory to avoid symlinking issues
+- openwrt: Use --with-curses=ncurses to avoid ncursesw dependency
+- configure: Support --with-curses=FOO to look for curses implementation in
+libFOO
+- Set pool socket to INVSOCK after closing connection, just in case
+- Clean up compiler warnings
+- Bugfix: Check that pool is active one last time before selecting it
+- Bugfix: Trim whitespace (like newlines) off the end of debug info from
+libcurl
+- Bugfix: submit_nonce: Backup the original work->blk.nonce since the miner
+code uses it to track work consumption
+- Bugfix: Scheduler needs to unpause disabled devices, even if it isn't waking
+them up
+- Bugfix: Use SOCKETTYPE for notifiers, to avoid potential overflow on Win64
+- Bugfix: Some versions of MingW define localtime_r, but don't handle the
+timeval.tv_sec case that we use; so undef any preexisting one and use our own
+- Bugfix: reinit_gpu: Remember the selected device to correctly change
+properties of
+- Bugfix: cpu: reinit_device hasn't worked since 93b284d, so just remove it
+entirely instead of letting it screw with thread 0
+- Document necessity to run ldconfig and possibly configure ld.so
+- Bugfix: Complete startup after just one pool is found active, no need to wait
+for the rest
+- Bugfix: Update links
+- miner.php: Replace PGA dev number with concatenated device ID
+- Bugfix: miner.php: Display devices with aligned columns instead of assuming
+they come out of the RPC aligned
+- Bugfix: miner.php: Silence PHP "local timezone" warning
+- Bugfix: api-example: Try to use BSD sockets on any non-Windows platform
+- Bugfix: stratum: Delay mining.get_transactions request until after auth has
+succeeded, so its failure doesn't abort the connection (also avoids any delay
+from a large result)
+- --no-getwork option to disable getwork protocol support
+- Clarify dependencies with Debian/Ubuntu package names
+
+
 BFGMiner Version 2.10.5 - February 8, 2013
 
 - Bugfix: Actually increment template_nonce when we use it
