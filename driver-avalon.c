@@ -39,7 +39,7 @@
 #include "hexdump.c"
 
 static int option_offset = -1;
-struct avalon_info **avalon_info;
+struct avalon_info **avalon_infos;
 struct device_drv avalon_drv;
 
 static int avalon_init_task(struct avalon_task *at,
@@ -171,7 +171,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	buf[4] = tt;
 #endif
 	if (likely(avalon)) {
-		info = avalon_info[avalon->device_id];
+		info = avalon_infos[avalon->device_id];
 		delay = nr_len * 10 * 1000000000ULL;
 		delay = delay / info->baud;
 	}
@@ -265,7 +265,7 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 
 	if (likely(thr)) {
 		avalon = thr->cgpu;
-		info = avalon_info[avalon->device_id];
+		info = avalon_infos[avalon->device_id];
 		read_count = info->read_count;
 	}
 
@@ -300,7 +300,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 	if (!work)
 		return false;
 
-	info = avalon_info[avalon->device_id];
+	info = avalon_infos[avalon->device_id];
 	info->matching_work[i]++;
 	*nonce = htole32(ar->nonce);
 	submit_nonce(thr, work, *nonce);
@@ -360,7 +360,7 @@ static void avalon_idle(struct cgpu_info *avalon)
 	struct avalon_task at;
 
 	int fd = avalon->device_fd;
-	struct avalon_info *info = avalon_info[avalon->device_id];
+	struct avalon_info *info = avalon_infos[avalon->device_id];
 	int avalon_get_work_count = info->miner_count;
 
 	i = 0;
@@ -559,19 +559,19 @@ static bool avalon_detect_one(const char *devpath)
 		   * return false; */
 	}
 	
-	avalon_info = realloc(avalon_info,
+	avalon_infos = realloc(avalon_infos,
 			      sizeof(struct avalon_info *) *
 			      (total_devices + 1));
 
 	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
 	       devpath, avalon->device_id);
 
-	avalon_info[avalon->device_id] = (struct avalon_info *)
+	avalon_infos[avalon->device_id] = (struct avalon_info *)
 		malloc(sizeof(struct avalon_info));
-	if (unlikely(!(avalon_info[avalon->device_id])))
-		quit(1, "Failed to malloc avalon_info");
+	if (unlikely(!(avalon_infos[avalon->device_id])))
+		quit(1, "Failed to malloc avalon_infos");
 
-	info = avalon_info[avalon->device_id];
+	info = avalon_infos[avalon->device_id];
 
 	memset(info, 0, sizeof(struct avalon_info));
 
@@ -622,7 +622,7 @@ static void avalon_init(struct cgpu_info *avalon)
 
 	avalon->device_fd = -1;
 	fd = avalon_open(avalon->device_path,
-			     avalon_info[avalon->device_id]->baud);
+			     avalon_infos[avalon->device_id]->baud);
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Avalon: Failed to open on %s",
 		       avalon->device_path);
@@ -642,7 +642,7 @@ static void avalon_init(struct cgpu_info *avalon)
 static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
-	struct avalon_info *info = avalon_info[avalon->device_id];
+	struct avalon_info *info = avalon_infos[avalon->device_id];
 	struct timeval now;
 
 	avalon->works = calloc(info->miner_count * sizeof(struct work *), 1);
@@ -667,7 +667,7 @@ static void avalon_free_work(struct thr_info *thr)
 	if (unlikely(!avalon->works))
 		return;
 	works = avalon->works;
-	info = avalon_info[avalon->device_id];
+	info = avalon_infos[avalon->device_id];
 
 	for (i = 0; i < info->miner_count; i++) {
 		if (likely(works[i])) {
@@ -681,7 +681,7 @@ static void do_avalon_close(struct thr_info *thr)
 {
 	struct avalon_result ar;
 	struct cgpu_info *avalon = thr->cgpu;
-	struct avalon_info *info = avalon_info[avalon->device_id];
+	struct avalon_info *info = avalon_infos[avalon->device_id];
 
 	avalon_free_work(thr);
 	sleep(1);
@@ -761,10 +761,10 @@ static bool avalon_fill(struct cgpu_info *avalon)
 
 	if (unlikely(!work))
 		return false;
-	if (avalon->queued == avalon_info[avalon->device_id]->miner_count)
+	if (avalon->queued == avalon_infos[avalon->device_id]->miner_count)
 		return true;
 	avalon->works[avalon->queued++] = work;
-	if (avalon->queued == avalon_info[avalon->device_id]->miner_count)
+	if (avalon->queued == avalon_infos[avalon->device_id]->miner_count)
 		return true;
 	return false;
 }
@@ -789,7 +789,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	avalon = thr->cgpu;
 	works = avalon->works;
-	info = avalon_info[avalon->device_id];
+	info = avalon_infos[avalon->device_id];
 	avalon_get_work_count = info->miner_count;
 
 	if (unlikely(avalon->device_fd == -1)) {
@@ -941,7 +941,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct avalon_info *info = avalon_info[cgpu->device_id];
+	struct avalon_info *info = avalon_infos[cgpu->device_id];
 
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "miner_count", &(info->miner_count),false);
