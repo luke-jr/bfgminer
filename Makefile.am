@@ -98,6 +98,10 @@ if HAS_ICARUS
 cgminer_SOURCES += driver-icarus.c
 endif
 
+if HAS_AVALON
+cgminer_SOURCES += driver-avalon.c
+endif
+
 if HAS_MODMINER
 cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
