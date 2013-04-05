@@ -222,12 +222,12 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 			ret = read(fd, buf, read_amount);
 			if (unlikely(ret < 0))
 				return AVA_GETS_ERROR;
-			if (first) {
-				if (tv_finish)
+			if (likely(first)) {
+				if (likely(tv_finish))
 					gettimeofday(tv_finish, NULL);
 				first = false;
 			}
-			if (ret >= read_amount)
+			if (likely(ret >= read_amount))
 				return AVA_GETS_OK;
 			buf += ret;
 			read_amount -= ret;
