@@ -1158,6 +1158,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 
 static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 {
+	struct bitforce_data *data = cgpu->cgpu_data;
 	struct api_data *root = NULL;
 
 	// Warning, access to these is not locked - but we don't really
@@ -1165,7 +1166,13 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
 	root = api_add_uint(root, "Sleep Time", &(cgpu->sleep_ms), false);
-	root = api_add_uint(root, "Avg Wait", &(cgpu->avg_wait_d), false);
+	if (data->proto != BFP_BQUEUE)
+		root = api_add_uint(root, "Avg Wait", &(cgpu->avg_wait_d), false);
+	if (data->temp[0] > 0 && data->temp[1] > 0)
+	{
+		root = api_add_temp(root, "Temperature0", &(data->temp[0]), false);
+		root = api_add_temp(root, "Temperature1", &(data->temp[1]), false);
+	}
 
 	return root;
 }
