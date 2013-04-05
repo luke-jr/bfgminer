@@ -832,8 +832,14 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			{
 				// Didn't find the one we're waiting on
 				// Must be extra stuff in the queue results
+				char *xmid = bin2hex(work->midstate, 32);
+				char *xdt = bin2hex(&work->data[64], 12);
 				applog(LOG_WARNING, "%"PRIpreprv": Found extra garbage in queue results: %s",
 				       bitforce->proc_repr, pdevbuf);
+				applog(LOG_WARNING, "%"PRIpreprv": ...while waiting on: %s,%s",
+				       bitforce->proc_repr, xmid, xdt);
+				free(xmid);
+				free(xdt);
 				count = 0;
 			}
 			else
