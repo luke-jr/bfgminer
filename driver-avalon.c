@@ -645,7 +645,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	struct avalon_info *info = avalon_infos[avalon->device_id];
 	struct timeval now;
 
-	avalon->works = calloc(info->miner_count * sizeof(struct work *), 1);
+	avalon->works = calloc(info->miner_count * sizeof(struct work *), 4);
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
 	__avalon_init(avalon);
@@ -669,7 +669,31 @@ static void avalon_free_work(struct thr_info *thr)
 	works = avalon->works;
 	info = avalon_infos[avalon->device_id];
 
-	for (i = 0; i < info->miner_count; i++) {
+	for (i = 0; i < info->miner_count * 4; i++) {
+		if (works[i]) {
+			work_completed(avalon, works[i]);
+			works[i] = NULL;
+		}
+	}
+}
+
+static void avalon_free_work_array(struct thr_info *thr)
+{
+	struct cgpu_info *avalon;
+	struct work **works;
+	int i, j, mc, wa;
+
+	avalon = thr->cgpu;
+	avalon->queued = 0;
+	if (unlikely(!avalon->works))
+		return;
+	works = avalon->works;
+	mc = avalon_infos[avalon->device_id]->miner_count;
+	wa = avalon->work_array + 1;
+	if (wa > 3)
+		wa = 0;
+
+	for (i = wa * mc, j = 0; j < mc; i++, j++) {
 		if (likely(works[i])) {
 			work_completed(avalon, works[i]);
 			works[i] = NULL;
@@ -758,13 +782,14 @@ static inline void adjust_fan(struct avalon_info *info)
 static bool avalon_fill(struct cgpu_info *avalon)
 {
 	struct work *work = get_queued(avalon);
+	int mc = avalon_infos[avalon->device_id]->miner_count;
 
 	if (unlikely(!work))
 		return false;
-	if (avalon->queued == avalon_infos[avalon->device_id]->miner_count)
+	if (avalon->queued >= mc)
 		return true;
-	avalon->works[avalon->queued++] = work;
-	if (avalon->queued == avalon_infos[avalon->device_id]->miner_count)
+	avalon->works[avalon->work_array * mc + avalon->queued++] = work;
+	if (avalon->queued >= mc)
 		return true;
 	return false;
 }
@@ -780,6 +805,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	struct avalon_result ar;
 	int i;
 	int avalon_get_work_count;
+	int start_count, end_count;
 
 	struct timeval tv_start, tv_finish, elapsed;
 	uint32_t nonce;
@@ -806,7 +832,9 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	tcflush(fd, TCOFLUSH);
 #endif
 
-	i = 0;
+	start_count = avalon->work_array * avalon_get_work_count;
+	end_count = start_count + avalon_get_work_count;
+	i = start_count;
 	while (true) {
 		avalon_init_task(&at, 0, 0, info->fan_pwm,
 				 info->timeout, info->asic_count,
@@ -815,7 +843,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		ret = avalon_send_task(fd, &at, avalon);
 		if (unlikely(ret == AVA_SEND_ERROR ||
 			     (ret == AVA_SEND_BUFFER_EMPTY &&
-			      (i + 1 == avalon_get_work_count) &&
+			      (i + 1 == end_count) &&
 			      first_try))) {
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error(buffer)",
@@ -826,7 +854,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			avalon_init(avalon);
 			return 0;	/* This should never happen */
 		}
-		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == avalon_get_work_count)) {
+		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == end_count)) {
 			first_try = 1;
 			return 0xffffffff;
 		}
@@ -908,7 +936,9 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		return 0;
 	}
 
-	avalon_free_work(thr);
+	avalon_free_work_array(thr);
+	if (++avalon->work_array > 3)
+		avalon->work_array = 0;
 
 	record_temp_fan(info, &ar, &(avalon->temp));
 	applog(LOG_INFO,

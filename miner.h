@@ -429,6 +429,7 @@ struct cgpu_info {
 	};
 #ifdef USE_AVALON
 	struct work **works;
+	int work_array;
 	int queued;
 #endif
 #ifdef USE_USBUTILS
