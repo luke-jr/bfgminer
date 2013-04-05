@@ -158,10 +158,26 @@ AC_CHECK_LIB(pthread, pthread_create, [
         AC_MSG_ERROR([Could not find pthread library - please install libpthread]))
 PTHREAD_LIBS=-lpthread
 
-AC_CHECK_LIB(jansson, json_loads, [
+PKG_CHECK_MODULES([JANSSON],[jansson],[
 	true
-],
-	AC_MSG_ERROR([Could not find jansson library]))
+],[
+	AC_MSG_CHECKING([for jansson in system-default locations])
+	LIBS="$LIBS -ljansson"
+	AC_TRY_LINK([
+		#include <jansson.h>
+	],[
+		json_object();
+	],[
+		AC_MSG_RESULT([found])
+		JANSSON_LIBS=-ljansson
+	],[
+		AC_MSG_RESULT([not found])
+		AC_MSG_ERROR([Could not find jansson library])
+	])
+	LIBS="${save_LIBS}"
+])
+AC_SUBST(JANSSON_CFLAGS)
+AC_SUBST(JANSSON_LIBS)
 
 if test "x$opencl" = xyes; then
 	adl="yes"
@@ -390,8 +406,6 @@ AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
-JANSSON_LIBS=-ljansson
-
 dnl Find YASM
 has_yasm=false
 if test "x$have_x86_32$have_x86_64" != "xfalsefalse"; then
@@ -605,7 +619,6 @@ AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo121016"], [Filename for diablo ker
 AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt121016"], [Filename for scrypt kernel])
 
 
-AC_SUBST(JANSSON_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(DLOPEN_FLAGS)
 AC_SUBST(PTHREAD_LIBS)
@@ -709,7 +722,7 @@ fi
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............:" $CPPFLAGS $NCURSES_CPPFLAGS
-echo "  CFLAGS...............:" $CFLAGS $LIBUSB_CFLAGS
+echo "  CFLAGS...............:" $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS
 echo "  LDFLAGS..............:" $LDFLAGS $PTHREAD_FLAGS
 echo "  LDADD................:" $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS
 echo
