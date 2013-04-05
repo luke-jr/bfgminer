@@ -221,6 +221,7 @@ struct bitforce_data {
 	enum bitforce_proto proto;
 	bool sc;
 	int queued;
+	bool already_have_results;
 	bool just_flushed;
 	int ready_to_queue;
 	unsigned result_busy_polled;
@@ -608,11 +609,16 @@ void bitforce_job_start(struct thr_info *thr)
 	
 	if (data->queued)
 	{
+		uint32_t delay;
+		
 		// get_results collected more accurate job start time
 		mt_job_transition(thr);
 		job_start_complete(thr);
 		data->queued = 0;
-		timer_set_delay(&thr->tv_morework, &bitforce->work_start_tv, bitforce->sleep_ms * 1000);
+		delay = (uint32_t)bitforce->sleep_ms * 1000;
+		if (unlikely(data->already_have_results))
+			delay = 0;
+		timer_set_delay(&thr->tv_morework, &bitforce->work_start_tv, delay);
 		return;
 	}
 
@@ -717,6 +723,8 @@ int bitforce_zox(struct thr_info *thr, const char *cmd)
 	return count;
 }
 
+static inline char *next_line(char *);
+
 static
 void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 {
@@ -755,6 +763,14 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	}
 
 	while (1) {
+		if (data->already_have_results)
+		{
+			data->already_have_results = false;
+			strcpy(pdevbuf, "COUNT:0");
+			count = 1;
+			break;
+		}
+		
 		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
 		count = bitforce_zox(thr, cmd);
 
@@ -767,6 +783,40 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			goto out;
 		}
 
+		if (count > 0)
+		{
+			// Check that queue results match the current work
+			// Also, if there are results from the next work, short-circuit this wait
+			unsigned char midstate[32], datatail[12];
+			char *p;
+			int i;
+			
+			p = pdevbuf;
+			for (i = 0; i < count; ++i)
+			{
+				p = next_line(p);
+				hex2bin(midstate, p, 32);
+				hex2bin(datatail, &p[65], 12);
+				if (!(memcmp(work->midstate, midstate, 32) || memcmp(&work->data[64], datatail, 12)))
+					break;
+			}
+			if (i == count)
+			{
+				// Didn't find the one we're waiting on
+				// Must be extra stuff in the queue results
+				applog(LOG_WARNING, "%"PRIpreprv": Found extra garbage in queue results: %s",
+				       bitforce->proc_repr, pdevbuf);
+				count = 0;
+			}
+			else
+			if (i == count - 1)
+				// Last one found is what we're looking for
+			{}
+			else
+				// We finished the next job too!
+				data->already_have_results = true;
+		}
+		
 		if (!count)
 			goto noqr;
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
