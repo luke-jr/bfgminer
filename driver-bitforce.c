@@ -33,20 +33,26 @@
 #define MAX_START_DELAY_MS 100
 #define tv_to_ms(tval) ((unsigned long)(tval.tv_sec * 1000 + tval.tv_usec / 1000))
 #define TIME_AVG_CONSTANT 8
+#define BITFORCE_MAX_QUEUED 10
+#define BITFORCE_MAX_QRESULTS 10
+#define BITFORCE_GOAL_QRESULTS (BITFORCE_MAX_QRESULTS / 2)
 
 enum bitforce_proto {
 	BFP_WORK,
 	BFP_RANGE,
 	BFP_QUEUE,
+	BFP_BQUEUE,
 };
 
 static const char *protonames[] = {
 	"full work",
 	"nonce range",
 	"work queue",
+	"bulk queue",
 };
 
 struct device_api bitforce_api;
+struct device_api bitforce_queue_api;
 
 // Code must deal with a timeout
 #define BFopen(devpath)  serial_open(devpath, 0, 250, true)
@@ -176,6 +182,8 @@ static bool bitforce_detect_one(const char *devpath)
 	// We have a real BitForce!
 	bitforce = calloc(1, sizeof(*bitforce));
 	bitforce->api = &bitforce_api;
+	if (initdata->sc && procs > 1)
+		bitforce->api = &bitforce_queue_api;
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
 	bitforce->procs = procs;
@@ -208,13 +216,17 @@ struct bitforce_data {
 	unsigned char *next_work_obs;    // Start of data to send
 	unsigned char next_work_obsz;
 	const char *next_work_cmd;
-	char noncebuf[0x200];  // Large enough for 3 works of queue results
+	char noncebuf[14 + (BITFORCE_MAX_QUEUED * 165)];
 	int poll_func;
 	enum bitforce_proto proto;
 	bool sc;
-	bool queued;
+	int queued;
+	bool already_have_results;
+	bool just_flushed;
+	int ready_to_queue;
 	unsigned result_busy_polled;
 	unsigned sleep_ms_default;
+	struct timeval tv_hashmeter_start;
 };
 
 static void bitforce_clear_buffer(struct cgpu_info *);
@@ -483,6 +495,8 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 	memcpy(ob_dt, work->data + 64, 12);
 	switch (data->proto)
 	{
+		case BFP_BQUEUE:
+			quit(1, "%"PRIpreprv": Impossible BFP_BQUEUE in bitforce_job_prepare", bitforce->proc_repr);
 		case BFP_RANGE:
 		{
 			uint32_t *ob_nonce = (uint32_t*)&(ob_dt[32]);
@@ -513,7 +527,7 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 				else
 				{
 					dbg_block_data(bitforce);
-					data->queued = true;
+					data->queued = 1;
 				}
 			}
 			// fallthru...
@@ -595,11 +609,16 @@ void bitforce_job_start(struct thr_info *thr)
 	
 	if (data->queued)
 	{
+		uint32_t delay;
+		
 		// get_results collected more accurate job start time
 		mt_job_transition(thr);
 		job_start_complete(thr);
-		data->queued = false;
-		timer_set_delay(&thr->tv_morework, &bitforce->work_start_tv, bitforce->sleep_ms * 1000);
+		data->queued = 0;
+		delay = (uint32_t)bitforce->sleep_ms * 1000;
+		if (unlikely(data->already_have_results))
+			delay = 0;
+		timer_set_delay(&thr->tv_morework, &bitforce->work_start_tv, delay);
 		return;
 	}
 
@@ -654,11 +673,63 @@ commerr:
 static char _discardedbuf[0x10];
 
 static
-void bitforce_job_get_results(struct thr_info *thr, struct work *work)
+int bitforce_zox(struct thr_info *thr, const char *cmd)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fd = bitforce->device->device_fd;
+	char *pdevbuf = &data->noncebuf[0];
+	int count;
+	
+	mutex_lock(mutexp);
+	bitforce_cmd1(fd, data->xlink_id, pdevbuf, sizeof(data->noncebuf), cmd);
+	if (!strncasecmp(pdevbuf, "INPROCESS:", 10))
+		BFgets(pdevbuf, sizeof(data->noncebuf), fd);
+	if (!strncasecmp(pdevbuf, "COUNT:", 6))
+	{
+		count = atoi(&pdevbuf[6]);
+		size_t cls = strlen(pdevbuf);
+		char *pmorebuf = &pdevbuf[cls];
+		size_t szleft = sizeof(data->noncebuf) - cls, sz;
+		
+		if (count && data->queued)
+			gettimeofday(&bitforce->work_start_tv, NULL);
+		
+		while (true)
+		{
+			BFgets(pmorebuf, szleft, fd);
+			if (!strncasecmp(pmorebuf, "OK", 2))
+			{
+				pmorebuf[0] = '\0';  // process expects only results
+				break;
+			}
+			sz = strlen(pmorebuf);
+			szleft -= sz;
+			pmorebuf += sz;
+			if (unlikely(!szleft))
+			{
+				// Out of buffer space somehow :(
+				applog(LOG_DEBUG, "%"PRIpreprv": Ran out of buffer space for results, discarding extra data", bitforce->proc_repr);
+				pmorebuf = _discardedbuf;
+				szleft = sizeof(_discardedbuf);
+			}
+		}
+	}
+	else
+		count = -1;
+	mutex_unlock(mutexp);
+	
+	return count;
+}
+
+static inline char *next_line(char *);
+
+static
+void bitforce_job_get_results(struct thr_info *thr, struct work *work)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
 	int fdDev = bitforce->device->device_fd;
 	unsigned int delay_time_ms;
 	struct timeval elapsed;
@@ -692,45 +763,16 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	}
 
 	while (1) {
-		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
-		mutex_lock(mutexp);
-		bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(data->noncebuf), cmd);
-		if (!strncasecmp(pdevbuf, "COUNT:", 6))
+		if (data->already_have_results)
 		{
-			count = atoi(&pdevbuf[6]);
-			size_t cls = strlen(pdevbuf);
-			char *pmorebuf = &pdevbuf[cls];
-			size_t szleft = sizeof(data->noncebuf) - cls, sz;
-			
-			if (count && data->queued)
-			{
-				gettimeofday(&now, NULL);
-				bitforce->work_start_tv = now;
-			}
-			
-			while (true)
-			{
-				BFgets(pmorebuf, szleft, fdDev);
-				if (!strncasecmp(pmorebuf, "OK", 2))
-				{
-					pmorebuf[0] = '\0';  // process expects only results
-					break;
-				}
-				sz = strlen(pmorebuf);
-				szleft -= sz;
-				pmorebuf += sz;
-				if (unlikely(!szleft))
-				{
-					// Out of buffer space somehow :(
-					applog(LOG_DEBUG, "%"PRIpreprv": Ran out of buffer space for results, discarding extra data", bitforce->proc_repr);
-					pmorebuf = _discardedbuf;
-					szleft = sizeof(_discardedbuf);
-				}
-			}
+			data->already_have_results = false;
+			strcpy(pdevbuf, "COUNT:0");
+			count = 1;
+			break;
 		}
-		else
-			count = -1;
-		mutex_unlock(mutexp);
+		
+		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
+		count = bitforce_zox(thr, cmd);
 
 		gettimeofday(&now, NULL);
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
@@ -741,6 +783,40 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			goto out;
 		}
 
+		if (count > 0)
+		{
+			// Check that queue results match the current work
+			// Also, if there are results from the next work, short-circuit this wait
+			unsigned char midstate[32], datatail[12];
+			char *p;
+			int i;
+			
+			p = pdevbuf;
+			for (i = 0; i < count; ++i)
+			{
+				p = next_line(p);
+				hex2bin(midstate, p, 32);
+				hex2bin(datatail, &p[65], 12);
+				if (!(memcmp(work->midstate, midstate, 32) || memcmp(&work->data[64], datatail, 12)))
+					break;
+			}
+			if (i == count)
+			{
+				// Didn't find the one we're waiting on
+				// Must be extra stuff in the queue results
+				applog(LOG_WARNING, "%"PRIpreprv": Found extra garbage in queue results: %s",
+				       bitforce->proc_repr, pdevbuf);
+				count = 0;
+			}
+			else
+			if (i == count - 1)
+				// Last one found is what we're looking for
+			{}
+			else
+				// We finished the next job too!
+				data->already_have_results = true;
+		}
+		
 		if (!count)
 			goto noqr;
 		if (pdevbuf[0] && strncasecmp(pdevbuf, "B", 1)) /* BFL does not respond during throttling */
@@ -991,6 +1067,8 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	
 	for ( ; bitforce; bitforce = bitforce->next_proc)
 	{
+		thr = bitforce->thr[0];
+		
 		if (unlikely(xlink_id > 30))
 		{
 			applog(LOG_ERR, "%"PRIpreprv": Failed to find XLINK address", bitforce->proc_repr);
@@ -1014,7 +1092,14 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			data->next_work_ob[8+32+12+8] = '\xAA';
 			data->next_work_obs = &data->next_work_ob[7];
 			
-			bitforce_change_mode(bitforce, BFP_QUEUE);
+			if (bitforce->api == &bitforce_queue_api)
+			{
+				INIT_LIST_HEAD(&thr->work_list);
+				bitforce_change_mode(bitforce, BFP_BQUEUE);
+				timer_set_delay_from_now(&thr->tv_poll, 0);
+			}
+			else
+				bitforce_change_mode(bitforce, BFP_QUEUE);
 		}
 		else
 		{
@@ -1094,6 +1179,291 @@ struct device_api bitforce_api = {
 	.job_get_results = bitforce_job_get_results,
 	.poll = bitforce_poll,
 	.job_process_results = bitforce_job_process_results,
+	.thread_shutdown = bitforce_shutdown,
+	.thread_enable = biforce_thread_enable
+};
+
+
+static inline
+void bitforce_set_queue_full(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	
+	thr->queue_full = (data->queued + data->ready_to_queue >= BITFORCE_MAX_QUEUED);
+}
+
+static
+bool bitforce_send_queue(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fd = bitforce->device->device_fd;
+	struct work *work;
+	struct list_head *pos;
+	
+	if (unlikely(!(fd && data->ready_to_queue)))
+		return false;
+	
+	char buf[0x100];
+	int queued_ok;
+	size_t qjs_sz = (32 + 12 + 2);
+	size_t qjp_sz = 4 + (qjs_sz * data->ready_to_queue);
+	uint8_t qjp[qjp_sz], *qjs;
+	qjp[0] = qjp_sz - 1;
+	qjp[1] = 0xc1;
+	qjp[2] = data->ready_to_queue;
+	qjp[qjp_sz - 1] = 0xfe;
+	qjs = &qjp[qjp_sz - 1];
+	
+	pos = thr->work_list.prev;
+	for (int i = data->ready_to_queue; i > 0; --i, pos = pos->prev)
+	{
+		work = list_entry(pos, typeof(*work), list);
+		*(--qjs) = 0xaa;
+		memcpy(qjs -= 12, work->data + 64, 12);
+		memcpy(qjs -= 32, work->midstate, 32);
+		*(--qjs) = 45;
+	}
+	
+	mutex_lock(mutexp);
+	bitforce_cmd2(fd, data->xlink_id, buf, sizeof(buf), "ZWX", qjp, qjp_sz);
+	mutex_unlock(mutexp);
+	
+	if (!strncasecmp(buf, "ERR:QUEUE", 9))
+	{
+		// Queue full :(
+		applog(LOG_DEBUG, "%"PRIpreprv": Device queue full while attempting to append %d jobs (queued<=%d)",
+	           bitforce->proc_repr,
+	           data->ready_to_queue, data->queued);
+		thr->queue_full = true;
+		return false;
+	}
+	if (strncasecmp(buf, "OK:QUEUED", 9))
+	{
+		// TODO: ERR:UNKNOWN COMMAND
+		applog(LOG_DEBUG, "%"PRIpreprv": Unexpected error attempting to append %d jobs (queued<=%d): %s",
+	           bitforce->proc_repr,
+	           data->ready_to_queue, data->queued, buf);
+		return false;
+	}
+	
+	queued_ok = atoi(&buf[9]);
+	data->queued += queued_ok;
+	applog(LOG_DEBUG, "%"PRIpreprv": Successfully queued %d/%d jobs on device (queued<=%d)",
+	       bitforce->proc_repr,
+	       queued_ok, data->ready_to_queue, data->queued);
+	data->ready_to_queue -= queued_ok;
+	thr->queue_full = data->ready_to_queue;
+	data->just_flushed = false;
+	
+	return true;
+}
+
+void work_list_del(struct list_head *pos)
+{
+	struct work *work;
+	
+	work = list_entry(pos, typeof(*work), list);
+	list_del(pos);
+	free_work(work);
+}
+
+static
+bool bitforce_queue_do_results(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	int fd = bitforce->device->device_fd;
+	int count;
+	char *buf = &data->noncebuf[0];
+	unsigned char midstate[32], datatail[12];
+	struct work *work;
+	struct list_head *pos, *next_pos;
+	struct timeval tv_now, tv_elapsed;
+	
+	if (unlikely(!fd))
+		return false;
+	
+	count = bitforce_zox(thr, "ZOX");
+	
+	if (!count)
+		return true;
+	
+	if (unlikely(count < 0))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Received unexpected queue result response: %s", bitforce->proc_repr, buf);
+		++bitforce->hw_errors;
+		++hw_errors;
+		return false;
+	}
+	
+	if (unlikely(list_empty(&thr->work_list)))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Received %d queued results when there was no queue", bitforce->proc_repr, count);
+		++bitforce->hw_errors;
+		++hw_errors;
+		return true;
+	}
+	
+	if (count != BITFORCE_GOAL_QRESULTS)
+	{
+		unsigned int old_sleep_ms = bitforce->sleep_ms;
+		bitforce->sleep_ms = (uint32_t)bitforce->sleep_ms * BITFORCE_GOAL_QRESULTS / (count ?: 1);
+		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time changed to: %ums",
+		       bitforce->proc_repr, count, old_sleep_ms, bitforce->sleep_ms);
+	}
+	else
+		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time unchanged",
+		       bitforce->proc_repr, count, bitforce->sleep_ms);
+	
+	count = 0;
+	while ((buf = next_line(buf)), buf[0])
+	{
+		if (strlen(buf) <= 90)
+		{
+			applog(LOG_ERR, "%"PRIpreprv": Gibberish within queue results: %s", bitforce->proc_repr, buf);
+			continue;
+		}
+		
+		hex2bin(midstate, buf, 32);
+		hex2bin(datatail, &buf[65], 12);
+		
+		for (pos = thr->work_list.next; ; pos = pos->next)
+		{
+			if (unlikely(pos == &thr->work_list))
+			{
+				applog(LOG_ERR, "%"PRIpreprv": Failed to find work for queue results", bitforce->proc_repr);
+				++bitforce->hw_errors;
+				++hw_errors;
+				goto next_qline;
+			}
+			
+			work = list_entry(pos, typeof(*work), list);
+			if (unlikely(memcmp(work->midstate, midstate, 32)))
+				continue;
+			if (unlikely(memcmp(&work->data[64], datatail, 12)))
+				continue;
+			break;
+		}
+		
+		++count;
+		if (atoi(&buf[90]))
+			bitforce_process_result_nonces(thr, work, &buf[92]);
+		
+		// Queue results are in order, so anything queued prior this is lost
+		// Delete all queued work up to, and including, this one
+		for ( ; pos != &thr->work_list; pos = next_pos)
+		{
+			next_pos = pos->prev;
+			work_list_del(pos);
+			--data->queued;
+		}
+next_qline: (void)0;
+	}
+	
+	bitforce_set_queue_full(thr);
+	
+	gettimeofday(&tv_now, NULL);
+	timersub(&tv_now, &data->tv_hashmeter_start, &tv_elapsed);
+	hashes_done(thr, (uint64_t)bitforce->nonces * count, &tv_elapsed, NULL);
+	data->tv_hashmeter_start = tv_now;
+	
+	return true;
+}
+
+static
+bool bitforce_queue_append(struct thr_info *thr, struct work *work)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	bool rv, ndq;
+	
+	bitforce_set_queue_full(thr);
+	rv = !thr->queue_full;
+	if (rv)
+	{
+		list_add_tail(&work->list, &thr->work_list);
+		++data->ready_to_queue;
+		applog(LOG_DEBUG, "%"PRIpreprv": Appending to driver queue (max=%u, ready=%d, queued<=%d)",
+		       bitforce->proc_repr,
+		       (unsigned)BITFORCE_MAX_QUEUED, data->ready_to_queue, data->queued);
+		bitforce_set_queue_full(thr);
+	}
+	
+	ndq = !data->queued;
+	if ((ndq)              // Device is idle
+	 || (data->ready_to_queue >= 5)  // ...or 5 items ready to go
+	 || (thr->queue_full)            // ...or done filling queue
+	 || (data->just_flushed)         // ...or queue was just flushed (only remaining job is partly done already)
+	)
+	{
+		bitforce_send_queue(thr);
+		if (ndq)
+			gettimeofday(&data->tv_hashmeter_start, NULL);
+	}
+	
+	return rv;
+}
+
+static
+void bitforce_queue_flush(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fd = bitforce->device->device_fd;
+	char buf[100];
+	unsigned flushed;
+	
+	mutex_lock(mutexp);
+	bitforce_cmd1(fd, data->xlink_id, buf, sizeof(buf), "ZQX");
+	mutex_unlock(mutexp);
+	if (unlikely(strncasecmp(buf, "OK:FLUSHED", 10)))
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Failed to flush device queue: %s", bitforce->proc_repr, buf);
+		flushed = 0;
+	}
+	else
+		flushed = atoi(&buf[10]);
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Flushed %u jobs from device and %d from driver",
+	       bitforce->proc_repr, flushed, data->ready_to_queue);
+	
+	data->queued -= flushed;
+	flushed += data->ready_to_queue;
+	data->ready_to_queue = 0;
+	while (flushed--)
+		work_list_del(thr->work_list.prev);
+	thr->queue_full = false;
+	data->just_flushed = true;
+	
+	bitforce_queue_do_results(thr);
+}
+
+static
+void bitforce_queue_poll(struct thr_info *thr)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	
+	bitforce_queue_do_results(thr);
+	timer_set_delay_from_now(&thr->tv_poll, bitforce->sleep_ms * 1000);
+}
+
+struct device_api bitforce_queue_api = {
+	.dname = "bitforce_queue",
+	.name = "BFL",
+	.minerloop = minerloop_queue,
+	.reinit_device = bitforce_init,
+	.get_statline_before = get_bitforce_statline_before,
+	.get_stats = bitforce_get_stats,
+	.identify_device = bitforce_identify,
+	.thread_prepare = bitforce_thread_prepare,
+	.thread_init = bitforce_thread_init,
+	.queue_append = bitforce_queue_append,
+	.queue_flush = bitforce_queue_flush,
+	.poll = bitforce_queue_poll,
 	.thread_shutdown = bitforce_shutdown,
 	.thread_enable = biforce_thread_enable
 };

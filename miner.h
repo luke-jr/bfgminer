@@ -297,16 +297,18 @@ struct device_api {
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
 
-	// === Implemented by minerloop_async ===
-
-	// Can be used per-thread or per-processor
+	// Can be used per-thread or per-processor (only with minerloop async or queue!)
 	void (*poll)(struct thr_info *);
 
-	// Job-specific functions (only with minerloop_async!)
+	// === Implemented by minerloop_async ===
 	bool (*job_prepare)(struct thr_info*, struct work*, uint64_t);
 	void (*job_start)(struct thr_info*);
 	void (*job_get_results)(struct thr_info*, struct work*);
 	int64_t (*job_process_results)(struct thr_info*, struct work*, bool stopping);
+
+	// === Implemented by minerloop_queue ===
+	bool (*queue_append)(struct thr_info *, struct work *);
+	void (*queue_flush)(struct thr_info *);
 };
 
 enum dev_enable {
@@ -578,6 +580,11 @@ struct thr_info {
 	bool starting_next_work;
 	uint32_t _max_nonce;
 	notifier_t mutex_request;
+
+	// Used by minerloop_queue
+	struct list_head work_list;
+	bool queue_full;
+	bool _last_sbr_state;
 
 	bool	work_restart;
 	notifier_t work_restart_notifier;
