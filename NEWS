@@ -1,5 +1,43 @@
+Version 2.11.4 - April 5th, 2013
+
+- Remove bfl-sc option  from configure for 2.11 branch.
+- Only update hashrate calculation with the log interval.
+- Update the total_tv_end only when we show the log to prevent failure to update
+logs.
+- Minor README updates.
+- Add example 7970 tuning for scrypt in readme.
+- Update driver recommendations.
+- Add extensive GPU FAQs for the flood of new Scrypt miners.
+- Remove help option for cpumining in build environment.
+- Remove scripts that make it too easy to compile CPU mining support.
+- Win32 and win64 build updates
+- Remove references to CPU mining from README.
+- Show share hash as little endian as needed.
+- usbutils extra message requirements
+- Make hashmeter frequency for hash_queued_work match sole_work.
+- Update links and recommended SDKs.
+- Update scrypt readme re drivers and sdk.
+- usbutils.c usb_cmdname() usb_cmds -> string name
+- BFL FPGA Windows timeout set to 999ms
+- AUTHORS - spam update time (one year since the last)
+- Update README for x970 memdiff values.
+- Update README to match changes to display.
+- Remove increasingly irrelevant discarded work from status lines.
+- Remove increasingly irrelevant queued and efficiency values from status and
+move WU to status line.
+- Allow cgminer to start if usb hotplug is enabled but no devices yet exist.
+- Do not scan other gpu platforms if one is specified.
+- Update README for sync objects on windows.
+- Update README about intensity.
+- Add information for setting gpu max alloc and sync parameters for windows with
+scrypt.
+- If the hashmeter is less than the log interval and being updated by the
+watchdog, don't update the hashrate.
+
+
 Version 2.11.3 - March 17, 2013
 
+- Update docs and reorder README to show executive summary near top.
 - Update the hashmeter at most 5 times per second.
 - Usbutils use its own internal read buffer
 - Calculate work utility for devices that support target diffs of greater than
