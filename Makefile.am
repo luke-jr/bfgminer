@@ -27,7 +27,11 @@ cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @UDEV_LIBS@ @LIBUSB_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 
+if HAVE_WINDOWS
+cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@ @LIBUSB_CFLAGS@
+else
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@ @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
+endif
 
 # common sources
 cgminer_SOURCES := cgminer.c
