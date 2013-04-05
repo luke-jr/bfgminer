@@ -289,14 +289,14 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 {
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
-	int avalon_get_work_count;
 	struct work *work;
 
 	avalon = thr->cgpu;
 	if (unlikely(!avalon->works))
 		return false;
 
-	work = find_queued_work_bymidstate(avalon, ar->midstate, 32, ar->data, 64, 12);
+	work = find_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
+					   (char *)ar->data, 64, 12);
 	if (!work)
 		return false;
 
