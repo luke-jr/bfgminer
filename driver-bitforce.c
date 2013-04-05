@@ -1022,6 +1022,8 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	
 	bitforce = thr->cgpu;
 
+	free(initdata);
+
 	/* Pause each new thread at least 100ms between initialising
 	 * so the devices aren't making calls all at the same time. */
 	wait = thr->id * MAX_START_DELAY_MS;
