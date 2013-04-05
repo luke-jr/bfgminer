@@ -1,0 +1,11 @@
+--- a/Makefile.am	2013-04-04 18:03:03.676180429 +0200
++++ b/Makefile.am	2013-04-04 18:03:28.760195976 +0200
+@@ -36,7 +36,7 @@
+ if NEED_LIBBLKMAKER
+ SUBDIRS           += libblkmaker
+ bfgminer_CPPFLAGS += -Ilibblkmaker
+-bfgminer_LDFLAGS  += -Llibblkmaker/.libs -Wl,-rpath,libblkmaker/.libs
++bfgminer_LDFLAGS  += -Llibblkmaker/.libs
+ bfgminer_LDADD    += -lblkmaker-0.1 -lblkmaker_jansson-0.1
+ 
+ if HAVE_CYGWIN
