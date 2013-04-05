@@ -4697,9 +4697,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (total_diff.tv_sec < opt_log_interval) {
 		if (thr_id < 0)
 			goto out_unlock;
-	} else
+	} else {
 		showlog = true;
-	gettimeofday(&total_tv_end, NULL);
+		gettimeofday(&total_tv_end, NULL);
+	}
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 	decay_time(&rolling, local_mhashes_done / local_secs);
