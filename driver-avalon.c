@@ -40,7 +40,7 @@
 
 static int option_offset = -1;
 struct avalon_info **avalon_info;
-struct device_drv avalon_api;
+struct device_drv avalon_drv;
 
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
@@ -552,7 +552,7 @@ static bool avalon_detect_one(const char *devpath)
 
 	/* We have a real Avalon! */
 	avalon = calloc(1, sizeof(struct cgpu_info));
-	avalon->drv = &avalon_api;
+	avalon->drv = &avalon_drv;
 	avalon->device_path = strdup(devpath);
 	avalon->device_fd = fd;
 	avalon->threads = AVALON_MINER_THREADS;
@@ -613,7 +613,7 @@ static bool avalon_detect_one(const char *devpath)
 
 static inline void avalon_detect()
 {
-	serial_detect(&avalon_api, avalon_detect_one);
+	serial_detect(&avalon_drv, avalon_detect_one);
 }
 
 static void __avalon_init(struct cgpu_info *avalon)
