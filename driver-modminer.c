@@ -590,14 +590,8 @@ get_modminer_api_extra_device_status(struct cgpu_info*modminer)
 	struct api_data*root = NULL;
 	struct thr_info*thr = modminer->thr[0];
 	struct modminer_fpga_state *state = thr->cgpu_data;
-	float f;
 	double d;
 
-	if (state->temp)
-	{
-		f = state->temp;
-		root = api_add_temp(root, "Temperature", &f, true);
-	}
 	d = (double)state->dclk.freqM * 2;
 	root = api_add_freq(root, "Frequency", &d, true);
 	d = (double)state->dclk.freqMaxM * 2;
