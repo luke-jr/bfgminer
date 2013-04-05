@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
 		if (strcmp(argv[1], "-?") == 0
 		||  strcmp(argv[1], "-h") == 0
 		||  strcmp(argv[1], "--help") == 0) {
-			fprintf(stderr, "usAge: %s [command [ip/host [port]]]\n", argv[0]);
+			fprintf(stderr, "Usage: %s [command [ip/host [port]]]\n", argv[0]);
 			return 1;
 		}
 
