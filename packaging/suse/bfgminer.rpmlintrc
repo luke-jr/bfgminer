@@ -1,0 +1,6 @@
+addFilter("devel-file-in-non-devel-package")
+addFilter("no-manual-page-for-binary")
+addFilter("wrong-script-end-of-line-encoding")
+addFilter("standard-dir-owned-by-package")
+addFilter("script-without-shebang")
+addFilter("binary-or-shlib-calls-gethostbyname")
