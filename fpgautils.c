@@ -1,4 +1,5 @@
 /*
+ * Copyright 2013 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
  *
@@ -19,6 +20,7 @@
 #ifndef WIN32
 #include <errno.h>
 #include <termios.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -32,10 +34,12 @@
 
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
+#include <sys/ioctl.h>
 #endif
 
 #include "elist.h"
 #include "logging.h"
+#include "miner.h"
 #include "fpgautils.h"
 
 #ifdef HAVE_LIBUDEV
@@ -382,6 +386,14 @@ int serial_open(const char *devpath, unsigned long baud, signed short timeout, b
 	switch (baud) {
 	case 0:
 		break;
+	case 19200:
+		cfsetispeed(&my_termios, B19200);
+		cfsetospeed(&my_termios, B19200);
+		break;
+	case 38400:
+		cfsetispeed(&my_termios, B38400);
+		cfsetospeed(&my_termios, B38400);
+		break;
 	case 57600:
 		cfsetispeed(&my_termios, B57600);
 		cfsetospeed(&my_termios, B57600);
@@ -570,4 +582,14 @@ size_t _select_write(int fd, char *buf, size_t siz, struct timeval *timeout)
 	return wrote;
 }
 
+int get_serial_cts(int fd)
+{
+	int flags;
+
+	if (!fd)
+		return -1;
+
+	ioctl(fd, TIOCMGET, &flags);
+	return (flags & TIOCM_CTS) ? 1 : 0;
+}
 #endif // ! WIN32

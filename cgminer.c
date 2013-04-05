@@ -48,6 +48,7 @@
 #include "driver-opencl.h"
 #include "bench_block.h"
 #include "scrypt.h"
+#include "driver-avalon.h"
 
 #if defined(unix)
 	#include <errno.h>
@@ -55,9 +56,9 @@
 	#include <sys/wait.h>
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
 #	define USE_FPGA
-#if defined(USE_ICARUS)
+#if defined(USE_ICARUS) || defined(USE_AVALON)
 #	define USE_FPGA_SERIAL
 #endif
 #elif defined(USE_ZTEX)
@@ -138,6 +139,9 @@ bool opt_disable_pool;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
+#ifdef USE_AVALON
+char *opt_avalon_options = NULL;
+#endif
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
@@ -833,6 +837,15 @@ static char *set_icarus_timing(const char *arg)
 }
 #endif
 
+#ifdef USE_AVALON
+static char *set_avalon_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_avalon_options);
+
+	return NULL;
+}
+#endif
+
 #ifdef USE_USBUTILS
 static char *set_usb_select(const char *arg)
 {
@@ -1031,6 +1044,11 @@ static struct opt_table opt_config_table[] = {
 		     opt_hidden),
 	OPT_WITH_ARG("--icarus-timing",
 		     set_icarus_timing, NULL, NULL,
+		     opt_hidden),
+#endif
+#ifdef USE_AVALON
+	OPT_WITH_ARG("--avalon-options",
+		     set_avalon_options, NULL, NULL,
 		     opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
@@ -1358,6 +1376,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_ICARUS
 		"icarus "
+#endif
+#ifdef USE_AVALON
+		"avalon "
 #endif
 #ifdef USE_MODMINER
 		"modminer "
@@ -6792,6 +6813,10 @@ extern struct device_drv bitforce_drv;
 extern struct device_drv icarus_drv;
 #endif
 
+#ifdef USE_AVALON
+extern struct device_drv avalon_api;
+#endif
+
 #ifdef USE_MODMINER
 extern struct device_drv modminer_drv;
 #endif
@@ -7309,6 +7334,11 @@ int main(int argc, char *argv[])
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
 		icarus_drv.drv_detect();
+#endif
+
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_api.drv_detect();
 #endif
 
 #ifdef USE_BFLSC
