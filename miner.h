@@ -426,11 +426,11 @@ struct cgpu_info {
 #if defined(USE_ICARUS) || defined(USE_AVALON)
 		int device_fd;
 #endif
+	};
 #ifdef USE_AVALON
 	struct work **works;
 	int queued;
 #endif
-	};
 #ifdef USE_USBUTILS
 	struct cg_usb_info usbinfo;
 #endif
