@@ -272,6 +272,7 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	memset(result, 0, AVALON_READ_SIZE);
 	ret = avalon_gets(fd, result, read_count, thr, tv_finish);
 
+	memset(ar, 0, sizeof(struct avalon_result));
 	if (ret == AVA_GETS_OK) {
 		if (opt_debug) {
 			applog(LOG_DEBUG, "Avalon: get:");
@@ -283,35 +284,28 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	return ret;
 }
 
-static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
-			       struct avalon_result *ar, uint32_t *nonce)
+static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
+				uint32_t *nonce)
 {
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
 	int avalon_get_work_count, i;
-
-	if (unlikely(!work))
-		return -1;
+	struct work *work;
 
 	avalon = thr->cgpu;
+	if (unlikely(!avalon->works))
+		return false;
+
+	work = find_queued_work_bymidstate(avalon, ar->midstate, 32, ar->data, 64, 12);
+	if (!work)
+		return false;
+
 	info = avalon_info[avalon->device_id];
-	avalon_get_work_count = info->miner_count;
-
-	for (i = 0; i < avalon_get_work_count; i++) {
-		if (work[i] &&
-		    !memcmp(ar->data, work[i]->data + 64, 12) &&
-		    !memcmp(ar->midstate, work[i]->midstate, 32))
-			break;
-	}
-	if (i == avalon_get_work_count)
-		return -1;
-
 	info->matching_work[i]++;
 	*nonce = htole32(ar->nonce);
+	submit_nonce(thr, work, *nonce);
 
-	applog(LOG_DEBUG, "Avalon: match to work[%d](%p): %d",i, work[i],
-	       info->matching_work[i]);
-	return i;
+	return true;
 }
 
 static int avalon_reset(int fd, struct avalon_result *ar)
@@ -661,16 +655,18 @@ static bool avalon_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void avalon_free_work(struct thr_info *thr, struct work **works)
+static void avalon_free_work(struct thr_info *thr)
 {
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
+	struct work **works;
 	int i;
 
-	if (unlikely(!works))
-		return;
-
 	avalon = thr->cgpu;
+	avalon->queued = 0;
+	if (unlikely(!avalon->works))
+		return;
+	works = avalon->works;
 	info = avalon_info[avalon->device_id];
 
 	for (i = 0; i < info->miner_count; i++) {
@@ -687,6 +683,7 @@ static void do_avalon_close(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon_info[avalon->device_id];
 
+	avalon_free_work(thr);
 	sleep(1);
 	avalon_reset(avalon->device_fd, &ar);
 	avalon_idle(avalon);
@@ -694,10 +691,6 @@ static void do_avalon_close(struct thr_info *thr)
 	avalon->device_fd = -1;
 
 	info->no_matching_work = 0;
-	avalon_free_work(thr, info->bulk0);
-	avalon_free_work(thr, info->bulk1);
-	avalon_free_work(thr, info->bulk2);
-	avalon_free_work(thr, info->bulk3);
 }
 
 static inline void record_temp_fan(struct avalon_info *info, struct avalon_result *ar, float *temp_avg)
@@ -781,12 +774,11 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	struct cgpu_info *avalon;
 	struct work **works;
 	int fd, ret, full;
-	int64_t scanret = 0;
 
 	struct avalon_info *info;
 	struct avalon_task at;
 	struct avalon_result ar;
-	int i, work_i0, work_i1, work_i2, work_i3;
+	int i;
 	int avalon_get_work_count;
 
 	struct timeval tv_start, tv_finish, elapsed;
@@ -806,23 +798,13 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			/* fail the device if the reopen attempt fails */
-			scanret = -1;
-			goto out;
+			return -1;
 		}
 	}
 	fd = avalon->device_fd;
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
 #endif
-
-	for (i = 0; i < avalon_get_work_count; i++) {
-		info->bulk0[i] = info->bulk1[i];
-		info->bulk1[i] = info->bulk2[i];
-		info->bulk2[i] = info->bulk3[i];
-		info->bulk3[i] = works[i];
-		applog(LOG_DEBUG, "Avalon: bulk0/1/2 buffer [%d]: %p, %p, %p, %p",
-		       i, info->bulk0[i], info->bulk1[i], info->bulk2[i], info->bulk3[i]);
-	}
 
 	i = 0;
 	while (true) {
@@ -835,10 +817,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			     (ret == AVA_SEND_BUFFER_EMPTY &&
 			      (i + 1 == avalon_get_work_count) &&
 			      first_try))) {
-			avalon_free_work(thr, info->bulk0);
-			avalon_free_work(thr, info->bulk1);
-			avalon_free_work(thr, info->bulk2);
-			avalon_free_work(thr, info->bulk3);
 			do_avalon_close(thr);
 			applog(LOG_ERR, "AVA%i: Comms error(buffer)",
 			       avalon->device_id);
@@ -846,12 +824,11 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			first_try = 0;
 			sleep(1);
 			avalon_init(avalon);
-			goto out;	/* This should never happen */
+			return 0;	/* This should never happen */
 		}
 		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == avalon_get_work_count)) {
 			first_try = 1;
-			ret = 0xffffffff;
-			goto out;
+			return 0xffffffff;
 		}
 
 		works[i]->blk.nonce = 0xffffffff;
@@ -871,8 +848,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	result_wrong = 0;
 	hash_count = 0;
 	while (true) {
-		work_i0 = work_i1 = work_i2 = work_i3 = -1;
-
 		full = avalon_buffer_full(fd);
 		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
 		       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
@@ -881,15 +856,11 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
 		if (unlikely(ret == AVA_GETS_ERROR)) {
-			avalon_free_work(thr, info->bulk0);
-			avalon_free_work(thr, info->bulk1);
-			avalon_free_work(thr, info->bulk2);
-			avalon_free_work(thr, info->bulk3);
 			do_avalon_close(thr);
 			applog(LOG_ERR,
 			       "AVA%i: Comms error(read)", avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
-			goto out;
+			return 0;
 		}
 		if (unlikely(ret == AVA_GETS_TIMEOUT)) {
 			timersub(&tv_finish, &tv_start, &elapsed);
@@ -898,40 +869,22 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			continue;
 		}
 		if (unlikely(ret == AVA_GETS_RESTART)) {
-			avalon_free_work(thr, info->bulk0);
-			avalon_free_work(thr, info->bulk1);
-			avalon_free_work(thr, info->bulk2);
-			avalon_free_work(thr, info->bulk3);
 			break;
 		}
 		result_count++;
 
-		work_i0 = avalon_decode_nonce(thr, info->bulk0, &ar, &nonce);
-		if (work_i0 < 0) {
-			work_i1 = avalon_decode_nonce(thr, info->bulk1, &ar, &nonce);
-			if (work_i1 < 0) {
-				work_i2 = avalon_decode_nonce(thr, info->bulk2, &ar, &nonce);
-				if (work_i2 < 0) {
-					work_i3 = avalon_decode_nonce(thr, info->bulk3, &ar, &nonce);
-					if (work_i3 < 0) {
-						info->no_matching_work++;
-						result_wrong++;
+		if (!avalon_decode_nonce(thr, &ar, &nonce)) {
+			info->no_matching_work++;
+			result_wrong++;
 
-						if (opt_debug) {
-							timersub(&tv_finish, &tv_start, &elapsed);
-							applog(LOG_DEBUG,"Avalon: no matching work: %d"
-							" (%ld.%06lds)", info->no_matching_work,
-							elapsed.tv_sec, elapsed.tv_usec);
-						}
-						continue;
-					} else
-						submit_nonce(thr, info->bulk3[work_i3], nonce);
-				} else
-					submit_nonce(thr, info->bulk2[work_i2], nonce);
-			} else
-				submit_nonce(thr, info->bulk1[work_i1], nonce);
-		} else
-			submit_nonce(thr, info->bulk0[work_i0], nonce);
+			if (opt_debug) {
+				timersub(&tv_finish, &tv_start, &elapsed);
+				applog(LOG_DEBUG,"Avalon: no matching work: %d"
+				" (%ld.%06lds)", info->no_matching_work,
+				elapsed.tv_sec, elapsed.tv_usec);
+			}
+			continue;
+		}
 
 		hash_count += nonce;
 		if (opt_debug) {
@@ -945,10 +898,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	if (result_wrong && result_count == result_wrong) {
 		/* This mean FPGA controller give all wrong result
 		 * try to reset the Avalon */
-		avalon_free_work(thr, info->bulk0);
-		avalon_free_work(thr, info->bulk1);
-		avalon_free_work(thr, info->bulk2);
-		avalon_free_work(thr, info->bulk3);
 		do_avalon_close(thr);
 		applog(LOG_ERR,
 		       "AVA%i: FPGA controller mess up", avalon->device_id);
@@ -956,10 +905,10 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		do_avalon_close(thr);
 		sleep(1);
 		avalon_init(avalon);
-		goto out;
+		return 0;
 	}
 
-	avalon_free_work(thr, info->bulk0);
+	avalon_free_work(thr);
 
 	record_temp_fan(info, &ar, &(avalon->temp));
 	applog(LOG_INFO,
@@ -986,11 +935,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	 *
 	 * Any patch will be great.
 	 */
-	scanret = hash_count * 2;
-out:
-	avalon_free_work(thr, avalon->works);
-	avalon->queued = 0;
-	return scanret;
+	return hash_count * 2;
 }
 
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)

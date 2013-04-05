@@ -96,10 +96,6 @@ struct avalon_info {
 
 	int no_matching_work;
 	int matching_work[AVALON_DEFAULT_MINER_NUM];
-	struct work *bulk0[AVALON_DEFAULT_MINER_NUM];
-	struct work *bulk1[AVALON_DEFAULT_MINER_NUM];
-	struct work *bulk2[AVALON_DEFAULT_MINER_NUM];
-	struct work *bulk3[AVALON_DEFAULT_MINER_NUM];
 
 	int frequency;
 };
