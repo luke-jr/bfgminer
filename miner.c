@@ -2687,6 +2687,33 @@ void share_result_msg(const struct work *work, const char *disp, const char *rea
 }
 
 static bool test_work_current(struct work *);
+static void _submit_work_async(struct work *);
+
+static
+void maybe_local_submit(const struct work *work)
+{
+#if BLKMAKER_VERSION > 3
+	if (unlikely(work->block && work->tmpl))
+	{
+		// This is a block with a full template (GBT)
+		// Regardless of the result, submit to local bitcoind(s) as well
+		struct work *work_cp;
+		char *p;
+		
+		for (int i = 0; i < total_pools; ++i)
+		{
+			p = strchr(pools[i]->rpc_url, '#');
+			if (likely(!(p && strstr(&p[1], "allblocks"))))
+				continue;
+			
+			work_cp = copy_work(work);
+			work_cp->pool = pools[i];
+			work_cp->do_foreign_submit = true;
+			_submit_work_async(work_cp);
+		}
+	}
+#endif
+}
 
 /* Theoretically threads could race when modifying accepted and
  * rejected values but the chance of two submits completing at the
@@ -2819,6 +2846,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			}
 		}
 	}
+	
+	maybe_local_submit(work);
 }
 
 static const uint64_t diffone = 0xFFFF000000000000ull;
@@ -2848,9 +2877,16 @@ static char *submit_upstream_work_request(struct work *work)
 	struct pool *pool = work->pool;
 
 	if (work->tmpl) {
+		json_t *req;
 		unsigned char data[80];
+		
 		swap32yes(data, work->data, 80 / 4);
-		json_t *req = blkmk_submit_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
+#if BLKMAKER_VERSION > 3
+		if (work->do_foreign_submit)
+			req = blkmk_submit_foreign_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
+		else
+#endif
+			req = blkmk_submit_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
 		s = json_dumps(req, 0);
 		json_decref(req);
 		sd = bin2hex(data, 80);
@@ -3589,7 +3625,7 @@ static void roll_work(struct work *work)
 
 /* Duplicates any dynamically allocated arrays within the work struct to
  * prevent a copied work struct from freeing ram belonging to another struct */
-void __copy_work(struct work *work, struct work *base_work)
+void __copy_work(struct work *work, const struct work *base_work)
 {
 	int id = work->id;
 
@@ -3617,7 +3653,7 @@ void __copy_work(struct work *work, struct work *base_work)
 
 /* Generates a copy of an existing work struct, creating fresh heap allocations
  * for all dynamically allocated arrays within the struct */
-struct work *copy_work(struct work *base_work)
+struct work *copy_work(const struct work *base_work)
 {
 	struct work *work = make_work();
 
@@ -6689,12 +6725,9 @@ struct work *get_work(struct thr_info *thr)
 	return work;
 }
 
-void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+static
+void _submit_work_async(struct work *work)
 {
-	struct work *work = copy_work(work_in);
-
-	if (tv_work_found)
-		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 
 	mutex_lock(&submitting_lock);
@@ -6703,6 +6736,16 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 	mutex_unlock(&submitting_lock);
 
 	notifier_wake(submit_waiting_notifier);
+}
+
+void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+{
+	struct work *work = copy_work(work_in);
+
+	if (tv_work_found)
+		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
+	
+	_submit_work_async(work);
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)

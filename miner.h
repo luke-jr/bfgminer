@@ -1117,6 +1117,7 @@ struct work {
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;
 	unsigned int	dataid;
+	bool		do_foreign_submit;
 
 	struct timeval	tv_getwork;
 	struct timeval	tv_getwork_reply;
@@ -1166,8 +1167,8 @@ extern bool successful_connect;
 extern void adl(void);
 extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
-extern void __copy_work(struct work *work, struct work *base_work);
-extern struct work *copy_work(struct work *base_work);
+extern void __copy_work(struct work *work, const struct work *base_work);
+extern struct work *copy_work(const struct work *base_work);
 
 enum api_data_type {
 	API_ESCAPE,
