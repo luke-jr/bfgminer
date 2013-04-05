@@ -6814,7 +6814,7 @@ extern struct device_drv icarus_drv;
 #endif
 
 #ifdef USE_AVALON
-extern struct device_drv avalon_api;
+extern struct device_drv avalon_drv;
 #endif
 
 #ifdef USE_MODMINER
@@ -7338,7 +7338,7 @@ int main(int argc, char *argv[])
 
 #ifdef USE_AVALON
 	if (!opt_scrypt)
-		avalon_api.drv_detect();
+		avalon_drv.drv_detect();
 #endif
 
 #ifdef USE_BFLSC

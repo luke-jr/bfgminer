@@ -1046,7 +1046,7 @@ static void avalon_shutdown(struct thr_info *thr)
 	do_avalon_close(thr);
 }
 
-struct device_drv avalon_api = {
+struct device_drv avalon_drv = {
 	.dname = "avalon",
 	.name = "AVA",
 	.drv_detect = avalon_detect,
