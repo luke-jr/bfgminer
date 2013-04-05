@@ -1203,6 +1203,45 @@ void bitforce_poll(struct thr_info *thr)
 	}
 }
 
+static
+char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, char *replybuf)
+{
+	struct bitforce_data *data = proc->cgpu_data;
+	pthread_mutex_t *mutexp = &proc->device->device_mutex;
+	int fd;
+	
+	if (!strcasecmp(option, "help"))
+	{
+		sprintf(replybuf, "fanmode: range 0-4 (low to fast) or 5 (auto)");
+		return replybuf;
+	}
+	
+	if (!strcasecmp(option, "fanmode"))
+	{
+		if (!setting || !*setting)
+		{
+			sprintf(replybuf, "missing fanmode setting");
+			return replybuf;
+		}
+		if (setting[1] || setting[0] < '0' || setting[0] > '5')
+		{
+			sprintf(replybuf, "invalid fanmode setting");
+			return replybuf;
+		}
+		
+		char cmd[4] = "Z5X";
+		cmd[1] = setting[0];
+		mutex_lock(mutexp);
+		fd = proc->device->device_fd;
+		bitforce_cmd1(fd, data->xlink_id, replybuf, 256, cmd);
+		mutex_unlock(mutexp);
+		return replybuf;
+	}
+	
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 struct device_api bitforce_api = {
 	.dname = "bitforce",
 	.name = "BFL",
@@ -1212,6 +1251,7 @@ struct device_api bitforce_api = {
 	.reinit_device = bitforce_init,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
+	.set_device = bitforce_set_device,
 	.identify_device = bitforce_identify,
 	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
@@ -1499,6 +1539,7 @@ struct device_api bitforce_queue_api = {
 	.reinit_device = bitforce_init,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
+	.set_device = bitforce_set_device,
 	.identify_device = bitforce_identify,
 	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
