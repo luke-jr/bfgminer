@@ -15,7 +15,7 @@ vcfglist="$(
 )"
 plat1=''
 for cfn in $vcfglist; do
-	plat="$(perl -ple 's/^(\d+)\.config\.(\w+)_\w+$/$2/ or $_=""' <<<"$cfn")"
+	plat="$(perl -ple 's/^(\d+)\.config\.(\w+?)_\w+$/$2/ or $_=""' <<<"$cfn")"
 	test -n "$plat" ||
 		continue
 	platlist+=("$plat")

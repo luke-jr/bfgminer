@@ -1,3 +1,16 @@
+bfgminer (3.0.0-0precise1) precise; urgency=low
+
+  * New device driver for ASIC devices, including both Butterfly Labs' BitForce SC and Avalon.
+  * Enhanced device driver API, enabling devices to asynchronously handle multiple slave processors. Use --show-processors to view each individually (not yet supported for Avalon).
+  * You can now use --request-diff <difficulty> to ask for a specific share target from pools that support BIP 23 GBT Basic Pool Extensions.
+  * Support for submitting found blocks to a local Bitcoin GBT server (bitcoind or Bitcoin-Qt with -server flag): just append #allblocks to the end of your bitcoind's URI.
+  * Stratum connection resuming support - if you lose an active stratum connection, BFGMiner will attempt to resubmit any lost shares when it reconnects.
+  * Android target support. You will have to compile it yourself, but it should just work - no patching needed.
+  * New Python RPC client example from Christian Berendt.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 05 Apr 2013 17:12:20 -0000
+
+
 bfgminer (2.10.5-0precise1) precise; urgency=low
 
   * Fix critical solo mining bug.

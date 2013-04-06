@@ -414,7 +414,7 @@ api-example.py - a Python script to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.24.1
+API V1.24.1 (BFGMiner v3.0.0)
 
 Modified API commands:
  'cpustatus' - add 'ProcID'

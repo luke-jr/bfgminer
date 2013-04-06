@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Luke Dashjr
+ * Copyright 2012-2013 Luke Dashjr
  * Copyright 2012 nelisky.btc@gmail.com
  *
  * This program is free software; you can redistribute it and/or modify it

@@ -28,6 +28,8 @@ extern void job_start_abort(struct thr_info *, bool failure);
 extern bool do_process_results(struct thr_info *, struct timeval *tvp_now, struct work *, bool stopping);
 extern void minerloop_async(struct thr_info *);
 
+extern void minerloop_queue(struct thr_info *);
+
 extern void *miner_thread(void *);
 
 #endif
