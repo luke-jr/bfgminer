@@ -912,7 +912,7 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 	len++;
 
 	while (len > 0 ) {
-		struct timeval timeout = {0, 0};
+		struct timeval timeout = {1, 0};
 		ssize_t sent;
 		fd_set wd;
 
@@ -966,7 +966,7 @@ static bool socket_full(struct pool *pool, bool wait)
 	if (wait)
 		timeout.tv_sec = 60;
 	else
-		timeout.tv_sec = 0;
+		timeout.tv_sec = 1;
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
