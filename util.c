@@ -1125,11 +1125,16 @@ char *recv_line(struct pool *pool)
 		mutex_lock(&pool->stratum_lock);
 		do {
 			char s[RBUFSIZE];
-			size_t slen, n;
+			size_t slen;
+			ssize_t n;
 
 			memset(s, 0, RBUFSIZE);
 			n = recv(pool->sock, s, RECVSIZE, 0);
-			if (n < 1 && errno != EAGAIN && errno != EWOULDBLOCK) {
+			if (!n) {
+				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
+				break;
+			}
+			if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
 				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
 				break;
 			}
