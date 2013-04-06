@@ -1372,7 +1372,10 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	count = bitforce_zox(thr, "ZOX");
 	
 	if (!count)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Received 0 queued results on poll", bitforce->proc_repr);
 		return true;
+	}
 	
 	if (unlikely(count < 0))
 	{
