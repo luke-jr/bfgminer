@@ -645,10 +645,14 @@ static bool avalon_prepare(struct thr_info *thr)
 	struct avalon_info *info = avalon_infos[avalon->device_id];
 	struct timeval now;
 
+	free(avalon->works);
 	avalon->works = calloc(info->miner_count * sizeof(struct work *), 4);
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
-	__avalon_init(avalon);
+	if (avalon->device_fd == -1)
+		avalon_init(avalon);
+	else
+		__avalon_init(avalon);
 
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
