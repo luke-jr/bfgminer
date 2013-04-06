@@ -29,7 +29,7 @@
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 
-#if defined(USE_BFLSC)
+#if defined(USE_BFLSC) || defined(USE_AVALON)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -178,6 +178,9 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_ICARUS
 			"ICA "
+#endif
+#ifdef USE_AVALON
+			"AVA "
 #endif
 #ifdef USE_ZTEX
 			"ZTX "
@@ -605,9 +608,6 @@ struct CODES {
 
 static int my_thr_id = 0;
 static bool bye;
-#if defined(HAVE_OPENCL) || defined (HAVE_AN_ASIC) || defined(HAVE_AN_FPGA)
-static bool ping = true;
-#endif
 
 // Used to control quit restart access to shutdown variables
 static pthread_mutex_t quit_restart_lock;
@@ -1178,6 +1178,10 @@ static int numascs()
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
+#ifdef USE_AVALON
+		if (devices[i]->drv->drv_id == DRIVER_AVALON)
+			count++;
+#endif
 #ifdef USE_BFLSC
 		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
 			count++;
@@ -1194,6 +1198,10 @@ static int ascdevice(int ascid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
+#ifdef USE_AVALON
+		if (devices[i]->drv->drv_id == DRIVER_AVALON)
+			count++;
+#endif
 #ifdef USE_BFLSC
 		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
 			count++;
