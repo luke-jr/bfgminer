@@ -785,13 +785,14 @@ static inline void adjust_fan(struct avalon_info *info)
 
 static bool avalon_fill(struct cgpu_info *avalon)
 {
-	struct work *work = get_queued(avalon);
+	struct work *work;
 	int mc = avalon_infos[avalon->device_id]->miner_count;
 
-	if (unlikely(!work))
-		return false;
 	if (avalon->queued >= mc)
 		return true;
+	work = get_queued(avalon);
+	if (unlikely(!work))
+		return false;
 	avalon->works[avalon->work_array * mc + avalon->queued++] = work;
 	if (avalon->queued >= mc)
 		return true;
