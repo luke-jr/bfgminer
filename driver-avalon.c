@@ -902,6 +902,10 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			continue;
 		}
 		if (unlikely(ret == AVA_GETS_RESTART)) {
+			/* Reset the wrong count in case there has only been
+			 * a small number of nonces tested before the restart.
+			 */
+			result_wrong = 0;
 			break;
 		}
 		result_count++;
