@@ -5754,11 +5754,14 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 {
 	thread_reportout(mythr);
 	do {
-		struct work *work = get_work(mythr, thr_id);
+		struct work *work;
 
-		work->device_diff = MIN(drv->max_diff, work->work_difficulty);
 		wr_lock(&cgpu->qlock);
-		HASH_ADD_INT(cgpu->queued_work, id, work);
+		if (HASH_COUNT(cgpu->queued_work) == cgpu->queued_count) {
+			work = get_work(mythr, thr_id);
+			work->device_diff = MIN(drv->max_diff, work->work_difficulty);
+			HASH_ADD_INT(cgpu->queued_work, id, work);
+		}
 		wr_unlock(&cgpu->qlock);
 		/* The queue_full function should be used by the driver to
 		 * actually place work items on the physical device if it
@@ -5778,6 +5781,7 @@ struct work *get_queued(struct cgpu_info *cgpu)
 	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
 		if (!work->queued) {
 			work->queued = true;
+			cgpu->queued_count++;
 			ret = work;
 			break;
 		}
@@ -5828,6 +5832,8 @@ struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 void work_completed(struct cgpu_info *cgpu, struct work *work)
 {
 	wr_lock(&cgpu->qlock);
+	if (work->queued)
+		cgpu->queued_count--;
 	HASH_DEL(cgpu->queued_work, work);
 	wr_unlock(&cgpu->qlock);
 	free_work(work);
