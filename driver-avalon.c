@@ -685,7 +685,7 @@ static void avalon_free_work_array(struct thr_info *thr)
 {
 	struct cgpu_info *avalon;
 	struct work **works;
-	int i, j, mc, wa;
+	int i, j, mc;
 
 	avalon = thr->cgpu;
 	avalon->queued = 0;
@@ -693,11 +693,10 @@ static void avalon_free_work_array(struct thr_info *thr)
 		return;
 	works = avalon->works;
 	mc = avalon_infos[avalon->device_id]->miner_count;
-	wa = avalon->work_array + 1;
-	if (wa > 3)
-		wa = 0;
+	if (++avalon->work_array > 3)
+		avalon->work_array = 0;
 
-	for (i = wa * mc, j = 0; j < mc; i++, j++) {
+	for (i = avalon->work_array * mc, j = 0; j < mc; i++, j++) {
 		if (likely(works[i])) {
 			work_completed(avalon, works[i]);
 			works[i] = NULL;
@@ -861,6 +860,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		}
 		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == end_count)) {
 			first_try = 1;
+			avalon_free_work_array(thr);
 			return 0xffffffff;
 		}
 
@@ -942,8 +942,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	}
 
 	avalon_free_work_array(thr);
-	if (++avalon->work_array > 3)
-		avalon->work_array = 0;
 
 	record_temp_fan(info, &ar, &(avalon->temp));
 	applog(LOG_INFO,
