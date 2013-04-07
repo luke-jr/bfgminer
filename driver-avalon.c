@@ -201,7 +201,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	return AVA_SEND_BUFFER_EMPTY;
 }
 
-static int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
+static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
 		       struct timeval *tv_finish)
 {
 	int read_amount = AVALON_READ_SIZE;
