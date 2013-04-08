@@ -238,7 +238,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
-double current_diff;
+double current_diff = 0xFFFFFFFFFFFFFFFF;
 static char block_diff[8];
 uint64_t best_diff = 0;
 
@@ -2245,52 +2245,6 @@ void clear_logwin(void)
 }
 #endif
 
-/* Returns true if the regenerated work->hash solves a block */
-static bool solves_block(const struct work *work)
-{
-	uint32_t *hash32 = (uint32_t *)(work->hash);
-	uint32_t difficulty = 0;
-	uint32_t diffbytes = 0;
-	uint32_t diffvalue = 0;
-	uint32_t diffcmp[8];
-	int diffshift = 0;
-	int i;
-
-	difficulty = swab32(*((uint32_t *)(work->data + 72)));
-
-	diffbytes = ((difficulty >> 24) & 0xff) - 3;
-	diffvalue = difficulty & 0x00ffffff;
-
-	diffshift = (diffbytes % 4) * 8;
-	if (diffshift == 0) {
-		diffshift = 32;
-		diffbytes--;
-	}
-
-	memset(diffcmp, 0, 32);
-	diffbytes >>= 2;
-	/* Sanity check looking for overflow */
-	if (unlikely(diffbytes > 6))
-		return false;
-	diffcmp[diffbytes + 1] = diffvalue >> (32 - diffshift);
-	diffcmp[diffbytes] = diffvalue << diffshift;
-
-	for (i = 7; i >= 0; i--) {
-		if (hash32[i] > diffcmp[i])
-			return false;
-		if (hash32[i] < diffcmp[i])
-			return true;
-	}
-
-	// https://en.bitcoin.it/wiki/Block says: "numerically below"
-	// https://en.bitcoin.it/wiki/Target says: "lower than or equal to"
-	// code in bitcoind 0.3.24 main.cpp CheckWork() says: if (hash > hashTarget) return false;
-	if (hash32[0] == diffcmp[0])
-		return true;
-	else
-		return false;
-}
-
 static void enable_pool(struct pool *pool)
 {
 	if (pool->enabled != POOL_ENABLED) {
@@ -2440,34 +2394,6 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	}
 }
 
-static const uint64_t diffone = 0xFFFF000000000000ull;
-
-static uint64_t share_diff(const struct work *work)
-{
-	uint64_t *data64, d64;
-	char rhash[32];
-	uint64_t ret;
-
-	swab256(rhash, work->hash);
-	if (opt_scrypt)
-		data64 = (uint64_t *)(rhash + 2);
-	else
-		data64 = (uint64_t *)(rhash + 4);
-	d64 = be64toh(*data64);
-	if (unlikely(!d64))
-		d64 = 1;
-	ret = diffone / d64;
-	cg_wlock(&control_lock);
-	if (ret > best_diff) {
-		best_diff = ret;
-		suffix_string(best_diff, best_share, 0);
-	}
-	if (ret > work->pool->best_diff)
-		work->pool->best_diff = ret;
-	cg_wunlock(&control_lock);
-	return ret;
-}
-
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
@@ -2562,15 +2488,13 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		int intdiff = floor(work->work_difficulty);
 		char diffdisp[16], *outhash;
 		unsigned char rhash[32];
-		uint64_t sharediff;
 
 		swab256(rhash, work->hash);
 		if (opt_scrypt)
 			outhash = bin2hex(rhash + 2, 4);
 		else
 			outhash = bin2hex(rhash + 4, 4);
-		sharediff = share_diff(work);
-		suffix_string(sharediff, diffdisp, 0);
+		suffix_string(work->share_diff, diffdisp, 0);
 		sprintf(hashshow, "%s Diff %s/%d%s", outhash, diffdisp, intdiff,
 			work->block? " BLOCK!" : "");
 		free(outhash);
@@ -2712,6 +2636,7 @@ static inline struct pool *select_pool(bool lagging)
 }
 
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
+static const uint64_t diffone = 0xFFFF000000000000ull;
 
 /*
  * Calculate the work share difficulty
@@ -3240,6 +3165,32 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
+static uint64_t share_diff(const struct work *work)
+{
+	uint64_t *data64, d64;
+	char rhash[32];
+	uint64_t ret;
+
+	swab256(rhash, work->hash);
+	if (opt_scrypt)
+		data64 = (uint64_t *)(rhash + 2);
+	else
+		data64 = (uint64_t *)(rhash + 4);
+	d64 = be64toh(*data64);
+	if (unlikely(!d64))
+		d64 = 1;
+	ret = diffone / d64;
+	cg_wlock(&control_lock);
+	if (ret > best_diff) {
+		best_diff = ret;
+		suffix_string(best_diff, best_share, 0);
+	}
+	if (ret > work->pool->best_diff)
+		work->pool->best_diff = ret;
+	cg_wunlock(&control_lock);
+	return ret;
+}
+
 static void regen_hash(struct work *work)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
@@ -3252,15 +3203,16 @@ static void regen_hash(struct work *work)
 	sha2(hash1, 32, (unsigned char *)(work->hash));
 }
 
-static void check_solve(struct work *work)
+static void rebuild_hash(struct work *work)
 {
 	if (opt_scrypt)
 		scrypt_outputhash(work);
 	else
 		regen_hash(work);
 
-	work->block = solves_block(work);
-	if (unlikely(work->block)) {
+	work->share_diff = share_diff(work);
+	if (unlikely(work->share_diff >= current_diff)) {
+		work->block = true;
 		work->pool->solved++;
 		found_blocks++;
 		work->mandatory = true;
@@ -3283,7 +3235,7 @@ static void *submit_work_thread(void *userdata)
 
 	applog(LOG_DEBUG, "Creating extra submit work thread");
 
-	check_solve(work);
+	rebuild_hash(work);
 
 	if (stale_work(work, true)) {
 		if (opt_submit_stale)
@@ -4736,7 +4688,6 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 				 struct stratum_share *sshare)
 {
 	struct work *work = sshare->work;
-	uint64_t sharediff = share_diff(work);
 	char hashshow[65];
 	uint32_t *hash32;
 	char diffdisp[16];
@@ -4744,7 +4695,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 
 	hash32 = (uint32_t *)(work->hash);
 	intdiff = floor(work->work_difficulty);
-	suffix_string(sharediff, diffdisp, 0);
+	suffix_string(work->share_diff, diffdisp, 0);
 	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)htole32(hash32[6]), diffdisp, intdiff,
 		work->block? " BLOCK!" : "");
 	share_result(val, res_val, err_val, work, hashshow, false, "");
