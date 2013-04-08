@@ -705,29 +705,6 @@ static void avalon_free_work(struct thr_info *thr)
 	}
 }
 
-static void avalon_free_work_array(struct thr_info *thr)
-{
-	struct cgpu_info *avalon;
-	struct work **works;
-	int i, j, mc;
-
-	avalon = thr->cgpu;
-	avalon->queued = 0;
-	if (unlikely(!avalon->works))
-		return;
-	works = avalon->works;
-	mc = avalon_infos[avalon->device_id]->miner_count;
-	if (++avalon->work_array > 3)
-		avalon->work_array = 0;
-
-	for (i = avalon->work_array * mc, j = 0; j < mc; i++, j++) {
-		if (likely(works[i])) {
-			work_completed(avalon, works[i]);
-			works[i] = NULL;
-		}
-	}
-}
-
 static void do_avalon_close(struct thr_info *thr)
 {
 	struct avalon_result ar;
@@ -794,9 +771,11 @@ static inline void adjust_fan(struct avalon_info *info)
 	}
 }
 
+/* We use a replacement algorithm to only remove references to work done from
+ * the buffer when we need the extra space for new work. */
 static bool avalon_fill(struct cgpu_info *avalon)
 {
-	int subid, mc = avalon_infos[avalon->device_id]->miner_count;
+	int subid, slot, mc = avalon_infos[avalon->device_id]->miner_count;
 	struct work *work;
 
 	if (avalon->queued >= mc)
@@ -806,10 +785,20 @@ static bool avalon_fill(struct cgpu_info *avalon)
 		return false;
 	subid = avalon->queued++;
 	work->subid = subid;
-	avalon->works[avalon->work_array * mc + subid] = work;
+	slot = avalon->work_array * mc + subid;
+	if (likely(avalon->works[slot]))
+		work_completed(avalon, avalon->works[slot]);
+	avalon->works[slot] = work;
 	if (avalon->queued >= mc)
 		return true;
 	return false;
+}
+
+static void avalon_rotate_array(struct cgpu_info *avalon)
+{
+	avalon->queued = 0;
+	if (++avalon->work_array > 3)
+		avalon->work_array = 0;
 }
 
 static int64_t avalon_scanhash(struct thr_info *thr)
@@ -874,7 +863,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		}
 		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == end_count)) {
 			first_try = 1;
-			avalon_free_work_array(thr);
+			avalon_rotate_array(avalon);
 			return 0xffffffff;
 		}
 
@@ -951,7 +940,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		return 0;
 	}
 
-	avalon_free_work_array(thr);
+	avalon_rotate_array(avalon);
 
 	record_temp_fan(info, &ar, &(avalon->temp));
 	applog(LOG_INFO,
