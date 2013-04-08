@@ -1119,7 +1119,8 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
-	double	device_diff;
+	double		device_diff;
+	uint64_t	share_diff;
 
 	int		rolls;
 
