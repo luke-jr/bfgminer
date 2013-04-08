@@ -670,7 +670,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	struct timeval now;
 
 	free(avalon->works);
-	avalon->works = calloc(info->miner_count * sizeof(struct work *), 2);
+	avalon->works = calloc(info->miner_count * sizeof(struct work *), 4);
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
 	if (avalon->device_fd == -1)
@@ -697,7 +697,7 @@ static void avalon_free_work(struct thr_info *thr)
 	works = avalon->works;
 	info = avalon_infos[avalon->device_id];
 
-	for (i = 0; i < info->miner_count * 2; i++) {
+	for (i = 0; i < info->miner_count * 4; i++) {
 		if (works[i]) {
 			work_completed(avalon, works[i]);
 			works[i] = NULL;
@@ -717,7 +717,8 @@ static void avalon_free_work_array(struct thr_info *thr)
 		return;
 	works = avalon->works;
 	mc = avalon_infos[avalon->device_id]->miner_count;
-	avalon->work_array ^= 1;
+	if (++avalon->work_array > 3)
+		avalon->work_array = 0;
 
 	for (i = avalon->work_array * mc, j = 0; j < mc; i++, j++) {
 		if (likely(works[i])) {
