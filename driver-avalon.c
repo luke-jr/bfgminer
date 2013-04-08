@@ -829,7 +829,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	uint32_t nonce;
 	int64_t hash_count;
 	static int first_try = 0;
-	int result_wrong;
 
 	avalon = thr->cgpu;
 	works = avalon->works;
@@ -891,7 +890,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
 
-	result_wrong = 0;
 	hash_count = 0;
 	while (true) {
 		full = avalon_buffer_full(fd);
@@ -919,7 +917,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 		if (!avalon_decode_nonce(thr, &ar, &nonce)) {
 			info->no_matching_work++;
-			result_wrong++;
 
 			if (opt_debug) {
 				timersub(&tv_finish, &tv_start, &elapsed);
@@ -938,17 +935,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       "(%ld.%06lds)", nonce, hash_count,
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
-	}
-	if (result_wrong >= avalon_get_work_count && ret != AVA_GETS_RESTART) {
-		/* This mean FPGA controller gave all wrong results, so
-		 * try to reset the Avalon */
-		do_avalon_close(thr);
-		applog(LOG_ERR,
-		       "AVA%i: FPGA controller mess up", avalon->device_id);
-		dev_error(avalon, REASON_DEV_COMMS_ERROR);
-		sleep(1);
-		avalon_init(avalon);
-		return 0;
 	}
 
 	avalon_free_work_array(thr);
