@@ -586,8 +586,8 @@ static bool avalon_detect_one(const char *devpath)
 	}
 	
 	avalon_infos = realloc(avalon_infos,
-			      sizeof(struct avalon_info *) *
-			      (total_devices + 1));
+			       sizeof(struct avalon_info *) *
+			       (total_devices + 1));
 
 	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
 	       devpath, avalon->device_id);
@@ -618,14 +618,11 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_old = 0;
 	info->frequency = frequency;
 
-	/* Do something for failed reset ? */
-	if (0) {
-		/* Set asic to idle mode after detect */
-		avalon_idle(avalon);
-		avalon->device_fd = -1;
+	/* Set asic to idle mode after detect */
+	avalon_idle(avalon);
+	avalon->device_fd = -1;
 
-		avalon_close(fd);
-	}
+	avalon_close(fd);
 	return true;
 }
 
