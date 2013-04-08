@@ -586,8 +586,8 @@ static bool avalon_detect_one(const char *devpath)
 	}
 	
 	avalon_infos = realloc(avalon_infos,
-			      sizeof(struct avalon_info *) *
-			      (total_devices + 1));
+			       sizeof(struct avalon_info *) *
+			       (total_devices + 1));
 
 	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
 	       devpath, avalon->device_id);
@@ -618,14 +618,11 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_old = 0;
 	info->frequency = frequency;
 
-	/* Do something for failed reset ? */
-	if (0) {
-		/* Set asic to idle mode after detect */
-		avalon_idle(avalon);
-		avalon->device_fd = -1;
+	/* Set asic to idle mode after detect */
+	avalon_idle(avalon);
+	avalon->device_fd = -1;
 
-		avalon_close(fd);
-	}
+	avalon_close(fd);
 	return true;
 }
 
@@ -744,7 +741,7 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 		info->temp2 = 0 - ((~ar->temp2 & 0x7f) + 1);
 	}
 
-	*temp_avg = info->temp2;
+	*temp_avg = info->temp2 > info->temp1 ? info->temp2 : info->temp1;
 
 	if (info->temp0 > info->temp_max)
 		info->temp_max = info->temp0;
@@ -929,7 +926,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (result_wrong >= avalon_get_work_count) {
+	if (result_wrong >= avalon_get_work_count || hash_count == 0) {
 		/* This means FPGA controller gave all wrong results, so
 		 * try to reset the Avalon */
 		do_avalon_close(thr);
@@ -950,7 +947,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	       info->fan0, info->fan1, info->fan2,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
 	info->temp_history_index++;
-	info->temp_sum += info->temp2;
+	info->temp_sum += avalon->temp;
 	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
 	       info->temp_history_index, info->temp_history_count, info->temp_old);
 	if (info->temp_history_index == info->temp_history_count) {
