@@ -290,7 +290,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 		return false;
 
 	info = avalon_infos[avalon->device_id];
-	info->matching_work++;
+	info->matching_work[work->subid]++;
 	*nonce = htole32(ar->nonce);
 	submit_nonce(thr, work, *nonce);
 
@@ -984,7 +984,30 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "temp_max", &(info->temp_max), false);
 
 	root = api_add_int(root, "no_matching_work", &(info->no_matching_work), false);
-	root = api_add_int(root, "matching_work_count", &(info->matching_work), false);
+	root = api_add_int(root, "matching_work_count1", &(info->matching_work[0]), false);
+	root = api_add_int(root, "matching_work_count2", &(info->matching_work[1]), false);
+	root = api_add_int(root, "matching_work_count3", &(info->matching_work[2]), false);
+	root = api_add_int(root, "matching_work_count4", &(info->matching_work[3]), false);
+	root = api_add_int(root, "matching_work_count5", &(info->matching_work[4]), false);
+	root = api_add_int(root, "matching_work_count6", &(info->matching_work[5]), false);
+	root = api_add_int(root, "matching_work_count7", &(info->matching_work[6]), false);
+	root = api_add_int(root, "matching_work_count8", &(info->matching_work[7]), false);
+	root = api_add_int(root, "matching_work_count9", &(info->matching_work[8]), false);
+	root = api_add_int(root, "matching_work_count10", &(info->matching_work[9]), false);
+	root = api_add_int(root, "matching_work_count11", &(info->matching_work[10]), false);
+	root = api_add_int(root, "matching_work_count12", &(info->matching_work[11]), false);
+	root = api_add_int(root, "matching_work_count13", &(info->matching_work[12]), false);
+	root = api_add_int(root, "matching_work_count14", &(info->matching_work[13]), false);
+	root = api_add_int(root, "matching_work_count15", &(info->matching_work[14]), false);
+	root = api_add_int(root, "matching_work_count16", &(info->matching_work[15]), false);
+	root = api_add_int(root, "matching_work_count17", &(info->matching_work[16]), false);
+	root = api_add_int(root, "matching_work_count18", &(info->matching_work[17]), false);
+	root = api_add_int(root, "matching_work_count19", &(info->matching_work[18]), false);
+	root = api_add_int(root, "matching_work_count20", &(info->matching_work[19]), false);
+	root = api_add_int(root, "matching_work_count21", &(info->matching_work[20]), false);
+	root = api_add_int(root, "matching_work_count22", &(info->matching_work[21]), false);
+	root = api_add_int(root, "matching_work_count23", &(info->matching_work[22]), false);
+	root = api_add_int(root, "matching_work_count24", &(info->matching_work[23]), false);
 
 	return root;
 }
