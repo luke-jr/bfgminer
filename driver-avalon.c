@@ -934,7 +934,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (result_wrong >= info->miner_count && ret != AVA_GETS_RESTART) {
+	if (result_wrong >= avalon_get_work_count && ret != AVA_GETS_RESTART) {
 		/* This mean FPGA controller gave all wrong results, so
 		 * try to reset the Avalon */
 		do_avalon_close(thr);
