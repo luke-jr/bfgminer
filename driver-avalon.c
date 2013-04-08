@@ -744,7 +744,7 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 		info->temp2 = 0 - ((~ar->temp2 & 0x7f) + 1);
 	}
 
-	*temp_avg = info->temp2;
+	*temp_avg = info->temp2 > info->temp1 ? info->temp2 : info->temp1;
 
 	if (info->temp0 > info->temp_max)
 		info->temp_max = info->temp0;
@@ -929,7 +929,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (result_wrong >= avalon_get_work_count) {
+	if (result_wrong >= avalon_get_work_count || hash_count == 0) {
 		/* This means FPGA controller gave all wrong results, so
 		 * try to reset the Avalon */
 		do_avalon_close(thr);
