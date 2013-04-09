@@ -288,45 +288,54 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void bitforce_clear_buffer(struct cgpu_info *bitforce)
+static void __bitforce_clear_buffer(int fdDev)
 {
-	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
-	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
 	int count = 0;
 
-	if (!fdDev)
-		return;
-
-	applog(LOG_DEBUG, "%"PRIpreprv": Clearing read buffer", bitforce->proc_repr);
-
-	mutex_lock(mutexp);
 	do {
 		pdevbuf[0] = '\0';
 		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 	} while (pdevbuf[0] && (++count < 10));
+}
+
+static void bitforce_clear_buffer(struct cgpu_info *bitforce)
+{
+	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
+	int fdDev;
+	
+	mutex_lock(mutexp);
+	
+	fdDev = bitforce->device->device_fd;
+	if (fdDev)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Clearing read buffer", bitforce->proc_repr);
+		__bitforce_clear_buffer(fdDev);
+	}
 	mutex_unlock(mutexp);
 }
 
-void bitforce_init(struct cgpu_info *bitforce)
+void bitforce_reinit(struct cgpu_info *bitforce)
 {
+	struct bitforce_data *data = bitforce->cgpu_data;
+	struct thr_info *thr = bitforce->thr[0];
 	const char *devpath = bitforce->device_path;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int *p_fdDev = &bitforce->device->device_fd;
-	int fdDev = *p_fdDev, retries = 0;
+	int fdDev, retries = 0;
 	char pdevbuf[0x100];
 	char *s;
 
+	mutex_lock(mutexp);
+	fdDev = *p_fdDev;
+	
 	applog(LOG_WARNING, "%"PRIpreprv": Re-initialising", bitforce->proc_repr);
 
-	bitforce_clear_buffer(bitforce);
-
-	mutex_lock(mutexp);
 	if (fdDev) {
 		BFclose(fdDev);
 		sleep(5);
+		*p_fdDev = 0;
 	}
-	*p_fdDev = 0;
 
 	fdDev = BFopen(devpath);
 	if (unlikely(fdDev == -1)) {
@@ -335,6 +344,8 @@ void bitforce_init(struct cgpu_info *bitforce)
 		return;
 	}
 
+	__bitforce_clear_buffer(fdDev);
+	
 	do {
 		bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZGX");
 		if (unlikely(!pdevbuf[0])) {
@@ -362,9 +373,24 @@ void bitforce_init(struct cgpu_info *bitforce)
 	}
 
 	*p_fdDev = fdDev;
-	bitforce->sleep_ms = BITFORCE_SLEEP_MS;
+
+	bitforce->sleep_ms = data->sleep_ms_default;
+	
+	if (bitforce->api == &bitforce_queue_api)
+	{
+		timer_set_delay_from_now(&thr->tv_poll, 0);
+		notifier_wake(thr->notifier);
+		
+		bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZQX");
+		data->queued = 0;
+		data->ready_to_queue = 0;
+		data->already_have_results = false;
+		data->just_flushed = true;
+		thr->queue_full = false;
+	}
 
 	mutex_unlock(mutexp);
+
 }
 
 static void bitforce_flash_led(struct cgpu_info *bitforce)
@@ -1078,7 +1104,7 @@ static void biforce_thread_enable(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 
-	bitforce_init(bitforce);
+	bitforce_reinit(bitforce);
 }
 
 static bool bitforce_get_stats(struct cgpu_info *bitforce)
@@ -1252,7 +1278,7 @@ struct device_api bitforce_api = {
 	.api_detect = bitforce_detect,
 	.get_api_stats = bitforce_api_stats,
 	.minerloop = minerloop_async,
-	.reinit_device = bitforce_init,
+	.reinit_device = bitforce_reinit,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.set_device = bitforce_set_device,
@@ -1524,7 +1550,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 	data->ready_to_queue = 0;
 	while (flushed--)
 		work_list_del(thr->work_list.prev);
-	thr->queue_full = false;
+	bitforce_set_queue_full(thr);
 	data->just_flushed = true;
 	
 	bitforce_queue_do_results(thr);
@@ -1543,7 +1569,7 @@ struct device_api bitforce_queue_api = {
 	.dname = "bitforce_queue",
 	.name = "BFL",
 	.minerloop = minerloop_queue,
-	.reinit_device = bitforce_init,
+	.reinit_device = bitforce_reinit,
 	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.set_device = bitforce_set_device,
