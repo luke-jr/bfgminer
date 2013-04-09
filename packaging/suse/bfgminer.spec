@@ -14,7 +14,7 @@
 #
 
 Name:           bfgminer
-Version:        2.99.1
+Version:        3.0.0
 Release:        0
 Summary:        A BitCoin miner
 License:        GPL-3.0
