@@ -183,7 +183,7 @@ static bool bitforce_detect_one(const char *devpath)
 	// We have a real BitForce!
 	bitforce = calloc(1, sizeof(*bitforce));
 	bitforce->api = &bitforce_api;
-	if (initdata->sc && procs > 1)
+	if (initdata->sc)
 		bitforce->api = &bitforce_queue_api;
 	bitforce->device_path = strdup(devpath);
 	bitforce->deven = DEV_ENABLED;
