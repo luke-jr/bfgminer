@@ -379,10 +379,20 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 	
 	if (bitforce->api == &bitforce_queue_api)
 	{
+		struct list_head *pos, *npos;
+		struct work *work;
+		
 		timer_set_delay_from_now(&thr->tv_poll, 0);
 		notifier_wake(thr->notifier);
 		
 		bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZQX");
+		for (pos = thr->work_list.prev; pos != &thr->work_list; pos = npos)
+		{
+			npos = pos->next;
+			work = list_entry(pos, typeof(*work), list);
+			free_work(work);
+		}
+		INIT_LIST_HEAD(&thr->work_list);
 		data->queued = 0;
 		data->ready_to_queue = 0;
 		data->already_have_results = false;
