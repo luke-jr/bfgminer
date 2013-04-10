@@ -345,7 +345,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 		if (retries++)
 			nmsleep(10);
-	} while (!strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
+	} while (strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		mutex_unlock(mutexp);
