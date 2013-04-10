@@ -908,6 +908,9 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			info->no_matching_work++;
 			result_wrong++;
 
+			if (result_wrong >= avalon_get_work_count)
+				break;
+
 			if (opt_debug) {
 				timersub(&tv_finish, &tv_start, &elapsed);
 				applog(LOG_DEBUG,"Avalon: no matching work: %d"
