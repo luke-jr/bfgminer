@@ -33,6 +33,7 @@
 #define MAX_START_DELAY_MS 100
 #define tv_to_ms(tval) ((unsigned long)(tval.tv_sec * 1000 + tval.tv_usec / 1000))
 #define TIME_AVG_CONSTANT 8
+#define BITFORCE_QRESULT_LINE_LEN 165
 #define BITFORCE_MAX_QUEUED 10
 #define BITFORCE_MAX_QRESULTS 10
 #define BITFORCE_GOAL_QRESULTS (BITFORCE_MAX_QRESULTS / 2)
@@ -216,7 +217,7 @@ struct bitforce_data {
 	unsigned char *next_work_obs;    // Start of data to send
 	unsigned char next_work_obsz;
 	const char *next_work_cmd;
-	char noncebuf[14 + (BITFORCE_MAX_QUEUED * 165)];
+	char noncebuf[14 + (BITFORCE_MAX_QUEUED * BITFORCE_QRESULT_LINE_LEN)];
 	int poll_func;
 	enum bitforce_proto proto;
 	bool sc;
@@ -761,12 +762,17 @@ int bitforce_zox(struct thr_info *thr, const char *cmd)
 				break;
 			}
 			sz = strlen(pmorebuf);
+			if (!sz)
+			{
+				applog(LOG_ERR, "%"PRIpreprv": Timeout during %s", bitforce->proc_repr, cmd);
+				break;
+			}
 			szleft -= sz;
 			pmorebuf += sz;
-			if (unlikely(!szleft))
+			if (unlikely(szleft < BITFORCE_QRESULT_LINE_LEN))
 			{
 				// Out of buffer space somehow :(
-				applog(LOG_DEBUG, "%"PRIpreprv": Ran out of buffer space for results, discarding extra data", bitforce->proc_repr);
+				applog(LOG_ERR, "%"PRIpreprv": Ran out of buffer space for results, discarding extra data", bitforce->proc_repr);
 				pmorebuf = _discardedbuf;
 				szleft = sizeof(_discardedbuf);
 			}
