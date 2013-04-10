@@ -211,6 +211,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(&bitforce->device_mutex);
+			BFclose(fdDev);
 			applog(LOG_ERR, "BFL%i: Error reading/timeout (ZGX)", bitforce->device_id);
 			return;
 		}
@@ -221,6 +222,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		mutex_unlock(&bitforce->device_mutex);
+		BFclose(fdDev);
 		applog(LOG_ERR, "BFL%i: Didn't recognise BitForce on %s returned: %s", bitforce->device_id, devpath, pdevbuf);
 		return;
 	}
