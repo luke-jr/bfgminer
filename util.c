@@ -1429,8 +1429,14 @@ static bool setup_stratum_curl(struct pool *pool)
 
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
-	if (pool->stratum_curl)
+	if (pool->stratum_curl) {
+#if CURL_HAS_KEEPALIVE
 		curl_easy_cleanup(pool->stratum_curl);
+#else
+		/* See above in suspend_stratum */
+		CLOSESOCKET(pool->sock);
+#endif
+	}
 	pool->stratum_curl = curl_easy_init();
 	if (unlikely(!pool->stratum_curl))
 		quit(1, "Failed to curl_easy_init in initiate_stratum");
