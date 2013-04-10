@@ -185,7 +185,7 @@ void bitforce_init(struct cgpu_info *bitforce)
 			applog(LOG_ERR, "BFL%i: Error reading (ZGX)", bitforce->device_id);
 			return;
 		}
-	} while (!strstr(pdevbuf, "BUSY"));
+	} while (strstr(pdevbuf, "BUSY"));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		mutex_unlock(&bitforce->device_mutex);
