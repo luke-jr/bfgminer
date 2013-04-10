@@ -242,7 +242,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
-double current_diff = 0xFFFFFFFFFFFFFFFF;
+double current_diff = 0xFFFFFFFFFFFFFFFFULL;
 static char block_diff[8];
 uint64_t best_diff = 0;
 
@@ -1123,7 +1123,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_FPGA_SERIAL
 	OPT_WITH_ARG("--scan-serial|-S",
 		     add_serial, NULL, NULL,
-		     "Serial port to probe for FPGA Mining device"),
+		     "Serial port to probe for Icarus FPGA Mining device"),
 #endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,

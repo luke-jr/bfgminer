@@ -294,6 +294,8 @@ static const char *C_REQUESTQUEJOB_S = "RequestQueJob";
 static const char *C_REQUESTQUEJOBSTATUS_S = "RequestQueJobStatus";
 static const char *C_QUEJOB_S = "QueJob";
 static const char *C_QUEJOBSTATUS_S = "QueJobStatus";
+static const char *C_QUEFLUSH_S = "QueFlush";
+static const char *C_QUEFLUSHREPLY_S = "QueFlushReply";
 
 #ifdef EOL
 #undef EOL
@@ -759,6 +761,8 @@ static void cgusb_check_init()
 		usb_commands[C_REQUESTQUEJOBSTATUS] = C_REQUESTQUEJOBSTATUS_S;
 		usb_commands[C_QUEJOB] = C_QUEJOB_S;
 		usb_commands[C_QUEJOBSTATUS] = C_QUEJOBSTATUS_S;
+		usb_commands[C_QUEFLUSH] = C_QUEFLUSH_S;
+		usb_commands[C_QUEFLUSHREPLY] = C_QUEFLUSHREPLY_S;
 
 		stats_initialised = true;
 	}
