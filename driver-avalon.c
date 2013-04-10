@@ -908,7 +908,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			info->no_matching_work++;
 			result_wrong++;
 
-			if (result_wrong >= avalon_get_work_count)
+			if (unlikely(result_wrong >= avalon_get_work_count))
 				break;
 
 			if (opt_debug) {
@@ -929,7 +929,8 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (result_wrong >= avalon_get_work_count || hash_count == 0) {
+	if (unlikely(result_wrong >= avalon_get_work_count ||
+	    (hash_count == 0 && ret != AVA_GETS_RESTART))) {
 		/* This means FPGA controller gave all wrong results, so
 		 * try to reset the Avalon */
 		do_avalon_close(thr);
