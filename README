@@ -984,6 +984,10 @@ Q: Can I mine with Nvidia or Intel GPUs?
 A: Yes but their hashrate is very poor and likely you'll be using much more
 energy than you'll be earning in coins.
 
+Q: Can I mine on both Nvidia and AMD GPUs at the same time?
+A: No, you must run one instance of cgminer with the --gpu-platform option for
+each.
+
 Q: Can I mine on Linux without running Xorg?
 A: With Nvidia you can, but with AMD you cannot.
 
@@ -1001,12 +1005,28 @@ A: You are generating garbage hashes due to your choice of settings. Your
 Work Utility (WU) value will confirm you are not generating garbage. You
 should be getting about .9WU per kHash. If not, then try decreasing your
 intensity, do not increase the number of gpu-threads, and consider adding
-system RAM to match your GPU ram.
+system RAM to match your GPU ram. You may also be using a bad combination
+of driver and/or SDK.
 
 Q: Scrypt fails to initialise the kernel every time?
 A: Your parameters are too high. Don't add GPU threads, don't set intensity
 too high, decrease thread concurrency. See the SCRYPT-README for a lot more
 help.
+
+Q: Cgminer stops mining (or my GPUs go DEAD) and I can't close it?
+A: Once the driver has crashed, there is no way for cgminer to close cleanly.
+You will have to kill it, and depending on how corrupted your driver state
+has gotten, you may even need to reboot. Windows is known to reset drivers
+when they fail and cgminer will be stuck trying to use the old driver instance.
+
+Q: I can't get any monitoring of temperatures or fanspeed with cgminer when
+I start it remotely?
+A: With linux, make sure to export the DISPLAY variable. On windows, you
+cannot access these monitoring values via a remote session.
+
+Q: I switch users on windows and my mining stops working?
+A: That's correct, it does. It's a permissions issue that there is no known
+fix for.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
