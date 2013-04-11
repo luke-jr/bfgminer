@@ -551,9 +551,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
 	 * have otherwise created. The filename is:
-	 * name + kernelname +/- g(offset) + v + vectors + w + work_size + l + sizeof(long) + .bin
+	 * kernelname + name +/- g(offset) + v + vectors + w + work_size + l + sizeof(long) + p + platform version + .bin
 	 * For scrypt the filename is:
-	 * name + kernelname + g + lg + lookup_gap + tc + thread_concurrency + w + work_size + l + sizeof(long) + .bin
+	 * kernelname + name + g + lg + lookup_gap + tc + thread_concurrency + w + work_size + l + sizeof(long) + p + platform version + .bin
 	 */
 	char binaryfilename[255];
 	char filename[255];
@@ -726,6 +726,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	strcat(binaryfilename, numbuf);
 	sprintf(numbuf, "l%d", (int)sizeof(long));
 	strcat(binaryfilename, numbuf);
+	strcat(binaryfilename, "p");
+	strcat(binaryfilename, vbuff);
+	sanestr(binaryfilename, binaryfilename);
 	strcat(binaryfilename, ".bin");
 
 	binaryfile = fopen(binaryfilename, "rb");

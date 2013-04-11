@@ -1557,6 +1557,51 @@ void *realloc_strcat(char *ptr, char *s)
 	return ret;
 }
 
+static
+bool sanechars[] = {
+	false, false, false, false, false, false, false, false,
+	false, false, false, false, false, false, false, false,
+	false, false, false, false, false, false, false, false,
+	false, false, false, false, false, false, false, false,
+	false, false, false, false, false, false, false, false,
+	false, false, false, false, false, false, false, false,
+	true , true , true , true , true , true , true , true ,
+	true , true , false, false, false, false, false, false,
+	false, true , true , true , true , true , true , true ,
+	true , true , true , true , true , true , true , true ,
+	true , true , true , true , true , true , true , true ,
+	true , true , true , false, false, false, false, false,
+	false, true , true , true , true , true , true , true ,
+	true , true , true , true , true , true , true , true ,
+	true , true , true , true , true , true , true , true ,
+	true , true , true , false, false, false, false, false,
+};
+
+char *sanestr(char *o, char *s)
+{
+	char *rv = o;
+	bool br = false;
+	
+	for ( ; s[0]; ++s)
+	{
+		if (sanechars[s[0] & 0x7f])
+		{
+			if (br)
+			{
+				br = false;
+				if (s[0] >= '0' && s[0] <= '9')
+					(o++)[0] = '_';
+			}
+			(o++)[0] = s[0];
+		}
+		else
+		if (o != s && o[-1] >= '0' && o[-1] <= '9')
+			br = true;
+	}
+	o[0] = '\0';
+	return rv;
+}
+
 void RenameThread(const char* name)
 {
 #if defined(PR_SET_NAME)
