@@ -1433,6 +1433,9 @@ static void opencl_detect()
 	if (!nDevs)
 		return;
 
+	if (opt_g_threads == -1)
+		opt_g_threads = 2;
+
 	for (i = 0; i < nDevs; ++i) {
 		struct cgpu_info *cgpu;
 

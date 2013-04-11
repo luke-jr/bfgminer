@@ -251,6 +251,8 @@ char *file_contents(const char *filename, int *length)
 	return (char*)buffer;
 }
 
+extern int opt_g_threads;
+
 int clDevicesNum(void) {
 	cl_int status;
 	char pbuff[256];
@@ -259,6 +261,7 @@ int clDevicesNum(void) {
 	cl_platform_id *platforms;
 	cl_platform_id platform = NULL;
 	unsigned int most_devices = 0, i, mdplatform = 0;
+	bool mdmesa = false;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	/* If this fails, assume no GPUs. */
@@ -307,6 +310,7 @@ int clDevicesNum(void) {
 		if (numDevices > most_devices) {
 			most_devices = numDevices;
 			mdplatform = i;
+			mdmesa = strstr(pbuff, "MESA");
 		}
 		if (numDevices) {
 			unsigned int j;
@@ -324,6 +328,8 @@ int clDevicesNum(void) {
 
 	if (opt_platform_id < 0)
 		opt_platform_id = mdplatform;;
+	if (mdmesa && opt_g_threads == -1)
+		opt_g_threads = 1;
 
 	return most_devices;
 }
