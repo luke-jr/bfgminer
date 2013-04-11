@@ -389,6 +389,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	_clState *clState = calloc(1, sizeof(_clState));
 	bool patchbfi = false, prog_built = false;
+	bool usebinary = true;
 	struct cgpu_info *cgpu = &gpus[gpu];
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
@@ -551,6 +552,13 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 	applog(LOG_DEBUG, "Max mem alloc size is %lu", (unsigned long)cgpu->max_alloc);
+	
+	if (strstr(vbuff, "MESA"))
+	{
+		applog(LOG_DEBUG, "Mesa OpenCL platform detected, disabling OpenCL kernel binaries and bitalign");
+		clState->hasBitAlign = false;
+		usebinary = false;
+	}
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
@@ -735,7 +743,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	strcat(binaryfilename, "p");
 	strcat(binaryfilename, vbuff);
 	sanestr(binaryfilename, binaryfilename);
+	applog(LOG_DEBUG, "OCL%2u: Configured OpenCL kernel name: %s", gpu, binaryfilename);
 	strcat(binaryfilename, ".bin");
+	
+	if (!usebinary)
+		goto build;
 
 	binaryfile = fopen(binaryfilename, "rb");
 	if (!binaryfile) {
@@ -856,6 +868,9 @@ build:
 	}
 
 	prog_built = true;
+	
+	if (!usebinary)
+		goto built;
 
 	status = clGetProgramInfo(clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
