@@ -395,7 +395,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	_clState *clState = calloc(1, sizeof(_clState));
 	bool patchbfi = false, prog_built = false;
-	bool usebinary = true;
+	bool usebinary = true, ismesa = false;
 	struct cgpu_info *cgpu = &gpus[gpu];
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
@@ -564,6 +564,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_DEBUG, "Mesa OpenCL platform detected, disabling OpenCL kernel binaries and bitalign");
 		clState->hasBitAlign = false;
 		usebinary = false;
+		ismesa = true;
 	}
 
 	/* Create binary filename based on parameters passed to opencl
@@ -581,6 +582,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (opt_scrypt) {
 			applog(LOG_INFO, "Selecting scrypt kernel");
 			clState->chosen_kernel = KL_SCRYPT;
+		}
+		else if (ismesa)
+		{
+			applog(LOG_INFO, "Selecting phatk kernel for Mesa");
+			clState->chosen_kernel = KL_PHATK;
 		} else if (!strstr(name, "Tahiti") &&
 			/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
 			(strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
