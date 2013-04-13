@@ -1,3 +1,23 @@
+BFGMiner Version 3.0.1 - Future
+
+- opencl: Default to phatk kernel for Mesa platform
+- opencl: Default to single thread with Mesa OpenCL
+- opencl: Check for Mesa OpenCL and avoid using binary kernels with it
+- bitforce: Never increase bulkqueue poll wait time during queue underruns
+- bitforce: Start off polling bulk queue every 100ms
+- bitforce: Log device queue size after getting bulk results
+- bitforce: Ensure bulkqueue polling occurs at least once a second
+- opencl: Include OpenCL platform in kernel binary filenames
+- bitforce: Use bulk queue mode for all SC devices
+- Bugfix: bitforce: When reinitializing, free all known works to avoid
+decrementing reset queued counter
+- bitforce: Handle timeout during ZOX as cleanly as possible
+- Bugfix: bitforce: Make reinitialization more complete and safe
+- Bugfix: bitforce: Close opened fd if reinit fails
+- Bugfix: bitforce: Retry ZGX until device is NOT busy
+- bitforce: Log when zero queued results are received
+
+
 BFGMiner Version 3.0.0 - April 5, 2013
 
 - Update libblkmaker to 0.3.0
@@ -342,6 +362,8 @@ still)
 
 BFGMiner Version 2.10.6 - April 5, 2013
 
+- Bugfix: Restore missing variable
+- Bugfix: openwrt: Never include _ in platform name
 - Bugfix: Fixed typo in bfgminer-rpc usage
 - pool_active: Ensure temporary curl is always cleaned up
 - Try to find jansson via pkg-config first, and fall back to checking system
