@@ -1438,19 +1438,6 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		return true;
 	}
 	
-	if ((count < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT) || count > BITFORCE_GOAL_QRESULTS)
-	{
-		unsigned int old_sleep_ms = bitforce->sleep_ms;
-		bitforce->sleep_ms = (uint32_t)bitforce->sleep_ms * BITFORCE_GOAL_QRESULTS / (count ?: 1);
-		if (bitforce->sleep_ms > BITFORCE_MAX_QRESULT_WAIT)
-			bitforce->sleep_ms = BITFORCE_MAX_QRESULT_WAIT;
-		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time changed to: %ums",
-		       bitforce->proc_repr, count, old_sleep_ms, bitforce->sleep_ms);
-	}
-	else
-		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time unchanged",
-		       bitforce->proc_repr, count, bitforce->sleep_ms);
-	
 	count = 0;
 	while ((buf = next_line(buf)), buf[0])
 	{
@@ -1497,6 +1484,19 @@ next_qline: (void)0;
 	}
 	
 	bitforce_set_queue_full(thr);
+	
+	if ((count < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT) || count > BITFORCE_GOAL_QRESULTS)
+	{
+		unsigned int old_sleep_ms = bitforce->sleep_ms;
+		bitforce->sleep_ms = (uint32_t)bitforce->sleep_ms * BITFORCE_GOAL_QRESULTS / (count ?: 1);
+		if (bitforce->sleep_ms > BITFORCE_MAX_QRESULT_WAIT)
+			bitforce->sleep_ms = BITFORCE_MAX_QRESULT_WAIT;
+		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time changed to: %ums (queued<=%d)",
+		       bitforce->proc_repr, count, old_sleep_ms, bitforce->sleep_ms, data->queued);
+	}
+	else
+		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time unchanged (queued<=%d)",
+		       bitforce->proc_repr, count, bitforce->sleep_ms, data->queued);
 	
 	gettimeofday(&tv_now, NULL);
 	timersub(&tv_now, &data->tv_hashmeter_start, &tv_elapsed);
