@@ -69,6 +69,7 @@ bool initiate_stratum(struct pool *pool);
 void suspend_stratum(struct pool *pool);
 void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
+extern char *sanestr(char *o, char *s);
 void RenameThread(const char* name);
 
 typedef SOCKETTYPE notifier_t[2];
