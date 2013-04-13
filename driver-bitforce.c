@@ -1175,6 +1175,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			{
 				INIT_LIST_HEAD(&thr->work_list);
 				bitforce_change_mode(bitforce, BFP_BQUEUE);
+				bitforce->sleep_ms = data->sleep_ms_default = 100;
 				timer_set_delay_from_now(&thr->tv_poll, 0);
 			}
 			else
