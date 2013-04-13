@@ -138,7 +138,7 @@ unsigned long long global_hashrate;
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
 int nDevs;
-int opt_g_threads = 2;
+int opt_g_threads = -1;
 int gpu_threads;
 #endif
 #ifdef USE_SCRYPT

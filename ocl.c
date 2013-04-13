@@ -251,6 +251,8 @@ char *file_contents(const char *filename, int *length)
 	return (char*)buffer;
 }
 
+extern int opt_g_threads;
+
 int clDevicesNum(void) {
 	cl_int status;
 	char pbuff[256];
@@ -259,6 +261,7 @@ int clDevicesNum(void) {
 	cl_platform_id *platforms;
 	cl_platform_id platform = NULL;
 	unsigned int most_devices = 0, i, mdplatform = 0;
+	bool mdmesa = false;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	/* If this fails, assume no GPUs. */
@@ -307,6 +310,7 @@ int clDevicesNum(void) {
 		if (numDevices > most_devices) {
 			most_devices = numDevices;
 			mdplatform = i;
+			mdmesa = strstr(pbuff, "MESA");
 		}
 		if (numDevices) {
 			unsigned int j;
@@ -324,6 +328,8 @@ int clDevicesNum(void) {
 
 	if (opt_platform_id < 0)
 		opt_platform_id = mdplatform;;
+	if (mdmesa && opt_g_threads == -1)
+		opt_g_threads = 1;
 
 	return most_devices;
 }
@@ -389,6 +395,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	_clState *clState = calloc(1, sizeof(_clState));
 	bool patchbfi = false, prog_built = false;
+	bool usebinary = true, ismesa = false;
 	struct cgpu_info *cgpu = &gpus[gpu];
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
@@ -551,6 +558,14 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 	applog(LOG_DEBUG, "Max mem alloc size is %lu", (unsigned long)cgpu->max_alloc);
+	
+	if (strstr(vbuff, "MESA"))
+	{
+		applog(LOG_DEBUG, "Mesa OpenCL platform detected, disabling OpenCL kernel binaries and bitalign");
+		clState->hasBitAlign = false;
+		usebinary = false;
+		ismesa = true;
+	}
 
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
@@ -567,6 +582,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (opt_scrypt) {
 			applog(LOG_INFO, "Selecting scrypt kernel");
 			clState->chosen_kernel = KL_SCRYPT;
+		}
+		else if (ismesa)
+		{
+			applog(LOG_INFO, "Selecting phatk kernel for Mesa");
+			clState->chosen_kernel = KL_PHATK;
 		} else if (!strstr(name, "Tahiti") &&
 			/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
 			(strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
@@ -735,7 +755,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	strcat(binaryfilename, "p");
 	strcat(binaryfilename, vbuff);
 	sanestr(binaryfilename, binaryfilename);
+	applog(LOG_DEBUG, "OCL%2u: Configured OpenCL kernel name: %s", gpu, binaryfilename);
 	strcat(binaryfilename, ".bin");
+	
+	if (!usebinary)
+		goto build;
 
 	binaryfile = fopen(binaryfilename, "rb");
 	if (!binaryfile) {
@@ -856,6 +880,9 @@ build:
 	}
 
 	prog_built = true;
+	
+	if (!usebinary)
+		goto built;
 
 	status = clGetProgramInfo(clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
