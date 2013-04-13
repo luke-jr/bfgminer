@@ -1,5 +1,13 @@
+BFGMiner Version 2.10.7 - Future
+
+- opencl: Include OpenCL platform in kernel binary filenames
+- Bugfix: bitforce: Close opened fd if reinit fails
+- Bugfix: bitforce: Retry ZGX until device is NOT busy
+
+
 BFGMiner Version 2.10.6 - April 5, 2013
 
+- Bugfix: Restore missing variable
 - Bugfix: openwrt: Never include _ in platform name
 - Bugfix: Fixed typo in bfgminer-rpc usage
 - pool_active: Ensure temporary curl is always cleaned up
