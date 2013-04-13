@@ -1486,7 +1486,7 @@ next_qline: (void)0;
 	
 	bitforce_set_queue_full(thr);
 	
-	if ((count < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT) || count > BITFORCE_GOAL_QRESULTS)
+	if ((count < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT && data->queued > 1) || count > BITFORCE_GOAL_QRESULTS)
 	{
 		unsigned int old_sleep_ms = bitforce->sleep_ms;
 		bitforce->sleep_ms = (uint32_t)bitforce->sleep_ms * BITFORCE_GOAL_QRESULTS / (count ?: 1);
