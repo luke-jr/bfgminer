@@ -1022,12 +1022,18 @@ when they fail and cgminer will be stuck trying to use the old driver instance.
 Q: I can't get any monitoring of temperatures or fanspeed with cgminer when
 I start it remotely?
 A: With linux, make sure to export the DISPLAY variable. On windows, you
-cannot access these monitoring values via a remote session.
+cannot access these monitoring values via RDP. This should work with tightVNC
+or teamviewer though.
 
 Q: I change my GPU engine/memory/voltage and cgminer reports back no change?
 A: Cgminer asks the GPU using the ATI Display Library to change settings, but
 the driver and hardware are free to do what it wants with that query, including
 ignoring it. Some GPUs are locked with one or more of those properties as well.
+
+Q: I have some random GPU performance related problem not addressed above.
+A: Seriously, it's the driver and/or SDK. Uninstall them and start again,
+noting there is no clean way to uninstall them so you have to use extra tools
+or do it manually.
 
 Q: I switch users on windows and my mining stops working?
 A: That's correct, it does. It's a permissions issue that there is no known
