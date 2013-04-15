@@ -990,15 +990,19 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	return true;
 }
 
+enum send_ret {
+	SEND_OK,
+	SEND_SELECTFAIL,
+	SEND_SENDFAIL,
+	SEND_INACTIVE
+};
+
 /* Send a single command across a socket, appending \n to it. This should all
  * be done under stratum lock except when first establishing the socket */
-static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
+static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 {
 	SOCKETTYPE sock = pool->sock;
 	ssize_t ssent = 0;
-
-	if (opt_protocol)
-		applog(LOG_DEBUG, "Pool %u: SEND: %s", pool->pool_no, s);
 
 	strcat(s, "\n");
 	len++;
@@ -1010,16 +1014,12 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 		FD_ZERO(&wd);
 		FD_SET(sock, &wd);
-		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1) {
-			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
-			return false;
-		}
+		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1)
+			return SEND_SELECTFAIL;
 		sent = send(pool->sock, s + ssent, len, 0);
 		if (sent < 0) {
-			if (errno != EAGAIN && errno != EWOULDBLOCK) {
-				applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
-				return false;
-			}
+			if (errno != EAGAIN && errno != EWOULDBLOCK)
+				return SEND_SENDFAIL;
 			sent = 0;
 		}
 		ssent += sent;
@@ -1030,21 +1030,37 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 	pool->cgminer_pool_stats.bytes_sent += ssent;
 	total_bytes_xfer += ssent;
 	pool->cgminer_pool_stats.net_bytes_sent += ssent;
-	return true;
+	return SEND_OK;
 }
 
 bool stratum_send(struct pool *pool, char *s, ssize_t len)
 {
-	bool ret = false;
+	enum send_ret ret = SEND_INACTIVE;
+
+	if (opt_protocol)
+		applog(LOG_DEBUG, "Pool %u: SEND: %s", pool->pool_no, s);
 
 	mutex_lock(&pool->stratum_lock);
 	if (pool->stratum_active)
 		ret = __stratum_send(pool, s, len);
-	else
-		applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
 	mutex_unlock(&pool->stratum_lock);
 
-	return ret;
+	/* This is to avoid doing applog under stratum_lock */
+	switch (ret) {
+		default:
+		case SEND_OK:
+			break;
+		case SEND_SELECTFAIL:
+			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
+			break;
+		case SEND_SENDFAIL:
+			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
+			break;
+		case SEND_INACTIVE:
+			applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
+			break;
+	}
+	return (ret == SEND_OK);
 }
 
 static bool socket_full(struct pool *pool, bool wait)
@@ -1626,7 +1642,7 @@ bool initiate_stratum(struct pool *pool)
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
-	if (!__stratum_send(pool, s, strlen(s))) {
+	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
