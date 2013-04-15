@@ -1030,6 +1030,12 @@ A: Cgminer asks the GPU using the ATI Display Library to change settings, but
 the driver and hardware are free to do what it wants with that query, including
 ignoring it. Some GPUs are locked with one or more of those properties as well.
 
+Q: I have multiple GPUs and although many devices show up, it appears to be
+working only on one GPU splitting it up.
+A: Your driver setup is failing to properly use the accessory GPUs. Your
+driver may be configured wrong or you have a driver version that needs a dummy
+plug on all the GPUs that aren't connected to a monitor.
+
 Q: I have some random GPU performance related problem not addressed above.
 A: Seriously, it's the driver and/or SDK. Uninstall them and start again,
 noting there is no clean way to uninstall them so you have to use extra tools
