@@ -272,6 +272,7 @@ struct timeval block_timeval;
 static char best_share[8] = "0";
 double current_diff;
 static char block_diff[8];
+static char net_hashrate[10];
 uint64_t best_diff = 0;
 
 static bool known_blkheight_current;
@@ -2445,8 +2446,8 @@ static void curses_print_status(void)
 			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s  Diff:%s  Started: %s  Best share: %s   ",
-		  current_hash, block_diff, blocktime, best_share);
+	mvwprintw(statuswin, 5, 0, " Block: %s  Diff:%s (%s)  Started: %s",
+		  current_hash, block_diff, net_hashrate, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -4516,7 +4517,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 
 	get_timestamp(blocktime, &block_timeval);
 
-	applog(LOG_INFO, "New block: %s diff %s", current_hash, block_diff);
+	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
 }
 
 /* Search to see if this string is from a block that has been seen before */
@@ -4559,6 +4560,7 @@ static void set_blockdiff(const struct work *work)
 	diff64 = diff;
 
 	suffix_string(diff64, block_diff, 0);
+	hashrate_to_bufstr(net_hashrate, diff * 7158278, -1, H2B_SHORT);
 	current_diff = diff;
 }
 
@@ -5771,14 +5773,15 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d U:%.1f/m",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d U:%.1f/m BS:%s",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
 		total_accepted, total_rejected, total_stale,
 		hw_errors,
-		utility);
+		utility,
+		best_share);
 
 
 	local_mhashes_done = 0;
