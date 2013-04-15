@@ -1793,6 +1793,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
+		curl_easy_cleanup(curl);
+		pool->stratum_curl = NULL;
 		return false;
 	}
 	if (pool->sock == INVSOCK)
