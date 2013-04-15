@@ -3588,8 +3588,9 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	free(current_fullhash);
 	current_fullhash = bin2hex(block_hash_swap, 32);
 	get_timestamp(blocktime, &block_timeval);
-	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
 	cg_wunlock(&ch_lock);
+
+	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
 }
 
 /* Search to see if this string is from a block that has been seen before */
