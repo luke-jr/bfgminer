@@ -5768,6 +5768,7 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 		if (need_work) {
 			struct work *work = get_work(mythr, thr_id);
 
+			work->device_diff = MIN(drv->max_diff, work->work_difficulty);
 			wr_lock(&cgpu->qlock);
 			HASH_ADD_INT(cgpu->queued_work, id, work);
 			wr_unlock(&cgpu->qlock);
