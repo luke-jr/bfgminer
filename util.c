@@ -1501,6 +1501,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
+		curl_easy_cleanup(curl);
+		pool->stratum_curl = NULL;
 		return false;
 	}
 	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
