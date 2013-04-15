@@ -145,7 +145,7 @@
 static const char SEPARATOR = '|';
 static const char COMMA = ',';
 static const char EQ = '=';
-static int ONLY = 0;
+static int ONLY;
 
 void display(char *buf)
 {
