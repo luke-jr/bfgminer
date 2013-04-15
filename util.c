@@ -710,9 +710,7 @@ void tq_free(struct thread_q *tq)
 static void tq_freezethaw(struct thread_q *tq, bool frozen)
 {
 	mutex_lock(&tq->mutex);
-
 	tq->frozen = frozen;
-
 	pthread_cond_signal(&tq->cond);
 	mutex_unlock(&tq->mutex);
 }
@@ -740,14 +738,12 @@ bool tq_push(struct thread_q *tq, void *data)
 	INIT_LIST_HEAD(&ent->q_node);
 
 	mutex_lock(&tq->mutex);
-
 	if (!tq->frozen) {
 		list_add_tail(&ent->q_node, &tq->q);
 	} else {
 		free(ent);
 		rc = false;
 	}
-
 	pthread_cond_signal(&tq->cond);
 	mutex_unlock(&tq->mutex);
 
@@ -761,7 +757,6 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 	int rc;
 
 	mutex_lock(&tq->mutex);
-
 	if (!list_empty(&tq->q))
 		goto pop;
 
@@ -773,16 +768,15 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 		goto out;
 	if (list_empty(&tq->q))
 		goto out;
-
 pop:
 	ent = list_entry(tq->q.next, struct tq_ent, q_node);
 	rval = ent->data;
 
 	list_del(&ent->q_node);
 	free(ent);
-
 out:
 	mutex_unlock(&tq->mutex);
+
 	return rval;
 }
 
@@ -1441,6 +1435,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	if (unlikely(!pool->stratum_curl))
 		quit(1, "Failed to curl_easy_init in initiate_stratum");
 	mutex_unlock(&pool->stratum_lock);
+
 	curl = pool->stratum_curl;
 
 	if (!pool->sockbuf) {
@@ -1517,6 +1512,7 @@ void suspend_stratum(struct pool *pool)
 {
 	clear_sockbuf(pool);
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
+
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = pool->stratum_notify = false;
 	if (pool->stratum_curl) {
@@ -1654,6 +1650,7 @@ out:
 			free(pool->nonce1);
 			pool->sessionid = pool->nonce1 = NULL;
 			cg_wunlock(&pool->data_lock);
+
 			applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
 			noresume = true;
 			goto resend;
