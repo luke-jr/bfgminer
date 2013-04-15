@@ -1041,6 +1041,11 @@ A: Seriously, it's the driver and/or SDK. Uninstall them and start again,
 noting there is no clean way to uninstall them so you have to use extra tools
 or do it manually.
 
+Q: Do I need to recompile after updating my driver/SDK?
+A: No. The software is unchanged regardless of which driver/SDK/ADL_SDK version
+you are running. However if you change SDKs you should delete any generated
+.bin files for them to be recreated with the new SDK.
+
 Q: I switch users on windows and my mining stops working?
 A: That's correct, it does. It's a permissions issue that there is no known
 fix for.
