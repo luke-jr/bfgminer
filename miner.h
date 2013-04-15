@@ -431,6 +431,7 @@ struct cgpu_info {
 	struct work **works;
 	int work_array;
 	int queued;
+	int results;
 #endif
 #ifdef USE_USBUTILS
 	struct cg_usb_info usbinfo;
