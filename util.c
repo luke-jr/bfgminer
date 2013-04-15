@@ -1021,7 +1021,8 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	if (new < pool->sockbuf_size)
 		return;
 	new = new + (RBUFSIZE - (new % RBUFSIZE));
-	applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
+	// Avoid potentially recursive locking
+	// applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
 	pool->sockbuf = realloc(pool->sockbuf, new);
 	if (!pool->sockbuf)
 		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
