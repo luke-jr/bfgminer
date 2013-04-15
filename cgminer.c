@@ -2061,10 +2061,8 @@ static void curses_print_status(void)
 			pool->has_gbt ? "GBT" : "LP", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	cg_rlock(&ch_lock);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
 		  current_hash, block_diff, blocktime, best_share);
-	cg_runlock(&ch_lock);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -3094,7 +3092,6 @@ static bool clone_available(void)
 			roll_work(work);
 			work_clone = make_clone(work);
 			roll_work(work);
-			applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
 			cloned = true;
 			break;
 		}
@@ -3103,8 +3100,10 @@ static bool clone_available(void)
 out_unlock:
 	mutex_unlock(stgd_lock);
 
-	if (cloned)
+	if (cloned) {
+		applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
 		stage_work(work_clone);
+	}
 	return cloned;
 }
 
