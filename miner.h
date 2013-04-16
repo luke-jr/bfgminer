@@ -120,9 +120,11 @@ static inline int fsync (int fd)
 
 #if (!defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))) \
     || (defined(WIN32) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 7)))
-#define bswap_16 __builtin_bswap16
-#define bswap_32 __builtin_bswap32
-#define bswap_64 __builtin_bswap64
+#ifndef bswap_16
+ #define bswap_16 __builtin_bswap16
+ #define bswap_32 __builtin_bswap32
+ #define bswap_64 __builtin_bswap64
+#endif
 #else
 #if HAVE_BYTESWAP_H
 #include <byteswap.h>
@@ -421,10 +423,16 @@ struct cgpu_info {
 #ifdef USE_USBUTILS
 		struct cg_usb_device *usbdev;
 #endif
-#ifdef USE_ICARUS
+#if defined(USE_ICARUS) || defined(USE_AVALON)
 		int device_fd;
 #endif
 	};
+#ifdef USE_AVALON
+	struct work **works;
+	int work_array;
+	int queued;
+	int results;
+#endif
 #ifdef USE_USBUTILS
 	struct cg_usb_info usbinfo;
 #endif
@@ -787,6 +795,9 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+#ifdef USE_AVALON
+extern char *opt_avalon_options;
+#endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;
 extern int opt_usbdump;
@@ -795,6 +806,7 @@ extern bool opt_usb_list_all;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
+extern bool ping;
 extern int swork_id;
 
 extern pthread_rwlock_t netacc_lock;

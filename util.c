@@ -710,9 +710,7 @@ void tq_free(struct thread_q *tq)
 static void tq_freezethaw(struct thread_q *tq, bool frozen)
 {
 	mutex_lock(&tq->mutex);
-
 	tq->frozen = frozen;
-
 	pthread_cond_signal(&tq->cond);
 	mutex_unlock(&tq->mutex);
 }
@@ -740,14 +738,12 @@ bool tq_push(struct thread_q *tq, void *data)
 	INIT_LIST_HEAD(&ent->q_node);
 
 	mutex_lock(&tq->mutex);
-
 	if (!tq->frozen) {
 		list_add_tail(&ent->q_node, &tq->q);
 	} else {
 		free(ent);
 		rc = false;
 	}
-
 	pthread_cond_signal(&tq->cond);
 	mutex_unlock(&tq->mutex);
 
@@ -761,7 +757,6 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 	int rc;
 
 	mutex_lock(&tq->mutex);
-
 	if (!list_empty(&tq->q))
 		goto pop;
 
@@ -773,16 +768,15 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 		goto out;
 	if (list_empty(&tq->q))
 		goto out;
-
 pop:
 	ent = list_entry(tq->q.next, struct tq_ent, q_node);
 	rval = ent->data;
 
 	list_del(&ent->q_node);
 	free(ent);
-
 out:
 	mutex_unlock(&tq->mutex);
+
 	return rval;
 }
 
@@ -898,15 +892,19 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	return true;
 }
 
+enum send_ret {
+	SEND_OK,
+	SEND_SELECTFAIL,
+	SEND_SENDFAIL,
+	SEND_INACTIVE
+};
+
 /* Send a single command across a socket, appending \n to it. This should all
  * be done under stratum lock except when first establishing the socket */
-static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
+static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 {
 	SOCKETTYPE sock = pool->sock;
 	ssize_t ssent = 0;
-
-	if (opt_protocol)
-		applog(LOG_DEBUG, "SEND: %s", s);
 
 	strcat(s, "\n");
 	len++;
@@ -918,16 +916,12 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 		FD_ZERO(&wd);
 		FD_SET(sock, &wd);
-		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1) {
-			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
-			return false;
-		}
+		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1)
+			return SEND_SELECTFAIL;
 		sent = send(pool->sock, s + ssent, len, 0);
 		if (sent < 0) {
-			if (errno != EAGAIN && errno != EWOULDBLOCK) {
-				applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
-				return false;
-			}
+			if (errno != EAGAIN && errno != EWOULDBLOCK)
+				return SEND_SENDFAIL;
 			sent = 0;
 		}
 		ssent += sent;
@@ -937,21 +931,37 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.bytes_sent += ssent;
 	pool->cgminer_pool_stats.net_bytes_sent += ssent;
-	return true;
+	return SEND_OK;
 }
 
 bool stratum_send(struct pool *pool, char *s, ssize_t len)
 {
-	bool ret = false;
+	enum send_ret ret = SEND_INACTIVE;
+
+	if (opt_protocol)
+		applog(LOG_DEBUG, "SEND: %s", s);
 
 	mutex_lock(&pool->stratum_lock);
 	if (pool->stratum_active)
 		ret = __stratum_send(pool, s, len);
-	else
-		applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
 	mutex_unlock(&pool->stratum_lock);
 
-	return ret;
+	/* This is to avoid doing applog under stratum_lock */
+	switch (ret) {
+		default:
+		case SEND_OK:
+			break;
+		case SEND_SELECTFAIL:
+			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
+			break;
+		case SEND_SENDFAIL:
+			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
+			break;
+		case SEND_INACTIVE:
+			applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
+			break;
+	}
+	return (ret == SEND_OK);
 }
 
 static bool socket_full(struct pool *pool, bool wait)
@@ -1011,13 +1021,20 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	if (new < pool->sockbuf_size)
 		return;
 	new = new + (RBUFSIZE - (new % RBUFSIZE));
-	applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
+	// Avoid potentially recursive locking
+	// applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
 	pool->sockbuf = realloc(pool->sockbuf, new);
 	if (!pool->sockbuf)
 		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
 	memset(pool->sockbuf + old, 0, new - old);
 	pool->sockbuf_size = new;
 }
+
+enum recv_ret {
+	RECV_OK,
+	RECV_CLOSED,
+	RECV_RECVFAIL
+};
 
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
@@ -1027,6 +1044,7 @@ char *recv_line(struct pool *pool)
 	char *tok, *sret = NULL;
 
 	if (!strstr(pool->sockbuf, "\n")) {
+		enum recv_ret ret = RECV_OK;
 		struct timeval rstart, now;
 
 		gettimeofday(&rstart, NULL);
@@ -1044,11 +1062,11 @@ char *recv_line(struct pool *pool)
 			memset(s, 0, RBUFSIZE);
 			n = recv(pool->sock, s, RECVSIZE, 0);
 			if (!n) {
-				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
+				ret = RECV_CLOSED;
 				break;
 			}
 			if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+				ret = RECV_RECVFAIL;
 				break;
 			}
 			slen = strlen(s);
@@ -1057,6 +1075,18 @@ char *recv_line(struct pool *pool)
 			gettimeofday(&now, NULL);
 		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
 		mutex_unlock(&pool->stratum_lock);
+
+		switch (ret) {
+			default:
+			case RECV_OK:
+				break;
+			case RECV_CLOSED:
+				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
+				break;
+			case RECV_RECVFAIL:
+				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+				break;
+		}
 	}
 
 	buflen = strlen(pool->sockbuf);
@@ -1441,6 +1471,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	if (unlikely(!pool->stratum_curl))
 		quit(1, "Failed to curl_easy_init in initiate_stratum");
 	mutex_unlock(&pool->stratum_lock);
+
 	curl = pool->stratum_curl;
 
 	if (!pool->sockbuf) {
@@ -1470,6 +1501,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
+		curl_easy_cleanup(curl);
+		pool->stratum_curl = NULL;
 		return false;
 	}
 	curl_easy_getinfo(curl, CURLINFO_LASTSOCKET, (long *)&pool->sock);
@@ -1517,6 +1550,7 @@ void suspend_stratum(struct pool *pool)
 {
 	clear_sockbuf(pool);
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
+
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = pool->stratum_notify = false;
 	if (pool->stratum_curl) {
@@ -1561,7 +1595,7 @@ resend:
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
 	}
 
-	if (!__stratum_send(pool, s, strlen(s))) {
+	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
@@ -1654,6 +1688,7 @@ out:
 			free(pool->nonce1);
 			pool->sessionid = pool->nonce1 = NULL;
 			cg_wunlock(&pool->data_lock);
+
 			applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
 			noresume = true;
 			goto resend;

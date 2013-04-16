@@ -48,6 +48,7 @@
 #include "driver-opencl.h"
 #include "bench_block.h"
 #include "scrypt.h"
+#include "driver-avalon.h"
 
 #if defined(unix)
 	#include <errno.h>
@@ -55,9 +56,9 @@
 	#include <sys/wait.h>
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
 #	define USE_FPGA
-#if defined(USE_ICARUS)
+#if defined(USE_ICARUS) || defined(USE_AVALON)
 #	define USE_FPGA_SERIAL
 #endif
 #elif defined(USE_ZTEX)
@@ -138,6 +139,9 @@ bool opt_disable_pool;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
+#ifdef USE_AVALON
+char *opt_avalon_options = NULL;
+#endif
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
@@ -394,6 +398,7 @@ struct thr_info *get_thread(int thr_id)
 	rd_lock(&mining_thr_lock);
 	thr = mining_thr[thr_id];
 	rd_unlock(&mining_thr_lock);
+
 	return thr;
 }
 
@@ -411,6 +416,7 @@ struct cgpu_info *get_devices(int id)
 	rd_lock(&devices_lock);
 	cgpu = devices[id];
 	rd_unlock(&devices_lock);
+
 	return cgpu;
 }
 
@@ -451,6 +457,7 @@ static void sharelog(const char*disposition, const struct work*work)
 	ret = fwrite(s, rv, 1, sharelog_file);
 	fflush(sharelog_file);
 	mutex_unlock(&sharelog_lock);
+
 	if (ret != 1)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
@@ -496,6 +503,7 @@ static bool pool_tset(struct pool *pool, bool *var)
 	ret = *var;
 	*var = true;
 	mutex_unlock(&pool->pool_lock);
+
 	return ret;
 }
 
@@ -507,6 +515,7 @@ bool pool_tclear(struct pool *pool, bool *var)
 	ret = *var;
 	*var = false;
 	mutex_unlock(&pool->pool_lock);
+
 	return ret;
 }
 
@@ -517,6 +526,7 @@ struct pool *current_pool(void)
 	cg_rlock(&control_lock);
 	pool = currentpool;
 	cg_runlock(&control_lock);
+
 	return pool;
 }
 
@@ -786,6 +796,7 @@ static void load_temp_cutoffs()
 				devices[i]->cutofftemp = opt_cutofftemp;
 		}
 		rd_unlock(&devices_lock);
+
 		return;
 	}
 	if (device <= 1) {
@@ -828,6 +839,15 @@ static char *set_icarus_options(const char *arg)
 static char *set_icarus_timing(const char *arg)
 {
 	opt_set_charp(arg, &opt_icarus_timing);
+
+	return NULL;
+}
+#endif
+
+#ifdef USE_AVALON
+static char *set_avalon_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_avalon_options);
 
 	return NULL;
 }
@@ -1033,6 +1053,11 @@ static struct opt_table opt_config_table[] = {
 		     set_icarus_timing, NULL, NULL,
 		     opt_hidden),
 #endif
+#ifdef USE_AVALON
+	OPT_WITH_ARG("--avalon-options",
+		     set_avalon_options, NULL, NULL,
+		     opt_hidden),
+#endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
 		     "Change multipool strategy from failover to efficiency based balance"),
@@ -1105,7 +1130,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_FPGA_SERIAL
 	OPT_WITH_ARG("--scan-serial|-S",
 		     add_serial, NULL, NULL,
-		     "Serial port to probe for FPGA Mining device"),
+		     "Serial port to probe for Icarus FPGA Mining device"),
 #endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
@@ -1359,6 +1384,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_ICARUS
 		"icarus "
 #endif
+#ifdef USE_AVALON
+		"avalon "
+#endif
 #ifdef USE_MODMINER
 		"modminer "
 #endif
@@ -1470,9 +1498,11 @@ static struct work *make_work(void)
 
 	if (unlikely(!work))
 		quit(1, "Failed to calloc work in make_work");
+
 	cg_wlock(&control_lock);
 	work->id = total_work++;
 	cg_wunlock(&control_lock);
+
 	return work;
 }
 
@@ -1865,6 +1895,7 @@ static int total_staged(void)
 	mutex_lock(stgd_lock);
 	ret = __total_staged();
 	mutex_unlock(stgd_lock);
+
 	return ret;
 }
 
@@ -2040,10 +2071,8 @@ static void curses_print_status(void)
 			pool->has_gbt ? "GBT" : "LP", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	cg_rlock(&ch_lock);
 	mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
 		  current_hash, block_diff, blocktime, best_share);
-	cg_runlock(&ch_lock);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -2916,7 +2945,6 @@ static void recruit_curl(struct pool *pool)
 
 	list_add(&ce->node, &pool->curlring);
 	pool->curls++;
-	applog(LOG_DEBUG, "Recruited curl %d for pool %d", pool->curls, pool->pool_no);
 }
 
 /* Grab an available curl if there is one. If not, then recruit extra curls
@@ -2927,23 +2955,29 @@ static void recruit_curl(struct pool *pool)
 static struct curl_ent *pop_curl_entry(struct pool *pool)
 {
 	int curl_limit = opt_delaynet ? 5 : (mining_threads + opt_queue) * 2;
+	bool recruited = false;
 	struct curl_ent *ce;
 
 	mutex_lock(&pool->pool_lock);
 retry:
-	if (!pool->curls)
+	if (!pool->curls) {
 		recruit_curl(pool);
-	else if (list_empty(&pool->curlring)) {
+		recruited = true;
+	} else if (list_empty(&pool->curlring)) {
 		if (pool->curls >= curl_limit) {
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
 			goto retry;
-		} else
+		} else {
 			recruit_curl(pool);
+			recruited = true;
+		}
 	}
 	ce = list_entry(pool->curlring.next, struct curl_ent, node);
 	list_del(&ce->node);
 	mutex_unlock(&pool->pool_lock);
 
+	if (recruited)
+		applog(LOG_DEBUG, "Recruited curl for pool %d", pool->pool_no);
 	return ce;
 }
 
@@ -3073,7 +3107,6 @@ static bool clone_available(void)
 			roll_work(work);
 			work_clone = make_clone(work);
 			roll_work(work);
-			applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
 			cloned = true;
 			break;
 		}
@@ -3082,8 +3115,10 @@ static bool clone_available(void)
 out_unlock:
 	mutex_unlock(stgd_lock);
 
-	if (cloned)
+	if (cloned) {
+		applog(LOG_DEBUG, "Pushing cloned available work to stage thread");
 		stage_work(work_clone);
+	}
 	return cloned;
 }
 
@@ -3133,10 +3168,12 @@ static bool stale_work(struct work *work, bool share)
 		}
 
 		same_job = true;
+
 		cg_rlock(&pool->data_lock);
 		if (strcmp(work->job_id, pool->swork.job_id))
 			same_job = false;
 		cg_runlock(&pool->data_lock);
+
 		if (!same_job) {
 			applog(LOG_DEBUG, "Work stale due to stratum job_id mismatch");
 			return true;
@@ -3180,6 +3217,7 @@ static uint64_t share_diff(const struct work *work)
 	if (unlikely(!d64))
 		d64 = 1;
 	ret = diffone / d64;
+
 	cg_wlock(&control_lock);
 	if (ret > best_diff) {
 		best_diff = ret;
@@ -3188,6 +3226,7 @@ static uint64_t share_diff(const struct work *work)
 	if (ret > work->pool->best_diff)
 		work->pool->best_diff = ret;
 	cg_wunlock(&control_lock);
+
 	return ret;
 }
 
@@ -3252,6 +3291,7 @@ static void *submit_work_thread(void *userdata)
 			total_diff_stale += work->work_difficulty;
 			pool->diff_stale += work->work_difficulty;
 			mutex_unlock(&stats_lock);
+
 			goto out;
 		}
 		work->stale = true;
@@ -3291,10 +3331,12 @@ static void *submit_work_thread(void *userdata)
 			if (likely(stratum_send(pool, s, strlen(s)))) {
 				if (pool_tclear(pool, &pool->submit_fail))
 						applog(LOG_WARNING, "Pool %d communication resumed, submitting work", pool->pool_no);
+
 				mutex_lock(&sshare_lock);
 				HASH_ADD_INT(stratum_shares, id, sshare);
 				pool->sshares++;
 				mutex_unlock(&sshare_lock);
+
 				applog(LOG_DEBUG, "Successfully submitted, adding to stratum_shares db");
 				submitted = true;
 				break;
@@ -3340,6 +3382,7 @@ static void *submit_work_thread(void *userdata)
 			total_diff_stale += work->work_difficulty;
 			pool->diff_stale += work->work_difficulty;
 			mutex_unlock(&stats_lock);
+
 			break;
 		}
 
@@ -3567,8 +3610,9 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	free(current_fullhash);
 	current_fullhash = bin2hex(block_hash_swap, 32);
 	get_timestamp(blocktime, &block_timeval);
-	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
 	cg_wunlock(&ch_lock);
+
+	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
 }
 
 /* Search to see if this string is from a block that has been seen before */
@@ -3579,6 +3623,7 @@ static bool block_exists(char *hexstr)
 	rd_lock(&blk_lock);
 	HASH_FIND_STR(blocks, hexstr, s);
 	rd_unlock(&blk_lock);
+
 	if (s)
 		return true;
 	return false;
@@ -3667,6 +3712,7 @@ static bool test_work_current(struct work *work)
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
 		s->block_no = new_blocks++;
+
 		wr_lock(&blk_lock);
 		/* Only keep the last hour's worth of blocks in memory since
 		 * work from blocks before this is virtually impossible and we
@@ -3683,6 +3729,7 @@ static bool test_work_current(struct work *work)
 		HASH_ADD_STR(blocks, hash, s);
 		set_blockdiff(work);
 		wr_unlock(&blk_lock);
+
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
 		set_curblock(hexstr, work->data);
@@ -4675,6 +4722,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	local_mhashes_done = 0;
 out_unlock:
 	mutex_unlock(&hash_lock);
+
 	if (showlog) {
 		if (!curses_active) {
 			printf("%s          \r", statusline);
@@ -4737,6 +4785,7 @@ static bool parse_stratum_response(struct pool *pool, char *s)
 	}
 
 	id = json_integer_value(id_val);
+
 	mutex_lock(&sshare_lock);
 	HASH_FIND_INT(stratum_shares, &id, sshare);
 	if (sshare) {
@@ -4744,6 +4793,7 @@ static bool parse_stratum_response(struct pool *pool, char *s)
 		pool->sshares--;
 	}
 	mutex_unlock(&sshare_lock);
+
 	if (!sshare) {
 		if (json_is_true(res_val))
 			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
@@ -4814,6 +4864,7 @@ static int cp_prio(void)
 	cg_rlock(&control_lock);
 	prio = currentpool->prio;
 	cg_runlock(&control_lock);
+
 	return prio;
 }
 
@@ -4875,6 +4926,7 @@ static bool supports_resume(struct pool *pool)
 	cg_rlock(&pool->data_lock);
 	ret = (pool->sessionid != NULL);
 	cg_runlock(&pool->data_lock);
+
 	return ret;
 }
 
@@ -5707,15 +5759,20 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 {
 	thread_reportout(mythr);
 	do {
-		struct work *work;
+		bool need_work;
 
-		wr_lock(&cgpu->qlock);
-		if (HASH_COUNT(cgpu->queued_work) == cgpu->queued_count) {
-			work = get_work(mythr, thr_id);
+		rd_lock(&cgpu->qlock);
+		need_work = (HASH_COUNT(cgpu->queued_work) == cgpu->queued_count);
+		rd_unlock(&cgpu->qlock);
+
+		if (need_work) {
+			struct work *work = get_work(mythr, thr_id);
+
 			work->device_diff = MIN(drv->max_diff, work->work_difficulty);
+			wr_lock(&cgpu->qlock);
 			HASH_ADD_INT(cgpu->queued_work, id, work);
+			wr_unlock(&cgpu->qlock);
 		}
-		wr_unlock(&cgpu->qlock);
 		/* The queue_full function should be used by the driver to
 		 * actually place work items on the physical device if it
 		 * does have a queue. */
@@ -5789,6 +5846,7 @@ void work_completed(struct cgpu_info *cgpu, struct work *work)
 		cgpu->queued_count--;
 	HASH_DEL(cgpu->queued_work, work);
 	wr_unlock(&cgpu->qlock);
+
 	free_work(work);
 }
 
@@ -6129,6 +6187,7 @@ static void reap_curl(struct pool *pool)
 	int reaped = 0;
 
 	gettimeofday(&now, NULL);
+
 	mutex_lock(&pool->pool_lock);
 	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
 		if (pool->curls < 2)
@@ -6142,6 +6201,7 @@ static void reap_curl(struct pool *pool)
 		}
 	}
 	mutex_unlock(&pool->pool_lock);
+
 	if (reaped)
 		applog(LOG_DEBUG, "Reaped %d curl%s from pool %d", reaped, reaped > 1 ? "s" : "", pool->pool_no);
 }
@@ -6264,6 +6324,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
 			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
 			sched_paused = true;
+
 			rd_lock(&mining_thr_lock);
 			for (i = 0; i < mining_threads; i++)
 				mining_thr[i]->pause = true;
@@ -6538,15 +6599,20 @@ static void *test_pool_thread(void *arg)
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
+		bool first_pool = false;
 
 		cg_wlock(&control_lock);
 		if (!pools_active) {
 			currentpool = pool;
 			if (pool->pool_no != 0)
-				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
+				first_pool = true;
 			pools_active = true;
 		}
 		cg_wunlock(&control_lock);
+
+		if (unlikely(first_pool))
+			applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
+
 		pool_resus(pool);
 	} else
 		pool_died(pool);
@@ -6751,6 +6817,10 @@ extern struct device_drv bitforce_drv;
 extern struct device_drv icarus_drv;
 #endif
 
+#ifdef USE_AVALON
+extern struct device_drv avalon_drv;
+#endif
+
 #ifdef USE_MODMINER
 extern struct device_drv modminer_drv;
 #endif
@@ -6856,9 +6926,11 @@ void fill_device_drv(struct cgpu_info *cgpu)
 void enable_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
+
 	wr_lock(&devices_lock);
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
 	wr_unlock(&devices_lock);
+
 	if (hotplug_mode) {
 		new_threads += cgpu->threads;
 #ifdef HAVE_CURSES
@@ -6901,9 +6973,11 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
+
 	wr_lock(&devices_lock);
 	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
 	wr_unlock(&devices_lock);
+
 	if (hotplug_mode)
 		devices[total_devices + new_devices++] = cgpu;
 	else
@@ -6942,6 +7016,7 @@ static void hotplug_process()
 	wr_lock(&mining_thr_lock);
 	mining_thr = realloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
 	wr_unlock(&mining_thr_lock);
+
 	if (!mining_thr)
 		quit(1, "Failed to hotplug realloc mining_thr");
 	for (i = 0; i < new_threads; i++) {
@@ -7268,6 +7343,11 @@ int main(int argc, char *argv[])
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
 		icarus_drv.drv_detect();
+#endif
+
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_drv.drv_detect();
 #endif
 
 #ifdef USE_BFLSC
