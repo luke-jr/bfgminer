@@ -1048,7 +1048,8 @@ you are running. However if you change SDKs you should delete any generated
 
 Q: I switch users on windows and my mining stops working?
 A: That's correct, it does. It's a permissions issue that there is no known
-fix for.
+fix for due to monitoring of GPU fanspeeds and temperatures. If you disable
+the monitoring with --no-adl it should switch okay.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
