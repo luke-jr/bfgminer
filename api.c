@@ -3299,28 +3299,28 @@ static void setup_groups()
 			if (colon)
 				*colon = '\0';
 			applog(LOG_WARNING, "API invalid group name '%s'", ptr);
-			quit(1, INVAPIGROUPS);
+			quit(1, "%s", INVAPIGROUPS);
 		}
 
 		group = GROUP(*ptr);
 		if (!VALIDGROUP(group)) {
 			applog(LOG_WARNING, "API invalid group name '%c'", *ptr);
-			quit(1, INVAPIGROUPS);
+			quit(1, "%s", INVAPIGROUPS);
 		}
 
 		if (group == PRIVGROUP) {
 			applog(LOG_WARNING, "API group name can't be '%c'", PRIVGROUP);
-			quit(1, INVAPIGROUPS);
+			quit(1, "%s", INVAPIGROUPS);
 		}
 
 		if (group == NOPRIVGROUP) {
 			applog(LOG_WARNING, "API group name can't be '%c'", NOPRIVGROUP);
-			quit(1, INVAPIGROUPS);
+			quit(1, "%s", INVAPIGROUPS);
 		}
 
 		if (apigroups[GROUPOFFSET(group)].commands != NULL) {
 			applog(LOG_WARNING, "API duplicate group name '%c'", *ptr);
-			quit(1, INVAPIGROUPS);
+			quit(1, "%s", INVAPIGROUPS);
 		}
 
 		ptr += 2;
@@ -3356,7 +3356,7 @@ static void setup_groups()
 					}
 				} else {
 					applog(LOG_WARNING, "API unknown command '%s' in group '%c'", ptr, group);
-					quit(1, INVAPIGROUPS);
+					quit(1, "%s", INVAPIGROUPS);
 				}
 			}
 

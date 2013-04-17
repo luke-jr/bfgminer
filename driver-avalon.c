@@ -401,7 +401,6 @@ static void avalon_idle(struct cgpu_info *avalon)
 static void get_options(int this_option_offset, int *baud, int *miner_count,
 			int *asic_count, int *timeout, int *frequency)
 {
-	char err_buf[BUFSIZ+1];
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2, *colon3, *colon4;
 	size_t max;
@@ -458,10 +457,9 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 		*baud = 19200;
 		break;
 	default:
-		sprintf(err_buf,
+		quit(1,
 			"Invalid avalon-options for baud (%s) "
 			"must be 115200, 57600, 38400 or 19200", buf);
-		quit(1, err_buf);
 	}
 
 	if (colon && *colon) {
@@ -474,11 +472,10 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 			if (tmp > 0 && tmp <= AVALON_DEFAULT_MINER_NUM) {
 				*miner_count = tmp;
 			} else {
-				sprintf(err_buf,
+				quit(1,
 					"Invalid avalon-options for "
 					"miner_count (%s) must be 1 ~ %d",
 					colon, AVALON_DEFAULT_MINER_NUM);
-				quit(1, err_buf);
 			}
 		}
 
@@ -491,11 +488,10 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 			if (tmp > 0 && tmp <= AVALON_DEFAULT_ASIC_NUM)
 				*asic_count = tmp;
 			else {
-				sprintf(err_buf,
+				quit(1,
 					"Invalid avalon-options for "
 					"asic_count (%s) must be 1 ~ %d",
 					colon2, AVALON_DEFAULT_ASIC_NUM);
-				quit(1, err_buf);
 			}
 
 			if (colon3 && *colon3) {
@@ -507,11 +503,10 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 				if (tmp > 0 && tmp <= 0xff)
 					*timeout = tmp;
 				else {
-					sprintf(err_buf,
+					quit(1,
 						"Invalid avalon-options for "
 						"timeout (%s) must be 1 ~ %d",
 						colon3, 0xff);
-					quit(1, err_buf);
 				}
 				if (colon4 && *colon4) {
 					tmp = atoi(colon4);
@@ -523,10 +518,9 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 						*frequency = tmp;
 						break;
 					default:
-						sprintf(err_buf,
+						quit(1,
 							"Invalid avalon-options for "
 							"frequency must be 256/270/282/300");
-							quit(1, err_buf);
 					}
 				}
 			}
