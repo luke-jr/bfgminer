@@ -658,6 +658,8 @@ tryagain: ;
 		string_elist_add(devpath, &scan_devices);
 	}
 	closedir(D);
+	
+	return NULL;
 
 #endif
 }
