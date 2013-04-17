@@ -917,6 +917,8 @@ int set_serial_rts(int fd, int rts)
 	if (!fd)
 		return -1;
 
+	ioctl(fd, TIOCMGET, &flags);
+	
 	if (rts)
 		flags |= TIOCM_RTS;
 	else
