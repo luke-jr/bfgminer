@@ -530,8 +530,14 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((const)) cleanup(vo
 			  AC_DEFINE([HAVE_ATTRIBUTE_CONST], [1],
                                     [Define if __attribute__((const))]))
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((noreturn)) cleanup(void) { exit(1); }])],
+	[
 			  AC_DEFINE([HAVE_ATTRIBUTE_NORETURN], [1],
-                                    [Define if __attribute__((noreturn))]))
+                                    [Define if __attribute__((noreturn))])
+		AC_DEFINE_UNQUOTED([NORETURN], [__attribute__((noreturn))], [Syntax of noreturn attribute])
+	], [
+		AC_DEFINE_UNQUOTED([NORETURN], [])
+	]
+)
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([static void __attribute__((format(__printf__, 1, 2))) cleanup(const char *fmt, ...) { }])],
 			  AC_DEFINE([HAVE_ATTRIBUTE_PRINTF], [1],
                                     [Define if __attribute__((format(__printf__)))]))

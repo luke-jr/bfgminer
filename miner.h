@@ -684,7 +684,7 @@ static inline void swab256(void *dest_p, const void *src_p)
 
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
 
-extern void quit(int status, const char *format, ...);
+extern void quit(int status, const char *format, ...) NORETURN FORMAT_SYNTAX_CHECK(printf, 2, 3);
 
 static inline void mutex_lock(pthread_mutex_t *lock)
 {
