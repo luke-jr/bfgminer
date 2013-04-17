@@ -6846,7 +6846,10 @@ retry_pool:
 		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
 		work->pool = pool;
 		if (!lpreq)
+		{
+			free_work(work);
 			goto lpfail;
+		}
 
 		wait_lpcurrent(cp);
 
