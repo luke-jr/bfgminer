@@ -557,6 +557,21 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([static int __attribute__((warn_unused_result)
 			  AC_DEFINE([HAVE_WARN_UNUSED_RESULT], [1],
                                     [Define if __attribute__((warn_unused_result))]))
 
+AC_MSG_CHECKING([for roundl function])
+save_LIBS="${LIBS}"
+LIBS="$LIBS -lm"
+AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+	#include <math.h>
+]], [[
+	return (roundl(0.5) == 1.0);
+]])], [
+	AC_MSG_RESULT([yes])
+], [
+	AC_MSG_RESULT([no])
+	AC_DEFINE_UNQUOTED([roundl(x)], [(long double)((long long)((x==0)?0.0:((x)+(((x)>0)?0.5:-0.5))))], [Round to nearest integer, away from zero])
+])
+LIBS="${save_LIBS}"
+
 
 # byteswap functions
 AH_TEMPLATE([HAVE_BYTESWAP_H], [Define to use byteswap macros from byteswap.h])
