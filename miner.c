@@ -587,6 +587,7 @@ char *set_request_diff(const char *arg, float *p)
 	return NULL;
 }
 
+#ifdef USE_FPGA_SERIAL
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
 #endif
@@ -686,7 +687,6 @@ tryagain: ;
 #endif
 }
 
-#ifdef USE_FPGA_SERIAL
 static char *add_serial(char *arg)
 {
 	char *p = strchr(arg, ':');
