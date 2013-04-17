@@ -5308,7 +5308,10 @@ retry_pool:
 		const char *rpc_req;
 		rpc_req = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
 		if (!rpc_req)
+		{
+			free_work(work);
 			goto lpfail;
+		}
 
 		wait_lpcurrent(cp);
 
