@@ -314,7 +314,6 @@ int clDevicesNum(void) {
 		}
 		if (numDevices) {
 			unsigned int j;
-			char pbuff[256];
 			cl_device_id *devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
 
 			clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
