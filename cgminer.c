@@ -5910,13 +5910,13 @@ void hash_queued_work(struct thr_info *mythr)
 			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
 		}
 
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr, thr_id, drv);
+
 		if (unlikely(mythr->work_restart)) {
 			flush_queue(cgpu);
 			drv->flush_work(cgpu);
 		}
-
-		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
-			mt_disable(mythr, thr_id, drv);
 	}
 }
 

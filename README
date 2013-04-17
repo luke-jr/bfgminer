@@ -960,6 +960,14 @@ their various features. Linux offers much better long term stability and
 remote monitoring and security, while windows offers you overclocking tools
 that can achieve much more than cgminer can do on linux.
 
+Q: Can I mine with cgminer on a MAC?
+A: cgminer will compile on OSX, but the performance of GPU mining is
+compromised due to the opencl implementation on OSX, there is no temperature
+or fanspeed monitoring, and the cooling design of most MACs, despite having
+powerful GPUs, will usually not cope with constant usage leading to a high
+risk of thermal damage. It is highly recommended not to mine on a MAC unless
+it is to a USB device.
+
 Q: Cgminer cannot see any of my GPUs even though I have configured them all
 to be enabled and installed OpenCL (+/- Xorg is running and the DISPLAY
 variable is exported on linux)?
@@ -1049,7 +1057,8 @@ you are running. However if you change SDKs you should delete any generated
 
 Q: I switch users on windows and my mining stops working?
 A: That's correct, it does. It's a permissions issue that there is no known
-fix for.
+fix for due to monitoring of GPU fanspeeds and temperatures. If you disable
+the monitoring with --no-adl it should switch okay.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
