@@ -196,9 +196,6 @@ struct ft232r_device_handle *ft232r_open(libusb_device *dev)
 		return NULL;
 	}
 
-	ftdi = calloc(1, sizeof(*ftdi));
-	ftdi->h = devh;
-
 	struct libusb_config_descriptor *cfg;
 	if (libusb_get_config_descriptor(dev, 0, &cfg)) {
 		applog(LOG_ERR, "ft232r_open: Error getting config descriptor");
@@ -209,6 +206,8 @@ struct ft232r_device_handle *ft232r_open(libusb_device *dev)
 		applog(LOG_ERR, "ft232r_open: Too few endpoints");
 		return NULL;
 	}
+	ftdi = calloc(1, sizeof(*ftdi));
+	ftdi->h = devh;
 	ftdi->i = altcfg->endpoint[0].bEndpointAddress;
 	ftdi->o = altcfg->endpoint[1].bEndpointAddress;
 	ftdi->osz = 0x1000;
