@@ -343,8 +343,10 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 			// data is not null-terminated, so we need to copy and terminate it for applog
 			char datacp[size + 1];
 			memcpy(datacp, data, size);
-			while (isspace(datacp[size-1]))
+			while (likely(size) && unlikely(isspace(datacp[size-1])))
 				--size;
+			if (unlikely(!size))
+				break;
 			datacp[size] = '\0';
 			applog(LOG_DEBUG, "Pool %u: %s", pool->pool_no, datacp);
 			break;
