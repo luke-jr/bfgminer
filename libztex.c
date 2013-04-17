@@ -185,6 +185,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	ret = CHECK_RESCAN;
 
 done:
+	free(fw_buf);
 	if (fp)
 		fclose(fp);
 	if (hndl)
