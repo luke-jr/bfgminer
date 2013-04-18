@@ -763,6 +763,8 @@ static void cpu_detect()
 		cgpu->deven = DEV_ENABLED;
 		cgpu->threads = 1;
 		cgpu->kname = algo_names[opt_algo];
+		if (opt_scrypt)
+			cgpu->drv->max_diff = 0xffffffff;
 		add_cgpu(cgpu);
 	}
 }
