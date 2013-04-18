@@ -420,7 +420,7 @@ void scrypt_regenhash(struct work *work)
 }
 
 /* Used externally as confirmation of correct OCL code */
-bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t nonce)
+int scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t nonce)
 {
 	uint32_t tmp_hash7, Htarg = ((const uint32_t *)ptarget)[7];
 	uint32_t data[20], ohash[8];
@@ -432,7 +432,11 @@ bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t no
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
 	tmp_hash7 = be32toh(ohash[7]);
 
-	return (tmp_hash7 <= Htarg);
+	/* FIXME: Needs to be able to return 0 as well for not meeting target
+	 * but target diff currently is sent to devices. */
+	if (tmp_hash7 > Htarg)
+		return -1;
+	return 1;
 }
 
 bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *pmidstate,

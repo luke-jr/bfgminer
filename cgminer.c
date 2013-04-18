@@ -5525,7 +5525,8 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
-static bool hashtest(struct thr_info *thr, struct work *work)
+/* Returns 1 if meets difficulty target, 0 if not, -1 if hw error */
+static int hashtest(struct thr_info *thr, struct work *work)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[80];
@@ -5533,7 +5534,6 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	bool ret = false;
 
 	flip80(swap32, data32);
 	sha2(swap, 80, hash1);
@@ -5544,29 +5544,29 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
 				thr->cgpu->drv->name, thr->cgpu->device_id);
 
-		inc_hw_errors(thr);
-		goto out;
+		return -1;
 	}
 
 	mutex_lock(&stats_lock);
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 
-	ret = fulltest(hash2, work->target);
-	if (!ret) {
+	if (!fulltest(hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
 		/* Check the diff of the share, even if it didn't reach the
 		 * target, just to set the best share value if it's higher. */
 		share_diff(work);
+		return 0;
 	}
-out:
-	return ret;
+
+	return 1;
 }
 
 void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
+	int valid;
 
 	gettimeofday(&tv_work_found, NULL);
 	*work_nonce = htole32(nonce);
@@ -5578,10 +5578,15 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	mutex_unlock(&stats_lock);
 
 	/* Do one last check before attempting to submit the work */
-	if (!opt_scrypt && !hashtest(thr, work))
-		return;
+	if (opt_scrypt)
+		valid = scrypt_test(work->data, work->target, nonce);
+	else
+		valid = hashtest(thr, work);
 
-	submit_work_async(work, &tv_work_found);
+	if (unlikely(valid == -1))
+		inc_hw_errors(thr);
+	else if (valid == 1)
+		submit_work_async(work, &tv_work_found);
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
