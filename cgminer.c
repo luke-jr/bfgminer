@@ -6979,7 +6979,7 @@ struct _cgpu_devid_counter {
 	UT_hash_handle hh;
 };
 
-bool add_cgpu(struct cgpu_info*cgpu)
+bool add_cgpu(struct cgpu_info *cgpu)
 {
 	static struct _cgpu_devid_counter *devids = NULL;
 	struct _cgpu_devid_counter *d;
@@ -6997,6 +6997,10 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	wr_lock(&devices_lock);
 	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
 	wr_unlock(&devices_lock);
+
+	mutex_lock(&stats_lock);
+	cgpu->last_device_valid_work = time(NULL);
+	mutex_unlock(&stats_lock);
 
 	if (hotplug_mode)
 		devices[total_devices + new_devices++] = cgpu;
