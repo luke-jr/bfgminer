@@ -134,7 +134,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.24";
+static const char *APIVERSION = "1.25";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -1540,6 +1540,7 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
 	root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 	root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+	root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
 	if (cgpu->api->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->api->get_api_extra_device_status(cgpu));
