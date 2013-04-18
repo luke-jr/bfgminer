@@ -5547,10 +5547,6 @@ static int hashtest(struct thr_info *thr, struct work *work)
 		return -1;
 	}
 
-	mutex_lock(&stats_lock);
-	thr->cgpu->last_device_valid_work = time(NULL);
-	mutex_unlock(&stats_lock);
-
 	if (!fulltest(hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
 		/* Check the diff of the share, even if it didn't reach the
@@ -5584,9 +5580,16 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		valid = hashtest(thr, work);
 
 	if (unlikely(valid == -1))
-		inc_hw_errors(thr);
-	else if (valid == 1)
+		return inc_hw_errors(thr);
+
+	mutex_lock(&stats_lock);
+	thr->cgpu->last_device_valid_work = time(NULL);
+	mutex_unlock(&stats_lock);
+
+	if (valid == 1)
 		submit_work_async(work, &tv_work_found);
+	else
+		applog(LOG_INFO, "Share below target");
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
