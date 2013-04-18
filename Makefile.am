@@ -33,6 +33,8 @@ else
 cgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @OPENCL_FLAGS@ @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
 endif
 
+cgminer_CPPFLAGS += $(ADL_CPPFLAGS)
+
 # common sources
 cgminer_SOURCES := cgminer.c
 
