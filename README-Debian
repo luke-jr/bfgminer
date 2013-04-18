@@ -9,4 +9,4 @@ a normal Debian package. Here's a few short steps on how to get it building corr
 	tar -cJvf ../bfgminer_${VERSION}.orig.tar.xz *
 * Build the package using pbuilder:
 	pdebuild
-* The built package should end up in /var/cache/pbuilder/results
+* The built package should end up in /var/cache/pbuilder/result
