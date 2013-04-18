@@ -3204,9 +3204,9 @@ static bool stale_work(struct work *work, bool share)
 
 static uint64_t share_diff(const struct work *work)
 {
-	uint64_t *data64, d64;
+	uint64_t *data64, d64, ret;
+	bool new_best = false;
 	char rhash[32];
-	uint64_t ret;
 
 	swab256(rhash, work->hash);
 	if (opt_scrypt)
@@ -3219,13 +3219,17 @@ static uint64_t share_diff(const struct work *work)
 	ret = diffone / d64;
 
 	cg_wlock(&control_lock);
-	if (ret > best_diff) {
+	if (unlikely(ret > best_diff)) {
+		new_best = true;
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
-	if (ret > work->pool->best_diff)
+	if (unlikely(ret > work->pool->best_diff))
 		work->pool->best_diff = ret;
 	cg_wunlock(&control_lock);
+
+	if (unlikely(new_best))
+		applog(LOG_INFO, "New best share: %s", best_share);
 
 	return ret;
 }
