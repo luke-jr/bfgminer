@@ -2298,6 +2298,8 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
+static void restart_threads(void);
+
 /* Theoretically threads could race when modifying accepted and
  * rejected values but the chance of two submits completing at the
  * same time is zero so there is no point adding extra locking */
@@ -2351,6 +2353,10 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			enable_pool(pool);
 			switch_pools(NULL);
 		}
+		/* If we know we found the block we know better than anyone
+		 * that new work is needed. */
+		if (unlikely(work->block))
+			restart_threads();
 	} else {
 		mutex_lock(&stats_lock);
 		cgpu->rejected++;
