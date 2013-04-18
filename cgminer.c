@@ -5515,6 +5515,16 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 		quit(1, "Failed to create submit_work_thread");
 }
 
+void inc_hw_errors(struct thr_info *thr)
+{
+	mutex_lock(&stats_lock);
+	hw_errors++;
+	thr->cgpu->hw_errors++;
+	mutex_unlock(&stats_lock);
+
+	thr->cgpu->drv->hw_error(thr);
+}
+
 static bool hashtest(struct thr_info *thr, struct work *work)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
@@ -5534,13 +5544,7 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
 				thr->cgpu->drv->name, thr->cgpu->device_id);
 
-		mutex_lock(&stats_lock);
-		hw_errors++;
-		thr->cgpu->hw_errors++;
-		mutex_unlock(&stats_lock);
-
-		thr->cgpu->drv->hw_error(thr);
-
+		inc_hw_errors(thr);
 		goto out;
 	}
 

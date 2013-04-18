@@ -186,10 +186,8 @@ static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
 
 	if (scrypt_test(work->data, work->target, nonce))
 		submit_nonce(thr, work, nonce);
-	else {
-		applog(LOG_INFO, "Scrypt error, review settings");
-		thr->cgpu->hw_errors++;
-	}
+	else
+		inc_hw_errors(thr);
 }
 
 static void *postcalc_hash(void *userdata)
