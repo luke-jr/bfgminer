@@ -797,6 +797,7 @@ extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
 extern pthread_mutex_t mining_thr_lock;
+extern pthread_mutex_t devices_lock;
 
 extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
@@ -1168,6 +1169,18 @@ extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
+
+static inline
+struct cgpu_info *get_proc_by_id(int i)
+{
+	struct cgpu_info *proc;
+
+	mutex_lock(&devices_lock);
+	proc = devices[i];
+	mutex_unlock(&devices_lock);
+	return proc;
+}
+
 
 enum api_data_type {
 	API_ESCAPE,

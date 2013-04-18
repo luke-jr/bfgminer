@@ -412,7 +412,7 @@ static void ztex_shutdown(struct thr_info *thr)
 static void ztex_disable(struct thr_info *thr)
 {
 	applog(LOG_ERR, "%s: Disabling!", thr->cgpu->device_ztex->repr);
-	devices[thr->cgpu->device_id]->deven = DEV_DISABLED;
+	thr->cgpu->deven = DEV_DISABLED;
 	ztex_shutdown(thr);
 }
 
