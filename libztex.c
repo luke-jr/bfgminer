@@ -125,7 +125,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	struct libusb_device_descriptor desc;
 	int ret = CHECK_ERROR, err, cnt;
 	size_t got_bytes, length;
-	unsigned char buf[64], *fw_buf;
+	unsigned char buf[64], *fw_buf = NULL;
 	unsigned int i;
 
 	err = libusb_get_device_descriptor(dev, &desc);
