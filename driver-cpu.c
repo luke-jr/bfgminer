@@ -75,7 +75,6 @@ static inline void affine_to_cpu(int __maybe_unused id, int __maybe_unused cpu)
 
 
 /* TODO: resolve externals */
-extern void submit_work_async(const struct work *work_in, struct timeval *tv);
 extern char *set_int_range(const char *arg, int *i, int min, int max);
 extern int dev_from_id(int thr_id);
 
@@ -833,7 +832,7 @@ CPUSearch:
 	/* if nonce found, submit work */
 	if (unlikely(rc)) {
 		applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
-		submit_work_async(work, NULL);
+		submit_nonce(thr, work, last_nonce);
 		work->blk.nonce = last_nonce + 1;
 		goto CPUSearch;
 	}
