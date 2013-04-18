@@ -3648,6 +3648,7 @@ static int block_sort(struct block *blocka, struct block *blockb)
 static void set_blockdiff(const struct work *work)
 {
 	uint64_t *data64, d64, diff64;
+	double previous_diff;
 	uint32_t diffhash[8];
 	uint32_t difficulty;
 	uint32_t diffbytes;
@@ -3683,9 +3684,12 @@ static void set_blockdiff(const struct work *work)
 	if (unlikely(!d64))
 		d64 = 1;
 
+	previous_diff = current_diff;
 	diff64 = diffone / d64;
 	suffix_string(diff64, block_diff, 0);
 	current_diff = (double)diffone / (double)d64;
+	if (unlikely(current_diff != previous_diff))
+		applog(LOG_NOTICE, "Network diff set to %s", block_diff);
 }
 
 static bool test_work_current(struct work *work)
