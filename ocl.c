@@ -121,7 +121,7 @@ int clDevicesNum(void) {
 			applog(LOG_INFO, "CL Platform %d version: %s", i, pbuff);
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
+			applog(LOG_INFO, "Error %d: Getting Device IDs (num)", status);
 			continue;
 		}
 		applog(LOG_INFO, "Platform %d devices: %d", i, numDevices);
@@ -131,7 +131,6 @@ int clDevicesNum(void) {
 		}
 		if (numDevices) {
 			unsigned int j;
-			char pbuff[256];
 			cl_device_id *devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
 
 			clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
