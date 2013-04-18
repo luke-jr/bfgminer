@@ -117,6 +117,13 @@ if test "x$have_win32" != xtrue; then
 	fi
 fi
 
+have_cgminer_sdk=false
+if test -n "$CGMINER_SDK"; then
+	have_cgminer_sdk=true
+	CPPFLAGS="-I$CGMINER_SDK/include $CPPFLAGS"
+	LDFLAGS="-L$CGMINER_SDK/lib/$target $LDFLAGS"
+fi
+
 cpumining="no"
 
 AC_ARG_ENABLE([cpumining],,[cpumining=$enableval]	)
@@ -186,7 +193,11 @@ scrypt="no"
 
 if test "$found_opencl" = 1; then
 	if test "x$adl" != xno; then
-		AC_CHECK_FILE([${ADL_SDK:-ADL_SDK}/adl_sdk.h], have_adl=true, have_adl=false,)
+		ADL_CPPFLAGS=
+		AC_CHECK_FILE([$srcdir/ADL_SDK/adl_sdk.h], [have_adl=true; ADL_CPPFLAGS=-I$srcdir], have_adl=false,)
+		if test x$have_adl+$have_cgminer_sdk = xfalse+true; then
+			AC_CHECK_FILE([$CGMINER_SDK/include/ADL_SDK/adl_sdk.h], [have_adl=true; ADL_CPPFLAGS=-I$CGMINER_SDK/include], have_adl=false,)
+		fi
 		if test x$have_adl = xtrue
 		then
 			AC_DEFINE([HAVE_ADL], [1], [Defined if ADL headers were found])
@@ -386,6 +397,16 @@ AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
 PKG_PROG_PKG_CONFIG()
 
+if test "x$have_cgminer_sdk" = "xtrue"; then
+	if test "x$have_x86_64" = xtrue; then
+		ARCH_DIR=x86_64
+	else
+		ARCH_DIR=x86
+	fi
+	PKG_CONFIG="${PKG_CONFIG:-pkg-config} --define-variable=arch=$ARCH_DIR --define-variable=target=$target --define-variable=cgminersdkdir=$CGMINER_SDK"
+	PKG_CONFIG_PATH="$CGMINER_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+fi
+
 if test "x$ztex$modminer$bitforce$bflsc" != xnononono; then
   case $target in
     *-*-freebsd*)
@@ -475,6 +496,7 @@ AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
 AC_SUBST(YASM_FMT)
+AC_SUBST(ADL_CPPFLAGS)
 
 AC_CONFIG_FILES([
 	Makefile
