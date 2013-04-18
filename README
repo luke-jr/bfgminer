@@ -960,6 +960,10 @@ Q: BFGMiner reports no devices or only one device on startup on Linux although
 I have multiple devices and drivers+SDK installed properly?
 A: Try "export DISPLAY=:0" before running BFGMiner.
 
+Q: Should I use crossfire/SLI?
+A: It does not benefit mining at all and depending on the GPU may actually
+worsen performance.
+
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
 
