@@ -4566,6 +4566,8 @@ static void set_blockdiff(const struct work *work)
 
 	suffix_string(diff64, block_diff, 0);
 	hashrate_to_bufstr(net_hashrate, diff * 7158278, -1, H2B_SHORT);
+	if (unlikely(current_diff != diff))
+		applog(LOG_NOTICE, "Network difficulty changed to %s (%s)", block_diff, net_hashrate);
 	current_diff = diff;
 }
 
