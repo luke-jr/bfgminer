@@ -2860,16 +2860,22 @@ static double target_diff(const unsigned char *target);
 static uint64_t share_diff(const struct work *work)
 {
 	uint64_t ret;
+	bool new_best = false;
 
 	ret = target_diff(work->hash);
 	mutex_lock(&control_lock);
-	if (ret > best_diff) {
+	if (unlikely(ret > best_diff)) {
+		new_best = true;
 		best_diff = ret;
 		suffix_string(best_diff, best_share, 0);
 	}
-	if (ret > work->pool->best_diff)
+	if (unlikely(ret > work->pool->best_diff))
 		work->pool->best_diff = ret;
 	mutex_unlock(&control_lock);
+
+	if (unlikely(new_best))
+		applog(LOG_INFO, "New best share: %s", best_share);
+
 	return ret;
 }
 
