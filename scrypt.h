@@ -4,16 +4,16 @@
 #include "miner.h"
 
 #ifdef USE_SCRYPT
-extern bool scrypt_test(unsigned char *pdata, const unsigned char *ptarget,
+extern int scrypt_test(unsigned char *pdata, const unsigned char *ptarget,
 			uint32_t nonce);
 extern void scrypt_regenhash(struct work *work);
 
 #else /* USE_SCRYPT */
-static inline bool scrypt_test(__maybe_unused unsigned char *pdata,
+static inline int scrypt_test(__maybe_unused unsigned char *pdata,
 			       __maybe_unused const unsigned char *ptarget,
 			       __maybe_unused uint32_t nonce)
 {
-	return false;
+	return 0;
 }
 
 static inline void scrypt_regenhash(__maybe_unused struct work *work)

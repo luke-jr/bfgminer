@@ -179,19 +179,6 @@ struct pc_data {
 	int found;
 };
 
-static void send_scrypt_nonce(struct pc_data *pcd, uint32_t nonce)
-{
-	struct thr_info *thr = pcd->thr;
-	struct work *work = pcd->work;
-
-	if (scrypt_test(work->data, work->target, nonce))
-		submit_nonce(thr, work, nonce);
-	else {
-		applog(LOG_INFO, "Scrypt error, review settings");
-		thr->cgpu->hw_errors++;
-	}
-}
-
 static void *postcalc_hash(void *userdata)
 {
 	struct pc_data *pcd = (struct pc_data *)userdata;
@@ -214,10 +201,7 @@ static void *postcalc_hash(void *userdata)
 		uint32_t nonce = pcd->res[entry];
 
 		applog(LOG_DEBUG, "OCL NONCE %u found in slot %d", nonce, entry);
-		if (opt_scrypt)
-			send_scrypt_nonce(pcd, nonce);
-		else
-			submit_nonce(thr, pcd->work, nonce);
+		submit_nonce(thr, pcd->work, nonce);
 	}
 
 	discard_work(pcd->work);

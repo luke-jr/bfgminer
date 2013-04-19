@@ -2298,6 +2298,8 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
+static void restart_threads(void);
+
 /* Theoretically threads could race when modifying accepted and
  * rejected values but the chance of two submits completing at the
  * same time is zero so there is no point adding extra locking */
@@ -2351,6 +2353,10 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			enable_pool(pool);
 			switch_pools(NULL);
 		}
+		/* If we know we found the block we know better than anyone
+		 * that new work is needed. */
+		if (unlikely(work->block))
+			restart_threads();
 	} else {
 		mutex_lock(&stats_lock);
 		cgpu->rejected++;
@@ -5515,7 +5521,18 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 		quit(1, "Failed to create submit_work_thread");
 }
 
-static bool hashtest(struct thr_info *thr, struct work *work)
+void inc_hw_errors(struct thr_info *thr)
+{
+	mutex_lock(&stats_lock);
+	hw_errors++;
+	thr->cgpu->hw_errors++;
+	mutex_unlock(&stats_lock);
+
+	thr->cgpu->drv->hw_error(thr);
+}
+
+/* Returns 1 if meets difficulty target, 0 if not, -1 if hw error */
+static int hashtest(struct thr_info *thr, struct work *work)
 {
 	uint32_t *data32 = (uint32_t *)(work->data);
 	unsigned char swap[80];
@@ -5523,7 +5540,6 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 	unsigned char hash1[32];
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
-	bool ret = false;
 
 	flip80(swap32, data32);
 	sha2(swap, 80, hash1);
@@ -5534,35 +5550,25 @@ static bool hashtest(struct thr_info *thr, struct work *work)
 		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
 				thr->cgpu->drv->name, thr->cgpu->device_id);
 
-		mutex_lock(&stats_lock);
-		hw_errors++;
-		thr->cgpu->hw_errors++;
-		mutex_unlock(&stats_lock);
-
-		thr->cgpu->drv->hw_error(thr);
-
-		goto out;
+		return -1;
 	}
 
-	mutex_lock(&stats_lock);
-	thr->cgpu->last_device_valid_work = time(NULL);
-	mutex_unlock(&stats_lock);
-
-	ret = fulltest(hash2, work->target);
-	if (!ret) {
+	if (!fulltest(hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
 		/* Check the diff of the share, even if it didn't reach the
 		 * target, just to set the best share value if it's higher. */
 		share_diff(work);
+		return 0;
 	}
-out:
-	return ret;
+
+	return 1;
 }
 
 void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
+	int valid;
 
 	gettimeofday(&tv_work_found, NULL);
 	*work_nonce = htole32(nonce);
@@ -5574,10 +5580,22 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	mutex_unlock(&stats_lock);
 
 	/* Do one last check before attempting to submit the work */
-	if (!opt_scrypt && !hashtest(thr, work))
-		return;
+	if (opt_scrypt)
+		valid = scrypt_test(work->data, work->target, nonce);
+	else
+		valid = hashtest(thr, work);
 
-	submit_work_async(work, &tv_work_found);
+	if (unlikely(valid == -1))
+		return inc_hw_errors(thr);
+
+	mutex_lock(&stats_lock);
+	thr->cgpu->last_device_valid_work = time(NULL);
+	mutex_unlock(&stats_lock);
+
+	if (valid == 1)
+		submit_work_async(work, &tv_work_found);
+	else
+		applog(LOG_INFO, "Share below target");
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
@@ -6967,7 +6985,7 @@ struct _cgpu_devid_counter {
 	UT_hash_handle hh;
 };
 
-bool add_cgpu(struct cgpu_info*cgpu)
+bool add_cgpu(struct cgpu_info *cgpu)
 {
 	static struct _cgpu_devid_counter *devids = NULL;
 	struct _cgpu_devid_counter *d;
@@ -6985,6 +7003,10 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	wr_lock(&devices_lock);
 	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));
 	wr_unlock(&devices_lock);
+
+	mutex_lock(&stats_lock);
+	cgpu->last_device_valid_work = time(NULL);
+	mutex_unlock(&stats_lock);
 
 	if (hotplug_mode)
 		devices[total_devices + new_devices++] = cgpu;
