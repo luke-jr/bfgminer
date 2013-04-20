@@ -212,6 +212,7 @@ CL_API_ENTRY cl_int CL_API_CALL
                        cl_event *       /* event */) CL_API_SUFFIX__VERSION_1_0;
 
 int opt_platform_id = -1;
+bool opt_opencl_binaries = true;
 
 char *file_contents(const char *filename, int *length)
 {
@@ -395,7 +396,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	_clState *clState = calloc(1, sizeof(_clState));
 	bool patchbfi = false, prog_built = false;
-	bool usebinary = true, ismesa = false;
+	bool usebinary = opt_opencl_binaries, ismesa = false;
 	struct cgpu_info *cgpu = &gpus[gpu];
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
