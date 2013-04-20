@@ -1730,10 +1730,9 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 				const char *cbappend = opt_coinbase_sig;
 				if (!cbappend) {
 					const char full[] = PACKAGE " " VERSION;
-					// NOTE: Intentially including a trailing \0 on long forms so extranonce doesn't confuse things
-					if ((size_t)ae >= sizeof(full))
+					if ((size_t)ae >= sizeof(full) - 1)
 						cbappend = full;
-					else if ((size_t)ae >= sizeof(PACKAGE))
+					else if ((size_t)ae >= sizeof(PACKAGE) - 1)
 						cbappend = PACKAGE;
 					else
 						cbappend = "BFG";
@@ -1741,6 +1740,9 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 				size_t cbappendsz = strlen(cbappend);
 				static bool truncatewarning = false;
 				if (cbappendsz <= (size_t)ae) {
+					if (cbappendsz < (size_t)ae)
+						// If we have space, include the trailing \0
+						++cbappendsz;
 					ae = cbappendsz;
 					truncatewarning = false;
 				} else {
