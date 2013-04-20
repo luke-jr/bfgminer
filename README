@@ -103,7 +103,7 @@ make
 On Mac OS X, you can use Homebrew to install the dependency libraries. When you
 are ready to build BFGMiner, you may need to point the configure script at one
 or more pkg-config paths. For example:
-	./configure PKG_CONFIG_PATH=/usr/local/opt/curl/lib/pkgconfig
+	./configure PKG_CONFIG_PATH=/usr/local/opt/curl/lib/pkgconfig:/usr/local/opt/jansson/lib/pkgconfig
 
 Native WIN32 build instructions: see windows-build.txt
 
