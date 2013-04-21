@@ -13,6 +13,7 @@
 
 #include "logging.h"
 #include "miner.h"
+// #include "util.h"
 
 bool opt_debug = false;
 bool opt_log_output = false;
@@ -83,7 +84,7 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 		struct timeval tv = {0, 0};
 		struct tm *tm;
 
-		gettimeofday(&tv, NULL);
+		cgtime(&tv);
 
 		const time_t tmp_time = tv.tv_sec;
 		tm = localtime(&tmp_time);
