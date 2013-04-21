@@ -1481,9 +1481,7 @@ static void calc_midstate(struct work *work)
 	sha2_starts(&ctx);
 	sha2_update(&ctx, data, 64);
 	memcpy(work->midstate, ctx.state, 32);
-#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
-	flip32(work->midstate, work->midstate);
-#endif
+	endian_flip32(work->midstate, work->midstate);
 }
 
 static struct work *make_work(void)
@@ -2439,9 +2437,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	cgpu = get_thr_cgpu(thr_id);
 
-#ifdef __BIG_ENDIAN__
-	flip128(work->data, work->data);
-#endif
+	endian_flip128(work->data, work->data);
 
 	/* build hex string */
 	hexstr = bin2hex(work->data, sizeof(work->data));

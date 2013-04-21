@@ -670,6 +670,29 @@ static inline void flip128(void *dest_p, const void *src_p)
 		dest[i] = swab32(src[i]);
 }
 
+/* For flipping to the correct endianness if necessary */
+#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
+static inline void endian_flip32(void *dest_p, const void *src_p)
+{
+	flip32(dest_p, src_p);
+}
+
+static inline void endian_flip128(void *dest_p, const void *src_p)
+{
+	flip128(dest_p, src_p);
+}
+#else
+static inline void
+endian_flip32(void __maybe_unused *dest_p, const void __maybe_unused *src_p)
+{
+}
+
+static inline void
+endian_flip128(void __maybe_unused *dest_p, const void __maybe_unused *src_p)
+{
+}
+#endif
+
 extern void quit(int status, const char *format, ...);
 
 static inline void mutex_lock(pthread_mutex_t *lock)
