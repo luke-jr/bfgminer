@@ -45,6 +45,7 @@
 struct pool;
 enum dev_reason;
 struct cgpu_info;
+void cgtime(struct timeval *tv);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
 bool sock_full(struct pool *pool);
 char *recv_line(struct pool *pool);
