@@ -9,6 +9,7 @@
 #include <sys/time.h>
 
 #include "miner.h"  // for timersub
+#include "util.h"
 
 #include <windows.h>
 
@@ -18,7 +19,7 @@ static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 	struct timeval tstart;
 	DWORD msecs;
 
-	gettimeofday(&tstart, NULL);
+	cgtime(&tstart);
 	msecs = (req->tv_sec * 1000) + ((999999 + req->tv_nsec) / 1000000);
 
 	if (SleepEx(msecs, true) == WAIT_IO_COMPLETION) {
@@ -31,7 +32,7 @@ static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 				++tdone.tv_sec;
 			}
 
-			gettimeofday(&tnow, NULL);
+			cgtime(&tnow);
 			if (timercmp(&tnow, &tdone, >))
 				return 0;
 			timersub(&tdone, &tnow, &tleft);
