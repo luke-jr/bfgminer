@@ -30,6 +30,7 @@
 # include <netinet/tcp.h>
 # include <netdb.h>
 #else
+# include <windows.h>
 # include <winsock2.h>
 # include <ws2tcpip.h>
 #endif
@@ -825,6 +826,9 @@ void nmsleep(unsigned int msecs)
 	int ret;
 	ldiv_t d;
 
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
 	d = ldiv(msecs, 1000);
 	tleft.tv_sec = d.quot;
 	tleft.tv_nsec = d.rem * 1000000;
@@ -833,6 +837,9 @@ void nmsleep(unsigned int msecs)
 		twait.tv_nsec = tleft.tv_nsec;
 		ret = nanosleep(&twait, &tleft);
 	} while (ret == -1 && errno == EINTR);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 }
 
 /* Returns the microseconds difference between end and start times as a double */

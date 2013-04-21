@@ -65,6 +65,7 @@ PTHREAD_FLAGS="-lpthread"
 DLOPEN_FLAGS="-ldl"
 OPENCL_LIBS="-lOpenCL"
 WS2_LIBS=""
+MM_LIBS=""
 MATH_LIBS="-lm"
 
 case $target in
@@ -85,6 +86,7 @@ case $target in
     PTHREAD_FLAGS=""
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
+    MM_LIBS="-lwinmm"
     AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     ;;
   powerpc-*-darwin*)
@@ -493,6 +495,7 @@ AC_SUBST(PTHREAD_LIBS)
 AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
+AC_SUBST(MM_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
 AC_SUBST(YASM_FMT)
