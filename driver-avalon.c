@@ -223,7 +223,7 @@ static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
 		timeout.tv_usec = 100000;
 
 		FD_ZERO(&rd);
-		FD_SET(fd, &rd);
+		FD_SET((SOCKETTYPE)fd, &rd);
 		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
 		if (unlikely(ret < 0)) {
 			applog(LOG_ERR, "Avalon: Error %d on select in avalon_gets", errno);
@@ -310,7 +310,7 @@ static void avalon_get_reset(int fd, struct avalon_result *ar)
 	memset(result, 0, AVALON_READ_SIZE);
 	memset(ar, 0, AVALON_READ_SIZE);
 	FD_ZERO(&rd);
-	FD_SET(fd, &rd);
+	FD_SET((SOCKETTYPE)fd, &rd);
 	ret = select(fd + 1, &rd, NULL, NULL, &timeout);
 	if (unlikely(ret < 0)) {
 		applog(LOG_WARNING, "Avalon: Error %d on select in avalon_get_reset", errno);
