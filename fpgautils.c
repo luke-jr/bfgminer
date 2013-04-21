@@ -557,7 +557,7 @@ size_t _select_write(int fd, char *buf, size_t siz, struct timeval *timeout)
 	fd_set rfds;
 	ssize_t wrote = 0, ret;
 
-	gettimeofday(&tv_now, NULL);
+	cgtime(&tv_now);
 	timeradd(&tv_now, timeout, &tv_finish);
 
 	// timeout is the maximum time to spend trying to write
@@ -576,7 +576,7 @@ size_t _select_write(int fd, char *buf, size_t siz, struct timeval *timeout)
 		else if (ret < 0)
 			return wrote;
 
-		gettimeofday(&tv_now, NULL);
+		cgtime(&tv_now);
 	}
 
 	return wrote;
