@@ -217,7 +217,7 @@ struct bitforce_data {
 	unsigned char *next_work_obs;    // Start of data to send
 	unsigned char next_work_obsz;
 	const char *next_work_cmd;
-	char noncebuf[14 + (BITFORCE_MAX_QUEUED * BITFORCE_QRESULT_LINE_LEN)];
+	char noncebuf[14 + ((BITFORCE_MAX_QRESULTS+1) * BITFORCE_QRESULT_LINE_LEN)];
 	int poll_func;
 	enum bitforce_proto proto;
 	bool sc;
