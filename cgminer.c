@@ -2440,9 +2440,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	cgpu = get_thr_cgpu(thr_id);
 
 #ifdef __BIG_ENDIAN__
-        int swapcounter = 0;
-        for (swapcounter = 0; swapcounter < 32; swapcounter++)
-            (((uint32_t*) (work->data))[swapcounter]) = swab32(((uint32_t*) (work->data))[swapcounter]);
+	flip128(work->data, work->data);
 #endif
 
 	/* build hex string */
