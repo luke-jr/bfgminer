@@ -1473,22 +1473,16 @@ static bool jobj_binary(const json_t *obj, const char *key,
 
 static void calc_midstate(struct work *work)
 {
-	union {
-		unsigned char c[64];
-		uint32_t i[16];
-	} data;
-	int swapcounter;
-
-	for (swapcounter = 0; swapcounter < 16; swapcounter++)
-		data.i[swapcounter] = swab32(((uint32_t*) (work->data))[swapcounter]);
+	unsigned char data[64];
+	uint32_t *data32 = (uint32_t *)data;
 	sha2_context ctx;
+
+	flip64(data32, work->data);
 	sha2_starts(&ctx);
-	sha2_update(&ctx, data.c, 64);
-	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
+	sha2_update(&ctx, data, 64);
+	memcpy(work->midstate, ctx.state, 32);
 #if defined(__BIG_ENDIAN__) || defined(MIPSEB)
-	int i;
-	for (i = 0; i < 8; i++)
-		(((uint32_t*) (work->midstate))[i]) = swab32(((uint32_t*) (work->midstate))[i]);
+	flip32(work->midstate, work->midstate);
 #endif
 }
 
