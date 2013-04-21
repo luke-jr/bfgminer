@@ -1079,7 +1079,7 @@ static void release_cgpu(struct cgpu_info *cgpu)
 
 	cgpu->usbinfo.nodev = true;
 	cgpu->usbinfo.nodev_count++;
-	gettimeofday(&(cgpu->usbinfo.last_nodev), NULL);
+	cgtime(&cgpu->usbinfo.last_nodev);
 
 	// Any devices sharing the same USB device should be marked also
 	// Currently only MMQ shares a USB device
@@ -1470,7 +1470,7 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 
 #if DO_USB_STATS
 #define USB_STATS(sgpu, sta, fin, err, cmd, seq) stats(cgpu, sta, fin, err, cmd, seq)
-#define STATS_TIMEVAL(tv) gettimeofday(tv, NULL)
+#define STATS_TIMEVAL(tv) cgtime(tv)
 #else
 #define USB_STATS(sgpu, sta, fin, err, cmd, seq)
 #define STATS_TIMEVAL(tv)
@@ -1713,7 +1713,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
 	max = ((double)timeout) / 1000.0;
-	gettimeofday(&read_start, NULL);
+	cgtime(&read_start);
 	while (bufsiz) {
 		if (ftdi)
 			usbbufread = bufsiz + 2;
@@ -1724,7 +1724,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		err = libusb_bulk_transfer(usbdev->handle,
 				usbdev->found->eps[ep].ep,
 				ptr, usbbufread, &got, timeout);
-		gettimeofday(&tv_finish, NULL);
+		cgtime(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, first ? SEQ0 : SEQ1);
 		ptr[got] = '\0';
 
