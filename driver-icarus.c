@@ -244,7 +244,7 @@ static int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, st
 			return ICA_GETS_ERROR;
 
 		if (first)
-			gettimeofday(tv_finish, NULL);
+			cgtime(tv_finish);
 
 		if (ret >= read_amount)
 			return ICA_GETS_OK;
@@ -546,7 +546,7 @@ static bool icarus_detect_one(const char *devpath)
 
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
-	gettimeofday(&tv_start, NULL);
+	cgtime(&tv_start);
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1);
@@ -630,7 +630,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	icarus->device_fd = fd;
 
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(icarus->init, &now);
 
 	return true;
@@ -693,7 +693,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		return 0;	/* This should never happen */
 	}
 
-	gettimeofday(&tv_start, NULL);
+	cgtime(&tv_start);
 
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
@@ -769,7 +769,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	&&  !was_hw_error
 	&&  ((nonce & info->nonce_mask) > END_CONDITION)
 	&&  ((nonce & info->nonce_mask) < (info->nonce_mask & ~END_CONDITION))) {
-		gettimeofday(&tv_history_start, NULL);
+		cgtime(&tv_history_start);
 
 		history0 = &(info->history[0]);
 
@@ -857,7 +857,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 					icarus->device_id, Hs, W, read_count, fullnonce);
 		}
 		info->history_count++;
-		gettimeofday(&tv_history_finish, NULL);
+		cgtime(&tv_history_finish);
 
 		timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
 		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
