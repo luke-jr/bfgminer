@@ -22,6 +22,7 @@
 #include "compat.h"
 #include "miner.h"
 #include "usbutils.h"
+#include "util.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -196,7 +197,7 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 retry:
 	init_count = 0;
 	init_sleep = REINIT_TIME_FIRST_MS;
-	gettimeofday(&init_start, NULL);
+	cgtime(&init_start);
 reinit:
 	bitforce_initialise(bitforce, false);
 	if ((err = usb_write(bitforce, BITFORCE_IDENTIFY, BITFORCE_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY)) < 0 || amount != BITFORCE_IDENTIFY_LEN) {
@@ -207,7 +208,7 @@ reinit:
 
 	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY)) < 0 || amount < 1) {
 		init_count++;
-		gettimeofday(&init_now, NULL);
+		cgtime(&init_now);
 		if (us_tdiff(&init_now, &init_start) <= REINIT_TIME_MAX) {
 			if (init_count == 2) {
 				applog(LOG_WARNING, "%s detect (%s) 2nd init failed (%d:%d) - retrying",
@@ -320,7 +321,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct timeval now;
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(bitforce->init, &now);
 
 	return true;
@@ -548,7 +549,7 @@ re_send:
 		return false;
 	}
 
-	gettimeofday(&bitforce->work_start_tv, NULL);
+	cgtime(&bitforce->work_start_tv);
 	return true;
 }
 
@@ -572,7 +573,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETWORKSTATUS);
 		mutex_unlock(&bitforce->device_mutex);
 
-		gettimeofday(&now, NULL);
+		cgtime(&now);
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
