@@ -590,7 +590,7 @@ static bool modminer_fpga_prepare(struct thr_info *thr)
 	struct cgpu_info *modminer = thr->cgpu;
 	struct timeval now;
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(modminer->init, &now);
 
 	struct modminer_fpga_state *state;
@@ -785,10 +785,10 @@ static bool modminer_start_work(struct thr_info *thr, struct work *work)
 	memcpy(&cmd[34], work->data + 64, 12);
 
 	if (state->first_work.tv_sec == 0)
-		gettimeofday(&state->first_work, NULL);
+		cgtime(&state->first_work);
 
 	if (state->last_nonce.tv_sec == 0)
-		gettimeofday(&state->last_nonce, NULL);
+		cgtime(&state->last_nonce);
 
 	mutex_lock(modminer->modminer_mutex);
 
@@ -801,7 +801,7 @@ static bool modminer_start_work(struct thr_info *thr, struct work *work)
 		return false;
 	}
 
-	gettimeofday(&state->tv_workstart, NULL);
+	cgtime(&state->tv_workstart);
 
 	sta = get_status(modminer, "start work", C_SENDWORKSTATUS);
 
@@ -971,7 +971,7 @@ static uint64_t modminer_process_results(struct thr_info *thr, struct work *work
 			curr_hw_errors = state->hw_errors;
 			submit_nonce(thr, work, nonce);
 			if (state->hw_errors > curr_hw_errors) {
-				gettimeofday(&now, NULL);
+				cgtime(&now);
 				// Ignore initial errors that often happen
 				if (tdiff(&now, &state->first_work) < 2.0) {
 					state->shares = 0;
@@ -986,7 +986,7 @@ static uint64_t modminer_process_results(struct thr_info *thr, struct work *work
 					}
 				}
 			} else {
-				gettimeofday(&state->last_nonce, NULL);
+				cgtime(&state->last_nonce);
 				state->death_stage_one = false;
 				// If we've reached the required good shares in a row then clock up
 				if (((state->shares - state->shares_last_hw) >= state->shares_to_good) &&
@@ -996,7 +996,7 @@ static uint64_t modminer_process_results(struct thr_info *thr, struct work *work
 		} else {
 			// on rare occasions - the MMQ can just stop returning valid nonces
 			double death = ITS_DEAD_JIM * (state->death_stage_one ? 2.0 : 1.0);
-			gettimeofday(&now, NULL);
+			cgtime(&now);
 			if (tdiff(&now, &state->last_nonce) >= death) {
 				if (state->death_stage_one) {
 					modminer_delta_clock(thr, MODMINER_CLOCK_DEAD, false, true);
@@ -1037,7 +1037,7 @@ tryagain:
 		else
 			timeout = processtime;
 
-		gettimeofday(&now, NULL);
+		cgtime(&now);
 		if (tdiff(&now, &state->tv_workstart) > timeout)
 			break;
 
@@ -1048,7 +1048,7 @@ tryagain:
 	}
 
 	struct timeval tv_workend, elapsed;
-	gettimeofday(&tv_workend, NULL);
+	cgtime(&tv_workend);
 	timersub(&tv_workend, &state->tv_workstart, &elapsed);
 
 	// Not exact since the clock may have changed ... but close enough I guess
@@ -1074,7 +1074,7 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 
 	// Don't start new work if overheated
 	if (state->overheated == true) {
-		gettimeofday(&tv1, NULL);
+		cgtime(&tv1);
 
 		while (state->overheated == true) {
 			check_temperature(thr);
@@ -1084,7 +1084,7 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 				return -1;
 
 			if (state->overheated == true) {
-				gettimeofday(&tv2, NULL);
+				cgtime(&tv2);
 
 				// give up on this work item after 30s
 				if (work_restart(thr) || tdiff(&tv2, &tv1) > 30)
