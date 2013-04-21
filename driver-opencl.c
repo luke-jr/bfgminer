@@ -32,6 +32,7 @@
 #include "findnonce.h"
 #include "ocl.h"
 #include "adl.h"
+#include "util.h"
 
 /* TODO: cleanup externals ********************/
 
@@ -1162,7 +1163,7 @@ select_cgpu:
 
 		thr->rolling = thr->cgpu->rolling = 0;
 		/* Reports the last time we tried to revive a sick GPU */
-		gettimeofday(&thr->sick, NULL);
+		cgtime(&thr->sick);
 		if (!pthread_cancel(thr->pth)) {
 			applog(LOG_WARNING, "Thread %d still exists, killing it off", thr_id);
 		} else
@@ -1205,7 +1206,7 @@ select_cgpu:
 		applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	}
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(cgpu->init, &now);
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
@@ -1388,7 +1389,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(cgpu->init, &now);
 
 	have_opencl = true;
@@ -1488,7 +1489,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		struct timeval tv_gpuend;
 		double gpu_us;
 
-		gettimeofday(&tv_gpuend, NULL);
+		cgtime(&tv_gpuend);
 		gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpustart) / gpu->intervals;
 		if (gpu_us > dynamic_us) {
 			if (gpu->intensity > MIN_INTENSITY)
