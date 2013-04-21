@@ -660,7 +660,7 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 		applog(LOG_DEBUG, " Proof: %s\nTarget: %s\nTrgVal? %s",
 			hash_str,
 			target_str,
-			rc ? "YES (hash < target)" :
+			rc ? "YES (hash <= target)" :
 			     "no (false positive; hash > target)");
 
 		free(hash_str);
