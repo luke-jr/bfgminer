@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <sha2.h>
 #include "libztex.h"
+#include "util.h"
 
 #define GOLDEN_BACKLOG 5
 
@@ -375,7 +376,7 @@ static bool ztex_prepare(struct thr_info *thr)
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct libztex_device *ztex = cgpu->device_ztex;
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(cgpu->init, &now);
 
 	ztex_selectFpga(ztex);
