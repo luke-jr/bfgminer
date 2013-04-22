@@ -1,3 +1,178 @@
+Version 3.0.0 - April 22nd, 2013
+
+- Remove all CPU mining code.
+- compile on win32
+- Update SCRYPT README with improved hashrates for 7970.
+- Use copy_time helper throughout cgminer.c
+- Provide wrappers for commonly used timer routines with API stats.
+- Avoid one cgtime call in sole_hash_work.
+- Fulltest is true if value is <= target.
+- Use system host to endian functions for clarity in fulltest.
+- Provide endian_flipX functions to avoid special casing big endian in cgminer.c
+- Provide a flip128 helper to simplify big endian flipping.
+- Use flip helpers to simplify code for calculation of midstate.
+- Use flip32 function instead of open coding it in gen_stratum_work.
+- Move util.c exports to util.h
+- Fix warning on building avalon on win32
+- Use cgtime in driver-avalon.c
+- Use cgtime in driver-icarus.c
+- Use cgtime in driver-bitforce.c
+- Use cgtime in logging.c
+- Use cgtime in usbutils.c
+- Use cgtime in driver-opencl.c
+- Use cgtime wrapper in driver-modminer.c
+- Use cgtime in driver-ztex.c
+- Use cgtime in compat.h
+- Use cgtime instead of gettimeofday in fpgautils.c
+- Replace gettimeofday usage in cgminer.c with cgtime
+- Create a cgminer specific gettimeofday wrapper that is always called with tz
+set to NULL and increases the resolution on windows.
+- Add high resolution to nmsleep wrapper on windows.
+- Set default ocl work size for scrypt to 256.
+- define le32toh if needed
+- fliter out the wrong result from adjust fan code
+- compile avalon driver on win32 and win64
+- Restart threads on the rare chance we found the block ourselves.
+- Add more FAQs about crossfire.
+- Set last device valid work on adding device.
+- Increment last device valid work count in submit_nonce to cover scrypt.
+- Set opt_scrypt drv max diff for correctness.
+- Make scrypt submission use the submit_nonce code, with nonces matching
+endianness.
+- Do testing for HW errors on submit nonce for both scrypt and sha.
+- Increment hardware error count from the one site.
+- Rename scrypt regenhash function for consistency.
+- Add new best share info to verbose logging.
+- Add notice for when network diff is changed.
+- Convert error getting device IDs in ocl code to info log level only since
+multiple platforms may be installed and the error is harmless there.
+- Unnecessary extra array in ocl code.
+- Further driver FAQs.
+- Add MAC FAQ.
+- Add more FAQ details.
+- Check for work restart after disable in the hash queued work loop since it may
+be a long time before we re-enable a device.
+- Unconditionally test for many wrong results on avalon and reset to avoid
+passing a corrupt avalon result to temperature code.
+- build out of source dir
+- Set device_diff for queued work or there will be no diff1 share count.
+- Only reset an avalon device with no results when there are no results
+consecutively.
+- More FAQs.
+- More FAQs.
+- Cleanup when stratum curl fails to initialise.
+- Avoid applog in recalloc_sock.
+- Avoid applog under stratum_lock in recv_line.
+- Avoid applog under stratum_lock in __stratum_send.
+- Put spacing around locking in util.c for clarity.
+- Avoid applog under cg_wlock.
+- Put spacing around locking code for clarity.
+- Avoid applog under pool_lock.
+- Avoid more recursive locks.
+- Avoid applog while ch_lock is held.
+- Avoid recursive locks in fill_queue.
+- Variable is already initialised in global scope.
+- More GPU faqs.
+- More README faqs.
+- Yet more README faqs.
+- Add more faqs to README.
+- Merge branch 'master' into avalon-dev
+- Wrap result wrong tests in avalon scanhash in unlikely() and only consider a
+hash count of zero wrong if a restart wasn't issued.
+- avalon: if result_wrong >= get_work_count jump out the read loop
+- Fix warning on 32bit.
+- Fix warning on 32bit.
+- Avoid curl_easy_cleanup on old curl versions in setup_stratum_curl as well.
+- fix the fan control on max temp2/3
+- for some reason network down. one simple cgminer command:   "cgminer -o
+127.0.0.1:8888 -O fa:ke --avalon-options 115200:32:10:50:256" can idle the
+avalon for safe power and protect chip
+- if hash_count == 0; reinit avalon, fix the 0MHS bug use the max value of temp1
+and temp2 for fan control
+- Reinstate the matching_work_count per subdevice on avalon based on the work
+subid.
+- Avalon driver is missing the drv_id.
+- Rationalise and simplify the share diff and block solve detection to a common
+site.
+- Rationalise and simplify the share diff and block solve detection to a common
+site.
+- Make the avalon array size a macro.
+- Use replacement of work items in the avalon buffer as needed instead of
+flushing them.
+- Reinstate wrong work count to reset avalon regardless and display number of
+wrong results.
+- Revert "The result_wrong measurement for avalon is continually leading to
+false positives so remove it."
+- select() on serial usb in avalon does not work properly with zero timeout.
+- The result_wrong measurement for avalon is continually leading to false
+positives so remove it.
+- Revert "Use only 2 queued work arrays in avalon."
+- Use no timeout on further reads in avalon_gets
+- Do sequential reads in avalon_get_reset to cope with partial reads.
+- Show read discrepancy in avalon_get_reset.
+- Reuse avalon_get_work_count variable.
+- Check for AVA_GETS_RESTART when deciding if avalon has messed up.
+- Make the detection of all wrong results on avalon much more conservative to
+avoid false positives on work restarts.
+- Show error codes on select and read fail in avalon.
+- If we get a restart message in avalon_gets still check if there's a receive
+message to parse first without a timeout before returning AVA_GETS_RESTART.
+- Use only 2 queued work arrays in avalon.
+- avalon_gets is always called from the one call site so inline it.
+- The read_count is unused by the avalon get result code and no longer required
+for avalon reset so simplify code removing it.
+- Use a separate avalon_get_reset function for resetting avalon instead of using
+avalon_get_result.
+- The current hash count returned by avalon scanhash is just an obfuscated
+utility counter so make it explicit.
+- Check for a restart before a timeout in message parsing code in avalon.
+- We should check for a restart message before checking for a timeout in avalon
+scanhash.
+- Store the subid for the work item in avalon.
+- usbutils more stats for bflsc
+- Fix record_temp_fan function in avalon driver. Patch by Xiangfu
+<xiangfu@openmobilefree.net>
+- Remove inappropriate memset of struct avalon result which was corrupting fan
+values.
+- Fix warning with no curses built in.
+- Bump version to 2.11.4
+- Fix warning with no curses built in.
+- Bump version to 2.11.4
+- Add API support for Avalon.
+- Only do_avalon_close once on multiple errors.
+- Reset the result_wrong count on block change in avalon scanhash to prevent
+false positives for all nonces failed.
+- Small timeouts on select() instead of instant timeout increase reliability of
+socket reads and writes.
+- Only get extra work in fill_queue if we don't have any unqueued work in the
+list.
+- Small timeouts on select() instead of instant timeout increase reliability of
+socket reads and writes.
+- Rotate the avalon work array and free work on AVA_SEND_BUFFER_EMPTY as well.
+- Only get extra work in fill_queue if we don't have any unqueued work in the
+list.
+- Don't get any work if our queue is already full in avalon_fill.
+- Differentiate socket closed from socket error in recv_line.
+- Differentiate socket closed from socket error in recv_line.
+- Free avalon->works in the event we call avalon_prepare on failure to
+initialise.
+- Fix warnings.
+- Create an array of 4 lots of work for avalon and cycle through them.
+- Remove unused per unit matching work count for avalon.
+- Rename the confusing avalon_info pointer.
+- Simplify avalon scanhash code using the new find_queued_work_bymidstate
+function. Partially works only.
+- Members of cgpu_info for avalon are not meant to be in the union.
+- Use correct struct device_drv for avalon_drv.
+- cgminer.c -S help to only say Icarus
+- Check enough work is queued before queueing more in avalon_fill.
+- Actually put the work in the avalon queue.
+- Rneame avalon_api to avalon_drv.
+- First draft of port of avalon driver to new cgminer queued infrastructure.
+- Add Makefile entry for driver-avalon.
+- Add configure support for avalon.
+
+
 Version 2.11.4 - April 5th, 2013
 
 - Remove bfl-sc option  from configure for 2.11 branch.
