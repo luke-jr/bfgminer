@@ -78,7 +78,7 @@ cgminer_SOURCES += driver-icarus.c
 endif
 
 if HAS_AVALON
-cgminer_SOURCES += driver-avalon.c
+cgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
 if HAS_MODMINER
