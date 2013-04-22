@@ -852,6 +852,31 @@ void cgtime(struct timeval *tv)
 #endif
 }
 
+void subtime(struct timeval *a, struct timeval *b)
+{
+	timersub(a, b, b);
+}
+
+void addtime(struct timeval *a, struct timeval *b)
+{
+	timeradd(a, b, b);
+}
+
+bool time_more(struct timeval *a, struct timeval *b)
+{
+	return timercmp(a, b, >);
+}
+
+bool time_less(struct timeval *a, struct timeval *b)
+{
+	return timercmp(a, b, <);
+}
+
+void copy_time(struct timeval *dest, const struct timeval *src)
+{
+	memcpy(dest, src, sizeof(struct timeval));
+}
+
 /* Returns the microseconds difference between end and start times as a double */
 double us_tdiff(struct timeval *end, struct timeval *start)
 {

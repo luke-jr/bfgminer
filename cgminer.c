@@ -5653,34 +5653,22 @@ static void hash_sole_work(struct thr_info *mythr)
 		do {
 			cgtime(&tv_start);
 
-			timersub(&tv_start, &getwork_start, &getwork_start);
+			subtime(&tv_start, &getwork_start);
 
-			timeradd(&getwork_start,
-				&(dev_stats->getwork_wait),
-				&(dev_stats->getwork_wait));
-			if (timercmp(&getwork_start, &(dev_stats->getwork_wait_max), >)) {
-				dev_stats->getwork_wait_max.tv_sec = getwork_start.tv_sec;
-				dev_stats->getwork_wait_max.tv_usec = getwork_start.tv_usec;
-			}
-			if (timercmp(&getwork_start, &(dev_stats->getwork_wait_min), <)) {
-				dev_stats->getwork_wait_min.tv_sec = getwork_start.tv_sec;
-				dev_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
-			}
+			addtime(&getwork_start, &dev_stats->getwork_wait);
+			if (time_more(&getwork_start, &dev_stats->getwork_wait_max))
+				copy_time(&dev_stats->getwork_wait_max, &getwork_start);
+			if (time_less(&getwork_start, &dev_stats->getwork_wait_min))
+				copy_time(&dev_stats->getwork_wait_min, &getwork_start);
 			dev_stats->getwork_calls++;
 
 			pool_stats = &(work->pool->cgminer_stats);
 
-			timeradd(&getwork_start,
-				&(pool_stats->getwork_wait),
-				&(pool_stats->getwork_wait));
-			if (timercmp(&getwork_start, &(pool_stats->getwork_wait_max), >)) {
-				pool_stats->getwork_wait_max.tv_sec = getwork_start.tv_sec;
-				pool_stats->getwork_wait_max.tv_usec = getwork_start.tv_usec;
-			}
-			if (timercmp(&getwork_start, &(pool_stats->getwork_wait_min), <)) {
-				pool_stats->getwork_wait_min.tv_sec = getwork_start.tv_sec;
-				pool_stats->getwork_wait_min.tv_usec = getwork_start.tv_usec;
-			}
+			addtime(&getwork_start, &pool_stats->getwork_wait);
+			if (time_more(&getwork_start, &pool_stats->getwork_wait_max))
+				copy_time(&pool_stats->getwork_wait_max, &getwork_start);
+			if (time_less(&getwork_start, &pool_stats->getwork_wait_min))
+				copy_time(&pool_stats->getwork_wait_min, &getwork_start);
 			pool_stats->getwork_calls++;
 
 			cgtime(&(work->tv_work_start));
