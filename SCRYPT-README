@@ -218,8 +218,8 @@ without crashing the GPU, you will have to use a lower memclock.
 Then, and only then, bother trying to increase intensity further.
 
 My final settings were:
---gpu-engine 1157  --gpu-memclock 1900 -I 20
-for a hashrate of 725kH.
+--gpu-engine 1141  --gpu-memclock 1875 -I 20
+for a hashrate of 745kH.
 
 Note I did not bother setting a thread concurrency. Once you have the magic
 endpoint, look at what tc was chosen by the bin file generated and then hard
