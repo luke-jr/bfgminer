@@ -2724,7 +2724,7 @@ static void get_benchmark_work(struct work *work)
 	work->mandatory = true;
 	work->pool = pools[0];
 	cgtime(&work->tv_getwork);
-	memcpy(&(work->tv_getwork_reply), &(work->tv_getwork), sizeof(struct timeval));
+	copy_time(&work->tv_getwork_reply, &work->tv_getwork);
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
 	calc_diff(work, 0);
 }
@@ -5180,8 +5180,8 @@ retry_stratum:
 			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
 			work->rolltime = rolltime;
-			memcpy(&(work->tv_getwork), &tv_getwork, sizeof(struct timeval));
-			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
+			copy_time(&work->tv_getwork, &tv_getwork);
+			copy_time(&work->tv_getwork_reply, &tv_getwork_reply);
 			work->getwork_mode = GETWORK_MODE_TESTPOOL;
 			calc_diff(work, 0);
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
@@ -5502,7 +5502,7 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 	pthread_t submit_thread;
 
 	if (tv_work_found)
-		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
+		copy_time(&work->tv_work_found, tv_work_found);
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
 	if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, (void *)work)))
 		quit(1, "Failed to create submit_work_thread");
@@ -5723,7 +5723,7 @@ static void hash_sole_work(struct thr_info *mythr)
 			if (diff.tv_sec > 0 || diff.tv_usec > 200) {
 				hashmeter(thr_id, &diff, hashes_done);
 				hashes_done = 0;
-				memcpy(&tv_lastupdate, tv_end, sizeof(struct timeval));
+				copy_time(&tv_lastupdate, tv_end);
 			}
 
 			if (unlikely(mythr->work_restart)) {
@@ -5909,7 +5909,7 @@ void hash_queued_work(struct thr_info *mythr)
 		if (diff.tv_sec > 0 || diff.tv_usec > 200) {
 			hashmeter(thr_id, &diff, hashes_done);
 			hashes_done = 0;
-			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
+			copy_time(&tv_start, &tv_end);
 		}
 
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
@@ -5979,8 +5979,8 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 	pool->getwork_requested++;
 	work->pool = pool;
 	work->rolltime = rolltime;
-	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
-	memcpy(&(work->tv_getwork_reply), tv_lp_reply, sizeof(struct timeval));
+	copy_time(&work->tv_getwork, tv_lp);
+	copy_time(&work->tv_getwork_reply, tv_lp_reply);
 	calc_diff(work, 0);
 
 	if (pool->enabled == POOL_REJECTING)
