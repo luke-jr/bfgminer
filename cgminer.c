@@ -5618,7 +5618,7 @@ static void hash_sole_work(struct thr_info *mythr)
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_drv *drv = cgpu->drv;
-	struct timeval getwork_start, tv_start, tv_end, tv_workstart, tv_lastupdate;
+	struct timeval getwork_start, tv_start, *tv_end, tv_workstart, tv_lastupdate;
 	struct cgminer_stats *dev_stats = &(cgpu->cgminer_stats);
 	struct cgminer_stats *pool_stats;
 	/* Try to cycle approximately 5 times before each log update */
@@ -5628,6 +5628,7 @@ static void hash_sole_work(struct thr_info *mythr)
 	uint32_t max_nonce = drv->can_limit_work(mythr);
 	int64_t hashes_done = 0;
 
+	tv_end = &getwork_start;
 	cgtime(&getwork_start);
 	sdiff.tv_sec = sdiff.tv_usec = 0;
 	cgtime(&tv_lastupdate);
@@ -5688,6 +5689,7 @@ static void hash_sole_work(struct thr_info *mythr)
 			hashes = drv->scanhash(mythr, work, work->blk.nonce + max_nonce);
 			thread_reportin(mythr);
 
+			/* tv_end is == &getwork_start */
 			cgtime(&getwork_start);
 
 			if (unlikely(hashes == -1)) {
@@ -5701,8 +5703,7 @@ static void hash_sole_work(struct thr_info *mythr)
 			if (hashes > cgpu->max_hashes)
 				cgpu->max_hashes = hashes;
 
-			cgtime(&tv_end);
-			timersub(&tv_end, &tv_start, &diff);
+			timersub(tv_end, &tv_start, &diff);
 			sdiff.tv_sec += diff.tv_sec;
 			sdiff.tv_usec += diff.tv_usec;
 			if (sdiff.tv_usec > 1000000) {
@@ -5710,7 +5711,7 @@ static void hash_sole_work(struct thr_info *mythr)
 				sdiff.tv_usec -= 1000000;
 			}
 
-			timersub(&tv_end, &tv_workstart, &wdiff);
+			timersub(tv_end, &tv_workstart, &wdiff);
 
 			if (unlikely((long)sdiff.tv_sec < cycle)) {
 				int mult;
@@ -5729,12 +5730,12 @@ static void hash_sole_work(struct thr_info *mythr)
 			else if (unlikely(sdiff.tv_usec > 100000))
 				max_nonce = max_nonce * 0x400 / (((cycle * 1000000) + sdiff.tv_usec) / (cycle * 1000000 / 0x400));
 
-			timersub(&tv_end, &tv_lastupdate, &diff);
+			timersub(tv_end, &tv_lastupdate, &diff);
 			/* Update the hashmeter at most 5 times per second */
 			if (diff.tv_sec > 0 || diff.tv_usec > 200) {
 				hashmeter(thr_id, &diff, hashes_done);
 				hashes_done = 0;
-				memcpy(&tv_lastupdate, &tv_end, sizeof(struct timeval));
+				memcpy(&tv_lastupdate, tv_end, sizeof(struct timeval));
 			}
 
 			if (unlikely(mythr->work_restart)) {
