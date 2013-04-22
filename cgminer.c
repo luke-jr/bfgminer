@@ -44,7 +44,6 @@
 #include "miner.h"
 #include "findnonce.h"
 #include "adl.h"
-#include "driver-cpu.h"
 #include "driver-opencl.h"
 #include "bench_block.h"
 #include "scrypt.h"
@@ -89,7 +88,6 @@ int opt_log_interval = 5;
 int opt_queue = 1;
 int opt_scantime = 60;
 int opt_expiry = 120;
-int opt_bench_algo = -1;
 static const bool opt_time = true;
 unsigned long long global_hashrate;
 
@@ -113,7 +111,6 @@ static bool opt_removedisabled;
 int total_devices;
 struct cgpu_info **devices;
 bool have_opencl;
-int opt_n_threads = -1;
 int mining_threads;
 int num_processors;
 #ifdef HAVE_CURSES
@@ -869,36 +866,6 @@ static char *set_null(const char __maybe_unused *arg)
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
-#ifdef WANT_CPUMINE
-	OPT_WITH_ARG("--algo|-a",
-		     set_algo, show_algo, &opt_algo,
-		     "Specify sha256 implementation for CPU mining:\n"
-		     "\tauto\t\tBenchmark at startup and pick fastest algorithm"
-		     "\n\tc\t\tLinux kernel sha256, implemented in C"
-#ifdef WANT_SSE2_4WAY
-		     "\n\t4way\t\ttcatm's 4-way SSE2 implementation"
-#endif
-#ifdef WANT_VIA_PADLOCK
-		     "\n\tvia\t\tVIA padlock implementation"
-#endif
-		     "\n\tcryptopp\tCrypto++ C/C++ implementation"
-#ifdef WANT_CRYPTOPP_ASM32
-		     "\n\tcryptopp_asm32\tCrypto++ 32-bit assembler implementation"
-#endif
-#ifdef WANT_X8632_SSE2
-		     "\n\tsse2_32\t\tSSE2 32 bit implementation for i386 machines"
-#endif
-#ifdef WANT_X8664_SSE2
-		     "\n\tsse2_64\t\tSSE2 64 bit implementation for x86_64 machines"
-#endif
-#ifdef WANT_X8664_SSE4
-		     "\n\tsse4_64\t\tSSE4.1 64 bit implementation for x86_64 machines"
-#endif
-#ifdef WANT_ALTIVEC_4WAY
-    "\n\taltivec_4way\tAltivec implementation for PowerPC G4 and G5 machines"
-#endif
-		),
-#endif
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
 		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
@@ -936,20 +903,10 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_bfl_noncerange,
 			"Use nonce range on bitforce devices if supported"),
 #endif
-#ifdef WANT_CPUMINE
-	OPT_WITH_ARG("--bench-algo|-b",
-		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
-		     opt_hidden),
-#endif
 #ifdef HAVE_CURSES
 	OPT_WITHOUT_ARG("--compact",
 			opt_set_bool, &opt_compact,
 			"Use compact display without per device statistics"),
-#endif
-#ifdef WANT_CPUMINE
-	OPT_WITH_ARG("--cpu-threads|-t",
-		     force_nthreads_int, opt_show_intval, &opt_n_threads,
-		     "Number of miner CPU threads"),
 #endif
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
@@ -968,11 +925,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
-#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_FPGA))
-	OPT_WITHOUT_ARG("--enable-cpu|-C",
-			opt_set_bool, &opt_usecpu,
-			"Enable CPU mining with other mining (default: no CPU mining if other devices exist)"),
-#endif
 	OPT_WITH_ARG("--expiry|-E",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
 		     "Upper bound on how many seconds after getting work we consider a share from it stale"),
@@ -1374,9 +1326,6 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef HAVE_OPENCL
 		"GPU "
-#endif
-#ifdef WANT_CPUMINE
-		"CPU "
 #endif
 #ifdef USE_BITFORCE
 		"bitforce "
@@ -1905,7 +1854,6 @@ static int statusy;
 #ifdef HAVE_OPENCL
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 #endif
-struct cgpu_info *cpus;
 
 #ifdef HAVE_CURSES
 static inline void unlock_curses(void)
@@ -2039,10 +1987,6 @@ static void curses_print_status(void)
 
 	wattron(statuswin, A_BOLD);
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
-#ifdef WANT_CPUMINE
-	if (opt_n_threads)
-		wprintw(statuswin, " CPU Algo: %s", algo_names[opt_algo]);
-#endif
 	wattroff(statuswin, A_BOLD);
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
@@ -4058,9 +4002,6 @@ void write_config(FILE *fcfg)
 #ifdef HAVE_ADL
 	if (opt_reorder)
 		fprintf(fcfg, ",\n\"gpu-reorder\" : true");
-#endif
-#ifdef WANT_CPUMINE
-	fprintf(fcfg, ",\n\"algo\" : \"%s\"", algo_names[opt_algo]);
 #endif
 
 	/* Simple bool and int options */
@@ -6382,10 +6323,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			if (thr->getwork || *denable == DEV_DISABLED)
 				continue;
 
-#ifdef WANT_CPUMINE
-			if (cgpu->drv->drv_id == DRIVER_CPU)
-				continue;
-#endif
 			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
 				if (cgpu->status != LIFE_INIT)
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
@@ -6459,10 +6396,6 @@ void print_summary(void)
 	applog(LOG_WARNING, "Started at %s", datestamp);
 	if (total_pools == 1)
 		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
-#ifdef WANT_CPUMINE
-	if (opt_n_threads)
-		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
-#endif
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
 	displayed_hashes = total_mhashes_done / total_secs;
 	if (displayed_hashes < 1) {
@@ -6541,9 +6474,6 @@ static void clean_up(void)
 #endif
 	if (!opt_realquiet && successful_connect)
 		print_summary();
-
-	if (opt_n_threads)
-		free(cpus);
 
 	curl_global_cleanup();
 }
@@ -6796,15 +6726,6 @@ void enable_curses(void) {
 	statusy = logstart;
 	unlock_curses();
 }
-#endif
-
-/* TODO: fix need a dummy CPU device_drv even if no support for CPU mining */
-#ifndef WANT_CPUMINE
-struct device_drv cpu_drv;
-struct device_drv cpu_drv = {
-	.drv_id = DRIVER_CPU,
-	.name = "CPU",
-};
 #endif
 
 #ifdef USE_BFLSC
@@ -7183,10 +7104,6 @@ int main(int argc, char *argv[])
 
 	sprintf(packagename, "%s %s", PACKAGE, VERSION);
 
-#ifdef WANT_CPUMINE
-	init_max_name_len();
-#endif
-
 	handler.sa_handler = &sighandler;
 	handler.sa_flags = 0;
 	sigemptyset(&handler.sa_mask);
@@ -7202,15 +7119,6 @@ int main(int argc, char *argv[])
 	strcpy(cgminer_path, dirname(s));
 	free(s);
 	strcat(cgminer_path, "/");
-#ifdef WANT_CPUMINE
-	// Hack to make cgminer silent when called recursively on WIN32
-	int skip_to_bench = 0;
-	#if defined(WIN32)
-		char buf[32];
-		if (GetEnvironmentVariable("CGMINER_BENCH_ALGO", buf, 16))
-			skip_to_bench = 1;
-	#endif // defined(WIN32)
-#endif
 
 	devcursor = 8;
 	logstart = devcursor + 1;
@@ -7295,51 +7203,6 @@ int main(int argc, char *argv[])
 	usb_initialise();
 #endif
 
-#ifdef WANT_CPUMINE
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		set_scrypt_algo(&opt_algo);
-	else
-#endif
-	if (0 <= opt_bench_algo) {
-		double rate = bench_algo_stage3(opt_bench_algo);
-
-		if (!skip_to_bench)
-			printf("%.5f (%s)\n", rate, algo_names[opt_bench_algo]);
-		else {
-			// Write result to shared memory for parent
-#if defined(WIN32)
-				char unique_name[64];
-
-				if (GetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name, 32)) {
-					HANDLE map_handle = CreateFileMapping(
-						INVALID_HANDLE_VALUE,   // use paging file
-						NULL,                   // default security attributes
-						PAGE_READWRITE,         // read/write access
-						0,                      // size: high 32-bits
-						4096,			// size: low 32-bits
-						unique_name		// name of map object
-					);
-					if (NULL != map_handle) {
-						void *shared_mem = MapViewOfFile(
-							map_handle,	// object to map view of
-							FILE_MAP_WRITE, // read/write access
-							0,              // high offset:  map from
-							0,              // low offset:   beginning
-							0		// default: map entire file
-						);
-						if (NULL != shared_mem)
-							CopyMemory(shared_mem, &rate, sizeof(rate));
-						(void)UnmapViewOfFile(shared_mem);
-					}
-					(void)CloseHandle(map_handle);
-				}
-#endif
-		}
-		exit(0);
-	}
-#endif
-
 #ifdef HAVE_OPENCL
 	if (!opt_nogpu)
 		opencl_drv.drv_detect();
@@ -7376,10 +7239,6 @@ int main(int argc, char *argv[])
 		ztex_drv.drv_detect();
 #endif
 
-#ifdef WANT_CPUMINE
-	cpu_drv.drv_detect();
-#endif
-
 	if (devices_enabled == -1) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
@@ -7400,12 +7259,8 @@ int main(int argc, char *argv[])
 					quit (1, "Command line options set a device that doesn't exist");
 				enable_device(devices[i]);
 			} else if (i < total_devices) {
-				if (opt_removedisabled) {
-					if (devices[i]->drv->drv_id == DRIVER_CPU)
-						--opt_n_threads;
-				} else {
+				if (!opt_removedisabled)
 					enable_device(devices[i]);
-				}
 				devices[i]->deven = DEV_DISABLED;
 			}
 		}
@@ -7607,13 +7462,6 @@ begin_bench:
 	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
 	for (i = 0; i < nDevs; i++)
 		pause_dynamic_threads(i);
-#endif
-
-#ifdef WANT_CPUMINE
-	applog(LOG_INFO, "%d cpu miner threads started, "
-		"using SHA256 '%s' algorithm.",
-		opt_n_threads,
-		algo_names[opt_algo]);
 #endif
 
 	cgtime(&total_tv_start);

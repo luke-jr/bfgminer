@@ -210,7 +210,6 @@ enum drv_driver {
 	DRIVER_BITFORCE,
 	DRIVER_MODMINER,
 	DRIVER_ZTEX,
-	DRIVER_CPU,
 	DRIVER_BFLSC,
 	DRIVER_AVALON,
 	DRIVER_MAX
@@ -927,7 +926,6 @@ extern bool hotplug_mode;
 extern int hotplug_time;
 extern struct list_head scan_devices;
 extern int nDevs;
-extern int opt_n_threads;
 extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
@@ -943,13 +941,10 @@ extern bool opt_scrypt;
 #endif
 extern double total_secs;
 extern int mining_threads;
-extern struct cgpu_info *cpus;
 extern int total_devices;
 extern struct cgpu_info **devices;
 extern int total_pools;
 extern struct pool **pools;
-extern const char *algo_names[];
-extern enum sha256_algos opt_algo;
 extern struct strategies strategies[];
 extern enum pool_strategy pool_strategy;
 extern int opt_rotate_period;

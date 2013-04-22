@@ -126,14 +126,6 @@ if test -n "$CGMINER_SDK"; then
 	LDFLAGS="-L$CGMINER_SDK/lib/$target $LDFLAGS"
 fi
 
-cpumining="no"
-
-AC_ARG_ENABLE([cpumining],,[cpumining=$enableval]	)
-if test "x$cpumining" = xyes; then
-	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
-fi
-AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
-
 opencl="yes"
 
 AC_ARG_ENABLE([opencl],
@@ -329,54 +321,6 @@ else
 	JANSSON_LIBS=-ljansson
 fi
 
-dnl Find YASM
-has_yasm=false
-AC_PATH_PROG([YASM],[yasm],[false])
-if test "x$YASM" != "xfalse" ; then
-  AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
-  yasmver=`"$YASM" --version | head -1 | cut -d\  -f2`
-  yamajor=`echo $yasmver | cut -d. -f1`
-  yaminor=`echo $yasmver | cut -d. -f2`
-  yamini=`echo $yasmver | cut -d. -f3`
-  if test "$yamajor" -ge "1" ; then
-    if test "$yamajor" -eq "1" ; then
-      if test "$yaminor" -ge "0" ; then
-        if test "$yaminor" -eq "0"; then
-          if test "$yamini" -ge "1"; then
-            has_yasm=true
-          fi
-        else
-          has_yasm=true
-        fi
-      fi
-    fi
-  else
-    has_yasm=false
-  fi
-  if test "x$has_yasm" = "xtrue" ; then
-    AC_MSG_RESULT([yes])
-  else
-    AC_MSG_RESULT([no])
-  fi
-fi
-if test "x$has_yasm" = "xfalse" ; then
-  AC_MSG_NOTICE([yasm is required for the assembly algorithms. They will be skipped.])
-else
-  if test "x$have_x86_64" = xtrue; then
-    if test "x$have_win32" = xtrue; then
-      YASM_FMT="win64"
-    else
-      YASM_FMT="elf64"
-    fi
-  elif test "x$have_win32" = xtrue; then
-    YASM_FMT="coff"
-  else
-    YASM_FMT="elf32"
-  fi
-fi
-
-AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
-
 if test "x$icarus" != xno; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
@@ -498,15 +442,12 @@ AC_SUBST(WS2_LIBS)
 AC_SUBST(MM_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
-AC_SUBST(YASM_FMT)
 AC_SUBST(ADL_CPPFLAGS)
 
 AC_CONFIG_FILES([
 	Makefile
 	compat/Makefile
 	compat/jansson/Makefile
-	x86_64/Makefile
-	x86_32/Makefile
 	ccan/Makefile
 	lib/Makefile
 	])
@@ -537,14 +478,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$cpumining$bitforce$avalon$icarus$ztex$modminer$bflsc" = xnonononononono; then
+		if test "x$bitforce$avalon$icarus$ztex$modminer$bflsc" = xnonononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$cpumining$bitforce$icarus$avalon$ztex$modminer$bflsc" = xnonononononono; then
+	if test "x$bitforce$icarus$avalon$ztex$modminer$bflsc" = xnonononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -599,12 +540,6 @@ fi
 
 if test "x$icarus" != xno; then
 	echo "  libudev.detection....: $libudev"
-fi
-
-if test "x$cpumining" = xyes; then
-	echo
-	echo "  CPU Mining...........: Enabled"
-	echo "  ASM.(for CPU mining).: $has_yasm"
 fi
 
 echo
