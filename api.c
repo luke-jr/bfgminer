@@ -3481,7 +3481,7 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 		n = send(c, buf, tosend, 0);
 
 		if (SOCKETFAIL(n)) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
+			if (sock_blocks())
 				continue;
 
 			applog(LOG_WARNING, "API: send (%d) failed: %s", tosend, SOCKERRMSG);
