@@ -1128,10 +1128,10 @@ char *recv_line(struct pool *pool)
 				break;
 			case RECV_CLOSED:
 				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
-				break;
+				goto out;
 			case RECV_RECVFAIL:
 				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
-				break;
+				goto out;
 		}
 	}
 
