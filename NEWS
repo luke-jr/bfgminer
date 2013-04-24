@@ -1,5 +1,17 @@
+Version 3.0.1 - April 25th, 2013
+
+- Bypass attempting to read and save binary files on OSX to avoid crashes on >1
+GPU.
+- Receive failures in recv_line should unconditionally fail.
+- Use sock_blocks in api.c
+- Use sock_blocks function for stratum send and receive.
+- Create an OS specific sock_blocks function.
+
+
 Version 3.0.0 - April 22nd, 2013
 
+- Further fix distdir for hexdump.c
+- Fix build and distdir.
 - Remove all CPU mining code.
 - compile on win32
 - Update SCRYPT README with improved hashrates for 7970.
