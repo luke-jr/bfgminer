@@ -514,6 +514,11 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	if (!source)
 		return NULL;
 
+	/* OSX OpenCL breaks reading off binaries with >1 GPU so always build
+	 * from source. */
+#ifdef __APPLE__
+	goto build;
+#endif
 	binary_sizes = calloc(sizeof(size_t) * MAX_GPUDEVICES * 4, 1);
 	if (unlikely(!binary_sizes)) {
 		applog(LOG_ERR, "Unable to calloc binary_sizes");
@@ -662,6 +667,9 @@ build:
 	}
 
 	prog_built = true;
+#ifdef __APPLE__
+	goto built;
+#endif
 
 	status = clGetProgramInfo(clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
