@@ -1,5 +1,22 @@
-BFGMiner Version 2.10.7 - Future
+BFGMiner Version 2.10.7 - April 24, 2013
 
+- Bugfix: Check that all pools have URIs set before starting
+- README: Include jansson PKG_CONFIG_PATH in example for Mac
+- Include trailing \0 with coinbase sigs if there's room
+- Differentiate socket closed from socket error in recv_line.
+- Bugfix: ztex: Initialize fw_buf pointer to NULL so a free before allocation is
+safe
+- LTC text typo
+- MMQ it's a bitstream
+- Fix --benchmark generating valid work for cgminer.
+- Bugfix: Correct pdbuilder result directory
+- Bugfix: roundl: Add needed parenthesis to perform ?: before +
+- Bugfix: ft232r: Defer allocating structure until after USB endpoint is
+successfully opened, so it won't leak in case of failure
+- Bugfix: ztex: Free bitstream in memory when done with it
+- Bugfix: Safely handle all-space cURL debug messages, should they ever happen
+- Bugfix: Missing return for /dev globbing
+- Bugfix: Free unused work when retrying failed lp request
 - opencl: Include OpenCL platform in kernel binary filenames
 - Bugfix: bitforce: Close opened fd if reinit fails
 - Bugfix: bitforce: Retry ZGX until device is NOT busy
