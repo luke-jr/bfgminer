@@ -1137,17 +1137,19 @@ char *recv_line(struct pool *pool)
 
 			memset(s, 0, RBUFSIZE);
 			n = recv(pool->sock, s, RECVSIZE, 0);
-			if (!n) {
-				ret = RECV_CLOSED;
-				break;
+			if (n < 1) {
+				if (errno != EAGAIN && errno != EWOULDBLOCK) {
+					if (n == 0)
+						ret = RECV_CLOSED;
+					else
+						ret = RECV_RECVFAIL;
+					break;
+				}
+			} else {
+				slen = strlen(s);
+				recalloc_sock(pool, slen);
+				strcat(pool->sockbuf, s);
 			}
-			if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-				ret = RECV_RECVFAIL;
-				break;
-			}
-			slen = strlen(s);
-			recalloc_sock(pool, slen);
-			strcat(pool->sockbuf, s);
 			gettimeofday(&now, NULL);
 		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
 		mutex_unlock(&pool->stratum_lock);
