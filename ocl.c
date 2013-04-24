@@ -502,8 +502,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 #endif
 
 	FILE *binaryfile;
-	size_t *binary_sizes;
-	char **binaries;
+	size_t *binary_sizes = NULL;
+	char **binaries = NULL;
 	int pl;
 	char *source = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
