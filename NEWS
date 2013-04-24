@@ -1,5 +1,52 @@
-BFGMiner Version 3.0.1 - Future
+BFGMiner Version 3.0.1 - April 24, 2013
 
+- Remove bitstreams from Windows binary distributions (README directs users to
+download source and copy them)
+- make-release: Remove autom4te.cache from distributed source
+- Bugfix: Omit --no-opencl-binaries option from build if OpenCL is not being
+compiled
+- Bugfix: Check that all pools have URIs set before starting
+- Bugfix: bitforce: Make noncebuf large enough for max qresults +1 (for OK line)
+- opencl: Ability to avoid using binary kernels with new --no-opencl-binaries
+option
+- README: Include jansson PKG_CONFIG_PATH in example for Mac
+- Include trailing \0 with coinbase sigs if there's room
+- Differentiate socket closed from socket error in recv_line.
+- Add new best share info to verbose logging.
+- Add notice for when network diff is changed.
+- convert sleep(const) to nmsleep()
+- Rename longpoll threads according to what pool they're associated with
+- miner.php report 'Last Valid Work' as time before request
+- API V1.25 - add 'Last Valid Work' time for each device
+- add 'count' to customsummarypage 'calc'
+- Bugfix: ztex: Initialize fw_buf pointer to NULL so a free before allocation is
+safe
+- Cleanup when stratum curl fails to initialise.
+- LTC text typo
+- Recreate cURL for new stratum connections, and clear stratum_notify on
+suspending them
+- clear_stratum_shares: Rename diff_stale variable to diff_cleared
+- MMQ it's a bitstream
+- Update a pool's last work time when the work is popped as well as staged.
+- Extend stratum connections another minute (total 2 minutes) after the last
+work item was staged, and maintain last_work_time for non-stratum pools.
+- Fix --benchmark generating valid work for cgminer.
+- Bugfix: Correct pdbuilder result directory
+- Omit add_serial_all code when serial support is not wanted
+- Use configure to detect presence of roundl to avoid redefining an actual
+function (possibly inline)
+- Bugfix: roundl: Add needed parenthesis to perform ?: before +
+- Bugfix: ft232r: Defer allocating structure until after USB endpoint is
+successfully opened, so it won't leak in case of failure
+- Bugfix: ztex: Free bitstream in memory when done with it
+- Bugfix: Safely handle all-space cURL debug messages, should they ever happen
+- Silence warnings about poor format usage for quit()
+- Apply noreturn and printf-format attributes to quit() function definition
+- Bugfix: set_serial_rts get flags to manipulate them correctly
+- Bugfix: Missing return for /dev globbing
+- Bugfix: Free unused work when retrying failed lp request
+- Display processor name with thread disabled/re-enabled messages
+- Move best share to top summary line, and add network difficulty to block line
 - opencl: Default to phatk kernel for Mesa platform
 - opencl: Default to single thread with Mesa OpenCL
 - opencl: Check for Mesa OpenCL and avoid using binary kernels with it

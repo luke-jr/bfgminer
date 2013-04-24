@@ -1,3 +1,14 @@
+bfgminer (3.0.1-0precise1) precise; urgency=low
+
+  * Bitforce SC: Switched to using bulk queue mode for all ASIC-based devices.
+  * Bitforce SC: Fix reinitialization-on-failure, so devices can autorecover from some problems.
+  * OpenCL: Support for mining with completely free (non-proprietary) Mesa/LLVM OpenCL on Linux (requires git Mesa/LLVM).
+  * OpenCL: Include platform in kernel binary filenames to avoid using stale binaries from other SDK installs.
+  * Added network hashrate (based on block difficulty) to block status line.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 24 Apr 2013 02:40:23 -0000
+
+
 bfgminer (3.0.0-0precise1) precise; urgency=low
 
   * New device driver for ASIC devices, including both Butterfly Labs' BitForce SC and Avalon.
