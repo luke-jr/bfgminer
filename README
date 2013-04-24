@@ -265,6 +265,11 @@ prepend the argument with the driver name followed by a colon.
 For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
 or using the short name: "ica:/dev/ttyUSB0" or "bfl:\\.\COM5"
 
+Some FPGAs do not have non-volatile storage for their bitstreams and must be
+programmed every power cycle, including first use. To use these devices, you
+must download the BFGMiner source archive (bfgminer-x.y.z.zip) and copy the
+"bitstreams" directory into your BFGMiner application directory.
+
 For other FPGA details see the README.FPGA
 
 
