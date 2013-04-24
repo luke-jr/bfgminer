@@ -36,6 +36,8 @@ cd "$sw"
 NOSUBMODULES=1 \
 NOCONFIGURE=1 \
 ./autogen.sh
+find . -name autom4te.cache |
+ xargs rm -r
 cd ..
 zip -r "$OUTDIR/${sw}.zip" "$sw"
 tar cjvpf "$OUTDIR/${sw}.tbz2" "$sw"
