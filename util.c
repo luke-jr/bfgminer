@@ -1085,10 +1085,10 @@ char *recv_line(struct pool *pool)
 {
 	ssize_t len, buflen;
 	char *tok, *sret = NULL;
-	struct timeval rstart, now;
 
 	if (!strstr(pool->sockbuf, "\n")) {
 		enum recv_ret ret = RECV_OK;
+		struct timeval rstart, now;
 
 		cgtime(&rstart);
 		if (!socket_full(pool, true)) {
@@ -1139,9 +1139,6 @@ char *recv_line(struct pool *pool)
 	tok = strtok(pool->sockbuf, "\n");
 	if (!tok) {
 		applog(LOG_DEBUG, "Failed to parse a \\n terminated string in recv_line");
-		applog(LOG_DEBUG, "sockbuf: %s", pool->sockbuf);
-		applog(LOG_DEBUG, "Receive start time %d  end time %d",
-		       rstart.tv_sec, now.tv_sec);
 		goto out;
 	}
 	sret = strdup(tok);
