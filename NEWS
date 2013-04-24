@@ -1,5 +1,11 @@
 BFGMiner Version 3.0.1 - April 24, 2013
 
+- Bugfix: configure: Move actual roundl macro back to miner.h after math.h
+should be included
+- Bugfix: configure: Use dummy pointer to correctly detect roundl when conftest
+main is missing argc parameter
+- Bugfix: configure: Use variable argument to roundl to prevent compilers from
+optimizing it out entirely
 - Remove bitstreams from Windows binary distributions (README directs users to
 download source and copy them)
 - make-release: Remove autom4te.cache from distributed source
