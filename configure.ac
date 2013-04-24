@@ -563,7 +563,7 @@ LIBS="$LIBS -lm"
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[
 	#include <math.h>
 ]], [[
-	return (roundl((long double)argc) == 1.0);
+	return (roundl(*(long double *)0xdeadbeef) == 1.0);
 ]])], [
 	AC_MSG_RESULT([yes])
 ], [
