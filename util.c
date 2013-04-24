@@ -963,7 +963,7 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 			return SEND_SELECTFAIL;
 		sent = send(pool->sock, s + ssent, len, 0);
 		if (sent < 0) {
-			if (errno != EAGAIN && errno != EWOULDBLOCK)
+			if (!sock_blocks())
 				return SEND_SENDFAIL;
 			sent = 0;
 		}
@@ -1108,13 +1108,16 @@ char *recv_line(struct pool *pool)
 				ret = RECV_CLOSED;
 				break;
 			}
-			if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-				ret = RECV_RECVFAIL;
-				break;
+			if (n < 0) {
+				if (!sock_blocks()) {
+					ret = RECV_RECVFAIL;
+					break;
+				}
+			} else {
+				slen = strlen(s);
+				recalloc_sock(pool, slen);
+				strcat(pool->sockbuf, s);
 			}
-			slen = strlen(s);
-			recalloc_sock(pool, slen);
-			strcat(pool->sockbuf, s);
 			cgtime(&now);
 		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
 		mutex_unlock(&pool->stratum_lock);
