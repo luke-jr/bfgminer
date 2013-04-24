@@ -235,21 +235,19 @@ scrypt only options:
 See README.scrypt for more information regarding (non-bitcoin) scrypt mining.
 
 
-FPGA mining boards (BitForce, Icarus, ModMiner, X6500, ZTEX) only options:
+ASIC/FPGA mining boards (BitForce, Icarus, ModMiner, X6500, ZTEX) only options:
 
---scan-serial|-S <arg> Serial port to probe for FPGA mining device
+--scan-serial|-S <arg> Serial port to probe for mining devices
 
-This option is only for BitForce, Icarus, and/or ModMiner FPGAs
-
-To use FPGAs, you will need to be sure the user BFGMiner is running as has
-appropriate permissions. This varies by operating system.
+To use ASICs or FPGAs, you will need to be sure the user BFGMiner is running as
+has appropriate permissions. This varies by operating system.
 On Gentoo: sudo usermod <username> -a -G uucp
 On Ubuntu: sudo usermod <username> -a -G dialout
 Note that on GNU/Linux systems, you will usually need to login again before
 group changes take effect.
 
-By default, BFGMiner will scan for autodetected FPGAs unless at least one -S is
-specified for that driver. If you specify -S and still want BFGMiner to scan,
+By default, BFGMiner will scan for autodetected devices unless at least one -S
+is specified for that driver. If you specify -S and still want BFGMiner to scan,
 you must also use "-S auto". If you want to prevent BFGMiner from scanning
 without specifying a device, you can use "-S noauto". Note that presently,
 autodetection only works on Linux, and might only detect one device depending
@@ -259,9 +257,9 @@ then behave in unexpected ways!
 
 On Linux, <arg> is usually of the format /dev/ttyUSBn
 On Windows, <arg> is usually of the format \\.\COMn
-(where n = the correct device number for the FPGA device)
+(where n = the correct device number for the device)
 
-The official supplied binaries are compiled with support for all FPGAs.
+The official supplied binaries are compiled with support for all ASICs/FPGAs.
 To force the code to only attempt detection with a specific driver,
 prepend the argument with the driver name followed by a colon.
 For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
@@ -981,7 +979,8 @@ A: At the moment, BFGMiner supports 5 FPGAs: BitForce, Icarus, ModMiner, X6500,
 and ZTEX.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
-been skipped.
+been skipped. "PGA" is also used for devices built with Application-Specific
+Integrated Circuits (ASICs).
 
 Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
 A: On Linux, if the /dev/ttyUSB* devices don't automatically appear, the only
