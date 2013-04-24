@@ -563,12 +563,12 @@ LIBS="$LIBS -lm"
 AC_LINK_IFELSE([AC_LANG_PROGRAM([[
 	#include <math.h>
 ]], [[
-	return (roundl(0.5) == 1.0);
+	return (roundl(*(long double *)0xdeadbeef) == 1.0);
 ]])], [
 	AC_MSG_RESULT([yes])
 ], [
 	AC_MSG_RESULT([no])
-	AC_DEFINE_UNQUOTED([roundl(x)], [(long double)((long long)((x==0)?0.0:((x)+(((x)>0)?0.5:-0.5))))], [Round to nearest integer, away from zero])
+	AC_DEFINE([NEED_ROUNDL], [1], [Defined to 1 if C99 roundl is missing])
 ])
 LIBS="${save_LIBS}"
 
