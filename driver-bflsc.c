@@ -1532,12 +1532,12 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 			cleanup = false;
 
 			// Is there any flushed work that can be removed?
-			wr_lock(&(sc_info->stat_lock));
+			rd_lock(&(sc_info->stat_lock));
 			if (sc_info->sc_devs[dev].flushed) {
 				if (sc_info->sc_devs[dev].result_id > (sc_info->sc_devs[dev].flush_id + 1))
 					cleanup = true;
 			}
-			wr_unlock(&(sc_info->stat_lock));
+			rd_unlock(&(sc_info->stat_lock));
 
 			// yes remove the flushed work that can be removed
 			if (cleanup) {
@@ -1563,8 +1563,8 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 		restart_wait(sc_info->scan_sleep_time);
 
 	// Count up the work done since we last were here
-	wr_lock(&(sc_info->stat_lock));
 	ret = 0;
+	wr_lock(&(sc_info->stat_lock));
 	for (dev = 0; dev < sc_info->sc_count; dev++) {
 		unsent = sc_info->sc_devs[dev].hashes_unsent;
 		sc_info->sc_devs[dev].hashes_unsent = 0;
