@@ -550,7 +550,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 static void bflsc_initialise(struct cgpu_info *bflsc)
 {
 	mutex_lock(&(bflsc->device_mutex));
-	bflsc_initialise(bflsc);
+	__bflsc_initialise(bflsc);
 	mutex_unlock(&(bflsc->device_mutex));
 }
 
