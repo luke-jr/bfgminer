@@ -459,7 +459,7 @@ static void xlinkstr(char *xlink, int dev, struct bflsc_info *sc_info)
 	}
 }
 
-static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
+static void __bflsc_initialise(struct cgpu_info *bflsc)
 {
 	int err;
 
@@ -468,11 +468,8 @@ static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
 // TODO: does x-link bypass the other device FTDI? (I think it does)
 //	So no initialisation required except for the master device?
 
-	if (lock)
-		mutex_lock(&(bflsc->device_mutex));
-
 	if (bflsc->usbinfo.nodev)
-		goto failed;
+		return;
 
 	// Reset
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
@@ -482,7 +479,7 @@ static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (bflsc->usbinfo.nodev)
-		goto failed;
+		return;
 
 	// Set data control
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
@@ -492,7 +489,7 @@ static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (bflsc->usbinfo.nodev)
-		goto failed;
+		return;
 
 	// Set the baud
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD,
@@ -503,7 +500,7 @@ static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (bflsc->usbinfo.nodev)
-		goto failed;
+		return;
 
 	// Set Flow Control
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
@@ -513,7 +510,7 @@ static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (bflsc->usbinfo.nodev)
-		goto failed;
+		return;
 
 	// Set Modem Control
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
@@ -523,7 +520,7 @@ static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (bflsc->usbinfo.nodev)
-		goto failed;
+		return;
 
 	// Clear any sent data
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
@@ -533,7 +530,7 @@ static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (bflsc->usbinfo.nodev)
-		goto failed;
+		return;
 
 	// Clear any received data
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
@@ -542,10 +539,13 @@ static void bflsc_initialise(struct cgpu_info *bflsc, bool lock)
 	applog(LOG_DEBUG, "%s%i: purgerx got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
 
-failed:
+}
 
-	if (lock)
-		mutex_unlock(&(bflsc->device_mutex));
+static void bflsc_initialise(struct cgpu_info *bflsc)
+{
+	mutex_lock(&(bflsc->device_mutex));
+	bflsc_initialise(bflsc);
+	mutex_unlock(&(bflsc->device_mutex));
 }
 
 static int write_to_dev(struct cgpu_info *bflsc, int dev, char *buf, int buflen, int *amount, enum usb_cmds cmd)
@@ -690,7 +690,7 @@ retry:
 	init_sleep = REINIT_TIME_FIRST_MS;
 	gettimeofday(&init_start, NULL);
 reinit:
-	bflsc_initialise(bflsc, false);
+	__bflsc_initialise(bflsc);
 	err = write_to_dev(bflsc, 0, BFLSC_IDENTIFY, BFLSC_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY);
 	if (err < 0 || amount != BFLSC_IDENTIFY_LEN) {
 		applog(LOG_ERR, "%s detect (%s) send identify request failed (%d:%d)",
@@ -1313,7 +1313,7 @@ static void bflsc_thread_enable(struct thr_info *thr)
 	if (bflsc->usbinfo.nodev)
 		return;
 
-	bflsc_initialise(bflsc, true);
+	bflsc_initialise(bflsc);
 }
 
 static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work)
@@ -1565,7 +1565,7 @@ static bool bflsc_thread_init(struct thr_info *thr)
 	if (bflsc->usbinfo.nodev)
 		return false;
 
-	bflsc_initialise(bflsc, true);
+	bflsc_initialise(bflsc);
 
 	return true;
 }
