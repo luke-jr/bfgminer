@@ -1,5 +1,6 @@
 /*
  * Copyright 2013 Andrew Smith
+ * Copyright 2013 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -688,7 +689,7 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 retry:
 	init_count = 0;
 	init_sleep = REINIT_TIME_FIRST_MS;
-	gettimeofday(&init_start, NULL);
+	cgtime(&init_start);
 reinit:
 	__bflsc_initialise(bflsc);
 	err = write_to_dev(bflsc, 0, BFLSC_IDENTIFY, BFLSC_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY);
@@ -701,7 +702,7 @@ reinit:
 	err = usb_ftdi_read_nl(bflsc, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY);
 	if (err < 0 || amount < 1) {
 		init_count++;
-		gettimeofday(&init_now, NULL);
+		cgtime(&init_now);
 		if (us_tdiff(&init_now, &init_start) <= REINIT_TIME_MAX) {
 			if (init_count == 2) {
 				applog(LOG_WARNING, "%s detect (%s) 2nd init failed (%d:%d) - retrying",
@@ -1211,7 +1212,7 @@ static void *bflsc_get_results(void *userdata)
 	int err, amount;
 	int i, que, dev, nonces;
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	for (i = 0; i < sc_info->sc_count; i++) {
 		memcpy(&(sc_info->sc_devs[i].last_check_result), &now, sizeof(now));
 		memcpy(&(sc_info->sc_devs[i].last_dev_result), &now, sizeof(now));
@@ -1224,7 +1225,7 @@ static void *bflsc_get_results(void *userdata)
 
 		dev = -1;
 		oldest = FLT_MAX;
-		gettimeofday(&now, NULL);
+		cgtime(&now);
 
 		// Find the first oldest ... that also needs checking
 		for (i = 0; i < sc_info->sc_count; i++) {
@@ -1243,7 +1244,7 @@ static void *bflsc_get_results(void *userdata)
 			goto utsura;
 
 		mutex_lock(&(bflsc->device_mutex));
-		gettimeofday(&(sc_info->sc_devs[dev].last_check_result), NULL);
+		cgtime(&(sc_info->sc_devs[dev].last_check_result));
 		err = write_to_dev(bflsc, dev, BFLSC_QRES, BFLSC_QRES_LEN, &amount, C_REQUESTRESULTS);
 		if (err < 0 || amount != BFLSC_QRES_LEN) {
 			mutex_unlock(&(bflsc->device_mutex));
@@ -1265,9 +1266,9 @@ static void *bflsc_get_results(void *userdata)
 			} else {
 				que = process_results(bflsc, dev, buf, &nonces);
 				if (que > 0)
-					gettimeofday(&(sc_info->sc_devs[dev].last_dev_result), NULL);
+					cgtime(&(sc_info->sc_devs[dev].last_dev_result));
 				if (nonces > 0)
-					gettimeofday(&(sc_info->sc_devs[dev].last_nonce_result), NULL);
+					cgtime(&(sc_info->sc_devs[dev].last_nonce_result));
 				// TODO: if not getting results ...
 			}
 
@@ -1293,7 +1294,7 @@ static bool bflsc_thread_prepare(struct thr_info *thr)
 	}
 	pthread_detach(sc_info->results_thr.pth);
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(bflsc->init, &now);
 
 	return true;
