@@ -1111,8 +1111,18 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 	if (temp1 > 0 || temp2 > 0) {
 		wr_lock(&(sc_info->stat_lock));
-		sc_info->sc_devs[dev].temp1 = temp1;
-		sc_info->sc_devs[dev].temp2 = temp2;
+		if (unlikely(!sc_info->sc_devs[dev].temp1))
+			sc_info->sc_devs[dev].temp1 = temp1;
+		else {
+			sc_info->sc_devs[dev].temp1 += temp1 * 0.63;
+			sc_info->sc_devs[dev].temp1 /= 1.63;
+		}
+		if (unlikely(!sc_info->sc_devs[dev].temp2))
+			sc_info->sc_devs[dev].temp2 = temp2;
+		else {
+			sc_info->sc_devs[dev].temp2 += temp2 * 0.63;
+			sc_info->sc_devs[dev].temp2 /= 1.63;
+		}
 		if (temp1 > sc_info->sc_devs[dev].temp1_max) {
 			sc_info->sc_devs[dev].temp1_max = temp1;
 			sc_info->sc_devs[dev].temp1_max_time = time(NULL);
