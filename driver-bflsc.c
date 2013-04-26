@@ -1214,9 +1214,9 @@ static void *bflsc_get_results(void *userdata)
 
 	cgtime(&now);
 	for (i = 0; i < sc_info->sc_count; i++) {
-		memcpy(&(sc_info->sc_devs[i].last_check_result), &now, sizeof(now));
-		memcpy(&(sc_info->sc_devs[i].last_dev_result), &now, sizeof(now));
-		memcpy(&(sc_info->sc_devs[i].last_nonce_result), &now, sizeof(now));
+		copy_time(&(sc_info->sc_devs[i].last_check_result), &now);
+		copy_time(&(sc_info->sc_devs[i].last_dev_result), &now);
+		copy_time(&(sc_info->sc_devs[i].last_nonce_result), &now);
 	}
 
 	while (sc_info->shutdown == false) {
