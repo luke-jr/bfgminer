@@ -1350,8 +1350,9 @@ static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work)
 	data.endOfBlock = BFLSC_EOB;
 
 	try = 0;
-re_send:
+
 	mutex_lock(&(bflsc->device_mutex));
+re_send:
 	err = write_to_dev(bflsc, dev, BFLSC_QJOB, BFLSC_QJOB_LEN, &amount, C_REQUESTQUEJOB);
 	if (err < 0 || amount != BFLSC_QJOB_LEN) {
 		mutex_unlock(&(bflsc->device_mutex));
