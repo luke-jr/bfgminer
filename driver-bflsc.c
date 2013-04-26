@@ -1521,6 +1521,10 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 		}
 	}
 
+	// avoid a hard loop
+	if (sc_info->scan_sleep_time > 0)
+		nmsleep(sc_info->scan_sleep_time);
+
 	// Count up the work done since we last were here
 	wr_lock(&(sc_info->stat_lock));
 	ret = 0;
@@ -1532,10 +1536,6 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 		ret += unsent;
 	}
 	wr_unlock(&(sc_info->stat_lock));
-
-	// avoid a hard loop
-	if (sc_info->scan_sleep_time > 0)
-		nmsleep(sc_info->scan_sleep_time);
 
 	return ret;
 }
