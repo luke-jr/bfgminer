@@ -77,6 +77,7 @@ bool restart_stratum(struct pool *pool);
 void suspend_stratum(struct pool *pool);
 void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
+void *str_text(char *ptr);
 void RenameThread(const char* name);
 
 /* Align a size_t to 4 byte boundaries for fussy arches */

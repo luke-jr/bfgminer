@@ -1818,6 +1818,40 @@ void *realloc_strcat(char *ptr, char *s)
 	return ret;
 }
 
+/* Make a text readable version of a string using 0xNN for < ' ' or > '~'
+ * Including 0x00 at the end
+ * You must free the result yourself */
+void *str_text(char *ptr)
+{
+	unsigned char *uptr;
+	char *ret, *txt;
+
+	if (ptr == NULL) {
+		ret = strdup("(null)");
+
+		if (unlikely(!ret))
+			quit(1, "Failed to malloc in text_str null");
+	}
+
+	uptr = (unsigned char *)ptr;
+
+	ret = txt = malloc(strlen(ptr)*4+5); // Guaranteed >= needed
+	if (unlikely(!txt))
+		quit(1, "Failed to malloc in text_str txt");
+
+	do {
+		if (*uptr < ' ' || *uptr > '~') {
+			sprintf(txt, "0x%02x", *uptr);
+			txt += 4;
+		} else
+			*(txt++) = *uptr;
+	} while (*(uptr++));
+
+	*txt = '\0';
+
+	return ret;
+}
+
 void RenameThread(const char* name)
 {
 #if defined(PR_SET_NAME)
