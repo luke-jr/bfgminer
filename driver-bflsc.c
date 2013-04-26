@@ -604,14 +604,14 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 
 	memset(&sc_dev, 0, sizeof(struct bflsc_dev));
 	sc_info->sc_count = 1;
-	res = tolines(bflsc, dev, buf, &lines, &items, C_GETDETAILS);
-	for (i = 0; i < lines-1; i++) {
+	res = tolines(bflsc, dev, &(buf[0]), &lines, &items, C_GETDETAILS);
+	for (i = 0; i < lines-2; i++) {
 		res = breakdown(ONECOLON, items[i], &count, &firstname, &fields, &lf);
 		if (lf)
 			*lf = '\0';
-		if (!res || count != 2 || !lf) {
-			applog(LOG_WARNING, "%s detect (%s) invalid details line: '%s%s'",
-					bflsc->drv->dname, bflsc->device_path, buf, lf ? LFSTR : BLANK);
+		if (!res || count != 1) {
+			applog(LOG_WARNING, "%s detect (%s) invalid details line: '%s' %d",
+					bflsc->drv->dname, bflsc->device_path, str_text(buf), count);
 			dev_error(bflsc, REASON_DEV_COMMS_ERROR);
 			goto mata;
 		}
@@ -619,7 +619,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			sc_dev.firmware = strdup(fields[0]);
 		else if (strcmp(firstname, BFLSC_DI_ENGINES) == 0) {
 			sc_dev.engines = atoi(fields[0]);
-			if (sc_dev.engines < 1 || sc_dev.engines > 8) {
+			if (sc_dev.engines < 1) {
 				applog(LOG_WARNING, "%s detect (%s) invalid engine count: '%s%s'",
 					bflsc->drv->dname, bflsc->device_path, buf, lf ? LFSTR : BLANK);
 				goto mata;
