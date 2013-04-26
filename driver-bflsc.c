@@ -606,6 +606,9 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 	memset(&sc_dev, 0, sizeof(struct bflsc_dev));
 	sc_info->sc_count = 1;
 	res = tolines(bflsc, dev, &(buf[0]), &lines, &items, C_GETDETAILS);
+	if (!res)
+		return false;
+
 	for (i = 0; i < lines-2; i++) {
 		res = breakdown(ONECOLON, items[i], &count, &firstname, &fields, &lf);
 		if (lf)
