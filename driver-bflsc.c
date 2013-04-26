@@ -1094,7 +1094,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 	return true;
 }
 
-static void process_nonces(struct cgpu_info *bflsc, int dev, int count, char **fields, int *nonces)
+static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *data, int count, char **fields, int *nonces)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
 	char midstate[MIDSTATE_BYTES], blockdata[MERKLE_BYTES];
@@ -1102,20 +1102,26 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, int count, char **f
 	uint32_t nonce;
 	int i, num;
 	bool res;
+	char *tmp;
 
 	if (count < QUE_FLD_MIN) {
-		// error msg
+		tmp = str_text(data);
+		applog(LOG_ERR, "%s%i:%s work returned too small (%d,%s)",
+				bflsc->drv->name, bflsc->device_id, xlink, count, tmp);
+		free(tmp);
 		return;
 	}
 
 	if (count > QUE_FLD_MAX) {
-		// error msg
+		applog(LOG_ERR, "%s%i:%s work returned too large (%d) processing %d anyway",
+				bflsc->drv->name, bflsc->device_id, xlink, count, QUE_FLD_MAX);
 		count = QUE_FLD_MAX;
 	}
 
 	num = atoi(fields[QUE_NONCECOUNT]);
 	if (num != count - QUE_FLD_MIN) {
-		// error msg
+		applog(LOG_ERR, "%s%i:%s incorrect data count (%d) will use %d instead",
+				bflsc->drv->name, bflsc->device_id, xlink, num, count - QUE_FLD_MAX);
 	}
 
 	memset(midstate, 0, MIDSTATE_BYTES);
@@ -1126,14 +1132,18 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, int count, char **f
 	work = find_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
 						blockdata, MERKLE_OFFSET, MERKLE_BYTES);
 	if (!work) {
-		// error msg
+		applog(LOG_ERR, "%s%i:%s failed to find work - can't be processed - ignored",
+				bflsc->drv->name, bflsc->device_id, xlink);
 		return;
 	}
 
 	res = false;
 	for (i = QUE_FLD_MIN; i < count; i++) {
 		if (strlen(fields[i]) != 8) {
-			// error msg
+			tmp = str_text(data);
+			applog(LOG_ERR, "%s%i:%s invalid nonce (%s) will try to process anyway",
+					bflsc->drv->name, bflsc->device_id, xlink, tmp);
+			free(tmp);
 		}
 
 		hex2bin((void*)&nonce, fields[i], 4);
@@ -1162,9 +1172,12 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, int count, char **f
 
 static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *nonces)
 {
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
 	char **items, *firstname, **fields, *lf;
 	int que, i, lines, count;
+	char xlink[17];
 	bool res;
+	char *tmp;
 
 	*nonces = 0;
 
@@ -1174,9 +1187,14 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 		goto arigatou;
 	}
 
+	xlinkstr(&(xlink[0]), dev, sc_info);
+
 	res = breakdown(ONECOLON, items[0], &count, &firstname, &fields, &lf);
 	if (count < 1) {
-		// error msg
+		tmp = str_text(items[0]);
+		applog(LOG_ERR, "%s%i:%s incorrect result header (%s) results ignored",
+					bflsc->drv->name, bflsc->device_id, xlink, tmp);
+		free(tmp);
 		freebreakdown(&count, &firstname, &fields);
 
 		que = 0;
@@ -1184,12 +1202,18 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	}
 
 	if (count != 1) {
-		// error msg
+		tmp = str_text(items[0]);
+		applog(LOG_ERR, "%s%i:%s incorrect result header (%s) will try anyway",
+					bflsc->drv->name, bflsc->device_id, xlink, tmp);
+		free(tmp);
 	}
 
 	que = atoi(fields[0]);
 	if (que != (lines - 2)) {
-		// error
+		tmp = str_text(items[0]);
+		applog(LOG_ERR, "%s%i:%s incorrect result header (%s) %d but should be %d will try %d anyway",
+					bflsc->drv->name, bflsc->device_id, xlink, tmp, que, lines - 2, lines - 2);
+		free(tmp);
 		que = lines - 2;
 	}
 
@@ -1197,7 +1221,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 
 	for (i = 1; i <= que; i++) {
 		res = breakdown(NOCOLON, items[i], &count, &firstname, &fields, &lf);
-		process_nonces(bflsc, dev, count, fields, nonces);
+		process_nonces(bflsc, dev, &(xlink[0]), items[i], count, fields, nonces);
 		freebreakdown(&count, &firstname, &fields);
 	}
 
