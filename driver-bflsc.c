@@ -278,13 +278,13 @@ struct SaveString {
 // SCAN_TIME - delay after sending work
 // RES_TIME - delay between checking for results
 // TODO: make dynamic? (for all but MiniRig)
-#define BAM_SCAN_TIME 2
+#define BAM_SCAN_TIME 20
 #define BAM_RES_TIME 2
-#define BAS_SCAN_TIME 36
+#define BAS_SCAN_TIME 360
 #define BAS_RES_TIME 36
-#define BAL_SCAN_TIME 72
+#define BAL_SCAN_TIME 720
 #define BAL_RES_TIME 72
-#define BAJ_SCAN_TIME 100
+#define BAJ_SCAN_TIME 1000
 #define BAJ_RES_TIME 100
 
 #define BFLSC_TEMP_SLEEPMS 5
@@ -1560,7 +1560,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 
 	// avoid a hard loop
 	if (sc_info->scan_sleep_time > 0)
-		nmsleep(sc_info->scan_sleep_time);
+		restart_wait(sc_info->scan_sleep_time);
 
 	// Count up the work done since we last were here
 	wr_lock(&(sc_info->stat_lock));
