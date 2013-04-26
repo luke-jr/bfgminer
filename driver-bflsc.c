@@ -204,7 +204,7 @@ struct SaveString {
 
 // Replies
 #define BFLSC_IDENTITY "BitFORCE SC"
-#define BFLSC_BFLFPGA "SHA256"
+#define BFLSC_BFLSC "SHA256 SC"
 
 #define BFLSC_OK "OK\n"
 #define BFLSC_OK_LEN (sizeof(BFLSC_OK)-1)
@@ -741,13 +741,13 @@ reinit:
 	}
 	buf[amount] = '\0';
 
-	if (unlikely(strstr(buf, BFLSC_BFLFPGA))) {
+	if (unlikely(!strstr(buf, BFLSC_BFLSC))) {
 		applog(LOG_DEBUG, "%s detect (%s) found an FPGA '%s' ignoring",
 			bflsc->drv->dname, devpath, buf);
 		goto unshin;
 	}
 
-	if (unlikely(!strstr(buf, BFLSC_IDENTITY))) {
+	if (unlikely(strstr(buf, BFLSC_IDENTITY))) {
 		if (ident_first) {
 			applog(LOG_DEBUG, "%s detect (%s) didn't recognise '%s' trying again ...",
 				bflsc->drv->dname, devpath, buf);
