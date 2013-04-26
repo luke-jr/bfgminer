@@ -138,6 +138,7 @@ struct QueueJobStructure {
 	uint8_t endOfBlock;
 };
 
+#define QUE_RES_LINES_MIN 3
 #define QUE_MIDSTATE 0
 #define QUE_BLOCKDATA 1
 #define QUE_NONCECOUNT 2
@@ -1177,50 +1178,65 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	int que, i, lines, count;
 	char xlink[17];
 	bool res;
-	char *tmp;
+	char *tmp, *tmp2;
 
 	*nonces = 0;
 
-	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
-	if (lines < 1) {
-		que = 0;
-		goto arigatou;
-	}
-
 	xlinkstr(&(xlink[0]), dev, sc_info);
 
-	res = breakdown(ONECOLON, items[0], &count, &firstname, &fields, &lf);
-	if (count < 1) {
-		tmp = str_text(items[0]);
-		applog(LOG_ERR, "%s%i:%s incorrect result header (%s) results ignored",
+	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
+	if (lines < 1) {
+		tmp = str_text(buf);
+		applog(LOG_ERR, "%s%i:%s empty result (%s) ignored",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp);
 		free(tmp);
-		freebreakdown(&count, &firstname, &fields);
-
 		que = 0;
 		goto arigatou;
 	}
 
-	if (count != 1) {
-		tmp = str_text(items[0]);
-		applog(LOG_ERR, "%s%i:%s incorrect result header (%s) will try anyway",
+	if (lines < QUE_RES_LINES_MIN) {
+		tmp = str_text(buf);
+		applog(LOG_ERR, "%s%i:%s result too small (%s) ignored",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp);
+		free(tmp);
+		que = 0;
+		goto arigatou;
+	}
+
+	res = breakdown(ONECOLON, items[1], &count, &firstname, &fields, &lf);
+	if (count < 1) {
+		tmp = str_text(buf);
+		tmp2 = str_text(items[1]);
+		applog(LOG_ERR, "%s%i:%s empty result count (%s) in (%s) will try anyway",
+					bflsc->drv->name, bflsc->device_id, xlink, tmp2, tmp);
+		free(tmp2);
+		free(tmp);
+	} else if (count != 1) {
+		tmp = str_text(buf);
+		tmp2 = str_text(items[1]);
+		applog(LOG_ERR, "%s%i:%s incorrect result count (%s) in (%s) will try anyway",
+					bflsc->drv->name, bflsc->device_id, xlink, tmp2, tmp);
+		free(tmp2);
 		free(tmp);
 	}
 
 	que = atoi(fields[0]);
-	if (que != (lines - 2)) {
+	if (que != (lines - QUE_RES_LINES_MIN)) {
+		i = que;
+		// 1+ In case the last line isn't 'OK' - try to process it
+		que = 1 + lines - QUE_RES_LINES_MIN;
+
 		tmp = str_text(items[0]);
-		applog(LOG_ERR, "%s%i:%s incorrect result header (%s) %d but should be %d will try %d anyway",
-					bflsc->drv->name, bflsc->device_id, xlink, tmp, que, lines - 2, lines - 2);
+		applog(LOG_ERR, "%s%i:%s incorrect result count (%s) %d but should be %d will try %d anyway",
+					bflsc->drv->name, bflsc->device_id, xlink, tmp, i, que, que);
 		free(tmp);
-		que = lines - 2;
+
 	}
 
 	freebreakdown(&count, &firstname, &fields);
 
-	for (i = 1; i <= que; i++) {
-		res = breakdown(NOCOLON, items[i], &count, &firstname, &fields, &lf);
+	for (i = 0; i < que; i++) {
+		res = breakdown(NOCOLON, items[i + QUE_RES_LINES_MIN - 1], &count, &firstname, &fields, &lf);
 		process_nonces(bflsc, dev, &(xlink[0]), items[i], count, fields, nonces);
 		freebreakdown(&count, &firstname, &fields);
 	}
