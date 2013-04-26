@@ -248,6 +248,15 @@ reinit:
 		goto unshin;
 	}
 
+	if (strstr(buf, "SHA256 SC")) {
+#ifdef USE_BFLSC
+		applog(LOG_DEBUG, "SC device detected, will defer to BFLSC driver");
+#else
+		applog(LOG_WARNING, "SC device detected but no BFLSC support compiled in!");
+#endif
+		goto unshin;
+	}
+
 	if (likely((!memcmp(buf, ">>>ID: ", 7)) && (s = strstr(buf + 3, ">>>")))) {
 		s[0] = '\0';
 		bitforce->name = strdup(buf + 7);
