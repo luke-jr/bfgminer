@@ -1511,7 +1511,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
 	int64_t ret, unsent;
 	bool flushed, cleanup;
-	struct work *work, *tmp, *flush;
+	struct work *work, *tmp;
 	int dev;
 
 	// Device is gone
@@ -1537,27 +1537,24 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 				if (sc_info->sc_devs[dev].result_id > (sc_info->sc_devs[dev].flush_id + 1))
 					cleanup = true;
 			}
+			wr_unlock(&(sc_info->stat_lock));
+
 			// yes remove the flushed work that can be removed
 			if (cleanup) {
-				// one lock per item - TODO: need a better way to do this?
-				do {
-					flush = NULL;
-					rd_lock(&bflsc->qlock);
-
-					HASH_ITER(hh, bflsc->queued_work, work, tmp) {
-						if (work->devflag && work->subid == dev)
-							flush = work;
+				wr_lock(&bflsc->qlock);
+				HASH_ITER(hh, bflsc->queued_work, work, tmp) {
+					if (work->devflag && work->subid == dev) {
+						bflsc->queued_count--;
+						HASH_DEL(bflsc->queued_work, work);
+						discard_work(work);
 					}
+				}
+				wr_unlock(&bflsc->qlock);
 
-					rd_unlock(&bflsc->qlock);
-
-					if (flush)
-						discard_work(flush);
-				} while (flush);
-
+				wr_lock(&(sc_info->stat_lock));
 				sc_info->sc_devs[dev].flushed = false;
+				wr_unlock(&(sc_info->stat_lock));
 			}
-			wr_unlock(&(sc_info->stat_lock));
 		}
 	}
 
