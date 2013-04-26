@@ -75,10 +75,6 @@ struct bflsc_dev {
 	float temp2_max;
 	time_t temp1_max_time;
 	time_t temp2_max_time;
-	float temp1_sum;
-	float temp2_sum;
-	uint64_t temp_count;
-	time_t temp_time;
 	float temp1_5min_av; // TODO:
 	float temp2_5min_av; // TODO:
 
@@ -1151,10 +1147,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 			sc_dev->temp2_max = temp2;
 			sc_dev->temp2_max_time = time(NULL);
 		}
-		sc_dev->temp1_sum += temp1;
-		sc_dev->temp2_sum += temp2;
-		sc_dev->temp_count++;
-		sc_dev->temp_time = time(NULL);
+
 		if (unlikely(sc_dev->temp1_5min_av == 0))
 			sc_dev->temp1_5min_av = temp1;
 		else {
