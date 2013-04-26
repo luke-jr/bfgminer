@@ -661,8 +661,8 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 	bool ident_first;
 	char *newname;
 
-	struct cgpu_info *bflsc = NULL;
-	bflsc = calloc(1, sizeof(*bflsc));
+	struct cgpu_info *bflsc = calloc(1, sizeof(*bflsc));
+
 	bflsc->drv = &bflsc_drv;
 	bflsc->deven = DEV_ENABLED;
 	bflsc->threads = 1;
