@@ -8,6 +8,7 @@
  * any later version.  See COPYING for more details.
  */
 
+#include <float.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdint.h>
