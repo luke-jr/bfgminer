@@ -1100,12 +1100,30 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 	vmain = (float)atoi(fields[2]) / 1000.0;
 	if (vcc1 > 0 || vcc2 > 0 || vmain > 0) {
 		wr_lock(&(sc_info->stat_lock));
-		if (vcc1 > 0)
-			sc_info->sc_devs[dev].vcc1 = vcc1;
-		if (vcc2 > 0)
-			sc_info->sc_devs[dev].vcc2 = vcc2;
-		if (vmain > 0)
-			sc_info->sc_devs[dev].vmain = vmain;
+		if (vcc1 > 0) {
+			if (unlikely(sc_info->sc_devs[dev].vcc1 == 0))
+				sc_info->sc_devs[dev].vcc1 = vcc1;
+			else {
+				sc_info->sc_devs[dev].vcc1 += vcc1 * 0.63;
+				sc_info->sc_devs[dev].vcc1 /= 1.63;
+			}
+		}
+		if (vcc2 > 0) {
+			if (unlikely(sc_info->sc_devs[dev].vcc2 == 0))
+				sc_info->sc_devs[dev].vcc2 = vcc2;
+			else {
+				sc_info->sc_devs[dev].vcc2 += vcc2 * 0.63;
+				sc_info->sc_devs[dev].vcc2 /= 1.63;
+			}
+		}
+		if (vmain > 0) {
+			if (unlikely(sc_info->sc_devs[dev].vmain == 0))
+				sc_info->sc_devs[dev].vmain = vmain;
+			else {
+				sc_info->sc_devs[dev].vmain += vmain * 0.63;
+				sc_info->sc_devs[dev].vmain /= 1.63;
+			}
+		}
 		wr_unlock(&(sc_info->stat_lock));
 	}
 
