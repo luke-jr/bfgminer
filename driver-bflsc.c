@@ -1403,7 +1403,7 @@ re_send:
 static bool bflsc_queue_full(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
-	struct work *work;
+	struct work *work = NULL;
 	int i, dev, tried, que;
 	bool ret = false;
 	int tries = 0;
@@ -1449,16 +1449,19 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 			break;
 		}
 
-		work = get_queued(bflsc);
-		if (work) {
-			if (bflsc_send_work(bflsc, dev, work))
-				break;
-			else
-				tried = dev;
-		} else
+		if (!work)
+			work = get_queued(bflsc);
+		if (unlikely(!work))
 			break;
+		if (bflsc_send_work(bflsc, dev, work)) {
+			work = NULL;
+			break;
+		} else
+			tried = dev;
 	}
 
+	if (unlikely(work))
+		work_completed(bflsc, work);
 	return ret;
 }
 
