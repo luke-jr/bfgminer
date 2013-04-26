@@ -636,6 +636,8 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 	}
 
 	sc_info->sc_devs = calloc(sc_info->sc_count, sizeof(struct bflsc_dev));
+	if (unlikely(!sc_info->sc_devs))
+		quit(1, "Failed to calloc in getinfo");
 	memcpy(&(sc_info->sc_devs[0]), &sc_dev, sizeof(sc_dev));
 	// TODO: do we care about getting this info for the rest if > 0 x-link
 
@@ -663,11 +665,15 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 
 	struct cgpu_info *bflsc = calloc(1, sizeof(*bflsc));
 
+	if (unlikely(!bflsc))
+		quit(1, "Failed to calloc bflsc in bflsc_detect_one");
 	bflsc->drv = &bflsc_drv;
 	bflsc->deven = DEV_ENABLED;
 	bflsc->threads = 1;
 
 	sc_info = calloc(1, sizeof(*sc_info));
+	if (unlikely(!sc_info))
+		quit(1, "Failed to calloc sc_info in bflsc_detect_one");
 	// TODO: fix ... everywhere ...
 	bflsc->device_file = (FILE *)sc_info;
 
