@@ -987,6 +987,7 @@ static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_dev *sc_dev;
 	char temp_buf[BFLSC_BUFSIZ+1];
 	char volt_buf[BFLSC_BUFSIZ+1];
 	char *tmp;
@@ -1095,33 +1096,34 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
+	sc_dev = &sc_info->sc_devs[dev];
 	vcc1 = (float)atoi(fields[0]) / 1000.0;
 	vcc2 = (float)atoi(fields[1]) / 1000.0;
 	vmain = (float)atoi(fields[2]) / 1000.0;
 	if (vcc1 > 0 || vcc2 > 0 || vmain > 0) {
 		wr_lock(&(sc_info->stat_lock));
 		if (vcc1 > 0) {
-			if (unlikely(sc_info->sc_devs[dev].vcc1 == 0))
-				sc_info->sc_devs[dev].vcc1 = vcc1;
+			if (unlikely(sc_dev->vcc1 == 0))
+				sc_dev->vcc1 = vcc1;
 			else {
-				sc_info->sc_devs[dev].vcc1 += vcc1 * 0.63;
-				sc_info->sc_devs[dev].vcc1 /= 1.63;
+				sc_dev->vcc1 += vcc1 * 0.63;
+				sc_dev->vcc1 /= 1.63;
 			}
 		}
 		if (vcc2 > 0) {
-			if (unlikely(sc_info->sc_devs[dev].vcc2 == 0))
-				sc_info->sc_devs[dev].vcc2 = vcc2;
+			if (unlikely(sc_dev->vcc2 == 0))
+				sc_dev->vcc2 = vcc2;
 			else {
-				sc_info->sc_devs[dev].vcc2 += vcc2 * 0.63;
-				sc_info->sc_devs[dev].vcc2 /= 1.63;
+				sc_dev->vcc2 += vcc2 * 0.63;
+				sc_dev->vcc2 /= 1.63;
 			}
 		}
 		if (vmain > 0) {
-			if (unlikely(sc_info->sc_devs[dev].vmain == 0))
-				sc_info->sc_devs[dev].vmain = vmain;
+			if (unlikely(sc_dev->vmain == 0))
+				sc_dev->vmain = vmain;
 			else {
-				sc_info->sc_devs[dev].vmain += vmain * 0.63;
-				sc_info->sc_devs[dev].vmain /= 1.63;
+				sc_dev->vmain += vmain * 0.63;
+				sc_dev->vmain /= 1.63;
 			}
 		}
 		wr_unlock(&(sc_info->stat_lock));
@@ -1129,32 +1131,42 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 	if (temp1 > 0 || temp2 > 0) {
 		wr_lock(&(sc_info->stat_lock));
-		if (unlikely(!sc_info->sc_devs[dev].temp1))
-			sc_info->sc_devs[dev].temp1 = temp1;
+		if (unlikely(!sc_dev->temp1))
+			sc_dev->temp1 = temp1;
 		else {
-			sc_info->sc_devs[dev].temp1 += temp1 * 0.63;
-			sc_info->sc_devs[dev].temp1 /= 1.63;
+			sc_dev->temp1 += temp1 * 0.63;
+			sc_dev->temp1 /= 1.63;
 		}
-		if (unlikely(!sc_info->sc_devs[dev].temp2))
-			sc_info->sc_devs[dev].temp2 = temp2;
+		if (unlikely(!sc_dev->temp2))
+			sc_dev->temp2 = temp2;
 		else {
-			sc_info->sc_devs[dev].temp2 += temp2 * 0.63;
-			sc_info->sc_devs[dev].temp2 /= 1.63;
+			sc_dev->temp2 += temp2 * 0.63;
+			sc_dev->temp2 /= 1.63;
 		}
-		if (temp1 > sc_info->sc_devs[dev].temp1_max) {
-			sc_info->sc_devs[dev].temp1_max = temp1;
-			sc_info->sc_devs[dev].temp1_max_time = time(NULL);
+		if (temp1 > sc_dev->temp1_max) {
+			sc_dev->temp1_max = temp1;
+			sc_dev->temp1_max_time = time(NULL);
 		}
-		if (temp2 > sc_info->sc_devs[dev].temp2_max) {
-			sc_info->sc_devs[dev].temp2_max = temp2;
-			sc_info->sc_devs[dev].temp2_max_time = time(NULL);
+		if (temp2 > sc_dev->temp2_max) {
+			sc_dev->temp2_max = temp2;
+			sc_dev->temp2_max_time = time(NULL);
 		}
-		sc_info->sc_devs[dev].temp1_sum += temp1;
-		sc_info->sc_devs[dev].temp2_sum += temp2;
-		sc_info->sc_devs[dev].temp_count++;
-		sc_info->sc_devs[dev].temp_time = time(NULL);
-		// TODO: 5min av
-		//  also will be useful for adjusting the fans by code
+		sc_dev->temp1_sum += temp1;
+		sc_dev->temp2_sum += temp2;
+		sc_dev->temp_count++;
+		sc_dev->temp_time = time(NULL);
+		if (unlikely(sc_dev->temp1_5min_av == 0))
+			sc_dev->temp1_5min_av = temp1;
+		else {
+			sc_dev->temp1_5min_av += temp1 * .0042;
+			sc_dev->temp1_5min_av /= 1.0042;
+		}
+		if (unlikely(sc_dev->temp2_5min_av == 0))
+			sc_dev->temp2_5min_av = temp2;
+		else {
+			sc_dev->temp2_5min_av += temp2 * .0042;
+			sc_dev->temp2_5min_av /= 1.0042;
+		}
 		wr_unlock(&(sc_info->stat_lock));
 
 		if (temp < temp2)
@@ -1167,13 +1179,13 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 						bflsc->drv->name, bflsc->device_id, xlink,
 						temp, bflsc->cutofftemp);
 			dev_error(bflsc, REASON_DEV_THERMAL_CUTOFF);
-			sc_info->sc_devs[dev].overheat = true;
+			sc_dev->overheat = true;
 			flush_one_dev(bflsc, dev);
 			return false;
 		}
 
 		if (bflsc->cutofftemp > 0 && temp < (bflsc->cutofftemp - BFLSC_TEMP_RECOVER))
-			sc_info->sc_devs[dev].overheat = false;
+			sc_dev->overheat = false;
 	}
 
 	freebreakdown(&count, &firstname, &fields);
