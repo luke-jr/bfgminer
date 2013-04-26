@@ -1444,15 +1444,16 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 		rd_unlock(&(sc_info->stat_lock));
 
 		// nothing needs work yet
-		if (dev == -1)
+		if (dev == -1) {
+			ret = true;
 			break;
+		}
 
 		work = get_queued(bflsc);
 		if (work) {
-			if (bflsc_send_work(bflsc, dev, work)) {
-				ret = true;
+			if (bflsc_send_work(bflsc, dev, work))
 				break;
-			} else
+			else
 				tried = dev;
 		} else
 			break;
