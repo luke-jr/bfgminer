@@ -1116,7 +1116,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, int count, char **f
 	num = atoi(fields[QUE_NONCECOUNT]);
 	if (num != count - QUE_FLD_MIN) {
 		// error msg
-	} 
+	}
 
 	memset(midstate, 0, MIDSTATE_BYTES);
 	memset(blockdata, 0, MERKLE_BYTES);
@@ -1137,9 +1137,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, int count, char **f
 		}
 
 		hex2bin((void*)&nonce, fields[i], 4);
-#ifndef __BIG_ENDIAN__
-		nonce = swab32(nonce);
-#endif
+		nonce = htobe32(nonce);
 		wr_lock(&(sc_info->stat_lock));
 		sc_info->sc_devs[dev].nonces_found++;
 		wr_unlock(&(sc_info->stat_lock));
