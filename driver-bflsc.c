@@ -346,6 +346,8 @@ static bool tolines(struct cgpu_info *bflsc, int dev, char *buf, int *lines, cha
 	ptr = strdup(buf);
 	while (ptr && *ptr) {
 		p_items = realloc(p_items, ++p_lines * sizeof(*p_items));
+		if (unlikely(!p_items))
+			quit(1, "Failed to realloc p_items in tolines");
 		p_items[p_lines-1] = ptr;
 		ptr = strchr(ptr, '\n');
 		if (ptr)
@@ -430,6 +432,8 @@ static bool breakdown(enum breakmode mode, char *buf, int *count, char **firstna
 		if (comma)
 			*(comma++) = '\0';
 		p_fields = realloc(p_fields, ++p_count * sizeof(*p_fields));
+		if (unlikely(!p_fields))
+			quit(1, "Failed to realloc p_fields in breakdown");
 		p_fields[p_count-1] = ptr;
 		ptr = comma;
 	}
