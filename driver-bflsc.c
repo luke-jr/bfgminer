@@ -602,7 +602,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	bzero(&sc_dev, sizeof(struct bflsc_dev));
+	memset(&sc_dev, 0, sizeof(struct bflsc_dev));
 	sc_info->sc_count = 1;
 	res = tolines(bflsc, dev, buf, &lines, &items, C_GETDETAILS);
 	for (i = 0; i < lines-1; i++) {
@@ -1118,8 +1118,8 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, int count, char **f
 		// error msg
 	} 
 
-	bzero(midstate, MIDSTATE_BYTES);
-	bzero(blockdata, MERKLE_BYTES);
+	memset(midstate, 0, MIDSTATE_BYTES);
+	memset(blockdata, 0, MERKLE_BYTES);
 	hex2bin((unsigned char *)midstate, fields[QUE_MIDSTATE], MIDSTATE_BYTES);
 	hex2bin((unsigned char *)blockdata, fields[QUE_BLOCKDATA], MERKLE_BYTES);
 
