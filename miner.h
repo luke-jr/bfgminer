@@ -452,8 +452,10 @@ struct cgpu_info {
 	bool nonce_range;
 	bool polling;
 	bool flash_led;
+#endif /* USE_BITFORCE */
+#if defined(USE_BITFORCE) || defined(USE_BFLSC)
 	pthread_mutex_t device_mutex;
-#endif
+#endif /* USE_BITFORCE || USE_BFLSC */
 	enum dev_enable deven;
 	int accepted;
 	int rejected;
