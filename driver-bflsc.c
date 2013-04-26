@@ -68,7 +68,7 @@ struct bflsc_dev {
 	// Stats
 	float temp1;
 	float temp2;
-	float vcc1; // TODO? get V also
+	float vcc1;
 	float vcc2;
 	float vmain;
 	float temp1_max;
@@ -866,7 +866,7 @@ static void get_bflsc_statline_before(char *buf, struct cgpu_info *bflsc)
 	}
 	rd_unlock(&(sc_info->stat_lock));
 
-	tailsprintf(buf, "max%5.1fC%4.2fV | ", temp, vcc1);
+	tailsprintf(buf, " max%3.0fC %4.2fV | ", temp, vcc1);
 }
 
 static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount)
@@ -987,13 +987,16 @@ static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
-	char buf[BFLSC_BUFSIZ+1];
+	char temp_buf[BFLSC_BUFSIZ+1];
+	char volt_buf[BFLSC_BUFSIZ+1];
+	char *tmp;
 	int err, amount;
 	char *firstname, **fields, *lf;
 	char xlink[17];
 	int count;
 	bool res;
 	float temp, temp1, temp2;
+	float vcc1, vcc2, vmain;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
@@ -1026,7 +1029,29 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	err = usb_ftdi_read_nl(bflsc, buf, sizeof(buf)-1, &amount, C_GETTEMPERATURE);
+	err = usb_ftdi_read_nl(bflsc, temp_buf, sizeof(temp_buf)-1, &amount, C_GETTEMPERATURE);
+	if (err < 0 || amount < 1) {
+		mutex_unlock(&(bflsc->device_mutex));
+		if (err < 0) {
+			applog(LOG_ERR, "%s%i: Error: Get%s temp return invalid/timed out (%d:%d)",
+					bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+		} else {
+			applog(LOG_ERR, "%s%i: Error: Get%s temp returned nothing (%d:%d)",
+					bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+		}
+		return false;
+	}
+
+	// N.B. we only get the voltages if the temp succeeds - temp is the important one
+	err = write_to_dev(bflsc, dev, BFLSC_VOLTAGE, BFLSC_VOLTAGE_LEN, &amount, C_REQUESTVOLTS);
+	if (err < 0 || amount != BFLSC_VOLTAGE_LEN) {
+		mutex_unlock(&(bflsc->device_mutex));
+		applog(LOG_ERR, "%s%i: Error: Request%s volts invalid/timed out (%d:%d)",
+				bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+		return false;
+	}
+
+	err = usb_ftdi_read_nl(bflsc, volt_buf, sizeof(volt_buf)-1, &amount, C_GETTEMPERATURE);
 	if (err < 0 || amount < 1) {
 		mutex_unlock(&(bflsc->device_mutex));
 		if (err < 0) {
@@ -1041,12 +1066,14 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 	mutex_unlock(&(bflsc->device_mutex));
 	
-	res = breakdown(ALLCOLON, buf, &count, &firstname, &fields, &lf);
+	res = breakdown(ALLCOLON, temp_buf, &count, &firstname, &fields, &lf);
 	if (lf)
 		*lf = '\0';
 	if (!res || count != 2 || !lf) {
-		applog(LOG_WARNING, "%s%i: Invalid%s temp reply: '%s%s'",
-				bflsc->drv->name, bflsc->device_id, xlink, buf, lf ? LFSTR : BLANK);
+		tmp = str_text(temp_buf);
+		applog(LOG_WARNING, "%s%i: Invalid%s temp reply: '%s'",
+				bflsc->drv->name, bflsc->device_id, xlink, tmp);
+		free(tmp);
 		freebreakdown(&count, &firstname, &fields);
 		dev_error(bflsc, REASON_DEV_COMMS_ERROR);
 		return false;
@@ -1054,6 +1081,33 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 	temp = temp1 = (float)atoi(fields[0]);
 	temp2 = (float)atoi(fields[1]);
+
+	res = breakdown(NOCOLON, volt_buf, &count, &firstname, &fields, &lf);
+	if (lf)
+		*lf = '\0';
+	if (!res || count != 3 || !lf) {
+		tmp = str_text(volt_buf);
+		applog(LOG_WARNING, "%s%i: Invalid%s volt reply: '%s'",
+				bflsc->drv->name, bflsc->device_id, xlink, tmp);
+		free(tmp);
+		freebreakdown(&count, &firstname, &fields);
+		dev_error(bflsc, REASON_DEV_COMMS_ERROR);
+		return false;
+	}
+
+	vcc1 = (float)atoi(fields[0]) / 1000.0;
+	vcc2 = (float)atoi(fields[1]) / 1000.0;
+	vmain = (float)atoi(fields[2]) / 1000.0;
+	if (vcc1 > 0 || vcc2 > 0 || vmain > 0) {
+		wr_lock(&(sc_info->stat_lock));
+		if (vcc1 > 0)
+			sc_info->sc_devs[dev].vcc1 = vcc1;
+		if (vcc2 > 0)
+			sc_info->sc_devs[dev].vcc2 = vcc2;
+		if (vmain > 0)
+			sc_info->sc_devs[dev].vmain = vmain;
+		wr_unlock(&(sc_info->stat_lock));
+	}
 
 	if (temp1 > 0 || temp2 > 0) {
 		wr_lock(&(sc_info->stat_lock));
