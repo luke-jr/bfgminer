@@ -1161,11 +1161,11 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	wr_lock(&(sc_info->stat_lock));
 	if (res)
 		sc_info->sc_devs[dev].result_id++;
-	sc_info->sc_devs[i].work_complete++;
-	sc_info->sc_devs[i].hashes_unsent += FULLNONCE;
+	sc_info->sc_devs[dev].work_complete++;
+	sc_info->sc_devs[dev].hashes_unsent += FULLNONCE;
 	// If not flushed (stale)
 	if (!(work->devflag))
-		sc_info->sc_devs[i].work_queued -= 1;
+		sc_info->sc_devs[dev].work_queued -= 1;
 	wr_unlock(&(sc_info->stat_lock));
 
 	work_completed(bflsc, work);
