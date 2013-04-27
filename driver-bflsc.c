@@ -304,19 +304,24 @@ static const char *blank = "";
 
 struct device_drv bflsc_drv;
 
+static void xlinkstr(char *xlink, int dev, struct bflsc_info *sc_info)
+{
+	if (dev > 0)
+		sprintf(xlink, " x-%d", dev);
+	else {
+		if (sc_info->sc_count > 1)
+			strcpy(xlink, " master");
+		else
+			*xlink = '\0';
+	}
+}
+
 static void bflsc_applog(struct cgpu_info *bflsc, int dev, enum usb_cmds cmd, int amount, int err)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
 	char xlink[17];
 
-	if (dev > 0)
-		sprintf(xlink, "x-%d", dev);
-	else {
-		if (sc_info->sc_count > 0)
-			strcpy(xlink, " master");
-		else
-			xlink[0] = '\0';
-	}
+	xlinkstr(xlink, dev, sc_info);
 
 	usb_applog(bflsc, cmd, xlink, amount, err);
 }
@@ -448,18 +453,6 @@ static void freebreakdown(int *count, char **firstname, char ***fields)
 	*count = 0;
 	*firstname = NULL;
 	*fields = NULL;
-}
-
-static void xlinkstr(char *xlink, int dev, struct bflsc_info *sc_info)
-{
-	if (dev > 0)
-		sprintf(xlink, " x-%d", dev);
-	else {
-		if (sc_info->sc_count > 0)
-			strcpy(xlink, " mast");
-		else
-			*xlink = '\0';
-	}
 }
 
 static int write_to_dev(struct cgpu_info *bflsc, int dev, char *buf, int buflen, int *amount, enum usb_cmds cmd)
