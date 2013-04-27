@@ -1331,14 +1331,13 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	char **items, *firstname, **fields, *lf;
 	int que, i, lines, count;
 	char xlink[17];
-	bool res;
 	char *tmp, *tmp2;
 
 	*nonces = 0;
 
 	xlinkstr(&(xlink[0]), dev, sc_info);
 
-	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
+	tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
 	if (lines < 1) {
 		tmp = str_text(buf);
 		applog(LOG_ERR, "%s%i:%s empty result (%s) ignored",
@@ -1357,7 +1356,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 		goto arigatou;
 	}
 
-	res = breakdown(ONECOLON, items[1], &count, &firstname, &fields, &lf);
+	breakdown(ONECOLON, items[1], &count, &firstname, &fields, &lf);
 	if (count < 1) {
 		tmp = str_text(buf);
 		tmp2 = str_text(items[1]);
@@ -1390,7 +1389,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	freebreakdown(&count, &firstname, &fields);
 
 	for (i = 0; i < que; i++) {
-		res = breakdown(NOCOLON, items[i + QUE_RES_LINES_MIN - 1], &count, &firstname, &fields, &lf);
+		breakdown(NOCOLON, items[i + QUE_RES_LINES_MIN - 1], &count, &firstname, &fields, &lf);
 		process_nonces(bflsc, dev, &(xlink[0]), items[i], count, fields, nonces);
 		freebreakdown(&count, &firstname, &fields);
 	}
