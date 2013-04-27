@@ -462,6 +462,105 @@ static void xlinkstr(char *xlink, int dev, struct bflsc_info *sc_info)
 	}
 }
 
+static int write_to_dev(struct cgpu_info *bflsc, int dev, char *buf, int buflen, int *amount, enum usb_cmds cmd)
+{
+	struct DataForwardToChain data;
+	int len;
+
+	if (dev == 0)
+		return usb_write(bflsc, buf, buflen, amount, cmd);
+
+	data.header = BFLSC_XLINKHDR;
+	data.deviceAddress = (uint8_t)dev;
+	data.payloadSize = buflen;
+	memcpy(data.payloadData, buf, buflen);
+	len = DATAFORWARDSIZE(data);
+
+	// TODO: handle xlink timeout message - here or at call?
+	return usb_write(bflsc, (char *)&data, len, amount, cmd);
+}
+
+static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount)
+{
+	char buf[BFLSC_BUFSIZ+1];
+
+	*err = usb_ftdi_read_nl(bflsc, buf, sizeof(buf)-1, amount, cmd);
+	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
+		return false;
+	else
+		return true;
+}
+
+static bool getokerr(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount, char *buf, size_t bufsiz)
+{
+	*err = usb_ftdi_read_nl(bflsc, buf, bufsiz-1, amount, cmd);
+	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
+		return false;
+	else {
+		if (*amount > (int)BFLSC_ANERR_LEN && strncmp(buf, BFLSC_ANERR, BFLSC_ANERR_LEN) == 0)
+			return false;
+		else
+			return true;
+	}
+}
+
+static void bflsc_send_flush_work(struct cgpu_info *bflsc, int dev)
+{
+	int err, amount;
+
+	// Device is gone
+	if (bflsc->usbinfo.nodev)
+		return;
+
+	mutex_lock(&bflsc->device_mutex);
+
+	err = write_to_dev(bflsc, dev, BFLSC_QFLUSH, BFLSC_QFLUSH_LEN, &amount, C_QUEFLUSH);
+	if (err < 0 || amount != BFLSC_QFLUSH_LEN) {
+		mutex_unlock(&bflsc->device_mutex);
+		bflsc_applog(bflsc, dev, C_QUEFLUSH, amount, err);
+	} else {
+		// TODO: do we care if we don't get 'OK'? (always will in normal processing)
+		err = getok(bflsc, C_QUEFLUSHREPLY, &err, &amount);
+		mutex_unlock(&bflsc->device_mutex);
+		// TODO: report an error if not 'OK' ?
+	}
+}
+
+/* return True = attempted usb_ftdi_read_ok()
+ * set ignore to true means no applog/ignore errors */
+static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int dev, int *err, int *amount, bool ignore)
+{
+	bool readok = false;
+
+	mutex_lock(&(bflsc->device_mutex));
+
+	*err = write_to_dev(bflsc, dev, BFLSC_QRES, BFLSC_QRES_LEN, amount, C_REQUESTRESULTS);
+	if (*err < 0 || *amount != BFLSC_QRES_LEN) {
+		mutex_unlock(&(bflsc->device_mutex));
+		if (!ignore)
+			bflsc_applog(bflsc, dev, C_REQUESTRESULTS, *amount, *err);
+
+		// TODO: do what? flag as dead device?
+		// count how many times it has happened and reset/fail it
+		// or even make sure it is all x-link and that means device
+		// has failed after some limit of this?
+		// of course all other I/O must also be failing ...
+	} else {
+		readok = true;
+		*err = usb_ftdi_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
+		mutex_unlock(&(bflsc->device_mutex));
+
+		if (*err < 0 || *amount < 1) {
+			if (!ignore)
+				bflsc_applog(bflsc, dev, C_GETRESULTS, *amount, *err);
+
+			// TODO: do what? ... see above
+		}
+	}
+
+	return readok;
+}
+
 static void __bflsc_initialise(struct cgpu_info *bflsc)
 {
 	int err;
@@ -546,27 +645,19 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 static void bflsc_initialise(struct cgpu_info *bflsc)
 {
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	char buf[BFLSC_BUFSIZ+1];
+	int err, amount;
+	int dev;
+
 	mutex_lock(&(bflsc->device_mutex));
 	__bflsc_initialise(bflsc);
 	mutex_unlock(&(bflsc->device_mutex));
-}
 
-static int write_to_dev(struct cgpu_info *bflsc, int dev, char *buf, int buflen, int *amount, enum usb_cmds cmd)
-{
-	struct DataForwardToChain data;
-	int len;
-
-	if (dev == 0)
-		return usb_write(bflsc, buf, buflen, amount, cmd);
-
-	data.header = BFLSC_XLINKHDR;
-	data.deviceAddress = (uint8_t)dev;
-	data.payloadSize = buflen;
-	memcpy(data.payloadData, buf, buflen);
-	len = DATAFORWARDSIZE(data);
-
-	// TODO: handle xlink timeout message - here or at call?
-	return usb_write(bflsc, (char *)&data, len, amount, cmd);
+	for (dev = 0; dev < sc_info->sc_count; dev++) {
+		bflsc_send_flush_work(bflsc, dev);
+		bflsc_qres(bflsc, buf, sizeof(buf), dev, &err, &amount, true);
+	}
 }
 
 static bool getinfo(struct cgpu_info *bflsc, int dev)
@@ -863,52 +954,6 @@ static void get_bflsc_statline_before(char *buf, struct cgpu_info *bflsc)
 	rd_unlock(&(sc_info->stat_lock));
 
 	tailsprintf(buf, " max%3.0fC %4.2fV | ", temp, vcc1);
-}
-
-static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount)
-{
-	char buf[BFLSC_BUFSIZ+1];
-
-	*err = usb_ftdi_read_nl(bflsc, buf, sizeof(buf)-1, amount, cmd);
-	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
-		return false;
-	else
-		return true;
-}
-
-static bool getokerr(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount, char *buf, size_t bufsiz)
-{
-	*err = usb_ftdi_read_nl(bflsc, buf, bufsiz-1, amount, cmd);
-	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
-		return false;
-	else {
-		if (*amount > (int)BFLSC_ANERR_LEN && strncmp(buf, BFLSC_ANERR, BFLSC_ANERR_LEN) == 0)
-			return false;
-		else
-			return true;
-	}
-}
-
-static void bflsc_send_flush_work(struct cgpu_info *bflsc, int dev)
-{
-	int err, amount;
-
-	// Device is gone
-	if (bflsc->usbinfo.nodev)
-		return;
-
-	mutex_lock(&bflsc->device_mutex);
-
-	err = write_to_dev(bflsc, dev, BFLSC_QFLUSH, BFLSC_QFLUSH_LEN, &amount, C_QUEFLUSH);
-	if (err < 0 || amount != BFLSC_QFLUSH_LEN) {
-		mutex_unlock(&bflsc->device_mutex);
-		bflsc_applog(bflsc, dev, C_QUEFLUSH, amount, err);
-	} else {
-		// TODO: do we care if we don't get 'OK'? (always will in normal processing)
-		err = getok(bflsc, C_QUEFLUSHREPLY, &err, &amount);
-		mutex_unlock(&bflsc->device_mutex);
-		// TODO: report an error if not 'OK' ?
-	}
 }
 
 static void flush_one_dev(struct cgpu_info *bflsc, int dev)
@@ -1335,41 +1380,6 @@ arigatou:
 	freetolines(&lines, &items);
 
 	return que;
-}
-
-/* return True = attempted usb_ftdi_read_ok()
- * set ignore to true means no applog/ignore errors */
-static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int dev, int *err, int *amount, bool ignore)
-{
-	bool readok = false;
-
-	mutex_lock(&(bflsc->device_mutex));
-
-	*err = write_to_dev(bflsc, dev, BFLSC_QRES, BFLSC_QRES_LEN, amount, C_REQUESTRESULTS);
-	if (*err < 0 || *amount != BFLSC_QRES_LEN) {
-		mutex_unlock(&(bflsc->device_mutex));
-		if (!ignore)
-			bflsc_applog(bflsc, dev, C_REQUESTRESULTS, *amount, *err);
-
-		// TODO: do what? flag as dead device?
-		// count how many times it has happened and reset/fail it
-		// or even make sure it is all x-link and that means device
-		// has failed after some limit of this?
-		// of course all other I/O must also be failing ...
-	} else {
-		readok = true;
-		*err = usb_ftdi_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
-		mutex_unlock(&(bflsc->device_mutex));
-
-		if (*err < 0 || *amount < 1) {
-			if (!ignore)
-				bflsc_applog(bflsc, dev, C_GETRESULTS, *amount, *err);
-
-			// TODO: do what? ... see above
-		}
-	}
-
-	return readok;
 }
 
 #define TVF(tv) ((float)((tv)->tv_sec) + ((float)((tv)->tv_usec) / 1000000.0))
