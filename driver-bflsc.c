@@ -273,7 +273,6 @@ struct SaveString {
 // Defaults (slightly over half the work time) but ensure none are above 100
 // SCAN_TIME - delay after sending work
 // RES_TIME - delay between checking for results
-// TODO: make dynamic? (for all but MiniRig)
 #define BAM_SCAN_TIME 20
 #define BAM_RES_TIME 2
 #define BAS_SCAN_TIME 360
@@ -286,6 +285,7 @@ struct SaveString {
 #define BFLSC_TEMP_SLEEPMS 5
 #define BFLSC_QUE_SIZE 20
 #define BFLSC_QUE_FULL_ENOUGH 13
+#define BFLSC_QUE_WATERMARK 6
 
 #define BFLSC_BUFSIZ (0x200)
 
@@ -1443,6 +1443,8 @@ static void bflsc_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+
+	bflsc_flush_work(bflsc);
 	sc_info->shutdown = true;
 }
 
@@ -1602,7 +1604,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	int64_t ret, unsent;
 	bool flushed, cleanup;
 	struct work *work, *tmp;
-	int dev;
+	int dev, waited = ETIMEDOUT, i;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
@@ -1650,7 +1652,29 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 
 	// avoid a hard loop
 	if (sc_info->scan_sleep_time > 0)
-		restart_wait(sc_info->scan_sleep_time);
+		waited = restart_wait(sc_info->scan_sleep_time);
+	if (waited == ETIMEDOUT) {
+		/* Only adjust the scan_sleep_time if we did not receive a
+		 * restart message while waiting. Try to adjust sleep time
+		 * so we drop to BFLSC_QUE_WATERMARK before getting more work.
+		 */
+		int min_queued = BFLSC_QUE_SIZE;
+
+		for (i = 0; i < sc_info->sc_count; i++) {
+			if (sc_info->sc_devs[i].work_queued < min_queued)
+				min_queued = sc_info->sc_devs[i].work_queued;
+		}
+		/* Increase slowly but decrease quickly */
+		if (min_queued > BFLSC_QUE_WATERMARK) {
+			sc_info->scan_sleep_time = sc_info->scan_sleep_time * 21 / 20;
+			applog(LOG_DEBUG, "%s%i: Increased scan_sleep_time to %d",
+			       bflsc->drv->name, bflsc->device_id, sc_info->scan_sleep_time);
+		} else if (min_queued < BFLSC_QUE_WATERMARK) {
+			sc_info->scan_sleep_time = sc_info->scan_sleep_time * 2 / 3;
+			applog(LOG_DEBUG, "%s%i: Decreased scan_sleep_time to %d",
+			       bflsc->drv->name, bflsc->device_id, sc_info->scan_sleep_time);
+		}
+	}
 
 	// Count up the work done since we last were here
 	ret = 0;
