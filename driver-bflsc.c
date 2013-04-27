@@ -852,6 +852,9 @@ reinit:
 	sc_info->results_sleep_time = BAS_RES_TIME;
 	sc_info->default_ms_work = BAS_WORK_TIME;
 
+	/* When getinfo() "FREQUENCY: [UNKNOWN]" is fixed -
+	 * use 'freq * engines' to estimate.
+	 * Otherwise for now: */
 	newname = NULL;
 	if (sc_info->sc_count > 1) {
 		newname = BFLSC_MINIRIG;
@@ -859,23 +862,16 @@ reinit:
 		sc_info->results_sleep_time = BAM_RES_TIME;
 		sc_info->default_ms_work = BAM_WORK_TIME;
 	} else {
-		switch (sc_info->sc_devs[0].engines) {
-			case 1:
-				newname = BFLSC_JALAPENO;
-				sc_info->scan_sleep_time = BAJ_SCAN_TIME;
-				sc_info->results_sleep_time = BAJ_RES_TIME;
-				sc_info->default_ms_work = BAJ_WORK_TIME;
-				break;
-			case 2:
-			case 3:
-			case 4:
-				newname = BFLSC_LITTLESINGLE;
-				sc_info->scan_sleep_time = BAL_SCAN_TIME;
-				sc_info->results_sleep_time = BAL_RES_TIME;
-				sc_info->default_ms_work = BAL_WORK_TIME;
-				break;
-			default:
-				break;
+		if (sc_info->sc_devs[0].engines < 34) { // 16 * 2 + 2
+			newname = BFLSC_JALAPENO;
+			sc_info->scan_sleep_time = BAJ_SCAN_TIME;
+			sc_info->results_sleep_time = BAJ_RES_TIME;
+			sc_info->default_ms_work = BAJ_WORK_TIME;
+		} else if (sc_info->sc_devs[0].engines < 130)  { // 16 * 8 + 2
+			newname = BFLSC_LITTLESINGLE;
+			sc_info->scan_sleep_time = BAL_SCAN_TIME;
+			sc_info->results_sleep_time = BAL_RES_TIME;
+			sc_info->default_ms_work = BAL_WORK_TIME;
 		}
 	}
 
@@ -887,8 +883,6 @@ reinit:
 			bflsc->drv = copy_drv(bflsc->drv);
 		bflsc->drv->name = newname;
 	}
-
-	// Do a performance test of a nonce? (and set ms_work)
 
 	// We have a real BFLSC!
 	applog(LOG_DEBUG, "%s (%s) identified as: '%s'",
