@@ -992,15 +992,19 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	return true;
 }
 
+enum send_ret {
+	SEND_OK,
+	SEND_SELECTFAIL,
+	SEND_SENDFAIL,
+	SEND_INACTIVE
+};
+
 /* Send a single command across a socket, appending \n to it. This should all
  * be done under stratum lock except when first establishing the socket */
-static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
+static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 {
 	SOCKETTYPE sock = pool->sock;
 	ssize_t ssent = 0;
-
-	if (opt_protocol)
-		applog(LOG_DEBUG, "Pool %u: SEND: %s", pool->pool_no, s);
 
 	strcat(s, "\n");
 	len++;
@@ -1012,16 +1016,12 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 		FD_ZERO(&wd);
 		FD_SET(sock, &wd);
-		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1) {
-			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
-			return false;
-		}
+		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1)
+			return SEND_SELECTFAIL;
 		sent = send(pool->sock, s + ssent, len, 0);
 		if (sent < 0) {
-			if (errno != EAGAIN && errno != EWOULDBLOCK) {
-				applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
-				return false;
-			}
+			if (!sock_blocks())
+				return SEND_SENDFAIL;
 			sent = 0;
 		}
 		ssent += sent;
@@ -1032,21 +1032,37 @@ static bool __stratum_send(struct pool *pool, char *s, ssize_t len)
 	pool->cgminer_pool_stats.bytes_sent += ssent;
 	total_bytes_xfer += ssent;
 	pool->cgminer_pool_stats.net_bytes_sent += ssent;
-	return true;
+	return SEND_OK;
 }
 
 bool stratum_send(struct pool *pool, char *s, ssize_t len)
 {
-	bool ret = false;
+	enum send_ret ret = SEND_INACTIVE;
+
+	if (opt_protocol)
+		applog(LOG_DEBUG, "Pool %u: SEND: %s", pool->pool_no, s);
 
 	mutex_lock(&pool->stratum_lock);
 	if (pool->stratum_active)
 		ret = __stratum_send(pool, s, len);
-	else
-		applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
 	mutex_unlock(&pool->stratum_lock);
 
-	return ret;
+	/* This is to avoid doing applog under stratum_lock */
+	switch (ret) {
+		default:
+		case SEND_OK:
+			break;
+		case SEND_SELECTFAIL:
+			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
+			break;
+		case SEND_SENDFAIL:
+			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
+			break;
+		case SEND_INACTIVE:
+			applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
+			break;
+	}
+	return (ret == SEND_OK);
 }
 
 static bool socket_full(struct pool *pool, bool wait)
@@ -1108,6 +1124,12 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	pool->sockbuf_size = new;
 }
 
+enum recv_ret {
+	RECV_OK,
+	RECV_CLOSED,
+	RECV_RECVFAIL
+};
+
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
@@ -1116,6 +1138,7 @@ char *recv_line(struct pool *pool)
 	char *tok, *sret = NULL;
 
 	if (!strstr(pool->sockbuf, "\n")) {
+		enum recv_ret ret = RECV_OK;
 		struct timeval rstart, now;
 
 		gettimeofday(&rstart, NULL);
@@ -1133,19 +1156,34 @@ char *recv_line(struct pool *pool)
 			memset(s, 0, RBUFSIZE);
 			n = recv(pool->sock, s, RECVSIZE, 0);
 			if (!n) {
-				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
+				ret = RECV_CLOSED;
 				break;
 			}
-			if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
-				break;
+			if (n < 0) {
+				if (!sock_blocks()) {
+					ret = RECV_RECVFAIL;
+					break;
+				}
+			} else {
+				slen = strlen(s);
+				recalloc_sock(pool, slen);
+				strcat(pool->sockbuf, s);
 			}
-			slen = strlen(s);
-			recalloc_sock(pool, slen);
-			strcat(pool->sockbuf, s);
 			gettimeofday(&now, NULL);
 		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
 		mutex_unlock(&pool->stratum_lock);
+
+		switch (ret) {
+			default:
+			case RECV_OK:
+				break;
+			case RECV_CLOSED:
+				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
+				goto out;
+			case RECV_RECVFAIL:
+				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+				goto out;
+		}
 	}
 
 	buflen = strlen(pool->sockbuf);
@@ -1656,7 +1694,7 @@ bool initiate_stratum(struct pool *pool)
 
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
-	if (!__stratum_send(pool, s, strlen(s))) {
+	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
