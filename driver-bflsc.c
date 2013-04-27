@@ -1337,6 +1337,41 @@ arigatou:
 	return que;
 }
 
+/* return True = attempted usb_ftdi_read_ok()
+ * set ignore to true means no applog/ignore errors */
+static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int dev, int *err, int *amount, bool ignore)
+{
+	bool readok = false;
+
+	mutex_lock(&(bflsc->device_mutex));
+
+	*err = write_to_dev(bflsc, dev, BFLSC_QRES, BFLSC_QRES_LEN, amount, C_REQUESTRESULTS);
+	if (*err < 0 || *amount != BFLSC_QRES_LEN) {
+		mutex_unlock(&(bflsc->device_mutex));
+		if (!ignore)
+			bflsc_applog(bflsc, dev, C_REQUESTRESULTS, *amount, *err);
+
+		// TODO: do what? flag as dead device?
+		// count how many times it has happened and reset/fail it
+		// or even make sure it is all x-link and that means device
+		// has failed after some limit of this?
+		// of course all other I/O must also be failing ...
+	} else {
+		readok = true;
+		*err = usb_ftdi_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
+		mutex_unlock(&(bflsc->device_mutex));
+
+		if (*err < 0 || *amount < 1) {
+			if (!ignore)
+				bflsc_applog(bflsc, dev, C_GETRESULTS, *amount, *err);
+
+			// TODO: do what? ... see above
+		}
+	}
+
+	return readok;
+}
+
 #define TVF(tv) ((float)((tv)->tv_sec) + ((float)((tv)->tv_usec) / 1000000.0))
 #define TVFMS(tv) (TVF(tv) * 1000.0)
 
@@ -1350,6 +1385,7 @@ static void *bflsc_get_results(void *userdata)
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
 	int i, que, dev, nonces;
+	bool readok;
 
 	cgtime(&now);
 	for (i = 0; i < sc_info->sc_count; i++) {
@@ -1382,36 +1418,19 @@ static void *bflsc_get_results(void *userdata)
 		if (dev == -1)
 			goto utsura;
 
-		mutex_lock(&(bflsc->device_mutex));
 		cgtime(&(sc_info->sc_devs[dev].last_check_result));
-		err = write_to_dev(bflsc, dev, BFLSC_QRES, BFLSC_QRES_LEN, &amount, C_REQUESTRESULTS);
-		if (err < 0 || amount != BFLSC_QRES_LEN) {
-			mutex_unlock(&(bflsc->device_mutex));
-			bflsc_applog(bflsc, dev, C_REQUESTRESULTS, amount, err);
 
-			// TODO: do what? flag as dead device?
-			// count how many times it has happened and reset/fail it
-			// or even make sure it is all x-link and that means device
-			// has failed after some limit of this?
-			// of course all other I/O must also be failing ...
+		readok = bflsc_qres(bflsc, buf, sizeof(buf), dev, &err, &amount, false);
+		if (err < 0 || (!readok && amount != BFLSC_QRES_LEN) || (readok && amount < 1)) {
+			// TODO: do what else?
 		} else {
-			err = usb_ftdi_read_ok(bflsc, buf, sizeof(buf)-1, &amount, C_GETRESULTS);
-			mutex_unlock(&(bflsc->device_mutex));
+			que = process_results(bflsc, dev, buf, &nonces);
+			if (que > 0)
+				cgtime(&(sc_info->sc_devs[dev].last_dev_result));
+			if (nonces > 0)
+				cgtime(&(sc_info->sc_devs[dev].last_nonce_result));
 
-			if (err < 0 || amount < 1) {
-				bflsc_applog(bflsc, dev, C_GETRESULTS, amount, err);
-
-				// TODO: do what? ... see above
-			} else {
-				que = process_results(bflsc, dev, buf, &nonces);
-				if (que > 0)
-					cgtime(&(sc_info->sc_devs[dev].last_dev_result));
-				if (nonces > 0)
-					cgtime(&(sc_info->sc_devs[dev].last_nonce_result));
-				// TODO: if not getting results ...
-			}
-
-			// TODO: re-estimate the wait times (results_sleep_time and ms_work) based on ?
+			// TODO: if not getting results ... reinit?
 		}
 
 utsura:
