@@ -19,6 +19,10 @@
 	#define CLOSESOCKET close
 
 	#define SOCKERRMSG strerror(errno)
+	static inline bool sock_blocks(void)
+	{
+		return (errno == EAGAIN || errno == EWOULDBLOCK);
+	}
 #elif defined WIN32
 	#include <ws2tcpip.h>
 	#include <winsock2.h>
@@ -32,6 +36,10 @@
 	extern char *WSAErrorMsg(void);
 	#define SOCKERRMSG WSAErrorMsg()
 
+	static inline bool sock_blocks(void)
+	{
+		return (WSAGetLastError() == WSAEWOULDBLOCK);
+	}
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
 	#endif
