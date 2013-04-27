@@ -284,6 +284,7 @@ struct SaveString {
 #define BAL_RES_TIME 72
 #define BAJ_SCAN_TIME 1000
 #define BAJ_RES_TIME 100
+#define BFLSC_MAX_SLEEP 2000
 
 #define BFLSC_TEMP_SLEEPMS 5
 #define BFLSC_QUE_SIZE 20
@@ -1653,7 +1654,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	int64_t ret, unsent;
 	bool flushed, cleanup;
 	struct work *work, *tmp;
-	int dev, waited = ETIMEDOUT, i;
+	int dev, waited, i;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
@@ -1699,29 +1700,43 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 		}
 	}
 
-	// avoid a hard loop
-	if (sc_info->scan_sleep_time > 0)
-		waited = restart_wait(sc_info->scan_sleep_time);
+	waited = restart_wait(sc_info->scan_sleep_time);
 	if (waited == ETIMEDOUT) {
+		unsigned int old_sleep_time, new_sleep_time = 0;
+		int min_queued = BFLSC_QUE_SIZE;
 		/* Only adjust the scan_sleep_time if we did not receive a
 		 * restart message while waiting. Try to adjust sleep time
 		 * so we drop to BFLSC_QUE_WATERMARK before getting more work.
 		 */
-		int min_queued = BFLSC_QUE_SIZE;
 
+		rd_lock(&sc_info->stat_lock);
+		old_sleep_time = sc_info->scan_sleep_time;
 		for (i = 0; i < sc_info->sc_count; i++) {
 			if (sc_info->sc_devs[i].work_queued < min_queued)
 				min_queued = sc_info->sc_devs[i].work_queued;
 		}
+		rd_unlock(&sc_info->stat_lock);
+		new_sleep_time = old_sleep_time;
+
 		/* Increase slowly but decrease quickly */
-		if (min_queued > BFLSC_QUE_WATERMARK) {
-			sc_info->scan_sleep_time = sc_info->scan_sleep_time * 21 / 20;
-			applog(LOG_DEBUG, "%s%i: Increased scan_sleep_time to %d",
-			       bflsc->drv->name, bflsc->device_id, sc_info->scan_sleep_time);
-		} else if (min_queued < BFLSC_QUE_WATERMARK) {
-			sc_info->scan_sleep_time = sc_info->scan_sleep_time * 2 / 3;
-			applog(LOG_DEBUG, "%s%i: Decreased scan_sleep_time to %d",
-			       bflsc->drv->name, bflsc->device_id, sc_info->scan_sleep_time);
+		if (min_queued > BFLSC_QUE_WATERMARK && old_sleep_time < BFLSC_MAX_SLEEP)
+			new_sleep_time = old_sleep_time * 21 / 20;
+		else if (min_queued < BFLSC_QUE_WATERMARK)
+			new_sleep_time = old_sleep_time * 2 / 3;
+
+		/* Do not sleep more than BFLSC_MAX_SLEEP so we can always
+		 * report in at least 2 results per 5s log interval. */
+		if (new_sleep_time != old_sleep_time) {
+			if (new_sleep_time > BFLSC_MAX_SLEEP)
+				new_sleep_time = BFLSC_MAX_SLEEP;
+			else if (new_sleep_time == 0)
+				new_sleep_time = 1;
+			applog(LOG_DEBUG, "%s%i: Changed scan sleep time to %d",
+			       bflsc->drv->name, bflsc->device_id, new_sleep_time);
+
+			wr_lock(&sc_info->stat_lock);
+			sc_info->scan_sleep_time = new_sleep_time;
+			wr_unlock(&sc_info->stat_lock);
 		}
 	}
 
