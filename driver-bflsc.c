@@ -1544,9 +1544,11 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 	// if something is wrong with a device try the next one available
 	// TODO: try them all? Add an unavailable flag to sc_devs[i] init to 0 here first
 	while (++tries < 3) {
-		// Device is gone
-		if (bflsc->usbinfo.nodev)
-			return false;
+		// Device is gone - shouldn't normally get here
+		if (bflsc->usbinfo.nodev) {
+			ret = true;
+			break;
+		}
 
 		dev = -1;
 		rd_lock(&(sc_info->stat_lock));
