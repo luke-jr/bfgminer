@@ -1276,8 +1276,10 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 	num = atoi(fields[QUE_NONCECOUNT]);
 	if (num != count - QUE_FLD_MIN) {
-		applog(LOG_ERR, "%s%i:%s incorrect data count (%d) will use %d instead",
-				bflsc->drv->name, bflsc->device_id, xlink, num, count - QUE_FLD_MAX);
+		tmp = str_text(data);
+		applog(LOG_ERR, "%s%i:%s incorrect data count (%d) will use %d instead from (%s)",
+				bflsc->drv->name, bflsc->device_id, xlink, num, count - QUE_FLD_MAX, tmp);
+		free(tmp);
 	}
 
 	memset(midstate, 0, MIDSTATE_BYTES);
@@ -1288,7 +1290,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	work = find_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
 						blockdata, MERKLE_OFFSET, MERKLE_BYTES);
 	if (!work) {
-		applog(LOG_ERR, "%s%i:%s failed to find work - can't be processed - ignored",
+		applog(LOG_ERR, "%s%i:%s failed to find nonce work - can't be processed - ignored",
 				bflsc->drv->name, bflsc->device_id, xlink);
 		return;
 	}
@@ -1368,8 +1370,8 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	} else if (count != 1) {
 		tmp = str_text(buf);
 		tmp2 = str_text(items[1]);
-		applog(LOG_ERR, "%s%i:%s incorrect result count (%s) in (%s) will try anyway",
-					bflsc->drv->name, bflsc->device_id, xlink, tmp2, tmp);
+		applog(LOG_ERR, "%s%i:%s incorrect result count %d (%s) in (%s) will try anyway",
+					bflsc->drv->name, bflsc->device_id, xlink, count, tmp2, tmp);
 		free(tmp2);
 		free(tmp);
 	}
@@ -1380,9 +1382,11 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 		// 1+ In case the last line isn't 'OK' - try to process it
 		que = 1 + lines - QUE_RES_LINES_MIN;
 
-		tmp = str_text(items[0]);
-		applog(LOG_ERR, "%s%i:%s incorrect result count (%s) %d but should be %d will try %d anyway",
-					bflsc->drv->name, bflsc->device_id, xlink, tmp, i, que, que);
+		tmp = str_text(buf);
+		tmp2 = str_text(items[0]);
+		applog(LOG_ERR, "%s%i:%s incorrect result count %d (%s) will try %d (%s)",
+					bflsc->drv->name, bflsc->device_id, xlink, i, tmp2, que, tmp);
+		free(tmp2);
 		free(tmp);
 
 	}
