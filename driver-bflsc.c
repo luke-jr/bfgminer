@@ -30,6 +30,8 @@
 #define BLANK ""
 #define LFSTR "<LF>"
 
+#define BFLSC_BUFSIZ (0x200)
+
 #define BFLSC_DI_FIRMWARE "FIRMWARE"
 #define BFLSC_DI_ENGINES "ENGINES"
 #define BFLSC_DI_JOBSINQUE "JOBS IN QUEUE"
@@ -56,8 +58,9 @@ struct bflsc_dev {
 	struct timeval last_nonce_result; // > 0 nonce
 
 	// Info
+	char getinfo[(BFLSC_BUFSIZ+4)*4];
 	char *firmware;
-	int engines; // does a faulty engine only hash 'x/16 * FULLNONCE' ?
+	int engines; // each engine represents a 'thread' in a chip
 	char *xlink_mode;
 	char *xlink_present;
 
@@ -286,8 +289,6 @@ struct SaveString {
 #define BFLSC_QUE_SIZE 20
 #define BFLSC_QUE_FULL_ENOUGH 13
 #define BFLSC_QUE_WATERMARK 6
-
-#define BFLSC_BUFSIZ (0x200)
 
 // Must drop this far below cutoff before resuming work
 #define BFLSC_TEMP_RECOVER 5
@@ -662,6 +663,20 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 	char **items, *firstname, **fields, *lf;
 	int i, lines, count;
 	bool res, ok;
+	char *tmp;
+
+	/*
+	 * Kano's first dev Jalapeno output:
+	 * DEVICE: BitFORCE SC<LF>
+	 * FIRMWARE: 1.0.0<LF>
+	 * ENGINES: 30<LF>
+	 * FREQUENCY: [UNKNOWN]<LF>
+	 * XLINK MODE: MASTER<LF>
+	 * XLINK PRESENT: YES<LF>
+	 * --DEVICES IN CHAIN: 0<LF>
+	 * --CHAIN PRESENCE MASK: 00000000<LF>
+	 * OK<LF>
+	 */
 
 	// TODO: if dev is ever > 0 must handle xlink timeout message
 	err = write_to_dev(bflsc, dev, BFLSC_DETAILS, BFLSC_DETAILS_LEN, &amount, C_REQUESTDETAILS);
@@ -689,23 +704,38 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 	if (!res)
 		return false;
 
+	tmp = str_text(buf);
+	strcpy(sc_dev.getinfo, tmp);
+	free(tmp);
+
 	for (i = 0; i < lines-2; i++) {
 		res = breakdown(ONECOLON, items[i], &count, &firstname, &fields, &lf);
 		if (lf)
 			*lf = '\0';
 		if (!res || count != 1) {
+			tmp = str_text(items[i]);
 			applog(LOG_WARNING, "%s detect (%s) invalid details line: '%s' %d",
-					bflsc->drv->dname, bflsc->device_path, str_text(buf), count);
+					bflsc->drv->dname, bflsc->device_path, tmp, count);
+			free(tmp);
 			dev_error(bflsc, REASON_DEV_COMMS_ERROR);
 			goto mata;
 		}
-		if (strcmp(firstname, BFLSC_DI_FIRMWARE) == 0)
+		if (strcmp(firstname, BFLSC_DI_FIRMWARE) == 0) {
 			sc_dev.firmware = strdup(fields[0]);
+			if (strcmp(sc_dev.firmware, "1.0.0")) {
+				tmp = str_text(items[i]);
+				applog(LOG_WARNING, "%s detect (%s) Warning unknown firmware '%s'",
+					bflsc->drv->dname, bflsc->device_path, tmp);
+				free(tmp);
+			}
+		}
 		else if (strcmp(firstname, BFLSC_DI_ENGINES) == 0) {
 			sc_dev.engines = atoi(fields[0]);
 			if (sc_dev.engines < 1) {
-				applog(LOG_WARNING, "%s detect (%s) invalid engine count: '%s%s'",
-					bflsc->drv->dname, bflsc->device_path, buf, lf ? LFSTR : BLANK);
+				tmp = str_text(items[i]);
+				applog(LOG_WARNING, "%s detect (%s) invalid engine count: '%s'",
+					bflsc->drv->dname, bflsc->device_path, tmp);
+				free(tmp);
 				goto mata;
 			}
 		}
@@ -716,8 +746,10 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		else if (strcmp(firstname, BFLSC_DI_DEVICESINCHAIN) == 0) {
 			sc_info->sc_count = atoi(fields[0]) + 1;
 			if (sc_info->sc_count < 1 || sc_info->sc_count > 30) {
-				applog(LOG_WARNING, "%s detect (%s) invalid s-link count: '%s%s'",
-					bflsc->drv->dname, bflsc->device_path, buf, lf ? LFSTR : BLANK);
+				tmp = str_text(items[i]);
+				applog(LOG_WARNING, "%s detect (%s) invalid s-link count: '%s'",
+					bflsc->drv->dname, bflsc->device_path, tmp);
+				free(tmp);
 				goto mata;
 			}
 		}
@@ -1775,6 +1807,7 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 	root = api_add_time(root, "Temp1 Max Time", &(sc_info->sc_devs[0].temp1_max_time), true);
 	root = api_add_time(root, "Temp2 Max Time", &(sc_info->sc_devs[0].temp2_max_time), true);
 	rd_unlock(&(sc_info->stat_lock));
+	root = api_add_escape(root, "GetInfo", sc_info->sc_devs[0].getinfo, false);
 
 /*
 else a whole lot of something like these ... etc
