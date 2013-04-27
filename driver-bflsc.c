@@ -110,6 +110,7 @@ struct bflsc_info {
 	unsigned int default_ms_work;
 	bool shutdown;
 	bool flash_led;
+	bool not_first_work; // allow ignoring the first nonce error
 };
 
 #define BFLSC_XLINKHDR '@'
@@ -1290,8 +1291,9 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	work = find_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
 						blockdata, MERKLE_OFFSET, MERKLE_BYTES);
 	if (!work) {
-		applog(LOG_ERR, "%s%i:%s failed to find nonce work - can't be processed - ignored",
-				bflsc->drv->name, bflsc->device_id, xlink);
+		if (sc_info->not_first_work)
+			applog(LOG_ERR, "%s%i:%s failed to find nonce work - can't be processed - ignored",
+					bflsc->drv->name, bflsc->device_id, xlink);
 		return;
 	}
 
@@ -1397,6 +1399,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 		breakdown(NOCOLON, items[i + QUE_RES_LINES_MIN - 1], &count, &firstname, &fields, &lf);
 		process_nonces(bflsc, dev, &(xlink[0]), items[i], count, fields, nonces);
 		freebreakdown(&count, &firstname, &fields);
+		sc_info->not_first_work = true;
 	}
 
 arigatou:
@@ -1458,6 +1461,7 @@ static void *bflsc_get_results(void *userdata)
 			// TODO: do what else?
 		} else {
 			que = process_results(bflsc, dev, buf, &nonces);
+			sc_info->not_first_work = true; // in case it failed processing it
 			if (que > 0)
 				cgtime(&(sc_info->sc_devs[dev].last_dev_result));
 			if (nonces > 0)
