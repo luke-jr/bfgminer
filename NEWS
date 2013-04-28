@@ -1,3 +1,15 @@
+BFGMiner Version 3.0.2 - April 28, 2013
+
+- Receive failures in recv_line should unconditionally fail.
+- Use sock_blocks function for stratum send and receive.
+- Avoid applog under stratum_lock in __stratum_send.
+- Create an OS specific sock_blocks function.
+- There should be no error response code with return value 0 in recv_line.
+- Check for errors on stratum recv for any recv return value less than 1 and
+only parse the response if it's positive.
+- Avoid applog under stratum_lock in recv_line.
+
+
 BFGMiner Version 3.0.1 - April 24, 2013
 
 - Bugfix: configure: Move actual roundl macro back to miner.h after math.h
