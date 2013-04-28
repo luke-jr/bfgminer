@@ -1,3 +1,45 @@
+Version 3.1.0 - April 28th, 2013
+
+- Make the scan sleep time after scanwork in bflsc dynamic to keep queues
+between watermark levels.
+- Remove unused temp counts in bflsc.
+- Calculate a rolling 5 min average set of temperatures for bflsc.
+- Damp the display of voltage for BFLSC devices.
+- Damp the temperature display measurement for bflsc since it fluctuates so
+wildly.
+- bflsc add volt stats
+- Handle failed tolines command in bflsc driver.
+- Can use a read lock instead of a write lock in bflsc scanwork.
+- Since we are filling a queue on the bflsc devices, there is no need to run
+through scanwork frequently provided we use the restart_wait function to abort
+early during a block change.
+- Remove flushed work in bfl scanwork from the hash table.
+- Set correct device in process_nonces in bflsc driver.
+- bflsc add work reply INPROCESS: missing from the spec
+- bflsc put in some error messages not yet written
+- bflsc get completed hashes as late as possible
+- Fix potential memory leak with unused work items in bflsc_queue_full
+- Reverse bools in bflsc_queue_full
+- Avoid recursive loop calling correct function instead.
+- bflsc fix details identification
+- Differentiate BFLSC device from regular bitforce and give warning if no
+support is compiled in.
+- util.c str_text make a fully text readable version of str
+- BFLSC fix FPGA identity overlap
+- Locking error in bflsc_send_work
+- Use htobe32 function for converting nonce in bflsc.
+- Replace deprecated bzero with memset in bflsc driver.
+- Fix compilation of bflsc driver without opencl.
+- Check for realloc failures in bflsc driver.
+- Check for failure to calloc in bflsc driver.
+- Trivial style change
+- Use copy_time function in bflsc driver.
+- Use cgtime in bflsc driver and update copyright notice.
+- Use a separate function for bfl initialise that doesn't require locking.
+- Fix BFLSC building.
+- bflsc v0.1
+
+
 Version 3.0.1 - April 25th, 2013
 
 - Bypass attempting to read and save binary files on OSX to avoid crashes on >1
@@ -88,7 +130,6 @@ consecutively.
 - More README faqs.
 - Yet more README faqs.
 - Add more faqs to README.
-- Merge branch 'master' into avalon-dev
 - Wrap result wrong tests in avalon scanhash in unlikely() and only consider a
 hash count of zero wrong if a restart wasn't issued.
 - avalon: if result_wrong >= get_work_count jump out the read loop
@@ -146,8 +187,6 @@ scanhash.
 <xiangfu@openmobilefree.net>
 - Remove inappropriate memset of struct avalon result which was corrupting fan
 values.
-- Fix warning with no curses built in.
-- Bump version to 2.11.4
 - Fix warning with no curses built in.
 - Bump version to 2.11.4
 - Add API support for Avalon.
