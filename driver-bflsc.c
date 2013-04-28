@@ -935,6 +935,7 @@ reinit:
 	update_usb_stats(bflsc);
 
 	mutex_init(&bflsc->device_mutex);
+	rwlock_init(&sc_info->stat_lock);
 
 	return true;
 
