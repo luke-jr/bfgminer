@@ -1,4 +1,7 @@
+Current maintainers and active developers:
+Main code+ASIC+GPU+SCRYPT+maintainer: Con Kolivas <kernel@kolivas.org> 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+API+USB+FPGA+ASIC: Andrew Smith <kan0i {at} kano-kun [dot] net> 1Jjk2LmktEQKnv8r2cZ9MvLiZwZ9gxabKm
+
+Legacy:
 Original CPU mining software: Jeff Garzik <jgarzik@pobox.com>
-GPU mining and rewrite: Con Kolivas <kernel@kolivas.org> 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
-API+USB+: Andrew Smith <kan0i {at} kano-kun [dot] net> 1Jjk2LmktEQKnv8r2cZ9MvLiZwZ9gxabKm
 BitFORCE FPGA mining and refactor: Luke Dashjr <luke-jr+cgminer@utopios.org> 1NbRmS6a4dniwHHoSS9v3tEYUpP1Z5VVdL
