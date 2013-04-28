@@ -893,7 +893,11 @@ Q: What happened to CPU mining?
 A: Being increasingly irrelevant for most users, and a maintenance issue, it is
 no longer under active development and will not be supported. No binary builds
 supporting CPU mining will be released. Virtually all remaining users of CPU
-mining are as back ends for illegal botnets.
+mining are as back ends for illegal botnets. The main reason cgminer is being
+inappopriately tagged as a virus by antivirus software is due to the trojans
+packaging a CPU mining capable version of it. There is no longer ANY CPU mining
+code in cgminer. If you are mining bitcoin with CPU today, you are spending
+1000x more in electricity costs than you are earning in bitcoin.
 
 Q: I upgraded cgminer version and my hashrate suddenly dropped!
 A: No, you upgraded your SDK version unwittingly between upgrades of cgminer
@@ -1089,10 +1093,9 @@ They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
 
-Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
+Q: How do I get my Icarus/Lancelot/Cairnsmore device to auto-recognise?
 A: On linux, if the /dev/ttyUSB* devices don't automatically appear, the only
 thing that needs to be done is to load the driver for them:
-BFL: sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
 Icarus: sudo modprobe pl2303 vendor=0x067b product=0x230
 Lancelot: sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
 Cairnsmore: sudo modprobe ftdi_sio product=0x8350 vendor=0x0403
