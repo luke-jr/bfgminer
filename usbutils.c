@@ -888,6 +888,7 @@ static void remove_in_use(uint8_t bus_number, uint8_t device_address)
 					in_use_tmp->next->prev = in_use_tmp->prev;
 			}
 			free(in_use_tmp);
+			break;
 		}
 		in_use_tmp = in_use_tmp->next;
 	}
