@@ -2735,6 +2735,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 static void disable_curses(void)
 {
 	if (curses_active_locked()) {
+		use_curses = false;
 		curses_active = false;
 		leaveok(logwin, false);
 		leaveok(statuswin, false);
@@ -6454,12 +6455,15 @@ void print_summary(void)
 		log_print_status(cgpu);
 	}
 
-	if (opt_shares)
+	if (opt_shares) {
 		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
-	fflush(stdout);
+		if (opt_shares > total_accepted)
+			applog(LOG_WARNING, "WARNING - Mined only %d shares of %d requested.", total_accepted, opt_shares);
+	}
+	applog(LOG_WARNING, "");
+
 	fflush(stderr);
-	if (opt_shares > total_accepted)
-		applog(LOG_WARNING, "WARNING - Mined only %d shares of %d requested.", total_accepted, opt_shares);
+	fflush(stdout);
 }
 
 static void clean_up(void)
@@ -6483,17 +6487,10 @@ static void clean_up(void)
 
 void quit(int status, const char *format, ...)
 {
-	va_list ap;
-
 	clean_up();
 
-	if (format) {
-		va_start(ap, format);
-		vfprintf(stderr, format, ap);
-		va_end(ap);
-	}
-	fprintf(stderr, "\n");
-	fflush(stderr);
+	if (format)
+		log_error(format);
 
 #if defined(unix)
 	if (forkpid > 0) {
