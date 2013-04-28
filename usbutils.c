@@ -880,7 +880,8 @@ static void remove_in_use(uint8_t bus_number, uint8_t device_address)
 			found = true;
 			if (in_use_tmp == in_use_head) {
 				in_use_head = in_use_head->next;
-				in_use_head->prev = NULL;
+				if (in_use_head)
+					in_use_head->prev = NULL;
 			} else {
 				in_use_tmp->prev->next = in_use_tmp->next;
 				if (in_use_tmp->next)
