@@ -807,13 +807,8 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 	// TODO: fix ... everywhere ...
 	bflsc->device_file = (FILE *)sc_info;
 
-	if (!usb_init(bflsc, dev, found)) {
-		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
-			bflsc->drv->dname,
-			(int)(bflsc->usbinfo.bus_number),
-			(int)(bflsc->usbinfo.device_address));
+	if (!usb_init(bflsc, dev, found))
 		goto shin;
-	}
 
 	sprintf(devpath, "%d:%d",
 			(int)(bflsc->usbinfo.bus_number),

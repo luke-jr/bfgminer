@@ -179,18 +179,12 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 	bitforce->deven = DEV_ENABLED;
 	bitforce->threads = 1;
 
-	if (!usb_init(bitforce, dev, found)) {
-		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
-			bitforce->drv->dname,
-			(int)(bitforce->usbinfo.bus_number),
-			(int)(bitforce->usbinfo.device_address));
+	if (!usb_init(bitforce, dev, found))
 		goto shin;
-	}
 
 	sprintf(devpath, "%d:%d",
 			(int)(bitforce->usbinfo.bus_number),
 			(int)(bitforce->usbinfo.device_address));
-
 
 	// Allow 2 complete attempts if the 1st time returns an unrecognised reply
 	ident_first = true;

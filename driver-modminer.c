@@ -126,13 +126,8 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	mutex_init(modminer->modminer_mutex);
 	modminer->fpgaid = (char)0;
 
-	if (!usb_init(modminer, dev, found)) {
-		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
-			modminer->drv->dname,
-			(int)(modminer->usbinfo.bus_number),
-			(int)(modminer->usbinfo.device_address));
+	if (!usb_init(modminer, dev, found))
 		goto shin;
-	}
 
 	sprintf(devpath, "%d:%d",
 			(int)(modminer->usbinfo.bus_number),
