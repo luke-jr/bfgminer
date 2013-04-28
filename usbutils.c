@@ -960,6 +960,7 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 					goto fail;
 				}
 			}
+			add_in_use(bus_number, device_address);
 			return true;
 		case WAIT_TIMEOUT:
 			if (!hotplug_mode)
