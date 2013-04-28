@@ -12,7 +12,7 @@ EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
 		  API.class API.java api-example.c windows-build.txt \
 		  bitstreams/* API-README FPGA-README SCRYPT-README \
 		  bitforce-firmware-flash.c hexdump.c ASIC-README \
-		  01-cgminer.rules
+		  01-cgminer.rules GPU-README
 
 SUBDIRS		= lib compat ccan
 
