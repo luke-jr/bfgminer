@@ -220,6 +220,15 @@ static int busdev_count = 0;
 static int total_count = 0;
 static int total_limit = 999999;
 
+struct usb_in_use_list {
+	struct usb_busdev in_use;
+	struct usb_in_use_list *prev;
+	struct usb_in_use_list *next;
+};
+
+// List of in use devices
+static struct usb_in_use_list *in_use_head = NULL;
+
 static bool stats_initialised = false;
 
 struct cg_usb_stats_item {
@@ -798,6 +807,96 @@ void usb_applog(struct cgpu_info *cgpu, enum usb_cmds cmd, char *msg, int amount
                         err, amount);
 }
 
+static bool __is_in_use(uint8_t bus_number, uint8_t device_address)
+{
+	struct usb_in_use_list *in_use_tmp;
+	bool ret = false;
+
+	in_use_tmp = in_use_head;
+	while (in_use_tmp) {
+		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
+		    in_use_tmp->in_use.device_address == (int)device_address) {
+			ret = true;
+			break;
+		}
+		in_use_tmp = in_use_tmp->next;
+	}
+
+	return ret;
+}
+
+static bool is_in_use_bd(uint8_t bus_number, uint8_t device_address)
+{
+	bool ret;
+
+	mutex_lock(&cgusb_lock);
+	ret = __is_in_use(bus_number, device_address);
+	mutex_unlock(&cgusb_lock);
+	return ret;
+}
+
+static bool is_in_use(libusb_device *dev)
+{
+	return is_in_use_bd(libusb_get_bus_number(dev), libusb_get_device_address(dev));
+}
+
+static void add_in_use(uint8_t bus_number, uint8_t device_address)
+{
+	struct usb_in_use_list *in_use_tmp;
+	bool found = false;
+
+	mutex_lock(&cgusb_lock);
+	if (unlikely(__is_in_use(bus_number, device_address))) {
+		found = true;
+		goto nofway;
+	}
+
+	in_use_tmp = calloc(1, sizeof(*in_use_tmp));
+	in_use_tmp->in_use.bus_number = (int)bus_number;
+	in_use_tmp->in_use.device_address = (int)device_address;
+	in_use_tmp->next = in_use_head;
+	if (in_use_head)
+		in_use_head->prev = in_use_tmp;
+	in_use_head = in_use_tmp;
+nofway:
+	mutex_unlock(&cgusb_lock);
+
+	if (found)
+		applog(LOG_ERR, "FAIL: USB add already in use (%d:%d)",
+				(int)bus_number, (int)device_address);
+}
+
+static void remove_in_use(uint8_t bus_number, uint8_t device_address)
+{
+	struct usb_in_use_list *in_use_tmp;
+	bool found = false;
+
+	mutex_lock(&cgusb_lock);
+
+	in_use_tmp = in_use_head;
+	while (in_use_tmp) {
+		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
+		    in_use_tmp->in_use.device_address == (int)device_address) {
+			found = true;
+			if (in_use_tmp == in_use_head)
+				in_use_head = in_use_head->next;
+			else {
+				in_use_tmp->prev->next = in_use_tmp->next;
+				if (in_use_tmp->next)
+					in_use_tmp->next->prev = in_use_tmp->prev;
+			}
+			free(in_use_tmp);
+		}
+		in_use_tmp = in_use_tmp->next;
+	}
+
+	mutex_unlock(&cgusb_lock);
+
+	if (!found)
+		applog(LOG_ERR, "FAIL: USB remove not already in use (%d:%d)",
+				(int)bus_number, (int)device_address);
+}
+
 #ifndef WIN32
 #include <errno.h>
 #include <unistd.h>
@@ -825,6 +924,9 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 	char name[64];
 	DWORD res;
 	int i;
+
+	if (is_in_use_bd(bus_number, device_address))
+		return false;
 
 	sprintf(name, "cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
 
@@ -878,6 +980,7 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 	}
 
 	CloseHandle(usbMutex);
+	add_in_use(bus_number, device_address);
 	return true;
 fail:
 	CloseHandle(usbMutex);
@@ -888,6 +991,9 @@ fail:
 	char name[64];
 	key_t key;
 	int fd, sem, count;
+
+	if (is_in_use_bd(bus_number, device_address))
+		return false;
 
 	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
 	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
@@ -957,6 +1063,7 @@ fail:
 		return false;
 	}
 
+	add_in_use(bus_number, device_address);
 	return true;
 #endif
 }
@@ -990,6 +1097,7 @@ static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, ui
 			drv->dname, name, GetLastError());
 
 	CloseHandle(usbMutex);
+	remove_in_use(bus_number, device_address);
 	return;
 #else
 	char name[64];
@@ -1030,6 +1138,7 @@ static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, ui
 			drv->dname, name, errno, strerror(errno));
 	}
 
+	remove_in_use(bus_number, device_address);
 	return;
 #endif
 }
@@ -1487,7 +1596,7 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 
 		found = usb_check(drv, list[i]);
 		if (found != NULL) {
-			if (cgminer_usb_lock(drv, list[i]) == false)
+			if (is_in_use(list[i]) || cgminer_usb_lock(drv, list[i]) == false)
 				free(found);
 			else {
 				if (!device_detect(list[i], found))
