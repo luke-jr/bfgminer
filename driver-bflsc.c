@@ -1274,6 +1274,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		applog(LOG_ERR, "%s%i:%s work returned too small (%d,%s)",
 				bflsc->drv->name, bflsc->device_id, xlink, count, tmp);
 		free(tmp);
+		inc_hw_errors(bflsc->thr[0]);
 		return;
 	}
 
@@ -1281,6 +1282,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		applog(LOG_ERR, "%s%i:%s work returned too large (%d) processing %d anyway",
 				bflsc->drv->name, bflsc->device_id, xlink, count, QUE_FLD_MAX);
 		count = QUE_FLD_MAX;
+		inc_hw_errors(bflsc->thr[0]);
 	}
 
 	num = atoi(fields[QUE_NONCECOUNT]);
@@ -1289,6 +1291,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		applog(LOG_ERR, "%s%i:%s incorrect data count (%d) will use %d instead from (%s)",
 				bflsc->drv->name, bflsc->device_id, xlink, num, count - QUE_FLD_MAX, tmp);
 		free(tmp);
+		inc_hw_errors(bflsc->thr[0]);
 	}
 
 	memset(midstate, 0, MIDSTATE_BYTES);
@@ -1299,9 +1302,11 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	work = find_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
 						blockdata, MERKLE_OFFSET, MERKLE_BYTES);
 	if (!work) {
-		if (sc_info->not_first_work)
+		if (sc_info->not_first_work) {
 			applog(LOG_ERR, "%s%i:%s failed to find nonce work - can't be processed - ignored",
 					bflsc->drv->name, bflsc->device_id, xlink);
+					inc_hw_errors(bflsc->thr[0]);
+		}
 		return;
 	}
 
