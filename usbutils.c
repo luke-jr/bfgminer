@@ -1217,7 +1217,11 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 }
 
-bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
+#define USB_INIT_FAIL 0
+#define USB_INIT_OK 1
+#define USB_INIT_IGNORE 2
+
+static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cg_usb_device *cgusb = NULL;
 	struct libusb_config_descriptor *config = NULL;
@@ -1226,6 +1230,7 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 	unsigned char strbuf[STRBUFLEN+1];
 	char devstr[STRBUFLEN+1];
 	int err, i, j, k;
+	int bad = USB_INIT_FAIL;
 
 	cgpu->usbinfo.bus_number = libusb_get_bus_number(dev);
 	cgpu->usbinfo.device_address = libusb_get_device_address(dev);
@@ -1301,8 +1306,10 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 				err, devstr);
 			goto cldame;
 		}
-		if (strcmp((char *)man, found->iManufacturer))
+		if (strcmp((char *)man, found->iManufacturer)) {
+			bad = USB_INIT_IGNORE;
 			goto cldame;
+		}
 	}
 
 	if (found->iProduct) {
@@ -1317,8 +1324,10 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 				err, devstr);
 			goto cldame;
 		}
-		if (strcmp((char *)prod, found->iProduct))
+		if (strcmp((char *)prod, found->iProduct)) {
+			bad = USB_INIT_IGNORE;
 			goto cldame;
+		}
 	}
 
 	err = libusb_set_configuration(cgusb->handle, found->config);
@@ -1435,7 +1444,7 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		cgpu->drv->name = (char *)(found->name);
 	}
 
-	return true;
+	return USB_INIT_OK;
 
 cldame:
 
@@ -1448,7 +1457,22 @@ dame:
 
 	cgusb = free_cgusb(cgusb);
 
-	return false;
+	return bad;
+}
+
+bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
+{
+	int ret;
+
+	ret = _usb_init(cgpu, dev, found);
+
+	if (ret == USB_INIT_FAIL)
+		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
+				cgpu->drv->dname,
+				(int)(cgpu->usbinfo.bus_number),
+				(int)(cgpu->usbinfo.device_address));
+
+	return (ret == USB_INIT_OK);
 }
 
 static bool usb_check_device(struct device_drv *drv, struct libusb_device *dev, struct usb_find_devices *look)
