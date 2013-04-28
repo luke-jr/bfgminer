@@ -1,3 +1,10 @@
+bfgminer (2.10.8-0precise1) precise; urgency=low
+
+  * Fix stratum on Windows.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 28 Apr 2013 05:53:02 -0000
+
+
 bfgminer (2.10.7-0precise1) precise; urgency=low
 
   * Bugfixes only.
