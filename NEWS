@@ -1,5 +1,10 @@
 Version 3.1.0 - April 28th, 2013
 
+- va_copy is meant to be matched by a va_end in log_generic.
+- usbutils remove_in_use break
+- usbutils remove_in_use missing prev
+- usbutils missing add_in_use
+- Clean up summary slightly better on exit.
 - Make the scan sleep time after scanwork in bflsc dynamic to keep queues
 between watermark levels.
 - Remove unused temp counts in bflsc.
