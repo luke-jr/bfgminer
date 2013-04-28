@@ -124,7 +124,7 @@ static struct usb_find_devices find_dev[] = {
 		.name = "BFL",
 		.idVendor = 0x0403,
 		.idProduct = 0x6014,
-		.iManufacturer = "Butterfly Labs",
+		.iManufacturer = "Butterfly Labs Inc.",
 		.iProduct = "BitFORCE SHA256",
 		.kernel = 0,
 		.config = 1,
@@ -1182,7 +1182,6 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 
 	if (found->iManufacturer) {
 		unsigned char man[STRBUFLEN+1];
-applog(LOG_ERR, "USB init, looking for man='%s'", found->iManufacturer);
 
 		err = libusb_get_string_descriptor_ascii(cgusb->handle,
 							 cgusb->descriptor->iManufacturer,
@@ -1193,14 +1192,12 @@ applog(LOG_ERR, "USB init, looking for man='%s'", found->iManufacturer);
 				err, devstr);
 			goto cldame;
 		}
-applog(LOG_ERR, "USB init, man='%s' to '%s'", found->iManufacturer, man);
 		if (strcmp((char *)man, found->iManufacturer))
 			goto cldame;
 	}
 
 	if (found->iProduct) {
 		unsigned char prod[STRBUFLEN+1];
-applog(LOG_ERR, "USB init, looking for prod='%s'", found->iProduct);
 
 		err = libusb_get_string_descriptor_ascii(cgusb->handle,
 							 cgusb->descriptor->iProduct,
@@ -1211,7 +1208,6 @@ applog(LOG_ERR, "USB init, looking for prod='%s'", found->iProduct);
 				err, devstr);
 			goto cldame;
 		}
-applog(LOG_ERR, "USB init, prod='%s' to '%s'", found->iProduct, prod);
 		if (strcmp((char *)prod, found->iProduct))
 			goto cldame;
 	}
