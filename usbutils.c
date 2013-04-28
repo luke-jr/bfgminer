@@ -109,6 +109,8 @@ static struct usb_find_devices find_dev[] = {
 		.name = "BAS",
 		.idVendor = 0x0403,
 		.idProduct = 0x6014,
+		.iManufacturer = "Butterfly Labs",
+		.iProduct = "BitFORCE SHA256 SC",
 		.kernel = 0,
 		.config = 1,
 		.interface = 0,
@@ -122,6 +124,8 @@ static struct usb_find_devices find_dev[] = {
 		.name = "BFL",
 		.idVendor = 0x0403,
 		.idProduct = 0x6014,
+		.iManufacturer = "Butterfly Labs",
+		.iProduct = "BitFORCE SHA256",
 		.kernel = 0,
 		.config = 1,
 		.interface = 0,
@@ -170,7 +174,7 @@ static struct usb_find_devices find_dev[] = {
 		.epcount = 0,
 		.eps = NULL },
 #endif
-	{ DRV_LAST, NULL, 0, 0, 0, 0, 0, 0, 0, NULL }
+	{ DRV_LAST, NULL, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, NULL }
 };
 
 #ifdef USE_BFLSC
@@ -1175,6 +1179,42 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		}
 	}
 #endif
+
+	if (found->iManufacturer) {
+		unsigned char man[STRBUFLEN+1];
+applog(LOG_ERR, "USB init, looking for man='%s'", found->iManufacturer);
+
+		err = libusb_get_string_descriptor_ascii(cgusb->handle,
+							 cgusb->descriptor->iManufacturer,
+							 man, STRBUFLEN);
+		if (err < 0) {
+			applog(LOG_DEBUG,
+				"USB init, failed to get iManufacturer, err %d %s",
+				err, devstr);
+			goto cldame;
+		}
+applog(LOG_ERR, "USB init, man='%s' to '%s'", found->iManufacturer, man);
+		if (strcmp((char *)man, found->iManufacturer))
+			goto cldame;
+	}
+
+	if (found->iProduct) {
+		unsigned char prod[STRBUFLEN+1];
+applog(LOG_ERR, "USB init, looking for prod='%s'", found->iProduct);
+
+		err = libusb_get_string_descriptor_ascii(cgusb->handle,
+							 cgusb->descriptor->iProduct,
+							 prod, STRBUFLEN);
+		if (err < 0) {
+			applog(LOG_DEBUG,
+				"USB init, failed to get iProduct, err %d %s",
+				err, devstr);
+			goto cldame;
+		}
+applog(LOG_ERR, "USB init, prod='%s' to '%s'", found->iProduct, prod);
+		if (strcmp((char *)prod, found->iProduct))
+			goto cldame;
+	}
 
 	err = libusb_set_configuration(cgusb->handle, found->config);
 	if (err) {
