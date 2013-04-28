@@ -11,7 +11,8 @@ EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-cgminer \
 		  ADL_SDK/readme.txt api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
 		  bitstreams/* API-README FPGA-README SCRYPT-README \
-		  bitforce-firmware-flash.c hexdump.c
+		  bitforce-firmware-flash.c hexdump.c ASIC-README \
+		  01-cgminer.rules
 
 SUBDIRS		= lib compat ccan
 

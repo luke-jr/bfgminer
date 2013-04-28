@@ -1,0 +1,3 @@
+# Butterfly Labs FPGA and ASIC devices
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
