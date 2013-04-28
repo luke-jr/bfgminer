@@ -30,7 +30,14 @@
 #define BLANK ""
 #define LFSTR "<LF>"
 
-#define BFLSC_BUFSIZ (0x200)
+/*
+ * With Firmware 1.0.0 and a result queue of 20 the Max is:
+ * header = 9
+ * 64+1+32+1+1+(1+8)*8+1 per line = 172 * 20
+ * OK = 3
+ * Total: 3452
+ */
+#define BFLSC_BUFSIZ (0x1000)
 
 #define BFLSC_DI_FIRMWARE "FIRMWARE"
 #define BFLSC_DI_ENGINES "ENGINES"
