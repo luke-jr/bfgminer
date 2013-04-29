@@ -432,7 +432,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	state->upload_data.len = strlen(rpc_req);
 	sprintf(len_hdr, "Content-Length: %lu",
 		(unsigned long) state->upload_data.len);
-	sprintf(user_agent_hdr, "User-Agent: %s", PACKAGE_STRING);
+	sprintf(user_agent_hdr, "User-Agent: %s", PACKAGE"/"VERSION);
 
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
