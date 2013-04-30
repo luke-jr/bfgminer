@@ -878,23 +878,17 @@ int libztex_readHashData(struct libztex_device *ztex, struct libztex_hash_data n
 	}
 
 	for (i=0; i<ztex->numNonces; i++) {
-		memcpy((char*)&nonces[i].goldenNonce[0], &rbuf[i*bufsize], 4);
-		nonces[i].goldenNonce[0] -= ztex->offsNonces;
+		uint32_t *nonce_data = (void*)&rbuf[i * bufsize];
+		nonces[i].goldenNonce[0] = nonce_data[0] - ztex->offsNonces;
 		//applog(LOG_DEBUG, "W %d:0 %0.8x", i, nonces[i].goldenNonce[0]);
 
-		memcpy((char*)&nonces[i].nonce, &rbuf[(i*bufsize)+4], 4);
-		memcpy((char*)&nonces[i].hash7, &rbuf[(i*bufsize)+8], 4);
+		nonces[i].nonce = le32toh(nonce_data[1]) - ztex->offsNonces;
+		nonces[i].hash7 = le32toh(nonce_data[2]);
 
-		nonces[i].nonce = le32toh(nonces[i].nonce);
-		nonces[i].hash7 = le32toh(nonces[i].hash7);
-
-		nonces[i].nonce -= ztex->offsNonces;
-
-		for (j=0; j<ztex->extraSolutions; j++) {
-			memcpy((char*)&nonces[i].goldenNonce[j+1], &rbuf[(i*bufsize)+12+(j*4)], 4);
-			nonces[i].goldenNonce[j+1] = le32toh(nonces[i].goldenNonce[j+1]);
-			nonces[i].goldenNonce[j+1] -= ztex->offsNonces;
-			//applog(LOG_DEBUG, "W %d:%d %0.8x", i, j+1, nonces[i].goldenNonce[j+1]);
+		for (j = 1; j <= ztex->extraSolutions; ++j)
+		{
+			nonces[i].goldenNonce[j] = le32toh(nonce_data[2 + j]) - ztex->offsNonces;
+			//applog(LOG_DEBUG, "W %d:%d %0.8x", i, j, nonces[i].goldenNonce[j]);
 		}
 	}
 
