@@ -440,9 +440,25 @@ else
 fi
 
 
-AC_CONFIG_SUBDIRS([libblkmaker])
+AC_ARG_WITH([system-libblkmaker], [AC_HELP_STRING([--with-system-libblkmaker], [Use system libblkmaker rather than bundled one (default disabled)])],[],[with_system_libblkmaker=no])
+if test "x$with_system_libblkmaker" = "xyes"; then
+	PKG_CHECK_MODULES([libblkmaker],[libblkmaker_jansson-0.1],[
+		true
+	],[
+		AC_MSG_ERROR([Could not find system libblkmaker])
+	])
+else
+	libblkmaker_CFLAGS='-Ilibblkmaker'
+	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,libblkmaker/.libs'
+	libblkmaker_LIBS='-lblkmaker_jansson-0.1 -lblkmaker-0.1'
+	AC_CONFIG_SUBDIRS([libblkmaker])
+fi
+AC_SUBST(libblkmaker_CFLAGS)
+AC_SUBST(libblkmaker_LDFLAGS)
+AC_SUBST(libblkmaker_LIBS)
 
-AM_CONDITIONAL([NEED_LIBBLKMAKER], [true])
+
+AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$x6500$ztex != xnonono])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononono])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])

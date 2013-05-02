@@ -26,6 +26,10 @@ bfgminer_CPPFLAGS += @JANSSON_CFLAGS@
 bfgminer_CPPFLAGS += $(PTHREAD_FLAGS)
 bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
 
+bfgminer_LDADD += $(libblkmaker_LIBS)
+bfgminer_LDFLAGS += $(libblkmaker_LDFLAGS)
+bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
+
 # common sources
 bfgminer_SOURCES := miner.c
 
@@ -37,9 +41,6 @@ bfgminer_DEPENDENCIES =
 
 if NEED_LIBBLKMAKER
 SUBDIRS           += libblkmaker
-bfgminer_CPPFLAGS += -Ilibblkmaker
-bfgminer_LDFLAGS  += -Llibblkmaker/.libs -Wl,-rpath,libblkmaker/.libs
-bfgminer_LDADD    += -lblkmaker_jansson-0.1 -lblkmaker-0.1
 
 if HAVE_CYGWIN
 bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
