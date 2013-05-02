@@ -1067,7 +1067,7 @@ static bool fan_autotune(int gpu, int temp, int fanpercent, int lasttemp, bool *
 
 	get_fanrange(gpu, &iMin, &iMax);
 	if (temp > ga->overtemp && fanpercent < iMax) {
-		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%", gpu);
+		applog(LOG_WARNING, "Overheat detected on GPU %d, increasing fan to 100%%", gpu);
 		newpercent = iMax;
 
 		dev_error(cgpu, REASON_DEV_OVER_HEAT);
