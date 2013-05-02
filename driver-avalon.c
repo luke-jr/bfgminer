@@ -1017,6 +1017,16 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "matching_work_count22", &(info->matching_work[21]), false);
 	root = api_add_int(root, "matching_work_count23", &(info->matching_work[22]), false);
 	root = api_add_int(root, "matching_work_count24", &(info->matching_work[23]), false);
+	if (info->miner_count > 24) {
+		root = api_add_int(root, "matching_work_count25", &(info->matching_work[24]), false);
+		root = api_add_int(root, "matching_work_count26", &(info->matching_work[25]), false);
+		root = api_add_int(root, "matching_work_count27", &(info->matching_work[26]), false);
+		root = api_add_int(root, "matching_work_count28", &(info->matching_work[27]), false);
+		root = api_add_int(root, "matching_work_count29", &(info->matching_work[28]), false);
+		root = api_add_int(root, "matching_work_count30", &(info->matching_work[29]), false);
+		root = api_add_int(root, "matching_work_count31", &(info->matching_work[30]), false);
+		root = api_add_int(root, "matching_work_count32", &(info->matching_work[31]), false);
+	}
 
 	return root;
 }
