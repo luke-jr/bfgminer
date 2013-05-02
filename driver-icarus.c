@@ -730,8 +730,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			estimate_hashes = 0xffffffff;
 
 		if (opt_debug) {
-			applog(LOG_DEBUG, "Icarus %d no nonce = 0x%08llx hashes (%ld.%06lds)",
-					icarus->device_id, estimate_hashes,
+			applog(LOG_DEBUG, "Icarus %d no nonce = 0x%08lX hashes (%ld.%06lds)",
+					icarus->device_id, (long unsigned int)estimate_hashes,
 					elapsed.tv_sec, elapsed.tv_usec);
 		}
 
@@ -760,8 +760,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		timersub(&tv_finish, &tv_start, &elapsed);
 
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Icarus %d nonce = 0x%08x = 0x%08llx hashes (%ld.%06lds)",
-				icarus->device_id, nonce, hash_count, elapsed.tv_sec, elapsed.tv_usec);
+		applog(LOG_DEBUG, "Icarus %d nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
+				icarus->device_id, nonce, (long unsigned int)hash_count,
+				elapsed.tv_sec, elapsed.tv_usec);
 	}
 
 	// ignore possible end condition values ... and hw errors
