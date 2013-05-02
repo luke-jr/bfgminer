@@ -298,7 +298,7 @@ static bool get_info(struct cgpu_info *modminer, FILE *f, char *buf, int bufsiz,
 	}
 
 	if (fread(buf, len, 1, f) != 1) {
-		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream '%s'", errno,
+		applog(LOG_ERR, "%s%u: Error (%d) reading bitstream '%s'",
 			modminer->drv->name, modminer->device_id, errno, name);
 		return false;
 	}
@@ -436,7 +436,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		goto dame;
 	}
 
-	applog(LOG_DEBUG, " Version: %u, build %u", (fwusercode >> 8) & 0xff, fwusercode & 0xff);
+	applog(LOG_DEBUG, " Version: %lu, build %lu", (fwusercode >> 8) & 0xff, fwusercode & 0xff);
 
 	if (!get_expect(modminer, f, 'b'))
 		goto undame;
@@ -514,7 +514,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		if (fread(buf, buflen, 1, f) != 1) {
 			mutex_unlock(modminer->modminer_mutex);
 
-			applog(LOG_ERR, "%s%u: bitstream file read error %d (%d bytes left)",
+			applog(LOG_ERR, "%s%u: bitstream file read error %d (%lu bytes left)",
 				modminer->drv->name, modminer->device_id, errno, len);
 
 			goto dame;
@@ -529,7 +529,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 				ptr += amount;
 
 				if (opt_debug)
-					applog(LOG_DEBUG, "%s%u: Program timeout (%d:%d) sent %d tries %d",
+					applog(LOG_DEBUG, "%s%u: Program timeout (%d:%d) sent %zu tries %d",
 						modminer->drv->name, modminer->device_id,
 						amount, err, remaining, tries);
 
@@ -539,7 +539,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 			} else {
 				mutex_unlock(modminer->modminer_mutex);
 
-				applog(LOG_ERR, "%s%u: Program failed (%d:%d) sent %d",
+				applog(LOG_ERR, "%s%u: Program failed (%d:%d) sent %zu",
 					modminer->drv->name, modminer->device_id, amount, err, remaining);
 
 				goto dame;
@@ -554,7 +554,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		upto = (float)(totlen - len) / (float)(totlen);
 		if (upto >= nextmsg) {
 			applog(LOG_WARNING,
-				"%s%u: Programming %.1f%% (%d out of %d)",
+				"%s%u: Programming %.1f%% (%lu out of %lu)",
 				modminer->drv->name, modminer->device_id, upto*100, (totlen - len), totlen);
 
 			nextmsg += 0.1;
