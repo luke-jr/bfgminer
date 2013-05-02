@@ -580,7 +580,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
-			applog(LOG_ERR, "%s%i: took %dms - longer than %dms",
+			applog(LOG_ERR, "%s%i: took %ldms - longer than %dms",
 				bitforce->drv->name, bitforce->device_id,
 				tv_to_ms(elapsed), BITFORCE_LONG_TIMEOUT_MS);
 			return 0;
@@ -596,7 +596,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 	}
 
 	if (elapsed.tv_sec > BITFORCE_TIMEOUT_S) {
-		applog(LOG_ERR, "%s%i: took %dms - longer than %dms",
+		applog(LOG_ERR, "%s%i: took %ldms - longer than %dms",
 			bitforce->drv->name, bitforce->device_id,
 			tv_to_ms(elapsed), BITFORCE_TIMEOUT_MS);
 		dev_error(bitforce, REASON_DEV_OVER_HEAT);
