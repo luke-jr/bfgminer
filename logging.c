@@ -53,7 +53,7 @@ void vapplog(int prio, const char *fmt, va_list ap)
 		log_generic(prio, fmt, ap);
 }
 
-void applog(int prio, const char *fmt, ...)
+void _applog(int prio, const char *fmt, ...)
 {
 	va_list ap;
 

@@ -6487,10 +6487,14 @@ static void clean_up(void)
 
 void quit(int status, const char *format, ...)
 {
-	clean_up();
+	if (format) {
+		va_list ap;
+		va_start(ap, format);
+		vapplog(LOG_ERR, format, ap);
+		va_end(ap);
+	}
 
-	if (format)
-		log_error(format);
+	clean_up();
 
 #if defined(unix)
 	if (forkpid > 0) {
