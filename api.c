@@ -3928,18 +3928,18 @@ void api(int api_thr_id)
 	}
 
 	if (opt_api_allow)
-		applog(LOG_WARNING, "API running in IP access mode on port %d (%d)", port, *apisock);
+		applog(LOG_WARNING, "API running in IP access mode on port %d (%d)", port, (int)*apisock);
 	else {
 		if (opt_api_network)
-			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d (%d)", port, *apisock);
+			applog(LOG_WARNING, "API running in UNRESTRICTED read access mode on port %d (%d)", port, (int)*apisock);
 		else
-			applog(LOG_WARNING, "API running in local read access mode on port %d (%d)", port, *apisock);
+			applog(LOG_WARNING, "API running in local read access mode on port %d (%d)", port, (int)*apisock);
 	}
 
 	while (!bye) {
 		clisiz = sizeof(cli);
 		if (SOCKETFAIL(c = accept(*apisock, (struct sockaddr *)(&cli), &clisiz))) {
-			applog(LOG_ERR, "API failed (%s)%s (%d)", SOCKERRMSG, UNAVAILABLE, *apisock);
+			applog(LOG_ERR, "API failed (%s)%s (%d)", SOCKERRMSG, UNAVAILABLE, (int)*apisock);
 			goto die;
 		}
 
