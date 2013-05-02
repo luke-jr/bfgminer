@@ -1138,7 +1138,7 @@ static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, ui
 	// Wait forever since we shoud be the one who has it
 	if (semtimedop(sem, sops, 1, &timeout)) {
 		applog(LOG_ERR,
-			"SEM: %d USB failed to release '%s' err (%d) %s",
+			"SEM: %s USB failed to release '%s' err (%d) %s",
 			drv->dname, name, errno, strerror(errno));
 	}
 
@@ -1602,7 +1602,7 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 
 	count = libusb_get_device_list(NULL, &list);
 	if (count < 0) {
-		applog(LOG_DEBUG, "USB scan devices: failed, err %d", count);
+		applog(LOG_DEBUG, "USB scan devices: failed, err %zd", count);
 		return;
 	}
 
