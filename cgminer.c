@@ -3266,7 +3266,8 @@ static void *submit_work_thread(void *userdata)
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
 
-		applog(LOG_INFO, "Submitting share %08lx to pool %d", htole32(hash32[6]), pool->pool_no);
+		applog(LOG_INFO, "Submitting share %08lx to pool %d",
+					(long unsigned int)htole32(hash32[6]), pool->pool_no);
 
 		/* Try resubmitting for up to 2 minutes if we fail to submit
 		 * once and the stratum pool nonce1 still matches suggesting
@@ -6460,7 +6461,7 @@ void print_summary(void)
 		if (opt_shares > total_accepted)
 			applog(LOG_WARNING, "WARNING - Mined only %d shares of %d requested.", total_accepted, opt_shares);
 	}
-	applog(LOG_WARNING, "");
+	applog(LOG_WARNING, " ");
 
 	fflush(stderr);
 	fflush(stdout);
