@@ -274,13 +274,13 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 			if (nonce > noncecnt)
 				noncecnt = nonce;
 			if (((0xffffffff - nonce) < (nonce - lastnonce[i])) || nonce < lastnonce[i]) {
-				applog(LOG_DEBUG, "%s: overflow nonce=%0.8x lastnonce=%0.8x", ztex->repr, nonce, lastnonce[i]);
+				applog(LOG_DEBUG, "%s: overflow nonce=%08x lastnonce=%08x", ztex->repr, nonce, lastnonce[i]);
 				overflow = true;
 			} else
 				lastnonce[i] = nonce;
 
 			if (ztex_checkNonce(work, nonce) != (hdata->hash7 + 0x5be0cd19)) {
-				applog(LOG_DEBUG, "%s: checkNonce failed for %0.8X", ztex->repr, nonce);
+				applog(LOG_DEBUG, "%s: checkNonce failed for %08X", ztex->repr, nonce);
 
 				// do not count errors in the first 500ms after sendHashData (2x250 wait time)
 				if (count > 2) {
@@ -320,7 +320,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 					work->blk.nonce = 0xffffffff;
 					submit_nonce(thr, work, nonce);
-					applog(LOG_DEBUG, "%s: submitted %0.8x", ztex->repr, nonce);
+					applog(LOG_DEBUG, "%s: submitted %08x", ztex->repr, nonce);
 				}
 			}
 		}
