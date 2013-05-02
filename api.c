@@ -827,7 +827,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 
 	api_data = (struct api_data *)malloc(sizeof(struct api_data));
 
-	api_data->name = name;
+	api_data->name = strdup(name);
 	api_data->type = type;
 
 	if (root == NULL) {
@@ -1116,6 +1116,7 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 
 		buf = strchr(buf, '\0');
 
+		free(root->name);
 		if (root->data_was_malloc)
 			free(root->data);
 
