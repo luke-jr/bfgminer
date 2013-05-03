@@ -181,7 +181,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	if (at->reset)
 		nr_len = 1;
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: Sent(%d):", nr_len);
+		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
 		hexdump((uint8_t *)buf, nr_len);
 	}
 	ret = write(fd, buf, nr_len);
@@ -927,7 +927,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			timersub(&tv_finish, &tv_start, &elapsed);
 			applog(LOG_DEBUG,
 			       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
-			       "(%ld.%06lds)", nonce, hash_count,
+			       "(%ld.%06lds)", nonce, (unsigned long long)hash_count,
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
