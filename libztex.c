@@ -1,10 +1,10 @@
 /**
  *   libztex.c - Ztex 1.15x/1.15y fpga board support library
  *
- *   Copyright 2012 nelisky.btc@gmail.com
+ *   Copyright 2012 nelisky
  *   Copyright 2012-2013 Luke Dashjr
- *   Copyright 2012-2013 Denis Ahrens <denis@h3q.com>
- *   Copyright 2012 Peter Stuge <peter@stuge.se>
+ *   Copyright 2012-2013 Denis Ahrens
+ *   Copyright 2012 Peter Stuge
  *
  *   This work is based upon the Java SDK provided by ztex which is
  *   Copyright (C) 2009-2011 ZTEX GmbH.
