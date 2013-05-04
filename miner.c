@@ -389,6 +389,8 @@ void get_timestamp(char *f, struct timeval *tv)
 		tm->tm_sec);
 }
 
+static void applog_and_exit(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
+
 static void applog_and_exit(const char *fmt, ...)
 {
 	va_list ap;
@@ -4986,7 +4988,7 @@ updated:
 	}
 retry:
 	wlogprint("\nCurrent pool management strategy: %s\n",
-		strategies[pool_strategy]);
+		strategies[pool_strategy].s);
 	if (pool_strategy == POOL_ROTATE)
 		wlogprint("Set to rotate every %d minutes\n", opt_rotate_period);
 	wlogprint("[F]ailover only %s\n", opt_fail_only ? "enabled" : "disabled");
@@ -5056,7 +5058,7 @@ retry:
 		goto updated;
 	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)
-			wlogprint("%d: %s\n", i, strategies[i]);
+			wlogprint("%d: %s\n", i, strategies[i].s);
 		selected = curses_int("Select strategy number type");
 		if (selected < 0 || selected > TOP_STRATEGY) {
 			wlogprint("Invalid selection\n");

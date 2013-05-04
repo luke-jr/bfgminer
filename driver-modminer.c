@@ -75,6 +75,8 @@ struct modminer_fpga_state {
 	unsigned char pdone;
 };
 
+static inline bool _bailout(int fd, struct cgpu_info*modminer, int prio, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 4, 5);
+
 static inline bool
 _bailout(int fd, struct cgpu_info*modminer, int prio, const char *fmt, ...)
 {
@@ -242,7 +244,7 @@ modminer_fpga_upload_bitstream(struct cgpu_info*modminer)
 	while (len) {
 		buflen = len < 32 ? len : 32;
 		if (fread(buf, buflen, 1, f) != 1)
-			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%d bytes left)", modminer->api->name, modminer->device_id, modminer->device_path, len);
+			bailout2(LOG_ERR, "%s %u: File underrun programming %s (%lu bytes left)", modminer->api->name, modminer->device_id, modminer->device_path, len);
 		if (write(fd, buf, buflen) != buflen)
 			bailout2(LOG_ERR, "%s %u: Error programming %s (data)", modminer->api->name, modminer->device_id,  modminer->device_path);
 		state->pdone = 100 - ((len * 100) / flen);
