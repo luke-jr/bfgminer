@@ -50,6 +50,8 @@ struct modminer_fpga_state {
 	unsigned char pdone;
 };
 
+static inline bool _bailout(int fd, struct cgpu_info*modminer, int prio, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 4, 5);
+
 static inline bool
 _bailout(int fd, struct cgpu_info*modminer, int prio, const char *fmt, ...)
 {

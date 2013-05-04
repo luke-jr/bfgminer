@@ -380,6 +380,8 @@ void get_timestamp(char *f, struct timeval *tv)
 		tm->tm_sec);
 }
 
+static void applog_and_exit(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
+
 static void applog_and_exit(const char *fmt, ...)
 {
 	va_list ap;

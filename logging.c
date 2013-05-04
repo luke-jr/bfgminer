@@ -21,6 +21,8 @@ bool opt_log_output = false;
 /* per default priorities higher than LOG_NOTICE are logged */
 int opt_log_level = LOG_NOTICE;
 
+static void my_log_curses(int prio, char *f, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
+
 static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
 {
 	if (opt_quiet && prio != LOG_ERR)
@@ -48,7 +50,7 @@ static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
 	}
 }
 
-static void log_generic(int prio, const char *fmt, va_list ap);
+static void log_generic(int prio, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
 
 void vapplog(int prio, const char *fmt, va_list ap)
 {
