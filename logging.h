@@ -32,10 +32,10 @@ extern void vapplog(int prio, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(p
 extern void applog(int prio, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
 
 /* high-level logging functions with implicit priority */
-extern void log_error(const char *fmt, ...);
-extern void log_warning(const char *fmt, ...);
-extern void log_notice(const char *fmt, ...);
-extern void log_info(const char *fmt, ...);
-extern void log_debug(const char *fmt, ...);
+extern void log_error(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
+extern void log_warning(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
+extern void log_notice(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
+extern void log_info(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
+extern void log_debug(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 
 #endif /* __LOGGING_H__ */
