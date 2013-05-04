@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Xiangfu <xiangfu@openmobilefree.net>
+ * Copyright 2012-2013 Xiangfu
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
  *

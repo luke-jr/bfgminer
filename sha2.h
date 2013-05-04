@@ -1,7 +1,7 @@
 /**
  * \file sha2.h
  *
- *  Copyright (C) 2011, Con Kolivas <kernel@kolivas.org>
+ *  Copyright (C) 2011, Con Kolivas
  *  Copyright (C) 2006-2010, Brainspark B.V.
  *
  *  This file is part of PolarSSL (http://www.polarssl.org)

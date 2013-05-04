@@ -1,10 +1,10 @@
 /**
  *   ztex.c - BFGMiner worker for Ztex 1.15x/y fpga board
  *
- *   Copyright 2012 nelisky.btc@gmail.com
+ *   Copyright 2012 nelisky
  *   Copyright 2012-2013 Luke Dashjr
  *   Copyright 2012-2013 Denis Ahrens
- *   Copyright 2012 Xiangfu <xiangfu@openmobilefree.net>
+ *   Copyright 2012 Xiangfu
  *
  *   This work is based upon the Java SDK provided by ztex which is
  *   Copyright (C) 2009-2011 ZTEX GmbH.
