@@ -475,7 +475,7 @@ void get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
 	if (gt > 0)
 		tailsprintf(buf, "%5.1fC ", gt);
 	else
-		tailsprintf(buf, "       ", gt);
+		tailsprintf(buf, "       ");
 	tailsprintf(buf, "        | ");
 }
 
