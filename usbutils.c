@@ -1311,6 +1311,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 			goto cldame;
 		}
 		if (strcmp((char *)man, found->iManufacturer)) {
+			applog(LOG_DEBUG, "USB init, iManufacturer mismatch %s",
+			       devstr);
 			bad = USB_INIT_IGNORE;
 			goto cldame;
 		}
@@ -1329,6 +1331,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 			goto cldame;
 		}
 		if (strcmp((char *)prod, found->iProduct)) {
+			applog(LOG_DEBUG, "USB init, iProduct mismatch %s",
+			       devstr);
 			bad = USB_INIT_IGNORE;
 			goto cldame;
 		}
@@ -1358,8 +1362,11 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		goto cldame;
 	}
 
-	if ((int)(config->bNumInterfaces) <= found->interface)
+	if ((int)(config->bNumInterfaces) <= found->interface) {
+		applog(LOG_DEBUG, "USB init bNumInterfaces <= interface %s",
+		       devstr);
 		goto cldame;
+	}
 
 	for (i = 0; i < found->epcount; i++)
 		found->eps[i].found = false;
@@ -1381,9 +1388,13 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		}
 	}
 
-	for (i = 0; i < found->epcount; i++)
-		if (found->eps[i].found == false)
+	for (i = 0; i < found->epcount; i++) {
+		if (found->eps[i].found == false) {
+			applog(LOG_DEBUG, "USB init found == false %s",
+			       devstr);
 			goto cldame;
+		}
+	}
 
 	err = libusb_claim_interface(cgusb->handle, found->interface);
 	if (err) {
