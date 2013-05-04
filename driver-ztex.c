@@ -4,7 +4,7 @@
  *   Copyright 2012 nelisky.btc@gmail.com
  *   Copyright 2012-2013 Luke Dashjr
  *   Copyright 2012-2013 Denis Ahrens
- *   Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
+ *   Copyright 2012 Xiangfu <xiangfu@openmobilefree.net>
  *
  *   This work is based upon the Java SDK provided by ztex which is
  *   Copyright (C) 2009-2011 ZTEX GmbH.
