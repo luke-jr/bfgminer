@@ -202,6 +202,17 @@ static const char *BLANK = "";
 static const char *space = " ";
 static const char *nodatareturned = "no data returned ";
 
+#if 0 // enable USBDEBUG - only during development testing
+ static const char *debug_true_str = "true";
+ static const char *debug_false_str = "false";
+ static const char *nodevstr = "=NODEV";
+ #define bool_str(boo) ((boo) ? debug_true_str : debug_false_str)
+ #define isnodev(err) (NODEV(err) ? nodevstr : BLANK)
+ #define USBDEBUG(fmt, ...) applog(LOG_WARNING, fmt, ##__VA_ARGS__)
+#else
+ #define USBDEBUG(fmt, ...)
+#endif
+
 // For device limits by driver
 static struct driver_count {
 	uint32_t count;
@@ -1844,6 +1855,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	unsigned char usbbuf[USB_MAX_READ+4], *ptr;
 	size_t usbbufread;
 
+	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),ep=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi));
+
 	if (bufsiz > USB_MAX_READ)
 		quit(1, "%s USB read request %d too large (max=%d)", cgpu->drv->name, bufsiz, USB_MAX_READ);
 
@@ -1872,6 +1885,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		STATS_TIMEVAL(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
 		usbbuf[got] = '\0';
+
+		USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) err=%d%s got=%d usbbuf='%s' usbbufread=%zu", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), got, (char *)str_text((char *)usbbuf), usbbufread);
 
 		if (ftdi) {
 			// first 2 bytes returned are an FTDI status
@@ -1913,6 +1928,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		cgtime(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, first ? SEQ0 : SEQ1);
 		ptr[got] = '\0';
+
+		USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%zu", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), usbbufread);
 
 		if (ftdi) {
 			// first 2 bytes returned are an FTDI status
@@ -1978,6 +1995,8 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 #endif
 	int err, sent;
 
+	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),ep=%d,buf='%s',bufsiz=%zu,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, (char *)str_text(buf), bufsiz, processed, timeout, usb_cmdname(cmd));
+
 	if (cgpu->usbinfo.nodev) {
 		*processed = 0;
 #if DO_USB_STATS
@@ -1996,6 +2015,8 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
 
+	USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
+
 	*processed = sent;
 
 	if (NODEV(err))
@@ -2012,6 +2033,8 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 #endif
 	int err;
 
+	USBDEBUG("USB debug: _usb_transfer(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, timeout, usb_cmdname(cmd));
+
 	if (cgpu->usbinfo.nodev) {
 #if DO_USB_STATS
 		rejected_inc(cgpu);
@@ -2025,6 +2048,8 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
+
+	USBDEBUG("USB debug: @_usb_transfer(%s (nodev=%s)) err=%d%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err));
 
 	if (NODEV(err))
 		release_cgpu(cgpu);
