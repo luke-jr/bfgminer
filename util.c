@@ -1535,7 +1535,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, s);
-	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
+	if (!opt_delaynet)
+		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
