@@ -1506,12 +1506,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = false;
 	if (pool->stratum_curl) {
-#if CURL_HAS_KEEPALIVE
-		curl_easy_cleanup(pool->stratum_curl);
-#else
 		/* See above in suspend_stratum */
 		CLOSESOCKET(pool->sock);
-#endif
 	}
 	pool->stratum_curl = curl_easy_init();
 	if (unlikely(!pool->stratum_curl))
@@ -1547,7 +1543,9 @@ static bool setup_stratum_curl(struct pool *pool)
 	}
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
 	if (curl_easy_perform(curl)) {
-		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
+		applog(LOG_INFO, "Stratum connect failed to pool %d: %s",
+		       pool->pool_no, curl_err_str);
+		/* Hopefully we can just clean this curl handle up properly */
 		curl_easy_cleanup(curl);
 		pool->stratum_curl = NULL;
 		return false;
@@ -1601,15 +1599,10 @@ void suspend_stratum(struct pool *pool)
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = pool->stratum_notify = false;
 	if (pool->stratum_curl) {
-#if CURL_HAS_KEEPALIVE
-		curl_easy_cleanup(pool->stratum_curl);
-#else
-		/* Old versions of libcurl seem to crash occasionally on this since
-		* the socket is modified in keep_sockalive in ways curl does not
-		* know about so sacrifice the ram knowing we leak one curl handle
-		* every time we disconnect stratum. */
+		/* libcurl seems to crash occasionally on this since so just
+		 * sacrifice the ram knowing we leak one curl handle every
+		 * time we disconnect stratum. */
 		CLOSESOCKET(pool->sock);
-#endif
 	}
 	pool->stratum_curl = NULL;
 	mutex_unlock(&pool->stratum_lock);
