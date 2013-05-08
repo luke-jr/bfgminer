@@ -1033,13 +1033,11 @@ static void clear_sock(struct pool *pool)
 {
 	ssize_t n;
 
-	if (socket_full(pool, false)) {
-		mutex_lock(&pool->stratum_lock);
-		do {
-			n = recv(pool->sock, pool->sockbuf, RECVSIZE, 0);
-		} while (n > 0);
-		mutex_unlock(&pool->stratum_lock);
-	}
+	mutex_lock(&pool->stratum_lock);
+	do {
+		n = recv(pool->sock, pool->sockbuf, RECVSIZE, MSG_DONTWAIT);
+	} while (n > 0);
+	mutex_unlock(&pool->stratum_lock);
 
 	clear_sockbuf(pool);
 }
@@ -1095,7 +1093,7 @@ char *recv_line(struct pool *pool)
 			ssize_t n;
 
 			memset(s, 0, RBUFSIZE);
-			n = recv(pool->sock, s, RECVSIZE, 0);
+			n = recv(pool->sock, s, RECVSIZE, MSG_DONTWAIT);
 			if (!n) {
 				ret = RECV_CLOSED;
 				break;
