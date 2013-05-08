@@ -1525,12 +1525,13 @@ static bool setup_stratum_socket(struct pool *pool)
 
 		break;
 	}
-	freeaddrinfo(servinfo);
 	if (p == NULL) {
 		applog(LOG_WARNING, "Failed to find servinfo on %s:%s",
 		       pool->sockaddr_url, pool->stratum_port);
+		freeaddrinfo(servinfo);
 		return false;
 	}
+	freeaddrinfo(servinfo);
 
 	if (!pool->sockbuf) {
 		pool->sockbuf = calloc(RBUFSIZE, 1);
