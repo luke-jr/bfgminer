@@ -183,6 +183,9 @@ void usb_initialise();
 #define usb_write_ep_timeout(cgpu, ep, buf, bufsiz, wrote, timeout, cmd) \
 	_usb_write(cgpu, ep, buf, bufsiz, wrote, timeout, cmd)
 
+#define usb_ftdi_read(cgpu, buf, bufsiz, read, cmd) \
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, true)
+
 #define usb_ftdi_read_nl(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, true)
 
