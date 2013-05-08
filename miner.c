@@ -16,6 +16,7 @@
 #include <curses.h>
 #endif
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -3898,11 +3899,13 @@ struct submit_work_state {
 
 static int my_curl_timer_set(__maybe_unused CURLM *curlm, long timeout_ms, void *userp)
 {
-	struct timeval *tvp_timer = userp;
-	if (timeout_ms == -1)
-		tvp_timer->tv_sec = -1;
-	else
-		timer_set_delay_from_now(tvp_timer, timeout_ms * 1000);
+	long *p_timeout_us = userp;
+	
+	const long max_ms = LONG_MAX / 1000;
+	if (max_ms < timeout_ms)
+		timeout_ms = max_ms;
+	
+	*p_timeout_us = timeout_ms * 1000;
 	return 0;
 }
 
@@ -4021,6 +4024,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 {
 	int wip = 0;
 	CURLM *curlm;
+	long curlm_timeout_us = -1;
 	struct timeval curlm_timer;
 	struct submit_work_state *sws, **swsp;
 	struct submit_work_state *write_sws = NULL;
@@ -4033,8 +4037,8 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 	applog(LOG_DEBUG, "Creating extra submit work thread");
 
 	curlm = curl_multi_init();
-	curlm_timer.tv_sec = -1;
-	curl_multi_setopt(curlm, CURLMOPT_TIMERDATA, &curlm_timer);
+	curlm_timeout_us = -1;
+	curl_multi_setopt(curlm, CURLMOPT_TIMERDATA, &curlm_timeout_us);
 	curl_multi_setopt(curlm, CURLMOPT_TIMERFUNCTION, my_curl_timer_set);
 
 	fd_set rfds, wfds, efds;
@@ -4080,8 +4084,14 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		tv_timeout.tv_sec = -1;
 		
 		// Setup cURL with select
+		// Need to call perform to ensure the timeout gets updated
+		curl_multi_perform(curlm, &n);
 		curl_multi_fdset(curlm, &rfds, &wfds, &efds, &maxfd);
-		reduce_timeout_to(&tv_timeout, &curlm_timer);
+		if (curlm_timeout_us >= 0)
+		{
+			timer_set_delay_from_now(&curlm_timer, curlm_timeout_us);
+			reduce_timeout_to(&tv_timeout, &curlm_timer);
+		}
 		
 		// Setup waiting stratum submissions with select
 		for (sws = write_sws; sws; sws = sws->next)
