@@ -201,8 +201,10 @@ out:
 
 static void keep_sockalive(SOCKETTYPE fd)
 {
+#ifndef WIN32
 	const int tcp_keepidle = 45;
 	const int tcp_keepintvl = 30;
+#endif
 	const int tcp_one = 1;
 
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&tcp_one, sizeof(tcp_one));
