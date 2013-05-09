@@ -14,8 +14,10 @@
 #include "logging.h"
 #include "util.h"
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
+#ifndef WIN32
+# include <sys/socket.h>
+# include <netdb.h>
+#endif
 
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
