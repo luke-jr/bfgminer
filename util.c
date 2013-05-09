@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #ifndef WIN32
+#include <fcntl.h>
 # ifdef __linux
 #  include <sys/prctl.h>
 # endif
@@ -201,11 +202,18 @@ out:
 
 static void keep_sockalive(SOCKETTYPE fd)
 {
+	const int tcp_one = 1;
 #ifndef WIN32
 	const int tcp_keepidle = 45;
 	const int tcp_keepintvl = 30;
+	int flags = fcntl(fd, F_GETFL, 0);
+
+	fcntl(fd, F_SETFL, O_NONBLOCK | flags);
+#else
+	u_long flags = 1;
+
+	ioctlsocket(fd, FIONBIO, &flags);
 #endif
-	const int tcp_one = 1;
 
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&tcp_one, sizeof(tcp_one));
 	if (!opt_delaynet)
@@ -213,9 +221,6 @@ static void keep_sockalive(SOCKETTYPE fd)
 		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
 #else /* __linux */
 		setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
-#endif /* __linux */
-
-#ifdef __linux
 	setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_one, sizeof(tcp_one));
 	setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle));
 	setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl));
@@ -224,6 +229,7 @@ static void keep_sockalive(SOCKETTYPE fd)
 #ifdef __APPLE_CC__
 	setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl));
 #endif /* __APPLE_CC__ */
+
 }
 
 #if CURL_HAS_KEEPALIVE
@@ -1048,7 +1054,7 @@ static void clear_sock(struct pool *pool)
 
 	mutex_lock(&pool->stratum_lock);
 	do {
-		n = recv(pool->sock, pool->sockbuf, RECVSIZE, MSG_DONTWAIT);
+		n = recv(pool->sock, pool->sockbuf, RECVSIZE, 0);
 	} while (n > 0);
 	mutex_unlock(&pool->stratum_lock);
 
@@ -1106,7 +1112,7 @@ char *recv_line(struct pool *pool)
 			ssize_t n;
 
 			memset(s, 0, RBUFSIZE);
-			n = recv(pool->sock, s, RECVSIZE, MSG_DONTWAIT);
+			n = recv(pool->sock, s, RECVSIZE, 0);
 			if (!n) {
 				ret = RECV_CLOSED;
 				break;
