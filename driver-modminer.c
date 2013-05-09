@@ -103,7 +103,7 @@ static void do_ping(struct cgpu_info *modminer)
 		modminer->drv->name, modminer->fpgaid, amount, err);
 
 	// Clear any outstanding data
-	while ((err = usb_read(modminer, buf, sizeof(buf)-1, &amount, C_CLEAR)) == 0 && amount > 0)
+	while ((err = usb_read_once(modminer, buf, sizeof(buf)-1, &amount, C_CLEAR)) == 0 && amount > 0)
 		applog(LOG_DEBUG, "%s%u: clear got %d",
 			modminer->drv->name, modminer->fpgaid, amount);
 
@@ -141,7 +141,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 		goto unshin;
 	}
 
-	if ((err = usb_read(modminer, buf, sizeof(buf)-1, &amount, C_GETVERSION)) < 0 || amount < 1) {
+	if ((err = usb_read_once(modminer, buf, sizeof(buf)-1, &amount, C_GETVERSION)) < 0 || amount < 1) {
 		if (err < 0)
 			applog(LOG_ERR, "%s detect (%s) no version reply (%d)",
 				modminer->drv->dname, devpath, err);

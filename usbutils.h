@@ -150,26 +150,29 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
 struct api_data *api_usb_stats(int *count);
 void update_usb_stats(struct cgpu_info *cgpu);
-int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool ftdi);
+int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool ftdi, bool readonce);
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds);
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned int timeout, enum usb_cmds cmd);
 void usb_cleanup();
 void usb_initialise();
 
 #define usb_read(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false)
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)
+
+#define usb_read_once(cgpu, buf, bufsiz, read, cmd) \
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, true)
 
 #define usb_read_nl(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, false)
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, false, false)
 
 #define usb_read_ep(cgpu, ep, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, ep, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false)
+	_usb_read(cgpu, ep, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)
 
 #define usb_read_timeout(cgpu, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false)
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, false)
 
 #define usb_read_ep_timeout(cgpu, ep, buf, bufsiz, read, timeout, cmd) \
-	_usb_read(cgpu, ep, buf, bufsiz, read, timeout, NULL, cmd, false)
+	_usb_read(cgpu, ep, buf, bufsiz, read, timeout, NULL, cmd, false, false)
 
 #define usb_write(cgpu, buf, bufsiz, wrote, cmd) \
 	_usb_write(cgpu, DEFAULT_EP_OUT, buf, bufsiz, wrote, DEVTIMEOUT, cmd)
@@ -183,11 +186,14 @@ void usb_initialise();
 #define usb_write_ep_timeout(cgpu, ep, buf, bufsiz, wrote, timeout, cmd) \
 	_usb_write(cgpu, ep, buf, bufsiz, wrote, timeout, cmd)
 
+#define usb_ftdi_read(cgpu, buf, bufsiz, read, cmd) \
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, true, false)
+
 #define usb_ftdi_read_nl(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, true)
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, true, false)
 
 #define usb_ftdi_read_ok(cgpu, buf, bufsiz, read, cmd) \
-	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "OK\n", cmd, true)
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "OK\n", cmd, true, false)
 
 #define usb_transfer(cgpu, typ, req, val, idx, cmd) \
 	_usb_transfer(cgpu, typ, req, val, idx, DEVTIMEOUT, cmd)
