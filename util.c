@@ -207,15 +207,21 @@ static void keep_sockalive(SOCKETTYPE fd)
 
 	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&tcp_one, sizeof(tcp_one));
 	if (!opt_delaynet)
+#ifndef __linux
+		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
+#else /* __linux */
 		setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
-# ifdef __linux
+#endif /* __linux */
+
+#ifdef __linux
 	setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_one, sizeof(tcp_one));
 	setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle));
 	setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl));
-# endif /* __linux */
-# ifdef __APPLE_CC__
+#endif /* __linux */
+
+#ifdef __APPLE_CC__
 	setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl));
-# endif /* __APPLE_CC__ */
+#endif /* __APPLE_CC__ */
 }
 
 #if CURL_HAS_KEEPALIVE
