@@ -958,7 +958,11 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 		FD_SET(sock, &wd);
 		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1)
 			return SEND_SELECTFAIL;
+#ifndef WIN32
 		sent = send(pool->sock, s + ssent, len, MSG_NOSIGNAL);
+#else
+		sent = send(pool->sock, s + ssent, len, 0);
+#endif
 		if (sent < 0) {
 			if (!sock_blocks())
 				return SEND_SENDFAIL;
