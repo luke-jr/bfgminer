@@ -62,6 +62,10 @@ bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 bfgminer_SOURCES += adl.c adl.h adl_functions.h
 bfgminer_SOURCES += *.cl
 
+if HAVE_SENSORS
+bfgminer_LDADD += $(sensors_LIBS)
+endif
+
 if HAS_SCRYPT
 bfgminer_SOURCES += scrypt.c scrypt.h
 endif

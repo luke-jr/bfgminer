@@ -216,6 +216,33 @@ AC_SUBST(JANSSON_LIBS)
 if test "x$opencl" = xyes; then
 	adl="yes"
 	
+AC_ARG_WITH([sensors],[Build with libsensors monitoring],[true],[with_sensors=auto])
+if test "x$opencl" != xyes; then
+	with_sensors=no
+fi
+if test "x$with_sensors" != xno; then
+	AC_MSG_CHECKING([for libsensors])
+	save_LIBS="${LIBS}"
+	LIBS="$LIBS -lsensors"
+	AC_LINK_IFELSE([AC_LANG_PROGRAM([
+		#include <stddef.h>
+		#include <sensors/sensors.h>
+	],[
+		const sensors_chip_name *cn;
+		cn = sensors_get_detected_chips(NULL, NULL);
+	])],[
+		with_sensors=yes
+		sensors_LIBS="-lsensors"
+		AC_DEFINE([HAVE_SENSORS], [1], [Defined if libsensors was found])
+		AC_MSG_RESULT([yes])
+	],[
+		with_sensors=no
+		AC_MSG_RESULT([no])
+	])
+	LIBS="$save_LIBS"
+fi
+AC_SUBST(sensors_LIBS)
+
 AC_ARG_ENABLE([adl],
 	[AC_HELP_STRING([--disable-adl],[Build without ADL monitoring (default enabled)])],
 	[adl=$enableval]
@@ -463,6 +490,7 @@ AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$x6500$ztex != xnonono])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononono])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
+AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
 AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
@@ -745,6 +773,14 @@ if test "x$opencl" = xyes; then
 	echo "  OpenCL...............: Enabled"
 else
 	echo "  OpenCL...............: Disabled"
+fi
+
+if test "x$with_sensors" = xyes; then
+	echo "    sensors.monitoring.: Enabled"
+elif test "x$opencl" = xyes; then
+	echo "    sensors.monitoring.: Disabled"
+else
+	echo "    sensors.monitoring.: n/a"
 fi
 
 if test "x$adl" = xyes; then
