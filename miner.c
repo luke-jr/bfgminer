@@ -1322,12 +1322,9 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &use_syslog,
 			"Use system log for output messages (default: standard error)"),
 #endif
-#if defined(HAVE_ADL) || defined(USE_BITFORCE) || defined(USE_MODMINER)
 	OPT_WITH_ARG("--temp-cutoff",
 		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
 		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
-#endif
-#if defined(HAVE_ADL) || defined(USE_MODMINER)
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
@@ -1339,7 +1336,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--temp-target",
 		     set_temp_target, NULL, NULL,
 		     "Target temperature when automatically managing fan and clock speeds, one value or comma separated list"),
-#endif
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
 #ifdef HAVE_CURSES
@@ -4523,6 +4519,13 @@ void write_config(FILE *fcfg)
 	}
 	fputs("\n]\n", fcfg);
 
+	fputs(",\n\"temp-cutoff\" : \"", fcfg);
+	for (i = 0; i < total_devices; ++i)
+		fprintf(fcfg, "%s%d", i > 0 ? "," : "", devices[i]->cutofftemp);
+	fputs("\",\n\"temp-target\" : \"", fcfg);
+	for (i = 0; i < total_devices; ++i)
+		fprintf(fcfg, "%s%d", i > 0 ? "," : "", devices[i]->targettemp);
+	fputs("\"", fcfg);
 #ifdef HAVE_OPENCL
 	if (nDevs) {
 		/* Write GPU device values */
@@ -4593,15 +4596,9 @@ void write_config(FILE *fcfg)
 		fputs("\",\n\"gpu-vddc\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%1.3f", i > 0 ? "," : "", gpus[i].gpu_vddc);
-		fputs("\",\n\"temp-cutoff\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].cutofftemp);
 		fputs("\",\n\"temp-overheat\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
-		fputs("\",\n\"temp-target\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].targettemp);
 #endif
 		fputs("\"", fcfg);
 	}
