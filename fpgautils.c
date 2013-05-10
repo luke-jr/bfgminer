@@ -192,10 +192,10 @@ serial_open(const char*devpath, unsigned long baud, signed short timeout, bool p
 		applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
 	}
 
+	my_termios.c_cflag &= ~(CSIZE | PARENB);
 	my_termios.c_cflag |= CS8;
 	my_termios.c_cflag |= CREAD;
 	my_termios.c_cflag |= CLOCAL;
-	my_termios.c_cflag &= ~(CSIZE | PARENB);
 
 	my_termios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK |
 				ISTRIP | INLCR | IGNCR | ICRNL | IXON);
