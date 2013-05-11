@@ -5280,7 +5280,7 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
  * 0x00000000ffff0000000000000000000000000000000000000000000000000000
  * so we use a big endian 64 bit unsigned integer centred on the 5th byte to
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
-static void set_work_target(struct work *work, double diff)
+void set_target(unsigned char *dest_target, double diff)
 {
 	unsigned char target[32];
 	uint64_t *data64, h64;
@@ -5315,7 +5315,7 @@ static void set_work_target(struct work *work, double diff)
 		applog(LOG_DEBUG, "Generated target %s", htarget);
 		free(htarget);
 	}
-	memcpy(work->target, target, 32);
+	memcpy(dest_target, target, 32);
 }
 
 /* Generates stratum based work based on the most recent notify information
@@ -5399,7 +5399,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	free(header);
 	calc_midstate(work);
 
-	set_work_target(work, work->sdiff);
+	set_target(work->target, work->sdiff);
 
 	local_work++;
 	work->pool = pool;
