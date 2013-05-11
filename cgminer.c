@@ -4056,15 +4056,14 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
-#ifdef HAVE_OPENCL
-	for(i = 0; i < nDevs; i++)
-		if (gpus[i].deven == DEV_DISABLED)
-			break;
-	if (i < nDevs)
-		for (i = 0; i < nDevs; i++)
-			if (gpus[i].deven != DEV_DISABLED)
+	if (devices_enabled) {
+		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
+			if (devices_enabled & (1 << i))
 				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
-#endif
+		}
+	}
+	if (opt_removedisabled)
+		fprintf(fcfg, ",\n\"remove-disabled\" : true");
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
