@@ -1522,8 +1522,13 @@ static bool setup_stratum_socket(struct pool *pool)
 	hints->ai_family = AF_UNSPEC;
 	hints->ai_socktype = SOCK_STREAM;
 	if (getaddrinfo(pool->sockaddr_url, pool->stratum_port, hints, &servinfo) != 0) {
-		applog(LOG_WARNING, "Failed to getaddrinfo (?wrong URL) on %s:%s",
-		       pool->sockaddr_url, pool->stratum_port);
+		if (!pool->probed) {
+			applog(LOG_WARNING, "Failed to resolve (?wrong URL) %s:%s",
+			       pool->sockaddr_url, pool->stratum_port);
+		} else {
+			applog(LOG_INFO, "Failed to getaddrinfo for %s:%s",
+			       pool->sockaddr_url, pool->stratum_port);
+		}
 		return false;
 	}
 
