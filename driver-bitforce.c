@@ -1403,6 +1403,7 @@ struct device_api bitforce_queue_api = {
 	.minerloop = minerloop_queue,
 	.reinit_device = bitforce_init,
 	.get_statline_before = get_bitforce_statline_before,
+	.get_api_stats = bitforce_api_stats,
 	.get_stats = bitforce_get_stats,
 	.identify_device = bitforce_identify,
 	.thread_prepare = bitforce_thread_prepare,
