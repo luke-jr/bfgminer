@@ -826,7 +826,8 @@ built:
 			applog(LOG_ERR, "Error %d: clCreateBuffer (CLbuffer0)", status);
 			return NULL;
 		}
-	}
+		clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, SCRYPT_BUFFERSIZE, NULL, &status);
+	} else
 #endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
