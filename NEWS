@@ -1,3 +1,64 @@
+Version 3.1.1 - May 11th, 2013
+
+- Use a discrete device target for scrypt that dynamically changes to ensure we
+still report a work utility even if no shares are submitted such as in solo
+mining.
+- Make set_work_target a function to set a specified char as target for use
+elsewhere.
+- Further consolidate the hash regeneration between sha and scrypt doing it only
+once and always checking the share diff for both before submission.
+- Regenerate the hash before checking the share diff in hashtest().
+- Minor typo.
+- Use a scantime of 30 seconds for scrypt if none is specified.
+- Support more shares to be returned for scrypt mining.
+- Update the write config to properly record device entries and remove disabled
+option.
+- Show a different warning and loglevel for failure to resolve a URL on first or
+subsequent testing of stratum pool URLs.
+- Fix the problem of seting up termio of ttyUSB0 for icarus. the CSIZE  is the
+mask of CS2/4/8 From: navyxliu <navy.xliu@gmail.com>
+- Set all stratum sockets to nonblocking to avoid trying to use MSG_DONTWAIT on
+windows.
+- Fix warnings on win32 build.
+- Only use MSG_NOSIGNAL for !win32 since it doesn't exist on windows.
+- Use MSG_NOSIGNAL on stratum send()
+- Set TCP_NODELAY for !linux for raw sockets.
+- Use TCP_NODELAY with raw sockets if !opt_delaynet
+- Make raw sockets compile on windows
+- Recheck select succeeds on EWOULDBLOCK for stratum.
+- usbutils/mmq fixed size usb_read default to wait for all data
+- usbutils optional (disabled by default) dev debug
+- Add an ftdi usb read macro without newline
+- Avalon usb interface should be 0.
+- Add more debug for failure to USB init.
+- Recv() should all be non-blocking for raw sockets in stratum.
+- Change verbosity and error for getaddrinfo warnings in setup stratum socket.
+- Free servinfo after p is checked in setup stratum socket.
+- Use raw sockets without curl for stratum communications.
+- Sacrifice curl handle memory on stratum disconnects on all versions of libcurl
+to avoid curl corruption.
+- Don't use TCP_NODELAY if opt_delaynet is enabled with stratum.
+- Fix warnings in avalon driver.
+- Make FULLNONCE an ULL to fix a warning on 32 bit.
+- ztx correct applog typing
+- ocl correct applog typing
+- util correct applog typing
+- api correct applog typing
+- cgminer correct applog typing
+- scrypt correct applog typing
+- bfl correct applog typing
+- ica correct applog typing
+- mmq correct applog typing
+- adl fix trailing %
+- usbutils correct applog typing
+- applog - force type checking
+- Simplify the many lines passed as API data in the avalon driver now that the
+API does not need persistent storage for the name.
+- Duplicate the name string always in api_add_data_full to not need persistent
+storage for names passed to it.
+- Add extra matching work count data in API for Avalon with 4 modules.
+
+
 Version 3.1.0 - April 28th, 2013
 
 - va_copy is meant to be matched by a va_end in log_generic.
