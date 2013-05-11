@@ -3220,8 +3220,6 @@ static void *submit_work_thread(void *userdata)
 
 	applog(LOG_DEBUG, "Creating extra submit work thread");
 
-	rebuild_hash(work);
-
 	if (stale_work(work, true)) {
 		if (opt_submit_stale)
 			applog(LOG_NOTICE, "Pool %d stale share detected, submitting as user requested", pool->pool_no);
@@ -5463,45 +5461,13 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
-/* Returns 1 if meets difficulty target, 0 if not, -1 if hw error */
-static int hashtest(struct thr_info *thr, struct work *work)
-{
-	uint32_t *data32 = (uint32_t *)(work->data);
-	unsigned char swap[80];
-	uint32_t *swap32 = (uint32_t *)swap;
-	unsigned char hash1[32];
-	unsigned char hash2[32];
-	uint32_t *hash2_32 = (uint32_t *)hash2;
-
-	flip80(swap32, data32);
-	sha2(swap, 80, hash1);
-	sha2(hash1, 32, work->hash);
-	flip32(hash2_32, work->hash);
-
-	if (hash2_32[7] != 0) {
-		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
-				thr->cgpu->drv->name, thr->cgpu->device_id);
-
-		return -1;
-	}
-
-	if (!fulltest(hash2, work->target)) {
-		applog(LOG_INFO, "Share below target");
-		/* Check the diff of the share, even if it didn't reach the
-		 * target, just to set the best share value if it's higher. */
-		regen_hash(work);
-		share_diff(work);
-		return 0;
-	}
-
-	return 1;
-}
-
 void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
-	int valid;
+	unsigned char hash2[32];
+	uint32_t *hash2_32 = (uint32_t *)hash2;
+	uint32_t diff1targ;
 
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
@@ -5513,22 +5479,28 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	mutex_unlock(&stats_lock);
 
 	/* Do one last check before attempting to submit the work */
-	if (opt_scrypt)
-		valid = scrypt_test(work->data, work->target, nonce);
-	else
-		valid = hashtest(thr, work);
+	rebuild_hash(work);
+	flip32(hash2_32, work->hash);
 
-	if (unlikely(valid == -1))
-		return inc_hw_errors(thr);
+	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
+	if (be32toh(hash2_32[7]) > diff1targ) {
+		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
+				thr->cgpu->drv->name, thr->cgpu->device_id);
+
+		inc_hw_errors(thr);
+		return;
+	}
 
 	mutex_lock(&stats_lock);
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 
-	if (valid == 1)
-		submit_work_async(work, &tv_work_found);
-	else
+	if (!fulltest(hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
+		return;
+	}
+
+	submit_work_async(work, &tv_work_found);
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
