@@ -336,6 +336,7 @@ struct device_drv {
 
 	/* Highest target diff the device supports */
 	double max_diff;
+	double working_diff;
 };
 
 extern struct device_drv *copy_drv(struct device_drv*);
@@ -1161,6 +1162,9 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
+#ifdef USE_SCRYPT
+	unsigned char	device_target[32];
+#endif
 	double		device_diff;
 	uint64_t	share_diff;
 
