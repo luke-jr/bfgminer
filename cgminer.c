@@ -5489,6 +5489,7 @@ static int hashtest(struct thr_info *thr, struct work *work)
 		applog(LOG_INFO, "Share below target");
 		/* Check the diff of the share, even if it didn't reach the
 		 * target, just to set the best share value if it's higher. */
+		regen_hash(work);
 		share_diff(work);
 		return 0;
 	}
