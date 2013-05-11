@@ -89,7 +89,7 @@ bool opt_compact;
 const int opt_cutofftemp = 95;
 int opt_log_interval = 5;
 int opt_queue = 1;
-int opt_scantime = 60;
+int opt_scantime = -1;
 int opt_expiry = 120;
 static const bool opt_time = true;
 unsigned long long global_hashrate;
@@ -7203,6 +7203,9 @@ int main(int argc, char *argv[])
 	if (want_per_device_stats)
 		opt_log_output = true;
 
+	/* Use a shorter scantime for scrypt */
+	if (opt_scantime < 0)
+		opt_scantime = opt_scrypt ? 30 : 60;
 #ifdef USE_USBUTILS
 	usb_initialise();
 #endif
