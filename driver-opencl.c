@@ -289,6 +289,15 @@ extern int gpu_fanpercent(int gpu);
 #endif
 
 
+#ifdef HAVE_SENSORS
+#include <sensors/sensors.h>
+
+struct opencl_device_data {
+	const sensors_chip_name *sensor;
+};
+#endif
+
+
 #ifdef HAVE_OPENCL
 char *set_vector(char *arg)
 {
@@ -1434,6 +1443,17 @@ static void opencl_detect()
 	if (opt_g_threads == -1)
 		opt_g_threads = 2;
 
+#ifdef HAVE_SENSORS
+	struct opencl_device_data *data;
+	const sensors_chip_name *cn;
+	int c = 0;
+	
+	sensors_init(NULL);
+	sensors_chip_name cnm;
+	if (sensors_parse_chip_name("radeon-*", &cnm))
+		c = -1;
+#endif
+
 	for (i = 0; i < nDevs; ++i) {
 		struct cgpu_info *cgpu;
 
@@ -1444,6 +1464,15 @@ static void opencl_detect()
 		cgpu->device_id = i;
 		cgpu->threads = opt_g_threads;
 		cgpu->virtual_gpu = i;
+		
+#ifdef HAVE_SENSORS
+		cn = (c == -1) ? NULL : sensors_get_detected_chips(&cnm, &c);
+		cgpu->cgpu_data = data = malloc(sizeof(*data));
+		*data = (struct opencl_device_data){
+			.sensor = cn,
+		};
+#endif
+		
 		add_cgpu(cgpu);
 	}
 
@@ -1456,9 +1485,33 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 	tq_push(thr_info[gpur_thr_id].q, gpu);
 }
 
-#ifdef HAVE_ADL
 static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 {
+#ifdef HAVE_SENSORS
+	struct opencl_device_data *data = gpu->cgpu_data;
+	if (data->sensor)
+	{
+		const sensors_chip_name *cn = data->sensor;
+		const sensors_feature *feat;
+		for (int f = 0; (feat = sensors_get_features(cn, &f)); )
+		{
+			const sensors_subfeature *subf;
+			subf = sensors_get_subfeature(cn, feat, SENSORS_SUBFEATURE_TEMP_INPUT);
+			if (!(subf && subf->flags & SENSORS_MODE_R))
+				continue;
+			
+			double val;
+			int rc = sensors_get_value(cn, subf->number, &val);
+			if (rc)
+				continue;
+			
+			gpu->temp = val;
+			tailsprintf(buf, "%5.1fC         | ", val);
+			return;
+		}
+	}
+#endif
+#ifdef HAVE_ADL
 	if (gpu->has_adl) {
 		int gpuid = gpu->device_id;
 		float gt = gpu_temp(gpuid);
@@ -1478,9 +1531,9 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 		tailsprintf(buf, "| ");
 	}
 	else
+#endif
 		tailsprintf(buf, "               | ");
 }
-#endif
 
 static struct api_data*
 get_opencl_api_extra_device_status(struct cgpu_info *gpu)
@@ -1778,9 +1831,7 @@ struct device_api opencl_api = {
 	.name = "OCL",
 	.api_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
-#ifdef HAVE_ADL
 	.get_statline_before = get_opencl_statline_before,
-#endif
 	.get_api_extra_device_status = get_opencl_api_extra_device_status,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
