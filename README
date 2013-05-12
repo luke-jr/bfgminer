@@ -31,7 +31,52 @@ irc://irc.freenode.net/eligius
 
 License: GPLv3.  See COPYING for details.
 
-READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
+SEE ALSO README.FPGA, README.GPU, README.RPC, AND README.scrypt FOR MORE
+INFORMATION ON EACH.
+
+---
+
+EXECUTIVE SUMMARY ON USAGE:
+
+After saving configuration from the menu, you do not need to give BFGMiner any
+arguments and it will load your configuration.
+
+Any configuration file may also contain a single
+	"include" : "filename"
+to recursively include another configuration file.
+Writing the configuration will save all settings from all files in the output.
+
+
+Single pool:
+
+bfgminer -o http://pool:port -u username -p password
+
+Multiple pools:
+
+bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password
+
+Single pool with a standard http proxy, regular desktop:
+
+bfgminer -o http://pool:port -x http://proxy:port -u username -p password
+
+Single pool with a socks5 proxy, regular desktop:
+
+bfgminer -o http://pool:port -x socks5://proxy:port -u username -p password
+
+The list of proxy types are:
+ http:    standard http 1.1 proxy
+ socks4:  socks4 proxy
+ socks5:  socks5 proxy
+ socks4a: socks4a proxy
+ socks5h: socks5 proxy using a hostname
+
+Proxy support requires cURL version 7.21.7 or newer.
+
+If you specify the --socks-proxy option to BFGMiner, it will only be applied to
+all pools that don't specify their own proxy setting like above
+
+---
+BUILDING BFGMINER
 
 Dependencies:
 	autoconf             http://www.gnu.org/software/autoconf/
@@ -50,7 +95,7 @@ Optional Dependencies:
 	  libncursesw5-dev       ^ same
 	  libpdcurses        http://pdcurses.sourceforge.net/ (Linux/Mac/Windows)
 
-	Multiple FPGA autodetection: any one of:
+	Multiple ASIC/FPGA autodetection: any one of:
 	  sysfs              (builtin to most Linux kernels, just mount on /sys)
 	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
 
@@ -78,38 +123,14 @@ BFGMiner specific configuration options:
 	--without-curses        Compile support for curses TUI (default enabled)
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
----
-
-To build with GPU mining support:
-
-Install AMD APP sdk, ideal version (see FAQ!) - put it into a system location.
-Download the correct version for either 32 bit or 64 bit from here:
-	http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/
-
-This will give you a file with a name like:
- AMD-APP-SDK-v2.4-lnx64.tgz (64-bit)
-or
- AMD-APP-SDK-v2.4-lnx32.tgz (32-bit)
-
-Then:
-
-sudo -i
-cd /opt
-tar xf /path/to/AMD-APP-SDK-v2.4-lnx##.tgz
-cd /
-tar xf /opt/AMD-APP-SDK-v2.4-lnx##/icd-registration.tgz
-ln -s /opt/AMD-APP-SDK-v2.4-lnx##/include/CL /usr/include
-ln -s /opt/AMD-APP-SDK-v2.4-lnx##/lib/x86_64/* /usr/lib/
-ldconfig
-
-Where ## is 32 or 64, depending on the bitness of the SDK you downloaded.
-If you are on 32 bit, x86_64 in the 2nd last line should be x86
-
 Basic *nix build instructions:
 
 ./autogen.sh    # only needed if building from git repo
 ./configure
 make
+
+No installation is necessary. You may run BFGMiner from the build directory
+directly.
 
 On Mac OS X, you can use Homebrew to install the dependency libraries. When you
 are ready to build BFGMiner, you may need to point the configure script at one
@@ -287,71 +308,6 @@ CPU only options (not included in binaries):
 --enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if other devices exist)
 
 
-
----
-
-EXECUTIVE SUMMARY ON USAGE:
-
-After saving configuration from the menu, you do not need to give BFGMiner any
-arguments and it will load your configuration.
-
-Any configuration file may also contain a single
-	"include" : "filename"
-to recursively include another configuration file.
-Writing the configuration will save all settings from all files in the output.
-
-
-Single pool, regular desktop:
-
-bfgminer -o http://pool:port -u username -p password
-
-Single pool, dedicated miner:
-
-bfgminer -o http://pool:port -u username -p password -I 9
-
-Single pool, first card regular desktop, 3 other dedicated cards:
-
-bfgminer -o http://pool:port -u username -p password -I d,9,9,9
-
-Multiple pool, dedicated miner:
-
-bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
-
-Add overclocking settings, GPU and fan control for all cards:
-
-bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
-
-Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
-
-bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
-
-Single pool with a standard http proxy, regular desktop:
-
-bfgminer -o http://pool:port -x http://proxy:port -u username -p password
-
-Single pool with a socks5 proxy, regular desktop:
-
-bfgminer -o http://pool:port -x socks5://proxy:port -u username -p password
-
-The list of proxy types are:
- http:    standard http 1.1 proxy
- socks4:  socks4 proxy
- socks5:  socks5 proxy
- socks4a: socks4a proxy
- socks5h: socks5 proxy using a hostname
-
-Proxy support requires cURL version 7.21.7 or newer.
-
-If you specify the --socks-proxy option to BFGMiner, it will only be applied to
-all pools that don't specify their own proxy setting like above
-
-READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
-
-On Linux you virtually always need to export your display settings before
-starting to get all the cards recognised and/or temperature+clocking working:
-
-export DISPLAY=:0
-
 ---
 
 WHILE RUNNING:
@@ -469,12 +425,6 @@ AS is Active Submissions (shares in the process of submitting)
 RF is Remote Fail occasions (server slow to accept work)
 E  is Efficiency defined as number of shares accepted (multiplied by their
           difficulty) per 2 KB of bandwidth
-
-NOTE: Running intensities above 9 with current hardware is likely to only
-diminish return performance even if the hash rate might appear better. A good
-starting baseline intensity to try on dedicated miners is 9. Higher values are
-there to cope with future improvements in hardware.
-
 
 The block display shows:
 Block: ...1b89f8d3 #217364  Diff:7.67M (54.93Th/s)  Started: [17:17:22]
@@ -601,221 +551,10 @@ For example (this is wrapped, but it's all on one line for real):
     0000000000000000000000000000000000000000000000000000000080020000
 
 ---
-OVERCLOCKING WARNING AND INFORMATION
-
-AS WITH ALL OVERCLOCKING TOOLS YOU ARE ENTIRELY RESPONSIBLE FOR ANY HARM YOU
-MAY CAUSE TO YOUR HARDWARE. OVERCLOCKING CAN INVALIDATE WARRANTIES, DAMAGE
-HARDWARE AND EVEN CAUSE FIRES. THE AUTHOR ASSUMES NO RESPONSIBILITY FOR ANY
-DAMAGE YOU MAY CAUSE OR UNPLANNED CHILDREN THAT MAY OCCUR AS A RESULT.
-
-The GPU monitoring, clocking and fanspeed control incorporated into BFGMiner
-comes through use of the ATI Display Library. As such, it only supports ATI
-GPUs. Even if ADL support is successfully built into BFGMiner, unless the card
-and driver supports it, no GPU monitoring/settings will be available.
-
-BFGMiner supports initial setting of GPU engine clock speed, memory clock
-speed, voltage, fanspeed, and the undocumented powertune feature of 69x0+ GPUs.
-The setting passed to BFGMiner is used by all GPUs unless separate values are
-specified. All settings can all be changed within the menu on the fly on a
-per-GPU basis.
-
-For example:
---gpu-engine 950 --gpu-memclock 825
-
-will try to set all GPU engine clocks to 950 and all memory clocks to 825,
-while:
---gpu-engine 950,945,930,960 --gpu-memclock 300
-
-will try to set the engine clock of card 0 to 950, 1 to 945, 2 to 930, 3 to
-960 and all memory clocks to 300.
-
-You can substitute 0 to leave the engine clock of a card at its default.
-For example, to keep the 2nd GPU to its default clocks:
---gpu-engine 950,0,930,960 --gpu-memclock 300,0,300,300
-
-AUTO MODES:
-There are two "auto" modes in BFGMiner, --auto-fan and --auto-gpu. These can be
-used independently of each other and are complementary. Both auto modes are
-designed to safely change settings while trying to maintain a target
-temperature. By default this is set to 75 degrees C but can be changed with:
-
---temp-target
-e.g.
---temp-target 80
-Sets all cards' target temperature to 80 degrees.
-
---temp-target 75,85
-Sets card 0 target temperature to 75, and card 1 to 85 degrees.
-
-AUTO FAN:
-e.g.
---auto-fan (implies 85% upper limit)
---gpu-fan 25-85,65 --auto-fan
-
-Fan control in auto fan works off the theory that the minimum possible fan
-required to maintain an optimal temperature will use less power, make less
-noise, and prolong the life of the fan. In auto-fan mode, the fan speed is
-limited to 85% if the temperature is below "overheat" intentionally, as higher
-fanspeeds on GPUs do not produce signficantly more cooling, yet significantly
-shorten the lifespan of the fans. If temperature reaches the overheat value,
-fanspeed will still be increased to 100%. The overheat value is set to 85
-degrees by default and can be changed with:
-
---temp-overheat
-e.g.
---temp-overheat 75,85
-Sets card 0 overheat threshold to 75 degrees and card 1 to 85.
-
-AUTO GPU:
-e.g.
---auto-gpu --gpu-engine 750-950
---auto-gpu --gpu-engine 750-950,945,700-930,960
-
-GPU control in auto gpu tries to maintain as high a clock speed as possible
-while not reaching overheat temperatures. As a lower clock speed limit, the
-auto-gpu mode checks the GPU card's "normal" clock speed and will not go below
-this unless you have manually set a lower speed in the range. Also, unless a
-higher clock speed was specified at startup, it will not raise the clockspeed.
-If the temperature climbs, fanspeed is adjusted and optimised before GPU engin
-e clockspeed is adjusted. If fan speed control is not available or already
-optimal, then GPU clock speed is only decreased if it goes over the target
-temperature by the hysteresis amount, which is set to 3 by default and can be
-changed with:
---temp-hysteresis
-If the temperature drops below the target temperature, and engine clock speed
-is not at the highest level set at startup, BFGMiner will raise the clock speed.
-If at any time you manually set an even higher clock speed successfully in
-BFGMiner, it will record this value and use it as its new upper limit (and the
-same for low clock speeds and lower limits). If the temperature goes over the
-cutoff limit (95 degrees by default), BFGMiner will completely disable the GPU
-from mining and it will not be re-enabled unless manually done so. The cutoff
-temperature can be changed with:
-
---temp-cutoff
-e.g.
---temp-cutoff 95,105
-Sets card 0 cutoff temperature to 95 and card 1 to 105.
-
---gpu-memdiff -125
-This setting will modify the memory speed whenever the GPU clock speed is
-modified by --auto-gpu. In this example, it will set the memory speed to be 125
-MHz lower than the GPU speed. This is useful for some cards like the 6970 which
-normally don't allow a bigger clock speed difference. The 6970 is known to only
-allow -125, while the 7970 only allows -150.
-
-
-CHANGING SETTINGS:
-When setting values, it is important to realise that even though the driver
-may report the value was changed successfully, and the new card power profile
-information contains the values you set it to, that the card itself may
-refuse to use those settings. As the performance profile changes dynamically,
-querying the "current" value on the card can be wrong as well. So when changing
-values in BFGMiner, after a pause of 1 second, it will report to you the current
-values where you should check that your change has taken. An example is that
-6970 reference cards will accept low memory values but refuse to actually run
-those lower memory values unless they're within 125 of the engine clock speed.
-In that scenario, they usually set their real speed back to their default.
-
-BFGMiner reports the so-called "safe" range of whatever it is you are modifying
-when you ask to modify it on the fly. However, you can change settings to values
-outside this range. Despite this, the card can easily refuse to accept your
-changes, or worse, to accept your changes and then silently ignore them. So
-there is absolutely to know how far to/from where/to it can set things safely or
-otherwise, and there is nothing stopping you from at least trying to set them
-outside this range. Being very conscious of these possible failures is why
-BFGMiner will report back the current values for you to examine how exactly the
-card has responded. Even within the reported range of accepted values by the
-card, it is very easy to crash just about any card, so it cannot use those
-values to determine what range to set. You have to provide something meaningful
-manually for BFGMiner to work with through experimentation.
-
-STARTUP / SHUTDOWN:
-When BFGMiner starts up, it tries to read off the current profile information
-for clock and fan speeds and stores these values. When quitting BFGMiner, it
-will then try to restore the original values. Changing settings outside of
-BFGMiner while it's running may be reset to the startup BFGMiner values when
-BFGMiner shuts down because of this.
-
----
 
 RPC API
 
 For RPC API details see the README.RPC file
-
----
-
-GPU DEVICE ISSUES and use of --gpu-map
-
-GPUs mine with OpenCL software via the GPU device driver. This means you need
-to have both an OpenCL SDK installed, and the GPU device driver RUNNING (i.e.
-Xorg up and running configured for all devices that will mine on linux etc.)
-Meanwhile, the hardware monitoring that BFGMiner offers for AMD devices relies
-on the ATI Display Library (ADL) software to work. OpenCL DOES NOT TALK TO THE
-ADL. There is no 100% reliable way to know that OpenCL devices are identical
-to the ADL devices, as neither give off the same information. BFGMiner does its
-best to correlate these devices based on the order that OpenCL and ADL numbers
-them. It is possible that this will fail for the following reasons:
-
-1. The device order is listed differently by OpenCL and ADL (rare), even if the
-number of devices is the same.
-2. There are more OpenCL devices than ADL. OpenCL stupidly sees one GPU as two
-devices if you have two monitors connected to the one GPU.
-3. There are more ADL devices than OpenCL. ADL devices include any ATI GPUs,
-including ones that can't mine, like some older R4xxx cards.
-
-To cope with this, the ADVANCED option for --gpu-map is provided with BFGMiner.
-DO NOT USE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. The default will work the
-vast majority of the time unless you know you have a problem already.
-
-To get useful information, start BFGMiner with just the -n option. You will get
-output that looks like this:
-
-[2012-04-25 13:17:34] CL Platform 0 vendor: Advanced Micro Devices, Inc.
-[2012-04-25 13:17:34] CL Platform 0 name: AMD Accelerated Parallel Processing
-[2012-04-25 13:17:34] CL Platform 0 version: OpenCL 1.1 AMD-APP (844.4)
-[2012-04-25 13:17:34] Platform 0 devices: 3
-[2012-04-25 13:17:34]   0       Tahiti
-[2012-04-25 13:17:34]   1       Tahiti
-[2012-04-25 13:17:34]   2       Cayman
-[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 6900 Series hardware monitoring enabled
-[2012-04-25 13:17:34] 3 GPU devices max detected
-
-Note the number of devices here match, and the order is the same. If devices 1
-and 2 were different between Tahiti and Cayman, you could run BFGMiner with:
---gpu-map 2:1,1:2
-And it would swap the monitoring it received from ADL device 1 and put it to
-OpenCL device 2 and vice versa.
-
-If you have 2 monitors connected to the first device it would look like this:
-
-[2012-04-25 13:17:34] Platform 0 devices: 4
-[2012-04-25 13:17:34]   0       Tahiti
-[2012-04-25 13:17:34]   1       Tahiti
-[2012-04-25 13:17:34]   2       Tahiti
-[2012-04-25 13:17:34]   3       Cayman
-[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 6900 Series hardware monitoring enabled
-
-To work around this, you would use:
--d 0 -d 2 -d 3 --gpu-map 2:1,3:2
-
-If you have an older card as well as the rest it would look like this:
-
-[2012-04-25 13:17:34] Platform 0 devices: 3
-[2012-04-25 13:17:34]   0       Tahiti
-[2012-04-25 13:17:34]   1       Tahiti
-[2012-04-25 13:17:34]   2       Cayman
-[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 4500 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 3 AMD Radeon HD 6900 Series hardware monitoring enabled
-
-To work around this you would use:
---gpu-map 0:1,1:2,2:3
-
 
 ---
 
@@ -841,9 +580,6 @@ A: No, BFGMiner keeps a database of the block it's working on to ensure it does
 not work on stale blocks, and having different blocks from two networks would
 make it invalidate the work from each other.
 
-Q: Can I change the intensity settings individually for each GPU?
-A: Yes, pass a list separated by commas such as -I d,4,9,9
-
 Q: Can I put multiple pools in the config file?
 A: Yes, check the example.conf file. Alternatively, set up everything either on
 the command line or via the menu after startup and choose settings->write
@@ -853,32 +589,9 @@ Q: The build fails with gcc is unable to build a binary.
 A: Remove the "-march=native" component of your CFLAGS as your version of GCC
 does not support it.
 
-Q: The CPU usage is high.
-A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
-CPU core unnecessarily so downgrade to 11.6. Binding BFGMiner to one CPU core on
-windows can minimise it to 100% (instead of more than one core). Driver version
-11.11 on linux and 11.12 on windows appear to have fixed this issue. Note that
-later drivers may have an apparent return of high CPU usage. Try
-'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting BFGMiner. You can also
-set this variable in windows via a batch file or on the command line before
-starting BFGMiner with 'setx GPU_USE_SYNC_OBJECTS 1'
-
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
 their feature requests implemented.
-
-Q: My GPU hangs and I have to reboot it to get it going again?
-A: The more aggressively the mining software uses your GPU, the less overclock
-you will be able to run. You are more likely to hit your limits with BFGMiner
-and you will find you may need to overclock your GPU less aggressively. The
-software cannot be responsible and make your GPU hang directly. If you simply
-cannot get it to ever stop hanging, try decreasing the intensity, and if even
-that fails, try changing to the poclbm kernel with -k poclbm, though you will
-sacrifice performance. BFGMiner is designed to try and safely restart GPUs as
-much as possible, but NOT if that restart might actually crash the rest of the
-GPUs mining, or even the machine. It tries to restart them with a separate
-thread and if that separate thread dies, it gives up trying to restart any more
-GPUs.
 
 Q: Work keeps going to my backup pool even though my primary pool hasn't
 failed?
@@ -903,10 +616,6 @@ A: Everyone will always have their own view of what's important to monitor.
 The defaults are very sane and I have very little interest in changing this
 any further.
 
-Q: Can you change the autofan/autogpu to change speeds in a different manner?
-A: The defaults are sane and safe. I'm not interested in changing them further.
-The starting fan speed is set to 50% in auto-fan mode as a safety precaution.
-
 Q: Why is my efficiency above/below 1.00?
 A: Efficiency simply means how many shares you return for the amount of
 bandwidth used. It does not correlate with efficient use of your hardware, and
@@ -916,36 +625,13 @@ other factors.
 Q: What are the best parameters to pass for X pool/hardware/device.
 A: Virtually always, the DEFAULT parameters give the best results. Most user
 defined settings lead to worse performance. The ONLY thing most users should
-need to set is the Intensity.
+need to set is the Intensity for GPUs.
 
 Q: What happened to CPU mining?
 A: Being increasingly irrelevant for most users, and a maintenance issue, it is
 no longer under active development and will not be supported unless someone
 steps up to help maintain it. No binary builds supporting CPU mining will be
 released but CPU mining can be built into BFGMiner when it is compiled.
-
-Q: I upgraded BFGMiner version and my hashrate suddenly dropped!
-A: No, you upgraded your SDK version unwittingly between upgrades of BFGMiner
-and that caused  your hashrate to drop. See the next question.
-
-Q: I upgraded my ATI driver/SDK/BFGMiner and my hashrate suddenly dropped!
-A: The hashrate performance in BFGMiner is tied to the version of the ATI SDK
-that is installed only for the very first time BFGMiner is run. This generates
-binaries that are used by the GPU every time after that. Any upgrades to the
-SDK after that time will have no effect on the binaries. However, if you
-install a fresh version of BFGMiner, and have since upgraded your SDK, new
-binaries will be built. It is known that the 2.6 ATI SDK has a huge hashrate
-penalty on generating new binaries. It is recommended to not use this SDK at
-this time unless you are using an ATI 7xxx card that needs it.
-
-Q: Which ATI SDK is the best for BFGMiner?
-A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK, the phatk kernel will perform poorly, while the diablo or my
-custom modified poclbm kernel are optimised for it.
-
-Q: I have multiple SDKs installed, can I choose which one it uses?
-A: Run bfgminer with the -n option and it will list all the platforms currently
-installed. Then you can tell BFGMiner which platform to use with --gpu-platform.
 
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one
@@ -955,10 +641,6 @@ Q: I'm having an issue. What debugging information should I provide?
 A: Start BFGMiner with your regular commands and add -D -T --verbose and provide
 the full startup output and a summary of your hardware, operating system, ATI
 driver version and ATI stream version.
-
-Q: BFGMiner reports no devices or only one device on startup on Linux although
-I have multiple devices and drivers+SDK installed properly?
-A: Try "export DISPLAY=:0" before running BFGMiner.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
@@ -986,6 +668,11 @@ They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped. "PGA" is also used for devices built with Application-Specific
 Integrated Circuits (ASICs).
+
+Q: What is an ASIC?
+A: BFGMiner currently supports 2 ASICs: Avalon and BitForce SC devices. They are
+Application Specify Integrated Circuit devices and provide the highest
+performance per unit power due to being dedicated to only one purpose.
 
 Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
 A: On Linux, if the /dev/ttyUSB* devices don't automatically appear, the only

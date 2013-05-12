@@ -259,9 +259,10 @@ int clDevicesNum(void) {
 	char pbuff[256];
 	cl_uint numDevices;
 	cl_uint numPlatforms;
+	int most_devices = -1;
 	cl_platform_id *platforms;
 	cl_platform_id platform = NULL;
-	unsigned int most_devices = 0, i, mdplatform = 0;
+	unsigned int i, mdplatform = 0;
 	bool mdmesa = false;
 
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
@@ -302,20 +303,17 @@ int clDevicesNum(void) {
 			applog(LOG_INFO, "CL Platform %d version: %s", i, pbuff);
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
-			if ((int)i != opt_platform_id)
-				continue;
-			return -1;
+			applog(LOG_INFO, "Error %d: Getting Device IDs (num)", status);
+			continue;
 		}
 		applog(LOG_INFO, "Platform %d devices: %d", i, numDevices);
-		if (numDevices > most_devices) {
+		if ((int)numDevices > most_devices) {
 			most_devices = numDevices;
 			mdplatform = i;
 			mdmesa = strstr(pbuff, "MESA");
 		}
 		if (numDevices) {
 			unsigned int j;
-			char pbuff[256];
 			cl_device_id *devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
 
 			clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
@@ -1025,7 +1023,7 @@ built:
 			applog(LOG_WARNING, "Your scrypt settings come to %lu", (unsigned long)bufsize);
 		} else
 			bufsize = cgpu->max_alloc;
-		applog(LOG_DEBUG, "Creating scrypt buffer sized %ld", (unsigned long)bufsize);
+		applog(LOG_DEBUG, "Creating scrypt buffer sized %lu", (unsigned long)bufsize);
 		clState->padbufsize = bufsize;
 
 		/* This buffer is weird and might work to some degree even if
