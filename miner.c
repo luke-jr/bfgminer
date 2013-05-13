@@ -2275,7 +2275,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 #else
 	assert(for_curses == false);
 #endif
-	const struct device_api *api = cgpu->api;
+	struct device_drv *drv = cgpu->drv;
 	void (*statline_func)(char *, struct cgpu_info *);
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
@@ -2329,12 +2329,12 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 #endif
 		sprintf(buf, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
 	
-	if (api->get_dev_statline_before || api->get_statline_before)
+	if (drv->get_dev_statline_before || drv->get_statline_before)
 	{
-		if (api->get_dev_statline_before && api->get_statline_before)
-			statline_func = opt_show_procs ? api->get_statline_before : api->get_dev_statline_before;
+		if (drv->get_dev_statline_before && drv->get_statline_before)
+			statline_func = opt_show_procs ? drv->get_statline_before : drv->get_dev_statline_before;
 		else
-			statline_func = api->get_statline_before ?: api->get_dev_statline_before;
+			statline_func = drv->get_statline_before ?: drv->get_dev_statline_before;
 		statline_func(buf, cgpu);
 	}
 	else
@@ -2407,12 +2407,12 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			util);
 	}
 	
-	if (api->get_dev_statline_after || api->get_statline)
+	if (drv->get_dev_statline_after || drv->get_statline)
 	{
-		if (api->get_dev_statline_after && api->get_statline)
-			statline_func = opt_show_procs ? api->get_statline : api->get_dev_statline_after;
+		if (drv->get_dev_statline_after && drv->get_statline)
+			statline_func = opt_show_procs ? drv->get_statline : drv->get_dev_statline_after;
 		else
-			statline_func = api->get_statline ?: api->get_dev_statline_after;
+			statline_func = drv->get_statline ?: drv->get_dev_statline_after;
 		statline_func(buf, cgpu);
 	}
 }
@@ -6893,8 +6893,8 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			++thr->cgpu->hw_errors;
 			mutex_unlock(&stats_lock);
 
-			if (thr->cgpu->api->hw_error)
-				thr->cgpu->api->hw_error(thr);
+			if (thr->cgpu->drv->hw_error)
+				thr->cgpu->drv->hw_error(thr);
 			goto out;
 		}
 	
@@ -6950,12 +6950,12 @@ void mt_disable_start(struct thr_info *mythr)
 
 void mt_disable_finish(struct thr_info *mythr)
 {
-	const struct device_api *api = mythr->cgpu->api;
+	struct device_drv *drv = mythr->cgpu->drv;
 	
 	thread_reportin(mythr);
 	__thr_being_msg(mythr, "re-enabled");
-	if (api->thread_enable)
-		api->thread_enable(mythr);
+	if (drv->thread_enable)
+		drv->thread_enable(mythr);
 }
 
 void mt_disable(struct thr_info *mythr)
@@ -7235,8 +7235,8 @@ static void start_longpoll(void)
 
 void reinit_device(struct cgpu_info *cgpu)
 {
-	if (cgpu->api->reinit_device)
-		cgpu->api->reinit_device(cgpu);
+	if (cgpu->drv->reinit_device)
+		cgpu->drv->reinit_device(cgpu);
 }
 
 static struct timeval rotate_tv;
@@ -7436,8 +7436,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
-			if (cgpu->api->get_stats)
-			  cgpu->api->get_stats(cgpu);
+			if (cgpu->drv->get_stats)
+			  cgpu->drv->get_stats(cgpu);
 
 			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
@@ -7509,7 +7509,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				cgpu->status = LIFE_WELL;
 
 #ifdef WANT_CPUMINE
-			if (!strcmp(cgpu->api->dname, "cpu"))
+			if (!strcmp(cgpu->drv->dname, "cpu"))
 				continue;
 #endif
 			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
@@ -7910,37 +7910,37 @@ void enable_curses(void) {
 }
 #endif
 
-/* TODO: fix need a dummy CPU device_api even if no support for CPU mining */
+/* TODO: fix need a dummy CPU device_drv even if no support for CPU mining */
 #ifndef WANT_CPUMINE
-struct device_api cpu_api;
-struct device_api cpu_api = {
+struct device_drv cpu_drv;
+struct device_drv cpu_drv = {
 	.name = "CPU",
 };
 #endif
 
 #ifdef USE_BITFORCE
-extern struct device_api bitforce_api;
+extern struct device_drv bitforce_drv;
 #endif
 
 #ifdef USE_ICARUS
-extern struct device_api cairnsmore_api;
-extern struct device_api icarus_api;
+extern struct device_drv cairnsmore_drv;
+extern struct device_drv icarus_drv;
 #endif
 
 #ifdef USE_AVALON
-extern struct device_api avalon_api;
+extern struct device_drv avalon_drv;
 #endif
 
 #ifdef USE_MODMINER
-extern struct device_api modminer_api;
+extern struct device_drv modminer_drv;
 #endif
 
 #ifdef USE_X6500
-extern struct device_api x6500_api;
+extern struct device_drv x6500_api;
 #endif
 
 #ifdef USE_ZTEX
-extern struct device_api ztex_api;
+extern struct device_drv ztex_drv;
 #endif
 
 
@@ -7960,7 +7960,7 @@ void register_device(struct cgpu_info *cgpu)
 	adj_width(mining_threads, &dev_width);
 #endif
 #ifdef HAVE_OPENCL
-	if (cgpu->api == &opencl_api) {
+	if (cgpu->drv == &opencl_api) {
 		gpu_threads += cgpu->threads;
 	}
 #endif
@@ -7977,12 +7977,12 @@ void renumber_cgpu(struct cgpu_info *cgpu)
 	static struct _cgpu_devid_counter *devids = NULL;
 	struct _cgpu_devid_counter *d;
 	
-	HASH_FIND_STR(devids, cgpu->api->name, d);
+	HASH_FIND_STR(devids, cgpu->drv->name, d);
 	if (d)
 		cgpu->device_id = ++d->lastid;
 	else {
 		d = malloc(sizeof(*d));
-		memcpy(d->name, cgpu->api->name, sizeof(d->name));
+		memcpy(d->name, cgpu->drv->name, sizeof(d->name));
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
@@ -8237,45 +8237,45 @@ int main(int argc, char *argv[])
 
 #ifdef HAVE_OPENCL
 	if (!opt_nogpu)
-		opencl_api.api_detect();
+		opencl_api.drv_detect();
 	gpu_threads = 0;
 #endif
 
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
 	{
-		cairnsmore_api.api_detect();
-		icarus_api.api_detect();
+		cairnsmore_drv.drv_detect();
+		icarus_drv.drv_detect();
 	}
 #endif
 
 #ifdef USE_AVALON
 	if (!opt_scrypt)
-		avalon_api.api_detect();
+		avalon_drv.drv_detect();
 #endif
 
 #ifdef USE_BITFORCE
 	if (!opt_scrypt)
-		bitforce_api.api_detect();
+		bitforce_drv.drv_detect();
 #endif
 
 #ifdef USE_MODMINER
 	if (!opt_scrypt)
-		modminer_api.api_detect();
+		modminer_drv.drv_detect();
 #endif
 
 #ifdef USE_X6500
 	if (!opt_scrypt)
-		x6500_api.api_detect();
+		x6500_api.drv_detect();
 #endif
 
 #ifdef USE_ZTEX
 	if (!opt_scrypt)
-		ztex_api.api_detect();
+		ztex_drv.drv_detect();
 #endif
 
 #ifdef WANT_CPUMINE
-	cpu_api.api_detect();
+	cpu_drv.drv_detect();
 #endif
 
 #ifdef USE_X6500
@@ -8291,9 +8291,9 @@ int main(int argc, char *argv[])
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
 			if (cgpu->name)
-				applog(LOG_ERR, " %2d. %"PRIprepr": %s (driver: %s)", i, cgpu->proc_repr, cgpu->name, cgpu->api->dname);
+				applog(LOG_ERR, " %2d. %"PRIprepr": %s (driver: %s)", i, cgpu->proc_repr, cgpu->name, cgpu->drv->dname);
 			else
-				applog(LOG_ERR, " %2d. %"PRIprepr" (driver: %s)", i, cgpu->proc_repr, cgpu->api->dname);
+				applog(LOG_ERR, " %2d. %"PRIprepr" (driver: %s)", i, cgpu->proc_repr, cgpu->drv->dname);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}
@@ -8307,7 +8307,7 @@ int main(int argc, char *argv[])
 				register_device(devices[i]);
 			} else if (i < total_devices) {
 				if (opt_removedisabled) {
-					if (devices[i]->api == &cpu_api)
+					if (devices[i]->drv == &cpu_drv)
 						--opt_n_threads;
 				} else {
 					register_device(devices[i]);
@@ -8500,7 +8500,7 @@ begin_bench:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		const struct device_api *api = cgpu->api;
+		struct device_drv *api = cgpu->drv;
 		int threadobj = cgpu->threads;
 		if (!threadobj)
 			// Create a fake thread object to handle hashmeter etc
@@ -8546,7 +8546,7 @@ begin_bench:
 
 			/* Enable threads for devices set not to mine but disable
 			 * their queue in case we wish to enable them later */
-			if (cgpu->api->thread_prepare && !cgpu->api->thread_prepare(thr))
+			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
 				continue;
 
 			thread_reportout(thr);

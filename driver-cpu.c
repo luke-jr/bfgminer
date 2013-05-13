@@ -770,7 +770,7 @@ static void cpu_detect()
 		struct cgpu_info *cgpu;
 
 		cgpu = &cpus[i];
-		cgpu->api = &cpu_api;
+		cgpu->drv = &cpu_drv;
 		cgpu->devtype = "CPU";
 		cgpu->deven = DEV_ENABLED;
 		cgpu->threads = 1;
@@ -850,10 +850,10 @@ CPUSearch:
 	return last_nonce - first_nonce + 1;
 }
 
-struct device_api cpu_api = {
+struct device_drv cpu_drv = {
 	.dname = "cpu",
 	.name = "CPU",
-	.api_detect = cpu_detect,
+	.drv_detect = cpu_detect,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,
 	.thread_init = cpu_thread_init,

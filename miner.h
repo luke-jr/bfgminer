@@ -261,12 +261,12 @@ struct api_data;
 struct thr_info;
 struct work;
 
-struct device_api {
+struct device_drv {
 	const char *dname;
 	const char *name;
 
-	// API-global functions
-	void (*api_detect)();
+	// DRV-global functions
+	void (*drv_detect)();
 
 	// Device-specific functions
 	void (*get_dev_statline_before)(char *, struct cgpu_info *);
@@ -403,7 +403,7 @@ struct cgminer_pool_stats {
 struct cgpu_info {
 	int cgminer_id;
 	int device_line_id;
-	const struct device_api *api;
+	struct device_drv *drv;
 	const char *devtype;
 	int device_id;
 	char *dev_repr;

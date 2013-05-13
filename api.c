@@ -609,11 +609,11 @@ static struct IP4ACCESS *ipaccess = NULL;
 static int ips = 0;
 
 #ifdef HAVE_OPENCL
-extern struct device_api opencl_api;
+extern struct device_drv opencl_api;
 #endif
 
 #ifdef WANT_CPUMINE
-extern struct device_api cpu_api;
+extern struct device_drv cpu_drv;
 #endif
 
 struct io_data {
@@ -1175,11 +1175,11 @@ static int numpgas()
 	mutex_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef HAVE_OPENCL
-		if (devices[i]->api == &opencl_api)
+		if (devices[i]->drv == &opencl_api)
 			continue;
 #endif
 #ifdef WANT_CPUMINE
-		if (devices[i]->api == &cpu_api)
+		if (devices[i]->drv == &cpu_drv)
 			continue;
 #endif
 		++count;
@@ -1196,11 +1196,11 @@ static int pgadevice(int pgaid)
 	mutex_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef HAVE_OPENCL
-		if (devices[i]->api == &opencl_api)
+		if (devices[i]->drv == &opencl_api)
 			continue;
 #endif
 #ifdef WANT_CPUMINE
-		if (devices[i]->api == &cpu_api)
+		if (devices[i]->drv == &cpu_drv)
 			continue;
 #endif
 		++count;
@@ -1473,7 +1473,7 @@ static const char *status2str(enum alive status)
 static
 struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_info *cgpu)
 {
-	root = api_add_string(root, "Name", cgpu->api->name, false);
+	root = api_add_string(root, "Name", cgpu->drv->name, false);
 	root = api_add_int(root, "ID", &(cgpu->device_id), false);
 	root = api_add_int(root, "ProcID", &(cgpu->proc_id), false);
 	return root;
@@ -1498,7 +1498,7 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 
 	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
 	root = api_add_device_identifier(root, cgpu);
-	root = api_add_string(root, "Driver", cgpu->api->dname, false);
+	root = api_add_string(root, "Driver", cgpu->drv->dname, false);
 	if (cgpu->kname)
 		root = api_add_string(root, "Kernel", cgpu->kname, false);
 	if (cgpu->name)
@@ -1506,8 +1506,8 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	if (cgpu->device_path)
 		root = api_add_string(root, "Device Path", cgpu->device_path, false);
 
-	if (cgpu->api->get_api_extra_device_detail)
-		root = api_add_extra(root, cgpu->api->get_api_extra_device_detail(cgpu));
+	if (cgpu->drv->get_api_extra_device_detail)
+		root = api_add_extra(root, cgpu->drv->get_api_extra_device_detail(cgpu));
 
 	root = print_data(root, buf, isjson, precom);
 	io_add(io_data, buf);
@@ -1556,8 +1556,8 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 	root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
 
-	if (cgpu->api->get_api_extra_device_status)
-		root = api_add_extra(root, cgpu->api->get_api_extra_device_status(cgpu));
+	if (cgpu->drv->get_api_extra_device_status)
+		root = api_add_extra(root, cgpu->drv->get_api_extra_device_status(cgpu));
 
 	root = print_data(root, buf, isjson, precom);
 	io_add(io_data, buf);
@@ -1789,7 +1789,7 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
-	const struct device_api *api;
+	struct device_drv *drv;
 	int numpga = numpgas();
 	int id;
 
@@ -1816,9 +1816,9 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 	}
 
 	cgpu = get_devices(dev);
-	api = cgpu->api;
+	drv = cgpu->drv;
 
-	if (api->identify_device && api->identify_device(cgpu))
+	if (drv->identify_device && drv->identify_device(cgpu))
 		message(io_data, MSG_PGAIDENT, id, NULL, isjson);
 	else
 		message(io_data, MSG_PGANOID, id, NULL, isjson);
@@ -2717,7 +2717,7 @@ static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 
 		root = api_add_int(root, "DEVDETAILS", &i, false);
 		root = api_add_device_identifier(root, cgpu);
-		root = api_add_string(root, "Driver", cgpu->api->dname, false);
+		root = api_add_string(root, "Driver", cgpu->drv->dname, false);
 		root = api_add_const(root, "Kernel", cgpu->kname ? : BLANK, false);
 		root = api_add_const(root, "Model", cgpu->name ? : BLANK, false);
 		root = api_add_const(root, "Device Path", cgpu->device_path ? : BLANK, false);
@@ -2824,9 +2824,9 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 	for (j = 0; j < total_devices; j++) {
 		cgpu = get_devices(j);
 
-		if (cgpu && cgpu->api) {
-			if (cgpu->api->get_api_stats)
-				extra = cgpu->api->get_api_stats(cgpu);
+		if (cgpu && cgpu->drv) {
+			if (cgpu->drv->get_api_stats)
+				extra = cgpu->drv->get_api_stats(cgpu);
 			else
 				extra = NULL;
 
@@ -3030,7 +3030,7 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
-	const struct device_api *api;
+	struct device_drv *drv;
 	char buf[TMPBUFSIZ];
 	int numpga = numpgas();
 
@@ -3065,16 +3065,16 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 	}
 
 	cgpu = get_devices(dev);
-	api = cgpu->api;
+	drv = cgpu->drv;
 
 	char *set = strchr(opt, ',');
 	if (set)
 		*(set++) = '\0';
 
-	if (!api->set_device)
+	if (!drv->set_device)
 		message(io_data, MSG_PGANOSET, id, NULL, isjson);
 	else {
-		char *ret = api->set_device(cgpu, opt, set, buf);
+		char *ret = drv->set_device(cgpu, opt, set, buf);
 		if (ret) {
 			if (strcasecmp(opt, "help") == 0)
 				message(io_data, MSG_PGAHELP, id, ret, isjson);

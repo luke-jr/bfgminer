@@ -159,7 +159,7 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 //
 static int option_offset = -1;
 
-struct device_api icarus_api;
+struct device_drv icarus_drv;
 
 extern void convert_icarus_to_cairnsmore(struct cgpu_info *);
 
@@ -389,7 +389,7 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		int def_read_count = ICARUS_READ_COUNT_TIMING;
 
 		if (info->timing_mode == MODE_DEFAULT) {
-			if (icarus->api == &icarus_api) {
+			if (icarus->drv == &icarus_drv) {
 				info->do_default_detection = 0x10;
 			} else {
 				def_read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
@@ -531,7 +531,7 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 	}
 }
 
-bool icarus_detect_custom(const char *devpath, struct device_api *api, struct ICARUS_INFO *info)
+bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct ICARUS_INFO *info)
 {
 	int this_option_offset = ++option_offset;
 
@@ -607,7 +607,7 @@ bool icarus_detect_custom(const char *devpath, struct device_api *api, struct IC
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;
 	icarus = calloc(1, sizeof(struct cgpu_info));
-	icarus->api = api;
+	icarus->drv = api;
 	icarus->device_path = strdup(devpath);
 	icarus->device_fd = -1;
 	icarus->threads = 1;
@@ -646,7 +646,7 @@ static bool icarus_detect_one(const char *devpath)
 	info->Hs = ICARUS_REV3_HASH_TIME;
 	info->timing_mode = MODE_DEFAULT;
 
-	if (!icarus_detect_custom(devpath, &icarus_api, info)) {
+	if (!icarus_detect_custom(devpath, &icarus_drv, info)) {
 		free(info);
 		return false;
 	}
@@ -655,7 +655,7 @@ static bool icarus_detect_one(const char *devpath)
 
 static void icarus_detect()
 {
-	serial_detect(&icarus_api, icarus_detect_one);
+	serial_detect(&icarus_drv, icarus_detect_one);
 }
 
 static bool icarus_prepare(struct thr_info *thr)
@@ -1048,7 +1048,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	return hash_count;
 }
 
-static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
+static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct ICARUS_INFO *info = cgpu->cgpu_data;
@@ -1083,11 +1083,11 @@ static void icarus_shutdown(struct thr_info *thr)
 	free(thr->cgpu_data);
 }
 
-struct device_api icarus_api = {
+struct device_drv icarus_drv = {
 	.dname = "icarus",
 	.name = "ICA",
-	.api_detect = icarus_detect,
-	.get_api_stats = icarus_api_stats,
+	.drv_detect = icarus_detect,
+	.get_api_stats = icarus_drv_stats,
 	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,
 	.thread_shutdown = icarus_shutdown,

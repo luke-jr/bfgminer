@@ -39,7 +39,7 @@
 
 static int option_offset = -1;
 struct avalon_info **avalon_info;
-struct device_api avalon_api;
+struct device_drv avalon_drv;
 
 static inline uint8_t rev8(uint8_t d)
 {
@@ -560,7 +560,7 @@ static bool avalon_detect_one(const char *devpath)
 	/* We have a real Avalon! */
 	struct cgpu_info *avalon;
 	avalon = calloc(1, sizeof(struct cgpu_info));
-	avalon->api = &avalon_api;
+	avalon->drv = &avalon_drv;
 	avalon->device_path = strdup(devpath);
 	avalon->device_fd = fd;
 	avalon->threads = AVALON_MINER_THREADS;
@@ -610,7 +610,7 @@ static bool avalon_detect_one(const char *devpath)
 
 static inline void avalon_detect()
 {
-	serial_detect(&avalon_api, avalon_detect_one);
+	serial_detect(&avalon_drv, avalon_detect_one);
 }
 
 static void avalon_init(struct cgpu_info *avalon)
@@ -961,7 +961,7 @@ void minerloop_avalon(struct thr_info *mythr)
 {
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
-	const struct device_api *api = cgpu->api;
+	struct device_drv *api = cgpu->drv;
 	struct timeval tv_start, tv_end;
 	struct timeval tv_hashes;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
@@ -1026,7 +1026,7 @@ disabled:
 	free(work);
 }
 
-static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
+static struct api_data *avalon_drv_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon_info *info = avalon_info[cgpu->device_id];
@@ -1081,14 +1081,14 @@ static void avalon_shutdown(struct thr_info *thr)
 	do_avalon_close(thr);
 }
 
-struct device_api avalon_api = {
+struct device_drv avalon_drv = {
 	.dname = "avalon",
 	.name = "AVA",
-	.api_detect = avalon_detect,
+	.drv_detect = avalon_detect,
 	.thread_prepare = avalon_prepare,
 	.minerloop = minerloop_avalon,
 	.scanhash_queue = avalon_scanhash,
-	.get_api_stats = avalon_api_stats,
+	.get_api_stats = avalon_drv_stats,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };
