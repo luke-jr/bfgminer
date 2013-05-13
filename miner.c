@@ -218,8 +218,8 @@ static pthread_rwlock_t blk_lock;
 static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
-pthread_mutex_t mining_thr_lock;
-pthread_mutex_t devices_lock;
+pthread_rwlock_t mining_thr_lock;
+pthread_rwlock_t devices_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -418,9 +418,9 @@ struct thr_info *get_thread(int thr_id)
 {
 	struct thr_info *thr;
 
-	mutex_lock(&mining_thr_lock);
+	rd_lock(&mining_thr_lock);
 	thr = mining_thr[thr_id];
-	mutex_unlock(&mining_thr_lock);
+	rd_unlock(&mining_thr_lock);
 	return thr;
 }
 
@@ -435,9 +435,9 @@ struct cgpu_info *get_devices(int id)
 {
 	struct cgpu_info *cgpu;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	cgpu = devices[id];
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return cgpu;
 }
 
@@ -4541,7 +4541,7 @@ static void restart_threads(void)
 	/* Discard staged work that is now stale */
 	discard_stale();
 
-	mutex_lock(&mining_thr_lock);
+	rd_lock(&mining_thr_lock);
 	
 	for (i = 0; i < mining_threads; i++)
 	{
@@ -4555,7 +4555,7 @@ static void restart_threads(void)
 		notifier_wake(thr->work_restart_notifier);
 	}
 	
-	mutex_unlock(&mining_thr_lock);
+	rd_unlock(&mining_thr_lock);
 }
 
 static char *blkhashstr(unsigned char *hash)
@@ -7559,10 +7559,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
 			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
 			sched_paused = true;
-			mutex_lock(&mining_thr_lock);
+			rd_lock(&mining_thr_lock);
 			for (i = 0; i < mining_threads; i++)
 				mining_thr[i]->pause = true;
-			mutex_unlock(&mining_thr_lock);
+			rd_unlock(&mining_thr_lock);
 		} else if (sched_paused && should_run()) {
 			applog(LOG_WARNING, "Restarting execution as per start time %02d:%02d scheduled",
 				schedstart.tm.tm_hour, schedstart.tm.tm_min);
@@ -8110,9 +8110,9 @@ static int device_line_id_count;
 void register_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
-	mutex_lock(&devices_lock);
+	wr_lock(&devices_lock);
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
-	mutex_unlock(&devices_lock);
+	wr_unlock(&devices_lock);
 	if (!cgpu->proc_id)
 		cgpu->device_line_id = device_line_id_count++;
 	mining_threads += cgpu->threads ?: 1;
@@ -8207,8 +8207,8 @@ int main(int argc, char *argv[])
 	mutex_init(&sshare_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
-	mutex_init(&mining_thr_lock);
-	mutex_init(&devices_lock);
+	rwlock_init(&mining_thr_lock);
+	rwlock_init(&devices_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))

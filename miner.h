@@ -812,8 +812,8 @@ extern int opt_expiry;
 extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
-extern pthread_mutex_t mining_thr_lock;
-extern pthread_mutex_t devices_lock;
+extern pthread_rwlock_t mining_thr_lock;
+extern pthread_rwlock_t devices_lock;
 
 extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);

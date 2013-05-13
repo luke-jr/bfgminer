@@ -1172,7 +1172,7 @@ static int numpgas()
 	int count = 0;
 	int i;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef HAVE_OPENCL
 		if (devices[i]->drv == &opencl_api)
@@ -1184,7 +1184,7 @@ static int numpgas()
 #endif
 		++count;
 	}
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return count;
 }
 
@@ -1193,7 +1193,7 @@ static int pgadevice(int pgaid)
 	int count = 0;
 	int i;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef HAVE_OPENCL
 		if (devices[i]->drv == &opencl_api)
@@ -1208,12 +1208,12 @@ static int pgadevice(int pgaid)
 			goto foundit;
 	}
 
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return -1;
 
 foundit:
 
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return i;
 }
 #endif
@@ -1487,14 +1487,14 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; ++i) {
 		if (devices[i] == cgpu)
 			break;
 		if (cgpu->devtype == devices[i]->devtype)
 			++n;
 	}
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 
 	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
 	root = api_add_device_identifier(root, cgpu);
@@ -1521,14 +1521,14 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 
 	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; ++i) {
 		if (devices[i] == cgpu)
 			break;
 		if (cgpu->devtype == devices[i]->devtype)
 			++n;
 	}
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 
 	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
 	root = api_add_device_identifier(root, cgpu);

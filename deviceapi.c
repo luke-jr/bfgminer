@@ -597,7 +597,7 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
-	mutex_lock(&devices_lock);
+	wr_lock(&devices_lock);
 	
 	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + lpcount + 1));
 	devices[total_devices++] = cgpu;
@@ -631,7 +631,7 @@ bool add_cgpu(struct cgpu_info*cgpu)
 		cgpu->threads -= (tpp * (lpcount - 1));
 	}
 	
-	mutex_unlock(&devices_lock);
+	wr_unlock(&devices_lock);
 	
 	return true;
 }
