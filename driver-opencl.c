@@ -824,10 +824,7 @@ void pause_dynamic_threads(int gpu)
 	for (i = 1; i < cgpu->threads; i++) {
 		struct thr_info *thr;
 
-		mutex_lock(&mining_thr_lock);
-		thr = mining_thr[i];
-		mutex_unlock(&mining_thr_lock);
-
+		thr = get_thread(i);
 		if (!thr->pause && cgpu->dynamic) {
 			applog(LOG_WARNING, "Disabling extra threads due to dynamic mode.");
 			applog(LOG_WARNING, "Tune dynamic intensity with --gpu-dyninterval");
@@ -919,9 +916,7 @@ retry:
 		else
 			wlog("%d\n", gpus[gpu].intensity);
 		for (i = 0; i < mining_threads; i++) {
-			mutex_lock(&mining_thr_lock);
-			thr = mining_thr[i];
-			mutex_unlock(&mining_thr_lock);
+			thr = get_thread(i);
 			if (thr->cgpu != cgpu)
 				continue;
 			get_datestamp(checkin, &thr->last);
