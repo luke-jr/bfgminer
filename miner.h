@@ -294,6 +294,10 @@ struct device_drv {
 #endif
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
 	int64_t (*scanwork)(struct thr_info *);
+
+	/* Used to extract work from the hash table of queued work and tell
+	 * the main loop that it should not add any further work to the table.
+	 */
 	bool (*queue_full)(struct cgpu_info *);
 	void (*flush_work)(struct cgpu_info *);
 
@@ -1153,6 +1157,7 @@ extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool 
 extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
+extern void hash_queued_work(struct thr_info *mythr);
 extern void tailsprintf(char *f, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
 extern void wlog(const char *f, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 extern void wlogprint(const char *f, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);

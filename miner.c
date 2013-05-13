@@ -6964,6 +6964,9 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 		wr_lock(&cgpu->qlock);
 		HASH_ADD_INT(cgpu->queued_work, id, work);
 		wr_unlock(&cgpu->qlock);
+		/* The queue_full function should be used by the driver to
+		 * actually place work items on the physical device if it
+		 * does have a queue. */
 	} while (drv->queue_full && !drv->queue_full(cgpu));
 }
 
@@ -7002,7 +7005,7 @@ static void flush_queue(struct cgpu_info *cgpu)
  * perform a full nonce range and need a queue to maintain the device busy.
  * Work creation and destruction is not done from within this function
  * directly. */
-static void hash_queued_work(struct thr_info *mythr)
+void hash_queued_work(struct thr_info *mythr)
 {
 	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start = {0, 0}, tv_end;
