@@ -6168,6 +6168,7 @@ static void *stratum_thread(void *userdata)
 
 	while (42) {
 		struct timeval timeout;
+		int sel_ret;
 		fd_set rd;
 		char *s;
 
@@ -6201,8 +6202,8 @@ static void *stratum_thread(void *userdata)
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (!sock_full(pool) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
-			applog(LOG_DEBUG, "Stratum select timeout on pool %d", pool->pool_no);
+		if (!sock_full(pool) && (sel_ret = select(pool->sock + 1, &rd, NULL, NULL, &timeout)) < 1) {
+			applog(LOG_DEBUG, "Stratum select failed on pool %d with value %d", pool->pool_no, sel_ret);
 			s = NULL;
 		} else
 			s = recv_line(pool);
