@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <dirent.h>
 #include <unistd.h>
 #ifndef WIN32
@@ -208,22 +209,28 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 	int read_amount = AVALON_READ_SIZE;
 	bool first = true;
 
-	/* Read reply 1 byte at a time to get earliest tv_finish */
 	while (true) {
-		ret = read(fd, buf, 1);
-		if (ret < 0)
+		struct timeval timeout = {0, 1000};
+		fd_set rd;
+
+		FD_ZERO(&rd);
+		FD_SET(fd, &rd);
+		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
+		if (unlikely(ret < 0))
 			return AVA_GETS_ERROR;
-
-		if (first && tv_finish != NULL)
-			gettimeofday(tv_finish, NULL);
-
-		if (ret >= read_amount)
-			return AVA_GETS_OK;
-
-		if (ret > 0) {
+		if (ret) {
+			ret = read(fd, buf, read_amount);
+			if (unlikely(ret < 0))
+				return AVA_GETS_ERROR;
+			if (ret >= read_amount)
+				return AVA_GETS_OK;
+			if (first) {
+				if (tv_finish)
+					gettimeofday(tv_finish, NULL);
+				first = false;
+			}
 			buf += ret;
 			read_amount -= ret;
-			first = false;
 			continue;
 		}
 
