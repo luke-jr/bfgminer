@@ -6503,7 +6503,7 @@ static void pool_resus(struct pool *pool)
 		applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 		switch_pools(NULL);
 	} else
-		applog(LOG_INFO, "Pool %d %s resumed returning work", pool->pool_no, pool->rpc_url);
+		applog(LOG_INFO, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 }
 
 static struct work *hash_pop(void)
@@ -7463,7 +7463,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				pool->shares = pool->utility;
 			}
 
-			if ((pool->enabled == POOL_DISABLED || pool->has_stratum) && pool->probed)
+			if (pool->enabled == POOL_DISABLED)
 				continue;
 
 			/* Test pool is idle once every minute */
@@ -8166,9 +8166,48 @@ extern void setup_pthread_cancel_workaround();
 extern struct sigaction pcwm_orig_term_handler;
 #endif
 
+static bool pools_active = false;
+
+static void *test_pool_thread(void *arg)
+{
+	struct pool *pool = (struct pool *)arg;
+
+	if (pool_active(pool, false)) {
+		bool resus = false;
+
+		pool_tset(pool, &pool->lagging);
+		pool_tclear(pool, &pool->idle);
+
+		mutex_lock(&control_lock);
+		if (!pools_active) {
+			currentpool = pool;
+			if (pool->pool_no != 0)
+				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
+			pools_active = true;
+		} else
+			resus = true;
+		mutex_unlock(&control_lock);
+		if (resus)
+			pool_resus(pool);
+	}
+
+	return NULL;
+}
+
+static void probe_pools(void)
+{
+	int i;
+
+	for (i = 0; i < total_pools; i++) {
+		pthread_t *test_thread = malloc(sizeof(pthread_t));
+		struct pool *pool = pools[i];
+
+		pthread_create(test_thread, NULL, test_pool_thread, (void *)pool);
+	}
+}
+
 int main(int argc, char *argv[])
 {
-	bool pools_active = false;
 	struct sigaction handler;
 	struct thr_info *thr;
 	struct block *block;
@@ -8589,29 +8628,14 @@ int main(int argc, char *argv[])
 
 	applog(LOG_NOTICE, "Probing for an alive pool");
 	do {
+		int slept = 0;
+
 		/* Look for at least one active pool before starting */
-		for (j = 0; j < total_pools; j++) {
-			for (i = 0; i < total_pools; i++) {
-				struct pool *pool  = pools[i];
-
-				if (pool->prio != j)
-					continue;
-
-				if (pool_active(pool, false)) {
-					pool_tset(pool, &pool->lagging);
-					pool_tclear(pool, &pool->idle);
-					if (!currentpool)
-						currentpool = pool;
-					applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
-					pools_active = true;
-					goto found_active_pool;
-				} else {
-					if (pool == currentpool)
-						currentpool = NULL;
-					applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
-				}
-			}
-		}
+		probe_pools();
+		do {
+			sleep(1);
+			slept++;
+		} while (!pools_active && slept < 60);
 
 		if (!pools_active) {
 			applog(LOG_ERR, "No servers were found that could be used to get work from.");
@@ -8636,7 +8660,6 @@ int main(int argc, char *argv[])
 				quit(0, "No servers could be used! Exiting.");
 		}
 	} while (!pools_active);
-found_active_pool: ;
 
 #ifdef USE_SCRYPT
 	if (detect_algo == 1 && !opt_scrypt) {
