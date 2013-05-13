@@ -218,6 +218,7 @@ static pthread_rwlock_t blk_lock;
 static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
+pthread_mutex_t mining_thr_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -426,7 +427,9 @@ static void sharelog(const char*disposition, const struct work*work)
 		return;
 
 	thr_id = work->thr_id;
+	mutex_lock(&mining_thr_lock);
 	cgpu = mining_thr[thr_id]->cgpu;
+	mutex_unlock(&mining_thr_lock);
 	pool = work->pool;
 	t = (unsigned long int)(work->tv_work_found.tv_sec);
 	target = bin2hex(work->target, sizeof(work->target));
@@ -1989,7 +1992,13 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 int dev_from_id(int thr_id)
 {
-	return mining_thr[thr_id]->cgpu->device_id;
+	struct cgpu_info *cgpu;
+
+	mutex_lock(&mining_thr_lock);
+	cgpu = mining_thr[thr_id]->cgpu;
+	mutex_unlock(&mining_thr_lock);
+
+	return cgpu->device_id;
 }
 
 /* Make the change in the recent value adjust dynamically when the difference
@@ -2390,8 +2399,12 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 
 static void text_print_status(int thr_id)
 {
-	struct cgpu_info *cgpu = mining_thr[thr_id]->cgpu;
+	struct cgpu_info *cgpu;
 	char logline[256];
+
+	mutex_lock(&mining_thr_lock);
+	cgpu = mining_thr[thr_id]->cgpu;
+	mutex_unlock(&mining_thr_lock);
 
 	if (cgpu) {
 		get_statline(logline, cgpu);
@@ -2473,12 +2486,16 @@ static int dev_width;
 
 static void curses_print_devstatus(int thr_id)
 {
-	struct cgpu_info *cgpu = mining_thr[thr_id]->cgpu;
+	struct cgpu_info *cgpu;
 	char logline[256];
 	int ypos;
 
 	if (opt_compact)
 		return;
+
+	mutex_lock(&mining_thr_lock);
+	cgpu = mining_thr[thr_id]->cgpu;
+	mutex_unlock(&mining_thr_lock);
 
 	/* Check this isn't out of the window size */
 	if (opt_show_procs)
@@ -2668,13 +2685,17 @@ static uint64_t share_diff(const struct work *);
 
 static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
-	struct cgpu_info *cgpu = mining_thr[work->thr_id]->cgpu;
+	struct cgpu_info *cgpu;
 	const unsigned char *hashpart = &work->hash[opt_scrypt ? 26 : 24];
 	uint64_t shrdiff = share_diff(work);
 	char shrdiffdisp[16];
 	int tgtdiff = floor(work->work_difficulty);
 	char tgtdiffdisp[16];
 	char where[20];
+	
+	mutex_lock(&mining_thr_lock);
+	cgpu = mining_thr[work->thr_id]->cgpu;
+	mutex_unlock(&mining_thr_lock);
 	
 	suffix_string(shrdiff, shrdiffdisp, 0);
 	suffix_string(tgtdiff, tgtdiffdisp, 0);
@@ -2733,7 +2754,11 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	     /*char *hashshow,*/ bool resubmit, char *worktime)
 {
 	struct pool *pool = work->pool;
-	struct cgpu_info *cgpu = mining_thr[work->thr_id]->cgpu;
+	struct cgpu_info *cgpu;
+
+	mutex_lock(&mining_thr_lock);
+	cgpu = mining_thr[work->thr_id]->cgpu;
+	mutex_unlock(&mining_thr_lock);
 
 	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
 		mutex_lock(&stats_lock);
@@ -2934,7 +2959,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	json_t *res, *err;
 	bool rc = false;
 	int thr_id = work->thr_id;
-	struct cgpu_info *cgpu = mining_thr[thr_id]->cgpu;
 	struct pool *pool = work->pool;
 	struct timeval tv_submit_reply;
 	char worktime[200] = "";
@@ -3006,7 +3030,12 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 		print_status(thr_id);
 	if (!want_per_device_stats) {
 		char logline[256];
+		struct cgpu_info *cgpu;
 
+		mutex_lock(&mining_thr_lock);
+		cgpu = mining_thr[thr_id]->cgpu;
+		mutex_unlock(&mining_thr_lock);
+		
 		get_statline(logline, cgpu);
 		applog(LOG_INFO, "%s", logline);
 	}
@@ -3419,7 +3448,9 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Stopping mining threads");
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
+		mutex_lock(&mining_thr_lock);
 		thr = mining_thr[i];
+		mutex_unlock(&mining_thr_lock);
 		if (thr->cgpu->threads)
 			thr_info_freeze(thr);
 		thr->pause = true;
@@ -3430,7 +3461,9 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
+		mutex_lock(&mining_thr_lock);
 		thr = mining_thr[i];
+		mutex_unlock(&mining_thr_lock);
 		if (thr->cgpu->threads)
 			thr_info_cancel(thr);
 	}
@@ -4501,6 +4534,8 @@ static void restart_threads(void)
 	/* Discard staged work that is now stale */
 	discard_stale();
 
+	mutex_lock(&mining_thr_lock);
+	
 	for (i = 0; i < mining_threads; i++)
 	{
 		thr = mining_thr[i];
@@ -4512,6 +4547,8 @@ static void restart_threads(void)
 		thr = mining_thr[i];
 		notifier_wake(thr->work_restart_notifier);
 	}
+	
+	mutex_unlock(&mining_thr_lock);
 }
 
 static char *blkhashstr(unsigned char *hash)
@@ -5720,18 +5757,21 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	bool showlog = false;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
+	struct thr_info *thr;
 
 	/* Update the last time this thread reported in */
 	if (thr_id >= 0) {
-		gettimeofday(&(mining_thr[thr_id]->last), NULL);
-		mining_thr[thr_id]->cgpu->device_last_well = time(NULL);
+		mutex_lock(&mining_thr_lock);
+		thr = mining_thr[thr_id];
+		mutex_unlock(&mining_thr_lock);
+		gettimeofday(&(thr->last), NULL);
+		thr->cgpu->device_last_well = time(NULL);
 	}
 
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
 
 	/* So we can call hashmeter from a non worker thread */
 	if (thr_id >= 0) {
-		struct thr_info *thr = mining_thr[thr_id];
 		struct cgpu_info *cgpu = thr->cgpu;
 		int threadobj = cgpu->threads ?: 1;
 		double thread_rolling = 0.0;
@@ -7354,12 +7394,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
 			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
 			sched_paused = true;
-			for (i = 0; i < mining_threads; i++) {
-				struct thr_info *thr;
-				thr = mining_thr[i];
-
-				thr->pause = true;
-			}
+			mutex_lock(&mining_thr_lock);
+			for (i = 0; i < mining_threads; i++)
+				mining_thr[i]->pause = true;
+			mutex_unlock(&mining_thr_lock);
 		} else if (sched_paused && should_run()) {
 			applog(LOG_WARNING, "Restarting execution as per start time %02d:%02d scheduled",
 				schedstart.tm.tm_hour, schedstart.tm.tm_min);
@@ -7370,7 +7408,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 			for (i = 0; i < mining_threads; i++) {
 				struct thr_info *thr;
+
+				mutex_lock(&mining_thr_lock);
 				thr = mining_thr[i];
+				mutex_unlock(&mining_thr_lock);
 				thr->pause = false;
 			}
 			
@@ -7999,6 +8040,7 @@ int main(int argc, char *argv[])
 	mutex_init(&sshare_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
+	mutex_init(&mining_thr_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
@@ -8466,7 +8508,9 @@ begin_bench:
 
 		// Setup thread structs before starting any of the threads, in case they try to interact
 		for (j = 0; j < threadobj; ++j, ++k) {
+			mutex_lock(&mining_thr_lock);
 			thr = mining_thr[k];
+			mutex_unlock(&mining_thr_lock);
 			thr->id = k;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
