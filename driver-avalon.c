@@ -808,6 +808,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			first_try = 0;
 			nmsleep(1000);
+			avalon_init(avalon);
 			return 0;	/* This should never happen */
 		}
 		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == avalon_get_work_count)) {
@@ -915,6 +916,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		       "AVA%i: FPGA controller mess up", avalon->device_id);
 		dev_error(avalon, REASON_DEV_COMMS_ERROR);
 		do_avalon_close(thr);
+		nmsleep(1000);
 		avalon_init(avalon);
 		return 0;
 	}
