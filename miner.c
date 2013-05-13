@@ -4388,6 +4388,8 @@ void validate_pool_priorities(void)
 	}
 }
 
+static void clear_pool_work(struct pool *pool);
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -4461,6 +4463,8 @@ void switch_pools(struct pool *selected)
 		pool->block_id = 0;
 		if (pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 			applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
+			if (pool->last_work_copy || pool->has_stratum || opt_fail_only)
+				clear_pool_work(last_pool);
 		}
 	}
 
