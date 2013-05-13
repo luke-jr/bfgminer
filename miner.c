@@ -5834,7 +5834,8 @@ void hashmeter2(struct thr_info *thr)
 	
 	gettimeofday(&tv_now, NULL);
 	timersub(&tv_now, &thr->tv_lastupdate, &tv_elapsed);
-	if (tv_elapsed.tv_sec >= opt_log_interval) {
+	/* Update the hashmeter at most 5 times per second */
+	if (tv_elapsed.tv_sec > 0 || tv_elapsed.tv_usec > 200) {
 		hashmeter(thr->id, &tv_elapsed, thr->hashes_done);
 		thr->hashes_done = 0;
 		thr->tv_lastupdate = tv_now;
@@ -7295,7 +7296,7 @@ void proc_enable(struct cgpu_info *cgpu)
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
-#define WATCHDOG_INTERVAL		3
+#define WATCHDOG_INTERVAL		2
 #define WATCHDOG_SICK_TIME		60
 #define WATCHDOG_DEAD_TIME		600
 #define WATCHDOG_SICK_COUNT		(WATCHDOG_SICK_TIME/WATCHDOG_INTERVAL)
