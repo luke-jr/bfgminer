@@ -403,7 +403,7 @@ struct cgminer_pool_stats {
 struct cgpu_info {
 	int cgminer_id;
 	int device_line_id;
-	const struct device_drv *drv;
+	struct device_drv *drv;
 	const char *devtype;
 	int device_id;
 	char *dev_repr;

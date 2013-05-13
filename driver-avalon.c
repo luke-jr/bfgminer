@@ -961,7 +961,7 @@ void minerloop_avalon(struct thr_info *mythr)
 {
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
-	const struct device_drv *api = cgpu->drv;
+	struct device_drv *api = cgpu->drv;
 	struct timeval tv_start, tv_end;
 	struct timeval tv_hashes;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;

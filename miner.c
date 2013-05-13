@@ -2275,7 +2275,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 #else
 	assert(for_curses == false);
 #endif
-	const struct device_drv *drv = cgpu->drv;
+	struct device_drv *drv = cgpu->drv;
 	void (*statline_func)(char *, struct cgpu_info *);
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
@@ -6950,7 +6950,7 @@ void mt_disable_start(struct thr_info *mythr)
 
 void mt_disable_finish(struct thr_info *mythr)
 {
-	const struct device_drv *drv = mythr->cgpu->drv;
+	struct device_drv *drv = mythr->cgpu->drv;
 	
 	thread_reportin(mythr);
 	__thr_being_msg(mythr, "re-enabled");
@@ -8500,7 +8500,7 @@ begin_bench:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		const struct device_drv *api = cgpu->drv;
+		struct device_drv *api = cgpu->drv;
 		int threadobj = cgpu->threads;
 		if (!threadobj)
 			// Create a fake thread object to handle hashmeter etc

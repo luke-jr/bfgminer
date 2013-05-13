@@ -1789,7 +1789,7 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
-	const struct device_drv *drv;
+	struct device_drv *drv;
 	int numpga = numpgas();
 	int id;
 
@@ -3030,7 +3030,7 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
-	const struct device_drv *drv;
+	struct device_drv *drv;
 	char buf[TMPBUFSIZ];
 	int numpga = numpgas();
 

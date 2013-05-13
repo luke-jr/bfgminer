@@ -126,7 +126,7 @@ static
 struct work *get_and_prepare_work(struct thr_info *thr)
 {
 	struct cgpu_info *proc = thr->cgpu;
-	const struct device_drv *api = proc->drv;
+	struct device_drv *api = proc->drv;
 	struct work *work;
 	
 	work = get_work(thr);
@@ -145,7 +145,7 @@ struct work *get_and_prepare_work(struct thr_info *thr)
 void minerloop_scanhash(struct thr_info *mythr)
 {
 	struct cgpu_info *cgpu = mythr->cgpu;
-	const struct device_drv *api = cgpu->drv;
+	struct device_drv *api = cgpu->drv;
 	struct timeval tv_start, tv_end;
 	struct timeval tv_hashes, tv_worktime;
 	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
@@ -200,7 +200,7 @@ disabled:
 bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
 {
 	struct cgpu_info *proc = mythr->cgpu;
-	const struct device_drv *api = proc->drv;
+	struct device_drv *api = proc->drv;
 	struct timeval tv_worktime;
 	
 	mythr->tv_morework.tv_sec = -1;
@@ -247,7 +247,7 @@ void job_prepare_complete(struct thr_info *mythr)
 void do_get_results(struct thr_info *mythr, bool proceed_with_new_job)
 {
 	struct cgpu_info *proc = mythr->cgpu;
-	const struct device_drv *api = proc->drv;
+	struct device_drv *api = proc->drv;
 	struct work *work = mythr->work;
 	
 	mythr->_job_transition_in_progress = true;
@@ -276,7 +276,7 @@ void job_results_fetched(struct thr_info *mythr)
 void do_job_start(struct thr_info *mythr)
 {
 	struct cgpu_info *proc = mythr->cgpu;
-	const struct device_drv *api = proc->drv;
+	struct device_drv *api = proc->drv;
 	
 	thread_reportin(mythr);
 	api->job_start(mythr);
@@ -323,7 +323,7 @@ void job_start_abort(struct thr_info *mythr, bool failure)
 bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct work *work, bool stopping)
 {
 	struct cgpu_info *proc = mythr->cgpu;
-	const struct device_drv *api = proc->drv;
+	struct device_drv *api = proc->drv;
 	struct timeval tv_hashes;
 	int64_t hashes = 0;
 	
@@ -383,7 +383,7 @@ void minerloop_async(struct thr_info *mythr)
 {
 	struct thr_info *thr = mythr;
 	struct cgpu_info *cgpu = mythr->cgpu;
-	const struct device_drv *api = cgpu->drv;
+	struct device_drv *api = cgpu->drv;
 	struct timeval tv_now;
 	struct timeval tv_timeout;
 	struct cgpu_info *proc;
@@ -453,7 +453,7 @@ static
 void do_queue_flush(struct thr_info *mythr)
 {
 	struct cgpu_info *proc = mythr->cgpu;
-	const struct device_drv *api = proc->drv;
+	struct device_drv *api = proc->drv;
 	
 	api->queue_flush(mythr);
 	if (mythr->next_work)
@@ -467,7 +467,7 @@ void minerloop_queue(struct thr_info *thr)
 {
 	struct thr_info *mythr;
 	struct cgpu_info *cgpu = thr->cgpu;
-	const struct device_drv *api = cgpu->drv;
+	struct device_drv *api = cgpu->drv;
 	struct timeval tv_now;
 	struct timeval tv_timeout;
 	struct cgpu_info *proc;
@@ -545,7 +545,7 @@ void *miner_thread(void *userdata)
 	struct thr_info *mythr = userdata;
 	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
-	const struct device_drv *drv = cgpu->drv;
+	struct device_drv *drv = cgpu->drv;
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
