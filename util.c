@@ -1903,8 +1903,10 @@ bool initiate_stratum(struct pool *pool)
 	int n2size;
 
 resend:
-	if (!setup_stratum_curl(pool))
+	if (!setup_stratum_curl(pool)) {
+		sockd = false;
 		goto out;
+	}
 
 	sockd = true;
 

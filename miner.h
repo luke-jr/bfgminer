@@ -1043,6 +1043,8 @@ struct pool {
 	struct thread_q *getwork_q;
 
 	pthread_t longpoll_thread;
+	pthread_t test_thread;
+	bool testing;
 
 	int curls;
 	pthread_cond_t cr_cond;

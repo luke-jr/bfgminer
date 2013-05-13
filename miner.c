@@ -7506,6 +7506,13 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			if (pool->enabled == POOL_DISABLED)
 				continue;
 
+			/* Don't start testing any pools if the test threads
+			 * from startup are still doing their first attempt. */
+			if (unlikely(pool->testing)) {
+				pthread_join(pool->test_thread, NULL);
+				pool->testing = false;
+			}
+
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
 				gettimeofday(&pool->tv_idle, NULL);
@@ -8235,10 +8242,10 @@ static void probe_pools(void)
 	int i;
 
 	for (i = 0; i < total_pools; i++) {
-		pthread_t *test_thread = malloc(sizeof(pthread_t));
 		struct pool *pool = pools[i];
 
-		pthread_create(test_thread, NULL, test_pool_thread, (void *)pool);
+		pool->testing = true;
+		pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
 	}
 }
 
