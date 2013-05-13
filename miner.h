@@ -1150,6 +1150,7 @@ extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool 
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
 extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void tailsprintf(char *f, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
 extern void wlog(const char *f, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);

@@ -6967,6 +6967,16 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 	} while (drv->queue_full && !drv->queue_full(cgpu));
 }
 
+/* This function should be used by queued device drivers when they're sure
+ * the work struct is no longer in use. */
+void work_completed(struct cgpu_info *cgpu, struct work *work)
+{
+	wr_lock(&cgpu->qlock);
+	HASH_DEL(cgpu->queued_work, work);
+	wr_unlock(&cgpu->qlock);
+	free_work(work);
+}
+
 /* This version of hash work is for devices that are fast enough to always
  * perform a full nonce range and need a queue to maintain the device busy.
  * Work creation and destruction is not done from within this function
