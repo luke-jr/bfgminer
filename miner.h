@@ -904,7 +904,7 @@ extern int enabled_pools;
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
 extern struct pool *add_pool(void);
-extern void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
+extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
 
