@@ -1473,7 +1473,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out;
 	}
 
-	mutex_lock(&pool->pool_lock);
+	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
 	free(pool->swork.prev_hash);
 	free(pool->swork.coinbase1);
@@ -1513,7 +1513,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	/* workpadding */	 96;
 	pool->swork.header_len = pool->swork.header_len * 2 + 1;
 	align_len(&pool->swork.header_len);
-	mutex_unlock(&pool->pool_lock);
+	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Received stratum notify from pool %u with job_id=%s",
 	       pool->pool_no, job_id);
@@ -1551,9 +1551,9 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	if (diff == 0)
 		return false;
 
-	mutex_lock(&pool->pool_lock);
+	cg_wlock(&pool->data_lock);
 	pool->swork.diff = diff;
-	mutex_unlock(&pool->pool_lock);
+	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Pool %d stratum bdifficulty set to %f", pool->pool_no, diff);
 
@@ -1980,14 +1980,14 @@ resend:
 		goto out;
 	}
 
-	mutex_lock(&pool->pool_lock);
+	cg_wlock(&pool->data_lock);
 	free(pool->sessionid);
 	pool->sessionid = sessionid;
 	free(pool->nonce1);
 	pool->nonce1 = nonce1;
 	pool->n1_len = strlen(nonce1) / 2;
 	pool->n2size = n2size;
-	mutex_unlock(&pool->pool_lock);
+	cg_wunlock(&pool->data_lock);
 
 	if (sessionid)
 		applog(LOG_DEBUG, "Pool %d stratum session id: %s", pool->pool_no, pool->sessionid);

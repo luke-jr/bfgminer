@@ -1076,6 +1076,7 @@ struct pool {
 	char *rpc_proxy;
 
 	pthread_mutex_t pool_lock;
+	cglock_t data_lock;
 
 	struct thread_q *submit_q;
 	struct thread_q *getwork_q;
