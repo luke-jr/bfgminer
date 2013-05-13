@@ -234,14 +234,14 @@ out:
 
 static int keep_sockalive(SOCKETTYPE fd)
 {
-	const int tcp_keepidle = 60;
-	const int tcp_keepintvl = 60;
+	const int tcp_keepidle = 45;
+	const int tcp_keepintvl = 30;
 	const int keepalive = 1;
 	int ret = 0;
 
 
 #ifndef WIN32
-	const int tcp_keepcnt = 5;
+	const int tcp_keepcnt = 1;
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
 		ret = 1;
@@ -1473,7 +1473,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out;
 	}
 
-	mutex_lock(&pool->pool_lock);
+	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
 	free(pool->swork.prev_hash);
 	free(pool->swork.coinbase1);
@@ -1513,7 +1513,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	/* workpadding */	 96;
 	pool->swork.header_len = pool->swork.header_len * 2 + 1;
 	align_len(&pool->swork.header_len);
-	mutex_unlock(&pool->pool_lock);
+	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Received stratum notify from pool %u with job_id=%s",
 	       pool->pool_no, job_id);
@@ -1535,7 +1535,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	total_getworks++;
 
 	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || pool->swork.transparency_time != (time_t)-1)
-		if (pool->stratum_auth)
+		if (pool->stratum_init)
 			stratum_probe_transparency(pool);
 
 	ret = true;
@@ -1551,9 +1551,9 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	if (diff == 0)
 		return false;
 
-	mutex_lock(&pool->pool_lock);
+	cg_wlock(&pool->data_lock);
 	pool->swork.diff = diff;
-	mutex_unlock(&pool->pool_lock);
+	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Pool %d stratum bdifficulty set to %f", pool->pool_no, diff);
 
@@ -1607,9 +1607,10 @@ static bool send_version(struct pool *pool, json_t *val)
 
 static bool stratum_show_message(struct pool *pool, json_t *val, json_t *params)
 {
+	char *msg;
 	char s[RBUFSIZE], *idstr;
 	json_t *id = json_object_get(val, "id");
-	char *msg = json_array_string(params, 0);
+	msg = json_array_string(params, 0);
 	
 	if (likely(msg))
 	{
@@ -1746,7 +1747,7 @@ bool auth_stratum(struct pool *pool)
 			ss = json_dumps(err_val, JSON_INDENT(3));
 		else
 			ss = strdup("(unknown reason)");
-		applog(LOG_WARNING, "JSON stratum auth failed: %s", ss);
+		applog(LOG_WARNING, "pool %d JSON stratum auth failed: %s", pool->pool_no, ss);
 		free(ss);
 
 		goto out;
@@ -1755,7 +1756,6 @@ bool auth_stratum(struct pool *pool)
 	ret = true;
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
-	pool->stratum_auth = true;
 	successful_connect = true;
 out:
 	if (val)
@@ -1785,7 +1785,6 @@ static bool setup_stratum_curl(struct pool *pool)
 	mutex_lock(&pool->stratum_lock);
 	pool->swork.transparency_time = (time_t)-1;
 	pool->stratum_active = false;
-	pool->stratum_auth = false;
 	pool->stratum_notify = false;
 	pool->swork.transparency_probed = false;
 	if (pool->stratum_curl)
@@ -1883,25 +1882,46 @@ out:
 	return ret;
 }
 
+void suspend_stratum(struct pool *pool)
+{
+	clear_sockbuf(pool);
+	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
+	mutex_lock(&pool->stratum_lock);
+	pool->stratum_active = pool->stratum_notify = false;
+	if (pool->stratum_curl) {
+		curl_easy_cleanup(pool->stratum_curl);
+	}
+	pool->stratum_curl = NULL;
+	pool->sock = INVSOCK;
+	mutex_unlock(&pool->stratum_lock);
+}
+
 bool initiate_stratum(struct pool *pool)
 {
+	bool ret = false, recvd = false, noresume = false, sockd = false;
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
-	bool ret = false, recvd = false, noresume = false;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
 	int n2size;
 
-	if (!setup_stratum_curl(pool))
-		goto out;
-
 resend:
-	if (!noresume) {
+	if (!setup_stratum_curl(pool)) {
+		sockd = false;
+		goto out;
+	}
+
+	sockd = true;
+
+	if (noresume) {
+		/* Get rid of any crap lying around if we're resending */
+		clear_sock(pool);
+		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
+	} else {
 		if (pool->sessionid)
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
-	} else
-		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
+	}
 
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
@@ -1962,14 +1982,14 @@ resend:
 		goto out;
 	}
 
-	mutex_lock(&pool->pool_lock);
+	cg_wlock(&pool->data_lock);
 	free(pool->sessionid);
 	pool->sessionid = sessionid;
 	free(pool->nonce1);
 	pool->nonce1 = nonce1;
 	pool->n1_len = strlen(nonce1) / 2;
 	pool->n2size = n2size;
-	mutex_unlock(&pool->pool_lock);
+	cg_wunlock(&pool->data_lock);
 
 	if (sessionid)
 		applog(LOG_DEBUG, "Pool %d stratum session id: %s", pool->pool_no, pool->sessionid);
@@ -1995,26 +2015,11 @@ out:
 			goto resend;
 		}
 		applog(LOG_DEBUG, "Initiate stratum failed");
-		if (pool->sock != INVSOCK) {
-			shutdown(pool->sock, SHUT_RDWR);
-			pool->sock = INVSOCK;
-		}
+		if (sockd)
+			suspend_stratum(pool);
 	}
 
 	return ret;
-}
-
-void suspend_stratum(struct pool *pool)
-{
-	clear_sockbuf(pool);
-	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
-	mutex_lock(&pool->stratum_lock);
-	pool->stratum_active = pool->stratum_notify = false;
-	pool->stratum_auth = false;
-	curl_easy_cleanup(pool->stratum_curl);
-	pool->stratum_curl = NULL;
-	pool->sock = INVSOCK;
-	mutex_unlock(&pool->stratum_lock);
 }
 
 bool restart_stratum(struct pool *pool)

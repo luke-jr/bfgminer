@@ -1441,8 +1441,14 @@ static void opencl_detect()
 	if (!nDevs)
 		return;
 
-	if (opt_g_threads == -1)
-		opt_g_threads = 2;
+	/* If opt_g_threads is not set, use default 1 thread on scrypt and
+	 * 2 for regular mining */
+	if (opt_g_threads == -1) {
+		if (opt_scrypt)
+			opt_g_threads = 1;
+		else
+			opt_g_threads = 2;
+	}
 
 #ifdef HAVE_SENSORS
 	struct opencl_device_data *data;

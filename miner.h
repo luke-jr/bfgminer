@@ -293,6 +293,14 @@ struct device_drv {
 	int64_t (*scanhash_queue)(struct thr_info *, struct work **, int64_t);
 #endif
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
+	int64_t (*scanwork)(struct thr_info *);
+
+	/* Used to extract work from the hash table of queued work and tell
+	 * the main loop that it should not add any further work to the table.
+	 */
+	bool (*queue_full)(struct cgpu_info *);
+	void (*flush_work)(struct cgpu_info *);
+
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
@@ -524,6 +532,9 @@ struct cgpu_info {
 	int dev_throttle_count;
 
 	struct cgminer_stats cgminer_stats;
+
+	pthread_rwlock_t qlock;
+	struct work *queued_work;
 };
 
 extern void renumber_cgpu(struct cgpu_info *);
@@ -744,6 +755,65 @@ static inline void rwlock_init(pthread_rwlock_t *lock)
 		quit(1, "Failed to pthread_rwlock_init");
 }
 
+/* cgminer locks, a write biased variant of rwlocks */
+struct cglock {
+	pthread_mutex_t mutex;
+	pthread_rwlock_t rwlock;
+};
+
+typedef struct cglock cglock_t;
+
+static inline void cglock_init(cglock_t *lock)
+{
+	mutex_init(&lock->mutex);
+	rwlock_init(&lock->rwlock);
+}
+
+/* Read lock variant of cglock */
+static inline void cg_rlock(cglock_t *lock)
+{
+	mutex_lock(&lock->mutex);
+	rd_lock(&lock->rwlock);
+	mutex_unlock(&lock->mutex);
+}
+
+/* Intermediate variant of cglock */
+static inline void cg_ilock(cglock_t *lock)
+{
+	mutex_lock(&lock->mutex);
+}
+
+/* Upgrade intermediate variant to a write lock */
+static inline void cg_ulock(cglock_t *lock)
+{
+	wr_lock(&lock->rwlock);
+}
+
+/* Write lock variant of cglock */
+static inline void cg_wlock(cglock_t *lock)
+{
+	mutex_lock(&lock->mutex);
+	wr_lock(&lock->rwlock);
+}
+
+/* Downgrade intermediate variant to a read lock */
+static inline void cg_dlock(cglock_t *lock)
+{
+	rd_lock(&lock->rwlock);
+	mutex_unlock(&lock->mutex);
+}
+
+static inline void cg_runlock(cglock_t *lock)
+{
+	rd_unlock(&lock->rwlock);
+}
+
+static inline void cg_wunlock(cglock_t *lock)
+{
+	wr_unlock(&lock->rwlock);
+	mutex_unlock(&lock->mutex);
+}
+
 struct pool;
 
 extern bool opt_protocol;
@@ -798,11 +868,12 @@ extern int opt_queue;
 extern int opt_scantime;
 extern int opt_expiry;
 
+extern cglock_t control_lock;
 extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
-extern pthread_mutex_t ch_lock;
-extern pthread_mutex_t mining_thr_lock;
-extern pthread_mutex_t devices_lock;
+extern cglock_t ch_lock;
+extern pthread_rwlock_t mining_thr_lock;
+extern pthread_rwlock_t devices_lock;
 
 extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
@@ -833,7 +904,7 @@ extern int enabled_pools;
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
 extern struct pool *add_pool(void);
-extern void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
+extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
 
@@ -1026,13 +1097,14 @@ struct pool {
 	char *rpc_proxy;
 
 	pthread_mutex_t pool_lock;
+	cglock_t data_lock;
 
 	struct thread_q *submit_q;
 	struct thread_q *getwork_q;
 
 	pthread_t longpoll_thread;
-	pthread_t submit_thread;
-	pthread_t getwork_thread;
+	pthread_t test_thread;
+	bool testing;
 
 	int curls;
 	pthread_cond_t cr_cond;
@@ -1062,7 +1134,7 @@ struct pool {
 	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;
-	bool stratum_auth;
+	bool stratum_init;
 	bool stratum_notify;
 	struct stratum_work swork;
 	pthread_t stratum_thread;
@@ -1144,7 +1216,12 @@ extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool 
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
 extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern struct work *get_queued(struct cgpu_info *cgpu);
+extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
+extern void hash_queued_work(struct thr_info *mythr);
 extern void tailsprintf(char *f, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
 extern void wlog(const char *f, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 extern void wlogprint(const char *f, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);

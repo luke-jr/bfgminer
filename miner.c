@@ -210,16 +210,15 @@ static int api_thr_id;
 static int total_control_threads;
 
 pthread_mutex_t hash_lock;
-static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
 pthread_mutex_t console_lock;
-pthread_mutex_t ch_lock;
+cglock_t ch_lock;
 static pthread_rwlock_t blk_lock;
 static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
-pthread_mutex_t mining_thr_lock;
-pthread_mutex_t devices_lock;
+pthread_rwlock_t mining_thr_lock;
+pthread_rwlock_t devices_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -232,7 +231,7 @@ double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static struct timeval miner_started;
 
-pthread_mutex_t control_lock;
+cglock_t control_lock;
 pthread_mutex_t stats_lock;
 
 static pthread_mutex_t submitting_lock;
@@ -267,9 +266,12 @@ const
 bool curses_active;
 
 static char current_block[40];
+
+/* Protected by ch_lock */
 static char *current_hash;
 static uint32_t current_block_id;
 char *current_fullhash;
+
 static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
@@ -418,9 +420,9 @@ struct thr_info *get_thread(int thr_id)
 {
 	struct thr_info *thr;
 
-	mutex_lock(&mining_thr_lock);
+	rd_lock(&mining_thr_lock);
 	thr = mining_thr[thr_id];
-	mutex_unlock(&mining_thr_lock);
+	rd_unlock(&mining_thr_lock);
 	return thr;
 }
 
@@ -435,9 +437,9 @@ struct cgpu_info *get_devices(int id)
 {
 	struct cgpu_info *cgpu;
 
-	mutex_lock(&devices_lock);
+	rd_lock(&devices_lock);
 	cgpu = devices[id];
-	mutex_unlock(&devices_lock);
+	rd_unlock(&devices_lock);
 	return cgpu;
 }
 
@@ -497,6 +499,7 @@ struct pool *add_pool(void)
 	mutex_init(&pool->pool_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
+	cglock_init(&pool->data_lock);
 	mutex_init(&pool->stratum_lock);
 	INIT_LIST_HEAD(&pool->curlring);
 	pool->swork.transparency_time = (time_t)-1;
@@ -542,9 +545,9 @@ struct pool *current_pool(void)
 {
 	struct pool *pool;
 
-	mutex_lock(&control_lock);
+	cg_rlock(&control_lock);
 	pool = currentpool;
-	mutex_unlock(&control_lock);
+	cg_runlock(&control_lock);
 	return pool;
 }
 
@@ -1790,9 +1793,9 @@ static struct work *make_work(void)
 
 	if (unlikely(!work))
 		quit(1, "Failed to calloc work in make_work");
-	mutex_lock(&control_lock);
+	cg_wlock(&control_lock);
 	work->id = total_work++;
-	mutex_unlock(&control_lock);
+	cg_wunlock(&control_lock);
 	return work;
 }
 
@@ -1861,12 +1864,12 @@ void have_block_height(uint32_t block_id, uint32_t blkheight)
 	if (known_blkheight == blkheight)
 		return;
 	applog(LOG_DEBUG, "Learned that block id %08" PRIx32 " is height %" PRIu32, be32toh(block_id), blkheight);
-	mutex_lock(&ch_lock);
+	cg_wlock(&ch_lock);
 	known_blkheight = blkheight;
 	known_blkheight_blkid = block_id;
 	if (block_id == current_block_id)
 		__update_block_title(NULL);
-	mutex_unlock(&ch_lock);
+	cg_wunlock(&ch_lock);
 }
 
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
@@ -2487,8 +2490,10 @@ static void curses_print_status(void)
 			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
+	cg_rlock(&ch_lock);
 	mvwprintw(statuswin, 5, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  current_hash, block_diff, net_hashrate, blocktime);
+	cg_runlock(&ch_lock);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -2908,7 +2913,7 @@ static uint64_t share_diff(const struct work *work)
 	bool new_best = false;
 
 	ret = target_diff(work->hash);
-	mutex_lock(&control_lock);
+	cg_wlock(&control_lock);
 	if (unlikely(ret > best_diff)) {
 		new_best = true;
 		best_diff = ret;
@@ -2916,7 +2921,7 @@ static uint64_t share_diff(const struct work *work)
 	}
 	if (unlikely(ret > work->pool->best_diff))
 		work->pool->best_diff = ret;
-	mutex_unlock(&control_lock);
+	cg_wunlock(&control_lock);
 
 	if (unlikely(new_best))
 		applog(LOG_INFO, "New best share: %s", best_share);
@@ -3058,6 +3063,18 @@ out:
 	return rc;
 }
 
+/* Specifies whether we can use this pool for work or not. */
+static bool pool_unworkable(struct pool *pool)
+{
+	if (pool->idle)
+		return true;
+	if (pool->enabled != POOL_ENABLED)
+		return true;
+	if (pool->has_stratum && !pool->stratum_active)
+		return true;
+	return false;
+}
+
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
  * rolling average per 10 minutes and if pools start getting more, it biases
  * away from them to distribute work evenly. The share count is reset to the
@@ -3071,7 +3088,7 @@ static struct pool *select_balanced(struct pool *cp)
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
-		if (pool->idle || pool->enabled != POOL_ENABLED)
+		if (pool_unworkable(pool))
 			continue;
 		if (pool->shares < lowest) {
 			lowest = pool->shares;
@@ -3091,6 +3108,7 @@ static inline struct pool *select_pool(bool lagging)
 {
 	static int rotating_pool = 0;
 	struct pool *pool, *cp;
+	int tested;
 
 	cp = current_pool();
 
@@ -3106,14 +3124,19 @@ retry:
 	else
 		pool = NULL;
 
-	while (!pool) {
+	/* Try to find the first pool in the rotation that is usable */
+	tested = 0;
+	while (!pool && tested++ < total_pools) {
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 		pool = pools[rotating_pool];
-		if ((!pool->idle && pool->enabled == POOL_ENABLED) || pool == cp)
+		if (!pool_unworkable(pool))
 			break;
 		pool = NULL;
 	}
+	/* If still nothing is usable, use the current pool */
+	if (!pool)
+		pool = cp;
 
 have_pool:
 	if (cp != pool)
@@ -3848,10 +3871,10 @@ bool stale_work(struct work *work, bool share)
 		}
 
 		same_job = true;
-		mutex_lock(&pool->pool_lock);
+		cg_rlock(&pool->data_lock);
 		if (strcmp(work->job_id, pool->swork.job_id))
 			same_job = false;
-		mutex_unlock(&pool->pool_lock);
+		cg_runlock(&pool->data_lock);
 		if (!same_job) {
 			applog(LOG_DEBUG, "Work stale due to stratum job_id mismatch");
 			return true;
@@ -4135,7 +4158,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		{
 			struct pool *pool = sws->work->pool;
 			int fd = pool->sock;
-			if (fd == INVSOCK || (!pool->stratum_auth) || !pool->stratum_notify)
+			if (fd == INVSOCK || (!pool->stratum_init) || !pool->stratum_notify)
 				continue;
 			FD_SET(fd, &wfds);
 			set_maxfd(&maxfd, fd);
@@ -4159,11 +4182,11 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 			int fd = pool->sock;
 			bool sessionid_match;
 			
-			mutex_lock(&pool->pool_lock);
+			cg_rlock(&pool->data_lock);
 			// NOTE: cgminer only does this check on retries, but BFGMiner does it for even the first/normal submit; therefore, it needs to be such that it always is true on the same connection regardless of session management
 			// NOTE: Worst case scenario for a false positive: the pool rejects it as H-not-zero
 			sessionid_match = (!pool->nonce1) || !strcmp(work->nonce1, pool->nonce1);
-			mutex_unlock(&pool->pool_lock);
+			cg_runlock(&pool->data_lock);
 			if (!sessionid_match)
 			{
 				applog(LOG_DEBUG, "No matching session id for resubmitting stratum share");
@@ -4179,7 +4202,7 @@ next_write_sws_del:
 				continue;
 			}
 			
-			if (fd == INVSOCK || (!pool->stratum_auth) || (!pool->stratum_notify) || !FD_ISSET(fd, &wfds)) {
+			if (fd == INVSOCK || (!pool->stratum_init) || (!pool->stratum_notify) || !FD_ISSET(fd, &wfds)) {
 next_write_sws:
 				// TODO: Check if stale, possibly discard etc
 				swsp = &sws->next;
@@ -4388,12 +4411,24 @@ void validate_pool_priorities(void)
 	}
 }
 
+static void clear_pool_work(struct pool *pool);
+
+/* Specifies whether we can switch to this pool or not. */
+static bool pool_unusable(struct pool *pool)
+{
+	if (pool->idle)
+		return true;
+	if (pool->enabled != POOL_ENABLED)
+		return true;
+	return false;
+}
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
 	int i, pool_no, next_pool;
 
-	mutex_lock(&control_lock);
+	cg_wlock(&control_lock);
 	last_pool = currentpool;
 	pool_no = currentpool->pool_no;
 
@@ -4416,10 +4451,10 @@ void switch_pools(struct pool *selected)
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
 				pool = priority_pool(i);
-				if (!pool->idle && pool->enabled == POOL_ENABLED) {
-					pool_no = pool->pool_no;
-					break;
-				}
+				if (pool_unusable(pool))
+					continue;
+				pool_no = pool->pool_no;
+				break;
 			}
 			break;
 		/* Both of these simply increment and cycle */
@@ -4436,10 +4471,10 @@ void switch_pools(struct pool *selected)
 				if (next_pool >= total_pools)
 					next_pool = 0;
 				pool = pools[next_pool];
-				if (!pool->idle && pool->enabled == POOL_ENABLED) {
-					pool_no = next_pool;
-					break;
-				}
+				if (pool_unusable(pool))
+					continue;
+				pool_no = next_pool;
+				break;
 			}
 			break;
 		default:
@@ -4448,7 +4483,7 @@ void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
-	mutex_unlock(&control_lock);
+	cg_wunlock(&control_lock);
 
 	/* Set the lagging flag to avoid pool not providing work fast enough
 	 * messages in failover only mode since  we have to get all fresh work
@@ -4461,6 +4496,8 @@ void switch_pools(struct pool *selected)
 		pool->block_id = 0;
 		if (pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 			applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
+			if (pool->last_work_copy || pool->has_stratum || opt_fail_only)
+				clear_pool_work(last_pool);
 		}
 	}
 
@@ -4541,7 +4578,7 @@ static void restart_threads(void)
 	/* Discard staged work that is now stale */
 	discard_stale();
 
-	mutex_lock(&mining_thr_lock);
+	rd_lock(&mining_thr_lock);
 	
 	for (i = 0; i < mining_threads; i++)
 	{
@@ -4555,7 +4592,7 @@ static void restart_threads(void)
 		notifier_wake(thr->work_restart_notifier);
 	}
 	
-	mutex_unlock(&mining_thr_lock);
+	rd_unlock(&mining_thr_lock);
 }
 
 static char *blkhashstr(unsigned char *hash)
@@ -4569,26 +4606,20 @@ static char *blkhashstr(unsigned char *hash)
 static void set_curblock(char *hexstr, unsigned char *hash)
 {
 	unsigned char hash_swap[32];
-	char *old_hash;
 
 	current_block_id = ((uint32_t*)hash)[0];
 	strcpy(current_block, hexstr);
 	swap256(hash_swap, hash);
 	swap32tole(hash_swap, hash_swap, 32 / 4);
 
-	/* Don't free current_hash directly to avoid dereferencing when read
-	 * elsewhere - and update block_timeval inside the same lock */
-	mutex_lock(&ch_lock);
+	cg_wlock(&ch_lock);
 	gettimeofday(&block_timeval, NULL);
 	__update_block_title(hash_swap);
-	old_hash = current_fullhash;
+	free(current_fullhash);
 	current_fullhash = bin2hex(hash_swap, 32);
-	free(old_hash);
-	mutex_unlock(&ch_lock);
-
 	get_timestamp(blocktime, &block_timeval);
-
 	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
+	cg_wunlock(&ch_lock);
 }
 
 /* Search to see if this string is from a block that has been seen before */
@@ -5998,7 +6029,7 @@ static void shutdown_stratum(struct pool *pool)
 {
 	// Shut down Stratum as if we never had it
 	pool->stratum_active = false;
-	pool->stratum_auth = false;
+	pool->stratum_init = false;
 	pool->has_stratum = false;
 	shutdown(pool->sock, SHUT_RDWR);
 	free(pool->stratum_url);
@@ -6090,6 +6121,16 @@ static void clear_pool_work(struct pool *pool)
 	mutex_unlock(stgd_lock);
 }
 
+static int cp_prio(void)
+{
+	int prio;
+
+	cg_rlock(&control_lock);
+	prio = currentpool->prio;
+	cg_runlock(&control_lock);
+	return prio;
+}
+
 /* We only need to maintain a secondary pool connection when we need the
  * capacity to get work from the backup pools while still on the primary */
 static bool cnx_needed(struct pool *pool)
@@ -6119,6 +6160,15 @@ static bool cnx_needed(struct pool *pool)
 	if (difftime(time(NULL), pool->last_work_time) < 120)
 		return true;
 
+	/* If the pool has only just come to life and is higher priority than
+	 * the current pool keep the connection open so we can fail back to
+	 * it. */
+	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
+		return true;
+
+	if (pool_unworkable(cp))
+		return true;
+
 	return false;
 }
 
@@ -6140,9 +6190,9 @@ static bool supports_resume(struct pool *pool)
 {
 	bool ret;
 
-	mutex_lock(&pool->pool_lock);
+	cg_rlock(&pool->data_lock);
 	ret = (pool->sessionid != NULL);
-	mutex_unlock(&pool->pool_lock);
+	cg_runlock(&pool->data_lock);
 	return ret;
 }
 
@@ -6164,6 +6214,7 @@ static void *stratum_thread(void *userdata)
 
 	while (42) {
 		struct timeval timeout;
+		int sel_ret;
 		fd_set rd;
 		char *s;
 
@@ -6197,8 +6248,8 @@ static void *stratum_thread(void *userdata)
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (!sock_full(pool) && select(pool->sock + 1, &rd, NULL, NULL, &timeout) < 1) {
-			applog(LOG_DEBUG, "Stratum select timeout on pool %d", pool->pool_no);
+		if (!sock_full(pool) && (sel_ret = select(pool->sock + 1, &rd, NULL, NULL, &timeout)) < 1) {
+			applog(LOG_DEBUG, "Stratum select failed on pool %d with value %d", pool->pool_no, sel_ret);
 			s = NULL;
 		} else
 			s = recv_line(pool);
@@ -6368,16 +6419,21 @@ retry_stratum:
 		curl_easy_cleanup(curl);
 		
 		/* We create the stratum thread for each pool just after
-		 * successful authorisation. Once the auth flag has been set
+		 * successful authorisation. Once the init flag has been set
 		 * we never unset it and the stratum thread is responsible for
 		 * setting/unsetting the active flag */
-		if (pool->stratum_auth)
-			return pool->stratum_active;
-		if (!(pool->stratum_active ? auth_stratum(pool) : restart_stratum(pool)))
-			return false;
-		init_stratum_thread(pool);
-		detect_algo = 2;
-		return true;
+		bool init = pool_tset(pool, &pool->stratum_init);
+
+		if (!init) {
+			bool ret = initiate_stratum(pool) && auth_stratum(pool);
+
+			if (ret)
+				init_stratum_thread(pool);
+			else
+				pool_tclear(pool, &pool->stratum_init);
+			return ret;
+		}
+		return pool->stratum_active;
 	}
 	else if (pool->has_stratum)
 		shutdown_stratum(pool);
@@ -6483,23 +6539,13 @@ out:
 	return ret;
 }
 
-static inline int cp_prio(void)
-{
-	int prio;
-
-	mutex_lock(&control_lock);
-	prio = currentpool->prio;
-	mutex_unlock(&control_lock);
-	return prio;
-}
-
 static void pool_resus(struct pool *pool)
 {
-	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER) {
+	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio()) {
 		applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 		switch_pools(NULL);
 	} else
-		applog(LOG_INFO, "Pool %d %s resumed returning work", pool->pool_no, pool->rpc_url);
+		applog(LOG_INFO, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 }
 
 static struct work *hash_pop(void)
@@ -6648,11 +6694,15 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	clean_work(work);
 
-	mutex_lock(&pool->pool_lock);
+	/* Use intermediate lock to update the one pool variable */
+	cg_ilock(&pool->data_lock);
 
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
+
+	/* Downgrade to a read lock to read off the pool variables */
+	cg_dlock(&pool->data_lock);
 	alloc_len = pool->swork.cb_len;
 	align_len(&alloc_len);
 	coinbase = calloc(alloc_len, 1);
@@ -6701,7 +6751,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->job_id = strdup(pool->swork.job_id);
 	work->nonce1 = strdup(pool->nonce1);
 	work->ntime = strdup(pool->swork.ntime);
-	mutex_unlock(&pool->pool_lock);
+	cg_runlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
@@ -6946,6 +6996,166 @@ void mt_disable_start(struct thr_info *mythr)
 	__thr_being_msg(mythr, "disabled");
 	mythr->rolling = mythr->cgpu->rolling = 0;
 	thread_reportout(mythr);
+}
+
+/* Create a hashtable of work items for devices with a queue. The device
+ * driver must have a custom queue_full function or it will default to true
+ * and put only one work item in the queue. Work items should not be removed
+ * from this hashtable until they are no longer in use anywhere. Once a work
+ * item is physically queued on the device itself, the work->queued flag
+ * should be set under cgpu->qlock write lock to prevent it being dereferenced
+ * while still in use. */
+static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
+{
+	thread_reportout(mythr);
+	do {
+		struct work *work = get_work(mythr);
+
+		wr_lock(&cgpu->qlock);
+		HASH_ADD_INT(cgpu->queued_work, id, work);
+		wr_unlock(&cgpu->qlock);
+		/* The queue_full function should be used by the driver to
+		 * actually place work items on the physical device if it
+		 * does have a queue. */
+	} while (drv->queue_full && !drv->queue_full(cgpu));
+}
+
+/* This function is for retrieving one work item from the queued hashtable of
+ * available work items that are not yet physically on a device (which is
+ * flagged with the work->queued bool). Code using this function must be able
+ * to handle NULL as a return which implies there is no work available. */
+struct work *get_queued(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (!work->queued) {
+			work->queued = true;
+			ret = work;
+			break;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
+/* This function is for finding an already queued work item in the
+ * given que hashtable. Code using this function must be able
+ * to handle NULL as a return which implies there is no matching work.
+ * The calling function must lock access to the que if it is required.
+ * The common values for midstatelen, offset, datalen are 32, 64, 12 */
+struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	HASH_ITER(hh, que, work, tmp) {
+		if (work->queued &&
+		    memcmp(work->midstate, midstate, midstatelen) == 0 &&
+		    memcmp(work->data + offset, data, datalen) == 0) {
+			ret = work;
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/* This function is for finding an already queued work item in the
+ * device's queued_work hashtable. Code using this function must be able
+ * to handle NULL as a return which implies there is no matching work.
+ * The common values for midstatelen, offset, datalen are 32, 64, 12 */
+struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *ret;
+
+	rd_lock(&cgpu->qlock);
+	ret = __find_work_bymidstate(cgpu->queued_work, midstate, midstatelen, data, offset, datalen);
+	rd_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
+/* This function should be used by queued device drivers when they're sure
+ * the work struct is no longer in use. */
+void work_completed(struct cgpu_info *cgpu, struct work *work)
+{
+	wr_lock(&cgpu->qlock);
+	HASH_DEL(cgpu->queued_work, work);
+	wr_unlock(&cgpu->qlock);
+	free_work(work);
+}
+
+static void flush_queue(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp;
+	int discarded = 0;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		/* Can only discard the work items if they're not physically
+		 * queued on the device. */
+		if (!work->queued) {
+			HASH_DEL(cgpu->queued_work, work);
+			discard_work(work);
+			discarded++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	if (discarded)
+		applog(LOG_DEBUG, "Discarded %d queued work items", discarded);
+}
+
+/* This version of hash work is for devices that are fast enough to always
+ * perform a full nonce range and need a queue to maintain the device busy.
+ * Work creation and destruction is not done from within this function
+ * directly. */
+void hash_queued_work(struct thr_info *mythr)
+{
+	const long cycle = opt_log_interval / 5 ? : 1;
+	struct timeval tv_start = {0, 0}, tv_end;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	const int thr_id = mythr->id;
+	int64_t hashes_done = 0;
+
+	while (42) {
+		struct timeval diff;
+		int64_t hashes;
+
+		mythr->work_restart = false;
+
+		fill_queue(mythr, cgpu, drv, thr_id);
+
+		thread_reportin(mythr);
+		hashes = drv->scanwork(mythr);
+		if (unlikely(hashes == -1 )) {
+			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
+			cgpu->deven = DEV_DISABLED;
+			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
+			mt_disable(mythr);
+		}
+
+		hashes_done += hashes;
+		gettimeofday(&tv_end, NULL);
+		timersub(&tv_end, &tv_start, &diff);
+		if (diff.tv_sec >= cycle) {
+			hashmeter(thr_id, &diff, hashes_done);
+			hashes_done = 0;
+			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
+		}
+
+		if (unlikely(mythr->work_restart)) {
+			flush_queue(cgpu);
+			if (drv->flush_work)
+				drv->flush_work(cgpu);
+		}
+
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr);
+	}
 }
 
 void mt_disable_finish(struct thr_info *mythr)
@@ -7299,8 +7509,15 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				pool->shares = pool->utility;
 			}
 
-			if ((pool->enabled == POOL_DISABLED || pool->has_stratum) && pool->probed)
+			if (pool->enabled == POOL_DISABLED)
 				continue;
+
+			/* Don't start testing any pools if the test threads
+			 * from startup are still doing their first attempt. */
+			if (unlikely(pool->testing)) {
+				pthread_join(pool->test_thread, NULL);
+				pool->testing = false;
+			}
 
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
@@ -7308,7 +7525,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
-
 		}
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
@@ -7399,10 +7615,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
 			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
 			sched_paused = true;
-			mutex_lock(&mining_thr_lock);
+			rd_lock(&mining_thr_lock);
 			for (i = 0; i < mining_threads; i++)
 				mining_thr[i]->pause = true;
-			mutex_unlock(&mining_thr_lock);
+			rd_unlock(&mining_thr_lock);
 		} else if (sched_paused && should_run()) {
 			applog(LOG_WARNING, "Restarting execution as per start time %02d:%02d scheduled",
 				schedstart.tm.tm_hour, schedstart.tm.tm_min);
@@ -7734,7 +7950,35 @@ char *curses_input(const char *query)
 }
 #endif
 
-void add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass)
+static bool pools_active = false;
+
+static void *test_pool_thread(void *arg)
+{
+	struct pool *pool = (struct pool *)arg;
+
+	if (pool_active(pool, false)) {
+		pool_tset(pool, &pool->lagging);
+		pool_tclear(pool, &pool->idle);
+
+		cg_wlock(&control_lock);
+		if (!pools_active) {
+			currentpool = pool;
+			if (pool->pool_no != 0)
+				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
+			pools_active = true;
+		}
+		cg_wunlock(&control_lock);
+		pool_resus(pool);
+	} else
+		pool_died(pool);
+
+	return NULL;
+}
+
+/* Always returns true that the pool details were added unless we are not
+ * live, implying this is the only pool being added, so if no pools are
+ * active it returns false. */
+bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass)
 {
 	pool->rpc_url = url;
 	pool->rpc_user = user;
@@ -7744,17 +7988,17 @@ void add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 		quit(1, "Failed to malloc userpass");
 	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
+	pool->testing = true;
+	pool->idle = true;
 	enable_pool(pool);
 
-	/* Prevent noise on startup */
-	pool->lagging = true;
-
-	/* Test the pool is not idle if we're live running, otherwise
-	 * it will be tested separately */
-	if (live && !pool_active(pool, false)) {
-		gettimeofday(&pool->tv_idle, NULL);
-		pool->idle = true;
+	pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
+	if (!live) {
+		pthread_join(pool->test_thread, NULL);
+		pool->testing = false;
+		return pools_active;
 	}
+	return true;
 }
 
 #ifdef HAVE_CURSES
@@ -7794,8 +8038,7 @@ static bool input_pool(bool live)
 		url = httpinput;
 	}
 
-	add_pool_details(pool, live, url, user, pass);
-	ret = true;
+	ret = add_pool_details(pool, live, url, user, pass);
 out:
 	immedok(logwin, false);
 
@@ -7950,9 +8193,9 @@ static int device_line_id_count;
 void register_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
-	mutex_lock(&devices_lock);
+	wr_lock(&devices_lock);
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
-	mutex_unlock(&devices_lock);
+	wr_unlock(&devices_lock);
 	if (!cgpu->proc_id)
 		cgpu->device_line_id = device_line_id_count++;
 	mining_threads += cgpu->threads ?: 1;
@@ -7964,6 +8207,9 @@ void register_device(struct cgpu_info *cgpu)
 		gpu_threads += cgpu->threads;
 	}
 #endif
+
+	rwlock_init(&cgpu->qlock);
+	cgpu->queued_work = NULL;
 }
 
 struct _cgpu_devid_counter {
@@ -7999,9 +8245,20 @@ extern void setup_pthread_cancel_workaround();
 extern struct sigaction pcwm_orig_term_handler;
 #endif
 
+static void probe_pools(void)
+{
+	int i;
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+
+		pool->testing = true;
+		pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
+	}
+}
+
 int main(int argc, char *argv[])
 {
-	bool pools_active = false;
 	struct sigaction handler;
 	struct thr_info *thr;
 	struct block *block;
@@ -8035,17 +8292,16 @@ int main(int argc, char *argv[])
 #endif
 
 	mutex_init(&hash_lock);
-	mutex_init(&qd_lock);
 	mutex_init(&console_lock);
-	mutex_init(&control_lock);
+	cglock_init(&control_lock);
 	mutex_init(&stats_lock);
 	mutex_init(&sharelog_lock);
-	mutex_init(&ch_lock);
+	cglock_init(&ch_lock);
 	mutex_init(&sshare_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
-	mutex_init(&mining_thr_lock);
-	mutex_init(&devices_lock);
+	rwlock_init(&mining_thr_lock);
+	rwlock_init(&devices_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
@@ -8422,29 +8678,14 @@ int main(int argc, char *argv[])
 
 	applog(LOG_NOTICE, "Probing for an alive pool");
 	do {
+		int slept = 0;
+
 		/* Look for at least one active pool before starting */
-		for (j = 0; j < total_pools; j++) {
-			for (i = 0; i < total_pools; i++) {
-				struct pool *pool  = pools[i];
-
-				if (pool->prio != j)
-					continue;
-
-				if (pool_active(pool, false)) {
-					pool_tset(pool, &pool->lagging);
-					pool_tclear(pool, &pool->idle);
-					if (!currentpool)
-						currentpool = pool;
-					applog(LOG_INFO, "Pool %d %s active", pool->pool_no, pool->rpc_url);
-					pools_active = true;
-					goto found_active_pool;
-				} else {
-					if (pool == currentpool)
-						currentpool = NULL;
-					applog(LOG_WARNING, "Unable to get work from pool %d %s", pool->pool_no, pool->rpc_url);
-				}
-			}
-		}
+		probe_pools();
+		do {
+			sleep(1);
+			slept++;
+		} while (!pools_active && slept < 60);
 
 		if (!pools_active) {
 			applog(LOG_ERR, "No servers were found that could be used to get work from.");
@@ -8469,7 +8710,6 @@ int main(int argc, char *argv[])
 				quit(0, "No servers could be used! Exiting.");
 		}
 	} while (!pools_active);
-found_active_pool: ;
 
 #ifdef USE_SCRYPT
 	if (detect_algo == 1 && !opt_scrypt) {
