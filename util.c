@@ -1535,7 +1535,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	total_getworks++;
 
 	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || pool->swork.transparency_time != (time_t)-1)
-		if (pool->stratum_auth)
+		if (pool->stratum_init)
 			stratum_probe_transparency(pool);
 
 	ret = true;
@@ -1756,7 +1756,6 @@ bool auth_stratum(struct pool *pool)
 	ret = true;
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
-	pool->stratum_auth = true;
 	successful_connect = true;
 out:
 	if (val)
@@ -1786,7 +1785,6 @@ static bool setup_stratum_curl(struct pool *pool)
 	mutex_lock(&pool->stratum_lock);
 	pool->swork.transparency_time = (time_t)-1;
 	pool->stratum_active = false;
-	pool->stratum_auth = false;
 	pool->stratum_notify = false;
 	pool->swork.transparency_probed = false;
 	if (pool->stratum_curl)
@@ -1890,7 +1888,6 @@ void suspend_stratum(struct pool *pool)
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = pool->stratum_notify = false;
-	pool->stratum_auth = false;
 	curl_easy_cleanup(pool->stratum_curl);
 	pool->stratum_curl = NULL;
 	pool->sock = INVSOCK;

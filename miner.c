@@ -3086,11 +3086,23 @@ static struct pool *select_balanced(struct pool *cp)
 static bool pool_active(struct pool *, bool pinging);
 static void pool_died(struct pool *);
 
+static bool pool_unusable(struct pool *pool)
+{
+	if (pool->idle)
+		return true;
+	if (pool->enabled != POOL_ENABLED)
+		return true;
+	if (pool->has_stratum && !pool->stratum_active)
+		return true;
+	return false;
+}
+
 /* Select any active pool in a rotating fashion when loadbalance is chosen */
 static inline struct pool *select_pool(bool lagging)
 {
 	static int rotating_pool = 0;
 	struct pool *pool, *cp;
+	int tested;
 
 	cp = current_pool();
 
@@ -3106,14 +3118,19 @@ retry:
 	else
 		pool = NULL;
 
-	while (!pool) {
+	/* Try to find the first pool in the rotation that is usable */
+	tested = 0;
+	while (!pool && tested++ < total_pools) {
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 		pool = pools[rotating_pool];
-		if ((!pool->idle && pool->enabled == POOL_ENABLED) || pool == cp)
+		if (!pool_unusable(pool))
 			break;
 		pool = NULL;
 	}
+	/* If still nothing is usable, use the current pool */
+	if (!pool)
+		pool = cp;
 
 have_pool:
 	if (cp != pool)
@@ -4135,7 +4152,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		{
 			struct pool *pool = sws->work->pool;
 			int fd = pool->sock;
-			if (fd == INVSOCK || (!pool->stratum_auth) || !pool->stratum_notify)
+			if (fd == INVSOCK || (!pool->stratum_init) || !pool->stratum_notify)
 				continue;
 			FD_SET(fd, &wfds);
 			set_maxfd(&maxfd, fd);
@@ -4179,7 +4196,7 @@ next_write_sws_del:
 				continue;
 			}
 			
-			if (fd == INVSOCK || (!pool->stratum_auth) || (!pool->stratum_notify) || !FD_ISSET(fd, &wfds)) {
+			if (fd == INVSOCK || (!pool->stratum_init) || (!pool->stratum_notify) || !FD_ISSET(fd, &wfds)) {
 next_write_sws:
 				// TODO: Check if stale, possibly discard etc
 				swsp = &sws->next;
@@ -4418,10 +4435,10 @@ void switch_pools(struct pool *selected)
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
 				pool = priority_pool(i);
-				if (!pool->idle && pool->enabled == POOL_ENABLED) {
-					pool_no = pool->pool_no;
-					break;
-				}
+				if (pool_unusable(pool) && pool != selected)
+					continue;
+				pool_no = pool->pool_no;
+				break;
 			}
 			break;
 		/* Both of these simply increment and cycle */
@@ -4438,10 +4455,10 @@ void switch_pools(struct pool *selected)
 				if (next_pool >= total_pools)
 					next_pool = 0;
 				pool = pools[next_pool];
-				if (!pool->idle && pool->enabled == POOL_ENABLED) {
-					pool_no = next_pool;
-					break;
-				}
+				if (pool_unusable(pool) && pool != selected)
+					continue;
+				pool_no = next_pool;
+				break;
 			}
 			break;
 		default:
@@ -6002,7 +6019,7 @@ static void shutdown_stratum(struct pool *pool)
 {
 	// Shut down Stratum as if we never had it
 	pool->stratum_active = false;
-	pool->stratum_auth = false;
+	pool->stratum_init = false;
 	pool->has_stratum = false;
 	shutdown(pool->sock, SHUT_RDWR);
 	free(pool->stratum_url);
@@ -6373,16 +6390,21 @@ retry_stratum:
 		curl_easy_cleanup(curl);
 		
 		/* We create the stratum thread for each pool just after
-		 * successful authorisation. Once the auth flag has been set
+		 * successful authorisation. Once the init flag has been set
 		 * we never unset it and the stratum thread is responsible for
 		 * setting/unsetting the active flag */
-		if (pool->stratum_auth)
-			return pool->stratum_active;
-		if (!(pool->stratum_active ? auth_stratum(pool) : restart_stratum(pool)))
-			return false;
-		init_stratum_thread(pool);
-		detect_algo = 2;
-		return true;
+		bool init = pool_tset(pool, &pool->stratum_init);
+
+		if (!init) {
+			bool ret = initiate_stratum(pool) && auth_stratum(pool);
+
+			if (ret)
+				init_stratum_thread(pool);
+			else
+				pool_tclear(pool, &pool->stratum_init);
+			return ret;
+		}
+		return pool->stratum_active;
 	}
 	else if (pool->has_stratum)
 		shutdown_stratum(pool);
