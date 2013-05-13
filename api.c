@@ -1204,13 +1204,17 @@ static int pgadevice(int pgaid)
 			continue;
 #endif
 		++count;
-		if (count == (pgaid + 1)) {
-			mutex_unlock(&devices_lock);
-			return i;
-		}
+		if (count == (pgaid + 1))
+			goto foundit;
 	}
+
 	mutex_unlock(&devices_lock);
 	return -1;
+
+foundit:
+
+	mutex_unlock(&devices_lock);
+	return i;
 }
 #endif
 
@@ -1574,7 +1578,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
         int dev = pgadevice(pga);
         if (dev < 0) // Should never happen
                 return;
-        devstatus_an(io_data, get_proc_by_id(dev), isjson, precom);
+        devstatus_an(io_data, get_devices(dev), isjson, precom);
 }
 #endif
 
@@ -1604,7 +1608,7 @@ devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), 
 		io_open = io_add(io_data, COMSTR JSON_DEVS);
 
 	for (i = 0; i < total_devices; ++i) {
-		func(io_data, get_proc_by_id(i), isjson, isjson && i > 0);
+		func(io_data, get_devices(i), isjson, isjson && i > 0);
 	}
 
 	if (isjson && io_open)
@@ -1717,7 +1721,7 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
-	cgpu = get_proc_by_id(dev);
+	cgpu = get_devices(dev);
 
 	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s",
 			id, dev, cgpu->proc_repr_ns);
@@ -1767,7 +1771,7 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	cgpu = get_proc_by_id(dev);
+	cgpu = get_devices(dev);
 
 	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s",
 			id, dev, cgpu->proc_repr_ns);
@@ -1811,7 +1815,7 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 		return;
 	}
 
-	cgpu = get_proc_by_id(dev);
+	cgpu = get_devices(dev);
 	api = cgpu->api;
 
 	if (api->identify_device && api->identify_device(cgpu))
@@ -2667,6 +2671,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 
 static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
 {
+	struct cgpu_info *cgpu;
 	bool io_open = false;
 	int i;
 
@@ -2680,8 +2685,10 @@ static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 	if (isjson)
 		io_open = io_add(io_data, COMSTR JSON_NOTIFY);
 
-	for (i = 0; i < total_devices; i++)
-		notifystatus(io_data, i, get_proc_by_id(i), isjson, group);
+	for (i = 0; i < total_devices; i++) {
+		cgpu = get_devices(i);
+		notifystatus(io_data, i, cgpu, isjson, group);
+	}
 
 	if (isjson && io_open)
 		io_close(io_data);
@@ -2706,7 +2713,7 @@ static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		io_open = io_add(io_data, COMSTR JSON_DEVDETAILS);
 
 	for (i = 0; i < total_devices; i++) {
-		cgpu = get_proc_by_id(i);
+		cgpu = get_devices(i);
 
 		root = api_add_int(root, "DEVDETAILS", &i, false);
 		root = api_add_device_identifier(root, cgpu);
@@ -2815,7 +2822,7 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 
 	i = 0;
 	for (j = 0; j < total_devices; j++) {
-		cgpu = get_proc_by_id(j);
+		cgpu = get_devices(j);
 
 		if (cgpu && cgpu->api) {
 			if (cgpu->api->get_api_stats)
@@ -3057,7 +3064,7 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 		return;
 	}
 
-	cgpu = get_proc_by_id(dev);
+	cgpu = get_devices(dev);
 	api = cgpu->api;
 
 	char *set = strchr(opt, ',');

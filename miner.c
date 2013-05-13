@@ -431,6 +431,16 @@ static struct cgpu_info *get_thr_cgpu(int thr_id)
 	return thr->cgpu;
 }
 
+struct cgpu_info *get_devices(int id)
+{
+	struct cgpu_info *cgpu;
+
+	mutex_lock(&devices_lock);
+	cgpu = devices[id];
+	mutex_unlock(&devices_lock);
+	return cgpu;
+}
+
 static void sharelog(const char*disposition, const struct work*work)
 {
 	char *target, *hash, *data;
@@ -1010,7 +1020,7 @@ static void load_temp_config()
 	target_n = temp_target_str;
 
 	for (i = 0; i < total_devices; ++i) {
-		cgpu = get_proc_by_id(i);
+		cgpu = get_devices(i);
 		
 		// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
 		if (!cgpu->cutofftemp)
@@ -5199,7 +5209,7 @@ void zero_stats(void)
 	zero_bestshare();
 
 	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = get_proc_by_id(i);
+		struct cgpu_info *cgpu = get_devices(i);
 
 		mutex_lock(&hash_lock);
 		cgpu->total_mhashes = 0;
@@ -7410,7 +7420,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			
 			for (i = 0; i < total_devices; ++i)
 			{
-				struct cgpu_info *cgpu = get_proc_by_id(i);
+				struct cgpu_info *cgpu = get_devices(i);
 				
 				/* Don't touch disabled devices */
 				if (cgpu->deven == DEV_DISABLED)
@@ -7420,15 +7430,12 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		}
 
 		for (i = 0; i < total_devices; ++i) {
-			struct cgpu_info *cgpu;
-			struct thr_info *thr;
+			struct cgpu_info *cgpu = get_devices(i);
+			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
-			cgpu = get_proc_by_id(i);
-			thr = cgpu->thr[0];
-			
 			if (cgpu->api->get_stats)
 			  cgpu->api->get_stats(cgpu);
 
@@ -7631,10 +7638,9 @@ void print_summary(void)
 	}
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
-	for (i = 0; i < total_devices; ++i)
-	{
-		struct cgpu_info *cgpu;
-		cgpu = get_proc_by_id(i);
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = get_devices(i);
+
 		if ((!cgpu->proc_id) && cgpu->next_proc)
 		{
 			// Device summary line
