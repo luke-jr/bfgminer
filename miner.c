@@ -219,6 +219,7 @@ static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
 pthread_mutex_t mining_thr_lock;
+pthread_mutex_t devices_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -1009,7 +1010,7 @@ static void load_temp_config()
 	target_n = temp_target_str;
 
 	for (i = 0; i < total_devices; ++i) {
-		cgpu = devices[i];
+		cgpu = get_proc_by_id(i);
 		
 		// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
 		if (!cgpu->cutofftemp)
@@ -5197,10 +5198,10 @@ void zero_stats(void)
 
 	zero_bestshare();
 
-	mutex_lock(&hash_lock);
 	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = devices[i];
+		struct cgpu_info *cgpu = get_proc_by_id(i);
 
+		mutex_lock(&hash_lock);
 		cgpu->total_mhashes = 0;
 		cgpu->accepted = 0;
 		cgpu->rejected = 0;
@@ -5226,8 +5227,8 @@ void zero_stats(void)
 		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		cgpu->cgminer_stats.getwork_wait_max.tv_sec = 0;
 		cgpu->cgminer_stats.getwork_wait_max.tv_usec = 0;
+		mutex_unlock(&hash_lock);
 	}
-	mutex_unlock(&hash_lock);
 }
 
 #ifdef HAVE_CURSES
@@ -7409,7 +7410,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			
 			for (i = 0; i < total_devices; ++i)
 			{
-				struct cgpu_info *cgpu = devices[i];
+				struct cgpu_info *cgpu = get_proc_by_id(i);
 				
 				/* Don't touch disabled devices */
 				if (cgpu->deven == DEV_DISABLED)
@@ -7419,13 +7420,15 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		}
 
 		for (i = 0; i < total_devices; ++i) {
-			struct cgpu_info *cgpu = devices[i];
+			struct cgpu_info *cgpu;
 			struct thr_info *thr;
-			thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
+			cgpu = get_proc_by_id(i);
+			thr = cgpu->thr[0];
+			
 			if (cgpu->api->get_stats)
 			  cgpu->api->get_stats(cgpu);
 
@@ -7630,7 +7633,8 @@ void print_summary(void)
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
 	for (i = 0; i < total_devices; ++i)
 	{
-		struct cgpu_info *cgpu = devices[i];
+		struct cgpu_info *cgpu;
+		cgpu = get_proc_by_id(i);
 		if ((!cgpu->proc_id) && cgpu->next_proc)
 		{
 			// Device summary line
@@ -7638,7 +7642,7 @@ void print_summary(void)
 			log_print_status(cgpu);
 			opt_show_procs = true;
 		}
-		log_print_status(devices[i]);
+		log_print_status(cgpu);
 	}
 
 	if (opt_shares)
@@ -7940,7 +7944,9 @@ static int device_line_id_count;
 void register_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
+	mutex_lock(&devices_lock);
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
+	mutex_unlock(&devices_lock);
 	if (!cgpu->proc_id)
 		cgpu->device_line_id = device_line_id_count++;
 	mining_threads += cgpu->threads ?: 1;
@@ -8033,6 +8039,7 @@ int main(int argc, char *argv[])
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
 	mutex_init(&mining_thr_lock);
+	mutex_init(&devices_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
