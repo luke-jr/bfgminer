@@ -336,6 +336,8 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 	avalon_get_result(fd, ar, NULL, NULL);
 
 	buf = (uint8_t *)ar;
+	/* Sometimes there is one extra 0 byte for some reason in the buffer,
+	 * so work around it. */
 	if (buf[0] == 0)
 		buf = (uint8_t  *)(ar + 1);
 	if (buf[0] == 0xAA && buf[1] == 0x55 &&
