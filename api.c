@@ -2183,16 +2183,16 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	id = atoi(param);
-	mutex_lock(&control_lock);
+	cg_rlock(&control_lock);
 	if (id < 0 || id >= total_pools) {
-		mutex_unlock(&control_lock);
+		cg_runlock(&control_lock);
 		message(io_data, MSG_INVPID, id, NULL, isjson);
 		return;
 	}
 
 	pool = pools[id];
 	pool->enabled = POOL_ENABLED;
-	mutex_unlock(&control_lock);
+	cg_runlock(&control_lock);
 	switch_pools(pool);
 
 	message(io_data, MSG_SWITCHP, id, NULL, isjson);
