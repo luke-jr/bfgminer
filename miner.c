@@ -6948,6 +6948,53 @@ void mt_disable_start(struct thr_info *mythr)
 	thread_reportout(mythr);
 }
 
+/* This version of hash work is for devices that are fast enough to always
+ * perform a full nonce range and need a queue to maintain the device busy.
+ * Work creation and destruction is not done from within this function
+ * directly. */
+static void hash_queued_work(struct thr_info *mythr)
+{
+	const long cycle = opt_log_interval / 5 ? : 1;
+	struct timeval tv_start = {0, 0}, tv_end;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	const int thr_id = mythr->id;
+	int64_t hashes_done = 0;
+
+	while (42) {
+		struct timeval diff;
+		int64_t hashes;
+
+		mythr->work_restart = false;
+
+		//fill_queue(mythr, cgpu, drv, thr_id);
+
+		thread_reportin(mythr);
+		hashes = drv->scanwork(mythr);
+		if (unlikely(hashes == -1 )) {
+			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
+			cgpu->deven = DEV_DISABLED;
+			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
+			mt_disable(mythr);
+		}
+
+		hashes_done += hashes;
+		gettimeofday(&tv_end, NULL);
+		timersub(&tv_end, &tv_start, &diff);
+		if (diff.tv_sec >= cycle) {
+			hashmeter(thr_id, &diff, hashes_done);
+			hashes_done = 0;
+			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
+		}
+
+		//if (unlikely(mythr->work_restart))
+		//	flush_queue(mythr, cgpu);
+
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr);
+	}
+}
+
 void mt_disable_finish(struct thr_info *mythr)
 {
 	struct device_drv *drv = mythr->cgpu->drv;

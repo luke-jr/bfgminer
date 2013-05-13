@@ -293,6 +293,7 @@ struct device_drv {
 	int64_t (*scanhash_queue)(struct thr_info *, struct work **, int64_t);
 #endif
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
+	int64_t (*scanwork)(struct thr_info *);
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
