@@ -6111,6 +6111,16 @@ static void clear_pool_work(struct pool *pool)
 	mutex_unlock(stgd_lock);
 }
 
+static int cp_prio(void)
+{
+	int prio;
+
+	mutex_lock(&control_lock);
+	prio = currentpool->prio;
+	mutex_unlock(&control_lock);
+	return prio;
+}
+
 /* We only need to maintain a secondary pool connection when we need the
  * capacity to get work from the backup pools while still on the primary */
 static bool cnx_needed(struct pool *pool)
@@ -6138,6 +6148,12 @@ static bool cnx_needed(struct pool *pool)
 	/* Keep the connection open to allow any stray shares to be submitted
 	 * on switching pools for 2 minutes. */
 	if (difftime(time(NULL), pool->last_work_time) < 120)
+		return true;
+
+	/* If the pool has only just come to life and is higher priority than
+	 * the current pool keep the connection open so we can fail back to
+	 * it. */
+	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
 		return true;
 
 	return false;
@@ -6510,19 +6526,9 @@ out:
 	return ret;
 }
 
-static inline int cp_prio(void)
-{
-	int prio;
-
-	mutex_lock(&control_lock);
-	prio = currentpool->prio;
-	mutex_unlock(&control_lock);
-	return prio;
-}
-
 static void pool_resus(struct pool *pool)
 {
-	if (pool->prio < cp_prio() && pool_strategy == POOL_FAILOVER) {
+	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio()) {
 		applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 		switch_pools(NULL);
 	} else
