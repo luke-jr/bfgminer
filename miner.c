@@ -6948,6 +6948,166 @@ void mt_disable_start(struct thr_info *mythr)
 	thread_reportout(mythr);
 }
 
+/* Create a hashtable of work items for devices with a queue. The device
+ * driver must have a custom queue_full function or it will default to true
+ * and put only one work item in the queue. Work items should not be removed
+ * from this hashtable until they are no longer in use anywhere. Once a work
+ * item is physically queued on the device itself, the work->queued flag
+ * should be set under cgpu->qlock write lock to prevent it being dereferenced
+ * while still in use. */
+static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
+{
+	thread_reportout(mythr);
+	do {
+		struct work *work = get_work(mythr);
+
+		wr_lock(&cgpu->qlock);
+		HASH_ADD_INT(cgpu->queued_work, id, work);
+		wr_unlock(&cgpu->qlock);
+		/* The queue_full function should be used by the driver to
+		 * actually place work items on the physical device if it
+		 * does have a queue. */
+	} while (drv->queue_full && !drv->queue_full(cgpu));
+}
+
+/* This function is for retrieving one work item from the queued hashtable of
+ * available work items that are not yet physically on a device (which is
+ * flagged with the work->queued bool). Code using this function must be able
+ * to handle NULL as a return which implies there is no work available. */
+struct work *get_queued(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (!work->queued) {
+			work->queued = true;
+			ret = work;
+			break;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
+/* This function is for finding an already queued work item in the
+ * given que hashtable. Code using this function must be able
+ * to handle NULL as a return which implies there is no matching work.
+ * The calling function must lock access to the que if it is required.
+ * The common values for midstatelen, offset, datalen are 32, 64, 12 */
+struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *work, *tmp, *ret = NULL;
+
+	HASH_ITER(hh, que, work, tmp) {
+		if (work->queued &&
+		    memcmp(work->midstate, midstate, midstatelen) == 0 &&
+		    memcmp(work->data + offset, data, datalen) == 0) {
+			ret = work;
+			break;
+		}
+	}
+
+	return ret;
+}
+
+/* This function is for finding an already queued work item in the
+ * device's queued_work hashtable. Code using this function must be able
+ * to handle NULL as a return which implies there is no matching work.
+ * The common values for midstatelen, offset, datalen are 32, 64, 12 */
+struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *ret;
+
+	rd_lock(&cgpu->qlock);
+	ret = __find_work_bymidstate(cgpu->queued_work, midstate, midstatelen, data, offset, datalen);
+	rd_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
+/* This function should be used by queued device drivers when they're sure
+ * the work struct is no longer in use. */
+void work_completed(struct cgpu_info *cgpu, struct work *work)
+{
+	wr_lock(&cgpu->qlock);
+	HASH_DEL(cgpu->queued_work, work);
+	wr_unlock(&cgpu->qlock);
+	free_work(work);
+}
+
+static void flush_queue(struct cgpu_info *cgpu)
+{
+	struct work *work, *tmp;
+	int discarded = 0;
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		/* Can only discard the work items if they're not physically
+		 * queued on the device. */
+		if (!work->queued) {
+			HASH_DEL(cgpu->queued_work, work);
+			discard_work(work);
+			discarded++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	if (discarded)
+		applog(LOG_DEBUG, "Discarded %d queued work items", discarded);
+}
+
+/* This version of hash work is for devices that are fast enough to always
+ * perform a full nonce range and need a queue to maintain the device busy.
+ * Work creation and destruction is not done from within this function
+ * directly. */
+void hash_queued_work(struct thr_info *mythr)
+{
+	const long cycle = opt_log_interval / 5 ? : 1;
+	struct timeval tv_start = {0, 0}, tv_end;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	const int thr_id = mythr->id;
+	int64_t hashes_done = 0;
+
+	while (42) {
+		struct timeval diff;
+		int64_t hashes;
+
+		mythr->work_restart = false;
+
+		fill_queue(mythr, cgpu, drv, thr_id);
+
+		thread_reportin(mythr);
+		hashes = drv->scanwork(mythr);
+		if (unlikely(hashes == -1 )) {
+			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
+			cgpu->deven = DEV_DISABLED;
+			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
+			mt_disable(mythr);
+		}
+
+		hashes_done += hashes;
+		gettimeofday(&tv_end, NULL);
+		timersub(&tv_end, &tv_start, &diff);
+		if (diff.tv_sec >= cycle) {
+			hashmeter(thr_id, &diff, hashes_done);
+			hashes_done = 0;
+			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
+		}
+
+		if (unlikely(mythr->work_restart)) {
+			flush_queue(cgpu);
+			if (drv->flush_work)
+				drv->flush_work(cgpu);
+		}
+
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr);
+	}
+}
+
 void mt_disable_finish(struct thr_info *mythr)
 {
 	struct device_drv *drv = mythr->cgpu->drv;
@@ -7964,6 +8124,9 @@ void register_device(struct cgpu_info *cgpu)
 		gpu_threads += cgpu->threads;
 	}
 #endif
+
+	rwlock_init(&cgpu->qlock);
+	cgpu->queued_work = NULL;
 }
 
 struct _cgpu_devid_counter {
