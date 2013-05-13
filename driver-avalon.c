@@ -210,7 +210,7 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 	bool first = true;
 
 	while (true) {
-		struct timeval timeout = {0, 1000};
+		struct timeval timeout = {0, 100000};
 		fd_set rd;
 
 		FD_ZERO(&rd);
