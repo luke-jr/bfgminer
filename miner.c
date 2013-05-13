@@ -196,7 +196,8 @@ bool opt_bfl_noncerange;
 #endif
 #define QUIET	(opt_quiet || opt_realquiet)
 
-struct thr_info *thr_info;
+struct thr_info *control_thr;
+struct thr_info **mining_thr;
 static int gwsched_thr_id;
 static int stage_thr_id;
 static int watchpool_thr_id;
@@ -206,7 +207,7 @@ static int input_thr_id;
 #endif
 int gpur_thr_id;
 static int api_thr_id;
-static int total_threads;
+static int total_control_threads;
 
 pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
@@ -217,6 +218,8 @@ static pthread_rwlock_t blk_lock;
 static pthread_mutex_t sshare_lock;
 
 pthread_rwlock_t netacc_lock;
+pthread_mutex_t mining_thr_lock;
+pthread_mutex_t devices_lock;
 
 static pthread_mutex_t lp_lock;
 static pthread_cond_t lp_cond;
@@ -411,6 +414,33 @@ static void applog_and_exit(const char *fmt, ...)
 static pthread_mutex_t sharelog_lock;
 static FILE *sharelog_file = NULL;
 
+struct thr_info *get_thread(int thr_id)
+{
+	struct thr_info *thr;
+
+	mutex_lock(&mining_thr_lock);
+	thr = mining_thr[thr_id];
+	mutex_unlock(&mining_thr_lock);
+	return thr;
+}
+
+static struct cgpu_info *get_thr_cgpu(int thr_id)
+{
+	struct thr_info *thr = get_thread(thr_id);
+
+	return thr->cgpu;
+}
+
+struct cgpu_info *get_devices(int id)
+{
+	struct cgpu_info *cgpu;
+
+	mutex_lock(&devices_lock);
+	cgpu = devices[id];
+	mutex_unlock(&devices_lock);
+	return cgpu;
+}
+
 static void sharelog(const char*disposition, const struct work*work)
 {
 	char *target, *hash, *data;
@@ -425,7 +455,7 @@ static void sharelog(const char*disposition, const struct work*work)
 		return;
 
 	thr_id = work->thr_id;
-	cgpu = thr_info[thr_id].cgpu;
+	cgpu = get_thr_cgpu(thr_id);
 	pool = work->pool;
 	t = (unsigned long int)(work->tv_work_found.tv_sec);
 	target = bin2hex(work->target, sizeof(work->target));
@@ -990,7 +1020,7 @@ static void load_temp_config()
 	target_n = temp_target_str;
 
 	for (i = 0; i < total_devices; ++i) {
-		cgpu = devices[i];
+		cgpu = get_devices(i);
 		
 		// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
 		if (!cgpu->cutofftemp)
@@ -1988,7 +2018,9 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 int dev_from_id(int thr_id)
 {
-	return thr_info[thr_id].cgpu->device_id;
+	struct cgpu_info *cgpu = get_thr_cgpu(thr_id);
+
+	return cgpu->device_id;
 }
 
 /* Make the change in the recent value adjust dynamically when the difference
@@ -2389,9 +2421,10 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 
 static void text_print_status(int thr_id)
 {
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	struct cgpu_info *cgpu;
 	char logline[256];
 
+	cgpu = get_thr_cgpu(thr_id);
 	if (cgpu) {
 		get_statline(logline, cgpu);
 		printf("%s\n", logline);
@@ -2472,12 +2505,14 @@ static int dev_width;
 
 static void curses_print_devstatus(int thr_id)
 {
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+	struct cgpu_info *cgpu;
 	char logline[256];
 	int ypos;
 
 	if (opt_compact)
 		return;
+
+	cgpu = get_thr_cgpu(thr_id);
 
 	/* Check this isn't out of the window size */
 	if (opt_show_procs)
@@ -2667,13 +2702,15 @@ static uint64_t share_diff(const struct work *);
 
 static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
-	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
+	struct cgpu_info *cgpu;
 	const unsigned char *hashpart = &work->hash[opt_scrypt ? 26 : 24];
 	uint64_t shrdiff = share_diff(work);
 	char shrdiffdisp[16];
 	int tgtdiff = floor(work->work_difficulty);
 	char tgtdiffdisp[16];
 	char where[20];
+	
+	cgpu = get_thr_cgpu(work->thr_id);
 	
 	suffix_string(shrdiff, shrdiffdisp, 0);
 	suffix_string(tgtdiff, tgtdiffdisp, 0);
@@ -2732,7 +2769,9 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	     /*char *hashshow,*/ bool resubmit, char *worktime)
 {
 	struct pool *pool = work->pool;
-	struct cgpu_info *cgpu = thr_info[work->thr_id].cgpu;
+	struct cgpu_info *cgpu;
+
+	cgpu = get_thr_cgpu(work->thr_id);
 
 	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
 		mutex_lock(&stats_lock);
@@ -2933,7 +2972,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	json_t *res, *err;
 	bool rc = false;
 	int thr_id = work->thr_id;
-	struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
 	struct pool *pool = work->pool;
 	struct timeval tv_submit_reply;
 	char worktime[200] = "";
@@ -3005,7 +3043,10 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 		print_status(thr_id);
 	if (!want_per_device_stats) {
 		char logline[256];
+		struct cgpu_info *cgpu;
 
+		cgpu = get_thr_cgpu(thr_id);
+		
 		get_statline(logline, cgpu);
 		applog(LOG_INFO, "%s", logline);
 	}
@@ -3407,18 +3448,18 @@ static void __kill_work(void)
 
 	applog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
-	thr = &thr_info[watchpool_thr_id];
+	thr = &control_thr[watchpool_thr_id];
 	thr_info_cancel(thr);
 
 	applog(LOG_DEBUG, "Killing off watchdog thread");
 	/* Kill the watchdog thread */
-	thr = &thr_info[watchdog_thr_id];
+	thr = &control_thr[watchdog_thr_id];
 	thr_info_cancel(thr);
 
 	applog(LOG_DEBUG, "Stopping mining threads");
 	/* Stop the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
-		thr = &thr_info[i];
+		thr = get_thread(i);
 		if (thr->cgpu->threads)
 			thr_info_freeze(thr);
 		thr->pause = true;
@@ -3429,18 +3470,18 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
-		thr = &thr_info[i];
+		thr = get_thread(i);
 		if (thr->cgpu->threads)
 			thr_info_cancel(thr);
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
 	/* Stop the others */
-	thr = &thr_info[stage_thr_id];
+	thr = &control_thr[stage_thr_id];
 	thr_info_cancel(thr);
 
 	applog(LOG_DEBUG, "Killing off API thread");
-	thr = &thr_info[api_thr_id];
+	thr = &control_thr[api_thr_id];
 	thr_info_cancel(thr);
 }
 
@@ -4500,17 +4541,21 @@ static void restart_threads(void)
 	/* Discard staged work that is now stale */
 	discard_stale();
 
+	mutex_lock(&mining_thr_lock);
+	
 	for (i = 0; i < mining_threads; i++)
 	{
-		thr = &thr_info[i];
+		thr = mining_thr[i];
 		thr->work_restart = true;
 	}
 	
 	for (i = 0; i < mining_threads; i++)
 	{
-		thr = &thr_info[i];
+		thr = mining_thr[i];
 		notifier_wake(thr->work_restart_notifier);
 	}
+	
+	mutex_unlock(&mining_thr_lock);
 }
 
 static char *blkhashstr(unsigned char *hash)
@@ -5163,10 +5208,10 @@ void zero_stats(void)
 
 	zero_bestshare();
 
-	mutex_lock(&hash_lock);
 	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = devices[i];
+		struct cgpu_info *cgpu = get_devices(i);
 
+		mutex_lock(&hash_lock);
 		cgpu->total_mhashes = 0;
 		cgpu->accepted = 0;
 		cgpu->rejected = 0;
@@ -5192,8 +5237,8 @@ void zero_stats(void)
 		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		cgpu->cgminer_stats.getwork_wait_max.tv_sec = 0;
 		cgpu->cgminer_stats.getwork_wait_max.tv_usec = 0;
+		mutex_unlock(&hash_lock);
 	}
-	mutex_unlock(&hash_lock);
 }
 
 #ifdef HAVE_CURSES
@@ -5719,19 +5764,20 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	bool showlog = false;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
+	struct thr_info *thr;
 
 	/* Update the last time this thread reported in */
 	if (thr_id >= 0) {
-		gettimeofday(&thr_info[thr_id].last, NULL);
-		thr_info[thr_id].cgpu->device_last_well = time(NULL);
+		thr = get_thread(thr_id);
+		gettimeofday(&(thr->last), NULL);
+		thr->cgpu->device_last_well = time(NULL);
 	}
 
 	secs = (double)diff->tv_sec + ((double)diff->tv_usec / 1000000.0);
 
 	/* So we can call hashmeter from a non worker thread */
 	if (thr_id >= 0) {
-		struct thr_info *thr = &thr_info[thr_id];
-		struct cgpu_info *cgpu = thr_info[thr_id].cgpu;
+		struct cgpu_info *cgpu = thr->cgpu;
 		int threadobj = cgpu->threads ?: 1;
 		double thread_rolling = 0.0;
 		int i;
@@ -6359,7 +6405,7 @@ retry_stratum:
 
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
-			tq_push(thr_info[stage_thr_id].q, work);
+			tq_push(control_thr[stage_thr_id].q, work);
 			total_getworks++;
 			pool->getwork_requested++;
 			ret = true;
@@ -7353,12 +7399,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
 			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
 			sched_paused = true;
-			for (i = 0; i < mining_threads; i++) {
-				struct thr_info *thr;
-				thr = &thr_info[i];
-
-				thr->pause = true;
-			}
+			mutex_lock(&mining_thr_lock);
+			for (i = 0; i < mining_threads; i++)
+				mining_thr[i]->pause = true;
+			mutex_unlock(&mining_thr_lock);
 		} else if (sched_paused && should_run()) {
 			applog(LOG_WARNING, "Restarting execution as per start time %02d:%02d scheduled",
 				schedstart.tm.tm_hour, schedstart.tm.tm_min);
@@ -7369,13 +7413,14 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 			for (i = 0; i < mining_threads; i++) {
 				struct thr_info *thr;
-				thr = &thr_info[i];
+
+				thr = get_thread(i);
 				thr->pause = false;
 			}
 			
 			for (i = 0; i < total_devices; ++i)
 			{
-				struct cgpu_info *cgpu = devices[i];
+				struct cgpu_info *cgpu = get_devices(i);
 				
 				/* Don't touch disabled devices */
 				if (cgpu->deven == DEV_DISABLED)
@@ -7385,9 +7430,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		}
 
 		for (i = 0; i < total_devices; ++i) {
-			struct cgpu_info *cgpu = devices[i];
-			struct thr_info *thr;
-			thr = cgpu->thr[0];
+			struct cgpu_info *cgpu = get_devices(i);
+			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
@@ -7594,9 +7638,9 @@ void print_summary(void)
 	}
 
 	applog(LOG_WARNING, "Summary of per device statistics:\n");
-	for (i = 0; i < total_devices; ++i)
-	{
-		struct cgpu_info *cgpu = devices[i];
+	for (i = 0; i < total_devices; ++i) {
+		struct cgpu_info *cgpu = get_devices(i);
+
 		if ((!cgpu->proc_id) && cgpu->next_proc)
 		{
 			// Device summary line
@@ -7604,7 +7648,7 @@ void print_summary(void)
 			log_print_status(cgpu);
 			opt_show_procs = true;
 		}
-		log_print_status(devices[i]);
+		log_print_status(cgpu);
 	}
 
 	if (opt_shares)
@@ -7906,7 +7950,9 @@ static int device_line_id_count;
 void register_device(struct cgpu_info *cgpu)
 {
 	cgpu->deven = DEV_ENABLED;
+	mutex_lock(&devices_lock);
 	devices[cgpu->cgminer_id = cgminer_id_count++] = cgpu;
+	mutex_unlock(&devices_lock);
 	if (!cgpu->proc_id)
 		cgpu->device_line_id = device_line_id_count++;
 	mining_threads += cgpu->threads ?: 1;
@@ -7998,6 +8044,8 @@ int main(int argc, char *argv[])
 	mutex_init(&sshare_lock);
 	rwlock_init(&blk_lock);
 	rwlock_init(&netacc_lock);
+	mutex_init(&mining_thr_lock);
+	mutex_init(&devices_lock);
 
 	mutex_init(&lp_lock);
 	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
@@ -8330,14 +8378,23 @@ int main(int argc, char *argv[])
 			fork_monitor();
 	#endif // defined(unix)
 
-	total_threads = mining_threads + 7;
-	thr_info = calloc(total_threads, sizeof(*thr));
-	if (!thr_info)
-		quit(1, "Failed to calloc thr_info");
+	mining_thr = calloc(mining_threads, sizeof(thr));
+	if (!mining_thr)
+		quit(1, "Failed to calloc mining_thr");
+	for (i = 0; i < mining_threads; i++) {
+		mining_thr[i] = calloc(1, sizeof(*thr));
+		if (!mining_thr[i])
+			quit(1, "Failed to calloc mining_thr[%d]", i);
+	}
 
-	gwsched_thr_id = mining_threads;
-	stage_thr_id = mining_threads + 1;
-	thr = &thr_info[stage_thr_id];
+	total_control_threads = 7;
+	control_thr = calloc(total_control_threads, sizeof(*thr));
+	if (!control_thr)
+		quit(1, "Failed to calloc control_thr");
+
+	gwsched_thr_id = 0;
+	stage_thr_id = 1;
+	thr = &control_thr[stage_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
 		quit(1, "Failed to tq_new");
@@ -8456,7 +8513,7 @@ begin_bench:
 
 		// Setup thread structs before starting any of the threads, in case they try to interact
 		for (j = 0; j < threadobj; ++j, ++k) {
-			thr = &thr_info[k];
+			thr = get_thread(k);
 			thr->id = k;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
@@ -8523,15 +8580,15 @@ begin_bench:
 			quit(1, "submit_work thread create failed");
 	}
 
-	watchpool_thr_id = mining_threads + 2;
-	thr = &thr_info[watchpool_thr_id];
+	watchpool_thr_id = 2;
+	thr = &control_thr[watchpool_thr_id];
 	/* start watchpool thread */
 	if (thr_info_create(thr, NULL, watchpool_thread, NULL))
 		quit(1, "watchpool thread create failed");
 	pthread_detach(thr->pth);
 
-	watchdog_thr_id = mining_threads + 3;
-	thr = &thr_info[watchdog_thr_id];
+	watchdog_thr_id = 3;
+	thr = &control_thr[watchdog_thr_id];
 	/* start watchdog thread */
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
 		quit(1, "watchdog thread create failed");
@@ -8539,8 +8596,8 @@ begin_bench:
 
 #ifdef HAVE_OPENCL
 	/* Create reinit gpu thread */
-	gpur_thr_id = mining_threads + 4;
-	thr = &thr_info[gpur_thr_id];
+	gpur_thr_id = 4;
+	thr = &control_thr[gpur_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
 		quit(1, "tq_new failed for gpur_thr_id");
@@ -8549,8 +8606,8 @@ begin_bench:
 #endif	
 
 	/* Create API socket thread */
-	api_thr_id = mining_threads + 5;
-	thr = &thr_info[api_thr_id];
+	api_thr_id = 5;
+	thr = &control_thr[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
 
@@ -8558,12 +8615,16 @@ begin_bench:
 	/* Create curses input thread for keyboard input. Create this last so
 	 * that we know all threads are created since this can call kill_work
 	 * to try and shut down ll previous threads. */
-	input_thr_id = mining_threads + 6;
-	thr = &thr_info[input_thr_id];
+	input_thr_id = 6;
+	thr = &control_thr[input_thr_id];
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
 	pthread_detach(thr->pth);
 #endif
+
+	/* Just to be sure */
+	if (total_control_threads != 7)
+		quit(1, "incorrect total_control_threads (%d) should be 7", total_control_threads);
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {

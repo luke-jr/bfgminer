@@ -801,6 +801,8 @@ extern int opt_expiry;
 extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern pthread_mutex_t ch_lock;
+extern pthread_mutex_t mining_thr_lock;
+extern pthread_mutex_t devices_lock;
 
 extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
@@ -853,7 +855,8 @@ extern int num_processors;
 extern int hw_errors;
 extern bool use_syslog;
 extern bool opt_quiet;
-extern struct thr_info *thr_info;
+extern struct thr_info *control_thr;
+extern struct thr_info **mining_thr;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 extern int gpu_threads;
 #ifdef USE_SCRYPT
@@ -1171,6 +1174,8 @@ extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
+extern struct thr_info *get_thread(int thr_id);
+extern struct cgpu_info *get_devices(int id);
 
 enum api_data_type {
 	API_ESCAPE,
