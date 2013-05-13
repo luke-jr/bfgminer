@@ -1607,9 +1607,10 @@ static bool send_version(struct pool *pool, json_t *val)
 
 static bool stratum_show_message(struct pool *pool, json_t *val, json_t *params)
 {
+	char *msg;
 	char s[RBUFSIZE], *idstr;
 	json_t *id = json_object_get(val, "id");
-	char *msg = json_array_string(params, 0);
+	msg = json_array_string(params, 0);
 	
 	if (likely(msg))
 	{
