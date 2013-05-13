@@ -1884,10 +1884,23 @@ out:
 	return ret;
 }
 
+void suspend_stratum(struct pool *pool)
+{
+	clear_sockbuf(pool);
+	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
+	mutex_lock(&pool->stratum_lock);
+	pool->stratum_active = pool->stratum_notify = false;
+	pool->stratum_auth = false;
+	curl_easy_cleanup(pool->stratum_curl);
+	pool->stratum_curl = NULL;
+	pool->sock = INVSOCK;
+	mutex_unlock(&pool->stratum_lock);
+}
+
 bool initiate_stratum(struct pool *pool)
 {
+	bool ret = false, recvd = false, noresume = false, sockd = false;
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
-	bool ret = false, recvd = false, noresume = false;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
 	int n2size;
@@ -1895,6 +1908,7 @@ bool initiate_stratum(struct pool *pool)
 	if (!setup_stratum_curl(pool))
 		goto out;
 
+	sockd = true;
 resend:
 	if (!noresume) {
 		if (pool->sessionid)
@@ -1996,26 +2010,11 @@ out:
 			goto resend;
 		}
 		applog(LOG_DEBUG, "Initiate stratum failed");
-		if (pool->sock != INVSOCK) {
-			shutdown(pool->sock, SHUT_RDWR);
-			pool->sock = INVSOCK;
-		}
+		if (sockd)
+			suspend_stratum(pool);
 	}
 
 	return ret;
-}
-
-void suspend_stratum(struct pool *pool)
-{
-	clear_sockbuf(pool);
-	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
-	mutex_lock(&pool->stratum_lock);
-	pool->stratum_active = pool->stratum_notify = false;
-	pool->stratum_auth = false;
-	curl_easy_cleanup(pool->stratum_curl);
-	pool->stratum_curl = NULL;
-	pool->sock = INVSOCK;
-	mutex_unlock(&pool->stratum_lock);
 }
 
 bool restart_stratum(struct pool *pool)
