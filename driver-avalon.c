@@ -300,10 +300,7 @@ static int avalon_decode_nonce(struct thr_info *thr, struct work **work,
 		return -1;
 
 	info->matching_work[i]++;
-	*nonce = ar->nonce;
-#if defined (__BIG_ENDIAN__) || defined(MIPSEB)
-	*nonce = swab32(*nonce);
-#endif
+	*nonce = htole32(ar->nonce);
 
 	applog(LOG_DEBUG, "Avalon: match to work[%d](%p): %d",i, work[i],
 	       info->matching_work[i]);
