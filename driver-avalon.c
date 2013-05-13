@@ -646,7 +646,10 @@ static bool avalon_prepare(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	struct timeval now;
 
-	__avalon_init(avalon);
+	if (avalon->device_fd == -1)
+		avalon_init(avalon);
+	else
+		__avalon_init(avalon);
 
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
