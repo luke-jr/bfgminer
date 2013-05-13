@@ -234,14 +234,14 @@ out:
 
 static int keep_sockalive(SOCKETTYPE fd)
 {
-	const int tcp_keepidle = 60;
-	const int tcp_keepintvl = 60;
+	const int tcp_keepidle = 45;
+	const int tcp_keepintvl = 30;
 	const int keepalive = 1;
 	int ret = 0;
 
 
 #ifndef WIN32
-	const int tcp_keepcnt = 5;
+	const int tcp_keepcnt = 1;
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
 		ret = 1;
