@@ -33,7 +33,7 @@ export GPU_USE_SYNC_OBJECTS=1
 may help CPU usage a little as well.
 
 On windows the same commands can be passed via a batch file if the following
-lines are in the .bat before starting cgminer:
+lines are in the .bat before starting BFGMiner:
 setx GPU_MAX_ALLOC_PERCENT 100
 setx GPU_USE_SYNC_OBJECTS 1
 
