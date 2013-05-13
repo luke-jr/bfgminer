@@ -1,5 +1,6 @@
 /*
  * Copyright 2012-2013 Xiangfu
+ * Copyright 2013 Con Kolivas <kernel@kolivas.org>
  * Copyright 2012 Luke Dashjr
  * Copyright 2012 Andrew Smith
  *
