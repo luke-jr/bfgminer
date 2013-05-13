@@ -1308,17 +1308,21 @@ out:
 
 static bool parse_diff(struct pool *pool, json_t *val)
 {
-	double diff;
+	double old_diff, diff;
 
 	diff = json_number_value(json_array_get(val, 0));
 	if (diff == 0)
 		return false;
 
 	cg_wlock(&pool->data_lock);
+	old_diff = pool->swork.diff;
 	pool->swork.diff = diff;
 	cg_wunlock(&pool->data_lock);
 
-	applog(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no, diff);
+	if (old_diff != diff)
+		applog(LOG_NOTICE, "Pool %d difficulty changed to %f", pool->pool_no, diff);
+	else
+		applog(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no, diff);
 
 	return true;
 }
