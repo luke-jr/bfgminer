@@ -769,6 +769,7 @@ static inline void cglock_init(cglock_t *lock)
 	rwlock_init(&lock->rwlock);
 }
 
+/* Read lock variant of cglock */
 static inline void cg_rlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
@@ -776,10 +777,29 @@ static inline void cg_rlock(cglock_t *lock)
 	mutex_unlock(&lock->mutex);
 }
 
+/* Intermediate variant of cglock */
+static inline void cg_ilock(cglock_t *lock)
+{
+	mutex_lock(&lock->mutex);
+}
+
+/* Upgrade intermediate variant to a write lock */
+static inline void cg_ulock(cglock_t *lock)
+{
+	wr_lock(&lock->rwlock);
+}
+
+/* Write lock variant of cglock */
 static inline void cg_wlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
 	wr_lock(&lock->rwlock);
+}
+
+/* Downgrade intermediate variant to a read lock */
+static inline void cg_dlock(cglock_t *lock)
+{
+	rd_lock(&lock->rwlock);
 	mutex_unlock(&lock->mutex);
 }
 
@@ -791,6 +811,7 @@ static inline void cg_runlock(cglock_t *lock)
 static inline void cg_wunlock(cglock_t *lock)
 {
 	wr_unlock(&lock->rwlock);
+	mutex_unlock(&lock->mutex);
 }
 
 struct pool;
