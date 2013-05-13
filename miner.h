@@ -294,6 +294,8 @@ struct device_drv {
 #endif
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
 	int64_t (*scanwork)(struct thr_info *);
+	bool (*queue_full)(struct cgpu_info *);
+
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
@@ -525,6 +527,9 @@ struct cgpu_info {
 	int dev_throttle_count;
 
 	struct cgminer_stats cgminer_stats;
+
+	pthread_rwlock_t qlock;
+	struct work *queued_work;
 };
 
 extern void renumber_cgpu(struct cgpu_info *);
