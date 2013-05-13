@@ -1902,11 +1902,12 @@ bool initiate_stratum(struct pool *pool)
 	json_error_t err;
 	int n2size;
 
+resend:
 	if (!setup_stratum_curl(pool))
 		goto out;
 
 	sockd = true;
-resend:
+
 	if (noresume) {
 		/* Get rid of any crap lying around if we're resending */
 		clear_sock(pool);
