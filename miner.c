@@ -3058,6 +3058,18 @@ out:
 	return rc;
 }
 
+/* Specifies whether we can use this pool for work or not. */
+static bool pool_unworkable(struct pool *pool)
+{
+	if (pool->idle)
+		return true;
+	if (pool->enabled != POOL_ENABLED)
+		return true;
+	if (pool->has_stratum && !pool->stratum_active)
+		return true;
+	return false;
+}
+
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
  * rolling average per 10 minutes and if pools start getting more, it biases
  * away from them to distribute work evenly. The share count is reset to the
@@ -3071,7 +3083,7 @@ static struct pool *select_balanced(struct pool *cp)
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
-		if (pool->idle || pool->enabled != POOL_ENABLED)
+		if (pool_unworkable(pool))
 			continue;
 		if (pool->shares < lowest) {
 			lowest = pool->shares;
@@ -3085,17 +3097,6 @@ static struct pool *select_balanced(struct pool *cp)
 
 static bool pool_active(struct pool *, bool pinging);
 static void pool_died(struct pool *);
-
-static bool pool_unusable(struct pool *pool)
-{
-	if (pool->idle)
-		return true;
-	if (pool->enabled != POOL_ENABLED)
-		return true;
-	if (pool->has_stratum && !pool->stratum_active)
-		return true;
-	return false;
-}
 
 /* Select any active pool in a rotating fashion when loadbalance is chosen */
 static inline struct pool *select_pool(bool lagging)
@@ -3124,7 +3125,7 @@ retry:
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 		pool = pools[rotating_pool];
-		if (!pool_unusable(pool))
+		if (!pool_unworkable(pool))
 			break;
 		pool = NULL;
 	}
@@ -4407,6 +4408,16 @@ void validate_pool_priorities(void)
 
 static void clear_pool_work(struct pool *pool);
 
+/* Specifies whether we can switch to this pool or not. */
+static bool pool_unusable(struct pool *pool)
+{
+	if (pool->idle)
+		return true;
+	if (pool->enabled != POOL_ENABLED)
+		return true;
+	return false;
+}
+
 void switch_pools(struct pool *selected)
 {
 	struct pool *pool, *last_pool;
@@ -4435,7 +4446,7 @@ void switch_pools(struct pool *selected)
 		case POOL_LOADBALANCE:
 			for (i = 0; i < total_pools; i++) {
 				pool = priority_pool(i);
-				if (pool_unusable(pool) && pool != selected)
+				if (pool_unusable(pool))
 					continue;
 				pool_no = pool->pool_no;
 				break;
@@ -4455,7 +4466,7 @@ void switch_pools(struct pool *selected)
 				if (next_pool >= total_pools)
 					next_pool = 0;
 				pool = pools[next_pool];
-				if (pool_unusable(pool) && pool != selected)
+				if (pool_unusable(pool))
 					continue;
 				pool_no = next_pool;
 				break;
@@ -7501,7 +7512,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
-
 		}
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
@@ -8202,8 +8212,6 @@ static void *test_pool_thread(void *arg)
 	struct pool *pool = (struct pool *)arg;
 
 	if (pool_active(pool, false)) {
-		bool resus = false;
-
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
 
@@ -8213,12 +8221,11 @@ static void *test_pool_thread(void *arg)
 			if (pool->pool_no != 0)
 				applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
 			pools_active = true;
-		} else
-			resus = true;
+		}
 		mutex_unlock(&control_lock);
-		if (resus)
-			pool_resus(pool);
-	}
+		pool_resus(pool);
+	} else
+		pool_died(pool);
 
 	return NULL;
 }
