@@ -1360,7 +1360,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	struct bitforce_data *data = bitforce->cgpu_data;
 	int fd = bitforce->device->device_fd;
 	int count;
-	char *buf = &data->noncebuf[0];
+	char *noncebuf = &data->noncebuf[0], *buf;
 	unsigned char midstate[32], datatail[12];
 	struct work *work;
 	struct list_head *pos, *next_pos;
@@ -1376,7 +1376,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	
 	if (unlikely(count < 0))
 	{
-		applog(LOG_ERR, "%"PRIpreprv": Received unexpected queue result response: %s", bitforce->proc_repr, buf);
+		applog(LOG_ERR, "%"PRIpreprv": Received unexpected queue result response: %s", bitforce->proc_repr, noncebuf);
 		++bitforce->hw_errors;
 		++hw_errors;
 		return false;
@@ -1402,13 +1402,19 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		       bitforce->proc_repr, count, bitforce->sleep_ms);
 	
 	count = 0;
-	while ((buf = next_line(buf)), buf[0])
+	noncebuf = next_line(noncebuf);
+	while ((buf = noncebuf)[0])
 	{
+		if ( (noncebuf = next_line(buf)) )
+			noncebuf[-1] = '\0';
+		
 		if (strlen(buf) <= 90)
 		{
 			applog(LOG_ERR, "%"PRIpreprv": Gibberish within queue results: %s", bitforce->proc_repr, buf);
 			continue;
 		}
+		
+		applog(LOG_DEBUG, "%"PRIpreprv": Queue result: %s", bitforce->proc_repr, buf);
 		
 		hex2bin(midstate, buf, 32);
 		hex2bin(datatail, &buf[65], 12);
