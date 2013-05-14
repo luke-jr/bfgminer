@@ -39,7 +39,6 @@ enum timing_mode { MODE_DEFAULT, MODE_SHORT, MODE_LONG, MODE_VALUE };
 
 struct ICARUS_INFO {
 	// time to calculate the golden_ob
-	uint64_t golden_hashes;
 	struct timeval golden_tv;
 
 	struct ICARUS_HISTORY history[INFO_HISTORY+1];

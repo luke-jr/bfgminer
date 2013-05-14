@@ -625,9 +625,6 @@ bool icarus_detect_custom(const char *devpath, struct device_api *api, struct IC
 
 	icarus->cgpu_data = info;
 
-	info->nonce_mask = mask(work_division);
-
-	info->golden_hashes = (golden_nonce_val & info->nonce_mask) * fpga_count;
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
 	set_timing_mode(this_option_offset, icarus);
@@ -642,8 +639,6 @@ static bool icarus_detect_one(const char *devpath)
 		quit(1, "Failed to malloc ICARUS_INFO");
 
 	info->baud = ICARUS_IO_SPEED;
-	info->work_division = 2;
-	info->fpga_count = 2;
 	info->quirk_reopen = 1;
 	info->Hs = ICARUS_REV3_HASH_TIME;
 	info->timing_mode = MODE_DEFAULT;
@@ -695,6 +690,57 @@ static bool icarus_prepare(struct thr_info *thr)
 	}
 #endif
 
+	return true;
+}
+
+static bool icarus_init(struct thr_info *thr)
+{
+	struct cgpu_info *icarus = thr->cgpu;
+	struct ICARUS_INFO *info = icarus->cgpu_data;
+	int fd = icarus->device_fd;
+	
+	if (!info->work_division)
+	{
+		struct timeval tv_finish;
+		uint32_t res;
+		
+		applog(LOG_DEBUG, "%"PRIpreprv": Work division not specified - autodetecting", icarus->proc_repr);
+		
+		// Special packet to probe work_division
+		unsigned char pkt[64] =
+			"\x6C\x0E\x85\x6F\xD5\xB7\x0D\x39\xB3\xEB\xCF\x26\x21\x22\xD5\x1F"
+			"\x7E\x89\x6B\x26\x92\x2A\xD8\xFC\x66\xDF\x8C\x66\xB8\x2C\x37\x7C"
+			"BFGMiner Probe\0\0"
+			"BFG\0\xE9\x7F\x01\x1A\x3B\xE1\x91\x51\xD3\x58\xC5\xFF";
+		
+		icarus_write(fd, pkt, sizeof(pkt));
+		if (ICA_GETS_OK == icarus_gets((unsigned char*)&res, fd, &tv_finish, NULL, info->read_count))
+			res = be32toh(res);
+		else
+			res = 0;
+		
+		switch (res) {
+			case 0x06448360:
+				info->work_division = 1;
+				break;
+			case 0x85C55B5B:
+				info->work_division = 2;
+				break;
+			case 0xC0DC6008:
+				info->work_division = 4;
+				break;
+			default:
+				applog(LOG_ERR, "%"PRIpreprv": Work division autodetection failed: got %08x", icarus->proc_repr, res);
+				return false;
+		}
+		applog(LOG_DEBUG, "%"PRIpreprv": Work division autodetection got %08x (=%d)", icarus->proc_repr, res, info->work_division);
+	}
+	
+	if (!info->fpga_count)
+		info->fpga_count = info->work_division;
+	
+	info->nonce_mask = mask(info->work_division);
+	
 	return true;
 }
 
@@ -1094,6 +1140,7 @@ struct device_api icarus_api = {
 	.api_detect = icarus_detect,
 	.get_api_stats = icarus_api_stats,
 	.thread_prepare = icarus_prepare,
+	.thread_init = icarus_init,
 	.scanhash = icarus_scanhash,
 	.thread_shutdown = icarus_shutdown,
 };
