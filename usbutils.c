@@ -105,7 +105,7 @@ static struct usb_endpoints amu_eps[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0 }
 };
-static struct usb_endpoints lot_eps[] = {
+static struct usb_endpoints llt_eps[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
 };
@@ -198,7 +198,7 @@ static struct usb_find_devices find_dev[] = {
 		.eps = amu_eps },
 	{
 		.drv = DRV_ICARUS,
-		.name = "BAT",
+		.name = "BAL",
 		.idVendor = 0x0403,
 		.idProduct = 0x6001,
 		.iProduct = "FT232R USB UART",
@@ -206,9 +206,9 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
-		.epcount = ARRAY_SIZE(lot_eps),
-		.eps = lot_eps },
-	// For any that don't match the above "BAT"
+		.epcount = ARRAY_SIZE(llt_eps),
+		.eps = llt_eps },
+	// For any that don't match the above "BAL"
 	{
 		.drv = DRV_ICARUS,
 		.name = "LLT",
@@ -218,8 +218,8 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
-		.epcount = ARRAY_SIZE(lot_eps),
-		.eps = lot_eps },
+		.epcount = ARRAY_SIZE(llt_eps),
+		.eps = llt_eps },
 	{
 		.drv = DRV_ICARUS,
 		.name = "CMR",
