@@ -123,6 +123,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_BFLSC,
 		.name = "BAS",
+		.ident = IDENT_BAS,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iManufacturer = "Butterfly Labs",
@@ -138,6 +139,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_BITFORCE,
 		.name = "BFL",
+		.ident = IDENT_BFL,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iManufacturer = "Butterfly Labs Inc.",
@@ -153,6 +155,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_MODMINER,
 		.name = "MMQ",
+		.ident = IDENT_MMQ,
 		.idVendor = 0x1fc9,
 		.idProduct = 0x0003,
 		.kernel = 0,
@@ -166,6 +169,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_AVALON,
 		.name = "AVA",
+		.ident = IDENT_AVA,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
 		.kernel = 0,
@@ -179,6 +183,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ICARUS,
 		.name = "ICA",
+		.ident = IDENT_ICA,
 		.idVendor = 0x067b,
 		.idProduct = 0x2303,
 		.kernel = 0,
@@ -190,6 +195,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ICARUS,
 		.name = "AMU",
+		.ident = IDENT_AMU,
 		.idVendor = 0x10c4,
 		.idProduct = 0xea60,
 		.kernel = 0,
@@ -201,6 +207,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ICARUS,
 		.name = "BLT",
+		.ident = IDENT_BLT,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
 		.iProduct = "FT232R USB UART",
@@ -214,6 +221,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ICARUS,
 		.name = "LLT",
+		.ident = IDENT_LLT,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
 		.kernel = 0,
@@ -225,6 +233,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ICARUS,
 		.name = "CMR",
+		.ident = IDENT_CMR,
 		.idVendor = 0x067b,
 		.idProduct = 0x0230,
 		.iProduct = "Cairnsmore1",
@@ -241,6 +250,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ZTEX,
 		.name = "ZTX",
+		.ident = IDENT_ZTX,
 		.idVendor = 0x221a,
 		.idProduct = 0x0100,
 		.kernel = 0,
@@ -250,7 +260,7 @@ static struct usb_find_devices find_dev[] = {
 		.epcount = 0,
 		.eps = NULL },
 #endif
-	{ DRV_LAST, NULL, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, NULL }
+	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, NULL }
 };
 
 #ifdef USE_BFLSC
@@ -1334,6 +1344,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 	if (found->idVendor == IDVENDOR_FTDI)
 		cgusb->usb_type = USB_TYPE_FTDI;
+
+	cgusb->ident = found->ident;
 
 	cgusb->descriptor = calloc(1, sizeof(*(cgusb->descriptor)));
 

@@ -50,9 +50,26 @@ struct usb_endpoints {
 	bool found;
 };
 
+enum sub_ident {
+	IDENT_BAJ,
+	IDENT_BAL,
+	IDENT_BAS,
+	IDENT_BAM,
+	IDENT_BFL,
+	IDENT_MMQ,
+	IDENT_AVA,
+	IDENT_ICA,
+	IDENT_AMU,
+	IDENT_BLT,
+	IDENT_LLT,
+	IDENT_CMR,
+	IDENT_ZTX
+};
+
 struct usb_find_devices {
 	int drv;
 	const char *name;
+	enum sub_ident ident;
 	uint16_t idVendor;
 	uint16_t idProduct;
 	char *iManufacturer;
@@ -75,8 +92,9 @@ struct cg_usb_device {
 	libusb_device_handle *handle;
 	pthread_mutex_t *mutex;
 	struct libusb_device_descriptor *descriptor;
-	uint16_t usbver;
 	enum usb_types usb_type;
+	enum sub_ident ident;
+	uint16_t usbver;
 	int speed;
 	char *prod_string;
 	char *manuf_string;
