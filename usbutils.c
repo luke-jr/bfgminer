@@ -198,7 +198,7 @@ static struct usb_find_devices find_dev[] = {
 		.eps = amu_eps },
 	{
 		.drv = DRV_ICARUS,
-		.name = "BAL",
+		.name = "BLT",
 		.idVendor = 0x0403,
 		.idProduct = 0x6001,
 		.iProduct = "FT232R USB UART",
@@ -208,7 +208,7 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = ICARUS_TIMEOUT_MS,
 		.epcount = ARRAY_SIZE(llt_eps),
 		.eps = llt_eps },
-	// For any that don't match the above "BAL"
+	// For any that don't match the above "BLT"
 	{
 		.drv = DRV_ICARUS,
 		.name = "LLT",
