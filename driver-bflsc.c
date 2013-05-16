@@ -487,7 +487,7 @@ static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amo
 {
 	char buf[BFLSC_BUFSIZ+1];
 
-	*err = usb_ftdi_read_nl(bflsc, buf, sizeof(buf)-1, amount, cmd);
+	*err = usb_read_nl(bflsc, buf, sizeof(buf)-1, amount, cmd);
 	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
 		return false;
 	else
@@ -496,7 +496,7 @@ static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amo
 
 static bool getokerr(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount, char *buf, size_t bufsiz)
 {
-	*err = usb_ftdi_read_nl(bflsc, buf, bufsiz-1, amount, cmd);
+	*err = usb_read_nl(bflsc, buf, bufsiz-1, amount, cmd);
 	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
 		return false;
 	else {
@@ -529,7 +529,7 @@ static void bflsc_send_flush_work(struct cgpu_info *bflsc, int dev)
 	}
 }
 
-/* return True = attempted usb_ftdi_read_ok()
+/* return True = attempted usb_read_ok()
  * set ignore to true means no applog/ignore errors */
 static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int dev, int *err, int *amount, bool ignore)
 {
@@ -550,7 +550,7 @@ static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int de
 		// of course all other I/O must also be failing ...
 	} else {
 		readok = true;
-		*err = usb_ftdi_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
+		*err = usb_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
 		mutex_unlock(&(bflsc->device_mutex));
 
 		if (*err < 0 || *amount < 1) {
@@ -695,7 +695,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	err = usb_ftdi_read_ok(bflsc, buf, sizeof(buf)-1, &amount, C_GETDETAILS);
+	err = usb_read_ok(bflsc, buf, sizeof(buf)-1, &amount, C_GETDETAILS);
 	if (err < 0 || amount < 1) {
 		if (err < 0) {
 			applog(LOG_ERR, "%s detect (%s) get details return invalid/timed out (%d:%d)",
@@ -830,7 +830,7 @@ reinit:
 		goto unshin;
 	}
 
-	err = usb_ftdi_read_nl(bflsc, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY);
+	err = usb_read_nl(bflsc, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY);
 	if (err < 0 || amount < 1) {
 		init_count++;
 		cgtime(&init_now);
@@ -1095,7 +1095,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	err = usb_ftdi_read_nl(bflsc, temp_buf, sizeof(temp_buf)-1, &amount, C_GETTEMPERATURE);
+	err = usb_read_nl(bflsc, temp_buf, sizeof(temp_buf)-1, &amount, C_GETTEMPERATURE);
 	if (err < 0 || amount < 1) {
 		mutex_unlock(&(bflsc->device_mutex));
 		if (err < 0) {
@@ -1117,7 +1117,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	err = usb_ftdi_read_nl(bflsc, volt_buf, sizeof(volt_buf)-1, &amount, C_GETTEMPERATURE);
+	err = usb_read_nl(bflsc, volt_buf, sizeof(volt_buf)-1, &amount, C_GETTEMPERATURE);
 	if (err < 0 || amount < 1) {
 		mutex_unlock(&(bflsc->device_mutex));
 		if (err < 0) {

@@ -115,13 +115,15 @@ static struct usb_endpoints cmr_eps[] = {
 };
 #endif
 
+#define IDVENDOR_FTDI 0x0403
+
 // TODO: Add support for (at least) Isochronous endpoints
 static struct usb_find_devices find_dev[] = {
 #ifdef USE_BFLSC
 	{
 		.drv = DRV_BFLSC,
 		.name = "BAS",
-		.idVendor = 0x0403,
+		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iManufacturer = "Butterfly Labs",
 		.iProduct = "BitFORCE SHA256 SC",
@@ -136,7 +138,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_BITFORCE,
 		.name = "BFL",
-		.idVendor = 0x0403,
+		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iManufacturer = "Butterfly Labs Inc.",
 		.iProduct = "BitFORCE SHA256",
@@ -164,7 +166,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_AVALON,
 		.name = "AVA",
-		.idVendor = 0x0403,
+		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
 		.kernel = 0,
 		.config = 1,
@@ -199,7 +201,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ICARUS,
 		.name = "BLT",
-		.idVendor = 0x0403,
+		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
 		.iProduct = "FT232R USB UART",
 		.kernel = 0,
@@ -212,7 +214,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ICARUS,
 		.name = "LLT",
-		.idVendor = 0x0403,
+		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
 		.kernel = 0,
 		.config = 1,
@@ -1330,6 +1332,9 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	cgusb = calloc(1, sizeof(*cgusb));
 	cgusb->found = found;
 
+	if (found->idVendor == IDVENDOR_FTDI)
+		cgusb->usb_type = USB_TYPE_FTDI;
+
 	cgusb->descriptor = calloc(1, sizeof(*(cgusb->descriptor)));
 
 	err = libusb_get_device_descriptor(dev, cgusb->descriptor);
@@ -1911,9 +1916,10 @@ static void rejected_inc(struct cgpu_info *cgpu)
 
 #define USB_MAX_READ 8192
 
-int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool ftdi, bool readonce)
+int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
+	bool ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
 #if DO_USB_STATS
 	struct timeval tv_start;
 #endif
