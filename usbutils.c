@@ -57,11 +57,13 @@
 #define BITFORCE_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 200
 #define AVALON_TIMEOUT_MS 500
+#define ICARUS_TIMEOUT_MS 500
 #else
 #define BFLSC_TIMEOUT_MS 200
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
+#define ICARUS_TIMEOUT_MS 200
 #endif
 
 #ifdef USE_BFLSC
@@ -94,15 +96,27 @@ static struct usb_endpoints ava_eps[] = {
 };
 #endif
 
+#ifdef USE_ICARUS
+static struct usb_endpoints ica_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+static struct usb_endpoints amu_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0 }
+};
+static struct usb_endpoints lot_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+static struct usb_endpoints cmr_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+#endif
+
 // TODO: Add support for (at least) Isochronous endpoints
 static struct usb_find_devices find_dev[] = {
-/*
-#ifdef USE_ICARUS
-	{ DRV_ICARUS, 	"ICA",	0x067b,	0x0230,	true,	EPI(3),	EPO(2), 1 },
-	{ DRV_ICARUS, 	"LOT",	0x0403,	0x6001,	false,	EPI(0),	EPO(0), 1 },
-	{ DRV_ICARUS, 	"CM1",	0x067b,	0x0230,	false,	EPI(0),	EPO(0), 1 },
-#endif
-*/
 #ifdef USE_BFLSC
 	{
 		.drv = DRV_BFLSC,
@@ -158,6 +172,66 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = AVALON_TIMEOUT_MS,
 		.epcount = ARRAY_SIZE(ava_eps),
 		.eps = ava_eps },
+#endif
+#ifdef USE_ICARUS
+	{
+		.drv = DRV_ICARUS,
+		.name = "ICA",
+		.idVendor = 0x067b,
+		.idProduct = 0x2303,
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(ica_eps),
+		.eps = ica_eps },
+	{
+		.drv = DRV_ICARUS,
+		.name = "AMU",
+		.idVendor = 0x10c4,
+		.idProduct = 0xea60,
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(amu_eps),
+		.eps = amu_eps },
+	{
+		.drv = DRV_ICARUS,
+		.name = "BAT",
+		.idVendor = 0x0403,
+		.idProduct = 0x6001,
+		.iProduct = "FT232R USB UART",
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(lot_eps),
+		.eps = lot_eps },
+	// For any that don't match the above "BAT"
+	{
+		.drv = DRV_ICARUS,
+		.name = "LLT",
+		.idVendor = 0x0403,
+		.idProduct = 0x6001,
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(lot_eps),
+		.eps = lot_eps },
+	{
+		.drv = DRV_ICARUS,
+		.name = "CMR",
+		.idVendor = 0x067b,
+		.idProduct = 0x0230,
+		.iProduct = "Cairnsmore1",
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(cmr_eps),
+		.eps = cmr_eps },
 #endif
 #ifdef USE_ZTEX
 // This is here so cgminer -n shows them
