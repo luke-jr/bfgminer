@@ -1677,14 +1677,14 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 		return usb_check_each(DRV_BITFORCE, drv, dev);
 #endif
 
-#ifdef USE_ICARUS
-	if (drv->drv_id == DRIVER_ICARUS)
-		return usb_check_each(DRV_ICARUS, drv, dev);
-#endif
-
 #ifdef USE_MODMINER
 	if (drv->drv_id == DRIVER_MODMINER)
 		return usb_check_each(DRV_MODMINER, drv, dev);
+#endif
+
+#ifdef USE_ICARUS
+	if (drv->drv_id == DRIVER_ICARUS)
+		return usb_check_each(DRV_ICARUS, drv, dev);
 #endif
 
 #ifdef USE_AVALON
@@ -2193,6 +2193,7 @@ void usb_cleanup()
 			case DRIVER_BFLSC:
 			case DRIVER_BITFORCE:
 			case DRIVER_MODMINER:
+			case DRIVER_ICARUS:
 			case DRIVER_AVALON:
 				release_cgpu(cgpu);
 				break;
@@ -2298,6 +2299,12 @@ void usb_initialise()
 #ifdef USE_MODMINER
 				if (!found && strcasecmp(ptr, modminer_drv.name) == 0) {
 					drv_count[modminer_drv.drv_id].limit = lim;
+					found = true;
+				}
+#endif
+#ifdef USE_ICARUS
+				if (!found && strcasecmp(ptr, icarus_drv.name) == 0) {
+					drv_count[icarus_drv.drv_id].limit = lim;
 					found = true;
 				}
 #endif
