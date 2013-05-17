@@ -1279,8 +1279,6 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 
 void usb_uninit(struct cgpu_info *cgpu)
 {
-	int err;
-
 	applog(LOG_DEBUG, "USB uninit %s%i",
 			cgpu->drv->name, cgpu->device_id);
 
@@ -1288,7 +1286,7 @@ void usb_uninit(struct cgpu_info *cgpu)
 	//  if release_cgpu() was called due to a USB NODEV(err)
 	if (!cgpu->usbdev)
 		return;
-	err = libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
+	libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
 	libusb_close(cgpu->usbdev->handle);
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
 }

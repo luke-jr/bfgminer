@@ -330,6 +330,9 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 
 	cgtime(tv_start);
 	while (true) {
+		if (icarus->usbinfo.nodev)
+			return ICA_NONCE_ERROR;
+
 		cgtime(&read_start);
 		err = usb_read_timeout(icarus, (char *)buf, read_amount, &amt, ICARUS_WAIT_TIMEOUT, C_GETRESULTS);
 		cgtime(&read_finish);
