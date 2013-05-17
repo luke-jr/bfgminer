@@ -285,7 +285,7 @@ not scan for any more
 If one of the 10 devices stops working, hotplug - if enabled, as is default
 - will scan normally again until it has 10 devices
 
-  --usb :0 will disable all USB I/O other than to initialse libusb
+  --usb :0 will disable all USB I/O other than to initialise libusb
 
 
 For other FPGA details see the FPGA-README
