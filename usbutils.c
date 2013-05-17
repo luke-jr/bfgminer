@@ -57,11 +57,13 @@
 #define BITFORCE_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 200
 #define AVALON_TIMEOUT_MS 500
+#define ICARUS_TIMEOUT_MS 500
 #else
 #define BFLSC_TIMEOUT_MS 200
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
+#define ICARUS_TIMEOUT_MS 200
 #endif
 
 #ifdef USE_BFLSC
@@ -94,20 +96,35 @@ static struct usb_endpoints ava_eps[] = {
 };
 #endif
 
+#ifdef USE_ICARUS
+static struct usb_endpoints ica_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+static struct usb_endpoints amu_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0 }
+};
+static struct usb_endpoints llt_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+static struct usb_endpoints cmr_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+#endif
+
+#define IDVENDOR_FTDI 0x0403
+
 // TODO: Add support for (at least) Isochronous endpoints
 static struct usb_find_devices find_dev[] = {
-/*
-#ifdef USE_ICARUS
-	{ DRV_ICARUS, 	"ICA",	0x067b,	0x0230,	true,	EPI(3),	EPO(2), 1 },
-	{ DRV_ICARUS, 	"LOT",	0x0403,	0x6001,	false,	EPI(0),	EPO(0), 1 },
-	{ DRV_ICARUS, 	"CM1",	0x067b,	0x0230,	false,	EPI(0),	EPO(0), 1 },
-#endif
-*/
 #ifdef USE_BFLSC
 	{
 		.drv = DRV_BFLSC,
 		.name = "BAS",
-		.idVendor = 0x0403,
+		.ident = IDENT_BAS,
+		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iManufacturer = "Butterfly Labs",
 		.iProduct = "BitFORCE SHA256 SC",
@@ -122,7 +139,8 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_BITFORCE,
 		.name = "BFL",
-		.idVendor = 0x0403,
+		.ident = IDENT_BFL,
+		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iManufacturer = "Butterfly Labs Inc.",
 		.iProduct = "BitFORCE SHA256",
@@ -137,6 +155,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_MODMINER,
 		.name = "MMQ",
+		.ident = IDENT_MMQ,
 		.idVendor = 0x1fc9,
 		.idProduct = 0x0003,
 		.kernel = 0,
@@ -150,7 +169,8 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_AVALON,
 		.name = "AVA",
-		.idVendor = 0x0403,
+		.ident = IDENT_AVA,
+		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
 		.kernel = 0,
 		.config = 1,
@@ -159,12 +179,78 @@ static struct usb_find_devices find_dev[] = {
 		.epcount = ARRAY_SIZE(ava_eps),
 		.eps = ava_eps },
 #endif
+#ifdef USE_ICARUS
+	{
+		.drv = DRV_ICARUS,
+		.name = "ICA",
+		.ident = IDENT_ICA,
+		.idVendor = 0x067b,
+		.idProduct = 0x2303,
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(ica_eps),
+		.eps = ica_eps },
+	{
+		.drv = DRV_ICARUS,
+		.name = "AMU",
+		.ident = IDENT_AMU,
+		.idVendor = 0x10c4,
+		.idProduct = 0xea60,
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(amu_eps),
+		.eps = amu_eps },
+	{
+		.drv = DRV_ICARUS,
+		.name = "BLT",
+		.ident = IDENT_BLT,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6001,
+		.iProduct = "FT232R USB UART",
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(llt_eps),
+		.eps = llt_eps },
+	// For any that don't match the above "BLT"
+	{
+		.drv = DRV_ICARUS,
+		.name = "LLT",
+		.ident = IDENT_LLT,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6001,
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(llt_eps),
+		.eps = llt_eps },
+	{
+		.drv = DRV_ICARUS,
+		.name = "CMR",
+		.ident = IDENT_CMR,
+		.idVendor = 0x067b,
+		.idProduct = 0x0230,
+		.iProduct = "Cairnsmore1",
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = ICARUS_TIMEOUT_MS,
+		.epcount = ARRAY_SIZE(cmr_eps),
+		.eps = cmr_eps },
+#endif
 #ifdef USE_ZTEX
 // This is here so cgminer -n shows them
 // the ztex driver (as at 201303) doesn't use usbutils
 	{
 		.drv = DRV_ZTEX,
 		.name = "ZTX",
+		.ident = IDENT_ZTX,
 		.idVendor = 0x221a,
 		.idProduct = 0x0100,
 		.kernel = 0,
@@ -174,7 +260,7 @@ static struct usb_find_devices find_dev[] = {
 		.epcount = 0,
 		.eps = NULL },
 #endif
-	{ DRV_LAST, NULL, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, NULL }
+	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, NULL }
 };
 
 #ifdef USE_BFLSC
@@ -321,6 +407,7 @@ static const char *C_QUEJOBSTATUS_S = "QueJobStatus";
 static const char *C_QUEFLUSH_S = "QueFlush";
 static const char *C_QUEFLUSHREPLY_S = "QueFlushReply";
 static const char *C_REQUESTVOLTS_S = "RequestVolts";
+static const char *C_SENDTESTWORK_S = "SendTestWork";
 
 #ifdef EOL
 #undef EOL
@@ -789,6 +876,7 @@ static void cgusb_check_init()
 		usb_commands[C_QUEFLUSH] = C_QUEFLUSH_S;
 		usb_commands[C_QUEFLUSHREPLY] = C_QUEFLUSHREPLY_S;
 		usb_commands[C_REQUESTVOLTS] = C_REQUESTVOLTS_S;
+		usb_commands[C_SENDTESTWORK] = C_SENDTESTWORK_S;
 
 		stats_initialised = true;
 	}
@@ -1255,6 +1343,11 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 	cgusb = calloc(1, sizeof(*cgusb));
 	cgusb->found = found;
+
+	if (found->idVendor == IDVENDOR_FTDI)
+		cgusb->usb_type = USB_TYPE_FTDI;
+
+	cgusb->ident = found->ident;
 
 	cgusb->descriptor = calloc(1, sizeof(*(cgusb->descriptor)));
 
@@ -1837,9 +1930,10 @@ static void rejected_inc(struct cgpu_info *cgpu)
 
 #define USB_MAX_READ 8192
 
-int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool ftdi, bool readonce)
+int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
+	bool ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
 #if DO_USB_STATS
 	struct timeval tv_start;
 #endif

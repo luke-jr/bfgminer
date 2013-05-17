@@ -111,7 +111,7 @@ CGMiner specific configuration options:
 	--disable-adl           Override detection and disable building with adl
 	--enable-bflsc          Compile support for BFL ASICs (default disabled)
 	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
-	--enable-icarus         Compile support for Icarus Board(default disabled)
+	--enable-icarus         Compile support for Icarus bitstream FPGAs(default disabled)
 	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
 	--enable-ztex           Compile support for Ztex Board(default disabled)
 	--enable-avalon         Compile support for Avalon (default disabled)
@@ -235,13 +235,14 @@ ASIC and FPGA mining boards (BFL ASIC, BitForce, Icarus, ModMiner, Ztex)
 only options:
 
 Cgminer will automatically find all of your BFL ASIC, BitForce FPGAs,
-ModMiner FPGAs or Ztex FPGAs
-The --usb option can restrict how many BFL ASIC, BitForce FPGAs or
-ModMiner FPGAs it finds:
+ModMiner FPGAs, Icarus bitstream FPGAs or Ztex FPGAs
+
+The --usb option can restrict how many BFL ASIC, BitForce FPGAs,
+ModMiner FPGAs or Icarus bitstream FPGAs it finds:
 
   --usb 1:2,1:3,1:4,1:*
 or
-  --usb BAS:1,BFL:1,MMQ:0
+  --usb BAS:1,BFL:1,MMQ:0,ICA:0
 or
   --usb :10
 
@@ -260,15 +261,16 @@ This is useful if you unplug a device then plug it back in the same port,
 it usually reappears with the same bus_number but a different device_address
 
 You can see the list of all USB devices on linux with 'sudo lsusb'
-Cgminer will list the recognised USB devices with the '--usb-dump 0' option
+Cgminer will list the recognised USB devices with the '-n' option or the
+'--usb-dump 0' option
 The '--usb-dump N' option with a value of N greater than 0 will dump a lot
 of details about each recognised USB device
 If you wish to see all USB devices, include the --usb-list-all option
 
 The second version
-  --usb BAS:1,BFL:1,MMQ:0
+  --usb BAS:1,BFL:1,MMQ:0,ICA:0
 allows you to specify how many devices to choose based on each device
-driver cgminer has - there are currently 3 USB drivers: BAS, BFL & MMQ
+driver cgminer has - there are currently 4 USB drivers: BAS, BFL, MMQ & ICA
 N.B. you can only specify which device driver to limit, not the type of
 each device, e.g. with BAS:n you can limit how many BFL ASIC devices will
 be checked, but you cannot limit the number of each type of BFL ASIC
@@ -283,28 +285,8 @@ not scan for any more
 If one of the 10 devices stops working, hotplug - if enabled, as is default
 - will scan normally again until it has 10 devices
 
+  --usb :0 will disable all USB I/O other than to initialise libusb
 
---scan-serial|-S <arg> Serial port to probe for Icarus mining device
-
-This option is only for Icarus bitstream FPGAs
-
-By default, cgminer will scan for autodetected Icarus unless at least one
--S is specified for that driver. If you specify -S and still want cgminer
-to scan, you must also use "-S auto". If you want to prevent cgminer from
-scanning without specifying a device, you can use "-S noauto". Note that
-presently, autodetection only works on Linux, and might only detect one
-device depending on the version of udev being used.
-
-On linux <arg> is usually of the format /dev/ttyUSBn
-On windows <arg> is usually of the format \\.\COMn
-(where n = the correct device number for the Icarus device)
-
-The official supplied binaries are compiled with support for all FPGAs.
-To force the code to only attempt detection with a specific driver,
-prepend the argument with the driver name followed by a colon.
-For example, "icarus:/dev/ttyUSB0" or using the short name: "ica:/dev/ttyUSB0"
-This option not longer matters since Icarus is the only serial-USB
-device that uses it
 
 For other FPGA details see the FPGA-README
 
@@ -656,27 +638,6 @@ Q: What is an ASIC?
 A: Cgminer currently supports 2 ASICs: Avalon and BitForce SC devices. They
 are Application Specify Integrated Circuit devices and provide the highest
 performance per unit power due to being dedicated to only one purpose.
-
-Q: How do I get my Icarus/Lancelot/Cairnsmore device to auto-recognise?
-A: On linux, if the /dev/ttyUSB* devices don't automatically appear, the only
-thing that needs to be done is to load the driver for them:
-Icarus: sudo modprobe pl2303 vendor=0x067b product=0x230
-Lancelot: sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
-Cairnsmore: sudo modprobe ftdi_sio product=0x8350 vendor=0x0403
-On windows you must install the pl2303 or ftdi driver required for the device
-pl2303: http://prolificusa.com/pl-2303hx-drivers/
-ftdi: http://www.ftdichip.com/Drivers/VCP.htm
-
-Q: On linux I can see the /dev/ttyUSB* devices for my Icarus FPGAs, but
-cgminer can't mine on them
-A: Make sure you have the required priviledges to access the /dev/ttyUSB* devices:
- sudo ls -las /dev/ttyUSB*
-will give output like:
- 0 crw-rw---- 1 root dialout 188, 0 2012-09-11 13:49 /dev/ttyUSB0
-This means your account must have the group 'dialout' or root priviledges
-To permanently give your account the 'dialout' group:
- sudo usermod -G dialout -a `whoami`
-Then logout and back in again
 
 Q: Can I mine scrypt with FPGAs or ASICs?
 A: No.

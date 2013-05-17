@@ -1,3 +1,20 @@
 # Butterfly Labs FPGA and ASIC devices
 ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# ModMinerQuad
 ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# Lancelot and Avalon
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# Icarus
+ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# AsicminerUSB
+ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# Cairnsmore1
+ATTRS{idVendor}=="067b", ATTRS{idProduct}=="0230", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# Ztex
+ATTRS{idVendor}=="221a", ATTRS{idProduct}=="0100", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"

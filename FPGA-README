@@ -2,16 +2,14 @@
 This README contains extended details about FPGA mining with cgminer
 
 
-For ModMinerQuad (MMQ) and BitForce (BFL)
------------------------------------------
+For ModMinerQuad (MMQ) BitForce (BFL) and Icarus (ICA, BLT, LLT, AMU, CMR)
+--------------------------------------------------------------------------
 
 When mining on windows, the driver being used will determine if mining will work.
 
 If the driver doesn't allow mining, you will get a "USB init," error message
 i.e. one of:
  open device failed, err %d, you need to install a Windows USB driver for the device
-or
- kernel detach failed :(
 or
  claim interface %d failed, err %d
 
@@ -32,18 +30,15 @@ with cgminer (not the libusbx version)
 When mining on linux, but not using 'sudo' and not logged into 'root' you
 may get a USB priviledge error (-3), so you may also need to do the following:
 
-Create /etc/udev/rules.d/01-cgminer.rules
-With:
- ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
- ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+ sudo cp 01-cgminer.rules /etc/udev/rules.d/
 
 And also:
  sudo usermod -G plugdev -a `whoami`
 
-Then reboot ...
-
 If your linux distro doesn't have the 'plugdev' group, you can create it like:
  sudo groupadd plugdev
+
+Then reboot ...
 
 -
 
@@ -53,8 +48,7 @@ problems:
 
  --usb-dump 0
 
-It will only help if you have a working MMQ or BFL device attached to the
-computer
+It will only help if you have a working FPGA device listed above
 
 
 ModMinerQuad (MMQ)
@@ -190,8 +184,8 @@ the MH/s value reported with the changed firmware - and the MH/s reported
 will be less than the firmware speed since you lose work on every block change.
 
 
-Icarus (ICA)
-------------
+Icarus (ICA, BLT, LLT, AMU, CMR)
+--------------------------------
 
 There are two hidden options in cgminer when Icarus support is compiled in:
 
@@ -245,8 +239,8 @@ scan hash time, for the first 5 nonce's or one minute (whichever is longer)
 
 In 'default' or 'value' mode the 'constants' are calculated once at the start, based on the default
 value or the value specified
-The optional additional =N specifies to set the default abort at N 1/10ths of a second, not the
-calculated value, which is 112 for 2.6316ns
+The optional additional =N specifies to set the default abort at N * 100ms, not the calculated
+value, which is ~112 for 2.6316ns
 
 To determine the hash time value for a non Icarus Rev3 device or an Icarus Rev3 with a different
 bitstream to the default one, use 'long' mode and give it at least a few hundred shares, or use
@@ -257,6 +251,9 @@ The Icarus code currently only works with an FPGA device that supports the same 
 Icarus Rev3 requires and also is less than ~840MH/s and greater than 2MH/s
 If an FPGA device does hash faster than ~840MH/s it should work correctly if you supply the
 correct hash time nanoseconds value
+
+The Icarus code will automatically detect Icarus, Lancelot, AsicminerUSB and Cairnsmore1
+FPGA devices and set default settings to match those devices if you don't specify them
 
 The timing code itself will affect the Icarus performance since it increases the delay after
 work is completed or aborted until it starts again

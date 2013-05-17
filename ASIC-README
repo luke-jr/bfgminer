@@ -44,16 +44,11 @@ If your distribution does not have the plugdev group you can create it with:
  sudo groupadd plugdev
 
 In order for the BFL devices to instantly be owned by the plugdev group and
-accessible by anyone from the plugdev group you can either copy the file
+accessible by anyone from the plugdev group you can copy the file
 "01-cgminer.rules" from the cgminer archive into the /etc/udev/rules.d
 directory with the following command:
 
  sudo cp 01-cgminer.rules /etc/udev/rules.d/
-
-Or you can manually create a file/add to a rules.d file with following rules
-(most users won't want to do this manually):
-ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
-ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
 
 After this you can either manually restart udev and re-login, or more easily
 just reboot.
