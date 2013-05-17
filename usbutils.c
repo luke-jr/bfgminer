@@ -811,7 +811,7 @@ void usb_applog(struct cgpu_info *cgpu, enum usb_cmds cmd, char *msg, int amount
 	if (!msg && amount == 0 && err == LIBUSB_SUCCESS)
 		msg = (char *)nodatareturned;
 
-        applog(LOG_ERR, "%s%i: %s failed%s%s (err=%d amt%d)",
+        applog(LOG_ERR, "%s%i: %s failed%s%s (err=%d amt=%d)",
                         cgpu->drv->name, cgpu->device_id,
                         usb_cmdname(cmd),
                         msg ? space : BLANK, msg ? msg : BLANK,
