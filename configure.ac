@@ -303,14 +303,14 @@ else
 	])
 fi
 
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon$icarus$bitforce$modminer$ztex != xnonononono])
-AM_CONDITIONAL([NEED_USBUTILS_C], [test x$bitforce$modminer$bflsc != xnonono])
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon$modminer$ztex != xnonono])
+AM_CONDITIONAL([NEED_USBUTILS_C], [test x$bitforce$modminer$bflsc$icarus != xnononono])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
-if test "x$bitforce$modminer$bflsc" != xnonono; then
+if test "x$bitforce$modminer$bflsc$icarus" != xnononono; then
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
 fi
 
@@ -320,26 +320,6 @@ then
 else
 	JANSSON_LIBS=-ljansson
 fi
-
-if test "x$icarus" != xno; then
-	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
-		[libudev=$withval],
-		[libudev=auto]
-		)
-	if test "x$libudev" != "xno"; then
-		AC_CHECK_HEADER([libudev.h],[
-			libudev=yes
-			UDEV_LIBS=-ludev
-			AC_DEFINE([HAVE_LIBUDEV], [1], [Defined to 1 if libudev is wanted])
-		], [
-			if test "x$libudev" = "xyes"; then
-				AC_MSG_ERROR([libudev not found])
-			fi
-			libudev=no
-		])
-	fi
-fi
-AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
 PKG_PROG_PKG_CONFIG()
 
@@ -353,7 +333,7 @@ if test "x$have_cgminer_sdk" = "xtrue"; then
 	PKG_CONFIG_PATH="$CGMINER_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 fi
 
-if test "x$ztex$modminer$bitforce$bflsc" != xnononono; then
+if test "x$ztex$modminer$bitforce$bflsc$icarus" != xnonononono; then
   case $target in
     *-*-freebsd*)
       LIBUSB_LIBS="-lusb"
@@ -441,7 +421,6 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MM_LIBS)
 AC_SUBST(MATH_LIBS)
-AC_SUBST(UDEV_LIBS)
 AC_SUBST(ADL_CPPFLAGS)
 
 AC_CONFIG_FILES([
@@ -538,16 +517,12 @@ else
 	echo "  Ztex.FPGAs...........: Disabled"
 fi
 
-if test "x$icarus" != xno; then
-	echo "  libudev.detection....: $libudev"
-fi
-
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS $LIBUSB_CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $LIBUSB_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"

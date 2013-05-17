@@ -60,7 +60,7 @@
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
 #	define USE_FPGA
-#if defined(USE_ICARUS) || defined(USE_AVALON)
+#if defined(USE_AVALON)
 #	define USE_FPGA_SERIAL
 #endif
 #elif defined(USE_ZTEX)
