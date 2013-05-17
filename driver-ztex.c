@@ -7,7 +7,7 @@
  *   Copyright (C) 2009-2011 ZTEX GmbH.
  *   http://www.ztex.de
  *
- *   This work is based upon the icarus.c worker which is
+ *   This work is based upon the icarus.c worker which was
  *   Copyright 2012 Luke Dashjr
  *   Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
  *
