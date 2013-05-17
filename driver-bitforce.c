@@ -101,7 +101,7 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 
 	// Set data control
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
-				FTDI_VALUE_DATA, bitforce->usbdev->found->interface, C_SETDATA);
+				FTDI_VALUE_DATA_BFL, bitforce->usbdev->found->interface, C_SETDATA);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setdata got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
@@ -110,8 +110,8 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		goto failed;
 
 	// Set the baud
-	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD,
-				(FTDI_INDEX_BAUD & 0xff00) | bitforce->usbdev->found->interface,
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BFL,
+				(FTDI_INDEX_BAUD_BFL & 0xff00) | bitforce->usbdev->found->interface,
 				C_SETBAUD);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setbaud got err %d",

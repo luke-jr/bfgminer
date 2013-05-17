@@ -1020,6 +1020,8 @@ union semun {
 // and thus it is best to always display them
 static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
+	applog(LOG_DEBUG, "USB lock %s %d-%d", drv->name, (int)bus_number, (int)device_address);
+
 #ifdef WIN32
 	struct cgpu_info *cgpu;
 	HANDLE usbMutex;
@@ -1180,6 +1182,8 @@ static bool cgminer_usb_lock(struct device_drv *drv, libusb_device *dev)
 // and thus it is best to always display them
 static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
+	applog(LOG_DEBUG, "USB unlock %s %d-%d", drv->name, (int)bus_number, (int)device_address);
+
 #ifdef WIN32
 	HANDLE usbMutex;
 	char name[64];
@@ -1253,6 +1257,8 @@ static void cgminer_usb_unlock(struct device_drv *drv, libusb_device *dev)
 
 static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 {
+	applog(LOG_DEBUG, "USB free %s", cgusb->found->name);
+
 	if (cgusb->serial_string && cgusb->serial_string != BLANK)
 		free(cgusb->serial_string);
 
@@ -1273,11 +1279,16 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 
 void usb_uninit(struct cgpu_info *cgpu)
 {
+	int err;
+
+	applog(LOG_DEBUG, "USB uninit %s%i",
+			cgpu->drv->name, cgpu->device_id);
+
 	// May have happened already during a failed initialisation
 	//  if release_cgpu() was called due to a USB NODEV(err)
 	if (!cgpu->usbdev)
 		return;
-	libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
+	err = libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
 	libusb_close(cgpu->usbdev->handle);
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
 }
@@ -1287,6 +1298,9 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	struct cg_usb_device *cgusb = cgpu->usbdev;
 	struct cgpu_info *lookcgpu;
 	int i;
+
+	applog(LOG_DEBUG, "USB release %s%i",
+			cgpu->drv->name, cgpu->device_id);
 
 	// It has already been done
 	if (cgpu->usbinfo.nodev)

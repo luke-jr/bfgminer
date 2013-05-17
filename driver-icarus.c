@@ -215,12 +215,91 @@ static int option_offset = -1;
 
 struct device_drv icarus_drv;
 
-static void icarus_initialise(struct cgpu_info *icarus, int baud)
+static void transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, enum usb_cmds cmd)
+{
+	int err;
+
+	err = usb_transfer(icarus, request_type, bRequest, wValue, wIndex, cmd);
+
+	applog(LOG_DEBUG, "%s%i: %s got err %d",
+			icarus->drv->name, icarus->device_id,
+			usb_cmdname(cmd), err);
+}
+
+// TODO: handle baud
+static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 {
 	if (icarus->usbinfo.nodev)
 		return;
 
-	if (baud) {
+	switch (icarus->usbdev->ident) {
+		case IDENT_BLT:
+		case IDENT_LLT:
+			// Reset
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY, FTDI_VALUE_LATENCY,
+				 icarus->usbdev->found->interface, C_RESET);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Reset
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_RESET,
+				 icarus->usbdev->found->interface, C_RESET);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Set data control
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_DATA, FTDI_VALUE_DATA_BLT,
+				 icarus->usbdev->found->interface, C_SETDATA);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Set the baud
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BLT,
+				 (FTDI_INDEX_BAUD_BLT & 0xff00) | icarus->usbdev->found->interface,
+				 C_SETBAUD);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Set Modem Control
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM, FTDI_VALUE_MODEM,
+				 icarus->usbdev->found->interface, C_SETMODEM);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Set Flow Control
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW, FTDI_VALUE_FLOW,
+				 icarus->usbdev->found->interface, C_SETFLOW);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Clear any sent data
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_PURGE_TX,
+				 icarus->usbdev->found->interface, C_PURGETX);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Clear any received data
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_PURGE_RX,
+				 icarus->usbdev->found->interface, C_PURGERX);
+
+			break;
+		case IDENT_ICA:
+			break;
+		case IDENT_AMU:
+			break;
+		case IDENT_CMR:
+			break;
+		default:
+			quit(1, "icarus_intialise() called with invalid %s%i ident=%d",
+				icarus->drv->name, icarus->device_id,
+				icarus->usbdev->ident);
 	}
 }
 

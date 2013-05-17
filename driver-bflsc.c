@@ -568,8 +568,6 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 {
 	int err;
 
-// TODO: this is a standard BFL FPGA Initialisation
-// it probably will need changing ...
 // TODO: does x-link bypass the other device FTDI? (I think it does)
 //	So no initialisation required except for the master device?
 
@@ -588,7 +586,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	// Set data control
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
-				FTDI_VALUE_DATA, bflsc->usbdev->found->interface, C_SETDATA);
+				FTDI_VALUE_DATA_BAS, bflsc->usbdev->found->interface, C_SETDATA);
 
 	applog(LOG_DEBUG, "%s%i: setdata got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
@@ -597,8 +595,8 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 		return;
 
 	// Set the baud
-	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD,
-				(FTDI_INDEX_BAUD & 0xff00) | bflsc->usbdev->found->interface,
+	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BAS,
+				(FTDI_INDEX_BAUD_BAS & 0xff00) | bflsc->usbdev->found->interface,
 				C_SETBAUD);
 
 	applog(LOG_DEBUG, "%s%i: setbaud got err %d",
