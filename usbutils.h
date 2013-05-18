@@ -20,18 +20,28 @@
 #define FTDI_REQUEST_FLOW ((uint8_t)2)
 #define FTDI_REQUEST_BAUD ((uint8_t)3)
 #define FTDI_REQUEST_DATA ((uint8_t)4)
+#define FTDI_REQUEST_LATENCY ((uint8_t)9)
 
 #define FTDI_VALUE_RESET 0
 #define FTDI_VALUE_PURGE_RX 1
 #define FTDI_VALUE_PURGE_TX 2
+#define FTDI_VALUE_LATENCY 1
 
-// baud with a 0 divisor is 120,000,000/10
-//#define FTDI_VALUE_BAUD (0)
-//#define FTDI_INDEX_BAUD (0)
-#define FTDI_VALUE_BAUD 0xc068
-#define FTDI_INDEX_BAUD 0x0200
+// Baud
+#define FTDI_VALUE_BAUD_BFL 0xc068
+#define FTDI_INDEX_BAUD_BFL 0x0200
+#define FTDI_VALUE_BAUD_BAS FTDI_VALUE_BAUD_BFL
+#define FTDI_INDEX_BAUD_BAS FTDI_INDEX_BAUD_BFL
+// LLT = BLT (same code)
+#define FTDI_VALUE_BAUD_BLT 0x001a
+#define FTDI_INDEX_BAUD_BLT 0x0000
 
-#define FTDI_VALUE_DATA 0
+// Data control
+#define FTDI_VALUE_DATA_BFL 0
+#define FTDI_VALUE_DATA_BAS FTDI_VALUE_DATA_BFL
+// LLT = BLT (same code)
+#define FTDI_VALUE_DATA_BLT 8
+
 #define FTDI_VALUE_FLOW 0
 #define FTDI_VALUE_MODEM 0x0303
 
