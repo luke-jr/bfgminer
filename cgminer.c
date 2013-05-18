@@ -2801,21 +2801,13 @@ static void __kill_work(void)
 	thr = &control_thr[watchdog_thr_id];
 	thr_info_cancel(thr);
 
-	applog(LOG_DEBUG, "Stopping mining threads");
-	/* Stop the mining threads*/
-	for (i = 0; i < mining_threads; i++) {
-		thr = get_thread(i);
-		thr_info_freeze(thr);
-		thr->pause = true;
-	}
-
-	nmsleep(1000);
-
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = get_thread(i);
 		thr_info_cancel(thr);
+		if (thr && thr->pth)
+			pthread_join(thr->pth, NULL);
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
@@ -5653,8 +5645,13 @@ static void hash_sole_work(struct thr_info *mythr)
 			cgtime(&(work->tv_work_start));
 
 			thread_reportin(mythr);
+			/* Only allow the mining thread to be cancelled when
+			 * it is not in the driver code. */
+			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 			hashes = drv->scanhash(mythr, work, work->blk.nonce + max_nonce);
 			thread_reportin(mythr);
+			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+			pthread_testcancel();
 
 			/* tv_end is == &getwork_start */
 			cgtime(&getwork_start);
@@ -5908,8 +5905,6 @@ void *miner_thread(void *userdata)
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_drv *drv = cgpu->drv;
 	char threadname[24];
-
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
         snprintf(threadname, 24, "miner/%d", thr_id);
 	RenameThread(threadname);
