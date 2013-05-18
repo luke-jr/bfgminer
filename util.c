@@ -1531,6 +1531,7 @@ static bool setup_stratum_socket(struct pool *pool)
 		if (!pool->probed) {
 			applog(LOG_WARNING, "Failed to resolve (?wrong URL) %s:%s",
 			       pool->sockaddr_url, pool->stratum_port);
+			pool->probed = true;
 		} else {
 			applog(LOG_INFO, "Failed to getaddrinfo for %s:%s",
 			       pool->sockaddr_url, pool->stratum_port);
