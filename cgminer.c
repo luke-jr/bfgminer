@@ -5494,7 +5494,7 @@ static struct work *get_work(struct thr_info *thr, const int thr_id)
 	return work;
 }
 
-void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+static void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
 	struct work *work = copy_work(work_in);
 	struct pool *pool = work->pool;
