@@ -346,7 +346,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 			copy_time(tv_finish, &read_finish);
 
 		// TODO: test if there is more data? to read a 2nd nonce?
-		if (amt >= ICARUS_READ_SIZE)
+		if (amt >= read_amount)
 			return ICA_NONCE_OK;
 
 		if (amt > 0) {
