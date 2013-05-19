@@ -235,9 +235,9 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 	switch (icarus->usbdev->ident) {
 		case IDENT_BLT:
 		case IDENT_LLT:
-			// Reset
+			// Latency
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY, FTDI_VALUE_LATENCY,
-				 icarus->usbdev->found->interface, C_RESET);
+				 icarus->usbdev->found->interface, C_LATENCY);
 
 			if (icarus->usbinfo.nodev)
 				return;
