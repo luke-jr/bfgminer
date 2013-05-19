@@ -740,6 +740,7 @@ retry:
 	wlogprint("[E]nable [D]isable [I]ntensity [R]estart GPU %s\n",adl_active ? "[C]hange settings" : "");
 
 	wlogprint("Or press any other key to continue\n");
+	logwin_update();
 	input = getch();
 
 	if (nDevs == 1)

@@ -1269,6 +1269,7 @@ extern void zero_stats(void);
 extern void default_save_file(char *filename);
 extern bool log_curses_only(int prio, const char *f, va_list ap);
 extern void clear_logwin(void);
+extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
