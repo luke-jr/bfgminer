@@ -196,9 +196,6 @@ struct ICARUS_INFO {
 
 #define END_CONDITION 0x0000ffff
 
-// One for each possible device
-static struct ICARUS_INFO **icarus_info;
-
 // Looking for options in --icarus-timing and --icarus-options:
 //
 // Code increments this each time we start to look at a device
@@ -224,8 +221,8 @@ static void _transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bR
 
 	err = usb_transfer_data(icarus, request_type, bRequest, wValue, wIndex, data, siz, cmd);
 
-	applog(LOG_DEBUG, "%s%i: %s got err %d",
-			icarus->drv->name, icarus->device_id,
+	applog(LOG_DEBUG, "%s: cgid %d %s got err %d",
+			icarus->drv->name, icarus->cgminer_id,
 			usb_cmdname(cmd), err);
 }
 
@@ -316,8 +313,8 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 		case IDENT_CMR:
 			break;
 		default:
-			quit(1, "icarus_intialise() called with invalid %s%i ident=%d",
-				icarus->drv->name, icarus->device_id,
+			quit(1, "icarus_intialise() called with invalid %s cgid %i ident=%d",
+				icarus->drv->name, icarus->cgminer_id,
 				icarus->usbdev->ident);
 	}
 }
@@ -411,7 +408,7 @@ static const char *timing_mode_str(enum timing_mode timing_mode)
 
 static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 {
-	struct ICARUS_INFO *info = icarus_info[icarus->device_id];
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 	double Hs;
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *eq;
@@ -508,8 +505,10 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 
 	info->min_data_count = MIN_DATA_COUNT;
 
-	applog(LOG_DEBUG, "Icarus: Init: %d mode=%s read_time=%dms Hs=%e",
-		icarus->device_id, timing_mode_str(info->timing_mode), info->read_time, info->Hs);
+	applog(LOG_DEBUG, "%s: cgid %d Init: mode=%s read_time=%dms Hs=%e",
+			icarus->drv->name, icarus->cgminer_id,
+			timing_mode_str(info->timing_mode),
+			info->read_time, info->Hs);
 }
 
 static uint32_t mask(int work_division)
@@ -730,22 +729,17 @@ retry:
 
 	update_usb_stats(icarus);
 
-	icarus_info = realloc(icarus_info, sizeof(struct ICARUS_INFO *) * (total_devices + 1));
-	if (unlikely(!icarus_info))
-		quit(1, "Failed to realloc ICARUS_INFO");
+	applog(LOG_INFO, "%s%d: Found at %s",
+		icarus->drv->name, icarus->device_id, devpath);
 
-	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
-		devpath, icarus->device_id);
+	applog(LOG_DEBUG, "%s%d: Init baud=%d work_division=%d fpga_count=%d",
+		icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
 
-	applog(LOG_DEBUG, "Icarus: Init: %d baud=%d work_division=%d fpga_count=%d",
-		icarus->device_id, baud, work_division, fpga_count);
-
-	// Since we are adding a new device on the end it needs to always be allocated
-	icarus_info[icarus->device_id] = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
-	if (unlikely(!(icarus_info[icarus->device_id])))
+	info = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
+	if (unlikely(!info))
 		quit(1, "Failed to malloc ICARUS_INFO");
 
-	info = icarus_info[icarus->device_id];
+	icarus->device_data = (void *)info;
 
 	// Initialise everything to zero for a new device
 	memset(info, 0, sizeof(struct ICARUS_INFO));
@@ -796,10 +790,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused int64_t max_nonce)
 {
 	struct cgpu_info *icarus = thr->cgpu;
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 	int ret, err, amount;
-
-	struct ICARUS_INFO *info;
-
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *ob_hex;
 	uint32_t nonce;
@@ -822,7 +814,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (icarus->usbinfo.nodev)
 		return -1;
 
-	info = icarus_info[icarus->device_id];
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
 	memset(ob_bin, 0, sizeof(ob_bin));
@@ -842,8 +833,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
-		applog(LOG_DEBUG, "Icarus %d sent: %s",
-			icarus->device_id, ob_hex);
+		applog(LOG_DEBUG, "%s%d: sent %s",
+			icarus->drv->name, icarus->device_id, ob_hex);
 		free(ob_hex);
 	}
 
@@ -870,8 +861,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			estimate_hashes = 0xffffffff;
 
 		if (opt_debug) {
-			applog(LOG_DEBUG, "Icarus %d no nonce = 0x%08lX hashes (%ld.%06lds)",
-					icarus->device_id, (long unsigned int)estimate_hashes,
+			applog(LOG_DEBUG, "%s%d: no nonce = 0x%08lX hashes (%ld.%06lds)",
+					icarus->drv->name, icarus->device_id,
+					(long unsigned int)estimate_hashes,
 					elapsed.tv_sec, elapsed.tv_usec);
 		}
 
@@ -892,8 +884,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		timersub(&tv_finish, &tv_start, &elapsed);
 
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Icarus %d nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
-				icarus->device_id, nonce, (long unsigned int)hash_count,
+		applog(LOG_DEBUG, "%s%d: nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
+				icarus->drv->name, icarus->device_id,
+				nonce, (long unsigned int)hash_count,
 				elapsed.tv_sec, elapsed.tv_usec);
 	}
 
@@ -985,9 +978,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			else if (info->timing_mode == MODE_SHORT)
 				info->do_icarus_timing = false;
 
-//			applog(LOG_WARNING, "Icarus %d Re-estimate: read_time=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->device_id, read_time, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
-			applog(LOG_WARNING, "Icarus %d Re-estimate: Hs=%e W=%e read_time=%dms fullnonce=%.3fs",
-					icarus->device_id, Hs, W, read_time, fullnonce);
+			applog(LOG_WARNING, "%s%d Re-estimate: Hs=%e W=%e read_time=%dms fullnonce=%.3fs",
+					icarus->drv->name, icarus->device_id, Hs, W, read_time, fullnonce);
 		}
 		info->history_count++;
 		cgtime(&tv_history_finish);
@@ -1002,7 +994,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct ICARUS_INFO *info = icarus_info[cgpu->device_id];
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(cgpu->device_data);
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
