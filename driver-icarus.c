@@ -358,19 +358,18 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 			return ICA_NONCE_TIMEOUT;
 		}
 
-		if (amt > 0) {
-			buf += amt;
-			read_amount -= amt;
-			first = false;
-			continue;
-		}
-
 		if (thr && thr->work_restart) {
 			if (opt_debug) {
 				applog(LOG_DEBUG,
 					"Icarus Read: Work restart at %d ms", rc);
 			}
 			return ICA_NONCE_RESTART;
+		}
+
+		if (amt > 0) {
+			buf += amt;
+			read_amount -= amt;
+			first = false;
 		}
 	}
 }
