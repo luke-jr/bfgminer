@@ -61,6 +61,7 @@ struct usb_endpoints {
 };
 
 enum sub_ident {
+	IDENT_UNK = 0,
 	IDENT_BAJ,
 	IDENT_BAL,
 	IDENT_BAS,
