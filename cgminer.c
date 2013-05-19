@@ -5556,6 +5556,8 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	uint32_t *hash2_32 = (uint32_t *)hash2;
 	uint32_t diff1targ;
 
+	thread_reportout(thr);
+
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
 
@@ -5575,7 +5577,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 				thr->cgpu->drv->name, thr->cgpu->device_id);
 
 		inc_hw_errors(thr);
-		return;
+		goto out;
 	}
 
 	mutex_lock(&stats_lock);
@@ -5584,10 +5586,12 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	if (!fulltest(hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
-		return;
+		goto out;
 	}
 
 	submit_work_async(work, &tv_work_found);
+out:
+	thread_reportin(thr);
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
