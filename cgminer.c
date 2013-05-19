@@ -2810,7 +2810,7 @@ static void __kill_work(void)
 		if (thr && PTH(thr) != 0L)
 			pth = &thr->pth;
 		thr_info_cancel(thr);
-		if (pth)
+		if (pth && *pth)
 			pthread_join(*pth, NULL);
 	}
 
