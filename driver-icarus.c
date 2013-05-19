@@ -783,7 +783,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	err = usb_write(icarus, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDWORK);
 	if (err < 0 || amount != sizeof(ob_bin)) {
-		applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
+		applog(LOG_ERR, "%s%i: Comms error (err=%d amt=%d)",
+				icarus->drv->name, icarus->device_id, err, amount);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		icarus_initialise(icarus, info->baud);
 		return 0;
