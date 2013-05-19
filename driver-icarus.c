@@ -89,6 +89,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define ICARUS_REV3_HASH_TIME 0.0000000026316
 #define LANCELOT_HASH_TIME 0.0000000025000
 #define ASICMINERUSB_HASH_TIME 0.0000000029761
+// TODO: What is it?
+#define CAIRNSMORE1_HASH_TIME 0.0000000026316
 #define NANOSEC 1000000000.0
 
 // Icarus Rev3 doesn't send a completion message when it finishes
@@ -423,17 +425,34 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		buf[max] = '\0';
 	}
 
-	info->Hs = 0;
+	switch (icarus->usbdev->ident) {
+		case IDENT_ICA:
+			info->Hs = ICARUS_REV3_HASH_TIME;
+			break;
+		case IDENT_BLT:
+		case IDENT_LLT:
+			info->Hs = LANCELOT_HASH_TIME;
+			break;
+		case IDENT_AMU:
+			info->Hs = ASICMINERUSB_HASH_TIME;
+			break;
+		case IDENT_CMR:
+			info->Hs = CAIRNSMORE1_HASH_TIME;
+			break;
+		default:
+			quit(1, "Icarus get_options() called with invalid %s ident=%d",
+				icarus->drv->name, icarus->usbdev->ident);
+	}
+
 	info->read_time = 0;
 
+	// TODO: allow short=N and long=N
 	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
-		info->Hs = ICARUS_REV3_HASH_TIME;
 		info->read_time = ICARUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
 	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
-		info->Hs = ICARUS_REV3_HASH_TIME;
 		info->read_time = ICARUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_LONG;
@@ -456,7 +475,6 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 	} else {
 		// Anything else in buf just uses DEFAULT mode
 
-		info->Hs = ICARUS_REV3_HASH_TIME;
 		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 
 		if ((eq = strchr(buf, '=')) != NULL)
@@ -505,7 +523,7 @@ static uint32_t mask(int work_division)
 	return nonce_mask;
 }
 
-static void get_options(int this_option_offset, int *baud, int *work_division, int *fpga_count)
+static void get_options(int this_option_offset, struct cgpu_info *icarus, int *baud, int *work_division, int *fpga_count)
 {
 	char err_buf[BUFSIZ+1];
 	char buf[BUFSIZ+1];
@@ -536,9 +554,28 @@ static void get_options(int this_option_offset, int *baud, int *work_division, i
 		buf[max] = '\0';
 	}
 
-	*baud = ICARUS_IO_SPEED;
-	*work_division = 2;
-	*fpga_count = 2;
+	switch (icarus->usbdev->ident) {
+		case IDENT_ICA:
+		case IDENT_BLT:
+		case IDENT_LLT:
+			*baud = ICARUS_IO_SPEED;
+			*work_division = 2;
+			*fpga_count = 2;
+			break;
+		case IDENT_AMU:
+			*baud = ICARUS_IO_SPEED;
+			*work_division = 1;
+			*fpga_count = 1;
+			break;
+		case IDENT_CMR:
+			*baud = ICARUS_IO_SPEED;
+			*work_division = 2;
+			*fpga_count = 2;
+			break;
+		default:
+			quit(1, "Icarus get_options() called with invalid %s ident=%d",
+				icarus->drv->name, icarus->usbdev->ident);
+	}
 
 	if (*buf) {
 		colon = strchr(buf, ':');
@@ -614,8 +651,6 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	struct cgpu_info *icarus;
 	int ret, err, amount, tries;
 
-	get_options(this_option_offset, &baud, &work_division, &fpga_count);
-
 	icarus = calloc(1, sizeof(struct cgpu_info));
 	if (unlikely(!icarus))
 		quit(1, "Failed to calloc icarus in icarus_detect_one");
@@ -626,8 +661,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	if (!usb_init(icarus, dev, found))
 		goto shin;
 
-	// TODO: set options based on ident if options not supplied
-	// add a flag to say options were set by parameters
+	get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
 
 	sprintf(devpath, "%d:%d",
 			(int)(icarus->usbinfo.bus_number),
