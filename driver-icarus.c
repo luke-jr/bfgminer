@@ -218,16 +218,19 @@ static int option_offset = -1;
 
 struct device_drv icarus_drv;
 
-static void transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, enum usb_cmds cmd)
+static void _transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, enum usb_cmds cmd)
 {
 	int err;
 
-	err = usb_transfer(icarus, request_type, bRequest, wValue, wIndex, cmd);
+	err = usb_transfer_data(icarus, request_type, bRequest, wValue, wIndex, data, siz, cmd);
 
 	applog(LOG_DEBUG, "%s%i: %s got err %d",
 			icarus->drv->name, icarus->device_id,
 			usb_cmdname(cmd), err);
 }
+
+#define transfer(icarus, request_type, bRequest, wValue, wIndex, cmd) \
+		_transfer(icarus, request_type, bRequest, wValue, wIndex, NULL, 0, cmd)
 
 // TODO: handle baud
 static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
@@ -296,6 +299,19 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 		case IDENT_ICA:
 			break;
 		case IDENT_AMU:
+			// Set data control
+			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_DATA, CP210X_VALUE_DATA,
+				 icarus->usbdev->found->interface, C_SETDATA);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Set the baud
+			uint32_t data = CP210X_DATA_BAUD;
+			_transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_BAUD, 0,
+				 icarus->usbdev->found->interface,
+				 &data, sizeof(data), C_SETBAUD);
+
 			break;
 		case IDENT_CMR:
 			break;

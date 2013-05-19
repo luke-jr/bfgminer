@@ -2160,15 +2160,16 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	return err;
 }
 
-int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned int timeout, enum usb_cmds cmd)
+int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
-	int err;
+	uint32_t *buf = NULL;
+	int err, i;
 
-	USBDEBUG("USB debug: _usb_transfer(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, timeout, usb_cmdname(cmd));
+	USBDEBUG("USB debug: _usb_transfer(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",siz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, siz, timeout, usb_cmdname(cmd));
 
 	if (cgpu->usbinfo.nodev) {
 #if DO_USB_STATS
@@ -2177,14 +2178,33 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
 
+	USBDEBUG("USB debug: @_usb_transfer() data=%s", bin2hex((unsigned char *)data, (size_t)siz));
+
+	if (siz > 0) {
+		siz--;
+		siz >>= 2;
+		siz++;
+		buf = malloc(siz << 2);
+		if (unlikely(!buf))
+			quit(1, "Failed to malloc in _usb_transfer");
+		for (i = 0; i < siz; i++)
+			buf[i] = htole32(data[i]);
+	}
+
+	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex((unsigned char *)buf, (size_t)(siz << 2)));
+
 	STATS_TIMEVAL(&tv_start);
 	err = libusb_control_transfer(usbdev->handle, request_type,
-		bRequest, htole16(wValue), htole16(wIndex), NULL, 0,
+		bRequest, htole16(wValue), htole16(wIndex),
+		(unsigned char *)buf, (uint16_t)(siz << 2),
 		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
 
 	USBDEBUG("USB debug: @_usb_transfer(%s (nodev=%s)) err=%d%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err));
+
+	if (buf)
+		free(buf);
 
 	if (NODEV(err))
 		release_cgpu(cgpu);

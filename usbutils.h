@@ -12,7 +12,8 @@
 
 #include <libusb.h>
 
-// for 0x0403/0x6014 FT232H (and possibly others?)
+
+// For 0x0403:0x6014/0x6001 FT232H (and possibly others?)
 #define FTDI_TYPE_OUT (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_OUT)
 
 #define FTDI_REQUEST_RESET ((uint8_t)0)
@@ -44,6 +45,16 @@
 
 #define FTDI_VALUE_FLOW 0
 #define FTDI_VALUE_MODEM 0x0303
+
+
+// For 0x10c4:0xea60 USB cp210x chip
+#define CP210X_TYPE_OUT 0x41
+
+#define CP210X_REQUEST_DATA 0x07
+#define CP210X_REQUEST_BAUD 0x1e
+
+#define CP210X_VALUE_DATA 0x0303
+#define CP210X_DATA_BAUD 0x0001c200
 
 // Use the device defined timeout
 #define DEVTIMEOUT 0
@@ -189,7 +200,7 @@ struct api_data *api_usb_stats(int *count);
 void update_usb_stats(struct cgpu_info *cgpu);
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce);
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds);
-int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned int timeout, enum usb_cmds cmd);
+int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd);
 void usb_cleanup();
 void usb_initialise();
 
@@ -227,6 +238,9 @@ void usb_initialise();
 	_usb_write(cgpu, ep, buf, bufsiz, wrote, timeout, cmd)
 
 #define usb_transfer(cgpu, typ, req, val, idx, cmd) \
-	_usb_transfer(cgpu, typ, req, val, idx, DEVTIMEOUT, cmd)
+	_usb_transfer(cgpu, typ, req, val, idx, NULL, 0, DEVTIMEOUT, cmd)
+
+#define usb_transfer_data(cgpu, typ, req, val, idx, data, len, cmd) \
+	_usb_transfer(cgpu, typ, req, val, idx, data, len, DEVTIMEOUT, cmd)
 
 #endif
