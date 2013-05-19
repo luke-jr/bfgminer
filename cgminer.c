@@ -2804,10 +2804,14 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
+		pthread_t *pth = NULL;
+
 		thr = get_thread(i);
+		if (thr && PTH(thr) != 0L)
+			pth = &thr->pth;
 		thr_info_cancel(thr);
-		if (thr && thr->pth)
-			pthread_join(thr->pth, NULL);
+		if (pth)
+			pthread_join(*pth, NULL);
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
