@@ -1126,8 +1126,10 @@ struct pool {
 	bool stratum_init;
 	bool stratum_notify;
 	struct stratum_work swork;
-	pthread_t stratum_thread;
+	pthread_t stratum_sthread;
+	pthread_t stratum_rthread;
 	pthread_mutex_t stratum_lock;
+	struct thread_q *stratum_q;
 	int sshares; /* stratum shares submitted waiting on response */
 
 	/* GBT  variables */
