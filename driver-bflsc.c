@@ -99,11 +99,6 @@ struct bflsc_dev {
 	bool flushed; // are any flushed?
 };
 
-// TODO: I stole cgpu_info.device_file
-//  ... need to update miner.h to instead have a generic void *device_info = NULL;
-//  ... and these structure definitions need to be in miner.h if API needs to see them
-//  ... but then again maybe not - maybe another devinfo that the driver provides
-//  However, clean up all that for all devices in miner.h ... miner.h is a mess at the moment
 struct bflsc_info {
 	pthread_rwlock_t stat_lock;
 	struct thr_info results_thr;
@@ -328,7 +323,7 @@ static void xlinkstr(char *xlink, int dev, struct bflsc_info *sc_info)
 
 static void bflsc_applog(struct cgpu_info *bflsc, int dev, enum usb_cmds cmd, int amount, int err)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char xlink[17];
 
 	xlinkstr(xlink, dev, sc_info);
@@ -646,7 +641,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 static void bflsc_initialise(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
 	int dev;
@@ -663,7 +658,7 @@ static void bflsc_initialise(struct cgpu_info *bflsc)
 
 static bool getinfo(struct cgpu_info *bflsc, int dev)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct bflsc_dev sc_dev;
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
@@ -803,7 +798,7 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 	if (unlikely(!sc_info))
 		quit(1, "Failed to calloc sc_info in bflsc_detect_one");
 	// TODO: fix ... everywhere ...
-	bflsc->device_file = (FILE *)sc_info;
+	bflsc->device_data = (FILE *)sc_info;
 
 	if (!usb_init(bflsc, dev, found))
 		goto shin;
@@ -942,7 +937,7 @@ unshin:
 shin:
 
 	free(bflsc->device_path);
-	free(bflsc->device_file);
+	free(bflsc->device_data);
 
 	if (bflsc->name != blank)
 		free(bflsc->name);
@@ -962,7 +957,7 @@ static void bflsc_detect(void)
 
 static void get_bflsc_statline_before(char *buf, struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	float temp = 0;
 	float vcc1 = 0;
 	int i;
@@ -983,7 +978,7 @@ static void get_bflsc_statline_before(char *buf, struct cgpu_info *bflsc)
 
 static void flush_one_dev(struct cgpu_info *bflsc, int dev)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct work *work, *tmp;
 	bool did = false;
 
@@ -1012,7 +1007,7 @@ static void flush_one_dev(struct cgpu_info *bflsc, int dev)
 
 static void bflsc_flush_work(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	int dev;
 
 	for (dev = 0; dev < sc_info->sc_count; dev++)
@@ -1021,7 +1016,7 @@ static void bflsc_flush_work(struct cgpu_info *bflsc)
 
 static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	int err, amount;
 
 	// Device is gone
@@ -1052,7 +1047,7 @@ static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 
 static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct bflsc_dev *sc_dev;
 	char temp_buf[BFLSC_BUFSIZ+1];
 	char volt_buf[BFLSC_BUFSIZ+1];
@@ -1257,7 +1252,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *data, int count, char **fields, int *nonces)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char midstate[MIDSTATE_BYTES], blockdata[MERKLE_BYTES];
 	struct work *work;
 	uint32_t nonce;
@@ -1341,7 +1336,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *nonces)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char **items, *firstname, **fields, *lf;
 	int que, i, lines, count;
 	char xlink[17];
@@ -1424,7 +1419,7 @@ arigatou:
 static void *bflsc_get_results(void *userdata)
 {
 	struct cgpu_info *bflsc = (struct cgpu_info *)userdata;
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct timeval elapsed, now;
 	float oldest, f;
 	char buf[BFLSC_BUFSIZ+1];
@@ -1489,7 +1484,7 @@ utsura:
 static bool bflsc_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct timeval now;
 
 	if (thr_info_create(&(sc_info->results_thr), NULL, bflsc_get_results, (void *)bflsc)) {
@@ -1507,7 +1502,7 @@ static bool bflsc_thread_prepare(struct thr_info *thr)
 static void bflsc_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 
 	bflsc_flush_work(bflsc);
 	sc_info->shutdown = true;
@@ -1525,7 +1520,7 @@ static void bflsc_thread_enable(struct thr_info *thr)
 
 static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct FullNonceRangeJob data;
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
@@ -1599,7 +1594,7 @@ re_send:
 
 static bool bflsc_queue_full(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct work *work = NULL;
 	int i, dev, tried, que;
 	bool ret = false;
@@ -1667,7 +1662,7 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 static int64_t bflsc_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	int64_t ret, unsent;
 	bool flushed, cleanup;
 	struct work *work, *tmp;
@@ -1774,7 +1769,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 
 static bool bflsc_get_stats(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	bool allok = true;
 	int i;
 
@@ -1799,7 +1794,7 @@ static bool bflsc_get_stats(struct cgpu_info *bflsc)
 
 static void bflsc_identify(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 
 	// TODO: handle x-link
 	sc_info->flash_led = true;
@@ -1823,7 +1818,7 @@ static bool bflsc_thread_init(struct thr_info *thr)
 
 static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct api_data *root = NULL;
 
 //if no x-link ... etc

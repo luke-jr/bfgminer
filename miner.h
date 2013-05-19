@@ -422,7 +422,7 @@ struct cgpu_info {
 	int device_id;
 	char *name;
 	char *device_path;
-	FILE *device_file;
+	void *device_data;
 	union {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
