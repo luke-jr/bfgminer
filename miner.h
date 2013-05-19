@@ -430,7 +430,7 @@ struct cgpu_info {
 #ifdef USE_USBUTILS
 		struct cg_usb_device *usbdev;
 #endif
-#if defined(USE_ICARUS) || defined(USE_AVALON)
+#ifdef USE_AVALON
 		int device_fd;
 #endif
 	};
