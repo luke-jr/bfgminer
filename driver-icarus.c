@@ -638,6 +638,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
 
 	tries = 0;
+retry:
 	while (++tries) {
 		icarus_initialise(icarus, baud);
 
@@ -652,8 +653,11 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 1);
-	if (ret != ICA_NONCE_OK)
+	if (ret != ICA_NONCE_OK) {
+		if (tries < 3)
+			goto retry;
 		goto unshin;
+	}
 
 	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 	if (strncmp(nonce_hex, golden_nonce, 8)) {
