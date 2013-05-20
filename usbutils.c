@@ -2171,7 +2171,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	struct timeval tv_start, tv_finish;
 #endif
 	uint32_t *buf = NULL;
-	int err, i;
+	int err, i, bufsiz;
 
 	USBDEBUG("USB debug: _usb_transfer(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",siz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, siz, timeout, usb_cmdname(cmd));
 
@@ -2185,22 +2185,22 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	USBDEBUG("USB debug: @_usb_transfer() data=%s", bin2hex((unsigned char *)data, (size_t)siz));
 
 	if (siz > 0) {
-		siz--;
-		siz >>= 2;
-		siz++;
-		buf = malloc(siz << 2);
+		bufsiz = siz - 1;
+		bufsiz >>= 2;
+		bufsiz++;
+		buf = malloc(bufsiz << 2);
 		if (unlikely(!buf))
 			quit(1, "Failed to malloc in _usb_transfer");
-		for (i = 0; i < siz; i++)
+		for (i = 0; i < bufsiz; i++)
 			buf[i] = htole32(data[i]);
 	}
 
-	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex((unsigned char *)buf, (size_t)(siz << 2)));
+	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex((unsigned char *)buf, (size_t)siz));
 
 	STATS_TIMEVAL(&tv_start);
 	err = libusb_control_transfer(usbdev->handle, request_type,
 		bRequest, htole16(wValue), htole16(wIndex),
-		(unsigned char *)buf, (uint16_t)(siz << 2),
+		(unsigned char *)buf, (uint16_t)siz,
 		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
