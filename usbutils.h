@@ -13,7 +13,7 @@
 #include <libusb.h>
 
 
-// For 0x0403:0x6014/0x6001 FT232H (and possibly others?)
+// For 0x0403:0x6014/0x6001 FT232H (and possibly others?) - BFL, BAS, BLT, LLT, AVA
 #define FTDI_TYPE_OUT (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_OUT)
 
 #define FTDI_REQUEST_RESET ((uint8_t)0)
@@ -47,7 +47,7 @@
 #define FTDI_VALUE_MODEM 0x0303
 
 
-// For 0x10c4:0xea60 USB cp210x chip
+// For 0x10c4:0xea60 USB cp210x chip - AMU
 #define CP210X_TYPE_OUT 0x41
 
 #define CP210X_REQUEST_DATA 0x07
@@ -55,6 +55,25 @@
 
 #define CP210X_VALUE_DATA 0x0303
 #define CP210X_DATA_BAUD 0x0001c200
+
+
+// For 0x067b:0x2303 Prolific PL2303 - ICA
+#define PL2303_CTRL_DTR 0x01
+#define PL2303_CTRL_RTS 0x02
+
+#define PL2303_CTRL_OUT 0x21
+#define PL2303_VENDOR_OUT 0x40
+
+#define PL2303_REQUEST_CTRL 0x22
+#define PL2303_REQUEST_LINE 0x20
+#define PL2303_REQUEST_VENDOR 0x01
+
+#define PL2303_VALUE_CTRL (PL2303_CTRL_DTR | PL2303_CTRL_RTS)
+#define PL2303_VALUE_LINE 0
+#define PL2303_VALUE_LINE0 0x0001c200
+#define PL2303_VALUE_LINE1 0x08000000
+#define PL2303_VALUE_LINE_SIZE 7
+#define PL2303_VALUE_VENDOR 0
 
 // Use the device defined timeout
 #define DEVTIMEOUT 0
@@ -184,6 +203,8 @@ enum usb_cmds {
 	C_REQUESTVOLTS,
 	C_SENDTESTWORK,
 	C_LATENCY,
+	C_SETLINE,
+	C_VENDOR,
 	C_MAX
 };
 

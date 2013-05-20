@@ -294,6 +294,26 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 
 			break;
 		case IDENT_ICA:
+			// Set Data Control
+			transfer(icarus, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, PL2303_VALUE_CTRL,
+				 icarus->usbdev->found->interface, C_SETDATA);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Set Line Control
+			uint32_t ica_data[2] = { PL2303_VALUE_LINE0, PL2303_VALUE_LINE1 };
+			_transfer(icarus, PL2303_CTRL_OUT, PL2303_REQUEST_LINE, PL2303_VALUE_LINE,
+				 icarus->usbdev->found->interface,
+				 &ica_data[0], PL2303_VALUE_LINE_SIZE, C_SETLINE);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Vendor
+			transfer(icarus, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, PL2303_VALUE_VENDOR,
+				 icarus->usbdev->found->interface, C_VENDOR);
+
 			break;
 		case IDENT_AMU:
 			// Set data control
