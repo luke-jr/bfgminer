@@ -353,7 +353,8 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		err = usb_read_timeout(icarus, (char *)buf, read_amount, &amt, ICARUS_WAIT_TIMEOUT, C_GETRESULTS);
 		cgtime(&read_finish);
 		if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-			applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
+			applog(LOG_ERR, "%s%i: Comms error (err=%d amt=%d)",
+					icarus->drv->name, icarus->device_id, err, amt);
 			dev_error(icarus, REASON_DEV_COMMS_ERROR);
 			return ICA_NONCE_ERROR;
 		}
