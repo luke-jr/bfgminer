@@ -700,6 +700,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	int baud, work_division, fpga_count;
 	struct cgpu_info *icarus;
 	int ret, err, amount, tries;
+	bool ok;
 
 	icarus = calloc(1, sizeof(struct cgpu_info));
 	if (unlikely(!icarus))
@@ -721,42 +722,42 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
 
-	tries = 0;
-retry:
-	while (++tries) {
+	tries = 2;
+	ok = false;
+	while (!ok && tries-- > 0) {
 		icarus_initialise(icarus, baud);
 
 		err = usb_write(icarus, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDTESTWORK);
 
-		if (err == LIBUSB_SUCCESS && amount == sizeof(ob_bin))
-			break;
+		if (err != LIBUSB_SUCCESS || amount != sizeof(ob_bin))
+			continue;
 
-		if (tries > 2)
-			goto unshin;
-	}
+		memset(nonce_bin, 0, sizeof(nonce_bin));
+		ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
+		if (ret != ICA_NONCE_OK)
+			continue;
 
-	memset(nonce_bin, 0, sizeof(nonce_bin));
-	ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, NULL, 100);
-	if (ret != ICA_NONCE_OK) {
-		if (tries < 3)
-			goto retry;
-		goto unshin;
-	}
-
-	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
-	if (strncmp(nonce_hex, golden_nonce, 8)) {
-		applog(LOG_ERR,
-			"Icarus Detect: "
-			"Test failed at %s: get %s, should: %s",
-			devpath, nonce_hex, golden_nonce);
+		nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
+		if (strncmp(nonce_hex, golden_nonce, 8) == 0)
+			ok = true;
+		else {
+			if (tries < 0) {
+				applog(LOG_ERR,
+					"Icarus Detect: "
+					"Test failed at %s: get %s, should: %s",
+					devpath, nonce_hex, golden_nonce);
+			}
+		}
 		free(nonce_hex);
-		goto unshin;
 	}
+
+	if (!ok)
+		goto unshin;
+
 	applog(LOG_DEBUG,
 		"Icarus Detect: "
 		"Test succeeded at %s: got %s",
-			devpath, nonce_hex);
-	free(nonce_hex);
+			devpath, golden_nonce);
 
 	/* We have a real Icarus! */
 	if (!add_cgpu(icarus))
