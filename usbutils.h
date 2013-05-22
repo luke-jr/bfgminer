@@ -12,6 +12,9 @@
 
 #include <libusb.h>
 
+#define EPI(x) (LIBUSB_ENDPOINT_IN | (unsigned char)(x))
+#define EPO(x) (LIBUSB_ENDPOINT_OUT | (unsigned char)(x))
+
 
 // For 0x0403:0x6014/0x6001 FT232H (and possibly others?) - BFL, BAS, BLT, LLT, AVA
 #define FTDI_TYPE_OUT (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_OUT)
@@ -67,6 +70,8 @@
 #define PL2303_REQUEST_CTRL 0x22
 #define PL2303_REQUEST_LINE 0x20
 #define PL2303_REQUEST_VENDOR 0x01
+
+#define PL2303_REPLY_CTRL 0x21
 
 #define PL2303_VALUE_CTRL (PL2303_CTRL_DTR | PL2303_CTRL_RTS)
 #define PL2303_VALUE_LINE 0
@@ -222,6 +227,7 @@ void update_usb_stats(struct cgpu_info *cgpu);
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce);
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds);
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd);
+int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, enum usb_cmds cmd);
 void usb_cleanup();
 void usb_initialise();
 
@@ -263,5 +269,8 @@ void usb_initialise();
 
 #define usb_transfer_data(cgpu, typ, req, val, idx, data, len, cmd) \
 	_usb_transfer(cgpu, typ, req, val, idx, data, len, DEVTIMEOUT, cmd)
+
+#define usb_transfer_read(cgpu, typ, req, val, idx, buf, bufsiz, read, cmd) \
+	_usb_transfer_read(cgpu, typ, req, val, idx, buf, bufsiz, read, DEVTIMEOUT, cmd)
 
 #endif

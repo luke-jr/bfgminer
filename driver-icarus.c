@@ -215,6 +215,21 @@ static int option_offset = -1;
 
 struct device_drv icarus_drv;
 
+/*
+#define ICA_BUFSIZ (0x200)
+
+static void transfer_read(struct cgpu_info *icarus, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, enum usb_cmds cmd)
+{
+	int err;
+
+	err = usb_transfer_read(icarus, request_type, bRequest, wValue, wIndex, buf, bufsiz, amount, cmd);
+
+	applog(LOG_DEBUG, "%s: cgid %d %s got err %d",
+			icarus->drv->name, icarus->cgminer_id,
+			usb_cmdname(cmd), err);
+}
+*/
+
 static void _transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, enum usb_cmds cmd)
 {
 	int err;

@@ -49,9 +49,6 @@
 
 #define USB_CONFIG 1
 
-#define EPI(x) (LIBUSB_ENDPOINT_IN | (unsigned char)(x))
-#define EPO(x) (LIBUSB_ENDPOINT_OUT | (unsigned char)(x))
-
 #ifdef WIN32
 #define BFLSC_TIMEOUT_MS 500
 #define BITFORCE_TIMEOUT_MS 999
@@ -2211,6 +2208,44 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 		free(buf);
 
 	if (NODEV(err))
+		release_cgpu(cgpu);
+
+	return err;
+}
+
+int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, enum usb_cmds cmd)
+{
+	struct cg_usb_device *usbdev = cgpu->usbdev;
+#if DO_USB_STATS
+	struct timeval tv_start, tv_finish;
+#endif
+	int err;
+
+	USBDEBUG("USB debug: _usb_transfer_read(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",bufsiz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, bufsiz, timeout, usb_cmdname(cmd));
+
+	if (cgpu->usbinfo.nodev) {
+#if DO_USB_STATS
+		rejected_inc(cgpu);
+#endif
+		return LIBUSB_ERROR_NO_DEVICE;
+	}
+
+	*amount = 0;
+
+	STATS_TIMEVAL(&tv_start);
+	err = libusb_control_transfer(usbdev->handle, request_type,
+		bRequest, htole16(wValue), htole16(wIndex),
+		(unsigned char *)buf, (uint16_t)bufsiz,
+		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
+	STATS_TIMEVAL(&tv_finish);
+	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
+
+	USBDEBUG("USB debug: @_usb_transfer_read(%s (nodev=%s)) amt/err=%d%s%s%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), err > 0 ? " = " : BLANK, err > 0 ? bin2hex((unsigned char *)buf, (size_t)err) : BLANK);
+
+	if (err > 0) {
+		*amount = err;
+		err = 0;
+	} else if (NODEV(err))
 		release_cgpu(cgpu);
 
 	return err;
