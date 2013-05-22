@@ -253,6 +253,7 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 	switch (icarus->usbdev->ident) {
 		case IDENT_BLT:
 		case IDENT_LLT:
+		case IDENT_CMR:
 			// Latency
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY, FTDI_VALUE_LATENCY,
 				 icarus->usbdev->found->interface, C_LATENCY);
@@ -344,8 +345,6 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 				 icarus->usbdev->found->interface,
 				 &data, sizeof(data), C_SETBAUD);
 
-			break;
-		case IDENT_CMR:
 			break;
 		default:
 			quit(1, "icarus_intialise() called with invalid %s cgid %i ident=%d",
