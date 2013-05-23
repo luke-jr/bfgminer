@@ -6428,7 +6428,10 @@ retry_stratum:
 			bool ret = initiate_stratum(pool) && auth_stratum(pool);
 
 			if (ret)
+			{
+				detect_algo = 2;
 				init_stratum_thread(pool);
+			}
 			else
 				pool_tclear(pool, &pool->stratum_init);
 			return ret;
