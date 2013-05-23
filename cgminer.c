@@ -2819,8 +2819,13 @@ static void __kill_work(void)
 		if (thr && PTH(thr) != 0L)
 			pth = &thr->pth;
 		thr_info_cancel(thr);
+#ifndef WIN32
 		if (pth && *pth)
 			pthread_join(*pth, NULL);
+#else
+		if (pth && pth->p)
+			pthread_join(*pth, NULL);
+#endif
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
