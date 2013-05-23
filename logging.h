@@ -31,6 +31,11 @@ extern int opt_log_level;
 extern void vapplog(int prio, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
 extern void applog(int prio, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
 
+#define applogr(rv, prio, ...)  do {  \
+	applog(prio, __VA_ARGS__);  \
+	return rv;  \
+} while (0)
+
 /* high-level logging functions with implicit priority */
 extern void log_error(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 extern void log_warning(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);

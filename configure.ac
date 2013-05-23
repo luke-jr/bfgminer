@@ -563,6 +563,8 @@ if echo "$LIBCURL_CFLAGS" | grep '@CPPFLAG_CURL_STATICLIB@' >/dev/null 2>&1; the
 fi
 AC_SUBST(LIBCURL_LIBS)
 
+AC_CHECK_FUNCS([setrlimit])
+
 dnl CCAN wants to know a lot of vars.
 # All the configuration checks.  Regrettably, the __attribute__ checks will
 # give false positives on old GCCs, since they just cause warnings.  But that's
