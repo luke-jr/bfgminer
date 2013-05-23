@@ -905,7 +905,7 @@ retry:
 				if (powertune != -1)
 					tailsprintf(logline, "P: %d%%", powertune);
 				tailsprintf(logline, "\n");
-				wlog(logline);
+				wlog("%s", logline);
 			}
 		}
 #endif
@@ -1528,7 +1528,7 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 		if (gt != -1)
 			tailsprintf(buf, "%5.1fC ", gt);
 		else
-			tailsprintf(buf, "       ", gt);
+			tailsprintf(buf, "       ");
 		if (gf != -1)
 			tailsprintf(buf, "%4dRPM ", gf);
 		else if ((gp = gpu_fanpercent(gpuid)) != -1)
