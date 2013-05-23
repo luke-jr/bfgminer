@@ -541,7 +541,7 @@ void change_gpusettings(int gpu)
 			wlogprint("Failed to modify engine clock speed\n");
 	} else 	if (!strncasecmp(&input, "f", 1)) {
 		get_fanrange(gpu, &imin, &imax);
-		wlogprint("Enter fan percentage (%d - %d %)", imin, imax);
+		wlogprint("Enter fan percentage (%d - %d %%)", imin, imax);
 		val = curses_int("");
 		if (val < imin || val > imax) {
 			wlogprint("Value is outside safe range, are you sure?\n");
