@@ -7952,6 +7952,32 @@ extern void setup_pthread_cancel_workaround();
 extern struct sigaction pcwm_orig_term_handler;
 #endif
 
+static void raise_fd_limits(void)
+{
+#ifdef HAVE_SETRLIMIT
+	struct rlimit fdlimit;
+	unsigned long old_soft_limit;
+	
+	if (getrlimit(RLIMIT_NOFILE, &fdlimit))
+		applogr(, LOG_DEBUG, "setrlimit: Failed to getrlimit(RLIMIT_NOFILE)");
+	
+	if (fdlimit.rlim_cur == RLIM_INFINITY)
+		applogr(, LOG_DEBUG, "setrlimit: Soft fd limit already infinite");
+	
+	if (fdlimit.rlim_cur == fdlimit.rlim_max)
+		applogr(, LOG_DEBUG, "setrlimit: Soft fd limit already identical to hard limit (%lu)", (unsigned long)fdlimit.rlim_max);
+	
+	old_soft_limit = fdlimit.rlim_cur;
+	fdlimit.rlim_cur = fdlimit.rlim_max;
+	if (setrlimit(RLIMIT_NOFILE, &fdlimit))
+		applogr(, LOG_DEBUG, "setrlimit: Failed to increase soft fd limit from %lu to hard limit of %lu", old_soft_limit, (unsigned long)fdlimit.rlim_max);
+	
+	applog(LOG_DEBUG, "setrlimit: Increased soft fd limit from %lu to hard limit of %lu", old_soft_limit, (unsigned long)fdlimit.rlim_max);
+#else
+	applog(LOG_DEBUG, "setrlimit: Not supported by platform");
+#endif
+}
+
 int main(int argc, char *argv[])
 {
 	bool pools_active = false;
@@ -8090,6 +8116,8 @@ int main(int argc, char *argv[])
 	applog(LOG_DEBUG, "pthread_cancel workaround in use");
 #endif
 
+	raise_fd_limits();
+	
 	if (opt_benchmark) {
 		struct pool *pool;
 
