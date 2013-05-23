@@ -403,6 +403,8 @@ AC_SUBST(LIBUSB_CFLAGS)
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
 AC_SUBST(LIBCURL_LIBS)
 
+AC_CHECK_FUNCS([setrlimit])
+
 dnl CCAN wants to know a lot of vars.
 # All the configuration checks.  Regrettably, the __attribute__ checks will
 # give false positives on old GCCs, since they just cause warnings.  But that's
