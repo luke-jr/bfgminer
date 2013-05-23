@@ -38,6 +38,7 @@
 #define BITFORCE_MAX_QRESULTS 10
 #define BITFORCE_GOAL_QRESULTS (BITFORCE_MAX_QRESULTS / 2)
 #define BITFORCE_MAX_QRESULT_WAIT 1000
+#define BITFORCE_MAX_BQUEUE_AT_ONCE 5
 
 enum bitforce_proto {
 	BFP_WORK,
@@ -226,6 +227,7 @@ struct bitforce_data {
 	bool already_have_results;
 	bool just_flushed;
 	int ready_to_queue;
+	bool want_to_send_queue;
 	unsigned result_busy_polled;
 	unsigned sleep_ms_default;
 	struct timeval tv_hashmeter_start;
@@ -1319,7 +1321,7 @@ void bitforce_set_queue_full(struct thr_info *thr)
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->cgpu_data;
 	
-	thr->queue_full = (data->queued + data->ready_to_queue >= BITFORCE_MAX_QUEUED);
+	thr->queue_full = (data->queued + data->ready_to_queue >= BITFORCE_MAX_QUEUED) || (data->ready_to_queue >= BITFORCE_MAX_BQUEUE_AT_ONCE);
 }
 
 static
@@ -1378,6 +1380,9 @@ bool bitforce_send_queue(struct thr_info *thr)
 		return false;
 	}
 	
+	if (!data->queued)
+		gettimeofday(&data->tv_hashmeter_start, NULL);
+	
 	queued_ok = atoi(&buf[9]);
 	data->queued += queued_ok;
 	applog(LOG_DEBUG, "%"PRIpreprv": Successfully queued %d/%d jobs on device (queued<=%d)",
@@ -1386,6 +1391,7 @@ bool bitforce_send_queue(struct thr_info *thr)
 	data->ready_to_queue -= queued_ok;
 	thr->queue_full = data->ready_to_queue;
 	data->just_flushed = false;
+	data->want_to_send_queue = false;
 	
 	return true;
 }
@@ -1528,14 +1534,14 @@ bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 	
 	ndq = !data->queued;
 	if ((ndq)              // Device is idle
-	 || (data->ready_to_queue >= 5)  // ...or 5 items ready to go
+	 || (data->ready_to_queue >= BITFORCE_MAX_BQUEUE_AT_ONCE)  // ...or 5 items ready to go
 	 || (thr->queue_full)            // ...or done filling queue
 	 || (data->just_flushed)         // ...or queue was just flushed (only remaining job is partly done already)
 	)
 	{
-		bitforce_send_queue(thr);
-		if (ndq)
-			gettimeofday(&data->tv_hashmeter_start, NULL);
+		if (!bitforce_send_queue(thr))
+			// Problem sending queue, retry again in a few seconds
+			data->want_to_send_queue = true;
 	}
 	
 	return rv;
@@ -1580,9 +1586,19 @@ static
 void bitforce_queue_poll(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data *data = bitforce->cgpu_data;
+	unsigned long sleep_us;
 	
-	bitforce_queue_do_results(thr);
-	timer_set_delay_from_now(&thr->tv_poll, bitforce->sleep_ms * 1000);
+	if (data->queued)
+		bitforce_queue_do_results(thr);
+	sleep_us = (unsigned long)bitforce->sleep_ms * 1000;
+	
+	if (data->want_to_send_queue)
+		if (!bitforce_send_queue(thr))
+			if (!data->queued)
+				sleep_us = 1000000;
+	
+	timer_set_delay_from_now(&thr->tv_poll, sleep_us);
 }
 
 struct device_api bitforce_queue_api = {
