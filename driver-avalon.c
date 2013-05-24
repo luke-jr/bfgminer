@@ -665,7 +665,8 @@ static bool avalon_prepare(struct thr_info *thr)
 	struct timeval now;
 
 	free(avalon->works);
-	avalon->works = calloc(info->miner_count * sizeof(struct work *), 4);
+	avalon->works = calloc(info->miner_count * sizeof(struct work *),
+			       AVALON_ARRAY_SIZE);
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
 	if (avalon->device_fd == -1)
@@ -792,7 +793,7 @@ static bool avalon_fill(struct cgpu_info *avalon)
 static void avalon_rotate_array(struct cgpu_info *avalon)
 {
 	avalon->queued = 0;
-	if (++avalon->work_array > 3)
+	if (++avalon->work_array >= AVALON_ARRAY_SIZE)
 		avalon->work_array = 0;
 }
 
