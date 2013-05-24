@@ -580,7 +580,7 @@ out:
 	return NULL;
 }
 
-bool add_cgpu(struct cgpu_info*cgpu)
+bool add_cgpu(struct cgpu_info *cgpu)
 {
 	int lpcount;
 	
@@ -632,6 +632,10 @@ bool add_cgpu(struct cgpu_info*cgpu)
 	}
 	
 	wr_unlock(&devices_lock);
+
+	mutex_lock(&stats_lock);
+	cgpu->last_device_valid_work = time(NULL);
+	mutex_unlock(&stats_lock);
 	
 	return true;
 }
