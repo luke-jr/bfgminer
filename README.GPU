@@ -444,6 +444,11 @@ start it remotely?
 A: With Linux, make sure to export the DISPLAY variable. On Windows, you cannot
 access these monitoring values via a remote session.
 
+Q: I change my GPU engine/memory/voltage and BFGMiner reports back no change?
+A: BFGMiner asks the GPU using the ATI Display Library to change settings, but
+the driver and hardware are free to do what it wants with that query, including
+ignoring it. Some GPUs are locked with one or more of those properties as well.
+
 Q: Should I use crossfire/SLI?
 A: It does not benefit mining at all and depending on the GPU may actually
 worsen performance.
