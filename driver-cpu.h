@@ -30,7 +30,7 @@
 #define WANT_X8664_SSE2 1
 #endif
 
-#if defined(__x86_64__) && defined(HAS_YASM)
+#if defined(__x86_64__) && defined(HAS_YASM) && defined(__SSE4_1__)
 #define WANT_X8664_SSE4 1
 #endif
 
