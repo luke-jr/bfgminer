@@ -4605,8 +4605,9 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	free(current_fullhash);
 	current_fullhash = bin2hex(hash_swap, 32);
 	get_timestamp(blocktime, &block_timeval);
-	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
 	cg_wunlock(&ch_lock);
+
+	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
 }
 
 /* Search to see if this string is from a block that has been seen before */
