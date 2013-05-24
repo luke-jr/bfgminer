@@ -194,13 +194,17 @@ without TC parameters, but you never know. So if it doesn't, start with
 --thread-concurrency 8192 and add 2048 to it at a time till you find the highest
 value it will start successfully at.
 
+If you wish to get a little extra from your hardware, you may also try
+overclocking. Do note that this will damage your GPUs and void your warranty,
+so unless you are willing to take that risk, skip the --gpu-engine and
+--gpu-memclock sections!
+
 Then start overclocking the eyeballs off your memory, as 7970s are exquisitely
 sensitive to memory speed and amazingly overclockable but please make sure it
 keeps adequately cooled with --auto-fan! Do it while it's running from the GPU
 menu. Go up by 25 at a time every 30 seconds or so until your GPU crashes. Then
 reboot and start it 25 lower as a rough start. One example runs stable at 1900
-memory without overvolting. Overvolting is the only thing that can actually
-damage your GPU so I wouldn't recommend it at all.
+memory without overvolting.
 
 Then once you find the maximum memory clock speed, you need to find the sweet
 spot engine clock speed that matches it. It's a fine line where one more MHz
