@@ -150,7 +150,7 @@ AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 m4_define([BFG_PTHREAD_FLAG_CHECK],
 	AC_MSG_CHECKING([for $1])
 	for cflag in ' -pthread' ''; do
-		for lib in ' -lpthread' ''; do
+		for lib in ' -lpthread' ' -lwinpthread' ''; do
 			CFLAGS="${save_CFLAGS}${cflag}"
 			LIBS="${save_LIBS}${lib}"
 			AC_LINK_IFELSE([
