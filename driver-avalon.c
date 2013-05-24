@@ -262,13 +262,11 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
 	uint8_t result[AVALON_READ_SIZE];
-	int ret, read_count = AVALON_RESET_FAULT_DECISECONDS * AVALON_TIME_FACTOR;
+	int ret, read_count;
 
-	if (likely(thr)) {
-		avalon = thr->cgpu;
-		info = avalon_infos[avalon->device_id];
-		read_count = info->read_count;
-	}
+	avalon = thr->cgpu;
+	info = avalon_infos[avalon->device_id];
+	read_count = info->read_count;
 
 	memset(result, 0, AVALON_READ_SIZE);
 	ret = avalon_gets(fd, result, read_count, thr, tv_finish);
@@ -308,6 +306,39 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 	return true;
 }
 
+static void avalon_get_reset(int fd, struct avalon_result *ar)
+{
+	int read_amount = AVALON_READ_SIZE;
+	uint8_t result[AVALON_READ_SIZE];
+	struct timeval timeout = {1, 0};
+	ssize_t ret = 0;
+	fd_set rd;
+
+	memset(result, 0, AVALON_READ_SIZE);
+	memset(ar, 0, AVALON_READ_SIZE);
+	FD_ZERO(&rd);
+	FD_SET(fd, &rd);
+	ret = select(fd + 1, &rd, NULL, NULL, &timeout);
+	if (unlikely(ret < 0)) {
+		applog(LOG_WARNING, "Avalon: Error on select in avalon_get_reset");
+		return;
+	}
+	if (!ret) {
+		applog(LOG_WARNING, "Avalon: Timeout on select in avalon_get_reset");
+		return;
+	}
+	ret = read(fd, result, read_amount);
+	if (unlikely(ret != read_amount)) {
+		applog(LOG_WARNING, "Avalon: Error on read in avalon_get_reset");
+		return;
+	}
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: get:");
+		hexdump((uint8_t *)result, AVALON_READ_SIZE);
+	}
+	memcpy((uint8_t *)ar, result, AVALON_READ_SIZE);
+}
+
 static int avalon_reset(int fd, struct avalon_result *ar)
 {
 	struct avalon_task at;
@@ -326,7 +357,7 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 	if (ret == AVA_SEND_ERROR)
 		return 1;
 
-	avalon_get_result(fd, ar, NULL, NULL);
+	avalon_get_reset(fd, ar);
 
 	buf = (uint8_t *)ar;
 	/* Sometimes there is one extra 0 byte for some reason in the buffer,
