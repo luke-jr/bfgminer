@@ -695,6 +695,9 @@ To permanently give your account the 'dialout' group:
  sudo usermod -G dialout -a `whoami`
 Then logout and back in again
 
+Q: Can I mine scrypt with FPGAs or ASICs?
+A: No.
+
 Q: What is stratum and how do I use it?
 A: Stratum is a protocol designed to reduce resources for mining pools at the
 cost of keeping the miner in the dark and blindly transferring his mining

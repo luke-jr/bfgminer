@@ -348,10 +348,10 @@ penalty on generating new binaries. It is recommended to not use this SDK at
 this time unless you are using an ATI 7xxx card that needs it.
 
 Q: Which ATI SDK is the best for BFGMiner?
-A: At the moment, versions 2.4 and 2.5 work the best for 5xxx and 6xxx GPUs. If
-you are need to use the 2.6+ SDK (7xxx and later), the phatk kernel will perform
-poorly, while the diablo or my custom modified poclbm kernel are optimised for
-it.
+A: At the moment, versions 2.4 and 2.5 work the best for 5xxx and 6xxx GPUs. SDK
+2.6 or 2.7 works best for 7xxx. SDK 2.8 is known to have many problems. If you
+need to use the 2.6+ SDK (7xxx and later), the phatk kernel will perform poorly,
+while the diablo or (modified) poclbm kernel are optimised for it.
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
 A: Run bfgminer with the -n option and it will list all the platforms currently
@@ -360,6 +360,62 @@ installed. Then you can tell BFGMiner which platform to use with --gpu-platform.
 Q: BFGMiner reports no devices or only one device on startup on Linux although
 I have multiple devices and drivers+SDK installed properly?
 A: Try "export DISPLAY=:0" before running BFGMiner.
+
+Q: BFGMiner crashes immediately on startup.
+A: One of the common reasons for this is that you have mixed files on your
+machine for the driver or SDK. Windows has a nasty history of not cleanly
+uninstalling files so you may have to use third party tools like driversweeper
+to remove old versions. The other common reason for this is windows antivirus
+software is disabling one of the DLLs from working. If BFGMiner starts with the
+-T option but never starts without it, this is a sure fire sign you have this
+problem and will have to disable your antivirus or make exceptions.
+
+Q: Is it faster to mine on Windows or Linux?
+A: It makes no difference. It comes down to choice of operating system for their
+various features. Linux offers much better long term stability and remote
+monitoring and security, while Windows offers you overclocking tools that can
+achieve much more than BFGMiner can do on Linux.
+
+Q: BFGMiner cannot see any of my GPUs even though I have configured them all to
+be enabled and installed OpenCL (+/- Xorg is running and the DISPLAY variable is
+exported on Linux)?
+A: Check the output of 'bfgminer -d?', it will list what OpenCL devices your
+installed SDK recognises. If it lists none, you have a problem with your version
+or installation of the SDK.
+
+Q: BFGMiner is mining on the wrong GPU, I want it on the AMD but it's mining on
+my on board GPU?
+A: Make sure the AMD OpenCL SDK is installed, check the output of 'bfgminer -d?'
+and use the appropriate parameter with --gpu-platform.
+
+Q: I'm getting much lower hashrates than I should be for my GPU?
+A: Look at your driver/SDK combination and disable power saving options for your
+GPU. Specifically look to disable ULPS.
+
+Q: Can I mine with AMD while running Nvidia or Intel GPUs at the same time?
+A: If you can install both drivers successfully (easier on windows) then yes,
+using the --gpu-platform option.
+
+Q: Can I mine with Nvidia or Intel GPUs?
+A: Yes, but their hashrate is very poor and likely you'll be using much more
+energy than you'll be earning in coins.
+
+Q: Can I mine on Linux without running Xorg?
+A: With Nvidia you can, but with AMD you cannot.
+
+Q: I'm trying to mine a scrypt cryptocurrency but BFGMiner shows MH values
+instead of kH and submits no shares?
+A: Add the --scrypt parameter.
+
+Q: I can't get anywhere near enough hashrate for scrypt compared to other
+people?
+A: You may not have enough system RAM as this is also required.
+
+Q: My scrypt hashrate is high but the pool reports only a tiny proportion of my
+hashrate?
+A: You are generating garbage hashes due to your choice of settings. Try
+decreasing your intensity, do not increase the number of gpu-threads, and
+consider adding system RAM to match your GPU ram.
 
 Q: Should I use crossfire/SLI?
 A: It does not benefit mining at all and depending on the GPU may actually
