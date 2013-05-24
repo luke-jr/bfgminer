@@ -190,6 +190,8 @@ if test "x${found_pthread}" = "xfalse"; then
 		AC_MSG_ERROR([Could not find pthread library - please install libpthread])
 	fi
 fi
+# check for nanosleep here, since it is provided by winpthread
+AC_CHECK_FUNCS([nanosleep])
 CFLAGS="${save_CFLAGS}"
 LIBS="${save_LIBS}"
 

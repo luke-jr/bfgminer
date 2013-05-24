@@ -76,7 +76,9 @@ struct tm *localtime_convert(time_t t)
 {
 	return localtime(&t);
 }
+#endif
 
+#ifndef HAVE_NANOSLEEP
 static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 {
 	struct timeval tstart;
@@ -108,7 +110,9 @@ static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 	}
 	return 0;
 }
+#endif
 
+#ifdef WIN32
 static inline int sleep(unsigned int secs)
 {
 	struct timespec req, rem;
