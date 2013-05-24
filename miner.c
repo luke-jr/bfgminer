@@ -356,7 +356,7 @@ static bool should_run(void)
 	if (!schedstart.enable && !schedstop.enable)
 		return true;
 
-	gettimeofday(&tv, NULL);
+	cgtime(&tv);
 	localtime_r(&tv.tv_sec, &tm);
 
 	// NOTE: This is delicately balanced so that should_run is always false if schedstart==schedstop
@@ -2018,7 +2018,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	memset(work->hash, 0, sizeof(work->hash));
 
-	gettimeofday(&work->tv_staged, NULL);
+	cgtime(&work->tv_staged);
 
 	ret = true;
 
@@ -2951,7 +2951,7 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	struct timeval tv_submit_reply;
 	char worktime[200] = "";
 
-	gettimeofday(&tv_submit_reply, NULL);
+	cgtime(&tv_submit_reply);
 
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
@@ -3179,7 +3179,7 @@ static void get_benchmark_work(struct work *work)
 	memcpy(work, &bench_block, min_size);
 	work->mandatory = true;
 	work->pool = pools[0];
-	gettimeofday(&(work->tv_getwork), NULL);
+	cgtime(&work->tv_getwork);
 	memcpy(&(work->tv_getwork_reply), &(work->tv_getwork), sizeof(struct timeval));
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
 	calc_diff(work, 0);
@@ -3344,7 +3344,7 @@ tryagain:
 
 	url = pool->rpc_url;
 
-	gettimeofday(&(work->tv_getwork), NULL);
+	cgtime(&work->tv_getwork);
 
 	val = json_rpc_call(curl, url, pool->rpc_userpass, rpc_req, false,
 			    false, &work->rolltime, pool, false);
@@ -3363,7 +3363,7 @@ tryagain:
 	} else
 		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
 
-	gettimeofday(&(work->tv_getwork_reply), NULL);
+	cgtime(&work->tv_getwork_reply);
 	timersub(&(work->tv_getwork_reply), &(work->tv_getwork), &tv_elapsed);
 	pool_stats->getwork_wait_rolling += ((double)tv_elapsed.tv_sec + ((double)tv_elapsed.tv_usec / 1000000)) * 0.63;
 	pool_stats->getwork_wait_rolling /= 1.63;
@@ -3598,7 +3598,7 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	if (!ce || !ce->curl)
 		quit(1, "Attempted to add NULL in push_curl_entry");
 	list_add_tail(&ce->node, &pool->curlring);
-	gettimeofday(&ce->tv, NULL);
+	cgtime(&ce->tv);
 	pthread_cond_broadcast(&pool->cr_cond);
 	mutex_unlock(&pool->pool_lock);
 }
@@ -3624,7 +3624,7 @@ static inline bool should_roll(struct work *work)
 
 	/* We shouldn't roll if we're unlikely to get one shares' duration
 	 * work out of doing so */
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	if (now.tv_sec - work->tv_staged.tv_sec > expiry)
 		return false;
 	
@@ -3722,7 +3722,7 @@ static struct work *make_clone(struct work *work)
 	struct work *work_clone = copy_work(work);
 
 	work_clone->clone = true;
-	gettimeofday((struct timeval *)&(work_clone->tv_cloned), NULL);
+	cgtime((struct timeval *)&(work_clone->tv_cloned));
 	work_clone->longpoll = false;
 	work_clone->mandatory = false;
 	/* Make cloned work appear slightly older to bias towards keeping the
@@ -3766,7 +3766,7 @@ out_unlock:
 static void pool_died(struct pool *pool)
 {
 	if (!pool_tset(pool, &pool->idle)) {
-		gettimeofday(&pool->tv_idle, NULL);
+		cgtime(&pool->tv_idle);
 		if (pool == current_pool()) {
 			applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
 			switch_pools(NULL);
@@ -3976,7 +3976,7 @@ static void sws_has_ce(struct submit_work_state *sws)
 {
 	struct pool *pool = sws->work->pool;
 	sws->s = submit_upstream_work_request(sws->work);
-	gettimeofday(&sws->tv_submit, NULL);
+	cgtime(&sws->tv_submit);
 	json_rpc_call_async(sws->ce->curl, pool->rpc_url, pool->rpc_userpass, sws->s, false, pool, true, sws);
 }
 
@@ -4070,7 +4070,7 @@ static bool retry_submission(struct submit_work_state *sws)
 		/* pause, then restart work-request loop */
 		applog(LOG_INFO, "json_rpc_call failed on submit_work, retrying");
 
-		gettimeofday(&sws->tv_submit, NULL);
+		cgtime(&sws->tv_submit);
 		json_rpc_call_async(sws->ce->curl, pool->rpc_url, pool->rpc_userpass, sws->s, false, pool, true, sws);
 	
 	return true;
@@ -4172,7 +4172,7 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		set_maxfd(&maxfd, submit_waiting_notifier[0]);
 		
 		// Wait for something interesting to happen :)
-		gettimeofday(&tv_now, NULL);
+		cgtime(&tv_now);
 		if (select(maxfd+1, &rfds, &wfds, &efds, select_timeout(&tv_timeout, &tv_now)) < 0) {
 			FD_ZERO(&rfds);
 			continue;
@@ -4616,7 +4616,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	swap32tole(hash_swap, hash_swap, 32 / 4);
 
 	cg_wlock(&ch_lock);
-	gettimeofday(&block_timeval, NULL);
+	cgtime(&block_timeval);
 	__update_block_title(hash_swap);
 	free(current_fullhash);
 	current_fullhash = bin2hex(hash_swap, 32);
@@ -5184,7 +5184,7 @@ void zero_stats(void)
 {
 	int i;
 
-	gettimeofday(&total_tv_start, NULL);
+	cgtime(&total_tv_start);
 	miner_started = total_tv_start;
 	total_mhashes_done = 0;
 	total_getworks = 0;
@@ -5779,7 +5779,7 @@ static void *api_thread(void *userdata)
 
 void thread_reportin(struct thr_info *thr)
 {
-	gettimeofday(&thr->last, NULL);
+	cgtime(&thr->last);
 	thr->cgpu->status = LIFE_WELL;
 	thr->getwork = 0;
 	thr->cgpu->device_last_well = time(NULL);
@@ -5807,7 +5807,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	/* Update the last time this thread reported in */
 	if (thr_id >= 0) {
 		thr = get_thread(thr_id);
-		gettimeofday(&(thr->last), NULL);
+		cgtime(&(thr->last));
 		thr->cgpu->device_last_well = time(NULL);
 	}
 
@@ -5839,7 +5839,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			struct timeval elapsed;
 			struct timeval *last_msg_tv = opt_show_procs ? &thr->cgpu->last_message_tv : &thr->cgpu->device->last_message_tv;
 
-			gettimeofday(&now, NULL);
+			cgtime(&now);
 			timersub(&now, last_msg_tv, &elapsed);
 			if (opt_log_interval <= elapsed.tv_sec) {
 				struct cgpu_info *cgpu = thr->cgpu;
@@ -5859,7 +5859,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	/* Totals are updated by all threads so can race without locking */
 	mutex_lock(&hash_lock);
-	gettimeofday(&temp_tv_end, NULL);
+	cgtime(&temp_tv_end);
 	timersub(&temp_tv_end, &total_tv_end, &total_diff);
 
 	total_mhashes_done += local_mhashes;
@@ -5868,7 +5868,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (total_diff.tv_sec < opt_log_interval)
 		goto out_unlock;
 	showlog = true;
-	gettimeofday(&total_tv_end, NULL);
+	cgtime(&total_tv_end);
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 	decay_time(&rolling, local_mhashes_done / local_secs);
@@ -5917,7 +5917,7 @@ void hashmeter2(struct thr_info *thr)
 	
 	timerclear(&thr->tv_hashes_done);
 	
-	gettimeofday(&tv_now, NULL);
+	cgtime(&tv_now);
 	timersub(&tv_now, &thr->tv_lastupdate, &tv_elapsed);
 	/* Update the hashmeter at most 5 times per second */
 	if (tv_elapsed.tv_sec > 0 || tv_elapsed.tv_usec > 200) {
@@ -6404,10 +6404,10 @@ tryagain:
 		goto out;
 
 	pool->probed = false;
-	gettimeofday(&tv_getwork, NULL);
+	cgtime(&tv_getwork);
 	val = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, rpc_req,
 			true, false, &rolltime, pool, false);
-	gettimeofday(&tv_getwork_reply, NULL);
+	cgtime(&tv_getwork_reply);
 
 	free(rpc_req);
 
@@ -6480,7 +6480,7 @@ retry_stratum:
 			total_getworks++;
 			pool->getwork_requested++;
 			ret = true;
-			gettimeofday(&pool->tv_idle, NULL);
+			cgtime(&pool->tv_idle);
 		} else {
 badwork:
 			json_decref(val);
@@ -6792,7 +6792,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->work_restart_id = work->pool->work_restart_id;
 	calc_diff(work, 0);
 
-	gettimeofday(&work->tv_staged, NULL);
+	cgtime(&work->tv_staged);
 }
 
 void request_work(struct thr_info *thr)
@@ -6812,7 +6812,7 @@ void request_work(struct thr_info *thr)
 		thread_reportout(proc->thr[0]);
 	}
 
-	gettimeofday(&dev_stats->_get_start, NULL);
+	cgtime(&dev_stats->_get_start);
 }
 
 // FIXME: Make this non-blocking (and remove HACK above)
@@ -6850,7 +6850,7 @@ struct work *get_work(struct thr_info *thr)
 	work->mined = true;
 	work->blk.nonce = 0;
 
-	gettimeofday(&tv_get, NULL);
+	cgtime(&tv_get);
 	timersub(&tv_get, &dev_stats->_get_start, &tv_get);
 
 	timeradd(&tv_get, &dev_stats->getwork_wait, &dev_stats->getwork_wait);
@@ -6944,7 +6944,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	struct timeval tv_work_found;
 	enum test_nonce2_result res;
 
-	gettimeofday(&tv_work_found, NULL);
+	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
 
 	mutex_lock(&stats_lock);
@@ -7169,7 +7169,7 @@ void hash_queued_work(struct thr_info *mythr)
 		}
 
 		hashes_done += hashes;
-		gettimeofday(&tv_end, NULL);
+		cgtime(&tv_end);
 		timersub(&tv_end, &tv_start, &diff);
 		if (diff.tv_sec >= cycle) {
 			hashmeter(thr_id, &diff, hashes_done);
@@ -7375,7 +7375,7 @@ retry_pool:
 
 		wait_lpcurrent(cp);
 
-		gettimeofday(&start, NULL);
+		cgtime(&start);
 
 		/* Longpoll connections can be persistent for a very long time
 		 * and any number of issues could have come up in the meantime
@@ -7388,7 +7388,7 @@ retry_pool:
 				    lpreq, false, true, &rolltime, pool, false);
 		pool->lp_socket = CURL_SOCKET_BAD;
 
-		gettimeofday(&reply, NULL);
+		cgtime(&reply);
 
 		free(lpreq);
 
@@ -7406,7 +7406,7 @@ retry_pool:
 			 * only see this as longpoll failure if it happens
 			 * immediately and just restart it the rest of the
 			 * time. */
-			gettimeofday(&end, NULL);
+			cgtime(&end);
 			free_work(work);
 			if (end.tv_sec - start.tv_sec > 30)
 				continue;
@@ -7488,7 +7488,7 @@ static void reap_curl(struct pool *pool)
 	struct timeval now;
 	int reaped = 0;
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 
 	mutex_lock(&pool->pool_lock);
 	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
@@ -7524,7 +7524,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 		if (++intervals > 20)
 			intervals = 0;
-		gettimeofday(&now, NULL);
+		cgtime(&now);
 
 		for (i = 0; i < total_pools; i++) {
 			struct pool *pool = pools[i];
@@ -7553,14 +7553,14 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
-				gettimeofday(&pool->tv_idle, NULL);
+				cgtime(&pool->tv_idle);
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
 		}
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
-			gettimeofday(&rotate_tv, NULL);
+			cgtime(&rotate_tv);
 			switch_pools(NULL);
 		}
 
@@ -7608,7 +7608,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 	RenameThread("watchdog");
 
 	memset(&zero_tv, 0, sizeof(struct timeval));
-	gettimeofday(&rotate_tv, NULL);
+	cgtime(&rotate_tv);
 
 	while (1) {
 		int i;
@@ -7634,7 +7634,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		}
 #endif
 
-		gettimeofday(&now, NULL);
+		cgtime(&now);
 
 		if (!sched_paused && !should_run()) {
 			applog(LOG_WARNING, "Pausing execution as per stop time %02d:%02d scheduled",
@@ -7770,7 +7770,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				thr->rolling = cgpu->rolling = 0;
 				cgpu->status = LIFE_SICK;
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
-				gettimeofday(&thr->sick, NULL);
+				cgtime(&thr->sick);
 
 				dev_error(cgpu, REASON_DEV_SICK_IDLE_60);
 #ifdef HAVE_ADL
@@ -7786,13 +7786,13 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			} else if (cgpu->status == LIFE_SICK && (now.tv_sec - thr->last.tv_sec > WATCHDOG_DEAD_TIME)) {
 				cgpu->status = LIFE_DEAD;
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
-				gettimeofday(&thr->sick, NULL);
+				cgtime(&thr->sick);
 
 				dev_error(cgpu, REASON_DEV_DEAD_IDLE_600);
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
 				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
-				gettimeofday(&thr->sick, NULL);
+				cgtime(&thr->sick);
 #ifdef HAVE_ADL
 				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
 					/* Again do not attempt to restart a device that may have hard hung */
@@ -7913,7 +7913,7 @@ static void clean_up(void)
         libusb_exit(NULL);
 #endif
 
-	gettimeofday(&total_tv_end, NULL);
+	cgtime(&total_tv_end);
 #ifdef HAVE_CURSES
 	disable_curses();
 #endif
@@ -8798,8 +8798,8 @@ begin_bench:
 		cgpu->rolling = cgpu->total_mhashes = 0;
 	}
 	
-	gettimeofday(&total_tv_start, NULL);
-	gettimeofday(&total_tv_end, NULL);
+	cgtime(&total_tv_start);
+	cgtime(&total_tv_end);
 	miner_started = total_tv_start;
 	if (schedstart.tm.tm_sec)
 		localtime_r(&miner_started.tv_sec, &schedstart.tm);
@@ -8837,7 +8837,7 @@ begin_bench:
 			thr->scanhash_working = true;
 			thr->hashes_done = 0;
 			timerclear(&thr->tv_hashes_done);
-			gettimeofday(&thr->tv_lastupdate, NULL);
+			cgtime(&thr->tv_lastupdate);
 			thr->tv_poll.tv_sec = -1;
 			thr->_max_nonce = api->can_limit_work ? api->can_limit_work(thr) : 0xffffffff;
 
@@ -8882,8 +8882,8 @@ begin_bench:
 		algo_names[opt_algo]);
 #endif
 
-	gettimeofday(&total_tv_start, NULL);
-	gettimeofday(&total_tv_end, NULL);
+	cgtime(&total_tv_start);
+	cgtime(&total_tv_end);
 
 	{
 		pthread_t submit_thread;
