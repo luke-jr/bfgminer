@@ -6742,8 +6742,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	}
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
-	for (i = 0; i < 32 / 4; i++)
-		swap32[i] = swab32(data32[i]);
+	flip32(swap32, data32);
 	merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 
 	header = calloc(pool->swork.header_len, 1);
