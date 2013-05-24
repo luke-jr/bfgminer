@@ -942,7 +942,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	       info->fan0, info->fan1, info->fan2,
 	       info->temp0, info->temp1, info->temp2, info->temp_max);
 	info->temp_history_index++;
-	info->temp_sum += info->temp2;
+	info->temp_sum += avalon->temp;
 	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
 	       info->temp_history_index, info->temp_history_count, info->temp_old);
 	if (info->temp_history_index == info->temp_history_count) {
