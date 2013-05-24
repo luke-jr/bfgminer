@@ -432,11 +432,11 @@ struct cgpu_info {
 #ifdef USE_X6500
 		struct ft232r_device_handle *device_ft232r;
 #endif
+	};
 #ifdef USE_AVALON
 	struct work **works;
 	int queued;
 #endif
-	};
 #ifdef USE_BITFORCE
 	struct timeval work_start_tv;
 	unsigned int wait_ms;
