@@ -321,7 +321,8 @@ static void avalon_get_reset(int fd, struct avalon_result *ar)
 	}
 	ret = read(fd, result, read_amount);
 	if (unlikely(ret != read_amount)) {
-		applog(LOG_WARNING, "Avalon: Error %d on read in avalon_get_reset", errno);
+		applog(LOG_WARNING, "Avalon: Error %d on read, asked for %d got %d in avalon_get_reset",
+		       errno, read_amount, ret);
 		return;
 	}
 	if (opt_debug) {
