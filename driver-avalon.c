@@ -934,7 +934,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		applog(LOG_ERR,
 		       "AVA%i: FPGA controller mess up", avalon->device_id);
 		dev_error(avalon, REASON_DEV_COMMS_ERROR);
-		do_avalon_close(thr);
 		nmsleep(1000);
 		avalon_init(avalon);
 		return 0;
