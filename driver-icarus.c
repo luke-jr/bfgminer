@@ -30,6 +30,7 @@
  */
 
 #include "config.h"
+#include "miner.h"
 
 #ifdef WIN32
 #include <winsock2.h>
@@ -62,7 +63,6 @@
 #include "dynclock.h"
 #include "elist.h"
 #include "icarus-common.h"
-#include "miner.h"
 #include "fpgautils.h"
 
 // The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h

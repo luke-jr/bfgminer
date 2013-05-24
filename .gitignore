@@ -34,6 +34,7 @@ mingw32-config.cache
 *~
 *.orig
 *.rej
+*.swp
 *.kate-swp
 
 ext_deps

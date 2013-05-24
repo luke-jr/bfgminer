@@ -22,6 +22,8 @@
 #include <dirent.h>
 #include <string.h>
 
+#include "miner.h"
+
 #ifndef WIN32
 #include <errno.h>
 #include <termios.h>
@@ -59,7 +61,6 @@ enum {
 
 #include "elist.h"
 #include "logging.h"
-#include "miner.h"
 #include "fpgautils.h"
 
 #define SEARCH_NEEDLES_BEGIN()  {  \

@@ -136,7 +136,7 @@ endif
 if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif
 
 bin_PROGRAMS += bfgminer-rpc
