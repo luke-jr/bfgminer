@@ -274,7 +274,7 @@ static char datestamp[40];
 static char blocktime[32];
 struct timeval block_timeval;
 static char best_share[8] = "0";
-double current_diff;
+double current_diff = 0xFFFFFFFFFFFFFFFF;
 static char block_diff[8];
 static char net_hashrate[10];
 uint64_t best_diff = 0;
@@ -2669,15 +2669,6 @@ void clear_logwin(void)
 }
 #endif
 
-/* Returns true if the regenerated work->hash solves a block */
-static bool solves_block(const struct work *work)
-{
-	unsigned char target[32];
-
-	real_block_target(target, work->data);
-	return hash_target_check(work->hash, target);
-}
-
 static void enable_pool(struct pool *pool)
 {
 	if (pool->enabled != POOL_ENABLED) {
@@ -2708,7 +2699,6 @@ static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
 	struct cgpu_info *cgpu;
 	const unsigned char *hashpart = &work->hash[opt_scrypt ? 26 : 24];
-	uint64_t shrdiff = share_diff(work);
 	char shrdiffdisp[16];
 	int tgtdiff = floor(work->work_difficulty);
 	char tgtdiffdisp[16];
@@ -2716,7 +2706,7 @@ void share_result_msg(const struct work *work, const char *disp, const char *rea
 	
 	cgpu = get_thr_cgpu(work->thr_id);
 	
-	suffix_string(shrdiff, shrdiffdisp, 0);
+	suffix_string(work->share_diff, shrdiffdisp, 0);
 	suffix_string(tgtdiff, tgtdiffdisp, 0);
 	
 	if (total_pools > 1)
@@ -2900,32 +2890,6 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	}
 	
 	maybe_local_submit(work);
-}
-
-static const uint64_t diffone = 0xFFFF000000000000ull;
-
-static double target_diff(const unsigned char *target);
-
-static uint64_t share_diff(const struct work *work)
-{
-	uint64_t ret;
-	bool new_best = false;
-
-	ret = target_diff(work->hash);
-	cg_wlock(&control_lock);
-	if (unlikely(ret > best_diff)) {
-		new_best = true;
-		best_diff = ret;
-		suffix_string(best_diff, best_share, 0);
-	}
-	if (unlikely(ret > work->pool->best_diff))
-		work->pool->best_diff = ret;
-	cg_wunlock(&control_lock);
-
-	if (unlikely(new_best))
-		applog(LOG_INFO, "New best share: %s", best_share);
-
-	return ret;
 }
 
 static char *submit_upstream_work_request(struct work *work)
@@ -3151,6 +3115,7 @@ have_pool:
 }
 
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
+static const uint64_t diffone = 0xFFFF000000000000ull;
 
 static double target_diff(const unsigned char *target)
 {
@@ -3907,20 +3872,43 @@ bool stale_work(struct work *work, bool share)
 	return false;
 }
 
+static uint64_t share_diff(const struct work *work)
+{
+	uint64_t ret;
+	bool new_best = false;
+
+	ret = target_diff(work->hash);
+	cg_wlock(&control_lock);
+	if (unlikely(ret > best_diff)) {
+		new_best = true;
+		best_diff = ret;
+		suffix_string(best_diff, best_share, 0);
+	}
+	if (unlikely(ret > work->pool->best_diff))
+		work->pool->best_diff = ret;
+	cg_wunlock(&control_lock);
+
+	if (unlikely(new_best))
+		applog(LOG_INFO, "New best share: %s", best_share);
+
+	return ret;
+}
+
 static void regen_hash(struct work *work)
 {
 	hash_data(work->hash, work->data);
 }
 
-static void check_solve(struct work *work)
+static void rebuild_hash(struct work *work)
 {
 	if (opt_scrypt)
 		scrypt_outputhash(work);
 	else
 		regen_hash(work);
 
-	work->block = solves_block(work);
-	if (unlikely(work->block)) {
+	work->share_diff = share_diff(work);
+	if (unlikely(work->share_diff >= current_diff)) {
+		work->block = true;
 		work->pool->solved++;
 		found_blocks++;
 		work->mandatory = true;
@@ -3987,7 +3975,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 		.work = work,
 	};
 
-	check_solve(work);
+	rebuild_hash(work);
 
 	if (stale_work(work, true)) {
 		work->stale = true;
