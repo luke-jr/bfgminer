@@ -202,13 +202,12 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	return AVA_SEND_BUFFER_EMPTY;
 }
 
-static int avalon_gets(int fd, uint8_t *buf, int read_count,
-		       struct thr_info *thr, struct timeval *tv_finish)
+static int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
+		       struct timeval *tv_finish)
 {
-	ssize_t ret = 0;
-	int rc = 0;
 	int read_amount = AVALON_READ_SIZE;
 	bool first = true;
+	ssize_t ret = 0;
 
 	while (true) {
 		struct timeval timeout = {0, 100000};
@@ -224,8 +223,7 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 			if (unlikely(ret < 0))
 				return AVA_GETS_ERROR;
 			if (likely(first)) {
-				if (likely(tv_finish))
-					gettimeofday(tv_finish, NULL);
+				gettimeofday(tv_finish, NULL);
 				first = false;
 			}
 			if (likely(ret >= read_amount))
@@ -235,41 +233,23 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 			continue;
 		}
 
-		if (thr && thr->work_restart) {
-			if (opt_debug) {
-				applog(LOG_WARNING,
-				       "Avalon: Work restart at %.2f seconds",
-				       (float)(rc)/(float)AVALON_TIME_FACTOR);
-			}
+		if (thr->work_restart) {
+			applog(LOG_DEBUG, "Avalon: Work restart");
 			return AVA_GETS_RESTART;
 		}
 
-		rc++;
-		if (rc >= read_count) {
-			if (opt_debug) {
-				applog(LOG_WARNING,
-				       "Avalon: No data in %.2f seconds",
-				       (float)rc/(float)AVALON_TIME_FACTOR);
-			}
-			return AVA_GETS_TIMEOUT;
-		}
+		return AVA_GETS_TIMEOUT;
 	}
 }
 
 static int avalon_get_result(int fd, struct avalon_result *ar,
 			     struct thr_info *thr, struct timeval *tv_finish)
 {
-	struct cgpu_info *avalon;
-	struct avalon_info *info;
 	uint8_t result[AVALON_READ_SIZE];
-	int ret, read_count;
-
-	avalon = thr->cgpu;
-	info = avalon_infos[avalon->device_id];
-	read_count = info->read_count;
+	int ret;
 
 	memset(result, 0, AVALON_READ_SIZE);
-	ret = avalon_gets(fd, result, read_count, thr, tv_finish);
+	ret = avalon_gets(fd, result, thr, tv_finish);
 
 	if (ret == AVA_GETS_OK) {
 		if (opt_debug) {
@@ -604,8 +584,6 @@ static bool avalon_detect_one(const char *devpath)
 	info->miner_count = miner_count;
 	info->asic_count = asic_count;
 	info->timeout = timeout;
-	info->read_count = ((float)info->timeout * AVALON_HASH_TIME_FACTOR *
-			    AVALON_TIME_FACTOR) / (float)info->miner_count;
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
@@ -989,7 +967,6 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "miner_count", &(info->miner_count),false);
 	root = api_add_int(root, "asic_count", &(info->asic_count), false);
-	root = api_add_int(root, "read_count", &(info->read_count), false);
 	root = api_add_int(root, "timeout", &(info->timeout), false);
 	root = api_add_int(root, "frequency", &(info->frequency), false);
 
