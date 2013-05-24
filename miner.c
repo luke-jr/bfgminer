@@ -6999,15 +6999,19 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 {
 	thread_reportout(mythr);
 	do {
-		struct work *work;
+		bool need_work;
 
-		wr_lock(&cgpu->qlock);
-		if (HASH_COUNT(cgpu->queued_work) == cgpu->queued_count) {
-			work = get_work(mythr);
-			//work->device_diff = MIN(drv->max_diff, work->work_difficulty);
+		rd_lock(&cgpu->qlock);
+		need_work = (HASH_COUNT(cgpu->queued_work) == cgpu->queued_count);
+		rd_unlock(&cgpu->qlock);
+
+		if (need_work) {
+			struct work *work = get_work(mythr);
+
+			wr_lock(&cgpu->qlock);
 			HASH_ADD_INT(cgpu->queued_work, id, work);
+			wr_unlock(&cgpu->qlock);
 		}
-		wr_unlock(&cgpu->qlock);
 		/* The queue_full function should be used by the driver to
 		 * actually place work items on the physical device if it
 		 * does have a queue. */
