@@ -1,5 +1,6 @@
 /*
  * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2013 Con Kolivas
  * Copyright 2012 Andrew Smith
  * Copyright 2013 Xiangfu
  *
@@ -27,8 +28,8 @@
 #ifndef WIN32
 #include <errno.h>
 #include <termios.h>
-#include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #ifndef O_CLOEXEC
@@ -57,10 +58,12 @@ enum {
 
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
+#include <sys/ioctl.h>
 #endif
 
 #include "elist.h"
 #include "logging.h"
+#include "miner.h"
 #include "fpgautils.h"
 
 #define SEARCH_NEEDLES_BEGIN()  {  \

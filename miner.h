@@ -289,9 +289,6 @@ struct device_drv {
 	uint64_t (*can_limit_work)(struct thr_info *);
 	bool (*thread_init)(struct thr_info *);
 	bool (*prepare_work)(struct thr_info *, struct work *);
-#ifdef USE_AVALON
-	int64_t (*scanhash_queue)(struct thr_info *, struct work **, int64_t);
-#endif
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
 	int64_t (*scanwork)(struct thr_info *);
 
@@ -434,6 +431,10 @@ struct cgpu_info {
 		int device_fd;
 #ifdef USE_X6500
 		struct ft232r_device_handle *device_ft232r;
+#endif
+#ifdef USE_AVALON
+	struct work **works;
+	int queued;
 #endif
 	};
 #ifdef USE_BITFORCE
@@ -839,7 +840,9 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+#ifdef USE_AVALON
 extern char *opt_avalon_options;
+#endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif

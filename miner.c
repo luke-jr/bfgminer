@@ -59,9 +59,7 @@
 #include "driver-opencl.h"
 #include "bench_block.h"
 #include "scrypt.h"
-#ifdef USE_AVALON
-  #include "driver-avalon.h"
-#endif
+#include "driver-avalon.h"
 
 #ifdef USE_X6500
 #include "ft232r.h"

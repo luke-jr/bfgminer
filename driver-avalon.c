@@ -636,7 +636,6 @@ static void avalon_init(struct cgpu_info *avalon)
 		return;
 	}
 
-	avalon->status = LIFE_INIT;
 	avalon->device_fd = fd;
 	__avalon_init(avalon);
 }
@@ -644,35 +643,37 @@ static void avalon_init(struct cgpu_info *avalon)
 static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
+	struct avalon_info *info = avalon_info[avalon->device_id];
 	struct timeval now;
 
-	if (avalon->device_fd == -1)
-		avalon_init(avalon);
-	else
-		__avalon_init(avalon);
+	avalon->works = calloc(info->miner_count * sizeof(struct work *), 1);
+	if (!avalon->works)
+		quit(1, "Failed to calloc avalon works in avalon_prepare");
+	__avalon_init(avalon);
 
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
 	return true;
 }
 
-static void avalon_free_work(struct thr_info *thr, struct work **work)
+static void avalon_free_work(struct thr_info *thr, struct work **works)
 {
 	struct cgpu_info *avalon;
 	struct avalon_info *info;
 	int i;
 
-	if (unlikely(!work))
+	if (unlikely(!works))
 		return;
 
 	avalon = thr->cgpu;
 	info = avalon_info[avalon->device_id];
 
-	for (i = 0; i < info->miner_count; i++)
-		if (likely(work[i])) {
-			free_work(work[i]);
-			work[i] = NULL;
+	for (i = 0; i < info->miner_count; i++) {
+		if (likely(works[i])) {
+			work_completed(avalon, works[i]);
+			works[i] = NULL;
 		}
+	}
 }
 
 static void do_avalon_close(struct thr_info *thr)
@@ -756,11 +757,24 @@ static inline void adjust_fan(struct avalon_info *info)
 	}
 }
 
-static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
-			       __maybe_unused int64_t max_nonce)
+static bool avalon_fill(struct cgpu_info *avalon)
+{
+	struct work *work = get_queued(avalon);
+
+	if (unlikely(!work))
+		return false;
+	avalon->queued++;
+	if (avalon->queued == avalon_info[avalon->device_id]->miner_count)
+		return true;
+	return false;
+}
+
+static int64_t avalon_scanhash(struct thr_info *thr)
 {
 	struct cgpu_info *avalon;
+	struct work **works;
 	int fd, ret, full;
+	int64_t scanret = 0;
 
 	struct avalon_info *info;
 	struct avalon_task at;
@@ -775,17 +789,20 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	int result_count, result_wrong;
 
 	avalon = thr->cgpu;
+	works = avalon->works;
 	info = avalon_info[avalon->device_id];
 	avalon_get_work_count = info->miner_count;
 
-	if (unlikely(avalon->device_fd == -1))
+	if (unlikely(avalon->device_fd == -1)) {
 		if (!avalon_prepare(thr)) {
 			applog(LOG_ERR, "AVA%i: Comms error(open)",
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			/* fail the device if the reopen attempt fails */
-			return -1;
+			scanret = -1;
+			goto out;
 		}
+	}
 	fd = avalon->device_fd;
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
@@ -795,7 +812,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		info->bulk0[i] = info->bulk1[i];
 		info->bulk1[i] = info->bulk2[i];
 		info->bulk2[i] = info->bulk3[i];
-		info->bulk3[i] = work[i];
+		info->bulk3[i] = works[i];
 		applog(LOG_DEBUG, "Avalon: bulk0/1/2 buffer [%d]: %p, %p, %p, %p",
 		       i, info->bulk0[i], info->bulk1[i], info->bulk2[i], info->bulk3[i]);
 	}
@@ -805,7 +822,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		avalon_init_task(&at, 0, 0, info->fan_pwm,
 				 info->timeout, info->asic_count,
 				 info->miner_count, 1, 0, info->frequency);
-		avalon_create_task(&at, work[i]);
+		avalon_create_task(&at, works[i]);
 		ret = avalon_send_task(fd, &at, avalon);
 		if (unlikely(ret == AVA_SEND_ERROR ||
 			     (ret == AVA_SEND_BUFFER_EMPTY &&
@@ -822,14 +839,15 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			first_try = 0;
 			nmsleep(1000);
 			avalon_init(avalon);
-			return 0;	/* This should never happen */
+			goto out;	/* This should never happen */
 		}
 		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == avalon_get_work_count)) {
 			first_try = 1;
-			return 0xffffffff;
+			ret = 0xffffffff;
+			goto out;
 		}
 
-		work[i]->blk.nonce = 0xffffffff;
+		works[i]->blk.nonce = 0xffffffff;
 
 		if (ret == AVA_SEND_BUFFER_FULL)
 			break;
@@ -864,7 +882,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 			applog(LOG_ERR,
 			       "AVA%i: Comms error(read)", avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
-			return 0;
+			goto out;
 		}
 		if (unlikely(ret == AVA_GETS_TIMEOUT)) {
 			timersub(&tv_finish, &tv_start, &elapsed);
@@ -931,7 +949,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		do_avalon_close(thr);
 		nmsleep(1000);
 		avalon_init(avalon);
-		return 0;
+		goto out;
 	}
 
 	avalon_free_work(thr, info->bulk0);
@@ -961,81 +979,14 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 	 *
 	 * Any patch will be great.
 	 */
-	return (hash_count * 2);
+	scanret = hash_count * 2;
+out:
+	avalon_free_work(thr, avalon->works);
+	avalon->queued = 0;
+	return scanret;
 }
 
-// minerloop_scanhash hacked to handle Avalon's many processors
-static
-void minerloop_avalon(struct thr_info *mythr)
-{
-	const int thr_id = mythr->id;
-	struct cgpu_info *cgpu = mythr->cgpu;
-	struct device_drv *api = cgpu->drv;
-	struct timeval tv_start, tv_end;
-	struct timeval tv_hashes;
-	uint32_t max_nonce = api->can_limit_work ? api->can_limit_work(mythr) : 0xffffffff;
-	int64_t hashes;
-	struct avalon_info *info = avalon_info[cgpu->device_id];
-	int i;
-	int avalon_get_work_count = info->miner_count;
-	struct work **work = calloc(1,
-				    avalon_get_work_count * sizeof(struct work *));
-	if (!work)
-		quit(1, "Faile on Avalon calloc");
-	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
-	
-	while (1) {
-		mythr->work_restart = false;
-		for (i = 0; i < avalon_get_work_count; i++)
-			request_work(mythr);
-		for (i = 0; i < avalon_get_work_count; i++) {
-			work[i] = get_work(mythr);
-			work[i]->blk.nonce = 0;
-		}
-		for (i = 0; i < avalon_get_work_count; i++) {
-			if (api->prepare_work && !api->prepare_work(mythr, work[i])) {
-				applog(LOG_ERR, "work prepare failed, exiting "
-					"mining thread %d", thr_id);
-				break;
-			}
-			gettimeofday(&(work[i]->tv_work_start), NULL);
-		}
-		
-		do {
-			thread_reportin(mythr);
-			gettimeofday(&tv_start, NULL);
-			hashes = api->scanhash_queue(mythr, work, max_nonce);
-			gettimeofday(&tv_end, NULL);
-			thread_reportin(mythr);
-			
-			timersub(&tv_end, &tv_start, &tv_hashes);
-			if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &max_nonce : NULL))
-				goto disabled;
-			
-			if (unlikely(mythr->work_restart)) {
-				/* Apart from device_thread 0, we stagger the
-				 * starting of every next thread to try and get
-				 * all devices busy before worrying about
-				 * getting work for their extra threads */
-				if (!primary) {
-					struct timespec rgtp;
-
-					rgtp.tv_sec = 0;
-					rgtp.tv_nsec = 250 * mythr->device_thread * 1000000;
-					nanosleep(&rgtp, NULL);
-				}
-				break;
-			}
-			
-			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
-disabled:
-				mt_disable(mythr);
-		} while (false);
-	}
-	free(work);
-}
-
-static struct api_data *avalon_drv_stats(struct cgpu_info *cgpu)
+static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon_info *info = avalon_info[cgpu->device_id];
@@ -1095,9 +1046,10 @@ struct device_drv avalon_drv = {
 	.name = "AVA",
 	.drv_detect = avalon_detect,
 	.thread_prepare = avalon_prepare,
-	.minerloop = minerloop_avalon,
-	.scanhash_queue = avalon_scanhash,
-	.get_api_stats = avalon_drv_stats,
+	.minerloop = hash_queued_work,
+	.queue_full = avalon_fill,
+	.scanwork = avalon_scanhash,
+	.get_api_stats = avalon_api_stats,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };

@@ -10,6 +10,8 @@
 #ifndef AVALON_H
 #define AVALON_H
 
+#ifdef USE_AVALON
+
 #define AVALON_TIME_FACTOR 10
 #define AVALON_RESET_FAULT_DECISECONDS 1
 #define AVALON_MINER_THREADS 1
@@ -130,4 +132,5 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 extern struct avalon_info **avalon_info;
 
+#endif /* USE_AVALON */
 #endif	/* AVALON_H */
