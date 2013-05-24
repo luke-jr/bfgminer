@@ -924,22 +924,21 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (hash_count) {
-		if (avalon->results < AVALON_ARRAY_SIZE)
-			avalon->results++;
-	} else if (unlikely((result_wrong >= avalon_get_work_count ) ||
-		   (ret != AVA_GETS_RESTART && --avalon->results < 0))) {
-			/* Look for all invalid results, or consecutive failure
-			 * to generate any results suggesting the FPGA
-			 * controller has screwed up. */
-			do_avalon_close(thr);
-			applog(LOG_ERR,
-			       "AVA%i: FPGA controller messed up, %d wrong results",
-			       avalon->device_id, result_wrong);
-			dev_error(avalon, REASON_DEV_COMMS_ERROR);
-			nmsleep(1000);
-			avalon_init(avalon);
-			return 0;
+	if (hash_count && avalon->results < AVALON_ARRAY_SIZE)
+		avalon->results++;
+	if (unlikely((result_wrong >= avalon_get_work_count) ||
+	    (!hash_count && ret != AVA_GETS_RESTART && --avalon->results < 0))) {
+		/* Look for all invalid results, or consecutive failure
+		 * to generate any results suggesting the FPGA
+		 * controller has screwed up. */
+		do_avalon_close(thr);
+		applog(LOG_ERR,
+			"AVA%i: FPGA controller messed up, %d wrong results",
+			avalon->device_id, result_wrong);
+		dev_error(avalon, REASON_DEV_COMMS_ERROR);
+		nmsleep(1000);
+		avalon_init(avalon);
+		return 0;
 	}
 
 	avalon_rotate_array(avalon);
