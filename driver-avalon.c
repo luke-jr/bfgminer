@@ -273,7 +273,6 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 	memset(result, 0, AVALON_READ_SIZE);
 	ret = avalon_gets(fd, result, read_count, thr, tv_finish);
 
-	memset(ar, 0, sizeof(struct avalon_result));
 	if (ret == AVA_GETS_OK) {
 		if (opt_debug) {
 			applog(LOG_DEBUG, "Avalon: get:");
