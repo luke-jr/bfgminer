@@ -2686,12 +2686,14 @@ static void enable_pool(struct pool *pool)
 	}
 }
 
+#ifdef HAVE_CURSES
 static void disable_pool(struct pool *pool)
 {
 	if (pool->enabled == POOL_ENABLED)
 		enabled_pools--;
 	pool->enabled = POOL_DISABLED;
 }
+#endif
 
 static void reject_pool(struct pool *pool)
 {
