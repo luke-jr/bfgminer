@@ -161,9 +161,6 @@ static const char *SCRYPTSTR = "scrypt";
 static const char *SHA256STR = "sha256";
 
 static const char *DEVICECODE = ""
-#ifdef USE_AVALON
-			"AVA "
-#endif
 #ifdef HAVE_OPENCL
 			"GPU "
 #endif
@@ -172,6 +169,9 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_ICARUS
 			"ICA "
+#endif
+#ifdef USE_AVALON
+			"AVA "
 #endif
 #ifdef USE_X6500
 			"XBS "
