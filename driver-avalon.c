@@ -934,12 +934,12 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (result_wrong >= avalon_get_work_count && ret != AVA_GETS_RESTART) {
-		/* This mean FPGA controller gave all wrong results, so
+	if (result_wrong >= avalon_get_work_count) {
+		/* This means FPGA controller gave all wrong results, so
 		 * try to reset the Avalon */
 		do_avalon_close(thr);
 		applog(LOG_ERR,
-		       "AVA%i: FPGA controller mess up", avalon->device_id);
+		       "AVA%i: FPGA controller mess up, %d wrong results", avalon->device_id, result_wrong);
 		dev_error(avalon, REASON_DEV_COMMS_ERROR);
 		nmsleep(1000);
 		avalon_init(avalon);
