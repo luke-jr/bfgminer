@@ -19,7 +19,7 @@ bin_SCRIPTS	= $(top_srcdir)/*.cl
 bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
-		  @UDEV_LIBS@ @LIBUSB_LIBS@ \
+		  @UDEV_LIBS@ @LIBUSB_LIBS@ @MM_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
 
