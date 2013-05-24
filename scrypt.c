@@ -405,7 +405,7 @@ static void scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad, uint
 /* 131583 rounded up to 4 byte alignment */
 #define SCRATCHBUF_SIZE	(131584)
 
-void scrypt_outputhash(struct work *work)
+void scrypt_regenhash(struct work *work)
 {
 	uint32_t data[20];
 	char *scratchbuf;

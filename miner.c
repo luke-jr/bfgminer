@@ -3918,7 +3918,7 @@ static void regen_hash(struct work *work)
 static void rebuild_hash(struct work *work)
 {
 	if (opt_scrypt)
-		scrypt_outputhash(work);
+		scrypt_regenhash(work);
 	else
 		regen_hash(work);
 
