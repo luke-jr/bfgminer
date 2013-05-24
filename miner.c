@@ -6894,6 +6894,17 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 	_submit_work_async(work);
 }
 
+void inc_hw_errors(struct thr_info *thr)
+{
+	mutex_lock(&stats_lock);
+	hw_errors++;
+	thr->cgpu->hw_errors++;
+	mutex_unlock(&stats_lock);
+
+	if (thr->cgpu->drv->hw_error)
+		thr->cgpu->drv->hw_error(thr);
+}
+
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 {
 	uint32_t *hash2_32 = (uint32_t *)&work->hash[0];
@@ -6953,13 +6964,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			struct cgpu_info *cgpu = thr->cgpu;
 			applog(LOG_WARNING, "%"PRIpreprv": invalid nonce - HW error",
 			       cgpu->proc_repr);
-			mutex_lock(&stats_lock);
-			++hw_errors;
-			++thr->cgpu->hw_errors;
-			mutex_unlock(&stats_lock);
-
-			if (thr->cgpu->drv->hw_error)
-				thr->cgpu->drv->hw_error(thr);
+			inc_hw_errors(thr);
 			goto out;
 		}
 	

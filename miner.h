@@ -1220,6 +1220,7 @@ struct work {
 };
 
 extern void get_datestamp(char *, struct timeval *);
+extern void inc_hw_errors(struct thr_info *thr);
 enum test_nonce2_result {
 	TNR_GOOD,
 	TNR_HIGH,
