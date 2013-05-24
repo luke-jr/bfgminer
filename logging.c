@@ -15,6 +15,7 @@
 #include "compat.h"
 #include "logging.h"
 #include "miner.h"
+// #include "util.h"
 
 bool opt_debug = false;
 bool opt_debug_console = false;  // Only used if opt_debug is also enabled
@@ -99,7 +100,7 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 		struct tm _tm;
 		struct tm *tm = &_tm;
 
-		gettimeofday(&tv, NULL);
+		cgtime(&tv);
 
 		localtime_r(&tv.tv_sec, tm);
 
