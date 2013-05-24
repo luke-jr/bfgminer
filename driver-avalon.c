@@ -210,8 +210,16 @@ static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
 	ssize_t ret = 0;
 
 	while (true) {
-		struct timeval timeout = {0, 100000};
+		struct timeval timeout;
 		fd_set rd;
+
+		timeout.tv_sec = 0;
+		/* If we get a restart message, still check if there's
+		 * anything in the buffer waiting to be parsed */
+		if (unlikely(thr->work_restart))
+			timeout.tv_usec = 0;
+		else
+			timeout.tv_usec = 100000;
 
 		FD_ZERO(&rd);
 		FD_SET(fd, &rd);
@@ -233,7 +241,7 @@ static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
 			continue;
 		}
 
-		if (thr->work_restart) {
+		if (unlikely(thr->work_restart)) {
 			applog(LOG_DEBUG, "Avalon: Work restart");
 			return AVA_GETS_RESTART;
 		}
