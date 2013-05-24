@@ -437,6 +437,7 @@ struct cgpu_info {
 	struct work **works;
 	int work_array;
 	int queued;
+	int results;
 #endif
 #ifdef USE_BITFORCE
 	struct timeval work_start_tv;
