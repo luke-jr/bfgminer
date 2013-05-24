@@ -8608,8 +8608,15 @@ int main(int argc, char *argv[])
 			register_device(devices[i]);
 	}
 
+#ifdef USE_USBUTILS
+	if (!total_devices) {
+		applog(LOG_WARNING, "No devices detected!");
+		applog(LOG_WARNING, "Waiting for USB hotplug devices or press q to quit");
+	}
+#else
 	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
+#endif
 
 	load_temp_config();
 
