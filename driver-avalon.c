@@ -224,12 +224,16 @@ static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
 		FD_ZERO(&rd);
 		FD_SET(fd, &rd);
 		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
-		if (unlikely(ret < 0))
+		if (unlikely(ret < 0)) {
+			applog(LOG_ERR, "Avalon: Error %d on select in avalon_gets", errno);
 			return AVA_GETS_ERROR;
+		}
 		if (ret) {
 			ret = read(fd, buf, read_amount);
-			if (unlikely(ret < 0))
+			if (unlikely(ret < 0)) {
+				applog(LOG_ERR, "Avalon: Error %d on read in avalon_gets", errno);
 				return AVA_GETS_ERROR;
+			}
 			if (likely(first)) {
 				gettimeofday(tv_finish, NULL);
 				first = false;
@@ -308,7 +312,7 @@ static void avalon_get_reset(int fd, struct avalon_result *ar)
 	FD_SET(fd, &rd);
 	ret = select(fd + 1, &rd, NULL, NULL, &timeout);
 	if (unlikely(ret < 0)) {
-		applog(LOG_WARNING, "Avalon: Error on select in avalon_get_reset");
+		applog(LOG_WARNING, "Avalon: Error %d on select in avalon_get_reset", errno);
 		return;
 	}
 	if (!ret) {
@@ -317,7 +321,7 @@ static void avalon_get_reset(int fd, struct avalon_result *ar)
 	}
 	ret = read(fd, result, read_amount);
 	if (unlikely(ret != read_amount)) {
-		applog(LOG_WARNING, "Avalon: Error on read in avalon_get_reset");
+		applog(LOG_WARNING, "Avalon: Error %d on read in avalon_get_reset", errno);
 		return;
 	}
 	if (opt_debug) {
