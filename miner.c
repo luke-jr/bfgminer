@@ -3532,7 +3532,6 @@ static void recruit_curl(struct pool *pool)
 
 	list_add(&ce->node, &pool->curlring);
 	pool->curls++;
-	applog(LOG_DEBUG, "Recruited curl %d for pool %d", pool->curls, pool->pool_no);
 }
 
 /* Grab an available curl if there is one. If not, then recruit extra curls
@@ -3543,13 +3542,15 @@ static void recruit_curl(struct pool *pool)
 static struct curl_ent *pop_curl_entry3(struct pool *pool, int blocking)
 {
 	int curl_limit = opt_delaynet ? 5 : (mining_threads + opt_queue) * 2;
+	bool recruited = false;
 	struct curl_ent *ce;
 
 	mutex_lock(&pool->pool_lock);
 retry:
-	if (!pool->curls)
+	if (!pool->curls) {
 		recruit_curl(pool);
-	else if (list_empty(&pool->curlring)) {
+		recruited = true;
+	} else if (list_empty(&pool->curlring)) {
 		if (blocking < 2 && pool->curls >= curl_limit && (blocking || pool->curls >= opt_submit_threads)) {
 			if (!blocking) {
 				mutex_unlock(&pool->pool_lock);
@@ -3557,13 +3558,17 @@ retry:
 			}
 			pthread_cond_wait(&pool->cr_cond, &pool->pool_lock);
 			goto retry;
-		} else
+		} else {
 			recruit_curl(pool);
+			recruited = true;
+		}
 	}
 	ce = list_entry(pool->curlring.next, struct curl_ent, node);
 	list_del(&ce->node);
 	mutex_unlock(&pool->pool_lock);
 
+	if (recruited)
+		applog(LOG_DEBUG, "Recruited curl for pool %d", pool->pool_no);
 	return ce;
 }
 
