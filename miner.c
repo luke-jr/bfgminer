@@ -2469,9 +2469,8 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  DW: %d  GW: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
-		total_staged(), total_discarded,
-		total_getworks,
+	mvwprintw(statuswin, 3, 0, " ST: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
+		total_staged(),
 		local_work,
 		total_go,
 		new_blocks,
@@ -5765,7 +5764,7 @@ static void *api_thread(void *userdata)
 
 	api(api_thr_id);
 
-	PTH(mythr) = 0L;
+	mythr->has_pth = false;
 
 	return NULL;
 }
@@ -5857,8 +5856,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	total_mhashes_done += local_mhashes;
 	local_mhashes_done += local_mhashes;
+	/* Only update with opt_log_interval */
 	if (total_diff.tv_sec < opt_log_interval)
-		/* Only update the total every opt_log_interval seconds */
 		goto out_unlock;
 	showlog = true;
 	gettimeofday(&total_tv_end, NULL);
@@ -7811,7 +7810,6 @@ void print_summary(void)
 	applog(LOG_WARNING, "Average hashrate: %.1f Megahash/s", total_mhashes_done / total_secs);
 	applog(LOG_WARNING, "Solved blocks: %d", found_blocks);
 	applog(LOG_WARNING, "Best share difficulty: %s", best_share);
-	applog(LOG_WARNING, "Queued work requests: %d", total_getworks);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
 	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
 	applog(LOG_WARNING, "Rejected shares: %d", total_rejected);
@@ -7823,7 +7821,6 @@ void print_summary(void)
 	applog(LOG_WARNING, "Efficiency (accepted shares * difficulty / 2 KB): %.2f", efficiency);
 	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min\n", utility);
 
-	applog(LOG_WARNING, "Discarded work due to new blocks: %d", total_discarded);
 	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %d", total_stale);
 	applog(LOG_WARNING, "Unable to get work from server occasions: %d", total_go);
 	applog(LOG_WARNING, "Work items generated locally: %d", local_work);
@@ -7837,7 +7834,6 @@ void print_summary(void)
 			applog(LOG_WARNING, "Pool: %s", pool->rpc_url);
 			if (pool->solved)
 				applog(LOG_WARNING, "SOLVED %d BLOCK%s!", pool->solved, pool->solved > 1 ? "S" : "");
-			applog(LOG_WARNING, " Queued work requests: %d", pool->getwork_requested);
 			applog(LOG_WARNING, " Share submissions: %d", pool->accepted + pool->rejected);
 			applog(LOG_WARNING, " Accepted shares: %d", pool->accepted);
 			applog(LOG_WARNING, " Rejected shares: %d", pool->rejected);
@@ -7849,7 +7845,6 @@ void print_summary(void)
 			efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 			applog(LOG_WARNING, " Efficiency (accepted * difficulty / 2 KB): %.2f", efficiency);
 
-			applog(LOG_WARNING, " Discarded work due to new blocks: %d", pool->discarded_work);
 			applog(LOG_WARNING, " Stale submissions discarded due to new blocks: %d", pool->stale_shares);
 			applog(LOG_WARNING, " Unable to get work from server occasions: %d", pool->getfail_occasions);
 			applog(LOG_WARNING, " Submitting work remotely delay occasions: %d\n", pool->remotefail_occasions);
@@ -8608,8 +8603,15 @@ int main(int argc, char *argv[])
 			register_device(devices[i]);
 	}
 
+#ifdef USE_USBUTILS
+	if (!total_devices) {
+		applog(LOG_WARNING, "No devices detected!");
+		applog(LOG_WARNING, "Waiting for USB hotplug devices or press q to quit");
+	}
+#else
 	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
+#endif
 
 	load_temp_config();
 

@@ -14,7 +14,7 @@ INCLUDES	= -fno-strict-aliasing
 
 bin_PROGRAMS	= bfgminer
 
-bin_SCRIPTS	= *.cl
+bin_SCRIPTS	= $(top_srcdir)/*.cl
 
 bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
@@ -124,19 +124,19 @@ endif
 if HAS_MODMINER
 bfgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif
 
 if HAS_X6500
 bfgminer_SOURCES += driver-x6500.c ft232r.c ft232r.h jtag.c jtag.h
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif
 
 if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif
 
 bin_PROGRAMS += bfgminer-rpc

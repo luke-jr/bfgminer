@@ -25,13 +25,13 @@
 
 #include "config.h"
 
+#include "miner.h"
 #include <unistd.h>
 #include <sha2.h>
 
 #include "deviceapi.h"
 #include "dynclock.h"
 #include "fpgautils.h"
-#include "miner.h"
 #include "libztex.h"
 
 #define GOLDEN_BACKLOG 5

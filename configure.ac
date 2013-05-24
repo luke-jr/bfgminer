@@ -85,7 +85,6 @@ esac
 
 case $target in
   *-*-mingw*)
-    have_x86_64=false
     have_win32=true
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
@@ -126,7 +125,7 @@ m4_define([BFG_PREPROC_IFELSE],
 cpumining="no"
 
 AC_ARG_ENABLE([cpumining],
-	[AC_HELP_STRING([--enable-cpumining],[Build with cpu mining support(default disabled)])],
+	[AC_HELP_STRING([--enable-cpumining],[Build with CPU mining support (default disabled)])],
 	[cpumining=$enableval]
 	)
 if test "x$cpumining" = xyes; then
@@ -150,7 +149,7 @@ AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 m4_define([BFG_PTHREAD_FLAG_CHECK],
 	AC_MSG_CHECKING([for $1])
 	for cflag in ' -pthread' ''; do
-		for lib in ' -lpthread' ''; do
+		for lib in ' -lpthread' ' -lwinpthread' ''; do
 			CFLAGS="${save_CFLAGS}${cflag}"
 			LIBS="${save_LIBS}${lib}"
 			AC_LINK_IFELSE([
@@ -173,6 +172,9 @@ m4_define([BFG_PTHREAD_FLAG_CHECK],
 			],[])
 		done
 	done
+	if test "x${found_pthread}" = "xfalse"; then
+		AC_MSG_RESULT([no])
+	fi
 )
 
 save_CFLAGS="${CFLAGS}"
@@ -182,13 +184,13 @@ BFG_PTHREAD_FLAG_CHECK([pthread_cancel],[
 	AC_DEFINE([HAVE_PTHREAD_CANCEL], [1], [Define if you have a native pthread_cancel])
 ])
 if test "x${found_pthread}" = "xfalse"; then
-	AC_MSG_RESULT([no])
 	BFG_PTHREAD_FLAG_CHECK([pthread_create])
 	if test "x${found_pthread}" = "xfalse"; then
-		AC_MSG_RESULT([no])
 		AC_MSG_ERROR([Could not find pthread library - please install libpthread])
 	fi
 fi
+# check for nanosleep here, since it is provided by winpthread
+AC_CHECK_FUNCS([nanosleep])
 CFLAGS="${save_CFLAGS}"
 LIBS="${save_LIBS}"
 
@@ -501,7 +503,7 @@ if test "x$have_x86_32$have_x86_64" != "xfalsefalse"; then
 AC_PATH_PROG([YASM],[yasm],[false])
 if test "x$YASM" != "xfalse" ; then
   AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
-  yasmver=`yasm --version | head -1 | cut -d\  -f2`
+  yasmver=`"$YASM" --version | head -1 | cut -d\  -f2`
   yamajor=`echo $yasmver | cut -d. -f1`
   yaminor=`echo $yasmver | cut -d. -f2`
   yamini=`echo $yasmver | cut -d. -f3`
@@ -528,6 +530,18 @@ if test "x$YASM" != "xfalse" ; then
 fi
 if test "x$has_yasm" = "xfalse" ; then
   AC_MSG_NOTICE([yasm is required for the assembly algorithms. They will be skipped.])
+else
+  if test "x$have_x86_64" = xtrue; then
+    if test "x$have_win32" = xtrue; then
+      YASM_FMT="win64"
+    else
+      YASM_FMT="elf64"
+    fi
+  elif test "x$have_win32" = xtrue; then
+    YASM_FMT="coff"
+  else
+    YASM_FMT="elf32"
+  fi
 fi
 fi
 
@@ -740,6 +754,7 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
+AC_SUBST(YASM_FMT)
 
 AC_CONFIG_FILES([
 	Makefile
