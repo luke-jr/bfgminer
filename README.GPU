@@ -344,10 +344,10 @@ penalty on generating new binaries. It is recommended to not use this SDK at
 this time unless you are using an ATI 7xxx card that needs it.
 
 Q: Which ATI SDK is the best for BFGMiner?
-A: At the moment, versions 2.4 and 2.5 work the best for R5xxx and R6xxx GPUS.
-If you are need to use the 2.6+ SDK ofr R7xxx or later, the phatk kernel will
-perform poorly, while the diablo or my custom modified poclbm kernel are
-optimised for it.
+A: At the moment, versions 2.4 and 2.5 work the best for 5xxx and 6xxx GPUs. If
+you are need to use the 2.6+ SDK (7xxx and later), the phatk kernel will perform
+poorly, while the diablo or my custom modified poclbm kernel are optimised for
+it.
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
 A: Run bfgminer with the -n option and it will list all the platforms currently
