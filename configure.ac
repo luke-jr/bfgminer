@@ -126,7 +126,7 @@ m4_define([BFG_PREPROC_IFELSE],
 cpumining="no"
 
 AC_ARG_ENABLE([cpumining],
-	[AC_HELP_STRING([--enable-cpumining],[Build with cpu mining support(default disabled)])],
+	[AC_HELP_STRING([--enable-cpumining],[Build with CPU mining support (default disabled)])],
 	[cpumining=$enableval]
 	)
 if test "x$cpumining" = xyes; then
