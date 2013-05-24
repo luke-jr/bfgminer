@@ -173,6 +173,9 @@ m4_define([BFG_PTHREAD_FLAG_CHECK],
 			],[])
 		done
 	done
+	if test "x${found_pthread}" = "xfalse"; then
+		AC_MSG_RESULT([no])
+	fi
 )
 
 save_CFLAGS="${CFLAGS}"
@@ -182,10 +185,8 @@ BFG_PTHREAD_FLAG_CHECK([pthread_cancel],[
 	AC_DEFINE([HAVE_PTHREAD_CANCEL], [1], [Define if you have a native pthread_cancel])
 ])
 if test "x${found_pthread}" = "xfalse"; then
-	AC_MSG_RESULT([no])
 	BFG_PTHREAD_FLAG_CHECK([pthread_create])
 	if test "x${found_pthread}" = "xfalse"; then
-		AC_MSG_RESULT([no])
 		AC_MSG_ERROR([Could not find pthread library - please install libpthread])
 	fi
 fi
