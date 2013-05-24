@@ -419,10 +419,12 @@ void scrypt_regenhash(struct work *work)
 	flip32(ohash, ohash);
 }
 
+static const uint32_t diff1targ = 0x0000ffff;
+
 /* Used externally as confirmation of correct OCL code */
 int scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t nonce)
 {
-	uint32_t tmp_hash7, Htarg = ((const uint32_t *)ptarget)[7];
+	uint32_t tmp_hash7, Htarg = le32toh(((const uint32_t *)ptarget)[7]);
 	uint32_t data[20], ohash[8];
 	char *scratchbuf;
 
@@ -432,10 +434,11 @@ int scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t non
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
 	tmp_hash7 = be32toh(ohash[7]);
 
-	/* FIXME: Needs to be able to return 0 as well for not meeting target
-	 * but target diff currently is sent to devices. */
-	if (tmp_hash7 > Htarg)
+	applog(LOG_DEBUG, "harget %08lx diff1 %08lx hash %08lx", Htarg, diff1targ, tmp_hash7);
+	if (tmp_hash7 > diff1targ)
 		return -1;
+	if (tmp_hash7 > Htarg)
+		return 0;
 	return 1;
 }
 
@@ -448,7 +451,7 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 	char *scratchbuf;
 	uint32_t data[20];
 	uint32_t tmp_hash7;
-	uint32_t Htarg = ((const uint32_t *)ptarget)[7];
+	uint32_t Htarg = le32toh(((const uint32_t *)ptarget)[7]);
 	bool ret = false;
 
 	be32enc_vect(data, (const uint32_t *)pdata, 19);
@@ -463,7 +466,7 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 		uint32_t ostate[8];
 
 		*nonce = ++n;
-		data[19] = n;
+		data[19] = htobe32(n);
 		scrypt_1024_1_1_256_sp(data, scratchbuf, ostate);
 		tmp_hash7 = be32toh(ostate[7]);
 
