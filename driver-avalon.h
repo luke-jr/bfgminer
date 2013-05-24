@@ -92,7 +92,7 @@ struct avalon_info {
 	int fan_pwm;
 
 	int no_matching_work;
-	int matching_work;
+	int matching_work[AVALON_DEFAULT_MINER_NUM];
 
 	int frequency;
 };
