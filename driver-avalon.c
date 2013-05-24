@@ -39,6 +39,7 @@
 #include "fpgautils.h"
 #include "driver-avalon.h"
 #include "hexdump.c"
+#include "util.h"
 
 static int option_offset = -1;
 struct avalon_info **avalon_infos;
@@ -236,7 +237,7 @@ static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
 				return AVA_GETS_ERROR;
 			}
 			if (likely(first)) {
-				gettimeofday(tv_finish, NULL);
+				cgtime(tv_finish);
 				first = false;
 			}
 			if (likely(ret >= read_amount))
@@ -672,7 +673,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	else
 		__avalon_init(avalon);
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(avalon->init, &now);
 	return true;
 }
@@ -872,7 +873,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		first_try = 0;
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
-	gettimeofday(&tv_start, NULL);
+	cgtime(&tv_start);
 
 	result_wrong = 0;
 	hash_count = 0;
