@@ -140,9 +140,6 @@ typedef unsigned int uint;
 typedef long suseconds_t;
 #endif
 
-#define PTH(thr) ((thr)->pth.p)
-#else
-#define PTH(thr) ((thr)->pth)
 #endif /* WIN32 */
 
 #ifndef HAVE_PTHREAD_CANCEL
