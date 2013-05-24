@@ -303,7 +303,7 @@ static void avalon_get_reset(int fd, struct avalon_result *ar)
 	int read_amount = AVALON_READ_SIZE;
 	uint8_t result[AVALON_READ_SIZE];
 	struct timeval timeout = {1, 0};
-	ssize_t ret = 0;
+	ssize_t ret = 0, offset = 0;
 	fd_set rd;
 
 	memset(result, 0, AVALON_READ_SIZE);
@@ -319,12 +319,15 @@ static void avalon_get_reset(int fd, struct avalon_result *ar)
 		applog(LOG_WARNING, "Avalon: Timeout on select in avalon_get_reset");
 		return;
 	}
-	ret = read(fd, result, read_amount);
-	if (unlikely(ret != read_amount)) {
-		applog(LOG_WARNING, "Avalon: Error %d on read, asked for %d got %d in avalon_get_reset",
-		       errno, read_amount, ret);
-		return;
-	}
+	do {
+		ret = read(fd, result + offset, read_amount);
+		if (unlikely(ret < 0)) {
+			applog(LOG_WARNING, "Avalon: Error %d on read in avalon_get_reset", errno);
+			return;
+		}
+		read_amount -= ret;
+		offset += ret;
+	} while (read_amount > 0);
 	if (opt_debug) {
 		applog(LOG_DEBUG, "Avalon: get:");
 		hexdump((uint8_t *)result, AVALON_READ_SIZE);
