@@ -6929,11 +6929,9 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	*work_nonce = htole32(nonce);
 
 #ifdef USE_SCRYPT
-	if (opt_scrypt) {
-		if (!scrypt_test(work->data, work->target, nonce))
-			return TNR_BAD;
-		return TNR_GOOD;
-	}
+	if (opt_scrypt)
+		// NOTE: Depends on scrypt_test return matching enum values
+		return scrypt_test(work->data, work->target, nonce);
 #endif
 
 	return hashtest2(work, checktarget);

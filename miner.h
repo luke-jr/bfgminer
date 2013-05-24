@@ -1222,9 +1222,9 @@ struct work {
 extern void get_datestamp(char *, struct timeval *);
 extern void inc_hw_errors(struct thr_info *thr);
 enum test_nonce2_result {
-	TNR_GOOD,
-	TNR_HIGH,
-	TNR_BAD,
+	TNR_GOOD = 1,
+	TNR_HIGH = 0,
+	TNR_BAD = -1,
 };
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
