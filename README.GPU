@@ -357,7 +357,8 @@ Q: Which AMD driver is the best?
 A: Unfortunately AMD has a history of having quite a few releases with issues
 when it comes to mining, either in terms of breaking mining, increasing CPU
 usage or very low hashrates. Only experimentation can tell you for sure, but
-some good releases were 11.6, 11.12, 12.4 and 12.8
+some good releases were 11.6, 11.12, 12.4 and 12.8. Note that older cards may
+not work with the newer drivers.
 
 Q: I have multiple SDKs installed, can I choose which one it uses?
 A: Run bfgminer with the -n option and it will list all the platforms currently
