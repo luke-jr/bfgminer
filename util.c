@@ -308,7 +308,7 @@ static void last_nettime(struct timeval *last)
 static void set_nettime(void)
 {
 	wr_lock(&netacc_lock);
-	gettimeofday(&nettime, NULL);
+	cgtime(&nettime);
 	wr_unlock(&netacc_lock);
 }
 
@@ -464,7 +464,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 			long long now_msecs, last_msecs;
 			struct timeval now, last;
 
-			gettimeofday(&now, NULL);
+			cgtime(&now);
 			last_nettime(&last);
 			now_msecs = (long long)now.tv_sec * 1000;
 			now_msecs += now.tv_usec / 1000;
@@ -1061,6 +1061,20 @@ void nmsleep(unsigned int msecs)
 #endif
 }
 
+/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
+ * with tz set to NULL, and windows' default resolution is only 15ms, this
+ * gives us higher resolution times on windows. */
+void cgtime(struct timeval *tv)
+{
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
+	gettimeofday(tv, NULL);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
+}
+
 /* Returns the microseconds difference between end and start times as a double */
 double us_tdiff(struct timeval *end, struct timeval *start)
 {
@@ -1275,7 +1289,7 @@ char *recv_line(struct pool *pool)
 		enum recv_ret ret = RECV_OK;
 		struct timeval rstart, now;
 
-		gettimeofday(&rstart, NULL);
+		cgtime(&rstart);
 		if (!socket_full(pool, true)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
@@ -1303,7 +1317,7 @@ char *recv_line(struct pool *pool)
 				recalloc_sock(pool, slen);
 				strcat(pool->sockbuf, s);
 			}
-			gettimeofday(&now, NULL);
+			cgtime(&now);
 		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
 		mutex_unlock(&pool->stratum_lock);
 
