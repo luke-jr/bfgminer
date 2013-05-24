@@ -461,6 +461,10 @@ A: Seriously, it's the driver and/or SDK. Uninstall them and start again,
 noting there is no clean way to uninstall them so you have to use extra tools
 or do it manually.
 
+Q: Do I need to recompile after updating my driver/SDK?
+A: No. The software is unchanged regardless of which driver/SDK/ADL version you
+are running.
+
 Q: Should I use crossfire/SLI?
 A: It does not benefit mining at all and depending on the GPU may actually
 worsen performance.
