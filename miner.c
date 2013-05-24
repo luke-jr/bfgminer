@@ -7174,14 +7174,14 @@ void hash_queued_work(struct thr_info *mythr)
 			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
 		}
 
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr);
+
 		if (unlikely(mythr->work_restart)) {
 			flush_queue(cgpu);
 			if (drv->flush_work)
 				drv->flush_work(cgpu);
 		}
-
-		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
-			mt_disable(mythr);
 	}
 }
 
