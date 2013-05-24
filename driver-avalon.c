@@ -879,18 +879,18 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			return 0;
 		}
-		if (unlikely(ret == AVA_GETS_TIMEOUT)) {
-			timersub(&tv_finish, &tv_start, &elapsed);
-			applog(LOG_DEBUG, "Avalon: no nonce in (%ld.%06lds)",
-			       elapsed.tv_sec, elapsed.tv_usec);
-			continue;
-		}
 		if (unlikely(ret == AVA_GETS_RESTART)) {
 			/* Reset the wrong count in case there has only been
 			 * a small number of nonces tested before the restart.
 			 */
 			result_wrong = 0;
 			break;
+		}
+		if (unlikely(ret == AVA_GETS_TIMEOUT)) {
+			timersub(&tv_finish, &tv_start, &elapsed);
+			applog(LOG_DEBUG, "Avalon: no nonce in (%ld.%06lds)",
+			       elapsed.tv_sec, elapsed.tv_usec);
+			continue;
 		}
 		result_count++;
 
