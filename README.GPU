@@ -80,8 +80,9 @@ device may be very slow to return responses, or produce errors.
 
 NOTE: Running intensities above 9 with current hardware is likely to only
 diminish return performance even if the hash rate might appear better. A good
-starting baseline intensity to try on dedicated miners is 9. Higher values are
-there to cope with future improvements in hardware.
+starting baseline intensity to try on dedicated miners is 9. 11 is the upper
+limit for intensity while BTC mining, if the GPU_USE_SYNC_OBJECTS variable
+is set (see FAQ). The upper limit for sha256 mining is 14 and 20 for scrypt.
 
 
 ---
