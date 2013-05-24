@@ -820,7 +820,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	uint32_t nonce;
 	int64_t hash_count;
 	static int first_try = 0;
-	int result_count, result_wrong;
+	int result_wrong;
 
 	avalon = thr->cgpu;
 	works = avalon->works;
@@ -882,7 +882,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	gettimeofday(&tv_start, NULL);
 
-	result_count = 0;
 	result_wrong = 0;
 	hash_count = 0;
 	while (true) {
@@ -900,20 +899,14 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			return 0;
 		}
-		if (unlikely(ret == AVA_GETS_RESTART)) {
-			/* Reset the wrong count in case there has only been
-			 * a small number of nonces tested before the restart.
-			 */
-			result_wrong = 0;
+		if (unlikely(ret == AVA_GETS_RESTART))
 			break;
-		}
 		if (unlikely(ret == AVA_GETS_TIMEOUT)) {
 			timersub(&tv_finish, &tv_start, &elapsed);
 			applog(LOG_DEBUG, "Avalon: no nonce in (%ld.%06lds)",
 			       elapsed.tv_sec, elapsed.tv_usec);
 			continue;
 		}
-		result_count++;
 
 		if (!avalon_decode_nonce(thr, &ar, &nonce)) {
 			info->no_matching_work++;
@@ -937,8 +930,8 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (result_wrong && result_count == result_wrong) {
-		/* This mean FPGA controller give all wrong result
+	if (result_wrong >= info->miner_count) {
+		/* This mean FPGA controller gave all wrong results, so
 		 * try to reset the Avalon */
 		do_avalon_close(thr);
 		applog(LOG_ERR,
