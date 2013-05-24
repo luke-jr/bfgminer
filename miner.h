@@ -607,13 +607,6 @@ struct thr_info {
 	notifier_t work_restart_notifier;
 };
 
-extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
-extern void thr_info_cancel(struct thr_info *thr);
-extern void thr_info_freeze(struct thr_info *thr);
-extern void nmsleep(unsigned int msecs);
-extern double us_tdiff(struct timeval *end, struct timeval *start);
-extern double tdiff(struct timeval *end, struct timeval *start);
-
 struct string_elist {
 	char *string;
 	bool free_me;

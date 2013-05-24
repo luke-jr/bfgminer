@@ -56,6 +56,7 @@
 #endif
 extern char *json_dumps_ANY(json_t *, size_t flags);
 
+struct thr_info;
 struct pool;
 enum dev_reason;
 struct cgpu_info;
@@ -71,7 +72,13 @@ extern void real_block_target(unsigned char *target, const unsigned char *data);
 extern bool hash_target_check(const unsigned char *hash, const unsigned char *target);
 extern bool hash_target_check_v(const unsigned char *hash, const unsigned char *target);
 
+int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
+void thr_info_freeze(struct thr_info *thr);
+void thr_info_cancel(struct thr_info *thr);
+void nmsleep(unsigned int msecs);
 void cgtime(struct timeval *tv);
+double us_tdiff(struct timeval *end, struct timeval *start);
+double tdiff(struct timeval *end, struct timeval *start);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
 bool sock_full(struct pool *pool);
 char *recv_line(struct pool *pool);
