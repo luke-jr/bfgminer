@@ -150,7 +150,7 @@ AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 m4_define([BFG_PTHREAD_FLAG_CHECK],
 	AC_MSG_CHECKING([for $1])
 	for cflag in ' -pthread' ''; do
-		for lib in ' -lpthread' ''; do
+		for lib in ' -lpthread' ' -lwinpthread' ''; do
 			CFLAGS="${save_CFLAGS}${cflag}"
 			LIBS="${save_LIBS}${lib}"
 			AC_LINK_IFELSE([
@@ -173,6 +173,9 @@ m4_define([BFG_PTHREAD_FLAG_CHECK],
 			],[])
 		done
 	done
+	if test "x${found_pthread}" = "xfalse"; then
+		AC_MSG_RESULT([no])
+	fi
 )
 
 save_CFLAGS="${CFLAGS}"
@@ -182,13 +185,13 @@ BFG_PTHREAD_FLAG_CHECK([pthread_cancel],[
 	AC_DEFINE([HAVE_PTHREAD_CANCEL], [1], [Define if you have a native pthread_cancel])
 ])
 if test "x${found_pthread}" = "xfalse"; then
-	AC_MSG_RESULT([no])
 	BFG_PTHREAD_FLAG_CHECK([pthread_create])
 	if test "x${found_pthread}" = "xfalse"; then
-		AC_MSG_RESULT([no])
 		AC_MSG_ERROR([Could not find pthread library - please install libpthread])
 	fi
 fi
+# check for nanosleep here, since it is provided by winpthread
+AC_CHECK_FUNCS([nanosleep])
 CFLAGS="${save_CFLAGS}"
 LIBS="${save_LIBS}"
 

@@ -909,7 +909,10 @@ out:
 
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg)
 {
-	return pthread_create(&thr->pth, attr, start, arg);
+	int rv = pthread_create(&thr->pth, attr, start, arg);
+	if (likely(!rv))
+		thr->has_pth = true;
+	return rv;
 }
 
 void thr_info_freeze(struct thr_info *thr)
@@ -938,9 +941,9 @@ void thr_info_cancel(struct thr_info *thr)
 	if (!thr)
 		return;
 
-	if (PTH(thr) != 0L) {
+	if (thr->has_pth) {
 		pthread_cancel(thr->pth);
-		PTH(thr) = 0L;
+		thr->has_pth = false;
 	}
 }
 

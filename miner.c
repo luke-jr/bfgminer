@@ -5764,7 +5764,7 @@ static void *api_thread(void *userdata)
 
 	api(api_thr_id);
 
-	PTH(mythr) = 0L;
+	mythr->has_pth = false;
 
 	return NULL;
 }

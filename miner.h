@@ -560,6 +560,7 @@ struct thr_info {
 	int		device_thread;
 	bool		primary_thread;
 
+	bool		has_pth;
 	pthread_t	pth;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
