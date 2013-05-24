@@ -763,7 +763,9 @@ static bool avalon_fill(struct cgpu_info *avalon)
 
 	if (unlikely(!work))
 		return false;
-	avalon->queued++;
+	if (avalon->queued == avalon_info[avalon->device_id]->miner_count)
+		return true;
+	avalon->works[avalon->queued++] = work;
 	if (avalon->queued == avalon_info[avalon->device_id]->miner_count)
 		return true;
 	return false;
