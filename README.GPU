@@ -396,7 +396,8 @@ and use the appropriate parameter with --gpu-platform.
 
 Q: I'm getting much lower hashrates than I should be for my GPU?
 A: Look at your driver/SDK combination and disable power saving options for your
-GPU. Specifically look to disable ULPS.
+GPU. Specifically look to disable ULPS. Make sure not to set intensity above 11
+for Bitcoin mining.
 
 Q: Can I mine with AMD while running Nvidia or Intel GPUs at the same time?
 A: If you can install both drivers successfully (easier on windows) then yes,
@@ -422,6 +423,10 @@ hashrate?
 A: You are generating garbage hashes due to your choice of settings. Try
 decreasing your intensity, do not increase the number of gpu-threads, and
 consider adding system RAM to match your GPU ram.
+
+Q: Scrypt fails to initialise the kernel every time?
+A: Your parameters are too high. Don't add GPU threads, don't set intensity too
+high, decrease thread concurrency. See the README.scrypt for a lot more help.
 
 Q: Should I use crossfire/SLI?
 A: It does not benefit mining at all and depending on the GPU may actually
