@@ -807,7 +807,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 {
 	struct cgpu_info *avalon;
 	struct work **works;
-	int fd, ret, full;
+	int fd, ret = AVA_GETS_OK, full;
 
 	struct avalon_info *info;
 	struct avalon_task at;
@@ -930,7 +930,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
-	if (result_wrong >= info->miner_count) {
+	if (result_wrong >= info->miner_count && ret != AVA_GETS_RESTART) {
 		/* This mean FPGA controller gave all wrong results, so
 		 * try to reset the Avalon */
 		do_avalon_close(thr);
