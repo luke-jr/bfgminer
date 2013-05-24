@@ -907,7 +907,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			continue;
 		}
 
-		hash_count += nonce;
+		hash_count += 0xffffffff;
 		if (opt_debug) {
 			timersub(&tv_finish, &tv_start, &elapsed);
 			applog(LOG_DEBUG,
@@ -946,16 +946,8 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		info->temp_sum = 0;
 	}
 
-	/*
-	 * FIXME: Each work split to 10 pieces, each piece send to a
-	 * asic(256MHs). one work can be mulit-nonce back. it is not
-	 * easy calculate correct hash on such situation. so I simplely
-	 * add each nonce to hash_count. base on Utility/m hash_count*2
-	 * give a very good result.
-	 *
-	 * Any patch will be great.
-	 */
-	return hash_count * 2;
+	/* This hashmeter is just a utility counter based on returned shares */
+	return hash_count;
 }
 
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
