@@ -17,10 +17,10 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/select.h>
 #include <dirent.h>
 #include <unistd.h>
 #ifndef WIN32
+  #include <sys/select.h>
   #include <termios.h>
   #include <sys/stat.h>
   #include <fcntl.h>
@@ -28,6 +28,7 @@
     #define O_CLOEXEC 0
   #endif
 #else
+  #include "compat.h"
   #include <windows.h>
   #include <io.h>
 #endif

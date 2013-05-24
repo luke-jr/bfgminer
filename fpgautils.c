@@ -931,5 +931,19 @@ int set_serial_rts(int fd, int rts)
 	ioctl(fd, TIOCMSET, &flags);
 	return flags & TIOCM_CTS;
 }
+#else
+int get_serial_cts(const int fd)
+{
+	if (!fd)
+		return -1;
+	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
+	if (!fh)
+		return -1;
 
+	DWORD flags;
+	if (!GetCommModemStatus(fh, &flags))
+		return -1;
+
+	return (flags & MS_CTS_ON) ? 1 : 0;
+}
 #endif // ! WIN32
