@@ -216,7 +216,7 @@ static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
 		timeout.tv_sec = 0;
 		/* If we get a restart message, still check if there's
 		 * anything in the buffer waiting to be parsed */
-		if (unlikely(thr->work_restart))
+		if (unlikely(thr->work_restart || !first))
 			timeout.tv_usec = 0;
 		else
 			timeout.tv_usec = 100000;
