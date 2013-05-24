@@ -235,6 +235,15 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 			continue;
 		}
 
+		if (thr && thr->work_restart) {
+			if (opt_debug) {
+				applog(LOG_WARNING,
+				       "Avalon: Work restart at %.2f seconds",
+				       (float)(rc)/(float)AVALON_TIME_FACTOR);
+			}
+			return AVA_GETS_RESTART;
+		}
+
 		rc++;
 		if (rc >= read_count) {
 			if (opt_debug) {
@@ -243,15 +252,6 @@ static int avalon_gets(int fd, uint8_t *buf, int read_count,
 				       (float)rc/(float)AVALON_TIME_FACTOR);
 			}
 			return AVA_GETS_TIMEOUT;
-		}
-
-		if (thr && thr->work_restart) {
-			if (opt_debug) {
-				applog(LOG_WARNING,
-				       "Avalon: Work restart at %.2f seconds",
-				       (float)(rc)/(float)AVALON_TIME_FACTOR);
-			}
-			return AVA_GETS_RESTART;
 		}
 	}
 }
