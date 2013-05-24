@@ -353,7 +353,7 @@ Q quits the application.
 
 G gives you something like:
 
-GPU 0: [124.2 / 191.3 Mh/s] [Q:212  A:77  R:33  HW:0  E:36%  U:1.73/m]
+GPU 0: [124.2 / 191.3 Mh/s] [A:77  R:33  HW:0  U:1.73/m  WU 1.73/m]
 Temp: 67.0 C
 Fan Speed: 35% (2500 RPM)
 Engine Clock: 960 MHz
@@ -413,11 +413,9 @@ The number of hardware erorrs
 The utility defines as the number of shares / minute
 
 The BFGMiner status line shows:
- ST: 1  DW: 0  GW: 301  LW: 8  GF: 1  NB: 1  AS: 0  RF: 1  E: 2.42
+ ST: 1  LW: 8  GF: 1  NB: 1  AS: 0  RF: 1  E: 2.42
 
 ST is STaged work items (ready to use).
-DW is Discarded Work items (work from block no longer valid to work on)
-GW is GetWork requested (work items from pools)
 LW is Locally generated Work items
 GF is Getwork Fail Occasions (server slow to provide work)
 NB is New Blocks detected on the network
@@ -652,7 +650,7 @@ with -g 1. It is also recommended to use --failover-only since the work is
 effectively like a different block chain. If mining with a Mini Rig, it is worth
 adding the --bfl-range option.
 
-Q: Are kernels from other mining software useable in BFGMiner?
+Q: Are OpenCL kernels from other mining software useable in BFGMiner?
 A: No, the APIs are slightly different between the different software and they
 will not work.
 
