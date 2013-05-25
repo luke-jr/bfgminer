@@ -118,7 +118,7 @@ bfgminer_SOURCES += driver-cairnsmore.c
 endif
 
 if HAS_AVALON
-bfgminer_SOURCES += driver-avalon.c
+bfgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
 if HAS_MODMINER
