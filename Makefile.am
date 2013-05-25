@@ -6,6 +6,7 @@ EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 		  API.class API.java api-example.c windows-build.txt \
 		  bitstreams/* README.FPGA README.RPC README.scrypt \
 		  README.GPU \
+		  hexdump.c \
                   api-example.py
 
 SUBDIRS		= lib ccan
