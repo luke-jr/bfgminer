@@ -1196,7 +1196,7 @@ struct work {
 
 	// Allow devices to identify work if multiple sub-devices
 	// DEPRECATED: New code should be using multiple processors instead
-	char		subid;
+	unsigned char	subid;
 
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;

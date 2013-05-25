@@ -555,7 +555,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	 */
 
 	const char golden_nonce[] = "000187a2";
-	const uint32_t golden_nonce_val = 0x000187a2;
 
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *nonce_hex;
