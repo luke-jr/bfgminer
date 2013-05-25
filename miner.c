@@ -130,7 +130,7 @@ static int opt_retries = -1;
 int opt_fail_pause = 5;
 int opt_log_interval = 5;
 int opt_queue = 1;
-int opt_scantime = 60;
+int opt_scantime = -1;
 int opt_expiry = 120;
 int opt_expiry_lp = 3600;
 int opt_bench_algo = -1;
@@ -8822,6 +8822,10 @@ int main(int argc, char *argv[])
 		applog(LOG_NOTICE, "Detected scrypt algorithm");
 		opt_scrypt = true;
 	}
+
+	/* Use a shorter scantime for scrypt */
+	if (opt_scantime < 0)
+		opt_scantime = opt_scrypt ? 30 : 60;
 #endif
 	detect_algo = 0;
 
