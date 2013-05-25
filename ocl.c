@@ -212,7 +212,12 @@ CL_API_ENTRY cl_int CL_API_CALL
                        cl_event *       /* event */) CL_API_SUFFIX__VERSION_1_0;
 
 int opt_platform_id = -1;
+#ifdef __APPLE__
+// Apple OpenCL doesn't like using binaries this way
+bool opt_opencl_binaries;
+#else
 bool opt_opencl_binaries = true;
+#endif
 
 char *file_contents(const char *filename, int *length)
 {
