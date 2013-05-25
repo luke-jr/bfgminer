@@ -434,7 +434,10 @@ int scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t non
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
 	tmp_hash7 = be32toh(ohash[7]);
 
-	applog(LOG_DEBUG, "harget %08lx diff1 %08lx hash %08lx", Htarg, diff1targ, tmp_hash7);
+	applog(LOG_DEBUG, "harget %08lx diff1 %08lx hash %08lx",
+				(long unsigned int)Htarg,
+				(long unsigned int)diff1targ,
+				(long unsigned int)tmp_hash7);
 	if (tmp_hash7 > diff1targ)
 		return -1;
 	if (tmp_hash7 > Htarg)
