@@ -2040,7 +2040,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			first = false;
 
 			done = tdiff(&tv_finish, &read_start);
-			// N.B. this is return LIBUSB_SUCCESS with whatever size has already been read
+			// N.B. this is: return LIBUSB_SUCCESS with whatever size has already been read
 			if (unlikely(done >= max))
 				break;
 
@@ -2120,7 +2120,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		first = false;
 
 		done = tdiff(&tv_finish, &read_start);
-		// N.B. this is return LIBUSB_SUCCESS with whatever size has already been read
+		// N.B. this is: return LIBUSB_SUCCESS with whatever size has already been read
 		if (unlikely(done >= max))
 			break;
 
@@ -2140,33 +2140,64 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 #if DO_USB_STATS
-	struct timeval tv_start, tv_finish;
+	struct timeval tv_start;
 #endif
-	int err, sent;
+	struct timeval read_start, tv_finish;
+	unsigned int initial_timeout;
+	double max, done;
+	bool first = true;
+	int err, sent, tot;
 
 	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),ep=%d,buf='%s',bufsiz=%zu,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, (char *)str_text(buf), bufsiz, processed, timeout, usb_cmdname(cmd));
 
+	*processed = 0;
+
 	if (cgpu->usbinfo.nodev) {
-		*processed = 0;
 #if DO_USB_STATS
 		rejected_inc(cgpu);
 #endif
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
 
-	sent = 0;
-	STATS_TIMEVAL(&tv_start);
-	err = libusb_bulk_transfer(usbdev->handle,
-			usbdev->found->eps[ep].ep,
-			(unsigned char *)buf,
-			bufsiz, &sent,
-			timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
-	STATS_TIMEVAL(&tv_finish);
-	USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, SEQ0);
+	if (timeout == DEVTIMEOUT)
+		timeout = usbdev->found->timeout;
 
-	USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
+	tot = 0;
+	err = LIBUSB_SUCCESS;
+	initial_timeout = timeout;
+	max = ((double)timeout) / 1000.0;
+	cgtime(&read_start);
+	while (bufsiz > 0) {
+		sent = 0;
+		STATS_TIMEVAL(&tv_start);
+		err = libusb_bulk_transfer(usbdev->handle,
+				usbdev->found->eps[ep].ep,
+				(unsigned char *)buf,
+				bufsiz, &sent, timeout);
+		STATS_TIMEVAL(&tv_finish);
+		USB_STATS(cgpu, &tv_start, &tv_finish, err, cmd, first ? SEQ0 : SEQ1);
 
-	*processed = sent;
+		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
+
+		tot += sent;
+
+		if (err)
+			break;
+
+		buf += sent;
+		bufsiz -= sent;
+
+		first = false;
+
+		done = tdiff(&tv_finish, &read_start);
+		// N.B. this is: return LIBUSB_SUCCESS with whatever size was written
+		if (unlikely(done >= max))
+			break;
+
+		timeout = initial_timeout - (done * 1000);
+	}
+
+	*processed = tot;
 
 	if (NODEV(err))
 		release_cgpu(cgpu);
