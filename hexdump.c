@@ -19,6 +19,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "logging.h"
+
 #define hex_print(p) applog(LOG_DEBUG, "%s", p)
 
 static char nibble[] = {
@@ -27,8 +29,9 @@ static char nibble[] = {
 
 #define BYTES_PER_LINE 0x10
 
-void hexdump(const uint8_t *p, unsigned int len)
+void hexdump(const void *vp, unsigned int len)
 {
+	const unsigned char *p = vp;
 	unsigned int i, addr;
 	unsigned int wordlen = sizeof(void*);
 	unsigned char v, line[BYTES_PER_LINE * 5];

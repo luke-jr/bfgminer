@@ -43,4 +43,6 @@ extern void log_notice(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 extern void log_info(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 extern void log_debug(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 
+extern void hexdump(const void *, unsigned int len);
+
 #endif /* __LOGGING_H__ */

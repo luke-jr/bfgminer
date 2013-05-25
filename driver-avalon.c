@@ -38,7 +38,7 @@
 #include "miner.h"
 #include "fpgautils.h"
 #include "driver-avalon.h"
-#include "hexdump.c"
+#include "logging.h"
 #include "util.h"
 
 static int option_offset = -1;
