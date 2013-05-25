@@ -32,7 +32,7 @@
 	#define INVSOCK -1
 	#define CLOSESOCKET close
 
-	#define SOCKETINIT {}
+	#define SOCKETINIT do{}while(0)
 
 	#define SOCKERRMSG strerror(errno)
 #else
@@ -104,7 +104,6 @@
 
 	static char *WSAErrorMsg()
 	{
-		char *msg;
 		int i;
 		int id = WSAGetLastError();
 
@@ -122,11 +121,13 @@
 
 	static WSADATA WSA_Data;
 
-	#define SOCKETINIT	int wsa; \
-				if (wsa = WSAStartup(0x0202, &WSA_Data)) { \
+	#define SOCKETINIT	do {  \
+		int wsa; \
+				if ( (wsa = WSAStartup(0x0202, &WSA_Data)) ) { \
 					printf("Socket startup failed: %d\n", wsa); \
 					return 1; \
-				}
+		}  \
+	} while (0)
 
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH

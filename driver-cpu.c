@@ -499,7 +499,7 @@ static double bench_algo_stage2(
 			&process_info		// Pointer to PROCESS_INFORMATION structure
 		);
 		if (!ok) {
-			applog(LOG_ERR, "CreateProcess failed with error %d\n", GetLastError() );
+			applog(LOG_ERR, "CreateProcess failed with error %ld\n", (long)GetLastError() );
 			exit(1);
 		}
 
