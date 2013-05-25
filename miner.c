@@ -3995,6 +3995,8 @@ static struct submit_work_state *begin_submission(struct work *work)
 		.work = work,
 	};
 
+	rebuild_hash(work);
+
 	if (stale_work(work, true)) {
 		work->stale = true;
 		if (opt_submit_stale)
