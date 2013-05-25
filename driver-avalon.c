@@ -416,9 +416,6 @@ static void avalon_idle(struct cgpu_info *avalon, int fd)
 			break;
 	}
 	applog(LOG_ERR, "Avalon: Going to idle mode");
-	sleep(2);
-	avalon_clear_readbuf(fd);
-	applog(LOG_ERR, "Avalon: Idle");
 }
 
 static int avalon_reset(struct cgpu_info *avalon, int fd)
@@ -437,11 +434,18 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	ret = avalon_write(fd, "ad", 2);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
+	/* Ignore first result as it may be corrupt with old work */
+	avalon_clear_readbuf(fd);
+
+	/* What do these sleeps do?? */
 	p.tv_sec = 0;
 	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
-	avalon_clear_readbuf(fd);
 	avalon_idle(avalon, fd);
+	avalon_wait_write(fd);
+	avalon_clear_readbuf(fd);
+	applog(LOG_ERR, "Avalon: Idle");
+
 	/* Reset again, then check result */
 	ret = avalon_write(fd, "ad", 2);
 	if (unlikely(ret == AVA_SEND_ERROR))
@@ -468,6 +472,8 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 		/* FIXME: return 1; */
 	} else
 		applog(LOG_WARNING, "Avalon: Reset succeeded");
+
+	avalon_idle(avalon, fd);
 	return 0;
 }
 
