@@ -238,19 +238,21 @@ static int keep_sockalive(SOCKETTYPE fd)
 {
 	const int tcp_keepidle = 45;
 	const int tcp_keepintvl = 30;
-	const int keepalive = 1;
+	const int tcp_one = 1;
 	int ret = 0;
 
+	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&tcp_one, sizeof(tcp_one))))
+		ret = 1;
+
+	if (!opt_delaynet)
+		if (unlikely(setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one))))
+			ret = 1;
 
 #ifndef WIN32
-	const int tcp_keepcnt = 1;
-
-	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
-		ret = 1;
 
 # ifdef __linux
 
-	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt))))
+	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_one, sizeof(tcp_one))))
 		ret = 1;
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle))))
@@ -275,9 +277,6 @@ static int keep_sockalive(SOCKETTYPE fd)
 	vals.keepaliveinterval = tcp_keepintvl * 1000;
 
 	DWORD outputBytes;
-
-	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&keepalive, sizeof(keepalive))))
-		ret = 1;
 
 	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
 		ret = 1;
