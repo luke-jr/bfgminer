@@ -6712,12 +6712,11 @@ static void bdiff_target_leadzero(unsigned char *target, double diff)
 	}
 }
 
-static inline
-void set_work_target(struct work *work, double diff)
+void set_target(unsigned char *dest_target, double diff)
 {
 	unsigned char rtarget[32];
 	bdiff_target_leadzero(rtarget, diff);
-	swab256(work->target, rtarget);
+	swab256(dest_target, rtarget);
 	
 	if (opt_debug) {
 		char *htarget = bin2hex(rtarget, 32);
@@ -6810,7 +6809,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	free(header);
 	calc_midstate(work);
 
-	set_work_target(work, work->sdiff);
+	set_target(work->target, work->sdiff);
 
 	local_work++;
 	work->pool = pool;

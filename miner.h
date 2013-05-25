@@ -882,6 +882,7 @@ extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
+extern void set_target(unsigned char *dest_target, double diff);
 
 extern void kill_work(void);
 extern void app_restart(void);
