@@ -1040,10 +1040,9 @@ bool bitforce_process_qresult_line_i(struct thr_info *thr, char *midstate, char 
 	if (memcmp(&work->data[64], datatail, 12))
 		return false;
 	
-	if (!atoi(&buf[90]))
-		return true;
-	
-	bitforce_process_result_nonces(thr, work, &buf[92]);
+	char *end;
+	if (strtol(&buf[90], &end, 10))
+		bitforce_process_result_nonces(thr, work, &end[1]);
 	
 	return true;
 }
@@ -1413,7 +1412,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	struct bitforce_data *data = bitforce->cgpu_data;
 	int fd = bitforce->device->device_fd;
 	int count;
-	char *noncebuf = &data->noncebuf[0], *buf;
+	char *noncebuf = &data->noncebuf[0], *buf, *end;
 	unsigned char midstate[32], datatail[12];
 	struct work *work;
 	struct list_head *pos, *next_pos;
@@ -1483,8 +1482,8 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		}
 		
 		++count;
-		if (atoi(&buf[90]))
-			bitforce_process_result_nonces(thr, work, &buf[92]);
+		if (strtol(&buf[90], &end, 10))
+			bitforce_process_result_nonces(thr, work, &end[1]);
 		
 		// Queue results are in order, so anything queued prior this is lost
 		// Delete all queued work up to, and including, this one
