@@ -401,7 +401,7 @@ static void avalon_idle(struct cgpu_info *avalon, int fd)
 		int ret;
 
 		if (unlikely(avalon_buffer_full(fd))) {
-			applog(LOG_WARNING, "Avalon buffer full in avalon_idle");
+			applog(LOG_WARNING, "Avalon buffer full in avalon_idle after %d tasks", i);
 			break;
 		}
 		avalon_init_task(&at, 0, 0, info->fan_pwm,
