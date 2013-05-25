@@ -613,6 +613,9 @@ static struct work *avalon_valid_result(struct cgpu_info *avalon, struct avalon_
 					   (char *)ar->data, 64, 12);
 }
 
+static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
+				struct avalon_result *ar);
+
 static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *info,
 				 struct thr_info *thr, char *buf, size_t *offset)
 {
@@ -628,13 +631,21 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 
 		ar = (struct avalon_result *)&buf[i];
 		if ((work = avalon_valid_result(avalon, ar)) != NULL) {
+			bool gettemp = false;
+
 			found = true;
 
 			mutex_lock(&info->lock);
-			info->nonces++;
+			if (!avalon->results++ % info->miner_count) {
+				gettemp = true;
+				avalon->results = 0;
+			}
+ 			info->nonces++;
 			mutex_unlock(&info->lock);
 
 			avalon_decode_nonce(thr, avalon, info, ar, work);
+			if (gettemp)
+				avalon_update_temps(avalon, info, ar);
 			break;
 		}
 	}
@@ -812,6 +823,26 @@ static inline void adjust_fan(struct avalon_info *info)
 	}
 }
 
+static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
+				struct avalon_result *ar)
+{
+	record_temp_fan(info, ar, &(avalon->temp));
+	applog(LOG_INFO,
+		"Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
+		"Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
+		info->fan0, info->fan1, info->fan2,
+		info->temp0, info->temp1, info->temp2, info->temp_max);
+	info->temp_history_index++;
+	info->temp_sum += avalon->temp;
+	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
+		info->temp_history_index, info->temp_history_count, info->temp_old);
+	if (info->temp_history_index == info->temp_history_count) {
+		adjust_fan(info);
+		info->temp_history_index = 0;
+		info->temp_sum = 0;
+	}
+}
+
 /* We use a replacement algorithm to only remove references to work done from
  * the buffer when we need the extra space for new work. */
 static bool avalon_fill(struct cgpu_info *avalon)
@@ -850,7 +881,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	struct avalon_info *info;
 	struct avalon_task at;
-	struct avalon_result ar;
 	int i;
 	int avalon_get_work_count;
 	int start_count, end_count;
@@ -923,24 +953,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	mutex_unlock(&info->lock);
 
 	avalon_rotate_array(avalon);
-
-	if (hash_count) {
-		record_temp_fan(info, &ar, &(avalon->temp));
-		applog(LOG_INFO,
-		       "Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
-		       "Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
-		       info->fan0, info->fan1, info->fan2,
-		       info->temp0, info->temp1, info->temp2, info->temp_max);
-		info->temp_history_index++;
-		info->temp_sum += avalon->temp;
-		applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
-		       info->temp_history_index, info->temp_history_count, info->temp_old);
-		if (info->temp_history_index == info->temp_history_count) {
-			adjust_fan(info);
-			info->temp_history_index = 0;
-			info->temp_sum = 0;
-		}
-	}
 
 	/* This hashmeter is just a utility counter based on returned shares */
 	return hash_count;
