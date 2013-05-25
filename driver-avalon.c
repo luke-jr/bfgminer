@@ -654,7 +654,8 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 		 * work result. */
 		if (spare < (int)AVALON_READ_SIZE)
 			return;
-		applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", spare);
+		applog(LOG_WARNING, "%s%d: No valid work - HW error",
+				thr->cgpu->drv->name, thr->cgpu->device_id);
 
 		inc_hw_errors(thr);
 		mutex_lock(&info->lock);
