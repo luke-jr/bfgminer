@@ -378,10 +378,10 @@ static void avalon_clear_readbuf(int fd)
 	} while (ret > 0);
 }
 
-static void avalon_idle(struct cgpu_info *avalon)
+static void avalon_idle(struct cgpu_info *avalon, int fd)
 {
 	struct avalon_info *info = avalon->device_data;
-	int i, fd = avalon->device_fd;
+	int i;
 
 	for (i = 0; i < info->miner_count; i++) {
 		struct avalon_task at;
@@ -419,7 +419,7 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
 	avalon_clear_readbuf(fd);
-	avalon_idle(avalon);
+	avalon_idle(avalon, fd);
 	/* Reset again, then check result */
 	ret = avalon_write(fd, "ad", 2);
 	if (unlikely(ret == AVA_SEND_ERROR))
