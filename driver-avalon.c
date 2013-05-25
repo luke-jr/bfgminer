@@ -400,11 +400,6 @@ static void avalon_idle(struct cgpu_info *avalon, int fd)
 	struct avalon_info *info = avalon->device_data;
 	int i;
 
-	if (!avalon_wait_write(fd)) {
-		applog(LOG_WARNING, "Avalon not ready for writes in avalon_idle");
-		return;
-	}
-
 	for (i = 0; i < info->miner_count; i++) {
 		struct avalon_task at;
 		int ret;
@@ -432,6 +427,11 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	uint8_t *buf;
 	int ret, i = 0;
 	struct timespec p;
+
+	if (!avalon_wait_write(fd)) {
+		applog(LOG_WARNING, "Avalon not ready for writes in avalon_reset");
+		return 1;
+	}
 
 	/* Reset once, then send command to go idle */
 	ret = avalon_write(fd, "ad", 2);
