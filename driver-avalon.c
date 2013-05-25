@@ -388,6 +388,8 @@ static bool avalon_wait_write(int fd)
 
 	do {
 		ret = avalon_buffer_full(fd);
+		if (ret)
+			nmsleep(50);
 	} while (ret == true && i++ < 40);
 
 	return !ret;
