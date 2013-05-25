@@ -245,12 +245,14 @@ static int keep_sockalive(SOCKETTYPE fd)
 		ret = 1;
 
 	if (!opt_delaynet)
+#ifndef __linux
+		if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one))))
+#else /* __linux */
 		if (unlikely(setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one))))
+#endif /* __linux */
 			ret = 1;
 
-#ifndef WIN32
-
-# ifdef __linux
+#ifdef __linux
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_one, sizeof(tcp_one))))
 		ret = 1;
@@ -260,15 +262,16 @@ static int keep_sockalive(SOCKETTYPE fd)
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl))))
 		ret = 1;
-# endif /* __linux */
-# ifdef __APPLE_CC__
+#endif /* __linux */
+
+#ifdef __APPLE_CC__
 
 	if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl))))
 		ret = 1;
 
-# endif /* __APPLE_CC__ */
+#endif /* __APPLE_CC__ */
 
-#else /* WIN32 */
+#ifdef WIN32
 
 	const int zero = 0;
 	struct tcp_keepalive vals;
