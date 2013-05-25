@@ -384,18 +384,17 @@ static void avalon_idle(struct cgpu_info *avalon)
 	int i, fd = avalon->device_fd;
 
 	for (i = 0; i < info->miner_count; i++) {
-		char buf[AVALON_WRITE_SIZE];
-		struct avalon_task *at = (struct avalon_task *)buf;
+		struct avalon_task at;
 		int ret;
 
 		if (unlikely(avalon_buffer_full(fd))) {
 			applog(LOG_WARNING, "Avalon buffer full in avalon_idle");
 			break;
 		}
-		avalon_init_task(at, 0, 0, info->fan_pwm,
+		avalon_init_task(&at, 0, 0, info->fan_pwm,
 				 info->timeout, info->asic_count,
 				 info->miner_count, 1, 1, info->frequency);
-		ret = avalon_write(fd, buf, AVALON_WRITE_SIZE);
+		ret = avalon_write(fd, (char *)&at, AVALON_WRITE_SIZE);
 		if (unlikely(ret == AVA_SEND_ERROR))
 			break;
 	}
