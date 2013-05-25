@@ -617,9 +617,9 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 				struct avalon_result *ar);
 
 static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *info,
-				 struct thr_info *thr, char *buf, size_t *offset)
+				 struct thr_info *thr, char *buf, int *offset)
 {
-	size_t i, spare = AVALON_READ_SIZE - *offset;
+	int i, spare = AVALON_READ_SIZE - *offset;
 	bool found = false;
 
 	for (i = 0; i <= spare; i++) {
@@ -668,7 +668,7 @@ static void *avalon_get_results(void *userdata)
 	char readbuf[AVALON_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
 	int fd = avalon->device_fd;
-	size_t offset = 0;
+	int offset = 0;
 
 	pthread_detach(pthread_self());
 
@@ -706,7 +706,7 @@ static void *avalon_get_results(void *userdata)
 		memcpy(&readbuf[offset], buf, ret);
 		offset += ret;
 
-		while (offset >= AVALON_READ_SIZE)
+		while (offset >= (int)AVALON_READ_SIZE)
 			avalon_parse_results(avalon, info, thr, readbuf, &offset);
 	}
 	return NULL;
