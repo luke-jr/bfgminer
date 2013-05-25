@@ -424,6 +424,7 @@ static void avalon_idle(struct cgpu_info *avalon, int fd)
 static int avalon_reset(struct cgpu_info *avalon, int fd)
 {
 	struct avalon_result ar;
+	struct avalon_task at;
 	uint8_t *buf;
 	int ret, i = 0;
 	struct timespec p;
@@ -433,8 +434,16 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 		return 1;
 	}
 
+	avalon_init_task(&at, 1, 0,
+			 AVALON_DEFAULT_FAN_MAX_PWM,
+			 AVALON_DEFAULT_TIMEOUT,
+			 AVALON_DEFAULT_ASIC_NUM,
+			 AVALON_DEFAULT_MINER_NUM,
+			 0, 0,
+			 AVALON_DEFAULT_FREQUENCY);
+
 	/* Reset once, then send command to go idle */
-	ret = avalon_write(fd, "ad", 2);
+	ret = avalon_write(fd, (char *)&at, AVALON_WRITE_SIZE);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
 	p.tv_sec = 0;
@@ -443,7 +452,7 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	avalon_clear_readbuf(fd);
 	avalon_idle(avalon, fd);
 	/* Reset again, then check result */
-	ret = avalon_write(fd, "ad", 2);
+	ret = avalon_write(fd, (char *)&at, AVALON_WRITE_SIZE);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
 
