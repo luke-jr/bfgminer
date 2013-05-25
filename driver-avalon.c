@@ -378,10 +378,23 @@ static void avalon_clear_readbuf(int fd)
 	} while (ret > 0);
 }
 
+/* Wait until the avalon says it's ready to receive a write, or 2 seconds has
+ * elapsed, whichever comes first. The status is updated by the ftdi device
+ * every 40ms. */
+static void avalon_wait_write(int fd)
+{
+	int i = 0;
+
+	while (avalon_buffer_full(fd) && i++ < 40)
+		nmsleep(50);
+}
+
 static void avalon_idle(struct cgpu_info *avalon, int fd)
 {
 	struct avalon_info *info = avalon->device_data;
 	int i;
+
+	avalon_wait_write(fd);
 
 	for (i = 0; i < info->miner_count; i++) {
 		struct avalon_task at;
