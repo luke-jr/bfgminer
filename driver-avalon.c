@@ -865,7 +865,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		if (unlikely(ret == AVA_GETS_TIMEOUT)) {
 			timersub(&tv_finish, &tv_start, &elapsed);
 			applog(LOG_DEBUG, "Avalon: no nonce in (%ld.%06lds)",
-			       elapsed.tv_sec, elapsed.tv_usec);
+			       (long)elapsed.tv_sec, (long)elapsed.tv_usec);
 			continue;
 		}
 		if (unlikely(ret == AVA_GETS_RESTART)) {
@@ -889,7 +889,7 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 				timersub(&tv_finish, &tv_start, &elapsed);
 				applog(LOG_DEBUG,"Avalon: no matching work: %d"
 				       " (%ld.%06lds)", info->no_matching_work,
-				       elapsed.tv_sec, elapsed.tv_usec);
+				       (long)elapsed.tv_sec, (long)elapsed.tv_usec);
 			}
 			continue;
 		}
@@ -906,8 +906,8 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		if (opt_debug) {
 			timersub(&tv_finish, &tv_start, &elapsed);
 			applog(LOG_DEBUG,
-			       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
-			       "(%ld.%06lds)", nonce, hash_count,
+			       "Avalon: nonce = 0x%08x = 0x%08"PRIx64" hashes "
+			       "(%ld.%06lds)", nonce, (uint64_t)hash_count,
 			       elapsed.tv_sec, elapsed.tv_usec);
 		}
 	}
