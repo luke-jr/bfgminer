@@ -627,7 +627,8 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 		struct work *work;
 
 		ar = (struct avalon_result *)&buf[i];
-		if ((work = avalon_valid_result(avalon, ar)) != NULL) {
+		work = avalon_valid_result(avalon, ar);
+		if (work) {
 			bool gettemp = false;
 
 			found = true;
@@ -651,6 +652,7 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 		spare = *offset - AVALON_READ_SIZE - 1;
 	else
 		spare = AVALON_READ_SIZE + i;
+	applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", spare);
 	*offset -= spare;
 	memmove(buf, buf + spare, *offset);
 	if (!found) {
@@ -701,6 +703,11 @@ static void *avalon_get_results(void *userdata)
 			if (unlikely(ret < 0))
 				applog(LOG_WARNING, "Read error in avalon_get_results");
 			continue;
+		}
+
+		if (opt_debug) {
+			applog(LOG_DEBUG, "Avalon: get:");
+			hexdump((uint8_t *)buf, ret);
 		}
 
 		memcpy(&readbuf[offset], buf, ret);
