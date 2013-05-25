@@ -616,6 +616,17 @@ static struct work *avalon_valid_result(struct cgpu_info *avalon, struct avalon_
 static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
 				struct avalon_result *ar);
 
+static void avalon_inc_nvw(struct avalon_info *info, struct thr_info *thr)
+{
+	applog(LOG_WARNING, "%s%d: No valid work - HW error",
+			thr->cgpu->drv->name, thr->cgpu->device_id);
+
+	inc_hw_errors(thr);
+	mutex_lock(&info->lock);
+	info->no_matching_work++;
+	mutex_unlock(&info->lock);
+}
+
 static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *info,
 				 struct thr_info *thr, char *buf, int *offset)
 {
@@ -654,17 +665,15 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 		 * work result. */
 		if (spare < (int)AVALON_READ_SIZE)
 			return;
-		applog(LOG_WARNING, "%s%d: No valid work - HW error",
-				thr->cgpu->drv->name, thr->cgpu->device_id);
-
-		inc_hw_errors(thr);
-		mutex_lock(&info->lock);
-		info->no_matching_work++;
-		mutex_unlock(&info->lock);
+		avalon_inc_nvw(info, thr);
 	} else {
 		spare = AVALON_READ_SIZE + i;
-		if (i)
-			applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", i);
+		if (i) {
+			if (i >= (int)AVALON_READ_SIZE)
+				avalon_inc_nvw(info, thr);
+			else
+				applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", i);
+		}
 	}
 
 	*offset -= spare;
