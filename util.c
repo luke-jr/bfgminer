@@ -1858,7 +1858,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, s);
-	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
+	if (!opt_delaynet)
+		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 
 	/* We use DEBUGFUNCTION to count bytes sent/received, and verbose is needed
 	 * to enable it */
