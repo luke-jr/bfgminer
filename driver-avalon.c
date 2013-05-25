@@ -688,11 +688,13 @@ static void *avalon_get_results(void *userdata)
 	char readbuf[AVALON_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
 	int fd = avalon->device_fd;
+	char threadname[24];
 	int offset = 0;
 
 	pthread_detach(pthread_self());
 
-	RenameThread("ava_getres");
+	snprintf(threadname, 24, "ava_getres/%d", avalon->device_id);
+	RenameThread(threadname);
 
 	while (42) {
 		struct timeval timeout;
