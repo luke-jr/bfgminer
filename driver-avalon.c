@@ -619,7 +619,7 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *info,
 				 struct thr_info *thr, char *buf, int *offset)
 {
-	int i, spare = AVALON_READ_SIZE - *offset;
+	int i, spare = *offset - AVALON_READ_SIZE;
 	bool found = false;
 
 	for (i = 0; i <= spare; i++) {
