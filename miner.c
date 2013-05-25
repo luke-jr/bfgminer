@@ -7904,7 +7904,7 @@ void print_summary(void)
 		if (opt_shares > total_accepted)
 			applog(LOG_WARNING, "WARNING - Mined only %d shares of %d requested.", total_accepted, opt_shares);
 	}
-	applog(LOG_WARNING, "");
+	applog(LOG_WARNING, " ");
 
 	fflush(stderr);
 	fflush(stdout);
