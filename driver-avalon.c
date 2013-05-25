@@ -685,6 +685,9 @@ static void *avalon_get_results(void *userdata)
 		ssize_t ret;
 		fd_set rd;
 
+		if (offset >= (int)AVALON_READ_SIZE)
+			avalon_parse_results(avalon, info, thr, readbuf, &offset);
+
 		if (unlikely(offset + rsize >= AVALON_READBUF_SIZE)) {
 			/* This should never happen */
 			applog(LOG_ERR, "Avalon readbuf overflow, resetting buffer");
@@ -715,9 +718,6 @@ static void *avalon_get_results(void *userdata)
 
 		memcpy(&readbuf[offset], buf, ret);
 		offset += ret;
-
-		while (offset >= (int)AVALON_READ_SIZE)
-			avalon_parse_results(avalon, info, thr, readbuf, &offset);
 	}
 	return NULL;
 }
