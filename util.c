@@ -1334,7 +1334,7 @@ char *recv_line(struct pool *pool)
 				break;
 			}
 			if (n < 0) {
-				if (!sock_blocks()) {
+				if (!sock_blocks() || !socket_full(pool, false)) {
 					ret = RECV_RECVFAIL;
 					break;
 				}
