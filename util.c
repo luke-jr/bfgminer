@@ -32,6 +32,7 @@
 # include <pthread_np.h>
 #endif
 #ifndef WIN32
+#include <fcntl.h>
 # ifdef __linux
 #  include <sys/prctl.h>
 # endif
@@ -236,13 +237,23 @@ out:
 
 static int keep_sockalive(SOCKETTYPE fd)
 {
+	const int tcp_one = 1;
 	const int tcp_keepidle = 45;
 	const int tcp_keepintvl = 30;
-	const int tcp_one = 1;
 	int ret = 0;
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&tcp_one, sizeof(tcp_one))))
 		ret = 1;
+
+#ifndef WIN32
+	int flags = fcntl(fd, F_GETFL, 0);
+
+	fcntl(fd, F_SETFL, O_NONBLOCK | flags);
+#else
+	u_long flags = 1;
+
+	ioctlsocket(fd, FIONBIO, &flags);
+#endif
 
 	if (!opt_delaynet)
 #ifndef __linux
