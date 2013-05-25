@@ -66,6 +66,7 @@ have_cygwin=false
 have_win32=false
 DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
+MM_LIBS=""
 MATH_LIBS="-lm"
 
 case $target in
@@ -88,6 +89,7 @@ case $target in
     have_win32=true
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
+    MM_LIBS="-lwinmm"
     AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     AC_DEFINE([FD_SETSIZE], [4096], [Maximum sockets before fd_set overflows])
     ;;
@@ -742,7 +744,7 @@ AC_DEFINE_UNQUOTED([PHATK_KERNNAME], ["phatk121016"], [Filename for phatk kernel
 AC_DEFINE_UNQUOTED([POCLBM_KERNNAME], ["poclbm130302"], [Filename for poclbm kernel])
 AC_DEFINE_UNQUOTED([DIAKGCN_KERNNAME], ["diakgcn121016"], [Filename for diakgcn kernel])
 AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo130302"], [Filename for diablo kernel])
-AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt130302"], [Filename for scrypt kernel])
+AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt130511"], [Filename for scrypt kernel])
 
 
 AC_SUBST(PTHREAD_FLAGS)
@@ -752,6 +754,7 @@ AC_SUBST(NCURSES_CPPFLAGS)
 AC_SUBST(NCURSES_LIBS)
 AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
+AC_SUBST(MM_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
 AC_SUBST(YASM_FMT)

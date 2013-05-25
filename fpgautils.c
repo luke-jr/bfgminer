@@ -1,5 +1,6 @@
 /*
  * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2013 Con Kolivas
  * Copyright 2012 Andrew Smith
  * Copyright 2013 Xiangfu
  *
@@ -27,8 +28,8 @@
 #ifndef WIN32
 #include <errno.h>
 #include <termios.h>
-#include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #ifndef O_CLOEXEC
@@ -57,10 +58,12 @@ enum {
 
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
+#include <sys/ioctl.h>
 #endif
 
 #include "elist.h"
 #include "logging.h"
+#include "miner.h"
 #include "fpgautils.h"
 
 #define SEARCH_NEEDLES_BEGIN()  {  \
@@ -928,5 +931,19 @@ int set_serial_rts(int fd, int rts)
 	ioctl(fd, TIOCMSET, &flags);
 	return flags & TIOCM_CTS;
 }
+#else
+int get_serial_cts(const int fd)
+{
+	if (!fd)
+		return -1;
+	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
+	if (!fh)
+		return -1;
 
+	DWORD flags;
+	if (!GetCommModemStatus(fh, &flags))
+		return -1;
+
+	return (flags & MS_CTS_ON) ? 1 : 0;
+}
 #endif // ! WIN32

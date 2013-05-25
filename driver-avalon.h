@@ -10,7 +10,8 @@
 #ifndef AVALON_H
 #define AVALON_H
 
-#define AVALON_TIME_FACTOR 10
+#ifdef USE_AVALON
+
 #define AVALON_RESET_FAULT_DECISECONDS 1
 #define AVALON_MINER_THREADS 1
 
@@ -71,8 +72,6 @@ struct avalon_result {
 } __attribute__((packed, aligned(4)));
 
 struct avalon_info {
-	int read_count;
-
 	int baud;
 	int miner_count;
 	int asic_count;
@@ -94,16 +93,13 @@ struct avalon_info {
 
 	int no_matching_work;
 	int matching_work[AVALON_DEFAULT_MINER_NUM];
-	struct work *bulk0[AVALON_DEFAULT_MINER_NUM];
-	struct work *bulk1[AVALON_DEFAULT_MINER_NUM];
-	struct work *bulk2[AVALON_DEFAULT_MINER_NUM];
-	struct work *bulk3[AVALON_DEFAULT_MINER_NUM];
 
 	int frequency;
 };
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
 #define AVALON_READ_SIZE (sizeof(struct avalon_result))
+#define AVALON_ARRAY_SIZE 4
 
 #define AVA_GETS_ERROR -1
 #define AVA_GETS_OK 0
@@ -130,4 +126,5 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 extern struct avalon_info **avalon_info;
 
+#endif /* USE_AVALON */
 #endif	/* AVALON_H */

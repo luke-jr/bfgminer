@@ -641,6 +641,14 @@ A: Start BFGMiner with your regular commands and add -D -T --verbose and provide
 the full startup output and a summary of your hardware, operating system, ATI
 driver version and ATI stream version.
 
+Q: Can I mine with BFGMiner on a Mac?
+A: BFGMiner will compile on OS X, but the performance of GPU mining is
+compromised due to the OpenCL implementation on OS X, there is no temperature or
+fanspeed monitoring, and the cooling design of most Macs, despite having
+powerful GPUs, will usually not cope with constant usage leading to a high risk
+of thermal damage. It is highly recommended not to mine on a Mac unless it is to
+a USB device.
+
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
 

@@ -44,6 +44,7 @@
 #include "findnonce.h"
 #include "ocl.h"
 #include "adl.h"
+#include "util.h"
 
 /* TODO: cleanup externals ********************/
 
@@ -1355,7 +1356,7 @@ select_cgpu:
 
 		thr->rolling = thr->cgpu->rolling = 0;
 		/* Reports the last time we tried to revive a sick GPU */
-		gettimeofday(&thr->sick, NULL);
+		cgtime(&thr->sick);
 		if (!pthread_cancel(thr->pth)) {
 			applog(LOG_WARNING, "Thread %d still exists, killing it off", thr_id);
 		} else
@@ -1395,7 +1396,7 @@ select_cgpu:
 		applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	}
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(sel_cgpu->init, &now);
 
 	proc_enable(cgpu);
@@ -1587,9 +1588,10 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	int virtual_gpu = cgpu->virtual_gpu;
 	int i = thr->id;
 	static bool failmessage = false;
+	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
 
 	if (!blank_res)
-		blank_res = calloc(BUFFERSIZE, 1);
+		blank_res = calloc(buffersize, 1);
 	if (!blank_res) {
 		applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
 		return false;
@@ -1651,7 +1653,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(cgpu->init, &now);
 
 	have_opencl = true;
@@ -1668,6 +1670,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 	cl_int status = 0;
 	thrdata = calloc(1, sizeof(*thrdata));
 	thr->cgpu_data = thrdata;
+	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
 
 	if (!thrdata) {
 		applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
@@ -1695,7 +1698,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 			break;
 	}
 
-	thrdata->res = calloc(BUFFERSIZE, 1);
+	thrdata->res = calloc(buffersize, 1);
 
 	if (!thrdata->res) {
 		free(thrdata);
@@ -1704,7 +1707,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 	}
 
 	status |= clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0,
-			BUFFERSIZE, blank_res, 0, NULL, NULL);
+				       buffersize, blank_res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
 		return false;
@@ -1745,13 +1748,15 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	size_t globalThreads[1];
 	size_t localThreads[1] = { clState->wsize };
 	int64_t hashes;
+	int found = opt_scrypt ? SCRYPT_FOUND : FOUND;
+	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
 
 	/* Windows' timer resolution is only 15ms so oversample 5x */
 	if (gpu->dynamic && (++gpu->intervals * dynamic_us) > 70000) {
 		struct timeval tv_gpuend;
 		double gpu_us;
 
-		gettimeofday(&tv_gpuend, NULL);
+		cgtime(&tv_gpuend);
 		gpu_us = us_tdiff(&tv_gpuend, &gpu->tv_gpustart) / gpu->intervals;
 		if (gpu_us > dynamic_us) {
 			if (gpu->intensity > MIN_INTENSITY)
@@ -1789,7 +1794,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
-			BUFFERSIZE, thrdata->res, 0, NULL, NULL);
+				     buffersize, thrdata->res, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clEnqueueReadBuffer failed error %d. (clEnqueueReadBuffer)", status);
 		return -1;
@@ -1804,17 +1809,17 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	clFinish(clState->commandQueue);
 
 	/* FOUND entry is used as a counter to say how many nonces exist */
-	if (thrdata->res[FOUND]) {
+	if (thrdata->res[found]) {
 		/* Clear the buffer again */
 		status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0,
-				BUFFERSIZE, blank_res, 0, NULL, NULL);
+					      buffersize, blank_res, 0, NULL, NULL);
 		if (unlikely(status != CL_SUCCESS)) {
 			applog(LOG_ERR, "Error: clEnqueueWriteBuffer failed.");
 			return -1;
 		}
 		applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
 		postcalc_hash_async(thr, work, thrdata->res);
-		memset(thrdata->res, 0, BUFFERSIZE);
+		memset(thrdata->res, 0, buffersize);
 		/* This finish flushes the writebuffer set with CL_FALSE in clEnqueueWriteBuffer */
 		clFinish(clState->commandQueue);
 	}

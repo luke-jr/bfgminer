@@ -289,9 +289,6 @@ struct device_drv {
 	uint64_t (*can_limit_work)(struct thr_info *);
 	bool (*thread_init)(struct thr_info *);
 	bool (*prepare_work)(struct thr_info *, struct work *);
-#ifdef USE_AVALON
-	int64_t (*scanhash_queue)(struct thr_info *, struct work **, int64_t);
-#endif
 	int64_t (*scanhash)(struct thr_info *, struct work *, int64_t);
 	int64_t (*scanwork)(struct thr_info *);
 
@@ -436,6 +433,12 @@ struct cgpu_info {
 		struct ft232r_device_handle *device_ft232r;
 #endif
 	};
+#ifdef USE_AVALON
+	struct work **works;
+	int work_array;
+	int queued;
+	int results;
+#endif
 #ifdef USE_BITFORCE
 	struct timeval work_start_tv;
 	unsigned int wait_ms;
@@ -535,6 +538,7 @@ struct cgpu_info {
 
 	pthread_rwlock_t qlock;
 	struct work *queued_work;
+	unsigned int queued_count;
 };
 
 extern void renumber_cgpu(struct cgpu_info *);
@@ -602,13 +606,6 @@ struct thr_info {
 	bool	work_restart;
 	notifier_t work_restart_notifier;
 };
-
-extern int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
-extern void thr_info_cancel(struct thr_info *thr);
-extern void thr_info_freeze(struct thr_info *thr);
-extern void nmsleep(unsigned int msecs);
-extern double us_tdiff(struct timeval *end, struct timeval *start);
-extern double tdiff(struct timeval *end, struct timeval *start);
 
 struct string_elist {
 	char *string;
@@ -839,7 +836,9 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+#ifdef USE_AVALON
 extern char *opt_avalon_options;
+#endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
@@ -870,6 +869,7 @@ extern int opt_scantime;
 extern int opt_expiry;
 
 extern cglock_t control_lock;
+extern pthread_mutex_t stats_lock;
 extern pthread_mutex_t hash_lock;
 extern pthread_mutex_t console_lock;
 extern cglock_t ch_lock;
@@ -882,6 +882,7 @@ extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
+extern void set_target(unsigned char *dest_target, double diff);
 
 extern void kill_work(void);
 extern void app_restart(void);
@@ -1159,6 +1160,8 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
+	uint64_t	share_diff;
+
 	int		rolls;
 
 	dev_blk_ctx	blk;
@@ -1191,6 +1194,10 @@ struct work {
 	
 	double		work_difficulty;
 
+	// Allow devices to identify work if multiple sub-devices
+	// DEPRECATED: New code should be using multiple processors instead
+	char		subid;
+
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;
 	unsigned int	dataid;
@@ -1208,10 +1215,11 @@ struct work {
 };
 
 extern void get_datestamp(char *, struct timeval *);
+extern void inc_hw_errors(struct thr_info *thr);
 enum test_nonce2_result {
-	TNR_GOOD,
-	TNR_HIGH,
-	TNR_BAD,
+	TNR_GOOD = 1,
+	TNR_HIGH = 0,
+	TNR_BAD = -1,
 };
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)

@@ -161,9 +161,6 @@ static const char *SCRYPTSTR = "scrypt";
 static const char *SHA256STR = "sha256";
 
 static const char *DEVICECODE = ""
-#ifdef USE_AVALON
-			"AVA "
-#endif
 #ifdef HAVE_OPENCL
 			"GPU "
 #endif
@@ -172,6 +169,9 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_ICARUS
 			"ICA "
+#endif
+#ifdef USE_AVALON
+			"AVA "
 #endif
 #ifdef USE_X6500
 			"XBS "
@@ -836,7 +836,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 
 	api_data = (struct api_data *)malloc(sizeof(struct api_data));
 
-	api_data->name = name;
+	api_data->name = strdup(name);
 	api_data->type = type;
 
 	if (root == NULL) {
@@ -1143,6 +1143,7 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 
 		buf = strchr(buf, '\0');
 
+		free(root->name);
 		if (root->type == API_JSON)
 			json_decref((json_t *)root->data);
 		if (root->data_was_malloc)
@@ -3277,7 +3278,7 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 		n = send(c, buf, tosend, 0);
 
 		if (SOCKETFAIL(n)) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
+			if (sock_blocks())
 				continue;
 
 			applog(LOG_WARNING, "API: send (%d) failed: %s", tosend, SOCKERRMSG);

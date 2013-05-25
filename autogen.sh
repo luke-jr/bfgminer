@@ -14,5 +14,5 @@ echo 'Running autoreconf -if...'
 	cd "${bs_dir}"
 	rm -rf autom4te.cache
 	rm -f aclocal.m4 ltmain.sh
-	autoreconf -if
+	autoreconf -if ${AC_FLAGS}
 )

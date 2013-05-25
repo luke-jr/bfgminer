@@ -22,6 +22,7 @@
 #include "deviceapi.h"
 #include "miner.h"
 #include "fpgautils.h"
+#include "util.h"
 
 #define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_S 7
@@ -286,7 +287,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	bitforce->device_fd = fdDev;
 
 	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	get_datestamp(bitforce->init, &now);
 
 	return true;
@@ -699,7 +700,7 @@ re_send:
 	bitforce_cmd2(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, ob, data->next_work_obsz);
 	if (!pdevbuf[0] || !strncasecmp(pdevbuf, "B", 1)) {
 		mutex_unlock(mutexp);
-		gettimeofday(&tv_now, NULL);
+		cgtime(&tv_now);
 		timer_set_delay(&thr->tv_poll, &tv_now, WORK_CHECK_INTERVAL_MS * 1000);
 		data->poll_func = 1;
 		return;
@@ -727,7 +728,7 @@ re_send:
 
 	dbg_block_data(bitforce);
 
-	gettimeofday(&tv_now, NULL);
+	cgtime(&tv_now);
 	bitforce->work_start_tv = tv_now;
 	
 	timer_set_delay(&thr->tv_morework, &tv_now, bitforce->sleep_ms * 1000);
@@ -764,7 +765,7 @@ int bitforce_zox(struct thr_info *thr, const char *cmd)
 		size_t szleft = sizeof(data->noncebuf) - cls, sz;
 		
 		if (count && data->queued)
-			gettimeofday(&bitforce->work_start_tv, NULL);
+			cgtime(&bitforce->work_start_tv);
 		
 		while (true)
 		{
@@ -813,7 +814,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	bool stale;
 	int count;
 
-	gettimeofday(&now, NULL);
+	cgtime(&now);
 	timersub(&now, &bitforce->work_start_tv, &elapsed);
 	bitforce->wait_ms = tv_to_ms(elapsed);
 	bitforce->polling = true;
@@ -849,7 +850,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
 		count = bitforce_zox(thr, cmd);
 
-		gettimeofday(&now, NULL);
+		cgtime(&now);
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
 
 		if (elapsed.tv_sec >= BITFORCE_LONG_TIMEOUT_S) {
@@ -1381,7 +1382,7 @@ bool bitforce_send_queue(struct thr_info *thr)
 	}
 	
 	if (!data->queued)
-		gettimeofday(&data->tv_hashmeter_start, NULL);
+		cgtime(&data->tv_hashmeter_start);
 	
 	queued_ok = atoi(&buf[9]);
 	data->queued += queued_ok;
@@ -1511,7 +1512,7 @@ next_qline: (void)0;
 		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time unchanged (queued<=%d)",
 		       bitforce->proc_repr, count, bitforce->sleep_ms, data->queued);
 	
-	gettimeofday(&tv_now, NULL);
+	cgtime(&tv_now);
 	timersub(&tv_now, &data->tv_hashmeter_start, &tv_elapsed);
 	hashes_done(thr, (uint64_t)bitforce->nonces * count, &tv_elapsed, NULL);
 	data->tv_hashmeter_start = tv_now;

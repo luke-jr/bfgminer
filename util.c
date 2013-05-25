@@ -32,6 +32,7 @@
 # include <pthread_np.h>
 #endif
 #ifndef WIN32
+#include <fcntl.h>
 # ifdef __linux
 #  include <sys/prctl.h>
 # endif
@@ -40,9 +41,11 @@
 # include <netinet/tcp.h>
 # include <netdb.h>
 #else
+# include <windows.h>
 # include <winsock2.h>
 # include <mstcpip.h>
 # include <ws2tcpip.h>
+# include <mmsystem.h>
 #endif
 
 #include "miner.h"
@@ -234,21 +237,35 @@ out:
 
 static int keep_sockalive(SOCKETTYPE fd)
 {
+	const int tcp_one = 1;
 	const int tcp_keepidle = 45;
 	const int tcp_keepintvl = 30;
-	const int keepalive = 1;
 	int ret = 0;
 
-
-#ifndef WIN32
-	const int tcp_keepcnt = 1;
-
-	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive))))
+	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&tcp_one, sizeof(tcp_one))))
 		ret = 1;
 
-# ifdef __linux
+#ifndef WIN32
+	int flags = fcntl(fd, F_GETFL, 0);
 
-	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_keepcnt, sizeof(tcp_keepcnt))))
+	fcntl(fd, F_SETFL, O_NONBLOCK | flags);
+#else
+	u_long flags = 1;
+
+	ioctlsocket(fd, FIONBIO, &flags);
+#endif
+
+	if (!opt_delaynet)
+#ifndef __linux
+		if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one))))
+#else /* __linux */
+		if (unlikely(setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one))))
+#endif /* __linux */
+			ret = 1;
+
+#ifdef __linux
+
+	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_one, sizeof(tcp_one))))
 		ret = 1;
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle))))
@@ -256,15 +273,16 @@ static int keep_sockalive(SOCKETTYPE fd)
 
 	if (unlikely(setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl))))
 		ret = 1;
-# endif /* __linux */
-# ifdef __APPLE_CC__
+#endif /* __linux */
+
+#ifdef __APPLE_CC__
 
 	if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl))))
 		ret = 1;
 
-# endif /* __APPLE_CC__ */
+#endif /* __APPLE_CC__ */
 
-#else /* WIN32 */
+#ifdef WIN32
 
 	const int zero = 0;
 	struct tcp_keepalive vals;
@@ -273,9 +291,6 @@ static int keep_sockalive(SOCKETTYPE fd)
 	vals.keepaliveinterval = tcp_keepintvl * 1000;
 
 	DWORD outputBytes;
-
-	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&keepalive, sizeof(keepalive))))
-		ret = 1;
 
 	if (unlikely(WSAIoctl(fd, SIO_KEEPALIVE_VALS, &vals, sizeof(vals), NULL, 0, &outputBytes, NULL, NULL)))
 		ret = 1;
@@ -307,7 +322,7 @@ static void last_nettime(struct timeval *last)
 static void set_nettime(void)
 {
 	wr_lock(&netacc_lock);
-	gettimeofday(&nettime, NULL);
+	cgtime(&nettime);
 	wr_unlock(&netacc_lock);
 }
 
@@ -463,7 +478,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 			long long now_msecs, last_msecs;
 			struct timeval now, last;
 
-			gettimeofday(&now, NULL);
+			cgtime(&now);
 			last_nettime(&last);
 			now_msecs = (long long)now.tv_sec * 1000;
 			now_msecs += now.tv_usec / 1000;
@@ -775,7 +790,7 @@ bool hash_target_check_v(const unsigned char *hash, const unsigned char *target)
 		applog(LOG_DEBUG, " Proof: %s\nTarget: %s\nTrgVal? %s",
 			hash_str,
 			target_str,
-			rc ? "YES (hash < target)" :
+			rc ? "YES (hash <= target)" :
 			     "no (false positive; hash > target)");
 
 		free(hash_str);
@@ -831,9 +846,7 @@ void tq_free(struct thread_q *tq)
 static void tq_freezethaw(struct thread_q *tq, bool frozen)
 {
 	mutex_lock(&tq->mutex);
-
 	tq->frozen = frozen;
-
 	pthread_cond_signal(&tq->cond);
 	mutex_unlock(&tq->mutex);
 }
@@ -861,14 +874,12 @@ bool tq_push(struct thread_q *tq, void *data)
 	INIT_LIST_HEAD(&ent->q_node);
 
 	mutex_lock(&tq->mutex);
-
 	if (!tq->frozen) {
 		list_add_tail(&ent->q_node, &tq->q);
 	} else {
 		free(ent);
 		rc = false;
 	}
-
 	pthread_cond_signal(&tq->cond);
 	mutex_unlock(&tq->mutex);
 
@@ -882,7 +893,6 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 	int rc;
 
 	mutex_lock(&tq->mutex);
-
 	if (!list_empty(&tq->q))
 		goto pop;
 
@@ -894,16 +904,15 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 		goto out;
 	if (list_empty(&tq->q))
 		goto out;
-
 pop:
 	ent = list_entry(tq->q.next, struct tq_ent, q_node);
 	rval = ent->data;
 
 	list_del(&ent->q_node);
 	free(ent);
-
 out:
 	mutex_unlock(&tq->mutex);
+
 	return rval;
 }
 
@@ -1050,6 +1059,9 @@ void nmsleep(unsigned int msecs)
 	int ret;
 	ldiv_t d;
 
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
 	d = ldiv(msecs, 1000);
 	tleft.tv_sec = d.quot;
 	tleft.tv_nsec = d.rem * 1000000;
@@ -1058,6 +1070,48 @@ void nmsleep(unsigned int msecs)
 		twait.tv_nsec = tleft.tv_nsec;
 		ret = nanosleep(&twait, &tleft);
 	} while (ret == -1 && errno == EINTR);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
+}
+
+/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
+ * with tz set to NULL, and windows' default resolution is only 15ms, this
+ * gives us higher resolution times on windows. */
+void cgtime(struct timeval *tv)
+{
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
+	gettimeofday(tv, NULL);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
+}
+
+void subtime(struct timeval *a, struct timeval *b)
+{
+	timersub(a, b, b);
+}
+
+void addtime(struct timeval *a, struct timeval *b)
+{
+	timeradd(a, b, b);
+}
+
+bool time_more(struct timeval *a, struct timeval *b)
+{
+	return timercmp(a, b, >);
+}
+
+bool time_less(struct timeval *a, struct timeval *b)
+{
+	return timercmp(a, b, <);
+}
+
+void copy_time(struct timeval *dest, const struct timeval *src)
+{
+	memcpy(dest, src, sizeof(struct timeval));
 }
 
 /* Returns the microseconds difference between end and start times as a double */
@@ -1136,7 +1190,7 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 	len++;
 
 	while (len > 0 ) {
-		struct timeval timeout = {0, 0};
+		struct timeval timeout = {1, 0};
 		ssize_t sent;
 		fd_set wd;
 
@@ -1144,7 +1198,13 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 		FD_SET(sock, &wd);
 		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1)
 			return SEND_SELECTFAIL;
+#ifdef __APPLE__
+		sent = send(pool->sock, s + ssent, len, SO_NOSIGPIPE);
+#elif WIN32
 		sent = send(pool->sock, s + ssent, len, 0);
+#else
+		sent = send(pool->sock, s + ssent, len, MSG_NOSIGNAL);
+#endif
 		if (sent < 0) {
 			if (!sock_blocks())
 				return SEND_SENDFAIL;
@@ -1203,7 +1263,7 @@ static bool socket_full(struct pool *pool, bool wait)
 	if (wait)
 		timeout.tv_sec = 60;
 	else
-		timeout.tv_sec = 0;
+		timeout.tv_sec = 1;
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
@@ -1248,7 +1308,8 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	if (new < pool->sockbuf_size)
 		return;
 	new = new + (RBUFSIZE - (new % RBUFSIZE));
-	applog(LOG_DEBUG, "Recallocing pool sockbuf to %lu", (unsigned long)new);
+	// Avoid potentially recursive locking
+	// applog(LOG_DEBUG, "Recallocing pool sockbuf to %lu", (unsigned long)new);
 	pool->sockbuf = realloc(pool->sockbuf, new);
 	if (!pool->sockbuf)
 		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
@@ -1273,7 +1334,7 @@ char *recv_line(struct pool *pool)
 		enum recv_ret ret = RECV_OK;
 		struct timeval rstart, now;
 
-		gettimeofday(&rstart, NULL);
+		cgtime(&rstart);
 		if (!socket_full(pool, true)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
@@ -1292,7 +1353,7 @@ char *recv_line(struct pool *pool)
 				break;
 			}
 			if (n < 0) {
-				if (!sock_blocks()) {
+				if (!sock_blocks() || !socket_full(pool, false)) {
 					ret = RECV_RECVFAIL;
 					break;
 				}
@@ -1301,7 +1362,7 @@ char *recv_line(struct pool *pool)
 				recalloc_sock(pool, slen);
 				strcat(pool->sockbuf, s);
 			}
-			gettimeofday(&now, NULL);
+			cgtime(&now);
 		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
 		mutex_unlock(&pool->stratum_lock);
 
@@ -1798,6 +1859,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	if (pool->sockbuf)
 		pool->sockbuf[0] = '\0';
 	mutex_unlock(&pool->stratum_lock);
+
 	curl = pool->stratum_curl;
 
 	if (!pool->sockbuf) {
@@ -1815,7 +1877,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, s);
-	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
+	if (!opt_delaynet)
+		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 
 	/* We use DEBUGFUNCTION to count bytes sent/received, and verbose is needed
 	 * to enable it */
@@ -1889,6 +1952,7 @@ void suspend_stratum(struct pool *pool)
 {
 	clear_sockbuf(pool);
 	applog(LOG_INFO, "Closing socket for stratum pool %d", pool->pool_no);
+
 	mutex_lock(&pool->stratum_lock);
 	pool->stratum_active = pool->stratum_notify = false;
 	if (pool->stratum_curl) {

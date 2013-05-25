@@ -212,7 +212,12 @@ CL_API_ENTRY cl_int CL_API_CALL
                        cl_event *       /* event */) CL_API_SUFFIX__VERSION_1_0;
 
 int opt_platform_id = -1;
+#ifdef __APPLE__
+// Apple OpenCL doesn't like using binaries this way
+bool opt_opencl_binaries;
+#else
 bool opt_opencl_binaries = true;
+#endif
 
 char *file_contents(const char *filename, int *length)
 {
@@ -668,6 +673,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 
 	if (cgpu->work_size && cgpu->work_size <= clState->max_work_size)
 		clState->wsize = cgpu->work_size;
+	else if (opt_scrypt)
+		clState->wsize = 256;
 	else if (strstr(name, "Tahiti"))
 		clState->wsize = 64;
 	else
@@ -1027,7 +1034,8 @@ built:
 			applog(LOG_ERR, "Error %d: clCreateBuffer (CLbuffer0)", status);
 			return NULL;
 		}
-	}
+		clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, SCRYPT_BUFFERSIZE, NULL, &status);
+	} else
 #endif
 	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
