@@ -191,7 +191,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	if (at->reset)
 		nr_len = 1;
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: Sent(%d):", nr_len);
+		applog(LOG_DEBUG, "Avalon: Sent(%lu):", (unsigned long)nr_len);
 		hexdump((uint8_t *)buf, nr_len);
 	}
 	ret = write(fd, buf, nr_len);
