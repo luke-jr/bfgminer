@@ -1004,6 +1004,13 @@ void sighandler_pthread_cancel(int sig)
 	do_pthread_cancel_exit(flags);
 }
 
+void pthread_testcancel(void)
+{
+	int flags = (int)pthread_getspecific(key_pcwm);
+	if (flags & PCWM_CANCELLED && !(flags & PCWM_DISABLED))
+		do_pthread_cancel_exit(flags);
+}
+
 int pthread_setcancelstate(int state, int *oldstate)
 {
 	int flags = (int)pthread_getspecific(key_pcwm);
