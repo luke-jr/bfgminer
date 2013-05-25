@@ -3180,7 +3180,7 @@ static void get_benchmark_work(struct work *work)
 	work->mandatory = true;
 	work->pool = pools[0];
 	cgtime(&work->tv_getwork);
-	memcpy(&(work->tv_getwork_reply), &(work->tv_getwork), sizeof(struct timeval));
+	copy_time(&work->tv_getwork_reply, &work->tv_getwork);
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
 	calc_diff(work, 0);
 }
@@ -6467,8 +6467,8 @@ retry_stratum:
 			applog(LOG_DEBUG, "Successfully retrieved and deciphered work from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			work->pool = pool;
-			memcpy(&(work->tv_getwork), &tv_getwork, sizeof(struct timeval));
-			memcpy(&(work->tv_getwork_reply), &tv_getwork_reply, sizeof(struct timeval));
+			copy_time(&work->tv_getwork, &tv_getwork);
+			copy_time(&work->tv_getwork_reply, &tv_getwork_reply);
 			work->getwork_mode = GETWORK_MODE_TESTPOOL;
 			calc_diff(work, 0);
 
@@ -6888,7 +6888,7 @@ void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 	struct work *work = copy_work(work_in);
 
 	if (tv_work_found)
-		memcpy(&(work->tv_work_found), tv_work_found, sizeof(struct timeval));
+		copy_time(&work->tv_work_found, tv_work_found);
 	
 	_submit_work_async(work);
 }
@@ -7173,7 +7173,7 @@ void hash_queued_work(struct thr_info *mythr)
 		if (diff.tv_sec >= cycle) {
 			hashmeter(thr_id, &diff, hashes_done);
 			hashes_done = 0;
-			memcpy(&tv_start, &tv_end, sizeof(struct timeval));
+			copy_time(&tv_start, &tv_end);
 		}
 
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
@@ -7229,8 +7229,8 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 	total_getworks++;
 	pool->getwork_requested++;
 	work->pool = pool;
-	memcpy(&(work->tv_getwork), tv_lp, sizeof(struct timeval));
-	memcpy(&(work->tv_getwork_reply), tv_lp_reply, sizeof(struct timeval));
+	copy_time(&work->tv_getwork, tv_lp);
+	copy_time(&work->tv_getwork_reply, tv_lp_reply);
 	calc_diff(work, 0);
 
 	if (pool->enabled == POOL_REJECTING)
