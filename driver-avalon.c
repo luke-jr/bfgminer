@@ -652,9 +652,12 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 		spare = *offset - AVALON_READ_SIZE;
 	else
 		spare = AVALON_READ_SIZE + i;
-	applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", spare);
-	*offset -= spare;
-	memmove(buf, buf + spare, *offset);
+	if (spare) {
+		applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", spare);
+		*offset -= spare;
+		memmove(buf, buf + spare, *offset);
+	}
+
 	if (!found) {
 		mutex_lock(&info->lock);
 		info->no_matching_work++;
