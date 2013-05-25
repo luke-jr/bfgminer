@@ -203,100 +203,17 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	return AVA_SEND_BUFFER_EMPTY;
 }
 
-static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
-		       struct timeval *tv_finish)
+static void avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
+				struct avalon_info *info, struct avalon_result *ar,
+				struct work *work)
 {
-	int read_amount = AVALON_READ_SIZE;
-	bool first = true;
-	ssize_t ret = 0;
-
-	while (true) {
-		struct timeval timeout;
-		fd_set rd;
-
-		if (unlikely(thr->work_restart)) {
-			applog(LOG_DEBUG, "Avalon: Work restart");
-			return AVA_GETS_RESTART;
-		}
-
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 100000;
-
-		FD_ZERO(&rd);
-		FD_SET((SOCKETTYPE)fd, &rd);
-		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
-		if (unlikely(ret < 0)) {
-			applog(LOG_ERR, "Avalon: Error %d on select in avalon_gets", errno);
-			return AVA_GETS_ERROR;
-		}
-		if (ret) {
-			ret = read(fd, buf, read_amount);
-			if (unlikely(ret < 0)) {
-				applog(LOG_ERR, "Avalon: Error %d on read in avalon_gets", errno);
-				return AVA_GETS_ERROR;
-			}
-			if (likely(first)) {
-				cgtime(tv_finish);
-				first = false;
-			}
-			if (likely(ret >= read_amount))
-				return AVA_GETS_OK;
-			buf += ret;
-			read_amount -= ret;
-			continue;
-		}
-
-		if (unlikely(thr->work_restart)) {
-			applog(LOG_DEBUG, "Avalon: Work restart");
-			return AVA_GETS_RESTART;
-		}
-
-		return AVA_GETS_TIMEOUT;
-	}
-}
-
-static int avalon_get_result(int fd, struct avalon_result *ar,
-			     struct thr_info *thr, struct timeval *tv_finish)
-{
-	uint8_t result[AVALON_READ_SIZE];
-	int ret;
-
-	memset(result, 0, AVALON_READ_SIZE);
-	ret = avalon_gets(fd, result, thr, tv_finish);
-
-	if (ret == AVA_GETS_OK) {
-		if (opt_debug) {
-			applog(LOG_DEBUG, "Avalon: get:");
-			hexdump((uint8_t *)result, AVALON_READ_SIZE);
-		}
-		memcpy((uint8_t *)ar, result, AVALON_READ_SIZE);
-	}
-
-	return ret;
-}
-
-static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
-				uint32_t *nonce)
-{
-	struct cgpu_info *avalon;
-	struct avalon_info *info;
-	struct work *work;
-
-	avalon = thr->cgpu;
-	if (unlikely(!avalon->works))
-		return false;
-
-	work = find_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
-					   (char *)ar->data, 64, 12);
-	if (!work)
-		return false;
+	uint32_t nonce;
 
 	info = avalon->device_data;
 	info->matching_work[work->subid]++;
-	*nonce = htole32(ar->nonce);
-	submit_nonce(thr, work, *nonce);
-
-	return true;
+	nonce = htole32(ar->nonce);
+	applog(LOG_DEBUG, "Avalon: nonce = %0x08x", nonce);
+	submit_nonce(thr, work, nonce);
 }
 
 static int avalon_write(int fd, char *buf, ssize_t len)
@@ -690,6 +607,100 @@ static void avalon_init(struct cgpu_info *avalon)
 	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
 }
 
+static struct work *avalon_valid_result(struct cgpu_info *avalon, struct avalon_result *ar)
+{
+	return find_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
+					   (char *)ar->data, 64, 12);
+}
+
+static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *info,
+				 struct thr_info *thr, char *buf, size_t *offset)
+{
+	size_t i, spare = AVALON_READ_SIZE - *offset;
+	bool found = false;
+
+	if (spare > AVALON_READ_SIZE - 1)
+		spare = AVALON_READ_SIZE - 1;
+
+	for (i = 0; i <= spare; i++) {
+		struct avalon_result *ar;
+		struct work *work;
+
+		ar = (struct avalon_result *)&buf[i];
+		if ((work = avalon_valid_result(avalon, ar)) != NULL) {
+			found = true;
+
+			mutex_lock(&info->lock);
+			info->nonces++;
+			mutex_unlock(&info->lock);
+
+			avalon_decode_nonce(thr, avalon, info, ar, work);
+			break;
+		}
+	}
+
+	spare = AVALON_READ_SIZE + i;
+	*offset -= spare;
+	memmove(buf, buf + spare, *offset);
+	if (!found) {
+		mutex_lock(&info->lock);
+		info->no_matching_work++;
+		mutex_unlock(&info->lock);
+	}
+}
+
+static void *avalon_get_results(void *userdata)
+{
+	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
+	struct avalon_info *info = avalon->device_data;
+	const int rsize = AVALON_FTDI_READSIZE;
+	char readbuf[AVALON_READBUF_SIZE];
+	struct thr_info *thr = info->thr;
+	int fd = avalon->device_fd;
+	size_t offset = 0;
+
+	pthread_detach(pthread_self());
+
+	RenameThread("ava_getres");
+
+	while (42) {
+		struct timeval timeout;
+		char buf[rsize];
+		ssize_t ret;
+		fd_set rd;
+
+		if (unlikely(offset + rsize >= AVALON_READBUF_SIZE)) {
+			/* This should never happen */
+			applog(LOG_ERR, "Avalon readbuf overflow, resetting buffer");
+			offset = 0;
+		}
+
+		timeout.tv_sec = 0;
+		timeout.tv_usec = AVALON_READ_TIMEOUT * 1000;
+		FD_ZERO(&rd);
+		FD_SET((SOCKETTYPE)fd, &rd);
+		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
+		if (ret < 1) {
+			if (unlikely(ret < 0))
+				applog(LOG_WARNING, "Select error in avalon_get_results");
+			continue;
+		}
+		ret = read(fd, buf, AVALON_FTDI_READSIZE);
+		if (unlikely(ret < 1)) {
+			if (unlikely(ret < 0))
+				applog(LOG_WARNING, "Read error in avalon_get_results");
+			continue;
+		}
+
+		memcpy(&readbuf[offset], buf, ret);
+		offset += ret;
+
+		while (offset >= AVALON_READ_SIZE)
+			avalon_parse_results(avalon, info, thr, readbuf, &offset);
+	}
+	return NULL;
+}
+
 static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
@@ -701,6 +712,13 @@ static bool avalon_prepare(struct thr_info *thr)
 			       AVALON_ARRAY_SIZE);
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
+
+	info->thr = thr;
+	mutex_init(&info->lock);
+	avalon_clear_readbuf(avalon->device_fd);
+
+	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
+		quit(1, "Failed to create avalon read_thr");
 
 	avalon_init(avalon);
 
@@ -837,11 +855,9 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	int avalon_get_work_count;
 	int start_count, end_count;
 
-	struct timeval tv_start, tv_finish, elapsed;
-	uint32_t nonce;
+	struct timeval tv_start, elapsed;
 	int64_t hash_count;
 	static int first_try = 0;
-	int result_wrong;
 
 	avalon = thr->cgpu;
 	works = avalon->works;
@@ -892,71 +908,19 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 	cgtime(&tv_start);
 
-	result_wrong = 0;
-	hash_count = 0;
 	while (true) {
 		full = avalon_buffer_full(fd);
 		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
 		       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
 		if (unlikely(full == AVA_BUFFER_EMPTY))
 			break;
-
-		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
-		if (unlikely(ret == AVA_GETS_ERROR)) {
-			applog(LOG_ERR,
-			       "AVA%i: Comms error(read)", avalon->device_id);
-			dev_error(avalon, REASON_DEV_COMMS_ERROR);
-			avalon_reset(avalon, fd);
-			return 0;
-		}
-		if (unlikely(ret == AVA_GETS_RESTART))
-			break;
-		if (unlikely(ret == AVA_GETS_TIMEOUT)) {
-			timersub(&tv_finish, &tv_start, &elapsed);
-			applog(LOG_DEBUG, "Avalon: no nonce in (%ld.%06lds)",
-			       elapsed.tv_sec, elapsed.tv_usec);
-			continue;
-		}
-
-		if (!avalon_decode_nonce(thr, &ar, &nonce)) {
-			info->no_matching_work++;
-			result_wrong++;
-
-			if (unlikely(result_wrong >= avalon_get_work_count))
-				break;
-
-			if (opt_debug) {
-				timersub(&tv_finish, &tv_start, &elapsed);
-				applog(LOG_DEBUG,"Avalon: no matching work: %d"
-				" (%ld.%06lds)", info->no_matching_work,
-				elapsed.tv_sec, elapsed.tv_usec);
-			}
-			continue;
-		}
-
-		hash_count += 0xffffffff;
-		if (opt_debug) {
-			timersub(&tv_finish, &tv_start, &elapsed);
-			applog(LOG_DEBUG,
-			       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
-			       "(%ld.%06lds)", nonce, (unsigned long long)hash_count,
-			       elapsed.tv_sec, elapsed.tv_usec);
-		}
+		nmsleep(40);
 	}
-	if (hash_count && avalon->results < AVALON_ARRAY_SIZE)
-		avalon->results++;
-	if (unlikely((result_wrong >= avalon_get_work_count) ||
-	    (!hash_count && ret != AVA_GETS_RESTART && --avalon->results < 0))) {
-		/* Look for all invalid results, or consecutive failure
-		 * to generate any results suggesting the FPGA
-		 * controller has screwed up. */
-		applog(LOG_ERR,
-			"AVA%i: FPGA controller messed up, %d wrong results",
-			avalon->device_id, result_wrong);
-		dev_error(avalon, REASON_DEV_COMMS_ERROR);
-		avalon_reset(avalon, fd);
-		return 0;
-	}
+
+	mutex_lock(&info->lock);
+	hash_count = 0xffffffffull * (uint64_t)info->nonces;
+	info->nonces = 0;
+	mutex_unlock(&info->lock);
 
 	avalon_rotate_array(avalon);
 
