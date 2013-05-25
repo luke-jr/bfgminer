@@ -421,6 +421,7 @@ static void avalon_idle(struct cgpu_info *avalon, int fd)
 static int avalon_reset(struct cgpu_info *avalon, int fd)
 {
 	struct avalon_result ar;
+	char reset = 0xad;
 	uint8_t *buf;
 	int ret, i = 0;
 	struct timespec p;
@@ -431,7 +432,7 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	}
 
 	/* Reset once, then send command to go idle */
-	ret = avalon_write(fd, "ad", 2);
+	ret = avalon_write(fd, &reset, 1);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
 	/* Ignore first result as it may be corrupt with old work */
@@ -447,7 +448,7 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	applog(LOG_ERR, "Avalon: Idle");
 
 	/* Reset again, then check result */
-	ret = avalon_write(fd, "ad", 2);
+	ret = avalon_write(fd, &reset, 1);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
 
