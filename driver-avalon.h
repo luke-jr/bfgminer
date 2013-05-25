@@ -28,6 +28,8 @@
 #define AVALON_DEFAULT_MINER_NUM 0x20
 #define AVALON_DEFAULT_ASIC_NUM 0xA
 
+#define AVALON_FTDI_READSIZE 512
+
 struct avalon_task {
 	uint8_t reset		:1;
 	uint8_t flush_fifo	:1;

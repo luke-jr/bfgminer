@@ -550,6 +550,25 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	}
 }
 
+/* Non blocking clearing of anything in the buffer */
+static void avalon_clear_readbuf(int fd)
+{
+	ssize_t ret;
+
+	do {
+		struct timeval timeout;
+		char buf[AVALON_FTDI_READSIZE];
+		fd_set rd;
+
+		timeout.tv_sec = timeout.tv_usec = 0;
+		FD_ZERO(&rd);
+		FD_SET((SOCKETTYPE)fd, &rd);
+		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
+		if (ret > 0)
+			ret = read(fd, buf, AVALON_FTDI_READSIZE);
+	} while (ret > 0);
+}
+
 static bool avalon_detect_one(const char *devpath)
 {
 	struct avalon_info *info;
@@ -571,6 +590,7 @@ static bool avalon_detect_one(const char *devpath)
 		applog(LOG_ERR, "Avalon Detect: Failed to open %s", devpath);
 		return false;
 	}
+	avalon_clear_readbuf(fd);
 
 	/* We have a real Avalon! */
 	avalon = calloc(1, sizeof(struct cgpu_info));
