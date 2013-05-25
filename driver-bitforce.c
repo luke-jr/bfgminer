@@ -133,7 +133,7 @@ static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 	if (gt > 0)
 		tailsprintf(buf, "%5.1fC ", gt);
 	else
-		tailsprintf(buf, "       ", gt);
+		tailsprintf(buf, "       ");
 	tailsprintf(buf, "        | ");
 }
 
