@@ -6043,10 +6043,35 @@ fishy:
 	mutex_unlock(&sshare_lock);
 
 	if (!sshare) {
-		if (json_is_true(res_val))
+		double pool_diff;
+
+		/* Since the share is untracked, we can only guess at what the
+		 * work difficulty is based on the current pool diff. */
+		cg_rlock(&pool->data_lock);
+		pool_diff = pool->swork.diff;
+		cg_runlock(&pool->data_lock);
+
+		if (json_is_true(res_val)) {
 			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
-		else
+
+			/* We don't know what device this came from so we can't
+			 * attribute the work to the relevant cgpu */
+			mutex_lock(&stats_lock);
+			total_accepted++;
+			pool->accepted++;
+			total_diff_accepted += pool_diff;
+			pool->diff_accepted += pool_diff;
+			mutex_unlock(&stats_lock);
+		} else {
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
+
+			mutex_lock(&stats_lock);
+			total_rejected++;
+			pool->rejected++;
+			total_diff_rejected += pool_diff;
+			pool->diff_rejected += pool_diff;
+			mutex_unlock(&stats_lock);
+		}
 		goto out;
 	}
 	else {
